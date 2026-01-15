@@ -18,6 +18,7 @@ import java.util.Optional;
 import java.util.UUID;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -29,6 +30,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/session")
+@ConditionalOnProperty(prefix = "dts.analytics.platform-auth", name = "enabled", havingValue = "false")
 public class SessionResource {
 
     private final AnalyticsUserRepository userRepository;

@@ -91,7 +91,9 @@ public class KeycloakApiResource {
     @Value("${dts.keycloak.admin-client-secret:${OAUTH2_ADMIN_CLIENT_SECRET:}}")
     private String managementClientSecret;
 
-    @org.springframework.beans.factory.annotation.Value("${dts.admin.userlist.exclude-roles:ROLE_SYS_ADMIN,ROLE_AUTH_ADMIN,ROLE_SECURITY_AUDITOR,ROLE_OP_ADMIN}")
+    @org.springframework.beans.factory.annotation.Value(
+        "${dts.admin.userlist.exclude-roles:ROLE_SYS_ADMIN,ROLE_AUTH_ADMIN,ROLE_SECURITY_AUDITOR,ROLE_OP_ADMIN}"
+    )
     private String excludeRolesForUserList;
 
     @org.springframework.beans.factory.annotation.Value("${dts.admin.login.allowed-roles:ROLE_SYS_ADMIN,ROLE_AUTH_ADMIN,ROLE_SECURITY_AUDITOR}")
@@ -106,7 +108,7 @@ public class KeycloakApiResource {
     private java.util.Set<String> triadConfigured;
 
     private static final String DEFAULT_PERSON_LEVEL = "GENERAL";
-    private static final Set<String> PROTECTED_USERNAMES = Set.of("sysadmin",  "authadmin", "auditadmin", "opadmin");
+    private static final Set<String> PROTECTED_USERNAMES = Set.of("sysadmin", "authadmin", "auditadmin", "opadmin");
     private static final Set<String> TRIAD_AUTHORITIES = Set.of(
         AuthoritiesConstants.SYS_ADMIN,
         AuthoritiesConstants.AUTH_ADMIN,
@@ -929,7 +931,14 @@ public class KeycloakApiResource {
         }
         return users
             .stream()
-            .filter(u -> u.getUsername() == null || PROTECTED_USERNAMES.stream().noneMatch(name -> name.equalsIgnoreCase(u.getUsername())))
+            .filter(u -> {
+                String username = u == null ? null : u.getUsername();
+                if (username == null) {
+                    return true;
+                }
+                String normalized = username.trim().toLowerCase();
+                return !PROTECTED_USERNAMES.contains(normalized);
+            })
             .toList();
     }
 

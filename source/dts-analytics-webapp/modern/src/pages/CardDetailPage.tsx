@@ -17,6 +17,9 @@ export default function CardDetailPage() {
 	const [state, setState] = useState<LoadState<CardDetail>>({ state: "loading" });
 	const [queryState, setQueryState] = useState<LoadState<CardQueryResponse> | null>(null);
 	const [showRaw, setShowRaw] = useState(false);
+	const [shareUuid, setShareUuid] = useState<string>("");
+	const [shareBusy, setShareBusy] = useState(false);
+	const [shareCopied, setShareCopied] = useState(false);
 
 	useEffect(() => {
 		let cancelled = false;
@@ -63,12 +66,67 @@ export default function CardDetailPage() {
 				<>
 					<div className="row" style={{ justifyContent: "space-between", alignItems: "baseline" }}>
 						<h1 className="pageTitle">{state.value.name ?? "-"}</h1>
-						<Link className="btn" to={`/questions/${encodeURIComponent(String(state.value.id))}/edit`}>
-							{t(locale, "questions.edit")}
-						</Link>
+						<div className="row" style={{ justifyContent: "flex-end" }}>
+							<button
+								className="btn"
+								type="button"
+								disabled={shareBusy}
+								onClick={async () => {
+									if (!id) return;
+									setShareBusy(true);
+									setShareCopied(false);
+									try {
+										const r = await analyticsApi.createCardPublicLink(id);
+										setShareUuid(r.uuid ?? "");
+									} finally {
+										setShareBusy(false);
+									}
+								}}
+							>
+								{t(locale, "share.create")}
+							</button>
+							<Link className="btn" to={`/questions/${encodeURIComponent(String(state.value.id))}/edit`}>
+								{t(locale, "questions.edit")}
+							</Link>
+						</div>
 					</div>
 					<div className="pageSub">{state.value.description ?? ""}</div>
 					<div style={{ height: 16 }} />
+
+					{shareUuid ? (
+						<div className="card">
+							<div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
+								<div className="muted">{t(locale, "share.title")}</div>
+								<button
+									className="btn"
+									type="button"
+									onClick={async () => {
+										const link = `${window.location.origin}/analytics/public/card/${encodeURIComponent(shareUuid)}`;
+										try {
+											await navigator.clipboard.writeText(link);
+											setShareCopied(true);
+										} catch {
+											window.prompt("Copy link:", link);
+											setShareCopied(true);
+										}
+									}}
+								>
+									{shareCopied ? t(locale, "share.copied") : t(locale, "share.copy")}
+								</button>
+							</div>
+							<div style={{ height: 10 }} />
+							<input
+								className="input"
+								readOnly
+								value={`${window.location.origin}/analytics/public/card/${encodeURIComponent(shareUuid)}`}
+							/>
+							<div className="muted" style={{ marginTop: 10 }}>
+								{t(locale, "share.note")}
+							</div>
+						</div>
+					) : null}
+
+					<div style={{ height: shareUuid ? 16 : 0 }} />
 					<div className="card">
 						<div className="muted">{t(locale, "questions.detailNote")}</div>
 						<pre style={{ whiteSpace: "pre-wrap", fontSize: 12, margin: "12px 0 0" }}>

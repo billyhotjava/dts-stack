@@ -47,8 +47,6 @@ function shouldHideRoleName(role: string): boolean {
 	if (upper.startsWith("DEFAULT-ROLES")) return true;
 	if (upper === "ROLE_OFFLINE_ACCESS" || upper === "ROLE_UMA_AUTHORIZATION") return true;
 
-	// 用户反馈：个人信息里不要展示该角色（系统管理员身份已通过账号名/显示名体现）
-	if (upper === "ROLE_SYS_ADMIN") return true;
 	return false;
 }
 
@@ -133,7 +131,7 @@ export default function ProfileTab({ detail, resolveAttributeValue }: ProfileTab
 		{ label: "用户名", value: resolvedUsername },
 		{ label: "邮箱", value: resolvedEmail },
 		{ label: "角色", value: roleLabels.length ? roleLabels.join("、") : "-" },
-		{ label: "账号状态", value: accountStatus === false ? "已停用" : "正常" },
+		{ label: "账号状态", value: accountStatus === false ? "禁用" : "可用" },
 		{ label: "账号标识", value: accountId },
 	];
 

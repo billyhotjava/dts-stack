@@ -9,6 +9,8 @@ import {
 	updateIndicator,
 } from "@/api/platformApi";
 import deptService, { type DeptDto } from "@/api/services/deptService";
+import userDirectoryService, { type UserDirectoryEntry } from "@/api/services/userDirectoryService";
+import { useCatalogDomainOptions } from "@/hooks/useCatalogDomainOptions";
 import { Badge } from "@/ui/badge";
 import { Button } from "@/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
@@ -46,6 +48,7 @@ type FormState = {
 	code: string;
 	name: string;
 	category: string;
+	owner: string;
 	ownerDept: string;
 	dataLevel: DataLevel;
 	status: Status;
@@ -85,6 +88,7 @@ const DEFAULT_FORM: FormState = {
 	code: "",
 	name: "",
 	category: "",
+	owner: "",
 	ownerDept: "",
 	dataLevel: "DATA_INTERNAL",
 	status: "DRAFT",
@@ -110,6 +114,16 @@ export default function IndicatorsPage() {
 	const [dialogOpen, setDialogOpen] = useState(false);
 	const [form, setForm] = useState<FormState>(DEFAULT_FORM);
 	const [saving, setSaving] = useState(false);
+
+	const { options: domainOptions, loading: domainLoading } = useCatalogDomainOptions();
+	const domainNameSet = useMemo(() => new Set(domainOptions.map((opt) => opt.name)), [domainOptions]);
+	const selectedDomainName = useMemo(() => {
+		return domainNameSet.has(form.category) ? form.category : "__UNSET__";
+	}, [domainNameSet, form.category]);
+
+	const [ownerSearch, setOwnerSearch] = useState("");
+	const [ownerLoading, setOwnerLoading] = useState(false);
+	const [ownerCandidates, setOwnerCandidates] = useState<UserDirectoryEntry[]>([]);
 
 	const userInfo = useUserInfo() as any;
 	const roles = useMemo(() => {
@@ -238,6 +252,7 @@ export default function IndicatorsPage() {
 			code: row.code,
 			name: row.name,
 			category: String(row.category ?? ""),
+			owner: String(row.owner ?? ""),
 			ownerDept: String(row.ownerDept ?? enforcedDeptCode ?? ""),
 			dataLevel: (row.dataLevel as DataLevel) || "DATA_INTERNAL",
 			status: (row.status as Status) || "DRAFT",
@@ -251,6 +266,33 @@ export default function IndicatorsPage() {
 		setDialogOpen(true);
 	};
 
+	useEffect(() => {
+		if (!dialogOpen) return;
+		let alive = true;
+		const keyword = ownerSearch.trim();
+		setOwnerLoading(true);
+		const timer = setTimeout(() => {
+			userDirectoryService
+				.searchUsers(keyword)
+				.then((list) => {
+					if (!alive) return;
+					setOwnerCandidates(Array.isArray(list) ? list : []);
+				})
+				.catch(() => {
+					if (!alive) return;
+					setOwnerCandidates([]);
+				})
+				.finally(() => {
+					if (!alive) return;
+					setOwnerLoading(false);
+				});
+		}, 250);
+		return () => {
+			alive = false;
+			clearTimeout(timer);
+		};
+	}, [dialogOpen, ownerSearch]);
+
 	const submit = async () => {
 		if (!form.code.trim() || !form.name.trim()) {
 			toast.error("请填写指标编码和名称");
@@ -262,6 +304,7 @@ export default function IndicatorsPage() {
 				code: form.code.trim(),
 				name: form.name.trim(),
 				category: form.category.trim() || null,
+				owner: form.owner.trim() || null,
 				ownerDept: form.ownerDept.trim() || null,
 				dataLevel: form.dataLevel,
 				status: form.status,
@@ -336,7 +379,8 @@ export default function IndicatorsPage() {
 								<tr>
 									<th className="py-2 pr-4 font-medium">编码</th>
 									<th className="py-2 pr-4 font-medium">名称</th>
-									<th className="py-2 pr-4 font-medium">分类</th>
+									<th className="py-2 pr-4 font-medium">主题域</th>
+									<th className="py-2 pr-4 font-medium">负责人</th>
 									<th className="py-2 pr-4 font-medium">部门</th>
 									<th className="py-2 pr-4 font-medium">数据集</th>
 									<th className="py-2 pr-4 font-medium">密级</th>
@@ -350,6 +394,7 @@ export default function IndicatorsPage() {
 										<td className="py-2 pr-4 font-mono">{row.code}</td>
 										<td className="py-2 pr-4 font-medium">{row.name}</td>
 										<td className="py-2 pr-4 text-muted-foreground">{row.category || "-"}</td>
+										<td className="py-2 pr-4 text-muted-foreground">{row.owner || "-"}</td>
 										<td className="py-2 pr-4 text-muted-foreground">{row.ownerDept || "-"}</td>
 										<td className="py-2 pr-4 text-muted-foreground">
 											{row.datasetId ? <Badge variant="outline">已绑定</Badge> : <Badge variant="secondary">未绑定</Badge>}
@@ -419,7 +464,7 @@ export default function IndicatorsPage() {
 								))}
 								{items.length === 0 ? (
 									<tr>
-										<td colSpan={8} className="py-10 text-center text-muted-foreground">
+										<td colSpan={9} className="py-10 text-center text-muted-foreground">
 											{loading ? "加载中..." : "暂无数据"}
 										</td>
 									</tr>
@@ -464,8 +509,58 @@ export default function IndicatorsPage() {
 								<Input value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))} />
 							</div>
 							<div className="space-y-2">
-								<Label>分类</Label>
+								<Label>主题域（可手工填）</Label>
 								<Input value={form.category} onChange={(e) => setForm((p) => ({ ...p, category: e.target.value }))} />
+								<Select
+									value={selectedDomainName}
+									onValueChange={(v) => {
+										if (v === "__UNSET__") return;
+										setForm((p) => ({ ...p, category: v }));
+									}}
+								>
+									<SelectTrigger>
+										<SelectValue placeholder={domainLoading ? "加载主题域中..." : "从主题域树选择"} />
+									</SelectTrigger>
+									<SelectContent>
+										<SelectItem value="__UNSET__">不选择</SelectItem>
+										{domainOptions.map((opt) => (
+											<SelectItem key={opt.key} value={opt.name}>
+												{opt.label}
+											</SelectItem>
+										))}
+									</SelectContent>
+								</Select>
+							</div>
+							<div className="space-y-2">
+								<Label>负责人（可手工填）</Label>
+								<Input value={form.owner} onChange={(e) => setForm((p) => ({ ...p, owner: e.target.value }))} />
+								<div className="grid grid-cols-1 gap-2">
+									<Input
+										value={ownerSearch}
+										onChange={(e) => setOwnerSearch(e.target.value)}
+										placeholder="从通讯录搜索用户（姓名/用户名）"
+									/>
+									<Select
+										value="__UNSET__"
+										onValueChange={(v) => {
+											const picked = ownerCandidates.find((u) => u.id === v);
+											if (!picked) return;
+											setForm((p) => ({ ...p, owner: picked.displayName || picked.username }));
+										}}
+									>
+										<SelectTrigger>
+											<SelectValue placeholder={ownerLoading ? "加载用户中..." : "选择用户写入负责人"} />
+										</SelectTrigger>
+										<SelectContent>
+											<SelectItem value="__UNSET__">不选择</SelectItem>
+											{ownerCandidates.slice(0, 50).map((u) => (
+												<SelectItem key={u.id} value={u.id}>
+													{u.displayName || u.username}（{u.username}）
+												</SelectItem>
+											))}
+										</SelectContent>
+									</Select>
+								</div>
 							</div>
 							<div className="space-y-2">
 								<Label>所属部门</Label>

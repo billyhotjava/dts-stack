@@ -15,6 +15,10 @@ import { Label } from "@/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/ui/select";
 import { Textarea } from "@/ui/textarea";
 import { formatDateTime } from "@/utils/format";
+import { useCatalogDomainOptions } from "@/hooks/useCatalogDomainOptions";
+
+const DOMAIN_SELECT_UNSET = "__UNSET__";
+const DOMAIN_SELECT_CUSTOM = "__CUSTOM__";
 
 type TermRow = {
 	id: string;
@@ -62,6 +66,29 @@ export default function GlossaryPage() {
 	const [saving, setSaving] = useState(false);
 	const [form, setForm] = useState<TermForm>(DEFAULT_FORM);
 
+	const {
+		options: domainTreeOptions,
+		keyByName: domainKeyByName,
+		nameByKey: domainNameByKey,
+		labelByKey: domainLabelByKey,
+	} = useCatalogDomainOptions();
+
+	const domainOptions = useMemo(() => {
+		const list = [...domainTreeOptions];
+		list.sort((a, b) => a.label.localeCompare(b.label, "zh-Hans-CN"));
+		return list;
+	}, [domainTreeOptions]);
+
+	const renderDomainLabel = useCallback(
+		(domain?: string | null) => {
+			const raw = String(domain ?? "").trim();
+			if (!raw) return "-";
+			const key = domainKeyByName[raw];
+			return key ? domainLabelByKey[key] ?? raw : raw;
+		},
+		[domainKeyByName, domainLabelByKey],
+	);
+
 	const fetchList = useCallback(async () => {
 		setLoading(true);
 		try {
@@ -102,6 +129,13 @@ export default function GlossaryPage() {
 				String(it.aliases || "").toLowerCase().includes(k),
 		);
 	}, [items, keyword]);
+
+	const domainFormSelectValue = useMemo(() => {
+		const raw = String(form.domain ?? "").trim();
+		if (!raw) return DOMAIN_SELECT_UNSET;
+		const key = domainKeyByName[raw];
+		return key ?? DOMAIN_SELECT_CUSTOM;
+	}, [domainKeyByName, form.domain]);
 
 	const openCreate = () => {
 		setForm(DEFAULT_FORM);
@@ -222,7 +256,7 @@ export default function GlossaryPage() {
 										<td className="px-3 py-2 text-xs">{row.code || "-"}</td>
 										<td className="px-3 py-2 text-xs font-medium">{row.name}</td>
 										<td className="px-3 py-2 text-xs">{row.aliases || "-"}</td>
-										<td className="px-3 py-2 text-xs">{row.domain || "-"}</td>
+										<td className="px-3 py-2 text-xs">{renderDomainLabel(row.domain)}</td>
 										<td className="px-3 py-2 text-xs">{statusBadge(row.status)}</td>
 										<td className="px-3 py-2 text-xs">{row.owner || "-"}</td>
 										<td className="px-3 py-2 text-xs">{row.ownerDept || "-"}</td>
@@ -264,7 +298,35 @@ export default function GlossaryPage() {
 						</div>
 						<div className="space-y-2">
 							<Label>主题域</Label>
-							<Input value={form.domain} onChange={(e) => setForm((p) => ({ ...p, domain: e.target.value }))} placeholder="如：财务 / 项目 / 库存" />
+							<Select
+								value={domainFormSelectValue}
+								onValueChange={(value) => {
+									if (value === DOMAIN_SELECT_UNSET) {
+										setForm((p) => ({ ...p, domain: "" }));
+										return;
+									}
+									if (value === DOMAIN_SELECT_CUSTOM) {
+										return;
+									}
+									const domainName = domainNameByKey[value] ?? "";
+									setForm((p) => ({ ...p, domain: domainName }));
+								}}
+							>
+								<SelectTrigger>
+									<SelectValue placeholder="选择主题域" />
+								</SelectTrigger>
+								<SelectContent>
+									<SelectItem value={DOMAIN_SELECT_UNSET}>（未选择）</SelectItem>
+									{domainFormSelectValue === DOMAIN_SELECT_CUSTOM && !!form.domain.trim() && (
+										<SelectItem value={DOMAIN_SELECT_CUSTOM}>当前值：{form.domain}（已不存在）</SelectItem>
+									)}
+									{domainOptions.map((opt) => (
+										<SelectItem key={opt.key} value={opt.key}>
+											{opt.label}
+										</SelectItem>
+									))}
+								</SelectContent>
+							</Select>
 						</div>
 						<div className="space-y-2 md:col-span-2">
 							<Label>名称 *</Label>

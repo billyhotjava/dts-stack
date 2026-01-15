@@ -1,6 +1,7 @@
 import { Link } from "react-router";
 import { useEffect, useMemo, useState } from "react";
 import { analyticsApi, type DashboardListItem } from "../api/analyticsApi";
+import { EmptyState } from "../components/EmptyState";
 import { ErrorNotice } from "../components/ErrorNotice";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import "./page.css";
@@ -46,32 +47,42 @@ export default function DashboardsPage() {
 				</div>
 			</div>
 
-			<div style={{ height: 16 }} />
+				<div style={{ height: 16 }} />
 
-			<div className="card">
-				{state.state === "loading" && <div>{t(locale, "loading")}</div>}
+				{state.state === "loading" && <div className="card">{t(locale, "loading")}</div>}
 				{state.state === "error" && <ErrorNotice locale={locale} error={state.error} />}
-				{state.state === "loaded" && (
-					<table className="table">
-						<thead>
-							<tr>
-								<th>{t(locale, "common.name")}</th>
-								<th>{t(locale, "common.id")}</th>
-							</tr>
-						</thead>
-						<tbody>
-							{state.value.map((d) => (
-								<tr key={String(d.id)}>
-									<td>
-										<Link to={`/dashboards/${d.id}`}>{d.name ?? "-"}</Link>
-									</td>
-									<td>{d.id}</td>
+				{state.state === "loaded" && state.value.length === 0 && (
+					<EmptyState
+						title={t(locale, "common.empty")}
+						action={
+							<Link className="btn" to="/dashboards/new">
+								{t(locale, "dashboards.new")}
+							</Link>
+						}
+					/>
+				)}
+				{state.state === "loaded" && state.value.length > 0 && (
+					<div className="card">
+						<table className="table">
+							<thead>
+								<tr>
+									<th>{t(locale, "common.name")}</th>
+									<th>{t(locale, "common.id")}</th>
 								</tr>
-							))}
-						</tbody>
-					</table>
+							</thead>
+							<tbody>
+								{state.value.map((d) => (
+									<tr key={String(d.id)}>
+										<td>
+											<Link to={`/dashboards/${d.id}`}>{d.name ?? "-"}</Link>
+										</td>
+										<td>{d.id}</td>
+									</tr>
+								))}
+							</tbody>
+						</table>
+					</div>
 				)}
 			</div>
-		</div>
-	);
-}
+		);
+	}

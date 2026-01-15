@@ -32,6 +32,12 @@ public class AnalyticsPublicLink implements Serializable {
     @Column(name = "creator_id")
     private Long creatorId;
 
+    @Column(name = "dept", length = 100)
+    private String dept;
+
+    @Column(name = "classification", length = 100)
+    private String classification;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -78,6 +84,22 @@ public class AnalyticsPublicLink implements Serializable {
         this.creatorId = creatorId;
     }
 
+    public String getDept() {
+        return dept;
+    }
+
+    public void setDept(String dept) {
+        this.dept = dept;
+    }
+
+    public String getClassification() {
+        return classification;
+    }
+
+    public void setClassification(String classification) {
+        this.classification = classification;
+    }
+
     public Instant getCreatedAt() {
         return createdAt;
     }
@@ -100,4 +122,3 @@ public class AnalyticsPublicLink implements Serializable {
         updatedAt = Instant.now();
     }
 }
-

@@ -72,6 +72,21 @@ function cloneDomains(domains: DomainNode[]): DomainNode[] {
 	}));
 }
 
+function removeDomainNode(nodes: DomainNode[], key: string): DomainNode[] {
+	const next: DomainNode[] = [];
+	nodes.forEach((node) => {
+		if (node.key === key) {
+			return;
+		}
+		const children = node.children ? removeDomainNode(node.children, key) : undefined;
+		next.push({
+			...node,
+			children: children && children.length ? children : undefined,
+		});
+	});
+	return next;
+}
+
 function loop(
 	nodes: DomainNode[],
 	key: string,
@@ -531,7 +546,7 @@ const headers = ["名称", "负责人", "默认密级", "来源系统", "父节�
 				<Card className="h-[calc(100vh-220px)]">
 					<CardHeader className="space-y-4">
 						<CardTitle className="flex items-center justify-between text-base font-semibold">
-							<span>数据域/主题域</span>
+							<span>主题域</span>
 							<div className="flex items-center gap-2">
 								<Button size="sm" variant="outline" onClick={openEditForm}>
 									编辑
@@ -539,10 +554,10 @@ const headers = ["名称", "负责人", "默认密级", "来源系统", "父节�
 								<Button size="sm" onClick={openCreateForm}>
 									新增节点
 								</Button>
-								<Button
-									size="sm"
-									variant="destructive"
-									onClick={async () => {
+									<Button
+										size="sm"
+										variant="destructive"
+										onClick={async () => {
 										if (!selectedDomainMeta) {
 											toast.warning("请选择需要删除的节点");
 											return;
@@ -553,14 +568,15 @@ const headers = ["名称", "负责人", "默认密级", "来源系统", "父节�
 										if (hasChildren || hasDatasets) {
 											toast.error("请先清空子节点和数据集后再删除");
 											return;
-										}
-										try {
-											await apiDeleteDomain(key);
-											setDomains((prev) => prev.filter((n) => n.key !== key));
-											setSelectedDomainKey("");
-											toast.success("已删除");
-										} catch (e) {
-											console.error(e);
+											}
+											try {
+												await apiDeleteDomain(key);
+												setDomains((prev) => removeDomainNode(prev, key));
+												setExpandedKeys((prev) => prev.filter((k) => k !== key));
+												setSelectedDomainKey("");
+												toast.success("已删除");
+											} catch (e) {
+												console.error(e);
 											toast.error("删除失败");
 										}
 									}}
@@ -669,7 +685,7 @@ const headers = ["名称", "负责人", "默认密级", "来源系统", "父节�
 											/>
 										</th>
 										<th className="border-b px-3 py-2">数据集</th>
-										<th className="border-b px-3 py-2">所属域/主题</th>
+										<th className="border-b px-3 py-2">所属主题域</th>
 										<th className="border-b px-3 py-2">负责人</th>
 										<th className="border-b px-3 py-2">来源系统</th>
 										<th className="border-b px-3 py-2">最近更新</th>
@@ -722,7 +738,7 @@ const headers = ["名称", "负责人", "默认密级", "来源系统", "父节�
 			<Dialog open={formOpen} onOpenChange={setFormOpen}>
 				<DialogContent className="max-w-lg">
 					<DialogHeader>
-						<DialogTitle>{formMode === "create" ? "新增域/主题节点" : "编辑域/主题节点"}</DialogTitle>
+						<DialogTitle>{formMode === "create" ? "新增主题域节点" : "编辑主题域节点"}</DialogTitle>
 					</DialogHeader>
 					<div className="space-y-4">
 						<div className="grid gap-2">
@@ -752,7 +768,7 @@ const headers = ["名称", "负责人", "默认密级", "来源系统", "父节�
 							<Textarea
 								value={formState.description}
 								onChange={(event) => setFormState((prev) => ({ ...prev, description: event.target.value }))}
-								placeholder="简要说明域/主题的职责范围"
+								placeholder="简要说明主题域职责范围"
 							/>
 						</div>
 					</div>

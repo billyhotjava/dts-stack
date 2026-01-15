@@ -4,6 +4,9 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.domain.governance.GovIndicatorDefinition;
+import com.yuzhi.dts.platform.domain.catalog.CatalogColumnSchema;
+import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
+import com.yuzhi.dts.platform.domain.catalog.CatalogTableSchema;
 import com.yuzhi.dts.platform.domain.modeling.DataStandard;
 import com.yuzhi.dts.platform.domain.modeling.ModelingGlossaryTerm;
 import com.yuzhi.dts.platform.domain.modeling.ModelingGlossaryTermReview;
@@ -14,6 +17,8 @@ import com.yuzhi.dts.platform.domain.modeling.ModelingPlanVersion;
 import com.yuzhi.dts.platform.domain.modeling.ModelingTemplate;
 import com.yuzhi.dts.platform.domain.modeling.ModelingTemplateVersion;
 import com.yuzhi.dts.platform.repository.governance.GovIndicatorDefinitionRepository;
+import com.yuzhi.dts.platform.repository.catalog.CatalogColumnSchemaRepository;
+import com.yuzhi.dts.platform.repository.catalog.CatalogTableSchemaRepository;
 import com.yuzhi.dts.platform.repository.modeling.DataStandardRepository;
 import com.yuzhi.dts.platform.repository.modeling.ModelingGlossaryTermRepository;
 import com.yuzhi.dts.platform.repository.modeling.ModelingGlossaryTermReviewRepository;
@@ -28,18 +33,25 @@ import com.yuzhi.dts.platform.security.DepartmentUtils;
 import com.yuzhi.dts.platform.security.SecurityUtils;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.modeling.DataStandardSecurity;
+import com.yuzhi.dts.platform.service.security.AccessChecker;
 import com.yuzhi.dts.platform.service.security.OrganizationVisibilityService;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.validation.Valid;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Pattern;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.transaction.annotation.Transactional;
@@ -61,6 +73,7 @@ public class ModelingAuxResource {
 
     private static final String MODELING_MAINTAINER_EXPRESSION =
         "hasAnyAuthority(T(com.yuzhi.dts.platform.security.AuthoritiesConstants).CATALOG_MAINTAINERS)";
+    private static final Pattern STD_CODE_PATTERN = Pattern.compile("(?i)(?:\\bSTD\\b|标准)\\s*[:：]\\s*([A-Za-z0-9_\\-\\.]+)");
 
     private final ModelingPlanRepository planRepo;
     private final ModelingPlanVersionRepository planVersionRepo;
@@ -76,6 +89,9 @@ public class ModelingAuxResource {
     private final ObjectMapper objectMapper;
     private final DataStandardRepository dataStandardRepository;
     private final GovIndicatorDefinitionRepository indicatorRepository;
+    private final CatalogTableSchemaRepository catalogTableRepo;
+    private final CatalogColumnSchemaRepository catalogColumnRepo;
+    private final AccessChecker catalogAccessChecker;
 
     public ModelingAuxResource(
         ModelingPlanRepository planRepo,
@@ -91,7 +107,10 @@ public class ModelingAuxResource {
         OrganizationVisibilityService organizationVisibilityService,
         ObjectMapper objectMapper,
         DataStandardRepository dataStandardRepository,
-        GovIndicatorDefinitionRepository indicatorRepository
+        GovIndicatorDefinitionRepository indicatorRepository,
+        CatalogTableSchemaRepository catalogTableRepo,
+        CatalogColumnSchemaRepository catalogColumnRepo,
+        AccessChecker catalogAccessChecker
     ) {
         this.planRepo = planRepo;
         this.planVersionRepo = planVersionRepo;
@@ -107,20 +126,26 @@ public class ModelingAuxResource {
         this.objectMapper = objectMapper;
         this.dataStandardRepository = dataStandardRepository;
         this.indicatorRepository = indicatorRepository;
+        this.catalogTableRepo = catalogTableRepo;
+        this.catalogColumnRepo = catalogColumnRepo;
+        this.catalogAccessChecker = catalogAccessChecker;
     }
 
     @GetMapping("/plans")
     public ApiResponse<List<ModelingPlan>> listPlans(
         @RequestParam(value = "keyword", required = false) String keyword,
+        @RequestParam(value = "status", required = false) String status,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDeptHeader
     ) {
         String activeDept = security.resolveActiveDept(activeDeptHeader);
         boolean instituteScope = security.hasInstituteScope();
         String kw = StringUtils.trimToNull(keyword);
+        String statusFilter = parsePlanStatusFilter(status);
         List<ModelingPlan> list = planRepo
             .findAll()
             .stream()
             .filter(plan -> isOwnerDeptVisible(plan != null ? plan.getOwnerDept() : null, activeDept, instituteScope))
+            .filter(plan -> statusFilter == null || statusFilter.equalsIgnoreCase(StringUtils.trimToEmpty(plan != null ? plan.getStatus() : null)))
             .filter(plan -> kw == null || matchKeyword(plan.getName(), kw) || matchKeyword(plan.getDomain(), kw) || matchKeyword(plan.getOwner(), kw))
             .sorted(Comparator.comparing(plan -> String.valueOf(plan.getName()).toLowerCase(Locale.ROOT)))
             .toList();
@@ -200,6 +225,9 @@ public class ModelingAuxResource {
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDeptHeader
     ) {
         ModelingPlan plan = getWritablePlan(id, activeDeptHeader);
+        if ("ARCHIVED".equalsIgnoreCase(StringUtils.trimToEmpty(plan.getStatus()))) {
+            throw new org.springframework.web.server.ResponseStatusException(HttpStatus.BAD_REQUEST, "已归档的数据规划不能直接发布，请先恢复为草稿");
+        }
         Map<String, Object> before = toPlanAuditView(plan);
 
         String version = StringUtils.trimToNull(body != null ? body.version() : null);
@@ -223,6 +251,61 @@ public class ModelingAuxResource {
         auditPayload.put("summary", "发布数据规划：" + saved.getName());
         auditPayload.put("version", saved.getVersion());
         auditService.auditAction("MODELING_PLAN_PUBLISH", AuditStage.SUCCESS, id.toString(), auditPayload);
+        return ApiResponses.ok(saved);
+    }
+
+    public record ModelingPlanArchiveRequest(String notes) {}
+
+    @PostMapping("/plans/{id}/archive")
+    @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
+    public ApiResponse<ModelingPlan> archivePlan(
+        @PathVariable UUID id,
+        @RequestBody(required = false) ModelingPlanArchiveRequest body,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDeptHeader
+    ) {
+        ModelingPlan plan = getWritablePlan(id, activeDeptHeader);
+        Map<String, Object> before = toPlanAuditView(plan);
+        plan.setStatus("ARCHIVED");
+        if (StringUtils.isNotBlank(body != null ? body.notes() : null)) {
+            plan.setVersionNotes(StringUtils.trimToNull(body.notes()));
+        }
+        ensurePlanDefaults(plan);
+        ModelingPlan saved = planRepo.save(plan);
+        upsertPlanVersionSnapshot(saved, StringUtils.trimToNull(body != null ? body.notes() : null), "ARCHIVED");
+
+        Map<String, Object> auditPayload = new LinkedHashMap<>();
+        auditPayload.put("before", before);
+        auditPayload.put("after", toPlanAuditView(saved));
+        auditPayload.put("targetId", id.toString());
+        auditPayload.put("targetName", saved.getName());
+        auditPayload.put("operationType", "ARCHIVE");
+        auditPayload.put("summary", "归档数据规划：" + saved.getName());
+        auditPayload.put("version", saved.getVersion());
+        auditService.auditAction("MODELING_PLAN_ARCHIVE", AuditStage.SUCCESS, id.toString(), auditPayload);
+        return ApiResponses.ok(saved);
+    }
+
+    @PostMapping("/plans/{id}/restore")
+    @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
+    public ApiResponse<ModelingPlan> restorePlan(
+        @PathVariable UUID id,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDeptHeader
+    ) {
+        ModelingPlan plan = getWritablePlan(id, activeDeptHeader);
+        Map<String, Object> before = toPlanAuditView(plan);
+        plan.setStatus("DRAFT");
+        ensurePlanDefaults(plan);
+        ModelingPlan saved = planRepo.save(plan);
+        upsertPlanVersionSnapshot(saved, null, "DRAFT");
+
+        Map<String, Object> auditPayload = new LinkedHashMap<>();
+        auditPayload.put("before", before);
+        auditPayload.put("after", toPlanAuditView(saved));
+        auditPayload.put("targetId", id.toString());
+        auditPayload.put("targetName", saved.getName());
+        auditPayload.put("operationType", "RESTORE");
+        auditPayload.put("summary", "恢复数据规划为草稿：" + saved.getName());
+        auditService.auditAction("MODELING_PLAN_RESTORE", AuditStage.SUCCESS, id.toString(), auditPayload);
         return ApiResponses.ok(saved);
     }
 
@@ -340,9 +423,13 @@ public class ModelingAuxResource {
     }
 
     @DeleteMapping("/plans/{id}")
-    @PreAuthorize("hasAuthority('" + AuthoritiesConstants.OP_ADMIN + "')")
+    @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
     public ApiResponse<Boolean> deletePlan(@PathVariable UUID id) {
-        planRepo.deleteById(id);
+        ModelingPlan plan = planRepo.findById(id).orElseThrow(() -> new EntityNotFoundException("数据规划不存在"));
+        // Delete dependent records first to satisfy DB foreign keys (plan_version/plan_review).
+        planReviewRepo.deleteByPlan(plan);
+        planVersionRepo.deleteByPlan(plan);
+        planRepo.delete(plan);
         auditService.audit("DELETE", "modeling.plan", id.toString());
         return ApiResponses.ok(Boolean.TRUE);
     }
@@ -718,12 +805,213 @@ public class ModelingAuxResource {
         return ApiResponses.ok(Boolean.TRUE);
     }
 
+    public record TemplateFieldSpec(String name, String dataType, Boolean nullable, String standardCode, String comment) {}
+
+    public record TemplateValidationIssue(
+        String severity,
+        String code,
+        String columnName,
+        String message,
+        String expected,
+        String actual
+    ) {}
+
+    @GetMapping("/templates/{id}/validate")
+    @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
+    public ApiResponse<Map<String, Object>> validateTemplateAgainstTable(
+        @PathVariable UUID id,
+        @RequestParam UUID tableId,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDeptHeader
+    ) {
+        ModelingTemplate template = templateRepo.findById(id).orElseThrow(() -> new EntityNotFoundException("模型模板不存在"));
+        CatalogTableSchema table = catalogTableRepo.findById(tableId).orElseThrow(() -> new EntityNotFoundException("数据表不存在"));
+        CatalogDataset dataset = table.getDataset();
+
+        String activeDept = security.resolveActiveDept(activeDeptHeader);
+        if (dataset != null) {
+            if (!catalogAccessChecker.canRead(dataset) || !catalogAccessChecker.departmentAllowed(dataset, activeDept)) {
+                throw new AccessDeniedException("当前账号无权访问该数据表");
+            }
+        }
+
+        List<CatalogColumnSchema> columns = catalogColumnRepo.findByTable(table);
+        Map<String, CatalogColumnSchema> byName = new LinkedHashMap<>();
+        for (CatalogColumnSchema c : columns) {
+            if (c == null) continue;
+            String name = org.springframework.util.StringUtils.hasText(c.getName()) ? c.getName().trim().toLowerCase(Locale.ROOT) : null;
+            if (name != null && !byName.containsKey(name)) {
+                byName.put(name, c);
+            }
+        }
+
+        Map<UUID, DataStandard> standardsById = loadStandardsById(columns);
+        List<TemplateFieldSpec> specs = parseTemplateFieldSpecs(template.getFieldsTemplate());
+
+        int requiredFields = specs.size();
+        int missingFields = 0;
+        int typeMismatches = 0;
+        int nullableMismatches = 0;
+        int standardMismatches = 0;
+        int unmappedStandards = 0;
+
+        List<TemplateValidationIssue> issues = new ArrayList<>();
+
+        // Table naming rule (regex support)
+        String namingRule = StringUtils.trimToNull(template.getNamingRule());
+        Pattern namingPattern = compileNamingPattern(namingRule);
+        if (namingPattern != null) {
+            String tableName = StringUtils.trimToNull(table.getName());
+            if (tableName != null && !namingPattern.matcher(tableName).matches()) {
+                issues.add(new TemplateValidationIssue(
+                    "WARN",
+                    "TABLE_NAME_RULE",
+                    tableName,
+                    "表名不符合模板命名规则",
+                    namingRule,
+                    tableName
+                ));
+            }
+        }
+
+        for (TemplateFieldSpec spec : specs) {
+            if (spec == null || !org.springframework.util.StringUtils.hasText(spec.name())) {
+                continue;
+            }
+            String expectedName = spec.name().trim();
+            CatalogColumnSchema col = byName.get(expectedName.toLowerCase(Locale.ROOT));
+            if (col == null) {
+                missingFields++;
+                issues.add(new TemplateValidationIssue(
+                    "ERROR",
+                    "MISSING_FIELD",
+                    expectedName,
+                    "缺少必备字段",
+                    expectedName,
+                    null
+                ));
+                continue;
+            }
+
+            String actualType = StringUtils.trimToNull(col.getDataType());
+            String expectedType = StringUtils.trimToNull(spec.dataType());
+            if (expectedType != null && actualType != null && !isTypeCompatible(expectedType, actualType)) {
+                typeMismatches++;
+                issues.add(new TemplateValidationIssue(
+                    "ERROR",
+                    "TYPE_MISMATCH",
+                    col.getName(),
+                    "字段类型不符合模板定义",
+                    expectedType,
+                    actualType
+                ));
+            }
+
+            Boolean expectedNullable = spec.nullable();
+            Boolean actualNullable = col.getNullable();
+            if (expectedNullable != null) {
+                boolean exp = Boolean.TRUE.equals(expectedNullable);
+                boolean act = actualNullable == null || Boolean.TRUE.equals(actualNullable);
+                if (exp != act) {
+                    nullableMismatches++;
+                    issues.add(new TemplateValidationIssue(
+                        "ERROR",
+                        "NULLABLE_MISMATCH",
+                        col.getName(),
+                        "字段可空性不符合模板定义",
+                        String.valueOf(exp),
+                        String.valueOf(act)
+                    ));
+                }
+            }
+
+            String expectedStandardCode = StringUtils.trimToNull(spec.standardCode());
+            if (expectedStandardCode != null) {
+                UUID standardId = col.getStandardId();
+                if (standardId == null) {
+                    unmappedStandards++;
+                    issues.add(new TemplateValidationIssue(
+                        "WARN",
+                        "STANDARD_UNMAPPED",
+                        col.getName(),
+                        "字段未绑定数据元（字段标准）",
+                        expectedStandardCode,
+                        null
+                    ));
+                } else {
+                    DataStandard standard = standardsById.get(standardId);
+                    String actualStandardCode = standard != null ? StringUtils.trimToNull(standard.getCode()) : null;
+                    if (actualStandardCode == null || !actualStandardCode.equalsIgnoreCase(expectedStandardCode)) {
+                        standardMismatches++;
+                        issues.add(new TemplateValidationIssue(
+                            "WARN",
+                            "STANDARD_MISMATCH",
+                            col.getName(),
+                            "字段绑定的数据元与模板期望不一致",
+                            expectedStandardCode,
+                            actualStandardCode
+                        ));
+                    }
+                }
+            } else {
+                // If template didn't specify standard but comment hints exist, encourage mapping.
+                String hinted = extractStdCodeHint(StringUtils.trimToNull(col.getComment()));
+                if (hinted != null && col.getStandardId() == null) {
+                    issues.add(new TemplateValidationIssue(
+                        "INFO",
+                        "STD_HINT_UNMAPPED",
+                        col.getName(),
+                        "注释包含 STD 编码但未绑定数据元，可在元数据页面使用“自动匹配”",
+                        hinted,
+                        null
+                    ));
+                }
+            }
+        }
+
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("requiredFields", requiredFields);
+        summary.put("missingFields", missingFields);
+        summary.put("typeMismatches", typeMismatches);
+        summary.put("nullableMismatches", nullableMismatches);
+        summary.put("unmappedStandards", unmappedStandards);
+        summary.put("standardMismatches", standardMismatches);
+        summary.put("issueCount", issues.size());
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("templateId", id.toString());
+        payload.put("templateName", template.getName());
+        payload.put("layer", template.getLayer());
+        payload.put("version", template.getVersion());
+        payload.put("tableId", tableId.toString());
+        payload.put("tableName", table.getName());
+        payload.put("datasetId", dataset != null && dataset.getId() != null ? dataset.getId().toString() : null);
+        payload.put("namingRule", namingRule);
+        payload.put("summary", summary);
+        payload.put("issues", issues);
+
+        auditService.auditAction(
+            "MODELING_TEMPLATE_VALIDATE",
+            AuditStage.SUCCESS,
+            id.toString(),
+            Map.of(
+                "summary",
+                "校验模型模板与数据表结构",
+                "templateId",
+                id.toString(),
+                "tableId",
+                tableId.toString(),
+                "issueCount",
+                issues.size()
+            )
+        );
+        return ApiResponses.ok(payload);
+    }
+
     private void applyPlanUpsert(ModelingPlan plan, ModelingPlan request, String activeDeptHeader) {
         if (plan == null || request == null) return;
         plan.setName(StringUtils.trimToNull(request.getName()));
         plan.setDomain(StringUtils.trimToNull(request.getDomain()));
         plan.setScope(StringUtils.trimToNull(request.getScope()));
-        plan.setStatus(StringUtils.trimToNull(request.getStatus()));
         plan.setVersion(StringUtils.trimToNull(request.getVersion()));
         plan.setVersionNotes(StringUtils.trimToNull(request.getVersionNotes()));
         plan.setOwner(StringUtils.trimToNull(request.getOwner()));
@@ -834,6 +1122,20 @@ public class ModelingAuxResource {
             return s;
         }
         return "DRAFT";
+    }
+
+    private String parsePlanStatusFilter(String status) {
+        if (!org.springframework.util.StringUtils.hasText(status)) {
+            return null;
+        }
+        String s = status.trim().toUpperCase(Locale.ROOT);
+        if ("ALL".equals(s)) {
+            return null;
+        }
+        if ("PUBLISHED".equals(s) || "ARCHIVED".equals(s) || "DRAFT".equals(s)) {
+            return s;
+        }
+        throw new org.springframework.web.server.ResponseStatusException(HttpStatus.BAD_REQUEST, "invalid status: " + status);
     }
 
     private void upsertPlanVersionSnapshot(ModelingPlan plan, String changeSummary, String statusOverride) {
@@ -1089,5 +1391,175 @@ public class ModelingAuxResource {
             return false;
         }
         return value.toLowerCase(Locale.ROOT).contains(keyword.trim().toLowerCase(Locale.ROOT));
+    }
+
+    private List<TemplateFieldSpec> parseTemplateFieldSpecs(String raw) {
+        String text = StringUtils.trimToNull(raw);
+        if (text == null) {
+            return List.of();
+        }
+        String trimmed = text.trim();
+        if (trimmed.startsWith("[") || trimmed.startsWith("{")) {
+            try {
+                Object parsed = objectMapper.readValue(trimmed, Object.class);
+                if (parsed instanceof List<?> list) {
+                    return parseTemplateFieldSpecsFromList(list);
+                }
+                if (parsed instanceof Map<?, ?> map) {
+                    Object fields = map.get("fields");
+                    if (fields instanceof List<?> list) {
+                        return parseTemplateFieldSpecsFromList(list);
+                    }
+                }
+            } catch (Exception ignored) {}
+        }
+        return parseTemplateFieldSpecsFromText(trimmed);
+    }
+
+    private List<TemplateFieldSpec> parseTemplateFieldSpecsFromList(List<?> list) {
+        if (list == null || list.isEmpty()) {
+            return List.of();
+        }
+        List<TemplateFieldSpec> specs = new ArrayList<>();
+        for (Object o : list) {
+            if (!(o instanceof Map<?, ?> m)) continue;
+            String name = StringUtils.trimToNull(Objects.toString(m.get("name"), null));
+            if (name == null) continue;
+            String dataType = StringUtils.trimToNull(Objects.toString(m.get("dataType"), null));
+            Boolean nullable = parseNullable(m.get("nullable"));
+            String standardCode = StringUtils.trimToNull(Objects.toString(m.get("standardCode"), null));
+            String comment = StringUtils.trimToNull(Objects.toString(m.get("comment"), null));
+            specs.add(new TemplateFieldSpec(name, dataType, nullable, standardCode, comment));
+        }
+        return specs;
+    }
+
+    private List<TemplateFieldSpec> parseTemplateFieldSpecsFromText(String text) {
+        List<String> lines = Arrays.stream(text.split("\\r?\\n"))
+            .map(String::trim)
+            .filter(s -> !s.isEmpty())
+            .filter(s -> !s.startsWith("#"))
+            .filter(s -> !s.startsWith("//"))
+            .toList();
+        if (lines.isEmpty()) {
+            return List.of();
+        }
+
+        String header = lines.getFirst();
+        boolean hasHeader = header.toLowerCase(Locale.ROOT).contains("name") && header.toLowerCase(Locale.ROOT).contains("datatype");
+        List<String> dataLines = hasHeader ? lines.subList(1, lines.size()) : lines;
+
+        List<TemplateFieldSpec> specs = new ArrayList<>();
+        for (String line : dataLines) {
+            if (!org.springframework.util.StringUtils.hasText(line)) continue;
+            String[] parts = line.split("[,\\t]");
+            String name = parts.length > 0 ? StringUtils.trimToNull(parts[0]) : null;
+            if (name == null) continue;
+            String dataType = parts.length > 1 ? StringUtils.trimToNull(parts[1]) : null;
+            Boolean nullable = parts.length > 2 ? parseNullable(parts[2]) : null;
+            String standardCode = parts.length > 3 ? StringUtils.trimToNull(parts[3]) : null;
+            specs.add(new TemplateFieldSpec(name, dataType, nullable, standardCode, null));
+        }
+        return specs;
+    }
+
+    private Boolean parseNullable(Object raw) {
+        if (raw == null) return null;
+        if (raw instanceof Boolean b) return b;
+        String s = StringUtils.trimToNull(String.valueOf(raw));
+        if (s == null) return null;
+        String v = s.trim().toLowerCase(Locale.ROOT);
+        if (v.equals("true") || v.equals("1") || v.equals("yes") || v.equals("y") || v.equals("是")) return Boolean.TRUE;
+        if (v.equals("false") || v.equals("0") || v.equals("no") || v.equals("n") || v.equals("否")) return Boolean.FALSE;
+        return null;
+    }
+
+    private Pattern compileNamingPattern(String namingRule) {
+        String raw = StringUtils.trimToNull(namingRule);
+        if (raw == null) return null;
+        String candidate = raw;
+        if (candidate.startsWith("regex:")) {
+            candidate = StringUtils.trimToNull(candidate.substring("regex:".length()));
+        } else if (candidate.startsWith("/") && candidate.endsWith("/") && candidate.length() > 2) {
+            candidate = candidate.substring(1, candidate.length() - 1);
+        }
+        if (!org.springframework.util.StringUtils.hasText(candidate)) {
+            return null;
+        }
+        try {
+            return Pattern.compile(candidate);
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private String extractStdCodeHint(String comment) {
+        if (!org.springframework.util.StringUtils.hasText(comment)) {
+            return null;
+        }
+        var m = STD_CODE_PATTERN.matcher(comment);
+        if (m.find()) {
+            String code = StringUtils.trimToNull(m.group(1));
+            return code;
+        }
+        return null;
+    }
+
+    private Map<UUID, DataStandard> loadStandardsById(List<CatalogColumnSchema> columns) {
+        if (columns == null || columns.isEmpty()) {
+            return java.util.Collections.emptyMap();
+        }
+        Set<UUID> ids = new LinkedHashSet<>();
+        for (CatalogColumnSchema c : columns) {
+            if (c == null) continue;
+            if (c.getStandardId() != null) {
+                ids.add(c.getStandardId());
+            }
+        }
+        if (ids.isEmpty()) {
+            return java.util.Collections.emptyMap();
+        }
+        Map<UUID, DataStandard> map = new LinkedHashMap<>();
+        for (DataStandard standard : dataStandardRepository.findAllById(ids)) {
+            if (standard != null && standard.getId() != null) {
+                map.put(standard.getId(), standard);
+            }
+        }
+        return map;
+    }
+
+    private boolean isTypeCompatible(String expectedType, String actualType) {
+        String expected = normalizeDataType(expectedType);
+        String actual = normalizeDataType(actualType);
+        if (expected == null || actual == null) {
+            return true;
+        }
+        return expected.equals(actual);
+    }
+
+    private String normalizeDataType(String rawType) {
+        if (!org.springframework.util.StringUtils.hasText(rawType)) {
+            return null;
+        }
+        String t = rawType.trim().toLowerCase(Locale.ROOT);
+        int paren = t.indexOf('(');
+        if (paren > 0) {
+            t = t.substring(0, paren).trim();
+        }
+        if (t.isEmpty()) {
+            return null;
+        }
+        return switch (t) {
+            case "varchar", "char", "character", "character varying", "string", "text" -> "string";
+            case "bigint", "int8", "long" -> "bigint";
+            case "int", "integer", "int4" -> "int";
+            case "smallint", "int2", "short" -> "smallint";
+            case "double", "float8" -> "double";
+            case "float", "float4", "real" -> "float";
+            case "decimal", "numeric" -> "decimal";
+            case "boolean", "bool" -> "boolean";
+            case "timestamp", "datetime" -> "timestamp";
+            default -> t;
+        };
     }
 }

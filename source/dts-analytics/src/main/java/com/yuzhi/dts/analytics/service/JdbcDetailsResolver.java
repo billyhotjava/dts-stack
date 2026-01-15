@@ -29,6 +29,33 @@ public class JdbcDetailsResolver {
             jdbcUrl = "jdbc:postgresql://%s:%d/%s".formatted(host, port, dbName);
         }
 
+        if (jdbcUrl == null && "mysql".equalsIgnoreCase(engine)) {
+            String host = firstText(details, "host");
+            Integer port = firstInt(details, "port").orElse(3306);
+            String dbName = firstText(details, "dbname", "db", "database");
+            if (host == null || dbName == null) {
+                throw new IllegalArgumentException("MySQL database requires details.host and details.dbname");
+            }
+            jdbcUrl = "jdbc:mysql://%s:%d/%s".formatted(host, port, dbName);
+        }
+
+        if (jdbcUrl == null && "oracle".equalsIgnoreCase(engine)) {
+            String host = firstText(details, "host");
+            Integer port = firstInt(details, "port").orElse(1521);
+            String serviceName = firstText(details, "service-name", "service_name", "serviceName", "service");
+            String sid = firstText(details, "sid", "database");
+            if (host == null) {
+                throw new IllegalArgumentException("Oracle database requires details.host");
+            }
+            if (serviceName != null) {
+                jdbcUrl = "jdbc:oracle:thin:@//%s:%d/%s".formatted(host, port, serviceName);
+            } else if (sid != null) {
+                jdbcUrl = "jdbc:oracle:thin:@%s:%d:%s".formatted(host, port, sid);
+            } else {
+                throw new IllegalArgumentException("Oracle database requires details.service-name or details.sid");
+            }
+        }
+
         if (jdbcUrl == null || jdbcUrl.isBlank()) {
             throw new IllegalArgumentException("Missing details.jdbc-url for engine=" + engine);
         }
@@ -77,4 +104,3 @@ public class JdbcDetailsResolver {
 
     public record JdbcDetails(String jdbcUrl, String username, String password) {}
 }
-

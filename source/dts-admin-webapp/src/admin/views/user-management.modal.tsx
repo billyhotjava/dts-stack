@@ -689,9 +689,9 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 								<div className="flex items-center gap-2">
 									<span className="text-sm text-muted-foreground">院级状态</span>
 									{mdmEnabled === 0 ? (
-										<span className="text-sm text-red-600">院级禁用</span>
+										<span className="text-sm text-red-600">禁用</span>
 									) : mdmEnabled === 1 ? (
-										<span className="text-sm text-emerald-600">院级启用</span>
+										<span className="text-sm text-emerald-600">可用</span>
 									) : (
 										<span className="text-sm text-muted-foreground">--</span>
 									)}

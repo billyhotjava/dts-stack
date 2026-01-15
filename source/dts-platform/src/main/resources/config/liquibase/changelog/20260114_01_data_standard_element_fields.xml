@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260114_01_data_standard_element_fields" author="platform">
+        <comment>Data standards: add data-element fields (type/nullability/codeset) for model mapping</comment>
+        <addColumn tableName="data_standard">
+            <column name="data_type" type="varchar(64)"/>
+            <column name="nullable" type="boolean"/>
+            <column name="code_set" type="varchar(128)"/>
+        </addColumn>
+        <createIndex tableName="data_standard" indexName="idx_data_standard_data_type">
+            <column name="data_type"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>
+

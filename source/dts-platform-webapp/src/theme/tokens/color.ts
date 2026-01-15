@@ -127,13 +127,13 @@ export const darkColorTokens = {
 	common: commonColors,
 	action: actionColors,
 	text: {
-		primary: "#E0E6ED",
-		secondary: "#94A3B8",
-		disabled: "#64748B",
+		primary: "#E6E8EE",
+		secondary: "#A1A9B7",
+		disabled: "#667085",
 	},
 	background: {
-		default: "#0F172A",
-		paper: "#10192A",
-		neutral: "#0B1220",
+		default: "#171A21",
+		paper: "#1F2430",
+		neutral: "#2A3341",
 	},
 };

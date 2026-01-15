@@ -26,6 +26,7 @@ import java.time.Instant;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
@@ -246,13 +247,66 @@ public class InfraManagementService {
             log.setResult(result.success() ? "SUCCESS" : "FAILED");
             log.setMessage(result.message());
             log.setElapsedMs((int) result.elapsedMillis());
-            log.setRequestPayload(objectMapper.writeValueAsString(payload));
+            log.setRequestPayload(objectMapper.writeValueAsString(redactPayload(payload)));
             log.setCreatedBy(username);
             log.setCreatedDate(Instant.now());
             testLogRepository.save(log);
         } catch (JsonProcessingException e) {
             LOG.warn("Failed to persist connection test log: {}", e.getMessage());
         }
+    }
+
+    private Object redactPayload(Object payload) {
+        if (payload == null) {
+            return null;
+        }
+        if (payload instanceof HiveConnectionTestRequest request) {
+            Map<String, Object> safe = new LinkedHashMap<>();
+            safe.put("jdbcUrl", request.getJdbcUrl());
+            safe.put("loginPrincipal", request.getLoginPrincipal());
+            safe.put("authMethod", request.getAuthMethod() != null ? request.getAuthMethod().name() : null);
+            safe.put("proxyUser", request.getProxyUser());
+            safe.put("testQuery", request.getTestQuery());
+            safe.put("jdbcProperties", request.getJdbcProperties());
+            safe.put("remarks", request.getRemarks());
+            safe.put("krb5Provided", StringUtils.hasText(request.getKrb5Conf()));
+            safe.put("keytabProvided", StringUtils.hasText(request.getKeytabBase64()));
+            safe.put("passwordProvided", StringUtils.hasText(request.getPassword()));
+            return safe;
+        }
+        if (payload instanceof DataSourceRequest request) {
+            Map<String, Object> safe = new LinkedHashMap<>();
+            safe.put("name", request.name());
+            safe.put("type", request.type());
+            safe.put("jdbcUrl", request.jdbcUrl());
+            safe.put("username", request.username());
+            safe.put("description", request.description());
+            safe.put("props", request.props());
+            safe.put("secretsProvided", request.secrets() != null && !request.secrets().isEmpty());
+            return safe;
+        }
+        if (payload instanceof Map<?, ?> map) {
+            Map<String, Object> safe = new LinkedHashMap<>();
+            map.forEach((k, v) -> {
+                if (k == null) {
+                    return;
+                }
+                String key = String.valueOf(k);
+                String normalized = key.toLowerCase(Locale.ROOT);
+                if (
+                    normalized.contains("password") ||
+                    normalized.contains("keytab") ||
+                    normalized.contains("krb5") ||
+                    normalized.contains("secret")
+                ) {
+                    safe.put(key, "***");
+                } else {
+                    safe.put(key, v);
+                }
+            });
+            return safe;
+        }
+        return payload;
     }
 
     public boolean isMultiSourceEnabled() {
@@ -266,7 +320,9 @@ public class InfraManagementService {
         entity.setUsername(request.username());
         entity.setDescription(request.description());
         entity.setProps(writeProps(request.props()));
-        secretService.applySecrets(entity, request.secrets());
+        if (request.secrets() != null) {
+            secretService.applySecrets(entity, request.secrets());
+        }
         entity.setLastModifiedBy(username);
         entity.setCreatedBy(entity.getCreatedBy() == null ? username : entity.getCreatedBy());
         if (!StringUtils.hasText(entity.getStatus())) {
@@ -442,10 +498,14 @@ public class InfraManagementService {
             secrets.put("keytabBase64", request.getKeytabBase64());
             secrets.put("keytabFileName", request.getKeytabFileName());
         }
-        if (request.getAuthMethod() == HiveConnectionTestRequest.AuthMethod.PASSWORD && StringUtils.hasText(request.getPassword())) {
+        if (
+            (request.getAuthMethod() == HiveConnectionTestRequest.AuthMethod.PASSWORD ||
+                request.getAuthMethod() == HiveConnectionTestRequest.AuthMethod.JDBC_PASSWORD) &&
+            StringUtils.hasText(request.getPassword())
+        ) {
             secrets.put("password", request.getPassword());
         }
-        if (StringUtils.hasText(request.getKrb5Conf())) {
+        if (request.getAuthMethod() != HiveConnectionTestRequest.AuthMethod.JDBC_PASSWORD && StringUtils.hasText(request.getKrb5Conf())) {
             secrets.put("krb5Conf", request.getKrb5Conf());
         }
         return secrets;
@@ -457,7 +517,9 @@ public class InfraManagementService {
         entity.setLocation(request.location());
         entity.setDescription(request.description());
         entity.setProps(writeProps(request.props()));
-        secretService.applySecrets(entity, request.secrets());
+        if (request.secrets() != null) {
+            secretService.applySecrets(entity, request.secrets());
+        }
         entity.setLastModifiedBy(username);
         entity.setCreatedBy(entity.getCreatedBy() == null ? username : entity.getCreatedBy());
     }

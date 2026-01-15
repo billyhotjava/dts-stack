@@ -178,7 +178,11 @@ public class EmbedResource {
     }
 
     @GetMapping(path = "/embed/card/{token}", produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<?> embedCard(@PathVariable("token") String token) {
+    public ResponseEntity<?> embedCard(@PathVariable("token") String token, HttpServletRequest request) {
+        Optional<ResponseEntity<String>> auth = MetabaseAuth.requireUser(sessionService, request);
+        if (auth.isPresent()) {
+            return auth.get();
+        }
         if (!embedTokenService.isEmbeddingEnabled()) {
             return ResponseEntity.status(404).build();
         }
@@ -201,7 +205,12 @@ public class EmbedResource {
     }
 
     @PostMapping(path = "/embed/card/{token}/query", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<?> embedCardQuery(@PathVariable("token") String token, @RequestBody(required = false) JsonNode body) {
+    public ResponseEntity<?> embedCardQuery(
+            @PathVariable("token") String token, @RequestBody(required = false) JsonNode body, HttpServletRequest request) {
+        Optional<ResponseEntity<String>> auth = MetabaseAuth.requireUser(sessionService, request);
+        if (auth.isPresent()) {
+            return auth.get();
+        }
         if (!embedTokenService.isEmbeddingEnabled()) {
             return ResponseEntity.status(404).build();
         }
@@ -223,12 +232,17 @@ public class EmbedResource {
     }
 
     @PostMapping(path = "/embed/pivot/card/{token}/query", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<?> embedPivotCardQuery(@PathVariable("token") String token, @RequestBody(required = false) JsonNode body) {
-        return embedCardQuery(token, body);
+    public ResponseEntity<?> embedPivotCardQuery(
+            @PathVariable("token") String token, @RequestBody(required = false) JsonNode body, HttpServletRequest request) {
+        return embedCardQuery(token, body, request);
     }
 
     @GetMapping(path = "/embed/dashboard/{token}", produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<?> embedDashboard(@PathVariable("token") String token) {
+    public ResponseEntity<?> embedDashboard(@PathVariable("token") String token, HttpServletRequest request) {
+        Optional<ResponseEntity<String>> auth = MetabaseAuth.requireUser(sessionService, request);
+        if (auth.isPresent()) {
+            return auth.get();
+        }
         if (!embedTokenService.isEmbeddingEnabled()) {
             return ResponseEntity.status(404).build();
         }
@@ -259,7 +273,12 @@ public class EmbedResource {
             @PathVariable("token") String token,
             @PathVariable("dashcardId") long dashcardId,
             @PathVariable("cardId") long cardId,
-            @RequestBody(required = false) JsonNode body) {
+            @RequestBody(required = false) JsonNode body,
+            HttpServletRequest request) {
+        Optional<ResponseEntity<String>> auth = MetabaseAuth.requireUser(sessionService, request);
+        if (auth.isPresent()) {
+            return auth.get();
+        }
         if (!embedTokenService.isEmbeddingEnabled()) {
             return ResponseEntity.status(404).build();
         }
@@ -284,8 +303,9 @@ public class EmbedResource {
             @PathVariable("token") String token,
             @PathVariable("dashcardId") long dashcardId,
             @PathVariable("cardId") long cardId,
-            @RequestBody(required = false) JsonNode body) {
-        return embedDashboardDashcardQuery(token, dashcardId, cardId, body);
+            @RequestBody(required = false) JsonNode body,
+            HttpServletRequest request) {
+        return embedDashboardDashcardQuery(token, dashcardId, cardId, body, request);
     }
 
     private Map<String, Object> embedSettingsResponse() {

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router";
+import { Link, useLocation, useNavigate, useParams } from "react-router";
 import {
 	analyticsApi,
 	type CardDetail,
@@ -8,7 +8,9 @@ import {
 	type DatabaseListItem,
 } from "../api/analyticsApi";
 import { DataTable } from "../components/DataTable";
+import { EmptyState } from "../components/EmptyState";
 import { ErrorNotice } from "../components/ErrorNotice";
+import { QueryBuilder } from "../components/query/QueryBuilder";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import "./page.css";
 
@@ -17,21 +19,28 @@ type LoadState<T> =
 	| { state: "loaded"; value: T }
 	| { state: "error"; error: unknown };
 
+type EditorMode = "builder" | "sql";
+
+function extractDatasetQuery(card: CardDetail): Record<string, unknown> | null {
+	const dq: any = card.dataset_query;
+	return dq && typeof dq === "object" ? (dq as Record<string, unknown>) : null;
+}
+
 function extractNativeSql(card: CardDetail): string {
 	const dq: any = card.dataset_query;
 	const q = dq?.native?.query;
 	return typeof q === "string" ? q : "";
 }
 
-function extractDatabaseId(card: CardDetail): number | null {
-	const dq: any = card.dataset_query;
-	const v = dq?.database;
+function extractDatabaseIdFromDatasetQuery(datasetQuery: Record<string, unknown> | null): number | null {
+	const v: any = datasetQuery?.database;
 	return typeof v === "number" && v > 0 ? v : null;
 }
 
 export default function CardEditorPage() {
 	const locale: Locale = useMemo(() => getEffectiveLocale(), []);
 	const navigate = useNavigate();
+	const location = useLocation();
 	const params = useParams();
 	const cardId = params.id ? String(params.id) : null;
 
@@ -41,7 +50,10 @@ export default function CardEditorPage() {
 	const [name, setName] = useState("");
 	const [databaseId, setDatabaseId] = useState<number | null>(null);
 	const [collectionId, setCollectionId] = useState<number | null>(null);
+	const [mode, setMode] = useState<EditorMode>("builder");
 	const [sql, setSql] = useState("");
+	const [builderInitialDatasetQuery, setBuilderInitialDatasetQuery] = useState<Record<string, unknown> | null>(null);
+	const [builderDatasetQuery, setBuilderDatasetQuery] = useState<Record<string, unknown> | null>(null);
 	const [runState, setRunState] = useState<LoadState<CardQueryResponse> | null>(null);
 	const [saveState, setSaveState] = useState<LoadState<CardDetail> | null>(null);
 
@@ -88,9 +100,21 @@ export default function CardEditorPage() {
 				if (cancelled) return;
 				setCard({ state: "loaded", value: v });
 				setName(v.name ?? "");
-				setSql(extractNativeSql(v));
-				setDatabaseId(extractDatabaseId(v));
+				const dq = extractDatasetQuery(v);
+				setDatabaseId(extractDatabaseIdFromDatasetQuery(dq));
 				setCollectionId(typeof v.collection_id === "number" ? v.collection_id : null);
+
+				if (dq?.type === "query") {
+					setMode("builder");
+					setBuilderInitialDatasetQuery(dq);
+					setBuilderDatasetQuery(dq);
+					setSql("");
+				} else {
+					setMode("sql");
+					setSql(extractNativeSql(v));
+					setBuilderInitialDatasetQuery(null);
+					setBuilderDatasetQuery(null);
+				}
 			})
 			.catch((e) => {
 				if (cancelled) return;
@@ -109,21 +133,59 @@ export default function CardEditorPage() {
 		}
 	}, [databaseId, databases]);
 
-	const canRun = Boolean(databaseId && sql.trim());
-	const canSave = Boolean(name.trim() && databaseId && sql.trim());
+	useEffect(() => {
+		setRunState(null);
+		if (mode === "builder") {
+			setSql("");
+		}
+	}, [mode]);
+
+	useEffect(() => {
+		if (mode !== "builder") return;
+		setBuilderInitialDatasetQuery(null);
+		setBuilderDatasetQuery(null);
+	}, [databaseId, mode]);
+
+	useEffect(() => {
+		if (cardId) return;
+		const sp = new URLSearchParams(location.search);
+		const preDb = Number.parseInt(sp.get("db") ?? "", 10);
+		const preTable = Number.parseInt(sp.get("table") ?? "", 10);
+		if (!Number.isFinite(preDb) || preDb <= 0) return;
+		if (!Number.isFinite(preTable) || preTable <= 0) return;
+		if (databases.state !== "loaded") return;
+		const exists = databases.value.some((db) => db.id === preDb);
+		if (!exists) return;
+		setMode("builder");
+		if (databaseId !== preDb) {
+			setDatabaseId(preDb);
+		}
+		const init = { database: preDb, type: "query", query: { "source-table": preTable } } as Record<string, unknown>;
+		setBuilderInitialDatasetQuery(init);
+		setBuilderDatasetQuery(init);
+	}, [cardId, location.search, databases, databaseId]);
+
+	const canRun = mode === "sql" ? Boolean(databaseId && sql.trim()) : Boolean(builderDatasetQuery);
+	const canSave =
+		mode === "sql"
+			? Boolean(name.trim() && databaseId && sql.trim())
+			: Boolean(name.trim() && databaseId && builderDatasetQuery);
+	const dbEmpty = databases.state === "loaded" && databases.value.length === 0;
 
 	const run = async () => {
 		if (!databaseId) return;
-		const query = sql.trim();
-		if (!query) return;
+		const trimmedSql = sql.trim();
+		if (mode === "sql" && !trimmedSql) return;
+		if (mode === "builder" && !builderDatasetQuery) return;
+
 		setRunState({ state: "loading" });
 		try {
-			const res = await analyticsApi.runDatasetQuery({
-				database: databaseId,
-				type: "native",
-				native: { query },
-				context: "ad-hoc",
-			});
+			const datasetQuery =
+				mode === "builder"
+					? { ...(builderDatasetQuery as Record<string, unknown>), context: "ad-hoc" }
+					: { database: databaseId, type: "native", native: { query: trimmedSql }, context: "ad-hoc" };
+
+			const res = await analyticsApi.runDatasetQuery(datasetQuery);
 			setRunState({ state: "loaded", value: res });
 		} catch (e) {
 			setRunState({ state: "error", error: e });
@@ -133,20 +195,26 @@ export default function CardEditorPage() {
 	const save = async () => {
 		if (!databaseId) return;
 		const trimmedName = name.trim();
-		const query = sql.trim();
-		if (!trimmedName || !query) return;
+		const trimmedSql = sql.trim();
+		if (!trimmedName) return;
+		if (mode === "sql" && !trimmedSql) return;
+		if (mode === "builder" && !builderDatasetQuery) return;
 
 		setSaveState({ state: "loading" });
 		try {
+			const datasetQuery =
+				mode === "builder"
+					? builderDatasetQuery
+					: {
+							database: databaseId,
+							type: "native",
+							native: { query: trimmedSql },
+						};
 			const body = {
 				name: trimmedName,
 				collection_id: collectionId,
 				display: "table",
-				dataset_query: {
-					database: databaseId,
-					type: "native",
-					native: { query },
-				},
+				dataset_query: datasetQuery,
 				visualization_settings: {},
 			};
 
@@ -159,28 +227,42 @@ export default function CardEditorPage() {
 	};
 
 	return (
-		<div className="page">
-			<h1 className="pageTitle">
-				{cardId ? `${t(locale, "questions.edit")} #${cardId}` : t(locale, "questions.new")}
-			</h1>
-			<div className="pageSub">
-				<Link to="/questions">{t(locale, "nav.questions")}</Link>
-				<span className="muted"> · </span>
-				<span className="muted">{t(locale, "questions.unsaved")}</span>
-			</div>
+			<div className="page">
+				<h1 className="pageTitle">
+					{cardId ? `${t(locale, "questions.edit")} #${cardId}` : t(locale, "questions.new")}
+				</h1>
+				<div className="pageSub">
+					<Link to="/questions">{t(locale, "nav.questions")}</Link>
+					<span className="muted"> · </span>
+					<span className="muted">{cardId ? `#${cardId}` : t(locale, "questions.unsaved")}</span>
+				</div>
 
 			<div style={{ height: 16 }} />
 
 			{card?.state === "error" && <ErrorNotice locale={locale} error={card.error} />}
 			{databases.state === "error" && <ErrorNotice locale={locale} error={databases.error} />}
-			{collections.state === "error" && <ErrorNotice locale={locale} error={collections.error} />}
-			{saveState?.state === "error" && <ErrorNotice locale={locale} error={saveState.error} />}
+				{collections.state === "error" && <ErrorNotice locale={locale} error={collections.error} />}
+				{saveState?.state === "error" && <ErrorNotice locale={locale} error={saveState.error} />}
 
-			<div className="card">
-				<div className="row">
-					<label style={{ flex: 1 }}>
-						<div className="muted">{t(locale, "common.name")}</div>
-						<input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="..." />
+				{dbEmpty ? (
+					<>
+						<EmptyState
+							title={t(locale, "questions.noDb")}
+							action={
+								<Link className="btn" to="/data/new">
+									{t(locale, "data.add")}
+								</Link>
+							}
+						/>
+						<div style={{ height: 16 }} />
+					</>
+				) : null}
+
+				<div className="card">
+					<div className="row">
+						<label style={{ flex: 1 }}>
+							<div className="muted">{t(locale, "common.name")}</div>
+							<input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="..." />
 					</label>
 
 					<label style={{ width: 260 }}>
@@ -226,6 +308,36 @@ export default function CardEditorPage() {
 
 				<div style={{ height: 12 }} />
 
+				<div className="row">
+					<button
+						className={mode === "builder" ? "btn btnActive" : "btn"}
+						type="button"
+						onClick={() => setMode("builder")}
+						disabled={dbEmpty}
+					>
+						{t(locale, "questions.mode.builder")}
+					</button>
+					<button
+						className={mode === "sql" ? "btn btnActive" : "btn"}
+						type="button"
+						onClick={() => setMode("sql")}
+						disabled={dbEmpty}
+					>
+						{t(locale, "questions.mode.sql")}
+					</button>
+					{mode === "builder" ? <span className="muted">{t(locale, "questions.builder")}</span> : null}
+					{mode === "sql" ? <span className="muted">{t(locale, "questions.sql")}</span> : null}
+				</div>
+
+				<div style={{ height: 12 }} />
+
+				{mode === "builder" ? (
+					<QueryBuilder
+						databaseId={databaseId}
+						initialDatasetQuery={builderInitialDatasetQuery}
+						onDatasetQueryChange={(dq) => setBuilderDatasetQuery(dq)}
+					/>
+				) : (
 				<label>
 					<div className="muted">{t(locale, "questions.sql")}</div>
 					<textarea
@@ -236,19 +348,30 @@ export default function CardEditorPage() {
 						placeholder="select 1"
 					/>
 				</label>
+				)}
 
 				<div style={{ height: 12 }} />
 
-				<div className="row">
-					<button className="btn" type="button" onClick={run} disabled={!canRun || runState?.state === "loading"}>
-						{t(locale, "questions.run")}
-					</button>
-					<button className="btn" type="button" onClick={save} disabled={!canSave || saveState?.state === "loading"}>
-						{t(locale, "questions.save")}
-					</button>
-					{saveState?.state === "loading" && <span className="muted">{t(locale, "loading")}</span>}
+					<div className="row">
+						<button
+							className="btn"
+							type="button"
+							onClick={run}
+							disabled={dbEmpty || !canRun || runState?.state === "loading"}
+						>
+							{t(locale, "questions.run")}
+						</button>
+						<button
+							className="btn"
+							type="button"
+							onClick={save}
+							disabled={dbEmpty || !canSave || saveState?.state === "loading"}
+						>
+							{t(locale, "questions.save")}
+						</button>
+						{saveState?.state === "loading" && <span className="muted">{t(locale, "loading")}</span>}
+					</div>
 				</div>
-			</div>
 
 			<div style={{ height: 16 }} />
 
@@ -262,7 +385,17 @@ export default function CardEditorPage() {
 				{runState?.state === "loading" && <div>{t(locale, "loading")}</div>}
 				{runState?.state === "error" && <ErrorNotice locale={locale} error={runState.error} />}
 				{runState?.state === "loaded" && (
-					<DataTable cols={(runState.value.data?.cols as any[]) ?? []} rows={(runState.value.data?.rows as any[]) ?? []} maxRows={200} />
+					<>
+						{runState.value?.data?.native_form?.query ? (
+							<div style={{ marginBottom: 12 }}>
+								<div className="muted">{t(locale, "questions.querySql")}</div>
+								<pre style={{ whiteSpace: "pre-wrap", fontSize: 12, margin: "8px 0 0" }}>
+									{String(runState.value.data.native_form.query)}
+								</pre>
+							</div>
+						) : null}
+						<DataTable cols={(runState.value.data?.cols as any[]) ?? []} rows={(runState.value.data?.rows as any[]) ?? []} maxRows={200} />
+					</>
 				)}
 			</div>
 		</div>

@@ -151,6 +151,10 @@ public class HiveConnectionService {
         Objects.requireNonNull(request, "request");
         Objects.requireNonNull(callback, "callback");
 
+        if (!requiresKerberos(request)) {
+            return executeWithinDriver(request, callback);
+        }
+
         kerberosLock.lock();
         Path tempDir = null;
         Path keytabPath = null;
@@ -383,9 +387,16 @@ public class HiveConnectionService {
         }
     }
 
+    private boolean requiresKerberos(HiveConnectionTestRequest request) {
+        if (request == null || request.getAuthMethod() == null) {
+            return true;
+        }
+        return request.getAuthMethod() != HiveConnectionTestRequest.AuthMethod.JDBC_PASSWORD;
+    }
+
     private String resolveJdbcUrl(HiveConnectionTestRequest request) {
         String url = request.getJdbcUrl();
-        if (request.getAuthMethod() == HiveConnectionTestRequest.AuthMethod.KEYTAB && StringUtils.hasText(url)) {
+        if (requiresKerberos(request) && StringUtils.hasText(url)) {
             String lower = url.toLowerCase(Locale.ROOT);
             if (lower.startsWith("jdbc:hive2:") && !lower.contains(";authentication=")) {
                 url = url + (url.endsWith(";") ? "" : ";") + "authentication=kerberos";
@@ -397,7 +408,15 @@ public class HiveConnectionService {
 
     private java.util.Properties buildConnectionProperties(HiveConnectionTestRequest request) {
         java.util.Properties props = new java.util.Properties();
-        if (request.getAuthMethod() == HiveConnectionTestRequest.AuthMethod.PASSWORD && StringUtils.hasText(request.getPassword())) {
+        if (request.getAuthMethod() == HiveConnectionTestRequest.AuthMethod.JDBC_PASSWORD) {
+            if (StringUtils.hasText(request.getLoginPrincipal())) {
+                props.setProperty("user", request.getLoginPrincipal().trim());
+            }
+            if (StringUtils.hasText(request.getPassword())) {
+                props.setProperty("password", request.getPassword());
+            }
+        } else if (request.getAuthMethod() == HiveConnectionTestRequest.AuthMethod.PASSWORD && StringUtils.hasText(request.getPassword())) {
+            // Kerberos password login (JAAS). Some drivers also accept this as a JDBC property.
             props.setProperty("password", request.getPassword());
         }
         if (StringUtils.hasText(request.getProxyUser())) {

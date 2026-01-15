@@ -22,6 +22,35 @@ public interface AdminKeycloakUserRepository extends JpaRepository<AdminKeycloak
 
     Page<AdminKeycloakUser> findByUsernameContainingIgnoreCaseAndMdmEnabled(String username, int mdmEnabled, Pageable pageable);
 
+    @Query("select u from AdminKeycloakUser u where u.username is not null and lower(u.username) not in :excluded")
+    Page<AdminKeycloakUser> findAllExcludingUsernames(@Param("excluded") Collection<String> excluded, Pageable pageable);
+
+    @Query(
+        "select u from AdminKeycloakUser u where u.username is not null and lower(u.username) not in :excluded and lower(u.username) like lower(concat('%', :username, '%'))"
+    )
+    Page<AdminKeycloakUser> findByUsernameContainingIgnoreCaseExcludingUsernames(
+        @Param("username") String username,
+        @Param("excluded") Collection<String> excluded,
+        Pageable pageable
+    );
+
+    @Query("select u from AdminKeycloakUser u where u.username is not null and lower(u.username) not in :excluded and u.mdmEnabled = :mdmEnabled")
+    Page<AdminKeycloakUser> findByMdmEnabledExcludingUsernames(
+        @Param("mdmEnabled") int mdmEnabled,
+        @Param("excluded") Collection<String> excluded,
+        Pageable pageable
+    );
+
+    @Query(
+        "select u from AdminKeycloakUser u where u.username is not null and lower(u.username) not in :excluded and lower(u.username) like lower(concat('%', :username, '%')) and u.mdmEnabled = :mdmEnabled"
+    )
+    Page<AdminKeycloakUser> findByUsernameContainingIgnoreCaseAndMdmEnabledExcludingUsernames(
+        @Param("username") String username,
+        @Param("mdmEnabled") int mdmEnabled,
+        @Param("excluded") Collection<String> excluded,
+        Pageable pageable
+    );
+
     @Query("select u from AdminKeycloakUser u where lower(u.username) in :usernames")
     List<AdminKeycloakUser> findByUsernameInIgnoreCase(@Param("usernames") Collection<String> usernames);
 }

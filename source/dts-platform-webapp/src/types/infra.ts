@@ -1,4 +1,4 @@
-export type HiveAuthMethod = "KEYTAB" | "PASSWORD";
+export type HiveAuthMethod = "KEYTAB" | "PASSWORD" | "JDBC_PASSWORD";
 
 export interface HiveConnectionTestRequest {
 	jdbcUrl: string;

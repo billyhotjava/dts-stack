@@ -23,6 +23,7 @@ import { Separator } from "@/ui/separator";
 import { Label } from "@/ui/label";
 import { Textarea } from "@/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/ui/select";
+import { useCatalogDomainOptions } from "@/hooks/useCatalogDomainOptions";
 import {
     DataStandardAttachmentDto,
     DataStandardDto,
@@ -38,6 +39,8 @@ import {
 import { useUserInfo } from "@/store/userStore";
 
 const attachmentExtensions = ["docx", "wps", "pdf", "xlsx", "xls", "md", "txt"];
+const DOMAIN_SELECT_UNSET = "__UNSET__";
+const DOMAIN_SELECT_CUSTOM = "__CUSTOM__";
 
 type EditFormState = {
     code: string;
@@ -45,6 +48,9 @@ type EditFormState = {
     domain: string;
     scope: string;
     owner: string;
+    dataType: string;
+    nullable: "UNSPECIFIED" | "true" | "false";
+    codeSet: string;
     tagsText: string;
     status: DataStandardStatus;
     version: string;
@@ -59,6 +65,9 @@ const buildEditFormState = (detail: DataStandardDto): EditFormState => ({
     domain: detail.domain ?? "",
     scope: detail.scope ?? "",
     owner: detail.owner ?? "",
+    dataType: detail.dataType ?? "",
+    nullable: detail.nullable === true ? "true" : detail.nullable === false ? "false" : "UNSPECIFIED",
+    codeSet: detail.codeSet ?? "",
     tagsText: fromTagList(detail.tags),
     status: detail.status,
     version: detail.currentVersion ?? "v1",
@@ -110,6 +119,29 @@ const DataStandardDetailPage = () => {
         ];
         return candidates.some((r) => roleSet.has(r));
     }, [roleSet]);
+
+    const {
+        options: domainTreeOptions,
+        keyByName: domainKeyByName,
+        nameByKey: domainNameByKey,
+        labelByKey: domainLabelByKey,
+    } = useCatalogDomainOptions();
+
+    const domainOptions = useMemo(() => {
+        const list = [...domainTreeOptions];
+        list.sort((a, b) => a.label.localeCompare(b.label, "zh-Hans-CN"));
+        return list;
+    }, [domainTreeOptions]);
+
+    const renderDomainLabel = useCallback(
+        (domain?: string | null) => {
+            const raw = String(domain ?? "").trim();
+            if (!raw) return "-";
+            const key = domainKeyByName[raw];
+            return key ? domainLabelByKey[key] ?? raw : raw;
+        },
+        [domainKeyByName, domainLabelByKey],
+    );
 
     const basicInfoRef = useRef<HTMLDivElement | null>(null);
     const versionsRef = useRef<HTMLDivElement | null>(null);
@@ -230,12 +262,16 @@ const DataStandardDetailPage = () => {
         }
         setSaving(true);
         const domain = editForm.domain.trim();
+        const nullable = editForm.nullable === "true" ? true : editForm.nullable === "false" ? false : null;
         const payload = {
             code: editForm.code.trim(),
             name: editForm.name.trim(),
             domain: domain || undefined,
             scope: editForm.scope || undefined,
             owner: editForm.owner || undefined,
+            dataType: editForm.dataType.trim() || null,
+            nullable,
+            codeSet: editForm.codeSet.trim() || null,
             tags: toTagList(editForm.tagsText),
             status: editForm.status,
             version: editForm.version.trim() || "v1",
@@ -505,13 +541,43 @@ const DataStandardDetailPage = () => {
 	                                    </div>
 	                                    <div>
 	                                        <Label className="text-sm">主题域</Label>
-	                                        <Input
-	                                            value={effectiveForm.domain}
-	                                            onChange={(event) =>
-	                                                setEditForm((prev) => (prev ? { ...prev, domain: event.target.value } : prev))
-	                                            }
-	                                            placeholder="如：财务 / 库存 / 项目"
-	                                        />
+                                            <Select
+                                                value={(() => {
+                                                    const raw = String(effectiveForm.domain ?? "").trim();
+                                                    if (!raw) return DOMAIN_SELECT_UNSET;
+                                                    const key = domainKeyByName[raw];
+                                                    return key ?? DOMAIN_SELECT_CUSTOM;
+                                                })()}
+                                                onValueChange={(value) => {
+                                                    if (value === DOMAIN_SELECT_UNSET) {
+                                                        setEditForm((prev) => (prev ? { ...prev, domain: "" } : prev));
+                                                        return;
+                                                    }
+                                                    if (value === DOMAIN_SELECT_CUSTOM) {
+                                                        return;
+                                                    }
+                                                    const domainName = domainNameByKey[value] ?? "";
+                                                    setEditForm((prev) => (prev ? { ...prev, domain: domainName } : prev));
+                                                }}
+                                            >
+                                                <SelectTrigger>
+                                                    <SelectValue placeholder="选择主题域" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value={DOMAIN_SELECT_UNSET}>（未选择）</SelectItem>
+                                                    {!domainKeyByName[String(effectiveForm.domain ?? "").trim()] &&
+                                                        !!String(effectiveForm.domain ?? "").trim() && (
+                                                            <SelectItem value={DOMAIN_SELECT_CUSTOM}>
+                                                                当前值：{effectiveForm.domain}（已不存在）
+                                                            </SelectItem>
+                                                        )}
+                                                    {domainOptions.map((opt) => (
+                                                        <SelectItem key={opt.key} value={opt.key}>
+                                                            {opt.label}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
 	                                    </div>
                                     <div>
                                         <Label className="text-sm">状态</Label>
@@ -545,6 +611,44 @@ const DataStandardDetailPage = () => {
                                                 )
                                             }
                                             placeholder="业务范围说明"
+                                        />
+                                    </div>
+                                    <div>
+                                        <Label className="text-sm">数据类型</Label>
+                                        <Input
+                                            value={effectiveForm.dataType}
+                                            onChange={(event) =>
+                                                setEditForm((prev) => (prev ? { ...prev, dataType: event.target.value } : prev))
+                                            }
+                                            placeholder="如：string / bigint / date"
+                                        />
+                                    </div>
+                                    <div>
+                                        <Label className="text-sm">可空</Label>
+                                        <Select
+                                            value={effectiveForm.nullable}
+                                            onValueChange={(value: any) =>
+                                                setEditForm((prev) => (prev ? { ...prev, nullable: value } : prev))
+                                            }
+                                        >
+                                            <SelectTrigger>
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="UNSPECIFIED">（未指定）</SelectItem>
+                                                <SelectItem value="true">是</SelectItem>
+                                                <SelectItem value="false">否</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="md:col-span-2">
+                                        <Label className="text-sm">码表/取值范围</Label>
+                                        <Input
+                                            value={effectiveForm.codeSet}
+                                            onChange={(event) =>
+                                                setEditForm((prev) => (prev ? { ...prev, codeSet: event.target.value } : prev))
+                                            }
+                                            placeholder="如：YES/NO，或引用码表编码"
                                         />
                                     </div>
                                     <div>
@@ -613,32 +717,44 @@ const DataStandardDetailPage = () => {
                             </div>
                         ) : (
                             <>
-	                                <div className="grid gap-4 md:grid-cols-2">
+		                                <div className="grid gap-4 md:grid-cols-2">
+		                                    <div className="space-y-2">
+		                                        <div className="text-sm text-muted-foreground">主题域</div>
+		                                        <div>{renderDomainLabel(detail.domain)}</div>
+		                                    </div>
 	                                    <div className="space-y-2">
-	                                        <div className="text-sm text-muted-foreground">主题域</div>
-	                                        <div>{detail.domain || "-"}</div>
+	                                        <div className="text-sm text-muted-foreground">负责人</div>
+	                                        <div>{detail.owner ?? "-"}</div>
 	                                    </div>
-                                    <div className="space-y-2">
-                                        <div className="text-sm text-muted-foreground">负责人</div>
-                                        <div>{detail.owner ?? "-"}</div>
-                                    </div>
-                                    <div className="space-y-2">
-                                        <div className="text-sm text-muted-foreground">当前版本</div>
-                                        <div>{detail.currentVersion ?? "-"}</div>
-                                    </div>
-                                    <div className="space-y-2">
-                                        <div className="text-sm text-muted-foreground">最新更新时间</div>
-                                        <div>{formatDate(detail.lastModifiedDate ?? detail.createdDate)}</div>
-                                    </div>
-                                    <div className="space-y-2">
-                                        <div className="text-sm text-muted-foreground">适用范围</div>
-                                        <div>{detail.scope || "-"}</div>
-                                    </div>
-                                    <div className="space-y-2">
-                                        <div className="text-sm text-muted-foreground">标签</div>
-                                        <div>{detail.tags?.length ? detail.tags.join(", ") : "-"}</div>
-                                    </div>
-                                </div>
+                                        <div className="space-y-2">
+                                            <div className="text-sm text-muted-foreground">数据类型</div>
+                                            <div>{detail.dataType || "-"}</div>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <div className="text-sm text-muted-foreground">可空</div>
+                                            <div>{detail.nullable === true ? "是" : detail.nullable === false ? "否" : "-"}</div>
+                                        </div>
+	                                    <div className="space-y-2">
+	                                        <div className="text-sm text-muted-foreground">当前版本</div>
+	                                        <div>{detail.currentVersion ?? "-"}</div>
+	                                    </div>
+	                                    <div className="space-y-2">
+	                                        <div className="text-sm text-muted-foreground">最新更新时间</div>
+	                                        <div>{formatDate(detail.lastModifiedDate ?? detail.createdDate)}</div>
+	                                    </div>
+	                                    <div className="space-y-2">
+	                                        <div className="text-sm text-muted-foreground">适用范围</div>
+	                                        <div>{detail.scope || "-"}</div>
+	                                    </div>
+                                        <div className="space-y-2">
+                                            <div className="text-sm text-muted-foreground">码表/取值范围</div>
+                                            <div>{detail.codeSet || "-"}</div>
+                                        </div>
+	                                    <div className="space-y-2">
+	                                        <div className="text-sm text-muted-foreground">标签</div>
+	                                        <div>{detail.tags?.length ? detail.tags.join(", ") : "-"}</div>
+	                                    </div>
+		                                </div>
                                 <Separator className="my-6" />
                                 <div>
                                     <div className="text-sm font-semibold text-muted-foreground">描述与说明</div>

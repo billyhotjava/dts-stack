@@ -1,11 +1,23 @@
-# 2026-01-09 — dts-analytics（modern 替代 legacy）功能点清单（对齐 Metabase v0.58.x）
+# 2026-01-09 — dts-analytics（modern 替代 legacy）功能点清单（对齐 Metabase v0.58.1）
 
-目标：以 `source/dts-analytics-webapp/modern`（React 19/Vite，Chrome98 target）**全面替代** `source/dts-analytics-webapp/legacy`（Metabase UI 静态产物，当前基准 Metabase `v0.58.x`），完成后删除 legacy（代码/路由/运维配置）。
+目标：以 `source/dts-analytics-webapp/modern`（React 19/Vite，Chrome98 target）**全面替代** `source/dts-analytics-webapp/legacy`（Metabase UI 静态产物，基准 Metabase `v0.58.1`），完成后删除 legacy（代码/路由/运维配置）。
 
 约束与约定：
 - 只支持两种语言：中文（默认）+ 英文。
 - embedded：用户只在 `dts-platform` 登录一次；analytics 不提供二次登录 UI，不走 metabase bootstrap 向导。
 - 前端仅通过 `dts-analytics` 的 `/analytics/api/**` 交互（松耦合），不依赖 metabase.jar 或 cljs 源码。
+- analytics 作为 platform 子模块：入口由 `dts-platform-webapp` 打开新窗口 `/analytics`；鉴权/会话完全复用 platform（Traefik `platform-forward-auth@file`）。
+- 当前交付范围（明确不做）：入门（Getting Started）、Examples、使用向导/帮助中心、用户管理 UI、Admin Settings、Alerts/Pulses、Embedding（iframe 匿名/公开嵌入）。
+- 分享策略：只生成分享链接，但访问必须登录；暂不允许跨部门/跨密级分享（平台接口未定，先预留/占位）。
+- 数据源：支持 PostgreSQL / MySQL / Oracle / 达梦（JDBC 直连配置 UI）；达梦 JDBC 驱动 jar 放置在 `services/jdbc/` 并通过 `ANALYTICS_JDBC_DRIVERS_DIR` 动态加载。
+- 目标菜单结构（对齐 Metabase 0.58.1 左侧导航语义，允许名称微调，但要保证主要入口存在）：
+  - 首页
+  - 集合 / 你的个人集合
+  - 分析中心（作为“问题/仪表盘”的聚合页）
+  - 数据（数据库/表/字段）
+  - 模型
+  - 指标（本地 + 平台指标占位）
+  - 废纸篓
 
 ## 0) Metabase v0.58.x “对齐口径”（验收基线）
 
@@ -54,6 +66,7 @@
 - [x] App Layout：侧边栏导航（Collections/Dashboards/Questions/Search）。
 - [x] 404/错误页（最少 404 + 未登录提示页）。
 - [x] 语言切换（zh/en）与默认 zh（不引入第三语言资源）。
+- [x] dev 路由对齐：Traefik 代理 Vite 时 strip `/analytics`（保证 `/analytics/@vite/client` 正常，不出现“空白页/只有脚本标签”）。
 
 ### P0-Collections：集合浏览
 - [x] Collection 列表（含 root 概念）。
@@ -81,6 +94,18 @@
 
 相关后端：
 - `GET /api/card`、`GET /api/card/{id}`、`POST /api/card/{id}/query`（`CardResource`）
+
+### P0-Data：数据源配置（JDBC 直连）
+- [x] 数据源列表（Databases）。
+- [x] 新增数据源：连接信息表单 + 连接校验（validate）。
+- [x] 同步元数据（sync schema）并在数据源详情页展示表列表。
+- [ ] 表/字段浏览页（补齐 Metabase v0.58.x 的交互：schema 分组/搜索/字段详情）。
+  - [x] 字段详情页（field detail）：字段属性 + Top values（`GET /api/field/{id}` + `GET /api/field/{id}/values`）。
+
+相关后端：
+- `GET/POST /api/database`、`POST /api/database/validate`、`POST /api/database/{id}/sync_schema`、`GET /api/database/{id}/metadata`（`DatabaseResource`）
+- `GET /api/table?db_id=...`、`GET /api/table/{id}`（`TableResource`）
+- `GET /api/field/{id}`、`GET /api/field/{id}/values`（`FieldResource`）
 
 ### P0-Search：全局搜索（至少按名称）
 - [x] 搜索页（query 输入 → results 列表 → 进入 dashboard/card/collection）。
@@ -132,9 +157,13 @@
 ## 4) P2（管理与企业扩展：平台融合）
 
 ### P2-Data：数据浏览与元数据
-- [ ] Databases 列表/详情（只读）。
-- [ ] Tables/Fields 浏览（只读）。
+- [x] Databases 列表/详情（只读）。
+- [ ] Tables/Fields 浏览（只读）（P0 已有最小表列表，待补齐交互）。
 - [ ] Datasets/Segments/Metrics（只读 → 编辑）。
+
+平台融合（占位）：
+- [ ] 平台可见数据集/表：先做 dummy API（后续替换为 platform 真接口）。
+- [ ] 平台指标列表：先做 dummy API（后续替换为 platform 真接口），analytics 本地指标仍保留。
 
 相关后端：
 - `DatabaseResource` / `TableResource` / `FieldResource` / `DatasetResource` / `SegmentResource` / `MetricResource`
@@ -148,8 +177,9 @@
 - `UserResource` / `PermissionsResource` / `SettingsResource` / `LoginHistoryResource`
 
 ### P2-Sharing：分享与嵌入
-- [ ] dashboard/card public link（只读访问）。
-- [ ] embed（iframe/分享链接）策略（与平台安全头兼容）。
+- [ ] dashboard/card 分享链接（创建/撤销/打开）。
+- [x] 分享链接访问必须登录（禁止匿名）：`/api/public/**` 也要求登录态（embedded）。
+- [ ] 分享权限：暂不允许跨部门/跨密级分享（平台接口未定，先预留）。
 
 相关后端：
 - `PublicResource` / `EmbedResource`

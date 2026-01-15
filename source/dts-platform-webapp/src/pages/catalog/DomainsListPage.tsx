@@ -105,7 +105,7 @@ export default function DomainsListPage() {
 		<div className="space-y-4">
 			<Card>
 				<CardHeader className="flex items-center justify-between">
-					<CardTitle className="text-base">数据域管理</CardTitle>
+					<CardTitle className="text-base">主题域管理</CardTitle>
 					<div className="flex items-center gap-2">
 						<Input
 							value={keyword}
@@ -188,7 +188,7 @@ export default function DomainsListPage() {
 			<Dialog open={open} onOpenChange={setOpen}>
 				<DialogContent className="max-w-lg">
 					<DialogHeader>
-						<DialogTitle>{mode === "create" ? "新建数据域" : "编辑数据域"}</DialogTitle>
+						<DialogTitle>{mode === "create" ? "新建主题域" : "编辑主题域"}</DialogTitle>
 					</DialogHeader>
 					<div className="space-y-3">
 						<div className="grid gap-2">

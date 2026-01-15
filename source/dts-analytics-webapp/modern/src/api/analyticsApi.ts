@@ -36,12 +36,21 @@ export type DashboardListItem = {
 	created_at?: string;
 	updated_at?: string;
 	favorite?: boolean;
+	public_uuid?: string | null;
 };
 
 export type DashboardDetail = DashboardListItem & {
 	dashcards?: unknown[];
 	parameters?: unknown[];
 	ordered_cards?: DashboardCard[];
+};
+
+export type PublicCardDetail = CardDetail & {
+	public_uuid?: string | null;
+};
+
+export type PublicDashboardDetail = DashboardDetail & {
+	public_uuid?: string | null;
 };
 
 export type DashboardCard = {
@@ -66,6 +75,7 @@ export type CardListItem = {
 	created_at?: string;
 	updated_at?: string;
 	favorite?: boolean;
+	public_uuid?: string | null;
 };
 
 export type CardDetail = CardListItem & {
@@ -103,6 +113,21 @@ export type SearchResponse = {
 	total: number;
 };
 
+export type TrashItem = {
+	model: "dashboard" | "card" | string;
+	id: number;
+	name?: string;
+	description?: string | null;
+	collection_id?: number | null;
+	updated_at?: string;
+	created_at?: string;
+};
+
+export type TrashResponse = {
+	dashboards: TrashItem[];
+	cards: TrashItem[];
+};
+
 export type DatabaseListItem = {
 	id: number;
 	name?: string;
@@ -115,6 +140,77 @@ export type DatabaseListResponse = {
 };
 
 export type DatabaseMetadataResponse = Record<string, unknown>;
+
+export type DatabaseValidateResponse = Record<string, unknown>;
+export type DatabaseCreateResponse = Record<string, unknown>;
+
+export type TableSummary = {
+	id: number;
+	db_id?: number;
+	schema?: string | null;
+	name?: string;
+	display_name?: string;
+	description?: string | null;
+};
+
+export type TableDetail = TableSummary & {
+	fields?: Array<{
+		id: number;
+		name?: string;
+		display_name?: string;
+		base_type?: string;
+		semantic_type?: string | null;
+	}>;
+};
+
+export type FieldDetail = {
+	id: number;
+	name?: string;
+	display_name?: string;
+	description?: string | null;
+	table_id?: number;
+	db_id?: number;
+	base_type?: string;
+	effective_type?: string;
+	semantic_type?: string | null;
+	active?: boolean;
+	visibility_type?: string;
+	fingerprint?: unknown;
+	created_at?: string;
+	updated_at?: string;
+};
+
+export type FieldValuesResponse = {
+	field_id: number;
+	values: unknown[];
+	has_more_values?: boolean;
+	error?: unknown;
+};
+
+export type Metric = {
+	id: number;
+	name?: string;
+	description?: string | null;
+	archived?: boolean;
+	creator_id?: number;
+	table_id?: number | null;
+	definition?: unknown;
+};
+
+export type PlatformMetric = {
+	id: string | number;
+	name?: string;
+	description?: string | null;
+	dept?: string;
+	classification?: string;
+};
+
+export type VisibleTable = {
+	tableId: number;
+	dbId?: number;
+	schema?: string | null;
+	name?: string | null;
+};
 
 import { getPlatformTokens, refreshPlatformAccessToken } from "./platformSession";
 
@@ -199,6 +295,13 @@ async function requestJson<T>(url: string, method: "POST" | "PUT" | "DELETE", bo
 		}
 		throw new HttpError(response.status, msg, text);
 	}
+	if (response.status === 204) {
+		return undefined as T;
+	}
+	const contentType = response.headers.get("content-type") ?? "";
+	if (!contentType.includes("application/json")) {
+		return (await response.text()) as unknown as T;
+	}
 	return (await response.json()) as T;
 }
 
@@ -206,6 +309,18 @@ export const analyticsApi = {
 	getCurrentUser: () => fetchJson<CurrentUser>("/analytics/api/user/current"),
 	getHealth: () => fetchJson<{ status?: string }>("/analytics/api/health"),
 	listDatabases: () => fetchJson<DatabaseListResponse>("/analytics/api/database"),
+	listTables: (dbId: string | number) =>
+		fetchJson<TableSummary[]>(`/analytics/api/table?db_id=${encodeURIComponent(String(dbId))}`),
+	getTable: (tableId: string | number) =>
+		fetchJson<TableDetail>(`/analytics/api/table/${encodeURIComponent(String(tableId))}`),
+	getField: (fieldId: string | number) =>
+		fetchJson<FieldDetail>(`/analytics/api/field/${encodeURIComponent(String(fieldId))}`),
+	getFieldValues: (fieldId: string | number) =>
+		fetchJson<FieldValuesResponse>(`/analytics/api/field/${encodeURIComponent(String(fieldId))}/values`),
+	validateDatabase: (body: unknown) => sendJson<DatabaseValidateResponse>("/analytics/api/database/validate", body),
+	createDatabase: (body: unknown) => sendJson<DatabaseCreateResponse>("/analytics/api/database", body),
+	syncDatabaseSchema: (dbId: string | number) =>
+		sendJson<Record<string, unknown>>(`/analytics/api/database/${encodeURIComponent(String(dbId))}/sync_schema`, {}),
 	getDatabaseMetadata: (dbId: string | number) =>
 		fetchJson<DatabaseMetadataResponse>(`/analytics/api/database/${encodeURIComponent(String(dbId))}/metadata`),
 	listCollections: () => fetchJson<CollectionListItem[]>("/analytics/api/collection"),
@@ -238,4 +353,26 @@ export const analyticsApi = {
 		),
 	search: (q: string) =>
 		fetchJson<SearchResponse>(`/analytics/api/search?q=${encodeURIComponent(String(q ?? ""))}&limit=25&offset=0`),
+	listMetrics: () => fetchJson<Metric[]>("/analytics/api/metric"),
+	listPlatformMetrics: () => fetchJson<PlatformMetric[]>("/analytics/api/platform/metrics"),
+	listVisibleTables: () => fetchJson<Array<number | VisibleTable>>("/analytics/api/platform/visible-tables"),
+	getTrash: () => fetchJson<TrashResponse>("/analytics/api/trash"),
+	createCardPublicLink: (id: string | number) =>
+		sendJson<{ uuid: string }>(`/analytics/api/card/${encodeURIComponent(String(id))}/public_link`, {}),
+	deleteCardPublicLink: (id: string | number) =>
+		requestJson<void>(`/analytics/api/card/${encodeURIComponent(String(id))}/public_link`, "DELETE"),
+	createDashboardPublicLink: (id: string | number) =>
+		sendJson<{ uuid: string }>(`/analytics/api/dashboard/${encodeURIComponent(String(id))}/public_link`, {}),
+	deleteDashboardPublicLink: (id: string | number) =>
+		requestJson<void>(`/analytics/api/dashboard/${encodeURIComponent(String(id))}/public_link`, "DELETE"),
+	getPublicCard: (uuid: string) => fetchJson<PublicCardDetail>(`/analytics/api/public/card/${encodeURIComponent(uuid)}`),
+	queryPublicCard: (uuid: string, body?: unknown) =>
+		sendJson<CardQueryResponse>(`/analytics/api/public/card/${encodeURIComponent(uuid)}/query`, body ?? {}),
+	getPublicDashboard: (uuid: string) =>
+		fetchJson<PublicDashboardDetail>(`/analytics/api/public/dashboard/${encodeURIComponent(uuid)}`),
+	queryPublicDashboardDashcard: (uuid: string, dashcardId: string | number, cardId: string | number, body?: unknown) =>
+		sendJson<DashboardQueryResponse>(
+			`/analytics/api/public/dashboard/${encodeURIComponent(uuid)}/dashcard/${encodeURIComponent(String(dashcardId))}/card/${encodeURIComponent(String(cardId))}/query`,
+			body ?? {},
+		),
 };

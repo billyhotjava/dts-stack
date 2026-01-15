@@ -3,7 +3,9 @@ package com.yuzhi.dts.platform.web.rest;
 import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.config.CatalogFeatureProperties;
 import com.yuzhi.dts.platform.domain.catalog.*;
+import com.yuzhi.dts.platform.domain.modeling.DataStandard;
 import com.yuzhi.dts.platform.repository.catalog.*;
+import com.yuzhi.dts.platform.repository.modeling.DataStandardRepository;
 import com.yuzhi.dts.platform.repository.service.InfraDataSourceRepository;
 import com.yuzhi.dts.platform.security.AuthoritiesConstants;
 import com.yuzhi.dts.platform.security.ClassificationUtils;
@@ -15,6 +17,8 @@ import com.yuzhi.dts.platform.service.security.OrganizationVisibilityService;
 import jakarta.validation.Valid;
 import java.lang.reflect.Array;
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.springframework.http.HttpStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -34,6 +38,7 @@ public class CatalogResource {
     private static final String TYPE_INCEPTOR = "INCEPTOR";
     private static final String CATALOG_MAINTAINER_EXPRESSION =
         "hasAnyAuthority(T(com.yuzhi.dts.platform.security.AuthoritiesConstants).CATALOG_MAINTAINERS)";
+    private static final Pattern STD_CODE_PATTERN = Pattern.compile("(?i)(?:\\bSTD\\b|标准)\\s*[:：]\\s*([A-Za-z0-9_\\-\\.]+)");
 
     private final CatalogDomainRepository domainRepo;
     private final CatalogDatasetRepository datasetRepo;
@@ -51,6 +56,7 @@ public class CatalogResource {
     private final InfraDataSourceRepository infraDataSourceRepository;
     private final CatalogFeatureProperties catalogFeatures;
     private final OrganizationVisibilityService organizationVisibilityService;
+    private final DataStandardRepository dataStandardRepository;
 
     public CatalogResource(
         CatalogDomainRepository domainRepo,
@@ -68,7 +74,8 @@ public class CatalogResource {
         CatalogDatasetGrantRepository grantRepo,
         InfraDataSourceRepository infraDataSourceRepository,
         CatalogFeatureProperties catalogFeatures,
-        OrganizationVisibilityService organizationVisibilityService
+        OrganizationVisibilityService organizationVisibilityService,
+        DataStandardRepository dataStandardRepository
     ) {
         this.domainRepo = domainRepo;
         this.datasetRepo = datasetRepo;
@@ -86,6 +93,7 @@ public class CatalogResource {
         this.infraDataSourceRepository = infraDataSourceRepository;
         this.catalogFeatures = catalogFeatures;
         this.organizationVisibilityService = organizationVisibilityService;
+        this.dataStandardRepository = dataStandardRepository;
     }
 
     @GetMapping("/config")
@@ -1151,6 +1159,389 @@ public class CatalogResource {
         return ApiResponses.ok(saved);
     }
 
+    @GetMapping("/tables/{id}/standard-mapping/validate")
+    public ApiResponse<Map<String, Object>> validateTableStandardMapping(
+        @PathVariable UUID id,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        CatalogTableSchema table = tableRepo.findById(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "数据表不存在"));
+        CatalogDataset dataset = table.getDataset();
+        if (dataset != null) {
+            String effDept = activeDept != null ? activeDept : claim("dept_code");
+            if (!accessChecker.canRead(dataset) || !accessChecker.departmentAllowed(dataset, effDept)) {
+                return ApiResponses.error(com.yuzhi.dts.platform.security.policy.PolicyErrorCodes.RESOURCE_NOT_VISIBLE, "Access denied for dataset");
+            }
+        }
+
+        List<CatalogColumnSchema> columns = columnRepo.findByTable(table);
+        Map<UUID, DataStandard> standards = loadStandardsById(columns);
+
+        String warehouseLayer = dataset != null ? trimToNull(dataset.getWarehouseLayer()) : null;
+        boolean strictDwd = warehouseLayer != null && "DWD".equalsIgnoreCase(warehouseLayer);
+
+        int totalColumns = columns.size();
+        int mappedColumns = 0;
+        int unmappedColumns = 0;
+        int mismatchedColumns = 0;
+        List<Map<String, Object>> issues = new ArrayList<>();
+
+        for (CatalogColumnSchema col : columns) {
+            if (col == null) continue;
+            UUID standardId = col.getStandardId();
+            DataStandard standard = standardId != null ? standards.get(standardId) : null;
+
+            if (standardId == null) {
+                unmappedColumns++;
+                issues.add(buildStandardIssue(col, null, "未绑定数据元（字段标准）"));
+                continue;
+            }
+
+            mappedColumns++;
+            if (standard == null) {
+                mismatchedColumns++;
+                issues.add(buildStandardIssue(col, null, "关联的数据元不存在或无权限"));
+                continue;
+            }
+
+            String typeReason = null;
+            String nullableReason = null;
+
+            String standardType = trimToNull(standard.getDataType());
+            String columnType = trimToNull(col.getDataType());
+            if (standardType != null && columnType != null && !isTypeCompatible(standardType, columnType)) {
+                typeReason = "字段类型与数据元不一致";
+            }
+
+            Boolean standardNullable = standard.getNullable();
+            Boolean columnNullable = col.getNullable();
+            if (standardNullable != null && Boolean.FALSE.equals(standardNullable) && Boolean.TRUE.equals(columnNullable)) {
+                nullableReason = "字段可空性与数据元不一致（数据元要求不可空）";
+            }
+
+            if (typeReason != null || nullableReason != null) {
+                mismatchedColumns++;
+                String reason = typeReason != null && nullableReason != null ? (typeReason + "；" + nullableReason) : (typeReason != null ? typeReason : nullableReason);
+                issues.add(buildStandardIssue(col, standard, reason));
+            }
+        }
+
+        boolean blocking = strictDwd && (unmappedColumns > 0 || mismatchedColumns > 0);
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("tableId", id.toString());
+        payload.put("datasetId", dataset != null && dataset.getId() != null ? dataset.getId().toString() : null);
+        payload.put("warehouseLayer", warehouseLayer);
+        payload.put("strictDwd", strictDwd);
+        payload.put("blocking", blocking);
+        payload.put("totalColumns", totalColumns);
+        payload.put("mappedColumns", mappedColumns);
+        payload.put("unmappedColumns", unmappedColumns);
+        payload.put("mismatchedColumns", mismatchedColumns);
+        payload.put("issues", issues);
+
+        audit.auditAction(
+            "CATALOG_STANDARD_MAPPING_VALIDATE",
+            AuditStage.SUCCESS,
+            id.toString(),
+            Map.of(
+                "summary",
+                "校验字段与数据元映射",
+                "tableId",
+                id.toString(),
+                "datasetId",
+                dataset != null && dataset.getId() != null ? dataset.getId().toString() : null,
+                "warehouseLayer",
+                warehouseLayer != null ? warehouseLayer : "",
+                "blocking",
+                blocking
+            )
+        );
+        return ApiResponses.ok(payload);
+    }
+
+    public record StandardAutoMapApplyRequest(Boolean overwrite, Boolean onlyUnmapped) {}
+
+    @GetMapping("/tables/{id}/standard-mapping/auto-map/preview")
+    @PreAuthorize(CATALOG_MAINTAINER_EXPRESSION)
+    public ApiResponse<Map<String, Object>> previewAutoMapTableStandardMapping(
+        @PathVariable UUID id,
+        @RequestParam(name = "overwrite", required = false, defaultValue = "false") boolean overwrite,
+        @RequestParam(name = "onlyUnmapped", required = false, defaultValue = "true") boolean onlyUnmapped,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        CatalogTableSchema table = tableRepo.findById(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "数据表不存在"));
+        CatalogDataset dataset = table.getDataset();
+        if (dataset != null) {
+            String effDept = activeDept != null ? activeDept : claim("dept_code");
+            if (!accessChecker.canRead(dataset) || !accessChecker.departmentAllowed(dataset, effDept)) {
+                return ApiResponses.error(com.yuzhi.dts.platform.security.policy.PolicyErrorCodes.RESOURCE_NOT_VISIBLE, "Access denied for dataset");
+            }
+        }
+
+        List<CatalogColumnSchema> columns = columnRepo.findByTable(table);
+        Map<UUID, DataStandard> standardsById = loadStandardsById(columns);
+
+        Set<String> codeCandidates = new LinkedHashSet<>();
+        Map<UUID, String> hintedCodes = new HashMap<>();
+        for (CatalogColumnSchema col : columns) {
+            if (col == null) continue;
+            String hint = extractStandardCodeHint(col.getComment());
+            if (hint != null) {
+                hintedCodes.put(col.getId(), hint);
+                codeCandidates.add(hint.toLowerCase(Locale.ROOT));
+            }
+            if (StringUtils.hasText(col.getName())) {
+                codeCandidates.add(col.getName().trim().toLowerCase(Locale.ROOT));
+            }
+        }
+
+        Map<String, DataStandard> standardsByCode = new HashMap<>();
+        if (!codeCandidates.isEmpty()) {
+            for (DataStandard s : dataStandardRepository.findByCodeLowerIn(codeCandidates)) {
+                if (s != null && StringUtils.hasText(s.getCode())) {
+                    standardsByCode.put(s.getCode().trim().toLowerCase(Locale.ROOT), s);
+                }
+            }
+        }
+
+        int totalColumns = columns.size();
+        int matchedColumns = 0;
+        int conflictColumns = 0;
+        int noMatchColumns = 0;
+        int willUpdateColumns = 0;
+        int skippedColumns = 0;
+
+        List<Map<String, Object>> items = new ArrayList<>();
+        for (CatalogColumnSchema col : columns) {
+            if (col == null) continue;
+            UUID columnId = col.getId();
+
+            UUID currentStandardId = col.getStandardId();
+            DataStandard currentStandard = currentStandardId != null ? standardsById.get(currentStandardId) : null;
+            String columnName = trimToNull(col.getName());
+
+            String hinted = columnId != null ? hintedCodes.get(columnId) : null;
+            DataStandard byHint = hinted != null ? standardsByCode.get(hinted.trim().toLowerCase(Locale.ROOT)) : null;
+            DataStandard byName = columnName != null ? standardsByCode.get(columnName.trim().toLowerCase(Locale.ROOT)) : null;
+
+            DataStandard proposed = null;
+            String source = null;
+            String status = null;
+            String reason = null;
+
+            if (byHint != null && byName != null && byHint.getId() != null && byName.getId() != null && !byHint.getId().equals(byName.getId())) {
+                conflictColumns++;
+                status = "CONFLICT";
+                reason = "注释STD与字段名匹配到不同数据元";
+            } else if (byHint != null) {
+                proposed = byHint;
+                source = byName != null ? "COMMENT+NAME" : "COMMENT";
+            } else if (byName != null) {
+                proposed = byName;
+                source = "COLUMN_NAME";
+            }
+
+            if (status == null) {
+                if (proposed == null) {
+                    noMatchColumns++;
+                    status = "NO_MATCH";
+                } else {
+                    matchedColumns++;
+                    if (currentStandardId != null) {
+                        if (proposed.getId() != null && proposed.getId().equals(currentStandardId)) {
+                            skippedColumns++;
+                            status = "ALREADY_OK";
+                        } else if (onlyUnmapped) {
+                            skippedColumns++;
+                            status = "SKIP_MAPPED";
+                            reason = "字段已绑定数据元（onlyUnmapped=true）";
+                        } else if (!overwrite) {
+                            skippedColumns++;
+                            status = "SKIP_MAPPED";
+                            reason = "字段已绑定数据元（overwrite=false）";
+                        } else {
+                            willUpdateColumns++;
+                            status = "WILL_UPDATE";
+                        }
+                    } else {
+                        willUpdateColumns++;
+                        status = "WILL_UPDATE";
+                    }
+                }
+            }
+
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("columnId", columnId != null ? columnId.toString() : null);
+            item.put("columnName", columnName);
+            item.put("columnDataType", trimToNull(col.getDataType()));
+            item.put("hintedStandardCode", hinted);
+            item.put("currentStandardId", currentStandardId != null ? currentStandardId.toString() : null);
+            item.put("currentStandardCode", currentStandard != null ? currentStandard.getCode() : null);
+            item.put("proposedStandardId", proposed != null && proposed.getId() != null ? proposed.getId().toString() : null);
+            item.put("proposedStandardCode", proposed != null ? proposed.getCode() : null);
+            item.put("proposedStandardName", proposed != null ? proposed.getName() : null);
+            item.put("source", source);
+            item.put("status", status);
+            item.put("reason", reason);
+            item.put("willUpdate", "WILL_UPDATE".equals(status));
+            items.add(item);
+        }
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("tableId", id.toString());
+        payload.put("datasetId", dataset != null && dataset.getId() != null ? dataset.getId().toString() : null);
+        payload.put("totalColumns", totalColumns);
+        payload.put("matchedColumns", matchedColumns);
+        payload.put("noMatchColumns", noMatchColumns);
+        payload.put("conflictColumns", conflictColumns);
+        payload.put("willUpdateColumns", willUpdateColumns);
+        payload.put("skippedColumns", skippedColumns);
+        payload.put("overwrite", overwrite);
+        payload.put("onlyUnmapped", onlyUnmapped);
+        payload.put("items", items);
+
+        audit.auditAction(
+            "CATALOG_STANDARD_MAPPING_AUTOMAP_PREVIEW",
+            AuditStage.SUCCESS,
+            id.toString(),
+            Map.of(
+                "summary",
+                "预览自动匹配字段与数据元",
+                "tableId",
+                id.toString(),
+                "datasetId",
+                dataset != null && dataset.getId() != null ? dataset.getId().toString() : null,
+                "willUpdate",
+                willUpdateColumns,
+                "conflicts",
+                conflictColumns
+            )
+        );
+        return ApiResponses.ok(payload);
+    }
+
+    @PostMapping("/tables/{id}/standard-mapping/auto-map/apply")
+    @PreAuthorize(CATALOG_MAINTAINER_EXPRESSION)
+    public ApiResponse<Map<String, Object>> applyAutoMapTableStandardMapping(
+        @PathVariable UUID id,
+        @RequestBody(required = false) StandardAutoMapApplyRequest body,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        boolean overwrite = body != null && body.overwrite != null && body.overwrite.booleanValue();
+        boolean onlyUnmapped = body == null || body.onlyUnmapped == null || body.onlyUnmapped.booleanValue();
+
+        CatalogTableSchema table = tableRepo.findById(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "数据表不存在"));
+        CatalogDataset dataset = table.getDataset();
+        if (dataset != null) {
+            String effDept = activeDept != null ? activeDept : claim("dept_code");
+            if (!accessChecker.canRead(dataset) || !accessChecker.departmentAllowed(dataset, effDept)) {
+                return ApiResponses.error(com.yuzhi.dts.platform.security.policy.PolicyErrorCodes.RESOURCE_NOT_VISIBLE, "Access denied for dataset");
+            }
+        }
+
+        List<CatalogColumnSchema> columns = columnRepo.findByTable(table);
+        Map<UUID, DataStandard> standardsById = loadStandardsById(columns);
+
+        Set<String> codeCandidates = new LinkedHashSet<>();
+        Map<UUID, String> hintedCodes = new HashMap<>();
+        for (CatalogColumnSchema col : columns) {
+            if (col == null) continue;
+            String hint = extractStandardCodeHint(col.getComment());
+            if (hint != null) {
+                hintedCodes.put(col.getId(), hint);
+                codeCandidates.add(hint.toLowerCase(Locale.ROOT));
+            }
+            if (StringUtils.hasText(col.getName())) {
+                codeCandidates.add(col.getName().trim().toLowerCase(Locale.ROOT));
+            }
+        }
+        Map<String, DataStandard> standardsByCode = new HashMap<>();
+        if (!codeCandidates.isEmpty()) {
+            for (DataStandard s : dataStandardRepository.findByCodeLowerIn(codeCandidates)) {
+                if (s != null && StringUtils.hasText(s.getCode())) {
+                    standardsByCode.put(s.getCode().trim().toLowerCase(Locale.ROOT), s);
+                }
+            }
+        }
+
+        int applied = 0;
+        int conflicts = 0;
+        int skipped = 0;
+        List<UUID> updatedIds = new ArrayList<>();
+
+        for (CatalogColumnSchema col : columns) {
+            if (col == null || col.getId() == null) continue;
+            UUID columnId = col.getId();
+            UUID currentStandardId = col.getStandardId();
+
+            String hinted = hintedCodes.get(columnId);
+            DataStandard byHint = hinted != null ? standardsByCode.get(hinted.trim().toLowerCase(Locale.ROOT)) : null;
+            String columnName = trimToNull(col.getName());
+            DataStandard byName = columnName != null ? standardsByCode.get(columnName.trim().toLowerCase(Locale.ROOT)) : null;
+
+            if (byHint != null && byName != null && byHint.getId() != null && byName.getId() != null && !byHint.getId().equals(byName.getId())) {
+                conflicts++;
+                continue;
+            }
+            DataStandard proposed = byHint != null ? byHint : byName;
+            if (proposed == null || proposed.getId() == null) {
+                continue;
+            }
+
+            if (currentStandardId != null) {
+                if (proposed.getId().equals(currentStandardId)) {
+                    skipped++;
+                    continue;
+                }
+                if (onlyUnmapped) {
+                    skipped++;
+                    continue;
+                }
+                if (!overwrite) {
+                    skipped++;
+                    continue;
+                }
+            }
+
+            Map<String, Object> before = snapshotColumn(col);
+            col.setStandardId(proposed.getId());
+            CatalogColumnSchema saved = columnRepo.save(col);
+            recordColumnMetadataChanges(saved, before, "AUTO_MAP");
+            standardsById.put(proposed.getId(), proposed);
+            applied++;
+            updatedIds.add(saved.getId());
+        }
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("tableId", id.toString());
+        payload.put("datasetId", dataset != null && dataset.getId() != null ? dataset.getId().toString() : null);
+        payload.put("applied", applied);
+        payload.put("conflicts", conflicts);
+        payload.put("skipped", skipped);
+        payload.put("updatedColumnIds", updatedIds.stream().map(UUID::toString).toList());
+
+        audit.auditAction(
+            "CATALOG_STANDARD_MAPPING_AUTOMAP_APPLY",
+            AuditStage.SUCCESS,
+            id.toString(),
+            Map.of(
+                "summary",
+                "自动匹配字段与数据元",
+                "tableId",
+                id.toString(),
+                "datasetId",
+                dataset != null && dataset.getId() != null ? dataset.getId().toString() : null,
+                "applied",
+                applied,
+                "conflicts",
+                conflicts,
+                "skipped",
+                skipped
+            )
+        );
+        return ApiResponses.ok(payload);
+    }
+
     @GetMapping("/tables/{id}/changes")
     @PreAuthorize(CATALOG_MAINTAINER_EXPRESSION)
     public ApiResponse<Map<String, Object>> listTableChanges(
@@ -1256,8 +1647,10 @@ public class CatalogResource {
                 (c.getComment() != null && c.getComment().toLowerCase().contains(keyword.toLowerCase()))
             )
             .toList();
+        Map<UUID, DataStandard> standards = loadStandardsById(filtered);
+        List<Map<String, Object>> content = filtered.stream().map(col -> toColumnDto(col, standards)).toList();
         audit.audit("READ", "catalog.column", String.valueOf(tableId));
-        return ApiResponses.ok(Map.of("content", filtered, "total", filtered.size()));
+        return ApiResponses.ok(Map.of("content", content, "total", filtered.size()));
     }
 
     @PostMapping("/columns")
@@ -1272,7 +1665,7 @@ public class CatalogResource {
 
     @PutMapping("/columns/{id}")
     @PreAuthorize(CATALOG_MAINTAINER_EXPRESSION)
-    public ApiResponse<com.yuzhi.dts.platform.domain.catalog.CatalogColumnSchema> updateColumn(
+    public ApiResponse<Map<String, Object>> updateColumn(
         @PathVariable UUID id,
         @Valid @RequestBody com.yuzhi.dts.platform.domain.catalog.CatalogColumnSchema patch
     ) {
@@ -1284,6 +1677,9 @@ public class CatalogResource {
         existing.setTags(patch.getTags());
         existing.setComment(patch.getComment());
         existing.setSensitiveTags(patch.getSensitiveTags());
+        existing.setStandardId(patch.getStandardId());
+        existing.setStandardRule(trimToNull(patch.getStandardRule()));
+        existing.setStandardMismatchReason(trimToNull(patch.getStandardMismatchReason()));
         var saved = columnRepo.save(existing);
         recordColumnMetadataChanges(saved, before, "MANUAL");
         Map<String, Object> auditPayload = new LinkedHashMap<>();
@@ -1299,7 +1695,8 @@ public class CatalogResource {
             id.toString(),
             auditPayload
         );
-        return ApiResponses.ok(saved);
+        Map<UUID, DataStandard> standards = loadStandardsById(List.of(saved));
+        return ApiResponses.ok(toColumnDto(saved, standards));
     }
 
     @GetMapping("/columns/{id}/changes")
@@ -1433,6 +1830,9 @@ public class CatalogResource {
         addMetadataChange(changes, "COLUMN", columnId, datasetId, tableId, "tags", safeText(before.get("tags")), saved.getTags(), "更新数据字段元数据", actorDept, source);
         addMetadataChange(changes, "COLUMN", columnId, datasetId, tableId, "sensitiveTags", safeText(before.get("sensitiveTags")), saved.getSensitiveTags(), "更新数据字段元数据", actorDept, source);
         addMetadataChange(changes, "COLUMN", columnId, datasetId, tableId, "comment", safeText(before.get("comment")), saved.getComment(), "更新数据字段元数据", actorDept, source);
+        addMetadataChange(changes, "COLUMN", columnId, datasetId, tableId, "standardId", safeText(before.get("standardId")), safeText(saved.getStandardId()), "更新数据字段元数据", actorDept, source);
+        addMetadataChange(changes, "COLUMN", columnId, datasetId, tableId, "standardRule", safeText(before.get("standardRule")), saved.getStandardRule(), "更新数据字段元数据", actorDept, source);
+        addMetadataChange(changes, "COLUMN", columnId, datasetId, tableId, "standardMismatchReason", safeText(before.get("standardMismatchReason")), saved.getStandardMismatchReason(), "更新数据字段元数据", actorDept, source);
 
         if (!changes.isEmpty()) {
             metadataChangeLogRepo.saveAll(changes);
@@ -1495,7 +1895,173 @@ public class CatalogResource {
         m.put("tags", trimToNull(column.getTags()));
         m.put("sensitiveTags", trimToNull(column.getSensitiveTags()));
         m.put("comment", trimToNull(column.getComment()));
+        m.put("standardId", column.getStandardId() != null ? column.getStandardId().toString() : null);
+        m.put("standardRule", trimToNull(column.getStandardRule()));
+        m.put("standardMismatchReason", trimToNull(column.getStandardMismatchReason()));
         return m;
+    }
+
+    private Map<UUID, DataStandard> loadStandardsById(List<CatalogColumnSchema> columns) {
+        if (columns == null || columns.isEmpty()) {
+            return java.util.Collections.emptyMap();
+        }
+        Set<UUID> ids = new LinkedHashSet<>();
+        for (CatalogColumnSchema c : columns) {
+            if (c == null) continue;
+            if (c.getStandardId() != null) {
+                ids.add(c.getStandardId());
+            }
+        }
+        if (ids.isEmpty()) {
+            return java.util.Collections.emptyMap();
+        }
+        Map<UUID, DataStandard> map = new HashMap<>();
+        for (DataStandard standard : dataStandardRepository.findAllById(ids)) {
+            if (standard != null && standard.getId() != null) {
+                map.put(standard.getId(), standard);
+            }
+        }
+        return map;
+    }
+
+    private Map<String, Object> buildStandardIssue(CatalogColumnSchema col, DataStandard standard, String reason) {
+        Map<String, Object> issue = new LinkedHashMap<>();
+        issue.put("columnId", col.getId() != null ? col.getId().toString() : null);
+        issue.put("columnName", col.getName());
+        issue.put("columnDataType", trimToNull(col.getDataType()));
+        issue.put("columnNullable", col.getNullable());
+        issue.put("standardId", col.getStandardId() != null ? col.getStandardId().toString() : null);
+        if (standard != null) {
+            issue.put("standardCode", standard.getCode());
+            issue.put("standardName", standard.getName());
+            issue.put("standardDataType", trimToNull(standard.getDataType()));
+            issue.put("standardNullable", standard.getNullable());
+            issue.put("standardCodeSet", trimToNull(standard.getCodeSet()));
+        }
+        issue.put("reason", reason);
+        return issue;
+    }
+
+    private boolean isTypeCompatible(String standardType, String columnType) {
+        String standard = normalizeDataType(standardType);
+        String column = normalizeDataType(columnType);
+        if (standard == null || column == null) {
+            return true;
+        }
+        return standard.equals(column);
+    }
+
+    private String normalizeDataType(String rawType) {
+        if (!StringUtils.hasText(rawType)) {
+            return null;
+        }
+        String t = rawType.trim().toLowerCase(Locale.ROOT);
+        int paren = t.indexOf('(');
+        if (paren > 0) {
+            t = t.substring(0, paren).trim();
+        }
+        if (t.isEmpty()) {
+            return null;
+        }
+        return switch (t) {
+            case "varchar", "char", "character", "character varying", "string", "text" -> "string";
+            case "bigint", "int8", "long" -> "bigint";
+            case "int", "integer", "int4" -> "int";
+            case "smallint", "int2", "short" -> "smallint";
+            case "double", "float8" -> "double";
+            case "float", "float4", "real" -> "float";
+            case "decimal", "numeric" -> "decimal";
+            case "boolean", "bool" -> "boolean";
+            case "timestamp", "datetime" -> "timestamp";
+            default -> t;
+        };
+    }
+
+    private Map<String, Object> toColumnDto(CatalogColumnSchema col, Map<UUID, DataStandard> standards) {
+        Map<String, Object> dto = new LinkedHashMap<>();
+        if (col == null) {
+            return dto;
+        }
+        dto.put("id", col.getId());
+        dto.put("name", col.getName());
+        dto.put("dataType", col.getDataType());
+        dto.put("nullable", col.getNullable());
+        dto.put("tags", col.getTags());
+        dto.put("sensitiveTags", col.getSensitiveTags());
+        dto.put("comment", trimToNull(col.getComment()));
+        dto.put("standardId", col.getStandardId());
+        dto.put("standardRule", trimToNull(col.getStandardRule()));
+        dto.put("standardMismatchReason", trimToNull(col.getStandardMismatchReason()));
+
+        DataStandard standard = (col.getStandardId() != null && standards != null) ? standards.get(col.getStandardId()) : null;
+        if (standard != null) {
+            dto.put("standardCode", standard.getCode());
+            dto.put("standardName", standard.getName());
+            dto.put("standardDataType", standard.getDataType());
+            dto.put("standardNullable", standard.getNullable());
+            dto.put("standardCodeSet", standard.getCodeSet());
+        }
+        String computedMismatchReason = computeStandardMismatchReason(col, standard);
+        dto.put("computedMismatchReason", computedMismatchReason);
+        dto.put("mappingStatus", computeStandardMappingStatus(col, standard, computedMismatchReason));
+        return dto;
+    }
+
+    private String extractStandardCodeHint(String comment) {
+        if (!StringUtils.hasText(comment)) {
+            return null;
+        }
+        Matcher matcher = STD_CODE_PATTERN.matcher(comment);
+        if (matcher.find()) {
+            String raw = matcher.group(1);
+            return StringUtils.hasText(raw) ? raw.trim() : null;
+        }
+        return null;
+    }
+
+    private String computeStandardMismatchReason(CatalogColumnSchema col, DataStandard standard) {
+        if (col == null) {
+            return null;
+        }
+        UUID standardId = col.getStandardId();
+        if (standardId == null) {
+            return "未绑定数据元（字段标准）";
+        }
+        if (standard == null) {
+            return "关联的数据元不存在或无权限";
+        }
+        String typeReason = null;
+        String nullableReason = null;
+        String standardType = trimToNull(standard.getDataType());
+        String columnType = trimToNull(col.getDataType());
+        if (standardType != null && columnType != null && !isTypeCompatible(standardType, columnType)) {
+            typeReason = "字段类型与数据元不一致";
+        }
+        Boolean standardNullable = standard.getNullable();
+        Boolean columnNullable = col.getNullable();
+        if (standardNullable != null && Boolean.FALSE.equals(standardNullable) && Boolean.TRUE.equals(columnNullable)) {
+            nullableReason = "字段可空性与数据元不一致（数据元要求不可空）";
+        }
+        if (typeReason != null || nullableReason != null) {
+            return typeReason != null && nullableReason != null ? (typeReason + "；" + nullableReason) : (typeReason != null ? typeReason : nullableReason);
+        }
+        return null;
+    }
+
+    private String computeStandardMappingStatus(CatalogColumnSchema col, DataStandard standard, String computedMismatchReason) {
+        if (col == null) {
+            return "UNKNOWN";
+        }
+        if (col.getStandardId() == null) {
+            return "UNMAPPED";
+        }
+        if (standard == null) {
+            return "STANDARD_MISSING";
+        }
+        if (computedMismatchReason != null) {
+            return "MISMATCHED";
+        }
+        return "OK";
     }
 
     private String safeBool(Boolean value) {

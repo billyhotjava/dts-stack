@@ -17,6 +17,7 @@ import com.yuzhi.dts.analytics.service.NativeQueryTemplateService;
 import com.yuzhi.dts.analytics.service.PublicLinkService;
 import com.yuzhi.dts.analytics.service.RevisionService;
 import com.yuzhi.dts.analytics.web.support.MetabaseAuth;
+import com.yuzhi.dts.analytics.web.support.PlatformContext;
 import jakarta.servlet.http.HttpServletRequest;
 import java.sql.SQLException;
 import java.time.OffsetDateTime;
@@ -371,7 +372,14 @@ public class CardResource {
         if (card == null || card.isArchived()) {
             return ResponseEntity.notFound().build();
         }
-        String uuid = publicLinkService.getOrCreate(PublicLinkService.MODEL_CARD, cardId, user.get().getId());
+        PlatformContext ctx = PlatformContext.from(request);
+        String uuid;
+        try {
+            uuid = publicLinkService.getOrCreateScoped(
+                    PublicLinkService.MODEL_CARD, cardId, user.get().getId(), ctx.dept(), ctx.classification());
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(403).contentType(MediaType.TEXT_PLAIN).body("Forbidden");
+        }
         return ResponseEntity.ok(Map.of("uuid", uuid));
     }
 

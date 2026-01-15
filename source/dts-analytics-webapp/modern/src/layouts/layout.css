@@ -38,6 +38,15 @@
 	padding: 6px;
 }
 
+.navSectionTitle {
+	font-size: 12px;
+	font-weight: 600;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	color: rgba(255, 255, 255, 0.55);
+	padding: 10px 10px 4px;
+}
+
 .navItem {
 	color: rgba(255, 255, 255, 0.85);
 	text-decoration: none;
@@ -65,4 +74,3 @@
 	background: #f6f7fb;
 	color: #111;
 }
-

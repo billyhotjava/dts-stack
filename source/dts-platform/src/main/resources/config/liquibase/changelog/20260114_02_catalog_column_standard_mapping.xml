@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260114_02_catalog_column_standard_mapping" author="platform">
+        <comment>Catalog column schema: link to data standard (data element) and mapping notes</comment>
+        <addColumn tableName="catalog_column_schema">
+            <column name="standard_id" type="uuid"/>
+            <column name="standard_rule" type="text"/>
+            <column name="standard_mismatch_reason" type="varchar(512)"/>
+        </addColumn>
+
+        <addForeignKeyConstraint
+            baseTableName="catalog_column_schema"
+            baseColumnNames="standard_id"
+            referencedTableName="data_standard"
+            referencedColumnNames="id"
+            constraintName="fk_catalog_column_schema_standard"
+            onDelete="SET NULL"/>
+
+        <createIndex tableName="catalog_column_schema" indexName="idx_catalog_column_schema_standard_id">
+            <column name="standard_id"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>
+

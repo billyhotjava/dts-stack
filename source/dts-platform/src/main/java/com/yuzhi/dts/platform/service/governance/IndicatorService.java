@@ -517,8 +517,13 @@ public class IndicatorService {
 
     private void applyDefaults(GovIndicatorDefinition entity, String activeDept) {
         if (entity == null) return;
-        if (!StringUtils.hasText(entity.getOwner()) && SecurityUtils.getCurrentUserDisplayName().isPresent()) {
-            entity.setOwner(SecurityUtils.getCurrentUserDisplayName().orElse(null));
+        if (!StringUtils.hasText(entity.getOwner())) {
+            String login = SecurityUtils.getCurrentUserLogin().orElse(null);
+            String display = SecurityUtils.getCurrentUserDisplayName().orElse(null);
+            String formatted = formatOwner(display, login);
+            if (StringUtils.hasText(formatted)) {
+                entity.setOwner(formatted);
+            }
         }
         if (!StringUtils.hasText(entity.getOwnerDept()) && StringUtils.hasText(activeDept)) {
             entity.setOwnerDept(activeDept.trim());
@@ -530,6 +535,16 @@ public class IndicatorService {
             entity.setVersion("v1");
         }
         entity.setDataLevel(normalizeDataLevel(entity.getDataLevel()));
+    }
+
+    private String formatOwner(String displayName, String username) {
+        String display = displayName == null ? "" : displayName.trim();
+        String user = username == null ? "" : username.trim();
+        if (display.isEmpty() && user.isEmpty()) return null;
+        if (display.isEmpty()) return user;
+        if (user.isEmpty()) return display;
+        if (display.equalsIgnoreCase(user)) return display;
+        return display + " (" + user + ")";
     }
 
     private String normalizeDataLevel(String raw) {
@@ -546,7 +561,7 @@ public class IndicatorService {
     private boolean keywordMatches(GovIndicatorDefinition entity, String keyword) {
         if (!StringUtils.hasText(keyword)) return true;
         String kw = keyword.trim().toLowerCase(Locale.ROOT);
-        return contains(entity.getName(), kw) || contains(entity.getCode(), kw) || contains(entity.getCategory(), kw);
+        return contains(entity.getName(), kw) || contains(entity.getCode(), kw) || contains(entity.getCategory(), kw) || contains(entity.getOwner(), kw);
     }
 
     private boolean statusMatches(GovIndicatorDefinition entity, String status) {

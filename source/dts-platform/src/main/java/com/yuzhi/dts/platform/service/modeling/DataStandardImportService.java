@@ -25,8 +25,8 @@ import org.springframework.web.multipart.MultipartFile;
 public class DataStandardImportService {
 
     private static final String TEMPLATE =
-        "code,name,domain,scope,owner,tags,security_level,status,version,version_notes,description\n" +
-        "STD_FIN_001,项目预算金额,财务,全院,财务管理员,\"金额,预算\",内部,ACTIVE,v1,初版,示例：预算金额（元）\n";
+        "code,name,domain,scope,owner,tags,security_level,status,data_type,nullable,code_set,version,version_notes,description\n" +
+        "STD_FIN_001,项目预算金额,财务,全院,财务管理员,\"金额,预算\",内部,ACTIVE,DECIMAL(18,2),false,,v1,初版,示例：预算金额（元）\n";
 
     private final DataStandardRepository repository;
     private final DataStandardService standardService;
@@ -84,6 +84,9 @@ public class DataStandardImportService {
                 request.setOwner(trimToNull(get(values, index, "owner")));
                 request.setTags(parseTags(get(values, index, "tags")));
                 request.setStatus(parseStatus(get(values, index, "status")));
+                request.setDataType(trimToNull(get(values, index, "data_type")));
+                request.setNullable(parseNullable(get(values, index, "nullable")));
+                request.setCodeSet(trimToNull(get(values, index, "code_set")));
                 request.setVersion(trimToNull(get(values, index, "version")));
                 request.setVersionNotes(trimToNull(get(values, index, "version_notes")));
                 request.setDescription(trimToNull(get(values, index, "description")));
@@ -173,6 +176,20 @@ public class DataStandardImportService {
             case SECRET -> DataSecurityLevel.SECRET;
             case CONFIDENTIAL -> DataSecurityLevel.CONFIDENTIAL;
         };
+    }
+
+    private Boolean parseNullable(String raw) {
+        if (!StringUtils.hasText(raw)) {
+            return null;
+        }
+        String token = raw.trim().toLowerCase(Locale.ROOT);
+        if (token.equals("1") || token.equals("true") || token.equals("y") || token.equals("yes")) {
+            return Boolean.TRUE;
+        }
+        if (token.equals("0") || token.equals("false") || token.equals("n") || token.equals("no")) {
+            return Boolean.FALSE;
+        }
+        return null;
     }
 
     private List<String> parseCsvLine(String line) {

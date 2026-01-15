@@ -5,7 +5,8 @@
 	"type": "module",
 	"scripts": {
 		"dev": "VITE_CACHE_DIR=.vite-cache vite --host 0.0.0.0 --port 3002 --strictPort --open=false",
-		"build": "VITE_CACHE_DIR=.vite-cache tsc && VITE_CACHE_DIR=.vite-cache vite build",
+		"typecheck": "VITE_CACHE_DIR=.vite-cache tsc --noEmit",
+		"build": "VITE_CACHE_DIR=.vite-cache vite build",
 		"preview": "vite preview --host 0.0.0.0 --port 3002 --strictPort"
 	},
 	"dependencies": {
@@ -34,4 +35,3 @@
 		]
 	}
 }
-

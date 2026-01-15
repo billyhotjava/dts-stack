@@ -33,7 +33,7 @@ const ROLE_LABEL_MAP: Record<string, string> = {
 };
 
 const HIDDEN_ROLE_PREFIXES = ["ROLE_DEFAULT", "DEFAULT-ROLES", "ROLE_UMA_AUTHORIZATION", "ROLE_OFFLINE_ACCESS"];
-const HIDDEN_ROLE_EXACT = new Set(["offline_access", "uma_authorization", "role_sys_admin"]);
+const HIDDEN_ROLE_EXACT = new Set(["offline_access", "uma_authorization"]);
 
 function resolveRoleLabels(roles: unknown): string[] {
 	if (!Array.isArray(roles) || roles.length === 0) {
@@ -49,7 +49,7 @@ function resolveRoleLabels(roles: unknown): string[] {
 				const lower = trimmed.toLowerCase();
 				if (HIDDEN_ROLE_PREFIXES.some((prefix) => upper.startsWith(prefix))) return undefined;
 				if (HIDDEN_ROLE_EXACT.has(lower)) return undefined;
-				if (upper === "ROLE_SYS_ADMIN") return undefined;
+				// Do not hide triad roles (sysadmin/authadmin/auditadmin) in system profile.
 				return ROLE_LABEL_MAP[upper] || ROLE_LABEL_MAP[upper.replace(/^ROLE_/, "")] || trimmed;
 			}
 
@@ -61,7 +61,7 @@ function resolveRoleLabels(roles: unknown): string[] {
 					const lower = key.toLowerCase();
 					if (HIDDEN_ROLE_PREFIXES.some((prefix) => upper.startsWith(prefix))) return undefined;
 					if (HIDDEN_ROLE_EXACT.has(lower)) return undefined;
-					if (upper === "ROLE_SYS_ADMIN") return undefined;
+					// Do not hide triad roles (sysadmin/authadmin/auditadmin) in system profile.
 					return ROLE_LABEL_MAP[upper] || ROLE_LABEL_MAP[upper.replace(/^ROLE_/, "")] || key;
 				}
 			}

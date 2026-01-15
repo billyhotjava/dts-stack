@@ -82,6 +82,20 @@ export const listConnectionTestLogs = (dataSourceId?: string) =>
 export const testHiveConnection = (data: HiveConnectionTestRequest) =>
 	api.post<HiveConnectionTestResult>({ url: "/infra/data-sources/test-connection", data });
 
+export interface JdbcConnectionTestRequest {
+	jdbcUrl: string;
+	driverClass?: string;
+	username?: string;
+	password?: string;
+	jdbcProperties?: Record<string, string>;
+	testQuery?: string;
+	remarks?: string;
+	dataSourceId?: string;
+}
+
+export const testJdbcConnection = (data: JdbcConnectionTestRequest) =>
+	api.post<HiveConnectionTestResult>({ url: "/infra/data-sources/jdbc/test-connection", data });
+
 export const publishInceptorDataSource = (data: HiveConnectionPersistRequest) =>
 	api.post<InfraDataSource>({ url: "/infra/data-sources/inceptor/publish", data });
 

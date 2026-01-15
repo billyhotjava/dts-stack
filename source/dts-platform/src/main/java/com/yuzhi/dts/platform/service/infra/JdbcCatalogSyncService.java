@@ -53,6 +53,7 @@ public class JdbcCatalogSyncService {
 
     private final InfraDataSourceRepository infraDataSourceRepository;
     private final InfraSecretService secretService;
+    private final HiveConnectionService hiveConnectionService;
     private final ObjectMapper objectMapper;
     private final CatalogDomainRepository domainRepository;
     private final CatalogDatasetRepository datasetRepository;
@@ -65,6 +66,7 @@ public class JdbcCatalogSyncService {
     public JdbcCatalogSyncService(
         InfraDataSourceRepository infraDataSourceRepository,
         InfraSecretService secretService,
+        HiveConnectionService hiveConnectionService,
         ObjectMapper objectMapper,
         CatalogDomainRepository domainRepository,
         CatalogDatasetRepository datasetRepository,
@@ -76,6 +78,7 @@ public class JdbcCatalogSyncService {
     ) {
         this.infraDataSourceRepository = infraDataSourceRepository;
         this.secretService = secretService;
+        this.hiveConnectionService = hiveConnectionService;
         this.objectMapper = objectMapper;
         this.domainRepository = domainRepository;
         this.datasetRepository = datasetRepository;
@@ -370,6 +373,29 @@ public class JdbcCatalogSyncService {
     private Connection openConnection(InfraDataSource source, String password, Map<String, Object> props) throws SQLException {
         String url = source.getJdbcUrl().trim();
         String username = StringUtils.hasText(source.getUsername()) ? source.getUsername().trim() : null;
+
+        ClassLoader previousCl = Thread.currentThread().getContextClassLoader();
+        ClassLoader jdbcLoader = hiveConnectionService != null ? hiveConnectionService.getJdbcDriverLoader() : null;
+        if (jdbcLoader != null) {
+            Thread.currentThread().setContextClassLoader(jdbcLoader);
+        }
+        try {
+            Object driverClass = props.get("driverClass");
+            if (driverClass == null) {
+                driverClass = props.get("driver_class");
+            }
+            if (driverClass != null && StringUtils.hasText(String.valueOf(driverClass))) {
+                try {
+                    String cn = String.valueOf(driverClass).trim();
+                    if (jdbcLoader != null) {
+                        Class.forName(cn, true, jdbcLoader);
+                    } else {
+                        Class.forName(cn);
+                    }
+                } catch (Throwable ex) {
+                    LOG.warn("Failed to load JDBC driver class {} for {}: {}", driverClass, url, ex.getMessage());
+                }
+            }
         java.util.Properties jdbcProps = new java.util.Properties();
         if (StringUtils.hasText(username)) {
             jdbcProps.setProperty("user", username);
@@ -387,7 +413,10 @@ public class JdbcCatalogSyncService {
                 }
             }
         }
-        return DriverManager.getConnection(url, jdbcProps);
+            return DriverManager.getConnection(url, jdbcProps);
+        } finally {
+            Thread.currentThread().setContextClassLoader(previousCl);
+        }
     }
 
     private List<TableMeta> listTables(Connection connection, String catalog, String schema, String tablePattern) throws SQLException {

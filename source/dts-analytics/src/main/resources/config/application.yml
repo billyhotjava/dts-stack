@@ -5,15 +5,6 @@ spring:
     banner-mode: "off"
   profiles:
     active: ${SPRING_PROFILES_ACTIVE:dev}
-  security:
-    user:
-      name: admin
-      password: admin
-      roles: ADMIN
-    additional-user:
-      name: user
-      password: user
-      roles: USER
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://${PG_HOST:dts-pg}:${PG_PORT:5432}/${PG_DB_ANALYTICS:dts_analytics}}
     username: ${SPRING_DATASOURCE_USERNAME:${PG_USER_ANALYTICS:dts_analytics}}
@@ -45,6 +36,8 @@ application:
 
 dts:
   analytics:
+    jdbc:
+      drivers-dir: ${ANALYTICS_JDBC_DRIVERS_DIR:}
     platform-auth:
       enabled: ${DTS_ANALYTICS_PLATFORM_AUTH_ENABLED:true}
       require-forwarded-headers: ${DTS_ANALYTICS_PLATFORM_AUTH_REQUIRE_FORWARDED_HEADERS:true}

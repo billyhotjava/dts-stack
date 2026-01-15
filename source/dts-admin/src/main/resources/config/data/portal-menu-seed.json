@@ -56,7 +56,23 @@
           "path": "planning",
           "icon": "solar:map-point-bold-duotone",
           "titleKey": "sys.nav.portal.modelingPlanning",
-          "title": "数据规划管理"
+          "title": "数据规划管理",
+          "children": [
+            {
+              "key": "overview",
+              "path": "overview",
+              "icon": "solar:map-point-bold-duotone",
+              "titleKey": "sys.nav.portal.modelingPlanning",
+              "title": "数据规划管理"
+            },
+            {
+              "key": "subjectDomains",
+              "path": "subject-domains",
+              "icon": "solar:folder-with-files-bold-duotone",
+              "titleKey": "sys.nav.portal.modelingPlanningSubjectDomains",
+              "title": "主题域管理"
+            }
+          ]
         },
         {
           "key": "standards",

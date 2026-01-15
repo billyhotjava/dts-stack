@@ -50,6 +50,9 @@ public class SecurityConfiguration {
                     .requestMatchers(mvc.pattern("/api/keycloak/auth/**")).permitAll()
                     // Allow localization resources without auth (used at boot)
                     .requestMatchers(mvc.pattern("/api/keycloak/localization/**")).permitAll()
+                    // Traefik forward-auth probe endpoint must be reachable without prior auth.
+                    // The endpoint itself returns 2xx only when the incoming session/token is valid.
+                    .requestMatchers(mvc.pattern("/api/forward-auth")).permitAll()
                     // Menus must be fetched under authentication so role-based filtering works
                     // Platform has no /api/admin/** endpoints; remove legacy matchers
                     .requestMatchers(mvc.pattern("/api/**")).authenticated()

@@ -9,13 +9,18 @@ import com.yuzhi.dts.analytics.domain.AnalyticsPublicLink;
 import com.yuzhi.dts.analytics.repository.AnalyticsCardRepository;
 import com.yuzhi.dts.analytics.repository.AnalyticsDashboardCardRepository;
 import com.yuzhi.dts.analytics.repository.AnalyticsDashboardRepository;
+import com.yuzhi.dts.analytics.service.AnalyticsSessionService;
 import com.yuzhi.dts.analytics.service.DatasetQueryService;
 import com.yuzhi.dts.analytics.service.MbqlToSqlService;
 import com.yuzhi.dts.analytics.service.PublicLinkService;
+import com.yuzhi.dts.analytics.web.support.MetabaseAuth;
+import com.yuzhi.dts.analytics.web.support.PlatformContext;
+import jakarta.servlet.http.HttpServletRequest;
 import java.time.OffsetDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -29,6 +34,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/public")
 public class PublicResource {
 
+    private final AnalyticsSessionService sessionService;
     private final PublicLinkService publicLinkService;
     private final AnalyticsCardRepository cardRepository;
     private final AnalyticsDashboardRepository dashboardRepository;
@@ -38,6 +44,7 @@ public class PublicResource {
     private final ObjectMapper objectMapper;
 
     public PublicResource(
+            AnalyticsSessionService sessionService,
             PublicLinkService publicLinkService,
             AnalyticsCardRepository cardRepository,
             AnalyticsDashboardRepository dashboardRepository,
@@ -45,6 +52,7 @@ public class PublicResource {
             DatasetQueryService datasetQueryService,
             MbqlToSqlService mbqlToSqlService,
             ObjectMapper objectMapper) {
+        this.sessionService = sessionService;
         this.publicLinkService = publicLinkService;
         this.cardRepository = cardRepository;
         this.dashboardRepository = dashboardRepository;
@@ -55,15 +63,27 @@ public class PublicResource {
     }
 
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<?> info() {
+    public ResponseEntity<?> info(HttpServletRequest request) {
+        Optional<ResponseEntity<String>> auth = MetabaseAuth.requireUser(sessionService, request);
+        if (auth.isPresent()) {
+            return auth.get();
+        }
         return ResponseEntity.ok(Map.of());
     }
 
     @GetMapping(path = "/card/{uuid}", produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<?> card(@PathVariable("uuid") String uuid) {
+    public ResponseEntity<?> card(@PathVariable("uuid") String uuid, HttpServletRequest request) {
+        Optional<ResponseEntity<String>> auth = MetabaseAuth.requireUser(sessionService, request);
+        if (auth.isPresent()) {
+            return auth.get();
+        }
         AnalyticsPublicLink link = publicLinkService.findByPublicUuid(uuid).orElse(null);
         if (link == null || !PublicLinkService.MODEL_CARD.equals(link.getModel())) {
             return ResponseEntity.notFound().build();
+        }
+        PlatformContext ctx = PlatformContext.from(request);
+        if (!publicLinkService.canAccess(link, ctx.dept(), ctx.classification())) {
+            return ResponseEntity.status(403).contentType(MediaType.TEXT_PLAIN).body("Forbidden");
         }
         AnalyticsCard card = cardRepository.findById(link.getModelId()).orElse(null);
         if (card == null || card.isArchived()) {
@@ -73,10 +93,19 @@ public class PublicResource {
     }
 
     @PostMapping(path = "/card/{uuid}/query", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<?> cardQuery(@PathVariable("uuid") String uuid, @RequestBody(required = false) JsonNode body) {
+    public ResponseEntity<?> cardQuery(
+            @PathVariable("uuid") String uuid, @RequestBody(required = false) JsonNode body, HttpServletRequest request) {
+        Optional<ResponseEntity<String>> auth = MetabaseAuth.requireUser(sessionService, request);
+        if (auth.isPresent()) {
+            return auth.get();
+        }
         AnalyticsPublicLink link = publicLinkService.findByPublicUuid(uuid).orElse(null);
         if (link == null || !PublicLinkService.MODEL_CARD.equals(link.getModel())) {
             return ResponseEntity.notFound().build();
+        }
+        PlatformContext ctx = PlatformContext.from(request);
+        if (!publicLinkService.canAccess(link, ctx.dept(), ctx.classification())) {
+            return ResponseEntity.status(403).contentType(MediaType.TEXT_PLAIN).body("Forbidden");
         }
         AnalyticsCard card = cardRepository.findById(link.getModelId()).orElse(null);
         if (card == null || card.isArchived()) {
@@ -86,15 +115,24 @@ public class PublicResource {
     }
 
     @PostMapping(path = "/pivot/card/{uuid}/query", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<?> pivotCardQuery(@PathVariable("uuid") String uuid, @RequestBody(required = false) JsonNode body) {
-        return cardQuery(uuid, body);
+    public ResponseEntity<?> pivotCardQuery(
+            @PathVariable("uuid") String uuid, @RequestBody(required = false) JsonNode body, HttpServletRequest request) {
+        return cardQuery(uuid, body, request);
     }
 
     @GetMapping(path = "/dashboard/{uuid}", produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<?> dashboard(@PathVariable("uuid") String uuid) {
+    public ResponseEntity<?> dashboard(@PathVariable("uuid") String uuid, HttpServletRequest request) {
+        Optional<ResponseEntity<String>> auth = MetabaseAuth.requireUser(sessionService, request);
+        if (auth.isPresent()) {
+            return auth.get();
+        }
         AnalyticsPublicLink link = publicLinkService.findByPublicUuid(uuid).orElse(null);
         if (link == null || !PublicLinkService.MODEL_DASHBOARD.equals(link.getModel())) {
             return ResponseEntity.notFound().build();
+        }
+        PlatformContext ctx = PlatformContext.from(request);
+        if (!publicLinkService.canAccess(link, ctx.dept(), ctx.classification())) {
+            return ResponseEntity.status(403).contentType(MediaType.TEXT_PLAIN).body("Forbidden");
         }
         AnalyticsDashboard dashboard = dashboardRepository.findById(link.getModelId()).orElse(null);
         if (dashboard == null || dashboard.isArchived()) {
@@ -112,10 +150,19 @@ public class PublicResource {
             @PathVariable("uuid") String uuid,
             @PathVariable("dashcardId") long dashcardId,
             @PathVariable("cardId") long cardId,
-            @RequestBody(required = false) JsonNode body) {
+            @RequestBody(required = false) JsonNode body,
+            HttpServletRequest request) {
+        Optional<ResponseEntity<String>> auth = MetabaseAuth.requireUser(sessionService, request);
+        if (auth.isPresent()) {
+            return auth.get();
+        }
         AnalyticsPublicLink link = publicLinkService.findByPublicUuid(uuid).orElse(null);
         if (link == null || !PublicLinkService.MODEL_DASHBOARD.equals(link.getModel())) {
             return ResponseEntity.notFound().build();
+        }
+        PlatformContext ctx = PlatformContext.from(request);
+        if (!publicLinkService.canAccess(link, ctx.dept(), ctx.classification())) {
+            return ResponseEntity.status(403).contentType(MediaType.TEXT_PLAIN).body("Forbidden");
         }
         AnalyticsDashboard dashboard = dashboardRepository.findById(link.getModelId()).orElse(null);
         if (dashboard == null || dashboard.isArchived()) {
@@ -140,8 +187,9 @@ public class PublicResource {
             @PathVariable("uuid") String uuid,
             @PathVariable("dashcardId") long dashcardId,
             @PathVariable("cardId") long cardId,
-            @RequestBody(required = false) JsonNode body) {
-        return dashboardDashcardQuery(uuid, dashcardId, cardId, body);
+            @RequestBody(required = false) JsonNode body,
+            HttpServletRequest request) {
+        return dashboardDashcardQuery(uuid, dashcardId, cardId, body, request);
     }
 
     private ResponseEntity<?> runCardDatasetQuery(AnalyticsCard card, JsonNode body) {

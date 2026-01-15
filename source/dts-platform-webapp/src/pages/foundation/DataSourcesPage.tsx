@@ -27,11 +27,13 @@ import {
 	listConnectionTestLogs,
 	listInfraDataSources,
 	publishInceptorDataSource,
+	testJdbcConnection,
 	testHiveConnection,
 	updateInfraDataSource,
 	type ConnectionTestLog,
 	type InfraDataSource,
 	type InfraFeatureFlags,
+	type JdbcConnectionTestRequest,
 	type UpsertInfraDataSourcePayload,
 } from "@/api/services/infraService";
 import { useAuthCheck } from "@/components/auth/use-auth";
@@ -59,6 +61,33 @@ function tryParseJsonObject(raw: string | undefined): Record<string, any> | unde
 		return undefined;
 	} catch {
 		return undefined;
+	}
+}
+
+function toStringMap(value: any): Record<string, string> | undefined {
+	if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+	const out: Record<string, string> = {};
+	Object.entries(value).forEach(([k, v]) => {
+		if (!k) return;
+		if (v == null) return;
+		if (typeof v === "string" || typeof v === "number" || typeof v === "boolean") {
+			out[k] = String(v);
+		}
+	});
+	return Object.keys(out).length > 0 ? out : undefined;
+}
+
+function validateJsonObjectOptional(_: unknown, value: unknown) {
+	const text = String(value ?? "").trim();
+	if (!text) return Promise.resolve();
+	try {
+		const parsed = JSON.parse(text);
+		if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+			return Promise.resolve();
+		}
+		return Promise.reject(new Error("必须是 JSON 对象"));
+	} catch {
+		return Promise.reject(new Error("JSON 格式不正确"));
 	}
 }
 
@@ -106,6 +135,8 @@ export default function DataSourcesPage() {
 	const [editMode, setEditMode] = useState<"create" | "edit">("create");
 	const [editing, setEditing] = useState<InfraDataSource | null>(null);
 	const [form] = Form.useForm();
+	const [jdbcTesting, setJdbcTesting] = useState(false);
+	const [jdbcTestResult, setJdbcTestResult] = useState<HiveConnectionTestResult | null>(null);
 
 	const [inceptorOpen, setInceptorOpen] = useState(false);
 	const [inceptorForm] = Form.useForm();
@@ -142,8 +173,9 @@ export default function DataSourcesPage() {
 		}
 		setEditMode("create");
 		setEditing(null);
+		setJdbcTestResult(null);
 		form.resetFields();
-		form.setFieldsValue({ type: "JDBC", propsJson: "{}", secretsJson: "{}" });
+		form.setFieldsValue({ type: "JDBC", propsJson: "{}", secretsJson: "", testQuery: "SELECT 1" });
 		setEditOpen(true);
 	};
 
@@ -156,17 +188,82 @@ export default function DataSourcesPage() {
 		}
 		setEditMode("edit");
 		setEditing(row);
+		setJdbcTestResult(null);
 		form.resetFields();
+		const rowProps = row.props || {};
+		const driverClass = String((rowProps as any).driverClass || (rowProps as any).driver_class || "").trim() || undefined;
 		form.setFieldsValue({
 			name: row.name,
 			type: row.type,
 			jdbcUrl: row.jdbcUrl,
 			username: row.username,
 			description: row.description,
+			driverClass,
+			jdbcPropertiesJson: (rowProps as any).jdbcProperties ? JSON.stringify((rowProps as any).jdbcProperties, null, 2) : "",
 			propsJson: row.props ? JSON.stringify(row.props, null, 2) : "{}",
-			secretsJson: "{}",
+			secretsJson: "",
+			password: "",
+			testQuery: "SELECT 1",
 		});
 		setEditOpen(true);
+	};
+
+	const getDefaultDriverClass = (type: string | undefined) => {
+		const t = safeUpper(type);
+		if (t === "DAMENG") return "dm.jdbc.driver.DmDriver";
+		if (t === "POSTGRES" || t === "POSTGRESQL") return "org.postgresql.Driver";
+		if (t === "MYSQL") return "com.mysql.cj.jdbc.Driver";
+		return "";
+	};
+
+	const doTestJdbc = async () => {
+		setJdbcTesting(true);
+		try {
+			const values = await form.validateFields(["jdbcUrl", "type"]);
+			const propsFromJson = tryParseJsonObject(form.getFieldValue("propsJson")) || {};
+			const jdbcPropsFromJson = tryParseJsonObject(form.getFieldValue("jdbcPropertiesJson"));
+			const jdbcProperties =
+				toStringMap(jdbcPropsFromJson) ||
+				toStringMap((propsFromJson as any).jdbcProperties) ||
+				undefined;
+
+			const secretsFromJson = tryParseJsonObject(form.getFieldValue("secretsJson"));
+			const password =
+				String(form.getFieldValue("password") || "").trim() ||
+				String((secretsFromJson as any)?.password || "").trim() ||
+				undefined;
+
+			const rawDriverClass = String(form.getFieldValue("driverClass") || "").trim();
+			const driverClass =
+				rawDriverClass ||
+				String((propsFromJson as any).driverClass || (propsFromJson as any).driver_class || "").trim() ||
+				getDefaultDriverClass(String(values.type || "")) ||
+				undefined;
+
+			const request: JdbcConnectionTestRequest = {
+				jdbcUrl: String(values.jdbcUrl || "").trim(),
+				driverClass,
+				username: String(form.getFieldValue("username") || "").trim() || undefined,
+				password,
+				jdbcProperties,
+				testQuery: String(form.getFieldValue("testQuery") || "").trim() || undefined,
+				dataSourceId: editing?.id,
+			};
+
+			const result: any = await testJdbcConnection(request);
+			setJdbcTestResult((result as HiveConnectionTestResult) ?? null);
+			if (result?.success) {
+				toast.success(`连接成功，用时 ${result?.elapsedMillis ?? "-"} ms`);
+			} else {
+				toast.error(result?.message || "连接失败");
+			}
+		} catch (error: any) {
+			console.error(error);
+			setJdbcTestResult(null);
+			toast.error(error?.message ?? "连接测试失败");
+		} finally {
+			setJdbcTesting(false);
+		}
 	};
 
 	const submitEdit = async () => {
@@ -175,14 +272,37 @@ export default function DataSourcesPage() {
 			toast.error("缺少部门范围，请先选择部门范围");
 			return;
 		}
+
+		const propsFromJson = tryParseJsonObject(values.propsJson) || {};
+		const jdbcPropsFromJson = tryParseJsonObject(values.jdbcPropertiesJson);
+		const mergedProps: Record<string, any> = { ...propsFromJson };
+		if (String(values.driverClass || "").trim()) {
+			mergedProps.driverClass = String(values.driverClass).trim();
+		}
+		if (jdbcPropsFromJson !== undefined) {
+			mergedProps.jdbcProperties = jdbcPropsFromJson;
+		}
+
+		const secretsText = String(values.secretsJson || "").trim();
+		const secretsFromJson = secretsText ? tryParseJsonObject(secretsText) : undefined;
+		const passwordText = String(values.password || "").trim();
+		let mergedSecrets: Record<string, any> | undefined = secretsFromJson;
+		if (passwordText) {
+			mergedSecrets = { ...(mergedSecrets || {}), password: passwordText };
+		}
+		// If user explicitly entered "{}", treat it as a clear operation (even if password empty)
+		if (secretsText === "{}" && !passwordText) {
+			mergedSecrets = {};
+		}
+
 		const payload: UpsertInfraDataSourcePayload = {
 			name: String(values.name || "").trim(),
 			type: String(values.type || "").trim(),
 			jdbcUrl: String(values.jdbcUrl || "").trim(),
 			username: String(values.username || "").trim() || undefined,
 			description: String(values.description || "").trim() || undefined,
-			props: tryParseJsonObject(values.propsJson) || {},
-			secrets: tryParseJsonObject(values.secretsJson) || {},
+			props: mergedProps,
+			secrets: mergedSecrets,
 		};
 		setSaving(true);
 		try {
@@ -476,9 +596,17 @@ export default function DataSourcesPage() {
 				open={editOpen}
 				title={editMode === "create" ? "新增数据源" : "编辑数据源"}
 				onCancel={() => setEditOpen(false)}
-				onOk={submitEdit}
-				confirmLoading={saving}
-				okText="保存"
+				footer={
+					<Space>
+						<Button onClick={() => setEditOpen(false)}>取消</Button>
+						<Button onClick={doTestJdbc} loading={jdbcTesting}>
+							测试连接
+						</Button>
+						<Button type="primary" onClick={submitEdit} loading={saving}>
+							保存
+						</Button>
+					</Space>
+				}
 			>
 				<Form form={form} layout="vertical">
 					<Form.Item name="name" label="数据源名称" rules={[{ required: true, message: "请输入数据源名称" }]}>
@@ -503,15 +631,58 @@ export default function DataSourcesPage() {
 					<Form.Item name="username" label="用户名（可选）">
 						<Input />
 					</Form.Item>
+					<Form.Item name="password" label="密码（可选）">
+						<Input.Password autoComplete="new-password" />
+					</Form.Item>
+					<Form.Item shouldUpdate noStyle>
+						{() => {
+							const placeholder = getDefaultDriverClass(String(form.getFieldValue("type") || "")) || "com.vendor.Driver";
+							return (
+								<Form.Item name="driverClass" label="Driver Class（可选）">
+									<Input placeholder={placeholder} />
+								</Form.Item>
+							);
+						}}
+					</Form.Item>
+					<Form.Item name="testQuery" label="测试 SQL（可选，仅用于“测试连接”）">
+						<Input placeholder="SELECT 1" />
+					</Form.Item>
 					<Form.Item name="description" label="描述（可选）">
 						<Input />
 					</Form.Item>
+
+					{jdbcTestResult && (
+						<Alert
+							type={jdbcTestResult.success ? "success" : "error"}
+							showIcon
+							message={jdbcTestResult.success ? "连接成功" : "连接失败"}
+							description={
+								<div className="space-y-1">
+									<div>{jdbcTestResult.message}</div>
+									<div>耗时：{jdbcTestResult.elapsedMillis} ms</div>
+									{Array.isArray(jdbcTestResult.warnings) && jdbcTestResult.warnings.length > 0 && (
+										<div>警告：{jdbcTestResult.warnings.join("；")}</div>
+									)}
+								</div>
+							}
+						/>
+					)}
+
 					<Divider />
-					<Form.Item name="propsJson" label="连接参数 props（JSON，可选）">
-						<Input.TextArea autoSize={{ minRows: 3, maxRows: 8 }} placeholder="{\n  \"ssl\": true\n}" />
+					<Form.Item name="jdbcPropertiesJson" label="连接属性 jdbcProperties（JSON，可选）" rules={[{ validator: validateJsonObjectOptional }]}>
+						<Input.TextArea
+							autoSize={{ minRows: 3, maxRows: 8 }}
+							placeholder={`{\n  "useUnicode": "true",\n  "characterEncoding": "UTF-8"\n}`}
+						/>
 					</Form.Item>
-					<Form.Item name="secretsJson" label="密钥 secrets（JSON，可选）">
-						<Input.TextArea autoSize={{ minRows: 3, maxRows: 8 }} placeholder="{\n  \"password\": \"******\"\n}" />
+					<Form.Item name="propsJson" label="连接参数 props（JSON，可选，高级）" rules={[{ validator: validateJsonObjectOptional }]}>
+						<Input.TextArea autoSize={{ minRows: 3, maxRows: 8 }} placeholder={`{\n  "catalog": \"...\"\n}`} />
+					</Form.Item>
+					<Form.Item name="secretsJson" label="密钥 secrets（JSON，可选，高级）" rules={[{ validator: validateJsonObjectOptional }]}>
+						<Input.TextArea
+							autoSize={{ minRows: 3, maxRows: 8 }}
+							placeholder={`{\n  \"password\": \"******\"\n}\n\n# 留空：不修改已有密钥\n# 输入 {}：清空密钥`}
+						/>
 					</Form.Item>
 				</Form>
 			</Modal>
@@ -596,36 +767,53 @@ export default function DataSourcesPage() {
 							children: (
 								<div className="space-y-3">
 									<Form form={inceptorForm} layout="vertical">
-										<Form.Item name="loginPrincipal" label="登录主体 (user@REALM)" rules={[{ required: true, message: "请输入登录主体" }]}>
-											<Input />
+										<Form.Item name="loginPrincipal" label="登录用户" rules={[{ required: true, message: "请输入登录用户" }]}>
+											<Input placeholder="Kerberos: user@REALM；或 JDBC: username" />
 										</Form.Item>
 										<div className="grid gap-4 md:grid-cols-2">
 											<Form.Item name="authMethod" label="认证方式" initialValue="KEYTAB" rules={[{ required: true }]}>
-												<Select options={[{ label: "KEYTAB", value: "KEYTAB" }, { label: "PASSWORD", value: "PASSWORD" }]} />
+												<Select
+													options={[
+														{ label: "KEYTAB（Kerberos）", value: "KEYTAB" },
+														{ label: "PASSWORD（Kerberos）", value: "PASSWORD" },
+														{ label: "JDBC_PASSWORD（用户名密码）", value: "JDBC_PASSWORD" },
+													]}
+												/>
 											</Form.Item>
 											<Form.Item name="testQuery" label="测试 SQL（可选）">
 												<Input placeholder="SELECT 1" />
 											</Form.Item>
 										</div>
-										<Form.Item label="krb5.conf（必填）" required>
-											<Space direction="vertical" style={{ width: "100%" }}>
-												<Upload
-													maxCount={1}
-													fileList={inceptorKrb5File ? [inceptorKrb5File] : []}
-													beforeUpload={(file) => {
-														setInceptorKrb5File(file as any);
-														return false;
-													}}
-													onRemove={() => {
-														setInceptorKrb5File(null);
-													}}
-												>
-													<Button>选择 krb5.conf 文件</Button>
-												</Upload>
-												<Form.Item name="krb5Conf" noStyle>
-													<Input.TextArea autoSize={{ minRows: 3, maxRows: 8 }} placeholder="也可直接粘贴 krb5.conf 内容" />
-												</Form.Item>
-											</Space>
+
+										<Form.Item shouldUpdate noStyle>
+											{() => {
+												const method = String(inceptorForm.getFieldValue("authMethod") || "KEYTAB").toUpperCase();
+												if (method === "JDBC_PASSWORD") {
+													return null;
+												}
+												return (
+													<Form.Item label="krb5.conf（Kerberos 必填）" required>
+														<Space direction="vertical" style={{ width: "100%" }}>
+															<Upload
+																maxCount={1}
+																fileList={inceptorKrb5File ? [inceptorKrb5File] : []}
+																beforeUpload={(file) => {
+																	setInceptorKrb5File(file as any);
+																	return false;
+																}}
+																onRemove={() => {
+																	setInceptorKrb5File(null);
+																}}
+															>
+																<Button>选择 krb5.conf 文件</Button>
+															</Upload>
+															<Form.Item name="krb5Conf" noStyle>
+																<Input.TextArea autoSize={{ minRows: 3, maxRows: 8 }} placeholder="也可直接粘贴 krb5.conf 内容" />
+															</Form.Item>
+														</Space>
+													</Form.Item>
+												);
+											}}
 										</Form.Item>
 
 										<Form.Item shouldUpdate noStyle>
@@ -635,6 +823,13 @@ export default function DataSourcesPage() {
 													return (
 														<Form.Item name="password" label="Kerberos 密码" rules={[{ required: true, message: "请输入密码" }]}>
 															<Input.Password />
+														</Form.Item>
+													);
+												}
+												if (method === "JDBC_PASSWORD") {
+													return (
+														<Form.Item name="password" label="密码" rules={[{ required: true, message: "请输入密码" }]}>
+															<Input.Password autoComplete="new-password" />
 														</Form.Item>
 													);
 												}
@@ -666,11 +861,11 @@ export default function DataSourcesPage() {
 													</Form.Item>
 												);
 											}}
-										</Form.Item>
+											</Form.Item>
 
-										<Form.Item name="jdbcPropertiesJson" label="JDBC Properties（JSON，可选）">
-											<Input.TextArea autoSize={{ minRows: 2, maxRows: 6 }} placeholder="{\n  \"hive.exec.dynamic.partition\": \"true\"\n}" />
-										</Form.Item>
+											<Form.Item name="jdbcPropertiesJson" label="JDBC Properties（JSON，可选）">
+												<Input.TextArea autoSize={{ minRows: 2, maxRows: 6 }} placeholder={`{\n  "hive.exec.dynamic.partition": "true"\n}`} />
+											</Form.Item>
 										<Form.Item name="remarks" label="备注（可选）">
 											<Input />
 										</Form.Item>

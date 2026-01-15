@@ -31,6 +31,9 @@ final class DataStandardMapper {
         dto.setCurrentVersion(entity.getCurrentVersion());
         dto.setVersionNotes(entity.getVersionNotes());
         dto.setDescription(entity.getDescription());
+        dto.setDataType(entity.getDataType());
+        dto.setNullable(entity.getNullable());
+        dto.setCodeSet(entity.getCodeSet());
         dto.setReviewCycle(entity.getReviewCycle());
         dto.setLastReviewAt(entity.getLastReviewAt());
         dto.setCreatedDate(entity.getCreatedDate());
@@ -91,4 +94,3 @@ final class DataStandardMapper {
             .collect(Collectors.toList());
     }
 }
-

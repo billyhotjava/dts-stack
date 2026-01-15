@@ -28,6 +28,18 @@
 	align-items: center;
 }
 
+.grid2 {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 16px;
+}
+
+@media (max-width: 960px) {
+	.grid2 {
+		grid-template-columns: 1fr;
+	}
+}
+
 .muted {
 	color: rgba(0, 0, 0, 0.6);
 }

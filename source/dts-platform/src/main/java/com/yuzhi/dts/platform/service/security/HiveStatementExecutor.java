@@ -149,7 +149,10 @@ public class HiveStatementExecutor {
         if (state.authMethod() == HiveConnectionTestRequest.AuthMethod.KEYTAB) {
             request.setKeytabBase64(state.keytabBase64());
             request.setKeytabFileName(state.keytabFileName());
-        } else if (state.authMethod() == HiveConnectionTestRequest.AuthMethod.PASSWORD) {
+        } else if (
+            state.authMethod() == HiveConnectionTestRequest.AuthMethod.PASSWORD ||
+            state.authMethod() == HiveConnectionTestRequest.AuthMethod.JDBC_PASSWORD
+        ) {
             request.setPassword(state.password());
         }
         return request;

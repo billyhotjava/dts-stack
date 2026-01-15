@@ -1,8 +1,10 @@
 package com.yuzhi.dts.analytics.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.yuzhi.dts.analytics.domain.AnalyticsDatabase;
 import com.yuzhi.dts.analytics.domain.AnalyticsField;
 import com.yuzhi.dts.analytics.domain.AnalyticsTable;
+import com.yuzhi.dts.analytics.repository.AnalyticsDatabaseRepository;
 import com.yuzhi.dts.analytics.repository.AnalyticsFieldRepository;
 import com.yuzhi.dts.analytics.repository.AnalyticsTableRepository;
 import java.math.BigDecimal;
@@ -18,17 +20,20 @@ import org.springframework.transaction.annotation.Transactional;
 public class MbqlToSqlService {
 
     private static final Set<String> UNSUPPORTED_KEYS = Set.of(
-            "aggregation",
-            "breakout",
             "expressions",
             "joins",
             "source-query",
             "limit-by");
 
+    private final AnalyticsDatabaseRepository databaseRepository;
     private final AnalyticsTableRepository tableRepository;
     private final AnalyticsFieldRepository fieldRepository;
 
-    public MbqlToSqlService(AnalyticsTableRepository tableRepository, AnalyticsFieldRepository fieldRepository) {
+    public MbqlToSqlService(
+            AnalyticsDatabaseRepository databaseRepository,
+            AnalyticsTableRepository tableRepository,
+            AnalyticsFieldRepository fieldRepository) {
+        this.databaseRepository = databaseRepository;
         this.tableRepository = tableRepository;
         this.fieldRepository = fieldRepository;
     }
@@ -68,19 +73,40 @@ public class MbqlToSqlService {
             }
         }
 
-        String select = "*";
-        JsonNode fields = mbqlQuery.get("fields");
-        if (fields != null && fields.isArray() && fields.size() > 0) {
-            List<String> projected = new ArrayList<>();
-            for (JsonNode node : fields) {
-                projected.add(parseFieldRefColumnName(node, fieldsById));
+        String engine = databaseRepository
+                .findById(databaseId)
+                .map(AnalyticsDatabase::getEngine)
+                .orElse(null);
+        char quote = quoteChar(engine);
+
+        List<String> breakoutColumns = parseBreakoutColumns(mbqlQuery.get("breakout"), fieldsById, quote);
+        List<AggregationSpec> aggregations = parseAggregations(mbqlQuery.get("aggregation"), fieldsById, quote);
+        boolean hasBreakout = !breakoutColumns.isEmpty();
+        boolean hasAgg = !aggregations.isEmpty();
+
+        List<String> selectParts = new ArrayList<>();
+        if (hasBreakout) {
+            selectParts.addAll(breakoutColumns);
+        }
+        if (hasAgg) {
+            for (AggregationSpec agg : aggregations) {
+                selectParts.add(agg.sqlWithAlias());
             }
-            select = String.join(", ", projected);
+        }
+        if (selectParts.isEmpty()) {
+            JsonNode fields = mbqlQuery.get("fields");
+            if (fields != null && fields.isArray() && fields.size() > 0) {
+                for (JsonNode node : fields) {
+                    selectParts.add(parseFieldRefColumnName(node, fieldsById, quote));
+                }
+            }
         }
 
-        String from = qualifyTable(table.getSchemaName(), table.getName());
-        SqlFragment where = renderWhere(mbqlQuery.get("filter"), fieldsById);
-        String orderBy = renderOrderBy(mbqlQuery.get("order-by"), fieldsById);
+        String select = selectParts.isEmpty() ? "*" : String.join(", ", selectParts);
+        String from = qualifyTable(table.getSchemaName(), table.getName(), quote);
+        SqlFragment where = renderWhere(mbqlQuery.get("filter"), fieldsById, quote);
+        String groupBy = hasAgg && hasBreakout ? (" GROUP BY " + String.join(", ", breakoutColumns)) : "";
+        String orderBy = renderOrderBy(mbqlQuery.get("order-by"), fieldsById, aggregations, quote);
 
         int requestedLimit = mbqlQuery.path("limit").canConvertToInt() ? mbqlQuery.path("limit").asInt() : 0;
         int limit = constraints != null ? constraints.maxResults() : DatasetQueryService.DatasetConstraints.defaults().maxResults();
@@ -104,23 +130,23 @@ public class MbqlToSqlService {
             }
         }
 
-        String sql = "SELECT %s FROM %s%s%s LIMIT %d%s"
-                .formatted(select, from, where.sql(), orderBy, limit, offset > 0 ? " OFFSET " + offset : "");
+        String sql = "SELECT %s FROM %s%s%s%s LIMIT %d%s"
+                .formatted(select, from, where.sql(), groupBy, orderBy, limit, offset > 0 ? " OFFSET " + offset : "");
         return new TranslationResult(tableId, sql, where.bindings());
     }
 
-    private static SqlFragment renderWhere(JsonNode filter, Map<Long, AnalyticsField> fieldsById) {
+    private static SqlFragment renderWhere(JsonNode filter, Map<Long, AnalyticsField> fieldsById, char quote) {
         if (filter == null || filter.isNull() || filter.isMissingNode()) {
             return SqlFragment.empty();
         }
-        SqlFragment rendered = renderFilter(filter, fieldsById);
+        SqlFragment rendered = renderFilter(filter, fieldsById, quote);
         if (rendered.sql().isBlank()) {
             return SqlFragment.empty();
         }
         return new SqlFragment(" WHERE " + rendered.sql(), rendered.bindings());
     }
 
-    private static SqlFragment renderFilter(JsonNode filter, Map<Long, AnalyticsField> fieldsById) {
+    private static SqlFragment renderFilter(JsonNode filter, Map<Long, AnalyticsField> fieldsById, char quote) {
         if (filter == null || filter.isNull() || filter.isMissingNode()) {
             return SqlFragment.empty();
         }
@@ -130,36 +156,36 @@ public class MbqlToSqlService {
 
         String op = filter.get(0).asText("").toLowerCase();
         return switch (op) {
-            case "and" -> renderLogical("AND", filter, fieldsById);
-            case "or" -> renderLogical("OR", filter, fieldsById);
-            case "not" -> renderNot(filter, fieldsById);
-            case "=" -> renderComparison("=", filter, fieldsById);
-            case "!=" -> renderComparison("<>", filter, fieldsById);
-            case "<" -> renderComparison("<", filter, fieldsById);
-            case ">" -> renderComparison(">", filter, fieldsById);
-            case "<=" -> renderComparison("<=", filter, fieldsById);
-            case ">=" -> renderComparison(">=", filter, fieldsById);
-            case "is-null" -> renderNullCheck(filter, fieldsById, true);
-            case "not-null" -> renderNullCheck(filter, fieldsById, false);
-            case "between" -> renderBetween(filter, fieldsById);
-            case "in" -> renderIn(filter, fieldsById);
-            case "contains" -> renderLike(filter, fieldsById, "%", "%");
-            case "starts-with" -> renderLike(filter, fieldsById, "", "%");
-            case "ends-with" -> renderLike(filter, fieldsById, "%", "");
-            case "is-empty" -> renderEmptyCheck(filter, fieldsById, true);
-            case "not-empty" -> renderEmptyCheck(filter, fieldsById, false);
+            case "and" -> renderLogical("AND", filter, fieldsById, quote);
+            case "or" -> renderLogical("OR", filter, fieldsById, quote);
+            case "not" -> renderNot(filter, fieldsById, quote);
+            case "=" -> renderComparison("=", filter, fieldsById, quote);
+            case "!=" -> renderComparison("<>", filter, fieldsById, quote);
+            case "<" -> renderComparison("<", filter, fieldsById, quote);
+            case ">" -> renderComparison(">", filter, fieldsById, quote);
+            case "<=" -> renderComparison("<=", filter, fieldsById, quote);
+            case ">=" -> renderComparison(">=", filter, fieldsById, quote);
+            case "is-null" -> renderNullCheck(filter, fieldsById, quote, true);
+            case "not-null" -> renderNullCheck(filter, fieldsById, quote, false);
+            case "between" -> renderBetween(filter, fieldsById, quote);
+            case "in" -> renderIn(filter, fieldsById, quote);
+            case "contains" -> renderLike(filter, fieldsById, quote, "%", "%");
+            case "starts-with" -> renderLike(filter, fieldsById, quote, "", "%");
+            case "ends-with" -> renderLike(filter, fieldsById, quote, "%", "");
+            case "is-empty" -> renderEmptyCheck(filter, fieldsById, quote, true);
+            case "not-empty" -> renderEmptyCheck(filter, fieldsById, quote, false);
             default -> throw new IllegalArgumentException("Unsupported filter operator: " + op);
         };
     }
 
-    private static SqlFragment renderLogical(String join, JsonNode filter, Map<Long, AnalyticsField> fieldsById) {
+    private static SqlFragment renderLogical(String join, JsonNode filter, Map<Long, AnalyticsField> fieldsById, char quote) {
         if (filter.size() < 2) {
             throw new IllegalArgumentException("query.filter " + join.toLowerCase() + " requires at least one clause.");
         }
         List<String> parts = new ArrayList<>();
         List<Object> bindings = new ArrayList<>();
         for (int i = 1; i < filter.size(); i++) {
-            SqlFragment child = renderFilter(filter.get(i), fieldsById);
+            SqlFragment child = renderFilter(filter.get(i), fieldsById, quote);
             if (child.sql().isBlank()) {
                 continue;
             }
@@ -172,22 +198,22 @@ public class MbqlToSqlService {
         return new SqlFragment(String.join(" " + join + " ", parts), bindings);
     }
 
-    private static SqlFragment renderNot(JsonNode filter, Map<Long, AnalyticsField> fieldsById) {
+    private static SqlFragment renderNot(JsonNode filter, Map<Long, AnalyticsField> fieldsById, char quote) {
         if (filter.size() != 2) {
             throw new IllegalArgumentException("query.filter not must be [\"not\", clause].");
         }
-        SqlFragment child = renderFilter(filter.get(1), fieldsById);
+        SqlFragment child = renderFilter(filter.get(1), fieldsById, quote);
         if (child.sql().isBlank()) {
             return SqlFragment.empty();
         }
         return new SqlFragment("NOT (" + child.sql() + ")", child.bindings());
     }
 
-    private static SqlFragment renderComparison(String operator, JsonNode filter, Map<Long, AnalyticsField> fieldsById) {
+    private static SqlFragment renderComparison(String operator, JsonNode filter, Map<Long, AnalyticsField> fieldsById, char quote) {
         if (filter.size() != 3) {
             throw new IllegalArgumentException("query.filter comparison must be [\"" + operator + "\", field, value].");
         }
-        String column = parseFieldRefColumnName(filter.get(1), fieldsById);
+        String column = parseFieldRefColumnName(filter.get(1), fieldsById, quote);
         JsonNode valueNode = filter.get(2);
         if (valueNode == null || valueNode.isNull()) {
             if ("=".equals(operator)) {
@@ -205,29 +231,29 @@ public class MbqlToSqlService {
         return new SqlFragment(column + " " + operator + " ?", List.of(binding));
     }
 
-    private static SqlFragment renderNullCheck(JsonNode filter, Map<Long, AnalyticsField> fieldsById, boolean isNull) {
+    private static SqlFragment renderNullCheck(JsonNode filter, Map<Long, AnalyticsField> fieldsById, char quote, boolean isNull) {
         if (filter.size() != 2) {
             throw new IllegalArgumentException("query.filter null check must be [\"is-null\"|\"not-null\", field].");
         }
-        String column = parseFieldRefColumnName(filter.get(1), fieldsById);
+        String column = parseFieldRefColumnName(filter.get(1), fieldsById, quote);
         return new SqlFragment(column + (isNull ? " IS NULL" : " IS NOT NULL"), List.of());
     }
 
-    private static SqlFragment renderBetween(JsonNode filter, Map<Long, AnalyticsField> fieldsById) {
+    private static SqlFragment renderBetween(JsonNode filter, Map<Long, AnalyticsField> fieldsById, char quote) {
         if (filter.size() != 4) {
             throw new IllegalArgumentException("query.filter between must be [\"between\", field, min, max].");
         }
-        String column = parseFieldRefColumnName(filter.get(1), fieldsById);
+        String column = parseFieldRefColumnName(filter.get(1), fieldsById, quote);
         Object min = jsonScalarToBinding(requireScalar(filter.get(2), "between min"));
         Object max = jsonScalarToBinding(requireScalar(filter.get(3), "between max"));
         return new SqlFragment(column + " BETWEEN ? AND ?", List.of(min, max));
     }
 
-    private static SqlFragment renderIn(JsonNode filter, Map<Long, AnalyticsField> fieldsById) {
+    private static SqlFragment renderIn(JsonNode filter, Map<Long, AnalyticsField> fieldsById, char quote) {
         if (filter.size() < 3) {
             throw new IllegalArgumentException("query.filter in must be [\"in\", field, values...].");
         }
-        String column = parseFieldRefColumnName(filter.get(1), fieldsById);
+        String column = parseFieldRefColumnName(filter.get(1), fieldsById, quote);
 
         List<JsonNode> values = new ArrayList<>();
         JsonNode third = filter.get(2);
@@ -267,21 +293,21 @@ public class MbqlToSqlService {
         return new SqlFragment(sql, bindings);
     }
 
-    private static SqlFragment renderLike(JsonNode filter, Map<Long, AnalyticsField> fieldsById, String prefix, String suffix) {
+    private static SqlFragment renderLike(JsonNode filter, Map<Long, AnalyticsField> fieldsById, char quote, String prefix, String suffix) {
         if (filter.size() != 3) {
             throw new IllegalArgumentException("query.filter like must be [\"contains\"|\"starts-with\"|\"ends-with\", field, value].");
         }
-        String column = parseFieldRefColumnName(filter.get(1), fieldsById);
+        String column = parseFieldRefColumnName(filter.get(1), fieldsById, quote);
         JsonNode valueNode = requireScalar(filter.get(2), "like value");
         String value = valueNode.asText();
         return new SqlFragment(column + " LIKE ?", List.of(prefix + value + suffix));
     }
 
-    private static SqlFragment renderEmptyCheck(JsonNode filter, Map<Long, AnalyticsField> fieldsById, boolean isEmpty) {
+    private static SqlFragment renderEmptyCheck(JsonNode filter, Map<Long, AnalyticsField> fieldsById, char quote, boolean isEmpty) {
         if (filter.size() != 2) {
             throw new IllegalArgumentException("query.filter is-empty/not-empty must be [\"is-empty\"|\"not-empty\", field].");
         }
-        String column = parseFieldRefColumnName(filter.get(1), fieldsById);
+        String column = parseFieldRefColumnName(filter.get(1), fieldsById, quote);
         String sql = "(%s IS NULL OR %s = '')".formatted(column, column);
         if (isEmpty) {
             return new SqlFragment(sql, List.of());
@@ -316,14 +342,15 @@ public class MbqlToSqlService {
         return node.asText();
     }
 
-    private static String renderOrderBy(JsonNode orderBy, Map<Long, AnalyticsField> fieldsById) {
+    private static String renderOrderBy(
+            JsonNode orderBy, Map<Long, AnalyticsField> fieldsById, List<AggregationSpec> aggregations, char quote) {
         if (orderBy == null || !orderBy.isArray() || orderBy.isEmpty()) {
             return "";
         }
 
         List<String> clauses = new ArrayList<>();
         for (JsonNode node : orderBy) {
-            clauses.add(renderOrderByClause(node, fieldsById));
+            clauses.add(renderOrderByClause(node, fieldsById, aggregations, quote));
         }
 
         if (clauses.isEmpty()) {
@@ -332,7 +359,8 @@ public class MbqlToSqlService {
         return " ORDER BY " + String.join(", ", clauses);
     }
 
-    private static String renderOrderByClause(JsonNode node, Map<Long, AnalyticsField> fieldsById) {
+    private static String renderOrderByClause(
+            JsonNode node, Map<Long, AnalyticsField> fieldsById, List<AggregationSpec> aggregations, char quote) {
         if (node == null || !node.isArray() || node.size() < 2) {
             throw new IllegalArgumentException("query.order-by must be a list of [direction field-ref] pairs.");
         }
@@ -340,11 +368,26 @@ public class MbqlToSqlService {
         if (!"asc".equalsIgnoreCase(direction) && !"desc".equalsIgnoreCase(direction)) {
             throw new IllegalArgumentException("query.order-by direction must be asc or desc.");
         }
-        String column = parseFieldRefColumnName(node.get(1), fieldsById);
+        String column = parseOrderByTarget(node.get(1), fieldsById, aggregations, quote);
         return column + " " + direction.toUpperCase();
     }
 
-    private static String parseFieldRefColumnName(JsonNode fieldRef, Map<Long, AnalyticsField> fieldsById) {
+    private static String parseOrderByTarget(
+            JsonNode target, Map<Long, AnalyticsField> fieldsById, List<AggregationSpec> aggregations, char quote) {
+        if (target != null && target.isArray() && target.size() >= 2) {
+            String kind = target.get(0).asText("");
+            if ("aggregation".equalsIgnoreCase(kind)) {
+                int index = target.get(1).canConvertToInt() ? target.get(1).asInt() : -1;
+                if (index < 0 || index >= aggregations.size()) {
+                    throw new IllegalArgumentException("Invalid aggregation reference in order-by: " + target);
+                }
+                return quoteIdentifier(aggregations.get(index).alias(), quote);
+            }
+        }
+        return parseFieldRefColumnName(target, fieldsById, quote);
+    }
+
+    private static String parseFieldRefColumnName(JsonNode fieldRef, Map<Long, AnalyticsField> fieldsById, char quote) {
         if (fieldRef == null || !fieldRef.isArray() || fieldRef.size() < 2) {
             throw new IllegalArgumentException("fields must contain field references.");
         }
@@ -360,26 +403,106 @@ public class MbqlToSqlService {
         if (field == null) {
             throw new IllegalArgumentException("Field not found: " + fieldId);
         }
-        return quoteIdentifier(field.getName());
+        return quoteIdentifier(field.getName(), quote);
     }
 
-    private static String qualifyTable(String schema, String name) {
-        String tableName = quoteIdentifier(name);
+    private static String qualifyTable(String schema, String name, char quote) {
+        String tableName = quoteIdentifier(name, quote);
         if (schema == null || schema.isBlank()) {
             return tableName;
         }
-        return quoteIdentifier(schema) + "." + tableName;
+        return quoteIdentifier(schema, quote) + "." + tableName;
     }
 
-    private static String quoteIdentifier(String identifier) {
+    private static char quoteChar(String engine) {
+        if (engine == null) {
+            return '"';
+        }
+        return switch (engine.trim().toLowerCase(java.util.Locale.ROOT)) {
+            case "mysql" -> '`';
+            default -> '"';
+        };
+    }
+
+    private static String quoteIdentifier(String identifier, char quote) {
         if (identifier == null) {
             throw new IllegalArgumentException("Identifier cannot be null");
         }
-        String escaped = identifier.replace("\"", "\"\"");
-        return "\"" + escaped + "\"";
+        String q = String.valueOf(quote);
+        String escaped = identifier.replace(q, q + q);
+        return quote + escaped + quote;
+    }
+
+    private static List<String> parseBreakoutColumns(JsonNode breakout, Map<Long, AnalyticsField> fieldsById, char quote) {
+        if (breakout == null || breakout.isNull() || breakout.isMissingNode()) {
+            return List.of();
+        }
+        if (!breakout.isArray()) {
+            throw new IllegalArgumentException("query.breakout must be a list of field refs.");
+        }
+        List<String> columns = new ArrayList<>();
+        for (JsonNode node : breakout) {
+            columns.add(parseFieldRefColumnName(node, fieldsById, quote));
+        }
+        return columns;
+    }
+
+    private static List<AggregationSpec> parseAggregations(JsonNode aggregation, Map<Long, AnalyticsField> fieldsById, char quote) {
+        if (aggregation == null || aggregation.isNull() || aggregation.isMissingNode()) {
+            return List.of();
+        }
+        if (!aggregation.isArray()) {
+            throw new IllegalArgumentException("query.aggregation must be a list.");
+        }
+        List<AggregationSpec> result = new ArrayList<>();
+        int idx = 0;
+        for (JsonNode node : aggregation) {
+            if (node == null || !node.isArray() || node.isEmpty()) {
+                throw new IllegalArgumentException("query.aggregation items must be an array.");
+            }
+            String op = node.get(0).asText("");
+            String alias = "metric_" + idx;
+            String expr = switch (op.toLowerCase(java.util.Locale.ROOT)) {
+                case "count" -> {
+                    if (node.size() == 1) {
+                        yield "COUNT(*)";
+                    }
+                    if (node.size() == 2) {
+                        yield "COUNT(" + parseFieldRefColumnName(node.get(1), fieldsById, quote) + ")";
+                    }
+                    throw new IllegalArgumentException("aggregation count must be [\"count\"] or [\"count\", field].");
+                }
+                case "sum" -> {
+                    if (node.size() != 2) throw new IllegalArgumentException("aggregation sum must be [\"sum\", field].");
+                    yield "SUM(" + parseFieldRefColumnName(node.get(1), fieldsById, quote) + ")";
+                }
+                case "avg" -> {
+                    if (node.size() != 2) throw new IllegalArgumentException("aggregation avg must be [\"avg\", field].");
+                    yield "AVG(" + parseFieldRefColumnName(node.get(1), fieldsById, quote) + ")";
+                }
+                case "min" -> {
+                    if (node.size() != 2) throw new IllegalArgumentException("aggregation min must be [\"min\", field].");
+                    yield "MIN(" + parseFieldRefColumnName(node.get(1), fieldsById, quote) + ")";
+                }
+                case "max" -> {
+                    if (node.size() != 2) throw new IllegalArgumentException("aggregation max must be [\"max\", field].");
+                    yield "MAX(" + parseFieldRefColumnName(node.get(1), fieldsById, quote) + ")";
+                }
+                default -> throw new IllegalArgumentException("Unsupported aggregation operator: " + op);
+            };
+            result.add(new AggregationSpec(expr, alias, quote));
+            idx++;
+        }
+        return result;
     }
 
     public record TranslationResult(long sourceTableId, String sql, List<Object> bindings) {}
+
+    private record AggregationSpec(String sql, String alias, char quote) {
+        String sqlWithAlias() {
+            return sql + " AS " + quoteIdentifier(alias, quote);
+        }
+    }
 
     private record SqlFragment(String sql, List<Object> bindings) {
 

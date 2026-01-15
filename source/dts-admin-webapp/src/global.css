@@ -56,6 +56,15 @@
 		font-size: 0.75rem !important;
 		line-height: 1rem !important;
 	}
+
+	/* AntD: ensure expanded-row content scrolls with horizontal scrollbar */
+	.user-management-table :where(.ant-table-expanded-row-fixed) {
+		position: static !important;
+		left: auto !important;
+		right: auto !important;
+		inset-inline-start: auto !important;
+		inset-inline-end: auto !important;
+	}
 }
 
 @theme {
@@ -126,40 +135,41 @@
 	--sidebar-ring: var(--colors-palette-primary-default);
 }
 
-/* Shadcn UI Dark Theme */
-[data-theme-mode="dark"] {
-	--background: var(--colors-common-black);
-	--foreground: var(--colors-common-white);
-	--card: var(--colors-common-black);
-	--card-foreground: var(--colors-common-white);
-	--popover: var(--colors-common-black);
-	--popover-foreground: var(--colors-common-white);
-	--primary: var(--colors-palette-primary-default);
-	--primary-foreground: var(--colors-palette-primary-darker);
-	--secondary: var(--colors-background-neutral);
-	--secondary-foreground: var(--colors-palette-gray-500);
-	--muted: var(--colors-background-neutral);
-	--muted-foreground: var(--colors-palette-gray-400);
-	--accent: var(--colors-background-neutral);
-	--accent-foreground: var(--colors-palette-gray-500);
-	--destructive: var(--colors-palette-error-default);
-	--border: rgba(var(--colors-palette-gray-500Channel) / var(--opacity-border));
-	--input: rgba(var(--colors-palette-gray-500Channel) / var(--opacity-border));
-	--ring: var(--colors-palette-primary-default);
+	/* Shadcn UI Dark Theme */
+	[data-theme-mode="dark"] {
+		--background: var(--colors-background-default);
+		--foreground: var(--colors-text-primary);
+		--card: var(--colors-background-paper);
+		--card-foreground: var(--colors-text-primary);
+		--popover: var(--colors-background-paper);
+		--popover-foreground: var(--colors-text-primary);
+		--primary: var(--colors-palette-primary-default);
+		--primary-foreground: var(--colors-common-white);
+		--secondary: var(--colors-background-neutral);
+		--secondary-foreground: var(--colors-common-white);
+		--muted: var(--colors-background-neutral);
+		--muted-foreground: var(--colors-palette-gray-400);
+		--accent: var(--colors-background-neutral);
+		--accent-foreground: var(--colors-common-white);
+		--destructive: var(--colors-palette-error-default);
+		--destructive-foreground: var(--colors-common-white);
+		--border: rgba(var(--colors-palette-gray-500Channel) / var(--opacity-border));
+		--input: rgba(var(--colors-palette-gray-500Channel) / var(--opacity-border));
+		--ring: var(--colors-palette-primary-default);
 	--chart-1: oklch(0.488 0.243 264.376);
 	--chart-2: oklch(0.696 0.17 162.48);
 	--chart-3: oklch(0.769 0.188 70.08);
-	--chart-4: oklch(0.627 0.265 303.9);
-	--chart-5: oklch(0.645 0.246 16.439);
-	--sidebar: var(--colors-background-neutral);
-	--sidebar-foreground: var(--colors-common-white);
-	--sidebar-primary: var(--colors-palette-primary-default);
-	--sidebar-primary-foreground: var(--colors-palette-primary-darker);
-	--sidebar-accent: var(--colors-background-neutral);
-	--sidebar-accent-foreground: var(--colors-common-white);
-	--sidebar-border: rgba(var(--colors-palette-gray-500Channel) / var(--opacity-border));
-	--sidebar-ring: var(--colors-palette-primary-default);
-}
+		--chart-4: oklch(0.627 0.265 303.9);
+		--chart-5: oklch(0.645 0.246 16.439);
+		--sidebar: var(--colors-background-neutral);
+		--sidebar-foreground: var(--colors-text-primary);
+		--sidebar-primary: var(--colors-palette-primary-default);
+		--sidebar-primary-foreground: var(--colors-common-white);
+		--sidebar-accent: var(--colors-background-neutral);
+		--sidebar-accent-foreground: var(--colors-text-primary);
+		--sidebar-border: rgba(var(--colors-palette-gray-500Channel) / var(--opacity-border));
+		--sidebar-ring: var(--colors-palette-primary-default);
+	}
 
 /* slash layout */
 :root {

@@ -1,6 +1,7 @@
 import { Link, useParams } from "react-router";
 import { useEffect, useMemo, useState } from "react";
 import { analyticsApi, type CollectionItem } from "../api/analyticsApi";
+import { EmptyState } from "../components/EmptyState";
 import { ErrorNotice } from "../components/ErrorNotice";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import "./page.css";
@@ -42,7 +43,10 @@ export default function CollectionItemsPage() {
 			<div className="card">
 				{state.state === "loading" && <div>{t(locale, "loading")}</div>}
 				{state.state === "error" && <ErrorNotice locale={locale} error={state.error} />}
-				{state.state === "loaded" && (
+				{state.state === "loaded" && state.value.length === 0 ? (
+					<EmptyState title={t(locale, "common.empty")} />
+				) : null}
+				{state.state === "loaded" && state.value.length > 0 && (
 					<table className="table">
 						<thead>
 							<tr>

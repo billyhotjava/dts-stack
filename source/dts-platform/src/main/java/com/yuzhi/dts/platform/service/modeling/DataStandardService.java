@@ -222,6 +222,9 @@ public class DataStandardService {
         entity.setOwner(request.getOwner());
         entity.setTags(DataStandardMapper.joinTags(request.getTags()));
         entity.setDescription(request.getDescription());
+        entity.setDataType(StringUtils.hasText(request.getDataType()) ? request.getDataType().trim() : null);
+        entity.setNullable(request.getNullable());
+        entity.setCodeSet(StringUtils.hasText(request.getCodeSet()) ? request.getCodeSet().trim() : null);
         entity.setReviewCycle(request.getReviewCycle());
     }
 

@@ -1,4 +1,4 @@
-import { Select, Table } from "antd";
+import { Table } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { KeycloakUser } from "#/keycloak";
@@ -32,8 +32,6 @@ type UserSnapshotRow = {
 };
 
 type RoleChip = { code: string; label: string };
-
-type InstituteStatus = "ALL" | "1" | "0";
 
 function normalizeRoleCode(value?: string): string {
   if (!value) return "";
@@ -97,16 +95,18 @@ export default function UserManagementView() {
   const [loading, setLoading] = useState(false);
   const [keywordInput, setKeywordInput] = useState("");
   const [keyword, setKeyword] = useState("");
-  const [status, setStatus] = useState<InstituteStatus>("ALL");
   const [pagination, setPagination] = useState<{ current: number; pageSize: number }>({
     current: 1,
     pageSize: 20,
   });
   const [roleDisplayNameMap, setRoleDisplayNameMap] = useState<Record<string, string>>({
     SYSADMIN: "系统管理员",
+    SYS_ADMIN: "系统管理员",
     AUTHADMIN: "授权管理员",
+    AUTH_ADMIN: "授权管理员",
     OPADMIN: "运维管理员",
     AUDITADMIN: "安全审计员",
+    SECURITY_AUDITOR: "安全审计员",
   });
   const [modalState, setModalState] = useState<{
     open: boolean;
@@ -121,7 +121,6 @@ export default function UserManagementView() {
         page: Math.max(0, pagination.current - 1),
         size: pagination.pageSize,
         keyword: keyword.trim() ? keyword.trim() : undefined,
-        status: status === "ALL" ? undefined : (Number(status) as 0 | 1),
       });
       const { items, total: nextTotal } = normalizeUsersPage(page);
       setList(items);
@@ -131,7 +130,7 @@ export default function UserManagementView() {
     } finally {
       setLoading(false);
     }
-  }, [keyword, pagination.current, pagination.pageSize, status]);
+  }, [keyword, pagination.current, pagination.pageSize]);
 
   useEffect(() => {
     load();
@@ -265,11 +264,11 @@ export default function UserManagementView() {
               </div>
               <div>
                 <span className="text-muted-foreground">账号状态：</span>
-                <span className={record.enabled ? "text-emerald-600" : "text-red-600"}>{record.enabled ? "已启用" : "已停用"}</span>
+                <span className={record.enabled ? "text-emerald-600" : "text-red-600"}>{record.enabled ? "可用" : "禁用"}</span>
               </div>
               <div>
                 <span className="text-muted-foreground">院级状态：</span>
-                <span className={record.mdmEnabled === 0 ? "text-red-600" : "text-emerald-600"}>{record.mdmEnabled === 0 ? "不可用" : "可用"}</span>
+                <span className={record.mdmEnabled === 0 ? "text-red-600" : "text-emerald-600"}>{record.mdmEnabled === 0 ? "禁用" : "可用"}</span>
               </div>
             </div>
           </div>
@@ -366,7 +365,7 @@ export default function UserManagementView() {
         render: (val?: boolean) => (
           <div className="flex items-center gap-2">
             <span className={val ? "h-2 w-2 rounded-full bg-emerald-500" : "h-2 w-2 rounded-full bg-red-500"} />
-            <span className={val ? "text-emerald-600" : "text-red-600"}>{val ? "已启用" : "已停用"}</span>
+            <span className={val ? "text-emerald-600" : "text-red-600"}>{val ? "可用" : "禁用"}</span>
           </div>
         ),
       },
@@ -377,8 +376,8 @@ export default function UserManagementView() {
         onCell: () => ({ style: { verticalAlign: "middle" } }),
         render: (_, record) => {
           const value = record.mdmEnabled;
-          if (value === 0) return <Badge variant="destructive">院级禁用</Badge>;
-          if (value === 1) return <Badge variant="secondary">院级启用</Badge>;
+          if (value === 0) return <Badge variant="destructive">禁用</Badge>;
+          if (value === 1) return <Badge variant="secondary">可用</Badge>;
           return <span className="text-muted-foreground">--</span>;
         },
       },
@@ -425,19 +424,6 @@ export default function UserManagementView() {
             用户管理
           </Text>
           <div className="ml-auto flex items-center gap-2">
-            <Select
-              value={status}
-              style={{ width: 140 }}
-              onChange={(value) => {
-                setStatus(value as InstituteStatus);
-                setPagination((prev) => ({ ...prev, current: 1 }));
-              }}
-              options={[
-                { value: "ALL", label: "院级状态：全部" },
-                { value: "1", label: "院级状态：可用" },
-                { value: "0", label: "院级状态：不可用" },
-              ]}
-            />
             <Input
               placeholder="按用户名搜索"
               value={keywordInput}
@@ -488,7 +474,7 @@ export default function UserManagementView() {
                 total,
               }}
               size="small"
-              className="text-sm"
+              className="user-management-table text-sm"
               rowClassName={() => "text-sm"}
               tableLayout="fixed"
               scroll={{ x: 1500 }}
@@ -496,6 +482,7 @@ export default function UserManagementView() {
                 expandedRowRender,
                 expandRowByClick: true,
                 columnWidth: 48,
+                fixed: false,
               }}
             />
           </CardContent>

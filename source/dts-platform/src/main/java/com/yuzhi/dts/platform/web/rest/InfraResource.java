@@ -13,6 +13,7 @@ import com.yuzhi.dts.platform.service.infra.InceptorIntegrationCoordinator;
 import com.yuzhi.dts.platform.service.infra.InceptorIntegrationCoordinator.IntegrationStatus;
 import com.yuzhi.dts.platform.service.infra.HiveConnectionTestResult;
 import com.yuzhi.dts.platform.service.infra.InfraManagementService;
+import com.yuzhi.dts.platform.service.infra.JdbcConnectionTestService;
 import com.yuzhi.dts.platform.service.infra.dto.ConnectionTestLogDto;
 import com.yuzhi.dts.platform.service.infra.dto.DataSourceRequest;
 import com.yuzhi.dts.platform.service.infra.dto.DataStorageRequest;
@@ -20,6 +21,7 @@ import com.yuzhi.dts.platform.service.infra.dto.HiveConnectionPersistRequest;
 import com.yuzhi.dts.platform.service.infra.dto.InfraDataSourceDto;
 import com.yuzhi.dts.platform.service.infra.dto.InfraDataStorageDto;
 import com.yuzhi.dts.platform.web.rest.infra.HiveConnectionTestRequest;
+import com.yuzhi.dts.platform.web.rest.infra.JdbcConnectionTestRequest;
 import jakarta.validation.Valid;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -46,6 +48,7 @@ public class InfraResource {
     private final AuditService audit;
     private final InfraManagementService managementService;
     private final HiveConnectionService hiveConnectionService;
+    private final JdbcConnectionTestService jdbcConnectionTestService;
     private final HiveExecutionProperties hiveProps;
     private final InceptorDataSourceRegistry inceptorRegistry;
     private final InceptorIntegrationCoordinator integrationCoordinator;
@@ -55,6 +58,7 @@ public class InfraResource {
         AuditService audit,
         InfraManagementService managementService,
         HiveConnectionService hiveConnectionService,
+        JdbcConnectionTestService jdbcConnectionTestService,
         HiveExecutionProperties hiveProps,
         InceptorDataSourceRegistry inceptorRegistry,
         InceptorIntegrationCoordinator integrationCoordinator
@@ -63,6 +67,7 @@ public class InfraResource {
         this.audit = audit;
         this.managementService = managementService;
         this.hiveConnectionService = hiveConnectionService;
+        this.jdbcConnectionTestService = jdbcConnectionTestService;
         this.hiveProps = hiveProps;
         this.inceptorRegistry = inceptorRegistry;
         this.integrationCoordinator = integrationCoordinator;
@@ -83,6 +88,40 @@ public class InfraResource {
         var user = SecurityUtils.getCurrentUserLogin().orElse("system");
         managementService.recordConnectionTest(null, request, result, user);
         audit.audit("TEST", "infra.dataSource", "test-connection:" + request.getLoginPrincipal());
+        return ApiResponses.ok(result);
+    }
+
+    @PostMapping("/data-sources/jdbc/test-connection")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ApiResponse<HiveConnectionTestResult> testJdbcConnection(@Valid @RequestBody JdbcConnectionTestRequest request) {
+        var result = jdbcConnectionTestService.testConnection(request);
+        var user = SecurityUtils.getCurrentUserLogin().orElse("system");
+        UUID dataSourceId = null;
+        try {
+            if (org.springframework.util.StringUtils.hasText(request.getDataSourceId())) {
+                dataSourceId = UUID.fromString(request.getDataSourceId().trim());
+            }
+        } catch (Exception ignore) {}
+        managementService.recordConnectionTest(
+            dataSourceId,
+            Map.of(
+                "jdbcUrl",
+                request.getJdbcUrl(),
+                "driverClass",
+                request.getDriverClass(),
+                "username",
+                request.getUsername(),
+                "jdbcProperties",
+                request.getJdbcProperties(),
+                "testQuery",
+                request.getTestQuery(),
+                "remarks",
+                request.getRemarks()
+            ),
+            result,
+            user
+        );
+        audit.audit("TEST", "infra.dataSource", "jdbc-test-connection");
         return ApiResponses.ok(result);
     }
 

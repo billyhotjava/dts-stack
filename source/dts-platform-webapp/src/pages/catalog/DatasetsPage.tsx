@@ -43,6 +43,7 @@ type ListItem = {
 	tags?: string[];
     description?: string;
     editable?: boolean;
+	warehouseLayer?: string;
 };
 
 export default function DatasetsPage() {
@@ -135,6 +136,7 @@ export default function DatasetsPage() {
 	const [size] = useState(10);
 	const [keyword, setKeyword] = useState("");
 const [deptFilter, setDeptFilter] = useState<string>("");
+const [layerFilter, setLayerFilter] = useState<string>("");
 	const [instOwnerInitialized, setInstOwnerInitialized] = useState(false);
 	const [open, setOpen] = useState(false);
 	const [form, setForm] = useState({
@@ -322,6 +324,7 @@ const renderSourceLabel = (value: string) => {
 		try {
 		const params: any = { page, size, keyword };
 			if (deptFilter.trim()) params.ownerDept = deptFilter.trim();
+			if (layerFilter.trim()) params.warehouseLayer = layerFilter.trim();
 			const resp = (await listDatasets(params)) as any;
 			const content = (resp && resp.content) || [];
 			const mapped: ListItem[] = content.map((it: any) => {
@@ -347,6 +350,7 @@ const renderSourceLabel = (value: string) => {
 					tags,
 					description: typeof it.description === "string" ? it.description : "",
 					editable: typeof it.editable === "boolean" ? it.editable : fallbackEditable,
+					warehouseLayer: typeof it.warehouseLayer === "string" ? it.warehouseLayer : typeof it.warehouse_layer === "string" ? it.warehouse_layer : undefined,
 				};
 				});
 			setItems(mapped);
@@ -402,7 +406,7 @@ const renderSourceLabel = (value: string) => {
 
 useEffect(() => {
 	void fetchList();
-}, [page, size, resolvedDefaultSource, deptFilter, keyword]);
+}, [page, size, resolvedDefaultSource, deptFilter, layerFilter, keyword]);
 
 	useEffect(() => {
 		if (hasPrimarySource) {
@@ -680,6 +684,28 @@ const filtered = useMemo(() => {
 							{d.nameZh || d.nameEn || d.code}
 						</SelectItem>
 					  ))}
+				</SelectContent>
+			</Select>
+		</div>
+		<div>
+			<Label>数仓分层</Label>
+			<Select
+				value={layerFilter || "all"}
+				onValueChange={(v) => {
+					const next = v === "all" ? "" : v;
+					setLayerFilter(next);
+					setPage(0);
+				}}
+			>
+				<SelectTrigger>
+					<SelectValue placeholder="全部" />
+				</SelectTrigger>
+				<SelectContent>
+					<SelectItem value="all">全部</SelectItem>
+					<SelectItem value="ODS">ODS</SelectItem>
+					<SelectItem value="DWD">DWD</SelectItem>
+					<SelectItem value="DWS">DWS</SelectItem>
+					<SelectItem value="ADS">ADS</SelectItem>
 				</SelectContent>
 			</Select>
 		</div>

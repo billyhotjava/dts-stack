@@ -20,6 +20,9 @@ public class DataStandardDto {
     private String currentVersion;
     private String versionNotes;
     private String description;
+    private String dataType;
+    private Boolean nullable;
+    private String codeSet;
     private String reviewCycle;
     private Instant lastReviewAt;
     private Instant createdDate;
@@ -123,6 +126,30 @@ public class DataStandardDto {
         this.description = description;
     }
 
+    public String getDataType() {
+        return dataType;
+    }
+
+    public void setDataType(String dataType) {
+        this.dataType = dataType;
+    }
+
+    public Boolean getNullable() {
+        return nullable;
+    }
+
+    public void setNullable(Boolean nullable) {
+        this.nullable = nullable;
+    }
+
+    public String getCodeSet() {
+        return codeSet;
+    }
+
+    public void setCodeSet(String codeSet) {
+        this.codeSet = codeSet;
+    }
+
     public String getReviewCycle() {
         return reviewCycle;
     }
@@ -171,4 +198,3 @@ public class DataStandardDto {
         this.lastModifiedBy = lastModifiedBy;
     }
 }
-

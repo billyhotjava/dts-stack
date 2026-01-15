@@ -14,12 +14,16 @@ import java.util.Objects;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class HiveConnectionTestRequest {
 
-    public enum AuthMethod { KEYTAB, PASSWORD }
+    /**
+     * KEYTAB/PASSWORD are Kerberos-based modes (require krb5.conf).
+     * JDBC_PASSWORD is a non-Kerberos JDBC username/password mode.
+     */
+    public enum AuthMethod { KEYTAB, PASSWORD, JDBC_PASSWORD }
 
     @NotBlank
     private String jdbcUrl;
 
-    /** Kerberos identity in the form user@REALM used to acquire TGT */
+    /** Login username (Kerberos principal like user@REALM, or plain JDBC username when authMethod=JDBC_PASSWORD). */
     @NotBlank
     private String loginPrincipal;
 
@@ -90,6 +94,9 @@ public class HiveConnectionTestRequest {
     @JsonIgnore
     @AssertTrue(message = "必须上传 krb5.conf 文件")
     public boolean isKrb5Available() {
+        if (authMethod == AuthMethod.JDBC_PASSWORD) {
+            return true;
+        }
         return krb5Conf != null && !krb5Conf.isBlank();
     }
 
@@ -105,7 +112,7 @@ public class HiveConnectionTestRequest {
     @JsonIgnore
     @AssertTrue(message = "密码认证模式需要填写密码")
     public boolean isPasswordProvided() {
-        if (authMethod == AuthMethod.PASSWORD) {
+        if (authMethod == AuthMethod.PASSWORD || authMethod == AuthMethod.JDBC_PASSWORD) {
             return password != null && !password.isBlank();
         }
         return true;

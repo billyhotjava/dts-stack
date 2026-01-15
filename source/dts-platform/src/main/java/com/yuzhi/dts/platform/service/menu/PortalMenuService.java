@@ -1,9 +1,7 @@
 package com.yuzhi.dts.platform.service.menu;
 
 import com.yuzhi.dts.platform.service.menu.PortalMenuClient.RemoteMenuNode;
-import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.Deque;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -32,11 +30,12 @@ public class PortalMenuService {
         java.util.Set<String> activeIds = flattenIds(baseline);
         java.util.Set<String> visited = new java.util.LinkedHashSet<>();
         List<RemoteMenuNode> remote = (roles != null && !roles.isEmpty()) ? client.fetchMenuTreeForAudience(roles, List.of()) : baseline;
-        return remote
+        List<PortalMenuTreeItem> mapped = remote
             .stream()
             .map(node -> mapTree(node, null, null, activeIds, visited))
             .filter(Objects::nonNull)
             .collect(Collectors.toCollection(ArrayList::new));
+        return mapped;
     }
 
     public List<PortalMenuFlatItem> getFlatMenuList() {
@@ -45,9 +44,8 @@ public class PortalMenuService {
             tree = tree.stream().filter(node -> node != null && !node.deleted()).collect(Collectors.toCollection(ArrayList::new));
         }
         List<PortalMenuFlatItem> flat = new ArrayList<>();
-        Deque<String> pathStack = new ArrayDeque<>();
         for (PortalMenuTreeItem root : tree) {
-            flatten(root, pathStack, flat);
+            flatten(root, "", flat);
         }
         return flat;
     }
@@ -111,22 +109,21 @@ public class PortalMenuService {
         return client.deletePortalMenu(id);
     }
 
-    private void flatten(PortalMenuTreeItem node, Deque<String> pathStack, List<PortalMenuFlatItem> out) {
+    private void flatten(PortalMenuTreeItem node, String parentId, List<PortalMenuFlatItem> out) {
         if (node.deleted()) {
             return;
         }
-        String parentPath = pathStack.peekLast();
-        String fullPath = buildFullPath(parentPath, node.pathSegment());
-
+        String id = node.id() != null ? String.valueOf(node.id()) : node.generatedId();
+        String fullPath = node.fullPath();
         out.add(
             new PortalMenuFlatItem(
-                node.id() != null ? String.valueOf(node.id()) : node.generatedId(),
-                node.parentId() != null ? String.valueOf(node.parentId()) : Optional.ofNullable(pathStack.peekLast()).orElse(""),
+                id,
+                parentId != null ? parentId : "",
                 node.name(),
                 node.code(),
                 node.sortOrder(),
                 node.type(),
-                fullPath,
+                fullPath != null ? fullPath : "",
                 node.component(),
                 node.icon(),
                 node.metadata(),
@@ -134,12 +131,8 @@ public class PortalMenuService {
             )
         );
 
-        if (!node.children().isEmpty()) {
-            pathStack.addLast(fullPath);
-            for (PortalMenuTreeItem child : node.children()) {
-                flatten(child, pathStack, out);
-            }
-            pathStack.removeLast();
+        for (PortalMenuTreeItem child : node.children()) {
+            flatten(child, id, out);
         }
     }
 
@@ -215,8 +208,12 @@ public class PortalMenuService {
         if (node == null) return true;
         String metadata = node.getMetadata();
         String name = node.getName();
+        String path = node.getPath();
+        String component = node.getComponent();
         String metaLower = metadata == null ? "" : metadata.toLowerCase(java.util.Locale.ROOT);
         String nameLower = name == null ? "" : name.toLowerCase(java.util.Locale.ROOT);
+        String pathLower = path == null ? "" : path.toLowerCase(java.util.Locale.ROOT);
+        String componentLower = component == null ? "" : component.toLowerCase(java.util.Locale.ROOT);
 
         // Preferred: sectionKey / entryKey in metadata (seeded menus always include these).
         if (metaLower.contains("\"sectionkey\":\"ops\"")) {
@@ -227,6 +224,26 @@ public class PortalMenuService {
         }
         if (metaLower.contains("\"sectionkey\":\"security\"") && metaLower.contains("\"entrykey\":\"three_admins\"")) {
             return true;
+        }
+        // Hide duplicated "主题域" menu under 数据资产(catalog); keep the one under 模型与标准(modeling).
+        // Different deployments use different keys (domains/subjectDomains/catalogDomains) and translations, so match by
+        // sectionKey + entryKey/path/component instead of Chinese literals.
+        if (metaLower.contains("\"sectionkey\":\"catalog\"")) {
+            // Common portal-menu entry keys for "主题域管理"
+            if (metaLower.contains("\"entrykey\":\"domains\"") || metaLower.contains("\"entrykey\":\"subjectdomains\"")) {
+                return true;
+            }
+            // Common title keys (older seeds)
+            if (metaLower.contains("catalogdomains") || nameLower.contains("catalogdomains")) {
+                return true;
+            }
+            // Some menus may not carry metadata keys; match by route segment/component.
+            if ("domains".equals(pathLower) || "subject-domains".equals(pathLower)) {
+                return true;
+            }
+            if (componentLower.contains("domainslistpage") || componentLower.contains("datadomainmanagementpage")) {
+                return true;
+            }
         }
 
         // Fallback: name tokens (for old rows with missing metadata)

@@ -25,7 +25,7 @@ public class GovIndicatorDefinition extends AbstractAuditingEntity<UUID> impleme
     @Column(name = "name", length = 256)
     private String name;
 
-    @Column(name = "category", length = 64)
+    @Column(name = "category", length = 128)
     private String category;
 
     @Column(name = "definition")
@@ -37,7 +37,7 @@ public class GovIndicatorDefinition extends AbstractAuditingEntity<UUID> impleme
     @Column(name = "dataset_id", length = 64)
     private String datasetId;
 
-    @Column(name = "owner", length = 64)
+    @Column(name = "owner", length = 128)
     private String owner;
 
     @Column(name = "owner_dept", length = 128)

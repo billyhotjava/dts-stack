@@ -20,6 +20,7 @@ import { Label } from "@/ui/label";
 import { ScrollArea } from "@/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/ui/select";
 import { Textarea } from "@/ui/textarea";
+import { useCatalogDomainOptions } from "@/hooks/useCatalogDomainOptions";
 import {
   type DataStandardDto,
   type DataStandardStatus,
@@ -44,6 +45,9 @@ type FormState = {
   domain: string;
   scope: string;
   owner: string;
+  dataType: string;
+  nullable: "UNSPECIFIED" | "true" | "false";
+  codeSet: string;
   tagsText: string;
   status: DataStandardStatus;
   version: string;
@@ -59,6 +63,9 @@ const DEFAULT_FORM: FormState = {
   domain: "",
   scope: "",
   owner: "",
+  dataType: "",
+  nullable: "UNSPECIFIED",
+  codeSet: "",
   tagsText: "",
   status: "DRAFT",
   version: "v1",
@@ -73,6 +80,9 @@ const buildUpdatePayload = (standard: DataStandardDto, patch: Record<string, unk
   domain: standard.domain || undefined,
   scope: standard.scope || undefined,
   owner: standard.owner || undefined,
+  dataType: standard.dataType ?? null,
+  nullable: typeof standard.nullable === "boolean" ? standard.nullable : null,
+  codeSet: standard.codeSet ?? null,
   tags: Array.isArray(standard.tags) ? standard.tags : [],
   status: standard.status,
   version: standard.currentVersion ?? "v1",
@@ -81,6 +91,9 @@ const buildUpdatePayload = (standard: DataStandardDto, patch: Record<string, unk
   description: standard.description || undefined,
   ...patch,
 });
+
+const DOMAIN_SELECT_UNSET = "__UNSET__";
+const DOMAIN_SELECT_CUSTOM = "__CUSTOM__";
 
 export default function DataStandardsPage() {
   const navigate = useNavigate();
@@ -126,16 +139,28 @@ export default function DataStandardsPage() {
   const [importOpen, setImportOpen] = useState(false);
   const [importResult, setImportResult] = useState<any | null>(null);
 
+  const {
+    options: domainTreeOptions,
+    keyByName: domainKeyByName,
+    nameByKey: domainNameByKey,
+    labelByKey: domainLabelByKey,
+  } = useCatalogDomainOptions();
+
   const domainOptions = useMemo(() => {
-    const set = new Set<string>();
-    standards.forEach((s) => {
-      const raw = String(s.domain ?? "").trim();
-      if (raw) set.add(raw);
-    });
-    const list = Array.from(set);
-    list.sort((a, b) => a.localeCompare(b, "zh-Hans-CN"));
+    const list = [...domainTreeOptions];
+    list.sort((a, b) => a.label.localeCompare(b.label, "zh-Hans-CN"));
     return list;
-  }, [standards]);
+  }, [domainTreeOptions]);
+
+  const renderDomainLabel = useCallback(
+    (domain?: string | null) => {
+      const raw = String(domain ?? "").trim();
+      if (!raw) return "-";
+      const key = domainKeyByName[raw];
+      return key ? domainLabelByKey[key] ?? raw : raw;
+    },
+    [domainKeyByName, domainLabelByKey],
+  );
 
   const loadStandards = useCallback(async () => {
     setLoading(true);
@@ -210,6 +235,19 @@ export default function DataStandardsPage() {
     [loadStandards],
   );
 
+  const domainFilterSelectValue = useMemo(() => {
+    if (filters.domain === "ALL") return "ALL";
+    const key = domainKeyByName[String(filters.domain ?? "").trim()];
+    return key ?? DOMAIN_SELECT_CUSTOM;
+  }, [domainKeyByName, filters.domain]);
+
+  const domainFormSelectValue = useMemo(() => {
+    const raw = String(formState.domain ?? "").trim();
+    if (!raw) return DOMAIN_SELECT_UNSET;
+    const key = domainKeyByName[raw];
+    return key ?? DOMAIN_SELECT_CUSTOM;
+  }, [domainKeyByName, formState.domain]);
+
   const openCreate = () => {
     setFormState({ ...DEFAULT_FORM });
     setCreateOpen(true);
@@ -221,12 +259,17 @@ export default function DataStandardsPage() {
       return;
     }
     setCreating(true);
+    const nullable =
+      formState.nullable === "true" ? true : formState.nullable === "false" ? false : undefined;
     const payload: any = {
       code: formState.code.trim(),
       name: formState.name.trim(),
       domain: formState.domain.trim() || undefined,
       scope: formState.scope || undefined,
       owner: formState.owner || undefined,
+      dataType: formState.dataType.trim() || undefined,
+      nullable,
+      codeSet: formState.codeSet.trim() || undefined,
       tags: toTagList(formState.tagsText),
       status: formState.status,
       version: formState.version.trim() || "v1",
@@ -337,9 +380,18 @@ export default function DataStandardsPage() {
               }}
             />
             <Select
-              value={filters.domain}
+              value={domainFilterSelectValue}
               onValueChange={(value) => {
-                setFilters((prev) => ({ ...prev, domain: value as DomainFilter }));
+                if (value === "ALL") {
+                  setFilters((prev) => ({ ...prev, domain: "ALL" }));
+                  setPage(0);
+                  return;
+                }
+                if (value === DOMAIN_SELECT_CUSTOM) {
+                  return;
+                }
+                const domainName = domainNameByKey[value];
+                setFilters((prev) => ({ ...prev, domain: (domainName || "ALL") as DomainFilter }));
                 setPage(0);
               }}
             >
@@ -348,9 +400,12 @@ export default function DataStandardsPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="ALL">全部主题域</SelectItem>
-                {domainOptions.map((domain) => (
-                  <SelectItem key={domain} value={domain}>
-                    {domain}
+                {domainFilterSelectValue === DOMAIN_SELECT_CUSTOM && filters.domain !== "ALL" && (
+                  <SelectItem value={DOMAIN_SELECT_CUSTOM}>当前值：{filters.domain}（已不存在）</SelectItem>
+                )}
+                {domainOptions.map((opt) => (
+                  <SelectItem key={opt.key} value={opt.key}>
+                    {opt.label}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -382,6 +437,8 @@ export default function DataStandardsPage() {
                 <tr>
                   <th className="w-40 px-3 py-3">编码</th>
                   <th className="min-w-[200px] px-3 py-3">名称</th>
+                  <th className="w-40 px-3 py-3">数据类型</th>
+                  <th className="w-24 px-3 py-3">可空</th>
                   <th className="w-40 px-3 py-3">主题域</th>
                   <th className="w-40 px-3 py-3">负责人</th>
                   <th className="w-28 px-3 py-3">状态</th>
@@ -393,7 +450,7 @@ export default function DataStandardsPage() {
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={8} className="px-3 py-6 text-center text-muted-foreground">
+                    <td colSpan={10} className="px-3 py-6 text-center text-muted-foreground">
                       加载中…
                     </td>
                   </tr>
@@ -406,7 +463,11 @@ export default function DataStandardsPage() {
                           {standard.name}
                         </button>
                       </td>
-                      <td className="px-3 py-3">{standard.domain || "-"}</td>
+                      <td className="px-3 py-3 text-xs text-muted-foreground">{standard.dataType || "-"}</td>
+                      <td className="px-3 py-3 text-xs text-muted-foreground">
+                        {standard.nullable === true ? "是" : standard.nullable === false ? "否" : "-"}
+                      </td>
+                      <td className="px-3 py-3">{renderDomainLabel(standard.domain)}</td>
                       <td className="px-3 py-3">{standard.owner || "-"}</td>
                       <td className="px-3 py-3">{statusLabel(standard.status)}</td>
                       <td className="px-3 py-3">{standard.currentVersion || "-"}</td>
@@ -435,7 +496,7 @@ export default function DataStandardsPage() {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={8} className="px-3 py-6 text-center text-muted-foreground">
+                    <td colSpan={10} className="px-3 py-6 text-center text-muted-foreground">
                       暂无数据
                     </td>
                   </tr>
@@ -479,22 +540,61 @@ export default function DataStandardsPage() {
               <Input value={formState.code} onChange={(e) => setFormState((p) => ({ ...p, code: e.target.value }))} />
             </div>
             <div className="grid gap-2">
+              <Label>数据类型</Label>
+              <Input value={formState.dataType} onChange={(e) => setFormState((p) => ({ ...p, dataType: e.target.value }))} placeholder="如：string / bigint / date" />
+            </div>
+            <div className="grid gap-2">
+              <Label>可空</Label>
+              <Select value={formState.nullable} onValueChange={(v: any) => setFormState((p) => ({ ...p, nullable: v }))}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="UNSPECIFIED">（未指定）</SelectItem>
+                  <SelectItem value="true">是</SelectItem>
+                  <SelectItem value="false">否</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-2">
               <Label>主题域</Label>
-              <Input
-                value={formState.domain}
-                onChange={(e) => setFormState((p) => ({ ...p, domain: e.target.value }))}
-                placeholder="如：财务 / 库存 / 项目"
-                list="dts-standard-domain-list"
-              />
-              <datalist id="dts-standard-domain-list">
-                {domainOptions.map((d) => (
-                  <option key={d} value={d} />
-                ))}
-              </datalist>
+              <Select
+                value={domainFormSelectValue}
+                onValueChange={(value) => {
+                  if (value === DOMAIN_SELECT_UNSET) {
+                    setFormState((p) => ({ ...p, domain: "" }));
+                    return;
+                  }
+                  if (value === DOMAIN_SELECT_CUSTOM) {
+                    return;
+                  }
+                  const domainName = domainNameByKey[value];
+                  setFormState((p) => ({ ...p, domain: domainName || "" }));
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="选择主题域" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={DOMAIN_SELECT_UNSET}>（未选择）</SelectItem>
+                  {domainFormSelectValue === DOMAIN_SELECT_CUSTOM && !!formState.domain.trim() && (
+                    <SelectItem value={DOMAIN_SELECT_CUSTOM}>当前值：{formState.domain}（已不存在）</SelectItem>
+                  )}
+                  {domainOptions.map((opt) => (
+                    <SelectItem key={opt.key} value={opt.key}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="grid gap-2">
               <Label>负责人</Label>
               <Input value={formState.owner} onChange={(e) => setFormState((p) => ({ ...p, owner: e.target.value }))} />
+            </div>
+            <div className="grid gap-2 md:col-span-2">
+              <Label>码表/取值范围</Label>
+              <Input value={formState.codeSet} onChange={(e) => setFormState((p) => ({ ...p, codeSet: e.target.value }))} placeholder="如：YES/NO，或引用码表编码" />
             </div>
             <div className="grid gap-2">
               <Label>状态</Label>
@@ -582,4 +682,3 @@ export default function DataStandardsPage() {
     </div>
   );
 }
-

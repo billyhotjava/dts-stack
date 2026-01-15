@@ -66,11 +66,11 @@ function LoginPage() {
 				</div>
 			</div>
 
-			<div className="relative hidden bg-background-paper lg:block">
+			<div className="relative hidden bg-background lg:block">
 				<img
 					src={TechDataBackground}
 					alt={brandIllustrationAlt}
-					className="absolute inset-0 h-full w-full object-cover dark:brightness-[0.5] dark:grayscale"
+					className="absolute inset-0 h-full w-full object-cover"
 				/>
 			</div>
 

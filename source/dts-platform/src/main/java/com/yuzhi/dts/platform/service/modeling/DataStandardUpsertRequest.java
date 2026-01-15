@@ -26,6 +26,9 @@ public class DataStandardUpsertRequest {
     private String changeSummary;
     private DataStandardVersionStatus versionStatus;
     private String description;
+    private String dataType;
+    private Boolean nullable;
+    private String codeSet;
     private String reviewCycle;
     private Instant lastReviewAt;
 
@@ -133,6 +136,30 @@ public class DataStandardUpsertRequest {
         this.description = description;
     }
 
+    public String getDataType() {
+        return dataType;
+    }
+
+    public void setDataType(String dataType) {
+        this.dataType = dataType;
+    }
+
+    public Boolean getNullable() {
+        return nullable;
+    }
+
+    public void setNullable(Boolean nullable) {
+        this.nullable = nullable;
+    }
+
+    public String getCodeSet() {
+        return codeSet;
+    }
+
+    public void setCodeSet(String codeSet) {
+        this.codeSet = codeSet;
+    }
+
     public String getReviewCycle() {
         return reviewCycle;
     }
@@ -149,4 +176,3 @@ public class DataStandardUpsertRequest {
         this.lastReviewAt = lastReviewAt;
     }
 }
-

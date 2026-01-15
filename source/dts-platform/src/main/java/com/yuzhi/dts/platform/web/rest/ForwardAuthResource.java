@@ -7,14 +7,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.oauth2.core.OAuth2AuthenticatedPrincipal;
 import org.springframework.util.StringUtils;
-import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -28,15 +29,28 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api")
 public class ForwardAuthResource {
 
-    @GetMapping("/forward-auth")
-    public ResponseEntity<Void> forwardAuth(Authentication authentication) {
+    @RequestMapping(path = "/forward-auth", method = {RequestMethod.GET, RequestMethod.HEAD})
+    public ResponseEntity<Void> forwardAuth(Authentication authentication, HttpServletRequest request) {
+        String forwardedUri = request == null ? null : request.getHeader("X-Forwarded-Uri");
+        String forwardedPrefix = request == null ? null : request.getHeader("X-Forwarded-Prefix");
+
+        boolean isAnalyticsRequest =
+                (forwardedUri != null && forwardedUri.startsWith("/analytics"))
+                        || (forwardedPrefix != null && (forwardedPrefix.equals("/analytics") || forwardedPrefix.startsWith("/analytics/")));
+
+        boolean isAnalyticsApiRequest =
+                (forwardedUri != null && forwardedUri.startsWith("/analytics/api"))
+                        || (isAnalyticsRequest && forwardedUri != null && forwardedUri.startsWith("/api"));
+
+        boolean isAnalyticsUiRequest = isAnalyticsRequest && !isAnalyticsApiRequest;
+
         if (authentication == null || !authentication.isAuthenticated()) {
-            return ResponseEntity.status(401).build();
+            return unauthorized(isAnalyticsApiRequest, isAnalyticsUiRequest);
         }
 
         String username = SecurityUtils.getCurrentUserLogin().orElse(null);
         if (!StringUtils.hasText(username)) {
-            return ResponseEntity.status(401).build();
+            return unauthorized(isAnalyticsApiRequest, isAnalyticsUiRequest);
         }
 
         HttpHeaders headers = new HttpHeaders();
@@ -66,6 +80,18 @@ public class ForwardAuthResource {
             .ifPresent(v -> headers.add("X-DTS-Personnel-Level", v));
 
         return ResponseEntity.noContent().headers(headers).build();
+    }
+
+    private static ResponseEntity<Void> unauthorized(boolean isAnalyticsApiRequest, boolean isAnalyticsUiRequest) {
+        if (isAnalyticsUiRequest) {
+            HttpHeaders headers = new HttpHeaders();
+            headers.add(HttpHeaders.LOCATION, "/auth/login");
+            return ResponseEntity.status(302).headers(headers).build();
+        }
+        if (isAnalyticsApiRequest) {
+            return ResponseEntity.status(401).build();
+        }
+        return ResponseEntity.status(401).build();
     }
 
     private static List<String> authorities(Authentication authentication) {

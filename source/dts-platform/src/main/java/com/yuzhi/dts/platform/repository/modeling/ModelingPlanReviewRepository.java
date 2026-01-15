@@ -10,5 +10,6 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface ModelingPlanReviewRepository extends JpaRepository<ModelingPlanReview, UUID> {
     List<ModelingPlanReview> findByPlanOrderByCreatedDateDesc(ModelingPlan plan);
-}
 
+    long deleteByPlan(ModelingPlan plan);
+}

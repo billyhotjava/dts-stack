@@ -56,6 +56,16 @@ public class DataStandard extends AbstractAuditingEntity<UUID> implements Serial
     @Column(name = "description", length = 2048)
     private String description;
 
+    // Data element fields (for mapping to model columns)
+    @Column(name = "data_type", length = 64)
+    private String dataType;
+
+    @Column(name = "nullable")
+    private Boolean nullable;
+
+    @Column(name = "code_set", length = 128)
+    private String codeSet;
+
     @Column(name = "review_cycle", length = 32)
     private String reviewCycle;
 
@@ -159,6 +169,30 @@ public class DataStandard extends AbstractAuditingEntity<UUID> implements Serial
         this.description = description;
     }
 
+    public String getDataType() {
+        return dataType;
+    }
+
+    public void setDataType(String dataType) {
+        this.dataType = dataType;
+    }
+
+    public Boolean getNullable() {
+        return nullable;
+    }
+
+    public void setNullable(Boolean nullable) {
+        this.nullable = nullable;
+    }
+
+    public String getCodeSet() {
+        return codeSet;
+    }
+
+    public void setCodeSet(String codeSet) {
+        this.codeSet = codeSet;
+    }
+
     public String getReviewCycle() {
         return reviewCycle;
     }
@@ -175,4 +209,3 @@ public class DataStandard extends AbstractAuditingEntity<UUID> implements Serial
         this.lastReviewAt = lastReviewAt;
     }
 }
-

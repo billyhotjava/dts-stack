@@ -338,6 +338,8 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://dts-pg:5432/${PG_DB_ANALYTICS:-dts_analytics}
       SPRING_DATASOURCE_USERNAME: ${PG_USER_ANALYTICS:-dts_analytics}
       SPRING_DATASOURCE_PASSWORD: ${PG_PWD_ANALYTICS:-dts_analytics}
+      # External JDBC drivers (e.g., Dameng). Mount jars to /opt/dts/jdbc.
+      ANALYTICS_JDBC_DRIVERS_DIR: /opt/dts/jdbc
       SPRING_LIQUIBASE_ENABLED: ${SPRING_LIQUIBASE_ENABLED:-true}
       SPRING_CLOUD_CONFIG_ENABLED: ${SPRING_CLOUD_CONFIG_ENABLED:-false}
       EUREKA_CLIENT_ENABLED: ${EUREKA_CLIENT_ENABLED:-false}
@@ -359,6 +361,7 @@ services:
       - ./source:/workspace-src:z
       - dts-analytics-target:/workspace-src/dts-analytics/target
       - maven-cache:/root/.m2
+      - ./services/jdbc:/opt/dts/jdbc:ro,z
       - ./logs/dts-analytics:/workspace/logs/dts-analytics:z
     healthcheck:
       test: ["CMD-SHELL","curl -fsS http://127.0.0.1:3000/api/health >/dev/null || wget -qO- http://127.0.0.1:3000/api/health >/dev/null"]
@@ -371,20 +374,20 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=dts-core"
-      # Public endpoints: /analytics/api/public/* -> dts-analytics /api/public/* (no platform forward-auth)
+      # Public endpoints: /analytics/api/public/* -> dts-analytics /api/public/* (requires platform login)
       - "traefik.http.routers.dts-analytics-public.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/analytics/api/public`)"
       - "traefik.http.routers.dts-analytics-public.entrypoints=websecure"
       - "traefik.http.routers.dts-analytics-public.tls=true"
       - "traefik.http.routers.dts-analytics-public.priority=245"
       - "traefik.http.routers.dts-analytics-public.service=dts-analytics-api"
-      - "traefik.http.routers.dts-analytics-public.middlewares=dts-strip-analytics-api@docker,cors-allow@file,security-headers@file"
-      # Embed runtime endpoints: /analytics/api/embed/* (token-gated; no platform forward-auth)
+      - "traefik.http.routers.dts-analytics-public.middlewares=platform-forward-auth@file,dts-strip-analytics-api@docker,cors-allow@file,security-headers@file"
+      # Embed runtime endpoints: /analytics/api/embed/* (token-gated; requires platform login)
       - "traefik.http.routers.dts-analytics-embed.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/analytics/api/embed/`)"
       - "traefik.http.routers.dts-analytics-embed.entrypoints=websecure"
       - "traefik.http.routers.dts-analytics-embed.tls=true"
       - "traefik.http.routers.dts-analytics-embed.priority=244"
       - "traefik.http.routers.dts-analytics-embed.service=dts-analytics-api"
-      - "traefik.http.routers.dts-analytics-embed.middlewares=dts-strip-analytics-api@docker,cors-allow@file,security-headers@file"
+      - "traefik.http.routers.dts-analytics-embed.middlewares=platform-forward-auth@file,dts-strip-analytics-api@docker,cors-allow@file,security-headers@file"
       # /analytics/api/* -> dts-analytics /api/*
       - "traefik.http.routers.dts-analytics-api.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/analytics/api`)"
       - "traefik.http.routers.dts-analytics-api.entrypoints=websecure"
@@ -432,14 +435,15 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=dts-core"
+      # Vite runs at container root; strip `/analytics` before proxying so `/analytics/@vite/client` works.
+      - "traefik.http.middlewares.dts-strip-analytics-ui.stripprefix.prefixes=/analytics"
       - "traefik.http.routers.dts-analytics-ui.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/analytics`) && !PathPrefix(`/analytics/api`)"
       - "traefik.http.routers.dts-analytics-ui.entrypoints=websecure"
       - "traefik.http.routers.dts-analytics-ui.tls=true"
       - "traefik.http.routers.dts-analytics-ui.priority=230"
       - "traefik.http.routers.dts-analytics-ui.service=dts-analytics-webapp-modern"
       - "traefik.http.services.dts-analytics-webapp-modern.loadbalancer.server.port=3002"
-      # Dev server (Vite) already serves under base=/analytics/, so do NOT strip the prefix here.
-      - "traefik.http.routers.dts-analytics-ui.middlewares=security-headers@file"
+      - "traefik.http.routers.dts-analytics-ui.middlewares=platform-forward-auth@file,dts-strip-analytics-ui@docker,security-headers@file"
     healthcheck:
       test:
         [

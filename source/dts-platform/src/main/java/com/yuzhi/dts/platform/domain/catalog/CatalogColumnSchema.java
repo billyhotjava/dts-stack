@@ -40,6 +40,16 @@ public class CatalogColumnSchema extends AbstractAuditingEntity<UUID> implements
     @Column(name = "comment", length = 1024)
     private String comment;
 
+    // Mapping to Data Standard (data element)
+    @Column(name = "standard_id", columnDefinition = "uuid")
+    private UUID standardId;
+
+    @Column(name = "standard_rule", columnDefinition = "text")
+    private String standardRule;
+
+    @Column(name = "standard_mismatch_reason", length = 512)
+    private String standardMismatchReason;
+
     @Override
     public UUID getId() {
         return id;
@@ -103,5 +113,29 @@ public class CatalogColumnSchema extends AbstractAuditingEntity<UUID> implements
 
     public void setComment(String comment) {
         this.comment = comment;
+    }
+
+    public UUID getStandardId() {
+        return standardId;
+    }
+
+    public void setStandardId(UUID standardId) {
+        this.standardId = standardId;
+    }
+
+    public String getStandardRule() {
+        return standardRule;
+    }
+
+    public void setStandardRule(String standardRule) {
+        this.standardRule = standardRule;
+    }
+
+    public String getStandardMismatchReason() {
+        return standardMismatchReason;
+    }
+
+    public void setStandardMismatchReason(String standardMismatchReason) {
+        this.standardMismatchReason = standardMismatchReason;
     }
 }

@@ -219,6 +219,11 @@ public class InceptorDataSourceRegistry {
                 LOG.warn("Inceptor data source {} missing Kerberos password credentials", entity.getId());
                 return Optional.empty();
             }
+        } else if (authMethod == HiveConnectionTestRequest.AuthMethod.JDBC_PASSWORD) {
+            if (!StringUtils.hasText(password)) {
+                LOG.warn("Inceptor data source {} missing JDBC password credentials", entity.getId());
+                return Optional.empty();
+            }
         } else {
             LOG.warn("Inceptor data source {} has unsupported auth method {}", entity.getId(), authMethod);
             return Optional.empty();
@@ -297,6 +302,11 @@ public class InceptorDataSourceRegistry {
                 LOG.warn("Admin Inceptor config missing password credentials");
                 return Optional.empty();
             }
+        } else if (authMethod == HiveConnectionTestRequest.AuthMethod.JDBC_PASSWORD) {
+            if (!StringUtils.hasText(password)) {
+                LOG.warn("Admin Inceptor config missing JDBC password credentials");
+                return Optional.empty();
+            }
         }
 
         Map<String, String> jdbcProperties = new HashMap<>(config.getJdbcProperties());
@@ -354,7 +364,10 @@ public class InceptorDataSourceRegistry {
         hiveExecutionProperties.setEnabled(true);
         hiveExecutionProperties.setJdbcUrl(state.jdbcUrl());
         hiveExecutionProperties.setUsername(state.loginPrincipal());
-        if (state.authMethod() == HiveConnectionTestRequest.AuthMethod.PASSWORD) {
+        if (
+            state.authMethod() == HiveConnectionTestRequest.AuthMethod.PASSWORD ||
+            state.authMethod() == HiveConnectionTestRequest.AuthMethod.JDBC_PASSWORD
+        ) {
             hiveExecutionProperties.setPassword(state.password());
         } else {
             hiveExecutionProperties.setPassword(null);
@@ -363,7 +376,7 @@ public class InceptorDataSourceRegistry {
         if (StringUtils.hasText(state.proxyUser())) {
             props.put("hive.server2.proxy.user", state.proxyUser());
         }
-        if (StringUtils.hasText(state.servicePrincipal())) {
+        if (state.authMethod() != HiveConnectionTestRequest.AuthMethod.JDBC_PASSWORD && StringUtils.hasText(state.servicePrincipal())) {
             props.putIfAbsent("principal", state.servicePrincipal());
         }
         hiveExecutionProperties.setProperties(props);
@@ -506,6 +519,9 @@ public class InceptorDataSourceRegistry {
             }
             if (authMethod == HiveConnectionTestRequest.AuthMethod.PASSWORD) {
                 return StringUtils.hasText(password) && StringUtils.hasText(krb5Conf);
+            }
+            if (authMethod == HiveConnectionTestRequest.AuthMethod.JDBC_PASSWORD) {
+                return StringUtils.hasText(password);
             }
             return false;
         }

@@ -89,4 +89,7 @@
     <include file="config/liquibase/changelog/20260103_03_svc_token_context.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260104_01_catalog_dataset_description.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260113_01_catalog_dataset_access_approval.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260114_01_data_standard_element_fields.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260114_02_catalog_column_standard_mapping.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260115_01_governance_indicator_owner_domain_fields.xml" relativeToChangelogFile="false"/>
 </databaseChangeLog>

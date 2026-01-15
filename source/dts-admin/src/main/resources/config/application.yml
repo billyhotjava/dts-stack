@@ -449,7 +449,7 @@ dts:
   # Admin console specific settings
   admin:
     # Comma-separated roles to exclude from the user list views (admin users should not appear in "普通用户"列表)
-    # Default excludes governance triad and OP admin.
+    # Default excludes built-in admin roles (sysadmin/authadmin/auditadmin/opadmin) from the generic user list.
     userlist:
       exclude-roles: ${DTS_ADMIN_USERLIST_EXCLUDE_ROLES:ROLE_SYS_ADMIN,ROLE_AUTH_ADMIN,ROLE_SECURITY_AUDITOR,ROLE_OP_ADMIN}
     # Roles allowed to log into the admin console (when using PKI admin login audience)

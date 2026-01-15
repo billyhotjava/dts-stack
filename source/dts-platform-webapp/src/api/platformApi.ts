@@ -113,6 +113,10 @@ export const getModelingPlan = (id: string) => api.get({ url: `/modeling/plans/$
 export const createModelingPlan = (data: any) => api.post({ url: "/modeling/plans", data });
 export const updateModelingPlan = (id: string, data: any) => api.put({ url: `/modeling/plans/${id}`, data });
 export const deleteModelingPlan = (id: string) => api.delete({ url: `/modeling/plans/${id}` });
+export const publishModelingPlan = (id: string, data?: { version?: string; changeSummary?: string }) =>
+	api.post({ url: `/modeling/plans/${id}/publish`, data });
+export const archiveModelingPlan = (id: string, data?: { notes?: string }) => api.post({ url: `/modeling/plans/${id}/archive`, data });
+export const restoreModelingPlan = (id: string) => api.post({ url: `/modeling/plans/${id}/restore` });
 
 export const listGlossaryTerms = (params: any = {}) => api.get<any[]>({ url: "/modeling/glossary/terms", params });
 export const createGlossaryTerm = (data: any) => api.post({ url: "/modeling/glossary/terms", data });
@@ -120,9 +124,12 @@ export const updateGlossaryTerm = (id: string, data: any) => api.put({ url: `/mo
 export const deleteGlossaryTerm = (id: string) => api.delete({ url: `/modeling/glossary/terms/${id}` });
 
 export const listModelTemplates = () => api.get<any[]>({ url: "/modeling/templates" });
+export const getModelTemplate = (id: string) => api.get({ url: `/modeling/templates/${id}` });
 export const createModelTemplate = (data: any) => api.post({ url: "/modeling/templates", data });
 export const updateModelTemplate = (id: string, data: any) => api.put({ url: `/modeling/templates/${id}`, data });
 export const deleteModelTemplate = (id: string) => api.delete({ url: `/modeling/templates/${id}` });
+export const validateModelTemplate = (id: string, tableId: string) =>
+	api.get({ url: `/modeling/templates/${id}/validate`, params: { tableId } });
 
 // Governance
 export const listQualityRules = () => api.get({ url: "/governance/quality/rules" });
@@ -167,6 +174,7 @@ export const deleteIndicator = (id: string) => api.delete({ url: `/governance/in
 export const publishIndicator = (id: string) => api.post({ url: `/governance/indicators/${id}/publish` });
 export const archiveIndicator = (id: string) => api.post({ url: `/governance/indicators/${id}/archive` });
 export const validateIndicator = (id: string) => api.post({ url: `/governance/indicators/${id}/validate` });
+export const getIndicatorDependencies = (params: any = {}) => api.get({ url: "/governance/indicators/dependencies", params });
 
 // Dimensions
 export const listDimensions = (params: any = {}) => api.get({ url: "/governance/dimensions", params });
@@ -228,6 +236,16 @@ export const listColumnsByTable = (tableId: string, keyword?: string) =>
   api.get({ url: "/catalog/columns", params: { tableId, keyword } });
 export const updateTableSchema = (id: string, data: any) => api.put({ url: `/catalog/tables/${id}`, data });
 export const updateColumnSchema = (id: string, data: any) => api.put({ url: `/catalog/columns/${id}`, data });
+export const validateTableStandardMapping = (tableId: string) =>
+  api.get({ url: `/catalog/tables/${tableId}/standard-mapping/validate` });
+export const previewAutoMapTableStandardMapping = (
+  tableId: string,
+  params: { overwrite?: boolean; onlyUnmapped?: boolean } = {},
+) => api.get({ url: `/catalog/tables/${tableId}/standard-mapping/auto-map/preview`, params });
+export const applyAutoMapTableStandardMapping = (
+  tableId: string,
+  data: { overwrite?: boolean; onlyUnmapped?: boolean } = {},
+) => api.post({ url: `/catalog/tables/${tableId}/standard-mapping/auto-map/apply`, data });
 
 // Catalog lineage
 export const getCatalogLineage = (datasetId: string) => api.get({ url: "/catalog/lineage", params: { datasetId } });

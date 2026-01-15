@@ -136,48 +136,49 @@
 	--sidebar-ring: var(--colors-palette-primary-default);
 }
 
-/* Shadcn UI Dark Theme */
-[data-theme-mode="dark"] {
+	/* Shadcn UI Dark Theme */
+	[data-theme-mode="dark"] {
 	--background: var(--colors-background-default);
 	--foreground: var(--colors-text-primary);
 	--card: var(--colors-background-paper);
 	--card-foreground: var(--colors-text-primary);
-	--popover: var(--colors-background-paper);
-	--popover-foreground: var(--colors-text-primary);
-	--primary: var(--colors-palette-primary-default);
-	--primary-foreground: var(--colors-palette-primary-darker);
-	--secondary: var(--colors-background-neutral);
-	--secondary-foreground: var(--colors-text-secondary);
-	--muted: var(--colors-background-neutral);
-	--muted-foreground: var(--colors-palette-gray-400);
-	--accent: var(--colors-background-neutral);
-	--accent-foreground: var(--colors-text-secondary);
-	--destructive: var(--colors-palette-error-default);
-	--border: rgba(var(--colors-palette-gray-500Channel) / var(--opacity-border));
-	--input: rgba(var(--colors-palette-gray-500Channel) / var(--opacity-border));
-	--ring: var(--colors-palette-primary-default);
+		--popover: var(--colors-background-paper);
+		--popover-foreground: var(--colors-text-primary);
+		--primary: var(--colors-palette-primary-default);
+		--primary-foreground: var(--colors-common-white);
+		--secondary: var(--colors-background-neutral);
+		--secondary-foreground: var(--colors-common-white);
+		--muted: var(--colors-background-neutral);
+		--muted-foreground: var(--colors-palette-gray-400);
+		--accent: var(--colors-background-neutral);
+		--accent-foreground: var(--colors-common-white);
+		--destructive: var(--colors-palette-error-default);
+		--destructive-foreground: var(--colors-common-white);
+		--border: rgba(var(--colors-palette-gray-500Channel) / var(--opacity-border));
+		--input: rgba(var(--colors-palette-gray-500Channel) / var(--opacity-border));
+		--ring: var(--colors-palette-primary-default);
 	--chart-1: oklch(0.488 0.243 264.376);
 	--chart-2: oklch(0.696 0.17 162.48);
 	--chart-3: oklch(0.769 0.188 70.08);
 	--chart-4: oklch(0.627 0.265 303.9);
-	--chart-5: oklch(0.645 0.246 16.439);
-	--sidebar: var(--colors-background-neutral);
-	--sidebar-foreground: var(--colors-text-primary);
-	--sidebar-primary: var(--colors-palette-primary-default);
-	--sidebar-primary-foreground: var(--colors-palette-primary-darker);
-	--sidebar-accent: var(--colors-background-neutral);
-	--sidebar-accent-foreground: var(--colors-text-primary);
-	--sidebar-border: rgba(var(--colors-palette-gray-500Channel) / var(--opacity-border));
-	--sidebar-ring: var(--colors-palette-primary-default);
-}
+		--chart-5: oklch(0.645 0.246 16.439);
+		--sidebar: var(--colors-background-neutral);
+		--sidebar-foreground: var(--colors-text-primary);
+		--sidebar-primary: var(--colors-palette-primary-default);
+		--sidebar-primary-foreground: var(--colors-common-white);
+		--sidebar-accent: var(--colors-background-neutral);
+		--sidebar-accent-foreground: var(--colors-text-primary);
+		--sidebar-border: rgba(var(--colors-palette-gray-500Channel) / var(--opacity-border));
+		--sidebar-ring: var(--colors-palette-primary-default);
+	}
 
 /* "科技模式"视觉增强（全局） */
 [data-theme-mode="dark"] body {
 	background-color: var(--colors-background-default);
 	background-image:
-		radial-gradient(circle at 10% 20%, rgba(0, 242, 255, 0.06) 0%, transparent 22%),
-		radial-gradient(circle at 90% 80%, rgba(112, 0, 255, 0.06) 0%, transparent 22%),
-		linear-gradient(180deg, rgba(16, 25, 42, 0.35), transparent 42%);
+		radial-gradient(circle at 10% 20%, rgba(0, 242, 255, 0.04) 0%, transparent 24%),
+		radial-gradient(circle at 90% 80%, rgba(112, 0, 255, 0.04) 0%, transparent 24%),
+		linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 50%);
 	background-attachment: fixed;
 }
 

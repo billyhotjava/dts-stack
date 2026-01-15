@@ -12,6 +12,9 @@ export interface DataStandardDto {
     currentVersion: string;
     versionNotes?: string;
     description?: string;
+    dataType?: string | null;
+    nullable?: boolean | null;
+    codeSet?: string | null;
     reviewCycle?: string;
     lastReviewAt?: string;
     createdDate?: string;

@@ -1,17 +1,22 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Modal, Select as AntSelect, Spin, Table as AntTable } from "antd";
 import { toast } from "sonner";
 import {
 	getDataset,
 	getDatasetJob,
 	getCatalogSyncStatus,
+	applyAutoMapTableStandardMapping,
 	listColumnsByTable,
 	listDatasets,
 	listDatasetJobs,
+	listStandards,
 	listTablesByDataset,
+	previewAutoMapTableStandardMapping,
 	syncDatasetSchema,
 	triggerCatalogSync,
 	updateColumnSchema,
 	updateTableSchema,
+	validateTableStandardMapping,
 } from "@/api/platformApi";
 import { Badge } from "@/ui/badge";
 import { Button } from "@/ui/button";
@@ -25,7 +30,34 @@ import { Textarea } from "@/ui/textarea";
 
 type DatasetOption = { id: string; name: string; ownerDept?: string | null; classification?: string | null };
 type TableRow = { id: string; name: string; owner?: string | null; classification?: string | null; bizDomain?: string | null; tags?: string | null };
-type ColumnRow = { id: string; name: string; dataType?: string | null; nullable?: boolean | null; tags?: string | null; sensitiveTags?: string | null; comment?: string | null };
+type ColumnRow = {
+	id: string;
+	name: string;
+	dataType?: string | null;
+	nullable?: boolean | null;
+	tags?: string | null;
+	sensitiveTags?: string | null;
+	comment?: string | null;
+	standardId?: string | null;
+	standardRule?: string | null;
+	standardMismatchReason?: string | null;
+	standardCode?: string | null;
+	standardName?: string | null;
+	standardDataType?: string | null;
+	standardNullable?: boolean | null;
+	standardCodeSet?: string | null;
+	computedMismatchReason?: string | null;
+	mappingStatus?: string | null;
+};
+
+type StandardOption = {
+	id: string;
+	code: string;
+	name: string;
+	dataType?: string | null;
+	nullable?: boolean | null;
+	codeSet?: string | null;
+};
 
 const PAGE_SIZE = 200;
 
@@ -67,15 +99,61 @@ export default function MetadataPage() {
 	const [savingTable, setSavingTable] = useState(false);
 
 	const [colDialogOpen, setColDialogOpen] = useState(false);
-	const [colForm, setColForm] = useState<{ id: string; comment: string; tags: string; sensitiveTags: string }>({
+	const [colForm, setColForm] = useState<{ id: string; comment: string; tags: string; sensitiveTags: string; standardId: string }>({
 		id: "",
 		comment: "",
 		tags: "",
 		sensitiveTags: "",
+		standardId: "",
 	});
 	const [savingCol, setSavingCol] = useState(false);
+	const [standardOptions, setStandardOptions] = useState<StandardOption[]>([]);
+	const [standardsLoading, setStandardsLoading] = useState(false);
+
+	const [validateOpen, setValidateOpen] = useState(false);
+	const [validating, setValidating] = useState(false);
+	const [validationResult, setValidationResult] = useState<any | null>(null);
+
+	const [autoMapOpen, setAutoMapOpen] = useState(false);
+	const [autoMapLoading, setAutoMapLoading] = useState(false);
+	const [autoMapApplying, setAutoMapApplying] = useState(false);
+	const [autoMapPreview, setAutoMapPreview] = useState<any | null>(null);
+	const [autoMapItems, setAutoMapItems] = useState<any[]>([]);
+	const [autoMapOverwrite, setAutoMapOverwrite] = useState(false);
+	const [autoMapOnlyUnmapped, setAutoMapOnlyUnmapped] = useState(true);
 
 	const selectedTable = useMemo(() => tables.find((t) => t.id === selectedTableId) || null, [selectedTableId, tables]);
+	const standardSelectOptions = useMemo(
+		() =>
+			standardOptions.map((s) => ({
+				value: s.id,
+				label: `${s.code}${s.name ? ` · ${s.name}` : ""}`,
+			})),
+		[standardOptions],
+	);
+
+	const loadStandardOptions = useCallback(async (keyword?: string) => {
+		setStandardsLoading(true);
+		try {
+			const resp = (await listStandards({ page: 0, size: 20, keyword: keyword?.trim() || undefined })) as any;
+			const content = Array.isArray(resp?.content) ? resp.content : [];
+			setStandardOptions(
+				content.map((s: any) => ({
+					id: String(s.id),
+					code: String(s.code || ""),
+					name: String(s.name || ""),
+					dataType: s.dataType ?? null,
+					nullable: s.nullable ?? null,
+					codeSet: s.codeSet ?? null,
+				})),
+			);
+		} catch (e) {
+			console.error(e);
+			setStandardOptions([]);
+		} finally {
+			setStandardsLoading(false);
+		}
+	}, []);
 
 	const loadFullSyncStatus = useCallback(async () => {
 		setFullSyncStatusLoading(true);
@@ -193,6 +271,16 @@ export default function MetadataPage() {
 					tags: c.tags,
 					sensitiveTags: c.sensitiveTags,
 					comment: c.comment,
+					standardId: c.standardId ?? null,
+					standardRule: c.standardRule ?? null,
+					standardMismatchReason: c.standardMismatchReason ?? null,
+					standardCode: c.standardCode ?? null,
+					standardName: c.standardName ?? null,
+					standardDataType: c.standardDataType ?? null,
+					standardNullable: c.standardNullable ?? null,
+					standardCodeSet: c.standardCodeSet ?? null,
+					computedMismatchReason: c.computedMismatchReason ?? null,
+					mappingStatus: c.mappingStatus ?? null,
 				})),
 			);
 		} catch (e) {
@@ -309,11 +397,28 @@ export default function MetadataPage() {
 	}, [tableForm]);
 
 	const openEditColumn = useCallback((row: ColumnRow) => {
+		if (row.standardId && row.standardCode) {
+			setStandardOptions((prev) => {
+				if (prev.some((s) => s.id === row.standardId)) return prev;
+				return [
+					{
+						id: row.standardId as string,
+						code: String(row.standardCode || ""),
+						name: String(row.standardName || ""),
+						dataType: row.standardDataType ?? null,
+						nullable: row.standardNullable ?? null,
+						codeSet: row.standardCodeSet ?? null,
+					},
+					...prev,
+				];
+			});
+		}
 		setColForm({
 			id: row.id,
 			comment: String(row.comment || ""),
 			tags: String(row.tags || ""),
 			sensitiveTags: String(row.sensitiveTags || ""),
+			standardId: String(row.standardId || ""),
 		});
 		setColDialogOpen(true);
 	}, []);
@@ -335,6 +440,7 @@ export default function MetadataPage() {
 				tags: colForm.tags.trim() || null,
 				sensitiveTags: colForm.sensitiveTags.trim() || null,
 				comment: colForm.comment.trim() || null,
+				standardId: colForm.standardId.trim() || null,
 			};
 			const saved = (await updateColumnSchema(colForm.id, payload)) as any;
 			toast.success("已保存字段元数据");
@@ -347,6 +453,86 @@ export default function MetadataPage() {
 			setSavingCol(false);
 		}
 	}, [colForm, columns]);
+
+	const runValidation = useCallback(async () => {
+		if (!selectedTableId) return;
+		setValidating(true);
+		try {
+			const res = (await validateTableStandardMapping(selectedTableId)) as any;
+			setValidationResult(res || null);
+			setValidateOpen(true);
+		} catch (e: any) {
+			console.error(e);
+			toast.error(e?.message || "校验失败");
+			setValidationResult(null);
+			setValidateOpen(false);
+		} finally {
+			setValidating(false);
+		}
+	}, [selectedTableId]);
+
+	const refreshAutoMapPreview = useCallback(async () => {
+		if (!selectedTableId) return;
+		setAutoMapLoading(true);
+		try {
+			const res = (await previewAutoMapTableStandardMapping(selectedTableId, {
+				overwrite: autoMapOverwrite,
+				onlyUnmapped: autoMapOnlyUnmapped,
+			})) as any;
+			setAutoMapPreview(res || null);
+			setAutoMapItems(Array.isArray(res?.items) ? res.items : []);
+		} catch (e: any) {
+			console.error(e);
+			toast.error(e?.message || "刷新自动匹配预览失败");
+			setAutoMapPreview(null);
+			setAutoMapItems([]);
+		} finally {
+			setAutoMapLoading(false);
+		}
+	}, [autoMapOnlyUnmapped, autoMapOverwrite, selectedTableId]);
+
+	const openAutoMap = useCallback(async () => {
+		if (!selectedTableId) return;
+		setAutoMapOpen(true);
+		await refreshAutoMapPreview();
+	}, [refreshAutoMapPreview, selectedTableId]);
+
+	const applyAutoMap = useCallback(async () => {
+		if (!selectedTableId) return;
+		setAutoMapApplying(true);
+		try {
+			const res = (await applyAutoMapTableStandardMapping(selectedTableId, {
+				overwrite: autoMapOverwrite,
+				onlyUnmapped: autoMapOnlyUnmapped,
+			})) as any;
+			toast.success(`自动匹配完成：应用 ${Number(res?.applied ?? 0)} 条，冲突 ${Number(res?.conflicts ?? 0)} 条`);
+			setAutoMapOpen(false);
+			await loadColumns();
+		} catch (e: any) {
+			console.error(e);
+			toast.error(e?.message || "自动匹配失败");
+		} finally {
+			setAutoMapApplying(false);
+		}
+	}, [autoMapOnlyUnmapped, autoMapOverwrite, loadColumns, selectedTableId]);
+
+	const mappingCounts = useMemo(() => {
+		const counts = { OK: 0, MISMATCHED: 0, UNMAPPED: 0, STANDARD_MISSING: 0, UNKNOWN: 0 };
+		for (const c of columns) {
+			const s = String(c.mappingStatus || "UNKNOWN");
+			if ((counts as any)[s] != null) {
+				(counts as any)[s] += 1;
+			} else {
+				counts.UNKNOWN += 1;
+			}
+		}
+		return counts;
+	}, [columns]);
+
+	const validationIssues = useMemo(() => {
+		const issues = validationResult?.issues;
+		return Array.isArray(issues) ? issues : [];
+	}, [validationResult]);
 
 	return (
 		<div className="flex flex-col gap-6">
@@ -554,6 +740,12 @@ export default function MetadataPage() {
 							<Button variant="outline" onClick={loadColumns} disabled={!selectedTableId || columnsLoading}>
 								刷新
 							</Button>
+							<Button variant="outline" onClick={() => void openAutoMap()} disabled={!selectedTableId || autoMapLoading}>
+								{autoMapLoading ? "加载中…" : "自动匹配"}
+							</Button>
+							<Button variant="outline" onClick={runValidation} disabled={!selectedTableId || validating}>
+								{validating ? "校验中…" : "校验映射"}
+							</Button>
 						</div>
 					</CardHeader>
 					<CardContent className="space-y-3">
@@ -567,50 +759,93 @@ export default function MetadataPage() {
 							<div className="text-sm text-muted-foreground">请选择左侧表</div>
 						)}
 
-						<div className="overflow-auto rounded-md border">
-							<table className="min-w-full text-sm">
-								<thead className="text-left text-muted-foreground border-b">
-									<tr>
-										<th className="py-2 px-3 font-medium">字段</th>
-										<th className="py-2 px-3 font-medium">类型</th>
-										<th className="py-2 px-3 font-medium">敏感标签</th>
-										<th className="py-2 px-3 font-medium">注释</th>
-										<th className="py-2 px-3 font-medium text-right">操作</th>
-									</tr>
-								</thead>
-								<tbody>
-									{columns.map((c) => (
-										<tr key={c.id} className="border-b last:border-none">
-											<td className="py-2 px-3 font-mono">{c.name}</td>
-											<td className="py-2 px-3 text-muted-foreground">{c.dataType || "-"}</td>
-											<td className="py-2 px-3 text-muted-foreground">{c.sensitiveTags || "-"}</td>
-											<td className="py-2 px-3 text-muted-foreground max-w-[360px] truncate" title={String(c.comment || "")}>
-												{c.comment || "-"}
-											</td>
-											<td className="py-2 px-3 text-right">
-												<Button size="sm" variant="outline" onClick={() => openEditColumn(c)}>
-													编辑
-												</Button>
-											</td>
-										</tr>
-									))}
-									{columnsLoading ? (
-										<tr>
-											<td colSpan={5} className="py-10 text-center text-muted-foreground">
-												加载中…
-											</td>
-										</tr>
-									) : null}
-									{!columnsLoading && selectedTableId && columns.length === 0 ? (
-										<tr>
-											<td colSpan={5} className="py-10 text-center text-muted-foreground">
-												暂无字段
-											</td>
-										</tr>
-									) : null}
-								</tbody>
-							</table>
-						</div>
+						{selectedTableId ? (
+							<div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+								<Badge variant="secondary">OK: {mappingCounts.OK}</Badge>
+								<Badge variant="outline">不一致: {mappingCounts.MISMATCHED}</Badge>
+								<Badge variant="outline">未映射: {mappingCounts.UNMAPPED}</Badge>
+								{mappingCounts.STANDARD_MISSING ? <Badge variant="outline">标准缺失: {mappingCounts.STANDARD_MISSING}</Badge> : null}
+							</div>
+						) : null}
+
+						<AntTable
+							rowKey={(r: any) => String(r.id)}
+							size="middle"
+							loading={columnsLoading}
+							pagination={{ pageSize: 20, showSizeChanger: false, showTotal: (total) => `总计 ${total} 条` }}
+							scroll={{ x: 1200 }}
+							dataSource={columns}
+							locale={{ emptyText: selectedTableId ? "暂无字段" : "请选择左侧表" }}
+							columns={[
+								{
+									title: "字段",
+									dataIndex: "name",
+									key: "name",
+									width: 180,
+									ellipsis: true,
+									render: (v: any) => <span className="font-mono">{String(v || "-")}</span>,
+								},
+								{ title: "类型", dataIndex: "dataType", key: "dataType", width: 120, ellipsis: true },
+								{
+									title: "映射状态",
+									dataIndex: "mappingStatus",
+									key: "mappingStatus",
+									width: 110,
+									filters: [
+										{ text: "OK", value: "OK" },
+										{ text: "不一致", value: "MISMATCHED" },
+										{ text: "未映射", value: "UNMAPPED" },
+										{ text: "标准缺失", value: "STANDARD_MISSING" },
+									],
+									onFilter: (value: any, record: any) => String(record?.mappingStatus || "") === String(value),
+									render: (_: any, r: any) => {
+										const s = String(r?.mappingStatus || "UNKNOWN");
+										if (s === "OK") return <Badge variant="secondary">OK</Badge>;
+										if (s === "MISMATCHED") return <Badge variant="outline">不一致</Badge>;
+										if (s === "UNMAPPED") return <Badge variant="outline">未映射</Badge>;
+										if (s === "STANDARD_MISSING") return <Badge variant="destructive">缺失</Badge>;
+										return <Badge variant="outline">-</Badge>;
+									},
+								},
+								{
+									title: "数据元",
+									key: "standard",
+									width: 240,
+									ellipsis: true,
+									render: (_: any, r: any) =>
+										r.standardCode ? `${r.standardCode}${r.standardName ? ` · ${r.standardName}` : ""}` : "-",
+								},
+								{
+									title: "不一致原因",
+									key: "mismatch",
+									width: 280,
+									ellipsis: true,
+									render: (_: any, r: any) => {
+										const reason = String(r.computedMismatchReason || r.standardMismatchReason || "").trim();
+										return reason || "-";
+									},
+								},
+								{ title: "敏感标签", dataIndex: "sensitiveTags", key: "sensitiveTags", width: 180, ellipsis: true },
+								{
+									title: "注释",
+									dataIndex: "comment",
+									key: "comment",
+									ellipsis: true,
+									render: (v: any) => String(v || "-"),
+								},
+								{
+									title: "操作",
+									key: "action",
+									fixed: "right",
+									width: 90,
+									render: (_: any, r: any) => (
+										<Button size="sm" variant="outline" onClick={() => openEditColumn(r)}>
+											编辑
+										</Button>
+									),
+								},
+							]}
+						/>
 
 						<Card>
 							<CardHeader>
@@ -709,6 +944,29 @@ export default function MetadataPage() {
 					</DialogHeader>
 					<div className="grid gap-4">
 						<div className="space-y-2">
+							<Label>关联数据元（字段标准）</Label>
+							<AntSelect
+								allowClear
+								showSearch
+								value={colForm.standardId || undefined}
+								placeholder="输入编码/名称搜索数据标准"
+								filterOption={false}
+								onDropdownVisibleChange={(open) => {
+									if (open && standardOptions.length === 0) {
+										void loadStandardOptions("");
+									}
+								}}
+								onSearch={(value) => void loadStandardOptions(value)}
+								onChange={(value) => setColForm((p) => ({ ...p, standardId: value ? String(value) : "" }))}
+								options={standardSelectOptions}
+								notFoundContent={standardsLoading ? <Spin size="small" /> : null}
+								style={{ width: "100%" }}
+							/>
+							<div className="text-xs text-muted-foreground">
+								建议：先在“数据标准台账”中补齐 `数据类型/可空/码表`，再在此绑定到字段。
+							</div>
+						</div>
+						<div className="space-y-2">
 							<Label>敏感标签（例如：PII:phone）</Label>
 							<Input
 								value={colForm.sensitiveTags}
@@ -739,6 +997,149 @@ export default function MetadataPage() {
 					</DialogFooter>
 				</DialogContent>
 			</Dialog>
+
+			<Modal
+				open={validateOpen}
+				title="字段 ↔ 数据元 映射校验"
+				onCancel={() => setValidateOpen(false)}
+				footer={null}
+				width={980}
+				destroyOnClose
+			>
+				<div className="space-y-3">
+					<div className="flex flex-wrap items-center gap-2 text-sm">
+						<Badge variant="secondary">层级：{String(validationResult?.warehouseLayer || "-")}</Badge>
+						{validationResult?.strictDwd ? <Badge variant="outline">DWD 强校验（仅提示）</Badge> : <Badge variant="outline">弱校验</Badge>}
+						{validationResult?.blocking ? (
+							<Badge variant="destructive">存在需修复项（不拦截）</Badge>
+						) : (
+							<Badge variant="secondary">未发现问题</Badge>
+						)}
+					</div>
+					<div className="text-xs text-muted-foreground">说明：该校验仅用于提示数据资产质量，不会阻止发布/同步/预览。</div>
+					<div className="grid grid-cols-2 gap-2 text-sm md:grid-cols-4">
+						<div>总字段：{Number(validationResult?.totalColumns ?? 0)}</div>
+						<div>已映射：{Number(validationResult?.mappedColumns ?? 0)}</div>
+						<div>未映射：{Number(validationResult?.unmappedColumns ?? 0)}</div>
+						<div>不一致：{Number(validationResult?.mismatchedColumns ?? 0)}</div>
+					</div>
+
+					<AntTable
+						rowKey={(r: any) => String(r.columnId || r.columnName || Math.random())}
+						size="small"
+						pagination={{ pageSize: 10, showSizeChanger: false }}
+						dataSource={validationIssues}
+						columns={[
+							{ title: "字段", dataIndex: "columnName", key: "columnName", width: 160, ellipsis: true },
+							{ title: "字段类型", dataIndex: "columnDataType", key: "columnDataType", width: 120, ellipsis: true },
+							{
+								title: "数据元",
+								key: "standard",
+								width: 220,
+								ellipsis: true,
+								render: (_: any, r: any) => (r.standardCode ? `${r.standardCode}${r.standardName ? ` · ${r.standardName}` : ""}` : "-"),
+							},
+							{ title: "标准类型", dataIndex: "standardDataType", key: "standardDataType", width: 120, ellipsis: true },
+							{ title: "问题", dataIndex: "reason", key: "reason", ellipsis: true },
+						]}
+					/>
+				</div>
+			</Modal>
+
+			<Modal
+				open={autoMapOpen}
+				title="自动匹配字段 → 数据元（预览）"
+				onCancel={() => setAutoMapOpen(false)}
+				footer={null}
+				width={1080}
+				destroyOnClose
+			>
+				<div className="space-y-3">
+					<div className="flex flex-wrap items-center gap-3 text-sm">
+						<label className="flex items-center gap-2">
+							<input type="checkbox" checked={autoMapOnlyUnmapped} onChange={(e) => setAutoMapOnlyUnmapped(e.target.checked)} />
+							仅处理未绑定字段
+						</label>
+						<label className="flex items-center gap-2">
+							<input
+								type="checkbox"
+								checked={autoMapOverwrite}
+								onChange={(e) => setAutoMapOverwrite(e.target.checked)}
+								disabled={autoMapOnlyUnmapped}
+							/>
+							允许覆盖已绑定字段
+						</label>
+						<Button variant="secondary" onClick={() => void refreshAutoMapPreview()} disabled={autoMapLoading}>
+							{autoMapLoading ? "刷新中…" : "刷新预览"}
+						</Button>
+					</div>
+
+					<div className="grid grid-cols-2 gap-2 text-sm md:grid-cols-5">
+						<div>总字段：{Number(autoMapPreview?.totalColumns ?? 0)}</div>
+						<div>可匹配：{Number(autoMapPreview?.matchedColumns ?? 0)}</div>
+						<div>将更新：{Number(autoMapPreview?.willUpdateColumns ?? 0)}</div>
+						<div>冲突：{Number(autoMapPreview?.conflictColumns ?? 0)}</div>
+						<div>无匹配：{Number(autoMapPreview?.noMatchColumns ?? 0)}</div>
+					</div>
+
+					<div className="flex items-center justify-between gap-3">
+						<div className="text-xs text-muted-foreground">
+							优先规则：注释中的 `STD:CODE` / `标准:CODE` → 字段名=标准编码；若两者冲突则需要人工处理。
+						</div>
+						<Button
+							onClick={() => void applyAutoMap()}
+							disabled={autoMapApplying || Number(autoMapPreview?.willUpdateColumns ?? 0) <= 0}
+						>
+							{autoMapApplying ? "应用中…" : "确认应用"}
+						</Button>
+					</div>
+
+					<AntTable
+						rowKey={(r: any) => String(r.columnId || Math.random())}
+						size="small"
+						loading={autoMapLoading}
+						pagination={{ pageSize: 12, showSizeChanger: false }}
+						dataSource={autoMapItems}
+						columns={[
+							{ title: "字段", dataIndex: "columnName", key: "columnName", width: 180, ellipsis: true },
+							{ title: "提示编码", dataIndex: "hintedStandardCode", key: "hintedStandardCode", width: 140, ellipsis: true },
+							{
+								title: "当前数据元",
+								key: "current",
+								width: 200,
+								ellipsis: true,
+								render: (_: any, r: any) => (r.currentStandardCode ? String(r.currentStandardCode) : "-"),
+							},
+							{
+								title: "建议数据元",
+								key: "proposed",
+								width: 260,
+								ellipsis: true,
+								render: (_: any, r: any) =>
+									r.proposedStandardCode ? `${r.proposedStandardCode}${r.proposedStandardName ? ` · ${r.proposedStandardName}` : ""}` : "-",
+							},
+							{ title: "来源", dataIndex: "source", key: "source", width: 130, ellipsis: true },
+							{
+								title: "状态",
+								dataIndex: "status",
+								key: "status",
+								width: 140,
+								ellipsis: true,
+								render: (v: any) => {
+									const s = String(v || "");
+									if (s === "WILL_UPDATE") return <Badge variant="secondary">将更新</Badge>;
+									if (s === "CONFLICT") return <Badge variant="destructive">冲突</Badge>;
+									if (s === "NO_MATCH") return <Badge variant="outline">无匹配</Badge>;
+									if (s === "ALREADY_OK") return <Badge variant="outline">已一致</Badge>;
+									if (s === "SKIP_MAPPED") return <Badge variant="outline">已跳过</Badge>;
+									return <Badge variant="outline">{s || "-"}</Badge>;
+								},
+							},
+							{ title: "说明", dataIndex: "reason", key: "reason", ellipsis: true },
+						]}
+					/>
+				</div>
+			</Modal>
 		</div>
 	);
 }

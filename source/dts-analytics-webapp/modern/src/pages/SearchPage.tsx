@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
 import { analyticsApi, type SearchItem } from "../api/analyticsApi";
+import { EmptyState } from "../components/EmptyState";
 import { ErrorNotice } from "../components/ErrorNotice";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import "./page.css";
@@ -101,28 +102,32 @@ export default function SearchPage() {
 							</div>
 						</div>
 						<div style={{ height: 8 }} />
-						<table className="table">
-							<thead>
-								<tr>
-									<th>{t(locale, "common.type")}</th>
-									<th>{t(locale, "common.name")}</th>
-									<th>{t(locale, "common.id")}</th>
-								</tr>
-							</thead>
-							<tbody>
-								{state.value.data.map((item) => (
-									<tr key={`${item.model}:${item.id}`}>
-										<td>
-											<span className="tag">{String(item.model)}</span>
-										</td>
-										<td>
-											<Link to={resultHref(item)}>{item.name ?? "-"}</Link>
-										</td>
-										<td>{String(item.id)}</td>
+						{state.value.data.length === 0 ? (
+							<EmptyState title={t(locale, "common.empty")} />
+						) : (
+							<table className="table">
+								<thead>
+									<tr>
+										<th>{t(locale, "common.type")}</th>
+										<th>{t(locale, "common.name")}</th>
+										<th>{t(locale, "common.id")}</th>
 									</tr>
-								))}
-							</tbody>
-						</table>
+								</thead>
+								<tbody>
+									{state.value.data.map((item) => (
+										<tr key={`${item.model}:${item.id}`}>
+											<td>
+												<span className="tag">{String(item.model)}</span>
+											</td>
+											<td>
+												<Link to={resultHref(item)}>{item.name ?? "-"}</Link>
+											</td>
+											<td>{String(item.id)}</td>
+										</tr>
+									))}
+								</tbody>
+							</table>
+						)}
 					</>
 				)}
 			</div>

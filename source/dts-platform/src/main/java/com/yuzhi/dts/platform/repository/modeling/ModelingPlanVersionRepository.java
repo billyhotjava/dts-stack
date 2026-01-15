@@ -13,5 +13,6 @@ public interface ModelingPlanVersionRepository extends JpaRepository<ModelingPla
     Optional<ModelingPlanVersion> findByPlanAndVersion(ModelingPlan plan, String version);
 
     List<ModelingPlanVersion> findByPlanOrderByCreatedDateDesc(ModelingPlan plan);
-}
 
+    long deleteByPlan(ModelingPlan plan);
+}

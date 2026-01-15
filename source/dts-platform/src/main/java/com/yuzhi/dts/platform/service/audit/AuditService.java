@@ -87,12 +87,12 @@ public class AuditService {
         registerLegacy("catalog.dataset.import", "CREATE", legacyMapping("CATALOG_ASSET_EDIT", "导入数据资产", "导入数据资产失败", null, "IMPORT", false, AuditStage.SUCCESS));
 
         // Catalog domains
-        registerLegacy("catalog.domain", "READ", legacyMapping("CATALOG_ASSET_VIEW", "查看数据域", null, null, "READ", true, AuditStage.SUCCESS));
-        registerLegacy("catalog.domain", "CREATE", legacyMapping("CATALOG_ASSET_EDIT", "新增数据域", "新增数据域失败", null, "CREATE", false, AuditStage.SUCCESS));
-        registerLegacy("catalog.domain", "UPDATE", legacyMapping("CATALOG_ASSET_EDIT", "更新数据域", "更新数据域失败", null, "UPDATE", false, AuditStage.SUCCESS));
-        registerLegacy("catalog.domain", "DELETE", legacyMapping("CATALOG_ASSET_EDIT", "删除数据域", "删除数据域失败", null, "DELETE", false, AuditStage.SUCCESS));
-        registerLegacy("catalog.domain.move", "UPDATE", legacyMapping("CATALOG_ASSET_EDIT", "调整数据域顺序", "调整数据域顺序失败", null, "UPDATE", false, AuditStage.SUCCESS));
-        registerLegacy("catalog.domain.tree", "READ", legacyMapping("CATALOG_ASSET_VIEW", "查看数据域树", null, null, "READ", true, AuditStage.SUCCESS));
+        registerLegacy("catalog.domain", "READ", legacyMapping("CATALOG_ASSET_VIEW", "查看主题域", null, null, "READ", true, AuditStage.SUCCESS));
+        registerLegacy("catalog.domain", "CREATE", legacyMapping("CATALOG_ASSET_EDIT", "新增主题域", "新增主题域失败", null, "CREATE", false, AuditStage.SUCCESS));
+        registerLegacy("catalog.domain", "UPDATE", legacyMapping("CATALOG_ASSET_EDIT", "更新主题域", "更新主题域失败", null, "UPDATE", false, AuditStage.SUCCESS));
+        registerLegacy("catalog.domain", "DELETE", legacyMapping("CATALOG_ASSET_EDIT", "删除主题域", "删除主题域失败", null, "DELETE", false, AuditStage.SUCCESS));
+        registerLegacy("catalog.domain.move", "UPDATE", legacyMapping("CATALOG_ASSET_EDIT", "调整主题域顺序", "调整主题域顺序失败", null, "UPDATE", false, AuditStage.SUCCESS));
+        registerLegacy("catalog.domain.tree", "READ", legacyMapping("CATALOG_ASSET_VIEW", "查看主题域树", null, null, "READ", true, AuditStage.SUCCESS));
 
         // Catalog table metadata
         registerLegacyCrud("catalog.table", "数据表");
