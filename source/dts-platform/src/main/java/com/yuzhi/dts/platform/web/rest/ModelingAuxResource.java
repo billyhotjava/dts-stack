@@ -1040,10 +1040,10 @@ public class ModelingAuxResource {
         term.setAliases(StringUtils.trimToNull(request.getAliases()));
         term.setDomain(StringUtils.trimToNull(request.getDomain()));
         term.setDefinition(StringUtils.trimToNull(request.getDefinition()));
-        term.setStatus(StringUtils.trimToNull(request.getStatus()));
         term.setVersion(StringUtils.trimToNull(request.getVersion()));
         term.setVersionNotes(StringUtils.trimToNull(request.getVersionNotes()));
-        term.setOwner(StringUtils.trimToNull(request.getOwner()));
+        // Treat as dictionary ledger: no "owner" field.
+        term.setOwner(null);
         term.setTags(StringUtils.trimToNull(request.getTags()));
 
         String requestedOwnerDept = StringUtils.trimToNull(request.getOwnerDept());
@@ -1213,11 +1213,8 @@ public class ModelingAuxResource {
 
     private void ensureGlossaryDefaults(ModelingGlossaryTerm term) {
         if (term == null) return;
-        if (!org.springframework.util.StringUtils.hasText(term.getStatus())) {
-            term.setStatus("ACTIVE");
-        } else {
-            term.setStatus(normalizeGlossaryStatus(term.getStatus()));
-        }
+        // Glossary/indicator terms are treated as a simple ledger: no status workflow.
+        term.setStatus("ACTIVE");
         if (!org.springframework.util.StringUtils.hasText(term.getVersion())) {
             term.setVersion("v1");
         } else {
@@ -1276,10 +1273,8 @@ public class ModelingAuxResource {
         view.put("aliases", term.getAliases());
         view.put("domain", term.getDomain());
         view.put("definition", term.getDefinition());
-        view.put("status", term.getStatus());
         view.put("version", term.getVersion());
         view.put("versionNotes", term.getVersionNotes());
-        view.put("owner", term.getOwner());
         view.put("ownerDept", term.getOwnerDept());
         view.put("tags", term.getTags());
         return view;

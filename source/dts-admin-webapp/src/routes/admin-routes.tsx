@@ -11,6 +11,7 @@ import UserDetailView from "@/admin/views/user-detail";
 import MyChangesView from "@/admin/views/my-changes";
 import RoleManagementView from "@/admin/views/role-management";
 import RoleDetailView from "@/admin/views/role-detail";
+import WorkflowConfigView from "@/admin/views/workflow-config";
 import { getMenusByRole } from "@/admin/config/menus";
 import { useAdminSession } from "@/admin/lib/session-context";
 
@@ -28,12 +29,13 @@ export const adminRoutes: RouteObject[] = [
 		path: "admin",
 		element: (
 			<AdminGuard>
-				<DashboardLayout />
-			</AdminGuard>
-		),
+		<DashboardLayout />
+	</AdminGuard>
+	),
 		children: [
 			{ index: true, element: <AdminIndexRedirect /> },
-			{ path: "system", element: <Navigate to="/admin/users" replace /> },
+			{ path: "system", element: <Navigate to="/admin/ops" replace /> },
+			{ path: "system/*", element: <Navigate to="/admin/ops" replace /> },
 			{ path: "my-changes", element: <MyChangesView /> },
 			{ path: "users", element: <UserManagementView /> },
 			{ path: "users/:id", element: <UserDetailView /> },
@@ -45,6 +47,7 @@ export const adminRoutes: RouteObject[] = [
 			{ path: "approval", element: <ApprovalCenterView /> },
 			{ path: "audit", element: <AuditCenterView /> },
 			{ path: "ops", element: <OpsConfigView /> },
+			{ path: "workflows", element: <WorkflowConfigView /> },
 			{ path: "*", element: <Navigate to="/403" replace /> },
 		],
 	},

@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/ui/dialog";
@@ -6,7 +6,13 @@ import { Label } from "@/ui/label";
 import { Input } from "@/ui/input";
 import { Textarea } from "@/ui/textarea";
 import { Checkbox } from "@/ui/checkbox";
+import { Popover, PopoverContent, PopoverTrigger } from "@/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/ui/command";
 import { createDatasetAccessRequest } from "@/api/platformApi";
+import userDirectoryService, { type UserDirectoryEntry } from "@/api/services/userDirectoryService";
+import { useUserInfo } from "@/store/userStore";
+import { cn } from "@/utils";
+import { Check, ChevronsUpDown } from "lucide-react";
 
 export type DatasetAccessDialogAction = "query" | "preview";
 
@@ -29,12 +35,37 @@ type Props = {
 const normalizeAction = (action: DatasetAccessDialogAction): DatasetAccessDialogAction => action;
 
 export function DatasetAccessRequestDialog({ open, onOpenChange, dataset, defaultActions, onSubmitted }: Props) {
+	const userInfo = useUserInfo() as any;
+	const normalizedRoleSet = useMemo(() => {
+		const raw = (userInfo as any)?.roles;
+		const list = Array.isArray(raw) ? raw : [];
+		return new Set(list.map((r: any) => String(r ?? "").toUpperCase()).filter(Boolean));
+	}, [userInfo]);
+	const canProxyApply = useMemo(() => {
+		const allowed = [
+			"ROLE_OP_ADMIN",
+			"OPADMIN",
+			"ROLE_ADMIN",
+			"ADMIN",
+			"ROLE_INST_DATA_OWNER",
+			"INST_DATA_OWNER",
+			"ROLE_DEPT_DATA_OWNER",
+			"DEPT_DATA_OWNER",
+		];
+		return allowed.some((r) => normalizedRoleSet.has(r));
+	}, [normalizedRoleSet]);
+
 	const defaultSet = useMemo(() => new Set(defaultActions.map(normalizeAction)), [defaultActions]);
 	const [canQuery, setCanQuery] = useState(defaultSet.has("query"));
 	const [canPreview, setCanPreview] = useState(defaultSet.has("preview"));
 	const [validDays, setValidDays] = useState<string>("7");
 	const [reason, setReason] = useState<string>("");
 	const [submitting, setSubmitting] = useState(false);
+	const [userPickerOpen, setUserPickerOpen] = useState(false);
+	const [userSearch, setUserSearch] = useState("");
+	const [userLoading, setUserLoading] = useState(false);
+	const [userOptions, setUserOptions] = useState<UserDirectoryEntry[]>([]);
+	const [targetUser, setTargetUser] = useState<UserDirectoryEntry | null>(null);
 
 	const title = dataset?.name ? `申请数据访问：${dataset.name}` : "申请数据访问";
 	const metaLine = useMemo(() => {
@@ -50,11 +81,57 @@ export function DatasetAccessRequestDialog({ open, onOpenChange, dataset, defaul
 		setCanPreview(defaultSet.has("preview"));
 		setValidDays("7");
 		setReason("");
+		setTargetUser(null);
+		setUserOptions([]);
+		setUserSearch("");
+		setUserPickerOpen(false);
 	}, [defaultSet]);
+
+	const loadUsers = useCallback(async (keyword: string) => {
+		const query = keyword.trim();
+		setUserLoading(true);
+		try {
+			const list = await userDirectoryService.searchUsers(query);
+			setUserOptions(list);
+		} catch (error) {
+			console.error(error);
+			setUserOptions([]);
+		} finally {
+			setUserLoading(false);
+		}
+	}, []);
+
+	useEffect(() => {
+		if (!open || !canProxyApply) return;
+		setUserSearch("");
+		void loadUsers("");
+	}, [open, canProxyApply, loadUsers]);
+
+	useEffect(() => {
+		if (!open || !canProxyApply) return;
+		const handle = window.setTimeout(() => {
+			void loadUsers(userSearch);
+		}, 300);
+		return () => window.clearTimeout(handle);
+	}, [open, canProxyApply, userSearch, loadUsers]);
+
+	const handleUserSelect = useCallback((option: UserDirectoryEntry) => {
+		setTargetUser(option);
+		setUserSearch("");
+		setUserPickerOpen(false);
+	}, []);
 
 	const handleSubmit = useCallback(async () => {
 		if (!dataset?.id) {
 			toast.error("缺少数据集信息");
+			return;
+		}
+		if (!canProxyApply) {
+			toast.error("普通员工不支持自助申请，请联系数据管理员代申请");
+			return;
+		}
+		if (!targetUser?.username) {
+			toast.error("请选择申请对象");
 			return;
 		}
 		if (!canQuery && !canPreview) {
@@ -77,8 +154,13 @@ export function DatasetAccessRequestDialog({ open, onOpenChange, dataset, defaul
 			const now = new Date();
 			const validFrom = now.toISOString();
 			const validTo = new Date(now.getTime() + days * 24 * 60 * 60 * 1000).toISOString();
+			const preferredName = targetUser.fullName?.trim() || targetUser.displayName?.trim() || targetUser.username;
 			await createDatasetAccessRequest({
 				datasetId: dataset.id,
+				targetUserId: targetUser.id,
+				targetUsername: targetUser.username,
+				targetName: preferredName,
+				targetDept: targetUser.deptCode,
 				canQuery,
 				canPreview,
 				validFrom,
@@ -97,7 +179,7 @@ export function DatasetAccessRequestDialog({ open, onOpenChange, dataset, defaul
 		} finally {
 			setSubmitting(false);
 		}
-	}, [dataset, canQuery, canPreview, validDays, reason, onOpenChange, resetForm, onSubmitted]);
+	}, [dataset, canProxyApply, targetUser, canQuery, canPreview, validDays, reason, onOpenChange, resetForm, onSubmitted]);
 
 	return (
 		<Dialog
@@ -115,6 +197,73 @@ export function DatasetAccessRequestDialog({ open, onOpenChange, dataset, defaul
 				</DialogHeader>
 				<div className="space-y-4">
 					{metaLine ? <div className="text-xs text-muted-foreground">{metaLine}</div> : null}
+
+					{canProxyApply ? (
+						<div className="space-y-2">
+							<Label>申请对象 *</Label>
+							<Popover open={userPickerOpen} onOpenChange={setUserPickerOpen}>
+								<PopoverTrigger asChild>
+									<Button
+										variant="outline"
+										role="combobox"
+										aria-expanded={userPickerOpen}
+										className={cn("justify-between", targetUser?.username ? "" : "text-muted-foreground")}
+									>
+										{targetUser?.username
+											? `${targetUser.fullName || targetUser.displayName || targetUser.username} (${targetUser.username})`
+											: "选择用户"}
+										<ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+									</Button>
+								</PopoverTrigger>
+								<PopoverContent className="w-[360px] p-0">
+									<Command>
+										<CommandInput placeholder="搜索用户名..." value={userSearch} onValueChange={setUserSearch} />
+										<CommandList>
+											{userLoading ? (
+												<div className="px-3 py-4 text-sm text-muted-foreground">加载中…</div>
+											) : (
+												<>
+													<CommandEmpty>未找到匹配用户</CommandEmpty>
+													<CommandGroup heading="用户">
+														{userOptions.map((option) => (
+															<CommandItem
+																key={option.id}
+																value={option.username}
+																onSelect={() => handleUserSelect(option)}
+															>
+																<div className="flex flex-col overflow-hidden">
+																	<span className="truncate font-medium">
+																		{option.fullName || option.displayName || option.username}
+																	</span>
+																	<span className="truncate text-xs text-muted-foreground">
+																		{option.username}
+																		{option.deptCode ? ` · ${option.deptCode}` : ""}
+																	</span>
+																</div>
+																<Check
+																	className={cn(
+																		"ml-2 h-4 w-4",
+																		targetUser?.username === option.username ? "opacity-100" : "opacity-0",
+																	)}
+																/>
+															</CommandItem>
+														))}
+													</CommandGroup>
+												</>
+											)}
+										</CommandList>
+									</Command>
+								</PopoverContent>
+							</Popover>
+							<div className="text-xs text-muted-foreground">
+								普通员工不支持自助申请；由部门/所级数据管理员代申请并走领导审批。
+							</div>
+						</div>
+					) : (
+						<div className="rounded-md border px-3 py-2 text-sm text-muted-foreground">
+							普通员工不支持自助申请，请联系部门/所级数据管理员代申请。
+						</div>
+					)}
 
 					<div className="space-y-2">
 						<Label>申请权限</Label>
@@ -162,7 +311,7 @@ export function DatasetAccessRequestDialog({ open, onOpenChange, dataset, defaul
 					<Button variant="ghost" onClick={() => onOpenChange(false)} disabled={submitting}>
 						取消
 					</Button>
-					<Button onClick={handleSubmit} disabled={submitting}>
+					<Button onClick={handleSubmit} disabled={submitting || !canProxyApply || !targetUser?.username}>
 						{submitting ? "提交中..." : "提交申请"}
 					</Button>
 				</DialogFooter>

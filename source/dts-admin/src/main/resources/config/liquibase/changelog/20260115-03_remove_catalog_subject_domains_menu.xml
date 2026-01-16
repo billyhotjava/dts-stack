@@ -8,7 +8,7 @@
             <tableExists tableName="portal_menu"/>
         </preConditions>
 
-        <sql>
+        <sql splitStatements="false">
             DO $$
             BEGIN
               IF to_regclass('portal_menu') IS NULL THEN
@@ -108,4 +108,3 @@
         </sql>
     </changeSet>
 </databaseChangeLog>
-

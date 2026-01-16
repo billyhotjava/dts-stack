@@ -14,6 +14,8 @@ import type {
 	PortalMenuCollection,
 	PortalMenuItem,
 	SystemConfigItem,
+	UpsertWorkflowTemplatePayload,
+	WorkflowTemplateConfig,
 } from "@/admin/types";
 import apiClient from "@/api/apiClient";
 
@@ -255,6 +257,34 @@ export const adminApi = {
 	getDatasets: () =>
 		apiClient.get<AdminDataset[]>({
 			url: "/admin/datasets",
+		}),
+
+	getWorkflowTemplates: (workflowType: string, enabledOnly: boolean = false) =>
+		apiClient.get<WorkflowTemplateConfig[]>({
+			url: "/workflows/templates",
+			params: { type: workflowType, enabledOnly },
+		}),
+
+	getWorkflowTemplate: (id: string) =>
+		apiClient.get<WorkflowTemplateConfig>({
+			url: `/workflows/templates/${id}`,
+		}),
+
+	createWorkflowTemplate: (payload: UpsertWorkflowTemplatePayload) =>
+		apiClient.post<WorkflowTemplateConfig>({
+			url: "/workflows/templates",
+			data: payload,
+		}),
+
+	updateWorkflowTemplate: (id: string, payload: UpsertWorkflowTemplatePayload) =>
+		apiClient.put<WorkflowTemplateConfig>({
+			url: `/workflows/templates/${id}`,
+			data: payload,
+		}),
+
+	deleteWorkflowTemplate: (id: string) =>
+		apiClient.delete<void>({
+			url: `/workflows/templates/${id}`,
 		}),
 
 	getCustomRoles: () =>

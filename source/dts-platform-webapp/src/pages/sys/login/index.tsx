@@ -1,5 +1,5 @@
 import { Star } from "lucide-react";
-import { Navigate } from "react-router";
+import { Navigate, useLocation } from "react-router";
 import TechDataBackground from "@/assets/images/background/tech-data-platform.svg";
 import LocalePicker from "@/components/locale-picker";
 import { GLOBAL_CONFIG } from "@/global-config";
@@ -14,9 +14,31 @@ import ResetForm from "./reset-form";
 function LoginPage() {
 	const token = useUserToken();
 	const bilingual = useBilingualText();
+	const location = useLocation();
+
+	const safeRedirect = (() => {
+		try {
+			const params = new URLSearchParams(location.search || "");
+			const raw = (params.get("redirect") || "").trim();
+			if (!raw) return null;
+			if (!raw.startsWith("/")) return null;
+			if (raw.startsWith("//")) return null;
+			if (raw.includes("://")) return null;
+			if (raw.length > 2048) return null;
+			return raw;
+		} catch {
+			return null;
+		}
+	})();
 
 	if (token.accessToken) {
-		return <Navigate to={GLOBAL_CONFIG.defaultRoute} replace />;
+		// If we're already authenticated and this page was reached via embedded module redirect,
+		// jump directly to that module with a hard navigation.
+		if (safeRedirect?.startsWith("/analytics")) {
+			window.location.replace(safeRedirect);
+			return null;
+		}
+		return <Navigate to={safeRedirect || GLOBAL_CONFIG.defaultRoute} replace />;
 	}
 
 	const brandLabel = bilingual("sys.login.brandName");

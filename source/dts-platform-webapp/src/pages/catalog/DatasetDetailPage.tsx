@@ -179,6 +179,19 @@ export default function DatasetDetailPage() {
 	}, [userInfo]);
 	const isOpadmin = useMemo(() => currentUsername.toLowerCase() === "opadmin", [currentUsername]);
 	const canManageGrants = useMemo(() => isOpadmin || hasDataMaintainerRole, [hasDataMaintainerRole, isOpadmin]);
+	const canProxyApply = useMemo(() => {
+		const allowed = [
+			"ROLE_OP_ADMIN",
+			"OPADMIN",
+			"ROLE_ADMIN",
+			"ADMIN",
+			"ROLE_INST_DATA_OWNER",
+			"INST_DATA_OWNER",
+			"ROLE_DEPT_DATA_OWNER",
+			"DEPT_DATA_OWNER",
+		];
+		return allowed.some((role) => normalizedRoleSet.has(role));
+	}, [normalizedRoleSet]);
 	const [grants, setGrants] = useState<DatasetGrant[]>([]);
 	const [grantLoading, setGrantLoading] = useState(false);
 	const [grantDialogOpen, setGrantDialogOpen] = useState(false);
@@ -376,7 +389,11 @@ export default function DatasetDetailPage() {
 				console.error(error);
 				const errCode = (error as any)?.response?.data?.code;
 				if (errCode === "dts-sec-0004") {
-					setAccessDialogOpen(true);
+					if (canProxyApply) {
+						setAccessDialogOpen(true);
+					} else if (!silent) {
+						toast.error("无权限预览数据内容，请联系数据管理员代申请");
+					}
 					return;
 				}
 				if (!silent) {
@@ -386,7 +403,7 @@ export default function DatasetDetailPage() {
 				setSampleLoading(false);
 			}
 			},
-			[id],
+			[id, canProxyApply],
 		);
 	const formatDateTime = useCallback((value?: string) => {
 		if (!value) return "-";
@@ -785,6 +802,16 @@ if (!dataset) return <div className="text-sm text-muted-foreground">未找到该
 						>
 							{sampleLoading ? "采样中…" : "刷新采样"}
 						</Button>
+						{canProxyApply ? (
+							<Button
+								variant="outline"
+								onClick={() => {
+									setAccessDialogOpen(true);
+								}}
+							>
+								代申请访问
+							</Button>
+						) : null}
 						<Button
 							variant="outline"
 							disabled={saving}

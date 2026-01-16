@@ -9,5 +9,9 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface CatalogDatasetAccessRequestRepository extends JpaRepository<CatalogDatasetAccessRequest, UUID> {
     List<CatalogDatasetAccessRequest> findByRequesterUsernameIgnoreCaseOrderByCreatedDateDesc(String requesterUsername);
-}
 
+    List<CatalogDatasetAccessRequest> findByRequesterUsernameIgnoreCaseOrTargetUsernameIgnoreCaseOrderByCreatedDateDesc(
+        String requesterUsername,
+        String targetUsername
+    );
+}

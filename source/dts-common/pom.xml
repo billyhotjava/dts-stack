@@ -38,4 +38,18 @@
             <artifactId>slf4j-api</artifactId>
         </dependency>
     </dependencies>
+
+    <build>
+        <plugins>
+            <!-- In dev mode, target/ is a mounted volume and stale resource files may already exist.
+                 Force overwriting to avoid FileAlreadyExistsException during resources:resources. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-resources-plugin</artifactId>
+                <configuration>
+                    <overwrite>true</overwrite>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
 </project>

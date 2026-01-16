@@ -24,6 +24,7 @@ import {
 import { normalizeClassification, type ClassificationLevel } from "@/utils/classification";
 import { GLOBAL_CONFIG } from "@/global-config";
 import { useActiveDept } from "@/store/contextStore";
+import { useUserInfo } from "@/store/userStore";
 import { SqlWorkbenchExperimental } from "@/components/sql/SqlWorkbenchExperimental";
 import { DatasetAccessRequestDialog } from "@/components/security/DatasetAccessRequestDialog";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/ui/dialog";
@@ -834,6 +835,24 @@ export default function QueryWorkbenchPage() {
 		return <SqlWorkbenchExperimental />;
 	}
 
+	const userInfo = useUserInfo() as any;
+	const canProxyApply = useMemo(() => {
+		const raw = (userInfo as any)?.roles;
+		const roles = Array.isArray(raw) ? raw.map((r: any) => String(r ?? "").toUpperCase()).filter(Boolean) : [];
+		const roleSet = new Set(roles);
+		const allowed = [
+			"ROLE_OP_ADMIN",
+			"OPADMIN",
+			"ROLE_ADMIN",
+			"ADMIN",
+			"ROLE_INST_DATA_OWNER",
+			"INST_DATA_OWNER",
+			"ROLE_DEPT_DATA_OWNER",
+			"DEPT_DATA_OWNER",
+		];
+		return allowed.some((r) => roleSet.has(r));
+	}, [userInfo]);
+
 	const [remoteDatasets, setRemoteDatasets] = useState<Dataset[]>([]);
 	const [isDatasetsLoading, setDatasetsLoading] = useState<boolean>(false);
 	const [datasetsError, setDatasetsError] = useState<string | null>(null);
@@ -981,12 +1000,16 @@ const [saveTtlDays, setSaveTtlDays] = useState<string>("7");
 				if (errCode === "dts-sec-0004") {
 					setRunStatus({
 						type: "error",
-						message: "需要审批授权后才能查询数据内容",
+						message: canProxyApply
+							? "需要审批授权后才能查询数据内容（由数据管理员代申请）"
+							: "无权限查询数据内容，请联系数据管理员代申请",
 						sql,
 					});
-					setAccessDialogDataset(dataset);
-					setAccessDialogDefaultActions(["query"]);
-					setAccessDialogOpen(true);
+					if (canProxyApply) {
+						setAccessDialogDataset(dataset);
+						setAccessDialogDefaultActions(["query"]);
+						setAccessDialogOpen(true);
+					}
 					return;
 				}
 				const errorInfo = extractErrorInfo(e);
@@ -1001,7 +1024,7 @@ const [saveTtlDays, setSaveTtlDays] = useState<string>("7");
 				setIsRunning(false);
 			}
 		},
-		[listQueryExecutions, toast]
+		[listQueryExecutions, toast, canProxyApply]
 	);
 
 useEffect(() => {

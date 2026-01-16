@@ -41,23 +41,23 @@ export const frontendNavData: NavProps["data"] = [
 			},
 			{
 				title: "sys.nav.usermgmt.system.system_config",
-				path: "/admin/system/data-sources",
+				path: "/admin/system",
 				icon: <Icon icon="local:ic-setting" size={24} />,
 				auth: SYSADMIN_ROLES,
 				children: [
 					{
-						title: "sys.nav.usermgmt.system.datasource",
-						path: "/admin/system/data-sources",
-						icon: <Icon icon="local:ic-analysis" size={18} />,
+						title: "sys.nav.usermgmt.system.ops",
+						path: "/admin/ops",
+						icon: <Icon icon="solar:settings-bold-duotone" size={18} />,
+						auth: SYSADMIN_ROLES,
+					},
+					{
+						title: "工作流配置",
+						path: "/admin/workflows",
+						icon: <Icon icon="solar:shuffle-bold-duotone" size={18} />,
 						auth: SYSADMIN_ROLES,
 					},
 				],
-			},
-			{
-				title: "运维配置",
-				path: "/admin/ops",
-				icon: <Icon icon="solar:settings-bold-duotone" size={24} />,
-				auth: SYSADMIN_ROLES,
 			},
 			{
 				title: "任务审批",

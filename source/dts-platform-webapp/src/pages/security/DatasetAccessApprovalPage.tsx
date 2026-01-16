@@ -20,6 +20,9 @@ type AccessRequest = {
 	requesterUsername?: string;
 	requesterName?: string;
 	requesterDept?: string;
+	targetUsername?: string;
+	targetName?: string;
+	targetDept?: string;
 	canQuery?: boolean;
 	canPreview?: boolean;
 	reason?: string;
@@ -148,6 +151,18 @@ export default function DatasetAccessApprovalPage() {
 			},
 			{ title: "分层", dataIndex: "warehouseLayer", key: "warehouseLayer", width: 90, render: (v) => v || "-" },
 			{ title: "密级", dataIndex: "classification", key: "classification", width: 110, render: (v) => v || "-" },
+			{
+				title: "申请对象",
+				key: "target",
+				width: 160,
+				render: (_: unknown, row) => row.targetName || row.targetUsername || "-",
+			},
+			{
+				title: "提交人",
+				key: "requester",
+				width: 160,
+				render: (_: unknown, row) => row.requesterName || row.requesterUsername || "-",
+			},
 			{ title: "申请权限", key: "actions", width: 120, render: (_, row) => renderActions(row) },
 			{ title: "有效期至", dataIndex: "validTo", key: "validTo", width: 180, render: (v) => formatDateTime(v) },
 			{ title: "状态", dataIndex: "status", key: "status", width: 110, render: (v) => renderStatus(v) },
@@ -174,7 +189,8 @@ export default function DatasetAccessApprovalPage() {
 					</Button>
 				),
 			},
-			{ title: "申请人", key: "requester", width: 160, render: (_, row) => row.request?.requesterName || row.request?.requesterUsername || "-" },
+			{ title: "申请对象", key: "target", width: 160, render: (_, row) => row.request?.targetName || row.request?.targetUsername || "-" },
+			{ title: "提交人", key: "requester", width: 160, render: (_, row) => row.request?.requesterName || row.request?.requesterUsername || "-" },
 			{ title: "分层", key: "layer", width: 90, render: (_, row) => row.request?.warehouseLayer || "-" },
 			{ title: "密级", key: "class", width: 110, render: (_, row) => row.request?.classification || "-" },
 			{ title: "申请权限", key: "actions", width: 120, render: (_, row) => renderActions(row.request) },
@@ -323,4 +339,3 @@ export default function DatasetAccessApprovalPage() {
 		</div>
 	);
 }
-

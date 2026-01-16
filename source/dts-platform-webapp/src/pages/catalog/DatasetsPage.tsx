@@ -7,7 +7,7 @@ import { Input } from "@/ui/input";
 import { Label } from "@/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/ui/select";
 import { Textarea } from "@/ui/textarea";
-import { Alert, AlertDescription, AlertTitle } from "@/ui/alert";
+import { Alert, AlertDescription } from "@/ui/alert";
 import { toast } from "sonner";
 import { createDataset, getCatalogConfig, listDatasets } from "@/api/platformApi";
 import { listInfraDataSources, refreshInceptorRegistry } from "@/api/services/infraService";
@@ -196,7 +196,6 @@ const [deptLoading, setDeptLoading] = useState(false);
 	const [dataSources, setDataSources] = useState<any[]>([]);
 	const [multiSourceUnlocked, setMultiSourceUnlocked] = useState(false);
 	    const [refreshing, setRefreshing] = useState(false);
-	const [primarySourceAlertDismissed, setPrimarySourceAlertDismissed] = useState(false);
     // Preview dialog state
 const sourceTypeUpper = (form.sourceType || "").toUpperCase();
 const isInceptorSource = sourceTypeUpper === "INCEPTOR" || sourceTypeUpper === "HIVE";
@@ -231,7 +230,11 @@ const primarySourceLabel = useMemo(
 );
 const multiSourceAllowed = catalogConfig.multiSourceEnabled || multiSourceUnlocked;
 const fallbackEditable = useMemo(() => isOpadmin || hasDataMaintainerRole, [isOpadmin, hasDataMaintainerRole]);
-const canSyncInfra = true; // 放开刷新，前端不再限制角色
+// Only attempt Inceptor registry refresh when an Inceptor datasource exists (avoid historical hard dependency).
+const canSyncInfra = useMemo(
+	() => dataSources.some((ds) => normalizeSourceType(String(ds?.type || "")) === "INCEPTOR"),
+	[dataSources, normalizeSourceType],
+);
 
 const availableSourceTypes = useMemo(() => {
 	const set = new Set<string>();
@@ -264,14 +267,6 @@ const availableSourceTypes = useMemo(() => {
 			setInstOwnerInitialized(true);
 		}
 	}, [hasInstOwnerRole, instOwnerInitialized, deptFilter, page, setDeptFilter, setInstOwnerInitialized, setPage]);
-	const hasPrimarySource = useMemo(() => {
-		if (multiSourceAllowed) {
-			return availableSourceTypes.length > 0;
-		}
-		if (catalogConfig.hasPrimarySource) return true;
-		return dataSources.some((ds) => normalizeSourceType(String(ds?.type || "")) === resolvedDefaultSource);
-	}, [availableSourceTypes, catalogConfig.hasPrimarySource, dataSources, multiSourceAllowed, normalizeSourceType, resolvedDefaultSource]);
-	const showPrimarySourceAlert = !hasPrimarySource && !primarySourceAlertDismissed;
 const deptLabelMap = useMemo(() => {
   const map = new Map<string, string>();
   for (const d of deptOptions) {
@@ -409,12 +404,6 @@ useEffect(() => {
 }, [page, size, resolvedDefaultSource, deptFilter, layerFilter, keyword]);
 
 	useEffect(() => {
-		if (hasPrimarySource) {
-			setPrimarySourceAlertDismissed(false);
-		}
-	}, [hasPrimarySource]);
-
-	useEffect(() => {
 		if (!open) return;
 		if (isOpadmin) return;
 		const enforced = normalizedUserDept ?? "";
@@ -490,7 +479,6 @@ const filtered = useMemo(() => {
 		}
 		try {
 			await fetchList();
-			setPrimarySourceAlertDismissed(true);
 			if (registrySynced) {
 				try {
 					const [cfg, ds] = await Promise.all([
@@ -524,10 +512,6 @@ const filtered = useMemo(() => {
 	};
 
 	const onCreate = async () => {
-		if (!hasPrimarySource) {
-			toast.error("请先在基础管理中完善默认数据源连接");
-			return;
-		}
 	if (!form.name.trim()) {
 		toast.error("请填写数据集名称");
 		return;
@@ -710,14 +694,6 @@ const filtered = useMemo(() => {
 			</Select>
 		</div>
 						</div>
-					{showPrimarySourceAlert && (
-						<Alert variant="destructive">
-							<AlertTitle>缺少默认数据源</AlertTitle>
-							<AlertDescription>
-								未检测到 {renderSourceLabel(primarySourceLabel)} 连接，请前往「基础管理 - 数据源」完成配置后再浏览或管理数据集。
-							</AlertDescription>
-						</Alert>
-					)}
 					<div className="overflow-hidden rounded-md border">
 						<table className="w-full min-w-[820px] table-fixed text-sm">
 							<thead className="bg-muted/50">

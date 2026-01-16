@@ -112,4 +112,11 @@ public final class ButtonCodes {
     public static final String MASTERDATA_PERSON_IMPORT_API = "ADMIN_PERSON_IMPORT_API";
     public static final String MASTERDATA_PERSON_IMPORT_EXCEL = "ADMIN_PERSON_IMPORT_EXCEL";
     public static final String MASTERDATA_PERSON_IMPORT_MANUAL = "ADMIN_PERSON_IMPORT_MANUAL";
+
+    // Workflow configuration (Platform approvals)
+    public static final String WORKFLOW_TEMPLATE_LIST = "ADMIN_WORKFLOW_TEMPLATE_LIST";
+    public static final String WORKFLOW_TEMPLATE_VIEW = "ADMIN_WORKFLOW_TEMPLATE_VIEW";
+    public static final String WORKFLOW_TEMPLATE_CREATE = "ADMIN_WORKFLOW_TEMPLATE_CREATE";
+    public static final String WORKFLOW_TEMPLATE_UPDATE = "ADMIN_WORKFLOW_TEMPLATE_UPDATE";
+    public static final String WORKFLOW_TEMPLATE_DELETE = "ADMIN_WORKFLOW_TEMPLATE_DELETE";
 }

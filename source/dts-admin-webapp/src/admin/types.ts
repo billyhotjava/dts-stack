@@ -126,6 +126,28 @@ export interface SystemConfigItem {
 	description?: string;
 }
 
+export type WorkflowOwnerScope = "ANY" | "INST" | "DEPT";
+
+export interface WorkflowStepConfig {
+	stepOrder: number;
+	approverRole: string;
+	deptBinding?: boolean;
+}
+
+export interface WorkflowTemplateConfig {
+	id: string;
+	workflowType: string;
+	name: string;
+	enabled?: boolean;
+	priority?: number;
+	ownerScope?: WorkflowOwnerScope | string;
+	classificationMin?: string | null;
+	classificationMax?: string | null;
+	steps?: WorkflowStepConfig[];
+}
+
+export type UpsertWorkflowTemplatePayload = Omit<WorkflowTemplateConfig, "id">;
+
 export interface PortalMenuItem {
 	id?: number;
 	name: string;

@@ -11,7 +11,10 @@ import ErrorBoundary from "./routes/components/error-boundary";
 import { makeRoutesSection } from "./routes/sections";
 
 if (import.meta.env.DEV) {
-	await import("./debug/register-koal-devtools");
+	import("./debug/register-koal-devtools").catch((error) => {
+		// Dev-only optional tooling; never block the app bootstrap.
+		console.warn("[devtools] register-koal-devtools failed to load", error);
+	});
 }
 
 await registerLocalIcons();

@@ -35,6 +35,10 @@ export const listDatasetJobs = (datasetId: string) => api.get({ url: `/datasets/
 // Dataset data-access approval (query/preview)
 export type DatasetAccessRequestCreatePayload = {
 	datasetId: string;
+	targetUserId?: string;
+	targetUsername: string;
+	targetName?: string;
+	targetDept?: string;
 	canQuery?: boolean;
 	canPreview?: boolean;
 	validFrom?: string;

@@ -1,3 +1,4 @@
+import { Table as AntTable } from "antd";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -6,7 +7,6 @@ import {
 	listGlossaryTerms,
 	updateGlossaryTerm,
 } from "@/api/platformApi";
-import { Badge } from "@/ui/badge";
 import { Button } from "@/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/ui/dialog";
@@ -26,8 +26,6 @@ type TermRow = {
 	name: string;
 	aliases?: string | null;
 	domain?: string | null;
-	status?: string | null;
-	owner?: string | null;
 	ownerDept?: string | null;
 	tags?: string | null;
 	definition?: string | null;
@@ -40,8 +38,6 @@ type TermForm = {
 	name: string;
 	aliases: string;
 	domain: string;
-	status: "DRAFT" | "ACTIVE" | "ARCHIVED";
-	owner: string;
 	tags: string;
 	definition: string;
 };
@@ -51,8 +47,6 @@ const DEFAULT_FORM: TermForm = {
 	name: "",
 	aliases: "",
 	domain: "",
-	status: "ACTIVE",
-	owner: "",
 	tags: "",
 	definition: "",
 };
@@ -100,8 +94,6 @@ export default function GlossaryPage() {
 					name: String(t?.name ?? ""),
 					aliases: t?.aliases ?? null,
 					domain: t?.domain ?? null,
-					status: t?.status ?? null,
-					owner: t?.owner ?? null,
 					ownerDept: t?.ownerDept ?? t?.owner_dept ?? null,
 					tags: t?.tags ?? null,
 					definition: t?.definition ?? null,
@@ -149,13 +141,6 @@ export default function GlossaryPage() {
 			name: String(row.name ?? ""),
 			aliases: String(row.aliases ?? ""),
 			domain: String(row.domain ?? ""),
-			status:
-				String(row.status ?? "ACTIVE").toUpperCase() === "ARCHIVED"
-					? "ARCHIVED"
-					: String(row.status ?? "ACTIVE").toUpperCase() === "DRAFT"
-						? "DRAFT"
-						: "ACTIVE",
-			owner: String(row.owner ?? ""),
 			tags: String(row.tags ?? ""),
 			definition: String(row.definition ?? ""),
 		});
@@ -169,16 +154,14 @@ export default function GlossaryPage() {
 		}
 		setSaving(true);
 		try {
-			const payload: any = {
-				code: form.code.trim() || null,
-				name: form.name.trim(),
-				aliases: form.aliases.trim() || null,
-				domain: form.domain.trim() || null,
-				status: form.status,
-				owner: form.owner.trim() || null,
-				tags: form.tags.trim() || null,
-				definition: form.definition.trim() || null,
-			};
+				const payload: any = {
+					code: form.code.trim() || null,
+					name: form.name.trim(),
+					aliases: form.aliases.trim() || null,
+					domain: form.domain.trim() || null,
+					tags: form.tags.trim() || null,
+					definition: form.definition.trim() || null,
+				};
 			if (form.id) {
 				await updateGlossaryTerm(form.id, payload);
 			} else {
@@ -209,13 +192,6 @@ export default function GlossaryPage() {
 		[fetchList],
 	);
 
-	const statusBadge = (status?: string | null) => {
-		const s = String(status || "").toUpperCase();
-		if (s === "ARCHIVED") return <Badge variant="outline">归档</Badge>;
-		if (s === "DRAFT") return <Badge variant="outline">草稿</Badge>;
-		return <Badge variant="secondary">启用</Badge>;
-	};
-
 	return (
 		<div className="space-y-4">
 			<Card>
@@ -235,54 +211,60 @@ export default function GlossaryPage() {
 							刷新
 						</Button>
 					</div>
-					<div className="overflow-auto rounded border">
-						<table className="w-full text-sm">
-							<thead className="bg-muted/40 text-left text-xs uppercase text-muted-foreground">
-								<tr>
-									<th className="px-3 py-2">编码</th>
-									<th className="px-3 py-2">名称</th>
-									<th className="px-3 py-2">别名</th>
-									<th className="px-3 py-2">主题域</th>
-									<th className="px-3 py-2">状态</th>
-									<th className="px-3 py-2">负责人</th>
-									<th className="px-3 py-2">部门</th>
-									<th className="px-3 py-2">更新时间</th>
-									<th className="px-3 py-2 w-[180px]">操作</th>
-								</tr>
-							</thead>
-							<tbody>
-								{filtered.map((row) => (
-									<tr key={row.id} className="border-b last:border-b-0">
-										<td className="px-3 py-2 text-xs">{row.code || "-"}</td>
-										<td className="px-3 py-2 text-xs font-medium">{row.name}</td>
-										<td className="px-3 py-2 text-xs">{row.aliases || "-"}</td>
-										<td className="px-3 py-2 text-xs">{renderDomainLabel(row.domain)}</td>
-										<td className="px-3 py-2 text-xs">{statusBadge(row.status)}</td>
-										<td className="px-3 py-2 text-xs">{row.owner || "-"}</td>
-										<td className="px-3 py-2 text-xs">{row.ownerDept || "-"}</td>
-										<td className="px-3 py-2 text-xs">{formatDateTime(row.lastModifiedDate)}</td>
-										<td className="px-3 py-2">
-											<div className="flex gap-2">
-												<Button size="sm" variant="secondary" onClick={() => openEdit(row)}>
-													编辑
-												</Button>
-												<Button size="sm" variant="destructive" onClick={() => void remove(row)}>
-													删除
-												</Button>
-											</div>
-										</td>
-									</tr>
-								))}
-								{filtered.length === 0 && (
-									<tr>
-										<td colSpan={9} className="px-3 py-10 text-center text-muted-foreground">
-											{loading ? "加载中..." : "暂无数据"}
-										</td>
-									</tr>
-								)}
-							</tbody>
-						</table>
-					</div>
+					<AntTable
+						rowKey={(r: any) => String(r.id)}
+						size="middle"
+						loading={loading}
+						pagination={{ pageSize: 20, showSizeChanger: false, showTotal: (total) => `总计 ${total} 条` }}
+						dataSource={filtered}
+						columns={[
+							{ title: "编码", dataIndex: "code", key: "code", width: 160, ellipsis: true, render: (v: any) => String(v || "-") },
+							{
+								title: "名称",
+								dataIndex: "name",
+								key: "name",
+								ellipsis: true,
+								render: (v: any, r: any) => (
+									<button type="button" className="text-left font-medium hover:underline" onClick={() => openEdit(r)}>
+										{String(v || "-")}
+									</button>
+								),
+							},
+							{ title: "别名", dataIndex: "aliases", key: "aliases", width: 200, ellipsis: true, render: (v: any) => String(v || "-") },
+							{
+								title: "主题域",
+								dataIndex: "domain",
+								key: "domain",
+								width: 180,
+								ellipsis: true,
+								render: (_: any, r: any) => renderDomainLabel(r.domain),
+							},
+							{ title: "部门", dataIndex: "ownerDept", key: "ownerDept", width: 140, ellipsis: true, render: (v: any) => String(v || "-") },
+							{
+								title: "更新时间",
+								dataIndex: "lastModifiedDate",
+								key: "lastModifiedDate",
+								width: 180,
+								render: (v: any) => formatDateTime(v),
+							},
+							{
+								title: "操作",
+								key: "action",
+								width: 180,
+								render: (_: any, r: any) => (
+									<div className="flex gap-2">
+										<Button size="sm" variant="secondary" onClick={() => openEdit(r)}>
+											编辑
+										</Button>
+										<Button size="sm" variant="destructive" onClick={() => void remove(r)}>
+											删除
+										</Button>
+									</div>
+								),
+							},
+						]}
+						locale={{ emptyText: loading ? "加载中..." : "暂无数据" }}
+					/>
 				</CardContent>
 			</Card>
 
@@ -335,23 +317,6 @@ export default function GlossaryPage() {
 						<div className="space-y-2 md:col-span-2">
 							<Label>别名</Label>
 							<Input value={form.aliases} onChange={(e) => setForm((p) => ({ ...p, aliases: e.target.value }))} placeholder="逗号分隔" />
-						</div>
-						<div className="space-y-2">
-							<Label>状态</Label>
-							<Select value={form.status} onValueChange={(v: any) => setForm((p) => ({ ...p, status: v }))}>
-								<SelectTrigger>
-									<SelectValue />
-								</SelectTrigger>
-								<SelectContent>
-									<SelectItem value="ACTIVE">启用</SelectItem>
-									<SelectItem value="DRAFT">草稿</SelectItem>
-									<SelectItem value="ARCHIVED">归档</SelectItem>
-								</SelectContent>
-							</Select>
-						</div>
-						<div className="space-y-2">
-							<Label>负责人</Label>
-							<Input value={form.owner} onChange={(e) => setForm((p) => ({ ...p, owner: e.target.value }))} />
 						</div>
 						<div className="space-y-2 md:col-span-2">
 							<Label>标签（逗号分隔）</Label>

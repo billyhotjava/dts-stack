@@ -16,6 +16,66 @@ public class AuditButtonRegistry {
         register(
             map,
             new AuditButtonMetadata(
+                ButtonCodes.WORKFLOW_TEMPLATE_LIST,
+                "system-admin",
+                "系统管理",
+                "WORKFLOW_TEMPLATE_LIST",
+                "查看审批工作流配置",
+                AuditOperationKind.QUERY,
+                true
+            )
+        );
+        register(
+            map,
+            new AuditButtonMetadata(
+                ButtonCodes.WORKFLOW_TEMPLATE_VIEW,
+                "system-admin",
+                "系统管理",
+                "WORKFLOW_TEMPLATE_VIEW",
+                "查看审批工作流配置详情",
+                AuditOperationKind.QUERY,
+                true
+            )
+        );
+        register(
+            map,
+            new AuditButtonMetadata(
+                ButtonCodes.WORKFLOW_TEMPLATE_CREATE,
+                "system-admin",
+                "系统管理",
+                "WORKFLOW_TEMPLATE_CREATE",
+                "新增审批工作流配置",
+                AuditOperationKind.CREATE,
+                false
+            )
+        );
+        register(
+            map,
+            new AuditButtonMetadata(
+                ButtonCodes.WORKFLOW_TEMPLATE_UPDATE,
+                "system-admin",
+                "系统管理",
+                "WORKFLOW_TEMPLATE_UPDATE",
+                "更新审批工作流配置",
+                AuditOperationKind.UPDATE,
+                false
+            )
+        );
+        register(
+            map,
+            new AuditButtonMetadata(
+                ButtonCodes.WORKFLOW_TEMPLATE_DELETE,
+                "system-admin",
+                "系统管理",
+                "WORKFLOW_TEMPLATE_DELETE",
+                "删除审批工作流配置",
+                AuditOperationKind.DELETE,
+                false
+            )
+        );
+        register(
+            map,
+            new AuditButtonMetadata(
                 ButtonCodes.SYSTEM_CONFIG_SUBMIT,
                 "system-admin",
                 "系统管理",

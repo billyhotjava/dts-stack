@@ -1,6 +1,8 @@
 package com.yuzhi.dts.platform.web.rest;
 
 import com.yuzhi.dts.platform.security.SecurityUtils;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -45,12 +47,12 @@ public class ForwardAuthResource {
         boolean isAnalyticsUiRequest = isAnalyticsRequest && !isAnalyticsApiRequest;
 
         if (authentication == null || !authentication.isAuthenticated()) {
-            return unauthorized(isAnalyticsApiRequest, isAnalyticsUiRequest);
+            return unauthorized(isAnalyticsApiRequest, isAnalyticsUiRequest, forwardedUri, forwardedPrefix, request);
         }
 
         String username = SecurityUtils.getCurrentUserLogin().orElse(null);
         if (!StringUtils.hasText(username)) {
-            return unauthorized(isAnalyticsApiRequest, isAnalyticsUiRequest);
+            return unauthorized(isAnalyticsApiRequest, isAnalyticsUiRequest, forwardedUri, forwardedPrefix, request);
         }
 
         HttpHeaders headers = new HttpHeaders();
@@ -82,10 +84,38 @@ public class ForwardAuthResource {
         return ResponseEntity.noContent().headers(headers).build();
     }
 
-    private static ResponseEntity<Void> unauthorized(boolean isAnalyticsApiRequest, boolean isAnalyticsUiRequest) {
+    private static ResponseEntity<Void> unauthorized(
+            boolean isAnalyticsApiRequest,
+            boolean isAnalyticsUiRequest,
+            String forwardedUri,
+            String forwardedPrefix,
+            HttpServletRequest request
+    ) {
         if (isAnalyticsUiRequest) {
+            String returnTo = "/analytics";
+            if (StringUtils.hasText(forwardedUri) && forwardedUri.startsWith("/analytics")) {
+                returnTo = forwardedUri;
+            } else if (StringUtils.hasText(forwardedPrefix) && forwardedPrefix.startsWith("/analytics")) {
+                returnTo = forwardedPrefix;
+            }
+            String encodedReturnTo = URLEncoder.encode(returnTo, StandardCharsets.UTF_8);
+            String loginPath = "/#/auth/login?redirect=" + encodedReturnTo;
+
+            // Build an absolute URL using X-Forwarded-* (original external request), to avoid leaking
+            // internal docker hostname (e.g. "dts-platform:8081") to the browser.
+            // If X-Forwarded-* are absent, fall back to a relative URL.
+            String loginUrl = loginPath;
+            if (request != null) {
+                String xfProtoRaw = request.getHeader("X-Forwarded-Proto");
+                String xfHostRaw = request.getHeader("X-Forwarded-Host");
+                String xfProto = StringUtils.hasText(xfProtoRaw) ? xfProtoRaw.split(",")[0].trim() : null;
+                String xfHost = StringUtils.hasText(xfHostRaw) ? xfHostRaw.split(",")[0].trim() : null;
+                if (StringUtils.hasText(xfProto) && StringUtils.hasText(xfHost)) {
+                    loginUrl = xfProto + "://" + xfHost + loginPath;
+                }
+            }
             HttpHeaders headers = new HttpHeaders();
-            headers.add(HttpHeaders.LOCATION, "/auth/login");
+            headers.add(HttpHeaders.LOCATION, loginUrl);
             return ResponseEntity.status(302).headers(headers).build();
         }
         if (isAnalyticsApiRequest) {

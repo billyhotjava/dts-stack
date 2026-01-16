@@ -70,6 +70,10 @@ public class CatalogDatasetAccessApprovalResource {
                 validFrom,
                 validTo,
                 body.reason(),
+                body.targetUserId(),
+                body.targetUsername(),
+                body.targetName(),
+                body.targetDept(),
                 activeDept
             );
             auditService.record(
@@ -78,17 +82,26 @@ public class CatalogDatasetAccessApprovalResource {
                 "catalog.dataset.access.request",
                 saved.getId().toString(),
                 "SUCCESS",
-                Map.of("datasetId", body.datasetId().toString())
+                Map.of(
+                    "datasetId",
+                    body.datasetId() != null ? body.datasetId().toString() : "",
+                    "targetUsername",
+                    body.targetUsername() != null ? body.targetUsername() : "",
+                    "requester",
+                    saved.getRequesterUsername() != null ? saved.getRequesterUsername() : ""
+                )
             );
             return ApiResponses.ok(saved);
         } catch (RuntimeException ex) {
+            Map<String, Object> meta = new LinkedHashMap<>();
+            meta.put("error", ex.getMessage() != null ? ex.getMessage() : ex.getClass().getSimpleName());
             auditService.record(
                 "CREATE",
                 "catalog.dataset.access.request",
                 "catalog.dataset.access.request",
-                body.datasetId().toString(),
+                body.datasetId() != null ? body.datasetId().toString() : "unknown",
                 "FAILED",
-                Map.of("error", ex.getMessage())
+                meta
             );
             return ApiResponses.error(ex.getMessage());
         }
@@ -146,6 +159,10 @@ public class CatalogDatasetAccessApprovalResource {
 
     public record CreateDatasetAccessRequest(
         UUID datasetId,
+        String targetUserId,
+        String targetUsername,
+        String targetName,
+        String targetDept,
         Boolean canQuery,
         Boolean canPreview,
         Instant validFrom,

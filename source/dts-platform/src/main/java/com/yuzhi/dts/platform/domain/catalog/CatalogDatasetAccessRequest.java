@@ -46,6 +46,18 @@ public class CatalogDatasetAccessRequest extends AbstractAuditingEntity<UUID> im
     @Column(name = "requester_dept", length = 64)
     private String requesterDept;
 
+    @Column(name = "target_user_id", length = 64)
+    private String targetUserId;
+
+    @Column(name = "target_username", length = 64)
+    private String targetUsername;
+
+    @Column(name = "target_name", length = 128)
+    private String targetName;
+
+    @Column(name = "target_dept", length = 64)
+    private String targetDept;
+
     @Column(name = "can_query", nullable = false)
     private Boolean canQuery = Boolean.FALSE;
 
@@ -154,6 +166,38 @@ public class CatalogDatasetAccessRequest extends AbstractAuditingEntity<UUID> im
         this.requesterDept = requesterDept;
     }
 
+    public String getTargetUserId() {
+        return targetUserId;
+    }
+
+    public void setTargetUserId(String targetUserId) {
+        this.targetUserId = targetUserId;
+    }
+
+    public String getTargetUsername() {
+        return targetUsername;
+    }
+
+    public void setTargetUsername(String targetUsername) {
+        this.targetUsername = targetUsername;
+    }
+
+    public String getTargetName() {
+        return targetName;
+    }
+
+    public void setTargetName(String targetName) {
+        this.targetName = targetName;
+    }
+
+    public String getTargetDept() {
+        return targetDept;
+    }
+
+    public void setTargetDept(String targetDept) {
+        this.targetDept = targetDept;
+    }
+
     public Boolean getCanQuery() {
         return canQuery;
     }
@@ -226,4 +270,3 @@ public class CatalogDatasetAccessRequest extends AbstractAuditingEntity<UUID> im
         this.decisionNotes = decisionNotes;
     }
 }
-

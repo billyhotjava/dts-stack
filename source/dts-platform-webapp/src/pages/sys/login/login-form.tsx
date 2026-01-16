@@ -1,7 +1,7 @@
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
-import { useNavigate } from "react-router";
+import { useLocation, useNavigate } from "react-router";
 import { toast } from "sonner";
 import { KeycloakLocalizationService } from "@/api/services/keycloakLocalizationService";
 import { formatKoalError, type KoalCertificate, KoalMiddlewareClient } from "@/api/services/koalPkiClient";
@@ -37,6 +37,7 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 	} | null>(null);
 	const [pkiSubmitting, setPkiSubmitting] = useState(false);
 	const navigate = useNavigate();
+	const location = useLocation();
 
 	const { loginState } = useLoginStateContext();
 	const signIn = useSignIn();
@@ -156,6 +157,21 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 
 	if (loginState !== LoginStateEnum.LOGIN) return null;
 
+	const safeRedirect = (() => {
+		try {
+			const params = new URLSearchParams(location.search || "");
+			const raw = (params.get("redirect") || "").trim();
+			if (!raw) return null;
+			if (!raw.startsWith("/")) return null;
+			if (raw.startsWith("//")) return null;
+			if (raw.includes("://")) return null;
+			if (raw.length > 2048) return null;
+			return raw;
+		} catch {
+			return null;
+		}
+	})();
+
 	const handleFinish = async (values: SignInReq) => {
 		const trimmedUsername = values.username?.trim() ?? "";
 		const normalizedUsername = trimmedUsername.toLowerCase();
@@ -179,9 +195,15 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 					await svc.default.getMenuTree().catch(() => undefined);
 				} catch {}
 			}
+			// If login was triggered by an embedded module (e.g. /analytics), honor the redirect hint.
+			// Keep this safe: only allow same-origin absolute paths, and use hard navigation for cross-app paths.
+			if (safeRedirect?.startsWith("/analytics")) {
+				window.location.assign(safeRedirect);
+				return;
+			}
 			// 登录后回到平台默认首页（由全局配置/菜单决定）。
 			// 注意：Router 已配置 basename=publicPath，这里必须传入“路由内路径”，不要再拼 publicPath。
-			navigate(GLOBAL_CONFIG.defaultRoute || "/dashboard/workbench", { replace: true });
+			navigate(safeRedirect || GLOBAL_CONFIG.defaultRoute || "/dashboard/workbench", { replace: true });
 			toast.success(bilingual("sys.login.loginSuccessTitle"), {
 				closeButton: true,
 			});

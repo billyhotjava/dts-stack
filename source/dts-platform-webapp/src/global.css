@@ -66,6 +66,14 @@
 		font-size: 0.75rem !important;
 		line-height: 1rem !important;
 	}
+
+	/* Dark mode: force all button text to white (including antd + shadcn variants) */
+	[data-theme-mode="dark"] :where(button, [role="button"], .ant-btn) {
+		color: var(--colors-common-white) !important;
+	}
+	[data-theme-mode="dark"] :where(.ant-btn) :where(span) {
+		color: inherit !important;
+	}
 }
 
 @theme {

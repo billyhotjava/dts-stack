@@ -25,6 +25,16 @@ import { useUserInfo } from "@/store/userStore";
 type DataLevel = "DATA_PUBLIC" | "DATA_INTERNAL" | "DATA_CONFIDENTIAL" | "DATA_SECRET";
 type Status = "DRAFT" | "PUBLISHED" | "DEPRECATED";
 
+function formatOwnerValue(entry: UserDirectoryEntry): string {
+	const display = String(entry.displayName || entry.fullName || "").trim();
+	const username = String(entry.username || "").trim();
+	if (!display && !username) return "";
+	if (!display) return username;
+	if (!username) return display;
+	if (display.toLowerCase() === username.toLowerCase()) return display;
+	return `${display} (${username})`;
+}
+
 type IndicatorRow = {
 	id: string;
 	code: string;
@@ -540,14 +550,14 @@ export default function IndicatorsPage() {
 										onChange={(e) => setOwnerSearch(e.target.value)}
 										placeholder="从通讯录搜索用户（姓名/用户名）"
 									/>
-									<Select
-										value="__UNSET__"
-										onValueChange={(v) => {
-											const picked = ownerCandidates.find((u) => u.id === v);
-											if (!picked) return;
-											setForm((p) => ({ ...p, owner: picked.displayName || picked.username }));
-										}}
-									>
+											<Select
+												value="__UNSET__"
+												onValueChange={(v) => {
+													const picked = ownerCandidates.find((u) => u.id === v);
+													if (!picked) return;
+													setForm((p) => ({ ...p, owner: formatOwnerValue(picked) }));
+												}}
+											>
 										<SelectTrigger>
 											<SelectValue placeholder={ownerLoading ? "加载用户中..." : "选择用户写入负责人"} />
 										</SelectTrigger>

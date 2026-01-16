@@ -64,6 +64,18 @@ public class HiveConnectionService {
         "com.transwarp.inceptor.Driver",
         "com.inceptor.jdbc.Driver",
     };
+    private static final String[] COMMON_EXTERNAL_DRIVERS = new String[] {
+        // Dameng
+        "dm.jdbc.driver.DmDriver",
+        // PostgreSQL
+        "org.postgresql.Driver",
+        // MySQL
+        "com.mysql.cj.jdbc.Driver",
+        // SQL Server
+        "com.microsoft.sqlserver.jdbc.SQLServerDriver",
+        // Oracle
+        "oracle.jdbc.OracleDriver",
+    };
     private static final String KRB5_CONF_KEY = "java.security.krb5.conf";
     private static final String USE_SUBJECT_CREDS_ONLY_KEY = "javax.security.auth.useSubjectCredsOnly";
     private static final Set<String> REGISTERED_EXTERNAL_DRIVERS = ConcurrentHashMap.newKeySet();
@@ -250,46 +262,57 @@ public class HiveConnectionService {
     }
 
     private void tryLoadExternalDrivers() {
-        if (externalDriversDir == null || externalDriversDir.isBlank()) return;
+        if (externalDriversDir == null || externalDriversDir.isBlank()) {
+            return;
+        }
         try {
             Path dir = Path.of(externalDriversDir);
             if (!Files.isDirectory(dir)) {
                 log.debug("External drivers dir not found: {}", dir);
                 return;
             }
-            // Build URL set with optional explicit jar first, then all jars from directory
+
             java.util.LinkedHashSet<URL> jarSet = new java.util.LinkedHashSet<>();
             if (explicitDriverJar != null && !explicitDriverJar.isBlank()) {
                 Path jarPath = Path.of(explicitDriverJar);
-                if (!jarPath.isAbsolute()) jarPath = dir.resolve(explicitDriverJar);
+                if (!jarPath.isAbsolute()) {
+                    jarPath = dir.resolve(explicitDriverJar);
+                }
                 if (Files.isRegularFile(jarPath)) {
-                    try { jarSet.add(jarPath.toUri().toURL()); } catch (Exception ignored) {}
+                    try {
+                        jarSet.add(jarPath.toUri().toURL());
+                    } catch (Exception ignored) {}
                 } else {
                     log.warn("Configured driver jar not found: {}", jarPath);
                 }
             }
             try (var stream = Files.list(dir)) {
-                stream.filter(p -> p.toString().endsWith(".jar")).forEach(p -> {
-                    try { jarSet.add(p.toUri().toURL()); } catch (Exception ignored) {}
-                });
+                stream
+                    .filter(p -> p.toString().endsWith(".jar"))
+                    .forEach(p -> {
+                        try {
+                            jarSet.add(p.toUri().toURL());
+                        } catch (Exception ignored) {}
+                    });
             }
-            List<URL> jars = new ArrayList<>(jarSet);
-            if (jars.isEmpty()) {
+            if (jarSet.isEmpty()) {
                 log.debug("No JARs found under {}", dir);
                 return;
             }
-            if (jars.size() > 1) {
-                log.warn("Multiple JDBC driver JARs detected under {} ({} files). To avoid conflicts, keep only one vendor driver jar.", dir, jars.size());
+            if (jarSet.size() > 1) {
+                log.warn(
+                    "Multiple JDBC driver JARs detected under {} ({} files). This is supported, but keep this directory minimal to avoid classpath conflicts.",
+                    dir,
+                    jarSet.size()
+                );
             }
-            URL[] urls = jars.toArray(new URL[0]);
-            try {
-                log.info("Preparing external JDBC loader with {} jar(s); first={} dir={}", urls.length, urls[0].toString(), dir);
-            } catch (Throwable ignored) {}
-            // Use platform classloader as parent so standard Java modules like java.sql are visible
+
+            URL[] urls = jarSet.toArray(new URL[0]);
             ClassLoader parent = getPlatformOrSystemClassLoader();
             URLClassLoader loader = new URLClassLoader(urls, parent);
-            boolean loaded = false;
-            // 1) If explicit driver class is provided, try that first
+
+            boolean loadedAny = false;
+
             if (explicitDriverClass != null && !explicitDriverClass.isBlank()) {
                 String cn = explicitDriverClass.trim();
                 try {
@@ -297,7 +320,7 @@ public class HiveConnectionService {
                     Object inst = cls.getDeclaredConstructor().newInstance();
                     if (inst instanceof java.sql.Driver driver) {
                         registerExternalDriver(driver);
-                        loaded = true;
+                        loadedAny = true;
                         log.info("Loaded and registered explicit JDBC driver {} from {}", cn, externalDriversDir);
                     } else {
                         log.warn("Explicit class {} is not a java.sql.Driver", cn);
@@ -306,50 +329,66 @@ public class HiveConnectionService {
                     log.warn("Failed to load explicit driver {}: {}", cn, e.toString());
                 }
             }
-            // 2) Discover via ServiceLoader (JDBC 4)
-            if (!loaded) {
-                try {
-                    java.util.ServiceLoader<java.sql.Driver> drivers = java.util.ServiceLoader.load(java.sql.Driver.class, loader);
-                    for (java.sql.Driver drv : drivers) {
-                        try {
-                            registerExternalDriver(drv);
-                            log.info("Discovered and registered JDBC driver via ServiceLoader: {} (loader={})", drv.getClass().getName(), loader);
-                            loaded = true;
-                        } catch (Throwable t) {
-                            log.debug("Ignoring ServiceLoader driver load failure: {}", t.toString());
-                        }
+
+            try {
+                java.util.ServiceLoader<java.sql.Driver> drivers = java.util.ServiceLoader.load(java.sql.Driver.class, loader);
+                for (java.sql.Driver drv : drivers) {
+                    try {
+                        registerExternalDriver(drv);
+                        loadedAny = true;
+                        log.info("Discovered and registered JDBC driver via ServiceLoader: {} (loader={})", drv.getClass().getName(), loader);
+                    } catch (Throwable t) {
+                        log.debug("Ignoring ServiceLoader driver load failure: {}", t.toString());
                     }
-                } catch (Throwable t) {
-                    log.debug("ServiceLoader discovery failed: {}", t.toString());
                 }
+            } catch (Throwable t) {
+                log.debug("ServiceLoader discovery failed: {}", t.toString());
             }
+
+            boolean hiveLoaded = false;
             try {
                 Class<?> cls = Class.forName(HIVE_DRIVER, true, loader);
                 Object inst = cls.getDeclaredConstructor().newInstance();
                 if (inst instanceof java.sql.Driver driver) {
                     registerExternalDriver(driver);
+                    loadedAny = true;
+                    hiveLoaded = true;
+                    log.info("Loaded Hive driver {} from {}", HIVE_DRIVER, externalDriversDir);
                 }
-                loaded = true;
-                log.info("Loaded Hive driver {} from {}", HIVE_DRIVER, externalDriversDir);
-            } catch (Throwable ignored) {
+            } catch (Throwable ignored) {}
+            if (!hiveLoaded) {
                 for (String alt : FALLBACK_DRIVERS) {
                     try {
                         Class<?> cls = Class.forName(alt, true, loader);
                         Object inst = cls.getDeclaredConstructor().newInstance();
                         if (inst instanceof java.sql.Driver driver) {
                             registerExternalDriver(driver);
+                            loadedAny = true;
+                            log.info("Loaded alternative JDBC driver {} from {}", alt, externalDriversDir);
+                            break;
                         }
-                        loaded = true;
-                        log.info("Loaded alternative JDBC driver {} from {}", alt, externalDriversDir);
-                        break;
-                    } catch (Throwable e) {
+                    } catch (Throwable ignored) {
                         // keep trying
+                    }
+                }
             }
-    }
+
+            for (String cn : COMMON_EXTERNAL_DRIVERS) {
+                try {
+                    Class<?> cls = Class.forName(cn, true, loader);
+                    Object inst = cls.getDeclaredConstructor().newInstance();
+                    if (inst instanceof java.sql.Driver driver) {
+                        registerExternalDriver(driver);
+                        loadedAny = true;
+                        log.info("Loaded JDBC driver {} from {}", cn, externalDriversDir);
+                    }
+                } catch (Throwable ignored) {
+                    // ignore when jar not present
+                }
             }
-            if (loaded) {
+
+            if (loadedAny) {
                 this.jdbcDriverLoader = loader;
-                // Log available drivers for debugging (do not alter global TCCL here)
                 try {
                     var e = java.sql.DriverManager.getDrivers();
                     while (e.hasMoreElements()) {
@@ -360,7 +399,7 @@ public class HiveConnectionService {
                     log.debug("Failed to list DriverManager drivers: {}", t.toString());
                 }
             } else {
-                log.warn("Failed to load any JDBC driver from {}", externalDriversDir);
+                log.warn("No JDBC drivers could be loaded from {}", externalDriversDir);
             }
         } catch (Throwable ex) {
             log.warn("Error while loading external JDBC drivers (suppressed, will not fail startup): {}", ex.toString());

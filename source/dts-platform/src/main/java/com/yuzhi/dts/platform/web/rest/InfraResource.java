@@ -102,22 +102,17 @@ public class InfraResource {
                 dataSourceId = UUID.fromString(request.getDataSourceId().trim());
             }
         } catch (Exception ignore) {}
+        // Map.of does not allow null keys/values; JDBC test requests often omit optional fields.
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("jdbcUrl", request.getJdbcUrl());
+        payload.put("driverClass", request.getDriverClass());
+        payload.put("username", request.getUsername());
+        payload.put("jdbcProperties", request.getJdbcProperties());
+        payload.put("testQuery", request.getTestQuery());
+        payload.put("remarks", request.getRemarks());
         managementService.recordConnectionTest(
             dataSourceId,
-            Map.of(
-                "jdbcUrl",
-                request.getJdbcUrl(),
-                "driverClass",
-                request.getDriverClass(),
-                "username",
-                request.getUsername(),
-                "jdbcProperties",
-                request.getJdbcProperties(),
-                "testQuery",
-                request.getTestQuery(),
-                "remarks",
-                request.getRemarks()
-            ),
+            payload,
             result,
             user
         );

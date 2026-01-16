@@ -13,8 +13,10 @@ import com.yuzhi.dts.platform.security.DepartmentUtils;
 import com.yuzhi.dts.platform.security.SecurityUtils;
 import com.yuzhi.dts.platform.security.policy.DataLevel;
 import com.yuzhi.dts.platform.security.policy.PolicyErrorCodes;
+import com.yuzhi.dts.platform.service.workflow.AdminWorkflowConfigClient;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
@@ -56,6 +58,7 @@ public class DatasetDataAccessApprovalService {
     private final CatalogDatasetGrantRepository grantRepository;
     private final CatalogDatasetAccessRequestRepository requestRepository;
     private final CatalogDatasetAccessTaskRepository taskRepository;
+    private final AdminWorkflowConfigClient adminWorkflowConfigClient;
 
     public DatasetDataAccessApprovalService(
         AccessChecker accessChecker,
@@ -63,7 +66,8 @@ public class DatasetDataAccessApprovalService {
         CatalogDatasetRepository datasetRepository,
         CatalogDatasetGrantRepository grantRepository,
         CatalogDatasetAccessRequestRepository requestRepository,
-        CatalogDatasetAccessTaskRepository taskRepository
+        CatalogDatasetAccessTaskRepository taskRepository,
+        AdminWorkflowConfigClient adminWorkflowConfigClient
     ) {
         this.accessChecker = accessChecker;
         this.organizationVisibilityService = organizationVisibilityService;
@@ -71,6 +75,7 @@ public class DatasetDataAccessApprovalService {
         this.grantRepository = grantRepository;
         this.requestRepository = requestRepository;
         this.taskRepository = taskRepository;
+        this.adminWorkflowConfigClient = adminWorkflowConfigClient;
     }
 
     public record Decision(boolean allowed, String code, String message) {
@@ -129,6 +134,10 @@ public class DatasetDataAccessApprovalService {
         Instant validFrom,
         Instant validTo,
         String reason,
+        String targetUserId,
+        String targetUsername,
+        String targetName,
+        String targetDept,
         String activeDeptHeader
     ) {
         Objects.requireNonNull(dataset, "dataset is required");
@@ -138,10 +147,15 @@ public class DatasetDataAccessApprovalService {
         if (validFrom == null || validTo == null || !validTo.isAfter(validFrom)) {
             throw new IllegalArgumentException("授权有效期不合法");
         }
-        if (!isDataMaintainer() && isEmployeeForbiddenLayer(dataset.getWarehouseLayer())) {
+        String activeDept = resolveActiveDept(activeDeptHeader);
+        assertCanCreateProxyRequest(activeDept, targetDept);
+        if (isEmployeeForbiddenLayer(dataset.getWarehouseLayer())) {
             throw new IllegalStateException("当前数据分层不允许普通员工申请访问数据内容");
         }
         if (!accessChecker.canRead(dataset)) {
+            throw new IllegalStateException("无权限申请访问该数据集");
+        }
+        if (!accessChecker.departmentAllowed(dataset, activeDept)) {
             throw new IllegalStateException("无权限申请访问该数据集");
         }
 
@@ -149,6 +163,10 @@ public class DatasetDataAccessApprovalService {
         String requesterUsername = SecurityUtils.getCurrentUserLogin().orElse(null);
         if (!StringUtils.hasText(requesterUsername)) {
             throw new IllegalStateException("缺少用户身份信息");
+        }
+        String normalizedTargetUsername = trimToNull(targetUsername);
+        if (!StringUtils.hasText(normalizedTargetUsername)) {
+            throw new IllegalArgumentException("请选择申请对象（用户名）");
         }
 
         CatalogDatasetAccessRequest req = new CatalogDatasetAccessRequest();
@@ -160,7 +178,11 @@ public class DatasetDataAccessApprovalService {
         req.setRequesterId(trimToNull(requesterId));
         req.setRequesterUsername(trimToNull(requesterUsername));
         req.setRequesterName(trimToNull(SecurityUtils.getCurrentUserDisplayName().orElse(null)));
-        req.setRequesterDept(trimToNull(resolveActiveDept(activeDeptHeader)));
+        req.setRequesterDept(trimToNull(activeDept));
+        req.setTargetUserId(trimToNull(targetUserId));
+        req.setTargetUsername(normalizedTargetUsername);
+        req.setTargetName(trimToNull(targetName));
+        req.setTargetDept(trimToNull(targetDept));
         req.setCanQuery(Boolean.valueOf(canQuery));
         req.setCanPreview(Boolean.valueOf(canPreview));
         req.setReason(trimToNull(reason));
@@ -180,7 +202,7 @@ public class DatasetDataAccessApprovalService {
         if (!StringUtils.hasText(username)) {
             return List.of();
         }
-        return requestRepository.findByRequesterUsernameIgnoreCaseOrderByCreatedDateDesc(username);
+        return requestRepository.findByRequesterUsernameIgnoreCaseOrTargetUsernameIgnoreCaseOrderByCreatedDateDesc(username, username);
     }
 
     @Transactional(readOnly = true)
@@ -264,11 +286,17 @@ public class DatasetDataAccessApprovalService {
         if (datasetId == null) {
             return;
         }
-        String granteeId = trimToNull(req.getRequesterId());
-        String username = trimToNull(req.getRequesterUsername());
+        String granteeId = trimToNull(req.getTargetUserId());
+        String username = trimToNull(req.getTargetUsername());
+        String displayName = trimToNull(req.getTargetName());
+        String dept = trimToNull(req.getTargetDept());
         if (!StringUtils.hasText(username)) {
-            return;
+            granteeId = trimToNull(req.getRequesterId());
+            username = trimToNull(req.getRequesterUsername());
+            displayName = trimToNull(req.getRequesterName());
+            dept = trimToNull(req.getRequesterDept());
         }
+        if (!StringUtils.hasText(username)) return;
         CatalogDatasetGrant grant = grantRepository
             .findLatestDataAccessGrantForUser(datasetId, granteeId, username)
             .orElseGet(CatalogDatasetGrant::new);
@@ -282,11 +310,11 @@ public class DatasetDataAccessApprovalService {
         if (!StringUtils.hasText(grant.getGranteeId()) && StringUtils.hasText(granteeId)) {
             grant.setGranteeId(granteeId);
         }
-        if (!StringUtils.hasText(grant.getGranteeName()) && StringUtils.hasText(req.getRequesterName())) {
-            grant.setGranteeName(req.getRequesterName());
+        if (!StringUtils.hasText(grant.getGranteeName()) && StringUtils.hasText(displayName)) {
+            grant.setGranteeName(displayName);
         }
-        if (!StringUtils.hasText(grant.getGranteeDept()) && StringUtils.hasText(req.getRequesterDept())) {
-            grant.setGranteeDept(req.getRequesterDept());
+        if (!StringUtils.hasText(grant.getGranteeDept()) && StringUtils.hasText(dept)) {
+            grant.setGranteeDept(dept);
         }
         grant.setGrantType(GRANT_TYPE_DATA_ACCESS);
         grant.setCanQuery(Boolean.TRUE.equals(req.getCanQuery()));
@@ -298,6 +326,10 @@ public class DatasetDataAccessApprovalService {
     }
 
     private List<CatalogDatasetAccessTask> buildApprovalTasks(CatalogDatasetAccessRequest req, CatalogDataset dataset) {
+        List<CatalogDatasetAccessTask> configured = buildApprovalTasksFromAdminConfig(req, dataset);
+        if (!configured.isEmpty()) {
+            return configured;
+        }
         String ownerDept = trimToNull(dataset.getOwnerDept());
         boolean instituteOwned = !StringUtils.hasText(ownerDept) || organizationVisibilityService.isRoot(ownerDept);
         boolean highSensitivity = isHighSensitivity(dataset.getClassification());
@@ -324,6 +356,70 @@ public class DatasetDataAccessApprovalService {
             tasks.add(task);
         }
         return tasks;
+    }
+
+    private List<CatalogDatasetAccessTask> buildApprovalTasksFromAdminConfig(CatalogDatasetAccessRequest req, CatalogDataset dataset) {
+        if (adminWorkflowConfigClient == null || dataset == null || req == null) {
+            return List.of();
+        }
+        List<AdminWorkflowConfigClient.WorkflowTemplateDto> templates =
+            adminWorkflowConfigClient.listEnabledTemplates("DATASET_DATA_ACCESS");
+        if (templates.isEmpty()) {
+            return List.of();
+        }
+        String ownerDept = trimToNull(dataset.getOwnerDept());
+        boolean instituteOwned = !StringUtils.hasText(ownerDept) || organizationVisibilityService.isRoot(ownerDept);
+        DataLevel parsedLevel = DataLevel.normalize(dataset.getClassification());
+        final DataLevel datasetLevel = parsedLevel != null ? parsedLevel : DataLevel.DATA_INTERNAL;
+
+        AdminWorkflowConfigClient.WorkflowTemplateDto picked = templates
+            .stream()
+            .filter(t -> templateMatches(t, instituteOwned, datasetLevel))
+            .max(Comparator.comparingInt(t -> t.priority() == null ? 0 : t.priority()))
+            .orElse(null);
+        if (picked == null || picked.steps() == null || picked.steps().isEmpty()) {
+            return List.of();
+        }
+
+        List<CatalogDatasetAccessTask> tasks = new ArrayList<>();
+        int i = 1;
+        for (AdminWorkflowConfigClient.WorkflowStepDto step : picked.steps()) {
+            if (step == null || !StringUtils.hasText(step.approverRole())) {
+                continue;
+            }
+            CatalogDatasetAccessTask task = new CatalogDatasetAccessTask();
+            task.setRequestId(req.getId());
+            task.setStepOrder(i++);
+            task.setApproverRole(step.approverRole().trim());
+            boolean deptBinding = step.deptBinding() != null && step.deptBinding().booleanValue();
+            task.setDeptCode(deptBinding ? ownerDept : null);
+            task.setStatus(TASK_PENDING);
+            tasks.add(task);
+        }
+        return tasks;
+    }
+
+    private boolean templateMatches(
+        AdminWorkflowConfigClient.WorkflowTemplateDto template,
+        boolean instituteOwned,
+        DataLevel datasetLevel
+    ) {
+        if (template == null) return false;
+        String scope = template.ownerScope();
+        if (StringUtils.hasText(scope)) {
+            String normalized = scope.trim().toUpperCase(Locale.ROOT);
+            if (!"ANY".equals(normalized)) {
+                if ("INST".equals(normalized) && !instituteOwned) return false;
+                if ("DEPT".equals(normalized) && instituteOwned) return false;
+            }
+        }
+
+        DataLevel min = DataLevel.normalize(template.classificationMin());
+        DataLevel max = DataLevel.normalize(template.classificationMax());
+        int rank = datasetLevel != null ? datasetLevel.rank() : DataLevel.DATA_INTERNAL.rank();
+        if (min != null && rank < min.rank()) return false;
+        if (max != null && rank > max.rank()) return false;
+        return true;
     }
 
     private void assertCanDecide(CatalogDatasetAccessTask task, String activeDeptHeader) {
@@ -355,6 +451,34 @@ public class DatasetDataAccessApprovalService {
             return;
         }
         throw new IllegalStateException("未知审批角色配置");
+    }
+
+    private void assertCanCreateProxyRequest(String activeDept, String targetDept) {
+        boolean canCreate =
+            isSuperAdmin() ||
+            SecurityUtils.hasCurrentUserAnyOfAuthorities(AuthoritiesConstants.INST_DATA_OWNER, AuthoritiesConstants.DEPT_DATA_OWNER);
+        if (!canCreate) {
+            throw new IllegalStateException("普通员工不支持自助申请，请联系数据管理员代申请");
+        }
+
+        boolean isDeptOwnerOnly =
+            SecurityUtils.hasCurrentUserAnyOfAuthorities(AuthoritiesConstants.DEPT_DATA_OWNER) &&
+            !SecurityUtils.hasCurrentUserAnyOfAuthorities(AuthoritiesConstants.INST_DATA_OWNER) &&
+            !isSuperAdmin();
+        if (!isDeptOwnerOnly) {
+            return;
+        }
+        String active = DepartmentUtils.normalize(activeDept);
+        if (!StringUtils.hasText(active) || organizationVisibilityService.isRoot(active)) {
+            throw new IllegalStateException("部门数据管理员缺少有效的部门上下文（X-Active-Dept）");
+        }
+        String target = DepartmentUtils.normalize(targetDept);
+        if (!StringUtils.hasText(target)) {
+            throw new IllegalStateException("缺少申请对象部门信息，请从用户目录选择账号");
+        }
+        if (!active.equalsIgnoreCase(target)) {
+            throw new IllegalStateException("部门数据管理员只能代本部门用户提交申请");
+        }
     }
 
     private boolean isDataMaintainer() {

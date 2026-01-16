@@ -4,10 +4,12 @@ import com.yuzhi.dts.platform.web.rest.infra.JdbcConnectionTestRequest;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.DriverManager;
+import java.sql.SQLException;
 import java.sql.SQLWarning;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
@@ -49,15 +51,20 @@ public class JdbcConnectionTestService {
                 DriverManager.setLoginTimeout(Math.max(1, loginTimeoutSeconds));
             } catch (Throwable ignored) {}
 
-            if (StringUtils.hasText(request.getDriverClass())) {
+            String driverClass = StringUtils.trimWhitespace(request.getDriverClass());
+            if (!StringUtils.hasText(driverClass)) {
+                driverClass = inferDriverClass(url);
+            }
+
+            if (StringUtils.hasText(driverClass)) {
                 try {
                     if (jdbcLoader != null) {
-                        Class.forName(request.getDriverClass(), true, jdbcLoader);
+                        Class.forName(driverClass, true, jdbcLoader);
                     } else {
-                        Class.forName(request.getDriverClass());
+                        Class.forName(driverClass);
                     }
                 } catch (Throwable ex) {
-                    LOG.warn("Failed to load JDBC driver class {}: {}", request.getDriverClass(), ex.getMessage());
+                    LOG.warn("Failed to load JDBC driver class {}: {}", driverClass, ex.getMessage());
                 }
             }
 
@@ -88,10 +95,26 @@ public class JdbcConnectionTestService {
                 );
             }
         } catch (Exception ex) {
+            LOG.debug("JDBC connection test failed. url={}, driverClass={}", url, request.getDriverClass(), ex);
             return HiveConnectionTestResult.failure(sanitizeMessage(ex), elapsedMillis(start));
         } finally {
             Thread.currentThread().setContextClassLoader(previousCl);
         }
+    }
+
+    private static String inferDriverClass(String jdbcUrl) {
+        if (!StringUtils.hasText(jdbcUrl)) return null;
+        String url = jdbcUrl.trim().toLowerCase(Locale.ROOT);
+        if (url.startsWith("jdbc:dm:")) return "dm.jdbc.driver.DmDriver";
+        if (url.startsWith("jdbc:postgresql:")) return "org.postgresql.Driver";
+        if (url.startsWith("jdbc:mysql:")) return "com.mysql.cj.jdbc.Driver";
+        if (url.startsWith("jdbc:oracle:")) return "oracle.jdbc.OracleDriver";
+        if (url.startsWith("jdbc:sqlserver:")) return "com.microsoft.sqlserver.jdbc.SQLServerDriver";
+        if (url.startsWith("jdbc:hive2:") || url.startsWith("jdbc:inceptor") || url.startsWith("jdbc:inceptor2:")) {
+            // Prefer the explicit external driver if configured in HiveConnectionService; otherwise rely on classpath.
+            return "org.apache.hive.jdbc.HiveDriver";
+        }
+        return null;
     }
 
     private void runValidationQuery(Connection connection, String testQuery) throws Exception {
@@ -136,8 +159,35 @@ public class JdbcConnectionTestService {
         if (throwable == null) {
             return "未知错误";
         }
-        String msg = Optional.ofNullable(throwable.getMessage()).orElse(throwable.toString());
-        return msg.length() > 800 ? msg.substring(0, 800) : msg;
+        StringBuilder sb = new StringBuilder();
+        if (throwable instanceof SQLException se) {
+            if (se.getSQLState() != null && !se.getSQLState().isBlank()) {
+                sb.append("SQLState=").append(se.getSQLState()).append("; ");
+            }
+            if (se.getErrorCode() != 0) {
+                sb.append("ErrorCode=").append(se.getErrorCode()).append("; ");
+            }
+        }
+        sb.append(oneLine(throwable));
+        Throwable cause = throwable.getCause();
+        int depth = 0;
+        while (cause != null && cause != throwable && depth++ < 5) {
+            String causeLine = oneLine(cause);
+            if (!causeLine.isBlank() && sb.indexOf(causeLine) < 0) {
+                sb.append(" | Caused by: ").append(causeLine);
+            }
+            cause = cause.getCause();
+        }
+        String msg = sb.toString();
+        return msg.length() > 900 ? msg.substring(0, 900) : msg;
+    }
+
+    private static String oneLine(Throwable t) {
+        String msg = Optional.ofNullable(t.getMessage()).orElse("");
+        msg = msg.replaceAll("\\s+", " ").trim();
+        if (msg.isEmpty()) {
+            return t.getClass().getSimpleName();
+        }
+        return msg;
     }
 }
-

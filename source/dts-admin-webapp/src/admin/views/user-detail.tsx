@@ -93,10 +93,11 @@ export default function UserDetailView() {
 		setLoading(true);
 		setError("");
 		try {
-			const [userData, rolesData, groupsData] = await Promise.all([
-				KeycloakUserService.getUserById(id),
-				KeycloakUserService.getUserRoles(id),
-				KeycloakGroupService.getUserGroups(id),
+			const userData = await KeycloakUserService.getUserById(id);
+			const resolvedUserId = userData?.id || id;
+			const [rolesData, groupsData] = await Promise.all([
+				KeycloakUserService.getUserRoles(resolvedUserId, { silent: true }),
+				KeycloakGroupService.getUserGroups(resolvedUserId),
 			]);
 			setUser(userData);
 			// Hide Keycloak 内置/默认角色（如 default-roles-*、offline_access、uma_authorization、realm-management 等）
@@ -106,10 +107,6 @@ export default function UserDetailView() {
 				const lower = name.toLowerCase();
 				if (GLOBAL_CONFIG.hideDefaultRoles && lower.startsWith("default-roles-")) return false;
 				if (GLOBAL_CONFIG.hideBuiltinRoles && isKeycloakBuiltInRole(r as any)) return false;
-				if (name.startsWith("ROLE_")) {
-					const withoutPrefix = name.slice(5);
-					if (withoutPrefix === withoutPrefix.toUpperCase()) return false;
-				}
 				if (lower.startsWith("offline_access") || lower.startsWith("uma_authorization")) return false;
 				return true;
 			});
