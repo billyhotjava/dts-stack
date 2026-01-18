@@ -665,6 +665,7 @@ services:
     command:
       - -c
       - |
+        rm -f /opt/airflow/airflow.cfg
         airflow db migrate
         if airflow --help 2>/dev/null | grep -q "users"; then
           airflow users create \
