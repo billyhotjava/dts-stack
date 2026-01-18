@@ -5,10 +5,6 @@ ARG RUNTIME_BASE_IMAGE=eclipse-temurin:21-jre
 # syntax=docker/dockerfile:1.6
 FROM maven:3.9.9-eclipse-temurin-21 AS build
 
-# Ensure Maven finds Java reliably on Kunpeng/Kylin as well
-ENV JAVA_HOME=/opt/java/openjdk \
-    PATH="/opt/java/openjdk/bin:${PATH}"
-
 ARG UBUNTU_PORTS_MIRROR=https://mirrors.aliyun.com/ubuntu-ports
 ARG UBUNTU_ARCHIVE_MIRROR=https://mirrors.aliyun.com/ubuntu
 RUN set -eux; \
@@ -77,9 +73,16 @@ RUN mkdir -p /root/.m2 && \
 RUN set -eux; \
     BUILD_POM=$(cat /workspace/.build-pom); \
     if [ "${ENABLE_MAVEN_BUILD}" = "true" ]; then \
+      JAVA_BIN=$(command -v java); \
+      JAVA_HOME="$(dirname "$(dirname "$(readlink -f "$JAVA_BIN")")")"; \
+      if [ ! -x "${JAVA_HOME}/bin/java" ]; then \
+        echo >&2 "[build] JAVA_HOME does not contain java: ${JAVA_HOME}"; \
+        exit 1; \
+      fi; \
       echo "Using JAVA_HOME=${JAVA_HOME}"; \
+      export JAVA_HOME; \
       sed -i "s|__MIRROR_URL__|${MAVEN_MIRROR_URL}|g" /root/.m2/settings.xml; \
-      env -u JAVA_HOME mvn -s /root/.m2/settings.xml -q -DskipTests -f "$BUILD_POM" -pl dts-platform -am package; \
+      mvn -s /root/.m2/settings.xml -q -DskipTests -f "$BUILD_POM" -pl dts-platform -am package; \
     else \
       # Offline/locked-down fallback: use prebuilt jar from builds/
       echo "Skipping Maven build; using prebuilt jar from /workspace/builds/dts-platform"; \
