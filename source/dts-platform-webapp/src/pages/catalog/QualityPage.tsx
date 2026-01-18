@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { getDatasetQuality, listDatasets } from "@/api/platformApi";
+import { batchDatasetQuality, getDatasetQuality, listDatasets } from "@/api/platformApi";
 import { Badge } from "@/ui/badge";
 import { Button } from "@/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
@@ -20,6 +20,8 @@ export default function QualityPage() {
 
 	const [qualityLoading, setQualityLoading] = useState(false);
 	const [qualityInfo, setQualityInfo] = useState<any | null>(null);
+	const [batchLoading, setBatchLoading] = useState(false);
+	const [batchSummaries, setBatchSummaries] = useState<Record<string, any>>({});
 
 	const loadDatasets = useCallback(async () => {
 		setDatasetsLoading(true);
@@ -60,6 +62,25 @@ export default function QualityPage() {
 		}
 	}, [datasetId]);
 
+	const loadBatchSummary = useCallback(async () => {
+		if (!datasets.length) {
+			setBatchSummaries({});
+			return;
+		}
+		setBatchLoading(true);
+		try {
+			const ids = datasets.slice(0, 50).map((d) => d.id);
+			const resp = (await batchDatasetQuality(ids)) as any;
+			setBatchSummaries(resp || {});
+		} catch (e: any) {
+			console.error(e);
+			setBatchSummaries({});
+			toast.error(e?.message || "加载质量概览失败");
+		} finally {
+			setBatchLoading(false);
+		}
+	}, [datasets]);
+
 	useEffect(() => {
 		void loadDatasets();
 	}, [loadDatasets]);
@@ -67,6 +88,10 @@ export default function QualityPage() {
 	useEffect(() => {
 		void loadQuality();
 	}, [loadQuality]);
+
+	useEffect(() => {
+		void loadBatchSummary();
+	}, [loadBatchSummary]);
 
 	const currentDataset = useMemo(() => datasets.find((d) => d.id === datasetId) || null, [datasetId, datasets]);
 	const summary = useMemo(() => {
@@ -83,6 +108,25 @@ export default function QualityPage() {
 		const list = qualityInfo?.snapshot?.cases;
 		return Array.isArray(list) ? list : [];
 	}, [qualityInfo]);
+
+	const overview = useMemo(() => {
+		const list = datasets
+			.map((d) => {
+				const summary = batchSummaries[d.id];
+				return summary ? { dataset: d, summary } : null;
+			})
+			.filter(Boolean) as Array<{ dataset: DatasetOption; summary: any }>;
+		const totalAssets = list.length;
+		const failedAssets = list.filter((item) => Number(item.summary?.failed || 0) > 0).length;
+		const worst = [...list]
+			.sort((a, b) => Number(b.summary?.failed || 0) - Number(a.summary?.failed || 0))
+			.slice(0, 5);
+		const lowPassRate = [...list]
+			.filter((item) => item.summary?.passRate != null)
+			.sort((a, b) => Number(a.summary?.passRate || 0) - Number(b.summary?.passRate || 0))
+			.slice(0, 5);
+		return { totalAssets, failedAssets, worst, lowPassRate };
+	}, [batchSummaries, datasets]);
 
 	return (
 		<div className="flex flex-col gap-6">
@@ -136,6 +180,67 @@ export default function QualityPage() {
 							<Badge variant="secondary">{currentDataset.ownerDept ? `部门:${currentDataset.ownerDept}` : "部门:未指定"}</Badge>
 						</div>
 					) : null}
+				</CardContent>
+			</Card>
+
+			<Card>
+				<CardHeader className="flex items-center justify-between">
+					<CardTitle>质量总览（前 50 资产）</CardTitle>
+					<Button variant="outline" onClick={loadBatchSummary} disabled={batchLoading}>
+						{batchLoading ? "加载中…" : "刷新概览"}
+					</Button>
+				</CardHeader>
+				<CardContent className="space-y-4">
+					<div className="grid gap-3 md:grid-cols-3 text-sm">
+						<div className="space-y-1">
+							<div className="text-xs text-muted-foreground">覆盖资产</div>
+							<div className="text-lg font-semibold">{overview.totalAssets}</div>
+						</div>
+						<div className="space-y-1">
+							<div className="text-xs text-muted-foreground">存在失败</div>
+							<div className="text-lg font-semibold">{overview.failedAssets}</div>
+						</div>
+						<div className="space-y-1">
+							<div className="text-xs text-muted-foreground">数据来源</div>
+							<div className="text-lg font-semibold">质量检测结果</div>
+						</div>
+					</div>
+					<div className="grid gap-4 md:grid-cols-2">
+						<div className="space-y-2">
+							<div className="text-sm font-medium">失败最多资产</div>
+							{overview.worst.length ? (
+								<ul className="space-y-2 text-sm">
+									{overview.worst.map((item) => (
+										<li key={item.dataset.id} className="rounded-md border px-3 py-2">
+											<div className="font-medium">{item.dataset.name}</div>
+											<div className="text-xs text-muted-foreground">
+												失败 {item.summary?.failed || 0} / 总数 {item.summary?.total || 0}
+											</div>
+										</li>
+									))}
+								</ul>
+							) : (
+								<div className="text-sm text-muted-foreground">暂无统计</div>
+							)}
+						</div>
+						<div className="space-y-2">
+							<div className="text-sm font-medium">通过率最低资产</div>
+							{overview.lowPassRate.length ? (
+								<ul className="space-y-2 text-sm">
+									{overview.lowPassRate.map((item) => (
+										<li key={item.dataset.id} className="rounded-md border px-3 py-2">
+											<div className="font-medium">{item.dataset.name}</div>
+											<div className="text-xs text-muted-foreground">
+												通过率 {item.summary?.passRate == null ? "-" : `${item.summary.passRate}%`}
+											</div>
+										</li>
+									))}
+								</ul>
+							) : (
+								<div className="text-sm text-muted-foreground">暂无统计</div>
+							)}
+						</div>
+					</div>
 				</CardContent>
 			</Card>
 

@@ -137,6 +137,7 @@
 				"governanceIndicatorsComputeRules": "计算规则",
 				"governanceIndicatorsPublish": "发布与一致性校验",
 				"governanceRules": "质量规则",
+				"governanceQuality": "数据质量",
 				"governanceRulesCaption": "空值、唯一性、参考值、阈值、自定义 SQL",
 				"governanceTasks": "质量任务与结果",
 				"governanceTasksCaption": "趋势、告警并追踪到字段与数据集",

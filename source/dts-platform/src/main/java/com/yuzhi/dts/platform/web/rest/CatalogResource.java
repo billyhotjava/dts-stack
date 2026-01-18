@@ -454,6 +454,39 @@ public class CatalogResource {
         return ApiResponses.ok(openMetadataService.fetchQualityForDataset(dataset));
     }
 
+    @PostMapping("/quality/batch")
+    public ApiResponse<Map<String, OpenMetadataService.OpenMetadataQualitySummary>> batchDatasetQuality(
+        @RequestBody OpenMetadataBatchRequest body,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        List<UUID> ids = body != null && body.ids() != null ? body.ids() : List.of();
+        if (ids.isEmpty()) {
+            return ApiResponses.ok(Map.of());
+        }
+        if (ids.size() > 100) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "批量请求过大");
+        }
+        String effDept = activeDept != null ? activeDept : claim("dept_code");
+        Map<String, OpenMetadataService.OpenMetadataQualitySummary> payload = new LinkedHashMap<>();
+        List<CatalogDataset> datasets = datasetRepo.findAllById(ids);
+        for (CatalogDataset dataset : datasets) {
+            if (dataset == null || dataset.getId() == null) {
+                continue;
+            }
+            if (dataset.getEnabled() != null && !dataset.getEnabled().booleanValue() && !SecurityUtils.isOpAdminAccount()) {
+                continue;
+            }
+            OpenMetadataService.OpenMetadataQualityResult result = openMetadataService.fetchQualityForDataset(dataset);
+            payload.put(dataset.getId().toString(), openMetadataService.summarizeQuality(result));
+        }
+        Map<String, Object> auditPayload = new LinkedHashMap<>();
+        auditPayload.put("summary", "批量查询质量结果");
+        auditPayload.put("count", payload.size());
+        putIfHasText(auditPayload, "activeDept", effDept);
+        audit.auditAction("CATALOG_ASSET_VIEW", AuditStage.SUCCESS, "batch-quality", auditPayload);
+        return ApiResponses.ok(payload);
+    }
+
     @PostMapping("/datasets/openmetadata/batch")
     public ApiResponse<Map<String, OpenMetadataService.OpenMetadataSummary>> batchOpenMetadata(
         @RequestBody OpenMetadataBatchRequest body,

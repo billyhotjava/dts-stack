@@ -4,8 +4,8 @@ WORKDIR /workspace
 # Recommended build context: repository root
 #   docker build -t dts-common:TAG -f builds/dts-common/Dockerfile .
 COPY source/dts-common/ ./
-RUN --mount=type=cache,target=/root/.m2 \
-    mvn -q -DskipTests package
+# Avoid BuildKit-only cache mounts to keep legacy Docker compatible.
+RUN mvn -q -DskipTests package
 
 # ---------- runtime stage ----------
 FROM eclipse-temurin:17-jre AS runtime

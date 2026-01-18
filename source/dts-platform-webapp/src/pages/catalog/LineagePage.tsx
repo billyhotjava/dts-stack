@@ -128,6 +128,11 @@ export default function LineagePage() {
 	const currentDataset = useMemo(() => datasets.find((d) => d.id === datasetId) || null, [datasetId, datasets]);
 	const selectableOtherDatasets = useMemo(() => datasets.filter((d) => d.id !== datasetId), [datasetId, datasets]);
 	const techGraph = useMemo(() => techLineageInfo?.graph || null, [techLineageInfo]);
+	const techUpstreamLevels = useMemo(() => (Array.isArray(techGraph?.upstreamLevels) ? techGraph.upstreamLevels : []), [techGraph]);
+	const techDownstreamLevels = useMemo(
+		() => (Array.isArray(techGraph?.downstreamLevels) ? techGraph.downstreamLevels : []),
+		[techGraph],
+	);
 
 	const openCreate = useCallback(() => {
 		if (!datasetId) {
@@ -278,40 +283,94 @@ export default function LineagePage() {
 					) : !techGraph ? (
 						<div className="text-sm text-muted-foreground">暂无血缘数据</div>
 					) : (
-						<div className="grid gap-4 md:grid-cols-2">
-							<div className="space-y-2">
-								<div className="text-sm font-medium">上游</div>
-								{Array.isArray(techGraph.upstream) && techGraph.upstream.length > 0 ? (
-									<ul className="space-y-2 text-sm">
-										{techGraph.upstream.map((node: any) => (
-											<li key={node.id} className="rounded-md border px-3 py-2">
-												<div className="font-medium">{node.name || node.fqn || node.id}</div>
-												<div className="text-xs text-muted-foreground">
-													{[node.service, node.database, node.schema].filter(Boolean).join(" / ") || "-"}
-												</div>
-											</li>
-										))}
-									</ul>
-								) : (
-									<div className="text-sm text-muted-foreground">无上游血缘</div>
-								)}
+						<div className="space-y-4">
+							<div className="grid gap-3 md:grid-cols-3 text-sm">
+								<div className="space-y-1">
+									<div className="text-xs text-muted-foreground">上游数量</div>
+									<div className="text-lg font-semibold">{techGraph?.upstream?.length || 0}</div>
+								</div>
+								<div className="space-y-1">
+									<div className="text-xs text-muted-foreground">下游数量</div>
+									<div className="text-lg font-semibold">{techGraph?.downstream?.length || 0}</div>
+								</div>
+								<div className="space-y-1">
+									<div className="text-xs text-muted-foreground">影响范围</div>
+									<div className="text-lg font-semibold">
+										{(techGraph?.upstream?.length || 0) + (techGraph?.downstream?.length || 0)}
+									</div>
+								</div>
 							</div>
-							<div className="space-y-2">
-								<div className="text-sm font-medium">下游</div>
-								{Array.isArray(techGraph.downstream) && techGraph.downstream.length > 0 ? (
-									<ul className="space-y-2 text-sm">
-										{techGraph.downstream.map((node: any) => (
-											<li key={node.id} className="rounded-md border px-3 py-2">
-												<div className="font-medium">{node.name || node.fqn || node.id}</div>
-												<div className="text-xs text-muted-foreground">
-													{[node.service, node.database, node.schema].filter(Boolean).join(" / ") || "-"}
+							<div className="grid gap-4 md:grid-cols-2">
+								<div className="space-y-2">
+									<div className="text-sm font-medium">上游</div>
+									{techUpstreamLevels.length ? (
+										<div className="space-y-3">
+											{techUpstreamLevels.map((level: any) => (
+												<div key={`up-${level.level}`} className="space-y-2">
+													<div className="text-xs text-muted-foreground">第 {level.level} 层</div>
+													<ul className="space-y-2 text-sm">
+														{(level.nodes || []).map((node: any) => (
+															<li key={node.id} className="rounded-md border px-3 py-2">
+																<div className="font-medium">{node.name || node.fqn || node.id}</div>
+																<div className="text-xs text-muted-foreground">
+																	{[node.service, node.database, node.schema].filter(Boolean).join(" / ") || "-"}
+																</div>
+															</li>
+														))}
+													</ul>
 												</div>
-											</li>
-										))}
-									</ul>
-								) : (
-									<div className="text-sm text-muted-foreground">无下游血缘</div>
-								)}
+											))}
+										</div>
+									) : Array.isArray(techGraph.upstream) && techGraph.upstream.length > 0 ? (
+										<ul className="space-y-2 text-sm">
+											{techGraph.upstream.map((node: any) => (
+												<li key={node.id} className="rounded-md border px-3 py-2">
+													<div className="font-medium">{node.name || node.fqn || node.id}</div>
+													<div className="text-xs text-muted-foreground">
+														{[node.service, node.database, node.schema].filter(Boolean).join(" / ") || "-"}
+													</div>
+												</li>
+											))}
+										</ul>
+									) : (
+										<div className="text-sm text-muted-foreground">无上游血缘</div>
+									)}
+								</div>
+								<div className="space-y-2">
+									<div className="text-sm font-medium">下游</div>
+									{techDownstreamLevels.length ? (
+										<div className="space-y-3">
+											{techDownstreamLevels.map((level: any) => (
+												<div key={`down-${level.level}`} className="space-y-2">
+													<div className="text-xs text-muted-foreground">第 {level.level} 层</div>
+													<ul className="space-y-2 text-sm">
+														{(level.nodes || []).map((node: any) => (
+															<li key={node.id} className="rounded-md border px-3 py-2">
+																<div className="font-medium">{node.name || node.fqn || node.id}</div>
+																<div className="text-xs text-muted-foreground">
+																	{[node.service, node.database, node.schema].filter(Boolean).join(" / ") || "-"}
+																</div>
+															</li>
+														))}
+													</ul>
+												</div>
+											))}
+										</div>
+									) : Array.isArray(techGraph.downstream) && techGraph.downstream.length > 0 ? (
+										<ul className="space-y-2 text-sm">
+											{techGraph.downstream.map((node: any) => (
+												<li key={node.id} className="rounded-md border px-3 py-2">
+													<div className="font-medium">{node.name || node.fqn || node.id}</div>
+													<div className="text-xs text-muted-foreground">
+														{[node.service, node.database, node.schema].filter(Boolean).join(" / ") || "-"}
+													</div>
+												</li>
+											))}
+										</ul>
+									) : (
+										<div className="text-sm text-muted-foreground">无下游血缘</div>
+									)}
+								</div>
 							</div>
 						</div>
 					)}

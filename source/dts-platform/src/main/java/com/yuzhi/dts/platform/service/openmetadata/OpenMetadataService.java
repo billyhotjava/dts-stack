@@ -166,6 +166,51 @@ public class OpenMetadataService {
         return OpenMetadataQualityResult.found(fqn, snapshot);
     }
 
+    public OpenMetadataQualitySummary summarizeQuality(OpenMetadataQualityResult result) {
+        if (result == null) {
+            return OpenMetadataQualitySummary.empty("元数据服务未启用");
+        }
+        if (!result.enabled()) {
+            return OpenMetadataQualitySummary.empty("元数据服务未启用");
+        }
+        if (!result.found()) {
+            return new OpenMetadataQualitySummary(
+                true,
+                false,
+                result.fqn(),
+                0,
+                0,
+                0,
+                0,
+                0,
+                null,
+                null,
+                result.message() == null ? "暂无质量结果" : result.message()
+            );
+        }
+        QualitySummary summary = result.snapshot() != null ? result.snapshot().summary() : null;
+        int total = summary != null ? summary.total() : 0;
+        int passed = summary != null ? summary.passed() : 0;
+        int failed = summary != null ? summary.failed() : 0;
+        int aborted = summary != null ? summary.aborted() : 0;
+        int missing = summary != null ? summary.missing() : 0;
+        Integer passRate = total > 0 ? Math.toIntExact(Math.round((passed * 100.0) / total)) : null;
+        Instant lastRunAt = summary != null ? summary.lastRunAt() : null;
+        return new OpenMetadataQualitySummary(
+            true,
+            true,
+            result.fqn(),
+            total,
+            passed,
+            failed,
+            aborted,
+            missing,
+            passRate,
+            lastRunAt,
+            null
+        );
+    }
+
     private List<String> buildCandidateFqns(CatalogDataset dataset) {
         String service = trim(props.getServiceName());
         String database = trim(dataset.getHiveDatabase());
@@ -383,7 +428,9 @@ public class OpenMetadataService {
         List<LineageNode> downstream = buildLineageList(downstreamIds, nodes);
 
         LineageNode root = StringUtils.hasText(rootId) ? nodes.get(rootId) : null;
-        return new LineageGraph(root, upstream, downstream, upstreamDepth, downstreamDepth);
+        List<LineageLevel> upstreamLevels = buildLevels(rootId, upstreamAdj, nodes, upstreamDepth);
+        List<LineageLevel> downstreamLevels = buildLevels(rootId, downstreamAdj, nodes, downstreamDepth);
+        return new LineageGraph(root, upstream, downstream, upstreamDepth, downstreamDepth, upstreamLevels, downstreamLevels);
     }
 
     private Set<String> collectByDepth(String rootId, Map<String, List<String>> adjacency, int maxDepth) {
@@ -419,6 +466,48 @@ public class OpenMetadataService {
         }
         list.sort(Comparator.comparing(LineageNode::name, Comparator.nullsLast(String::compareTo)));
         return list;
+    }
+
+    private List<LineageLevel> buildLevels(
+        String rootId,
+        Map<String, List<String>> adjacency,
+        Map<String, LineageNode> nodes,
+        int maxDepth
+    ) {
+        if (!StringUtils.hasText(rootId) || maxDepth <= 0) {
+            return List.of();
+        }
+        Map<Integer, List<LineageNode>> buckets = new LinkedHashMap<>();
+        Deque<DepthNode> queue = new ArrayDeque<>();
+        Set<String> visited = new HashSet<>();
+        queue.add(new DepthNode(rootId, 0));
+        visited.add(rootId);
+        while (!queue.isEmpty()) {
+            DepthNode current = queue.removeFirst();
+            if (current.depth >= maxDepth) {
+                continue;
+            }
+            List<String> nextList = adjacency.getOrDefault(current.id, List.of());
+            for (String next : nextList) {
+                if (!StringUtils.hasText(next) || visited.contains(next)) {
+                    continue;
+                }
+                int level = current.depth + 1;
+                LineageNode node = nodes.get(next);
+                if (node != null) {
+                    buckets.computeIfAbsent(level, key -> new ArrayList<>()).add(node);
+                }
+                visited.add(next);
+                queue.addLast(new DepthNode(next, level));
+            }
+        }
+        List<LineageLevel> levels = new ArrayList<>();
+        for (Map.Entry<Integer, List<LineageNode>> entry : buckets.entrySet()) {
+            entry.getValue().sort(Comparator.comparing(LineageNode::name, Comparator.nullsLast(String::compareTo)));
+            levels.add(new LineageLevel(entry.getKey(), entry.getValue()));
+        }
+        levels.sort(Comparator.comparingInt(LineageLevel::level));
+        return levels;
     }
 
     private LineageNode toLineageNode(Map<?, ?> map, String id) {
@@ -728,8 +817,12 @@ public class OpenMetadataService {
         List<LineageNode> upstream,
         List<LineageNode> downstream,
         int upstreamDepth,
-        int downstreamDepth
+        int downstreamDepth,
+        List<LineageLevel> upstreamLevels,
+        List<LineageLevel> downstreamLevels
     ) {}
+
+    public record LineageLevel(int level, List<LineageNode> nodes) {}
 
     public record LineageNode(
         String id,
@@ -779,4 +872,22 @@ public class OpenMetadataService {
         Integer passedRows,
         Integer failedRows
     ) {}
+
+    public record OpenMetadataQualitySummary(
+        boolean enabled,
+        boolean found,
+        String fqn,
+        int total,
+        int passed,
+        int failed,
+        int aborted,
+        int missing,
+        Integer passRate,
+        Instant lastRunAt,
+        String message
+    ) {
+        public static OpenMetadataQualitySummary empty(String message) {
+            return new OpenMetadataQualitySummary(false, false, null, 0, 0, 0, 0, 0, null, null, message);
+        }
+    }
 }

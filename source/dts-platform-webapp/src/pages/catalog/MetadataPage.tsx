@@ -85,6 +85,7 @@ export default function MetadataPage() {
 	const [fullSyncIncludeJdbc, setFullSyncIncludeJdbc] = useState(true);
 
 	const [techKeyword, setTechKeyword] = useState("");
+	const [techSize, setTechSize] = useState(50);
 	const [techLoading, setTechLoading] = useState(false);
 	const [techPage, setTechPage] = useState<any | null>(null);
 	const [techTables, setTechTables] = useState<TechTableSummary[]>([]);
@@ -197,7 +198,7 @@ export default function MetadataPage() {
 		setTechLoading(true);
 		try {
 			const keyword = techKeyword.trim();
-			const resp = (await getTechMetadataTables({ keyword: keyword || undefined, size: 100 })) as any;
+			const resp = (await getTechMetadataTables({ keyword: keyword || undefined, size: techSize })) as any;
 			const items = Array.isArray(resp?.items) ? resp.items : [];
 			setTechPage(resp || null);
 			setTechTables(items);
@@ -214,7 +215,7 @@ export default function MetadataPage() {
 		} finally {
 			setTechLoading(false);
 		}
-	}, [selectedTechFqn, techKeyword]);
+	}, [selectedTechFqn, techKeyword, techSize]);
 
 	const loadTechDetail = useCallback(async () => {
 		const fqn = selectedTechFqn.trim();
@@ -656,6 +657,19 @@ export default function MetadataPage() {
 							placeholder="搜索技术资产"
 							className="w-full md:w-64"
 						/>
+						<Input
+							type="number"
+							min={10}
+							max={200}
+							value={techSize}
+							onChange={(e) => {
+								const raw = Number(e.target.value);
+								const safe = Number.isFinite(raw) ? raw : 50;
+								setTechSize(Math.max(10, Math.min(200, safe)));
+							}}
+							placeholder="显示数量"
+							className="w-full md:w-28"
+						/>
 						<Button variant="secondary" onClick={loadTechTables} disabled={techLoading}>
 							{techLoading ? "加载中…" : "搜索"}
 						</Button>
@@ -672,7 +686,9 @@ export default function MetadataPage() {
 								</CardHeader>
 								<CardContent className="space-y-2">
 									<div className="text-xs text-muted-foreground">
-										{techPage?.searched ? `搜索结果：${techTables.length}` : `最新资产：${techTables.length}`}
+										{techPage?.searched
+											? `搜索结果：${techTables.length}${techPage?.total ? ` / ${techPage.total}` : ""}`
+											: `最新资产：${techTables.length}`}
 									</div>
 									<ScrollArea className="h-[420px] pr-2">
 										<div className="space-y-2">

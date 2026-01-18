@@ -12,7 +12,7 @@ export const STATIC_DASHBOARD_ROUTES: RouteObject[] = [
 		element: <DatasetDetailPage />,
 	},
 	{
-		path: "catalog/quality",
+		path: "governance/quality",
 		element: <QualityPage />,
 	},
 	{

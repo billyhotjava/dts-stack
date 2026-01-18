@@ -165,6 +165,13 @@
           "title": "质量规则"
         },
         {
+          "key": "quality",
+          "path": "quality",
+          "icon": "solar:check-circle-bold-duotone",
+          "titleKey": "sys.nav.portal.governanceQuality",
+          "title": "数据质量"
+        },
+        {
           "key": "tasks",
           "path": "tasks",
           "icon": "solar:calendar-search-bold-duotone",
