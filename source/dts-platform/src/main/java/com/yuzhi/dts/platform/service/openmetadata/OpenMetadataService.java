@@ -41,7 +41,7 @@ public class OpenMetadataService {
         for (String fqn : candidates) {
             Optional<Map<String, Object>> found = client.getTableByFqn(fqn, fields);
             if (found.isPresent()) {
-                return OpenMetadataResult.found(fqn, found.get(), resolveUiBaseUrl());
+                return OpenMetadataResult.found(fqn, found.orElseThrow(), resolveUiBaseUrl());
             }
         }
         String fallback = candidates.isEmpty() ? null : candidates.get(0);
@@ -58,7 +58,7 @@ public class OpenMetadataService {
         String fields = props.getTableFields();
         Optional<Map<String, Object>> found = client.getTableByFqn(fqn.trim(), fields);
         if (found.isPresent()) {
-            return OpenMetadataResult.found(fqn.trim(), found.get(), resolveUiBaseUrl());
+            return OpenMetadataResult.found(fqn.trim(), found.orElseThrow(), resolveUiBaseUrl());
         }
         return OpenMetadataResult.notFound(fqn.trim(), "未找到匹配的技术资产");
     }
@@ -101,7 +101,7 @@ public class OpenMetadataService {
             if (response.isEmpty()) {
                 return new OpenMetadataTablePage(true, List.of(), 0, keyword, true, "暂无技术资产");
             }
-            SearchEnvelope envelope = parseSearchEnvelope(response.get());
+            SearchEnvelope envelope = parseSearchEnvelope(response.orElseThrow());
             entities = envelope.entities();
             total = envelope.total();
         } else {
@@ -109,7 +109,7 @@ public class OpenMetadataService {
             if (response.isEmpty()) {
                 return new OpenMetadataTablePage(true, List.of(), 0, null, false, "暂无技术资产");
             }
-            List<Map<String, Object>> data = parseListData(response.get());
+            List<Map<String, Object>> data = parseListData(response.orElseThrow());
             entities = data;
             total = data.size();
         }
@@ -143,7 +143,7 @@ public class OpenMetadataService {
         if (lineage.isEmpty()) {
             return OpenMetadataLineageResult.notFound(result.fqn(), "暂无血缘信息");
         }
-        LineageGraph graph = buildLineageGraph(result, lineage.get(), upstreamDepth, downstreamDepth);
+        LineageGraph graph = buildLineageGraph(result, lineage.orElseThrow(), upstreamDepth, downstreamDepth);
         return OpenMetadataLineageResult.found(result.fqn(), graph);
     }
 
@@ -164,7 +164,7 @@ public class OpenMetadataService {
         if (response.isEmpty()) {
             return OpenMetadataQualityResult.notFound(fqn, "暂无质量结果");
         }
-        QualitySnapshot snapshot = buildQualitySnapshot(response.get());
+        QualitySnapshot snapshot = buildQualitySnapshot(response.orElseThrow());
         return OpenMetadataQualityResult.found(fqn, snapshot);
     }
 
