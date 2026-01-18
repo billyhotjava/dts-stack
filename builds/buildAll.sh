@@ -114,19 +114,17 @@ EOF
         "$MAVEN_IMAGE" \
         sh -lc 'set -eux; env | grep -E "JAVA_HOME|PATH"; command -v java; java -version; ls -la /opt/java/openjdk/bin/java; \
           if [ ! -f /root/.m2/settings.xml ]; then \
-            cat > /root/.m2/settings.xml <<EOF \
-<settings xmlns="http://maven.apache.org/SETTINGS/1.0.0" \
-          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" \
-          xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0 https://maven.apache.org/xsd/settings-1.0.0.xsd"> \
-  <mirrors> \
-    <mirror> \
-      <id>aliyun</id> \
-      <mirrorOf>*</mirrorOf> \
-      <url>${MAVEN_MIRROR_URL}</url> \
-    </mirror> \
-  </mirrors> \
-</settings> \
-EOF \
+            printf "%s\n" \
+              "<settings xmlns=\"http://maven.apache.org/SETTINGS/1.0.0\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://maven.apache.org/SETTINGS/1.0.0 https://maven.apache.org/xsd/settings-1.0.0.xsd\">" \
+              "  <mirrors>" \
+              "    <mirror>" \
+              "      <id>aliyun</id>" \
+              "      <mirrorOf>*</mirrorOf>" \
+              "      <url>${MAVEN_MIRROR_URL}</url>" \
+              "    </mirror>" \
+              "  </mirrors>" \
+              "</settings>" \
+              > /root/.m2/settings.xml; \
           fi; \
           mvn -v; mvn "$@" package' \
         -- "${maven_args[@]}"
@@ -140,19 +138,17 @@ EOF \
         -w /workspace \
         "$MAVEN_IMAGE" \
         sh -lc 'if [ ! -f /root/.m2/settings.xml ]; then \
-          cat > /root/.m2/settings.xml <<EOF \
-<settings xmlns="http://maven.apache.org/SETTINGS/1.0.0" \
-          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" \
-          xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0 https://maven.apache.org/xsd/settings-1.0.0.xsd"> \
-  <mirrors> \
-    <mirror> \
-      <id>aliyun</id> \
-      <mirrorOf>*</mirrorOf> \
-      <url>${MAVEN_MIRROR_URL}</url> \
-    </mirror> \
-  </mirrors> \
-</settings> \
-EOF \
+          printf "%s\n" \
+            "<settings xmlns=\"http://maven.apache.org/SETTINGS/1.0.0\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://maven.apache.org/SETTINGS/1.0.0 https://maven.apache.org/xsd/settings-1.0.0.xsd\">" \
+            "  <mirrors>" \
+            "    <mirror>" \
+            "      <id>aliyun</id>" \
+            "      <mirrorOf>*</mirrorOf>" \
+            "      <url>${MAVEN_MIRROR_URL}</url>" \
+            "    </mirror>" \
+            "  </mirrors>" \
+            "</settings>" \
+            > /root/.m2/settings.xml; \
         fi; \
         mvn "$@" package' \
         -- "${maven_args[@]}"
