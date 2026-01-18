@@ -57,6 +57,8 @@ services:
       - ./services/certs/server.key:/certs/server.key:ro,z
     labels:
       - "traefik.enable=true"
+      # Avoid "port is missing" error for host-network Traefik container.
+      - "traefik.http.services.dts-proxy.loadbalancer.server.port=80"
       # Default TLS store and certificates are defined via file provider (dynamic/traefik-dynamic.yml)
       #
       # Hetu BI reverse proxy (path-based on the platform UI domain):
@@ -161,6 +163,10 @@ services:
       PG_DB_ANALYTICS: ${PG_DB_ANALYTICS:-dts_analytics}
       PG_USER_ANALYTICS: ${PG_USER_ANALYTICS:-dts_analytics}
       PG_PWD_ANALYTICS: ${PG_PWD_ANALYTICS:-dts_analytics}
+      # Airflow
+      PG_DB_AIRFLOW: ${PG_DB_AIRFLOW}
+      PG_USER_AIRFLOW: ${PG_USER_AIRFLOW}
+      PG_PWD_AIRFLOW: ${PG_PWD_AIRFLOW}
     volumes:
       - ./services/dts-pg/data:/var/lib/postgresql/data
       - ./services/dts-pg/init:/docker-entrypoint-initdb.d:ro
@@ -558,7 +564,7 @@ services:
       - "traefik.docker.network=dts-core"
       # Avoid swallowing analytics mount path (/analytics) which is served by dts-analytics,
       # and avoid taking over Hetu reverse-proxy prefixes (screen/dashboards/system/tdv/...).
-      - "traefik.http.routers.dts-platform-ui.rule=Host(`${HOST_PLATFORM_UI}`) && !PathPrefix(`/admin/api`) && !PathPrefix(`/analytics`) && !PathPrefix(`/screen`) && !PathPrefix(`/dashboards`) && !PathPrefix(`/system`) && !PathPrefix(`/tdv`) && !PathPrefix(`/account`) && !PathPrefix(`/hetu`) && !PathPrefix(`/static`)"
+      - "traefik.http.routers.dts-platform-ui.rule=Host(`${HOST_PLATFORM_UI}`) && !PathPrefix(`/api`) && !PathPrefix(`/admin/api`) && !PathPrefix(`/analytics`) && !PathPrefix(`/screen`) && !PathPrefix(`/dashboards`) && !PathPrefix(`/system`) && !PathPrefix(`/tdv`) && !PathPrefix(`/account`) && !PathPrefix(`/hetu`) && !PathPrefix(`/static`)"
       # Ensure Hetu reverse-proxy routers (/screen,/dashboards,/system,/tdv,...) win over the SPA catch-all.
       - "traefik.http.routers.dts-platform-ui.priority=100"
       - "traefik.http.routers.dts-platform-ui.entrypoints=websecure"
@@ -573,6 +579,14 @@ services:
       discovery.type: single-node
       xpack.security.enabled: "false"
       ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+    ulimits:
+      nproc: 65535
+      nofile:
+        soft: 65535
+        hard: 65535
+    pids_limit: -1
+    security_opt:
+      - seccomp=unconfined
     volumes:
       - elasticsearch-data:/usr/share/elasticsearch/data
     healthcheck:
@@ -639,7 +653,7 @@ services:
     volumes:
       - ./services/dts-openmetadata/ingestion:/opt/openmetadata/ingestion:ro,z
       - ./services/dts-dbt:/opt/dbt:ro,z
-    command: ["-c", "/opt/openmetadata/ingestion/run-dbt-ingestion.sh"]
+    command: ["-c", "sh /opt/openmetadata/ingestion/run-dbt-ingestion.sh"]
     restart: "no"
     networks:
       - dts-core
@@ -802,7 +816,7 @@ services:
       - dts-core
 
   dts-dbt:
-    image: ${IMAGE_DBT}
+    image: ${IMAGE_DBT:-dbt-core:1.11.2}
     container_name: dts-dbt
     entrypoint: /bin/bash
     command: ["-lc", "sleep infinity"]
