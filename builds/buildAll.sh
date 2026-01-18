@@ -6,6 +6,8 @@ MODE="${1:-both}"
 
 NORMAL_DIST="${REPO_ROOT}/builds/dist"
 LEGACY_DIST="${REPO_ROOT}/builds/legacy-dist"
+NODE_IMAGE="${NODE_IMAGE:-node:20.17.0-alpine3.20}"
+PNPM_VERSION="${PNPM_VERSION:-10.28.0}"
 
 require_cmd() {
   if ! command -v "$1" >/dev/null 2>&1; then
@@ -29,15 +31,15 @@ build_webapp() {
   local out_dir="$4"
 
   echo "[buildAll] Building ${name} (${build_cmd})"
-  if [[ ! -d "${dir}/node_modules" ]]; then
-    echo "[buildAll] Installing dependencies for ${name}"
-    (cd "$dir" && pnpm install --frozen-lockfile)
-  fi
-  (cd "$dir" && pnpm ${build_cmd})
+  docker run --rm -it \
+    -v "${REPO_ROOT}:/workspace" \
+    -w "/workspace/${dir#${REPO_ROOT}/}" \
+    "${NODE_IMAGE}" \
+    sh -lc "npm install -g pnpm@${PNPM_VERSION} >/dev/null 2>&1; pnpm install --frozen-lockfile; pnpm ${build_cmd}"
   copy_dist "${dir}/dist" "${out_dir}/${name}"
 }
 
-require_cmd pnpm
+require_cmd docker
 
 case "$MODE" in
   normal|legacy|both) ;;

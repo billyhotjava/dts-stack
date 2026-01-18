@@ -106,6 +106,7 @@ export default function DatasetDetailPage() {
 	const [omLoading, setOmLoading] = useState(false);
 	const [omInfo, setOmInfo] = useState<any | null>(null);
 	const [columnsView, setColumnsView] = useState<"tech" | "business" | "merged">("business");
+	const [diffOpen, setDiffOpen] = useState(false);
 	const userInfo = useUserInfo() as any;
 	const userRoles = useMemo(() => {
 		if (!userInfo || !Array.isArray(userInfo.roles)) return [] as string[];
@@ -1229,6 +1230,26 @@ if (!dataset) return <div className="text-sm text-muted-foreground">未找到该
 							</TabsContent>
 						<TabsContent value="columns">
 							<div className="space-y-4">
+								{(technicalColumns.length || businessColumns.length) ? (
+									<div className="rounded-md border border-dashed p-3 text-xs text-muted-foreground">
+										<div className="mb-2 text-[13px] font-medium text-foreground">字段差异提示</div>
+										<div className="flex flex-wrap gap-4">
+											<span>仅技术字段：{columnDiff.onlyTech.length}</span>
+											<span>仅业务字段：{columnDiff.onlyBiz.length}</span>
+											<span>类型不一致：{columnDiff.typeMismatch.length}</span>
+										</div>
+										{columnDiff.typeMismatch.length ? (
+											<div className="mt-2 text-[11px] text-muted-foreground">
+												示例：{columnDiff.typeMismatch.slice(0, 5).map((item) => `${item.name}(${item.techType}/${item.bizType})`).join("，")}
+											</div>
+										) : null}
+										<div className="mt-3">
+											<Button variant="outline" size="sm" onClick={() => setDiffOpen(true)}>
+												查看差异清单
+											</Button>
+										</div>
+									</div>
+								) : null}
 								<div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
 									<span>视图：</span>
 									<Button
@@ -1671,6 +1692,44 @@ if (!dataset) return <div className="text-sm text-muted-foreground">未找到该
 				}}
 				defaultActions={["preview"]}
 			/>
+			<Dialog open={diffOpen} onOpenChange={setDiffOpen}>
+				<DialogContent className="max-w-2xl">
+					<DialogHeader>
+						<DialogTitle>字段差异清单</DialogTitle>
+					</DialogHeader>
+					<div className="space-y-4 text-sm">
+						<div>
+							<div className="mb-2 font-medium">仅技术字段（{columnDiff.onlyTech.length}）</div>
+							<div className="max-h-36 overflow-auto rounded border border-dashed p-2 text-xs text-muted-foreground">
+								{columnDiff.onlyTech.length
+									? columnDiff.onlyTech.map((c: any) => c.name).join(", ")
+									: "无"}
+							</div>
+						</div>
+						<div>
+							<div className="mb-2 font-medium">仅业务字段（{columnDiff.onlyBiz.length}）</div>
+							<div className="max-h-36 overflow-auto rounded border border-dashed p-2 text-xs text-muted-foreground">
+								{columnDiff.onlyBiz.length
+									? columnDiff.onlyBiz.map((c: any) => c.name).join(", ")
+									: "无"}
+							</div>
+						</div>
+						<div>
+							<div className="mb-2 font-medium">类型不一致（{columnDiff.typeMismatch.length}）</div>
+							<div className="max-h-36 overflow-auto rounded border border-dashed p-2 text-xs text-muted-foreground">
+								{columnDiff.typeMismatch.length
+									? columnDiff.typeMismatch.map((c) => `${c.name} (${c.techType} / ${c.bizType})`).join(", ")
+									: "无"}
+							</div>
+						</div>
+					</div>
+					<DialogFooter>
+						<Button variant="outline" onClick={() => setDiffOpen(false)}>
+							关闭
+						</Button>
+					</DialogFooter>
+				</DialogContent>
+			</Dialog>
 		</div>
 	);
 }
