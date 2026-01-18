@@ -12,6 +12,7 @@ IMGVERSION_FILE="${IMGVERSION_FILE:-${REPO_ROOT}/imgversion.conf}"
 MAVEN_IMAGE="${MAVEN_IMAGE:-maven:3.9.9-eclipse-temurin-21}"
 MAVEN_SECURITY_OPT="${MAVEN_SECURITY_OPT:-}"
 LEGACY_USE_HOST_MAVEN="${LEGACY_USE_HOST_MAVEN:-}"
+MAVEN_DEBUG="${MAVEN_DEBUG:-}"
 
 require_cmd() {
   if ! command -v "$1" >/dev/null 2>&1; then
@@ -84,14 +85,26 @@ build_maven_module() {
     maven_args=(-B -e -DskipTests -s /root/.m2/settings.xml -f pom.xml -pl "$module" -am)
   fi
 
-    docker run --rm "${security_opts[@]}" \
-      -e "JAVA_HOME=/opt/java/openjdk" \
-      -e "PATH=/opt/java/openjdk/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
-      -v "${REPO_ROOT}/source:/workspace" \
-      -v "/root/.m2:/root/.m2" \
-      -w /workspace \
-      "$MAVEN_IMAGE" \
-      mvn "${maven_args[@]}" package
+    if [[ -n "$MAVEN_DEBUG" ]]; then
+      docker run --rm "${security_opts[@]}" \
+        -e "JAVA_HOME=/opt/java/openjdk" \
+        -e "PATH=/opt/java/openjdk/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
+        -v "${REPO_ROOT}/source:/workspace" \
+        -v "/root/.m2:/root/.m2" \
+        -w /workspace \
+        "$MAVEN_IMAGE" \
+        sh -lc 'set -eux; env | grep -E "JAVA_HOME|PATH"; command -v java; java -version; ls -la /opt/java/openjdk/bin/java; mvn -v; mvn "$@" package' \
+        -- "${maven_args[@]}"
+    else
+      docker run --rm "${security_opts[@]}" \
+        -e "JAVA_HOME=/opt/java/openjdk" \
+        -e "PATH=/opt/java/openjdk/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
+        -v "${REPO_ROOT}/source:/workspace" \
+        -v "/root/.m2:/root/.m2" \
+        -w /workspace \
+        "$MAVEN_IMAGE" \
+        mvn "${maven_args[@]}" package
+    fi
   fi
 
   local jar_path
