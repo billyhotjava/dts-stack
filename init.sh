@@ -260,6 +260,7 @@ prepare_data_dirs(){
     "services/dts-ranger"
     "services/dts-analytics/data"
     "services/dts-analytics/plugins"
+    "services/dts-openmetadata/ingestion"
   )
   if [[ "${ENABLE_MINIO:-false}" == "true" ]]; then
     data_dirs+=("services/dts-minio/data")
@@ -270,6 +271,17 @@ prepare_data_dirs(){
   done
   if [[ "${ENABLE_MINIO:-false}" == "true" ]]; then
     chmod -R 777 services/dts-minio/data || true
+  fi
+  # Ensure ingestion scripts are readable inside containers (SELinux-safe when possible).
+  if [[ -d "services/dts-openmetadata/ingestion" ]]; then
+    chmod -R a+rX services/dts-openmetadata/ingestion || true
+    if command -v getenforce >/dev/null 2>&1; then
+      if [[ "$(getenforce 2>/dev/null || true)" != "Disabled" ]]; then
+        if command -v chcon >/dev/null 2>&1; then
+          chcon -Rt svirt_sandbox_file_t services/dts-openmetadata/ingestion 2>/dev/null || true
+        fi
+      fi
+    fi
   fi
 }
 
