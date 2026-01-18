@@ -9,6 +9,8 @@ LEGACY_DIST="${REPO_ROOT}/builds/legacy-dist"
 NODE_IMAGE="${NODE_IMAGE:-node:20.17.0-alpine3.20}"
 PNPM_VERSION="${PNPM_VERSION:-10.28.0}"
 IMGVERSION_FILE="${IMGVERSION_FILE:-${REPO_ROOT}/imgversion.conf}"
+MAVEN_IMAGE="${MAVEN_IMAGE:-maven:3.9.9-eclipse-temurin-21}"
+MAVEN_SECURITY_OPT="${MAVEN_SECURITY_OPT:-}"
 
 require_cmd() {
   if ! command -v "$1" >/dev/null 2>&1; then
@@ -46,6 +48,35 @@ build_image() {
   local tar_path="${output_dir}/$(sanitize_tag "$tag").tar"
   docker save "$tag" -o "$tar_path"
   echo "[buildAll] Saved ${tar_path}"
+}
+
+build_maven_module() {
+  local module="$1"
+  local jar_glob="$2"
+  local out_jar="$3"
+
+  echo "[buildAll] Building ${module} jar via ${MAVEN_IMAGE}"
+  local security_opts=()
+  if [[ -n "$MAVEN_SECURITY_OPT" ]]; then
+    security_opts+=(--security-opt "$MAVEN_SECURITY_OPT")
+  fi
+
+  docker run --rm "${security_opts[@]}" \
+    -v "${REPO_ROOT}/source:/workspace" \
+    -v "/root/.m2:/root/.m2" \
+    -w /workspace \
+    "$MAVEN_IMAGE" \
+    mvn -B -e -DskipTests -s /root/.m2/settings.xml -f pom.xml -pl "$module" -am package
+
+  local jar_path
+  jar_path="$(ls -1t ${REPO_ROOT}/source/${module}/target/${jar_glob} 2>/dev/null | head -n 1 || true)"
+  if [[ -z "$jar_path" ]]; then
+    echo "[buildAll] ERROR: ${module} jar not found under source/${module}/target" >&2
+    exit 1
+  fi
+  mkdir -p "$(dirname "$out_jar")"
+  cp "$jar_path" "$out_jar"
+  echo "[buildAll] Copied ${jar_path} -> ${out_jar}"
 }
 
 require_cmd docker
@@ -91,11 +122,13 @@ if [[ "$MODE" == "legacy" || "$MODE" == "both" ]]; then
   IMAGE_DTS_PLATFORM_WEBAPP="${IMAGE_DTS_PLATFORM_WEBAPP:-dts-platform-webapp:local}"
   IMAGE_DTS_ANALYTICS_WEBAPP_LEGACY="${IMAGE_DTS_ANALYTICS_WEBAPP_LEGACY:-dts-analytics-webapp:local}"
 
-  build_image "dts-admin" "$IMAGE_DTS_ADMIN" "${REPO_ROOT}/builds/dts-admin/Dockerfile" "$LEGACY_DIST" \
-    --build-arg ENABLE_MAVEN_BUILD="${ENABLE_MAVEN_BUILD:-true}"
-  build_image "dts-platform" "$IMAGE_DTS_PLATFORM" "${REPO_ROOT}/builds/dts-platform/Dockerfile" "$LEGACY_DIST" \
-    --build-arg ENABLE_MAVEN_BUILD="${ENABLE_MAVEN_BUILD:-true}"
-  build_image "dts-analytics" "$IMAGE_DTS_ANALYTICS" "${REPO_ROOT}/builds/dts-analytics/Dockerfile" "$LEGACY_DIST"
+  build_maven_module "dts-admin" "dts-admin-*.jar" "${REPO_ROOT}/builds/dts-admin/dts-admin.jar"
+  build_maven_module "dts-platform" "dts-platform-*.jar" "${REPO_ROOT}/builds/dts-platform/dts-platform.jar"
+  build_maven_module "dts-analytics" "dts-analytics-*.jar" "${REPO_ROOT}/builds/dts-analytics/dts-analytics.jar"
+
+  build_image "dts-admin" "$IMAGE_DTS_ADMIN" "${REPO_ROOT}/builds/dts-admin/Dockerfile.offline" "$LEGACY_DIST"
+  build_image "dts-platform" "$IMAGE_DTS_PLATFORM" "${REPO_ROOT}/builds/dts-platform/Dockerfile.offline" "$LEGACY_DIST"
+  build_image "dts-analytics" "$IMAGE_DTS_ANALYTICS" "${REPO_ROOT}/builds/dts-analytics/Dockerfile.offline" "$LEGACY_DIST"
   build_image "dts-admin-webapp" "$IMAGE_DTS_ADMIN_WEBAPP" "${REPO_ROOT}/builds/dts-admin-webapp/Dockerfile" "$LEGACY_DIST" \
     --build-arg PNPM_VERSION="${PNPM_VERSION}" \
     --build-arg WEBAPP_BUILD_CMD="build"

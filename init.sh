@@ -57,6 +57,18 @@ pick_mode(){ echo "1) single  2) ha2  3) cluster"; read -rp "Choice: " c; case "
 read_secret(){ while true; do read -rsp "Password: " p1; echo; read -rsp "Confirm: " p2; echo; [[ "$p1" == "$p2" ]] || { echo "Mismatch"; continue; }; [[ ${#p1} -ge 10 && "$p1" =~ [A-Z] && "$p1" =~ [a-z] && "$p1" =~ [0-9] && "$p1" =~ [^A-Za-z0-9] ]] || { echo "Weak"; continue; }; SECRET="$p1"; break; done; }
 ensure_env(){ k="$1"; shift; v="$*"; if grep -qE "^${k}=" .env 2>/dev/null; then sed -i -E "s|^${k}=.*|${k}=${v}|g" .env; else echo "${k}=${v}" >> .env; fi; }
 load_img_versions(){ conf="imgversion.conf"; [[ -f "$conf" ]] || return 0; while IFS='=' read -r k v; do [[ -z "${k// }" || "${k#\#}" != "$k" ]] && continue; v="$(echo "$v"|sed -E 's/^\s+|\s+$//g')"; ensure_env "$k" "$v"; done < <(grep -E '^[[:space:]]*([A-Z0-9_]+)[[:space:]]*=' "$conf" || true); echo "[init.sh] loaded image versions"; }
+urlencode(){
+  local input="${1:-}"
+  local out="" i ch hex
+  for ((i=0; i<${#input}; i++)); do
+    ch="${input:i:1}"
+    case "${ch}" in
+      [a-zA-Z0-9.~_-]) out+="${ch}" ;;
+      *) printf -v hex '%02X' "'${ch}"; out+="%${hex}" ;;
+    esac
+  done
+  printf '%s' "${out}"
+}
 
 # Try to detect a stable IPv4 address on the host for containers to reach services exposed on the host
 detect_host_ipv4(){
@@ -485,6 +497,11 @@ generate_env_base(){
   : "${DTS_DBT_PROFILES_DIR:=/opt/dts/dbt-profiles}"
   : "${DTS_DBT_CONFIG_PATH:=/opt/dts/upload/dbt-config.json}"
   : "${DTS_AIRFLOW_BASE_URL:=http://dts-airflow-webserver:8080}"
+  : "${AIRFLOW_ADMIN_USERNAME:=airflow}"
+  : "${AIRFLOW_ADMIN_PASSWORD:=${SECRET}}"
+  : "${AIRFLOW_ADMIN_EMAIL:=airflow@example.com}"
+  : "${AIRFLOW_ADMIN_FIRSTNAME:=Airflow}"
+  : "${AIRFLOW_ADMIN_LASTNAME:=Admin}"
   : "${DTS_AIRFLOW_USERNAME:=${AIRFLOW_ADMIN_USERNAME}}"
   : "${DTS_AIRFLOW_PASSWORD:=${AIRFLOW_ADMIN_PASSWORD}}"
   : "${DTS_AIRFLOW_DAG_ID:=dbt_load}"
@@ -493,6 +510,7 @@ generate_env_base(){
   : "${PG_DB_AIRFLOW:=airflow}"
   : "${PG_USER_AIRFLOW:=airflow}"
   : "${PG_PWD_AIRFLOW:=${SECRET}}"
+  : "${PG_PWD_AIRFLOW_URLENCODED:=$(urlencode "${PG_PWD_AIRFLOW}")}"
 
   # ---------- Ranger（Admin） ----------
   : "${PG_DB_RANGER:=dts_ranger}"
@@ -748,6 +766,7 @@ PG_PWD_OPENMETADATA=${PG_PWD_OPENMETADATA}
 PG_DB_AIRFLOW=${PG_DB_AIRFLOW}
 PG_USER_AIRFLOW=${PG_USER_AIRFLOW}
 PG_PWD_AIRFLOW=${PG_PWD_AIRFLOW}
+PG_PWD_AIRFLOW_URLENCODED=${PG_PWD_AIRFLOW_URLENCODED}
 
 
 # ====== OIDC Clients ======
