@@ -13,6 +13,9 @@ MAVEN_IMAGE="${MAVEN_IMAGE:-maven:3.9.9-eclipse-temurin-21}"
 MAVEN_SECURITY_OPT="${MAVEN_SECURITY_OPT:-}"
 LEGACY_USE_HOST_MAVEN="${LEGACY_USE_HOST_MAVEN:-}"
 MAVEN_DEBUG="${MAVEN_DEBUG:-}"
+LEGACY_UNRESTRICTED="${LEGACY_UNRESTRICTED:-1}"
+MAVEN_MIRROR_URL="${MAVEN_MIRROR_URL:-https://maven.aliyun.com/repository/public}"
+MAVEN_SETTINGS_FILE="${MAVEN_SETTINGS_FILE:-/root/.m2/settings.xml}"
 
 require_cmd() {
   if ! command -v "$1" >/dev/null 2>&1; then
@@ -69,41 +72,90 @@ build_maven_module() {
   if [[ -n "$LEGACY_USE_HOST_MAVEN" ]]; then
     require_cmd mvn
     echo "[buildAll] Building ${module} jar via host Maven"
-    if [[ -f /root/.m2/settings.xml ]]; then
-      mvn -B -e -DskipTests -s /root/.m2/settings.xml -f "${REPO_ROOT}/source/pom.xml" -pl "$module" -am package
-    else
-      mvn -B -e -DskipTests -f "${REPO_ROOT}/source/pom.xml" -pl "$module" -am package
+    if [[ ! -f "$MAVEN_SETTINGS_FILE" ]]; then
+      mkdir -p "$(dirname "$MAVEN_SETTINGS_FILE")"
+      cat > "$MAVEN_SETTINGS_FILE" <<EOF
+<settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0 https://maven.apache.org/xsd/settings-1.0.0.xsd">
+  <mirrors>
+    <mirror>
+      <id>aliyun</id>
+      <mirrorOf>*</mirrorOf>
+      <url>${MAVEN_MIRROR_URL}</url>
+    </mirror>
+  </mirrors>
+</settings>
+EOF
     fi
+    mvn -B -e -DskipTests -s "$MAVEN_SETTINGS_FILE" -f "${REPO_ROOT}/source/pom.xml" -pl "$module" -am package
   else
     echo "[buildAll] Building ${module} jar via ${MAVEN_IMAGE}"
-  local security_opts=()
-  if [[ -n "$MAVEN_SECURITY_OPT" ]]; then
-    security_opts+=(--security-opt "$MAVEN_SECURITY_OPT")
-  fi
-  local maven_args=(-B -e -DskipTests -f pom.xml -pl "$module" -am)
-  if [[ -f /root/.m2/settings.xml ]]; then
-    maven_args=(-B -e -DskipTests -s /root/.m2/settings.xml -f pom.xml -pl "$module" -am)
-  fi
+    local security_opts=()
+    if [[ -n "$MAVEN_SECURITY_OPT" ]]; then
+      security_opts+=(--security-opt "$MAVEN_SECURITY_OPT")
+    fi
+    if [[ "$MODE" == "legacy" && -n "$LEGACY_UNRESTRICTED" ]]; then
+      security_opts+=(--security-opt "seccomp=unconfined" --pids-limit=-1 --ulimit "nproc=65535:65535")
+    fi
+    local maven_args=(-B -e -DskipTests -f pom.xml -pl "$module" -am)
+    if [[ -f "$MAVEN_SETTINGS_FILE" ]]; then
+      maven_args=(-B -e -DskipTests -s "$MAVEN_SETTINGS_FILE" -f pom.xml -pl "$module" -am)
+    fi
 
     if [[ -n "$MAVEN_DEBUG" ]]; then
       docker run --rm "${security_opts[@]}" \
+        -e "MAVEN_MIRROR_URL=${MAVEN_MIRROR_URL}" \
         -e "JAVA_HOME=/opt/java/openjdk" \
         -e "PATH=/opt/java/openjdk/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
         -v "${REPO_ROOT}/source:/workspace" \
         -v "/root/.m2:/root/.m2" \
         -w /workspace \
         "$MAVEN_IMAGE" \
-        sh -lc 'set -eux; env | grep -E "JAVA_HOME|PATH"; command -v java; java -version; ls -la /opt/java/openjdk/bin/java; mvn -v; mvn "$@" package' \
+        sh -lc 'set -eux; env | grep -E "JAVA_HOME|PATH"; command -v java; java -version; ls -la /opt/java/openjdk/bin/java; \
+          if [ ! -f /root/.m2/settings.xml ]; then \
+            cat > /root/.m2/settings.xml <<EOF \
+<settings xmlns="http://maven.apache.org/SETTINGS/1.0.0" \
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" \
+          xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0 https://maven.apache.org/xsd/settings-1.0.0.xsd"> \
+  <mirrors> \
+    <mirror> \
+      <id>aliyun</id> \
+      <mirrorOf>*</mirrorOf> \
+      <url>${MAVEN_MIRROR_URL}</url> \
+    </mirror> \
+  </mirrors> \
+</settings> \
+EOF \
+          fi; \
+          mvn -v; mvn "$@" package' \
         -- "${maven_args[@]}"
     else
       docker run --rm "${security_opts[@]}" \
+        -e "MAVEN_MIRROR_URL=${MAVEN_MIRROR_URL}" \
         -e "JAVA_HOME=/opt/java/openjdk" \
         -e "PATH=/opt/java/openjdk/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
         -v "${REPO_ROOT}/source:/workspace" \
         -v "/root/.m2:/root/.m2" \
         -w /workspace \
         "$MAVEN_IMAGE" \
-        mvn "${maven_args[@]}" package
+        sh -lc 'if [ ! -f /root/.m2/settings.xml ]; then \
+          cat > /root/.m2/settings.xml <<EOF \
+<settings xmlns="http://maven.apache.org/SETTINGS/1.0.0" \
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" \
+          xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0 https://maven.apache.org/xsd/settings-1.0.0.xsd"> \
+  <mirrors> \
+    <mirror> \
+      <id>aliyun</id> \
+      <mirrorOf>*</mirrorOf> \
+      <url>${MAVEN_MIRROR_URL}</url> \
+    </mirror> \
+  </mirrors> \
+</settings> \
+EOF \
+        fi; \
+        mvn "$@" package' \
+        -- "${maven_args[@]}"
     fi
   fi
 
