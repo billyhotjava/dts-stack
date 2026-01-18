@@ -189,14 +189,17 @@ fix_pg_permissions(){
   mkdir -p "${pg_dir}"
   local pg_runtime_uid="${PG_RUNTIME_UID:-999}"
   local pg_runtime_gid="${PG_RUNTIME_GID:-${pg_runtime_uid}}"
-  if command -v setfacl >/dev/null 2>&1; then
-    setfacl -R -m u:"${pg_runtime_uid}":rwx "${pg_dir}" 2>/dev/null || true
-    setfacl -R -d -m u:"${pg_runtime_uid}":rwx "${pg_dir}" 2>/dev/null || true
-  else
-    echo "[init.sh] WARNING: setfacl not found, falling back to chmod 777 on Postgres data directory." >&2
-    chmod -R 777 "${pg_dir}" 2>/dev/null || true
-  fi
   chown -R "${pg_runtime_uid}:${pg_runtime_gid}" "${pg_dir}" 2>/dev/null || true
+  # Postgres requires 0700 or 0750. Use 0700 to avoid startup failures.
+  chmod -R 700 "${pg_dir}" 2>/dev/null || true
+  if command -v stat >/dev/null 2>&1; then
+    local perms
+    perms="$(stat -c '%a' "${pg_dir}" 2>/dev/null || true)"
+    if [[ "${perms}" != "700" && "${perms}" != "750" ]]; then
+      echo "[init.sh] WARNING: Postgres data dir permissions are ${perms}; forcing 0700." >&2
+      chmod -R 700 "${pg_dir}" 2>/dev/null || true
+    fi
+  fi
 }
 
 # Ensure /docker-entrypoint-initdb.d contents are world-readable and shell scripts executable
@@ -1054,6 +1057,8 @@ fi
 if [[ "${RESET_PG_DATA}" == "true" ]]; then
   echo "[init.sh] Resetting Postgres data directory (requested)."
   rm -rf services/dts-pg/data
+  mkdir -p services/dts-pg/data
+  fix_pg_permissions
 fi
 prepare_data_dirs
 
