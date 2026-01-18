@@ -81,15 +81,8 @@ RUN set -eux; \
     fi; \
     if [ "${USE_MAVEN}" = "true" ]; then \
       echo "[build] Building dts-admin via Maven"; \
-      if [ -n "${JAVA_HOME:-}" ] && [ -x "${JAVA_HOME}/bin/java" ]; then \
-        echo "[build] Reusing preset JAVA_HOME=${JAVA_HOME}"; \
-      else \
-        JAVA_BIN=$(readlink -f "$(command -v java)"); \
-        export JAVA_HOME="${JAVA_BIN%/bin/java}"; \
-        echo "[build] Derived JAVA_HOME from java: ${JAVA_HOME}"; \
-      fi; \
       sed -i "s|__MIRROR_URL__|${MAVEN_MIRROR_URL}|g" /root/.m2/settings.xml; \
-      /usr/share/maven/bin/mvn -s /root/.m2/settings.xml -q -DskipTests -f "$BUILD_POM" -pl dts-admin -am package; \
+      env -u JAVA_HOME /usr/share/maven/bin/mvn -s /root/.m2/settings.xml -q -DskipTests -f "$BUILD_POM" -pl dts-admin -am package; \
     else \
       echo "[build] Using prebuilt jar from ${PREBUILT_JAR}"; \
       mkdir -p /workspace/dts-admin/target; \
