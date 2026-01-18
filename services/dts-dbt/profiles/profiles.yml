@@ -1,0 +1,12 @@
+dts:
+  target: dev
+  outputs:
+    dev:
+      type: postgres
+      host: dts-pg
+      port: 5432
+      user: dts_platform
+      password: "Devops123@"
+      dbname: dts_platform
+      schema: public
+      threads: 4

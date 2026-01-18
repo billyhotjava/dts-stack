@@ -3,10 +3,12 @@ source:
   serviceName: ${OPENMETADATA_DBT_SERVICE}
   sourceConfig:
     config:
-      dbtConfigSource: local
-      manifestPath: /opt/dbt/target/manifest.json
-      runResultsPath: /opt/dbt/target/run_results.json
-      catalogPath: /opt/dbt/target/catalog.json
+      type: DBT
+      dbtConfigSource:
+        dbtConfigType: local
+        dbtManifestFilePath: /opt/dbt/target/manifest.json
+        dbtRunResultsFilePath: /opt/dbt/target/run_results.json
+        dbtCatalogFilePath: /opt/dbt/target/catalog.json
 sink:
   type: metadata-rest
   config:
@@ -16,3 +18,8 @@ sink:
       jwtToken: ${OPENMETADATA_AUTH_TOKEN}
 workflowConfig:
   loggerLevel: INFO
+  openMetadataServerConfig:
+    hostPort: ${OPENMETADATA_API_ENDPOINT}
+    authProvider: openmetadata
+    securityConfig:
+      jwtToken: ${OPENMETADATA_AUTH_TOKEN}

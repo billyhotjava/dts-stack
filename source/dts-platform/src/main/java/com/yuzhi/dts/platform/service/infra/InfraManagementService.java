@@ -191,6 +191,10 @@ public class InfraManagementService {
         return toDto(dataSourceRepository.save(entity));
     }
 
+    public InfraDataSource findEntity(UUID id) {
+        return dataSourceRepository.findById(id).orElseThrow(EntityNotFoundException::new);
+    }
+
     @Transactional
     public void deleteDataSource(UUID id, String activeDeptHeader) {
         InfraDataSource entity = dataSourceRepository.findById(id).orElseThrow(EntityNotFoundException::new);

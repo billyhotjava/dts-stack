@@ -14,6 +14,7 @@ import com.yuzhi.dts.platform.service.infra.InceptorIntegrationCoordinator.Integ
 import com.yuzhi.dts.platform.service.infra.HiveConnectionTestResult;
 import com.yuzhi.dts.platform.service.infra.InfraManagementService;
 import com.yuzhi.dts.platform.service.infra.JdbcConnectionTestService;
+import com.yuzhi.dts.platform.service.infra.JdbcCatalogSyncService;
 import com.yuzhi.dts.platform.service.infra.dto.ConnectionTestLogDto;
 import com.yuzhi.dts.platform.service.infra.dto.DataSourceRequest;
 import com.yuzhi.dts.platform.service.infra.dto.DataStorageRequest;
@@ -52,6 +53,7 @@ public class InfraResource {
     private final HiveExecutionProperties hiveProps;
     private final InceptorDataSourceRegistry inceptorRegistry;
     private final InceptorIntegrationCoordinator integrationCoordinator;
+    private final JdbcCatalogSyncService jdbcCatalogSyncService;
 
     public InfraResource(
         InfraTaskScheduleRepository schedRepo,
@@ -61,7 +63,8 @@ public class InfraResource {
         JdbcConnectionTestService jdbcConnectionTestService,
         HiveExecutionProperties hiveProps,
         InceptorDataSourceRegistry inceptorRegistry,
-        InceptorIntegrationCoordinator integrationCoordinator
+        InceptorIntegrationCoordinator integrationCoordinator,
+        JdbcCatalogSyncService jdbcCatalogSyncService
     ) {
         this.schedRepo = schedRepo;
         this.audit = audit;
@@ -71,6 +74,7 @@ public class InfraResource {
         this.hiveProps = hiveProps;
         this.inceptorRegistry = inceptorRegistry;
         this.integrationCoordinator = integrationCoordinator;
+        this.jdbcCatalogSyncService = jdbcCatalogSyncService;
     }
 
     // Data sources
@@ -130,6 +134,15 @@ public class InfraResource {
         var saved = managementService.createDataSource(request, user, activeDept);
         audit.audit("CREATE", "infra.dataSource", String.valueOf(saved.id()));
         return ApiResponses.ok(saved);
+    }
+
+    @PostMapping("/data-sources/{id}/sync")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ApiResponse<Object> syncDataSource(@PathVariable UUID id) {
+        var source = managementService.findEntity(id);
+        var result = jdbcCatalogSyncService.synchronize(source);
+        audit.audit("SYNC", "infra.dataSource", String.valueOf(id));
+        return ApiResponses.ok(result);
     }
 
     @PostMapping("/data-sources/inceptor/publish")

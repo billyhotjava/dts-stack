@@ -1,0 +1,11 @@
+name: "dts_demo"
+version: "1.0.0"
+config-version: 2
+
+profile: "dts"
+
+model-paths: ["models"]
+
+models:
+  dts_demo:
+    +materialized: table

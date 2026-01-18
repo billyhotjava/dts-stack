@@ -193,6 +193,13 @@ services:
       DTS_JDBC_DRIVER_CLASS: "org.apache.hive.jdbc.HiveDriver"
       DTS_JDBC_DRIVER_JAR: "quark-driver-8.37.3.jar"
       DTS_FEATURE_PLATFORM_KC_LOCALIZATION: "true"
+      DTS_DBT_PROJECT_DIR: /opt/dts/dbt
+      DTS_DBT_PROFILES_DIR: /opt/dts/dbt-profiles
+      DTS_DBT_CONFIG_PATH: /opt/dts/upload/dbt-config.json
+      DTS_AIRFLOW_BASE_URL: ${DTS_AIRFLOW_BASE_URL}
+      DTS_AIRFLOW_USERNAME: ${DTS_AIRFLOW_USERNAME}
+      DTS_AIRFLOW_PASSWORD: ${DTS_AIRFLOW_PASSWORD}
+      DTS_AIRFLOW_DAG_ID: ${DTS_AIRFLOW_DAG_ID}
       LOG_ROOT: /logs
       # Data Standard attachments: encrypted filesystem storage
       DATA_STANDARD_ATTACHMENT_STORAGE_STRATEGY: "filesystem"
@@ -207,6 +214,8 @@ services:
       - ./services/dts-platform/drivers:/opt/dts/drivers:ro,z
       # Encrypted attachments storage (host-bound)
       - ./services/dts-platform/upload:/opt/dts/upload:Z
+      - ./services/dts-dbt:/opt/dts/dbt:ro,z
+      - ./services/dts-dbt/profiles:/opt/dts/dbt-profiles:Z
       - ./logs/dts-platform:/logs/dts-platform:z
     security_opt:
       - seccomp=unconfined

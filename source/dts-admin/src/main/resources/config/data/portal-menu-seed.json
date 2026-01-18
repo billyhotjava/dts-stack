@@ -311,6 +311,13 @@
           "icon": "solar:database-bold-duotone",
           "titleKey": "sys.nav.portal.foundationDataSources",
           "title": "数据源配置"
+        },
+        {
+          "key": "dbtConfig",
+          "path": "dbt-config",
+          "icon": "solar:settings-bold-duotone",
+          "titleKey": "sys.nav.portal.foundationDbtConfig",
+          "title": "dbt执行配置"
         }
       ]
     },

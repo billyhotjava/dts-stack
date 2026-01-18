@@ -22,6 +22,11 @@ export const getTechMetadataTables = (params?: { keyword?: string; size?: number
 	api.get({ url: "/catalog/metadata/tables", params });
 export const getTechMetadataTableDetail = (fqn: string) =>
 	api.get({ url: "/catalog/metadata/tables/detail", params: { fqn } });
+export const getDbtConfig = () => api.get({ url: "/etl/dbt/config" });
+export const updateDbtConfig = (data: any) => api.put({ url: "/etl/dbt/config", data });
+export const listDbtModels = () => api.get({ url: "/etl/dbt/models" });
+export const listDbtRuns = (limit = 20) => api.get({ url: "/etl/dbt/runs", params: { limit } });
+export const triggerDbtRun = (data: any) => api.post({ url: "/etl/dbt/run", data });
 export const createDataset = (data: any) => api.post({ url: "/catalog/datasets", data });
 export const updateDataset = (id: string, data: any) => api.put({ url: `/catalog/datasets/${id}`, data });
 export const deleteDataset = (id: string) => api.delete({ url: `/catalog/datasets/${id}` });
@@ -221,11 +226,6 @@ export const updateDimension = (id: string, data: any) => api.put({ url: `/gover
 export const deleteDimension = (id: string) => api.delete({ url: `/governance/dimensions/${id}` });
 export const publishDimension = (id: string) => api.post({ url: `/governance/dimensions/${id}/publish` });
 export const archiveDimension = (id: string) => api.post({ url: `/governance/dimensions/${id}/archive` });
-
-// Data quality (compatibility helpers)
-export const triggerQuality = (datasetId: string, ruleId?: string) =>
-	api.post({ url: "/data-quality-runs/trigger", params: { datasetId, ruleId } });
-export const latestQuality = (datasetId: string) => api.get({ url: "/data-quality-runs/latest", params: { datasetId } });
 
 // Explore
 export const previewQuery = (data: any) => api.post({ url: "/explore/query/preview", data });

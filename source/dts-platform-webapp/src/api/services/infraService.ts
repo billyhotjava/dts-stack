@@ -78,6 +78,7 @@ export const refreshInceptorRegistry = () =>
 
 export const listConnectionTestLogs = (dataSourceId?: string) =>
 	api.get<ConnectionTestLog[]>({ url: "/infra/data-sources/test-logs", params: dataSourceId ? { dataSourceId } : undefined });
+export const syncInfraDataSource = (id: string) => api.post({ url: `/infra/data-sources/${id}/sync` });
 
 export const testHiveConnection = (data: HiveConnectionTestRequest) =>
 	api.post<HiveConnectionTestResult>({ url: "/infra/data-sources/test-connection", data });

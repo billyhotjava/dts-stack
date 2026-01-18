@@ -239,6 +239,17 @@ info:
   display-ribbon-on-profiles: 'dev'
 
 dts:
+  dbt:
+    enabled: ${DTS_DBT_ENABLED:true}
+    config-path: ${DTS_DBT_CONFIG_PATH:/opt/dts/upload/dbt-config.json}
+    project-dir: ${DTS_DBT_PROJECT_DIR:/opt/dts/dbt}
+    profiles-dir: ${DTS_DBT_PROFILES_DIR:/opt/dts/dbt-profiles}
+  airflow:
+    enabled: ${DTS_AIRFLOW_ENABLED:true}
+    base-url: ${DTS_AIRFLOW_BASE_URL:http://dts-airflow-webserver:8080}
+    username: ${DTS_AIRFLOW_USERNAME:airflow}
+    password: ${DTS_AIRFLOW_PASSWORD:airflow}
+    dag-id: ${DTS_AIRFLOW_DAG_ID:dbt_load}
   admin:
     enabled: true
     base-url: http://dts-admin:8081

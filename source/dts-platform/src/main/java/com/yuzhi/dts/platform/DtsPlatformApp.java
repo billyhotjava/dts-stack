@@ -2,7 +2,9 @@ package com.yuzhi.dts.platform;
 
 import com.yuzhi.dts.platform.config.ApplicationProperties;
 import com.yuzhi.dts.platform.config.AuditProperties;
+import com.yuzhi.dts.platform.config.AirflowProperties;
 import com.yuzhi.dts.platform.config.CatalogFeatureProperties;
+import com.yuzhi.dts.platform.config.DbtProperties;
 import com.yuzhi.dts.platform.config.DtsAdminProperties;
 import com.yuzhi.dts.platform.config.DataStandardProperties;
 import com.yuzhi.dts.platform.config.GovernanceProperties;
@@ -39,6 +41,8 @@ import tech.jhipster.config.JHipsterConstants;
     GovernanceProperties.class,
     InfraSecurityProperties.class,
     OpenMetadataProperties.class,
+    DbtProperties.class,
+    AirflowProperties.class,
 })
 public class DtsPlatformApp {
 

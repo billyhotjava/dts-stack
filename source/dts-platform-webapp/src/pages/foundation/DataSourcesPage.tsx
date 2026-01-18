@@ -51,6 +51,17 @@ const formatDateTime = (value?: string) => {
 };
 
 const safeUpper = (value?: string) => String(value || "").trim().toUpperCase();
+const ROLE_OPTIONS = [
+	{ value: "SOURCE", label: "来源" },
+	{ value: "TARGET", label: "目标" },
+	{ value: "BOTH", label: "双向" },
+];
+const LAYER_OPTIONS = [
+	{ value: "ODS", label: "ODS" },
+	{ value: "DWD", label: "DWD" },
+	{ value: "DWS", label: "DWS" },
+	{ value: "ADS", label: "ADS" },
+];
 
 function tryParseJsonObject(raw: string | undefined): Record<string, any> | undefined {
 	const text = String(raw || "").trim();
@@ -175,7 +186,14 @@ export default function DataSourcesPage() {
 		setEditing(null);
 		setJdbcTestResult(null);
 		form.resetFields();
-		form.setFieldsValue({ type: "JDBC", propsJson: "{}", secretsJson: "", testQuery: "SELECT 1" });
+		form.setFieldsValue({
+			type: "JDBC",
+			propsJson: "{}",
+			secretsJson: "",
+			testQuery: "SELECT 1",
+			usageRole: undefined,
+			warehouseLayers: [],
+		});
 		setEditOpen(true);
 	};
 
@@ -199,6 +217,8 @@ export default function DataSourcesPage() {
 			username: row.username,
 			description: row.description,
 			driverClass,
+			usageRole: rowProps?.usageRole || undefined,
+			warehouseLayers: Array.isArray(rowProps?.warehouseLayers) ? rowProps.warehouseLayers : [],
 			jdbcPropertiesJson: (rowProps as any).jdbcProperties ? JSON.stringify((rowProps as any).jdbcProperties, null, 2) : "",
 			propsJson: row.props ? JSON.stringify(row.props, null, 2) : "{}",
 			secretsJson: "",
@@ -278,6 +298,16 @@ export default function DataSourcesPage() {
 		const mergedProps: Record<string, any> = { ...propsFromJson };
 		if (String(values.driverClass || "").trim()) {
 			mergedProps.driverClass = String(values.driverClass).trim();
+		}
+		if (values.usageRole) {
+			mergedProps.usageRole = String(values.usageRole);
+		} else {
+			delete mergedProps.usageRole;
+		}
+		if (Array.isArray(values.warehouseLayers) && values.warehouseLayers.length) {
+			mergedProps.warehouseLayers = values.warehouseLayers;
+		} else {
+			delete mergedProps.warehouseLayers;
 		}
 		if (jdbcPropsFromJson !== undefined) {
 			mergedProps.jdbcProperties = jdbcPropsFromJson;
@@ -476,6 +506,24 @@ export default function DataSourcesPage() {
 					return <Tag color={color}>{s || "-"}</Tag>;
 				},
 			},
+			{
+				title: "角色",
+				key: "usageRole",
+				width: 120,
+				render: (_: unknown, row) => {
+					const role = (row.props as any)?.usageRole;
+					return role ? <Tag>{String(role)}</Tag> : "-";
+				},
+			},
+			{
+				title: "分层用途",
+				key: "warehouseLayers",
+				width: 160,
+				render: (_: unknown, row) => {
+					const layers = Array.isArray((row.props as any)?.warehouseLayers) ? (row.props as any).warehouseLayers : [];
+					return layers.length ? layers.map((l: string) => <Tag key={l}>{l}</Tag>) : "-";
+				},
+			},
 			{ title: "类型", dataIndex: "type", key: "type", width: 140, render: (v) => v || "-" },
 			{
 				title: "连接串",
@@ -624,6 +672,12 @@ export default function DataSourcesPage() {
 							showSearch
 							allowClear
 						/>
+					</Form.Item>
+					<Form.Item name="usageRole" label="数据源角色（可选）">
+						<Select options={ROLE_OPTIONS} allowClear placeholder="SOURCE / TARGET / BOTH" />
+					</Form.Item>
+					<Form.Item name="warehouseLayers" label="数仓分层用途（可选）">
+						<Select options={LAYER_OPTIONS} mode="multiple" allowClear placeholder="ODS / DWD / DWS / ADS" />
 					</Form.Item>
 					<Form.Item name="jdbcUrl" label="JDBC / 连接地址" rules={[{ required: true, message: "请输入连接串" }]}>
 						<Input.TextArea autoSize={{ minRows: 2, maxRows: 4 }} placeholder="jdbc:..." />

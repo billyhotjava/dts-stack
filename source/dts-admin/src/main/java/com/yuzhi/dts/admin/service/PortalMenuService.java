@@ -66,6 +66,7 @@ public class PortalMenuService {
         Map.entry("governance.indicators.computeRules", "/pages/governance/IndicatorComputeRulesPage"),
         Map.entry("governance.indicators.publish", "/pages/governance/IndicatorPublishPage"),
         Map.entry("governance.rules", "/pages/governance/QualityRulesPage"),
+        Map.entry("governance.quality", "/pages/catalog/QualityPage"),
         Map.entry("governance.tasks", "/pages/governance/QualityTasksPage"),
         Map.entry("governance.issues", "/pages/governance/QualityIssuesPage"),
         Map.entry("governance.compliance", "/pages/governance/CompliancePage"),
@@ -100,6 +101,7 @@ public class PortalMenuService {
         Map.entry("ops.deploy", "/pages/ops/DeploymentPage"),
         Map.entry("ops.settings", "/pages/ops/OpsSettingsPage"),
         Map.entry("foundation.dataSources", "/pages/foundation/DataSourcesPage"),
+        Map.entry("foundation.dbtConfig", "/pages/foundation/DbtConfigPage"),
         Map.entry("foundation.dataStorage", "/pages/foundation/DataStoragePage"),
         Map.entry("foundation.taskScheduling", "/pages/foundation/TaskSchedulingPage")
     );

@@ -262,6 +262,13 @@ services:
       # Enable lightweight HTTP access logging in dev to diagnose 401s and routing
       DTS_HTTP_ACCESS_LOG: "true"
       DTS_FEATURE_PLATFORM_KC_LOCALIZATION: "true"
+      DTS_DBT_PROJECT_DIR: /opt/dts/dbt
+      DTS_DBT_PROFILES_DIR: /opt/dts/dbt-profiles
+      DTS_DBT_CONFIG_PATH: /opt/dts/upload/dbt-config.json
+      DTS_AIRFLOW_BASE_URL: ${DTS_AIRFLOW_BASE_URL}
+      DTS_AIRFLOW_USERNAME: ${DTS_AIRFLOW_USERNAME}
+      DTS_AIRFLOW_PASSWORD: ${DTS_AIRFLOW_PASSWORD}
+      DTS_AIRFLOW_DAG_ID: ${DTS_AIRFLOW_DAG_ID}
       # Encrypted filesystem storage for Data Standard attachments
       DATA_STANDARD_ATTACHMENT_STORAGE_STRATEGY: "filesystem"
       DATA_STANDARD_STORAGE_DIR: "/opt/dts/upload"
@@ -306,6 +313,8 @@ services:
       - ./services/certs/truststore.p12:/etc/dts/truststore.p12:ro,z
       - ./services/dts-platform/drivers:/opt/dts/drivers:ro,z
       - ./services/dts-platform/upload:/opt/dts/upload:Z
+      - ./services/dts-dbt:/opt/dts/dbt:ro,z
+      - ./services/dts-dbt/profiles:/opt/dts/dbt-profiles:Z
       - ./builds/patch-app-dev-yml.sh:/patches/patch-app-dev-yml.sh:ro,z
       - ./logs/dts-platform:/workspace/logs/dts-platform:z
     security_opt:
@@ -635,7 +644,8 @@ services:
     volumes:
       - ./services/dts-openmetadata/ingestion:/opt/openmetadata/ingestion:ro,z
       - ./services/dts-dbt:/opt/dbt:ro,z
-    command: ["/bin/bash", "-lc", "/opt/openmetadata/ingestion/run-dbt-ingestion.sh"]
+    entrypoint: /bin/sh
+    command: ["-c", "/opt/openmetadata/ingestion/run-dbt-ingestion.sh"]
     restart: "no"
     networks:
       - dts-core
@@ -648,23 +658,33 @@ services:
       - -c
       - |
         airflow db migrate
-        airflow users create \
-          --username "${AIRFLOW_ADMIN_USERNAME}" \
-          --password "${AIRFLOW_ADMIN_PASSWORD}" \
-          --firstname "${AIRFLOW_ADMIN_FIRSTNAME}" \
-          --lastname "${AIRFLOW_ADMIN_LASTNAME}" \
-          --role Admin \
-          --email "${AIRFLOW_ADMIN_EMAIL}"
+        if airflow --help 2>/dev/null | grep -q "users"; then
+          airflow users create \
+            --username "${AIRFLOW_ADMIN_USERNAME}" \
+            --password "${AIRFLOW_ADMIN_PASSWORD}" \
+            --firstname "${AIRFLOW_ADMIN_FIRSTNAME}" \
+            --lastname "${AIRFLOW_ADMIN_LASTNAME}" \
+            --role Admin \
+            --email "${AIRFLOW_ADMIN_EMAIL}" || true
+        fi
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
       AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: "postgresql+psycopg2://${PG_USER_AIRFLOW}:${PG_PWD_AIRFLOW}@${PG_HOST}:${PG_PORT}/${PG_DB_AIRFLOW}"
-      AIRFLOW__CORE__SQL_ALCHEMY_CONN: "postgresql+psycopg2://${PG_USER_AIRFLOW}:${PG_PWD_AIRFLOW}@${PG_HOST}:${PG_PORT}/${PG_DB_AIRFLOW}"
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: "postgresql+psycopg2://${PG_USER_AIRFLOW}:${PG_PWD_AIRFLOW_URLENCODED:-${PG_PWD_AIRFLOW}}@${PG_HOST}:${PG_PORT}/${PG_DB_AIRFLOW}"
+      AIRFLOW__CORE__SQL_ALCHEMY_CONN: "postgresql+psycopg2://${PG_USER_AIRFLOW}:${PG_PWD_AIRFLOW_URLENCODED:-${PG_PWD_AIRFLOW}}@${PG_HOST}:${PG_PORT}/${PG_DB_AIRFLOW}"
       AIRFLOW__WEBSERVER__ENABLE_PROXY_FIX: "true"
       AIRFLOW__WEBSERVER__BASE_URL: "https://${HOST_FLOW}"
       AIRFLOW__WEBSERVER__EXPOSE_CONFIG: "true"
       AIRFLOW_HOME: /opt/airflow
+      DBT_PROJECT_DIR: ${DBT_PROJECT_DIR}
+      DBT_PROFILES_DIR: ${DBT_PROFILES_DIR}
+      DBT_IMAGE: ${IMAGE_DBT}
+      OPENMETADATA_INGEST_IMAGE: ${IMAGE_OPENMETADATA_INGESTION}
+      OPENMETADATA_INGEST_CONFIG_DIR: ${OPENMETADATA_INGEST_CONFIG_DIR}
+      OPENMETADATA_API_ENDPOINT: ${DTS_PLATFORM_OPENMETADATA_BASE_URL}/api/v1
+      OPENMETADATA_AUTH_TOKEN: ${DTS_PLATFORM_OPENMETADATA_AUTH_TOKEN}
+      OPENMETADATA_DBT_SERVICE: ${DTS_PLATFORM_OPENMETADATA_SERVICE_NAME:-hive}
     depends_on:
       dts-pg:
         condition: service_healthy
@@ -673,6 +693,7 @@ services:
       - ./services/dts-airflow/logs:/opt/airflow/logs
       - ./services/dts-airflow/plugins:/opt/airflow/plugins
       - ./services/dts-airflow/config:/opt/airflow/config
+      - /var/run/docker.sock:/var/run/docker.sock
     restart: "no"
     networks:
       - dts-core
@@ -688,12 +709,20 @@ services:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
       AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: "postgresql+psycopg2://${PG_USER_AIRFLOW}:${PG_PWD_AIRFLOW}@${PG_HOST}:${PG_PORT}/${PG_DB_AIRFLOW}"
-      AIRFLOW__CORE__SQL_ALCHEMY_CONN: "postgresql+psycopg2://${PG_USER_AIRFLOW}:${PG_PWD_AIRFLOW}@${PG_HOST}:${PG_PORT}/${PG_DB_AIRFLOW}"
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: "postgresql+psycopg2://${PG_USER_AIRFLOW}:${PG_PWD_AIRFLOW_URLENCODED:-${PG_PWD_AIRFLOW}}@${PG_HOST}:${PG_PORT}/${PG_DB_AIRFLOW}"
+      AIRFLOW__CORE__SQL_ALCHEMY_CONN: "postgresql+psycopg2://${PG_USER_AIRFLOW}:${PG_PWD_AIRFLOW_URLENCODED:-${PG_PWD_AIRFLOW}}@${PG_HOST}:${PG_PORT}/${PG_DB_AIRFLOW}"
       AIRFLOW__WEBSERVER__ENABLE_PROXY_FIX: "true"
       AIRFLOW__WEBSERVER__BASE_URL: "https://${HOST_FLOW}"
       AIRFLOW__WEBSERVER__EXPOSE_CONFIG: "true"
       AIRFLOW_HOME: /opt/airflow
+      DBT_PROJECT_DIR: ${DBT_PROJECT_DIR}
+      DBT_PROFILES_DIR: ${DBT_PROFILES_DIR}
+      DBT_IMAGE: ${IMAGE_DBT}
+      OPENMETADATA_INGEST_IMAGE: ${IMAGE_OPENMETADATA_INGESTION}
+      OPENMETADATA_INGEST_CONFIG_DIR: ${OPENMETADATA_INGEST_CONFIG_DIR}
+      OPENMETADATA_API_ENDPOINT: ${DTS_PLATFORM_OPENMETADATA_BASE_URL}/api/v1
+      OPENMETADATA_AUTH_TOKEN: ${DTS_PLATFORM_OPENMETADATA_AUTH_TOKEN}
+      OPENMETADATA_DBT_SERVICE: ${DTS_PLATFORM_OPENMETADATA_SERVICE_NAME:-hive}
     ports:
       - "${AIRFLOW_WEBSERVER_PORT:-18090}:8080"
     volumes:
@@ -701,6 +730,7 @@ services:
       - ./services/dts-airflow/logs:/opt/airflow/logs
       - ./services/dts-airflow/plugins:/opt/airflow/plugins
       - ./services/dts-airflow/config:/opt/airflow/config
+      - /var/run/docker.sock:/var/run/docker.sock
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=dts-core"
@@ -724,14 +754,23 @@ services:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
       AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: "postgresql+psycopg2://${PG_USER_AIRFLOW}:${PG_PWD_AIRFLOW}@${PG_HOST}:${PG_PORT}/${PG_DB_AIRFLOW}"
-      AIRFLOW__CORE__SQL_ALCHEMY_CONN: "postgresql+psycopg2://${PG_USER_AIRFLOW}:${PG_PWD_AIRFLOW}@${PG_HOST}:${PG_PORT}/${PG_DB_AIRFLOW}"
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: "postgresql+psycopg2://${PG_USER_AIRFLOW}:${PG_PWD_AIRFLOW_URLENCODED:-${PG_PWD_AIRFLOW}}@${PG_HOST}:${PG_PORT}/${PG_DB_AIRFLOW}"
+      AIRFLOW__CORE__SQL_ALCHEMY_CONN: "postgresql+psycopg2://${PG_USER_AIRFLOW}:${PG_PWD_AIRFLOW_URLENCODED:-${PG_PWD_AIRFLOW}}@${PG_HOST}:${PG_PORT}/${PG_DB_AIRFLOW}"
       AIRFLOW_HOME: /opt/airflow
+      DBT_PROJECT_DIR: ${DBT_PROJECT_DIR}
+      DBT_PROFILES_DIR: ${DBT_PROFILES_DIR}
+      DBT_IMAGE: ${IMAGE_DBT}
+      OPENMETADATA_INGEST_IMAGE: ${IMAGE_OPENMETADATA_INGESTION}
+      OPENMETADATA_INGEST_CONFIG_DIR: ${OPENMETADATA_INGEST_CONFIG_DIR}
+      OPENMETADATA_API_ENDPOINT: ${DTS_PLATFORM_OPENMETADATA_BASE_URL}/api/v1
+      OPENMETADATA_AUTH_TOKEN: ${DTS_PLATFORM_OPENMETADATA_AUTH_TOKEN}
+      OPENMETADATA_DBT_SERVICE: ${DTS_PLATFORM_OPENMETADATA_SERVICE_NAME:-hive}
     volumes:
       - ./services/dts-airflow/dags:/opt/airflow/dags
       - ./services/dts-airflow/logs:/opt/airflow/logs
       - ./services/dts-airflow/plugins:/opt/airflow/plugins
       - ./services/dts-airflow/config:/opt/airflow/config
+      - /var/run/docker.sock:/var/run/docker.sock
     restart: unless-stopped
     networks:
       - dts-core
@@ -747,14 +786,23 @@ services:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
       AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: "postgresql+psycopg2://${PG_USER_AIRFLOW}:${PG_PWD_AIRFLOW}@${PG_HOST}:${PG_PORT}/${PG_DB_AIRFLOW}"
-      AIRFLOW__CORE__SQL_ALCHEMY_CONN: "postgresql+psycopg2://${PG_USER_AIRFLOW}:${PG_PWD_AIRFLOW}@${PG_HOST}:${PG_PORT}/${PG_DB_AIRFLOW}"
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: "postgresql+psycopg2://${PG_USER_AIRFLOW}:${PG_PWD_AIRFLOW_URLENCODED:-${PG_PWD_AIRFLOW}}@${PG_HOST}:${PG_PORT}/${PG_DB_AIRFLOW}"
+      AIRFLOW__CORE__SQL_ALCHEMY_CONN: "postgresql+psycopg2://${PG_USER_AIRFLOW}:${PG_PWD_AIRFLOW_URLENCODED:-${PG_PWD_AIRFLOW}}@${PG_HOST}:${PG_PORT}/${PG_DB_AIRFLOW}"
       AIRFLOW_HOME: /opt/airflow
+      DBT_PROJECT_DIR: ${DBT_PROJECT_DIR}
+      DBT_PROFILES_DIR: ${DBT_PROFILES_DIR}
+      DBT_IMAGE: ${IMAGE_DBT}
+      OPENMETADATA_INGEST_IMAGE: ${IMAGE_OPENMETADATA_INGESTION}
+      OPENMETADATA_INGEST_CONFIG_DIR: ${OPENMETADATA_INGEST_CONFIG_DIR}
+      OPENMETADATA_API_ENDPOINT: ${DTS_PLATFORM_OPENMETADATA_BASE_URL}/api/v1
+      OPENMETADATA_AUTH_TOKEN: ${DTS_PLATFORM_OPENMETADATA_AUTH_TOKEN}
+      OPENMETADATA_DBT_SERVICE: ${DTS_PLATFORM_OPENMETADATA_SERVICE_NAME:-hive}
     volumes:
       - ./services/dts-airflow/dags:/opt/airflow/dags
       - ./services/dts-airflow/logs:/opt/airflow/logs
       - ./services/dts-airflow/plugins:/opt/airflow/plugins
       - ./services/dts-airflow/config:/opt/airflow/config
+      - /var/run/docker.sock:/var/run/docker.sock
     restart: unless-stopped
     networks:
       - dts-core
@@ -762,7 +810,8 @@ services:
   dts-dbt:
     image: ${IMAGE_DBT}
     container_name: dts-dbt
-    command: ["sleep", "infinity"]
+    entrypoint: /bin/bash
+    command: ["-lc", "sleep infinity"]
     working_dir: /opt/dbt
     volumes:
       - ./services/dts-dbt:/opt/dbt
