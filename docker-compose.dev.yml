@@ -498,6 +498,7 @@ services:
     volumes:
       - ./source/dts-admin-webapp:/workspace:z
       - ./source/dts-platform-webapp:/workspace/dts-platform-webapp:ro,z
+      - ./builds:/builds:ro,z
       - ./builds/patch-vite-env.sh:/patches/patch-vite-env.sh:ro,z
       - pnpm-store:/pnpm-store
       - /workspace/node_modules

@@ -266,7 +266,17 @@ public class DbtConfigService {
                     targetId = UUID.fromString(String.valueOf(targetObj));
                 } catch (Exception ignored) {}
             }
-            Map<String, Object> vars = raw.get("vars") instanceof Map<?, ?> map ? new LinkedHashMap<>(map) : Collections.emptyMap();
+            Map<String, Object> vars;
+            if (raw.get("vars") instanceof Map<?, ?> map) {
+                vars = new LinkedHashMap<>();
+                for (Map.Entry<?, ?> entry : map.entrySet()) {
+                    if (entry.getKey() != null) {
+                        vars.put(String.valueOf(entry.getKey()), entry.getValue());
+                    }
+                }
+            } else {
+                vars = Collections.emptyMap();
+            }
             return new DbtWorkspaceConfig(
                 true,
                 stringVal(raw.get("projectDir"), properties.getProjectDir()),

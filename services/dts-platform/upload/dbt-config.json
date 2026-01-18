@@ -1,0 +1,8 @@
+{
+  "enabled" : true,
+  "projectDir" : "/opt/dts/dbt",
+  "profilesDir" : "/opt/dts/dbt-profiles",
+  "profileName" : "dts",
+  "targetName" : "dev",
+  "targetDataSourceId" : null
+}

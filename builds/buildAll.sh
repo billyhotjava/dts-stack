@@ -66,12 +66,7 @@ build_maven_module() {
     -v "/root/.m2:/root/.m2" \
     -w /workspace \
     "$MAVEN_IMAGE" \
-    sh -lc 'JAVA_BIN="$(command -v java)"; \
-      if [ -z "$JAVA_BIN" ]; then echo >&2 "[buildAll] java not found in PATH"; exit 1; fi; \
-      JAVA_HOME="$(dirname "$(dirname "$(readlink -f "$JAVA_BIN")")")"; \
-      if [ ! -x "${JAVA_HOME}/bin/java" ]; then echo >&2 "[buildAll] invalid JAVA_HOME: ${JAVA_HOME}"; exit 1; fi; \
-      export JAVA_HOME; \
-      mvn -B -e -DskipTests -s /root/.m2/settings.xml -f pom.xml -pl "'"$module"'" -am package'
+    mvn -B -e -DskipTests -s /root/.m2/settings.xml -f pom.xml -pl "$module" -am package
 
   local jar_path
   jar_path="$(ls -1t ${REPO_ROOT}/source/${module}/target/${jar_glob} 2>/dev/null | head -n 1 || true)"

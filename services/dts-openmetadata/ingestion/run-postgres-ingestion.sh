@@ -1,30 +1,18 @@
 #!/bin/sh
 set -eu
 
-MANIFEST="/opt/dbt/target/manifest.json"
-RUN_RESULTS="/opt/dbt/target/run_results.json"
-CATALOG="/opt/dbt/target/catalog.json"
-CONFIG_SRC="/opt/openmetadata/ingestion/dbt.yml"
-CONFIG_TMP="/tmp/openmetadata-dbt.yml"
+CONFIG_SRC="/opt/openmetadata/ingestion/postgres.yml"
+CONFIG_TMP="/tmp/openmetadata-postgres.yml"
 export CONFIG_SRC CONFIG_TMP
 ALLOW_NO_AUTH="${OPENMETADATA_ALLOW_NO_AUTH:-false}"
 export ALLOW_NO_AUTH
-
-if [ ! -f "${MANIFEST}" ] || [ ! -f "${RUN_RESULTS}" ]; then
-  echo "[openmetadata-ingestion] dbt artifacts not found; skipping ingestion." >&2
-  exit 0
-fi
-
-if [ ! -f "${CATALOG}" ]; then
-  echo "[openmetadata-ingestion] catalog.json not found; continuing with available artifacts." >&2
-fi
 
 python3 - <<'PY'
 import os
 from pathlib import Path
 
-src = Path(os.environ.get("CONFIG_SRC", "/opt/openmetadata/ingestion/dbt.yml"))
-out = Path(os.environ.get("CONFIG_TMP", "/tmp/openmetadata-dbt.yml"))
+src = Path(os.environ.get("CONFIG_SRC", "/opt/openmetadata/ingestion/postgres.yml"))
+out = Path(os.environ.get("CONFIG_TMP", "/tmp/openmetadata-postgres.yml"))
 
 text = src.read_text(encoding="utf-8")
 text = os.path.expandvars(text)

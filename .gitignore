@@ -15,6 +15,7 @@ services/certs/*.srl
 services/certs/*.jks
 services/dts-minio/data/
 services/dts-platform/upload/data-standard
+services/dts-elasticsearch/data/
 services/jdbc/*.jar
 services/jdbc/*.JAR
 builds/offline/
