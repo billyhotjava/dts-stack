@@ -11,6 +11,7 @@ PNPM_VERSION="${PNPM_VERSION:-10.28.0}"
 IMGVERSION_FILE="${IMGVERSION_FILE:-${REPO_ROOT}/imgversion.conf}"
 MAVEN_IMAGE="${MAVEN_IMAGE:-maven:3.9.9-eclipse-temurin-21}"
 MAVEN_SECURITY_OPT="${MAVEN_SECURITY_OPT:-}"
+MAVEN_JAVA_HOME="${MAVEN_JAVA_HOME:-/opt/java/openjdk}"
 
 require_cmd() {
   if ! command -v "$1" >/dev/null 2>&1; then
@@ -62,6 +63,8 @@ build_maven_module() {
   fi
 
   docker run --rm "${security_opts[@]}" \
+    -e "JAVA_HOME=${MAVEN_JAVA_HOME}" \
+    -e "PATH=${MAVEN_JAVA_HOME}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
     -v "${REPO_ROOT}/source:/workspace" \
     -v "/root/.m2:/root/.m2" \
     -w /workspace \
