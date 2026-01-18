@@ -202,6 +202,29 @@ fix_pg_permissions(){
   fi
 }
 
+reset_pg_data_dir(){
+  if [[ "${PG_MODE:-}" != "embedded" ]]; then
+    return
+  fi
+  local pg_dir="services/dts-pg/data"
+  if command -v docker >/dev/null 2>&1; then
+    local cid
+    cid="$(docker ps -q --filter "name=dts-pg" 2>/dev/null | head -n 1 || true)"
+    if [[ -n "${cid:-}" ]]; then
+      echo "[init.sh] Stopping running dts-pg container for reset."
+      docker stop "${cid}" >/dev/null 2>&1 || true
+    fi
+  fi
+  rm -rf "${pg_dir}"
+  mkdir -p "${pg_dir}"
+  if [[ -n "$(ls -A "${pg_dir}" 2>/dev/null)" ]]; then
+    echo "[init.sh] ERROR: Postgres data dir not empty after reset: ${pg_dir}" >&2
+    echo "[init.sh] ERROR: Remove it manually and re-run init.sh --reset-pg." >&2
+    exit 1
+  fi
+  fix_pg_permissions
+}
+
 # Ensure /docker-entrypoint-initdb.d contents are world-readable and shell scripts executable
 # This avoids 'permission denied' when the Postgres container (user 'postgres') reads host-mounted init files.
 fix_pg_initdir_permissions(){
@@ -1056,9 +1079,7 @@ fi
 
 if [[ "${RESET_PG_DATA}" == "true" ]]; then
   echo "[init.sh] Resetting Postgres data directory (requested)."
-  rm -rf services/dts-pg/data
-  mkdir -p services/dts-pg/data
-  fix_pg_permissions
+  reset_pg_data_dir
 fi
 prepare_data_dirs
 
