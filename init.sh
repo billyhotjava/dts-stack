@@ -9,8 +9,9 @@ BASE_DOMAIN_ARG=""
 LEGACY_STACK=false
 RESET_PG_DATA=false
 RESET_ENV=false
+FORCE_PG_ENSURE=true
 
-usage(){ echo "Usage: $0 [legacy] [--reset-pg] [--reset-env] [single|ha2|cluster] [unified-password] [base-domain]"; }
+usage(){ echo "Usage: $0 [legacy] [--reset-pg] [--reset-env] [--no-force-pg-ensure] [single|ha2|cluster] [unified-password] [base-domain]"; }
 
 looks_like_domain(){
   local candidate="${1:-}"
@@ -971,6 +972,9 @@ while (($#)); do
     --reset-env)
       RESET_ENV=true
       ;;
+    --no-force-pg-ensure)
+      FORCE_PG_ENSURE=false
+      ;;
     single|ha2|cluster) [[ -z "$MODE" ]] || { echo "[init.sh] ERROR: deployment mode already specified as '${MODE}'." >&2; exit 1; }; MODE="$1";;
     *)
       if [[ -z "$BASE_DOMAIN_ARG" ]] && looks_like_domain "$1"; then BASE_DOMAIN_ARG="$1"
@@ -1209,6 +1213,10 @@ if [[ "${PG_MODE}" == "embedded" ]]; then
   ensure_pg_triplets
   echo "[init.sh] Bringing up the remaining services ..."
   "${compose_run[@]}" up -d
+  if [[ "${FORCE_PG_ENSURE}" == "true" ]]; then
+    echo "[init.sh] Re-running Postgres ensure script after stack up (forced)."
+    ensure_pg_triplets
+  fi
 else
   # 外部 PG：直接启动全部服务
   "${compose_run[@]}" up -d

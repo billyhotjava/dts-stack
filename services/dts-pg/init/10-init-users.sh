@@ -12,6 +12,10 @@ PG_AUTH_METHOD="${PG_AUTH_METHOD:-scram}"
 
 log(){ echo "[$(date +'%F %T')] [init] $*"; }
 
+if [[ -n "${POSTGRES_PASSWORD:-}" ]]; then
+  export PGPASSWORD="${POSTGRES_PASSWORD}"
+fi
+
 # 等待 PG，若未就绪则仅做离线文件调整，在线 SQL 留待后续 ensure 脚本
 PG_READY=0
 for i in {1..15}; do
