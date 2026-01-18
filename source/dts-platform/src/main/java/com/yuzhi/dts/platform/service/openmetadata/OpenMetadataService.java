@@ -65,7 +65,7 @@ public class OpenMetadataService {
 
     public OpenMetadataSummary summarize(OpenMetadataResult result) {
         if (result == null) {
-            return new OpenMetadataSummary(false, false, null, null, "-", "-", "-", "-", 0);
+            return new OpenMetadataSummary(false, false, null, null, "-", "-", "-", "-", 0, null);
         }
         Map<String, Object> entity = result.entity();
         String owner = resolveOwner(entity);
@@ -73,6 +73,7 @@ public class OpenMetadataService {
         String tags = resolveTags(entity);
         String description = resolveDescription(entity);
         int columnCount = resolveColumnCount(entity);
+        UsageSummary usage = resolveUsageSummary(entity);
         return new OpenMetadataSummary(
             result.enabled(),
             result.found(),
@@ -82,7 +83,8 @@ public class OpenMetadataService {
             domain,
             tags,
             description,
-            columnCount
+            columnCount,
+            usage
         );
     }
 
@@ -342,6 +344,34 @@ public class OpenMetadataService {
             return list.size();
         }
         return 0;
+    }
+
+    private UsageSummary resolveUsageSummary(Map<String, Object> entity) {
+        if (entity == null) return null;
+        Object raw = entity.get("usageSummary");
+        if (!(raw instanceof Map<?, ?> map)) {
+            return null;
+        }
+        UsageStats daily = toUsageStats(map.get("dailyStats"));
+        UsageStats weekly = toUsageStats(map.get("weeklyStats"));
+        UsageStats monthly = toUsageStats(map.get("monthlyStats"));
+        String date = stringValue(map.get("date"));
+        if (daily == null && weekly == null && monthly == null && date == null) {
+            return null;
+        }
+        return new UsageSummary(daily, weekly, monthly, date);
+    }
+
+    private UsageStats toUsageStats(Object raw) {
+        if (!(raw instanceof Map<?, ?> map)) {
+            return null;
+        }
+        Integer count = parseInteger(map.get("count"));
+        Double percentile = parseDouble(map.get("percentileRank"));
+        if (count == null && percentile == null) {
+            return null;
+        }
+        return new UsageStats(count, percentile);
     }
 
     private OpenMetadataTableSummary toTableSummary(Map<String, Object> entity) {
@@ -627,6 +657,20 @@ public class OpenMetadataService {
         }
     }
 
+    private Double parseDouble(Object value) {
+        if (value instanceof Number number) {
+            return number.doubleValue();
+        }
+        if (value == null) {
+            return null;
+        }
+        try {
+            return Double.parseDouble(String.valueOf(value).trim());
+        } catch (NumberFormatException ex) {
+            return null;
+        }
+    }
+
     private Instant parseTimestamp(Object value) {
         if (value instanceof Number number) {
             long ts = number.longValue();
@@ -761,7 +805,8 @@ public class OpenMetadataService {
         String domain,
         String tags,
         String description,
-        int columnCount
+        int columnCount,
+        UsageSummary usage
     ) {}
 
     public record OpenMetadataTablePage(
@@ -890,4 +935,8 @@ public class OpenMetadataService {
             return new OpenMetadataQualitySummary(false, false, null, 0, 0, 0, 0, 0, null, null, message);
         }
     }
+
+    public record UsageSummary(UsageStats daily, UsageStats weekly, UsageStats monthly, String date) {}
+
+    public record UsageStats(Integer count, Double percentileRank) {}
 }

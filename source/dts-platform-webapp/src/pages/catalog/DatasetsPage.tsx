@@ -932,6 +932,14 @@ const filtered = useMemo(() => {
 											<div className="mb-2 text-[11px] text-muted-foreground">
 												{(() => {
 													const summary = resolveTechSummary(d.id);
+													if (!summary || !summary.found) return "近7天访问：-";
+													const weekly = Number(summary?.usage?.weekly?.count ?? summary?.usage?.weeklyStats?.count ?? 0);
+													return `近7天访问：${Number.isFinite(weekly) ? weekly : "-"}`;
+												})()}
+											</div>
+											<div className="mb-2 text-[11px] text-muted-foreground">
+												{(() => {
+													const summary = resolveTechSummary(d.id);
 													if (!summary || !summary.found) return "标签：-";
 													return `标签：${summary.tags || "-"}`;
 												})()}

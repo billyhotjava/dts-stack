@@ -886,6 +886,15 @@ export default function DatasetDetailPage() {
 	const omColumns = useMemo(() => {
 		return Array.isArray(omEntity?.columns) ? omEntity.columns.length : 0;
 	}, [omEntity]);
+	const omUsage = useMemo(() => {
+		const usage = omEntity?.usageSummary;
+		if (!usage || typeof usage !== "object") return null;
+		const daily = Number((usage as any).dailyStats?.count ?? 0);
+		const weekly = Number((usage as any).weeklyStats?.count ?? 0);
+		const monthly = Number((usage as any).monthlyStats?.count ?? 0);
+		const date = String((usage as any).date || "").trim();
+		return { daily, weekly, monthly, date: date || "-" };
+	}, [omEntity]);
 	type TechnicalColumn = {
 		name: string;
 		displayName: string;
@@ -1204,6 +1213,14 @@ if (!dataset) return <div className="text-sm text-muted-foreground">未找到该
 												<div>Domain：{omDomain}</div>
 												<div>标签：{omTags}</div>
 												<div>字段数：{omColumns || "-"}</div>
+												<div>
+													访问统计：
+													{omUsage
+														? `日 ${omUsage.daily} / 周 ${omUsage.weekly} / 月 ${omUsage.monthly}${
+																omUsage.date !== "-" ? `（${omUsage.date}）` : ""
+															}`
+														: "-"}
+												</div>
 												<div>
 													元数据链接：
 													{omLink ? (
