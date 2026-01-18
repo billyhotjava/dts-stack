@@ -5,10 +5,6 @@ ARG RUNTIME_BASE_IMAGE=eclipse-temurin:21-jre
 # syntax=docker/dockerfile:1.6
 FROM maven:3.9.9-eclipse-temurin-21 AS build
 
-# Ensure Maven finds Java reliably
-ENV JAVA_HOME=/opt/java/openjdk \
-    PATH="/opt/java/openjdk/bin:${PATH}"
-
 ARG UBUNTU_PORTS_MIRROR=https://mirrors.aliyun.com/ubuntu-ports
 ARG UBUNTU_ARCHIVE_MIRROR=https://mirrors.aliyun.com/ubuntu
 RUN set -eux; \
@@ -85,8 +81,7 @@ RUN set -eux; \
     fi; \
     if [ "${USE_MAVEN}" = "true" ]; then \
       echo "[build] Building dts-admin via Maven"; \
-      if [ -x "${JAVA_HOME:-/opt/java/openjdk}/bin/java" ]; then \
-        export JAVA_HOME="${JAVA_HOME:-/opt/java/openjdk}"; \
+      if [ -n "${JAVA_HOME:-}" ] && [ -x "${JAVA_HOME}/bin/java" ]; then \
         echo "[build] Reusing preset JAVA_HOME=${JAVA_HOME}"; \
       else \
         JAVA_BIN=$(readlink -f "$(command -v java)"); \

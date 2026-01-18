@@ -11,15 +11,11 @@ source:
         dbtCatalogFilePath: /opt/dbt/target/catalog.json
 sink:
   type: metadata-rest
-  config:
-    apiEndpoint: ${OPENMETADATA_API_ENDPOINT}
-    authProvider: openmetadata
-    securityConfig:
-      jwtToken: ${OPENMETADATA_AUTH_TOKEN}
+  config: {}
 workflowConfig:
   loggerLevel: INFO
   openMetadataServerConfig:
-    hostPort: ${OPENMETADATA_API_ENDPOINT}
+    hostPort: ${OPENMETADATA_HOST_PORT}
     authProvider: openmetadata
     securityConfig:
       jwtToken: ${OPENMETADATA_AUTH_TOKEN}

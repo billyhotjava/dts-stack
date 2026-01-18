@@ -1,1 +1,1 @@
-{"_invocation_id": "d838fd99-447b-4971-8133-4e201adadee4", "linked": {"0": {"name": "model.dts_demo.demo", "type": "model"}}}
+{"_invocation_id": "3b3841da-0afd-479b-a061-bcb6865ab482", "linked": {"0": {"name": "model.dts_demo.demo", "type": "model", "succ": [1, 2, 3]}, "1": {"name": "test.dts_demo.not_null_demo_id.ec2804e8d3", "type": "test"}, "2": {"name": "test.dts_demo.unique_demo_id.05afb6f0d5", "type": "test"}, "3": {"name": "test.dts_demo.not_null_demo_label.8d54b25181", "type": "test"}}}

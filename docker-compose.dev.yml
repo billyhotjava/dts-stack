@@ -639,8 +639,15 @@ services:
         condition: service_started
     environment:
       OPENMETADATA_API_ENDPOINT: "http://dts-openmetadata:8585/api/v1"
+      OPENMETADATA_HOST_PORT: "http://dts-openmetadata:8585/api"
       OPENMETADATA_AUTH_TOKEN: ${DTS_PLATFORM_OPENMETADATA_AUTH_TOKEN:-}
       OPENMETADATA_DBT_SERVICE: ${DTS_PLATFORM_OPENMETADATA_SERVICE_NAME:-hive}
+      OPENMETADATA_DB_SERVICE: ${DTS_PLATFORM_OPENMETADATA_SERVICE_NAME:-hive}
+      PG_SUPER_USER: ${PG_SUPER_USER}
+      PG_SUPER_PASSWORD: ${PG_SUPER_PASSWORD}
+      PG_HOST: ${PG_HOST}
+      PG_PORT: ${PG_PORT}
+      PG_DB_DTPS: ${PG_DB_DTPS}
     volumes:
       - ./services/dts-openmetadata/ingestion:/opt/openmetadata/ingestion:ro,z
       - ./services/dts-dbt:/opt/dbt:ro,z
