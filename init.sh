@@ -1026,6 +1026,15 @@ ensure_env LEGACY_STACK "${LEGACY_STACK}"
 
 # 加载镜像版本 & 目录
 load_img_versions
+if [[ "${LEGACY_STACK}" == "true" ]]; then
+  arch="$(uname -m 2>/dev/null || true)"
+  if [[ "$arch" == "aarch64" || "$arch" == "arm64" ]]; then
+    if [[ -z "${IMAGE_DBT:-}" || "${IMAGE_DBT}" == "ghcr.io/dbt-labs/dbt-core:1.11.2" ]]; then
+      ensure_env IMAGE_DBT "dbt-core:1.11.2"
+      echo "[init.sh] Using local dbt-core image for arm64 legacy stack: dbt-core:1.11.2"
+    fi
+  fi
+fi
 prepare_data_dirs
 
 warn_if_ima_appraise
