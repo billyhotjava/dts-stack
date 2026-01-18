@@ -1,5 +1,11 @@
 ## Dev overlay: run services from source via bind mounts and live reload
 
+x-hc: &hc
+  interval: 10s
+  timeout: 5s
+  retries: 30
+  start_period: 20s
+
 services:
 
   # Traefik overlay (Hetu reverse proxy via path prefixes).
@@ -565,6 +571,187 @@ services:
       timeout: 5s
       retries: 30
       start_period: 60s
+
+  dts-elasticsearch:
+    image: ${IMAGE_ELASTICSEARCH}
+    container_name: dts-elasticsearch
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+    volumes:
+      - ./services/dts-elasticsearch/data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:9200 >/dev/null || exit 1"]
+      <<: *hc
+    restart: unless-stopped
+    networks:
+      - dts-core
+
+  dts-openmetadata:
+    image: ${IMAGE_OPENMETADATA}
+    container_name: dts-openmetadata
+    depends_on:
+      dts-pg:
+        condition: service_healthy
+      dts-elasticsearch:
+        condition: service_healthy
+    environment:
+      OPENMETADATA_CLUSTER_NAME: dts-openmetadata
+      OPENMETADATA_SERVER_PORT: 8585
+      OPENMETADATA_JWT_SECRET: ${OPENMETADATA_JWT_SECRET}
+      DB_HOST: ${PG_HOST}
+      DB_PORT: ${PG_PORT}
+      DB_USER: ${PG_USER_OPENMETADATA}
+      DB_USER_PASSWORD: ${PG_PWD_OPENMETADATA}
+      DB_DATABASE: ${PG_DB_OPENMETADATA}
+      ELASTICSEARCH_HOST: dts-elasticsearch
+      ELASTICSEARCH_PORT: 9200
+      ELASTICSEARCH_SCHEME: http
+    ports:
+      - "${OPENMETADATA_HTTP_PORT:-8585}:8585"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=dts-core"
+      - "traefik.http.routers.dts-openmetadata.rule=Host(`${HOST_META}`)"
+      - "traefik.http.routers.dts-openmetadata.entrypoints=websecure"
+      - "traefik.http.routers.dts-openmetadata.tls=true"
+      - "traefik.http.services.dts-openmetadata.loadbalancer.server.port=8585"
+      - "traefik.http.routers.dts-openmetadata.middlewares=platform-forward-auth@file,security-headers@file"
+    restart: unless-stopped
+    networks:
+      - dts-core
+
+  dts-airflow-init:
+    image: ${IMAGE_AIRFLOW}
+    container_name: dts-airflow-init
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        airflow db migrate
+        airflow users create \
+          --username "${AIRFLOW_ADMIN_USERNAME}" \
+          --password "${AIRFLOW_ADMIN_PASSWORD}" \
+          --firstname "${AIRFLOW_ADMIN_FIRSTNAME}" \
+          --lastname "${AIRFLOW_ADMIN_LASTNAME}" \
+          --role Admin \
+          --email "${AIRFLOW_ADMIN_EMAIL}"
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: "postgresql+psycopg2://${PG_USER_AIRFLOW}:${PG_PWD_AIRFLOW}@${PG_HOST}:${PG_PORT}/${PG_DB_AIRFLOW}"
+      AIRFLOW__CORE__SQL_ALCHEMY_CONN: "postgresql+psycopg2://${PG_USER_AIRFLOW}:${PG_PWD_AIRFLOW}@${PG_HOST}:${PG_PORT}/${PG_DB_AIRFLOW}"
+      AIRFLOW__WEBSERVER__ENABLE_PROXY_FIX: "true"
+      AIRFLOW__WEBSERVER__BASE_URL: "https://${HOST_FLOW}"
+      AIRFLOW__WEBSERVER__EXPOSE_CONFIG: "true"
+      AIRFLOW_HOME: /opt/airflow
+    depends_on:
+      dts-pg:
+        condition: service_healthy
+    volumes:
+      - ./services/dts-airflow/dags:/opt/airflow/dags
+      - ./services/dts-airflow/logs:/opt/airflow/logs
+      - ./services/dts-airflow/plugins:/opt/airflow/plugins
+      - ./services/dts-airflow/config:/opt/airflow/config
+    restart: "no"
+    networks:
+      - dts-core
+
+  dts-airflow-webserver:
+    image: ${IMAGE_AIRFLOW}
+    container_name: dts-airflow-webserver
+    command: webserver
+    depends_on:
+      dts-airflow-init:
+        condition: service_completed_successfully
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: "postgresql+psycopg2://${PG_USER_AIRFLOW}:${PG_PWD_AIRFLOW}@${PG_HOST}:${PG_PORT}/${PG_DB_AIRFLOW}"
+      AIRFLOW__CORE__SQL_ALCHEMY_CONN: "postgresql+psycopg2://${PG_USER_AIRFLOW}:${PG_PWD_AIRFLOW}@${PG_HOST}:${PG_PORT}/${PG_DB_AIRFLOW}"
+      AIRFLOW__WEBSERVER__ENABLE_PROXY_FIX: "true"
+      AIRFLOW__WEBSERVER__BASE_URL: "https://${HOST_FLOW}"
+      AIRFLOW__WEBSERVER__EXPOSE_CONFIG: "true"
+      AIRFLOW_HOME: /opt/airflow
+    ports:
+      - "${AIRFLOW_WEBSERVER_PORT:-18090}:8080"
+    volumes:
+      - ./services/dts-airflow/dags:/opt/airflow/dags
+      - ./services/dts-airflow/logs:/opt/airflow/logs
+      - ./services/dts-airflow/plugins:/opt/airflow/plugins
+      - ./services/dts-airflow/config:/opt/airflow/config
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=dts-core"
+      - "traefik.http.routers.dts-airflow.rule=Host(`${HOST_FLOW}`)"
+      - "traefik.http.routers.dts-airflow.entrypoints=websecure"
+      - "traefik.http.routers.dts-airflow.tls=true"
+      - "traefik.http.services.dts-airflow.loadbalancer.server.port=8080"
+      - "traefik.http.routers.dts-airflow.middlewares=platform-forward-auth@file,security-headers@file"
+    restart: unless-stopped
+    networks:
+      - dts-core
+
+  dts-airflow-scheduler:
+    image: ${IMAGE_AIRFLOW}
+    container_name: dts-airflow-scheduler
+    command: scheduler
+    depends_on:
+      dts-airflow-init:
+        condition: service_completed_successfully
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: "postgresql+psycopg2://${PG_USER_AIRFLOW}:${PG_PWD_AIRFLOW}@${PG_HOST}:${PG_PORT}/${PG_DB_AIRFLOW}"
+      AIRFLOW__CORE__SQL_ALCHEMY_CONN: "postgresql+psycopg2://${PG_USER_AIRFLOW}:${PG_PWD_AIRFLOW}@${PG_HOST}:${PG_PORT}/${PG_DB_AIRFLOW}"
+      AIRFLOW_HOME: /opt/airflow
+    volumes:
+      - ./services/dts-airflow/dags:/opt/airflow/dags
+      - ./services/dts-airflow/logs:/opt/airflow/logs
+      - ./services/dts-airflow/plugins:/opt/airflow/plugins
+      - ./services/dts-airflow/config:/opt/airflow/config
+    restart: unless-stopped
+    networks:
+      - dts-core
+
+  dts-airflow-triggerer:
+    image: ${IMAGE_AIRFLOW}
+    container_name: dts-airflow-triggerer
+    command: triggerer
+    depends_on:
+      dts-airflow-init:
+        condition: service_completed_successfully
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: "postgresql+psycopg2://${PG_USER_AIRFLOW}:${PG_PWD_AIRFLOW}@${PG_HOST}:${PG_PORT}/${PG_DB_AIRFLOW}"
+      AIRFLOW__CORE__SQL_ALCHEMY_CONN: "postgresql+psycopg2://${PG_USER_AIRFLOW}:${PG_PWD_AIRFLOW}@${PG_HOST}:${PG_PORT}/${PG_DB_AIRFLOW}"
+      AIRFLOW_HOME: /opt/airflow
+    volumes:
+      - ./services/dts-airflow/dags:/opt/airflow/dags
+      - ./services/dts-airflow/logs:/opt/airflow/logs
+      - ./services/dts-airflow/plugins:/opt/airflow/plugins
+      - ./services/dts-airflow/config:/opt/airflow/config
+    restart: unless-stopped
+    networks:
+      - dts-core
+
+  dts-dbt:
+    image: ${IMAGE_DBT}
+    container_name: dts-dbt
+    command: ["sleep", "infinity"]
+    working_dir: /opt/dbt
+    volumes:
+      - ./services/dts-dbt:/opt/dbt
+      - ./services/dts-dbt/profiles:/root/.dbt
+    restart: unless-stopped
+    networks:
+      - dts-core
 
 volumes:
   pnpm-store:

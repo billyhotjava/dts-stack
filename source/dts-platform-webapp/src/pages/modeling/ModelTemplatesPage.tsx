@@ -5,6 +5,7 @@ import {
 	createModelTemplate,
 	deleteModelTemplate,
 	listDatasets,
+	listMetadataStandards,
 	listModelTemplates,
 	listTablesByDataset,
 	updateModelTemplate,
@@ -29,6 +30,7 @@ type TemplateRow = {
 	versionNotes?: string | null;
 	namingRule?: string | null;
 	fieldsTemplate?: string | null;
+	metadataStandardIds?: string | null;
 	reviewChecklist?: string | null;
 	lastModifiedDate?: string | null;
 };
@@ -42,6 +44,7 @@ type FormState = {
 	versionNotes: string;
 	namingRule: string;
 	fieldsTemplate: string;
+	metadataStandardIds: string[];
 	reviewChecklist: string;
 };
 
@@ -53,11 +56,13 @@ const DEFAULT_FORM: FormState = {
 	versionNotes: "",
 	namingRule: "",
 	fieldsTemplate: "",
+	metadataStandardIds: [],
 	reviewChecklist: "",
 };
 
 type DatasetOption = { id: string; name: string; ownerDept?: string | null; classification?: string | null };
 type TableOption = { id: string; name: string };
+type MetadataStandardOption = { id: string; fieldNameCn: string; fieldNameEn: string; dataType?: string; nullable?: boolean; description?: string };
 
 export default function ModelTemplatesPage() {
 	const [loading, setLoading] = useState(false);
@@ -85,6 +90,9 @@ export default function ModelTemplatesPage() {
 	const [tables, setTables] = useState<TableOption[]>([]);
 	const [tableId, setTableId] = useState<string>("");
 
+	const [metadataLoading, setMetadataLoading] = useState(false);
+	const [metadataOptions, setMetadataOptions] = useState<MetadataStandardOption[]>([]);
+
 	const fetchList = useCallback(async () => {
 		setLoading(true);
 		try {
@@ -99,6 +107,7 @@ export default function ModelTemplatesPage() {
 					versionNotes: t?.versionNotes ?? t?.version_notes ?? null,
 					namingRule: t?.namingRule ?? t?.naming_rule ?? null,
 					fieldsTemplate: t?.fieldsTemplate ?? t?.fields_template ?? null,
+					metadataStandardIds: t?.metadataStandardIds ?? t?.metadata_standard_ids ?? null,
 					reviewChecklist: t?.reviewChecklist ?? t?.review_checklist ?? null,
 					lastModifiedDate: t?.lastModifiedDate ?? t?.last_modified_date ?? null,
 				})),
@@ -130,6 +139,24 @@ export default function ModelTemplatesPage() {
 		setDialogOpen(true);
 	};
 
+	const parseMetadataIds = (raw?: string | null): string[] => {
+		if (!raw) return [];
+		const text = String(raw).trim();
+		if (!text) return [];
+		try {
+			const parsed = JSON.parse(text);
+			if (Array.isArray(parsed)) {
+				return parsed.map((v) => String(v)).filter(Boolean);
+			}
+		} catch {
+			// ignore
+		}
+		return text
+			.split(",")
+			.map((v) => v.trim())
+			.filter(Boolean);
+	};
+
 	const openEdit = (row: TemplateRow) => {
 		setForm({
 			id: row.id,
@@ -140,6 +167,7 @@ export default function ModelTemplatesPage() {
 			versionNotes: String(row.versionNotes || ""),
 			namingRule: String(row.namingRule || ""),
 			fieldsTemplate: String(row.fieldsTemplate || ""),
+			metadataStandardIds: parseMetadataIds(row.metadataStandardIds),
 			reviewChecklist: String(row.reviewChecklist || ""),
 		});
 		setDialogOpen(true);
@@ -169,6 +197,7 @@ export default function ModelTemplatesPage() {
 		lines.push(`- 分层：${row.layer || "-"}`);
 		lines.push(`- 状态：${String(row.status || "").toUpperCase() || "-"}`);
 		lines.push(`- 版本：${row.version || "-"}`);
+		lines.push(`- 关联元数据标准：${row.metadataStandardIds || "-"}`);
 		lines.push("");
 		lines.push("## 命名规则");
 		lines.push("```");
@@ -237,6 +266,35 @@ export default function ModelTemplatesPage() {
 		}
 	}, [datasetId, tableKeyword]);
 
+	const loadMetadataStandards = useCallback(async () => {
+		setMetadataLoading(true);
+		try {
+			const resp = (await listMetadataStandards({ page: 0, size: 500 })) as any;
+			const content = Array.isArray(resp?.content) ? resp.content : [];
+			setMetadataOptions(
+				content.map((item: any) => ({
+					id: String(item.id),
+					fieldNameCn: String(item.fieldNameCn || ""),
+					fieldNameEn: String(item.fieldNameEn || ""),
+					dataType: item.dataType ?? null,
+					nullable: item.nullable ?? null,
+					description: item.description ?? null,
+				})),
+			);
+		} catch (e: any) {
+			console.error(e);
+			setMetadataOptions([]);
+		} finally {
+			setMetadataLoading(false);
+		}
+	}, []);
+
+	useEffect(() => {
+		if (dialogOpen) {
+			void loadMetadataStandards();
+		}
+	}, [dialogOpen, loadMetadataStandards]);
+
 	const openValidate = useCallback(
 		(row: TemplateRow) => {
 			setActiveTemplate(row);
@@ -277,6 +335,7 @@ export default function ModelTemplatesPage() {
 		}
 		setSaving(true);
 		try {
+			const metadataStandardIds = Array.isArray(form.metadataStandardIds) ? form.metadataStandardIds : [];
 			const payload: any = {
 				name: form.name.trim(),
 				layer: form.layer || null,
@@ -285,6 +344,7 @@ export default function ModelTemplatesPage() {
 				versionNotes: form.versionNotes.trim() || null,
 				namingRule: form.namingRule.trim() || null,
 				fieldsTemplate: form.fieldsTemplate.trim() || null,
+				metadataStandardIds: metadataStandardIds.length ? JSON.stringify(metadataStandardIds) : null,
 				reviewChecklist: form.reviewChecklist.trim() || null,
 			};
 			if (form.id) {
@@ -301,6 +361,28 @@ export default function ModelTemplatesPage() {
 			setSaving(false);
 		}
 	}, [form, fetchList]);
+
+	const applyMetadataTemplate = () => {
+		if (!form.metadataStandardIds.length) {
+			toast.error("请先选择元数据标准");
+			return;
+		}
+		const selected = metadataOptions.filter((opt) => form.metadataStandardIds.includes(opt.id));
+		if (selected.length === 0) {
+			toast.error("选中的元数据标准未加载");
+			return;
+		}
+		const lines = ["name,dataType,nullable,standardCode,comment"];
+		for (const item of selected) {
+			const name = item.fieldNameEn || item.fieldNameCn || "";
+			const dataType = item.dataType || "";
+			const nullable = item.nullable === false ? "false" : "true";
+			const comment = item.description ? String(item.description).replaceAll(",", "，") : "";
+			lines.push(`${name},${dataType},${nullable},,${comment}`);
+		}
+		setForm((p) => ({ ...p, fieldsTemplate: lines.join("\n") }));
+		toast.success("已生成字段模板（CSV）");
+	};
 
 	const remove = useCallback(
 		async (id: string) => {
@@ -462,6 +544,29 @@ export default function ModelTemplatesPage() {
 						</div>
 						<div className="space-y-2 md:col-span-2">
 							<Label>字段模板（可选）</Label>
+							<div className="space-y-2">
+								<div className="flex flex-wrap items-center gap-2">
+									<Label className="text-xs text-muted-foreground">关联元数据标准</Label>
+									<AntSelect
+										mode="multiple"
+										value={form.metadataStandardIds}
+										onChange={(value) => setForm((p) => ({ ...p, metadataStandardIds: value as string[] }))}
+										placeholder="选择元数据标准（可多选）"
+										style={{ minWidth: 320 }}
+										loading={metadataLoading}
+										options={metadataOptions.map((opt) => ({
+											label: `${opt.fieldNameCn} (${opt.fieldNameEn})`,
+											value: opt.id,
+										}))}
+									/>
+									<Button size="sm" variant="secondary" onClick={applyMetadataTemplate}>
+										生成字段模板
+									</Button>
+								</div>
+								<div className="text-xs text-muted-foreground">
+									字段模板可由元数据标准生成（CSV），生成会覆盖当前内容。
+								</div>
+							</div>
 							<Textarea
 								value={form.fieldsTemplate}
 								onChange={(e) => setForm((p) => ({ ...p, fieldsTemplate: e.target.value }))}

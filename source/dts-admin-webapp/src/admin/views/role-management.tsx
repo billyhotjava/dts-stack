@@ -486,7 +486,7 @@ export default function RoleManagementView() {
                                     showTotal: (total, range) => `第 ${range[0]}-${range[1]} 条，共 ${total} 条`,
                                 }}
                                 size="small"
-                                className="text-sm"
+                                className="role-management-table text-sm"
                                 rowClassName={() => "text-sm"}
                                 tableLayout="fixed"
                                 scroll={{ x: 1500 }}

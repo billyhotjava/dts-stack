@@ -5,7 +5,16 @@
       "path": "workbench",
       "icon": "solar:widget-3-bold-duotone",
       "titleKey": "sys.nav.portal.workbench",
-      "title": "工作台"
+      "title": "工作台",
+      "children": [
+        {
+          "key": "workflowCenter",
+          "path": "workflow-center",
+          "icon": "solar:checklist-minimalistic-bold-duotone",
+          "titleKey": "sys.nav.portal.workbenchWorkflowCenter",
+          "title": "流程中心"
+        }
+      ]
     },
     {
       "key": "catalog",
@@ -80,6 +89,13 @@
           "icon": "solar:document-text-bold-duotone",
           "titleKey": "sys.nav.portal.modelingStandards",
           "title": "数据标准"
+        },
+        {
+          "key": "metadataStandards",
+          "path": "metadata-standards",
+          "icon": "solar:document-text-bold-duotone",
+          "titleKey": "sys.nav.portal.modelingMetadataStandards",
+          "title": "元数据标准"
         },
         {
           "key": "glossary",

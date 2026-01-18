@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+    <changeSet id="20260117-01-fix-catalog-dataset-access-task-dept-code" author="codex" dbms="postgresql">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="bytea">
+                select data_type
+                from information_schema.columns
+                where table_name = 'catalog_dataset_access_task'
+                  and column_name = 'dept_code'
+            </sqlCheck>
+        </preConditions>
+        <sql>
+            alter table catalog_dataset_access_task
+            alter column dept_code type varchar(64)
+            using case
+                when dept_code is null then null
+                else convert_from(dept_code, 'UTF8')
+            end;
+        </sql>
+    </changeSet>
+</databaseChangeLog>

@@ -223,6 +223,15 @@ public class DatasetDataAccessApprovalService {
         return List.of();
     }
 
+    @Transactional(readOnly = true)
+    public List<CatalogDatasetAccessTask> listDoneTasksForCurrentUser() {
+        String username = SecurityUtils.getCurrentUserLogin().orElse(null);
+        if (!StringUtils.hasText(username)) {
+            return List.of();
+        }
+        return taskRepository.findDecidedTasksForUser(username);
+    }
+
     public CatalogDatasetAccessTask approveTask(UUID taskId, String notes, String activeDeptHeader) {
         CatalogDatasetAccessTask task = taskRepository.findById(taskId).orElseThrow();
         assertCanDecide(task, activeDeptHeader);

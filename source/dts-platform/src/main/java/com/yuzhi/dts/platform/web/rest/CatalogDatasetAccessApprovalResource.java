@@ -5,6 +5,7 @@ import com.yuzhi.dts.platform.domain.catalog.CatalogDatasetAccessRequest;
 import com.yuzhi.dts.platform.domain.catalog.CatalogDatasetAccessTask;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetAccessRequestRepository;
+import com.yuzhi.dts.platform.security.SecurityUtils;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.security.DatasetDataAccessApprovalService;
 import jakarta.validation.Valid;
@@ -121,6 +122,27 @@ public class CatalogDatasetAccessApprovalResource {
                 dto.put("request", req);
                 return dto;
             })
+            .toList();
+        return ApiResponses.ok(views);
+    }
+
+    @GetMapping("/tasks/done")
+    public ApiResponse<List<Map<String, Object>>> listDoneTasks() {
+        String currentLogin = SecurityUtils.getCurrentUserLogin().orElse(null);
+        List<CatalogDatasetAccessTask> tasks = approvalService.listDoneTasksForCurrentUser();
+        List<Map<String, Object>> views = tasks
+            .stream()
+            .map(task -> {
+                CatalogDatasetAccessRequest req = task.getRequestId() != null ? requestRepository.findById(task.getRequestId()).orElse(null) : null;
+                if (req != null && currentLogin != null && currentLogin.equalsIgnoreCase(req.getRequesterUsername())) {
+                    return null;
+                }
+                Map<String, Object> dto = new LinkedHashMap<>();
+                dto.put("task", task);
+                dto.put("request", req);
+                return dto;
+            })
+            .filter(item -> item != null)
             .toList();
         return ApiResponses.ok(views);
     }

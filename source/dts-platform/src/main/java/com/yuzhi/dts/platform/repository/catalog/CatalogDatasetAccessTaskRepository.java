@@ -46,5 +46,14 @@ public interface CatalogDatasetAccessTaskRepository extends JpaRepository<Catalo
         """
     )
     Optional<CatalogDatasetAccessTask> findFirstPendingTask(@Param("requestId") UUID requestId);
-}
 
+    @Query(
+        """
+        select t from CatalogDatasetAccessTask t
+        where lower(t.decidedBy) = lower(:decidedBy)
+          and t.status in ('APPROVED', 'REJECTED')
+        order by t.decidedAt desc
+        """
+    )
+    List<CatalogDatasetAccessTask> findDecidedTasksForUser(@Param("decidedBy") String decidedBy);
+}

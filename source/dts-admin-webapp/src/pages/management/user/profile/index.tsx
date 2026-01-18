@@ -168,7 +168,7 @@ function UserProfile() {
 		<div className="space-y-6">
 			<div className="relative flex flex-col items-center gap-4 p-6 text-center">
 				<div style={bgStyle} className="absolute inset-0 rounded-lg" />
-				<div className="absolute inset-0 rounded-lg bg-black/40" />
+				<div className="absolute inset-0 rounded-lg bg-black/40 dark:bg-white/30" />
 				<div className="relative z-10 flex flex-col items-center gap-3">
 					<Avatar className="h-24 w-24 border-4 border-background shadow-lg">
 						<AvatarImage src={avatar} className="rounded-full" />

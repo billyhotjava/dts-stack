@@ -9,6 +9,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.analytics.domain.AnalyticsField;
 import com.yuzhi.dts.analytics.domain.AnalyticsTable;
+import com.yuzhi.dts.analytics.repository.AnalyticsDatabaseRepository;
 import com.yuzhi.dts.analytics.repository.AnalyticsFieldRepository;
 import com.yuzhi.dts.analytics.repository.AnalyticsTableRepository;
 import java.util.List;
@@ -21,6 +22,7 @@ class MbqlToSqlServiceTest {
 
     @Test
     void translateSelect_rendersFilterWithBindings() throws Exception {
+        AnalyticsDatabaseRepository databaseRepository = mock(AnalyticsDatabaseRepository.class);
         AnalyticsTableRepository tableRepository = mock(AnalyticsTableRepository.class);
         AnalyticsFieldRepository fieldRepository = mock(AnalyticsFieldRepository.class);
 
@@ -45,7 +47,7 @@ class MbqlToSqlServiceTest {
 
         when(fieldRepository.findAllByTableIdOrderByPositionAscIdAsc(10L)).thenReturn(List.of(id, status));
 
-        MbqlToSqlService service = new MbqlToSqlService(tableRepository, fieldRepository);
+        MbqlToSqlService service = new MbqlToSqlService(databaseRepository, tableRepository, fieldRepository);
 
         JsonNode mbql = objectMapper.readTree(
                 """
@@ -77,9 +79,10 @@ class MbqlToSqlServiceTest {
 
     @Test
     void translateSelect_rejectsUnsupportedKeys() throws Exception {
+        AnalyticsDatabaseRepository databaseRepository = mock(AnalyticsDatabaseRepository.class);
         AnalyticsTableRepository tableRepository = mock(AnalyticsTableRepository.class);
         AnalyticsFieldRepository fieldRepository = mock(AnalyticsFieldRepository.class);
-        MbqlToSqlService service = new MbqlToSqlService(tableRepository, fieldRepository);
+        MbqlToSqlService service = new MbqlToSqlService(databaseRepository, tableRepository, fieldRepository);
 
         JsonNode mbql = objectMapper.readTree(
                 """
@@ -91,4 +94,3 @@ class MbqlToSqlServiceTest {
                 .hasMessageContaining("MBQL query key is not supported yet");
     }
 }
-

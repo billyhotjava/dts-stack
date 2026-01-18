@@ -114,6 +114,7 @@
 				"exploreEtlWarehouseLayers": "数仓分层管理",
 				"exploreEtlReconciliation": "装载对账校验",
 				"workbench": "工作台",
+				"workbenchHome": "首页",
 				"exploreSharing": "结果集分享",
 				"exploreSharingCaption": "受控分享，支持有效期与可见范围",
 				"exploreExport": "导出中心",

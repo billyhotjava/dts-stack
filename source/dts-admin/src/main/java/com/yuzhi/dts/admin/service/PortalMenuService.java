@@ -50,6 +50,7 @@ public class PortalMenuService {
     private static final Set<String> IAM_SECTIONS = Set.of();
     private static final Map<String, String> MENU_COMPONENTS = Map.ofEntries(
         Map.entry("workbench", "/pages/workbench"),
+        Map.entry("workbench.workflowCenter", "/pages/workbench/WorkflowCenterPage"),
         Map.entry("catalog.assets", "/pages/catalog/DatasetsPage"),
         Map.entry("catalog.metadata", "/pages/catalog/MetadataPage"),
         Map.entry("catalog.lineage", "/pages/catalog/LineagePage"),
@@ -57,6 +58,7 @@ public class PortalMenuService {
         Map.entry("modeling.planning.overview", "/pages/modeling/DataPlanningPage"),
         Map.entry("modeling.planning.subjectDomains", "/pages/catalog/DataDomainManagementPage"),
         Map.entry("modeling.standards", "/pages/modeling/DataStandardsPage"),
+        Map.entry("modeling.metadataStandards", "/pages/modeling/MetadataStandardsPage"),
         Map.entry("modeling.glossary", "/pages/modeling/GlossaryPage"),
         Map.entry("modeling.templates", "/pages/modeling/ModelTemplatesPage"),
         Map.entry("governance.indicators.dictionary", "/pages/governance/IndicatorsPage"),

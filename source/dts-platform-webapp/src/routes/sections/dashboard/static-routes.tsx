@@ -2,6 +2,8 @@ import type { RouteObject } from "react-router";
 import DatasetDetailPage from "@/pages/catalog/DatasetDetailPage";
 import DataStandardDetailPage from "@/pages/modeling/DataStandardDetailPage";
 import DatasetAccessApprovalPage from "@/pages/security/DatasetAccessApprovalPage";
+import WorkflowCenterPage from "@/pages/workbench/WorkflowCenterPage";
+import MetadataStandardsPage from "@/pages/modeling/MetadataStandardsPage";
 
 export const STATIC_DASHBOARD_ROUTES: RouteObject[] = [
 	{
@@ -11,6 +13,14 @@ export const STATIC_DASHBOARD_ROUTES: RouteObject[] = [
 	{
 		path: "security/dataset-access",
 		element: <DatasetAccessApprovalPage />,
+	},
+	{
+		path: "workbench/workflow-center",
+		element: <WorkflowCenterPage />,
+	},
+	{
+		path: "modeling/metadata-standards",
+		element: <MetadataStandardsPage />,
 	},
 	{
 		path: "modeling/standards/:id",

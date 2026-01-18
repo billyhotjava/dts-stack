@@ -39,6 +39,9 @@ public class ModelingTemplate extends AbstractAuditingEntity<UUID> implements Se
     @Column(name = "fields_template")
     private String fieldsTemplate;
 
+    @Column(name = "metadata_standard_ids")
+    private String metadataStandardIds;
+
     @Column(name = "review_checklist")
     private String reviewChecklist;
 
@@ -105,6 +108,14 @@ public class ModelingTemplate extends AbstractAuditingEntity<UUID> implements Se
 
     public void setFieldsTemplate(String fieldsTemplate) {
         this.fieldsTemplate = fieldsTemplate;
+    }
+
+    public String getMetadataStandardIds() {
+        return metadataStandardIds;
+    }
+
+    public void setMetadataStandardIds(String metadataStandardIds) {
+        this.metadataStandardIds = metadataStandardIds;
     }
 
     public String getReviewChecklist() {

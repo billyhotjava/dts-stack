@@ -17,6 +17,9 @@ import com.yuzhi.dts.platform.service.modeling.dto.DataStandardVersionDto;
 import jakarta.validation.Valid;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.io.ByteArrayOutputStream;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -52,6 +55,26 @@ public class ModelingResource {
 
     private static final String MODELING_MAINTAINER_EXPRESSION =
         "hasAnyAuthority(T(com.yuzhi.dts.platform.security.AuthoritiesConstants).CATALOG_MAINTAINERS)";
+    private static final String METADATA_STANDARD_TEMPLATE =
+        "field_name_cn,field_name_en,data_type,data_length,data_precision,data_scale,nullable,domain,description,source_system,code_set,default_value,is_pk,security_level\n" +
+        "员工编号,emp_id,VARCHAR,32,,,N,人力,员工唯一编号,ERP,,,\n";
+    private static final String METADATA_STANDARD_RULES =
+        """
+        元数据标准导入校验规则
+        1) 必填字段：field_name_cn, field_name_en, data_type, nullable, domain, description, source_system
+        2) 唯一键：field_name_en + domain
+        3) nullable 仅允许 Y/N（大小写不敏感）
+        4) data_type 建议使用：VARCHAR/INT/BIGINT/DECIMAL/DATE/TIMESTAMP/BOOLEAN/DOUBLE
+        5) VARCHAR 必须填写 data_length；DECIMAL 建议填写 data_precision/data_scale
+        6) security_level 可选：INTERNAL/CONFIDENTIAL/SECRET/TOP_SECRET
+        7) 空行或全部为空的记录会被跳过
+
+        常见错误说明
+        - 缺少必填字段：请补齐必填列后再导入
+        - 唯一键重复：同一 domain 下 field_name_en 重复
+        - 类型不匹配：data_type 未在建议集合内
+        - 长度/精度缺失：VARCHAR 未填 length 或 DECIMAL 未填 precision/scale
+        """;
 
     private final DataStandardService standards;
     private final DataStandardAttachmentService attachments;
@@ -134,6 +157,26 @@ public class ModelingResource {
         return ResponseEntity.ok().headers(headers).body(content);
     }
 
+    @GetMapping("/metadata-standards/template")
+    @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
+    public ResponseEntity<byte[]> downloadMetadataStandardsTemplate() {
+        byte[] zip = buildMetadataTemplateZip();
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_OCTET_STREAM);
+        headers.setContentDisposition(
+            ContentDisposition.attachment()
+                .filename(URLEncoder.encode("metadata-standards-template.zip", StandardCharsets.UTF_8), StandardCharsets.UTF_8)
+                .build()
+        );
+        audit.auditAction(
+            "MODELING_METADATA_STANDARD_TEMPLATE_DOWNLOAD",
+            AuditStage.SUCCESS,
+            "template",
+            Map.of("summary", "下载元数据标准导入模板")
+        );
+        return ResponseEntity.ok().headers(headers).body(zip);
+    }
+
     @PostMapping(value = "/standards/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
     public ApiResponse<DataStandardImportResultDto> importStandards(@RequestPart("file") MultipartFile file) {
@@ -168,6 +211,25 @@ public class ModelingResource {
         );
         audit.auditAction("MODELING_STANDARD_TEMPLATE_DOWNLOAD", AuditStage.SUCCESS, "template", Map.of("summary", "下载数据标准导入模板"));
         return ResponseEntity.ok().headers(headers).body(out);
+    }
+
+    private byte[] buildMetadataTemplateZip() {
+        try (ByteArrayOutputStream baos = new ByteArrayOutputStream(); ZipOutputStream zos = new ZipOutputStream(baos, StandardCharsets.UTF_8)) {
+            ZipEntry templateEntry = new ZipEntry("metadata-standards-template.csv");
+            zos.putNextEntry(templateEntry);
+            zos.write(METADATA_STANDARD_TEMPLATE.getBytes(StandardCharsets.UTF_8));
+            zos.closeEntry();
+
+            ZipEntry rulesEntry = new ZipEntry("metadata-standards-rules.txt");
+            zos.putNextEntry(rulesEntry);
+            zos.write(METADATA_STANDARD_RULES.getBytes(StandardCharsets.UTF_8));
+            zos.closeEntry();
+
+            zos.finish();
+            return baos.toByteArray();
+        } catch (Exception ex) {
+            return METADATA_STANDARD_TEMPLATE.getBytes(StandardCharsets.UTF_8);
+        }
     }
 
     @GetMapping("/standards/{id}")

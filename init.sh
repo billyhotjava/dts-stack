@@ -399,6 +399,8 @@ generate_env_base(){
   HOST_ADMIN_UI="biadmin.${BASE_DOMAIN}"
   HOST_PLATFORM_UI="bi.${BASE_DOMAIN}"
   HOST_ANALYTICS="analytics.${BASE_DOMAIN}"
+  HOST_META="meta.${BASE_DOMAIN}"
+  HOST_FLOW="flow.${BASE_DOMAIN}"
 
   # ---------- Host reachability for in-container calls to host services ----------
   # Allow operators to pin this via environment; otherwise auto-detect.
@@ -457,6 +459,16 @@ generate_env_base(){
   : "${PG_USER_ANALYTICS:=dts_analytics}"
   : "${PG_PWD_ANALYTICS:=${SECRET}}"
 
+  # OpenMetadata
+  : "${PG_DB_OPENMETADATA:=openmetadata}"
+  : "${PG_USER_OPENMETADATA:=openmetadata}"
+  : "${PG_PWD_OPENMETADATA:=${SECRET}}"
+
+  # Airflow
+  : "${PG_DB_AIRFLOW:=airflow}"
+  : "${PG_USER_AIRFLOW:=airflow}"
+  : "${PG_PWD_AIRFLOW:=${SECRET}}"
+
   # ---------- Ranger（Admin） ----------
   : "${PG_DB_RANGER:=dts_ranger}"
   : "${PG_USER_RANGER:=dts_ranger}"
@@ -496,6 +508,19 @@ generate_env_base(){
   # When mounted under /analytics behind Traefik, the redirect URI must include the prefix.
   : "${ANALYTICS_OIDC_REDIRECT_URI:=https://${HOST_PLATFORM_UI}/analytics/auth/oidc/callback}"
   : "${ANALYTICS_OIDC_METADATA_URL:=https://${HOST_SSO}/realms/${KC_REALM}/.well-known/openid-configuration}"
+
+  # ---------- OpenMetadata ----------
+  : "${OPENMETADATA_HTTP_PORT:=18585}"
+  : "${OPENMETADATA_JWT_SECRET:=$(generate_fernet)}"
+
+  # ---------- Airflow ----------
+  : "${AIRFLOW_WEBSERVER_PORT:=18090}"
+  : "${AIRFLOW_FERNET_KEY:=$(generate_fernet)}"
+  : "${AIRFLOW_ADMIN_USERNAME:=airflow}"
+  : "${AIRFLOW_ADMIN_PASSWORD:=${SECRET}}"
+  : "${AIRFLOW_ADMIN_EMAIL:=airflow@example.com}"
+  : "${AIRFLOW_ADMIN_FIRSTNAME:=Airflow}"
+  : "${AIRFLOW_ADMIN_LASTNAME:=Admin}"
 
   # ---------- MDM Gateway ----------
   : "${DTS_MDM_GATEWAY_ENABLED:=true}"
@@ -621,6 +646,8 @@ HOST_RANGER=${HOST_RANGER}
 HOST_ADMIN_UI=${HOST_ADMIN_UI}
 HOST_PLATFORM_UI=${HOST_PLATFORM_UI}
 HOST_ANALYTICS=${HOST_ANALYTICS}
+HOST_META=${HOST_META}
+HOST_FLOW=${HOST_FLOW}
 HOST_GATEWAY_IP=${HOST_GATEWAY_IP}
 DOCKER_HOST_GATEWAY_IP=${DOCKER_HOST_GATEWAY_IP}
 HETU_UPSTREAM_IP=${HETU_UPSTREAM_IP}
@@ -679,6 +706,16 @@ PG_DB_ANALYTICS=${PG_DB_ANALYTICS}
 PG_USER_ANALYTICS=${PG_USER_ANALYTICS}
 PG_PWD_ANALYTICS=${PG_PWD_ANALYTICS}
 
+# --- OpenMetadata triplet ---
+PG_DB_OPENMETADATA=${PG_DB_OPENMETADATA}
+PG_USER_OPENMETADATA=${PG_USER_OPENMETADATA}
+PG_PWD_OPENMETADATA=${PG_PWD_OPENMETADATA}
+
+# --- Airflow triplet ---
+PG_DB_AIRFLOW=${PG_DB_AIRFLOW}
+PG_USER_AIRFLOW=${PG_USER_AIRFLOW}
+PG_PWD_AIRFLOW=${PG_PWD_AIRFLOW}
+
 
 # ====== OIDC Clients ======
 OAUTH2_ADMIN_CLIENT_ID=${OAUTH2_ADMIN_CLIENT_ID}
@@ -728,6 +765,19 @@ ANALYTICS_OIDC_CLIENT_ID=${ANALYTICS_OIDC_CLIENT_ID}
 ANALYTICS_OIDC_CLIENT_SECRET=${ANALYTICS_OIDC_CLIENT_SECRET}
 ANALYTICS_OIDC_REDIRECT_URI=${ANALYTICS_OIDC_REDIRECT_URI}
 ANALYTICS_OIDC_METADATA_URL=${ANALYTICS_OIDC_METADATA_URL}
+
+# ====== OpenMetadata ======
+OPENMETADATA_HTTP_PORT=${OPENMETADATA_HTTP_PORT}
+OPENMETADATA_JWT_SECRET=${OPENMETADATA_JWT_SECRET}
+
+# ====== Airflow ======
+AIRFLOW_WEBSERVER_PORT=${AIRFLOW_WEBSERVER_PORT}
+AIRFLOW_FERNET_KEY=${AIRFLOW_FERNET_KEY}
+AIRFLOW_ADMIN_USERNAME=${AIRFLOW_ADMIN_USERNAME}
+AIRFLOW_ADMIN_PASSWORD=${AIRFLOW_ADMIN_PASSWORD}
+AIRFLOW_ADMIN_EMAIL=${AIRFLOW_ADMIN_EMAIL}
+AIRFLOW_ADMIN_FIRSTNAME=${AIRFLOW_ADMIN_FIRSTNAME}
+AIRFLOW_ADMIN_LASTNAME=${AIRFLOW_ADMIN_LASTNAME}
 
 # ====== MDM Gateway (new keys) ======
 DTS_MDM_GATEWAY_ENABLED=${DTS_MDM_GATEWAY_ENABLED}

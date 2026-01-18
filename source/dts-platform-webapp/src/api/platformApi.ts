@@ -53,6 +53,8 @@ export const listMyDatasetAccessRequests = () => api.get({ url: "/catalog/access
 
 export const listPendingDatasetAccessTasks = () => api.get({ url: "/catalog/access/tasks/pending" });
 
+export const listDoneDatasetAccessTasks = () => api.get({ url: "/catalog/access/tasks/done" });
+
 export const approveDatasetAccessTask = (taskId: string, notes?: string) =>
 	api.post({ url: `/catalog/access/tasks/${taskId}/approve`, data: notes ? { notes } : {} });
 
@@ -110,6 +112,15 @@ export const deleteStandardAttachment = (standardId: string, attachmentId: strin
 export const getStandardSettings = () => api.get({ url: "/modeling/standards/settings" });
 export const updateStandardSettings = (data: any) => api.put({ url: "/modeling/standards/settings", data });
 export const getStandardHealth = () => api.get({ url: "/modeling/standards/health" });
+
+// Metadata standards
+export const listMetadataStandards = (params: any = {}) => api.get({ url: "/modeling/metadata-standards", params });
+export const getMetadataStandard = (id: string) => api.get({ url: `/modeling/metadata-standards/${id}` });
+export const createMetadataStandard = (data: any) => api.post({ url: "/modeling/metadata-standards", data });
+export const updateMetadataStandard = (id: string, data: any) => api.put({ url: `/modeling/metadata-standards/${id}`, data });
+export const deleteMetadataStandard = (id: string) => api.delete({ url: `/modeling/metadata-standards/${id}` });
+export const importMetadataStandards = (formData: FormData) =>
+    api.post({ url: "/modeling/metadata-standards/import", data: formData });
 
 // Modeling (planning / glossary / templates)
 export const listModelingPlans = (params: any = {}) => api.get<any[]>({ url: "/modeling/plans", params });

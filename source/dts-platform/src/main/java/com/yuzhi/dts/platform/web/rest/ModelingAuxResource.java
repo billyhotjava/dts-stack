@@ -1070,6 +1070,7 @@ public class ModelingAuxResource {
         template.setVersionNotes(StringUtils.trimToNull(request.getVersionNotes()));
         template.setNamingRule(StringUtils.trimToNull(request.getNamingRule()));
         template.setFieldsTemplate(StringUtils.trimToNull(request.getFieldsTemplate()));
+        template.setMetadataStandardIds(StringUtils.trimToNull(request.getMetadataStandardIds()));
         template.setReviewChecklist(StringUtils.trimToNull(request.getReviewChecklist()));
     }
 
@@ -1368,6 +1369,7 @@ public class ModelingAuxResource {
         view.put("versionNotes", template.getVersionNotes());
         view.put("namingRule", template.getNamingRule());
         view.put("fieldsTemplate", template.getFieldsTemplate());
+        view.put("metadataStandardIds", template.getMetadataStandardIds());
         view.put("reviewChecklist", template.getReviewChecklist());
         return view;
     }

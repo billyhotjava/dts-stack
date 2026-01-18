@@ -29,6 +29,8 @@ export default function AccountDropdown() {
 	const signOut = useSignOut();
 	const { backToLogin } = useLoginStateContext();
 	const { t } = useTranslation();
+	const isDefaultAvatar = avatar?.includes("/assets/icons/ic-user.svg");
+	const avatarClassName = isDefaultAvatar ? "rounded-full dark:brightness-0 dark:invert" : "rounded-full";
 
 	const logout = async () => {
 		try {
@@ -45,12 +47,12 @@ export default function AccountDropdown() {
 		<DropdownMenu>
 			<DropdownMenuTrigger asChild>
 				<Button variant="ghost" size="icon" className="rounded-full">
-					<img className="h-6 w-6 rounded-full" src={avatar} alt="" />
+					<img className={`h-6 w-6 ${avatarClassName}`} src={avatar} alt="" />
 				</Button>
 			</DropdownMenuTrigger>
 			<DropdownMenuContent className="w-56">
 				<div className="flex items-center gap-2 p-2">
-					<img className="h-10 w-10 rounded-full" src={avatar} alt="" />
+					<img className={`h-10 w-10 ${avatarClassName}`} src={avatar} alt="" />
 					<div className="flex flex-col items-start">
 						<div className="text-text-primary text-sm font-medium">{fullName || fallbackName || username}</div>
 						<div className="text-text-secondary text-xs">
