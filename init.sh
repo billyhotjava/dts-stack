@@ -142,6 +142,10 @@ determine_enabled_services(){
 # Default log root (can be overridden before running init)
 set_default_log_root(){
   local default_root="${SCRIPT_DIR}/logs"
+  # Ensure source/logs doesn't linger; logs live at repo root.
+  if [[ -d "${SCRIPT_DIR}/source/logs" ]]; then
+    rm -rf "${SCRIPT_DIR}/source/logs"
+  fi
   ensure_env LOG_ROOT "${LOG_ROOT:-${default_root}}"
 }
 

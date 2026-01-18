@@ -10,7 +10,7 @@
 		"build": "LEGACY_BROWSER_BUILD=1 VITE_CACHE_DIR=.vite-cache tsc && LEGACY_BROWSER_BUILD=1 VITE_CACHE_DIR=.vite-cache vite build",
 		"build:modern": "LEGACY_BROWSER_BUILD=0 VITE_CACHE_DIR=.vite-cache tsc && LEGACY_BROWSER_BUILD=0 VITE_CACHE_DIR=.vite-cache vite build",
 		"preview": "vite preview",
-		"preinstall": "lefthook install"
+		"preinstall": "lefthook install || true"
 	},
 	"dependencies": {
 		"@ant-design/cssinjs": "^1.22.0",

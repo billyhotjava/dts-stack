@@ -177,6 +177,11 @@ set -a
 source "$ENV_RUNTIME"
 set +a
 
+# Ensure source/logs does not get recreated; logs live at repo root.
+if [[ -d "source/logs" ]]; then
+  rm -rf "source/logs"
+fi
+
 # Ensure local bind-mount directories exist (avoid Docker creating them as root).
 mkdir -p logs/dts-admin logs/dts-platform logs/dts-analytics
 

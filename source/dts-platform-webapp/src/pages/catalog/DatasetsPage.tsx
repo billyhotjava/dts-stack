@@ -144,6 +144,7 @@ const [techDomainFilter, setTechDomainFilter] = useState<string>("");
 const [techTagFilter, setTechTagFilter] = useState<string>("");
 const [onlyTechManaged, setOnlyTechManaged] = useState<boolean>(false);
 const [techSort, setTechSort] = useState<string>("name");
+const [techStatusFilter, setTechStatusFilter] = useState<string>("all");
 	const [instOwnerInitialized, setInstOwnerInitialized] = useState(false);
 	const [open, setOpen] = useState(false);
 	const [form, setForm] = useState({
@@ -526,6 +527,12 @@ const filtered = useMemo(() => {
 		if (keyword && !it.name.toLowerCase().includes(keyword.toLowerCase())) return false;
 		const summary = resolveTechSummary(it.id);
 		if (onlyTechManaged && !summary?.found) return false;
+		if (techStatusFilter !== "all") {
+			if (techStatusFilter === "enabled" && summary?.enabled !== true) return false;
+			if (techStatusFilter === "managed" && summary?.found !== true) return false;
+			if (techStatusFilter === "unmanaged" && summary?.found === true) return false;
+			if (techStatusFilter === "disabled" && summary?.enabled !== false) return false;
+		}
 		if (techOwnerFilter.trim()) {
 			const owner = String(summary?.owner || "").toLowerCase();
 			if (!owner.includes(techOwnerFilter.trim().toLowerCase())) return false;
@@ -571,7 +578,7 @@ const filtered = useMemo(() => {
 		byName();
 	}
 	return sorted;
-}, [items, keyword, resolveTechSummary, onlyTechManaged, techOwnerFilter, techDomainFilter, techTagFilter, techSort]);
+}, [items, keyword, resolveTechSummary, onlyTechManaged, techOwnerFilter, techDomainFilter, techTagFilter, techSort, techStatusFilter]);
 
 	const totalPages = useMemo(() => Math.max(1, Math.ceil(total / size)), [total, size]);
 
@@ -841,6 +848,21 @@ const filtered = useMemo(() => {
 							</Button>
 						</div>
 						<div>
+							<Label>技术资产状态</Label>
+							<Select value={techStatusFilter} onValueChange={setTechStatusFilter}>
+								<SelectTrigger>
+									<SelectValue placeholder="全部" />
+								</SelectTrigger>
+								<SelectContent>
+									<SelectItem value="all">全部</SelectItem>
+									<SelectItem value="managed">已接管</SelectItem>
+									<SelectItem value="unmanaged">未接管</SelectItem>
+									<SelectItem value="enabled">服务启用</SelectItem>
+									<SelectItem value="disabled">服务未启用</SelectItem>
+								</SelectContent>
+							</Select>
+						</div>
+						<div>
 							<Label>排序</Label>
 							<Select value={techSort} onValueChange={setTechSort}>
 								<SelectTrigger>
@@ -863,6 +885,7 @@ const filtered = useMemo(() => {
 									<th className="px-3 py-2">所属部门</th>
 									<th className="px-3 py-2">描述</th>
 									<th className="px-3 py-2">技术资产</th>
+									<th className="px-3 py-2">覆盖/差异</th>
 									<th className="px-3 py-2">操作</th>
 								</tr>
 							</thead>
@@ -922,6 +945,15 @@ const filtered = useMemo(() => {
 												{omOpening[d.id] ? "打开中…" : "元数据详情"}
 											</Button>
 										</td>
+										<td className="px-3 py-2 text-xs text-muted-foreground">
+											{(() => {
+												const summary = resolveTechSummary(d.id);
+												if (!summary || !summary.found) return "-";
+												const total = Number(summary.columnCount || 0);
+												if (!Number.isFinite(total) || total <= 0) return "-";
+												return `字段数 ${total} / 差异见详情`;
+											})()}
+										</td>
 										<td className="px-3 py-2">
 											<div className="flex flex-wrap items-center gap-2">
 												{d.editable ? (
@@ -937,7 +969,7 @@ const filtered = useMemo(() => {
 								))}
 								{!filtered.length && (
 									<tr>
-										<td colSpan={6} className="px-3 py-6 text-center text-xs text-muted-foreground">
+										<td colSpan={7} className="px-3 py-6 text-center text-xs text-muted-foreground">
 											{loading ? "加载中…" : "暂无数据"}
 										</td>
 									</tr>

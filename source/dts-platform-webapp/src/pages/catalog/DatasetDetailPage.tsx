@@ -548,15 +548,6 @@ export default function DatasetDetailPage() {
 
 	useEffect(() => {
 		if (!id) return;
-		if (technicalColumns.length) {
-			setColumnsView("tech");
-		} else {
-			setColumnsView("business");
-		}
-	}, [id, technicalColumns.length]);
-
-	useEffect(() => {
-		if (!id) return;
 		let mounted = true;
 		setOmLoading(true);
 		(getDatasetOpenMetadata(id) as any)
@@ -843,10 +834,19 @@ export default function DatasetDetailPage() {
 	const omColumns = useMemo(() => {
 		return Array.isArray(omEntity?.columns) ? omEntity.columns.length : 0;
 	}, [omEntity]);
-	const technicalColumns = useMemo(() => {
+	type TechnicalColumn = {
+		name: string;
+		displayName: string;
+		dataType: string;
+		nullable: boolean;
+		tags: string[];
+		description: string;
+	};
+
+	const technicalColumns = useMemo<TechnicalColumn[]>(() => {
 		if (!Array.isArray(omEntity?.columns)) return [];
 		return omEntity.columns
-			.map((col: any) => {
+			.map((col: any): TechnicalColumn | null => {
 				const name = String(col?.name || "").trim();
 				if (!name) return null;
 				const displayName = String(col?.displayName || col?.description || col?.comment || "").trim();
@@ -864,8 +864,17 @@ export default function DatasetDetailPage() {
 					description: String(col?.description || "").trim(),
 				};
 			})
-			.filter(Boolean);
+			.filter((col): col is TechnicalColumn => Boolean(col));
 	}, [omEntity]);
+
+	useEffect(() => {
+		if (!id) return;
+		if (technicalColumns.length) {
+			setColumnsView("tech");
+		} else {
+			setColumnsView("business");
+		}
+	}, [id, technicalColumns.length]);
 	const businessColumns = useMemo(() => {
 		const list: any[] = [];
 		for (const table of tables) {
@@ -1231,22 +1240,76 @@ if (!dataset) return <div className="text-sm text-muted-foreground">未找到该
 						<TabsContent value="columns">
 							<div className="space-y-4">
 								{(technicalColumns.length || businessColumns.length) ? (
-									<div className="rounded-md border border-dashed p-3 text-xs text-muted-foreground">
-										<div className="mb-2 text-[13px] font-medium text-foreground">字段差异提示</div>
-										<div className="flex flex-wrap gap-4">
-											<span>仅技术字段：{columnDiff.onlyTech.length}</span>
-											<span>仅业务字段：{columnDiff.onlyBiz.length}</span>
-											<span>类型不一致：{columnDiff.typeMismatch.length}</span>
+									<div className="space-y-3">
+										<div className="grid gap-2 md:grid-cols-3">
+											<Card>
+												<CardContent className="space-y-2 p-3 text-xs text-muted-foreground">
+													<div className="text-[13px] font-medium text-foreground">字段覆盖率</div>
+													<div className="text-lg font-semibold text-foreground">
+														{technicalColumns.length + businessColumns.length > 0
+															? `${Math.round(
+																	(technicalColumns.length / (technicalColumns.length + businessColumns.length)) * 100,
+																)}%`
+															: "0%"}
+													</div>
+													<div>技术字段：{technicalColumns.length}</div>
+													<div>业务字段：{businessColumns.length}</div>
+												</CardContent>
+											</Card>
+											<Card>
+												<CardContent className="space-y-2 p-3 text-xs text-muted-foreground">
+													<div className="text-[13px] font-medium text-foreground">字段差异率</div>
+													<div className="text-lg font-semibold text-foreground">
+														{technicalColumns.length + businessColumns.length > 0
+															? `${Math.round(
+																	((columnDiff.onlyTech.length +
+																		columnDiff.onlyBiz.length +
+																		columnDiff.typeMismatch.length) /
+																		(technicalColumns.length + businessColumns.length)) *
+																		100,
+																)}%`
+															: "0%"}
+													</div>
+													<div>仅技术：{columnDiff.onlyTech.length}</div>
+													<div>仅业务：{columnDiff.onlyBiz.length}</div>
+												</CardContent>
+											</Card>
+											<Card>
+												<CardContent className="space-y-2 p-3 text-xs text-muted-foreground">
+													<div className="text-[13px] font-medium text-foreground">类型不一致</div>
+													<div className="text-lg font-semibold text-foreground">{columnDiff.typeMismatch.length}</div>
+													<div className="text-[11px] text-muted-foreground">
+														示例：
+														{columnDiff.typeMismatch.length
+															? columnDiff.typeMismatch
+																	.slice(0, 3)
+																	.map((item) => `${item.name}(${item.techType}/${item.bizType})`)
+																	.join("，")
+															: "无"}
+													</div>
+												</CardContent>
+											</Card>
 										</div>
-										{columnDiff.typeMismatch.length ? (
-											<div className="mt-2 text-[11px] text-muted-foreground">
-												示例：{columnDiff.typeMismatch.slice(0, 5).map((item) => `${item.name}(${item.techType}/${item.bizType})`).join("，")}
+										<div className="rounded-md border border-dashed p-3 text-xs text-muted-foreground">
+											<div className="mb-2 text-[13px] font-medium text-foreground">字段差异提示</div>
+											<div className="flex flex-wrap gap-4">
+												<span>仅技术字段：{columnDiff.onlyTech.length}</span>
+												<span>仅业务字段：{columnDiff.onlyBiz.length}</span>
+												<span>类型不一致：{columnDiff.typeMismatch.length}</span>
 											</div>
-										) : null}
-										<div className="mt-3">
-											<Button variant="outline" size="sm" onClick={() => setDiffOpen(true)}>
-												查看差异清单
-											</Button>
+											{columnDiff.typeMismatch.length ? (
+												<div className="mt-2 text-[11px] text-muted-foreground">
+													示例：{columnDiff.typeMismatch
+														.slice(0, 5)
+														.map((item) => `${item.name}(${item.techType}/${item.bizType})`)
+														.join("，")}
+												</div>
+											) : null}
+											<div className="mt-3">
+												<Button variant="outline" size="sm" onClick={() => setDiffOpen(true)}>
+													查看差异清单
+												</Button>
+											</div>
 										</div>
 									</div>
 								) : null}

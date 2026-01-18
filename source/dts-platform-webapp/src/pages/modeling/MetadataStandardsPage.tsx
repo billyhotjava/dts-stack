@@ -321,7 +321,7 @@ export default function MetadataStandardsPage() {
 					>
 						<Select.Option value="ALL">全部业务域</Select.Option>
 						{domainOptions.map((opt) => (
-							<Select.Option key={opt.value} value={opt.value}>
+							<Select.Option key={opt.key} value={opt.key}>
 								{opt.label}
 							</Select.Option>
 						))}
@@ -415,7 +415,7 @@ export default function MetadataStandardsPage() {
 						<Select
 							showSearch
 							allowClear
-							options={domainOptions.map((opt) => ({ label: opt.label, value: opt.value }))}
+							options={domainOptions.map((opt) => ({ label: opt.label, value: opt.key }))}
 						/>
 					</Form.Item>
 					<Form.Item name="sourceSystem" label="来源系统" rules={[{ required: true, message: "请输入来源系统" }]}>
