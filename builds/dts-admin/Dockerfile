@@ -9,15 +9,9 @@ FROM maven:3.9.9-eclipse-temurin-21 AS build
 ENV JAVA_HOME=/opt/java/openjdk \
     PATH="/opt/java/openjdk/bin:${PATH}"
 
-# Embed Ubuntu archive signing key so apt works on older ARM mirrors;
-# use a dedicated keyring path and repoint the Ubuntu sources to it.
-COPY apt-keys/ubuntu-archive-2021.gpg /tmp/ubuntu-archive-2021.gpg
 ARG UBUNTU_PORTS_MIRROR=https://mirrors.aliyun.com/ubuntu-ports
 ARG UBUNTU_ARCHIVE_MIRROR=https://mirrors.aliyun.com/ubuntu
 RUN set -eux; \
-    install -d /usr/share/keyrings /etc/apt/trusted.gpg.d; \
-    gpg --dearmor --batch --yes --output /usr/share/keyrings/ubuntu-archive-2021.gpg /tmp/ubuntu-archive-2021.gpg; \
-    install -m 0644 /usr/share/keyrings/ubuntu-archive-2021.gpg /etc/apt/trusted.gpg.d/ubuntu-archive-2021.gpg; \
     ARCH=$(dpkg --print-architecture); \
     case "$ARCH" in \
       arm*|aarch64) MIRROR="${UBUNTU_PORTS_MIRROR}";; \
@@ -37,8 +31,6 @@ RUN set -eux; \
       "Components: main universe restricted multiverse" \
       "Trusted: yes" \
       > /etc/apt/sources.list.d/ubuntu.sources; \
-    sha256sum /usr/share/keyrings/ubuntu-archive-2021.gpg; \
-    gpg --show-keys /usr/share/keyrings/ubuntu-archive-2021.gpg; \
     cat /etc/apt/sources.list.d/ubuntu.sources
 RUN printf '%s\n' \
       'APT::Get::AllowUnauthenticated "true";' \
@@ -125,8 +117,6 @@ RUN set -eux; \
 FROM ${RUNTIME_BASE_IMAGE} AS runtime
 ARG UBUNTU_PORTS_MIRROR=https://mirrors.aliyun.com/ubuntu-ports
 ARG UBUNTU_ARCHIVE_MIRROR=https://mirrors.aliyun.com/ubuntu
-COPY --from=build /usr/share/keyrings/ubuntu-archive-2021.gpg /usr/share/keyrings/ubuntu-archive-2021.gpg
-COPY --from=build /etc/apt/trusted.gpg.d/ubuntu-archive-2021.gpg /etc/apt/trusted.gpg.d/ubuntu-archive-2021.gpg
 RUN set -eux; \
     ARCH=$(dpkg --print-architecture); \
     case "$ARCH" in \
