@@ -11,6 +11,7 @@ PNPM_VERSION="${PNPM_VERSION:-10.28.0}"
 IMGVERSION_FILE="${IMGVERSION_FILE:-${REPO_ROOT}/imgversion.conf}"
 MAVEN_IMAGE="${MAVEN_IMAGE:-maven:3.9.9-eclipse-temurin-21}"
 MAVEN_SECURITY_OPT="${MAVEN_SECURITY_OPT:-}"
+LEGACY_USE_HOST_MAVEN="${LEGACY_USE_HOST_MAVEN:-}"
 
 require_cmd() {
   if ! command -v "$1" >/dev/null 2>&1; then
@@ -55,7 +56,25 @@ build_maven_module() {
   local jar_glob="$2"
   local out_jar="$3"
 
-  echo "[buildAll] Building ${module} jar via ${MAVEN_IMAGE}"
+  if [[ -f "$out_jar" ]]; then
+    echo "[buildAll] Using prebuilt jar for ${module}: ${out_jar}"
+    return
+  fi
+  if [[ "${LEGACY_USE_PREBUILT_JARS:-}" == "1" ]]; then
+    echo "[buildAll] ERROR: ${out_jar} missing (LEGACY_USE_PREBUILT_JARS=1)" >&2
+    exit 1
+  fi
+
+  if [[ -n "$LEGACY_USE_HOST_MAVEN" ]]; then
+    require_cmd mvn
+    echo "[buildAll] Building ${module} jar via host Maven"
+    if [[ -f /root/.m2/settings.xml ]]; then
+      mvn -B -e -DskipTests -s /root/.m2/settings.xml -f "${REPO_ROOT}/source/pom.xml" -pl "$module" -am package
+    else
+      mvn -B -e -DskipTests -f "${REPO_ROOT}/source/pom.xml" -pl "$module" -am package
+    fi
+  else
+    echo "[buildAll] Building ${module} jar via ${MAVEN_IMAGE}"
   local security_opts=()
   if [[ -n "$MAVEN_SECURITY_OPT" ]]; then
     security_opts+=(--security-opt "$MAVEN_SECURITY_OPT")
@@ -65,14 +84,15 @@ build_maven_module() {
     maven_args=(-B -e -DskipTests -s /root/.m2/settings.xml -f pom.xml -pl "$module" -am)
   fi
 
-  docker run --rm "${security_opts[@]}" \
-    -e "JAVA_HOME=/opt/java/openjdk" \
-    -e "PATH=/opt/java/openjdk/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
-    -v "${REPO_ROOT}/source:/workspace" \
-    -v "/root/.m2:/root/.m2" \
-    -w /workspace \
-    "$MAVEN_IMAGE" \
-    mvn "${maven_args[@]}" package
+    docker run --rm "${security_opts[@]}" \
+      -e "JAVA_HOME=/opt/java/openjdk" \
+      -e "PATH=/opt/java/openjdk/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
+      -v "${REPO_ROOT}/source:/workspace" \
+      -v "/root/.m2:/root/.m2" \
+      -w /workspace \
+      "$MAVEN_IMAGE" \
+      mvn "${maven_args[@]}" package
+  fi
 
   local jar_path
   jar_path="$(ls -1t ${REPO_ROOT}/source/${module}/target/${jar_glob} 2>/dev/null | head -n 1 || true)"
