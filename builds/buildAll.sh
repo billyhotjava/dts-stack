@@ -60,13 +60,19 @@ build_maven_module() {
   if [[ -n "$MAVEN_SECURITY_OPT" ]]; then
     security_opts+=(--security-opt "$MAVEN_SECURITY_OPT")
   fi
+  local maven_args=(-B -e -DskipTests -f pom.xml -pl "$module" -am)
+  if [[ -f /root/.m2/settings.xml ]]; then
+    maven_args=(-B -e -DskipTests -s /root/.m2/settings.xml -f pom.xml -pl "$module" -am)
+  fi
 
   docker run --rm "${security_opts[@]}" \
+    -e "JAVA_HOME=/opt/java/openjdk" \
+    -e "PATH=/opt/java/openjdk/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
     -v "${REPO_ROOT}/source:/workspace" \
     -v "/root/.m2:/root/.m2" \
     -w /workspace \
     "$MAVEN_IMAGE" \
-    mvn -B -e -DskipTests -s /root/.m2/settings.xml -f pom.xml -pl "$module" -am package
+    mvn "${maven_args[@]}" package
 
   local jar_path
   jar_path="$(ls -1t ${REPO_ROOT}/source/${module}/target/${jar_glob} 2>/dev/null | head -n 1 || true)"
