@@ -7,8 +7,10 @@ MODE=""
 SECRET=""
 BASE_DOMAIN_ARG=""
 LEGACY_STACK=false
+RESET_PG_DATA=false
+RESET_ENV=false
 
-usage(){ echo "Usage: $0 [legacy] [single|ha2|cluster] [unified-password] [base-domain]"; }
+usage(){ echo "Usage: $0 [legacy] [--reset-pg] [--reset-env] [single|ha2|cluster] [unified-password] [base-domain]"; }
 
 looks_like_domain(){
   local candidate="${1:-}"
@@ -937,6 +939,12 @@ while (($#)); do
       fi
       LEGACY_STACK=true
       ;;
+    --reset-pg)
+      RESET_PG_DATA=true
+      ;;
+    --reset-env)
+      RESET_ENV=true
+      ;;
     single|ha2|cluster) [[ -z "$MODE" ]] || { echo "[init.sh] ERROR: deployment mode already specified as '${MODE}'." >&2; exit 1; }; MODE="$1";;
     *)
       if [[ -z "$BASE_DOMAIN_ARG" ]] && looks_like_domain "$1"; then BASE_DOMAIN_ARG="$1"
@@ -1034,6 +1042,18 @@ if [[ "${LEGACY_STACK}" == "true" ]]; then
       echo "[init.sh] Using local dbt-core image for arm64 legacy stack: dbt-core:1.11.2"
     fi
   fi
+fi
+
+if [[ "${RESET_ENV}" == "true" ]]; then
+  echo "[init.sh] Resetting .env (requested)."
+  rm -f .env
+  generate_env_base
+  load_img_versions
+fi
+
+if [[ "${RESET_PG_DATA}" == "true" ]]; then
+  echo "[init.sh] Resetting Postgres data directory (requested)."
+  rm -rf services/dts-pg/data
 fi
 prepare_data_dirs
 
