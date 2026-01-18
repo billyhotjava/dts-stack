@@ -5,7 +5,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.platform.config.DbtProperties;
 import java.io.File;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -42,7 +41,7 @@ public class DbtManifestService {
         if (!StringUtils.hasText(manifestPath)) {
             return DbtModelResult.empty("dbt 项目目录未配置");
         }
-        Path manifestFile = Paths.get(manifestPath);
+        Path manifestFile = Path.of(manifestPath);
         File file = manifestFile.toFile();
         if (!file.exists()) {
             return DbtModelResult.empty("manifest.json 不存在，请先执行 dbt run/docs");
