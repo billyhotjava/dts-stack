@@ -606,6 +606,24 @@ services:
     networks:
       - dts-core
 
+  dts-openmetadata-ingestion:
+    image: ${IMAGE_OPENMETADATA_INGESTION}
+    container_name: dts-openmetadata-ingestion
+    depends_on:
+      dts-openmetadata:
+        condition: service_started
+    environment:
+      OPENMETADATA_API_ENDPOINT: "http://dts-openmetadata:8585/api/v1"
+      OPENMETADATA_AUTH_TOKEN: ${DTS_PLATFORM_OPENMETADATA_AUTH_TOKEN:-}
+      OPENMETADATA_DBT_SERVICE: ${DTS_PLATFORM_OPENMETADATA_SERVICE_NAME:-hive}
+    volumes:
+      - ./services/dts-openmetadata/ingestion:/opt/openmetadata/ingestion:ro,z
+      - ./services/dts-dbt:/opt/dbt:ro,z
+    command: ["/bin/bash", "-lc", "/opt/openmetadata/ingestion/run-dbt-ingestion.sh"]
+    restart: "no"
+    networks:
+      - dts-core
+
   dts-airflow-init:
     image: ${IMAGE_AIRFLOW}
     container_name: dts-airflow-init

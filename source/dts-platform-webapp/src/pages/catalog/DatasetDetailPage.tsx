@@ -21,6 +21,8 @@ import {
 	getDatasetSecurityMapping,
 	upsertDatasetSecurityMapping,
 	getDatasetOpenMetadata,
+	getDatasetLineage,
+	getDatasetQuality,
 } from "@/api/platformApi";
 import type { DatasetAsset, DatasetGrant, TableSchema } from "@/types/catalog";
 import deptService, { type DeptDto } from "@/api/services/deptService";
@@ -105,6 +107,10 @@ export default function DatasetDetailPage() {
 	const [dataset, setDataset] = useState<DatasetAsset | null>(null);
 	const [omLoading, setOmLoading] = useState(false);
 	const [omInfo, setOmInfo] = useState<any | null>(null);
+	const [lineageLoading, setLineageLoading] = useState(false);
+	const [lineageInfo, setLineageInfo] = useState<any | null>(null);
+	const [qualityLoading, setQualityLoading] = useState(false);
+	const [qualityInfo, setQualityInfo] = useState<any | null>(null);
 	const [columnsView, setColumnsView] = useState<"tech" | "business" | "merged">("business");
 	const [diffOpen, setDiffOpen] = useState(false);
 	const userInfo = useUserInfo() as any;
@@ -570,6 +576,52 @@ export default function DatasetDetailPage() {
 	}, [id]);
 
 	useEffect(() => {
+		if (!id) return;
+		let mounted = true;
+		setLineageLoading(true);
+		(getDatasetLineage(id) as any)
+			.then((resp: any) => {
+				if (!mounted) return;
+				setLineageInfo(resp || null);
+			})
+			.catch((error: any) => {
+				console.error(error);
+				if (!mounted) return;
+				setLineageInfo(null);
+			})
+			.finally(() => {
+				if (!mounted) return;
+				setLineageLoading(false);
+			});
+		return () => {
+			mounted = false;
+		};
+	}, [id]);
+
+	useEffect(() => {
+		if (!id) return;
+		let mounted = true;
+		setQualityLoading(true);
+		(getDatasetQuality(id) as any)
+			.then((resp: any) => {
+				if (!mounted) return;
+				setQualityInfo(resp || null);
+			})
+			.catch((error: any) => {
+				console.error(error);
+				if (!mounted) return;
+				setQualityInfo(null);
+			})
+			.finally(() => {
+				if (!mounted) return;
+				setQualityLoading(false);
+			});
+		return () => {
+			mounted = false;
+		};
+	}, [id]);
+
+	useEffect(() => {
 		if (!id || !hasDataMaintainerRole) {
 			return;
 		}
@@ -864,7 +916,7 @@ export default function DatasetDetailPage() {
 					description: String(col?.description || "").trim(),
 				};
 			})
-			.filter((col): col is TechnicalColumn => Boolean(col));
+			.filter((col: TechnicalColumn | null): col is TechnicalColumn => Boolean(col));
 	}, [omEntity]);
 
 	useEffect(() => {
@@ -933,6 +985,23 @@ export default function DatasetDetailPage() {
 		const fqn = encodeURIComponent(String(omInfo.fqn || ""));
 		return `${base}/table/${fqn}`;
 	}, [omInfo]);
+	const qualitySummary = useMemo(() => {
+		const summary = qualityInfo?.snapshot?.summary;
+		const total = Number(summary?.total || 0);
+		const passed = Number(summary?.passed || 0);
+		const failed = Number(summary?.failed || 0);
+		const aborted = Number(summary?.aborted || 0);
+		const missing = Number(summary?.missing || 0);
+		const passRate = total > 0 ? Math.round((passed / total) * 100) : null;
+		return { total, passed, failed, aborted, missing, passRate, lastRunAt: summary?.lastRunAt };
+	}, [qualityInfo]);
+	const qualityCases = useMemo(() => {
+		const list = qualityInfo?.snapshot?.cases;
+		return Array.isArray(list) ? list : [];
+	}, [qualityInfo]);
+	const lineageGraph = useMemo(() => {
+		return lineageInfo?.graph || null;
+	}, [lineageInfo]);
 
 	if (loading) return <div className="text-sm text-muted-foreground">加载中…</div>;
 if (!dataset) return <div className="text-sm text-muted-foreground">未找到该数据集</div>;
@@ -989,6 +1058,8 @@ if (!dataset) return <div className="text-sm text-muted-foreground">未找到该
 							<TabsTrigger value="overview">概览</TabsTrigger>
 							<TabsTrigger value="columns">列信息</TabsTrigger>
 							<TabsTrigger value="sample">数据采样</TabsTrigger>
+							<TabsTrigger value="quality">数据质量</TabsTrigger>
+							<TabsTrigger value="lineage">数据血缘</TabsTrigger>
 						</TabsList>
 						<TabsContent value="overview">
 							<div className="grid gap-4 md:grid-cols-2">
@@ -1545,6 +1616,145 @@ if (!dataset) return <div className="text-sm text-muted-foreground">未找到该
 								) : (
 									<div className="text-sm text-muted-foreground">暂无采样数据，可尝试刷新采样。</div>
 								)}
+							</div>
+						</TabsContent>
+						<TabsContent value="quality">
+							<div className="space-y-4">
+								<Card>
+									<CardHeader className="flex items-center justify-between">
+										<CardTitle className="text-base">质量概览</CardTitle>
+										<div className="text-xs text-muted-foreground">数据来自质量检测结果</div>
+									</CardHeader>
+									<CardContent className="grid gap-3 md:grid-cols-5 text-sm">
+										<div className="space-y-1">
+											<div className="text-xs text-muted-foreground">总数</div>
+											<div className="text-lg font-semibold">{qualitySummary.total}</div>
+										</div>
+										<div className="space-y-1">
+											<div className="text-xs text-muted-foreground">通过</div>
+											<div className="text-lg font-semibold">{qualitySummary.passed}</div>
+										</div>
+										<div className="space-y-1">
+											<div className="text-xs text-muted-foreground">失败</div>
+											<div className="text-lg font-semibold">{qualitySummary.failed}</div>
+										</div>
+										<div className="space-y-1">
+											<div className="text-xs text-muted-foreground">其他</div>
+											<div className="text-lg font-semibold">{qualitySummary.aborted + qualitySummary.missing}</div>
+										</div>
+										<div className="space-y-1">
+											<div className="text-xs text-muted-foreground">通过率</div>
+											<div className="text-lg font-semibold">
+												{qualitySummary.passRate === null ? "-" : `${qualitySummary.passRate}%`}
+											</div>
+										</div>
+										<div className="md:col-span-5 text-xs text-muted-foreground">
+											最近运行：{qualitySummary.lastRunAt ? new Date(qualitySummary.lastRunAt).toLocaleString() : "-"}
+										</div>
+									</CardContent>
+								</Card>
+								<Card>
+									<CardHeader>
+										<CardTitle className="text-base">质量明细</CardTitle>
+									</CardHeader>
+									<CardContent>
+										{qualityLoading ? (
+											<div className="text-sm text-muted-foreground">加载中…</div>
+										) : qualityInfo?.found === false ? (
+											<div className="text-sm text-muted-foreground">{qualityInfo?.message || "暂无质量数据"}</div>
+										) : qualityCases.length === 0 ? (
+											<div className="text-sm text-muted-foreground">暂无质量规则结果</div>
+										) : (
+											<div className="overflow-auto">
+												<table className="w-full text-sm">
+													<thead className="text-xs text-muted-foreground">
+														<tr className="border-b">
+															<th className="py-2 text-left font-medium">规则</th>
+															<th className="py-2 text-left font-medium">状态</th>
+															<th className="py-2 text-left font-medium">负责人</th>
+															<th className="py-2 text-left font-medium">测试集</th>
+															<th className="py-2 text-left font-medium">最近运行</th>
+														</tr>
+													</thead>
+													<tbody>
+														{qualityCases.map((item: any) => (
+															<tr key={item.id || item.name} className="border-b last:border-none">
+																<td className="py-2 pr-4">
+																	<div className="font-medium">{item.name || "-"}</div>
+																	{item.description ? (
+																		<div className="text-xs text-muted-foreground">{item.description}</div>
+																	) : null}
+																</td>
+																<td className="py-2 pr-4">{item.status || "-"}</td>
+																<td className="py-2 pr-4">{item.owner || "-"}</td>
+																<td className="py-2 pr-4">{item.testSuite || "-"}</td>
+																<td className="py-2 pr-4">
+																	{item.lastRunAt ? new Date(item.lastRunAt).toLocaleString() : "-"}
+																</td>
+															</tr>
+														))}
+													</tbody>
+												</table>
+											</div>
+										)}
+									</CardContent>
+								</Card>
+							</div>
+						</TabsContent>
+						<TabsContent value="lineage">
+							<div className="space-y-4">
+								<Card>
+									<CardHeader className="flex items-center justify-between">
+										<CardTitle className="text-base">血缘范围（2层）</CardTitle>
+										<div className="text-xs text-muted-foreground">仅展示上下游两层依赖</div>
+									</CardHeader>
+									<CardContent>
+										{lineageLoading ? (
+											<div className="text-sm text-muted-foreground">加载中…</div>
+										) : lineageInfo?.found === false ? (
+											<div className="text-sm text-muted-foreground">{lineageInfo?.message || "暂无血缘数据"}</div>
+										) : !lineageGraph ? (
+											<div className="text-sm text-muted-foreground">暂无血缘数据</div>
+										) : (
+											<div className="grid gap-4 md:grid-cols-2">
+												<div className="space-y-2">
+													<div className="text-sm font-medium">上游</div>
+													{Array.isArray(lineageGraph.upstream) && lineageGraph.upstream.length > 0 ? (
+														<ul className="space-y-2 text-sm">
+															{lineageGraph.upstream.map((node: any) => (
+																<li key={node.id} className="rounded-md border px-3 py-2">
+																	<div className="font-medium">{node.name || node.fqn || node.id}</div>
+																	<div className="text-xs text-muted-foreground">
+																		{[node.service, node.database, node.schema].filter(Boolean).join(" / ") || "-"}
+																	</div>
+																</li>
+															))}
+														</ul>
+													) : (
+														<div className="text-sm text-muted-foreground">无上游血缘</div>
+													)}
+												</div>
+												<div className="space-y-2">
+													<div className="text-sm font-medium">下游</div>
+													{Array.isArray(lineageGraph.downstream) && lineageGraph.downstream.length > 0 ? (
+														<ul className="space-y-2 text-sm">
+															{lineageGraph.downstream.map((node: any) => (
+																<li key={node.id} className="rounded-md border px-3 py-2">
+																	<div className="font-medium">{node.name || node.fqn || node.id}</div>
+																	<div className="text-xs text-muted-foreground">
+																		{[node.service, node.database, node.schema].filter(Boolean).join(" / ") || "-"}
+																	</div>
+																</li>
+															))}
+														</ul>
+													) : (
+														<div className="text-sm text-muted-foreground">无下游血缘</div>
+													)}
+												</div>
+											</div>
+										)}
+									</CardContent>
+								</Card>
 							</div>
 						</TabsContent>
 					</Tabs>

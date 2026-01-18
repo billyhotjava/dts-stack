@@ -14,6 +14,8 @@ export const getDataset = (id: string) => api.get({ url: `/catalog/datasets/${id
 export const getDatasetOpenMetadata = (id: string) => api.get({ url: `/catalog/datasets/${id}/openmetadata` });
 export const batchDatasetOpenMetadata = (ids: string[]) =>
 	api.post({ url: "/catalog/datasets/openmetadata/batch", data: { ids } });
+export const getDatasetLineage = (id: string) => api.get({ url: `/catalog/datasets/${id}/lineage` });
+export const getDatasetQuality = (id: string) => api.get({ url: `/catalog/datasets/${id}/quality` });
 export const createDataset = (data: any) => api.post({ url: "/catalog/datasets", data });
 export const updateDataset = (id: string, data: any) => api.put({ url: `/catalog/datasets/${id}`, data });
 export const deleteDataset = (id: string) => api.delete({ url: `/catalog/datasets/${id}` });

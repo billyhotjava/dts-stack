@@ -386,6 +386,46 @@ public class CatalogResource {
         return ApiResponses.ok(openMetadataService.fetchTableForDataset(dataset));
     }
 
+    @GetMapping("/datasets/{id}/lineage")
+    public ApiResponse<OpenMetadataService.OpenMetadataLineageResult> getDatasetLineage(
+        @PathVariable UUID id,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        CatalogDataset dataset = datasetRepo
+            .findById(id)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "数据集不存在或无权访问"));
+        String effDept = activeDept != null ? activeDept : claim("dept_code");
+        if (dataset.getEnabled() != null && !dataset.getEnabled().booleanValue() && !SecurityUtils.isOpAdminAccount()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "数据集不存在或无权访问");
+        }
+        Map<String, Object> auditPayload = new LinkedHashMap<>();
+        auditPayload.put("summary", "查看数据集血缘");
+        auditPayload.put("datasetId", id.toString());
+        putIfHasText(auditPayload, "activeDept", effDept);
+        audit.auditAction("CATALOG_ASSET_VIEW", AuditStage.SUCCESS, id.toString(), auditPayload);
+        return ApiResponses.ok(openMetadataService.fetchLineageForDataset(dataset, 2, 2));
+    }
+
+    @GetMapping("/datasets/{id}/quality")
+    public ApiResponse<OpenMetadataService.OpenMetadataQualityResult> getDatasetQuality(
+        @PathVariable UUID id,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        CatalogDataset dataset = datasetRepo
+            .findById(id)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "数据集不存在或无权访问"));
+        String effDept = activeDept != null ? activeDept : claim("dept_code");
+        if (dataset.getEnabled() != null && !dataset.getEnabled().booleanValue() && !SecurityUtils.isOpAdminAccount()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "数据集不存在或无权访问");
+        }
+        Map<String, Object> auditPayload = new LinkedHashMap<>();
+        auditPayload.put("summary", "查看数据集质量");
+        auditPayload.put("datasetId", id.toString());
+        putIfHasText(auditPayload, "activeDept", effDept);
+        audit.auditAction("CATALOG_ASSET_VIEW", AuditStage.SUCCESS, id.toString(), auditPayload);
+        return ApiResponses.ok(openMetadataService.fetchQualityForDataset(dataset));
+    }
+
     @PostMapping("/datasets/openmetadata/batch")
     public ApiResponse<Map<String, OpenMetadataService.OpenMetadataSummary>> batchOpenMetadata(
         @RequestBody OpenMetadataBatchRequest body,
