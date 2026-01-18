@@ -63,12 +63,10 @@ if [[ "$MODE" == "normal" || "$MODE" == "both" ]]; then
   IMAGE_DTS_ADMIN="${IMAGE_DTS_ADMIN:-dts-admin:local}"
   IMAGE_DTS_PLATFORM="${IMAGE_DTS_PLATFORM:-dts-platform:local}"
   IMAGE_DTS_ANALYTICS="${IMAGE_DTS_ANALYTICS:-dts-analytics:local}"
-  IMAGE_DTS_COMMON="${IMAGE_DTS_COMMON:-dts-common:local}"
   IMAGE_DTS_ADMIN_WEBAPP="${IMAGE_DTS_ADMIN_WEBAPP:-dts-admin-webapp:local}"
   IMAGE_DTS_PLATFORM_WEBAPP="${IMAGE_DTS_PLATFORM_WEBAPP:-dts-platform-webapp:local}"
   IMAGE_DTS_ANALYTICS_WEBAPP_MODERN="${IMAGE_DTS_ANALYTICS_WEBAPP_MODERN:-dts-analytics-webapp-modern:local}"
 
-  build_image "dts-common" "$IMAGE_DTS_COMMON" "${REPO_ROOT}/builds/dts-common/Dockerfile" "$NORMAL_DIST"
   build_image "dts-admin" "$IMAGE_DTS_ADMIN" "${REPO_ROOT}/builds/dts-admin/Dockerfile" "$NORMAL_DIST" \
     --build-arg ENABLE_MAVEN_BUILD="${ENABLE_MAVEN_BUILD:-true}"
   build_image "dts-platform" "$IMAGE_DTS_PLATFORM" "${REPO_ROOT}/builds/dts-platform/Dockerfile" "$NORMAL_DIST" \
@@ -89,12 +87,10 @@ if [[ "$MODE" == "legacy" || "$MODE" == "both" ]]; then
   IMAGE_DTS_ADMIN="${IMAGE_DTS_ADMIN:-dts-admin:local}"
   IMAGE_DTS_PLATFORM="${IMAGE_DTS_PLATFORM:-dts-platform:local}"
   IMAGE_DTS_ANALYTICS="${IMAGE_DTS_ANALYTICS:-dts-analytics:local}"
-  IMAGE_DTS_COMMON="${IMAGE_DTS_COMMON:-dts-common:local}"
   IMAGE_DTS_ADMIN_WEBAPP="${IMAGE_DTS_ADMIN_WEBAPP:-dts-admin-webapp:local}"
   IMAGE_DTS_PLATFORM_WEBAPP="${IMAGE_DTS_PLATFORM_WEBAPP:-dts-platform-webapp:local}"
   IMAGE_DTS_ANALYTICS_WEBAPP_LEGACY="${IMAGE_DTS_ANALYTICS_WEBAPP_LEGACY:-dts-analytics-webapp:local}"
 
-  build_image "dts-common" "$IMAGE_DTS_COMMON" "${REPO_ROOT}/builds/dts-common/Dockerfile" "$LEGACY_DIST"
   build_image "dts-admin" "$IMAGE_DTS_ADMIN" "${REPO_ROOT}/builds/dts-admin/Dockerfile" "$LEGACY_DIST" \
     --build-arg ENABLE_MAVEN_BUILD="${ENABLE_MAVEN_BUILD:-true}"
   build_image "dts-platform" "$IMAGE_DTS_PLATFORM" "${REPO_ROOT}/builds/dts-platform/Dockerfile" "$LEGACY_DIST" \
