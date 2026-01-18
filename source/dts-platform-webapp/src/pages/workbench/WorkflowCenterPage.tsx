@@ -4,6 +4,7 @@ import { Button, Card, Input, Modal, Space, Table, Tabs, Tag, Typography } from 
 import type { ColumnsType } from "antd/es/table";
 import {
 	approveDatasetAccessTask,
+	listDatasetAccessRequestSteps,
 	listDoneDatasetAccessTasks,
 	listMyDatasetAccessRequests,
 	listPendingDatasetAccessTasks,
@@ -93,6 +94,11 @@ export default function WorkflowCenterPage() {
 	const [decisionRow, setDecisionRow] = useState<PendingTaskRow | null>(null);
 	const [decisionSubmitting, setDecisionSubmitting] = useState(false);
 
+	const [detailOpen, setDetailOpen] = useState(false);
+	const [detailLoading, setDetailLoading] = useState(false);
+	const [detailRow, setDetailRow] = useState<PendingTaskRow | null>(null);
+	const [detailSteps, setDetailSteps] = useState<any[]>([]);
+
 	const loadMine = useCallback(async () => {
 		setLoadingMine(true);
 		try {
@@ -141,6 +147,28 @@ export default function WorkflowCenterPage() {
 			setDoneTasks([]);
 		} finally {
 			setLoadingDone(false);
+		}
+	}, []);
+
+	const openDetail = useCallback(async (row: PendingTaskRow | AccessRequest) => {
+		const requestId = "task" in row ? row.task?.requestId || row.request?.id : row.id;
+		const request = "task" in row ? row.request : row;
+		if (!requestId) {
+			toast.error("缺少审批信息");
+			return;
+		}
+		setDetailRow("task" in row ? row : { task: null as any, request });
+		setDetailOpen(true);
+		setDetailLoading(true);
+		try {
+			const resp: any = await listDatasetAccessRequestSteps(requestId);
+			setDetailSteps(Array.isArray(resp) ? resp : []);
+		} catch (error) {
+			console.error(error);
+			setDetailSteps([]);
+			toast.error("加载审批详情失败");
+		} finally {
+			setDetailLoading(false);
 		}
 	}, []);
 
@@ -196,8 +224,18 @@ export default function WorkflowCenterPage() {
 			{ title: "有效期至", dataIndex: "validTo", key: "validTo", width: 180, render: (v) => formatDateTime(v) },
 			{ title: "状态", dataIndex: "status", key: "status", width: 110, render: (v) => renderStatus(v) },
 			{ title: "申请时间", dataIndex: "createdDate", key: "createdDate", width: 180, render: (v) => formatDateTime(v) },
+			{
+				title: "操作",
+				key: "op",
+				width: 120,
+				render: (_: unknown, row) => (
+					<Button type="link" size="small" onClick={() => void openDetail(row)}>
+						详情
+					</Button>
+				),
+			},
 		],
-		[router],
+		[router, openDetail],
 	);
 
 	const pendingColumns: ColumnsType<PendingTaskRow> = useMemo(
@@ -233,6 +271,9 @@ export default function WorkflowCenterPage() {
 				width: 180,
 				render: (_: unknown, row) => (
 					<Space>
+						<Button size="small" type="link" onClick={() => void openDetail(row)}>
+							详情
+						</Button>
 						<Button
 							size="small"
 							type="primary"
@@ -291,8 +332,18 @@ export default function WorkflowCenterPage() {
 			{ title: "审批时间", key: "decidedAt", width: 180, render: (_, row) => formatDateTime(row.task?.decidedAt) },
 			{ title: "审批意见", key: "notes", width: 220, render: (_, row) => row.task?.decisionNotes || "-" },
 			{ title: "审批环节", key: "step", width: 150, render: (_, row) => `${row.task?.approverRole || "-"} / 第${row.task?.stepOrder || 0}步` },
+			{
+				title: "操作",
+				key: "op",
+				width: 120,
+				render: (_: unknown, row) => (
+					<Button type="link" size="small" onClick={() => void openDetail(row)}>
+						详情
+					</Button>
+				),
+			},
 		],
-		[router],
+		[router, openDetail],
 	);
 
 	const handleDecisionSubmit = async () => {
@@ -394,6 +445,48 @@ export default function WorkflowCenterPage() {
 					value={decisionNotes}
 					onChange={(e) => setDecisionNotes(e.target.value)}
 				/>
+			</Modal>
+
+			<Modal
+				open={detailOpen}
+				title="审批详情"
+				onCancel={() => setDetailOpen(false)}
+				footer={null}
+				destroyOnClose
+				width={720}
+			>
+				<div className="space-y-3">
+					<div className="text-sm text-muted-foreground">
+						数据集：{detailRow?.request?.datasetName || detailRow?.request?.datasetId || "-"}
+					</div>
+					<div className="grid gap-2 text-xs text-muted-foreground md:grid-cols-2">
+						<div>申请对象：{detailRow?.request?.targetName || detailRow?.request?.targetUsername || "-"}</div>
+						<div>提交人：{detailRow?.request?.requesterName || detailRow?.request?.requesterUsername || "-"}</div>
+						<div>申请权限：{renderActions(detailRow?.request)}</div>
+						<div>有效期至：{formatDateTime(detailRow?.request?.validTo)}</div>
+						<div>申请时间：{formatDateTime(detailRow?.request?.createdDate)}</div>
+						<div>审批结果：{renderStatus(detailRow?.request?.status)}</div>
+					</div>
+					{detailRow?.request?.reason ? (
+						<div className="rounded-md bg-muted p-3 text-xs text-muted-foreground">申请理由：{detailRow.request.reason}</div>
+					) : null}
+					<Table
+						rowKey={(row) => `${row?.stepOrder || 0}-${row?.approverRole || ""}`}
+						loading={detailLoading}
+						pagination={false}
+						size="small"
+						dataSource={detailSteps}
+						columns={[
+							{ title: "步骤", dataIndex: "stepOrder", key: "stepOrder", width: 70 },
+							{ title: "审批角色", dataIndex: "approverRole", key: "approverRole", width: 140 },
+							{ title: "绑定部门", dataIndex: "deptCode", key: "deptCode", width: 140, render: (v) => v || "-" },
+							{ title: "状态", dataIndex: "status", key: "status", width: 100, render: (v) => renderStatus(v) },
+							{ title: "审批人", dataIndex: "decidedBy", key: "decidedBy", width: 140, render: (v) => v || "-" },
+							{ title: "审批时间", dataIndex: "decidedAt", key: "decidedAt", width: 180, render: (v) => formatDateTime(v) },
+							{ title: "意见", dataIndex: "decisionNotes", key: "decisionNotes", width: 200, render: (v) => v || "-" },
+						]}
+					/>
+				</div>
 			</Modal>
 		</Card>
 	);

@@ -449,7 +449,7 @@ services:
       - "traefik.http.routers.dts-analytics-ui.priority=230"
       - "traefik.http.routers.dts-analytics-ui.service=dts-analytics-webapp-modern"
       - "traefik.http.services.dts-analytics-webapp-modern.loadbalancer.server.port=3002"
-      - "traefik.http.routers.dts-analytics-ui.middlewares=platform-forward-auth@file,dts-strip-analytics-ui@docker,security-headers@file"
+      - "traefik.http.routers.dts-analytics-ui.middlewares=dts-strip-analytics-ui@docker,security-headers@file"
     healthcheck:
       test:
         [

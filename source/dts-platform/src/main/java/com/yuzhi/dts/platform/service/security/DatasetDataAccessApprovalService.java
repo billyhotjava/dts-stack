@@ -88,6 +88,18 @@ public class DatasetDataAccessApprovalService {
         }
     }
 
+    public record WorkflowPreview(
+        String source,
+        UUID templateId,
+        String templateName,
+        String ownerScope,
+        String classificationMin,
+        String classificationMax,
+        List<WorkflowStepPreview> steps
+    ) {}
+
+    public record WorkflowStepPreview(Integer stepOrder, String approverRole, Boolean deptBinding, String deptCode) {}
+
     @Transactional(readOnly = true)
     public Decision checkDataAccess(CatalogDataset dataset, DataAction action, String activeDeptHeader) {
         if (dataset == null) {
@@ -232,6 +244,14 @@ public class DatasetDataAccessApprovalService {
         return taskRepository.findDecidedTasksForUser(username);
     }
 
+    @Transactional(readOnly = true)
+    public List<CatalogDatasetAccessTask> listTasksForRequest(UUID requestId) {
+        if (requestId == null) {
+            return List.of();
+        }
+        return taskRepository.findByRequestIdOrderByStepOrderAsc(requestId);
+    }
+
     public CatalogDatasetAccessTask approveTask(UUID taskId, String notes, String activeDeptHeader) {
         CatalogDatasetAccessTask task = taskRepository.findById(taskId).orElseThrow();
         assertCanDecide(task, activeDeptHeader);
@@ -371,21 +391,7 @@ public class DatasetDataAccessApprovalService {
         if (adminWorkflowConfigClient == null || dataset == null || req == null) {
             return List.of();
         }
-        List<AdminWorkflowConfigClient.WorkflowTemplateDto> templates =
-            adminWorkflowConfigClient.listEnabledTemplates("DATASET_DATA_ACCESS");
-        if (templates.isEmpty()) {
-            return List.of();
-        }
-        String ownerDept = trimToNull(dataset.getOwnerDept());
-        boolean instituteOwned = !StringUtils.hasText(ownerDept) || organizationVisibilityService.isRoot(ownerDept);
-        DataLevel parsedLevel = DataLevel.normalize(dataset.getClassification());
-        final DataLevel datasetLevel = parsedLevel != null ? parsedLevel : DataLevel.DATA_INTERNAL;
-
-        AdminWorkflowConfigClient.WorkflowTemplateDto picked = templates
-            .stream()
-            .filter(t -> templateMatches(t, instituteOwned, datasetLevel))
-            .max(Comparator.comparingInt(t -> t.priority() == null ? 0 : t.priority()))
-            .orElse(null);
+        AdminWorkflowConfigClient.WorkflowTemplateDto picked = pickAdminTemplate(dataset);
         if (picked == null || picked.steps() == null || picked.steps().isEmpty()) {
             return List.of();
         }
@@ -406,6 +412,92 @@ public class DatasetDataAccessApprovalService {
             tasks.add(task);
         }
         return tasks;
+    }
+
+    @Transactional(readOnly = true)
+    public WorkflowPreview previewWorkflow(CatalogDataset dataset) {
+        if (dataset == null) {
+            return new WorkflowPreview("DEFAULT", null, null, null, null, null, List.of());
+        }
+        AdminWorkflowConfigClient.WorkflowTemplateDto picked = pickAdminTemplate(dataset);
+        List<WorkflowStepPreview> steps = buildPreviewStepsFromTemplate(picked, dataset);
+        if (!steps.isEmpty()) {
+            return new WorkflowPreview(
+                "ADMIN_CONFIG",
+                picked != null ? picked.id() : null,
+                picked != null ? picked.name() : null,
+                picked != null ? picked.ownerScope() : null,
+                picked != null ? picked.classificationMin() : null,
+                picked != null ? picked.classificationMax() : null,
+                steps
+            );
+        }
+        return new WorkflowPreview("DEFAULT", null, null, null, null, null, buildDefaultPreviewSteps(dataset));
+    }
+
+    private AdminWorkflowConfigClient.WorkflowTemplateDto pickAdminTemplate(CatalogDataset dataset) {
+        if (adminWorkflowConfigClient == null || dataset == null) {
+            return null;
+        }
+        List<AdminWorkflowConfigClient.WorkflowTemplateDto> templates =
+            adminWorkflowConfigClient.listEnabledTemplates("DATASET_DATA_ACCESS");
+        if (templates.isEmpty()) {
+            return null;
+        }
+        String ownerDept = trimToNull(dataset.getOwnerDept());
+        boolean instituteOwned = !StringUtils.hasText(ownerDept) || organizationVisibilityService.isRoot(ownerDept);
+        DataLevel parsedLevel = DataLevel.normalize(dataset.getClassification());
+        final DataLevel datasetLevel = parsedLevel != null ? parsedLevel : DataLevel.DATA_INTERNAL;
+
+        return templates
+            .stream()
+            .filter(t -> templateMatches(t, instituteOwned, datasetLevel))
+            .max(Comparator.comparingInt(t -> t.priority() == null ? 0 : t.priority()))
+            .orElse(null);
+    }
+
+    private List<WorkflowStepPreview> buildPreviewStepsFromTemplate(
+        AdminWorkflowConfigClient.WorkflowTemplateDto picked,
+        CatalogDataset dataset
+    ) {
+        if (picked == null || picked.steps() == null || picked.steps().isEmpty()) {
+            return List.of();
+        }
+        String ownerDept = trimToNull(dataset.getOwnerDept());
+        List<WorkflowStepPreview> steps = new ArrayList<>();
+        int index = 1;
+        for (AdminWorkflowConfigClient.WorkflowStepDto step : picked.steps()) {
+            if (step == null || !StringUtils.hasText(step.approverRole())) {
+                continue;
+            }
+            boolean deptBinding = step.deptBinding() != null && step.deptBinding().booleanValue();
+            Integer order = step.stepOrder() != null ? step.stepOrder() : index;
+            steps.add(new WorkflowStepPreview(order, step.approverRole().trim(), deptBinding, deptBinding ? ownerDept : null));
+            index++;
+        }
+        steps.sort(Comparator.comparingInt(s -> s.stepOrder() != null ? s.stepOrder() : 0));
+        return steps;
+    }
+
+    private List<WorkflowStepPreview> buildDefaultPreviewSteps(CatalogDataset dataset) {
+        if (dataset == null) {
+            return List.of();
+        }
+        String ownerDept = trimToNull(dataset.getOwnerDept());
+        boolean instituteOwned = !StringUtils.hasText(ownerDept) || organizationVisibilityService.isRoot(ownerDept);
+        boolean highSensitivity = isHighSensitivity(dataset.getClassification());
+
+        List<WorkflowStepPreview> steps = new ArrayList<>();
+        int i = 1;
+        if (instituteOwned) {
+            steps.add(new WorkflowStepPreview(i++, AuthoritiesConstants.INST_LEADER, false, null));
+        } else {
+            steps.add(new WorkflowStepPreview(i++, AuthoritiesConstants.DEPT_LEADER, true, ownerDept));
+            if (highSensitivity) {
+                steps.add(new WorkflowStepPreview(i++, AuthoritiesConstants.INST_LEADER, false, null));
+            }
+        }
+        return steps;
     }
 
     private boolean templateMatches(

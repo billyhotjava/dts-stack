@@ -299,7 +299,7 @@ services:
       - "traefik.http.routers.dts-analytics-ui.priority=230"
       - "traefik.http.routers.dts-analytics-ui.service=dts-analytics-webapp-modern"
       - "traefik.http.services.dts-analytics-webapp-modern.loadbalancer.server.port=80"
-      - "traefik.http.routers.dts-analytics-ui.middlewares=platform-forward-auth@file,dts-strip-analytics-ui@docker,security-headers@file"
+      - "traefik.http.routers.dts-analytics-ui.middlewares=dts-strip-analytics-ui@docker,security-headers@file"
 
   dts-admin-webapp:
     image: ${IMAGE_DTS_ADMIN_WEBAPP:?Set IMAGE_DTS_ADMIN_WEBAPP in imgversion.conf or .env}

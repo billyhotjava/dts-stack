@@ -1088,7 +1088,7 @@ else
 fi
 
 # 输出可访问地址
-host_vars=(HOST_SSO HOST_TRINO HOST_RANGER HOST_API HOST_ADMIN_UI HOST_PLATFORM_UI HOST_ANALYTICS)
+host_vars=(HOST_SSO HOST_TRINO HOST_RANGER HOST_API HOST_ADMIN_UI HOST_PLATFORM_UI HOST_ANALYTICS HOST_META HOST_FLOW)
 if [[ "${ENABLE_MINIO:-false}" == "true" ]]; then host_vars+=(HOST_MINIO); fi
 if [[ "${ENABLE_NESSIE:-false}" == "true" ]]; then host_vars+=(HOST_NESSIE); fi
 for host_var in "${host_vars[@]}"; do

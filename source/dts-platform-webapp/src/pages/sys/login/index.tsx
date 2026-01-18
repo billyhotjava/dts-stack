@@ -1,6 +1,7 @@
 import { Star } from "lucide-react";
 import { Navigate, useLocation } from "react-router";
 import TechDataBackground from "@/assets/images/background/tech-data-platform.svg";
+import TechDataBackgroundLight from "@/assets/images/background/tech-data-platform-light.svg";
 import LocalePicker from "@/components/locale-picker";
 import { GLOBAL_CONFIG } from "@/global-config";
 import { useBilingualText } from "@/hooks/useBilingualText";
@@ -49,9 +50,14 @@ function LoginPage() {
 			{/* Illustration at left on desktop to distinguish from admin style */}
 			<div className="relative hidden bg-background lg:block">
 				<img
+					src={TechDataBackgroundLight}
+					alt={brandIllustrationAlt}
+					className="absolute inset-0 h-full w-full object-cover dark:hidden"
+				/>
+				<img
 					src={TechDataBackground}
 					alt={brandIllustrationAlt}
-					className="absolute inset-0 h-full w-full object-cover"
+					className="absolute inset-0 h-full w-full object-cover hidden dark:block"
 				/>
 			</div>
 

@@ -280,6 +280,9 @@ fi
 
 services=(dts-admin dts-platform)
 
+# Metadata/ELT stack for dev mode
+services+=(dts-elasticsearch dts-openmetadata dts-airflow-init dts-airflow-webserver dts-airflow-scheduler dts-airflow-triggerer dts-dbt)
+
 WITH_WEBAPP="${WITH_WEBAPP:-$WITH_WEBAPP_DEFAULT}"
 if [[ "$WITH_WEBAPP" != "0" && "${SKIP_WEBAPP:-0}" != "1" ]]; then
   services+=(dts-admin-webapp dts-platform-webapp)

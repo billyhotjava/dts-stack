@@ -55,6 +55,11 @@ export const listPendingDatasetAccessTasks = () => api.get({ url: "/catalog/acce
 
 export const listDoneDatasetAccessTasks = () => api.get({ url: "/catalog/access/tasks/done" });
 
+export const getDatasetAccessWorkflowPreview = (datasetId: string) =>
+	api.get({ url: "/catalog/access/workflow/preview", params: { datasetId } });
+
+export const listDatasetAccessRequestSteps = (requestId: string) => api.get({ url: `/catalog/access/requests/${requestId}/steps` });
+
 export const approveDatasetAccessTask = (taskId: string, notes?: string) =>
 	api.post({ url: `/catalog/access/tasks/${taskId}/approve`, data: notes ? { notes } : {} });
 
@@ -86,6 +91,12 @@ export const getExternalLinkStatus = (entryKey: string) => api.get({ url: `/infr
 export const visitExternalLink = (entryKey: string, data?: any) => api.post({ url: `/infra/external-links/${entryKey}/visit`, data });
 export const upsertExternalLink = (entryKey: string, data: any) => api.put({ url: `/infra/external-links/${entryKey}`, data });
 export const deleteExternalLink = (entryKey: string) => api.delete({ url: `/infra/external-links/${entryKey}` });
+
+// External exchange files (data ingestion ledger)
+export const listExchangeFiles = (params?: any) => api.get({ url: "/infra/exchange-files", params });
+export const createExchangeFile = (data: any) => api.post({ url: "/infra/exchange-files", data });
+export const updateExchangeFile = (id: string, data: any) => api.put({ url: `/infra/exchange-files/${id}`, data });
+export const deleteExchangeFile = (id: string) => api.delete({ url: `/infra/exchange-files/${id}` });
 
 // Security audit logs (proxy to dts-admin)
 export const listAuditLogs = (params: any = {}) => api.get({ url: "/security/audit-logs", params });

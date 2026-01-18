@@ -11,12 +11,14 @@ import com.yuzhi.dts.platform.service.security.DatasetDataAccessApprovalService;
 import jakarta.validation.Valid;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import com.yuzhi.dts.platform.security.AuthoritiesConstants;
 import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -49,6 +51,15 @@ public class CatalogDatasetAccessApprovalResource {
     @GetMapping("/requests/mine")
     public ApiResponse<List<CatalogDatasetAccessRequest>> listMyRequests() {
         return ApiResponses.ok(approvalService.listMyRequests());
+    }
+
+    @GetMapping("/workflow/preview")
+    public ApiResponse<DatasetDataAccessApprovalService.WorkflowPreview> previewWorkflow(@RequestParam UUID datasetId) {
+        CatalogDataset dataset = datasetRepository.findById(datasetId).orElse(null);
+        if (dataset == null) {
+            return ApiResponses.error("数据集不存在或已被删除");
+        }
+        return ApiResponses.ok(approvalService.previewWorkflow(dataset));
     }
 
     @PostMapping("/requests")
@@ -147,6 +158,23 @@ public class CatalogDatasetAccessApprovalResource {
         return ApiResponses.ok(views);
     }
 
+    @GetMapping("/requests/{id}/steps")
+    public ApiResponse<List<AccessStepDto>> listRequestSteps(@PathVariable UUID id) {
+        CatalogDatasetAccessRequest req = requestRepository.findById(id).orElse(null);
+        if (req == null) {
+            return ApiResponses.error("申请记录不存在或已被删除");
+        }
+        if (!canViewRequest(req)) {
+            return ApiResponses.error("无权限查看审批详情");
+        }
+        List<AccessStepDto> steps = approvalService
+            .listTasksForRequest(id)
+            .stream()
+            .map(AccessStepDto::fromTask)
+            .toList();
+        return ApiResponses.ok(steps);
+    }
+
     @PostMapping("/tasks/{id}/approve")
     public ApiResponse<CatalogDatasetAccessTask> approveTask(
         @PathVariable UUID id,
@@ -193,4 +221,36 @@ public class CatalogDatasetAccessApprovalResource {
     ) {}
 
     public record DecisionNotes(String notes) {}
+
+    public record AccessStepDto(
+        Integer stepOrder,
+        String approverRole,
+        String deptCode,
+        String status,
+        String decidedBy,
+        Instant decidedAt,
+        String decisionNotes
+    ) {
+        static AccessStepDto fromTask(CatalogDatasetAccessTask task) {
+            return new AccessStepDto(
+                task.getStepOrder(),
+                task.getApproverRole(),
+                task.getDeptCode(),
+                task.getStatus(),
+                task.getDecidedBy(),
+                task.getDecidedAt(),
+                task.getDecisionNotes()
+            );
+        }
+    }
+
+    private boolean canViewRequest(CatalogDatasetAccessRequest req) {
+        String login = SecurityUtils.getCurrentUserLogin().orElse(null);
+        if (login != null) {
+            if (login.equalsIgnoreCase(req.getRequesterUsername()) || login.equalsIgnoreCase(req.getTargetUsername())) {
+                return true;
+            }
+        }
+        return SecurityUtils.hasCurrentUserAnyOfAuthorities(AuthoritiesConstants.DATA_MAINTAINER_ROLES);
+    }
 }

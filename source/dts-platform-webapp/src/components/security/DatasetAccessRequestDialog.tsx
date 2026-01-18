@@ -8,7 +8,7 @@ import { Textarea } from "@/ui/textarea";
 import { Checkbox } from "@/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/ui/command";
-import { createDatasetAccessRequest } from "@/api/platformApi";
+import { createDatasetAccessRequest, getDatasetAccessWorkflowPreview } from "@/api/platformApi";
 import userDirectoryService, { type UserDirectoryEntry } from "@/api/services/userDirectoryService";
 import { useUserInfo } from "@/store/userStore";
 import { cn } from "@/utils";
@@ -22,6 +22,21 @@ export type DatasetAccessDialogDataset = {
 	classification?: string;
 	warehouseLayer?: string;
 	ownerDept?: string;
+};
+
+type WorkflowPreview = {
+	source?: string;
+	templateId?: string;
+	templateName?: string;
+	ownerScope?: string;
+	classificationMin?: string;
+	classificationMax?: string;
+	steps?: Array<{
+		stepOrder?: number;
+		approverRole?: string;
+		deptBinding?: boolean;
+		deptCode?: string | null;
+	}>;
 };
 
 type Props = {
@@ -61,6 +76,8 @@ export function DatasetAccessRequestDialog({ open, onOpenChange, dataset, defaul
 	const [validDays, setValidDays] = useState<string>("7");
 	const [reason, setReason] = useState<string>("");
 	const [submitting, setSubmitting] = useState(false);
+	const [previewLoading, setPreviewLoading] = useState(false);
+	const [workflowPreview, setWorkflowPreview] = useState<WorkflowPreview | null>(null);
 	const [userPickerOpen, setUserPickerOpen] = useState(false);
 	const [userSearch, setUserSearch] = useState("");
 	const [userLoading, setUserLoading] = useState(false);
@@ -76,6 +93,21 @@ export function DatasetAccessRequestDialog({ open, onOpenChange, dataset, defaul
 		return parts.join(" · ");
 	}, [dataset]);
 
+	const workflowSourceLabel = useMemo(() => {
+		if (!workflowPreview) return "";
+		if (workflowPreview.source === "ADMIN_CONFIG") {
+			return `审批模板：${workflowPreview.templateName || "管理端配置"}`;
+		}
+		return "审批模板：默认安全策略";
+	}, [workflowPreview]);
+
+	const resolveRoleLabel = (role?: string) => {
+		const normalized = String(role || "").toUpperCase();
+		if (normalized === "ROLE_INST_LEADER" || normalized === "INST_LEADER") return "所级审批";
+		if (normalized === "ROLE_DEPT_LEADER" || normalized === "DEPT_LEADER") return "部门审批";
+		return role || "-";
+	};
+
 	const resetForm = useCallback(() => {
 		setCanQuery(defaultSet.has("query"));
 		setCanPreview(defaultSet.has("preview"));
@@ -85,6 +117,7 @@ export function DatasetAccessRequestDialog({ open, onOpenChange, dataset, defaul
 		setUserOptions([]);
 		setUserSearch("");
 		setUserPickerOpen(false);
+		setWorkflowPreview(null);
 	}, [defaultSet]);
 
 	const loadUsers = useCallback(async (keyword: string) => {
@@ -106,6 +139,31 @@ export function DatasetAccessRequestDialog({ open, onOpenChange, dataset, defaul
 		setUserSearch("");
 		void loadUsers("");
 	}, [open, canProxyApply, loadUsers]);
+
+	useEffect(() => {
+		if (!open || !dataset?.id) return;
+		let cancelled = false;
+		const loadPreview = async () => {
+			setPreviewLoading(true);
+			try {
+				const resp: any = await getDatasetAccessWorkflowPreview(dataset.id);
+				if (!cancelled) {
+					setWorkflowPreview(resp || null);
+				}
+			} catch (error) {
+				console.error(error);
+				if (!cancelled) {
+					setWorkflowPreview(null);
+				}
+			} finally {
+				if (!cancelled) setPreviewLoading(false);
+			}
+		};
+		void loadPreview();
+		return () => {
+			cancelled = true;
+		};
+	}, [open, dataset?.id]);
 
 	useEffect(() => {
 		if (!open || !canProxyApply) return;
@@ -197,6 +255,28 @@ export function DatasetAccessRequestDialog({ open, onOpenChange, dataset, defaul
 				</DialogHeader>
 				<div className="space-y-4">
 					{metaLine ? <div className="text-xs text-muted-foreground">{metaLine}</div> : null}
+					{workflowSourceLabel ? <div className="text-xs text-muted-foreground">{workflowSourceLabel}</div> : null}
+					{previewLoading ? (
+						<div className="text-xs text-muted-foreground">审批路径加载中…</div>
+					) : workflowPreview?.steps?.length ? (
+						<div className="rounded-md border border-dashed p-3 text-xs text-muted-foreground">
+							<div className="mb-2 text-[13px] font-medium text-foreground">审批路径预览</div>
+							<div className="space-y-1">
+								{workflowPreview.steps
+									.slice()
+									.sort((a, b) => (a.stepOrder ?? 0) - (b.stepOrder ?? 0))
+									.map((step, idx) => (
+										<div key={`${step.approverRole || "step"}-${idx}`} className="flex flex-wrap gap-2">
+											<span>第{step.stepOrder ?? idx + 1}步</span>
+											<span>{resolveRoleLabel(step.approverRole)}</span>
+											{step.deptBinding ? <span>绑定部门：{step.deptCode || "未指定"}</span> : <span>不绑定部门</span>}
+										</div>
+									))}
+							</div>
+						</div>
+					) : (
+						<div className="text-xs text-muted-foreground">审批路径未配置，将采用默认审批链路。</div>
+					)}
 
 					{canProxyApply ? (
 						<div className="space-y-2">
