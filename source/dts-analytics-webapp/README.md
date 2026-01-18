@@ -13,7 +13,7 @@
 在仓库根目录执行：
 
 ```bash
-bash source/dts-analytics-webapp/scripts/extract-metabase-ui.sh
+bash builds/dts-analytics-webapp/scripts/extract-metabase-ui.sh
 ```
 
 输出目录：
@@ -41,7 +41,7 @@ node source/dts-analytics-webapp/server.mjs
 构建镜像（一次）：
 
 ```bash
-docker build --no-cache -t dts-analytics-webapp:1.0.0 -f source/dts-analytics-webapp/Dockerfile source/dts-analytics-webapp
+docker build --no-cache -t dts-analytics-webapp:1.0.0 -f builds/dts-analytics-webapp/Dockerfile .
 ```
 
 然后启动（开发模式）：

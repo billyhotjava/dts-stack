@@ -20,6 +20,7 @@ import {
 	deleteDatasetGrant,
 	getDatasetSecurityMapping,
 	upsertDatasetSecurityMapping,
+	getDatasetOpenMetadata,
 } from "@/api/platformApi";
 import type { DatasetAsset, DatasetGrant, TableSchema } from "@/types/catalog";
 import deptService, { type DeptDto } from "@/api/services/deptService";
@@ -102,6 +103,9 @@ export default function DatasetDetailPage() {
 	const [loading, setLoading] = useState(true);
 	const [saving, setSaving] = useState(false);
 	const [dataset, setDataset] = useState<DatasetAsset | null>(null);
+	const [omLoading, setOmLoading] = useState(false);
+	const [omInfo, setOmInfo] = useState<any | null>(null);
+	const [columnsView, setColumnsView] = useState<"tech" | "business" | "merged">("business");
 	const userInfo = useUserInfo() as any;
 	const userRoles = useMemo(() => {
 		if (!userInfo || !Array.isArray(userInfo.roles)) return [] as string[];
@@ -542,6 +546,38 @@ export default function DatasetDetailPage() {
 	}, [id]);
 
 	useEffect(() => {
+		if (!id) return;
+		if (technicalColumns.length) {
+			setColumnsView("tech");
+		} else {
+			setColumnsView("business");
+		}
+	}, [id, technicalColumns.length]);
+
+	useEffect(() => {
+		if (!id) return;
+		let mounted = true;
+		setOmLoading(true);
+		(getDatasetOpenMetadata(id) as any)
+			.then((resp: any) => {
+				if (!mounted) return;
+				setOmInfo(resp || null);
+			})
+			.catch((error: any) => {
+				console.error(error);
+				if (!mounted) return;
+				setOmInfo(null);
+			})
+			.finally(() => {
+				if (!mounted) return;
+				setOmLoading(false);
+			});
+		return () => {
+			mounted = false;
+		};
+	}, [id]);
+
+	useEffect(() => {
 		if (!id || !hasDataMaintainerRole) {
 			return;
 		}
@@ -781,6 +817,113 @@ export default function DatasetDetailPage() {
 		return "";
 	}, [allColumnNames]);
 
+	const omEntity = omInfo?.entity ?? null;
+	const omOwner = useMemo(() => {
+		const owner = omEntity?.owner;
+		if (!owner) return "-";
+		return owner.displayName || owner.name || owner.id || "-";
+	}, [omEntity]);
+	const omTags = useMemo(() => {
+		const raw = Array.isArray(omEntity?.tags) ? omEntity.tags : [];
+		const tags = raw
+			.map((item: any) => item?.tagFQN || item?.tag?.name || item?.tag?.displayName || item?.name)
+			.filter(Boolean);
+		return tags.length ? tags.join(", ") : "-";
+	}, [omEntity]);
+	const omDomain = useMemo(() => {
+		const domain = omEntity?.domain;
+		if (!domain) return "-";
+		return domain.displayName || domain.name || domain.id || "-";
+	}, [omEntity]);
+	const omDescription = useMemo(() => {
+		const desc = String(omEntity?.description || "").trim();
+		return desc || "-";
+	}, [omEntity]);
+	const omColumns = useMemo(() => {
+		return Array.isArray(omEntity?.columns) ? omEntity.columns.length : 0;
+	}, [omEntity]);
+	const technicalColumns = useMemo(() => {
+		if (!Array.isArray(omEntity?.columns)) return [];
+		return omEntity.columns
+			.map((col: any) => {
+				const name = String(col?.name || "").trim();
+				if (!name) return null;
+				const displayName = String(col?.displayName || col?.description || col?.comment || "").trim();
+				const tags = Array.isArray(col?.tags)
+					? col.tags
+							.map((t: any) => t?.tagFQN || t?.tag?.name || t?.tag?.displayName || t?.name)
+							.filter(Boolean)
+					: [];
+				return {
+					name,
+					displayName: displayName || "",
+					dataType: String(col?.dataType || col?.dataTypeDisplay || "").toUpperCase(),
+					nullable: col?.constraint === "NOT_NULL" ? false : true,
+					tags,
+					description: String(col?.description || "").trim(),
+				};
+			})
+			.filter(Boolean);
+	}, [omEntity]);
+	const businessColumns = useMemo(() => {
+		const list: any[] = [];
+		for (const table of tables) {
+			for (const col of Array.isArray(table?.columns) ? table.columns : []) {
+				if (!col?.name) continue;
+				list.push({
+					name: col.name,
+					displayName: col.displayName || "",
+					dataType: col.dataType || "",
+					nullable: col.nullable !== false,
+					tags: Array.isArray(col.tags) ? col.tags : [],
+					sensitiveTags: Array.isArray(col.sensitiveTags) ? col.sensitiveTags : [],
+					description: col.description || "",
+				});
+			}
+		}
+		return list;
+	}, [tables]);
+	const mergedColumns = useMemo(() => {
+		const map = new Map<string, any>();
+		for (const col of technicalColumns) {
+			map.set(col.name, { name: col.name, tech: col, biz: null });
+		}
+		for (const col of businessColumns) {
+			const existing = map.get(col.name);
+			if (existing) {
+				existing.biz = col;
+			} else {
+				map.set(col.name, { name: col.name, tech: null, biz: col });
+			}
+		}
+		return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
+	}, [technicalColumns, businessColumns]);
+	const columnDiff = useMemo(() => {
+		const techSet = new Set(technicalColumns.map((c: any) => String(c.name || "").toLowerCase()));
+		const bizSet = new Set(businessColumns.map((c: any) => String(c.name || "").toLowerCase()));
+		const onlyTech = technicalColumns.filter((c: any) => !bizSet.has(String(c.name || "").toLowerCase()));
+		const onlyBiz = businessColumns.filter((c: any) => !techSet.has(String(c.name || "").toLowerCase()));
+		const typeMismatch: Array<{ name: string; techType: string; bizType: string }> = [];
+		const techMap = new Map(technicalColumns.map((c: any) => [String(c.name || "").toLowerCase(), c]));
+		for (const col of businessColumns) {
+			const key = String(col.name || "").toLowerCase();
+			const tech = techMap.get(key);
+			if (!tech) continue;
+			const techType = String(tech.dataType || "").toUpperCase();
+			const bizType = String(col.dataType || "").toUpperCase();
+			if (techType && bizType && techType !== bizType) {
+				typeMismatch.push({ name: col.name, techType, bizType });
+			}
+		}
+		return { onlyTech, onlyBiz, typeMismatch };
+	}, [technicalColumns, businessColumns]);
+	const omLink = useMemo(() => {
+		if (!omInfo?.uiBaseUrl || !omInfo?.fqn) return "";
+		const base = String(omInfo.uiBaseUrl || "").replace(/\/+$/, "");
+		const fqn = encodeURIComponent(String(omInfo.fqn || ""));
+		return `${base}/table/${fqn}`;
+	}, [omInfo]);
+
 	if (loading) return <div className="text-sm text-muted-foreground">加载中…</div>;
 if (!dataset) return <div className="text-sm text-muted-foreground">未找到该数据集</div>;
 
@@ -920,6 +1063,9 @@ if (!dataset) return <div className="text-sm text-muted-foreground">未找到该
 										disabled={!editable}
 										onChange={(e) => setDataset({ ...(dataset as DatasetAsset), description: e.target.value })}
 									/>
+									{omInfo?.found && omDescription !== "-" ? (
+										<div className="text-xs text-muted-foreground">技术描述：{omDescription}</div>
+									) : null}
 								</div>
 								<div className="grid gap-2">
 									<Label>来源类型</Label>
@@ -956,6 +1102,47 @@ if (!dataset) return <div className="text-sm text-muted-foreground">未找到该
 									</>
 									)}
 								</div>
+								<Card className="mt-4">
+									<CardHeader>
+										<CardTitle className="text-base">技术资产信息</CardTitle>
+										<p className="text-sm text-muted-foreground">
+											平台目录保留为业务视图，技术元数据用于增强展示。
+										</p>
+									</CardHeader>
+									<CardContent className="space-y-3">
+										{omLoading ? (
+											<div className="text-sm text-muted-foreground">加载中…</div>
+										) : !omInfo ? (
+											<div className="text-sm text-muted-foreground">暂未获取技术元数据信息</div>
+										) : !omInfo?.enabled ? (
+											<div className="text-sm text-muted-foreground">元数据服务未启用</div>
+										) : omInfo?.found ? (
+											<div className="grid gap-3 text-sm md:grid-cols-2">
+												<div>资产FQN：{omInfo?.fqn || "-"}</div>
+												<div>Owner：{omOwner}</div>
+												<div>Domain：{omDomain}</div>
+												<div>标签：{omTags}</div>
+												<div>字段数：{omColumns || "-"}</div>
+												<div>
+													元数据链接：
+													{omLink ? (
+														<a className="ml-1 text-primary underline" href={omLink} target="_blank" rel="noreferrer">
+															打开
+														</a>
+													) : (
+														<span className="ml-1 text-muted-foreground">未配置</span>
+													)}
+												</div>
+												<div className="md:col-span-2">描述：{omDescription}</div>
+											</div>
+										) : (
+											<div className="text-sm text-muted-foreground">
+												{omInfo?.message || "未找到匹配的技术资产"}
+												{omInfo?.fqn ? <span className="ml-2">候选FQN：{omInfo.fqn}</span> : null}
+											</div>
+										)}
+									</CardContent>
+								</Card>
 								{hasDataMaintainerRole ? (
 									<Card className="mt-4">
 										<CardHeader>
@@ -1042,7 +1229,124 @@ if (!dataset) return <div className="text-sm text-muted-foreground">未找到该
 							</TabsContent>
 						<TabsContent value="columns">
 							<div className="space-y-4">
-								{tables.length ? (
+								<div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+									<span>视图：</span>
+									<Button
+										variant={columnsView === "tech" ? "default" : "outline"}
+										size="sm"
+										onClick={() => setColumnsView("tech")}
+										disabled={!technicalColumns.length}
+									>
+										技术字段
+									</Button>
+									<Button
+										variant={columnsView === "business" ? "default" : "outline"}
+										size="sm"
+										onClick={() => setColumnsView("business")}
+									>
+										业务字段
+									</Button>
+									<Button
+										variant={columnsView === "merged" ? "default" : "outline"}
+										size="sm"
+										onClick={() => setColumnsView("merged")}
+										disabled={!mergedColumns.length}
+									>
+										融合视图
+									</Button>
+								</div>
+								{columnsView === "tech" && technicalColumns.length ? (
+									<div className="space-y-2">
+										<div className="flex items-center justify-between">
+											<span className="text-sm font-medium">技术字段</span>
+											<span className="text-xs text-muted-foreground">列数 {technicalColumns.length}</span>
+										</div>
+										<div className="overflow-x-auto">
+											<table className="w-full min-w-[640px] table-fixed border-collapse text-sm">
+												<thead className="bg-muted/40 text-left text-xs uppercase text-muted-foreground">
+													<tr>
+														<th className="px-3 py-2">列名</th>
+														<th className="px-3 py-2">说明</th>
+														<th className="px-3 py-2">类型</th>
+														<th className="px-3 py-2">可为空</th>
+														<th className="px-3 py-2">标签</th>
+													</tr>
+												</thead>
+												<tbody>
+													{technicalColumns.map((column: any) => {
+														const tagsText = column.tags && column.tags.length ? column.tags.join(", ") : "-";
+														return (
+															<tr
+																key={`om-${column.name}`}
+																className="border-b border-border/40 last:border-b-0"
+															>
+																<td className="px-3 py-2 text-xs font-medium">{column.name}</td>
+																<td className="px-3 py-2 text-xs text-muted-foreground">
+																	{column.displayName || column.description || "-"}
+																</td>
+																<td className="px-3 py-2 text-xs">{column.dataType || "-"}</td>
+																<td className="px-3 py-2 text-xs">{column.nullable === false ? "否" : "是"}</td>
+																<td className="px-3 py-2 text-xs truncate" title={tagsText}>
+																	{tagsText}
+																</td>
+															</tr>
+														);
+													})}
+												</tbody>
+											</table>
+										</div>
+									</div>
+								) : null}
+								{columnsView === "merged" && mergedColumns.length ? (
+									<div className="space-y-2">
+										<div className="flex items-center justify-between">
+											<span className="text-sm font-medium">融合字段</span>
+											<span className="text-xs text-muted-foreground">列数 {mergedColumns.length}</span>
+										</div>
+										<div className="overflow-x-auto">
+											<table className="w-full min-w-[720px] table-fixed border-collapse text-sm">
+												<thead className="bg-muted/40 text-left text-xs uppercase text-muted-foreground">
+													<tr>
+														<th className="px-3 py-2">列名</th>
+														<th className="px-3 py-2">技术说明</th>
+														<th className="px-3 py-2">业务说明</th>
+														<th className="px-3 py-2">类型</th>
+														<th className="px-3 py-2">标签</th>
+													</tr>
+												</thead>
+												<tbody>
+													{mergedColumns.map((row: any) => {
+														const tags = [
+															...(row.tech?.tags || []),
+															...(row.biz?.tags || []),
+															...(row.biz?.sensitiveTags || []),
+														]
+															.filter(Boolean)
+															.join(", ");
+														const techDesc = row.tech?.displayName || row.tech?.description || "-";
+														const bizDesc = row.biz?.displayName || row.biz?.description || "-";
+														const dataType = row.tech?.dataType || row.biz?.dataType || "-";
+														return (
+															<tr key={`merged-${row.name}`} className="border-b border-border/40 last:border-b-0">
+																<td className="px-3 py-2 text-xs font-medium">{row.name}</td>
+																<td className="px-3 py-2 text-xs text-muted-foreground">{techDesc}</td>
+																<td className="px-3 py-2 text-xs text-muted-foreground">{bizDesc}</td>
+																<td className="px-3 py-2 text-xs">{dataType}</td>
+																<td className="px-3 py-2 text-xs truncate" title={tags || "-"}>
+																	{tags || "-"}
+																</td>
+															</tr>
+														);
+													})}
+												</tbody>
+											</table>
+										</div>
+									</div>
+								) : null}
+								{columnsView === "business" && technicalColumns.length ? (
+									<div className="text-xs text-muted-foreground">平台登记字段（业务视图）</div>
+								) : null}
+								{columnsView === "business" && tables.length ? (
 									tables.map((table) => (
 										<div key={table.id || table.name} className="space-y-2">
 											<div className="flex items-center justify-between">
@@ -1102,9 +1406,15 @@ if (!dataset) return <div className="text-sm text-muted-foreground">未找到该
 											)}
 										</div>
 									))
-								) : (
+								) : columnsView === "business" ? (
 									<div className="text-sm text-muted-foreground">暂无列信息，请在列表页刷新后重试。</div>
-								)}
+								) : null}
+								{columnsView === "tech" && !technicalColumns.length ? (
+									<div className="text-sm text-muted-foreground">暂无技术字段信息</div>
+								) : null}
+								{columnsView === "merged" && !mergedColumns.length ? (
+									<div className="text-sm text-muted-foreground">暂无融合字段信息</div>
+								) : null}
 							</div>
 						</TabsContent>
 						<TabsContent value="sample">

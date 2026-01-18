@@ -13,8 +13,10 @@ ARG NPM_HTTPS_PROXY
 ARG NPM_REGISTRY
 ARG PNPM_VERSION=10.8.0
 
+# Recommended build context: repository root
+#   docker build -t dts-admin-webapp:TAG -f builds/dts-admin-webapp/Dockerfile .
 # Copy lockfile and manifest first to leverage docker layer caching
-COPY pnpm-lock.yaml package.json ./
+COPY source/dts-admin-webapp/pnpm-lock.yaml source/dts-admin-webapp/package.json ./
 
 # Install pnpm matching the repo's packageManager. Corepack bundled with Node 20.17 may lack the new signing key,
 # so install via npm to avoid signature verification failures.
@@ -48,7 +50,8 @@ RUN set -eux; \
     unset npm_config_registry npm_config_proxy npm_config_https_proxy http_proxy https_proxy
 
 # Copy the remaining project files and build the production bundle
-COPY . .
+COPY source/dts-admin-webapp/ ./
+COPY builds/dts-admin-webapp/scripts /builds/dts-admin-webapp/scripts
 RUN pnpm build
 
 ARG BASE_IMAGE_NODE=node:20.17.0-alpine3.20
@@ -92,8 +95,8 @@ RUN set -eux; \
     # Ensure all assets are world-readable & directories executable for nginx worker
     find /usr/share/nginx/html -type d -exec chmod 755 {} + || true; \
     find /usr/share/nginx/html -type f -exec chmod 644 {} + || true
-COPY nginx.conf /etc/nginx/http.d/default.conf
-COPY docker-entrypoint.sh /docker-entrypoint.sh
+COPY builds/dts-admin-webapp/nginx.conf /etc/nginx/http.d/default.conf
+COPY builds/dts-admin-webapp/docker-entrypoint.sh /docker-entrypoint.sh
 RUN chmod +x /docker-entrypoint.sh
 
 EXPOSE 80

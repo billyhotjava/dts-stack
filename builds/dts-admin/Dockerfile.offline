@@ -1,6 +1,6 @@
 # Offline runtime-only image for dts-admin
 # - No apt usage
-# - Expects a prebuilt JAR at build context path: source/builds/dts-admin.jar
+# - Expects a prebuilt JAR at build context path: builds/dts-admin/dts-admin.jar
 # - Base image pinned by version (choose digest pinning in your pipeline if needed)
 
 ARG RUNTIME_BASE_IMAGE=eclipse-temurin:21.0.9_10-jre-noble
@@ -12,9 +12,8 @@ ENV TZ=Asia/Shanghai \
     JAVA_OPTS="-Djava.security.egd=file:/dev/./urandom -XX:MaxRAMPercentage=75.0 -Duser.timezone=Asia/Shanghai --add-exports=java.base/sun.security.x509=ALL-UNNAMED --add-exports=java.base/sun.security.util=ALL-UNNAMED --add-opens=java.base/sun.security.x509=ALL-UNNAMED --add-opens=java.base/sun.security.util=ALL-UNNAMED"
 
 WORKDIR /app
-# Copy prebuilt jar from repository path: source/builds/dts-admin.jar
-COPY builds/dts-admin.jar /app/app.jar
+# Copy prebuilt jar from repository path: builds/dts-admin/dts-admin.jar
+COPY builds/dts-admin/dts-admin.jar /app/app.jar
 
 EXPOSE 8080
 ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar /app/app.jar"]
-

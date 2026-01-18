@@ -14,7 +14,7 @@ This module bootstraps a JHipster-style Spring Boot stack (mirroring `source/dts
 ## Offline Docker build (same pattern as dts-admin)
 1. Build the JAR using Maven inside Docker:
    ```bash
-   bash source/dts-analytics/scripts/build-offline-jar.sh
+   bash builds/dts-analytics/scripts/build-offline-jar.sh
    ```
 
    Alternatively (manual command, reactor build):
@@ -38,11 +38,11 @@ This module bootstraps a JHipster-style Spring Boot stack (mirroring `source/dts
    If you see errors like `package com.yuzhi.dts.analytics.domain does not exist` or missing filters, it means the container did not see the full `source/` tree (wrong `$PWD`, wrong `-v` mount, or building from a different checkout). Use the script above: it performs a preflight check and prints the Java source file count inside the container.
 
 2. Copy the artifact into the offline build context:
-   - 已由 `bash source/dts-analytics/scripts/build-offline-jar.sh` 自动完成
+   - 已由 `bash builds/dts-analytics/scripts/build-offline-jar.sh` 自动完成
 
 3. Build the runtime image (offline Dockerfile):
    ```bash
-   bash source/dts-analytics/scripts/build-offline-image.sh
+   bash builds/dts-analytics/scripts/build-offline-image.sh
    ```
 
 ## Migration Guide

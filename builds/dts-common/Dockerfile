@@ -1,7 +1,9 @@
 # ---------- build stage ----------
 FROM maven:3.9-eclipse-temurin-17 AS build
 WORKDIR /workspace
-COPY . .
+# Recommended build context: repository root
+#   docker build -t dts-common:TAG -f builds/dts-common/Dockerfile .
+COPY source/dts-common/ ./
 RUN --mount=type=cache,target=/root/.m2 \
     mvn -q -DskipTests package
 

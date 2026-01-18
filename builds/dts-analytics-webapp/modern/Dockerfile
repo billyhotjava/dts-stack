@@ -24,7 +24,9 @@ RUN set -eux; \
     pnpm --version; \
     unset npm_config_registry npm_config_proxy npm_config_https_proxy http_proxy https_proxy
 
-COPY package.json ./
+# Recommended build context: repository root
+#   docker build -t dts-analytics-webapp-modern:TAG -f builds/dts-analytics-webapp/modern/Dockerfile .
+COPY source/dts-analytics-webapp/modern/package.json ./
 
 RUN set -eux; \
     if [ -n "${NPM_REGISTRY:-}" ]; then export npm_config_registry="${NPM_REGISTRY}"; fi; \
@@ -37,7 +39,7 @@ RUN set -eux; \
     pnpm install --no-frozen-lockfile --ignore-scripts; \
     unset npm_config_registry npm_config_proxy npm_config_https_proxy http_proxy https_proxy
 
-COPY . .
+COPY source/dts-analytics-webapp/modern/ ./
 RUN pnpm build
 
 ARG BASE_IMAGE_NODE=node:20.17.0-alpine3.20
@@ -50,7 +52,7 @@ RUN set -eux; \
 
 WORKDIR /usr/share/nginx/html
 COPY --from=builder /app/dist ./
-COPY nginx.conf /etc/nginx/http.d/default.conf
+COPY builds/dts-analytics-webapp/modern/nginx.conf /etc/nginx/http.d/default.conf
 
 EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]

@@ -14,6 +14,7 @@ import com.yuzhi.dts.platform.security.SecurityUtils;
 import com.yuzhi.dts.platform.security.policy.DataLevel;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.security.OrganizationVisibilityService;
+import com.yuzhi.dts.platform.service.openmetadata.OpenMetadataService;
 import jakarta.validation.Valid;
 import java.lang.reflect.Array;
 import java.util.*;
@@ -57,6 +58,7 @@ public class CatalogResource {
     private final CatalogFeatureProperties catalogFeatures;
     private final OrganizationVisibilityService organizationVisibilityService;
     private final DataStandardRepository dataStandardRepository;
+    private final OpenMetadataService openMetadataService;
 
     public CatalogResource(
         CatalogDomainRepository domainRepo,
@@ -75,7 +77,8 @@ public class CatalogResource {
         InfraDataSourceRepository infraDataSourceRepository,
         CatalogFeatureProperties catalogFeatures,
         OrganizationVisibilityService organizationVisibilityService,
-        DataStandardRepository dataStandardRepository
+        DataStandardRepository dataStandardRepository,
+        OpenMetadataService openMetadataService
     ) {
         this.domainRepo = domainRepo;
         this.datasetRepo = datasetRepo;
@@ -94,6 +97,7 @@ public class CatalogResource {
         this.catalogFeatures = catalogFeatures;
         this.organizationVisibilityService = organizationVisibilityService;
         this.dataStandardRepository = dataStandardRepository;
+        this.openMetadataService = openMetadataService;
     }
 
     @GetMapping("/config")
@@ -360,6 +364,59 @@ public class CatalogResource {
         putIfHasText(auditPayload, "owner", safeText(ds.get("owner")));
         audit.auditAction("CATALOG_ASSET_VIEW", AuditStage.SUCCESS, id.toString(), auditPayload);
         return ApiResponses.ok(ds);
+    }
+
+    @GetMapping("/datasets/{id}/openmetadata")
+    public ApiResponse<OpenMetadataService.OpenMetadataResult> getDatasetOpenMetadata(
+        @PathVariable UUID id,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        CatalogDataset dataset = datasetRepo
+            .findById(id)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "数据集不存在或无权访问"));
+        String effDept = activeDept != null ? activeDept : claim("dept_code");
+        if (dataset.getEnabled() != null && !dataset.getEnabled().booleanValue() && !SecurityUtils.isOpAdminAccount()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "数据集不存在或无权访问");
+        }
+        Map<String, Object> auditPayload = new LinkedHashMap<>();
+        auditPayload.put("summary", "查看技术资产信息");
+        auditPayload.put("datasetId", id.toString());
+        putIfHasText(auditPayload, "activeDept", effDept);
+        audit.auditAction("CATALOG_ASSET_VIEW", AuditStage.SUCCESS, id.toString(), auditPayload);
+        return ApiResponses.ok(openMetadataService.fetchTableForDataset(dataset));
+    }
+
+    @PostMapping("/datasets/openmetadata/batch")
+    public ApiResponse<Map<String, OpenMetadataService.OpenMetadataSummary>> batchOpenMetadata(
+        @RequestBody OpenMetadataBatchRequest body,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        List<UUID> ids = body != null && body.ids() != null ? body.ids() : List.of();
+        if (ids.isEmpty()) {
+            return ApiResponses.ok(Map.of());
+        }
+        if (ids.size() > 100) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "批量请求过大");
+        }
+        String effDept = activeDept != null ? activeDept : claim("dept_code");
+        Map<String, OpenMetadataService.OpenMetadataSummary> payload = new LinkedHashMap<>();
+        List<CatalogDataset> datasets = datasetRepo.findAllById(ids);
+        for (CatalogDataset dataset : datasets) {
+            if (dataset == null || dataset.getId() == null) {
+                continue;
+            }
+            if (dataset.getEnabled() != null && !dataset.getEnabled().booleanValue() && !SecurityUtils.isOpAdminAccount()) {
+                continue;
+            }
+            OpenMetadataService.OpenMetadataResult result = openMetadataService.fetchTableForDataset(dataset);
+            payload.put(dataset.getId().toString(), openMetadataService.summarize(result));
+        }
+        Map<String, Object> auditPayload = new LinkedHashMap<>();
+        auditPayload.put("summary", "批量查询技术资产信息");
+        auditPayload.put("count", payload.size());
+        putIfHasText(auditPayload, "activeDept", effDept);
+        audit.auditAction("CATALOG_ASSET_VIEW", AuditStage.SUCCESS, "batch-openmetadata", auditPayload);
+        return ApiResponses.ok(payload);
     }
 
     @GetMapping("/datasets/{id}/security-mapping")
@@ -2193,4 +2250,6 @@ public class CatalogResource {
         }
         return raw;
     }
+
+    public record OpenMetadataBatchRequest(List<UUID> ids) {}
 }

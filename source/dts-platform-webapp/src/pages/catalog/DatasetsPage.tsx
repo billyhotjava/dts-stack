@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/ui/textarea";
 import { Alert, AlertDescription } from "@/ui/alert";
 import { toast } from "sonner";
-import { createDataset, getCatalogConfig, listDatasets } from "@/api/platformApi";
+import { batchDatasetOpenMetadata, createDataset, getCatalogConfig, getDatasetOpenMetadata, listDatasets } from "@/api/platformApi";
 import { listInfraDataSources, refreshInceptorRegistry } from "@/api/services/infraService";
 import deptService, { type DeptDto } from "@/api/services/deptService";
 import { useUserInfo } from "@/store/userStore";
@@ -130,13 +130,20 @@ export default function DatasetsPage() {
 		return trimmed.length > 0 ? trimmed : undefined;
 	}, [userDeptCode]);
 	const [items, setItems] = useState<ListItem[]>([]);
+	const [techSummary, setTechSummary] = useState<Record<string, any>>({});
 	const [total, setTotal] = useState(0);
 	const [loading, setLoading] = useState(false);
+	const [omOpening, setOmOpening] = useState<Record<string, boolean>>({});
 	const [page, setPage] = useState(0);
 	const [size] = useState(10);
 	const [keyword, setKeyword] = useState("");
 const [deptFilter, setDeptFilter] = useState<string>("");
 const [layerFilter, setLayerFilter] = useState<string>("");
+const [techOwnerFilter, setTechOwnerFilter] = useState<string>("");
+const [techDomainFilter, setTechDomainFilter] = useState<string>("");
+const [techTagFilter, setTechTagFilter] = useState<string>("");
+const [onlyTechManaged, setOnlyTechManaged] = useState<boolean>(false);
+const [techSort, setTechSort] = useState<string>("name");
 	const [instOwnerInitialized, setInstOwnerInitialized] = useState(false);
 	const [open, setOpen] = useState(false);
 	const [form, setForm] = useState({
@@ -198,6 +205,56 @@ const [deptLoading, setDeptLoading] = useState(false);
 	    const [refreshing, setRefreshing] = useState(false);
     // Preview dialog state
 const sourceTypeUpper = (form.sourceType || "").toUpperCase();
+
+	const resolveTechSummary = useCallback(
+		(id: string) => {
+			return techSummary[id] || null;
+		},
+		[techSummary],
+	);
+
+	const resolveDescription = useCallback(
+		(item: ListItem) => {
+			const summary = resolveTechSummary(item.id);
+			const desc = summary?.description;
+			if (typeof desc === "string" && desc.trim() && desc.trim() !== "-") {
+				return desc.trim();
+			}
+			return item.description || "-";
+		},
+		[resolveTechSummary],
+	);
+
+	const openOpenMetadata = useCallback(
+		async (datasetId: string) => {
+			if (!datasetId) return;
+			setOmOpening((prev) => ({ ...prev, [datasetId]: true }));
+			try {
+				const resp: any = await getDatasetOpenMetadata(datasetId);
+				if (!resp?.enabled) {
+					toast.error("元数据服务未启用");
+					return;
+				}
+				if (!resp?.found) {
+					toast.error(resp?.message || "未找到对应的技术资产");
+					return;
+				}
+				const base = String(resp?.uiBaseUrl || "").replace(/\/+$/, "");
+				const fqn = encodeURIComponent(String(resp?.fqn || ""));
+				if (!base || !fqn) {
+					toast.error("元数据链接未配置");
+					return;
+				}
+				window.open(`${base}/table/${fqn}`, "_blank", "noopener,noreferrer");
+			} catch (error) {
+				console.error(error);
+				toast.error("打开元数据详情失败");
+			} finally {
+				setOmOpening((prev) => ({ ...prev, [datasetId]: false }));
+			}
+		},
+		[],
+	);
 const isInceptorSource = sourceTypeUpper === "INCEPTOR" || sourceTypeUpper === "HIVE";
 const isPostgresSource = sourceTypeUpper === "POSTGRES";
 const databaseLabel = isPostgresSource ? "Schema" : "Hive Database";
@@ -350,6 +407,18 @@ const renderSourceLabel = (value: string) => {
 				});
 			setItems(mapped);
 			setTotal(Number(resp?.total || mapped.length));
+			if (mapped.length) {
+				try {
+					const ids = mapped.map((item) => item.id);
+					const omResp: any = await batchDatasetOpenMetadata(ids);
+					setTechSummary(typeof omResp === "object" && omResp ? omResp : {});
+				} catch (error) {
+					console.error(error);
+					setTechSummary({});
+				}
+			} else {
+				setTechSummary({});
+			}
 		} catch (e) {
 			console.error(e);
 			toast.error("加载失败");
@@ -453,11 +522,56 @@ useEffect(() => {
 	}, [multiSourceAllowed, resolvedDefaultSource]);
 
 const filtered = useMemo(() => {
-	return items.filter((it) => {
+	const base = items.filter((it) => {
 		if (keyword && !it.name.toLowerCase().includes(keyword.toLowerCase())) return false;
+		const summary = resolveTechSummary(it.id);
+		if (onlyTechManaged && !summary?.found) return false;
+		if (techOwnerFilter.trim()) {
+			const owner = String(summary?.owner || "").toLowerCase();
+			if (!owner.includes(techOwnerFilter.trim().toLowerCase())) return false;
+		}
+		if (techDomainFilter.trim()) {
+			const domain = String(summary?.domain || "").toLowerCase();
+			if (!domain.includes(techDomainFilter.trim().toLowerCase())) return false;
+		}
+		if (techTagFilter.trim()) {
+			const tagsRaw = String(summary?.tags || "");
+			const tags = tagsRaw
+				.split(",")
+				.map((t) => t.trim().toLowerCase())
+				.filter(Boolean);
+			if (!tags.some((t) => t.includes(techTagFilter.trim().toLowerCase()))) return false;
+		}
 		return true;
 	});
-}, [items, keyword]);
+
+	const sorted = [...base];
+	const byName = () => sorted.sort((a, b) => a.name.localeCompare(b.name));
+	if (techSort === "columns") {
+		sorted.sort((a, b) => {
+			const aCount = Number(resolveTechSummary(a.id)?.columnCount || 0);
+			const bCount = Number(resolveTechSummary(b.id)?.columnCount || 0);
+			if (bCount !== aCount) return bCount - aCount;
+			return a.name.localeCompare(b.name);
+		});
+	} else if (techSort === "tags") {
+		sorted.sort((a, b) => {
+			const aTags = String(resolveTechSummary(a.id)?.tags || "")
+				.split(",")
+				.map((t) => t.trim())
+				.filter(Boolean).length;
+			const bTags = String(resolveTechSummary(b.id)?.tags || "")
+				.split(",")
+				.map((t) => t.trim())
+				.filter(Boolean).length;
+			if (bTags !== aTags) return bTags - aTags;
+			return a.name.localeCompare(b.name);
+		});
+	} else {
+		byName();
+	}
+	return sorted;
+}, [items, keyword, resolveTechSummary, onlyTechManaged, techOwnerFilter, techDomainFilter, techTagFilter, techSort]);
 
 	const totalPages = useMemo(() => Math.max(1, Math.ceil(total / size)), [total, size]);
 
@@ -647,7 +761,7 @@ const filtered = useMemo(() => {
 					</div>
 				</CardHeader>
 				<CardContent className="space-y-3">
-					<div className="grid gap-2 md:grid-cols-4">
+					<div className="grid gap-2 md:grid-cols-6">
 						<div>
 			<Label>所属部门</Label>
 			<Select
@@ -693,6 +807,52 @@ const filtered = useMemo(() => {
 				</SelectContent>
 			</Select>
 		</div>
+						<div>
+							<Label>技术责任人</Label>
+							<Input
+								placeholder="责任人"
+								value={techOwnerFilter}
+								onChange={(e) => setTechOwnerFilter(e.target.value)}
+							/>
+						</div>
+						<div>
+							<Label>技术业务域</Label>
+							<Input
+								placeholder="业务域"
+								value={techDomainFilter}
+								onChange={(e) => setTechDomainFilter(e.target.value)}
+							/>
+						</div>
+						<div>
+							<Label>技术标签</Label>
+							<Input
+								placeholder="标签关键字"
+								value={techTagFilter}
+								onChange={(e) => setTechTagFilter(e.target.value)}
+							/>
+						</div>
+						<div className="flex items-end">
+							<Button
+								variant={onlyTechManaged ? "default" : "outline"}
+								size="sm"
+								onClick={() => setOnlyTechManaged((prev) => !prev)}
+							>
+								{onlyTechManaged ? "仅技术资产：开" : "仅技术资产：关"}
+							</Button>
+						</div>
+						<div>
+							<Label>排序</Label>
+							<Select value={techSort} onValueChange={setTechSort}>
+								<SelectTrigger>
+									<SelectValue placeholder="按名称" />
+								</SelectTrigger>
+								<SelectContent>
+									<SelectItem value="name">名称</SelectItem>
+									<SelectItem value="columns">字段数</SelectItem>
+									<SelectItem value="tags">标签数</SelectItem>
+								</SelectContent>
+							</Select>
+						</div>
 						</div>
 					<div className="overflow-hidden rounded-md border">
 						<table className="w-full min-w-[820px] table-fixed text-sm">
@@ -702,6 +862,7 @@ const filtered = useMemo(() => {
 									<th className="px-3 py-2">数据集名称</th>
 									<th className="px-3 py-2">所属部门</th>
 									<th className="px-3 py-2">描述</th>
+									<th className="px-3 py-2">技术资产</th>
 									<th className="px-3 py-2">操作</th>
 								</tr>
 							</thead>
@@ -711,7 +872,56 @@ const filtered = useMemo(() => {
 										<td className="px-3 py-2 text-xs text-muted-foreground">{idx + 1}</td>
 										<td className="px-3 py-2 font-medium">{d.name}</td>
 										<td className="px-3 py-2 text-xs">{renderDept(d.ownerDept)}</td>
-										<td className="px-3 py-2 text-xs truncate" title={d.description || "-"}>{d.description || "-"}</td>
+										<td className="px-3 py-2 text-xs truncate" title={resolveDescription(d)}>
+											{resolveDescription(d)}
+										</td>
+										<td className="px-3 py-2">
+											<div className="mb-1 text-[11px] text-muted-foreground">
+												{(() => {
+													const summary = resolveTechSummary(d.id);
+													if (!summary) return "技术资产状态：待获取";
+													if (!summary.enabled) return "技术资产状态：未启用";
+													return summary.found ? "技术资产状态：已接管" : "技术资产状态：未接管";
+												})()}
+											</div>
+											<div className="mb-2 text-[11px] text-muted-foreground">
+												{(() => {
+													const summary = resolveTechSummary(d.id);
+													if (!summary || !summary.found) return "责任人：-";
+													return `责任人：${summary.owner || "-"}`;
+												})()}
+											</div>
+											<div className="mb-2 text-[11px] text-muted-foreground">
+												{(() => {
+													const summary = resolveTechSummary(d.id);
+													if (!summary || !summary.found) return "业务域：-";
+													return `业务域：${summary.domain || "-"}`;
+												})()}
+											</div>
+											<div className="mb-2 text-[11px] text-muted-foreground">
+												{(() => {
+													const summary = resolveTechSummary(d.id);
+													if (!summary || !summary.found) return "字段数：-";
+													const count = typeof summary.columnCount === "number" ? summary.columnCount : 0;
+													return `字段数：${count}`;
+												})()}
+											</div>
+											<div className="mb-2 text-[11px] text-muted-foreground">
+												{(() => {
+													const summary = resolveTechSummary(d.id);
+													if (!summary || !summary.found) return "标签：-";
+													return `标签：${summary.tags || "-"}`;
+												})()}
+											</div>
+											<Button
+												variant="outline"
+												size="sm"
+												disabled={Boolean(omOpening[d.id])}
+												onClick={() => void openOpenMetadata(d.id)}
+											>
+												{omOpening[d.id] ? "打开中…" : "元数据详情"}
+											</Button>
+										</td>
 										<td className="px-3 py-2">
 											<div className="flex flex-wrap items-center gap-2">
 												{d.editable ? (
@@ -727,7 +937,7 @@ const filtered = useMemo(() => {
 								))}
 								{!filtered.length && (
 									<tr>
-										<td colSpan={5} className="px-3 py-6 text-center text-xs text-muted-foreground">
+										<td colSpan={6} className="px-3 py-6 text-center text-xs text-muted-foreground">
 											{loading ? "加载中…" : "暂无数据"}
 										</td>
 									</tr>

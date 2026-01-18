@@ -15,8 +15,10 @@ ARG PNPM_VERSION=10.8.0
 # Disable opening visualizer report during Docker build
 ENV VISUALIZER_OPEN=false
 
+# Recommended build context: repository root
+#   docker build -t dts-platform-webapp:TAG -f builds/dts-platform-webapp/Dockerfile .
 # Copy lockfile and manifest first to leverage docker layer caching
-COPY pnpm-lock.yaml package.json ./
+COPY source/dts-platform-webapp/pnpm-lock.yaml source/dts-platform-webapp/package.json ./
 
 # Install pnpm matching the repo's packageManager. Corepack bundled with Node 20.17 may lack the latest signing key,
 # so install via npm to avoid signature verification failures.
@@ -50,7 +52,7 @@ RUN set -eux; \
     unset npm_config_registry npm_config_proxy npm_config_https_proxy http_proxy https_proxy
 
 # Copy the remaining project files and build the production bundle
-COPY . .
+COPY source/dts-platform-webapp/ ./
 RUN pnpm build
 
 ARG BASE_IMAGE_NODE=node:20.17.0-alpine3.20
@@ -100,8 +102,8 @@ RUN set -eux; \
     find /usr/share/nginx/html -type f -name '*.js' -exec chmod a+r {} + || true
 
 # Template-based Nginx config rendered at container start
-COPY nginx.conf.template /etc/nginx/http.d/default.conf.template
-COPY docker-entrypoint.sh /docker-entrypoint.sh
+COPY builds/dts-platform-webapp/nginx.conf.template /etc/nginx/http.d/default.conf.template
+COPY builds/dts-platform-webapp/docker-entrypoint.sh /docker-entrypoint.sh
 RUN chmod +x /docker-entrypoint.sh
 
 EXPOSE 80

@@ -11,11 +11,10 @@ if ! command -v docker >/dev/null 2>&1; then
   exit 1
 fi
 
-if [[ ! -f "${REPO_ROOT}/source/builds/dts-analytics.jar" ]]; then
-  echo "[dts-analytics] ERROR: source/builds/dts-analytics.jar not found; run scripts/build-offline-jar.sh first" >&2
+if [[ ! -f "${REPO_ROOT}/builds/dts-analytics/dts-analytics.jar" ]]; then
+  echo "[dts-analytics] ERROR: builds/dts-analytics/dts-analytics.jar not found; run scripts/build-offline-jar.sh first" >&2
   exit 1
 fi
 
-docker build --no-cache -t "${IMAGE_TAG}" -f "${REPO_ROOT}/source/dts-analytics/Dockerfile.offline" "${REPO_ROOT}/source"
+docker build --no-cache -t "${IMAGE_TAG}" -f "${REPO_ROOT}/builds/dts-analytics/Dockerfile.offline" "${REPO_ROOT}"
 echo "[dts-analytics] built ${IMAGE_TAG}"
-

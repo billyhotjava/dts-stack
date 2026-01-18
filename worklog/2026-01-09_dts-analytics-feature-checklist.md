@@ -46,7 +46,7 @@
 ## 1) 功能盘点方法（如何确保不漏）
 
 1. 以 Java 重写后端为准：扫描 `source/dts-analytics/src/main/java/com/yuzhi/dts/analytics/web/rest/*` 的 REST 资源，作为“应实现能力边界”。
-2. 以 legacy UI 为验收基线：对 `source/dts-analytics-webapp/legacy/frontend_client` 的 bundle 扫描字符串（见 `source/dts-analytics-webapp/scripts/scan-legacy-api.sh` 输出 `source/dts-analytics-webapp/legacy/api-endpoints.txt`），再配合浏览器 Network 行为验证。
+2. 以 legacy UI 为验收基线：对 `source/dts-analytics-webapp/legacy/frontend_client` 的 bundle 扫描字符串（见 `builds/dts-analytics-webapp/scripts/scan-legacy-api.sh` 输出 `source/dts-analytics-webapp/legacy/api-endpoints.txt`），再配合浏览器 Network 行为验证。
 3. 以 Metabase v0.58.x 的模块结构做“检查表”校验：Browse/Collections、Questions、Dashboards、Data、Admin、Sharing/Embedding、Alerts/Pulses、Activity/Recents 等。
 
 ## 2) P0（必须交付：替代 legacy 的最小闭环）

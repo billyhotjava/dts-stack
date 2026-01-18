@@ -67,8 +67,8 @@ RUN set -eu; \
         done; \
         echo "source/pom.xml" > /workspace/.build-pom; \
     else \
-        echo >&2 "Missing source modules. Run build with repository root or 'source' as context, e.g.:"; \
-        echo >&2 "  docker build -f source/dts-admin/Dockerfile source"; \
+        echo >&2 "Missing source modules. Run build with repository root as context, e.g.:"; \
+        echo >&2 "  docker build -f builds/dts-admin/Dockerfile ."; \
         exit 1; \
     fi
 RUN mkdir -p /root/.m2 && \
@@ -85,7 +85,7 @@ RUN mkdir -p /root/.m2 && \
       > /root/.m2/settings.xml
 RUN set -eux; \
     BUILD_POM=$(cat /workspace/.build-pom); \
-    PREBUILT_JAR="/workspace/builds/dts-admin.jar"; \
+    PREBUILT_JAR="/workspace/builds/dts-admin/dts-admin.jar"; \
     USE_MAVEN="${ENABLE_MAVEN_BUILD}"; \
     if [ ! -f "${PREBUILT_JAR}" ]; then \
       echo "[build] Prebuilt jar missing at ${PREBUILT_JAR}; forcing Maven build"; \

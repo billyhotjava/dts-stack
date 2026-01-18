@@ -7,7 +7,7 @@ LEGACY_DIR="${WEBAPP_DIR}/legacy/frontend_client"
 
 if [[ ! -d "${LEGACY_DIR}" ]]; then
   echo "[scan-legacy-api] ERROR: missing ${LEGACY_DIR}" >&2
-  echo "[scan-legacy-api] Run: bash source/dts-analytics-webapp/scripts/extract-metabase-ui.sh" >&2
+  echo "[scan-legacy-api] Run: bash builds/dts-analytics-webapp/scripts/extract-metabase-ui.sh" >&2
   exit 1
 fi
 
@@ -39,4 +39,3 @@ out_file.parent.mkdir(parents=True, exist_ok=True)
 out_file.write_text("\n".join(sorted(endpoints)) + ("\n" if endpoints else ""), encoding="utf-8")
 print(f"[scan-legacy-api] endpoints={len(endpoints)} -> {out_file}")
 PY
-

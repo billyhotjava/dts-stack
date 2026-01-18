@@ -67,8 +67,8 @@ RUN set -eu; \
         done; \
         echo "source/pom.xml" > /workspace/.build-pom; \
     else \
-        echo >&2 "Missing source modules. Run build with repository root or 'source' as context, e.g.:"; \
-        echo >&2 "  docker build -f source/dts-platform/Dockerfile source"; \
+        echo >&2 "Missing source modules. Run build with repository root as context, e.g.:"; \
+        echo >&2 "  docker build -f builds/dts-platform/Dockerfile ."; \
         exit 1; \
     fi
 RUN mkdir -p /root/.m2 && \
@@ -90,10 +90,10 @@ RUN set -eux; \
       env -u JAVA_HOME mvn -s /root/.m2/settings.xml -q -DskipTests -f "$BUILD_POM" -pl dts-platform -am package; \
     else \
       # Offline/locked-down fallback: use prebuilt jar from builds/
-      echo "Skipping Maven build; using prebuilt jar from /workspace/builds"; \
+      echo "Skipping Maven build; using prebuilt jar from /workspace/builds/dts-platform"; \
       mkdir -p /workspace/dts-platform/target; \
-      test -f /workspace/builds/dts-platform.jar; \
-      cp /workspace/builds/dts-platform.jar /workspace/dts-platform/target/dts-platform-prebuilt.jar; \
+      test -f /workspace/builds/dts-platform/dts-platform.jar; \
+      cp /workspace/builds/dts-platform/dts-platform.jar /workspace/dts-platform/target/dts-platform-prebuilt.jar; \
     fi
 
 # Normalize artifact name to a deterministic jar path for the runtime stage

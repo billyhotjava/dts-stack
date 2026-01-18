@@ -103,9 +103,9 @@ pnpm build
 
 ### 生产环境 API 代理说明
 
-生产镜像默认使用 Nginx 提供静态文件。为使前端相对路径 `/api/**` 正确转发到后端，本仓库已新增 `nginx/default.conf` 并在 `Dockerfile` 中启用（复制到 `/etc/nginx/conf.d/default.conf`）。
+生产镜像默认使用 Nginx 提供静态文件。为使前端相对路径 `/api/**` 正确转发到后端，本仓库已新增 `builds/dts-platform-webapp/nginx.conf.template` 并在 `Dockerfile` 中启用（复制到 `/etc/nginx/http.d/default.conf.template`）。
 
-- 配置位置：`nginx/default.conf:1`
+- 配置位置：`builds/dts-platform-webapp/nginx.conf.template:1`
 - 默认上游：`proxy_pass http://dts-platform:8080;`（保留 `/api` 前缀）
 - 如后端地址不同，请修改上述上游主机端口后重新构建镜像。
 

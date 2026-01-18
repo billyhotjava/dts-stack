@@ -8,6 +8,7 @@ import com.yuzhi.dts.platform.config.DataStandardProperties;
 import com.yuzhi.dts.platform.config.GovernanceProperties;
 import com.yuzhi.dts.platform.config.HiveExecutionProperties;
 import com.yuzhi.dts.platform.config.CRLFLogConverter;
+import com.yuzhi.dts.platform.config.OpenMetadataProperties;
 import jakarta.annotation.PostConstruct;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
@@ -37,6 +38,7 @@ import tech.jhipster.config.JHipsterConstants;
     DataStandardProperties.class,
     GovernanceProperties.class,
     InfraSecurityProperties.class,
+    OpenMetadataProperties.class,
 })
 public class DtsPlatformApp {
 

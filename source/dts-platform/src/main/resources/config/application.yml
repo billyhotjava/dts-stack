@@ -249,6 +249,17 @@ dts:
     features:
       # Serve Keycloak localization resources from platform to avoid browser TLS trust issues to admin domain in dev
       kc-localization: ${DTS_FEATURE_PLATFORM_KC_LOCALIZATION:true}
+    openmetadata:
+      enabled: ${DTS_PLATFORM_OPENMETADATA_ENABLED:true}
+      base-url: ${DTS_PLATFORM_OPENMETADATA_BASE_URL:http://dts-openmetadata:8585}
+      api-path: ${DTS_PLATFORM_OPENMETADATA_API_PATH:/api/v1}
+      ui-base-url: ${DTS_PLATFORM_OPENMETADATA_UI_BASE_URL:}
+      auth-token: ${DTS_PLATFORM_OPENMETADATA_AUTH_TOKEN:}
+      service-name: ${DTS_PLATFORM_OPENMETADATA_SERVICE_NAME:hive}
+      default-database: ${DTS_PLATFORM_OPENMETADATA_DEFAULT_DATABASE:}
+      default-schema: ${DTS_PLATFORM_OPENMETADATA_DEFAULT_SCHEMA:}
+      table-fqn-pattern: ${DTS_PLATFORM_OPENMETADATA_TABLE_FQN_PATTERN:{service}.{database}.{table}}
+      table-fields: ${DTS_PLATFORM_OPENMETADATA_TABLE_FIELDS:columns,owner,tags,domain,usageSummary,profile}
     session:
       timeout-minutes: ${DTS_PLATFORM_SESSION_TIMEOUT_MINUTES:10}
     hive:

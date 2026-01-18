@@ -63,6 +63,6 @@ if [[ -z "${JAR_PATH}" ]]; then
   exit 1
 fi
 
-mkdir -p "${REPO_ROOT}/source/builds"
-cp -f "${JAR_PATH}" "${REPO_ROOT}/source/builds/dts-analytics.jar"
-echo "[dts-analytics] copied ${JAR_PATH} -> source/builds/dts-analytics.jar"
+mkdir -p "${REPO_ROOT}/builds/dts-analytics"
+cp -f "${JAR_PATH}" "${REPO_ROOT}/builds/dts-analytics/dts-analytics.jar"
+echo "[dts-analytics] copied ${JAR_PATH} -> builds/dts-analytics/dts-analytics.jar"

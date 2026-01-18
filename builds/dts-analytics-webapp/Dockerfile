@@ -11,9 +11,11 @@ FROM ${BASE_IMAGE_NODE} AS build
 
 WORKDIR /app
 
+# Recommended build context: repository root
+#   docker build -t dts-analytics-webapp:TAG -f builds/dts-analytics-webapp/Dockerfile .
 # Copy runtime server and legacy UI assets extracted from metabase.jar
-COPY server.mjs ./server.mjs
-COPY legacy ./legacy
+COPY source/dts-analytics-webapp/server.mjs ./server.mjs
+COPY source/dts-analytics-webapp/legacy ./legacy
 
 # Fail fast if the server script has syntax errors
 RUN node --check /app/server.mjs

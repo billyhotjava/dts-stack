@@ -391,6 +391,7 @@ public class DatasetDataAccessApprovalService {
         if (adminWorkflowConfigClient == null || dataset == null || req == null) {
             return List.of();
         }
+        String ownerDept = trimToNull(dataset.getOwnerDept());
         AdminWorkflowConfigClient.WorkflowTemplateDto picked = pickAdminTemplate(dataset);
         if (picked == null || picked.steps() == null || picked.steps().isEmpty()) {
             return List.of();
