@@ -4,11 +4,16 @@ import DataStandardDetailPage from "@/pages/modeling/DataStandardDetailPage";
 import DatasetAccessApprovalPage from "@/pages/security/DatasetAccessApprovalPage";
 import WorkflowCenterPage from "@/pages/workbench/WorkflowCenterPage";
 import MetadataStandardsPage from "@/pages/modeling/MetadataStandardsPage";
+import QualityPage from "@/pages/catalog/QualityPage";
 
 export const STATIC_DASHBOARD_ROUTES: RouteObject[] = [
 	{
 		path: "catalog/datasets/:id",
 		element: <DatasetDetailPage />,
+	},
+	{
+		path: "catalog/quality",
+		element: <QualityPage />,
 	},
 	{
 		path: "security/dataset-access",

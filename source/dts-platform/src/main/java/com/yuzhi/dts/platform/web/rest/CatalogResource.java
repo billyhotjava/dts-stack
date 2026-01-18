@@ -386,6 +386,34 @@ public class CatalogResource {
         return ApiResponses.ok(openMetadataService.fetchTableForDataset(dataset));
     }
 
+    @GetMapping("/metadata/tables")
+    public ApiResponse<OpenMetadataService.OpenMetadataTablePage> listTechMetadataTables(
+        @RequestParam(value = "keyword", required = false) String keyword,
+        @RequestParam(value = "size", required = false, defaultValue = "50") int size
+    ) {
+        OpenMetadataService.OpenMetadataTablePage page = openMetadataService.searchTables(keyword, size);
+        Map<String, Object> auditPayload = new LinkedHashMap<>();
+        auditPayload.put("summary", "浏览技术元数据资产");
+        if (keyword != null && !keyword.isBlank()) {
+            auditPayload.put("keyword", keyword);
+        }
+        auditPayload.put("size", size);
+        audit.auditAction("CATALOG_ASSET_VIEW", AuditStage.SUCCESS, "tech-metadata", auditPayload);
+        return ApiResponses.ok(page);
+    }
+
+    @GetMapping("/metadata/tables/detail")
+    public ApiResponse<OpenMetadataService.OpenMetadataResult> getTechMetadataTableDetail(
+        @RequestParam("fqn") String fqn
+    ) {
+        OpenMetadataService.OpenMetadataResult result = openMetadataService.fetchTableByFqn(fqn);
+        Map<String, Object> auditPayload = new LinkedHashMap<>();
+        auditPayload.put("summary", "查看技术元数据详情");
+        auditPayload.put("fqn", fqn);
+        audit.auditAction("CATALOG_ASSET_VIEW", AuditStage.SUCCESS, "tech-metadata-detail", auditPayload);
+        return ApiResponses.ok(result);
+    }
+
     @GetMapping("/datasets/{id}/lineage")
     public ApiResponse<OpenMetadataService.OpenMetadataLineageResult> getDatasetLineage(
         @PathVariable UUID id,

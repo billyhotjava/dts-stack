@@ -126,6 +126,67 @@ public class OpenMetadataClient {
         return Optional.empty();
     }
 
+    public Optional<Map<String, Object>> listTables(int limit, String fields) {
+        if (!props.isEnabled()) {
+            return Optional.empty();
+        }
+        URI uri = buildUri("/tables", Map.of("limit", Math.max(limit, 1), "fields", fields));
+        try {
+            HttpHeaders headers = defaultHeaders();
+            HttpEntity<Void> entity = new HttpEntity<>(headers);
+            ResponseEntity<Map> response = restTemplate.exchange(uri, HttpMethod.GET, entity, Map.class);
+            Map<String, Object> body = response.getBody();
+            if (body != null && !body.isEmpty()) {
+                return Optional.of(body);
+            }
+        } catch (HttpStatusCodeException ex) {
+            if (ex.getStatusCode().value() != 404) {
+                LOG.debug(
+                    "OpenMetadata table list failed status={} uri={} body={}",
+                    ex.getStatusCode().value(),
+                    uri,
+                    trim(ex.getResponseBodyAsString(), 256)
+                );
+            }
+        } catch (Exception ex) {
+            LOG.debug("OpenMetadata table list error: {}", ex.getMessage());
+            LOG.trace("OpenMetadata table list stack", ex);
+        }
+        return Optional.empty();
+    }
+
+    public Optional<Map<String, Object>> searchTables(String keyword, int size) {
+        if (!StringUtils.hasText(keyword) || !props.isEnabled()) {
+            return Optional.empty();
+        }
+        URI uri = buildUri(
+            "/search/query",
+            Map.of("query", keyword.trim(), "index", "table", "from", 0, "size", Math.max(size, 1))
+        );
+        try {
+            HttpHeaders headers = defaultHeaders();
+            HttpEntity<Void> entity = new HttpEntity<>(headers);
+            ResponseEntity<Map> response = restTemplate.exchange(uri, HttpMethod.GET, entity, Map.class);
+            Map<String, Object> body = response.getBody();
+            if (body != null && !body.isEmpty()) {
+                return Optional.of(body);
+            }
+        } catch (HttpStatusCodeException ex) {
+            if (ex.getStatusCode().value() != 404) {
+                LOG.debug(
+                    "OpenMetadata table search failed status={} uri={} body={}",
+                    ex.getStatusCode().value(),
+                    uri,
+                    trim(ex.getResponseBodyAsString(), 256)
+                );
+            }
+        } catch (Exception ex) {
+            LOG.debug("OpenMetadata table search error: {}", ex.getMessage());
+            LOG.trace("OpenMetadata table search stack", ex);
+        }
+        return Optional.empty();
+    }
+
     private HttpHeaders defaultHeaders() {
         HttpHeaders headers = new HttpHeaders();
         headers.setAccept(List.of(MediaType.APPLICATION_JSON));

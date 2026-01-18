@@ -48,6 +48,21 @@ public class OpenMetadataService {
         return OpenMetadataResult.notFound(fallback, "未找到匹配的技术资产");
     }
 
+    public OpenMetadataResult fetchTableByFqn(String fqn) {
+        if (!props.isEnabled()) {
+            return OpenMetadataResult.disabled();
+        }
+        if (!StringUtils.hasText(fqn)) {
+            return OpenMetadataResult.notFound(null, "未提供技术资产标识");
+        }
+        String fields = props.getTableFields();
+        Optional<Map<String, Object>> found = client.getTableByFqn(fqn.trim(), fields);
+        if (found.isPresent()) {
+            return OpenMetadataResult.found(fqn.trim(), found.get(), resolveUiBaseUrl());
+        }
+        return OpenMetadataResult.notFound(fqn.trim(), "未找到匹配的技术资产");
+    }
+
     public OpenMetadataSummary summarize(OpenMetadataResult result) {
         if (result == null) {
             return new OpenMetadataSummary(false, false, null, null, "-", "-", "-", "-", 0);
@@ -69,6 +84,45 @@ public class OpenMetadataService {
             description,
             columnCount
         );
+    }
+
+    public OpenMetadataTablePage searchTables(String keyword, int size) {
+        if (!props.isEnabled()) {
+            return OpenMetadataTablePage.disabled();
+        }
+        int limit = Math.max(1, Math.min(size, 200));
+        List<Map<String, Object>> entities = new ArrayList<>();
+        int total = 0;
+        boolean usedSearch = StringUtils.hasText(keyword);
+        if (usedSearch) {
+            Optional<Map<String, Object>> response = client.searchTables(keyword.trim(), limit);
+            if (response.isEmpty()) {
+                return new OpenMetadataTablePage(true, List.of(), 0, keyword, true, "暂无技术资产");
+            }
+            SearchEnvelope envelope = parseSearchEnvelope(response.get());
+            entities = envelope.entities();
+            total = envelope.total();
+        } else {
+            Optional<Map<String, Object>> response = client.listTables(limit, props.getTableFields());
+            if (response.isEmpty()) {
+                return new OpenMetadataTablePage(true, List.of(), 0, null, false, "暂无技术资产");
+            }
+            List<Map<String, Object>> data = parseListData(response.get());
+            entities = data;
+            total = data.size();
+        }
+        List<OpenMetadataTableSummary> summaries = new ArrayList<>();
+        for (Map<String, Object> entity : entities) {
+            if (entity == null || entity.isEmpty()) {
+                continue;
+            }
+            OpenMetadataTableSummary summary = toTableSummary(entity);
+            if (summary != null) {
+                summaries.add(summary);
+            }
+        }
+        summaries.sort(Comparator.comparing(OpenMetadataTableSummary::name, Comparator.nullsLast(String::compareTo)));
+        return new OpenMetadataTablePage(true, summaries, total, keyword, usedSearch, null);
     }
 
     public OpenMetadataLineageResult fetchLineageForDataset(CatalogDataset dataset, int upstreamDepth, int downstreamDepth) {
@@ -243,6 +297,24 @@ public class OpenMetadataService {
             return list.size();
         }
         return 0;
+    }
+
+    private OpenMetadataTableSummary toTableSummary(Map<String, Object> entity) {
+        if (entity == null || entity.isEmpty()) {
+            return null;
+        }
+        String fqn = stringValue(entity.get("fullyQualifiedName"));
+        String name = pickFirstString(entity.get("displayName"), entity.get("name"), fqn);
+        String id = stringValue(entity.get("id"));
+        String owner = resolveOwner(entity);
+        String domain = resolveDomain(entity);
+        String tags = resolveTags(entity);
+        String description = resolveDescription(entity);
+        int columnCount = resolveColumnCount(entity);
+        String service = extractName(entity.get("service"));
+        String database = extractName(entity.get("database"));
+        String schema = extractName(entity.get("schema"));
+        return new OpenMetadataTableSummary(id, name, fqn, service, database, schema, owner, domain, tags, description, columnCount);
     }
 
     private String fallbackDash(Object value) {
@@ -504,6 +576,71 @@ public class OpenMetadataService {
 
     private record DepthNode(String id, int depth) {}
 
+    private record SearchEnvelope(List<Map<String, Object>> entities, int total) {}
+
+    private SearchEnvelope parseSearchEnvelope(Map<String, Object> response) {
+        if (response == null) {
+            return new SearchEnvelope(List.of(), 0);
+        }
+        Object hits = response.get("hits");
+        if (hits instanceof Map<?, ?> hitsMap) {
+            int total = 0;
+            Object rawTotal = hitsMap.get("total");
+            if (rawTotal instanceof Map<?, ?> totalMap) {
+                Object value = totalMap.get("value");
+                if (value instanceof Number number) {
+                    total = number.intValue();
+                }
+            } else if (rawTotal instanceof Number number) {
+                total = number.intValue();
+            }
+            List<Map<String, Object>> items = new ArrayList<>();
+            Object hitItems = hitsMap.get("hits");
+            if (hitItems instanceof List<?> list) {
+                for (Object hit : list) {
+                    if (hit instanceof Map<?, ?> hitMap) {
+                        Object source = hitMap.get("_source");
+                        if (source instanceof Map<?, ?> srcMap) {
+                            items.add(new LinkedHashMap<>((Map<String, Object>) srcMap));
+                        } else if (hitMap.get("source") instanceof Map<?, ?> altMap) {
+                            items.add(new LinkedHashMap<>((Map<String, Object>) altMap));
+                        }
+                    }
+                }
+            }
+            return new SearchEnvelope(items, total);
+        }
+        List<Map<String, Object>> data = parseListData(response);
+        return new SearchEnvelope(data, data.size());
+    }
+
+    private List<Map<String, Object>> parseListData(Map<String, Object> response) {
+        if (response == null) {
+            return List.of();
+        }
+        Object data = response.get("data");
+        if (data instanceof List<?> list) {
+            List<Map<String, Object>> items = new ArrayList<>();
+            for (Object item : list) {
+                if (item instanceof Map<?, ?> map) {
+                    items.add(new LinkedHashMap<>((Map<String, Object>) map));
+                }
+            }
+            return items;
+        }
+        Object tables = response.get("tables");
+        if (tables instanceof List<?> list) {
+            List<Map<String, Object>> items = new ArrayList<>();
+            for (Object item : list) {
+                if (item instanceof Map<?, ?> map) {
+                    items.add(new LinkedHashMap<>((Map<String, Object>) map));
+                }
+            }
+            return items;
+        }
+        return List.of();
+    }
+
     public record OpenMetadataResult(
         boolean enabled,
         boolean found,
@@ -531,6 +668,33 @@ public class OpenMetadataService {
         boolean found,
         String fqn,
         String uiBaseUrl,
+        String owner,
+        String domain,
+        String tags,
+        String description,
+        int columnCount
+    ) {}
+
+    public record OpenMetadataTablePage(
+        boolean enabled,
+        List<OpenMetadataTableSummary> items,
+        int total,
+        String keyword,
+        boolean searched,
+        String message
+    ) {
+        public static OpenMetadataTablePage disabled() {
+            return new OpenMetadataTablePage(false, List.of(), 0, null, false, "元数据服务未启用");
+        }
+    }
+
+    public record OpenMetadataTableSummary(
+        String id,
+        String name,
+        String fqn,
+        String service,
+        String database,
+        String schema,
         String owner,
         String domain,
         String tags,

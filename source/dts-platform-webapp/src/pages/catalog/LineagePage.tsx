@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { createCatalogLineage, deleteCatalogLineage, getCatalogLineage, listDatasets } from "@/api/platformApi";
+import { createCatalogLineage, deleteCatalogLineage, getCatalogLineage, getDatasetLineage, listDatasets } from "@/api/platformApi";
 import { Badge } from "@/ui/badge";
 import { Button } from "@/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
@@ -44,6 +44,8 @@ export default function LineagePage() {
 	const [loading, setLoading] = useState(false);
 	const [upstreams, setUpstreams] = useState<LineageEdge[]>([]);
 	const [downstreams, setDownstreams] = useState<LineageEdge[]>([]);
+	const [techLineageLoading, setTechLineageLoading] = useState(false);
+	const [techLineageInfo, setTechLineageInfo] = useState<any | null>(null);
 
 	const [dialogOpen, setDialogOpen] = useState(false);
 	const [direction, setDirection] = useState<"UPSTREAM_TO_CURRENT" | "CURRENT_TO_DOWNSTREAM">("UPSTREAM_TO_CURRENT");
@@ -94,6 +96,23 @@ export default function LineagePage() {
 		}
 	}, [datasetId]);
 
+	const loadTechLineage = useCallback(async () => {
+		if (!datasetId) {
+			setTechLineageInfo(null);
+			return;
+		}
+		setTechLineageLoading(true);
+		try {
+			const resp = (await getDatasetLineage(datasetId)) as any;
+			setTechLineageInfo(resp || null);
+		} catch (e: any) {
+			console.error(e);
+			setTechLineageInfo(null);
+		} finally {
+			setTechLineageLoading(false);
+		}
+	}, [datasetId]);
+
 	useEffect(() => {
 		void loadDatasets();
 	}, [loadDatasets]);
@@ -102,8 +121,13 @@ export default function LineagePage() {
 		void loadLineage();
 	}, [loadLineage]);
 
+	useEffect(() => {
+		void loadTechLineage();
+	}, [loadTechLineage]);
+
 	const currentDataset = useMemo(() => datasets.find((d) => d.id === datasetId) || null, [datasetId, datasets]);
 	const selectableOtherDatasets = useMemo(() => datasets.filter((d) => d.id !== datasetId), [datasetId, datasets]);
+	const techGraph = useMemo(() => techLineageInfo?.graph || null, [techLineageInfo]);
 
 	const openCreate = useCallback(() => {
 		if (!datasetId) {
@@ -234,6 +258,63 @@ export default function LineagePage() {
 							<Badge variant="secondary">{currentDataset.ownerDept ? `部门:${currentDataset.ownerDept}` : "部门:未指定"}</Badge>
 						</div>
 					) : null}
+				</CardContent>
+			</Card>
+
+			<Card>
+				<CardHeader className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+					<CardTitle>技术血缘（2 层）</CardTitle>
+					<Button variant="outline" onClick={loadTechLineage} disabled={!datasetId || techLineageLoading}>
+						{techLineageLoading ? "加载中…" : "刷新技术血缘"}
+					</Button>
+				</CardHeader>
+				<CardContent>
+					{!datasetId ? (
+						<div className="text-sm text-muted-foreground">请先选择数据集</div>
+					) : techLineageLoading ? (
+						<div className="text-sm text-muted-foreground">加载中…</div>
+					) : techLineageInfo?.found === false ? (
+						<div className="text-sm text-muted-foreground">{techLineageInfo?.message || "暂无血缘数据"}</div>
+					) : !techGraph ? (
+						<div className="text-sm text-muted-foreground">暂无血缘数据</div>
+					) : (
+						<div className="grid gap-4 md:grid-cols-2">
+							<div className="space-y-2">
+								<div className="text-sm font-medium">上游</div>
+								{Array.isArray(techGraph.upstream) && techGraph.upstream.length > 0 ? (
+									<ul className="space-y-2 text-sm">
+										{techGraph.upstream.map((node: any) => (
+											<li key={node.id} className="rounded-md border px-3 py-2">
+												<div className="font-medium">{node.name || node.fqn || node.id}</div>
+												<div className="text-xs text-muted-foreground">
+													{[node.service, node.database, node.schema].filter(Boolean).join(" / ") || "-"}
+												</div>
+											</li>
+										))}
+									</ul>
+								) : (
+									<div className="text-sm text-muted-foreground">无上游血缘</div>
+								)}
+							</div>
+							<div className="space-y-2">
+								<div className="text-sm font-medium">下游</div>
+								{Array.isArray(techGraph.downstream) && techGraph.downstream.length > 0 ? (
+									<ul className="space-y-2 text-sm">
+										{techGraph.downstream.map((node: any) => (
+											<li key={node.id} className="rounded-md border px-3 py-2">
+												<div className="font-medium">{node.name || node.fqn || node.id}</div>
+												<div className="text-xs text-muted-foreground">
+													{[node.service, node.database, node.schema].filter(Boolean).join(" / ") || "-"}
+												</div>
+											</li>
+										))}
+									</ul>
+								) : (
+									<div className="text-sm text-muted-foreground">无下游血缘</div>
+								)}
+							</div>
+						</div>
+					)}
 				</CardContent>
 			</Card>
 

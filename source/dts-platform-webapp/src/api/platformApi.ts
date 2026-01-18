@@ -16,6 +16,10 @@ export const batchDatasetOpenMetadata = (ids: string[]) =>
 	api.post({ url: "/catalog/datasets/openmetadata/batch", data: { ids } });
 export const getDatasetLineage = (id: string) => api.get({ url: `/catalog/datasets/${id}/lineage` });
 export const getDatasetQuality = (id: string) => api.get({ url: `/catalog/datasets/${id}/quality` });
+export const getTechMetadataTables = (params?: { keyword?: string; size?: number }) =>
+	api.get({ url: "/catalog/metadata/tables", params });
+export const getTechMetadataTableDetail = (fqn: string) =>
+	api.get({ url: "/catalog/metadata/tables/detail", params: { fqn } });
 export const createDataset = (data: any) => api.post({ url: "/catalog/datasets", data });
 export const updateDataset = (id: string, data: any) => api.put({ url: `/catalog/datasets/${id}`, data });
 export const deleteDataset = (id: string) => api.delete({ url: `/catalog/datasets/${id}` });

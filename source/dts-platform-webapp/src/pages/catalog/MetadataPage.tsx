@@ -9,6 +9,8 @@ import {
 	listColumnsByTable,
 	listDatasets,
 	listDatasetJobs,
+	getTechMetadataTables,
+	getTechMetadataTableDetail,
 	listStandards,
 	listTablesByDataset,
 	previewAutoMapTableStandardMapping,
@@ -59,6 +61,20 @@ type StandardOption = {
 	codeSet?: string | null;
 };
 
+type TechTableSummary = {
+	id?: string | null;
+	name?: string | null;
+	fqn?: string | null;
+	service?: string | null;
+	database?: string | null;
+	schema?: string | null;
+	owner?: string | null;
+	domain?: string | null;
+	tags?: string | null;
+	description?: string | null;
+	columnCount?: number | null;
+};
+
 const PAGE_SIZE = 200;
 
 export default function MetadataPage() {
@@ -67,6 +83,14 @@ export default function MetadataPage() {
 	const [fullSyncStatus, setFullSyncStatus] = useState<any | null>(null);
 	const [fullSyncIncludePrimary, setFullSyncIncludePrimary] = useState(true);
 	const [fullSyncIncludeJdbc, setFullSyncIncludeJdbc] = useState(true);
+
+	const [techKeyword, setTechKeyword] = useState("");
+	const [techLoading, setTechLoading] = useState(false);
+	const [techPage, setTechPage] = useState<any | null>(null);
+	const [techTables, setTechTables] = useState<TechTableSummary[]>([]);
+	const [selectedTechFqn, setSelectedTechFqn] = useState<string>("");
+	const [techDetailLoading, setTechDetailLoading] = useState(false);
+	const [techDetail, setTechDetail] = useState<any | null>(null);
 
 	const [datasetKeyword, setDatasetKeyword] = useState("");
 	const [datasetsLoading, setDatasetsLoading] = useState(false);
@@ -169,6 +193,47 @@ export default function MetadataPage() {
 		}
 	}, []);
 
+	const loadTechTables = useCallback(async () => {
+		setTechLoading(true);
+		try {
+			const keyword = techKeyword.trim();
+			const resp = (await getTechMetadataTables({ keyword: keyword || undefined, size: 100 })) as any;
+			const items = Array.isArray(resp?.items) ? resp.items : [];
+			setTechPage(resp || null);
+			setTechTables(items);
+			const hasSelection = items.some((item: any) => String(item?.fqn || "") === selectedTechFqn);
+			if (!hasSelection) {
+				const firstFqn = items.length ? String(items[0]?.fqn || "") : "";
+				setSelectedTechFqn(firstFqn);
+			}
+		} catch (e: any) {
+			console.error(e);
+			setTechTables([]);
+			setTechPage(null);
+			toast.error(e?.message || "加载技术元数据失败");
+		} finally {
+			setTechLoading(false);
+		}
+	}, [selectedTechFqn, techKeyword]);
+
+	const loadTechDetail = useCallback(async () => {
+		const fqn = selectedTechFqn.trim();
+		if (!fqn) {
+			setTechDetail(null);
+			return;
+		}
+		setTechDetailLoading(true);
+		try {
+			const resp = (await getTechMetadataTableDetail(fqn)) as any;
+			setTechDetail(resp || null);
+		} catch (e: any) {
+			console.error(e);
+			setTechDetail(null);
+		} finally {
+			setTechDetailLoading(false);
+		}
+	}, [selectedTechFqn]);
+
 	const triggerFullSync = useCallback(async () => {
 		if (!fullSyncIncludePrimary && !fullSyncIncludeJdbc) {
 			toast.error("请至少选择一种采集范围（主数据源 / JDBC）");
@@ -190,6 +255,14 @@ export default function MetadataPage() {
 			setFullSyncLoading(false);
 		}
 	}, [fullSyncIncludeJdbc, fullSyncIncludePrimary, loadFullSyncStatus]);
+
+	useEffect(() => {
+		void loadTechTables();
+	}, [loadTechTables]);
+
+	useEffect(() => {
+		void loadTechDetail();
+	}, [loadTechDetail]);
 
 	const loadDatasets = useCallback(async () => {
 		setDatasetsLoading(true);
@@ -534,8 +607,167 @@ export default function MetadataPage() {
 		return Array.isArray(issues) ? issues : [];
 	}, [validationResult]);
 
+	const techColumns = useMemo(() => {
+		const cols = techDetail?.entity?.columns;
+		return Array.isArray(cols) ? cols : [];
+	}, [techDetail]);
+
+	const techEntity = techDetail?.entity || null;
+	const techName = useMemo(() => {
+		const name = techEntity?.displayName || techEntity?.name || techDetail?.fqn;
+		return name ? String(name) : "-";
+	}, [techDetail?.fqn, techEntity]);
+	const techOwner = useMemo(() => {
+		const owner = techEntity?.owner;
+		return owner?.displayName || owner?.name || "-";
+	}, [techEntity]);
+	const techDomain = useMemo(() => {
+		const domain = techEntity?.domain;
+		return domain?.displayName || domain?.name || "-";
+	}, [techEntity]);
+	const techTags = useMemo(() => {
+		const tags = techEntity?.tags;
+		if (!Array.isArray(tags)) return "-";
+		const list = tags
+			.map((t: any) => t?.tagFQN || t?.tag?.displayName || t?.tag?.name || t?.name || "")
+			.filter(Boolean);
+		return list.length ? list.join(", ") : "-";
+	}, [techEntity]);
+	const techDesc = useMemo(() => {
+		return techEntity?.description ? String(techEntity.description) : "-";
+	}, [techEntity]);
+
+	const techLink = useMemo(() => {
+		if (!techDetail?.uiBaseUrl || !techDetail?.fqn) return "";
+		const base = String(techDetail.uiBaseUrl || "").replace(/\/+$/, "");
+		const fqn = encodeURIComponent(String(techDetail.fqn || ""));
+		return `${base}/table/${fqn}`;
+	}, [techDetail]);
+
 	return (
 		<div className="flex flex-col gap-6">
+			<Card>
+				<CardHeader className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+					<CardTitle>技术元数据浏览</CardTitle>
+					<div className="flex flex-col gap-2 md:flex-row md:items-center">
+						<Input
+							value={techKeyword}
+							onChange={(e) => setTechKeyword(e.target.value)}
+							placeholder="搜索技术资产"
+							className="w-full md:w-64"
+						/>
+						<Button variant="secondary" onClick={loadTechTables} disabled={techLoading}>
+							{techLoading ? "加载中…" : "搜索"}
+						</Button>
+					</div>
+				</CardHeader>
+				<CardContent className="space-y-4">
+					{techPage && techPage.enabled === false ? (
+						<div className="text-sm text-muted-foreground">{techPage?.message || "元数据服务未启用"}</div>
+					) : (
+						<div className="grid gap-4 lg:grid-cols-[320px_1fr]">
+							<Card>
+								<CardHeader>
+									<CardTitle className="text-base">技术资产列表</CardTitle>
+								</CardHeader>
+								<CardContent className="space-y-2">
+									<div className="text-xs text-muted-foreground">
+										{techPage?.searched ? `搜索结果：${techTables.length}` : `最新资产：${techTables.length}`}
+									</div>
+									<ScrollArea className="h-[420px] pr-2">
+										<div className="space-y-2">
+											{techTables.map((item) => {
+												const fqn = String(item.fqn || "");
+												const active = fqn && fqn === selectedTechFqn;
+												return (
+													<button
+														key={fqn || item.id}
+														type="button"
+														onClick={() => setSelectedTechFqn(fqn)}
+														className={[
+															"w-full rounded-md border px-3 py-2 text-left",
+															active ? "border-primary bg-primary/5" : "border-border hover:bg-muted/30",
+														].join(" ")}
+													>
+														<div className="truncate text-sm font-medium">{item.name || fqn || "-"}</div>
+														<div className="text-xs text-muted-foreground truncate">
+															{[item.service, item.database, item.schema].filter(Boolean).join(" / ") || "-"}
+														</div>
+														<div className="text-xs text-muted-foreground">字段数：{item.columnCount ?? "-"}</div>
+													</button>
+												);
+											})}
+											{!techTables.length && !techLoading ? (
+												<div className="text-xs text-muted-foreground">暂无技术资产</div>
+											) : null}
+										</div>
+									</ScrollArea>
+								</CardContent>
+							</Card>
+							<Card>
+								<CardHeader className="flex items-center justify-between">
+									<CardTitle className="text-base">技术资产详情</CardTitle>
+									{techLink ? (
+										<a className="text-xs text-primary underline" href={techLink} target="_blank" rel="noreferrer">
+											打开技术资产
+										</a>
+									) : null}
+								</CardHeader>
+								<CardContent className="space-y-3">
+									{techDetailLoading ? (
+										<div className="text-sm text-muted-foreground">加载中…</div>
+									) : !techDetail ? (
+										<div className="text-sm text-muted-foreground">请选择技术资产</div>
+									) : techDetail?.found === false ? (
+										<div className="text-sm text-muted-foreground">{techDetail?.message || "未找到技术资产"}</div>
+									) : (
+										<div className="space-y-3">
+											<div className="grid gap-2 md:grid-cols-2 text-sm">
+												<div>名称：{techName}</div>
+												<div>Owner：{techOwner}</div>
+												<div>Domain：{techDomain}</div>
+												<div>标签：{techTags}</div>
+												<div>字段数：{techColumns.length}</div>
+												<div>FQN：{techDetail?.fqn || "-"}</div>
+												<div className="md:col-span-2">描述：{techDesc}</div>
+											</div>
+											<div className="border-t pt-3">
+												<div className="text-sm font-medium mb-2">字段明细</div>
+												{techColumns.length ? (
+													<div className="overflow-x-auto">
+														<table className="w-full min-w-[520px] table-fixed border-collapse text-sm">
+															<thead className="bg-muted/40 text-left text-xs uppercase text-muted-foreground">
+																<tr>
+																	<th className="px-3 py-2">列名</th>
+																	<th className="px-3 py-2">说明</th>
+																	<th className="px-3 py-2">类型</th>
+																</tr>
+															</thead>
+															<tbody>
+																{techColumns.map((col: any) => (
+																	<tr key={col?.name} className="border-b border-border/40 last:border-b-0">
+																		<td className="px-3 py-2 text-xs font-medium">{col?.name || "-"}</td>
+																		<td className="px-3 py-2 text-xs text-muted-foreground">
+																			{col?.displayName || col?.description || "-"}
+																		</td>
+																		<td className="px-3 py-2 text-xs">{col?.dataType || "-"}</td>
+																	</tr>
+																))}
+															</tbody>
+														</table>
+													</div>
+												) : (
+													<div className="text-sm text-muted-foreground">暂无字段信息</div>
+												)}
+											</div>
+										</div>
+									)}
+								</CardContent>
+							</Card>
+						</div>
+					)}
+				</CardContent>
+			</Card>
 			<Card>
 				<CardHeader className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
 					<CardTitle>自动采集（全量）</CardTitle>

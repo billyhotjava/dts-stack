@@ -12,7 +12,7 @@
 		"prebuild": "node ../../builds/dts-admin-webapp/scripts/sync-portal-menus.mjs",
 		"sync:portal-menus": "node ../../builds/dts-admin-webapp/scripts/sync-portal-menus.mjs",
 		"preview": "vite preview",
-		"preinstall": "lefthook install"
+		"preinstall": "lefthook install || true"
 	},
 	"dependencies": {
 		"@ant-design/cssinjs": "^1.22.0",

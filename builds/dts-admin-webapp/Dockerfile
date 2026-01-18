@@ -12,6 +12,7 @@ ARG NPM_HTTP_PROXY
 ARG NPM_HTTPS_PROXY
 ARG NPM_REGISTRY
 ARG PNPM_VERSION=10.8.0
+ARG WEBAPP_BUILD_CMD=build
 
 # Recommended build context: repository root
 #   docker build -t dts-admin-webapp:TAG -f builds/dts-admin-webapp/Dockerfile .
@@ -52,7 +53,7 @@ RUN set -eux; \
 # Copy the remaining project files and build the production bundle
 COPY source/dts-admin-webapp/ ./
 COPY builds/dts-admin-webapp/scripts /builds/dts-admin-webapp/scripts
-RUN pnpm build
+RUN pnpm "${WEBAPP_BUILD_CMD}"
 
 ARG BASE_IMAGE_NODE=node:20.17.0-alpine3.20
 FROM ${BASE_IMAGE_NODE} AS runtime
