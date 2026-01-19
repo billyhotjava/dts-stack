@@ -8,6 +8,13 @@
       "title": "工作台",
       "children": [
         {
+          "key": "home",
+          "path": "home",
+          "icon": "solar:home-2-bold-duotone",
+          "titleKey": "sys.nav.portal.workbenchHome",
+          "title": "首页"
+        },
+        {
           "key": "workflowCenter",
           "path": "workflow-center",
           "icon": "solar:checklist-minimalistic-bold-duotone",

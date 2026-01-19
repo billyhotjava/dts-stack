@@ -50,6 +50,7 @@ public class PortalMenuService {
     private static final Set<String> IAM_SECTIONS = Set.of();
     private static final Map<String, String> MENU_COMPONENTS = Map.ofEntries(
         Map.entry("workbench", "/pages/workbench"),
+        Map.entry("workbench.home", "/pages/workbench"),
         Map.entry("workbench.workflowCenter", "/pages/workbench/WorkflowCenterPage"),
         Map.entry("catalog.assets", "/pages/catalog/DatasetsPage"),
         Map.entry("catalog.metadata", "/pages/catalog/MetadataPage"),

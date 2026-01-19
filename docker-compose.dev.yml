@@ -616,6 +616,8 @@ services:
     image: ${IMAGE_OPENMETADATA}
     container_name: dts-openmetadata
     depends_on:
+      dts-openmetadata-init:
+        condition: service_completed_successfully
       dts-pg:
         condition: service_healthy
       dts-elasticsearch:
@@ -629,6 +631,10 @@ services:
       DB_USER: ${PG_USER_OPENMETADATA}
       DB_USER_PASSWORD: ${PG_PWD_OPENMETADATA}
       DB_DATABASE: ${PG_DB_OPENMETADATA}
+      OM_DATABASE: ${PG_DB_OPENMETADATA}
+      DB_SCHEME: postgresql
+      DB_DRIVER_CLASS: org.postgresql.Driver
+      DB_PARAMS: "sslmode=disable"
       ELASTICSEARCH_HOST: dts-elasticsearch
       ELASTICSEARCH_PORT: 9200
       ELASTICSEARCH_SCHEME: http
@@ -643,6 +649,39 @@ services:
       - "traefik.http.services.dts-openmetadata.loadbalancer.server.port=8585"
       - "traefik.http.routers.dts-openmetadata.middlewares=platform-forward-auth@file,security-headers@file"
     restart: unless-stopped
+    networks:
+      - dts-core
+
+  dts-openmetadata-init:
+    image: ${IMAGE_OPENMETADATA}
+    container_name: dts-openmetadata-init
+    entrypoint: /bin/bash
+    command:
+      - -lc
+      - |
+        /opt/openmetadata/bootstrap/openmetadata-ops.sh migrate
+    depends_on:
+      dts-pg:
+        condition: service_healthy
+      dts-elasticsearch:
+        condition: service_healthy
+    environment:
+      OPENMETADATA_CLUSTER_NAME: dts-openmetadata
+      OPENMETADATA_SERVER_PORT: 8585
+      OPENMETADATA_JWT_SECRET: ${OPENMETADATA_JWT_SECRET}
+      DB_HOST: ${PG_HOST}
+      DB_PORT: ${PG_PORT}
+      DB_USER: ${PG_USER_OPENMETADATA}
+      DB_USER_PASSWORD: ${PG_PWD_OPENMETADATA}
+      DB_DATABASE: ${PG_DB_OPENMETADATA}
+      OM_DATABASE: ${PG_DB_OPENMETADATA}
+      DB_SCHEME: postgresql
+      DB_DRIVER_CLASS: org.postgresql.Driver
+      DB_PARAMS: "sslmode=disable"
+      ELASTICSEARCH_HOST: dts-elasticsearch
+      ELASTICSEARCH_PORT: 9200
+      ELASTICSEARCH_SCHEME: http
+    restart: "no"
     networks:
       - dts-core
 
@@ -701,7 +740,7 @@ services:
       AIRFLOW_HOME: /opt/airflow
       DBT_PROJECT_DIR: ${DBT_PROJECT_DIR}
       DBT_PROFILES_DIR: ${DBT_PROFILES_DIR}
-      DBT_IMAGE: ${IMAGE_DBT}
+      DBT_IMAGE: ${IMAGE_DBT:-ghcr.io/dbt-labs/dbt-core:1.11.2}
       OPENMETADATA_INGEST_IMAGE: ${IMAGE_OPENMETADATA_INGESTION}
       OPENMETADATA_INGEST_CONFIG_DIR: ${OPENMETADATA_INGEST_CONFIG_DIR}
       OPENMETADATA_API_ENDPOINT: ${DTS_PLATFORM_OPENMETADATA_BASE_URL}/api/v1
@@ -739,7 +778,7 @@ services:
       AIRFLOW_HOME: /opt/airflow
       DBT_PROJECT_DIR: ${DBT_PROJECT_DIR}
       DBT_PROFILES_DIR: ${DBT_PROFILES_DIR}
-      DBT_IMAGE: ${IMAGE_DBT}
+      DBT_IMAGE: ${IMAGE_DBT:-ghcr.io/dbt-labs/dbt-core:1.11.2}
       OPENMETADATA_INGEST_IMAGE: ${IMAGE_OPENMETADATA_INGESTION}
       OPENMETADATA_INGEST_CONFIG_DIR: ${OPENMETADATA_INGEST_CONFIG_DIR}
       OPENMETADATA_API_ENDPOINT: ${DTS_PLATFORM_OPENMETADATA_BASE_URL}/api/v1
@@ -781,7 +820,7 @@ services:
       AIRFLOW_HOME: /opt/airflow
       DBT_PROJECT_DIR: ${DBT_PROJECT_DIR}
       DBT_PROFILES_DIR: ${DBT_PROFILES_DIR}
-      DBT_IMAGE: ${IMAGE_DBT}
+      DBT_IMAGE: ${IMAGE_DBT:-ghcr.io/dbt-labs/dbt-core:1.11.2}
       OPENMETADATA_INGEST_IMAGE: ${IMAGE_OPENMETADATA_INGESTION}
       OPENMETADATA_INGEST_CONFIG_DIR: ${OPENMETADATA_INGEST_CONFIG_DIR}
       OPENMETADATA_API_ENDPOINT: ${DTS_PLATFORM_OPENMETADATA_BASE_URL}/api/v1
@@ -813,7 +852,7 @@ services:
       AIRFLOW_HOME: /opt/airflow
       DBT_PROJECT_DIR: ${DBT_PROJECT_DIR}
       DBT_PROFILES_DIR: ${DBT_PROFILES_DIR}
-      DBT_IMAGE: ${IMAGE_DBT}
+      DBT_IMAGE: ${IMAGE_DBT:-ghcr.io/dbt-labs/dbt-core:1.11.2}
       OPENMETADATA_INGEST_IMAGE: ${IMAGE_OPENMETADATA_INGESTION}
       OPENMETADATA_INGEST_CONFIG_DIR: ${OPENMETADATA_INGEST_CONFIG_DIR}
       OPENMETADATA_API_ENDPOINT: ${DTS_PLATFORM_OPENMETADATA_BASE_URL}/api/v1
@@ -830,7 +869,7 @@ services:
       - dts-core
 
   dts-dbt:
-    image: ${IMAGE_DBT}
+    image: ${IMAGE_DBT:-ghcr.io/dbt-labs/dbt-core:1.11.2}
     container_name: dts-dbt
     entrypoint: /bin/bash
     command: ["-lc", "sleep infinity"]

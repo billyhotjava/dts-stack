@@ -200,6 +200,24 @@ fix_pg_permissions(){
       echo "[init.sh] WARNING: Postgres data dir permissions are ${perms}; forcing 0700." >&2
       chmod -R 700 "${pg_dir}" 2>/dev/null || true
     fi
+    local owner_uid owner_gid
+    owner_uid="$(stat -c '%u' "${pg_dir}" 2>/dev/null || true)"
+    owner_gid="$(stat -c '%g' "${pg_dir}" 2>/dev/null || true)"
+    if [[ -n "${owner_uid}" && "${owner_uid}" != "${pg_runtime_uid}" ]]; then
+      echo "[init.sh] WARNING: Postgres data dir owner is ${owner_uid}:${owner_gid}; expected ${pg_runtime_uid}:${pg_runtime_gid}." >&2
+      if command -v docker >/dev/null 2>&1; then
+        local pg_image="${IMAGE_POSTGRES:-postgres:17.6}"
+        if docker image inspect "${pg_image}" >/dev/null 2>&1; then
+          echo "[init.sh] Fixing Postgres data dir ownership via Docker (${pg_image})..."
+          docker run --rm -v "${SCRIPT_DIR}/${pg_dir}:/data" "${pg_image}" \
+            bash -lc "chown -R ${pg_runtime_uid}:${pg_runtime_gid} /data && chmod -R 700 /data" >/dev/null 2>&1 || true
+        else
+          echo "[init.sh] WARNING: Docker image ${pg_image} not found; unable to auto-fix ownership." >&2
+        fi
+      else
+        echo "[init.sh] WARNING: docker not available to fix Postgres data dir ownership." >&2
+      fi
+    fi
   fi
 }
 
@@ -517,7 +535,7 @@ generate_env_base(){
   : "${PG_PWD_ANALYTICS:=${SECRET}}"
 
   # OpenMetadata
-  : "${PG_DB_OPENMETADATA:=openmetadata}"
+  : "${PG_DB_OPENMETADATA:=openmetadata_db}"
   : "${PG_USER_OPENMETADATA:=openmetadata}"
   : "${PG_PWD_OPENMETADATA:=${SECRET}}"
 
@@ -1077,12 +1095,14 @@ ensure_env LEGACY_STACK "${LEGACY_STACK}"
 # 加载镜像版本 & 目录
 load_img_versions
 if [[ "${LEGACY_STACK}" == "true" ]]; then
-  arch="$(uname -m 2>/dev/null || true)"
-  if [[ "$arch" == "aarch64" || "$arch" == "arm64" ]]; then
-    if [[ -z "${IMAGE_DBT:-}" || "${IMAGE_DBT}" == "ghcr.io/dbt-labs/dbt-core:1.11.2" ]]; then
-      ensure_env IMAGE_DBT "dbt-core:1.11.2"
-      echo "[init.sh] Using local dbt-core image for arm64 legacy stack: dbt-core:1.11.2"
-    fi
+  if [[ -z "${IMAGE_DBT:-}" || "${IMAGE_DBT}" == "ghcr.io/dbt-labs/dbt-core:1.11.2" ]]; then
+    ensure_env IMAGE_DBT "dbt-core:1.11.2"
+    echo "[init.sh] Using local dbt-core image for legacy stack: dbt-core:1.11.2"
+  fi
+else
+  if [[ -z "${IMAGE_DBT:-}" || "${IMAGE_DBT}" == "dbt-core:1.11.2" ]]; then
+    ensure_env IMAGE_DBT "ghcr.io/dbt-labs/dbt-core:1.11.2"
+    echo "[init.sh] Using ghcr dbt-core image for non-legacy stack: ghcr.io/dbt-labs/dbt-core:1.11.2"
   fi
 fi
 
@@ -1223,6 +1243,10 @@ if [[ "${PG_MODE}" == "embedded" ]]; then
   done
   # 收敛角色/数据库（幂等）
   ensure_pg_triplets
+  # Run OpenMetadata migrations before the rest of the stack (idempotent).
+  echo "[init.sh] Running OpenMetadata migrations (dts-openmetadata-init) ..."
+  "${compose_run[@]}" up -d dts-openmetadata-init >/dev/null 2>&1 || \
+    echo "[init.sh] WARNING: dts-openmetadata-init did not start; continuing." >&2
   echo "[init.sh] Bringing up the remaining services ..."
   "${compose_run[@]}" up -d
   if [[ "${FORCE_PG_ENSURE}" == "true" ]]; then
@@ -1231,6 +1255,9 @@ if [[ "${PG_MODE}" == "embedded" ]]; then
   fi
 else
   # 外部 PG：直接启动全部服务
+  echo "[init.sh] Running OpenMetadata migrations (dts-openmetadata-init) ..."
+  "${compose_run[@]}" up -d dts-openmetadata-init >/dev/null 2>&1 || \
+    echo "[init.sh] WARNING: dts-openmetadata-init did not start; continuing." >&2
   "${compose_run[@]}" up -d
 fi
 
