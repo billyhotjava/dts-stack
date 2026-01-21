@@ -4,11 +4,14 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.admin.domain.PortalMenu;
 import com.yuzhi.dts.admin.domain.PortalMenuVisibility;
+import com.yuzhi.dts.admin.domain.SystemConfig;
 import com.yuzhi.dts.admin.repository.PortalMenuRepository;
 import com.yuzhi.dts.admin.repository.PortalMenuVisibilityRepository;
+import com.yuzhi.dts.admin.repository.SystemConfigRepository;
 import com.yuzhi.dts.admin.security.AuthoritiesConstants;
 import java.io.IOException;
 import java.io.InputStream;
+import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
@@ -38,91 +41,97 @@ import org.springframework.util.StringUtils;
 public class PortalMenuService {
 
     private static final Logger log = LoggerFactory.getLogger(PortalMenuService.class);
+    private static final String MENU_SEED_HASH_KEY = "portal.menu.seed.hash";
 
     // Default roles that can see menus when no explicit visibility is defined.
     // Note: Do NOT include ROLE_USER here; otherwise all authenticated users would see all menus.
     private static final List<String> DEFAULT_MENU_ROLES = List.of("ROLE_OP_ADMIN");
-    // NOTE: ops 菜单已迁移到 dts-admin 管理端，平台侧不再展示；security.threeAdmins 同理（已在管理端实现）。
-    private static final Set<String> DISABLED_SECTIONS = Set.of("services", "iam", "ops");
-    private static final Set<String> BASE_READ_SECTIONS = Set.of("catalog", "explore", "visualization");
-    private static final Set<String> WRITE_SECTIONS = Set.of("modeling", "governance");
-    private static final Set<String> FOUNDATION_SECTIONS = Set.of("foundation");
+    // NOTE: security.threeAdmins 同理（已在管理端实现）。
+    private static final Set<String> DISABLED_SECTIONS = Set.of("iam");
+    private static final Set<String> LEGACY_SECTION_KEYS = Set.of(
+        "workspace",
+        "domain",
+        "standard",
+        "asset",
+        "model",
+        "job",
+        "quality",
+        "bi",
+        "operations",
+        "catalog",
+        "modeling",
+        "governance",
+        "explore",
+        "visualization",
+        "foundation",
+        "security",
+        "ops",
+        "services",
+        "iam"
+    );
+    private static final Set<String> BASE_READ_SECTIONS = Set.of("workbench", "portal", "services");
+    private static final Set<String> WRITE_SECTIONS = Set.of("studio", "governance");
+    private static final Set<String> FOUNDATION_SECTIONS = Set.of("resource", "ops");
     private static final Set<String> IAM_SECTIONS = Set.of();
     private static final Map<String, String> MENU_COMPONENTS = Map.ofEntries(
-        Map.entry("workbench", "/pages/workbench"),
-        Map.entry("workbench.home", "/pages/workbench"),
-        Map.entry("workbench.workflowCenter", "/pages/workbench/WorkflowCenterPage"),
-        Map.entry("catalog.assets", "/pages/catalog/DatasetsPage"),
-        Map.entry("catalog.metadata", "/pages/catalog/MetadataPage"),
-        Map.entry("catalog.lineage", "/pages/catalog/LineagePage"),
-        Map.entry("catalog.lifecycle", "/pages/catalog/LifecyclePage"),
-        Map.entry("modeling.planning.overview", "/pages/modeling/DataPlanningPage"),
-        Map.entry("modeling.planning.subjectDomains", "/pages/catalog/DataDomainManagementPage"),
-        Map.entry("modeling.standards", "/pages/modeling/DataStandardsPage"),
-        Map.entry("modeling.metadataStandards", "/pages/modeling/MetadataStandardsPage"),
-        Map.entry("modeling.glossary", "/pages/modeling/GlossaryPage"),
-        Map.entry("modeling.templates", "/pages/modeling/ModelTemplatesPage"),
-        Map.entry("governance.indicators.dictionary", "/pages/governance/IndicatorsPage"),
-        Map.entry("governance.indicators.dimensions", "/pages/governance/DimensionsPage"),
-        Map.entry("governance.indicators.computeRules", "/pages/governance/IndicatorComputeRulesPage"),
-        Map.entry("governance.indicators.publish", "/pages/governance/IndicatorPublishPage"),
-        Map.entry("governance.rules", "/pages/governance/QualityRulesPage"),
-        Map.entry("governance.quality", "/pages/catalog/QualityPage"),
-        Map.entry("governance.tasks", "/pages/governance/QualityTasksPage"),
-        Map.entry("governance.issues", "/pages/governance/QualityIssuesPage"),
-        Map.entry("governance.compliance", "/pages/governance/CompliancePage"),
-        Map.entry("explore.workbench", "/pages/explore/QueryWorkbenchPage"),
-        Map.entry("explore.savedQueries", "/pages/explore/SavedQueriesPage"),
-        Map.entry("explore.etl.adapters", "/pages/explore/etl/AdaptersPage"),
-        Map.entry("explore.etl.fileExchange", "/pages/explore/etl/FileExchangePage"),
-        Map.entry("explore.etl.transform", "/pages/explore/etl/TransformPage"),
-        Map.entry("explore.etl.orchestration", "/pages/explore/etl/OrchestrationPage"),
-        Map.entry("explore.etl.warehouseLayers", "/pages/explore/etl/WarehouseLayersPage"),
-        Map.entry("explore.etl.reconciliation", "/pages/explore/etl/ReconciliationPage"),
-        Map.entry("visualization.dashboards", "/pages/visualization/DashboardsPage"),
-        Map.entry("visualization.cockpit", "/pages/visualization/CockpitPage"),
-        Map.entry("visualization.projects", "/pages/visualization/ProjectsSummaryPage"),
-        Map.entry("visualization.finance", "/pages/visualization/FinanceSummaryPage"),
-        Map.entry("visualization.supplyChain", "/pages/visualization/SupplyChainSummaryPage"),
-        Map.entry("visualization.hr", "/pages/visualization/HRSummaryPage"),
-        Map.entry("visualization.reports", "/pages/visualization/ReportsPage"),
-        Map.entry("visualization.analytics", "/pages/visualization/AnalyticsPage"),
-        Map.entry("visualization.reportsManage", "/pages/visualization/ReportsManagePage"),
-        Map.entry("security.overview", "/pages/security/data-security"),
-        Map.entry("security.accessMatrix", "/pages/security/AccessMatrixPage"),
-        Map.entry("security.masking", "/pages/security/MaskingPolicyPage"),
-        Map.entry("security.baseline", "/pages/security/SecurityBaselinePage"),
-        Map.entry("security.threeAdmins", "/pages/security/ThreeAdminsPage"),
-        Map.entry("security.authIntegration", "/pages/security/AuthIntegrationPage"),
-        Map.entry("security.backupRecovery", "/pages/security/BackupRecoveryPage"),
-        Map.entry("security.audit", "/pages/security/AuditLogsPage"),
-        Map.entry("ops.monitoring", "/pages/ops/MonitoringPage"),
-        Map.entry("ops.alerting", "/pages/ops/AlertingPage"),
-        Map.entry("ops.logs", "/pages/ops/LogsPage"),
-        Map.entry("ops.deploy", "/pages/ops/DeploymentPage"),
-        Map.entry("ops.settings", "/pages/ops/OpsSettingsPage"),
-        Map.entry("foundation.dataSources", "/pages/foundation/DataSourcesPage"),
-        Map.entry("foundation.dbtConfig", "/pages/foundation/DbtConfigPage"),
-        Map.entry("foundation.dataStorage", "/pages/foundation/DataStoragePage"),
-        Map.entry("foundation.taskScheduling", "/pages/foundation/TaskSchedulingPage")
+        Map.entry("workbench.overview", "/pages/workbench"),
+        Map.entry("workbench.todo", "/pages/workbench/WorkflowCenterPage"),
+        Map.entry("workbench.favorites", "/pages/workbench"),
+        Map.entry("resource.sources", "/pages/foundation/DataSourcesPage"),
+        Map.entry("resource.metadata", "/pages/catalog/MetadataPage"),
+        Map.entry("resource.ingestion", "/pages/explore/etl/TransformPage"),
+        Map.entry("studio.projects", "/pages/modeling/ModelTemplatesPage"),
+        Map.entry("studio.sql", "/pages/modeling/SqlModelingPage"),
+        Map.entry("studio.scripts", "/pages/explore/etl/ScriptStudioPage"),
+        Map.entry("studio.orchestration", "/pages/explore/etl/OrchestrationPage"),
+        Map.entry("studio.adhoc", "/pages/explore/QueryWorkbenchPage"),
+        Map.entry("governance.subjects", "/pages/governance/SubjectAreasPage"),
+        Map.entry("governance.standards.glossary", "/pages/governance/GlossaryPage"),
+        Map.entry("governance.standards.elements", "/pages/governance/ElementsPage"),
+        Map.entry("governance.standards.reference", "/pages/governance/ReferenceCodesPage"),
+        Map.entry("governance.templates", "/pages/governance/TemplatesPage"),
+        Map.entry("governance.indicators", "/pages/governance/IndicatorsPage"),
+        Map.entry("governance.qualityRules", "/pages/governance/QualityRulesPage"),
+        Map.entry("governance.qualityReport", "/pages/catalog/QualityPage"),
+        Map.entry("governance.classification", "/pages/security/data-security"),
+        Map.entry("portal.map", "/pages/catalog/DatasetsPage"),
+        Map.entry("portal.search", "/pages/catalog/DatasetsPage"),
+        Map.entry("portal.detail", "/pages/catalog/DatasetsPage"),
+        Map.entry("portal.lineage", "/pages/catalog/LineagePage"),
+        Map.entry("portal.permission", "/pages/security/DatasetAccessApprovalPage"),
+        Map.entry("ops.overview", "/pages/ops/OpsOverviewPage"),
+        Map.entry("ops.instances", "/pages/ops/OpsInstancesPage"),
+        Map.entry("ops.alerts", "/pages/ops/OpsAlertLogPage"),
+        Map.entry("ops.backfill", "/pages/ops/OpsBackfillPage"),
+        Map.entry("services.api", "/pages/services/ApiServicesPage"),
+        Map.entry("services.outbound", "/pages/services/DataProductsPage"),
+        Map.entry("services.exchange", "/pages/services/TokensPage"),
+        Map.entry("services.bi-links", "/pages/services/BiLinksPage"),
+        Map.entry("visual-analytics.dashboards", "/pages/visualization/ReportsPage"),
+        Map.entry("visual-analytics.exploration", "/pages/visualization/AnalyticsPage"),
+        Map.entry("visual-analytics.datasets", "/pages/visualization/ReportsManagePage")
     );
 
     private final PortalMenuRepository menuRepo;
     private final PortalMenuVisibilityRepository visibilityRepo;
+    private final SystemConfigRepository systemConfigRepository;
     private final ObjectMapper objectMapper;
     private final TransactionTemplate menuMutationTx;
 
     private volatile MenuSeed cachedSeed;
+    private volatile String cachedSeedHash;
     private final Map<String, String> titleKeyCache = new ConcurrentHashMap<>();
 
     public PortalMenuService(
         PortalMenuRepository menuRepo,
         PortalMenuVisibilityRepository visibilityRepo,
+        SystemConfigRepository systemConfigRepository,
         ObjectMapper objectMapper,
         PlatformTransactionManager transactionManager
     ) {
         this.menuRepo = menuRepo;
         this.visibilityRepo = visibilityRepo;
+        this.systemConfigRepository = systemConfigRepository;
         this.objectMapper = objectMapper;
         this.menuMutationTx = new TransactionTemplate(Objects.requireNonNull(transactionManager, "transactionManager"));
         this.menuMutationTx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
@@ -479,6 +488,7 @@ public class PortalMenuService {
 
     public void resetMenusToSeed() {
         MenuSeed seed = menuSeed();
+        String seedHash = currentSeedHash();
         // Phase 1: purge and rebuild menu tree in its own TX
         menuMutationTx.execute(status -> {
             performMenuReset(seed);
@@ -495,6 +505,7 @@ public class PortalMenuService {
             log.warn("Failed applying default role bindings: {}", ex.getMessage());
             log.debug("Default role bindings error stack", ex);
         }
+        persistSeedHash(seedHash);
     }
 
     private void performMenuReset(MenuSeed seed) {
@@ -601,8 +612,6 @@ public class PortalMenuService {
     }
 
     private String buildPath(PortalMenu parent, String segment) {
-        // Store path as a segment (not a full path).
-        // The platform backend computes full paths by concatenation; storing full paths would duplicate prefixes.
         String normalized = segment == null ? "" : segment.trim();
         if (normalized.startsWith("/")) {
             normalized = normalized.substring(1);
@@ -610,7 +619,12 @@ public class PortalMenuService {
         if (normalized.endsWith("/")) {
             normalized = normalized.substring(0, normalized.length() - 1);
         }
-        return normalized;
+        String combined = combineMenuPath(parent == null ? null : parent.getPath(), normalized);
+        if (!StringUtils.hasText(combined)) {
+            return normalized;
+        }
+        String trimmed = combined.startsWith("/") ? combined.substring(1) : combined;
+        return trimmed.endsWith("/") ? trimmed.substring(0, trimmed.length() - 1) : trimmed;
     }
 
     private String resolveComponent(String compositeKey) {
@@ -646,13 +660,91 @@ public class PortalMenuService {
         return seed;
     }
 
+    private String currentSeedHash() {
+        String hash = cachedSeedHash;
+        if (hash != null) {
+            return hash;
+        }
+        synchronized (this) {
+            hash = cachedSeedHash;
+            if (hash != null) {
+                return hash;
+            }
+            try {
+                ClassPathResource resource = new ClassPathResource("config/data/portal-menu-seed.json");
+                if (!resource.exists()) {
+                    return null;
+                }
+                MessageDigest digest = MessageDigest.getInstance("SHA-256");
+                try (InputStream is = resource.getInputStream()) {
+                    byte[] buffer = new byte[4096];
+                    int read;
+                    while ((read = is.read(buffer)) > 0) {
+                        digest.update(buffer, 0, read);
+                    }
+                }
+                hash = toHex(digest.digest());
+                cachedSeedHash = hash;
+                return hash;
+            } catch (Exception ex) {
+                log.warn("Failed to compute portal menu seed hash: {}", ex.getMessage());
+                return null;
+            }
+        }
+    }
+
+    private String storedSeedHash() {
+        return systemConfigRepository
+            .findByKey(MENU_SEED_HASH_KEY)
+            .map(SystemConfig::getValue)
+            .filter(StringUtils::hasText)
+            .orElse(null);
+    }
+
+    private void persistSeedHash(String hash) {
+        if (!StringUtils.hasText(hash)) {
+            return;
+        }
+        SystemConfig config = systemConfigRepository.findByKey(MENU_SEED_HASH_KEY).orElseGet(SystemConfig::new);
+        config.setKey(MENU_SEED_HASH_KEY);
+        config.setValue(hash);
+        if (!StringUtils.hasText(config.getDescription())) {
+            config.setDescription("Portal menu seed hash");
+        }
+        systemConfigRepository.save(config);
+    }
+
+    private String toHex(byte[] bytes) {
+        StringBuilder sb = new StringBuilder(bytes.length * 2);
+        for (byte b : bytes) {
+            sb.append(String.format("%02x", b));
+        }
+        return sb.toString();
+    }
+
     private void ensureSeedMenus() {
         try {
             MenuSeed seed = menuSeed();
+            String seedHash = currentSeedHash();
+            String storedHash = storedSeedHash();
             List<PortalMenu> roots = menuRepo.findByDeletedFalseAndParentIsNullOrderBySortOrderAscIdAsc();
+
+            if (seedHash != null && storedHash != null && !seedHash.equals(storedHash)) {
+                log.info("Portal menu seed changed; resetting menus to new seed");
+                resetMenusToSeed();
+                persistSeedHash(seedHash);
+                return;
+            }
+            if (storedHash == null && roots != null && !roots.isEmpty()) {
+                log.info("Portal menu seed baseline missing; resetting menus to new seed");
+                resetMenusToSeed();
+                persistSeedHash(seedHash);
+                return;
+            }
             if (roots == null || roots.isEmpty()) {
                 // Fresh install: create full seed (destructive reset is acceptable when no menus exist).
                 resetMenusToSeed();
+                persistSeedHash(seedHash);
                 return;
             }
 
@@ -674,9 +766,82 @@ public class PortalMenuService {
                     return null;
                 });
             } catch (Exception ignored) {}
+
+            // Soft-delete legacy root menus that are no longer part of the seed
+            try {
+                menuMutationTx.execute(status -> {
+                    cleanupLegacyRootMenus(seed);
+                    return null;
+                });
+            } catch (Exception ex) {
+                log.warn("Failed cleaning legacy portal menus: {}", ex.getMessage());
+                log.debug("Legacy portal menu cleanup error stack", ex);
+            }
+
+            if (storedHash == null) {
+                persistSeedHash(seedHash);
+            }
         } catch (Exception ex) {
             log.warn("Skip portal menu seed verification due to: {}", ex.getMessage());
         }
+    }
+
+    private void cleanupLegacyRootMenus(MenuSeed seed) {
+        if (seed == null || seed.portalNavSections() == null) {
+            return;
+        }
+        Set<String> seedKeys = seed
+            .portalNavSections()
+            .stream()
+            .map(MenuNode::key)
+            .filter(StringUtils::hasText)
+            .map(key -> key.trim().toLowerCase(Locale.ROOT))
+            .collect(Collectors.toCollection(LinkedHashSet::new));
+        if (seedKeys.isEmpty()) {
+            return;
+        }
+        List<PortalMenu> roots = menuRepo.findByDeletedFalseAndParentIsNullOrderBySortOrderAscIdAsc();
+        if (roots == null || roots.isEmpty()) {
+            return;
+        }
+        for (PortalMenu root : roots) {
+            String rootKey = resolveRootKey(root);
+            if (!StringUtils.hasText(rootKey)) {
+                continue;
+            }
+            String normalized = rootKey.trim().toLowerCase(Locale.ROOT);
+            if (seedKeys.contains(normalized)) {
+                continue;
+            }
+            if (LEGACY_SECTION_KEYS.contains(normalized)) {
+                root.setDeleted(true);
+                menuRepo.save(root);
+            }
+        }
+    }
+
+    private String resolveRootKey(PortalMenu menu) {
+        String key = extractMetadataKey(menu);
+        if (StringUtils.hasText(key)) {
+            return key;
+        }
+        key = extractSectionKey(menu);
+        if (StringUtils.hasText(key)) {
+            return key;
+        }
+        String name = menu != null ? menu.getName() : null;
+        if (StringUtils.hasText(name)) {
+            String normalized = name.trim();
+            if (normalized.startsWith("sys.nav.portal.")) {
+                normalized = normalized.substring("sys.nav.portal.".length());
+            }
+            return normalized;
+        }
+        String path = menu != null ? menu.getPath() : null;
+        if (StringUtils.hasText(path)) {
+            return path.trim().replaceAll("^/+", "").replaceAll("/+$", "");
+        }
+        return null;
     }
 
     private void upsertMenusFromSeed(MenuSeed seed) {
@@ -1251,14 +1416,6 @@ public class PortalMenuService {
         String path = menu != null ? menu.getPath() : null;
         String nameLower = name == null ? "" : name.trim().toLowerCase(Locale.ROOT);
         String pathLower = path == null ? "" : path.trim().toLowerCase(Locale.ROOT);
-        if (
-            nameLower.contains("sys.nav.portal.ops") ||
-            nameLower.endsWith(".ops") ||
-            nameLower.contains(".ops.") ||
-            "ops".equals(pathLower)
-        ) {
-            return true;
-        }
         String entryKey = extractEntryKey(menu);
         if ("security".equalsIgnoreCase(sectionKey) && StringUtils.hasText(entryKey)) {
             String normalized = entryKey.trim().toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]+", "");

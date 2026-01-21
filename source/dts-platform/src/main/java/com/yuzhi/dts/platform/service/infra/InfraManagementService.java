@@ -20,6 +20,7 @@ import com.yuzhi.dts.platform.service.infra.dto.DataStorageRequest;
 import com.yuzhi.dts.platform.service.infra.dto.InfraDataSourceDto;
 import com.yuzhi.dts.platform.service.infra.dto.InfraDataStorageDto;
 import com.yuzhi.dts.platform.service.infra.event.InceptorDataSourcePublishedEvent;
+import com.yuzhi.dts.platform.service.infra.JdbcCatalogSyncService.JdbcSyncResult;
 import com.yuzhi.dts.platform.web.rest.infra.HiveConnectionTestRequest;
 import jakarta.persistence.EntityNotFoundException;
 import java.time.Instant;
@@ -114,6 +115,7 @@ public class InfraManagementService {
     public InfraDataSourceDto createDataSource(DataSourceRequest request, String username, String activeDeptHeader) {
         ensureNotInceptorManaged(request.type());
         InfraDataSource entity = new InfraDataSource();
+        validateJdbcCredentials(request, null);
         applyDataSource(entity, request, username);
         ensureNotSystemManaged(entity.getType(), activeDeptHeader);
         applyOwnerDept(entity, activeDeptHeader);
@@ -186,6 +188,7 @@ public class InfraManagementService {
         ensureNotInceptorManaged(entity.getType());
         ensureNotSystemManaged(entity.getType(), activeDeptHeader);
         ensureDeptScopeWritable(entity, activeDeptHeader);
+        validateJdbcCredentials(request, entity);
         applyDataSource(entity, request, username);
         applyOwnerDept(entity, activeDeptHeader);
         return toDto(dataSourceRepository.save(entity));
@@ -193,6 +196,36 @@ public class InfraManagementService {
 
     public InfraDataSource findEntity(UUID id) {
         return dataSourceRepository.findById(id).orElseThrow(EntityNotFoundException::new);
+    }
+
+    @Transactional
+    public void updateJdbcSyncResult(UUID id, JdbcSyncResult result) {
+        if (id == null || result == null) {
+            return;
+        }
+        InfraDataSource entity = dataSourceRepository.findById(id).orElse(null);
+        if (entity == null) {
+            return;
+        }
+        Map<String, Object> props = readProps(entity.getProps());
+        Map<String, Object> sync = new LinkedHashMap<>();
+        sync.put("status", result.status());
+        sync.put("error", result.error());
+        sync.put("elapsedMs", result.elapsedMs());
+        sync.put("databaseProduct", result.databaseProduct());
+        sync.put("databaseVersion", result.databaseVersion());
+        sync.put("schemas", result.schemas());
+        sync.put("tablesDiscovered", result.tablesDiscovered());
+        sync.put("datasetsCreated", result.datasetsCreated());
+        sync.put("datasetsUpdated", result.datasetsUpdated());
+        sync.put("datasetsRemoved", result.datasetsRemoved());
+        sync.put("tablesCreated", result.tablesCreated());
+        sync.put("columnsImported", result.columnsImported());
+        sync.put("lastSyncAt", Instant.now().toString());
+        props.put("sync", sync);
+        props.put("tableCount", Math.max(result.tablesDiscovered(), 0));
+        entity.setProps(writeProps(props));
+        dataSourceRepository.save(entity);
     }
 
     @Transactional
@@ -332,6 +365,39 @@ public class InfraManagementService {
         if (!StringUtils.hasText(entity.getStatus())) {
             entity.setStatus(STATUS_ACTIVE);
         }
+    }
+
+    private void validateJdbcCredentials(DataSourceRequest request, InfraDataSource existing) {
+        if (request == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请求参数不能为空");
+        }
+        if (!StringUtils.hasText(request.username())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "用户名不能为空");
+        }
+        String password = extractPassword(request.secrets());
+        if (StringUtils.hasText(password)) {
+            return;
+        }
+        if (existing == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "密码不能为空");
+        }
+        Map<String, Object> secrets = secretService.readSecrets(existing);
+        String existingPassword = extractPassword(secrets);
+        if (!StringUtils.hasText(existingPassword)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "密码不能为空");
+        }
+    }
+
+    private String extractPassword(Map<String, Object> secrets) {
+        if (secrets == null || secrets.isEmpty()) {
+            return null;
+        }
+        Object value = secrets.get("password");
+        if (value == null) {
+            return null;
+        }
+        String text = value.toString().trim();
+        return text.isEmpty() ? null : text;
     }
 
     private void applyInceptorDataSource(InfraDataSource entity, HiveConnectionPersistRequest request, String username) {

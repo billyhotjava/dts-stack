@@ -45,7 +45,7 @@ public class OpenMetadataService {
             }
         }
         String fallback = candidates.isEmpty() ? null : candidates.get(0);
-        return OpenMetadataResult.notFound(fallback, "未找到匹配的技术资产");
+        return OpenMetadataResult.notFound(fallback, "未找到匹配的元数据");
     }
 
     public OpenMetadataResult fetchTableByFqn(String fqn) {
@@ -53,14 +53,14 @@ public class OpenMetadataService {
             return OpenMetadataResult.disabled();
         }
         if (!StringUtils.hasText(fqn)) {
-            return OpenMetadataResult.notFound(null, "未提供技术资产标识");
+            return OpenMetadataResult.notFound(null, "未提供元数据标识");
         }
         String fields = props.getTableFields();
         Optional<Map<String, Object>> found = client.getTableByFqn(fqn.trim(), fields);
         if (found.isPresent()) {
             return OpenMetadataResult.found(fqn.trim(), found.orElseThrow(), resolveUiBaseUrl());
         }
-        return OpenMetadataResult.notFound(fqn.trim(), "未找到匹配的技术资产");
+        return OpenMetadataResult.notFound(fqn.trim(), "未找到匹配的元数据");
     }
 
     public OpenMetadataSummary summarize(OpenMetadataResult result) {
@@ -99,7 +99,7 @@ public class OpenMetadataService {
         if (usedSearch) {
             Optional<Map<String, Object>> response = client.searchTables(keyword.trim(), limit);
             if (response.isEmpty()) {
-                return new OpenMetadataTablePage(true, List.of(), 0, keyword, true, "暂无技术资产");
+                return new OpenMetadataTablePage(true, List.of(), 0, keyword, true, "暂无元数据");
             }
             SearchEnvelope envelope = parseSearchEnvelope(response.orElseThrow());
             entities = envelope.entities();
@@ -107,7 +107,7 @@ public class OpenMetadataService {
         } else {
             Optional<Map<String, Object>> response = client.listTables(limit, props.getTableFields());
             if (response.isEmpty()) {
-                return new OpenMetadataTablePage(true, List.of(), 0, null, false, "暂无技术资产");
+                return new OpenMetadataTablePage(true, List.of(), 0, null, false, "暂无元数据");
             }
             List<Map<String, Object>> data = parseListData(response.orElseThrow());
             entities = data;
@@ -137,7 +137,7 @@ public class OpenMetadataService {
         }
         String entityId = extractEntityId(result.entity());
         if (!StringUtils.hasText(entityId)) {
-            return OpenMetadataLineageResult.notFound(result.fqn(), "技术资产缺少标识");
+            return OpenMetadataLineageResult.notFound(result.fqn(), "元数据缺少标识");
         }
         Optional<Map<String, Object>> lineage = client.getLineage(entityId, upstreamDepth, downstreamDepth);
         if (lineage.isEmpty()) {
@@ -158,7 +158,7 @@ public class OpenMetadataService {
         String fqn = result.fqn();
         String entityLink = buildEntityLink(fqn);
         if (!StringUtils.hasText(entityLink)) {
-            return OpenMetadataQualityResult.notFound(fqn, "技术资产缺少标识");
+            return OpenMetadataQualityResult.notFound(fqn, "元数据缺少标识");
         }
         Optional<Map<String, Object>> response = client.getTestCases(entityLink);
         if (response.isEmpty()) {

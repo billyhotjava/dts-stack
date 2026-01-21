@@ -366,15 +366,6 @@ public class AuditLoggingFilter extends OncePerRequestFilter {
         if (uri.startsWith("/api/directory/orgs") || uri.startsWith("/api/directory/users") || uri.startsWith("/api/directory/roles")) {
             return true;
         }
-        if ("GET".equalsIgnoreCase(method) && uri.startsWith("/api/infra/data-sources")) {
-            return true;
-        }
-        if ("GET".equalsIgnoreCase(method) && uri.startsWith("/api/infra/data-storages")) {
-            return true;
-        }
-        if ("GET".equalsIgnoreCase(method) && uri.startsWith("/api/infra/data-sources/test-logs")) {
-            return true;
-        }
         if (uri.startsWith("/api/catalog/domains") || uri.contains("/dictionary/") || uri.contains("/lookup/")) {
             return true;
         }

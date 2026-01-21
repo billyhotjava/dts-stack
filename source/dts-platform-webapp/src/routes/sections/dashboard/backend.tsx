@@ -111,11 +111,14 @@ const convertToRoute = (items: MenuTree[], parent?: MenuTree): RouteObject[] => 
 
 // Provide dynamic fallback routes for key sections so menu-driven paths resolve before menus are baked into routes.
 const buildDynamicFallbackRoutes = (): RouteObject[] => [
+	{ path: "workbench", children: [{ path: "*", element: <DynamicMenuResolver base="/workbench" /> }] },
 	{ path: "catalog", children: [{ path: "*", element: <DynamicMenuResolver base="/catalog" /> }] },
 	{ path: "modeling", children: [{ path: "*", element: <DynamicMenuResolver base="/modeling" /> }] },
 	{ path: "governance", children: [{ path: "*", element: <DynamicMenuResolver base="/governance" /> }] },
 	{ path: "explore", children: [{ path: "*", element: <DynamicMenuResolver base="/explore" /> }] },
 	{ path: "foundation", children: [{ path: "*", element: <DynamicMenuResolver base="/foundation" /> }] },
+	{ path: "services", children: [{ path: "*", element: <DynamicMenuResolver base="/services" /> }] },
+	{ path: "ops", children: [{ path: "*", element: <DynamicMenuResolver base="/ops" /> }] },
 ];
 
 export function getBackendDashboardRoutes() {

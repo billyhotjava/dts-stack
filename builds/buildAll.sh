@@ -184,6 +184,7 @@ if [[ "$MODE" == "normal" || "$MODE" == "both" ]]; then
   IMAGE_DTS_ADMIN_WEBAPP="${IMAGE_DTS_ADMIN_WEBAPP:-dts-admin-webapp:local}"
   IMAGE_DTS_PLATFORM_WEBAPP="${IMAGE_DTS_PLATFORM_WEBAPP:-dts-platform-webapp:local}"
   IMAGE_DTS_ANALYTICS_WEBAPP_MODERN="${IMAGE_DTS_ANALYTICS_WEBAPP_MODERN:-dts-analytics-webapp-modern:local}"
+  IMAGE_DTS_AIRFLOW_OM="${IMAGE_DTS_AIRFLOW_OM:-${IMAGE_AIRFLOW:-dts-airflow-om:local}}"
 
   build_image "dts-admin" "$IMAGE_DTS_ADMIN" "${REPO_ROOT}/builds/dts-admin/Dockerfile" "$NORMAL_DIST" \
     --build-arg ENABLE_MAVEN_BUILD="${ENABLE_MAVEN_BUILD:-true}"
@@ -198,6 +199,14 @@ if [[ "$MODE" == "normal" || "$MODE" == "both" ]]; then
     --build-arg WEBAPP_BUILD_CMD="build:modern"
   build_image "dts-analytics-webapp-modern" "$IMAGE_DTS_ANALYTICS_WEBAPP_MODERN" "${REPO_ROOT}/builds/dts-analytics-webapp/modern/Dockerfile" "$NORMAL_DIST" \
     --build-arg PNPM_VERSION="${PNPM_VERSION}"
+  build_image "dts-airflow-om" "$IMAGE_DTS_AIRFLOW_OM" "${REPO_ROOT}/source/dts-airflow-om/Dockerfile" "$NORMAL_DIST" \
+    --build-arg PIP_INDEX_URL="${PIP_INDEX_URL:-}" \
+    --build-arg PIP_TRUSTED_HOST="${PIP_TRUSTED_HOST:-}" \
+    --build-arg PIP_DEFAULT_TIMEOUT="${PIP_DEFAULT_TIMEOUT:-60}" \
+    --build-arg PIP_RETRIES="${PIP_RETRIES:-10}" \
+    --build-arg HTTP_PROXY="${HTTP_PROXY:-}" \
+    --build-arg HTTPS_PROXY="${HTTPS_PROXY:-}" \
+    --build-arg NO_PROXY="${NO_PROXY:-}"
 fi
 
 if [[ "$MODE" == "legacy" || "$MODE" == "both" ]]; then
@@ -208,6 +217,7 @@ if [[ "$MODE" == "legacy" || "$MODE" == "both" ]]; then
   IMAGE_DTS_ADMIN_WEBAPP="${IMAGE_DTS_ADMIN_WEBAPP:-dts-admin-webapp:local}"
   IMAGE_DTS_PLATFORM_WEBAPP="${IMAGE_DTS_PLATFORM_WEBAPP:-dts-platform-webapp:local}"
   IMAGE_DTS_ANALYTICS_WEBAPP_LEGACY="${IMAGE_DTS_ANALYTICS_WEBAPP_LEGACY:-dts-analytics-webapp:local}"
+  IMAGE_DTS_AIRFLOW_OM="${IMAGE_DTS_AIRFLOW_OM:-${IMAGE_AIRFLOW:-dts-airflow-om:local}}"
 
   build_maven_module "dts-admin" "dts-admin-*.jar" "${REPO_ROOT}/builds/dts-admin/dts-admin.jar"
   build_maven_module "dts-platform" "dts-platform-*.jar" "${REPO_ROOT}/builds/dts-platform/dts-platform.jar"
@@ -223,6 +233,14 @@ if [[ "$MODE" == "legacy" || "$MODE" == "both" ]]; then
     --build-arg PNPM_VERSION="${PNPM_VERSION}" \
     --build-arg WEBAPP_BUILD_CMD="build"
   build_image "dts-analytics-webapp" "$IMAGE_DTS_ANALYTICS_WEBAPP_LEGACY" "${REPO_ROOT}/builds/dts-analytics-webapp/Dockerfile" "$LEGACY_DIST"
+  build_image "dts-airflow-om" "$IMAGE_DTS_AIRFLOW_OM" "${REPO_ROOT}/source/dts-airflow-om/Dockerfile" "$LEGACY_DIST" \
+    --build-arg PIP_INDEX_URL="${PIP_INDEX_URL:-}" \
+    --build-arg PIP_TRUSTED_HOST="${PIP_TRUSTED_HOST:-}" \
+    --build-arg PIP_DEFAULT_TIMEOUT="${PIP_DEFAULT_TIMEOUT:-60}" \
+    --build-arg PIP_RETRIES="${PIP_RETRIES:-10}" \
+    --build-arg HTTP_PROXY="${HTTP_PROXY:-}" \
+    --build-arg HTTPS_PROXY="${HTTPS_PROXY:-}" \
+    --build-arg NO_PROXY="${NO_PROXY:-}"
 fi
 
 echo "[buildAll] Done. normal=${NORMAL_DIST} legacy=${LEGACY_DIST}"

@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260222_01_infra_airbyte_source" author="platform">
+        <createTable tableName="infra_airbyte_source">
+            <column name="id" type="uuid">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="name" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="source_definition_id" type="varchar(64)"/>
+            <column name="source_id" type="varchar(64)"/>
+            <column name="status" type="varchar(32)"/>
+            <column name="last_checked_at" type="timestamptz"/>
+            <column name="last_discovered_at" type="timestamptz"/>
+            <column name="owner" type="varchar(64)"/>
+            <column name="enabled" type="boolean">
+                <constraints nullable="false"/>
+            </column>
+            <column name="description" type="varchar(512)"/>
+            <column name="config_json" type="text"/>
+            <column name="created_by" type="varchar(50)"/>
+            <column name="created_date" type="timestamptz"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamptz"/>
+        </createTable>
+
+        <createIndex tableName="infra_airbyte_source" indexName="idx_airbyte_source_id">
+            <column name="source_id"/>
+        </createIndex>
+    </changeSet>
+</databaseChangeLog>

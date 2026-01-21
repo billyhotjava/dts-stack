@@ -9,9 +9,10 @@ MODE="images"  # images | local
 WITH_WEBAPP_DEFAULT=1
 WITH_ANALYTICS_DEV=0
 WITH_ANALYTICS=0
+FORCE_AIRFLOW_BUILD=0
 
 usage(){
-  echo "Usage: $0 [--mode images|local] [--no-webapp] [--analytics] [--analytics-dev]"
+  echo "Usage: $0 [--mode images|local] [--no-webapp] [--analytics] [--analytics-dev] [--force-airflow-build]"
 }
 
 checksum_file() {
@@ -109,6 +110,8 @@ while (($#)); do
       WITH_ANALYTICS_DEV=1;;
     --analytics)
       WITH_ANALYTICS=1;;
+    --force-airflow-build)
+      FORCE_AIRFLOW_BUILD=1;;
     -h|--help)
       usage; exit 0;;
     *)
@@ -172,6 +175,30 @@ else
   echo "[dev-up] NOTE: compose does not support --env-file; falling back to default .env loading (still read-only)." >&2
 fi
 
+wait_for_service_healthy() {
+  local svc="$1"
+  local max_wait="${2:-60}"
+  local waited=0
+  local cid=""
+  cid="$("${compose_cmd[@]}" "${compose_files[@]}" ps -q "${svc}" 2>/dev/null | head -n 1 || true)"
+  if [[ -z "${cid}" ]]; then
+    return 1
+  fi
+  while (( waited < max_wait )); do
+    local status
+    status="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "${cid}" 2>/dev/null || echo none)"
+    if [[ "${status}" == "healthy" ]]; then
+      return 0
+    fi
+    if [[ "${status}" == "none" ]]; then
+      return 0
+    fi
+    sleep 2
+    waited=$(( waited + 2 ))
+  done
+  return 1
+}
+
 # Load env file into current shell so compose gets complete variables (read-only copy)
 set -a
 source "$ENV_RUNTIME"
@@ -188,6 +215,29 @@ mkdir -p logs/dts-admin logs/dts-platform logs/dts-analytics
 # Load optional image versions into current env (does not modify files)
 load_img_versions_dev
 
+# Build the OpenMetadata-enabled Airflow image when used in dev.
+build_airflow_om_image() {
+  local tag="${IMAGE_AIRFLOW:-}"
+  if [[ -z "${tag}" ]]; then
+    return
+  fi
+  if [[ "${tag}" != dts-airflow-om:* && "${tag}" != dts-airflow-om ]]; then
+    return
+  fi
+  if [[ "${FORCE_AIRFLOW_BUILD}" != "1" ]] && docker image inspect "${tag}" >/dev/null 2>&1; then
+    echo "[dev-up] Using existing ${tag} (dts-airflow-om)."
+    return
+  fi
+  if [[ ! -f "${SCRIPT_DIR}/source/dts-airflow-om/Dockerfile" ]]; then
+    return
+  fi
+  echo "[dev-up] Building ${tag} (dts-airflow-om) ..."
+  IMAGE_TAG="${tag}" \
+  PIP_INDEX_URL="${PIP_INDEX_URL:-}" \
+  PIP_TRUSTED_HOST="${PIP_TRUSTED_HOST:-}" \
+    "${SCRIPT_DIR}/builds/airflow/build-image.sh"
+}
+
 # Decide optional services
 determine_enabled_services
 
@@ -199,6 +249,12 @@ set -a
 : "${PG_DB_ANALYTICS:=dts_analytics}"
 : "${PG_USER_ANALYTICS:=dts_analytics}"
 : "${PG_PWD_ANALYTICS:=dts_analytics}"
+: "${PG_DB_AIRBYTE:=airbyte}"
+: "${PG_USER_AIRBYTE:=airbyte}"
+: "${PG_PWD_AIRBYTE:=airbyte}"
+: "${PG_DB_TEMPORAL:=airbyte_temporal}"
+: "${PG_USER_TEMPORAL:=airbyte_temporal}"
+: "${PG_PWD_TEMPORAL:=airbyte_temporal}"
 set +a
 
 if [[ "$MODE" == "local" ]]; then
@@ -283,10 +339,13 @@ if [[ "$MODE" == "local" ]]; then
   fi
 fi
 
+build_airflow_om_image
+
 services=(dts-admin dts-platform)
 
 # Metadata/ELT stack for dev mode
 services+=(dts-elasticsearch dts-openmetadata dts-airflow-init dts-airflow-webserver dts-airflow-scheduler dts-airflow-triggerer dts-dbt)
+services+=(dts-airbyte-temporal dts-airbyte-bootloader dts-airbyte-server dts-airbyte-worker dts-airbyte-webapp)
 
 WITH_WEBAPP="${WITH_WEBAPP:-$WITH_WEBAPP_DEFAULT}"
 if [[ "$WITH_WEBAPP" != "0" && "${SKIP_WEBAPP:-0}" != "1" ]]; then
@@ -302,11 +361,55 @@ if [[ "${WITH_ANALYTICS}" == "1" || "${WITH_ANALYTICS_DEV}" == "1" ]]; then
   fi
 fi
 
+# Ensure Airflow is up before OpenMetadata.
+airflow_services=(dts-airflow-init dts-airflow-webserver dts-airflow-scheduler dts-airflow-triggerer)
+openmetadata_services=(dts-openmetadata)
+
+# Only rebuild our dev services; keep shared infra intact.
+dev_services=(dts-admin dts-platform)
+if [[ "${WITH_ANALYTICS}" == "1" || "${WITH_ANALYTICS_DEV}" == "1" ]]; then
+  dev_services+=(dts-analytics)
+fi
+other_services=()
+for svc in "${services[@]}"; do
+  skip=0
+  for dev_svc in "${dev_services[@]}"; do
+    if [[ "${svc}" == "${dev_svc}" ]]; then
+      skip=1
+      break
+    fi
+  done
+  for af_svc in "${airflow_services[@]}"; do
+    if [[ "${svc}" == "${af_svc}" ]]; then
+      skip=1
+      break
+    fi
+  done
+  for om_svc in "${openmetadata_services[@]}"; do
+    if [[ "${svc}" == "${om_svc}" ]]; then
+      skip=1
+      break
+    fi
+  done
+  if [[ "${skip}" -eq 0 ]]; then
+    other_services+=("${svc}")
+  fi
+done
+
 if [[ "$MODE" == "local" ]]; then
   echo "[dev-up] Starting local-dev services (bind mounts + live reload) ..."
-  # Force recreate so changes in docker-compose.dev.yml (command/volumes) reliably take effect,
-  # especially for the mounted target/ directories used to avoid host filesystem permission issues.
-  "${compose_cmd[@]}" "${compose_files[@]}" up -d --force-recreate "${services[@]}"
+  # Keep shared services stable; only force-recreate our dev containers.
+  if [[ "${#other_services[@]}" -gt 0 ]]; then
+    "${compose_cmd[@]}" "${compose_files[@]}" up -d "${other_services[@]}"
+  fi
+  "${compose_cmd[@]}" "${compose_files[@]}" up -d "${airflow_services[@]}" >/dev/null 2>&1 || true
+  if ! wait_for_service_healthy dts-airflow-webserver 90; then
+    echo "[dev-up] WARNING: dts-airflow-webserver not healthy yet; continuing." >&2
+  fi
+  "${compose_cmd[@]}" "${compose_files[@]}" up -d "${openmetadata_services[@]}" >/dev/null 2>&1 || true
+  if [[ "${#dev_services[@]}" -gt 0 ]]; then
+    "${compose_cmd[@]}" "${compose_files[@]}" up -d --force-recreate "${dev_services[@]}"
+  fi
   if [[ "$WITH_WEBAPP" != "0" && "${SKIP_WEBAPP:-0}" != "1" ]]; then
     echo "[dev-up] Patching Vite env handling (best-effort) ..."
     "${compose_cmd[@]}" "${compose_files[@]}" exec -T dts-admin-webapp sh -lc "sh /patches/patch-vite-env.sh || true" || true
@@ -316,7 +419,17 @@ else
   echo "[dev-up] Starting source dev services with build ..."
   clean_maven_targets
   clean_node_modules
-  "${compose_cmd[@]}" "${compose_files[@]}" up -d --build "${services[@]}"
+  if [[ "${#other_services[@]}" -gt 0 ]]; then
+    "${compose_cmd[@]}" "${compose_files[@]}" up -d "${other_services[@]}"
+  fi
+  "${compose_cmd[@]}" "${compose_files[@]}" up -d "${airflow_services[@]}" >/dev/null 2>&1 || true
+  if ! wait_for_service_healthy dts-airflow-webserver 90; then
+    echo "[dev-up] WARNING: dts-airflow-webserver not healthy yet; continuing." >&2
+  fi
+  "${compose_cmd[@]}" "${compose_files[@]}" up -d "${openmetadata_services[@]}" >/dev/null 2>&1 || true
+  if [[ "${#dev_services[@]}" -gt 0 ]]; then
+    "${compose_cmd[@]}" "${compose_files[@]}" up -d --build "${dev_services[@]}"
+  fi
 fi
 
 echo "[dev-up] Done. Stop dev services with: ./dev-stop.sh [--mode images|local]"

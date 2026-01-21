@@ -136,7 +136,7 @@ services:
   dts-pg:
     platform: linux/arm64
     image: ${IMAGE_POSTGRES}
-    command: ["postgres", "-c", "shared_preload_libraries=pg_stat_statements"]
+    command: ["postgres", "-c", "shared_preload_libraries=pg_stat_statements", "-c", "max_connections=300"]
     environment:
       POSTGRES_PASSWORD: ${PG_SUPER_PASSWORD}
       POSTGRES_USER: ${PG_SUPER_USER}
@@ -167,6 +167,14 @@ services:
       PG_DB_AIRFLOW: ${PG_DB_AIRFLOW}
       PG_USER_AIRFLOW: ${PG_USER_AIRFLOW}
       PG_PWD_AIRFLOW: ${PG_PWD_AIRFLOW}
+      # Airbyte
+      PG_DB_AIRBYTE: ${PG_DB_AIRBYTE}
+      PG_USER_AIRBYTE: ${PG_USER_AIRBYTE}
+      PG_PWD_AIRBYTE: ${PG_PWD_AIRBYTE}
+      # Temporal (Airbyte)
+      PG_DB_TEMPORAL: ${PG_DB_TEMPORAL}
+      PG_USER_TEMPORAL: ${PG_USER_TEMPORAL}
+      PG_PWD_TEMPORAL: ${PG_PWD_TEMPORAL}
     volumes:
       - ./services/dts-pg/data:/var/lib/postgresql/data
       - ./services/dts-pg/init:/docker-entrypoint-initdb.d:ro
@@ -372,6 +380,8 @@ services:
         condition: service_started
     environment:
       SPRING_PROFILES_ACTIVE: ${DTS_PROFILE:-prod}
+      DTS_PLATFORM_CATALOG_MULTI_SOURCE_ENABLED: "true"
+      DTS_PLATFORM_CATALOG_DEFAULT_SOURCE_TYPE: "POSTGRES"
       SPRING_DATASOURCE_URL: jdbc:postgresql://dts-pg:5432/${PG_DB_DTPS:-dts_platform}
       SPRING_DATASOURCE_USERNAME: ${PG_USER_DTPS:-dts_platform}
       SPRING_DATASOURCE_PASSWORD: ${PG_PWD_DTPS:-dts_platform}
@@ -606,6 +616,8 @@ services:
         condition: service_healthy
       dts-elasticsearch:
         condition: service_healthy
+      dts-airflow-webserver:
+        condition: service_healthy
     environment:
       OPENMETADATA_CLUSTER_NAME: dts-openmetadata
       OPENMETADATA_SERVER_PORT: 8585
@@ -622,6 +634,10 @@ services:
       ELASTICSEARCH_HOST: dts-elasticsearch
       ELASTICSEARCH_PORT: 9200
       ELASTICSEARCH_SCHEME: http
+      PIPELINE_SERVICE_CLIENT_ENDPOINT: ${DTS_AIRFLOW_BASE_URL:-http://dts-airflow-webserver:8080}
+      AIRFLOW_USERNAME: ${DTS_AIRFLOW_USERNAME:-airflow}
+      AIRFLOW_PASSWORD: ${DTS_AIRFLOW_PASSWORD:-airflow}
+      SERVER_HOST_API_URL: "http://dts-openmetadata:8585/api"
     ports:
       - "${OPENMETADATA_HTTP_PORT:-8585}:8585"
     labels:
@@ -717,6 +733,9 @@ services:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
       AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
+      PIP_ADDITIONAL_REQUIREMENTS: "${AIRFLOW_PIP_ADDITIONAL_REQUIREMENTS:-openmetadata-managed-apis==${OPENMETADATA_MANAGED_APIS_VERSION:-1.11.5.0} openmetadata-ingestion==${OPENMETADATA_INGESTION_VERSION:-1.11.5.0}}"
+      AIRFLOW__API__AUTH_BACKENDS: "airflow.api.auth.backend.basic_auth"
+      PYTHONPATH: "/opt/airflow/extra:${PYTHONPATH:-}"
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: "postgresql+psycopg2://${PG_USER_AIRFLOW}:${PG_PWD_AIRFLOW_URLENCODED}@${PG_HOST}:${PG_PORT}/${PG_DB_AIRFLOW}"
       AIRFLOW__CORE__SQL_ALCHEMY_CONN: "postgresql+psycopg2://${PG_USER_AIRFLOW}:${PG_PWD_AIRFLOW_URLENCODED}@${PG_HOST}:${PG_PORT}/${PG_DB_AIRFLOW}"
       AIRFLOW__WEBSERVER__ENABLE_PROXY_FIX: "true"
@@ -738,6 +757,7 @@ services:
       - ./services/dts-airflow/dags:/opt/airflow/dags
       - ./services/dts-airflow/logs:/opt/airflow/logs
       - ./services/dts-airflow/plugins:/opt/airflow/plugins
+      - ./services/dts-airflow/extra:/opt/airflow/extra:ro,z
       - ./services/dts-airflow/config:/opt/airflow/config
       - /var/run/docker.sock:/var/run/docker.sock
     restart: "no"
@@ -755,6 +775,9 @@ services:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
       AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
+      PIP_ADDITIONAL_REQUIREMENTS: "${AIRFLOW_PIP_ADDITIONAL_REQUIREMENTS:-openmetadata-managed-apis==${OPENMETADATA_MANAGED_APIS_VERSION:-1.11.5.0} openmetadata-ingestion==${OPENMETADATA_INGESTION_VERSION:-1.11.5.0}}"
+      AIRFLOW__API__AUTH_BACKENDS: "airflow.api.auth.backend.basic_auth"
+      PYTHONPATH: "/opt/airflow/extra:${PYTHONPATH:-}"
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: "postgresql+psycopg2://${PG_USER_AIRFLOW}:${PG_PWD_AIRFLOW_URLENCODED}@${PG_HOST}:${PG_PORT}/${PG_DB_AIRFLOW}"
       AIRFLOW__CORE__SQL_ALCHEMY_CONN: "postgresql+psycopg2://${PG_USER_AIRFLOW}:${PG_PWD_AIRFLOW_URLENCODED}@${PG_HOST}:${PG_PORT}/${PG_DB_AIRFLOW}"
       AIRFLOW__WEBSERVER__ENABLE_PROXY_FIX: "true"
@@ -775,6 +798,7 @@ services:
       - ./services/dts-airflow/dags:/opt/airflow/dags
       - ./services/dts-airflow/logs:/opt/airflow/logs
       - ./services/dts-airflow/plugins:/opt/airflow/plugins
+      - ./services/dts-airflow/extra:/opt/airflow/extra:ro,z
       - ./services/dts-airflow/config:/opt/airflow/config
       - /var/run/docker.sock:/var/run/docker.sock
     labels:
@@ -786,6 +810,12 @@ services:
       - "traefik.http.services.dts-airflow.loadbalancer.server.port=8080"
       - "traefik.http.routers.dts-airflow.middlewares=platform-forward-auth@file,security-headers@file"
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/api/v1/health >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
     networks:
       - dts-core
 
@@ -800,6 +830,9 @@ services:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
       AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
+      PIP_ADDITIONAL_REQUIREMENTS: "${AIRFLOW_PIP_ADDITIONAL_REQUIREMENTS:-openmetadata-managed-apis==${OPENMETADATA_MANAGED_APIS_VERSION:-1.11.5.0} openmetadata-ingestion==${OPENMETADATA_INGESTION_VERSION:-1.11.5.0}}"
+      AIRFLOW__API__AUTH_BACKENDS: "airflow.api.auth.backend.basic_auth"
+      PYTHONPATH: "/opt/airflow/extra:${PYTHONPATH:-}"
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: "postgresql+psycopg2://${PG_USER_AIRFLOW}:${PG_PWD_AIRFLOW_URLENCODED}@${PG_HOST}:${PG_PORT}/${PG_DB_AIRFLOW}"
       AIRFLOW__CORE__SQL_ALCHEMY_CONN: "postgresql+psycopg2://${PG_USER_AIRFLOW}:${PG_PWD_AIRFLOW_URLENCODED}@${PG_HOST}:${PG_PORT}/${PG_DB_AIRFLOW}"
       AIRFLOW_HOME: /opt/airflow
@@ -815,6 +848,7 @@ services:
       - ./services/dts-airflow/dags:/opt/airflow/dags
       - ./services/dts-airflow/logs:/opt/airflow/logs
       - ./services/dts-airflow/plugins:/opt/airflow/plugins
+      - ./services/dts-airflow/extra:/opt/airflow/extra:ro,z
       - ./services/dts-airflow/config:/opt/airflow/config
       - /var/run/docker.sock:/var/run/docker.sock
     restart: unless-stopped
@@ -832,6 +866,9 @@ services:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
       AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
+      PIP_ADDITIONAL_REQUIREMENTS: "${AIRFLOW_PIP_ADDITIONAL_REQUIREMENTS:-openmetadata-managed-apis==${OPENMETADATA_MANAGED_APIS_VERSION:-1.11.5.0} openmetadata-ingestion==${OPENMETADATA_INGESTION_VERSION:-1.11.5.0}}"
+      AIRFLOW__API__AUTH_BACKENDS: "airflow.api.auth.backend.basic_auth"
+      PYTHONPATH: "/opt/airflow/extra:${PYTHONPATH:-}"
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: "postgresql+psycopg2://${PG_USER_AIRFLOW}:${PG_PWD_AIRFLOW_URLENCODED}@${PG_HOST}:${PG_PORT}/${PG_DB_AIRFLOW}"
       AIRFLOW__CORE__SQL_ALCHEMY_CONN: "postgresql+psycopg2://${PG_USER_AIRFLOW}:${PG_PWD_AIRFLOW_URLENCODED}@${PG_HOST}:${PG_PORT}/${PG_DB_AIRFLOW}"
       AIRFLOW_HOME: /opt/airflow
@@ -847,8 +884,218 @@ services:
       - ./services/dts-airflow/dags:/opt/airflow/dags
       - ./services/dts-airflow/logs:/opt/airflow/logs
       - ./services/dts-airflow/plugins:/opt/airflow/plugins
+      - ./services/dts-airflow/extra:/opt/airflow/extra:ro,z
       - ./services/dts-airflow/config:/opt/airflow/config
       - /var/run/docker.sock:/var/run/docker.sock
+    restart: unless-stopped
+    networks:
+      - dts-core
+
+  dts-airbyte-temporal:
+    platform: linux/arm64
+    image: ${IMAGE_TEMPORAL}
+    container_name: dts-airbyte-temporal
+    environment:
+      DB: postgres12
+      DB_PORT: 5432
+      POSTGRES_SEEDS: dts-pg
+      POSTGRES_USER: ${PG_USER_TEMPORAL}
+      POSTGRES_PWD: ${PG_PWD_TEMPORAL}
+      POSTGRES_DB: ${PG_DB_TEMPORAL}
+    depends_on:
+      dts-pg:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - dts-core
+
+  dts-airbyte-k8s-mock:
+    image: python:3.11-alpine
+    container_name: dts-airbyte-k8s-mock
+    command: ["python", "/app/server.py"]
+    volumes:
+      - ./services/dts-airbyte/k8s-mock:/app:ro
+    restart: unless-stopped
+    networks:
+      - dts-core
+
+  dts-airbyte-bootloader:
+    platform: linux/arm64
+    image: ${IMAGE_AIRBYTE_BOOTLOADER}
+    container_name: dts-airbyte-bootloader
+    depends_on:
+      dts-pg:
+        condition: service_healthy
+      dts-airbyte-temporal:
+        condition: service_started
+      dts-airbyte-k8s-mock:
+        condition: service_started
+    environment:
+      AIRBYTE_VERSION: ${AIRBYTE_VERSION:-1.8.2}
+      AB_AUTH_SECRET_CREATION_ENABLED: "false"
+      KUBERNETES_MASTER: http://dts-airbyte-k8s-mock:8000
+      KUBERNETES_TRUST_CERTIFICATES: "true"
+      DATABASE_HOST: ${PG_HOST}
+      DATABASE_PORT: ${PG_PORT}
+      DATABASE_DB: ${PG_DB_AIRBYTE}
+      DATABASE_USER: ${PG_USER_AIRBYTE}
+      DATABASE_PASSWORD: ${PG_PWD_AIRBYTE}
+      DATABASE_URL: jdbc:postgresql://${PG_HOST}:${PG_PORT}/${PG_DB_AIRBYTE}
+      DATASOURCES_LOCAL_URL: jdbc:postgresql://${PG_HOST}:${PG_PORT}/${PG_DB_AIRBYTE}
+      DATASOURCES_LOCAL_USERNAME: ${PG_USER_AIRBYTE}
+      DATASOURCES_LOCAL_PASSWORD: ${PG_PWD_AIRBYTE}
+      DATASOURCES_LOCAL_DRIVER_CLASS_NAME: org.postgresql.Driver
+      DATASOURCES_LOCAL_SECRETS_URL: jdbc:postgresql://${PG_HOST}:${PG_PORT}/${PG_DB_AIRBYTE}
+      DATASOURCES_LOCAL_SECRETS_USERNAME: ${PG_USER_AIRBYTE}
+      DATASOURCES_LOCAL_SECRETS_PASSWORD: ${PG_PWD_AIRBYTE}
+      DATASOURCES_LOCAL_SECRETS_DRIVER_CLASS_NAME: org.postgresql.Driver
+      KUBERNETES_NAMESPACE: ${KUBERNETES_NAMESPACE:-default}
+      KUBERNETES_IN_CLUSTER: "false"
+      CONFIG_ROOT: /data/airbyte/config
+      WORKSPACE_ROOT: /data/airbyte/workspace
+      JAVA_TOOL_OPTIONS: "-Ddatasources.local-secrets.url=jdbc:postgresql://${PG_HOST}:${PG_PORT}/${PG_DB_AIRBYTE} -Ddatasources.local-secrets.username=${PG_USER_AIRBYTE} -Ddatasources.local-secrets.password=${PG_PWD_AIRBYTE} -Ddatasources.local-secrets.driver-class-name=org.postgresql.Driver"
+    volumes:
+      - ./services/dts-airbyte/config:/data/airbyte/config
+      - ./services/dts-airbyte/workspace:/data/airbyte/workspace
+    restart: "no"
+    networks:
+      - dts-core
+
+  dts-airbyte-server:
+    platform: linux/arm64
+    image: ${IMAGE_AIRBYTE_SERVER}
+    container_name: dts-airbyte-server
+    depends_on:
+      dts-airbyte-bootloader:
+        condition: service_completed_successfully
+      dts-airbyte-temporal:
+        condition: service_started
+      dts-airbyte-k8s-mock:
+        condition: service_started
+    environment:
+      AIRBYTE_VERSION: ${AIRBYTE_VERSION:-1.8.2}
+      AB_AUTH_SECRET_CREATION_ENABLED: "false"
+      KUBERNETES_MASTER: http://dts-airbyte-k8s-mock:8000
+      KUBERNETES_TRUST_CERTIFICATES: "true"
+      DATABASE_HOST: ${PG_HOST}
+      DATABASE_PORT: ${PG_PORT}
+      DATABASE_DB: ${PG_DB_AIRBYTE}
+      DATABASE_USER: ${PG_USER_AIRBYTE}
+      DATABASE_PASSWORD: ${PG_PWD_AIRBYTE}
+      DATABASE_URL: jdbc:postgresql://${PG_HOST}:${PG_PORT}/${PG_DB_AIRBYTE}
+      DATASOURCES_LOCAL_URL: jdbc:postgresql://${PG_HOST}:${PG_PORT}/${PG_DB_AIRBYTE}
+      DATASOURCES_LOCAL_USERNAME: ${PG_USER_AIRBYTE}
+      DATASOURCES_LOCAL_PASSWORD: ${PG_PWD_AIRBYTE}
+      DATASOURCES_LOCAL_DRIVER_CLASS_NAME: org.postgresql.Driver
+      DATASOURCES_LOCAL_SECRETS_URL: jdbc:postgresql://${PG_HOST}:${PG_PORT}/${PG_DB_AIRBYTE}
+      DATASOURCES_LOCAL_SECRETS_USERNAME: ${PG_USER_AIRBYTE}
+      DATASOURCES_LOCAL_SECRETS_PASSWORD: ${PG_PWD_AIRBYTE}
+      DATASOURCES_LOCAL_SECRETS_DRIVER_CLASS_NAME: org.postgresql.Driver
+      KUBERNETES_NAMESPACE: ${KUBERNETES_NAMESPACE:-default}
+      KUBERNETES_IN_CLUSTER: "false"
+      CONFIG_ROOT: /data/airbyte/config
+      WORKSPACE_ROOT: /data/airbyte/workspace
+      JAVA_TOOL_OPTIONS: "-Ddatasources.local-secrets.url=jdbc:postgresql://${PG_HOST}:${PG_PORT}/${PG_DB_AIRBYTE} -Ddatasources.local-secrets.username=${PG_USER_AIRBYTE} -Ddatasources.local-secrets.password=${PG_PWD_AIRBYTE} -Ddatasources.local-secrets.driver-class-name=org.postgresql.Driver"
+      STORAGE_TYPE: local
+      LOCAL_ROOT: /data/airbyte/local
+      AIRBYTE_CLOUD_STORAGE_BUCKET_LOG: log
+      AIRBYTE_CLOUD_STORAGE_BUCKET_STATE: state
+      AIRBYTE_CLOUD_STORAGE_BUCKET_WORKLOAD_OUTPUT: workload_output
+      AIRBYTE_CLOUD_STORAGE_BUCKET_ACTIVITY_PAYLOAD: activity_payload
+      AIRBYTE_CLOUD_STORAGE_BUCKET_AUDIT_LOGGING: audit_logging
+      AIRBYTE_CLOUD_STORAGE_BUCKET_PROFILER_OUTPUT: profiler_output
+      CONFIGS_DATABASE_MINIMUM_FLYWAY_MIGRATION_VERSION: 0.29.0.001
+      JOBS_DATABASE_MINIMUM_FLYWAY_MIGRATION_VERSION: 0.29.0.001
+      AIRBYTE_CONNECTOR_REGISTRY_ENTERPRISE_ENTERPRISE_SOURCE_STUBS_URL: http://dts-airbyte-server:8001/api/v1/enterprise-source-stubs
+      TEMPORAL_HOST: dts-airbyte-temporal:7233
+    volumes:
+      - ./services/dts-airbyte/config:/data/airbyte/config
+      - ./services/dts-airbyte/workspace:/data/airbyte/workspace
+      - ./services/dts-airbyte/local:/data/airbyte/local
+    ports:
+      - "${AIRBYTE_SERVER_PORT:-18021}:8001"
+    restart: unless-stopped
+    networks:
+      - dts-core
+
+  dts-airbyte-worker:
+    platform: linux/arm64
+    image: ${IMAGE_AIRBYTE_WORKER}
+    container_name: dts-airbyte-worker
+    depends_on:
+      dts-airbyte-server:
+        condition: service_started
+      dts-airbyte-temporal:
+        condition: service_started
+      dts-airbyte-k8s-mock:
+        condition: service_started
+    environment:
+      AIRBYTE_VERSION: ${AIRBYTE_VERSION:-1.8.2}
+      AB_AUTH_SECRET_CREATION_ENABLED: "false"
+      KUBERNETES_MASTER: http://dts-airbyte-k8s-mock:8000
+      KUBERNETES_TRUST_CERTIFICATES: "true"
+      DATABASE_HOST: ${PG_HOST}
+      DATABASE_PORT: ${PG_PORT}
+      DATABASE_DB: ${PG_DB_AIRBYTE}
+      DATABASE_USER: ${PG_USER_AIRBYTE}
+      DATABASE_PASSWORD: ${PG_PWD_AIRBYTE}
+      DATABASE_URL: jdbc:postgresql://${PG_HOST}:${PG_PORT}/${PG_DB_AIRBYTE}
+      DATASOURCES_LOCAL_URL: jdbc:postgresql://${PG_HOST}:${PG_PORT}/${PG_DB_AIRBYTE}
+      DATASOURCES_LOCAL_USERNAME: ${PG_USER_AIRBYTE}
+      DATASOURCES_LOCAL_PASSWORD: ${PG_PWD_AIRBYTE}
+      DATASOURCES_LOCAL_DRIVER_CLASS_NAME: org.postgresql.Driver
+      DATASOURCES_LOCAL_SECRETS_URL: jdbc:postgresql://${PG_HOST}:${PG_PORT}/${PG_DB_AIRBYTE}
+      DATASOURCES_LOCAL_SECRETS_USERNAME: ${PG_USER_AIRBYTE}
+      DATASOURCES_LOCAL_SECRETS_PASSWORD: ${PG_PWD_AIRBYTE}
+      DATASOURCES_LOCAL_SECRETS_DRIVER_CLASS_NAME: org.postgresql.Driver
+      KUBERNETES_NAMESPACE: ${KUBERNETES_NAMESPACE:-default}
+      KUBERNETES_IN_CLUSTER: "false"
+      CONFIG_ROOT: /data/airbyte/config
+      WORKSPACE_ROOT: /data/airbyte/workspace
+      JAVA_TOOL_OPTIONS: "-Ddatasources.local-secrets.url=jdbc:postgresql://${PG_HOST}:${PG_PORT}/${PG_DB_AIRBYTE} -Ddatasources.local-secrets.username=${PG_USER_AIRBYTE} -Ddatasources.local-secrets.password=${PG_PWD_AIRBYTE} -Ddatasources.local-secrets.driver-class-name=org.postgresql.Driver"
+      LOCAL_ROOT: /data/airbyte/local
+      LOCAL_DOCKER_MOUNT: /data/airbyte/local
+      STORAGE_TYPE: local
+      AIRBYTE_CLOUD_STORAGE_BUCKET_LOG: log
+      AIRBYTE_CLOUD_STORAGE_BUCKET_STATE: state
+      AIRBYTE_CLOUD_STORAGE_BUCKET_WORKLOAD_OUTPUT: workload_output
+      AIRBYTE_CLOUD_STORAGE_BUCKET_ACTIVITY_PAYLOAD: activity_payload
+      AIRBYTE_CLOUD_STORAGE_BUCKET_AUDIT_LOGGING: audit_logging
+      AIRBYTE_CLOUD_STORAGE_BUCKET_PROFILER_OUTPUT: profiler_output
+      INTERNAL_API_HOST: dts-airbyte-server
+      INTERNAL_API_PORT: 8001
+      AIRBYTE_INTERNAL_API_BASE_PATH: http://dts-airbyte-server:8001/api/v1
+      AIRBYTE_INTERNAL_API_WORKLOAD_API_HOST: http://dts-airbyte-server:8001
+      AIRBYTE_INTERNAL_API_CONNECTOR_BUILDER_API_HOST: http://dts-airbyte-server:8001
+      AIRBYTE_WORKLOAD_API_BASE_PATH: http://dts-airbyte-server:8001/api/v1/workload/
+      TEMPORAL_HOST: dts-airbyte-temporal:7233
+      WORKER_ENVIRONMENT: DOCKER
+      MICRONAUT_ENVIRONMENTS: control-plane
+    volumes:
+      - ./services/dts-airbyte/config:/data/airbyte/config
+      - ./services/dts-airbyte/workspace:/data/airbyte/workspace
+      - ./services/dts-airbyte/local:/data/airbyte/local
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: unless-stopped
+    networks:
+      - dts-core
+
+  dts-airbyte-webapp:
+    platform: linux/arm64
+    image: ${IMAGE_AIRBYTE_WEBAPP:-airbyte/webapp:1.8.2}
+    container_name: dts-airbyte-webapp
+    depends_on:
+      dts-airbyte-server:
+        condition: service_started
+    environment:
+      AIRBYTE_API_URL: "http://${HOST_GATEWAY_IP:-127.0.0.1}:${AIRBYTE_SERVER_PORT:-18021}"
+      REACT_APP_API_URL: "http://${HOST_GATEWAY_IP:-127.0.0.1}:${AIRBYTE_SERVER_PORT:-18021}"
+      AIRBYTE_SERVER_HOST: dts-airbyte-server
+      AIRBYTE_SERVER_PORT: 8001
+      CONNECTOR_BUILDER_API_HOST: dts-airbyte-server
+      KEYCLOAK_INTERNAL_HOST: dts-keycloak:8080
+    ports:
+      - "${AIRBYTE_WEBAPP_PORT:-18020}:80"
     restart: unless-stopped
     networks:
       - dts-core

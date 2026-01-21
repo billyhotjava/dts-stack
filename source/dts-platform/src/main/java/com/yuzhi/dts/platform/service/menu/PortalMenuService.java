@@ -147,7 +147,6 @@ public class PortalMenuService {
             return null;
         }
         // Platform-side hard removal for legacy portal menus:
-        // - ops: 运维菜单已迁移到 dts-admin 管理端
         // - security.threeAdmins: 三员管理与职责分离已在 dts-admin 管理端实现
         if (isDisabledForPlatform(node)) {
             return null;
@@ -216,9 +215,6 @@ public class PortalMenuService {
         String componentLower = component == null ? "" : component.toLowerCase(java.util.Locale.ROOT);
 
         // Preferred: sectionKey / entryKey in metadata (seeded menus always include these).
-        if (metaLower.contains("\"sectionkey\":\"ops\"")) {
-            return true;
-        }
         if (metaLower.contains("\"sectionkey\":\"security\"") && metaLower.contains("\"entrykey\":\"threeadmins\"")) {
             return true;
         }
@@ -247,9 +243,6 @@ public class PortalMenuService {
         }
 
         // Fallback: name tokens (for old rows with missing metadata)
-        if (nameLower.contains("sys.nav.portal.ops") || nameLower.endsWith(".ops") || nameLower.contains(".ops.")) {
-            return true;
-        }
         if (nameLower.contains("threeadmins") || nameLower.contains("three_admins") || nameLower.contains("three-admins")) {
             return true;
         }

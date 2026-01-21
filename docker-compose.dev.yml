@@ -246,6 +246,8 @@ services:
       #   condition: service_started
     environment:
       SPRING_PROFILES_ACTIVE: ${DTS_PROFILE:-dev}
+      DTS_PLATFORM_CATALOG_MULTI_SOURCE_ENABLED: "true"
+      DTS_PLATFORM_CATALOG_DEFAULT_SOURCE_TYPE: "POSTGRES"
       SPRING_DATASOURCE_URL: jdbc:postgresql://dts-pg:5432/${PG_DB_DTPS:-dts_platform}
       SPRING_DATASOURCE_USERNAME: ${PG_USER_DTPS:-dts_platform}
       SPRING_DATASOURCE_PASSWORD: ${PG_PWD_DTPS:-dts_platform}
@@ -622,6 +624,8 @@ services:
         condition: service_healthy
       dts-elasticsearch:
         condition: service_healthy
+      dts-airflow-webserver:
+        condition: service_healthy
     environment:
       OPENMETADATA_CLUSTER_NAME: dts-openmetadata
       OPENMETADATA_SERVER_PORT: 8585
@@ -638,6 +642,10 @@ services:
       ELASTICSEARCH_HOST: dts-elasticsearch
       ELASTICSEARCH_PORT: 9200
       ELASTICSEARCH_SCHEME: http
+      PIPELINE_SERVICE_CLIENT_ENDPOINT: ${DTS_AIRFLOW_BASE_URL:-http://dts-airflow-webserver:8080}
+      AIRFLOW_USERNAME: ${DTS_AIRFLOW_USERNAME:-airflow}
+      AIRFLOW_PASSWORD: ${DTS_AIRFLOW_PASSWORD:-airflow}
+      SERVER_HOST_API_URL: "http://dts-openmetadata:8585/api"
     ports:
       - "${OPENMETADATA_HTTP_PORT:-8585}:8585"
     labels:
@@ -732,6 +740,9 @@ services:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
       AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
+      PIP_ADDITIONAL_REQUIREMENTS: "${AIRFLOW_PIP_ADDITIONAL_REQUIREMENTS:-openmetadata-managed-apis==${OPENMETADATA_MANAGED_APIS_VERSION:-1.11.5.0} openmetadata-ingestion==${OPENMETADATA_INGESTION_VERSION:-1.11.5.0}}"
+      AIRFLOW__API__AUTH_BACKENDS: "airflow.api.auth.backend.basic_auth"
+      PYTHONPATH: "/opt/airflow/extra:${PYTHONPATH:-}"
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: "postgresql+psycopg2://${PG_USER_AIRFLOW}:${PG_PWD_AIRFLOW_URLENCODED:-${PG_PWD_AIRFLOW}}@${PG_HOST}:${PG_PORT}/${PG_DB_AIRFLOW}"
       AIRFLOW__CORE__SQL_ALCHEMY_CONN: "postgresql+psycopg2://${PG_USER_AIRFLOW}:${PG_PWD_AIRFLOW_URLENCODED:-${PG_PWD_AIRFLOW}}@${PG_HOST}:${PG_PORT}/${PG_DB_AIRFLOW}"
       AIRFLOW__WEBSERVER__ENABLE_PROXY_FIX: "true"
@@ -753,6 +764,7 @@ services:
       - ./services/dts-airflow/dags:/opt/airflow/dags
       - ./services/dts-airflow/logs:/opt/airflow/logs
       - ./services/dts-airflow/plugins:/opt/airflow/plugins
+      - ./services/dts-airflow/extra:/opt/airflow/extra:ro,z
       - ./services/dts-airflow/config:/opt/airflow/config
       - /var/run/docker.sock:/var/run/docker.sock
     restart: "no"
@@ -770,6 +782,9 @@ services:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
       AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
+      PIP_ADDITIONAL_REQUIREMENTS: "${AIRFLOW_PIP_ADDITIONAL_REQUIREMENTS:-openmetadata-managed-apis==${OPENMETADATA_MANAGED_APIS_VERSION:-1.11.5.0} openmetadata-ingestion==${OPENMETADATA_INGESTION_VERSION:-1.11.5.0}}"
+      AIRFLOW__API__AUTH_BACKENDS: "airflow.api.auth.backend.basic_auth"
+      PYTHONPATH: "/opt/airflow/extra:${PYTHONPATH:-}"
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: "postgresql+psycopg2://${PG_USER_AIRFLOW}:${PG_PWD_AIRFLOW_URLENCODED:-${PG_PWD_AIRFLOW}}@${PG_HOST}:${PG_PORT}/${PG_DB_AIRFLOW}"
       AIRFLOW__CORE__SQL_ALCHEMY_CONN: "postgresql+psycopg2://${PG_USER_AIRFLOW}:${PG_PWD_AIRFLOW_URLENCODED:-${PG_PWD_AIRFLOW}}@${PG_HOST}:${PG_PORT}/${PG_DB_AIRFLOW}"
       AIRFLOW__WEBSERVER__ENABLE_PROXY_FIX: "true"
@@ -790,6 +805,7 @@ services:
       - ./services/dts-airflow/dags:/opt/airflow/dags
       - ./services/dts-airflow/logs:/opt/airflow/logs
       - ./services/dts-airflow/plugins:/opt/airflow/plugins
+      - ./services/dts-airflow/extra:/opt/airflow/extra:ro,z
       - ./services/dts-airflow/config:/opt/airflow/config
       - /var/run/docker.sock:/var/run/docker.sock
     labels:
@@ -801,6 +817,12 @@ services:
       - "traefik.http.services.dts-airflow.loadbalancer.server.port=8080"
       - "traefik.http.routers.dts-airflow.middlewares=platform-forward-auth@file,security-headers@file"
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/api/v1/health >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
     networks:
       - dts-core
 
@@ -815,6 +837,9 @@ services:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
       AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
+      PIP_ADDITIONAL_REQUIREMENTS: "${AIRFLOW_PIP_ADDITIONAL_REQUIREMENTS:-openmetadata-managed-apis==${OPENMETADATA_MANAGED_APIS_VERSION:-1.11.5.0} openmetadata-ingestion==${OPENMETADATA_INGESTION_VERSION:-1.11.5.0}}"
+      AIRFLOW__API__AUTH_BACKENDS: "airflow.api.auth.backend.basic_auth"
+      PYTHONPATH: "/opt/airflow/extra:${PYTHONPATH:-}"
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: "postgresql+psycopg2://${PG_USER_AIRFLOW}:${PG_PWD_AIRFLOW_URLENCODED:-${PG_PWD_AIRFLOW}}@${PG_HOST}:${PG_PORT}/${PG_DB_AIRFLOW}"
       AIRFLOW__CORE__SQL_ALCHEMY_CONN: "postgresql+psycopg2://${PG_USER_AIRFLOW}:${PG_PWD_AIRFLOW_URLENCODED:-${PG_PWD_AIRFLOW}}@${PG_HOST}:${PG_PORT}/${PG_DB_AIRFLOW}"
       AIRFLOW_HOME: /opt/airflow
@@ -830,6 +855,7 @@ services:
       - ./services/dts-airflow/dags:/opt/airflow/dags
       - ./services/dts-airflow/logs:/opt/airflow/logs
       - ./services/dts-airflow/plugins:/opt/airflow/plugins
+      - ./services/dts-airflow/extra:/opt/airflow/extra:ro,z
       - ./services/dts-airflow/config:/opt/airflow/config
       - /var/run/docker.sock:/var/run/docker.sock
     restart: unless-stopped
@@ -847,6 +873,9 @@ services:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
       AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
+      PIP_ADDITIONAL_REQUIREMENTS: "${AIRFLOW_PIP_ADDITIONAL_REQUIREMENTS:-openmetadata-managed-apis==${OPENMETADATA_MANAGED_APIS_VERSION:-1.11.5.0} openmetadata-ingestion==${OPENMETADATA_INGESTION_VERSION:-1.11.5.0}}"
+      AIRFLOW__API__AUTH_BACKENDS: "airflow.api.auth.backend.basic_auth"
+      PYTHONPATH: "/opt/airflow/extra:${PYTHONPATH:-}"
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: "postgresql+psycopg2://${PG_USER_AIRFLOW}:${PG_PWD_AIRFLOW_URLENCODED:-${PG_PWD_AIRFLOW}}@${PG_HOST}:${PG_PORT}/${PG_DB_AIRFLOW}"
       AIRFLOW__CORE__SQL_ALCHEMY_CONN: "postgresql+psycopg2://${PG_USER_AIRFLOW}:${PG_PWD_AIRFLOW_URLENCODED:-${PG_PWD_AIRFLOW}}@${PG_HOST}:${PG_PORT}/${PG_DB_AIRFLOW}"
       AIRFLOW_HOME: /opt/airflow
@@ -862,6 +891,7 @@ services:
       - ./services/dts-airflow/dags:/opt/airflow/dags
       - ./services/dts-airflow/logs:/opt/airflow/logs
       - ./services/dts-airflow/plugins:/opt/airflow/plugins
+      - ./services/dts-airflow/extra:/opt/airflow/extra:ro,z
       - ./services/dts-airflow/config:/opt/airflow/config
       - /var/run/docker.sock:/var/run/docker.sock
     restart: unless-stopped

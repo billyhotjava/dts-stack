@@ -4,13 +4,11 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.platform.domain.catalog.CatalogColumnSchema;
 import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
-import com.yuzhi.dts.platform.domain.catalog.CatalogDomain;
 import com.yuzhi.dts.platform.domain.catalog.CatalogSchemaDriftEvent;
 import com.yuzhi.dts.platform.domain.catalog.CatalogTableSchema;
 import com.yuzhi.dts.platform.domain.service.InfraDataSource;
 import com.yuzhi.dts.platform.repository.catalog.CatalogColumnSchemaRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
-import com.yuzhi.dts.platform.repository.catalog.CatalogDomainRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogSchemaDriftEventRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogTableSchemaRepository;
 import com.yuzhi.dts.platform.repository.service.InfraDataSourceRepository;
@@ -55,7 +53,6 @@ public class JdbcCatalogSyncService {
     private final InfraSecretService secretService;
     private final HiveConnectionService hiveConnectionService;
     private final ObjectMapper objectMapper;
-    private final CatalogDomainRepository domainRepository;
     private final CatalogDatasetRepository datasetRepository;
     private final CatalogTableSchemaRepository tableRepository;
     private final CatalogColumnSchemaRepository columnRepository;
@@ -68,7 +65,6 @@ public class JdbcCatalogSyncService {
         InfraSecretService secretService,
         HiveConnectionService hiveConnectionService,
         ObjectMapper objectMapper,
-        CatalogDomainRepository domainRepository,
         CatalogDatasetRepository datasetRepository,
         CatalogTableSchemaRepository tableRepository,
         CatalogColumnSchemaRepository columnRepository,
@@ -80,7 +76,6 @@ public class JdbcCatalogSyncService {
         this.secretService = secretService;
         this.hiveConnectionService = hiveConnectionService;
         this.objectMapper = objectMapper;
-        this.domainRepository = domainRepository;
         this.datasetRepository = datasetRepository;
         this.tableRepository = tableRepository;
         this.columnRepository = columnRepository;
@@ -131,10 +126,7 @@ public class JdbcCatalogSyncService {
             return JdbcSyncResult.failed(source.getId(), "missing-jdbc-url");
         }
 
-        List<String> schemas = resolveSchemas(props);
-        if (schemas.isEmpty()) {
-            schemas = List.of("");
-        }
+        List<String> schemas = resolveSchemas(props, source);
 
         boolean cleanupStale = boolProp(props, "catalogCleanupStale", false);
         String tablePattern = Optional.ofNullable(stringProp(props, "tablePattern")).filter(StringUtils::hasText).orElse("%");
@@ -142,6 +134,7 @@ public class JdbcCatalogSyncService {
         int datasetsCreated = 0;
         int datasetsUpdated = 0;
         int tablesCreated = 0;
+        int tablesDiscovered = 0;
         int columnsImported = 0;
         int datasetsRemoved = 0;
 
@@ -150,15 +143,22 @@ public class JdbcCatalogSyncService {
             String dbProduct = safe(connection.getMetaData().getDatabaseProductName());
             String dbVersion = safe(connection.getMetaData().getDatabaseProductVersion());
             String resolvedCatalog = resolveCatalog(props, connection);
-
-            CatalogDomain sourceDomain = resolveOrCreateSourceDomain(source);
+            if (schemas.isEmpty()) {
+                schemas = discoverSchemas(connection, resolvedCatalog, source);
+                if (LOG.isDebugEnabled()) {
+                    LOG.debug("Discovered schemas for source {}: {}", source.getName(), schemas);
+                }
+            }
+            if (schemas.isEmpty()) {
+                schemas = List.of("");
+            }
 
             for (String schema : schemas) {
                 String normalizedSchema = normalizeSchema(schema, connection);
-                CatalogDomain schemaDomain = resolveOrCreateSchemaDomain(sourceDomain, source, normalizedSchema);
 
                 Set<String> processedTablesLower = new LinkedHashSet<>();
                 List<TableMeta> tables = listTables(connection, resolvedCatalog, normalizedSchema, tablePattern);
+                tablesDiscovered += tables.size();
                 for (TableMeta table : tables) {
                     String tableName = table.tableName();
                     processedTablesLower.add(tableName.toLowerCase(Locale.ROOT));
@@ -176,9 +176,6 @@ public class JdbcCatalogSyncService {
                     dataset.setClassification(defaultIfBlank(dataset.getClassification(), DEFAULT_CLASSIFICATION));
                     dataset.setOwner(defaultIfBlank(dataset.getOwner(), defaultOwner(source)));
                     dataset.setExposedBy(defaultIfBlank(dataset.getExposedBy(), DEFAULT_EXPOSED_BY));
-                    if (dataset.getDomain() == null && schemaDomain != null) {
-                        dataset.setDomain(schemaDomain);
-                    }
 
                     CatalogDataset savedDataset = datasetRepository.save(dataset);
                     if (isNewDataset) {
@@ -283,6 +280,7 @@ public class JdbcCatalogSyncService {
                 dbProduct,
                 dbVersion,
                 schemas,
+                tablesDiscovered,
                 datasetsCreated,
                 datasetsUpdated,
                 tablesCreated,
@@ -312,6 +310,7 @@ public class JdbcCatalogSyncService {
                 null,
                 null,
                 schemas,
+                tablesDiscovered,
                 datasetsCreated,
                 datasetsUpdated,
                 tablesCreated,
@@ -503,54 +502,9 @@ public class JdbcCatalogSyncService {
         }
     }
 
-    private CatalogDomain resolveOrCreateSourceDomain(InfraDataSource source) {
-        String code = "DS:" + source.getId();
-        CatalogDomain existing = findDomainByCode(code).orElse(null);
-        if (existing != null) {
-            return existing;
-        }
-        CatalogDomain domain = new CatalogDomain();
-        domain.setCode(code);
-        domain.setName(defaultIfBlank(source.getName(), code));
-        domain.setOwner(defaultIfBlank(source.getUsername(), DEFAULT_OWNER));
-        domain.setDescription(truncate(source.getDescription()));
-        return domainRepository.save(domain);
-    }
-
-    private CatalogDomain resolveOrCreateSchemaDomain(CatalogDomain sourceDomain, InfraDataSource source, String schema) {
-        if (sourceDomain == null || source == null || source.getId() == null) {
-            return null;
-        }
-        String normalizedSchema = StringUtils.hasText(schema) ? schema.trim() : "default";
-        String code = "DS:" + source.getId() + ":" + normalizedSchema;
-        CatalogDomain existing = findDomainByCode(code).orElse(null);
-        if (existing != null) {
-            return existing;
-        }
-        CatalogDomain domain = new CatalogDomain();
-        domain.setCode(code);
-        domain.setName(normalizedSchema);
-        domain.setOwner(defaultIfBlank(source.getUsername(), DEFAULT_OWNER));
-        domain.setDescription("Schema from " + defaultIfBlank(source.getName(), source.getId().toString()));
-        domain.setParent(sourceDomain);
-        return domainRepository.save(domain);
-    }
-
-    private Optional<CatalogDomain> findDomainByCode(String code) {
-        if (!StringUtils.hasText(code)) {
-            return Optional.empty();
-        }
-        try {
-            return domainRepository.findFirstByCodeIgnoreCase(code.trim());
-        } catch (RuntimeException ex) {
-            // Backward compatibility: older schema might not support code-based lookup.
-            return Optional.empty();
-        }
-    }
-
-    private List<String> resolveSchemas(Map<String, Object> props) {
+    private List<String> resolveSchemas(Map<String, Object> props, InfraDataSource source) {
         if (props == null || props.isEmpty()) {
-            return List.of();
+            return extractSchemasFromJdbcUrl(source != null ? source.getJdbcUrl() : null);
         }
         Object schemas = props.get("schemas");
         if (schemas instanceof List<?> list) {
@@ -567,11 +521,206 @@ public class JdbcCatalogSyncService {
         if (StringUtils.hasText(schema)) {
             return List.of(schema.trim());
         }
+        List<String> fromJdbcProps = extractSchemasFromJdbcProps(props);
+        if (!fromJdbcProps.isEmpty()) {
+            return fromJdbcProps;
+        }
+        List<String> fromJdbcUrl = extractSchemasFromJdbcUrl(source != null ? source.getJdbcUrl() : null);
+        if (!fromJdbcUrl.isEmpty()) {
+            return fromJdbcUrl;
+        }
         String database = stringProp(props, "database");
         if (StringUtils.hasText(database)) {
             return List.of(database.trim());
         }
         return List.of();
+    }
+
+    private List<String> extractSchemasFromJdbcProps(Map<String, Object> props) {
+        if (props == null || props.isEmpty()) {
+            return List.of();
+        }
+        Object jdbcProperties = props.get("jdbcProperties");
+        if (!(jdbcProperties instanceof Map<?, ?> map)) {
+            return List.of();
+        }
+        String schemaValue = lookupSchemaValue(map);
+        return splitSchemas(schemaValue);
+    }
+
+    private String lookupSchemaValue(Map<?, ?> map) {
+        for (String key : List.of("currentSchema", "current_schema", "schema", "searchpath", "search_path")) {
+            Object value = map.get(key);
+            if (value == null) {
+                value = map.get(key.toLowerCase(Locale.ROOT));
+            }
+            if (value != null) {
+                String text = value.toString().trim();
+                if (StringUtils.hasText(text)) {
+                    return text;
+                }
+            }
+        }
+        return null;
+    }
+
+    private List<String> extractSchemasFromJdbcUrl(String jdbcUrl) {
+        if (!StringUtils.hasText(jdbcUrl)) {
+            return List.of();
+        }
+        int idx = jdbcUrl.indexOf('?');
+        if (idx < 0 || idx == jdbcUrl.length() - 1) {
+            return List.of();
+        }
+        String query = jdbcUrl.substring(idx + 1);
+        String[] pairs = query.split("[&;]");
+        for (String pair : pairs) {
+            if (!StringUtils.hasText(pair)) {
+                continue;
+            }
+            int eq = pair.indexOf('=');
+            if (eq <= 0 || eq == pair.length() - 1) {
+                continue;
+            }
+            String key = pair.substring(0, eq).trim().toLowerCase(Locale.ROOT);
+            String value = pair.substring(eq + 1).trim();
+            if (!StringUtils.hasText(value)) {
+                continue;
+            }
+            if (key.equals("currentschema") || key.equals("current_schema") || key.equals("schema") || key.equals("searchpath") || key.equals("search_path")) {
+                return splitSchemas(urlDecode(value));
+            }
+        }
+        return List.of();
+    }
+
+    private List<String> discoverSchemas(Connection connection, String catalog, InfraDataSource source) {
+        if (connection == null) {
+            return List.of();
+        }
+        String product = databaseProduct(connection);
+        DatabaseMetaData meta;
+        try {
+            meta = connection.getMetaData();
+        } catch (SQLException ex) {
+            return List.of();
+        }
+        String currentCatalog = safeCatalog(connection);
+        if (product.contains("mysql") || product.contains("mariadb")) {
+            String database = StringUtils.hasText(currentCatalog) ? currentCatalog : parseDatabaseName(source);
+            if (StringUtils.hasText(database)) {
+                return List.of(database);
+            }
+            return filterSchemas(listCatalogs(meta), product);
+        }
+        List<String> schemas = listSchemas(meta, catalog);
+        if (schemas.isEmpty()) {
+            schemas = listSchemas(meta, null);
+        }
+        if (schemas.isEmpty() && StringUtils.hasText(currentCatalog)) {
+            schemas = List.of(currentCatalog);
+        }
+        return filterSchemas(schemas, product);
+    }
+
+    private List<String> listSchemas(DatabaseMetaData meta, String catalog) {
+        List<String> schemas = new ArrayList<>();
+        try (ResultSet rs = meta.getSchemas(catalog, null)) {
+            while (rs.next()) {
+                String name = safe(rs.getString("TABLE_SCHEM"));
+                if (StringUtils.hasText(name)) {
+                    schemas.add(name.trim());
+                }
+            }
+        } catch (SQLException ignored) {
+            return List.of();
+        }
+        return schemas;
+    }
+
+    private List<String> listCatalogs(DatabaseMetaData meta) {
+        List<String> catalogs = new ArrayList<>();
+        try (ResultSet rs = meta.getCatalogs()) {
+            while (rs.next()) {
+                String name = safe(rs.getString("TABLE_CAT"));
+                if (StringUtils.hasText(name)) {
+                    catalogs.add(name.trim());
+                }
+            }
+        } catch (SQLException ignored) {
+            return List.of();
+        }
+        return catalogs;
+    }
+
+    private List<String> filterSchemas(List<String> schemas, String product) {
+        if (schemas == null || schemas.isEmpty()) {
+            return List.of();
+        }
+        List<String> out = new ArrayList<>();
+        for (String schema : schemas) {
+            if (!StringUtils.hasText(schema)) {
+                continue;
+            }
+            String normalized = schema.trim();
+            String lower = normalized.toLowerCase(Locale.ROOT);
+            if (lower.startsWith("pg_") || lower.startsWith("pg_toast")) {
+                continue;
+            }
+            if (lower.equals("information_schema") || lower.equals("pg_catalog") || lower.equals("mysql") || lower.equals("performance_schema") || lower.equals("sys")) {
+                continue;
+            }
+            if (lower.equals("sys") || lower.equals("system") || lower.equals("sysdba") || lower.equals("public")) {
+                if (product.contains("dm") || product.contains("oracle")) {
+                    continue;
+                }
+            }
+            out.add(normalized);
+        }
+        return out;
+    }
+
+    private String parseDatabaseName(InfraDataSource source) {
+        if (source == null || !StringUtils.hasText(source.getJdbcUrl())) {
+            return null;
+        }
+        String url = source.getJdbcUrl().trim();
+        int slash = url.indexOf("://");
+        if (slash < 0) {
+            return null;
+        }
+        int path = url.indexOf('/', slash + 3);
+        if (path < 0 || path == url.length() - 1) {
+            return null;
+        }
+        String tail = url.substring(path + 1);
+        int query = tail.indexOf('?');
+        String database = query >= 0 ? tail.substring(0, query) : tail;
+        database = database.trim();
+        return StringUtils.hasText(database) ? database : null;
+    }
+
+    private String urlDecode(String value) {
+        try {
+            return java.net.URLDecoder.decode(value, java.nio.charset.StandardCharsets.UTF_8);
+        } catch (Exception ignored) {
+            return value;
+        }
+    }
+
+    private List<String> splitSchemas(String value) {
+        if (!StringUtils.hasText(value)) {
+            return List.of();
+        }
+        String[] parts = value.split("[,;]");
+        List<String> out = new ArrayList<>();
+        for (String part : parts) {
+            String trimmed = part != null ? part.trim() : "";
+            if (StringUtils.hasText(trimmed)) {
+                out.add(trimmed);
+            }
+        }
+        return out;
     }
 
     private String resolveCatalog(Map<String, Object> props, Connection connection) {
@@ -590,13 +739,53 @@ public class JdbcCatalogSyncService {
         if (StringUtils.hasText(schema)) {
             return schema.trim();
         }
-        try {
-            String current = safe(connection.getSchema());
-            if (StringUtils.hasText(current)) {
-                return current;
-            }
-        } catch (Exception ignored) {}
+        String current = nullSafeSchema(connection);
+        if (StringUtils.hasText(current)) {
+            return current;
+        }
+        String product = databaseProduct(connection);
+        if (product.contains("postgres")) {
+            return "public";
+        }
+        String catalog = safeCatalog(connection);
+        if (StringUtils.hasText(catalog)) {
+            return catalog;
+        }
         return "default";
+    }
+
+    private String databaseProduct(Connection connection) {
+        if (connection == null) {
+            return "";
+        }
+        try {
+            String name = safe(connection.getMetaData().getDatabaseProductName());
+            return name != null ? name.trim().toLowerCase(Locale.ROOT) : "";
+        } catch (Exception ignored) {
+            return "";
+        }
+    }
+
+    private String nullSafeSchema(Connection connection) {
+        if (connection == null) {
+            return null;
+        }
+        try {
+            return safe(connection.getSchema());
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private String safeCatalog(Connection connection) {
+        if (connection == null) {
+            return null;
+        }
+        try {
+            return safe(connection.getCatalog());
+        } catch (Exception ignored) {
+            return null;
+        }
     }
 
     private String fetchViewDefinition(Connection connection, String databaseProduct, String catalog, String schema, String view) {
@@ -796,6 +985,7 @@ public class JdbcCatalogSyncService {
         String databaseProduct,
         String databaseVersion,
         List<String> schemas,
+        int tablesDiscovered,
         int datasetsCreated,
         int datasetsUpdated,
         int tablesCreated,
@@ -803,11 +993,11 @@ public class JdbcCatalogSyncService {
         int datasetsRemoved
     ) {
         public static JdbcSyncResult skipped(UUID sourceId, String reason) {
-            return new JdbcSyncResult(sourceId, "SKIPPED", reason, 0L, null, null, List.of(), 0, 0, 0, 0, 0);
+            return new JdbcSyncResult(sourceId, "SKIPPED", reason, 0L, null, null, List.of(), 0, 0, 0, 0, 0, 0);
         }
 
         public static JdbcSyncResult failed(UUID sourceId, String error) {
-            return new JdbcSyncResult(sourceId, "FAILED", error, 0L, null, null, List.of(), 0, 0, 0, 0, 0);
+            return new JdbcSyncResult(sourceId, "FAILED", error, 0L, null, null, List.of(), 0, 0, 0, 0, 0, 0);
         }
     }
 }

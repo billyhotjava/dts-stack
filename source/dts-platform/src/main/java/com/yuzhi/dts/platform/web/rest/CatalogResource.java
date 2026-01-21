@@ -379,7 +379,7 @@ public class CatalogResource {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "数据集不存在或无权访问");
         }
         Map<String, Object> auditPayload = new LinkedHashMap<>();
-        auditPayload.put("summary", "查看技术资产信息");
+        auditPayload.put("summary", "查看元数据信息");
         auditPayload.put("datasetId", id.toString());
         putIfHasText(auditPayload, "activeDept", effDept);
         audit.auditAction("CATALOG_ASSET_VIEW", AuditStage.SUCCESS, id.toString(), auditPayload);
@@ -393,7 +393,7 @@ public class CatalogResource {
     ) {
         OpenMetadataService.OpenMetadataTablePage page = openMetadataService.searchTables(keyword, size);
         Map<String, Object> auditPayload = new LinkedHashMap<>();
-        auditPayload.put("summary", "浏览技术元数据资产");
+        auditPayload.put("summary", "浏览元数据资产");
         if (keyword != null && !keyword.isBlank()) {
             auditPayload.put("keyword", keyword);
         }
@@ -408,7 +408,7 @@ public class CatalogResource {
     ) {
         OpenMetadataService.OpenMetadataResult result = openMetadataService.fetchTableByFqn(fqn);
         Map<String, Object> auditPayload = new LinkedHashMap<>();
-        auditPayload.put("summary", "查看技术元数据详情");
+        auditPayload.put("summary", "查看元数据详情");
         auditPayload.put("fqn", fqn);
         audit.auditAction("CATALOG_ASSET_VIEW", AuditStage.SUCCESS, "tech-metadata-detail", auditPayload);
         return ApiResponses.ok(result);
@@ -513,7 +513,7 @@ public class CatalogResource {
             payload.put(dataset.getId().toString(), openMetadataService.summarize(result));
         }
         Map<String, Object> auditPayload = new LinkedHashMap<>();
-        auditPayload.put("summary", "批量查询技术资产信息");
+        auditPayload.put("summary", "批量查询元数据信息");
         auditPayload.put("count", payload.size());
         putIfHasText(auditPayload, "activeDept", effDept);
         audit.auditAction("CATALOG_ASSET_VIEW", AuditStage.SUCCESS, "batch-openmetadata", auditPayload);

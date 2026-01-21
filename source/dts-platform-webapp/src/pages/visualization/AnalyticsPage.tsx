@@ -1,29 +1,41 @@
-import { Icon } from "@/components/icon";
+import { EmptyState } from "@/components/empty-state";
+import { PageHeader } from "@/components/page-header";
 import { Button } from "@/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/ui/card";
 
-export default function AnalyticsPage() {
-  const openAnalytics = () => {
-    window.open("/analytics", "_blank", "noopener,noreferrer");
-  };
+export default function Page() {
+	return (
+		<div className="space-y-6">
+			<PageHeader
+				title="BI 可视化 / 自助分析"
+				description="拖拽式分析，支持维度筛选与多指标对比。"
+				actions={
+					<div className="flex items-center gap-2">
+						<Button variant="default">新建分析</Button>
+						<Button variant="outline">保存为看板</Button>
+					</div>
+				}
+			/>
 
-  return (
-    <div className="space-y-4">
-      <Card>
-        <CardHeader className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <CardTitle className="text-base">分析</CardTitle>
-          <Button onClick={openAnalytics}>
-            <Icon icon="solar:chart-2-bold-duotone" /> 打开
-          </Button>
-        </CardHeader>
-        <CardContent className="text-sm text-muted-foreground space-y-2">
-          <div>将以新窗口打开 Analytics（通过平台 SSO 登录）。</div>
-          <div className="text-xs">
-            如需将链接纳入门户菜单管理，可把菜单地址配置为 <code>/visualization/analytics</code>。
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  );
+			<Card>
+				<CardHeader>
+					<CardTitle>分析主题</CardTitle>
+					<CardDescription>按业务场景组织的分析模板</CardDescription>
+				</CardHeader>
+				<CardContent>
+					<EmptyState title="暂无分析主题" description="从数据集管理创建语义模型后可生成主题。" />
+				</CardContent>
+			</Card>
+
+			<Card>
+				<CardHeader>
+					<CardTitle>我的分析</CardTitle>
+					<CardDescription>草稿与已发布分析</CardDescription>
+				</CardHeader>
+				<CardContent>
+					<EmptyState title="暂无分析记录" description="创建分析后将在此处展示。" />
+				</CardContent>
+			</Card>
+		</div>
+	);
 }
-

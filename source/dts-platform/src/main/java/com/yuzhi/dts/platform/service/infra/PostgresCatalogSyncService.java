@@ -3,14 +3,12 @@ package com.yuzhi.dts.platform.service.infra;
 import com.yuzhi.dts.platform.config.CatalogFeatureProperties;
 import com.yuzhi.dts.platform.domain.catalog.CatalogColumnSchema;
 import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
-import com.yuzhi.dts.platform.domain.catalog.CatalogDomain;
 import com.yuzhi.dts.platform.domain.catalog.CatalogSchemaDriftEvent;
 import com.yuzhi.dts.platform.domain.catalog.CatalogTableSchema;
 import com.yuzhi.dts.platform.repository.catalog.CatalogColumnSchemaRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogSchemaDriftEventRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogTableSchemaRepository;
-import com.yuzhi.dts.platform.repository.catalog.CatalogDomainRepository;
 import com.yuzhi.dts.platform.repository.service.InfraDataSourceRepository;
 import com.yuzhi.dts.platform.domain.service.InfraDataSource;
 import com.yuzhi.dts.platform.service.catalog.CatalogAutoLineageService;
@@ -51,7 +49,6 @@ public class PostgresCatalogSyncService {
     private final CatalogColumnSchemaRepository columnRepository;
     private final CatalogFeatureProperties catalogFeatureProperties;
     private final DataSource dataSource;
-    private final CatalogDomainRepository domainRepository;
     private final CatalogAutoLineageService autoLineageService;
     private final CatalogSchemaDriftEventRepository schemaDriftEventRepository;
     private final SchemaDriftDetector schemaDriftDetector;
@@ -63,7 +60,6 @@ public class PostgresCatalogSyncService {
         CatalogColumnSchemaRepository columnRepository,
         CatalogFeatureProperties catalogFeatureProperties,
         DataSource dataSource,
-        CatalogDomainRepository domainRepository,
         CatalogAutoLineageService autoLineageService,
         CatalogSchemaDriftEventRepository schemaDriftEventRepository,
         SchemaDriftDetector schemaDriftDetector
@@ -74,7 +70,6 @@ public class PostgresCatalogSyncService {
         this.columnRepository = columnRepository;
         this.catalogFeatureProperties = catalogFeatureProperties;
         this.dataSource = dataSource;
-        this.domainRepository = domainRepository;
         this.autoLineageService = autoLineageService;
         this.schemaDriftEventRepository = schemaDriftEventRepository;
         this.schemaDriftDetector = schemaDriftDetector;
@@ -132,8 +127,6 @@ public class PostgresCatalogSyncService {
         int columnsImported = 0;
         List<String> processedTables = new ArrayList<>(metadata.size());
 
-        CatalogDomain databaseDomain = resolveOrCreateDomain(schema);
-
         for (Map.Entry<String, TableMeta> entry : metadata.entrySet()) {
             String tableName = entry.getKey();
             TableMeta tableMeta = entry.getValue();
@@ -153,9 +146,6 @@ public class PostgresCatalogSyncService {
             dataset.setClassification(defaultIfBlank(dataset.getClassification(), DEFAULT_CLASSIFICATION));
             dataset.setOwner(defaultIfBlank(dataset.getOwner(), DEFAULT_OWNER));
             dataset.setExposedBy(defaultIfBlank(dataset.getExposedBy(), DEFAULT_EXPOSED_BY));
-            if (databaseDomain != null && dataset.getDomain() == null) {
-                dataset.setDomain(databaseDomain);
-            }
 
             dataset = datasetRepository.save(dataset);
             if (isNewDataset) {
@@ -237,11 +227,6 @@ public class PostgresCatalogSyncService {
                     recordSchemaDrift(runId, TYPE_POSTGRES, dataset, schema, tableName, drift);
                 }
             }
-            if (databaseDomain != null && dataset.getDomain() == null) {
-                dataset.setDomain(databaseDomain);
-                datasetRepository.save(dataset);
-            }
-
             if (tableMeta != null && tableMeta.isView() && org.springframework.util.StringUtils.hasText(tableMeta.viewDefinition())) {
                 try {
                     autoLineageService.syncAutoViewLineage(dataset, tableMeta.viewDefinition());
@@ -430,22 +415,6 @@ public class PostgresCatalogSyncService {
     }
 
     private record ColumnMeta(String name, String dataType, boolean nullable, String comment) {}
-
-    private CatalogDomain resolveOrCreateDomain(String schema) {
-        try {
-            return domainRepository
-                .findFirstByNameIgnoreCase(schema)
-                .orElseGet(() -> {
-                    CatalogDomain domain = new CatalogDomain();
-                    domain.setName(schema);
-                    domain.setDescription("Auto-created domain for schema " + schema);
-                    return domainRepository.save(domain);
-                });
-        } catch (Exception ex) {
-            LOG.warn("Failed to resolve/create domain for schema {}: {}", schema, ex.getMessage());
-            return null;
-        }
-    }
 
     private record LegacyColumnValues(String comment, String tags, String sensitiveTags) {}
 }

@@ -279,6 +279,9 @@ prepare_data_dirs(){
     "services/dts-analytics/data"
     "services/dts-analytics/plugins"
     "services/dts-openmetadata/ingestion"
+    "services/dts-airflow/logs"
+    "services/dts-airflow/logs/scheduler"
+    "services/dts-airflow/extra"
   )
   if [[ "${ENABLE_MINIO:-false}" == "true" ]]; then
     data_dirs+=("services/dts-minio/data")
@@ -289,6 +292,16 @@ prepare_data_dirs(){
   done
   if [[ "${ENABLE_MINIO:-false}" == "true" ]]; then
     chmod -R 777 services/dts-minio/data || true
+  fi
+  if [[ -d "services/dts-airflow/logs" ]]; then
+    chmod -R 777 services/dts-airflow/logs || true
+    if command -v getenforce >/dev/null 2>&1; then
+      if [[ "$(getenforce 2>/dev/null || true)" != "Disabled" ]]; then
+        if command -v chcon >/dev/null 2>&1; then
+          chcon -Rt svirt_sandbox_file_t services/dts-airflow/logs 2>/dev/null || true
+        fi
+      fi
+    fi
   fi
   # Ensure ingestion scripts are readable inside containers (SELinux-safe when possible).
   if [[ -d "services/dts-openmetadata/ingestion" ]]; then
@@ -301,6 +314,55 @@ prepare_data_dirs(){
       fi
     fi
   fi
+}
+
+ensure_airflow_openmetadata_plugin() {
+  local plugin_dir="services/dts-airflow/extra/openmetadata_managed_apis"
+  local metadata_dir="services/dts-airflow/extra/metadata"
+  if [[ -d "${plugin_dir}" && -d "${metadata_dir}" ]]; then
+    return
+  fi
+  if ! command -v docker >/dev/null 2>&1; then
+    return
+  fi
+  local img="${IMAGE_OPENMETADATA_INGESTION:-openmetadata/ingestion:1.11.5}"
+  local cid=""
+  cid="$(docker create "${img}" 2>/dev/null || true)"
+  if [[ -z "${cid}" ]]; then
+    echo "[init.sh] WARNING: cannot create container from ${img} to copy OpenMetadata Airflow plugin." >&2
+    return
+  fi
+  mkdir -p "services/dts-airflow/plugins"
+  local ok_plugin="false"
+  local ok_metadata="false"
+  if [[ ! -d "${plugin_dir}" ]]; then
+    if docker cp "${cid}:/home/airflow/.local/lib/python3.10/site-packages/openmetadata_managed_apis" \
+      "${plugin_dir}" 2>/dev/null; then
+      ok_plugin="true"
+    fi
+  else
+    ok_plugin="true"
+  fi
+  if [[ ! -d "${metadata_dir}" ]]; then
+    if docker cp "${cid}:/home/airflow/.local/lib/python3.10/site-packages/metadata" \
+      "${metadata_dir}" 2>/dev/null; then
+      ok_metadata="true"
+    fi
+  else
+    ok_metadata="true"
+  fi
+  if [[ -d "services/dts-airflow/plugins/metadata" ]]; then
+    rm -rf "services/dts-airflow/plugins/metadata"
+  fi
+  if [[ -d "services/dts-airflow/plugins/openmetadata_managed_apis" ]]; then
+    rm -rf "services/dts-airflow/plugins/openmetadata_managed_apis"
+  fi
+  if [[ "${ok_plugin}" == "true" && "${ok_metadata}" == "true" ]]; then
+    echo "[init.sh] Copied OpenMetadata Airflow plugin dependencies from ${img}"
+  else
+    echo "[init.sh] WARNING: failed to copy OpenMetadata Airflow plugin dependencies from ${img}" >&2
+  fi
+  docker rm -f "${cid}" >/dev/null 2>&1 || true
 }
 
 # Ensure embedded Postgres has all required roles/databases
@@ -565,11 +627,27 @@ generate_env_base(){
   : "${DTS_AIRFLOW_PASSWORD:=${AIRFLOW_ADMIN_PASSWORD}}"
   : "${DTS_AIRFLOW_DAG_ID:=dbt_load}"
 
+  # ---------- Airbyte ----------
+  : "${DTS_AIRBYTE_BASE_URL:=http://dts-airbyte-server:8001}"
+  : "${DTS_AIRBYTE_WORKSPACE_ID:=}"
+  : "${DTS_AIRBYTE_DEFAULT_DESTINATION_ID:=}"
+  : "${AIRBYTE_SERVER_PORT:=18021}"
+  : "${AIRBYTE_WEBAPP_PORT:=18020}"
+  : "${AIRBYTE_VERSION:=1.8.2}"
+
   # Airflow
   : "${PG_DB_AIRFLOW:=airflow}"
   : "${PG_USER_AIRFLOW:=airflow}"
   : "${PG_PWD_AIRFLOW:=${SECRET}}"
   : "${PG_PWD_AIRFLOW_URLENCODED:=$(urlencode "${PG_PWD_AIRFLOW}")}"
+
+  # ---------- Airbyte / Temporal ----------
+  : "${PG_DB_AIRBYTE:=airbyte}"
+  : "${PG_USER_AIRBYTE:=airbyte}"
+  : "${PG_PWD_AIRBYTE:=${SECRET}}"
+  : "${PG_DB_TEMPORAL:=airbyte_temporal}"
+  : "${PG_USER_TEMPORAL:=airbyte_temporal}"
+  : "${PG_PWD_TEMPORAL:=${SECRET}}"
 
   # ---------- Ranger（Admin） ----------
   : "${PG_DB_RANGER:=dts_ranger}"
@@ -819,6 +897,14 @@ PG_USER_AIRFLOW=${PG_USER_AIRFLOW}
 PG_PWD_AIRFLOW=${PG_PWD_AIRFLOW}
 PG_PWD_AIRFLOW_URLENCODED=${PG_PWD_AIRFLOW_URLENCODED}
 
+# --- Airbyte / Temporal triplet ---
+PG_DB_AIRBYTE=${PG_DB_AIRBYTE}
+PG_USER_AIRBYTE=${PG_USER_AIRBYTE}
+PG_PWD_AIRBYTE=${PG_PWD_AIRBYTE}
+PG_DB_TEMPORAL=${PG_DB_TEMPORAL}
+PG_USER_TEMPORAL=${PG_USER_TEMPORAL}
+PG_PWD_TEMPORAL=${PG_PWD_TEMPORAL}
+
 
 # ====== OIDC Clients ======
 OAUTH2_ADMIN_CLIENT_ID=${OAUTH2_ADMIN_CLIENT_ID}
@@ -892,6 +978,12 @@ DTS_AIRFLOW_BASE_URL=${DTS_AIRFLOW_BASE_URL}
 DTS_AIRFLOW_USERNAME=${DTS_AIRFLOW_USERNAME}
 DTS_AIRFLOW_PASSWORD=${DTS_AIRFLOW_PASSWORD}
 DTS_AIRFLOW_DAG_ID=${DTS_AIRFLOW_DAG_ID}
+DTS_AIRBYTE_BASE_URL=${DTS_AIRBYTE_BASE_URL}
+DTS_AIRBYTE_WORKSPACE_ID=${DTS_AIRBYTE_WORKSPACE_ID}
+DTS_AIRBYTE_DEFAULT_DESTINATION_ID=${DTS_AIRBYTE_DEFAULT_DESTINATION_ID}
+AIRBYTE_SERVER_PORT=${AIRBYTE_SERVER_PORT}
+AIRBYTE_WEBAPP_PORT=${AIRBYTE_WEBAPP_PORT}
+AIRBYTE_VERSION=${AIRBYTE_VERSION}
 
 # ====== Airflow ======
 AIRFLOW_WEBSERVER_PORT=${AIRFLOW_WEBSERVER_PORT}
@@ -1111,6 +1203,17 @@ if [[ "${RESET_ENV}" == "true" ]]; then
   rm -f .env
   generate_env_base
   load_img_versions
+  if [[ "${LEGACY_STACK}" == "true" ]]; then
+    if [[ -z "${IMAGE_DBT:-}" || "${IMAGE_DBT}" == "ghcr.io/dbt-labs/dbt-core:1.11.2" ]]; then
+      ensure_env IMAGE_DBT "dbt-core:1.11.2"
+      echo "[init.sh] Using local dbt-core image for legacy stack: dbt-core:1.11.2"
+    fi
+  else
+    if [[ -z "${IMAGE_DBT:-}" || "${IMAGE_DBT}" == "dbt-core:1.11.2" ]]; then
+      ensure_env IMAGE_DBT "ghcr.io/dbt-labs/dbt-core:1.11.2"
+      echo "[init.sh] Using ghcr dbt-core image for non-legacy stack: ghcr.io/dbt-labs/dbt-core:1.11.2"
+    fi
+  fi
 fi
 
 if [[ "${RESET_PG_DATA}" == "true" ]]; then
@@ -1118,6 +1221,8 @@ if [[ "${RESET_PG_DATA}" == "true" ]]; then
   reset_pg_data_dir
 fi
 prepare_data_dirs
+
+ensure_airflow_openmetadata_plugin
 
 warn_if_ima_appraise
 
@@ -1226,6 +1331,31 @@ if [[ -n "${COMPOSE_FILE}" ]]; then
   compose_run+=(-f "${COMPOSE_FILE}")
 fi
 
+wait_for_service_healthy() {
+  local svc="$1"
+  local max_wait="${2:-60}"
+  local waited=0
+  local cid=""
+  cid="$("${compose_run[@]}" ps -q "${svc}" 2>/dev/null | head -n 1 || true)"
+  if [[ -z "${cid}" ]]; then
+    return 1
+  fi
+  while (( waited < max_wait )); do
+    local status
+    status="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "${cid}" 2>/dev/null || echo none)"
+    if [[ "${status}" == "healthy" ]]; then
+      return 0
+    fi
+    if [[ "${status}" == "none" ]]; then
+      # No healthcheck defined; treat as ready.
+      return 0
+    fi
+    sleep 2
+    waited=$(( waited + 2 ))
+  done
+  return 1
+}
+
 if [[ "${PG_MODE}" == "embedded" ]]; then
   # 先启动 Postgres，确保用户/库就绪，再启动其余服务，避免依赖服务初始化竞态
   echo "[init.sh] Bringing up Postgres first to prepare roles/databases ..."
@@ -1243,10 +1373,18 @@ if [[ "${PG_MODE}" == "embedded" ]]; then
   done
   # 收敛角色/数据库（幂等）
   ensure_pg_triplets
-  # Run OpenMetadata migrations before the rest of the stack (idempotent).
+  # Bring up Airflow first, then OpenMetadata, then the rest to avoid API detection races.
+  echo "[init.sh] Bringing up Airflow services ..."
+  "${compose_run[@]}" up -d dts-airflow-init dts-airflow-webserver dts-airflow-scheduler dts-airflow-triggerer >/dev/null 2>&1 || true
+  if ! wait_for_service_healthy dts-airflow-webserver 90; then
+    echo "[init.sh] WARNING: dts-airflow-webserver not healthy yet; continuing." >&2
+  fi
+  # Run OpenMetadata migrations before starting OpenMetadata server (idempotent).
   echo "[init.sh] Running OpenMetadata migrations (dts-openmetadata-init) ..."
   "${compose_run[@]}" up -d dts-openmetadata-init >/dev/null 2>&1 || \
     echo "[init.sh] WARNING: dts-openmetadata-init did not start; continuing." >&2
+  echo "[init.sh] Bringing up OpenMetadata ..."
+  "${compose_run[@]}" up -d dts-openmetadata >/dev/null 2>&1 || true
   echo "[init.sh] Bringing up the remaining services ..."
   "${compose_run[@]}" up -d
   if [[ "${FORCE_PG_ENSURE}" == "true" ]]; then
@@ -1255,9 +1393,15 @@ if [[ "${PG_MODE}" == "embedded" ]]; then
   fi
 else
   # 外部 PG：直接启动全部服务
+  echo "[init.sh] Bringing up Airflow services ..."
+  "${compose_run[@]}" up -d dts-airflow-init dts-airflow-webserver dts-airflow-scheduler dts-airflow-triggerer >/dev/null 2>&1 || true
+  if ! wait_for_service_healthy dts-airflow-webserver 90; then
+    echo "[init.sh] WARNING: dts-airflow-webserver not healthy yet; continuing." >&2
+  fi
   echo "[init.sh] Running OpenMetadata migrations (dts-openmetadata-init) ..."
   "${compose_run[@]}" up -d dts-openmetadata-init >/dev/null 2>&1 || \
     echo "[init.sh] WARNING: dts-openmetadata-init did not start; continuing." >&2
+  "${compose_run[@]}" up -d dts-openmetadata >/dev/null 2>&1 || true
   "${compose_run[@]}" up -d
 fi
 

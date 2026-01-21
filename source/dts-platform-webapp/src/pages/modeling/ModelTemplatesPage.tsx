@@ -1,791 +1,438 @@
-import { Modal, Select as AntSelect, Spin, Table as AntTable, Tabs } from "antd";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
-	createModelTemplate,
-	deleteModelTemplate,
-	listDatasets,
-	listMetadataStandards,
-	listModelTemplates,
-	listTablesByDataset,
-	updateModelTemplate,
-	validateModelTemplate,
+	Alert,
+	Button,
+	Card,
+	Form,
+	Input,
+	Modal,
+	Select,
+	Space,
+	Table,
+	Tag,
+	Typography,
+} from "antd";
+import type { ColumnsType } from "antd/es/table";
+import { EmptyState } from "@/components/empty-state";
+import { PageHeader } from "@/components/page-header";
+import {
+	archiveModelingPlan,
+	createModelingPlan,
+	listModelingPlans,
+	publishModelingPlan,
+	restoreModelingPlan,
+	updateModelingPlan,
 } from "@/api/platformApi";
-import { Badge } from "@/ui/badge";
-import { Button } from "@/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/ui/dialog";
-import { Input } from "@/ui/input";
-import { Label } from "@/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/ui/select";
-import { Textarea } from "@/ui/textarea";
-import { formatDateTime } from "@/utils/format";
 
-type TemplateRow = {
-	id: string;
-	name: string;
-	layer?: string | null;
-	status?: string | null;
-	version?: string | null;
-	versionNotes?: string | null;
-	namingRule?: string | null;
-	fieldsTemplate?: string | null;
-	metadataStandardIds?: string | null;
-	reviewChecklist?: string | null;
-	lastModifiedDate?: string | null;
+const { Text } = Typography;
+
+const formatDateTime = (value?: string) => {
+	if (!value) return "-";
+	try {
+		return new Date(value).toLocaleString();
+	} catch {
+		return value;
+	}
 };
 
-type FormState = {
+const normalizeText = (value?: string) => String(value || "").trim();
+const normalizeUpper = (value?: string) => normalizeText(value).toUpperCase();
+
+type ProjectSpace = {
 	id?: string;
-	name: string;
-	layer: string;
-	status: "ACTIVE" | "ARCHIVED";
-	version: string;
-	versionNotes: string;
-	namingRule: string;
-	fieldsTemplate: string;
-	metadataStandardIds: string[];
-	reviewChecklist: string;
+	name?: string;
+	domain?: string;
+	scope?: string;
+	status?: string;
+	version?: string;
+	versionNotes?: string;
+	owner?: string;
+	ownerDept?: string;
+	tags?: string;
+	content?: string;
+	createdDate?: string;
+	lastModifiedDate?: string;
 };
 
-const DEFAULT_FORM: FormState = {
-	name: "",
-	layer: "DWD",
-	status: "ACTIVE",
-	version: "v1",
-	versionNotes: "",
-	namingRule: "",
-	fieldsTemplate: "",
-	metadataStandardIds: [],
-	reviewChecklist: "",
+const STATUS_OPTIONS = ["DRAFT", "PUBLISHED", "ARCHIVED"];
+
+const statusColor = (status?: string) => {
+	const key = normalizeUpper(status);
+	if (key === "PUBLISHED") return "green";
+	if (key === "ARCHIVED") return "default";
+	return "gold";
 };
 
-type DatasetOption = { id: string; name: string; ownerDept?: string | null; classification?: string | null };
-type TableOption = { id: string; name: string };
-type MetadataStandardOption = { id: string; fieldNameCn: string; fieldNameEn: string; dataType?: string; nullable?: boolean; description?: string };
-
-export default function ModelTemplatesPage() {
+export default function Page() {
 	const [loading, setLoading] = useState(false);
-	const [items, setItems] = useState<TemplateRow[]>([]);
+	const [spaces, setSpaces] = useState<ProjectSpace[]>([]);
 	const [keyword, setKeyword] = useState("");
-
-	const [dialogOpen, setDialogOpen] = useState(false);
+	const [status, setStatus] = useState<string | null>(null);
+	const [editOpen, setEditOpen] = useState(false);
+	const [editMode, setEditMode] = useState<"create" | "edit">("create");
+	const [editing, setEditing] = useState<ProjectSpace | null>(null);
 	const [saving, setSaving] = useState(false);
-	const [form, setForm] = useState<FormState>(DEFAULT_FORM);
+	const [publishOpen, setPublishOpen] = useState(false);
+	const [publishing, setPublishing] = useState(false);
+	const [publishTarget, setPublishTarget] = useState<ProjectSpace | null>(null);
+	const [form] = Form.useForm();
+	const [publishForm] = Form.useForm();
 
-	const [detailOpen, setDetailOpen] = useState(false);
-	const [activeTemplate, setActiveTemplate] = useState<TemplateRow | null>(null);
-
-	const [validateOpen, setValidateOpen] = useState(false);
-	const [validateLoading, setValidateLoading] = useState(false);
-	const [validateResult, setValidateResult] = useState<any | null>(null);
-
-	const [datasetKeyword, setDatasetKeyword] = useState("");
-	const [datasetsLoading, setDatasetsLoading] = useState(false);
-	const [datasets, setDatasets] = useState<DatasetOption[]>([]);
-	const [datasetId, setDatasetId] = useState<string>("");
-
-	const [tableKeyword, setTableKeyword] = useState("");
-	const [tablesLoading, setTablesLoading] = useState(false);
-	const [tables, setTables] = useState<TableOption[]>([]);
-	const [tableId, setTableId] = useState<string>("");
-
-	const [metadataLoading, setMetadataLoading] = useState(false);
-	const [metadataOptions, setMetadataOptions] = useState<MetadataStandardOption[]>([]);
-
-	const fetchList = useCallback(async () => {
+	const loadSpaces = useCallback(async () => {
 		setLoading(true);
 		try {
-			const list: any[] = await listModelTemplates();
-			setItems(
-				(Array.isArray(list) ? list : []).map((t: any) => ({
-					id: String(t?.id ?? ""),
-					name: String(t?.name ?? ""),
-					layer: t?.layer ?? null,
-					status: t?.status ?? null,
-					version: t?.version ?? null,
-					versionNotes: t?.versionNotes ?? t?.version_notes ?? null,
-					namingRule: t?.namingRule ?? t?.naming_rule ?? null,
-					fieldsTemplate: t?.fieldsTemplate ?? t?.fields_template ?? null,
-					metadataStandardIds: t?.metadataStandardIds ?? t?.metadata_standard_ids ?? null,
-					reviewChecklist: t?.reviewChecklist ?? t?.review_checklist ?? null,
-					lastModifiedDate: t?.lastModifiedDate ?? t?.last_modified_date ?? null,
-				})),
-			);
-		} catch (e: any) {
-			toast.error(e?.message || "加载模板失败");
+			const resp = (await listModelingPlans({
+				keyword: normalizeText(keyword) || undefined,
+				status: status || undefined,
+			})) as ProjectSpace[];
+			setSpaces(Array.isArray(resp) ? resp : []);
+		} catch (err: any) {
+			toast.error(err?.message || "加载项目空间失败");
 		} finally {
 			setLoading(false);
 		}
-	}, []);
+	}, [keyword, status]);
 
 	useEffect(() => {
-		void fetchList();
-	}, [fetchList]);
+		void loadSpaces();
+	}, [loadSpaces]);
 
-	const filtered = useMemo(() => {
-		const k = keyword.trim().toLowerCase();
-		if (!k) return items;
-		return items.filter(
-			(it) =>
-				(it.name || "").toLowerCase().includes(k) ||
-				String(it.layer || "").toLowerCase().includes(k) ||
-				String(it.status || "").toLowerCase().includes(k),
-		);
-	}, [items, keyword]);
+	const stats = useMemo(() => {
+		const total = spaces.length;
+		const draft = spaces.filter((row) => normalizeUpper(row.status) === "DRAFT").length;
+		const published = spaces.filter((row) => normalizeUpper(row.status) === "PUBLISHED").length;
+		const archived = spaces.filter((row) => normalizeUpper(row.status) === "ARCHIVED").length;
+		return { total, draft, published, archived };
+	}, [spaces]);
 
 	const openCreate = () => {
-		setForm(DEFAULT_FORM);
-		setDialogOpen(true);
+		setEditMode("create");
+		setEditing(null);
+		form.resetFields();
+		form.setFieldsValue({ status: "DRAFT", version: "v1" });
+		setEditOpen(true);
 	};
 
-	const parseMetadataIds = (raw?: string | null): string[] => {
-		if (!raw) return [];
-		const text = String(raw).trim();
-		if (!text) return [];
-		try {
-			const parsed = JSON.parse(text);
-			if (Array.isArray(parsed)) {
-				return parsed.map((v) => String(v)).filter(Boolean);
-			}
-		} catch {
-			// ignore
-		}
-		return text
-			.split(",")
-			.map((v) => v.trim())
-			.filter(Boolean);
-	};
-
-	const openEdit = (row: TemplateRow) => {
-		setForm({
-			id: row.id,
-			name: row.name || "",
-			layer: String(row.layer || "DWD"),
-			status: String(row.status || "ACTIVE").toUpperCase() === "ARCHIVED" ? "ARCHIVED" : "ACTIVE",
-			version: String(row.version || "v1"),
-			versionNotes: String(row.versionNotes || ""),
-			namingRule: String(row.namingRule || ""),
-			fieldsTemplate: String(row.fieldsTemplate || ""),
-			metadataStandardIds: parseMetadataIds(row.metadataStandardIds),
-			reviewChecklist: String(row.reviewChecklist || ""),
+	const openEdit = (row: ProjectSpace) => {
+		setEditMode("edit");
+		setEditing(row);
+		form.resetFields();
+		form.setFieldsValue({
+			name: row.name,
+			domain: row.domain,
+			scope: row.scope,
+			status: row.status,
+			version: row.version,
+			versionNotes: row.versionNotes,
+			owner: row.owner,
+			ownerDept: row.ownerDept,
+			tags: row.tags,
+			content: row.content,
 		});
-		setDialogOpen(true);
+		setEditOpen(true);
 	};
 
-	const openDetail = (row: TemplateRow) => {
-		setActiveTemplate(row);
-		setDetailOpen(true);
-	};
-
-	const downloadText = (filename: string, content: string, type = "text/plain;charset=utf-8") => {
-		const blob = new Blob([content], { type });
-		const url = URL.createObjectURL(blob);
-		const a = document.createElement("a");
-		a.href = url;
-		a.download = filename;
-		document.body.appendChild(a);
-		a.click();
-		a.remove();
-		URL.revokeObjectURL(url);
-	};
-
-	const exportMarkdown = (row: TemplateRow) => {
-		const lines: string[] = [];
-		lines.push(`# 模型模板：${row.name || "-"}`);
-		lines.push("");
-		lines.push(`- 分层：${row.layer || "-"}`);
-		lines.push(`- 状态：${String(row.status || "").toUpperCase() || "-"}`);
-		lines.push(`- 版本：${row.version || "-"}`);
-		lines.push(`- 关联元数据标准：${row.metadataStandardIds || "-"}`);
-		lines.push("");
-		lines.push("## 命名规则");
-		lines.push("```");
-		lines.push(String(row.namingRule || "").trim() || "(未配置)");
-		lines.push("```");
-		lines.push("");
-		lines.push("## 字段模板");
-		lines.push("```");
-		lines.push(String(row.fieldsTemplate || "").trim() || "(未配置)");
-		lines.push("```");
-		lines.push("");
-		lines.push("## 评审清单");
-		lines.push("```");
-		lines.push(String(row.reviewChecklist || "").trim() || "(未配置)");
-		lines.push("```");
-		lines.push("");
-		lines.push("## 使用建议");
-		lines.push("- 建议 AI/开发生成 DDL 时在字段注释写入标准编码：`STD:CODE`（例如 `STD:DS_001`）");
-		lines.push("- 在“元数据采集与维护”页可用“自动匹配/校验映射”对字段与数据标准做闭环");
-		downloadText(`model-template-${row.layer || "LAYER"}-${row.name || row.id}.md`, lines.join("\n"), "text/markdown;charset=utf-8");
-	};
-
-	const loadDatasets = useCallback(async () => {
-		setDatasetsLoading(true);
-		try {
-			const resp = (await listDatasets({ page: 0, size: 200, keyword: datasetKeyword.trim() || undefined })) as any;
-			const content = Array.isArray(resp?.content) ? resp.content : [];
-			setDatasets(
-				content.map((d: any) => ({
-					id: String(d.id),
-					name: String(d.name || d.id),
-					ownerDept: d.ownerDept ?? null,
-					classification: d.classification ?? null,
-				})),
-			);
-		} catch (e: any) {
-			console.error(e);
-			setDatasets([]);
-			toast.error(e?.message || "加载数据集失败");
-		} finally {
-			setDatasetsLoading(false);
-		}
-	}, [datasetKeyword]);
-
-	const loadTables = useCallback(async () => {
-		if (!datasetId) {
-			setTables([]);
-			return;
-		}
-		setTablesLoading(true);
-		try {
-			const resp = (await listTablesByDataset(datasetId, tableKeyword.trim() || undefined)) as any;
-			const content = Array.isArray(resp?.content) ? resp.content : [];
-			setTables(
-				content.map((t: any) => ({
-					id: String(t.id),
-					name: String(t.name || t.tableName || t.id),
-				})),
-			);
-		} catch (e: any) {
-			console.error(e);
-			setTables([]);
-			toast.error(e?.message || "加载表失败");
-		} finally {
-			setTablesLoading(false);
-		}
-	}, [datasetId, tableKeyword]);
-
-	const loadMetadataStandards = useCallback(async () => {
-		setMetadataLoading(true);
-		try {
-			const resp = (await listMetadataStandards({ page: 0, size: 500 })) as any;
-			const content = Array.isArray(resp?.content) ? resp.content : [];
-			setMetadataOptions(
-				content.map((item: any) => ({
-					id: String(item.id),
-					fieldNameCn: String(item.fieldNameCn || ""),
-					fieldNameEn: String(item.fieldNameEn || ""),
-					dataType: item.dataType ?? null,
-					nullable: item.nullable ?? null,
-					description: item.description ?? null,
-				})),
-			);
-		} catch (e: any) {
-			console.error(e);
-			setMetadataOptions([]);
-		} finally {
-			setMetadataLoading(false);
-		}
-	}, []);
-
-	useEffect(() => {
-		if (dialogOpen) {
-			void loadMetadataStandards();
-		}
-	}, [dialogOpen, loadMetadataStandards]);
-
-	const openValidate = useCallback(
-		(row: TemplateRow) => {
-			setActiveTemplate(row);
-			setValidateResult(null);
-			setDatasetId("");
-			setTableId("");
-			setTableKeyword("");
-			setValidateOpen(true);
-			void loadDatasets();
-		},
-		[loadDatasets],
-	);
-
-	const runValidate = useCallback(async () => {
-		if (!activeTemplate?.id) return;
-		if (!tableId) {
-			toast.error("请选择要校验的数据表");
-			return;
-		}
-		setValidateLoading(true);
-		try {
-			const res = (await validateModelTemplate(activeTemplate.id, tableId)) as any;
-			setValidateResult(res || null);
-			toast.success("校验完成");
-		} catch (e: any) {
-			console.error(e);
-			setValidateResult(null);
-			toast.error(e?.message || "校验失败");
-		} finally {
-			setValidateLoading(false);
-		}
-	}, [activeTemplate?.id, tableId]);
-
-	const save = useCallback(async () => {
-		if (!form.name.trim()) {
-			toast.error("请输入名称");
-			return;
-		}
+	const submitEdit = async () => {
 		setSaving(true);
 		try {
-			const metadataStandardIds = Array.isArray(form.metadataStandardIds) ? form.metadataStandardIds : [];
-			const payload: any = {
-				name: form.name.trim(),
-				layer: form.layer || null,
-				status: form.status,
-				version: form.version.trim() || null,
-				versionNotes: form.versionNotes.trim() || null,
-				namingRule: form.namingRule.trim() || null,
-				fieldsTemplate: form.fieldsTemplate.trim() || null,
-				metadataStandardIds: metadataStandardIds.length ? JSON.stringify(metadataStandardIds) : null,
-				reviewChecklist: form.reviewChecklist.trim() || null,
+			const values = await form.validateFields(["name"]);
+			const payload: ProjectSpace = {
+				name: normalizeText(values.name),
+				domain: normalizeText(form.getFieldValue("domain")) || undefined,
+				scope: normalizeText(form.getFieldValue("scope")) || undefined,
+				status: normalizeUpper(form.getFieldValue("status")) || undefined,
+				version: normalizeText(form.getFieldValue("version")) || undefined,
+				versionNotes: normalizeText(form.getFieldValue("versionNotes")) || undefined,
+				owner: normalizeText(form.getFieldValue("owner")) || undefined,
+				ownerDept: normalizeText(form.getFieldValue("ownerDept")) || undefined,
+				tags: normalizeText(form.getFieldValue("tags")) || undefined,
+				content: normalizeText(form.getFieldValue("content")) || undefined,
 			};
-			if (form.id) {
-				await updateModelTemplate(form.id, payload);
-			} else {
-				await createModelTemplate(payload);
+			if (editMode === "create") {
+				await createModelingPlan(payload);
+				toast.success("项目空间已创建");
+			} else if (editing?.id) {
+				await updateModelingPlan(editing.id, payload);
+				toast.success("项目空间已更新");
 			}
-			toast.success("保存成功");
-			setDialogOpen(false);
-			await fetchList();
-		} catch (e: any) {
-			toast.error(e?.message || "保存失败");
+			setEditOpen(false);
+			setEditing(null);
+			await loadSpaces();
+		} catch (err: any) {
+			toast.error(err?.message || "保存失败");
 		} finally {
 			setSaving(false);
 		}
-	}, [form, fetchList]);
-
-	const applyMetadataTemplate = () => {
-		if (!form.metadataStandardIds.length) {
-			toast.error("请先选择元数据标准");
-			return;
-		}
-		const selected = metadataOptions.filter((opt) => form.metadataStandardIds.includes(opt.id));
-		if (selected.length === 0) {
-			toast.error("选中的元数据标准未加载");
-			return;
-		}
-		const lines = ["name,dataType,nullable,standardCode,comment"];
-		for (const item of selected) {
-			const name = item.fieldNameEn || item.fieldNameCn || "";
-			const dataType = item.dataType || "";
-			const nullable = item.nullable === false ? "false" : "true";
-			const comment = item.description ? String(item.description).replaceAll(",", "，") : "";
-			lines.push(`${name},${dataType},${nullable},,${comment}`);
-		}
-		setForm((p) => ({ ...p, fieldsTemplate: lines.join("\n") }));
-		toast.success("已生成字段模板（CSV）");
 	};
 
-	const remove = useCallback(
-		async (id: string) => {
-			if (!window.confirm("确认删除该模板？")) return;
-			try {
-				await deleteModelTemplate(id);
-				toast.success("已删除");
-				await fetchList();
-			} catch (e: any) {
-				toast.error(e?.message || "删除失败");
-			}
-		},
-		[fetchList],
+	const openPublish = (row: ProjectSpace) => {
+		setPublishTarget(row);
+		publishForm.resetFields();
+		publishForm.setFieldsValue({
+			version: row.version || "v1",
+			changeSummary: "",
+		});
+		setPublishOpen(true);
+	};
+
+	const submitPublish = async () => {
+		if (!publishTarget?.id) return;
+		setPublishing(true);
+		try {
+			const values = await publishForm.validateFields(["version"]);
+			await publishModelingPlan(publishTarget.id, {
+				version: normalizeText(values.version),
+				changeSummary: normalizeText(values.changeSummary) || undefined,
+			});
+			toast.success("项目空间已发布");
+			setPublishOpen(false);
+			setPublishTarget(null);
+			await loadSpaces();
+		} catch (err: any) {
+			toast.error(err?.message || "发布失败");
+		} finally {
+			setPublishing(false);
+		}
+	};
+
+	const handleArchive = (row: ProjectSpace) => {
+		if (!row.id) return;
+		Modal.confirm({
+			title: "归档项目空间？",
+			content: "归档后将进入只读状态，可随时恢复。",
+			okText: "确认归档",
+			cancelText: "取消",
+			onOk: async () => {
+				try {
+					await archiveModelingPlan(row.id);
+					toast.success("已归档");
+					await loadSpaces();
+				} catch (err: any) {
+					toast.error(err?.message || "归档失败");
+				}
+			},
+		});
+	};
+
+	const handleRestore = (row: ProjectSpace) => {
+		if (!row.id) return;
+		Modal.confirm({
+			title: "恢复项目空间？",
+			okText: "确认恢复",
+			cancelText: "取消",
+			onOk: async () => {
+				try {
+					await restoreModelingPlan(row.id);
+					toast.success("已恢复");
+					await loadSpaces();
+				} catch (err: any) {
+					toast.error(err?.message || "恢复失败");
+				}
+			},
+		});
+	};
+
+	const columns: ColumnsType<ProjectSpace> = useMemo(
+		() => [
+			{ title: "项目空间", dataIndex: "name", key: "name", width: 200 },
+			{ title: "业务域", dataIndex: "domain", key: "domain", width: 140, render: (v) => v || "-" },
+			{ title: "范围说明", dataIndex: "scope", key: "scope", ellipsis: true, render: (v) => v || "-" },
+			{ title: "负责人", dataIndex: "owner", key: "owner", width: 120, render: (v) => v || "-" },
+			{ title: "部门", dataIndex: "ownerDept", key: "ownerDept", width: 120, render: (v) => v || "-" },
+			{
+				title: "状态",
+				dataIndex: "status",
+				key: "status",
+				width: 120,
+				render: (v) => {
+					const label = normalizeUpper(v) || "DRAFT";
+					return <Tag color={statusColor(label)}>{label}</Tag>;
+				},
+			},
+			{ title: "版本", dataIndex: "version", key: "version", width: 100, render: (v) => v || "-" },
+			{ title: "更新时间", dataIndex: "lastModifiedDate", key: "lastModifiedDate", width: 180, render: (v) => formatDateTime(v) },
+			{
+				title: "操作",
+				key: "actions",
+				fixed: "right",
+				width: 220,
+				render: (_, row) => (
+					<Space>
+						<Button size="small" onClick={() => openEdit(row)}>
+							编辑
+						</Button>
+						<Button size="small" onClick={() => openPublish(row)} disabled={normalizeUpper(row.status) === "ARCHIVED"}>
+							发布
+						</Button>
+						{normalizeUpper(row.status) === "ARCHIVED" ? (
+							<Button size="small" onClick={() => handleRestore(row)}>
+								恢复
+							</Button>
+						) : (
+							<Button size="small" danger onClick={() => handleArchive(row)}>
+								归档
+							</Button>
+						)}
+					</Space>
+				),
+			},
+		],
+		[],
 	);
-
-	const statusBadge = (status?: string | null) => {
-		const s = String(status || "").toUpperCase();
-		return s === "ARCHIVED" ? <Badge variant="outline">归档</Badge> : <Badge variant="secondary">启用</Badge>;
-	};
 
 	return (
 		<div className="space-y-4">
-			<Card>
-				<CardHeader className="flex flex-row items-center justify-between space-y-0">
-					<CardTitle>模型规范与模板</CardTitle>
-					<Button size="sm" onClick={openCreate}>
-						新增
-					</Button>
-				</CardHeader>
-				<CardContent className="space-y-3">
-					<div className="flex flex-col gap-2 md:flex-row md:items-end">
-						<div className="flex-1 space-y-2">
-							<Label>检索</Label>
-							<Input value={keyword} onChange={(e) => setKeyword(e.target.value)} placeholder="按名称/分层筛选" />
-						</div>
-						<Button variant="secondary" disabled={loading} onClick={() => void fetchList()}>
+			<PageHeader
+				title="数据开发中心 · 项目空间管理"
+				description="维护项目成员、仓库与环境配置，支撑后续建模与调度。"
+				actions={
+					<Space>
+						<Button onClick={loadSpaces} loading={loading}>
 							刷新
 						</Button>
-					</div>
-					<AntTable
-						rowKey={(r: any) => String(r.id)}
-						loading={loading}
-						size="middle"
-						pagination={{ pageSize: 20, showSizeChanger: false, showTotal: (total) => `总计 ${total} 条` }}
-						dataSource={filtered}
-						locale={{ emptyText: loading ? <Spin size="small" /> : "暂无模板" }}
-						columns={[
-							{
-								title: "名称",
-								dataIndex: "name",
-								key: "name",
-								ellipsis: true,
-								render: (v: any, r: any) => (
-									<button type="button" className="text-left font-medium hover:underline" onClick={() => openDetail(r)}>
-										{String(v || "-")}
-									</button>
-								),
-							},
-							{ title: "分层", dataIndex: "layer", key: "layer", width: 90, ellipsis: true },
-							{
-								title: "状态",
-								dataIndex: "status",
-								key: "status",
-								width: 90,
-								render: (v: any) => statusBadge(v),
-							},
-							{ title: "版本", dataIndex: "version", key: "version", width: 90, ellipsis: true },
-							{
-								title: "更新时间",
-								dataIndex: "lastModifiedDate",
-								key: "lastModifiedDate",
-								width: 160,
-								render: (v: any) => <span className="text-xs text-muted-foreground">{formatDateTime(v)}</span>,
-							},
-							{
-								title: "操作",
-								key: "action",
-								width: 360,
-								render: (_: any, r: any) => (
-									<div className="flex flex-wrap gap-2">
-										<Button size="sm" variant="outline" onClick={() => openDetail(r)}>
-											预览
-										</Button>
-										<Button size="sm" variant="outline" onClick={() => void openValidate(r)}>
-											校验
-										</Button>
-										<Button size="sm" variant="secondary" onClick={() => openEdit(r)}>
-											编辑
-										</Button>
-										<Button size="sm" variant="outline" onClick={() => exportMarkdown(r)}>
-											导出
-										</Button>
-										<Button size="sm" variant="destructive" onClick={() => void remove(r.id)}>
-											删除
-										</Button>
-									</div>
-								),
-							},
-						]}
+						<Button type="primary" onClick={openCreate}>
+							新建项目空间
+						</Button>
+					</Space>
+				}
+			/>
+
+			<div className="grid gap-4 lg:grid-cols-4">
+				<Card>
+					<div className="text-sm text-gray-500">空间总数</div>
+					<div className="mt-2 text-2xl font-semibold">{stats.total}</div>
+				</Card>
+				<Card>
+					<div className="text-sm text-gray-500">草稿</div>
+					<div className="mt-2 text-2xl font-semibold">{stats.draft}</div>
+				</Card>
+				<Card>
+					<div className="text-sm text-gray-500">已发布</div>
+					<div className="mt-2 text-2xl font-semibold">{stats.published}</div>
+				</Card>
+				<Card>
+					<div className="text-sm text-gray-500">已归档</div>
+					<div className="mt-2 text-2xl font-semibold">{stats.archived}</div>
+				</Card>
+			</div>
+
+			<Card
+				title="项目空间列表"
+				extra={
+					<Space>
+						<Text>状态</Text>
+						<Select
+							placeholder="全部"
+							value={status}
+							onChange={(value) => setStatus(value)}
+							allowClear
+							style={{ width: 160 }}
+							options={STATUS_OPTIONS.map((item) => ({ value: item, label: item }))}
+						/>
+					</Space>
+				}
+			>
+				<Space wrap className="mb-4">
+					<Input
+						placeholder="搜索项目/域/负责人"
+						value={keyword}
+						onChange={(e) => setKeyword(e.target.value)}
+						allowClear
+						style={{ width: 240 }}
 					/>
-				</CardContent>
+					<Button onClick={loadSpaces} loading={loading}>
+						查询
+					</Button>
+				</Space>
+				{spaces.length === 0 && !loading ? (
+					<EmptyState title="暂无项目空间" description="先创建一个项目空间，配置仓库与环境信息。" />
+				) : (
+					<Table
+						rowKey={(row) => row.id || row.name || Math.random().toString(36)}
+						columns={columns}
+						dataSource={spaces}
+						loading={loading}
+						scroll={{ x: 1200 }}
+						pagination={{ pageSize: 8 }}
+					/>
+				)}
 			</Card>
 
-			<Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-				<DialogContent className="sm:max-w-[920px]">
-					<DialogHeader>
-						<DialogTitle>{form.id ? "编辑模板" : "新增模板"}</DialogTitle>
-					</DialogHeader>
-					<div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-						<div className="space-y-2 md:col-span-2">
-							<Label>名称 *</Label>
-							<Input value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))} />
-						</div>
-						<div className="space-y-2">
-							<Label>分层</Label>
-							<Select value={form.layer} onValueChange={(v) => setForm((p) => ({ ...p, layer: v }))}>
-								<SelectTrigger>
-									<SelectValue />
-								</SelectTrigger>
-								<SelectContent>
-									<SelectItem value="ODS">ODS</SelectItem>
-									<SelectItem value="DWD">DWD</SelectItem>
-									<SelectItem value="DWS">DWS</SelectItem>
-									<SelectItem value="ADS">ADS</SelectItem>
-								</SelectContent>
-							</Select>
-						</div>
-						<div className="space-y-2">
-							<Label>状态</Label>
-							<Select value={form.status} onValueChange={(v: any) => setForm((p) => ({ ...p, status: v }))}>
-								<SelectTrigger>
-									<SelectValue />
-								</SelectTrigger>
-								<SelectContent>
-									<SelectItem value="ACTIVE">启用</SelectItem>
-									<SelectItem value="ARCHIVED">归档</SelectItem>
-								</SelectContent>
-							</Select>
-						</div>
-						<div className="space-y-2">
-							<Label>版本</Label>
-							<Input value={form.version} onChange={(e) => setForm((p) => ({ ...p, version: e.target.value }))} placeholder="如：v1" />
-						</div>
-						<div className="space-y-2 md:col-span-2">
-							<Label>版本说明（可选）</Label>
-							<Input value={form.versionNotes} onChange={(e) => setForm((p) => ({ ...p, versionNotes: e.target.value }))} placeholder="简述变更点" />
-						</div>
-						<div className="space-y-2 md:col-span-2">
-							<Label>命名规则（可选，支持 regex）</Label>
-							<Textarea
-								value={form.namingRule}
-								onChange={(e) => setForm((p) => ({ ...p, namingRule: e.target.value }))}
-								className="min-h-[80px]"
-								placeholder="示例：regex:^dwd_[a-z0-9_]+$"
-							/>
-							<div className="text-xs text-muted-foreground">
-								建议：用 `regex:` 指定正则，或直接填写可编译的正则表达式（例如 `^ods_.*$`）。
-							</div>
-						</div>
-						<div className="space-y-2 md:col-span-2">
-							<Label>字段模板（可选）</Label>
-							<div className="space-y-2">
-								<div className="flex flex-wrap items-center gap-2">
-									<Label className="text-xs text-muted-foreground">关联元数据标准</Label>
-									<AntSelect
-										mode="multiple"
-										value={form.metadataStandardIds}
-										onChange={(value) => setForm((p) => ({ ...p, metadataStandardIds: value as string[] }))}
-										placeholder="选择元数据标准（可多选）"
-										style={{ minWidth: 320 }}
-										loading={metadataLoading}
-										options={metadataOptions.map((opt) => ({
-											label: `${opt.fieldNameCn} (${opt.fieldNameEn})`,
-											value: opt.id,
-										}))}
-									/>
-									<Button size="sm" variant="secondary" onClick={applyMetadataTemplate}>
-										生成字段模板
-									</Button>
-								</div>
-								<div className="text-xs text-muted-foreground">
-									字段模板可由元数据标准生成（CSV），生成会覆盖当前内容。
-								</div>
-							</div>
-							<Textarea
-								value={form.fieldsTemplate}
-								onChange={(e) => setForm((p) => ({ ...p, fieldsTemplate: e.target.value }))}
-								className="min-h-[140px]"
-								placeholder={`推荐 CSV：\nname,dataType,nullable,standardCode\nbiz_date,date,false,DS_001\n...\n\n或 JSON：[{\"name\":\"biz_date\",\"dataType\":\"date\",\"nullable\":false,\"standardCode\":\"DS_001\"}]`}
-							/>
-							<div className="text-xs text-muted-foreground">
-								校验规则来源于此处字段模板：缺字段/类型/可空/标准编码（standardCode）会出问题清单。
-							</div>
-						</div>
-						<div className="space-y-2 md:col-span-2">
-							<Label>评审要点清单（可选）</Label>
-							<Textarea
-								value={form.reviewChecklist}
-								onChange={(e) => setForm((p) => ({ ...p, reviewChecklist: e.target.value }))}
-								className="min-h-[140px]"
-								placeholder="例如：主键/分区；字段口径；敏感字段标记；血缘影响评估..."
-							/>
-						</div>
-					</div>
-					<DialogFooter>
-						<Button variant="secondary" onClick={() => setDialogOpen(false)}>
-							取消
-						</Button>
-						<Button onClick={() => void save()} disabled={saving}>
-							保存
-						</Button>
-					</DialogFooter>
-				</DialogContent>
-			</Dialog>
+			<Alert
+				type="info"
+				showIcon
+				message="项目空间作为开发入口，后续将关联 SQL 建模、脚本开发与任务编排。"
+			/>
 
 			<Modal
-				open={detailOpen}
-				title={activeTemplate ? `模板预览：${activeTemplate.name}` : "模板预览"}
-				onCancel={() => setDetailOpen(false)}
-				footer={null}
-				width={980}
-				destroyOnClose
+				open={editOpen}
+				title={editMode === "create" ? "新建项目空间" : "编辑项目空间"}
+				onCancel={() => setEditOpen(false)}
+				onOk={submitEdit}
+				okText="保存"
+				cancelText="取消"
+				confirmLoading={saving}
+				width={760}
 			>
-				{activeTemplate ? (
-					<div className="space-y-3">
-						<div className="flex flex-wrap items-center gap-2 text-sm">
-							<Badge variant="secondary">分层：{activeTemplate.layer || "-"}</Badge>
-							<Badge variant="outline">版本：{activeTemplate.version || "-"}</Badge>
-							{statusBadge(activeTemplate.status)}
-							<span className="text-xs text-muted-foreground">更新时间：{formatDateTime(activeTemplate.lastModifiedDate)}</span>
-						</div>
-
-						<div className="flex flex-wrap gap-2">
-							<Button variant="outline" onClick={() => exportMarkdown(activeTemplate)}>
-								导出 Markdown
-							</Button>
-							<Button
-								variant="secondary"
-								onClick={() => {
-									openEdit(activeTemplate);
-									setDetailOpen(false);
-								}}
-							>
-								编辑
-							</Button>
-							<Button variant="outline" onClick={() => void openValidate(activeTemplate)}>
-								校验
-							</Button>
-						</div>
-
-						<Tabs
-							items={[
-								{
-									key: "naming",
-									label: "命名规则",
-									children: (
-										<pre className="whitespace-pre-wrap rounded border bg-muted/30 p-3 text-xs">
-											{String(activeTemplate.namingRule || "").trim() || "(未配置)"}
-										</pre>
-									),
-								},
-								{
-									key: "fields",
-									label: "字段模板",
-									children: (
-										<pre className="whitespace-pre-wrap rounded border bg-muted/30 p-3 text-xs">
-											{String(activeTemplate.fieldsTemplate || "").trim() || "(未配置)"}
-										</pre>
-									),
-								},
-								{
-									key: "checklist",
-									label: "评审清单",
-									children: (
-										<pre className="whitespace-pre-wrap rounded border bg-muted/30 p-3 text-xs">
-											{String(activeTemplate.reviewChecklist || "").trim() || "(未配置)"}
-										</pre>
-									),
-								},
-								{
-									key: "guide",
-									label: "使用建议",
-									children: (
-										<div className="space-y-2 text-sm">
-											<div>1) AI/开发生成 DDL：字段注释建议写 `STD:CODE`（例如 `STD:DS_001`）。</div>
-											<div>2) 平台采集后，在“元数据采集与维护”页可用“自动匹配/校验映射”完成字段↔标准闭环。</div>
-											<div>3) 本页面“校验”用于检查表结构是否符合模板约束（缺字段/类型/可空/标准编码）。</div>
-										</div>
-									),
-								},
-							]}
-						/>
+				<Form layout="vertical" form={form}>
+					<div className="grid gap-4 md:grid-cols-2">
+						<Form.Item name="name" label="项目空间名称" rules={[{ required: true, message: "请输入名称" }]}>
+							<Input placeholder="例如：ERP 经营分析" />
+						</Form.Item>
+						<Form.Item name="domain" label="业务域">
+							<Input placeholder="例如：销售、库存" />
+						</Form.Item>
 					</div>
-				) : null}
+					<Form.Item name="scope" label="范围说明">
+						<Input.TextArea rows={2} placeholder="描述该项目覆盖的主题、表范围或业务边界" />
+					</Form.Item>
+					<div className="grid gap-4 md:grid-cols-2">
+						<Form.Item name="owner" label="负责人">
+							<Input placeholder="负责人姓名" />
+						</Form.Item>
+						<Form.Item name="ownerDept" label="负责部门">
+							<Input placeholder="部门代码" />
+						</Form.Item>
+					</div>
+					<div className="grid gap-4 md:grid-cols-2">
+						<Form.Item name="status" label="状态">
+							<Select allowClear options={STATUS_OPTIONS.map((item) => ({ value: item, label: item }))} />
+						</Form.Item>
+						<Form.Item name="version" label="版本号">
+							<Input placeholder="v1" />
+						</Form.Item>
+					</div>
+					<Form.Item name="versionNotes" label="版本说明">
+						<Input.TextArea rows={2} placeholder="版本变化与关键说明" />
+					</Form.Item>
+					<Form.Item name="tags" label="标签">
+						<Input placeholder="标签/关键字，逗号分隔" />
+					</Form.Item>
+					<Form.Item name="content" label="仓库与环境配置">
+						<Input.TextArea rows={4} placeholder="例如：Git 仓库地址、分支、运行环境与成员配置" />
+					</Form.Item>
+				</Form>
 			</Modal>
 
 			<Modal
-				open={validateOpen}
-				title={activeTemplate ? `模板校验：${activeTemplate.name}` : "模板校验"}
-				onCancel={() => setValidateOpen(false)}
-				footer={null}
-				width={1080}
-				destroyOnClose
+				open={publishOpen}
+				title="发布项目空间"
+				onCancel={() => setPublishOpen(false)}
+				onOk={submitPublish}
+				okText="发布"
+				cancelText="取消"
+				confirmLoading={publishing}
+				width={520}
 			>
-				<div className="space-y-3">
-					<div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-						<div className="space-y-2">
-							<div className="flex items-center justify-between gap-2">
-								<Label>数据集</Label>
-								<Button size="sm" variant="outline" onClick={() => void loadDatasets()} disabled={datasetsLoading}>
-									{datasetsLoading ? "加载中…" : "搜索"}
-								</Button>
-							</div>
-							<Input value={datasetKeyword} onChange={(e) => setDatasetKeyword(e.target.value)} placeholder="搜索数据集" />
-							<AntSelect
-								showSearch
-								allowClear
-								value={datasetId || undefined}
-								placeholder="选择数据集"
-								filterOption={false}
-								onChange={(v) => {
-									setDatasetId(v ? String(v) : "");
-									setTableId("");
-									setTables([]);
-								}}
-								onSearch={() => void loadDatasets()}
-								notFoundContent={datasetsLoading ? <Spin size="small" /> : null}
-								options={datasets.map((d) => ({ value: d.id, label: `${d.name}${d.ownerDept ? ` · ${d.ownerDept}` : ""}` }))}
-								style={{ width: "100%" }}
-							/>
-						</div>
-
-						<div className="space-y-2">
-							<div className="flex items-center justify-between gap-2">
-								<Label>数据表</Label>
-								<Button size="sm" variant="outline" onClick={() => void loadTables()} disabled={!datasetId || tablesLoading}>
-									{tablesLoading ? "加载中…" : "搜索"}
-								</Button>
-							</div>
-							<Input value={tableKeyword} onChange={(e) => setTableKeyword(e.target.value)} placeholder="搜索表（可选）" disabled={!datasetId} />
-							<AntSelect
-								showSearch
-								allowClear
-								value={tableId || undefined}
-								placeholder={datasetId ? "选择数据表" : "请先选择数据集"}
-								filterOption={false}
-								onChange={(v) => setTableId(v ? String(v) : "")}
-								onSearch={() => void loadTables()}
-								notFoundContent={tablesLoading ? <Spin size="small" /> : null}
-								options={tables.map((t) => ({ value: t.id, label: t.name }))}
-								style={{ width: "100%" }}
-								disabled={!datasetId}
-							/>
-						</div>
-					</div>
-
-					<div className="flex items-center justify-between gap-2">
-						<div className="text-xs text-muted-foreground">
-							说明：校验基于“字段模板”内容（支持 CSV/JSON/纯文本）。建议先在元数据页完成字段采集与标准绑定。
-						</div>
-						<Button onClick={() => void runValidate()} disabled={!tableId || validateLoading}>
-							{validateLoading ? "校验中…" : "执行校验"}
-						</Button>
-					</div>
-
-					{validateResult?.summary ? (
-						<div className="grid grid-cols-2 gap-2 text-sm md:grid-cols-6">
-							<div>必备字段：{Number(validateResult?.summary?.requiredFields ?? 0)}</div>
-							<div>缺字段：{Number(validateResult?.summary?.missingFields ?? 0)}</div>
-							<div>类型不符：{Number(validateResult?.summary?.typeMismatches ?? 0)}</div>
-							<div>可空不符：{Number(validateResult?.summary?.nullableMismatches ?? 0)}</div>
-							<div>未绑定标准：{Number(validateResult?.summary?.unmappedStandards ?? 0)}</div>
-							<div>标准不符：{Number(validateResult?.summary?.standardMismatches ?? 0)}</div>
-						</div>
-					) : null}
-
-					<AntTable
-						rowKey={(r: any) => `${r.code || ""}:${r.columnName || ""}:${r.message || ""}`}
-						size="small"
-						pagination={{ pageSize: 10, showSizeChanger: false }}
-						dataSource={Array.isArray(validateResult?.issues) ? validateResult.issues : []}
-						locale={{ emptyText: validateLoading ? <Spin size="small" /> : "暂无校验结果" }}
-						columns={[
-							{
-								title: "级别",
-								dataIndex: "severity",
-								key: "severity",
-								width: 90,
-								render: (v: any) => {
-									const s = String(v || "").toUpperCase();
-									if (s === "ERROR") return <Badge variant="destructive">ERROR</Badge>;
-									if (s === "WARN") return <Badge variant="outline">WARN</Badge>;
-									return <Badge variant="secondary">INFO</Badge>;
-								},
-							},
-							{ title: "字段", dataIndex: "columnName", key: "columnName", width: 180, ellipsis: true },
-							{ title: "问题", dataIndex: "message", key: "message", ellipsis: true },
-							{ title: "期望", dataIndex: "expected", key: "expected", width: 220, ellipsis: true },
-							{ title: "实际", dataIndex: "actual", key: "actual", width: 220, ellipsis: true },
-							{ title: "代码", dataIndex: "code", key: "code", width: 160, ellipsis: true },
-						]}
-					/>
-				</div>
+				<Form layout="vertical" form={publishForm}>
+					<Form.Item name="version" label="发布版本" rules={[{ required: true, message: "请输入版本号" }]}>
+						<Input placeholder="v1" />
+					</Form.Item>
+					<Form.Item name="changeSummary" label="变更说明">
+						<Input.TextArea rows={3} placeholder="可选，记录发布说明" />
+					</Form.Item>
+				</Form>
 			</Modal>
 		</div>
 	);

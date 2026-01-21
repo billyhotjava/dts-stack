@@ -1,34 +1,25 @@
+import { lazy, Suspense } from "react";
 import type { RouteObject } from "react-router";
-import DatasetDetailPage from "@/pages/catalog/DatasetDetailPage";
-import DataStandardDetailPage from "@/pages/modeling/DataStandardDetailPage";
-import DatasetAccessApprovalPage from "@/pages/security/DatasetAccessApprovalPage";
-import WorkflowCenterPage from "@/pages/workbench/WorkflowCenterPage";
-import MetadataStandardsPage from "@/pages/modeling/MetadataStandardsPage";
-import QualityPage from "@/pages/catalog/QualityPage";
+import { LineLoading } from "@/components/loading";
+
+const DataSourcesPage = lazy(() => import("@/pages/foundation/DataSourcesPage"));
+const DataSourceDetailPage = lazy(() => import("@/pages/foundation/DataSourceDetailPage"));
 
 export const STATIC_DASHBOARD_ROUTES: RouteObject[] = [
 	{
-		path: "catalog/datasets/:id",
-		element: <DatasetDetailPage />,
+		path: "foundation/data-sources",
+		element: (
+			<Suspense fallback={<LineLoading />}>
+				<DataSourcesPage />
+			</Suspense>
+		),
 	},
 	{
-		path: "governance/quality",
-		element: <QualityPage />,
-	},
-	{
-		path: "security/dataset-access",
-		element: <DatasetAccessApprovalPage />,
-	},
-	{
-		path: "workbench/workflow-center",
-		element: <WorkflowCenterPage />,
-	},
-	{
-		path: "modeling/metadata-standards",
-		element: <MetadataStandardsPage />,
-	},
-	{
-		path: "modeling/standards/:id",
-		element: <DataStandardDetailPage />,
+		path: "foundation/data-sources/:id",
+		element: (
+			<Suspense fallback={<LineLoading />}>
+				<DataSourceDetailPage />
+			</Suspense>
+		),
 	},
 ];

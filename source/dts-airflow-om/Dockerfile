@@ -1,0 +1,24 @@
+FROM apache/airflow:2.9.3
+
+ARG PIP_INDEX_URL=
+ARG PIP_TRUSTED_HOST=
+ARG PIP_DEFAULT_TIMEOUT=60
+ARG PIP_RETRIES=10
+ARG HTTP_PROXY=
+ARG HTTPS_PROXY=
+ARG NO_PROXY=
+
+ENV PIP_INDEX_URL=${PIP_INDEX_URL}
+ENV PIP_TRUSTED_HOST=${PIP_TRUSTED_HOST}
+ENV PIP_DEFAULT_TIMEOUT=${PIP_DEFAULT_TIMEOUT}
+ENV PIP_RETRIES=${PIP_RETRIES}
+ENV HTTP_PROXY=${HTTP_PROXY}
+ENV HTTPS_PROXY=${HTTPS_PROXY}
+ENV NO_PROXY=${NO_PROXY}
+
+RUN python -m pip install --no-cache-dir \
+    --default-timeout=${PIP_DEFAULT_TIMEOUT} \
+    --retries=${PIP_RETRIES} \
+    --use-deprecated=legacy-resolver \
+    openmetadata-managed-apis==1.11.5.0 \
+    openmetadata-ingestion==1.11.5.0

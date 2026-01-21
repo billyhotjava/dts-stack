@@ -1,187 +1,194 @@
 [
   {
-    "code": "sys.nav.portal.catalog",
-    "title": "数据资产管理",
-    "route": "/catalog",
-    "scopes": ["DEPT","INST"],
-    "requiredRoles": [
-      "DEPT_DATA_OWNER","DEPT_LEADER",
-      "INST_DATA_OWNER","INST_LEADER"
-    ],
-    "requiredMgmtRoles": []
-  },
-  {
-    "code": "sys.nav.portal.governanceQuality",
-    "title": "数据质量",
-    "route": "/governance/quality",
-    "scopes": ["DEPT","INST"],
-    "requiredRoles": [
-      "DEPT_DATA_OWNER","DEPT_LEADER",
-      "INST_DATA_OWNER","INST_LEADER"
-    ],
-    "requiredMgmtRoles": []
-  },
-  {
-    "code": "sys.nav.portal.modeling",
-    "title": "数据标准",
-    "route": "/modeling",
-    "scopes": ["DEPT","INST"],
-    "requiredRoles": [
-      "DEPT_DATA_OWNER","DEPT_LEADER",
-      "INST_DATA_OWNER","INST_LEADER"
-    ],
-    "editEnabledRoles": [
-      "DEPT_DATA_OWNER","DEPT_LEADER",
-      "INST_DATA_OWNER","INST_LEADER"
-    ],
-    "requiredMgmtRoles": []
-  },
-  {
-    "code": "sys.nav.portal.modelingMetadataStandards",
-    "title": "元数据标准",
-    "route": "/modeling/metadata-standards",
-    "scopes": ["DEPT","INST"],
-    "requiredRoles": [
-      "DEPT_DATA_OWNER","DEPT_LEADER",
-      "INST_DATA_OWNER","INST_LEADER"
-    ],
-    "editEnabledRoles": [
-      "DEPT_DATA_OWNER","DEPT_LEADER",
-      "INST_DATA_OWNER","INST_LEADER"
-    ],
-    "requiredMgmtRoles": []
-  },
-  {
-    "code": "sys.nav.portal.governance",
-    "title": "治理和质量",
-    "route": "/governance",
-    "scopes": ["DEPT","INST"],
-    "requiredRoles": [
-      "DEPT_DATA_OWNER","DEPT_LEADER",
-      "INST_DATA_OWNER","INST_LEADER"
-    ],
-    "editEnabledRoles": [
-      "DEPT_DATA_OWNER","DEPT_LEADER",
-      "INST_DATA_OWNER","INST_LEADER"
-    ],
-    "requiredMgmtRoles": []
-  },
-  {
-    "code": "sys.nav.portal.explore",
-    "title": "数据开发",
-    "route": "/explore",
-    "scopes": ["DEPT","INST"],
-    "requiredRoles": [
-      "DEPT_DATA_OWNER","DEPT_LEADER",
-      "INST_DATA_OWNER","INST_LEADER"
-    ],
-    "requiredMgmtRoles": []
-  },
-  {
-    "code": "sys.nav.portal.visualizationReports",
-    "title": "报表与大屏",
-    "route": "/visualization/reports",
-    "scopes": ["DEPT","INST"],
-    "requiredRoles": [
-      "EMPLOYEE",
-      "DEPT_DATA_OWNER","DEPT_LEADER",
-      "INST_DATA_OWNER","INST_LEADER",
-      "ADMIN","OP_ADMIN"
-    ],
-    "requiredMgmtRoles": []
-  },
-  {
-    "code": "sys.nav.portal.visualizationAnalytics",
-    "title": "自助分析",
-    "route": "/visualization/analytics",
-    "scopes": ["DEPT","INST"],
-    "requiredRoles": [
-      "EMPLOYEE",
-      "DEPT_DATA_OWNER","DEPT_LEADER",
-      "INST_DATA_OWNER","INST_LEADER",
-      "ADMIN","OP_ADMIN"
-    ],
-    "requiredMgmtRoles": []
-  },
-  {
-    "code": "sys.nav.portal.workbench",
-    "title": "工作台",
+    "code": "sys.nav.portal.workbenchOverview",
+    "title": "我的概览",
     "route": "/workbench",
-    "scopes": ["DEPT","INST"],
-    "requiredRoles": [
-      "EMPLOYEE",
-      "DEPT_DATA_OWNER","DEPT_LEADER",
-      "INST_DATA_OWNER","INST_LEADER",
-      "ADMIN","OP_ADMIN"
-    ],
-    "requiredMgmtRoles": []
+    "requiredRoles": ["EMPLOYEE", "DEPT_DATA_OWNER", "DEPT_LEADER", "INST_DATA_OWNER", "INST_LEADER", "ADMIN", "OP_ADMIN"]
   },
   {
-    "code": "sys.nav.portal.workbenchWorkflowCenter",
-    "title": "流程中心",
-    "route": "/workbench/workflow-center",
-    "scopes": ["DEPT","INST"],
-    "requiredRoles": [
-      "EMPLOYEE",
-      "DEPT_DATA_OWNER","DEPT_LEADER",
-      "INST_DATA_OWNER","INST_LEADER",
-      "ADMIN","OP_ADMIN"
-    ],
-    "requiredMgmtRoles": []
+    "code": "sys.nav.portal.workbenchTodo",
+    "title": "待办事项",
+    "route": "/workbench/todo",
+    "requiredRoles": ["EMPLOYEE", "DEPT_DATA_OWNER", "DEPT_LEADER", "INST_DATA_OWNER", "INST_LEADER", "ADMIN", "OP_ADMIN"]
   },
   {
-    "code": "sys.nav.portal.foundation",
-    "title": "基础管理",
-    "route": "/foundation",
-    "scopes": ["DEPT","INST"],
-    "requiredRoles": [
-      "DEPT_DATA_OWNER","DEPT_LEADER",
-      "INST_DATA_OWNER","INST_LEADER",
-      "ADMIN","OP_ADMIN"
-    ],
-    "requiredMgmtRoles": []
+    "code": "sys.nav.portal.workbenchFavorites",
+    "title": "我的收藏",
+    "route": "/workbench/favorites",
+    "requiredRoles": ["EMPLOYEE", "DEPT_DATA_OWNER", "DEPT_LEADER", "INST_DATA_OWNER", "INST_LEADER", "ADMIN", "OP_ADMIN"]
   },
   {
-    "code": "sys.nav.portal.foundationDataSources",
-    "title": "数据源配置",
+    "code": "sys.nav.portal.resourceSources",
+    "title": "数据源管理",
     "route": "/foundation/data-sources",
-    "scopes": ["DEPT","INST"],
-    "requiredRoles": [
-      "DEPT_DATA_OWNER","DEPT_LEADER",
-      "INST_DATA_OWNER","INST_LEADER",
-      "ADMIN","OP_ADMIN"
-    ],
-    "requiredMgmtRoles": []
+    "requiredRoles": ["DEPT_DATA_OWNER", "DEPT_LEADER", "INST_DATA_OWNER", "INST_LEADER", "ADMIN", "OP_ADMIN"]
   },
   {
-    "code": "sys.nav.portal.foundationDbtConfig",
-    "title": "dbt执行配置",
-    "route": "/foundation/dbt-config",
-    "scopes": ["DEPT","INST"],
-    "requiredRoles": [
-      "DEPT_DATA_OWNER","DEPT_LEADER",
-      "INST_DATA_OWNER","INST_LEADER",
-      "ADMIN","OP_ADMIN"
-    ],
-    "requiredMgmtRoles": []
+    "code": "sys.nav.portal.resourceMetadata",
+    "title": "元数据采集",
+    "route": "/catalog/metadata",
+    "requiredRoles": ["DEPT_DATA_OWNER", "DEPT_LEADER", "INST_DATA_OWNER", "INST_LEADER", "ADMIN", "OP_ADMIN"]
   },
   {
-    "code": "sys.nav.portal.visualizationReportsManage",
-    "title": "报表链接管理",
-    "route": "/visualization/reports-manage",
-    "scopes": ["DEPT","INST"],
-    "requiredRoles": [
-      "ADMIN","OP_ADMIN",
-      "INST_DATA_OWNER","INST_LEADER"
-    ],
-    "requiredMgmtRoles": []
+    "code": "sys.nav.portal.resourceIngestion",
+    "title": "数据入湖配置",
+    "route": "/explore/etl/transform",
+    "requiredRoles": ["DEPT_DATA_OWNER", "DEPT_LEADER", "INST_DATA_OWNER", "INST_LEADER", "ADMIN", "OP_ADMIN"]
   },
   {
-    "code": "sys.nav.portal.security",
-    "title": "安全合规",
-    "route": "/security",
-    "scopes": ["DEPT","INST"],
-    "requiredRoles": ["OP_ADMIN","ADMIN"],
-    "requiredMgmtRoles": []
+    "code": "sys.nav.portal.studioProjects",
+    "title": "项目空间管理",
+    "route": "/modeling/templates",
+    "requiredRoles": ["DEPT_DATA_OWNER", "DEPT_LEADER", "INST_DATA_OWNER", "INST_LEADER", "ADMIN", "OP_ADMIN"]
+  },
+  {
+    "code": "sys.nav.portal.studioSqlModeling",
+    "title": "逻辑建模（SQL）",
+    "route": "/modeling/templates",
+    "requiredRoles": ["DEPT_DATA_OWNER", "DEPT_LEADER", "INST_DATA_OWNER", "INST_LEADER", "ADMIN", "OP_ADMIN"]
+  },
+  {
+    "code": "sys.nav.portal.studioScripts",
+    "title": "脚本开发（Python/Spark）",
+    "route": "/explore/etl/transform",
+    "requiredRoles": ["DEPT_DATA_OWNER", "DEPT_LEADER", "INST_DATA_OWNER", "INST_LEADER", "ADMIN", "OP_ADMIN"]
+  },
+  {
+    "code": "sys.nav.portal.studioOrchestration",
+    "title": "任务编排",
+    "route": "/explore/etl/orchestration",
+    "requiredRoles": ["DEPT_DATA_OWNER", "DEPT_LEADER", "INST_DATA_OWNER", "INST_LEADER", "ADMIN", "OP_ADMIN"]
+  },
+  {
+    "code": "sys.nav.portal.studioAdhoc",
+    "title": "即席查询",
+    "route": "/explore/workbench",
+    "requiredRoles": ["EMPLOYEE", "DEPT_DATA_OWNER", "DEPT_LEADER", "INST_DATA_OWNER", "INST_LEADER", "ADMIN", "OP_ADMIN"]
+  },
+  {
+    "code": "sys.nav.portal.governanceSubjects",
+    "title": "主题域管理",
+    "route": "/governance/subjects",
+    "requiredRoles": ["DEPT_DATA_OWNER", "DEPT_LEADER", "INST_DATA_OWNER", "INST_LEADER", "ADMIN", "OP_ADMIN"]
+  },
+  {
+    "code": "sys.nav.portal.governanceGlossary",
+    "title": "业务术语",
+    "route": "/governance/standards/glossary",
+    "requiredRoles": ["DEPT_DATA_OWNER", "DEPT_LEADER", "INST_DATA_OWNER", "INST_LEADER", "ADMIN", "OP_ADMIN"]
+  },
+  {
+    "code": "sys.nav.portal.governanceElements",
+    "title": "数据元",
+    "route": "/governance/standards/elements",
+    "requiredRoles": ["DEPT_DATA_OWNER", "DEPT_LEADER", "INST_DATA_OWNER", "INST_LEADER", "ADMIN", "OP_ADMIN"]
+  },
+  {
+    "code": "sys.nav.portal.governanceReference",
+    "title": "公共码表",
+    "route": "/governance/standards/reference",
+    "requiredRoles": ["DEPT_DATA_OWNER", "DEPT_LEADER", "INST_DATA_OWNER", "INST_LEADER", "ADMIN", "OP_ADMIN"]
+  },
+  {
+    "code": "sys.nav.portal.governanceTemplates",
+    "title": "标准模板",
+    "route": "/governance/templates",
+    "requiredRoles": ["DEPT_DATA_OWNER", "DEPT_LEADER", "INST_DATA_OWNER", "INST_LEADER", "ADMIN", "OP_ADMIN"]
+  },
+  {
+    "code": "sys.nav.portal.governanceIndicators",
+    "title": "指标中心",
+    "route": "/governance/indicators/dictionary",
+    "requiredRoles": ["DEPT_DATA_OWNER", "DEPT_LEADER", "INST_DATA_OWNER", "INST_LEADER", "ADMIN", "OP_ADMIN"]
+  },
+  {
+    "code": "sys.nav.portal.governanceQualityRules",
+    "title": "质量管控",
+    "route": "/governance/rules",
+    "requiredRoles": ["DEPT_DATA_OWNER", "DEPT_LEADER", "INST_DATA_OWNER", "INST_LEADER", "ADMIN", "OP_ADMIN"]
+  },
+  {
+    "code": "sys.nav.portal.governanceQualityReport",
+    "title": "质量报告",
+    "route": "/governance/quality",
+    "requiredRoles": ["DEPT_DATA_OWNER", "DEPT_LEADER", "INST_DATA_OWNER", "INST_LEADER", "ADMIN", "OP_ADMIN"]
+  },
+  {
+    "code": "sys.nav.portal.governanceClassification",
+    "title": "分级分类",
+    "route": "/security/data-security",
+    "requiredRoles": ["DEPT_DATA_OWNER", "DEPT_LEADER", "INST_DATA_OWNER", "INST_LEADER", "ADMIN", "OP_ADMIN"]
+  },
+  {
+    "code": "sys.nav.portal.dataPortalMap",
+    "title": "资产地图",
+    "route": "/catalog/assets",
+    "requiredRoles": ["EMPLOYEE", "DEPT_DATA_OWNER", "DEPT_LEADER", "INST_DATA_OWNER", "INST_LEADER", "ADMIN", "OP_ADMIN"]
+  },
+  {
+    "code": "sys.nav.portal.dataPortalSearch",
+    "title": "数据搜索",
+    "route": "/catalog/assets",
+    "requiredRoles": ["EMPLOYEE", "DEPT_DATA_OWNER", "DEPT_LEADER", "INST_DATA_OWNER", "INST_LEADER", "ADMIN", "OP_ADMIN"]
+  },
+  {
+    "code": "sys.nav.portal.dataPortalDetail",
+    "title": "资产详情",
+    "route": "/catalog/assets",
+    "requiredRoles": ["EMPLOYEE", "DEPT_DATA_OWNER", "DEPT_LEADER", "INST_DATA_OWNER", "INST_LEADER", "ADMIN", "OP_ADMIN"]
+  },
+  {
+    "code": "sys.nav.portal.dataPortalLineage",
+    "title": "血缘视图",
+    "route": "/catalog/lineage",
+    "requiredRoles": ["EMPLOYEE", "DEPT_DATA_OWNER", "DEPT_LEADER", "INST_DATA_OWNER", "INST_LEADER", "ADMIN", "OP_ADMIN"]
+  },
+  {
+    "code": "sys.nav.portal.dataPortalPermission",
+    "title": "权限申请",
+    "route": "/security/dataset-access-approval",
+    "requiredRoles": ["EMPLOYEE", "DEPT_DATA_OWNER", "DEPT_LEADER", "INST_DATA_OWNER", "INST_LEADER", "ADMIN", "OP_ADMIN"]
+  },
+  {
+    "code": "sys.nav.portal.opsOverview",
+    "title": "运行概览",
+    "route": "/ops/overview",
+    "requiredRoles": ["DEPT_DATA_OWNER", "DEPT_LEADER", "INST_DATA_OWNER", "INST_LEADER", "ADMIN", "OP_ADMIN", "SYS_ADMIN"]
+  },
+  {
+    "code": "sys.nav.portal.opsInstances",
+    "title": "任务实例监控",
+    "route": "/ops/instances",
+    "requiredRoles": ["DEPT_DATA_OWNER", "DEPT_LEADER", "INST_DATA_OWNER", "INST_LEADER", "ADMIN", "OP_ADMIN", "SYS_ADMIN"]
+  },
+  {
+    "code": "sys.nav.portal.opsAlerts",
+    "title": "告警记录",
+    "route": "/ops/alerts",
+    "requiredRoles": ["DEPT_DATA_OWNER", "DEPT_LEADER", "INST_DATA_OWNER", "INST_LEADER", "ADMIN", "OP_ADMIN", "SYS_ADMIN"]
+  },
+  {
+    "code": "sys.nav.portal.opsBackfill",
+    "title": "补数管理",
+    "route": "/ops/backfill",
+    "requiredRoles": ["DEPT_DATA_OWNER", "DEPT_LEADER", "INST_DATA_OWNER", "INST_LEADER", "ADMIN", "OP_ADMIN", "SYS_ADMIN"]
+  },
+  {
+    "code": "sys.nav.portal.serviceApi",
+    "title": "数据 API 管理",
+    "route": "/services/apis",
+    "requiredRoles": ["EMPLOYEE", "DEPT_DATA_OWNER", "DEPT_LEADER", "INST_DATA_OWNER", "INST_LEADER", "ADMIN", "OP_ADMIN"]
+  },
+  {
+    "code": "sys.nav.portal.serviceOutbound",
+    "title": "数据推送",
+    "route": "/services/products",
+    "requiredRoles": ["DEPT_DATA_OWNER", "DEPT_LEADER", "INST_DATA_OWNER", "INST_LEADER", "ADMIN", "OP_ADMIN"]
+  },
+  {
+    "code": "sys.nav.portal.serviceExchange",
+    "title": "共享交换",
+    "route": "/services/tokens",
+    "requiredRoles": ["DEPT_DATA_OWNER", "DEPT_LEADER", "INST_DATA_OWNER", "INST_LEADER", "ADMIN", "OP_ADMIN"]
   }
 ]

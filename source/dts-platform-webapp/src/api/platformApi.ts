@@ -27,6 +27,10 @@ export const updateDbtConfig = (data: any) => api.put({ url: "/etl/dbt/config", 
 export const listDbtModels = () => api.get({ url: "/etl/dbt/models" });
 export const listDbtRuns = (limit = 20) => api.get({ url: "/etl/dbt/runs", params: { limit } });
 export const triggerDbtRun = (data: any) => api.post({ url: "/etl/dbt/run", data });
+export const listAirflowJobs = (limit = 50) => api.get({ url: "/etl/airflow/jobs", params: { limit } });
+export const listAirflowJobRuns = (dagId: string, limit = 20) =>
+	api.get({ url: `/etl/airflow/jobs/${dagId}/runs`, params: { limit } });
+export const triggerAirflowJob = (dagId: string, data?: any) => api.post({ url: `/etl/airflow/jobs/${dagId}/trigger`, data });
 export const createDataset = (data: any) => api.post({ url: "/catalog/datasets", data });
 export const updateDataset = (id: string, data: any) => api.put({ url: `/catalog/datasets/${id}`, data });
 export const deleteDataset = (id: string) => api.delete({ url: `/catalog/datasets/${id}` });
@@ -107,6 +111,23 @@ export const getExternalLinkStatus = (entryKey: string) => api.get({ url: `/infr
 export const visitExternalLink = (entryKey: string, data?: any) => api.post({ url: `/infra/external-links/${entryKey}/visit`, data });
 export const upsertExternalLink = (entryKey: string, data: any) => api.put({ url: `/infra/external-links/${entryKey}`, data });
 export const deleteExternalLink = (entryKey: string) => api.delete({ url: `/infra/external-links/${entryKey}` });
+
+// Airbyte (data lake ingestion)
+export const listAirbyteSourceDefinitions = () => api.get({ url: "/infra/airbyte/definitions/sources" });
+export const listAirbyteDestinationDefinitions = () => api.get({ url: "/infra/airbyte/definitions/destinations" });
+export const listAirbyteSources = () => api.get({ url: "/infra/airbyte/sources" });
+export const createAirbyteSource = (data: any) => api.post({ url: "/infra/airbyte/sources", data });
+export const updateAirbyteSource = (id: string, data: any) => api.put({ url: `/infra/airbyte/sources/${id}`, data });
+export const checkAirbyteSource = (id: string) => api.post({ url: `/infra/airbyte/sources/${id}/check` });
+export const discoverAirbyteSource = (id: string) => api.post({ url: `/infra/airbyte/sources/${id}/discover` });
+export const listAirbyteConnections = (refresh = false) =>
+	api.get({ url: "/infra/airbyte/connections", params: refresh ? { refresh } : undefined });
+export const createAirbyteConnection = (data: any) => api.post({ url: "/infra/airbyte/connections", data });
+export const updateAirbyteConnection = (id: string, data: any) =>
+	api.put({ url: `/infra/airbyte/connections/${id}`, data });
+export const triggerAirbyteSync = (id: string) => api.post({ url: `/infra/airbyte/connections/${id}/sync` });
+export const listAirbyteJobs = (id: string, limit = 10) =>
+	api.get({ url: `/infra/airbyte/connections/${id}/jobs`, params: { limit } });
 
 // External exchange files (data ingestion ledger)
 export const listExchangeFiles = (params?: any) => api.get({ url: "/infra/exchange-files", params });
@@ -293,6 +314,11 @@ export const deleteCatalogLineage = (id: string) => api.delete({ url: `/catalog/
 export type CatalogSyncRequest = { includePrimary?: boolean; includeJdbc?: boolean; reason?: string };
 export const triggerCatalogSync = (data: CatalogSyncRequest = {}) => api.post({ url: "/catalog/sync", data });
 export const getCatalogSyncStatus = () => api.get({ url: "/catalog/sync/status" });
+export const listCatalogSyncPipelines = () => api.get({ url: "/catalog/sync/pipelines" });
+export const listCatalogSyncRuns = (params: { integration?: string; limit?: number; includeDetails?: boolean } = {}) =>
+	api.get({ url: "/catalog/sync/runs", params });
+export const triggerJdbcCatalogSync = (sourceId: string, data: { reason?: string } = {}) =>
+	api.post({ url: `/catalog/sync/jdbc/${sourceId}/run`, data });
 
 // Visualization
 export const getCockpitMetrics = () => api.get({ url: "/vis/cockpit/metrics" });

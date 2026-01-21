@@ -2,6 +2,7 @@ package com.yuzhi.dts.platform;
 
 import com.yuzhi.dts.platform.config.ApplicationProperties;
 import com.yuzhi.dts.platform.config.AuditProperties;
+import com.yuzhi.dts.platform.config.AirbyteProperties;
 import com.yuzhi.dts.platform.config.AirflowProperties;
 import com.yuzhi.dts.platform.config.CatalogFeatureProperties;
 import com.yuzhi.dts.platform.config.DbtProperties;
@@ -43,6 +44,7 @@ import tech.jhipster.config.JHipsterConstants;
     OpenMetadataProperties.class,
     DbtProperties.class,
     AirflowProperties.class,
+    AirbyteProperties.class,
 })
 public class DtsPlatformApp {
 

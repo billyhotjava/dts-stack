@@ -69,6 +69,25 @@ public class AirflowClient {
         return Optional.empty();
     }
 
+    public Optional<Map<String, Object>> listDags(int limit) {
+        if (!properties.isEnabled()) {
+            return Optional.empty();
+        }
+        int safeLimit = Math.max(1, Math.min(limit, 200));
+        URI uri = buildUri("/dags", Map.of("limit", safeLimit, "order_by", "dag_id"));
+        try {
+            HttpHeaders headers = defaultHeaders();
+            HttpEntity<Void> entity = new HttpEntity<>(headers);
+            ResponseEntity<Map> response = restTemplate.exchange(uri, HttpMethod.GET, entity, Map.class);
+            return Optional.ofNullable(response.getBody());
+        } catch (HttpStatusCodeException ex) {
+            LOG.warn("Airflow dag list failed status={} body={}", ex.getStatusCode().value(), ex.getResponseBodyAsString());
+        } catch (Exception ex) {
+            LOG.warn("Airflow dag list error: {}", ex.getMessage());
+        }
+        return Optional.empty();
+    }
+
     private HttpHeaders defaultHeaders() {
         HttpHeaders headers = new HttpHeaders();
         headers.setAccept(List.of(MediaType.APPLICATION_JSON));

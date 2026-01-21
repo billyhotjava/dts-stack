@@ -75,6 +75,10 @@ public class JdbcConnectionTestService {
             if (StringUtils.hasText(request.getPassword())) {
                 props.setProperty("password", request.getPassword());
             }
+            // Add short connect timeout for PostgreSQL to avoid long hangs in UI tests.
+            if (url.toLowerCase(Locale.ROOT).startsWith("jdbc:postgresql:") && !props.containsKey("connectTimeout")) {
+                props.setProperty("connectTimeout", "5");
+            }
             request.getJdbcProperties().forEach((k, v) -> {
                 if (k != null && v != null) {
                     props.setProperty(k, v);
