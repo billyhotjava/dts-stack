@@ -63,6 +63,14 @@
           "titleKey": "sys.nav.portal.resourceIngestion",
           "title": "数据入湖配置",
           "externalLink": "/explore/etl/transform"
+        },
+        {
+          "key": "changes",
+          "path": "access-changes",
+          "icon": "solar:history-2-bold-duotone",
+          "titleKey": "sys.nav.portal.resourceChanges",
+          "title": "接入变更记录",
+          "externalLink": "/foundation/access-changes"
         }
       ]
     },

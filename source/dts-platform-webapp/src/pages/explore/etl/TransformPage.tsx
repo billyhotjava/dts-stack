@@ -4,12 +4,14 @@ import {
 	Alert,
 	Button,
 	Card,
-	Drawer,
+	Col,
 	Form,
 	Input,
 	Modal,
+	Row,
 	Select,
 	Space,
+	Statistic,
 	Switch,
 	Table,
 	Tag,
@@ -221,15 +223,15 @@ export default function Page() {
 	const [infraSources, setInfraSources] = useState<AirbyteSource[]>([]);
 	const [availableStreams, setAvailableStreams] = useState<string[]>([]);
 	const [keyword, setKeyword] = useState("");
-	const [editOpen, setEditOpen] = useState(false);
+	const [statusFilter, setStatusFilter] = useState("ALL");
 	const [editMode, setEditMode] = useState<"create" | "edit">("create");
 	const [editing, setEditing] = useState<AirbyteConnection | null>(null);
 	const [saving, setSaving] = useState(false);
 	const [destinationMode, setDestinationMode] = useState<"default" | "custom">("default");
-	const [jobsOpen, setJobsOpen] = useState(false);
 	const [jobs, setJobs] = useState<AirbyteJob[]>([]);
 	const [jobsLoading, setJobsLoading] = useState(false);
 	const [activeJobConnection, setActiveJobConnection] = useState<AirbyteConnection | null>(null);
+	const [helpOpen, setHelpOpen] = useState(false);
 	const [form] = Form.useForm();
 	const userInfo = useUserInfo() as any;
 
@@ -268,14 +270,6 @@ export default function Page() {
 		void loadConnections(true);
 	}, [loadConnections, loadDefinitions]);
 
-	const stats = useMemo(() => {
-		const total = connections.length;
-		const enabled = connections.filter((row) => row.enabled !== false).length;
-		const running = connections.filter((row) => normalizeUpper(row.lastJobStatus) === "RUNNING").length;
-		const failed = connections.filter((row) => normalizeUpper(row.lastJobStatus) === "FAILED").length;
-		return { total, enabled, running, failed };
-	}, [connections]);
-
 	const sourceMap = useMemo(() => {
 		const map = new Map<string, AirbyteDefinition>();
 		for (const def of sourceDefs) {
@@ -285,14 +279,82 @@ export default function Page() {
 		return map;
 	}, [sourceDefs]);
 
+	const sourceNameMap = useMemo(() => {
+		const map = new Map<string, AirbyteSource>();
+		infraSources.forEach((item) => {
+			if (item.id) map.set(String(item.id), item);
+		});
+		return map;
+	}, [infraSources]);
+
+	const resolveHealth = useCallback((row: AirbyteConnection) => {
+		if (row.enabled === false) return "PAUSED";
+		const status = normalizeUpper(row.lastJobStatus);
+		if (["FAILED", "ERROR"].includes(status)) return "BAD";
+		if (["SUCCEEDED", "SUCCESS", "COMPLETED"].includes(status)) return "OK";
+		if (status === "RUNNING") return "RUNNING";
+		return "UNKNOWN";
+	}, []);
+
+	const resolveStatusLabel = useCallback((row: AirbyteConnection) => {
+		const status = normalizeUpper(row.lastJobStatus);
+		if (row.enabled === false) return "停用";
+		if (status === "RUNNING") return "运行中";
+		if (["SUCCEEDED", "SUCCESS", "COMPLETED"].includes(status)) return "健康";
+		if (["FAILED", "ERROR"].includes(status)) return "异常";
+		return status || "待运行";
+	}, []);
+
+	const resolveLag = useCallback((row: AirbyteConnection) => {
+		const raw = row.lastSyncAt;
+		if (!raw) return "-";
+		const ts = new Date(raw as any).getTime();
+		if (Number.isNaN(ts)) return "-";
+		const diff = Date.now() - ts;
+		if (diff <= 0) return "0m";
+		const minutes = Math.floor(diff / 60000);
+		if (minutes < 60) return `${minutes}m`;
+		const hours = Math.floor(minutes / 60);
+		if (hours < 24) return `${hours}h`;
+		const days = Math.floor(hours / 24);
+		return `${days}d`;
+	}, []);
+
+	const isLagging = useCallback((row: AirbyteConnection) => {
+		const raw = row.lastSyncAt;
+		if (!raw) return false;
+		const ts = new Date(raw as any).getTime();
+		if (Number.isNaN(ts)) return false;
+		return Date.now() - ts > 24 * 60 * 60 * 1000;
+	}, []);
+
+	const hasSchemaChange = useCallback((row: AirbyteConnection) => {
+		const status = normalizeUpper(row.status);
+		const jobStatus = normalizeUpper(row.lastJobStatus);
+		return status.includes("SCHEMA") || jobStatus.includes("SCHEMA");
+	}, []);
+
+	const stats = useMemo(() => {
+		const total = connections.length;
+		const success24h = connections.filter((row) => {
+			const status = normalizeUpper(row.lastJobStatus);
+			if (!["SUCCEEDED", "SUCCESS", "COMPLETED"].includes(status)) return false;
+			const ts = row.lastSyncAt ? new Date(row.lastSyncAt as any).getTime() : NaN;
+			if (Number.isNaN(ts)) return false;
+			return Date.now() - ts < 24 * 60 * 60 * 1000;
+		}).length;
+		const lagging = connections.filter((row) => isLagging(row)).length;
+		const schemaChanges = connections.filter((row) => hasSchemaChange(row)).length;
+		return { total, success24h, lagging, schemaChanges };
+	}, [connections, hasSchemaChange, isLagging]);
+
 	const buildDefaultPairs = useCallback(
 		(definitionId?: string) => {
 			const def = definitionId ? sourceMap.get(definitionId) : undefined;
 			const name = (def?.name || def?.dockerRepository || "").toLowerCase();
-			const isDatabase =
-				["postgres", "mysql", "oracle", "sql server", "mssql", "dameng", "dm8", "db2"].some((key) =>
-					name.includes(key),
-				);
+			const isDatabase = ["postgres", "mysql", "oracle", "sql server", "mssql", "dameng", "dm8", "db2"].some((key) =>
+				name.includes(key),
+			);
 			const keys = isDatabase
 				? ["host", "port", "database", "schema", "username", "password"]
 				: ["host", "port", "username", "password"];
@@ -303,13 +365,17 @@ export default function Page() {
 
 	const filteredConnections = useMemo(() => {
 		const key = normalizeText(keyword).toLowerCase();
-		if (!key) return connections;
-		return connections.filter((row) =>
-			[row.name, row.owner, row.syncMode, row.scheduleCron]
-				.filter(Boolean)
-				.some((value) => String(value).toLowerCase().includes(key)),
-		);
-	}, [connections, keyword]);
+		return connections.filter((row) => {
+			const matchesKeyword = !key
+				? true
+				: [row.name, row.owner, row.syncMode, row.scheduleCron]
+						.filter(Boolean)
+						.some((value) => String(value).toLowerCase().includes(key));
+			if (!matchesKeyword) return false;
+			if (statusFilter === "ALL") return true;
+			return resolveHealth(row) === statusFilter;
+		});
+	}, [connections, keyword, resolveHealth, statusFilter]);
 
 	const openCreate = () => {
 		setEditMode("create");
@@ -317,6 +383,7 @@ export default function Page() {
 		setDestinationMode("default");
 		setAvailableStreams([]);
 		form.resetFields();
+		const initialDefinitionId = sourceDefs[0]?.sourceDefinitionId;
 		form.setFieldsValue({
 			name: "",
 			syncMode: "INCREMENTAL",
@@ -325,10 +392,11 @@ export default function Page() {
 			schemaStrategy: "AUTO",
 			reconcileRule: "NONE",
 			owner: userInfo?.username || userInfo?.name || "",
-			sourceConfigPairs: buildDefaultPairs(),
+			sourceDefinitionId: initialDefinitionId,
+			sourceConfigPairs: buildDefaultPairs(initialDefinitionId),
 			destinationConfigPairs: [],
+			selectedStreams: [],
 		});
-		setEditOpen(true);
 	};
 
 	const openEdit = (row: AirbyteConnection) => {
@@ -360,7 +428,6 @@ export default function Page() {
 		} else {
 			setAvailableStreams([]);
 		}
-		setEditOpen(true);
 	};
 
 	const handleInfraSourceChange = (value?: string) => {
@@ -402,7 +469,6 @@ export default function Page() {
 		try {
 			const resp = (await listAirbyteJobs(row.id, 20)) as AirbyteJob[];
 			setJobs(Array.isArray(resp) ? resp : []);
-			setJobsOpen(true);
 		} catch (err: any) {
 			toast.error(err?.message || "加载同步记录失败");
 		} finally {
@@ -469,9 +535,10 @@ export default function Page() {
 				await updateAirbyteConnection(editing.id, payload);
 				toast.success("入湖接入已更新");
 			}
-			setEditOpen(false);
 			setEditing(null);
+			setEditMode("create");
 			await loadConnections(true);
+			openCreate();
 		} catch (err: any) {
 			toast.error(err?.message || "保存失败");
 		} finally {
@@ -490,63 +557,83 @@ export default function Page() {
 		}
 	};
 
+	const toMillis = (value?: number | string | null) => {
+		if (value === null || value === undefined) return null;
+		if (typeof value === "number") return value;
+		const ts = new Date(String(value)).getTime();
+		if (Number.isNaN(ts)) return null;
+		return ts;
+	};
+
+	const formatDuration = useCallback((start?: number | string | null, end?: number | string | null) => {
+		const startTs = toMillis(start);
+		const endTs = toMillis(end);
+		if (startTs === null || endTs === null) return "-";
+		const diff = Math.max(0, endTs - startTs);
+		const seconds = Math.floor(diff / 1000);
+		if (seconds < 60) return `${seconds}s`;
+		const minutes = Math.floor(seconds / 60);
+		if (minutes < 60) return `${minutes}m`;
+		const hours = Math.floor(minutes / 60);
+		if (hours < 24) return `${hours}h`;
+		const days = Math.floor(hours / 24);
+		return `${days}d`;
+	}, []);
+
 	const columns: ColumnsType<AirbyteConnection> = useMemo(
 		() => [
-			{ title: "接入名称", dataIndex: "name", key: "name", width: 200, render: (v) => <Text strong>{v}</Text> },
+			{ title: "任务", dataIndex: "name", key: "name", render: (v) => <Text strong>{v}</Text> },
 			{
-				title: "源端类型",
-				dataIndex: "sourceDefinitionId",
-				key: "sourceDefinitionId",
-				width: 180,
-				render: (v) => renderDefinitionLabel(sourceMap.get(String(v))),
+				title: "源",
+				dataIndex: "infraSourceId",
+				key: "infraSourceId",
+				render: (_, row) => {
+					const source = row.infraSourceId ? sourceNameMap.get(String(row.infraSourceId)) : undefined;
+					const def = sourceMap.get(String(row.sourceDefinitionId || source?.sourceDefinitionId));
+					return (
+						<Space direction="vertical" size={0}>
+							<Text>{source?.name || row.sourceId || "未关联数据源"}</Text>
+							<Text type="secondary" className="text-xs">
+								{def?.name || row.sourceDefinitionId || "-"}
+							</Text>
+						</Space>
+					);
+				},
 			},
 			{
-				title: "同步表数",
-				dataIndex: "selectedStreams",
-				key: "selectedStreams",
-				width: 120,
-				render: (v) => (Array.isArray(v) ? v.length : 0),
+				title: "目标",
+				dataIndex: "namespace",
+				key: "namespace",
+				render: (_, row) => <Text>{row.namespace ? `ODS.${row.namespace}` : "默认 ODS"}</Text>,
 			},
 			{
-				title: "同步策略",
+				title: "模式",
 				dataIndex: "syncMode",
 				key: "syncMode",
-				width: 140,
 				render: (v) => <Tag>{syncModeLabel(v)}</Tag>,
 			},
 			{
-				title: "调度周期",
-				key: "schedule",
-				width: 160,
-				render: (_, row) => scheduleLabel(row),
-			},
-			{
-				title: "最新状态",
-				dataIndex: "lastJobStatus",
-				key: "lastJobStatus",
-				width: 140,
-				render: (v) => <Tag color={statusColor(v)}>{normalizeUpper(v) || "未运行"}</Tag>,
-			},
-			{
-				title: "最近同步",
+				title: "延迟",
 				dataIndex: "lastSyncAt",
 				key: "lastSyncAt",
-				width: 180,
-				render: (v) => formatDateTime(v),
+				render: (_, row) => resolveLag(row),
 			},
-			{ title: "负责人", dataIndex: "owner", key: "owner", width: 120 },
+			{
+				title: "状态",
+				dataIndex: "lastJobStatus",
+				key: "lastJobStatus",
+				render: (_, row) => <Tag color={statusColor(row.lastJobStatus)}>{resolveStatusLabel(row)}</Tag>,
+			},
 			{
 				title: "操作",
 				key: "actions",
-				fixed: "right",
-				width: 200,
 				render: (_, row) => (
 					<Space>
 						<Button size="small" onClick={() => triggerSync(row)}>
-							同步
+							运行
 						</Button>
 						<Button size="small" onClick={() => loadJobs(row)}>
-							记录
+							历史
 						</Button>
 						<Button size="small" onClick={() => openEdit(row)}>
 							编辑
@@ -555,391 +642,458 @@ export default function Page() {
 				),
 			},
 		],
-		[sourceMap],
+		[resolveLag, resolveStatusLabel, sourceMap, sourceNameMap],
 	);
 
-	const jobColumns: ColumnsType<AirbyteJob> = [
-		{ title: "任务 ID", dataIndex: "id", key: "id", width: 160 },
+	const jobRows = useMemo(
+		() =>
+			jobs.map((job) => ({
+				key: String(job.id || job.createdAt || Math.random()),
+				time: formatDateTime(job.createdAt),
+				name: activeJobConnection?.name || "-",
+				status: normalizeUpper(job.status) || "-",
+				sourceRows: "-",
+				targetRows: "-",
+				delta: "-",
+				duration: formatDuration(job.startedAt, job.updatedAt),
+			})),
+		[activeJobConnection?.name, formatDuration, jobs],
+	);
+
+	const jobColumns: ColumnsType<any> = [
+		{ title: "时间", dataIndex: "time" },
+		{ title: "任务", dataIndex: "name" },
 		{
 			title: "状态",
 			dataIndex: "status",
-			key: "status",
-			width: 120,
-			render: (v) => <Tag color={statusColor(v)}>{normalizeUpper(v)}</Tag>,
+			render: (v) => <Tag color={statusColor(v)}>{v}</Tag>,
 		},
-		{ title: "创建时间", dataIndex: "createdAt", key: "createdAt", render: (v) => formatDateTime(v) },
-		{ title: "开始时间", dataIndex: "startedAt", key: "startedAt", render: (v) => formatDateTime(v) },
-		{ title: "结束时间", dataIndex: "updatedAt", key: "updatedAt", render: (v) => formatDateTime(v) },
+		{ title: "源行数", dataIndex: "sourceRows" },
+		{ title: "目标行数", dataIndex: "targetRows" },
+		{ title: "差异", dataIndex: "delta" },
+		{ title: "延迟", dataIndex: "duration" },
+	];
+
+	const statusOptions = [
+		{ label: "全部", value: "ALL" },
+		{ label: "健康", value: "OK" },
+		{ label: "异常", value: "BAD" },
+		{ label: "运行中", value: "RUNNING" },
+		{ label: "停用", value: "PAUSED" },
+		{ label: "待运行", value: "UNKNOWN" },
 	];
 
 	return (
 		<div className="space-y-4">
 			<PageHeader
-				title="数据资源中心 · 数据入湖配置"
-				description="配置业务系统到中台的同步规则，统一管理接入任务与状态。"
+				title="数据入湖任务"
+				description="Airbyte Connection 的业务化包装：统一管理入湖任务、运行历史与治理策略。"
 				actions={
 					<Space>
 						<Button onClick={() => loadConnections(true)} loading={loading}>
 							刷新
 						</Button>
+						<Button onClick={() => setHelpOpen(true)}>使用说明</Button>
 						<Button type="primary" onClick={openCreate}>
-							新建接入
+							新建入湖任务
 						</Button>
 					</Space>
 				}
 			/>
 
-			<div className="grid gap-4 lg:grid-cols-4">
-				<Card>
-					<div className="text-sm text-gray-500">接入总数</div>
-					<div className="mt-2 text-2xl font-semibold">{stats.total}</div>
-				</Card>
-				<Card>
-					<div className="text-sm text-gray-500">启用中</div>
-					<div className="mt-2 text-2xl font-semibold">{stats.enabled}</div>
-				</Card>
-				<Card>
-					<div className="text-sm text-gray-500">运行中</div>
-					<div className="mt-2 text-2xl font-semibold">{stats.running}</div>
-				</Card>
-				<Card>
-					<div className="text-sm text-gray-500">失败</div>
-					<div className="mt-2 text-2xl font-semibold text-red-500">{stats.failed}</div>
-				</Card>
-			</div>
-
-			<Card
-				title="入湖任务列表"
-				extra={
-					<Space>
-						<Input
-							placeholder="搜索名称/负责人"
-							value={keyword}
-							onChange={(e) => setKeyword(e.target.value)}
-							style={{ width: 220 }}
-							allowClear
-						/>
-					</Space>
-				}
-			>
-				{filteredConnections.length === 0 && !loading ? (
-					<EmptyState title="暂无入湖接入" description="新增一个数据接入，将业务库同步到中台。" />
-				) : (
-					<Table
-						rowKey={(row) => row.id || row.connectionId || row.name || "row"}
-						columns={columns}
-						dataSource={filteredConnections}
-						loading={loading}
-						scroll={{ x: 1200 }}
-						pagination={{ pageSize: 10 }}
-					/>
-				)}
-			</Card>
-
 			<Alert
 				type="info"
 				showIcon
-				message="任务运行完成后将自动刷新元数据，并为后续建模提供最新表结构。"
+				message="入湖任务封装源连接、目标 ODS 预设与同步策略，运行完成后自动刷新元数据。"
 			/>
 
-			<Modal
-				open={editOpen}
-				title={editMode === "create" ? "新建入湖接入" : "编辑入湖接入"}
-				onCancel={() => setEditOpen(false)}
-				onOk={submitEdit}
-				confirmLoading={saving}
-				okText="保存"
-				cancelText="取消"
-				width={860}
-			>
-				<Form layout="vertical" form={form}>
-					<div className="grid gap-4 md:grid-cols-2">
-						<Form.Item name="name" label="接入名称" rules={[{ required: true, message: "请输入接入名称" }]}>
-							<Input placeholder="例如：ERP 主数据接入" />
-						</Form.Item>
-						<Form.Item name="owner" label="负责人">
-							<Input placeholder="默认当前用户" />
-						</Form.Item>
-					</div>
-					<div className="grid gap-4 md:grid-cols-2">
-						<Form.Item name="infraSourceId" label="已建数据源">
-							<Select
-								allowClear
-								placeholder="选择已建数据源"
-								options={infraSources.map((item) => {
-									const def = sourceMap.get(String(item.sourceDefinitionId));
-									const iconSrc = resolveIconSrc(def?.icon);
-									return {
-										label: (
-											<Space>
-												{iconSrc ? (
-													<img src={iconSrc} alt={def?.name || "icon"} className="h-4 w-4 object-contain" />
-												) : (
-													<span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-slate-200 text-[10px] text-slate-500">
-														{String(def?.name || "D").slice(0, 1).toUpperCase()}
-													</span>
-												)}
-												<span>{item.name || item.id}</span>
-												<Text type="secondary">{def?.name || "未知类型"}</Text>
-											</Space>
-										),
-										value: item.id,
-									};
-								})}
-								optionLabelProp="label"
-								onChange={(value) => handleInfraSourceChange(value as string | undefined)}
-							/>
-						</Form.Item>
-						<Form.Item shouldUpdate={(prev, next) => prev.infraSourceId !== next.infraSourceId} noStyle>
-							{({ getFieldValue }) => (
-								<Form.Item
-									name="sourceDefinitionId"
-									label="源端类型"
-									rules={[{ required: true, message: "请选择源端类型" }]}
-								>
-									<Select
-										placeholder="选择业务系统类型"
-										options={sourceDefs.map((item) => ({
-											label: renderDefinitionLabel(item),
-											value: item.sourceDefinitionId,
-										}))}
-										optionLabelProp="label"
-										disabled={Boolean(getFieldValue("infraSourceId"))}
-										onChange={(value) => {
-											if (!getFieldValue("infraSourceId")) {
-												form.setFieldsValue({ sourceConfigPairs: buildDefaultPairs(String(value)) });
-											}
-										}}
-									/>
-								</Form.Item>
-							)}
-						</Form.Item>
-						<Form.Item name="syncMode" label="同步策略">
-							<Select
-								options={[
-									{ label: "全量重写", value: "FULL_REFRESH" },
-									{ label: "增量追加", value: "INCREMENTAL" },
-									{ label: "CDC 实时同步", value: "CDC" },
-								]}
-							/>
-						</Form.Item>
-					</div>
-					<Form.Item shouldUpdate={(prev, next) => prev.infraSourceId !== next.infraSourceId} noStyle>
-						{({ getFieldValue }) => (
-							<Form.Item
-								name="sourceConfigPairs"
-								label="源端连接配置"
-								rules={[{ required: true, message: "请填写源端连接配置" }]}
-								extra="敏感字段支持脱敏显示，保持 ****** 表示不修改原值。"
-							>
-								<Form.List name="sourceConfigPairs">
-									{(fields, { add, remove }) => (
-										<div className="space-y-2">
-											{fields.map((field) => (
-												<Space key={field.key} align="start" className="w-full">
-													<Form.Item
-														{...field}
-														name={[field.name, "key"]}
-														rules={[{ required: true, message: "请输入参数名" }]}
-														className="mb-0 w-40"
-													>
-														<Input placeholder="参数名" disabled={Boolean(getFieldValue("infraSourceId"))} />
-													</Form.Item>
-													<Form.Item shouldUpdate noStyle>
-														{() => {
-															const keyValue = form.getFieldValue(["sourceConfigPairs", field.name, "key"]);
-															const secret = isSecretKey(keyValue);
-															return (
-																<Form.Item
-																	{...field}
-																	name={[field.name, "value"]}
-																	rules={[{ required: true, message: "请输入参数值" }]}
-																	className="mb-0 flex-1"
-																>
-																	{secret ? (
-																		<Input.Password
-																			placeholder="请输入"
-																			disabled={Boolean(getFieldValue("infraSourceId"))}
-																		/>
-																	) : (
-																		<Input placeholder="请输入" disabled={Boolean(getFieldValue("infraSourceId"))} />
-																	)}
-																</Form.Item>
-															);
-														}}
-													</Form.Item>
-													<Button
-														type="text"
-														onClick={() => remove(field.name)}
-														disabled={Boolean(getFieldValue("infraSourceId"))}
-													>
-														删除
-													</Button>
-												</Space>
-											))}
-											<Button
-												type="dashed"
-												onClick={() => add({ key: "", value: "" })}
-												disabled={Boolean(getFieldValue("infraSourceId"))}
-											>
-												+ 添加参数
-											</Button>
-										</div>
-									)}
-								</Form.List>
-							</Form.Item>
-						)}
-					</Form.Item>
-					<Form.Item name="selectedStreams" label="同步表/流选择">
-						<Select
-							mode="multiple"
-							allowClear
-							placeholder={availableStreams.length ? "选择需要同步的表" : "请先选择数据源并发现 Schema"}
-							options={availableStreams.map((name) => ({ label: name, value: name }))}
-						/>
-					</Form.Item>
-					<div className="grid gap-4 md:grid-cols-2">
-						<Form.Item name="schemaStrategy" label="Schema 策略">
-							<Select
-								options={[
-									{ label: "自动迁移", value: "AUTO" },
-									{ label: "阻断任务", value: "BLOCK" },
-									{ label: "待办提醒", value: "MANUAL" },
-								]}
-							/>
-						</Form.Item>
-						<Form.Item name="reconcileRule" label="入湖对账">
-							<Select
-								options={[
-									{ label: "不启用", value: "NONE" },
-									{ label: "行数强一致", value: "ROW_COUNT_STRICT" },
-								]}
-							/>
-						</Form.Item>
-					</div>
-					<div className="grid gap-4 md:grid-cols-2">
-						<Form.Item name="scheduleType" label="调度方式">
-							<Select
-								options={[
-									{ label: "手动", value: "manual" },
-									{ label: "Cron", value: "cron" },
-								]}
-							/>
-						</Form.Item>
-						<Form.Item name="scheduleCron" label="Cron 表达式">
-							<Input placeholder="0 2 * * *" />
-						</Form.Item>
-					</div>
-					<div className="grid gap-4 md:grid-cols-2">
-						<Form.Item name="namespace" label="入湖命名空间">
-							<Input placeholder="ods" />
-						</Form.Item>
-						<Form.Item name="prefix" label="表前缀">
-							<Input placeholder="ods_" />
-						</Form.Item>
-					</div>
+			<Row gutter={[16, 16]}>
+				<Col xs={12} sm={12} lg={6}>
+					<Card className="rounded-xl shadow-sm">
+						<Statistic title="入湖任务" value={stats.total} />
+					</Card>
+				</Col>
+				<Col xs={12} sm={12} lg={6}>
+					<Card className="rounded-xl shadow-sm">
+						<Statistic title="近24h成功" value={stats.success24h} />
+					</Card>
+				</Col>
+				<Col xs={12} sm={12} lg={6}>
+					<Card className="rounded-xl shadow-sm">
+						<Statistic title="延迟告警" value={stats.lagging} valueStyle={{ color: "#d48806" }} />
+					</Card>
+				</Col>
+				<Col xs={12} sm={12} lg={6}>
+					<Card className="rounded-xl shadow-sm">
+						<Statistic title="Schema 变更待处理" value={stats.schemaChanges} />
+					</Card>
+				</Col>
+			</Row>
 
-					<Card size="small" title="目标端配置" className="mb-4">
-						<Space className="mb-4">
-							<Text>目标端：</Text>
-							<Select
-								value={destinationMode}
-								onChange={(value) => setDestinationMode(value)}
-								options={[
-									{ label: "中台默认数据湖", value: "default" },
-									{ label: "自定义目标端", value: "custom" },
-								]}
-								style={{ width: 200 }}
-							/>
-						</Space>
-						{destinationMode === "custom" ? (
-							<>
-								<Form.Item name="destinationDefinitionId" label="目标端类型">
-									<Select
-										placeholder="选择目标端类型"
-										options={destinationDefs.map((item) => ({
-											label: renderDefinitionLabel(item),
-											value: item.destinationDefinitionId,
-										}))}
-										optionLabelProp="label"
-									/>
-								</Form.Item>
-								<Form.Item name="destinationConfigPairs" label="目标端连接配置" extra="保持 ****** 表示不修改原值。">
-									<Form.List name="destinationConfigPairs">
-										{(fields, { add, remove }) => (
-											<div className="space-y-2">
-												{fields.map((field) => (
-													<Space key={field.key} align="start" className="w-full">
-														<Form.Item
-															{...field}
-															name={[field.name, "key"]}
-															rules={[{ required: true, message: "请输入参数名" }]}
-															className="mb-0 w-40"
-														>
-															<Input placeholder="参数名" />
-														</Form.Item>
-														<Form.Item shouldUpdate noStyle>
-															{() => {
-																const keyValue = form.getFieldValue(["destinationConfigPairs", field.name, "key"]);
-																const secret = isSecretKey(keyValue);
-																return (
-																	<Form.Item
-																		{...field}
-																		name={[field.name, "value"]}
-																		rules={[{ required: true, message: "请输入参数值" }]}
-																		className="mb-0 flex-1"
-																	>
-																		{secret ? (
-																			<Input.Password placeholder="请输入" />
-																		) : (
-																			<Input placeholder="请输入" />
-																		)}
-																	</Form.Item>
-																);
-															}}
-														</Form.Item>
-														<Button type="text" onClick={() => remove(field.name)}>
-															删除
-														</Button>
-													</Space>
-												))}
-												<Button type="dashed" onClick={() => add({ key: "", value: "" })}>
-													+ 添加参数
-												</Button>
-											</div>
-										)}
-									</Form.List>
-								</Form.Item>
-							</>
+			<Row gutter={[16, 16]} align="top">
+				<Col xs={24} xl={15}>
+					<Card
+						title="入湖任务列表"
+						extra={
+							<Space>
+								<Input
+									placeholder="按任务名 / 负责人搜索"
+									value={keyword}
+									onChange={(e) => setKeyword(e.target.value)}
+									style={{ width: 220 }}
+									allowClear
+								/>
+								<Select value={statusFilter} onChange={setStatusFilter} style={{ width: 140 }} options={statusOptions} />
+							</Space>
+						}
+					>
+						{filteredConnections.length === 0 && !loading ? (
+							<EmptyState title="暂无入湖任务" description="新增一个数据接入，将业务库同步到中台。" />
 						) : (
-							<Text type="secondary">默认写入中台统一数据湖/仓，不需要额外配置。</Text>
+							<Table
+								rowKey={(row) => row.id || row.connectionId || row.name || "row"}
+								columns={columns}
+								dataSource={filteredConnections}
+								loading={loading}
+								pagination={{ pageSize: 8 }}
+							/>
 						)}
 					</Card>
+				</Col>
+				<Col xs={24} xl={9}>
+					<Card
+						title={editMode === "create" ? "创建入湖任务" : "编辑入湖任务"}
+						extra={
+							editMode === "edit" ? (
+								<Button size="small" onClick={openCreate}>
+									切换为新建
+								</Button>
+							) : null
+						}
+					>
+						<Form layout="vertical" form={form}>
+							<div className="grid gap-4 md:grid-cols-2">
+								<Form.Item name="name" label="任务名称" rules={[{ required: true, message: "请输入任务名称" }]}>
+									<Input placeholder="例如：ERP-销售订单入湖" />
+								</Form.Item>
+								<Form.Item name="owner" label="负责人">
+									<Input placeholder="默认当前用户" />
+								</Form.Item>
+							</div>
+							<div className="grid gap-4 md:grid-cols-2">
+								<Form.Item name="infraSourceId" label="选择源（数据源连接）">
+									<Select
+										allowClear
+										placeholder="选择已建数据源"
+										options={infraSources.map((item) => {
+											const def = sourceMap.get(String(item.sourceDefinitionId));
+											const iconSrc = resolveIconSrc(def?.icon);
+											return {
+												label: (
+													<Space>
+														{iconSrc ? (
+															<img src={iconSrc} alt={def?.name || "icon"} className="h-4 w-4 object-contain" />
+														) : (
+															<span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-slate-200 text-[10px] text-slate-500">
+																{String(def?.name || "D").slice(0, 1).toUpperCase()}
+															</span>
+														)}
+														<span>{item.name || item.id}</span>
+														<Text type="secondary">{def?.name || "未知类型"}</Text>
+													</Space>
+												),
+												value: item.id,
+											};
+										})}
+										optionLabelProp="label"
+										onChange={(value) => handleInfraSourceChange(value as string | undefined)}
+									/>
+								</Form.Item>
+								<Form.Item shouldUpdate={(prev, next) => prev.infraSourceId !== next.infraSourceId} noStyle>
+									{({ getFieldValue }) => (
+										<Form.Item
+											name="sourceDefinitionId"
+											label="源端类型"
+											rules={[{ required: true, message: "请选择源端类型" }]}
+										>
+											<Select
+												placeholder="选择业务系统类型"
+												options={sourceDefs.map((item) => ({
+													label: renderDefinitionLabel(item),
+													value: item.sourceDefinitionId,
+												}))}
+												optionLabelProp="label"
+												disabled={Boolean(getFieldValue("infraSourceId"))}
+												onChange={(value) => {
+													if (!getFieldValue("infraSourceId")) {
+														form.setFieldsValue({ sourceConfigPairs: buildDefaultPairs(String(value)) });
+													}
+												}}
+											/>
+										</Form.Item>
+									)}
+								</Form.Item>
+							</div>
+							<div className="grid gap-4 md:grid-cols-2">
+								<Form.Item name="syncMode" label="同步模式">
+									<Select
+										options={[
+											{ label: "全量刷新（覆盖）", value: "FULL_REFRESH" },
+											{ label: "增量追加（窗口）", value: "INCREMENTAL" },
+											{ label: "CDC（日志捕获）", value: "CDC" },
+										]}
+									/>
+								</Form.Item>
+								<Form.Item name="schemaStrategy" label="Schema 漂移策略">
+									<Select
+										options={[
+											{ label: "自动接纳新增字段", value: "AUTO" },
+											{ label: "阻断并告警", value: "BLOCK" },
+											{ label: "需要审批后接纳", value: "MANUAL" },
+										]}
+									/>
+								</Form.Item>
+							</div>
+							<div className="grid gap-4 md:grid-cols-2">
+								<Form.Item name="reconcileRule" label="入湖对账">
+									<Select
+										options={[
+											{ label: "不启用", value: "NONE" },
+											{ label: "行数强一致", value: "ROW_COUNT_STRICT" },
+										]}
+									/>
+								</Form.Item>
+								<Form.Item name="scheduleType" label="调度方式">
+									<Select
+										options={[
+											{ label: "手动", value: "manual" },
+											{ label: "Cron", value: "cron" },
+										]}
+									/>
+								</Form.Item>
+							</div>
+							<div className="grid gap-4 md:grid-cols-2">
+								<Form.Item name="scheduleCron" label="Cron 表达式">
+									<Input placeholder="0 2 * * *" />
+								</Form.Item>
+								<Form.Item name="namespace" label="入湖命名空间">
+									<Input placeholder="ods" />
+								</Form.Item>
+							</div>
+							<div className="grid gap-4 md:grid-cols-2">
+								<Form.Item name="prefix" label="表前缀">
+									<Input placeholder="ods_" />
+								</Form.Item>
+								<Form.Item name="enabled" label="启用" valuePropName="checked">
+									<Switch />
+								</Form.Item>
+							</div>
+							<Form.Item name="selectedStreams" label="已选择对象">
+								<Select
+									mode="multiple"
+									allowClear
+									placeholder={availableStreams.length ? "选择需要同步的表" : "请先选择数据源并发现 Schema"}
+									options={availableStreams.map((name) => ({ label: name, value: name }))}
+								/>
+							</Form.Item>
+							<Space>
+								<Button
+									onClick={async () => {
+										const sourceId = form.getFieldValue("infraSourceId");
+										if (!sourceId) {
+											toast.error("请先选择数据源");
+											return;
+										}
+										await loadStreamsForSource(String(sourceId));
+										toast.success("已发现可同步对象");
+									}}
+								>
+									发现可同步对象
+								</Button>
+								<Button type="primary" onClick={submitEdit} loading={saving}>
+									{editMode === "create" ? "创建入湖任务" : "保存修改"}
+								</Button>
+								<Button onClick={() => toast.success("已保存草稿（示例）")}>保存草稿</Button>
+							</Space>
 
-					<Form.Item name="description" label="说明">
-						<Input.TextArea rows={2} placeholder="补充说明同步范围或口径" />
-					</Form.Item>
-					<Form.Item name="enabled" label="启用" valuePropName="checked">
-						<Switch />
-					</Form.Item>
-				</Form>
-			</Modal>
+							<Form.Item shouldUpdate={(prev, next) => prev.infraSourceId !== next.infraSourceId} noStyle>
+								{({ getFieldValue }) => (
+									<Card size="small" title="源端连接配置" className="mt-4">
+										<Form.Item
+											name="sourceConfigPairs"
+											extra="敏感字段支持脱敏显示，保持 ****** 表示不修改原值。"
+										>
+											<Form.List name="sourceConfigPairs">
+												{(fields, { add, remove }) => (
+													<div className="space-y-2">
+														{fields.map((field) => (
+															<Space key={field.key} align="start" className="w-full">
+																<Form.Item
+																	{...field}
+																	name={[field.name, "key"]}
+																	rules={[{ required: true, message: "请输入参数名" }]}
+																	className="mb-0 w-40"
+																>
+																	<Input placeholder="参数名" disabled={Boolean(getFieldValue("infraSourceId"))} />
+																</Form.Item>
+																<Form.Item shouldUpdate noStyle>
+																	{() => {
+																		const keyValue = form.getFieldValue(["sourceConfigPairs", field.name, "key"]);
+																		const secret = isSecretKey(keyValue);
+																		return (
+																			<Form.Item
+																				{...field}
+																				name={[field.name, "value"]}
+																				rules={[{ required: true, message: "请输入参数值" }]}
+																				className="mb-0 flex-1"
+																			>
+																				{secret ? (
+																					<Input.Password placeholder="请输入" disabled={Boolean(getFieldValue("infraSourceId"))} />
+																				) : (
+																					<Input placeholder="请输入" disabled={Boolean(getFieldValue("infraSourceId"))} />
+																				)}
+																			</Form.Item>
+																		);
+																	}}
+																</Form.Item>
+																<Button
+																	type="text"
+																	onClick={() => remove(field.name)}
+																	disabled={Boolean(getFieldValue("infraSourceId"))}
+																>
+																	删除
+																</Button>
+															</Space>
+														))}
+														<Button
+															type="dashed"
+															onClick={() => add({ key: "", value: "" })}
+															disabled={Boolean(getFieldValue("infraSourceId"))}
+														>
+															+ 添加参数
+														</Button>
+													</div>
+												)}
+											</Form.List>
+										</Form.Item>
+									</Card>
+								)}
+							</Form.Item>
 
-			<Drawer
-				open={jobsOpen}
-				onClose={() => setJobsOpen(false)}
-				title={`同步记录${activeJobConnection?.name ? ` - ${activeJobConnection.name}` : ""}`}
-				width={680}
+							<Card size="small" title="目标端配置" className="mt-4">
+								<Space className="mb-3">
+									<Text>目标端：</Text>
+									<Select
+										value={destinationMode}
+										onChange={(value) => setDestinationMode(value)}
+										options={[
+											{ label: "中台默认数据湖", value: "default" },
+											{ label: "自定义目标端", value: "custom" },
+										]}
+										style={{ width: 200 }}
+									/>
+								</Space>
+								{destinationMode === "custom" ? (
+									<>
+										<Form.Item name="destinationDefinitionId" label="目标端类型">
+											<Select
+												placeholder="选择目标端类型"
+												options={destinationDefs.map((item) => ({
+													label: renderDefinitionLabel(item),
+													value: item.destinationDefinitionId,
+												}))}
+												optionLabelProp="label"
+											/>
+										</Form.Item>
+										<Form.Item name="destinationConfigPairs" label="目标端连接配置" extra="保持 ****** 表示不修改原值。">
+											<Form.List name="destinationConfigPairs">
+												{(fields, { add, remove }) => (
+													<div className="space-y-2">
+														{fields.map((field) => (
+															<Space key={field.key} align="start" className="w-full">
+																<Form.Item
+																	{...field}
+																	name={[field.name, "key"]}
+																	rules={[{ required: true, message: "请输入参数名" }]}
+																	className="mb-0 w-40"
+																>
+																	<Input placeholder="参数名" />
+																</Form.Item>
+																<Form.Item shouldUpdate noStyle>
+																	{() => {
+																		const keyValue = form.getFieldValue(["destinationConfigPairs", field.name, "key"]);
+																		const secret = isSecretKey(keyValue);
+																		return (
+																			<Form.Item
+																				{...field}
+																				name={[field.name, "value"]}
+																				rules={[{ required: true, message: "请输入参数值" }]}
+																				className="mb-0 flex-1"
+																			>
+																				{secret ? <Input.Password placeholder="请输入" /> : <Input placeholder="请输入" />}
+																			</Form.Item>
+																		);
+																	}}
+																</Form.Item>
+																<Button type="text" onClick={() => remove(field.name)}>
+																	删除
+																</Button>
+															</Space>
+														))}
+														<Button type="dashed" onClick={() => add({ key: "", value: "" })}>
+															+ 添加参数
+														</Button>
+													</div>
+												)}
+											</Form.List>
+										</Form.Item>
+									</>
+								) : (
+									<Text type="secondary">默认写入中台统一数据湖/仓，不需要额外配置。</Text>
+								)}
+							</Card>
+
+							<Form.Item name="description" label="说明" className="mt-3">
+								<Input.TextArea rows={2} placeholder="补充说明同步范围或口径" />
+							</Form.Item>
+						</Form>
+					</Card>
+				</Col>
+			</Row>
+
+			<Card
+				title="运行历史与对账"
+				extra={
+					activeJobConnection ? (
+						<Text type="secondary">当前任务：{activeJobConnection.name}</Text>
+					) : (
+						<Text type="secondary">请选择任务查看历史</Text>
+					)
+				}
 			>
-				<Table
-					rowKey={(row) => String(row.id || row.createdAt || Math.random())}
-					columns={jobColumns}
-					dataSource={jobs}
-					loading={jobsLoading}
-					pagination={false}
-					size="small"
-				/>
-			</Drawer>
+				{jobRows.length === 0 && !jobsLoading ? (
+					<EmptyState title="暂无运行记录" description="点击任务的“历史”查看运行记录。" />
+				) : (
+					<Table columns={jobColumns} dataSource={jobRows} loading={jobsLoading} pagination={{ pageSize: 6 }} />
+				)}
+			</Card>
+
+			<Modal
+				open={helpOpen}
+				title="使用说明"
+				onCancel={() => setHelpOpen(false)}
+				footer={[
+					<Button key="close" onClick={() => setHelpOpen(false)}>
+						关闭
+					</Button>,
+				]}
+			>
+				<div className="space-y-2 text-sm text-slate-600">
+					<div>1. 入湖任务复用数据源连接，封装同步模式、表选择与漂移策略。</div>
+					<div>2. 点击“发现可同步对象”获取最新 Schema，再选择同步表。</div>
+					<div>3. 运行历史与对账指标后续会补充到实际作业输出。</div>
+				</div>
+			</Modal>
 		</div>
 	);
 }

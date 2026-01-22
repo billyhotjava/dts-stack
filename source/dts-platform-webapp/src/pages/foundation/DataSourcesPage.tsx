@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
-	Badge,
+	Alert,
 	Button,
 	Card,
 	Col,
@@ -12,25 +12,22 @@ import {
 	Row,
 	Select,
 	Space,
+	Statistic,
 	Table,
 	Tag,
-	Tooltip,
 	Typography,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import {
-	AppstoreOutlined,
 	DatabaseOutlined,
-	EditOutlined,
-	DeleteOutlined,
-	MoreOutlined,
 	PlusOutlined,
 	ReloadOutlined,
 	SearchOutlined,
 	ThunderboltOutlined,
-	UnorderedListOutlined,
+	InfoCircleOutlined,
 } from "@ant-design/icons";
 import { EmptyState } from "@/components/empty-state";
+import { PageHeader } from "@/components/page-header";
 import mysqlIcon from "@/assets/connector-icons/mysql.svg";
 import postgresIcon from "@/assets/connector-icons/postgresql.svg";
 import oracleIcon from "@/assets/connector-icons/oracle.svg";
@@ -49,7 +46,7 @@ import {
 } from "@/api/platformApi";
 import { useRouter } from "@/routes/hooks";
 
-const { Text, Title } = Typography;
+const { Text } = Typography;
 
 type AirbyteDefinition = {
 	sourceDefinitionId?: string;
@@ -443,7 +440,6 @@ export default function DataSourcesPage() {
 	const [sources, setSources] = useState<AirbyteSource[]>([]);
 	const [sourceDefs, setSourceDefs] = useState<Record<string, AirbyteDefinition>>({});
 	const [sourceDefList, setSourceDefList] = useState<AirbyteDefinition[]>([]);
-	const [editOpen, setEditOpen] = useState(false);
 	const [editMode, setEditMode] = useState<"create" | "edit">("create");
 	const [editing, setEditing] = useState<AirbyteSource | null>(null);
 	const [editingConfig, setEditingConfig] = useState<Record<string, any> | null>(null);
@@ -451,7 +447,8 @@ export default function DataSourcesPage() {
 	const [rowCheckingId, setRowCheckingId] = useState<string | null>(null);
 	const [rowDiscoveringId, setRowDiscoveringId] = useState<string | null>(null);
 	const [search, setSearch] = useState("");
-	const [viewMode, setViewMode] = useState<"card" | "list">("card");
+	const [statusFilter, setStatusFilter] = useState("ALL");
+	const [helpOpen, setHelpOpen] = useState(false);
 	const [form] = Form.useForm();
 	const router = useRouter();
 	const selectedDefinitionId = Form.useWatch("sourceDefinitionId", form);
@@ -504,14 +501,40 @@ export default function DataSourcesPage() {
 		void loadAll();
 	}, [loadAll]);
 
+	const resolveStatusKey = useCallback((row: AirbyteSource) => {
+		const status = safeLower(row.status);
+		if (status.includes("fail") || status.includes("error")) return "UNHEALTHY";
+		if (status.includes("success") || status.includes("succeed")) return "HEALTHY";
+		if (row.enabled === false) return "DISABLED";
+		return "UNKNOWN";
+	}, []);
+
 	const filteredSources = useMemo(() => {
 		const keyword = search.trim().toLowerCase();
-		if (!keyword) return sources;
 		return sources.filter((row) => {
-			const hay = `${row.name} ${row.owner} ${row.description}`.toLowerCase();
+			if (statusFilter !== "ALL" && resolveStatusKey(row) !== statusFilter) {
+				return false;
+			}
+			if (!keyword) return true;
+			const hay = `${row.name} ${row.owner} ${row.description} ${row.id}`.toLowerCase();
 			return hay.includes(keyword);
 		});
-	}, [sources, search]);
+	}, [sources, search, statusFilter, resolveStatusKey]);
+
+	const isRecent = (value?: string) => {
+		if (!value) return false;
+		const ts = Date.parse(value);
+		if (Number.isNaN(ts)) return false;
+		return Date.now() - ts < 7 * 24 * 60 * 60 * 1000;
+	};
+
+	const kpis = useMemo(() => {
+		const total = sources.length;
+		const healthy = sources.filter((row) => resolveStatusKey(row) === "HEALTHY").length;
+		const unhealthy = sources.filter((row) => resolveStatusKey(row) === "UNHEALTHY").length;
+		const recent = sources.filter((row) => isRecent(row.lastCheckedAt) || isRecent(row.lastDiscoveredAt)).length;
+		return { total, healthy, unhealthy, recent };
+	}, [sources, resolveStatusKey]);
 
 	const openDetail = (row: AirbyteSource) => {
 		if (!row?.id) return;
@@ -567,24 +590,32 @@ export default function DataSourcesPage() {
 		}
 	};
 
-	const openCreate = () => {
+	const resetForm = useCallback(() => {
 		setEditMode("create");
 		setEditing(null);
 		setEditingConfig(null);
 		form.resetFields();
 		const firstDef = sourceDefList[0];
+		if (!firstDef?.sourceDefinitionId) {
+			form.setFieldsValue({ enabled: true, configExtraJson: "" });
+			return;
+		}
 		const profile = resolveConfigProfile(firstDef);
 		form.setFieldsValue({
 			enabled: true,
-			sourceDefinitionId: firstDef?.sourceDefinitionId,
+			sourceDefinitionId: firstDef.sourceDefinitionId,
 			config: normalizeConfigForForm(defaultConfigForDefinition(firstDef), profile),
 			configExtraJson: "",
 		});
-		setEditOpen(true);
-		if (sourceDefList.length === 0) {
-			void loadDefinitions(true);
-		}
-	};
+	}, [form, sourceDefList]);
+
+	useEffect(() => {
+		if (editMode !== "create") return;
+		const currentId = String(form.getFieldValue("sourceDefinitionId") || "").trim();
+		if (currentId) return;
+		if (sourceDefList.length === 0) return;
+		resetForm();
+	}, [editMode, form, resetForm, sourceDefList.length]);
 
 	const openEdit = (row: AirbyteSource) => {
 		setEditMode("edit");
@@ -602,7 +633,6 @@ export default function DataSourcesPage() {
 			configExtraJson: "",
 			enabled: row.enabled ?? true,
 		});
-		setEditOpen(true);
 	};
 
 	const applyDefaultConfig = (definitionId?: string) => {
@@ -642,11 +672,11 @@ export default function DataSourcesPage() {
 			if (editMode === "create") {
 				await createAirbyteSource(payload);
 				toast.success("数据源已创建");
+				resetForm();
 			} else if (editing?.id) {
 				await updateAirbyteSource(editing.id, payload);
 				toast.success("数据源已更新");
 			}
-			setEditOpen(false);
 			await loadAll();
 		} catch (err: any) {
 			toast.error(err?.message || "保存失败");
@@ -655,29 +685,17 @@ export default function DataSourcesPage() {
 		}
 	};
 
-	useEffect(() => {
-		if (!editOpen || editMode !== "create") return;
-		const currentId = String(form.getFieldValue("sourceDefinitionId") || "").trim();
-		if (currentId) return;
-		const firstDef = sourceDefList[0];
-		if (!firstDef?.sourceDefinitionId) return;
-		const profile = resolveConfigProfile(firstDef);
-		form.setFieldsValue({
-			sourceDefinitionId: firstDef.sourceDefinitionId,
-			config: normalizeConfigForForm(defaultConfigForDefinition(firstDef), profile),
-		});
-	}, [editOpen, editMode, form, sourceDefList]);
-
-	const statusBadge = (row: AirbyteSource) => {
-		const status = safeLower(row.status);
-		if (status.includes("fail") || status.includes("error")) return <Badge status="error" text="异常" />;
-		if (status.includes("success") || status.includes("succeed")) return <Badge status="success" text="正常" />;
-		return <Badge status={row.enabled === false ? "default" : "processing"} text={row.enabled === false ? "停用" : "待检测"} />;
+	const statusTag = (row: AirbyteSource) => {
+		const key = resolveStatusKey(row);
+		if (key === "HEALTHY") return <Tag color="green">健康</Tag>;
+		if (key === "UNHEALTHY") return <Tag color="red">异常</Tag>;
+		if (key === "DISABLED") return <Tag>停用</Tag>;
+		return <Tag color="blue">待检测</Tag>;
 	};
 
 	const listColumns: ColumnsType<AirbyteSource> = [
 		{
-			title: "数据源",
+			title: "名称",
 			dataIndex: "name",
 			render: (text, row) => {
 				const def = resolveDefinition(sourceDefs, row.sourceDefinitionId);
@@ -700,17 +718,18 @@ export default function DataSourcesPage() {
 			render: (value) => renderDefinitionTag(resolveDefinition(sourceDefs, value)),
 		},
 		{
-			title: "连接地址",
-			render: (_, row) => extractEndpoint(row.config),
+			title: "状态",
+			render: (_, row) => statusTag(row),
 		},
 		{
-			title: "最近检测",
+			title: "负责人",
+			dataIndex: "owner",
+			render: (value) => value || "-",
+		},
+		{
+			title: "最近测试",
 			dataIndex: "lastCheckedAt",
 			render: (value) => formatDateTime(value as string),
-		},
-		{
-			title: "状态",
-			render: (_, row) => statusBadge(row),
 		},
 		{
 			title: "操作",
@@ -736,195 +755,208 @@ export default function DataSourcesPage() {
 		},
 	];
 
+	const statusOptions = [
+		{ label: "全部", value: "ALL" },
+		{ label: "健康", value: "HEALTHY" },
+		{ label: "异常", value: "UNHEALTHY" },
+		{ label: "停用", value: "DISABLED" },
+		{ label: "待检测", value: "UNKNOWN" },
+	];
+
+	const handleTestForm = async () => {
+		if (!editing?.id) {
+			toast.error("请先保存数据源再测试连接");
+			return;
+		}
+		await doCheck(editing);
+	};
+
 	return (
 		<div className="space-y-4">
-			<div className="flex flex-wrap items-center justify-between gap-4">
-				<div>
-					<Title level={3} style={{ marginBottom: 4 }}>
-						数据源管理
-					</Title>
-					<Text type="secondary">统一管理业务系统连接，系统自动完成接入与同步准备。</Text>
-				</div>
-				<Space>
-					<Input
-						prefix={<SearchOutlined />}
-						placeholder="搜索名称、负责人..."
-						value={search}
-						onChange={(event) => setSearch(event.target.value)}
-						style={{ width: 240 }}
-					/>
-					<Button icon={<ReloadOutlined />} onClick={loadAll}>
-						刷新
-					</Button>
-					<Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
-						新增数据源
-					</Button>
-					<Button
-						icon={viewMode === "card" ? <AppstoreOutlined /> : <UnorderedListOutlined />}
-						onClick={() => setViewMode(viewMode === "card" ? "list" : "card")}
-					>
-						{viewMode === "card" ? "卡片" : "列表"}
-					</Button>
-				</Space>
-			</div>
+			<PageHeader
+				title="数据源管理"
+				description="连接器工厂：动态连接器列表 + 配置表单创建数据源连接。"
+				actions={
+					<Space>
+						<Button icon={<ReloadOutlined />} onClick={loadAll} loading={loading}>
+							刷新
+						</Button>
+						<Button icon={<InfoCircleOutlined />} onClick={() => setHelpOpen(true)}>
+							使用说明
+						</Button>
+						<Button type="primary" icon={<PlusOutlined />} onClick={resetForm}>
+							新建数据源
+						</Button>
+					</Space>
+				}
+			/>
 
-			{viewMode === "card" ? (
-				<Row gutter={[16, 16]}>
-					{filteredSources.map((row) => (
-						<Col key={row.id} xs={24} sm={12} lg={8}>
-							<Card
-								hoverable
-								actions={[
-									<Tooltip title="测试连接" key="check">
-										<span onClick={() => doCheck(row)}>
-											<ThunderboltOutlined />
-										</span>
-									</Tooltip>,
-									<Tooltip title="发现 Schema" key="discover">
-										<span onClick={() => doDiscover(row)}>
-											<ReloadOutlined />
-										</span>
-									</Tooltip>,
-									<Tooltip title="编辑" key="edit">
-										<span onClick={() => openEdit(row)}>
-											<EditOutlined />
-										</span>
-									</Tooltip>,
-									<Tooltip title="删除" key="delete">
-										<span onClick={() => confirmDelete(row)}>
-											<DeleteOutlined />
-										</span>
-									</Tooltip>,
-									<Tooltip title="详情" key="more">
-										<span onClick={() => openDetail(row)}>
-											<MoreOutlined />
-										</span>
-									</Tooltip>,
-								]}
+			<Alert
+				type="info"
+				showIcon
+				message="通过连接器定义与连接参数配置，统一托管业务系统连接；敏感凭证由平台加密保存。"
+			/>
+
+			<Row gutter={[16, 16]}>
+				<Col xs={12} sm={12} lg={6}>
+					<Card className="rounded-xl shadow-sm">
+						<Statistic title="已接入数据源" value={kpis.total} />
+					</Card>
+				</Col>
+				<Col xs={12} sm={12} lg={6}>
+					<Card className="rounded-xl shadow-sm">
+						<Statistic title="健康（近7天）" value={kpis.healthy} />
+					</Card>
+				</Col>
+				<Col xs={12} sm={12} lg={6}>
+					<Card className="rounded-xl shadow-sm">
+						<Statistic title="需处理（异常）" value={kpis.unhealthy} valueStyle={{ color: "#cf1322" }} />
+					</Card>
+				</Col>
+				<Col xs={12} sm={12} lg={6}>
+					<Card className="rounded-xl shadow-sm">
+						<Statistic title="近期变更" value={kpis.recent} />
+					</Card>
+				</Col>
+			</Row>
+
+			<Row gutter={[16, 16]} align="top">
+				<Col xs={24} xl={15}>
+					<Card
+						title="已配置数据源"
+						extra={
+							<Space>
+								<Input
+									prefix={<SearchOutlined />}
+									placeholder="按名称 / 类型 / 负责人搜索"
+									value={search}
+									onChange={(event) => setSearch(event.target.value)}
+									style={{ width: 220 }}
+								/>
+								<Select
+									value={statusFilter}
+									onChange={setStatusFilter}
+									style={{ width: 140 }}
+									options={statusOptions}
+								/>
+							</Space>
+						}
+					>
+						{filteredSources.length === 0 && !loading ? (
+							<EmptyState title="暂无数据源" description="点击“新建数据源”开始配置连接。" />
+						) : (
+							<Table
+								rowKey={(row) => row.id || row.name || Math.random().toString(36)}
+								columns={listColumns}
+								dataSource={filteredSources}
+								loading={loading}
+								pagination={{ pageSize: 8 }}
+							/>
+						)}
+					</Card>
+				</Col>
+				<Col xs={24} xl={9}>
+					<Card
+						title={editMode === "create" ? "创建数据源" : "编辑数据源"}
+						extra={
+							editMode === "edit" ? (
+								<Button size="small" onClick={resetForm}>
+									切换为新建
+								</Button>
+							) : null
+						}
+					>
+						<Form form={form} layout="vertical">
+							<div className="grid gap-4 md:grid-cols-2">
+								<Form.Item name="name" label="数据源名称" rules={[{ required: true, message: "请输入名称" }]}>
+									<Input placeholder="例如：ERP-生产库" />
+								</Form.Item>
+								<Form.Item name="owner" label="负责人">
+									<Input placeholder="例如：张三" />
+								</Form.Item>
+							</div>
+							<Form.Item name="description" label="说明">
+								<Input.TextArea rows={2} placeholder="补充说明（可选）" />
+							</Form.Item>
+							<Form.Item
+								name="sourceDefinitionId"
+								label="数据源类型"
+								rules={[{ required: true, message: "请选择数据源类型" }]}
 							>
-								<div className="flex items-start justify-between">
-									<Space>
-										<div className="rounded-md bg-slate-100 p-2">
-											{renderDefinitionIcon(resolveDefinition(sourceDefs, row.sourceDefinitionId), 20)}
-										</div>
-										<div>
-											<Text strong>{row.name || "未命名"}</Text>
-											<div className="text-xs text-slate-500">负责人：{row.owner || "-"}</div>
-										</div>
-									</Space>
-									{statusBadge(row)}
+								<Select
+									placeholder="选择数据源类型"
+									loading={defLoading}
+									notFoundContent={defLoading ? "加载中..." : "未获取到数据源类型"}
+									options={sourceDefList.map((item) => ({
+										label: (
+											<Space size={8}>
+												{renderDefinitionIcon(item, 16)}
+												<span>{item.name || item.sourceDefinitionId}</span>
+											</Space>
+										),
+										value: item.sourceDefinitionId,
+									}))}
+									onChange={(value) => applyDefaultConfig(String(value || ""))}
+								/>
+							</Form.Item>
+							<div className="space-y-2">
+								<div className="grid gap-4 md:grid-cols-2">
+									{configProfile.fields.map((field) => {
+										const rules = field.required ? [{ required: true, message: `请填写${field.label}` }] : undefined;
+										return (
+											<Form.Item
+												key={field.key}
+												name={["config", field.key]}
+												label={field.label}
+												rules={rules}
+												extra={field.help}
+												className={field.span === 2 ? "md:col-span-2" : undefined}
+											>
+												{renderConfigInput(field)}
+											</Form.Item>
+										);
+									})}
 								</div>
-								<div className="mt-4 space-y-2 text-sm text-slate-600">
-									<div>类型：{resolveDefinitionName(sourceDefs, row.sourceDefinitionId)}</div>
-									<div>地址：{extractEndpoint(row.config)}</div>
-									<div>最近检测：{formatDateTime(row.lastCheckedAt)}</div>
-									<div>Schema 探查：{formatDateTime(row.lastDiscoveredAt)}</div>
-								</div>
-							</Card>
-						</Col>
-					))}
-					{filteredSources.length === 0 && !loading ? (
-						<Col span={24}>
-							<Card>
-								<EmptyState title="暂无数据源" description="点击“新增数据源”开始配置连接。" />
-							</Card>
-						</Col>
-					) : null}
-				</Row>
-			) : (
-				<Card>
-					{filteredSources.length === 0 && !loading ? (
-						<EmptyState title="暂无数据源" description="点击“新增数据源”开始配置连接。" />
-					) : (
-						<Table
-							rowKey={(row) => row.id || row.name || Math.random().toString(36)}
-							columns={listColumns}
-							dataSource={filteredSources}
-							loading={loading}
-							pagination={{ pageSize: 8 }}
-						/>
-					)}
-				</Card>
-			)}
+								<Form.Item name="configExtraJson" label="高级参数 (JSON，可选)" extra="用于填写未覆盖的连接参数。">
+									<Input.TextArea rows={3} placeholder='{"ssl": true}' />
+								</Form.Item>
+							</div>
+							<Form.Item name="enabled" label="启用状态">
+								<Select
+									options={[
+										{ label: "启用", value: true },
+										{ label: "停用", value: false },
+									]}
+								/>
+							</Form.Item>
+							<div className="flex flex-wrap gap-2">
+								<Button icon={<ThunderboltOutlined />} onClick={handleTestForm} disabled={saving}>
+									连接测试
+								</Button>
+								<Button type="primary" onClick={submit} loading={saving}>
+									{editMode === "create" ? "创建并保存" : "保存修改"}
+								</Button>
+							</div>
+						</Form>
+					</Card>
+				</Col>
+			</Row>
 
 			<Modal
-				open={editOpen}
-				title={editMode === "create" ? "新增数据源" : "编辑数据源"}
-				onCancel={() => setEditOpen(false)}
-				onOk={submit}
-				okText="保存"
-				cancelText="取消"
-				confirmLoading={saving}
-				width={760}
+				open={helpOpen}
+				title="使用说明"
+				onCancel={() => setHelpOpen(false)}
+				footer={[
+					<Button key="close" onClick={() => setHelpOpen(false)}>
+						关闭
+					</Button>,
+				]}
 			>
-				<Form form={form} layout="vertical">
-					<div className="grid gap-4 md:grid-cols-2">
-						<Form.Item name="name" label="数据源名称" rules={[{ required: true, message: "请输入名称" }]}>
-							<Input placeholder="erp_db_prod" />
-						</Form.Item>
-						<Form.Item name="owner" label="负责人">
-							<Input placeholder="负责人姓名" />
-						</Form.Item>
-					</div>
-					<Form.Item name="description" label="说明">
-						<Input.TextArea rows={2} placeholder="可选：补充说明" />
-					</Form.Item>
-					<Form.Item
-						name="sourceDefinitionId"
-						label="数据源类型"
-						rules={[{ required: true, message: "请选择数据源类型" }]}
-					>
-						<Select
-							placeholder="选择数据源类型"
-							loading={defLoading}
-							notFoundContent={defLoading ? "加载中..." : "未获取到数据源类型"}
-							options={sourceDefList.map((item) => ({
-								label: (
-									<Space size={8}>
-										{renderDefinitionIcon(item, 16)}
-										<span>{item.name || item.sourceDefinitionId}</span>
-									</Space>
-								),
-								value: item.sourceDefinitionId,
-							}))}
-							onChange={(value) => applyDefaultConfig(String(value || ""))}
-						/>
-					</Form.Item>
-					<div className="space-y-2">
-						<div className="grid gap-4 md:grid-cols-2">
-							{configProfile.fields.map((field) => {
-								const rules = field.required ? [{ required: true, message: `请填写${field.label}` }] : undefined;
-								return (
-									<Form.Item
-										key={field.key}
-										name={["config", field.key]}
-										label={field.label}
-										rules={rules}
-										extra={field.help}
-										className={field.span === 2 ? "md:col-span-2" : undefined}
-									>
-										{renderConfigInput(field)}
-									</Form.Item>
-								);
-							})}
-						</div>
-						<Form.Item
-							name="configExtraJson"
-							label="高级参数 (JSON，可选)"
-							extra="用于填写未覆盖的连接参数，JSON 对象格式。"
-						>
-							<Input.TextArea rows={4} placeholder='{"ssl": true}' />
-						</Form.Item>
-					</div>
-					<Form.Item name="enabled" label="启用状态">
-						<Select
-							options={[
-								{ label: "启用", value: true },
-								{ label: "停用", value: false },
-							]}
-						/>
-					</Form.Item>
-				</Form>
+				<div className="space-y-2 text-sm text-slate-600">
+					<div>1. 先选择连接器类型，填写必要的连接参数并保存数据源。</div>
+					<div>2. 保存后可进行连接测试与 Schema 探查。</div>
+					<div>3. 数据源可被元数据采集与入湖任务复用。</div>
+				</div>
 			</Modal>
 		</div>
 	);

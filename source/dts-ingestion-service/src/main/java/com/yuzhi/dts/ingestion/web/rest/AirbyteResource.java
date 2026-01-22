@@ -10,6 +10,7 @@ import com.yuzhi.dts.ingestion.repository.infra.InfraAirbyteConnectionRepository
 import com.yuzhi.dts.ingestion.repository.infra.InfraAirbyteSourceRepository;
 import com.yuzhi.dts.ingestion.service.audit.AuditService;
 import com.yuzhi.dts.ingestion.service.etl.AirbyteClient;
+import com.yuzhi.dts.ingestion.service.infra.IngestionSettingsService;
 import com.yuzhi.dts.ingestion.service.infra.InfraSecretService;
 import jakarta.validation.Valid;
 import java.time.Instant;
@@ -63,6 +64,7 @@ public class AirbyteResource {
     private final AuditService auditService;
     private final ObjectMapper objectMapper;
     private final InfraSecretService secretService;
+    private final IngestionSettingsService settingsService;
 
     public AirbyteResource(
         AirbyteClient airbyteClient,
@@ -71,7 +73,8 @@ public class AirbyteResource {
         InfraAirbyteSourceRepository sourceRepository,
         AuditService auditService,
         ObjectMapper objectMapper,
-        InfraSecretService secretService
+        InfraSecretService secretService,
+        IngestionSettingsService settingsService
     ) {
         this.airbyteClient = airbyteClient;
         this.properties = properties;
@@ -80,6 +83,7 @@ public class AirbyteResource {
         this.auditService = auditService;
         this.objectMapper = objectMapper;
         this.secretService = secretService;
+        this.settingsService = settingsService;
     }
 
     public record AirbyteSourceRequest(
@@ -375,26 +379,32 @@ public class AirbyteResource {
             sourceId = stringVal(resp.get("sourceId"));
         }
 
+        IngestionSettingsService.SettingsSnapshot settings = settingsService.getSettings(IngestionSettingsService.SERVICE_AIRBYTE);
         String destinationId = normalize(request.destinationId());
         if (!StringUtils.hasText(destinationId) && StringUtils.hasText(entity.getDestinationId())) {
             destinationId = entity.getDestinationId();
         }
         if (!StringUtils.hasText(destinationId)) {
-            destinationId = normalize(properties.getDefaultDestinationId());
+            destinationId = normalize(settings.getString("defaultDestinationId", properties.getDefaultDestinationId()));
         }
         if (!StringUtils.hasText(destinationId)) {
             String destinationDefinitionId = normalize(request.destinationDefinitionId());
-            String fallbackDefinitionId = normalize(properties.getDefaultDestinationDefinitionId());
+            String fallbackDefinitionId = normalize(settings.getString("defaultDestinationDefinitionId", properties.getDefaultDestinationDefinitionId()));
             String definitionId = StringUtils.hasText(destinationDefinitionId) ? destinationDefinitionId : fallbackDefinitionId;
             Map<String, Object> destinationConfig = request.destinationConfig();
             if (destinationConfig == null || destinationConfig.isEmpty()) {
-                destinationConfig = parseJson(properties.getDefaultDestinationConfigJson());
+                destinationConfig = parseJson(settings.getString("defaultDestinationConfigJson", properties.getDefaultDestinationConfigJson()));
             }
             if (!StringUtils.hasText(definitionId) || destinationConfig == null || destinationConfig.isEmpty()) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "缺少目标端配置");
             }
             Map<String, Object> resp = airbyteClient
-                .createDestination(workspaceId, definitionId, properties.getDefaultDestinationName(), destinationConfig)
+                .createDestination(
+                    workspaceId,
+                    definitionId,
+                    settings.getString("defaultDestinationName", properties.getDefaultDestinationName()),
+                    destinationConfig
+                )
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_GATEWAY, "创建目标端失败"));
             destinationId = stringVal(resp.get("destinationId"));
             if (StringUtils.hasText(destinationId)) {
@@ -562,7 +572,8 @@ public class AirbyteResource {
     }
 
     private String resolveWorkspaceId() {
-        String workspaceId = properties.getWorkspaceId();
+        IngestionSettingsService.SettingsSnapshot settings = settingsService.getSettings(IngestionSettingsService.SERVICE_AIRBYTE);
+        String workspaceId = settings.getString("workspaceId", properties.getWorkspaceId());
         if (StringUtils.hasText(workspaceId)) {
             if (airbyteClient.getWorkspace(workspaceId).isPresent()) {
                 return workspaceId;
@@ -572,7 +583,7 @@ public class AirbyteResource {
             }
             properties.setWorkspaceId(null);
         }
-        String organizationId = resolveOrganizationId();
+        String organizationId = resolveOrganizationId(settings);
         List<Map<String, Object>> workspaces = extractList(airbyteClient.listWorkspacesByOrganizationId(organizationId), "workspaces");
         if (!workspaces.isEmpty()) {
             workspaceId = stringVal(workspaces.get(0).get("workspaceId"));
@@ -650,8 +661,8 @@ public class AirbyteResource {
         }
     }
 
-    private String resolveOrganizationId() {
-        String organizationId = properties.getOrganizationId();
+    private String resolveOrganizationId(IngestionSettingsService.SettingsSnapshot settings) {
+        String organizationId = settings.getString("organizationId", properties.getOrganizationId());
         if (StringUtils.hasText(organizationId)) {
             return organizationId;
         }
@@ -663,7 +674,7 @@ public class AirbyteResource {
             properties.setOrganizationId(DEFAULT_AIRBYTE_ORG_ID);
             return DEFAULT_AIRBYTE_ORG_ID;
         }
-        String userId = resolveAirbyteUserId();
+        String userId = resolveAirbyteUserId(settings);
         List<Map<String, Object>> organizations = extractList(airbyteClient.listOrganizationsByUserId(userId), "organizations");
         if (!organizations.isEmpty()) {
             organizationId = stringVal(organizations.get(0).get("organizationId"));
@@ -673,7 +684,7 @@ public class AirbyteResource {
             }
         }
         Map<String, Object> created = airbyteClient
-            .createOrganization(userId, properties.getOrganizationName())
+            .createOrganization(userId, settings.getString("organizationName", properties.getOrganizationName()))
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_GATEWAY, "创建 Airbyte organization 失败"));
         organizationId = stringVal(created.get("organizationId"));
         if (StringUtils.hasText(organizationId)) {
@@ -683,8 +694,8 @@ public class AirbyteResource {
         throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Airbyte organization 未配置，请在配置中设置 DTS_AIRBYTE_ORGANIZATION_ID");
     }
 
-    private String resolveAirbyteUserId() {
-        String authUserId = properties.getAuthUserId();
+    private String resolveAirbyteUserId(IngestionSettingsService.SettingsSnapshot settings) {
+        String authUserId = settings.getString("authUserId", properties.getAuthUserId());
         Map<String, Object> payload = airbyteClient
             .getUserByAuthId(authUserId)
             .orElseGet(

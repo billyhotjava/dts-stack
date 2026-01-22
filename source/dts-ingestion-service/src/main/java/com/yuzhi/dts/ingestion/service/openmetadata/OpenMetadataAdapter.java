@@ -1,6 +1,7 @@
 package com.yuzhi.dts.ingestion.service.openmetadata;
 
 import com.yuzhi.dts.ingestion.config.OpenMetadataProperties;
+import com.yuzhi.dts.ingestion.service.infra.IngestionSettingsService;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -17,10 +18,12 @@ public class OpenMetadataAdapter {
 
     private final OpenMetadataClient client;
     private final OpenMetadataProperties properties;
+    private final IngestionSettingsService settingsService;
 
-    public OpenMetadataAdapter(OpenMetadataClient client, OpenMetadataProperties properties) {
+    public OpenMetadataAdapter(OpenMetadataClient client, OpenMetadataProperties properties, IngestionSettingsService settingsService) {
         this.client = client;
         this.properties = properties;
+        this.settingsService = settingsService;
     }
 
     public record LineageRequest(Boolean enabled, String domain, List<String> tags, String owner) {}
@@ -58,10 +61,20 @@ public class OpenMetadataAdapter {
             return result;
         }
 
-        String sourceService = firstNonEmpty(properties.getSourceServiceName(), context.sourceType());
-        String destinationService = firstNonEmpty(properties.getDestinationServiceName(), null);
-        String sourceDatabase = firstNonEmpty(resolveDatabase(context.sourceConfig()), properties.getSourceDatabase());
-        String destinationDatabase = firstNonEmpty(resolveDatabase(context.destinationConfig()), properties.getDestinationDatabase(), sourceDatabase);
+        IngestionSettingsService.SettingsSnapshot settings = settingsService.getSettings(IngestionSettingsService.SERVICE_OPENMETADATA);
+        String sourceService = firstNonEmpty(settings.getString("sourceServiceName", null), properties.getSourceServiceName(), context.sourceType());
+        String destinationService = firstNonEmpty(settings.getString("destinationServiceName", null), properties.getDestinationServiceName());
+        String sourceDatabase = firstNonEmpty(
+            resolveDatabase(context.sourceConfig()),
+            settings.getString("sourceDatabase", null),
+            properties.getSourceDatabase()
+        );
+        String destinationDatabase = firstNonEmpty(
+            resolveDatabase(context.destinationConfig()),
+            settings.getString("destinationDatabase", null),
+            properties.getDestinationDatabase(),
+            sourceDatabase
+        );
 
         if (!StringUtils.hasText(sourceService) || !StringUtils.hasText(destinationService)) {
             result.put("status", "skipped");
@@ -73,13 +86,13 @@ public class OpenMetadataAdapter {
         int skipped = 0;
         List<Map<String, String>> edges = new ArrayList<>();
         for (StreamRef stream : context.streams()) {
-            String sourceSchema = resolveSchema(stream, context.sourceConfig(), properties.getSourceSchema());
+            String sourceSchema = resolveSchema(stream, context.sourceConfig(), settings.getString("sourceSchema", properties.getSourceSchema()));
             String destinationSchema = resolveDestinationSchema(
                 context.namespaceTemplate(),
                 stream,
                 sourceSchema,
                 context.destinationConfig(),
-                properties.getDestinationSchema()
+                settings.getString("destinationSchema", properties.getDestinationSchema())
             );
             String sourceTable = stream.name();
             String destinationTable = buildDestinationTable(context.prefix(), stream.name());
@@ -113,7 +126,9 @@ public class OpenMetadataAdapter {
 
     public Map<String, Object> ensureMetadataIngestion(IngestionContext context) {
         Map<String, Object> result = new LinkedHashMap<>();
-        if (!properties.isEnabled() || !properties.isIngestionEnabled()) {
+        IngestionSettingsService.SettingsSnapshot settings = settingsService.getSettings(IngestionSettingsService.SERVICE_OPENMETADATA);
+        boolean ingestionEnabled = settings.getBoolean("ingestionEnabled", properties.isIngestionEnabled());
+        if (!properties.isEnabled() || !ingestionEnabled) {
             result.put("enabled", false);
             result.put("message", "OpenMetadata 采集未启用");
             return result;
@@ -125,7 +140,7 @@ public class OpenMetadataAdapter {
             return result;
         }
 
-        String serviceName = normalize(properties.getDestinationServiceName());
+        String serviceName = firstNonEmpty(settings.getString("destinationServiceName", null), properties.getDestinationServiceName());
         if (!StringUtils.hasText(serviceName)) {
             result.put("enabled", true);
             result.put("status", "skipped");
@@ -133,7 +148,10 @@ public class OpenMetadataAdapter {
             return result;
         }
 
-        String serviceType = resolveServiceType(properties.getDestinationServiceType(), null);
+        String serviceType = resolveServiceType(
+            settings.getString("destinationServiceType", properties.getDestinationServiceType()),
+            null
+        );
         Map<String, Object> connectionConfig = buildConnectionConfig(serviceType, context.destinationConfig());
         if (connectionConfig == null || connectionConfig.isEmpty()) {
             result.put("enabled", true);
@@ -154,12 +172,12 @@ public class OpenMetadataAdapter {
             return result;
         }
 
-        String pipelineName = buildPipelineName(serviceName);
+        String pipelineName = buildPipelineName(settings.getString("ingestionPrefix", properties.getIngestionPipelinePrefix()), serviceName);
         Map<String, Object> pipeline = client.getIngestionPipelineByName(pipelineName).orElse(null);
         if (pipeline == null || pipeline.isEmpty()) {
             String schedule = normalize(context.scheduleCron());
             if (!StringUtils.hasText(schedule)) {
-                schedule = normalize(properties.getIngestionDefaultSchedule());
+                schedule = normalize(settings.getString("ingestionSchedule", properties.getIngestionDefaultSchedule()));
             }
             pipeline = client.createIngestionPipeline(pipelineName, serviceId, schedule, "metadata").orElse(null);
         }
@@ -288,12 +306,12 @@ public class OpenMetadataAdapter {
         return connection;
     }
 
-    private String buildPipelineName(String serviceName) {
-        String prefix = normalize(properties.getIngestionPipelinePrefix());
-        if (!StringUtils.hasText(prefix)) {
+    private String buildPipelineName(String prefix, String serviceName) {
+        String normalized = normalize(prefix);
+        if (!StringUtils.hasText(normalized)) {
             return serviceName;
         }
-        return prefix + "_" + serviceName;
+        return normalized + "_" + serviceName;
     }
 
     private String resolveServiceType(String fallback, String sourceType) {

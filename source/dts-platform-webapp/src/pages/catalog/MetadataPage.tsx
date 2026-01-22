@@ -1,540 +1,340 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
-	Badge,
-	Breadcrumb,
+	Alert,
 	Button,
 	Card,
 	Col,
-	Divider,
-	Drawer,
+	Descriptions,
 	Form,
 	Input,
 	Modal,
-	Progress,
 	Row,
 	Select,
 	Space,
 	Table,
-	Tabs,
 	Tag,
 	Typography,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { EmptyState } from "@/components/empty-state";
-import { listAirflowJobRuns, listAirflowJobs, triggerAirflowJob } from "@/api/platformApi";
+import { PageHeader } from "@/components/page-header";
 
-const { Title, Text } = Typography;
+const { Text } = Typography;
 
-const formatDateTime = (value?: string) => {
-	if (!value) return "-";
-	try {
-		return new Date(value).toLocaleString();
-	} catch {
-		return value;
-	}
+type DataSource = {
+	id: string;
+	name: string;
+	type: string;
+	owner: string;
 };
 
-const normalizeUpper = (value?: string) => String(value || "").trim().toUpperCase();
-
-type AirflowJob = {
-	dagId: string;
-	name?: string;
-	owners?: string | string[];
-	schedule?: string;
-	isPaused?: boolean;
-	lastRun?: string;
-	lastState?: string;
-	lastDuration?: string | number;
-	lastRunId?: string;
-	tags?: string[];
-};
-
-type JobRow = {
+type AssetColumn = {
 	key: string;
 	name: string;
-	layer: string;
-	owner: string;
-	schedule: string;
-	status: string;
-	lastRun: string;
-	duration: string;
-	quality: number;
-	job: AirflowJob;
+	type: string;
+	comment: string;
+	quality: string;
 };
 
-type AirflowRun = {
-	dag_run_id?: string;
-	run_id?: string;
-	state?: string;
-	logical_date?: string;
-	execution_date?: string;
-	start_date?: string;
-	end_date?: string;
-	duration?: number;
-	conf?: Record<string, any>;
+type Asset = {
+	id: string;
+	label: string;
+	table: {
+		db: string;
+		schema: string;
+		name: string;
+		comment: string;
+		pk: string;
+	};
+	cols: AssetColumn[];
+	diff: {
+		newTables: number;
+		newCols: number;
+		typeChanges: number;
+		commentMissing: number;
+	};
+};
+
+type RunRow = {
+	id: string;
+	time: string;
+	source: string;
+	mode: string;
+	tables: number;
+	columns: number;
+	status: string;
+};
+
+const dataSources: DataSource[] = [
+	{ id: "ds_001", name: "ERP-生产库", type: "MySQL", owner: "谢志民" },
+	{ id: "ds_002", name: "MES-测试库", type: "PostgreSQL", owner: "王工" },
+	{ id: "ds_003", name: "订单事件流", type: "Kafka", owner: "李工" },
+];
+
+const assets: Asset[] = [
+	{
+		id: "a1",
+		label: "erp.so_sales_order（销售订单）",
+		table: {
+			db: "erp",
+			schema: "erp",
+			name: "so_sales_order",
+			comment: "销售订单主表",
+			pk: "pk_order",
+		},
+		cols: [
+			{ key: "pk_order", name: "pk_order", type: "varchar(36)", comment: "订单主键", quality: "唯一性：建议校验" },
+			{ key: "order_code", name: "order_code", type: "varchar(64)", comment: "订单编号", quality: "空值率<1%" },
+			{ key: "customer_code", name: "customer_code", type: "varchar(64)", comment: "客户编码", quality: "参照完整性" },
+			{ key: "order_time", name: "order_time", type: "timestamp", comment: "下单时间", quality: "时间分区候选" },
+			{ key: "total_amt", name: "total_amt", type: "decimal(18,2)", comment: "含税金额", quality: "值域：>=0" },
+		],
+		diff: { newTables: 0, newCols: 2, typeChanges: 0, commentMissing: 1 },
+	},
+	{
+		id: "a2",
+		label: "erp.inv_stock_balance（库存余额）",
+		table: {
+			db: "erp",
+			schema: "erp",
+			name: "inv_stock_balance",
+			comment: "库存日余额",
+			pk: "(material_id, wh_id, dt)",
+		},
+		cols: [
+			{ key: "material_id", name: "material_id", type: "varchar(36)", comment: "物料主键", quality: "参照完整性" },
+			{ key: "wh_id", name: "wh_id", type: "varchar(36)", comment: "仓库主键", quality: "参照完整性" },
+			{ key: "qty", name: "qty", type: "decimal(18,3)", comment: "数量", quality: "值域：>=0" },
+			{ key: "dt", name: "dt", type: "date", comment: "业务日期", quality: "分区字段" },
+		],
+		diff: { newTables: 1, newCols: 0, typeChanges: 1, commentMissing: 0 },
+	},
+];
+
+const runs: RunRow[] = [
+	{ id: "r1", time: "2026-01-22 01:58", source: "ERP-生产库", mode: "增量扫描", tables: 12, columns: 143, status: "SUCCESS" },
+	{ id: "r2", time: "2026-01-21 02:01", source: "ERP-生产库", mode: "全量扫描", tables: 12, columns: 141, status: "SUCCESS" },
+	{ id: "r3", time: "2026-01-20 15:12", source: "MES-测试库", mode: "增量扫描", tables: 8, columns: 97, status: "FAILED" },
+];
+
+const statusTag = (status: string) => {
+	if (status === "SUCCESS") return <Tag color="green">成功</Tag>;
+	if (status === "FAILED") return <Tag color="red">失败</Tag>;
+	return <Tag>未知</Tag>;
 };
 
 export default function MetadataPage() {
 	const [form] = Form.useForm();
-	const [jobs, setJobs] = useState<AirflowJob[]>([]);
-	const [jobsLoading, setJobsLoading] = useState(false);
-	const [runs, setRuns] = useState<AirflowRun[]>([]);
-	const [runsLoading, setRunsLoading] = useState(false);
-	const [drawerOpen, setDrawerOpen] = useState(false);
-	const [activeLog, setActiveLog] = useState<AirflowJob | null>(null);
-	const [actioningId, setActioningId] = useState<string | null>(null);
-	const [modalOpen, setModalOpen] = useState(false);
-	const [activeTab, setActiveTab] = useState("jobs");
-	const [selectedJob, setSelectedJob] = useState<AirflowJob | null>(null);
+	const [helpOpen, setHelpOpen] = useState(false);
+	const [selectedAssetId, setSelectedAssetId] = useState(assets[0]?.id || "");
 
-	const loadJobs = useCallback(async () => {
-		setJobsLoading(true);
-		try {
-			const resp = (await listAirflowJobs()) as AirflowJob[];
-			const list = Array.isArray(resp) ? resp : [];
-			setJobs(list);
-			if (list.length > 0) {
-				setSelectedJob((prev) => prev ?? list[0]);
-			}
-		} catch (err: any) {
-			toast.error(err?.message || "加载作业列表失败");
-		} finally {
-			setJobsLoading(false);
-		}
-	}, []);
+	const selectedAsset = useMemo(() => assets.find((item) => item.id === selectedAssetId) || null, [selectedAssetId]);
 
-	const loadRuns = useCallback(async (dagId?: string) => {
-		if (!dagId) {
-			setRuns([]);
-			return;
-		}
-		setRunsLoading(true);
-		try {
-			const resp = (await listAirflowJobRuns(dagId, 20)) as { dag_runs?: AirflowRun[] };
-			const list = Array.isArray(resp?.dag_runs) ? resp.dag_runs : [];
-			list.sort((a, b) => {
-				const t1Raw = a.logical_date || a.execution_date || a.start_date;
-				const t2Raw = b.logical_date || b.execution_date || b.start_date;
-				const t1 = t1Raw ? new Date(t1Raw).getTime() : 0;
-				const t2 = t2Raw ? new Date(t2Raw).getTime() : 0;
-				return t2 - t1;
-			});
-			setRuns(list);
-		} catch (err: any) {
-			toast.error(err?.message || "加载运行记录失败");
-		} finally {
-			setRunsLoading(false);
-		}
-	}, []);
+	const assetColumns: ColumnsType<AssetColumn> = [
+		{ title: "字段", dataIndex: "name" },
+		{ title: "类型", dataIndex: "type" },
+		{ title: "备注", dataIndex: "comment" },
+		{ title: "质量提示", dataIndex: "quality" },
+	];
 
-	useEffect(() => {
-		void loadJobs();
-	}, [loadJobs]);
+	const runColumns: ColumnsType<RunRow> = [
+		{ title: "时间", dataIndex: "time" },
+		{ title: "数据源", dataIndex: "source" },
+		{ title: "模式", dataIndex: "mode" },
+		{ title: "发现表", dataIndex: "tables" },
+		{ title: "发现字段", dataIndex: "columns" },
+		{ title: "状态", dataIndex: "status", render: statusTag },
+		{ title: "操作", render: () => <Button type="link">查看日志</Button> },
+	];
 
-	useEffect(() => {
-		if (selectedJob?.dagId) {
-			void loadRuns(selectedJob.dagId);
-		}
-	}, [loadRuns, selectedJob?.dagId]);
-
-	const handleRefresh = async () => {
-		await loadJobs();
-		await loadRuns(selectedJob?.dagId);
-	};
-
-	const handleRun = async (job: AirflowJob) => {
-		if (!job?.dagId) {
-			toast.error("缺少 DAG 标识，无法触发");
-			return;
-		}
-		setActioningId(job.dagId);
-		try {
-			await triggerAirflowJob(job.dagId, {});
-			toast.success("作业已触发");
-			await handleRefresh();
-		} catch (err: any) {
-			toast.error(err?.message || "触发失败");
-		} finally {
-			setActioningId(null);
-		}
-	};
-
-	const openLog = (job: AirflowJob) => {
-		setActiveLog(job);
-		setDrawerOpen(true);
-	};
-
-	const statusBadge = (status?: string) => {
-		const normalized = normalizeUpper(status);
-		if (normalized === "RUNNING") return <Badge status="processing" text="运行中" />;
-		if (normalized === "QUEUED") return <Badge status="processing" text="排队中" />;
-		if (normalized === "SUCCESS") return <Badge status="success" text="成功" />;
-		if (normalized === "FAILED") return <Badge status="error" text="失败" />;
-		if (normalized === "IDLE") return <Badge status="default" text="空闲" />;
-		return <Badge status="default" text={normalized || "未知"} />;
-	};
-
-	const inferLayer = (name?: string) => {
-		const normalized = (name || "").toLowerCase();
-		if (normalized.includes("ods")) return "ODS";
-		if (normalized.includes("dwd")) return "DWD";
-		if (normalized.includes("dws")) return "DWS";
-		if (normalized.includes("ads")) return "ADS";
-		return "未指定";
-	};
-
-	const layerTag = (layer: string) => {
-		const color =
-			layer === "ODS" ? "blue" : layer === "DWD" ? "cyan" : layer === "DWS" ? "purple" : layer === "ADS" ? "geekblue" : "default";
-		return (
-			<Tag color={color} className="rounded-md font-semibold">
-				{layer}
-			</Tag>
-		);
-	};
-
-	const qualityScore = (status?: string) => {
-		const normalized = normalizeUpper(status);
-		if (normalized === "SUCCESS") return 100;
-		if (normalized === "RUNNING") return 95;
-		if (normalized === "FAILED") return 60;
-		return 0;
-	};
-
-	const jobRows = useMemo<JobRow[]>(() => {
-		return jobs.map((row, idx) => {
-			const layer = inferLayer(row.name);
-			const status = normalizeUpper(row.lastState) || "UNKNOWN";
-			const lastRun = row.lastRun ? formatDateTime(row.lastRun) : "-";
-			const owners = Array.isArray(row.owners) ? row.owners.join(" / ") : row.owners || "-";
-			return {
-				key: row.dagId || row.name || `${idx}`,
-				name: row.name || row.dagId || "未命名任务",
-				layer,
-				owner: owners,
-				schedule: row.schedule || "手动",
-				status,
-				lastRun,
-				duration: row.lastDuration != null ? String(row.lastDuration) : "-",
-				quality: qualityScore(row.lastState),
-				job: row,
-			};
-		});
-	}, [jobs]);
-
-	const jobColumns: ColumnsType<JobRow> = useMemo(
-		() => [
-			{ title: "作业名称", dataIndex: "name", key: "name", render: (t) => <Text strong>{t}</Text> },
-			{ title: "目标层级", dataIndex: "layer", key: "layer", render: (l) => layerTag(l) },
-			{ title: "运行状态", dataIndex: "status", key: "status", render: (s) => statusBadge(s) },
-			{ title: "最后运行", dataIndex: "lastRun", key: "lastRun", width: 160 },
-			{ title: "耗时", dataIndex: "duration", key: "duration", width: 100 },
-			{
-				title: "数据质量",
-				dataIndex: "quality",
-				key: "quality",
-				render: (q) => <Progress percent={q} size="small" status={q < 90 ? "exception" : "active"} />,
-			},
-			{
-				title: "操作",
-				key: "actions",
-				width: 240,
-				render: (_, row) => (
-					<Space>
-						<Button
-							type="link"
-							size="small"
-							loading={actioningId === row.job.dagId}
-							onClick={() => handleRun(row.job)}
-						>
-							触发
-						</Button>
-						<Button
-							type="link"
-							size="small"
-							loading={actioningId === row.job.dagId}
-							onClick={() => handleRun(row.job)}
-						>
-							重跑
-						</Button>
-						<Button type="link" size="small" onClick={() => openLog(row.job)}>
-							日志
-						</Button>
-						<Button
-							type="link"
-							size="small"
-							onClick={() => {
-								setSelectedJob(row.job);
-								setActiveTab("monitor");
-							}}
-						>
-							健康档案
-						</Button>
-					</Space>
-				),
-			},
-		],
-		[actioningId],
-	);
-
-	const latestRun = runs[0];
-	const monitorLogLines = useMemo(() => {
-		if (!latestRun) {
-			return ["暂无运行日志"];
-		}
-		const startedAt = formatDateTime(latestRun.logical_date || latestRun.execution_date || latestRun.start_date);
-		const status = normalizeUpper(latestRun.state);
-		const failed = normalizeUpper(latestRun.state) === "FAILED";
-		return [
-			`[${startedAt}] INFO - Triggered DAG ${selectedJob?.dagId || "-"}`,
-			`[${startedAt}] INFO - Status: ${status}`,
-			failed ? `[${startedAt}] ERROR - Dag run failed.` : "[INFO] Pipeline completed.",
-			"[INFO] Triggering OpenMetadata Refresh...",
-			"[INFO] Metadata Sync Successful.",
-		];
-	}, [latestRun, selectedJob?.dagId]);
-
-	const syncColumns: ColumnsType<AirflowRun> = useMemo(
-		() => [
-			{ title: "运行 ID", dataIndex: "dag_run_id", key: "dag_run_id", width: 180, render: (v, row) => v || row.run_id || "-" },
-			{
-				title: "状态",
-				dataIndex: "state",
-				key: "state",
-				width: 120,
-				render: (v) => {
-					const label = normalizeUpper(v) || "UNKNOWN";
-					const color = label === "SUCCESS" ? "green" : label === "FAILED" ? "red" : "gold";
-					return <Tag color={color}>{label}</Tag>;
-				},
-			},
-			{
-				title: "开始时间",
-				dataIndex: "start_date",
-				key: "start_date",
-				render: (v, row) => formatDateTime(v || row.logical_date || row.execution_date),
-			},
-			{ title: "结束时间", dataIndex: "end_date", key: "end_date", render: (v) => formatDateTime(v) },
-			{ title: "耗时", dataIndex: "duration", key: "duration", render: (v) => (v == null ? "-" : `${v}s`) },
-		],
-		[],
-	);
-
-	const activeLogLines = useMemo(() => {
-		if (!activeLog) {
-			return ["暂无日志"];
-		}
-		const timestamp = formatDateTime(activeLog.lastRun);
-		const status = normalizeUpper(activeLog.lastState);
-		return [
-			`[${timestamp}] INFO - DAG ${activeLog.dagId} triggered`,
-			`[${timestamp}] INFO - Status: ${status || "UNKNOWN"}`,
-			activeLog.lastRunId ? `[${timestamp}] INFO - Run ID: ${activeLog.lastRunId}` : "[INFO] Run ID: -",
-		];
-	}, [activeLog]);
+	const diffItems = selectedAsset
+		? [
+				{ label: "新增表", value: selectedAsset.diff.newTables, color: "blue" },
+				{ label: "新增字段", value: selectedAsset.diff.newCols, color: "cyan" },
+				{ label: "类型变更", value: selectedAsset.diff.typeChanges, color: "orange" },
+				{ label: "备注缺失", value: selectedAsset.diff.commentMissing, color: "red" },
+			]
+		: [];
 
 	return (
-		<div className="p-8">
-			<Breadcrumb className="mb-4">
-				<Breadcrumb.Item>作业与调度中心</Breadcrumb.Item>
-				<Breadcrumb.Item>数据集成作业</Breadcrumb.Item>
-			</Breadcrumb>
-
-			<div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-				<div>
-					<Title level={3} style={{ margin: 0 }}>
-						作业集成控制台
-					</Title>
-					<Text type="secondary">统一管理 dbt + Airflow + OpenMetadata 的采集与加工任务。</Text>
-				</div>
-				<Space>
-					<Button onClick={handleRefresh} loading={jobsLoading}>
-						刷新
-					</Button>
-					<Button type="primary" size="large" onClick={() => setModalOpen(true)}>
-						+ 新建采集/加工任务
-					</Button>
-				</Space>
-			</div>
-
-			<Tabs
-				activeKey={activeTab}
-				onChange={setActiveTab}
-				className="rounded-lg bg-white p-6 shadow-sm"
-				items={[
-					{ key: "jobs", label: "作业列表" },
-					{ key: "monitor", label: "运行监控与看板" },
-				]}
-			/>
-
-			{activeTab === "jobs" ? (
-				<Card className="shadow-sm">
-					{jobRows.length === 0 && !jobsLoading ? (
-						<EmptyState title="暂无采集任务" description="请先配置数据源或创建采集作业。" />
-					) : (
-						<Table
-							dataSource={jobRows}
-							columns={jobColumns}
-							loading={jobsLoading}
-							pagination={{ pageSize: 6 }}
-						/>
-					)}
-				</Card>
-			) : (
-				<Row gutter={16}>
-					<Col xs={24} lg={16}>
-						<Card title="血缘追踪 (2层深度 - 来自 OpenMetadata)" className="mb-6">
-							<div className="flex flex-wrap items-center justify-around gap-6 rounded-lg bg-slate-50 py-10">
-								<div className="w-40 rounded-md border border-slate-200 bg-white p-3 text-center text-xs">
-									<div className="text-slate-400">Upstream (ODS)</div>
-									<div className="font-semibold">{selectedJob?.name ? `ods_${selectedJob.name}` : "ods_orders"}</div>
-								</div>
-								<div className="text-slate-400">➔</div>
-								<div className="w-40 rounded-md border-2 border-blue-500 bg-white p-3 text-center text-xs shadow-md">
-									<div className="text-blue-500">Target (DWD)</div>
-									<div className="font-semibold">{selectedJob?.name ? `dwd_${selectedJob.name}` : "dwd_order_detail"}</div>
-								</div>
-								<div className="text-slate-400">➔</div>
-								<div className="w-40 rounded-md border border-slate-200 bg-white p-3 text-center text-xs">
-									<div className="text-slate-400">Downstream (ADS)</div>
-									<div className="font-semibold">{selectedJob?.name ? `ads_${selectedJob.name}` : "ads_sales_report"}</div>
-								</div>
-							</div>
-						</Card>
-
-						<Card title="运行记录 (Airflow)">
-							<Table
-								size="small"
-								pagination={false}
-								dataSource={runsLoading ? [] : runs.slice(0, 5)}
-								columns={syncColumns}
-								rowKey={(row) => row.dag_run_id || row.run_id || Math.random().toString(36)}
-								loading={runsLoading}
-							/>
-						</Card>
-					</Col>
-					<Col xs={24} lg={8}>
-						<Card title="运行日志流 (Airflow API)">
-							<div className="h-64 overflow-y-auto rounded bg-black p-4 font-mono text-xs text-green-400">
-								{monitorLogLines.map((line, idx) => (
-									<div key={`${line}-${idx}`}>{line}</div>
-								))}
-							</div>
-						</Card>
-					</Col>
-				</Row>
-			)}
-
-			<Drawer
-				title={`采集运行日志${activeLog?.name ? ` - ${activeLog.name}` : activeLog?.dagId ? ` - ${activeLog.dagId}` : ""}`}
-				width={640}
-				open={drawerOpen}
-				onClose={() => setDrawerOpen(false)}
-			>
-				<div className="rounded-md bg-slate-950 p-3 font-mono text-xs leading-relaxed text-sky-400">
-					{activeLogLines.map((line, idx) => (
-						<div key={`${line}-${idx}`}>{line}</div>
-					))}
-				</div>
-			</Drawer>
-
-			<Modal
-				open={modalOpen}
-				title="新建采集/加工任务配置"
-				onCancel={() => setModalOpen(false)}
-				width={820}
-				footer={
+		<div className="space-y-4">
+			<PageHeader
+				title="元数据采集"
+				description="结构扫描：复用数据源连接，触发元数据采集与结构同步（占位）。"
+				actions={
 					<Space>
-						<Button onClick={() => setModalOpen(false)}>取消</Button>
-						<Button
-							type="primary"
-							onClick={async () => {
-								try {
-									const values = await form.validateFields();
-									const dagId = String(values.dagId || "").trim();
-									if (!dagId) {
-										toast.error("请填写 Airflow DAG ID");
-										return;
-									}
-									await triggerAirflowJob(dagId, {});
-									toast.success("任务已提交到 Airflow");
-									setModalOpen(false);
-									form.resetFields();
-									await handleRefresh();
-								} catch {
-									return;
-								}
-							}}
-						>
-							保存并同步至 Airflow
-						</Button>
+						<Button onClick={() => toast.success("已刷新（示例）")}>刷新</Button>
+						<Button onClick={() => setHelpOpen(true)}>使用说明</Button>
+						<Button type="primary" onClick={() => toast.success("已保存计划（示例）")}>保存计划</Button>
 					</Space>
 				}
+			/>
+
+			<Alert
+				type="info"
+				showIcon
+				message="元数据采集将自动同步表/字段/索引等结构信息，并为质量校验与入湖任务提供基础。"
+			/>
+
+			<Row gutter={[16, 16]} align="top">
+				<Col xs={24} xl={12}>
+					<Card title="创建/维护采集计划">
+						<Form
+							form={form}
+							layout="vertical"
+							initialValues={{
+								source: dataSources[0]?.id,
+								mode: "FULL",
+								schedule: "MANUAL",
+								profiler: "LIGHT",
+								owner: dataSources[0]?.owner,
+							}}
+						>
+							<Row gutter={12}>
+								<Col span={12}>
+									<Form.Item name="source" label="选择数据源">
+										<Select
+											options={dataSources.map((item) => ({
+												label: `${item.name}（${item.type}）`,
+												value: item.id,
+											}))}
+										/>
+									</Form.Item>
+								</Col>
+								<Col span={12}>
+									<Form.Item name="mode" label="采集模式">
+										<Select
+											options={[
+												{ label: "全量扫描（首次/低频）", value: "FULL" },
+												{ label: "增量扫描（仅发现变更）", value: "INCR" },
+											]}
+										/>
+									</Form.Item>
+								</Col>
+							</Row>
+							<Row gutter={12}>
+								<Col span={12}>
+									<Form.Item name="schemaAllow" label="Schema 白名单">
+										<Input placeholder="例如：erp, public" />
+									</Form.Item>
+								</Col>
+								<Col span={12}>
+									<Form.Item name="tableFilter" label="表过滤（前缀/正则）">
+										<Input placeholder="例如：^so_.*" />
+									</Form.Item>
+								</Col>
+							</Row>
+							<Row gutter={12}>
+								<Col span={8}>
+									<Form.Item name="schedule" label="执行计划">
+										<Select
+											options={[
+												{ label: "仅手动", value: "MANUAL" },
+												{ label: "每日 02:00", value: "DAILY" },
+												{ label: "每小时", value: "HOURLY" },
+												{ label: "每周日 02:00", value: "WEEKLY" },
+											]}
+										/>
+									</Form.Item>
+								</Col>
+								<Col span={8}>
+									<Form.Item name="profiler" label="字段剖析">
+										<Select
+											options={[
+												{ label: "关闭", value: "OFF" },
+												{ label: "轻量（空值率/基数）", value: "LIGHT" },
+												{ label: "完整（分布/直方图）", value: "FULL" },
+											]}
+										/>
+									</Form.Item>
+								</Col>
+								<Col span={8}>
+									<Form.Item name="owner" label="责任人">
+										<Input placeholder="例如：数据治理专员A" />
+									</Form.Item>
+								</Col>
+							</Row>
+							<Space>
+								<Button onClick={() => toast.success("已触发采集（示例）")}>立即采集</Button>
+								<Button type="primary" onClick={() => toast.success("已保存计划（示例）")}>
+									保存计划
+								</Button>
+							</Space>
+							<div className="mt-3 text-xs text-text-tertiary">
+								后端会将数据源参数映射为采集配置，并触发实际运行（重构中，暂用占位数据）。
+							</div>
+						</Form>
+					</Card>
+				</Col>
+				<Col xs={24} xl={12}>
+					<Card title="采集结果预览">
+						{selectedAsset ? (
+							<Space direction="vertical" className="w-full" size={12}>
+								<Form layout="vertical">
+									<Form.Item label="已发现资产（按主题/库）">
+										<Select
+											value={selectedAssetId}
+											onChange={setSelectedAssetId}
+											options={assets.map((item) => ({ label: item.label, value: item.id }))}
+										/>
+									</Form.Item>
+								</Form>
+								<Descriptions size="small" bordered column={1}>
+									<Descriptions.Item label="库/Schema">
+										{selectedAsset.table.db}.{selectedAsset.table.schema}
+									</Descriptions.Item>
+									<Descriptions.Item label="表名">{selectedAsset.table.name}</Descriptions.Item>
+									<Descriptions.Item label="备注">{selectedAsset.table.comment}</Descriptions.Item>
+									<Descriptions.Item label="主键">{selectedAsset.table.pk}</Descriptions.Item>
+								</Descriptions>
+								<div>
+									<Text type="secondary">字段列表</Text>
+									<Table
+										size="small"
+										pagination={false}
+										columns={assetColumns}
+										dataSource={selectedAsset.cols}
+									/>
+								</div>
+								<div>
+									<Text type="secondary">本次扫描变更摘要</Text>
+									<Space className="mt-2" wrap>
+										{diffItems.map((item) => (
+											<Tag key={item.label} color={item.color}>
+												{item.label}：{item.value}
+											</Tag>
+										))}
+									</Space>
+								</div>
+								<Button type="primary" onClick={() => toast.success("已生成入湖候选清单（示例）")}>生成入湖候选清单</Button>
+							</Space>
+						) : (
+							<EmptyState title="暂无资产" description="请先完成采集或选择数据源。" />
+						)}
+					</Card>
+				</Col>
+			</Row>
+
+			<Card title="采集历史" extra={<Button onClick={() => toast.success("已导出（示例）")}>导出</Button>}>
+				<Table rowKey={(row) => row.id} columns={runColumns} dataSource={runs} pagination={{ pageSize: 6 }} />
+			</Card>
+
+			<Modal
+				open={helpOpen}
+				title="使用说明"
+				onCancel={() => setHelpOpen(false)}
+				footer={[
+					<Button key="close" onClick={() => setHelpOpen(false)}>
+						关闭
+					</Button>,
+				]}
 			>
-				<Form form={form} layout="vertical">
-					<Row gutter={16}>
-						<Col span={12}>
-							<Form.Item name="name" label="任务名称" rules={[{ required: true, message: "请输入作业名称" }]}>
-								<Input placeholder="请输入作业名称" />
-							</Form.Item>
-						</Col>
-						<Col span={12}>
-							<Form.Item name="layer" label="目标数仓分层" rules={[{ required: true, message: "请选择目标层" }]}>
-								<Select
-									placeholder="请选择目标层"
-									options={[
-										{ label: "ODS (贴源层)", value: "ODS" },
-										{ label: "DWD (明细层)", value: "DWD" },
-										{ label: "DWS (汇总层)", value: "DWS" },
-										{ label: "ADS (应用层)", value: "ADS" },
-									]}
-								/>
-							</Form.Item>
-						</Col>
-					</Row>
-					<Row gutter={16}>
-						<Col span={12}>
-							<Form.Item name="source" label="源数据源">
-								<Select
-									placeholder="请选择来源"
-									options={jobs.map((item) => ({ label: item.name || item.dagId, value: item.dagId }))}
-								/>
-							</Form.Item>
-						</Col>
-						<Col span={12}>
-							<Form.Item name="owner" label="负责人">
-								<Select
-									placeholder="请选择负责人"
-									options={[
-										{ label: "张三", value: "张三" },
-										{ label: "李四", value: "李四" },
-										{ label: "王五", value: "王五" },
-									]}
-								/>
-							</Form.Item>
-						</Col>
-					</Row>
-					<Divider orientation="left">调度与编排</Divider>
-					<Row gutter={16}>
-						<Col span={12}>
-							<Form.Item name="cron" label="调度周期 (Cron)">
-								<Input placeholder="0 2 * * *" />
-							</Form.Item>
-						</Col>
-						<Col span={12}>
-							<Form.Item name="depends" label="上游作业依赖">
-								<Select mode="multiple" placeholder="选择上游任务" options={jobRows.map((row) => ({ label: row.name, value: row.key }))} />
-							</Form.Item>
-						</Col>
-					</Row>
-					<Form.Item name="dagId" label="关联 Airflow DAG ID">
-						<Input placeholder="例如: dag_ods_order_sync (不填则系统自动生成)" />
-					</Form.Item>
-					<Form.Item label="元数据自动刷新">
-						<Badge status="processing" text="开启 (运行成功后将自动同步至 OpenMetadata)" />
-					</Form.Item>
-				</Form>
+				<div className="space-y-2 text-sm text-slate-600">
+					<div>1. 采集计划复用已建数据源连接，避免重复配置连接参数。</div>
+					<div>2. 采集结果用于资产入库、质量校验与入湖任务候选清单。</div>
+					<div>3. 当前为静态占位数据，后续将对接 OpenMetadata。</div>
+				</div>
 			</Modal>
 		</div>
 	);

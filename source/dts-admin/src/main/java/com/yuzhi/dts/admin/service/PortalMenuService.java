@@ -80,6 +80,7 @@ public class PortalMenuService {
         Map.entry("resource.sources", "/pages/foundation/DataSourcesPage"),
         Map.entry("resource.metadata", "/pages/catalog/MetadataPage"),
         Map.entry("resource.ingestion", "/pages/explore/etl/TransformPage"),
+        Map.entry("resource.changes", "/pages/foundation/AccessChangesPage"),
         Map.entry("studio.projects", "/pages/modeling/ModelTemplatesPage"),
         Map.entry("studio.sql", "/pages/modeling/SqlModelingPage"),
         Map.entry("studio.scripts", "/pages/explore/etl/ScriptStudioPage"),

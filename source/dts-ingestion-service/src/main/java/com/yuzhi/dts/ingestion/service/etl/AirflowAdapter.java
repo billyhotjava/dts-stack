@@ -1,6 +1,7 @@
 package com.yuzhi.dts.ingestion.service.etl;
 
 import com.yuzhi.dts.ingestion.config.AirflowProperties;
+import com.yuzhi.dts.ingestion.service.infra.IngestionSettingsService;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.springframework.stereotype.Component;
@@ -11,17 +12,21 @@ public class AirflowAdapter {
 
     private final AirflowClient client;
     private final AirflowProperties properties;
+    private final IngestionSettingsService settingsService;
 
-    public AirflowAdapter(AirflowClient client, AirflowProperties properties) {
+    public AirflowAdapter(AirflowClient client, AirflowProperties properties, IngestionSettingsService settingsService) {
         this.client = client;
         this.properties = properties;
+        this.settingsService = settingsService;
     }
 
     public record AirflowRequest(Boolean enabled, String dagId, String scheduleType, String cron, Integer intervalMinutes) {}
 
     public Map<String, Object> triggerIfRequested(AirflowRequest request, String connectionId, String sourceId, String taskName, boolean runNow) {
         Map<String, Object> result = new LinkedHashMap<>();
-        if (!properties.isEnabled()) {
+        IngestionSettingsService.SettingsSnapshot settings = settingsService.getSettings(IngestionSettingsService.SERVICE_AIRFLOW);
+        boolean enabled = settings.getBoolean("enabled", properties.isEnabled());
+        if (!enabled) {
             result.put("enabled", false);
             result.put("message", "Airflow 未启用");
             return result;
@@ -31,7 +36,9 @@ public class AirflowAdapter {
             result.put("message", "未启用编排");
             return result;
         }
-        String dagId = StringUtils.hasText(request.dagId()) ? request.dagId().trim() : properties.getDagId();
+        String dagId = StringUtils.hasText(request.dagId())
+            ? request.dagId().trim()
+            : settings.getString("dagId", properties.getDagId());
         if (!StringUtils.hasText(dagId)) {
             result.put("enabled", true);
             result.put("status", "skipped");

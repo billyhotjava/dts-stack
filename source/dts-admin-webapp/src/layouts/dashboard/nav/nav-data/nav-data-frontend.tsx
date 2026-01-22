@@ -52,6 +52,12 @@ export const frontendNavData: NavProps["data"] = [
 						auth: SYSADMIN_ROLES,
 					},
 					{
+						title: "数据湖配置",
+						path: "/admin/data-lake",
+						icon: <Icon icon="local:ic-management" size={18} />,
+						auth: SYSADMIN_ROLES,
+					},
+					{
 						title: "工作流配置",
 						path: "/admin/workflows",
 						icon: <Icon icon="solar:shuffle-bold-duotone" size={18} />,

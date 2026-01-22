@@ -17,6 +17,14 @@ import type {
 	UpsertWorkflowTemplatePayload,
 	WorkflowTemplateConfig,
 } from "@/admin/types";
+import type {
+	ConnectionTestLog,
+	HiveConnectionPersistRequest,
+	HiveConnectionTestRequest,
+	HiveConnectionTestResult,
+	InceptorConfig,
+	InfraFeatureFlags,
+} from "@/types/infra";
 import apiClient from "@/api/apiClient";
 
 type AuditSilentOption = { auditSilent?: boolean };
@@ -116,6 +124,40 @@ export const adminApi = {
 		apiClient.post<ChangeRequest>({
 			url: "/admin/system/config",
 			data: config,
+		}),
+
+	getInceptorConfig: () =>
+		apiClient.get<InceptorConfig | null>({
+			url: "/admin/infra/inceptor",
+		}),
+
+	getInceptorFlags: () =>
+		apiClient.get<InfraFeatureFlags>({
+			url: "/admin/infra/inceptor/flags",
+		}),
+
+	testInceptorConnection: (payload: HiveConnectionTestRequest, dataSourceId?: string) =>
+		apiClient.post<HiveConnectionTestResult>({
+			url: "/admin/infra/inceptor/test",
+			data: payload,
+			params: dataSourceId ? { dataSourceId } : undefined,
+		}),
+
+	publishInceptorConfig: (payload: HiveConnectionPersistRequest) =>
+		apiClient.post<Record<string, unknown>>({
+			url: "/admin/infra/inceptor/publish",
+			data: payload,
+		}),
+
+	refreshInceptorRegistry: () =>
+		apiClient.post<InfraFeatureFlags>({
+			url: "/admin/infra/inceptor/refresh",
+		}),
+
+	getInceptorTestLogs: (dataSourceId?: string) =>
+		apiClient.get<ConnectionTestLog[]>({
+			url: "/admin/infra/inceptor/test-logs",
+			params: dataSourceId ? { dataSourceId } : undefined,
 		}),
 
 	getPortalMenus: (options?: AuditSilentOption) =>

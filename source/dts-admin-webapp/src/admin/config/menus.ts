@@ -20,6 +20,7 @@ const sysadminMenus: AdminMenuItem[] = [
 			{ key: "roles", label: "角色管理", path: "/admin/roles", icon: "local:ic-roles" },
 			{ key: "portal-menus", label: "菜单管理", path: "/admin/portal-menus", icon: "local:ic-menu" },
 			{ key: "orgs", label: "组织机构管理", path: "/admin/orgs", icon: "local:ic-orgs" },
+			{ key: "data-lake", label: "数据湖配置", path: "/admin/data-lake", icon: "local:ic-management" },
 			{ key: "ops", label: "运维配置", path: "/admin/ops", icon: "solar:settings-bold-duotone" },
 			{ key: "workflows", label: "工作流配置", path: "/admin/workflows", icon: "solar:shuffle-bold-duotone" },
 		],
