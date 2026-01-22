@@ -10,6 +10,9 @@ public class AirbyteProperties {
     private String apiPath = "/api/v1";
     private String username;
     private String password;
+    private String authUserId = "00000000-0000-0000-0000-000000000000";
+    private String organizationId;
+    private String organizationName = "dts-org";
     private String workspaceId;
     private String defaultDestinationId;
     private String defaultDestinationName = "dts-ods-destination";
@@ -54,6 +57,30 @@ public class AirbyteProperties {
 
     public void setPassword(String password) {
         this.password = password;
+    }
+
+    public String getAuthUserId() {
+        return authUserId;
+    }
+
+    public void setAuthUserId(String authUserId) {
+        this.authUserId = authUserId;
+    }
+
+    public String getOrganizationId() {
+        return organizationId;
+    }
+
+    public void setOrganizationId(String organizationId) {
+        this.organizationId = organizationId;
+    }
+
+    public String getOrganizationName() {
+        return organizationName;
+    }
+
+    public void setOrganizationName(String organizationName) {
+        this.organizationName = organizationName;
     }
 
     public String getWorkspaceId() {

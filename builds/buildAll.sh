@@ -180,6 +180,7 @@ if [[ "$MODE" == "normal" || "$MODE" == "both" ]]; then
   load_image_versions
   IMAGE_DTS_ADMIN="${IMAGE_DTS_ADMIN:-dts-admin:local}"
   IMAGE_DTS_PLATFORM="${IMAGE_DTS_PLATFORM:-dts-platform:local}"
+  IMAGE_DTS_INGESTION_SERVICE="${IMAGE_DTS_INGESTION_SERVICE:-dts-ingestion-service:local}"
   IMAGE_DTS_ANALYTICS="${IMAGE_DTS_ANALYTICS:-dts-analytics:local}"
   IMAGE_DTS_ADMIN_WEBAPP="${IMAGE_DTS_ADMIN_WEBAPP:-dts-admin-webapp:local}"
   IMAGE_DTS_PLATFORM_WEBAPP="${IMAGE_DTS_PLATFORM_WEBAPP:-dts-platform-webapp:local}"
@@ -189,6 +190,8 @@ if [[ "$MODE" == "normal" || "$MODE" == "both" ]]; then
   build_image "dts-admin" "$IMAGE_DTS_ADMIN" "${REPO_ROOT}/builds/dts-admin/Dockerfile" "$NORMAL_DIST" \
     --build-arg ENABLE_MAVEN_BUILD="${ENABLE_MAVEN_BUILD:-true}"
   build_image "dts-platform" "$IMAGE_DTS_PLATFORM" "${REPO_ROOT}/builds/dts-platform/Dockerfile" "$NORMAL_DIST" \
+    --build-arg ENABLE_MAVEN_BUILD="${ENABLE_MAVEN_BUILD:-true}"
+  build_image "dts-ingestion-service" "$IMAGE_DTS_INGESTION_SERVICE" "${REPO_ROOT}/builds/dts-ingestion-service/Dockerfile" "$NORMAL_DIST" \
     --build-arg ENABLE_MAVEN_BUILD="${ENABLE_MAVEN_BUILD:-true}"
   build_image "dts-analytics" "$IMAGE_DTS_ANALYTICS" "${REPO_ROOT}/builds/dts-analytics/Dockerfile" "$NORMAL_DIST"
   build_image "dts-admin-webapp" "$IMAGE_DTS_ADMIN_WEBAPP" "${REPO_ROOT}/builds/dts-admin-webapp/Dockerfile" "$NORMAL_DIST" \
@@ -213,6 +216,7 @@ if [[ "$MODE" == "legacy" || "$MODE" == "both" ]]; then
   load_image_versions
   IMAGE_DTS_ADMIN="${IMAGE_DTS_ADMIN:-dts-admin:local}"
   IMAGE_DTS_PLATFORM="${IMAGE_DTS_PLATFORM:-dts-platform:local}"
+  IMAGE_DTS_INGESTION_SERVICE="${IMAGE_DTS_INGESTION_SERVICE:-dts-ingestion-service:local}"
   IMAGE_DTS_ANALYTICS="${IMAGE_DTS_ANALYTICS:-dts-analytics:local}"
   IMAGE_DTS_ADMIN_WEBAPP="${IMAGE_DTS_ADMIN_WEBAPP:-dts-admin-webapp:local}"
   IMAGE_DTS_PLATFORM_WEBAPP="${IMAGE_DTS_PLATFORM_WEBAPP:-dts-platform-webapp:local}"
@@ -225,6 +229,7 @@ if [[ "$MODE" == "legacy" || "$MODE" == "both" ]]; then
 
   build_image "dts-admin" "$IMAGE_DTS_ADMIN" "${REPO_ROOT}/builds/dts-admin/Dockerfile.offline" "$LEGACY_DIST"
   build_image "dts-platform" "$IMAGE_DTS_PLATFORM" "${REPO_ROOT}/builds/dts-platform/Dockerfile.offline" "$LEGACY_DIST"
+  build_image "dts-ingestion-service" "$IMAGE_DTS_INGESTION_SERVICE" "${REPO_ROOT}/builds/dts-ingestion-service/Dockerfile.offline" "$LEGACY_DIST"
   build_image "dts-analytics" "$IMAGE_DTS_ANALYTICS" "${REPO_ROOT}/builds/dts-analytics/Dockerfile.offline" "$LEGACY_DIST"
   build_image "dts-admin-webapp" "$IMAGE_DTS_ADMIN_WEBAPP" "${REPO_ROOT}/builds/dts-admin-webapp/Dockerfile" "$LEGACY_DIST" \
     --build-arg PNPM_VERSION="${PNPM_VERSION}" \

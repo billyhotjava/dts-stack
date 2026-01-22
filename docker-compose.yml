@@ -559,8 +559,8 @@ services:
       DB: postgres12
       DB_PORT: 5432
       POSTGRES_SEEDS: dts-pg
-      POSTGRES_USER: ${PG_USER_TEMPORAL:-airbyte_temporal}
-      POSTGRES_PWD: ${PG_PWD_TEMPORAL:-airbyte_temporal}
+      POSTGRES_USER: ${PG_SUPER_USER:-postgres}
+      POSTGRES_PWD: ${PG_SUPER_PASSWORD:-postgres}
       POSTGRES_DB: ${PG_DB_TEMPORAL:-airbyte_temporal}
     depends_on:
       dts-pg:

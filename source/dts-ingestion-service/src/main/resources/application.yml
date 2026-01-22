@@ -1,0 +1,73 @@
+server:
+  port: 8083
+
+spring:
+  application:
+    name: dts-ingestion-service
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://dts-pg:5432/dtsPlatform}
+    username: ${SPRING_DATASOURCE_USERNAME:dts}
+    password: ${SPRING_DATASOURCE_PASSWORD:dts}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: none
+    properties:
+      hibernate:
+        format_sql: false
+
+management:
+  endpoints:
+    web:
+      base-path: /management
+      exposure:
+        include:
+          - health
+          - info
+
+dts:
+  ingestion:
+    enabled: true
+    trusted-service-name: ${DTS_INGESTION_TRUSTED_SERVICE_NAME:dts-platform}
+  airbyte:
+    enabled: true
+    base-url: ${DTS_AIRBYTE_BASE_URL:http://dts-airbyte-server:8001}
+    api-path: ${DTS_AIRBYTE_API_PATH:/api/v1}
+    username: ${DTS_AIRBYTE_USERNAME:}
+    password: ${DTS_AIRBYTE_PASSWORD:}
+    auth-user-id: ${DTS_AIRBYTE_AUTH_USER_ID:00000000-0000-0000-0000-000000000000}
+    organization-id: ${DTS_AIRBYTE_ORGANIZATION_ID:}
+    organization-name: ${DTS_AIRBYTE_ORGANIZATION_NAME:dts-org}
+    workspace-id: ${DTS_AIRBYTE_WORKSPACE_ID:}
+    default-destination-id: ${DTS_AIRBYTE_DEFAULT_DESTINATION_ID:}
+    default-destination-name: ${DTS_AIRBYTE_DEFAULT_DESTINATION_NAME:dts-ods-destination}
+    default-destination-definition-id: ${DTS_AIRBYTE_DEFAULT_DESTINATION_DEFINITION_ID:}
+    default-destination-config-json: ${DTS_AIRBYTE_DEFAULT_DESTINATION_CONFIG_JSON:}
+  airflow:
+    enabled: ${DTS_AIRFLOW_ENABLED:true}
+    base-url: ${DTS_AIRFLOW_BASE_URL:http://dts-airflow-webserver:8080}
+    api-path: ${DTS_AIRFLOW_API_PATH:/api/v1}
+    username: ${DTS_AIRFLOW_USERNAME:}
+    password: ${DTS_AIRFLOW_PASSWORD:}
+    dag-id: ${DTS_AIRFLOW_DAG_ID:}
+  openmetadata:
+    enabled: ${DTS_OPENMETADATA_ENABLED:${DTS_PLATFORM_OPENMETADATA_ENABLED:true}}
+    base-url: ${DTS_OPENMETADATA_BASE_URL:${DTS_PLATFORM_OPENMETADATA_BASE_URL:http://dts-openmetadata:8585}}
+    api-path: ${DTS_OPENMETADATA_API_PATH:/api/v1}
+    auth-token: ${DTS_OPENMETADATA_AUTH_TOKEN:${DTS_PLATFORM_OPENMETADATA_AUTH_TOKEN:}}
+    table-fields: ${DTS_OPENMETADATA_TABLE_FIELDS:${DTS_PLATFORM_OPENMETADATA_TABLE_FIELDS:columns,owner,tags,domain}}
+    source-service-name: ${DTS_OPENMETADATA_SOURCE_SERVICE_NAME:}
+    source-service-type: ${DTS_OPENMETADATA_SOURCE_SERVICE_TYPE:}
+    destination-service-name: ${DTS_OPENMETADATA_DESTINATION_SERVICE_NAME:${DTS_PLATFORM_OPENMETADATA_SERVICE_NAME:}}
+    destination-service-type: ${DTS_OPENMETADATA_DESTINATION_SERVICE_TYPE:Postgres}
+    destination-database: ${DTS_OPENMETADATA_DESTINATION_DATABASE:${DTS_PLATFORM_OPENMETADATA_DEFAULT_DATABASE:}}
+    destination-schema: ${DTS_OPENMETADATA_DESTINATION_SCHEMA:${DTS_PLATFORM_OPENMETADATA_DEFAULT_SCHEMA:}}
+    source-database: ${DTS_OPENMETADATA_SOURCE_DATABASE:}
+    source-schema: ${DTS_OPENMETADATA_SOURCE_SCHEMA:}
+    ingestion-enabled: ${DTS_OPENMETADATA_INGESTION_ENABLED:true}
+    ingestion-pipeline-prefix: ${DTS_OPENMETADATA_INGESTION_PREFIX:dts_ingest}
+    ingestion-default-schedule: ${DTS_OPENMETADATA_INGESTION_SCHEDULE:0 * * * *}
+  platform:
+    infra:
+      encryption-key: ${DTS_INFRA_ENCRYPTION_KEY:}
+      key-version: ${DTS_INFRA_KEY_VERSION:v1}

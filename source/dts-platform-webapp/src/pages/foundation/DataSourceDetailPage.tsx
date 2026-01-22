@@ -9,17 +9,19 @@ import {
 	Empty,
 	Form,
 	Input,
+	InputNumber,
 	Modal,
 	Select,
 	Space,
 	Tabs,
 	Typography,
 } from "antd";
-import { DatabaseOutlined, EditOutlined, ReloadOutlined, ThunderboltOutlined } from "@ant-design/icons";
+import { DatabaseOutlined, DeleteOutlined, EditOutlined, ReloadOutlined, ThunderboltOutlined } from "@ant-design/icons";
 import { useParams } from "react-router";
 import { useRouter } from "@/routes/hooks";
 import {
 	checkAirbyteSource,
+	deleteAirbyteSource,
 	discoverAirbyteSource,
 	listAirbyteSourceDefinitions,
 	listAirbyteSources,
@@ -30,7 +32,7 @@ import postgresIcon from "@/assets/connector-icons/postgresql.svg";
 import oracleIcon from "@/assets/connector-icons/oracle.svg";
 import mssqlIcon from "@/assets/connector-icons/mssql.svg";
 import csvIcon from "@/assets/connector-icons/file-csv.svg";
-import dmIcon from "@/assets/connector-icons/database.svg";
+import dmIcon from "@/assets/connector-icons/dameng.ico";
 import excelIcon from "@/assets/icons/file-excel.svg";
 
 const { Text, Title } = Typography;
@@ -62,6 +64,30 @@ type AllowedDefinition = {
 	displayName?: string;
 };
 
+type ConfigFieldType = "text" | "number" | "password" | "select";
+
+type ConfigFieldOption = {
+	label: string;
+	value: string | number;
+};
+
+type ConfigField = {
+	key: string;
+	label: string;
+	type?: ConfigFieldType;
+	required?: boolean;
+	placeholder?: string;
+	options?: ConfigFieldOption[];
+	span?: number;
+	help?: string;
+};
+
+type ConfigProfile = {
+	key: string;
+	fields: ConfigField[];
+	defaults: Record<string, any>;
+};
+
 const formatDateTime = (value?: string) => {
 	if (!value) return "-";
 	try {
@@ -82,9 +108,150 @@ const ALLOWED_SOURCE_DEFS: AllowedDefinition[] = [
 		matchers: ["file (csv, json, excel, feather, parquet)", "airbyte/source-file", "file (csv, excel)"],
 		displayName: "File (CSV, Excel)",
 	},
-	{ key: "dameng", matchers: ["dameng", "dm8", "达梦"], displayName: "Dameng (DM)" },
+	{ key: "dameng", matchers: ["dameng", "dm8", "达梦"], displayName: "Dameng" },
 	{ key: "mssql", matchers: ["microsoft sql server (mssql)", "mssql", "sql server"], displayName: "Microsoft SQL Server" },
 ];
+
+const CONFIG_FORMAT_OPTIONS: ConfigFieldOption[] = [
+	{ label: "CSV", value: "csv" },
+	{ label: "Excel", value: "excel" },
+	{ label: "JSON", value: "json" },
+	{ label: "Parquet", value: "parquet" },
+	{ label: "Feather", value: "feather" },
+];
+
+const resolveDefinitionKey = (def?: AirbyteDefinition) => {
+	const raw = `${def?.name || ""} ${def?.dockerRepository || ""} ${def?.sourceDefinitionId || ""}`.toLowerCase();
+	if (raw.includes("postgres")) return "postgres";
+	if (raw.includes("file") || raw.includes("csv") || raw.includes("excel")) return "file";
+	if (raw.includes("mysql")) return "mysql";
+	if (raw.includes("dameng") || raw.includes("dm") || raw.includes("dm8")) return "dameng";
+	if (raw.includes("oracle")) return "oracle";
+	if (raw.includes("sqlserver") || raw.includes("sql server") || raw.includes("mssql")) return "mssql";
+	return "generic";
+};
+
+const CONFIG_PROFILES: Record<string, ConfigProfile> = {
+	mysql: {
+		key: "mysql",
+		defaults: { host: "", port: 3306, database: "", username: "", password: "" },
+		fields: [
+			{ key: "host", label: "主机地址", required: true, placeholder: "db.internal" },
+			{ key: "port", label: "端口", required: true, type: "number", placeholder: "3306" },
+			{ key: "database", label: "数据库", required: true, placeholder: "erp" },
+			{ key: "username", label: "用户名", required: true, placeholder: "readonly" },
+			{
+				key: "password",
+				label: "密码",
+				required: true,
+				type: "password",
+				placeholder: "保持 ****** 表示不修改原值",
+				help: "密码等敏感字段将脱敏显示，保持 ****** 表示不修改原值。",
+			},
+		],
+	},
+	postgres: {
+		key: "postgres",
+		defaults: { host: "", port: 5432, database: "", username: "", password: "", schema: "" },
+		fields: [
+			{ key: "host", label: "主机地址", required: true, placeholder: "db.internal" },
+			{ key: "port", label: "端口", required: true, type: "number", placeholder: "5432" },
+			{ key: "database", label: "数据库", required: true, placeholder: "analytics" },
+			{ key: "schema", label: "Schema (可选)", placeholder: "public" },
+			{ key: "username", label: "用户名", required: true, placeholder: "readonly" },
+			{
+				key: "password",
+				label: "密码",
+				required: true,
+				type: "password",
+				placeholder: "保持 ****** 表示不修改原值",
+				help: "密码等敏感字段将脱敏显示，保持 ****** 表示不修改原值。",
+			},
+		],
+	},
+	dameng: {
+		key: "dameng",
+		defaults: { host: "", port: 5236, database: "", username: "", password: "" },
+		fields: [
+			{ key: "host", label: "主机地址", required: true, placeholder: "db.internal" },
+			{ key: "port", label: "端口", required: true, type: "number", placeholder: "5236" },
+			{ key: "database", label: "数据库", required: true, placeholder: "default" },
+			{ key: "username", label: "用户名", required: true, placeholder: "readonly" },
+			{
+				key: "password",
+				label: "密码",
+				required: true,
+				type: "password",
+				placeholder: "保持 ****** 表示不修改原值",
+				help: "密码等敏感字段将脱敏显示，保持 ****** 表示不修改原值。",
+			},
+		],
+	},
+	mssql: {
+		key: "mssql",
+		defaults: { host: "", port: 1433, database: "", username: "", password: "" },
+		fields: [
+			{ key: "host", label: "主机地址", required: true, placeholder: "db.internal" },
+			{ key: "port", label: "端口", required: true, type: "number", placeholder: "1433" },
+			{ key: "database", label: "数据库", required: true, placeholder: "master" },
+			{ key: "username", label: "用户名", required: true, placeholder: "readonly" },
+			{
+				key: "password",
+				label: "密码",
+				required: true,
+				type: "password",
+				placeholder: "保持 ****** 表示不修改原值",
+				help: "密码等敏感字段将脱敏显示，保持 ****** 表示不修改原值。",
+			},
+		],
+	},
+	oracle: {
+		key: "oracle",
+		defaults: { host: "", port: 1521, service_name: "", sid: "", username: "", password: "" },
+		fields: [
+			{ key: "host", label: "主机地址", required: true, placeholder: "db.internal" },
+			{ key: "port", label: "端口", required: true, type: "number", placeholder: "1521" },
+			{ key: "service_name", label: "Service Name", required: true, placeholder: "ORCL" },
+			{ key: "sid", label: "SID (可选)", placeholder: "ORCL" },
+			{ key: "username", label: "用户名", required: true, placeholder: "readonly" },
+			{
+				key: "password",
+				label: "密码",
+				required: true,
+				type: "password",
+				placeholder: "保持 ****** 表示不修改原值",
+				help: "密码等敏感字段将脱敏显示，保持 ****** 表示不修改原值。",
+			},
+		],
+	},
+	file: {
+		key: "file",
+		defaults: { dataset_name: "", format: "csv", url: "", sheet_name: "" },
+		fields: [
+			{ key: "dataset_name", label: "数据集名称", required: true, placeholder: "sales_2025" },
+			{
+				key: "format",
+				label: "文件格式",
+				required: true,
+				type: "select",
+				options: CONFIG_FORMAT_OPTIONS,
+				placeholder: "选择文件格式",
+			},
+			{ key: "url", label: "文件地址", required: true, placeholder: "s3://bucket/path.csv", span: 2 },
+			{ key: "sheet_name", label: "Sheet 名称 (可选)", placeholder: "Sheet1", span: 2 },
+		],
+	},
+	generic: {
+		key: "generic",
+		defaults: {},
+		fields: [],
+	},
+};
+
+const resolveConfigProfile = (def?: AirbyteDefinition): ConfigProfile => {
+	const key = resolveDefinitionKey(def);
+	return CONFIG_PROFILES[key] || CONFIG_PROFILES.generic;
+};
 
 const parseJsonObject = (raw: string | undefined, label: string) => {
 	const text = String(raw || "").trim();
@@ -129,6 +296,87 @@ const resolveIconSrc = (icon?: string) => {
 	}
 	if (value.endsWith(".svg")) return value;
 	return `data:image/svg+xml;base64,${value}`;
+};
+
+const normalizeConfigForForm = (config: Record<string, any> | null | undefined, profile: ConfigProfile) => {
+	const base = config && typeof config === "object" ? { ...config } : {};
+	for (const field of profile.fields) {
+		if (field.type !== "number") continue;
+		const value = base[field.key];
+		if (value === null || value === undefined || value === "") continue;
+		const parsed = Number(value);
+		if (!Number.isNaN(parsed)) {
+			base[field.key] = parsed;
+		}
+	}
+	return base;
+};
+
+const hasConfigValue = (config: Record<string, any> | null | undefined) => {
+	if (!config || typeof config !== "object") return false;
+	return Object.values(config).some((value) => {
+		if (value === null || value === undefined) return false;
+		if (typeof value === "number") return true;
+		return String(value).trim() !== "";
+	});
+};
+
+const mergeConfigValues = (
+	base: Record<string, any> | null | undefined,
+	formConfig: Record<string, any> | null | undefined,
+	extraConfig: Record<string, any> | null | undefined,
+) => {
+	const merged = {
+		...(base || {}),
+		...(formConfig || {}),
+		...(extraConfig || {}),
+	};
+	const cleaned: Record<string, any> = {};
+	for (const [key, value] of Object.entries(merged)) {
+		if (value === undefined) continue;
+		cleaned[key] = typeof value === "string" ? value.trim() : value;
+	}
+	return cleaned;
+};
+
+const renderConfigInput = (field: ConfigField) => {
+	if (field.type === "number") {
+		return (
+			<InputNumber
+				placeholder={field.placeholder}
+				min={1}
+				max={65535}
+				style={{ width: "100%" }}
+			/>
+		);
+	}
+	if (field.type === "password") {
+		return <Input.Password placeholder={field.placeholder} autoComplete="new-password" />;
+	}
+	if (field.type === "select") {
+		return <Select options={field.options} placeholder={field.placeholder} />;
+	}
+	return <Input placeholder={field.placeholder} />;
+};
+
+const formatConfigValue = (field: ConfigField, value: any) => {
+	if (value === null || value === undefined || value === "") return "-";
+	if (field.type === "password") {
+		return "******";
+	}
+	if (field.type === "select" && field.options) {
+		const hit = field.options.find((option) => option.value === value);
+		return hit?.label ?? String(value);
+	}
+	return String(value);
+};
+
+const pickExtraConfig = (config: Record<string, any> | null | undefined, profile: ConfigProfile) => {
+	if (!config || typeof config !== "object") return null;
+	const knownKeys = new Set(profile.fields.map((field) => field.key));
+	const extraEntries = Object.entries(config).filter(([key]) => !knownKeys.has(key));
+	if (extraEntries.length === 0) return null;
+	return Object.fromEntries(extraEntries);
 };
 
 const renderDefinitionIcon = (def?: AirbyteDefinition, size = 18) => {
@@ -181,39 +429,14 @@ const filterAllowedDefinitions = (defs: AirbyteDefinition[]) => {
 };
 
 const defaultConfigForDefinition = (def?: AirbyteDefinition) => {
-	if (!def) return {};
-	const raw = `${def.name || ""} ${def.dockerRepository || ""} ${def.sourceDefinitionId || ""}`.toLowerCase();
-	if (raw.includes("postgres")) {
-		return { host: "", port: 5432, database: "", username: "", password: "" };
-	}
-	if (raw.includes("file") || raw.includes("csv") || raw.includes("excel")) {
-		return { dataset_name: "", format: "csv", url: "" };
-	}
-	if (raw.includes("mysql")) {
-		return { host: "", port: 3306, database: "", username: "", password: "" };
-	}
-	if (raw.includes("dameng") || raw.includes("dm") || raw.includes("dm8")) {
-		return { host: "", port: 5236, database: "", username: "", password: "" };
-	}
-	if (raw.includes("hive")) {
-		return { host: "", port: 10000, database: "default", username: "", password: "" };
-	}
-	if (raw.includes("oracle")) {
-		return { host: "", port: 1521, service_name: "", username: "", password: "" };
-	}
-	if (raw.includes("sqlserver") || raw.includes("sql server") || raw.includes("mssql")) {
-		return { host: "", port: 1433, database: "", username: "", password: "" };
-	}
-	return { host: "", port: "", database: "", username: "", password: "" };
-};
-
-const formatDefaultConfig = (def?: AirbyteDefinition) => {
-	const config = defaultConfigForDefinition(def);
-	return JSON.stringify(config, null, 2);
+	const profile = resolveConfigProfile(def);
+	return profile.defaults || {};
 };
 
 const extractEndpoint = (config?: Record<string, any> | null) => {
 	if (!config) return "-";
+	const url = config.url || config.path || config.file;
+	if (url) return String(url);
 	const host = config.host || config.hostname || config.server || config.endpoint;
 	const port = config.port || config.tcpPort || config.db_port;
 	if (host && port) return `${host}:${port}`;
@@ -229,10 +452,22 @@ export default function DataSourceDetailPage() {
 	const [sourceDefs, setSourceDefs] = useState<Record<string, AirbyteDefinition>>({});
 	const [sourceDefList, setSourceDefList] = useState<AirbyteDefinition[]>([]);
 	const [editOpen, setEditOpen] = useState(false);
+	const [editingConfig, setEditingConfig] = useState<Record<string, any> | null>(null);
 	const [saving, setSaving] = useState(false);
 	const [checking, setChecking] = useState(false);
 	const [discovering, setDiscovering] = useState(false);
 	const [form] = Form.useForm();
+	const selectedDefinitionId = Form.useWatch("sourceDefinitionId", form);
+	const selectedDefinition = useMemo(
+		() => resolveDefinition(sourceDefs, String(selectedDefinitionId || "")),
+		[selectedDefinitionId, sourceDefs],
+	);
+	const configProfile = useMemo(() => resolveConfigProfile(selectedDefinition), [selectedDefinition]);
+	const displayDefinition = useMemo(
+		() => resolveDefinition(sourceDefs, source?.sourceDefinitionId),
+		[source?.sourceDefinitionId, sourceDefs],
+	);
+	const displayProfile = useMemo(() => resolveConfigProfile(displayDefinition), [displayDefinition]);
 
 	const loadDefinitions = useCallback(async (notify = false) => {
 		setDefLoading(true);
@@ -289,13 +524,17 @@ export default function DataSourceDetailPage() {
 
 	const openEdit = () => {
 		if (!source) return;
+		setEditingConfig(source.config || null);
 		form.resetFields();
+		const def = resolveDefinition(sourceDefs, source.sourceDefinitionId);
+		const profile = resolveConfigProfile(def);
 		form.setFieldsValue({
 			name: source.name,
 			owner: source.owner,
 			description: source.description,
 			sourceDefinitionId: source.sourceDefinitionId,
-			configJson: formatJson(source.config),
+			config: normalizeConfigForForm(source.config, profile),
+			configExtraJson: "",
 			enabled: source.enabled ?? true,
 		});
 		setEditOpen(true);
@@ -306,15 +545,22 @@ export default function DataSourceDetailPage() {
 
 	const applyDefaultConfig = (definitionId?: string) => {
 		if (!definitionId) return;
-		const current = String(form.getFieldValue("configJson") || "").trim();
-		if (current) return;
+		const current = form.getFieldValue("config") as Record<string, any> | undefined;
+		if (hasConfigValue(current)) return;
 		const def = sourceDefList.find((item) => item.sourceDefinitionId === definitionId);
 		if (!def) return;
-		form.setFieldsValue({ configJson: formatDefaultConfig(def) });
+		const profile = resolveConfigProfile(def);
+		form.setFieldsValue({ config: normalizeConfigForForm(defaultConfigForDefinition(def), profile) });
 	};
 
 	const buildPayload = (values: any) => {
-		const config = parseJsonObject(values.configJson, "源端配置");
+		const extraConfig = parseJsonObject(values.configExtraJson, "高级参数");
+		const definitionChanged =
+			source?.sourceDefinitionId &&
+			values.sourceDefinitionId &&
+			String(values.sourceDefinitionId) !== String(source.sourceDefinitionId);
+		const baseConfig = definitionChanged ? null : editingConfig;
+		const config = mergeConfigValues(baseConfig, values.config, extraConfig || undefined);
 		return {
 			name: String(values.name || "").trim(),
 			owner: String(values.owner || "").trim() || undefined,
@@ -330,7 +576,7 @@ export default function DataSourceDetailPage() {
 		if (!source?.id) return;
 		setSaving(true);
 		try {
-			const values = await form.validateFields(["name", "sourceDefinitionId", "configJson"]);
+			const values = await form.validateFields();
 			const payload = buildPayload(values);
 			await updateAirbyteSource(source.id, payload);
 			toast.success("数据源已更新");
@@ -372,6 +618,26 @@ export default function DataSourceDetailPage() {
 		}
 	};
 
+	const confirmDelete = () => {
+		if (!source?.id) return;
+		Modal.confirm({
+			title: "删除数据源",
+			content: `确认删除「${source.name || "未命名"}」？该操作不可恢复。`,
+			okText: "删除",
+			cancelText: "取消",
+			okButtonProps: { danger: true },
+			onOk: async () => {
+				try {
+					await deleteAirbyteSource(source.id as string);
+					toast.success("数据源已删除");
+					router.push("/foundation/data-sources");
+				} catch (err: any) {
+					toast.error(err?.message || "删除失败");
+				}
+			},
+		});
+	};
+
 	if (!id) {
 		return <Empty description="缺少数据源 ID" />;
 	}
@@ -379,6 +645,9 @@ export default function DataSourceDetailPage() {
 	if (!source && !loading) {
 		return <Empty description="未找到数据源" />;
 	}
+
+	const configValues = source?.config && typeof source.config === "object" ? source.config : {};
+	const extraConfig = pickExtraConfig(configValues, displayProfile);
 
 	return (
 		<div className="space-y-4">
@@ -420,6 +689,9 @@ export default function DataSourceDetailPage() {
 						<Button icon={<EditOutlined />} onClick={openEdit}>
 							编辑
 						</Button>
+						<Button icon={<DeleteOutlined />} danger onClick={confirmDelete}>
+							删除
+						</Button>
 						<Button onClick={() => router.push("/foundation/data-sources")}>返回列表</Button>
 					</Space>
 				</div>
@@ -453,10 +725,28 @@ export default function DataSourceDetailPage() {
 										</Descriptions.Item>
 									</Descriptions>
 								</Card>
-								<Card title="连接参数 (JSON)" size="small">
-									<pre className="text-xs text-slate-600 whitespace-pre-wrap">
-										{formatJson(source?.config) || "-"}
-									</pre>
+								<Card title="连接参数" size="small">
+									{displayProfile.fields.length > 0 ? (
+										<>
+											<Descriptions column={2} bordered size="small">
+												{displayProfile.fields.map((field) => (
+													<Descriptions.Item key={field.key} label={field.label} span={field.span === 2 ? 2 : 1}>
+														{formatConfigValue(field, (configValues as any)[field.key])}
+													</Descriptions.Item>
+												))}
+											</Descriptions>
+											{extraConfig ? (
+												<div className="mt-3">
+													<Text type="secondary">扩展参数</Text>
+													<pre className="text-xs text-slate-600 whitespace-pre-wrap">{formatJson(extraConfig)}</pre>
+												</div>
+											) : null}
+										</>
+									) : (
+										<pre className="text-xs text-slate-600 whitespace-pre-wrap">
+											{formatJson(configValues) || "-"}
+										</pre>
+									)}
 								</Card>
 							</div>
 						),
@@ -523,14 +813,32 @@ export default function DataSourceDetailPage() {
 							onChange={(value) => applyDefaultConfig(String(value || ""))}
 						/>
 					</Form.Item>
-					<Form.Item
-						name="configJson"
-						label="连接参数 (JSON)"
-						rules={[{ required: true, message: "请填写连接参数" }]}
-						extra="密码等敏感字段将脱敏显示，保持 ****** 表示不修改原值。"
-					>
-						<Input.TextArea rows={6} placeholder='{"host":"...","port":5432}' />
-					</Form.Item>
+					<div className="space-y-2">
+						<div className="grid gap-4 md:grid-cols-2">
+							{configProfile.fields.map((field) => {
+								const rules = field.required ? [{ required: true, message: `请填写${field.label}` }] : undefined;
+								return (
+									<Form.Item
+										key={field.key}
+										name={["config", field.key]}
+										label={field.label}
+										rules={rules}
+										extra={field.help}
+										className={field.span === 2 ? "md:col-span-2" : undefined}
+									>
+										{renderConfigInput(field)}
+									</Form.Item>
+								);
+							})}
+						</div>
+						<Form.Item
+							name="configExtraJson"
+							label="高级参数 (JSON，可选)"
+							extra="用于填写未覆盖的连接参数，JSON 对象格式。"
+						>
+							<Input.TextArea rows={4} placeholder='{"ssl": true}' />
+						</Form.Item>
+					</div>
 					<Form.Item name="enabled" label="启用状态">
 						<Select
 							options={[

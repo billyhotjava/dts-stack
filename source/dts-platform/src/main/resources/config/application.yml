@@ -256,6 +256,9 @@ dts:
     api-path: ${DTS_AIRBYTE_API_PATH:/api/v1}
     username: ${DTS_AIRBYTE_USERNAME:}
     password: ${DTS_AIRBYTE_PASSWORD:}
+    auth-user-id: ${DTS_AIRBYTE_AUTH_USER_ID:00000000-0000-0000-0000-000000000000}
+    organization-id: ${DTS_AIRBYTE_ORGANIZATION_ID:}
+    organization-name: ${DTS_AIRBYTE_ORGANIZATION_NAME:dts-org}
     workspace-id: ${DTS_AIRBYTE_WORKSPACE_ID:}
     default-destination-id: ${DTS_AIRBYTE_DEFAULT_DESTINATION_ID:}
     default-destination-name: ${DTS_AIRBYTE_DEFAULT_DESTINATION_NAME:dts-ods-destination}

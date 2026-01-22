@@ -138,7 +138,6 @@ public class PortalMenuService {
         this.menuMutationTx.setReadOnly(false);
     }
 
-    @Transactional(readOnly = true)
     public List<PortalMenu> findTree() {
         ensureSeedMenus();
         return runSafely(
@@ -155,7 +154,6 @@ public class PortalMenuService {
         );
     }
 
-    @Transactional(readOnly = true)
     public List<PortalMenu> findTreeForAudience(Set<String> roleCodes, Set<String> permissionCodes, String maxDataLevel) {
         ensureSeedMenus();
         List<PortalMenu> roots = findTree();
@@ -231,7 +229,6 @@ public class PortalMenuService {
         return Optional.empty();
     }
 
-    @Transactional(readOnly = true)
     public List<PortalMenu> findAllMenusOrdered() {
         ensureSeedMenus();
         return runSafely(

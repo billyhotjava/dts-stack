@@ -19,6 +19,7 @@
     <modules>
         <module>dts-common</module>
         <module>dts-platform</module>
+        <module>dts-ingestion-service</module>
         <module>dts-admin</module>
         <module>dts-analytics</module>
     </modules>

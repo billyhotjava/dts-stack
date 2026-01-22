@@ -1,0 +1,68 @@
+package com.yuzhi.dts.ingestion.service.etl;
+
+import com.yuzhi.dts.ingestion.config.AirflowProperties;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
+
+@Component
+public class AirflowAdapter {
+
+    private final AirflowClient client;
+    private final AirflowProperties properties;
+
+    public AirflowAdapter(AirflowClient client, AirflowProperties properties) {
+        this.client = client;
+        this.properties = properties;
+    }
+
+    public record AirflowRequest(Boolean enabled, String dagId, String scheduleType, String cron, Integer intervalMinutes) {}
+
+    public Map<String, Object> triggerIfRequested(AirflowRequest request, String connectionId, String sourceId, String taskName, boolean runNow) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        if (!properties.isEnabled()) {
+            result.put("enabled", false);
+            result.put("message", "Airflow 未启用");
+            return result;
+        }
+        if (request == null || !Boolean.TRUE.equals(request.enabled())) {
+            result.put("enabled", false);
+            result.put("message", "未启用编排");
+            return result;
+        }
+        String dagId = StringUtils.hasText(request.dagId()) ? request.dagId().trim() : properties.getDagId();
+        if (!StringUtils.hasText(dagId)) {
+            result.put("enabled", true);
+            result.put("status", "skipped");
+            result.put("message", "缺少 DAG 标识");
+            return result;
+        }
+        result.put("enabled", true);
+        result.put("dagId", dagId);
+        if (!runNow) {
+            result.put("status", "ready");
+            return result;
+        }
+        Map<String, Object> conf = new LinkedHashMap<>();
+        if (StringUtils.hasText(connectionId)) {
+            conf.put("connectionId", connectionId);
+        }
+        if (StringUtils.hasText(sourceId)) {
+            conf.put("sourceId", sourceId);
+        }
+        if (StringUtils.hasText(taskName)) {
+            conf.put("taskName", taskName);
+        }
+        Map<String, Object> payload = Map.of("conf", conf);
+        Map<String, Object> response = client.triggerDag(dagId, payload).orElse(null);
+        if (response == null || response.isEmpty()) {
+            result.put("status", "failed");
+            result.put("message", "DAG 触发失败");
+        } else {
+            result.put("status", "triggered");
+            result.put("payload", response);
+        }
+        return result;
+    }
+}

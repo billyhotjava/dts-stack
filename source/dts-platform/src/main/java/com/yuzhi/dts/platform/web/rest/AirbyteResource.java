@@ -10,6 +10,8 @@ import com.yuzhi.dts.platform.repository.infra.InfraAirbyteConnectionRepository;
 import com.yuzhi.dts.platform.repository.infra.InfraAirbyteSourceRepository;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.etl.AirbyteClient;
+import com.yuzhi.dts.platform.service.ingestion.IngestionServiceClient;
+import com.yuzhi.dts.platform.service.infra.InfraSecretService;
 import jakarta.validation.Valid;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -23,6 +25,7 @@ import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.util.StringUtils;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -40,6 +43,7 @@ public class AirbyteResource {
     private static final String INFRA_MAINTAINER_EXPRESSION =
         "hasAnyAuthority(T(com.yuzhi.dts.platform.security.AuthoritiesConstants).INFRA_MAINTAINERS)";
     private static final String MASKED_SECRET = "******";
+    private static final String DEFAULT_AIRBYTE_ORG_ID = "00000000-0000-0000-0000-000000000000";
     private static final List<AllowedSourceDefinition> ALLOWED_SOURCE_DEFS = List.of(
         new AllowedSourceDefinition("mysql", List.of("mysql"), "MySQL"),
         new AllowedSourceDefinition("oracle", List.of("oracle db", "oracle"), "Oracle"),
@@ -49,7 +53,7 @@ public class AirbyteResource {
             List.of("file (csv, json, excel, feather, parquet)", "airbyte/source-file"),
             "File (CSV, Excel)"
         ),
-        new AllowedSourceDefinition("dameng", List.of("dameng", "dm8", "达梦"), "Dameng (DM)"),
+        new AllowedSourceDefinition("dameng", List.of("dameng", "dm8", "达梦"), "Dameng"),
         new AllowedSourceDefinition("mssql", List.of("microsoft sql server (mssql)", "mssql", "sql server"), "Microsoft SQL Server")
     );
 
@@ -59,6 +63,8 @@ public class AirbyteResource {
     private final InfraAirbyteSourceRepository sourceRepository;
     private final AuditService auditService;
     private final ObjectMapper objectMapper;
+    private final InfraSecretService secretService;
+    private final IngestionServiceClient ingestionClient;
 
     public AirbyteResource(
         AirbyteClient airbyteClient,
@@ -66,7 +72,9 @@ public class AirbyteResource {
         InfraAirbyteConnectionRepository connectionRepository,
         InfraAirbyteSourceRepository sourceRepository,
         AuditService auditService,
-        ObjectMapper objectMapper
+        ObjectMapper objectMapper,
+        InfraSecretService secretService,
+        IngestionServiceClient ingestionClient
     ) {
         this.airbyteClient = airbyteClient;
         this.properties = properties;
@@ -74,6 +82,8 @@ public class AirbyteResource {
         this.sourceRepository = sourceRepository;
         this.auditService = auditService;
         this.objectMapper = objectMapper;
+        this.secretService = secretService;
+        this.ingestionClient = ingestionClient;
     }
 
     public record AirbyteSourceRequest(
@@ -110,6 +120,9 @@ public class AirbyteResource {
 
     @GetMapping("/definitions/sources")
     public ApiResponse<List<Map<String, Object>>> listSourceDefinitions() {
+        if (ingestionClient.isEnabled()) {
+            return ingestionClient.listSourceDefinitions();
+        }
         List<Map<String, Object>> list = extractList(airbyteClient.listSourceDefinitions(), "sourceDefinitions");
         list = filterAllowedSourceDefinitions(list);
         auditService.auditAction("AIRBYTE_SOURCE_DEF_LIST", AuditStage.SUCCESS, "airbyte", Map.of("summary", "获取源端定义"));
@@ -118,6 +131,9 @@ public class AirbyteResource {
 
     @GetMapping("/sources")
     public ApiResponse<List<Map<String, Object>>> listSources() {
+        if (ingestionClient.isEnabled()) {
+            return ingestionClient.listSources();
+        }
         List<InfraAirbyteSource> list = new ArrayList<>(sourceRepository.findAll());
         list.sort(Comparator.comparing(InfraAirbyteSource::getCreatedDate, Comparator.nullsLast(Comparator.naturalOrder())).reversed());
         List<Map<String, Object>> payload = list.stream().map(this::toSourceDto).toList();
@@ -128,6 +144,9 @@ public class AirbyteResource {
     @PostMapping("/sources")
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ApiResponse<Map<String, Object>> createSource(@Valid @RequestBody AirbyteSourceRequest request) {
+        if (ingestionClient.isEnabled()) {
+            return ingestionClient.createSource(request);
+        }
         InfraAirbyteSource saved = saveSource(null, request);
         auditService.auditAction(
             "AIRBYTE_SOURCE_CREATE",
@@ -141,6 +160,9 @@ public class AirbyteResource {
     @PutMapping("/sources/{id}")
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ApiResponse<Map<String, Object>> updateSource(@PathVariable UUID id, @Valid @RequestBody AirbyteSourceRequest request) {
+        if (ingestionClient.isEnabled()) {
+            return ingestionClient.updateSource(id.toString(), request);
+        }
         InfraAirbyteSource saved = saveSource(id, request);
         auditService.auditAction(
             "AIRBYTE_SOURCE_UPDATE",
@@ -154,6 +176,9 @@ public class AirbyteResource {
     @PostMapping("/sources/{id}/check")
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ApiResponse<Map<String, Object>> checkSource(@PathVariable UUID id) {
+        if (ingestionClient.isEnabled()) {
+            return ingestionClient.checkSource(id.toString());
+        }
         InfraAirbyteSource source = sourceRepository
             .findById(id)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "数据源不存在"));
@@ -171,7 +196,7 @@ public class AirbyteResource {
             "AIRBYTE_SOURCE_CHECK",
             AuditStage.SUCCESS,
             id.toString(),
-            Map.of("summary", "测试数据源连接", "status", status)
+            buildAuditMeta("测试数据源连接", "status", status)
         );
         return ApiResponses.ok(payload);
     }
@@ -179,6 +204,9 @@ public class AirbyteResource {
     @PostMapping("/sources/{id}/discover")
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ApiResponse<Map<String, Object>> discoverSource(@PathVariable UUID id) {
+        if (ingestionClient.isEnabled()) {
+            return ingestionClient.discoverSource(id.toString());
+        }
         InfraAirbyteSource source = sourceRepository
             .findById(id)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "数据源不存在"));
@@ -192,13 +220,49 @@ public class AirbyteResource {
             "AIRBYTE_SOURCE_DISCOVER",
             AuditStage.SUCCESS,
             id.toString(),
-            Map.of("summary", "刷新源端 Schema")
+            buildAuditMeta("刷新源端 Schema", null, null)
         );
         return ApiResponses.ok(payload);
     }
 
+    @DeleteMapping("/sources/{id}")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ApiResponse<Void> deleteSource(@PathVariable UUID id) {
+        if (ingestionClient.isEnabled()) {
+            ApiResponse<Map<String, Object>> response = ingestionClient.deleteSource(id.toString());
+            if (response == null) {
+                return new ApiResponse<>(500, "ingestion service error", null);
+            }
+            return new ApiResponse<>(response.getStatus(), response.getMessage(), null);
+        }
+        InfraAirbyteSource source = sourceRepository
+            .findById(id)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "数据源不存在"));
+        long boundConnections = connectionRepository.countByInfraSourceId(id);
+        if (boundConnections > 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "数据源已被入湖配置引用，请先删除入湖任务");
+        }
+        if (properties.isEnabled() && StringUtils.hasText(source.getSourceId())) {
+            Map<String, Object> resp = airbyteClient.deleteSource(source.getSourceId()).orElse(null);
+            if (resp == null) {
+                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "删除 Airbyte 数据源失败");
+            }
+        }
+        sourceRepository.delete(source);
+        auditService.auditAction(
+            "AIRBYTE_SOURCE_DELETE",
+            AuditStage.SUCCESS,
+            id.toString(),
+            Map.of("summary", "删除数据源", "name", source.getName())
+        );
+        return ApiResponses.ok(null);
+    }
+
     @GetMapping("/definitions/destinations")
     public ApiResponse<List<Map<String, Object>>> listDestinationDefinitions() {
+        if (ingestionClient.isEnabled()) {
+            return ingestionClient.listDestinationDefinitions();
+        }
         List<Map<String, Object>> list = extractList(airbyteClient.listDestinationDefinitions(), "destinationDefinitions");
         auditService.auditAction("AIRBYTE_DEST_DEF_LIST", AuditStage.SUCCESS, "airbyte", Map.of("summary", "获取目标端定义"));
         return ApiResponses.ok(list);
@@ -206,6 +270,9 @@ public class AirbyteResource {
 
     @GetMapping("/connections")
     public ApiResponse<List<Map<String, Object>>> listConnections(@RequestParam(defaultValue = "false") boolean refresh) {
+        if (ingestionClient.isEnabled()) {
+            return ingestionClient.listConnections(refresh);
+        }
         List<InfraAirbyteConnection> list = new ArrayList<>(connectionRepository.findAll());
         list.sort(Comparator.comparing(InfraAirbyteConnection::getCreatedDate, Comparator.nullsLast(Comparator.naturalOrder())).reversed());
         if (refresh) {
@@ -221,6 +288,9 @@ public class AirbyteResource {
     @PostMapping("/connections")
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ApiResponse<Map<String, Object>> createConnection(@Valid @RequestBody AirbyteConnectionRequest request) {
+        if (ingestionClient.isEnabled()) {
+            return ingestionClient.createConnection(request);
+        }
         InfraAirbyteConnection saved = saveConnection(null, request);
         auditService.auditAction(
             "AIRBYTE_CONNECTION_CREATE",
@@ -237,6 +307,9 @@ public class AirbyteResource {
         @PathVariable UUID id,
         @Valid @RequestBody AirbyteConnectionRequest request
     ) {
+        if (ingestionClient.isEnabled()) {
+            return ingestionClient.updateConnection(id.toString(), request);
+        }
         InfraAirbyteConnection saved = saveConnection(id, request);
         auditService.auditAction(
             "AIRBYTE_CONNECTION_UPDATE",
@@ -250,6 +323,9 @@ public class AirbyteResource {
     @PostMapping("/connections/{id}/sync")
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ApiResponse<Map<String, Object>> triggerSync(@PathVariable UUID id) {
+        if (ingestionClient.isEnabled()) {
+            return ingestionClient.syncConnection(id.toString());
+        }
         InfraAirbyteConnection connection = connectionRepository
             .findById(id)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "接入配置不存在"));
@@ -282,6 +358,10 @@ public class AirbyteResource {
 
     @GetMapping("/connections/{id}/jobs")
     public ApiResponse<List<Map<String, Object>>> listJobs(@PathVariable UUID id, @RequestParam(defaultValue = "10") int limit) {
+        if (ingestionClient.isEnabled()) {
+            ApiResponse<List<Map<String, Object>>> response = ingestionClient.listJobs(id.toString(), limit);
+            return response != null ? response : ApiResponses.ok(List.of());
+        }
         InfraAirbyteConnection connection = connectionRepository
             .findById(id)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "接入配置不存在"));
@@ -465,13 +545,15 @@ public class AirbyteResource {
         if (!StringUtils.hasText(sourceDefinitionId) && StringUtils.hasText(entity.getSourceDefinitionId())) {
             sourceDefinitionId = entity.getSourceDefinitionId();
         }
-        Map<String, Object> config = request.config();
-        Map<String, Object> resolvedConfig = config;
-        if (resolvedConfig == null || resolvedConfig.isEmpty()) {
-            resolvedConfig = parseJson(entity.getConfigJson());
-        }
+        Map<String, Object> incomingConfig = request.config();
         Map<String, Object> existingConfig = parseJson(entity.getConfigJson());
-        resolvedConfig = mergeSecretConfig(resolvedConfig, existingConfig);
+        Map<String, Object> existingSecrets = secretService.readSecrets(entity);
+        Map<String, Object> existingFull = mergeMaps(existingConfig, existingSecrets);
+        Map<String, Object> resolvedConfig = incomingConfig;
+        if (resolvedConfig == null || resolvedConfig.isEmpty()) {
+            resolvedConfig = existingFull;
+        }
+        resolvedConfig = mergeSecretConfig(resolvedConfig, existingFull);
         if (!StringUtils.hasText(sourceId)) {
             if (!StringUtils.hasText(sourceDefinitionId)) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请选择源端类型");
@@ -495,10 +577,10 @@ public class AirbyteResource {
         entity.setOwner(normalize(request.owner()));
         entity.setDescription(normalize(request.description()));
         entity.setEnabled(request.enabled() == null ? Boolean.TRUE : request.enabled());
-        String configJson = writeJson(resolvedConfig);
-        if (configJson == null && StringUtils.hasText(entity.getConfigJson())) {
-            configJson = entity.getConfigJson();
-        }
+        Map<String, Object> sanitizedConfig = stripSecrets(resolvedConfig);
+        Map<String, Object> resolvedSecrets = extractSecrets(resolvedConfig);
+        secretService.applySecrets(entity, resolvedSecrets);
+        String configJson = writeJson(sanitizedConfig);
         entity.setConfigJson(configJson);
         entity.setStatus(entity.getEnabled() ? "ACTIVE" : "INACTIVE");
         return sourceRepository.save(entity);
@@ -530,9 +612,16 @@ public class AirbyteResource {
     private String resolveWorkspaceId() {
         String workspaceId = properties.getWorkspaceId();
         if (StringUtils.hasText(workspaceId)) {
-            return workspaceId;
+            if (airbyteClient.getWorkspace(workspaceId).isPresent()) {
+                return workspaceId;
+            }
+            if (shouldCleanupWorkspaceIds(workspaceId)) {
+                cleanupStaleAirbyteIds();
+            }
+            properties.setWorkspaceId(null);
         }
-        List<Map<String, Object>> workspaces = extractList(airbyteClient.listWorkspaces(), "workspaces");
+        String organizationId = resolveOrganizationId();
+        List<Map<String, Object>> workspaces = extractList(airbyteClient.listWorkspacesByOrganizationId(organizationId), "workspaces");
         if (!workspaces.isEmpty()) {
             workspaceId = stringVal(workspaces.get(0).get("workspaceId"));
             if (StringUtils.hasText(workspaceId)) {
@@ -541,7 +630,7 @@ public class AirbyteResource {
             }
         }
         Map<String, Object> created = airbyteClient
-            .createWorkspace("dts-platform")
+            .createWorkspace("dts-platform", organizationId)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_GATEWAY, "创建 Airbyte workspace 失败"));
         workspaceId = stringVal(created.get("workspaceId"));
         if (StringUtils.hasText(workspaceId)) {
@@ -549,6 +638,118 @@ public class AirbyteResource {
             return workspaceId;
         }
         throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Airbyte workspace 未配置，请在配置中设置 DTS_AIRBYTE_WORKSPACE_ID");
+    }
+
+    private boolean shouldCleanupWorkspaceIds(String workspaceId) {
+        Optional<Map<String, Object>> payloadOpt = airbyteClient.listWorkspaces();
+        if (payloadOpt.isEmpty()) {
+            return false;
+        }
+        List<Map<String, Object>> workspaces = extractList(payloadOpt, "workspaces");
+        if (workspaces.isEmpty()) {
+            return true;
+        }
+        for (Map<String, Object> workspace : workspaces) {
+            if (workspaceId.equals(stringVal(workspace.get("workspaceId")))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private void cleanupStaleAirbyteIds() {
+        List<InfraAirbyteSource> sources = sourceRepository.findAll();
+        boolean sourceChanged = false;
+        for (InfraAirbyteSource source : sources) {
+            if (!StringUtils.hasText(source.getSourceId())) {
+                continue;
+            }
+            source.setSourceId(null);
+            source.setStatus("STALE");
+            source.setLastCheckedAt(null);
+            source.setLastDiscoveredAt(null);
+            sourceChanged = true;
+        }
+        if (sourceChanged) {
+            sourceRepository.saveAll(sources);
+        }
+
+        List<InfraAirbyteConnection> connections = connectionRepository.findAll();
+        boolean connectionChanged = false;
+        for (InfraAirbyteConnection connection : connections) {
+            if (
+                !StringUtils.hasText(connection.getConnectionId()) &&
+                !StringUtils.hasText(connection.getSourceId()) &&
+                !StringUtils.hasText(connection.getDestinationId())
+            ) {
+                continue;
+            }
+            connection.setConnectionId(null);
+            connection.setSourceId(null);
+            connection.setDestinationId(null);
+            connection.setLastJobId(null);
+            connection.setLastJobStatus(null);
+            connection.setLastSyncAt(null);
+            connection.setStatus("STALE");
+            connectionChanged = true;
+        }
+        if (connectionChanged) {
+            connectionRepository.saveAll(connections);
+        }
+    }
+
+    private String resolveOrganizationId() {
+        String organizationId = properties.getOrganizationId();
+        if (StringUtils.hasText(organizationId)) {
+            return organizationId;
+        }
+        List<Map<String, Object>> defaultWorkspaces = extractList(
+            airbyteClient.listWorkspacesByOrganizationId(DEFAULT_AIRBYTE_ORG_ID),
+            "workspaces"
+        );
+        if (!defaultWorkspaces.isEmpty()) {
+            properties.setOrganizationId(DEFAULT_AIRBYTE_ORG_ID);
+            return DEFAULT_AIRBYTE_ORG_ID;
+        }
+        String userId = resolveAirbyteUserId();
+        List<Map<String, Object>> organizations = extractList(airbyteClient.listOrganizationsByUserId(userId), "organizations");
+        if (!organizations.isEmpty()) {
+            organizationId = stringVal(organizations.get(0).get("organizationId"));
+            if (StringUtils.hasText(organizationId)) {
+                properties.setOrganizationId(organizationId);
+                return organizationId;
+            }
+        }
+        Map<String, Object> created = airbyteClient
+            .createOrganization(userId, properties.getOrganizationName())
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_GATEWAY, "创建 Airbyte organization 失败"));
+        organizationId = stringVal(created.get("organizationId"));
+        if (StringUtils.hasText(organizationId)) {
+            properties.setOrganizationId(organizationId);
+            return organizationId;
+        }
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Airbyte organization 未配置，请在配置中设置 DTS_AIRBYTE_ORGANIZATION_ID");
+    }
+
+    private String resolveAirbyteUserId() {
+        String authUserId = properties.getAuthUserId();
+        Map<String, Object> payload = airbyteClient
+            .getUserByAuthId(authUserId)
+            .orElseGet(
+                () ->
+                    airbyteClient
+                        .getOrCreateUserByAuthId(authUserId)
+                        .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_GATEWAY, "创建 Airbyte 用户失败"))
+            );
+        String userId = stringVal(payload.get("userId"));
+        if (!StringUtils.hasText(userId)) {
+            Map<String, Object> userRead = asMap(payload.get("userRead"));
+            userId = stringVal(userRead.get("userId"));
+        }
+        if (StringUtils.hasText(userId)) {
+            return userId;
+        }
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Airbyte 用户未创建成功，请检查配置");
     }
 
     private List<Map<String, Object>> extractList(Optional<Map<String, Object>> payloadOpt, String key) {
@@ -677,7 +878,10 @@ public class AirbyteResource {
         dto.put("owner", entity.getOwner());
         dto.put("enabled", entity.getEnabled());
         dto.put("description", entity.getDescription());
-        dto.put("config", maskSecrets(parseJson(entity.getConfigJson())));
+        Map<String, Object> config = parseJson(entity.getConfigJson());
+        Map<String, Object> secrets = secretService.readSecrets(entity);
+        Map<String, Object> maskedSecrets = maskSecrets(secrets);
+        dto.put("config", mergeMaps(config, maskedSecrets));
         return dto;
     }
 
@@ -725,6 +929,151 @@ public class AirbyteResource {
             result.put(key, incomingValue);
         }
         return result;
+    }
+
+    private Map<String, Object> mergeMaps(Map<String, Object> base, Map<String, Object> override) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        if (base != null) {
+            result.putAll(base);
+        }
+        if (override == null || override.isEmpty()) {
+            return result;
+        }
+        for (Map.Entry<String, Object> entry : override.entrySet()) {
+            String key = entry.getKey();
+            Object next = mergeNodes(result.get(key), entry.getValue());
+            result.put(key, next);
+        }
+        return result;
+    }
+
+    private Object mergeNodes(Object base, Object override) {
+        if (override == null) {
+            return base;
+        }
+        if (base instanceof Map<?, ?> baseMap && override instanceof Map<?, ?> overrideMap) {
+            return mergeMaps(asMap(baseMap), asMap(overrideMap));
+        }
+        if (base instanceof List<?> baseList && override instanceof List<?> overrideList) {
+            return mergeLists(baseList, overrideList);
+        }
+        return override;
+    }
+
+    private List<Object> mergeLists(List<?> base, List<?> override) {
+        int size = Math.max(base != null ? base.size() : 0, override != null ? override.size() : 0);
+        List<Object> merged = new ArrayList<>(size);
+        for (int i = 0; i < size; i++) {
+            Object baseValue = base != null && i < base.size() ? base.get(i) : null;
+            Object overrideValue = override != null && i < override.size() ? override.get(i) : null;
+            merged.add(mergeNodes(baseValue, overrideValue));
+        }
+        return merged;
+    }
+
+    private Map<String, Object> extractSecrets(Map<String, Object> payload) {
+        if (payload == null || payload.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, Object> out = new LinkedHashMap<>();
+        for (Map.Entry<String, Object> entry : payload.entrySet()) {
+            String key = entry.getKey();
+            Object value = entry.getValue();
+            if (isSecretKey(key)) {
+                out.put(key, value);
+                continue;
+            }
+            if (value instanceof Map<?, ?> map) {
+                Map<String, Object> child = extractSecrets(asMap(map));
+                if (!child.isEmpty()) {
+                    out.put(key, child);
+                }
+                continue;
+            }
+            if (value instanceof List<?> list) {
+                List<Object> child = extractSecretList(list);
+                if (!child.isEmpty()) {
+                    out.put(key, child);
+                }
+            }
+        }
+        return out;
+    }
+
+    private List<Object> extractSecretList(List<?> list) {
+        if (list == null || list.isEmpty()) {
+            return List.of();
+        }
+        List<Object> out = new ArrayList<>(list.size());
+        boolean hasSecrets = false;
+        for (Object item : list) {
+            Object extracted = null;
+            if (item instanceof Map<?, ?> map) {
+                Map<String, Object> child = extractSecrets(asMap(map));
+                if (!child.isEmpty()) {
+                    extracted = child;
+                    hasSecrets = true;
+                }
+            } else if (item instanceof List<?> inner) {
+                List<Object> child = extractSecretList(inner);
+                if (!child.isEmpty()) {
+                    extracted = child;
+                    hasSecrets = true;
+                }
+            }
+            out.add(extracted);
+        }
+        return hasSecrets ? out : List.of();
+    }
+
+    private Map<String, Object> stripSecrets(Map<String, Object> payload) {
+        if (payload == null || payload.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, Object> out = new LinkedHashMap<>();
+        for (Map.Entry<String, Object> entry : payload.entrySet()) {
+            String key = entry.getKey();
+            Object value = entry.getValue();
+            if (isSecretKey(key)) {
+                continue;
+            }
+            if (value instanceof Map<?, ?> map) {
+                out.put(key, stripSecrets(asMap(map)));
+                continue;
+            }
+            if (value instanceof List<?> list) {
+                out.put(key, stripSecretsList(list));
+                continue;
+            }
+            out.put(key, value);
+        }
+        return out;
+    }
+
+    private List<Object> stripSecretsList(List<?> list) {
+        if (list == null || list.isEmpty()) {
+            return List.of();
+        }
+        List<Object> out = new ArrayList<>(list.size());
+        for (Object item : list) {
+            if (item instanceof Map<?, ?> map) {
+                out.add(stripSecrets(asMap(map)));
+            } else if (item instanceof List<?> inner) {
+                out.add(stripSecretsList(inner));
+            } else {
+                out.add(item);
+            }
+        }
+        return out;
+    }
+
+    private Map<String, Object> buildAuditMeta(String summary, String key, Object value) {
+        Map<String, Object> meta = new LinkedHashMap<>();
+        meta.put("summary", summary);
+        if (StringUtils.hasText(key) && value != null) {
+            meta.put(key, value);
+        }
+        return meta;
     }
 
     private Map<String, Object> maskSecrets(Map<String, Object> payload) {

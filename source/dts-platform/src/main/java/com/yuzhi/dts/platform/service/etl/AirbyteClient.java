@@ -40,15 +40,70 @@ public class AirbyteClient {
         return post("/workspaces/list", Map.of());
     }
 
-    public Optional<Map<String, Object>> createWorkspace(String name) {
+    public Optional<Map<String, Object>> getWorkspace(String workspaceId) {
+        if (!StringUtils.hasText(workspaceId)) {
+            return Optional.empty();
+        }
+        return post("/workspaces/get", Map.of("workspaceId", workspaceId));
+    }
+
+    public Optional<Map<String, Object>> listWorkspacesByOrganizationId(String organizationId) {
+        if (!StringUtils.hasText(organizationId)) {
+            return Optional.empty();
+        }
+        Map<String, Object> payload = Map.of(
+            "organizationId",
+            organizationId,
+            "pagination",
+            Map.of("pageSize", 50, "rowOffset", 0)
+        );
+        return post("/workspaces/list_by_organization_id", payload);
+    }
+
+    public Optional<Map<String, Object>> createWorkspace(String name, String organizationId) {
+        if (!StringUtils.hasText(organizationId)) {
+            return Optional.empty();
+        }
         String workspaceName = StringUtils.hasText(name) ? name.trim() : "dts-platform";
         Map<String, Object> payload = Map.of(
             "name",
             workspaceName,
+            "organizationId",
+            organizationId,
             "anonymousDataCollection",
             Boolean.TRUE
         );
         return post("/workspaces/create", payload);
+    }
+
+    public Optional<Map<String, Object>> getOrCreateUserByAuthId(String authUserId) {
+        if (!StringUtils.hasText(authUserId)) {
+            return Optional.empty();
+        }
+        return post("/users/get_or_create_by_auth_id", Map.of("authUserId", authUserId));
+    }
+
+    public Optional<Map<String, Object>> getUserByAuthId(String authUserId) {
+        if (!StringUtils.hasText(authUserId)) {
+            return Optional.empty();
+        }
+        return post("/users/get_by_auth_id", Map.of("authUserId", authUserId));
+    }
+
+    public Optional<Map<String, Object>> listOrganizationsByUserId(String userId) {
+        if (!StringUtils.hasText(userId)) {
+            return Optional.empty();
+        }
+        return post("/organizations/list_by_user_id", Map.of("userId", userId));
+    }
+
+    public Optional<Map<String, Object>> createOrganization(String userId, String organizationName) {
+        if (!StringUtils.hasText(userId)) {
+            return Optional.empty();
+        }
+        String name = StringUtils.hasText(organizationName) ? organizationName.trim() : "dts-org";
+        Map<String, Object> payload = Map.of("userId", userId, "organizationName", name);
+        return post("/organizations/create", payload);
     }
 
     public Optional<Map<String, Object>> listSources(String workspaceId) {
@@ -115,6 +170,13 @@ public class AirbyteClient {
             return Optional.empty();
         }
         return post("/sources/discover_schema", Map.of("sourceId", sourceId));
+    }
+
+    public Optional<Map<String, Object>> deleteSource(String sourceId) {
+        if (!StringUtils.hasText(sourceId)) {
+            return Optional.empty();
+        }
+        return post("/sources/delete", Map.of("sourceId", sourceId));
     }
 
     public Optional<Map<String, Object>> createDestination(

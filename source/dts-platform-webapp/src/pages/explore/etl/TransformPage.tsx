@@ -32,6 +32,7 @@ import {
 import { useUserInfo } from "@/store/userStore";
 
 const { Text } = Typography;
+const MASKED_SECRET = "******";
 
 type AirbyteDefinition = {
 	sourceDefinitionId?: string;
@@ -41,6 +42,7 @@ type AirbyteDefinition = {
 	dockerImageTag?: string;
 	documentationUrl?: string;
 	icon?: string;
+	connectionSpecification?: Record<string, any>;
 };
 
 type AirbyteConnection = {
@@ -86,6 +88,12 @@ type AirbyteSource = {
 	config?: Record<string, any> | null;
 };
 
+type ConfigPair = {
+	key?: string;
+	value?: string;
+	secret?: boolean;
+};
+
 const formatDateTime = (value?: string | number | null) => {
 	if (value == null) return "-";
 	const date = typeof value === "number" ? new Date(value) : new Date(String(value));
@@ -118,23 +126,91 @@ const scheduleLabel = (row: AirbyteConnection) => {
 	return "手动";
 };
 
-const parseJsonInput = (value: string | undefined, label: string) => {
-	if (!value) return undefined;
+const isSecretKey = (key?: string) => {
+	if (!key) return false;
+	const token = key.toLowerCase();
+	return [
+		"password",
+		"passwd",
+		"secret",
+		"token",
+		"access_key",
+		"accesskey",
+		"client_secret",
+		"private_key",
+		"api_key",
+	].some((item) => token.includes(item));
+};
+
+const formatPairValue = (value: any) => {
+	if (value === null || value === undefined) return "";
+	if (typeof value === "string") return value;
 	try {
-		return JSON.parse(value);
+		return JSON.stringify(value);
 	} catch {
-		toast.error(`${label} JSON 格式错误`);
-		return null;
+		return String(value);
 	}
 };
 
-const formatJson = (value?: Record<string, any> | null) => {
-	if (!value) return "";
-	try {
-		return JSON.stringify(value, null, 2);
-	} catch {
-		return "";
+const pairsFromConfig = (config?: Record<string, any> | null) => {
+	if (!config) return [];
+	return Object.entries(config).map(([key, value]) => ({
+		key,
+		value: formatPairValue(value),
+		secret: isSecretKey(key),
+	}));
+};
+
+const parsePairValue = (raw?: string) => {
+	if (raw == null) return "";
+	const text = String(raw).trim();
+	if (!text) return "";
+	if (text === MASKED_SECRET) return MASKED_SECRET;
+	if (text === "true") return true;
+	if (text === "false") return false;
+	if (/^-?\\d+(\\.\\d+)?$/.test(text)) return Number(text);
+	if ((text.startsWith("{") && text.endsWith("}")) || (text.startsWith("[") && text.endsWith("]"))) {
+		try {
+			return JSON.parse(text);
+		} catch {
+			return text;
+		}
 	}
+	return text;
+};
+
+const configFromPairs = (pairs?: ConfigPair[]) => {
+	if (!pairs || pairs.length === 0) return undefined;
+	const payload: Record<string, any> = {};
+	for (const item of pairs) {
+		const key = normalizeText(item.key);
+		if (!key) continue;
+		payload[key] = parsePairValue(item.value);
+	}
+	return payload;
+};
+
+const resolveIconSrc = (icon?: string) => {
+	if (!icon) return "";
+	if (icon.startsWith("data:") || icon.startsWith("http")) return icon;
+	return `data:image/svg+xml;base64,${icon}`;
+};
+
+const renderDefinitionLabel = (item: AirbyteDefinition | undefined) => {
+	if (!item) return <span>未知类型</span>;
+	const src = resolveIconSrc(item.icon);
+	return (
+		<Space>
+			{src ? (
+				<img src={src} alt={item.name || "icon"} className="h-4 w-4 object-contain" />
+			) : (
+				<span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-slate-200 text-[10px] text-slate-500">
+					{String(item.name || "D").slice(0, 1).toUpperCase()}
+				</span>
+			)}
+			<span>{item.name || item.sourceDefinitionId || item.destinationDefinitionId}</span>
+		</Space>
+	);
 };
 
 export default function Page() {
@@ -209,6 +285,22 @@ export default function Page() {
 		return map;
 	}, [sourceDefs]);
 
+	const buildDefaultPairs = useCallback(
+		(definitionId?: string) => {
+			const def = definitionId ? sourceMap.get(definitionId) : undefined;
+			const name = (def?.name || def?.dockerRepository || "").toLowerCase();
+			const isDatabase =
+				["postgres", "mysql", "oracle", "sql server", "mssql", "dameng", "dm8", "db2"].some((key) =>
+					name.includes(key),
+				);
+			const keys = isDatabase
+				? ["host", "port", "database", "schema", "username", "password"]
+				: ["host", "port", "username", "password"];
+			return keys.map((key) => ({ key, value: "", secret: isSecretKey(key) }));
+		},
+		[sourceMap],
+	);
+
 	const filteredConnections = useMemo(() => {
 		const key = normalizeText(keyword).toLowerCase();
 		if (!key) return connections;
@@ -233,6 +325,8 @@ export default function Page() {
 			schemaStrategy: "AUTO",
 			reconcileRule: "NONE",
 			owner: userInfo?.username || userInfo?.name || "",
+			sourceConfigPairs: buildDefaultPairs(),
+			destinationConfigPairs: [],
 		});
 		setEditOpen(true);
 	};
@@ -240,15 +334,13 @@ export default function Page() {
 	const openEdit = (row: AirbyteConnection) => {
 		setEditMode("edit");
 		setEditing(row);
-		const sourceConfigText = row.sourceConfig ? JSON.stringify(row.sourceConfig, null, 2) : "";
-		const destinationConfigText = row.destinationConfig ? JSON.stringify(row.destinationConfig, null, 2) : "";
 		setDestinationMode(row.destinationConfig ? "custom" : "default");
 		form.resetFields();
 		form.setFieldsValue({
 			name: row.name,
 			infraSourceId: row.infraSourceId,
 			sourceDefinitionId: row.sourceDefinitionId,
-			sourceConfigText,
+			sourceConfigPairs: pairsFromConfig(row.sourceConfig),
 			syncMode: row.syncMode || "INCREMENTAL",
 			scheduleType: row.scheduleType || "manual",
 			scheduleCron: row.scheduleCron,
@@ -261,7 +353,7 @@ export default function Page() {
 			schemaStrategy: row.schemaStrategy || "AUTO",
 			reconcileRule: row.reconcileRule || "NONE",
 			destinationDefinitionId: "",
-			destinationConfigText,
+			destinationConfigPairs: pairsFromConfig(row.destinationConfig),
 		});
 		if (row.infraSourceId) {
 			void loadStreamsForSource(String(row.infraSourceId));
@@ -273,7 +365,7 @@ export default function Page() {
 
 	const handleInfraSourceChange = (value?: string) => {
 		if (!value) {
-			form.setFieldsValue({ sourceDefinitionId: undefined, sourceConfigText: "" });
+			form.setFieldsValue({ sourceDefinitionId: undefined, sourceConfigPairs: buildDefaultPairs() });
 			setAvailableStreams([]);
 			return;
 		}
@@ -281,7 +373,7 @@ export default function Page() {
 		if (!selected) return;
 		form.setFieldsValue({
 			sourceDefinitionId: selected.sourceDefinitionId,
-			sourceConfigText: formatJson(selected.config || undefined),
+			sourceConfigPairs: pairsFromConfig(selected.config || undefined),
 		});
 		void loadStreamsForSource(String(selected.id));
 	};
@@ -321,27 +413,27 @@ export default function Page() {
 	const submitEdit = async () => {
 		setSaving(true);
 		try {
-			const values = await form.validateFields([
-				"name",
-				"infraSourceId",
-				"sourceDefinitionId",
-				"sourceConfigText",
-				"syncMode",
-			]);
+			const values = await form.validateFields();
 			const infraSourceId = normalizeText(values.infraSourceId);
 			const selectedSource = infraSourceId
 				? infraSources.find((item) => String(item.id) === infraSourceId)
 				: null;
-			let sourceConfig = parseJsonInput(values.sourceConfigText, "源端配置");
-			if (sourceConfig === null) return;
+			let sourceConfig = configFromPairs(values.sourceConfigPairs as ConfigPair[]);
 			if (selectedSource?.config && (!sourceConfig || Object.keys(sourceConfig).length === 0)) {
 				sourceConfig = selectedSource.config;
 			}
+			if (!sourceConfig || Object.keys(sourceConfig).length === 0) {
+				toast.error("请完善源端连接配置");
+				return;
+			}
 			const destinationConfig =
 				destinationMode === "custom"
-					? parseJsonInput(values.destinationConfigText, "目标端配置")
+					? configFromPairs(values.destinationConfigPairs as ConfigPair[])
 					: undefined;
-			if (destinationMode === "custom" && destinationConfig === null) return;
+			if (destinationMode === "custom" && destinationConfig && Object.keys(destinationConfig).length === 0) {
+				toast.error("请完善目标端配置");
+				return;
+			}
 
 			const payload: Record<string, any> = {
 				name: normalizeText(values.name),
@@ -406,7 +498,7 @@ export default function Page() {
 				dataIndex: "sourceDefinitionId",
 				key: "sourceDefinitionId",
 				width: 180,
-				render: (v) => sourceMap.get(String(v))?.name || "-",
+				render: (v) => renderDefinitionLabel(sourceMap.get(String(v))),
 			},
 			{
 				title: "同步表数",
@@ -574,10 +666,27 @@ export default function Page() {
 							<Select
 								allowClear
 								placeholder="选择已建数据源"
-								options={infraSources.map((item) => ({
-									label: item.name || item.id,
-									value: item.id,
-								}))}
+								options={infraSources.map((item) => {
+									const def = sourceMap.get(String(item.sourceDefinitionId));
+									const iconSrc = resolveIconSrc(def?.icon);
+									return {
+										label: (
+											<Space>
+												{iconSrc ? (
+													<img src={iconSrc} alt={def?.name || "icon"} className="h-4 w-4 object-contain" />
+												) : (
+													<span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-slate-200 text-[10px] text-slate-500">
+														{String(def?.name || "D").slice(0, 1).toUpperCase()}
+													</span>
+												)}
+												<span>{item.name || item.id}</span>
+												<Text type="secondary">{def?.name || "未知类型"}</Text>
+											</Space>
+										),
+										value: item.id,
+									};
+								})}
+								optionLabelProp="label"
 								onChange={(value) => handleInfraSourceChange(value as string | undefined)}
 							/>
 						</Form.Item>
@@ -591,10 +700,16 @@ export default function Page() {
 									<Select
 										placeholder="选择业务系统类型"
 										options={sourceDefs.map((item) => ({
-											label: item.name || item.sourceDefinitionId,
+											label: renderDefinitionLabel(item),
 											value: item.sourceDefinitionId,
 										}))}
+										optionLabelProp="label"
 										disabled={Boolean(getFieldValue("infraSourceId"))}
+										onChange={(value) => {
+											if (!getFieldValue("infraSourceId")) {
+												form.setFieldsValue({ sourceConfigPairs: buildDefaultPairs(String(value)) });
+											}
+										}}
 									/>
 								</Form.Item>
 							)}
@@ -612,16 +727,66 @@ export default function Page() {
 					<Form.Item shouldUpdate={(prev, next) => prev.infraSourceId !== next.infraSourceId} noStyle>
 						{({ getFieldValue }) => (
 							<Form.Item
-								name="sourceConfigText"
-								label="源端连接配置 (JSON)"
+								name="sourceConfigPairs"
+								label="源端连接配置"
 								rules={[{ required: true, message: "请填写源端连接配置" }]}
-								extra="密码等敏感字段将脱敏显示，保持 ****** 表示不修改原值。"
+								extra="敏感字段支持脱敏显示，保持 ****** 表示不修改原值。"
 							>
-								<Input.TextArea
-									rows={6}
-									placeholder='例如：{"host":"192.168.8.150","port":5432,"database":"erp_demo","username":"","password":""}'
-									disabled={Boolean(getFieldValue("infraSourceId"))}
-								/>
+								<Form.List name="sourceConfigPairs">
+									{(fields, { add, remove }) => (
+										<div className="space-y-2">
+											{fields.map((field) => (
+												<Space key={field.key} align="start" className="w-full">
+													<Form.Item
+														{...field}
+														name={[field.name, "key"]}
+														rules={[{ required: true, message: "请输入参数名" }]}
+														className="mb-0 w-40"
+													>
+														<Input placeholder="参数名" disabled={Boolean(getFieldValue("infraSourceId"))} />
+													</Form.Item>
+													<Form.Item shouldUpdate noStyle>
+														{() => {
+															const keyValue = form.getFieldValue(["sourceConfigPairs", field.name, "key"]);
+															const secret = isSecretKey(keyValue);
+															return (
+																<Form.Item
+																	{...field}
+																	name={[field.name, "value"]}
+																	rules={[{ required: true, message: "请输入参数值" }]}
+																	className="mb-0 flex-1"
+																>
+																	{secret ? (
+																		<Input.Password
+																			placeholder="请输入"
+																			disabled={Boolean(getFieldValue("infraSourceId"))}
+																		/>
+																	) : (
+																		<Input placeholder="请输入" disabled={Boolean(getFieldValue("infraSourceId"))} />
+																	)}
+																</Form.Item>
+															);
+														}}
+													</Form.Item>
+													<Button
+														type="text"
+														onClick={() => remove(field.name)}
+														disabled={Boolean(getFieldValue("infraSourceId"))}
+													>
+														删除
+													</Button>
+												</Space>
+											))}
+											<Button
+												type="dashed"
+												onClick={() => add({ key: "", value: "" })}
+												disabled={Boolean(getFieldValue("infraSourceId"))}
+											>
+												+ 添加参数
+											</Button>
+										</div>
+									)}
+								</Form.List>
 							</Form.Item>
 						)}
 					</Form.Item>
@@ -693,17 +858,57 @@ export default function Page() {
 									<Select
 										placeholder="选择目标端类型"
 										options={destinationDefs.map((item) => ({
-											label: item.name || item.destinationDefinitionId,
+											label: renderDefinitionLabel(item),
 											value: item.destinationDefinitionId,
 										}))}
+										optionLabelProp="label"
 									/>
 								</Form.Item>
-								<Form.Item
-									name="destinationConfigText"
-									label="目标端连接配置 (JSON)"
-									extra="密码等敏感字段将脱敏显示，保持 ****** 表示不修改原值。"
-								>
-									<Input.TextArea rows={4} placeholder='例如：{"host":"dts-pg","port":5432,"database":"ods"}' />
+								<Form.Item name="destinationConfigPairs" label="目标端连接配置" extra="保持 ****** 表示不修改原值。">
+									<Form.List name="destinationConfigPairs">
+										{(fields, { add, remove }) => (
+											<div className="space-y-2">
+												{fields.map((field) => (
+													<Space key={field.key} align="start" className="w-full">
+														<Form.Item
+															{...field}
+															name={[field.name, "key"]}
+															rules={[{ required: true, message: "请输入参数名" }]}
+															className="mb-0 w-40"
+														>
+															<Input placeholder="参数名" />
+														</Form.Item>
+														<Form.Item shouldUpdate noStyle>
+															{() => {
+																const keyValue = form.getFieldValue(["destinationConfigPairs", field.name, "key"]);
+																const secret = isSecretKey(keyValue);
+																return (
+																	<Form.Item
+																		{...field}
+																		name={[field.name, "value"]}
+																		rules={[{ required: true, message: "请输入参数值" }]}
+																		className="mb-0 flex-1"
+																	>
+																		{secret ? (
+																			<Input.Password placeholder="请输入" />
+																		) : (
+																			<Input placeholder="请输入" />
+																		)}
+																	</Form.Item>
+																);
+															}}
+														</Form.Item>
+														<Button type="text" onClick={() => remove(field.name)}>
+															删除
+														</Button>
+													</Space>
+												))}
+												<Button type="dashed" onClick={() => add({ key: "", value: "" })}>
+													+ 添加参数
+												</Button>
+											</div>
+										)}
+									</Form.List>
 								</Form.Item>
 							</>
 						) : (

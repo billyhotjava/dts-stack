@@ -7,4 +7,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface InfraAirbyteConnectionRepository extends JpaRepository<InfraAirbyteConnection, UUID> {
     Optional<InfraAirbyteConnection> findByConnectionId(String connectionId);
+
+    long countByInfraSourceId(UUID infraSourceId);
 }

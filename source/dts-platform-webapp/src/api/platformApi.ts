@@ -120,6 +120,7 @@ export const createAirbyteSource = (data: any) => api.post({ url: "/infra/airbyt
 export const updateAirbyteSource = (id: string, data: any) => api.put({ url: `/infra/airbyte/sources/${id}`, data });
 export const checkAirbyteSource = (id: string) => api.post({ url: `/infra/airbyte/sources/${id}/check` });
 export const discoverAirbyteSource = (id: string) => api.post({ url: `/infra/airbyte/sources/${id}/discover` });
+export const deleteAirbyteSource = (id: string) => api.delete({ url: `/infra/airbyte/sources/${id}` });
 export const listAirbyteConnections = (refresh = false) =>
 	api.get({ url: "/infra/airbyte/connections", params: refresh ? { refresh } : undefined });
 export const createAirbyteConnection = (data: any) => api.post({ url: "/infra/airbyte/connections", data });

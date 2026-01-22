@@ -1,6 +1,8 @@
 package com.yuzhi.dts.platform.domain.infra;
 
 import com.yuzhi.dts.platform.domain.AbstractAuditingEntity;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -48,6 +50,17 @@ public class InfraAirbyteSource extends AbstractAuditingEntity<UUID> implements 
 
     @Column(name = "config_json", columnDefinition = "text")
     private String configJson;
+
+    @JdbcTypeCode(SqlTypes.BINARY)
+    @Column(name = "secure_props", columnDefinition = "bytea")
+    private byte[] secureProps;
+
+    @JdbcTypeCode(SqlTypes.BINARY)
+    @Column(name = "secure_iv", columnDefinition = "bytea")
+    private byte[] secureIv;
+
+    @Column(name = "secure_key_version", length = 32)
+    private String secureKeyVersion;
 
     @Override
     public UUID getId() {
@@ -136,5 +149,29 @@ public class InfraAirbyteSource extends AbstractAuditingEntity<UUID> implements 
 
     public void setConfigJson(String configJson) {
         this.configJson = configJson;
+    }
+
+    public byte[] getSecureProps() {
+        return secureProps;
+    }
+
+    public void setSecureProps(byte[] secureProps) {
+        this.secureProps = secureProps;
+    }
+
+    public byte[] getSecureIv() {
+        return secureIv;
+    }
+
+    public void setSecureIv(byte[] secureIv) {
+        this.secureIv = secureIv;
+    }
+
+    public String getSecureKeyVersion() {
+        return secureKeyVersion;
+    }
+
+    public void setSecureKeyVersion(String secureKeyVersion) {
+        this.secureKeyVersion = secureKeyVersion;
     }
 }

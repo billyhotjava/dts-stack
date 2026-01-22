@@ -1,0 +1,631 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>数据源管理 · DTS 数据接入中心</title>
+  <style>
+:root{
+  --bg:#0b1220;
+  --panel:#0f1b2d;
+  --panel2:#0c1627;
+  --text:#e6edf6;
+  --muted:#9fb0c6;
+  --accent:#5aa7ff;
+  --good:#35d07f;
+  --warn:#ffcc66;
+  --bad:#ff6b6b;
+  --border:rgba(255,255,255,.10);
+  --shadow:0 12px 35px rgba(0,0,0,.35);
+  --radius:14px;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0; font-family:var(--sans);
+  background: radial-gradient(1200px 800px at 15% 10%, rgba(90,167,255,.22), transparent 60%),
+              radial-gradient(900px 600px at 85% 20%, rgba(53,208,127,.16), transparent 55%),
+              linear-gradient(180deg, var(--bg), #060a13 70%);
+  color:var(--text);
+}
+a{color:var(--accent); text-decoration:none}
+a:hover{text-decoration:underline}
+.container{display:flex; min-height:100%;}
+.sidebar{
+  width:280px; padding:18px 14px;
+  background: linear-gradient(180deg, rgba(15,27,45,.92), rgba(12,22,39,.92));
+  border-right:1px solid var(--border);
+  position:sticky; top:0; height:100vh;
+}
+.brand{
+  display:flex; align-items:center; gap:10px;
+  padding:10px 10px 14px; margin-bottom:10px;
+}
+.logo{
+  width:34px; height:34px; border-radius:10px;
+  background: linear-gradient(135deg, rgba(90,167,255,.9), rgba(53,208,127,.75));
+  box-shadow: 0 10px 24px rgba(90,167,255,.22);
+}
+.brand h1{font-size:15px; margin:0}
+.brand p{margin:2px 0 0; color:var(--muted); font-size:12px}
+.nav{
+  display:flex; flex-direction:column; gap:6px; padding:6px;
+}
+.nav a{
+  padding:10px 10px; border-radius:12px;
+  color:var(--text);
+  border:1px solid transparent;
+  display:flex; align-items:center; justify-content:space-between;
+}
+.nav a .hint{color:var(--muted); font-size:12px}
+.nav a.active{
+  background: rgba(90,167,255,.12);
+  border:1px solid rgba(90,167,255,.28);
+}
+.nav a:hover{
+  background: rgba(255,255,255,.06);
+  border:1px solid rgba(255,255,255,.10);
+  text-decoration:none;
+}
+.main{
+  flex:1; padding:22px 22px 36px;
+}
+.topbar{
+  display:flex; align-items:center; justify-content:space-between;
+  margin-bottom:14px;
+}
+.title h2{margin:0; font-size:18px}
+.title .sub{margin-top:4px; color:var(--muted); font-size:13px}
+.actions{display:flex; gap:10px; flex-wrap:wrap}
+.btn{
+  padding:9px 12px; border-radius:12px;
+  border:1px solid var(--border);
+  background: rgba(255,255,255,.06);
+  color:var(--text); cursor:pointer;
+}
+.btn.primary{
+  background: rgba(90,167,255,.16);
+  border:1px solid rgba(90,167,255,.40);
+}
+.btn.danger{
+  background: rgba(255,107,107,.12);
+  border:1px solid rgba(255,107,107,.40);
+}
+.btn:disabled{opacity:.5; cursor:not-allowed}
+.grid{
+  display:grid; grid-template-columns: 1.1fr .9fr; gap:14px;
+}
+.card{
+  background: rgba(15,27,45,.78);
+  border:1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+.card .hd{
+  padding:14px 14px 10px;
+  border-bottom:1px solid var(--border);
+  display:flex; align-items:center; justify-content:space-between;
+  gap:10px;
+}
+.card .hd h3{margin:0; font-size:14px}
+.card .hd .meta{color:var(--muted); font-size:12px}
+.card .bd{padding:14px}
+.kpis{display:grid; grid-template-columns:repeat(4, 1fr); gap:10px}
+.kpi{
+  padding:12px; border-radius:14px; border:1px solid var(--border);
+  background: rgba(255,255,255,.04);
+}
+.kpi .v{font-size:18px; font-weight:700}
+.kpi .k{color:var(--muted); font-size:12px; margin-top:4px}
+.pill{
+  padding:4px 8px; border-radius:999px; font-size:12px;
+  border:1px solid var(--border); background: rgba(255,255,255,.05);
+}
+.pill.good{border-color:rgba(53,208,127,.4); background:rgba(53,208,127,.12)}
+.pill.warn{border-color:rgba(255,204,102,.4); background:rgba(255,204,102,.12)}
+.pill.bad{border-color:rgba(255,107,107,.4); background:rgba(255,107,107,.12)}
+.table{
+  width:100%; border-collapse:separate; border-spacing:0;
+  overflow:hidden;
+}
+.table th, .table td{
+  text-align:left; padding:10px 10px;
+  border-bottom:1px solid var(--border);
+  font-size:13px;
+}
+.table th{color:var(--muted); font-weight:600; background: rgba(255,255,255,.03)}
+.table tr:hover td{background: rgba(255,255,255,.03)}
+.table td code{font-family:var(--mono); font-size:12px; color:#cfe4ff}
+.field{
+  display:flex; flex-direction:column; gap:6px;
+  margin-bottom:12px;
+}
+.field label{font-size:12px; color:var(--muted)}
+.field input, .field select, .field textarea{
+  padding:10px 10px; border-radius:12px;
+  border:1px solid var(--border);
+  background: rgba(255,255,255,.04);
+  color:var(--text);
+  outline:none;
+}
+.field textarea{min-height:90px; resize:vertical}
+.row{display:grid; grid-template-columns:1fr 1fr; gap:10px}
+.row3{display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px}
+.help{font-size:12px; color:var(--muted); line-height:1.5}
+.banner{
+  padding:12px 14px; border-radius:14px;
+  background: rgba(90,167,255,.12);
+  border:1px solid rgba(90,167,255,.32);
+  color: var(--text);
+  margin-bottom:14px;
+}
+.banner strong{font-weight:700}
+.mono{font-family:var(--mono)}
+.sep{height:1px; background:var(--border); margin:12px 0}
+.small{font-size:12px; color:var(--muted)}
+.modalBack{
+  position:fixed; inset:0; background:rgba(0,0,0,.55);
+  display:none; align-items:center; justify-content:center; padding:18px;
+}
+.modal{
+  width:min(860px, 98vw); max-height:90vh; overflow:auto;
+  background: rgba(15,27,45,.98);
+  border:1px solid var(--border);
+  border-radius:16px; box-shadow: var(--shadow);
+}
+.modal .hd{padding:14px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center}
+.modal .bd{padding:14px}
+.close{background:transparent; border:0; color:var(--muted); cursor:pointer; font-size:18px}
+.toast{
+  position:fixed; bottom:18px; right:18px;
+  background: rgba(15,27,45,.95);
+  border:1px solid var(--border);
+  color:var(--text); padding:10px 12px; border-radius:12px;
+  box-shadow: var(--shadow);
+  display:none;
+}
+@media (max-width: 1080px){
+  .grid{grid-template-columns:1fr}
+  .kpis{grid-template-columns:repeat(2, 1fr)}
+  .sidebar{position:relative; height:auto; width:100%}
+  .container{flex-direction:column}
+}
+</style>
+</head>
+<body>
+<div class="container">
+
+    <div class="sidebar">
+      <div class="brand">
+        <div class="logo"></div>
+        <div>
+          <h1>DTS · 数据接入中心</h1>
+          <p>业务端黑盒化接入（Demo UI）</p>
+        </div>
+      </div>
+      <div class="nav">
+        <a href="datasource.html"><span>数据源管理</span><span class="hint">连接器工厂</span></a>
+        <a href="metadata.html"><span>元数据采集</span><span class="hint">结构扫描</span></a>
+        <a href="ingest.html"><span>数据入湖任务</span><span class="hint">入湖配置</span></a>
+        <a href="changes.html"><span>接入变更记录</span><span class="hint">Schema / 连接变更</span></a>
+      </div>
+      <div class="sep"></div>
+      <div class="small" style="padding:0 10px 10px; line-height:1.6;">
+        说明：此 Demo 为静态页面，用于界面结构与交互说明。<br/>
+        真实系统需由 DTS 后端对接 Airbyte/OpenMetadata。
+      </div>
+    </div>
+    
+  <div class="main">
+    <div class="topbar">
+      <div class="title">
+        <h2>数据源管理</h2>
+        <div class="sub">连接器工厂：动态连接器列表 + 动态表单创建数据源连接（示例）</div>
+      </div>
+      <div class="actions">
+        <button class="btn" onclick="toast('已刷新（示例）')">刷新</button>
+        <button class="btn" onclick="openModal('helpModal')">使用说明</button>
+        <button class="btn primary" onclick="toast('已保存（示例）')">保存草稿</button>
+      </div>
+    </div>
+
+    
+<div class="banner">
+  <strong>数据源管理（连接器工厂）</strong>：通过“连接器定义列表 + JSON Schema 动态表单”创建可复用的数据源连接。凭证在平台侧加密托管。
+</div>
+
+<div class="kpis">
+  <div class="kpi"><div class="v">12</div><div class="k">已接入数据源</div></div>
+  <div class="kpi"><div class="v">10</div><div class="k">健康（近24h）</div></div>
+  <div class="kpi"><div class="v">2</div><div class="k">需处理（失败）</div></div>
+  <div class="kpi"><div class="v">3</div><div class="k">近期变更</div></div>
+</div>
+
+<div class="grid" style="margin-top:14px;">
+  <div class="card">
+    <div class="hd">
+      <h3>已配置数据源</h3>
+      <div class="meta">支持搜索、测试连接、变更参数（示例）</div>
+    </div>
+    <div class="bd">
+      <div class="row">
+        <div class="field">
+          <label>搜索</label>
+          <input id="dsSearch" placeholder="按名称 / 类型 / 负责人搜索"/>
+        </div>
+        <div class="field">
+          <label>状态</label>
+          <select id="dsFilter">
+            <option value="ALL">全部</option>
+            <option value="HEALTHY">健康</option>
+            <option value="UNHEALTHY">异常</option>
+          </select>
+        </div>
+      </div>
+
+      <table class="table" id="dsTable">
+        <thead>
+          <tr>
+            <th>名称</th>
+            <th>类型</th>
+            <th>状态</th>
+            <th>负责人</th>
+            <th>最近测试</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+
+      <div class="small" style="margin-top:10px;">
+        说明：真实系统中，此列表由 DTS 后端从平台数据库读取，并与 Airbyte Source 状态对齐。
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="hd">
+      <h3>创建数据源</h3>
+      <div class="meta">动态连接器列表 + 动态表单</div>
+    </div>
+    <div class="bd">
+      <div class="field">
+        <label>选择连接器类型</label>
+        <select id="connectorSelect"></select>
+        <div class="small">连接器列表来自：Airbyte Source Definitions（示例数据）。</div>
+      </div>
+
+      <div class="row">
+        <div class="field">
+          <label>数据源名称</label>
+          <input id="dsName" placeholder="例如：ERP-生产库（MySQL）"/>
+        </div>
+        <div class="field">
+          <label>负责人</label>
+          <input id="dsOwner" placeholder="例如：张三"/>
+        </div>
+      </div>
+
+      <div class="sep"></div>
+      <div class="small">连接参数（JSON Schema 动态渲染）</div>
+      <div id="schemaForm"></div>
+
+      <div class="sep"></div>
+      <div class="row">
+        <button class="btn" onclick="testConnection()">连接测试</button>
+        <button class="btn primary" onclick="createDataSource()">创建并保存</button>
+      </div>
+      <div class="small" style="margin-top:10px;">
+        创建后将生成 <span class="mono">airbyte_source_id</span>，供“元数据采集”和“数据入湖任务”复用。
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modalBack" id="dsDetailModal" onclick="if(event.target===this) closeModal('dsDetailModal')">
+  <div class="modal">
+    <div class="hd">
+      <div><strong>数据源详情</strong></div>
+      <button class="close" onclick="closeModal('dsDetailModal')">×</button>
+    </div>
+    <div class="bd">
+      <div class="row">
+        <div>
+          <div class="small">数据源名称</div>
+          <div id="detailName" style="font-weight:700; margin-top:4px;"></div>
+          <div class="sep"></div>
+          <div class="small">连接器</div>
+          <div id="detailType" class="mono" style="margin-top:4px;"></div>
+          <div class="sep"></div>
+          <div class="small">平台数据源 ID / Airbyte Source ID</div>
+          <div id="detailIds" class="mono" style="margin-top:6px;"></div>
+        </div>
+        <div>
+          <div class="small">健康状态</div>
+          <div id="detailStatus" style="margin-top:6px;"></div>
+          <div class="sep"></div>
+          <div class="small">最近测试详情</div>
+          <pre id="detailLog" class="mono" style="white-space:pre-wrap; background:rgba(255,255,255,.03); padding:10px; border-radius:12px; border:1px solid var(--border);"></pre>
+        </div>
+      </div>
+      <div class="sep"></div>
+      <div class="row">
+        <button class="btn" onclick="toast('已触发连接测试（示例）')">再次测试</button>
+        <button class="btn danger" onclick="toast('已禁用数据源（示例）')">禁用</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+    <div id="toast" class="toast"></div>
+
+    <div id="helpModal" class="modalBack" onclick="if(event.target===this) closeModal('helpModal')">
+      <div class="modal">
+        <div class="hd">
+          <div><strong>使用说明（Demo）</strong></div>
+          <button class="close" onclick="closeModal('helpModal')">×</button>
+        </div>
+        <div class="bd">
+          <div class="help">
+            <ol>
+              <li>本页面为静态 HTML Demo，用于确认菜单、信息架构与交互流。</li>
+              <li>真实落地需要：DTS 后端提供 API（连接器列表、JSON Schema、创建连接、触发采集/入湖、运行历史等）。</li>
+              <li>页面中的“创建/触发/更新”按钮仅模拟交互，便于你评审 UI。</li>
+            </ol>
+          </div>
+          <div class="sep"></div>
+          <div class="small mono">
+            建议 API：/connectors/*、/datasources、/metascans、/ingest-jobs、/ingest-jobs/{id}/runs、/changes
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+
+function $(sel, root=document){ return root.querySelector(sel); }
+function $all(sel, root=document){ return Array.from(root.querySelectorAll(sel)); }
+
+function openModal(id){ const b = document.getElementById(id); if(!b) return; b.style.display='flex'; }
+function closeModal(id){ const b = document.getElementById(id); if(!b) return; b.style.display='none'; }
+function toast(msg){
+  const t = document.getElementById('toast');
+  if(!t) return alert(msg);
+  t.textContent = msg;
+  t.style.display='block';
+  clearTimeout(window.__toastTimer);
+  window.__toastTimer = setTimeout(()=>{ t.style.display='none'; }, 2600);
+}
+function setActiveNav(path){
+  $all('.nav a').forEach(a=>{
+    if(a.getAttribute('href')===path){ a.classList.add('active'); }
+    else{ a.classList.remove('active'); }
+  });
+}
+
+// Simple JSON Schema → Form renderer (minimal subset for demo)
+function renderSchemaForm(schema, values, container){
+  container.innerHTML = '';
+  if(!schema || !schema.properties){ container.innerHTML = '<div class="help">未找到连接器表单定义（JSON Schema）。</div>'; return; }
+  const required = new Set(schema.required || []);
+  const props = schema.properties;
+  Object.keys(props).forEach(key=>{
+    const p = props[key];
+    const wrap = document.createElement('div'); wrap.className='field';
+    const label = document.createElement('label');
+    label.textContent = (p.title || key) + (required.has(key) ? ' *' : '');
+    const desc = p.description ? `<div class="small">${escapeHtml(p.description)}</div>` : '';
+    let el;
+    if(p.enum){
+      el = document.createElement('select');
+      p.enum.forEach(v=>{
+        const o=document.createElement('option'); o.value=v; o.textContent=v; el.appendChild(o);
+      });
+      if(values[key]!=null) el.value = values[key];
+    }else if(p.type==='boolean'){
+      el = document.createElement('select');
+      ['true','false'].forEach(v=>{ const o=document.createElement('option'); o.value=v; o.textContent=v; el.appendChild(o);});
+      el.value = String(values[key] ?? 'false');
+    }else if(p.type==='integer' || p.type==='number'){
+      el = document.createElement('input'); el.type='number'; el.value = values[key] ?? (p.default ?? '');
+      if(p.minimum!=null) el.min = p.minimum;
+      if(p.maximum!=null) el.max = p.maximum;
+    }else{
+      el = document.createElement('input');
+      el.type = (p.format==='password' || /password|secret|token/i.test(key)) ? 'password' : 'text';
+      el.placeholder = p.examples?.[0] || p.default || '';
+      el.value = values[key] ?? (p.default ?? '');
+    }
+    el.dataset.key = key;
+    wrap.appendChild(label);
+    if(desc) {
+      const d = document.createElement('div'); d.innerHTML=desc; wrap.appendChild(d);
+    }
+    wrap.appendChild(el);
+    container.appendChild(wrap);
+  });
+}
+
+function collectSchemaFormValues(container){
+  const out = {};
+  $all('[data-key]', container).forEach(el=>{
+    const k = el.dataset.key;
+    if(el.tagName==='SELECT' && (el.value==='true' || el.value==='false')) out[k] = (el.value==='true');
+    else if(el.type==='number') out[k] = (el.value===''? null : Number(el.value));
+    else out[k] = el.value;
+  });
+  return out;
+}
+function escapeHtml(s){
+  return String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');
+}
+
+setActiveNav('datasource.html');
+
+const connectors = [
+  {
+    id:'mysql', name:'MySQL', icon:'🗄️', version:'1.3.2', stage:'GA',
+    schema:{
+      type:'object',
+      required:['host','port','database','username','password'],
+      properties:{
+        host:{type:'string', title:'主机 Host', description:'数据库地址或域名', examples:['10.10.10.10']},
+        port:{type:'integer', title:'端口 Port', default:3306, minimum:1, maximum:65535},
+        database:{type:'string', title:'数据库名 Database', examples:['erp']},
+        username:{type:'string', title:'用户名 Username', examples:['readonly']},
+        password:{type:'string', title:'密码 Password', format:'password'},
+        ssl:{type:'boolean', title:'启用 SSL', description:'开启后将按平台安全策略验证证书', default:false},
+        tunnel:{type:'string', title:'网络策略', description:'示例：直连 / SSH 隧道 / 专线（真实系统由三员端控制）', enum:['直连','SSH 隧道','专线']}
+      }
+    }
+  },
+  {
+    id:'postgres', name:'PostgreSQL', icon:'🐘', version:'2.1.0', stage:'GA',
+    schema:{
+      type:'object',
+      required:['host','port','database','username','password'],
+      properties:{
+        host:{type:'string', title:'主机 Host'},
+        port:{type:'integer', title:'端口 Port', default:5432, minimum:1, maximum:65535},
+        database:{type:'string', title:'数据库名'},
+        username:{type:'string', title:'用户名'},
+        password:{type:'string', title:'密码', format:'password'},
+        schema:{type:'string', title:'默认 Schema', description:'用于默认展示（可选）', examples:['public']}
+      }
+    }
+  },
+  {
+    id:'kafka', name:'Kafka', icon:'🧩', version:'0.6.4', stage:'Beta',
+    schema:{
+      type:'object',
+      required:['bootstrap_servers','topic'],
+      properties:{
+        bootstrap_servers:{type:'string', title:'Bootstrap Servers', examples:['kafka-1:9092,kafka-2:9092']},
+        topic:{type:'string', title:'Topic'},
+        security_protocol:{type:'string', title:'安全协议', enum:['PLAINTEXT','SASL_SSL','SASL_PLAINTEXT'], default:'PLAINTEXT'},
+        sasl_username:{type:'string', title:'SASL 用户名'},
+        sasl_password:{type:'string', title:'SASL 密码', format:'password'}
+      }
+    }
+  }
+];
+
+let dataSources = [
+  {id:'ds_001', name:'ERP-生产库', type:'MySQL', status:'HEALTHY', owner:'谢志民', lastTest:'2026-01-22 01:12', airbyte:'ab_src_6c2f...'},
+  {id:'ds_002', name:'MES-测试库', type:'PostgreSQL', status:'UNHEALTHY', owner:'王工', lastTest:'2026-01-21 17:40', airbyte:'ab_src_2a19...'},
+  {id:'ds_003', name:'订单事件流', type:'Kafka', status:'HEALTHY', owner:'李工', lastTest:'2026-01-22 00:10', airbyte:'ab_src_991a...'}
+];
+
+function badge(status){
+  if(status==='HEALTHY') return '<span class="pill good">健康</span>';
+  if(status==='UNHEALTHY') return '<span class="pill bad">异常</span>';
+  return '<span class="pill warn">未知</span>';
+}
+
+function renderTable(){
+  const q = ($('#dsSearch').value||'').trim().toLowerCase();
+  const f = $('#dsFilter').value;
+  const tbody = $('#dsTable tbody');
+  tbody.innerHTML = '';
+  dataSources
+    .filter(r=>{
+      if(f==='HEALTHY' && r.status!=='HEALTHY') return false;
+      if(f==='UNHEALTHY' && r.status!=='UNHEALTHY') return false;
+      if(!q) return true;
+      return (r.name+r.type+r.owner+r.id).toLowerCase().includes(q);
+    })
+    .forEach(r=>{
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${escapeHtml(r.name)}<div class="small mono">${r.id}</div></td>
+        <td>${escapeHtml(r.type)}</td>
+        <td>${badge(r.status)}</td>
+        <td>${escapeHtml(r.owner)}</td>
+        <td class="mono">${escapeHtml(r.lastTest)}</td>
+        <td>
+          <button class="btn" onclick="showDetail('${r.id}')">详情</button>
+          <button class="btn" onclick="toast('已触发连接测试（示例）')">测试</button>
+        </td>`;
+      tbody.appendChild(tr);
+    });
+}
+
+function initConnectors(){
+  const sel = $('#connectorSelect');
+  connectors.forEach(c=>{
+    const opt = document.createElement('option');
+    opt.value = c.id;
+    opt.textContent = `${c.icon} ${c.name}  · v${c.version}  · ${c.stage}`;
+    sel.appendChild(opt);
+  });
+  sel.addEventListener('change', ()=> loadSchema(sel.value));
+  loadSchema(sel.value);
+}
+
+function loadSchema(id){
+  const c = connectors.find(x=>x.id===id);
+  const container = $('#schemaForm');
+  renderSchemaForm(c?.schema, {}, container);
+}
+
+function testConnection(){
+  const name = $('#dsName').value.trim();
+  if(!name){ toast('请先填写数据源名称'); return; }
+  toast('连接测试通过（示例）');
+}
+
+function createDataSource(){
+  const sel = $('#connectorSelect').value;
+  const c = connectors.find(x=>x.id===sel);
+  const name = $('#dsName').value.trim();
+  const owner = $('#dsOwner').value.trim() || '未指定';
+  if(!name){ toast('请填写数据源名称'); return; }
+
+  const params = collectSchemaFormValues($('#schemaForm'));
+  // demo validation (required)
+  const req = new Set(c.schema.required||[]);
+  for(const k of req){
+    if(params[k]==null || params[k]===''){ toast(`缺少必填项：${k}`); return; }
+  }
+
+  const id = 'ds_' + String(100 + dataSources.length + 1).padStart(3,'0');
+  const airbyte = 'ab_src_' + Math.random().toString(16).slice(2,10) + '...';
+  dataSources.unshift({
+    id, name, type:c.name, status:'HEALTHY', owner,
+    lastTest: new Date().toISOString().slice(0,16).replace('T',' '),
+    airbyte
+  });
+  renderTable();
+  toast('已创建数据源（示例）');
+  // clear a bit
+  $('#dsName').value='';
+}
+
+function showDetail(id){
+  const r = dataSources.find(x=>x.id===id);
+  if(!r) return;
+  $('#detailName').textContent = r.name;
+  $('#detailType').textContent = r.type;
+  $('#detailIds').textContent = `${r.id}  /  ${r.airbyte}`;
+  $('#detailStatus').innerHTML = badge(r.status) + ` <span class="small">最近测试：${escapeHtml(r.lastTest)}</span>`;
+  $('#detailLog').textContent = r.status==='HEALTHY'
+    ? '连接测试：SUCCESS\n网络：可达\n权限：只读\n建议：可开启增量窗口以降低压力'
+    : '连接测试：FAILED\n原因：认证失败（示例）\n建议：检查账号权限或密码是否已轮换';
+  openModal('dsDetailModal');
+}
+
+$('#dsSearch').addEventListener('input', renderTable);
+$('#dsFilter').addEventListener('change', renderTable);
+
+initConnectors();
+renderTable();
+
+</script>
+</body>
+</html>

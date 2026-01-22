@@ -1,0 +1,617 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>元数据采集 · DTS 数据接入中心</title>
+  <style>
+:root{
+  --bg:#0b1220;
+  --panel:#0f1b2d;
+  --panel2:#0c1627;
+  --text:#e6edf6;
+  --muted:#9fb0c6;
+  --accent:#5aa7ff;
+  --good:#35d07f;
+  --warn:#ffcc66;
+  --bad:#ff6b6b;
+  --border:rgba(255,255,255,.10);
+  --shadow:0 12px 35px rgba(0,0,0,.35);
+  --radius:14px;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0; font-family:var(--sans);
+  background: radial-gradient(1200px 800px at 15% 10%, rgba(90,167,255,.22), transparent 60%),
+              radial-gradient(900px 600px at 85% 20%, rgba(53,208,127,.16), transparent 55%),
+              linear-gradient(180deg, var(--bg), #060a13 70%);
+  color:var(--text);
+}
+a{color:var(--accent); text-decoration:none}
+a:hover{text-decoration:underline}
+.container{display:flex; min-height:100%;}
+.sidebar{
+  width:280px; padding:18px 14px;
+  background: linear-gradient(180deg, rgba(15,27,45,.92), rgba(12,22,39,.92));
+  border-right:1px solid var(--border);
+  position:sticky; top:0; height:100vh;
+}
+.brand{
+  display:flex; align-items:center; gap:10px;
+  padding:10px 10px 14px; margin-bottom:10px;
+}
+.logo{
+  width:34px; height:34px; border-radius:10px;
+  background: linear-gradient(135deg, rgba(90,167,255,.9), rgba(53,208,127,.75));
+  box-shadow: 0 10px 24px rgba(90,167,255,.22);
+}
+.brand h1{font-size:15px; margin:0}
+.brand p{margin:2px 0 0; color:var(--muted); font-size:12px}
+.nav{
+  display:flex; flex-direction:column; gap:6px; padding:6px;
+}
+.nav a{
+  padding:10px 10px; border-radius:12px;
+  color:var(--text);
+  border:1px solid transparent;
+  display:flex; align-items:center; justify-content:space-between;
+}
+.nav a .hint{color:var(--muted); font-size:12px}
+.nav a.active{
+  background: rgba(90,167,255,.12);
+  border:1px solid rgba(90,167,255,.28);
+}
+.nav a:hover{
+  background: rgba(255,255,255,.06);
+  border:1px solid rgba(255,255,255,.10);
+  text-decoration:none;
+}
+.main{
+  flex:1; padding:22px 22px 36px;
+}
+.topbar{
+  display:flex; align-items:center; justify-content:space-between;
+  margin-bottom:14px;
+}
+.title h2{margin:0; font-size:18px}
+.title .sub{margin-top:4px; color:var(--muted); font-size:13px}
+.actions{display:flex; gap:10px; flex-wrap:wrap}
+.btn{
+  padding:9px 12px; border-radius:12px;
+  border:1px solid var(--border);
+  background: rgba(255,255,255,.06);
+  color:var(--text); cursor:pointer;
+}
+.btn.primary{
+  background: rgba(90,167,255,.16);
+  border:1px solid rgba(90,167,255,.40);
+}
+.btn.danger{
+  background: rgba(255,107,107,.12);
+  border:1px solid rgba(255,107,107,.40);
+}
+.btn:disabled{opacity:.5; cursor:not-allowed}
+.grid{
+  display:grid; grid-template-columns: 1.1fr .9fr; gap:14px;
+}
+.card{
+  background: rgba(15,27,45,.78);
+  border:1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+.card .hd{
+  padding:14px 14px 10px;
+  border-bottom:1px solid var(--border);
+  display:flex; align-items:center; justify-content:space-between;
+  gap:10px;
+}
+.card .hd h3{margin:0; font-size:14px}
+.card .hd .meta{color:var(--muted); font-size:12px}
+.card .bd{padding:14px}
+.kpis{display:grid; grid-template-columns:repeat(4, 1fr); gap:10px}
+.kpi{
+  padding:12px; border-radius:14px; border:1px solid var(--border);
+  background: rgba(255,255,255,.04);
+}
+.kpi .v{font-size:18px; font-weight:700}
+.kpi .k{color:var(--muted); font-size:12px; margin-top:4px}
+.pill{
+  padding:4px 8px; border-radius:999px; font-size:12px;
+  border:1px solid var(--border); background: rgba(255,255,255,.05);
+}
+.pill.good{border-color:rgba(53,208,127,.4); background:rgba(53,208,127,.12)}
+.pill.warn{border-color:rgba(255,204,102,.4); background:rgba(255,204,102,.12)}
+.pill.bad{border-color:rgba(255,107,107,.4); background:rgba(255,107,107,.12)}
+.table{
+  width:100%; border-collapse:separate; border-spacing:0;
+  overflow:hidden;
+}
+.table th, .table td{
+  text-align:left; padding:10px 10px;
+  border-bottom:1px solid var(--border);
+  font-size:13px;
+}
+.table th{color:var(--muted); font-weight:600; background: rgba(255,255,255,.03)}
+.table tr:hover td{background: rgba(255,255,255,.03)}
+.table td code{font-family:var(--mono); font-size:12px; color:#cfe4ff}
+.field{
+  display:flex; flex-direction:column; gap:6px;
+  margin-bottom:12px;
+}
+.field label{font-size:12px; color:var(--muted)}
+.field input, .field select, .field textarea{
+  padding:10px 10px; border-radius:12px;
+  border:1px solid var(--border);
+  background: rgba(255,255,255,.04);
+  color:var(--text);
+  outline:none;
+}
+.field textarea{min-height:90px; resize:vertical}
+.row{display:grid; grid-template-columns:1fr 1fr; gap:10px}
+.row3{display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px}
+.help{font-size:12px; color:var(--muted); line-height:1.5}
+.banner{
+  padding:12px 14px; border-radius:14px;
+  background: rgba(90,167,255,.12);
+  border:1px solid rgba(90,167,255,.32);
+  color: var(--text);
+  margin-bottom:14px;
+}
+.banner strong{font-weight:700}
+.mono{font-family:var(--mono)}
+.sep{height:1px; background:var(--border); margin:12px 0}
+.small{font-size:12px; color:var(--muted)}
+.modalBack{
+  position:fixed; inset:0; background:rgba(0,0,0,.55);
+  display:none; align-items:center; justify-content:center; padding:18px;
+}
+.modal{
+  width:min(860px, 98vw); max-height:90vh; overflow:auto;
+  background: rgba(15,27,45,.98);
+  border:1px solid var(--border);
+  border-radius:16px; box-shadow: var(--shadow);
+}
+.modal .hd{padding:14px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center}
+.modal .bd{padding:14px}
+.close{background:transparent; border:0; color:var(--muted); cursor:pointer; font-size:18px}
+.toast{
+  position:fixed; bottom:18px; right:18px;
+  background: rgba(15,27,45,.95);
+  border:1px solid var(--border);
+  color:var(--text); padding:10px 12px; border-radius:12px;
+  box-shadow: var(--shadow);
+  display:none;
+}
+@media (max-width: 1080px){
+  .grid{grid-template-columns:1fr}
+  .kpis{grid-template-columns:repeat(2, 1fr)}
+  .sidebar{position:relative; height:auto; width:100%}
+  .container{flex-direction:column}
+}
+</style>
+</head>
+<body>
+<div class="container">
+
+    <div class="sidebar">
+      <div class="brand">
+        <div class="logo"></div>
+        <div>
+          <h1>DTS · 数据接入中心</h1>
+          <p>业务端黑盒化接入（Demo UI）</p>
+        </div>
+      </div>
+      <div class="nav">
+        <a href="datasource.html"><span>数据源管理</span><span class="hint">连接器工厂</span></a>
+        <a href="metadata.html"><span>元数据采集</span><span class="hint">结构扫描</span></a>
+        <a href="ingest.html"><span>数据入湖任务</span><span class="hint">入湖配置</span></a>
+        <a href="changes.html"><span>接入变更记录</span><span class="hint">Schema / 连接变更</span></a>
+      </div>
+      <div class="sep"></div>
+      <div class="small" style="padding:0 10px 10px; line-height:1.6;">
+        说明：此 Demo 为静态页面，用于界面结构与交互说明。<br/>
+        真实系统需由 DTS 后端对接 Airbyte/OpenMetadata。
+      </div>
+    </div>
+    
+  <div class="main">
+    <div class="topbar">
+      <div class="title">
+        <h2>元数据采集</h2>
+        <div class="sub">结构扫描：复用数据源连接，触发 OpenMetadata Ingestion（示例）</div>
+      </div>
+      <div class="actions">
+        <button class="btn" onclick="toast('已刷新（示例）')">刷新</button>
+        <button class="btn" onclick="openModal('helpModal')">使用说明</button>
+        <button class="btn primary" onclick="toast('已保存（示例）')">保存草稿</button>
+      </div>
+    </div>
+
+    
+<div class="banner">
+  <strong>元数据采集（结构扫描）</strong>：复用已创建的数据源连接，配置结构扫描范围与计划，自动同步表/字段/备注/索引等元信息（示例）。
+</div>
+
+<div class="grid">
+  <div class="card">
+    <div class="hd">
+      <h3>创建/维护采集计划</h3>
+      <div class="meta">选择数据源 → 配置范围 → 触发扫描 / 设置计划</div>
+    </div>
+    <div class="bd">
+      <div class="row">
+        <div class="field">
+          <label>选择数据源（复用连接）</label>
+          <select id="metaDsSelect"></select>
+          <div class="small">不再重复输入 Host/User/Pass。由数据源连接统一保证合法性。</div>
+        </div>
+        <div class="field">
+          <label>采集模式</label>
+          <select id="metaMode">
+            <option value="FULL">全量扫描（首次/低频）</option>
+            <option value="INCR">增量扫描（仅发现变更）</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="field">
+          <label>扫描范围（Schema 白名单）</label>
+          <input id="schemaAllow" placeholder="例如：erp, public（多个用逗号分隔）"/>
+          <div class="small">留空表示默认扫描全部（建议用白名单控制范围）。</div>
+        </div>
+        <div class="field">
+          <label>表过滤（前缀/正则）</label>
+          <input id="tableFilter" placeholder="例如：^so_.* 或 inv_"/>
+        </div>
+      </div>
+
+      <div class="row3">
+        <div class="field">
+          <label>执行计划</label>
+          <select id="metaSchedule">
+            <option value="MANUAL">仅手动</option>
+            <option value="DAILY">每日 02:00</option>
+            <option value="HOURLY">每小时</option>
+            <option value="WEEKLY">每周日 02:00</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>字段剖析（Profiler）</label>
+          <select id="profiler">
+            <option value="OFF">关闭</option>
+            <option value="LIGHT">轻量（空值率/基数）</option>
+            <option value="FULL">完整（分布/直方图）</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>责任人</label>
+          <input id="metaOwner" placeholder="例如：数据治理专员A"/>
+        </div>
+      </div>
+
+      <div class="sep"></div>
+      <div class="row">
+        <button class="btn" onclick="runScan()">立即采集</button>
+        <button class="btn primary" onclick="saveScan()">保存计划</button>
+      </div>
+
+      <div class="small" style="margin-top:10px;">
+        后端会将数据源参数映射为 OpenMetadata Ingestion 配置，并触发 Ingestion Run（示例）。
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="hd">
+      <h3>采集结果预览</h3>
+      <div class="meta">表/字段变更、备注、索引（示例）</div>
+    </div>
+    <div class="bd">
+      <div class="field">
+        <label>已发现资产（按主题/库）</label>
+        <select id="assetSelect"></select>
+      </div>
+      <div class="row">
+        <div>
+          <div class="small">表信息</div>
+          <div id="tableInfo" class="mono" style="margin-top:8px;"></div>
+          <div class="sep"></div>
+          <div class="small">字段列表</div>
+          <table class="table" id="colTable">
+            <thead><tr><th>字段</th><th>类型</th><th>备注</th><th>质量提示</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div>
+          <div class="small">本次扫描变更摘要</div>
+          <div id="diffBox" style="margin-top:8px;"></div>
+          <div class="sep"></div>
+          <div class="small">建议动作</div>
+          <div class="help">
+            <ul>
+              <li>发现新表：可在“数据入湖任务”中一键纳入同步清单。</li>
+              <li>字段类型变化：建议进入“接入变更记录”确认影响范围。</li>
+              <li>备注缺失：可在资产门户补充字段定义（示例）。</li>
+            </ul>
+          </div>
+          <div class="sep"></div>
+          <button class="btn primary" onclick="toast('已生成入湖候选清单（示例）')">生成入湖候选清单</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card" style="margin-top:14px;">
+  <div class="hd">
+    <h3>采集历史</h3>
+    <div class="meta">运行记录、耗时、发现数量、失败原因（示例）</div>
+  </div>
+  <div class="bd">
+    <table class="table" id="runTable">
+      <thead>
+        <tr>
+          <th>时间</th>
+          <th>数据源</th>
+          <th>模式</th>
+          <th>发现表</th>
+          <th>发现字段</th>
+          <th>状态</th>
+          <th>操作</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</div>
+
+
+    <div id="toast" class="toast"></div>
+
+    <div id="helpModal" class="modalBack" onclick="if(event.target===this) closeModal('helpModal')">
+      <div class="modal">
+        <div class="hd">
+          <div><strong>使用说明（Demo）</strong></div>
+          <button class="close" onclick="closeModal('helpModal')">×</button>
+        </div>
+        <div class="bd">
+          <div class="help">
+            <ol>
+              <li>本页面为静态 HTML Demo，用于确认菜单、信息架构与交互流。</li>
+              <li>真实落地需要：DTS 后端提供 API（连接器列表、JSON Schema、创建连接、触发采集/入湖、运行历史等）。</li>
+              <li>页面中的“创建/触发/更新”按钮仅模拟交互，便于你评审 UI。</li>
+            </ol>
+          </div>
+          <div class="sep"></div>
+          <div class="small mono">
+            建议 API：/connectors/*、/datasources、/metascans、/ingest-jobs、/ingest-jobs/{id}/runs、/changes
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+
+function $(sel, root=document){ return root.querySelector(sel); }
+function $all(sel, root=document){ return Array.from(root.querySelectorAll(sel)); }
+
+function openModal(id){ const b = document.getElementById(id); if(!b) return; b.style.display='flex'; }
+function closeModal(id){ const b = document.getElementById(id); if(!b) return; b.style.display='none'; }
+function toast(msg){
+  const t = document.getElementById('toast');
+  if(!t) return alert(msg);
+  t.textContent = msg;
+  t.style.display='block';
+  clearTimeout(window.__toastTimer);
+  window.__toastTimer = setTimeout(()=>{ t.style.display='none'; }, 2600);
+}
+function setActiveNav(path){
+  $all('.nav a').forEach(a=>{
+    if(a.getAttribute('href')===path){ a.classList.add('active'); }
+    else{ a.classList.remove('active'); }
+  });
+}
+
+// Simple JSON Schema → Form renderer (minimal subset for demo)
+function renderSchemaForm(schema, values, container){
+  container.innerHTML = '';
+  if(!schema || !schema.properties){ container.innerHTML = '<div class="help">未找到连接器表单定义（JSON Schema）。</div>'; return; }
+  const required = new Set(schema.required || []);
+  const props = schema.properties;
+  Object.keys(props).forEach(key=>{
+    const p = props[key];
+    const wrap = document.createElement('div'); wrap.className='field';
+    const label = document.createElement('label');
+    label.textContent = (p.title || key) + (required.has(key) ? ' *' : '');
+    const desc = p.description ? `<div class="small">${escapeHtml(p.description)}</div>` : '';
+    let el;
+    if(p.enum){
+      el = document.createElement('select');
+      p.enum.forEach(v=>{
+        const o=document.createElement('option'); o.value=v; o.textContent=v; el.appendChild(o);
+      });
+      if(values[key]!=null) el.value = values[key];
+    }else if(p.type==='boolean'){
+      el = document.createElement('select');
+      ['true','false'].forEach(v=>{ const o=document.createElement('option'); o.value=v; o.textContent=v; el.appendChild(o);});
+      el.value = String(values[key] ?? 'false');
+    }else if(p.type==='integer' || p.type==='number'){
+      el = document.createElement('input'); el.type='number'; el.value = values[key] ?? (p.default ?? '');
+      if(p.minimum!=null) el.min = p.minimum;
+      if(p.maximum!=null) el.max = p.maximum;
+    }else{
+      el = document.createElement('input');
+      el.type = (p.format==='password' || /password|secret|token/i.test(key)) ? 'password' : 'text';
+      el.placeholder = p.examples?.[0] || p.default || '';
+      el.value = values[key] ?? (p.default ?? '');
+    }
+    el.dataset.key = key;
+    wrap.appendChild(label);
+    if(desc) {
+      const d = document.createElement('div'); d.innerHTML=desc; wrap.appendChild(d);
+    }
+    wrap.appendChild(el);
+    container.appendChild(wrap);
+  });
+}
+
+function collectSchemaFormValues(container){
+  const out = {};
+  $all('[data-key]', container).forEach(el=>{
+    const k = el.dataset.key;
+    if(el.tagName==='SELECT' && (el.value==='true' || el.value==='false')) out[k] = (el.value==='true');
+    else if(el.type==='number') out[k] = (el.value===''? null : Number(el.value));
+    else out[k] = el.value;
+  });
+  return out;
+}
+function escapeHtml(s){
+  return String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');
+}
+
+setActiveNav('metadata.html');
+
+const dataSources = [
+  {id:'ds_001', name:'ERP-生产库', type:'MySQL', owner:'谢志民'},
+  {id:'ds_002', name:'MES-测试库', type:'PostgreSQL', owner:'王工'},
+  {id:'ds_003', name:'订单事件流', type:'Kafka', owner:'李工'}
+];
+
+const assets = [
+  {
+    id:'a1',
+    label:'erp.so_sales_order（销售订单）',
+    table:{db:'erp', schema:'erp', name:'so_sales_order', comment:'销售订单主表', pk:'pk_order'},
+    cols:[
+      {name:'pk_order', type:'varchar(36)', c:'订单主键', q:'唯一性：建议校验'},
+      {name:'order_code', type:'varchar(64)', c:'订单编号', q:'空值率<1%'},
+      {name:'customer_code', type:'varchar(64)', c:'客户编码', q:'参照完整性'},
+      {name:'order_time', type:'timestamp', c:'下单时间', q:'时间分区候选'},
+      {name:'total_amt', type:'decimal(18,2)', c:'含税金额', q:'值域：>=0'}
+    ],
+    diff:{newTables:0, newCols:2, typeChanges:0, commentMissing:1}
+  },
+  {
+    id:'a2',
+    label:'erp.inv_stock_balance（库存余额）',
+    table:{db:'erp', schema:'erp', name:'inv_stock_balance', comment:'库存日余额', pk:'(material_id, wh_id, dt)'},
+    cols:[
+      {name:'material_id', type:'varchar(36)', c:'物料主键', q:'参照完整性'},
+      {name:'wh_id', type:'varchar(36)', c:'仓库主键', q:'参照完整性'},
+      {name:'qty', type:'decimal(18,3)', c:'数量', q:'值域：>=0'},
+      {name:'dt', type:'date', c:'业务日期', q:'分区字段'},
+    ],
+    diff:{newTables:1, newCols:0, typeChanges:1, commentMissing:0}
+  }
+];
+
+let runs = [
+  {t:'2026-01-22 01:58', ds:'ERP-生产库', mode:'增量扫描', tables:12, cols:143, status:'SUCCESS'},
+  {t:'2026-01-21 02:01', ds:'ERP-生产库', mode:'全量扫描', tables:12, cols:141, status:'SUCCESS'},
+  {t:'2026-01-20 15:12', ds:'MES-测试库', mode:'增量扫描', tables:8, cols:97, status:'FAILED'}
+];
+
+function pill(s){
+  if(s==='SUCCESS') return '<span class="pill good">成功</span>';
+  if(s==='FAILED') return '<span class="pill bad">失败</span>';
+  return '<span class="pill warn">运行中</span>';
+}
+
+function init(){
+  const sel = $('#metaDsSelect');
+  dataSources.forEach(d=>{
+    const o=document.createElement('option');
+    o.value=d.id;
+    o.textContent=`${d.name} · ${d.type}`;
+    sel.appendChild(o);
+  });
+  $('#metaOwner').value = '数据治理专员A';
+
+  const assetSel = $('#assetSelect');
+  assets.forEach(a=>{
+    const o=document.createElement('option'); o.value=a.id; o.textContent=a.label; assetSel.appendChild(o);
+  });
+  assetSel.addEventListener('change', ()=> renderAsset(assetSel.value));
+  renderAsset(assetSel.value);
+
+  renderRuns();
+}
+
+function renderAsset(id){
+  const a = assets.find(x=>x.id===id);
+  if(!a) return;
+  $('#tableInfo').textContent = `${a.table.db}.${a.table.schema}.${a.table.name}  |  PK: ${a.table.pk}\n备注：${a.table.comment}`;
+  const tbody = $('#colTable tbody');
+  tbody.innerHTML='';
+  a.cols.forEach(c=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML = `
+      <td class="mono">${escapeHtml(c.name)}</td>
+      <td class="mono">${escapeHtml(c.type)}</td>
+      <td>${escapeHtml(c.c)}</td>
+      <td>${escapeHtml(c.q)}</td>`;
+    tbody.appendChild(tr);
+  });
+
+  const d=a.diff;
+  $('#diffBox').innerHTML = `
+    <div class="kpis" style="grid-template-columns:repeat(2, 1fr);">
+      <div class="kpi"><div class="v">${d.newTables}</div><div class="k">新增表</div></div>
+      <div class="kpi"><div class="v">${d.newCols}</div><div class="k">新增字段</div></div>
+      <div class="kpi"><div class="v">${d.typeChanges}</div><div class="k">类型变更</div></div>
+      <div class="kpi"><div class="v">${d.commentMissing}</div><div class="k">备注缺失</div></div>
+    </div>`;
+}
+
+function renderRuns(){
+  const tbody = $('#runTable tbody');
+  tbody.innerHTML='';
+  runs.forEach(r=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML = `
+      <td class="mono">${r.t}</td>
+      <td>${escapeHtml(r.ds)}</td>
+      <td>${escapeHtml(r.mode)}</td>
+      <td class="mono">${r.tables}</td>
+      <td class="mono">${r.cols}</td>
+      <td>${pill(r.status)}</td>
+      <td>
+        <button class="btn" onclick="toast('打开采集日志（示例）')">日志</button>
+        <button class="btn" onclick="toast('生成差异报告（示例）')">差异报告</button>
+      </td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+function runScan(){
+  const ds = $('#metaDsSelect');
+  const mode = $('#metaMode').value==='FULL' ? '全量扫描' : '增量扫描';
+  runs.unshift({
+    t: new Date().toISOString().slice(0,16).replace('T',' '),
+    ds: ds.options[ds.selectedIndex].text.split(' · ')[0],
+    mode,
+    tables: 12,
+    cols: 144,
+    status:'SUCCESS'
+  });
+  renderRuns();
+  toast('已触发采集（示例）');
+}
+
+function saveScan(){
+  toast('采集计划已保存（示例）');
+}
+
+init();
+
+</script>
+</body>
+</html>

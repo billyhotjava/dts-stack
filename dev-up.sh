@@ -59,7 +59,7 @@ determine_enabled_services(){
 }
 
 clean_maven_targets(){
-  for module in dts-admin dts-platform dts-common; do
+  for module in dts-admin dts-platform dts-common dts-ingestion-service; do
     local module_target="source/${module}/target"
     if [[ -d "${module_target}" ]]; then
       echo "[dev-up] Removing stale build output: ${module_target}"
@@ -210,7 +210,7 @@ if [[ -d "source/logs" ]]; then
 fi
 
 # Ensure local bind-mount directories exist (avoid Docker creating them as root).
-mkdir -p logs/dts-admin logs/dts-platform logs/dts-analytics
+mkdir -p logs/dts-admin logs/dts-platform logs/dts-analytics logs/dts-ingestion-service
 
 # Load optional image versions into current env (does not modify files)
 load_img_versions_dev
@@ -341,7 +341,7 @@ fi
 
 build_airflow_om_image
 
-services=(dts-admin dts-platform)
+services=(dts-admin dts-platform dts-ingestion-service)
 
 # Metadata/ELT stack for dev mode
 services+=(dts-elasticsearch dts-openmetadata dts-airflow-init dts-airflow-webserver dts-airflow-scheduler dts-airflow-triggerer dts-dbt)
@@ -366,7 +366,7 @@ airflow_services=(dts-airflow-init dts-airflow-webserver dts-airflow-scheduler d
 openmetadata_services=(dts-openmetadata)
 
 # Only rebuild our dev services; keep shared infra intact.
-dev_services=(dts-admin dts-platform)
+dev_services=(dts-admin dts-platform dts-ingestion-service)
 if [[ "${WITH_ANALYTICS}" == "1" || "${WITH_ANALYTICS_DEV}" == "1" ]]; then
   dev_services+=(dts-analytics)
 fi
