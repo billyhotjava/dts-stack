@@ -340,6 +340,7 @@ services:
       - ./config:/opt/dts/config:ro,z
       # Optional: mount vendor PKI client jar(s) like svs-uk_custom.jar into /opt/dts/vendor
       - ./services/dts-admin/vendor:/opt/dts/vendor:ro,z
+      - ./services/dts-platform/drivers:/opt/dts/drivers:ro,z
     extra_hosts:
       - "${HOST_SSO}:${HOST_GATEWAY_IP:-172.17.0.1}"
     networks:
@@ -378,7 +379,7 @@ services:
       #  condition: service_started
       dts-admin:
         condition: service_started
-      dts-ingestion-service:
+      dts-ingestion:
         condition: service_started
     environment:
       SPRING_PROFILES_ACTIVE: ${DTS_PROFILE:-prod}
@@ -411,7 +412,7 @@ services:
       DTS_AIRFLOW_USERNAME: ${DTS_AIRFLOW_USERNAME}
       DTS_AIRFLOW_PASSWORD: ${DTS_AIRFLOW_PASSWORD}
       DTS_AIRFLOW_DAG_ID: ${DTS_AIRFLOW_DAG_ID}
-      DTS_INGESTION_BASE_URL: ${DTS_INGESTION_BASE_URL:-http://dts-ingestion-service:8083}
+      DTS_INGESTION_BASE_URL: ${DTS_INGESTION_BASE_URL:-http://dts-ingestion:8083}
       DTS_INGESTION_API_PATH: ${DTS_INGESTION_API_PATH:-/api/infra/airbyte}
       DTS_INGESTION_SERVICE_NAME: ${DTS_INGESTION_SERVICE_NAME:-dts-platform}
       LOG_ROOT: /logs
@@ -457,8 +458,8 @@ services:
       - "traefik.http.middlewares.dts-platform-login-alias.replacepathregex.replacement=/api/keycloak/auth/login"
       - "traefik.http.routers.dts-platform-uiapi.middlewares=dts-platform-login-alias@docker,cors-allow@file,security-headers@file"
 
-  dts-ingestion-service:
-    image: ${IMAGE_DTS_INGESTION_SERVICE:?Set IMAGE_DTS_INGESTION_SERVICE in imgversion.conf or .env}
+  dts-ingestion:
+    image: ${IMAGE_DTS_INGESTION:?Set IMAGE_DTS_INGESTION in imgversion.conf or .env}
     ports: []
     depends_on:
       dts-pg:
@@ -512,7 +513,7 @@ services:
       DTS_INFRA_ENCRYPTION_KEY: ${DTS_INFRA_ENCRYPTION_KEY:-}
       DTS_INFRA_KEY_VERSION: ${DTS_INFRA_KEY_VERSION:-v1}
     volumes:
-      - ./logs/dts-ingestion-service:/logs/dts-ingestion-service:z
+      - ./logs/dts-ingestion:/logs/dts-ingestion:z
     security_opt:
       - seccomp=unconfined
     networks:

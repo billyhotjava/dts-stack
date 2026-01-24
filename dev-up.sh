@@ -15,6 +15,16 @@ usage(){
   echo "Usage: $0 [--mode images|local] [--no-webapp] [--analytics] [--analytics-dev] [--force-airflow-build]"
 }
 
+registry_reachable() {
+  if command -v getent >/dev/null 2>&1; then
+    getent hosts registry.npmjs.org >/dev/null 2>&1 && return 0
+  fi
+  if command -v nslookup >/dev/null 2>&1; then
+    nslookup registry.npmjs.org >/dev/null 2>&1 && return 0
+  fi
+  return 1
+}
+
 checksum_file() {
   local p="$1"
   if command -v sha256sum >/dev/null 2>&1; then
@@ -59,7 +69,7 @@ determine_enabled_services(){
 }
 
 clean_maven_targets(){
-  for module in dts-admin dts-platform dts-common dts-ingestion-service; do
+  for module in dts-admin dts-platform dts-common dts-ingestion; do
     local module_target="source/${module}/target"
     if [[ -d "${module_target}" ]]; then
       echo "[dev-up] Removing stale build output: ${module_target}"
@@ -123,6 +133,21 @@ done
 # Local dev default: start all self-owned apps (incl. analytics) unless explicitly disabled.
 if [[ "$MODE" == "local" && "${WITH_ANALYTICS}" == "0" && "${WITH_ANALYTICS_DEV}" == "0" ]]; then
   WITH_ANALYTICS_DEV=1
+fi
+
+# Skip webapp containers only when explicitly requested (USE_LOCAL_WEBAPP=1 or SKIP_WEBAPP=1).
+# If you want auto-detection, set AUTO_LOCAL_WEBAPP=1 to enable the registry check below.
+USE_LOCAL_WEBAPP="${USE_LOCAL_WEBAPP:-0}"
+AUTO_LOCAL_WEBAPP="${AUTO_LOCAL_WEBAPP:-0}"
+if [[ "${USE_LOCAL_WEBAPP}" == "1" ]]; then
+  SKIP_WEBAPP=1
+fi
+if [[ "${AUTO_LOCAL_WEBAPP}" == "1" && "${USE_LOCAL_WEBAPP}" != "1" && "$MODE" == "local" && "${WITH_WEBAPP_DEFAULT}" != "0" && "${SKIP_WEBAPP:-0}" != "1" ]]; then
+  if ! registry_reachable && command -v pnpm >/dev/null 2>&1; then
+    USE_LOCAL_WEBAPP=1
+    SKIP_WEBAPP=1
+    echo "[dev-up] npm registry unreachable; skipping webapp containers and using local pnpm."
+  fi
 fi
 
 # In local mode we always run analytics from source (like dts-admin/dts-platform).
@@ -210,7 +235,7 @@ if [[ -d "source/logs" ]]; then
 fi
 
 # Ensure local bind-mount directories exist (avoid Docker creating them as root).
-mkdir -p logs/dts-admin logs/dts-platform logs/dts-analytics logs/dts-ingestion-service
+mkdir -p logs/dts-admin logs/dts-platform logs/dts-analytics logs/dts-ingestion
 
 # Load optional image versions into current env (does not modify files)
 load_img_versions_dev
@@ -341,7 +366,7 @@ fi
 
 build_airflow_om_image
 
-services=(dts-admin dts-platform dts-ingestion-service)
+services=(dts-admin dts-platform dts-ingestion)
 
 # Metadata/ELT stack for dev mode
 services+=(dts-elasticsearch dts-openmetadata dts-airflow-init dts-airflow-webserver dts-airflow-scheduler dts-airflow-triggerer dts-dbt)
@@ -366,7 +391,7 @@ airflow_services=(dts-airflow-init dts-airflow-webserver dts-airflow-scheduler d
 openmetadata_services=(dts-openmetadata)
 
 # Only rebuild our dev services; keep shared infra intact.
-dev_services=(dts-admin dts-platform dts-ingestion-service)
+dev_services=(dts-admin dts-platform dts-ingestion)
 if [[ "${WITH_ANALYTICS}" == "1" || "${WITH_ANALYTICS_DEV}" == "1" ]]; then
   dev_services+=(dts-analytics)
 fi
@@ -430,6 +455,12 @@ else
   if [[ "${#dev_services[@]}" -gt 0 ]]; then
     "${compose_cmd[@]}" "${compose_files[@]}" up -d --build "${dev_services[@]}"
   fi
+fi
+
+if [[ "${USE_LOCAL_WEBAPP}" == "1" ]]; then
+  echo "[dev-up] Start frontend locally (use existing pnpm):"
+  echo "  (cd source/dts-admin-webapp && VITE_API_PROXY_TARGET=http://localhost:18081 PORT=3001 pnpm dev -- --host 0.0.0.0 --port 3001 --strictPort --open=false)"
+  echo "  (cd source/dts-platform-webapp && VITE_API_PROXY_TARGET=http://localhost:18082 VITE_ADMIN_PROXY_TARGET=http://localhost:18081 VITE_ADMIN_API_BASE_URL=/admin/api PORT=5173 pnpm dev -- --host 0.0.0.0 --port 5173 --strictPort --open=false)"
 fi
 
 echo "[dev-up] Done. Stop dev services with: ./dev-stop.sh [--mode images|local]"

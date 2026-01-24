@@ -44,7 +44,7 @@ set -a
 : "${PG_PWD_TEMPORAL:=airbyte_temporal}"
 set +a
 
-services=(dts-admin dts-platform dts-ingestion-service dts-analytics dts-admin-webapp dts-platform-webapp dts-analytics-webapp-modern)
+services=(dts-admin dts-platform dts-ingestion dts-analytics dts-admin-webapp dts-platform-webapp dts-analytics-webapp-modern)
 
 if [[ "$MODE" == "local" ]]; then
   echo "[dev-stop] Stopping local-dev services (core stack stays running) ..."

@@ -4,7 +4,7 @@
 Make OpenMetadata metadata collection more reliable in the ingestion flow, while keeping the business API stable.
 
 ## What changed
-- Added OpenMetadata ingestion support in `dts-ingestion-service`:
+- Added OpenMetadata ingestion support in `dts-ingestion`:
   - Create/ensure database service in OpenMetadata based on the Airbyte destination config.
   - Create/ensure an ingestion pipeline for that service.
   - Trigger ingestion when `runNow=true`.
@@ -12,13 +12,13 @@ Make OpenMetadata metadata collection more reliable in the ingestion flow, while
 
 ## Key files
 - OpenMetadata config + adapter:
-  - `source/dts-ingestion-service/src/main/java/com/yuzhi/dts/ingestion/config/OpenMetadataProperties.java`
-  - `source/dts-ingestion-service/src/main/java/com/yuzhi/dts/ingestion/service/openmetadata/OpenMetadataClient.java`
-  - `source/dts-ingestion-service/src/main/java/com/yuzhi/dts/ingestion/service/openmetadata/OpenMetadataAdapter.java`
+  - `source/dts-ingestion/src/main/java/com/yuzhi/dts/ingestion/config/OpenMetadataProperties.java`
+  - `source/dts-ingestion/src/main/java/com/yuzhi/dts/ingestion/service/openmetadata/OpenMetadataClient.java`
+  - `source/dts-ingestion/src/main/java/com/yuzhi/dts/ingestion/service/openmetadata/OpenMetadataAdapter.java`
 - Ingestion task integration:
-  - `source/dts-ingestion-service/src/main/java/com/yuzhi/dts/ingestion/web/rest/IngestionTaskResource.java`
+  - `source/dts-ingestion/src/main/java/com/yuzhi/dts/ingestion/web/rest/IngestionTaskResource.java`
 - Config wiring:
-  - `source/dts-ingestion-service/src/main/resources/application.yml`
+  - `source/dts-ingestion/src/main/resources/application.yml`
   - `docker-compose-app.yml`, `docker-compose.dev.yml`, `docker-compose.legacy.yml`
 
 ## Behavior summary

@@ -8,6 +8,10 @@ public final class ApiResponses {
         return new ApiResponse<>(ResultStatus.SUCCESS.getCode(), "OK", data);
     }
 
+    public static <T> ApiResponse<T> ok(String message, T data) {
+        return new ApiResponse<>(ResultStatus.SUCCESS.getCode(), message, data);
+    }
+
     public static <T> ApiResponse<T> error(String message) {
         return new ApiResponse<>(ResultStatus.ERROR.getCode(), message, (String) null, null);
     }

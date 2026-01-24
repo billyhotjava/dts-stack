@@ -201,6 +201,7 @@ services:
       - ./services/certs/truststore.p12:/etc/dts/truststore.p12:ro,z
       # Mount vendor PKI client jar(s) like svs-uk_custom.jar into /opt/dts/vendor
       - ./services/dts-admin/vendor:/opt/dts/vendor:ro,z
+      - ./services/dts-platform/drivers:/opt/dts/drivers:ro,z
       - ./builds/patch-app-dev-yml.sh:/patches/patch-app-dev-yml.sh:ro,z
     security_opt:
       - seccomp=unconfined
@@ -244,7 +245,7 @@ services:
         condition: service_healthy
       # dts-trino:
       #   condition: service_started
-      dts-ingestion-service:
+      dts-ingestion:
         condition: service_started
     environment:
       SPRING_PROFILES_ACTIVE: ${DTS_PROFILE:-dev}
@@ -280,7 +281,7 @@ services:
       DTS_AIRFLOW_USERNAME: ${DTS_AIRFLOW_USERNAME}
       DTS_AIRFLOW_PASSWORD: ${DTS_AIRFLOW_PASSWORD}
       DTS_AIRFLOW_DAG_ID: ${DTS_AIRFLOW_DAG_ID}
-      DTS_INGESTION_BASE_URL: ${DTS_INGESTION_BASE_URL:-http://dts-ingestion-service:8083}
+      DTS_INGESTION_BASE_URL: ${DTS_INGESTION_BASE_URL:-http://dts-ingestion:8083}
       DTS_INGESTION_API_PATH: ${DTS_INGESTION_API_PATH:-/api/infra/airbyte}
       DTS_INGESTION_SERVICE_NAME: ${DTS_INGESTION_SERVICE_NAME:-dts-platform}
       # Encrypted filesystem storage for Data Standard attachments
@@ -361,10 +362,10 @@ services:
       - "traefik.http.middlewares.dts-strip-platform.stripprefixregex.regex=/platform"
       - "traefik.http.routers.dts-platform.middlewares=dts-strip-platform@docker,cors-allow@file,security-headers@file"
 
-  # Java backend: dts-ingestion-service (Spring Boot)
-  dts-ingestion-service:
+  # Java backend: dts-ingestion (Spring Boot)
+  dts-ingestion:
     image: ${IMAGE_MAVEN}
-    working_dir: /workspace-src/dts-ingestion-service
+    working_dir: /workspace-src/dts-ingestion
     depends_on:
       dts-pg:
         condition: service_healthy
@@ -429,7 +430,7 @@ services:
     volumes:
       - ./source:/workspace-src:z
       - maven-cache:/root/.m2
-      - ./logs/dts-ingestion-service:/workspace/logs/dts-ingestion-service:z
+      - ./logs/dts-ingestion:/workspace/logs/dts-ingestion:z
     security_opt:
       - seccomp=unconfined
     networks:

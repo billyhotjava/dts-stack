@@ -32,6 +32,8 @@ public class HiveConnectionTestRequest {
 
     private String remarks;
 
+    private String driverVersion;
+
     public String getJdbcUrl() {
         return jdbcUrl;
     }
@@ -121,5 +123,13 @@ public class HiveConnectionTestRequest {
 
     public void setRemarks(String remarks) {
         this.remarks = remarks;
+    }
+
+    public String getDriverVersion() {
+        return driverVersion;
+    }
+
+    public void setDriverVersion(String driverVersion) {
+        this.driverVersion = driverVersion;
     }
 }

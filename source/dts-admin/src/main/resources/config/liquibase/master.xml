@@ -58,6 +58,7 @@
 	    <include file="config/liquibase/changelog/20251016-02_infra_data_source.xml" relativeToChangelogFile="false"/>
 	    <include file="config/liquibase/changelog/20251016-03_infra_data_source_audit_columns.xml" relativeToChangelogFile="false"/>
 	    <include file="config/liquibase/changelog/20251016-04_infra_data_source_secrets.xml" relativeToChangelogFile="false"/>
+	    <include file="config/liquibase/changelog/20260321-01_infra_data_source_default.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251015-06_add_infra_audit_rules.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251015-07_add_audit_log_detail_rule.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251015-08_delete_all_secure_views.xml" relativeToChangelogFile="false"/>

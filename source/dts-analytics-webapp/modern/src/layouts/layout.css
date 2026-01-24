@@ -22,12 +22,12 @@
 	color: #fff;
 	text-decoration: none;
 	font-weight: 700;
-	font-size: 16px;
+	font-size: 1rem;
 }
 
 .brandSub {
 	margin-top: 6px;
-	font-size: 12px;
+	font-size: 0.857rem;
 	color: rgba(255, 255, 255, 0.7);
 }
 
@@ -39,7 +39,7 @@
 }
 
 .navSectionTitle {
-	font-size: 12px;
+	font-size: 0.857rem;
 	font-weight: 600;
 	letter-spacing: 0.04em;
 	text-transform: uppercase;
@@ -52,7 +52,7 @@
 	text-decoration: none;
 	padding: 10px 10px;
 	border-radius: 10px;
-	font-size: 14px;
+	font-size: 1rem;
 }
 
 .navItem:hover {

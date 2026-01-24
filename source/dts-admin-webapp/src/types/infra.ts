@@ -1,4 +1,4 @@
-export type HiveAuthMethod = "KEYTAB" | "PASSWORD";
+export type HiveAuthMethod = "KEYTAB" | "PASSWORD" | "JDBC_PASSWORD";
 
 export interface HiveConnectionTestRequest {
 	jdbcUrl: string;
@@ -12,12 +12,13 @@ export interface HiveConnectionTestRequest {
 	proxyUser?: string;
 	testQuery?: string;
 	remarks?: string;
+	driverVersion?: string;
 }
 
 export interface HiveConnectionPersistRequest extends HiveConnectionTestRequest {
 	name: string;
 	description?: string;
-	servicePrincipal: string;
+	servicePrincipal?: string;
 	host: string;
 	port: number;
 	database: string;
@@ -29,6 +30,11 @@ export interface HiveConnectionPersistRequest extends HiveConnectionTestRequest 
 	lastTestElapsedMillis?: number;
 	engineVersion?: string | null;
 	driverVersion?: string | null;
+	defaulted?: boolean;
+	destinationId?: string;
+	destinationDefinitionId?: string;
+	destinationName?: string;
+	destinationConfig?: Record<string, any>;
 }
 
 export interface HiveConnectionTestResult {
@@ -38,6 +44,16 @@ export interface HiveConnectionTestResult {
 	engineVersion?: string | null;
 	driverVersion?: string | null;
 	warnings: string[];
+}
+
+export interface JdbcConnectionTestRequest {
+	jdbcUrl?: string;
+	driverClass?: string;
+	driverVersion?: string;
+	username?: string;
+	password?: string;
+	jdbcProperties?: Record<string, string>;
+	testQuery?: string;
 }
 
 export interface InceptorConfig {
@@ -71,6 +87,11 @@ export interface InceptorConfig {
 	heartbeatStatus?: string;
 	heartbeatFailureCount?: number;
 	lastError?: string;
+	defaulted?: boolean;
+	destinationId?: string;
+	destinationDefinitionId?: string;
+	destinationName?: string;
+	destinationConfig?: Record<string, any>;
 }
 
 export interface InfraFeatureFlags {
@@ -108,4 +129,48 @@ export interface ConnectionTestLog {
 	message?: string;
 	elapsedMs?: number;
 	createdAt?: string;
+}
+
+export interface JdbcDriverInfo {
+	fileName: string;
+	version?: string;
+	label?: string;
+}
+
+export interface AirbyteDestinationDefinition {
+	destinationDefinitionId?: string;
+	name?: string;
+	dockerRepository?: string;
+}
+
+export interface InfraDataSource {
+	id?: string;
+	name: string;
+	type: string;
+	jdbcUrl: string;
+	username?: string;
+	description?: string;
+	props?: Record<string, any>;
+	status?: string;
+	hasSecrets?: boolean;
+	defaulted?: boolean;
+	createdAt?: string;
+	lastUpdatedAt?: string;
+	lastVerifiedAt?: string;
+	lastTestElapsedMillis?: number;
+	lastHeartbeatAt?: string;
+	heartbeatStatus?: string;
+	heartbeatFailureCount?: number;
+	lastError?: string;
+}
+
+export interface UpsertInfraDataSourcePayload {
+	name: string;
+	type: string;
+	jdbcUrl: string;
+	username?: string;
+	description?: string;
+	props?: Record<string, any>;
+	secrets?: Record<string, any>;
+	defaulted?: boolean;
 }

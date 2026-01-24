@@ -119,16 +119,24 @@ export const listAirbyteSources = () => api.get({ url: "/infra/airbyte/sources" 
 export const createAirbyteSource = (data: any) => api.post({ url: "/infra/airbyte/sources", data });
 export const updateAirbyteSource = (id: string, data: any) => api.put({ url: `/infra/airbyte/sources/${id}`, data });
 export const checkAirbyteSource = (id: string) => api.post({ url: `/infra/airbyte/sources/${id}/check` });
-export const discoverAirbyteSource = (id: string) => api.post({ url: `/infra/airbyte/sources/${id}/discover` });
+export const discoverAirbyteSource = (id: string) =>
+	api.post({ url: `/infra/airbyte/sources/${id}/discover`, timeout: 180000 });
 export const deleteAirbyteSource = (id: string) => api.delete({ url: `/infra/airbyte/sources/${id}` });
 export const listAirbyteConnections = (refresh = false) =>
 	api.get({ url: "/infra/airbyte/connections", params: refresh ? { refresh } : undefined });
-export const createAirbyteConnection = (data: any) => api.post({ url: "/infra/airbyte/connections", data });
+export const createAirbyteConnection = (data: any) =>
+	api.post({ url: "/infra/airbyte/connections", data, timeout: 180000 });
 export const updateAirbyteConnection = (id: string, data: any) =>
-	api.put({ url: `/infra/airbyte/connections/${id}`, data });
+	api.put({ url: `/infra/airbyte/connections/${id}`, data, timeout: 180000 });
 export const triggerAirbyteSync = (id: string) => api.post({ url: `/infra/airbyte/connections/${id}/sync` });
 export const listAirbyteJobs = (id: string, limit = 10) =>
 	api.get({ url: `/infra/airbyte/connections/${id}/jobs`, params: { limit } });
+export const getDataLakeStatus = (refresh = true) =>
+	api.get({ url: "/infra/airbyte/data-lake/status", params: { refresh } });
+export const getDefaultDataLake = () => api.get({ url: "/infra/airbyte/data-lake/default" });
+export const listJdbcDrivers = () => api.get({ url: "/infra/jdbc/drivers" });
+export const createIngestionTask = (data: any) =>
+	api.post({ url: "/ingestion/tasks", data, timeout: 180000 });
 
 // External exchange files (data ingestion ledger)
 export const listExchangeFiles = (params?: any) => api.get({ url: "/infra/exchange-files", params });

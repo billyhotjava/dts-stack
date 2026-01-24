@@ -3,8 +3,11 @@ package com.yuzhi.dts.platform.service.infra;
 import com.yuzhi.dts.platform.web.rest.infra.JdbcConnectionTestRequest;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
+import java.sql.Driver;
 import java.sql.DriverManager;
+import java.sql.DriverPropertyInfo;
 import java.sql.SQLException;
+import java.sql.SQLFeatureNotSupportedException;
 import java.sql.SQLWarning;
 import java.sql.Statement;
 import java.util.ArrayList;
@@ -13,6 +16,8 @@ import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -23,6 +28,7 @@ import org.springframework.util.StringUtils;
 public class JdbcConnectionTestService {
 
     private static final Logger LOG = LoggerFactory.getLogger(JdbcConnectionTestService.class);
+    private static final Set<String> REGISTERED_DRIVERS = ConcurrentHashMap.newKeySet();
 
     private final HiveConnectionService hiveConnectionService;
 
@@ -42,7 +48,14 @@ public class JdbcConnectionTestService {
         }
 
         ClassLoader previousCl = Thread.currentThread().getContextClassLoader();
-        ClassLoader jdbcLoader = hiveConnectionService != null ? hiveConnectionService.getJdbcDriverLoader() : null;
+        ClassLoader jdbcLoader = null;
+        try {
+            jdbcLoader = hiveConnectionService != null
+                ? hiveConnectionService.resolveJdbcDriverClassLoader(request.getDriverVersion())
+                : null;
+        } catch (IllegalArgumentException ex) {
+            return HiveConnectionTestResult.failure(ex.getMessage(), elapsedMillis(start));
+        }
         if (jdbcLoader != null) {
             Thread.currentThread().setContextClassLoader(jdbcLoader);
         }
@@ -58,11 +71,10 @@ public class JdbcConnectionTestService {
 
             if (StringUtils.hasText(driverClass)) {
                 try {
-                    if (jdbcLoader != null) {
-                        Class.forName(driverClass, true, jdbcLoader);
-                    } else {
-                        Class.forName(driverClass);
-                    }
+                    Class<?> driverClazz = jdbcLoader != null
+                        ? Class.forName(driverClass, true, jdbcLoader)
+                        : Class.forName(driverClass);
+                    registerDriverIfNeeded(driverClazz);
                 } catch (Throwable ex) {
                     LOG.warn("Failed to load JDBC driver class {}: {}", driverClass, ex.getMessage());
                 }
@@ -121,6 +133,25 @@ public class JdbcConnectionTestService {
         return null;
     }
 
+    private void registerDriverIfNeeded(Class<?> driverClazz) throws Exception {
+        if (driverClazz == null || !Driver.class.isAssignableFrom(driverClazz)) {
+            return;
+        }
+        ClassLoader loader = driverClazz.getClassLoader();
+        String driverName = driverClazz.getName();
+        String key = driverName + "@" + Integer.toHexString(System.identityHashCode(loader));
+        if (!REGISTERED_DRIVERS.add(key)) {
+            return;
+        }
+        try {
+            Driver driver = (Driver) driverClazz.getDeclaredConstructor().newInstance();
+            DriverManager.registerDriver(new DriverShim(driver));
+        } catch (SQLException ex) {
+            REGISTERED_DRIVERS.remove(key);
+            throw ex;
+        }
+    }
+
     private void runValidationQuery(Connection connection, String testQuery) throws Exception {
         String sql = StringUtils.hasText(testQuery) ? testQuery.trim() : "SELECT 1";
         try (Statement statement = connection.createStatement()) {
@@ -151,6 +182,49 @@ public class JdbcConnectionTestService {
             return supplier.get();
         } catch (Exception ignore) {
             return null;
+        }
+    }
+
+    private static final class DriverShim implements Driver {
+        private final Driver delegate;
+
+        private DriverShim(Driver delegate) {
+            this.delegate = delegate;
+        }
+
+        @Override
+        public Connection connect(String url, Properties info) throws SQLException {
+            return delegate.connect(url, info);
+        }
+
+        @Override
+        public boolean acceptsURL(String url) throws SQLException {
+            return delegate.acceptsURL(url);
+        }
+
+        @Override
+        public DriverPropertyInfo[] getPropertyInfo(String url, Properties info) throws SQLException {
+            return delegate.getPropertyInfo(url, info);
+        }
+
+        @Override
+        public int getMajorVersion() {
+            return delegate.getMajorVersion();
+        }
+
+        @Override
+        public int getMinorVersion() {
+            return delegate.getMinorVersion();
+        }
+
+        @Override
+        public boolean jdbcCompliant() {
+            return delegate.jdbcCompliant();
+        }
+
+        @Override
+        public java.util.logging.Logger getParentLogger() throws SQLFeatureNotSupportedException {
+            return delegate.getParentLogger();
         }
     }
 

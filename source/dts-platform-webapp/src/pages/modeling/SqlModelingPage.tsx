@@ -18,7 +18,7 @@ import {
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { EmptyState } from "@/components/empty-state";
-import { getDbtConfig, listDbtModels, listDbtRuns, triggerDbtRun, updateDbtConfig } from "@/api/platformApi";
+import { getDbtConfig, listDbtModels, listDbtRuns, listModelingPlans, triggerDbtRun, updateDbtConfig } from "@/api/platformApi";
 
 const { Text } = Typography;
 const { DirectoryTree } = Tree;
@@ -81,6 +81,22 @@ type DbtModelResult = {
 	message?: string | null;
 };
 
+type ProjectSpace = {
+	id?: string;
+	name?: string;
+	domain?: string;
+	scope?: string;
+	status?: string;
+	version?: string;
+	versionNotes?: string;
+	owner?: string;
+	ownerDept?: string;
+	tags?: string;
+	content?: string;
+	createdDate?: string;
+	lastModifiedDate?: string;
+};
+
 type DagRun = {
 	dag_run_id?: string;
 	state?: string;
@@ -105,12 +121,16 @@ const layerTag = (layer?: string) => {
 };
 
 const resolveModelKey = (model: DbtModelSummary, fallback: string) => model.uniqueId || model.name || fallback;
+const resolveSpaceKey = (space: ProjectSpace, index: number) => `space-${space.id || index}`;
 
 export default function SqlModelingPage() {
 	const [configLoading, setConfigLoading] = useState(false);
 	const [configSaving, setConfigSaving] = useState(false);
 	const [configOpen, setConfigOpen] = useState(false);
 	const [dbtConfig, setDbtConfig] = useState<DbtConfigView | null>(null);
+	const [spacesLoading, setSpacesLoading] = useState(false);
+	const [spaces, setSpaces] = useState<ProjectSpace[]>([]);
+	const [activeSpaceKey, setActiveSpaceKey] = useState<string | null>(null);
 	const [modelsLoading, setModelsLoading] = useState(false);
 	const [modelResult, setModelResult] = useState<DbtModelResult | null>(null);
 	const [runsLoading, setRunsLoading] = useState(false);
@@ -157,6 +177,18 @@ export default function SqlModelingPage() {
 		}
 	}, []);
 
+	const loadSpaces = useCallback(async () => {
+		setSpacesLoading(true);
+		try {
+			const resp = (await listModelingPlans()) as ProjectSpace[];
+			setSpaces(Array.isArray(resp) ? resp : []);
+		} catch (err: any) {
+			toast.error(err?.message || "加载项目空间失败");
+		} finally {
+			setSpacesLoading(false);
+		}
+	}, []);
+
 	const loadRuns = useCallback(async () => {
 		setRunsLoading(true);
 		try {
@@ -174,7 +206,21 @@ export default function SqlModelingPage() {
 		void loadConfig();
 		void loadModels();
 		void loadRuns();
-	}, [loadConfig, loadModels, loadRuns]);
+		void loadSpaces();
+	}, [loadConfig, loadModels, loadRuns, loadSpaces]);
+
+	useEffect(() => {
+		if (spaces.length === 0) {
+			if (activeSpaceKey) {
+				setActiveSpaceKey(null);
+			}
+			return;
+		}
+		const hasActive = !!activeSpaceKey && spaces.some((space, idx) => resolveSpaceKey(space, idx) === activeSpaceKey);
+		if (!hasActive) {
+			setActiveSpaceKey(resolveSpaceKey(spaces[0], 0));
+		}
+	}, [activeSpaceKey, spaces]);
 
 	const saveConfig = async () => {
 		setConfigSaving(true);
@@ -261,7 +307,7 @@ export default function SqlModelingPage() {
 		return models.filter((model) => (model.name || "").toLowerCase().includes(key));
 	}, [keyword, models]);
 
-	const treeData = useMemo(() => {
+	const modelLayerNodes = useMemo(() => {
 		const layers = new Map<string, DbtModelSummary[]>();
 		filteredModels.forEach((model) => {
 			const layer = inferLayer(model.name);
@@ -281,57 +327,8 @@ export default function SqlModelingPage() {
 					isLeaf: true,
 				})),
 			}));
-		if (layerNodes.length === 0) {
-			return [];
-		}
-		return [
-			{
-				title: `核心数仓项目 (dbt)`,
-				key: "root",
-				children: layerNodes,
-			},
-		];
+		return layerNodes;
 	}, [filteredModels]);
-
-	const editorLines = useMemo(() => {
-		const modelName = activeModel?.name || "dwd_order_detail";
-		const upstream = modelName.startsWith("dwd_")
-			? modelName.replace("dwd_", "ods_")
-			: modelName.startsWith("dws_")
-				? modelName.replace("dws_", "dwd_")
-				: "ods_orders";
-		return [
-			`WITH base AS (`,
-			`  SELECT * FROM {{ ref('${upstream}') }}`,
-			`),`,
-			`final AS (`,
-			`  SELECT`,
-			`    order_id,`,
-			`    customer_id,`,
-			`    SUM(order_amt) AS total_revenue`,
-			`  FROM base`,
-			`  GROUP BY 1, 2`,
-			`)`,
-			`SELECT * FROM final;`,
-		];
-	}, [activeModel?.name]);
-
-	const previewColumns: ColumnsType<Record<string, any>> = [
-		{ title: "order_id", dataIndex: "order_id", key: "order_id" },
-		{ title: "customer_id", dataIndex: "customer_id", key: "customer_id" },
-		{
-			title: "total_revenue",
-			dataIndex: "total_revenue",
-			key: "total_revenue",
-			render: (v) => <span className="font-mono text-green-600">{v}</span>,
-		},
-	];
-
-	const previewRows = [
-		{ key: 1, order_id: "ORD001", customer_id: "C772", total_revenue: 128.5 },
-		{ key: 2, order_id: "ORD002", customer_id: "C881", total_revenue: 99.0 },
-		{ key: 3, order_id: "ORD003", customer_id: "C102", total_revenue: 250.3 },
-	];
 
 	const runColumns: ColumnsType<DagRun> = useMemo(
 		() => [
@@ -354,27 +351,30 @@ export default function SqlModelingPage() {
 		[],
 	);
 
-	const compileLogs = useMemo(() => {
-		const now = formatDateTime(new Date().toISOString());
-		const name = activeModel?.name || "dwd_order_detail";
-		const schema = activeModel?.schema || dbtConfig?.config?.schema || "public";
-		return [
-			`[${now}] Compiled successfully.`,
-			`[${now}] Model: ${name}`,
-			`[${now}] Target schema: ${schema}`,
-			`[${now}] SQL rendered with ref('${name}').`,
-		];
-	}, [activeModel?.name, activeModel?.schema, dbtConfig?.config?.schema]);
+	const spaceKeyMap = useMemo(() => {
+		const map = new Map<string, ProjectSpace>();
+		spaces.forEach((space, idx) => {
+			map.set(resolveSpaceKey(space, idx), space);
+		});
+		return map;
+	}, [spaces]);
 
-	const metadataWarnings = useMemo(() => {
-		if (!activeModel) {
-			return "尚未选择模型，无法进行落标检查。";
-		}
-		if (activeModel?.schema && dbtConfig?.config?.schema && activeModel.schema !== dbtConfig.config.schema) {
-			return `字段 [customer_id] 在标准库中定义为 STRING(32)，当前模型为 ${activeModel.schema}。`;
-		}
-		return "字段 [customer_id] 在标准库中定义为 STRING(32)，当前模型中为 VARCHAR。";
-	}, [activeModel, dbtConfig?.config?.schema]);
+	const activeSpace = useMemo(() => {
+		if (!activeSpaceKey) return null;
+		return spaceKeyMap.get(activeSpaceKey) || null;
+	}, [activeSpaceKey, spaceKeyMap]);
+
+	const treeData = useMemo(() => {
+		if (spaces.length === 0) return [];
+		return spaces.map((space, idx) => {
+			const key = resolveSpaceKey(space, idx);
+			return {
+				title: space.name || "未命名项目空间",
+				key,
+				children: key === activeSpaceKey ? modelLayerNodes : [],
+			};
+		});
+	}, [spaces, activeSpaceKey, modelLayerNodes]);
 
 	return (
 		<div className="flex min-h-[calc(100vh-120px)] flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
@@ -385,12 +385,13 @@ export default function SqlModelingPage() {
 					<Badge status={configEnabled ? "success" : "error"} text={configEnabled ? "dbt 已连接" : "dbt 未启用"} />
 				</Space>
 				<Space>
-					<Tooltip title="语法校验 (dbt compile)">
+					<Tooltip title="语法校验接口暂未接入">
 						<Button
 							onClick={() => {
-								toast.success("语法校验完成");
+								toast.info("语法校验接口暂未接入");
 								setBottomTab("compile");
 							}}
+							disabled={!configEnabled || !activeModelKey}
 						>
 							语法校验
 						</Button>
@@ -413,23 +414,36 @@ export default function SqlModelingPage() {
 						onChange={(event) => setKeyword(event.target.value)}
 						className="mb-3"
 					/>
-					{modelsLoading ? (
+					{spacesLoading ? (
 						<Card size="small" className="border-dashed text-center text-xs text-slate-400">
-							加载模型中...
+							加载项目空间中...
 						</Card>
 					) : treeData.length === 0 ? (
-						<EmptyState title="暂无模型" description={modelResult?.message || "先生成 dbt manifest.json"} />
+						<EmptyState title="暂无项目空间" description="请先在项目空间管理中创建项目空间。" />
 					) : (
-						<DirectoryTree
-							defaultExpandAll
-							treeData={treeData}
-							selectedKeys={activeModelKey ? [activeModelKey] : []}
-							onSelect={(keys) => {
-								const key = String(keys[0] || "");
-								if (!key || key.startsWith("layer-") || key === "root") return;
-								setActiveModelKey(key);
-							}}
-						/>
+						<>
+							<DirectoryTree
+								defaultExpandAll
+								treeData={treeData}
+								selectedKeys={activeModelKey ? [activeModelKey] : activeSpaceKey ? [activeSpaceKey] : []}
+								onSelect={(keys) => {
+									const key = String(keys[0] || "");
+									if (!key) return;
+									if (key.startsWith("space-")) {
+										setActiveSpaceKey(key);
+										setActiveModelKey(null);
+										return;
+									}
+									if (key.startsWith("layer-")) return;
+									setActiveModelKey(key);
+								}}
+							/>
+							{modelsLoading ? (
+								<div className="mt-3 text-xs text-slate-400">加载模型中...</div>
+							) : modelLayerNodes.length === 0 ? (
+								<div className="mt-3 text-xs text-slate-400">当前项目暂无模型。</div>
+							) : null}
+						</>
 					)}
 				</div>
 
@@ -451,13 +465,9 @@ export default function SqlModelingPage() {
 					</div>
 
 					<div className="flex-1 overflow-auto bg-slate-950 px-6 py-4 font-mono text-sm text-slate-200">
-						{editorLines.map((line, index) => (
-							<div key={`${line}-${index}`} className="flex items-start">
-								<span className="w-10 pr-4 text-right text-slate-600">{index + 1}</span>
-								<span className="whitespace-pre">{line}</span>
-							</div>
-						))}
-						<div className="mt-1 h-5 w-px animate-pulse bg-blue-400" />
+						<div className="flex h-full items-center justify-center text-center text-xs text-slate-500">
+							{activeModel ? "暂无模型 SQL 内容，等待元数据采集接入。" : "请选择模型查看 SQL。"}
+						</div>
 					</div>
 
 					<div className="h-64 border-t border-slate-200 bg-white">
@@ -471,23 +481,17 @@ export default function SqlModelingPage() {
 									key: "preview",
 									label: "数据预览 (Top 100)",
 									children: (
-										<Table
-											size="small"
-											pagination={false}
-											scroll={{ y: 140 }}
-											dataSource={previewRows}
-											columns={previewColumns}
-										/>
+										<div className="p-4">
+											<EmptyState title="暂无预览数据" description="运行预览接口接入后展示结果。" compact />
+										</div>
 									),
 								},
 								{
 									key: "compile",
 									label: "编译日志",
 									children: (
-										<div className="p-4 font-mono text-xs text-slate-500">
-											{compileLogs.map((line) => (
-												<div key={line}>{line}</div>
-											))}
+										<div className="p-4">
+											<EmptyState title="暂无编译日志" description="语法校验接口接入后展示日志。" compact />
 										</div>
 									),
 								},
@@ -514,30 +518,30 @@ export default function SqlModelingPage() {
 				</div>
 
 				<div className="w-72 border-l border-slate-200 bg-white p-4">
-					<div className="mb-4 text-xs font-bold uppercase text-slate-400">标准与元数据参考</div>
-					<Card size="small" title="推荐数据元" className="mb-4">
-						<div className="space-y-2 text-xs">
-							<div className="flex items-center justify-between rounded bg-blue-50 px-2 py-1">
-								<Text code>order_amt</Text>
-								<Tag color="blue">DECIMAL</Tag>
+					<div className="mb-4 text-xs font-bold uppercase text-slate-400">项目与元数据</div>
+					<Card size="small" title="项目空间" className="mb-4">
+						{activeSpace ? (
+							<div className="space-y-1 text-xs text-slate-500">
+								<div>名称：{activeSpace.name || "-"}</div>
+								<div>业务域：{activeSpace.domain || "-"}</div>
+								<div>负责人：{activeSpace.owner || "-"}</div>
+								<div>状态：{activeSpace.status || "-"}</div>
 							</div>
-							<div className="flex items-center justify-between rounded px-2 py-1 hover:bg-slate-50">
-								<Text code>customer_id</Text>
-								<Tag>STRING(32)</Tag>
-							</div>
-							<div className="flex items-center justify-between rounded px-2 py-1 hover:bg-slate-50">
-								<Text code>order_id</Text>
-								<Tag>STRING</Tag>
-							</div>
-						</div>
+						) : (
+							<div className="text-xs text-slate-500">请选择项目空间。</div>
+						)}
 					</Card>
-					<Card size="small" title="模型上下文" className="mb-4">
-						<div className="text-xs text-slate-500">上游依赖 (Upstream)</div>
-						<Tag className="mb-2 mt-1">{activeModel?.name ? `ref('${activeModel.name}')` : "ref('ods_orders')"}</Tag>
-						<div className="text-xs text-slate-500">引用描述</div>
-						<Text className="text-xs">
-							该模型用于计算每日销售汇总，对应的标准术语：有效销售额。
-						</Text>
+					<Card size="small" title="模型信息" className="mb-4">
+						{activeModel ? (
+							<div className="space-y-1 text-xs text-slate-500">
+								<div>模型名称：{activeModel.name || "-"}</div>
+								<div>数据库：{activeModel.database || "-"}</div>
+								<div>Schema：{activeModel.schema || "-"}</div>
+								<div>路径：{activeModel.path || "-"}</div>
+							</div>
+						) : (
+							<div className="text-xs text-slate-500">请选择模型查看详情。</div>
+						)}
 					</Card>
 					<Card size="small" title="工作区配置" className="mb-4">
 						<div className="text-xs text-slate-500">
@@ -550,8 +554,8 @@ export default function SqlModelingPage() {
 						</Button>
 					</Card>
 					<div className="rounded border border-yellow-100 bg-yellow-50 p-3">
-						<div className="text-xs font-bold text-yellow-700">落标检查预警</div>
-						<div className="mt-1 text-xs text-yellow-600">{metadataWarnings}</div>
+						<div className="text-xs font-bold text-yellow-700">元数据校验</div>
+						<div className="mt-1 text-xs text-yellow-600">质量与落标检查接口暂未接入。</div>
 					</div>
 				</div>
 			</div>
@@ -602,7 +606,7 @@ export default function SqlModelingPage() {
 						</Space>
 					</Form.Item>
 					<Form.Item name="vars" label="全局变量 (vars)">
-						<Input.TextArea rows={3} placeholder='JSON 结构，例如 {"erp_schema":"erp_demo"}' />
+						<Input.TextArea rows={3} placeholder='JSON 结构，例如 {"schema":"analytics"}' />
 					</Form.Item>
 				</Form>
 			</Drawer>
@@ -619,7 +623,7 @@ export default function SqlModelingPage() {
 			>
 				<Form layout="vertical" form={runForm}>
 					<Form.Item name="models" label="模型选择器" rules={[{ required: true, message: "请输入模型选择器" }]}>
-						<Input placeholder="例如：model:erp_demo+" />
+						<Input placeholder="例如：model:your_model+" />
 					</Form.Item>
 					<Form.Item name="target" label="Target">
 						<Input placeholder="dev" />

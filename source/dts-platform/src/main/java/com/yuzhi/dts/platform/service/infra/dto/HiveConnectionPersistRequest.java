@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.yuzhi.dts.platform.web.rest.infra.HiveConnectionTestRequest;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import java.util.Map;
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class HiveConnectionPersistRequest extends HiveConnectionTestRequest {
@@ -41,6 +42,16 @@ public class HiveConnectionPersistRequest extends HiveConnectionTestRequest {
     private String engineVersion;
 
     private String driverVersion;
+
+    private Boolean defaulted;
+
+    private String destinationId;
+
+    private String destinationDefinitionId;
+
+    private String destinationName;
+
+    private Map<String, Object> destinationConfig;
 
     public String getName() {
         return name;
@@ -152,5 +163,45 @@ public class HiveConnectionPersistRequest extends HiveConnectionTestRequest {
 
     public void setDriverVersion(String driverVersion) {
         this.driverVersion = driverVersion;
+    }
+
+    public Boolean getDefaulted() {
+        return defaulted;
+    }
+
+    public void setDefaulted(Boolean defaulted) {
+        this.defaulted = defaulted;
+    }
+
+    public String getDestinationId() {
+        return destinationId;
+    }
+
+    public void setDestinationId(String destinationId) {
+        this.destinationId = destinationId;
+    }
+
+    public String getDestinationDefinitionId() {
+        return destinationDefinitionId;
+    }
+
+    public void setDestinationDefinitionId(String destinationDefinitionId) {
+        this.destinationDefinitionId = destinationDefinitionId;
+    }
+
+    public String getDestinationName() {
+        return destinationName;
+    }
+
+    public void setDestinationName(String destinationName) {
+        this.destinationName = destinationName;
+    }
+
+    public Map<String, Object> getDestinationConfig() {
+        return destinationConfig;
+    }
+
+    public void setDestinationConfig(Map<String, Object> destinationConfig) {
+        this.destinationConfig = destinationConfig;
     }
 }

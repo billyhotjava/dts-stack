@@ -13,6 +13,7 @@ import RoleManagementView from "@/admin/views/role-management";
 import RoleDetailView from "@/admin/views/role-detail";
 import WorkflowConfigView from "@/admin/views/workflow-config";
 import DataLakeConfigView from "@/admin/views/data-lake-config";
+import DataLakeEditorView from "@/admin/views/data-lake-editor";
 import { getMenusByRole } from "@/admin/config/menus";
 import { useAdminSession } from "@/admin/lib/session-context";
 
@@ -46,6 +47,8 @@ export const adminRoutes: RouteObject[] = [
 			{ path: "portal-menus", element: <PortalMenusView /> },
 			{ path: "orgs", element: <OrgManagementView /> },
 			{ path: "data-lake", element: <DataLakeConfigView /> },
+			{ path: "data-lake/new", element: <DataLakeEditorView /> },
+			{ path: "data-lake/:id", element: <DataLakeEditorView /> },
 			{ path: "approval", element: <ApprovalCenterView /> },
 			{ path: "audit", element: <AuditCenterView /> },
 			{ path: "ops", element: <OpsConfigView /> },

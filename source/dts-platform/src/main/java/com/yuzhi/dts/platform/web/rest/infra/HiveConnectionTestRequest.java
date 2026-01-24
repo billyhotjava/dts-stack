@@ -54,6 +54,9 @@ public class HiveConnectionTestRequest {
     /** Optional notes carried to the backend (not used in connection test). */
     private String remarks;
 
+    /** Optional driver version or JAR file name hint to select a JDBC driver. */
+    private String driverVersion;
+
     public HiveConnectionTestRequest() {}
 
     public String getJdbcUrl() { return jdbcUrl; }
@@ -90,6 +93,9 @@ public class HiveConnectionTestRequest {
 
     public String getRemarks() { return remarks; }
     public void setRemarks(String remarks) { this.remarks = blankToNull(remarks); }
+
+    public String getDriverVersion() { return driverVersion; }
+    public void setDriverVersion(String driverVersion) { this.driverVersion = blankToNull(driverVersion); }
 
     @JsonIgnore
     @AssertTrue(message = "必须上传 krb5.conf 文件")
@@ -130,6 +136,7 @@ public class HiveConnectionTestRequest {
             ", authMethod=" + authMethod +
             ", proxyUser='" + proxyUser + '\'' +
             ", testQuery='" + testQuery + '\'' +
+            ", driverVersion='" + driverVersion + '\'' +
             '}';
     }
 

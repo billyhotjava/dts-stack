@@ -45,6 +45,9 @@ public class InfraDataSource extends AbstractAuditingEntity<UUID> implements Ser
     @Column(name = "has_secrets")
     private boolean hasSecrets;
 
+    @Column(name = "is_default")
+    private boolean defaulted;
+
     @Column(name = "engine_version", length = 64)
     private String engineVersion;
 
@@ -160,6 +163,14 @@ public class InfraDataSource extends AbstractAuditingEntity<UUID> implements Ser
 
     public void setHasSecrets(boolean hasSecrets) {
         this.hasSecrets = hasSecrets;
+    }
+
+    public boolean isDefaulted() {
+        return defaulted;
+    }
+
+    public void setDefaulted(boolean defaulted) {
+        this.defaulted = defaulted;
     }
 
     public String getEngineVersion() {

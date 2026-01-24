@@ -19,11 +19,15 @@ import type {
 } from "@/admin/types";
 import type {
 	ConnectionTestLog,
+	AirbyteDestinationDefinition,
 	HiveConnectionPersistRequest,
 	HiveConnectionTestRequest,
 	HiveConnectionTestResult,
 	InceptorConfig,
-	InfraFeatureFlags,
+	InfraDataSource,
+	JdbcConnectionTestRequest,
+	JdbcDriverInfo,
+	UpsertInfraDataSourcePayload,
 } from "@/types/infra";
 import apiClient from "@/api/apiClient";
 
@@ -131,11 +135,6 @@ export const adminApi = {
 			url: "/admin/infra/inceptor",
 		}),
 
-	getInceptorFlags: () =>
-		apiClient.get<InfraFeatureFlags>({
-			url: "/admin/infra/inceptor/flags",
-		}),
-
 	testInceptorConnection: (payload: HiveConnectionTestRequest, dataSourceId?: string) =>
 		apiClient.post<HiveConnectionTestResult>({
 			url: "/admin/infra/inceptor/test",
@@ -149,15 +148,52 @@ export const adminApi = {
 			data: payload,
 		}),
 
-	refreshInceptorRegistry: () =>
-		apiClient.post<InfraFeatureFlags>({
-			url: "/admin/infra/inceptor/refresh",
+	getDataLakeTestLogs: (dataSourceId?: string) =>
+		apiClient.get<ConnectionTestLog[]>({
+			url: "/admin/infra/data-lakes/test-logs",
+			params: dataSourceId ? { dataSourceId } : undefined,
 		}),
 
-	getInceptorTestLogs: (dataSourceId?: string) =>
-		apiClient.get<ConnectionTestLog[]>({
-			url: "/admin/infra/inceptor/test-logs",
-			params: dataSourceId ? { dataSourceId } : undefined,
+	getDataLakeJdbcDrivers: () =>
+		apiClient.get<JdbcDriverInfo[]>({
+			url: "/admin/infra/data-lakes/jdbc-drivers",
+		}),
+	getDataLakeDestinationDefinitions: () =>
+		apiClient.get<AirbyteDestinationDefinition[]>({
+			url: "/admin/infra/data-lakes/destination-definitions",
+		}),
+
+	listDataLakes: () =>
+		apiClient.get<InfraDataSource[]>({
+			url: "/admin/infra/data-lakes",
+		}),
+
+	createDataLake: (payload: UpsertInfraDataSourcePayload) =>
+		apiClient.post<InfraDataSource>({
+			url: "/admin/infra/data-lakes",
+			data: payload,
+		}),
+
+	updateDataLake: (id: string, payload: UpsertInfraDataSourcePayload) =>
+		apiClient.put<Record<string, unknown>>({
+			url: `/admin/infra/data-lakes/${id}`,
+			data: payload,
+		}),
+
+	deleteDataLake: (id: string) =>
+		apiClient.delete<InfraDataSource>({
+			url: `/admin/infra/data-lakes/${id}`,
+		}),
+
+	setDefaultDataLake: (id: string) =>
+		apiClient.post<InfraDataSource>({
+			url: `/admin/infra/data-lakes/${id}/default`,
+		}),
+
+	testDataLakeConnection: (id: string, payload?: JdbcConnectionTestRequest) =>
+		apiClient.post<HiveConnectionTestResult>({
+			url: `/admin/infra/data-lakes/${id}/test`,
+			data: payload ?? {},
 		}),
 
 	getPortalMenus: (options?: AuditSilentOption) =>

@@ -38,6 +38,16 @@ public class PlatformInceptorConfigResponse {
     private Integer heartbeatFailureCount;
     private String lastError;
 
+    private Boolean defaulted;
+
+    private String destinationId;
+
+    private String destinationName;
+
+    private String destinationDefinitionId;
+
+    private Map<String, Object> destinationConfig = new HashMap<>();
+
     public UUID getId() {
         return id;
     }
@@ -276,5 +286,45 @@ public class PlatformInceptorConfigResponse {
 
     public void setLastError(String lastError) {
         this.lastError = lastError;
+    }
+
+    public Boolean getDefaulted() {
+        return defaulted;
+    }
+
+    public void setDefaulted(Boolean defaulted) {
+        this.defaulted = defaulted;
+    }
+
+    public String getDestinationId() {
+        return destinationId;
+    }
+
+    public void setDestinationId(String destinationId) {
+        this.destinationId = destinationId;
+    }
+
+    public String getDestinationName() {
+        return destinationName;
+    }
+
+    public void setDestinationName(String destinationName) {
+        this.destinationName = destinationName;
+    }
+
+    public String getDestinationDefinitionId() {
+        return destinationDefinitionId;
+    }
+
+    public void setDestinationDefinitionId(String destinationDefinitionId) {
+        this.destinationDefinitionId = destinationDefinitionId;
+    }
+
+    public Map<String, Object> getDestinationConfig() {
+        return destinationConfig;
+    }
+
+    public void setDestinationConfig(Map<String, Object> destinationConfig) {
+        this.destinationConfig = destinationConfig != null ? new HashMap<>(destinationConfig) : new HashMap<>();
     }
 }

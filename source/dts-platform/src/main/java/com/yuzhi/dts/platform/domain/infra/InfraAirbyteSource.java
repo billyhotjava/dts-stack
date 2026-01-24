@@ -48,6 +48,9 @@ public class InfraAirbyteSource extends AbstractAuditingEntity<UUID> implements 
     @Column(name = "description", length = 512)
     private String description;
 
+    @Column(name = "driver_version", length = 128)
+    private String driverVersion;
+
     @Column(name = "config_json", columnDefinition = "text")
     private String configJson;
 
@@ -141,6 +144,14 @@ public class InfraAirbyteSource extends AbstractAuditingEntity<UUID> implements 
 
     public void setDescription(String description) {
         this.description = description;
+    }
+
+    public String getDriverVersion() {
+        return driverVersion;
+    }
+
+    public void setDriverVersion(String driverVersion) {
+        this.driverVersion = driverVersion;
     }
 
     public String getConfigJson() {

@@ -21,10 +21,11 @@ import type { ColumnsType } from "antd/es/table";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
 import {
-	createAirbyteConnection,
+	createIngestionTask,
 	discoverAirbyteSource,
+	getDataLakeStatus,
+	getDefaultDataLake,
 	listAirbyteConnections,
-	listAirbyteDestinationDefinitions,
 	listAirbyteJobs,
 	listAirbyteSources,
 	listAirbyteSourceDefinitions,
@@ -32,6 +33,7 @@ import {
 	updateAirbyteConnection,
 } from "@/api/platformApi";
 import { useUserInfo } from "@/store/userStore";
+import { useRouter } from "@/routes/hooks";
 
 const { Text } = Typography;
 const MASKED_SECRET = "******";
@@ -88,6 +90,25 @@ type AirbyteSource = {
 	sourceDefinitionId?: string;
 	sourceId?: string;
 	config?: Record<string, any> | null;
+};
+
+type DataLakeStatus = {
+	available?: boolean;
+	configured?: boolean;
+	reason?: string;
+	name?: string;
+	database?: string;
+	lastVerifiedAt?: string;
+};
+
+type DefaultDataLake = {
+	id?: string;
+	name?: string;
+	type?: string;
+	jdbcUrl?: string;
+	destinationId?: string;
+	destinationName?: string;
+	destinationDefinitionId?: string;
 };
 
 type ConfigPair = {
@@ -170,7 +191,7 @@ const parsePairValue = (raw?: string) => {
 	if (text === MASKED_SECRET) return MASKED_SECRET;
 	if (text === "true") return true;
 	if (text === "false") return false;
-	if (/^-?\\d+(\\.\\d+)?$/.test(text)) return Number(text);
+	if (/^-?\d+(\.\d+)?$/.test(text)) return Number(text);
 	if ((text.startsWith("{") && text.endsWith("}")) || (text.startsWith("[") && text.endsWith("]"))) {
 		try {
 			return JSON.parse(text);
@@ -232,19 +253,35 @@ export default function Page() {
 	const [jobsLoading, setJobsLoading] = useState(false);
 	const [activeJobConnection, setActiveJobConnection] = useState<AirbyteConnection | null>(null);
 	const [helpOpen, setHelpOpen] = useState(false);
+	const [destinationModalOpen, setDestinationModalOpen] = useState(false);
+	const [dataLakeStatus, setDataLakeStatus] = useState<DataLakeStatus | null>(null);
+	const [dataLakeLoading, setDataLakeLoading] = useState(false);
+	const [defaultDataLake, setDefaultDataLake] = useState<DefaultDataLake | null>(null);
 	const [form] = Form.useForm();
 	const userInfo = useUserInfo() as any;
+	const router = useRouter();
 
 	const loadDefinitions = useCallback(async () => {
 		try {
-			const [sources, destinations, infraSourceResp] = await Promise.all([
+			const [sources, infraSourceResp, defaultLakeResp] = await Promise.all([
 				listAirbyteSourceDefinitions(),
-				listAirbyteDestinationDefinitions(),
 				listAirbyteSources(),
+				getDefaultDataLake(),
 			]);
 			setSourceDefs(Array.isArray(sources) ? (sources as AirbyteDefinition[]) : []);
-			setDestinationDefs(Array.isArray(destinations) ? (destinations as AirbyteDefinition[]) : []);
 			setInfraSources(Array.isArray(infraSourceResp) ? (infraSourceResp as AirbyteSource[]) : []);
+			const resolvedDefaultLake = (defaultLakeResp || null) as DefaultDataLake | null;
+			setDefaultDataLake(resolvedDefaultLake);
+			if (resolvedDefaultLake?.destinationDefinitionId) {
+				setDestinationDefs([
+					{
+						destinationDefinitionId: resolvedDefaultLake.destinationDefinitionId,
+						name: resolvedDefaultLake.destinationName || resolvedDefaultLake.name,
+					},
+				]);
+			} else {
+				setDestinationDefs([]);
+			}
 		} catch (err: any) {
 			toast.error(err?.message || "加载连接器列表失败");
 		}
@@ -270,6 +307,32 @@ export default function Page() {
 		void loadConnections(true);
 	}, [loadConnections, loadDefinitions]);
 
+	const loadDataLakeStatus = useCallback(
+		async (refresh = true) => {
+			setDataLakeLoading(true);
+			try {
+				const resp = (await getDataLakeStatus(refresh)) as DataLakeStatus;
+				setDataLakeStatus(resp || null);
+			} catch (err: any) {
+				toast.error(err?.message || "获取数据湖状态失败");
+				setDataLakeStatus(null);
+			} finally {
+				setDataLakeLoading(false);
+			}
+		},
+		[],
+	);
+
+	useEffect(() => {
+		void loadDataLakeStatus(false);
+	}, [loadDataLakeStatus]);
+
+	useEffect(() => {
+		if (destinationMode === "default") {
+			void loadDataLakeStatus(true);
+		}
+	}, [destinationMode, loadDataLakeStatus]);
+
 	const sourceMap = useMemo(() => {
 		const map = new Map<string, AirbyteDefinition>();
 		for (const def of sourceDefs) {
@@ -278,6 +341,15 @@ export default function Page() {
 		}
 		return map;
 	}, [sourceDefs]);
+
+	const destinationMap = useMemo(() => {
+		const map = new Map<string, AirbyteDefinition>();
+		for (const def of destinationDefs) {
+			const id = def.destinationDefinitionId;
+			if (id) map.set(id, def);
+		}
+		return map;
+	}, [destinationDefs]);
 
 	const sourceNameMap = useMemo(() => {
 		const map = new Map<string, AirbyteSource>();
@@ -363,6 +435,25 @@ export default function Page() {
 		[sourceMap],
 	);
 
+	const buildDefaultDestinationPairs = useCallback(
+		(definitionId?: string) => {
+			const def = definitionId ? destinationMap.get(definitionId) : undefined;
+			const fallback = `${defaultDataLake?.type || ""} ${defaultDataLake?.jdbcUrl || ""}`.trim();
+			const name = (def?.name || def?.dockerRepository || fallback).toLowerCase();
+			const isDatabase = ["postgres", "mysql", "oracle", "sql server", "mssql", "dameng", "dm8", "db2"].some((key) =>
+				name.includes(key),
+			);
+			const isObjectStore = ["s3", "minio", "oss", "obs", "cos"].some((key) => name.includes(key));
+			const keys = isObjectStore
+				? ["endpoint", "bucket", "access_key", "secret_key"]
+				: isDatabase
+					? ["host", "port", "database", "schema", "username", "password"]
+					: ["host", "port", "username", "password"];
+			return keys.map((key) => ({ key, value: "", secret: isSecretKey(key) }));
+		},
+		[destinationMap, defaultDataLake],
+	);
+
 	const filteredConnections = useMemo(() => {
 		const key = normalizeText(keyword).toLowerCase();
 		return connections.filter((row) => {
@@ -381,6 +472,7 @@ export default function Page() {
 		setEditMode("create");
 		setEditing(null);
 		setDestinationMode("default");
+		setDestinationModalOpen(false);
 		setAvailableStreams([]);
 		form.resetFields();
 		const initialDefinitionId = sourceDefs[0]?.sourceDefinitionId;
@@ -403,6 +495,7 @@ export default function Page() {
 		setEditMode("edit");
 		setEditing(row);
 		setDestinationMode(row.destinationConfig ? "custom" : "default");
+		setDestinationModalOpen(false);
 		form.resetFields();
 		form.setFieldsValue({
 			name: row.name,
@@ -428,6 +521,28 @@ export default function Page() {
 		} else {
 			setAvailableStreams([]);
 		}
+	};
+
+	const handleDestinationModeChange = (value: "default" | "custom") => {
+		setDestinationMode(value);
+		if (value === "default") {
+			setDestinationModalOpen(false);
+			form.setFieldsValue({ destinationDefinitionId: undefined, destinationConfigPairs: [] });
+			return;
+		}
+		const currentDef = form.getFieldValue("destinationDefinitionId");
+		if (!currentDef && destinationDefs.length > 0) {
+			const initialDef = destinationDefs[0]?.destinationDefinitionId;
+			form.setFieldsValue({
+				destinationDefinitionId: initialDef,
+				destinationConfigPairs: buildDefaultDestinationPairs(String(initialDef || "")),
+			});
+		} else if (!form.getFieldValue("destinationConfigPairs")) {
+			form.setFieldsValue({
+				destinationConfigPairs: buildDefaultDestinationPairs(String(currentDef || "")),
+			});
+		}
+		setDestinationModalOpen(true);
 	};
 
 	const handleInfraSourceChange = (value?: string) => {
@@ -480,6 +595,10 @@ export default function Page() {
 		setSaving(true);
 		try {
 			const values = await form.validateFields();
+			if (destinationMode === "default" && dataLakeStatus?.available === false) {
+				toast.error("本地数据湖不可用，默认入湖已暂停");
+				return;
+			}
 			const infraSourceId = normalizeText(values.infraSourceId);
 			const selectedSource = infraSourceId
 				? infraSources.find((item) => String(item.id) === infraSourceId)
@@ -496,8 +615,9 @@ export default function Page() {
 				destinationMode === "custom"
 					? configFromPairs(values.destinationConfigPairs as ConfigPair[])
 					: undefined;
-			if (destinationMode === "custom" && destinationConfig && Object.keys(destinationConfig).length === 0) {
+			if (destinationMode === "custom" && (!destinationConfig || Object.keys(destinationConfig).length === 0)) {
 				toast.error("请完善目标端配置");
+				setDestinationModalOpen(true);
 				return;
 			}
 
@@ -529,8 +649,55 @@ export default function Page() {
 			}
 
 			if (editMode === "create") {
-				await createAirbyteConnection(payload);
-				toast.success("入湖接入已创建");
+				const selectedStreams = Array.isArray(values.selectedStreams) ? values.selectedStreams : [];
+				const streamSelection = selectedStreams.length ? "include" : "all";
+				const ingestionPayload = {
+					name: normalizeText(values.name),
+					owner: normalizeText(values.owner) || undefined,
+					description: normalizeText(values.description) || undefined,
+					source: {
+						definitionId: normalizeText(selectedSource?.sourceDefinitionId || values.sourceDefinitionId),
+						existingSourceId: normalizeText(selectedSource?.sourceId || editing?.sourceId) || undefined,
+						config: sourceConfig,
+						driverVersion: selectedSource?.driverVersion || undefined,
+					},
+					destination:
+						destinationMode === "custom"
+							? {
+									usePlatformDefault: false,
+									definitionId: normalizeText(values.destinationDefinitionId),
+									config: destinationConfig,
+								}
+							: { usePlatformDefault: true },
+					sync: {
+						mode: normalizeText(values.syncMode),
+						destinationMode: destinationMode === "custom" ? "custom" : "default",
+						schedule: {
+							type: normalizeText(values.scheduleType),
+							cron: normalizeText(values.scheduleCron) || undefined,
+						},
+						namespace: normalizeText(values.namespace)
+							? { definition: "custom", format: normalizeText(values.namespace) }
+							: undefined,
+						prefix: normalizeText(values.prefix) || undefined,
+					},
+					streams: {
+						selection: streamSelection,
+						include: streamSelection === "include" ? selectedStreams : undefined,
+					},
+					schemaChanges: normalizeText(values.schemaStrategy)
+						? { mode: normalizeText(values.schemaStrategy) }
+						: undefined,
+					airflow: {
+						enabled: true,
+						dagId: "dbt_load",
+						scheduleType: normalizeText(values.scheduleType),
+						cron: normalizeText(values.scheduleCron) || undefined,
+					},
+					runNow: true,
+				};
+				await createIngestionTask(ingestionPayload);
+				toast.success("入湖任务已创建并触发编排");
 			} else if (editing?.id) {
 				await updateAirbyteConnection(editing.id, payload);
 				toast.success("入湖接入已更新");
@@ -682,6 +849,7 @@ export default function Page() {
 		{ label: "停用", value: "PAUSED" },
 		{ label: "待运行", value: "UNKNOWN" },
 	];
+	const dataLakeBlocked = destinationMode === "default" && dataLakeStatus?.available === false;
 
 	return (
 		<div className="space-y-4">
@@ -693,6 +861,9 @@ export default function Page() {
 						<Button onClick={() => loadConnections(true)} loading={loading}>
 							刷新
 						</Button>
+						<Button onClick={() => loadDataLakeStatus(true)} loading={dataLakeLoading}>
+							刷新数据湖
+						</Button>
 						<Button onClick={() => setHelpOpen(true)}>使用说明</Button>
 						<Button type="primary" onClick={openCreate}>
 							新建入湖任务
@@ -700,6 +871,24 @@ export default function Page() {
 					</Space>
 				}
 			/>
+
+			{dataLakeStatus?.available === false ? (
+				<Alert
+					type="error"
+					showIcon
+					message="本地数据湖不可用，默认入湖已暂停"
+					description={
+						<Space direction="vertical" size={4}>
+							<Text type="secondary">
+								{dataLakeStatus.reason || "请先在管理端完成数据湖配置并通过测试。"}
+							</Text>
+							<Text type="secondary">
+								当前目标端为默认数据湖，已阻止入湖操作。若需继续，请切换为自定义目标端或联系管理员。
+							</Text>
+						</Space>
+					}
+				/>
+			) : null}
 
 			<Alert
 				type="info"
@@ -781,7 +970,18 @@ export default function Page() {
 								</Form.Item>
 							</div>
 							<div className="grid gap-4 md:grid-cols-2">
-								<Form.Item name="infraSourceId" label="选择源（数据源连接）">
+								<Form.Item
+									name="infraSourceId"
+									label="选择源（数据源连接）"
+									extra={
+										<Space size={6}>
+											<Text type="secondary">入湖任务复用已建连接。</Text>
+											<Button type="link" size="small" onClick={() => router.push("/foundation/data-sources")}>
+												去数据源管理新建
+											</Button>
+										</Space>
+									}
+								>
 									<Select
 										allowClear
 										placeholder="选择已建数据源"
@@ -910,7 +1110,7 @@ export default function Page() {
 								>
 									发现可同步对象
 								</Button>
-								<Button type="primary" onClick={submitEdit} loading={saving}>
+								<Button type="primary" onClick={submitEdit} loading={saving} disabled={dataLakeBlocked}>
 									{editMode === "create" ? "创建入湖任务" : "保存修改"}
 								</Button>
 								<Button onClick={() => toast.success("已保存草稿（示例）")}>保存草稿</Button>
@@ -926,45 +1126,48 @@ export default function Page() {
 											<Form.List name="sourceConfigPairs">
 												{(fields, { add, remove }) => (
 													<div className="space-y-2">
-														{fields.map((field) => (
-															<Space key={field.key} align="start" className="w-full">
-																<Form.Item
-																	{...field}
-																	name={[field.name, "key"]}
-																	rules={[{ required: true, message: "请输入参数名" }]}
-																	className="mb-0 w-40"
-																>
-																	<Input placeholder="参数名" disabled={Boolean(getFieldValue("infraSourceId"))} />
-																</Form.Item>
-																<Form.Item shouldUpdate noStyle>
-																	{() => {
-																		const keyValue = form.getFieldValue(["sourceConfigPairs", field.name, "key"]);
-																		const secret = isSecretKey(keyValue);
-																		return (
-																			<Form.Item
-																				{...field}
-																				name={[field.name, "value"]}
-																				rules={[{ required: true, message: "请输入参数值" }]}
-																				className="mb-0 flex-1"
-																			>
-																				{secret ? (
-																					<Input.Password placeholder="请输入" disabled={Boolean(getFieldValue("infraSourceId"))} />
-																				) : (
-																					<Input placeholder="请输入" disabled={Boolean(getFieldValue("infraSourceId"))} />
-																				)}
-																			</Form.Item>
-																		);
-																	}}
-																</Form.Item>
-																<Button
-																	type="text"
-																	onClick={() => remove(field.name)}
-																	disabled={Boolean(getFieldValue("infraSourceId"))}
-																>
-																	删除
-																</Button>
-															</Space>
-														))}
+														{fields.map((field) => {
+															const { key, ...restField } = field;
+															return (
+																<Space key={key} align="start" className="w-full">
+																	<Form.Item
+																		{...restField}
+																		name={[restField.name, "key"]}
+																		rules={[{ required: true, message: "请输入参数名" }]}
+																		className="mb-0 w-40"
+																	>
+																		<Input placeholder="参数名" disabled={Boolean(getFieldValue("infraSourceId"))} />
+																	</Form.Item>
+																	<Form.Item shouldUpdate noStyle>
+																		{() => {
+																			const keyValue = form.getFieldValue(["sourceConfigPairs", restField.name, "key"]);
+																			const secret = isSecretKey(keyValue);
+																			return (
+																				<Form.Item
+																					{...restField}
+																					name={[restField.name, "value"]}
+																					rules={[{ required: true, message: "请输入参数值" }]}
+																					className="mb-0 flex-1"
+																				>
+																					{secret ? (
+																						<Input.Password placeholder="请输入" disabled={Boolean(getFieldValue("infraSourceId"))} />
+																					) : (
+																						<Input placeholder="请输入" disabled={Boolean(getFieldValue("infraSourceId"))} />
+																					)}
+																				</Form.Item>
+																			);
+																		}}
+																	</Form.Item>
+																	<Button
+																		type="text"
+																		onClick={() => remove(restField.name)}
+																		disabled={Boolean(getFieldValue("infraSourceId"))}
+																	>
+																		删除
+																	</Button>
+																</Space>
+															);
+														})}
 														<Button
 															type="dashed"
 															onClick={() => add({ key: "", value: "" })}
@@ -985,69 +1188,53 @@ export default function Page() {
 									<Text>目标端：</Text>
 									<Select
 										value={destinationMode}
-										onChange={(value) => setDestinationMode(value)}
+										onChange={handleDestinationModeChange}
 										options={[
 											{ label: "中台默认数据湖", value: "default" },
-											{ label: "自定义目标端", value: "custom" },
+											{
+												label: "自定义目标端",
+												value: "custom",
+												disabled: !defaultDataLake?.destinationDefinitionId,
+											},
 										]}
 										style={{ width: 200 }}
 									/>
 								</Space>
+								{destinationMode === "default" && (
+									<Text type="secondary">
+										默认目标端：{defaultDataLake?.name || dataLakeStatus?.name || "未配置"}
+									</Text>
+								)}
 								{destinationMode === "custom" ? (
-									<>
-										<Form.Item name="destinationDefinitionId" label="目标端类型">
-											<Select
-												placeholder="选择目标端类型"
-												options={destinationDefs.map((item) => ({
-													label: renderDefinitionLabel(item),
-													value: item.destinationDefinitionId,
-												}))}
-												optionLabelProp="label"
-											/>
-										</Form.Item>
-										<Form.Item name="destinationConfigPairs" label="目标端连接配置" extra="保持 ****** 表示不修改原值。">
-											<Form.List name="destinationConfigPairs">
-												{(fields, { add, remove }) => (
-													<div className="space-y-2">
-														{fields.map((field) => (
-															<Space key={field.key} align="start" className="w-full">
-																<Form.Item
-																	{...field}
-																	name={[field.name, "key"]}
-																	rules={[{ required: true, message: "请输入参数名" }]}
-																	className="mb-0 w-40"
-																>
-																	<Input placeholder="参数名" />
-																</Form.Item>
-																<Form.Item shouldUpdate noStyle>
-																	{() => {
-																		const keyValue = form.getFieldValue(["destinationConfigPairs", field.name, "key"]);
-																		const secret = isSecretKey(keyValue);
-																		return (
-																			<Form.Item
-																				{...field}
-																				name={[field.name, "value"]}
-																				rules={[{ required: true, message: "请输入参数值" }]}
-																				className="mb-0 flex-1"
-																			>
-																				{secret ? <Input.Password placeholder="请输入" /> : <Input placeholder="请输入" />}
-																			</Form.Item>
-																		);
-																	}}
-																</Form.Item>
-																<Button type="text" onClick={() => remove(field.name)}>
-																	删除
-																</Button>
-															</Space>
-														))}
-														<Button type="dashed" onClick={() => add({ key: "", value: "" })}>
-															+ 添加参数
+									<Form.Item shouldUpdate noStyle>
+										{({ getFieldValue }) => {
+											const pairs = (getFieldValue("destinationConfigPairs") || []) as ConfigPair[];
+											const filled = pairs.filter((item) => normalizeText(item?.value)).length;
+											const total = pairs.length;
+											return (
+												<Space direction="vertical" className="w-full">
+													<Text type="secondary">
+														已配置 {filled}/{total || 0} 项
+													</Text>
+													<Space>
+														<Button onClick={() => setDestinationModalOpen(true)}>配置目标端</Button>
+														<Button
+															type="link"
+															onClick={() =>
+																form.setFieldsValue({
+																	destinationConfigPairs: buildDefaultDestinationPairs(
+																		String(form.getFieldValue("destinationDefinitionId") || ""),
+																	),
+																})
+															}
+														>
+															重置默认参数
 														</Button>
-													</div>
-												)}
-											</Form.List>
-										</Form.Item>
-									</>
+													</Space>
+												</Space>
+											);
+										}}
+									</Form.Item>
 								) : (
 									<Text type="secondary">默认写入中台统一数据湖/仓，不需要额外配置。</Text>
 								)}
@@ -1093,6 +1280,82 @@ export default function Page() {
 					<div>2. 点击“发现可同步对象”获取最新 Schema，再选择同步表。</div>
 					<div>3. 运行历史与对账指标后续会补充到实际作业输出。</div>
 				</div>
+			</Modal>
+
+			<Modal
+				open={destinationModalOpen}
+				title="配置目标端连接"
+				onCancel={() => setDestinationModalOpen(false)}
+				footer={[
+					<Button key="close" onClick={() => setDestinationModalOpen(false)}>
+						完成
+					</Button>,
+				]}
+			>
+				<Form layout="vertical" form={form}>
+					<Form.Item name="destinationDefinitionId" label="目标端类型" rules={[{ required: true, message: "请选择目标端类型" }]}>
+						<Select
+							placeholder="选择目标端类型"
+							options={destinationDefs.map((item) => ({
+								label: renderDefinitionLabel(item),
+								value: item.destinationDefinitionId,
+							}))}
+							notFoundContent="未获取到默认数据湖的目标端类型，请先在管理端补全"
+							optionLabelProp="label"
+							onChange={(value) => {
+								const pairs = form.getFieldValue("destinationConfigPairs") as ConfigPair[] | undefined;
+								if (!pairs || pairs.length === 0) {
+									form.setFieldsValue({ destinationConfigPairs: buildDefaultDestinationPairs(String(value)) });
+								}
+							}}
+						/>
+					</Form.Item>
+					<Form.Item name="destinationConfigPairs" label="目标端连接参数" extra="保持 ****** 表示不修改原值。">
+						<Form.List name="destinationConfigPairs">
+							{(fields, { add, remove }) => (
+								<div className="space-y-2">
+									{fields.map((field) => {
+										const { key, ...restField } = field;
+										return (
+											<Space key={key} align="start" className="w-full">
+												<Form.Item
+													{...restField}
+													name={[restField.name, "key"]}
+													rules={[{ required: true, message: "请输入参数名" }]}
+													className="mb-0 w-40"
+												>
+													<Input placeholder="参数名" />
+												</Form.Item>
+												<Form.Item shouldUpdate noStyle>
+													{() => {
+														const keyValue = form.getFieldValue(["destinationConfigPairs", restField.name, "key"]);
+														const secret = isSecretKey(keyValue);
+														return (
+															<Form.Item
+																{...restField}
+																name={[restField.name, "value"]}
+																rules={[{ required: true, message: "请输入参数值" }]}
+																className="mb-0 flex-1"
+															>
+																{secret ? <Input.Password placeholder="请输入" /> : <Input placeholder="请输入" />}
+															</Form.Item>
+														);
+													}}
+												</Form.Item>
+												<Button type="text" onClick={() => remove(restField.name)}>
+													删除
+												</Button>
+											</Space>
+										);
+									})}
+									<Button type="dashed" onClick={() => add({ key: "", value: "" })}>
+										+ 添加参数
+									</Button>
+								</div>
+							)}
+						</Form.List>
+					</Form.Item>
+				</Form>
 			</Modal>
 		</div>
 	);

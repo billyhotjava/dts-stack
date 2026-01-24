@@ -33,6 +33,8 @@ public class InfraDataSourceDto {
 
     private boolean hasSecrets;
 
+    private boolean defaulted;
+
     private String engineVersion;
 
     private String driverVersion;
@@ -143,6 +145,14 @@ public class InfraDataSourceDto {
         this.hasSecrets = hasSecrets;
     }
 
+    public boolean isDefaulted() {
+        return defaulted;
+    }
+
+    public void setDefaulted(boolean defaulted) {
+        this.defaulted = defaulted;
+    }
+
     public String getEngineVersion() {
         return engineVersion;
     }
@@ -213,6 +223,7 @@ public class InfraDataSourceDto {
         dto.setLastVerifiedAt(lastVerifiedAt);
         dto.setStatus(status);
         dto.setHasSecrets(hasSecrets);
+        dto.setDefaulted(defaulted);
         dto.setEngineVersion(engineVersion);
         dto.setDriverVersion(driverVersion);
         dto.setLastTestElapsedMillis(lastTestElapsedMillis);

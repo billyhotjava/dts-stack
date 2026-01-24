@@ -23,6 +23,7 @@ import java.sql.SQLException;
 import java.sql.SQLWarning;
 import java.sql.Statement;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.Base64;
 import java.util.EnumSet;
 import java.util.HashMap;
@@ -135,13 +136,74 @@ public class HiveConnectionService {
         return jdbcDriverLoader;
     }
 
-    private <T> T executeWithinDriver(HiveConnectionTestRequest request, HiveConnectionCallback<T> callback) throws Exception {
-        ClassLoader previousCl = Thread.currentThread().getContextClassLoader();
-        if (jdbcDriverLoader != null) {
-            Thread.currentThread().setContextClassLoader(jdbcDriverLoader);
+    public ClassLoader resolveJdbcDriverClassLoader(String driverHint) {
+        if (!StringUtils.hasText(driverHint)) {
+            return jdbcDriverLoader;
+        }
+        Path dir = resolveExternalDriversDir();
+        if (dir == null) {
+            return jdbcDriverLoader;
+        }
+        Path jar = resolveDriverJar(driverHint);
+        if (jar == null) {
+            String message = "未找到匹配的驱动文件: " + driverHint;
+            log.warn(message);
+            throw new IllegalArgumentException(message);
         }
         try {
-            prepareDriverClasses();
+            List<Path> jars = listDriverJars(dir);
+            List<Path> ordered = prioritizeJar(jars, jar);
+            URL[] urls = buildJarUrls(ordered);
+            if (urls.length == 0) {
+                return jdbcDriverLoader;
+            }
+            return new URLClassLoader(urls, getPlatformOrSystemClassLoader());
+        } catch (Exception ex) {
+            log.warn("Failed to build driver classloader for {}: {}", jar, ex.getMessage());
+            log.debug("Driver classloader failure stacktrace", ex);
+            return jdbcDriverLoader;
+        }
+    }
+
+    private Path resolveExternalDriversDir() {
+        if (externalDriversDir != null && !externalDriversDir.isBlank()) {
+            Path configured = Path.of(externalDriversDir);
+            if (Files.isDirectory(configured)) {
+                return configured;
+            }
+        }
+        Path repoFallback = resolveRepoDriversDir();
+        if (repoFallback != null) {
+            return repoFallback;
+        }
+        return null;
+    }
+
+    private Path resolveRepoDriversDir() {
+        Path current = Path.of("").toAbsolutePath();
+        for (int i = 0; i < 6 && current != null; i++) {
+            Path candidate = current.resolve("services").resolve("dts-platform").resolve("drivers");
+            if (Files.isDirectory(candidate)) {
+                return candidate;
+            }
+            current = current.getParent();
+        }
+        return null;
+    }
+
+    private <T> T executeWithinDriver(HiveConnectionTestRequest request, HiveConnectionCallback<T> callback) throws Exception {
+        ClassLoader previousCl = Thread.currentThread().getContextClassLoader();
+        ClassLoader requestLoader = resolveDriverClassLoader(request);
+        if (requestLoader != null) {
+            Thread.currentThread().setContextClassLoader(requestLoader);
+        }
+        try {
+            if (requestLoader != null) {
+                registerKnownDrivers(requestLoader);
+                prepareDriverClasses(requestLoader);
+            } else {
+                prepareDriverClasses();
+            }
             String url = resolveJdbcUrl(request);
             java.util.Properties props = buildConnectionProperties(request);
             long connectStart = System.nanoTime();
@@ -156,6 +218,120 @@ public class HiveConnectionService {
             }
         } finally {
             Thread.currentThread().setContextClassLoader(previousCl);
+        }
+    }
+
+    private ClassLoader resolveDriverClassLoader(HiveConnectionTestRequest request) {
+        if (request == null) {
+            return jdbcDriverLoader;
+        }
+        String driverHint = request.getDriverVersion();
+        if (!StringUtils.hasText(driverHint)) {
+            return jdbcDriverLoader;
+        }
+        Path dir = resolveExternalDriversDir();
+        if (dir == null) {
+            return jdbcDriverLoader;
+        }
+        Path jar = resolveDriverJar(driverHint);
+        if (jar == null) {
+            String message = "未找到匹配的驱动版本: " + driverHint;
+            log.warn(message);
+            throw new IllegalArgumentException(message);
+        }
+        try {
+            List<Path> jars = listDriverJars(dir);
+            List<Path> ordered = prioritizeJar(jars, jar);
+            URL[] urls = buildJarUrls(ordered);
+            if (urls.length == 0) {
+                return jdbcDriverLoader;
+            }
+            return new URLClassLoader(urls, getPlatformOrSystemClassLoader());
+        } catch (Exception ex) {
+            log.warn("Failed to build driver classloader for {}: {}", jar, ex.getMessage());
+            log.debug("Driver classloader failure stacktrace", ex);
+            return jdbcDriverLoader;
+        }
+    }
+
+    private List<Path> listDriverJars(Path dir) {
+        if (dir == null || !Files.isDirectory(dir)) {
+            return List.of();
+        }
+        try (var stream = Files.list(dir)) {
+            return stream
+                .filter(path -> Files.isRegularFile(path))
+                .filter(path -> path.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".jar"))
+                .sorted(Comparator.comparing(path -> path.getFileName().toString()))
+                .toList();
+        } catch (Exception ex) {
+            log.warn("Failed to list driver jars under {}: {}", dir, ex.getMessage());
+            return List.of();
+        }
+    }
+
+    private List<Path> prioritizeJar(List<Path> jars, Path preferred) {
+        if (jars == null || jars.isEmpty()) {
+            return List.of(preferred);
+        }
+        List<Path> ordered = new ArrayList<>(jars.size() + 1);
+        ordered.add(preferred);
+        for (Path jar : jars) {
+            if (!jar.equals(preferred)) {
+                ordered.add(jar);
+            }
+        }
+        return ordered;
+    }
+
+    private URL[] buildJarUrls(List<Path> jars) {
+        return jars
+            .stream()
+            .map(path -> {
+                try {
+                    return path.toUri().toURL();
+                } catch (Exception ex) {
+                    return null;
+                }
+            })
+            .filter(Objects::nonNull)
+            .toArray(URL[]::new);
+    }
+
+    private Path resolveDriverJar(String driverHint) {
+        if (!StringUtils.hasText(driverHint)) {
+            return null;
+        }
+        Path dir = resolveExternalDriversDir();
+        if (dir == null || !Files.isDirectory(dir)) {
+            return null;
+        }
+        String normalized = driverHint.trim();
+        String lower = normalized.toLowerCase(Locale.ROOT);
+        try (var stream = Files.list(dir)) {
+            List<Path> matches = stream
+                .filter(p -> Files.isRegularFile(p))
+                .filter(p -> p.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".jar"))
+                .filter(p -> {
+                    String name = p.getFileName().toString().toLowerCase(Locale.ROOT);
+                    if (lower.endsWith(".jar")) {
+                        return name.equals(lower);
+                    }
+                    return name.contains(lower);
+                })
+                .sorted(Comparator.comparing(path -> path.getFileName().toString()))
+                .toList();
+            if (matches.isEmpty()) {
+                return null;
+            }
+            if (matches.size() > 1) {
+                log.warn("Multiple driver jars match '{}': {}", driverHint, matches);
+            }
+            return matches.get(0);
+        } catch (Exception ex) {
+            log.warn("Failed to resolve driver jar for {}: {}", driverHint, ex.getMessage());
+            log.debug("Driver jar resolve failure stacktrace", ex);
+            return null;
         }
     }
 
@@ -262,15 +438,12 @@ public class HiveConnectionService {
     }
 
     private void tryLoadExternalDrivers() {
-        if (externalDriversDir == null || externalDriversDir.isBlank()) {
+        Path dir = resolveExternalDriversDir();
+        if (dir == null || !Files.isDirectory(dir)) {
+            log.debug("External drivers dir not found: {}", externalDriversDir);
             return;
         }
         try {
-            Path dir = Path.of(externalDriversDir);
-            if (!Files.isDirectory(dir)) {
-                log.debug("External drivers dir not found: {}", dir);
-                return;
-            }
 
             java.util.LinkedHashSet<URL> jarSet = new java.util.LinkedHashSet<>();
             if (explicitDriverJar != null && !explicitDriverJar.isBlank()) {
@@ -321,7 +494,7 @@ public class HiveConnectionService {
                     if (inst instanceof java.sql.Driver driver) {
                         registerExternalDriver(driver);
                         loadedAny = true;
-                        log.info("Loaded and registered explicit JDBC driver {} from {}", cn, externalDriversDir);
+                        log.info("Loaded and registered explicit JDBC driver {} from {}", cn, dir);
                     } else {
                         log.warn("Explicit class {} is not a java.sql.Driver", cn);
                     }
@@ -353,7 +526,7 @@ public class HiveConnectionService {
                     registerExternalDriver(driver);
                     loadedAny = true;
                     hiveLoaded = true;
-                    log.info("Loaded Hive driver {} from {}", HIVE_DRIVER, externalDriversDir);
+                    log.info("Loaded Hive driver {} from {}", HIVE_DRIVER, dir);
                 }
             } catch (Throwable ignored) {}
             if (!hiveLoaded) {
@@ -364,7 +537,7 @@ public class HiveConnectionService {
                         if (inst instanceof java.sql.Driver driver) {
                             registerExternalDriver(driver);
                             loadedAny = true;
-                            log.info("Loaded alternative JDBC driver {} from {}", alt, externalDriversDir);
+                            log.info("Loaded alternative JDBC driver {} from {}", alt, dir);
                             break;
                         }
                     } catch (Throwable ignored) {
@@ -380,7 +553,7 @@ public class HiveConnectionService {
                     if (inst instanceof java.sql.Driver driver) {
                         registerExternalDriver(driver);
                         loadedAny = true;
-                        log.info("Loaded JDBC driver {} from {}", cn, externalDriversDir);
+                        log.info("Loaded JDBC driver {} from {}", cn, dir);
                     }
                 } catch (Throwable ignored) {
                     // ignore when jar not present
@@ -399,7 +572,7 @@ public class HiveConnectionService {
                     log.debug("Failed to list DriverManager drivers: {}", t.toString());
                 }
             } else {
-                log.warn("No JDBC drivers could be loaded from {}", externalDriversDir);
+                log.warn("No JDBC drivers could be loaded from {}", dir);
             }
         } catch (Throwable ex) {
             log.warn("Error while loading external JDBC drivers (suppressed, will not fail startup): {}", ex.toString());
@@ -423,6 +596,97 @@ public class HiveConnectionService {
             }
         } catch (ClassNotFoundException ignored) {
             // Driver may have been registered via ServiceLoader from external JARs
+        }
+    }
+
+    private void prepareDriverClasses(ClassLoader loader) {
+        try {
+            var e = DriverManager.getDrivers();
+            while (e.hasMoreElements()) {
+                var d = e.nextElement();
+                log.info("Driver available before connect: {} via {}", d.getClass().getName(), d.getClass().getClassLoader());
+            }
+        } catch (Throwable ignored) {}
+        try {
+            Class.forName(HIVE_DRIVER, true, loader);
+        } catch (ClassNotFoundException ignored) {
+            // Driver may have been registered via ServiceLoader from external JARs
+        }
+    }
+
+    private void registerKnownDrivers(ClassLoader loader) {
+        boolean loadedAny = false;
+        if (explicitDriverClass != null && !explicitDriverClass.isBlank()) {
+            String cn = explicitDriverClass.trim();
+            try {
+                Class<?> cls = Class.forName(cn, true, loader);
+                Object inst = cls.getDeclaredConstructor().newInstance();
+                if (inst instanceof java.sql.Driver driver) {
+                    registerExternalDriver(driver);
+                    loadedAny = true;
+                    log.info("Loaded explicit JDBC driver {} from request jar", cn);
+                }
+            } catch (Throwable e) {
+                log.debug("Explicit driver {} not available in request jar: {}", cn, e.toString());
+            }
+        }
+
+        try {
+            java.util.ServiceLoader<java.sql.Driver> drivers = java.util.ServiceLoader.load(java.sql.Driver.class, loader);
+            for (java.sql.Driver drv : drivers) {
+                try {
+                    registerExternalDriver(drv);
+                    loadedAny = true;
+                    log.info("Discovered JDBC driver via ServiceLoader: {} (loader={})", drv.getClass().getName(), loader);
+                } catch (Throwable t) {
+                    log.debug("Ignoring ServiceLoader driver load failure: {}", t.toString());
+                }
+            }
+        } catch (Throwable t) {
+            log.debug("ServiceLoader discovery failed: {}", t.toString());
+        }
+
+        try {
+            Class<?> cls = Class.forName(HIVE_DRIVER, true, loader);
+            Object inst = cls.getDeclaredConstructor().newInstance();
+            if (inst instanceof java.sql.Driver driver) {
+                registerExternalDriver(driver);
+                loadedAny = true;
+                log.info("Loaded Hive driver {} from request jar", HIVE_DRIVER);
+            }
+        } catch (Throwable ignored) {}
+
+        if (!loadedAny) {
+            for (String alt : FALLBACK_DRIVERS) {
+                try {
+                    Class<?> cls = Class.forName(alt, true, loader);
+                    Object inst = cls.getDeclaredConstructor().newInstance();
+                    if (inst instanceof java.sql.Driver driver) {
+                        registerExternalDriver(driver);
+                        loadedAny = true;
+                        log.info("Loaded alternative JDBC driver {} from request jar", alt);
+                        break;
+                    }
+                } catch (Throwable ignored) {
+                    // keep trying
+                }
+            }
+        }
+
+        if (!loadedAny) {
+            for (String cn : COMMON_EXTERNAL_DRIVERS) {
+                try {
+                    Class<?> cls = Class.forName(cn, true, loader);
+                    Object inst = cls.getDeclaredConstructor().newInstance();
+                    if (inst instanceof java.sql.Driver driver) {
+                        registerExternalDriver(driver);
+                        loadedAny = true;
+                        log.info("Loaded JDBC driver {} from request jar", cn);
+                    }
+                } catch (Throwable ignored) {
+                    // ignore when jar not present
+                }
+            }
         }
     }
 
@@ -667,7 +931,7 @@ public class HiveConnectionService {
         return out.toArray(new String[0]);
     }
 
-    private void runValidationQuery(Connection connection, String query) {
+    private void runValidationQuery(Connection connection, String query) throws SQLException {
         String sql = (query == null || query.isBlank()) ? "SELECT 1" : query;
         try (Statement statement = connection.createStatement()) {
             try {
@@ -676,8 +940,6 @@ public class HiveConnectionService {
             statement.setMaxRows(1);
             log.info("Running validation query: {}", sql);
             statement.execute(sql);
-        } catch (SQLException e) {
-            log.warn("Validation query failed: {}", e.getMessage());
         }
     }
 

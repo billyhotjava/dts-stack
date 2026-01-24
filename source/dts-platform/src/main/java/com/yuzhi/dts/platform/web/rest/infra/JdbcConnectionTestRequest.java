@@ -14,6 +14,9 @@ public class JdbcConnectionTestRequest {
     /** Optional explicit driver class name (e.g. dm.jdbc.driver.DmDriver). */
     private String driverClass;
 
+    /** Optional driver jar hint (file name or version). */
+    private String driverVersion;
+
     /** Optional username for JDBC authentication. */
     private String username;
 
@@ -40,6 +43,9 @@ public class JdbcConnectionTestRequest {
     public String getDriverClass() { return driverClass; }
     public void setDriverClass(String driverClass) { this.driverClass = blankToNull(driverClass); }
 
+    public String getDriverVersion() { return driverVersion; }
+    public void setDriverVersion(String driverVersion) { this.driverVersion = blankToNull(driverVersion); }
+
     public String getUsername() { return username; }
     public void setUsername(String username) { this.username = blankToNull(username); }
 
@@ -62,4 +68,3 @@ public class JdbcConnectionTestRequest {
         return value == null || value.isBlank() ? null : value.trim();
     }
 }
-

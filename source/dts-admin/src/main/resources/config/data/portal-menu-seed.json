@@ -38,7 +38,7 @@
       "path": "resource",
       "icon": "solar:database-bold-duotone",
       "titleKey": "sys.nav.portal.resourceCenter",
-      "title": "数据资源中心",
+      "title": "数据接入中心",
       "children": [
         {
           "key": "sources",

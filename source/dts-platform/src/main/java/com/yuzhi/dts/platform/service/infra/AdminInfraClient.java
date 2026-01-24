@@ -29,6 +29,7 @@ public class AdminInfraClient {
 
     private static final Logger log = LoggerFactory.getLogger(AdminInfraClient.class);
     private static final ParameterizedTypeReference<AdminInceptorConfig> RESPONSE_TYPE = new ParameterizedTypeReference<>() {};
+    private static final ParameterizedTypeReference<AdminDataLakeConfig> DATA_LAKE_RESPONSE_TYPE = new ParameterizedTypeReference<>() {};
 
     private final RestTemplate restTemplate;
     private final DtsAdminProperties properties;
@@ -67,6 +68,68 @@ public class AdminInfraClient {
         }
         log.warn("Unable to fetch active Inceptor configuration from any configured admin endpoints {}", candidates);
         return Optional.empty();
+    }
+
+    public Optional<AdminDataLakeConfig> fetchDefaultDataLake() {
+        if (!properties.isEnabled()) {
+            return Optional.empty();
+        }
+        HttpHeaders headers = new HttpHeaders();
+        headers.setAccept(Collections.singletonList(MediaType.APPLICATION_JSON));
+        if (StringUtils.hasText(properties.getServiceToken())) {
+            headers.set(HttpHeaders.AUTHORIZATION, "Bearer " + properties.getServiceToken());
+        }
+        if (StringUtils.hasText(properties.getServiceName())) {
+            headers.set("X-DTS-Service", properties.getServiceName());
+        }
+        HttpEntity<Void> requestEntity = new HttpEntity<>(headers);
+
+        List<String> candidates = candidateBaseUrls();
+        for (String baseUrl : candidates) {
+            URI uri = buildUri(baseUrl, properties.getApiPath(), "/platform/infra/data-lakes/default");
+            try {
+                ResponseEntity<AdminDataLakeConfig> response = restTemplate.exchange(uri, HttpMethod.GET, requestEntity, DATA_LAKE_RESPONSE_TYPE);
+                if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                    return Optional.of(response.getBody());
+                }
+                log.debug("Admin data lake endpoint {} returned status {}", uri, response.getStatusCode());
+            } catch (Exception ex) {
+                log.debug("Failed to fetch default data lake from admin service at {}: {}", uri, ex.getMessage());
+            }
+        }
+        log.warn("Unable to fetch default data lake from any configured admin endpoints {}", candidates);
+        return Optional.empty();
+    }
+
+    public boolean updateDefaultDataLakeDestination(AdminDataLakeDestinationUpdateRequest request) {
+        if (!properties.isEnabled() || request == null) {
+            return false;
+        }
+        HttpHeaders headers = new HttpHeaders();
+        headers.setAccept(Collections.singletonList(MediaType.APPLICATION_JSON));
+        if (StringUtils.hasText(properties.getServiceToken())) {
+            headers.set(HttpHeaders.AUTHORIZATION, "Bearer " + properties.getServiceToken());
+        }
+        if (StringUtils.hasText(properties.getServiceName())) {
+            headers.set("X-DTS-Service", properties.getServiceName());
+        }
+        HttpEntity<AdminDataLakeDestinationUpdateRequest> requestEntity = new HttpEntity<>(request, headers);
+
+        List<String> candidates = candidateBaseUrls();
+        for (String baseUrl : candidates) {
+            URI uri = buildUri(baseUrl, properties.getApiPath(), "/platform/infra/data-lakes/default/destination");
+            try {
+                ResponseEntity<AdminDataLakeConfig> response =
+                    restTemplate.exchange(uri, HttpMethod.POST, requestEntity, DATA_LAKE_RESPONSE_TYPE);
+                if (response.getStatusCode().is2xxSuccessful()) {
+                    return true;
+                }
+                log.debug("Admin data lake update endpoint {} returned status {}", uri, response.getStatusCode());
+            } catch (Exception ex) {
+                log.debug("Failed to update default data lake at {}: {}", uri, ex.getMessage());
+            }
+        }
+        return false;
     }
 
     private List<String> candidateBaseUrls() {
@@ -267,4 +330,126 @@ public class AdminInfraClient {
             return lastError;
         }
     }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class AdminDataLakeConfig {
+
+        private UUID id;
+        private String name;
+        private String type;
+        private String description;
+        private String jdbcUrl;
+        private String username;
+        private String password;
+        private Boolean defaulted;
+        private Map<String, String> jdbcProperties = Collections.emptyMap();
+        private String destinationId;
+        private String destinationName;
+        private String destinationDefinitionId;
+        private Map<String, Object> destinationConfig = Collections.emptyMap();
+        private String status;
+        private String heartbeatStatus;
+        private Integer heartbeatFailureCount;
+        private String lastError;
+        private Long lastTestElapsedMillis;
+        private String engineVersion;
+        private String driverVersion;
+        private Instant lastVerifiedAt;
+        private Instant lastHeartbeatAt;
+
+        public UUID getId() {
+            return id;
+        }
+
+        public String getName() {
+            return name;
+        }
+
+        public String getType() {
+            return type;
+        }
+
+        public String getDescription() {
+            return description;
+        }
+
+        public String getJdbcUrl() {
+            return jdbcUrl;
+        }
+
+        public String getUsername() {
+            return username;
+        }
+
+        public String getPassword() {
+            return password;
+        }
+
+        public Boolean getDefaulted() {
+            return defaulted;
+        }
+
+        public Map<String, String> getJdbcProperties() {
+            return jdbcProperties == null ? Collections.emptyMap() : jdbcProperties;
+        }
+
+        public String getDestinationId() {
+            return destinationId;
+        }
+
+        public String getDestinationName() {
+            return destinationName;
+        }
+
+        public String getDestinationDefinitionId() {
+            return destinationDefinitionId;
+        }
+
+        public Map<String, Object> getDestinationConfig() {
+            return destinationConfig == null ? Collections.emptyMap() : destinationConfig;
+        }
+
+        public String getStatus() {
+            return status;
+        }
+
+        public String getHeartbeatStatus() {
+            return heartbeatStatus;
+        }
+
+        public Integer getHeartbeatFailureCount() {
+            return heartbeatFailureCount;
+        }
+
+        public String getLastError() {
+            return lastError;
+        }
+
+        public Long getLastTestElapsedMillis() {
+            return lastTestElapsedMillis;
+        }
+
+        public String getEngineVersion() {
+            return engineVersion;
+        }
+
+        public String getDriverVersion() {
+            return driverVersion;
+        }
+
+        public Instant getLastVerifiedAt() {
+            return lastVerifiedAt;
+        }
+
+        public Instant getLastHeartbeatAt() {
+            return lastHeartbeatAt;
+        }
+    }
+
+    public record AdminDataLakeDestinationUpdateRequest(
+        String destinationId,
+        String destinationName,
+        String destinationDefinitionId,
+        Map<String, Object> destinationConfig
+    ) {}
 }

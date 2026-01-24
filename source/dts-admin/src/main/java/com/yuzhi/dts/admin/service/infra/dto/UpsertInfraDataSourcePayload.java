@@ -23,6 +23,8 @@ public class UpsertInfraDataSourcePayload {
 
     private Map<String, Object> secrets;
 
+    private Boolean defaulted;
+
     public String getName() {
         return name;
     }
@@ -81,7 +83,19 @@ public class UpsertInfraDataSourcePayload {
         return secrets;
     }
 
+    public Map<String, Object> getSecretsRaw() {
+        return secrets;
+    }
+
     public void setSecrets(Map<String, Object> secrets) {
         this.secrets = secrets != null ? new HashMap<>(secrets) : new HashMap<>();
+    }
+
+    public Boolean getDefaulted() {
+        return defaulted;
+    }
+
+    public void setDefaulted(Boolean defaulted) {
+        this.defaulted = defaulted;
     }
 }

@@ -25,6 +25,7 @@ import {
 	discoverAirbyteSource,
 	listAirbyteSourceDefinitions,
 	listAirbyteSources,
+	listJdbcDrivers,
 	updateAirbyteSource,
 } from "@/api/platformApi";
 import mysqlIcon from "@/assets/connector-icons/mysql.svg";
@@ -56,6 +57,13 @@ type AirbyteSource = {
 	lastDiscoveredAt?: string;
 	enabled?: boolean;
 	description?: string;
+	driverVersion?: string;
+};
+
+type JdbcDriverInfo = {
+	fileName: string;
+	version?: string;
+	label?: string;
 };
 
 type AllowedDefinition = {
@@ -456,6 +464,8 @@ export default function DataSourceDetailPage() {
 	const [saving, setSaving] = useState(false);
 	const [checking, setChecking] = useState(false);
 	const [discovering, setDiscovering] = useState(false);
+	const [jdbcDrivers, setJdbcDrivers] = useState<JdbcDriverInfo[]>([]);
+	const [driverLoading, setDriverLoading] = useState(false);
 	const [form] = Form.useForm();
 	const selectedDefinitionId = Form.useWatch("sourceDefinitionId", form);
 	const selectedDefinition = useMemo(
@@ -468,6 +478,15 @@ export default function DataSourceDetailPage() {
 		[source?.sourceDefinitionId, sourceDefs],
 	);
 	const displayProfile = useMemo(() => resolveConfigProfile(displayDefinition), [displayDefinition]);
+	const driverOptions = useMemo(
+		() =>
+			jdbcDrivers.map((driver) => ({
+				value: driver.version && driver.version.trim() ? driver.version : driver.fileName,
+				label: driver.label || driver.fileName,
+			})),
+		[jdbcDrivers],
+	);
+	const hasDriverOptions = driverOptions.length > 0;
 
 	const loadDefinitions = useCallback(async (notify = false) => {
 		setDefLoading(true);
@@ -495,6 +514,24 @@ export default function DataSourceDetailPage() {
 		}
 	}, []);
 
+	const loadJdbcDrivers = useCallback(async (notify = false) => {
+		setDriverLoading(true);
+		try {
+			const resp = await listJdbcDrivers();
+			const list = Array.isArray(resp) ? (resp as JdbcDriverInfo[]) : [];
+			setJdbcDrivers(list);
+			if (notify && list.length === 0) {
+				toast.error("未获取到 JDBC 驱动列表");
+			}
+		} catch (err: any) {
+			if (notify) {
+				toast.error(err?.message || "加载 JDBC 驱动失败");
+			}
+		} finally {
+			setDriverLoading(false);
+		}
+	}, []);
+
 	const loadData = useCallback(async () => {
 		if (!id) return;
 		setLoading(true);
@@ -503,13 +540,13 @@ export default function DataSourceDetailPage() {
 			const list = Array.isArray(all) ? (all as AirbyteSource[]) : [];
 			const hit = list.find((item) => item.id === id) || null;
 			setSource(hit);
-			await loadDefinitions();
+			await Promise.all([loadDefinitions(), loadJdbcDrivers()]);
 		} catch (err: any) {
 			toast.error(err?.message || "加载数据源失败");
 		} finally {
 			setLoading(false);
 		}
-	}, [id, loadDefinitions]);
+	}, [id, loadDefinitions, loadJdbcDrivers]);
 
 	useEffect(() => {
 		void loadData();
@@ -536,6 +573,7 @@ export default function DataSourceDetailPage() {
 			config: normalizeConfigForForm(source.config, profile),
 			configExtraJson: "",
 			enabled: source.enabled ?? true,
+			driverVersion: source.driverVersion || "",
 		});
 		setEditOpen(true);
 		if (sourceDefList.length === 0) {
@@ -569,6 +607,7 @@ export default function DataSourceDetailPage() {
 			sourceId: source?.sourceId || undefined,
 			config,
 			enabled: values.enabled !== false,
+			driverVersion: values.driverVersion ? String(values.driverVersion).trim() : undefined,
 		};
 	};
 
@@ -712,6 +751,7 @@ export default function DataSourceDetailPage() {
 												<span>{resolveDefinitionName(sourceDefs, source?.sourceDefinitionId)}</span>
 											</Space>
 										</Descriptions.Item>
+										<Descriptions.Item label="驱动版本">{source?.driverVersion || "-"}</Descriptions.Item>
 										<Descriptions.Item label="连接地址">{extractEndpoint(source?.config)}</Descriptions.Item>
 										<Descriptions.Item label="负责人">{source?.owner || "-"}</Descriptions.Item>
 										<Descriptions.Item label="启用状态">
@@ -812,6 +852,20 @@ export default function DataSourceDetailPage() {
 							}))}
 							onChange={(value) => applyDefaultConfig(String(value || ""))}
 						/>
+					</Form.Item>
+					<Form.Item name="driverVersion" label="JDBC 驱动">
+						{hasDriverOptions ? (
+							<Select
+								placeholder="选择驱动版本"
+								options={driverOptions}
+								loading={driverLoading}
+								allowClear
+								showSearch
+								optionFilterProp="label"
+							/>
+						) : (
+							<Input placeholder="请输入驱动版本" />
+						)}
 					</Form.Item>
 					<div className="space-y-2">
 						<div className="grid gap-4 md:grid-cols-2">

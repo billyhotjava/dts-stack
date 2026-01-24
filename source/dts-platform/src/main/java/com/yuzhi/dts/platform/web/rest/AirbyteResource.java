@@ -11,6 +11,10 @@ import com.yuzhi.dts.platform.repository.infra.InfraAirbyteSourceRepository;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.etl.AirbyteClient;
 import com.yuzhi.dts.platform.service.ingestion.IngestionServiceClient;
+import com.yuzhi.dts.platform.service.infra.AdminInfraClient;
+import com.yuzhi.dts.platform.service.infra.DefaultDestinationSyncService;
+import com.yuzhi.dts.platform.service.infra.InceptorDataSourceRegistry;
+import com.yuzhi.dts.platform.service.infra.InceptorDataSourceRegistry.InceptorDataSourceState;
 import com.yuzhi.dts.platform.service.infra.InfraSecretService;
 import jakarta.validation.Valid;
 import java.time.Instant;
@@ -44,6 +48,16 @@ public class AirbyteResource {
         "hasAnyAuthority(T(com.yuzhi.dts.platform.security.AuthoritiesConstants).INFRA_MAINTAINERS)";
     private static final String MASKED_SECRET = "******";
     private static final String DEFAULT_AIRBYTE_ORG_ID = "00000000-0000-0000-0000-000000000000";
+    private static final List<String> DESTINATION_KEYWORDS = List.of("hive", "jdbc");
+    private static final List<String> DESTINATION_BLOCKLIST = List.of(
+        "vector",
+        "milvus",
+        "weaviate",
+        "pinecone",
+        "qdrant",
+        "chroma",
+        "embedding"
+    );
     private static final List<AllowedSourceDefinition> ALLOWED_SOURCE_DEFS = List.of(
         new AllowedSourceDefinition("mysql", List.of("mysql"), "MySQL"),
         new AllowedSourceDefinition("oracle", List.of("oracle db", "oracle"), "Oracle"),
@@ -65,6 +79,9 @@ public class AirbyteResource {
     private final ObjectMapper objectMapper;
     private final InfraSecretService secretService;
     private final IngestionServiceClient ingestionClient;
+    private final InceptorDataSourceRegistry inceptorRegistry;
+    private final AdminInfraClient adminInfraClient;
+    private final DefaultDestinationSyncService destinationSyncService;
 
     public AirbyteResource(
         AirbyteClient airbyteClient,
@@ -74,7 +91,10 @@ public class AirbyteResource {
         AuditService auditService,
         ObjectMapper objectMapper,
         InfraSecretService secretService,
-        IngestionServiceClient ingestionClient
+        IngestionServiceClient ingestionClient,
+        InceptorDataSourceRegistry inceptorRegistry,
+        AdminInfraClient adminInfraClient,
+        DefaultDestinationSyncService destinationSyncService
     ) {
         this.airbyteClient = airbyteClient;
         this.properties = properties;
@@ -84,7 +104,19 @@ public class AirbyteResource {
         this.objectMapper = objectMapper;
         this.secretService = secretService;
         this.ingestionClient = ingestionClient;
+        this.inceptorRegistry = inceptorRegistry;
+        this.adminInfraClient = adminInfraClient;
+        this.destinationSyncService = destinationSyncService;
     }
+
+    private record DataLakeAvailability(
+        boolean configured,
+        boolean available,
+        String reason,
+        String name,
+        String database,
+        Instant lastVerifiedAt
+    ) {}
 
     public record AirbyteSourceRequest(
         String name,
@@ -93,7 +125,8 @@ public class AirbyteResource {
         Map<String, Object> config,
         Boolean enabled,
         String owner,
-        String description
+        String description,
+        String driverVersion
     ) {}
 
     public record AirbyteConnectionRequest(
@@ -121,6 +154,10 @@ public class AirbyteResource {
     @GetMapping("/definitions/sources")
     public ApiResponse<List<Map<String, Object>>> listSourceDefinitions() {
         if (ingestionClient.isEnabled()) {
+            IngestionServiceClient.HealthStatus health = ingestionClient.healthStatus();
+            if (!health.ready()) {
+                return ApiResponses.ok("ingestion service starting", List.of());
+            }
             return ingestionClient.listSourceDefinitions();
         }
         List<Map<String, Object>> list = extractList(airbyteClient.listSourceDefinitions(), "sourceDefinitions");
@@ -132,6 +169,10 @@ public class AirbyteResource {
     @GetMapping("/sources")
     public ApiResponse<List<Map<String, Object>>> listSources() {
         if (ingestionClient.isEnabled()) {
+            IngestionServiceClient.HealthStatus health = ingestionClient.healthStatus();
+            if (!health.ready()) {
+                return ApiResponses.ok("ingestion service starting", List.of());
+            }
             return ingestionClient.listSources();
         }
         List<InfraAirbyteSource> list = new ArrayList<>(sourceRepository.findAll());
@@ -261,6 +302,10 @@ public class AirbyteResource {
     @GetMapping("/definitions/destinations")
     public ApiResponse<List<Map<String, Object>>> listDestinationDefinitions() {
         if (ingestionClient.isEnabled()) {
+            IngestionServiceClient.HealthStatus health = ingestionClient.healthStatus();
+            if (!health.ready()) {
+                return ApiResponses.ok("ingestion service starting", List.of());
+            }
             return ingestionClient.listDestinationDefinitions();
         }
         List<Map<String, Object>> list = extractList(airbyteClient.listDestinationDefinitions(), "destinationDefinitions");
@@ -271,6 +316,10 @@ public class AirbyteResource {
     @GetMapping("/connections")
     public ApiResponse<List<Map<String, Object>>> listConnections(@RequestParam(defaultValue = "false") boolean refresh) {
         if (ingestionClient.isEnabled()) {
+            IngestionServiceClient.HealthStatus health = ingestionClient.healthStatus();
+            if (!health.ready()) {
+                return ApiResponses.ok("ingestion service starting", List.of());
+            }
             return ingestionClient.listConnections(refresh);
         }
         List<InfraAirbyteConnection> list = new ArrayList<>(connectionRepository.findAll());
@@ -285,11 +334,54 @@ public class AirbyteResource {
         return ApiResponses.ok(payload);
     }
 
+    @GetMapping("/data-lake/status")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ApiResponse<Map<String, Object>> dataLakeStatus(@RequestParam(defaultValue = "true") boolean refresh) {
+        DataLakeAvailability availability = resolveDefaultDataLakeAvailability(refresh);
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("available", availability.available());
+        payload.put("configured", availability.configured());
+        payload.put("reason", availability.reason());
+        payload.put("name", availability.name());
+        payload.put("database", availability.database());
+        payload.put("lastVerifiedAt", availability.lastVerifiedAt());
+        return ApiResponses.ok(payload);
+    }
+
+    @GetMapping("/data-lake/default")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ApiResponse<Map<String, Object>> defaultDataLake() {
+        AdminInfraClient.AdminDataLakeConfig lake = adminInfraClient.fetchDefaultDataLake().orElse(null);
+        if (lake == null) {
+            return ApiResponses.ok(Map.of());
+        }
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("id", lake.getId());
+        payload.put("name", lake.getName());
+        payload.put("type", lake.getType());
+        payload.put("jdbcUrl", lake.getJdbcUrl());
+        payload.put("destinationId", lake.getDestinationId());
+        payload.put("destinationName", lake.getDestinationName());
+        payload.put("destinationDefinitionId", lake.getDestinationDefinitionId());
+        return ApiResponses.ok(payload);
+    }
+
     @PostMapping("/connections")
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ApiResponse<Map<String, Object>> createConnection(@Valid @RequestBody AirbyteConnectionRequest request) {
         if (ingestionClient.isEnabled()) {
-            return ingestionClient.createConnection(request);
+            IngestionServiceClient.HealthStatus health = ingestionClient.healthStatus();
+            if (!health.ready()) {
+                return ApiResponses.error("接入服务未就绪，请稍后重试");
+            }
+            assertLocalDataLakeAvailable(request);
+            DefaultDestinationSyncService.DefaultDestinationSnapshot snapshot = null;
+            if (isDefaultDestination(request)) {
+                snapshot = destinationSyncService.ensureDefaultDestination();
+            }
+            ApiResponse<Map<String, Object>> response = ingestionClient.createConnection(request);
+            updateAdminDestinationFromResponse(snapshot, response);
+            return response;
         }
         InfraAirbyteConnection saved = saveConnection(null, request);
         auditService.auditAction(
@@ -308,7 +400,18 @@ public class AirbyteResource {
         @Valid @RequestBody AirbyteConnectionRequest request
     ) {
         if (ingestionClient.isEnabled()) {
-            return ingestionClient.updateConnection(id.toString(), request);
+            IngestionServiceClient.HealthStatus health = ingestionClient.healthStatus();
+            if (!health.ready()) {
+                return ApiResponses.error("接入服务未就绪，请稍后重试");
+            }
+            assertLocalDataLakeAvailable(request);
+            DefaultDestinationSyncService.DefaultDestinationSnapshot snapshot = null;
+            if (isDefaultDestination(request)) {
+                snapshot = destinationSyncService.ensureDefaultDestination();
+            }
+            ApiResponse<Map<String, Object>> response = ingestionClient.updateConnection(id.toString(), request);
+            updateAdminDestinationFromResponse(snapshot, response);
+            return response;
         }
         InfraAirbyteConnection saved = saveConnection(id, request);
         auditService.auditAction(
@@ -359,6 +462,10 @@ public class AirbyteResource {
     @GetMapping("/connections/{id}/jobs")
     public ApiResponse<List<Map<String, Object>>> listJobs(@PathVariable UUID id, @RequestParam(defaultValue = "10") int limit) {
         if (ingestionClient.isEnabled()) {
+            IngestionServiceClient.HealthStatus health = ingestionClient.healthStatus();
+            if (!health.ready()) {
+                return ApiResponses.ok("ingestion service starting", List.of());
+            }
             ApiResponse<List<Map<String, Object>>> response = ingestionClient.listJobs(id.toString(), limit);
             return response != null ? response : ApiResponses.ok(List.of());
         }
@@ -430,23 +537,51 @@ public class AirbyteResource {
         if (!StringUtils.hasText(destinationId)) {
             destinationId = normalize(properties.getDefaultDestinationId());
         }
+        String destinationName = properties.getDefaultDestinationName();
+        String destinationDefinitionId = normalize(request.destinationDefinitionId());
+        Map<String, Object> destinationConfig = request.destinationConfig();
         if (!StringUtils.hasText(destinationId)) {
-            String destinationDefinitionId = normalize(request.destinationDefinitionId());
-            String fallbackDefinitionId = normalize(properties.getDefaultDestinationDefinitionId());
-            String definitionId = StringUtils.hasText(destinationDefinitionId) ? destinationDefinitionId : fallbackDefinitionId;
-            Map<String, Object> destinationConfig = request.destinationConfig();
+            AdminInfraClient.AdminDataLakeConfig defaultLake = adminInfraClient.fetchDefaultDataLake().orElse(null);
+            if (defaultLake != null) {
+                if (!StringUtils.hasText(destinationId)) {
+                    destinationId = normalize(defaultLake.getDestinationId());
+                }
+                if (!StringUtils.hasText(destinationDefinitionId)) {
+                    destinationDefinitionId = normalize(defaultLake.getDestinationDefinitionId());
+                }
+                if (destinationConfig == null || destinationConfig.isEmpty()) {
+                    destinationConfig = defaultLake.getDestinationConfig();
+                }
+                if (destinationConfig == null || destinationConfig.isEmpty()) {
+                    destinationConfig = buildDestinationConfig(defaultLake);
+                }
+                if (StringUtils.hasText(defaultLake.getDestinationName())) {
+                    destinationName = defaultLake.getDestinationName();
+                }
+            }
+            if (!StringUtils.hasText(destinationDefinitionId)) {
+                destinationDefinitionId = normalize(properties.getDefaultDestinationDefinitionId());
+            }
             if (destinationConfig == null || destinationConfig.isEmpty()) {
                 destinationConfig = parseJson(properties.getDefaultDestinationConfigJson());
             }
-            if (!StringUtils.hasText(definitionId) || destinationConfig == null || destinationConfig.isEmpty()) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "缺少目标端配置");
-            }
-            Map<String, Object> resp = airbyteClient
-                .createDestination(workspaceId, definitionId, properties.getDefaultDestinationName(), destinationConfig)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_GATEWAY, "创建目标端失败"));
-            destinationId = stringVal(resp.get("destinationId"));
-            if (StringUtils.hasText(destinationId)) {
-                properties.setDefaultDestinationId(destinationId);
+            if (!StringUtils.hasText(destinationId)) {
+                if (!StringUtils.hasText(destinationDefinitionId)) {
+                    destinationDefinitionId = resolveDestinationDefinitionId();
+                    if (StringUtils.hasText(destinationDefinitionId)) {
+                        properties.setDefaultDestinationDefinitionId(destinationDefinitionId);
+                    }
+                }
+                if (!StringUtils.hasText(destinationDefinitionId) || destinationConfig == null || destinationConfig.isEmpty()) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "缺少目标端配置");
+                }
+                Map<String, Object> resp = airbyteClient
+                    .createDestination(workspaceId, destinationDefinitionId, destinationName, destinationConfig)
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_GATEWAY, "创建目标端失败"));
+                destinationId = stringVal(resp.get("destinationId"));
+                if (StringUtils.hasText(destinationId)) {
+                    properties.setDefaultDestinationId(destinationId);
+                }
             }
         }
 
@@ -518,7 +653,7 @@ public class AirbyteResource {
             sourceConfigJson = entity.getSourceConfigJson();
         }
         Map<String, Object> existingDestinationConfig = parseJson(entity.getDestinationConfigJson());
-        Map<String, Object> resolvedDestinationConfig = mergeSecretConfig(request.destinationConfig(), existingDestinationConfig);
+        Map<String, Object> resolvedDestinationConfig = mergeSecretConfig(destinationConfig, existingDestinationConfig);
         String destinationConfigJson = writeJson(resolvedDestinationConfig);
         if (destinationConfigJson == null && StringUtils.hasText(entity.getDestinationConfigJson())) {
             destinationConfigJson = entity.getDestinationConfigJson();
@@ -576,6 +711,7 @@ public class AirbyteResource {
         entity.setSourceId(sourceId);
         entity.setOwner(normalize(request.owner()));
         entity.setDescription(normalize(request.description()));
+        entity.setDriverVersion(normalize(request.driverVersion()));
         entity.setEnabled(request.enabled() == null ? Boolean.TRUE : request.enabled());
         Map<String, Object> sanitizedConfig = stripSecrets(resolvedConfig);
         Map<String, Object> resolvedSecrets = extractSecrets(resolvedConfig);
@@ -878,6 +1014,7 @@ public class AirbyteResource {
         dto.put("owner", entity.getOwner());
         dto.put("enabled", entity.getEnabled());
         dto.put("description", entity.getDescription());
+        dto.put("driverVersion", entity.getDriverVersion());
         Map<String, Object> config = parseJson(entity.getConfigJson());
         Map<String, Object> secrets = secretService.readSecrets(entity);
         Map<String, Object> maskedSecrets = maskSecrets(secrets);
@@ -1248,6 +1385,122 @@ public class AirbyteResource {
         return out;
     }
 
+    private String resolveDestinationDefinitionId() {
+        try {
+            List<Map<String, Object>> defs = extractList(airbyteClient.listDestinationDefinitions(), "destinationDefinitions");
+            if (defs.isEmpty()) {
+                return null;
+            }
+            String preferred = findDefinitionIdByKeywords(defs, DESTINATION_KEYWORDS);
+            if (StringUtils.hasText(preferred)) {
+                return preferred;
+            }
+        } catch (Exception ex) {
+            // Keep flow resilient; caller handles missing id.
+        }
+        return null;
+    }
+
+    private String findDefinitionIdByKeywords(List<Map<String, Object>> defs, List<String> keywords) {
+        if (defs == null || defs.isEmpty()) {
+            return null;
+        }
+        List<String> normalized = keywords == null ? List.of() : keywords.stream().filter(StringUtils::hasText).toList();
+        for (String keyword : normalized) {
+            String repoHint = "destination-" + keyword.toLowerCase(Locale.ROOT);
+            for (Map<String, Object> def : defs) {
+                String id = stringVal(def.get("destinationDefinitionId"));
+                if (!StringUtils.hasText(id)) {
+                    continue;
+                }
+                String hay = buildDefinitionHaystack(def);
+                if (isBlockedDefinition(hay)) {
+                    continue;
+                }
+                String repo = normalize(stringVal(def.get("dockerRepository"))).toLowerCase(Locale.ROOT);
+                if (repo.contains(repoHint)) {
+                    return id;
+                }
+            }
+        }
+        for (String keyword : normalized) {
+            for (Map<String, Object> def : defs) {
+                String id = stringVal(def.get("destinationDefinitionId"));
+                if (!StringUtils.hasText(id)) {
+                    continue;
+                }
+                String hay = buildDefinitionHaystack(def);
+                if (isBlockedDefinition(hay)) {
+                    continue;
+                }
+                if (hay.contains(keyword.toLowerCase(Locale.ROOT))) {
+                    return id;
+                }
+            }
+        }
+        return null;
+    }
+
+    private String buildDefinitionHaystack(Map<String, Object> def) {
+        String name = normalize(stringVal(def.get("name")));
+        String repo = normalize(stringVal(def.get("dockerRepository")));
+        return (name + " " + repo).toLowerCase(Locale.ROOT);
+    }
+
+    private boolean isBlockedDefinition(String haystack) {
+        if (!StringUtils.hasText(haystack)) {
+            return false;
+        }
+        return DESTINATION_BLOCKLIST.stream().anyMatch(haystack::contains);
+    }
+
+    private Map<String, Object> buildDestinationConfig(AdminInfraClient.AdminDataLakeConfig config) {
+        if (config == null) {
+            return Map.of();
+        }
+        if (config.getDestinationConfig() != null && !config.getDestinationConfig().isEmpty()) {
+            return new LinkedHashMap<>(config.getDestinationConfig());
+        }
+        Map<String, Object> payload = new LinkedHashMap<>();
+        putIfText(payload, "jdbc_url", config.getJdbcUrl());
+        putIfText(payload, "username", config.getUsername());
+        putIfText(payload, "password", config.getPassword());
+        String database = extractDatabase(config.getJdbcUrl());
+        putIfText(payload, "database", database);
+        putIfText(payload, "schema", database);
+        if (config.getJdbcProperties() != null && !config.getJdbcProperties().isEmpty()) {
+            payload.put("jdbc_properties", config.getJdbcProperties());
+        }
+        return payload;
+    }
+
+    private String extractDatabase(String jdbcUrl) {
+        if (!StringUtils.hasText(jdbcUrl)) {
+            return null;
+        }
+        int scheme = jdbcUrl.indexOf("://");
+        int start = scheme > -1 ? jdbcUrl.indexOf("/", scheme + 3) : jdbcUrl.indexOf("/");
+        if (start < 0 || start + 1 >= jdbcUrl.length()) {
+            return null;
+        }
+        String tail = jdbcUrl.substring(start + 1);
+        int cut = tail.indexOf("?");
+        if (cut < 0) {
+            cut = tail.indexOf(";");
+        }
+        if (cut > -1) {
+            tail = tail.substring(0, cut);
+        }
+        String trimmed = tail.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private void putIfText(Map<String, Object> payload, String key, String value) {
+        if (StringUtils.hasText(value)) {
+            payload.put(key, value.trim());
+        }
+    }
+
     private String normalize(String value) {
         if (!StringUtils.hasText(value)) {
             return null;
@@ -1324,5 +1577,111 @@ public class AirbyteResource {
             }
         }
         return result;
+    }
+
+    private void assertLocalDataLakeAvailable(AirbyteConnectionRequest request) {
+        if (!isDefaultDestination(request)) {
+            return;
+        }
+        DataLakeAvailability availability = resolveDefaultDataLakeAvailability(true);
+        if (!availability.configured()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "本地数据湖未配置，请先在管理端完成配置");
+        }
+        if (!availability.available()) {
+            String reason = availability.reason();
+            throw new ResponseStatusException(
+                HttpStatus.BAD_REQUEST,
+                "本地数据湖不可用：" + (StringUtils.hasText(reason) ? reason : "请联系管理员确认数据湖状态")
+            );
+        }
+    }
+
+    private boolean isDefaultDestination(AirbyteConnectionRequest request) {
+        if (request == null) {
+            return true;
+        }
+        if (StringUtils.hasText(request.destinationId())) {
+            return false;
+        }
+        if (StringUtils.hasText(request.destinationDefinitionId())) {
+            return false;
+        }
+        return request.destinationConfig() == null || request.destinationConfig().isEmpty();
+    }
+
+    private void updateAdminDestinationFromResponse(
+        DefaultDestinationSyncService.DefaultDestinationSnapshot snapshot,
+        ApiResponse<Map<String, Object>> response
+    ) {
+        if (snapshot == null || response == null || response.getStatus() != 200) {
+            return;
+        }
+        Object payload = response.getData();
+        if (!(payload instanceof Map<?, ?> map)) {
+            return;
+        }
+        String destinationId = stringVal(map.get("destinationId"));
+        destinationSyncService.updateAdminDestinationIfNeeded(snapshot, destinationId);
+    }
+
+    private DataLakeAvailability resolveDefaultDataLakeAvailability(boolean refresh) {
+        AdminInfraClient.AdminDataLakeConfig lake = adminInfraClient.fetchDefaultDataLake().orElse(null);
+        if (lake != null) {
+            return resolveAdminDataLakeAvailability(lake);
+        }
+        if (refresh) {
+            try {
+                inceptorRegistry.refresh();
+            } catch (Exception ex) {
+                // keep cached state
+            }
+        }
+        Optional<InceptorDataSourceState> stateOpt = inceptorRegistry.getActive();
+        if (stateOpt.isPresent()) {
+            return resolveInceptorAvailability(stateOpt.orElseThrow());
+        }
+        return new DataLakeAvailability(false, false, "未配置默认数据湖", null, null, null);
+    }
+
+    private DataLakeAvailability resolveAdminDataLakeAvailability(AdminInfraClient.AdminDataLakeConfig lake) {
+        boolean hasJdbc = StringUtils.hasText(lake.getJdbcUrl());
+        boolean hasDestinationConfig = lake.getDestinationConfig() != null && !lake.getDestinationConfig().isEmpty();
+        boolean configured = hasJdbc || hasDestinationConfig;
+        if (!configured) {
+            return new DataLakeAvailability(false, false, "未配置默认数据湖", lake.getName(), null, lake.getLastVerifiedAt());
+        }
+        String reason = null;
+        String status = normalizeUpper(lake.getStatus());
+        if (StringUtils.hasText(status) && "INACTIVE".equals(status)) {
+            reason = "状态=INACTIVE";
+        }
+        String heartbeat = normalizeUpper(lake.getHeartbeatStatus());
+        if (!StringUtils.hasText(reason) && StringUtils.hasText(heartbeat) && !"UP".equals(heartbeat) && !"UNKNOWN".equals(heartbeat)) {
+            reason = "心跳状态=" + heartbeat;
+        }
+        if (!StringUtils.hasText(reason) && StringUtils.hasText(lake.getLastError())) {
+            reason = lake.getLastError();
+        }
+        boolean available = !StringUtils.hasText(reason);
+        String database = extractDatabase(lake.getJdbcUrl());
+        return new DataLakeAvailability(configured, available, reason, lake.getName(), database, lake.getLastVerifiedAt());
+    }
+
+    private DataLakeAvailability resolveInceptorAvailability(InceptorDataSourceState state) {
+        return new DataLakeAvailability(
+            true,
+            state.isAvailable(),
+            state.isAvailable() ? null : state.availabilityReason(),
+            state.name(),
+            state.database(),
+            state.lastVerifiedAt()
+        );
+    }
+
+    private String normalizeUpper(String value) {
+        if (!StringUtils.hasText(value)) {
+            return "";
+        }
+        return value.trim().toUpperCase(Locale.ROOT);
     }
 }

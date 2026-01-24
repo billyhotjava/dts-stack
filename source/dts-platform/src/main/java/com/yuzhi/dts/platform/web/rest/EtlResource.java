@@ -4,6 +4,7 @@ import com.yuzhi.dts.platform.config.AirflowProperties;
 import com.yuzhi.dts.platform.service.etl.AirflowClient;
 import com.yuzhi.dts.platform.service.etl.DbtConfigService;
 import com.yuzhi.dts.platform.service.etl.DbtManifestService;
+import com.yuzhi.dts.platform.service.etl.DbtSourceService;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -19,17 +20,20 @@ public class EtlResource {
 
     private final DbtConfigService dbtConfigService;
     private final DbtManifestService manifestService;
+    private final DbtSourceService dbtSourceService;
     private final AirflowClient airflowClient;
     private final AirflowProperties airflowProperties;
 
     public EtlResource(
         DbtConfigService dbtConfigService,
         DbtManifestService manifestService,
+        DbtSourceService dbtSourceService,
         AirflowClient airflowClient,
         AirflowProperties airflowProperties
     ) {
         this.dbtConfigService = dbtConfigService;
         this.manifestService = manifestService;
+        this.dbtSourceService = dbtSourceService;
         this.airflowClient = airflowClient;
         this.airflowProperties = airflowProperties;
     }
@@ -49,6 +53,11 @@ public class EtlResource {
     @GetMapping("/dbt/models")
     public ApiResponse<DbtManifestService.DbtModelResult> listDbtModels() {
         return ApiResponses.ok(manifestService.listModels());
+    }
+
+    @PostMapping("/dbt/sources/refresh")
+    public ApiResponse<DbtSourceService.DbtSourceRefreshResult> refreshDbtSources() {
+        return ApiResponses.ok(dbtSourceService.refreshOdsSources());
     }
 
     @GetMapping("/dbt/runs")

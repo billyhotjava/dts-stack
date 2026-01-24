@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
 	Alert,
@@ -34,6 +34,7 @@ import oracleIcon from "@/assets/connector-icons/oracle.svg";
 import mssqlIcon from "@/assets/connector-icons/mssql.svg";
 import csvIcon from "@/assets/connector-icons/file-csv.svg";
 import dmIcon from "@/assets/connector-icons/dameng.ico";
+import databaseIcon from "@/assets/connector-icons/database.svg";
 import excelIcon from "@/assets/icons/file-excel.svg";
 import {
 	checkAirbyteSource,
@@ -42,6 +43,7 @@ import {
 	discoverAirbyteSource,
 	listAirbyteSourceDefinitions,
 	listAirbyteSources,
+	listJdbcDrivers,
 	updateAirbyteSource,
 } from "@/api/platformApi";
 import { useRouter } from "@/routes/hooks";
@@ -67,6 +69,13 @@ type AirbyteSource = {
 	lastDiscoveredAt?: string;
 	enabled?: boolean;
 	description?: string;
+	driverVersion?: string;
+};
+
+type JdbcDriverInfo = {
+	fileName: string;
+	version?: string;
+	label?: string;
 };
 
 type AllowedDefinition = {
@@ -390,7 +399,7 @@ const resolveFallbackIcon = (def?: AirbyteDefinition) => {
 	if (text.includes("dameng") || text.includes("dm8") || text.includes("达梦")) return dmIcon;
 	if (text.includes("excel")) return excelIcon;
 	if (text.includes("csv") || text.includes("file")) return csvIcon;
-	return "";
+	return databaseIcon;
 };
 
 const filterAllowedDefinitions = (defs: AirbyteDefinition[]) => {
@@ -443,12 +452,17 @@ export default function DataSourcesPage() {
 	const [editMode, setEditMode] = useState<"create" | "edit">("create");
 	const [editing, setEditing] = useState<AirbyteSource | null>(null);
 	const [editingConfig, setEditingConfig] = useState<Record<string, any> | null>(null);
+	const [jdbcDrivers, setJdbcDrivers] = useState<JdbcDriverInfo[]>([]);
+	const [driverLoading, setDriverLoading] = useState(false);
 	const [saving, setSaving] = useState(false);
 	const [rowCheckingId, setRowCheckingId] = useState<string | null>(null);
 	const [rowDiscoveringId, setRowDiscoveringId] = useState<string | null>(null);
 	const [search, setSearch] = useState("");
 	const [statusFilter, setStatusFilter] = useState("ALL");
 	const [helpOpen, setHelpOpen] = useState(false);
+	const [highlightForm, setHighlightForm] = useState(false);
+	const formCardRef = useRef<HTMLDivElement | null>(null);
+	const highlightTimerRef = useRef<number | null>(null);
 	const [form] = Form.useForm();
 	const router = useRouter();
 	const selectedDefinitionId = Form.useWatch("sourceDefinitionId", form);
@@ -484,18 +498,36 @@ export default function DataSourcesPage() {
 		}
 	}, []);
 
+	const loadJdbcDrivers = useCallback(async (notify = false) => {
+		setDriverLoading(true);
+		try {
+			const resp = await listJdbcDrivers();
+			const list = Array.isArray(resp) ? (resp as JdbcDriverInfo[]) : [];
+			setJdbcDrivers(list);
+			if (notify && list.length === 0) {
+				toast.error("未获取到 JDBC 驱动列表");
+			}
+		} catch (err: any) {
+			if (notify) {
+				toast.error(err?.message || "加载 JDBC 驱动失败");
+			}
+		} finally {
+			setDriverLoading(false);
+		}
+	}, []);
+
 	const loadAll = useCallback(async () => {
 		setLoading(true);
 		try {
 			const sourceResp = await listAirbyteSources();
 			setSources(Array.isArray(sourceResp) ? (sourceResp as AirbyteSource[]) : []);
-			await loadDefinitions();
+			await Promise.all([loadDefinitions(), loadJdbcDrivers()]);
 		} catch (err: any) {
 			toast.error(err?.message || "加载数据源失败");
 		} finally {
 			setLoading(false);
 		}
-	}, [loadDefinitions]);
+	}, [loadDefinitions, loadJdbcDrivers]);
 
 	useEffect(() => {
 		void loadAll();
@@ -609,6 +641,20 @@ export default function DataSourcesPage() {
 		});
 	}, [form, sourceDefList]);
 
+	const handleCreate = useCallback(() => {
+		resetForm();
+		setHighlightForm(true);
+		if (highlightTimerRef.current) {
+			window.clearTimeout(highlightTimerRef.current);
+		}
+		highlightTimerRef.current = window.setTimeout(() => {
+			setHighlightForm(false);
+		}, 1200);
+		window.setTimeout(() => {
+			formCardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+		}, 0);
+	}, [resetForm]);
+
 	useEffect(() => {
 		if (editMode !== "create") return;
 		const currentId = String(form.getFieldValue("sourceDefinitionId") || "").trim();
@@ -616,6 +662,14 @@ export default function DataSourcesPage() {
 		if (sourceDefList.length === 0) return;
 		resetForm();
 	}, [editMode, form, resetForm, sourceDefList.length]);
+
+	useEffect(() => {
+		return () => {
+			if (highlightTimerRef.current) {
+				window.clearTimeout(highlightTimerRef.current);
+			}
+		};
+	}, []);
 
 	const openEdit = (row: AirbyteSource) => {
 		setEditMode("edit");
@@ -632,6 +686,7 @@ export default function DataSourcesPage() {
 			config: normalizeConfigForForm(row.config, profile),
 			configExtraJson: "",
 			enabled: row.enabled ?? true,
+			driverVersion: row.driverVersion || "",
 		});
 	};
 
@@ -661,8 +716,19 @@ export default function DataSourcesPage() {
 			sourceId: editing?.sourceId || undefined,
 			config,
 			enabled: values.enabled !== false,
+			driverVersion: values.driverVersion ? String(values.driverVersion).trim() : undefined,
 		};
 	};
+
+	const driverOptions = useMemo(
+		() =>
+			jdbcDrivers.map((driver) => ({
+				value: driver.version && driver.version.trim() ? driver.version : driver.fileName,
+				label: driver.label || driver.fileName,
+			})),
+		[jdbcDrivers],
+	);
+	const hasDriverOptions = driverOptions.length > 0;
 
 	const submit = async () => {
 		setSaving(true);
@@ -784,7 +850,7 @@ export default function DataSourcesPage() {
 						<Button icon={<InfoCircleOutlined />} onClick={() => setHelpOpen(true)}>
 							使用说明
 						</Button>
-						<Button type="primary" icon={<PlusOutlined />} onClick={resetForm}>
+						<Button type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
 							新建数据源
 						</Button>
 					</Space>
@@ -857,10 +923,12 @@ export default function DataSourcesPage() {
 				</Col>
 				<Col xs={24} xl={9}>
 					<Card
+						ref={formCardRef}
 						title={editMode === "create" ? "创建数据源" : "编辑数据源"}
+						className={highlightForm ? "ring-2 ring-primary/40" : undefined}
 						extra={
 							editMode === "edit" ? (
-								<Button size="small" onClick={resetForm}>
+								<Button size="small" onClick={handleCreate}>
 									切换为新建
 								</Button>
 							) : null
@@ -898,6 +966,20 @@ export default function DataSourcesPage() {
 									}))}
 									onChange={(value) => applyDefaultConfig(String(value || ""))}
 								/>
+							</Form.Item>
+							<Form.Item name="driverVersion" label="JDBC 驱动">
+								{hasDriverOptions ? (
+									<Select
+										placeholder="选择驱动版本"
+										options={driverOptions}
+										loading={driverLoading}
+										allowClear
+										showSearch
+										optionFilterProp="label"
+									/>
+								) : (
+									<Input placeholder="请输入驱动版本" />
+								)}
 							</Form.Item>
 							<div className="space-y-2">
 								<div className="grid gap-4 md:grid-cols-2">

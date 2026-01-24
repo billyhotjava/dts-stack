@@ -2,6 +2,7 @@ package com.yuzhi.dts.admin.service.infra;
 
 import com.yuzhi.dts.admin.domain.InfraDataSource;
 import com.yuzhi.dts.admin.repository.InfraDataSourceRepository;
+import com.yuzhi.dts.admin.service.infra.dto.AirbyteDestinationDefinitionDto;
 import com.yuzhi.dts.admin.service.infra.dto.ConnectionTestLogDto;
 import com.yuzhi.dts.admin.service.infra.dto.HiveAuthMethod;
 import com.yuzhi.dts.admin.service.infra.dto.HiveConnectionPersistRequest;
@@ -10,9 +11,14 @@ import com.yuzhi.dts.admin.service.infra.dto.HiveConnectionTestResult;
 import com.yuzhi.dts.admin.service.infra.dto.InfraDataSourceDto;
 import com.yuzhi.dts.admin.service.infra.dto.InfraFeatureFlags;
 import com.yuzhi.dts.admin.service.infra.dto.IntegrationStatus;
+import com.yuzhi.dts.admin.service.infra.dto.JdbcConnectionTestRequest;
+import com.yuzhi.dts.admin.service.infra.dto.JdbcDriverInfo;
 import com.yuzhi.dts.admin.service.infra.dto.ModuleStatus;
 import com.yuzhi.dts.admin.service.infra.dto.PlatformInceptorConfigResponse;
+import com.yuzhi.dts.admin.service.infra.dto.PlatformDataLakeConfigResponse;
+import com.yuzhi.dts.admin.service.infra.dto.PlatformDataLakeDestinationUpdateRequest;
 import com.yuzhi.dts.admin.service.infra.dto.UpsertInfraDataSourcePayload;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
 import java.net.InetSocketAddress;
 import java.net.Socket;
@@ -57,9 +63,13 @@ public class InfraAdminService {
     private static final long RELOAD_RETRY_DELAY_MS = 5000L;
 
     private final PlatformInfraClient platformInfraClient;
+    private final IngestionInfraClient ingestionInfraClient;
+    private final JdbcConnectionTestService jdbcConnectionTestService;
+    private final JdbcDriverCatalogService jdbcDriverCatalogService;
     private final InfraDataSourceRepository dataSourceRepository;
     private final InfraSecretService secretService;
     private final JdbcTemplate jdbcTemplate;
+    private final ObjectMapper objectMapper;
     private final boolean heartbeatEnabled;
     private final long heartbeatTimeoutMs;
 
@@ -75,19 +85,31 @@ public class InfraAdminService {
     private final AtomicBoolean syncInProgress = new AtomicBoolean(false);
     private final AtomicReference<HiveConnectionPersistRequest> lastInceptorDefinition = new AtomicReference<>();
     private final AtomicBoolean schemaReady = new AtomicBoolean(false);
+    @Value("${dts.airbyte.destination.postgres.image:airbyte/destination-postgres:3.0.7}")
+    private String defaultDestinationPostgresImage;
+    @Value("${dts.airbyte.destination.postgres.name:PostgreSQL}")
+    private String defaultDestinationPostgresName;
 
     public InfraAdminService(
         PlatformInfraClient platformInfraClient,
+        IngestionInfraClient ingestionInfraClient,
+        JdbcConnectionTestService jdbcConnectionTestService,
+        JdbcDriverCatalogService jdbcDriverCatalogService,
         InfraDataSourceRepository dataSourceRepository,
         InfraSecretService secretService,
         JdbcTemplate jdbcTemplate,
+        ObjectMapper objectMapper,
         @Value("${dts.infra.heartbeat.enabled:true}") boolean heartbeatEnabled,
         @Value("${dts.infra.heartbeat.timeout-ms:5000}") long heartbeatTimeoutMs
     ) {
         this.platformInfraClient = platformInfraClient;
+        this.ingestionInfraClient = ingestionInfraClient;
+        this.jdbcConnectionTestService = jdbcConnectionTestService;
+        this.jdbcDriverCatalogService = jdbcDriverCatalogService;
         this.dataSourceRepository = dataSourceRepository;
         this.secretService = secretService;
         this.jdbcTemplate = jdbcTemplate;
+        this.objectMapper = objectMapper;
         this.heartbeatEnabled = heartbeatEnabled;
         this.heartbeatTimeoutMs = heartbeatTimeoutMs;
     }
@@ -170,6 +192,32 @@ public class InfraAdminService {
             .collect(Collectors.toList());
     }
 
+    public Optional<InfraDataSourceDto> findDefaultDataLake() {
+        Optional<InfraDataSourceDto> preferred = cache.values().stream().filter(InfraDataSourceDto::isDefaulted).findFirst();
+        if (preferred.isPresent()) {
+            return preferred.map(InfraDataSourceDto::copy);
+        }
+        List<InfraDataSourceDto> list = listDataSources();
+        if (list.size() == 1) {
+            return Optional.of(list.get(0));
+        }
+        return Optional.empty();
+    }
+
+    public Optional<InfraDataSourceDto> setDefaultDataSource(UUID id, String operator) {
+        return dataSourceRepository
+            .findById(id)
+            .map(entity -> {
+                entity.setDefaulted(true);
+                entity.setUpdatedAt(Instant.now());
+                dataSourceRepository.save(entity);
+                clearDefaultExcept(entity.getId());
+                updateCache(entity);
+                touchLastUpdated();
+                return cache.get(entity.getId()).copy();
+            });
+    }
+
     public InfraDataSourceDto createDataSource(UpsertInfraDataSourcePayload payload, String operator) {
         InfraDataSource entity = new InfraDataSource();
         entity.setId(UUID.randomUUID());
@@ -181,7 +229,13 @@ public class InfraAdminService {
         entity.setHeartbeatFailureCount(0);
         entity.setCreatedAt(now);
         entity.setUpdatedAt(now);
+        if (payload.getDefaulted() == null) {
+            entity.setDefaulted(false);
+        }
         dataSourceRepository.save(entity);
+        if (entity.isDefaulted()) {
+            clearDefaultExcept(entity.getId());
+        }
         updateCache(entity);
         touchLastUpdated();
         return cache.get(entity.getId()).copy();
@@ -195,9 +249,14 @@ public class InfraAdminService {
             .map(existing -> {
                 InfraDataSourceDto before = toDto(existing);
                 applyPayload(existing, payload);
-                applySecrets(existing, payload.getSecrets());
+                if (payload.getSecretsRaw() != null) {
+                    applySecrets(existing, payload.getSecrets());
+                }
                 existing.setUpdatedAt(Instant.now());
                 dataSourceRepository.save(existing);
+                if (Boolean.TRUE.equals(payload.getDefaulted())) {
+                    clearDefaultExcept(existing.getId());
+                }
                 updateCache(existing);
                 touchLastUpdated();
                 InfraDataSourceDto after = cache.get(existing.getId()).copy();
@@ -218,46 +277,39 @@ public class InfraAdminService {
     }
 
     public HiveConnectionTestResult testDataSourceConnection(HiveConnectionTestRequest request, UUID dataSourceId) {
-        ConnectivityResult probe = performConnectivityCheck(request.getJdbcUrl(), mapToObject(request.getJdbcProperties()));
-        HiveConnectionTestResult result = new HiveConnectionTestResult();
-        result.setSuccess(probe.success());
-        result.setElapsedMillis(probe.elapsedMillis());
-        result.setMessage(probe.message());
-        if (!probe.success() && probe.error() != null) {
-            result.getWarnings().add(probe.error());
+        HiveConnectionTestResult result = platformInfraClient
+            .testInceptorConnection(request)
+            .orElseGet(() -> {
+                HiveConnectionTestResult fallback = new HiveConnectionTestResult();
+                fallback.setSuccess(false);
+                fallback.setElapsedMillis(0L);
+                fallback.setMessage("平台 SQL 测试不可用，请检查平台服务与驱动");
+                return fallback;
+            });
+        if (!StringUtils.hasText(result.getMessage())) {
+            result.setMessage(result.isSuccess() ? "连接成功" : "连接失败");
         }
         recordTestLog(dataSourceId, result);
 
         if (dataSourceId != null) {
-            dataSourceRepository
-                .findById(dataSourceId)
-                .ifPresent(entity -> {
-                    Instant now = Instant.now();
-                    if (probe.success()) {
-                        entity.setStatus(STATUS_ACTIVE);
-                        entity.setLastVerifiedAt(now);
-                        entity.setLastHeartbeatAt(now);
-                        entity.setHeartbeatStatus(HEARTBEAT_UP);
-                        entity.setHeartbeatFailureCount(0);
-                        entity.setLastError(null);
-                        lastVerifiedAt.set(now);
-                    } else {
-                        entity.setStatus(STATUS_INACTIVE);
-                        entity.setHeartbeatStatus(HEARTBEAT_DOWN);
-                        entity.setHeartbeatFailureCount(incrementFailure(entity.getHeartbeatFailureCount()));
-                        entity.setLastError(probe.message());
-                    }
-                    entity.setLastTestElapsedMillis(probe.elapsedMillis());
-                    entity.setUpdatedAt(now);
-                    dataSourceRepository.save(entity);
-                    updateCache(entity);
-                });
+            dataSourceRepository.findById(dataSourceId).ifPresent(entity -> applyTestResult(entity, result));
+        } else {
+            touchLastUpdated();
         }
-        if (probe.success()) {
-            lastTestElapsedMillis.set(result.getElapsedMillis());
-        }
-        touchLastUpdated();
         return result;
+    }
+
+    public Optional<HiveConnectionTestResult> testJdbcDataSourceConnection(UUID id, JdbcConnectionTestRequest request) {
+        return dataSourceRepository.findById(id).map(entity -> {
+            JdbcConnectionTestRequest payload = buildJdbcTestRequest(entity, request);
+            HiveConnectionTestResult result = jdbcConnectionTestService.testConnection(payload);
+            if (!StringUtils.hasText(result.getMessage())) {
+                result.setMessage(result.isSuccess() ? "连接成功" : "连接失败");
+            }
+            recordTestLog(entity.getId(), result);
+            applyTestResult(entity, result);
+            return result;
+        });
     }
 
     public DataSourceMutation publishInceptor(HiveConnectionPersistRequest request, String operator) {
@@ -272,6 +324,11 @@ public class InfraAdminService {
         });
         applyPersistRequest(entity, request);
         Instant now = Instant.now();
+        if (request.getDefaulted() != null) {
+            entity.setDefaulted(request.getDefaulted());
+        } else if (!hasDefaultDataLake()) {
+            entity.setDefaulted(true);
+        }
         entity.setLastVerifiedAt(now);
         entity.setLastHeartbeatAt(now);
         entity.setHeartbeatStatus(HEARTBEAT_UP);
@@ -279,6 +336,9 @@ public class InfraAdminService {
         entity.setLastError(null);
         entity.setUpdatedAt(now);
         dataSourceRepository.save(entity);
+        if (entity.isDefaulted()) {
+            clearDefaultExcept(entity.getId());
+        }
         updateCache(entity);
         updateLastInceptorDefinition(entity);
         lastVerifiedAt.set(now);
@@ -338,6 +398,14 @@ public class InfraAdminService {
         return flags;
     }
 
+    public List<JdbcDriverInfo> listJdbcDrivers() {
+        return jdbcDriverCatalogService.listDrivers();
+    }
+
+    public List<AirbyteDestinationDefinitionDto> listDestinationDefinitions() {
+        return ingestionInfraClient.listDestinationDefinitions();
+    }
+
     public Optional<PlatformInceptorConfigResponse> currentPlatformInceptorConfig() {
         InfraDataSource entity = findFirstInceptorEntity().orElse(null);
         if (entity == null) {
@@ -376,6 +444,11 @@ public class InfraAdminService {
         resp.setUseSsl(definition.isUseSsl());
         resp.setUseCustomJdbc(definition.isUseCustomJdbc());
         resp.setCustomJdbcUrl(definition.getCustomJdbcUrl());
+        resp.setDefaulted(entity.isDefaulted());
+        resp.setDestinationId(definition.getDestinationId());
+        resp.setDestinationName(definition.getDestinationName());
+        resp.setDestinationDefinitionId(definition.getDestinationDefinitionId());
+        resp.setDestinationConfig(definition.getDestinationConfig());
         resp.setLastTestElapsedMillis(ds.getLastTestElapsedMillis());
         resp.setEngineVersion(ds.getEngineVersion());
         resp.setDriverVersion(ds.getDriverVersion());
@@ -386,6 +459,84 @@ public class InfraAdminService {
         resp.setHeartbeatFailureCount(ds.getHeartbeatFailureCount());
         resp.setLastError(ds.getLastError());
         return Optional.of(resp);
+    }
+
+    public Optional<PlatformDataLakeConfigResponse> currentPlatformDefaultDataLakeConfig() {
+        InfraDataSourceDto preferred = findDefaultDataLake().orElse(null);
+        if (preferred == null || preferred.getId() == null) {
+            return Optional.empty();
+        }
+        InfraDataSource entity = dataSourceRepository.findById(preferred.getId()).orElse(null);
+        if (entity == null) {
+            return Optional.empty();
+        }
+        PlatformDataLakeConfigResponse resp = new PlatformDataLakeConfigResponse();
+        resp.setId(entity.getId());
+        resp.setName(entity.getName());
+        resp.setType(entity.getType());
+        resp.setDescription(entity.getDescription());
+        resp.setJdbcUrl(entity.getJdbcUrl());
+        resp.setUsername(entity.getUsername());
+        resp.setDefaulted(entity.isDefaulted());
+        Map<String, Object> props = entity.getProps();
+        Map<String, Object> secrets = secretService.readSecrets(entity);
+        resp.setPassword(asString(secrets.get("password")));
+        resp.setJdbcProperties(stringMap(props.get("jdbcProperties")));
+        resp.setDestinationId(asString(props.get("destinationId")));
+        resp.setDestinationName(asString(props.get("destinationName")));
+        resp.setDestinationDefinitionId(asString(props.get("destinationDefinitionId")));
+        resp.setDestinationConfig(parseDestinationConfig(secrets.get("destinationConfig")));
+        resp.setStatus(entity.getStatus());
+        resp.setHeartbeatStatus(entity.getHeartbeatStatus());
+        resp.setHeartbeatFailureCount(entity.getHeartbeatFailureCount());
+        resp.setLastError(entity.getLastError());
+        resp.setLastTestElapsedMillis(entity.getLastTestElapsedMillis());
+        resp.setEngineVersion(entity.getEngineVersion());
+        resp.setDriverVersion(entity.getDriverVersion());
+        resp.setLastVerifiedAt(entity.getLastVerifiedAt());
+        resp.setLastHeartbeatAt(entity.getLastHeartbeatAt());
+        return Optional.of(resp);
+    }
+
+    public Optional<PlatformDataLakeConfigResponse> updateDefaultDataLakeDestination(
+        PlatformDataLakeDestinationUpdateRequest request,
+        String operator
+    ) {
+        if (request == null) {
+            return Optional.empty();
+        }
+        InfraDataSourceDto preferred = findDefaultDataLake().orElse(null);
+        if (preferred == null || preferred.getId() == null) {
+            return Optional.empty();
+        }
+        InfraDataSource entity = dataSourceRepository.findById(preferred.getId()).orElse(null);
+        if (entity == null) {
+            return Optional.empty();
+        }
+        Map<String, Object> props = entity.getProps();
+        if (StringUtils.hasText(request.getDestinationId())) {
+            props.put("destinationId", request.getDestinationId().trim());
+        }
+        if (StringUtils.hasText(request.getDestinationName())) {
+            props.put("destinationName", request.getDestinationName().trim());
+        }
+        if (StringUtils.hasText(request.getDestinationDefinitionId())) {
+            props.put("destinationDefinitionId", request.getDestinationDefinitionId().trim());
+        }
+        entity.setProps(props);
+
+        Map<String, Object> secrets = new HashMap<>(secretService.readSecrets(entity));
+        if (request.getDestinationConfig() != null && !request.getDestinationConfig().isEmpty()) {
+            secrets.put("destinationConfig", request.getDestinationConfig());
+        }
+        secretService.applySecrets(entity, secrets);
+        entity.setHasSecrets(!secrets.isEmpty());
+
+        entity.setUpdatedAt(Instant.now());
+        dataSourceRepository.save(entity);
+        updateCache(entity);
+        touchLastUpdated();
+        return currentPlatformDefaultDataLakeConfig();
     }
 
     public List<ConnectionTestLogDto> recentTestLogs(UUID dataSourceId) {
@@ -443,11 +594,81 @@ public class InfraAdminService {
 
     private void applyPayload(InfraDataSource entity, UpsertInfraDataSourcePayload payload) {
         entity.setName(payload.getName());
-        entity.setType(payload.getType());
+        entity.setType(normalizeDataLakeType(payload.getType()));
         entity.setJdbcUrl(payload.getJdbcUrl());
         entity.setUsername(payload.getUsername());
         entity.setDescription(payload.getDescription());
         entity.setProps(payload.getProps());
+        if (payload.getDefaulted() != null) {
+            entity.setDefaulted(payload.getDefaulted());
+        }
+        ensureDestinationDefinition(entity);
+    }
+
+    private void ensureDestinationDefinition(InfraDataSource entity) {
+        if (entity == null) {
+            return;
+        }
+        Map<String, Object> props = entity.getProps() != null ? entity.getProps() : new HashMap<>();
+        if (StringUtils.hasText(asString(props.get("destinationDefinitionId")))) {
+            return;
+        }
+        // Only auto-register for postgres/JDBC types
+        String type = normalizeDataLakeType(entity.getType());
+        if (!type.equals("POSTGRESQL") && !type.equals("JDBC")) {
+            return;
+        }
+        String image = defaultDestinationPostgresImage;
+        String name = defaultDestinationPostgresName;
+        String repo = image;
+        String tag = "latest";
+        int idx = image.lastIndexOf(':');
+        if (idx > 0) {
+            repo = image.substring(0, idx);
+            tag = image.substring(idx + 1);
+        }
+        Optional<String> defId = platformInfraClient.registerDestinationDefinition(name, repo, tag);
+        defId.ifPresent(id -> {
+            props.put("destinationDefinitionId", id);
+            props.put("destinationDefinitionName", name);
+            entity.setProps(props);
+        });
+    }
+
+    private String normalizeDataLakeType(String type) {
+        if (!StringUtils.hasText(type)) {
+            return "JDBC";
+        }
+        return type.trim().toUpperCase(Locale.ROOT);
+    }
+
+    private JdbcConnectionTestRequest buildJdbcTestRequest(InfraDataSource entity, JdbcConnectionTestRequest override) {
+        JdbcConnectionTestRequest request = new JdbcConnectionTestRequest();
+        String jdbcUrl = StringUtils.hasText(override.getJdbcUrl()) ? override.getJdbcUrl() : entity.getJdbcUrl();
+        request.setJdbcUrl(jdbcUrl);
+        Map<String, Object> props = entity.getProps() != null ? entity.getProps() : Collections.emptyMap();
+        Map<String, Object> secrets = secretService.readSecrets(entity);
+
+        String username = StringUtils.hasText(override.getUsername()) ? override.getUsername() : entity.getUsername();
+        request.setUsername(username);
+        String password = StringUtils.hasText(override.getPassword()) ? override.getPassword() : asString(secrets.get("password"));
+        request.setPassword(password);
+        String driverClass = StringUtils.hasText(override.getDriverClass())
+            ? override.getDriverClass()
+            : asString(props.get("driverClass"));
+        request.setDriverClass(driverClass);
+        String driverVersion = StringUtils.hasText(override.getDriverVersion())
+            ? override.getDriverVersion()
+            : asString(props.get("driverVersion"));
+        request.setDriverVersion(driverVersion);
+        String testQuery = StringUtils.hasText(override.getTestQuery()) ? override.getTestQuery() : asString(props.get("testQuery"));
+        request.setTestQuery(testQuery);
+        Map<String, String> jdbcProps = override.getJdbcProperties();
+        if (jdbcProps == null || jdbcProps.isEmpty()) {
+            jdbcProps = stringMap(props.get("jdbcProperties"));
+        }
+        request.setJdbcProperties(jdbcProps);
+        return request;
     }
 
     private void applySecrets(InfraDataSource entity, Map<String, Object> secrets) {
@@ -475,11 +696,40 @@ public class InfraAdminService {
         props.put("authMethod", request.getAuthMethod() != null ? request.getAuthMethod().name() : null);
         props.put("proxyUser", request.getProxyUser());
         props.put("jdbcProperties", request.getJdbcProperties());
+        String destinationId = request.getDestinationId();
+        String destinationName = request.getDestinationName();
+        String destinationDefinitionId = request.getDestinationDefinitionId();
+        Map<String, Object> existingProps = entity.getProps();
+        if (!StringUtils.hasText(destinationId)) {
+            destinationId = asString(existingProps.get("destinationId"));
+        }
+        if (!StringUtils.hasText(destinationName)) {
+            destinationName = asString(existingProps.get("destinationName"));
+        }
+        if (!StringUtils.hasText(destinationDefinitionId)) {
+            destinationDefinitionId = asString(existingProps.get("destinationDefinitionId"));
+        }
+        if (StringUtils.hasText(destinationId)) {
+            props.put("destinationId", destinationId);
+        }
+        if (StringUtils.hasText(destinationName)) {
+            props.put("destinationName", destinationName);
+        }
+        if (StringUtils.hasText(destinationDefinitionId)) {
+            props.put("destinationDefinitionId", destinationDefinitionId);
+        }
         entity.setProps(props);
         entity.setEngineVersion(request.getEngineVersion());
         entity.setDriverVersion(request.getDriverVersion());
         entity.setLastTestElapsedMillis(request.getLastTestElapsedMillis());
-        applySecrets(entity, buildPersistSecrets(request));
+        Map<String, Object> secrets = buildPersistSecrets(request);
+        if (!secrets.containsKey("destinationConfig")) {
+            Map<String, Object> existingSecrets = secretService.readSecrets(entity);
+            if (existingSecrets.containsKey("destinationConfig")) {
+                secrets.put("destinationConfig", existingSecrets.get("destinationConfig"));
+            }
+        }
+        applySecrets(entity, secrets);
     }
 
     private Map<String, Object> buildPersistSecrets(HiveConnectionPersistRequest request) {
@@ -501,6 +751,9 @@ public class InfraAdminService {
         }
         if (request.getJdbcProperties() != null && !request.getJdbcProperties().isEmpty()) {
             secrets.put("jdbcProperties", new HashMap<>(request.getJdbcProperties()));
+        }
+        if (request.getDestinationConfig() != null) {
+            secrets.put("destinationConfig", new HashMap<>(request.getDestinationConfig()));
         }
         return secrets;
     }
@@ -538,6 +791,11 @@ public class InfraAdminService {
         request.setEngineVersion(entity.getEngineVersion());
         request.setDriverVersion(entity.getDriverVersion());
         request.setLastTestElapsedMillis(entity.getLastTestElapsedMillis());
+        request.setDefaulted(entity.isDefaulted());
+        request.setDestinationId(asString(props.get("destinationId")));
+        request.setDestinationName(asString(props.get("destinationName")));
+        request.setDestinationDefinitionId(asString(props.get("destinationDefinitionId")));
+        request.setDestinationConfig(parseDestinationConfig(secrets.get("destinationConfig")));
 
         String auth = asString(props.getOrDefault("authMethod", secrets.get("authMethod")));
         HiveAuthMethod authMethod = parseAuthMethod(auth);
@@ -561,6 +819,54 @@ public class InfraAdminService {
         cache.put(entity.getId(), toDto(entity));
     }
 
+    private void applyTestResult(InfraDataSource entity, HiveConnectionTestResult result) {
+        Instant now = Instant.now();
+        if (result.isSuccess()) {
+            entity.setStatus(STATUS_ACTIVE);
+            entity.setLastVerifiedAt(now);
+            entity.setLastHeartbeatAt(now);
+            entity.setHeartbeatStatus(HEARTBEAT_UP);
+            entity.setHeartbeatFailureCount(0);
+            entity.setLastError(null);
+            lastVerifiedAt.set(now);
+            lastTestElapsedMillis.set(result.getElapsedMillis());
+        } else {
+            entity.setStatus(STATUS_INACTIVE);
+            entity.setHeartbeatStatus(HEARTBEAT_DOWN);
+            entity.setHeartbeatFailureCount(incrementFailure(entity.getHeartbeatFailureCount()));
+            entity.setLastError(result.getMessage());
+        }
+        if (StringUtils.hasText(result.getEngineVersion())) {
+            entity.setEngineVersion(result.getEngineVersion());
+        }
+        if (StringUtils.hasText(result.getDriverVersion())) {
+            entity.setDriverVersion(result.getDriverVersion());
+        }
+        entity.setLastTestElapsedMillis(result.getElapsedMillis());
+        entity.setUpdatedAt(now);
+        dataSourceRepository.save(entity);
+        updateCache(entity);
+        touchLastUpdated();
+    }
+
+    private void clearDefaultExcept(UUID keepId) {
+        List<InfraDataSource> defaults = dataSourceRepository.findByDefaultedTrueAndIdNot(keepId);
+        if (defaults.isEmpty()) {
+            return;
+        }
+        Instant now = Instant.now();
+        for (InfraDataSource entity : defaults) {
+            entity.setDefaulted(false);
+            entity.setUpdatedAt(now);
+            dataSourceRepository.save(entity);
+            updateCache(entity);
+        }
+    }
+
+    private boolean hasDefaultDataLake() {
+        return cache.values().stream().anyMatch(InfraDataSourceDto::isDefaulted);
+    }
+
     private InfraDataSourceDto toDto(InfraDataSource entity) {
         InfraDataSourceDto dto = new InfraDataSourceDto();
         dto.setId(entity.getId());
@@ -572,6 +878,7 @@ public class InfraAdminService {
         dto.setProps(entity.getProps());
         dto.setStatus(entity.getStatus());
         dto.setHasSecrets(entity.isHasSecrets() || entity.getSecureProps() != null);
+        dto.setDefaulted(entity.isDefaulted());
         dto.setEngineVersion(entity.getEngineVersion());
         dto.setDriverVersion(entity.getDriverVersion());
         dto.setLastTestElapsedMillis(entity.getLastTestElapsedMillis());
@@ -586,6 +893,14 @@ public class InfraAdminService {
     }
 
     private Optional<InfraDataSourceDto> findFirstInceptor() {
+        Optional<InfraDataSourceDto> preferred = cache
+            .values()
+            .stream()
+            .filter(ds -> "INCEPTOR".equalsIgnoreCase(ds.getType()) && ds.isDefaulted())
+            .findFirst();
+        if (preferred.isPresent()) {
+            return preferred.map(InfraDataSourceDto::copy);
+        }
         return cache
             .values()
             .stream()
@@ -595,7 +910,9 @@ public class InfraAdminService {
     }
 
     private Optional<InfraDataSource> findFirstInceptorEntity() {
-        return dataSourceRepository.findFirstByTypeIgnoreCaseOrderByUpdatedAtDesc("INCEPTOR");
+        return dataSourceRepository
+            .findFirstByTypeIgnoreCaseAndDefaultedTrueOrderByUpdatedAtDesc("INCEPTOR")
+            .or(() -> dataSourceRepository.findFirstByTypeIgnoreCaseOrderByUpdatedAtDesc("INCEPTOR"));
     }
 
     private HiveAuthMethod parseAuthMethod(String value) {
@@ -637,6 +954,26 @@ public class InfraAdminService {
             }
         });
         return result;
+    }
+
+    private Map<String, Object> parseDestinationConfig(Object raw) {
+        if (raw instanceof Map<?, ?> map) {
+            Map<String, Object> result = new HashMap<>();
+            map.forEach((k, v) -> {
+                if (k != null) {
+                    result.put(k.toString(), v);
+                }
+            });
+            return result;
+        }
+        if (raw instanceof String str && StringUtils.hasText(str)) {
+            try {
+                return objectMapper.readValue(str, new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
+            } catch (Exception ex) {
+                LOG.debug("Failed to parse destination config: {}", ex.getMessage());
+            }
+        }
+        return Collections.emptyMap();
     }
 
     private void recordTestLog(UUID dataSourceId, HiveConnectionTestResult result) {

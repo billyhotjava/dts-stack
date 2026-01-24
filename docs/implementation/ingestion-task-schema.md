@@ -1,6 +1,6 @@
 # Ingestion Task JSON (v1) Proposal
 
-This document defines the recommended "ingestion task" JSON contract for the new `dts-ingestion-service`.
+This document defines the recommended "ingestion task" JSON contract for the new `dts-ingestion`.
 It hides Airbyte/OpenMetadata terminology while preserving Airbyte capabilities.
 
 ## Goals

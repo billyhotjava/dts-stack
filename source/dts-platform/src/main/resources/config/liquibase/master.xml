@@ -98,6 +98,8 @@
     <include file="config/liquibase/changelog/20260222_01_infra_airbyte_source.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260222_02_infra_airbyte_source_secrets.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260222_03_infra_airbyte_connection_extend.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260222_04_infra_airbyte_source_driver_version.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260225_01_infra_ods_table_mapping.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260201_01_metadata_standard.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260201_02_modeling_template_metadata_standard.xml" relativeToChangelogFile="false"/>
 </databaseChangeLog>

@@ -6,7 +6,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public class DtsIngestionProperties {
 
     private boolean enabled = true;
-    private String baseUrl = "http://dts-ingestion-service:8083";
+    private String baseUrl = "http://dts-ingestion:8083";
     private String apiPath = "/api/infra/airbyte";
     private String serviceName = "dts-platform";
 
