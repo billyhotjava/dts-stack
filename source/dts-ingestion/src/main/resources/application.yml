@@ -43,6 +43,7 @@ dts:
     default-destination-name: ${DTS_AIRBYTE_DEFAULT_DESTINATION_NAME:dts-ods-destination}
     default-destination-definition-id: ${DTS_AIRBYTE_DEFAULT_DESTINATION_DEFINITION_ID:}
     default-destination-config-json: ${DTS_AIRBYTE_DEFAULT_DESTINATION_CONFIG_JSON:}
+    default-destination-image: ${IMAGE_AIRBYTE_DESTINATION_POSTGRES:airbyte/destination-postgres:3.0.7}
   airflow:
     enabled: ${DTS_AIRFLOW_ENABLED:true}
     base-url: ${DTS_AIRFLOW_BASE_URL:http://dts-airflow-webserver:8080}

@@ -77,6 +77,7 @@ public class AirbyteResource {
     private final InfraSecretService secretService;
     private final IngestionSettingsService settingsService;
     private final AirbyteCatalogCache catalogCache;
+    private final IngestionSettingsService ingestionSettingsService;
 
     public AirbyteResource(
         AirbyteClient airbyteClient,
@@ -87,7 +88,8 @@ public class AirbyteResource {
         ObjectMapper objectMapper,
         InfraSecretService secretService,
         IngestionSettingsService settingsService,
-        AirbyteCatalogCache catalogCache
+        AirbyteCatalogCache catalogCache,
+        IngestionSettingsService ingestionSettingsService
     ) {
         this.airbyteClient = airbyteClient;
         this.properties = properties;
@@ -98,6 +100,7 @@ public class AirbyteResource {
         this.secretService = secretService;
         this.settingsService = settingsService;
         this.catalogCache = catalogCache;
+        this.ingestionSettingsService = ingestionSettingsService;
     }
 
     public record AirbyteSourceRequest(
@@ -260,7 +263,23 @@ public class AirbyteResource {
 
     @GetMapping("/definitions/destinations")
     public ApiResponse<List<Map<String, Object>>> listDestinationDefinitions() {
-        List<Map<String, Object>> list = extractList(airbyteClient.listDestinationDefinitions(), "destinationDefinitions");
+        List<Map<String, Object>> list = List.of();
+        try {
+            list = extractList(airbyteClient.listDestinationDefinitions(), "destinationDefinitions");
+        } catch (Exception ex) {
+            auditService.auditAction(
+                "AIRBYTE_DEST_DEF_LIST",
+                AuditStage.FAIL,
+                "airbyte",
+                Map.of("summary", "获取目标端定义失败", "error", ex.getMessage())
+            );
+        }
+        if (list.isEmpty()) {
+            Map<String, Object> fallback = buildFallbackDestinationDefinition();
+            if (!fallback.isEmpty()) {
+                list = List.of(fallback);
+            }
+        }
         auditService.auditAction("AIRBYTE_DEST_DEF_LIST", AuditStage.SUCCESS, "airbyte", Map.of("summary", "获取目标端定义"));
         return ApiResponses.ok(list);
     }
@@ -949,6 +968,29 @@ public class AirbyteResource {
             return null;
         }
         return Map.of("cron", Map.of("cronExpression", expression, "cronTimeZone", "UTC"));
+    }
+
+    private Map<String, Object> buildFallbackDestinationDefinition() {
+        IngestionSettingsService.SettingsSnapshot snapshot = ingestionSettingsService.getSettings(IngestionSettingsService.SERVICE_AIRBYTE);
+        String defId = snapshot.getString("defaultDestinationDefinitionId", "local-postgres-destination");
+        String name = snapshot.getString("defaultDestinationName", "Postgres (offline)");
+        String image = snapshot.getString("defaultDestinationImage", properties.getDefaultDestinationImage());
+        if (!StringUtils.hasText(image)) {
+            return Map.of();
+        }
+        String repo = image;
+        String tag = "latest";
+        int idx = image.lastIndexOf(':');
+        if (idx > 0 && idx < image.length() - 1) {
+            repo = image.substring(0, idx);
+            tag = image.substring(idx + 1);
+        }
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("destinationDefinitionId", defId);
+        map.put("name", name);
+        map.put("dockerRepository", repo);
+        map.put("dockerImageTag", tag);
+        return map;
     }
 
     private String resolveSyncMode(String requestedMode, List<String> supportedModes) {

@@ -6,7 +6,10 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public class IngestionProperties {
 
     private boolean enabled = true;
-    private String trustedServiceName = "dts-platform";
+    /**
+     * Comma-separated service names allowed via X-DTS-Service header (case-insensitive).
+     */
+    private String trustedServiceName = "dts-platform,dts-admin";
 
     public boolean isEnabled() {
         return enabled;

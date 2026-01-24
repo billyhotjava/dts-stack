@@ -679,12 +679,12 @@ export default function DataLakeEditorView() {
 
 	if (id && !dataLakesLoading && !editingLake) {
 		return (
-			<div className="space-y-6">
+			<div className="mx-auto w-full max-w-[1400px] px-6 py-6 space-y-6">
 				<Card>
 					<CardHeader>
 						<CardTitle>数据湖不存在</CardTitle>
 					</CardHeader>
-					<CardContent>
+					<CardContent className="text-sm">
 						<Text variant="body3" className="text-muted-foreground">
 							未找到对应的数据湖记录，请返回列表重新选择。
 						</Text>
@@ -698,10 +698,10 @@ export default function DataLakeEditorView() {
 	}
 
 	return (
-		<div className="space-y-6">
+		<div className="mx-auto w-full max-w-[1400px] px-6 py-6 space-y-6">
 			<div className="flex flex-wrap items-center justify-between gap-3">
 				<div>
-					<Text variant="subTitle1" className="block">
+					<Text variant="body1" className="block text-lg font-semibold">
 						{readOnly ? "数据湖详情" : isEditing ? "编辑数据湖" : "新增数据湖"}
 					</Text>
 					<Text variant="body3" className="text-muted-foreground">
@@ -735,8 +735,14 @@ export default function DataLakeEditorView() {
 				<CardHeader>
 					<CardTitle>连接配置</CardTitle>
 				</CardHeader>
-				<CardContent>
-					<Form<FormValues> layout="vertical" form={form} disabled={readOnly}>
+				<CardContent className="text-sm">
+					<Form<FormValues>
+						layout="vertical"
+						form={form}
+						disabled={readOnly}
+						size="small"
+						className="text-sm [&_.ant-form-item-label>label]:text-sm [&_.ant-input]:text-sm [&_.ant-input-number-input]:text-sm [&_.ant-select-selector]:text-sm [&_.ant-select-selection-item]:text-sm [&_.ant-select-selection-placeholder]:text-sm"
+					>
 						<div className="grid gap-4 md:grid-cols-2">
 							<Form.Item name="name" label="名称" rules={[{ required: true, message: "请填写名称" }]}>
 								<Input placeholder="如：ODS Hive" />
@@ -749,15 +755,19 @@ export default function DataLakeEditorView() {
 							</Form.Item>
 							{isInceptor ? null : (
 								<>
-									<Form.Item name="username" label="用户名">
-										<Input placeholder="可选" />
+									<Form.Item
+										name="username"
+										label="用户名"
+										rules={[{ required: true, message: "请输入用户名" }]}
+									>
+										<Input placeholder="数据库用户名" />
 									</Form.Item>
 									<Form.Item
 										name="password"
 										label="密码"
-										rules={[{ required: Boolean(username), message: "请输入密码" }]}
+										rules={[{ required: true, message: "请输入密码" }]}
 									>
-										<Input.Password placeholder={username ? "请输入密码" : "可选"} />
+										<Input.Password placeholder="数据库密码" />
 									</Form.Item>
 								</>
 							)}

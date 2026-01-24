@@ -18,6 +18,7 @@ public class AirbyteProperties {
     private String defaultDestinationName = "dts-ods-destination";
     private String defaultDestinationDefinitionId;
     private String defaultDestinationConfigJson;
+    private String defaultDestinationImage;
 
     public boolean isEnabled() {
         return enabled;
@@ -121,5 +122,13 @@ public class AirbyteProperties {
 
     public void setDefaultDestinationConfigJson(String defaultDestinationConfigJson) {
         this.defaultDestinationConfigJson = defaultDestinationConfigJson;
+    }
+
+    public String getDefaultDestinationImage() {
+        return defaultDestinationImage;
+    }
+
+    public void setDefaultDestinationImage(String defaultDestinationImage) {
+        this.defaultDestinationImage = defaultDestinationImage;
     }
 }

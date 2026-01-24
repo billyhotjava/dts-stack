@@ -555,6 +555,7 @@ public class AirbyteResource {
                 if (destinationConfig == null || destinationConfig.isEmpty()) {
                     destinationConfig = buildDestinationConfig(defaultLake);
                 }
+                destinationConfig = ensureHostPort(destinationConfig, defaultLake.getJdbcUrl());
                 if (StringUtils.hasText(defaultLake.getDestinationName())) {
                     destinationName = defaultLake.getDestinationName();
                 }
@@ -565,6 +566,7 @@ public class AirbyteResource {
             if (destinationConfig == null || destinationConfig.isEmpty()) {
                 destinationConfig = parseJson(properties.getDefaultDestinationConfigJson());
             }
+            destinationConfig = ensureHostPort(destinationConfig, properties.getDefaultDestinationConfigJson());
             if (!StringUtils.hasText(destinationId)) {
                 if (!StringUtils.hasText(destinationDefinitionId)) {
                     destinationDefinitionId = resolveDestinationDefinitionId();
@@ -1458,20 +1460,74 @@ public class AirbyteResource {
         if (config == null) {
             return Map.of();
         }
-        if (config.getDestinationConfig() != null && !config.getDestinationConfig().isEmpty()) {
-            return new LinkedHashMap<>(config.getDestinationConfig());
-        }
-        Map<String, Object> payload = new LinkedHashMap<>();
-        putIfText(payload, "jdbc_url", config.getJdbcUrl());
+        Map<String, Object> payload = config.getDestinationConfig() != null
+            ? new LinkedHashMap<>(config.getDestinationConfig())
+            : new LinkedHashMap<>();
+        String jdbcUrl = config.getJdbcUrl();
+        putIfText(payload, "jdbc_url", jdbcUrl);
         putIfText(payload, "username", config.getUsername());
         putIfText(payload, "password", config.getPassword());
-        String database = extractDatabase(config.getJdbcUrl());
+        String database = extractDatabase(jdbcUrl);
         putIfText(payload, "database", database);
         putIfText(payload, "schema", database);
+        JdbcParts parts = parseJdbc(jdbcUrl);
+        if (StringUtils.hasText(parts.host())) {
+            payload.putIfAbsent("host", parts.host());
+        }
+        if (parts.port() != null) {
+            payload.putIfAbsent("port", parts.port());
+        }
         if (config.getJdbcProperties() != null && !config.getJdbcProperties().isEmpty()) {
             payload.put("jdbc_properties", config.getJdbcProperties());
         }
         return payload;
+    }
+
+    private record JdbcParts(String host, Integer port) {}
+
+    private JdbcParts parseJdbc(String jdbcUrl) {
+        if (!StringUtils.hasText(jdbcUrl)) {
+            return new JdbcParts(null, null);
+        }
+        try {
+            String trimmed = jdbcUrl.trim();
+            int idx = trimmed.indexOf("://");
+            String rest = idx > 0 ? trimmed.substring(idx + 3) : trimmed;
+            String hostPort = rest;
+            int slash = hostPort.indexOf('/');
+            if (slash >= 0) {
+                hostPort = hostPort.substring(0, slash);
+            }
+            int semicolon = hostPort.indexOf(';');
+            if (semicolon >= 0) {
+                hostPort = hostPort.substring(0, semicolon);
+            }
+            int question = hostPort.indexOf('?');
+            if (question >= 0) {
+                hostPort = hostPort.substring(0, question);
+            }
+            String[] parts = hostPort.split(":", 2);
+            String host = parts[0];
+            Integer port = null;
+            if (parts.length > 1) {
+                try {
+                    port = Integer.parseInt(parts[1]);
+                } catch (NumberFormatException ignored) {}
+            }
+            if (port == null) {
+                if (trimmed.toLowerCase(Locale.ROOT).contains("postgres")) {
+                    port = 5432;
+                } else if (trimmed.toLowerCase(Locale.ROOT).contains("mysql")) {
+                    port = 3306;
+                }
+            }
+            if (!StringUtils.hasText(host)) {
+                host = null;
+            }
+            return new JdbcParts(host, port);
+        } catch (Exception ex) {
+            return new JdbcParts(null, null);
+        }
     }
 
     private String extractDatabase(String jdbcUrl) {
@@ -1499,6 +1555,51 @@ public class AirbyteResource {
         if (StringUtils.hasText(value)) {
             payload.put(key, value.trim());
         }
+    }
+
+    private Map<String, Object> ensureHostPort(Map<String, Object> config, String hint) {
+        Map<String, Object> payload = config == null ? new LinkedHashMap<>() : new LinkedHashMap<>(config);
+        String host = stringVal(payload.get("host"));
+        Integer port = toInteger(payload.get("port"));
+        String jdbc = stringVal(payload.get("jdbc_url"));
+
+        if (!StringUtils.hasText(jdbc) && StringUtils.hasText(hint) && hint.trim().startsWith("{")) {
+            Map<String, Object> parsed = parseJson(hint);
+            if (parsed != null) {
+                if (!StringUtils.hasText(jdbc)) {
+                    jdbc = stringVal(parsed.get("jdbc_url"));
+                }
+                if (!StringUtils.hasText(host)) {
+                    host = stringVal(parsed.get("host"));
+                }
+                if (port == null) {
+                    port = toInteger(parsed.get("port"));
+                }
+            }
+        }
+        if (!StringUtils.hasText(jdbc) && StringUtils.hasText(hint) && hint.contains("jdbc:")) {
+            jdbc = hint;
+        }
+        JdbcParts parts = parseJdbc(jdbc);
+        if (!StringUtils.hasText(host) && StringUtils.hasText(parts.host())) {
+            payload.put("host", parts.host());
+        }
+        if (port == null && parts.port() != null) {
+            payload.put("port", parts.port());
+        }
+        return payload;
+    }
+
+    private Integer toInteger(Object value) {
+        if (value instanceof Number num) {
+            return num.intValue();
+        }
+        if (value != null) {
+            try {
+                return Integer.parseInt(value.toString().trim());
+            } catch (NumberFormatException ignored) {}
+        }
+        return null;
     }
 
     private String normalize(String value) {

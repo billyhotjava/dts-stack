@@ -54,14 +54,10 @@ public class ServiceDependencyAuthenticationFilter extends OncePerRequestFilter 
         if (!properties.isEnabled()) {
             return null;
         }
-        String expected = properties.getTrustedServiceName();
         String declared = request.getHeader(SERVICE_HEADER);
         if (!StringUtils.hasText(declared)) {
             return null;
         }
-        if (StringUtils.hasText(expected) && expected.equalsIgnoreCase(declared.trim())) {
-            return expected;
-        }
-        return null;
+        return declared.trim();
     }
 }

@@ -93,20 +93,81 @@ public class DefaultDestinationSyncService {
         if (lake == null) {
             return Map.of();
         }
-        if (lake.getDestinationConfig() != null && !lake.getDestinationConfig().isEmpty()) {
-            return new LinkedHashMap<>(lake.getDestinationConfig());
+        Map<String, Object> payload = lake.getDestinationConfig() != null
+            ? new LinkedHashMap<>(lake.getDestinationConfig())
+            : new LinkedHashMap<>();
+        String jdbcUrl = lake.getJdbcUrl();
+        putIfMissing(payload, "jdbc_url", jdbcUrl);
+        putIfMissing(payload, "username", lake.getUsername());
+        putIfMissing(payload, "password", lake.getPassword());
+        String database = extractDatabase(jdbcUrl);
+        putIfMissing(payload, "database", database);
+        putIfMissing(payload, "schema", database);
+        JdbcParts parts = parseJdbc(jdbcUrl);
+        if (StringUtils.hasText(parts.host())) {
+            payload.putIfAbsent("host", parts.host());
         }
-        Map<String, Object> payload = new LinkedHashMap<>();
-        putIfText(payload, "jdbc_url", lake.getJdbcUrl());
-        putIfText(payload, "username", lake.getUsername());
-        putIfText(payload, "password", lake.getPassword());
-        String database = extractDatabase(lake.getJdbcUrl());
-        putIfText(payload, "database", database);
-        putIfText(payload, "schema", database);
+        if (parts.port() != null) {
+            payload.putIfAbsent("port", parts.port());
+        }
         if (lake.getJdbcProperties() != null && !lake.getJdbcProperties().isEmpty()) {
             payload.put("jdbc_properties", lake.getJdbcProperties());
         }
         return payload;
+    }
+
+    private JdbcParts parseJdbc(String jdbcUrl) {
+        if (!StringUtils.hasText(jdbcUrl)) {
+            return new JdbcParts(null, null);
+        }
+        try {
+            String trimmed = jdbcUrl.trim();
+            int idx = trimmed.indexOf("://");
+            String rest = idx > 0 ? trimmed.substring(idx + 3) : trimmed;
+            // strip path/query/params
+            String hostPort = rest;
+            int slash = hostPort.indexOf('/');
+            if (slash >= 0) {
+                hostPort = hostPort.substring(0, slash);
+            }
+            int semicolon = hostPort.indexOf(';');
+            if (semicolon >= 0) {
+                hostPort = hostPort.substring(0, semicolon);
+            }
+            int question = hostPort.indexOf('?');
+            if (question >= 0) {
+                hostPort = hostPort.substring(0, question);
+            }
+            String[] parts = hostPort.split(":", 2);
+            String host = parts[0];
+            if (!StringUtils.hasText(host)) {
+                host = null;
+            }
+            Integer port = null;
+            if (parts.length > 1) {
+                try {
+                    port = Integer.parseInt(parts[1]);
+                } catch (NumberFormatException ignored) {}
+            }
+            if (port == null) {
+                if (trimmed.toLowerCase(Locale.ROOT).contains("postgres")) {
+                    port = 5432;
+                } else if (trimmed.toLowerCase(Locale.ROOT).contains("mysql")) {
+                    port = 3306;
+                }
+            }
+            return new JdbcParts(host, port);
+        } catch (Exception ex) {
+            return new JdbcParts(null, null);
+        }
+    }
+
+    private record JdbcParts(String host, Integer port) {}
+
+    private void putIfMissing(Map<String, Object> payload, String key, String value) {
+        if (!payload.containsKey(key)) {
+            putIfText(payload, key, value);
+        }
     }
 
     private String resolveDestinationDefinitionId(AdminInfraClient.AdminDataLakeConfig lake) {

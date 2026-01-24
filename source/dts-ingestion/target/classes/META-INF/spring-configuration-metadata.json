@@ -60,6 +60,11 @@
       "sourceType": "com.yuzhi.dts.ingestion.config.AirbyteProperties"
     },
     {
+      "name": "dts.airbyte.default-destination-image",
+      "type": "java.lang.String",
+      "sourceType": "com.yuzhi.dts.ingestion.config.AirbyteProperties"
+    },
+    {
       "name": "dts.airbyte.default-destination-name",
       "type": "java.lang.String",
       "sourceType": "com.yuzhi.dts.ingestion.config.AirbyteProperties",
@@ -138,8 +143,9 @@
     {
       "name": "dts.ingestion.trusted-service-name",
       "type": "java.lang.String",
+      "description": "Comma-separated service names allowed via X-DTS-Service header (case-insensitive).",
       "sourceType": "com.yuzhi.dts.ingestion.config.IngestionProperties",
-      "defaultValue": "dts-platform"
+      "defaultValue": "dts-platform,dts-admin"
     },
     {
       "name": "dts.openmetadata.api-path",

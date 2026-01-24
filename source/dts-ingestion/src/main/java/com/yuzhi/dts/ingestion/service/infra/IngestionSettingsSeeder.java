@@ -21,17 +21,20 @@ public class IngestionSettingsSeeder implements ApplicationRunner {
     private final AirbyteProperties airbyteProperties;
     private final AirflowProperties airflowProperties;
     private final OpenMetadataProperties openMetadataProperties;
+    private final AirbyteDefaultDestinationRegistrar defaultDestinationRegistrar;
 
     public IngestionSettingsSeeder(
         InfraServiceSettingsRepository repository,
         AirbyteProperties airbyteProperties,
         AirflowProperties airflowProperties,
-        OpenMetadataProperties openMetadataProperties
+        OpenMetadataProperties openMetadataProperties,
+        AirbyteDefaultDestinationRegistrar defaultDestinationRegistrar
     ) {
         this.repository = repository;
         this.airbyteProperties = airbyteProperties;
         this.airflowProperties = airflowProperties;
         this.openMetadataProperties = openMetadataProperties;
+        this.defaultDestinationRegistrar = defaultDestinationRegistrar;
     }
 
     @Override
@@ -39,6 +42,7 @@ public class IngestionSettingsSeeder implements ApplicationRunner {
         seedIfMissing(IngestionSettingsService.SERVICE_AIRBYTE, buildAirbyteSettings());
         seedIfMissing(IngestionSettingsService.SERVICE_AIRFLOW, buildAirflowSettings());
         seedIfMissing(IngestionSettingsService.SERVICE_OPENMETADATA, buildOpenMetadataSettings());
+        defaultDestinationRegistrar.registerIfMissing();
     }
 
     private void seedIfMissing(String service, Map<String, Object> settings) {
@@ -62,6 +66,7 @@ public class IngestionSettingsSeeder implements ApplicationRunner {
         putIfText(settings, "defaultDestinationName", airbyteProperties.getDefaultDestinationName());
         putIfText(settings, "defaultDestinationDefinitionId", airbyteProperties.getDefaultDestinationDefinitionId());
         putIfText(settings, "defaultDestinationConfigJson", airbyteProperties.getDefaultDestinationConfigJson());
+        putIfText(settings, "defaultDestinationImage", airbyteProperties.getDefaultDestinationImage());
         return settings;
     }
 

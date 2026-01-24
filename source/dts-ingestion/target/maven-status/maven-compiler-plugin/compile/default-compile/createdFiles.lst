@@ -46,6 +46,7 @@ com/yuzhi/dts/ingestion/web/rest/IngestionTaskResource$StreamsSpec.class
 com/yuzhi/dts/ingestion/service/infra/InfraServiceSettingsRepository$1.class
 com/yuzhi/dts/ingestion/web/rest/IngestionTaskResource$AirflowSpec.class
 com/yuzhi/dts/ingestion/web/rest/IngestionTaskResource$IngestionTaskRequest.class
+com/yuzhi/dts/ingestion/service/infra/AirbyteDefaultDestinationRegistrar.class
 com/yuzhi/dts/ingestion/web/rest/AirbyteResource$2.class
 com/yuzhi/dts/ingestion/web/rest/IngestionSettingsResource$DefaultDestinationRequest.class
 com/yuzhi/dts/ingestion/service/infra/IngestionSettingsService$SettingsSnapshot.class
@@ -56,6 +57,7 @@ com/yuzhi/dts/ingestion/domain/infra/InfraAirbyteSource.class
 com/yuzhi/dts/ingestion/domain/AbstractAuditingEntity.class
 com/yuzhi/dts/ingestion/service/etl/AirbyteClient.class
 com/yuzhi/dts/ingestion/web/rest/IngestionTaskResource$LineageSpec.class
+com/yuzhi/dts/ingestion/web/rest/IngestionSettingsResource$DestinationDefinitionRequest.class
 com/yuzhi/dts/ingestion/repository/infra/InfraAirbyteSourceRepository.class
 com/yuzhi/dts/ingestion/web/rest/ApiExceptionHandler.class
 com/yuzhi/dts/ingestion/service/openmetadata/OpenMetadataAdapter.class

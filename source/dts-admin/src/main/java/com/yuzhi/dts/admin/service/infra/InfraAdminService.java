@@ -222,7 +222,12 @@ public class InfraAdminService {
         InfraDataSource entity = new InfraDataSource();
         entity.setId(UUID.randomUUID());
         applyPayload(entity, payload);
-        applySecrets(entity, payload.getSecrets());
+        Map<String, Object> mergedSecrets = new HashMap<>(payload.getSecrets());
+        Map<String, Object> destinationConfig = buildDestinationConfig(payload);
+        if (!destinationConfig.isEmpty()) {
+            mergedSecrets.put("destinationConfig", destinationConfig);
+        }
+        applySecrets(entity, mergedSecrets);
         Instant now = Instant.now();
         entity.setStatus(STATUS_ACTIVE);
         entity.setHeartbeatStatus(HEARTBEAT_UNKNOWN);
@@ -250,7 +255,12 @@ public class InfraAdminService {
                 InfraDataSourceDto before = toDto(existing);
                 applyPayload(existing, payload);
                 if (payload.getSecretsRaw() != null) {
-                    applySecrets(existing, payload.getSecrets());
+                    Map<String, Object> mergedSecrets = new HashMap<>(payload.getSecrets());
+                    Map<String, Object> destinationConfig = buildDestinationConfig(payload);
+                    if (!destinationConfig.isEmpty()) {
+                        mergedSecrets.put("destinationConfig", destinationConfig);
+                    }
+                    applySecrets(existing, mergedSecrets);
                 }
                 existing.setUpdatedAt(Instant.now());
                 dataSourceRepository.save(existing);
@@ -756,6 +766,123 @@ public class InfraAdminService {
             secrets.put("destinationConfig", new HashMap<>(request.getDestinationConfig()));
         }
         return secrets;
+    }
+
+    private Map<String, Object> buildDestinationConfig(UpsertInfraDataSourcePayload payload) {
+        Map<String, Object> config = new HashMap<>();
+        if (payload == null || !StringUtils.hasText(payload.getJdbcUrl())) {
+            return config;
+        }
+        String jdbcUrl = payload.getJdbcUrl().trim();
+        config.put("jdbc_url", jdbcUrl);
+        putIfText(config, "username", payload.getUsername());
+        String password = asString(payload.getSecrets().get("password"));
+        putIfText(config, "password", password);
+        String host = parseHost(jdbcUrl);
+        Integer port = parsePort(jdbcUrl);
+        putIfText(config, "host", host);
+        if (port != null) {
+            config.put("port", port);
+        }
+        String database = parseDatabase(jdbcUrl);
+        putIfText(config, "database", database);
+        putIfText(config, "schema", database);
+        if (payload.getProps() != null && payload.getProps().get("destinationDefinitionId") != null) {
+            config.putIfAbsent("destinationDefinitionId", payload.getProps().get("destinationDefinitionId"));
+        }
+        return config;
+    }
+
+    private void putIfText(Map<String, Object> target, String key, String value) {
+        if (target == null || key == null) {
+            return;
+        }
+        if (StringUtils.hasText(value)) {
+            target.put(key, value.trim());
+        }
+    }
+
+    private String parseDatabase(String jdbcUrl) {
+        if (!StringUtils.hasText(jdbcUrl)) {
+            return null;
+        }
+        int scheme = jdbcUrl.indexOf("://");
+        int start = scheme > -1 ? jdbcUrl.indexOf("/", scheme + 3) : jdbcUrl.indexOf("/");
+        if (start < 0 || start + 1 >= jdbcUrl.length()) {
+            return null;
+        }
+        String tail = jdbcUrl.substring(start + 1);
+        int cut = tail.indexOf("?");
+        if (cut < 0) {
+            cut = tail.indexOf(";");
+        }
+        if (cut > -1) {
+            tail = tail.substring(0, cut);
+        }
+        String trimmed = tail.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private String parseHost(String jdbcUrl) {
+        if (!StringUtils.hasText(jdbcUrl)) {
+            return null;
+        }
+        try {
+            String rest = jdbcUrl;
+            int idx = jdbcUrl.indexOf("://");
+            if (idx > 0) {
+                rest = jdbcUrl.substring(idx + 3);
+            }
+            int slash = rest.indexOf('/');
+            if (slash >= 0) {
+                rest = rest.substring(0, slash);
+            }
+            int semicolon = rest.indexOf(';');
+            if (semicolon >= 0) {
+                rest = rest.substring(0, semicolon);
+            }
+            int question = rest.indexOf('?');
+            if (question >= 0) {
+                rest = rest.substring(0, question);
+            }
+            String[] parts = rest.split(":", 2);
+            String host = parts[0];
+            return StringUtils.hasText(host) ? host : null;
+        } catch (Exception ex) {
+            return null;
+        }
+    }
+
+    private Integer parsePort(String jdbcUrl) {
+        if (!StringUtils.hasText(jdbcUrl)) {
+            return null;
+        }
+        try {
+            String rest = jdbcUrl;
+            int idx = jdbcUrl.indexOf("://");
+            if (idx > 0) {
+                rest = jdbcUrl.substring(idx + 3);
+            }
+            int slash = rest.indexOf('/');
+            if (slash >= 0) {
+                rest = rest.substring(0, slash);
+            }
+            int semicolon = rest.indexOf(';');
+            if (semicolon >= 0) {
+                rest = rest.substring(0, semicolon);
+            }
+            int question = rest.indexOf('?');
+            if (question >= 0) {
+                rest = rest.substring(0, question);
+            }
+            String[] parts = rest.split(":", 2);
+            if (parts.length > 1) {
+                return Integer.parseInt(parts[1]);
+            }
+        } catch (Exception ex) {
+            return null;
+        }
+        return null;
     }
 
     private void updateLastInceptorDefinition(InfraDataSource entity) {

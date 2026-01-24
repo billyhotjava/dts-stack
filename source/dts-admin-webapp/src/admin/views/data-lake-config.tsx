@@ -232,10 +232,10 @@ export default function DataLakeConfigView() {
 	);
 
 	return (
-		<div className="space-y-6">
+		<div className="mx-auto w-full max-w-[1400px] px-6 py-6 space-y-6">
 			<div className="flex flex-wrap items-center justify-between gap-3">
 				<div>
-					<Text variant="subTitle1" className="block">
+					<Text variant="body1" className="block text-lg font-semibold">
 						数据湖配置
 					</Text>
 					<Text variant="body3" className="text-muted-foreground">
@@ -248,7 +248,7 @@ export default function DataLakeConfigView() {
 				<CardHeader>
 					<CardTitle>默认数据湖状态</CardTitle>
 				</CardHeader>
-				<CardContent className="space-y-4">
+				<CardContent className="space-y-4 text-sm">
 					<div className="flex flex-wrap items-center gap-3">
 						{defaultStatusTag}
 						<Text variant="body3" className="text-muted-foreground">
@@ -285,7 +285,7 @@ export default function DataLakeConfigView() {
 				<CardHeader>
 					<CardTitle>数据湖列表</CardTitle>
 				</CardHeader>
-				<CardContent className="space-y-4">
+				<CardContent className="space-y-4 text-sm">
 					<div className="flex flex-wrap items-center justify-between gap-3">
 						<Text variant="body3" className="text-muted-foreground">
 							统一维护数据湖配置与目标端参数。
@@ -298,6 +298,8 @@ export default function DataLakeConfigView() {
 						columns={dataLakeColumns}
 						dataSource={dataLakes}
 						pagination={false}
+						className="text-sm"
+						rowClassName={() => "text-sm"}
 					/>
 				</CardContent>
 			</Card>
@@ -307,7 +309,7 @@ export default function DataLakeConfigView() {
 					<CardHeader>
 						<CardTitle>最新测试结果</CardTitle>
 					</CardHeader>
-					<CardContent>
+					<CardContent className="text-sm">
 						{(() => {
 							const parts = [`耗时 ${testResult.elapsedMillis ?? "--"} ms`];
 							if (testResult.engineVersion) {
@@ -336,7 +338,7 @@ export default function DataLakeConfigView() {
 				<CardHeader>
 					<CardTitle>测试记录</CardTitle>
 				</CardHeader>
-				<CardContent className="space-y-3">
+				<CardContent className="space-y-3 text-sm">
 					<div className="flex flex-wrap items-center justify-between gap-3">
 						<Text variant="body3" className="text-muted-foreground">
 							支持按数据湖过滤最近 20 条连接测试记录。
@@ -349,6 +351,7 @@ export default function DataLakeConfigView() {
 								.filter((lake) => lake.id)
 								.map((lake) => ({ value: lake.id as string, label: lake.name }))}
 							style={{ minWidth: 220 }}
+							size="small"
 							onChange={(value) => setTestLogSourceId(value || undefined)}
 						/>
 					</div>
@@ -362,6 +365,8 @@ export default function DataLakeConfigView() {
 							dataSource={testLogs}
 							pagination={false}
 							loading={testLogsLoading}
+							className="text-sm"
+							rowClassName={() => "text-sm"}
 						/>
 					)}
 				</CardContent>
