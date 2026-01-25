@@ -7,7 +7,6 @@ public class DtsIngestionProperties {
 
     private boolean enabled = true;
     private String baseUrl = "http://dts-ingestion:8083";
-    private String apiPath = "/api/infra/airbyte";
     private String serviceName = "dts-platform";
 
     public boolean isEnabled() {
@@ -24,14 +23,6 @@ public class DtsIngestionProperties {
 
     public void setBaseUrl(String baseUrl) {
         this.baseUrl = baseUrl;
-    }
-
-    public String getApiPath() {
-        return apiPath;
-    }
-
-    public void setApiPath(String apiPath) {
-        this.apiPath = apiPath;
     }
 
     public String getServiceName() {

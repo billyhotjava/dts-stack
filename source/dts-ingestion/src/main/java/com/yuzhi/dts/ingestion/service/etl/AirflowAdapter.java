@@ -22,7 +22,7 @@ public class AirflowAdapter {
 
     public record AirflowRequest(Boolean enabled, String dagId, String scheduleType, String cron, Integer intervalMinutes) {}
 
-    public Map<String, Object> triggerIfRequested(AirflowRequest request, String connectionId, String sourceId, String taskName, boolean runNow) {
+    public Map<String, Object> triggerIfRequested(AirflowRequest request, Map<String, Object> conf, boolean runNow) {
         Map<String, Object> result = new LinkedHashMap<>();
         IngestionSettingsService.SettingsSnapshot settings = settingsService.getSettings(IngestionSettingsService.SERVICE_AIRFLOW);
         boolean enabled = settings.getBoolean("enabled", properties.isEnabled());
@@ -51,17 +51,7 @@ public class AirflowAdapter {
             result.put("status", "ready");
             return result;
         }
-        Map<String, Object> conf = new LinkedHashMap<>();
-        if (StringUtils.hasText(connectionId)) {
-            conf.put("connectionId", connectionId);
-        }
-        if (StringUtils.hasText(sourceId)) {
-            conf.put("sourceId", sourceId);
-        }
-        if (StringUtils.hasText(taskName)) {
-            conf.put("taskName", taskName);
-        }
-        Map<String, Object> payload = Map.of("conf", conf);
+        Map<String, Object> payload = Map.of("conf", conf == null ? Map.of() : conf);
         Map<String, Object> response = client.triggerDag(dagId, payload).orElse(null);
         if (response == null || response.isEmpty()) {
             result.put("status", "failed");

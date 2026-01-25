@@ -15,7 +15,6 @@ from metadata.ingestion.models.custom_pydantic import BaseModel
 from ...type import basic, entityHistory, entityReference, entityReferenceList, tagLabel
 from .connections import testConnectionResult
 from .connections.pipeline import (
-    airbyteConnection,
     airflowConnection,
     customPipelineConnection,
     dagsterConnection,
@@ -45,7 +44,6 @@ class PipelineServiceType(Enum):
     Airflow = 'Airflow'
     GluePipeline = 'GluePipeline'
     KinesisFirehose = 'KinesisFirehose'
-    Airbyte = 'Airbyte'
     Fivetran = 'Fivetran'
     Flink = 'Flink'
     Dagster = 'Dagster'
@@ -78,7 +76,6 @@ class PipelineConnection(BaseModel):
             ssisConnection.SSISConnection,
             gluePipelineConnection.GluePipelineConnection,
             kinesisFirehoseConnection.KinesisFirehoseConnection,
-            airbyteConnection.AirbyteConnection,
             fivetranConnection.FivetranConnection,
             flinkConnection.FlinkConnection,
             dagsterConnection.DagsterConnection,

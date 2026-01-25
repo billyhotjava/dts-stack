@@ -137,10 +137,16 @@ export interface JdbcDriverInfo {
 	label?: string;
 }
 
-export interface AirbyteDestinationDefinition {
-	destinationDefinitionId?: string;
-	name?: string;
-	dockerRepository?: string;
+export interface InfraServiceSettingsPayload {
+	service: string;
+	settings: Record<string, any>;
+}
+
+export interface InfraServiceTestResult {
+	success?: boolean;
+	message?: string;
+	status?: number;
+	body?: string;
 }
 
 export interface InfraDataSource {

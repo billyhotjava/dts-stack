@@ -1,6 +1,6 @@
 package com.yuzhi.dts.ingestion;
 
-import com.yuzhi.dts.ingestion.config.AirbyteProperties;
+import com.yuzhi.dts.ingestion.config.AddaxProperties;
 import com.yuzhi.dts.ingestion.config.AirflowProperties;
 import com.yuzhi.dts.ingestion.config.InfraSecurityProperties;
 import com.yuzhi.dts.ingestion.config.IngestionProperties;
@@ -11,7 +11,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 
 @SpringBootApplication
 @EnableConfigurationProperties({
-    AirbyteProperties.class,
+    AddaxProperties.class,
     AirflowProperties.class,
     InfraSecurityProperties.class,
     IngestionProperties.class,

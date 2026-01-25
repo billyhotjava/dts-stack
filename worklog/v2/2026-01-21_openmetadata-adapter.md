@@ -5,7 +5,7 @@ Make OpenMetadata metadata collection more reliable in the ingestion flow, while
 
 ## What changed
 - Added OpenMetadata ingestion support in `dts-ingestion`:
-  - Create/ensure database service in OpenMetadata based on the Airbyte destination config.
+  - Create/ensure database service in OpenMetadata based on the destination config.
   - Create/ensure an ingestion pipeline for that service.
   - Trigger ingestion when `runNow=true`.
 - Lineage and ingestion are now both returned by the ingestion task response.
@@ -37,7 +37,7 @@ These are optional but recommended for stable ingestion:
 - `DTS_OPENMETADATA_INGESTION_SCHEDULE` (default: `0 * * * *`)
 
 ## Notes / assumptions
-- The destination connection uses the Airbyte destination config. If host/port/database/username are missing, ingestion is skipped.
+- The destination connection uses the destination (writer) config. If host/port/database/username are missing, ingestion is skipped.
 - The OpenMetadata service must already be reachable, and the auth token (if required) must be configured.
 
 ## Next validation steps

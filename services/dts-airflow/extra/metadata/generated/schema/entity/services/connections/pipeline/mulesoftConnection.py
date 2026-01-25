@@ -15,7 +15,7 @@ from metadata.ingestion.models.custom_pydantic import BaseModel
 from .....security.credentials import basicAuth
 from .....type import filterPattern
 from .. import connectionBasicType
-from .airbyte import oauthClientAuth
+from . import oauthClientAuth
 
 
 class MulesoftType(Enum):

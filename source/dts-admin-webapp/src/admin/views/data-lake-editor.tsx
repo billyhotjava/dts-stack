@@ -16,7 +16,6 @@ import {
 } from "antd";
 import { adminApi } from "@/admin/api/adminApi";
 import type {
-	AirbyteDestinationDefinition,
 	HiveAuthMethod,
 	HiveConnectionPersistRequest,
 	HiveConnectionTestRequest,
@@ -85,13 +84,13 @@ const DRIVER_TYPE_HINTS: Record<string, string[]> = {
 	POSTGRESQL: ["postgres", "postgresql", "pgjdbc", "pg"],
 };
 
-const DESTINATION_DEF_HINTS: Record<string, string[]> = {
-	HIVE: ["hive"],
-	INCEPTOR: ["hive"],
-	JDBC: ["jdbc"],
-	ICEBERG: ["iceberg"],
-	CLICKHOUSE: ["clickhouse"],
-	POSTGRESQL: ["postgres", "postgresql"],
+const WRITER_OPTIONS_BY_TYPE: Record<string, { value: string; label: string }[]> = {
+	HIVE: [{ value: "hivewriter", label: "hivewriter" }],
+	INCEPTOR: [{ value: "hivewriter", label: "hivewriter" }],
+	JDBC: [{ value: "rdbmswriter", label: "rdbmswriter" }],
+	ICEBERG: [{ value: "icebergwriter", label: "icebergwriter" }],
+	CLICKHOUSE: [{ value: "clickhousewriter", label: "clickhousewriter" }],
+	POSTGRESQL: [{ value: "postgresqlwriter", label: "postgresqlwriter" }],
 };
 
 const normalizeLakeType = (value?: string) => {
@@ -119,75 +118,9 @@ const buildDriverOptions = (drivers: JdbcDriverInfo[], type?: string) => {
 	return filtered.length > 0 ? filtered : options;
 };
 
-const resolveDestinationDefinitionId = (
-	definitions: AirbyteDestinationDefinition[],
-	type?: string,
-): string | undefined => {
-	if (!definitions.length) {
-		return undefined;
-	}
-	if (definitions.length === 1) {
-		return definitions[0]?.destinationDefinitionId;
-	}
+const resolveWriterOptions = (type?: string) => {
 	const normalizedType = normalizeLakeType(type);
-	const keywords = DESTINATION_DEF_HINTS[normalizedType] || [];
-	if (!keywords.length) {
-		return definitions[0]?.destinationDefinitionId;
-	}
-	const lowerKeywords = keywords.map((keyword) => keyword.toLowerCase());
-	const match = definitions.find((item) => {
-		const haystack = `${item.name || ""} ${item.dockerRepository || ""}`.toLowerCase();
-		return lowerKeywords.some((keyword) => haystack.includes(keyword));
-	});
-	return match?.destinationDefinitionId;
-};
-
-const extractDatabaseFromJdbcUrl = (jdbcUrl?: string) => {
-	if (!jdbcUrl) return undefined;
-	const schemeIndex = jdbcUrl.indexOf("://");
-	const start = schemeIndex > -1 ? jdbcUrl.indexOf("/", schemeIndex + 3) : jdbcUrl.indexOf("/");
-	if (start < 0 || start + 1 >= jdbcUrl.length) {
-		return undefined;
-	}
-	let tail = jdbcUrl.slice(start + 1);
-	const queryIndex = tail.indexOf("?");
-	const semicolonIndex = tail.indexOf(";");
-	const cutIndex =
-		queryIndex === -1
-			? semicolonIndex
-			: semicolonIndex === -1
-				? queryIndex
-				: Math.min(queryIndex, semicolonIndex);
-	if (cutIndex > -1) {
-		tail = tail.slice(0, cutIndex);
-	}
-	const trimmed = tail.trim();
-	return trimmed ? trimmed : undefined;
-};
-
-const buildDefaultDestinationConfig = (values: FormValues): Record<string, any> => {
-	const payload: Record<string, any> = {};
-	const jdbcUrl = values.jdbcUrl?.trim();
-	if (jdbcUrl) {
-		payload.jdbc_url = jdbcUrl;
-	}
-	const username = values.username?.trim() || values.loginPrincipal?.trim();
-	if (username) {
-		payload.username = username;
-	}
-	if (values.password) {
-		payload.password = values.password;
-	}
-	const database = extractDatabaseFromJdbcUrl(jdbcUrl);
-	if (database) {
-		payload.database = database;
-		payload.schema = database;
-	}
-	const jdbcProps = parseProperties(values.jdbcPropertiesRaw);
-	if (Object.keys(jdbcProps).length) {
-		payload.jdbc_properties = jdbcProps;
-	}
-	return payload;
+	return WRITER_OPTIONS_BY_TYPE[normalizedType] || [{ value: "rdbmswriter", label: "rdbmswriter" }];
 };
 
 const readFileAsText = (file: File) =>
@@ -288,11 +221,6 @@ export default function DataLakeEditorView() {
 		queryFn: adminApi.getDataLakeJdbcDrivers,
 	});
 
-	const { data: destinationDefs = [], isFetching: destinationDefsLoading } = useQuery({
-		queryKey: ["admin", "data-lake-destination-definitions"],
-		queryFn: adminApi.getDataLakeDestinationDefinitions,
-	});
-
 	const editingLake = useMemo(
 		() => dataLakes.find((lake) => lake.id && lake.id === id),
 		[dataLakes, id],
@@ -324,21 +252,9 @@ export default function DataLakeEditorView() {
 		[jdbcDrivers, resolvedType],
 	);
 	const hasDriverOptions = driverOptions.length > 0;
-
-	const destinationDefOptions = useMemo(
-		() =>
-			destinationDefs
-				.filter((item) => item.destinationDefinitionId)
-				.map((item) => ({
-					value: String(item.destinationDefinitionId),
-					label: item.name || item.destinationDefinitionId || "--",
-					repo: item.dockerRepository || "",
-				})),
-		[destinationDefs],
-	);
-
-	const destinationDefOptionsWithFallback = useMemo(() => {
-		const list = [...destinationDefOptions];
+	const writerOptions = useMemo(() => resolveWriterOptions(resolvedType), [resolvedType]);
+	const writerOptionsWithFallback = useMemo(() => {
+		const list = [...writerOptions];
 		const currentId = editingLake?.props?.destinationDefinitionId;
 		if (currentId && !list.some((item) => item.value === currentId)) {
 			list.push({
@@ -347,14 +263,12 @@ export default function DataLakeEditorView() {
 			});
 		}
 		return list;
-	}, [destinationDefOptions, editingLake?.props?.destinationDefinitionId, editingLake?.props?.destinationDefinitionName]);
+	}, [writerOptions, editingLake?.props?.destinationDefinitionId, editingLake?.props?.destinationDefinitionName]);
 
-	const destinationDefNameMap = useMemo(() => {
-		const entries = destinationDefs
-			.filter((item) => item.destinationDefinitionId)
-			.map((item) => [String(item.destinationDefinitionId), item.name || item.destinationDefinitionId]);
+	const writerNameMap = useMemo(() => {
+		const entries = writerOptions.map((item) => [String(item.value), item.label || item.value]);
 		return new Map(entries);
-	}, [destinationDefs]);
+	}, [writerOptions]);
 
 	useEffect(() => {
 		if (initialized) return;
@@ -436,14 +350,13 @@ export default function DataLakeEditorView() {
 
 	useEffect(() => {
 		if (readOnly || isEditing) return;
-		if (!destinationDefs.length) return;
 		const current = form.getFieldValue("destinationDefinitionId");
 		if (current) return;
-		const candidate = resolveDestinationDefinitionId(destinationDefs, resolvedType);
+		const candidate = writerOptions[0]?.value;
 		if (candidate) {
 			form.setFieldsValue({ destinationDefinitionId: candidate });
 		}
-	}, [destinationDefs, form, isEditing, readOnly, resolvedType]);
+	}, [form, isEditing, readOnly, resolvedType, writerOptions]);
 
 	const buildDataLakePayload = (
 		values: FormValues,
@@ -454,7 +367,7 @@ export default function DataLakeEditorView() {
 			props.destinationDefinitionId = values.destinationDefinitionId.trim();
 		}
 		if (values.destinationDefinitionId) {
-			const defName = destinationDefNameMap.get(values.destinationDefinitionId);
+			const defName = writerNameMap.get(values.destinationDefinitionId);
 			if (defName) {
 				props.destinationDefinitionName = defName;
 			}
@@ -574,8 +487,7 @@ export default function DataLakeEditorView() {
 		if (parsed && Object.keys(parsed).length) {
 			return parsed;
 		}
-		const fallback = buildDefaultDestinationConfig(values);
-		return Object.keys(fallback).length ? fallback : undefined;
+		return undefined;
 	};
 
 	const handleTest = async () => {
@@ -641,7 +553,7 @@ export default function DataLakeEditorView() {
 			const values = await form.validateFields();
 			const destinationConfig = resolveDestinationConfig(values);
 			if (!destinationConfig || Object.keys(destinationConfig).length === 0) {
-				toast.error("请完善目标端配置");
+				toast.error("请完善写入器配置");
 				return;
 			}
 			if (isInceptor) {
@@ -975,36 +887,36 @@ export default function DataLakeEditorView() {
 										},
 										{
 											key: "destination",
-											label: "目标连接器配置",
+											label: "写入器配置",
 											children: (
 												<div className="space-y-4">
 													<div className="grid gap-4 md:grid-cols-2">
 														<Form.Item
 															name="destinationDefinitionId"
-															label="目标连接器"
-															rules={[{ required: true, message: "请选择目标连接器" }]}
+															label="写入器类型"
+															rules={[{ required: true, message: "请选择写入器类型" }]}
 														>
 															<Select
-																options={destinationDefOptionsWithFallback}
-																placeholder="选择目标连接器"
+																options={writerOptionsWithFallback}
+																placeholder="选择写入器类型"
 																showSearch
 																allowClear
 																optionFilterProp="label"
-																loading={destinationDefsLoading}
-																notFoundContent={
-																	destinationDefsLoading ? "加载中..." : "未获取到目标连接器，请确认 Airbyte 已安装目标端插件"
-																}
+																notFoundContent="未提供写入器类型，请检查 Addax 配置"
 															/>
 														</Form.Item>
-														<Form.Item name="destinationName" label="目标端名称">
+														<Form.Item name="destinationName" label="写入器名称">
 															<Input placeholder="默认使用数据湖名称" />
 														</Form.Item>
 													</div>
-													<Form.Item name="destinationConfigRaw" label="目标端配置 JSON">
-														<Input.TextArea rows={6} placeholder='留空则使用当前数据湖连接参数生成，例如：{"jdbc_url":"jdbc:hive2://...","username":"hive"}' />
+													<Form.Item name="destinationConfigRaw" label="写入器配置 JSON">
+														<Input.TextArea
+															rows={6}
+															placeholder='填写 Addax writer 参数 JSON，例如：{"connection":[{"jdbcUrl":["jdbc:..."],"table":["target"]}],"username":"user","password":"***"}'
+														/>
 													</Form.Item>
 													<Text variant="body3" className="text-muted-foreground">
-														目标连接器配置将同步给平台默认入湖目标，密钥字段需包含在 JSON 中。
+														写入器配置将同步给平台默认入湖目标，密钥字段需包含在 JSON 中。
 													</Text>
 												</div>
 											),
@@ -1044,31 +956,31 @@ export default function DataLakeEditorView() {
 								<div className="grid gap-4 md:grid-cols-2">
 									<Form.Item
 										name="destinationDefinitionId"
-										label="目标连接器"
-										rules={[{ required: true, message: "请选择目标连接器" }]}
+										label="写入器类型"
+										rules={[{ required: true, message: "请选择写入器类型" }]}
 									>
 										<Select
-											options={destinationDefOptionsWithFallback}
-											placeholder="选择目标连接器"
+											options={writerOptionsWithFallback}
+											placeholder="选择写入器类型"
 											showSearch
 											allowClear
 											optionFilterProp="label"
-											loading={destinationDefsLoading}
-											notFoundContent={
-												destinationDefsLoading ? "加载中..." : "未获取到目标连接器，请确认 Airbyte 已安装目标端插件"
-											}
+											notFoundContent="未提供写入器类型，请检查 Addax 配置"
 										/>
 									</Form.Item>
-									<Form.Item name="destinationName" label="目标端名称">
+									<Form.Item name="destinationName" label="写入器名称">
 										<Input placeholder="默认使用数据湖名称" />
 									</Form.Item>
 								</div>
-								<Form.Item name="destinationConfigRaw" label="目标端配置 JSON">
-									<Input.TextArea rows={6} placeholder='留空则使用当前数据湖连接参数生成，例如：{"jdbc_url":"jdbc:hive2://..."}' />
+								<Form.Item name="destinationConfigRaw" label="写入器配置 JSON">
+									<Input.TextArea
+										rows={6}
+										placeholder='填写 Addax writer 参数 JSON，例如：{"connection":[{"jdbcUrl":["jdbc:..."],"table":["target"]}],"username":"user","password":"***"}'
+									/>
 								</Form.Item>
 								{editingLake?.hasSecrets ? (
 									<Text variant="body3" className="text-muted-foreground">
-										已存在目标端密钥，如需更新请重新填写配置 JSON。
+										已存在写入器密钥，如需更新请重新填写配置 JSON。
 									</Text>
 								) : null}
 							</div>

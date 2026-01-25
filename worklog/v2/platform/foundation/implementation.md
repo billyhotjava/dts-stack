@@ -12,7 +12,7 @@
 ## 主要功能
 1) 数据源管理
 - 选择类型(MySQL/PG/Oracle...)
-- 参数配置 + 连通性测试(Airbyte check)
+- 参数配置 + 连通性测试(Addax check)
 - 密码托管（三员管理端/密钥管理）
 
 2) 入湖任务
@@ -35,8 +35,8 @@
 - schema_drift_event
 
 ## 数据流与依赖
-- Airbyte：创建 Source/Destination/Connection
-- dts-ingestion：统一封装 Airbyte API
+- Addax：生成 Reader/Writer/Job 配置
+- dts-ingestion：统一封装 Addax 作业生成与触发
 - 平台数据库：入湖任务元数据与映射
 
 ## 实现要点
@@ -45,5 +45,5 @@
 - Drift 事件落库并触发工作台待办。
 
 ## 边界与异常
-- Airbyte 不可用时，禁止创建/修改入湖任务。
+- Addax 不可用时，禁止创建/修改入湖任务。
 - 密码不可明文展示，前端仅显示脱敏。

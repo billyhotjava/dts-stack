@@ -462,8 +462,3 @@ dts:
       enabled: ${DTS_SECURITY_IP_ALLOWLIST_ENABLED:true}
       # Comma-separated usernames (lowercase) to enforce single-IP allowlist
       triad-usernames: ${DTS_SECURITY_IP_ALLOWLIST_TRIAD_USERNAMES:sysadmin,authadmin,auditadmin}
-  airbyte:
-    destination:
-      postgres:
-        image: ${IMAGE_AIRBYTE_DESTINATION_POSTGRES:airbyte/destination-postgres:3.0.7}
-        name: PostgreSQL

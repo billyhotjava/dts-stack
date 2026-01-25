@@ -30,50 +30,10 @@ type ChangeRecord = {
 	summary: string;
 	risk: "L" | "M" | "H";
 	status: "已完成" | "待处理" | "待审批";
+	detail?: string;
 };
 
-const initialChanges: ChangeRecord[] = [
-	{
-		id: "c_001",
-		time: "2026-01-22 01:20",
-		objType: "DATASOURCE",
-		obj: "ds_001 ERP-生产库",
-		type: "CONN_PARAM",
-		summary: "密码轮换（平台密钥更新）",
-		risk: "M",
-		status: "已完成",
-	},
-	{
-		id: "c_002",
-		time: "2026-01-22 00:35",
-		objType: "INGEST_JOB",
-		obj: "ij_001 ERP-销售订单入湖",
-		type: "SCHEMA_NEW_COL",
-		summary: "新增字段：discount_amt",
-		risk: "M",
-		status: "待处理",
-	},
-	{
-		id: "c_003",
-		time: "2026-01-21 23:50",
-		objType: "INGEST_JOB",
-		obj: "ij_003 MES-工序报工入湖",
-		type: "SCHEMA_TYPE_CHANGE",
-		summary: "字段类型变更：qty int -> decimal(18,3)",
-		risk: "H",
-		status: "待审批",
-	},
-	{
-		id: "c_004",
-		time: "2026-01-21 21:10",
-		objType: "INGEST_JOB",
-		obj: "ij_001 ERP-销售订单入湖",
-		type: "CATALOG_CHANGE",
-		summary: "同步范围变更：新增表 erp.bd_customer",
-		risk: "L",
-		status: "已完成",
-	},
-];
+const initialChanges: ChangeRecord[] = [];
 
 const typeLabel = (value: ChangeRecord["type"]) => {
 	const map: Record<ChangeRecord["type"], string> = {
@@ -112,7 +72,7 @@ export default function AccessChangesPage() {
 			if (objType !== "ALL" && item.objType !== objType) return false;
 			if (changeType !== "ALL" && item.type !== changeType) return false;
 			if (!key) return true;
-			return `${item.obj} ${item.summary}`.toLowerCase().includes(key);
+			return `${item.obj} ${item.summary} ${item.detail || ""}`.toLowerCase().includes(key);
 		});
 	}, [changeType, changes, keyword, objType]);
 
@@ -120,7 +80,7 @@ export default function AccessChangesPage() {
 		{ title: "时间", dataIndex: "time" },
 		{ title: "对象", dataIndex: "obj" },
 		{ title: "类型", dataIndex: "type", render: (value) => typeLabel(value) },
-		{ title: "摘要", dataIndex: "summary" },
+		{ title: "摘要", dataIndex: "summary", render: (value) => value || "-" },
 		{ title: "风险等级", dataIndex: "risk", render: (value) => riskTag(value) },
 		{ title: "状态", dataIndex: "status", render: (value) => statusTag(value) },
 		{
@@ -150,10 +110,11 @@ export default function AccessChangesPage() {
 				summary: values.summary,
 				risk: values.risk,
 				status: "待处理",
+				detail: values.detail,
 			};
 			setChanges([newItem, ...changes]);
 			setModalOpen(false);
-			toast.success("已登记变更（示例）");
+			toast.success("变更已登记");
 		} catch {
 			// Validation handled by form
 		}
@@ -164,11 +125,9 @@ export default function AccessChangesPage() {
 			<Descriptions.Item label="变更对象">{selected.obj}</Descriptions.Item>
 			<Descriptions.Item label="变更类型">{typeLabel(selected.type)}</Descriptions.Item>
 			<Descriptions.Item label="风险等级">{riskTag(selected.risk)}</Descriptions.Item>
-			<Descriptions.Item label="影响范围">涉及下游 DWD/DWS 模型与报表（示例）。</Descriptions.Item>
-			<Descriptions.Item label="建议处置">
-				{selected.risk === "H" ? "阻断并告警" : "自动接纳并通知责任人"}
-			</Descriptions.Item>
-			<Descriptions.Item label="审计备注">审核人、回滚点与复现信息后续补充。</Descriptions.Item>
+			<Descriptions.Item label="处理状态">{statusTag(selected.status)}</Descriptions.Item>
+			<Descriptions.Item label="变更摘要">{selected.summary || "-"}</Descriptions.Item>
+			<Descriptions.Item label="变更详情">{selected.detail || "-"}</Descriptions.Item>
 		</Descriptions>
 	) : (
 		<Text type="secondary">请选择一条变更记录查看详情。</Text>
@@ -181,8 +140,7 @@ export default function AccessChangesPage() {
 				description="统一记录连接与 Schema 变更，提供影响分析与处置闭环。"
 				actions={
 					<Space>
-						<Button onClick={() => toast.success("已刷新（示例）")}>刷新</Button>
-						<Button onClick={() => toast.success("已保存草稿（示例）")}>保存草稿</Button>
+						<Button>刷新</Button>
 						<Button type="primary" onClick={openModal}>
 							登记变更
 						</Button>
@@ -196,76 +154,58 @@ export default function AccessChangesPage() {
 				message="记录连接参数变更、Schema 变更与同步策略调整，形成影响分析与处置闭环。"
 			/>
 
-			<Row gutter={[16, 16]} align="top">
-				<Col xs={24} xl={15}>
-					<Card
-						title="变更查询"
-						extra={
-							<Space>
-								<Button onClick={() => toast.success("已导出 CSV（示例）")}>导出</Button>
-								<Button type="primary" onClick={openModal}>
-									登记变更
-								</Button>
-							</Space>
-						}
-					>
-						<Row gutter={12} className="mb-4">
-							<Col span={8}>
-								<Select
-									value={objType}
-									onChange={setObjType}
-									options={[
-										{ label: "全部对象", value: "ALL" },
-										{ label: "数据源连接", value: "DATASOURCE" },
-										{ label: "入湖任务", value: "INGEST_JOB" },
-									]}
-								/>
-							</Col>
-							<Col span={8}>
-								<Select
-									value={changeType}
-									onChange={setChangeType}
-									options={[
-										{ label: "全部类型", value: "ALL" },
-										{ label: "连接参数变更", value: "CONN_PARAM" },
-										{ label: "新增字段", value: "SCHEMA_NEW_COL" },
-										{ label: "字段类型变更", value: "SCHEMA_TYPE_CHANGE" },
-										{ label: "同步范围变更", value: "CATALOG_CHANGE" },
-									]}
-								/>
-							</Col>
-							<Col span={8}>
-								<Input value={keyword} onChange={(e) => setKeyword(e.target.value)} placeholder="关键字" />
-							</Col>
-						</Row>
-						<Table
-							rowKey={(row) => row.id}
-							columns={columns}
-							dataSource={filteredChanges}
-							pagination={{ pageSize: 6 }}
-							onRow={(row) => ({
-								onClick: () => setSelected(row),
-							})}
+			<Card
+				title="变更查询"
+				extra={
+					<Space>
+						<Button>导出</Button>
+						<Button type="primary" onClick={openModal}>
+							登记变更
+						</Button>
+					</Space>
+				}
+			>
+				<Row gutter={12} className="mb-4">
+					<Col span={8}>
+						<Select
+							value={objType}
+							onChange={setObjType}
+							options={[
+								{ label: "全部对象", value: "ALL" },
+								{ label: "数据源连接", value: "DATASOURCE" },
+								{ label: "入湖任务", value: "INGEST_JOB" },
+							]}
 						/>
-					</Card>
-				</Col>
-				<Col xs={24} xl={9}>
-					<Card
-						title="影响分析与处置"
-						extra={
-							<Space>
-								<Button onClick={() => toast.success("已生成处置工单（示例）")}>生成工单</Button>
-								<Button onClick={() => toast.success("已通知责任人（示例）")}>通知责任人</Button>
-								<Button type="primary" onClick={() => toast.success("已审批通过（示例）")}>
-									审批通过
-								</Button>
-							</Space>
-						}
-					>
-						{impactView}
-					</Card>
-				</Col>
-			</Row>
+					</Col>
+					<Col span={8}>
+						<Select
+							value={changeType}
+							onChange={setChangeType}
+							options={[
+								{ label: "全部类型", value: "ALL" },
+								{ label: "连接参数变更", value: "CONN_PARAM" },
+								{ label: "新增字段", value: "SCHEMA_NEW_COL" },
+								{ label: "字段类型变更", value: "SCHEMA_TYPE_CHANGE" },
+								{ label: "同步范围变更", value: "CATALOG_CHANGE" },
+							]}
+						/>
+					</Col>
+					<Col span={8}>
+						<Input value={keyword} onChange={(e) => setKeyword(e.target.value)} placeholder="关键字" />
+					</Col>
+				</Row>
+				<Table
+					rowKey={(row) => row.id}
+					columns={columns}
+					dataSource={filteredChanges}
+					pagination={{ pageSize: 6 }}
+					onRow={(row) => ({
+						onClick: () => setSelected(row),
+					})}
+				/>
+			</Card>
+
+			<Card title="影响分析与处置">{impactView}</Card>
 
 			<Modal
 				open={modalOpen}

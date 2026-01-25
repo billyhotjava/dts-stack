@@ -2,7 +2,6 @@ package com.yuzhi.dts.admin.service.infra;
 
 import com.yuzhi.dts.admin.domain.InfraDataSource;
 import com.yuzhi.dts.admin.repository.InfraDataSourceRepository;
-import com.yuzhi.dts.admin.service.infra.dto.AirbyteDestinationDefinitionDto;
 import com.yuzhi.dts.admin.service.infra.dto.ConnectionTestLogDto;
 import com.yuzhi.dts.admin.service.infra.dto.HiveAuthMethod;
 import com.yuzhi.dts.admin.service.infra.dto.HiveConnectionPersistRequest;
@@ -85,10 +84,6 @@ public class InfraAdminService {
     private final AtomicBoolean syncInProgress = new AtomicBoolean(false);
     private final AtomicReference<HiveConnectionPersistRequest> lastInceptorDefinition = new AtomicReference<>();
     private final AtomicBoolean schemaReady = new AtomicBoolean(false);
-    @Value("${dts.airbyte.destination.postgres.image:airbyte/destination-postgres:3.0.7}")
-    private String defaultDestinationPostgresImage;
-    @Value("${dts.airbyte.destination.postgres.name:PostgreSQL}")
-    private String defaultDestinationPostgresName;
 
     public InfraAdminService(
         PlatformInfraClient platformInfraClient,
@@ -222,12 +217,7 @@ public class InfraAdminService {
         InfraDataSource entity = new InfraDataSource();
         entity.setId(UUID.randomUUID());
         applyPayload(entity, payload);
-        Map<String, Object> mergedSecrets = new HashMap<>(payload.getSecrets());
-        Map<String, Object> destinationConfig = buildDestinationConfig(payload);
-        if (!destinationConfig.isEmpty()) {
-            mergedSecrets.put("destinationConfig", destinationConfig);
-        }
-        applySecrets(entity, mergedSecrets);
+        applySecrets(entity, payload.getSecrets());
         Instant now = Instant.now();
         entity.setStatus(STATUS_ACTIVE);
         entity.setHeartbeatStatus(HEARTBEAT_UNKNOWN);
@@ -255,12 +245,7 @@ public class InfraAdminService {
                 InfraDataSourceDto before = toDto(existing);
                 applyPayload(existing, payload);
                 if (payload.getSecretsRaw() != null) {
-                    Map<String, Object> mergedSecrets = new HashMap<>(payload.getSecrets());
-                    Map<String, Object> destinationConfig = buildDestinationConfig(payload);
-                    if (!destinationConfig.isEmpty()) {
-                        mergedSecrets.put("destinationConfig", destinationConfig);
-                    }
-                    applySecrets(existing, mergedSecrets);
+                    applySecrets(existing, payload.getSecrets());
                 }
                 existing.setUpdatedAt(Instant.now());
                 dataSourceRepository.save(existing);
@@ -412,8 +397,16 @@ public class InfraAdminService {
         return jdbcDriverCatalogService.listDrivers();
     }
 
-    public List<AirbyteDestinationDefinitionDto> listDestinationDefinitions() {
-        return ingestionInfraClient.listDestinationDefinitions();
+    public Map<String, Object> getIntegrationSettings(String service) {
+        return ingestionInfraClient.getServiceSettings(service);
+    }
+
+    public Map<String, Object> updateIntegrationSettings(String service, Map<String, Object> settings) {
+        return ingestionInfraClient.updateServiceSettings(service, settings);
+    }
+
+    public Map<String, Object> testIntegrationSettings(String service, Map<String, Object> settings) {
+        return ingestionInfraClient.testServiceSettings(service, settings);
     }
 
     public Optional<PlatformInceptorConfigResponse> currentPlatformInceptorConfig() {
@@ -612,37 +605,6 @@ public class InfraAdminService {
         if (payload.getDefaulted() != null) {
             entity.setDefaulted(payload.getDefaulted());
         }
-        ensureDestinationDefinition(entity);
-    }
-
-    private void ensureDestinationDefinition(InfraDataSource entity) {
-        if (entity == null) {
-            return;
-        }
-        Map<String, Object> props = entity.getProps() != null ? entity.getProps() : new HashMap<>();
-        if (StringUtils.hasText(asString(props.get("destinationDefinitionId")))) {
-            return;
-        }
-        // Only auto-register for postgres/JDBC types
-        String type = normalizeDataLakeType(entity.getType());
-        if (!type.equals("POSTGRESQL") && !type.equals("JDBC")) {
-            return;
-        }
-        String image = defaultDestinationPostgresImage;
-        String name = defaultDestinationPostgresName;
-        String repo = image;
-        String tag = "latest";
-        int idx = image.lastIndexOf(':');
-        if (idx > 0) {
-            repo = image.substring(0, idx);
-            tag = image.substring(idx + 1);
-        }
-        Optional<String> defId = platformInfraClient.registerDestinationDefinition(name, repo, tag);
-        defId.ifPresent(id -> {
-            props.put("destinationDefinitionId", id);
-            props.put("destinationDefinitionName", name);
-            entity.setProps(props);
-        });
     }
 
     private String normalizeDataLakeType(String type) {
@@ -768,122 +730,6 @@ public class InfraAdminService {
         return secrets;
     }
 
-    private Map<String, Object> buildDestinationConfig(UpsertInfraDataSourcePayload payload) {
-        Map<String, Object> config = new HashMap<>();
-        if (payload == null || !StringUtils.hasText(payload.getJdbcUrl())) {
-            return config;
-        }
-        String jdbcUrl = payload.getJdbcUrl().trim();
-        config.put("jdbc_url", jdbcUrl);
-        putIfText(config, "username", payload.getUsername());
-        String password = asString(payload.getSecrets().get("password"));
-        putIfText(config, "password", password);
-        String host = parseHost(jdbcUrl);
-        Integer port = parsePort(jdbcUrl);
-        putIfText(config, "host", host);
-        if (port != null) {
-            config.put("port", port);
-        }
-        String database = parseDatabase(jdbcUrl);
-        putIfText(config, "database", database);
-        putIfText(config, "schema", database);
-        if (payload.getProps() != null && payload.getProps().get("destinationDefinitionId") != null) {
-            config.putIfAbsent("destinationDefinitionId", payload.getProps().get("destinationDefinitionId"));
-        }
-        return config;
-    }
-
-    private void putIfText(Map<String, Object> target, String key, String value) {
-        if (target == null || key == null) {
-            return;
-        }
-        if (StringUtils.hasText(value)) {
-            target.put(key, value.trim());
-        }
-    }
-
-    private String parseDatabase(String jdbcUrl) {
-        if (!StringUtils.hasText(jdbcUrl)) {
-            return null;
-        }
-        int scheme = jdbcUrl.indexOf("://");
-        int start = scheme > -1 ? jdbcUrl.indexOf("/", scheme + 3) : jdbcUrl.indexOf("/");
-        if (start < 0 || start + 1 >= jdbcUrl.length()) {
-            return null;
-        }
-        String tail = jdbcUrl.substring(start + 1);
-        int cut = tail.indexOf("?");
-        if (cut < 0) {
-            cut = tail.indexOf(";");
-        }
-        if (cut > -1) {
-            tail = tail.substring(0, cut);
-        }
-        String trimmed = tail.trim();
-        return trimmed.isEmpty() ? null : trimmed;
-    }
-
-    private String parseHost(String jdbcUrl) {
-        if (!StringUtils.hasText(jdbcUrl)) {
-            return null;
-        }
-        try {
-            String rest = jdbcUrl;
-            int idx = jdbcUrl.indexOf("://");
-            if (idx > 0) {
-                rest = jdbcUrl.substring(idx + 3);
-            }
-            int slash = rest.indexOf('/');
-            if (slash >= 0) {
-                rest = rest.substring(0, slash);
-            }
-            int semicolon = rest.indexOf(';');
-            if (semicolon >= 0) {
-                rest = rest.substring(0, semicolon);
-            }
-            int question = rest.indexOf('?');
-            if (question >= 0) {
-                rest = rest.substring(0, question);
-            }
-            String[] parts = rest.split(":", 2);
-            String host = parts[0];
-            return StringUtils.hasText(host) ? host : null;
-        } catch (Exception ex) {
-            return null;
-        }
-    }
-
-    private Integer parsePort(String jdbcUrl) {
-        if (!StringUtils.hasText(jdbcUrl)) {
-            return null;
-        }
-        try {
-            String rest = jdbcUrl;
-            int idx = jdbcUrl.indexOf("://");
-            if (idx > 0) {
-                rest = jdbcUrl.substring(idx + 3);
-            }
-            int slash = rest.indexOf('/');
-            if (slash >= 0) {
-                rest = rest.substring(0, slash);
-            }
-            int semicolon = rest.indexOf(';');
-            if (semicolon >= 0) {
-                rest = rest.substring(0, semicolon);
-            }
-            int question = rest.indexOf('?');
-            if (question >= 0) {
-                rest = rest.substring(0, question);
-            }
-            String[] parts = rest.split(":", 2);
-            if (parts.length > 1) {
-                return Integer.parseInt(parts[1]);
-            }
-        } catch (Exception ex) {
-            return null;
-        }
-        return null;
-    }
 
     private void updateLastInceptorDefinition(InfraDataSource entity) {
         buildPersistDefinition(entity).ifPresent(def -> lastInceptorDefinition.set(clonePersistRequest(def)));

@@ -36,12 +36,6 @@ set -a
 : "${PG_DB_ANALYTICS:=dts_analytics}"
 : "${PG_USER_ANALYTICS:=dts_analytics}"
 : "${PG_PWD_ANALYTICS:=dts_analytics}"
-: "${PG_DB_AIRBYTE:=airbyte}"
-: "${PG_USER_AIRBYTE:=airbyte}"
-: "${PG_PWD_AIRBYTE:=airbyte}"
-: "${PG_DB_TEMPORAL:=airbyte_temporal}"
-: "${PG_USER_TEMPORAL:=airbyte_temporal}"
-: "${PG_PWD_TEMPORAL:=airbyte_temporal}"
 set +a
 
 services=(dts-admin dts-platform dts-ingestion dts-analytics dts-admin-webapp dts-platform-webapp dts-analytics-webapp-modern)

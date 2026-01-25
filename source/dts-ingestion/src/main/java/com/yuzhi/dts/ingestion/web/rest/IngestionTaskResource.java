@@ -1,19 +1,17 @@
 package com.yuzhi.dts.ingestion.web.rest;
 
 import com.yuzhi.dts.common.audit.AuditStage;
-import com.yuzhi.dts.ingestion.repository.infra.InfraAirbyteSourceRepository;
+import com.yuzhi.dts.ingestion.config.AddaxProperties;
+import com.yuzhi.dts.ingestion.security.SecurityUtils;
 import com.yuzhi.dts.ingestion.service.audit.AuditService;
-import com.yuzhi.dts.ingestion.service.etl.AirbyteClient;
+import com.yuzhi.dts.ingestion.service.etl.AddaxJobService;
 import com.yuzhi.dts.ingestion.service.etl.AirflowAdapter;
+import com.yuzhi.dts.ingestion.service.infra.IngestionSettingsService;
 import com.yuzhi.dts.ingestion.service.openmetadata.OpenMetadataAdapter;
 import jakarta.validation.Valid;
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
-import java.util.Optional;
-import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.util.StringUtils;
@@ -30,27 +28,30 @@ public class IngestionTaskResource {
     private static final String INFRA_MAINTAINER_EXPRESSION =
         "hasAnyAuthority(T(com.yuzhi.dts.ingestion.security.AuthoritiesConstants).INFRA_MAINTAINERS)";
 
-    private final AirbyteClient airbyteClient;
-    private final AirbyteResource airbyteResource;
-    private final InfraAirbyteSourceRepository sourceRepository;
+    private final AddaxJobService addaxJobService;
+    private final AddaxProperties addaxProperties;
+    private final IngestionSettingsService settingsService;
     private final AuditService auditService;
     private final OpenMetadataAdapter openMetadataAdapter;
     private final AirflowAdapter airflowAdapter;
+    private final com.yuzhi.dts.ingestion.service.IngestionTaskService ingestionTaskService;
 
     public IngestionTaskResource(
-        AirbyteClient airbyteClient,
-        AirbyteResource airbyteResource,
-        InfraAirbyteSourceRepository sourceRepository,
+        AddaxJobService addaxJobService,
+        AddaxProperties addaxProperties,
+        IngestionSettingsService settingsService,
         AuditService auditService,
         OpenMetadataAdapter openMetadataAdapter,
-        AirflowAdapter airflowAdapter
+        AirflowAdapter airflowAdapter,
+        com.yuzhi.dts.ingestion.service.IngestionTaskService ingestionTaskService
     ) {
-        this.airbyteClient = airbyteClient;
-        this.airbyteResource = airbyteResource;
-        this.sourceRepository = sourceRepository;
+        this.addaxJobService = addaxJobService;
+        this.addaxProperties = addaxProperties;
+        this.settingsService = settingsService;
         this.auditService = auditService;
         this.openMetadataAdapter = openMetadataAdapter;
         this.airflowAdapter = airflowAdapter;
+        this.ingestionTaskService = ingestionTaskService;
     }
 
     public record IngestionTaskRequest(
@@ -64,7 +65,8 @@ public class IngestionTaskResource {
         SchemaChangeSpec schemaChanges,
         LineageSpec lineage,
         AirflowSpec airflow,
-        Boolean runNow
+        Boolean runNow,
+        Map<String, Object> jobConfig
     ) {}
 
     public record SourceSpec(
@@ -75,7 +77,13 @@ public class IngestionTaskResource {
         String driverVersion
     ) {}
 
-    public record DestinationSpec(Boolean usePlatformDefault, String definitionId, String existingDestinationId, Map<String, Object> config) {}
+    public record DestinationSpec(
+        Boolean usePlatformDefault,
+        String type,
+        String definitionId,
+        String existingDestinationId,
+        Map<String, Object> config
+    ) {}
 
     public record SyncSpec(String mode, String destinationMode, ScheduleSpec schedule, NamespaceSpec namespace, String prefix) {}
 
@@ -94,344 +102,150 @@ public class IngestionTaskResource {
     @PostMapping("/tasks")
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ApiResponse<Map<String, Object>> createTask(@Valid @RequestBody IngestionTaskRequest request) {
-        if (request == null || !StringUtils.hasText(request.name())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "任务名称不能为空");
-        }
-        if (request.source() == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "缺少源端配置");
-        }
-        String sourceDefinitionId = resolveSourceDefinitionId(request.source());
-        if (!StringUtils.hasText(sourceDefinitionId)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "未匹配到可用的源端类型");
-        }
-        String sourceId = normalize(request.source().existingSourceId());
-        ApiResponse<Map<String, Object>> sourceResponse;
-        AirbyteResource.AirbyteSourceRequest sourceRequest = new AirbyteResource.AirbyteSourceRequest(
-            request.name(),
-            sourceDefinitionId,
-            sourceId,
-            request.source().config(),
-            Boolean.TRUE,
-            normalize(request.owner()),
-            normalize(request.description()),
-            normalize(request.source().driverVersion())
-        );
-        if (StringUtils.hasText(sourceId)) {
-            sourceResponse = sourceRepository
-                .findBySourceId(sourceId)
-                .map(existing -> airbyteResource.updateSource(existing.getId(), sourceRequest))
-                .orElseGet(() -> airbyteResource.createSource(sourceRequest));
-        } else {
-            sourceResponse = airbyteResource.createSource(sourceRequest);
-        }
-        Map<String, Object> sourcePayload = requirePayload(sourceResponse, "源端配置创建失败");
-        String infraSourceId = stringVal(sourcePayload.get("id"));
-        sourceId = stringVal(sourcePayload.get("sourceId"));
-        if (!StringUtils.hasText(sourceId)) {
-            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "源端创建失败");
-        }
+        String operator = SecurityUtils.getCurrentUserLogin().orElse("system");
+        String taskName = request != null ? request.name() : null;
+        try {
+            if (request == null || !StringUtils.hasText(request.name())) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "任务名称不能为空");
+            }
+            if (request.source() == null || request.destination() == null) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "缺少源端或目标端配置");
+            }
 
-        List<String> selectedStreams = resolveSelectedStreams(sourceId, request.streams());
-        String scheduleType = normalizeScheduleType(request.sync());
-        String scheduleCron = normalizeScheduleCron(request.sync());
-        String namespaceFormat = resolveNamespaceFormat(request.sync());
+            String readerType = resolvePlugin(request.source().type(), request.source().config(), List.of("readerType", "reader", "type"));
+            String writerType = resolvePlugin(request.destination().type(), request.destination().config(), List.of("writerType", "writer", "type"));
+            if (!StringUtils.hasText(readerType) || !StringUtils.hasText(writerType)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "缺少 Addax Reader/Writer 类型");
+            }
 
-        AirbyteResource.AirbyteConnectionRequest connectionRequest = new AirbyteResource.AirbyteConnectionRequest(
-            parseUuid(infraSourceId),
-            request.name(),
-            sourceDefinitionId,
-            sourceId,
-            null,
-            resolveDestinationId(request.destination()),
-            normalize(request.destination() == null ? null : request.destination().definitionId()),
-            request.destination() == null ? null : request.destination().config(),
-            normalize(request.sync() == null ? null : request.sync().mode()),
-            scheduleType,
-            scheduleCron,
-            namespaceFormat,
-            normalize(request.sync() == null ? null : request.sync().prefix()),
-            Boolean.TRUE,
-            normalize(request.owner()),
-            normalize(request.description()),
-            selectedStreams,
-            request.schemaChanges() == null ? null : normalize(request.schemaChanges().mode()),
-            null
-        );
-        ApiResponse<Map<String, Object>> connectionResponse = airbyteResource.createConnection(connectionRequest);
-        Map<String, Object> connectionPayload = requirePayload(connectionResponse, "接入任务创建失败");
-        String connectionId = stringVal(connectionPayload.get("id"));
-
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("source", sourcePayload);
-        result.put("connection", connectionPayload);
-        if (Boolean.TRUE.equals(request.runNow()) && StringUtils.hasText(connectionId)) {
-            ApiResponse<Map<String, Object>> sync = airbyteResource.triggerSync(parseUuid(connectionId));
-            result.put("job", sync.getData());
-        }
-
-        Map<String, Object> lineageResult = openMetadataAdapter.registerLineage(
-            toLineageRequest(request.lineage()),
-            new OpenMetadataAdapter.LineageContext(
+            AddaxJobService.AddaxJobResult job = addaxJobService.createJob(
                 request.name(),
-                request.source().type(),
-                namespaceFormat,
-                normalize(request.sync() == null ? null : request.sync().prefix()),
-                asMap(sourcePayload.get("config")),
-                asMap(connectionPayload.get("destinationConfig")),
-                resolveStreamRefs(sourceId, request.streams())
-            )
-        );
-        if (lineageResult != null && !lineageResult.isEmpty()) {
-            result.put("lineage", lineageResult);
-        }
+                readerType,
+                request.source().config(),
+                writerType,
+                request.destination().config(),
+                request.jobConfig()
+            );
 
-        Map<String, Object> ingestionResult = openMetadataAdapter.ensureMetadataIngestion(
-            new OpenMetadataAdapter.IngestionContext(
-                request.name(),
-                asMap(connectionPayload.get("destinationConfig")),
-                scheduleCron,
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put(
+                "job",
+                Map.of(
+                    "name",
+                    job.jobName(),
+                    "path",
+                    job.jobPath(),
+                    "reader",
+                    readerType,
+                    "writer",
+                    writerType
+                )
+            );
+
+            String namespaceFormat = request.sync() == null || request.sync().namespace() == null ? null : normalize(request.sync().namespace().format());
+            String prefix = request.sync() == null ? null : normalize(request.sync().prefix());
+            Map<String, Object> lineageResult = openMetadataAdapter.registerLineage(
+                toLineageRequest(request.lineage()),
+                new OpenMetadataAdapter.LineageContext(
+                    request.name(),
+                    readerType,
+                    namespaceFormat,
+                    prefix,
+                    safeMap(request.source().config()),
+                    safeMap(request.destination().config()),
+                    List.of()
+                )
+            );
+            if (lineageResult != null && !lineageResult.isEmpty()) {
+                result.put("lineage", lineageResult);
+            }
+
+            Map<String, Object> ingestionResult = openMetadataAdapter.ensureMetadataIngestion(
+                new OpenMetadataAdapter.IngestionContext(
+                    request.name(),
+                    safeMap(request.destination().config()),
+                    null,
+                    Boolean.TRUE.equals(request.runNow())
+                )
+            );
+            if (ingestionResult != null && !ingestionResult.isEmpty()) {
+                result.put("openmetadataIngestion", ingestionResult);
+            }
+
+            Map<String, Object> airflowConf = new LinkedHashMap<>();
+            airflowConf.put("job_path", job.jobPath());
+            airflowConf.put("job_name", job.jobName());
+            airflowConf.put("taskName", request.name());
+            AirflowAdapter.AirflowRequest airflowRequest = buildAirflowRequest(request.airflow());
+            Map<String, Object> airflowResult = airflowAdapter.triggerIfRequested(
+                airflowRequest,
+                airflowConf,
                 Boolean.TRUE.equals(request.runNow())
-            )
-        );
-        if (ingestionResult != null && !ingestionResult.isEmpty()) {
-            result.put("openmetadataIngestion", ingestionResult);
-        }
+            );
+            if (airflowResult != null && !airflowResult.isEmpty()) {
+                result.put("airflow", airflowResult);
+            }
 
-        Map<String, Object> airflowResult = airflowAdapter.triggerIfRequested(
-            toAirflowRequest(request.airflow()),
-            connectionId,
-            sourceId,
-            request.name(),
-            Boolean.TRUE.equals(request.runNow())
-        );
-        if (airflowResult != null && !airflowResult.isEmpty()) {
-            result.put("airflow", airflowResult);
+            auditService.auditAction(
+                "INGESTION_TASK_CREATE",
+                AuditStage.SUCCESS,
+                job.jobName(),
+                Map.of("summary", "创建入湖任务", "name", request.name(), "operator", operator)
+            );
+            return ApiResponses.ok(result);
+        } catch (RuntimeException ex) {
+            Map<String, Object> meta = new LinkedHashMap<>();
+            meta.put("summary", "创建入湖任务失败");
+            meta.put("name", taskName);
+            meta.put("operator", operator);
+            String error = trimMessage(ex.getMessage());
+            if (StringUtils.hasText(error)) {
+                meta.put("error", error);
+            }
+            auditService.auditAction("INGESTION_TASK_CREATE", AuditStage.FAIL, taskName, meta);
+            throw ex;
         }
-
-        auditService.auditAction(
-            "INGESTION_TASK_CREATE",
-            AuditStage.SUCCESS,
-            connectionId != null ? connectionId : "ingestion",
-            Map.of("summary", "创建入湖任务", "name", request.name())
-        );
-        return ApiResponses.ok(result);
     }
 
-    private String resolveSourceDefinitionId(SourceSpec source) {
-        if (source == null) {
+    private String resolvePlugin(String direct, Map<String, Object> config, List<String> keys) {
+        String value = normalize(direct);
+        if (StringUtils.hasText(value)) {
+            return value;
+        }
+        if (config == null || config.isEmpty() || keys == null) {
             return null;
         }
-        String definitionId = normalize(source.definitionId());
-        if (StringUtils.hasText(definitionId)) {
-            return definitionId;
-        }
-        String type = normalize(source.type());
-        if (!StringUtils.hasText(type)) {
-            return null;
-        }
-        List<Map<String, Object>> definitions = extractList(airbyteClient.listSourceDefinitions(), "sourceDefinitions");
-        for (Map<String, Object> item : definitions) {
-            String name = normalize(item.get("name"));
-            String repo = normalize(item.get("dockerRepository"));
-            if (matchesType(type, name) || matchesType(type, repo)) {
-                String id = stringVal(item.get("sourceDefinitionId"));
-                if (StringUtils.hasText(id)) {
-                    return id;
-                }
+        for (String key : keys) {
+            Object candidate = config.get(key);
+            String text = normalize(candidate);
+            if (StringUtils.hasText(text)) {
+                return text;
             }
         }
         return null;
     }
 
-    private boolean matchesType(String type, String candidate) {
-        if (!StringUtils.hasText(type) || !StringUtils.hasText(candidate)) {
-            return false;
+    private AirflowAdapter.AirflowRequest buildAirflowRequest(AirflowSpec spec) {
+        boolean enabled = spec != null && Boolean.TRUE.equals(spec.enabled());
+        String dagId = spec == null ? null : normalize(spec.dagId());
+        if (!StringUtils.hasText(dagId)) {
+            IngestionSettingsService.SettingsSnapshot settings = settingsService.getSettings(IngestionSettingsService.SERVICE_ADDAX);
+            dagId = settings.getString("dagId", addaxProperties.getDagId());
         }
-        String needle = type.toLowerCase(Locale.ROOT);
-        String haystack = candidate.toLowerCase(Locale.ROOT);
-        return haystack.equals(needle) || haystack.contains(needle);
+        return new AirflowAdapter.AirflowRequest(
+            enabled,
+            dagId,
+            spec == null ? null : normalize(spec.scheduleType()),
+            spec == null ? null : normalize(spec.cron()),
+            spec == null ? null : spec.intervalMinutes()
+        );
     }
 
-    private String resolveDestinationId(DestinationSpec destination) {
-        if (destination == null) {
+    private OpenMetadataAdapter.LineageRequest toLineageRequest(LineageSpec spec) {
+        if (spec == null) {
             return null;
         }
-        String existing = normalize(destination.existingDestinationId());
-        if (StringUtils.hasText(existing)) {
-            return existing;
-        }
-        if (Boolean.FALSE.equals(destination.usePlatformDefault())) {
-            return null;
-        }
-        return null;
-    }
-
-    private List<String> resolveSelectedStreams(String sourceId, StreamsSpec streams) {
-        if (streams == null || !StringUtils.hasText(sourceId)) {
-            return List.of();
-        }
-        String selection = normalize(streams.selection());
-        if (!StringUtils.hasText(selection) || "all".equals(selection)) {
-            return List.of();
-        }
-        if ("include".equals(selection)) {
-            return normalizeList(streams.include());
-        }
-        if ("exclude".equals(selection)) {
-            Map<String, Object> payload = airbyteClient.discoverSchema(sourceId).orElse(Map.of());
-            List<String> allStreams = extractStreamNames(payload);
-            List<String> exclude = normalizeList(streams.exclude());
-            if (allStreams.isEmpty() || exclude.isEmpty()) {
-                return List.of();
-            }
-            List<String> filtered = new ArrayList<>();
-            for (String stream : allStreams) {
-                if (!exclude.contains(stream)) {
-                    filtered.add(stream);
-                }
-            }
-            return filtered;
-        }
-        return List.of();
-    }
-
-    private List<OpenMetadataAdapter.StreamRef> resolveStreamRefs(String sourceId, StreamsSpec streams) {
-        if (!StringUtils.hasText(sourceId)) {
-            return List.of();
-        }
-        Map<String, Object> payload = airbyteClient.discoverSchema(sourceId).orElse(Map.of());
-        List<OpenMetadataAdapter.StreamRef> refs = extractStreamRefs(payload);
-        if (streams == null || refs.isEmpty()) {
-            return refs;
-        }
-        String selection = normalize(streams.selection());
-        if (!StringUtils.hasText(selection) || "all".equals(selection)) {
-            return refs;
-        }
-        List<String> include = normalizeList(streams.include());
-        List<String> exclude = normalizeList(streams.exclude());
-        List<OpenMetadataAdapter.StreamRef> filtered = new ArrayList<>();
-        for (OpenMetadataAdapter.StreamRef ref : refs) {
-            if ("include".equals(selection) && !include.isEmpty()) {
-                if (include.contains(ref.name())) {
-                    filtered.add(ref);
-                }
-                continue;
-            }
-            if ("exclude".equals(selection) && !exclude.isEmpty()) {
-                if (!exclude.contains(ref.name())) {
-                    filtered.add(ref);
-                }
-                continue;
-            }
-        }
-        return filtered.isEmpty() ? refs : filtered;
-    }
-
-    private List<OpenMetadataAdapter.StreamRef> extractStreamRefs(Map<String, Object> payload) {
-        if (payload == null) {
-            return List.of();
-        }
-        Object catalogObj = payload.get("catalog");
-        if (!(catalogObj instanceof Map<?, ?> catalog)) {
-            return List.of();
-        }
-        Object streamsObj = catalog.get("streams");
-        if (!(streamsObj instanceof List<?> streamList)) {
-            return List.of();
-        }
-        List<OpenMetadataAdapter.StreamRef> refs = new ArrayList<>();
-        for (Object item : streamList) {
-            if (!(item instanceof Map<?, ?> map)) {
-                continue;
-            }
-            Object streamObj = map.get("stream");
-            if (!(streamObj instanceof Map<?, ?> streamMap)) {
-                continue;
-            }
-            String name = stringVal(streamMap.get("name"));
-            if (!StringUtils.hasText(name)) {
-                continue;
-            }
-            String namespace = stringVal(streamMap.get("namespace"));
-            refs.add(new OpenMetadataAdapter.StreamRef(name, namespace));
-        }
-        return refs;
-    }
-
-    private List<String> extractStreamNames(Map<String, Object> payload) {
-        if (payload == null) {
-            return List.of();
-        }
-        Object catalogObj = payload.get("catalog");
-        if (!(catalogObj instanceof Map<?, ?> catalog)) {
-            return List.of();
-        }
-        Object streamsObj = catalog.get("streams");
-        if (!(streamsObj instanceof List<?> streamList)) {
-            return List.of();
-        }
-        List<String> names = new ArrayList<>();
-        for (Object item : streamList) {
-            if (!(item instanceof Map<?, ?> map)) {
-                continue;
-            }
-            Object streamObj = map.get("stream");
-            if (streamObj instanceof Map<?, ?> streamMap) {
-                String name = stringVal(streamMap.get("name"));
-                if (StringUtils.hasText(name)) {
-                    names.add(name);
-                }
-            }
-        }
-        return names;
-    }
-
-    private String normalizeScheduleType(SyncSpec sync) {
-        if (sync == null || sync.schedule() == null) {
-            return null;
-        }
-        String type = normalize(sync.schedule().type());
-        if (!StringUtils.hasText(type)) {
-            return null;
-        }
-        if ("cron".equals(type)) {
-            return "cron";
-        }
-        if ("manual".equals(type)) {
-            return "manual";
-        }
-        return null;
-    }
-
-    private String normalizeScheduleCron(SyncSpec sync) {
-        if (sync == null || sync.schedule() == null) {
-            return null;
-        }
-        String cron = normalize(sync.schedule().cron());
-        return StringUtils.hasText(cron) ? cron : null;
-    }
-
-    private String resolveNamespaceFormat(SyncSpec sync) {
-        if (sync == null || sync.namespace() == null) {
-            return null;
-        }
-        String format = normalize(sync.namespace().format());
-        return StringUtils.hasText(format) ? format : null;
-    }
-
-    private Map<String, Object> requirePayload(ApiResponse<Map<String, Object>> response, String message) {
-        if (response == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, message);
-        }
-        if (response.getStatus() != 200) {
-            String reason = response.getMessage();
-            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, (reason == null || reason.isBlank()) ? message : reason);
-        }
-        if (response.getData() == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, message);
-        }
-        return response.getData();
+        return new OpenMetadataAdapter.LineageRequest(spec.enabled(), spec.domain(), spec.tags(), spec.owner());
     }
 
     private String normalize(Object value) {
@@ -442,79 +256,119 @@ public class IngestionTaskResource {
         return StringUtils.hasText(text) ? text : null;
     }
 
-    private UUID parseUuid(String value) {
-        if (!StringUtils.hasText(value)) {
+    private Map<String, Object> safeMap(Map<String, Object> value) {
+        return value == null ? Map.of() : new LinkedHashMap<>(value);
+    }
+
+    private String trimMessage(String message) {
+        if (!StringUtils.hasText(message)) {
             return null;
         }
+        String trimmed = message.trim();
+        return trimmed.length() > 200 ? trimmed.substring(0, 200) : trimmed;
+    }
+
+    // ==================== 新增CRUD端点 ====================
+
+    private final com.yuzhi.dts.ingestion.service.IngestionTaskService ingestionTaskService;
+
+    /**
+     * GET /api/ingestion/tasks : 获取任务列表
+     */
+    @GetMapping("/tasks/list")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public org.springframework.http.ResponseEntity<org.springframework.data.domain.Page<com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO>> getTasks(
+        @org.springframework.web.bind.annotation.RequestParam(required = false) String status,
+        org.springframework.data.domain.Pageable pageable
+    ) {
+        org.springframework.data.domain.Page<com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO> page = 
+            ingestionTaskService.findAll(status, pageable);
+        return org.springframework.http.ResponseEntity.ok(page);
+    }
+
+    /**
+     * GET /api/ingestion/tasks/{id} : 获取任务详情
+     */
+    @org.springframework.web.bind.annotation.GetMapping("/tasks/{id}")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public org.springframework.http.ResponseEntity<com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO> getTask(
+        @org.springframework.web.bind.annotation.PathVariable Long id
+    ) {
+        return ingestionTaskService.findOne(id)
+            .map(org.springframework.http.ResponseEntity::ok)
+            .orElse(org.springframework.http.ResponseEntity.notFound().build());
+    }
+
+    /**
+     * PUT /api/ingestion/tasks/{id} : 更新任务
+     */
+    @org.springframework.web.bind.annotation.PutMapping("/tasks/{id}")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public org.springframework.http.ResponseEntity<com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO> updateTask(
+        @org.springframework.web.bind.annotation.PathVariable Long id,
+        @Valid @RequestBody com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO taskDTO
+    ) {
+        if (!id.equals(taskDTO.getId())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "ID不匹配");
+        }
+        com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO updated = ingestionTaskService.update(id, taskDTO);
+        return org.springframework.http.ResponseEntity.ok(updated);
+    }
+
+    /**
+     * DELETE /api/ingestion/tasks/{id} : 删除任务（软删除）
+     */
+    @org.springframework.web.bind.annotation.DeleteMapping("/tasks/{id}")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public org.springframework.http.ResponseEntity<Void> deleteTask(
+        @org.springframework.web.bind.annotation.PathVariable Long id
+    ) {
+        ingestionTaskService.delete(id);
+        return org.springframework.http.ResponseEntity.noContent().build();
+    }
+
+    /**
+     * POST /api/ingestion/tasks/{id}/execute : 手动执行任务
+     */
+    @PostMapping("/tasks/{id}/execute")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public org.springframework.http.ResponseEntity<com.yuzhi.dts.ingestion.service.dto.IngestionExecutionDTO> executeTask(
+        @org.springframework.web.bind.annotation.PathVariable Long id
+    ) {
         try {
-            return UUID.fromString(value);
-        } catch (Exception ex) {
-            return null;
+            com.yuzhi.dts.ingestion.service.dto.IngestionExecutionDTO execution = ingestionTaskService.execute(id);
+            return org.springframework.http.ResponseEntity.ok(execution);
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "任务不存在");
+        } catch (IllegalStateException e) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, e.getMessage());
         }
     }
 
-    private String stringVal(Object value) {
-        if (value == null) {
-            return null;
-        }
-        String text = value.toString().trim();
-        return StringUtils.hasText(text) ? text : null;
+    /**
+     * GET /api/ingestion/tasks/{id}/executions : 获取任务执行历史
+     */
+    @org.springframework.web.bind.annotation.GetMapping("/tasks/{id}/executions")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public org.springframework.http.ResponseEntity<org.springframework.data.domain.Page<com.yuzhi.dts.ingestion.service.dto.IngestionExecutionDTO>> getExecutions(
+        @org.springframework.web.bind.annotation.PathVariable Long id,
+        org.springframework.data.domain.Pageable pageable
+    ) {
+        org.springframework.data.domain.Page<com.yuzhi.dts.ingestion.service.dto.IngestionExecutionDTO> page = 
+            ingestionTaskService.getExecutions(id, pageable);
+        return org.springframework.http.ResponseEntity.ok(page);
     }
 
-    private List<String> normalizeList(List<String> items) {
-        if (items == null || items.isEmpty()) {
-            return List.of();
-        }
-        List<String> normalized = new ArrayList<>();
-        for (String item : items) {
-            if (StringUtils.hasText(item)) {
-                normalized.add(item.trim());
-            }
-        }
-        return normalized;
-    }
-
-    private List<Map<String, Object>> extractList(Optional<Map<String, Object>> payloadOpt, String key) {
-        if (payloadOpt == null || payloadOpt.isEmpty()) {
-            return List.of();
-        }
-        Object value = payloadOpt.get().get(key);
-        if (!(value instanceof List<?> list)) {
-            return List.of();
-        }
-        List<Map<String, Object>> out = new ArrayList<>();
-        for (Object item : list) {
-            if (item instanceof Map<?, ?> map) {
-                out.add(new LinkedHashMap(map));
-            }
-        }
-        return out;
-    }
-
-    private Map<String, Object> asMap(Object value) {
-        if (!(value instanceof Map<?, ?> map)) {
-            return Map.of();
-        }
-        Map<String, Object> out = new LinkedHashMap<>();
-        for (Map.Entry<?, ?> entry : map.entrySet()) {
-            if (entry.getKey() != null) {
-                out.put(entry.getKey().toString(), entry.getValue());
-            }
-        }
-        return out;
-    }
-
-    private OpenMetadataAdapter.LineageRequest toLineageRequest(LineageSpec spec) {
-        if (spec == null) {
-            return null;
-        }
-        return new OpenMetadataAdapter.LineageRequest(spec.enabled(), spec.domain(), spec.tags(), spec.owner());
-    }
-
-    private AirflowAdapter.AirflowRequest toAirflowRequest(AirflowSpec spec) {
-        if (spec == null) {
-            return null;
-        }
-        return new AirflowAdapter.AirflowRequest(spec.enabled(), spec.dagId(), spec.scheduleType(), spec.cron(), spec.intervalMinutes());
+    /**
+     * GET /api/ingestion/tasks/{id}/executions/latest : 获取最新执行记录
+     */
+    @org.springframework.web.bind.annotation.GetMapping("/tasks/{id}/executions/latest")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public org.springframework.http.ResponseEntity<com.yuzhi.dts.ingestion.service.dto.IngestionExecutionDTO> getLatestExecution(
+        @org.springframework.web.bind.annotation.PathVariable Long id
+    ) {
+        return ingestionTaskService.getLatestExecution(id)
+            .map(org.springframework.http.ResponseEntity::ok)
+            .orElse(org.springframework.http.ResponseEntity.notFound().build());
     }
 }

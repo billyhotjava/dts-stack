@@ -96,7 +96,7 @@ public class PortalMenuService {
         Map.entry("governance.qualityReport", "/pages/catalog/QualityPage"),
         Map.entry("governance.classification", "/pages/security/data-security"),
         Map.entry("portal.map", "/pages/catalog/DatasetsPage"),
-        Map.entry("portal.search", "/pages/catalog/DatasetsPage"),
+        Map.entry("portal.search", "/pages/catalog/DataSearchPage"),
         Map.entry("portal.detail", "/pages/catalog/DatasetsPage"),
         Map.entry("portal.lineage", "/pages/catalog/LineagePage"),
         Map.entry("portal.permission", "/pages/security/DatasetAccessApprovalPage"),

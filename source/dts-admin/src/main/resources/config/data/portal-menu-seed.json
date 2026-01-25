@@ -101,7 +101,7 @@
           "icon": "solar:terminal-bold-duotone",
           "titleKey": "sys.nav.portal.studioScripts",
           "title": "脚本开发（Python/Spark）",
-          "externalLink": "/explore/etl/transform"
+          "externalLink": "/explore/etl/scripts"
         },
         {
           "key": "orchestration",
@@ -232,7 +232,7 @@
           "icon": "solar:rounded-magnifer-bold-duotone",
           "titleKey": "sys.nav.portal.dataPortalSearch",
           "title": "数据搜索",
-          "externalLink": "/catalog/assets"
+          "externalLink": "/catalog/search"
         },
         {
           "key": "detail",

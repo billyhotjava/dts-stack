@@ -1,6 +1,6 @@
 package com.yuzhi.dts.ingestion.service.infra;
 
-import com.yuzhi.dts.ingestion.config.AirbyteProperties;
+import com.yuzhi.dts.ingestion.config.AddaxProperties;
 import com.yuzhi.dts.ingestion.config.AirflowProperties;
 import com.yuzhi.dts.ingestion.config.OpenMetadataProperties;
 import java.util.LinkedHashMap;
@@ -18,31 +18,27 @@ public class IngestionSettingsSeeder implements ApplicationRunner {
     private static final Logger LOG = LoggerFactory.getLogger(IngestionSettingsSeeder.class);
 
     private final InfraServiceSettingsRepository repository;
-    private final AirbyteProperties airbyteProperties;
+    private final AddaxProperties addaxProperties;
     private final AirflowProperties airflowProperties;
     private final OpenMetadataProperties openMetadataProperties;
-    private final AirbyteDefaultDestinationRegistrar defaultDestinationRegistrar;
 
     public IngestionSettingsSeeder(
         InfraServiceSettingsRepository repository,
-        AirbyteProperties airbyteProperties,
+        AddaxProperties addaxProperties,
         AirflowProperties airflowProperties,
-        OpenMetadataProperties openMetadataProperties,
-        AirbyteDefaultDestinationRegistrar defaultDestinationRegistrar
+        OpenMetadataProperties openMetadataProperties
     ) {
         this.repository = repository;
-        this.airbyteProperties = airbyteProperties;
+        this.addaxProperties = addaxProperties;
         this.airflowProperties = airflowProperties;
         this.openMetadataProperties = openMetadataProperties;
-        this.defaultDestinationRegistrar = defaultDestinationRegistrar;
     }
 
     @Override
     public void run(ApplicationArguments args) {
-        seedIfMissing(IngestionSettingsService.SERVICE_AIRBYTE, buildAirbyteSettings());
+        seedIfMissing(IngestionSettingsService.SERVICE_ADDAX, buildAddaxSettings());
         seedIfMissing(IngestionSettingsService.SERVICE_AIRFLOW, buildAirflowSettings());
         seedIfMissing(IngestionSettingsService.SERVICE_OPENMETADATA, buildOpenMetadataSettings());
-        defaultDestinationRegistrar.registerIfMissing();
     }
 
     private void seedIfMissing(String service, Map<String, Object> settings) {
@@ -56,23 +52,22 @@ public class IngestionSettingsSeeder implements ApplicationRunner {
         LOG.info("[ingestion] Seeded settings for service={} keys={}", service, settings.keySet());
     }
 
-    private Map<String, Object> buildAirbyteSettings() {
+    private Map<String, Object> buildAddaxSettings() {
         Map<String, Object> settings = new LinkedHashMap<>();
-        putIfText(settings, "workspaceId", airbyteProperties.getWorkspaceId());
-        putIfText(settings, "organizationId", airbyteProperties.getOrganizationId());
-        putIfText(settings, "authUserId", airbyteProperties.getAuthUserId());
-        putIfText(settings, "organizationName", airbyteProperties.getOrganizationName());
-        putIfText(settings, "defaultDestinationId", airbyteProperties.getDefaultDestinationId());
-        putIfText(settings, "defaultDestinationName", airbyteProperties.getDefaultDestinationName());
-        putIfText(settings, "defaultDestinationDefinitionId", airbyteProperties.getDefaultDestinationDefinitionId());
-        putIfText(settings, "defaultDestinationConfigJson", airbyteProperties.getDefaultDestinationConfigJson());
-        putIfText(settings, "defaultDestinationImage", airbyteProperties.getDefaultDestinationImage());
+        settings.put("enabled", addaxProperties.isEnabled());
+        putIfText(settings, "jobDir", addaxProperties.getJobDir());
+        putIfText(settings, "image", addaxProperties.getImage());
+        putIfText(settings, "dagId", addaxProperties.getDagId());
         return settings;
     }
 
     private Map<String, Object> buildAirflowSettings() {
         Map<String, Object> settings = new LinkedHashMap<>();
         settings.put("enabled", airflowProperties.isEnabled());
+        putIfText(settings, "baseUrl", airflowProperties.getBaseUrl());
+        putIfText(settings, "apiPath", airflowProperties.getApiPath());
+        putIfText(settings, "username", airflowProperties.getUsername());
+        putIfText(settings, "password", airflowProperties.getPassword());
         putIfText(settings, "dagId", airflowProperties.getDagId());
         return settings;
     }
@@ -80,6 +75,9 @@ public class IngestionSettingsSeeder implements ApplicationRunner {
     private Map<String, Object> buildOpenMetadataSettings() {
         Map<String, Object> settings = new LinkedHashMap<>();
         settings.put("enabled", openMetadataProperties.isEnabled());
+        putIfText(settings, "baseUrl", openMetadataProperties.getBaseUrl());
+        putIfText(settings, "apiPath", openMetadataProperties.getApiPath());
+        putIfText(settings, "authToken", openMetadataProperties.getAuthToken());
         putIfText(settings, "sourceServiceName", openMetadataProperties.getSourceServiceName());
         putIfText(settings, "sourceServiceType", openMetadataProperties.getSourceServiceType());
         putIfText(settings, "destinationServiceName", openMetadataProperties.getDestinationServiceName());

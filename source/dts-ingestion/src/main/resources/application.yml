@@ -8,6 +8,9 @@ spring:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://dts-pg:5432/dtsPlatform}
     username: ${SPRING_DATASOURCE_USERNAME:dts}
     password: ${SPRING_DATASOURCE_PASSWORD:dts}
+  liquibase:
+    change-log: classpath:config/liquibase/master.xml
+    enabled: true
   jpa:
     open-in-view: false
     hibernate:
@@ -15,6 +18,10 @@ spring:
     properties:
       hibernate:
         format_sql: false
+  data:
+    jpa:
+      repositories:
+        bootstrap-mode: deferred
 
 management:
   endpoints:
@@ -29,21 +36,11 @@ dts:
   ingestion:
     enabled: true
     trusted-service-name: ${DTS_INGESTION_TRUSTED_SERVICE_NAME:dts-platform}
-  airbyte:
-    enabled: true
-    base-url: ${DTS_AIRBYTE_BASE_URL:http://dts-airbyte-server:8001}
-    api-path: ${DTS_AIRBYTE_API_PATH:/api/v1}
-    username: ${DTS_AIRBYTE_USERNAME:}
-    password: ${DTS_AIRBYTE_PASSWORD:}
-    auth-user-id: ${DTS_AIRBYTE_AUTH_USER_ID:00000000-0000-0000-0000-000000000000}
-    organization-id: ${DTS_AIRBYTE_ORGANIZATION_ID:}
-    organization-name: ${DTS_AIRBYTE_ORGANIZATION_NAME:dts-org}
-    workspace-id: ${DTS_AIRBYTE_WORKSPACE_ID:}
-    default-destination-id: ${DTS_AIRBYTE_DEFAULT_DESTINATION_ID:}
-    default-destination-name: ${DTS_AIRBYTE_DEFAULT_DESTINATION_NAME:dts-ods-destination}
-    default-destination-definition-id: ${DTS_AIRBYTE_DEFAULT_DESTINATION_DEFINITION_ID:}
-    default-destination-config-json: ${DTS_AIRBYTE_DEFAULT_DESTINATION_CONFIG_JSON:}
-    default-destination-image: ${IMAGE_AIRBYTE_DESTINATION_POSTGRES:airbyte/destination-postgres:3.0.7}
+  addax:
+    enabled: ${DTS_ADDAX_ENABLED:true}
+    job-dir: ${DTS_ADDAX_JOB_DIR:/opt/prod/s10/dts-stack/services/dts-addax/jobs}
+    image: ${IMAGE_ADDAX:wgzhao/addax:0.59.1}
+    dag-id: ${DTS_ADDAX_DAG_ID:addax_job}
   airflow:
     enabled: ${DTS_AIRFLOW_ENABLED:true}
     base-url: ${DTS_AIRFLOW_BASE_URL:http://dts-airflow-webserver:8080}

@@ -1,5 +1,6 @@
-import { Card, Col, Progress, Row, Statistic, Table, Typography } from "antd";
+import { Card, Col, Row, Statistic, Table, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
+import { EmptyState } from "@/components/empty-state";
 
 const { Title, Text } = Typography;
 
@@ -12,10 +13,7 @@ type SlaRow = {
 	owner: string;
 };
 
-const slaRows: SlaRow[] = [
-	{ key: "1", name: "ads_finance_report", expected: "08:00", current: "08:45", delay: "45min", owner: "张三" },
-	{ key: "2", name: "dws_user_assets", expected: "06:00", current: "06:10", delay: "10min", owner: "李四" },
-];
+const slaRows: SlaRow[] = [];
 
 const slaColumns: ColumnsType<SlaRow> = [
 	{ title: "任务名称", dataIndex: "name" },
@@ -27,68 +25,48 @@ const slaColumns: ColumnsType<SlaRow> = [
 
 export default function OpsOverviewPage() {
 	return (
-		<div className="mx-auto max-w-7xl space-y-6">
-			<div>
-				<Title level={3} style={{ margin: 0 }}>
-					任务运行概览
-				</Title>
-			</div>
+		<div className="mx-auto w-full max-w-none space-y-6 px-6 py-6">
+			<Title level={3} style={{ margin: 0 }}>
+				任务运行概览
+			</Title>
 
-			<Row gutter={16} className="mb-2">
-				<Col span={6}>
+			<Row gutter={[16, 16]} className="mb-2">
+				<Col xs={24} sm={12} lg={6}>
 					<Card className="rounded-xl shadow-sm">
-						<Statistic title="今日任务总数" value={1240} prefix={<span>📊</span>} />
+						<Statistic title="今日任务总数" value="--" />
 					</Card>
 				</Col>
-				<Col span={6}>
+				<Col xs={24} sm={12} lg={6}>
 					<Card className="rounded-xl shadow-sm">
-						<Statistic title="成功率" value={98.5} suffix="%" valueStyle={{ color: "#3f8600" }} />
+						<Statistic title="成功率" value="--" suffix="%" />
 					</Card>
 				</Col>
-				<Col span={6}>
+				<Col xs={24} sm={12} lg={6}>
 					<Card className="rounded-xl shadow-sm">
-						<Statistic title="异常告警" value={3} valueStyle={{ color: "#cf1322" }} />
+						<Statistic title="异常告警" value="--" />
 					</Card>
 				</Col>
-				<Col span={6}>
+				<Col xs={24} sm={12} lg={6}>
 					<Card className="rounded-xl shadow-sm">
-						<Statistic title="正在运行" value={12} />
+						<Statistic title="正在运行" value="--" />
 					</Card>
 				</Col>
 			</Row>
 
-			<Row gutter={16}>
-				<Col span={16}>
-					<Card title="任务执行趋势 (近24小时)" className="mb-6">
-						<div className="flex h-[200px] items-end justify-around rounded-lg bg-slate-50 px-4 py-3">
-							{[40, 60, 90, 30, 50, 80].map((height, idx) => (
-								<div
-									key={`bar-${height}-${idx}`}
-									className={`w-7 rounded-t-md ${idx === 4 ? "bg-blue-300" : "bg-blue-500"}`}
-									style={{ height: `${height}%` }}
-								/>
-							))}
-						</div>
-						<div className="mt-2 flex justify-between text-xs text-slate-400">
-							<span>02:00 (高峰)</span>
-							<span>08:00</span>
-							<span>14:00</span>
-							<span>20:00</span>
-						</div>
-					</Card>
-				</Col>
-				<Col span={8}>
-					<Card title="数仓分层成功率" className="mb-6">
-						<div className="mb-4">ODS 层 <Progress percent={100} size="small" /></div>
-						<div className="mb-4">DWD 层 <Progress percent={98} size="small" /></div>
-						<div className="mb-4">DWS 层 <Progress percent={95} size="small" status="active" /></div>
-						<div className="mb-4">ADS 层 <Progress percent={80} size="small" status="exception" /></div>
-					</Card>
-				</Col>
-			</Row>
+			<Card title="任务执行趋势 (近24小时)">
+				<EmptyState title="暂无趋势数据" description="任务运行数据接入后展示趋势分析。" />
+			</Card>
+
+			<Card title="数仓分层成功率">
+				<EmptyState title="暂无成功率统计" description="接入任务运行结果后展示分层成功率。" />
+			</Card>
 
 			<Card title="SLA 延迟预警 (关键任务路径)">
-				<Table size="small" pagination={false} dataSource={slaRows} columns={slaColumns} />
+				{slaRows.length ? (
+					<Table size="small" pagination={false} dataSource={slaRows} columns={slaColumns} />
+				) : (
+					<EmptyState title="暂无 SLA 预警" description="接入 SLA 数据后展示预警列表。" />
+				)}
 			</Card>
 		</div>
 	);

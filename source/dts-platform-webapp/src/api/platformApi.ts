@@ -112,29 +112,7 @@ export const visitExternalLink = (entryKey: string, data?: any) => api.post({ ur
 export const upsertExternalLink = (entryKey: string, data: any) => api.put({ url: `/infra/external-links/${entryKey}`, data });
 export const deleteExternalLink = (entryKey: string) => api.delete({ url: `/infra/external-links/${entryKey}` });
 
-// Airbyte (data lake ingestion)
-export const listAirbyteSourceDefinitions = () => api.get({ url: "/infra/airbyte/definitions/sources" });
-export const listAirbyteDestinationDefinitions = () => api.get({ url: "/infra/airbyte/definitions/destinations" });
-export const listAirbyteSources = () => api.get({ url: "/infra/airbyte/sources" });
-export const createAirbyteSource = (data: any) => api.post({ url: "/infra/airbyte/sources", data });
-export const updateAirbyteSource = (id: string, data: any) => api.put({ url: `/infra/airbyte/sources/${id}`, data });
-export const checkAirbyteSource = (id: string) => api.post({ url: `/infra/airbyte/sources/${id}/check` });
-export const discoverAirbyteSource = (id: string) =>
-	api.post({ url: `/infra/airbyte/sources/${id}/discover`, timeout: 180000 });
-export const deleteAirbyteSource = (id: string) => api.delete({ url: `/infra/airbyte/sources/${id}` });
-export const listAirbyteConnections = (refresh = false) =>
-	api.get({ url: "/infra/airbyte/connections", params: refresh ? { refresh } : undefined });
-export const createAirbyteConnection = (data: any) =>
-	api.post({ url: "/infra/airbyte/connections", data, timeout: 180000 });
-export const updateAirbyteConnection = (id: string, data: any) =>
-	api.put({ url: `/infra/airbyte/connections/${id}`, data, timeout: 180000 });
-export const triggerAirbyteSync = (id: string) => api.post({ url: `/infra/airbyte/connections/${id}/sync` });
-export const listAirbyteJobs = (id: string, limit = 10) =>
-	api.get({ url: `/infra/airbyte/connections/${id}/jobs`, params: { limit } });
-export const getDataLakeStatus = (refresh = true) =>
-	api.get({ url: "/infra/airbyte/data-lake/status", params: { refresh } });
-export const getDefaultDataLake = () => api.get({ url: "/infra/airbyte/data-lake/default" });
-export const listJdbcDrivers = () => api.get({ url: "/infra/jdbc/drivers" });
+// Addax (data lake ingestion)
 export const createIngestionTask = (data: any) =>
 	api.post({ url: "/ingestion/tasks", data, timeout: 180000 });
 

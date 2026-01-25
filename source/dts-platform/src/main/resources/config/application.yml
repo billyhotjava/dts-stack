@@ -250,20 +250,6 @@ dts:
     username: ${DTS_AIRFLOW_USERNAME:airflow}
     password: ${DTS_AIRFLOW_PASSWORD:airflow}
     dag-id: ${DTS_AIRFLOW_DAG_ID:dbt_load}
-  airbyte:
-    enabled: ${DTS_AIRBYTE_ENABLED:true}
-    base-url: ${DTS_AIRBYTE_BASE_URL:http://dts-airbyte-server:8001}
-    api-path: ${DTS_AIRBYTE_API_PATH:/api/v1}
-    username: ${DTS_AIRBYTE_USERNAME:}
-    password: ${DTS_AIRBYTE_PASSWORD:}
-    auth-user-id: ${DTS_AIRBYTE_AUTH_USER_ID:00000000-0000-0000-0000-000000000000}
-    organization-id: ${DTS_AIRBYTE_ORGANIZATION_ID:}
-    organization-name: ${DTS_AIRBYTE_ORGANIZATION_NAME:dts-org}
-    workspace-id: ${DTS_AIRBYTE_WORKSPACE_ID:}
-    default-destination-id: ${DTS_AIRBYTE_DEFAULT_DESTINATION_ID:}
-    default-destination-name: ${DTS_AIRBYTE_DEFAULT_DESTINATION_NAME:dts-ods-destination}
-    default-destination-definition-id: ${DTS_AIRBYTE_DEFAULT_DESTINATION_DEFINITION_ID:}
-    default-destination-config-json: ${DTS_AIRBYTE_DEFAULT_DESTINATION_CONFIG_JSON:}
   admin:
     enabled: true
     base-url: http://dts-admin:8081

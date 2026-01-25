@@ -6,6 +6,10 @@ public final class ButtonCodes {
     // System configuration
     public static final String SYSTEM_CONFIG_VIEW = "ADMIN_SYSTEM_CONFIG_VIEW";
     public static final String SYSTEM_CONFIG_SUBMIT = "ADMIN_SYSTEM_CONFIG_SUBMIT";
+    public static final String INTEGRATION_SETTINGS_VIEW = "ADMIN_INTEGRATION_SETTINGS_VIEW";
+    public static final String INTEGRATION_SETTINGS_UPDATE = "ADMIN_INTEGRATION_SETTINGS_UPDATE";
+    public static final String INTEGRATION_SETTINGS_TEST = "ADMIN_INTEGRATION_SETTINGS_TEST";
+    public static final String DATA_SOURCE_LIST = "ADMIN_DATA_SOURCE_LIST";
     public static final String DATA_SOURCE_CREATE = "ADMIN_DATA_SOURCE_CREATE";
     public static final String DATA_SOURCE_UPDATE = "ADMIN_DATA_SOURCE_UPDATE";
     public static final String DATA_SOURCE_REFRESH = "ADMIN_DATA_SOURCE_REFRESH";

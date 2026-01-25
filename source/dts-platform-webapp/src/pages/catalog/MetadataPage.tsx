@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
 	Alert,
@@ -19,154 +19,256 @@ import {
 import type { ColumnsType } from "antd/es/table";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
+import {
+	getTechMetadataTableDetail,
+	getTechMetadataTables,
+	listCatalogSyncPipelines,
+	listCatalogSyncRuns,
+	triggerCatalogSync,
+	triggerJdbcCatalogSync,
+} from "@/api/platformApi";
 
 const { Text } = Typography;
 
-type DataSource = {
-	id: string;
-	name: string;
-	type: string;
-	owner: string;
+type SyncPipeline = {
+	id?: string;
+	sourceId?: string;
+	integration?: string;
+	name?: string;
+	source?: string;
+	schedule?: string;
+	lastRun?: string;
+	status?: string;
+	tablesFound?: number;
+	autoEnabled?: boolean;
+	logLines?: string[];
+	error?: string;
 };
 
-type AssetColumn = {
+type SyncRun = {
+	id?: string;
+	integration?: string;
+	status?: string;
+	startedAt?: string;
+	finishedAt?: string;
+	tablesDiscovered?: number;
+	tablesCreated?: number;
+	columnsImported?: number;
+	datasetsCreated?: number;
+	datasetsUpdated?: number;
+	datasetsRemoved?: number;
+	error?: string;
+};
+
+type TableSummary = {
+	fqn?: string;
+	name?: string;
+	service?: string;
+	database?: string;
+	schema?: string;
+	owner?: string;
+	domain?: string;
+	tags?: string;
+	description?: string;
+	columnCount?: number;
+};
+
+type TableDetail = {
+	enabled?: boolean;
+	found?: boolean;
+	message?: string;
+	entity?: Record<string, any>;
+};
+
+type ColumnRow = {
 	key: string;
 	name: string;
 	type: string;
 	comment: string;
-	quality: string;
 };
 
-type Asset = {
-	id: string;
-	label: string;
-	table: {
-		db: string;
-		schema: string;
-		name: string;
-		comment: string;
-		pk: string;
-	};
-	cols: AssetColumn[];
-	diff: {
-		newTables: number;
-		newCols: number;
-		typeChanges: number;
-		commentMissing: number;
-	};
+const statusTag = (status?: string) => {
+	if (!status) return <Tag>未知</Tag>;
+	const normalized = status.toUpperCase();
+	if (["SUCCESS", "SUCCEEDED"].includes(normalized)) return <Tag color="green">成功</Tag>;
+	if (normalized === "FAILED") return <Tag color="red">失败</Tag>;
+	if (normalized === "RUNNING") return <Tag color="blue">运行中</Tag>;
+	return <Tag>{status}</Tag>;
 };
 
-type RunRow = {
-	id: string;
-	time: string;
-	source: string;
-	mode: string;
-	tables: number;
-	columns: number;
-	status: string;
-};
-
-const dataSources: DataSource[] = [
-	{ id: "ds_001", name: "ERP-生产库", type: "MySQL", owner: "谢志民" },
-	{ id: "ds_002", name: "MES-测试库", type: "PostgreSQL", owner: "王工" },
-	{ id: "ds_003", name: "订单事件流", type: "Kafka", owner: "李工" },
-];
-
-const assets: Asset[] = [
-	{
-		id: "a1",
-		label: "erp.so_sales_order（销售订单）",
-		table: {
-			db: "erp",
-			schema: "erp",
-			name: "so_sales_order",
-			comment: "销售订单主表",
-			pk: "pk_order",
-		},
-		cols: [
-			{ key: "pk_order", name: "pk_order", type: "varchar(36)", comment: "订单主键", quality: "唯一性：建议校验" },
-			{ key: "order_code", name: "order_code", type: "varchar(64)", comment: "订单编号", quality: "空值率<1%" },
-			{ key: "customer_code", name: "customer_code", type: "varchar(64)", comment: "客户编码", quality: "参照完整性" },
-			{ key: "order_time", name: "order_time", type: "timestamp", comment: "下单时间", quality: "时间分区候选" },
-			{ key: "total_amt", name: "total_amt", type: "decimal(18,2)", comment: "含税金额", quality: "值域：>=0" },
-		],
-		diff: { newTables: 0, newCols: 2, typeChanges: 0, commentMissing: 1 },
-	},
-	{
-		id: "a2",
-		label: "erp.inv_stock_balance（库存余额）",
-		table: {
-			db: "erp",
-			schema: "erp",
-			name: "inv_stock_balance",
-			comment: "库存日余额",
-			pk: "(material_id, wh_id, dt)",
-		},
-		cols: [
-			{ key: "material_id", name: "material_id", type: "varchar(36)", comment: "物料主键", quality: "参照完整性" },
-			{ key: "wh_id", name: "wh_id", type: "varchar(36)", comment: "仓库主键", quality: "参照完整性" },
-			{ key: "qty", name: "qty", type: "decimal(18,3)", comment: "数量", quality: "值域：>=0" },
-			{ key: "dt", name: "dt", type: "date", comment: "业务日期", quality: "分区字段" },
-		],
-		diff: { newTables: 1, newCols: 0, typeChanges: 1, commentMissing: 0 },
-	},
-];
-
-const runs: RunRow[] = [
-	{ id: "r1", time: "2026-01-22 01:58", source: "ERP-生产库", mode: "增量扫描", tables: 12, columns: 143, status: "SUCCESS" },
-	{ id: "r2", time: "2026-01-21 02:01", source: "ERP-生产库", mode: "全量扫描", tables: 12, columns: 141, status: "SUCCESS" },
-	{ id: "r3", time: "2026-01-20 15:12", source: "MES-测试库", mode: "增量扫描", tables: 8, columns: 97, status: "FAILED" },
-];
-
-const statusTag = (status: string) => {
-	if (status === "SUCCESS") return <Tag color="green">成功</Tag>;
-	if (status === "FAILED") return <Tag color="red">失败</Tag>;
-	return <Tag>未知</Tag>;
+const buildColumnRows = (detail?: TableDetail | null): ColumnRow[] => {
+	if (!detail?.entity) return [];
+	const columns = Array.isArray(detail.entity.columns) ? detail.entity.columns : [];
+	return columns.map((item: any, idx: number) => ({
+		key: String(item?.name || item?.displayName || idx),
+		name: String(item?.name || item?.displayName || "-").trim(),
+		type: String(item?.dataType || item?.dataTypeDisplay || "-").trim(),
+		comment: String(item?.description || item?.comment || "").trim(),
+	}));
 };
 
 export default function MetadataPage() {
 	const [form] = Form.useForm();
 	const [helpOpen, setHelpOpen] = useState(false);
-	const [selectedAssetId, setSelectedAssetId] = useState(assets[0]?.id || "");
+	const [pipelines, setPipelines] = useState<SyncPipeline[]>([]);
+	const [selectedPipelineId, setSelectedPipelineId] = useState<string | undefined>();
+	const [runs, setRuns] = useState<SyncRun[]>([]);
+	const [tables, setTables] = useState<TableSummary[]>([]);
+	const [selectedFqn, setSelectedFqn] = useState<string | undefined>();
+	const [tableDetail, setTableDetail] = useState<TableDetail | null>(null);
+	const [loadingPipelines, setLoadingPipelines] = useState(false);
+	const [loadingRuns, setLoadingRuns] = useState(false);
+	const [loadingTables, setLoadingTables] = useState(false);
+	const [keyword, setKeyword] = useState("");
 
-	const selectedAsset = useMemo(() => assets.find((item) => item.id === selectedAssetId) || null, [selectedAssetId]);
+	const selectedPipeline = useMemo(() => {
+		if (!pipelines.length) return null;
+		return pipelines.find((item) => String(item.id) === String(selectedPipelineId)) || pipelines[0];
+	}, [pipelines, selectedPipelineId]);
 
-	const assetColumns: ColumnsType<AssetColumn> = [
+	useEffect(() => {
+		void loadPipelines();
+		void loadTables("");
+	}, []);
+
+	useEffect(() => {
+		if (!selectedPipeline && pipelines.length) {
+			setSelectedPipelineId(pipelines[0]?.id);
+		}
+	}, [pipelines, selectedPipeline]);
+
+	useEffect(() => {
+		if (!selectedPipeline?.integration) {
+			setRuns([]);
+			return;
+		}
+		void loadRuns(selectedPipeline.integration);
+	}, [selectedPipeline?.integration]);
+
+	useEffect(() => {
+		if (!selectedFqn) {
+			setTableDetail(null);
+			return;
+		}
+		void loadTableDetail(selectedFqn);
+	}, [selectedFqn]);
+
+	const loadPipelines = async () => {
+		setLoadingPipelines(true);
+		try {
+			const resp: any = await listCatalogSyncPipelines();
+			const list = Array.isArray(resp) ? resp : [];
+			setPipelines(list as SyncPipeline[]);
+			if (list.length && !selectedPipelineId) {
+				setSelectedPipelineId(list[0]?.id);
+			}
+		} catch (error: any) {
+			toast.error(error?.message || "采集任务加载失败");
+		} finally {
+			setLoadingPipelines(false);
+		}
+	};
+
+	const loadRuns = async (integration: string) => {
+		setLoadingRuns(true);
+		try {
+			const resp: any = await listCatalogSyncRuns({ integration, limit: 20, includeDetails: false });
+			setRuns(Array.isArray(resp) ? (resp as SyncRun[]) : []);
+		} catch (error: any) {
+			toast.error(error?.message || "采集历史加载失败");
+		} finally {
+			setLoadingRuns(false);
+		}
+	};
+
+	const loadTables = async (nextKeyword: string) => {
+		setLoadingTables(true);
+		try {
+			const resp: any = await getTechMetadataTables({ keyword: nextKeyword || undefined, size: 50 });
+			const items = Array.isArray(resp?.items) ? resp.items : [];
+			setTables(items as TableSummary[]);
+			if (items.length) {
+				setSelectedFqn((prev) => prev || items[0]?.fqn);
+			} else {
+				setSelectedFqn(undefined);
+			}
+		} catch (error: any) {
+			toast.error(error?.message || "元数据资产加载失败");
+			setTables([]);
+			setSelectedFqn(undefined);
+		} finally {
+			setLoadingTables(false);
+		}
+	};
+
+	const loadTableDetail = async (fqn: string) => {
+		if (!fqn) return;
+		try {
+			const resp: any = await getTechMetadataTableDetail(fqn);
+			setTableDetail(resp || null);
+		} catch (error: any) {
+			toast.error(error?.message || "元数据详情加载失败");
+			setTableDetail(null);
+		}
+	};
+
+	const handleTrigger = async () => {
+		if (!selectedPipeline) {
+			toast.error("请先选择采集任务");
+			return;
+		}
+		const reason = String(form.getFieldValue("reason") || "manual").trim();
+		try {
+			if (selectedPipeline.integration === "JDBC") {
+				const sourceId = selectedPipeline.sourceId || selectedPipeline.id;
+				if (!sourceId) {
+					toast.error("缺少数据源标识");
+					return;
+				}
+				await triggerJdbcCatalogSync(sourceId, { reason });
+			} else {
+				await triggerCatalogSync({ includePrimary: true, includeJdbc: false, reason });
+			}
+			toast.success("已触发采集任务");
+			if (selectedPipeline.integration) {
+				void loadRuns(selectedPipeline.integration);
+			}
+		} catch (error: any) {
+			toast.error(error?.message || "触发采集失败");
+		}
+	};
+
+	const runColumns: ColumnsType<SyncRun> = [
+		{ title: "开始时间", dataIndex: "startedAt" },
+		{ title: "结束时间", dataIndex: "finishedAt" },
+		{ title: "状态", dataIndex: "status", render: statusTag },
+		{ title: "发现表", dataIndex: "tablesDiscovered" },
+		{ title: "新增表", dataIndex: "tablesCreated" },
+		{ title: "新增字段", dataIndex: "columnsImported" },
+		{ title: "错误", dataIndex: "error", render: (value) => <Text type="danger">{value || "-"}</Text> },
+	];
+
+	const columnColumns: ColumnsType<ColumnRow> = [
 		{ title: "字段", dataIndex: "name" },
 		{ title: "类型", dataIndex: "type" },
 		{ title: "备注", dataIndex: "comment" },
-		{ title: "质量提示", dataIndex: "quality" },
 	];
 
-	const runColumns: ColumnsType<RunRow> = [
-		{ title: "时间", dataIndex: "time" },
-		{ title: "数据源", dataIndex: "source" },
-		{ title: "模式", dataIndex: "mode" },
-		{ title: "发现表", dataIndex: "tables" },
-		{ title: "发现字段", dataIndex: "columns" },
-		{ title: "状态", dataIndex: "status", render: statusTag },
-		{ title: "操作", render: () => <Button type="link">查看日志</Button> },
-	];
-
-	const diffItems = selectedAsset
-		? [
-				{ label: "新增表", value: selectedAsset.diff.newTables, color: "blue" },
-				{ label: "新增字段", value: selectedAsset.diff.newCols, color: "cyan" },
-				{ label: "类型变更", value: selectedAsset.diff.typeChanges, color: "orange" },
-				{ label: "备注缺失", value: selectedAsset.diff.commentMissing, color: "red" },
-			]
-		: [];
+	const selectedSummary = useMemo(
+		() => tables.find((item) => item.fqn === selectedFqn) || null,
+		[tables, selectedFqn],
+	);
+	const columnRows = useMemo(() => buildColumnRows(tableDetail), [tableDetail]);
 
 	return (
 		<div className="space-y-4">
 			<PageHeader
 				title="元数据采集"
-				description="结构扫描：复用数据源连接，触发元数据采集与结构同步（占位）。"
+				description="基于数据源连接触发结构扫描，并在资产门户同步表/字段信息。"
 				actions={
 					<Space>
-						<Button onClick={() => toast.success("已刷新（示例）")}>刷新</Button>
+						<Button onClick={() => void loadPipelines()}>刷新任务</Button>
 						<Button onClick={() => setHelpOpen(true)}>使用说明</Button>
-						<Button type="primary" onClick={() => toast.success("已保存计划（示例）")}>保存计划</Button>
 					</Space>
 				}
 			/>
@@ -174,150 +276,110 @@ export default function MetadataPage() {
 			<Alert
 				type="info"
 				showIcon
-				message="元数据采集将自动同步表/字段/索引等结构信息，并为质量校验与入湖任务提供基础。"
+				message="采集任务会同步表/字段/索引等结构信息，供资产门户、质量校验与入湖配置复用。"
 			/>
 
 			<Row gutter={[16, 16]} align="top">
 				<Col xs={24} xl={12}>
-					<Card title="创建/维护采集计划">
-						<Form
-							form={form}
-							layout="vertical"
-							initialValues={{
-								source: dataSources[0]?.id,
-								mode: "FULL",
-								schedule: "MANUAL",
-								profiler: "LIGHT",
-								owner: dataSources[0]?.owner,
-							}}
-						>
-							<Row gutter={12}>
-								<Col span={12}>
-									<Form.Item name="source" label="选择数据源">
-										<Select
-											options={dataSources.map((item) => ({
-												label: `${item.name}（${item.type}）`,
-												value: item.id,
-											}))}
-										/>
-									</Form.Item>
-								</Col>
-								<Col span={12}>
-									<Form.Item name="mode" label="采集模式">
-										<Select
-											options={[
-												{ label: "全量扫描（首次/低频）", value: "FULL" },
-												{ label: "增量扫描（仅发现变更）", value: "INCR" },
-											]}
-										/>
-									</Form.Item>
-								</Col>
-							</Row>
-							<Row gutter={12}>
-								<Col span={12}>
-									<Form.Item name="schemaAllow" label="Schema 白名单">
-										<Input placeholder="例如：erp, public" />
-									</Form.Item>
-								</Col>
-								<Col span={12}>
-									<Form.Item name="tableFilter" label="表过滤（前缀/正则）">
-										<Input placeholder="例如：^so_.*" />
-									</Form.Item>
-								</Col>
-							</Row>
-							<Row gutter={12}>
-								<Col span={8}>
-									<Form.Item name="schedule" label="执行计划">
-										<Select
-											options={[
-												{ label: "仅手动", value: "MANUAL" },
-												{ label: "每日 02:00", value: "DAILY" },
-												{ label: "每小时", value: "HOURLY" },
-												{ label: "每周日 02:00", value: "WEEKLY" },
-											]}
-										/>
-									</Form.Item>
-								</Col>
-								<Col span={8}>
-									<Form.Item name="profiler" label="字段剖析">
-										<Select
-											options={[
-												{ label: "关闭", value: "OFF" },
-												{ label: "轻量（空值率/基数）", value: "LIGHT" },
-												{ label: "完整（分布/直方图）", value: "FULL" },
-											]}
-										/>
-									</Form.Item>
-								</Col>
-								<Col span={8}>
-									<Form.Item name="owner" label="责任人">
-										<Input placeholder="例如：数据治理专员A" />
-									</Form.Item>
-								</Col>
-							</Row>
-							<Space>
-								<Button onClick={() => toast.success("已触发采集（示例）")}>立即采集</Button>
-								<Button type="primary" onClick={() => toast.success("已保存计划（示例）")}>
-									保存计划
-								</Button>
-							</Space>
-							<div className="mt-3 text-xs text-text-tertiary">
-								后端会将数据源参数映射为采集配置，并触发实际运行（重构中，暂用占位数据）。
-							</div>
-						</Form>
+					<Card title="采集任务与触发" loading={loadingPipelines}>
+						{pipelines.length ? (
+							<Form form={form} layout="vertical">
+								<Form.Item label="选择采集任务">
+									<Select
+										value={selectedPipeline?.id}
+										onChange={(value) => setSelectedPipelineId(value)}
+										options={pipelines.map((item) => ({
+											label: `${item.name || "采集任务"} · ${item.source || ""}`.trim(),
+											value: item.id,
+										}))}
+									/>
+								</Form.Item>
+								<Form.Item name="reason" label="触发说明">
+									<Input placeholder="例如：测试同步" />
+								</Form.Item>
+								<Descriptions size="small" column={1} bordered>
+									<Descriptions.Item label="来源">{selectedPipeline?.source || "-"}</Descriptions.Item>
+									<Descriptions.Item label="调度策略">{selectedPipeline?.schedule || "-"}</Descriptions.Item>
+									<Descriptions.Item label="最近状态">{statusTag(selectedPipeline?.status)}</Descriptions.Item>
+									<Descriptions.Item label="最近发现表">{selectedPipeline?.tablesFound ?? "-"}</Descriptions.Item>
+								</Descriptions>
+								{selectedPipeline?.error ? (
+									<div className="mt-3 text-sm text-red-500">错误：{selectedPipeline.error}</div>
+								) : null}
+								<Space className="mt-4">
+									<Button type="primary" onClick={handleTrigger}>立即采集</Button>
+									<Button onClick={() => selectedPipeline?.integration && loadRuns(selectedPipeline.integration)}>
+										刷新历史
+									</Button>
+								</Space>
+							</Form>
+						) : (
+							<EmptyState title="暂无采集任务" description="请先配置数据源或数据湖连接。" />
+						)}
 					</Card>
 				</Col>
 				<Col xs={24} xl={12}>
-					<Card title="采集结果预览">
-						{selectedAsset ? (
-							<Space direction="vertical" className="w-full" size={12}>
-								<Form layout="vertical">
-									<Form.Item label="已发现资产（按主题/库）">
-										<Select
-											value={selectedAssetId}
-											onChange={setSelectedAssetId}
-											options={assets.map((item) => ({ label: item.label, value: item.id }))}
-										/>
-									</Form.Item>
-								</Form>
-								<Descriptions size="small" bordered column={1}>
-									<Descriptions.Item label="库/Schema">
-										{selectedAsset.table.db}.{selectedAsset.table.schema}
-									</Descriptions.Item>
-									<Descriptions.Item label="表名">{selectedAsset.table.name}</Descriptions.Item>
-									<Descriptions.Item label="备注">{selectedAsset.table.comment}</Descriptions.Item>
-									<Descriptions.Item label="主键">{selectedAsset.table.pk}</Descriptions.Item>
-								</Descriptions>
-								<div>
-									<Text type="secondary">字段列表</Text>
-									<Table
-										size="small"
-										pagination={false}
-										columns={assetColumns}
-										dataSource={selectedAsset.cols}
-									/>
-								</div>
-								<div>
-									<Text type="secondary">本次扫描变更摘要</Text>
-									<Space className="mt-2" wrap>
-										{diffItems.map((item) => (
-											<Tag key={item.label} color={item.color}>
-												{item.label}：{item.value}
-											</Tag>
-										))}
-									</Space>
-								</div>
-								<Button type="primary" onClick={() => toast.success("已生成入湖候选清单（示例）")}>生成入湖候选清单</Button>
+					<Card title="元数据结果预览" loading={loadingTables}>
+						<Space direction="vertical" className="w-full" size={12}>
+							<Space className="w-full" align="start">
+								<Input
+									placeholder="搜索表名或关键字"
+									value={keyword}
+									onChange={(e) => setKeyword(e.target.value)}
+									allowClear
+								/>
+								<Button onClick={() => void loadTables(keyword)}>搜索</Button>
 							</Space>
-						) : (
-							<EmptyState title="暂无资产" description="请先完成采集或选择数据源。" />
-						)}
+							{tables.length ? (
+								<>
+									<Form layout="vertical">
+										<Form.Item label="已发现表">
+											<Select
+												value={selectedFqn}
+												onChange={(value) => setSelectedFqn(value)}
+												options={tables.map((item) => ({
+													label: item.fqn || item.name || "-",
+													value: item.fqn,
+												}))}
+											/>
+										</Form.Item>
+									</Form>
+									<Descriptions size="small" bordered column={1}>
+										<Descriptions.Item label="服务">{selectedSummary?.service || "-"}</Descriptions.Item>
+										<Descriptions.Item label="库/Schema">
+											{[selectedSummary?.database, selectedSummary?.schema].filter(Boolean).join(".") || "-"}
+										</Descriptions.Item>
+										<Descriptions.Item label="表名">{selectedSummary?.name || "-"}</Descriptions.Item>
+										<Descriptions.Item label="描述">{selectedSummary?.description || "-"}</Descriptions.Item>
+										<Descriptions.Item label="字段数">{selectedSummary?.columnCount ?? "-"}</Descriptions.Item>
+									</Descriptions>
+									<div>
+										<Text type="secondary">字段列表</Text>
+										<Table
+											size="small"
+											pagination={false}
+											columns={columnColumns}
+											dataSource={columnRows}
+											rowKey={(row) => row.key}
+										/>
+									</div>
+								</>
+							) : (
+								<EmptyState title="暂无元数据" description="请先完成元数据采集或检查 OpenMetadata 连接。" />
+							)}
+						</Space>
 					</Card>
 				</Col>
 			</Row>
 
-			<Card title="采集历史" extra={<Button onClick={() => toast.success("已导出（示例）")}>导出</Button>}>
-				<Table rowKey={(row) => row.id} columns={runColumns} dataSource={runs} pagination={{ pageSize: 6 }} />
+			<Card title="采集历史" extra={<Button onClick={() => selectedPipeline?.integration && loadRuns(selectedPipeline.integration)}>刷新</Button>}>
+				<Table
+					rowKey={(row) => row.id || `${row.startedAt}-${row.finishedAt}`}
+					columns={runColumns}
+					dataSource={runs}
+					loading={loadingRuns}
+					pagination={{ pageSize: 8 }}
+				/>
 			</Card>
 
 			<Modal
@@ -331,9 +393,9 @@ export default function MetadataPage() {
 				]}
 			>
 				<div className="space-y-2 text-sm text-slate-600">
-					<div>1. 采集计划复用已建数据源连接，避免重复配置连接参数。</div>
-					<div>2. 采集结果用于资产入库、质量校验与入湖任务候选清单。</div>
-					<div>3. 当前为静态占位数据，后续将对接 OpenMetadata。</div>
+					<div>1. 采集任务来自当前已启用的数据源或主数据连接。</div>
+					<div>2. 触发采集后可在“采集历史”查看执行结果与错误信息。</div>
+					<div>3. 元数据结果预览来自 OpenMetadata 服务，需确认该服务已启用。</div>
 				</div>
 			</Modal>
 		</div>

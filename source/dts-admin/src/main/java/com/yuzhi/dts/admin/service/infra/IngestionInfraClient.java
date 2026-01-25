@@ -1,11 +1,8 @@
 package com.yuzhi.dts.admin.service.infra;
 
 import com.yuzhi.dts.admin.config.IngestionIntegrationProperties;
-import com.yuzhi.dts.admin.service.infra.dto.AirbyteDestinationDefinitionDto;
 import java.net.URI;
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,7 +22,7 @@ public class IngestionInfraClient {
 
     private static final Logger log = LoggerFactory.getLogger(IngestionInfraClient.class);
     private static final String SERVICE_HEADER = "X-DTS-Service";
-    private static final ParameterizedTypeReference<IngestionApiResponse<List<Map<String, Object>>>> DEST_DEF_RESPONSE_TYPE =
+    private static final ParameterizedTypeReference<IngestionApiResponse<Map<String, Object>>> MAP_RESPONSE_TYPE =
         new ParameterizedTypeReference<>() {};
 
     private final RestTemplate restTemplate;
@@ -36,75 +33,84 @@ public class IngestionInfraClient {
         this.restTemplate = builder.setConnectTimeout(Duration.ofSeconds(5)).setReadTimeout(Duration.ofSeconds(10)).build();
     }
 
-    public List<AirbyteDestinationDefinitionDto> listDestinationDefinitions() {
+    public Map<String, Object> getServiceSettings(String service) {
+        return fetchServiceSettings(service, null);
+    }
+
+    public Map<String, Object> updateServiceSettings(String service, Map<String, Object> settings) {
+        return fetchServiceSettings(service, settings);
+    }
+
+    public Map<String, Object> testServiceSettings(String service, Map<String, Object> settings) {
         if (!properties.isEnabled()) {
-            return List.of();
+            return Map.of();
         }
-        URI uri = buildUri("/definitions/destinations");
+        String target = StringUtils.hasText(service) ? service.trim().toLowerCase() : "";
+        URI uri = buildInfraUri("/settings/" + target + "/test");
         HttpHeaders headers = buildHeaders();
-        HttpEntity<Void> entity = new HttpEntity<>(headers);
+        HttpEntity<Map<String, Object>> entity = new HttpEntity<>(settings == null ? Map.of() : settings, headers);
         try {
-            ResponseEntity<IngestionApiResponse<List<Map<String, Object>>>> response = restTemplate.exchange(
+            ResponseEntity<IngestionApiResponse<Map<String, Object>>> response = restTemplate.exchange(
                 uri,
-                HttpMethod.GET,
+                HttpMethod.POST,
                 entity,
-                DEST_DEF_RESPONSE_TYPE
+                MAP_RESPONSE_TYPE
             );
-            IngestionApiResponse<List<Map<String, Object>>> payload = response.getBody();
+            IngestionApiResponse<Map<String, Object>> payload = response.getBody();
             if (payload != null && payload.getStatus() == 200 && payload.getData() != null) {
-                List<AirbyteDestinationDefinitionDto> output = new ArrayList<>();
-                for (Map<String, Object> item : payload.getData()) {
-                    AirbyteDestinationDefinitionDto dto = toDefinition(item);
-                    if (dto != null) {
-                        output.add(dto);
-                    }
-                }
-                return output;
+                return payload.getData();
             }
-            log.debug("Ingestion destination list returned status {}", response.getStatusCode());
+            log.debug("Ingestion settings test returned status {}", response.getStatusCode());
         } catch (Exception ex) {
-            log.warn("Failed to fetch destination definitions from ingestion: {}", ex.getMessage());
-            log.debug("Ingestion destination list failure stack", ex);
+            log.warn("Failed to test ingestion settings: {}", ex.getMessage());
+            log.debug("Ingestion settings test failure stack", ex);
         }
-        return List.of();
+        return Map.of();
     }
 
-    private AirbyteDestinationDefinitionDto toDefinition(Map<String, Object> item) {
-        if (item == null) {
-            return null;
-        }
-        String id = stringVal(item.get("destinationDefinitionId"));
-        String name = stringVal(item.get("name"));
-        String repo = stringVal(item.get("dockerRepository"));
-        if (!StringUtils.hasText(id) && !StringUtils.hasText(name)) {
-            return null;
-        }
-        return new AirbyteDestinationDefinitionDto(id, name, repo);
-    }
-
-    private String stringVal(Object value) {
-        if (value == null) {
-            return null;
-        }
-        String text = String.valueOf(value).trim();
-        return text.isEmpty() ? null : text;
-    }
-
-    private URI buildUri(String suffix) {
+    private URI buildInfraUri(String suffix) {
         String base = properties.getBaseUrl();
         if (!StringUtils.hasText(base)) {
             base = "http://dts-ingestion:8083";
         }
         String normalizedBase = base.replaceAll("/+$", "");
-        String path = properties.getApiPath();
+        String path = properties.getInfraApiPath();
         if (!StringUtils.hasText(path)) {
-            path = "";
+            path = "/api/infra";
         }
-        if (!path.isEmpty() && !path.startsWith("/")) {
+        if (!path.startsWith("/")) {
             path = "/" + path;
         }
         String tail = suffix == null ? "" : suffix;
         return URI.create(normalizedBase + path + tail);
+    }
+
+    private Map<String, Object> fetchServiceSettings(String service, Map<String, Object> settings) {
+        if (!properties.isEnabled()) {
+            return Map.of();
+        }
+        String target = StringUtils.hasText(service) ? service.trim().toLowerCase() : "";
+        URI uri = buildInfraUri("/settings/" + target);
+        HttpHeaders headers = buildHeaders();
+        HttpEntity<Map<String, Object>> entity = new HttpEntity<>(settings == null ? null : settings, headers);
+        HttpMethod method = settings == null ? HttpMethod.GET : HttpMethod.POST;
+        try {
+            ResponseEntity<IngestionApiResponse<Map<String, Object>>> response = restTemplate.exchange(
+                uri,
+                method,
+                entity,
+                MAP_RESPONSE_TYPE
+            );
+            IngestionApiResponse<Map<String, Object>> payload = response.getBody();
+            if (payload != null && payload.getStatus() == 200 && payload.getData() != null) {
+                return payload.getData();
+            }
+            log.debug("Ingestion settings request returned status {}", response.getStatusCode());
+        } catch (Exception ex) {
+            log.warn("Failed to fetch ingestion settings: {}", ex.getMessage());
+            log.debug("Ingestion settings failure stack", ex);
+        }
+        return Map.of();
     }
 
     private HttpHeaders buildHeaders() {

@@ -86,7 +86,7 @@ class SplineSource(PipelineServiceSource):
     ) -> Iterable[Either[CreatePipelineRequest]]:
         """
         Convert a Connection into a Pipeline Entity
-        :param pipeline_details: pipeline_details object from airbyte
+        :param pipeline_details: pipeline_details object from Spline
         :return: Create Pipeline request with tasks
         """
         connection_url = None

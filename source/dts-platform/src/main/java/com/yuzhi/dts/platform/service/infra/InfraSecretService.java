@@ -3,7 +3,6 @@ package com.yuzhi.dts.platform.service.infra;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.platform.config.InfraSecurityProperties;
-import com.yuzhi.dts.platform.domain.infra.InfraAirbyteSource;
 import com.yuzhi.dts.platform.domain.service.InfraDataSource;
 import com.yuzhi.dts.platform.domain.service.InfraDataStorage;
 import jakarta.annotation.PostConstruct;
@@ -93,50 +92,6 @@ public class InfraSecretService {
             return objectMapper.readValue(new String(plain, StandardCharsets.UTF_8), Map.class);
         } catch (Exception e) {
             LOG.warn("Failed to decrypt secrets for data source {}: {}", entity.getId(), e.getMessage());
-            return Collections.emptyMap();
-        }
-    }
-
-    public void applySecrets(InfraAirbyteSource entity, Map<String, Object> secrets) {
-        if (CollectionUtils.isEmpty(secrets)) {
-            entity.setSecureProps(null);
-            entity.setSecureIv(null);
-            entity.setSecureKeyVersion(null);
-            return;
-        }
-        try {
-            byte[] plain = objectMapper.writeValueAsString(secrets).getBytes(StandardCharsets.UTF_8);
-            if (secretKey == null) {
-                LOG.warn("Encryption key not configured. Persisting Airbyte source {} secrets as plaintext", entity.getName());
-                entity.setSecureProps(plain);
-                entity.setSecureIv(null);
-                entity.setSecureKeyVersion(PLAINTEXT_KEY_VERSION);
-                return;
-            }
-            byte[] iv = randomIv();
-            byte[] cipher = encrypt(plain, iv);
-            entity.setSecureProps(cipher);
-            entity.setSecureIv(iv);
-            entity.setSecureKeyVersion(properties.getKeyVersion());
-        } catch (JsonProcessingException | GeneralSecurityException e) {
-            throw new IllegalStateException("Failed to encrypt Airbyte source secrets", e);
-        }
-    }
-
-    public Map<String, Object> readSecrets(InfraAirbyteSource entity) {
-        if (entity.getSecureProps() == null) {
-            return Collections.emptyMap();
-        }
-        try {
-            byte[] plain;
-            if (PLAINTEXT_KEY_VERSION.equals(entity.getSecureKeyVersion()) || secretKey == null) {
-                plain = entity.getSecureProps();
-            } else {
-                plain = decrypt(entity.getSecureProps(), entity.getSecureIv());
-            }
-            return objectMapper.readValue(new String(plain, StandardCharsets.UTF_8), Map.class);
-        } catch (Exception e) {
-            LOG.warn("Failed to decrypt secrets for Airbyte source {}: {}", entity.getId(), e.getMessage());
             return Collections.emptyMap();
         }
     }

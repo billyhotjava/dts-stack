@@ -7,7 +7,7 @@ public class IngestionIntegrationProperties {
 
     private boolean enabled = true;
     private String baseUrl = "http://dts-ingestion:8083";
-    private String apiPath = "/api/infra/airbyte";
+    private String infraApiPath = "/api/infra";
     private String serviceName = "dts-admin";
 
     public boolean isEnabled() {
@@ -26,12 +26,12 @@ public class IngestionIntegrationProperties {
         this.baseUrl = baseUrl;
     }
 
-    public String getApiPath() {
-        return apiPath;
+    public String getInfraApiPath() {
+        return infraApiPath;
     }
 
-    public void setApiPath(String apiPath) {
-        this.apiPath = apiPath;
+    public void setInfraApiPath(String infraApiPath) {
+        this.infraApiPath = infraApiPath;
     }
 
     public String getServiceName() {

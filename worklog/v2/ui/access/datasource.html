@@ -214,7 +214,7 @@ a:hover{text-decoration:underline}
       <div class="sep"></div>
       <div class="small" style="padding:0 10px 10px; line-height:1.6;">
         说明：此 Demo 为静态页面，用于界面结构与交互说明。<br/>
-        真实系统需由 DTS 后端对接 Airbyte/OpenMetadata。
+        真实系统需由 DTS 后端对接 Addax/OpenMetadata。
       </div>
     </div>
     
@@ -280,7 +280,7 @@ a:hover{text-decoration:underline}
       </table>
 
       <div class="small" style="margin-top:10px;">
-        说明：真实系统中，此列表由 DTS 后端从平台数据库读取，并与 Airbyte Source 状态对齐。
+        说明：真实系统中，此列表由 DTS 后端从平台数据库读取，并与 Addax 源端状态对齐。
       </div>
     </div>
   </div>
@@ -294,7 +294,7 @@ a:hover{text-decoration:underline}
       <div class="field">
         <label>选择连接器类型</label>
         <select id="connectorSelect"></select>
-        <div class="small">连接器列表来自：Airbyte Source Definitions（示例数据）。</div>
+        <div class="small">连接器列表来自：Addax Reader 定义（示例数据）。</div>
       </div>
 
       <div class="row">
@@ -318,7 +318,7 @@ a:hover{text-decoration:underline}
         <button class="btn primary" onclick="createDataSource()">创建并保存</button>
       </div>
       <div class="small" style="margin-top:10px;">
-        创建后将生成 <span class="mono">airbyte_source_id</span>，供“元数据采集”和“数据入湖任务”复用。
+        创建后将生成 <span class="mono">addax_source_id</span>，供“元数据采集”和“数据入湖任务”复用。
       </div>
     </div>
   </div>
@@ -339,7 +339,7 @@ a:hover{text-decoration:underline}
           <div class="small">连接器</div>
           <div id="detailType" class="mono" style="margin-top:4px;"></div>
           <div class="sep"></div>
-          <div class="small">平台数据源 ID / Airbyte Source ID</div>
+          <div class="small">平台数据源 ID / Addax Source ID</div>
           <div id="detailIds" class="mono" style="margin-top:6px;"></div>
         </div>
         <div>
@@ -517,9 +517,9 @@ const connectors = [
 ];
 
 let dataSources = [
-  {id:'ds_001', name:'ERP-生产库', type:'MySQL', status:'HEALTHY', owner:'谢志民', lastTest:'2026-01-22 01:12', airbyte:'ab_src_6c2f...'},
-  {id:'ds_002', name:'MES-测试库', type:'PostgreSQL', status:'UNHEALTHY', owner:'王工', lastTest:'2026-01-21 17:40', airbyte:'ab_src_2a19...'},
-  {id:'ds_003', name:'订单事件流', type:'Kafka', status:'HEALTHY', owner:'李工', lastTest:'2026-01-22 00:10', airbyte:'ab_src_991a...'}
+  {id:'ds_001', name:'ERP-生产库', type:'MySQL', status:'HEALTHY', owner:'谢志民', lastTest:'2026-01-22 01:12', addax:'ax_src_6c2f...'},
+  {id:'ds_002', name:'MES-测试库', type:'PostgreSQL', status:'UNHEALTHY', owner:'王工', lastTest:'2026-01-21 17:40', addax:'ax_src_2a19...'},
+  {id:'ds_003', name:'订单事件流', type:'Kafka', status:'HEALTHY', owner:'李工', lastTest:'2026-01-22 00:10', addax:'ax_src_991a...'}
 ];
 
 function badge(status){
@@ -595,11 +595,11 @@ function createDataSource(){
   }
 
   const id = 'ds_' + String(100 + dataSources.length + 1).padStart(3,'0');
-  const airbyte = 'ab_src_' + Math.random().toString(16).slice(2,10) + '...';
+  const addax = 'ax_src_' + Math.random().toString(16).slice(2,10) + '...';
   dataSources.unshift({
     id, name, type:c.name, status:'HEALTHY', owner,
     lastTest: new Date().toISOString().slice(0,16).replace('T',' '),
-    airbyte
+    addax
   });
   renderTable();
   toast('已创建数据源（示例）');
@@ -612,7 +612,7 @@ function showDetail(id){
   if(!r) return;
   $('#detailName').textContent = r.name;
   $('#detailType').textContent = r.type;
-  $('#detailIds').textContent = `${r.id}  /  ${r.airbyte}`;
+  $('#detailIds').textContent = `${r.id}  /  ${r.addax}`;
   $('#detailStatus').innerHTML = badge(r.status) + ` <span class="small">最近测试：${escapeHtml(r.lastTest)}</span>`;
   $('#detailLog').textContent = r.status==='HEALTHY'
     ? '连接测试：SUCCESS\n网络：可达\n权限：只读\n建议：可开启增量窗口以降低压力'

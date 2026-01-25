@@ -1,6 +1,7 @@
 package com.yuzhi.dts.ingestion.service.etl;
 
 import com.yuzhi.dts.ingestion.config.AirflowProperties;
+import com.yuzhi.dts.ingestion.service.infra.IngestionSettingsService;
 import java.net.URI;
 import java.time.Duration;
 import java.util.List;
@@ -27,19 +28,22 @@ public class AirflowClient {
 
     private final RestTemplate restTemplate;
     private final AirflowProperties properties;
+    private final IngestionSettingsService settingsService;
 
-    public AirflowClient(RestTemplateBuilder builder, AirflowProperties properties) {
+    public AirflowClient(RestTemplateBuilder builder, AirflowProperties properties, IngestionSettingsService settingsService) {
         this.restTemplate = builder.setConnectTimeout(Duration.ofSeconds(5)).setReadTimeout(Duration.ofSeconds(10)).build();
         this.properties = properties;
+        this.settingsService = settingsService;
     }
 
     public Optional<Map<String, Object>> triggerDag(String dagId, Map<String, Object> payload) {
-        if (!properties.isEnabled() || !StringUtils.hasText(dagId)) {
+        AirflowSettings settings = resolveSettings();
+        if (!settings.enabled() || !StringUtils.hasText(settings.baseUrl()) || !StringUtils.hasText(dagId)) {
             return Optional.empty();
         }
-        URI uri = buildUri("/dags/" + dagId + "/dagRuns");
+        URI uri = buildUri(settings, "/dags/" + dagId + "/dagRuns", null);
         try {
-            HttpHeaders headers = defaultHeaders();
+            HttpHeaders headers = defaultHeaders(settings);
             HttpEntity<Map<String, Object>> entity = new HttpEntity<>(payload, headers);
             ResponseEntity<Map> response = restTemplate.exchange(uri, HttpMethod.POST, entity, Map.class);
             return Optional.ofNullable(response.getBody());
@@ -52,13 +56,14 @@ public class AirflowClient {
     }
 
     public Optional<Map<String, Object>> listDags(int limit) {
-        if (!properties.isEnabled()) {
+        AirflowSettings settings = resolveSettings();
+        if (!settings.enabled() || !StringUtils.hasText(settings.baseUrl())) {
             return Optional.empty();
         }
         int safeLimit = Math.max(1, Math.min(limit, 200));
-        URI uri = buildUri("/dags", Map.of("limit", safeLimit, "order_by", "dag_id"));
+        URI uri = buildUri(settings, "/dags", Map.of("limit", safeLimit, "order_by", "dag_id"));
         try {
-            HttpHeaders headers = defaultHeaders();
+            HttpHeaders headers = defaultHeaders(settings);
             HttpEntity<Void> entity = new HttpEntity<>(headers);
             ResponseEntity<Map> response = restTemplate.exchange(uri, HttpMethod.GET, entity, Map.class);
             return Optional.ofNullable(response.getBody());
@@ -70,29 +75,37 @@ public class AirflowClient {
         return Optional.empty();
     }
 
-    private HttpHeaders defaultHeaders() {
+    private HttpHeaders defaultHeaders(AirflowSettings settings) {
         HttpHeaders headers = new HttpHeaders();
         headers.setAccept(List.of(MediaType.APPLICATION_JSON));
         headers.setContentType(MediaType.APPLICATION_JSON);
-        if (StringUtils.hasText(properties.getUsername())) {
-            String token = properties.getUsername() + ":" + String.valueOf(properties.getPassword());
+        if (StringUtils.hasText(settings.username())) {
+            String token = settings.username() + ":" + String.valueOf(settings.password());
             String encoded = java.util.Base64.getEncoder().encodeToString(token.getBytes());
             headers.set(HttpHeaders.AUTHORIZATION, "Basic " + encoded);
         }
         return headers;
     }
 
-    private URI buildUri(String path) {
-        return buildUri(path, null);
-    }
-
-    private URI buildUri(String path, Map<String, ?> params) {
-        String base = properties.getBaseUrl();
-        String apiPath = properties.getApiPath() == null ? "/api/v1" : properties.getApiPath();
+    private URI buildUri(AirflowSettings settings, String path, Map<String, ?> params) {
+        String base = settings.baseUrl();
+        String apiPath = settings.apiPath() == null ? "/api/v1" : settings.apiPath();
         UriComponentsBuilder builder = UriComponentsBuilder.fromHttpUrl(base).path(apiPath).path(path);
         if (params != null) {
             params.forEach(builder::queryParam);
         }
         return builder.build(true).toUri();
     }
+
+    private AirflowSettings resolveSettings() {
+        IngestionSettingsService.SettingsSnapshot settings = settingsService.getSettings(IngestionSettingsService.SERVICE_AIRFLOW);
+        boolean enabled = settings.getBoolean("enabled", properties.isEnabled());
+        String baseUrl = settings.getString("baseUrl", properties.getBaseUrl());
+        String apiPath = settings.getString("apiPath", properties.getApiPath());
+        String username = settings.getString("username", properties.getUsername());
+        String password = settings.getString("password", properties.getPassword());
+        return new AirflowSettings(enabled, baseUrl, apiPath, username, password);
+    }
+
+    private record AirflowSettings(boolean enabled, String baseUrl, String apiPath, String username, String password) {}
 }

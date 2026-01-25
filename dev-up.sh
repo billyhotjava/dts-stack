@@ -274,12 +274,6 @@ set -a
 : "${PG_DB_ANALYTICS:=dts_analytics}"
 : "${PG_USER_ANALYTICS:=dts_analytics}"
 : "${PG_PWD_ANALYTICS:=dts_analytics}"
-: "${PG_DB_AIRBYTE:=airbyte}"
-: "${PG_USER_AIRBYTE:=airbyte}"
-: "${PG_PWD_AIRBYTE:=airbyte}"
-: "${PG_DB_TEMPORAL:=airbyte_temporal}"
-: "${PG_USER_TEMPORAL:=airbyte_temporal}"
-: "${PG_PWD_TEMPORAL:=airbyte_temporal}"
 set +a
 
 if [[ "$MODE" == "local" ]]; then
@@ -370,7 +364,6 @@ services=(dts-admin dts-platform dts-ingestion)
 
 # Metadata/ELT stack for dev mode
 services+=(dts-elasticsearch dts-openmetadata dts-airflow-init dts-airflow-webserver dts-airflow-scheduler dts-airflow-triggerer dts-dbt)
-services+=(dts-airbyte-temporal dts-airbyte-bootloader dts-airbyte-server dts-airbyte-worker dts-airbyte-webapp)
 
 WITH_WEBAPP="${WITH_WEBAPP:-$WITH_WEBAPP_DEFAULT}"
 if [[ "$WITH_WEBAPP" != "0" && "${SKIP_WEBAPP:-0}" != "1" ]]; then

@@ -44,7 +44,9 @@ public class OpenMetadataAdapter {
 
     public Map<String, Object> registerLineage(LineageRequest request, LineageContext context) {
         Map<String, Object> result = new LinkedHashMap<>();
-        if (!properties.isEnabled()) {
+        IngestionSettingsService.SettingsSnapshot settings = settingsService.getSettings(IngestionSettingsService.SERVICE_OPENMETADATA);
+        boolean enabled = settings.getBoolean("enabled", properties.isEnabled());
+        if (!enabled) {
             result.put("enabled", false);
             result.put("message", "OpenMetadata 未启用");
             return result;
@@ -61,7 +63,6 @@ public class OpenMetadataAdapter {
             return result;
         }
 
-        IngestionSettingsService.SettingsSnapshot settings = settingsService.getSettings(IngestionSettingsService.SERVICE_OPENMETADATA);
         String sourceService = firstNonEmpty(settings.getString("sourceServiceName", null), properties.getSourceServiceName(), context.sourceType());
         String destinationService = firstNonEmpty(settings.getString("destinationServiceName", null), properties.getDestinationServiceName());
         String sourceDatabase = firstNonEmpty(
@@ -127,8 +128,9 @@ public class OpenMetadataAdapter {
     public Map<String, Object> ensureMetadataIngestion(IngestionContext context) {
         Map<String, Object> result = new LinkedHashMap<>();
         IngestionSettingsService.SettingsSnapshot settings = settingsService.getSettings(IngestionSettingsService.SERVICE_OPENMETADATA);
+        boolean enabled = settings.getBoolean("enabled", properties.isEnabled());
         boolean ingestionEnabled = settings.getBoolean("ingestionEnabled", properties.isIngestionEnabled());
-        if (!properties.isEnabled() || !ingestionEnabled) {
+        if (!enabled || !ingestionEnabled) {
             result.put("enabled", false);
             result.put("message", "OpenMetadata 采集未启用");
             return result;

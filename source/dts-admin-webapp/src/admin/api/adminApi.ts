@@ -19,11 +19,12 @@ import type {
 } from "@/admin/types";
 import type {
 	ConnectionTestLog,
-	AirbyteDestinationDefinition,
 	HiveConnectionPersistRequest,
 	HiveConnectionTestRequest,
 	HiveConnectionTestResult,
 	InceptorConfig,
+	InfraServiceSettingsPayload,
+	InfraServiceTestResult,
 	InfraDataSource,
 	JdbcConnectionTestRequest,
 	JdbcDriverInfo,
@@ -158,9 +159,21 @@ export const adminApi = {
 		apiClient.get<JdbcDriverInfo[]>({
 			url: "/admin/infra/data-lakes/jdbc-drivers",
 		}),
-	getDataLakeDestinationDefinitions: () =>
-		apiClient.get<AirbyteDestinationDefinition[]>({
-			url: "/admin/infra/data-lakes/destination-definitions",
+	getIntegrationSettings: (service: string) =>
+		apiClient.get<InfraServiceSettingsPayload>({
+			url: `/admin/infra/settings/${service}`,
+		}),
+
+	updateIntegrationSettings: (service: string, payload: Record<string, any>) =>
+		apiClient.post<InfraServiceSettingsPayload>({
+			url: `/admin/infra/settings/${service}`,
+			data: payload,
+		}),
+
+	testIntegrationSettings: (service: string, payload: Record<string, any>) =>
+		apiClient.post<InfraServiceTestResult>({
+			url: `/admin/infra/settings/${service}/test`,
+			data: payload,
 		}),
 
 	listDataLakes: () =>

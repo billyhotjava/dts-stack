@@ -14,6 +14,7 @@ import RoleDetailView from "@/admin/views/role-detail";
 import WorkflowConfigView from "@/admin/views/workflow-config";
 import DataLakeConfigView from "@/admin/views/data-lake-config";
 import DataLakeEditorView from "@/admin/views/data-lake-editor";
+import InfraSettingsView from "@/admin/views/infra-settings";
 import { getMenusByRole } from "@/admin/config/menus";
 import { useAdminSession } from "@/admin/lib/session-context";
 
@@ -49,6 +50,7 @@ export const adminRoutes: RouteObject[] = [
 			{ path: "data-lake", element: <DataLakeConfigView /> },
 			{ path: "data-lake/new", element: <DataLakeEditorView /> },
 			{ path: "data-lake/:id", element: <DataLakeEditorView /> },
+			{ path: "infra-settings", element: <InfraSettingsView /> },
 			{ path: "approval", element: <ApprovalCenterView /> },
 			{ path: "audit", element: <AuditCenterView /> },
 			{ path: "ops", element: <OpsConfigView /> },

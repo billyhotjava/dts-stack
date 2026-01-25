@@ -9,7 +9,7 @@
     <version>0.0.1-SNAPSHOT</version>
     <packaging>jar</packaging>
     <name>Dts Ingestion Service</name>
-    <description>Ingestion adapter layer for Airbyte/OpenMetadata</description>
+    <description>Ingestion adapter layer for Addax/OpenMetadata</description>
 
     <parent>
         <groupId>org.springframework.boot</groupId>
@@ -74,6 +74,15 @@
         <dependency>
             <groupId>org.postgresql</groupId>
             <artifactId>postgresql</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.liquibase</groupId>
+            <artifactId>liquibase-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.hypersistence</groupId>
+            <artifactId>hypersistence-utils-hibernate-63</artifactId>
+            <version>3.7.3</version>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>

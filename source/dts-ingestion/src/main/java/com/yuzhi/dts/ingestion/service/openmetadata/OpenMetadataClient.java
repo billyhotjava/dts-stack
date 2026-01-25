@@ -1,6 +1,7 @@
 package com.yuzhi.dts.ingestion.service.openmetadata;
 
 import com.yuzhi.dts.ingestion.config.OpenMetadataProperties;
+import com.yuzhi.dts.ingestion.service.infra.IngestionSettingsService;
 import java.net.URI;
 import java.time.Duration;
 import java.util.List;
@@ -27,19 +28,22 @@ public class OpenMetadataClient {
 
     private final RestTemplate restTemplate;
     private final OpenMetadataProperties props;
+    private final IngestionSettingsService settingsService;
 
-    public OpenMetadataClient(RestTemplateBuilder builder, OpenMetadataProperties props) {
+    public OpenMetadataClient(RestTemplateBuilder builder, OpenMetadataProperties props, IngestionSettingsService settingsService) {
         this.restTemplate = builder.setConnectTimeout(Duration.ofSeconds(5)).setReadTimeout(Duration.ofSeconds(10)).build();
         this.props = props;
+        this.settingsService = settingsService;
     }
 
     public Optional<Map<String, Object>> getTableByFqn(String fqn, String fields) {
-        if (!StringUtils.hasText(fqn) || !props.isEnabled()) {
+        OpenMetadataSettings settings = resolveSettings();
+        if (!StringUtils.hasText(fqn) || !settings.enabled() || !StringUtils.hasText(settings.baseUrl())) {
             return Optional.empty();
         }
-        URI uri = buildUriWithFields("/tables/name/" + fqn, fields);
+        URI uri = buildUriWithFields(settings, "/tables/name/" + fqn, fields);
         try {
-            HttpHeaders headers = defaultHeaders();
+            HttpHeaders headers = defaultHeaders(settings);
             HttpEntity<Void> entity = new HttpEntity<>(headers);
             ResponseEntity<Map> response = restTemplate.exchange(uri, HttpMethod.GET, entity, Map.class);
             Map<String, Object> body = response.getBody();
@@ -63,10 +67,11 @@ public class OpenMetadataClient {
     }
 
     public Optional<Map<String, Object>> upsertLineage(String fromId, String toId, String description) {
-        if (!props.isEnabled() || !StringUtils.hasText(fromId) || !StringUtils.hasText(toId)) {
+        OpenMetadataSettings settings = resolveSettings();
+        if (!settings.enabled() || !StringUtils.hasText(settings.baseUrl()) || !StringUtils.hasText(fromId) || !StringUtils.hasText(toId)) {
             return Optional.empty();
         }
-        URI uri = buildUriWithParams("/lineage", null);
+        URI uri = buildUriWithParams(settings, "/lineage", null);
         Map<String, Object> edge = new java.util.LinkedHashMap<>();
         edge.put("fromEntity", Map.of("id", fromId, "type", "table"));
         edge.put("toEntity", Map.of("id", toId, "type", "table"));
@@ -75,7 +80,7 @@ public class OpenMetadataClient {
         }
         Map<String, Object> payload = Map.of("edge", edge);
         try {
-            HttpHeaders headers = defaultHeaders();
+            HttpHeaders headers = defaultHeaders(settings);
             HttpEntity<Map<String, Object>> entity = new HttpEntity<>(payload, headers);
             ResponseEntity<Map> response = restTemplate.exchange(uri, HttpMethod.PUT, entity, Map.class);
             return Optional.ofNullable(response.getBody());
@@ -94,12 +99,13 @@ public class OpenMetadataClient {
     }
 
     public Optional<Map<String, Object>> getDatabaseServiceByName(String name) {
-        if (!props.isEnabled() || !StringUtils.hasText(name)) {
+        OpenMetadataSettings settings = resolveSettings();
+        if (!settings.enabled() || !StringUtils.hasText(settings.baseUrl()) || !StringUtils.hasText(name)) {
             return Optional.empty();
         }
-        URI uri = buildUriWithParams("/services/databaseServices/name/" + name.trim(), null);
+        URI uri = buildUriWithParams(settings, "/services/databaseServices/name/" + name.trim(), null);
         try {
-            HttpHeaders headers = defaultHeaders();
+            HttpHeaders headers = defaultHeaders(settings);
             HttpEntity<Void> entity = new HttpEntity<>(headers);
             ResponseEntity<Map> response = restTemplate.exchange(uri, HttpMethod.GET, entity, Map.class);
             return Optional.ofNullable(response.getBody());
@@ -120,10 +126,17 @@ public class OpenMetadataClient {
     }
 
     public Optional<Map<String, Object>> createDatabaseService(String name, String serviceType, Map<String, Object> connectionConfig) {
-        if (!props.isEnabled() || !StringUtils.hasText(name) || !StringUtils.hasText(serviceType) || connectionConfig == null) {
+        OpenMetadataSettings settings = resolveSettings();
+        if (
+            !settings.enabled() ||
+            !StringUtils.hasText(settings.baseUrl()) ||
+            !StringUtils.hasText(name) ||
+            !StringUtils.hasText(serviceType) ||
+            connectionConfig == null
+        ) {
             return Optional.empty();
         }
-        URI uri = buildUriWithParams("/services/databaseServices", null);
+        URI uri = buildUriWithParams(settings, "/services/databaseServices", null);
         Map<String, Object> payload = Map.of(
             "name",
             name.trim(),
@@ -133,7 +146,7 @@ public class OpenMetadataClient {
             Map.of("config", connectionConfig)
         );
         try {
-            HttpHeaders headers = defaultHeaders();
+            HttpHeaders headers = defaultHeaders(settings);
             HttpEntity<Map<String, Object>> entity = new HttpEntity<>(payload, headers);
             ResponseEntity<Map> response = restTemplate.exchange(uri, HttpMethod.POST, entity, Map.class);
             return Optional.ofNullable(response.getBody());
@@ -152,12 +165,13 @@ public class OpenMetadataClient {
     }
 
     public Optional<Map<String, Object>> getIngestionPipelineByName(String name) {
-        if (!props.isEnabled() || !StringUtils.hasText(name)) {
+        OpenMetadataSettings settings = resolveSettings();
+        if (!settings.enabled() || !StringUtils.hasText(settings.baseUrl()) || !StringUtils.hasText(name)) {
             return Optional.empty();
         }
-        URI uri = buildUriWithParams("/services/ingestionPipelines/name/" + name.trim(), null);
+        URI uri = buildUriWithParams(settings, "/services/ingestionPipelines/name/" + name.trim(), null);
         try {
-            HttpHeaders headers = defaultHeaders();
+            HttpHeaders headers = defaultHeaders(settings);
             HttpEntity<Void> entity = new HttpEntity<>(headers);
             ResponseEntity<Map> response = restTemplate.exchange(uri, HttpMethod.GET, entity, Map.class);
             return Optional.ofNullable(response.getBody());
@@ -183,10 +197,11 @@ public class OpenMetadataClient {
         String scheduleCron,
         String pipelineType
     ) {
-        if (!props.isEnabled() || !StringUtils.hasText(name) || !StringUtils.hasText(serviceId)) {
+        OpenMetadataSettings settings = resolveSettings();
+        if (!settings.enabled() || !StringUtils.hasText(settings.baseUrl()) || !StringUtils.hasText(name) || !StringUtils.hasText(serviceId)) {
             return Optional.empty();
         }
-        URI uri = buildUriWithParams("/services/ingestionPipelines", null);
+        URI uri = buildUriWithParams(settings, "/services/ingestionPipelines", null);
         Map<String, Object> airflowConfig = new java.util.LinkedHashMap<>();
         String schedule = StringUtils.hasText(scheduleCron) ? scheduleCron.trim() : null;
         if (StringUtils.hasText(schedule)) {
@@ -203,7 +218,7 @@ public class OpenMetadataClient {
         payload.put("airflowConfig", airflowConfig);
         payload.put("loggerLevel", "INFO");
         try {
-            HttpHeaders headers = defaultHeaders();
+            HttpHeaders headers = defaultHeaders(settings);
             HttpEntity<Map<String, Object>> entity = new HttpEntity<>(payload, headers);
             ResponseEntity<Map> response = restTemplate.exchange(uri, HttpMethod.POST, entity, Map.class);
             return Optional.ofNullable(response.getBody());
@@ -222,12 +237,13 @@ public class OpenMetadataClient {
     }
 
     public Optional<Map<String, Object>> triggerIngestionPipeline(String pipelineId) {
-        if (!props.isEnabled() || !StringUtils.hasText(pipelineId)) {
+        OpenMetadataSettings settings = resolveSettings();
+        if (!settings.enabled() || !StringUtils.hasText(settings.baseUrl()) || !StringUtils.hasText(pipelineId)) {
             return Optional.empty();
         }
-        URI uri = buildUriWithParams("/services/ingestionPipelines/trigger/" + pipelineId.trim(), null);
+        URI uri = buildUriWithParams(settings, "/services/ingestionPipelines/trigger/" + pipelineId.trim(), null);
         try {
-            HttpHeaders headers = defaultHeaders();
+            HttpHeaders headers = defaultHeaders(settings);
             HttpEntity<Void> entity = new HttpEntity<>(headers);
             ResponseEntity<Map> response = restTemplate.exchange(uri, HttpMethod.POST, entity, Map.class);
             return Optional.ofNullable(response.getBody());
@@ -245,20 +261,20 @@ public class OpenMetadataClient {
         return Optional.empty();
     }
 
-    private HttpHeaders defaultHeaders() {
+    private HttpHeaders defaultHeaders(OpenMetadataSettings settings) {
         HttpHeaders headers = new HttpHeaders();
         headers.setAccept(List.of(MediaType.APPLICATION_JSON));
         headers.setContentType(MediaType.APPLICATION_JSON);
-        if (StringUtils.hasText(props.getAuthToken())) {
-            String raw = props.getAuthToken().trim();
+        if (StringUtils.hasText(settings.authToken())) {
+            String raw = settings.authToken().trim();
             headers.set(HttpHeaders.AUTHORIZATION, raw.startsWith("Bearer ") ? raw : "Bearer " + raw);
         }
         return headers;
     }
 
-    private URI buildUriWithFields(String suffix, String fields) {
-        String base = props.getBaseUrl();
-        String path = props.getApiPath() == null ? "/api/v1" : props.getApiPath();
+    private URI buildUriWithFields(OpenMetadataSettings settings, String suffix, String fields) {
+        String base = settings.baseUrl();
+        String path = settings.apiPath() == null ? "/api/v1" : settings.apiPath();
         UriComponentsBuilder builder = UriComponentsBuilder.fromHttpUrl(base).path(path).path(suffix);
         if (StringUtils.hasText(fields)) {
             builder.queryParam("fields", fields.trim());
@@ -266,14 +282,23 @@ public class OpenMetadataClient {
         return builder.build(true).toUri();
     }
 
-    private URI buildUriWithParams(String suffix, Map<String, ?> params) {
-        String base = props.getBaseUrl();
-        String path = props.getApiPath() == null ? "/api/v1" : props.getApiPath();
+    private URI buildUriWithParams(OpenMetadataSettings settings, String suffix, Map<String, ?> params) {
+        String base = settings.baseUrl();
+        String path = settings.apiPath() == null ? "/api/v1" : settings.apiPath();
         UriComponentsBuilder builder = UriComponentsBuilder.fromHttpUrl(base).path(path).path(suffix);
         if (params != null && !params.isEmpty()) {
             params.forEach(builder::queryParam);
         }
         return builder.build(true).toUri();
+    }
+
+    private OpenMetadataSettings resolveSettings() {
+        IngestionSettingsService.SettingsSnapshot settings = settingsService.getSettings(IngestionSettingsService.SERVICE_OPENMETADATA);
+        boolean enabled = settings.getBoolean("enabled", props.isEnabled());
+        String baseUrl = settings.getString("baseUrl", props.getBaseUrl());
+        String apiPath = settings.getString("apiPath", props.getApiPath());
+        String authToken = settings.getString("authToken", props.getAuthToken());
+        return new OpenMetadataSettings(enabled, baseUrl, apiPath, authToken);
     }
 
     private String trim(String value, int max) {
@@ -286,4 +311,6 @@ public class OpenMetadataClient {
         }
         return text.substring(0, max) + "...";
     }
+
+    private record OpenMetadataSettings(boolean enabled, String baseUrl, String apiPath, String authToken) {}
 }

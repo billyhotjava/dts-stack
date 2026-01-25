@@ -33,6 +33,7 @@ source/dts-analytics-webapp/modern/.pnpm/
 source/dts-analytics-webapp/modern/.vite/
 source/dts-analytics-webapp/modern/.vite-cache/
 source/dts-analytics-webapp/modern/dist/
+source/dts-ingestion/target/
 builds/*/*.jar
 source/dts-bi-analytics/
 .m2/

@@ -9,7 +9,6 @@ import com.yuzhi.dts.admin.service.infra.dto.JdbcDriverInfo;
 import java.net.URI;
 import java.time.Duration;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,8 +30,6 @@ public class PlatformInfraClient {
     private static final ParameterizedTypeReference<PlatformApiResponse<HiveConnectionTestResult>> TEST_RESPONSE_TYPE =
         new ParameterizedTypeReference<>() {};
     private static final ParameterizedTypeReference<PlatformApiResponse<List<JdbcDriverInfo>>> DRIVER_RESPONSE_TYPE =
-        new ParameterizedTypeReference<>() {};
-    private static final ParameterizedTypeReference<PlatformApiResponse<Map<String, Object>>> MAP_RESPONSE_TYPE =
         new ParameterizedTypeReference<>() {};
 
     static final String SERVICE_HEADER = "X-DTS-Service";
@@ -166,41 +163,6 @@ public class PlatformInfraClient {
             log.debug("Platform driver list failure stack", ex);
         }
         return List.of();
-    }
-
-    public Optional<String> registerDestinationDefinition(String name, String dockerRepo, String dockerTag) {
-        if (!properties.isEnabled()) {
-            return Optional.empty();
-        }
-        URI uri = buildUri("/infra/settings/airbyte/destination-definitions/register");
-        HttpHeaders headers = buildHeaders();
-        Map<String, String> payload = Map.of(
-            "name",
-            name,
-            "dockerRepository",
-            dockerRepo,
-            "dockerImageTag",
-            dockerTag
-        );
-        HttpEntity<Map<String, String>> entity = new HttpEntity<>(payload, headers);
-        try {
-            ResponseEntity<PlatformApiResponse<Map<String, Object>>> response = restTemplate.exchange(
-                uri,
-                HttpMethod.POST,
-                entity,
-                MAP_RESPONSE_TYPE
-            );
-            PlatformApiResponse<Map<String, Object>> body = response.getBody();
-            if (body != null && body.getStatus() == 200 && body.getData() != null) {
-                Object id = body.getData().get("destinationDefinitionId");
-                return Optional.ofNullable(id != null ? String.valueOf(id) : null);
-            }
-            log.debug("Register destination definition returned status {}", response.getStatusCode());
-        } catch (Exception ex) {
-            log.warn("Failed to register destination definition via platform: {}", ex.getMessage());
-            log.debug("Platform register destination failure stack", ex);
-        }
-        return Optional.empty();
     }
 
     private URI buildUri(String suffix) {

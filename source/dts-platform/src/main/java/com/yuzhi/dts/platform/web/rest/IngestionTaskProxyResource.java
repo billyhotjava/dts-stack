@@ -1,5 +1,8 @@
 package com.yuzhi.dts.platform.web.rest;
 
+import com.yuzhi.dts.common.audit.AuditStage;
+import com.yuzhi.dts.platform.security.SecurityUtils;
+import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.ingestion.IngestionServiceClient;
 import com.yuzhi.dts.platform.service.infra.DefaultDestinationSyncService;
 import java.util.Map;
@@ -18,13 +21,16 @@ public class IngestionTaskProxyResource {
 
     private final IngestionServiceClient ingestionClient;
     private final DefaultDestinationSyncService destinationSyncService;
+    private final AuditService auditService;
 
     public IngestionTaskProxyResource(
         IngestionServiceClient ingestionClient,
-        DefaultDestinationSyncService destinationSyncService
+        DefaultDestinationSyncService destinationSyncService,
+        AuditService auditService
     ) {
         this.ingestionClient = ingestionClient;
         this.destinationSyncService = destinationSyncService;
+        this.auditService = auditService;
     }
 
     @PostMapping("/tasks")
@@ -33,12 +39,22 @@ public class IngestionTaskProxyResource {
         DefaultDestinationSyncService.DefaultDestinationSnapshot snapshot = destinationSyncService.ensureDefaultDestination();
         Map<String, Object> resolvedPayload = applyDefaultDestinationPayload(payload, snapshot);
         ApiResponse<Map<String, Object>> response = ingestionClient.createIngestionTask(resolvedPayload);
-        if (response != null && response.getStatus() == 200 && response.getData() instanceof Map<?, ?> data) {
-            Object connectionObj = data.get("connection");
-            if (connectionObj instanceof Map<?, ?> connection) {
-                Object destinationId = connection.get("destinationId");
-                destinationSyncService.updateAdminDestinationIfNeeded(snapshot, destinationId != null ? destinationId.toString() : null);
-            }
+        String operator = SecurityUtils.getCurrentUserLogin().orElse("system");
+        String taskName = payload == null ? null : String.valueOf(payload.getOrDefault("name", ""));
+        if (response != null && response.getStatus() == 200) {
+            auditService.auditAction(
+                "INGESTION_TASK_CREATE",
+                AuditStage.SUCCESS,
+                taskName,
+                Map.of("summary", "创建入湖任务", "name", taskName, "operator", operator)
+            );
+        } else {
+            auditService.auditAction(
+                "INGESTION_TASK_CREATE",
+                AuditStage.FAIL,
+                taskName,
+                Map.of("summary", "创建入湖任务失败", "name", taskName, "operator", operator)
+            );
         }
         return response;
     }

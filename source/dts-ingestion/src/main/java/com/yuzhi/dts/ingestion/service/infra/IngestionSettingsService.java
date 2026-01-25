@@ -7,7 +7,7 @@ import org.springframework.util.StringUtils;
 @Component
 public class IngestionSettingsService {
 
-    public static final String SERVICE_AIRBYTE = "airbyte";
+    public static final String SERVICE_ADDAX = "addax";
     public static final String SERVICE_OPENMETADATA = "openmetadata";
     public static final String SERVICE_AIRFLOW = "airflow";
     public static final String SERVICE_DBT = "dbt";

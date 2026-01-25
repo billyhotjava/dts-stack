@@ -100,6 +100,54 @@ public class AuditButtonRegistry {
         register(
             map,
             new AuditButtonMetadata(
+                ButtonCodes.INTEGRATION_SETTINGS_VIEW,
+                "system-admin",
+                "系统管理",
+                "INTEGRATION_SETTINGS_VIEW",
+                "查看集成配置",
+                AuditOperationKind.QUERY,
+                true
+            )
+        );
+        register(
+            map,
+            new AuditButtonMetadata(
+                ButtonCodes.INTEGRATION_SETTINGS_UPDATE,
+                "system-admin",
+                "系统管理",
+                "INTEGRATION_SETTINGS_UPDATE",
+                "更新集成配置",
+                AuditOperationKind.UPDATE,
+                true
+            )
+        );
+        register(
+            map,
+            new AuditButtonMetadata(
+                ButtonCodes.INTEGRATION_SETTINGS_TEST,
+                "system-admin",
+                "系统管理",
+                "INTEGRATION_SETTINGS_TEST",
+                "测试集成配置",
+                AuditOperationKind.TEST,
+                true
+            )
+        );
+        register(
+            map,
+            new AuditButtonMetadata(
+                ButtonCodes.DATA_SOURCE_LIST,
+                "system-admin",
+                "基础设施",
+                "ADMIN_DATA_SOURCE_LIST",
+                "查看数据源列表",
+                AuditOperationKind.QUERY,
+                true
+            )
+        );
+        register(
+            map,
+            new AuditButtonMetadata(
                 ButtonCodes.DATA_SOURCE_CREATE,
                 "system-admin",
                 "基础设施",
