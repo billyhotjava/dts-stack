@@ -12,6 +12,7 @@ import com.yuzhi.dts.ingestion.service.dto.IngestionExecutionDTO;
 import com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO;
 import com.yuzhi.dts.ingestion.service.etl.AddaxJobService;
 import com.yuzhi.dts.ingestion.service.etl.AirflowAdapter;
+import com.yuzhi.dts.ingestion.service.etl.AirflowDagService;
 import com.yuzhi.dts.ingestion.service.mapper.IngestionExecutionMapper;
 import com.yuzhi.dts.ingestion.service.mapper.IngestionTaskMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -61,6 +62,9 @@ class IngestionTaskServiceTest {
     private AirflowAdapter airflowAdapter;
 
     @Mock
+    private AirflowDagService airflowDagService;
+
+    @Mock
     private AuditService auditService;
 
     private IngestionTaskService ingestionTaskService;
@@ -76,6 +80,7 @@ class IngestionTaskServiceTest {
             executionMapper,
             addaxJobService,
             airflowAdapter,
+            airflowDagService,
             auditService
         );
     }

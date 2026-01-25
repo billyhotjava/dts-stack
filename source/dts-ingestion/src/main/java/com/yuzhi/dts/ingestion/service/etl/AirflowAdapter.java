@@ -25,7 +25,6 @@ public class AirflowAdapter {
     public Map<String, Object> triggerIfRequested(AirflowRequest request, Map<String, Object> conf, boolean runNow) {
         Map<String, Object> result = new LinkedHashMap<>();
         IngestionSettingsService.SettingsSnapshot settings = settingsService.getSettings(IngestionSettingsService.SERVICE_AIRFLOW);
-        IngestionSettingsService.SettingsSnapshot addaxSettings = settingsService.getSettings(IngestionSettingsService.SERVICE_ADDAX);
         boolean enabled = settings.getBoolean("enabled", properties.isEnabled());
         if (!enabled) {
             result.put("enabled", false);
@@ -38,15 +37,11 @@ public class AirflowAdapter {
             return result;
         }
         String requestedDagId = normalize(request.dagId());
-        String addaxDagId = normalize(addaxSettings.getString("dagId", null));
         String fallbackDagId = normalize(settings.getString("dagId", properties.getDagId()));
         java.util.List<String> candidates = new java.util.ArrayList<>();
         if (StringUtils.hasText(requestedDagId)) {
             candidates.add(requestedDagId);
         } else {
-            if (StringUtils.hasText(addaxDagId) && !candidates.contains(addaxDagId)) {
-                candidates.add(addaxDagId);
-            }
             if (StringUtils.hasText(fallbackDagId) && !candidates.contains(fallbackDagId)) {
                 candidates.add(fallbackDagId);
             }

@@ -2,12 +2,10 @@ package com.yuzhi.dts.ingestion.web.rest;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.common.audit.AuditStage;
-import com.yuzhi.dts.ingestion.config.AddaxProperties;
 import com.yuzhi.dts.ingestion.security.SecurityUtils;
 import com.yuzhi.dts.ingestion.service.audit.AuditService;
 import com.yuzhi.dts.ingestion.service.etl.AddaxJobService;
 import com.yuzhi.dts.ingestion.service.etl.AirflowAdapter;
-import com.yuzhi.dts.ingestion.service.infra.IngestionSettingsService;
 import com.yuzhi.dts.ingestion.service.openmetadata.OpenMetadataAdapter;
 import jakarta.validation.Valid;
 import java.nio.file.Path;
@@ -32,8 +30,6 @@ public class IngestionTaskResource {
         "hasAnyAuthority(T(com.yuzhi.dts.ingestion.security.AuthoritiesConstants).INFRA_MAINTAINERS)";
 
     private final AddaxJobService addaxJobService;
-    private final AddaxProperties addaxProperties;
-    private final IngestionSettingsService settingsService;
     private final AuditService auditService;
     private final OpenMetadataAdapter openMetadataAdapter;
     private final AirflowAdapter airflowAdapter;
@@ -42,8 +38,6 @@ public class IngestionTaskResource {
 
     public IngestionTaskResource(
         AddaxJobService addaxJobService,
-        AddaxProperties addaxProperties,
-        IngestionSettingsService settingsService,
         AuditService auditService,
         OpenMetadataAdapter openMetadataAdapter,
         AirflowAdapter airflowAdapter,
@@ -51,8 +45,6 @@ public class IngestionTaskResource {
         ObjectMapper objectMapper
     ) {
         this.addaxJobService = addaxJobService;
-        this.addaxProperties = addaxProperties;
-        this.settingsService = settingsService;
         this.auditService = auditService;
         this.openMetadataAdapter = openMetadataAdapter;
         this.airflowAdapter = airflowAdapter;
@@ -120,27 +112,34 @@ public class IngestionTaskResource {
 
             String readerType = resolvePlugin(request.source().type(), request.source().config(), List.of("readerType", "reader", "type"));
 
-            // 处理平台默认数据湖配置
-            String writerType;
-            Map<String, Object> writerConfig;
-            if (Boolean.TRUE.equals(request.destination().usePlatformDefault())) {
-                // 从设置中获取默认 writer 类型和配置
-                IngestionSettingsService.SettingsSnapshot settings = settingsService.getSettings(IngestionSettingsService.SERVICE_ADDAX);
-                writerType = settings.getString("defaultWriterType", addaxProperties.getDefaultWriterType());
-                writerConfig = buildDefaultWriterConfig(settings);
-            } else {
-                writerType = resolvePlugin(request.destination().type(), request.destination().config(), List.of("writerType", "writer", "type"));
-                writerConfig = request.destination().config();
-            }
+            boolean useDefault = Boolean.TRUE.equals(request.destination().usePlatformDefault());
+            boolean hasJobConfig = request.jobConfig() != null && !request.jobConfig().isEmpty();
+            Map<String, Object> writerConfig = safeMap(request.destination().config());
+            String writerType = resolvePlugin(
+                useDefault ? request.destination().definitionId() : request.destination().type(),
+                writerConfig,
+                List.of("writerType", "writer", "type")
+            );
 
             if (!StringUtils.hasText(readerType)) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "缺少 Addax Reader 类型");
             }
-            if (!StringUtils.hasText(writerType)) {
-                throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "缺少 Addax Writer 类型。请在 Admin 模块「系统管理 -> 集成配置 -> addax」中配置 defaultWriterType，或取消勾选使用平台默认数据湖并手动指定 Writer 类型"
-                );
+            if (!hasJobConfig) {
+                if (!StringUtils.hasText(writerType)) {
+                    String message = useDefault
+                        ? "缺少 Addax Writer 类型，请在管理端数据湖配置中设置写入器类型"
+                        : "缺少 Addax Writer 类型";
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, message);
+                }
+                if (writerConfig.isEmpty()) {
+                    String message = useDefault
+                        ? "缺少 Addax Writer 配置，请在管理端数据湖配置中完善写入器参数"
+                        : "缺少 Addax Writer 配置";
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, message);
+                }
+            }
+            if (StringUtils.hasText(writerType) && !StringUtils.hasText(normalize(writerConfig.get("writerType")))) {
+                writerConfig.put("writerType", writerType);
             }
 
             AirflowAdapter.AirflowRequest airflowRequest = buildAirflowRequest(request.airflow());
@@ -256,48 +255,6 @@ public class IngestionTaskResource {
         }
     }
 
-    /**
-     * 从 Admin 集成配置（addax 服务设置）中构建默认 Writer 配置。
-     * 配置项在 Admin 模块的 "系统管理 -> 集成配置 -> addax" 中维护。
-     *
-     * 支持的配置键：
-     * - defaultWriterType: writer 插件类型，如 postgresqlwriter, mysqlwriter
-     * - defaultWriterJdbcUrl: JDBC 连接 URL
-     * - defaultWriterUsername: 数据库用户名
-     * - defaultWriterPassword: 数据库密码
-     * - defaultWriterSchema: 目标 schema
-     * - defaultWriterConfig: 额外的 writer 参数（Map 类型）
-     */
-    private Map<String, Object> buildDefaultWriterConfig(IngestionSettingsService.SettingsSnapshot settings) {
-        Map<String, Object> config = new LinkedHashMap<>();
-
-        String jdbcUrl = settings.getString("defaultWriterJdbcUrl", null);
-        String username = settings.getString("defaultWriterUsername", null);
-        String password = settings.getString("defaultWriterPassword", null);
-        String schema = settings.getString("defaultWriterSchema", null);
-
-        if (StringUtils.hasText(jdbcUrl)) {
-            config.put("jdbcUrl", jdbcUrl);
-        }
-        if (StringUtils.hasText(username)) {
-            config.put("username", username);
-        }
-        if (StringUtils.hasText(password)) {
-            config.put("password", password);
-        }
-        if (StringUtils.hasText(schema)) {
-            config.put("schema", schema);
-        }
-
-        // 从设置中获取额外的 writer 配置（如果有）
-        Map<String, Object> extraConfig = settings.getMap("defaultWriterConfig");
-        if (!extraConfig.isEmpty()) {
-            config.putAll(extraConfig);
-        }
-
-        return config;
-    }
-
     private String resolvePlugin(String direct, Map<String, Object> config, List<String> keys) {
         String value = normalize(direct);
         if (StringUtils.hasText(value)) {
@@ -318,14 +275,9 @@ public class IngestionTaskResource {
 
     private AirflowAdapter.AirflowRequest buildAirflowRequest(AirflowSpec spec) {
         boolean enabled = spec != null && Boolean.TRUE.equals(spec.enabled());
-        String dagId = spec == null ? null : normalize(spec.dagId());
-        if (!StringUtils.hasText(dagId)) {
-            IngestionSettingsService.SettingsSnapshot settings = settingsService.getSettings(IngestionSettingsService.SERVICE_ADDAX);
-            dagId = settings.getString("dagId", addaxProperties.getDagId());
-        }
         return new AirflowAdapter.AirflowRequest(
             enabled,
-            dagId,
+            spec == null ? null : normalize(spec.dagId()),
             spec == null ? null : normalize(spec.scheduleType()),
             spec == null ? null : normalize(spec.cron()),
             spec == null ? null : spec.intervalMinutes()
@@ -348,7 +300,7 @@ public class IngestionTaskResource {
     }
 
     private Map<String, Object> safeMap(Map<String, Object> value) {
-        return value == null ? Map.of() : new LinkedHashMap<>(value);
+        return value == null ? new LinkedHashMap<>() : new LinkedHashMap<>(value);
     }
 
     private com.fasterxml.jackson.databind.JsonNode toJsonNode(Object value) {
@@ -416,7 +368,7 @@ public class IngestionTaskResource {
     ) {
         return ingestionTaskService.findOne(id)
             .map(org.springframework.http.ResponseEntity::ok)
-            .orElse(org.springframework.http.ResponseEntity.notFound().build());
+            .orElse(org.springframework.http.ResponseEntity.<com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO>notFound().build());
     }
 
     /**
@@ -533,6 +485,6 @@ public class IngestionTaskResource {
     ) {
         return ingestionTaskService.getLatestExecution(id)
             .map(org.springframework.http.ResponseEntity::ok)
-            .orElse(org.springframework.http.ResponseEntity.notFound().build());
+            .orElse(org.springframework.http.ResponseEntity.<com.yuzhi.dts.ingestion.service.dto.IngestionExecutionDTO>notFound().build());
     }
 }

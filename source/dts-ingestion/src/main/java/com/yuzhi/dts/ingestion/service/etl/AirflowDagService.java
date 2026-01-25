@@ -1,6 +1,7 @@
 package com.yuzhi.dts.ingestion.service.etl;
 
 import com.yuzhi.dts.ingestion.config.AirflowProperties;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.yuzhi.dts.ingestion.domain.IngestionTask;
 import com.yuzhi.dts.ingestion.service.infra.IngestionSettingsService;
 import java.io.IOException;
@@ -71,10 +72,86 @@ public class AirflowDagService {
         if (StringUtils.hasText(task.getAirflowDagId())) {
             return task.getAirflowDagId().trim();
         }
+        String sourceKey = resolveSourceKey(task);
+        if (StringUtils.hasText(sourceKey)) {
+            return "ingestion_" + slugify(sourceKey);
+        }
         String base = StringUtils.hasText(task.getName()) ? task.getName() : "task";
         String slug = slugify(base);
         String suffix = task.getId() == null ? "new" : String.valueOf(task.getId());
         return "ingestion_" + slug + "_" + suffix;
+    }
+
+    private String resolveSourceKey(IngestionTask task) {
+        if (task == null) {
+            return null;
+        }
+        JsonNode config = task.getSourceConfig();
+        if (config == null || config.isNull()) {
+            return null;
+        }
+        String explicit = firstText(config, "sourceSystem", "sourceApp", "appCode", "system", "app", "name");
+        if (StringUtils.hasText(explicit)) {
+            return explicit;
+        }
+        String host = firstText(config, "host");
+        String database = firstText(config, "database");
+        if (StringUtils.hasText(host)) {
+            return StringUtils.hasText(database) ? host + "_" + database : host;
+        }
+        String jdbcUrl = extractJdbcUrl(config);
+        if (StringUtils.hasText(jdbcUrl)) {
+            return jdbcUrl;
+        }
+        return null;
+    }
+
+    private String firstText(JsonNode node, String... keys) {
+        if (node == null || keys == null) {
+            return null;
+        }
+        for (String key : keys) {
+            JsonNode value = node.get(key);
+            String text = textValue(value);
+            if (StringUtils.hasText(text)) {
+                return text;
+            }
+        }
+        return null;
+    }
+
+    private String extractJdbcUrl(JsonNode config) {
+        String direct = textValue(config.get("jdbcUrl"));
+        if (StringUtils.hasText(direct)) {
+            return direct;
+        }
+        JsonNode connection = config.get("connection");
+        if (connection != null && connection.isArray()) {
+            for (JsonNode item : connection) {
+                if (item == null || item.isNull()) {
+                    continue;
+                }
+                String candidate = textValue(item.get("jdbcUrl"));
+                if (StringUtils.hasText(candidate)) {
+                    return candidate;
+                }
+            }
+        }
+        return null;
+    }
+
+    private String textValue(JsonNode node) {
+        if (node == null || node.isNull()) {
+            return null;
+        }
+        if (node.isTextual()) {
+            return node.asText();
+        }
+        if (node.isArray() && node.size() > 0) {
+            JsonNode first = node.get(0);
+            return first != null && first.isTextual() ? first.asText() : null;
+        }
+        return null;
     }
 
     private String slugify(String value) {

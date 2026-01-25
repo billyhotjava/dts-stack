@@ -42,19 +42,12 @@ public class InfraSettingsResource {
         Set.of(
             "enabled",
             "jobDir",
-            "image",
-            "dagId",
-            "defaultWriterType",
-            "defaultWriterJdbcUrl",
-            "defaultWriterUsername",
-            "defaultWriterPassword",
-            "defaultWriterSchema",
-            "defaultWriterConfig"
+            "image"
         ),
-        Set.of("defaultWriterPassword")
+        Set.of()
     );
     private static final SettingsDefinition AIRFLOW_DEF = new SettingsDefinition(
-        Set.of("enabled", "baseUrl", "apiPath", "username", "password", "dagId"),
+        Set.of("enabled", "baseUrl", "apiPath", "username", "password", "dagId", "dagsDir"),
         Set.of("password")
     );
     private static final SettingsDefinition OPEN_METADATA_DEF = new SettingsDefinition(
@@ -180,22 +173,6 @@ public class InfraSettingsResource {
         java.nio.file.Path path = java.nio.file.Paths.get(jobDir);
         if (!java.nio.file.Files.exists(path)) {
             return Map.of("success", false, "message", "作业目录不存在: " + jobDir);
-        }
-        String writerType = stringValue(settings.get("defaultWriterType"));
-        if (!StringUtils.hasText(writerType)) {
-            return Map.of("success", false, "message", "请先填写默认写入器类型");
-        }
-        String jdbcUrl = stringValue(settings.get("defaultWriterJdbcUrl"));
-        if (!StringUtils.hasText(jdbcUrl)) {
-            return Map.of("success", false, "message", "请先填写默认写入器 JDBC URL");
-        }
-        String username = stringValue(settings.get("defaultWriterUsername"));
-        if (!StringUtils.hasText(username)) {
-            return Map.of("success", false, "message", "请先填写默认写入器用户名");
-        }
-        String password = stringValue(settings.get("defaultWriterPassword"));
-        if (!StringUtils.hasText(password)) {
-            return Map.of("success", false, "message", "请先填写默认写入器密码");
         }
         return Map.of("success", true, "message", "配置可用", "jobDir", jobDir);
     }

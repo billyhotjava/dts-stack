@@ -17,51 +17,15 @@ interface ServicePanelProps {
 	formContent: (form: FormInstance<Record<string, any>>) => ReactNode;
 }
 
-const formatJson = (value?: Record<string, any> | null): string => {
-	if (!value || typeof value !== "object") return "";
-	if (!Object.keys(value).length) return "";
-	try {
-		return JSON.stringify(value, null, 2);
-	} catch {
-		return "";
-	}
-};
-
-const parseJsonInput = (raw?: string): Record<string, any> | undefined => {
-	if (!raw || !raw.trim()) return undefined;
-	return JSON.parse(raw);
-};
-
 const normalizeSettings = (data?: InfraServiceSettingsPayload | null) => {
 	const settings = data?.settings || {};
-	const normalized: Record<string, any> = { enabled: true, ...settings };
-	if (settings.defaultWriterConfig && typeof settings.defaultWriterConfig === "object") {
-		normalized.defaultWriterConfigRaw = formatJson(settings.defaultWriterConfig);
-	}
-	return normalized;
+	return { enabled: true, ...settings };
 };
 
 const buildSettingsPayload = (
-	service: ServiceKey,
 	values: Record<string, any>,
-	form: FormInstance<Record<string, any>>,
 ) => {
-	const payload = { ...values };
-	if (service === "addax") {
-		const raw = values.defaultWriterConfigRaw as string | undefined;
-		if (raw && raw.trim()) {
-			try {
-				payload.defaultWriterConfig = parseJsonInput(raw);
-			} catch {
-				form.setFields([{ name: "defaultWriterConfigRaw", errors: ["写入器扩展配置 JSON 格式错误"] }]);
-				throw new Error("写入器扩展配置 JSON 格式错误");
-			}
-		} else {
-			delete payload.defaultWriterConfig;
-		}
-		delete payload.defaultWriterConfigRaw;
-	}
-	return payload;
+	return { ...values };
 };
 
 function ServicePanel({ service, title, description, formContent }: ServicePanelProps) {
@@ -80,7 +44,7 @@ function ServicePanel({ service, title, description, formContent }: ServicePanel
 	const handleSave = async () => {
 		try {
 			const values = await form.validateFields();
-			const payload = buildSettingsPayload(service, values, form);
+			const payload = buildSettingsPayload(values);
 			await adminApi.updateIntegrationSettings(service, payload);
 			toast.success("配置已保存");
 			queryClient.invalidateQueries({ queryKey: ["admin", "infra-settings", service] });
@@ -93,7 +57,7 @@ function ServicePanel({ service, title, description, formContent }: ServicePanel
 	const handleTest = async () => {
 		try {
 			const values = await form.validateFields();
-			const payload = buildSettingsPayload(service, values, form);
+			const payload = buildSettingsPayload(values);
 			const result = await adminApi.testIntegrationSettings(service, payload);
 			if (result?.success) {
 				toast.success(result?.message || "连接成功");
@@ -156,65 +120,8 @@ export default function InfraSettingsView() {
 							>
 								<Input placeholder="wgzhao/addax:0.59.1" />
 							</Form.Item>
-							<Form.Item label="默认 DAG ID" name="dagId">
-								<Input placeholder="addax_job" />
-							</Form.Item>
-							<Divider orientation="left">默认写入器</Divider>
-							<Form.Item
-								label="写入器类型"
-								name="defaultWriterType"
-								rules={[{ required: true, message: "请输入写入器类型" }]}
-							>
-								<Input placeholder="postgresqlwriter" />
-							</Form.Item>
-							<Form.Item
-								label="JDBC URL"
-								name="defaultWriterJdbcUrl"
-								rules={[{ required: true, message: "请输入 JDBC URL" }]}
-							>
-								<Input placeholder="jdbc:postgresql://host:5432/db" />
-							</Form.Item>
-							<Form.Item
-								label="用户名"
-								name="defaultWriterUsername"
-								rules={[{ required: true, message: "请输入用户名" }]}
-							>
-								<Input placeholder="db_user" />
-							</Form.Item>
-							<Form.Item
-								label="密码"
-								name="defaultWriterPassword"
-								rules={[{ required: true, message: "请输入密码" }]}
-							>
-								<Input.Password placeholder="******" />
-							</Form.Item>
-							<Form.Item label="Schema" name="defaultWriterSchema">
-								<Input placeholder="public" />
-							</Form.Item>
-							<Form.Item
-								label="写入器扩展配置 JSON"
-								name="defaultWriterConfigRaw"
-								rules={[
-									{
-										validator: async (_: unknown, value: string | undefined) => {
-											if (!value || !value.trim()) return Promise.resolve();
-											try {
-												parseJsonInput(value);
-												return Promise.resolve();
-											} catch {
-												return Promise.reject(new Error("JSON 格式错误"));
-											}
-										},
-									},
-								]}
-							>
-								<Input.TextArea
-									rows={6}
-									placeholder='可选扩展参数 JSON，例如：{"writeMode":"insert","column":["*"]}'
-								/>
-							</Form.Item>
 							<Text variant="body3" className="text-muted-foreground">
-								扩展配置用于补充 writer 参数，敏感字段建议放在上方密码项。
+								写入器配置请在数据湖管理中维护，入湖任务会自动引用对应的数据湖写入参数。
 							</Text>
 						</>
 					)}
@@ -243,6 +150,13 @@ export default function InfraSettingsView() {
 							</Form.Item>
 							<Form.Item label="API Path" name="apiPath">
 								<Input placeholder="/api/v1" />
+							</Form.Item>
+							<Form.Item
+								label="DAG 目录"
+								name="dagsDir"
+								rules={[{ required: true, message: "请输入 DAG 目录" }]}
+							>
+								<Input placeholder="/opt/airflow/dags" />
 							</Form.Item>
 							<Form.Item
 								label="用户名"

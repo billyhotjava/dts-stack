@@ -12,11 +12,11 @@ ADDAX_JOB_DIR = os.getenv("ADDAX_JOB_DIR", "/opt/prod/s10/dts-stack/services/dts
 
 
 with DAG(
-    dag_id="addax_job",
+    dag_id="ingestion_dm8test",
     schedule=None,
     start_date=datetime(2024, 1, 1),
     catchup=False,
-    tags=["addax", "etl", "ingestion", "rdbmsreader", "pg-lake1"],
+    tags=["addax", "etl", "ingestion", "rdbmsreader", "dm8test"],
 ) as dag:
     run_cmd = [
         "python",

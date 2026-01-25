@@ -40,7 +40,6 @@ dts:
     enabled: ${DTS_ADDAX_ENABLED:true}
     job-dir: ${DTS_ADDAX_JOB_DIR:/opt/prod/s10/dts-stack/services/dts-addax/jobs}
     image: ${IMAGE_ADDAX:wgzhao/addax:0.59.1}
-    dag-id: ${DTS_ADDAX_DAG_ID:addax_job}
   airflow:
     enabled: ${DTS_AIRFLOW_ENABLED:true}
     base-url: ${DTS_AIRFLOW_BASE_URL:http://dts-airflow-webserver:8080}
@@ -48,7 +47,7 @@ dts:
     username: ${DTS_AIRFLOW_USERNAME:}
     password: ${DTS_AIRFLOW_PASSWORD:}
     dag-id: ${DTS_AIRFLOW_DAG_ID:dbt_load}
-    dags-dir: ${DTS_AIRFLOW_DAGS_DIR:}
+    dags-dir: ${DTS_AIRFLOW_DAGS_DIR:/opt/airflow/dags}
   openmetadata:
     enabled: ${DTS_OPENMETADATA_ENABLED:${DTS_PLATFORM_OPENMETADATA_ENABLED:true}}
     base-url: ${DTS_OPENMETADATA_BASE_URL:${DTS_PLATFORM_OPENMETADATA_BASE_URL:http://dts-openmetadata:8585}}

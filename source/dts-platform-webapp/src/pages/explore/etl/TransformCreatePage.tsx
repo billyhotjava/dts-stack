@@ -51,6 +51,7 @@ const buildReaderConfig = (values: Record<string, any>) => {
 	const columns = splitColumns(values.readerColumns);
 	const querySql = splitLines(values.readerQuerySql);
 	const extra = parseJson(values.readerExtraConfig, "Reader 扩展配置") as Record<string, any> | undefined;
+	const sourceSystem = normalizeText(values.sourceSystem);
 
 	const connection: Record<string, any> = {};
 	if (jdbcUrls.length) connection.jdbcUrl = jdbcUrls;
@@ -66,6 +67,7 @@ const buildReaderConfig = (values: Record<string, any>) => {
 	if (username) config.username = username;
 	if (password) config.password = password;
 	if (where) config.where = where;
+	if (sourceSystem) config.sourceSystem = sourceSystem;
 	if (Object.keys(connection).length) config.connection = [connection];
 	return mergeConfig(config, extra);
 };
@@ -114,9 +116,13 @@ const buildJobPreview = (
 
 	let readerConfig: Record<string, any> | undefined;
 	let writerConfig: Record<string, any> | undefined;
+	const sourceSystem = normalizeText(values.sourceSystem);
 
 	if (editorMode === "json") {
 		readerConfig = parseJson(values.readerConfig, "Reader 配置") as Record<string, any> | undefined;
+		if (sourceSystem && readerConfig && !readerConfig.sourceSystem) {
+			readerConfig.sourceSystem = sourceSystem;
+		}
 		writerConfig = useDefaultDestination
 			? { __fromDefault__: true }
 			: (parseJson(values.writerConfig, "Writer 配置") as Record<string, any> | undefined);
@@ -202,6 +208,12 @@ const mapTaskToForm = (task: IngestionTaskDTO) => {
 		runNow: false,
 		name: task.name,
 		description: task.description,
+		sourceSystem:
+			sourceConfig.sourceSystem ||
+			sourceConfig.sourceApp ||
+			sourceConfig.appCode ||
+			sourceConfig.system ||
+			sourceConfig.name,
 		readerType: task.sourceType,
 		readerConfig: JSON.stringify(sourceConfig, null, 2),
 		writerType,
@@ -297,6 +309,10 @@ export default function TransformCreatePage() {
 			const readerConfig = isJsonMode
 				? parseJson(values.readerConfig, "Reader 配置")
 				: buildReaderConfig(values);
+			const sourceSystem = normalizeText(values.sourceSystem);
+			if (sourceSystem && readerConfig && typeof readerConfig === "object" && !readerConfig.sourceSystem) {
+				readerConfig.sourceSystem = sourceSystem;
+			}
 			const writerConfig = values.useDefaultDestination
 				? undefined
 				: isJsonMode
@@ -423,6 +439,9 @@ export default function TransformCreatePage() {
 					</Form.Item>
 					<Form.Item name="description" label="任务描述">
 						<Input.TextArea rows={2} placeholder="可选，说明任务用途" />
+					</Form.Item>
+					<Form.Item name="sourceSystem" label="源系统标识">
+						<Input placeholder="可选，例如：erp、crm（用于绑定 DAG）" />
 					</Form.Item>
 					<Divider orientation="left">Reader 配置</Divider>
 					<Form.Item
