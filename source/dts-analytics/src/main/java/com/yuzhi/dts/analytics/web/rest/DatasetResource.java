@@ -5,6 +5,8 @@ import com.yuzhi.dts.analytics.service.AnalyticsSessionService;
 import com.yuzhi.dts.analytics.service.DatasetQueryService;
 import com.yuzhi.dts.analytics.service.MbqlToSqlService;
 import com.yuzhi.dts.analytics.service.NativeQueryTemplateService;
+import com.yuzhi.dts.analytics.service.QueryCacheService;
+import com.yuzhi.dts.analytics.service.QueryPermissionService;
 import com.yuzhi.dts.analytics.web.support.MetabaseAuth;
 import jakarta.servlet.http.HttpServletRequest;
 import java.sql.SQLException;
@@ -15,8 +17,12 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -26,20 +32,28 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/dataset")
 public class DatasetResource {
 
+    private static final Logger log = LoggerFactory.getLogger(DatasetResource.class);
+
     private final AnalyticsSessionService sessionService;
     private final DatasetQueryService datasetQueryService;
     private final MbqlToSqlService mbqlToSqlService;
     private final NativeQueryTemplateService nativeQueryTemplateService;
+    private final QueryCacheService queryCacheService;
+    private final QueryPermissionService queryPermissionService;
 
     public DatasetResource(
             AnalyticsSessionService sessionService,
             DatasetQueryService datasetQueryService,
             MbqlToSqlService mbqlToSqlService,
-            NativeQueryTemplateService nativeQueryTemplateService) {
+            NativeQueryTemplateService nativeQueryTemplateService,
+            QueryCacheService queryCacheService,
+            QueryPermissionService queryPermissionService) {
         this.sessionService = sessionService;
         this.datasetQueryService = datasetQueryService;
         this.mbqlToSqlService = mbqlToSqlService;
         this.nativeQueryTemplateService = nativeQueryTemplateService;
+        this.queryCacheService = queryCacheService;
+        this.queryPermissionService = queryPermissionService;
     }
 
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
@@ -67,9 +81,19 @@ public class DatasetResource {
             return ResponseEntity.badRequest().body(Map.of("errors", Map.of("database", "database is required")));
         }
 
+        // Check query permissions
+        Long userId = MetabaseAuth.getUserId(sessionService, request).orElse(null);
+        QueryPermissionService.QueryPermissionCheck permissionCheck = queryPermissionService.checkQueryPermission(userId, databaseId, body);
+        if (!permissionCheck.allowed()) {
+            return ResponseEntity.status(403).body(Map.of("error", permissionCheck.denialReason()));
+        }
+
         DatasetQueryService.DatasetConstraints constraints = parseConstraints(body);
         OffsetDateTime startedAt = OffsetDateTime.now();
         long startedMillis = System.currentTimeMillis();
+
+        // Check if caching should be skipped
+        boolean skipCache = body.path("cache").path("skip").asBoolean(false);
 
         try {
             String sql;
@@ -108,7 +132,23 @@ public class DatasetResource {
                         .body(Map.of("errors", Map.of("type", "Only native and query (MBQL) dataset types are supported")));
             }
 
-            DatasetQueryService.DatasetResult result = datasetQueryService.runNative(databaseId, sql, constraints, bindings);
+            // Try to get from cache first (unless skipping cache)
+            DatasetQueryService.DatasetResult result;
+            boolean cached = false;
+            if (!skipCache) {
+                Optional<DatasetQueryService.DatasetResult> cachedResult = queryCacheService.get(databaseId, body, userId);
+                if (cachedResult.isPresent()) {
+                    result = cachedResult.get();
+                    cached = true;
+                    log.debug("Returning cached result for database {}", databaseId);
+                } else {
+                    result = datasetQueryService.runNative(databaseId, sql, constraints, bindings);
+                    queryCacheService.put(databaseId, body, userId, result);
+                }
+            } else {
+                result = datasetQueryService.runNative(databaseId, sql, constraints, bindings);
+            }
+
             long runningTimeMs = System.currentTimeMillis() - startedMillis;
 
             Map<String, Object> data = new LinkedHashMap<>();
@@ -129,6 +169,7 @@ public class DatasetResource {
             response.put("context", body.path("context").asText("ad-hoc"));
             response.put("row_count", result.rows().size());
             response.put("running_time", runningTimeMs);
+            response.put("cached", cached);
 
             return ResponseEntity.ok(response);
         } catch (IllegalArgumentException e) {
@@ -170,6 +211,40 @@ public class DatasetResource {
     @PostMapping(path = "/duration", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> duration(@RequestBody JsonNode body, HttpServletRequest request) {
         return run(body, request);
+    }
+
+    /**
+     * Get cache statistics.
+     */
+    @GetMapping(path = "/cache/stats", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> getCacheStats(HttpServletRequest request) {
+        Optional<ResponseEntity<String>> auth = MetabaseAuth.requireSuperuser(sessionService, request);
+        if (auth.isPresent()) {
+            return auth.get();
+        }
+
+        QueryCacheService.CacheStats stats = queryCacheService.getStats();
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("size", stats.size());
+        response.put("hit_count", stats.hitCount());
+        response.put("miss_count", stats.missCount());
+        response.put("hit_rate", stats.hitRate());
+        response.put("eviction_count", stats.evictionCount());
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Clear all cached query results.
+     */
+    @DeleteMapping(path = "/cache", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> clearCache(HttpServletRequest request) {
+        Optional<ResponseEntity<String>> auth = MetabaseAuth.requireSuperuser(sessionService, request);
+        if (auth.isPresent()) {
+            return auth.get();
+        }
+
+        queryCacheService.clearAll();
+        return ResponseEntity.ok(Map.of("status", "ok", "message", "Cache cleared"));
     }
 
     private static DatasetQueryService.DatasetConstraints parseConstraints(JsonNode body) {

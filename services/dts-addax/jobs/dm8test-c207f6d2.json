@@ -1,0 +1,27 @@
+{
+  "job" : {
+    "setting" : {
+      "speed" : {
+        "channel" : 1
+      }
+    },
+    "content" : [ {
+      "reader" : {
+        "parameter" : {
+          "column" : [ "*" ],
+          "username" : "sysdba",
+          "password" : "Devops123@",
+          "connection" : [ {
+            "jdbcUrl" : [ "jdbc:dm://192.168.8.127:5236/DMHR" ],
+            "table" : [ "*" ]
+          } ]
+        },
+        "name" : "rdbmsreader"
+      },
+      "writer" : {
+        "parameter" : { },
+        "name" : "postgresqlwriter"
+      }
+    } ]
+  }
+}

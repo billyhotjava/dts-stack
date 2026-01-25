@@ -1,5 +1,6 @@
 package com.yuzhi.dts.ingestion.web.rest;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.ingestion.config.AddaxProperties;
 import com.yuzhi.dts.ingestion.security.SecurityUtils;
@@ -9,6 +10,8 @@ import com.yuzhi.dts.ingestion.service.etl.AirflowAdapter;
 import com.yuzhi.dts.ingestion.service.infra.IngestionSettingsService;
 import com.yuzhi.dts.ingestion.service.openmetadata.OpenMetadataAdapter;
 import jakarta.validation.Valid;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -35,6 +38,7 @@ public class IngestionTaskResource {
     private final OpenMetadataAdapter openMetadataAdapter;
     private final AirflowAdapter airflowAdapter;
     private final com.yuzhi.dts.ingestion.service.IngestionTaskService ingestionTaskService;
+    private final ObjectMapper objectMapper;
 
     public IngestionTaskResource(
         AddaxJobService addaxJobService,
@@ -43,7 +47,8 @@ public class IngestionTaskResource {
         AuditService auditService,
         OpenMetadataAdapter openMetadataAdapter,
         AirflowAdapter airflowAdapter,
-        com.yuzhi.dts.ingestion.service.IngestionTaskService ingestionTaskService
+        com.yuzhi.dts.ingestion.service.IngestionTaskService ingestionTaskService,
+        ObjectMapper objectMapper
     ) {
         this.addaxJobService = addaxJobService;
         this.addaxProperties = addaxProperties;
@@ -52,6 +57,7 @@ public class IngestionTaskResource {
         this.openMetadataAdapter = openMetadataAdapter;
         this.airflowAdapter = airflowAdapter;
         this.ingestionTaskService = ingestionTaskService;
+        this.objectMapper = objectMapper;
     }
 
     public record IngestionTaskRequest(
@@ -113,34 +119,68 @@ public class IngestionTaskResource {
             }
 
             String readerType = resolvePlugin(request.source().type(), request.source().config(), List.of("readerType", "reader", "type"));
-            String writerType = resolvePlugin(request.destination().type(), request.destination().config(), List.of("writerType", "writer", "type"));
-            if (!StringUtils.hasText(readerType) || !StringUtils.hasText(writerType)) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "缺少 Addax Reader/Writer 类型");
+
+            // 处理平台默认数据湖配置
+            String writerType;
+            Map<String, Object> writerConfig;
+            if (Boolean.TRUE.equals(request.destination().usePlatformDefault())) {
+                // 从设置中获取默认 writer 类型和配置
+                IngestionSettingsService.SettingsSnapshot settings = settingsService.getSettings(IngestionSettingsService.SERVICE_ADDAX);
+                writerType = settings.getString("defaultWriterType", addaxProperties.getDefaultWriterType());
+                writerConfig = buildDefaultWriterConfig(settings);
+            } else {
+                writerType = resolvePlugin(request.destination().type(), request.destination().config(), List.of("writerType", "writer", "type"));
+                writerConfig = request.destination().config();
             }
 
-            AddaxJobService.AddaxJobResult job = addaxJobService.createJob(
-                request.name(),
-                readerType,
-                request.source().config(),
-                writerType,
-                request.destination().config(),
-                request.jobConfig()
-            );
+            if (!StringUtils.hasText(readerType)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "缺少 Addax Reader 类型");
+            }
+            if (!StringUtils.hasText(writerType)) {
+                throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "缺少 Addax Writer 类型。请在 Admin 模块「系统管理 -> 集成配置 -> addax」中配置 defaultWriterType，或取消勾选使用平台默认数据湖并手动指定 Writer 类型"
+                );
+            }
+
+            AirflowAdapter.AirflowRequest airflowRequest = buildAirflowRequest(request.airflow());
+            com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO taskDTO =
+                new com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO();
+            taskDTO.setName(request.name());
+            taskDTO.setDescription(request.description());
+            taskDTO.setSourceType(readerType);
+            taskDTO.setSourceConfig(toJsonNode(safeMap(request.source().config())));
+            taskDTO.setDestinationType(writerType);
+            taskDTO.setDestinationConfig(toJsonNode(safeMap(writerConfig)));
+            taskDTO.setSyncMode(resolveSyncMode(request.sync()));
+            taskDTO.setSyncSchedule(resolveSyncSchedule(request.sync()));
+            taskDTO.setAddaxConfig(toJsonNode(request.jobConfig()));
+            taskDTO.setAirflowEnabled(airflowRequest == null ? null : airflowRequest.enabled());
+            taskDTO.setAirflowDagId(airflowRequest == null ? null : normalize(airflowRequest.dagId()));
+
+            com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO createdTask = ingestionTaskService.create(taskDTO);
+            String jobPath = createdTask.getAddaxJobPath();
+            String jobName = null;
+            if (StringUtils.hasText(jobPath)) {
+                Path path = Paths.get(jobPath);
+                jobName = path.getFileName().toString();
+            }
 
             Map<String, Object> result = new LinkedHashMap<>();
             result.put(
                 "job",
                 Map.of(
                     "name",
-                    job.jobName(),
+                    jobName,
                     "path",
-                    job.jobPath(),
+                    jobPath,
                     "reader",
                     readerType,
                     "writer",
                     writerType
                 )
             );
+            result.put("task", createdTask);
 
             String namespaceFormat = request.sync() == null || request.sync().namespace() == null ? null : normalize(request.sync().namespace().format());
             String prefix = request.sync() == null ? null : normalize(request.sync().prefix());
@@ -152,7 +192,7 @@ public class IngestionTaskResource {
                     namespaceFormat,
                     prefix,
                     safeMap(request.source().config()),
-                    safeMap(request.destination().config()),
+                    safeMap(writerConfig),
                     List.of()
                 )
             );
@@ -163,7 +203,7 @@ public class IngestionTaskResource {
             Map<String, Object> ingestionResult = openMetadataAdapter.ensureMetadataIngestion(
                 new OpenMetadataAdapter.IngestionContext(
                     request.name(),
-                    safeMap(request.destination().config()),
+                    safeMap(writerConfig),
                     null,
                     Boolean.TRUE.equals(request.runNow())
                 )
@@ -173,10 +213,10 @@ public class IngestionTaskResource {
             }
 
             Map<String, Object> airflowConf = new LinkedHashMap<>();
-            airflowConf.put("job_path", job.jobPath());
-            airflowConf.put("job_name", job.jobName());
+            airflowConf.put("job_path", jobPath);
+            airflowConf.put("job_name", jobName);
             airflowConf.put("taskName", request.name());
-            AirflowAdapter.AirflowRequest airflowRequest = buildAirflowRequest(request.airflow());
+            airflowConf.put("taskId", createdTask.getId());
             Map<String, Object> airflowResult = airflowAdapter.triggerIfRequested(
                 airflowRequest,
                 airflowConf,
@@ -189,8 +229,17 @@ public class IngestionTaskResource {
             auditService.auditAction(
                 "INGESTION_TASK_CREATE",
                 AuditStage.SUCCESS,
-                job.jobName(),
-                Map.of("summary", "创建入湖任务", "name", request.name(), "operator", operator)
+                jobName,
+                Map.of(
+                    "summary",
+                    "创建入湖任务",
+                    "name",
+                    request.name(),
+                    "taskId",
+                    createdTask.getId(),
+                    "operator",
+                    operator
+                )
             );
             return ApiResponses.ok(result);
         } catch (RuntimeException ex) {
@@ -205,6 +254,48 @@ public class IngestionTaskResource {
             auditService.auditAction("INGESTION_TASK_CREATE", AuditStage.FAIL, taskName, meta);
             throw ex;
         }
+    }
+
+    /**
+     * 从 Admin 集成配置（addax 服务设置）中构建默认 Writer 配置。
+     * 配置项在 Admin 模块的 "系统管理 -> 集成配置 -> addax" 中维护。
+     *
+     * 支持的配置键：
+     * - defaultWriterType: writer 插件类型，如 postgresqlwriter, mysqlwriter
+     * - defaultWriterJdbcUrl: JDBC 连接 URL
+     * - defaultWriterUsername: 数据库用户名
+     * - defaultWriterPassword: 数据库密码
+     * - defaultWriterSchema: 目标 schema
+     * - defaultWriterConfig: 额外的 writer 参数（Map 类型）
+     */
+    private Map<String, Object> buildDefaultWriterConfig(IngestionSettingsService.SettingsSnapshot settings) {
+        Map<String, Object> config = new LinkedHashMap<>();
+
+        String jdbcUrl = settings.getString("defaultWriterJdbcUrl", null);
+        String username = settings.getString("defaultWriterUsername", null);
+        String password = settings.getString("defaultWriterPassword", null);
+        String schema = settings.getString("defaultWriterSchema", null);
+
+        if (StringUtils.hasText(jdbcUrl)) {
+            config.put("jdbcUrl", jdbcUrl);
+        }
+        if (StringUtils.hasText(username)) {
+            config.put("username", username);
+        }
+        if (StringUtils.hasText(password)) {
+            config.put("password", password);
+        }
+        if (StringUtils.hasText(schema)) {
+            config.put("schema", schema);
+        }
+
+        // 从设置中获取额外的 writer 配置（如果有）
+        Map<String, Object> extraConfig = settings.getMap("defaultWriterConfig");
+        if (!extraConfig.isEmpty()) {
+            config.putAll(extraConfig);
+        }
+
+        return config;
     }
 
     private String resolvePlugin(String direct, Map<String, Object> config, List<String> keys) {
@@ -260,6 +351,37 @@ public class IngestionTaskResource {
         return value == null ? Map.of() : new LinkedHashMap<>(value);
     }
 
+    private com.fasterxml.jackson.databind.JsonNode toJsonNode(Object value) {
+        if (value == null) {
+            return null;
+        }
+        return objectMapper.valueToTree(value);
+    }
+
+    private String resolveSyncMode(SyncSpec sync) {
+        String mode = sync == null ? null : normalize(sync.mode());
+        return StringUtils.hasText(mode) ? mode : "full_refresh";
+    }
+
+    private String resolveSyncSchedule(SyncSpec sync) {
+        if (sync == null || sync.schedule() == null) {
+            return null;
+        }
+        String type = normalize(sync.schedule().type());
+        String cron = normalize(sync.schedule().cron());
+        Integer interval = sync.schedule().intervalMinutes();
+        if (!StringUtils.hasText(type)) {
+            return cron;
+        }
+        if ("cron".equalsIgnoreCase(type) && StringUtils.hasText(cron)) {
+            return "cron:" + cron;
+        }
+        if ("interval".equalsIgnoreCase(type) && interval != null) {
+            return "interval:" + interval;
+        }
+        return type;
+    }
+
     private String trimMessage(String message) {
         if (!StringUtils.hasText(message)) {
             return null;
@@ -270,12 +392,10 @@ public class IngestionTaskResource {
 
     // ==================== 新增CRUD端点 ====================
 
-    private final com.yuzhi.dts.ingestion.service.IngestionTaskService ingestionTaskService;
-
     /**
      * GET /api/ingestion/tasks : 获取任务列表
      */
-    @GetMapping("/tasks/list")
+    @org.springframework.web.bind.annotation.GetMapping("/tasks/list")
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public org.springframework.http.ResponseEntity<org.springframework.data.domain.Page<com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO>> getTasks(
         @org.springframework.web.bind.annotation.RequestParam(required = false) String status,
@@ -311,8 +431,33 @@ public class IngestionTaskResource {
         if (!id.equals(taskDTO.getId())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "ID不匹配");
         }
-        com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO updated = ingestionTaskService.update(id, taskDTO);
-        return org.springframework.http.ResponseEntity.ok(updated);
+        String operator = SecurityUtils.getCurrentUserLogin().orElse("system");
+        try {
+            com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO updated = ingestionTaskService.update(id, taskDTO);
+            auditService.auditAction(
+                "INGESTION_TASK_UPDATE",
+                AuditStage.SUCCESS,
+                updated.getName(),
+                Map.of("summary", "更新入湖任务", "taskId", id, "operator", operator)
+            );
+            return org.springframework.http.ResponseEntity.ok(updated);
+        } catch (IllegalArgumentException ex) {
+            Map<String, Object> meta = new LinkedHashMap<>();
+            meta.put("summary", "更新入湖任务失败");
+            meta.put("taskId", id);
+            meta.put("operator", operator);
+            String error = trimMessage(ex.getMessage());
+            if (StringUtils.hasText(error)) {
+                meta.put("error", error);
+            }
+            auditService.auditAction(
+                "INGESTION_TASK_UPDATE",
+                AuditStage.FAIL,
+                taskDTO.getName(),
+                meta
+            );
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "任务不存在");
+        }
     }
 
     /**
@@ -323,7 +468,26 @@ public class IngestionTaskResource {
     public org.springframework.http.ResponseEntity<Void> deleteTask(
         @org.springframework.web.bind.annotation.PathVariable Long id
     ) {
+        String operator = SecurityUtils.getCurrentUserLogin().orElse("system");
+        java.util.Optional<com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO> taskOpt = ingestionTaskService.findOne(id);
+        if (taskOpt.isEmpty()) {
+            auditService.auditAction(
+                "INGESTION_TASK_DELETE",
+                AuditStage.FAIL,
+                String.valueOf(id),
+                Map.of("summary", "删除入湖任务失败", "taskId", id, "operator", operator)
+            );
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "任务不存在");
+        }
+
+        com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO task = taskOpt.get();
         ingestionTaskService.delete(id);
+        auditService.auditAction(
+            "INGESTION_TASK_DELETE",
+            AuditStage.SUCCESS,
+            task.getName(),
+            Map.of("summary", "删除入湖任务", "taskId", id, "operator", operator)
+        );
         return org.springframework.http.ResponseEntity.noContent().build();
     }
 

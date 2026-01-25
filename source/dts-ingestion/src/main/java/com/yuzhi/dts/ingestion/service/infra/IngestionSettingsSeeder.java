@@ -58,6 +58,11 @@ public class IngestionSettingsSeeder implements ApplicationRunner {
         putIfText(settings, "jobDir", addaxProperties.getJobDir());
         putIfText(settings, "image", addaxProperties.getImage());
         putIfText(settings, "dagId", addaxProperties.getDagId());
+        putIfText(settings, "defaultWriterType", addaxProperties.getDefaultWriterType());
+        putIfText(settings, "defaultWriterJdbcUrl", addaxProperties.getDefaultWriterJdbcUrl());
+        putIfText(settings, "defaultWriterUsername", addaxProperties.getDefaultWriterUsername());
+        putIfText(settings, "defaultWriterPassword", addaxProperties.getDefaultWriterPassword());
+        putIfText(settings, "defaultWriterSchema", addaxProperties.getDefaultWriterSchema());
         return settings;
     }
 
@@ -69,6 +74,7 @@ public class IngestionSettingsSeeder implements ApplicationRunner {
         putIfText(settings, "username", airflowProperties.getUsername());
         putIfText(settings, "password", airflowProperties.getPassword());
         putIfText(settings, "dagId", airflowProperties.getDagId());
+        putIfText(settings, "dagsDir", airflowProperties.getDagsDir());
         return settings;
     }
 

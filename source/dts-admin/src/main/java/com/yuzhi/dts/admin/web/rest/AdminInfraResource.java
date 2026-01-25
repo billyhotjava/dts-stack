@@ -95,7 +95,7 @@ public class AdminInfraResource {
             null,
             dataSourceId != null ? dataSourceId.toString() : null,
             null,
-            result != null && result.isSuccess() ? AuditResultStatus.SUCCESS : AuditResultStatus.FAIL,
+            result != null && result.isSuccess() ? AuditResultStatus.SUCCESS : AuditResultStatus.FAILED,
             httpRequest
         );
         return ResponseEntity.ok(ApiResponse.ok(result));
@@ -135,7 +135,7 @@ public class AdminInfraResource {
                 null,
                 null,
                 request.getName(),
-                AuditResultStatus.FAIL,
+                AuditResultStatus.FAILED,
                 httpRequest
             );
             throw ex;
@@ -227,7 +227,7 @@ public class AdminInfraResource {
                 service,
                 before,
                 null,
-                AuditResultStatus.FAIL,
+                AuditResultStatus.FAILED,
                 httpRequest
             );
             throw ex;
@@ -242,7 +242,7 @@ public class AdminInfraResource {
         HttpServletRequest httpRequest
     ) {
         Map<String, Object> result = infraAdminService.testIntegrationSettings(service, payload == null ? Map.of() : payload);
-        AuditResultStatus status = Boolean.TRUE.equals(result.get("success")) ? AuditResultStatus.SUCCESS : AuditResultStatus.FAIL;
+        AuditResultStatus status = Boolean.TRUE.equals(result.get("success")) ? AuditResultStatus.SUCCESS : AuditResultStatus.FAILED;
         recordSettingsAudit(
             ButtonCodes.INTEGRATION_SETTINGS_TEST,
             "测试集成配置",
@@ -313,7 +313,7 @@ public class AdminInfraResource {
                 null,
                 payload.getName(),
                 payload.getName(),
-                AuditResultStatus.FAIL,
+                AuditResultStatus.FAILED,
                 httpRequest
             );
             throw ex;
@@ -361,7 +361,7 @@ public class AdminInfraResource {
                 null,
                 id.toString(),
                 payload.getName(),
-                AuditResultStatus.FAIL,
+                AuditResultStatus.FAILED,
                 httpRequest
             );
             throw ex;
@@ -438,7 +438,7 @@ public class AdminInfraResource {
                     null,
                     id.toString(),
                     id.toString(),
-                    result != null && result.isSuccess() ? AuditResultStatus.SUCCESS : AuditResultStatus.FAIL,
+                    result != null && result.isSuccess() ? AuditResultStatus.SUCCESS : AuditResultStatus.FAILED,
                     httpRequest
                 );
                 return ResponseEntity.ok(ApiResponse.ok(result));

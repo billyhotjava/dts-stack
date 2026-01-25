@@ -1,4 +1,4 @@
-import { axiosInstance } from './base';
+import api from './apiClient';
 
 export interface IngestionTaskDTO {
   id?: number;
@@ -55,8 +55,7 @@ class IngestionTaskAPI {
    * 创建入湖任务
    */
   async createTask(data: IngestionTaskDTO): Promise<IngestionTaskDTO> {
-    const response = await axiosInstance.post('/api/ingestion/tasks', data);
-    return response.data;
+    return api.post({ url: '/ingestion/tasks', data });
   }
 
   /**
@@ -68,39 +67,35 @@ class IngestionTaskAPI {
     size?: number;
     sort?: string;
   }): Promise<PageResult<IngestionTaskDTO>> {
-    const response = await axiosInstance.get('/api/ingestion/tasks', { params });
-    return response.data;
+    return api.get({ url: '/ingestion/tasks/list', params });
   }
 
   /**
    * 获取任务详情
    */
   async getTask(id: number): Promise<IngestionTaskDTO> {
-    const response = await axiosInstance.get(`/api/ingestion/tasks/${id}`);
-    return response.data;
+    return api.get({ url: `/ingestion/tasks/${id}` });
   }
 
   /**
    * 更新任务
    */
   async updateTask(id: number, data: IngestionTaskDTO): Promise<IngestionTaskDTO> {
-    const response = await axiosInstance.put(`/api/ingestion/tasks/${id}`, data);
-    return response.data;
+    return api.put({ url: `/ingestion/tasks/${id}`, data });
   }
 
   /**
    * 删除任务（软删除）
    */
   async deleteTask(id: number): Promise<void> {
-    await axiosInstance.delete(`/api/ingestion/tasks/${id}`);
+    return api.delete({ url: `/ingestion/tasks/${id}` });
   }
 
   /**
    * 执行任务
    */
   async executeTask(id: number): Promise<IngestionExecutionDTO> {
-    const response = await axiosInstance.post(`/api/ingestion/tasks/${id}/execute`);
-    return response.data;
+    return api.post({ url: `/ingestion/tasks/${id}/execute` });
   }
 
   /**
@@ -114,8 +109,7 @@ class IngestionTaskAPI {
       sort?: string;
     }
   ): Promise<PageResult<IngestionExecutionDTO>> {
-    const response = await axiosInstance.get(`/api/ingestion/tasks/${taskId}/executions`, { params });
-    return response.data;
+    return api.get({ url: `/ingestion/tasks/${taskId}/executions`, params });
   }
 
   /**
@@ -123,8 +117,7 @@ class IngestionTaskAPI {
    */
   async getLatestExecution(taskId: number): Promise<IngestionExecutionDTO | null> {
     try {
-      const response = await axiosInstance.get(`/api/ingestion/tasks/${taskId}/executions/latest`);
-      return response.data;
+      return await api.get({ url: `/ingestion/tasks/${taskId}/executions/latest` });
     } catch (error: any) {
       if (error.response?.status === 404) {
         return null;
@@ -135,3 +128,4 @@ class IngestionTaskAPI {
 }
 
 export const ingestionTaskAPI = new IngestionTaskAPI();
+

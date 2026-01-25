@@ -23,6 +23,8 @@ public class InfraDataSourceDto {
 
     private Map<String, Object> props = new HashMap<>();
 
+    private Map<String, Object> destinationConfig;
+
     private Instant createdAt;
 
     private Instant lastUpdatedAt;
@@ -103,6 +105,18 @@ public class InfraDataSourceDto {
 
     public void setProps(Map<String, Object> props) {
         this.props = props != null ? new HashMap<>(props) : new HashMap<>();
+    }
+
+    public Map<String, Object> getDestinationConfig() {
+        return destinationConfig;
+    }
+
+    public void setDestinationConfig(Map<String, Object> destinationConfig) {
+        if (destinationConfig == null || destinationConfig.isEmpty()) {
+            this.destinationConfig = null;
+            return;
+        }
+        this.destinationConfig = new HashMap<>(destinationConfig);
     }
 
     public Instant getCreatedAt() {
@@ -218,6 +232,7 @@ public class InfraDataSourceDto {
         dto.setUsername(username);
         dto.setDescription(description);
         dto.setProps(props);
+        dto.setDestinationConfig(destinationConfig);
         dto.setCreatedAt(createdAt);
         dto.setLastUpdatedAt(lastUpdatedAt);
         dto.setLastVerifiedAt(lastVerifiedAt);

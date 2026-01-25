@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams } from "@/routes/hooks";
 import { Button, Card, Table, Tag, message, Spin } from "antd";
 import { ArrowLeftOutlined, ReloadOutlined } from "@ant-design/icons";
 import { PageHeader } from "@/components/page-header";

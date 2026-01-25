@@ -170,7 +170,7 @@ public class IngestionTaskDTO {
         return airflowDagId;
     }
 
-    public void setAirflowDagId(String airflowD agId) {
+    public void setAirflowDagId(String airflowDagId) {
         this.airflowDagId = airflowDagId;
     }
 

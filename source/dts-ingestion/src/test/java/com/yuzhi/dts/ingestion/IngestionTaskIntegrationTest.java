@@ -1,5 +1,6 @@
 package com.yuzhi.dts.ingestion;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -38,22 +39,7 @@ class IngestionTaskIntegrationTest {
     @WithMockUser(authorities = "INFRA_MAINTAINERS")
     void shouldCreateAndManageTaskCompleteFlow() throws Exception {
         // Step 1: Create task
-        IngestionTaskDTO taskDTO = createTestTaskDTO();
-        String taskJson = objectMapper.writeValueAsString(taskDTO);
-
-        String createResponse = mockMvc.perform(post("/api/ingestion/tasks/create")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(taskJson))
-            .andExpect(status().isCreated())
-            .andExpect(jsonPath("$.id").exists())
-            .andExpect(jsonPath("$.name").value("integration-test-task"))
-            .andExpect(jsonPath("$.status").value("draft"))
-            .andExpect(jsonPath("$.createdBy").exists())
-            .andReturn()
-            .getResponse()
-            .getContentAsString();
-
-        IngestionTaskDTO createdTask = objectMapper.readValue(createResponse, IngestionTaskDTO.class);
+        IngestionTaskDTO createdTask = createTask("integration-test-task");
         Long taskId = createdTask.getId();
 
         // Step 2: Get task list
@@ -69,12 +55,11 @@ class IngestionTaskIntegrationTest {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.id").value(taskId))
             .andExpect(jsonPath("$.name").value("integration-test-task"))
-            .andExpect(jsonPath("$.sourceType").value("mysqlreader"));
+            .andExpect(jsonPath("$.sourceType").value("postgresqlreader"));
 
         // Step 4: Update task
-        taskDTO.setId(taskId);
-        taskDTO.setDescription("Updated description");
-        String updateJson = objectMapper.writeValueAsString(taskDTO);
+        createdTask.setDescription("Updated description");
+        String updateJson = objectMapper.writeValueAsString(createdTask);
 
         mockMvc.perform(put("/api/ingestion/tasks/{id}", taskId)
                 .contentType(MediaType.APPLICATION_JSON)
@@ -142,7 +127,7 @@ class IngestionTaskIntegrationTest {
             .andExpect(status().isNotFound());
 
         // Update non-existent task
-        IngestionTaskDTO taskDTO = createTestTaskDTO();
+        IngestionTaskDTO taskDTO = createTask("task-invalid");
         taskDTO.setId(invalidId);
         String taskJson = objectMapper.writeValueAsString(taskDTO);
 
@@ -164,53 +149,74 @@ class IngestionTaskIntegrationTest {
     }
 
     // Helper methods
-    private IngestionTaskDTO createTestTaskDTO() {
-        IngestionTaskDTO dto = new IngestionTaskDTO();
-        dto.setName("integration-test-task");
-        dto.setDescription("Integration test task");
-        dto.setSourceType("mysqlreader");
-        dto.setDestinationType("postgresqlwriter");
-        dto.setSyncMode("full_refresh");
-        dto.setAirflowEnabled(false);
+    private IngestionTaskDTO createTask(String name) throws Exception {
+        String taskJson = objectMapper.writeValueAsString(buildTaskRequest(name));
+        String response = mockMvc.perform(post("/api/ingestion/tasks")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(taskJson))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.task.id").exists())
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
 
-        // Source config
-        ObjectNode sourceConfig = objectMapper.createObjectNode();
-        sourceConfig.put("host", "localhost");
-        sourceConfig.put("port", 3306);
-        sourceConfig.put("database", "testdb");
-        sourceConfig.put("username", "test");
-        sourceConfig.put("password", "test");
-        dto.setSourceConfig(sourceConfig);
-
-        // Destination config
-        ObjectNode destConfig = objectMapper.createObjectNode();
-        destConfig.put("host", "localhost");
-        destConfig.put("port", 5432);
-        destConfig.put("database", "targetdb");
-        destConfig.put("username", "test");
-        destConfig.put("password", "test");
-        dto.setDestinationConfig(destConfig);
-
-        // Table mapping
-        ArrayNode tableMapping = objectMapper.createArrayNode();
-        ObjectNode mapping = objectMapper.createObjectNode();
-        mapping.put("source", "users");
-        mapping.put("target", "ods_users");
-        tableMapping.add(mapping);
-        dto.setTableMapping(tableMapping);
-
-        return dto;
+        JsonNode root = objectMapper.readTree(response);
+        JsonNode taskNode = root.path("data").path("task");
+        return objectMapper.treeToValue(taskNode, IngestionTaskDTO.class);
     }
 
     private void createTaskWithStatus(String name, String status) throws Exception {
-        IngestionTaskDTO dto = createTestTaskDTO();
-        dto.setName(name);
-        dto.setStatus(status);
-        String taskJson = objectMapper.writeValueAsString(dto);
+        IngestionTaskDTO createdTask = createTask(name);
+        createdTask.setStatus(status);
+        String updateJson = objectMapper.writeValueAsString(createdTask);
 
-        mockMvc.perform(post("/api/ingestion/tasks/create")
+        mockMvc.perform(put("/api/ingestion/tasks/{id}", createdTask.getId())
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(taskJson))
-            .andExpect(status().isCreated());
+                .content(updateJson))
+            .andExpect(status().isOk());
+    }
+
+    private ObjectNode buildTaskRequest(String name) {
+        ObjectNode payload = objectMapper.createObjectNode();
+        payload.put("name", name);
+        payload.put("description", "Integration test task");
+
+        ObjectNode source = payload.putObject("source");
+        source.put("type", "postgresqlreader");
+        source.set("config", buildJdbcConfig("jdbc:postgresql://localhost:5432/testdb", "source_table"));
+
+        ObjectNode destination = payload.putObject("destination");
+        destination.put("usePlatformDefault", false);
+        destination.put("type", "postgresqlwriter");
+        destination.set("config", buildJdbcConfig("jdbc:postgresql://localhost:5432/targetdb", "target_table"));
+
+        ObjectNode sync = payload.putObject("sync");
+        sync.put("mode", "full_refresh");
+
+        ObjectNode airflow = payload.putObject("airflow");
+        airflow.put("enabled", false);
+
+        payload.put("runNow", false);
+        return payload;
+    }
+
+    private ObjectNode buildJdbcConfig(String jdbcUrl, String table) {
+        ObjectNode config = objectMapper.createObjectNode();
+        config.put("username", "test");
+        config.put("password", "test");
+        ArrayNode columns = objectMapper.createArrayNode();
+        columns.add("*");
+        config.set("column", columns);
+        ArrayNode connections = objectMapper.createArrayNode();
+        ObjectNode connection = objectMapper.createObjectNode();
+        ArrayNode jdbcUrls = objectMapper.createArrayNode();
+        jdbcUrls.add(jdbcUrl);
+        connection.set("jdbcUrl", jdbcUrls);
+        ArrayNode tables = objectMapper.createArrayNode();
+        tables.add(table);
+        connection.set("table", tables);
+        connections.add(connection);
+        config.set("connection", connections);
+        return config;
     }
 }

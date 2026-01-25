@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams } from "@/routes/hooks";
 import { Button, Card, Descriptions, Space, Tag, message, Spin } from "antd";
 import { ArrowLeftOutlined, PlayCircleOutlined, EditOutlined, HistoryOutlined } from "@ant-design/icons";
 import { PageHeader } from "@/components/page-header";
@@ -120,7 +120,7 @@ export default function TransformDetailPage() {
             <Card title="Airflow集成">
                 <Descriptions column={2} bordered>
                     <Descriptions.Item label="启用状态">{task.airflowEnabled ? <Tag color="success">已启用</Tag> : <Tag>未启用</Tag>}</Descriptions.Item>
-                    <Descriptions.Item label="DAG ID">{task.airflowDagId || "-"}</Descriptions.Item>
+                    <Descriptions.Item label="编排模板">{task.airflowDagId ? "系统自动生成" : "系统默认"}</Descriptions.Item>
                 </Descriptions>
             </Card>
 

@@ -849,6 +849,8 @@ public class InfraAdminService {
         dto.setUsername(entity.getUsername());
         dto.setDescription(entity.getDescription());
         dto.setProps(entity.getProps());
+        Map<String, Object> secrets = secretService.readSecrets(entity);
+        dto.setDestinationConfig(parseDestinationConfig(secrets.get("destinationConfig")));
         dto.setStatus(entity.getStatus());
         dto.setHasSecrets(entity.isHasSecrets() || entity.getSecureProps() != null);
         dto.setDefaulted(entity.isDefaulted());

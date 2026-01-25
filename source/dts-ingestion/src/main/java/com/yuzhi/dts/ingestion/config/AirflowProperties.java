@@ -11,6 +11,7 @@ public class AirflowProperties {
     private String username;
     private String password;
     private String dagId;
+    private String dagsDir;
 
     public boolean isEnabled() {
         return enabled;
@@ -58,5 +59,13 @@ public class AirflowProperties {
 
     public void setDagId(String dagId) {
         this.dagId = dagId;
+    }
+
+    public String getDagsDir() {
+        return dagsDir;
+    }
+
+    public void setDagsDir(String dagsDir) {
+        this.dagsDir = dagsDir;
     }
 }

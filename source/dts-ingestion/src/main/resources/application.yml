@@ -48,6 +48,7 @@ dts:
     username: ${DTS_AIRFLOW_USERNAME:}
     password: ${DTS_AIRFLOW_PASSWORD:}
     dag-id: ${DTS_AIRFLOW_DAG_ID:dbt_load}
+    dags-dir: ${DTS_AIRFLOW_DAGS_DIR:}
   openmetadata:
     enabled: ${DTS_OPENMETADATA_ENABLED:${DTS_PLATFORM_OPENMETADATA_ENABLED:true}}
     base-url: ${DTS_OPENMETADATA_BASE_URL:${DTS_PLATFORM_OPENMETADATA_BASE_URL:http://dts-openmetadata:8585}}

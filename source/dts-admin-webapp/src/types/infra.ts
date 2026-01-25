@@ -157,6 +157,7 @@ export interface InfraDataSource {
 	username?: string;
 	description?: string;
 	props?: Record<string, any>;
+	destinationConfig?: Record<string, any>;
 	status?: string;
 	hasSecrets?: boolean;
 	defaulted?: boolean;

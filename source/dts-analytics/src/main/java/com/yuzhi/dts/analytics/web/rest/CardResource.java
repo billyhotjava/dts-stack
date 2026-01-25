@@ -15,10 +15,12 @@ import com.yuzhi.dts.analytics.service.EntityIdGenerator;
 import com.yuzhi.dts.analytics.service.MbqlToSqlService;
 import com.yuzhi.dts.analytics.service.NativeQueryTemplateService;
 import com.yuzhi.dts.analytics.service.PublicLinkService;
+import com.yuzhi.dts.analytics.service.QueryExportService;
 import com.yuzhi.dts.analytics.service.RevisionService;
 import com.yuzhi.dts.analytics.web.support.MetabaseAuth;
 import com.yuzhi.dts.analytics.web.support.PlatformContext;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import java.sql.SQLException;
 import java.time.OffsetDateTime;
 import java.util.HashSet;
@@ -55,6 +57,7 @@ public class CardResource {
     private final EntityIdGenerator entityIdGenerator;
     private final PublicLinkService publicLinkService;
     private final RevisionService revisionService;
+    private final QueryExportService queryExportService;
     private final ObjectMapper objectMapper;
 
     public CardResource(
@@ -69,6 +72,7 @@ public class CardResource {
             EntityIdGenerator entityIdGenerator,
             PublicLinkService publicLinkService,
             RevisionService revisionService,
+            QueryExportService queryExportService,
             ObjectMapper objectMapper) {
         this.sessionService = sessionService;
         this.cardRepository = cardRepository;
@@ -81,6 +85,7 @@ public class CardResource {
         this.entityIdGenerator = entityIdGenerator;
         this.publicLinkService = publicLinkService;
         this.revisionService = revisionService;
+        this.queryExportService = queryExportService;
         this.objectMapper = objectMapper;
     }
 
@@ -324,6 +329,145 @@ public class CardResource {
     @PostMapping(path = "/pivot/{cardId}/query", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> pivotQuery(@PathVariable("cardId") long cardId, @RequestBody(required = false) JsonNode body, HttpServletRequest request) {
         return query(cardId, body, request);
+    }
+
+    /**
+     * Export card query results to CSV format.
+     */
+    @PostMapping(path = "/{cardId}/query/csv")
+    public void exportCsv(
+            @PathVariable("cardId") long cardId,
+            @RequestBody(required = false) JsonNode body,
+            HttpServletRequest request,
+            HttpServletResponse response) throws Exception {
+        exportCard(cardId, body, request, response, QueryExportService.ExportFormat.CSV);
+    }
+
+    /**
+     * Export card query results to Excel format.
+     */
+    @PostMapping(path = "/{cardId}/query/xlsx")
+    public void exportExcel(
+            @PathVariable("cardId") long cardId,
+            @RequestBody(required = false) JsonNode body,
+            HttpServletRequest request,
+            HttpServletResponse response) throws Exception {
+        exportCard(cardId, body, request, response, QueryExportService.ExportFormat.EXCEL);
+    }
+
+    /**
+     * Export card query results to JSON format.
+     */
+    @PostMapping(path = "/{cardId}/query/json")
+    public void exportJson(
+            @PathVariable("cardId") long cardId,
+            @RequestBody(required = false) JsonNode body,
+            HttpServletRequest request,
+            HttpServletResponse response) throws Exception {
+        exportCard(cardId, body, request, response, QueryExportService.ExportFormat.JSON);
+    }
+
+    private void exportCard(
+            long cardId,
+            JsonNode body,
+            HttpServletRequest request,
+            HttpServletResponse response,
+            QueryExportService.ExportFormat format) throws Exception {
+        Optional<ResponseEntity<String>> auth = MetabaseAuth.requireUser(sessionService, request);
+        if (auth.isPresent()) {
+            response.setStatus(401);
+            response.getWriter().write("Unauthenticated");
+            return;
+        }
+
+        AnalyticsCard card = cardRepository.findById(cardId).orElse(null);
+        if (card == null) {
+            response.setStatus(404);
+            return;
+        }
+
+        JsonNode datasetQuery;
+        try {
+            datasetQuery = objectMapper.readTree(card.getDatasetQueryJson());
+        } catch (Exception e) {
+            response.setStatus(500);
+            response.getWriter().write("Invalid saved dataset_query");
+            return;
+        }
+
+        String type = datasetQuery.path("type").asText(null);
+        long databaseId = datasetQuery.path("database").asLong(0);
+        if (databaseId <= 0) {
+            response.setStatus(400);
+            response.getWriter().write("dataset_query.database is required");
+            return;
+        }
+
+        try {
+            String sql;
+            List<Object> bindings = List.of();
+
+            if ("native".equalsIgnoreCase(type)) {
+                sql = datasetQuery.path("native").path("query").asText(null);
+                if (sql == null || sql.isBlank()) {
+                    response.setStatus(400);
+                    response.getWriter().write("dataset_query.native.query is required");
+                    return;
+                }
+                JsonNode parametersNode = body == null ? null : body.get("parameters");
+                if (parametersNode != null && !parametersNode.isNull() && !parametersNode.isMissingNode() && sql.contains("{{")) {
+                    NativeQueryTemplateService.RenderedQuery rendered = nativeQueryTemplateService.render(sql, parametersNode);
+                    sql = rendered.sql();
+                    bindings = rendered.bindings();
+                }
+            } else if ("query".equalsIgnoreCase(type)) {
+                JsonNode mbql = datasetQuery.get("query");
+                // Use higher limits for exports
+                DatasetQueryService.DatasetConstraints exportConstraints =
+                        new DatasetQueryService.DatasetConstraints(100000, 300, "UTC");
+                MbqlToSqlService.TranslationResult translated = mbqlToSqlService.translateSelect(databaseId, mbql, exportConstraints);
+                sql = translated.sql();
+                bindings = translated.bindings();
+            } else {
+                response.setStatus(400);
+                response.getWriter().write("Only native and query (MBQL) queries are supported");
+                return;
+            }
+
+            // Use higher limits for exports
+            DatasetQueryService.DatasetConstraints exportConstraints =
+                    new DatasetQueryService.DatasetConstraints(100000, 300, "UTC");
+            DatasetQueryService.DatasetResult result = datasetQueryService.runNative(databaseId, sql, exportConstraints, bindings);
+
+            // Set response headers
+            String filename = sanitizeFilename(card.getName()) + queryExportService.getFileExtension(format);
+            response.setContentType(queryExportService.getContentType(format));
+            response.setHeader("Content-Disposition", "attachment; filename=\"" + filename + "\"");
+
+            // Export based on format
+            QueryExportService.ExportOptions options = switch (format) {
+                case CSV -> QueryExportService.ExportOptions.forCsv();
+                case EXCEL -> QueryExportService.ExportOptions.forExcel().withSheetName(card.getName());
+                case JSON -> QueryExportService.ExportOptions.forJson();
+            };
+
+            switch (format) {
+                case CSV -> queryExportService.exportToCsv(result, response.getOutputStream(), options);
+                case EXCEL -> queryExportService.exportToExcel(result, response.getOutputStream(), options);
+                case JSON -> queryExportService.exportToJson(result, response.getOutputStream(), options);
+            }
+        } catch (SQLException e) {
+            response.setStatus(500);
+            response.getWriter().write("Query execution failed: " + e.getMessage());
+        }
+    }
+
+    private String sanitizeFilename(String name) {
+        if (name == null || name.isBlank()) {
+            return "export";
+        }
+        // Remove or replace invalid filename characters
+        return name.replaceAll("[\\\\/:*?\"<>|]", "_").trim();
     }
 
     @PostMapping(path = "/{id}/persist", produces = MediaType.APPLICATION_JSON_VALUE)

@@ -36,23 +36,24 @@ public class AirflowClient {
         this.settingsService = settingsService;
     }
 
-    public Optional<Map<String, Object>> triggerDag(String dagId, Map<String, Object> payload) {
+    public TriggerResult triggerDag(String dagId, Map<String, Object> payload) {
         AirflowSettings settings = resolveSettings();
         if (!settings.enabled() || !StringUtils.hasText(settings.baseUrl()) || !StringUtils.hasText(dagId)) {
-            return Optional.empty();
+            return new TriggerResult(false, 0, "Airflow 未启用或缺少 DAG", null);
         }
         URI uri = buildUri(settings, "/dags/" + dagId + "/dagRuns", null);
         try {
             HttpHeaders headers = defaultHeaders(settings);
             HttpEntity<Map<String, Object>> entity = new HttpEntity<>(payload, headers);
             ResponseEntity<Map> response = restTemplate.exchange(uri, HttpMethod.POST, entity, Map.class);
-            return Optional.ofNullable(response.getBody());
+            return new TriggerResult(true, response.getStatusCode().value(), null, response.getBody());
         } catch (HttpStatusCodeException ex) {
             LOG.warn("Airflow dag trigger failed status={} body={}", ex.getStatusCode().value(), ex.getResponseBodyAsString());
+            return new TriggerResult(false, ex.getStatusCode().value(), ex.getResponseBodyAsString(), null);
         } catch (Exception ex) {
             LOG.warn("Airflow dag trigger error: {}", ex.getMessage());
+            return new TriggerResult(false, -1, ex.getMessage(), null);
         }
-        return Optional.empty();
     }
 
     public Optional<Map<String, Object>> listDags(int limit) {
@@ -106,6 +107,8 @@ public class AirflowClient {
         String password = settings.getString("password", properties.getPassword());
         return new AirflowSettings(enabled, baseUrl, apiPath, username, password);
     }
+
+    public record TriggerResult(boolean success, int statusCode, String message, Map<String, Object> payload) {}
 
     private record AirflowSettings(boolean enabled, String baseUrl, String apiPath, String username, String password) {}
 }

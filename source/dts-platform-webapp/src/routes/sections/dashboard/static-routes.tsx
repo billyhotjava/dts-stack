@@ -60,6 +60,14 @@ export const STATIC_DASHBOARD_ROUTES: RouteObject[] = [
 		),
 	},
 	{
+		path: "explore/etl/transform/:id/edit",
+		element: (
+			<Suspense fallback={<LineLoading />}>
+				<TransformCreatePage />
+			</Suspense>
+		),
+	},
+	{
 		path: "explore/etl/transform/:id/executions",
 		element: (
 			<Suspense fallback={<LineLoading />}>

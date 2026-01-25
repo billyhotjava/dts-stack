@@ -37,3 +37,12 @@ export const formatDateTime = (value: unknown): string => {
 	}
 };
 
+// Alias for backward compatibility
+export const formatTimestamp = formatDateTime;
+
+export const formatNumber = (value: unknown): string => {
+	if (value === null || value === undefined) return "";
+	const num = typeof value === "number" ? value : Number(value);
+	if (Number.isNaN(num)) return String(value);
+	return new Intl.NumberFormat("zh-CN").format(num);
+};

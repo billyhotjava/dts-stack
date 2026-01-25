@@ -5,11 +5,18 @@ import com.yuzhi.dts.platform.security.SecurityUtils;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.ingestion.IngestionServiceClient;
 import com.yuzhi.dts.platform.service.infra.DefaultDestinationSyncService;
+import java.util.LinkedHashMap;
 import java.util.Map;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -57,6 +64,62 @@ public class IngestionTaskProxyResource {
             );
         }
         return response;
+    }
+
+    @GetMapping("/tasks/list")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ResponseEntity<ApiResponse<Map<String, Object>>> listTasks(@RequestParam Map<String, String> params) {
+        Map<String, Object> query = new LinkedHashMap<>();
+        if (params != null) {
+            query.putAll(params);
+        }
+        return ResponseEntity.ok(ingestionClient.listTasks(query));
+    }
+
+    @GetMapping("/tasks/{id}")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getTask(@PathVariable("id") Long id) {
+        return ResponseEntity.ok(ingestionClient.getTask(id));
+    }
+
+    @PutMapping("/tasks/{id}")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ResponseEntity<ApiResponse<Map<String, Object>>> updateTask(
+        @PathVariable("id") Long id,
+        @RequestBody Map<String, Object> payload
+    ) {
+        return ResponseEntity.ok(ingestionClient.updateTask(id, payload));
+    }
+
+    @DeleteMapping("/tasks/{id}")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ResponseEntity<ApiResponse<Map<String, Object>>> deleteTask(@PathVariable("id") Long id) {
+        return ResponseEntity.ok(ingestionClient.deleteTask(id));
+    }
+
+    @PostMapping("/tasks/{id}/execute")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ResponseEntity<ApiResponse<Map<String, Object>>> executeTask(@PathVariable("id") Long id) {
+        return ResponseEntity.ok(ingestionClient.executeTask(id));
+    }
+
+    @GetMapping("/tasks/{id}/executions")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ResponseEntity<ApiResponse<Map<String, Object>>> listExecutions(
+        @PathVariable("id") Long id,
+        @RequestParam Map<String, String> params
+    ) {
+        Map<String, Object> query = new LinkedHashMap<>();
+        if (params != null) {
+            query.putAll(params);
+        }
+        return ResponseEntity.ok(ingestionClient.listExecutions(id, query));
+    }
+
+    @GetMapping("/tasks/{id}/executions/latest")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ResponseEntity<ApiResponse<Map<String, Object>>> latestExecution(@PathVariable("id") Long id) {
+        return ResponseEntity.ok(ingestionClient.latestExecution(id));
     }
 
     private Map<String, Object> applyDefaultDestinationPayload(

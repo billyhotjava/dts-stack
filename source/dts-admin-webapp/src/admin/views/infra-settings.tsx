@@ -17,9 +17,51 @@ interface ServicePanelProps {
 	formContent: (form: FormInstance<Record<string, any>>) => ReactNode;
 }
 
+const formatJson = (value?: Record<string, any> | null): string => {
+	if (!value || typeof value !== "object") return "";
+	if (!Object.keys(value).length) return "";
+	try {
+		return JSON.stringify(value, null, 2);
+	} catch {
+		return "";
+	}
+};
+
+const parseJsonInput = (raw?: string): Record<string, any> | undefined => {
+	if (!raw || !raw.trim()) return undefined;
+	return JSON.parse(raw);
+};
+
 const normalizeSettings = (data?: InfraServiceSettingsPayload | null) => {
 	const settings = data?.settings || {};
-	return { enabled: true, ...settings };
+	const normalized: Record<string, any> = { enabled: true, ...settings };
+	if (settings.defaultWriterConfig && typeof settings.defaultWriterConfig === "object") {
+		normalized.defaultWriterConfigRaw = formatJson(settings.defaultWriterConfig);
+	}
+	return normalized;
+};
+
+const buildSettingsPayload = (
+	service: ServiceKey,
+	values: Record<string, any>,
+	form: FormInstance<Record<string, any>>,
+) => {
+	const payload = { ...values };
+	if (service === "addax") {
+		const raw = values.defaultWriterConfigRaw as string | undefined;
+		if (raw && raw.trim()) {
+			try {
+				payload.defaultWriterConfig = parseJsonInput(raw);
+			} catch {
+				form.setFields([{ name: "defaultWriterConfigRaw", errors: ["写入器扩展配置 JSON 格式错误"] }]);
+				throw new Error("写入器扩展配置 JSON 格式错误");
+			}
+		} else {
+			delete payload.defaultWriterConfig;
+		}
+		delete payload.defaultWriterConfigRaw;
+	}
+	return payload;
 };
 
 function ServicePanel({ service, title, description, formContent }: ServicePanelProps) {
@@ -38,7 +80,8 @@ function ServicePanel({ service, title, description, formContent }: ServicePanel
 	const handleSave = async () => {
 		try {
 			const values = await form.validateFields();
-			await adminApi.updateIntegrationSettings(service, values);
+			const payload = buildSettingsPayload(service, values, form);
+			await adminApi.updateIntegrationSettings(service, payload);
 			toast.success("配置已保存");
 			queryClient.invalidateQueries({ queryKey: ["admin", "infra-settings", service] });
 		} catch (error: any) {
@@ -50,7 +93,8 @@ function ServicePanel({ service, title, description, formContent }: ServicePanel
 	const handleTest = async () => {
 		try {
 			const values = await form.validateFields();
-			const result = await adminApi.testIntegrationSettings(service, values);
+			const payload = buildSettingsPayload(service, values, form);
+			const result = await adminApi.testIntegrationSettings(service, payload);
 			if (result?.success) {
 				toast.success(result?.message || "连接成功");
 			} else {
@@ -69,7 +113,7 @@ function ServicePanel({ service, title, description, formContent }: ServicePanel
 				{description ? <Text variant="body3" className="text-muted-foreground">{description}</Text> : null}
 			</CardHeader>
 			<CardContent>
-				<Form form={form} layout="vertical" disabled={isFetching} className="max-w-3xl">
+				<Form form={form} layout="vertical" requiredMark disabled={isFetching} className="max-w-3xl">
 					{formContent(form)}
 					<Space wrap>
 						<AntButton type="primary" onClick={handleSave}>
@@ -93,7 +137,7 @@ export default function InfraSettingsView() {
 					service="addax"
 					title="Addax 作业"
 					description="用于生成 Addax 作业文件并配合 Airflow 执行。"
-					formContent={() => (
+					formContent={(form) => (
 						<>
 							<Form.Item label="启用" name="enabled" valuePropName="checked">
 								<Switch />
@@ -115,6 +159,63 @@ export default function InfraSettingsView() {
 							<Form.Item label="默认 DAG ID" name="dagId">
 								<Input placeholder="addax_job" />
 							</Form.Item>
+							<Divider orientation="left">默认写入器</Divider>
+							<Form.Item
+								label="写入器类型"
+								name="defaultWriterType"
+								rules={[{ required: true, message: "请输入写入器类型" }]}
+							>
+								<Input placeholder="postgresqlwriter" />
+							</Form.Item>
+							<Form.Item
+								label="JDBC URL"
+								name="defaultWriterJdbcUrl"
+								rules={[{ required: true, message: "请输入 JDBC URL" }]}
+							>
+								<Input placeholder="jdbc:postgresql://host:5432/db" />
+							</Form.Item>
+							<Form.Item
+								label="用户名"
+								name="defaultWriterUsername"
+								rules={[{ required: true, message: "请输入用户名" }]}
+							>
+								<Input placeholder="db_user" />
+							</Form.Item>
+							<Form.Item
+								label="密码"
+								name="defaultWriterPassword"
+								rules={[{ required: true, message: "请输入密码" }]}
+							>
+								<Input.Password placeholder="******" />
+							</Form.Item>
+							<Form.Item label="Schema" name="defaultWriterSchema">
+								<Input placeholder="public" />
+							</Form.Item>
+							<Form.Item
+								label="写入器扩展配置 JSON"
+								name="defaultWriterConfigRaw"
+								rules={[
+									{
+										validator: async (_: unknown, value: string | undefined) => {
+											if (!value || !value.trim()) return Promise.resolve();
+											try {
+												parseJsonInput(value);
+												return Promise.resolve();
+											} catch {
+												return Promise.reject(new Error("JSON 格式错误"));
+											}
+										},
+									},
+								]}
+							>
+								<Input.TextArea
+									rows={6}
+									placeholder='可选扩展参数 JSON，例如：{"writeMode":"insert","column":["*"]}'
+								/>
+							</Form.Item>
+							<Text variant="body3" className="text-muted-foreground">
+								扩展配置用于补充 writer 参数，敏感字段建议放在上方密码项。
+							</Text>
 						</>
 					)}
 				/>
@@ -199,28 +300,60 @@ export default function InfraSettingsView() {
 								<Input placeholder="columns,owner,tags,domain" />
 							</Form.Item>
 							<Divider orientation="left">服务标识</Divider>
-							<Form.Item label="源服务名称" name="sourceServiceName">
+							<Form.Item
+								label="源服务名称"
+								name="sourceServiceName"
+								rules={[{ required: true, message: "请输入源服务名称" }]}
+							>
 								<Input placeholder="source_service" />
 							</Form.Item>
-							<Form.Item label="源服务类型" name="sourceServiceType">
+							<Form.Item
+								label="源服务类型"
+								name="sourceServiceType"
+								rules={[{ required: true, message: "请输入源服务类型" }]}
+							>
 								<Input placeholder="Postgres" />
 							</Form.Item>
-							<Form.Item label="目标服务名称" name="destinationServiceName">
+							<Form.Item
+								label="目标服务名称"
+								name="destinationServiceName"
+								rules={[{ required: true, message: "请输入目标服务名称" }]}
+							>
 								<Input placeholder="destination_service" />
 							</Form.Item>
-							<Form.Item label="目标服务类型" name="destinationServiceType">
+							<Form.Item
+								label="目标服务类型"
+								name="destinationServiceType"
+								rules={[{ required: true, message: "请输入目标服务类型" }]}
+							>
 								<Input placeholder="Postgres" />
 							</Form.Item>
-							<Form.Item label="源数据库" name="sourceDatabase">
+							<Form.Item
+								label="源数据库"
+								name="sourceDatabase"
+								rules={[{ required: true, message: "请输入源数据库" }]}
+							>
 								<Input placeholder="source_db" />
 							</Form.Item>
-							<Form.Item label="源 Schema" name="sourceSchema">
+							<Form.Item
+								label="源 Schema"
+								name="sourceSchema"
+								rules={[{ required: true, message: "请输入源 Schema" }]}
+							>
 								<Input placeholder="public" />
 							</Form.Item>
-							<Form.Item label="目标数据库" name="destinationDatabase">
+							<Form.Item
+								label="目标数据库"
+								name="destinationDatabase"
+								rules={[{ required: true, message: "请输入目标数据库" }]}
+							>
 								<Input placeholder="ods" />
 							</Form.Item>
-							<Form.Item label="目标 Schema" name="destinationSchema">
+							<Form.Item
+								label="目标 Schema"
+								name="destinationSchema"
+								rules={[{ required: true, message: "请输入目标 Schema" }]}
+							>
 								<Input placeholder="public" />
 							</Form.Item>
 							<Divider orientation="left">采集设置</Divider>

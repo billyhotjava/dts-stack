@@ -34,5 +34,9 @@ public final class MetabaseAuth {
     public static Optional<AnalyticsUser> currentUser(AnalyticsSessionService sessionService, HttpServletRequest request) {
         return sessionService.resolveUser(request);
     }
+
+    public static Optional<Long> getUserId(AnalyticsSessionService sessionService, HttpServletRequest request) {
+        return sessionService.resolveUser(request).map(AnalyticsUser::getId);
+    }
 }
 

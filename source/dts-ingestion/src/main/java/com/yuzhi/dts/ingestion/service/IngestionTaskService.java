@@ -1,3 +1,5 @@
+package com.yuzhi.dts.ingestion.service;
+
 import com.yuzhi.dts.ingestion.domain.IngestionExecution;
 import com.yuzhi.dts.ingestion.domain.IngestionTask;
 import com.yuzhi.dts.ingestion.repository.IngestionExecutionRepository;
@@ -7,6 +9,7 @@ import com.yuzhi.dts.ingestion.service.dto.IngestionExecutionDTO;
 import com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO;
 import com.yuzhi.dts.ingestion.service.etl.AddaxJobService;
 import com.yuzhi.dts.ingestion.service.etl.AirflowAdapter;
+import com.yuzhi.dts.ingestion.service.etl.AirflowDagService;
 import com.yuzhi.dts.ingestion.service.mapper.IngestionExecutionMapper;
 import com.yuzhi.dts.ingestion.service.mapper.IngestionTaskMapper;
 import com.yuzhi.dts.common.audit.AuditStage;
@@ -16,6 +19,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.time.Instant;
 import java.util.Map;
@@ -38,6 +42,7 @@ public class IngestionTaskService {
     private final IngestionExecutionMapper executionMapper;
     private final AddaxJobService addaxJobService;
     private final AirflowAdapter airflowAdapter;
+    private final AirflowDagService airflowDagService;
     private final AuditService auditService;
 
     public IngestionTaskService(
@@ -47,6 +52,7 @@ public class IngestionTaskService {
         IngestionExecutionMapper executionMapper,
         AddaxJobService addaxJobService,
         AirflowAdapter airflowAdapter,
+        AirflowDagService airflowDagService,
         AuditService auditService
     ) {
         this.taskRepository = taskRepository;
@@ -55,6 +61,7 @@ public class IngestionTaskService {
         this.executionMapper = executionMapper;
         this.addaxJobService = addaxJobService;
         this.airflowAdapter = airflowAdapter;
+        this.airflowDagService = airflowDagService;
         this.auditService = auditService;
     }
 
@@ -82,13 +89,9 @@ public class IngestionTaskService {
             throw new RuntimeException("Failed to generate Addax job", e);
         }
 
-        // 如果启用Airflow，生成DAG ID
-        if (Boolean.TRUE.equals(dto.getAirflowEnabled()) && dto.getAirflowDagId() == null) {
-            task.setAirflowDagId("ingestion_" + task.getName().toLowerCase().replaceAll("[^a-z0-9_]", "_"));
-        }
-
         task.setStatus("draft");
         IngestionTask savedTask = taskRepository.save(task);
+        savedTask = ensureAirflowDag(savedTask);
 
         log.info("Created ingestion task with ID: {} by user: {}", savedTask.getId(), savedTask.getCreatedBy());
 
@@ -115,9 +118,9 @@ public class IngestionTaskService {
                 taskMapper.partialUpdate(existingTask, dto);
 
                 // 如果配置改变，重新生成Addax Job JSON
-                boolean configChanged = !existingTask.getSourceConfig().equals(dto.getSourceConfig())
-                    || !existingTask.getSyncMode().equals(dto.getSyncMode())
-                    || (dto.getTableMapping() != null && !existingTask.getTableMapping().equals(dto.getTableMapping()));
+                boolean configChanged = !java.util.Objects.equals(existingTask.getSourceConfig(), dto.getSourceConfig())
+                    || !java.util.Objects.equals(existingTask.getSyncMode(), dto.getSyncMode())
+                    || (dto.getTableMapping() != null && !java.util.Objects.equals(existingTask.getTableMapping(), dto.getTableMapping()));
 
                 if (configChanged) {
                     try {
@@ -130,6 +133,7 @@ public class IngestionTaskService {
                 }
 
                 IngestionTask updatedTask = taskRepository.save(existingTask);
+                updatedTask = ensureAirflowDag(updatedTask);
                 log.info("Updated ingestion task ID: {} by user: {}", id, updatedTask.getLastModifiedBy());
 
                 return taskMapper.toDto(updatedTask);
@@ -187,6 +191,7 @@ public class IngestionTaskService {
         if (!"active".equals(task.getStatus()) && !"draft".equals(task.getStatus())) {
             throw new IllegalStateException("Task is not in executable status: " + task.getStatus());
         }
+        task = ensureAirflowDag(task);
 
         // 创建执行记录
         IngestionExecution execution = new IngestionExecution();
@@ -203,7 +208,7 @@ public class IngestionTaskService {
                     "task_name", task.getName()
                 );
                 
-                airflowAdapter.triggerIfRequested(
+                Map<String, Object> airflowResult = airflowAdapter.triggerIfRequested(
                     new AirflowAdapter.AirflowRequest(
                         true, 
                         task.getAirflowDagId(), 
@@ -214,7 +219,14 @@ public class IngestionTaskService {
                     conf,
                     true // runNow
                 );
-                
+                String status = airflowResult == null ? null : String.valueOf(airflowResult.get("status"));
+                if (!"triggered".equalsIgnoreCase(status)) {
+                    String message = airflowResult == null ? null : String.valueOf(airflowResult.get("message"));
+                    throw new IllegalStateException(
+                        "Airflow 触发失败" + (message == null || "null".equals(message) ? "" : (": " + message))
+                    );
+                }
+
                 execution.setExecutionId("airflow-" + java.util.UUID.randomUUID().toString().substring(0, 8));
             } else {
                 // 如果未启用Airflow，记录为手动执行
@@ -284,5 +296,17 @@ public class IngestionTaskService {
     public Optional<IngestionExecutionDTO> getLatestExecution(Long taskId) {
         return executionRepository.findFirstByTaskIdOrderByCreatedAtDesc(taskId)
             .map(executionMapper::toDto);
+    }
+
+    private IngestionTask ensureAirflowDag(IngestionTask task) {
+        if (task == null || !Boolean.TRUE.equals(task.getAirflowEnabled())) {
+            return task;
+        }
+        String dagId = airflowDagService.ensureDagForTask(task);
+        if (StringUtils.hasText(dagId) && !dagId.equals(task.getAirflowDagId())) {
+            task.setAirflowDagId(dagId);
+            return taskRepository.save(task);
+        }
+        return task;
     }
 }

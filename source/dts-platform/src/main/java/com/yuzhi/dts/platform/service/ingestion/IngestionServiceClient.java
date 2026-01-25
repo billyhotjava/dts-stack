@@ -65,24 +65,76 @@ public class IngestionServiceClient {
         return exchangeTaskLong("/api/ingestion/tasks", HttpMethod.POST, payload);
     }
 
+    public ApiResponse<Map<String, Object>> listTasks(Map<String, ?> params) {
+        return exchangeTask("/api/ingestion/tasks/list", HttpMethod.GET, null, params);
+    }
+
+    public ApiResponse<Map<String, Object>> getTask(Long id) {
+        return exchangeTask("/api/ingestion/tasks/" + id, HttpMethod.GET, null, null);
+    }
+
+    public ApiResponse<Map<String, Object>> updateTask(Long id, Object payload) {
+        return exchangeTask("/api/ingestion/tasks/" + id, HttpMethod.PUT, payload, null);
+    }
+
+    public ApiResponse<Map<String, Object>> deleteTask(Long id) {
+        return exchangeTask("/api/ingestion/tasks/" + id, HttpMethod.DELETE, null, null);
+    }
+
+    public ApiResponse<Map<String, Object>> executeTask(Long id) {
+        return exchangeTaskLong("/api/ingestion/tasks/" + id + "/execute", HttpMethod.POST, null);
+    }
+
+    public ApiResponse<Map<String, Object>> listExecutions(Long id, Map<String, ?> params) {
+        return exchangeTask("/api/ingestion/tasks/" + id + "/executions", HttpMethod.GET, null, params);
+    }
+
+    public ApiResponse<Map<String, Object>> latestExecution(Long id) {
+        return exchangeTask("/api/ingestion/tasks/" + id + "/executions/latest", HttpMethod.GET, null, null);
+    }
+
     private ApiResponse<Map<String, Object>> exchangeTaskLong(String path, HttpMethod method, Object payload) {
+        return exchangeTask(path, method, payload, null, longRestTemplate);
+    }
+
+    private ApiResponse<Map<String, Object>> exchangeTask(
+        String path,
+        HttpMethod method,
+        Object payload,
+        Map<String, ?> params
+    ) {
+        return exchangeTask(path, method, payload, params, restTemplate);
+    }
+
+    private ApiResponse<Map<String, Object>> exchangeTask(
+        String path,
+        HttpMethod method,
+        Object payload,
+        Map<String, ?> params,
+        RestTemplate client
+    ) {
         if (!isEnabled()) {
             return new ApiResponse<>(503, "ingestion service disabled", null);
         }
-        URI uri = buildAbsoluteUri(path);
+        URI uri = buildAbsoluteUri(path, params);
         try {
             HttpEntity<?> entity = payload == null ? new HttpEntity<>(defaultHeaders()) : new HttpEntity<>(payload, defaultHeaders());
-            ResponseEntity<ApiResponse<Map<String, Object>>> response = longRestTemplate.exchange(
-                uri,
-                method,
-                entity,
-                new org.springframework.core.ParameterizedTypeReference<ApiResponse<Map<String, Object>>>() {}
-            );
-            ApiResponse<Map<String, Object>> body = response.getBody();
+            ResponseEntity<Object> response = client.exchange(uri, method, entity, Object.class);
+            Object body = response.getBody();
             if (body == null) {
                 return new ApiResponse<>(response.getStatusCode().value(), "ingestion service empty response", null);
             }
-            return body;
+            if (body instanceof ApiResponse<?> apiResponse) {
+                @SuppressWarnings("unchecked")
+                ApiResponse<Map<String, Object>> casted = (ApiResponse<Map<String, Object>>) apiResponse;
+                return casted;
+            }
+            if (body instanceof Map<?, ?> map) {
+                Map<String, Object> payloadMap = new java.util.LinkedHashMap<>();
+                map.forEach((key, value) -> payloadMap.put(String.valueOf(key), value));
+                return new ApiResponse<>(response.getStatusCode().value(), "ok", payloadMap);
+            }
+            return new ApiResponse<>(response.getStatusCode().value(), "ok", Map.of("value", body));
         } catch (HttpStatusCodeException ex) {
             LOG.warn("Ingestion API {} failed status={} body={}", path, ex.getStatusCode().value(), ex.getResponseBodyAsString());
             return new ApiResponse<>(ex.getStatusCode().value(), "ingestion service error", null);
@@ -142,5 +194,28 @@ public class IngestionServiceClient {
             tail = "/" + tail;
         }
         return UriComponentsBuilder.fromHttpUrl(normalizedBase + tail).build(true).toUri();
+    }
+
+    private URI buildAbsoluteUri(String suffix, Map<String, ?> params) {
+        UriComponentsBuilder builder = UriComponentsBuilder.fromUri(buildAbsoluteUri(suffix));
+        if (params != null && !params.isEmpty()) {
+            params.forEach(
+                (key, value) -> {
+                    if (!StringUtils.hasText(key) || value == null) {
+                        return;
+                    }
+                    if (value instanceof Iterable<?> iterable) {
+                        for (Object item : iterable) {
+                            if (item != null) {
+                                builder.queryParam(key, item);
+                            }
+                        }
+                    } else {
+                        builder.queryParam(key, value);
+                    }
+                }
+            );
+        }
+        return builder.build(true).toUri();
     }
 }

@@ -198,6 +198,41 @@ const parseJsonInput = (raw?: string): Record<string, any> | undefined => {
 	return JSON.parse(raw);
 };
 
+const buildWriterTemplate = (
+	writerType: string | undefined,
+	values: Pick<FormValues, "jdbcUrl" | "username" | "password">,
+): Record<string, any> => {
+	const jdbcUrl = values.jdbcUrl?.trim() || "jdbc:your_database_url";
+	const username = values.username?.trim() || "your_username";
+	const password = values.password || "your_password";
+	const normalizedType = String(writerType || "").toLowerCase();
+	const base = {
+		username,
+		password,
+		connection: [
+			{
+				jdbcUrl: [jdbcUrl],
+				table: ["${table}"],
+			},
+		],
+	};
+	if (normalizedType.includes("hive") || normalizedType.includes("iceberg")) {
+		return {
+			...base,
+			fileType: "text",
+			writeMode: "append",
+			fieldDelimiter: "\u0001",
+			nullFormat: "\\N",
+			column: ["*"],
+		};
+	}
+	return {
+		...base,
+		column: ["*"],
+		writeMode: "insert",
+	};
+};
+
 export default function DataLakeEditorView() {
 	const queryClient = useQueryClient();
 	const navigate = useNavigate();
@@ -246,6 +281,7 @@ export default function DataLakeEditorView() {
 	const isKerberos = authMethod !== "JDBC_PASSWORD";
 	const isKeytab = authMethod === "KEYTAB";
 	const isKerberosPassword = authMethod === "PASSWORD";
+	const writerConfigRequired = isInceptor || !isEditing || !editingLake?.hasSecrets;
 
 	const driverOptions = useMemo(
 		() => buildDriverOptions(jdbcDrivers, resolvedType),
@@ -336,7 +372,7 @@ export default function DataLakeEditorView() {
 			jdbcPropertiesRaw: buildPropertiesRaw(editingLake.props?.jdbcProperties),
 			destinationDefinitionId: editingLake.props?.destinationDefinitionId,
 			destinationName: editingLake.props?.destinationName,
-			destinationConfigRaw: "",
+			destinationConfigRaw: formatJson(editingLake.destinationConfig ?? (editingLake.props as any)?.destinationConfig),
 		});
 		setInitialized(true);
 	}, [
@@ -490,6 +526,33 @@ export default function DataLakeEditorView() {
 		return undefined;
 	};
 
+	const validateWriterConfig = async (_: unknown, value: string | undefined) => {
+		if (readOnly) return Promise.resolve();
+		const trimmed = value?.trim();
+		if (!trimmed) {
+			if (writerConfigRequired) {
+				return Promise.reject(new Error("请填写写入器配置 JSON"));
+			}
+			return Promise.resolve();
+		}
+		try {
+			JSON.parse(trimmed);
+			return Promise.resolve();
+		} catch {
+			return Promise.reject(new Error("写入器配置 JSON 格式错误"));
+		}
+	};
+
+	const handleFillWriterConfig = () => {
+		const values = form.getFieldsValue();
+		const template = buildWriterTemplate(values.destinationDefinitionId, values);
+		form.setFieldsValue({ destinationConfigRaw: formatJson(template) });
+	};
+
+	const handleClearWriterConfig = () => {
+		form.setFieldsValue({ destinationConfigRaw: "" });
+	};
+
 	const handleTest = async () => {
 		if (!isEditing && !isInceptor) {
 			toast.error("请先保存后再测试");
@@ -552,7 +615,8 @@ export default function DataLakeEditorView() {
 			setSaving(true);
 			const values = await form.validateFields();
 			const destinationConfig = resolveDestinationConfig(values);
-			if (!destinationConfig || Object.keys(destinationConfig).length === 0) {
+			if (writerConfigRequired && (!destinationConfig || Object.keys(destinationConfig).length === 0)) {
+				form.scrollToField("destinationConfigRaw");
 				toast.error("请完善写入器配置");
 				return;
 			}
@@ -651,6 +715,7 @@ export default function DataLakeEditorView() {
 					<Form<FormValues>
 						layout="vertical"
 						form={form}
+						requiredMark
 						disabled={readOnly}
 						size="small"
 						className="text-sm [&_.ant-form-item-label>label]:text-sm [&_.ant-input]:text-sm [&_.ant-input-number-input]:text-sm [&_.ant-select-selector]:text-sm [&_.ant-select-selection-item]:text-sm [&_.ant-select-selection-placeholder]:text-sm"
@@ -659,10 +724,20 @@ export default function DataLakeEditorView() {
 							<Form.Item name="name" label="名称" rules={[{ required: true, message: "请填写名称" }]}>
 								<Input placeholder="如：ODS Hive" />
 							</Form.Item>
-							<Form.Item name="type" label="数据湖类型" rules={[{ required: true, message: "请选择类型" }]}>
+							<Form.Item
+								name="type"
+								label="数据湖类型"
+								required
+								rules={[{ required: true, message: "请选择类型" }]}
+							>
 								<Select options={TYPE_OPTIONS} disabled={isEditing} />
 							</Form.Item>
-							<Form.Item name="jdbcUrl" label="JDBC URL" rules={[{ required: true, message: "请填写 JDBC URL" }]}>
+							<Form.Item
+								name="jdbcUrl"
+								label="JDBC URL"
+								required
+								rules={[{ required: true, message: "请填写 JDBC URL" }]}
+							>
 								<Input placeholder="jdbc:xxx://host:port/db" />
 							</Form.Item>
 							{isInceptor ? null : (
@@ -670,6 +745,7 @@ export default function DataLakeEditorView() {
 									<Form.Item
 										name="username"
 										label="用户名"
+										required
 										rules={[{ required: true, message: "请输入用户名" }]}
 									>
 										<Input placeholder="数据库用户名" />
@@ -677,6 +753,7 @@ export default function DataLakeEditorView() {
 									<Form.Item
 										name="password"
 										label="密码"
+										required
 										rules={[{ required: true, message: "请输入密码" }]}
 									>
 										<Input.Password placeholder="数据库密码" />
@@ -696,7 +773,12 @@ export default function DataLakeEditorView() {
 						{isInceptor ? (
 							<div className="space-y-4">
 								<div className="grid gap-4 md:grid-cols-2">
-									<Form.Item name="authMethod" label="认证方式" rules={[{ required: true, message: "请选择认证方式" }]}> 
+									<Form.Item
+										name="authMethod"
+										label="认证方式"
+										required
+										rules={[{ required: true, message: "请选择认证方式" }]}
+									>
 										<Select options={AUTH_METHOD_OPTIONS} />
 									</Form.Item>
 									<Form.Item name="driverVersion" label="JDBC 驱动">
@@ -717,13 +799,13 @@ export default function DataLakeEditorView() {
 								</div>
 
 								<div className="grid gap-4 md:grid-cols-3">
-									<Form.Item name="host" label="主机" rules={[{ required: true, message: "请填写主机" }]}>
+									<Form.Item name="host" label="主机" required rules={[{ required: true, message: "请填写主机" }]}>
 										<Input placeholder="如：inceptor-prod" />
 									</Form.Item>
-									<Form.Item name="port" label="端口" rules={[{ required: true, message: "请填写端口" }]}>
+									<Form.Item name="port" label="端口" required rules={[{ required: true, message: "请填写端口" }]}>
 										<InputNumber min={1} max={65535} className="w-full" />
 									</Form.Item>
-									<Form.Item name="database" label="默认数据库" rules={[{ required: true, message: "请填写数据库" }]}>
+									<Form.Item name="database" label="默认数据库" required rules={[{ required: true, message: "请填写数据库" }]}>
 										<Input placeholder="default" />
 									</Form.Item>
 								</div>
@@ -732,16 +814,27 @@ export default function DataLakeEditorView() {
 									<Form.Item
 										name="loginPrincipal"
 										label={isJdbcPassword ? "用户名" : "Kerberos 主体"}
+										required
 										rules={[{ required: true, message: "请填写登录主体" }]}
 									>
 										<Input placeholder={isJdbcPassword ? "如：hive_user" : "如：hive/_HOST@REALM"} />
 									</Form.Item>
 									{isKerberos ? (
-										<Form.Item name="servicePrincipal" label="服务主体" rules={[{ required: true, message: "请填写服务主体" }]}> 
+										<Form.Item
+											name="servicePrincipal"
+											label="服务主体"
+											required
+											rules={[{ required: true, message: "请填写服务主体" }]}
+										>
 											<Input placeholder="如：hive/_HOST@REALM" />
 										</Form.Item>
 									) : (
-										<Form.Item name="password" label="密码" rules={[{ required: isJdbcPassword, message: "请输入密码" }]}> 
+										<Form.Item
+											name="password"
+											label="密码"
+											required={isJdbcPassword}
+											rules={[{ required: isJdbcPassword, message: "请输入密码" }]}
+										>
 											<Input.Password placeholder="请输入密码" />
 										</Form.Item>
 									)}
@@ -824,7 +917,12 @@ export default function DataLakeEditorView() {
 												}}
 											</Form.Item>
 										) : (
-											<Form.Item name="password" label="Kerberos 密码" rules={[{ required: isKerberosPassword, message: "请输入 Kerberos 密码" }]}> 
+											<Form.Item
+												name="password"
+												label="Kerberos 密码"
+												required={isKerberosPassword}
+												rules={[{ required: isKerberosPassword, message: "请输入 Kerberos 密码" }]}
+											>
 												<Input.Password placeholder="请输入 Kerberos 密码" />
 											</Form.Item>
 										)}
@@ -847,6 +945,7 @@ export default function DataLakeEditorView() {
 
 								<Collapse
 									ghost
+									defaultActiveKey={["destination"]}
 									items={[
 										{
 											key: "advanced",
@@ -894,6 +993,7 @@ export default function DataLakeEditorView() {
 														<Form.Item
 															name="destinationDefinitionId"
 															label="写入器类型"
+															required
 															rules={[{ required: true, message: "请选择写入器类型" }]}
 														>
 															<Select
@@ -909,14 +1009,29 @@ export default function DataLakeEditorView() {
 															<Input placeholder="默认使用数据湖名称" />
 														</Form.Item>
 													</div>
-													<Form.Item name="destinationConfigRaw" label="写入器配置 JSON">
+													<Form.Item
+														name="destinationConfigRaw"
+														label="写入器配置 JSON"
+														required={writerConfigRequired}
+														rules={[{ validator: validateWriterConfig }]}
+													>
 														<Input.TextArea
 															rows={6}
 															placeholder='填写 Addax writer 参数 JSON，例如：{"connection":[{"jdbcUrl":["jdbc:..."],"table":["target"]}],"username":"user","password":"***"}'
 														/>
 													</Form.Item>
+													<Space>
+														<AntButton onClick={handleFillWriterConfig} disabled={readOnly}>
+															生成模板
+														</AntButton>
+														<AntButton onClick={handleClearWriterConfig} disabled={readOnly}>
+															清空配置
+														</AntButton>
+													</Space>
 													<Text variant="body3" className="text-muted-foreground">
-														写入器配置将同步给平台默认入湖目标，密钥字段需包含在 JSON 中。
+														{writerConfigRequired
+															? "写入器配置为必填项，将同步给平台默认入湖目标，密钥字段需包含在 JSON 中。"
+															: "已存在写入器密钥，如需更新请重新填写配置 JSON。"}
 													</Text>
 												</div>
 											),
@@ -957,6 +1072,7 @@ export default function DataLakeEditorView() {
 									<Form.Item
 										name="destinationDefinitionId"
 										label="写入器类型"
+										required
 										rules={[{ required: true, message: "请选择写入器类型" }]}
 									>
 										<Select
@@ -972,13 +1088,30 @@ export default function DataLakeEditorView() {
 										<Input placeholder="默认使用数据湖名称" />
 									</Form.Item>
 								</div>
-								<Form.Item name="destinationConfigRaw" label="写入器配置 JSON">
+								<Form.Item
+									name="destinationConfigRaw"
+									label="写入器配置 JSON"
+									required={writerConfigRequired}
+									rules={[{ validator: validateWriterConfig }]}
+								>
 									<Input.TextArea
 										rows={6}
 										placeholder='填写 Addax writer 参数 JSON，例如：{"connection":[{"jdbcUrl":["jdbc:..."],"table":["target"]}],"username":"user","password":"***"}'
 									/>
 								</Form.Item>
-								{editingLake?.hasSecrets ? (
+								<Space>
+									<AntButton onClick={handleFillWriterConfig} disabled={readOnly}>
+										生成模板
+									</AntButton>
+									<AntButton onClick={handleClearWriterConfig} disabled={readOnly}>
+										清空配置
+									</AntButton>
+								</Space>
+								{writerConfigRequired ? (
+									<Text variant="body3" className="text-muted-foreground">
+										写入器配置为必填项，将同步给平台默认入湖目标，密钥字段需包含在 JSON 中。
+									</Text>
+								) : editingLake?.hasSecrets ? (
 									<Text variant="body3" className="text-muted-foreground">
 										已存在写入器密钥，如需更新请重新填写配置 JSON。
 									</Text>

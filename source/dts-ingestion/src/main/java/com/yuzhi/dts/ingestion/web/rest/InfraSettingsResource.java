@@ -39,8 +39,19 @@ public class InfraSettingsResource {
     private static final String MASKED_SECRET = "******";
 
     private static final SettingsDefinition ADDAX_DEF = new SettingsDefinition(
-        Set.of("enabled", "jobDir", "image", "dagId"),
-        Set.of()
+        Set.of(
+            "enabled",
+            "jobDir",
+            "image",
+            "dagId",
+            "defaultWriterType",
+            "defaultWriterJdbcUrl",
+            "defaultWriterUsername",
+            "defaultWriterPassword",
+            "defaultWriterSchema",
+            "defaultWriterConfig"
+        ),
+        Set.of("defaultWriterPassword")
     );
     private static final SettingsDefinition AIRFLOW_DEF = new SettingsDefinition(
         Set.of("enabled", "baseUrl", "apiPath", "username", "password", "dagId"),
@@ -158,6 +169,10 @@ public class InfraSettingsResource {
     }
 
     private Map<String, Object> testAddax(Map<String, Object> settings) {
+        boolean enabled = booleanValue(settings.get("enabled"));
+        if (!enabled) {
+            return Map.of("success", true, "message", "Addax 未启用");
+        }
         String jobDir = stringValue(settings.get("jobDir"));
         if (!StringUtils.hasText(jobDir)) {
             return Map.of("success", false, "message", "请先填写 Addax 作业目录");
@@ -165,6 +180,22 @@ public class InfraSettingsResource {
         java.nio.file.Path path = java.nio.file.Paths.get(jobDir);
         if (!java.nio.file.Files.exists(path)) {
             return Map.of("success", false, "message", "作业目录不存在: " + jobDir);
+        }
+        String writerType = stringValue(settings.get("defaultWriterType"));
+        if (!StringUtils.hasText(writerType)) {
+            return Map.of("success", false, "message", "请先填写默认写入器类型");
+        }
+        String jdbcUrl = stringValue(settings.get("defaultWriterJdbcUrl"));
+        if (!StringUtils.hasText(jdbcUrl)) {
+            return Map.of("success", false, "message", "请先填写默认写入器 JDBC URL");
+        }
+        String username = stringValue(settings.get("defaultWriterUsername"));
+        if (!StringUtils.hasText(username)) {
+            return Map.of("success", false, "message", "请先填写默认写入器用户名");
+        }
+        String password = stringValue(settings.get("defaultWriterPassword"));
+        if (!StringUtils.hasText(password)) {
+            return Map.of("success", false, "message", "请先填写默认写入器密码");
         }
         return Map.of("success", true, "message", "配置可用", "jobDir", jobDir);
     }
@@ -309,6 +340,16 @@ public class InfraSettingsResource {
             return trimmed.isEmpty() ? "" : trimmed;
         }
         return value;
+    }
+
+    private boolean booleanValue(Object value) {
+        if (value instanceof Boolean bool) {
+            return bool;
+        }
+        if (value == null) {
+            return false;
+        }
+        return Boolean.parseBoolean(value.toString().trim());
     }
 
     private boolean isMasked(Object value) {

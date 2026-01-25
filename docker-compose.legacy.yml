@@ -469,6 +469,7 @@ services:
       DTS_AIRFLOW_USERNAME: ${DTS_AIRFLOW_USERNAME}
       DTS_AIRFLOW_PASSWORD: ${DTS_AIRFLOW_PASSWORD}
       DTS_AIRFLOW_DAG_ID: ${DTS_AIRFLOW_DAG_ID}
+      DTS_AIRFLOW_DAGS_DIR: ${DTS_AIRFLOW_DAGS_DIR:-/opt/airflow/dags}
       DTS_OPENMETADATA_ENABLED: ${DTS_OPENMETADATA_ENABLED:-}
       DTS_OPENMETADATA_BASE_URL: ${DTS_OPENMETADATA_BASE_URL:-}
       DTS_OPENMETADATA_API_PATH: ${DTS_OPENMETADATA_API_PATH:-/api/v1}
@@ -497,6 +498,7 @@ services:
       DTS_INFRA_KEY_VERSION: ${DTS_INFRA_KEY_VERSION:-v1}
     volumes:
       - ./logs/dts-ingestion:/logs/dts-ingestion:z
+      - ./services/dts-airflow/dags:/opt/airflow/dags:z
       - ${DTS_ADDAX_JOB_DIR}:${DTS_ADDAX_JOB_DIR}:Z
     security_opt:
       - seccomp=unconfined
