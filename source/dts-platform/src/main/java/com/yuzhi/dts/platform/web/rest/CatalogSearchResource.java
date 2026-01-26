@@ -264,6 +264,12 @@ public class CatalogSearchResource {
         Map<String, Object> dto = new LinkedHashMap<>();
         if (ds == null) return dto;
         if (ds.getId() != null) dto.put("id", ds.getId().toString());
+        if (ds.getDomain() != null) {
+            if (ds.getDomain().getId() != null) {
+                dto.put("domainId", ds.getDomain().getId());
+            }
+            dto.put("domainName", ds.getDomain().getName());
+        }
         dto.put("name", ds.getName());
         dto.put("type", ds.getType());
         dto.put("classification", ds.getClassification());
@@ -291,6 +297,8 @@ public class CatalogSearchResource {
             dto.put("datasetId", datasetDto.get("id"));
             dto.put("datasetName", datasetDto.get("name"));
             dto.put("datasetOwnerDept", datasetDto.get("ownerDept"));
+            dto.put("domainId", datasetDto.get("domainId"));
+            dto.put("domainName", datasetDto.get("domainName"));
         }
         return dto;
     }
@@ -316,6 +324,8 @@ public class CatalogSearchResource {
             dto.put("datasetId", datasetDto.get("id"));
             dto.put("datasetName", datasetDto.get("name"));
             dto.put("datasetOwnerDept", datasetDto.get("ownerDept"));
+            dto.put("domainId", datasetDto.get("domainId"));
+            dto.put("domainName", datasetDto.get("domainName"));
         }
         return dto;
     }

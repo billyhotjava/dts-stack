@@ -78,6 +78,20 @@ export interface PageResult<T> {
   number: number;
 }
 
+export interface IngestionChangeLogDTO {
+  id?: number;
+  taskId: number;
+  taskName?: string;
+  objType?: string;
+  changeType: string;
+  summary: string;
+  detail?: string;
+  riskLevel?: string;
+  status?: string;
+  createdBy?: string;
+  createdDate?: string;
+}
+
 /**
  * 数据入湖任务API
  */
@@ -98,7 +112,11 @@ class IngestionTaskAPI {
     size?: number;
     sort?: string;
   }): Promise<PageResult<IngestionTaskDTO>> {
-    return api.get({ url: '/ingestion/tasks/list', params });
+    const payload: any = await api.get({ url: '/ingestion/tasks/list', params });
+    if (payload && typeof payload === "object" && "status" in payload && "data" in payload) {
+      return payload.data as PageResult<IngestionTaskDTO>;
+    }
+    return payload as PageResult<IngestionTaskDTO>;
   }
 
   /**
@@ -184,6 +202,29 @@ class IngestionTaskAPI {
       }
     }
     return [];
+  }
+
+  /**
+   * 获取接入变更记录
+   */
+  async getChangeLogs(params?: {
+    taskId?: number;
+    objType?: string;
+    changeType?: string;
+    status?: string;
+    keyword?: string;
+    page?: number;
+    size?: number;
+    sort?: string;
+  }): Promise<PageResult<IngestionChangeLogDTO>> {
+    return api.get({ url: "/ingestion/tasks/changes", params });
+  }
+
+  /**
+   * 登记接入变更
+   */
+  async createChangeLog(data: IngestionChangeLogDTO): Promise<IngestionChangeLogDTO> {
+    return api.post({ url: "/ingestion/tasks/changes", data });
   }
 }
 

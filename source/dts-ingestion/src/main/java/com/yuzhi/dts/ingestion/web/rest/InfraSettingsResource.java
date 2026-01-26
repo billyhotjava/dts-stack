@@ -1,8 +1,6 @@
 package com.yuzhi.dts.ingestion.web.rest;
 
 import com.yuzhi.dts.common.audit.AuditStage;
-import com.yuzhi.dts.ingestion.config.AddaxProperties;
-import com.yuzhi.dts.ingestion.config.AirflowProperties;
 import com.yuzhi.dts.ingestion.security.SecurityUtils;
 import com.yuzhi.dts.ingestion.service.audit.AuditService;
 import com.yuzhi.dts.ingestion.service.infra.IngestionSettingsService;
@@ -81,20 +79,14 @@ public class InfraSettingsResource {
     private final IngestionSettingsService settingsService;
     private final RestTemplate restTemplate;
     private final AuditService auditService;
-    private final AddaxProperties addaxProperties;
-    private final AirflowProperties airflowProperties;
 
     public InfraSettingsResource(
         RestTemplateBuilder builder,
         IngestionSettingsService settingsService,
-        AuditService auditService,
-        AddaxProperties addaxProperties,
-        AirflowProperties airflowProperties
+        AuditService auditService
     ) {
         this.settingsService = settingsService;
         this.auditService = auditService;
-        this.addaxProperties = addaxProperties;
-        this.airflowProperties = airflowProperties;
         RestTemplateBuilder baseBuilder = builder.setConnectTimeout(Duration.ofSeconds(5));
         this.restTemplate = baseBuilder.setReadTimeout(Duration.ofSeconds(10)).build();
     }
@@ -204,14 +196,6 @@ public class InfraSettingsResource {
         if (!StringUtils.hasText(jobDir)) {
             return Map.of("success", false, "message", "请先填写 Addax 作业目录");
         }
-        String expectedJobDir = normalizeDirPath(addaxProperties.getJobDir());
-        if (!StringUtils.hasText(expectedJobDir)) {
-            return Map.of("success", false, "message", "系统未配置 Addax 作业目录，请联系管理员");
-        }
-        String normalized = normalizeDirPath(jobDir);
-        if (!pathEquals(normalized, expectedJobDir)) {
-            return Map.of("success", false, "message", "Addax 作业目录必须与系统配置一致: " + expectedJobDir);
-        }
         java.nio.file.Path path = java.nio.file.Paths.get(jobDir);
         if (!java.nio.file.Files.exists(path)) {
             return Map.of("success", false, "message", "作业目录不存在: " + jobDir);
@@ -228,13 +212,9 @@ public class InfraSettingsResource {
         if (!StringUtils.hasText(dagsDir)) {
             return Map.of("success", false, "message", "请先填写 Airflow DAG 目录");
         }
-        String expectedDagsDir = normalizeDirPath(airflowProperties.getDagsDir());
-        if (!StringUtils.hasText(expectedDagsDir)) {
-            return Map.of("success", false, "message", "系统未配置 Airflow DAG 目录，请联系管理员");
-        }
-        String normalized = normalizeDirPath(dagsDir);
-        if (!pathEquals(normalized, expectedDagsDir)) {
-            return Map.of("success", false, "message", "Airflow DAG 目录必须与系统配置一致: " + expectedDagsDir);
+        java.nio.file.Path path = java.nio.file.Paths.get(dagsDir);
+        if (!java.nio.file.Files.exists(path)) {
+            return Map.of("success", false, "message", "DAG 目录不存在: " + dagsDir);
         }
         String apiPath = stringValue(settings.getOrDefault("apiPath", "/api/v1"));
         String username = stringValue(settings.get("username"));
@@ -289,35 +269,35 @@ public class InfraSettingsResource {
     }
 
     private String validateConsistency(String service, Map<String, Object> settings) {
-        if (IngestionSettingsService.SERVICE_ADDAX.equals(service) && booleanValue(settings.get("enabled"))) {
-            String jobDir = stringValue(settings.get("jobDir"));
-            String expectedJobDir = normalizeDirPath(addaxProperties.getJobDir());
-            if (!StringUtils.hasText(expectedJobDir)) {
-                return "系统未配置 Addax 作业目录，无法启用 Addax";
-            }
-            if (!StringUtils.hasText(jobDir)) {
-                return "请先填写 Addax 作业目录";
-            }
-            String normalized = normalizeDirPath(jobDir);
-            if (!pathEquals(normalized, expectedJobDir)) {
-                return "Addax 作业目录必须与系统配置一致: " + expectedJobDir;
-            }
+        Map<String, Object> addaxSettings = resolveServiceSettings(service, IngestionSettingsService.SERVICE_ADDAX, settings);
+        Map<String, Object> airflowSettings = resolveServiceSettings(service, IngestionSettingsService.SERVICE_AIRFLOW, settings);
+
+        boolean addaxEnabled = booleanValue(addaxSettings.get("enabled"));
+        boolean airflowEnabled = booleanValue(airflowSettings.get("enabled"));
+        String jobDir = stringValue(addaxSettings.get("jobDir"));
+        String dagsDir = stringValue(airflowSettings.get("dagsDir"));
+
+        if (addaxEnabled && !StringUtils.hasText(jobDir)) {
+            return "请先填写 Addax 作业目录";
         }
-        if (IngestionSettingsService.SERVICE_AIRFLOW.equals(service) && booleanValue(settings.get("enabled"))) {
-            String dagsDir = stringValue(settings.get("dagsDir"));
-            String expectedDagsDir = normalizeDirPath(airflowProperties.getDagsDir());
-            if (!StringUtils.hasText(expectedDagsDir)) {
-                return "系统未配置 Airflow DAG 目录，无法启用 Airflow";
-            }
-            if (!StringUtils.hasText(dagsDir)) {
-                return "请先填写 Airflow DAG 目录";
-            }
-            String normalized = normalizeDirPath(dagsDir);
-            if (!pathEquals(normalized, expectedDagsDir)) {
-                return "Airflow DAG 目录必须与系统配置一致: " + expectedDagsDir;
+        if (airflowEnabled && !StringUtils.hasText(dagsDir)) {
+            return "请先填写 Airflow DAG 目录";
+        }
+        if (addaxEnabled && airflowEnabled) {
+            String left = normalizeDirPath(jobDir);
+            String right = normalizeDirPath(dagsDir);
+            if (!pathEquals(left, right)) {
+                return "Addax 作业目录与 Airflow DAG 目录必须保持一致";
             }
         }
         return null;
+    }
+
+    private Map<String, Object> resolveServiceSettings(String currentService, String targetService, Map<String, Object> currentPayload) {
+        if (targetService.equals(currentService)) {
+            return currentPayload == null ? Map.of() : currentPayload;
+        }
+        return settingsService.getSettings(targetService).raw();
     }
 
     private String normalizeService(String service) {

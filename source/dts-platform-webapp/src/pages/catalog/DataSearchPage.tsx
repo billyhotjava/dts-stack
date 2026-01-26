@@ -1,24 +1,139 @@
-import { useState } from "react";
-import { Card, Input, Select, Space, Table, Tag } from "antd";
+import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
+import { Button, Card, Input, Select, Space, Table, Tag } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
+import { listDomains, searchCatalog } from "@/api/platformApi";
 
 type SearchRow = {
 	id: string;
 	name: string;
 	type: string;
+	assetKind: "DATASET" | "TABLE" | "COLUMN";
+	domainId?: string;
 	domain?: string;
 	owner?: string;
+	datasetName?: string;
 	updatedAt?: string;
 };
 
-const SEARCH_RESULTS: SearchRow[] = [];
+const TYPE_OPTIONS = [
+	{ label: "全部类型", value: "ALL" },
+	{ label: "数据集", value: "DATASET" },
+	{ label: "表", value: "TABLE" },
+	{ label: "字段", value: "COLUMN" },
+];
 
 export default function DataSearchPage() {
 	const [keyword, setKeyword] = useState("");
 	const [domain, setDomain] = useState<string | undefined>();
-	const [assetType, setAssetType] = useState<string | undefined>();
+	const [assetType, setAssetType] = useState<string>("ALL");
+	const [loading, setLoading] = useState(false);
+	const [results, setResults] = useState<SearchRow[]>([]);
+	const [domains, setDomains] = useState<{ id: string; name: string }[]>([]);
+	const [searched, setSearched] = useState(false);
+
+	useEffect(() => {
+		void loadDomains();
+	}, []);
+
+	const domainOptions = useMemo(() => {
+		return [
+			{ label: "全部主题域", value: "ALL" },
+			...domains.map((item) => ({ label: item.name, value: item.id })),
+		];
+	}, [domains]);
+
+	const loadDomains = async () => {
+		try {
+			const resp: any = await listDomains(0, 200, "");
+			const list = Array.isArray(resp?.content) ? resp.content : [];
+			setDomains(
+				list
+					.map((item: any) => ({ id: String(item.id || ""), name: String(item.name || "").trim() }))
+					.filter((item: any) => item.id && item.name),
+			);
+		} catch (error: any) {
+			toast.error(error?.message || "主题域加载失败");
+		}
+	};
+
+	const normalizeRows = (payload: any): SearchRow[] => {
+		const rows: SearchRow[] = [];
+		const datasets = Array.isArray(payload?.datasets) ? payload.datasets : [];
+		const tables = Array.isArray(payload?.tables) ? payload.tables : [];
+		const columns = Array.isArray(payload?.columns) ? payload.columns : [];
+		datasets.forEach((item: any) => {
+			if (!item) return;
+			rows.push({
+				id: String(item.id || `dataset-${rows.length}`),
+				name: String(item.name || item.hiveTable || "-"),
+				type: item.type ? String(item.type) : "DATASET",
+				assetKind: "DATASET",
+				domainId: item.domainId ? String(item.domainId) : undefined,
+				domain: item.domainName || undefined,
+				owner: item.owner || item.ownerDept || undefined,
+				updatedAt: item.updatedAt || undefined,
+			});
+		});
+		tables.forEach((item: any) => {
+			if (!item) return;
+			rows.push({
+				id: String(item.id || `table-${rows.length}`),
+				name: String(item.name || "-"),
+				type: "TABLE",
+				assetKind: "TABLE",
+				domainId: item.domainId ? String(item.domainId) : undefined,
+				domain: item.domainName || undefined,
+				owner: item.owner || item.datasetOwnerDept || undefined,
+				datasetName: item.datasetName || undefined,
+			});
+		});
+		columns.forEach((item: any) => {
+			if (!item) return;
+			const columnName = String(item.name || "-");
+			const tableName = String(item.tableName || item.datasetName || "").trim();
+			rows.push({
+				id: String(item.id || `column-${rows.length}`),
+				name: tableName ? `${tableName}.${columnName}` : columnName,
+				type: "COLUMN",
+				assetKind: "COLUMN",
+				domainId: item.domainId ? String(item.domainId) : undefined,
+				domain: item.domainName || undefined,
+				owner: item.datasetOwnerDept || undefined,
+				datasetName: item.datasetName || undefined,
+			});
+		});
+		return rows;
+	};
+
+	const handleSearch = async () => {
+		const trimmed = keyword.trim();
+		if (!trimmed) {
+			toast.error("请输入关键词后再搜索");
+			return;
+		}
+		setLoading(true);
+		setSearched(true);
+		try {
+			const resp: any = await searchCatalog({
+				keyword: trimmed,
+				types: assetType === "ALL" ? undefined : assetType,
+				limit: 200,
+			});
+			const rows = normalizeRows(resp || {});
+			const filtered =
+				domain && domain !== "ALL"
+					? rows.filter((row) => row.domainId === domain)
+					: rows;
+			setResults(filtered);
+		} catch (error: any) {
+			toast.error(error?.message || "搜索失败");
+		} finally {
+			setLoading(false);
+		}
+	};
 
 	const columns: ColumnsType<SearchRow> = [
 		{
@@ -42,6 +157,11 @@ export default function DataSearchPage() {
 			render: (value) => value || "-",
 		},
 		{
+			title: "来源",
+			dataIndex: "datasetName",
+			render: (value) => value || "-",
+		},
+		{
 			title: "更新时间",
 			dataIndex: "updatedAt",
 			render: (value) => value || "-",
@@ -62,32 +182,44 @@ export default function DataSearchPage() {
 						style={{ width: 320 }}
 						value={keyword}
 						onChange={(event) => setKeyword(event.target.value)}
+						onSearch={handleSearch}
 						allowClear
 					/>
 					<Select
 						allowClear
 						placeholder="主题域"
 						style={{ minWidth: 180 }}
-						value={domain}
-						onChange={(value) => setDomain(value)}
-						options={[]}
+						value={domain || "ALL"}
+						onChange={(value) => setDomain(value === "ALL" ? undefined : value)}
+						options={domainOptions}
 					/>
 					<Select
 						allowClear
 						placeholder="资产类型"
 						style={{ minWidth: 180 }}
 						value={assetType}
-						onChange={(value) => setAssetType(value)}
-						options={[]}
+						onChange={(value) => setAssetType(value || "ALL")}
+						options={TYPE_OPTIONS}
 					/>
+					<Button type="primary" onClick={handleSearch} loading={loading}>
+						搜索
+					</Button>
 				</Space>
 			</Card>
 
 			<Card title="搜索结果">
-				{SEARCH_RESULTS.length ? (
-					<Table rowKey="id" columns={columns} dataSource={SEARCH_RESULTS} pagination={{ pageSize: 10 }} />
-				) : (
+				{results.length ? (
+					<Table
+						rowKey="id"
+						columns={columns}
+						dataSource={results}
+						loading={loading}
+						pagination={{ pageSize: 10 }}
+					/>
+				) : searched ? (
 					<EmptyState title="暂无结果" description="调整筛选条件后重新搜索。" />
+				) : (
+					<EmptyState title="开始检索" description="输入关键词并点击搜索。"/>
 				)}
 			</Card>
 		</div>

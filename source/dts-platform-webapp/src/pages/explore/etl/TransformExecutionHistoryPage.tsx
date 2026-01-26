@@ -34,19 +34,22 @@ export default function TransformExecutionHistoryPage() {
     const loadExecutions = async () => {
         setLoading(true);
         try {
-            const result = await ingestionTaskAPI.getExecutions(Number(id), {
-                page: pagination.current - 1,
-                size: pagination.pageSize,
-                sort: "createdAt,desc",
-            });
-            setExecutions(result.content);
-            setPagination((prev) => ({ ...prev, total: result.totalElements }));
-        } catch (error: any) {
-            message.error("加载执行历史失败: " + (error.message || "未知错误"));
-        } finally {
-            setLoading(false);
-        }
-    };
+			const result = await ingestionTaskAPI.getExecutions(Number(id), {
+				page: pagination.current - 1,
+				size: pagination.pageSize,
+				sort: "createdAt,desc",
+			});
+			const content = Array.isArray(result?.content) ? result.content : [];
+			setExecutions(content);
+			const total = typeof result?.totalElements === "number" ? result.totalElements : content.length;
+			setPagination((prev) => ({ ...prev, total }));
+		} catch (error: any) {
+			message.error("加载执行历史失败: " + (error.message || "未知错误"));
+			setExecutions([]);
+		} finally {
+			setLoading(false);
+		}
+	};
 
     const renderStatus = (status: string) => {
         const statusMap: Record<string, { color: string; text: string }> = {

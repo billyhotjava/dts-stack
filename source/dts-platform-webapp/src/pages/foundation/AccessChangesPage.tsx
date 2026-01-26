@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
 	Alert,
@@ -18,70 +18,132 @@ import {
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { PageHeader } from "@/components/page-header";
+import { ingestionTaskAPI, type IngestionChangeLogDTO, type IngestionTaskDTO } from "@/api/ingestion";
+import { formatDateTime } from "@/utils/format";
 
 const { Text } = Typography;
 
-type ChangeRecord = {
-	id: string;
-	time: string;
-	objType: "DATASOURCE" | "INGEST_JOB";
-	obj: string;
-	type: "CONN_PARAM" | "SCHEMA_NEW_COL" | "SCHEMA_TYPE_CHANGE" | "CATALOG_CHANGE";
-	summary: string;
-	risk: "L" | "M" | "H";
-	status: "已完成" | "待处理" | "待审批";
-	detail?: string;
+const CHANGE_TYPE_LABELS: Record<string, string> = {
+	TASK_CREATE: "新建任务",
+	CONN_PARAM: "连接参数变更",
+	CATALOG_CHANGE: "同步范围变更",
+	SCHEDULE_CHANGE: "调度配置变更",
+	TASK_UPDATE: "任务信息更新",
 };
 
-const initialChanges: ChangeRecord[] = [];
-
-const typeLabel = (value: ChangeRecord["type"]) => {
-	const map: Record<ChangeRecord["type"], string> = {
-		CONN_PARAM: "连接参数变更",
-		SCHEMA_NEW_COL: "新增字段",
-		SCHEMA_TYPE_CHANGE: "字段类型变更",
-		CATALOG_CHANGE: "同步范围变更",
-	};
-	return map[value] || value;
+const STATUS_LABELS: Record<string, string> = {
+	DONE: "已完成",
+	PENDING: "待处理",
+	APPROVAL: "待审批",
 };
 
-const riskTag = (risk: ChangeRecord["risk"]) => {
+const changeTypeOptions = [
+	{ label: "全部类型", value: "ALL" },
+	{ label: "新建任务", value: "TASK_CREATE" },
+	{ label: "连接参数变更", value: "CONN_PARAM" },
+	{ label: "同步范围变更", value: "CATALOG_CHANGE" },
+	{ label: "调度配置变更", value: "SCHEDULE_CHANGE" },
+	{ label: "任务信息更新", value: "TASK_UPDATE" },
+];
+
+const statusOptions = [
+	{ label: "全部状态", value: "ALL" },
+	{ label: "已完成", value: "DONE" },
+	{ label: "待处理", value: "PENDING" },
+	{ label: "待审批", value: "APPROVAL" },
+];
+
+const riskTag = (risk?: string) => {
 	if (risk === "L") return <Tag color="green">低</Tag>;
 	if (risk === "M") return <Tag color="orange">中</Tag>;
-	return <Tag color="red">高</Tag>;
+	if (risk === "H") return <Tag color="red">高</Tag>;
+	return <Tag>未知</Tag>;
 };
 
-const statusTag = (status: ChangeRecord["status"]) => {
-	if (status === "已完成") return <Tag color="green">已完成</Tag>;
-	if (status === "待审批") return <Tag color="gold">待审批</Tag>;
-	return <Tag color="blue">待处理</Tag>;
+const statusTag = (status?: string) => {
+	const label = status ? STATUS_LABELS[status] || status : "未知";
+	if (status === "DONE") return <Tag color="green">{label}</Tag>;
+	if (status === "APPROVAL") return <Tag color="gold">{label}</Tag>;
+	if (status === "PENDING") return <Tag color="blue">{label}</Tag>;
+	return <Tag>{label}</Tag>;
 };
 
 export default function AccessChangesPage() {
-	const [changes, setChanges] = useState<ChangeRecord[]>(initialChanges);
-	const [objType, setObjType] = useState("ALL");
+	const [changes, setChanges] = useState<IngestionChangeLogDTO[]>([]);
+	const [tasks, setTasks] = useState<IngestionTaskDTO[]>([]);
+	const [taskId, setTaskId] = useState<number | "ALL">("ALL");
 	const [changeType, setChangeType] = useState("ALL");
+	const [status, setStatus] = useState("ALL");
 	const [keyword, setKeyword] = useState("");
-	const [selected, setSelected] = useState<ChangeRecord | null>(null);
+	const [selected, setSelected] = useState<IngestionChangeLogDTO | null>(null);
 	const [modalOpen, setModalOpen] = useState(false);
+	const [loading, setLoading] = useState(false);
+	const [pageState, setPageState] = useState({ page: 1, size: 8, total: 0 });
 	const [form] = Form.useForm();
 
-	const filteredChanges = useMemo(() => {
-		const key = keyword.trim().toLowerCase();
-		return changes.filter((item) => {
-			if (objType !== "ALL" && item.objType !== objType) return false;
-			if (changeType !== "ALL" && item.type !== changeType) return false;
-			if (!key) return true;
-			return `${item.obj} ${item.summary} ${item.detail || ""}`.toLowerCase().includes(key);
-		});
-	}, [changeType, changes, keyword, objType]);
+	const taskOptions = useMemo(() => {
+		const opts = tasks.map((task) => ({
+			label: task.name,
+			value: task.id ?? 0,
+		}));
+		return [{ label: "全部任务", value: "ALL" }, ...opts];
+	}, [tasks]);
 
-	const columns: ColumnsType<ChangeRecord> = [
-		{ title: "时间", dataIndex: "time" },
-		{ title: "对象", dataIndex: "obj" },
-		{ title: "类型", dataIndex: "type", render: (value) => typeLabel(value) },
+	const loadTasks = async () => {
+		try {
+			const result = await ingestionTaskAPI.getTasks({ page: 0, size: 200 });
+			setTasks(Array.isArray(result?.content) ? result.content : []);
+		} catch (error) {
+			console.error(error);
+			toast.error("获取任务列表失败");
+		}
+	};
+
+	const loadChanges = async (nextPage = pageState.page, nextSize = pageState.size) => {
+		setLoading(true);
+		try {
+			const result = await ingestionTaskAPI.getChangeLogs({
+				taskId: taskId === "ALL" ? undefined : Number(taskId),
+				changeType: changeType === "ALL" ? undefined : changeType,
+				status: status === "ALL" ? undefined : status,
+				keyword: keyword.trim() || undefined,
+				page: nextPage - 1,
+				size: nextSize,
+				sort: "createdDate,desc",
+			});
+			setChanges(result.content || []);
+			setPageState({
+				page: result.number + 1,
+				size: result.size,
+				total: result.totalElements,
+			});
+		} catch (error) {
+			console.error(error);
+			toast.error("加载变更记录失败");
+		} finally {
+			setLoading(false);
+		}
+	};
+
+	useEffect(() => {
+		loadTasks();
+	}, []);
+
+	useEffect(() => {
+		loadChanges(1, pageState.size);
+		setSelected(null);
+	}, [taskId, changeType, status, keyword]);
+
+	const columns: ColumnsType<IngestionChangeLogDTO> = [
+		{ title: "时间", dataIndex: "createdDate", render: (value) => formatDateTime(value) || "-" },
+		{ title: "任务", dataIndex: "taskName", render: (_, row) => row.taskName || `任务 #${row.taskId}` },
+		{
+			title: "类型",
+			dataIndex: "changeType",
+			render: (value) => CHANGE_TYPE_LABELS[value as string] || value,
+		},
 		{ title: "摘要", dataIndex: "summary", render: (value) => value || "-" },
-		{ title: "风险等级", dataIndex: "risk", render: (value) => riskTag(value) },
+		{ title: "风险等级", dataIndex: "riskLevel", render: (value) => riskTag(value) },
 		{ title: "状态", dataIndex: "status", render: (value) => statusTag(value) },
 		{
 			title: "操作",
@@ -101,30 +163,35 @@ export default function AccessChangesPage() {
 	const submitChange = async () => {
 		try {
 			const values = await form.validateFields();
-			const newItem: ChangeRecord = {
-				id: `c_${Math.random().toString(36).slice(2, 6)}`,
-				time: new Date().toISOString().slice(0, 16).replace("T", " "),
-				objType: values.objType,
-				obj: values.obj,
-				type: values.type,
+			await ingestionTaskAPI.createChangeLog({
+				taskId: values.taskId,
+				taskName: tasks.find((item) => item.id === values.taskId)?.name,
+				changeType: values.changeType,
 				summary: values.summary,
-				risk: values.risk,
-				status: "待处理",
 				detail: values.detail,
-			};
-			setChanges([newItem, ...changes]);
+				riskLevel: values.riskLevel,
+				status: "PENDING",
+			});
 			setModalOpen(false);
 			toast.success("变更已登记");
-		} catch {
-			// Validation handled by form
+			loadChanges(1, pageState.size);
+		} catch (error) {
+			if (error) {
+				console.error(error);
+				if (!(error as any)?.errorFields) {
+					toast.error("登记变更失败");
+				}
+			}
 		}
 	};
 
 	const impactView = selected ? (
 		<Descriptions column={1} size="small" bordered>
-			<Descriptions.Item label="变更对象">{selected.obj}</Descriptions.Item>
-			<Descriptions.Item label="变更类型">{typeLabel(selected.type)}</Descriptions.Item>
-			<Descriptions.Item label="风险等级">{riskTag(selected.risk)}</Descriptions.Item>
+			<Descriptions.Item label="变更任务">{selected.taskName || `任务 #${selected.taskId}`}</Descriptions.Item>
+			<Descriptions.Item label="变更类型">
+				{CHANGE_TYPE_LABELS[selected.changeType || ""] || selected.changeType || "-"}
+			</Descriptions.Item>
+			<Descriptions.Item label="风险等级">{riskTag(selected.riskLevel)}</Descriptions.Item>
 			<Descriptions.Item label="处理状态">{statusTag(selected.status)}</Descriptions.Item>
 			<Descriptions.Item label="变更摘要">{selected.summary || "-"}</Descriptions.Item>
 			<Descriptions.Item label="变更详情">{selected.detail || "-"}</Descriptions.Item>
@@ -137,10 +204,10 @@ export default function AccessChangesPage() {
 		<div className="space-y-4">
 			<PageHeader
 				title="接入变更记录"
-				description="统一记录连接与 Schema 变更，提供影响分析与处置闭环。"
+				description="统一记录入湖任务的连接、范围与调度变更。"
 				actions={
 					<Space>
-						<Button>刷新</Button>
+						<Button onClick={() => loadChanges()}>刷新</Button>
 						<Button type="primary" onClick={openModal}>
 							登记变更
 						</Button>
@@ -151,14 +218,14 @@ export default function AccessChangesPage() {
 			<Alert
 				type="info"
 				showIcon
-				message="记录连接参数变更、Schema 变更与同步策略调整，形成影响分析与处置闭环。"
+				message="记录连接参数变更、同步范围调整与调度配置变更，形成可追溯的接入变更闭环。"
 			/>
 
 			<Card
 				title="变更查询"
 				extra={
 					<Space>
-						<Button>导出</Button>
+						<Button onClick={() => loadChanges()}>刷新</Button>
 						<Button type="primary" onClick={openModal}>
 							登记变更
 						</Button>
@@ -166,39 +233,31 @@ export default function AccessChangesPage() {
 				}
 			>
 				<Row gutter={12} className="mb-4">
-					<Col span={8}>
-						<Select
-							value={objType}
-							onChange={setObjType}
-							options={[
-								{ label: "全部对象", value: "ALL" },
-								{ label: "数据源连接", value: "DATASOURCE" },
-								{ label: "入湖任务", value: "INGEST_JOB" },
-							]}
-						/>
+					<Col span={6}>
+						<Select value={taskId} onChange={setTaskId} options={taskOptions} />
 					</Col>
-					<Col span={8}>
-						<Select
-							value={changeType}
-							onChange={setChangeType}
-							options={[
-								{ label: "全部类型", value: "ALL" },
-								{ label: "连接参数变更", value: "CONN_PARAM" },
-								{ label: "新增字段", value: "SCHEMA_NEW_COL" },
-								{ label: "字段类型变更", value: "SCHEMA_TYPE_CHANGE" },
-								{ label: "同步范围变更", value: "CATALOG_CHANGE" },
-							]}
-						/>
+					<Col span={6}>
+						<Select value={changeType} onChange={setChangeType} options={changeTypeOptions} />
 					</Col>
-					<Col span={8}>
+					<Col span={6}>
+						<Select value={status} onChange={setStatus} options={statusOptions} />
+					</Col>
+					<Col span={6}>
 						<Input value={keyword} onChange={(e) => setKeyword(e.target.value)} placeholder="关键字" />
 					</Col>
 				</Row>
 				<Table
-					rowKey={(row) => row.id}
+					rowKey={(row) => row.id ?? `${row.taskId}-${row.createdDate}`}
 					columns={columns}
-					dataSource={filteredChanges}
-					pagination={{ pageSize: 6 }}
+					dataSource={changes}
+					loading={loading}
+					pagination={{
+						current: pageState.page,
+						pageSize: pageState.size,
+						total: pageState.total,
+						showSizeChanger: true,
+						onChange: (page, size) => loadChanges(page, size),
+					}}
 					onRow={(row) => ({
 						onClick: () => setSelected(row),
 					})}
@@ -218,36 +277,19 @@ export default function AccessChangesPage() {
 				<Form form={form} layout="vertical">
 					<Row gutter={12}>
 						<Col span={12}>
-							<Form.Item name="objType" label="对象类型" rules={[{ required: true, message: "请选择对象类型" }]}>
-								<Select
-									options={[
-										{ label: "数据源连接", value: "DATASOURCE" },
-										{ label: "入湖任务", value: "INGEST_JOB" },
-									]}
-								/>
+							<Form.Item name="taskId" label="入湖任务" rules={[{ required: true, message: "请选择入湖任务" }]}>
+								<Select options={taskOptions.filter((item) => item.value !== "ALL")} />
 							</Form.Item>
 						</Col>
 						<Col span={12}>
-							<Form.Item name="obj" label="对象标识" rules={[{ required: true, message: "请输入对象标识" }]}>
-								<Input placeholder="例如：ds_001 / ij_001" />
+							<Form.Item name="changeType" label="变更类型" rules={[{ required: true, message: "请选择变更类型" }]}>
+								<Select options={changeTypeOptions.filter((item) => item.value !== "ALL")} />
 							</Form.Item>
 						</Col>
 					</Row>
 					<Row gutter={12}>
 						<Col span={12}>
-							<Form.Item name="type" label="变更类型" rules={[{ required: true, message: "请选择变更类型" }]}>
-								<Select
-									options={[
-										{ label: "连接参数变更", value: "CONN_PARAM" },
-										{ label: "新增字段", value: "SCHEMA_NEW_COL" },
-										{ label: "字段类型变更", value: "SCHEMA_TYPE_CHANGE" },
-										{ label: "同步范围变更", value: "CATALOG_CHANGE" },
-									]}
-								/>
-							</Form.Item>
-						</Col>
-						<Col span={12}>
-							<Form.Item name="risk" label="风险等级" rules={[{ required: true, message: "请选择风险等级" }]}>
+							<Form.Item name="riskLevel" label="风险等级" rules={[{ required: true, message: "请选择风险等级" }]}>
 								<Select
 									options={[
 										{ label: "低", value: "L" },
@@ -257,12 +299,14 @@ export default function AccessChangesPage() {
 								/>
 							</Form.Item>
 						</Col>
+						<Col span={12}>
+							<Form.Item name="summary" label="变更摘要" rules={[{ required: true, message: "请输入摘要" }]}>
+								<Input placeholder="例如：同步范围调整、调度时间调整" />
+							</Form.Item>
+						</Col>
 					</Row>
-					<Form.Item name="summary" label="变更摘要" rules={[{ required: true, message: "请输入摘要" }]}>
-						<Input placeholder="例如：新增字段 discount_amt" />
-					</Form.Item>
 					<Form.Item name="detail" label="变更详情">
-						<Input.TextArea rows={4} placeholder="可粘贴 diff 或影响说明" />
+						<Input.TextArea rows={4} placeholder="补充说明、影响范围或处理建议" />
 					</Form.Item>
 				</Form>
 			</Modal>

@@ -8,6 +8,8 @@ import com.yuzhi.dts.ingestion.service.etl.AddaxJobService;
 import com.yuzhi.dts.ingestion.service.etl.AirflowAdapter;
 import com.yuzhi.dts.ingestion.service.etl.JdbcMetadataService;
 import com.yuzhi.dts.ingestion.service.openmetadata.OpenMetadataAdapter;
+import com.yuzhi.dts.ingestion.service.IngestionTaskChangeLogService;
+import com.yuzhi.dts.ingestion.service.dto.IngestionTaskChangeLogDTO;
 import jakarta.validation.Valid;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -36,6 +38,7 @@ public class IngestionTaskResource {
     private final AirflowAdapter airflowAdapter;
     private final com.yuzhi.dts.ingestion.service.IngestionTaskService ingestionTaskService;
     private final JdbcMetadataService jdbcMetadataService;
+    private final IngestionTaskChangeLogService changeLogService;
     private final ObjectMapper objectMapper;
 
     public IngestionTaskResource(
@@ -45,6 +48,7 @@ public class IngestionTaskResource {
         AirflowAdapter airflowAdapter,
         com.yuzhi.dts.ingestion.service.IngestionTaskService ingestionTaskService,
         JdbcMetadataService jdbcMetadataService,
+        IngestionTaskChangeLogService changeLogService,
         ObjectMapper objectMapper
     ) {
         this.addaxJobService = addaxJobService;
@@ -53,6 +57,7 @@ public class IngestionTaskResource {
         this.airflowAdapter = airflowAdapter;
         this.ingestionTaskService = ingestionTaskService;
         this.jdbcMetadataService = jdbcMetadataService;
+        this.changeLogService = changeLogService;
         this.objectMapper = objectMapper;
     }
 
@@ -108,6 +113,16 @@ public class IngestionTaskResource {
     public record TableInfo(String schema, String name, String type, List<ColumnInfo> columns) {}
 
     public record ColumnInfo(String name, Integer jdbcType, String typeName, Integer columnSize, Integer decimalDigits) {}
+
+    public record ChangeLogRequest(
+        Long taskId,
+        String taskName,
+        String changeType,
+        String summary,
+        String detail,
+        String riskLevel,
+        String status
+    ) {}
 
     @PostMapping("/tasks")
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
@@ -553,14 +568,18 @@ public class IngestionTaskResource {
                 prefix = resolveTablePrefix(writerConfig);
             }
             final String prefixValue = prefix;
-            targets = sources.stream()
-                .map(source -> StringUtils.hasText(prefixValue) ? prefixValue + source : source)
-                .toList();
+            List<String> computedTargets = new java.util.ArrayList<>(sources.size());
+            for (String source : sources) {
+                computedTargets.add(StringUtils.hasText(prefixValue) ? prefixValue + source : source);
+            }
+            targets = computedTargets;
         } else if (targets.size() == 1 && targets.get(0).contains("${table}")) {
             String template = targets.get(0);
-            targets = sources.stream()
-                .map(source -> template.replace("${table}", source))
-                .toList();
+            List<String> computedTargets = new java.util.ArrayList<>(sources.size());
+            for (String source : sources) {
+                computedTargets.add(template.replace("${table}", source));
+            }
+            targets = computedTargets;
         }
         int size = Math.min(sources.size(), targets.size());
         List<Map<String, String>> mappings = new java.util.ArrayList<>();
@@ -797,7 +816,7 @@ public class IngestionTaskResource {
      */
     @org.springframework.web.bind.annotation.DeleteMapping("/tasks/{id}")
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
-    public org.springframework.http.ResponseEntity<Void> deleteTask(
+    public org.springframework.http.ResponseEntity<ApiResponse<Map<String, Object>>> deleteTask(
         @org.springframework.web.bind.annotation.PathVariable Long id
     ) {
         String operator = SecurityUtils.getCurrentUserLogin().orElse("system");
@@ -820,7 +839,76 @@ public class IngestionTaskResource {
             task.getName(),
             Map.of("summary", "删除入湖任务", "taskId", id, "operator", operator)
         );
-        return org.springframework.http.ResponseEntity.<Void>noContent().build();
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("taskId", id);
+        payload.put("status", "deleted");
+        return org.springframework.http.ResponseEntity.ok(ApiResponses.ok(payload));
+    }
+
+    /**
+     * GET /api/ingestion/tasks/changes : 获取接入变更记录
+     */
+    @org.springframework.web.bind.annotation.GetMapping("/tasks/changes")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public org.springframework.http.ResponseEntity<org.springframework.data.domain.Page<IngestionTaskChangeLogDTO>> listChangeLogs(
+        @org.springframework.web.bind.annotation.RequestParam(required = false) Long taskId,
+        @org.springframework.web.bind.annotation.RequestParam(required = false) String objType,
+        @org.springframework.web.bind.annotation.RequestParam(required = false) String changeType,
+        @org.springframework.web.bind.annotation.RequestParam(required = false) String status,
+        @org.springframework.web.bind.annotation.RequestParam(required = false) String keyword,
+        org.springframework.data.domain.Pageable pageable
+    ) {
+        org.springframework.data.domain.Page<IngestionTaskChangeLogDTO> page =
+            changeLogService.search(taskId, objType, changeType, status, keyword, pageable);
+        auditService.auditAction(
+            "INGESTION_CHANGELOG_LIST",
+            AuditStage.SUCCESS,
+            String.valueOf(taskId == null ? "all" : taskId),
+            Map.of("summary", "查看接入变更记录", "taskId", taskId == null ? "all" : taskId)
+        );
+        return org.springframework.http.ResponseEntity.ok(page);
+    }
+
+    /**
+     * POST /api/ingestion/tasks/changes : 手工登记接入变更
+     */
+    @org.springframework.web.bind.annotation.PostMapping("/tasks/changes")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public org.springframework.http.ResponseEntity<IngestionTaskChangeLogDTO> createChangeLog(
+        @Valid @RequestBody ChangeLogRequest request
+    ) {
+        if (request == null || request.taskId() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "任务ID不能为空");
+        }
+        if (!StringUtils.hasText(request.changeType())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "变更类型不能为空");
+        }
+        if (!StringUtils.hasText(request.summary())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "变更摘要不能为空");
+        }
+        java.util.Optional<com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO> taskOpt =
+            ingestionTaskService.findOne(request.taskId());
+        if (taskOpt.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "任务不存在");
+        }
+        String taskName = StringUtils.hasText(request.taskName()) ? request.taskName() : taskOpt.get().getName();
+        IngestionTaskChangeLogDTO dto = new IngestionTaskChangeLogDTO();
+        dto.setTaskId(request.taskId());
+        dto.setTaskName(taskName);
+        dto.setObjType(IngestionTaskChangeLogService.OBJ_TYPE_INGEST_JOB);
+        dto.setChangeType(request.changeType());
+        dto.setSummary(request.summary());
+        dto.setDetail(request.detail());
+        dto.setRiskLevel(request.riskLevel());
+        dto.setStatus(request.status());
+        IngestionTaskChangeLogDTO saved = changeLogService.createManualLog(dto);
+        auditService.auditAction(
+            "INGESTION_CHANGELOG_CREATE",
+            AuditStage.SUCCESS,
+            String.valueOf(saved.getTaskId()),
+            Map.of("summary", "登记接入变更", "taskId", saved.getTaskId())
+        );
+        return org.springframework.http.ResponseEntity.status(HttpStatus.CREATED).body(saved);
     }
 
     /**

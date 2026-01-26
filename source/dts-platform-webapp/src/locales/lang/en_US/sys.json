@@ -167,7 +167,6 @@
     "catalogMetadata": "Metadata",
     "catalogLifecycle": "Lifecycle management",
     "foundation": "Foundation",
-    "foundationDataSources": "Data sources",
     "foundationDbtConfig": "dbt configuration",
     "modelingPlanning": "Data planning",
     "modelingGlossary": "Glossary & terms",

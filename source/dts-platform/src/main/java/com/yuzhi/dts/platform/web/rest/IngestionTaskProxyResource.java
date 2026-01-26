@@ -48,7 +48,7 @@ public class IngestionTaskProxyResource {
         ApiResponse<Map<String, Object>> response = ingestionClient.createIngestionTask(resolvedPayload);
         String operator = SecurityUtils.getCurrentUserLogin().orElse("system");
         String taskName = payload == null ? null : String.valueOf(payload.getOrDefault("name", ""));
-        if (response != null && response.getStatus() == 200) {
+        if (response != null && response.getStatus() >= 200 && response.getStatus() < 300) {
             auditService.auditAction(
                 "INGESTION_TASK_CREATE",
                 AuditStage.SUCCESS,
@@ -132,6 +132,40 @@ public class IngestionTaskProxyResource {
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ResponseEntity<ApiResponse<Object>> discoverTables(@RequestBody Map<String, Object> payload) {
         return ResponseEntity.ok(ingestionClient.discoverTables(payload));
+    }
+
+    @GetMapping("/tasks/changes")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ResponseEntity<ApiResponse<Map<String, Object>>> listChangeLogs(@RequestParam Map<String, String> params) {
+        Map<String, Object> query = new LinkedHashMap<>();
+        if (params != null) {
+            query.putAll(params);
+        }
+        return ResponseEntity.ok(ingestionClient.listChangeLogs(query));
+    }
+
+    @PostMapping("/tasks/changes")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ResponseEntity<ApiResponse<Map<String, Object>>> createChangeLog(@RequestBody Map<String, Object> payload) {
+        ApiResponse<Map<String, Object>> response = ingestionClient.createChangeLog(payload);
+        String operator = SecurityUtils.getCurrentUserLogin().orElse("system");
+        String taskId = payload == null ? null : String.valueOf(payload.getOrDefault("taskId", ""));
+        if (response != null && response.getStatus() == 200) {
+            auditService.auditAction(
+                "INGESTION_CHANGELOG_CREATE",
+                AuditStage.SUCCESS,
+                taskId,
+                Map.of("summary", "登记接入变更", "taskId", taskId, "operator", operator)
+            );
+        } else {
+            auditService.auditAction(
+                "INGESTION_CHANGELOG_CREATE",
+                AuditStage.FAIL,
+                taskId,
+                Map.of("summary", "登记接入变更失败", "taskId", taskId, "operator", operator)
+            );
+        }
+        return ResponseEntity.ok(response);
     }
 
     private Map<String, Object> applyDefaultDestinationPayload(

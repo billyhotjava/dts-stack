@@ -19,6 +19,32 @@ import { Component } from "./utils";
 
 type Props = { base?: string };
 
+const PATH_COMPONENT_OVERRIDES: Record<string, string> = {
+	"/catalog/assets": "/pages/catalog/DatasetsPage",
+	"/catalog/search": "/pages/catalog/DataSearchPage",
+	"/catalog/metadata": "/pages/catalog/MetadataPage",
+	"/catalog/lineage": "/pages/catalog/LineagePage",
+	"/catalog/quality": "/pages/catalog/QualityPage",
+	"/foundation/access-changes": "/pages/foundation/AccessChangesPage",
+	"/explore/etl/scripts": "/pages/explore/etl/ScriptStudioPage",
+	"/explore/etl/orchestration": "/pages/explore/etl/OrchestrationPage",
+	"/explore/workbench": "/pages/explore/QueryWorkbenchPage",
+	"/governance/subjects": "/pages/governance/SubjectAreasPage",
+	"/governance/standards/glossary": "/pages/governance/GlossaryPage",
+	"/governance/standards/elements": "/pages/governance/ElementsPage",
+	"/governance/standards/reference": "/pages/governance/ReferenceCodesPage",
+	"/governance/templates": "/pages/governance/TemplatesPage",
+	"/governance/indicators/dictionary": "/pages/governance/IndicatorsPage",
+	"/governance/rules": "/pages/governance/QualityRulesPage",
+	"/governance/quality": "/pages/catalog/QualityPage",
+	"/security/data-security": "/pages/security/data-security",
+	"/security/dataset-access-approval": "/pages/security/DatasetAccessApprovalPage",
+	"/services/apis": "/pages/services/ApiServicesPage",
+	"/services/products": "/pages/services/DataProductsPage",
+	"/services/tokens": "/pages/services/TokensPage",
+	"/services/bi-links": "/pages/services/BiLinksPage",
+};
+
 export function DynamicMenuResolver({ base }: Props) {
 	const location = useLocation();
 	const menus = useMenuStore((s) => s.menus);
@@ -60,9 +86,12 @@ export function DynamicMenuResolver({ base }: Props) {
 		return redirectToFallback();
 	}
 
+	const resolvedPath = resolveMenuPath(match, meta);
 	const componentPath = typeof match.component === "string" ? match.component.trim() : "";
-	if (componentPath) {
-		return <>{Component(componentPath)}</>;
+	const overridePath =
+		!componentPath && resolvedPath && !isExternalPath(resolvedPath) ? PATH_COMPONENT_OVERRIDES[resolvedPath] : "";
+	if (componentPath || overridePath) {
+		return <>{Component(componentPath || overridePath)}</>;
 	}
 
 	const redirectPath = firstAccessibleChildPath(match);
@@ -70,7 +99,6 @@ export function DynamicMenuResolver({ base }: Props) {
 		return <Navigate to={redirectPath} replace />;
 	}
 
-	const resolvedPath = resolveMenuPath(match, meta);
 	if (resolvedPath && resolvedPath !== pathname && !isExternalPath(resolvedPath)) {
 		return <Navigate to={resolvedPath} replace />;
 	}

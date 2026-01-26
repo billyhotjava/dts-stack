@@ -25,10 +25,13 @@ export default function TransformPage() {
 				page: pagination.current - 1,
 				size: pagination.pageSize,
 			});
-			setTasks(result.content);
-			setPagination((prev) => ({ ...prev, total: result.totalElements }));
+			const content = Array.isArray(result?.content) ? result.content : [];
+			setTasks(content);
+			const total = typeof result?.totalElements === "number" ? result.totalElements : content.length;
+			setPagination((prev) => ({ ...prev, total }));
 		} catch (error: any) {
 			message.error("加载任务列表失败: " + (error.message || "未知错误"));
+			setTasks([]);
 		} finally {
 			setLoading(false);
 		}

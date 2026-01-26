@@ -102,6 +102,14 @@ public class IngestionServiceClient {
         return exchangeObject("/api/ingestion/metadata/tables", HttpMethod.POST, payload, null, longRestTemplate);
     }
 
+    public ApiResponse<Map<String, Object>> listChangeLogs(Map<String, ?> params) {
+        return exchangeTask("/api/ingestion/tasks/changes", HttpMethod.GET, null, params);
+    }
+
+    public ApiResponse<Map<String, Object>> createChangeLog(Object payload) {
+        return exchangeTask("/api/ingestion/tasks/changes", HttpMethod.POST, payload, null);
+    }
+
     private ApiResponse<Map<String, Object>> exchangeTaskLong(String path, HttpMethod method, Object payload) {
         return exchangeTask(path, method, payload, null, longRestTemplate);
     }

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, createContext, useContext, ReactNode } from 'react';
 
 export type Theme = 'light' | 'dark';
 
@@ -61,9 +61,7 @@ export function useTheme() {
   };
 }
 
-// Create a simple context for sharing theme across components
-import { createContext, useContext, ReactNode } from 'react';
-
+// Theme Context for sharing theme across components
 interface ThemeContextValue {
   theme: Theme;
   setTheme: (theme: Theme) => void;

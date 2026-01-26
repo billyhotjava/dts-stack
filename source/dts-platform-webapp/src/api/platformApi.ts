@@ -22,6 +22,8 @@ export const getTechMetadataTables = (params?: { keyword?: string; size?: number
 	api.get({ url: "/catalog/metadata/tables", params });
 export const getTechMetadataTableDetail = (fqn: string) =>
 	api.get({ url: "/catalog/metadata/tables/detail", params: { fqn } });
+export const searchCatalog = (params: { keyword: string; types?: string; limit?: number }) =>
+	api.get({ url: "/catalog/search", params });
 export const getDbtConfig = () => api.get({ url: "/etl/dbt/config" });
 export const updateDbtConfig = (data: any) => api.put({ url: "/etl/dbt/config", data });
 export const listDbtModels = () => api.get({ url: "/etl/dbt/models" });

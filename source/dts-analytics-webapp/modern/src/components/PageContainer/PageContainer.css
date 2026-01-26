@@ -1,0 +1,242 @@
+/* Metabase-style Page Container */
+
+.mb-page-container {
+  width: 100%;
+  margin: 0 auto;
+}
+
+/* Max Width Variants */
+.mb-page-container--max-sm {
+  max-width: 640px;
+}
+
+.mb-page-container--max-md {
+  max-width: 768px;
+}
+
+.mb-page-container--max-lg {
+  max-width: var(--page-max-width);
+}
+
+.mb-page-container--max-xl {
+  max-width: 1400px;
+}
+
+.mb-page-container--max-full {
+  max-width: 100%;
+}
+
+/* Padding Variants */
+.mb-page-container--padding-none {
+  padding: 0;
+}
+
+.mb-page-container--padding-sm {
+  padding: var(--spacing-md);
+}
+
+.mb-page-container--padding-md {
+  padding: var(--spacing-lg);
+}
+
+.mb-page-container--padding-lg {
+  padding: var(--spacing-xl);
+}
+
+@media (max-width: 768px) {
+  .mb-page-container--padding-sm,
+  .mb-page-container--padding-md,
+  .mb-page-container--padding-lg {
+    padding: var(--spacing-md);
+  }
+}
+
+/* Page Header */
+.mb-page-header {
+  margin-bottom: var(--spacing-lg);
+}
+
+.mb-page-header__breadcrumbs {
+  margin-bottom: var(--spacing-md);
+}
+
+.mb-page-header__content {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--spacing-lg);
+  flex-wrap: wrap;
+}
+
+.mb-page-header__titles {
+  flex: 1;
+  min-width: 0;
+}
+
+.mb-page-header__title {
+  font-size: var(--font-size-2xl);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-primary);
+  margin: 0;
+  line-height: var(--line-height-tight);
+}
+
+.mb-page-header__subtitle {
+  font-size: var(--font-size-md);
+  color: var(--color-text-secondary);
+  margin: var(--spacing-xs) 0 0;
+}
+
+.mb-page-header__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  flex-shrink: 0;
+}
+
+/* Page Section */
+.mb-page-section {
+  margin-bottom: var(--spacing-xl);
+}
+
+.mb-page-section:last-child {
+  margin-bottom: 0;
+}
+
+.mb-page-section__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-md);
+}
+
+.mb-page-section__titles {
+  flex: 1;
+  min-width: 0;
+}
+
+.mb-page-section__title {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+.mb-page-section__description {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  margin: var(--spacing-xs) 0 0;
+}
+
+.mb-page-section__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  flex-shrink: 0;
+}
+
+.mb-page-section__content {
+  /* Content styling */
+}
+
+/* Breadcrumb */
+.mb-breadcrumb {
+  font-size: var(--font-size-sm);
+}
+
+.mb-breadcrumb__list {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--spacing-xs);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.mb-breadcrumb__item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
+.mb-breadcrumb__link {
+  color: var(--color-text-secondary);
+  text-decoration: none;
+  transition: color var(--transition-fast);
+}
+
+.mb-breadcrumb__link:hover {
+  color: var(--color-brand);
+}
+
+.mb-breadcrumb__link--button {
+  padding: 0;
+  border: none;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+
+.mb-breadcrumb__text {
+  color: var(--color-text-secondary);
+}
+
+.mb-breadcrumb__text--current {
+  color: var(--color-text-primary);
+  font-weight: var(--font-weight-medium);
+}
+
+.mb-breadcrumb__separator {
+  display: flex;
+  align-items: center;
+  color: var(--color-text-tertiary);
+}
+
+/* Empty State */
+.mb-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-2xl);
+  text-align: center;
+}
+
+.mb-empty-state__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  margin-bottom: var(--spacing-md);
+  border-radius: var(--radius-full);
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-tertiary);
+}
+
+.mb-empty-state__icon svg {
+  width: 32px;
+  height: 32px;
+}
+
+.mb-empty-state__title {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  margin: 0 0 var(--spacing-xs);
+}
+
+.mb-empty-state__description {
+  font-size: var(--font-size-md);
+  color: var(--color-text-secondary);
+  margin: 0 0 var(--spacing-lg);
+  max-width: 400px;
+}
+
+.mb-empty-state__action {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}

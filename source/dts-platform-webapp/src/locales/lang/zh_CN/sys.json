@@ -150,7 +150,6 @@
 				"governanceImpact": "变更影响评估",
 				"governanceImpactCaption": "基于血缘的影响范围评估",
 				"foundation": "基础管理",
-				"foundationDataSources": "数据源配置",
 				"foundationDbtConfig": "dbt执行配置",
 				"iam": "权限与策略",
                 "iamClassification": "数据密级模型映射",

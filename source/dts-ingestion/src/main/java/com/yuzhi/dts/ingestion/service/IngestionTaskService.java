@@ -48,6 +48,7 @@ public class IngestionTaskService {
     private final AirflowDagService airflowDagService;
     private final com.yuzhi.dts.ingestion.service.etl.TargetTableProvisioner targetTableProvisioner;
     private final AuditService auditService;
+    private final IngestionTaskChangeLogService changeLogService;
 
     public IngestionTaskService(
         IngestionTaskRepository taskRepository,
@@ -58,7 +59,8 @@ public class IngestionTaskService {
         AirflowAdapter airflowAdapter,
         AirflowDagService airflowDagService,
         com.yuzhi.dts.ingestion.service.etl.TargetTableProvisioner targetTableProvisioner,
-        AuditService auditService
+        AuditService auditService,
+        IngestionTaskChangeLogService changeLogService
     ) {
         this.taskRepository = taskRepository;
         this.executionRepository = executionRepository;
@@ -69,6 +71,7 @@ public class IngestionTaskService {
         this.airflowDagService = airflowDagService;
         this.targetTableProvisioner = targetTableProvisioner;
         this.auditService = auditService;
+        this.changeLogService = changeLogService;
     }
 
     /**
@@ -101,6 +104,12 @@ public class IngestionTaskService {
 
         log.info("Created ingestion task with ID: {} by user: {}", savedTask.getId(), savedTask.getCreatedBy());
 
+        try {
+            changeLogService.recordTaskCreate(savedTask);
+        } catch (Exception ex) {
+            log.warn("Failed to record change log for task create: {}", savedTask.getId(), ex);
+        }
+
         // 记录审计
         auditService.auditAction(
             "INGESTION_TASK_CREATE",
@@ -121,6 +130,7 @@ public class IngestionTaskService {
 
         return taskRepository.findById(id)
             .map(existingTask -> {
+                IngestionTask before = snapshot(existingTask);
                 taskMapper.partialUpdate(existingTask, dto);
 
                 // 如果配置改变，重新生成Addax Job JSON
@@ -141,6 +151,12 @@ public class IngestionTaskService {
                 IngestionTask updatedTask = taskRepository.save(existingTask);
                 updatedTask = ensureAirflowDag(updatedTask);
                 log.info("Updated ingestion task ID: {} by user: {}", id, updatedTask.getLastModifiedBy());
+
+                try {
+                    changeLogService.recordTaskUpdate(before, updatedTask);
+                } catch (Exception ex) {
+                    log.warn("Failed to record change log for task update: {}", id, ex);
+                }
 
                 return taskMapper.toDto(updatedTask);
             })
@@ -431,5 +447,26 @@ public class IngestionTaskService {
             return taskRepository.save(task);
         }
         return task;
+    }
+
+    private IngestionTask snapshot(IngestionTask task) {
+        if (task == null) {
+            return null;
+        }
+        IngestionTask snap = new IngestionTask();
+        snap.setId(task.getId());
+        snap.setName(task.getName());
+        snap.setDescription(task.getDescription());
+        snap.setSourceType(task.getSourceType());
+        snap.setSourceConfig(task.getSourceConfig());
+        snap.setDestinationType(task.getDestinationType());
+        snap.setDestinationConfig(task.getDestinationConfig());
+        snap.setSyncMode(task.getSyncMode());
+        snap.setSyncSchedule(task.getSyncSchedule());
+        snap.setTableMapping(task.getTableMapping());
+        snap.setAddaxConfig(task.getAddaxConfig());
+        snap.setAirflowEnabled(task.getAirflowEnabled());
+        snap.setAirflowDagId(task.getAirflowDagId());
+        return snap;
     }
 }
