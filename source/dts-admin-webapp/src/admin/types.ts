@@ -126,6 +126,35 @@ export interface SystemConfigItem {
 	description?: string;
 }
 
+/** 运维配置项（含脱敏值和元数据） */
+export interface OpsConfigItem {
+	id: number;
+	key: string;
+	value: string; // 脱敏后的值
+	description?: string;
+	category: string;
+	sensitive: boolean;
+	dataType: "STRING" | "BOOLEAN" | "INTEGER" | "JSON";
+	editable: boolean;
+	sortOrder: number;
+	displayName?: string;
+	lastModified?: string;
+	lastModifiedBy?: string;
+}
+
+/** 运维配置分类 */
+export interface OpsConfigCategory {
+	key: string;
+	label: string;
+	items: OpsConfigItem[];
+}
+
+/** 运维配置响应 */
+export interface OpsConfigResponse {
+	categories: OpsConfigCategory[];
+	total: number;
+}
+
 export type WorkflowOwnerScope = "ANY" | "INST" | "DEPT";
 
 export interface WorkflowStepConfig {

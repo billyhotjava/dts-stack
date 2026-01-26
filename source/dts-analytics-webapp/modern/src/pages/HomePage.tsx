@@ -6,7 +6,8 @@ import { PageContainer, PageHeader } from "../components/PageContainer/PageConta
 import { Card, CardHeader, CardBody, StatCard } from "../ui/Card/Card";
 import { Button } from "../ui/Button/Button";
 import { Badge } from "../ui/Badge/Badge";
-import { Spinner, CardSkeleton } from "../ui/Loading/Spinner";
+import { Spinner } from "../ui/Loading/Spinner";
+import { CardSkeleton } from "../ui/Loading/Skeleton";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import "./page.css";
 

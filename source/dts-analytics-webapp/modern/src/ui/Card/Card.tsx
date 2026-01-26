@@ -41,7 +41,7 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(
 Card.displayName = 'Card';
 
 // Card Header
-export interface CardHeaderProps extends HTMLAttributes<HTMLDivElement> {
+export interface CardHeaderProps extends Omit<HTMLAttributes<HTMLDivElement>, 'title'> {
   title?: ReactNode;
   subtitle?: ReactNode;
   action?: ReactNode;
@@ -106,7 +106,7 @@ export function CardFooter({
 }
 
 // Collapsible Card
-export interface CollapsibleCardProps extends Omit<CardProps, 'variant'> {
+export interface CollapsibleCardProps extends Omit<CardProps, 'variant' | 'title' | 'onToggle'> {
   title: ReactNode;
   subtitle?: ReactNode;
   icon?: ReactNode;

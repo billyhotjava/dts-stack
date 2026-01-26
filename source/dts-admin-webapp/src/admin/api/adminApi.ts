@@ -389,4 +389,67 @@ export const adminApi = {
 			data: payload,
 		}),
 
+	// ============ 运维配置 API ============
+
+	/** 获取分类配置列表（敏感值脱敏） */
+	getOpsConfigs: () =>
+		apiClient.get<{
+			categories: Array<{
+				key: string;
+				label: string;
+				items: Array<{
+					id: number;
+					key: string;
+					value: string;
+					description?: string;
+					category: string;
+					sensitive: boolean;
+					dataType: "STRING" | "BOOLEAN" | "INTEGER" | "JSON";
+					editable: boolean;
+					sortOrder: number;
+					displayName?: string;
+					lastModified?: string;
+					lastModifiedBy?: string;
+				}>;
+			}>;
+			total: number;
+		}>({
+			url: "/admin/ops/configs",
+		}),
+
+	/** 更新配置项（触发审批流程） */
+	updateOpsConfig: (key: string, value: string, reason?: string) =>
+		apiClient.put<ChangeRequest>({
+			url: `/admin/ops/configs/${encodeURIComponent(key)}`,
+			data: { value, reason },
+		}),
+
+	/** 获取功能开关列表 */
+	getFeatureToggles: () =>
+		apiClient.get<
+			Array<{
+				id: number;
+				key: string;
+				value: string;
+				description?: string;
+				category: string;
+				sensitive: boolean;
+				dataType: "STRING" | "BOOLEAN" | "INTEGER" | "JSON";
+				editable: boolean;
+				sortOrder: number;
+				displayName?: string;
+				lastModified?: string;
+				lastModifiedBy?: string;
+			}>
+		>({
+			url: "/admin/ops/feature-toggles",
+		}),
+
+	/** 切换功能开关（触发审批流程） */
+	toggleFeature: (key: string, enabled: boolean) =>
+		apiClient.put<ChangeRequest>({
+			url: `/admin/ops/feature-toggles/${encodeURIComponent(key)}`,
+			data: { value: enabled },
+		}),
 };
+

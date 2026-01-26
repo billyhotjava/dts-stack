@@ -81,8 +81,8 @@ export default function PublicCardPage() {
 				(Array.isArray(query.value?.data?.cols) && Array.isArray(query.value?.data?.rows) ? (
 					<ChartRenderer
 						data={{
-							cols: query.value.data?.cols ?? [],
-							rows: query.value.data?.rows ?? []
+							cols: (query.value.data?.cols ?? []) as { name: string; display_name?: string; base_type?: string }[],
+							rows: (query.value.data?.rows ?? []) as any[][]
 						}}
 						display={card.state === "loaded" ? (card.value.display as VisualizationType) || "table" : "table"}
 						settings={card.state === "loaded" ? (card.value.visualization_settings as VisualizationSettings) || {} : {}}

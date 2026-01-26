@@ -111,11 +111,12 @@ export default function AccessChangesPage() {
 				size: nextSize,
 				sort: "createdDate,desc",
 			});
-			setChanges(result.content || []);
+			const content = Array.isArray(result?.content) ? result.content : [];
+			setChanges(content);
 			setPageState({
-				page: result.number + 1,
-				size: result.size,
-				total: result.totalElements,
+				page: typeof result?.number === "number" ? result.number + 1 : nextPage,
+				size: typeof result?.size === "number" ? result.size : nextSize,
+				total: typeof result?.totalElements === "number" ? result.totalElements : content.length,
 			});
 		} catch (error) {
 			console.error(error);

@@ -161,8 +161,8 @@ export default function CardDetailPage() {
 								{Array.isArray(queryState.value?.data?.cols) && Array.isArray(queryState.value?.data?.rows) ? (
 									<ChartRenderer
 										data={{
-											cols: queryState.value.data.cols ?? [],
-											rows: queryState.value.data.rows ?? []
+											cols: (queryState.value.data.cols ?? []) as { name: string; display_name?: string; base_type?: string }[],
+											rows: (queryState.value.data.rows ?? []) as any[][]
 										}}
 										display={(state.value.display as VisualizationType) || 'table'}
 										settings={(state.value.visualization_settings as VisualizationSettings) || {}}

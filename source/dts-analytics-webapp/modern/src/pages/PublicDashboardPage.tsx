@@ -129,11 +129,11 @@ export default function PublicDashboardPage() {
 								) : Array.isArray(result.value?.data?.cols) && Array.isArray(result.value?.data?.rows) ? (
 									<ChartRenderer
 										data={{
-											cols: result.value.data?.cols ?? [],
-											rows: result.value.data?.rows ?? []
+											cols: (result.value.data?.cols ?? []) as { name: string; display_name?: string; base_type?: string }[],
+											rows: (result.value.data?.rows ?? []) as any[][]
 										}}
 										display={(dc.card?.display as VisualizationType) || "table"}
-										settings={(dc.card?.visualization_settings as VisualizationSettings) || {}}
+										settings={((dc.card as any)?.visualization_settings as VisualizationSettings) || {}}
 									/>
 								) : (
 									<EmptyState title={t(locale, "common.empty")} />

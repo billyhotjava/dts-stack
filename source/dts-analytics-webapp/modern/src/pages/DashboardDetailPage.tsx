@@ -277,8 +277,8 @@ export default function DashboardDetailPage() {
 									) : (
 										<ChartRenderer
 											data={{
-												cols: result.value.data?.cols ?? [],
-												rows: result.value.data?.rows ?? []
+												cols: (result.value.data?.cols ?? []) as { name: string; display_name?: string; base_type?: string }[],
+												rows: (result.value.data?.rows ?? []) as any[][]
 											}}
 											display={(card?.display as VisualizationType) || "table"}
 											settings={(card?.visualization_settings as VisualizationSettings) || {}}
