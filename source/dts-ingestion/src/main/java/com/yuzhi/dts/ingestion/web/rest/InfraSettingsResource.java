@@ -1,8 +1,10 @@
 package com.yuzhi.dts.ingestion.web.rest;
 
+import com.yuzhi.dts.common.audit.AuditStage;
+import com.yuzhi.dts.ingestion.config.AddaxProperties;
+import com.yuzhi.dts.ingestion.config.AirflowProperties;
 import com.yuzhi.dts.ingestion.security.SecurityUtils;
 import com.yuzhi.dts.ingestion.service.audit.AuditService;
-import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.ingestion.service.infra.IngestionSettingsService;
 import java.net.URI;
 import java.time.Duration;
@@ -79,9 +81,20 @@ public class InfraSettingsResource {
     private final IngestionSettingsService settingsService;
     private final RestTemplate restTemplate;
     private final AuditService auditService;
-    public InfraSettingsResource(RestTemplateBuilder builder, IngestionSettingsService settingsService, AuditService auditService) {
+    private final AddaxProperties addaxProperties;
+    private final AirflowProperties airflowProperties;
+
+    public InfraSettingsResource(
+        RestTemplateBuilder builder,
+        IngestionSettingsService settingsService,
+        AuditService auditService,
+        AddaxProperties addaxProperties,
+        AirflowProperties airflowProperties
+    ) {
         this.settingsService = settingsService;
         this.auditService = auditService;
+        this.addaxProperties = addaxProperties;
+        this.airflowProperties = airflowProperties;
         RestTemplateBuilder baseBuilder = builder.setConnectTimeout(Duration.ofSeconds(5));
         this.restTemplate = baseBuilder.setReadTimeout(Duration.ofSeconds(10)).build();
     }
@@ -115,7 +128,17 @@ public class InfraSettingsResource {
         Map<String, Object> incoming = extractSettings(request);
         IngestionSettingsService.SettingsSnapshot snapshot = settingsService.getSettings(normalized);
         Map<String, Object> merged = mergeSettings(snapshot.raw(), incoming, definition);
+        String consistencyError = validateConsistency(normalized, merged);
         String operator = SecurityUtils.getCurrentUserLogin().orElse("system");
+        if (StringUtils.hasText(consistencyError)) {
+            auditService.auditAction(
+                "INFRA_SETTINGS_UPDATE",
+                AuditStage.FAIL,
+                normalized,
+                Map.of("summary", "更新集成配置失败", "service", normalized, "operator", operator, "error", consistencyError)
+            );
+            return ApiResponses.error(400, consistencyError);
+        }
         settingsService.upsertSettings(normalized, merged, operator);
         auditService.auditAction(
             "INFRA_SETTINGS_UPDATE",
@@ -140,6 +163,17 @@ public class InfraSettingsResource {
         Map<String, Object> incoming = extractSettings(request);
         IngestionSettingsService.SettingsSnapshot snapshot = settingsService.getSettings(normalized);
         Map<String, Object> merged = mergeSettings(snapshot.raw(), incoming, definition);
+        String consistencyError = validateConsistency(normalized, merged);
+        if (StringUtils.hasText(consistencyError)) {
+            AuditStage stage = AuditStage.FAIL;
+            auditService.auditAction(
+                "INFRA_SETTINGS_TEST",
+                stage,
+                normalized,
+                Map.of("summary", "测试集成配置失败", "service", normalized, "operator", SecurityUtils.getCurrentUserLogin().orElse("system"), "error", consistencyError)
+            );
+            return ApiResponses.error(400, consistencyError);
+        }
         Map<String, Object> result = runTest(normalized, merged);
         AuditStage stage = Boolean.TRUE.equals(result.get("success")) ? AuditStage.SUCCESS : AuditStage.FAIL;
         auditService.auditAction(
@@ -170,6 +204,14 @@ public class InfraSettingsResource {
         if (!StringUtils.hasText(jobDir)) {
             return Map.of("success", false, "message", "请先填写 Addax 作业目录");
         }
+        String expectedJobDir = normalizeDirPath(addaxProperties.getJobDir());
+        if (!StringUtils.hasText(expectedJobDir)) {
+            return Map.of("success", false, "message", "系统未配置 Addax 作业目录，请联系管理员");
+        }
+        String normalized = normalizeDirPath(jobDir);
+        if (!pathEquals(normalized, expectedJobDir)) {
+            return Map.of("success", false, "message", "Addax 作业目录必须与系统配置一致: " + expectedJobDir);
+        }
         java.nio.file.Path path = java.nio.file.Paths.get(jobDir);
         if (!java.nio.file.Files.exists(path)) {
             return Map.of("success", false, "message", "作业目录不存在: " + jobDir);
@@ -181,6 +223,18 @@ public class InfraSettingsResource {
         String baseUrl = stringValue(settings.get("baseUrl"));
         if (!StringUtils.hasText(baseUrl)) {
             return Map.of("success", false, "message", "请先填写 Airflow 地址");
+        }
+        String dagsDir = stringValue(settings.get("dagsDir"));
+        if (!StringUtils.hasText(dagsDir)) {
+            return Map.of("success", false, "message", "请先填写 Airflow DAG 目录");
+        }
+        String expectedDagsDir = normalizeDirPath(airflowProperties.getDagsDir());
+        if (!StringUtils.hasText(expectedDagsDir)) {
+            return Map.of("success", false, "message", "系统未配置 Airflow DAG 目录，请联系管理员");
+        }
+        String normalized = normalizeDirPath(dagsDir);
+        if (!pathEquals(normalized, expectedDagsDir)) {
+            return Map.of("success", false, "message", "Airflow DAG 目录必须与系统配置一致: " + expectedDagsDir);
         }
         String apiPath = stringValue(settings.getOrDefault("apiPath", "/api/v1"));
         String username = stringValue(settings.get("username"));
@@ -232,6 +286,38 @@ public class InfraSettingsResource {
         } catch (Exception ex) {
             return Map.of("success", false, "message", "连接失败: " + ex.getMessage());
         }
+    }
+
+    private String validateConsistency(String service, Map<String, Object> settings) {
+        if (IngestionSettingsService.SERVICE_ADDAX.equals(service) && booleanValue(settings.get("enabled"))) {
+            String jobDir = stringValue(settings.get("jobDir"));
+            String expectedJobDir = normalizeDirPath(addaxProperties.getJobDir());
+            if (!StringUtils.hasText(expectedJobDir)) {
+                return "系统未配置 Addax 作业目录，无法启用 Addax";
+            }
+            if (!StringUtils.hasText(jobDir)) {
+                return "请先填写 Addax 作业目录";
+            }
+            String normalized = normalizeDirPath(jobDir);
+            if (!pathEquals(normalized, expectedJobDir)) {
+                return "Addax 作业目录必须与系统配置一致: " + expectedJobDir;
+            }
+        }
+        if (IngestionSettingsService.SERVICE_AIRFLOW.equals(service) && booleanValue(settings.get("enabled"))) {
+            String dagsDir = stringValue(settings.get("dagsDir"));
+            String expectedDagsDir = normalizeDirPath(airflowProperties.getDagsDir());
+            if (!StringUtils.hasText(expectedDagsDir)) {
+                return "系统未配置 Airflow DAG 目录，无法启用 Airflow";
+            }
+            if (!StringUtils.hasText(dagsDir)) {
+                return "请先填写 Airflow DAG 目录";
+            }
+            String normalized = normalizeDirPath(dagsDir);
+            if (!pathEquals(normalized, expectedDagsDir)) {
+                return "Airflow DAG 目录必须与系统配置一致: " + expectedDagsDir;
+            }
+        }
+        return null;
     }
 
     private String normalizeService(String service) {
@@ -404,6 +490,25 @@ public class InfraSettingsResource {
             resolved = resolved.substring(0, resolved.length() - 1);
         }
         return resolved;
+    }
+
+    private String normalizeDirPath(String value) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        try {
+            java.nio.file.Path path = java.nio.file.Paths.get(value.trim()).normalize();
+            return path.toString();
+        } catch (Exception ex) {
+            return value.trim();
+        }
+    }
+
+    private boolean pathEquals(String left, String right) {
+        if (!StringUtils.hasText(left) || !StringUtils.hasText(right)) {
+            return false;
+        }
+        return left.trim().equals(right.trim());
     }
 
     private String stringValue(Object value) {

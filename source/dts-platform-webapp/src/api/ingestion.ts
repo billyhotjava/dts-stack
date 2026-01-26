@@ -39,6 +39,37 @@ export interface IngestionExecutionDTO {
   createdAt?: string;
 }
 
+export interface ColumnInfo {
+  name: string;
+  jdbcType?: number;
+  typeName?: string;
+  columnSize?: number;
+  decimalDigits?: number;
+}
+
+export interface TableInfo {
+  schema?: string;
+  name: string;
+  type?: string;
+  columns?: ColumnInfo[];
+}
+
+export interface TableDiscoveryFilter {
+  schema?: string;
+  tablePattern?: string;
+  limit?: number;
+  includeColumns?: boolean;
+}
+
+export interface TableDiscoveryRequest {
+  source: {
+    type?: string;
+    config?: Record<string, any>;
+    driverVersion?: string;
+  };
+  filter?: TableDiscoveryFilter;
+}
+
 export interface PageResult<T> {
   content: T[];
   totalElements: number;
@@ -99,6 +130,13 @@ class IngestionTaskAPI {
   }
 
   /**
+   * 强制重建 DAG
+   */
+  async rebuildDag(id: number): Promise<IngestionTaskDTO> {
+    return api.post({ url: `/ingestion/tasks/${id}/dag/rebuild` });
+  }
+
+  /**
    * 获取任务执行历史
    */
   async getExecutions(
@@ -125,7 +163,28 @@ class IngestionTaskAPI {
       throw error;
     }
   }
+
+  /**
+   * 源端表发现
+   */
+  async discoverTables(data: TableDiscoveryRequest): Promise<TableInfo[]> {
+    const payload: any = await api.post({ url: "/ingestion/metadata/tables", data });
+    if (Array.isArray(payload)) {
+      return payload as TableInfo[];
+    }
+    if (payload && typeof payload === "object") {
+      const inner = (payload as any).data;
+      const status = (payload as any).status;
+      const message = (payload as any).message;
+      if (status && status !== 200 && status !== "200") {
+        throw new Error(message || "获取表清单失败");
+      }
+      if (Array.isArray(inner)) {
+        return inner as TableInfo[];
+      }
+    }
+    return [];
+  }
 }
 
 export const ingestionTaskAPI = new IngestionTaskAPI();
-

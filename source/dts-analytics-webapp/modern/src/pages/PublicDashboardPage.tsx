@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router";
 import { analyticsApi, type DashboardQueryResponse, type PublicDashboardDetail } from "../api/analyticsApi";
-import { DataTable } from "../components/DataTable";
+import { ChartRenderer, type VisualizationType, type VisualizationSettings } from "../components/charts";
 import { EmptyState } from "../components/EmptyState";
 import { ErrorNotice } from "../components/ErrorNotice";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
@@ -127,7 +127,14 @@ export default function PublicDashboardPage() {
 								) : result.state === "error" ? (
 									<ErrorNotice locale={locale} error={result.error} />
 								) : Array.isArray(result.value?.data?.cols) && Array.isArray(result.value?.data?.rows) ? (
-									<DataTable cols={result.value.data?.cols ?? []} rows={result.value.data?.rows ?? []} maxRows={50} />
+									<ChartRenderer
+										data={{
+											cols: result.value.data?.cols ?? [],
+											rows: result.value.data?.rows ?? []
+										}}
+										display={(dc.card?.display as VisualizationType) || "table"}
+										settings={(dc.card?.visualization_settings as VisualizationSettings) || {}}
+									/>
 								) : (
 									<EmptyState title={t(locale, "common.empty")} />
 								)}

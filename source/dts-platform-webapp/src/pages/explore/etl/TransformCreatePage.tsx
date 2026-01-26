@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { Alert, Button, Card, Collapse, Divider, Form, Input, Radio, Space, Switch, Typography } from "antd";
+import { Alert, Button, Card, Collapse, Divider, Form, Input, Radio, Space, Steps, Switch, Table, Typography } from "antd";
 import { SaveOutlined } from "@ant-design/icons";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
 import { createIngestionTask } from "@/api/platformApi";
 import { useUserInfo } from "@/store/userStore";
 import { useParams, useRouter } from "@/routes/hooks";
-import { ingestionTaskAPI, type IngestionTaskDTO } from "@/api/ingestion";
+import { ingestionTaskAPI, type IngestionTaskDTO, type TableInfo } from "@/api/ingestion";
 
 const { Text } = Typography;
 
@@ -43,6 +43,25 @@ const parseJson = (value?: string, label?: string) => {
 	} catch {
 		throw new Error(`${label || "配置"} JSON 格式错误`);
 	}
+};
+
+const buildTableKey = (table: TableInfo) =>
+	normalizeText(table.schema) ? `${table.schema}.${table.name}` : table.name;
+
+const applyTablesToConfig = (rawConfig: Record<string, any> | undefined, tables: string[]) => {
+	if (!rawConfig) return rawConfig;
+	const config = { ...rawConfig };
+	if (Array.isArray(config.connection) && config.connection.length) {
+		const first = { ...config.connection[0], table: tables };
+		config.connection = [first, ...config.connection.slice(1)];
+		return config;
+	}
+	if (config.connection && typeof config.connection === "object") {
+		config.connection = { ...(config.connection as Record<string, any>), table: tables };
+		return config;
+	}
+	config.table = tables;
+	return config;
 };
 
 const buildReaderConfig = (values: Record<string, any>) => {
@@ -228,9 +247,14 @@ export default function TransformCreatePage() {
 	const [hasDraft, setHasDraft] = useState(false);
 	const [loadingTask, setLoadingTask] = useState(false);
 	const [editingTask, setEditingTask] = useState<IngestionTaskDTO | null>(null);
+	const [discoveringTables, setDiscoveringTables] = useState(false);
+	const [discoveredTables, setDiscoveredTables] = useState<TableInfo[]>([]);
+	const [selectedTableKeys, setSelectedTableKeys] = useState<string[]>([]);
+	const [discoverError, setDiscoverError] = useState("");
+	const [currentStep, setCurrentStep] = useState(0);
 	const [form] = Form.useForm();
 	const router = useRouter();
-	const params = useParams<{ id?: string }>();
+	const params = useParams();
 	const editId = params?.id ? Number(params.id) : undefined;
 	const isEdit = Number.isFinite(editId);
 	const userInfo = useUserInfo() as any;
@@ -247,6 +271,16 @@ export default function TransformCreatePage() {
 			readerColumns: "*",
 			writerColumns: "*",
 		}),
+		[]
+	);
+
+	const stepItems = useMemo(
+		() => [
+			{ key: "basic", title: "基础信息" },
+			{ key: "reader", title: "源端配置" },
+			{ key: "writer", title: "目标配置" },
+			{ key: "review", title: "预览与执行" },
+		],
 		[]
 	);
 
@@ -302,6 +336,136 @@ export default function TransformCreatePage() {
 		}
 	};
 
+	const handleDiscoverTables = async () => {
+		try {
+			setDiscoverError("");
+			setDiscoveringTables(true);
+			const values = form.getFieldsValue(true);
+			const isJsonMode = values.editorMode === "json";
+			const readerType = normalizeText(values.readerType);
+			if (!readerType) {
+				throw new Error("请先填写 Reader 类型");
+			}
+			const readerConfig = isJsonMode
+				? (parseJson(values.readerConfig, "Reader 配置") as Record<string, any> | undefined)
+				: buildReaderConfig(values);
+			const schema = normalizeText(values.readerSchema);
+			const tablePattern = normalizeText(values.readerTablePattern);
+			const rawTables = await ingestionTaskAPI.discoverTables({
+				source: {
+					type: readerType,
+					config: readerConfig || {},
+				},
+				filter: {
+					schema: schema || undefined,
+					tablePattern: tablePattern || undefined,
+					limit: 500,
+				},
+			});
+			const tables = Array.isArray(rawTables) ? rawTables : [];
+			setDiscoveredTables(tables);
+			setSelectedTableKeys([]);
+			if (tables.length === 0) {
+				setDiscoverError("未发现可用表");
+			}
+		} catch (err: any) {
+			setDiscoverError(err?.message || "获取表清单失败");
+		} finally {
+			setDiscoveringTables(false);
+		}
+	};
+
+	const handleApplyTables = () => {
+		if (!selectedTableKeys.length) {
+			toast.error("请先选择表");
+			return;
+		}
+		try {
+			const tables = selectedTableKeys;
+			const values = form.getFieldsValue(true);
+			const isJsonMode = values.editorMode === "json";
+			if (isJsonMode) {
+				const readerConfig = parseJson(values.readerConfig, "Reader 配置") as Record<string, any> | undefined;
+				const nextReader = applyTablesToConfig(readerConfig, tables);
+				form.setFieldValue("readerConfig", JSON.stringify(nextReader || {}, null, 2));
+				if (!values.useDefaultDestination) {
+					const writerConfig = parseJson(values.writerConfig, "Writer 配置") as Record<string, any> | undefined;
+					const nextWriter = applyTablesToConfig(writerConfig, tables);
+					form.setFieldValue("writerConfig", JSON.stringify(nextWriter || {}, null, 2));
+				}
+			} else {
+				form.setFieldValue("readerTables", tables.join("\n"));
+				if (!values.useDefaultDestination) {
+					form.setFieldValue("writerTables", tables.join("\n"));
+				}
+			}
+			toast.success("已更新表清单");
+		} catch (err: any) {
+			toast.error(err?.message || "更新表清单失败");
+		}
+	};
+
+	const resolveStepFields = (stepIndex: number, values: Record<string, any>) => {
+		const isJsonMode = values?.editorMode === "json";
+		const useDefault = Boolean(values?.useDefaultDestination);
+		switch (stepIndex) {
+			case 0:
+				return ["editorMode", "name", "description", "sourceSystem"];
+			case 1:
+				return isJsonMode
+					? ["readerType", "readerConfig"]
+					: ["readerType", "readerJdbcUrls", "readerTables"];
+			case 2:
+				if (useDefault) return ["useDefaultDestination"];
+				return isJsonMode
+					? ["useDefaultDestination", "writerType", "writerConfig"]
+					: ["useDefaultDestination", "writerType", "writerJdbcUrls", "writerTables"];
+			case 3:
+				return ["jobConfig", "airflowEnabled", "runNow"];
+			default:
+				return [];
+		}
+	};
+
+	const validateStep = async (stepIndex: number) => {
+		const values = form.getFieldsValue(true);
+		const fields = resolveStepFields(stepIndex, values);
+		if (!fields.length) return true;
+		try {
+			await form.validateFields(fields);
+			return true;
+		} catch {
+			return false;
+		}
+	};
+
+	const handleStepChange = async (nextStep: number) => {
+		if (nextStep <= currentStep) {
+			setCurrentStep(nextStep);
+			return;
+		}
+		const ok = await validateStep(currentStep);
+		if (!ok) {
+			toast.error("请先完成当前步骤必填项");
+			return;
+		}
+		setCurrentStep(nextStep);
+	};
+
+	const handleNextStep = async () => {
+		if (currentStep >= stepItems.length - 1) return;
+		const ok = await validateStep(currentStep);
+		if (!ok) {
+			toast.error("请先完成当前步骤必填项");
+			return;
+		}
+		setCurrentStep((prev) => prev + 1);
+	};
+
+	const handlePrevStep = () => {
+		setCurrentStep((prev) => Math.max(prev - 1, 0));
+	};
+
 	const handleSubmit = async (values: any) => {
 		try {
 			setSaving(true);
@@ -329,6 +493,7 @@ export default function TransformCreatePage() {
 					sourceConfig: (readerConfig as Record<string, any>) || {},
 					destinationType: values.useDefaultDestination ? undefined : normalizeText(values.writerType),
 					destinationConfig: writerConfig as Record<string, any> | undefined,
+					syncMode: editingTask?.syncMode || "full",
 					addaxConfig: (jobConfig as Record<string, any>) || editingTask?.addaxConfig,
 					airflowEnabled: Boolean(values.airflowEnabled),
 				};
@@ -392,6 +557,7 @@ export default function TransformCreatePage() {
 								} else {
 									form.resetFields();
 								}
+								setCurrentStep(0);
 							}}
 						>
 							重置表单
@@ -403,9 +569,6 @@ export default function TransformCreatePage() {
 							disabled={isEdit}
 						>
 							保存草稿{hasDraft ? " ✓" : ""}
-						</Button>
-						<Button type="primary" loading={saving} onClick={() => form.submit()} disabled={loadingTask}>
-							{isEdit ? "保存修改" : "提交任务"}
 						</Button>
 					</Space>
 				}
@@ -424,114 +587,53 @@ export default function TransformCreatePage() {
 					initialValues={initialValues}
 					onFinish={handleSubmit}
 				>
-					<Form.Item name="editorMode" label="配置方式">
-						<Radio.Group>
-							<Radio.Button value="visual">可视化</Radio.Button>
-							<Radio.Button value="json">JSON</Radio.Button>
-						</Radio.Group>
-					</Form.Item>
-					<Form.Item
-						name="name"
-						label="任务名称"
-						rules={[{ required: true, message: "请输入任务名称" }]}
-					>
-						<Input placeholder="例如：pg-lake-task1" />
-					</Form.Item>
-					<Form.Item name="description" label="任务描述">
-						<Input.TextArea rows={2} placeholder="可选，说明任务用途" />
-					</Form.Item>
-					<Form.Item name="sourceSystem" label="源系统标识">
-						<Input placeholder="可选，例如：erp、crm（用于绑定 DAG）" />
-					</Form.Item>
-					<Divider orientation="left">Reader 配置</Divider>
-					<Form.Item
-						name="readerType"
-						label="Reader 类型"
-						rules={[{ required: true, message: "请输入 Reader 类型" }]}
-					>
-						<Input placeholder="例如：postgresqlreader" />
-					</Form.Item>
-					{editorMode === "json" ? (
-						<Form.Item
-							name="readerConfig"
-							label="Reader 配置 (JSON)"
-							rules={[{ required: true, message: "请输入 Reader 配置" }, { validator: jsonValidator("Reader 配置") }]}
-						>
-							<Input.TextArea rows={6} placeholder='{"username":"xxx","password":"xxx","column":["*"]}' />
-						</Form.Item>
-					) : (
+					<Steps
+						current={currentStep}
+						items={stepItems}
+						onChange={handleStepChange}
+						className="mb-6"
+					/>
+					{currentStep === 0 && (
 						<>
-							<div className="grid gap-4 md:grid-cols-2">
-								<Form.Item
-									name="readerJdbcUrls"
-									label="Reader JDBC URL（每行一个）"
-									rules={[{ required: true, message: "请输入 JDBC URL" }]}
-								>
-									<Input.TextArea rows={3} placeholder="jdbc:postgresql://host:5432/db" />
-								</Form.Item>
-								<Form.Item
-									name="readerTables"
-									label="Reader 表（每行一个）"
-									rules={[{ required: true, message: "请输入表名" }]}
-								>
-									<Input.TextArea rows={3} placeholder="source_table" />
-								</Form.Item>
-							</div>
-							<div className="grid gap-4 md:grid-cols-2">
-								<Form.Item name="readerColumns" label="Reader 字段（逗号分隔）">
-									<Input placeholder="* 或 id,name,created_at" />
-								</Form.Item>
-								<Form.Item name="readerWhere" label="Reader 过滤条件">
-									<Input placeholder="可选，例如：status = 1" />
-								</Form.Item>
-							</div>
-							<div className="grid gap-4 md:grid-cols-2">
-								<Form.Item name="readerUsername" label="Reader 用户名">
-									<Input placeholder="数据库账号" />
-								</Form.Item>
-								<Form.Item name="readerPassword" label="Reader 密码">
-									<Input.Password placeholder="******" />
-								</Form.Item>
-							</div>
-							<Collapse
-								ghost
-								items={[
-									{
-										key: "reader-advanced",
-										label: "Reader 高级参数",
-										children: (
-											<div className="space-y-4">
-												<Form.Item name="readerQuerySql" label="Reader 查询 SQL（每行一条）">
-													<Input.TextArea rows={3} placeholder="select * from t where ..." />
-												</Form.Item>
-												<Form.Item name="readerExtraConfig" label="Reader 扩展配置 JSON">
-													<Input.TextArea rows={4} placeholder='{"splitPk":"id"}' />
-												</Form.Item>
-											</div>
-										),
-									},
-								]}
-							/>
+							<Form.Item name="editorMode" label="配置方式">
+								<Radio.Group>
+									<Radio.Button value="visual">可视化</Radio.Button>
+									<Radio.Button value="json">JSON</Radio.Button>
+								</Radio.Group>
+							</Form.Item>
+							<Form.Item
+								name="name"
+								label="任务名称"
+								rules={[{ required: true, message: "请输入任务名称" }]}
+							>
+								<Input placeholder="例如：pg-lake-task1" />
+							</Form.Item>
+							<Form.Item name="description" label="任务描述">
+								<Input.TextArea rows={2} placeholder="可选，说明任务用途" />
+							</Form.Item>
+							<Form.Item name="sourceSystem" label="源系统标识">
+								<Input placeholder="可选，例如：erp、crm（用于绑定 DAG）" />
+							</Form.Item>
 						</>
 					)}
-					<Form.Item name="useDefaultDestination" label="使用平台默认数据湖" valuePropName="checked">
-						<Switch />
-					</Form.Item>
-					{!useDefaultDestination && (
+					{currentStep === 1 && (
 						<>
-							<Divider orientation="left">Writer 配置</Divider>
+							<Divider orientation="left">Reader 配置</Divider>
 							<Form.Item
-								name="writerType"
-								label="Writer 类型"
-								rules={[{ required: true, message: "请输入 Writer 类型" }]}
+								name="readerType"
+								label="Reader 类型"
+								rules={[{ required: true, message: "请输入 Reader 类型" }]}
 							>
-								<Input placeholder="例如：postgresqlwriter" />
+								<Input placeholder="例如：postgresqlreader" />
 							</Form.Item>
 							{editorMode === "json" ? (
 								<Form.Item
-									name="writerConfig"
-									label="Writer 配置 (JSON)"
-									rules={[{ required: true, message: "请输入 Writer 配置" }, { validator: jsonValidator("Writer 配置") }]}
+									name="readerConfig"
+									label="Reader 配置 (JSON)"
+									rules={[
+										{ required: true, message: "请输入 Reader 配置" },
+										{ validator: jsonValidator("Reader 配置") },
+									]}
 								>
 									<Input.TextArea rows={6} placeholder='{"username":"xxx","password":"xxx","column":["*"]}' />
 								</Form.Item>
@@ -539,55 +641,49 @@ export default function TransformCreatePage() {
 								<>
 									<div className="grid gap-4 md:grid-cols-2">
 										<Form.Item
-											name="writerJdbcUrls"
-											label="Writer JDBC URL（每行一个）"
+											name="readerJdbcUrls"
+											label="Reader JDBC URL（每行一个）"
 											rules={[{ required: true, message: "请输入 JDBC URL" }]}
 										>
 											<Input.TextArea rows={3} placeholder="jdbc:postgresql://host:5432/db" />
 										</Form.Item>
 										<Form.Item
-											name="writerTables"
-											label="Writer 表（每行一个）"
+											name="readerTables"
+											label="Reader 表（每行一个）"
 											rules={[{ required: true, message: "请输入表名" }]}
 										>
-											<Input.TextArea rows={3} placeholder="target_table" />
+											<Input.TextArea rows={3} placeholder="source_table" />
 										</Form.Item>
 									</div>
 									<div className="grid gap-4 md:grid-cols-2">
-										<Form.Item name="writerColumns" label="Writer 字段（逗号分隔）">
+										<Form.Item name="readerColumns" label="Reader 字段（逗号分隔）">
 											<Input placeholder="* 或 id,name,created_at" />
 										</Form.Item>
-										<Form.Item name="writerWriteMode" label="Writer 写入模式">
-											<Input placeholder="insert / replace / update" />
+										<Form.Item name="readerWhere" label="Reader 过滤条件">
+											<Input placeholder="可选，例如：status = 1" />
 										</Form.Item>
 									</div>
 									<div className="grid gap-4 md:grid-cols-2">
-										<Form.Item name="writerUsername" label="Writer 用户名">
+										<Form.Item name="readerUsername" label="Reader 用户名">
 											<Input placeholder="数据库账号" />
 										</Form.Item>
-										<Form.Item name="writerPassword" label="Writer 密码">
+										<Form.Item name="readerPassword" label="Reader 密码">
 											<Input.Password placeholder="******" />
 										</Form.Item>
 									</div>
-									<Form.Item name="writerSchema" label="Writer Schema">
-										<Input placeholder="可选，例如 public" />
-									</Form.Item>
 									<Collapse
 										ghost
 										items={[
 											{
-												key: "writer-advanced",
-												label: "Writer 高级参数",
+												key: "reader-advanced",
+												label: "Reader 高级参数",
 												children: (
 													<div className="space-y-4">
-														<Form.Item name="writerPreSql" label="Writer 前置 SQL（每行一条）">
-															<Input.TextArea rows={3} placeholder="delete from t where ..." />
+														<Form.Item name="readerQuerySql" label="Reader 查询 SQL（每行一条）">
+															<Input.TextArea rows={3} placeholder="select * from t where ..." />
 														</Form.Item>
-														<Form.Item name="writerPostSql" label="Writer 后置 SQL（每行一条）">
-															<Input.TextArea rows={3} placeholder="analyze table t" />
-														</Form.Item>
-														<Form.Item name="writerExtraConfig" label="Writer 扩展配置 JSON">
-															<Input.TextArea rows={4} placeholder='{"batchSize":1000}' />
+														<Form.Item name="readerExtraConfig" label="Reader 扩展配置 JSON">
+															<Input.TextArea rows={4} placeholder='{"splitPk":"id"}' />
 														</Form.Item>
 													</div>
 												),
@@ -596,36 +692,190 @@ export default function TransformCreatePage() {
 									/>
 								</>
 							)}
+							<Divider orientation="left">源端表发现</Divider>
+							<Card type="inner">
+								<div className="grid gap-4 md:grid-cols-3">
+									<Form.Item name="readerSchema" label="Schema（可选）">
+										<Input placeholder="例如 public" />
+									</Form.Item>
+									<Form.Item name="readerTablePattern" label="表名筛选（可选）">
+										<Input placeholder="支持 SQL LIKE，例如 ods_%" />
+									</Form.Item>
+									<Form.Item label="操作">
+										<Space>
+											<Button onClick={handleDiscoverTables} loading={discoveringTables}>
+												获取表清单
+											</Button>
+											<Button onClick={handleApplyTables} disabled={!selectedTableKeys.length}>
+												应用选择
+											</Button>
+										</Space>
+									</Form.Item>
+								</div>
+								{discoverError ? (
+									<Alert type="warning" message={discoverError} showIcon className="mb-3" />
+								) : null}
+								<Table
+									rowKey={(record) => buildTableKey(record)}
+									size="small"
+									loading={discoveringTables}
+									dataSource={discoveredTables}
+									rowSelection={{
+										selectedRowKeys: selectedTableKeys,
+										onChange: (keys) => setSelectedTableKeys(keys.map((key) => String(key))),
+									}}
+									columns={[
+										{ title: "Schema", dataIndex: "schema", width: 140 },
+										{ title: "表名", dataIndex: "name" },
+										{ title: "类型", dataIndex: "type", width: 120 },
+									]}
+									pagination={{ pageSize: 8 }}
+								/>
+								<Text type="secondary" className="block mt-2">
+									已选择 {selectedTableKeys.length} 张表
+								</Text>
+							</Card>
 						</>
 					)}
-					<Form.Item name="jobConfig" label="作业参数 (JSON，可选)" rules={[{ validator: jsonValidator("作业参数") }]}>
-						<Input.TextArea rows={4} placeholder='{"setting":{"speed":{"channel":3}}}' />
-					</Form.Item>
-					<Card type="inner" title="作业预览">
-						{previewState.error ? (
-							<Alert type="warning" message={previewState.error} showIcon />
+					{currentStep === 2 && (
+						<>
+							<Divider orientation="left">目标端配置</Divider>
+							<Form.Item name="useDefaultDestination" label="使用平台默认数据湖" valuePropName="checked">
+								<Switch />
+							</Form.Item>
+							{!useDefaultDestination && (
+								<>
+									<Divider orientation="left">Writer 配置</Divider>
+									<Form.Item
+										name="writerType"
+										label="Writer 类型"
+										rules={[{ required: true, message: "请输入 Writer 类型" }]}
+									>
+										<Input placeholder="例如：postgresqlwriter" />
+									</Form.Item>
+									{editorMode === "json" ? (
+										<Form.Item
+											name="writerConfig"
+											label="Writer 配置 (JSON)"
+											rules={[
+												{ required: true, message: "请输入 Writer 配置" },
+												{ validator: jsonValidator("Writer 配置") },
+											]}
+										>
+											<Input.TextArea rows={6} placeholder='{"username":"xxx","password":"xxx","column":["*"]}' />
+										</Form.Item>
+									) : (
+										<>
+											<div className="grid gap-4 md:grid-cols-2">
+												<Form.Item
+													name="writerJdbcUrls"
+													label="Writer JDBC URL（每行一个）"
+													rules={[{ required: true, message: "请输入 JDBC URL" }]}
+												>
+													<Input.TextArea rows={3} placeholder="jdbc:postgresql://host:5432/db" />
+												</Form.Item>
+												<Form.Item
+													name="writerTables"
+													label="Writer 表（每行一个）"
+													rules={[{ required: true, message: "请输入表名" }]}
+												>
+													<Input.TextArea rows={3} placeholder="target_table" />
+												</Form.Item>
+											</div>
+											<div className="grid gap-4 md:grid-cols-2">
+												<Form.Item name="writerColumns" label="Writer 字段（逗号分隔）">
+													<Input placeholder="* 或 id,name,created_at" />
+												</Form.Item>
+												<Form.Item name="writerWriteMode" label="Writer 写入模式">
+													<Input placeholder="insert / replace / update" />
+												</Form.Item>
+											</div>
+											<div className="grid gap-4 md:grid-cols-2">
+												<Form.Item name="writerUsername" label="Writer 用户名">
+													<Input placeholder="数据库账号" />
+												</Form.Item>
+												<Form.Item name="writerPassword" label="Writer 密码">
+													<Input.Password placeholder="******" />
+												</Form.Item>
+											</div>
+											<Form.Item name="writerSchema" label="Writer Schema">
+												<Input placeholder="可选，例如 public" />
+											</Form.Item>
+											<Collapse
+												ghost
+												items={[
+													{
+														key: "writer-advanced",
+														label: "Writer 高级参数",
+														children: (
+															<div className="space-y-4">
+																<Form.Item name="writerPreSql" label="Writer 前置 SQL（每行一条）">
+																	<Input.TextArea rows={3} placeholder="delete from t where ..." />
+																</Form.Item>
+																<Form.Item name="writerPostSql" label="Writer 后置 SQL（每行一条）">
+																	<Input.TextArea rows={3} placeholder="analyze table t" />
+																</Form.Item>
+																<Form.Item name="writerExtraConfig" label="Writer 扩展配置 JSON">
+																	<Input.TextArea rows={4} placeholder='{"batchSize":1000}' />
+																</Form.Item>
+															</div>
+														),
+													},
+												]}
+											/>
+										</>
+									)}
+								</>
+							)}
+						</>
+					)}
+					{currentStep === 3 && (
+						<>
+							<Form.Item name="jobConfig" label="作业参数 (JSON，可选)" rules={[{ validator: jsonValidator("作业参数") }]}>
+								<Input.TextArea rows={4} placeholder='{"setting":{"speed":{"channel":3}}}' />
+							</Form.Item>
+							<Card type="inner" title="作业预览">
+								{previewState.error ? (
+									<Alert type="warning" message={previewState.error} showIcon />
+								) : (
+									<pre className="bg-gray-50 p-4 rounded overflow-auto">
+										{JSON.stringify(previewState.config, null, 2)}
+									</pre>
+								)}
+								{useDefaultDestination ? (
+									<Text type="secondary" className="block mt-2">
+										Writer 使用平台默认配置，预览中仅展示占位参数。
+									</Text>
+								) : null}
+							</Card>
+							<Card type="inner" title="Airflow 触发">
+								<Form.Item name="airflowEnabled" label="启用 Airflow" valuePropName="checked">
+									<Switch />
+								</Form.Item>
+								<Form.Item name="runNow" label="立即触发" valuePropName="checked">
+									<Switch />
+								</Form.Item>
+								<Text type="secondary">
+									若未勾选立即触发，仅保存作业配置，后续可在 Airflow 中手动运行。
+								</Text>
+							</Card>
+						</>
+					)}
+					<Divider />
+					<Space>
+						<Button onClick={handlePrevStep} disabled={currentStep === 0}>
+							上一步
+						</Button>
+						{currentStep < stepItems.length - 1 ? (
+							<Button type="primary" onClick={handleNextStep}>
+								下一步
+							</Button>
 						) : (
-							<pre className="bg-gray-50 p-4 rounded overflow-auto">
-								{JSON.stringify(previewState.config, null, 2)}
-							</pre>
+							<Button type="primary" loading={saving} onClick={() => form.submit()} disabled={loadingTask}>
+								{isEdit ? "保存修改" : "提交任务"}
+							</Button>
 						)}
-						{useDefaultDestination ? (
-							<Text type="secondary" className="block mt-2">
-								Writer 使用平台默认配置，预览中仅展示占位参数。
-							</Text>
-						) : null}
-					</Card>
-					<Card type="inner" title="Airflow 触发">
-						<Form.Item name="airflowEnabled" label="启用 Airflow" valuePropName="checked">
-							<Switch />
-						</Form.Item>
-						<Form.Item name="runNow" label="立即触发" valuePropName="checked">
-							<Switch />
-						</Form.Item>
-						<Text type="secondary">
-							若未勾选立即触发，仅保存作业配置，后续可在 Airflow 中手动运行。
-						</Text>
-					</Card>
+					</Space>
 				</Form>
 			</Card>
 		</div>

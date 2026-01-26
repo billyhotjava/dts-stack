@@ -38,8 +38,8 @@ dts:
     trusted-service-name: ${DTS_INGESTION_TRUSTED_SERVICE_NAME:dts-platform}
   addax:
     enabled: ${DTS_ADDAX_ENABLED:true}
-    job-dir: ${DTS_ADDAX_JOB_DIR:/opt/prod/s10/dts-stack/services/dts-addax/jobs}
-    image: ${IMAGE_ADDAX:wgzhao/addax:0.59.1}
+    job-dir: ${STACK_ROOT:/opt/prod/s10/dts-stack}/services/dts-addax/jobs
+    image: ${IMAGE_ADDAX:quay.io/wgzhao/addax:6.0.8}
   airflow:
     enabled: ${DTS_AIRFLOW_ENABLED:true}
     base-url: ${DTS_AIRFLOW_BASE_URL:http://dts-airflow-webserver:8080}
@@ -48,6 +48,11 @@ dts:
     password: ${DTS_AIRFLOW_PASSWORD:}
     dag-id: ${DTS_AIRFLOW_DAG_ID:dbt_load}
     dags-dir: ${DTS_AIRFLOW_DAGS_DIR:/opt/airflow/dags}
+    dag-ready-wait-seconds: ${DTS_AIRFLOW_DAG_READY_WAIT_SECONDS:45}
+    dag-ready-poll-seconds: ${DTS_AIRFLOW_DAG_READY_POLL_SECONDS:3}
+    execution-poll-enabled: ${DTS_AIRFLOW_EXECUTION_POLL_ENABLED:true}
+    execution-poll-interval-ms: ${DTS_AIRFLOW_EXECUTION_POLL_INTERVAL_MS:15000}
+    execution-poll-batch-size: ${DTS_AIRFLOW_EXECUTION_POLL_BATCH_SIZE:50}
   openmetadata:
     enabled: ${DTS_OPENMETADATA_ENABLED:${DTS_PLATFORM_OPENMETADATA_ENABLED:true}}
     base-url: ${DTS_OPENMETADATA_BASE_URL:${DTS_PLATFORM_OPENMETADATA_BASE_URL:http://dts-openmetadata:8585}}

@@ -277,10 +277,10 @@ services:
       DTS_DBT_PROJECT_DIR: /opt/dts/dbt
       DTS_DBT_PROFILES_DIR: /opt/dts/dbt-profiles
       DTS_DBT_CONFIG_PATH: /opt/dts/upload/dbt-config.json
-      DTS_AIRFLOW_BASE_URL: ${DTS_AIRFLOW_BASE_URL}
-      DTS_AIRFLOW_USERNAME: ${DTS_AIRFLOW_USERNAME}
-      DTS_AIRFLOW_PASSWORD: ${DTS_AIRFLOW_PASSWORD}
-      DTS_AIRFLOW_DAG_ID: ${DTS_AIRFLOW_DAG_ID}
+      DTS_AIRFLOW_BASE_URL: ${DTS_AIRFLOW_BASE_URL:-http://dts-airflow-webserver:8080}
+      DTS_AIRFLOW_USERNAME: ${DTS_AIRFLOW_USERNAME:-airflow}
+      DTS_AIRFLOW_PASSWORD: ${DTS_AIRFLOW_PASSWORD:-airflow}
+      DTS_AIRFLOW_DAG_ID: ${DTS_AIRFLOW_DAG_ID:-dbt_load}
       DTS_INGESTION_BASE_URL: ${DTS_INGESTION_BASE_URL:-http://dts-ingestion:8083}
       DTS_INGESTION_SERVICE_NAME: ${DTS_INGESTION_SERVICE_NAME:-dts-platform}
       # Encrypted filesystem storage for Data Standard attachments
@@ -373,15 +373,17 @@ services:
       SPRING_DATASOURCE_USERNAME: ${PG_USER_DTPS:-dts_platform}
       SPRING_DATASOURCE_PASSWORD: ${PG_PWD_DTPS:-dts_platform}
       DTS_ADDAX_ENABLED: ${DTS_ADDAX_ENABLED:-true}
-      DTS_ADDAX_JOB_DIR: ${DTS_ADDAX_JOB_DIR}
-      DTS_ADDAX_IMAGE: ${IMAGE_ADDAX}
+      DTS_ADDAX_JOB_DIR: ${STACK_ROOT}/services/dts-addax/jobs
+      DTS_ADDAX_IMAGE: ${IMAGE_ADDAX:-quay.io/wgzhao/addax:6.0.8}
       DTS_ADDAX_DAG_ID: ${DTS_ADDAX_DAG_ID:-addax_job}
+      ADDAX_DRIVER_DIR: ${STACK_ROOT}/services/dts-platform/drivers
+      ADDAX_DRIVER_JARS: ${ADDAX_DRIVER_JARS:-DmJdbcDriver11.jar,postgresql-42.7.9.jar}
       DTS_AIRFLOW_ENABLED: ${DTS_AIRFLOW_ENABLED:-true}
-      DTS_AIRFLOW_BASE_URL: ${DTS_AIRFLOW_BASE_URL}
+      DTS_AIRFLOW_BASE_URL: ${DTS_AIRFLOW_BASE_URL:-http://dts-airflow-webserver:8080}
       DTS_AIRFLOW_API_PATH: ${DTS_AIRFLOW_API_PATH:-/api/v1}
-      DTS_AIRFLOW_USERNAME: ${DTS_AIRFLOW_USERNAME}
-      DTS_AIRFLOW_PASSWORD: ${DTS_AIRFLOW_PASSWORD}
-      DTS_AIRFLOW_DAG_ID: ${DTS_AIRFLOW_DAG_ID}
+      DTS_AIRFLOW_USERNAME: ${DTS_AIRFLOW_USERNAME:-airflow}
+      DTS_AIRFLOW_PASSWORD: ${DTS_AIRFLOW_PASSWORD:-airflow}
+      DTS_AIRFLOW_DAG_ID: ${DTS_AIRFLOW_DAG_ID:-dbt_load}
       DTS_AIRFLOW_DAGS_DIR: ${DTS_AIRFLOW_DAGS_DIR:-/opt/airflow/dags}
       DTS_OPENMETADATA_ENABLED: ${DTS_OPENMETADATA_ENABLED:-}
       DTS_OPENMETADATA_BASE_URL: ${DTS_OPENMETADATA_BASE_URL:-}
@@ -409,6 +411,7 @@ services:
       DTS_INGESTION_TRUSTED_SERVICE_NAME: ${DTS_INGESTION_TRUSTED_SERVICE_NAME:-dts-platform}
       DTS_INFRA_ENCRYPTION_KEY: ${DTS_INFRA_ENCRYPTION_KEY:-}
       DTS_INFRA_KEY_VERSION: ${DTS_INFRA_KEY_VERSION:-v1}
+      STACK_ROOT: ${STACK_ROOT}
     command:
       - bash
       - -lc
@@ -424,7 +427,8 @@ services:
       - maven-cache:/root/.m2
       - ./logs/dts-ingestion:/workspace/logs/dts-ingestion:z
       - ./services/dts-airflow/dags:/opt/airflow/dags:z
-      - ${DTS_ADDAX_JOB_DIR}:${DTS_ADDAX_JOB_DIR}:Z
+      - ${STACK_ROOT}/services/dts-addax/jobs:${STACK_ROOT}/services/dts-addax/jobs:Z
+      - ${STACK_ROOT}/services/dts-platform/drivers:${STACK_ROOT}/services/dts-platform/drivers:Z
     security_opt:
       - seccomp=unconfined
     networks:
@@ -510,13 +514,13 @@ services:
       - dts-analytics
     environment:
       PNPM_STORE_DIR: /pnpm-store
-      # Avoid inheriting broken host proxy envs inside container.
-      HTTP_PROXY: ""
-      HTTPS_PROXY: ""
-      http_proxy: ""
-      https_proxy: ""
-      NO_PROXY: "localhost,127.0.0.1,::1,dts-analytics,dts-pg,dts-platform,dts-admin,dts-proxy"
-      no_proxy: "localhost,127.0.0.1,::1,dts-analytics,dts-pg,dts-platform,dts-admin,dts-proxy"
+      # Use a host-accessible proxy when containers cannot resolve public registries directly.
+      HTTP_PROXY: ${DTS_DOCKER_HTTP_PROXY:-http://172.18.0.1:10808}
+      HTTPS_PROXY: ${DTS_DOCKER_HTTPS_PROXY:-http://172.18.0.1:10808}
+      http_proxy: ${DTS_DOCKER_HTTP_PROXY:-http://172.18.0.1:10808}
+      https_proxy: ${DTS_DOCKER_HTTPS_PROXY:-http://172.18.0.1:10808}
+      NO_PROXY: "${DTS_DOCKER_NO_PROXY:-localhost,127.0.0.1,::1},dts-analytics,dts-pg,dts-platform,dts-admin,dts-proxy"
+      no_proxy: "${DTS_DOCKER_NO_PROXY:-localhost,127.0.0.1,::1},dts-analytics,dts-pg,dts-platform,dts-admin,dts-proxy"
       BROWSER: none
       VITE_OPEN: "false"
       CHOKIDAR_USEPOLLING: "true"
@@ -540,15 +544,16 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=dts-core"
-      # Vite runs at container root; strip `/analytics` before proxying so `/analytics/@vite/client` works.
-      - "traefik.http.middlewares.dts-strip-analytics-ui.stripprefix.prefixes=/analytics"
       - "traefik.http.routers.dts-analytics-ui.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/analytics`) && !PathPrefix(`/analytics/api`)"
       - "traefik.http.routers.dts-analytics-ui.entrypoints=websecure"
       - "traefik.http.routers.dts-analytics-ui.tls=true"
       - "traefik.http.routers.dts-analytics-ui.priority=230"
       - "traefik.http.routers.dts-analytics-ui.service=dts-analytics-webapp-modern"
       - "traefik.http.services.dts-analytics-webapp-modern.loadbalancer.server.port=3002"
-      - "traefik.http.routers.dts-analytics-ui.middlewares=dts-strip-analytics-ui@docker,security-headers@file"
+      - "traefik.http.middlewares.dts-analytics-ui-redirect.redirectregex.regex=^https?://([^/]+)/analytics$"
+      - "traefik.http.middlewares.dts-analytics-ui-redirect.redirectregex.replacement=https://$${1}/analytics/"
+      - "traefik.http.middlewares.dts-analytics-ui-redirect.redirectregex.permanent=true"
+      - "traefik.http.routers.dts-analytics-ui.middlewares=dts-analytics-ui-redirect@docker,security-headers@file"
     healthcheck:
       test:
         [
@@ -813,6 +818,8 @@ services:
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__SCHEDULER__DAG_DIR_LIST_INTERVAL: ${AIRFLOW_DAG_DIR_LIST_INTERVAL:-10}
+      AIRFLOW__SCHEDULER__MIN_FILE_PROCESS_INTERVAL: ${AIRFLOW_MIN_FILE_PROCESS_INTERVAL:-10}
       AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
       PIP_ADDITIONAL_REQUIREMENTS: "${AIRFLOW_PIP_ADDITIONAL_REQUIREMENTS:-openmetadata-managed-apis==${OPENMETADATA_MANAGED_APIS_VERSION:-1.11.5.0} openmetadata-ingestion==${OPENMETADATA_INGESTION_VERSION:-1.11.5.0}}"
       AIRFLOW__API__AUTH_BACKENDS: "airflow.api.auth.backend.basic_auth"
@@ -831,8 +838,10 @@ services:
       OPENMETADATA_API_ENDPOINT: ${DTS_PLATFORM_OPENMETADATA_BASE_URL}/api/v1
       OPENMETADATA_AUTH_TOKEN: ${DTS_PLATFORM_OPENMETADATA_AUTH_TOKEN}
       OPENMETADATA_DBT_SERVICE: ${DTS_PLATFORM_OPENMETADATA_SERVICE_NAME:-hive}
-      ADDAX_IMAGE: ${IMAGE_ADDAX}
-      ADDAX_JOB_DIR: ${DTS_ADDAX_JOB_DIR}
+      ADDAX_IMAGE: ${IMAGE_ADDAX:-quay.io/wgzhao/addax:6.0.8}
+      ADDAX_JOB_DIR: ${STACK_ROOT}/services/dts-addax/jobs
+      ADDAX_DRIVER_DIR: ${STACK_ROOT}/services/dts-platform/drivers
+      ADDAX_DRIVER_JARS: ${ADDAX_DRIVER_JARS:-DmJdbcDriver11.jar,postgresql-42.7.9.jar}
     depends_on:
       dts-pg:
         condition: service_healthy
@@ -842,6 +851,7 @@ services:
       - ./services/dts-airflow/plugins:/opt/airflow/plugins
       - ./services/dts-airflow/extra:/opt/airflow/extra:ro,z
       - ./services/dts-airflow/config:/opt/airflow/config
+      - ./services/dts-platform/drivers:${STACK_ROOT}/services/dts-platform/drivers:ro,z
       - /var/run/docker.sock:/var/run/docker.sock
     restart: "no"
     networks:
@@ -875,8 +885,10 @@ services:
       OPENMETADATA_API_ENDPOINT: ${DTS_PLATFORM_OPENMETADATA_BASE_URL}/api/v1
       OPENMETADATA_AUTH_TOKEN: ${DTS_PLATFORM_OPENMETADATA_AUTH_TOKEN}
       OPENMETADATA_DBT_SERVICE: ${DTS_PLATFORM_OPENMETADATA_SERVICE_NAME:-hive}
-      ADDAX_IMAGE: ${IMAGE_ADDAX}
-      ADDAX_JOB_DIR: ${DTS_ADDAX_JOB_DIR}
+      ADDAX_IMAGE: ${IMAGE_ADDAX:-quay.io/wgzhao/addax:6.0.8}
+      ADDAX_JOB_DIR: ${STACK_ROOT}/services/dts-addax/jobs
+      ADDAX_DRIVER_DIR: ${STACK_ROOT}/services/dts-platform/drivers
+      ADDAX_DRIVER_JARS: ${ADDAX_DRIVER_JARS:-DmJdbcDriver11.jar,postgresql-42.7.9.jar}
     ports:
       - "${AIRFLOW_WEBSERVER_PORT:-18090}:8080"
     volumes:
@@ -885,6 +897,7 @@ services:
       - ./services/dts-airflow/plugins:/opt/airflow/plugins
       - ./services/dts-airflow/extra:/opt/airflow/extra:ro,z
       - ./services/dts-airflow/config:/opt/airflow/config
+      - ./services/dts-platform/drivers:${STACK_ROOT}/services/dts-platform/drivers:ro,z
       - /var/run/docker.sock:/var/run/docker.sock
     labels:
       - "traefik.enable=true"
@@ -929,14 +942,17 @@ services:
       OPENMETADATA_API_ENDPOINT: ${DTS_PLATFORM_OPENMETADATA_BASE_URL}/api/v1
       OPENMETADATA_AUTH_TOKEN: ${DTS_PLATFORM_OPENMETADATA_AUTH_TOKEN}
       OPENMETADATA_DBT_SERVICE: ${DTS_PLATFORM_OPENMETADATA_SERVICE_NAME:-hive}
-      ADDAX_IMAGE: ${IMAGE_ADDAX}
-      ADDAX_JOB_DIR: ${DTS_ADDAX_JOB_DIR}
+      ADDAX_IMAGE: ${IMAGE_ADDAX:-quay.io/wgzhao/addax:6.0.8}
+      ADDAX_JOB_DIR: ${STACK_ROOT}/services/dts-addax/jobs
+      ADDAX_DRIVER_DIR: ${STACK_ROOT}/services/dts-platform/drivers
+      ADDAX_DRIVER_JARS: ${ADDAX_DRIVER_JARS:-DmJdbcDriver11.jar,postgresql-42.7.9.jar}
     volumes:
       - ./services/dts-airflow/dags:/opt/airflow/dags
       - ./services/dts-airflow/logs:/opt/airflow/logs
       - ./services/dts-airflow/plugins:/opt/airflow/plugins
       - ./services/dts-airflow/extra:/opt/airflow/extra:ro,z
       - ./services/dts-airflow/config:/opt/airflow/config
+      - ./services/dts-platform/drivers:${STACK_ROOT}/services/dts-platform/drivers:ro,z
       - /var/run/docker.sock:/var/run/docker.sock
     restart: unless-stopped
     networks:
@@ -967,14 +983,17 @@ services:
       OPENMETADATA_API_ENDPOINT: ${DTS_PLATFORM_OPENMETADATA_BASE_URL}/api/v1
       OPENMETADATA_AUTH_TOKEN: ${DTS_PLATFORM_OPENMETADATA_AUTH_TOKEN}
       OPENMETADATA_DBT_SERVICE: ${DTS_PLATFORM_OPENMETADATA_SERVICE_NAME:-hive}
-      ADDAX_IMAGE: ${IMAGE_ADDAX}
-      ADDAX_JOB_DIR: ${DTS_ADDAX_JOB_DIR}
+      ADDAX_IMAGE: ${IMAGE_ADDAX:-quay.io/wgzhao/addax:6.0.8}
+      ADDAX_JOB_DIR: ${STACK_ROOT}/services/dts-addax/jobs
+      ADDAX_DRIVER_DIR: ${STACK_ROOT}/services/dts-platform/drivers
+      ADDAX_DRIVER_JARS: ${ADDAX_DRIVER_JARS:-DmJdbcDriver11.jar,postgresql-42.7.9.jar}
     volumes:
       - ./services/dts-airflow/dags:/opt/airflow/dags
       - ./services/dts-airflow/logs:/opt/airflow/logs
       - ./services/dts-airflow/plugins:/opt/airflow/plugins
       - ./services/dts-airflow/extra:/opt/airflow/extra:ro,z
       - ./services/dts-airflow/config:/opt/airflow/config
+      - ./services/dts-platform/drivers:${STACK_ROOT}/services/dts-platform/drivers:ro,z
       - /var/run/docker.sock:/var/run/docker.sock
     restart: unless-stopped
     networks:

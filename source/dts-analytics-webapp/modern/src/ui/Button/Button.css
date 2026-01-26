@@ -1,0 +1,229 @@
+/* Metabase-style Button Component */
+
+.mb-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-sm);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+  text-decoration: none;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+  user-select: none;
+}
+
+.mb-button:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+}
+
+.mb-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* Sizes */
+.mb-button--sm {
+  padding: var(--spacing-xs) var(--spacing-sm);
+  font-size: var(--font-size-sm);
+  min-height: 28px;
+}
+
+.mb-button--md {
+  padding: var(--spacing-sm) var(--spacing-md);
+  font-size: var(--font-size-md);
+  min-height: 36px;
+}
+
+.mb-button--lg {
+  padding: var(--spacing-md) var(--spacing-lg);
+  font-size: var(--font-size-lg);
+  min-height: 44px;
+}
+
+/* Primary Variant */
+.mb-button--primary {
+  background: var(--color-brand);
+  border-color: var(--color-brand);
+  color: var(--color-text-inverse);
+}
+
+.mb-button--primary:hover:not(:disabled) {
+  background: var(--color-brand-dark);
+  border-color: var(--color-brand-dark);
+}
+
+.mb-button--primary:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+/* Secondary Variant */
+.mb-button--secondary {
+  background: var(--color-bg-primary);
+  border-color: var(--color-border);
+  color: var(--color-text-primary);
+}
+
+.mb-button--secondary:hover:not(:disabled) {
+  background: var(--color-bg-tertiary);
+  border-color: var(--color-border-hover);
+}
+
+.mb-button--secondary:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+/* Tertiary Variant (Ghost) */
+.mb-button--tertiary {
+  background: transparent;
+  border-color: transparent;
+  color: var(--color-brand);
+}
+
+.mb-button--tertiary:hover:not(:disabled) {
+  background: var(--color-bg-hover);
+}
+
+.mb-button--tertiary:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+/* Danger Variant */
+.mb-button--danger {
+  background: var(--color-error);
+  border-color: var(--color-error);
+  color: var(--color-text-inverse);
+}
+
+.mb-button--danger:hover:not(:disabled) {
+  background: #d65656;
+  border-color: #d65656;
+}
+
+.mb-button--danger:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+/* Success Variant */
+.mb-button--success {
+  background: var(--color-success);
+  border-color: var(--color-success);
+  color: var(--color-text-inverse);
+}
+
+.mb-button--success:hover:not(:disabled) {
+  background: #6fa83d;
+  border-color: #6fa83d;
+}
+
+.mb-button--success:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+/* Full Width */
+.mb-button--full-width {
+  width: 100%;
+}
+
+/* Icon Only */
+.mb-button--icon-only {
+  padding: var(--spacing-sm);
+}
+
+.mb-button--icon-only.mb-button--sm {
+  padding: var(--spacing-xs);
+  min-width: 28px;
+}
+
+.mb-button--icon-only.mb-button--md {
+  padding: var(--spacing-sm);
+  min-width: 36px;
+}
+
+.mb-button--icon-only.mb-button--lg {
+  padding: var(--spacing-md);
+  min-width: 44px;
+}
+
+/* Loading State */
+.mb-button--loading {
+  position: relative;
+  pointer-events: none;
+}
+
+.mb-button__spinner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mb-button__spinner-icon {
+  animation: mb-button-spin 1s linear infinite;
+}
+
+@keyframes mb-button-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Icon */
+.mb-button__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.mb-button__icon svg {
+  width: 1em;
+  height: 1em;
+}
+
+/* Label */
+.mb-button__label {
+  display: inline-flex;
+  align-items: center;
+}
+
+/* Icon Button */
+.mb-icon-button {
+  border-radius: var(--radius-full);
+}
+
+/* Button Group */
+.mb-button-group {
+  display: inline-flex;
+  align-items: center;
+}
+
+.mb-button-group .mb-button {
+  border-radius: 0;
+}
+
+.mb-button-group .mb-button:first-child {
+  border-top-left-radius: var(--radius-sm);
+  border-bottom-left-radius: var(--radius-sm);
+}
+
+.mb-button-group .mb-button:last-child {
+  border-top-right-radius: var(--radius-sm);
+  border-bottom-right-radius: var(--radius-sm);
+}
+
+.mb-button-group .mb-button:not(:first-child) {
+  margin-left: -1px;
+}
+
+.mb-button-group .mb-button:hover,
+.mb-button-group .mb-button:focus {
+  z-index: 1;
+}

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams } from "@/routes/hooks";
-import { Button, Card, Table, Tag, message, Spin } from "antd";
+import { Button, Card, Space, Table, Tag, message, Spin } from "antd";
 import { ArrowLeftOutlined, ReloadOutlined } from "@ant-design/icons";
 import { PageHeader } from "@/components/page-header";
 import { useRouter } from "@/routes/hooks";
@@ -8,7 +8,7 @@ import { ingestionTaskAPI, type IngestionExecutionDTO, type IngestionTaskDTO } f
 import { formatTimestamp, formatNumber } from "@/utils/format";
 
 export default function TransformExecutionHistoryPage() {
-    const { id } = useParams<{ id: string }>();
+    const { id } = useParams();
     const router = useRouter();
     const [task, setTask] = useState<IngestionTaskDTO | null>(null);
     const [executions, setExecutions] = useState<IngestionExecutionDTO[]>([]);
@@ -146,11 +146,15 @@ export default function TransformExecutionHistoryPage() {
             <PageHeader
                 title={`${task.name} - 执行历史`}
                 description="查看任务的历史执行记录"
-                onBack={() => router.push(`/explore/etl/transform/${id}`)}
                 actions={
-                    <Button icon={<ReloadOutlined />} onClick={loadExecutions} loading={loading}>
-                        刷新
-                    </Button>
+                    <Space>
+                        <Button icon={<ArrowLeftOutlined />} onClick={() => router.push(`/explore/etl/transform/${id}`)}>
+                            返回
+                        </Button>
+                        <Button icon={<ReloadOutlined />} onClick={loadExecutions} loading={loading}>
+                            刷新
+                        </Button>
+                    </Space>
                 }
             />
 

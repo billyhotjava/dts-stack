@@ -400,10 +400,10 @@ services:
       DTS_DBT_PROJECT_DIR: /opt/dts/dbt
       DTS_DBT_PROFILES_DIR: /opt/dts/dbt-profiles
       DTS_DBT_CONFIG_PATH: /opt/dts/upload/dbt-config.json
-      DTS_AIRFLOW_BASE_URL: ${DTS_AIRFLOW_BASE_URL}
-      DTS_AIRFLOW_USERNAME: ${DTS_AIRFLOW_USERNAME}
-      DTS_AIRFLOW_PASSWORD: ${DTS_AIRFLOW_PASSWORD}
-      DTS_AIRFLOW_DAG_ID: ${DTS_AIRFLOW_DAG_ID}
+      DTS_AIRFLOW_BASE_URL: ${DTS_AIRFLOW_BASE_URL:-http://dts-airflow-webserver:8080}
+      DTS_AIRFLOW_USERNAME: ${DTS_AIRFLOW_USERNAME:-airflow}
+      DTS_AIRFLOW_PASSWORD: ${DTS_AIRFLOW_PASSWORD:-airflow}
+      DTS_AIRFLOW_DAG_ID: ${DTS_AIRFLOW_DAG_ID:-dbt_load}
       DTS_INGESTION_BASE_URL: ${DTS_INGESTION_BASE_URL:-http://dts-ingestion:8083}
       DTS_INGESTION_SERVICE_NAME: ${DTS_INGESTION_SERVICE_NAME:-dts-platform}
       LOG_ROOT: /logs
@@ -460,15 +460,17 @@ services:
       SPRING_DATASOURCE_USERNAME: ${PG_USER_DTPS:-dts_platform}
       SPRING_DATASOURCE_PASSWORD: ${PG_PWD_DTPS:-dts_platform}
       DTS_ADDAX_ENABLED: ${DTS_ADDAX_ENABLED:-true}
-      DTS_ADDAX_JOB_DIR: ${DTS_ADDAX_JOB_DIR}
-      DTS_ADDAX_IMAGE: ${IMAGE_ADDAX}
+      DTS_ADDAX_JOB_DIR: ${STACK_ROOT}/services/dts-addax/jobs
+      DTS_ADDAX_IMAGE: ${IMAGE_ADDAX:-quay.io/wgzhao/addax:6.0.8}
       DTS_ADDAX_DAG_ID: ${DTS_ADDAX_DAG_ID:-addax_job}
+      ADDAX_DRIVER_DIR: ${STACK_ROOT}/services/dts-platform/drivers
+      ADDAX_DRIVER_JARS: ${ADDAX_DRIVER_JARS:-DmJdbcDriver11.jar,postgresql-42.7.9.jar}
       DTS_AIRFLOW_ENABLED: ${DTS_AIRFLOW_ENABLED:-true}
-      DTS_AIRFLOW_BASE_URL: ${DTS_AIRFLOW_BASE_URL}
+      DTS_AIRFLOW_BASE_URL: ${DTS_AIRFLOW_BASE_URL:-http://dts-airflow-webserver:8080}
       DTS_AIRFLOW_API_PATH: ${DTS_AIRFLOW_API_PATH:-/api/v1}
-      DTS_AIRFLOW_USERNAME: ${DTS_AIRFLOW_USERNAME}
-      DTS_AIRFLOW_PASSWORD: ${DTS_AIRFLOW_PASSWORD}
-      DTS_AIRFLOW_DAG_ID: ${DTS_AIRFLOW_DAG_ID}
+      DTS_AIRFLOW_USERNAME: ${DTS_AIRFLOW_USERNAME:-airflow}
+      DTS_AIRFLOW_PASSWORD: ${DTS_AIRFLOW_PASSWORD:-airflow}
+      DTS_AIRFLOW_DAG_ID: ${DTS_AIRFLOW_DAG_ID:-dbt_load}
       DTS_AIRFLOW_DAGS_DIR: ${DTS_AIRFLOW_DAGS_DIR:-/opt/airflow/dags}
       DTS_OPENMETADATA_ENABLED: ${DTS_OPENMETADATA_ENABLED:-}
       DTS_OPENMETADATA_BASE_URL: ${DTS_OPENMETADATA_BASE_URL:-}
@@ -496,10 +498,12 @@ services:
       DTS_INGESTION_TRUSTED_SERVICE_NAME: ${DTS_INGESTION_TRUSTED_SERVICE_NAME:-dts-platform}
       DTS_INFRA_ENCRYPTION_KEY: ${DTS_INFRA_ENCRYPTION_KEY:-}
       DTS_INFRA_KEY_VERSION: ${DTS_INFRA_KEY_VERSION:-v1}
+      STACK_ROOT: ${STACK_ROOT}
     volumes:
       - ./logs/dts-ingestion:/logs/dts-ingestion:z
       - ./services/dts-airflow/dags:/opt/airflow/dags:z
-      - ${DTS_ADDAX_JOB_DIR}:${DTS_ADDAX_JOB_DIR}:Z
+      - ${STACK_ROOT}/services/dts-addax/jobs:${STACK_ROOT}/services/dts-addax/jobs:Z
+      - ${STACK_ROOT}/services/dts-platform/drivers:${STACK_ROOT}/services/dts-platform/drivers:Z
     security_opt:
       - seccomp=unconfined
     networks:
@@ -785,6 +789,8 @@ services:
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__SCHEDULER__DAG_DIR_LIST_INTERVAL: ${AIRFLOW_DAG_DIR_LIST_INTERVAL:-10}
+      AIRFLOW__SCHEDULER__MIN_FILE_PROCESS_INTERVAL: ${AIRFLOW_MIN_FILE_PROCESS_INTERVAL:-10}
       AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
       PIP_ADDITIONAL_REQUIREMENTS: "${AIRFLOW_PIP_ADDITIONAL_REQUIREMENTS:-openmetadata-managed-apis==${OPENMETADATA_MANAGED_APIS_VERSION:-1.11.5.0} openmetadata-ingestion==${OPENMETADATA_INGESTION_VERSION:-1.11.5.0}}"
       AIRFLOW__API__AUTH_BACKENDS: "airflow.api.auth.backend.basic_auth"
@@ -798,8 +804,10 @@ services:
       DBT_PROJECT_DIR: ${DBT_PROJECT_DIR}
       DBT_PROFILES_DIR: ${DBT_PROFILES_DIR}
       DBT_IMAGE: ${IMAGE_DBT}
-      ADDAX_IMAGE: ${IMAGE_ADDAX}
-      ADDAX_JOB_DIR: ${DTS_ADDAX_JOB_DIR}
+      ADDAX_IMAGE: ${IMAGE_ADDAX:-quay.io/wgzhao/addax:6.0.8}
+      ADDAX_JOB_DIR: ${STACK_ROOT}/services/dts-addax/jobs
+      ADDAX_DRIVER_DIR: ${STACK_ROOT}/services/dts-platform/drivers
+      ADDAX_DRIVER_JARS: ${ADDAX_DRIVER_JARS:-DmJdbcDriver11.jar,postgresql-42.7.9.jar}
       OPENMETADATA_INGEST_IMAGE: ${IMAGE_OPENMETADATA_INGESTION}
       OPENMETADATA_INGEST_CONFIG_DIR: ${OPENMETADATA_INGEST_CONFIG_DIR}
       OPENMETADATA_API_ENDPOINT: ${DTS_PLATFORM_OPENMETADATA_BASE_URL}/api/v1
@@ -814,6 +822,7 @@ services:
       - ./services/dts-airflow/plugins:/opt/airflow/plugins
       - ./services/dts-airflow/extra:/opt/airflow/extra:ro,z
       - ./services/dts-airflow/config:/opt/airflow/config
+      - ./services/dts-platform/drivers:${STACK_ROOT}/services/dts-platform/drivers:ro,z
       - /var/run/docker.sock:/var/run/docker.sock
     restart: "no"
     networks:
@@ -842,8 +851,10 @@ services:
       DBT_PROJECT_DIR: ${DBT_PROJECT_DIR}
       DBT_PROFILES_DIR: ${DBT_PROFILES_DIR}
       DBT_IMAGE: ${IMAGE_DBT}
-      ADDAX_IMAGE: ${IMAGE_ADDAX}
-      ADDAX_JOB_DIR: ${DTS_ADDAX_JOB_DIR}
+      ADDAX_IMAGE: ${IMAGE_ADDAX:-quay.io/wgzhao/addax:6.0.8}
+      ADDAX_JOB_DIR: ${STACK_ROOT}/services/dts-addax/jobs
+      ADDAX_DRIVER_DIR: ${STACK_ROOT}/services/dts-platform/drivers
+      ADDAX_DRIVER_JARS: ${ADDAX_DRIVER_JARS:-DmJdbcDriver11.jar,postgresql-42.7.9.jar}
       OPENMETADATA_INGEST_IMAGE: ${IMAGE_OPENMETADATA_INGESTION}
       OPENMETADATA_INGEST_CONFIG_DIR: ${OPENMETADATA_INGEST_CONFIG_DIR}
       OPENMETADATA_API_ENDPOINT: ${DTS_PLATFORM_OPENMETADATA_BASE_URL}/api/v1
@@ -857,6 +868,7 @@ services:
       - ./services/dts-airflow/plugins:/opt/airflow/plugins
       - ./services/dts-airflow/extra:/opt/airflow/extra:ro,z
       - ./services/dts-airflow/config:/opt/airflow/config
+      - ./services/dts-platform/drivers:${STACK_ROOT}/services/dts-platform/drivers:ro,z
       - /var/run/docker.sock:/var/run/docker.sock
     labels:
       - "traefik.enable=true"
@@ -896,8 +908,10 @@ services:
       DBT_PROJECT_DIR: ${DBT_PROJECT_DIR}
       DBT_PROFILES_DIR: ${DBT_PROFILES_DIR}
       DBT_IMAGE: ${IMAGE_DBT}
-      ADDAX_IMAGE: ${IMAGE_ADDAX}
-      ADDAX_JOB_DIR: ${DTS_ADDAX_JOB_DIR}
+      ADDAX_IMAGE: ${IMAGE_ADDAX:-quay.io/wgzhao/addax:6.0.8}
+      ADDAX_JOB_DIR: ${STACK_ROOT}/services/dts-addax/jobs
+      ADDAX_DRIVER_DIR: ${STACK_ROOT}/services/dts-platform/drivers
+      ADDAX_DRIVER_JARS: ${ADDAX_DRIVER_JARS:-DmJdbcDriver11.jar,postgresql-42.7.9.jar}
       OPENMETADATA_INGEST_IMAGE: ${IMAGE_OPENMETADATA_INGESTION}
       OPENMETADATA_INGEST_CONFIG_DIR: ${OPENMETADATA_INGEST_CONFIG_DIR}
       OPENMETADATA_API_ENDPOINT: ${DTS_PLATFORM_OPENMETADATA_BASE_URL}/api/v1
@@ -909,6 +923,7 @@ services:
       - ./services/dts-airflow/plugins:/opt/airflow/plugins
       - ./services/dts-airflow/extra:/opt/airflow/extra:ro,z
       - ./services/dts-airflow/config:/opt/airflow/config
+      - ./services/dts-platform/drivers:${STACK_ROOT}/services/dts-platform/drivers:ro,z
       - /var/run/docker.sock:/var/run/docker.sock
     restart: unless-stopped
     networks:
@@ -934,8 +949,10 @@ services:
       DBT_PROJECT_DIR: ${DBT_PROJECT_DIR}
       DBT_PROFILES_DIR: ${DBT_PROFILES_DIR}
       DBT_IMAGE: ${IMAGE_DBT}
-      ADDAX_IMAGE: ${IMAGE_ADDAX}
-      ADDAX_JOB_DIR: ${DTS_ADDAX_JOB_DIR}
+      ADDAX_IMAGE: ${IMAGE_ADDAX:-quay.io/wgzhao/addax:6.0.8}
+      ADDAX_JOB_DIR: ${STACK_ROOT}/services/dts-addax/jobs
+      ADDAX_DRIVER_DIR: ${STACK_ROOT}/services/dts-platform/drivers
+      ADDAX_DRIVER_JARS: ${ADDAX_DRIVER_JARS:-DmJdbcDriver11.jar,postgresql-42.7.9.jar}
       OPENMETADATA_INGEST_IMAGE: ${IMAGE_OPENMETADATA_INGESTION}
       OPENMETADATA_INGEST_CONFIG_DIR: ${OPENMETADATA_INGEST_CONFIG_DIR}
       OPENMETADATA_API_ENDPOINT: ${DTS_PLATFORM_OPENMETADATA_BASE_URL}/api/v1
@@ -947,6 +964,7 @@ services:
       - ./services/dts-airflow/plugins:/opt/airflow/plugins
       - ./services/dts-airflow/extra:/opt/airflow/extra:ro,z
       - ./services/dts-airflow/config:/opt/airflow/config
+      - ./services/dts-platform/drivers:${STACK_ROOT}/services/dts-platform/drivers:ro,z
       - /var/run/docker.sock:/var/run/docker.sock
     restart: unless-stopped
     networks:

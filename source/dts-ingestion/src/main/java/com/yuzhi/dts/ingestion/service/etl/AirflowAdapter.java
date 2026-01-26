@@ -59,8 +59,21 @@ public class AirflowAdapter {
             return result;
         }
         Map<String, Object> payload = Map.of("conf", conf == null ? Map.of() : conf);
+        int waitSeconds = settings.getInteger("dagReadyWaitSeconds", properties.getDagReadyWaitSeconds());
+        int pollSeconds = settings.getInteger("dagReadyPollSeconds", properties.getDagReadyPollSeconds());
         AirflowClient.TriggerResult lastFailure = null;
         for (String dagId : candidates) {
+            if (waitSeconds > 0) {
+                boolean ready = client.waitForDag(
+                    dagId,
+                    java.time.Duration.ofSeconds(waitSeconds),
+                    java.time.Duration.ofSeconds(Math.max(1, pollSeconds))
+                );
+                if (!ready) {
+                    lastFailure = new AirflowClient.TriggerResult(false, 404, "DAG 未就绪: " + dagId, null);
+                    continue;
+                }
+            }
             AirflowClient.TriggerResult response = triggerWithRetry(dagId, payload);
             if (response.success()) {
                 result.put("status", "triggered");

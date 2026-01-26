@@ -2,7 +2,7 @@ import { Link, useParams } from "react-router";
 import { useEffect, useMemo, useState } from "react";
 import { analyticsApi, type DashboardCard, type DashboardDetail, type DashboardQueryResponse } from "../api/analyticsApi";
 import { ErrorNotice } from "../components/ErrorNotice";
-import { DataTable } from "../components/DataTable";
+import { ChartRenderer, type VisualizationType, type VisualizationSettings } from "../components/charts";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import "./page.css";
 
@@ -275,7 +275,14 @@ export default function DashboardDetailPage() {
 									) : result.state === "error" ? (
 										<ErrorNotice locale={locale} error={result.error} />
 									) : (
-										<DataTable cols={result.value.data?.cols ?? []} rows={result.value.data?.rows ?? []} maxRows={50} />
+										<ChartRenderer
+											data={{
+												cols: result.value.data?.cols ?? [],
+												rows: result.value.data?.rows ?? []
+											}}
+											display={(card?.display as VisualizationType) || "table"}
+											settings={(card?.visualization_settings as VisualizationSettings) || {}}
+										/>
 									)}
 								</div>
 							);

@@ -115,6 +115,18 @@ compose_arch_candidates(){
   esac
 }
 
+detect_docker_gid(){
+  if [[ -S /var/run/docker.sock ]]; then
+    local gid
+    gid="$(stat -c '%g' /var/run/docker.sock 2>/dev/null || true)"
+    if [[ -n "${gid:-}" ]]; then
+      printf '%s' "$gid"
+      return 0
+    fi
+  fi
+  printf '%s' "0"
+}
+
 find_bundled_docker_compose(){
   local base_dir="$1"
   local -a names
@@ -632,21 +644,15 @@ generate_env_base(){
   : "${DTS_DBT_PROJECT_DIR:=/opt/dts/dbt}"
   : "${DTS_DBT_PROFILES_DIR:=/opt/dts/dbt-profiles}"
   : "${DTS_DBT_CONFIG_PATH:=/opt/dts/upload/dbt-config.json}"
-  : "${DTS_AIRFLOW_BASE_URL:=http://dts-airflow-webserver:8080}"
   : "${AIRFLOW_ADMIN_USERNAME:=airflow}"
   : "${AIRFLOW_ADMIN_PASSWORD:=${SECRET}}"
   : "${AIRFLOW_ADMIN_EMAIL:=airflow@example.com}"
   : "${AIRFLOW_ADMIN_FIRSTNAME:=Airflow}"
   : "${AIRFLOW_ADMIN_LASTNAME:=Admin}"
-  : "${DTS_AIRFLOW_USERNAME:=${AIRFLOW_ADMIN_USERNAME}}"
-  : "${DTS_AIRFLOW_PASSWORD:=${AIRFLOW_ADMIN_PASSWORD}}"
-  : "${DTS_AIRFLOW_DAG_ID:=dbt_load}"
+  : "${DOCKER_GID:=$(detect_docker_gid)}"
 
   # ---------- Addax ----------
-  : "${DTS_ADDAX_ENABLED:=true}"
-  : "${DTS_ADDAX_JOB_DIR:=${STACK_ROOT}/services/dts-addax/jobs}"
-  : "${DTS_ADDAX_DAG_ID:=addax_job}"
-  : "${IMAGE_ADDAX:=wgzhao/addax:0.59.1}"
+  : "${IMAGE_ADDAX:=quay.io/wgzhao/addax:6.0.8}"
 
   # Airflow
   : "${PG_DB_AIRFLOW:=airflow}"
@@ -987,13 +993,7 @@ OPENMETADATA_INGEST_CONFIG_DIR=${OPENMETADATA_INGEST_CONFIG_DIR}
 DTS_DBT_PROJECT_DIR=${DTS_DBT_PROJECT_DIR}
 DTS_DBT_PROFILES_DIR=${DTS_DBT_PROFILES_DIR}
 DTS_DBT_CONFIG_PATH=${DTS_DBT_CONFIG_PATH}
-DTS_AIRFLOW_BASE_URL=${DTS_AIRFLOW_BASE_URL}
-DTS_AIRFLOW_USERNAME=${DTS_AIRFLOW_USERNAME}
-DTS_AIRFLOW_PASSWORD=${DTS_AIRFLOW_PASSWORD}
-DTS_AIRFLOW_DAG_ID=${DTS_AIRFLOW_DAG_ID}
-DTS_ADDAX_ENABLED=${DTS_ADDAX_ENABLED}
-DTS_ADDAX_JOB_DIR=${DTS_ADDAX_JOB_DIR}
-DTS_ADDAX_DAG_ID=${DTS_ADDAX_DAG_ID}
+DOCKER_GID=${DOCKER_GID}
 IMAGE_ADDAX=${IMAGE_ADDAX}
 
 # ====== Airflow ======

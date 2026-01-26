@@ -76,6 +76,71 @@ public class AirflowClient {
         return Optional.empty();
     }
 
+    public Optional<Map<String, Object>> getDagRun(String dagId, String dagRunId) {
+        AirflowSettings settings = resolveSettings();
+        if (!settings.enabled() || !StringUtils.hasText(settings.baseUrl()) || !StringUtils.hasText(dagId) || !StringUtils.hasText(dagRunId)) {
+            return Optional.empty();
+        }
+        URI uri = buildUri(settings, "/dags/" + dagId + "/dagRuns/" + dagRunId, null);
+        try {
+            HttpHeaders headers = defaultHeaders(settings);
+            HttpEntity<Void> entity = new HttpEntity<>(headers);
+            ResponseEntity<Map> response = restTemplate.exchange(uri, HttpMethod.GET, entity, Map.class);
+            return Optional.ofNullable(response.getBody());
+        } catch (HttpStatusCodeException ex) {
+            LOG.warn("Airflow dag run fetch failed status={} body={}", ex.getStatusCode().value(), ex.getResponseBodyAsString());
+        } catch (Exception ex) {
+            LOG.warn("Airflow dag run fetch error: {}", ex.getMessage());
+        }
+        return Optional.empty();
+    }
+
+    public boolean waitForDag(String dagId, Duration timeout, Duration interval) {
+        if (!StringUtils.hasText(dagId)) {
+            return false;
+        }
+        Duration safeTimeout = timeout == null ? Duration.ZERO : timeout;
+        Duration safeInterval = interval == null ? Duration.ofSeconds(1) : interval;
+        long deadline = System.currentTimeMillis() + safeTimeout.toMillis();
+        do {
+            if (dagExists(dagId)) {
+                return true;
+            }
+            if (safeTimeout.isZero() || safeTimeout.isNegative()) {
+                return false;
+            }
+            try {
+                Thread.sleep(Math.max(250L, safeInterval.toMillis()));
+            } catch (InterruptedException ignored) {
+                Thread.currentThread().interrupt();
+                return false;
+            }
+        } while (System.currentTimeMillis() < deadline);
+        return dagExists(dagId);
+    }
+
+    private boolean dagExists(String dagId) {
+        AirflowSettings settings = resolveSettings();
+        if (!settings.enabled() || !StringUtils.hasText(settings.baseUrl())) {
+            return false;
+        }
+        URI uri = buildUri(settings, "/dags/" + dagId, null);
+        try {
+            HttpHeaders headers = defaultHeaders(settings);
+            HttpEntity<Void> entity = new HttpEntity<>(headers);
+            ResponseEntity<Map> response = restTemplate.exchange(uri, HttpMethod.GET, entity, Map.class);
+            return response.getStatusCode().is2xxSuccessful();
+        } catch (HttpStatusCodeException ex) {
+            if (ex.getStatusCode().value() == 404) {
+                return false;
+            }
+            LOG.warn("Airflow dag check failed status={} body={}", ex.getStatusCode().value(), ex.getResponseBodyAsString());
+        } catch (Exception ex) {
+            LOG.warn("Airflow dag check error: {}", ex.getMessage());
+        }
+        return false;
+    }
+
     private HttpHeaders defaultHeaders(AirflowSettings settings) {
         HttpHeaders headers = new HttpHeaders();
         headers.setAccept(List.of(MediaType.APPLICATION_JSON));

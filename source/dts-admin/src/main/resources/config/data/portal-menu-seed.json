@@ -346,28 +346,44 @@
       "title": "BI 可视化",
       "children": [
         {
+          "key": "analyze",
+          "path": "analyze",
+          "icon": "solar:graph-new-bold-duotone",
+          "titleKey": "sys.nav.portal.visualAnalyze",
+          "title": "分析中心",
+          "externalLink": "/analytics/analyze"
+        },
+        {
+          "key": "questions",
+          "path": "questions",
+          "icon": "solar:document-text-bold-duotone",
+          "titleKey": "sys.nav.portal.visualQuestions",
+          "title": "问题",
+          "externalLink": "/analytics/questions"
+        },
+        {
           "key": "dashboards",
           "path": "dashboards",
           "icon": "solar:chart-2-bold-duotone",
           "titleKey": "sys.nav.portal.visualDashboards",
-          "title": "看板中心",
-          "externalLink": "/visualization/reports"
+          "title": "仪表盘",
+          "externalLink": "/analytics/dashboards"
         },
         {
-          "key": "exploration",
-          "path": "exploration",
-          "icon": "solar:graph-new-bold-duotone",
-          "titleKey": "sys.nav.portal.visualExploration",
-          "title": "自助分析",
-          "externalLink": "/visualization/analytics"
+          "key": "collections",
+          "path": "collections",
+          "icon": "solar:folder-with-files-bold-duotone",
+          "titleKey": "sys.nav.portal.visualCollections",
+          "title": "集合",
+          "externalLink": "/analytics/collections"
         },
         {
-          "key": "datasets",
-          "path": "datasets",
+          "key": "data",
+          "path": "data",
           "icon": "solar:database-bold-duotone",
-          "titleKey": "sys.nav.portal.visualDatasets",
-          "title": "数据集管理",
-          "externalLink": "/visualization/reports/manage"
+          "titleKey": "sys.nav.portal.visualData",
+          "title": "数据源",
+          "externalLink": "/analytics/data"
         }
       ]
     }

@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
 import { useParams } from "@/routes/hooks";
-import { Button, Card, Descriptions, Space, Tag, message, Spin } from "antd";
-import { ArrowLeftOutlined, PlayCircleOutlined, EditOutlined, HistoryOutlined } from "@ant-design/icons";
+import { Button, Card, Descriptions, Space, Tag, message, Spin, Modal } from "antd";
+import { PlayCircleOutlined, EditOutlined, HistoryOutlined, ArrowLeftOutlined, SyncOutlined } from "@ant-design/icons";
 import { PageHeader } from "@/components/page-header";
 import { useRouter } from "@/routes/hooks";
 import { ingestionTaskAPI, type IngestionTaskDTO } from "@/api/ingestion";
 
 export default function TransformDetailPage() {
-    const { id } = useParams<{ id: string }>();
+    const { id } = useParams();
     const router = useRouter();
     const [task, setTask] = useState<IngestionTaskDTO | null>(null);
     const [loading, setLoading] = useState(false);
@@ -40,6 +40,22 @@ export default function TransformDetailPage() {
         }
     };
 
+    const handleRebuildDag = async () => {
+        Modal.confirm({
+            title: "强制重建 DAG",
+            content: `确定要重建任务 "${task?.name}" 的 DAG 文件吗？`,
+            onOk: async () => {
+                try {
+                    await ingestionTaskAPI.rebuildDag(Number(id));
+                    message.success("DAG 已重建");
+                    loadTask();
+                } catch (error: any) {
+                    message.error("重建失败: " + (error.message || "未知错误"));
+                }
+            },
+        });
+    };
+
     const renderStatus = (status?: string) => {
         const statusMap: Record<string, { color: string; text: string }> = {
             draft: { color: "default", text: "草稿" },
@@ -64,9 +80,11 @@ export default function TransformDetailPage() {
             <PageHeader
                 title={task.name}
                 description={task.description || "入湖任务详情"}
-                onBack={() => router.push("/explore/etl/transform")}
                 actions={
                     <Space>
+                        <Button icon={<ArrowLeftOutlined />} onClick={() => router.push("/explore/etl/transform")}>
+                            返回
+                        </Button>
                         <Button icon={<HistoryOutlined />} onClick={() => router.push(`/explore/etl/transform/${id}/executions`)}>
                             执行历史
                         </Button>
@@ -76,6 +94,13 @@ export default function TransformDetailPage() {
                             disabled={task.status === "deleted"}
                         >
                             编辑
+                        </Button>
+                        <Button
+                            icon={<SyncOutlined />}
+                            onClick={handleRebuildDag}
+                            disabled={task.status === "deleted" || task.airflowEnabled === false}
+                        >
+                            重建 DAG
                         </Button>
                         <Button type="primary" icon={<PlayCircleOutlined />} onClick={handleExecute} disabled={task.status === "deleted"}>
                             执行任务

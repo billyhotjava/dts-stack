@@ -1,7 +1,7 @@
 import { Link, useParams } from "react-router";
 import { useEffect, useMemo, useState } from "react";
 import { analyticsApi, type CardDetail, type CardQueryResponse } from "../api/analyticsApi";
-import { DataTable } from "../components/DataTable";
+import { ChartRenderer, type VisualizationType, type VisualizationSettings } from "../components/charts";
 import { ErrorNotice } from "../components/ErrorNotice";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import "./page.css";
@@ -159,7 +159,14 @@ export default function CardDetailPage() {
 								)}
 
 								{Array.isArray(queryState.value?.data?.cols) && Array.isArray(queryState.value?.data?.rows) ? (
-									<DataTable cols={queryState.value.data?.cols ?? []} rows={queryState.value.data?.rows ?? []} maxRows={200} />
+									<ChartRenderer
+										data={{
+											cols: queryState.value.data.cols ?? [],
+											rows: queryState.value.data.rows ?? []
+										}}
+										display={(state.value.display as VisualizationType) || 'table'}
+										settings={(state.value.visualization_settings as VisualizationSettings) || {}}
+									/>
 								) : (
 									<div className="muted">No tabular result.</div>
 								)}

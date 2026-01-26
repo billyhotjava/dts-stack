@@ -103,6 +103,12 @@ public class IngestionTaskProxyResource {
         return ResponseEntity.ok(ingestionClient.executeTask(id));
     }
 
+    @PostMapping("/tasks/{id}/dag/rebuild")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ResponseEntity<ApiResponse<Map<String, Object>>> rebuildDag(@PathVariable("id") Long id) {
+        return ResponseEntity.ok(ingestionClient.rebuildDag(id));
+    }
+
     @GetMapping("/tasks/{id}/executions")
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ResponseEntity<ApiResponse<Map<String, Object>>> listExecutions(
@@ -120,6 +126,12 @@ public class IngestionTaskProxyResource {
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ResponseEntity<ApiResponse<Map<String, Object>>> latestExecution(@PathVariable("id") Long id) {
         return ResponseEntity.ok(ingestionClient.latestExecution(id));
+    }
+
+    @PostMapping("/metadata/tables")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ResponseEntity<ApiResponse<Object>> discoverTables(@RequestBody Map<String, Object> payload) {
+        return ResponseEntity.ok(ingestionClient.discoverTables(payload));
     }
 
     private Map<String, Object> applyDefaultDestinationPayload(

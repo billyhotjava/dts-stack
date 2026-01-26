@@ -118,7 +118,7 @@ export default function InfraSettingsView() {
 								name="image"
 								rules={[{ required: true, message: "请输入镜像" }]}
 							>
-								<Input placeholder="wgzhao/addax:0.59.1" />
+								<Input placeholder="quay.io/wgzhao/addax:6.0.8" />
 							</Form.Item>
 							<Text variant="body3" className="text-muted-foreground">
 								写入器配置请在数据湖管理中维护，入湖任务会自动引用对应的数据湖写入参数。

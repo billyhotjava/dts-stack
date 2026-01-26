@@ -13,6 +13,7 @@ import com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO;
 import com.yuzhi.dts.ingestion.service.etl.AddaxJobService;
 import com.yuzhi.dts.ingestion.service.etl.AirflowAdapter;
 import com.yuzhi.dts.ingestion.service.etl.AirflowDagService;
+import com.yuzhi.dts.ingestion.service.etl.TargetTableProvisioner;
 import com.yuzhi.dts.ingestion.service.mapper.IngestionExecutionMapper;
 import com.yuzhi.dts.ingestion.service.mapper.IngestionTaskMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -65,6 +66,9 @@ class IngestionTaskServiceTest {
     private AirflowDagService airflowDagService;
 
     @Mock
+    private TargetTableProvisioner targetTableProvisioner;
+
+    @Mock
     private AuditService auditService;
 
     private IngestionTaskService ingestionTaskService;
@@ -81,6 +85,7 @@ class IngestionTaskServiceTest {
             addaxJobService,
             airflowAdapter,
             airflowDagService,
+            targetTableProvisioner,
             auditService
         );
     }
@@ -223,7 +228,7 @@ class IngestionTaskServiceTest {
     }
 
     @Test
-    void shouldExecuteTaskWithAirflow() {
+    void shouldExecuteTaskWithAirflow() throws Exception {
         // Given
         Long taskId = 1L;
         IngestionTask task = createTestTaskEntity();
@@ -231,7 +236,7 @@ class IngestionTaskServiceTest {
         task.setStatus("draft");
         task.setAirflowEnabled(true);
         task.setAirflowDagId("test-dag");
-        task.setAddaxJobPath("/path/to/job.json");
+        task.setAddaxJobPath(java.nio.file.Files.createTempFile("addax-job", ".json").toString());
 
         IngestionExecution execution = new IngestionExecution();
         execution.setId(1L);
@@ -240,6 +245,8 @@ class IngestionTaskServiceTest {
         when(taskRepository.findById(taskId)).thenReturn(Optional.of(task));
         when(executionRepository.save(any(IngestionExecution.class))).thenReturn(execution);
         when(executionMapper.toDto(execution)).thenReturn(new IngestionExecutionDTO());
+        when(addaxJobService.needsJobRebuild(any())).thenReturn(false);
+        when(addaxJobService.isJobConfigMalformed(any(java.nio.file.Path.class))).thenReturn(false);
 
         // When
         IngestionExecutionDTO result = ingestionTaskService.execute(taskId);

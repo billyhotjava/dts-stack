@@ -19,11 +19,17 @@ export function AppLayout() {
 					<NavLink className={({ isActive }) => (isActive ? "navItem active" : "navItem")} to="/">
 						{t(locale, "nav.home")}
 					</NavLink>
-					<NavLink className={({ isActive }) => (isActive ? "navItem active" : "navItem")} to="/collections">
-						{t(locale, "nav.collections")}
-					</NavLink>
 					<NavLink className={({ isActive }) => (isActive ? "navItem active" : "navItem")} to="/analyze">
 						{t(locale, "nav.analyze")}
+					</NavLink>
+					<NavLink className={({ isActive }) => (isActive ? "navItem active" : "navItem")} to="/questions">
+						{t(locale, "nav.questions")}
+					</NavLink>
+					<NavLink className={({ isActive }) => (isActive ? "navItem active" : "navItem")} to="/dashboards">
+						{t(locale, "nav.dashboards")}
+					</NavLink>
+					<NavLink className={({ isActive }) => (isActive ? "navItem active" : "navItem")} to="/collections">
+						{t(locale, "nav.collections")}
 					</NavLink>
 					<NavLink className={({ isActive }) => (isActive ? "navItem active" : "navItem")} to="/collections/root">
 						{t(locale, "nav.myCollection")}

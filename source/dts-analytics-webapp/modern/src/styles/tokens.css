@@ -1,0 +1,158 @@
+/* Metabase Design Tokens */
+:root {
+  /* Brand Colors */
+  --color-brand: #509EE3;
+  --color-brand-light: #C7E0F4;
+  --color-brand-dark: #2E6FAF;
+
+  /* Text Colors */
+  --color-text-primary: #4C5773;
+  --color-text-secondary: #697387;
+  --color-text-tertiary: #949AAB;
+  --color-text-inverse: #FFFFFF;
+  --color-text-link: #509EE3;
+
+  /* Background Colors */
+  --color-bg-primary: #FFFFFF;
+  --color-bg-secondary: #F9FBFC;
+  --color-bg-tertiary: #F1F3F5;
+  --color-bg-dark: #2E353B;
+  --color-bg-sidebar: #2E353B;
+  --color-bg-hover: rgba(80, 158, 227, 0.08);
+
+  /* Semantic Colors */
+  --color-success: #88BF4D;
+  --color-success-light: #E6F5D6;
+  --color-warning: #F9D45C;
+  --color-warning-light: #FEF6D8;
+  --color-error: #ED6E6E;
+  --color-error-light: #FCEAEA;
+  --color-info: #509EE3;
+  --color-info-light: #E6F1FB;
+
+  /* Border Colors */
+  --color-border: rgba(0, 0, 0, 0.08);
+  --color-border-hover: rgba(0, 0, 0, 0.12);
+  --color-border-focus: #509EE3;
+  --color-border-strong: rgba(0, 0, 0, 0.18);
+
+  /* Typography */
+  --font-family: "Lato", "Open Sans Variable", "Inter Variable", system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", "Noto Sans", sans-serif;
+  --font-family-mono: "Consolas", "Monaco", "Andale Mono", monospace;
+
+  --font-size-xs: 11px;
+  --font-size-sm: 12px;
+  --font-size-md: 14px;
+  --font-size-lg: 17px;
+  --font-size-xl: 21px;
+  --font-size-2xl: 25px;
+  --font-size-3xl: 32px;
+
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  --line-height-tight: 1.25;
+  --line-height-normal: 1.5;
+  --line-height-relaxed: 1.75;
+
+  /* Spacing */
+  --spacing-xxs: 2px;
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 16px;
+  --spacing-lg: 24px;
+  --spacing-xl: 32px;
+  --spacing-2xl: 48px;
+  --spacing-3xl: 64px;
+
+  /* Border Radius */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-full: 9999px;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.12);
+  --shadow-xl: 0 8px 32px rgba(0, 0, 0, 0.16);
+  --shadow-focus: 0 0 0 3px rgba(80, 158, 227, 0.25);
+
+  /* Layout */
+  --sidebar-width: 260px;
+  --sidebar-collapsed-width: 64px;
+  --header-height: 56px;
+  --page-max-width: 1200px;
+  --page-padding: var(--spacing-lg);
+
+  /* Z-index */
+  --z-dropdown: 100;
+  --z-sticky: 200;
+  --z-modal-backdrop: 300;
+  --z-modal: 400;
+  --z-tooltip: 500;
+  --z-toast: 600;
+
+  /* Transitions */
+  --transition-fast: 0.1s ease;
+  --transition-normal: 0.2s ease;
+  --transition-slow: 0.3s ease;
+
+  /* Chart Colors */
+  --chart-color-1: #509EE3;
+  --chart-color-2: #88BF4D;
+  --chart-color-3: #F9D45C;
+  --chart-color-4: #F2A86F;
+  --chart-color-5: #EF8C8C;
+  --chart-color-6: #A989C5;
+  --chart-color-7: #98D9D9;
+  --chart-color-8: #7172AD;
+}
+
+/* Dark Mode */
+[data-theme="dark"] {
+  --color-brand: #6FB3F2;
+  --color-brand-light: #1A3A5C;
+  --color-brand-dark: #8FCBFF;
+
+  --color-text-primary: #E8ECF1;
+  --color-text-secondary: #A8B3C5;
+  --color-text-tertiary: #6B7A99;
+  --color-text-inverse: #1A1D21;
+  --color-text-link: #6FB3F2;
+
+  --color-bg-primary: #1A1D21;
+  --color-bg-secondary: #22262B;
+  --color-bg-tertiary: #2C3138;
+  --color-bg-dark: #13161A;
+  --color-bg-sidebar: #13161A;
+  --color-bg-hover: rgba(111, 179, 242, 0.12);
+
+  --color-success-light: #1E3D1E;
+  --color-warning-light: #3D3520;
+  --color-error-light: #3D1E1E;
+  --color-info-light: #1E2E3D;
+
+  --color-border: rgba(255, 255, 255, 0.08);
+  --color-border-hover: rgba(255, 255, 255, 0.12);
+  --color-border-strong: rgba(255, 255, 255, 0.18);
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.5);
+  --shadow-xl: 0 8px 32px rgba(0, 0, 0, 0.6);
+  --shadow-focus: 0 0 0 3px rgba(111, 179, 242, 0.35);
+
+  --chart-color-1: #6FB3F2;
+  --chart-color-2: #9CD65C;
+  --chart-color-3: #FFE066;
+  --chart-color-4: #FFB380;
+  --chart-color-5: #FF9999;
+  --chart-color-6: #C4A6E3;
+  --chart-color-7: #A8E9E9;
+  --chart-color-8: #8E8FC7;
+}

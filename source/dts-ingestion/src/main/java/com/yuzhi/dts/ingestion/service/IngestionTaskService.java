@@ -21,6 +21,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.Instant;
 import java.util.Map;
 import java.util.Optional;
@@ -43,6 +46,7 @@ public class IngestionTaskService {
     private final AddaxJobService addaxJobService;
     private final AirflowAdapter airflowAdapter;
     private final AirflowDagService airflowDagService;
+    private final com.yuzhi.dts.ingestion.service.etl.TargetTableProvisioner targetTableProvisioner;
     private final AuditService auditService;
 
     public IngestionTaskService(
@@ -53,6 +57,7 @@ public class IngestionTaskService {
         AddaxJobService addaxJobService,
         AirflowAdapter airflowAdapter,
         AirflowDagService airflowDagService,
+        com.yuzhi.dts.ingestion.service.etl.TargetTableProvisioner targetTableProvisioner,
         AuditService auditService
     ) {
         this.taskRepository = taskRepository;
@@ -62,6 +67,7 @@ public class IngestionTaskService {
         this.addaxJobService = addaxJobService;
         this.airflowAdapter = airflowAdapter;
         this.airflowDagService = airflowDagService;
+        this.targetTableProvisioner = targetTableProvisioner;
         this.auditService = auditService;
     }
 
@@ -191,6 +197,8 @@ public class IngestionTaskService {
         if (!"active".equals(task.getStatus()) && !"draft".equals(task.getStatus())) {
             throw new IllegalStateException("Task is not in executable status: " + task.getStatus());
         }
+        task = ensureAddaxJobExists(task);
+        targetTableProvisioner.ensureTargetTables(task);
         task = ensureAirflowDag(task);
 
         // 创建执行记录
@@ -202,8 +210,9 @@ public class IngestionTaskService {
         try {
             // 触发Airflow DAG
             if (Boolean.TRUE.equals(task.getAirflowEnabled())) {
+                String airflowJobPath = addaxJobService.toContainerJobPath(task.getAddaxJobPath());
                 Map<String, Object> conf = Map.of(
-                    "job_path", task.getAddaxJobPath(),
+                    "job_path", airflowJobPath,
                     "task_id", taskId,
                     "task_name", task.getName()
                 );
@@ -226,8 +235,12 @@ public class IngestionTaskService {
                         "Airflow 触发失败" + (message == null || "null".equals(message) ? "" : (": " + message))
                     );
                 }
-
-                execution.setExecutionId("airflow-" + java.util.UUID.randomUUID().toString().substring(0, 8));
+                String dagRunId = extractDagRunId(airflowResult);
+                if (StringUtils.hasText(dagRunId)) {
+                    execution.setExecutionId(dagRunId);
+                } else {
+                    execution.setExecutionId("airflow-" + java.util.UUID.randomUUID().toString().substring(0, 8));
+                }
             } else {
                 // 如果未启用Airflow，记录为手动执行
                 execution.setExecutionId("manual-" + java.util.UUID.randomUUID().toString().substring(0, 8));
@@ -279,6 +292,99 @@ public class IngestionTaskService {
         }
     }
 
+    private IngestionTask ensureAddaxJobExists(IngestionTask task) {
+        String jobPath = task.getAddaxJobPath();
+        if (StringUtils.hasText(jobPath)) {
+            Path path = Paths.get(jobPath);
+            if (Files.exists(path)
+                && !addaxJobService.needsJobRebuild(task)
+                && !addaxJobService.isJobConfigMalformed(path)) {
+                return task;
+            }
+        }
+        String operator = resolveOperator(task);
+        try {
+            AddaxJobService.AddaxJobResult jobResult = addaxJobService.createJobFromTask(task);
+            task.setAddaxJobPath(jobResult.jobPath());
+            IngestionTask saved = taskRepository.save(task);
+            auditService.auditAction(
+                "INGESTION_TASK_JOB_REBUILD",
+                AuditStage.SUCCESS,
+                task.getName(),
+                Map.of(
+                    "summary",
+                    "重建 Addax 作业",
+                    "taskId",
+                    task.getId(),
+                    "jobPath",
+                    jobResult.jobPath(),
+                    "operator",
+                    operator
+                )
+            );
+            return saved;
+        } catch (Exception ex) {
+            auditService.auditAction(
+                "INGESTION_TASK_JOB_REBUILD",
+                AuditStage.FAIL,
+                task.getName(),
+                Map.of(
+                    "summary",
+                    "重建 Addax 作业失败",
+                    "taskId",
+                    task.getId(),
+                    "operator",
+                    operator,
+                    "error",
+                    ex.getMessage()
+                )
+            );
+            throw new IllegalStateException("Addax 作业文件缺失，重建失败: " + ex.getMessage(), ex);
+        }
+    }
+
+    private String resolveOperator(IngestionTask task) {
+        if (task == null) {
+            return "system";
+        }
+        if (StringUtils.hasText(task.getLastModifiedBy())) {
+            return task.getLastModifiedBy();
+        }
+        if (StringUtils.hasText(task.getCreatedBy())) {
+            return task.getCreatedBy();
+        }
+        return "system";
+    }
+
+    private String extractDagRunId(Map<String, Object> airflowResult) {
+        if (airflowResult == null) {
+            return null;
+        }
+        Object payload = airflowResult.get("payload");
+        if (!(payload instanceof Map<?, ?> payloadMap)) {
+            return null;
+        }
+        Object dagRunId =
+            firstNonBlank(payloadMap.get("dag_run_id"), payloadMap.get("dagRunId"), payloadMap.get("run_id"), payloadMap.get("runId"));
+        return dagRunId == null ? null : dagRunId.toString().trim();
+    }
+
+    private Object firstNonBlank(Object... values) {
+        if (values == null) {
+            return null;
+        }
+        for (Object value : values) {
+            if (value == null) {
+                continue;
+            }
+            String text = value.toString().trim();
+            if (StringUtils.hasText(text)) {
+                return value;
+            }
+        }
+        return null;
+    }
+
     /**
      * 获取任务的执行历史
      */
@@ -296,6 +402,23 @@ public class IngestionTaskService {
     public Optional<IngestionExecutionDTO> getLatestExecution(Long taskId) {
         return executionRepository.findFirstByTaskIdOrderByCreatedAtDesc(taskId)
             .map(executionMapper::toDto);
+    }
+
+    public IngestionTaskDTO rebuildDag(Long taskId) {
+        IngestionTask task = taskRepository.findById(taskId)
+            .orElseThrow(() -> new IllegalArgumentException("Task not found: " + taskId));
+        if (!Boolean.TRUE.equals(task.getAirflowEnabled())) {
+            throw new IllegalStateException("未启用 Airflow 编排");
+        }
+        String dagId = airflowDagService.rebuildDagForTask(task);
+        if (!StringUtils.hasText(dagId)) {
+            throw new IllegalStateException("DAG 生成失败");
+        }
+        if (!dagId.equals(task.getAirflowDagId())) {
+            task.setAirflowDagId(dagId);
+        }
+        task = taskRepository.save(task);
+        return taskMapper.toDto(task);
     }
 
     private IngestionTask ensureAirflowDag(IngestionTask task) {

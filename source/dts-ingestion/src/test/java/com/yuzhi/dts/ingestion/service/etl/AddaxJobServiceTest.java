@@ -138,6 +138,76 @@ class AddaxJobServiceTest {
     }
 
     @Test
+    void shouldNormalizeDriverAndJdbcUrl() throws Exception {
+        // Given
+        String taskName = "normalize-test";
+        Map<String, Object> readerConfig = Map.of(
+            "connection", Map.of("jdbcUrl", "jdbc:dm://10.0.0.1:5236/DMHR")
+        );
+        Map<String, Object> writerConfig = Map.of(
+            "connection", Map.of("jdbcUrl", "[\"jdbc:postgresql://10.0.0.2:5432/biadmin\"]")
+        );
+
+        // When
+        AddaxJobService.AddaxJobResult result = addaxJobService.createJob(
+            taskName,
+            "rdbmsreader",
+            readerConfig,
+            "rdbmswriter",
+            writerConfig,
+            null
+        );
+
+        // Then
+        Map<String, Object> job = (Map<String, Object>) result.jobConfig().get("job");
+        Map<String, Object> content = (Map<String, Object>) ((java.util.List<?>) job.get("content")).get(0);
+        Map<String, Object> reader = (Map<String, Object>) content.get("reader");
+        Map<String, Object> writer = (Map<String, Object>) content.get("writer");
+        Map<String, Object> readerParams = (Map<String, Object>) reader.get("parameter");
+        Map<String, Object> writerParams = (Map<String, Object>) writer.get("parameter");
+
+        assertThat(readerParams.get("driver")).isEqualTo("dm.jdbc.driver.DmDriver");
+        assertThat(writerParams.get("driver")).isEqualTo("org.postgresql.Driver");
+
+        Map<String, Object> writerConn = (Map<String, Object>) ((java.util.List<?>) writerParams.get("connection")).get(0);
+        assertThat(writerConn.get("jdbcUrl")).isInstanceOf(String.class);
+    }
+
+    @Test
+    void shouldReplaceWriterTablePlaceholder() throws Exception {
+        // Given
+        String taskName = "placeholder-test";
+        Map<String, Object> readerConfig = Map.of(
+            "connection", Map.of(
+                "jdbcUrl", "jdbc:dm://10.0.0.1:5236/DMHR",
+                "table", java.util.List.of("city", "department")
+            )
+        );
+        Map<String, Object> writerConfig = Map.of(
+            "connection", Map.of("jdbcUrl", "jdbc:postgresql://10.0.0.2:5432/biadmin", "table", java.util.List.of("${table}"))
+        );
+
+        // When
+        AddaxJobService.AddaxJobResult result = addaxJobService.createJob(
+            taskName,
+            "rdbmsreader",
+            readerConfig,
+            "rdbmswriter",
+            writerConfig,
+            null
+        );
+
+        // Then
+        Map<String, Object> job = (Map<String, Object>) result.jobConfig().get("job");
+        Map<String, Object> content = (Map<String, Object>) ((java.util.List<?>) job.get("content")).get(0);
+        Map<String, Object> writer = (Map<String, Object>) content.get("writer");
+        Map<String, Object> writerParams = (Map<String, Object>) writer.get("parameter");
+        Map<String, Object> writerConn = (Map<String, Object>) ((java.util.List<?>) writerParams.get("connection")).get(0);
+
+        assertThat(writerConn.get("table")).isEqualTo(java.util.List.of("city", "department"));
+    }
+
+    @Test
     void shouldSaveJobJson() throws Exception {
         // Given
         Long taskId = 123L;
@@ -160,6 +230,68 @@ class AddaxJobServiceTest {
 
         String savedContent = Files.readString(Path.of(jobPath));
         assertThat(savedContent).isEqualTo(jobJson);
+    }
+
+    @Test
+    void shouldDetectMalformedJobConfig() throws Exception {
+        // Given
+        String badJobJson = """
+            {
+              "job": {
+                "content": [
+                  {
+                    "writer": {
+                      "name": "rdbmswriter",
+                      "parameter": {
+                        "connection": [
+                          { "jdbcUrl": "[\\"jdbc:postgresql://localhost:5432/db\\"]" }
+                        ]
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+            """;
+        Path jobPath = tempDir.resolve("bad-job.json");
+        Files.writeString(jobPath, badJobJson);
+
+        // When
+        boolean malformed = addaxJobService.isJobConfigMalformed(jobPath);
+
+        // Then
+        assertThat(malformed).isTrue();
+    }
+
+    @Test
+    void shouldTreatWriterJdbcUrlListAsMalformed() throws Exception {
+        // Given
+        String badJobJson = """
+            {
+              "job": {
+                "content": [
+                  {
+                    "writer": {
+                      "name": "rdbmswriter",
+                      "parameter": {
+                        "connection": [
+                          { "jdbcUrl": ["jdbc:postgresql://localhost:5432/db"] }
+                        ]
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+            """;
+        Path jobPath = tempDir.resolve("bad-job-list.json");
+        Files.writeString(jobPath, badJobJson);
+
+        // When
+        boolean malformed = addaxJobService.isJobConfigMalformed(jobPath);
+
+        // Then
+        assertThat(malformed).isTrue();
     }
 
     @Test

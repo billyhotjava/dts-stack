@@ -1,0 +1,180 @@
+/* Metabase-style Tabs Component */
+
+.mb-tabs {
+  display: flex;
+  flex-direction: column;
+}
+
+.mb-tabs--vertical {
+  flex-direction: row;
+}
+
+/* Tab List */
+.mb-tabs__list {
+  display: flex;
+  gap: var(--spacing-xs);
+}
+
+.mb-tabs--horizontal .mb-tabs__list {
+  flex-direction: row;
+}
+
+.mb-tabs--vertical .mb-tabs__list {
+  flex-direction: column;
+  flex-shrink: 0;
+  padding-right: var(--spacing-md);
+  border-right: 1px solid var(--color-border);
+}
+
+/* Underline variant list */
+.mb-tabs--underline .mb-tabs__list {
+  border-bottom: 1px solid var(--color-border);
+  gap: var(--spacing-lg);
+}
+
+.mb-tabs--underline.mb-tabs--vertical .mb-tabs__list {
+  border-bottom: none;
+  gap: var(--spacing-xs);
+}
+
+/* Tab */
+.mb-tabs__tab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-sm) var(--spacing-xs);
+  border: none;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-family: inherit;
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  transition: color var(--transition-fast), background-color var(--transition-fast);
+  white-space: nowrap;
+}
+
+.mb-tabs__tab:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+}
+
+.mb-tabs__tab--disabled {
+  color: var(--color-text-tertiary);
+  cursor: not-allowed;
+}
+
+/* Underline Tab */
+.mb-tabs__tab--underline {
+  position: relative;
+  padding: var(--spacing-sm) var(--spacing-xs);
+  margin-bottom: -1px;
+  border-radius: 0;
+}
+
+.mb-tabs__tab--underline::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: transparent;
+  transition: background-color var(--transition-fast);
+}
+
+.mb-tabs__tab--underline:hover:not(:disabled) {
+  color: var(--color-text-primary);
+}
+
+.mb-tabs__tab--underline.mb-tabs__tab--active {
+  color: var(--color-brand);
+}
+
+.mb-tabs__tab--underline.mb-tabs__tab--active::after {
+  background: var(--color-brand);
+}
+
+/* Vertical Underline */
+.mb-tabs--vertical .mb-tabs__tab--underline {
+  padding: var(--spacing-sm) var(--spacing-md);
+  margin-bottom: 0;
+  margin-right: -1px;
+}
+
+.mb-tabs--vertical .mb-tabs__tab--underline::after {
+  top: 0;
+  bottom: 0;
+  left: auto;
+  right: 0;
+  width: 2px;
+  height: auto;
+}
+
+/* Pill Tab */
+.mb-tabs__tab--pill {
+  padding: var(--spacing-xs) var(--spacing-md);
+  border-radius: var(--radius-full);
+}
+
+.mb-tabs__tab--pill:hover:not(:disabled) {
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-primary);
+}
+
+.mb-tabs__tab--pill.mb-tabs__tab--active {
+  background: var(--color-brand);
+  color: var(--color-text-inverse);
+}
+
+/* Tab Icon */
+.mb-tabs__tab-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+}
+
+.mb-tabs__tab-icon svg {
+  width: 100%;
+  height: 100%;
+}
+
+/* Tab Label */
+.mb-tabs__tab-label {
+  display: inline-flex;
+  align-items: center;
+}
+
+/* Tab Panels */
+.mb-tabs__panels {
+  flex: 1;
+  min-width: 0;
+}
+
+.mb-tabs--horizontal .mb-tabs__panels {
+  padding-top: var(--spacing-md);
+}
+
+.mb-tabs--vertical .mb-tabs__panels {
+  padding-left: var(--spacing-lg);
+}
+
+/* Tab Panel */
+.mb-tabs__panel {
+  animation: mb-tabs-fade-in 0.2s ease-out;
+}
+
+@keyframes mb-tabs-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.mb-tabs__panel:focus-visible {
+  outline: none;
+}

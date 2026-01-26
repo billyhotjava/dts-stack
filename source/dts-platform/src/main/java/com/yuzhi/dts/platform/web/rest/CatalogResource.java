@@ -13,6 +13,7 @@ import com.yuzhi.dts.platform.security.DepartmentUtils;
 import com.yuzhi.dts.platform.security.SecurityUtils;
 import com.yuzhi.dts.platform.security.policy.DataLevel;
 import com.yuzhi.dts.platform.service.audit.AuditService;
+import com.yuzhi.dts.platform.service.catalog.CatalogMetadataService;
 import com.yuzhi.dts.platform.service.security.OrganizationVisibilityService;
 import com.yuzhi.dts.platform.service.openmetadata.OpenMetadataService;
 import jakarta.validation.Valid;
@@ -59,6 +60,7 @@ public class CatalogResource {
     private final OrganizationVisibilityService organizationVisibilityService;
     private final DataStandardRepository dataStandardRepository;
     private final OpenMetadataService openMetadataService;
+    private final CatalogMetadataService catalogMetadataService;
 
     public CatalogResource(
         CatalogDomainRepository domainRepo,
@@ -78,7 +80,8 @@ public class CatalogResource {
         CatalogFeatureProperties catalogFeatures,
         OrganizationVisibilityService organizationVisibilityService,
         DataStandardRepository dataStandardRepository,
-        OpenMetadataService openMetadataService
+        OpenMetadataService openMetadataService,
+        CatalogMetadataService catalogMetadataService
     ) {
         this.domainRepo = domainRepo;
         this.datasetRepo = datasetRepo;
@@ -98,6 +101,7 @@ public class CatalogResource {
         this.organizationVisibilityService = organizationVisibilityService;
         this.dataStandardRepository = dataStandardRepository;
         this.openMetadataService = openMetadataService;
+        this.catalogMetadataService = catalogMetadataService;
     }
 
     @GetMapping("/config")
@@ -389,27 +393,49 @@ public class CatalogResource {
     @GetMapping("/metadata/tables")
     public ApiResponse<OpenMetadataService.OpenMetadataTablePage> listTechMetadataTables(
         @RequestParam(value = "keyword", required = false) String keyword,
-        @RequestParam(value = "size", required = false, defaultValue = "50") int size
+        @RequestParam(value = "size", required = false, defaultValue = "50") int size,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
         OpenMetadataService.OpenMetadataTablePage page = openMetadataService.searchTables(keyword, size);
+        String effDept = activeDept != null ? activeDept : claim("dept_code");
+        boolean localFallback = false;
+        if (page == null || !page.enabled()) {
+            page = catalogMetadataService.listLocalTables(keyword, size, effDept);
+            localFallback = true;
+        }
         Map<String, Object> auditPayload = new LinkedHashMap<>();
         auditPayload.put("summary", "浏览元数据资产");
         if (keyword != null && !keyword.isBlank()) {
             auditPayload.put("keyword", keyword);
         }
         auditPayload.put("size", size);
+        auditPayload.put("source", localFallback ? "catalog" : "openmetadata");
         audit.auditAction("CATALOG_ASSET_VIEW", AuditStage.SUCCESS, "tech-metadata", auditPayload);
         return ApiResponses.ok(page);
     }
 
     @GetMapping("/metadata/tables/detail")
     public ApiResponse<OpenMetadataService.OpenMetadataResult> getTechMetadataTableDetail(
-        @RequestParam("fqn") String fqn
+        @RequestParam("fqn") String fqn,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
-        OpenMetadataService.OpenMetadataResult result = openMetadataService.fetchTableByFqn(fqn);
+        String effDept = activeDept != null ? activeDept : claim("dept_code");
+        boolean localFallback = false;
+        OpenMetadataService.OpenMetadataResult result;
+        if (catalogMetadataService.isLocalFqn(fqn)) {
+            result = catalogMetadataService.fetchLocalTableDetail(fqn, effDept);
+            localFallback = true;
+        } else {
+            result = openMetadataService.fetchTableByFqn(fqn);
+            if (result == null || !result.enabled()) {
+                result = catalogMetadataService.fetchLocalTableDetail(fqn, effDept);
+                localFallback = true;
+            }
+        }
         Map<String, Object> auditPayload = new LinkedHashMap<>();
         auditPayload.put("summary", "查看元数据详情");
         auditPayload.put("fqn", fqn);
+        auditPayload.put("source", localFallback ? "catalog" : "openmetadata");
         audit.auditAction("CATALOG_ASSET_VIEW", AuditStage.SUCCESS, "tech-metadata-detail", auditPayload);
         return ApiResponses.ok(result);
     }

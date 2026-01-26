@@ -12,6 +12,11 @@ public class AirflowProperties {
     private String password;
     private String dagId;
     private String dagsDir;
+    private Integer dagReadyWaitSeconds = 45;
+    private Integer dagReadyPollSeconds = 3;
+    private boolean executionPollEnabled = true;
+    private Long executionPollIntervalMs = 15000L;
+    private Integer executionPollBatchSize = 50;
 
     public boolean isEnabled() {
         return enabled;
@@ -67,5 +72,45 @@ public class AirflowProperties {
 
     public void setDagsDir(String dagsDir) {
         this.dagsDir = dagsDir;
+    }
+
+    public Integer getDagReadyWaitSeconds() {
+        return dagReadyWaitSeconds;
+    }
+
+    public void setDagReadyWaitSeconds(Integer dagReadyWaitSeconds) {
+        this.dagReadyWaitSeconds = dagReadyWaitSeconds;
+    }
+
+    public Integer getDagReadyPollSeconds() {
+        return dagReadyPollSeconds;
+    }
+
+    public void setDagReadyPollSeconds(Integer dagReadyPollSeconds) {
+        this.dagReadyPollSeconds = dagReadyPollSeconds;
+    }
+
+    public boolean isExecutionPollEnabled() {
+        return executionPollEnabled;
+    }
+
+    public void setExecutionPollEnabled(boolean executionPollEnabled) {
+        this.executionPollEnabled = executionPollEnabled;
+    }
+
+    public Long getExecutionPollIntervalMs() {
+        return executionPollIntervalMs;
+    }
+
+    public void setExecutionPollIntervalMs(Long executionPollIntervalMs) {
+        this.executionPollIntervalMs = executionPollIntervalMs;
+    }
+
+    public Integer getExecutionPollBatchSize() {
+        return executionPollBatchSize;
+    }
+
+    public void setExecutionPollBatchSize(Integer executionPollBatchSize) {
+        this.executionPollBatchSize = executionPollBatchSize;
     }
 }

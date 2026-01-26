@@ -69,6 +69,11 @@ public class IngestionSettingsSeeder implements ApplicationRunner {
         putIfText(settings, "password", airflowProperties.getPassword());
         putIfText(settings, "dagId", airflowProperties.getDagId());
         putIfText(settings, "dagsDir", airflowProperties.getDagsDir());
+        putIfNumber(settings, "dagReadyWaitSeconds", airflowProperties.getDagReadyWaitSeconds());
+        putIfNumber(settings, "dagReadyPollSeconds", airflowProperties.getDagReadyPollSeconds());
+        settings.put("executionPollEnabled", airflowProperties.isExecutionPollEnabled());
+        putIfNumber(settings, "executionPollIntervalMs", airflowProperties.getExecutionPollIntervalMs() == null ? null : airflowProperties.getExecutionPollIntervalMs().intValue());
+        putIfNumber(settings, "executionPollBatchSize", airflowProperties.getExecutionPollBatchSize());
         return settings;
     }
 
@@ -96,6 +101,12 @@ public class IngestionSettingsSeeder implements ApplicationRunner {
     private void putIfText(Map<String, Object> settings, String key, String value) {
         if (StringUtils.hasText(value)) {
             settings.put(key, value.trim());
+        }
+    }
+
+    private void putIfNumber(Map<String, Object> settings, String key, Integer value) {
+        if (value != null) {
+            settings.put(key, value);
         }
     }
 }

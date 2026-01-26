@@ -338,7 +338,11 @@ export default function MetadataPage() {
 												value={selectedFqn}
 												onChange={(value) => setSelectedFqn(value)}
 												options={tables.map((item) => ({
-													label: item.fqn || item.name || "-",
+													label:
+														[item.database, item.schema, item.name].filter(Boolean).join(".") ||
+														item.name ||
+														item.fqn ||
+														"-",
 													value: item.fqn,
 												}))}
 											/>
@@ -364,9 +368,9 @@ export default function MetadataPage() {
 										/>
 									</div>
 								</>
-							) : (
-								<EmptyState title="暂无元数据" description="请先完成元数据采集或检查 OpenMetadata 连接。" />
-							)}
+								) : (
+									<EmptyState title="暂无元数据" description="请先完成元数据采集或检查元数据服务连接。" />
+								)}
 						</Space>
 					</Card>
 				</Col>
@@ -392,12 +396,12 @@ export default function MetadataPage() {
 					</Button>,
 				]}
 			>
-				<div className="space-y-2 text-sm text-slate-600">
-					<div>1. 采集任务来自当前已启用的数据源或主数据连接。</div>
-					<div>2. 触发采集后可在“采集历史”查看执行结果与错误信息。</div>
-					<div>3. 元数据结果预览来自 OpenMetadata 服务，需确认该服务已启用。</div>
-				</div>
-			</Modal>
+					<div className="space-y-2 text-sm text-slate-600">
+						<div>1. 采集任务来自当前已启用的数据源或主数据连接。</div>
+						<div>2. 触发采集后可在“采集历史”查看执行结果与错误信息。</div>
+						<div>3. 元数据结果预览来自平台采集或 OpenMetadata 服务。</div>
+					</div>
+				</Modal>
 		</div>
 	);
 }

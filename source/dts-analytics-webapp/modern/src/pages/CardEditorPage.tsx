@@ -7,12 +7,22 @@ import {
 	type CollectionListItem,
 	type DatabaseListItem,
 } from "../api/analyticsApi";
-import { DataTable } from "../components/DataTable";
+import { ChartRenderer, type VisualizationType } from "../components/charts";
 import { EmptyState } from "../components/EmptyState";
 import { ErrorNotice } from "../components/ErrorNotice";
 import { QueryBuilder } from "../components/query/QueryBuilder";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import "./page.css";
+
+const VISUALIZATION_TYPES: { value: VisualizationType; label: string }[] = [
+	{ value: "table", label: "Table" },
+	{ value: "line", label: "Line" },
+	{ value: "bar", label: "Bar" },
+	{ value: "row", label: "Horizontal Bar" },
+	{ value: "area", label: "Area" },
+	{ value: "pie", label: "Pie" },
+	{ value: "scalar", label: "Number" },
+];
 
 type LoadState<T> =
 	| { state: "loading" }
@@ -56,6 +66,7 @@ export default function CardEditorPage() {
 	const [builderDatasetQuery, setBuilderDatasetQuery] = useState<Record<string, unknown> | null>(null);
 	const [runState, setRunState] = useState<LoadState<CardQueryResponse> | null>(null);
 	const [saveState, setSaveState] = useState<LoadState<CardDetail> | null>(null);
+	const [displayType, setDisplayType] = useState<VisualizationType>("table");
 
 	useEffect(() => {
 		let cancelled = false;
@@ -100,6 +111,7 @@ export default function CardEditorPage() {
 				if (cancelled) return;
 				setCard({ state: "loaded", value: v });
 				setName(v.name ?? "");
+				setDisplayType((v.display as VisualizationType) || "table");
 				const dq = extractDatasetQuery(v);
 				setDatabaseId(extractDatabaseIdFromDatasetQuery(dq));
 				setCollectionId(typeof v.collection_id === "number" ? v.collection_id : null);
@@ -213,7 +225,7 @@ export default function CardEditorPage() {
 			const body = {
 				name: trimmedName,
 				collection_id: collectionId,
-				display: "table",
+				display: displayType,
 				dataset_query: datasetQuery,
 				visualization_settings: {},
 			};
@@ -376,8 +388,21 @@ export default function CardEditorPage() {
 			<div style={{ height: 16 }} />
 
 			<div className="card">
-				<div className="row">
+				<div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
 					<strong>{t(locale, "questions.queryResult")}</strong>
+					<div className="row" style={{ gap: 4 }}>
+						{VISUALIZATION_TYPES.map((vt) => (
+							<button
+								key={vt.value}
+								className={displayType === vt.value ? "btn btnActive" : "btn"}
+								type="button"
+								onClick={() => setDisplayType(vt.value)}
+								style={{ padding: "4px 8px", fontSize: 12 }}
+							>
+								{vt.label}
+							</button>
+						))}
+					</div>
 				</div>
 				<div style={{ height: 8 }} />
 
@@ -394,7 +419,13 @@ export default function CardEditorPage() {
 								</pre>
 							</div>
 						) : null}
-						<DataTable cols={(runState.value.data?.cols as any[]) ?? []} rows={(runState.value.data?.rows as any[]) ?? []} maxRows={200} />
+						<ChartRenderer
+							data={{
+								cols: (runState.value.data?.cols as any[]) ?? [],
+								rows: (runState.value.data?.rows as any[]) ?? []
+							}}
+							display={displayType}
+						/>
 					</>
 				)}
 			</div>

@@ -2,6 +2,7 @@ package com.yuzhi.dts.platform.service.ingestion;
 
 import com.yuzhi.dts.platform.config.DtsIngestionProperties;
 import com.yuzhi.dts.platform.web.rest.ApiResponse;
+import com.yuzhi.dts.platform.web.rest.ResultStatus;
 import java.net.URI;
 import java.time.Duration;
 import java.time.Instant;
@@ -85,12 +86,20 @@ public class IngestionServiceClient {
         return exchangeTaskLong("/api/ingestion/tasks/" + id + "/execute", HttpMethod.POST, null);
     }
 
+    public ApiResponse<Map<String, Object>> rebuildDag(Long id) {
+        return exchangeTask("/api/ingestion/tasks/" + id + "/dag/rebuild", HttpMethod.POST, null, null);
+    }
+
     public ApiResponse<Map<String, Object>> listExecutions(Long id, Map<String, ?> params) {
         return exchangeTask("/api/ingestion/tasks/" + id + "/executions", HttpMethod.GET, null, params);
     }
 
     public ApiResponse<Map<String, Object>> latestExecution(Long id) {
         return exchangeTask("/api/ingestion/tasks/" + id + "/executions/latest", HttpMethod.GET, null, null);
+    }
+
+    public ApiResponse<Object> discoverTables(Object payload) {
+        return exchangeObject("/api/ingestion/metadata/tables", HttpMethod.POST, payload, null, longRestTemplate);
     }
 
     private ApiResponse<Map<String, Object>> exchangeTaskLong(String path, HttpMethod method, Object payload) {
@@ -122,6 +131,9 @@ public class IngestionServiceClient {
             ResponseEntity<Object> response = client.exchange(uri, method, entity, Object.class);
             Object body = response.getBody();
             if (body == null) {
+                if (response.getStatusCode().is2xxSuccessful()) {
+                    return new ApiResponse<>(ResultStatus.SUCCESS.getCode(), "OK", null);
+                }
                 return new ApiResponse<>(response.getStatusCode().value(), "ingestion service empty response", null);
             }
             if (body instanceof ApiResponse<?> apiResponse) {
@@ -142,6 +154,85 @@ public class IngestionServiceClient {
             LOG.warn("Ingestion API {} error: {}", path, ex.getMessage());
             return new ApiResponse<>(500, "ingestion service error", null);
         }
+    }
+
+    private ApiResponse<Object> exchangeObject(
+        String path,
+        HttpMethod method,
+        Object payload,
+        Map<String, ?> params,
+        RestTemplate client
+    ) {
+        if (!isEnabled()) {
+            return new ApiResponse<>(503, "ingestion service disabled", null);
+        }
+        URI uri = buildAbsoluteUri(path, params);
+        try {
+            HttpEntity<?> entity = payload == null ? new HttpEntity<>(defaultHeaders()) : new HttpEntity<>(payload, defaultHeaders());
+            ResponseEntity<Object> response = client.exchange(uri, method, entity, Object.class);
+            Object body = response.getBody();
+            if (body == null) {
+                if (response.getStatusCode().is2xxSuccessful()) {
+                    return new ApiResponse<>(ResultStatus.SUCCESS.getCode(), "OK", null);
+                }
+                return new ApiResponse<>(response.getStatusCode().value(), "ingestion service empty response", null);
+            }
+            if (body instanceof ApiResponse<?> apiResponse) {
+                @SuppressWarnings("unchecked")
+                ApiResponse<Object> casted = (ApiResponse<Object>) apiResponse;
+                return casted;
+            }
+            if (body instanceof Map<?, ?> map) {
+                ApiResponse<Object> unwrapped = unwrapApiResponseMap(map);
+                if (unwrapped != null) {
+                    return unwrapped;
+                }
+            }
+            return new ApiResponse<>(response.getStatusCode().value(), "ok", body);
+        } catch (HttpStatusCodeException ex) {
+            LOG.warn("Ingestion API {} failed status={} body={}", path, ex.getStatusCode().value(), ex.getResponseBodyAsString());
+            return new ApiResponse<>(ex.getStatusCode().value(), "ingestion service error", null);
+        } catch (Exception ex) {
+            LOG.warn("Ingestion API {} error: {}", path, ex.getMessage());
+            return new ApiResponse<>(500, "ingestion service error", null);
+        }
+    }
+
+    private ApiResponse<Object> unwrapApiResponseMap(Map<?, ?> map) {
+        if (map == null || map.isEmpty()) {
+            return null;
+        }
+        if (!map.containsKey("status") || !map.containsKey("data")) {
+            return null;
+        }
+        int status = parseStatus(map.get("status"), ResultStatus.SUCCESS.getCode());
+        String message = map.get("message") == null ? "ok" : String.valueOf(map.get("message"));
+        ApiResponse<Object> response = new ApiResponse<>(status, message, map.get("data"));
+        Object code = map.get("code");
+        if (code != null) {
+            String text = String.valueOf(code).trim();
+            if (!text.isEmpty()) {
+                response.setCode(text);
+            }
+        }
+        return response;
+    }
+
+    private int parseStatus(Object status, int fallback) {
+        if (status instanceof Number number) {
+            return number.intValue();
+        }
+        if (status != null) {
+            String text = status.toString().trim();
+            if (!text.isEmpty()) {
+                try {
+                    return Integer.parseInt(text);
+                } catch (NumberFormatException ignored) {
+                    return fallback;
+                }
+            }
+        }
+        return fallback;
     }
 
     private HealthStatus checkHealth(Instant now) {

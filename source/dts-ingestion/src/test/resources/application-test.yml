@@ -18,7 +18,7 @@ dts:
   addax:
     enabled: true
     job-dir: /tmp/addax-jobs
-    image: wgzhao/addax:0.59.1
+    image: quay.io/wgzhao/addax:6.0.8
   airflow:
     enabled: false
     base-url: http://localhost:8080

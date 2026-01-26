@@ -1,0 +1,39 @@
+{
+  "job" : {
+    "setting" : {
+      "speed" : {
+        "channel" : 1
+      }
+    },
+    "content" : [ {
+      "reader" : {
+        "parameter" : {
+          "column" : [ "*" ],
+          "driver" : "dm.jdbc.driver.DmDriver",
+          "password" : "Devops123@",
+          "username" : "sysdba",
+          "connection" : [ {
+            "table" : [ "city", "department", "employee", "job_history", "location", "region" ],
+            "jdbcUrl" : [ "jdbc:dm://10.20.0.4:5236/DMHR" ]
+          } ]
+        },
+        "name" : "rdbmsreader"
+      },
+      "writer" : {
+        "parameter" : {
+          "column" : [ "*" ],
+          "password" : "Devops123@",
+          "username" : "biadmin",
+          "writeMode" : "insert",
+          "connection" : [ {
+            "table" : [ "${table}" ],
+            "jdbcUrl" : "jdbc:postgresql://10.20.0.3:5432/biadmin"
+          } ],
+          "writerType" : "rdbmswriter",
+          "driver" : "org.postgresql.Driver"
+        },
+        "name" : "rdbmswriter"
+      }
+    } ]
+  }
+}

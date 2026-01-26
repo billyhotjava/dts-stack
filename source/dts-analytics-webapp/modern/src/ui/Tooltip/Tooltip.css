@@ -1,0 +1,118 @@
+/* Metabase-style Tooltip Component */
+
+.mb-tooltip__trigger {
+  display: inline-flex;
+}
+
+.mb-tooltip {
+  position: fixed;
+  z-index: var(--z-tooltip);
+  pointer-events: none;
+  animation: mb-tooltip-fade-in 0.15s ease-out;
+}
+
+@keyframes mb-tooltip-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.mb-tooltip__content {
+  padding: var(--spacing-xs) var(--spacing-sm);
+  background: var(--color-bg-dark);
+  color: var(--color-text-inverse);
+  font-size: var(--font-size-sm);
+  border-radius: var(--radius-sm);
+  max-width: 300px;
+  box-shadow: var(--shadow-lg);
+}
+
+[data-theme="dark"] .mb-tooltip__content {
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border);
+}
+
+/* Arrow */
+.mb-tooltip__arrow {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  background: var(--color-bg-dark);
+  transform: rotate(45deg);
+}
+
+[data-theme="dark"] .mb-tooltip__arrow {
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border);
+  border-top: none;
+  border-left: none;
+}
+
+/* Arrow Placement */
+.mb-tooltip--top .mb-tooltip__arrow {
+  bottom: -4px;
+  left: 50%;
+  margin-left: -4px;
+}
+
+.mb-tooltip--bottom .mb-tooltip__arrow {
+  top: -4px;
+  left: 50%;
+  margin-left: -4px;
+}
+
+[data-theme="dark"] .mb-tooltip--bottom .mb-tooltip__arrow {
+  border: 1px solid var(--color-border);
+  border-bottom: none;
+  border-right: none;
+}
+
+.mb-tooltip--left .mb-tooltip__arrow {
+  right: -4px;
+  top: 50%;
+  margin-top: -4px;
+}
+
+[data-theme="dark"] .mb-tooltip--left .mb-tooltip__arrow {
+  border: 1px solid var(--color-border);
+  border-top: none;
+  border-left: none;
+}
+
+.mb-tooltip--right .mb-tooltip__arrow {
+  left: -4px;
+  top: 50%;
+  margin-top: -4px;
+}
+
+[data-theme="dark"] .mb-tooltip--right .mb-tooltip__arrow {
+  border: 1px solid var(--color-border);
+  border-bottom: none;
+  border-right: none;
+}
+
+/* Info Tooltip */
+.mb-info-tooltip__trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+  transition: color var(--transition-fast);
+}
+
+.mb-info-tooltip__trigger:hover {
+  color: var(--color-text-secondary);
+}
+
+.mb-info-tooltip__trigger:focus-visible {
+  outline: none;
+  color: var(--color-brand);
+}

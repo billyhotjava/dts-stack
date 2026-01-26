@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router";
 import { analyticsApi, type CardQueryResponse, type PublicCardDetail } from "../api/analyticsApi";
-import { DataTable } from "../components/DataTable";
+import { ChartRenderer, type VisualizationType, type VisualizationSettings } from "../components/charts";
 import { EmptyState } from "../components/EmptyState";
 import { ErrorNotice } from "../components/ErrorNotice";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
@@ -79,7 +79,14 @@ export default function PublicCardPage() {
 			{query.state === "loading" && <div className="card">{t(locale, "loading")}</div>}
 			{query.state === "loaded" &&
 				(Array.isArray(query.value?.data?.cols) && Array.isArray(query.value?.data?.rows) ? (
-					<DataTable cols={query.value.data?.cols ?? []} rows={query.value.data?.rows ?? []} maxRows={200} />
+					<ChartRenderer
+						data={{
+							cols: query.value.data?.cols ?? [],
+							rows: query.value.data?.rows ?? []
+						}}
+						display={card.state === "loaded" ? (card.value.display as VisualizationType) || "table" : "table"}
+						settings={card.state === "loaded" ? (card.value.visualization_settings as VisualizationSettings) || {} : {}}
+					/>
 				) : (
 					<EmptyState title={t(locale, "common.empty")} />
 				))}

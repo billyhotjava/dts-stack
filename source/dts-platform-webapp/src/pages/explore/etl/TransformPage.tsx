@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Button, Card, Space, Table, Tag, message, Modal, Descriptions } from "antd";
-import { PlayCircleOutlined, EditOutlined, DeleteOutlined, HistoryOutlined, ReloadOutlined } from "@ant-design/icons";
+import { PlayCircleOutlined, EditOutlined, DeleteOutlined, HistoryOutlined, ReloadOutlined, SyncOutlined } from "@ant-design/icons";
 import { PageHeader } from "@/components/page-header";
 import { useRouter } from "@/routes/hooks";
 import { ingestionTaskAPI, type IngestionTaskDTO, type PageResult } from "@/api/ingestion";
@@ -45,6 +45,22 @@ export default function TransformPage() {
 					loadTasks();
 				} catch (error: any) {
 					message.error("执行失败: " + (error.message || "未知错误"));
+				}
+			},
+		});
+	};
+
+	const handleRebuildDag = async (id: number, name: string) => {
+		Modal.confirm({
+			title: "强制重建 DAG",
+			content: `确定要重建任务 "${name}" 的 DAG 文件吗？`,
+			onOk: async () => {
+				try {
+					await ingestionTaskAPI.rebuildDag(id);
+					message.success("DAG 已重建");
+					loadTasks();
+				} catch (error: any) {
+					message.error("重建失败: " + (error.message || "未知错误"));
 				}
 			},
 		});
@@ -175,6 +191,14 @@ export default function TransformPage() {
 						disabled={record.status === "deleted"}
 					>
 						编辑
+					</Button>
+					<Button
+						size="small"
+						icon={<SyncOutlined />}
+						onClick={() => handleRebuildDag(record.id!, record.name)}
+						disabled={record.status === "deleted" || record.airflowEnabled === false}
+					>
+						重建 DAG
 					</Button>
 					<Button
 						size="small"
