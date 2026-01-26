@@ -5,7 +5,7 @@ import com.yuzhi.dts.admin.security.AuthoritiesConstants;
 import com.yuzhi.dts.admin.security.SecurityUtils;
 import com.yuzhi.dts.admin.service.ops.OpsConfigService;
 import com.yuzhi.dts.admin.service.ops.OpsConfigView;
-import com.yuzhi.dts.admin.web.rest.vm.ApiResponse;
+import com.yuzhi.dts.admin.web.rest.api.ApiResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.LinkedHashMap;
 import java.util.List;

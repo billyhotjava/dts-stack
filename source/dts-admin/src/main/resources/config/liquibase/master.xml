@@ -91,6 +91,7 @@
     <include file="config/liquibase/changelog/20251117-01_org_mdm_fields.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260116-01_workflow_config_tables.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260127-03_ops_config_enhancements.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260127-04_ops_config_cleanup.xml" relativeToChangelogFile="false"/>
     <!-- jhipster-needle-liquibase-add-changelog - JHipster will add liquibase changelogs here -->
     <!-- jhipster-needle-liquibase-add-constraints-changelog - JHipster will add liquibase constraints changelogs here -->
     <!-- jhipster-needle-liquibase-add-incremental-changelog - JHipster will add incremental liquibase changelogs here -->

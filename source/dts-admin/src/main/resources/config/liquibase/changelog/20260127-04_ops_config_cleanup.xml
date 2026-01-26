@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <!-- 
+        清理运维配置种子数据
+        - 删除之前插入的示例功能开关数据
+        - 将所有现有配置设为可编辑
+    -->
+
+    <changeSet id="20260127-ops-04-cleanup-seed-data" author="dts-admin">
+        <!-- 删除之前插入的功能开关种子数据 -->
+        <delete tableName="system_config">
+            <where>cfg_key IN (
+                'feature.openmetadata.enabled',
+                'feature.airflow.enabled',
+                'security.pki.enabled',
+                'security.password_login.enabled',
+                'security.ip_allowlist.enabled',
+                'feature.mdm_gateway.enabled',
+                'security.triad_mode.enabled',
+                'security.session.timeout_minutes',
+                'feature.hetu_bi.enabled',
+                'system.audit_log.retention_days'
+            )</where>
+        </delete>
+    </changeSet>
+
+    <!-- 设置所有现有配置为可编辑 -->
+    <changeSet id="20260127-ops-05-make-all-editable" author="dts-admin">
+        <update tableName="system_config">
+            <column name="editable" valueBoolean="true"/>
+            <where>editable IS NULL OR editable = false</where>
+        </update>
+    </changeSet>
+
+</databaseChangeLog>

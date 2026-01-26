@@ -145,19 +145,17 @@ public class OpsConfigService {
     }
 
     /**
-     * 切换功能开关
+     * 切换布尔类型配置（功能开关）
+     * 支持所有布尔类型配置，不限于 FEATURE_TOGGLE 分类
      */
     public ChangeRequest toggleFeature(String key, boolean enabled, HttpServletRequest request) {
         String actor = SecurityUtils.getCurrentAuditableLogin();
         SystemConfig config = configRepository.findByKey(key)
-            .orElseThrow(() -> new IllegalArgumentException("功能开关不存在: " + key));
+            .orElseThrow(() -> new IllegalArgumentException("配置项不存在: " + key));
 
-        if (config.getCategory() != SystemConfig.Category.FEATURE_TOGGLE) {
-            throw new IllegalStateException("该配置项不是功能开关: " + key);
-        }
-
+        // 只检查是否可编辑，不再限制分类
         if (!config.isEditable()) {
-            throw new IllegalStateException("该功能开关不可编辑: " + key);
+            throw new IllegalStateException("该配置项不可编辑: " + key);
         }
 
         String newValue = String.valueOf(enabled);

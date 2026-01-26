@@ -71,6 +71,9 @@ class IngestionTaskServiceTest {
     @Mock
     private AuditService auditService;
 
+    @Mock
+    private IngestionTaskChangeLogService changeLogService;
+
     private IngestionTaskService ingestionTaskService;
     private ObjectMapper objectMapper;
 
@@ -86,7 +89,8 @@ class IngestionTaskServiceTest {
             airflowAdapter,
             airflowDagService,
             targetTableProvisioner,
-            auditService
+            auditService,
+            changeLogService
         );
     }
 
