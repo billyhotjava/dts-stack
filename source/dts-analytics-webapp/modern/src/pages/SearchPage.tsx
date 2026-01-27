@@ -1,8 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
 import { analyticsApi, type SearchItem } from "../api/analyticsApi";
+import { PageContainer, PageHeader } from "../components/PageContainer/PageContainer";
 import { EmptyState } from "../components/EmptyState";
 import { ErrorNotice } from "../components/ErrorNotice";
+import { Card, CardBody } from "../ui/Card/Card";
+import { SearchInput } from "../ui/Input/Input";
+import { Button } from "../ui/Button/Button";
+import { Badge } from "../ui/Badge/Badge";
+import { Spinner } from "../ui/Loading/Spinner";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import "./page.css";
 
@@ -12,11 +18,49 @@ type LoadState<T> =
 	| { state: "loaded"; value: T }
 	| { state: "error"; error: unknown };
 
+// Icons
+const SearchIcon = () => (
+	<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+		<circle cx="11" cy="11" r="8" />
+		<path d="m21 21-4.35-4.35" />
+	</svg>
+);
+
+const DashboardIcon = () => (
+	<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+		<rect width="7" height="9" x="3" y="3" rx="1" />
+		<rect width="7" height="5" x="14" y="3" rx="1" />
+		<rect width="7" height="9" x="14" y="12" rx="1" />
+		<rect width="7" height="5" x="3" y="16" rx="1" />
+	</svg>
+);
+
+const CardIcon = () => (
+	<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+		<rect width="18" height="18" x="3" y="3" rx="2" />
+		<path d="M3 9h18" />
+		<path d="M9 21V9" />
+	</svg>
+);
+
+const FolderIcon = () => (
+	<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+		<path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" />
+	</svg>
+);
+
 function resultHref(item: SearchItem): string {
 	if (item.model === "dashboard") return `/dashboards/${item.id}`;
 	if (item.model === "card") return `/questions/${item.id}`;
 	if (item.model === "collection") return `/collections/${item.id}`;
 	return "/";
+}
+
+function resultIcon(model: string) {
+	if (model === "dashboard") return <DashboardIcon />;
+	if (model === "card") return <CardIcon />;
+	if (model === "collection") return <FolderIcon />;
+	return <CardIcon />;
 }
 
 export default function SearchPage() {
@@ -56,81 +100,154 @@ export default function SearchPage() {
 		};
 	}, [q]);
 
+	const handleSubmit = (e: React.FormEvent) => {
+		e.preventDefault();
+		const next = value.trim();
+		if (!next) {
+			navigate({ pathname: location.pathname, search: "" }, { replace: true });
+		} else {
+			navigate({ pathname: location.pathname, search: `?q=${encodeURIComponent(next)}` }, { replace: true });
+		}
+	};
+
 	return (
-		<div className="page">
-			<h1 className="pageTitle">{t(locale, "search.title")}</h1>
-			<div className="pageSub">{t(locale, "search.subtitle")}</div>
-			<div style={{ height: 16 }} />
+		<PageContainer>
+			<PageHeader
+				title={t(locale, "search.title")}
+				subtitle={t(locale, "search.subtitle")}
+			/>
 
-			<div className="card">
-				<form
-					onSubmit={(e) => {
-						e.preventDefault();
-						const next = value.trim();
-						if (!next) {
-							navigate({ pathname: location.pathname, search: "" }, { replace: true });
-						} else {
-							navigate({ pathname: location.pathname, search: `?q=${encodeURIComponent(next)}` }, { replace: true });
-						}
-					}}
-				>
-					<div className="row">
-						<input
-							style={{ flex: "1 1 360px", padding: "10px 12px", borderRadius: 10, border: "1px solid rgba(0,0,0,0.12)" }}
-							value={value}
-							onChange={(e) => setValue(e.target.value)}
-							placeholder={t(locale, "search.placeholder")}
-						/>
-						<button className="btn" type="submit">
-							Search
-						</button>
-					</div>
-				</form>
-			</div>
-
-			<div style={{ height: 16 }} />
-
-			<div className="card">
-				{state.state === "idle" && <div className="muted">-</div>}
-				{state.state === "loading" && <div>{t(locale, "loading")}</div>}
-				{state.state === "error" && <ErrorNotice locale={locale} error={state.error} />}
-				{state.state === "loaded" && (
-					<>
-						<div className="row">
-							<div className="muted">
-								{t(locale, "search.total")}: {state.value.total}
+			<Card style={{ marginBottom: "var(--spacing-lg)" }}>
+				<CardBody>
+					<form onSubmit={handleSubmit}>
+						<div style={{ display: "flex", gap: "var(--spacing-sm)" }}>
+							<div style={{ flex: "1 1 360px" }}>
+								<SearchInput
+									value={value}
+									onChange={(e) => setValue(e.target.value)}
+									placeholder={t(locale, "search.placeholder")}
+									size="lg"
+								/>
 							</div>
+							<Button variant="primary" type="submit" icon={<SearchIcon />}>
+								Search
+							</Button>
 						</div>
-						<div style={{ height: 8 }} />
+					</form>
+				</CardBody>
+			</Card>
+
+			{state.state === "idle" && (
+				<Card>
+					<CardBody>
+						<p className="text-muted" style={{ textAlign: "center", margin: 0 }}>
+							{t(locale, "search.placeholder")}
+						</p>
+					</CardBody>
+				</Card>
+			)}
+			{state.state === "loading" && (
+				<Card>
+					<CardBody>
+						<div className="loading-container" style={{ padding: "var(--spacing-xl)" }}>
+							<Spinner size="lg" />
+						</div>
+					</CardBody>
+				</Card>
+			)}
+			{state.state === "error" && <ErrorNotice locale={locale} error={state.error} />}
+			{state.state === "loaded" && (
+				<Card>
+					<CardBody>
+						<div style={{ marginBottom: "var(--spacing-md)" }}>
+							<Badge variant="default">
+								{t(locale, "search.total")}: {state.value.total}
+							</Badge>
+						</div>
 						{state.value.data.length === 0 ? (
 							<EmptyState title={t(locale, "common.empty")} />
 						) : (
-							<table className="table">
-								<thead>
-									<tr>
-										<th>{t(locale, "common.type")}</th>
-										<th>{t(locale, "common.name")}</th>
-										<th>{t(locale, "common.id")}</th>
-									</tr>
-								</thead>
-								<tbody>
-									{state.value.data.map((item) => (
-										<tr key={`${item.model}:${item.id}`}>
-											<td>
-												<span className="tag">{String(item.model)}</span>
-											</td>
-											<td>
-												<Link to={resultHref(item)}>{item.name ?? "-"}</Link>
-											</td>
-											<td>{String(item.id)}</td>
-										</tr>
-									))}
-								</tbody>
-							</table>
+							<div className="search-results">
+								{state.value.data.map((item) => (
+									<Link
+										key={`${item.model}:${item.id}`}
+										to={resultHref(item)}
+										className="search-result-item"
+									>
+										<div className="search-result-icon">
+											{resultIcon(item.model)}
+										</div>
+										<div className="search-result-content">
+											<span className="search-result-name">{item.name ?? "-"}</span>
+											<span className="search-result-meta">
+												<Badge variant={item.model === "dashboard" ? "info" : item.model === "card" ? "success" : "default"} size="sm">
+													{String(item.model)}
+												</Badge>
+												<span className="text-muted">ID: {String(item.id)}</span>
+											</span>
+										</div>
+									</Link>
+								))}
+							</div>
 						)}
-					</>
-				)}
-			</div>
-		</div>
+					</CardBody>
+				</Card>
+			)}
+
+			<style>{`
+				.search-results {
+					display: flex;
+					flex-direction: column;
+					gap: var(--spacing-xs);
+				}
+
+				.search-result-item {
+					display: flex;
+					align-items: center;
+					gap: var(--spacing-md);
+					padding: var(--spacing-sm) var(--spacing-md);
+					border-radius: var(--radius-md);
+					text-decoration: none;
+					color: inherit;
+					transition: background-color var(--transition-fast);
+				}
+
+				.search-result-item:hover {
+					background: var(--color-bg-hover);
+				}
+
+				.search-result-icon {
+					display: flex;
+					align-items: center;
+					justify-content: center;
+					width: 32px;
+					height: 32px;
+					border-radius: var(--radius-sm);
+					background: var(--color-bg-tertiary);
+					color: var(--color-text-secondary);
+					flex-shrink: 0;
+				}
+
+				.search-result-content {
+					display: flex;
+					flex-direction: column;
+					gap: var(--spacing-xs);
+					flex: 1;
+					min-width: 0;
+				}
+
+				.search-result-name {
+					font-weight: var(--font-weight-medium);
+					color: var(--color-text-primary);
+				}
+
+				.search-result-meta {
+					display: flex;
+					align-items: center;
+					gap: var(--spacing-sm);
+					font-size: var(--font-size-sm);
+				}
+			`}</style>
+		</PageContainer>
 	);
 }

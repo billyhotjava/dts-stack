@@ -1,11 +1,39 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { analyticsApi } from "../api/analyticsApi";
+import { PageContainer, PageHeader, Breadcrumb } from "../components/PageContainer/PageContainer";
 import { ErrorNotice } from "../components/ErrorNotice";
+import { Card, CardHeader, CardBody, CardFooter } from "../ui/Card/Card";
+import { Button } from "../ui/Button/Button";
+import { Input } from "../ui/Input/Input";
+import { NativeSelect } from "../ui/Input/Select";
+import { Badge } from "../ui/Badge/Badge";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import "./page.css";
 
 type Engine = "postgres" | "mysql" | "oracle" | "dm";
+
+// Icons
+const CheckIcon = () => (
+	<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+		<polyline points="20 6 9 17 4 12" />
+	</svg>
+);
+
+const DatabaseIcon = () => (
+	<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+		<ellipse cx="12" cy="5" rx="9" ry="3" />
+		<path d="M3 5v14a9 3 0 0 0 18 0V5" />
+		<path d="M3 12a9 3 0 0 0 18 0" />
+	</svg>
+);
+
+const PlusIcon = () => (
+	<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+		<path d="M5 12h14" />
+		<path d="M12 5v14" />
+	</svg>
+);
 
 export default function DatabaseNewPage() {
 	const locale: Locale = useMemo(() => getEffectiveLocale(), []);
@@ -97,85 +125,149 @@ export default function DatabaseNewPage() {
 		}
 	}
 
+	const engineOptions = [
+		{ value: "postgres", label: "PostgreSQL" },
+		{ value: "mysql", label: "MySQL" },
+		{ value: "oracle", label: "Oracle" },
+		{ value: "dm", label: "达梦（DM）" },
+	];
+
 	return (
-		<div className="page">
-			<h1 className="pageTitle">{t(locale, "data.add")}</h1>
-			<div className="pageSub">{t(locale, "data.subtitle")}</div>
+		<PageContainer>
+			<PageHeader
+				title={t(locale, "data.add")}
+				subtitle={t(locale, "data.subtitle")}
+				breadcrumbs={
+					<Breadcrumb items={[
+						{ label: t(locale, "data.title"), href: "/data" },
+						{ label: t(locale, "data.add") }
+					]} />
+				}
+			/>
 
-			<div style={{ height: 16 }} />
+			<Card>
+				<CardHeader title="Database Connection" icon={<DatabaseIcon />} />
+				<CardBody>
+					{error ? <ErrorNotice locale={locale} error={error} /> : null}
+					{okMessage && (
+						<div style={{ display: "flex", alignItems: "center", gap: "var(--spacing-sm)", marginBottom: "var(--spacing-md)", padding: "var(--spacing-sm)", background: "var(--color-success-bg)", borderRadius: "var(--radius-sm)", color: "var(--color-success)" }}>
+							<CheckIcon />
+							{okMessage}
+						</div>
+					)}
 
-			<div className="card">
-				{error ? <ErrorNotice locale={locale} error={error} /> : null}
-				{okMessage ? <div className="muted">{okMessage}</div> : null}
+					<div className="form-grid">
+						<Input
+							label="Name"
+							value={name}
+							onChange={(e) => setName(e.target.value)}
+							placeholder="Analytics DB"
+						/>
 
-				<div style={{ display: "grid", gridTemplateColumns: "160px 1fr", gap: 12, alignItems: "center" }}>
-					<label className="muted">Name</label>
-					<input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Analytics DB" />
+						<NativeSelect
+							label="Engine"
+							value={engine}
+							onChange={(e) => setEngine(e.target.value as Engine)}
+							options={engineOptions}
+						/>
 
-					<label className="muted">Engine</label>
-					<select className="input" value={engine} onChange={(e) => setEngine(e.target.value as Engine)}>
-						<option value="postgres">PostgreSQL</option>
-						<option value="mysql">MySQL</option>
-						<option value="oracle">Oracle</option>
-						<option value="dm">达梦（DM）</option>
-					</select>
+						<div style={{ gridColumn: "1 / -1" }}>
+							<Input
+								label="JDBC URL (optional)"
+								value={jdbcUrl}
+								onChange={(e) => setJdbcUrl(e.target.value)}
+								placeholder="jdbc:postgresql://host:5432/db"
+								helperText="If provided, overrides host/port/database settings"
+							/>
+						</div>
 
-					<label className="muted">JDBC URL (optional)</label>
-					<input
-						className="input"
-						value={jdbcUrl}
-						onChange={(e) => setJdbcUrl(e.target.value)}
-						placeholder="jdbc:postgresql://host:5432/db"
-					/>
+						<Input
+							label="Host"
+							value={host}
+							onChange={(e) => setHost(e.target.value)}
+							placeholder="127.0.0.1"
+						/>
 
-					<label className="muted">Host</label>
-					<input className="input" value={host} onChange={(e) => setHost(e.target.value)} placeholder="127.0.0.1" />
+						<Input
+							label="Port"
+							value={port}
+							onChange={(e) => setPort(e.target.value)}
+							placeholder="5432"
+						/>
 
-					<label className="muted">Port</label>
-					<input className="input" value={port} onChange={(e) => setPort(e.target.value)} placeholder="5432" />
+						<Input
+							label={engine === "oracle" ? "SID (optional)" : "Database"}
+							value={dbName}
+							onChange={(e) => setDbName(e.target.value)}
+							placeholder="db"
+						/>
 
-					<label className="muted">{engine === "oracle" ? "SID (optional)" : "Database"}</label>
-					<input className="input" value={dbName} onChange={(e) => setDbName(e.target.value)} placeholder="db" />
-
-					{engine === "oracle" ? (
-						<>
-							<label className="muted">Service name (optional)</label>
-							<input
-								className="input"
+						{engine === "oracle" && (
+							<Input
+								label="Service Name (optional)"
 								value={serviceName}
 								onChange={(e) => setServiceName(e.target.value)}
 								placeholder="orclpdb1"
 							/>
-						</>
-					) : null}
+						)}
 
-					<label className="muted">Username</label>
-					<input className="input" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="user" />
+						<Input
+							label="Username"
+							value={username}
+							onChange={(e) => setUsername(e.target.value)}
+							placeholder="user"
+						/>
 
-					<label className="muted">Password</label>
-					<input
-						className="input"
-						value={password}
-						type="password"
-						onChange={(e) => setPassword(e.target.value)}
-						placeholder="••••••••"
-					/>
-				</div>
-
-				<div style={{ height: 16 }} />
-
-				<div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-					<button className="btn" type="button" disabled={busy !== null} onClick={validateConnection}>
-						{busy === "validate" ? t(locale, "loading") : "Validate"}
-					</button>
-					<button className="btn" type="button" disabled={busy !== null} onClick={createAndSync}>
-						{busy === "create" || busy === "sync" ? t(locale, "loading") : `${t(locale, "common.create")} + ${t(locale, "data.sync")}`}
-					</button>
-					<Link className="btn" to="/data">
-						{t(locale, "common.open")} {t(locale, "data.title")}
+						<Input
+							label="Password"
+							type="password"
+							value={password}
+							onChange={(e) => setPassword(e.target.value)}
+							placeholder="••••••••"
+						/>
+					</div>
+				</CardBody>
+				<CardFooter align="between">
+					<Link to="/data">
+						<Button variant="tertiary">
+							{t(locale, "common.open")} {t(locale, "data.title")}
+						</Button>
 					</Link>
-				</div>
-			</div>
-		</div>
+					<div style={{ display: "flex", gap: "var(--spacing-sm)" }}>
+						<Button
+							variant="secondary"
+							loading={busy === "validate"}
+							disabled={busy !== null}
+							onClick={validateConnection}
+						>
+							Validate
+						</Button>
+						<Button
+							variant="primary"
+							icon={<PlusIcon />}
+							loading={busy === "create" || busy === "sync"}
+							disabled={busy !== null}
+							onClick={createAndSync}
+						>
+							{t(locale, "common.create")} + {t(locale, "data.sync")}
+						</Button>
+					</div>
+				</CardFooter>
+			</Card>
+
+			<style>{`
+				.form-grid {
+					display: grid;
+					grid-template-columns: repeat(2, 1fr);
+					gap: var(--spacing-md);
+				}
+
+				@media (max-width: 768px) {
+					.form-grid {
+						grid-template-columns: 1fr;
+					}
+				}
+			`}</style>
+		</PageContainer>
 	);
 }

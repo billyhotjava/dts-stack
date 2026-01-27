@@ -1,70 +1,75 @@
-import { Badge, Button, Card, DatePicker, Input, Select, Space, Table, Tag } from "antd";
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
+import { Button, Card, Input, Select, Space, Table, Tag, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
+import { PageHeader } from "@/components/page-header";
+import opsService, { type OpsInstance } from "@/api/services/opsService";
 
-const { RangePicker } = DatePicker;
+const { Text } = Typography;
 
-type InstanceRow = {
-	key: string;
-	name: string;
-	layer: string;
-	status: "Success" | "Running" | "Failed";
-	retry: number;
-	start: string;
-	duration: string;
+const STATUS_OPTIONS = [
+	{ label: "全部", value: "ALL" },
+	{ label: "RUNNING", value: "RUNNING" },
+	{ label: "SUCCESS", value: "SUCCESS" },
+	{ label: "FAILED", value: "FAILED" },
+];
+
+const formatDate = (value?: string) => {
+	if (!value) return "-";
+	const date = new Date(value);
+	return Number.isNaN(date.valueOf()) ? value : date.toLocaleString();
 };
 
-const dataSource: InstanceRow[] = [
-	{ key: "1", name: "ods_user_center", layer: "ODS", status: "Success", retry: 0, start: "2026-01-20 02:00", duration: "1m 20s" },
-	{ key: "2", name: "dwd_trade_detail", layer: "DWD", status: "Failed", retry: 2, start: "2026-01-20 04:30", duration: "45s" },
-];
-
-const columns: ColumnsType<InstanceRow> = [
-	{ title: "任务名称", dataIndex: "name", key: "name", render: (t) => <span className="font-medium">{t}</span> },
-	{ title: "数仓分层", dataIndex: "layer", render: (l) => <Tag>{l}</Tag> },
-	{
-		title: "运行状态",
-		dataIndex: "status",
-		render: (s) => (
-			<Badge status={s === "Success" ? "success" : s === "Running" ? "processing" : "error"} text={s} />
-		),
-	},
-	{ title: "重试", dataIndex: "retry", render: (r) => `第 ${r} 次` },
-	{ title: "开始时间", dataIndex: "start" },
-	{ title: "耗时", dataIndex: "duration" },
-	{
-		title: "操作",
-		render: () => (
-			<Space>
-				<Button type="link" size="small">
-					详情
-				</Button>
-				<Button type="link" size="small">
-					重跑
-				</Button>
-				<Button type="link" size="small" danger>
-					停止
-				</Button>
-			</Space>
-		),
-	},
-];
-
 export default function OpsInstancesPage() {
+	const [records, setRecords] = useState<OpsInstance[]>([]);
+	const [loading, setLoading] = useState(false);
+	const [keyword, setKeyword] = useState("");
+	const [status, setStatus] = useState("ALL");
+
+	const loadInstances = async () => {
+		setLoading(true);
+		try {
+			const list = await opsService.instances({
+				keyword: keyword.trim() || undefined,
+				status: status === "ALL" ? undefined : status,
+				limit: 200,
+			});
+			setRecords(Array.isArray(list) ? (list as OpsInstance[]) : []);
+		} catch (error: any) {
+			toast.error(error?.message || "实例加载失败");
+		} finally {
+			setLoading(false);
+		}
+	};
+
+	useEffect(() => {
+		void loadInstances();
+	}, []);
+
+	const columns: ColumnsType<OpsInstance> = [
+		{ title: "任务", dataIndex: "artifactName", render: (v) => v || "-" },
+		{ title: "类型", dataIndex: "artifactType", width: 120, render: (v) => <Tag>{v || "-"}</Tag> },
+		{ title: "状态", dataIndex: "status", width: 120, render: (v) => <Tag>{v || "-"}</Tag> },
+		{ title: "开始时间", dataIndex: "startedAt", render: (v) => formatDate(v) },
+		{ title: "结束时间", dataIndex: "finishedAt", render: (v) => formatDate(v) },
+		{ title: "耗时(ms)", dataIndex: "durationMs", render: (v) => v ?? "-" },
+		{ title: "备注", dataIndex: "message", render: (v) => <Text type="secondary">{v || "-"}</Text> },
+	];
+
 	return (
-		<Card title="任务运行实例监控">
-			<div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-				<Space wrap>
-					<Input placeholder="搜索任务名称..." style={{ width: 200 }} />
-					<Select defaultValue="all" style={{ width: 120 }}>
-						<Select.Option value="all">所有状态</Select.Option>
-						<Select.Option value="running">运行中</Select.Option>
-						<Select.Option value="failed">失败</Select.Option>
-					</Select>
-					<RangePicker />
-				</Space>
-				<Button icon={<span>🔄</span>}>刷新</Button>
-			</div>
-			<Table dataSource={dataSource} columns={columns} />
-		</Card>
+		<div className="space-y-6 px-6 py-6">
+			<PageHeader title="任务实例监控" description="查看任务运行实例与日志入口。" />
+			<Card
+				extra={
+					<Space>
+						<Input placeholder="搜索任务名称..." value={keyword} onChange={(e) => setKeyword(e.target.value)} />
+						<Select value={status} options={STATUS_OPTIONS} onChange={setStatus} style={{ width: 140 }} />
+						<Button onClick={loadInstances}>刷新</Button>
+					</Space>
+				}
+			>
+				<Table rowKey={(record) => record.id} columns={columns} dataSource={records} loading={loading} />
+			</Card>
+		</div>
 	);
 }

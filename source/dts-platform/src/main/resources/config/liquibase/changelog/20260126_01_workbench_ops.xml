@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260126_01_workbench_ops" author="platform">
+        <createTable tableName="portal_user_favorite">
+            <column name="id" type="${uuidType}">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="user_login" type="varchar(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="title" type="varchar(160)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="target_type" type="varchar(32)"/>
+            <column name="target_id" type="varchar(64)"/>
+            <column name="link" type="varchar(512)"/>
+            <column name="metadata_json" type="text"/>
+            <column name="sort_order" type="integer"/>
+            <column name="enabled" type="boolean" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_by" type="varchar(50)"/>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+
+        <createIndex tableName="portal_user_favorite" indexName="idx_portal_favorite_user">
+            <column name="user_login"/>
+        </createIndex>
+
+        <createTable tableName="ops_backfill_request">
+            <column name="id" type="${uuidType}">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="dag_id" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="name" type="varchar(160)"/>
+            <column name="date_from" type="date"/>
+            <column name="date_to" type="date"/>
+            <column name="status" type="varchar(32)"/>
+            <column name="message" type="varchar(1024)"/>
+            <column name="triggered_at" type="timestamp"/>
+            <column name="external_run_id" type="varchar(256)"/>
+            <column name="payload_json" type="text"/>
+            <column name="created_by" type="varchar(50)"/>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+
+        <createIndex tableName="ops_backfill_request" indexName="idx_ops_backfill_dag">
+            <column name="dag_id"/>
+        </createIndex>
+        <createIndex tableName="ops_backfill_request" indexName="idx_ops_backfill_status">
+            <column name="status"/>
+        </createIndex>
+    </changeSet>
+</databaseChangeLog>

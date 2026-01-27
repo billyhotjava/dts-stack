@@ -23,6 +23,21 @@ public class AddaxJobService {
     private static final Logger LOG = LoggerFactory.getLogger(AddaxJobService.class);
     private static final String ADDAX_CONTAINER_DIR = "/opt/addax/jobs";
     private static final String TABLE_PLACEHOLDER = "${table}";
+    private static final List<String> CONNECTION_OVERRIDE_KEYS = List.of(
+        "jdbcUrl",
+        "url",
+        "host",
+        "port",
+        "username",
+        "password",
+        "database",
+        "db",
+        "driver",
+        "driverClass",
+        "driverVersion",
+        "jdbcProperties",
+        "connection"
+    );
     private static final Map<String, String> JDBC_PREFIX_DRIVERS = Map.ofEntries(
         Map.entry("jdbc:dm:", "dm.jdbc.driver.DmDriver"),
         Map.entry("jdbc:postgresql:", "org.postgresql.Driver"),
@@ -524,12 +539,22 @@ public class AddaxJobService {
      * 从IngestionTask实体创建Addax Job
      */
     public AddaxJobResult createJobFromTask(com.yuzhi.dts.ingestion.domain.IngestionTask task) {
+        return createJobFromTask(task, null, null);
+    }
+
+    public AddaxJobResult createJobFromTask(
+        com.yuzhi.dts.ingestion.domain.IngestionTask task,
+        String readerTypeOverride,
+        Map<String, Object> readerConfigOverride
+    ) {
         if (task == null) {
             throw new IllegalArgumentException("IngestionTask cannot be null");
         }
 
         // 将JsonNode转换为Map
-        Map<String, Object> readerConfig = jsonNodeToMap(task.getSourceConfig());
+        Map<String, Object> readerConfig = readerConfigOverride != null
+            ? mergeReaderConfig(readerConfigOverride, task.getSourceConfig())
+            : jsonNodeToMap(task.getSourceConfig());
         Map<String, Object> writerConfig = task.getDestinationConfig() != null
             ? jsonNodeToMap(task.getDestinationConfig())
             : Map.of();
@@ -540,12 +565,89 @@ public class AddaxJobService {
 
         return createJob(
             task.getName(),
-            task.getSourceType(),
+            StringUtils.hasText(readerTypeOverride) ? readerTypeOverride : task.getSourceType(),
             readerConfig,
             task.getDestinationType() != null ? task.getDestinationType() : "postgresqlwriter",
             writerConfig,
             jobConfig
         );
+    }
+
+    private Map<String, Object> mergeReaderConfig(Map<String, Object> baseConfig, JsonNode overrideNode) {
+        Map<String, Object> merged = baseConfig == null ? new LinkedHashMap<>() : new LinkedHashMap<>(baseConfig);
+        if (overrideNode == null || overrideNode.isNull()) {
+            return merged;
+        }
+        Map<String, Object> overrides = sanitizeReaderOverrides(jsonNodeToMap(overrideNode));
+        if (overrides.isEmpty()) {
+            return merged;
+        }
+        List<String> tables = extractTables(overrides);
+        overrides.remove("table");
+        overrides.remove("tables");
+        overrides.remove("connection");
+        merged.putAll(overrides);
+        if (!tables.isEmpty()) {
+            applyTables(merged, tables);
+        }
+        return merged;
+    }
+
+    private Map<String, Object> sanitizeReaderOverrides(Map<String, Object> overrides) {
+        if (overrides == null || overrides.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, Object> sanitized = new LinkedHashMap<>();
+        for (Map.Entry<String, Object> entry : overrides.entrySet()) {
+            String key = entry.getKey();
+            if (!StringUtils.hasText(key)) {
+                continue;
+            }
+            if (isConnectionOverrideKey(key)) {
+                continue;
+            }
+            if ("connection".equalsIgnoreCase(key)) {
+                continue;
+            }
+            sanitized.put(key, entry.getValue());
+        }
+        List<String> tables = extractTables(overrides);
+        if (!tables.isEmpty()) {
+            sanitized.put("table", tables);
+        }
+        return sanitized;
+    }
+
+    private boolean isConnectionOverrideKey(String key) {
+        if (!StringUtils.hasText(key)) {
+            return false;
+        }
+        for (String candidate : CONNECTION_OVERRIDE_KEYS) {
+            if (candidate.equalsIgnoreCase(key)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void applyTables(Map<String, Object> config, List<String> tables) {
+        if (config == null || tables == null || tables.isEmpty()) {
+            return;
+        }
+        Object connection = config.get("connection");
+        if (connection instanceof Map<?, ?> map) {
+            setTableField(map, tables);
+            return;
+        }
+        if (connection instanceof List<?> list) {
+            for (Object entry : list) {
+                if (entry instanceof Map<?, ?> entryMap) {
+                    setTableField(entryMap, tables);
+                }
+            }
+            return;
+        }
+        config.put("table", tables);
     }
 
     public boolean isDriverMissing(com.yuzhi.dts.ingestion.domain.IngestionTask task) {

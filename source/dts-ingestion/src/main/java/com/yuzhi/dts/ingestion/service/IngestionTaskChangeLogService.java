@@ -127,6 +127,7 @@ public class IngestionTaskChangeLogService {
         List<String> fields = new ArrayList<>();
 
         if (!Objects.equals(before.getSourceType(), after.getSourceType())
+            || !Objects.equals(before.getSourceDataSourceId(), after.getSourceDataSourceId())
             || !Objects.equals(before.getSourceConfig(), after.getSourceConfig())
             || !Objects.equals(before.getDestinationType(), after.getDestinationType())
             || !Objects.equals(before.getDestinationConfig(), after.getDestinationConfig())) {

@@ -50,7 +50,9 @@ public class CatalogDatasetAccessApprovalResource {
 
     @GetMapping("/requests/mine")
     public ApiResponse<List<CatalogDatasetAccessRequest>> listMyRequests() {
-        return ApiResponses.ok(approvalService.listMyRequests());
+        List<CatalogDatasetAccessRequest> list = approvalService.listMyRequests();
+        auditService.record("READ", "catalog.dataset.access.request", "catalog.dataset.access.request", "mine", "SUCCESS", Map.of("count", list.size()));
+        return ApiResponses.ok(list);
     }
 
     @GetMapping("/workflow/preview")
@@ -59,7 +61,9 @@ public class CatalogDatasetAccessApprovalResource {
         if (dataset == null) {
             return ApiResponses.error("数据集不存在或已被删除");
         }
-        return ApiResponses.ok(approvalService.previewWorkflow(dataset));
+        DatasetDataAccessApprovalService.WorkflowPreview preview = approvalService.previewWorkflow(dataset);
+        auditService.record("READ", "catalog.dataset.access.workflow", "catalog.dataset.access.workflow", datasetId.toString(), "SUCCESS", Map.of());
+        return ApiResponses.ok(preview);
     }
 
     @PostMapping("/requests")
@@ -134,6 +138,7 @@ public class CatalogDatasetAccessApprovalResource {
                 return dto;
             })
             .toList();
+        auditService.record("READ", "catalog.dataset.access.task", "catalog.dataset.access.task", "pending", "SUCCESS", Map.of("count", views.size()));
         return ApiResponses.ok(views);
     }
 
@@ -155,6 +160,7 @@ public class CatalogDatasetAccessApprovalResource {
             })
             .filter(item -> item != null)
             .toList();
+        auditService.record("READ", "catalog.dataset.access.task", "catalog.dataset.access.task", "done", "SUCCESS", Map.of("count", views.size()));
         return ApiResponses.ok(views);
     }
 
@@ -172,6 +178,7 @@ public class CatalogDatasetAccessApprovalResource {
             .stream()
             .map(AccessStepDto::fromTask)
             .toList();
+        auditService.record("READ", "catalog.dataset.access.task", "catalog.dataset.access.task", id.toString(), "SUCCESS", Map.of("count", steps.size()));
         return ApiResponses.ok(steps);
     }
 

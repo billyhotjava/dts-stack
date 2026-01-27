@@ -23,8 +23,9 @@ public class IngestionTaskDTO {
     @Size(min = 1, max = 50)
     private String sourceType;
 
-    @NotNull
     private JsonNode sourceConfig;
+
+    private java.util.UUID sourceDataSourceId;
 
     private String destinationType;
 
@@ -100,6 +101,14 @@ public class IngestionTaskDTO {
 
     public void setSourceConfig(JsonNode sourceConfig) {
         this.sourceConfig = sourceConfig;
+    }
+
+    public java.util.UUID getSourceDataSourceId() {
+        return sourceDataSourceId;
+    }
+
+    public void setSourceDataSourceId(java.util.UUID sourceDataSourceId) {
+        this.sourceDataSourceId = sourceDataSourceId;
     }
 
     public String getDestinationType() {

@@ -1,6 +1,7 @@
 package com.yuzhi.dts.platform.web.rest;
 
 import com.yuzhi.dts.platform.config.AirflowProperties;
+import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.etl.AirflowClient;
 import com.yuzhi.dts.platform.service.etl.DbtConfigService;
 import com.yuzhi.dts.platform.service.etl.DbtManifestService;
@@ -23,47 +24,59 @@ public class EtlResource {
     private final DbtSourceService dbtSourceService;
     private final AirflowClient airflowClient;
     private final AirflowProperties airflowProperties;
+    private final AuditService auditService;
 
     public EtlResource(
         DbtConfigService dbtConfigService,
         DbtManifestService manifestService,
         DbtSourceService dbtSourceService,
         AirflowClient airflowClient,
-        AirflowProperties airflowProperties
+        AirflowProperties airflowProperties,
+        AuditService auditService
     ) {
         this.dbtConfigService = dbtConfigService;
         this.manifestService = manifestService;
         this.dbtSourceService = dbtSourceService;
         this.airflowClient = airflowClient;
         this.airflowProperties = airflowProperties;
+        this.auditService = auditService;
     }
 
     @GetMapping("/dbt/config")
     public ApiResponse<DbtConfigService.DbtConfigView> getDbtConfig() {
-        return ApiResponses.ok(dbtConfigService.loadConfig());
+        ApiResponse<DbtConfigService.DbtConfigView> response = ApiResponses.ok(dbtConfigService.loadConfig());
+        auditService.audit("READ", "etl.dbt.config", "view");
+        return response;
     }
 
     @PutMapping("/dbt/config")
     public ApiResponse<DbtConfigService.DbtConfigView> updateDbtConfig(
         @RequestBody DbtConfigService.DbtWorkspaceConfigRequest request
     ) {
-        return ApiResponses.ok(dbtConfigService.saveConfig(request));
+        ApiResponse<DbtConfigService.DbtConfigView> response = ApiResponses.ok(dbtConfigService.saveConfig(request));
+        auditService.audit("UPDATE", "etl.dbt.config", "save");
+        return response;
     }
 
     @GetMapping("/dbt/models")
     public ApiResponse<DbtManifestService.DbtModelResult> listDbtModels() {
-        return ApiResponses.ok(manifestService.listModels());
+        ApiResponse<DbtManifestService.DbtModelResult> response = ApiResponses.ok(manifestService.listModels());
+        auditService.audit("READ", "etl.dbt.models", "list");
+        return response;
     }
 
     @PostMapping("/dbt/sources/refresh")
     public ApiResponse<DbtSourceService.DbtSourceRefreshResult> refreshDbtSources() {
-        return ApiResponses.ok(dbtSourceService.refreshOdsSources());
+        ApiResponse<DbtSourceService.DbtSourceRefreshResult> response = ApiResponses.ok(dbtSourceService.refreshOdsSources());
+        auditService.audit("EXECUTE", "etl.dbt.sources", "refresh");
+        return response;
     }
 
     @GetMapping("/dbt/runs")
     public ApiResponse<Map<String, Object>> listDbtRuns(@RequestParam(defaultValue = "20") int limit) {
         String dagId = airflowProperties.getDagId();
         Map<String, Object> payload = airflowClient.listDagRuns(dagId, Math.max(1, Math.min(limit, 50))).orElse(Map.of());
+        auditService.audit("READ", "etl.dbt.runs", "list");
         return ApiResponses.ok(payload);
     }
 
@@ -82,7 +95,9 @@ public class EtlResource {
             conf.put("vars", request.vars());
         }
         Map<String, Object> payload = Map.of("conf", conf, "logical_date", Instant.now().toString());
-        return ApiResponses.ok(airflowClient.triggerDag(dagId, payload).orElse(Map.of("status", "queued")));
+        Map<String, Object> result = airflowClient.triggerDag(dagId, payload).orElse(Map.of("status", "queued"));
+        auditService.audit("EXECUTE", "etl.dbt.run", request.models());
+        return ApiResponses.ok(result);
     }
 
     @GetMapping("/airflow/jobs")
@@ -112,6 +127,7 @@ public class EtlResource {
             }
             results.add(row);
         }
+        auditService.audit("READ", "etl.airflow.jobs", "list");
         return ApiResponses.ok(results);
     }
 
@@ -121,6 +137,7 @@ public class EtlResource {
         @RequestParam(defaultValue = "20") int limit
     ) {
         Map<String, Object> payload = airflowClient.listDagRuns(dagId, Math.max(1, Math.min(limit, 200))).orElse(Map.of());
+        auditService.audit("READ", "etl.airflow.runs", dagId);
         return ApiResponses.ok(payload);
     }
 
@@ -130,7 +147,9 @@ public class EtlResource {
         @RequestBody(required = false) Map<String, Object> body
     ) {
         Map<String, Object> payload = normalizeTriggerPayload(body);
-        return ApiResponses.ok(airflowClient.triggerDag(dagId, payload).orElse(Map.of("status", "queued")));
+        Map<String, Object> result = airflowClient.triggerDag(dagId, payload).orElse(Map.of("status", "queued"));
+        auditService.audit("EXECUTE", "etl.airflow.trigger", dagId);
+        return ApiResponses.ok(result);
     }
 
     public record DbtRunRequest(String models, String target, Map<String, Object> vars) {}

@@ -11,6 +11,7 @@ import com.yuzhi.dts.platform.repository.service.SvcDataProductRepository;
 import com.yuzhi.dts.platform.repository.service.SvcDataProductVersionRepository;
 import com.yuzhi.dts.platform.service.services.dto.*;
 import jakarta.persistence.EntityNotFoundException;
+import jakarta.validation.ValidationException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -121,6 +122,67 @@ public class DataProductService {
             product.getSubscriptions() != null ? product.getSubscriptions() : 0,
             datasets
         );
+    }
+
+    @Transactional
+    public DataProductDetailDto create(DataProductUpsertRequest request, String operator) {
+        validateRequest(request);
+        SvcDataProduct product = new SvcDataProduct();
+        applyUpsert(product, request);
+        product = productRepository.save(product);
+        replaceDatasets(product.getId(), request.datasets());
+        LOG.info("Data product created by {}: {}", operator, product.getCode());
+        return detail(product.getId());
+    }
+
+    @Transactional
+    public DataProductDetailDto update(UUID id, DataProductUpsertRequest request, String operator) {
+        validateRequest(request);
+        SvcDataProduct product = productRepository.findById(id).orElseThrow(() -> new EntityNotFoundException("Data product not found"));
+        applyUpsert(product, request);
+        productRepository.save(product);
+        replaceDatasets(product.getId(), request.datasets());
+        LOG.info("Data product updated by {}: {}", operator, product.getCode());
+        return detail(product.getId());
+    }
+
+    @Transactional
+    public DataProductVersionDto addVersion(UUID productId, DataProductVersionRequest request, String operator) {
+        SvcDataProduct product = productRepository.findById(productId).orElseThrow(() -> new EntityNotFoundException("Data product not found"));
+        if (request == null || !StringUtils.hasText(request.version())) {
+            throw new ValidationException("version is required");
+        }
+        String version = request.version().trim();
+        if (versionRepository.findByProductIdAndVersion(productId, version).isPresent()) {
+            throw new ValidationException("version already exists");
+        }
+        SvcDataProductVersion entity = new SvcDataProductVersion();
+        entity.setProductId(productId);
+        entity.setVersion(version);
+        entity.setStatus(StringUtils.hasText(request.status()) ? request.status().trim().toUpperCase(Locale.ROOT) : "DRAFT");
+        entity.setReleasedAt(Instant.now());
+        entity.setDiffSummary(StringUtils.hasText(request.diffSummary()) ? request.diffSummary().trim() : null);
+        entity.setSchemaJson(serialize(request.fields()));
+        entity.setConsumptionJson(serialize(request.consumption()));
+        entity.setMetadataJson(serialize(request.metadata()));
+        entity = versionRepository.save(entity);
+
+        product.setCurrentVersion(entity.getVersion());
+        if (StringUtils.hasText(entity.getStatus())) {
+            product.setStatus(entity.getStatus());
+        }
+        productRepository.save(product);
+        LOG.info("Data product version added by {}: {} {}", operator, product.getCode(), entity.getVersion());
+        return toVersionDto(entity);
+    }
+
+    @Transactional
+    public void delete(UUID id, String operator) {
+        SvcDataProduct product = productRepository.findById(id).orElseThrow(() -> new EntityNotFoundException("Data product not found"));
+        datasetRepository.deleteByProductId(id);
+        versionRepository.findByProductIdOrderByReleasedAtDesc(id).forEach(versionRepository::delete);
+        productRepository.delete(product);
+        LOG.info("Data product deleted by {}: {}", operator, product.getCode());
     }
 
     private boolean matchesKeyword(SvcDataProduct product, String keyword) {
@@ -235,5 +297,63 @@ public class DataProductService {
     private String textValue(JsonNode node, String field) {
         JsonNode child = node.path(field);
         return child.isMissingNode() || child.isNull() ? null : child.asText(null);
+    }
+
+    private void applyUpsert(SvcDataProduct product, DataProductUpsertRequest request) {
+        product.setCode(resolveText(request.code(), product.getCode()));
+        product.setName(resolveText(request.name(), product.getName()));
+        product.setProductType(resolveText(request.productType(), product.getProductType()));
+        product.setClassification(resolveText(request.classification(), product.getClassification()));
+        if (StringUtils.hasText(request.status())) {
+            product.setStatus(request.status().trim().toUpperCase(Locale.ROOT));
+        } else if (!StringUtils.hasText(product.getStatus())) {
+            product.setStatus("DRAFT");
+        }
+        product.setSla(resolveText(request.sla(), product.getSla()));
+        product.setRefreshFrequency(resolveText(request.refreshFrequency(), product.getRefreshFrequency()));
+        product.setLatencyObjective(resolveText(request.latencyObjective(), product.getLatencyObjective()));
+        product.setFailurePolicy(resolveText(request.failurePolicy(), product.getFailurePolicy()));
+        product.setDescription(resolveText(request.description(), product.getDescription()));
+    }
+
+    private void replaceDatasets(UUID productId, List<DataProductUpsertRequest.DataProductDatasetRequest> datasets) {
+        datasetRepository.deleteByProductId(productId);
+        if (datasets == null || datasets.isEmpty()) {
+            return;
+        }
+        for (DataProductUpsertRequest.DataProductDatasetRequest item : datasets) {
+            if (item == null) continue;
+            SvcDataProductDataset entity = new SvcDataProductDataset();
+            entity.setProductId(productId);
+            entity.setDatasetId(item.datasetId());
+            entity.setDatasetName(StringUtils.hasText(item.datasetName()) ? item.datasetName().trim() : null);
+            datasetRepository.save(entity);
+        }
+    }
+
+    private void validateRequest(DataProductUpsertRequest request) {
+        if (request == null) {
+            throw new ValidationException("request is required");
+        }
+        if (!StringUtils.hasText(request.code()) || !StringUtils.hasText(request.name())) {
+            throw new ValidationException("code and name are required");
+        }
+    }
+
+    private String serialize(Object payload) {
+        if (payload == null) return null;
+        try {
+            return objectMapper.writeValueAsString(payload);
+        } catch (Exception ex) {
+            LOG.warn("Failed to serialize payload: {}", ex.getMessage());
+            return null;
+        }
+    }
+
+    private String resolveText(String candidate, String fallback) {
+        if (StringUtils.hasText(candidate)) {
+            return candidate.trim();
+        }
+        return fallback;
     }
 }

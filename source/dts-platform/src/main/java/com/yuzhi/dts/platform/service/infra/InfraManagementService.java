@@ -63,6 +63,20 @@ public class InfraManagementService {
     private static final String TYPE_INCEPTOR = "INCEPTOR";
     private static final String TYPE_POSTGRES = "POSTGRES";
     private static final String STATUS_ACTIVE = "ACTIVE";
+    private static final java.util.Set<String> JDBC_TYPES = java.util.Set.of(
+        "jdbc",
+        "postgres",
+        "postgresql",
+        "mysql",
+        "mariadb",
+        "oracle",
+        "dm",
+        "sqlserver",
+        "clickhouse",
+        "hive",
+        "inceptor",
+        "db2"
+    );
 
     public InfraManagementService(
         InfraDataSourceRepository dataSourceRepository,
@@ -115,7 +129,7 @@ public class InfraManagementService {
     public InfraDataSourceDto createDataSource(DataSourceRequest request, String username, String activeDeptHeader) {
         ensureNotInceptorManaged(request.type());
         InfraDataSource entity = new InfraDataSource();
-        validateJdbcCredentials(request, null);
+        validateRequest(request, null);
         applyDataSource(entity, request, username);
         ensureNotSystemManaged(entity.getType(), activeDeptHeader);
         applyOwnerDept(entity, activeDeptHeader);
@@ -188,7 +202,7 @@ public class InfraManagementService {
         ensureNotInceptorManaged(entity.getType());
         ensureNotSystemManaged(entity.getType(), activeDeptHeader);
         ensureDeptScopeWritable(entity, activeDeptHeader);
-        validateJdbcCredentials(request, entity);
+        validateRequest(request, entity);
         applyDataSource(entity, request, username);
         applyOwnerDept(entity, activeDeptHeader);
         return toDto(dataSourceRepository.save(entity));
@@ -196,6 +210,33 @@ public class InfraManagementService {
 
     public InfraDataSource findEntity(UUID id) {
         return dataSourceRepository.findById(id).orElseThrow(EntityNotFoundException::new);
+    }
+
+    @Transactional(readOnly = true)
+    public InfraDataSourceDto getDataSource(UUID id, String activeDeptHeader) {
+        InfraDataSource entity = dataSourceRepository.findById(id).orElseThrow(EntityNotFoundException::new);
+        ensureDeptScopeReadable(entity, activeDeptHeader);
+        return toDto(entity);
+    }
+
+    @Transactional(readOnly = true)
+    public com.yuzhi.dts.platform.service.infra.dto.InfraDataSourceDetailDto getDataSourceDetail(UUID id) {
+        InfraDataSource entity = dataSourceRepository.findById(id).orElseThrow(EntityNotFoundException::new);
+        Map<String, Object> secrets = secretService.readSecrets(entity);
+        Map<String, Object> props = readProps(entity.getProps());
+        return new com.yuzhi.dts.platform.service.infra.dto.InfraDataSourceDetailDto(
+            entity.getId(),
+            entity.getName(),
+            entity.getType(),
+            entity.getJdbcUrl(),
+            entity.getUsername(),
+            entity.getDescription(),
+            entity.getOwnerDept(),
+            props,
+            secrets,
+            entity.getStatus(),
+            entity.getLastVerifiedAt()
+        );
     }
 
     @Transactional
@@ -367,24 +408,34 @@ public class InfraManagementService {
         }
     }
 
-    private void validateJdbcCredentials(DataSourceRequest request, InfraDataSource existing) {
+    private void validateRequest(DataSourceRequest request, InfraDataSource existing) {
         if (request == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请求参数不能为空");
         }
-        if (!StringUtils.hasText(request.username())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "用户名不能为空");
-        }
-        String password = extractPassword(request.secrets());
-        if (StringUtils.hasText(password)) {
+        if (isJdbcRequest(request)) {
+            if (!StringUtils.hasText(request.jdbcUrl())) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "JDBC 地址不能为空");
+            }
+            if (!StringUtils.hasText(request.username())) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "用户名不能为空");
+            }
+            String password = extractPassword(request.secrets());
+            if (StringUtils.hasText(password)) {
+                return;
+            }
+            if (existing == null) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "密码不能为空");
+            }
+            Map<String, Object> secrets = secretService.readSecrets(existing);
+            String existingPassword = extractPassword(secrets);
+            if (!StringUtils.hasText(existingPassword)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "密码不能为空");
+            }
             return;
         }
-        if (existing == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "密码不能为空");
-        }
-        Map<String, Object> secrets = secretService.readSecrets(existing);
-        String existingPassword = extractPassword(secrets);
-        if (!StringUtils.hasText(existingPassword)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "密码不能为空");
+        String readerType = extractReaderType(request.props());
+        if (!StringUtils.hasText(readerType)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请填写 Reader 类型");
         }
     }
 
@@ -398,6 +449,47 @@ public class InfraManagementService {
         }
         String text = value.toString().trim();
         return text.isEmpty() ? null : text;
+    }
+
+    private boolean isJdbcRequest(DataSourceRequest request) {
+        if (request == null) {
+            return false;
+        }
+        if (StringUtils.hasText(request.jdbcUrl())) {
+            return true;
+        }
+        String type = normalizeType(request.type());
+        return JDBC_TYPES.contains(type);
+    }
+
+    private String extractReaderType(Map<String, Object> props) {
+        if (props == null || props.isEmpty()) {
+            return null;
+        }
+        Object direct = props.get("readerType");
+        if (direct == null) {
+            direct = props.get("reader");
+        }
+        if (direct instanceof Map<?, ?> map) {
+            Object inner = map.get("type");
+            if (inner != null) {
+                return inner.toString().trim();
+            }
+        }
+        if (direct != null) {
+            String text = direct.toString().trim();
+            return text.isEmpty() ? null : text;
+        }
+        Object fallback = props.get("type");
+        if (fallback != null) {
+            String text = fallback.toString().trim();
+            return text.isEmpty() ? null : text;
+        }
+        return null;
+    }
+
+    private String normalizeType(String type) {
+        return type == null ? "" : type.trim().toLowerCase(Locale.ROOT);
     }
 
     private void applyInceptorDataSource(InfraDataSource entity, HiveConnectionPersistRequest request, String username) {
@@ -482,6 +574,20 @@ public class InfraManagementService {
         }
         if (!owner.equalsIgnoreCase(dept)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "无权限维护其他部门的数据源");
+        }
+    }
+
+    private void ensureDeptScopeReadable(InfraDataSource entity, String activeDeptHeader) {
+        if (entity == null) return;
+        if (isInstituteMaintainer()) return;
+
+        String dept = normalizeDept(resolveActiveDept(activeDeptHeader));
+        String owner = normalizeDept(entity.getOwnerDept());
+        if (dept.isEmpty() || owner.isEmpty()) {
+            return;
+        }
+        if (!owner.equalsIgnoreCase(dept)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "无权限查看其他部门的数据源");
         }
     }
 

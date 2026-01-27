@@ -11,6 +11,7 @@ public class IngestionSettingsService {
     public static final String SERVICE_OPENMETADATA = "openmetadata";
     public static final String SERVICE_AIRFLOW = "airflow";
     public static final String SERVICE_DBT = "dbt";
+    public static final String SERVICE_PLATFORM = "platform";
 
     private final InfraServiceSettingsRepository repository;
 

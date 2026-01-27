@@ -25,6 +25,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -46,6 +47,7 @@ public class IngestionTaskService {
     private final AddaxJobService addaxJobService;
     private final AirflowAdapter airflowAdapter;
     private final AirflowDagService airflowDagService;
+    private final com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver sourceResolver;
     private final com.yuzhi.dts.ingestion.service.etl.TargetTableProvisioner targetTableProvisioner;
     private final AuditService auditService;
     private final IngestionTaskChangeLogService changeLogService;
@@ -58,6 +60,7 @@ public class IngestionTaskService {
         AddaxJobService addaxJobService,
         AirflowAdapter airflowAdapter,
         AirflowDagService airflowDagService,
+        com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver sourceResolver,
         com.yuzhi.dts.ingestion.service.etl.TargetTableProvisioner targetTableProvisioner,
         AuditService auditService,
         IngestionTaskChangeLogService changeLogService
@@ -69,6 +72,7 @@ public class IngestionTaskService {
         this.addaxJobService = addaxJobService;
         this.airflowAdapter = airflowAdapter;
         this.airflowDagService = airflowDagService;
+        this.sourceResolver = sourceResolver;
         this.targetTableProvisioner = targetTableProvisioner;
         this.auditService = auditService;
         this.changeLogService = changeLogService;
@@ -79,13 +83,24 @@ public class IngestionTaskService {
      * 审计信息会自动填充（createdBy, createdDate）
      */
     public IngestionTaskDTO create(IngestionTaskDTO dto) {
+        return create(dto, null);
+    }
+
+    public IngestionTaskDTO create(IngestionTaskDTO dto, com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver.ResolvedSource resolvedSource) {
         log.info("Creating new ingestion task: {}", dto.getName());
 
         IngestionTask task = taskMapper.toEntity(dto);
 
         // 生成Addax Job JSON
         try {
-            AddaxJobService.AddaxJobResult jobResult = addaxJobService.createJobFromTask(task);
+            com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver.ResolvedSource source =
+                resolveSource(task, resolvedSource);
+            AddaxJobService.AddaxJobResult jobResult = source == null
+                ? addaxJobService.createJobFromTask(task)
+                : addaxJobService.createJobFromTask(task, source.readerType(), source.readerConfig());
+            if (source != null && StringUtils.hasText(source.readerType())) {
+                task.setSourceType(source.readerType());
+            }
             task.setAddaxJobPath(jobResult.jobPath());
         } catch (Exception e) {
             log.error("Failed to generate Addax job for task: {}", dto.getName(), e);
@@ -132,15 +147,25 @@ public class IngestionTaskService {
             .map(existingTask -> {
                 IngestionTask before = snapshot(existingTask);
                 taskMapper.partialUpdate(existingTask, dto);
-
                 // 如果配置改变，重新生成Addax Job JSON
-                boolean configChanged = !java.util.Objects.equals(existingTask.getSourceConfig(), dto.getSourceConfig())
-                    || !java.util.Objects.equals(existingTask.getSyncMode(), dto.getSyncMode())
-                    || (dto.getTableMapping() != null && !java.util.Objects.equals(existingTask.getTableMapping(), dto.getTableMapping()));
+                boolean sourceChanged = !java.util.Objects.equals(before.getSourceDataSourceId(), existingTask.getSourceDataSourceId());
+                boolean configChanged = sourceChanged
+                    || !java.util.Objects.equals(before.getSourceConfig(), existingTask.getSourceConfig())
+                    || !java.util.Objects.equals(before.getSyncMode(), existingTask.getSyncMode())
+                    || !java.util.Objects.equals(before.getDestinationType(), existingTask.getDestinationType())
+                    || !java.util.Objects.equals(before.getDestinationConfig(), existingTask.getDestinationConfig())
+                    || !java.util.Objects.equals(before.getTableMapping(), existingTask.getTableMapping())
+                    || !java.util.Objects.equals(before.getAddaxConfig(), existingTask.getAddaxConfig());
 
                 if (configChanged) {
                     try {
-                        AddaxJobService.AddaxJobResult jobResult = addaxJobService.createJobFromTask(existingTask);
+                        com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver.ResolvedSource source = resolveSource(existingTask, null);
+                        AddaxJobService.AddaxJobResult jobResult = source == null
+                            ? addaxJobService.createJobFromTask(existingTask)
+                            : addaxJobService.createJobFromTask(existingTask, source.readerType(), source.readerConfig());
+                        if (source != null && StringUtils.hasText(source.readerType())) {
+                            existingTask.setSourceType(source.readerType());
+                        }
                         existingTask.setAddaxJobPath(jobResult.jobPath());
                     } catch (Exception e) {
                         log.error("Failed to regenerate Addax job for task: {}", id, e);
@@ -213,8 +238,9 @@ public class IngestionTaskService {
         if (!"active".equals(task.getStatus()) && !"draft".equals(task.getStatus())) {
             throw new IllegalStateException("Task is not in executable status: " + task.getStatus());
         }
-        task = ensureAddaxJobExists(task);
-        targetTableProvisioner.ensureTargetTables(task);
+        com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver.ResolvedSource source = resolveSource(task, null);
+        task = ensureAddaxJobExists(task, source);
+        targetTableProvisioner.ensureTargetTables(task, source == null ? null : source.readerConfig());
         task = ensureAirflowDag(task);
 
         // 创建执行记录
@@ -309,6 +335,19 @@ public class IngestionTaskService {
     }
 
     private IngestionTask ensureAddaxJobExists(IngestionTask task) {
+        return ensureAddaxJobExists(task, null);
+    }
+
+    private IngestionTask ensureAddaxJobExists(
+        IngestionTask task,
+        com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver.ResolvedSource resolvedSource
+    ) {
+        if (task == null) {
+            return task;
+        }
+        if (resolvedSource != null || task.getSourceDataSourceId() != null) {
+            return rebuildAddaxJob(task, resolvedSource);
+        }
         String jobPath = task.getAddaxJobPath();
         if (StringUtils.hasText(jobPath)) {
             Path path = Paths.get(jobPath);
@@ -318,9 +357,23 @@ public class IngestionTaskService {
                 return task;
             }
         }
+        return rebuildAddaxJob(task, null);
+    }
+
+    private IngestionTask rebuildAddaxJob(
+        IngestionTask task,
+        com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver.ResolvedSource resolvedSource
+    ) {
         String operator = resolveOperator(task);
         try {
-            AddaxJobService.AddaxJobResult jobResult = addaxJobService.createJobFromTask(task);
+            com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver.ResolvedSource source =
+                resolveSource(task, resolvedSource);
+            AddaxJobService.AddaxJobResult jobResult = source == null
+                ? addaxJobService.createJobFromTask(task)
+                : addaxJobService.createJobFromTask(task, source.readerType(), source.readerConfig());
+            if (source != null && StringUtils.hasText(source.readerType())) {
+                task.setSourceType(source.readerType());
+            }
             task.setAddaxJobPath(jobResult.jobPath());
             IngestionTask saved = taskRepository.save(task);
             auditService.auditAction(
@@ -459,6 +512,7 @@ public class IngestionTaskService {
         snap.setDescription(task.getDescription());
         snap.setSourceType(task.getSourceType());
         snap.setSourceConfig(task.getSourceConfig());
+        snap.setSourceDataSourceId(task.getSourceDataSourceId());
         snap.setDestinationType(task.getDestinationType());
         snap.setDestinationConfig(task.getDestinationConfig());
         snap.setSyncMode(task.getSyncMode());
@@ -468,5 +522,18 @@ public class IngestionTaskService {
         snap.setAirflowEnabled(task.getAirflowEnabled());
         snap.setAirflowDagId(task.getAirflowDagId());
         return snap;
+    }
+
+    private com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver.ResolvedSource resolveSource(
+        IngestionTask task,
+        com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver.ResolvedSource provided
+    ) {
+        if (provided != null) {
+            return provided;
+        }
+        if (task == null || task.getSourceDataSourceId() == null) {
+            return null;
+        }
+        return sourceResolver.resolve(task.getSourceDataSourceId(), List.of());
     }
 }

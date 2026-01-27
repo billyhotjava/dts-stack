@@ -1,64 +1,122 @@
-import { EmptyState } from "@/components/empty-state";
+import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
+import { Button, Card, Col, Row, Select, Table, Tag, Typography } from "antd";
+import type { ColumnsType } from "antd/es/table";
 import { PageHeader } from "@/components/page-header";
-import { Button } from "@/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/ui/card";
+import reportsService, { type ReportLink } from "@/api/services/reportsService";
+
+const { Text } = Typography;
 
 export default function Page() {
+	const [reports, setReports] = useState<ReportLink[]>([]);
+	const [loading, setLoading] = useState(false);
+	const [typeFilter, setTypeFilter] = useState<string | undefined>(undefined);
+
+	const loadReports = async () => {
+		setLoading(true);
+		try {
+			const list = await reportsService.getPublishedReports({ type: typeFilter });
+			setReports(Array.isArray(list) ? (list as ReportLink[]) : []);
+		} catch (error: any) {
+			toast.error(error?.message || "看板加载失败");
+		} finally {
+			setLoading(false);
+		}
+	};
+
+	useEffect(() => {
+		void loadReports();
+	}, [typeFilter]);
+
+	const counts = useMemo(() => {
+		return {
+			total: reports.length,
+			cockpit: reports.filter((r) => r.reportType === "COCKPIT").length,
+			dashboard: reports.filter((r) => r.reportType === "DASHBOARD").length,
+		};
+	}, [reports]);
+
+	const columns: ColumnsType<ReportLink> = [
+		{ title: "标题", dataIndex: "title", render: (v) => v || "-" },
+		{ title: "类型", dataIndex: "reportType", width: 120, render: (v) => <Tag>{v || "-"}</Tag> },
+		{ title: "引擎", dataIndex: "engine", width: 120, render: (v) => <Tag>{v || "-"}</Tag> },
+		{ title: "密级", dataIndex: "classification", width: 120, render: (v) => <Tag>{v || "-"}</Tag> },
+		{ title: "URL", dataIndex: "url", render: (v) => v || "-" },
+		{
+			title: "操作",
+			width: 120,
+			render: (_, record) => (
+				<Button
+					type="link"
+					onClick={async () => {
+						try {
+							await reportsService.visit({
+								id: record.id,
+								code: record.code,
+								title: record.title,
+								url: record.url,
+								engine: record.engine,
+								classification: record.classification,
+							});
+							if (record.url) {
+								window.open(record.url, "_blank", "noopener,noreferrer");
+							}
+						} catch (error: any) {
+							toast.error(error?.message || "访问失败");
+						}
+					}}
+				>
+					打开
+				</Button>
+			),
+		},
+	];
+
 	return (
 		<div className="space-y-6">
 			<PageHeader
 				title="BI 可视化 / 看板中心"
 				description="统一管理可视化看板与外部 BI 入口。"
 				actions={
-					<div className="flex items-center gap-2">
-						<Button variant="default">新建看板</Button>
-						<Button variant="outline">同步目录</Button>
-					</div>
+					<Select
+						placeholder="筛选类型"
+						value={typeFilter}
+						onChange={setTypeFilter}
+						allowClear
+						options={[
+							{ label: "驾驶舱", value: "COCKPIT" },
+							{ label: "主题看板", value: "DASHBOARD" },
+							{ label: "分析报表", value: "REPORT" },
+							{ label: "业务应用", value: "APP" },
+						]}
+						style={{ minWidth: 160 }}
+					/>
 				}
 			/>
 
-			<div className="grid gap-4 md:grid-cols-3">
-				<Card>
-					<CardHeader>
-						<CardTitle>看板总数</CardTitle>
-						<CardDescription>统一口径统计</CardDescription>
-					</CardHeader>
-					<CardContent className="text-2xl font-semibold">0</CardContent>
-				</Card>
-				<Card>
-					<CardHeader>
-						<CardTitle>收藏看板</CardTitle>
-						<CardDescription>我的关注</CardDescription>
-					</CardHeader>
-					<CardContent className="text-2xl font-semibold">0</CardContent>
-				</Card>
-				<Card>
-					<CardHeader>
-						<CardTitle>共享看板</CardTitle>
-						<CardDescription>团队共享</CardDescription>
-					</CardHeader>
-					<CardContent className="text-2xl font-semibold">0</CardContent>
-				</Card>
-			</div>
+			<Row gutter={[16, 16]}>
+				<Col xs={24} sm={8}>
+					<Card>
+						<Text type="secondary">看板总数</Text>
+						<div className="text-2xl font-semibold">{counts.total}</div>
+					</Card>
+				</Col>
+				<Col xs={24} sm={8}>
+					<Card>
+						<Text type="secondary">驾驶舱</Text>
+						<div className="text-2xl font-semibold">{counts.cockpit}</div>
+					</Card>
+				</Col>
+				<Col xs={24} sm={8}>
+					<Card>
+						<Text type="secondary">主题看板</Text>
+						<div className="text-2xl font-semibold">{counts.dashboard}</div>
+					</Card>
+				</Col>
+			</Row>
 
 			<Card>
-				<CardHeader>
-					<CardTitle>看板列表</CardTitle>
-					<CardDescription>浏览、分享与权限管理</CardDescription>
-				</CardHeader>
-				<CardContent>
-					<EmptyState title="暂无看板" description="创建或导入看板后将在此处展示。" />
-				</CardContent>
-			</Card>
-
-			<Card>
-				<CardHeader>
-					<CardTitle>外部 BI 集成</CardTitle>
-					<CardDescription>Tableau、Superset 等入口与单点登录配置</CardDescription>
-				</CardHeader>
-				<CardContent>
-					<EmptyState title="暂无外部 BI" description="配置 BI 链接后可在此处跳转访问。" />
-				</CardContent>
+				<Table rowKey={(record) => record.id} columns={columns} dataSource={reports} loading={loading} />
 			</Card>
 		</div>
 	);

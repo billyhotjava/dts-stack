@@ -10,36 +10,8 @@ export type DataProductSummary = {
 	sla?: string;
 	refreshFrequency?: string;
 	currentVersion?: string;
-	subscriptions: number;
-	datasets: string[];
-};
-
-export type DataProductField = {
-	name: string;
-	type?: string;
-	term?: string;
-	masked?: boolean;
-	description?: string;
-};
-
-export type DataProductVersion = {
-	version: string;
-	status?: string;
-	releasedAt?: string;
-	diffSummary?: string;
-	fields: DataProductField[];
-	consumption: {
-		rest?: { endpoint?: string; auth?: string } | null;
-		jdbc?: { driver?: string; url?: string } | null;
-		file?: { objectStorePath?: string; sharedPath?: string; formats?: string[] } | null;
-	};
-	metadata: {
-		bloodlineSummary?: string;
-		classificationStrategy?: string;
-		maskingStrategy?: string;
-		latencyObjective?: string;
-		failurePolicy?: string;
-	};
+	subscriptions?: number;
+	datasets?: string[];
 };
 
 export type DataProductDetail = {
@@ -53,16 +25,61 @@ export type DataProductDetail = {
 	refreshFrequency?: string;
 	latencyObjective?: string;
 	failurePolicy?: string;
-	subscriptions: number;
-	datasets: string[];
-	versions: DataProductVersion[];
+	subscriptions?: number;
+	description?: string;
+	datasets?: string[];
+	versions?: DataProductVersion[];
+};
+
+export type DataProductVersion = {
+	version: string;
+	status?: string;
+	releasedAt?: string;
+	diffSummary?: string;
+	fields?: DataProductField[];
+	consumption?: any;
+	metadata?: any;
+};
+
+export type DataProductField = {
+	name: string;
+	type?: string;
+	term?: string;
+	masked?: boolean;
 	description?: string;
 };
 
-export function listDataProducts(params?: { keyword?: string; type?: string; status?: string }) {
-	return apiClient.get<DataProductSummary[]>({ url: "/services/products", params });
-}
+export type DataProductUpsert = {
+	code: string;
+	name: string;
+	productType?: string;
+	classification?: string;
+	status?: string;
+	sla?: string;
+	refreshFrequency?: string;
+	latencyObjective?: string;
+	failurePolicy?: string;
+	description?: string;
+	datasets?: { datasetId?: string; datasetName?: string }[];
+};
 
-export function getDataProductDetail(id: string) {
-	return apiClient.get<DataProductDetail>({ url: `/services/products/${id}` });
-}
+export type DataProductVersionRequest = {
+	version: string;
+	status?: string;
+	diffSummary?: string;
+	fields?: DataProductField[];
+	consumption?: any;
+	metadata?: any;
+};
+
+export default {
+	list: (params?: { keyword?: string; type?: string; status?: string }) =>
+		apiClient.get<DataProductSummary[]>({ url: "/services/products", params }),
+	detail: (id: string) => apiClient.get<DataProductDetail>({ url: `/services/products/${id}` }),
+	create: (payload: DataProductUpsert) => apiClient.post<DataProductDetail>({ url: "/services/products", data: payload }),
+	update: (id: string, payload: DataProductUpsert) =>
+		apiClient.put<DataProductDetail>({ url: `/services/products/${id}`, data: payload }),
+	addVersion: (id: string, payload: DataProductVersionRequest) =>
+		apiClient.post<DataProductVersion>({ url: `/services/products/${id}/versions`, data: payload }),
+	remove: (id: string) => apiClient.delete<boolean>({ url: `/services/products/${id}` }),
+};

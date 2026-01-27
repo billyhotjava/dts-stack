@@ -5,11 +5,13 @@ import { PlayCircleOutlined, EditOutlined, HistoryOutlined, ArrowLeftOutlined, S
 import { PageHeader } from "@/components/page-header";
 import { useRouter } from "@/routes/hooks";
 import { ingestionTaskAPI, type IngestionTaskDTO } from "@/api/ingestion";
+import dataSourcesService, { type InfraDataSource } from "@/api/services/dataSourcesService";
 
 export default function TransformDetailPage() {
     const { id } = useParams();
     const router = useRouter();
     const [task, setTask] = useState<IngestionTaskDTO | null>(null);
+    const [sourceDetail, setSourceDetail] = useState<InfraDataSource | null>(null);
     const [loading, setLoading] = useState(false);
 
     useEffect(() => {
@@ -17,6 +19,22 @@ export default function TransformDetailPage() {
             loadTask();
         }
     }, [id]);
+
+    useEffect(() => {
+        if (!task?.sourceDataSourceId) {
+            setSourceDetail(null);
+            return;
+        }
+        const loadSource = async () => {
+            try {
+                const detail = await dataSourcesService.detail(String(task.sourceDataSourceId));
+                setSourceDetail(detail);
+            } catch {
+                setSourceDetail(null);
+            }
+        };
+        loadSource();
+    }, [task?.sourceDataSourceId]);
 
     const loadTask = async () => {
         setLoading(true);
@@ -113,7 +131,10 @@ export default function TransformDetailPage() {
                 <Descriptions column={2} bordered>
                     <Descriptions.Item label="任务名称">{task.name}</Descriptions.Item>
                     <Descriptions.Item label="状态">{renderStatus(task.status)}</Descriptions.Item>
-                    <Descriptions.Item label="数据源类型">{task.sourceType}</Descriptions.Item>
+                    <Descriptions.Item label="数据源连接">
+                        {sourceDetail ? `${sourceDetail.name} (${sourceDetail.type || "unknown"})` : task.sourceDataSourceId || "-"}
+                    </Descriptions.Item>
+                    <Descriptions.Item label="Reader 类型">{task.sourceType}</Descriptions.Item>
                     <Descriptions.Item label="目标类型">{task.destinationType || "postgresqlwriter"}</Descriptions.Item>
                     <Descriptions.Item label="同步模式">{task.syncMode}</Descriptions.Item>
                     <Descriptions.Item label="调度配置">{task.syncSchedule || "手动触发"}</Descriptions.Item>
@@ -126,8 +147,8 @@ export default function TransformDetailPage() {
                 </Descriptions>
             </Card>
 
-            <Card title="数据源配置">
-                <pre className="bg-gray-50 p-4 rounded overflow-auto">{JSON.stringify(task.sourceConfig, null, 2)}</pre>
+            <Card title="源端覆盖参数">
+                <pre className="bg-gray-50 p-4 rounded overflow-auto">{JSON.stringify(task.sourceConfig || {}, null, 2)}</pre>
             </Card>
 
             {task.destinationConfig && (

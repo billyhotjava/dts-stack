@@ -1,8 +1,11 @@
 import { Link } from "react-router";
 import { useEffect, useMemo, useState } from "react";
 import { analyticsApi, type CollectionListItem } from "../api/analyticsApi";
+import { PageContainer, PageHeader } from "../components/PageContainer/PageContainer";
 import { EmptyState } from "../components/EmptyState";
 import { ErrorNotice } from "../components/ErrorNotice";
+import { Card, CardBody } from "../ui/Card/Card";
+import { Spinner } from "../ui/Loading/Spinner";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import "./page.css";
 
@@ -10,6 +13,13 @@ type LoadState<T> =
 	| { state: "loading" }
 	| { state: "loaded"; value: T }
 	| { state: "error"; error: unknown };
+
+// Icons
+const FolderIcon = () => (
+	<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+		<path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" />
+	</svg>
+);
 
 export default function CollectionsPage() {
 	const locale: Locale = useMemo(() => getEffectiveLocale(), []);
@@ -33,37 +43,58 @@ export default function CollectionsPage() {
 	}, []);
 
 	return (
-		<div className="page">
-			<h1 className="pageTitle">{t(locale, "collections.title")}</h1>
-			<div className="pageSub">{t(locale, "collections.subtitle")}</div>
+		<PageContainer>
+			<PageHeader
+				title={t(locale, "collections.title")}
+				subtitle={t(locale, "collections.subtitle")}
+			/>
 
-				<div style={{ height: 16 }} />
-
-				{state.state === "loading" && <div className="card">{t(locale, "loading")}</div>}
-				{state.state === "error" && <ErrorNotice locale={locale} error={state.error} />}
-				{state.state === "loaded" && state.value.length === 0 && <EmptyState title={t(locale, "common.empty")} />}
-				{state.state === "loaded" && state.value.length > 0 && (
-					<div className="card">
-						<table className="table">
-							<thead>
-								<tr>
-									<th>{t(locale, "common.name")}</th>
-									<th>{t(locale, "common.id")}</th>
-								</tr>
-							</thead>
-							<tbody>
-								{state.value.map((c) => (
-									<tr key={String(c.id)}>
-										<td>
-											<Link to={`/collections/${encodeURIComponent(String(c.id))}`}>{c.name ?? "-"}</Link>
-										</td>
-										<td>{String(c.id)}</td>
-									</tr>
-								))}
-							</tbody>
-						</table>
-					</div>
-				)}
-			</div>
-		);
-	}
+			{state.state === "loading" && (
+				<Card>
+					<CardBody>
+						<div className="loading-container" style={{ padding: "var(--spacing-xl)" }}>
+							<Spinner size="lg" />
+						</div>
+					</CardBody>
+				</Card>
+			)}
+			{state.state === "error" && <ErrorNotice locale={locale} error={state.error} />}
+			{state.state === "loaded" && state.value.length === 0 && <EmptyState title={t(locale, "common.empty")} />}
+			{state.state === "loaded" && state.value.length > 0 && (
+				<div className="grid3">
+					{state.value.map((c) => (
+						<Link key={String(c.id)} to={`/collections/${encodeURIComponent(String(c.id))}`} style={{ textDecoration: "none" }}>
+							<Card variant="hoverable" style={{ height: "100%" }}>
+								<CardBody>
+									<div style={{ display: "flex", alignItems: "center", gap: "var(--spacing-md)" }}>
+										<div style={{
+											display: "flex",
+											alignItems: "center",
+											justifyContent: "center",
+											width: 40,
+											height: 40,
+											borderRadius: "var(--radius-md)",
+											background: "var(--color-bg-hover)",
+											color: "var(--color-brand)",
+											flexShrink: 0
+										}}>
+											<FolderIcon />
+										</div>
+										<div style={{ flex: 1, minWidth: 0 }}>
+											<h3 style={{ margin: 0, fontSize: "var(--font-size-md)", fontWeight: "var(--font-weight-semibold)" }}>
+												{c.name ?? "-"}
+											</h3>
+											<p className="text-muted" style={{ margin: "var(--spacing-xs) 0 0", fontSize: "var(--font-size-sm)" }}>
+												ID: {String(c.id)}
+											</p>
+										</div>
+									</div>
+								</CardBody>
+							</Card>
+						</Link>
+					))}
+				</div>
+			)}
+		</PageContainer>
+	);
+}

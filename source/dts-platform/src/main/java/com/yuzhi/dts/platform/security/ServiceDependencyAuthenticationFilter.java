@@ -63,8 +63,14 @@ public class ServiceDependencyAuthenticationFilter extends OncePerRequestFilter 
         if (!StringUtils.hasText(declared)) {
             return null;
         }
-        if (StringUtils.hasText(expected) && expected.equalsIgnoreCase(declared.trim())) {
-            return expected;
+        String normalized = declared.trim();
+        if (!StringUtils.hasText(expected)) {
+            return null;
+        }
+        for (String candidate : expected.split(",")) {
+            if (StringUtils.hasText(candidate) && candidate.trim().equalsIgnoreCase(normalized)) {
+                return candidate.trim();
+            }
         }
         return null;
     }

@@ -9,4 +9,6 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface SvcDataProductDatasetRepository extends JpaRepository<SvcDataProductDataset, UUID> {
     List<SvcDataProductDataset> findByProductId(UUID productId);
+
+    void deleteByProductId(UUID productId);
 }

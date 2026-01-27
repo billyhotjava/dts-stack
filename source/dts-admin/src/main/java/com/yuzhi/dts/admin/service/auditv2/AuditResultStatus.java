@@ -2,6 +2,7 @@ package com.yuzhi.dts.admin.service.auditv2;
 
 public enum AuditResultStatus {
     SUCCESS("SUCCESS", "成功"),
+    FAIL("FAIL", "失败"),
     FAILED("FAILED", "失败"),
     PENDING("PENDING", "处理中");
 

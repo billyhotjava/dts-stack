@@ -6,7 +6,7 @@ import java.util.Map;
 public record DataSourceRequest(
     @NotBlank String name,
     @NotBlank String type,
-    @NotBlank String jdbcUrl,
+    String jdbcUrl,
     String username,
     String description,
     Map<String, Object> props,

@@ -35,10 +35,12 @@ public class IngestionTask extends AbstractAuditingEntity {
     @Column(name = "source_type", length = 50, nullable = false)
     private String sourceType; // mysql, postgres, oracle, etc.
 
-    @NotNull
+    @Column(name = "source_data_source_id")
+    private java.util.UUID sourceDataSourceId;
+
     @Type(JsonType.class)
-    @Column(name = "source_config", columnDefinition = "jsonb", nullable = false)
-    private JsonNode sourceConfig; // {host, port, database, username, password, tables}
+    @Column(name = "source_config", columnDefinition = "jsonb")
+    private JsonNode sourceConfig; // 任务级Reader参数（不含连接密钥）
 
     // 目标配置
     @Size(max = 50)
@@ -132,6 +134,14 @@ public class IngestionTask extends AbstractAuditingEntity {
 
     public void setSourceConfig(JsonNode sourceConfig) {
         this.sourceConfig = sourceConfig;
+    }
+
+    public java.util.UUID getSourceDataSourceId() {
+        return sourceDataSourceId;
+    }
+
+    public void setSourceDataSourceId(java.util.UUID sourceDataSourceId) {
+        this.sourceDataSourceId = sourceDataSourceId;
     }
 
     public String getDestinationType() {

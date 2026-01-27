@@ -1,17 +1,12 @@
 package com.yuzhi.dts.admin.service.ops;
 
-import com.yuzhi.dts.admin.domain.ChangeRequest;
 import com.yuzhi.dts.admin.domain.SystemConfig;
 import com.yuzhi.dts.admin.repository.SystemConfigRepository;
 import com.yuzhi.dts.admin.security.SecurityUtils;
-import com.yuzhi.dts.admin.service.ChangeRequestService;
 import com.yuzhi.dts.admin.service.auditv2.AuditActionRequest;
-import com.yuzhi.dts.admin.service.auditv2.AuditOperationKind;
 import com.yuzhi.dts.admin.service.auditv2.AuditResultStatus;
 import com.yuzhi.dts.admin.service.auditv2.AuditV2Service;
-import com.yuzhi.dts.common.audit.ChangeSnapshot;
 import jakarta.servlet.http.HttpServletRequest;
-import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -49,16 +44,13 @@ public class OpsConfigService {
     );
 
     private final SystemConfigRepository configRepository;
-    private final ChangeRequestService changeRequestService;
     private final AuditV2Service auditV2Service;
 
     public OpsConfigService(
         SystemConfigRepository configRepository,
-        ChangeRequestService changeRequestService,
         AuditV2Service auditV2Service
     ) {
         this.configRepository = configRepository;
-        this.changeRequestService = changeRequestService;
         this.auditV2Service = auditV2Service;
     }
 
@@ -112,9 +104,10 @@ public class OpsConfigService {
     }
 
     /**
-     * 更新配置（通过审批流程）
+     * 更新配置（直接生效，无需审批）
+     * @return 更新后的配置视图
      */
-    public ChangeRequest updateConfig(String key, String newValue, String reason, HttpServletRequest request) {
+    public OpsConfigView updateConfig(String key, String newValue, HttpServletRequest request) {
         String actor = SecurityUtils.getCurrentAuditableLogin();
         SystemConfig config = configRepository.findByKey(key)
             .orElseThrow(() -> new IllegalArgumentException("配置项不存在: " + key));
@@ -123,58 +116,40 @@ public class OpsConfigService {
             throw new IllegalStateException("该配置项不可编辑: " + key);
         }
 
-        // 构建变更前后数据（变更后值不脱敏，审批时需要看到实际值）
-        Map<String, Object> before = toConfigMap(config);
-        Map<String, Object> after = new LinkedHashMap<>(before);
-        after.put("value", newValue);
-
-        // 创建变更请求
-        ChangeRequest cr = changeRequestService.draft(
-            "CONFIG",
-            "CONFIG_SET",
-            key,
-            after,
-            before,
-            reason
-        );
+        String oldValue = config.getValue();
+        config.setValue(newValue);
+        configRepository.save(config);
 
         // 记录审计日志
-        recordConfigUpdateAudit(actor, key, config, newValue, cr, request);
+        recordConfigUpdateAudit(actor, key, config, oldValue, newValue, request);
 
-        return cr;
+        log.info("Config updated: {} = {} (was: {}) by {}", key, newValue, oldValue, actor);
+        return toView(config);
     }
 
     /**
-     * 切换布尔类型配置（功能开关）
-     * 支持所有布尔类型配置，不限于 FEATURE_TOGGLE 分类
+     * 切换布尔类型配置（直接生效，无需审批）
+     * @return 更新后的配置视图
      */
-    public ChangeRequest toggleFeature(String key, boolean enabled, HttpServletRequest request) {
+    public OpsConfigView toggleFeature(String key, boolean enabled, HttpServletRequest request) {
         String actor = SecurityUtils.getCurrentAuditableLogin();
         SystemConfig config = configRepository.findByKey(key)
             .orElseThrow(() -> new IllegalArgumentException("配置项不存在: " + key));
 
-        // 只检查是否可编辑，不再限制分类
         if (!config.isEditable()) {
             throw new IllegalStateException("该配置项不可编辑: " + key);
         }
 
+        String oldValue = config.getValue();
         String newValue = String.valueOf(enabled);
-        Map<String, Object> before = toConfigMap(config);
-        Map<String, Object> after = new LinkedHashMap<>(before);
-        after.put("value", newValue);
+        config.setValue(newValue);
+        configRepository.save(config);
 
-        ChangeRequest cr = changeRequestService.draft(
-            "CONFIG",
-            enabled ? "TOGGLE_ENABLE" : "TOGGLE_DISABLE",
-            key,
-            after,
-            before,
-            enabled ? "启用功能: " + getDisplayName(config) : "禁用功能: " + getDisplayName(config)
-        );
+        // 记录审计日志
+        recordToggleAudit(actor, key, config, oldValue, enabled, request);
 
-        recordToggleAudit(actor, key, config, enabled, cr, request);
-
-        return cr;
+        log.info("Feature toggled: {} = {} (was: {}) by {}", key, enabled, oldValue, actor);
+        return toView(config);
     }
 
     // ============ 私有方法 ============
@@ -257,13 +232,13 @@ public class OpsConfigService {
         String actor,
         String key,
         SystemConfig config,
+        String oldValue,
         String newValue,
-        ChangeRequest cr,
         HttpServletRequest request
     ) {
         try {
             String displayName = getDisplayName(config);
-            String maskedOldValue = config.isSensitive() ? maskValue(config.getValue()) : config.getValue();
+            String maskedOldValue = config.isSensitive() ? maskValue(oldValue) : oldValue;
             String maskedNewValue = config.isSensitive() ? maskValue(newValue) : newValue;
 
             auditV2Service.record(
@@ -272,7 +247,6 @@ public class OpsConfigService {
                     .target("system_config", String.valueOf(config.getId()), displayName)
                     .summary("修改运维配置：" + displayName + "，从 " + maskedOldValue + " 改为 " + maskedNewValue)
                     .result(AuditResultStatus.SUCCESS)
-                    .changeRequestRef(String.valueOf(cr.getId()))
                     .metadata("configKey", key)
                     .metadata("category", config.getCategory() != null ? config.getCategory().name() : "SYSTEM")
                     .detail("before", Map.of("key", key, "value", maskedOldValue))
@@ -293,13 +267,14 @@ public class OpsConfigService {
         String actor,
         String key,
         SystemConfig config,
+        String oldValue,
         boolean enabled,
-        ChangeRequest cr,
         HttpServletRequest request
     ) {
         try {
             String displayName = getDisplayName(config);
             String action = enabled ? "启用" : "禁用";
+            boolean wasEnabled = "true".equalsIgnoreCase(oldValue);
 
             auditV2Service.record(
                 AuditActionRequest.builder(actor, "OPS_TOGGLE_UPDATE")
@@ -307,10 +282,9 @@ public class OpsConfigService {
                     .target("system_config", String.valueOf(config.getId()), displayName)
                     .summary(action + "功能开关：" + displayName)
                     .result(AuditResultStatus.SUCCESS)
-                    .changeRequestRef(String.valueOf(cr.getId()))
                     .metadata("configKey", key)
                     .metadata("toggleAction", action)
-                    .detail("before", Map.of("key", key, "enabled", !enabled))
+                    .detail("before", Map.of("key", key, "enabled", wasEnabled))
                     .detail("after", Map.of("key", key, "enabled", enabled))
                     .client(resolveClientIp(request), request != null ? request.getHeader("User-Agent") : null)
                     .request(request != null ? request.getRequestURI() : "/api/admin/ops/feature-toggles/" + key, "PUT")

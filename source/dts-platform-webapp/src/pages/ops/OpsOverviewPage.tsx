@@ -1,71 +1,79 @@
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import { Card, Col, Row, Statistic, Table, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { EmptyState } from "@/components/empty-state";
+import { PageHeader } from "@/components/page-header";
+import opsService, { type OpsAlert, type OpsOverview } from "@/api/services/opsService";
 
 const { Title, Text } = Typography;
 
-type SlaRow = {
-	key: string;
-	name: string;
-	expected: string;
-	current: string;
-	delay: string;
-	owner: string;
-};
-
-const slaRows: SlaRow[] = [];
-
-const slaColumns: ColumnsType<SlaRow> = [
-	{ title: "任务名称", dataIndex: "name" },
-	{ title: "预期产出", dataIndex: "expected" },
-	{ title: "当前进度", dataIndex: "current" },
-	{ title: "延迟时长", dataIndex: "delay", render: (value) => <Text type="danger">{value}</Text> },
-	{ title: "负责人", dataIndex: "owner" },
+const alertColumns: ColumnsType<OpsAlert> = [
+	{ title: "类型", dataIndex: "type", width: 120 },
+	{ title: "规则", dataIndex: "ruleName", render: (value) => value || "-" },
+	{ title: "状态", dataIndex: "status", width: 120 },
+	{ title: "严重性", dataIndex: "severity", width: 120, render: (value) => value || "-" },
+	{ title: "描述", dataIndex: "message", render: (value) => value || "-" },
 ];
 
 export default function OpsOverviewPage() {
+	const [overview, setOverview] = useState<OpsOverview | null>(null);
+	const [alerts, setAlerts] = useState<OpsAlert[]>([]);
+	const [loading, setLoading] = useState(false);
+
+	const loadData = async () => {
+		setLoading(true);
+		try {
+			const [summary, alertList] = await Promise.all([opsService.overview(), opsService.alerts({ limit: 20 })]);
+			setOverview(summary as OpsOverview);
+			setAlerts(Array.isArray(alertList) ? (alertList as OpsAlert[]) : []);
+		} catch (error: any) {
+			toast.error(error?.message || "运维概览加载失败");
+		} finally {
+			setLoading(false);
+		}
+	};
+
+	useEffect(() => {
+		void loadData();
+	}, []);
+
 	return (
 		<div className="mx-auto w-full max-w-none space-y-6 px-6 py-6">
-			<Title level={3} style={{ margin: 0 }}>
-				任务运行概览
-			</Title>
+			<PageHeader title="任务运行概览" description="监控任务执行与告警情况。" />
 
 			<Row gutter={[16, 16]} className="mb-2">
 				<Col xs={24} sm={12} lg={6}>
 					<Card className="rounded-xl shadow-sm">
-						<Statistic title="今日任务总数" value="--" />
+						<Statistic title="今日任务总数" value={overview?.totalRuns ?? "--"} />
 					</Card>
 				</Col>
 				<Col xs={24} sm={12} lg={6}>
 					<Card className="rounded-xl shadow-sm">
-						<Statistic title="成功率" value="--" suffix="%" />
+						<Statistic title="成功率" value={overview?.successRate ?? "--"} suffix="%" />
 					</Card>
 				</Col>
 				<Col xs={24} sm={12} lg={6}>
 					<Card className="rounded-xl shadow-sm">
-						<Statistic title="异常告警" value="--" />
+						<Statistic title="异常告警" value={overview?.alerts ?? "--"} />
 					</Card>
 				</Col>
 				<Col xs={24} sm={12} lg={6}>
 					<Card className="rounded-xl shadow-sm">
-						<Statistic title="正在运行" value="--" />
+						<Statistic title="正在运行" value={overview?.running ?? "--"} />
 					</Card>
 				</Col>
 			</Row>
 
 			<Card title="任务执行趋势 (近24小时)">
-				<EmptyState title="暂无趋势数据" description="任务运行数据接入后展示趋势分析。" />
+				<EmptyState title="暂无趋势数据" description="趋势分析将在接入运行统计后展示。" />
 			</Card>
 
-			<Card title="数仓分层成功率">
-				<EmptyState title="暂无成功率统计" description="接入任务运行结果后展示分层成功率。" />
-			</Card>
-
-			<Card title="SLA 延迟预警 (关键任务路径)">
-				{slaRows.length ? (
-					<Table size="small" pagination={false} dataSource={slaRows} columns={slaColumns} />
+			<Card title="告警概览">
+				{alerts.length ? (
+					<Table size="small" pagination={false} dataSource={alerts} columns={alertColumns} rowKey={(row, idx) => `${row.type}-${idx}`} loading={loading} />
 				) : (
-					<EmptyState title="暂无 SLA 预警" description="接入 SLA 数据后展示预警列表。" />
+					<EmptyState title="暂无告警" description="当前没有质量或任务告警。" />
 				)}
 			</Card>
 		</div>

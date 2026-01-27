@@ -2,8 +2,12 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router";
 import { analyticsApi, type DashboardQueryResponse, type PublicDashboardDetail } from "../api/analyticsApi";
 import { ChartRenderer, type VisualizationType, type VisualizationSettings } from "../components/charts";
+import { PageContainer, PageHeader, Breadcrumb } from "../components/PageContainer/PageContainer";
 import { EmptyState } from "../components/EmptyState";
 import { ErrorNotice } from "../components/ErrorNotice";
+import { Card, CardHeader, CardBody } from "../ui/Card/Card";
+import { Badge } from "../ui/Badge/Badge";
+import { Spinner } from "../ui/Loading/Spinner";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import "./page.css";
 
@@ -79,22 +83,24 @@ export default function PublicDashboardPage() {
 	}, [dashboard]);
 
 	return (
-		<div className="page">
-			<h1 className="pageTitle">{dashboard.state === "loaded" ? dashboard.value.name ?? "-" : t(locale, "loading")}</h1>
-			<div className="pageSub">
-				<Link to="/analyze">{t(locale, "nav.analyze")}</Link>
-				<span className="muted"> · </span>
-				<span className="muted">Share</span>
-			</div>
-
-			<div style={{ height: 16 }} />
+		<PageContainer maxWidth="full">
+			<PageHeader
+				title={dashboard.state === "loaded" ? dashboard.value.name ?? "-" : t(locale, "loading")}
+				breadcrumbs={
+					<Breadcrumb items={[
+						{ label: t(locale, "nav.analyze"), href: "/analyze" },
+						{ label: "Share" }
+					]} />
+				}
+			/>
 
 			{dashboard.state === "error" && <ErrorNotice locale={locale} error={dashboard.error} />}
-			<div className="card">
-				<div className="muted">{t(locale, "share.note")}</div>
-			</div>
 
-			<div style={{ height: 16 }} />
+			<Card style={{ marginBottom: "var(--spacing-lg)" }}>
+				<CardBody>
+					<p className="text-muted" style={{ margin: 0 }}>{t(locale, "share.note")}</p>
+				</CardBody>
+			</Card>
 
 			{dashboard.state === "loaded" && dashcards.length === 0 && <EmptyState title={t(locale, "common.empty")} />}
 			{dashboard.state === "loaded" && dashcards.length > 0 && (
@@ -103,7 +109,7 @@ export default function PublicDashboardPage() {
 					style={{
 						display: "grid",
 						gridTemplateColumns: "repeat(24, minmax(0, 1fr))",
-						gap: 12,
+						gap: "var(--spacing-md)",
 						alignItems: "stretch",
 					}}
 				>
@@ -116,34 +122,37 @@ export default function PublicDashboardPage() {
 							typeof dc.row === "number" && typeof dc.size_y === "number" ? `${dc.row + 1} / span ${dc.size_y}` : "auto";
 						const result = dashcardResults[dc.id];
 						return (
-							<div key={String(dc.id)} className="card" style={{ gridColumn, gridRow, overflow: "hidden" }}>
-								<div className="row" style={{ justifyContent: "space-between" }}>
-									<div style={{ fontWeight: 600 }}>{cardId ? <Link to={`/questions/${cardId}`}>{String(name)}</Link> : String(name)}</div>
-									<span className="tag">card</span>
-								</div>
-								<div style={{ height: 10 }} />
-								{!result || result.state === "loading" ? (
-									<div>{t(locale, "loading")}</div>
-								) : result.state === "error" ? (
-									<ErrorNotice locale={locale} error={result.error} />
-								) : Array.isArray(result.value?.data?.cols) && Array.isArray(result.value?.data?.rows) ? (
-									<ChartRenderer
-										data={{
-											cols: (result.value.data?.cols ?? []) as { name: string; display_name?: string; base_type?: string }[],
-											rows: (result.value.data?.rows ?? []) as any[][]
-										}}
-										display={(dc.card?.display as VisualizationType) || "table"}
-										settings={((dc.card as any)?.visualization_settings as VisualizationSettings) || {}}
-									/>
-								) : (
-									<EmptyState title={t(locale, "common.empty")} />
-								)}
-							</div>
+							<Card key={String(dc.id)} style={{ gridColumn, gridRow, overflow: "hidden" }}>
+								<CardHeader
+									title={cardId ? <Link to={`/questions/${cardId}`}>{String(name)}</Link> : String(name)}
+									action={<Badge variant="default" size="sm">card</Badge>}
+								/>
+								<CardBody>
+									{!result || result.state === "loading" ? (
+										<div className="loading-container" style={{ padding: "var(--spacing-md)" }}>
+											<Spinner size="sm" />
+										</div>
+									) : result.state === "error" ? (
+										<ErrorNotice locale={locale} error={result.error} />
+									) : Array.isArray(result.value?.data?.cols) && Array.isArray(result.value?.data?.rows) ? (
+										<ChartRenderer
+											data={{
+												cols: (result.value.data?.cols ?? []) as { name: string; display_name?: string; base_type?: string }[],
+												rows: (result.value.data?.rows ?? []) as any[][]
+											}}
+											display={(dc.card?.display as VisualizationType) || "table"}
+											settings={((dc.card as any)?.visualization_settings as VisualizationSettings) || {}}
+										/>
+									) : (
+										<EmptyState title={t(locale, "common.empty")} />
+									)}
+								</CardBody>
+							</Card>
 						);
 					})}
 				</div>
 			)}
-		</div>
+		</PageContainer>
 	);
 }
 

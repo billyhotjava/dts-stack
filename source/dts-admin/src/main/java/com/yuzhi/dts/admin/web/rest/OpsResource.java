@@ -1,6 +1,5 @@
 package com.yuzhi.dts.admin.web.rest;
 
-import com.yuzhi.dts.admin.domain.ChangeRequest;
 import com.yuzhi.dts.admin.security.AuthoritiesConstants;
 import com.yuzhi.dts.admin.security.SecurityUtils;
 import com.yuzhi.dts.admin.service.ops.OpsConfigService;
@@ -24,7 +23,7 @@ import org.springframework.web.bind.annotation.RestController;
  * 
  * 提供运维配置的查看和管理功能，包含：
  * - 配置分类展示（脱敏处理敏感信息）
- * - 功能开关管理
+ * - 功能开关管理（直接生效，无需审批）
  * - 所有操作记录审计日志
  */
 @RestController
@@ -96,29 +95,24 @@ public class OpsResource {
     }
 
     /**
-     * 更新配置项（触发审批流程）
+     * 更新配置项（直接生效，无需审批）
      */
     @PutMapping("/configs/{key}")
     @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.SYS_ADMIN + "')")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> updateConfig(
+    public ResponseEntity<ApiResponse<OpsConfigView>> updateConfig(
         @PathVariable String key,
         @RequestBody Map<String, Object> payload,
         HttpServletRequest request
     ) {
         String value = payload.get("value") != null ? String.valueOf(payload.get("value")) : null;
-        String reason = payload.get("reason") != null ? String.valueOf(payload.get("reason")) : null;
 
         if (value == null) {
             return ResponseEntity.badRequest().body(ApiResponse.error("配置值不能为空"));
         }
 
         try {
-            ChangeRequest cr = opsConfigService.updateConfig(key, value, reason, request);
-            Map<String, Object> result = new LinkedHashMap<>();
-            result.put("changeRequestId", cr.getId());
-            result.put("status", cr.getStatus());
-            result.put("message", "配置变更已提交审批");
-            return ResponseEntity.accepted().body(ApiResponse.ok(result));
+            OpsConfigView updated = opsConfigService.updateConfig(key, value, request);
+            return ResponseEntity.ok(ApiResponse.ok(updated));
         } catch (IllegalArgumentException ex) {
             return ResponseEntity.badRequest().body(ApiResponse.error(ex.getMessage()));
         } catch (IllegalStateException ex) {
@@ -142,11 +136,11 @@ public class OpsResource {
     }
 
     /**
-     * 切换功能开关（触发审批流程）
+     * 切换功能开关（直接生效，无需审批）
      */
     @PutMapping("/feature-toggles/{key}")
     @PreAuthorize("hasAnyAuthority('" + AuthoritiesConstants.SYS_ADMIN + "')")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> toggleFeature(
+    public ResponseEntity<ApiResponse<OpsConfigView>> toggleFeature(
         @PathVariable String key,
         @RequestBody Map<String, Object> payload,
         HttpServletRequest request
@@ -168,12 +162,8 @@ public class OpsResource {
         }
 
         try {
-            ChangeRequest cr = opsConfigService.toggleFeature(key, enabled, request);
-            Map<String, Object> result = new LinkedHashMap<>();
-            result.put("changeRequestId", cr.getId());
-            result.put("status", cr.getStatus());
-            result.put("message", enabled ? "功能启用已提交审批" : "功能禁用已提交审批");
-            return ResponseEntity.accepted().body(ApiResponse.ok(result));
+            OpsConfigView updated = opsConfigService.toggleFeature(key, enabled, request);
+            return ResponseEntity.ok(ApiResponse.ok(updated));
         } catch (IllegalArgumentException ex) {
             return ResponseEntity.badRequest().body(ApiResponse.error(ex.getMessage()));
         } catch (IllegalStateException ex) {

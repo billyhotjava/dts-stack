@@ -19,9 +19,15 @@ import java.util.Map;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.util.StringUtils;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -31,6 +37,20 @@ public class IngestionTaskResource {
 
     private static final String INFRA_MAINTAINER_EXPRESSION =
         "hasAnyAuthority(T(com.yuzhi.dts.ingestion.security.AuthoritiesConstants).INFRA_MAINTAINERS)";
+    private static final List<String> CONNECTION_KEYS = List.of(
+        "jdbcUrl",
+        "url",
+        "host",
+        "port",
+        "username",
+        "password",
+        "database",
+        "db",
+        "driver",
+        "driverClass",
+        "driverVersion",
+        "jdbcProperties"
+    );
 
     private final AddaxJobService addaxJobService;
     private final AuditService auditService;
@@ -38,6 +58,7 @@ public class IngestionTaskResource {
     private final AirflowAdapter airflowAdapter;
     private final com.yuzhi.dts.ingestion.service.IngestionTaskService ingestionTaskService;
     private final JdbcMetadataService jdbcMetadataService;
+    private final com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver sourceResolver;
     private final IngestionTaskChangeLogService changeLogService;
     private final ObjectMapper objectMapper;
 
@@ -48,6 +69,7 @@ public class IngestionTaskResource {
         AirflowAdapter airflowAdapter,
         com.yuzhi.dts.ingestion.service.IngestionTaskService ingestionTaskService,
         JdbcMetadataService jdbcMetadataService,
+        com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver sourceResolver,
         IngestionTaskChangeLogService changeLogService,
         ObjectMapper objectMapper
     ) {
@@ -57,6 +79,7 @@ public class IngestionTaskResource {
         this.airflowAdapter = airflowAdapter;
         this.ingestionTaskService = ingestionTaskService;
         this.jdbcMetadataService = jdbcMetadataService;
+        this.sourceResolver = sourceResolver;
         this.changeLogService = changeLogService;
         this.objectMapper = objectMapper;
     }
@@ -77,6 +100,7 @@ public class IngestionTaskResource {
     ) {}
 
     public record SourceSpec(
+        java.util.UUID dataSourceId,
         String type,
         String definitionId,
         String existingSourceId,
@@ -137,16 +161,23 @@ public class IngestionTaskResource {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "缺少源端或目标端配置");
             }
 
-            String readerType = resolvePlugin(request.source().type(), request.source().config(), List.of("readerType", "reader", "type"));
+            if (request.source().dataSourceId() == null) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请选择数据源连接");
+            }
+            if (hasConnectionOverride(request.source().config())) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "入湖任务必须使用已配置的数据源连接");
+            }
+            List<String> streamTables = resolveStreamTables(request.streams());
+            com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver.ResolvedSource resolvedSource =
+                sourceResolver.resolve(request.source().dataSourceId(), streamTables);
+            String readerType = resolvedSource.readerType();
 
             boolean useDefault = Boolean.TRUE.equals(request.destination().usePlatformDefault());
             boolean hasJobConfig = request.jobConfig() != null && !request.jobConfig().isEmpty();
-            Map<String, Object> readerConfig = safeMap(request.source().config());
+            Map<String, Object> readerConfig = safeMap(resolvedSource.readerConfig());
+            Map<String, Object> sourceOverrides = sanitizeSourceOverrides(request.source().config());
+            Map<String, Object> mergedReaderConfig = mergeReaderOverrides(readerConfig, sourceOverrides);
             Map<String, Object> writerConfig = safeMap(request.destination().config());
-            List<String> streamTables = resolveStreamTables(request.streams());
-            if (!streamTables.isEmpty()) {
-                applyTables(readerConfig, streamTables);
-            }
             String writerType = resolvePlugin(
                 useDefault ? request.destination().definitionId() : request.destination().type(),
                 writerConfig,
@@ -180,7 +211,10 @@ public class IngestionTaskResource {
             taskDTO.setName(request.name());
             taskDTO.setDescription(request.description());
             taskDTO.setSourceType(readerType);
-            taskDTO.setSourceConfig(toJsonNode(readerConfig));
+            taskDTO.setSourceDataSourceId(request.source().dataSourceId());
+            if (!sourceOverrides.isEmpty()) {
+                taskDTO.setSourceConfig(toJsonNode(sourceOverrides));
+            }
             taskDTO.setDestinationType(writerType);
             taskDTO.setDestinationConfig(toJsonNode(safeMap(writerConfig)));
             taskDTO.setSyncMode(resolveSyncMode(request.sync()));
@@ -188,12 +222,13 @@ public class IngestionTaskResource {
             taskDTO.setAddaxConfig(toJsonNode(request.jobConfig()));
             taskDTO.setAirflowEnabled(airflowRequest == null ? null : airflowRequest.enabled());
             taskDTO.setAirflowDagId(airflowRequest == null ? null : normalize(airflowRequest.dagId()));
-            List<Map<String, String>> tableMapping = deriveTableMapping(readerConfig, writerConfig, request.sync());
+            List<Map<String, String>> tableMapping = deriveTableMapping(mergedReaderConfig, writerConfig, request.sync());
             if (!tableMapping.isEmpty()) {
                 taskDTO.setTableMapping(toJsonNode(tableMapping));
             }
 
-            com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO createdTask = ingestionTaskService.create(taskDTO);
+            com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO createdTask =
+                ingestionTaskService.create(taskDTO, resolvedSource);
             String jobPath = createdTask.getAddaxJobPath();
             String jobName = null;
             if (StringUtils.hasText(jobPath)) {
@@ -226,7 +261,7 @@ public class IngestionTaskResource {
                     readerType,
                     namespaceFormat,
                     prefix,
-                    safeMap(request.source().config()),
+                    safeMap(readerConfig),
                     safeMap(writerConfig),
                     List.of()
                 )
@@ -301,26 +336,16 @@ public class IngestionTaskResource {
         if (request == null || request.source() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "缺少源端配置");
         }
-        Map<String, Object> readerConfig = safeMap(request.source().config());
-        String jdbcUrl = resolveJdbcUrl(readerConfig);
-        if (!StringUtils.hasText(jdbcUrl)) {
+        if (request.source().dataSourceId() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请选择数据源连接");
+        }
+        com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver.ResolvedSource resolvedSource =
+            sourceResolver.resolve(request.source().dataSourceId(), List.of());
+        Map<String, Object> readerConfig = safeMap(resolvedSource.readerConfig());
+        JdbcMetadataService.JdbcConnectionInfo info = sourceResolver.resolveJdbcInfo(request.source().dataSourceId());
+        if (!StringUtils.hasText(info.jdbcUrl())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "缺少 JDBC URL");
         }
-        String driverClass = normalize(readerConfig.get("driver"));
-        if (!StringUtils.hasText(driverClass)) {
-            driverClass = normalize(readerConfig.get("driverClass"));
-        }
-        if (!StringUtils.hasText(driverClass)) {
-            driverClass = resolveDriverClassFromUrl(jdbcUrl);
-        }
-        JdbcMetadataService.JdbcConnectionInfo info = new JdbcMetadataService.JdbcConnectionInfo(
-            jdbcUrl,
-            normalize(readerConfig.get("username")),
-            normalize(readerConfig.get("password")),
-            driverClass,
-            normalize(request.source().driverVersion()),
-            resolveJdbcProperties(readerConfig)
-        );
         TableDiscoveryFilter filter = request.filter();
         String schema = filter == null ? null : normalize(filter.schema());
         if (!StringUtils.hasText(schema)) {
@@ -391,6 +416,93 @@ public class IngestionTaskResource {
 
     private Map<String, Object> safeMap(Map<String, Object> value) {
         return value == null ? new LinkedHashMap<>() : new LinkedHashMap<>(value);
+    }
+
+    private boolean hasConnectionOverride(Map<String, Object> config) {
+        if (config == null || config.isEmpty()) {
+            return false;
+        }
+        if (containsConnectionKeys(config)) {
+            return true;
+        }
+        Object connection = config.get("connection");
+        if (connection instanceof Map<?, ?> map) {
+            return containsConnectionKeys(map);
+        }
+        if (connection instanceof List<?> list) {
+            for (Object entry : list) {
+                if (entry instanceof Map<?, ?> entryMap && containsConnectionKeys(entryMap)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private boolean containsConnectionKeys(Map<?, ?> map) {
+        if (map == null || map.isEmpty()) {
+            return false;
+        }
+        for (String key : CONNECTION_KEYS) {
+            if (map.containsKey(key) && StringUtils.hasText(normalize(map.get(key)))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private Map<String, Object> sanitizeSourceOverrides(Map<String, Object> config) {
+        if (config == null || config.isEmpty()) {
+            return new LinkedHashMap<>();
+        }
+        Map<String, Object> sanitized = new LinkedHashMap<>();
+        for (Map.Entry<String, Object> entry : config.entrySet()) {
+            String key = entry.getKey();
+            if (!StringUtils.hasText(key)) {
+                continue;
+            }
+            if (isConnectionKey(key)) {
+                continue;
+            }
+            if ("connection".equalsIgnoreCase(key)) {
+                continue;
+            }
+            sanitized.put(key, entry.getValue());
+        }
+        List<String> tables = extractTables(config);
+        if (!tables.isEmpty()) {
+            sanitized.put("table", tables);
+        }
+        return sanitized;
+    }
+
+    private boolean isConnectionKey(String key) {
+        if (!StringUtils.hasText(key)) {
+            return false;
+        }
+        for (String candidate : CONNECTION_KEYS) {
+            if (candidate.equalsIgnoreCase(key)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private Map<String, Object> mergeReaderOverrides(Map<String, Object> readerConfig, Map<String, Object> overrides) {
+        Map<String, Object> merged = safeMap(readerConfig);
+        if (overrides == null || overrides.isEmpty()) {
+            return merged;
+        }
+        Map<String, Object> copy = new LinkedHashMap<>(overrides);
+        List<String> tables = extractTables(copy);
+        copy.remove("table");
+        copy.remove("tables");
+        copy.remove("connection");
+        merged.putAll(copy);
+        if (!tables.isEmpty()) {
+            applyTables(merged, tables);
+        }
+        return merged;
     }
 
     private com.fasterxml.jackson.databind.JsonNode toJsonNode(Object value) {
@@ -738,44 +850,54 @@ public class IngestionTaskResource {
     /**
      * GET /api/ingestion/tasks : 获取任务列表
      */
-    @org.springframework.web.bind.annotation.GetMapping("/tasks/list")
+    @GetMapping("/tasks/list")
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
-    public org.springframework.http.ResponseEntity<org.springframework.data.domain.Page<com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO>> getTasks(
-        @org.springframework.web.bind.annotation.RequestParam(required = false) String status,
+    public ResponseEntity<org.springframework.data.domain.Page<com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO>> getTasks(
+        @RequestParam(required = false) String status,
         org.springframework.data.domain.Pageable pageable
     ) {
         org.springframework.data.domain.Page<com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO> page = 
             ingestionTaskService.findAll(status, pageable);
-        return org.springframework.http.ResponseEntity.ok(page);
+        return ResponseEntity.ok(page);
     }
 
     /**
      * GET /api/ingestion/tasks/{id} : 获取任务详情
      */
-    @org.springframework.web.bind.annotation.GetMapping("/tasks/{id}")
+    @GetMapping("/tasks/{id}")
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
-    public org.springframework.http.ResponseEntity<com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO> getTask(
-        @org.springframework.web.bind.annotation.PathVariable Long id
+    public ResponseEntity<com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO> getTask(
+        @PathVariable Long id
     ) {
         return ingestionTaskService.findOne(id)
-            .map(org.springframework.http.ResponseEntity::ok)
-            .orElse(org.springframework.http.ResponseEntity.<com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO>notFound().build());
+            .map(ResponseEntity::ok)
+            .orElse(ResponseEntity.<com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO>notFound().build());
     }
 
     /**
      * PUT /api/ingestion/tasks/{id} : 更新任务
      */
-    @org.springframework.web.bind.annotation.PutMapping("/tasks/{id}")
+    @PutMapping("/tasks/{id}")
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
-    public org.springframework.http.ResponseEntity<com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO> updateTask(
-        @org.springframework.web.bind.annotation.PathVariable Long id,
+    public ResponseEntity<com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO> updateTask(
+        @PathVariable Long id,
         @Valid @RequestBody com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO taskDTO
     ) {
         if (!id.equals(taskDTO.getId())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "ID不匹配");
         }
+        if (taskDTO.getSourceDataSourceId() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请选择数据源连接");
+        }
+        Map<String, Object> sourceOverrides = sanitizeSourceOverrides(jsonNodeToMap(taskDTO.getSourceConfig()));
+        if (hasConnectionOverride(jsonNodeToMap(taskDTO.getSourceConfig()))) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "入湖任务必须使用已配置的数据源连接");
+        }
+        taskDTO.setSourceConfig(sourceOverrides.isEmpty() ? null : toJsonNode(sourceOverrides));
         if (taskDTO.getTableMapping() == null || taskDTO.getTableMapping().isNull()) {
-            Map<String, Object> readerConfig = jsonNodeToMap(taskDTO.getSourceConfig());
+            com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver.ResolvedSource resolved =
+                sourceResolver.resolve(taskDTO.getSourceDataSourceId(), List.of());
+            Map<String, Object> readerConfig = mergeReaderOverrides(safeMap(resolved.readerConfig()), sourceOverrides);
             Map<String, Object> writerConfig = jsonNodeToMap(taskDTO.getDestinationConfig());
             List<Map<String, String>> tableMapping = deriveTableMapping(readerConfig, writerConfig, null);
             if (!tableMapping.isEmpty()) {
@@ -791,7 +913,7 @@ public class IngestionTaskResource {
                 updated.getName(),
                 Map.of("summary", "更新入湖任务", "taskId", id, "operator", operator)
             );
-            return org.springframework.http.ResponseEntity.ok(updated);
+            return ResponseEntity.ok(updated);
         } catch (IllegalArgumentException ex) {
             Map<String, Object> meta = new LinkedHashMap<>();
             meta.put("summary", "更新入湖任务失败");
@@ -814,10 +936,10 @@ public class IngestionTaskResource {
     /**
      * DELETE /api/ingestion/tasks/{id} : 删除任务（软删除）
      */
-    @org.springframework.web.bind.annotation.DeleteMapping("/tasks/{id}")
+    @DeleteMapping("/tasks/{id}")
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
-    public org.springframework.http.ResponseEntity<ApiResponse<Map<String, Object>>> deleteTask(
-        @org.springframework.web.bind.annotation.PathVariable Long id
+    public ResponseEntity<ApiResponse<Map<String, Object>>> deleteTask(
+        @PathVariable Long id
     ) {
         String operator = SecurityUtils.getCurrentUserLogin().orElse("system");
         java.util.Optional<com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO> taskOpt = ingestionTaskService.findOne(id);
@@ -842,20 +964,20 @@ public class IngestionTaskResource {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("taskId", id);
         payload.put("status", "deleted");
-        return org.springframework.http.ResponseEntity.ok(ApiResponses.ok(payload));
+        return ResponseEntity.ok(ApiResponses.ok(payload));
     }
 
     /**
      * GET /api/ingestion/tasks/changes : 获取接入变更记录
      */
-    @org.springframework.web.bind.annotation.GetMapping("/tasks/changes")
+    @GetMapping("/tasks/changes")
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
-    public org.springframework.http.ResponseEntity<org.springframework.data.domain.Page<IngestionTaskChangeLogDTO>> listChangeLogs(
-        @org.springframework.web.bind.annotation.RequestParam(required = false) Long taskId,
-        @org.springframework.web.bind.annotation.RequestParam(required = false) String objType,
-        @org.springframework.web.bind.annotation.RequestParam(required = false) String changeType,
-        @org.springframework.web.bind.annotation.RequestParam(required = false) String status,
-        @org.springframework.web.bind.annotation.RequestParam(required = false) String keyword,
+    public ResponseEntity<org.springframework.data.domain.Page<IngestionTaskChangeLogDTO>> listChangeLogs(
+        @RequestParam(required = false) Long taskId,
+        @RequestParam(required = false) String objType,
+        @RequestParam(required = false) String changeType,
+        @RequestParam(required = false) String status,
+        @RequestParam(required = false) String keyword,
         org.springframework.data.domain.Pageable pageable
     ) {
         org.springframework.data.domain.Page<IngestionTaskChangeLogDTO> page =
@@ -866,15 +988,15 @@ public class IngestionTaskResource {
             String.valueOf(taskId == null ? "all" : taskId),
             Map.of("summary", "查看接入变更记录", "taskId", taskId == null ? "all" : taskId)
         );
-        return org.springframework.http.ResponseEntity.ok(page);
+        return ResponseEntity.ok(page);
     }
 
     /**
      * POST /api/ingestion/tasks/changes : 手工登记接入变更
      */
-    @org.springframework.web.bind.annotation.PostMapping("/tasks/changes")
+    @PostMapping("/tasks/changes")
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
-    public org.springframework.http.ResponseEntity<IngestionTaskChangeLogDTO> createChangeLog(
+    public ResponseEntity<IngestionTaskChangeLogDTO> createChangeLog(
         @Valid @RequestBody ChangeLogRequest request
     ) {
         if (request == null || request.taskId() == null) {
@@ -908,7 +1030,7 @@ public class IngestionTaskResource {
             String.valueOf(saved.getTaskId()),
             Map.of("summary", "登记接入变更", "taskId", saved.getTaskId())
         );
-        return org.springframework.http.ResponseEntity.status(HttpStatus.CREATED).body(saved);
+        return ResponseEntity.status(HttpStatus.CREATED).body(saved);
     }
 
     /**
@@ -916,12 +1038,12 @@ public class IngestionTaskResource {
      */
     @PostMapping("/tasks/{id}/execute")
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
-    public org.springframework.http.ResponseEntity<com.yuzhi.dts.ingestion.service.dto.IngestionExecutionDTO> executeTask(
-        @org.springframework.web.bind.annotation.PathVariable Long id
+    public ResponseEntity<com.yuzhi.dts.ingestion.service.dto.IngestionExecutionDTO> executeTask(
+        @PathVariable Long id
     ) {
         try {
             com.yuzhi.dts.ingestion.service.dto.IngestionExecutionDTO execution = ingestionTaskService.execute(id);
-            return org.springframework.http.ResponseEntity.ok(execution);
+            return ResponseEntity.ok(execution);
         } catch (IllegalArgumentException e) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "任务不存在");
         } catch (IllegalStateException e) {
@@ -934,8 +1056,8 @@ public class IngestionTaskResource {
      */
     @PostMapping("/tasks/{id}/dag/rebuild")
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
-    public org.springframework.http.ResponseEntity<com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO> rebuildDag(
-        @org.springframework.web.bind.annotation.PathVariable Long id
+    public ResponseEntity<com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO> rebuildDag(
+        @PathVariable Long id
     ) {
         String operator = SecurityUtils.getCurrentUserLogin().orElse("system");
         try {
@@ -946,7 +1068,7 @@ public class IngestionTaskResource {
                 updated.getName(),
                 Map.of("summary", "重建入湖 DAG", "taskId", id, "operator", operator)
             );
-            return org.springframework.http.ResponseEntity.ok(updated);
+            return ResponseEntity.ok(updated);
         } catch (IllegalArgumentException e) {
             auditService.auditAction(
                 "INGESTION_TASK_DAG_REBUILD",
@@ -969,27 +1091,27 @@ public class IngestionTaskResource {
     /**
      * GET /api/ingestion/tasks/{id}/executions : 获取任务执行历史
      */
-    @org.springframework.web.bind.annotation.GetMapping("/tasks/{id}/executions")
+    @GetMapping("/tasks/{id}/executions")
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
-    public org.springframework.http.ResponseEntity<org.springframework.data.domain.Page<com.yuzhi.dts.ingestion.service.dto.IngestionExecutionDTO>> getExecutions(
-        @org.springframework.web.bind.annotation.PathVariable Long id,
+    public ResponseEntity<org.springframework.data.domain.Page<com.yuzhi.dts.ingestion.service.dto.IngestionExecutionDTO>> getExecutions(
+        @PathVariable Long id,
         org.springframework.data.domain.Pageable pageable
     ) {
         org.springframework.data.domain.Page<com.yuzhi.dts.ingestion.service.dto.IngestionExecutionDTO> page = 
             ingestionTaskService.getExecutions(id, pageable);
-        return org.springframework.http.ResponseEntity.ok(page);
+        return ResponseEntity.ok(page);
     }
 
     /**
      * GET /api/ingestion/tasks/{id}/executions/latest : 获取最新执行记录
      */
-    @org.springframework.web.bind.annotation.GetMapping("/tasks/{id}/executions/latest")
+    @GetMapping("/tasks/{id}/executions/latest")
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
-    public org.springframework.http.ResponseEntity<com.yuzhi.dts.ingestion.service.dto.IngestionExecutionDTO> getLatestExecution(
-        @org.springframework.web.bind.annotation.PathVariable Long id
+    public ResponseEntity<com.yuzhi.dts.ingestion.service.dto.IngestionExecutionDTO> getLatestExecution(
+        @PathVariable Long id
     ) {
         return ingestionTaskService.getLatestExecution(id)
-            .map(org.springframework.http.ResponseEntity::ok)
-            .orElse(org.springframework.http.ResponseEntity.<com.yuzhi.dts.ingestion.service.dto.IngestionExecutionDTO>notFound().build());
+            .map(ResponseEntity::ok)
+            .orElse(ResponseEntity.<com.yuzhi.dts.ingestion.service.dto.IngestionExecutionDTO>notFound().build());
     }
 }

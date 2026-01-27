@@ -6,6 +6,7 @@ export interface IngestionTaskDTO {
   description?: string;
   sourceType: string;
   sourceConfig: Record<string, any>;
+  sourceDataSourceId?: string;
   destinationType?: string;
   destinationConfig?: Record<string, any>;
   syncMode: string;
@@ -63,9 +64,7 @@ export interface TableDiscoveryFilter {
 
 export interface TableDiscoveryRequest {
   source: {
-    type?: string;
-    config?: Record<string, any>;
-    driverVersion?: string;
+    dataSourceId: string;
   };
   filter?: TableDiscoveryFilter;
 }

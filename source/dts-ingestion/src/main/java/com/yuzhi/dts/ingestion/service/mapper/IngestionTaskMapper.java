@@ -21,6 +21,7 @@ public class IngestionTaskMapper {
         dto.setDescription(entity.getDescription());
         dto.setSourceType(entity.getSourceType());
         dto.setSourceConfig(entity.getSourceConfig());
+        dto.setSourceDataSourceId(entity.getSourceDataSourceId());
         dto.setDestinationType(entity.getDestinationType());
         dto.setDestinationConfig(entity.getDestinationConfig());
         dto.setSyncMode(entity.getSyncMode());
@@ -54,6 +55,7 @@ public class IngestionTaskMapper {
         entity.setDescription(dto.getDescription());
         entity.setSourceType(dto.getSourceType());
         entity.setSourceConfig(dto.getSourceConfig());
+        entity.setSourceDataSourceId(dto.getSourceDataSourceId());
         entity.setDestinationType(dto.getDestinationType());
         entity.setDestinationConfig(dto.getDestinationConfig());
         entity.setSyncMode(dto.getSyncMode());
@@ -82,6 +84,9 @@ public class IngestionTaskMapper {
         }
         if (dto.getSourceConfig() != null) {
             entity.setSourceConfig(dto.getSourceConfig());
+        }
+        if (dto.getSourceDataSourceId() != null) {
+            entity.setSourceDataSourceId(dto.getSourceDataSourceId());
         }
         if (dto.getDestinationType() != null) {
             entity.setDestinationType(dto.getDestinationType());

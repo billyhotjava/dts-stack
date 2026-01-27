@@ -2,6 +2,7 @@ package com.yuzhi.dts.platform.repository.catalog;
 
 import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
 import com.yuzhi.dts.platform.domain.catalog.CatalogDomain;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -22,4 +23,8 @@ public interface CatalogDatasetRepository extends JpaRepository<CatalogDataset, 
     List<CatalogDataset> findByHiveDatabaseIgnoreCase(String hiveDatabase);
 
     List<CatalogDataset> findBySourceIdAndHiveDatabaseIgnoreCase(UUID sourceId, String hiveDatabase);
+
+    long countByCreatedBy(String createdBy);
+
+    long countByCreatedDateAfter(Instant since);
 }

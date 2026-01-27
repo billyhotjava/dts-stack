@@ -5,17 +5,27 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO;
+import com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver;
+import com.yuzhi.dts.ingestion.service.etl.JdbcMetadataService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
 import static org.hamcrest.Matchers.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -35,9 +45,13 @@ class IngestionTaskIntegrationTest {
     @Autowired
     private ObjectMapper objectMapper;
 
+    @MockBean
+    private IngestionSourceResolver sourceResolver;
+
     @Test
     @WithMockUser(authorities = "INFRA_MAINTAINERS")
     void shouldCreateAndManageTaskCompleteFlow() throws Exception {
+        mockSourceResolver();
         // Step 1: Create task
         IngestionTaskDTO createdTask = createTask("integration-test-task");
         Long taskId = createdTask.getId();
@@ -97,6 +111,7 @@ class IngestionTaskIntegrationTest {
     @Test
     @WithMockUser(authorities = "INFRA_MAINTAINERS")
     void shouldFilterTasksByStatus() throws Exception {
+        mockSourceResolver();
         // Create tasks with different statuses
         createTaskWithStatus("task-draft", "draft");
         createTaskWithStatus("task-active", "active");
@@ -120,6 +135,7 @@ class IngestionTaskIntegrationTest {
     @Test
     @WithMockUser(authorities = "INFRA_MAINTAINERS")
     void shouldHandleInvalidTaskId() throws Exception {
+        mockSourceResolver();
         Long invalidId = 999999L;
 
         // Get non-existent task
@@ -150,6 +166,7 @@ class IngestionTaskIntegrationTest {
 
     // Helper methods
     private IngestionTaskDTO createTask(String name) throws Exception {
+        mockSourceResolver();
         String taskJson = objectMapper.writeValueAsString(buildTaskRequest(name));
         String response = mockMvc.perform(post("/api/ingestion/tasks")
                 .contentType(MediaType.APPLICATION_JSON)
@@ -182,8 +199,7 @@ class IngestionTaskIntegrationTest {
         payload.put("description", "Integration test task");
 
         ObjectNode source = payload.putObject("source");
-        source.put("type", "postgresqlreader");
-        source.set("config", buildJdbcConfig("jdbc:postgresql://localhost:5432/testdb", "source_table"));
+        source.put("dataSourceId", UUID.randomUUID().toString());
 
         ObjectNode destination = payload.putObject("destination");
         destination.put("usePlatformDefault", false);
@@ -218,5 +234,20 @@ class IngestionTaskIntegrationTest {
         connections.add(connection);
         config.set("connection", connections);
         return config;
+    }
+
+    private void mockSourceResolver() {
+        Map<String, Object> readerConfig = Map.of(
+            "username", "test",
+            "password", "test",
+            "column", List.of("*"),
+            "connection", List.of(Map.of("jdbcUrl", List.of("jdbc:postgresql://localhost:5432/testdb"), "table", List.of("source_table")))
+        );
+        when(sourceResolver.resolve(any(UUID.class), anyList()))
+            .thenReturn(new IngestionSourceResolver.ResolvedSource("postgresqlreader", readerConfig, null));
+        when(sourceResolver.resolveJdbcInfo(any(UUID.class)))
+            .thenReturn(new JdbcMetadataService.JdbcConnectionInfo(
+                "jdbc:postgresql://localhost:5432/testdb", "test", "test", "org.postgresql.Driver", null, Map.of()
+            ));
     }
 }

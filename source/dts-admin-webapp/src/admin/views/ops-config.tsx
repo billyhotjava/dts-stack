@@ -55,8 +55,8 @@ export default function OpsConfigView() {
 	const toggleMutation = useMutation({
 		mutationFn: ({ key, enabled }: { key: string; enabled: boolean }) =>
 			adminApi.toggleFeature(key, enabled),
-		onSuccess: () => {
-			toast.success("功能开关变更已提交审批");
+		onSuccess: (_, variables) => {
+			toast.success(variables.enabled ? "功能已启用" : "功能已禁用");
 			queryClient.invalidateQueries({ queryKey: ["admin", "ops-configs"] });
 		},
 		onError: () => {

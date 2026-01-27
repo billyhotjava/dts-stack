@@ -15,4 +15,6 @@ public interface GovQualityRunRepository extends JpaRepository<GovQualityRun, UU
     List<GovQualityRun> findByRuleId(UUID ruleId, Pageable pageable);
     Optional<GovQualityRun> findFirstByDatasetIdOrderByCreatedDateDesc(UUID datasetId);
     long countByRuleIdAndCreatedDateAfter(UUID ruleId, Instant since);
+
+    List<GovQualityRun> findTop100ByStatusOrderByCreatedDateDesc(String status);
 }

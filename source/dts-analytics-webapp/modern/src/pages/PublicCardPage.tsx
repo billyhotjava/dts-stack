@@ -2,8 +2,12 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router";
 import { analyticsApi, type CardQueryResponse, type PublicCardDetail } from "../api/analyticsApi";
 import { ChartRenderer, type VisualizationType, type VisualizationSettings } from "../components/charts";
+import { PageContainer, PageHeader, Breadcrumb } from "../components/PageContainer/PageContainer";
 import { EmptyState } from "../components/EmptyState";
 import { ErrorNotice } from "../components/ErrorNotice";
+import { Card, CardBody } from "../ui/Card/Card";
+import { Badge } from "../ui/Badge/Badge";
+import { Spinner } from "../ui/Loading/Spinner";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import "./page.css";
 
@@ -55,42 +59,56 @@ export default function PublicCardPage() {
 	}, [uuid]);
 
 	return (
-		<div className="page">
-			<h1 className="pageTitle">{card.state === "loaded" ? card.value.name ?? "-" : t(locale, "loading")}</h1>
-			<div className="pageSub">
-				<Link to="/analyze">{t(locale, "nav.analyze")}</Link>
-				<span className="muted"> · </span>
-				<span className="muted">Share</span>
-			</div>
-
-			<div style={{ height: 16 }} />
+		<PageContainer>
+			<PageHeader
+				title={card.state === "loaded" ? card.value.name ?? "-" : t(locale, "loading")}
+				breadcrumbs={
+					<Breadcrumb items={[
+						{ label: t(locale, "nav.analyze"), href: "/analyze" },
+						{ label: "Share" }
+					]} />
+				}
+			/>
 
 			{card.state === "error" && <ErrorNotice locale={locale} error={card.error} />}
 			{query.state === "error" && <ErrorNotice locale={locale} error={query.error} />}
 
-			<div className="card">
-				<div className="muted">
-					{t(locale, "share.note")}
-				</div>
-			</div>
+			<Card style={{ marginBottom: "var(--spacing-lg)" }}>
+				<CardBody>
+					<p className="text-muted" style={{ margin: 0 }}>
+						{t(locale, "share.note")}
+					</p>
+				</CardBody>
+			</Card>
 
-			<div style={{ height: 16 }} />
-
-			{query.state === "loading" && <div className="card">{t(locale, "loading")}</div>}
-			{query.state === "loaded" &&
-				(Array.isArray(query.value?.data?.cols) && Array.isArray(query.value?.data?.rows) ? (
-					<ChartRenderer
-						data={{
-							cols: (query.value.data?.cols ?? []) as { name: string; display_name?: string; base_type?: string }[],
-							rows: (query.value.data?.rows ?? []) as any[][]
-						}}
-						display={card.state === "loaded" ? (card.value.display as VisualizationType) || "table" : "table"}
-						settings={card.state === "loaded" ? (card.value.visualization_settings as VisualizationSettings) || {} : {}}
-					/>
-				) : (
-					<EmptyState title={t(locale, "common.empty")} />
-				))}
-		</div>
+			{query.state === "loading" && (
+				<Card>
+					<CardBody>
+						<div className="loading-container" style={{ padding: "var(--spacing-xl)" }}>
+							<Spinner size="lg" />
+						</div>
+					</CardBody>
+				</Card>
+			)}
+			{query.state === "loaded" && (
+				<Card>
+					<CardBody>
+						{Array.isArray(query.value?.data?.cols) && Array.isArray(query.value?.data?.rows) ? (
+							<ChartRenderer
+								data={{
+									cols: (query.value.data?.cols ?? []) as { name: string; display_name?: string; base_type?: string }[],
+									rows: (query.value.data?.rows ?? []) as any[][]
+								}}
+								display={card.state === "loaded" ? (card.value.display as VisualizationType) || "table" : "table"}
+								settings={card.state === "loaded" ? (card.value.visualization_settings as VisualizationSettings) || {} : {}}
+							/>
+						) : (
+							<EmptyState title={t(locale, "common.empty")} />
+						)}
+					</CardBody>
+				</Card>
+			)}
+		</PageContainer>
 	);
 }
 

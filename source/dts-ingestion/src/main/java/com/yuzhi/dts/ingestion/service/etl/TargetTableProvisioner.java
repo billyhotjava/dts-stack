@@ -33,10 +33,16 @@ public class TargetTableProvisioner {
     }
 
     public void ensureTargetTables(IngestionTask task) {
+        ensureTargetTables(task, null);
+    }
+
+    public void ensureTargetTables(IngestionTask task, Map<String, Object> readerConfigOverride) {
         if (task == null) {
             return;
         }
-        Map<String, Object> readerConfig = jsonNodeToMap(task.getSourceConfig());
+        Map<String, Object> readerConfig = readerConfigOverride != null
+            ? mergeReaderConfig(readerConfigOverride, task.getSourceConfig())
+            : jsonNodeToMap(task.getSourceConfig());
         Map<String, Object> writerConfig = task.getDestinationConfig() != null
             ? jsonNodeToMap(task.getDestinationConfig())
             : Map.of();
@@ -73,6 +79,58 @@ public class TargetTableProvisioner {
         } catch (Exception ex) {
             throw new IllegalStateException("自动建表失败: " + ex.getMessage(), ex);
         }
+    }
+
+    private Map<String, Object> mergeReaderConfig(Map<String, Object> baseConfig, JsonNode overrideNode) {
+        Map<String, Object> merged = baseConfig == null ? new LinkedHashMap<>() : new LinkedHashMap<>(baseConfig);
+        if (overrideNode == null || overrideNode.isNull()) {
+            return merged;
+        }
+        Map<String, Object> overrides = jsonNodeToMap(overrideNode);
+        if (overrides.isEmpty()) {
+            return merged;
+        }
+        List<String> tables = extractTables(overrides);
+        overrides.remove("table");
+        overrides.remove("tables");
+        overrides.remove("connection");
+        overrides.remove("jdbcUrl");
+        overrides.remove("url");
+        overrides.remove("host");
+        overrides.remove("port");
+        overrides.remove("username");
+        overrides.remove("password");
+        overrides.remove("database");
+        overrides.remove("db");
+        overrides.remove("driver");
+        overrides.remove("driverClass");
+        overrides.remove("driverVersion");
+        overrides.remove("jdbcProperties");
+        merged.putAll(overrides);
+        if (!tables.isEmpty()) {
+            applyTables(merged, tables);
+        }
+        return merged;
+    }
+
+    private void applyTables(Map<String, Object> config, List<String> tables) {
+        if (config == null || tables == null || tables.isEmpty()) {
+            return;
+        }
+        Object connection = config.get("connection");
+        if (connection instanceof Map<?, ?> map) {
+            setTableField(map, tables);
+            return;
+        }
+        if (connection instanceof List<?> list) {
+            for (Object entry : list) {
+                if (entry instanceof Map<?, ?> entryMap) {
+                    setTableField(entryMap, tables);
+                }
+            }
+            return;
+        }
+        config.put("table", tables);
     }
 
     private boolean shouldAutoCreate(Map<String, Object> writerConfig, JsonNode jobConfig) {

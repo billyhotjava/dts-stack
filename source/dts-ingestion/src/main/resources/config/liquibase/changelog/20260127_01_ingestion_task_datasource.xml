@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+    http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="20260127-1-add-source-datasource" author="assistant">
+        <addColumn tableName="ingestion_task">
+            <column name="source_data_source_id" type="uuid"/>
+        </addColumn>
+
+        <dropNotNullConstraint tableName="ingestion_task" columnName="source_config" columnDataType="jsonb"/>
+
+        <createIndex indexName="idx_ingestion_task_source_ds" tableName="ingestion_task">
+            <column name="source_data_source_id"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

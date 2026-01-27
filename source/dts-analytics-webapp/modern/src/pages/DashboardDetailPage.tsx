@@ -1,8 +1,15 @@
 import { Link, useParams } from "react-router";
 import { useEffect, useMemo, useState } from "react";
 import { analyticsApi, type DashboardCard, type DashboardDetail, type DashboardQueryResponse } from "../api/analyticsApi";
+import { PageContainer, PageHeader } from "../components/PageContainer/PageContainer";
 import { ErrorNotice } from "../components/ErrorNotice";
 import { ChartRenderer, type VisualizationType, type VisualizationSettings } from "../components/charts";
+import { Card, CardHeader, CardBody, CollapsibleCard } from "../ui/Card/Card";
+import { Button } from "../ui/Button/Button";
+import { Input } from "../ui/Input/Input";
+import { NativeSelect } from "../ui/Input/Select";
+import { Badge } from "../ui/Badge/Badge";
+import { Spinner } from "../ui/Loading/Spinner";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import "./page.css";
 
@@ -139,118 +146,159 @@ export default function DashboardDetailPage() {
 		};
 	}, [id, dashcards, queryParametersPayload]);
 
+	const ShareIcon = () => (
+		<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+			<circle cx="18" cy="5" r="3" />
+			<circle cx="6" cy="12" r="3" />
+			<circle cx="18" cy="19" r="3" />
+			<line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
+			<line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+		</svg>
+	);
+
+	const EditIcon = () => (
+		<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+			<path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+			<path d="m15 5 4 4" />
+		</svg>
+	);
+
+	const CopyIcon = () => (
+		<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+			<rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+			<path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+		</svg>
+	);
+
+	const CheckIcon = () => (
+		<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+			<polyline points="20 6 9 17 4 12" />
+		</svg>
+	);
+
+	const FilterIcon = () => (
+		<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+			<polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+		</svg>
+	);
+
 	return (
-		<div className="page">
-			{state.state === "loading" && <div>{t(locale, "loading")}</div>}
+		<PageContainer maxWidth="full">
+			{state.state === "loading" && (
+				<div className="loading-container">
+					<Spinner size="lg" />
+				</div>
+			)}
 			{state.state === "error" && <ErrorNotice locale={locale} error={state.error} />}
 			{state.state === "loaded" && (
 				<>
-					<div className="row" style={{ justifyContent: "space-between", alignItems: "baseline" }}>
-						<h1 className="pageTitle">{state.value.name ?? "-"}</h1>
-						<div className="row" style={{ justifyContent: "flex-end" }}>
-							<button
-								className="btn"
-								type="button"
-								disabled={shareBusy}
-								onClick={async () => {
-									if (!id) return;
-									setShareBusy(true);
-									setShareCopied(false);
-									try {
-										const r = await analyticsApi.createDashboardPublicLink(id);
-										setShareUuid(r.uuid ?? "");
-									} finally {
-										setShareBusy(false);
-									}
-								}}
-							>
-								{t(locale, "share.create")}
-							</button>
-							<Link className="btn" to={`/dashboards/${encodeURIComponent(String(state.value.id))}/edit`}>
-								{t(locale, "dashboards.edit")}
-							</Link>
-						</div>
-					</div>
-					<div className="pageSub">{state.value.description ?? ""}</div>
-					<div style={{ height: 16 }} />
-
-					{shareUuid ? (
-						<div className="card">
-							<div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
-								<div className="muted">{t(locale, "share.title")}</div>
-								<button
-									className="btn"
-									type="button"
+					<PageHeader
+						title={state.value.name ?? "-"}
+						subtitle={state.value.description ?? ""}
+						actions={
+							<>
+								<Button
+									variant="secondary"
+									icon={<ShareIcon />}
+									loading={shareBusy}
 									onClick={async () => {
-										const link = `${window.location.origin}/analytics/public/dashboard/${encodeURIComponent(shareUuid)}`;
+										if (!id) return;
+										setShareBusy(true);
+										setShareCopied(false);
 										try {
-											await navigator.clipboard.writeText(link);
-											setShareCopied(true);
-										} catch {
-											window.prompt("Copy link:", link);
-											setShareCopied(true);
+											const r = await analyticsApi.createDashboardPublicLink(id);
+											setShareUuid(r.uuid ?? "");
+										} finally {
+											setShareBusy(false);
 										}
 									}}
 								>
-									{shareCopied ? t(locale, "share.copied") : t(locale, "share.copy")}
-								</button>
-							</div>
-							<div style={{ height: 10 }} />
-							<input
-								className="input"
-								readOnly
-								value={`${window.location.origin}/analytics/public/dashboard/${encodeURIComponent(shareUuid)}`}
+									{t(locale, "share.create")}
+								</Button>
+								<Link to={`/dashboards/${encodeURIComponent(String(state.value.id))}/edit`}>
+									<Button variant="primary" icon={<EditIcon />}>
+										{t(locale, "dashboards.edit")}
+									</Button>
+								</Link>
+							</>
+						}
+					/>
+
+					{shareUuid && (
+						<Card style={{ marginBottom: "var(--spacing-lg)" }}>
+							<CardHeader
+								title={t(locale, "share.title")}
+								action={
+									<Button
+										variant="secondary"
+										size="sm"
+										icon={shareCopied ? <CheckIcon /> : <CopyIcon />}
+										onClick={async () => {
+											const link = `${window.location.origin}/analytics/public/dashboard/${encodeURIComponent(shareUuid)}`;
+											try {
+												await navigator.clipboard.writeText(link);
+												setShareCopied(true);
+											} catch {
+												window.prompt("Copy link:", link);
+												setShareCopied(true);
+											}
+										}}
+									>
+										{shareCopied ? t(locale, "share.copied") : t(locale, "share.copy")}
+									</Button>
+								}
 							/>
-							<div className="muted" style={{ marginTop: 10 }}>
-								{t(locale, "share.note")}
-							</div>
-						</div>
-					) : null}
-
-					<div style={{ height: shareUuid ? 16 : 0 }} />
-
-					{dashboardParams.length > 0 && (
-						<div className="card">
-							<div className="row" style={{ justifyContent: "space-between" }}>
-								<div className="muted">Filters</div>
-								<button className="btn" type="button" onClick={() => setParamValues({})}>
-									Clear
-								</button>
-							</div>
-							<div style={{ height: 12 }} />
-							<div className="row" style={{ flexWrap: "wrap", gap: 12 }}>
-								{dashboardParams.map((p) => (
-									<label key={p.id} style={{ display: "flex", flexDirection: "column", gap: 6, minWidth: 240 }}>
-										<span className="muted" style={{ fontSize: 12 }}>
-											{p.name || p.slug || p.id}
-										</span>
-										<select
-											value={paramValues[p.id] ?? ""}
-											onChange={(e) => setParamValues((prev) => ({ ...prev, [p.id]: e.target.value }))}
-											style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid rgba(0,0,0,0.12)" }}
-										>
-											<option value="">(All)</option>
-											{(paramOptions[p.id] ?? []).map((v) => (
-												<option key={String(v)} value={String(v)}>
-													{String(v)}
-												</option>
-											))}
-										</select>
-									</label>
-								))}
-							</div>
-						</div>
+							<CardBody>
+								<Input
+									readOnly
+									value={`${window.location.origin}/analytics/public/dashboard/${encodeURIComponent(shareUuid)}`}
+								/>
+								<p className="text-muted" style={{ marginTop: "var(--spacing-sm)", fontSize: "var(--font-size-sm)" }}>
+									{t(locale, "share.note")}
+								</p>
+							</CardBody>
+						</Card>
 					)}
 
-					<div style={{ height: 16 }} />
+					{dashboardParams.length > 0 && (
+						<Card style={{ marginBottom: "var(--spacing-lg)" }}>
+							<CardHeader
+								title="Filters"
+								icon={<FilterIcon />}
+								action={
+									<Button variant="tertiary" size="sm" onClick={() => setParamValues({})}>
+										Clear
+									</Button>
+								}
+							/>
+							<CardBody>
+								<div style={{ display: "flex", flexWrap: "wrap", gap: "var(--spacing-md)" }}>
+									{dashboardParams.map((p) => (
+										<div key={p.id} style={{ minWidth: 200, flex: "1 1 200px", maxWidth: 300 }}>
+											<NativeSelect
+												label={p.name || p.slug || p.id}
+												value={paramValues[p.id] ?? ""}
+												onChange={(e) => setParamValues((prev) => ({ ...prev, [p.id]: e.target.value }))}
+												options={[
+													{ value: "", label: "(All)" },
+													...(paramOptions[p.id] ?? []).map((v) => ({ value: String(v), label: String(v) }))
+												]}
+											/>
+										</div>
+									))}
+								</div>
+							</CardBody>
+						</Card>
+					)}
 
 					<div
 						className="dashboardGrid"
 						style={{
 							display: "grid",
 							gridTemplateColumns: "repeat(24, minmax(0, 1fr))",
-							gap: 12,
+							gap: "var(--spacing-md)",
 							alignItems: "stretch",
+							marginBottom: "var(--spacing-lg)",
 						}}
 					>
 						{dashcards.map((dc) => {
@@ -264,48 +312,45 @@ export default function DashboardDetailPage() {
 							const result = dashcardResults[dc.id];
 
 							return (
-								<div key={dc.id} className="card" style={{ gridColumn, gridRow, overflow: "hidden" }}>
-									<div className="row" style={{ justifyContent: "space-between" }}>
-										<div style={{ fontWeight: 600 }}>{cardId ? <Link to={`/questions/${cardId}`}>{String(name)}</Link> : String(name)}</div>
-										<span className="tag">card</span>
-									</div>
-									<div style={{ height: 10 }} />
-									{!result || result.state === "loading" ? (
-										<div>{t(locale, "loading")}</div>
-									) : result.state === "error" ? (
-										<ErrorNotice locale={locale} error={result.error} />
-									) : (
-										<ChartRenderer
-											data={{
-												cols: (result.value.data?.cols ?? []) as { name: string; display_name?: string; base_type?: string }[],
-												rows: (result.value.data?.rows ?? []) as any[][]
-											}}
-											display={(card?.display as VisualizationType) || "table"}
-											settings={(card?.visualization_settings as VisualizationSettings) || {}}
-										/>
-									)}
-								</div>
+								<Card key={dc.id} style={{ gridColumn, gridRow, overflow: "hidden" }}>
+									<CardHeader
+										title={cardId ? <Link to={`/questions/${cardId}`}>{String(name)}</Link> : String(name)}
+										action={<Badge variant="default" size="sm">card</Badge>}
+									/>
+									<CardBody>
+										{!result || result.state === "loading" ? (
+											<div className="loading-container" style={{ padding: "var(--spacing-md)" }}>
+												<Spinner size="sm" />
+											</div>
+										) : result.state === "error" ? (
+											<ErrorNotice locale={locale} error={result.error} />
+										) : (
+											<ChartRenderer
+												data={{
+													cols: (result.value.data?.cols ?? []) as { name: string; display_name?: string; base_type?: string }[],
+													rows: (result.value.data?.rows ?? []) as any[][]
+												}}
+												display={(card?.display as VisualizationType) || "table"}
+												settings={(card?.visualization_settings as VisualizationSettings) || {}}
+											/>
+										)}
+									</CardBody>
+								</Card>
 							);
 						})}
 					</div>
 
-					<div style={{ height: 16 }} />
-
-					<div className="card">
-						<div className="row" style={{ justifyContent: "space-between" }}>
-							<div className="muted">{t(locale, "dashboards.detailNote")}</div>
-							<button className="btn" type="button" onClick={() => setShowRaw((v) => !v)}>
-								{showRaw ? "Hide JSON" : "Show JSON"}
-							</button>
-						</div>
-						{showRaw && (
-							<pre style={{ whiteSpace: "pre-wrap", fontSize: 12, margin: "12px 0 0" }}>
-								{JSON.stringify(state.value, null, 2)}
-							</pre>
-						)}
-					</div>
+					<CollapsibleCard
+						title={t(locale, "dashboards.detailNote")}
+						subtitle="JSON"
+						defaultOpen={false}
+					>
+						<pre style={{ whiteSpace: "pre-wrap", fontSize: 12, margin: 0, overflow: "auto" }}>
+							{JSON.stringify(state.value, null, 2)}
+						</pre>
+					</CollapsibleCard>
 				</>
 			)}
-		</div>
+		</PageContainer>
 	);
 }

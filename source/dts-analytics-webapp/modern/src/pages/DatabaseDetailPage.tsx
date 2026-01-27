@@ -1,8 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router";
 import { analyticsApi, type DatabaseMetadataResponse } from "../api/analyticsApi";
+import { PageContainer, PageHeader, Breadcrumb } from "../components/PageContainer/PageContainer";
 import { EmptyState } from "../components/EmptyState";
 import { ErrorNotice } from "../components/ErrorNotice";
+import { Card, CardHeader, CardBody, CollapsibleCard } from "../ui/Card/Card";
+import { Button } from "../ui/Button/Button";
+import { SearchInput } from "../ui/Input/Input";
+import { Badge } from "../ui/Badge/Badge";
+import { Spinner } from "../ui/Loading/Spinner";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import "./page.css";
 
@@ -10,6 +16,39 @@ type LoadState<T> =
 	| { state: "loading" }
 	| { state: "loaded"; value: T }
 	| { state: "error"; error: unknown };
+
+// Icons
+const SyncIcon = () => (
+	<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+		<path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+		<path d="M3 3v5h5" />
+		<path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
+		<path d="M16 16h5v5" />
+	</svg>
+);
+
+const TableIcon = () => (
+	<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+		<path d="M12 3v18" />
+		<rect width="18" height="18" x="3" y="3" rx="2" />
+		<path d="M3 9h18" />
+		<path d="M3 15h18" />
+	</svg>
+);
+
+const PlusIcon = () => (
+	<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+		<path d="M5 12h14" />
+		<path d="M12 5v14" />
+	</svg>
+);
+
+const ClearIcon = () => (
+	<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+		<path d="M18 6 6 18" />
+		<path d="m6 6 12 12" />
+	</svg>
+);
 
 export default function DatabaseDetailPage() {
 	const locale: Locale = useMemo(() => getEffectiveLocale(), []);
@@ -80,59 +119,69 @@ export default function DatabaseDetailPage() {
 	}
 
 	return (
-		<div className="page">
-			<h1 className="pageTitle">
-				{t(locale, "data.db")} #{dbId}
-			</h1>
-			<div className="pageSub">
-				<Link to="/data">{t(locale, "data.title")}</Link>
-			</div>
-
-			<div style={{ height: 16 }} />
-
-			<div className="card">
-				<div className="row" style={{ justifyContent: "space-between" }}>
-					<div className="row">
-						<strong>{t(locale, "data.tables")}</strong>
-						<span className="muted">({filteredTables.length})</span>
-					</div>
-					<button className="btn" type="button" disabled={syncing} onClick={syncSchema}>
+		<PageContainer>
+			<PageHeader
+				title={`${t(locale, "data.db")} #${dbId}`}
+				breadcrumbs={
+					<Breadcrumb items={[
+						{ label: t(locale, "data.title"), href: "/data" },
+						{ label: `Database #${dbId}` }
+					]} />
+				}
+				actions={
+					<Button
+						variant="secondary"
+						icon={<SyncIcon />}
+						loading={syncing}
+						onClick={syncSchema}
+					>
 						{syncing ? t(locale, "data.syncing") : t(locale, "data.sync")}
-					</button>
-				</div>
-			</div>
+					</Button>
+				}
+			/>
 
-			<div style={{ height: 16 }} />
+			<Card style={{ marginBottom: "var(--spacing-lg)" }}>
+				<CardBody>
+					<div style={{ display: "flex", alignItems: "center", gap: "var(--spacing-md)" }}>
+						<div style={{ flex: 1, maxWidth: 520 }}>
+							<SearchInput
+								value={q}
+								onChange={(e) => setQ(e.target.value)}
+								placeholder={t(locale, "search.placeholder")}
+							/>
+						</div>
+						{q.trim() && (
+							<Button variant="tertiary" size="sm" icon={<ClearIcon />} onClick={() => setQ("")}>
+								{t(locale, "builder.remove")}
+							</Button>
+						)}
+						<div style={{ marginLeft: "auto" }}>
+							<Badge variant="default">
+								{t(locale, "data.tables")}: {filteredTables.length}
+							</Badge>
+						</div>
+					</div>
+				</CardBody>
+			</Card>
 
-			<div className="card">
-				<div className="row" style={{ justifyContent: "space-between" }}>
-					<input
-						className="input"
-						value={q}
-						onChange={(e) => setQ(e.target.value)}
-						placeholder={t(locale, "search.placeholder")}
-						style={{ maxWidth: 520 }}
-					/>
-					{q.trim() ? (
-						<button className="btn" type="button" onClick={() => setQ("")}>
-							{t(locale, "builder.remove")}
-						</button>
-					) : null}
-				</div>
-			</div>
-
-			<div style={{ height: 16 }} />
-
-			{state.state === "loading" && <div className="card">{t(locale, "loading")}</div>}
+			{state.state === "loading" && (
+				<Card>
+					<CardBody>
+						<div className="loading-container" style={{ padding: "var(--spacing-xl)" }}>
+							<Spinner size="lg" />
+						</div>
+					</CardBody>
+				</Card>
+			)}
 			{state.state === "error" && <ErrorNotice locale={locale} error={state.error} />}
 			{state.state === "loaded" && tables.length === 0 && (
 				<EmptyState
 					title={t(locale, "common.empty")}
 					description="提示：需要先同步元数据（同步后才会出现表/字段）。"
 					action={
-						<button className="btn" type="button" disabled={syncing} onClick={syncSchema}>
+						<Button variant="primary" icon={<SyncIcon />} loading={syncing} onClick={syncSchema}>
 							{syncing ? t(locale, "data.syncing") : t(locale, "data.sync")}
-						</button>
+						</Button>
 					}
 				/>
 			)}
@@ -140,57 +189,106 @@ export default function DatabaseDetailPage() {
 				<EmptyState title={t(locale, "common.empty")} description={t(locale, "search.total") + ": 0"} />
 			)}
 			{state.state === "loaded" && filteredTables.length > 0 && (
-				<div className="card">
+				<>
 					{tablesBySchema.map(([schema, list]) => (
-						<details key={schema} open={tablesBySchema.length <= 1}>
-							<summary className="muted" style={{ cursor: "pointer" }}>
-								{schema} <span className="muted">({list.length})</span>
-							</summary>
-							<div style={{ height: 12 }} />
-							<table className="table">
-								<thead>
-									<tr>
-										<th>{t(locale, "common.name")}</th>
-										<th>{t(locale, "common.id")}</th>
-										<th>{t(locale, "common.open")}</th>
-									</tr>
-								</thead>
-								<tbody>
-									{list.map((tb) => (
-										<tr key={String(tb?.id ?? tb?.name ?? Math.random())}>
-											<td>
-												{tb?.id ? (
-													<Link to={`/data/${encodeURIComponent(String(dbId))}/tables/${encodeURIComponent(String(tb.id))}`}>
-														{tb?.name ?? "-"}
-													</Link>
-												) : (
-													<span>{tb?.name ?? "-"}</span>
-												)}
-											</td>
-											<td>{String(tb?.id ?? "-")}</td>
-											<td>
-												{tb?.id ? (
-													<Link className="btn" to={`/questions/new?db=${encodeURIComponent(String(dbId))}&table=${encodeURIComponent(String(tb.id))}`}>
-														{t(locale, "questions.new")}
-													</Link>
-												) : null}
-											</td>
-										</tr>
-									))}
-								</tbody>
-							</table>
-							<div style={{ height: 16 }} />
-						</details>
+						<CollapsibleCard
+							key={schema}
+							title={schema}
+							subtitle={`${list.length} tables`}
+							defaultOpen={tablesBySchema.length <= 1}
+							style={{ marginBottom: "var(--spacing-md)" }}
+						>
+							<div className="table-list">
+								{list.map((tb) => (
+									<div key={String(tb?.id ?? tb?.name ?? Math.random())} className="table-list-item">
+										<div className="table-list-item__icon">
+											<TableIcon />
+										</div>
+										<div className="table-list-item__content">
+											{tb?.id ? (
+												<Link to={`/data/${encodeURIComponent(String(dbId))}/tables/${encodeURIComponent(String(tb.id))}`} className="table-list-item__name">
+													{tb?.name ?? "-"}
+												</Link>
+											) : (
+												<span className="table-list-item__name">{tb?.name ?? "-"}</span>
+											)}
+											<span className="table-list-item__id text-muted">ID: {String(tb?.id ?? "-")}</span>
+										</div>
+										{tb?.id && (
+											<Link to={`/questions/new?db=${encodeURIComponent(String(dbId))}&table=${encodeURIComponent(String(tb.id))}`}>
+												<Button variant="tertiary" size="sm" icon={<PlusIcon />}>
+													{t(locale, "questions.new")}
+												</Button>
+											</Link>
+										)}
+									</div>
+								))}
+							</div>
+						</CollapsibleCard>
 					))}
-					<div style={{ height: 12 }} />
-					<details>
-						<summary className="muted">Raw JSON</summary>
-						<pre style={{ whiteSpace: "pre-wrap", fontSize: 12, margin: "12px 0 0" }}>
+
+					<CollapsibleCard title="Raw JSON" defaultOpen={false}>
+						<pre style={{ whiteSpace: "pre-wrap", fontSize: 12, margin: 0, overflow: "auto" }}>
 							{JSON.stringify(state.value, null, 2)}
 						</pre>
-					</details>
-				</div>
+					</CollapsibleCard>
+				</>
 			)}
-		</div>
+
+			<style>{`
+				.table-list {
+					display: flex;
+					flex-direction: column;
+					gap: var(--spacing-xs);
+				}
+
+				.table-list-item {
+					display: flex;
+					align-items: center;
+					gap: var(--spacing-md);
+					padding: var(--spacing-sm) var(--spacing-md);
+					border-radius: var(--radius-sm);
+					transition: background-color var(--transition-fast);
+				}
+
+				.table-list-item:hover {
+					background: var(--color-bg-hover);
+				}
+
+				.table-list-item__icon {
+					display: flex;
+					align-items: center;
+					justify-content: center;
+					width: 28px;
+					height: 28px;
+					border-radius: var(--radius-sm);
+					background: var(--color-bg-tertiary);
+					color: var(--color-text-secondary);
+					flex-shrink: 0;
+				}
+
+				.table-list-item__content {
+					display: flex;
+					flex-direction: column;
+					gap: 2px;
+					flex: 1;
+					min-width: 0;
+				}
+
+				.table-list-item__name {
+					font-weight: var(--font-weight-medium);
+					color: var(--color-text-primary);
+					text-decoration: none;
+				}
+
+				.table-list-item__name:hover {
+					color: var(--color-brand);
+				}
+
+				.table-list-item__id {
+					font-size: var(--font-size-sm);
+				}
+			`}</style>
+		</PageContainer>
 	);
 }

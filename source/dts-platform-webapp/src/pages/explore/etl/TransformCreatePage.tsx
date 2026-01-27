@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Alert, Button, Card, Collapse, Divider, Form, Input, Radio, Space, Steps, Switch, Table, Typography } from "antd";
+import { Alert, Button, Card, Collapse, Divider, Form, Input, Radio, Select, Space, Steps, Switch, Table, Typography } from "antd";
 import { SaveOutlined } from "@ant-design/icons";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
@@ -7,12 +7,83 @@ import { createIngestionTask } from "@/api/platformApi";
 import { useUserInfo } from "@/store/userStore";
 import { useParams, useRouter } from "@/routes/hooks";
 import { ingestionTaskAPI, type IngestionTaskDTO, type TableInfo } from "@/api/ingestion";
+import dataSourcesService, { type InfraDataSource } from "@/api/services/dataSourcesService";
 
 const { Text } = Typography;
 
 const DRAFT_STORAGE_KEY = "ingestion_task_draft";
+const CONNECTION_KEYS = [
+	"jdbcUrl",
+	"host",
+	"port",
+	"username",
+	"password",
+	"database",
+	"schema",
+	"connectionString",
+	"dsn",
+];
+
+const JDBC_READER_BY_TYPE: Record<string, string> = {
+	dm: "dmreader",
+	dameng: "dmreader",
+	postgres: "postgresqlreader",
+	postgresql: "postgresqlreader",
+	pg: "postgresqlreader",
+	mysql: "mysqlreader",
+	mariadb: "mysqlreader",
+	oracle: "oraclereader",
+	sqlserver: "sqlserverreader",
+	mssql: "sqlserverreader",
+	clickhouse: "clickhousereader",
+	hive: "hivereader",
+	db2: "db2reader",
+	sqlite: "sqlitereader",
+};
+
+const JDBC_READER_BY_URL: Record<string, string> = {
+	"jdbc:dm:": "dmreader",
+	"jdbc:postgresql:": "postgresqlreader",
+	"jdbc:mysql:": "mysqlreader",
+	"jdbc:mariadb:": "mysqlreader",
+	"jdbc:oracle:": "oraclereader",
+	"jdbc:sqlserver:": "sqlserverreader",
+	"jdbc:clickhouse:": "clickhousereader",
+	"jdbc:hive2:": "hivereader",
+	"jdbc:db2:": "db2reader",
+	"jdbc:sqlite:": "sqlitereader",
+};
 
 const normalizeText = (value?: string) => String(value || "").trim();
+
+const normalizeType = (value?: string) => normalizeText(value).toLowerCase();
+
+const resolveReaderTypeFromDataSource = (source?: InfraDataSource | null) => {
+	if (!source) return "";
+	const props = source.props || {};
+	const direct = normalizeText(String(props.readerType || props.reader || props.type || ""));
+	if (direct) return direct;
+	const type = normalizeType(source.type);
+	if (type && JDBC_READER_BY_TYPE[type]) {
+		return JDBC_READER_BY_TYPE[type];
+	}
+	const jdbcUrl = normalizeText(source.jdbcUrl).toLowerCase();
+	if (jdbcUrl) {
+		for (const [prefix, reader] of Object.entries(JDBC_READER_BY_URL)) {
+			if (jdbcUrl.startsWith(prefix)) {
+				return reader;
+			}
+		}
+	}
+	return "";
+};
+
+const isJdbcSource = (source?: InfraDataSource | null) => {
+	if (!source) return false;
+	if (normalizeText(source.jdbcUrl)) return true;
+	const type = normalizeType(source.type);
+	return Boolean(type && JDBC_READER_BY_TYPE[type]);
+};
 
 const splitLines = (value?: string) =>
 	normalizeText(value)
@@ -45,6 +116,24 @@ const parseJson = (value?: string, label?: string) => {
 	}
 };
 
+const hasConnectionOverride = (config: any): boolean => {
+	if (!config) return false;
+	if (Array.isArray(config)) {
+		return config.some((item) => hasConnectionOverride(item));
+	}
+	if (typeof config !== "object") return false;
+	for (const key of CONNECTION_KEYS) {
+		if (key in config && normalizeText((config as any)[key])) {
+			return true;
+		}
+	}
+	const connection = (config as any).connection;
+	if (connection) {
+		return hasConnectionOverride(connection);
+	}
+	return false;
+};
+
 const buildTableKey = (table: TableInfo) =>
 	normalizeText(table.schema) ? `${table.schema}.${table.name}` : table.name;
 
@@ -65,29 +154,20 @@ const applyTablesToConfig = (rawConfig: Record<string, any> | undefined, tables:
 };
 
 const buildReaderConfig = (values: Record<string, any>) => {
-	const jdbcUrls = splitLines(values.readerJdbcUrls);
 	const tables = splitLines(values.readerTables);
 	const columns = splitColumns(values.readerColumns);
 	const querySql = splitLines(values.readerQuerySql);
 	const extra = parseJson(values.readerExtraConfig, "Reader 扩展配置") as Record<string, any> | undefined;
 	const sourceSystem = normalizeText(values.sourceSystem);
 
-	const connection: Record<string, any> = {};
-	if (jdbcUrls.length) connection.jdbcUrl = jdbcUrls;
-	if (tables.length) connection.table = tables;
-	if (querySql.length) connection.querySql = querySql;
-
 	const config: Record<string, any> = {
 		column: columns,
 	};
-	const username = normalizeText(values.readerUsername);
-	const password = normalizeText(values.readerPassword);
 	const where = normalizeText(values.readerWhere);
-	if (username) config.username = username;
-	if (password) config.password = password;
 	if (where) config.where = where;
 	if (sourceSystem) config.sourceSystem = sourceSystem;
-	if (Object.keys(connection).length) config.connection = [connection];
+	if (tables.length) config.table = tables;
+	if (querySql.length) config.querySql = querySql;
 	return mergeConfig(config, extra);
 };
 
@@ -173,10 +253,13 @@ const buildJobPreview = (
 	};
 };
 
-const jsonValidator = (label: string) => (_: any, value: string) => {
+const jsonValidator = (label: string, forbidConnection = false) => (_: any, value: string) => {
 	if (!normalizeText(value)) return Promise.resolve();
 	try {
-		JSON.parse(value);
+		const parsed = JSON.parse(value);
+		if (forbidConnection && hasConnectionOverride(parsed)) {
+			return Promise.reject(new Error(`${label} 不允许包含连接信息，请仅填写表/字段/过滤等覆盖参数`));
+		}
 		return Promise.resolve();
 	} catch {
 		return Promise.reject(new Error(`${label} JSON 格式错误`));
@@ -233,6 +316,7 @@ const mapTaskToForm = (task: IngestionTaskDTO) => {
 			sourceConfig.appCode ||
 			sourceConfig.system ||
 			sourceConfig.name,
+		sourceDataSourceId: task.sourceDataSourceId,
 		readerType: task.sourceType,
 		readerConfig: JSON.stringify(sourceConfig, null, 2),
 		writerType,
@@ -252,6 +336,8 @@ export default function TransformCreatePage() {
 	const [selectedTableKeys, setSelectedTableKeys] = useState<string[]>([]);
 	const [discoverError, setDiscoverError] = useState("");
 	const [currentStep, setCurrentStep] = useState(0);
+	const [dataSources, setDataSources] = useState<InfraDataSource[]>([]);
+	const [loadingDataSources, setLoadingDataSources] = useState(false);
 	const [form] = Form.useForm();
 	const router = useRouter();
 	const params = useParams();
@@ -261,6 +347,11 @@ export default function TransformCreatePage() {
 	const useDefaultDestination = Form.useWatch("useDefaultDestination", form);
 	const editorMode = Form.useWatch("editorMode", form);
 	const formValues = Form.useWatch([], form);
+	const selectedDataSourceId = Form.useWatch("sourceDataSourceId", form);
+	const selectedDataSource = useMemo(
+		() => dataSources.find((item) => String(item.id) === String(selectedDataSourceId)),
+		[dataSources, selectedDataSourceId]
+	);
 
 	const initialValues = useMemo(
 		() => ({
@@ -273,6 +364,41 @@ export default function TransformCreatePage() {
 		}),
 		[]
 	);
+
+	useEffect(() => {
+		const loadSources = async () => {
+			try {
+				setLoadingDataSources(true);
+				const list = await dataSourcesService.list();
+				setDataSources(Array.isArray(list) ? list : []);
+			} catch (error: any) {
+				toast.error(error?.message || "数据源列表加载失败");
+				setDataSources([]);
+			} finally {
+				setLoadingDataSources(false);
+			}
+		};
+		loadSources();
+	}, []);
+
+	useEffect(() => {
+		if (!selectedDataSource) {
+			if (!selectedDataSourceId && form.getFieldValue("readerType")) {
+				form.setFieldValue("readerType", undefined);
+			}
+			return;
+		}
+		const readerType = resolveReaderTypeFromDataSource(selectedDataSource);
+		if (readerType && form.getFieldValue("readerType") !== readerType) {
+			form.setFieldValue("readerType", readerType);
+		}
+	}, [form, selectedDataSource]);
+
+	useEffect(() => {
+		setDiscoveredTables([]);
+		setSelectedTableKeys([]);
+		setDiscoverError("");
+	}, [selectedDataSourceId]);
 
 	const stepItems = useMemo(
 		() => [
@@ -341,20 +467,18 @@ export default function TransformCreatePage() {
 			setDiscoverError("");
 			setDiscoveringTables(true);
 			const values = form.getFieldsValue(true);
-			const isJsonMode = values.editorMode === "json";
-			const readerType = normalizeText(values.readerType);
-			if (!readerType) {
-				throw new Error("请先填写 Reader 类型");
+			const dataSourceId = normalizeText(values.sourceDataSourceId);
+			if (!dataSourceId) {
+				throw new Error("请先选择数据源连接");
 			}
-			const readerConfig = isJsonMode
-				? (parseJson(values.readerConfig, "Reader 配置") as Record<string, any> | undefined)
-				: buildReaderConfig(values);
+			if (!isJdbcSource(selectedDataSource)) {
+				throw new Error("当前数据源不支持表发现");
+			}
 			const schema = normalizeText(values.readerSchema);
 			const tablePattern = normalizeText(values.readerTablePattern);
 			const rawTables = await ingestionTaskAPI.discoverTables({
 				source: {
-					type: readerType,
-					config: readerConfig || {},
+					dataSourceId,
 				},
 				filter: {
 					schema: schema || undefined,
@@ -413,8 +537,8 @@ export default function TransformCreatePage() {
 				return ["editorMode", "name", "description", "sourceSystem"];
 			case 1:
 				return isJsonMode
-					? ["readerType", "readerConfig"]
-					: ["readerType", "readerJdbcUrls", "readerTables"];
+					? ["sourceDataSourceId", "readerType", "readerConfig"]
+					: ["sourceDataSourceId", "readerType", "readerTables"];
 			case 2:
 				if (useDefault) return ["useDefaultDestination"];
 				return isJsonMode
@@ -473,6 +597,9 @@ export default function TransformCreatePage() {
 			const readerConfig = isJsonMode
 				? parseJson(values.readerConfig, "Reader 配置")
 				: buildReaderConfig(values);
+			if (hasConnectionOverride(readerConfig)) {
+				throw new Error("入湖任务必须使用已配置的数据源连接，Reader 配置中不可包含连接信息");
+			}
 			const sourceSystem = normalizeText(values.sourceSystem);
 			if (sourceSystem && readerConfig && typeof readerConfig === "object" && !readerConfig.sourceSystem) {
 				readerConfig.sourceSystem = sourceSystem;
@@ -490,6 +617,7 @@ export default function TransformCreatePage() {
 					name: normalizeText(values.name),
 					description: normalizeText(values.description) || undefined,
 					sourceType: normalizeText(values.readerType),
+					sourceDataSourceId: values.sourceDataSourceId,
 					sourceConfig: (readerConfig as Record<string, any>) || {},
 					destinationType: values.useDefaultDestination ? undefined : normalizeText(values.writerType),
 					destinationConfig: writerConfig as Record<string, any> | undefined,
@@ -506,7 +634,7 @@ export default function TransformCreatePage() {
 					description: normalizeText(values.description) || undefined,
 					owner: userInfo?.username || userInfo?.login,
 					source: {
-						type: normalizeText(values.readerType),
+						dataSourceId: values.sourceDataSourceId,
 						config: readerConfig || {},
 					},
 					destination: {
@@ -576,7 +704,7 @@ export default function TransformCreatePage() {
 			<Card>
 				<Alert
 					message="提示"
-					description="请填写 Addax Reader/Writer 类型与配置。Writer 可选择平台默认数据湖。"
+					description="请选择已配置的数据源连接并填写 Addax Reader/Writer 覆盖参数。Writer 可选择平台默认数据湖。"
 					type="info"
 					showIcon
 					className="mb-6"
@@ -620,11 +748,27 @@ export default function TransformCreatePage() {
 						<>
 							<Divider orientation="left">Reader 配置</Divider>
 							<Form.Item
+								name="sourceDataSourceId"
+								label="数据源连接"
+								rules={[{ required: true, message: "请选择数据源连接" }]}
+							>
+								<Select
+									loading={loadingDataSources}
+									placeholder={loadingDataSources ? "加载中..." : "请选择数据源连接"}
+									options={dataSources.map((item) => ({
+										label: `${item.name} (${item.type || "unknown"})`,
+										value: item.id,
+									}))}
+									showSearch
+									optionFilterProp="label"
+								/>
+							</Form.Item>
+							<Form.Item
 								name="readerType"
 								label="Reader 类型"
-								rules={[{ required: true, message: "请输入 Reader 类型" }]}
+								rules={[{ required: true, message: "Reader 类型未解析，请检查数据源配置" }]}
 							>
-								<Input placeholder="例如：postgresqlreader" />
+								<Input placeholder="将根据数据源自动生成" disabled />
 							</Form.Item>
 							{editorMode === "json" ? (
 								<Form.Item
@@ -632,21 +776,14 @@ export default function TransformCreatePage() {
 									label="Reader 配置 (JSON)"
 									rules={[
 										{ required: true, message: "请输入 Reader 配置" },
-										{ validator: jsonValidator("Reader 配置") },
+										{ validator: jsonValidator("Reader 配置", true) },
 									]}
 								>
-									<Input.TextArea rows={6} placeholder='{"username":"xxx","password":"xxx","column":["*"]}' />
+									<Input.TextArea rows={6} placeholder='{"column":["*"],"table":["table_a"]}' />
 								</Form.Item>
 							) : (
 								<>
 									<div className="grid gap-4 md:grid-cols-2">
-										<Form.Item
-											name="readerJdbcUrls"
-											label="Reader JDBC URL（每行一个）"
-											rules={[{ required: true, message: "请输入 JDBC URL" }]}
-										>
-											<Input.TextArea rows={3} placeholder="jdbc:postgresql://host:5432/db" />
-										</Form.Item>
 										<Form.Item
 											name="readerTables"
 											label="Reader 表（每行一个）"
@@ -654,21 +791,13 @@ export default function TransformCreatePage() {
 										>
 											<Input.TextArea rows={3} placeholder="source_table" />
 										</Form.Item>
-									</div>
-									<div className="grid gap-4 md:grid-cols-2">
 										<Form.Item name="readerColumns" label="Reader 字段（逗号分隔）">
 											<Input placeholder="* 或 id,name,created_at" />
 										</Form.Item>
-										<Form.Item name="readerWhere" label="Reader 过滤条件">
-											<Input placeholder="可选，例如：status = 1" />
-										</Form.Item>
 									</div>
 									<div className="grid gap-4 md:grid-cols-2">
-										<Form.Item name="readerUsername" label="Reader 用户名">
-											<Input placeholder="数据库账号" />
-										</Form.Item>
-										<Form.Item name="readerPassword" label="Reader 密码">
-											<Input.Password placeholder="******" />
+										<Form.Item name="readerWhere" label="Reader 过滤条件">
+											<Input placeholder="可选，例如：status = 1" />
 										</Form.Item>
 									</div>
 									<Collapse

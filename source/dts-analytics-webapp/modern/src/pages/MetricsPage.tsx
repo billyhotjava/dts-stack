@@ -1,7 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { analyticsApi, type Metric, type PlatformMetric } from "../api/analyticsApi";
+import { PageContainer, PageHeader } from "../components/PageContainer/PageContainer";
 import { EmptyState } from "../components/EmptyState";
 import { ErrorNotice } from "../components/ErrorNotice";
+import { Card, CardHeader, CardBody, StatCard } from "../ui/Card/Card";
+import { Badge } from "../ui/Badge/Badge";
+import { Spinner } from "../ui/Loading/Spinner";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import "./page.css";
 
@@ -9,6 +13,14 @@ type LoadState<T> =
 	| { state: "loading" }
 	| { state: "loaded"; value: T }
 	| { state: "error"; error: unknown };
+
+// Icons
+const MetricIcon = () => (
+	<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+		<path d="M3 3v18h18" />
+		<path d="m19 9-5 5-4-4-3 3" />
+	</svg>
+);
 
 export default function MetricsPage() {
 	const locale: Locale = useMemo(() => getEffectiveLocale(), []);
@@ -45,75 +57,116 @@ export default function MetricsPage() {
 	}, []);
 
 	return (
-		<div className="page">
-			<h1 className="pageTitle">{t(locale, "metrics.title")}</h1>
-			<div className="pageSub">{t(locale, "metrics.subtitle")}</div>
+		<PageContainer>
+			<PageHeader
+				title={t(locale, "metrics.title")}
+				subtitle={t(locale, "metrics.subtitle")}
+			/>
 
-			<div style={{ height: 16 }} />
+			{/* Summary Stats */}
+			<div className="grid3" style={{ marginBottom: "var(--spacing-lg)" }}>
+				<StatCard
+					label="Analytics Metrics"
+					value={localMetrics.state === "loaded" ? localMetrics.value.length : "-"}
+					icon={<MetricIcon />}
+				/>
+				<StatCard
+					label="Platform Metrics"
+					value={platformMetrics.state === "loaded" ? platformMetrics.value.length : "-"}
+					icon={<MetricIcon />}
+				/>
+				<StatCard
+					label="Total"
+					value={
+						localMetrics.state === "loaded" && platformMetrics.state === "loaded"
+							? localMetrics.value.length + platformMetrics.value.length
+							: "-"
+					}
+					icon={<MetricIcon />}
+				/>
+			</div>
 
-			{localMetrics.state === "loading" && <div className="card">{t(locale, "loading")}</div>}
-			{localMetrics.state === "error" && <ErrorNotice locale={locale} error={localMetrics.error} />}
-			{localMetrics.state === "loaded" && localMetrics.value.length === 0 && (
-				<EmptyState title={t(locale, "common.empty")} description="当前还没有创建任何指标（Analytics 内置指标）。" />
-			)}
-			{localMetrics.state === "loaded" && localMetrics.value.length > 0 && (
-				<div className="card">
-					<div className="row" style={{ justifyContent: "space-between" }}>
-						<strong>Analytics metrics</strong>
-						<div className="muted">{localMetrics.value.length}</div>
-					</div>
-					<div style={{ height: 12 }} />
-					<table className="table">
-						<thead>
-							<tr>
-								<th>{t(locale, "common.name")}</th>
-								<th>{t(locale, "common.id")}</th>
-							</tr>
-						</thead>
-						<tbody>
-							{localMetrics.value.map((m) => (
-								<tr key={String(m.id)}>
-									<td>{m.name ?? "-"}</td>
-									<td>{m.id}</td>
+			{/* Analytics Metrics */}
+			<Card style={{ marginBottom: "var(--spacing-lg)" }}>
+				<CardHeader
+					title="Analytics Metrics"
+					action={
+						localMetrics.state === "loaded" && (
+							<Badge variant="default">{localMetrics.value.length}</Badge>
+						)
+					}
+				/>
+				<CardBody>
+					{localMetrics.state === "loading" && (
+						<div className="loading-container" style={{ padding: "var(--spacing-lg)" }}>
+							<Spinner size="md" />
+						</div>
+					)}
+					{localMetrics.state === "error" && <ErrorNotice locale={locale} error={localMetrics.error} />}
+					{localMetrics.state === "loaded" && localMetrics.value.length === 0 && (
+						<EmptyState title={t(locale, "common.empty")} description="当前还没有创建任何指标（Analytics 内置指标）。" />
+					)}
+					{localMetrics.state === "loaded" && localMetrics.value.length > 0 && (
+						<table className="table">
+							<thead>
+								<tr>
+									<th>{t(locale, "common.name")}</th>
+									<th>{t(locale, "common.id")}</th>
 								</tr>
-							))}
-						</tbody>
-					</table>
-				</div>
-			)}
+							</thead>
+							<tbody>
+								{localMetrics.value.map((m) => (
+									<tr key={String(m.id)}>
+										<td>{m.name ?? "-"}</td>
+										<td>{m.id}</td>
+									</tr>
+								))}
+							</tbody>
+						</table>
+					)}
+				</CardBody>
+			</Card>
 
-			<div style={{ height: 16 }} />
-
-			{platformMetrics.state === "loading" && <div className="card">{t(locale, "loading")}</div>}
-			{platformMetrics.state === "error" && <ErrorNotice locale={locale} error={platformMetrics.error} />}
-			{platformMetrics.state === "loaded" && platformMetrics.value.length === 0 && (
-				<EmptyState title={t(locale, "common.empty")} description="平台指标接口（dummy）当前返回空列表。" />
-			)}
-			{platformMetrics.state === "loaded" && platformMetrics.value.length > 0 && (
-				<div className="card">
-					<div className="row" style={{ justifyContent: "space-between" }}>
-						<strong>Platform metrics</strong>
-						<div className="muted">{platformMetrics.value.length}</div>
-					</div>
-					<div style={{ height: 12 }} />
-					<table className="table">
-						<thead>
-							<tr>
-								<th>{t(locale, "common.name")}</th>
-								<th>{t(locale, "common.id")}</th>
-							</tr>
-						</thead>
-						<tbody>
-							{platformMetrics.value.map((m) => (
-								<tr key={String(m.id)}>
-									<td>{m.name ?? "-"}</td>
-									<td>{m.id}</td>
+			{/* Platform Metrics */}
+			<Card>
+				<CardHeader
+					title="Platform Metrics"
+					action={
+						platformMetrics.state === "loaded" && (
+							<Badge variant="default">{platformMetrics.value.length}</Badge>
+						)
+					}
+				/>
+				<CardBody>
+					{platformMetrics.state === "loading" && (
+						<div className="loading-container" style={{ padding: "var(--spacing-lg)" }}>
+							<Spinner size="md" />
+						</div>
+					)}
+					{platformMetrics.state === "error" && <ErrorNotice locale={locale} error={platformMetrics.error} />}
+					{platformMetrics.state === "loaded" && platformMetrics.value.length === 0 && (
+						<EmptyState title={t(locale, "common.empty")} description="平台指标接口（dummy）当前返回空列表。" />
+					)}
+					{platformMetrics.state === "loaded" && platformMetrics.value.length > 0 && (
+						<table className="table">
+							<thead>
+								<tr>
+									<th>{t(locale, "common.name")}</th>
+									<th>{t(locale, "common.id")}</th>
 								</tr>
-							))}
-						</tbody>
-					</table>
-				</div>
-			)}
-		</div>
+							</thead>
+							<tbody>
+								{platformMetrics.value.map((m) => (
+									<tr key={String(m.id)}>
+										<td>{m.name ?? "-"}</td>
+										<td>{m.id}</td>
+									</tr>
+								))}
+							</tbody>
+						</table>
+					)}
+				</CardBody>
+			</Card>
+		</PageContainer>
 	);
 }
