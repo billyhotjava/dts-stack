@@ -133,6 +133,15 @@ public class TargetTableProvisioner {
         config.put("table", tables);
     }
 
+    private void setTableField(Map<?, ?> map, List<String> tables) {
+        if (map == null) {
+            return;
+        }
+        @SuppressWarnings("unchecked")
+        Map<Object, Object> mutable = (Map<Object, Object>) map;
+        mutable.put("table", tables);
+    }
+
     private boolean shouldAutoCreate(Map<String, Object> writerConfig, JsonNode jobConfig) {
         Boolean value = booleanValue(writerConfig.get("autoCreateTables"));
         if (value == null) {

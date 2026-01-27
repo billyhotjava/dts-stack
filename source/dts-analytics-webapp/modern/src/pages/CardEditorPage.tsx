@@ -245,197 +245,225 @@ export default function CardEditorPage() {
 		}
 	};
 
-	return (
-			<div className="page">
-				<h1 className="pageTitle">
-					{cardId ? `${t(locale, "questions.edit")} #${cardId}` : t(locale, "questions.new")}
-				</h1>
-				<div className="pageSub">
-					<Link to="/questions">{t(locale, "nav.questions")}</Link>
-					<span className="muted"> · </span>
-					<span className="muted">{cardId ? `#${cardId}` : t(locale, "questions.unsaved")}</span>
-				</div>
+	// Icons
+	const PlayIcon = () => (
+		<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+			<polygon points="6 3 20 12 6 21 6 3" />
+		</svg>
+	);
 
-			<div style={{ height: 16 }} />
+	const SaveIcon = () => (
+		<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+			<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+			<polyline points="17 21 17 13 7 13 7 21" />
+			<polyline points="7 3 7 8 15 8" />
+		</svg>
+	);
+
+	const databaseOptions = databases.state === "loaded"
+		? databases.value.map((db) => ({ value: String(db.id), label: db.name ?? `db:${db.id}` }))
+		: [{ value: "", label: t(locale, "loading") }];
+
+	const collectionOptions = [
+		{ value: "", label: `${t(locale, "collections.title")} (root)` },
+		...(collections.state === "loaded"
+			? collections.value
+				.filter((c) => c.id !== "root")
+				.map((c) => ({ value: String(c.id), label: c.name ?? String(c.id) }))
+			: [])
+	];
+
+	return (
+		<PageContainer>
+			<PageHeader
+				title={cardId ? `${t(locale, "questions.edit")} #${cardId}` : t(locale, "questions.new")}
+				breadcrumbs={
+					<Breadcrumb items={[
+						{ label: t(locale, "nav.questions"), href: "/questions" },
+						{ label: cardId ? `#${cardId}` : t(locale, "questions.unsaved") }
+					]} />
+				}
+			/>
 
 			{card?.state === "error" && <ErrorNotice locale={locale} error={card.error} />}
 			{databases.state === "error" && <ErrorNotice locale={locale} error={databases.error} />}
-				{collections.state === "error" && <ErrorNotice locale={locale} error={collections.error} />}
-				{saveState?.state === "error" && <ErrorNotice locale={locale} error={saveState.error} />}
+			{collections.state === "error" && <ErrorNotice locale={locale} error={collections.error} />}
+			{saveState?.state === "error" && <ErrorNotice locale={locale} error={saveState.error} />}
 
-				{dbEmpty ? (
-					<>
+			{dbEmpty ? (
+				<Card style={{ marginBottom: "var(--spacing-lg)" }}>
+					<CardBody>
 						<EmptyState
 							title={t(locale, "questions.noDb")}
 							action={
-								<Link className="btn" to="/data/new">
-									{t(locale, "data.add")}
+								<Link to="/data/new">
+									<Button variant="primary">{t(locale, "data.add")}</Button>
 								</Link>
 							}
 						/>
-						<div style={{ height: 16 }} />
-					</>
-				) : null}
+					</CardBody>
+				</Card>
+			) : null}
 
-				<div className="card">
-					<div className="row">
-						<label style={{ flex: 1 }}>
-							<div className="muted">{t(locale, "common.name")}</div>
-							<input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="..." />
-					</label>
+			<Card style={{ marginBottom: "var(--spacing-lg)" }}>
+				<CardHeader title={t(locale, "questions.settings")} />
+				<CardBody>
+					<div className="form-grid" style={{ gridTemplateColumns: "1fr 260px 260px" }}>
+						<Input
+							label={t(locale, "common.name")}
+							value={name}
+							onChange={(e) => setName(e.target.value)}
+							placeholder="My Question"
+						/>
 
-					<label style={{ width: 260 }}>
-						<div className="muted">{t(locale, "questions.database")}</div>
-						<select
-							className="input"
-							value={databaseId ?? ""}
+						<NativeSelect
+							label={t(locale, "questions.database")}
+							value={databaseId ? String(databaseId) : ""}
 							onChange={(e) => setDatabaseId(Number.parseInt(e.target.value, 10) || null)}
+							options={databaseOptions}
 							disabled={databases.state !== "loaded"}
-						>
-							<option value="" disabled>
-								{t(locale, "loading")}
-							</option>
-							{databases.state === "loaded" &&
-								databases.value.map((db) => (
-									<option key={db.id} value={db.id}>
-										{db.name ?? `db:${db.id}`}
-									</option>
-								))}
-						</select>
-					</label>
+						/>
 
-					<label style={{ width: 260 }}>
-						<div className="muted">{t(locale, "questions.collection")}</div>
-						<select
-							className="input"
-							value={collectionId ?? ""}
+						<NativeSelect
+							label={t(locale, "questions.collection")}
+							value={collectionId ? String(collectionId) : ""}
 							onChange={(e) => setCollectionId(e.target.value ? Number.parseInt(e.target.value, 10) || null : null)}
+							options={collectionOptions}
 							disabled={collections.state !== "loaded"}
+						/>
+					</div>
+
+					<div style={{ marginTop: "var(--spacing-md)", display: "flex", alignItems: "center", gap: "var(--spacing-sm)" }}>
+						<Button
+							variant={mode === "builder" ? "primary" : "secondary"}
+							size="sm"
+							onClick={() => setMode("builder")}
+							disabled={dbEmpty}
 						>
-							<option value="">{t(locale, "collections.title")} (root)</option>
-							{collections.state === "loaded" &&
-								collections.value
-									.filter((c) => c.id !== "root")
-									.map((c) => (
-										<option key={String(c.id)} value={String(c.id)}>
-											{c.name ?? String(c.id)}
-										</option>
-									))}
-						</select>
-					</label>
-				</div>
+							{t(locale, "questions.mode.builder")}
+						</Button>
+						<Button
+							variant={mode === "sql" ? "primary" : "secondary"}
+							size="sm"
+							onClick={() => setMode("sql")}
+							disabled={dbEmpty}
+						>
+							{t(locale, "questions.mode.sql")}
+						</Button>
+						<span className="text-muted" style={{ marginLeft: "var(--spacing-sm)" }}>
+							{mode === "builder" ? t(locale, "questions.builder") : t(locale, "questions.sql")}
+						</span>
+					</div>
+				</CardBody>
+			</Card>
 
-				<div style={{ height: 12 }} />
-
-				<div className="row">
-					<button
-						className={mode === "builder" ? "btn btnActive" : "btn"}
-						type="button"
-						onClick={() => setMode("builder")}
-						disabled={dbEmpty}
-					>
-						{t(locale, "questions.mode.builder")}
-					</button>
-					<button
-						className={mode === "sql" ? "btn btnActive" : "btn"}
-						type="button"
-						onClick={() => setMode("sql")}
-						disabled={dbEmpty}
-					>
-						{t(locale, "questions.mode.sql")}
-					</button>
-					{mode === "builder" ? <span className="muted">{t(locale, "questions.builder")}</span> : null}
-					{mode === "sql" ? <span className="muted">{t(locale, "questions.sql")}</span> : null}
-				</div>
-
-				<div style={{ height: 12 }} />
-
-				{mode === "builder" ? (
-					<QueryBuilder
-						databaseId={databaseId}
-						initialDatasetQuery={builderInitialDatasetQuery}
-						onDatasetQueryChange={(dq) => setBuilderDatasetQuery(dq)}
-					/>
-				) : (
-				<label>
-					<div className="muted">{t(locale, "questions.sql")}</div>
-					<textarea
-						className="textarea"
-						style={{ width: "100%", minHeight: 200, fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" }}
-						value={sql}
-						onChange={(e) => setSql(e.target.value)}
-						placeholder="select 1"
-					/>
-				</label>
-				)}
-
-				<div style={{ height: 12 }} />
-
-					<div className="row">
-						<button
-							className="btn"
-							type="button"
+			<Card style={{ marginBottom: "var(--spacing-lg)" }}>
+				<CardHeader title={mode === "builder" ? t(locale, "questions.mode.builder") : t(locale, "questions.mode.sql")} />
+				<CardBody>
+					{mode === "builder" ? (
+						<QueryBuilder
+							databaseId={databaseId}
+							initialDatasetQuery={builderInitialDatasetQuery}
+							onDatasetQueryChange={(dq) => setBuilderDatasetQuery(dq)}
+						/>
+					) : (
+						<TextArea
+							label={t(locale, "questions.sql")}
+							value={sql}
+							onChange={(e) => setSql(e.target.value)}
+							placeholder="SELECT * FROM table"
+							rows={10}
+							style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" }}
+						/>
+					)}
+				</CardBody>
+				<CardFooter align="between">
+					<div style={{ display: "flex", gap: "var(--spacing-sm)", alignItems: "center" }}>
+						<Button
+							variant="primary"
+							icon={<PlayIcon />}
 							onClick={run}
 							disabled={dbEmpty || !canRun || runState?.state === "loading"}
+							loading={runState?.state === "loading"}
 						>
 							{t(locale, "questions.run")}
-						</button>
-						<button
-							className="btn"
-							type="button"
+						</Button>
+						<Button
+							variant="secondary"
+							icon={<SaveIcon />}
 							onClick={save}
 							disabled={dbEmpty || !canSave || saveState?.state === "loading"}
+							loading={saveState?.state === "loading"}
 						>
 							{t(locale, "questions.save")}
-						</button>
-						{saveState?.state === "loading" && <span className="muted">{t(locale, "loading")}</span>}
+						</Button>
 					</div>
-				</div>
+					<div />
+				</CardFooter>
+			</Card>
 
-			<div style={{ height: 16 }} />
+			<Card>
+				<CardHeader
+					title={t(locale, "questions.queryResult")}
+					action={
+						<div style={{ display: "flex", gap: "var(--spacing-xs)" }}>
+							{VISUALIZATION_TYPES.map((vt) => (
+								<Button
+									key={vt.value}
+									variant={displayType === vt.value ? "primary" : "tertiary"}
+									size="sm"
+									onClick={() => setDisplayType(vt.value)}
+								>
+									{vt.label}
+								</Button>
+							))}
+						</div>
+					}
+				/>
+				<CardBody>
+					{runState === null && (
+						<EmptyState title={t(locale, "questions.runFirst")} />
+					)}
+					{runState?.state === "loading" && (
+						<div className="loading-container" style={{ padding: "var(--spacing-xl)" }}>
+							<Spinner size="lg" />
+						</div>
+					)}
+					{runState?.state === "error" && <ErrorNotice locale={locale} error={runState.error} />}
+					{runState?.state === "loaded" && (
+						<>
+							{runState.value?.data?.native_form?.query ? (
+								<div style={{ marginBottom: "var(--spacing-md)" }}>
+									<div className="text-muted" style={{ marginBottom: "var(--spacing-xs)" }}>{t(locale, "questions.querySql")}</div>
+									<pre style={{ whiteSpace: "pre-wrap", fontSize: "var(--font-size-sm)", margin: 0, padding: "var(--spacing-sm)", background: "var(--color-bg-tertiary)", borderRadius: "var(--radius-sm)" }}>
+										{String(runState.value.data.native_form.query)}
+									</pre>
+								</div>
+							) : null}
+							<ChartRenderer
+								data={{
+									cols: (runState.value.data?.cols as any[]) ?? [],
+									rows: (runState.value.data?.rows as any[]) ?? []
+								}}
+								display={displayType}
+							/>
+						</>
+					)}
+				</CardBody>
+			</Card>
 
-			<div className="card">
-				<div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
-					<strong>{t(locale, "questions.queryResult")}</strong>
-					<div className="row" style={{ gap: 4 }}>
-						{VISUALIZATION_TYPES.map((vt) => (
-							<button
-								key={vt.value}
-								className={displayType === vt.value ? "btn btnActive" : "btn"}
-								type="button"
-								onClick={() => setDisplayType(vt.value)}
-								style={{ padding: "4px 8px", fontSize: 12 }}
-							>
-								{vt.label}
-							</button>
-						))}
-					</div>
-				</div>
-				<div style={{ height: 8 }} />
+			<style>{`
+				.form-grid {
+					display: grid;
+					gap: var(--spacing-md);
+				}
 
-				{runState === null && <div className="muted">—</div>}
-				{runState?.state === "loading" && <div>{t(locale, "loading")}</div>}
-				{runState?.state === "error" && <ErrorNotice locale={locale} error={runState.error} />}
-				{runState?.state === "loaded" && (
-					<>
-						{runState.value?.data?.native_form?.query ? (
-							<div style={{ marginBottom: 12 }}>
-								<div className="muted">{t(locale, "questions.querySql")}</div>
-								<pre style={{ whiteSpace: "pre-wrap", fontSize: 12, margin: "8px 0 0" }}>
-									{String(runState.value.data.native_form.query)}
-								</pre>
-							</div>
-						) : null}
-						<ChartRenderer
-							data={{
-								cols: (runState.value.data?.cols as any[]) ?? [],
-								rows: (runState.value.data?.rows as any[]) ?? []
-							}}
-							display={displayType}
-						/>
-					</>
-				)}
-			</div>
-		</div>
+				@media (max-width: 900px) {
+					.form-grid {
+						grid-template-columns: 1fr !important;
+					}
+				}
+			`}</style>
+		</PageContainer>
 	);
 }

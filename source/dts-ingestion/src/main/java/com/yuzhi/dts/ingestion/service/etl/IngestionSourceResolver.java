@@ -249,7 +249,13 @@ public class IngestionSourceResolver {
         for (String key : keys) {
             Object value = props.get(key);
             if (value instanceof Map<?, ?> map) {
-                return new LinkedHashMap<>(map);
+                Map<String, Object> resolved = new LinkedHashMap<>();
+                map.forEach((k, v) -> {
+                    if (k != null) {
+                        resolved.put(k.toString(), v);
+                    }
+                });
+                return resolved;
             }
         }
         return new LinkedHashMap<>();

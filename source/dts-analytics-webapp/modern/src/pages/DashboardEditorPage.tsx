@@ -7,7 +7,15 @@ import {
 	type DashboardCard,
 	type DashboardDetail,
 } from "../api/analyticsApi";
+import { EmptyState } from "../components/EmptyState";
 import { ErrorNotice } from "../components/ErrorNotice";
+import { PageContainer, PageHeader, Breadcrumb } from "../components/PageContainer/PageContainer";
+import { Card, CardHeader, CardBody, CardFooter } from "../ui/Card/Card";
+import { Button } from "../ui/Button/Button";
+import { Input } from "../ui/Input/Input";
+import { NativeSelect } from "../ui/Input/Select";
+import { Badge } from "../ui/Badge/Badge";
+import { Spinner } from "../ui/Loading/Spinner";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import "./page.css";
 
@@ -155,129 +163,193 @@ export default function DashboardEditorPage() {
 		}
 	};
 
-	return (
-		<div className="page">
-			<h1 className="pageTitle">
-				{dashboardId ? `${t(locale, "dashboards.edit")} #${dashboardId}` : t(locale, "dashboards.new")}
-			</h1>
-			<div className="pageSub">
-				<Link to="/dashboards">{t(locale, "nav.dashboards")}</Link>
-			</div>
+	// Icons
+	const SaveIcon = () => (
+		<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+			<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+			<polyline points="17 21 17 13 7 13 7 21" />
+			<polyline points="7 3 7 8 15 8" />
+		</svg>
+	);
 
-			<div style={{ height: 16 }} />
+	const PlusIcon = () => (
+		<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+			<path d="M5 12h14" />
+			<path d="M12 5v14" />
+		</svg>
+	);
+
+	const TrashIcon = () => (
+		<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+			<path d="M3 6h18" />
+			<path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+			<path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+		</svg>
+	);
+
+	const collectionOptions = [
+		{ value: "", label: `${t(locale, "collections.title")} (root)` },
+		...(collections.state === "loaded"
+			? collections.value
+				.filter((c) => c.id !== "root")
+				.map((c) => ({ value: String(c.id), label: c.name ?? String(c.id) }))
+			: [])
+	];
+
+	const cardOptions = cards.state === "loaded"
+		? cards.value.map((c) => ({ value: String(c.id), label: c.name ?? `card:${c.id}` }))
+		: [];
+
+	return (
+		<PageContainer>
+			<PageHeader
+				title={dashboardId ? `${t(locale, "dashboards.edit")} #${dashboardId}` : t(locale, "dashboards.new")}
+				breadcrumbs={
+					<Breadcrumb items={[
+						{ label: t(locale, "nav.dashboards"), href: "/dashboards" },
+						{ label: dashboardId ? `#${dashboardId}` : t(locale, "dashboards.new") }
+					]} />
+				}
+			/>
 
 			{dashboard?.state === "error" && <ErrorNotice locale={locale} error={dashboard.error} />}
 			{collections.state === "error" && <ErrorNotice locale={locale} error={collections.error} />}
 			{cards.state === "error" && <ErrorNotice locale={locale} error={cards.error} />}
 			{saveState?.state === "error" && <ErrorNotice locale={locale} error={saveState.error} />}
 
-			<div className="card">
-				<div className="row">
-					<label style={{ flex: 1 }}>
-						<div className="muted">{t(locale, "common.name")}</div>
-						<input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="..." />
-					</label>
+			<Card style={{ marginBottom: "var(--spacing-lg)" }}>
+				<CardHeader title={t(locale, "dashboards.settings")} />
+				<CardBody>
+					<div className="form-grid" style={{ gridTemplateColumns: "1fr 260px" }}>
+						<Input
+							label={t(locale, "common.name")}
+							value={name}
+							onChange={(e) => setName(e.target.value)}
+							placeholder="My Dashboard"
+						/>
 
-					<label style={{ width: 260 }}>
-						<div className="muted">{t(locale, "questions.collection")}</div>
-						<select
-							className="input"
-							value={collectionId ?? ""}
+						<NativeSelect
+							label={t(locale, "questions.collection")}
+							value={collectionId ? String(collectionId) : ""}
 							onChange={(e) => setCollectionId(e.target.value ? Number.parseInt(e.target.value, 10) || null : null)}
+							options={collectionOptions}
 							disabled={collections.state !== "loaded"}
-						>
-							<option value="">{t(locale, "collections.title")} (root)</option>
-							{collections.state === "loaded" &&
-								collections.value
-									.filter((c) => c.id !== "root")
-									.map((c) => (
-										<option key={String(c.id)} value={String(c.id)}>
-											{c.name ?? String(c.id)}
-										</option>
-									))}
-						</select>
-					</label>
-				</div>
-
-				<div style={{ height: 12 }} />
-
-				<label style={{ display: "block" }}>
-					<div className="muted">Description</div>
-					<input className="input" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="..." />
-				</label>
-
-				<div style={{ height: 12 }} />
-
-				<div className="row">
-					<button className="btn" type="button" onClick={save} disabled={!name.trim() || saveState?.state === "loading"}>
-						{t(locale, "dashboards.save")}
-					</button>
-					{saveState?.state === "loading" && <span className="muted">{t(locale, "loading")}</span>}
-				</div>
-			</div>
-
-			<div style={{ height: 16 }} />
-
-			<div className="card">
-				<div className="row" style={{ justifyContent: "space-between" }}>
-					<strong>Cards</strong>
-					<div className="row">
-						<select
-							className="input"
-							value={selectedCardId ?? ""}
-							onChange={(e) => setSelectedCardId(Number.parseInt(e.target.value, 10) || null)}
-							disabled={cards.state !== "loaded"}
-						>
-							{cards.state === "loaded" &&
-								cards.value.map((c) => (
-									<option key={c.id} value={c.id}>
-										{c.name ?? `card:${c.id}`}
-									</option>
-								))}
-						</select>
-						<button className="btn" type="button" onClick={addSelectedCard} disabled={!selectedCardId}>
-							{t(locale, "dashboards.addCard")}
-						</button>
+						/>
 					</div>
-				</div>
 
-				<div style={{ height: 12 }} />
+					<div style={{ marginTop: "var(--spacing-md)" }}>
+						<Input
+							label="Description"
+							value={description}
+							onChange={(e) => setDescription(e.target.value)}
+							placeholder="Optional description..."
+						/>
+					</div>
+				</CardBody>
+				<CardFooter>
+					<Button
+						variant="primary"
+						icon={<SaveIcon />}
+						onClick={save}
+						disabled={!name.trim() || saveState?.state === "loading"}
+						loading={saveState?.state === "loading"}
+					>
+						{t(locale, "dashboards.save")}
+					</Button>
+				</CardFooter>
+			</Card>
 
-				{dashcards.length === 0 && <div className="muted">—</div>}
-				{dashcards.length > 0 && (
-					<table className="table">
-						<thead>
-							<tr>
-								<th>{t(locale, "common.id")}</th>
-								<th>{t(locale, "common.name")}</th>
-								<th>{t(locale, "dashboards.remove")}</th>
-							</tr>
-						</thead>
-						<tbody>
-							{dashcards.map((dc, idx) => {
-								const cardName =
-									typeof (dc as any)?.card?.name === "string"
-										? String((dc as any).card.name)
-										: cards.state === "loaded"
-											? cards.value.find((c) => c.id === dc.card_id)?.name ?? `card:${dc.card_id ?? "-"}`
-											: `card:${dc.card_id ?? "-"}`;
-								return (
-									<tr key={`${dc.id}:${idx}`}>
-										<td>{dc.id && dc.id > 0 ? dc.id : "-"}</td>
-										<td>{cardName}</td>
-										<td>
-											<button className="btn" type="button" onClick={() => removeDashcardAt(idx)}>
-												{t(locale, "dashboards.remove")}
-											</button>
-										</td>
-									</tr>
-								);
-							})}
-						</tbody>
-					</table>
-				)}
-			</div>
-		</div>
+			<Card>
+				<CardHeader
+					title="Cards"
+					action={
+						<Badge variant="default">{dashcards.length}</Badge>
+					}
+				/>
+				<CardBody>
+					<div style={{ display: "flex", gap: "var(--spacing-sm)", alignItems: "flex-end", marginBottom: "var(--spacing-md)" }}>
+						<div style={{ flex: 1, maxWidth: 300 }}>
+							<NativeSelect
+								label={t(locale, "dashboards.selectCard")}
+								value={selectedCardId ? String(selectedCardId) : ""}
+								onChange={(e) => setSelectedCardId(Number.parseInt(e.target.value, 10) || null)}
+								options={cardOptions}
+								disabled={cards.state !== "loaded"}
+							/>
+						</div>
+						<Button
+							variant="secondary"
+							icon={<PlusIcon />}
+							onClick={addSelectedCard}
+							disabled={!selectedCardId}
+						>
+							{t(locale, "dashboards.addCard")}
+						</Button>
+					</div>
+
+					{dashcards.length === 0 && (
+						<EmptyState title={t(locale, "common.empty")} description={t(locale, "dashboards.noCards")} />
+					)}
+
+					{dashcards.length > 0 && (
+						<table className="table">
+							<thead>
+								<tr>
+									<th>{t(locale, "common.id")}</th>
+									<th>{t(locale, "common.name")}</th>
+									<th style={{ width: 120 }}>{t(locale, "common.actions")}</th>
+								</tr>
+							</thead>
+							<tbody>
+								{dashcards.map((dc, idx) => {
+									const cardName =
+										typeof (dc as any)?.card?.name === "string"
+											? String((dc as any).card.name)
+											: cards.state === "loaded"
+												? cards.value.find((c) => c.id === dc.card_id)?.name ?? `card:${dc.card_id ?? "-"}`
+												: `card:${dc.card_id ?? "-"}`;
+									return (
+										<tr key={`${dc.id}:${idx}`}>
+											<td>
+												{dc.id && dc.id > 0 ? (
+													<Badge variant="default" size="sm">{String(dc.id)}</Badge>
+												) : (
+													<span className="text-muted">-</span>
+												)}
+											</td>
+											<td>{cardName}</td>
+											<td>
+												<Button
+													variant="tertiary"
+													size="sm"
+													icon={<TrashIcon />}
+													onClick={() => removeDashcardAt(idx)}
+												>
+													{t(locale, "dashboards.remove")}
+												</Button>
+											</td>
+										</tr>
+									);
+								})}
+							</tbody>
+						</table>
+					)}
+				</CardBody>
+			</Card>
+
+			<style>{`
+				.form-grid {
+					display: grid;
+					gap: var(--spacing-md);
+				}
+
+				@media (max-width: 768px) {
+					.form-grid {
+						grid-template-columns: 1fr !important;
+					}
+				}
+			`}</style>
+		</PageContainer>
 	);
 }
 
