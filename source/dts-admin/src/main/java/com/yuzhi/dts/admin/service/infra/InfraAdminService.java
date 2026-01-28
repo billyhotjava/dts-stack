@@ -259,6 +259,13 @@ public class InfraAdminService {
             });
     }
 
+    public Optional<InfraDataSourceDto> getDataSource(UUID id) {
+        if (id == null) {
+            return Optional.empty();
+        }
+        return dataSourceRepository.findById(id).map(this::toDto);
+    }
+
     public Optional<InfraDataSourceDto> deleteDataSource(UUID id) {
         return dataSourceRepository
             .findById(id)

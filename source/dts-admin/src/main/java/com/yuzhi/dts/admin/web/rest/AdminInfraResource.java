@@ -285,7 +285,7 @@ public class AdminInfraResource {
         @Valid @RequestBody UpsertInfraDataSourcePayload payload,
         HttpServletRequest httpRequest
     ) {
-        String validationError = validateDataLakePayload(payload);
+        String validationError = validateDataLakePayload(payload, null);
         if (validationError != null) {
             return ResponseEntity.badRequest().body(ApiResponse.error(validationError));
         }
@@ -327,7 +327,8 @@ public class AdminInfraResource {
         @Valid @RequestBody UpsertInfraDataSourcePayload payload,
         HttpServletRequest httpRequest
     ) {
-        String validationError = validateDataLakePayload(payload);
+        InfraDataSourceDto existing = infraAdminService.getDataSource(id).orElse(null);
+        String validationError = validateDataLakePayload(payload, existing);
         if (validationError != null) {
             return ResponseEntity.badRequest().body(ApiResponse.error(validationError));
         }
@@ -629,6 +630,14 @@ public class AdminInfraResource {
         return value.trim();
     }
 
+    private String asString(Object value) {
+        if (value == null) {
+            return null;
+        }
+        String str = value.toString();
+        return StringUtils.hasText(str) ? str.trim() : null;
+    }
+
     private String trimMessage(String value) {
         if (!StringUtils.hasText(value)) {
             return null;
@@ -656,7 +665,7 @@ public class AdminInfraResource {
         }
     }
 
-    private String validateDataLakePayload(UpsertInfraDataSourcePayload payload) {
+    private String validateDataLakePayload(UpsertInfraDataSourcePayload payload, InfraDataSourceDto existing) {
         if (payload == null) {
             return "请求不能为空";
         }
@@ -666,6 +675,18 @@ public class AdminInfraResource {
         Object password = payload.getSecrets() == null ? null : payload.getSecrets().get("password");
         if (!StringUtils.hasText(password == null ? null : password.toString())) {
             return "请填写密码";
+        }
+        String destinationDefinitionId = payload.getProps() == null ? null : asString(payload.getProps().get("destinationDefinitionId"));
+        if (!StringUtils.hasText(destinationDefinitionId)) {
+            return "请选择写入器类型";
+        }
+        Object destConfigRaw = payload.getSecrets() == null ? null : payload.getSecrets().get("destinationConfig");
+        boolean hasNewConfig = destConfigRaw instanceof Map<?, ?> map && !map.isEmpty();
+        boolean hasExistingConfig = existing != null
+            && existing.getDestinationConfig() != null
+            && !existing.getDestinationConfig().isEmpty();
+        if (!hasNewConfig && !hasExistingConfig) {
+            return "请完善写入器配置";
         }
         return null;
     }

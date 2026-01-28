@@ -194,47 +194,60 @@
         </insert>
     </changeSet>
 
-    <!-- 审计操作映射：运维配置相关按钮 -->
+    <!-- 审计操作映射：运维配置相关接口 -->
     <changeSet id="20260127-ops-03-audit-button-codes" author="dts-admin">
         <insert tableName="audit_operation_mapping">
-            <column name="button_code" value="OPS_CONFIG_VIEW"/>
-            <column name="module_key" value="ops"/>
+            <column name="url_pattern" value="/api/admin/ops/configs"/>
+            <column name="http_method" value="GET"/>
             <column name="module_name" value="运维配置"/>
-            <column name="operation_code" value="view"/>
-            <column name="operation_name" value="查看运维配置"/>
-            <column name="operation_kind" value="QUERY"/>
-            <column name="source_system" value="admin"/>
-            <column name="allow_empty_targets" valueBoolean="true"/>
+            <column name="operation_type" value="READ"/>
+            <column name="description_template" value="查看运维配置列表"/>
+            <column name="source_table_template" value="运维配置"/>
+            <column name="order_value" valueNumeric="30"/>
+            <column name="enabled" valueBoolean="true"/>
         </insert>
         <insert tableName="audit_operation_mapping">
-            <column name="button_code" value="OPS_CONFIG_UPDATE"/>
-            <column name="module_key" value="ops"/>
+            <column name="url_pattern" value="/api/admin/ops/configs/{key}"/>
+            <column name="http_method" value="GET"/>
             <column name="module_name" value="运维配置"/>
-            <column name="operation_code" value="update"/>
-            <column name="operation_name" value="修改运维配置"/>
-            <column name="operation_kind" value="MODIFY"/>
-            <column name="source_system" value="admin"/>
-            <column name="allow_empty_targets" valueBoolean="false"/>
+            <column name="operation_type" value="READ"/>
+            <column name="description_template" value="查看运维配置: {key|未知}"/>
+            <column name="source_table_template" value="运维配置"/>
+            <column name="param_extractors" value="{&quot;key&quot;:&quot;path.key&quot;}"/>
+            <column name="order_value" valueNumeric="29"/>
+            <column name="enabled" valueBoolean="true"/>
         </insert>
         <insert tableName="audit_operation_mapping">
-            <column name="button_code" value="OPS_TOGGLE_VIEW"/>
-            <column name="module_key" value="ops"/>
+            <column name="url_pattern" value="/api/admin/ops/configs/{key}"/>
+            <column name="http_method" value="PUT"/>
             <column name="module_name" value="运维配置"/>
-            <column name="operation_code" value="view_toggle"/>
-            <column name="operation_name" value="查看功能开关"/>
-            <column name="operation_kind" value="QUERY"/>
-            <column name="source_system" value="admin"/>
-            <column name="allow_empty_targets" valueBoolean="true"/>
+            <column name="operation_type" value="UPDATE"/>
+            <column name="description_template" value="修改运维配置: {key|未知}"/>
+            <column name="source_table_template" value="运维配置"/>
+            <column name="param_extractors" value="{&quot;key&quot;:&quot;path.key&quot;}"/>
+            <column name="order_value" valueNumeric="29"/>
+            <column name="enabled" valueBoolean="true"/>
         </insert>
         <insert tableName="audit_operation_mapping">
-            <column name="button_code" value="OPS_TOGGLE_UPDATE"/>
-            <column name="module_key" value="ops"/>
+            <column name="url_pattern" value="/api/admin/ops/feature-toggles"/>
+            <column name="http_method" value="GET"/>
             <column name="module_name" value="运维配置"/>
-            <column name="operation_code" value="toggle"/>
-            <column name="operation_name" value="切换功能开关"/>
-            <column name="operation_kind" value="MODIFY"/>
-            <column name="source_system" value="admin"/>
-            <column name="allow_empty_targets" valueBoolean="false"/>
+            <column name="operation_type" value="READ"/>
+            <column name="description_template" value="查看功能开关列表"/>
+            <column name="source_table_template" value="功能开关"/>
+            <column name="order_value" valueNumeric="30"/>
+            <column name="enabled" valueBoolean="true"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/admin/ops/feature-toggles/{key}"/>
+            <column name="http_method" value="PUT"/>
+            <column name="module_name" value="运维配置"/>
+            <column name="operation_type" value="UPDATE"/>
+            <column name="description_template" value="切换功能开关: {key|未知}"/>
+            <column name="source_table_template" value="功能开关"/>
+            <column name="param_extractors" value="{&quot;key&quot;:&quot;path.key&quot;}"/>
+            <column name="order_value" valueNumeric="29"/>
+            <column name="enabled" valueBoolean="true"/>
         </insert>
     </changeSet>
 

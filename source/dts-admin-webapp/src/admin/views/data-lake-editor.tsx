@@ -275,6 +275,7 @@ export default function DataLakeEditorView() {
 	const useCustomJdbc = Form.useWatch("useCustomJdbc", form);
 	const keytabName = Form.useWatch("keytabFileName", form) as string | undefined;
 	const username = Form.useWatch("username", form) as string | undefined;
+	const destinationConfigRaw = Form.useWatch("destinationConfigRaw", form) as string | undefined;
 	const resolvedType = normalizeLakeType(type || editingType);
 	const isInceptor = resolvedType === "INCEPTOR";
 	const isJdbcPassword = authMethod === "JDBC_PASSWORD";
@@ -282,6 +283,19 @@ export default function DataLakeEditorView() {
 	const isKeytab = authMethod === "KEYTAB";
 	const isKerberosPassword = authMethod === "PASSWORD";
 	const writerConfigRequired = isInceptor || !isEditing || !editingLake?.hasSecrets;
+	const hasExistingWriterConfig = Boolean(
+		editingLake?.destinationConfig && Object.keys(editingLake.destinationConfig).length,
+	);
+	const hasRawWriterConfig = useMemo(() => {
+		if (!destinationConfigRaw || !destinationConfigRaw.trim()) return false;
+		try {
+			const parsed = parseJsonInput(destinationConfigRaw);
+			return Boolean(parsed && Object.keys(parsed).length);
+		} catch {
+			return false;
+		}
+	}, [destinationConfigRaw]);
+	const showWriterConfigAlert = !readOnly && writerConfigRequired && !hasRawWriterConfig && !hasExistingWriterConfig;
 
 	const driverOptions = useMemo(
 		() => buildDriverOptions(jdbcDrivers, resolvedType),
@@ -712,6 +726,15 @@ export default function DataLakeEditorView() {
 					<CardTitle>连接配置</CardTitle>
 				</CardHeader>
 				<CardContent className="text-sm">
+					{showWriterConfigAlert ? (
+						<Alert
+							type="warning"
+							showIcon
+							message="写入器配置必填"
+							description="请在页面下方「写入器配置」填写 Addax Writer JSON（包含目标连接与写入参数）。"
+							className="mb-4"
+						/>
+					) : null}
 					<Form<FormValues>
 						layout="vertical"
 						form={form}

@@ -212,6 +212,37 @@ export type VisibleTable = {
 	name?: string | null;
 };
 
+// Screen Designer Types
+export type ScreenListItem = {
+	id: number | string;
+	name?: string;
+	description?: string | null;
+	width?: number;
+	height?: number;
+	createdAt?: string;
+	updatedAt?: string;
+};
+
+export type ScreenDetail = ScreenListItem & {
+	backgroundColor?: string;
+	backgroundImage?: string | null;
+	components?: ScreenComponentData[];
+};
+
+export type ScreenComponentData = {
+	id: string;
+	type: string;
+	name: string;
+	x: number;
+	y: number;
+	width: number;
+	height: number;
+	zIndex: number;
+	locked: boolean;
+	visible: boolean;
+	config: Record<string, unknown>;
+};
+
 import { getPlatformTokens, refreshPlatformAccessToken } from "./platformSession";
 
 export class HttpError extends Error {
@@ -224,7 +255,7 @@ export class HttpError extends Error {
 	}
 }
 
-export class AuthError extends HttpError {}
+export class AuthError extends HttpError { }
 
 async function apiFetch(url: string, init: RequestInit, allowRefresh: boolean): Promise<Response> {
 	const tokens = getPlatformTokens();
@@ -375,4 +406,14 @@ export const analyticsApi = {
 			`/analytics/api/public/dashboard/${encodeURIComponent(uuid)}/dashcard/${encodeURIComponent(String(dashcardId))}/card/${encodeURIComponent(String(cardId))}/query`,
 			body ?? {},
 		),
+
+	// Screen Designer API
+	listScreens: () => fetchJson<ScreenListItem[]>("/analytics/api/screens"),
+	getScreen: (id: string | number) =>
+		fetchJson<ScreenDetail>(`/analytics/api/screens/${encodeURIComponent(String(id))}`),
+	createScreen: (body: unknown) => sendJson<ScreenDetail>("/analytics/api/screens", body),
+	updateScreen: (id: string | number, body: unknown) =>
+		requestJson<ScreenDetail>(`/analytics/api/screens/${encodeURIComponent(String(id))}`, "PUT", body),
+	deleteScreen: (id: string | number) =>
+		requestJson<void>(`/analytics/api/screens/${encodeURIComponent(String(id))}`, "DELETE"),
 };
