@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { adminApi } from "@/admin/api/adminApi";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/ui/card";
+import { Card, CardContent } from "@/ui/card";
 import { Button } from "@/ui/button";
 import { Input } from "@/ui/input";
 import { Switch } from "@/ui/switch";
@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/ui/tabs";
 import { Badge } from "@/ui/badge";
 import { Label } from "@/ui/label";
 import { toast } from "sonner";
-import { Settings, ToggleLeft, Shield, Database, Plug, RefreshCw, Eye, EyeOff, Lock } from "lucide-react";
+import { Settings, ToggleLeft, Shield, Database, Plug, RefreshCw, Lock, Pencil, Check, X } from "lucide-react";
 
 interface OpsConfigItem {
 	id: number;
@@ -64,6 +64,18 @@ export default function OpsConfigView() {
 		},
 	});
 
+	const updateMutation = useMutation({
+		mutationFn: ({ key, value }: { key: string; value: string }) =>
+			adminApi.updateOpsConfig(key, value),
+		onSuccess: () => {
+			toast.success("配置已保存");
+			queryClient.invalidateQueries({ queryKey: ["admin", "ops-configs"] });
+		},
+		onError: () => {
+			toast.error("保存失败，请稍后再试");
+		},
+	});
+
 	const handleToggle = (item: OpsConfigItem) => {
 		if (!item.editable) {
 			toast.error("该配置项不可编辑");
@@ -71,6 +83,14 @@ export default function OpsConfigView() {
 		}
 		const currentValue = item.value === "true";
 		toggleMutation.mutate({ key: item.key, enabled: !currentValue });
+	};
+
+	const handleUpdate = (item: OpsConfigItem, newValue: string) => {
+		if (!item.editable) {
+			toast.error("该配置项不可编辑");
+			return;
+		}
+		updateMutation.mutate({ key: item.key, value: newValue });
 	};
 
 	const formatValue = (item: OpsConfigItem): string => {
@@ -136,7 +156,9 @@ export default function OpsConfigView() {
 									key={item.id}
 									item={item}
 									onToggle={handleToggle}
+									onUpdate={handleUpdate}
 									formatValue={formatValue}
+									isSaving={updateMutation.isPending || toggleMutation.isPending}
 								/>
 							))}
 							{cat.items.length === 0 && (
@@ -157,14 +179,47 @@ export default function OpsConfigView() {
 function ConfigItemCard({
 	item,
 	onToggle,
+	onUpdate,
 	formatValue,
+	isSaving,
 }: {
 	item: OpsConfigItem;
 	onToggle: (item: OpsConfigItem) => void;
+	onUpdate: (item: OpsConfigItem, newValue: string) => void;
 	formatValue: (item: OpsConfigItem) => string;
+	isSaving: boolean;
 }) {
 	const isBoolean = item.dataType === "BOOLEAN";
+	const isInteger = item.dataType === "INTEGER";
+	const isEditable = item.editable && !item.sensitive;
 	const boolValue = item.value === "true";
+
+	const [isEditing, setIsEditing] = useState(false);
+	const [editValue, setEditValue] = useState(item.value);
+
+	const handleStartEdit = () => {
+		if (!isEditable) return;
+		setEditValue(item.value);
+		setIsEditing(true);
+	};
+
+	const handleSave = () => {
+		// Validate integer values
+		if (isInteger) {
+			const numValue = parseInt(editValue, 10);
+			if (isNaN(numValue) || numValue < 0) {
+				toast.error("请输入有效的正整数");
+				return;
+			}
+		}
+		onUpdate(item, editValue);
+		setIsEditing(false);
+	};
+
+	const handleCancel = () => {
+		setEditValue(item.value);
+		setIsEditing(false);
+	};
 
 	return (
 		<Card className={!item.editable ? "opacity-75" : undefined}>
@@ -203,12 +258,55 @@ function ConfigItemCard({
 								</code>
 							</div>
 
-							{!isBoolean && (
+							{!isBoolean && !isEditing && (
 								<div className="flex items-center gap-2">
 									<Label className="text-xs text-muted-foreground">当前值:</Label>
 									<span className={`text-sm ${item.sensitive ? "font-mono text-muted-foreground" : ""}`}>
 										{formatValue(item)}
 									</span>
+									{isEditable && (
+										<Button
+											variant="ghost"
+											size="sm"
+											className="h-6 w-6 p-0"
+											onClick={handleStartEdit}
+										>
+											<Pencil className="h-3 w-3" />
+										</Button>
+									)}
+								</div>
+							)}
+
+							{/* Inline Edit Mode */}
+							{!isBoolean && isEditing && (
+								<div className="flex items-center gap-2">
+									<Label className="text-xs text-muted-foreground">新值:</Label>
+									<Input
+										type={isInteger ? "number" : "text"}
+										value={editValue}
+										onChange={(e) => setEditValue(e.target.value)}
+										className="h-7 w-32 text-sm"
+										min={isInteger ? 0 : undefined}
+										autoFocus
+									/>
+									<Button
+										variant="ghost"
+										size="sm"
+										className="h-6 w-6 p-0 text-green-600 hover:text-green-700"
+										onClick={handleSave}
+										disabled={isSaving}
+									>
+										<Check className="h-4 w-4" />
+									</Button>
+									<Button
+										variant="ghost"
+										size="sm"
+										className="h-6 w-6 p-0 text-red-600 hover:text-red-700"
+										onClick={handleCancel}
+										disabled={isSaving}
+									>
+										<X className="h-4 w-4" />
+									</Button>
 								</div>
 							)}
 						</div>
@@ -231,7 +329,7 @@ function ConfigItemCard({
 							<Switch
 								checked={boolValue}
 								onCheckedChange={() => onToggle(item)}
-								disabled={!item.editable}
+								disabled={!item.editable || isSaving}
 							/>
 						</div>
 					)}

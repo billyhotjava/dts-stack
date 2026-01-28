@@ -8,6 +8,7 @@ import {
 	createMetadataStandard,
 	deleteMetadataStandard,
 	listMetadataStandards,
+	listReferenceCodes,
 	updateMetadataStandard,
 } from "@/api/platformApi";
 
@@ -35,6 +36,7 @@ type MetadataStandard = {
 };
 
 type PagedPayload<T> = { content?: T[]; total?: number; page?: number; size?: number };
+type ReferenceCodeDirectory = { codeTypeCode?: string; codeTypeName?: string };
 
 const SECURITY_LEVELS = ["PUBLIC", "INTERNAL", "SECRET", "CONFIDENTIAL"];
 
@@ -47,6 +49,7 @@ export default function ElementsPage() {
 	const [modalOpen, setModalOpen] = useState(false);
 	const [saving, setSaving] = useState(false);
 	const [editing, setEditing] = useState<MetadataStandard | null>(null);
+	const [codeOptions, setCodeOptions] = useState<ReferenceCodeDirectory[]>([]);
 	const [form] = Form.useForm();
 
 	const loadElements = useCallback(async () => {
@@ -68,6 +71,18 @@ export default function ElementsPage() {
 	useEffect(() => {
 		void loadElements();
 	}, [loadElements]);
+
+	useEffect(() => {
+		const loadCodeOptions = async () => {
+			try {
+				const resp = (await listReferenceCodes({ page: 0, size: 200 })) as PagedPayload<ReferenceCodeDirectory>;
+				setCodeOptions(resp?.content ?? []);
+			} catch {
+				setCodeOptions([]);
+			}
+		};
+		void loadCodeOptions();
+	}, []);
 
 	const openModal = (row?: MetadataStandard) => {
 		setEditing(row || null);
@@ -274,7 +289,17 @@ export default function ElementsPage() {
 					</Form.Item>
 					<div className="grid gap-4 md:grid-cols-2">
 						<Form.Item name="codeSet" label="码表编码">
-							<Input placeholder="ORD_STS" />
+							<Select
+								allowClear
+								showSearch
+								placeholder="建议选择标准码表"
+								options={codeOptions.map((item) => ({
+									label: item.codeTypeName && item.codeTypeCode
+										? `${item.codeTypeName} (${item.codeTypeCode})`
+										: `${item.codeTypeName || item.codeTypeCode || ""}`.trim(),
+									value: item.codeTypeCode,
+								}))}
+							/>
 						</Form.Item>
 						<Form.Item name="defaultValue" label="默认值">
 							<Input placeholder="可选" />

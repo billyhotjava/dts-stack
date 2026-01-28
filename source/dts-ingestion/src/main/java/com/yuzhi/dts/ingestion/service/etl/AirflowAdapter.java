@@ -1,5 +1,6 @@
 package com.yuzhi.dts.ingestion.service.etl;
 
+import com.yuzhi.dts.ingestion.config.AddaxProperties;
 import com.yuzhi.dts.ingestion.config.AirflowProperties;
 import com.yuzhi.dts.ingestion.service.infra.IngestionSettingsService;
 import java.util.LinkedHashMap;
@@ -12,11 +13,18 @@ public class AirflowAdapter {
 
     private final AirflowClient client;
     private final AirflowProperties properties;
+    private final AddaxProperties addaxProperties;
     private final IngestionSettingsService settingsService;
 
-    public AirflowAdapter(AirflowClient client, AirflowProperties properties, IngestionSettingsService settingsService) {
+    public AirflowAdapter(
+        AirflowClient client,
+        AirflowProperties properties,
+        AddaxProperties addaxProperties,
+        IngestionSettingsService settingsService
+    ) {
         this.client = client;
         this.properties = properties;
+        this.addaxProperties = addaxProperties;
         this.settingsService = settingsService;
     }
 
@@ -34,6 +42,13 @@ public class AirflowAdapter {
         if (request == null || !Boolean.TRUE.equals(request.enabled())) {
             result.put("enabled", false);
             result.put("message", "未启用编排");
+            return result;
+        }
+        String consistencyError = validateAddaxDagConsistency();
+        if (StringUtils.hasText(consistencyError)) {
+            result.put("enabled", true);
+            result.put("status", "failed");
+            result.put("message", consistencyError);
             return result;
         }
         String requestedDagId = normalize(request.dagId());
@@ -119,5 +134,44 @@ public class AirflowAdapter {
 
     private String normalize(String value) {
         return StringUtils.hasText(value) ? value.trim() : null;
+    }
+
+    private String validateAddaxDagConsistency() {
+        IngestionSettingsService.SettingsSnapshot addaxSettings = settingsService.getSettings(IngestionSettingsService.SERVICE_ADDAX);
+        IngestionSettingsService.SettingsSnapshot airflowSettings = settingsService.getSettings(IngestionSettingsService.SERVICE_AIRFLOW);
+        boolean addaxEnabled = addaxSettings.getBoolean("enabled", addaxProperties.isEnabled());
+        boolean airflowEnabled = airflowSettings.getBoolean("enabled", properties.isEnabled());
+        if (!addaxEnabled || !airflowEnabled) {
+            return null;
+        }
+        String jobDir = addaxSettings.getString("jobDir", addaxProperties.getJobDir());
+        String dagsDir = airflowSettings.getString("dagsDir", properties.getDagsDir());
+        if (!StringUtils.hasText(jobDir) || !StringUtils.hasText(dagsDir)) {
+            return "请先在集成配置中补齐 Addax 作业目录与 Airflow DAG 目录";
+        }
+        if (!pathEquals(jobDir, dagsDir)) {
+            return "Addax 作业目录与 Airflow DAG 目录必须保持一致";
+        }
+        return null;
+    }
+
+    private boolean pathEquals(String left, String right) {
+        String normalizedLeft = normalizeDir(left);
+        String normalizedRight = normalizeDir(right);
+        if (!StringUtils.hasText(normalizedLeft) || !StringUtils.hasText(normalizedRight)) {
+            return false;
+        }
+        return normalizedLeft.equals(normalizedRight);
+    }
+
+    private String normalizeDir(String value) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        String trimmed = value.trim();
+        while (trimmed.endsWith("/") || trimmed.endsWith("\\")) {
+            trimmed = trimmed.substring(0, trimmed.length() - 1);
+        }
+        return trimmed;
     }
 }

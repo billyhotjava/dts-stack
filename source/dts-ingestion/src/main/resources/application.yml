@@ -38,7 +38,7 @@ dts:
     trusted-service-name: ${DTS_INGESTION_TRUSTED_SERVICE_NAME:dts-platform}
   addax:
     enabled: ${DTS_ADDAX_ENABLED:true}
-    job-dir: ${STACK_ROOT:/opt/prod/s10/dts-stack}/services/dts-addax/jobs
+    job-dir: ${DTS_ADDAX_JOB_DIR:/opt/airflow/dags}
     image: ${IMAGE_ADDAX:quay.io/wgzhao/addax:6.0.8}
   airflow:
     enabled: ${DTS_AIRFLOW_ENABLED:true}

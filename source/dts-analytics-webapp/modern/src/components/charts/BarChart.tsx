@@ -1,4 +1,6 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
+import { getChartColor, formatChartValue } from './chartColors';
+import { ChartTooltip, useChartTooltip } from './ChartTooltip';
 
 interface BarChartProps {
   data: {
@@ -7,299 +9,359 @@ interface BarChartProps {
   };
   xAxisIndex?: number;
   yAxisIndex?: number;
+  yAxisIndices?: number[];
   orientation?: 'vertical' | 'horizontal';
   showValues?: boolean;
+  stacked?: boolean;
   colors?: string[];
 }
-
-const DEFAULT_COLORS = [
-  '#509EE3', '#88BF4D', '#F9D45C', '#F2A86F', '#EF8C8C',
-  '#A989C5', '#98D9D9', '#7172AD', '#6450a2', '#4C5773'
-];
 
 export function BarChart({
   data,
   xAxisIndex = 0,
   yAxisIndex = 1,
+  yAxisIndices,
   orientation = 'vertical',
   showValues = false,
-  colors = DEFAULT_COLORS
+  stacked = false,
+  colors
 }: BarChartProps) {
-  const { bars, maxValue, labels } = useMemo(() => {
+  const tooltip = useChartTooltip();
+  const [hoveredBar, setHoveredBar] = useState<{ groupIdx: number; barIdx: number } | null>(null);
+
+  const effectiveYIndices = yAxisIndices || [yAxisIndex];
+
+  const { groups, maxValue, labels, seriesNames } = useMemo(() => {
     if (!data?.rows?.length || !data?.cols?.length) {
-      return { bars: [], maxValue: 0, labels: [] };
+      return { groups: [], maxValue: 0, labels: [], seriesNames: [] };
     }
 
-    const values = data.rows.map(row => {
-      const value = Number(row[yAxisIndex]) || 0;
-      const label = String(row[xAxisIndex] ?? '');
-      return { value, label };
+    const labels = data.rows.map(row => String(row[xAxisIndex] ?? ''));
+    const seriesNames = effectiveYIndices.map(idx =>
+      data.cols[idx]?.display_name || data.cols[idx]?.name || `Series`
+    );
+
+    const groups = data.rows.map((row, rowIdx) => {
+      const values = effectiveYIndices.map(idx => Number(row[idx]) || 0);
+      return { label: labels[rowIdx], values };
     });
 
-    const max = Math.max(...values.map(v => v.value), 1);
+    let max: number;
+    if (stacked && effectiveYIndices.length > 1) {
+      max = Math.max(...groups.map(g => g.values.reduce((a, b) => a + b, 0)), 1);
+    } else {
+      max = Math.max(...groups.flatMap(g => g.values), 1);
+    }
 
-    return {
-      bars: values,
-      maxValue: max,
-      labels: values.map(v => v.label)
-    };
-  }, [data, xAxisIndex, yAxisIndex]);
+    return { groups, maxValue: max, labels, seriesNames };
+  }, [data, xAxisIndex, effectiveYIndices, stacked]);
 
-  if (bars.length === 0) {
-    return <div style={styles.empty}>No data to display</div>;
+  if (groups.length === 0) {
+    return <div className="chart-container__empty" style={{ minHeight: 200 }}>No data to display</div>;
   }
 
-  const xLabel = data.cols[xAxisIndex]?.display_name || data.cols[xAxisIndex]?.name || 'X';
-  const yLabel = data.cols[yAxisIndex]?.display_name || data.cols[yAxisIndex]?.name || 'Y';
+  const xLabel = data.cols[xAxisIndex]?.display_name || data.cols[xAxisIndex]?.name || '';
+  const yLabel = effectiveYIndices.length === 1
+    ? (data.cols[effectiveYIndices[0]]?.display_name || data.cols[effectiveYIndices[0]]?.name || '')
+    : '';
 
+  const handleBarHover = (groupIdx: number, barIdx: number, event: React.MouseEvent) => {
+    setHoveredBar({ groupIdx, barIdx });
+    const group = groups[groupIdx];
+    tooltip.showTooltip(
+      {
+        title: group.label,
+        items: group.values.map((v, i) => ({
+          label: seriesNames[i],
+          value: v,
+          color: colors?.[i % (colors?.length || 1)] || getChartColor(i),
+        })),
+      },
+      { x: event.clientX, y: event.clientY }
+    );
+  };
+
+  const handleBarLeave = () => {
+    setHoveredBar(null);
+    tooltip.hideTooltip();
+  };
+
+  // Horizontal bar chart
   if (orientation === 'horizontal') {
     return (
-      <div style={styles.container}>
-        <div style={styles.chartArea}>
-          <div style={styles.yAxisLabel}>{yLabel}</div>
-          <div style={styles.horizontalBars}>
-            {bars.map((bar, i) => (
-              <div key={i} style={styles.horizontalBarRow}>
-                <div style={styles.horizontalBarLabel} title={bar.label}>
-                  {bar.label.length > 15 ? bar.label.slice(0, 15) + '...' : bar.label}
-                </div>
-                <div style={styles.horizontalBarContainer}>
+      <div style={{ width: '100%', display: 'flex', flexDirection: 'column', minHeight: Math.max(200, groups.length * 36 + 40) }}>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 'var(--spacing-xs, 4px)', padding: 'var(--spacing-md, 16px)' }}>
+          {groups.map((group, groupIdx) => (
+            <div
+              key={groupIdx}
+              style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-sm, 8px)' }}
+              onMouseEnter={(e) => handleBarHover(groupIdx, 0, e)}
+              onMouseMove={(e) => tooltip.updatePosition({ x: e.clientX, y: e.clientY })}
+              onMouseLeave={handleBarLeave}
+            >
+              <div style={{
+                width: 120,
+                fontSize: 'var(--font-size-sm, 12px)',
+                color: 'var(--color-text-secondary, #666)',
+                textAlign: 'right',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                flexShrink: 0,
+              }} title={group.label}>
+                {group.label.length > 18 ? group.label.slice(0, 18) + '...' : group.label}
+              </div>
+              <div style={{
+                flex: 1,
+                height: 28,
+                backgroundColor: 'var(--color-bg-tertiary, #f5f5f5)',
+                borderRadius: 'var(--radius-sm, 4px)',
+                overflow: 'hidden',
+                display: 'flex',
+              }}>
+                {stacked && effectiveYIndices.length > 1 ? (
+                  // Stacked bars
+                  group.values.map((v, barIdx) => {
+                    const pct = (v / maxValue) * 100;
+                    const color = colors?.[barIdx % (colors?.length || 1)] || getChartColor(barIdx);
+                    return (
+                      <div
+                        key={barIdx}
+                        style={{
+                          width: `${pct}%`,
+                          height: '100%',
+                          backgroundColor: color,
+                          opacity: hoveredBar?.groupIdx === groupIdx && hoveredBar?.barIdx !== barIdx ? 0.6 : 1,
+                          transition: 'width 0.3s ease, opacity 0.15s ease',
+                        }}
+                      />
+                    );
+                  })
+                ) : (
                   <div
                     style={{
-                      ...styles.horizontalBar,
-                      width: `${(bar.value / maxValue) * 100}%`,
-                      backgroundColor: colors[i % colors.length]
+                      width: `${(group.values[0] / maxValue) * 100}%`,
+                      height: '100%',
+                      backgroundColor: colors?.[groupIdx % (colors?.length || 1)] || getChartColor(groupIdx),
+                      borderRadius: 'var(--radius-sm, 4px)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'flex-end',
+                      paddingRight: 'var(--spacing-sm, 8px)',
+                      transition: 'width 0.3s ease',
+                      minWidth: 4,
                     }}
                   >
                     {showValues && (
-                      <span style={styles.barValue}>{formatNumber(bar.value)}</span>
+                      <span style={{
+                        fontSize: 'var(--font-size-xs, 11px)',
+                        color: '#fff',
+                        fontWeight: 500,
+                      }}>
+                        {formatChartValue(group.values[0], { compact: true })}
+                      </span>
                     )}
                   </div>
-                </div>
+                )}
+              </div>
+              {showValues && stacked && (
+                <span style={{
+                  fontSize: 'var(--font-size-xs, 11px)',
+                  color: 'var(--color-text-secondary, #666)',
+                  fontWeight: 500,
+                  minWidth: 40,
+                }}>
+                  {formatChartValue(group.values.reduce((a, b) => a + b, 0), { compact: true })}
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {/* Legend for stacked */}
+        {stacked && effectiveYIndices.length > 1 && (
+          <div style={{ display: 'flex', justifyContent: 'center', gap: 'var(--spacing-md, 16px)', padding: 'var(--spacing-sm, 8px) 0', flexWrap: 'wrap' }}>
+            {seriesNames.map((name, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-xs, 4px)' }}>
+                <div style={{
+                  width: 12, height: 12,
+                  borderRadius: 'var(--radius-xs, 2px)',
+                  backgroundColor: colors?.[i % (colors?.length || 1)] || getChartColor(i),
+                }} />
+                <span style={{ fontSize: 'var(--font-size-sm, 12px)', color: 'var(--color-text-secondary, #666)' }}>{name}</span>
               </div>
             ))}
           </div>
-        </div>
-        <div style={styles.xAxisLabel}>{xLabel}</div>
+        )}
+
+        <ChartTooltip data={tooltip.tooltipData} position={tooltip.tooltipPosition} visible={tooltip.isVisible} />
       </div>
     );
   }
 
-  // Vertical bars
-  const barWidth = Math.max(20, Math.min(60, 400 / bars.length));
+  // Vertical bars - SVG-based
+  const width = 600;
+  const height = 300;
+  const pad = { top: 20, right: 20, bottom: 50, left: 60 };
+  const cw = width - pad.left - pad.right;
+  const ch = height - pad.top - pad.bottom;
+  const groupWidth = cw / groups.length;
+  const barPadding = Math.max(4, groupWidth * 0.15);
+  const barsPerGroup = stacked ? 1 : effectiveYIndices.length;
+  const barWidth = Math.min(60, (groupWidth - barPadding * 2) / barsPerGroup);
+
+  const getBarY = (value: number) => pad.top + ch - (value / maxValue) * ch;
 
   return (
-    <div style={styles.container}>
-      <div style={styles.yAxisLabel}>{yLabel}</div>
-      <div style={styles.chartArea}>
-        <div style={styles.yAxis}>
-          {[1, 0.75, 0.5, 0.25, 0].map(ratio => (
-            <div key={ratio} style={styles.yAxisTick}>
-              {formatNumber(maxValue * ratio)}
+    <div style={{ width: '100%', display: 'flex', flexDirection: 'column' }}>
+      <svg width="100%" height="100%" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="xMidYMid meet" style={{ minHeight: 260 }}>
+        {/* Grid lines */}
+        {[0, 0.25, 0.5, 0.75, 1].map((ratio, i) => {
+          const y = pad.top + ch * (1 - ratio);
+          const value = maxValue * ratio;
+          return (
+            <g key={i}>
+              <line x1={pad.left} y1={y} x2={width - pad.right} y2={y} stroke="var(--color-border, #eee)" strokeWidth={1} />
+              <text x={pad.left - 8} y={y + 4} fontSize={10} fill="var(--color-text-tertiary, #888)" textAnchor="end">
+                {formatChartValue(value, { compact: true })}
+              </text>
+            </g>
+          );
+        })}
+
+        {/* Bars */}
+        {groups.map((group, groupIdx) => {
+          const groupX = pad.left + groupIdx * groupWidth;
+
+          if (stacked && effectiveYIndices.length > 1) {
+            // Stacked bars
+            let stackY = 0;
+            return (
+              <g key={groupIdx}>
+                {group.values.map((v, barIdx) => {
+                  const barH = (v / maxValue) * ch;
+                  const y = pad.top + ch - stackY - barH;
+                  stackY += barH;
+                  const color = colors?.[barIdx % (colors?.length || 1)] || getChartColor(barIdx);
+                  const isHovered = hoveredBar?.groupIdx === groupIdx;
+                  return (
+                    <rect
+                      key={barIdx}
+                      x={groupX + barPadding}
+                      y={y}
+                      width={groupWidth - barPadding * 2}
+                      height={Math.max(1, barH)}
+                      fill={color}
+                      rx={barIdx === group.values.length - 1 ? 4 : 0}
+                      opacity={isHovered && hoveredBar?.barIdx !== barIdx ? 0.7 : 1}
+                      style={{ cursor: 'pointer', transition: 'opacity 0.15s ease' }}
+                      onMouseEnter={(e) => handleBarHover(groupIdx, barIdx, e)}
+                      onMouseMove={(e) => tooltip.updatePosition({ x: e.clientX, y: e.clientY })}
+                      onMouseLeave={handleBarLeave}
+                    />
+                  );
+                })}
+                {/* X label */}
+                <text
+                  x={groupX + groupWidth / 2}
+                  y={height - pad.bottom + 16}
+                  fontSize={10}
+                  fill="var(--color-text-tertiary, #888)"
+                  textAnchor="middle"
+                >
+                  {group.label.length > 10 ? group.label.slice(0, 10) + '...' : group.label}
+                </text>
+              </g>
+            );
+          }
+
+          // Grouped or single bars
+          return (
+            <g key={groupIdx}>
+              {group.values.map((v, barIdx) => {
+                const barH = (v / maxValue) * ch;
+                const y = getBarY(v);
+                const x = groupX + barPadding + barIdx * barWidth;
+                const color = effectiveYIndices.length > 1
+                  ? (colors?.[barIdx % (colors?.length || 1)] || getChartColor(barIdx))
+                  : (colors?.[groupIdx % (colors?.length || 1)] || getChartColor(groupIdx));
+                const isHovered = hoveredBar?.groupIdx === groupIdx && hoveredBar?.barIdx === barIdx;
+
+                return (
+                  <g key={barIdx}>
+                    <rect
+                      x={x}
+                      y={y}
+                      width={barWidth}
+                      height={Math.max(1, barH)}
+                      fill={color}
+                      rx={4}
+                      opacity={isHovered ? 1 : 0.85}
+                      style={{ cursor: 'pointer', transition: 'opacity 0.15s ease' }}
+                      onMouseEnter={(e) => handleBarHover(groupIdx, barIdx, e)}
+                      onMouseMove={(e) => tooltip.updatePosition({ x: e.clientX, y: e.clientY })}
+                      onMouseLeave={handleBarLeave}
+                    />
+                    {showValues && (
+                      <text
+                        x={x + barWidth / 2}
+                        y={y - 6}
+                        fontSize={10}
+                        fill="var(--color-text-primary, #333)"
+                        textAnchor="middle"
+                        fontWeight={500}
+                      >
+                        {formatChartValue(v, { compact: true })}
+                      </text>
+                    )}
+                  </g>
+                );
+              })}
+              {/* X label */}
+              <text
+                x={groupX + groupWidth / 2}
+                y={height - pad.bottom + 16}
+                fontSize={10}
+                fill="var(--color-text-tertiary, #888)"
+                textAnchor="middle"
+              >
+                {group.label.length > 10 ? group.label.slice(0, 10) + '...' : group.label}
+              </text>
+            </g>
+          );
+        })}
+
+        {/* Axes */}
+        <line x1={pad.left} y1={pad.top} x2={pad.left} y2={pad.top + ch} stroke="var(--color-border, #ccc)" strokeWidth={1} />
+        <line x1={pad.left} y1={pad.top + ch} x2={width - pad.right} y2={pad.top + ch} stroke="var(--color-border, #ccc)" strokeWidth={1} />
+
+        {/* Axis labels */}
+        {xLabel && (
+          <text x={width / 2} y={height - 4} fontSize={11} fill="var(--color-text-secondary, #666)" textAnchor="middle" fontWeight={500}>
+            {xLabel}
+          </text>
+        )}
+      </svg>
+
+      {/* Legend for grouped/stacked */}
+      {effectiveYIndices.length > 1 && (
+        <div style={{ display: 'flex', justifyContent: 'center', gap: 'var(--spacing-md, 16px)', padding: 'var(--spacing-sm, 8px) 0', flexWrap: 'wrap' }}>
+          {seriesNames.map((name, i) => (
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-xs, 4px)' }}>
+              <div style={{
+                width: 12, height: 12,
+                borderRadius: 'var(--radius-xs, 2px)',
+                backgroundColor: colors?.[i % (colors?.length || 1)] || getChartColor(i),
+              }} />
+              <span style={{ fontSize: 'var(--font-size-sm, 12px)', color: 'var(--color-text-secondary, #666)' }}>{name}</span>
             </div>
           ))}
         </div>
-        <div style={styles.barsContainer}>
-          <div style={styles.gridLines}>
-            {[0, 1, 2, 3, 4].map(i => (
-              <div key={i} style={styles.gridLine} />
-            ))}
-          </div>
-          <div style={styles.bars}>
-            {bars.map((bar, i) => (
-              <div key={i} style={{ ...styles.barColumn, width: barWidth }}>
-                <div style={styles.barWrapper}>
-                  <div
-                    style={{
-                      ...styles.bar,
-                      height: `${(bar.value / maxValue) * 100}%`,
-                      backgroundColor: colors[i % colors.length]
-                    }}
-                  >
-                    {showValues && (
-                      <span style={styles.verticalBarValue}>{formatNumber(bar.value)}</span>
-                    )}
-                  </div>
-                </div>
-                <div style={styles.barLabel} title={bar.label}>
-                  {bar.label.length > 8 ? bar.label.slice(0, 8) + '...' : bar.label}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-      <div style={styles.xAxisLabel}>{xLabel}</div>
+      )}
+
+      <ChartTooltip data={tooltip.tooltipData} position={tooltip.tooltipPosition} visible={tooltip.isVisible} />
     </div>
   );
 }
-
-function formatNumber(n: number): string {
-  if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
-  if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
-  if (Number.isInteger(n)) return String(n);
-  return n.toFixed(2);
-}
-
-const styles: Record<string, React.CSSProperties> = {
-  container: {
-    display: 'flex',
-    flexDirection: 'column',
-    width: '100%',
-    height: '100%',
-    minHeight: 300,
-    padding: 16,
-    boxSizing: 'border-box'
-  },
-  chartArea: {
-    display: 'flex',
-    flex: 1,
-    position: 'relative'
-  },
-  yAxisLabel: {
-    writingMode: 'vertical-rl',
-    textOrientation: 'mixed',
-    transform: 'rotate(180deg)',
-    padding: '8px 4px',
-    fontSize: 12,
-    color: '#666',
-    fontWeight: 500
-  },
-  xAxisLabel: {
-    textAlign: 'center',
-    padding: '8px 0',
-    fontSize: 12,
-    color: '#666',
-    fontWeight: 500
-  },
-  yAxis: {
-    display: 'flex',
-    flexDirection: 'column',
-    justifyContent: 'space-between',
-    paddingRight: 8,
-    fontSize: 11,
-    color: '#888',
-    width: 50,
-    textAlign: 'right'
-  },
-  yAxisTick: {
-    height: 20
-  },
-  barsContainer: {
-    flex: 1,
-    position: 'relative',
-    display: 'flex',
-    flexDirection: 'column'
-  },
-  gridLines: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 24,
-    display: 'flex',
-    flexDirection: 'column',
-    justifyContent: 'space-between'
-  },
-  gridLine: {
-    height: 1,
-    backgroundColor: '#eee'
-  },
-  bars: {
-    flex: 1,
-    display: 'flex',
-    alignItems: 'flex-end',
-    justifyContent: 'space-around',
-    paddingBottom: 24,
-    gap: 4
-  },
-  barColumn: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    height: '100%'
-  },
-  barWrapper: {
-    flex: 1,
-    display: 'flex',
-    alignItems: 'flex-end',
-    width: '100%'
-  },
-  bar: {
-    width: '100%',
-    borderRadius: '4px 4px 0 0',
-    transition: 'height 0.3s ease',
-    position: 'relative',
-    minHeight: 4
-  },
-  barLabel: {
-    fontSize: 10,
-    color: '#666',
-    textAlign: 'center',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
-    width: '100%',
-    paddingTop: 4
-  },
-  verticalBarValue: {
-    position: 'absolute',
-    top: -20,
-    left: '50%',
-    transform: 'translateX(-50%)',
-    fontSize: 10,
-    color: '#333',
-    fontWeight: 500
-  },
-  horizontalBars: {
-    flex: 1,
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 8,
-    paddingLeft: 8
-  },
-  horizontalBarRow: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 8
-  },
-  horizontalBarLabel: {
-    width: 100,
-    fontSize: 11,
-    color: '#666',
-    textAlign: 'right',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap'
-  },
-  horizontalBarContainer: {
-    flex: 1,
-    height: 24,
-    backgroundColor: '#f5f5f5',
-    borderRadius: 4
-  },
-  horizontalBar: {
-    height: '100%',
-    borderRadius: 4,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    paddingRight: 8,
-    transition: 'width 0.3s ease',
-    minWidth: 4
-  },
-  barValue: {
-    fontSize: 10,
-    color: '#fff',
-    fontWeight: 500
-  },
-  empty: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: 200,
-    color: '#888'
-  }
-};
 
 export default BarChart;

@@ -3,6 +3,7 @@ package com.yuzhi.dts.platform.web.rest.infra;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import jakarta.validation.constraints.NotBlank;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
@@ -25,6 +26,9 @@ public class JdbcConnectionTestRequest {
 
     /** Additional JDBC properties (merged into the connection properties). */
     private Map<String, String> jdbcProperties;
+
+    /** Optional schemas for discovery/test context. */
+    private List<String> schemas;
 
     /** Optional validation query, defaults to `SELECT 1`. */
     private String testQuery;
@@ -54,6 +58,9 @@ public class JdbcConnectionTestRequest {
 
     public Map<String, String> getJdbcProperties() { return jdbcProperties == null ? Collections.emptyMap() : jdbcProperties; }
     public void setJdbcProperties(Map<String, String> jdbcProperties) { this.jdbcProperties = jdbcProperties; }
+
+    public List<String> getSchemas() { return schemas == null ? List.of() : schemas; }
+    public void setSchemas(List<String> schemas) { this.schemas = schemas == null || schemas.isEmpty() ? null : schemas; }
 
     public String getTestQuery() { return testQuery; }
     public void setTestQuery(String testQuery) { this.testQuery = blankToNull(testQuery); }

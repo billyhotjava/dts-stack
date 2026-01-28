@@ -250,12 +250,13 @@ dts:
     username: ${DTS_AIRFLOW_USERNAME:airflow}
     password: ${DTS_AIRFLOW_PASSWORD:airflow}
     dag-id: ${DTS_AIRFLOW_DAG_ID:dbt_load}
+    dags-dir: ${DTS_AIRFLOW_DAGS_DIR:/opt/airflow/dags}
   admin:
     enabled: true
     base-url: http://dts-admin:8081
     api-path: /api
     admin-api-path: /api/admin
-    service-name: ${DTS_ADMIN_SERVICE_NAME:dts-admin,dts-ingestion}
+    service-name: ${DTS_ADMIN_SERVICE_NAME:dts-admin,dts-ingestion,dts-airflow}
   platform:
     features:
       # Serve Keycloak localization resources from platform to avoid browser TLS trust issues to admin domain in dev

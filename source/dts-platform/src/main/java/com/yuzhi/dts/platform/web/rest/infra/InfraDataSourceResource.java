@@ -13,6 +13,7 @@ import com.yuzhi.dts.platform.service.infra.dto.InfraDataSourceDto;
 import com.yuzhi.dts.platform.web.rest.ApiResponse;
 import com.yuzhi.dts.platform.web.rest.ApiResponses;
 import jakarta.validation.Valid;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -57,11 +58,16 @@ public class InfraDataSourceResource {
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
         List<InfraDataSourceDto> list = infraManagementService.listDataSources(activeDept);
+        Map<String, Object> auditPayload = new LinkedHashMap<>();
+        auditPayload.put("summary", "查看数据源列表");
+        if (StringUtils.hasText(activeDept)) {
+            auditPayload.put("activeDept", StringUtils.trimWhitespace(activeDept));
+        }
         auditService.auditAction(
             "FOUNDATION_DATASOURCE_REGISTER",
             AuditStage.SUCCESS,
             "list",
-            Map.of("summary", "查看数据源列表", "activeDept", StringUtils.trimWhitespace(activeDept))
+            auditPayload
         );
         return ApiResponses.ok(list);
     }

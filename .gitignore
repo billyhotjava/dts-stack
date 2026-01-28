@@ -16,6 +16,8 @@ services/certs/*.jks
 services/dts-minio/data/
 services/dts-platform/upload/data-standard
 services/dts-elasticsearch/data/
+services/dts-addax/jobs/*.json
+services/dts-airflow/dags/*.json
 services/jdbc/*.jar
 services/jdbc/*.JAR
 builds/offline/

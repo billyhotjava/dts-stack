@@ -23,6 +23,8 @@ import TrashPage from "./pages/TrashPage";
 import DatabaseNewPage from "./pages/DatabaseNewPage";
 import PublicCardPage from "./pages/PublicCardPage";
 import PublicDashboardPage from "./pages/PublicDashboardPage";
+import ScreenDesignerPage from "./pages/screens/ScreenDesignerPage";
+
 
 function ModernAliasRedirect() {
 	const navigate = useNavigate();
@@ -49,22 +51,24 @@ export function createRoutes() {
 					{ path: "/dashboards/:id/edit", Component: DashboardEditorPage },
 					{ path: "/questions", Component: CardsPage },
 					{ path: "/questions/new", Component: CardEditorPage },
-						{ path: "/questions/:id", Component: CardDetailPage },
-						{ path: "/questions/:id/edit", Component: CardEditorPage },
-						{ path: "/data", Component: DataPage },
-						{ path: "/data/new", Component: DatabaseNewPage },
-						{ path: "/data/:dbId", Component: DatabaseDetailPage },
-						{ path: "/data/:dbId/tables/:tableId", Component: TableDetailPage },
-						{ path: "/data/:dbId/tables/:tableId/fields/:fieldId", Component: FieldDetailPage },
-						{ path: "/models", Component: ModelsPage },
-						{ path: "/metrics", Component: MetricsPage },
-						{ path: "/trash", Component: TrashPage },
-						{ path: "/public/card/:uuid", Component: PublicCardPage },
-						{ path: "/public/dashboard/:uuid", Component: PublicDashboardPage },
-						{ path: "/search", Component: SearchPage },
-						{ path: "*", Component: NotFoundPage },
-					],
-				},
+					{ path: "/questions/:id", Component: CardDetailPage },
+					{ path: "/questions/:id/edit", Component: CardEditorPage },
+					{ path: "/data", Component: DataPage },
+					{ path: "/data/new", Component: DatabaseNewPage },
+					{ path: "/data/:dbId", Component: DatabaseDetailPage },
+					{ path: "/data/:dbId/tables/:tableId", Component: TableDetailPage },
+					{ path: "/data/:dbId/tables/:tableId/fields/:fieldId", Component: FieldDetailPage },
+					{ path: "/models", Component: ModelsPage },
+					{ path: "/metrics", Component: MetricsPage },
+					{ path: "/trash", Component: TrashPage },
+					{ path: "/public/card/:uuid", Component: PublicCardPage },
+					{ path: "/public/dashboard/:uuid", Component: PublicDashboardPage },
+					{ path: "/screens/new", Component: ScreenDesignerPage },
+					{ path: "/screens/:id/edit", Component: ScreenDesignerPage },
+					{ path: "/search", Component: SearchPage },
+					{ path: "*", Component: NotFoundPage },
+				],
+			},
 		],
 		{
 			basename: "/analytics",

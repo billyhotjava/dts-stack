@@ -262,9 +262,9 @@ export function QueryBuilder(props: {
 		setAggregations([]);
 		setFilters([{ id: makeId(), fieldId: null, op: "=", value1: "", value2: "" }]);
 		setOrderByKey("");
-		setVisibleTableIds({ state: "idle" });
 		if (!databaseId) {
 			setTables({ state: "idle" });
+			setVisibleTableIds({ state: "idle" });
 			return;
 		}
 		const dq = props.initialDatasetQuery;
@@ -275,48 +275,44 @@ export function QueryBuilder(props: {
 
 		let cancelled = false;
 		setVisibleTableIds({ state: "loading" });
-		analyticsApi
-			.listVisibleTables()
-			.then((raw) => {
+		setTables({ state: "loading" });
+
+		Promise.all([
+			analyticsApi.listVisibleTables().catch(() => null),
+			analyticsApi.listTables(databaseId),
+		])
+			.then(([rawVisible, tableList]) => {
 				if (cancelled) return;
 				const ids = new Set<number>();
-				for (const it of Array.isArray(raw) ? raw : []) {
-					if (typeof it === "number" && Number.isFinite(it) && it > 0) {
-						ids.add(it);
-						continue;
-					}
-					const obj = it as VisibleTable;
-					const id = Number((obj as any)?.tableId);
-					const dbId = Number((obj as any)?.dbId);
-					if (Number.isFinite(id) && id > 0 && (!Number.isFinite(dbId) || dbId === databaseId)) {
-						ids.add(id);
+				if (Array.isArray(rawVisible)) {
+					for (const it of rawVisible) {
+						if (typeof it === "number" && Number.isFinite(it) && it > 0) {
+							ids.add(it);
+							continue;
+						}
+						const obj = it as VisibleTable;
+						const id = Number((obj as any)?.tableId);
+						const dbId = Number((obj as any)?.dbId);
+						if (Number.isFinite(id) && id > 0 && (!Number.isFinite(dbId) || dbId === databaseId)) {
+							ids.add(id);
+						}
 					}
 				}
 				setVisibleTableIds({ state: "loaded", value: ids });
-			})
-			.catch((e) => {
-				if (cancelled) return;
-				setVisibleTableIds({ state: "error", error: e });
-			});
-
-		setTables({ state: "loading" });
-		analyticsApi
-			.listTables(databaseId)
-			.then((list) => {
-				if (cancelled) return;
-				const safe = Array.isArray(list) ? list : [];
-				const ids = visibleTableIds.state === "loaded" ? visibleTableIds.value : null;
-				const filtered = ids && ids.size > 0 ? safe.filter((t) => ids.has(t.id)) : safe;
+				const safe = Array.isArray(tableList) ? tableList : [];
+				const filtered = ids.size > 0 ? safe.filter((t) => ids.has(t.id)) : safe;
 				setTables({ state: "loaded", value: filtered });
 			})
 			.catch((e) => {
 				if (cancelled) return;
 				setTables({ state: "error", error: e });
+				setVisibleTableIds({ state: "error", error: e });
 			});
+
 		return () => {
 			cancelled = true;
 		};
-	}, [databaseId, visibleTableIds.state]);
+	}, [databaseId]);
 
 	useEffect(() => {
 		if (!databaseId) return;

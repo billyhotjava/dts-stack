@@ -1,4 +1,7 @@
-import React, { useMemo } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
+import { getChartColor, formatChartValue } from './chartColors';
+import { ChartLegend, type LegendItem } from './ChartLegend';
+import { ChartTooltip, type TooltipData, useChartTooltip } from './ChartTooltip';
 
 interface LineChartProps {
   data: {
@@ -9,13 +12,38 @@ interface LineChartProps {
   yAxisIndices?: number[];
   showDots?: boolean;
   showArea?: boolean;
+  smooth?: boolean;
   colors?: string[];
 }
 
-const DEFAULT_COLORS = [
-  '#509EE3', '#88BF4D', '#F9D45C', '#F2A86F', '#EF8C8C',
-  '#A989C5', '#98D9D9', '#7172AD', '#6450a2', '#4C5773'
-];
+// Compute cubic bezier control points for smooth curve
+function smoothPath(points: { x: number; y: number }[]): string {
+  if (points.length < 2) return '';
+  if (points.length === 2) {
+    return `M ${points[0].x} ${points[0].y} L ${points[1].x} ${points[1].y}`;
+  }
+
+  let d = `M ${points[0].x} ${points[0].y}`;
+  for (let i = 0; i < points.length - 1; i++) {
+    const p0 = points[Math.max(0, i - 1)];
+    const p1 = points[i];
+    const p2 = points[i + 1];
+    const p3 = points[Math.min(points.length - 1, i + 2)];
+
+    const tension = 0.3;
+    const cp1x = p1.x + (p2.x - p0.x) * tension;
+    const cp1y = p1.y + (p2.y - p0.y) * tension;
+    const cp2x = p2.x - (p3.x - p1.x) * tension;
+    const cp2y = p2.y - (p3.y - p1.y) * tension;
+
+    d += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${p2.x} ${p2.y}`;
+  }
+  return d;
+}
+
+function linearPath(points: { x: number; y: number }[]): string {
+  return points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
+}
 
 export function LineChart({
   data,
@@ -23,8 +51,14 @@ export function LineChart({
   yAxisIndices = [1],
   showDots = true,
   showArea = false,
-  colors = DEFAULT_COLORS
+  smooth = true,
+  colors
 }: LineChartProps) {
+  const svgRef = useRef<SVGSVGElement>(null);
+  const [hiddenSeries, setHiddenSeries] = useState<Set<string>>(new Set());
+  const [hoveredPoint, setHoveredPoint] = useState<{ seriesIdx: number; pointIdx: number } | null>(null);
+  const tooltip = useChartTooltip();
+
   const chartData = useMemo(() => {
     if (!data?.rows?.length || !data?.cols?.length) {
       return { series: [], maxValue: 0, minValue: 0, labels: [] };
@@ -32,20 +66,31 @@ export function LineChart({
 
     const labels = data.rows.map(row => String(row[xAxisIndex] ?? ''));
     const series = yAxisIndices.map((yIdx, seriesIdx) => ({
+      key: `series-${seriesIdx}`,
       name: data.cols[yIdx]?.display_name || data.cols[yIdx]?.name || `Series ${seriesIdx + 1}`,
       values: data.rows.map(row => Number(row[yIdx]) || 0),
-      color: colors[seriesIdx % colors.length]
+      color: colors?.[seriesIdx % (colors?.length || 1)] || getChartColor(seriesIdx)
     }));
 
-    const allValues = series.flatMap(s => s.values);
-    const max = Math.max(...allValues, 1);
-    const min = Math.min(...allValues, 0);
+    const visibleSeries = series.filter(s => !hiddenSeries.has(s.key));
+    const allValues = visibleSeries.flatMap(s => s.values);
+    const max = allValues.length > 0 ? Math.max(...allValues, 1) : 1;
+    const min = allValues.length > 0 ? Math.min(...allValues, 0) : 0;
 
     return { series, maxValue: max, minValue: min, labels };
-  }, [data, xAxisIndex, yAxisIndices, colors]);
+  }, [data, xAxisIndex, yAxisIndices, colors, hiddenSeries]);
+
+  const toggleSeries = useCallback((key: string) => {
+    setHiddenSeries(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }, []);
 
   if (chartData.series.length === 0) {
-    return <div style={styles.empty}>No data to display</div>;
+    return <div className="chart-container__empty" style={{ minHeight: 200 }}>No data to display</div>;
   }
 
   const width = 600;
@@ -57,14 +102,50 @@ export function LineChart({
   const { maxValue, minValue, series, labels } = chartData;
   const valueRange = maxValue - minValue || 1;
 
-  const xLabel = data.cols[xAxisIndex]?.display_name || data.cols[xAxisIndex]?.name || 'X';
+  const xLabel = data.cols[xAxisIndex]?.display_name || data.cols[xAxisIndex]?.name || '';
 
   const getX = (i: number) => padding.left + (i / (labels.length - 1 || 1)) * chartWidth;
   const getY = (value: number) => padding.top + chartHeight - ((value - minValue) / valueRange) * chartHeight;
 
+  const legendItems: LegendItem[] = series.map(s => ({
+    key: s.key,
+    label: s.name,
+    color: s.color,
+  }));
+
+  const handlePointHover = (seriesIdx: number, pointIdx: number, event: React.MouseEvent) => {
+    setHoveredPoint({ seriesIdx, pointIdx });
+    const s = series[seriesIdx];
+    tooltip.showTooltip(
+      {
+        title: labels[pointIdx],
+        items: series
+          .filter(ss => !hiddenSeries.has(ss.key))
+          .map(ss => ({
+            label: ss.name,
+            value: ss.values[pointIdx],
+            color: ss.color,
+          })),
+      },
+      { x: event.clientX, y: event.clientY }
+    );
+  };
+
+  const handlePointLeave = () => {
+    setHoveredPoint(null);
+    tooltip.hideTooltip();
+  };
+
   return (
-    <div style={styles.container}>
-      <svg width="100%" height="100%" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="xMidYMid meet">
+    <div style={{ width: '100%', display: 'flex', flexDirection: 'column' }}>
+      <svg
+        ref={svgRef}
+        width="100%"
+        height="100%"
+        viewBox={`0 0 ${width} ${height}`}
+        preserveAspectRatio="xMidYMid meet"
+        style={{ minHeight: 260 }}
+      >
         {/* Grid lines */}
         {[0, 0.25, 0.5, 0.75, 1].map((ratio, i) => {
           const y = padding.top + chartHeight * (1 - ratio);
@@ -76,11 +157,11 @@ export function LineChart({
                 y1={y}
                 x2={width - padding.right}
                 y2={y}
-                stroke="#eee"
+                stroke="var(--color-border, #eee)"
                 strokeWidth={1}
               />
-              <text x={padding.left - 8} y={y + 4} fontSize={10} fill="#888" textAnchor="end">
-                {formatNumber(value)}
+              <text x={padding.left - 8} y={y + 4} fontSize={10} fill="var(--color-text-tertiary, #888)" textAnchor="end">
+                {formatChartValue(value, { compact: true })}
               </text>
             </g>
           );
@@ -89,7 +170,7 @@ export function LineChart({
         {/* X-axis labels */}
         {labels.map((label, i) => {
           const x = getX(i);
-          const showLabel = labels.length <= 10 || i % Math.ceil(labels.length / 10) === 0;
+          const showLabel = labels.length <= 12 || i % Math.ceil(labels.length / 12) === 0;
           if (!showLabel) return null;
           return (
             <text
@@ -97,43 +178,69 @@ export function LineChart({
               x={x}
               y={height - padding.bottom + 16}
               fontSize={10}
-              fill="#888"
+              fill="var(--color-text-tertiary, #888)"
               textAnchor="middle"
             >
-              {label.length > 10 ? label.slice(0, 10) + '...' : label}
+              {label.length > 12 ? label.slice(0, 12) + '...' : label}
             </text>
           );
         })}
 
         {/* X-axis label */}
-        <text
-          x={width / 2}
-          y={height - 5}
-          fontSize={11}
-          fill="#666"
-          textAnchor="middle"
-          fontWeight={500}
-        >
-          {xLabel}
-        </text>
+        {xLabel && (
+          <text
+            x={width / 2}
+            y={height - 4}
+            fontSize={11}
+            fill="var(--color-text-secondary, #666)"
+            textAnchor="middle"
+            fontWeight={500}
+          >
+            {xLabel}
+          </text>
+        )}
+
+        {/* Hover crosshair */}
+        {hoveredPoint !== null && (
+          <line
+            x1={getX(hoveredPoint.pointIdx)}
+            y1={padding.top}
+            x2={getX(hoveredPoint.pointIdx)}
+            y2={padding.top + chartHeight}
+            stroke="var(--color-border-hover, #ccc)"
+            strokeWidth={1}
+            strokeDasharray="4 4"
+          />
+        )}
 
         {/* Series */}
         {series.map((s, seriesIdx) => {
+          if (hiddenSeries.has(s.key)) return null;
           const points = s.values.map((v, i) => ({ x: getX(i), y: getY(v) }));
-          const pathD = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
+          const pathD = smooth ? smoothPath(points) : linearPath(points);
 
+          // Area path: close to bottom
           const areaD = showArea
             ? `${pathD} L ${points[points.length - 1].x} ${padding.top + chartHeight} L ${points[0].x} ${padding.top + chartHeight} Z`
             : '';
 
           return (
             <g key={seriesIdx}>
+              {/* Gradient definition for area */}
+              {showArea && (
+                <defs>
+                  <linearGradient id={`area-gradient-${seriesIdx}`} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={s.color} stopOpacity={0.3} />
+                    <stop offset="100%" stopColor={s.color} stopOpacity={0.02} />
+                  </linearGradient>
+                </defs>
+              )}
+
               {/* Area fill */}
               {showArea && (
                 <path
                   d={areaD}
-                  fill={s.color}
-                  fillOpacity={0.1}
+                  fill={`url(#area-gradient-${seriesIdx})`}
                 />
               )}
 
@@ -142,7 +249,7 @@ export function LineChart({
                 d={pathD}
                 fill="none"
                 stroke={s.color}
-                strokeWidth={2}
+                strokeWidth={2.5}
                 strokeLinecap="round"
                 strokeLinejoin="round"
               />
@@ -153,13 +260,30 @@ export function LineChart({
                   key={i}
                   cx={p.x}
                   cy={p.y}
-                  r={4}
+                  r={hoveredPoint?.seriesIdx === seriesIdx && hoveredPoint?.pointIdx === i ? 6 : 4}
                   fill={s.color}
-                  stroke="#fff"
+                  stroke="var(--color-bg-primary, #fff)"
                   strokeWidth={2}
-                >
-                  <title>{`${labels[i]}: ${formatNumber(s.values[i])}`}</title>
-                </circle>
+                  style={{ cursor: 'pointer', transition: 'r 0.15s ease' }}
+                  onMouseEnter={(e) => handlePointHover(seriesIdx, i, e)}
+                  onMouseMove={(e) => tooltip.updatePosition({ x: e.clientX, y: e.clientY })}
+                  onMouseLeave={handlePointLeave}
+                />
+              ))}
+
+              {/* Invisible hit areas for tooltips when dots are hidden */}
+              {!showDots && points.map((p, i) => (
+                <circle
+                  key={`hit-${i}`}
+                  cx={p.x}
+                  cy={p.y}
+                  r={8}
+                  fill="transparent"
+                  style={{ cursor: 'pointer' }}
+                  onMouseEnter={(e) => handlePointHover(seriesIdx, i, e)}
+                  onMouseMove={(e) => tooltip.updatePosition({ x: e.clientX, y: e.clientY })}
+                  onMouseLeave={handlePointLeave}
+                />
               ))}
             </g>
           );
@@ -171,7 +295,7 @@ export function LineChart({
           y1={padding.top}
           x2={padding.left}
           y2={padding.top + chartHeight}
-          stroke="#ccc"
+          stroke="var(--color-border, #ccc)"
           strokeWidth={1}
         />
         <line
@@ -179,69 +303,30 @@ export function LineChart({
           y1={padding.top + chartHeight}
           x2={width - padding.right}
           y2={padding.top + chartHeight}
-          stroke="#ccc"
+          stroke="var(--color-border, #ccc)"
           strokeWidth={1}
         />
       </svg>
 
       {/* Legend */}
       {series.length > 1 && (
-        <div style={styles.legend}>
-          {series.map((s, i) => (
-            <div key={i} style={styles.legendItem}>
-              <div style={{ ...styles.legendColor, backgroundColor: s.color }} />
-              <span style={styles.legendLabel}>{s.name}</span>
-            </div>
-          ))}
-        </div>
+        <ChartLegend
+          items={legendItems}
+          hiddenItems={hiddenSeries}
+          onItemClick={toggleSeries}
+          orientation="horizontal"
+          position="bottom"
+        />
       )}
+
+      {/* Tooltip */}
+      <ChartTooltip
+        data={tooltip.tooltipData}
+        position={tooltip.tooltipPosition}
+        visible={tooltip.isVisible}
+      />
     </div>
   );
 }
-
-function formatNumber(n: number): string {
-  if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
-  if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
-  if (Number.isInteger(n)) return String(n);
-  return n.toFixed(2);
-}
-
-const styles: Record<string, React.CSSProperties> = {
-  container: {
-    width: '100%',
-    height: '100%',
-    minHeight: 300,
-    display: 'flex',
-    flexDirection: 'column'
-  },
-  legend: {
-    display: 'flex',
-    justifyContent: 'center',
-    gap: 16,
-    padding: '8px 0',
-    flexWrap: 'wrap'
-  },
-  legendItem: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 4
-  },
-  legendColor: {
-    width: 12,
-    height: 12,
-    borderRadius: 2
-  },
-  legendLabel: {
-    fontSize: 11,
-    color: '#666'
-  },
-  empty: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: 200,
-    color: '#888'
-  }
-};
 
 export default LineChart;

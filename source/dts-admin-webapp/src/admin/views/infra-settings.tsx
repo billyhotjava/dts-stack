@@ -111,7 +111,7 @@ export default function InfraSettingsView() {
 								name="jobDir"
 								rules={[{ required: true, message: "请输入作业目录" }]}
 							>
-								<Input placeholder="/opt/prod/s10/dts-stack/services/dts-addax/jobs" />
+								<Input placeholder="/opt/airflow/dags" />
 							</Form.Item>
 							<Form.Item
 								label="镜像"
@@ -120,6 +120,9 @@ export default function InfraSettingsView() {
 							>
 								<Input placeholder="quay.io/wgzhao/addax:6.0.8" />
 							</Form.Item>
+							<Text variant="body3" className="text-muted-foreground">
+								Addax 作业目录需与 Airflow DAG 目录保持一致。
+							</Text>
 							<Text variant="body3" className="text-muted-foreground">
 								写入器配置请在数据湖管理中维护，入湖任务会自动引用对应的数据湖写入参数。
 							</Text>

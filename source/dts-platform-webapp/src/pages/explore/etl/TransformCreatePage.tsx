@@ -137,6 +137,17 @@ const hasConnectionOverride = (config: any): boolean => {
 const buildTableKey = (table: TableInfo) =>
 	normalizeText(table.schema) ? `${table.schema}.${table.name}` : table.name;
 
+const inferPrefixFromMapping = (mapping?: { source?: string; target?: string } | null) => {
+	if (!mapping?.source || !mapping?.target) return "";
+	const source = normalizeText(mapping.source).split(".").pop() || "";
+	const target = normalizeText(mapping.target).split(".").pop() || "";
+	if (!source || !target) return "";
+	if (target.endsWith(source)) {
+		return target.slice(0, target.length - source.length);
+	}
+	return "";
+};
+
 const applyTablesToConfig = (rawConfig: Record<string, any> | undefined, tables: string[]) => {
 	if (!rawConfig) return rawConfig;
 	const config = { ...rawConfig };
@@ -303,6 +314,13 @@ const mapTaskToForm = (task: IngestionTaskDTO) => {
 	const destinationConfig = task.destinationConfig || {};
 	const writerType = normalizeText(task.destinationType);
 	const useDefaultDestination = !writerType;
+	const syncPrefix =
+		normalizeText(
+			destinationConfig.tablePrefix ||
+				destinationConfig.prefix ||
+				destinationConfig.targetPrefix ||
+				inferPrefixFromMapping(task.tableMapping?.[0]),
+		) || undefined;
 	return {
 		editorMode: "json",
 		useDefaultDestination,
@@ -319,6 +337,7 @@ const mapTaskToForm = (task: IngestionTaskDTO) => {
 		sourceDataSourceId: task.sourceDataSourceId,
 		readerType: task.sourceType,
 		readerConfig: JSON.stringify(sourceConfig, null, 2),
+		syncPrefix,
 		writerType,
 		writerConfig: JSON.stringify(destinationConfig, null, 2),
 		jobConfig: task.addaxConfig ? JSON.stringify(task.addaxConfig, null, 2) : undefined,
@@ -361,6 +380,7 @@ export default function TransformCreatePage() {
 			runNow: true,
 			readerColumns: "*",
 			writerColumns: "*",
+			syncPrefix: "",
 		}),
 		[]
 	);
@@ -540,7 +560,7 @@ export default function TransformCreatePage() {
 					? ["sourceDataSourceId", "readerType", "readerConfig"]
 					: ["sourceDataSourceId", "readerType", "readerTables"];
 			case 2:
-				if (useDefault) return ["useDefaultDestination"];
+				if (useDefault) return ["useDefaultDestination", "syncPrefix"];
 				return isJsonMode
 					? ["useDefaultDestination", "writerType", "writerConfig"]
 					: ["useDefaultDestination", "writerType", "writerJdbcUrls", "writerTables"];
@@ -622,6 +642,7 @@ export default function TransformCreatePage() {
 					destinationType: values.useDefaultDestination ? undefined : normalizeText(values.writerType),
 					destinationConfig: writerConfig as Record<string, any> | undefined,
 					syncMode: editingTask?.syncMode || "full",
+					syncPrefix: normalizeText(values.syncPrefix) || undefined,
 					addaxConfig: (jobConfig as Record<string, any>) || editingTask?.addaxConfig,
 					airflowEnabled: Boolean(values.airflowEnabled),
 				};
@@ -641,6 +662,9 @@ export default function TransformCreatePage() {
 						usePlatformDefault: Boolean(values.useDefaultDestination),
 						type: values.useDefaultDestination ? undefined : normalizeText(values.writerType),
 						config: writerConfig || undefined,
+					},
+					sync: {
+						prefix: normalizeText(values.syncPrefix) || undefined,
 					},
 					airflow: {
 						enabled: Boolean(values.airflowEnabled),
@@ -872,6 +896,21 @@ export default function TransformCreatePage() {
 							<Form.Item name="useDefaultDestination" label="使用平台默认数据湖" valuePropName="checked">
 								<Switch />
 							</Form.Item>
+							<Form.Item
+								name="syncPrefix"
+								label="目标表前缀"
+								rules={[
+									{
+										required: Boolean(useDefaultDestination),
+										message: "请输入目标表前缀，用于生成 ODS 表名",
+									},
+								]}
+							>
+								<Input placeholder="例如：ods_erp_" />
+							</Form.Item>
+							<Text type="secondary" className="block -mt-3 mb-4">
+								用于自动生成 ODS 表名（如：ods_erp_ + 源表名）。若 Writer 已指定目标表，可留空。
+							</Text>
 							{!useDefaultDestination && (
 								<>
 									<Divider orientation="left">Writer 配置</Divider>

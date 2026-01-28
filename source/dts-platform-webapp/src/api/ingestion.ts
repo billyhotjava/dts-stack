@@ -11,6 +11,7 @@ export interface IngestionTaskDTO {
   destinationConfig?: Record<string, any>;
   syncMode: string;
   syncSchedule?: string;
+  syncPrefix?: string;
   tableMapping?: Array<{ source: string; target: string }>;
   addaxJobPath?: string;
   addaxConfig?: Record<string, any>;

@@ -37,6 +37,8 @@ public class IngestionTaskDTO {
 
     private String syncSchedule;
 
+    private String syncPrefix;
+
     private JsonNode tableMapping;
 
     private String addaxJobPath;
@@ -141,6 +143,14 @@ public class IngestionTaskDTO {
 
     public void setSyncSchedule(String syncSchedule) {
         this.syncSchedule = syncSchedule;
+    }
+
+    public String getSyncPrefix() {
+        return syncPrefix;
+    }
+
+    public void setSyncPrefix(String syncPrefix) {
+        this.syncPrefix = syncPrefix;
     }
 
     public JsonNode getTableMapping() {

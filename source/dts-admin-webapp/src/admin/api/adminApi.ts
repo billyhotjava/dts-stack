@@ -417,11 +417,11 @@ export const adminApi = {
 			url: "/admin/ops/configs",
 		}),
 
-	/** 更新配置项（触发审批流程） */
-	updateOpsConfig: (key: string, value: string, reason?: string) =>
-		apiClient.put<ChangeRequest>({
+	/** 更新配置项（直接保存，无需审批） */
+	updateOpsConfig: (key: string, value: string) =>
+		apiClient.put<{ id: number; key: string; value: string }>({
 			url: `/admin/ops/configs/${encodeURIComponent(key)}`,
-			data: { value, reason },
+			data: { value },
 		}),
 
 	/** 获取功能开关列表 */

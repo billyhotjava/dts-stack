@@ -97,4 +97,5 @@
     <include file="config/liquibase/changelog/20260126_01_workbench_ops.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260201_01_metadata_standard.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260201_02_modeling_template_metadata_standard.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260201_03_std_code_tables.xml" relativeToChangelogFile="false"/>
 </databaseChangeLog>

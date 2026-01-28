@@ -1,5 +1,6 @@
 package com.yuzhi.dts.ingestion.service.etl;
 
+import com.yuzhi.dts.ingestion.config.AddaxProperties;
 import com.yuzhi.dts.ingestion.config.AirflowProperties;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.yuzhi.dts.ingestion.domain.IngestionTask;
@@ -22,10 +23,12 @@ public class AirflowDagService {
     private static final Pattern NON_SAFE = Pattern.compile("[^a-z0-9_]+");
 
     private final AirflowProperties properties;
+    private final AddaxProperties addaxProperties;
     private final IngestionSettingsService settingsService;
 
-    public AirflowDagService(AirflowProperties properties, IngestionSettingsService settingsService) {
+    public AirflowDagService(AirflowProperties properties, AddaxProperties addaxProperties, IngestionSettingsService settingsService) {
         this.properties = properties;
+        this.addaxProperties = addaxProperties;
         this.settingsService = settingsService;
     }
 
@@ -95,6 +98,14 @@ public class AirflowDagService {
         return value.trim();
     }
 
+    private String normalizePath(String value, String fallback) {
+        String normalized = normalizePath(value);
+        if (StringUtils.hasText(normalized)) {
+            return normalized;
+        }
+        return StringUtils.hasText(fallback) ? fallback.trim() : "";
+    }
+
     private String resolveDagId(IngestionTask task) {
         if (StringUtils.hasText(task.getAirflowDagId())) {
             return task.getAirflowDagId().trim();
@@ -160,6 +171,8 @@ public class AirflowDagService {
     private String buildDagSource(String dagId, IngestionTask task) {
         String sourceTag = sanitizeTag(task == null ? null : task.getSourceType(), "source");
         String nameTag = sanitizeTag(task == null ? null : task.getName(), "ingestion");
+        String addaxImage = escapePythonString(resolveAddaxImage());
+        String addaxJobDir = escapePythonString(resolveAddaxJobDir());
         return """
             from __future__ import annotations
 
@@ -170,8 +183,8 @@ public class AirflowDagService {
             from airflow.providers.docker.operators.docker import DockerOperator
             from docker.types import Mount
 
-            ADDAX_IMAGE = os.getenv("ADDAX_IMAGE", "quay.io/wgzhao/addax:6.0.8")
-            ADDAX_JOB_DIR = os.getenv("ADDAX_JOB_DIR", "/opt/prod/s10/dts-stack/services/dts-addax/jobs")
+            ADDAX_IMAGE = os.getenv("ADDAX_IMAGE", "%s")
+            ADDAX_JOB_DIR = os.getenv("ADDAX_JOB_DIR", "%s")
             ADDAX_DRIVER_DIR = os.getenv("ADDAX_DRIVER_DIR", "")
             ADDAX_DRIVER_JARS = os.getenv("ADDAX_DRIVER_JARS", "")
 
@@ -230,7 +243,28 @@ public class AirflowDagService {
                     environment={},
                     tty=True,
                 )
-            """.formatted(dagId, sourceTag, nameTag);
+            """.formatted(addaxImage, addaxJobDir, dagId, sourceTag, nameTag);
+    }
+
+    private String resolveAddaxJobDir() {
+        IngestionSettingsService.SettingsSnapshot settings = settingsService.getSettings(IngestionSettingsService.SERVICE_ADDAX);
+        String configured = settings.getString("jobDir", null);
+        String fallback = addaxProperties.getJobDir();
+        return normalizePath(configured, fallback != null ? fallback : "/opt/airflow/dags");
+    }
+
+    private String resolveAddaxImage() {
+        IngestionSettingsService.SettingsSnapshot settings = settingsService.getSettings(IngestionSettingsService.SERVICE_ADDAX);
+        String configured = settings.getString("image", null);
+        String fallback = addaxProperties.getImage();
+        return StringUtils.hasText(configured) ? configured.trim() : (StringUtils.hasText(fallback) ? fallback.trim() : "quay.io/wgzhao/addax:6.0.8");
+    }
+
+    private String escapePythonString(String value) {
+        if (!StringUtils.hasText(value)) {
+            return "";
+        }
+        return value.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 
     private String sanitizeTag(String value, String fallback) {

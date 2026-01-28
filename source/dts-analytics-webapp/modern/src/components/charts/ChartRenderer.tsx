@@ -1,10 +1,12 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { LineChart } from './LineChart';
 import { BarChart } from './BarChart';
 import { PieChart } from './PieChart';
 import { AreaChart } from './AreaChart';
 import { ScalarChart } from './ScalarChart';
 import { DataTable } from '../DataTable';
+import { Spinner } from '../../ui/Loading/Spinner';
+import './ChartComponents.css';
 
 export type VisualizationType =
   | 'table'
@@ -36,6 +38,7 @@ export interface VisualizationSettings {
   // Line/Area specific
   'graph.show_dots'?: boolean;
   'graph.show_area'?: boolean;
+  'graph.smooth'?: boolean;
   'stackable.stack_type'?: 'stacked' | 'normalized' | null;
 
   // Pie specific
@@ -70,9 +73,11 @@ interface ChartRendererProps {
   data: {
     rows: any[][];
     cols: { name: string; display_name?: string; base_type?: string }[];
-  };
+  } | null;
   display: VisualizationType;
   settings?: VisualizationSettings;
+  loading?: boolean;
+  error?: unknown;
   className?: string;
   style?: React.CSSProperties;
 }
@@ -81,13 +86,52 @@ export function ChartRenderer({
   data,
   display,
   settings = {},
+  loading = false,
+  error,
   className,
   style
 }: ChartRendererProps) {
-  if (!data || !data.rows || !data.cols) {
+  // Loading state
+  if (loading) {
     return (
-      <div style={{ ...styles.empty, ...style }} className={className}>
-        No data available
+      <div className={`chart-container ${className || ''}`} style={style}>
+        <div className="chart-container__loading">
+          <Spinner size="lg" />
+        </div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return (
+      <div className={`chart-container ${className || ''}`} style={style}>
+        <div className="chart-container__error">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10" />
+            <line x1="12" y1="8" x2="12" y2="12" />
+            <line x1="12" y1="16" x2="12.01" y2="16" />
+          </svg>
+          <div style={{ fontSize: 'var(--font-size-sm)' }}>{message}</div>
+        </div>
+      </div>
+    );
+  }
+
+  // Empty state
+  if (!data || !data.rows || !data.cols || data.rows.length === 0) {
+    return (
+      <div className={`chart-container ${className || ''}`} style={style}>
+        <div className="chart-container__empty">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M3 3v18h18" />
+            <path d="M18 17V9" />
+            <path d="M13 17V5" />
+            <path d="M8 17v-3" />
+          </svg>
+          <div style={{ fontSize: 'var(--font-size-sm)' }}>No data available</div>
+        </div>
       </div>
     );
   }
@@ -121,6 +165,7 @@ export function ChartRenderer({
             yAxisIndices={yAxisIndices.length > 0 ? yAxisIndices : [1]}
             showDots={settings['graph.show_dots'] !== false}
             showArea={settings['graph.show_area'] === true}
+            smooth={settings['graph.smooth'] !== false}
             colors={colors}
           />
         );
@@ -133,6 +178,7 @@ export function ChartRenderer({
             yAxisIndex={yAxisIndices[0] ?? 1}
             orientation="vertical"
             showValues={settings['graph.show_values'] === true}
+            stacked={settings['stackable.stack_type'] === 'stacked'}
             colors={colors}
           />
         );
@@ -169,6 +215,7 @@ export function ChartRenderer({
             xAxisIndex={xAxisIndex >= 0 ? xAxisIndex : 0}
             yAxisIndices={yAxisIndices.length > 0 ? yAxisIndices : [1]}
             stacked={settings['stackable.stack_type'] === 'stacked'}
+            smooth={settings['graph.smooth'] !== false}
             colors={colors}
           />
         );
@@ -187,7 +234,6 @@ export function ChartRenderer({
 
       case 'progress':
       case 'gauge':
-        // For now, render as scalar with a visual indicator
         return (
           <ScalarChart
             data={data}
@@ -215,9 +261,14 @@ export function ChartRenderer({
       case 'scatter':
       case 'map':
         return (
-          <div style={styles.unsupported}>
-            <div style={styles.unsupportedIcon}>📊</div>
-            <div style={styles.unsupportedText}>
+          <div className="chart-container__empty">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 3v18h18" />
+              <path d="M18 17V9" />
+              <path d="M13 17V5" />
+              <path d="M8 17v-3" />
+            </svg>
+            <div style={{ fontSize: 'var(--font-size-sm)', marginBottom: 'var(--spacing-md)' }}>
               {display} visualization is not yet supported
             </div>
             <DataTable cols={data.cols as any[]} rows={data.rows} />
@@ -227,41 +278,10 @@ export function ChartRenderer({
   })();
 
   return (
-    <div style={{ ...styles.container, ...style }} className={className}>
+    <div className={`chart-container ${className || ''}`} style={style}>
       {content}
     </div>
   );
 }
-
-const styles: Record<string, React.CSSProperties> = {
-  container: {
-    width: '100%',
-    height: '100%',
-    minHeight: 200
-  },
-  empty: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: 200,
-    color: '#888',
-    fontSize: 14
-  },
-  unsupported: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    padding: 16
-  },
-  unsupportedIcon: {
-    fontSize: 32,
-    marginBottom: 8
-  },
-  unsupportedText: {
-    color: '#888',
-    fontSize: 12,
-    marginBottom: 16
-  }
-};
 
 export default ChartRenderer;

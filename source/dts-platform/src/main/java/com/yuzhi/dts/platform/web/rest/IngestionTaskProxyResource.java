@@ -5,6 +5,7 @@ import com.yuzhi.dts.platform.security.SecurityUtils;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.ingestion.IngestionServiceClient;
 import com.yuzhi.dts.platform.service.infra.DefaultDestinationSyncService;
+import com.yuzhi.dts.platform.service.etl.OdsTableMappingSyncService;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.springframework.http.ResponseEntity;
@@ -28,15 +29,18 @@ public class IngestionTaskProxyResource {
 
     private final IngestionServiceClient ingestionClient;
     private final DefaultDestinationSyncService destinationSyncService;
+    private final OdsTableMappingSyncService odsTableMappingSyncService;
     private final AuditService auditService;
 
     public IngestionTaskProxyResource(
         IngestionServiceClient ingestionClient,
         DefaultDestinationSyncService destinationSyncService,
+        OdsTableMappingSyncService odsTableMappingSyncService,
         AuditService auditService
     ) {
         this.ingestionClient = ingestionClient;
         this.destinationSyncService = destinationSyncService;
+        this.odsTableMappingSyncService = odsTableMappingSyncService;
         this.auditService = auditService;
     }
 
@@ -55,6 +59,16 @@ public class IngestionTaskProxyResource {
                 taskName,
                 Map.of("summary", "创建入湖任务", "name", taskName, "operator", operator)
             );
+            try {
+                odsTableMappingSyncService.syncFromIngestionPayload(response.getData());
+            } catch (RuntimeException ex) {
+                auditService.auditAction(
+                    "INGESTION_MAPPING_SYNC",
+                    AuditStage.FAIL,
+                    taskName,
+                    Map.of("summary", "同步 ODS 映射失败", "name", taskName, "operator", operator, "error", ex.getMessage())
+                );
+            }
         } else {
             auditService.auditAction(
                 "INGESTION_TASK_CREATE",
@@ -88,7 +102,21 @@ public class IngestionTaskProxyResource {
         @PathVariable("id") Long id,
         @RequestBody Map<String, Object> payload
     ) {
-        return ResponseEntity.ok(ingestionClient.updateTask(id, payload));
+        ApiResponse<Map<String, Object>> response = ingestionClient.updateTask(id, payload);
+        if (response != null && response.getStatus() >= 200 && response.getStatus() < 300) {
+            try {
+                odsTableMappingSyncService.syncFromIngestionPayload(response.getData());
+            } catch (RuntimeException ex) {
+                String operator = SecurityUtils.getCurrentUserLogin().orElse("system");
+                auditService.auditAction(
+                    "INGESTION_MAPPING_SYNC",
+                    AuditStage.FAIL,
+                    String.valueOf(id),
+                    Map.of("summary", "同步 ODS 映射失败", "taskId", id, "operator", operator, "error", ex.getMessage())
+                );
+            }
+        }
+        return ResponseEntity.ok(response);
     }
 
     @DeleteMapping("/tasks/{id}")

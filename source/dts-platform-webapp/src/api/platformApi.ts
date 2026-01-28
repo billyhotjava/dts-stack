@@ -27,6 +27,7 @@ export const searchCatalog = (params: { keyword: string; types?: string; limit?:
 export const getDbtConfig = () => api.get({ url: "/etl/dbt/config" });
 export const updateDbtConfig = (data: any) => api.put({ url: "/etl/dbt/config", data });
 export const listDbtModels = () => api.get({ url: "/etl/dbt/models" });
+export const syncDbtModels = () => api.post({ url: "/etl/dbt/models/sync" });
 export const listDbtRuns = (limit = 20) => api.get({ url: "/etl/dbt/runs", params: { limit } });
 export const triggerDbtRun = (data: any) => api.post({ url: "/etl/dbt/run", data });
 export const listAirflowJobs = (limit = 50) => api.get({ url: "/etl/airflow/jobs", params: { limit } });
@@ -158,6 +159,33 @@ export const updateMetadataStandard = (id: string, data: any) => api.put({ url: 
 export const deleteMetadataStandard = (id: string) => api.delete({ url: `/modeling/metadata-standards/${id}` });
 export const importMetadataStandards = (formData: FormData) =>
     api.post({ url: "/modeling/metadata-standards/import", data: formData });
+
+// Reference codes (public code tables)
+export const listReferenceCodes = (params: any = {}) => api.get({ url: "/governance/reference-codes", params });
+export const getReferenceCode = (id: string) => api.get({ url: `/governance/reference-codes/${id}` });
+export const createReferenceCode = (data: any) => api.post({ url: "/governance/reference-codes", data });
+export const updateReferenceCode = (id: string, data: any) =>
+	api.put({ url: `/governance/reference-codes/${id}`, data });
+export const deleteReferenceCode = (id: string) => api.delete({ url: `/governance/reference-codes/${id}` });
+export const listReferenceCodeItems = (id: string) =>
+	api.get({ url: `/governance/reference-codes/${id}/items` });
+export const createReferenceCodeItem = (id: string, data: any) =>
+	api.post({ url: `/governance/reference-codes/${id}/items`, data });
+export const batchReferenceCodeItems = (id: string, data: { raw: string }) =>
+	api.post({ url: `/governance/reference-codes/${id}/items/batch`, data });
+export const updateReferenceCodeItem = (id: string, itemId: string | number, data: any) =>
+	api.put({ url: `/governance/reference-codes/${id}/items/${itemId}`, data });
+export const deleteReferenceCodeItem = (id: string, itemId: string | number) =>
+	api.delete({ url: `/governance/reference-codes/${id}/items/${itemId}` });
+export const listReferenceCodeMappings = (id: string) =>
+	api.get({ url: `/governance/reference-codes/${id}/mappings` });
+export const createReferenceCodeMapping = (id: string, data: any) =>
+	api.post({ url: `/governance/reference-codes/${id}/mappings`, data });
+export const updateReferenceCodeMapping = (id: string, mapId: string | number, data: any) =>
+	api.put({ url: `/governance/reference-codes/${id}/mappings/${mapId}`, data });
+export const deleteReferenceCodeMapping = (id: string, mapId: string | number) =>
+	api.delete({ url: `/governance/reference-codes/${id}/mappings/${mapId}` });
+export const syncReferenceCodeSeeds = () => api.post({ url: "/governance/reference-codes/seeds" });
 
 // Modeling (planning / glossary / templates)
 export const listModelingPlans = (params: any = {}) => api.get<any[]>({ url: "/modeling/plans", params });

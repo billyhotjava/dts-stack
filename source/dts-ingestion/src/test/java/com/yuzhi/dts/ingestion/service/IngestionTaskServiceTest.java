@@ -66,6 +66,9 @@ class IngestionTaskServiceTest {
     private AirflowDagService airflowDagService;
 
     @Mock
+    private com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver sourceResolver;
+
+    @Mock
     private TargetTableProvisioner targetTableProvisioner;
 
     @Mock
@@ -88,6 +91,7 @@ class IngestionTaskServiceTest {
             addaxJobService,
             airflowAdapter,
             airflowDagService,
+            sourceResolver,
             targetTableProvisioner,
             auditService,
             changeLogService

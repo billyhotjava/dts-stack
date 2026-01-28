@@ -18,7 +18,15 @@ import {
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { EmptyState } from "@/components/empty-state";
-import { getDbtConfig, listDbtModels, listDbtRuns, listModelingPlans, triggerDbtRun, updateDbtConfig } from "@/api/platformApi";
+import {
+	getDbtConfig,
+	listDbtModels,
+	listDbtRuns,
+	listModelingPlans,
+	syncDbtModels,
+	triggerDbtRun,
+	updateDbtConfig,
+} from "@/api/platformApi";
 
 const { Text } = Typography;
 const { DirectoryTree } = Tree;
@@ -133,6 +141,7 @@ export default function SqlModelingPage() {
 	const [activeSpaceKey, setActiveSpaceKey] = useState<string | null>(null);
 	const [modelsLoading, setModelsLoading] = useState(false);
 	const [modelResult, setModelResult] = useState<DbtModelResult | null>(null);
+	const [syncingModels, setSyncingModels] = useState(false);
 	const [runsLoading, setRunsLoading] = useState(false);
 	const [runs, setRuns] = useState<DagRun[]>([]);
 	const [runOpen, setRunOpen] = useState(false);
@@ -273,6 +282,20 @@ export default function SqlModelingPage() {
 			toast.error(err?.message || "触发失败");
 		} finally {
 			setRunSubmitting(false);
+		}
+	};
+
+	const handleSyncModels = async () => {
+		setSyncingModels(true);
+		try {
+			const result: any = await syncDbtModels();
+			const message = result?.message || result?.summary || "模型已同步至资产目录";
+			toast.success(message);
+			await loadModels();
+		} catch (err: any) {
+			toast.error(err?.message || "同步模型失败");
+		} finally {
+			setSyncingModels(false);
 		}
 	};
 
@@ -455,6 +478,9 @@ export default function SqlModelingPage() {
 							<Text type="secondary">{activeModel?.path || "尚未定位模型路径"}</Text>
 						</Space>
 						<Space>
+							<Button size="small" onClick={handleSyncModels} loading={syncingModels}>
+								同步模型
+							</Button>
 							<Button size="small" onClick={loadModels} loading={modelsLoading}>
 								刷新模型
 							</Button>
@@ -623,7 +649,7 @@ export default function SqlModelingPage() {
 			>
 				<Form layout="vertical" form={runForm}>
 					<Form.Item name="models" label="模型选择器" rules={[{ required: true, message: "请输入模型选择器" }]}>
-						<Input placeholder="例如：model:your_model+" />
+						<Input placeholder="例如：tag:source_system" />
 					</Form.Item>
 					<Form.Item name="target" label="Target">
 						<Input placeholder="dev" />

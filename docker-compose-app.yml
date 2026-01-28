@@ -223,6 +223,7 @@ services:
       - ./services/dts-platform/upload:/opt/dts/upload:Z
       - ./services/dts-dbt:/opt/dts/dbt:ro,z
       - ./services/dts-dbt/profiles:/opt/dts/dbt-profiles:Z
+      - ./services/dts-airflow/dags:/opt/airflow/dags:Z
       - ./logs/dts-platform:/logs/dts-platform:z
     security_opt:
       - seccomp=unconfined
@@ -257,7 +258,7 @@ services:
       SPRING_DATASOURCE_USERNAME: ${PG_USER_DTPS:-dts_platform}
       SPRING_DATASOURCE_PASSWORD: ${PG_PWD_DTPS:-dts_platform}
       DTS_ADDAX_ENABLED: ${DTS_ADDAX_ENABLED:-true}
-      DTS_ADDAX_JOB_DIR: ${STACK_ROOT}/services/dts-addax/jobs
+      DTS_ADDAX_JOB_DIR: ${DTS_AIRFLOW_DAGS_DIR:-/opt/airflow/dags}
       DTS_ADDAX_IMAGE: ${IMAGE_ADDAX:-quay.io/wgzhao/addax:6.0.8}
       DTS_ADDAX_DAG_ID: ${DTS_ADDAX_DAG_ID:-addax_job}
       ADDAX_DRIVER_DIR: ${STACK_ROOT}/services/dts-platform/drivers
@@ -299,7 +300,6 @@ services:
     volumes:
       - ./logs/dts-ingestion:/logs/dts-ingestion:z
       - ./services/dts-airflow/dags:/opt/airflow/dags:z
-      - ${STACK_ROOT}/services/dts-addax/jobs:${STACK_ROOT}/services/dts-addax/jobs:Z
       - ${STACK_ROOT}/services/dts-platform/drivers:${STACK_ROOT}/services/dts-platform/drivers:Z
     security_opt:
       - seccomp=unconfined

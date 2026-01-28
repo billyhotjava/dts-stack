@@ -74,6 +74,7 @@ export default function CardEditorPage() {
 	const [runState, setRunState] = useState<LoadState<CardQueryResponse> | null>(null);
 	const [saveState, setSaveState] = useState<LoadState<CardDetail> | null>(null);
 	const [displayType, setDisplayType] = useState<VisualizationType>("table");
+	const [showSql, setShowSql] = useState(false);
 
 	useEffect(() => {
 		let cancelled = false;
@@ -406,7 +407,15 @@ export default function CardEditorPage() {
 				<CardHeader
 					title={t(locale, "questions.queryResult")}
 					action={
-						<div style={{ display: "flex", gap: "var(--spacing-xs)" }}>
+						<div style={{ display: "flex", gap: "var(--spacing-xs)", alignItems: "center" }}>
+							{runState?.state === "loaded" && (
+								<Badge variant="default" size="sm" style={{ marginRight: "var(--spacing-sm)" }}>
+									{runState.value.row_count ?? (runState.value.data?.rows as any[] | undefined)?.length ?? 0} {t(locale, "questions.resultRows")}
+									{runState.value.running_time != null && (
+										<> &middot; {runState.value.running_time}ms</>
+									)}
+								</Badge>
+							)}
 							{VISUALIZATION_TYPES.map((vt) => (
 								<Button
 									key={vt.value}
@@ -432,14 +441,80 @@ export default function CardEditorPage() {
 					{runState?.state === "error" && <ErrorNotice locale={locale} error={runState.error} />}
 					{runState?.state === "loaded" && (
 						<>
-							{runState.value?.data?.native_form?.query ? (
+							{/* Result summary bar */}
+							<div style={{
+								display: "flex",
+								alignItems: "center",
+								gap: "var(--spacing-sm)",
+								padding: "var(--spacing-sm) var(--spacing-md)",
+								marginBottom: "var(--spacing-md)",
+								background: "var(--color-bg-tertiary)",
+								borderRadius: "var(--radius-sm)",
+								fontSize: "var(--font-size-sm)",
+								color: "var(--color-text-secondary)",
+							}}>
+								<Badge variant={runState.value.error ? "error" : "success"} size="sm">
+									{runState.value.error ? t(locale, "questions.status.failed") : t(locale, "questions.status.completed")}
+								</Badge>
+								<span>
+									{runState.value.row_count ?? (runState.value.data?.rows as any[] | undefined)?.length ?? 0} {t(locale, "questions.resultRows")}
+								</span>
+								{runState.value.running_time != null && (
+									<span>&middot; {t(locale, "questions.resultTime")} {runState.value.running_time}ms</span>
+								)}
+								{runState.value?.data?.native_form?.query && (
+									<Button
+										variant="tertiary"
+										size="sm"
+										onClick={() => setShowSql((v) => !v)}
+										style={{ marginLeft: "auto" }}
+									>
+										{showSql ? t(locale, "questions.hideSql") : t(locale, "questions.showSql")}
+									</Button>
+								)}
+							</div>
+
+							{/* Collapsible SQL block */}
+							{showSql && runState.value?.data?.native_form?.query && (
 								<div style={{ marginBottom: "var(--spacing-md)" }}>
 									<div className="text-muted" style={{ marginBottom: "var(--spacing-xs)" }}>{t(locale, "questions.querySql")}</div>
 									<pre style={{ whiteSpace: "pre-wrap", fontSize: "var(--font-size-sm)", margin: 0, padding: "var(--spacing-sm)", background: "var(--color-bg-tertiary)", borderRadius: "var(--radius-sm)" }}>
 										{String(runState.value.data.native_form.query)}
 									</pre>
 								</div>
-							) : null}
+							)}
+
+							{/* Error from response body (e.g. SQL error returned as 202) */}
+							{runState.value.error && (
+								<div style={{
+									padding: "var(--spacing-md)",
+									marginBottom: "var(--spacing-md)",
+									background: "var(--color-error-bg, #FFF0F0)",
+									border: "1px solid var(--color-error, #ED6E6E)",
+									borderRadius: "var(--radius-sm)",
+									color: "var(--color-error, #ED6E6E)",
+									fontSize: "var(--font-size-sm)",
+								}}>
+									{typeof runState.value.error === "string"
+										? runState.value.error
+										: JSON.stringify(runState.value.error)}
+								</div>
+							)}
+
+							{/* 0-row hint */}
+							{!runState.value.error &&
+								((runState.value.row_count ?? (runState.value.data?.rows as any[] | undefined)?.length ?? 0) === 0) && (
+								<div style={{
+									padding: "var(--spacing-lg)",
+									textAlign: "center",
+									color: "var(--color-text-tertiary)",
+									fontSize: "var(--font-size-sm)",
+								}}>
+									{t(locale, "questions.noRows")}
+								</div>
+							)}
+
+							{/* Chart/Table renderer */}
 							<ChartRenderer
 								data={{
 									cols: (runState.value.data?.cols as any[]) ?? [],

@@ -894,12 +894,18 @@ public class IngestionTaskResource {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "入湖任务必须使用已配置的数据源连接");
         }
         taskDTO.setSourceConfig(sourceOverrides.isEmpty() ? null : toJsonNode(sourceOverrides));
-        if (taskDTO.getTableMapping() == null || taskDTO.getTableMapping().isNull()) {
+        String syncPrefix = normalize(taskDTO.getSyncPrefix());
+        boolean rebuildMapping = taskDTO.getTableMapping() == null || taskDTO.getTableMapping().isNull();
+        if (StringUtils.hasText(syncPrefix)) {
+            rebuildMapping = true;
+        }
+        if (rebuildMapping) {
             com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver.ResolvedSource resolved =
                 sourceResolver.resolve(taskDTO.getSourceDataSourceId(), List.of());
             Map<String, Object> readerConfig = mergeReaderOverrides(safeMap(resolved.readerConfig()), sourceOverrides);
             Map<String, Object> writerConfig = jsonNodeToMap(taskDTO.getDestinationConfig());
-            List<Map<String, String>> tableMapping = deriveTableMapping(readerConfig, writerConfig, null);
+            SyncSpec syncSpec = StringUtils.hasText(syncPrefix) ? new SyncSpec(null, null, null, null, syncPrefix) : null;
+            List<Map<String, String>> tableMapping = deriveTableMapping(readerConfig, writerConfig, syncSpec);
             if (!tableMapping.isEmpty()) {
                 taskDTO.setTableMapping(toJsonNode(tableMapping));
             }
