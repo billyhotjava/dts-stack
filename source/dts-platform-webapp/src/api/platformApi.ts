@@ -30,6 +30,11 @@ export const listDbtModels = () => api.get({ url: "/etl/dbt/models" });
 export const syncDbtModels = () => api.post({ url: "/etl/dbt/models/sync" });
 export const listDbtRuns = (limit = 20) => api.get({ url: "/etl/dbt/runs", params: { limit } });
 export const triggerDbtRun = (data: any) => api.post({ url: "/etl/dbt/run", data });
+export const listSqlModels = (params?: any) => api.get({ url: "/modeling/sql-models", params });
+export const getSqlModel = (id: string) => api.get({ url: `/modeling/sql-models/${id}` });
+export const createSqlModel = (data: any) => api.post({ url: "/modeling/sql-models", data });
+export const updateSqlModel = (id: string, data: any) => api.put({ url: `/modeling/sql-models/${id}`, data });
+export const deleteSqlModel = (id: string) => api.delete({ url: `/modeling/sql-models/${id}` });
 export const listAirflowJobs = (limit = 50) => api.get({ url: "/etl/airflow/jobs", params: { limit } });
 export const listAirflowJobRuns = (dagId: string, limit = 20) =>
 	api.get({ url: `/etl/airflow/jobs/${dagId}/runs`, params: { limit } });

@@ -78,7 +78,8 @@ public class DbtConfigService {
         DbtWorkspaceConfig config = readConfig();
         DbtProfileStatus profileStatus = buildProfile(config);
         InfraDataSourceDto target = resolveTarget(config.targetDataSourceId());
-        return new DbtConfigView(true, config, profileStatus, target);
+        DbtWorkspaceStatus workspaceStatus = validateWorkspace(config, false);
+        return new DbtConfigView(true, config, profileStatus, target, workspaceStatus);
     }
 
     public DbtConfigView saveConfig(DbtWorkspaceConfigRequest request) {
@@ -96,10 +97,14 @@ public class DbtConfigService {
             safeText(request.schema(), null),
             request.vars() == null ? Collections.emptyMap() : request.vars()
         );
+        DbtWorkspaceStatus workspaceStatus = validateWorkspace(config, true);
+        if (!workspaceStatus.ok()) {
+            throw new IllegalArgumentException(workspaceStatus.message());
+        }
         writeConfig(config);
         DbtProfileStatus profileStatus = buildProfile(config);
         InfraDataSourceDto target = resolveTarget(config.targetDataSourceId());
-        return new DbtConfigView(true, config, profileStatus, target);
+        return new DbtConfigView(true, config, profileStatus, target, workspaceStatus);
     }
 
     private DbtProfileStatus buildProfile(DbtWorkspaceConfig config) {
@@ -336,14 +341,25 @@ public class DbtConfigService {
         boolean enabled,
         DbtWorkspaceConfig config,
         DbtProfileStatus profileStatus,
-        InfraDataSourceDto target
+        InfraDataSourceDto target,
+        DbtWorkspaceStatus workspaceStatus
     ) {
         public static DbtConfigView disabled(String message) {
-            return new DbtConfigView(false, null, DbtProfileStatus.skipped(message), null);
+            return new DbtConfigView(false, null, DbtProfileStatus.skipped(message), null, DbtWorkspaceStatus.failed(message));
         }
     }
 
     public record InfraDataSourceDto(UUID id, String name, String type, String jdbcUrl, String username) {}
+
+    public record DbtWorkspaceStatus(boolean ok, String message, Map<String, Object> detail) {
+        static DbtWorkspaceStatus success(String message, Map<String, Object> detail) {
+            return new DbtWorkspaceStatus(true, message, detail == null ? Map.of() : detail);
+        }
+
+        static DbtWorkspaceStatus failed(String message) {
+            return new DbtWorkspaceStatus(false, message, Map.of());
+        }
+    }
 
     private record JdbcEndpoint(String host, int port, String database) {
         static JdbcEndpoint parse(String jdbcUrl) {
@@ -381,6 +397,61 @@ public class DbtConfigService {
         if ("mysql".equalsIgnoreCase(adapter)) return 3306;
         if ("postgres".equalsIgnoreCase(adapter)) return 5432;
         return 0;
+    }
+
+    private DbtWorkspaceStatus validateWorkspace(DbtWorkspaceConfig config, boolean createIfMissing) {
+        if (config == null) {
+            return DbtWorkspaceStatus.failed("dbt 配置为空");
+        }
+        String projectDir = safeText(config.projectDir(), null);
+        String profilesDir = safeText(config.profilesDir(), null);
+        if (!StringUtils.hasText(projectDir)) {
+            return DbtWorkspaceStatus.failed("dbt 项目目录不能为空");
+        }
+        if (!StringUtils.hasText(profilesDir)) {
+            return DbtWorkspaceStatus.failed("profiles 目录不能为空");
+        }
+        Map<String, Object> detail = new LinkedHashMap<>();
+        try {
+            Path projectPath = Path.of(projectDir);
+            if (createIfMissing) {
+                Files.createDirectories(projectPath);
+            }
+            if (!Files.isDirectory(projectPath)) {
+                return DbtWorkspaceStatus.failed("dbt 项目目录不可用: " + projectDir);
+            }
+            detail.put("projectDir", projectPath.toString());
+            detail.put("projectWritable", Files.isWritable(projectPath));
+            Path targetDir = projectPath.resolve("target");
+            if (createIfMissing) {
+                Files.createDirectories(targetDir);
+            }
+            detail.put("targetDir", targetDir.toString());
+            detail.put("targetWritable", Files.isWritable(targetDir));
+            if (!Files.isWritable(projectPath) || !Files.isWritable(targetDir)) {
+                return DbtWorkspaceStatus.failed("dbt 项目目录或 target 目录不可写");
+            }
+        } catch (Exception ex) {
+            return DbtWorkspaceStatus.failed("dbt 项目目录检查失败: " + ex.getMessage());
+        }
+
+        try {
+            Path profilesPath = Path.of(profilesDir);
+            if (createIfMissing) {
+                Files.createDirectories(profilesPath);
+            }
+            if (!Files.isDirectory(profilesPath)) {
+                return DbtWorkspaceStatus.failed("profiles 目录不可用: " + profilesDir);
+            }
+            detail.put("profilesDir", profilesPath.toString());
+            detail.put("profilesWritable", Files.isWritable(profilesPath));
+            if (!Files.isWritable(profilesPath)) {
+                return DbtWorkspaceStatus.failed("profiles 目录不可写");
+            }
+        } catch (Exception ex) {
+            return DbtWorkspaceStatus.failed("profiles 目录检查失败: " + ex.getMessage());
+        }
+        return DbtWorkspaceStatus.success("dbt 工作区可用", detail);
     }
 
     private static final class YamlWriter {

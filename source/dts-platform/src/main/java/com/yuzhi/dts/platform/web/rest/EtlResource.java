@@ -10,6 +10,7 @@ import com.yuzhi.dts.platform.service.etl.DbtManifestService;
 import com.yuzhi.dts.platform.service.etl.DbtAssetSyncService;
 import com.yuzhi.dts.platform.service.etl.DbtDagService;
 import com.yuzhi.dts.platform.service.etl.DbtSourceService;
+import com.yuzhi.dts.platform.service.ops.ExternalRunLogService;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -31,6 +32,7 @@ public class EtlResource {
     private final DbtDagService dbtDagService;
     private final AirflowClient airflowClient;
     private final AirflowProperties airflowProperties;
+    private final ExternalRunLogService externalRunLogService;
     private final AuditService auditService;
     private final ObjectMapper objectMapper;
 
@@ -42,6 +44,7 @@ public class EtlResource {
         DbtDagService dbtDagService,
         AirflowClient airflowClient,
         AirflowProperties airflowProperties,
+        ExternalRunLogService externalRunLogService,
         AuditService auditService,
         ObjectMapper objectMapper
     ) {
@@ -52,6 +55,7 @@ public class EtlResource {
         this.dbtDagService = dbtDagService;
         this.airflowClient = airflowClient;
         this.airflowProperties = airflowProperties;
+        this.externalRunLogService = externalRunLogService;
         this.auditService = auditService;
         this.objectMapper = objectMapper;
     }
@@ -94,15 +98,26 @@ public class EtlResource {
     }
 
     @GetMapping("/dbt/runs")
-    public ApiResponse<Map<String, Object>> listDbtRuns(@RequestParam(defaultValue = "20") int limit) {
+    public ApiResponse<Map<String, Object>> listDbtRuns(
+        @RequestParam(defaultValue = "20") int limit,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
         String dagId = airflowProperties.getDagId();
         Map<String, Object> payload = airflowClient.listDagRuns(dagId, Math.max(1, Math.min(limit, 50))).orElse(Map.of());
+        try {
+            externalRunLogService.syncAirflowRuns(ExternalRunLogService.ENTRY_DBT, dagId, payload, activeDept);
+        } catch (RuntimeException ex) {
+            // best-effort
+        }
         auditService.audit("READ", "etl.dbt.runs", "list");
         return ApiResponses.ok(payload);
     }
 
     @PostMapping("/dbt/run")
-    public ApiResponse<Map<String, Object>> triggerDbtRun(@RequestBody DbtRunRequest request) {
+    public ApiResponse<Map<String, Object>> triggerDbtRun(
+        @RequestBody DbtRunRequest request,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
         if (request == null || (request.models() == null || request.models().isBlank())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请提供模型选择器");
         }
@@ -121,6 +136,11 @@ public class EtlResource {
         }
         Map<String, Object> payload = Map.of("conf", conf, "logical_date", Instant.now().toString());
         Map<String, Object> result = airflowClient.triggerDag(dagId, payload).orElse(Map.of("status", "queued"));
+        try {
+            externalRunLogService.recordAirflowRun(ExternalRunLogService.ENTRY_DBT, dagId, result, conf, activeDept);
+        } catch (RuntimeException ex) {
+            // best-effort sync
+        }
         auditService.audit("EXECUTE", "etl.dbt.run", selector);
         return ApiResponses.ok(result);
     }
@@ -159,9 +179,15 @@ public class EtlResource {
     @GetMapping("/airflow/jobs/{dagId}/runs")
     public ApiResponse<Map<String, Object>> listAirflowJobRuns(
         @PathVariable String dagId,
-        @RequestParam(defaultValue = "20") int limit
+        @RequestParam(defaultValue = "20") int limit,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
         Map<String, Object> payload = airflowClient.listDagRuns(dagId, Math.max(1, Math.min(limit, 200))).orElse(Map.of());
+        try {
+            externalRunLogService.syncAirflowRuns(ExternalRunLogService.ENTRY_AIRFLOW, dagId, payload, activeDept);
+        } catch (RuntimeException ex) {
+            // best-effort
+        }
         auditService.audit("READ", "etl.airflow.runs", dagId);
         return ApiResponses.ok(payload);
     }
@@ -169,10 +195,16 @@ public class EtlResource {
     @PostMapping("/airflow/jobs/{dagId}/trigger")
     public ApiResponse<Map<String, Object>> triggerAirflowJob(
         @PathVariable String dagId,
-        @RequestBody(required = false) Map<String, Object> body
+        @RequestBody(required = false) Map<String, Object> body,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
         Map<String, Object> payload = normalizeTriggerPayload(body);
         Map<String, Object> result = airflowClient.triggerDag(dagId, payload).orElse(Map.of("status", "queued"));
+        try {
+            externalRunLogService.recordAirflowRun(ExternalRunLogService.ENTRY_AIRFLOW, dagId, result, payload, activeDept);
+        } catch (RuntimeException ex) {
+            // best-effort sync
+        }
         auditService.audit("EXECUTE", "etl.airflow.trigger", dagId);
         return ApiResponses.ok(result);
     }

@@ -17,6 +17,8 @@ export interface IngestionTaskDTO {
   addaxConfig?: Record<string, any>;
   airflowEnabled?: boolean;
   airflowDagId?: string;
+  dbtModelSelector?: string;
+  dbtDagSelector?: string;
   status?: string;
   lastExecutedAt?: string;
   lastExecutionStatus?: string;
@@ -92,6 +94,15 @@ export interface IngestionChangeLogDTO {
   createdDate?: string;
 }
 
+export interface DefaultDestinationStatus {
+  available: boolean;
+  writerTypeReady: boolean;
+  writerConfigReady: boolean;
+  destinationName?: string;
+  writerType?: string;
+  message?: string;
+}
+
 /**
  * 数据入湖任务API
  */
@@ -124,6 +135,13 @@ class IngestionTaskAPI {
    */
   async getTask(id: number): Promise<IngestionTaskDTO> {
     return api.get({ url: `/ingestion/tasks/${id}` });
+  }
+
+  /**
+   * 获取默认数据湖写入器状态
+   */
+  async getDefaultDestinationStatus(): Promise<DefaultDestinationStatus> {
+    return api.get({ url: "/ingestion/default-destination" });
   }
 
   /**

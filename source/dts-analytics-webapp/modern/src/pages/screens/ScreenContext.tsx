@@ -1,4 +1,4 @@
-import { createContext, useContext, useReducer, ReactNode, useCallback } from 'react';
+import { createContext, useContext, useReducer, ReactNode, useCallback, useState } from 'react';
 import type { ScreenState, ScreenAction, ScreenConfig, ScreenComponent } from './types';
 
 const defaultConfig: ScreenConfig = {
@@ -29,6 +29,17 @@ function screenReducer(state: ScreenState, action: ScreenAction): ScreenState {
                 config: action.payload,
                 history: newHistory,
                 historyIndex: newHistory.length - 1,
+            };
+        }
+
+        case 'LOAD_CONFIG': {
+            // Load config without adding to history (used when loading from API)
+            return {
+                ...state,
+                config: action.payload,
+                selectedIds: [],
+                history: [action.payload],
+                historyIndex: 0,
             };
         }
 
@@ -81,6 +92,35 @@ function screenReducer(state: ScreenState, action: ScreenAction): ScreenState {
 
         case 'SELECT_COMPONENTS':
             return { ...state, selectedIds: action.payload };
+
+        case 'PASTE_COMPONENTS': {
+            const { components, offsetX = 20, offsetY = 20 } = action.payload;
+            const maxZIndex = state.config.components.length > 0
+                ? Math.max(...state.config.components.map(c => c.zIndex))
+                : 0;
+
+            const newComponents = components.map((comp, idx) => ({
+                ...comp,
+                id: `comp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                x: comp.x + offsetX,
+                y: comp.y + offsetY,
+                zIndex: maxZIndex + idx + 1,
+            }));
+
+            const newConfig = {
+                ...state.config,
+                components: [...state.config.components, ...newComponents],
+            };
+            const newHistory = state.history.slice(0, state.historyIndex + 1);
+            newHistory.push(newConfig);
+            return {
+                ...state,
+                config: newConfig,
+                selectedIds: newComponents.map(c => c.id),
+                history: newHistory,
+                historyIndex: newHistory.length - 1,
+            };
+        }
 
         case 'MOVE_COMPONENT': {
             const newComponents = state.config.components.map((comp) =>
@@ -181,12 +221,23 @@ interface ScreenContextValue {
     redo: () => void;
     canUndo: boolean;
     canRedo: boolean;
+    // Clipboard
+    clipboard: ScreenComponent[];
+    copyComponents: () => void;
+    pasteComponents: () => void;
+    // Save/Load
+    loadConfig: (config: ScreenConfig) => void;
+    updateConfig: (updates: Partial<ScreenConfig>) => void;
+    isSaving: boolean;
+    setIsSaving: (saving: boolean) => void;
 }
 
 const ScreenContext = createContext<ScreenContextValue | null>(null);
 
 export function ScreenProvider({ children }: { children: ReactNode }) {
     const [state, dispatch] = useReducer(screenReducer, initialState);
+    const [clipboard, setClipboard] = useState<ScreenComponent[]>([]);
+    const [isSaving, setIsSaving] = useState(false);
 
     const addComponent = useCallback((component: ScreenComponent) => {
         dispatch({ type: 'ADD_COMPONENT', payload: component });
@@ -212,6 +263,27 @@ export function ScreenProvider({ children }: { children: ReactNode }) {
         dispatch({ type: 'REDO' });
     }, []);
 
+    const copyComponents = useCallback(() => {
+        const selectedComps = state.config.components.filter(c => state.selectedIds.includes(c.id));
+        if (selectedComps.length > 0) {
+            setClipboard(selectedComps);
+        }
+    }, [state.config.components, state.selectedIds]);
+
+    const pasteComponents = useCallback(() => {
+        if (clipboard.length > 0) {
+            dispatch({ type: 'PASTE_COMPONENTS', payload: { components: clipboard } });
+        }
+    }, [clipboard]);
+
+    const loadConfig = useCallback((config: ScreenConfig) => {
+        dispatch({ type: 'LOAD_CONFIG', payload: config });
+    }, []);
+
+    const updateConfig = useCallback((updates: Partial<ScreenConfig>) => {
+        dispatch({ type: 'SET_CONFIG', payload: { ...state.config, ...updates } });
+    }, [state.config]);
+
     const canUndo = state.historyIndex > 0;
     const canRedo = state.historyIndex < state.history.length - 1;
 
@@ -228,6 +300,13 @@ export function ScreenProvider({ children }: { children: ReactNode }) {
                 redo,
                 canUndo,
                 canRedo,
+                clipboard,
+                copyComponents,
+                pasteComponents,
+                loadConfig,
+                updateConfig,
+                isSaving,
+                setIsSaving,
             }}
         >
             {children}

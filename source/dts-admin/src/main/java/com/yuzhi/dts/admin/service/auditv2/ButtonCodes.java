@@ -19,6 +19,12 @@ public final class ButtonCodes {
     public static final String DATA_SOURCE_UPLOAD_KEYTAB = "ADMIN_DATA_SOURCE_UPLOAD_KEYTAB";
     public static final String DATA_SOURCE_DELETE = "ADMIN_DATA_SOURCE_DELETE";
 
+    // Ops configuration
+    public static final String OPS_CONFIG_VIEW = "OPS_CONFIG_VIEW";
+    public static final String OPS_CONFIG_UPDATE = "OPS_CONFIG_UPDATE";
+    public static final String OPS_TOGGLE_VIEW = "OPS_TOGGLE_VIEW";
+    public static final String OPS_TOGGLE_UPDATE = "OPS_TOGGLE_UPDATE";
+
     // Change request lifecycle
     public static final String CHANGE_REQUEST_SUBMIT = "ADMIN_CHANGE_REQUEST_SUBMIT";
     public static final String CHANGE_REQUEST_APPROVE = "ADMIN_CHANGE_REQUEST_APPROVE";

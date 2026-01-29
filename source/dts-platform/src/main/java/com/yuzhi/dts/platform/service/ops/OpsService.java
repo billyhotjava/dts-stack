@@ -69,13 +69,17 @@ public class OpsService {
         return data;
     }
 
-    public List<Map<String, Object>> listInstances(String status, String keyword, int limit) {
+    public List<Map<String, Object>> listInstances(String entryKey, String status, String keyword, int limit) {
         List<InfraExternalRunLog> runs = runLogRepository.findTop200ByOrderByStartedAtDesc();
         List<Map<String, Object>> results = new ArrayList<>();
+        String normalizedEntry = normalize(entryKey);
         String normalizedStatus = normalize(status);
         String normalizedKeyword = normalize(keyword);
         int cap = Math.max(1, Math.min(limit, 200));
         for (InfraExternalRunLog run : runs) {
+            if (normalizedEntry != null && !normalizedEntry.equalsIgnoreCase(normalize(run.getEntryKey()))) {
+                continue;
+            }
             if (normalizedStatus != null && !normalizedStatus.equalsIgnoreCase(normalize(run.getStatus()))) {
                 continue;
             }
@@ -95,6 +99,9 @@ public class OpsService {
             row.put("finishedAt", run.getFinishedAt());
             row.put("durationMs", run.getDurationMs());
             row.put("message", run.getMessage());
+            Map<String, Object> metrics = parseMetrics(run.getMetricsJson());
+            row.put("logPath", metrics.get("logPath"));
+            row.put("dagId", metrics.get("dagId"));
             results.add(row);
             if (results.size() >= cap) break;
         }
@@ -180,6 +187,17 @@ public class OpsService {
     private boolean contains(String value, String keyword) {
         if (value == null) return false;
         return value.toLowerCase(Locale.ROOT).contains(keyword);
+    }
+
+    private Map<String, Object> parseMetrics(String metricsJson) {
+        if (!StringUtils.hasText(metricsJson)) {
+            return Map.of();
+        }
+        try {
+            return objectMapper.readValue(metricsJson, new com.fasterxml.jackson.core.type.TypeReference<>() {});
+        } catch (Exception ex) {
+            return Map.of();
+        }
     }
 
     private double roundRate(double rate) {

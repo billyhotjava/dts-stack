@@ -20,6 +20,7 @@ services/dts-addax/jobs/*.json
 services/dts-airflow/dags/*.json
 services/jdbc/*.jar
 services/jdbc/*.JAR
+service/dts-addax/jobs/
 services/dts-airflow/dags/*.json
 services/dts-airflow/logs/
 builds/offline/

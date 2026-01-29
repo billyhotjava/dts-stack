@@ -22,6 +22,11 @@ public interface InfraExternalRunLogRepository extends JpaRepository<InfraExtern
 
     List<InfraExternalRunLog> findTop200ByOrderByStartedAtDesc();
 
+    java.util.Optional<InfraExternalRunLog> findFirstByEntryKeyIgnoreCaseAndExternalRunId(
+        String entryKey,
+        String externalRunId
+    );
+
     @Query(
         """
         select r from InfraExternalRunLog r

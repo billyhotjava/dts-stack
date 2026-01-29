@@ -3,10 +3,15 @@ import { Alert, Button, Card, Collapse, Divider, Form, Input, Radio, Select, Spa
 import { SaveOutlined } from "@ant-design/icons";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
-import { createIngestionTask } from "@/api/platformApi";
+import { createIngestionTask, listSqlModels } from "@/api/platformApi";
 import { useUserInfo } from "@/store/userStore";
 import { useParams, useRouter } from "@/routes/hooks";
-import { ingestionTaskAPI, type IngestionTaskDTO, type TableInfo } from "@/api/ingestion";
+import {
+	ingestionTaskAPI,
+	type DefaultDestinationStatus,
+	type IngestionTaskDTO,
+	type TableInfo,
+} from "@/api/ingestion";
 import dataSourcesService, { type InfraDataSource } from "@/api/services/dataSourcesService";
 
 const { Text } = Typography;
@@ -57,6 +62,25 @@ const JDBC_READER_BY_URL: Record<string, string> = {
 const normalizeText = (value?: string) => String(value || "").trim();
 
 const normalizeType = (value?: string) => normalizeText(value).toLowerCase();
+
+const normalizeTag = (value?: string) => normalizeText(value).toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "");
+
+const resolveSourceSystemFromDataSource = (source?: InfraDataSource | null) => {
+	if (!source) return "";
+	const props = source.props || {};
+	const direct = normalizeText(
+		String(
+			props.sourceSystem ||
+				props.sourceName ||
+				props.system ||
+				props.app ||
+				props.appCode ||
+				props.name ||
+				"",
+		),
+	);
+	return direct || normalizeText(source.name);
+};
 
 const resolveReaderTypeFromDataSource = (source?: InfraDataSource | null) => {
 	if (!source) return "";
@@ -116,6 +140,26 @@ const parseJson = (value?: string, label?: string) => {
 	}
 };
 
+const tryParseJson = (value: any) => {
+	if (value == null) return undefined;
+	if (typeof value === "string") {
+		const text = value.trim();
+		if (!text) return undefined;
+		try {
+			return JSON.parse(text);
+		} catch {
+			return undefined;
+		}
+	}
+	return value;
+};
+
+const extractWriterFromAddax = (config?: Record<string, any>) =>
+	config?.job?.content?.[0]?.writer?.parameter;
+
+const extractWriterTypeFromAddax = (config?: Record<string, any>) =>
+	normalizeText(config?.job?.content?.[0]?.writer?.name);
+
 const hasConnectionOverride = (config: any): boolean => {
 	if (!config) return false;
 	if (Array.isArray(config)) {
@@ -147,6 +191,9 @@ const inferPrefixFromMapping = (mapping?: { source?: string; target?: string } |
 	}
 	return "";
 };
+
+const buildModelSelectorFromNames = (names: string[]) =>
+	(names || []).filter(Boolean).map((name) => `model:${name}`).join(" ");
 
 const applyTablesToConfig = (rawConfig: Record<string, any> | undefined, tables: string[]) => {
 	if (!rawConfig) return rawConfig;
@@ -310,9 +357,14 @@ const clearDraft = () => {
 };
 
 const mapTaskToForm = (task: IngestionTaskDTO) => {
-	const sourceConfig = task.sourceConfig || {};
-	const destinationConfig = task.destinationConfig || {};
-	const writerType = normalizeText(task.destinationType);
+	const sourceConfig = tryParseJson(task.sourceConfig) || {};
+	const rawDestinationConfig = tryParseJson(task.destinationConfig);
+	const destinationConfig = rawDestinationConfig || {};
+	const addaxConfig = tryParseJson(task.addaxConfig) as Record<string, any> | undefined;
+	const addaxWriterConfig = extractWriterFromAddax(addaxConfig);
+	const writerType =
+		normalizeText(task.destinationType) ||
+		extractWriterTypeFromAddax(addaxConfig);
 	const useDefaultDestination = !writerType;
 	const syncPrefix =
 		normalizeText(
@@ -321,6 +373,17 @@ const mapTaskToForm = (task: IngestionTaskDTO) => {
 				destinationConfig.targetPrefix ||
 				inferPrefixFromMapping(task.tableMapping?.[0]),
 		) || undefined;
+	const resolvedWriterConfig =
+		(rawDestinationConfig && Object.keys(rawDestinationConfig).length ? rawDestinationConfig : undefined) ||
+		(addaxWriterConfig && Object.keys(addaxWriterConfig).length ? addaxWriterConfig : undefined);
+	const selector = normalizeText(task.dbtModelSelector);
+	const dbtModels = selector
+		? selector
+				.split(/\s+/)
+				.filter((item) => item.startsWith("model:"))
+				.map((item) => item.replace("model:", ""))
+				.filter(Boolean)
+		: [];
 	return {
 		editorMode: "json",
 		useDefaultDestination,
@@ -339,8 +402,11 @@ const mapTaskToForm = (task: IngestionTaskDTO) => {
 		readerConfig: JSON.stringify(sourceConfig, null, 2),
 		syncPrefix,
 		writerType,
-		writerConfig: JSON.stringify(destinationConfig, null, 2),
-		jobConfig: task.addaxConfig ? JSON.stringify(task.addaxConfig, null, 2) : undefined,
+		writerConfig: resolvedWriterConfig ? JSON.stringify(resolvedWriterConfig, null, 2) : undefined,
+		jobConfig: addaxConfig ? JSON.stringify(addaxConfig, null, 2) : undefined,
+		dbtModels,
+		dbtModelSelector: task.dbtModelSelector,
+		dbtDagSelector: task.dbtDagSelector,
 	};
 };
 
@@ -354,9 +420,14 @@ export default function TransformCreatePage() {
 	const [discoveredTables, setDiscoveredTables] = useState<TableInfo[]>([]);
 	const [selectedTableKeys, setSelectedTableKeys] = useState<string[]>([]);
 	const [discoverError, setDiscoverError] = useState("");
+	const [defaultDestinationStatus, setDefaultDestinationStatus] = useState<DefaultDestinationStatus | null>(null);
+	const [loadingDefaultDestination, setLoadingDefaultDestination] = useState(false);
+	const [defaultDestinationError, setDefaultDestinationError] = useState("");
 	const [currentStep, setCurrentStep] = useState(0);
 	const [dataSources, setDataSources] = useState<InfraDataSource[]>([]);
 	const [loadingDataSources, setLoadingDataSources] = useState(false);
+	const [sqlModels, setSqlModels] = useState<Array<{ id?: string; name?: string; alias?: string }>>([]);
+	const [loadingSqlModels, setLoadingSqlModels] = useState(false);
 	const [form] = Form.useForm();
 	const router = useRouter();
 	const params = useParams();
@@ -402,6 +473,22 @@ export default function TransformCreatePage() {
 	}, []);
 
 	useEffect(() => {
+		const loadModels = async () => {
+			try {
+				setLoadingSqlModels(true);
+				const list = (await listSqlModels()) as Array<{ id?: string; name?: string; alias?: string }>;
+				setSqlModels(Array.isArray(list) ? list : []);
+			} catch (error: any) {
+				toast.error(error?.message || "模型列表加载失败");
+				setSqlModels([]);
+			} finally {
+				setLoadingSqlModels(false);
+			}
+		};
+		loadModels();
+	}, []);
+
+	useEffect(() => {
 		if (!selectedDataSource) {
 			if (!selectedDataSourceId && form.getFieldValue("readerType")) {
 				form.setFieldValue("readerType", undefined);
@@ -411,6 +498,20 @@ export default function TransformCreatePage() {
 		const readerType = resolveReaderTypeFromDataSource(selectedDataSource);
 		if (readerType && form.getFieldValue("readerType") !== readerType) {
 			form.setFieldValue("readerType", readerType);
+		}
+		const currentSourceSystem = normalizeText(form.getFieldValue("sourceSystem"));
+		if (!currentSourceSystem) {
+			const resolved = resolveSourceSystemFromDataSource(selectedDataSource);
+			if (resolved) {
+				form.setFieldValue("sourceSystem", resolved);
+			}
+		}
+		const currentDagSelector = normalizeText(form.getFieldValue("dbtDagSelector"));
+		if (!currentDagSelector) {
+			const sourceSystem = normalizeText(form.getFieldValue("sourceSystem")) || resolveSourceSystemFromDataSource(selectedDataSource);
+			if (sourceSystem) {
+				form.setFieldValue("dbtDagSelector", `tab:${normalizeTag(sourceSystem)}`);
+			}
 		}
 	}, [form, selectedDataSource]);
 
@@ -462,6 +563,35 @@ export default function TransformCreatePage() {
 		};
 		loadTask();
 	}, [editId, form, isEdit]);
+
+	useEffect(() => {
+		if (!useDefaultDestination) {
+			return;
+		}
+		let active = true;
+		const loadDefaultDestination = async () => {
+			try {
+				setLoadingDefaultDestination(true);
+				setDefaultDestinationError("");
+				const status = await ingestionTaskAPI.getDefaultDestinationStatus();
+				if (active) {
+					setDefaultDestinationStatus(status);
+				}
+			} catch (error: any) {
+				if (active) {
+					setDefaultDestinationError(error?.message || "无法获取默认数据湖配置");
+				}
+			} finally {
+				if (active) {
+					setLoadingDefaultDestination(false);
+				}
+			}
+		};
+		loadDefaultDestination();
+		return () => {
+			active = false;
+		};
+	}, [useDefaultDestination]);
 
 	const handleSaveDraft = async () => {
 		if (isEdit) {
@@ -630,6 +760,11 @@ export default function TransformCreatePage() {
 					? parseJson(values.writerConfig, "Writer 配置")
 					: buildWriterConfig(values);
 			const jobConfig = parseJson(values.jobConfig, "作业参数");
+			const modelSelector = normalizeText(values.dbtModelSelector) || buildModelSelectorFromNames(values.dbtModels || []);
+			const dagSelector = normalizeText(values.dbtDagSelector);
+			if (modelSelector && !dagSelector) {
+				toast.warning("未填写 DAG 族选择器，将使用默认 DAG 触发 dbt");
+			}
 			if (isEdit && editId) {
 				const updatePayload: IngestionTaskDTO = {
 					...(editingTask || {}),
@@ -645,6 +780,8 @@ export default function TransformCreatePage() {
 					syncPrefix: normalizeText(values.syncPrefix) || undefined,
 					addaxConfig: (jobConfig as Record<string, any>) || editingTask?.addaxConfig,
 					airflowEnabled: Boolean(values.airflowEnabled),
+					dbtModelSelector: modelSelector || undefined,
+					dbtDagSelector: dagSelector || undefined,
 				};
 				await ingestionTaskAPI.updateTask(editId, updatePayload);
 				toast.success("入湖任务已更新");
@@ -668,6 +805,10 @@ export default function TransformCreatePage() {
 					},
 					airflow: {
 						enabled: Boolean(values.airflowEnabled),
+					},
+					dbt: {
+						modelSelector: modelSelector || undefined,
+						dagSelector: dagSelector || undefined,
 					},
 					runNow: Boolean(values.runNow),
 					jobConfig: jobConfig || undefined,
@@ -738,6 +879,7 @@ export default function TransformCreatePage() {
 					layout="vertical"
 					initialValues={initialValues}
 					onFinish={handleSubmit}
+					requiredMark
 				>
 					<Steps
 						current={currentStep}
@@ -911,6 +1053,50 @@ export default function TransformCreatePage() {
 							<Text type="secondary" className="block -mt-3 mb-4">
 								用于自动生成 ODS 表名（如：ods_erp_ + 源表名）。若 Writer 已指定目标表，可留空。
 							</Text>
+							{useDefaultDestination && (
+								<Alert
+									type="info"
+									showIcon
+									className="mb-4"
+									message="使用平台默认数据湖"
+									description="Writer 类型与配置来自管理端数据湖配置，请确保已配置写入器类型与参数，否则创建任务会失败。"
+								/>
+							)}
+							{useDefaultDestination && loadingDefaultDestination ? (
+								<Alert
+									type="info"
+									showIcon
+									className="mb-4"
+									message="默认数据湖配置加载中..."
+								/>
+							) : null}
+							{useDefaultDestination && (defaultDestinationError || defaultDestinationStatus) ? (
+								<Alert
+									type={
+										defaultDestinationError || !defaultDestinationStatus?.writerTypeReady || !defaultDestinationStatus?.writerConfigReady
+											? "warning"
+											: "success"
+									}
+									showIcon
+									className="mb-4"
+									message={
+										defaultDestinationError ||
+										defaultDestinationStatus?.message ||
+										"默认数据湖写入器配置已就绪"
+									}
+									description={
+										defaultDestinationError
+											? "请检查管理端数据湖配置，确保已发布默认数据湖与写入器参数。"
+											: !defaultDestinationStatus?.writerTypeReady
+												? "默认数据湖未配置写入器类型，请在管理端补齐。"
+												: !defaultDestinationStatus?.writerConfigReady
+													? "默认数据湖未配置写入器参数，请在管理端补齐。"
+													: defaultDestinationStatus?.destinationName
+														? `当前默认数据湖：${defaultDestinationStatus.destinationName}`
+														: "默认数据湖已配置"
+									}
+								/>
+							) : null}
 							{!useDefaultDestination && (
 								<>
 									<Divider orientation="left">Writer 配置</Divider>
@@ -959,10 +1145,30 @@ export default function TransformCreatePage() {
 												</Form.Item>
 											</div>
 											<div className="grid gap-4 md:grid-cols-2">
-												<Form.Item name="writerUsername" label="Writer 用户名">
+												<Form.Item
+													name="writerUsername"
+													label="Writer 用户名"
+													dependencies={["useDefaultDestination", "editorMode"]}
+													rules={[
+														({ getFieldValue }) => ({
+															required: !getFieldValue("useDefaultDestination") && getFieldValue("editorMode") !== "json",
+															message: "请输入 Writer 用户名",
+														}),
+													]}
+												>
 													<Input placeholder="数据库账号" />
 												</Form.Item>
-												<Form.Item name="writerPassword" label="Writer 密码">
+												<Form.Item
+													name="writerPassword"
+													label="Writer 密码"
+													dependencies={["useDefaultDestination", "editorMode"]}
+													rules={[
+														({ getFieldValue }) => ({
+															required: !getFieldValue("useDefaultDestination") && getFieldValue("editorMode") !== "json",
+															message: "请输入 Writer 密码",
+														}),
+													]}
+												>
 													<Input.Password placeholder="******" />
 												</Form.Item>
 											</div>
@@ -999,6 +1205,31 @@ export default function TransformCreatePage() {
 					)}
 					{currentStep === 3 && (
 						<>
+							<Card type="inner" title="dbt 模型联动" className="mb-4">
+								<Form.Item name="dbtModels" label="选择模型（可选）">
+									<Select
+										mode="multiple"
+										allowClear
+										loading={loadingSqlModels}
+										placeholder={loadingSqlModels ? "模型加载中..." : "选择需要联动的模型"}
+										options={sqlModels.map((model) => ({
+											label: model.alias ? `${model.name} (${model.alias})` : model.name,
+											value: model.name,
+										}))}
+										showSearch
+										optionFilterProp="label"
+									/>
+								</Form.Item>
+								<Form.Item name="dbtModelSelector" label="模型选择器（可选）">
+									<Input placeholder="例如：model:ods_xxx model:dwd_xxx" />
+								</Form.Item>
+								<Form.Item name="dbtDagSelector" label="DAG 族选择器（可选）">
+									<Input placeholder="例如：tab:erp" />
+								</Form.Item>
+								<Text type="secondary">
+									若未填写模型选择器，将根据选中的模型生成 model:xxx 选择器；DAG 族建议使用 tab:源系统。
+								</Text>
+							</Card>
 							<Form.Item name="jobConfig" label="作业参数 (JSON，可选)" rules={[{ validator: jsonValidator("作业参数") }]}>
 								<Input.TextArea rows={4} placeholder='{"setting":{"speed":{"channel":3}}}' />
 							</Form.Item>

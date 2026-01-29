@@ -84,9 +84,12 @@ export interface ScreenState {
 
 export type ScreenAction =
     | { type: 'SET_CONFIG'; payload: ScreenConfig }
+    | { type: 'LOAD_CONFIG'; payload: ScreenConfig }  // Load without adding to history
     | { type: 'ADD_COMPONENT'; payload: ScreenComponent }
     | { type: 'UPDATE_COMPONENT'; payload: { id: string; updates: Partial<ScreenComponent> } }
     | { type: 'DELETE_COMPONENTS'; payload: string[] }
+    | { type: 'COPY_COMPONENTS'; payload: string[] }  // Copy to clipboard
+    | { type: 'PASTE_COMPONENTS'; payload: { components: ScreenComponent[]; offsetX?: number; offsetY?: number } }
     | { type: 'SELECT_COMPONENTS'; payload: string[] }
     | { type: 'MOVE_COMPONENT'; payload: { id: string; x: number; y: number } }
     | { type: 'RESIZE_COMPONENT'; payload: { id: string; width: number; height: number } }

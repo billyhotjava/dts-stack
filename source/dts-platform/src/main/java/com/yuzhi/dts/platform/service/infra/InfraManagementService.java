@@ -20,7 +20,9 @@ import com.yuzhi.dts.platform.service.infra.dto.DataStorageRequest;
 import com.yuzhi.dts.platform.service.infra.dto.InfraDataSourceDto;
 import com.yuzhi.dts.platform.service.infra.dto.InfraDataStorageDto;
 import com.yuzhi.dts.platform.service.infra.event.InceptorDataSourcePublishedEvent;
+import com.yuzhi.dts.platform.service.ingestion.IngestionServiceClient;
 import com.yuzhi.dts.platform.service.infra.JdbcCatalogSyncService.JdbcSyncResult;
+import com.yuzhi.dts.platform.web.rest.ApiResponse;
 import com.yuzhi.dts.platform.web.rest.infra.HiveConnectionTestRequest;
 import jakarta.persistence.EntityNotFoundException;
 import java.time.Instant;
@@ -59,6 +61,7 @@ public class InfraManagementService {
     private final ObjectMapper objectMapper;
     private final ApplicationEventPublisher eventPublisher;
     private final PostgresConnectionService postgresConnectionService;
+    private final IngestionServiceClient ingestionServiceClient;
 
     private static final String TYPE_INCEPTOR = "INCEPTOR";
     private static final String TYPE_POSTGRES = "POSTGRES";
@@ -86,7 +89,8 @@ public class InfraManagementService {
         InfraSecurityProperties securityProperties,
         ObjectMapper objectMapper,
         ApplicationEventPublisher eventPublisher,
-        PostgresConnectionService postgresConnectionService
+        PostgresConnectionService postgresConnectionService,
+        IngestionServiceClient ingestionServiceClient
     ) {
         this.dataSourceRepository = dataSourceRepository;
         this.storageRepository = storageRepository;
@@ -96,6 +100,7 @@ public class InfraManagementService {
         this.objectMapper = objectMapper;
         this.eventPublisher = eventPublisher;
         this.postgresConnectionService = postgresConnectionService;
+        this.ingestionServiceClient = ingestionServiceClient;
     }
 
     public List<InfraDataSourceDto> listDataSources(String activeDeptHeader) {
@@ -195,17 +200,58 @@ public class InfraManagementService {
         return toDto(saved);
     }
 
+    public record DataSourceUpdateImpact(
+        InfraDataSourceDto dataSource,
+        boolean connectionChanged,
+        int affectedTasks,
+        int changeLogCreated,
+        List<Long> taskIds
+    ) {}
+
     @Transactional
-    public InfraDataSourceDto updateDataSource(UUID id, DataSourceRequest request, String username, String activeDeptHeader) {
+    public DataSourceUpdateImpact updateDataSourceWithImpact(
+        UUID id,
+        DataSourceRequest request,
+        String username,
+        String activeDeptHeader
+    ) {
         InfraDataSource entity = dataSourceRepository.findById(id).orElseThrow(EntityNotFoundException::new);
         ensureNotInceptorManaged(request.type());
         ensureNotInceptorManaged(entity.getType());
         ensureNotSystemManaged(entity.getType(), activeDeptHeader);
         ensureDeptScopeWritable(entity, activeDeptHeader);
         validateRequest(request, entity);
+        String beforeType = entity.getType();
+        String beforeJdbcUrl = entity.getJdbcUrl();
+        String beforeUsername = entity.getUsername();
+        Map<String, Object> beforeProps = readProps(entity.getProps());
+        Map<String, Object> beforeSecrets = secretService.readSecrets(entity);
         applyDataSource(entity, request, username);
         applyOwnerDept(entity, activeDeptHeader);
-        return toDto(dataSourceRepository.save(entity));
+        InfraDataSource saved = dataSourceRepository.save(entity);
+        Map<String, Object> afterProps = readProps(saved.getProps());
+        Map<String, Object> afterSecrets = secretService.readSecrets(saved);
+        ConnectionChange change = buildConnectionChange(
+            beforeType,
+            beforeJdbcUrl,
+            beforeUsername,
+            beforeProps,
+            beforeSecrets,
+            saved.getType(),
+            saved.getJdbcUrl(),
+            saved.getUsername(),
+            afterProps,
+            afterSecrets
+        );
+        ImpactResult impact = change.changed()
+            ? notifyIngestionTasks(saved, change, username)
+            : ImpactResult.empty();
+        return new DataSourceUpdateImpact(toDto(saved), change.changed(), impact.affected(), impact.created(), impact.taskIds());
+    }
+
+    @Transactional
+    public InfraDataSourceDto updateDataSource(UUID id, DataSourceRequest request, String username, String activeDeptHeader) {
+        return updateDataSourceWithImpact(id, request, username, activeDeptHeader).dataSource();
     }
 
     public InfraDataSource findEntity(UUID id) {
@@ -405,6 +451,206 @@ public class InfraManagementService {
         entity.setCreatedBy(entity.getCreatedBy() == null ? username : entity.getCreatedBy());
         if (!StringUtils.hasText(entity.getStatus())) {
             entity.setStatus(STATUS_ACTIVE);
+        }
+    }
+
+    private record ConnectionChange(
+        boolean changed,
+        List<String> fields,
+        Map<String, Object> before,
+        Map<String, Object> after
+    ) {}
+
+    private record ImpactResult(int affected, int created, List<Long> taskIds) {
+        static ImpactResult empty() {
+            return new ImpactResult(0, 0, List.of());
+        }
+    }
+
+    private ConnectionChange buildConnectionChange(
+        String beforeType,
+        String beforeJdbcUrl,
+        String beforeUsername,
+        Map<String, Object> beforeProps,
+        Map<String, Object> beforeSecrets,
+        String afterType,
+        String afterJdbcUrl,
+        String afterUsername,
+        Map<String, Object> afterProps,
+        Map<String, Object> afterSecrets
+    ) {
+        Map<String, Object> beforeSig = buildConnectionSignature(beforeType, beforeJdbcUrl, beforeUsername, beforeProps, beforeSecrets);
+        Map<String, Object> afterSig = buildConnectionSignature(afterType, afterJdbcUrl, afterUsername, afterProps, afterSecrets);
+        List<String> changedFields = new java.util.ArrayList<>();
+        java.util.Set<String> keys = new java.util.LinkedHashSet<>();
+        keys.addAll(beforeSig.keySet());
+        keys.addAll(afterSig.keySet());
+        keys.remove("passwordPresent");
+        for (String key : keys) {
+            if (!Objects.equals(beforeSig.get(key), afterSig.get(key))) {
+                changedFields.add(key);
+            }
+        }
+        String beforePassword = extractPassword(beforeSecrets);
+        String afterPassword = extractPassword(afterSecrets);
+        if (!Objects.equals(beforePassword, afterPassword)) {
+            changedFields.add("password");
+        }
+        boolean changed = !changedFields.isEmpty();
+        return new ConnectionChange(changed, List.copyOf(changedFields), beforeSig, afterSig);
+    }
+
+    private Map<String, Object> buildConnectionSignature(
+        String type,
+        String jdbcUrl,
+        String username,
+        Map<String, Object> props,
+        Map<String, Object> secrets
+    ) {
+        Map<String, Object> signature = new LinkedHashMap<>();
+        signature.put("type", normalizeText(type));
+        signature.put("jdbcUrl", normalizeText(jdbcUrl));
+        signature.put("username", normalizeText(username));
+        signature.put("host", normalizeText(props.get("host")));
+        signature.put("port", normalizeNumber(props.get("port")));
+        signature.put("database", normalizeText(props.get("database")));
+        signature.put("schema", normalizeText(props.get("schema")));
+        signature.put("driverClass", normalizeText(props.get("driverClass")));
+        signature.put("driverVersion", normalizeText(props.get("driverVersion")));
+        signature.put("jdbcProperties", normalizeStringMap(props.get("jdbcProperties")));
+        signature.put("readerType", normalizeText(extractReaderType(props)));
+        signature.put("format", normalizeText(props.get("format")));
+        signature.put("passwordPresent", StringUtils.hasText(extractPassword(secrets)));
+        return signature;
+    }
+
+    private Object normalizeNumber(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Number number) {
+            return number.longValue();
+        }
+        try {
+            return Long.parseLong(value.toString().trim());
+        } catch (Exception ex) {
+            return normalizeText(value);
+        }
+    }
+
+    private String normalizeText(Object value) {
+        if (value == null) {
+            return null;
+        }
+        String text = value.toString().trim();
+        return text.isEmpty() ? null : text;
+    }
+
+    private Map<String, String> normalizeStringMap(Object value) {
+        if (!(value instanceof Map<?, ?> map)) {
+            return Collections.emptyMap();
+        }
+        java.util.Map<String, String> normalized = new java.util.TreeMap<>();
+        map.forEach((k, v) -> {
+            if (k == null) {
+                return;
+            }
+            String key = k.toString();
+            normalized.put(key, v == null ? null : v.toString());
+        });
+        return normalized;
+    }
+
+    private ImpactResult notifyIngestionTasks(InfraDataSource dataSource, ConnectionChange change, String operator) {
+        if (dataSource == null || dataSource.getId() == null) {
+            return ImpactResult.empty();
+        }
+        if (!ingestionServiceClient.isEnabled()) {
+            return ImpactResult.empty();
+        }
+        ApiResponse<Object> response = ingestionServiceClient.listTasksBySource(dataSource.getId(), false);
+        List<IngestionTaskSummary> tasks = extractTaskSummaries(response == null ? null : response.getData());
+        if (tasks.isEmpty()) {
+            return ImpactResult.empty();
+        }
+        int created = 0;
+        List<Long> taskIds = new java.util.ArrayList<>();
+        for (IngestionTaskSummary task : tasks) {
+            if (task.id() == null) {
+                continue;
+            }
+            taskIds.add(task.id());
+            Map<String, Object> detail = new LinkedHashMap<>();
+            detail.put("dataSourceId", dataSource.getId().toString());
+            detail.put("dataSourceName", dataSource.getName());
+            detail.put("changedFields", change.fields());
+            detail.put("before", change.before());
+            detail.put("after", change.after());
+            detail.put("operator", operator);
+            detail.put("timestamp", Instant.now().toString());
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("taskId", task.id());
+            payload.put("taskName", task.name());
+            payload.put("changeType", "CONN_PARAM");
+            payload.put("summary", "数据源连接已更新，请确认入湖任务");
+            payload.put("detail", toJson(detail));
+            payload.put("riskLevel", "M");
+            payload.put("status", "PENDING");
+            ApiResponse<Map<String, Object>> result = ingestionServiceClient.createChangeLog(payload);
+            if (result != null && result.getStatus() >= 200 && result.getStatus() < 300) {
+                created++;
+            }
+        }
+        return new ImpactResult(tasks.size(), created, List.copyOf(taskIds));
+    }
+
+    private record IngestionTaskSummary(Long id, String name, String status) {}
+
+    private List<IngestionTaskSummary> extractTaskSummaries(Object data) {
+        if (data == null) {
+            return List.of();
+        }
+        Object payload = data;
+        if (payload instanceof Map<?, ?> map && map.containsKey("content")) {
+            payload = map.get("content");
+        }
+        if (!(payload instanceof List<?> list)) {
+            return List.of();
+        }
+        List<IngestionTaskSummary> tasks = new java.util.ArrayList<>();
+        for (Object entry : list) {
+            if (entry instanceof Map<?, ?> item) {
+                Long id = parseLong(item.get("id"));
+                String name = normalizeText(item.get("name"));
+                String status = normalizeText(item.get("status"));
+                tasks.add(new IngestionTaskSummary(id, name, status));
+            }
+        }
+        return tasks;
+    }
+
+    private Long parseLong(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Number number) {
+            return number.longValue();
+        }
+        try {
+            return Long.parseLong(value.toString());
+        } catch (Exception ex) {
+            return null;
+        }
+    }
+
+    private String toJson(Object value) {
+        if (value == null) {
+            return null;
+        }
+        try {
+            return objectMapper.writeValueAsString(value);
+        } catch (Exception ex) {
+            return value.toString();
         }
     }
 

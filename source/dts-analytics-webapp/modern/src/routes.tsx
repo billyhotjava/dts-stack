@@ -24,6 +24,8 @@ import DatabaseNewPage from "./pages/DatabaseNewPage";
 import PublicCardPage from "./pages/PublicCardPage";
 import PublicDashboardPage from "./pages/PublicDashboardPage";
 import ScreenDesignerPage from "./pages/screens/ScreenDesignerPage";
+import ScreenPreviewPage from "./pages/screens/ScreenPreviewPage";
+import ScreensPage from "./pages/screens/ScreensPage";
 
 
 function ModernAliasRedirect() {
@@ -63,8 +65,10 @@ export function createRoutes() {
 					{ path: "/trash", Component: TrashPage },
 					{ path: "/public/card/:uuid", Component: PublicCardPage },
 					{ path: "/public/dashboard/:uuid", Component: PublicDashboardPage },
+					{ path: "/screens", Component: ScreensPage },
 					{ path: "/screens/new", Component: ScreenDesignerPage },
 					{ path: "/screens/:id/edit", Component: ScreenDesignerPage },
+					{ path: "/screens/:id/preview", Component: ScreenPreviewPage },
 					{ path: "/search", Component: SearchPage },
 					{ path: "*", Component: NotFoundPage },
 				],

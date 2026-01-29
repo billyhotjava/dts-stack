@@ -33,6 +33,25 @@ public class DefaultDestinationSyncService {
         return new DefaultDestinationSnapshot(writerType, destinationName, destinationConfig);
     }
 
+    public DefaultDestinationStatus checkDefaultDestinationStatus() {
+        AdminInfraClient.AdminDataLakeConfig lake = adminInfraClient.fetchDefaultDataLake().orElse(null);
+        if (lake == null) {
+            return DefaultDestinationStatus.missing("未配置默认数据湖");
+        }
+        Map<String, Object> destinationConfig = resolveDestinationConfig(lake);
+        String writerType = resolveWriterType(lake, destinationConfig);
+        boolean hasWriterType = StringUtils.hasText(writerType);
+        boolean hasConfig = destinationConfig != null && !destinationConfig.isEmpty();
+        String message = null;
+        if (!hasWriterType) {
+            message = "默认数据湖未配置写入器类型";
+        } else if (!hasConfig) {
+            message = "默认数据湖未配置写入器参数";
+        }
+        String destinationName = firstNonEmpty(lake.getDestinationName(), lake.getName());
+        return new DefaultDestinationStatus(true, hasWriterType, hasConfig, destinationName, writerType, message);
+    }
+
     private Map<String, Object> resolveDestinationConfig(AdminInfraClient.AdminDataLakeConfig lake) {
         if (lake == null || lake.getDestinationConfig() == null) {
             return new LinkedHashMap<>();
@@ -90,6 +109,19 @@ public class DefaultDestinationSyncService {
             return !StringUtils.hasText(destinationDefinitionId)
                 && !StringUtils.hasText(destinationName)
                 && (destinationConfig == null || destinationConfig.isEmpty());
+        }
+    }
+
+    public record DefaultDestinationStatus(
+        boolean available,
+        boolean writerTypeReady,
+        boolean writerConfigReady,
+        String destinationName,
+        String writerType,
+        String message
+    ) {
+        public static DefaultDestinationStatus missing(String message) {
+            return new DefaultDestinationStatus(false, false, false, null, null, message);
         }
     }
 }

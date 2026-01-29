@@ -136,6 +136,54 @@ public class AuditButtonRegistry {
         register(
             map,
             new AuditButtonMetadata(
+                ButtonCodes.OPS_CONFIG_VIEW,
+                "system-admin",
+                "运维配置",
+                "OPS_CONFIG_VIEW",
+                "查看运维配置",
+                AuditOperationKind.QUERY,
+                true
+            )
+        );
+        register(
+            map,
+            new AuditButtonMetadata(
+                ButtonCodes.OPS_CONFIG_UPDATE,
+                "system-admin",
+                "运维配置",
+                "OPS_CONFIG_UPDATE",
+                "更新运维配置",
+                AuditOperationKind.UPDATE,
+                false
+            )
+        );
+        register(
+            map,
+            new AuditButtonMetadata(
+                ButtonCodes.OPS_TOGGLE_VIEW,
+                "system-admin",
+                "运维配置",
+                "OPS_TOGGLE_VIEW",
+                "查看功能开关",
+                AuditOperationKind.QUERY,
+                true
+            )
+        );
+        register(
+            map,
+            new AuditButtonMetadata(
+                ButtonCodes.OPS_TOGGLE_UPDATE,
+                "system-admin",
+                "运维配置",
+                "OPS_TOGGLE_UPDATE",
+                "更新功能开关",
+                AuditOperationKind.UPDATE,
+                false
+            )
+        );
+        register(
+            map,
+            new AuditButtonMetadata(
                 ButtonCodes.DATA_SOURCE_LIST,
                 "system-admin",
                 "基础设施",

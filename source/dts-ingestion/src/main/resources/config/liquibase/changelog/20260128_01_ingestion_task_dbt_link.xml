@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+    http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="20260128-1-add-dbt-link" author="assistant">
+        <addColumn tableName="ingestion_task">
+            <column name="dbt_model_selector" type="varchar(512)"/>
+            <column name="dbt_dag_selector" type="varchar(256)"/>
+        </addColumn>
+    </changeSet>
+
+</databaseChangeLog>

@@ -6,6 +6,7 @@ import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.ingestion.IngestionServiceClient;
 import com.yuzhi.dts.platform.service.infra.DefaultDestinationSyncService;
 import com.yuzhi.dts.platform.service.etl.OdsTableMappingSyncService;
+import com.yuzhi.dts.platform.service.ops.ExternalRunLogService;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.springframework.http.ResponseEntity;
@@ -17,6 +18,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -31,17 +33,20 @@ public class IngestionTaskProxyResource {
     private final DefaultDestinationSyncService destinationSyncService;
     private final OdsTableMappingSyncService odsTableMappingSyncService;
     private final AuditService auditService;
+    private final ExternalRunLogService externalRunLogService;
 
     public IngestionTaskProxyResource(
         IngestionServiceClient ingestionClient,
         DefaultDestinationSyncService destinationSyncService,
         OdsTableMappingSyncService odsTableMappingSyncService,
-        AuditService auditService
+        AuditService auditService,
+        ExternalRunLogService externalRunLogService
     ) {
         this.ingestionClient = ingestionClient;
         this.destinationSyncService = destinationSyncService;
         this.odsTableMappingSyncService = odsTableMappingSyncService;
         this.auditService = auditService;
+        this.externalRunLogService = externalRunLogService;
     }
 
     @PostMapping("/tasks")
@@ -78,6 +83,13 @@ public class IngestionTaskProxyResource {
             );
         }
         return response;
+    }
+
+    @GetMapping("/default-destination")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ApiResponse<DefaultDestinationSyncService.DefaultDestinationStatus> getDefaultDestinationStatus() {
+        DefaultDestinationSyncService.DefaultDestinationStatus status = destinationSyncService.checkDefaultDestinationStatus();
+        return ApiResponses.ok(status);
     }
 
     @GetMapping("/tasks/list")
@@ -127,8 +139,31 @@ public class IngestionTaskProxyResource {
 
     @PostMapping("/tasks/{id}/execute")
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
-    public ResponseEntity<ApiResponse<Map<String, Object>>> executeTask(@PathVariable("id") Long id) {
-        return ResponseEntity.ok(ingestionClient.executeTask(id));
+    public ResponseEntity<ApiResponse<Map<String, Object>>> executeTask(
+        @PathVariable("id") Long id,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        ApiResponse<Map<String, Object>> response = ingestionClient.executeTask(id);
+        if (response != null && response.getStatus() >= 200 && response.getStatus() < 300) {
+            String operator = SecurityUtils.getCurrentUserLogin().orElse("system");
+            try {
+                externalRunLogService.recordIngestionExecution(response.getData(), activeDept);
+                auditService.auditAction(
+                    "INFRA_EXTERNAL_RUN_SYNC",
+                    AuditStage.SUCCESS,
+                    String.valueOf(id),
+                    Map.of("summary", "同步入湖执行实例", "taskId", id, "operator", operator)
+                );
+            } catch (RuntimeException ex) {
+                auditService.auditAction(
+                    "INFRA_EXTERNAL_RUN_SYNC",
+                    AuditStage.FAIL,
+                    String.valueOf(id),
+                    Map.of("summary", "同步入湖执行实例失败", "taskId", id, "operator", operator, "error", ex.getMessage())
+                );
+            }
+        }
+        return ResponseEntity.ok(response);
     }
 
     @PostMapping("/tasks/{id}/dag/rebuild")
@@ -141,19 +176,39 @@ public class IngestionTaskProxyResource {
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ResponseEntity<ApiResponse<Map<String, Object>>> listExecutions(
         @PathVariable("id") Long id,
-        @RequestParam Map<String, String> params
+        @RequestParam Map<String, String> params,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
         Map<String, Object> query = new LinkedHashMap<>();
         if (params != null) {
             query.putAll(params);
         }
-        return ResponseEntity.ok(ingestionClient.listExecutions(id, query));
+        ApiResponse<Map<String, Object>> response = ingestionClient.listExecutions(id, query);
+        if (response != null && response.getData() != null) {
+            try {
+                externalRunLogService.syncIngestionExecutions(response.getData(), activeDept);
+            } catch (RuntimeException ex) {
+                // best-effort sync
+            }
+        }
+        return ResponseEntity.ok(response);
     }
 
     @GetMapping("/tasks/{id}/executions/latest")
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
-    public ResponseEntity<ApiResponse<Map<String, Object>>> latestExecution(@PathVariable("id") Long id) {
-        return ResponseEntity.ok(ingestionClient.latestExecution(id));
+    public ResponseEntity<ApiResponse<Map<String, Object>>> latestExecution(
+        @PathVariable("id") Long id,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        ApiResponse<Map<String, Object>> response = ingestionClient.latestExecution(id);
+        if (response != null && response.getData() != null) {
+            try {
+                externalRunLogService.syncIngestionExecutions(response.getData(), activeDept);
+            } catch (RuntimeException ex) {
+                // best-effort sync
+            }
+        }
+        return ResponseEntity.ok(response);
     }
 
     @PostMapping("/metadata/tables")

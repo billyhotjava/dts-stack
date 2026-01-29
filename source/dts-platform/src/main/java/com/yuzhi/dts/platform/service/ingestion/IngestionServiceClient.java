@@ -70,6 +70,15 @@ public class IngestionServiceClient {
         return exchangeTask("/api/ingestion/tasks/list", HttpMethod.GET, null, params);
     }
 
+    public ApiResponse<Object> listTasksBySource(java.util.UUID sourceDataSourceId, boolean includeDeleted) {
+        Map<String, Object> params = new java.util.LinkedHashMap<>();
+        if (sourceDataSourceId != null) {
+            params.put("sourceDataSourceId", sourceDataSourceId.toString());
+        }
+        params.put("includeDeleted", String.valueOf(includeDeleted));
+        return exchangeObject("/api/ingestion/tasks/by-source", HttpMethod.GET, null, params, restTemplate);
+    }
+
     public ApiResponse<Map<String, Object>> getTask(Long id) {
         return exchangeTask("/api/ingestion/tasks/" + id, HttpMethod.GET, null, null);
     }

@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import Editor from "@monaco-editor/react";
 import { toast } from "sonner";
 import {
 	Badge,
@@ -8,7 +9,9 @@ import {
 	Form,
 	Input,
 	Modal,
+	Select,
 	Space,
+	Switch,
 	Table,
 	Tabs,
 	Tag,
@@ -20,13 +23,17 @@ import type { ColumnsType } from "antd/es/table";
 import { EmptyState } from "@/components/empty-state";
 import {
 	getDbtConfig,
-	listDbtModels,
 	listDbtRuns,
+	listSqlModels,
+	createSqlModel,
+	updateSqlModel,
+	deleteSqlModel,
 	listModelingPlans,
 	syncDbtModels,
 	triggerDbtRun,
 	updateDbtConfig,
 } from "@/api/platformApi";
+import dataSourcesService, { type InfraDataSource } from "@/api/services/dataSourcesService";
 
 const { Text } = Typography;
 const { DirectoryTree } = Tree;
@@ -71,22 +78,32 @@ type DbtConfigView = {
 		vars?: Record<string, any>;
 	};
 	profileStatus?: { generated?: boolean; message?: string; profilePath?: string };
+	workspaceStatus?: { ok?: boolean; message?: string; detail?: Record<string, any> };
 	target?: { id?: string; name?: string; type?: string };
 };
 
-type DbtModelSummary = {
-	uniqueId?: string;
+type SqlModel = {
+	id?: string;
+	planId?: string;
+	planName?: string;
 	name?: string;
 	alias?: string;
-	database?: string;
-	schema?: string;
-	path?: string;
-};
-
-type DbtModelResult = {
+	layer?: string;
+	sourceDataSourceId?: string;
+	sourceDataSourceName?: string;
+	sourceSystem?: string;
+	dagSelector?: string;
+	tags?: string;
+	materialized?: string;
+	schemaName?: string;
+	description?: string;
+	sql?: string;
 	enabled?: boolean;
-	models?: DbtModelSummary[];
-	message?: string | null;
+	modelPath?: string;
+	ownerDept?: string;
+	status?: string;
+	createdDate?: string;
+	lastModifiedDate?: string;
 };
 
 type ProjectSpace = {
@@ -128,7 +145,7 @@ const layerTag = (layer?: string) => {
 	return <Tag color={color}>{layer}</Tag>;
 };
 
-const resolveModelKey = (model: DbtModelSummary, fallback: string) => model.uniqueId || model.name || fallback;
+const resolveModelKey = (model: SqlModel, fallback: string) => model.id || model.name || fallback;
 const resolveSpaceKey = (space: ProjectSpace, index: number) => `space-${space.id || index}`;
 
 export default function SqlModelingPage() {
@@ -140,7 +157,12 @@ export default function SqlModelingPage() {
 	const [spaces, setSpaces] = useState<ProjectSpace[]>([]);
 	const [activeSpaceKey, setActiveSpaceKey] = useState<string | null>(null);
 	const [modelsLoading, setModelsLoading] = useState(false);
-	const [modelResult, setModelResult] = useState<DbtModelResult | null>(null);
+	const [sqlModels, setSqlModels] = useState<SqlModel[]>([]);
+	const [dataSources, setDataSources] = useState<InfraDataSource[]>([]);
+	const [modelDrawerOpen, setModelDrawerOpen] = useState(false);
+	const [modelSubmitting, setModelSubmitting] = useState(false);
+	const [editingModel, setEditingModel] = useState<SqlModel | null>(null);
+	const [sqlDraft, setSqlDraft] = useState("");
 	const [syncingModels, setSyncingModels] = useState(false);
 	const [runsLoading, setRunsLoading] = useState(false);
 	const [runs, setRuns] = useState<DagRun[]>([]);
@@ -151,6 +173,7 @@ export default function SqlModelingPage() {
 	const [activeModelKey, setActiveModelKey] = useState<string | null>(null);
 	const [form] = Form.useForm();
 	const [runForm] = Form.useForm();
+	const [modelForm] = Form.useForm();
 
 	const loadConfig = useCallback(async () => {
 		setConfigLoading(true);
@@ -177,12 +200,21 @@ export default function SqlModelingPage() {
 	const loadModels = useCallback(async () => {
 		setModelsLoading(true);
 		try {
-			const resp = (await listDbtModels()) as DbtModelResult;
-			setModelResult(resp || null);
+			const resp = (await listSqlModels()) as SqlModel[];
+			setSqlModels(Array.isArray(resp) ? resp : []);
 		} catch (err: any) {
 			toast.error(err?.message || "加载模型失败");
 		} finally {
 			setModelsLoading(false);
+		}
+	}, []);
+
+	const loadSources = useCallback(async () => {
+		try {
+			const resp = await dataSourcesService.list();
+			setDataSources(Array.isArray(resp) ? resp : []);
+		} catch (err: any) {
+			toast.error(err?.message || "加载数据源失败");
 		}
 	}, []);
 
@@ -216,7 +248,8 @@ export default function SqlModelingPage() {
 		void loadModels();
 		void loadRuns();
 		void loadSpaces();
-	}, [loadConfig, loadModels, loadRuns, loadSpaces]);
+		void loadSources();
+	}, [loadConfig, loadModels, loadRuns, loadSpaces, loadSources]);
 
 	useEffect(() => {
 		if (spaces.length === 0) {
@@ -257,9 +290,9 @@ export default function SqlModelingPage() {
 
 	const openRun = () => {
 		runForm.resetFields();
-		const modelName = activeModel?.name ? `model:${activeModel.name}` : "";
+		const selector = activeModel?.dagSelector || (activeModel?.name ? `model:${activeModel.name}` : "");
 		runForm.setFieldsValue({
-			models: modelName,
+			models: selector,
 			target: dbtConfig?.config?.targetName || "",
 			vars: "",
 		});
@@ -291,7 +324,6 @@ export default function SqlModelingPage() {
 			const result: any = await syncDbtModels();
 			const message = result?.message || result?.summary || "模型已同步至资产目录";
 			toast.success(message);
-			await loadModels();
 		} catch (err: any) {
 			toast.error(err?.message || "同步模型失败");
 		} finally {
@@ -299,12 +331,129 @@ export default function SqlModelingPage() {
 		}
 	};
 
-	const models = modelResult?.models || [];
+	const openCreateModel = () => {
+		setEditingModel(null);
+		modelForm.resetFields();
+		modelForm.setFieldsValue({
+			planId: activeSpace?.id || undefined,
+			layer: "DWD",
+			materialized: "table",
+			enabled: true,
+			sql: "select\n  *\nfrom {{ source('ods', 'your_table') }}\n",
+		});
+		setModelDrawerOpen(true);
+	};
+
+	const openEditModel = () => {
+		if (!activeModel) return;
+		setEditingModel(activeModel);
+		modelForm.setFieldsValue({
+			planId: activeModel.planId,
+			name: activeModel.name,
+			alias: activeModel.alias,
+			layer: activeModel.layer,
+			sourceDataSourceId: activeModel.sourceDataSourceId,
+			schemaName: activeModel.schemaName,
+			materialized: activeModel.materialized,
+			tags: activeModel.tags,
+			description: activeModel.description,
+			sql: activeModel.sql,
+			enabled: activeModel.enabled,
+			status: activeModel.status,
+		});
+		setModelDrawerOpen(true);
+	};
+
+	const submitModel = async () => {
+		setModelSubmitting(true);
+		try {
+			const values = await modelForm.validateFields([
+				"planId",
+				"name",
+				"sourceDataSourceId",
+				"sql",
+			]);
+			const payload = {
+				planId: values.planId,
+				name: normalizeText(values.name),
+				alias: normalizeText(values.alias) || undefined,
+				layer: normalizeText(values.layer) || undefined,
+				sourceDataSourceId: values.sourceDataSourceId,
+				schemaName: normalizeText(values.schemaName) || undefined,
+				materialized: normalizeText(values.materialized) || undefined,
+				tags: normalizeText(values.tags) || undefined,
+				description: normalizeText(values.description) || undefined,
+				sql: values.sql,
+				enabled: values.enabled ?? true,
+				status: normalizeText(values.status) || undefined,
+			};
+			if (editingModel?.id) {
+				await updateSqlModel(editingModel.id, payload);
+				toast.success("模型已更新");
+			} else {
+				await createSqlModel(payload);
+				toast.success("模型已创建");
+			}
+			setModelDrawerOpen(false);
+			await loadModels();
+		} catch (err: any) {
+			toast.error(err?.message || "保存模型失败");
+		} finally {
+			setModelSubmitting(false);
+		}
+	};
+
+	const removeModel = () => {
+		if (!activeModel?.id) return;
+		Modal.confirm({
+			title: "删除模型？",
+			content: `确认删除模型 ${activeModel.name || ""} 吗？`,
+			onOk: async () => {
+				try {
+					await deleteSqlModel(activeModel.id as string);
+					toast.success("模型已删除");
+					setActiveModelKey(null);
+					await loadModels();
+				} catch (err: any) {
+					toast.error(err?.message || "删除失败");
+				}
+			},
+		});
+	};
+
+	const saveSqlDraft = async () => {
+		if (!activeModel?.id) return;
+		try {
+			const payload = {
+				planId: activeModel.planId,
+				name: activeModel.name,
+				alias: activeModel.alias,
+				layer: activeModel.layer,
+				sourceDataSourceId: activeModel.sourceDataSourceId,
+				schemaName: activeModel.schemaName,
+				materialized: activeModel.materialized,
+				tags: activeModel.tags,
+				description: activeModel.description,
+				sql: sqlDraft,
+				enabled: activeModel.enabled ?? true,
+				status: activeModel.status,
+			};
+			await updateSqlModel(activeModel.id, payload);
+			toast.success("SQL 已保存");
+			await loadModels();
+		} catch (err: any) {
+			toast.error(err?.message || "保存失败");
+		}
+	};
+
+	const models = sqlModels || [];
 	const configEnabled = dbtConfig?.enabled !== false;
 	const profileStatus = dbtConfig?.profileStatus;
+	const workspaceStatus = dbtConfig?.workspaceStatus;
+	const workspaceOk = workspaceStatus?.ok !== false;
 
 	const modelKeyMap = useMemo(() => {
-		const map = new Map<string, DbtModelSummary>();
+		const map = new Map<string, SqlModel>();
 		models.forEach((model, idx) => {
 			const key = resolveModelKey(model, `model-${idx}`);
 			map.set(key, model);
@@ -319,39 +468,55 @@ export default function SqlModelingPage() {
 		}
 	}, [activeModelKey, models]);
 
+	useEffect(() => {
+		if (activeModelKey && !modelKeyMap.has(activeModelKey) && models.length > 0) {
+			const key = resolveModelKey(models[0], "model-0");
+			setActiveModelKey(key);
+		}
+	}, [activeModelKey, modelKeyMap, models]);
+
 	const activeModel = useMemo(() => {
 		if (!activeModelKey) return null;
 		return modelKeyMap.get(activeModelKey) || null;
 	}, [activeModelKey, modelKeyMap]);
 
+	useEffect(() => {
+		setSqlDraft(activeModel?.sql || "");
+	}, [activeModel?.id]);
+
+	const sqlDirty = !!activeModel && sqlDraft !== (activeModel?.sql || "");
+
 	const filteredModels = useMemo(() => {
 		const key = normalizeText(keyword).toLowerCase();
 		if (!key) return models;
-		return models.filter((model) => (model.name || "").toLowerCase().includes(key));
+		return models.filter((model) => {
+			const name = (model.name || "").toLowerCase();
+			const alias = (model.alias || "").toLowerCase();
+			return name.includes(key) || alias.includes(key);
+		});
 	}, [keyword, models]);
 
-	const modelLayerNodes = useMemo(() => {
-		const layers = new Map<string, DbtModelSummary[]>();
-		filteredModels.forEach((model) => {
-			const layer = inferLayer(model.name);
+	const buildLayerNodes = useCallback((input: SqlModel[]) => {
+		const layers = new Map<string, SqlModel[]>();
+		input.forEach((model) => {
+			const layer = model.layer || inferLayer(model.name);
 			const list = layers.get(layer) || [];
 			list.push(model);
 			layers.set(layer, list);
 		});
 		const order = ["ODS", "DWD", "DWS", "ADS", "其他"];
-		const layerNodes = Array.from(layers.entries())
+		return Array.from(layers.entries())
 			.sort((a, b) => order.indexOf(a[0]) - order.indexOf(b[0]))
 			.map(([layer, list]) => ({
 				title: `${layer}_层 (${list.length})`,
 				key: `layer-${layer}`,
 				children: list.map((model, idx) => ({
 					title: model.name || model.alias || "未命名模型",
-					key: resolveModelKey(model, `${layer}-${idx}`),
+					key: `model:${resolveModelKey(model, `${layer}-${idx}`)}`,
 					isLeaf: true,
 				})),
 			}));
-		return layerNodes;
-	}, [filteredModels]);
+	}, []);
 
 	const runColumns: ColumnsType<DagRun> = useMemo(
 		() => [
@@ -387,17 +552,25 @@ export default function SqlModelingPage() {
 		return spaceKeyMap.get(activeSpaceKey) || null;
 	}, [activeSpaceKey, spaceKeyMap]);
 
+	const activeSpaceModels = useMemo(() => {
+		if (!activeSpace) return filteredModels;
+		return filteredModels.filter((model) => model.planId === activeSpace.id);
+	}, [activeSpace, filteredModels]);
+
+	const activeLayerNodes = useMemo(() => buildLayerNodes(activeSpaceModels), [buildLayerNodes, activeSpaceModels]);
+
 	const treeData = useMemo(() => {
 		if (spaces.length === 0) return [];
 		return spaces.map((space, idx) => {
 			const key = resolveSpaceKey(space, idx);
+			const spaceModels = filteredModels.filter((model) => model.planId === space.id);
 			return {
 				title: space.name || "未命名项目空间",
 				key,
-				children: key === activeSpaceKey ? modelLayerNodes : [],
+				children: key === activeSpaceKey ? buildLayerNodes(spaceModels) : [],
 			};
 		});
-	}, [spaces, activeSpaceKey, modelLayerNodes]);
+	}, [spaces, activeSpaceKey, filteredModels, buildLayerNodes]);
 
 	return (
 		<div className="flex min-h-[calc(100vh-120px)] flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
@@ -408,6 +581,18 @@ export default function SqlModelingPage() {
 					<Badge status={configEnabled ? "success" : "error"} text={configEnabled ? "dbt 已连接" : "dbt 未启用"} />
 				</Space>
 				<Space>
+					<Button onClick={openCreateModel} disabled={!workspaceOk}>
+						新建模型
+					</Button>
+					<Button onClick={openEditModel} disabled={!activeModel || !workspaceOk}>
+						编辑模型
+					</Button>
+					<Button onClick={saveSqlDraft} disabled={!activeModel || !sqlDirty || !workspaceOk}>
+						保存 SQL
+					</Button>
+					<Button danger onClick={removeModel} disabled={!activeModel}>
+						删除模型
+					</Button>
 					<Tooltip title="语法校验接口暂未接入">
 						<Button
 							onClick={() => {
@@ -420,7 +605,7 @@ export default function SqlModelingPage() {
 						</Button>
 					</Tooltip>
 					<Button onClick={() => setBottomTab("preview")}>运行预览</Button>
-					<Button type="primary" onClick={openRun} disabled={!configEnabled}>
+					<Button type="primary" onClick={openRun} disabled={!configEnabled || !workspaceOk}>
 						提交上线
 					</Button>
 					<Button onClick={() => setConfigOpen(true)}>工作区配置</Button>
@@ -448,7 +633,13 @@ export default function SqlModelingPage() {
 							<DirectoryTree
 								defaultExpandAll
 								treeData={treeData}
-								selectedKeys={activeModelKey ? [activeModelKey] : activeSpaceKey ? [activeSpaceKey] : []}
+								selectedKeys={
+									activeModelKey
+										? [`model:${activeModelKey}`]
+										: activeSpaceKey
+											? [activeSpaceKey]
+											: []
+								}
 								onSelect={(keys) => {
 									const key = String(keys[0] || "");
 									if (!key) return;
@@ -458,12 +649,16 @@ export default function SqlModelingPage() {
 										return;
 									}
 									if (key.startsWith("layer-")) return;
+									if (key.startsWith("model:")) {
+										setActiveModelKey(key.replace("model:", ""));
+										return;
+									}
 									setActiveModelKey(key);
 								}}
 							/>
 							{modelsLoading ? (
 								<div className="mt-3 text-xs text-slate-400">加载模型中...</div>
-							) : modelLayerNodes.length === 0 ? (
+							) : activeLayerNodes.length === 0 ? (
 								<div className="mt-3 text-xs text-slate-400">当前项目暂无模型。</div>
 							) : null}
 						</>
@@ -474,11 +669,11 @@ export default function SqlModelingPage() {
 					<div className="flex items-center justify-between border-b px-4 py-2">
 						<Space>
 							<Text strong>{activeModel?.name || "未选择模型"}</Text>
-							{layerTag(activeModel ? inferLayer(activeModel.name) : undefined)}
-							<Text type="secondary">{activeModel?.path || "尚未定位模型路径"}</Text>
+							{layerTag(activeModel?.layer || (activeModel ? inferLayer(activeModel.name) : undefined))}
+							<Text type="secondary">{activeModel?.modelPath || "尚未定位模型路径"}</Text>
 						</Space>
 						<Space>
-							<Button size="small" onClick={handleSyncModels} loading={syncingModels}>
+							<Button size="small" onClick={handleSyncModels} loading={syncingModels} disabled={!workspaceOk}>
 								同步模型
 							</Button>
 							<Button size="small" onClick={loadModels} loading={modelsLoading}>
@@ -490,10 +685,36 @@ export default function SqlModelingPage() {
 						</Space>
 					</div>
 
-					<div className="flex-1 overflow-auto bg-slate-950 px-6 py-4 font-mono text-sm text-slate-200">
-						<div className="flex h-full items-center justify-center text-center text-xs text-slate-500">
-							{activeModel ? "暂无模型 SQL 内容，等待元数据采集接入。" : "请选择模型查看 SQL。"}
-						</div>
+					<div className="flex-1 overflow-auto bg-slate-950 px-6 py-4">
+						{activeModel ? (
+							<Suspense
+								fallback={
+									<div className="flex h-full items-center justify-center text-center text-xs text-slate-500">
+										加载编辑器中...
+									</div>
+								}
+							>
+								<Editor
+									height="100%"
+									language="sql"
+									theme="vs-dark"
+									value={sqlDraft}
+									onChange={(value) => setSqlDraft(value || "")}
+									options={{
+										fontSize: 13,
+										minimap: { enabled: false },
+										automaticLayout: true,
+										wordWrap: "on",
+										scrollBeyondLastLine: false,
+										tabSize: 2,
+									}}
+								/>
+							</Suspense>
+						) : (
+							<div className="flex h-full items-center justify-center text-center text-xs text-slate-500">
+								请选择模型查看 SQL。
+							</div>
+						)}
 					</div>
 
 					<div className="h-64 border-t border-slate-200 bg-white">
@@ -561,9 +782,13 @@ export default function SqlModelingPage() {
 						{activeModel ? (
 							<div className="space-y-1 text-xs text-slate-500">
 								<div>模型名称：{activeModel.name || "-"}</div>
-								<div>数据库：{activeModel.database || "-"}</div>
-								<div>Schema：{activeModel.schema || "-"}</div>
-								<div>路径：{activeModel.path || "-"}</div>
+								<div>数据源：{activeModel.sourceDataSourceName || "-"}</div>
+								<div>来源系统：{activeModel.sourceSystem || "-"}</div>
+								<div>Schema：{activeModel.schemaName || "-"}</div>
+								<div>物化方式：{activeModel.materialized || "-"}</div>
+								<div>标签：{activeModel.tags || "-"}</div>
+								<div>DAG 选择器：{activeModel.dagSelector || "-"}</div>
+								<div>路径：{activeModel.modelPath || "-"}</div>
 							</div>
 						) : (
 							<div className="text-xs text-slate-500">请选择模型查看详情。</div>
@@ -575,6 +800,11 @@ export default function SqlModelingPage() {
 							<div>Profiles：{dbtConfig?.config?.profilesDir || "未配置"}</div>
 							<div>Target：{dbtConfig?.config?.targetName || "未配置"}</div>
 						</div>
+						{workspaceStatus && !workspaceStatus.ok ? (
+							<div className="mt-2 rounded border border-red-100 bg-red-50 px-2 py-1 text-xs text-red-600">
+								{workspaceStatus.message || "dbt 工作区不可用"}
+							</div>
+						) : null}
 						<Button size="small" className="mt-3" onClick={() => setConfigOpen(true)}>
 							编辑配置
 						</Button>
@@ -631,6 +861,14 @@ export default function SqlModelingPage() {
 							<Text type="secondary">{profileStatus?.message || "—"}</Text>
 						</Space>
 					</Form.Item>
+					<Form.Item label="工作区状态">
+						<Space>
+							<Tag color={workspaceStatus?.ok ? "green" : "red"}>
+								{workspaceStatus?.ok ? "可用" : "不可用"}
+							</Tag>
+							<Text type="secondary">{workspaceStatus?.message || "—"}</Text>
+						</Space>
+					</Form.Item>
 					<Form.Item name="vars" label="全局变量 (vars)">
 						<Input.TextArea rows={3} placeholder='JSON 结构，例如 {"schema":"analytics"}' />
 					</Form.Item>
@@ -649,7 +887,7 @@ export default function SqlModelingPage() {
 			>
 				<Form layout="vertical" form={runForm}>
 					<Form.Item name="models" label="模型选择器" rules={[{ required: true, message: "请输入模型选择器" }]}>
-						<Input placeholder="例如：tag:source_system" />
+						<Input placeholder="例如：tab:crm 或 model:xxx" />
 					</Form.Item>
 					<Form.Item name="target" label="Target">
 						<Input placeholder="dev" />
@@ -659,6 +897,104 @@ export default function SqlModelingPage() {
 					</Form.Item>
 				</Form>
 			</Modal>
+
+			<Drawer
+				open={modelDrawerOpen}
+				title={editingModel ? "编辑模型" : "新建模型"}
+				width={720}
+				onClose={() => setModelDrawerOpen(false)}
+				footer={
+					<Space>
+						<Button onClick={() => setModelDrawerOpen(false)}>取消</Button>
+						<Button type="primary" onClick={submitModel} loading={modelSubmitting}>
+							保存
+						</Button>
+					</Space>
+				}
+			>
+				<Form layout="vertical" form={modelForm} disabled={modelSubmitting}>
+					<div className="grid gap-4 md:grid-cols-2">
+						<Form.Item name="planId" label="项目空间" rules={[{ required: true, message: "请选择项目空间" }]}>
+							<Select
+								placeholder="选择项目空间"
+								options={spaces.map((space) => ({ label: space.name || "未命名", value: space.id }))}
+							/>
+						</Form.Item>
+						<Form.Item name="layer" label="分层">
+							<Select
+								placeholder="选择分层"
+								options={[
+									{ label: "ODS", value: "ODS" },
+									{ label: "DWD", value: "DWD" },
+									{ label: "DWS", value: "DWS" },
+									{ label: "ADS", value: "ADS" },
+									{ label: "其他", value: "其他" },
+								]}
+							/>
+						</Form.Item>
+					</div>
+					<div className="grid gap-4 md:grid-cols-2">
+						<Form.Item name="name" label="模型名称" rules={[{ required: true, message: "请输入模型名称" }]}>
+							<Input placeholder="例如 dwd_sales_order" />
+						</Form.Item>
+						<Form.Item name="alias" label="物理表别名">
+							<Input placeholder="可选" />
+						</Form.Item>
+					</div>
+					<Form.Item
+						name="sourceDataSourceId"
+						label="来源数据源"
+						rules={[{ required: true, message: "请选择来源数据源" }]}
+					>
+						<Select
+							placeholder="选择来源数据源"
+							options={dataSources.map((ds) => ({
+								label: ds?.name || ds?.id,
+								value: ds?.id,
+							}))}
+						/>
+					</Form.Item>
+					<div className="grid gap-4 md:grid-cols-2">
+						<Form.Item name="schemaName" label="目标 Schema">
+							<Input placeholder="例如 ods" />
+						</Form.Item>
+						<Form.Item name="materialized" label="物化方式">
+							<Select
+								placeholder="选择物化方式"
+								options={[
+									{ label: "table", value: "table" },
+									{ label: "view", value: "view" },
+									{ label: "incremental", value: "incremental" },
+								]}
+							/>
+						</Form.Item>
+					</div>
+					<div className="grid gap-4 md:grid-cols-2">
+						<Form.Item name="tags" label="标签 (逗号分隔)">
+							<Input placeholder="如 sales,ods" />
+						</Form.Item>
+						<Form.Item name="status" label="状态">
+							<Select
+								placeholder="选择状态"
+								options={[
+									{ label: "草稿", value: "DRAFT" },
+									{ label: "启用", value: "READY" },
+									{ label: "停用", value: "PAUSED" },
+								]}
+							/>
+						</Form.Item>
+					</div>
+					<Form.Item name="description" label="描述">
+						<Input.TextArea rows={2} placeholder="模型说明" />
+					</Form.Item>
+					<Form.Item name="sql" label="SQL" rules={[{ required: true, message: "请输入 SQL" }]}>
+						<Input.TextArea rows={10} className="font-mono" placeholder="编写模型 SQL" />
+					</Form.Item>
+					<Form.Item name="enabled" label="是否启用" valuePropName="checked">
+						<Switch />
+					</Form.Item>
+				</Form>
+			</Drawer>
 		</div>
 	);
 }

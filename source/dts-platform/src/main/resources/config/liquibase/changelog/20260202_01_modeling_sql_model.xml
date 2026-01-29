@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260202_01_modeling_sql_model" author="platform">
+        <createTable tableName="modeling_sql_model">
+            <column name="id" type="${uuidType}">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="plan_id" type="${uuidType}"/>
+            <column name="name" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="alias" type="varchar(128)"/>
+            <column name="layer" type="varchar(16)"/>
+            <column name="source_data_source_id" type="${uuidType}">
+                <constraints nullable="false"/>
+            </column>
+            <column name="schema_name" type="varchar(128)"/>
+            <column name="materialized" type="varchar(32)"/>
+            <column name="tags" type="varchar(1024)"/>
+            <column name="dag_selector" type="varchar(128)"/>
+            <column name="model_path" type="varchar(512)"/>
+            <column name="status" type="varchar(32)"/>
+            <column name="description" type="text"/>
+            <column name="sql_text" type="text"/>
+            <column name="enabled" type="boolean" defaultValueBoolean="true"/>
+            <column name="owner_dept" type="varchar(64)"/>
+
+            <column name="created_by" type="varchar(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+
+        <createIndex tableName="modeling_sql_model" indexName="idx_modeling_sql_model_plan">
+            <column name="plan_id"/>
+        </createIndex>
+        <createIndex tableName="modeling_sql_model" indexName="idx_modeling_sql_model_owner_dept">
+            <column name="owner_dept"/>
+        </createIndex>
+        <createIndex tableName="modeling_sql_model" indexName="idx_modeling_sql_model_source">
+            <column name="source_data_source_id"/>
+        </createIndex>
+        <createIndex tableName="modeling_sql_model" indexName="idx_modeling_sql_model_name">
+            <column name="name"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

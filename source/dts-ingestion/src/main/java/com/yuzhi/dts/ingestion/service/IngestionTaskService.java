@@ -213,6 +213,23 @@ public class IngestionTaskService {
     }
 
     /**
+     * 根据源数据源ID查询任务列表
+     */
+    @Transactional(readOnly = true)
+    public List<IngestionTaskDTO> findBySourceDataSourceId(java.util.UUID sourceDataSourceId, boolean includeDeleted) {
+        if (sourceDataSourceId == null) {
+            return List.of();
+        }
+        List<IngestionTask> tasks = taskRepository.findBySourceDataSourceId(sourceDataSourceId);
+        if (!includeDeleted) {
+            tasks = tasks.stream()
+                .filter(task -> !"deleted".equalsIgnoreCase(task.getStatus()))
+                .toList();
+        }
+        return tasks.stream().map(taskMapper::toDto).toList();
+    }
+
+    /**
      * 删除任务（软删除）
      * 审计信息会自动更新
      */
@@ -521,6 +538,8 @@ public class IngestionTaskService {
         snap.setAddaxConfig(task.getAddaxConfig());
         snap.setAirflowEnabled(task.getAirflowEnabled());
         snap.setAirflowDagId(task.getAirflowDagId());
+        snap.setDbtModelSelector(task.getDbtModelSelector());
+        snap.setDbtDagSelector(task.getDbtDagSelector());
         return snap;
     }
 

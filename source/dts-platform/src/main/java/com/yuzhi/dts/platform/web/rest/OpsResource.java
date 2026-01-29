@@ -32,11 +32,12 @@ public class OpsResource {
 
     @GetMapping("/instances")
     public ApiResponse<List<Map<String, Object>>> instances(
+        @RequestParam(required = false) String entryKey,
         @RequestParam(required = false) String status,
         @RequestParam(required = false) String keyword,
         @RequestParam(defaultValue = "50") int limit
     ) {
-        List<Map<String, Object>> list = opsService.listInstances(status, keyword, limit);
+        List<Map<String, Object>> list = opsService.listInstances(entryKey, status, keyword, limit);
         auditService.audit("READ", "ops.instances", "count=" + list.size());
         return ApiResponses.ok(list);
     }

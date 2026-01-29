@@ -33,4 +33,9 @@ public interface IngestionTaskRepository extends JpaRepository<IngestionTask, Lo
      * 查询所有启用Airflow的活跃任务
      */
     Page<IngestionTask> findByAirflowEnabledTrueAndStatus(String status, Pageable pageable);
+
+    /**
+     * 根据源数据源ID查询任务
+     */
+    java.util.List<IngestionTask> findBySourceDataSourceId(java.util.UUID sourceDataSourceId);
 }

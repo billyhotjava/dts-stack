@@ -147,12 +147,26 @@ public class InfraDataSourceResource {
     ) {
         String operator = SecurityUtils.getCurrentUserLogin().orElse("system");
         try {
-            InfraDataSourceDto dto = infraManagementService.updateDataSource(id, request, operator, activeDept);
+            InfraManagementService.DataSourceUpdateImpact impact = infraManagementService.updateDataSourceWithImpact(
+                id,
+                request,
+                operator,
+                activeDept
+            );
+            InfraDataSourceDto dto = impact.dataSource();
+            Map<String, Object> meta = new LinkedHashMap<>();
+            meta.put("summary", "更新数据源");
+            meta.put("name", dto.name());
+            meta.put("operator", operator);
+            meta.put("connectionChanged", impact.connectionChanged());
+            meta.put("affectedTasks", impact.affectedTasks());
+            meta.put("changeLogCreated", impact.changeLogCreated());
+            meta.put("taskIds", impact.taskIds());
             auditService.auditAction(
                 "FOUNDATION_DATASOURCE_REGISTER",
                 AuditStage.SUCCESS,
                 id.toString(),
-                Map.of("summary", "更新数据源", "name", dto.name(), "operator", operator)
+                meta
             );
             return ApiResponses.ok(dto);
         } catch (RuntimeException ex) {

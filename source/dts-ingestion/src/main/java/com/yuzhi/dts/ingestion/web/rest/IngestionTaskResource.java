@@ -95,6 +95,7 @@ public class IngestionTaskResource {
         SchemaChangeSpec schemaChanges,
         LineageSpec lineage,
         AirflowSpec airflow,
+        DbtSpec dbt,
         Boolean runNow,
         Map<String, Object> jobConfig
     ) {}
@@ -129,6 +130,8 @@ public class IngestionTaskResource {
     public record LineageSpec(Boolean enabled, String domain, List<String> tags, String owner) {}
 
     public record AirflowSpec(Boolean enabled, String dagId, String scheduleType, String cron, Integer intervalMinutes) {}
+
+    public record DbtSpec(String modelSelector, String dagSelector) {}
 
     public record TableDiscoveryRequest(SourceSpec source, TableDiscoveryFilter filter) {}
 
@@ -222,6 +225,10 @@ public class IngestionTaskResource {
             taskDTO.setAddaxConfig(toJsonNode(request.jobConfig()));
             taskDTO.setAirflowEnabled(airflowRequest == null ? null : airflowRequest.enabled());
             taskDTO.setAirflowDagId(airflowRequest == null ? null : normalize(airflowRequest.dagId()));
+            if (request.dbt() != null) {
+                taskDTO.setDbtModelSelector(normalize(request.dbt().modelSelector()));
+                taskDTO.setDbtDagSelector(normalize(request.dbt().dagSelector()));
+            }
             List<Map<String, String>> tableMapping = deriveTableMapping(mergedReaderConfig, writerConfig, request.sync());
             if (!tableMapping.isEmpty()) {
                 taskDTO.setTableMapping(toJsonNode(tableMapping));
@@ -854,11 +861,33 @@ public class IngestionTaskResource {
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ResponseEntity<org.springframework.data.domain.Page<com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO>> getTasks(
         @RequestParam(required = false) String status,
+        @RequestParam(required = false) java.util.UUID sourceDataSourceId,
         org.springframework.data.domain.Pageable pageable
     ) {
-        org.springframework.data.domain.Page<com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO> page = 
+        if (sourceDataSourceId != null) {
+            java.util.List<com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO> list =
+                ingestionTaskService.findBySourceDataSourceId(sourceDataSourceId, false);
+            org.springframework.data.domain.Page<com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO> page =
+                new org.springframework.data.domain.PageImpl<>(list, pageable, list.size());
+            return ResponseEntity.ok(page);
+        }
+        org.springframework.data.domain.Page<com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO> page =
             ingestionTaskService.findAll(status, pageable);
         return ResponseEntity.ok(page);
+    }
+
+    /**
+     * GET /api/ingestion/tasks/by-source : 根据数据源ID获取任务列表
+     */
+    @GetMapping("/tasks/by-source")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ResponseEntity<List<com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO>> listTasksBySource(
+        @RequestParam java.util.UUID sourceDataSourceId,
+        @RequestParam(required = false, defaultValue = "false") boolean includeDeleted
+    ) {
+        List<com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO> list =
+            ingestionTaskService.findBySourceDataSourceId(sourceDataSourceId, includeDeleted);
+        return ResponseEntity.ok(list);
     }
 
     /**

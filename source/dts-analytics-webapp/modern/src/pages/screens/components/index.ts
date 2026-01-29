@@ -5,3 +5,4 @@ export { CanvasComponent } from './CanvasComponent';
 export { ComponentRenderer } from './ComponentRenderer';
 export { PropertyPanel } from './PropertyPanel';
 export { LayerPanel } from './LayerPanel';
+export { ScreenHeader } from './ScreenHeader';

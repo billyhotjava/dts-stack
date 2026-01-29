@@ -49,6 +49,10 @@ public class IngestionTaskDTO {
 
     private String airflowDagId;
 
+    private String dbtModelSelector;
+
+    private String dbtDagSelector;
+
     private String status;
 
     private Instant lastExecutedAt;
@@ -191,6 +195,22 @@ public class IngestionTaskDTO {
 
     public void setAirflowDagId(String airflowDagId) {
         this.airflowDagId = airflowDagId;
+    }
+
+    public String getDbtModelSelector() {
+        return dbtModelSelector;
+    }
+
+    public void setDbtModelSelector(String dbtModelSelector) {
+        this.dbtModelSelector = dbtModelSelector;
+    }
+
+    public String getDbtDagSelector() {
+        return dbtDagSelector;
+    }
+
+    public void setDbtDagSelector(String dbtDagSelector) {
+        this.dbtDagSelector = dbtDagSelector;
     }
 
     public String getStatus() {

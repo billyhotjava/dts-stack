@@ -31,6 +31,8 @@ public class IngestionTaskMapper {
         dto.setAddaxConfig(entity.getAddaxConfig());
         dto.setAirflowEnabled(entity.getAirflowEnabled());
         dto.setAirflowDagId(entity.getAirflowDagId());
+        dto.setDbtModelSelector(entity.getDbtModelSelector());
+        dto.setDbtDagSelector(entity.getDbtDagSelector());
         dto.setStatus(entity.getStatus());
         dto.setLastExecutedAt(entity.getLastExecutedAt());
         dto.setLastExecutionStatus(entity.getLastExecutionStatus());
@@ -65,6 +67,8 @@ public class IngestionTaskMapper {
         entity.setAddaxConfig(dto.getAddaxConfig());
         entity.setAirflowEnabled(dto.getAirflowEnabled());
         entity.setAirflowDagId(dto.getAirflowDagId());
+        entity.setDbtModelSelector(dto.getDbtModelSelector());
+        entity.setDbtDagSelector(dto.getDbtDagSelector());
         entity.setStatus(dto.getStatus());
         entity.setLastExecutedAt(dto.getLastExecutedAt());
         entity.setLastExecutionStatus(dto.getLastExecutionStatus());
@@ -111,6 +115,12 @@ public class IngestionTaskMapper {
         }
         if (dto.getAirflowDagId() != null) {
             entity.setAirflowDagId(dto.getAirflowDagId());
+        }
+        if (dto.getDbtModelSelector() != null) {
+            entity.setDbtModelSelector(dto.getDbtModelSelector());
+        }
+        if (dto.getDbtDagSelector() != null) {
+            entity.setDbtDagSelector(dto.getDbtDagSelector());
         }
         if (dto.getStatus() != null) {
             entity.setStatus(dto.getStatus());

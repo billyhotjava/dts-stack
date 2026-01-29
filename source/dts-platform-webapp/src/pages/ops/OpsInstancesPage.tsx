@@ -14,6 +14,13 @@ const STATUS_OPTIONS = [
 	{ label: "FAILED", value: "FAILED" },
 ];
 
+const ENTRY_OPTIONS = [
+	{ label: "全部", value: "ALL" },
+	{ label: "入湖任务", value: "INGESTION_TASK" },
+	{ label: "dbt 任务", value: "DBT_RUN" },
+	{ label: "Airflow DAG", value: "AIRFLOW_DAG" },
+];
+
 const formatDate = (value?: string) => {
 	if (!value) return "-";
 	const date = new Date(value);
@@ -25,6 +32,7 @@ export default function OpsInstancesPage() {
 	const [loading, setLoading] = useState(false);
 	const [keyword, setKeyword] = useState("");
 	const [status, setStatus] = useState("ALL");
+	const [entryKey, setEntryKey] = useState("ALL");
 
 	const loadInstances = async () => {
 		setLoading(true);
@@ -32,6 +40,7 @@ export default function OpsInstancesPage() {
 			const list = await opsService.instances({
 				keyword: keyword.trim() || undefined,
 				status: status === "ALL" ? undefined : status,
+				entryKey: entryKey === "ALL" ? undefined : entryKey,
 				limit: 200,
 			});
 			setRecords(Array.isArray(list) ? (list as OpsInstance[]) : []);
@@ -48,12 +57,22 @@ export default function OpsInstancesPage() {
 
 	const columns: ColumnsType<OpsInstance> = [
 		{ title: "任务", dataIndex: "artifactName", render: (v) => v || "-" },
-		{ title: "类型", dataIndex: "artifactType", width: 120, render: (v) => <Tag>{v || "-"}</Tag> },
+		{ title: "类型", dataIndex: "entryKey", width: 140, render: (v) => <Tag>{v || "-"}</Tag> },
+		{ title: "DAG", dataIndex: "dagId", width: 160, render: (v) => v || "-" },
 		{ title: "状态", dataIndex: "status", width: 120, render: (v) => <Tag>{v || "-"}</Tag> },
 		{ title: "开始时间", dataIndex: "startedAt", render: (v) => formatDate(v) },
 		{ title: "结束时间", dataIndex: "finishedAt", render: (v) => formatDate(v) },
 		{ title: "耗时(ms)", dataIndex: "durationMs", render: (v) => v ?? "-" },
-		{ title: "备注", dataIndex: "message", render: (v) => <Text type="secondary">{v || "-"}</Text> },
+		{
+			title: "日志/备注",
+			dataIndex: "logPath",
+			render: (_, record) =>
+				record.logPath ? (
+					<Text type="secondary">{record.logPath}</Text>
+				) : (
+					<Text type="secondary">{record.message || "-"}</Text>
+				),
+		},
 	];
 
 	return (
@@ -63,6 +82,7 @@ export default function OpsInstancesPage() {
 				extra={
 					<Space>
 						<Input placeholder="搜索任务名称..." value={keyword} onChange={(e) => setKeyword(e.target.value)} />
+						<Select value={entryKey} options={ENTRY_OPTIONS} onChange={setEntryKey} style={{ width: 160 }} />
 						<Select value={status} options={STATUS_OPTIONS} onChange={setStatus} style={{ width: 140 }} />
 						<Button onClick={loadInstances}>刷新</Button>
 					</Space>

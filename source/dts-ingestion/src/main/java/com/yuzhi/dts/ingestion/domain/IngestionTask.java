@@ -82,6 +82,14 @@ public class IngestionTask extends AbstractAuditingEntity {
     @Column(name = "airflow_dag_id", length = 200)
     private String airflowDagId;
 
+    @Size(max = 512)
+    @Column(name = "dbt_model_selector", length = 512)
+    private String dbtModelSelector;
+
+    @Size(max = 256)
+    @Column(name = "dbt_dag_selector", length = 256)
+    private String dbtDagSelector;
+
     // 状态与审计
     @Size(max = 50)
     @Column(name = "status", length = 50)
@@ -214,6 +222,22 @@ public class IngestionTask extends AbstractAuditingEntity {
 
     public void setAirflowDagId(String airflowDagId) {
         this.airflowDagId = airflowDagId;
+    }
+
+    public String getDbtModelSelector() {
+        return dbtModelSelector;
+    }
+
+    public void setDbtModelSelector(String dbtModelSelector) {
+        this.dbtModelSelector = dbtModelSelector;
+    }
+
+    public String getDbtDagSelector() {
+        return dbtDagSelector;
+    }
+
+    public void setDbtDagSelector(String dbtDagSelector) {
+        this.dbtDagSelector = dbtDagSelector;
     }
 
     public String getStatus() {

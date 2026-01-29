@@ -21,6 +21,8 @@ export type OpsInstance = {
 	finishedAt?: string;
 	durationMs?: number;
 	message?: string;
+	logPath?: string;
+	dagId?: string;
 };
 
 export type OpsAlert = {
@@ -55,7 +57,7 @@ export type OpsBackfillRequest = {
 
 export default {
 	overview: () => apiClient.get<OpsOverview>({ url: "/ops/overview" }),
-	instances: (params?: { status?: string; keyword?: string; limit?: number }) =>
+	instances: (params?: { entryKey?: string; status?: string; keyword?: string; limit?: number }) =>
 		apiClient.get<OpsInstance[]>({ url: "/ops/instances", params }),
 	alerts: (params?: { limit?: number }) => apiClient.get<OpsAlert[]>({ url: "/ops/alerts", params }),
 	backfills: () => apiClient.get<OpsBackfill[]>({ url: "/ops/backfills" }),
