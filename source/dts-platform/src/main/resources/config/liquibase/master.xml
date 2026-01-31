@@ -95,8 +95,10 @@
     <include file="config/liquibase/changelog/20260115_02_catalog_dataset_access_request_target_user.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260117_01_fix_catalog_dataset_access_task_dept_code.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260126_01_workbench_ops.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260131_01_infra_jdbc_driver.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260201_01_metadata_standard.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260201_02_modeling_template_metadata_standard.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260201_03_std_code_tables.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260202_01_modeling_sql_model.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260202_02_catalog_column_status.xml" relativeToChangelogFile="false"/>
 </databaseChangeLog>

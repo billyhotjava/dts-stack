@@ -263,11 +263,11 @@ export default function DashboardDetailPage() {
 					{dashboardParams.length > 0 && (
 						<Card style={{ marginBottom: "var(--spacing-lg)" }}>
 							<CardHeader
-								title="Filters"
+								title={t(locale, "filter.title")}
 								icon={<FilterIcon />}
 								action={
 									<Button variant="tertiary" size="sm" onClick={() => setParamValues({})}>
-										Clear
+										{t(locale, "filter.clear")}
 									</Button>
 								}
 							/>
@@ -280,7 +280,7 @@ export default function DashboardDetailPage() {
 												value={paramValues[p.id] ?? ""}
 												onChange={(e) => setParamValues((prev) => ({ ...prev, [p.id]: e.target.value }))}
 												options={[
-													{ value: "", label: "(All)" },
+													{ value: "", label: t(locale, "filter.all") },
 													...(paramOptions[p.id] ?? []).map((v) => ({ value: String(v), label: String(v) }))
 												]}
 											/>

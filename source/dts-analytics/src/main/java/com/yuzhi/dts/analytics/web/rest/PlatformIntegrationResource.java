@@ -1,6 +1,7 @@
 package com.yuzhi.dts.analytics.web.rest;
 
 import com.yuzhi.dts.analytics.service.AnalyticsSessionService;
+import com.yuzhi.dts.analytics.service.PlatformInfraClient;
 import com.yuzhi.dts.analytics.web.support.MetabaseAuth;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.List;
@@ -11,15 +12,31 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.util.StringUtils;
 
 @RestController
 @RequestMapping("/api/platform")
 public class PlatformIntegrationResource {
 
     private final AnalyticsSessionService sessionService;
+    private final PlatformInfraClient platformInfraClient;
 
-    public PlatformIntegrationResource(AnalyticsSessionService sessionService) {
+    public PlatformIntegrationResource(AnalyticsSessionService sessionService, PlatformInfraClient platformInfraClient) {
         this.sessionService = sessionService;
+        this.platformInfraClient = platformInfraClient;
+    }
+
+    @GetMapping(path = "/data-sources", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> dataSources(HttpServletRequest request) {
+        Optional<ResponseEntity<String>> auth = MetabaseAuth.requireSuperuser(sessionService, request);
+        if (auth.isPresent()) {
+            return auth.get();
+        }
+        List<PlatformInfraClient.DataSourceSummary> list = platformInfraClient.listDataSources();
+        List<PlatformInfraClient.DataSourceSummary> filtered = list.stream()
+            .filter(item -> StringUtils.hasText(item.jdbcUrl()))
+            .toList();
+        return ResponseEntity.ok(filtered);
     }
 
     @GetMapping(path = "/metrics", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -55,4 +72,3 @@ public class PlatformIntegrationResource {
                 "roles", roles));
     }
 }
-

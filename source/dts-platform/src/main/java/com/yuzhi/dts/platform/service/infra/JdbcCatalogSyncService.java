@@ -208,7 +208,13 @@ public class JdbcCatalogSyncService {
                                     new LegacyColumnValues(
                                         StringUtils.hasText(existing.getComment()) ? existing.getComment() : null,
                                         StringUtils.hasText(existing.getTags()) ? existing.getTags() : null,
-                                        StringUtils.hasText(existing.getSensitiveTags()) ? existing.getSensitiveTags() : null
+                                        StringUtils.hasText(existing.getSensitiveTags()) ? existing.getSensitiveTags() : null,
+                                        StringUtils.hasText(existing.getStatus()) ? existing.getStatus() : null,
+                                        existing.getStandardId(),
+                                        StringUtils.hasText(existing.getStandardRule()) ? existing.getStandardRule() : null,
+                                        StringUtils.hasText(existing.getStandardMismatchReason())
+                                            ? existing.getStandardMismatchReason()
+                                            : null
                                     ),
                                 (left, right) -> left,
                                 LinkedHashMap::new
@@ -233,12 +239,27 @@ public class JdbcCatalogSyncService {
                             }
                             entity.setComment(normalizeComment(comment));
                             LegacyColumnValues legacy = legacyColumns.getOrDefault(column.name().toLowerCase(Locale.ROOT), null);
-                            if (legacy != null) {
-                                entity.setTags(legacy.tags());
-                                entity.setSensitiveTags(legacy.sensitiveTags());
+                        if (legacy != null) {
+                            entity.setTags(legacy.tags());
+                            entity.setSensitiveTags(legacy.sensitiveTags());
+                            if (StringUtils.hasText(legacy.status())) {
+                                entity.setStatus(legacy.status());
+                                }
+                                if (legacy.standardId() != null) {
+                                    entity.setStandardId(legacy.standardId());
+                                }
+                                if (StringUtils.hasText(legacy.standardRule())) {
+                                    entity.setStandardRule(legacy.standardRule());
+                                }
+                                if (StringUtils.hasText(legacy.standardMismatchReason())) {
+                                    entity.setStandardMismatchReason(legacy.standardMismatchReason());
                             }
-                            columnEntities.add(entity);
                         }
+                        if (!StringUtils.hasText(entity.getStatus())) {
+                            entity.setStatus("ACTIVE");
+                        }
+                        columnEntities.add(entity);
+                    }
                         columnRepository.saveAll(columnEntities);
                         columnsImported += columnEntities.size();
                     }
@@ -964,7 +985,15 @@ public class JdbcCatalogSyncService {
         return trimmed.length() > 240 ? trimmed.substring(0, 240) : trimmed;
     }
 
-    private record LegacyColumnValues(String comment, String tags, String sensitiveTags) {}
+    private record LegacyColumnValues(
+        String comment,
+        String tags,
+        String sensitiveTags,
+        String status,
+        java.util.UUID standardId,
+        String standardRule,
+        String standardMismatchReason
+    ) {}
 
     private record TableMeta(String tableName, String tableType, String remarks) {
         boolean isView() {

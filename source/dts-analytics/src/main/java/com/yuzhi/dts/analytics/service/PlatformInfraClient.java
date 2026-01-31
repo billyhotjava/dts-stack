@@ -1,0 +1,205 @@
+package com.yuzhi.dts.analytics.service;
+
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.net.URI;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
+import org.springframework.web.client.HttpStatusCodeException;
+import org.springframework.web.client.RestTemplate;
+import org.springframework.web.util.UriComponentsBuilder;
+
+@Component
+public class PlatformInfraClient {
+
+    private static final Logger LOG = LoggerFactory.getLogger(PlatformInfraClient.class);
+    private static final String DEFAULT_BASE_URL = "http://dts-platform:8081";
+    private static final String DEFAULT_API_PATH = "/api";
+    private static final String SERVICE_HEADER = "X-DTS-Service";
+
+    private final RestTemplate restTemplate;
+    private final ObjectMapper objectMapper;
+    private final String baseUrl;
+    private final String apiPath;
+    private final String serviceName;
+
+    public PlatformInfraClient(
+        RestTemplateBuilder builder,
+        ObjectMapper objectMapper,
+        @Value("${dts.analytics.platform.base-url:}") String baseUrl,
+        @Value("${dts.analytics.platform.api-path:}") String apiPath,
+        @Value("${dts.analytics.platform.service-name:dts-analytics}") String serviceName,
+        @Value("${dts.analytics.platform.timeout-seconds:10}") long timeoutSeconds
+    ) {
+        long timeout = Math.max(2, timeoutSeconds);
+        this.restTemplate = builder
+            .setConnectTimeout(Duration.ofSeconds(timeout))
+            .setReadTimeout(Duration.ofSeconds(timeout))
+            .build();
+        this.objectMapper = objectMapper;
+        this.baseUrl = StringUtils.hasText(baseUrl) ? baseUrl.trim() : DEFAULT_BASE_URL;
+        this.apiPath = StringUtils.hasText(apiPath) ? apiPath.trim() : DEFAULT_API_PATH;
+        this.serviceName = StringUtils.hasText(serviceName) ? serviceName.trim() : "dts-analytics";
+    }
+
+    public List<DataSourceSummary> listDataSources() {
+        URI uri = buildUri("/infra/data-sources");
+        HttpHeaders headers = buildHeaders();
+        try {
+            ResponseEntity<Map> response = restTemplate.exchange(uri, HttpMethod.GET, new HttpEntity<>(headers), Map.class);
+            Map<String, Object> body = response.getBody() == null ? Map.of() : new LinkedHashMap<>(response.getBody());
+            Object data = body.get("data");
+            if (data instanceof List<?> list) {
+                return toSummaryList(list);
+            }
+            return List.of();
+        } catch (HttpStatusCodeException ex) {
+            LOG.warn("Platform data source list failed status={} body={}", ex.getStatusCode().value(), ex.getResponseBodyAsString());
+            throw new IllegalStateException("获取平台数据源失败: " + ex.getStatusCode().value());
+        } catch (RuntimeException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new IllegalStateException("获取平台数据源失败: " + ex.getMessage(), ex);
+        }
+    }
+
+    public DataSourceDetail fetchDataSourceDetail(UUID id) {
+        if (id == null) {
+            throw new IllegalArgumentException("dataSourceId不能为空");
+        }
+        URI uri = buildUri("/infra/data-sources/" + id + "/detail");
+        HttpHeaders headers = buildHeaders();
+        try {
+            ResponseEntity<Map> response = restTemplate.exchange(uri, HttpMethod.GET, new HttpEntity<>(headers), Map.class);
+            Map<String, Object> body = response.getBody() == null ? Map.of() : new LinkedHashMap<>(response.getBody());
+            Object data = body.get("data");
+            if (data instanceof Map<?, ?> map) {
+                return toDetail(map);
+            }
+            throw new IllegalStateException("平台未返回数据源详情");
+        } catch (HttpStatusCodeException ex) {
+            LOG.warn("Platform data source detail failed status={} body={}", ex.getStatusCode().value(), ex.getResponseBodyAsString());
+            throw new IllegalStateException("获取平台数据源失败: " + ex.getStatusCode().value());
+        } catch (RuntimeException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new IllegalStateException("获取平台数据源失败: " + ex.getMessage(), ex);
+        }
+    }
+
+    private URI buildUri(String path) {
+        return UriComponentsBuilder.fromHttpUrl(baseUrl)
+            .path(apiPath)
+            .path(path)
+            .build(true)
+            .toUri();
+    }
+
+    private HttpHeaders buildHeaders() {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setAccept(List.of(MediaType.APPLICATION_JSON));
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.set(SERVICE_HEADER, serviceName);
+        return headers;
+    }
+
+    private List<DataSourceSummary> toSummaryList(List<?> rawList) {
+        List<DataSourceSummary> result = new ArrayList<>();
+        for (Object item : rawList) {
+            if (item instanceof Map<?, ?> map) {
+                result.add(toSummary(map));
+            } else if (item != null) {
+                Map<String, Object> map = objectMapper.convertValue(item, new TypeReference<Map<String, Object>>() {});
+                result.add(toSummary(map));
+            }
+        }
+        return result;
+    }
+
+    private DataSourceSummary toSummary(Map<?, ?> raw) {
+        Map<String, Object> map = castMap(raw);
+        return new DataSourceSummary(
+            stringVal(map.get("id")),
+            stringVal(map.get("name")),
+            stringVal(map.get("type")),
+            stringVal(map.get("jdbcUrl")),
+            stringVal(map.get("description")),
+            stringVal(map.get("ownerDept")),
+            stringVal(map.get("status")),
+            stringVal(map.get("driverVersion")),
+            stringVal(map.get("lastUpdatedAt"))
+        );
+    }
+
+    private DataSourceDetail toDetail(Map<?, ?> raw) {
+        Map<String, Object> map = castMap(raw);
+        return new DataSourceDetail(
+            stringVal(map.get("id")),
+            stringVal(map.get("name")),
+            stringVal(map.get("type")),
+            stringVal(map.get("jdbcUrl")),
+            stringVal(map.get("username")),
+            stringVal(map.get("description")),
+            stringVal(map.get("ownerDept")),
+            castMap(map.get("props")),
+            castMap(map.get("secrets")),
+            stringVal(map.get("status")),
+            stringVal(map.get("lastVerifiedAt"))
+        );
+    }
+
+    private Map<String, Object> castMap(Object raw) {
+        if (raw instanceof Map<?, ?> map) {
+            return objectMapper.convertValue(map, new TypeReference<Map<String, Object>>() {});
+        }
+        return Collections.emptyMap();
+    }
+
+    private String stringVal(Object value) {
+        if (value == null) return null;
+        String text = value.toString().trim();
+        return text.isEmpty() ? null : text;
+    }
+
+    public record DataSourceSummary(
+        String id,
+        String name,
+        String type,
+        String jdbcUrl,
+        String description,
+        String ownerDept,
+        String status,
+        String driverVersion,
+        String lastUpdatedAt
+    ) {}
+
+    public record DataSourceDetail(
+        String id,
+        String name,
+        String type,
+        String jdbcUrl,
+        String username,
+        String description,
+        String ownerDept,
+        Map<String, Object> props,
+        Map<String, Object> secrets,
+        String status,
+        String lastVerifiedAt
+    ) {}
+}

@@ -222,14 +222,18 @@ public class DatasetDataAccessApprovalService {
         if (isSuperAdmin() || SecurityUtils.hasCurrentUserAnyOfAuthorities(AuthoritiesConstants.INST_LEADER)) {
             // Institute leaders can see institute tasks; optionally also see dept tasks for convenience.
             List<CatalogDatasetAccessTask> tasks = new ArrayList<>();
-            tasks.addAll(taskRepository.findPendingTasksForRole(AuthoritiesConstants.INST_LEADER, null));
-            tasks.addAll(taskRepository.findPendingTasksForRole(AuthoritiesConstants.DEPT_LEADER, null));
+            tasks.addAll(taskRepository.findPendingTasksForRole(AuthoritiesConstants.INST_LEADER));
+            tasks.addAll(taskRepository.findPendingTasksForRole(AuthoritiesConstants.DEPT_LEADER));
             return tasks;
         }
 
         if (SecurityUtils.hasCurrentUserAnyOfAuthorities(AuthoritiesConstants.DEPT_LEADER)) {
             String dept = trimToNull(resolveActiveDept(activeDeptHeader));
-            return taskRepository.findPendingTasksForRole(AuthoritiesConstants.DEPT_LEADER, dept);
+            if (dept == null) {
+                return taskRepository.findPendingTasksForRole(AuthoritiesConstants.DEPT_LEADER);
+            }
+            String normalized = dept.toLowerCase(Locale.ROOT);
+            return taskRepository.findPendingTasksForRoleAndDept(AuthoritiesConstants.DEPT_LEADER, normalized);
         }
 
         return List.of();

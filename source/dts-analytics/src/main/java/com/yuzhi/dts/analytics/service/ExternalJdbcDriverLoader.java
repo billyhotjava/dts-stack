@@ -35,19 +35,32 @@ public class ExternalJdbcDriverLoader {
 
     @PostConstruct
     public void load() {
-        if (driversDir.isBlank()) {
+        List<Path> candidates = new ArrayList<>();
+        if (!driversDir.isBlank()) {
+            candidates.add(Path.of(driversDir));
+        }
+        // Fallback paths
+        candidates.add(Path.of("/opt/prod/s10/dts-stack/services/dts-platform/drivers"));
+        candidates.add(Path.of("../dts-platform/drivers"));
+        candidates.add(Path.of("drivers"));
+
+        Path dir = null;
+        for (Path candidate : candidates) {
+            if (Files.exists(candidate) && Files.isDirectory(candidate)) {
+                dir = candidate;
+                break;
+            }
+        }
+
+        if (dir == null) {
+            if (!driversDir.isBlank()) {
+                log.info("External JDBC drivers dir not found: {}", driversDir);
+            }
+            log.debug("No valid external JDBC drivers directory found in candidates");
             return;
         }
 
-        Path dir = Path.of(driversDir);
-        if (!Files.exists(dir)) {
-            log.info("External JDBC drivers dir not found: {}", dir);
-            return;
-        }
-        if (!Files.isDirectory(dir)) {
-            log.warn("External JDBC drivers path is not a directory: {}", dir);
-            return;
-        }
+        log.info("Scanning for external JDBC drivers in: {}", dir);
 
         List<Path> jars = new ArrayList<>();
         try (var stream = Files.list(dir)) {
@@ -78,7 +91,7 @@ public class ExternalJdbcDriverLoader {
             return;
         }
 
-        URLClassLoader cl = new URLClassLoader(new URL[] {url}, ExternalJdbcDriverLoader.class.getClassLoader());
+        URLClassLoader cl = new URLClassLoader(new URL[] { url }, ExternalJdbcDriverLoader.class.getClassLoader());
         classLoaders.add(cl);
 
         boolean registeredAny = false;
@@ -178,4 +191,3 @@ public class ExternalJdbcDriverLoader {
         }
     }
 }
-

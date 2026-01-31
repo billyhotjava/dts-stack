@@ -83,7 +83,8 @@ public class DatasetResource {
 
         // Check query permissions
         Long userId = MetabaseAuth.getUserId(sessionService, request).orElse(null);
-        QueryPermissionService.QueryPermissionCheck permissionCheck = queryPermissionService.checkQueryPermission(userId, databaseId, body);
+        QueryPermissionService.QueryPermissionCheck permissionCheck = queryPermissionService
+                .checkQueryPermission(userId, databaseId, body);
         if (!permissionCheck.allowed()) {
             return ResponseEntity.status(403).body(Map.of("error", permissionCheck.denialReason()));
         }
@@ -110,11 +111,14 @@ public class DatasetResource {
                 JsonNode nativeQuery = body.path("native");
                 sql = nativeQuery.path("query").asText(null);
                 if (sql == null || sql.isBlank()) {
-                    return ResponseEntity.badRequest().body(Map.of("errors", Map.of("query", "native.query is required")));
+                    return ResponseEntity.badRequest()
+                            .body(Map.of("errors", Map.of("query", "native.query is required")));
                 }
                 JsonNode parametersNode = body.get("parameters");
-                if (parametersNode != null && !parametersNode.isNull() && !parametersNode.isMissingNode() && sql.contains("{{")) {
-                    NativeQueryTemplateService.RenderedQuery rendered = nativeQueryTemplateService.render(sql, parametersNode);
+                if (parametersNode != null && !parametersNode.isNull() && !parametersNode.isMissingNode()
+                        && sql.contains("{{")) {
+                    NativeQueryTemplateService.RenderedQuery rendered = nativeQueryTemplateService.render(sql,
+                            parametersNode);
                     sql = rendered.sql();
                     bindings = rendered.bindings();
                 }
@@ -122,21 +126,24 @@ public class DatasetResource {
                 jsonQuery.put("native", Map.of("query", sql));
             } else if ("query".equalsIgnoreCase(type)) {
                 JsonNode mbql = body.get("query");
-                MbqlToSqlService.TranslationResult translated = mbqlToSqlService.translateSelect(databaseId, mbql, constraints);
+                MbqlToSqlService.TranslationResult translated = mbqlToSqlService.translateSelect(databaseId, mbql,
+                        constraints);
                 sql = translated.sql();
                 bindings = translated.bindings();
                 jsonQuery.put("type", "query");
                 jsonQuery.put("query", mbql);
             } else {
                 return ResponseEntity.badRequest()
-                        .body(Map.of("errors", Map.of("type", "Only native and query (MBQL) dataset types are supported")));
+                        .body(Map.of("errors",
+                                Map.of("type", "Only native and query (MBQL) dataset types are supported")));
             }
 
             // Try to get from cache first (unless skipping cache)
             DatasetQueryService.DatasetResult result;
             boolean cached = false;
             if (!skipCache) {
-                Optional<DatasetQueryService.DatasetResult> cachedResult = queryCacheService.get(databaseId, body, userId);
+                Optional<DatasetQueryService.DatasetResult> cachedResult = queryCacheService.get(databaseId, body,
+                        userId);
                 if (cachedResult.isPresent()) {
                     result = cachedResult.get();
                     cached = true;

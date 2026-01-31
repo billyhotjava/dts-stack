@@ -1,24 +1,21 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router";
-import { analyticsApi } from "../api/analyticsApi";
+import { analyticsApi, type PlatformDataSourceItem } from "../api/analyticsApi";
 import { PageContainer, PageHeader, Breadcrumb } from "../components/PageContainer/PageContainer";
+import { EmptyState } from "../components/EmptyState";
 import { ErrorNotice } from "../components/ErrorNotice";
 import { Card, CardHeader, CardBody, CardFooter } from "../ui/Card/Card";
 import { Button } from "../ui/Button/Button";
-import { Input } from "../ui/Input/Input";
-import { NativeSelect } from "../ui/Input/Select";
+import { SearchInput } from "../ui/Input/Input";
 import { Badge } from "../ui/Badge/Badge";
+import { Spinner } from "../ui/Loading/Spinner";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import "./page.css";
 
-type Engine = "postgres" | "mysql" | "oracle" | "dm";
-
-// Icons
-const CheckIcon = () => (
-	<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-		<polyline points="20 6 9 17 4 12" />
-	</svg>
-);
+type LoadState<T> =
+	| { state: "loading" }
+	| { state: "loaded"; value: T }
+	| { state: "error"; error: unknown };
 
 const DatabaseIcon = () => (
 	<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -35,108 +32,93 @@ const PlusIcon = () => (
 	</svg>
 );
 
+const normalizeType = (value?: string | null) => String(value || "").trim().toLowerCase();
+
+const resolveEngine = (type?: string | null, jdbcUrl?: string | null) => {
+	const normalized = normalizeType(type);
+	if (normalized === "postgresql" || normalized === "postgres" || normalized === "pg") return "postgres";
+	if (normalized === "mysql" || normalized === "mariadb") return "mysql";
+	if (normalized === "oracle") return "oracle";
+	if (normalized === "dm" || normalized === "dameng") return "dm";
+	const url = String(jdbcUrl || "").toLowerCase();
+	if (url.startsWith("jdbc:postgresql:")) return "postgres";
+	if (url.startsWith("jdbc:mysql:")) return "mysql";
+	if (url.startsWith("jdbc:oracle:")) return "oracle";
+	if (url.startsWith("jdbc:dm:")) return "dm";
+	return normalized || "jdbc";
+};
+
 export default function DatabaseNewPage() {
 	const locale: Locale = useMemo(() => getEffectiveLocale(), []);
 	const navigate = useNavigate();
 
-	const [engine, setEngine] = useState<Engine>("postgres");
-	const [name, setName] = useState("");
-	const [host, setHost] = useState("");
-	const [port, setPort] = useState("");
-	const [dbName, setDbName] = useState("");
-	const [serviceName, setServiceName] = useState("");
-	const [jdbcUrl, setJdbcUrl] = useState("");
-	const [username, setUsername] = useState("");
-	const [password, setPassword] = useState("");
-
-	const [busy, setBusy] = useState<null | "validate" | "create" | "sync">(null);
-	const [okMessage, setOkMessage] = useState<string>("");
+	const [state, setState] = useState<LoadState<PlatformDataSourceItem[]>>({ state: "loading" });
+	const [query, setQuery] = useState("");
+	const [importingId, setImportingId] = useState<string | null>(null);
+	const [okMessage, setOkMessage] = useState("");
 	const [error, setError] = useState<unknown>(null);
 
-	function detailsObject(): Record<string, unknown> {
-		const details: Record<string, unknown> = {};
+	const reload = () => {
+		setState({ state: "loading" });
+		setError(null);
+		analyticsApi
+			.listPlatformDataSources()
+			.then((list) => {
+				setState({ state: "loaded", value: Array.isArray(list) ? list : [] });
+			})
+			.catch((e) => {
+				setState({ state: "error", error: e });
+				setError(e);
+			});
+	};
 
-		const u = jdbcUrl.trim();
-		if (u) {
-			details["jdbc-url"] = u;
-		} else {
-			if (host.trim()) details.host = host.trim();
-			if (port.trim()) details.port = Number.parseInt(port.trim(), 10);
+	useEffect(() => {
+		reload();
+	}, []);
 
-			if (engine === "oracle") {
-				if (serviceName.trim()) details["service-name"] = serviceName.trim();
-				if (dbName.trim()) details.sid = dbName.trim();
-			} else {
-				if (dbName.trim()) details.dbname = dbName.trim();
-			}
-		}
+	const filtered = useMemo(() => {
+		if (state.state !== "loaded") return [];
+		const needle = query.trim().toLowerCase();
+		if (!needle) return state.value;
+		return state.value.filter((item) => {
+			const name = String(item.name || "").toLowerCase();
+			const type = String(item.type || "").toLowerCase();
+			const url = String(item.jdbcUrl || "").toLowerCase();
+			return name.includes(needle) || type.includes(needle) || url.includes(needle);
+		});
+	}, [state, query]);
 
-		if (username.trim()) details.user = username.trim();
-		if (password) details.password = password;
-		return details;
-	}
-
-	async function validateConnection() {
-		setBusy("validate");
+	async function importSource(item: PlatformDataSourceItem) {
+		setImportingId(item.id);
 		setOkMessage("");
 		setError(null);
 		try {
-			const details = detailsObject();
-			if (engine === "dm" && !String(details["jdbc-url"] ?? "").trim()) {
-				throw new Error("达梦（DM）暂要求显式填写 JDBC URL（details.jdbc-url）。");
-			}
-			await analyticsApi.validateDatabase({ engine, details });
-			setOkMessage(t(locale, "data.validated"));
-		} catch (e) {
-			setError(e);
-		} finally {
-			setBusy(null);
-		}
-	}
-
-	async function createAndSync() {
-		setBusy("create");
-		setOkMessage("");
-		setError(null);
-		try {
-			const details = detailsObject();
-			if (engine === "dm" && !String(details["jdbc-url"] ?? "").trim()) {
-				throw new Error("达梦（DM）暂要求显式填写 JDBC URL（details.jdbc-url）。");
-			}
+			const engine = resolveEngine(item.type, item.jdbcUrl);
 			const response = await analyticsApi.createDatabase({
-				name: name.trim() || `${engine}-db`,
+				name: item.name || `${engine}-db`,
 				engine,
-				details,
+				details: { platformDataSourceId: item.id },
 			});
 			const createdId = (response as any)?.id;
 			if (!createdId) {
-				setOkMessage("Created.");
+				setOkMessage(t(locale, "data.created"));
 				return;
 			}
-
-			setBusy("sync");
 			await analyticsApi.syncDatabaseSchema(createdId);
 			setOkMessage(t(locale, "data.synced"));
 			navigate(`/data/${encodeURIComponent(String(createdId))}`, { replace: true });
 		} catch (e) {
 			setError(e);
 		} finally {
-			setBusy(null);
+			setImportingId(null);
 		}
 	}
-
-	const engineOptions = [
-		{ value: "postgres", label: "PostgreSQL" },
-		{ value: "mysql", label: "MySQL" },
-		{ value: "oracle", label: "Oracle" },
-		{ value: "dm", label: "达梦（DM）" },
-	];
 
 	return (
 		<PageContainer>
 			<PageHeader
 				title={t(locale, "data.add")}
-				subtitle={t(locale, "data.subtitle")}
+				subtitle={t(locale, "data.platformHint")}
 				breadcrumbs={
 					<Breadcrumb items={[
 						{ label: t(locale, "data.title"), href: "/data" },
@@ -146,86 +128,109 @@ export default function DatabaseNewPage() {
 			/>
 
 			<Card>
-				<CardHeader title="Database Connection" icon={<DatabaseIcon />} />
+				<CardHeader title={t(locale, "data.platformSources")} icon={<DatabaseIcon />} />
 				<CardBody>
 					{error ? <ErrorNotice locale={locale} error={error} /> : null}
 					{okMessage && (
-						<div style={{ display: "flex", alignItems: "center", gap: "var(--spacing-sm)", marginBottom: "var(--spacing-md)", padding: "var(--spacing-sm)", background: "var(--color-success-bg)", borderRadius: "var(--radius-sm)", color: "var(--color-success)" }}>
-							<CheckIcon />
+						<div style={{
+							display: "flex",
+							alignItems: "center",
+							gap: "var(--spacing-sm)",
+							marginBottom: "var(--spacing-md)",
+							padding: "var(--spacing-sm)",
+							background: "var(--color-success-bg)",
+							borderRadius: "var(--radius-sm)",
+							color: "var(--color-success)",
+						}}>
+							<PlusIcon />
 							{okMessage}
 						</div>
 					)}
 
-					<div className="form-grid">
-						<Input
-							label="Name"
-							value={name}
-							onChange={(e) => setName(e.target.value)}
-							placeholder="Analytics DB"
+					<div style={{ display: "flex", gap: "var(--spacing-sm)", marginBottom: "var(--spacing-md)" }}>
+						<SearchInput
+							label={t(locale, "common.search")}
+							value={query}
+							onChange={(e) => setQuery(e.target.value)}
+							placeholder={t(locale, "search.placeholder")}
+							onClear={() => setQuery("")}
 						/>
-
-						<NativeSelect
-							label="Engine"
-							value={engine}
-							onChange={(e) => setEngine(e.target.value as Engine)}
-							options={engineOptions}
-						/>
-
-						<div style={{ gridColumn: "1 / -1" }}>
-							<Input
-								label="JDBC URL (optional)"
-								value={jdbcUrl}
-								onChange={(e) => setJdbcUrl(e.target.value)}
-								placeholder="jdbc:postgresql://host:5432/db"
-								helperText="If provided, overrides host/port/database settings"
-							/>
-						</div>
-
-						<Input
-							label="Host"
-							value={host}
-							onChange={(e) => setHost(e.target.value)}
-							placeholder="127.0.0.1"
-						/>
-
-						<Input
-							label="Port"
-							value={port}
-							onChange={(e) => setPort(e.target.value)}
-							placeholder="5432"
-						/>
-
-						<Input
-							label={engine === "oracle" ? "SID (optional)" : "Database"}
-							value={dbName}
-							onChange={(e) => setDbName(e.target.value)}
-							placeholder="db"
-						/>
-
-						{engine === "oracle" && (
-							<Input
-								label="Service Name (optional)"
-								value={serviceName}
-								onChange={(e) => setServiceName(e.target.value)}
-								placeholder="orclpdb1"
-							/>
-						)}
-
-						<Input
-							label="Username"
-							value={username}
-							onChange={(e) => setUsername(e.target.value)}
-							placeholder="user"
-						/>
-
-						<Input
-							label="Password"
-							type="password"
-							value={password}
-							onChange={(e) => setPassword(e.target.value)}
-							placeholder="••••••••"
-						/>
+						<Button variant="secondary" onClick={reload}>
+							{t(locale, "common.refresh")}
+						</Button>
 					</div>
+
+					{state.state === "loading" && (
+						<div className="loading-container" style={{ padding: "var(--spacing-xl)" }}>
+							<Spinner size="lg" />
+						</div>
+					)}
+
+					{state.state === "loaded" && filtered.length === 0 && (
+						<EmptyState
+							title={t(locale, "data.platformEmpty")}
+							description={t(locale, "data.platformEmptyDesc")}
+						/>
+					)}
+
+					{state.state === "loaded" && filtered.length > 0 && (
+						<div className="grid3">
+							{filtered.map((item) => (
+								<Card key={item.id} variant="hoverable" style={{ height: "100%" }}>
+									<CardBody>
+										<div style={{ display: "flex", alignItems: "flex-start", gap: "var(--spacing-md)" }}>
+											<div style={{
+												display: "flex",
+												alignItems: "center",
+												justifyContent: "center",
+												width: 40,
+												height: 40,
+												borderRadius: "var(--radius-md)",
+												background: "var(--color-bg-hover)",
+												color: "var(--color-brand)",
+												flexShrink: 0,
+											}}>
+												<DatabaseIcon />
+											</div>
+											<div style={{ flex: 1, minWidth: 0 }}>
+												<h3 style={{ margin: 0, fontSize: "var(--font-size-md)", fontWeight: "var(--font-weight-semibold)" }}>
+													{item.name || item.id}
+												</h3>
+												<p className="text-muted" style={{ margin: "var(--spacing-xs) 0 0", fontSize: "var(--font-size-sm)" }}>
+													{t(locale, "common.id")}: {item.id}
+												</p>
+												{item.description ? (
+													<p className="text-muted" style={{ margin: "var(--spacing-xs) 0 0", fontSize: "var(--font-size-sm)" }}>
+														{item.description}
+													</p>
+												) : null}
+											</div>
+											<div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "var(--spacing-xs)" }}>
+												<Badge variant="default" size="sm">
+													{item.type || "JDBC"}
+												</Badge>
+												{item.status ? (
+													<Badge variant={item.status === "active" ? "success" : "default"} size="sm">
+														{item.status}
+													</Badge>
+												) : null}
+											</div>
+										</div>
+										<div style={{ display: "flex", justifyContent: "flex-end", marginTop: "var(--spacing-md)" }}>
+											<Button
+												variant="primary"
+												icon={<PlusIcon />}
+												loading={importingId === item.id}
+												onClick={() => importSource(item)}
+											>
+												{t(locale, "data.import")}
+											</Button>
+										</div>
+									</CardBody>
+								</Card>
+							))}
+						</div>
+					)}
 				</CardBody>
 				<CardFooter align="between">
 					<Link to="/data">
@@ -233,41 +238,8 @@ export default function DatabaseNewPage() {
 							{t(locale, "common.open")} {t(locale, "data.title")}
 						</Button>
 					</Link>
-					<div style={{ display: "flex", gap: "var(--spacing-sm)" }}>
-						<Button
-							variant="secondary"
-							loading={busy === "validate"}
-							disabled={busy !== null}
-							onClick={validateConnection}
-						>
-							Validate
-						</Button>
-						<Button
-							variant="primary"
-							icon={<PlusIcon />}
-							loading={busy === "create" || busy === "sync"}
-							disabled={busy !== null}
-							onClick={createAndSync}
-						>
-							{t(locale, "common.create")} + {t(locale, "data.sync")}
-						</Button>
-					</div>
 				</CardFooter>
 			</Card>
-
-			<style>{`
-				.form-grid {
-					display: grid;
-					grid-template-columns: repeat(2, 1fr);
-					gap: var(--spacing-md);
-				}
-
-				@media (max-width: 768px) {
-					.form-grid {
-						grid-template-columns: 1fr;
-					}
-				}
-			`}</style>
 		</PageContainer>
 	);
 }

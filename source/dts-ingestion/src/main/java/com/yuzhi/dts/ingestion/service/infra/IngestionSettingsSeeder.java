@@ -39,6 +39,7 @@ public class IngestionSettingsSeeder implements ApplicationRunner {
         seedIfMissing(IngestionSettingsService.SERVICE_ADDAX, buildAddaxSettings());
         seedIfMissing(IngestionSettingsService.SERVICE_AIRFLOW, buildAirflowSettings());
         seedIfMissing(IngestionSettingsService.SERVICE_OPENMETADATA, buildOpenMetadataSettings());
+        seedIfMissing(IngestionSettingsService.SERVICE_PLATFORM, buildPlatformSettings());
     }
 
     private void seedIfMissing(String service, Map<String, Object> settings) {
@@ -95,6 +96,12 @@ public class IngestionSettingsSeeder implements ApplicationRunner {
         putIfText(settings, "ingestionPrefix", openMetadataProperties.getIngestionPipelinePrefix());
         putIfText(settings, "ingestionSchedule", openMetadataProperties.getIngestionDefaultSchedule());
         putIfText(settings, "tableFields", openMetadataProperties.getTableFields());
+        return settings;
+    }
+
+    private Map<String, Object> buildPlatformSettings() {
+        Map<String, Object> settings = new LinkedHashMap<>();
+        settings.put("catalogSyncOnDataSource", Boolean.TRUE);
         return settings;
     }
 

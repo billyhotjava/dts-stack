@@ -131,7 +131,7 @@ services:
       - ./services/certs/truststore.p12:/etc/dts/truststore.p12:ro,z
       # Optional: mount vendor PKI client jar(s) like svs-uk_custom.jar into /opt/dts/vendor
       - ./services/dts-admin/vendor:/opt/dts/vendor:ro,z
-      - ./services/dts-platform/drivers:/opt/dts/drivers:ro,z
+      - ./services/dts-platform/drivers:/opt/dts/drivers:z
       - ./logs/dts-admin:/logs/dts-admin:z
       - ./config:/opt/dts/config:ro,z
     security_opt:
@@ -218,7 +218,7 @@ services:
     volumes:
       - ./services/certs/truststore.p12:/etc/dts/truststore.p12:ro,z
       # Mount vendor JDBC driver(s) for Hive to avoid Hadoop conflicts
-      - ./services/dts-platform/drivers:/opt/dts/drivers:ro,z
+      - ./services/dts-platform/drivers:/opt/dts/drivers:z
       # Encrypted attachments storage (host-bound)
       - ./services/dts-platform/upload:/opt/dts/upload:Z
       - ./services/dts-dbt:/opt/dts/dbt:ro,z
@@ -407,6 +407,8 @@ services:
       API_PROXY_TARGET: http://dts-platform:8081
       # Admin API base URL for Keycloak localization and other admin-proxied calls
       VITE_ADMIN_API_BASE_URL: "https://${HOST_ADMIN_UI}/api"
+      # Enable experimental SQL workbench by default (can be overridden in .env)
+      VITE_ENABLE_SQL_WORKBENCH: ${VITE_ENABLE_SQL_WORKBENCH:-true}
       # Unified PKI endpoints for both webapps (optional). Comma-separated list.
       KOAL_PKI_ENDPOINTS: ${KOAL_PKI_ENDPOINTS:-}
       # Optional explicit Koal SDK base (mirrors runtime-config koalVendorBase)

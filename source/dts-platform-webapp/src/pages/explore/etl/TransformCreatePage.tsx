@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Alert, Button, Card, Collapse, Divider, Form, Input, Radio, Select, Space, Steps, Switch, Table, Typography } from "antd";
 import { SaveOutlined } from "@ant-design/icons";
 import { toast } from "sonner";
@@ -125,6 +125,8 @@ const splitColumns = (value?: string) => {
 		.filter(Boolean);
 };
 
+const hasTableEntries = (tables: string[]) => tables.some((table) => Boolean(normalizeText(table)));
+
 const mergeConfig = (base: Record<string, any>, extra?: Record<string, any>) => {
 	if (!extra || Object.keys(extra).length === 0) return base;
 	return { ...base, ...extra };
@@ -137,6 +139,108 @@ const parseJson = (value?: string, label?: string) => {
 		return JSON.parse(text);
 	} catch {
 		throw new Error(`${label || "配置"} JSON 格式错误`);
+	}
+};
+
+const normalizeList = (value: any): string[] => {
+	if (Array.isArray(value)) {
+		return value.map((item) => normalizeText(item)).filter(Boolean);
+	}
+	if (value == null) return [];
+	const text = normalizeText(value);
+	if (!text) return [];
+	return [text];
+};
+
+const extractWriterTables = (config?: Record<string, any>) => {
+	if (!config) return [];
+	const direct = normalizeList(config.table || config.tables);
+	if (direct.length) return direct;
+	const connection = config.connection;
+	if (Array.isArray(connection) && connection.length) {
+		return normalizeList(connection[0]?.table || connection[0]?.tables);
+	}
+	if (connection && typeof connection === "object") {
+		return normalizeList((connection as any).table || (connection as any).tables);
+	}
+	return [];
+};
+
+const extractReaderTables = (config?: Record<string, any>) => {
+	if (!config) return [];
+	const direct = normalizeList(config.table || config.tables);
+	if (direct.length) return direct;
+	const connection = config.connection;
+	if (Array.isArray(connection) && connection.length) {
+		return normalizeList(connection[0]?.table || connection[0]?.tables);
+	}
+	if (connection && typeof connection === "object") {
+		return normalizeList((connection as any).table || (connection as any).tables);
+	}
+	return [];
+};
+
+const extractWriterJdbcUrls = (config?: Record<string, any>) => {
+	if (!config) return [];
+	const direct = normalizeList(config.jdbcUrl || config.jdbcUrls);
+	if (direct.length) return direct;
+	const connection = config.connection;
+	if (Array.isArray(connection) && connection.length) {
+		return normalizeList(connection[0]?.jdbcUrl || connection[0]?.jdbcUrls);
+	}
+	if (connection && typeof connection === "object") {
+		return normalizeList((connection as any).jdbcUrl || (connection as any).jdbcUrls);
+	}
+	return [];
+};
+
+const extractWriterColumns = (config?: Record<string, any>) => {
+	if (!config) return "";
+	const value = config.column ?? config.columns;
+	if (Array.isArray(value)) {
+		const cols = value.map((item) => normalizeText(item)).filter(Boolean);
+		return cols.length ? cols.join(",") : "";
+	}
+	return normalizeText(value);
+};
+
+const extractWriterSqlList = (value?: any) => {
+	const list = normalizeList(value);
+	return list.join("\n");
+};
+
+const buildWriterExtraConfig = (config?: Record<string, any>) => {
+	if (!config) return "";
+	const knownKeys = new Set([
+		"connection",
+		"jdbcUrl",
+		"jdbcUrls",
+		"table",
+		"tables",
+		"column",
+		"columns",
+		"writeMode",
+		"username",
+		"password",
+		"schema",
+		"database",
+		"preSql",
+		"postSql",
+		"writerType",
+		"tablePrefix",
+		"prefix",
+		"targetPrefix",
+	]);
+	const extra: Record<string, any> = {};
+	Object.keys(config).forEach((key) => {
+		if (knownKeys.has(key)) return;
+		extra[key] = config[key];
+	});
+	if (!Object.keys(extra).length) return "";
+	try {
+		return JSON.stringify(extra, null, 2);
+	} catch {
+		return "";
 	}
 };
 
@@ -258,17 +362,13 @@ const buildWriterConfig = (values: Record<string, any>) => {
 	return mergeConfig(config, extra);
 };
 
-const buildJobPreview = (
-	values: Record<string, any>,
-	useDefaultDestination: boolean,
-	editorMode?: string
-) => {
+const buildJobPreview = (values: Record<string, any>, editorMode?: string) => {
 	const readerType = normalizeText(values.readerType);
 	if (!readerType) throw new Error("Reader 类型不能为空");
 	const jobConfig = parseJson(values.jobConfig, "作业参数") as Record<string, any> | undefined;
 	if (jobConfig) return jobConfig;
 
-	const writerType = useDefaultDestination ? "default-writer" : normalizeText(values.writerType);
+	const writerType = normalizeText(values.writerType);
 	if (!writerType) throw new Error("Writer 类型不能为空");
 
 	let readerConfig: Record<string, any> | undefined;
@@ -280,12 +380,10 @@ const buildJobPreview = (
 		if (sourceSystem && readerConfig && !readerConfig.sourceSystem) {
 			readerConfig.sourceSystem = sourceSystem;
 		}
-		writerConfig = useDefaultDestination
-			? { __fromDefault__: true }
-			: (parseJson(values.writerConfig, "Writer 配置") as Record<string, any> | undefined);
+		writerConfig = parseJson(values.writerConfig, "Writer 配置") as Record<string, any> | undefined;
 	} else {
 		readerConfig = buildReaderConfig(values);
-		writerConfig = useDefaultDestination ? { __fromDefault__: true } : buildWriterConfig(values);
+		writerConfig = buildWriterConfig(values);
 	}
 
 	return {
@@ -321,6 +419,16 @@ const jsonValidator = (label: string, forbidConnection = false) => (_: any, valu
 		return Promise.resolve();
 	} catch {
 		return Promise.reject(new Error(`${label} JSON 格式错误`));
+	}
+};
+
+const writerConfigValidator = (_: any, value: string) => {
+	if (!normalizeText(value)) return Promise.resolve();
+	try {
+		JSON.parse(value);
+		return Promise.resolve();
+	} catch {
+		return Promise.reject(new Error("Writer 配置 JSON 格式错误"));
 	}
 };
 
@@ -362,10 +470,13 @@ const mapTaskToForm = (task: IngestionTaskDTO) => {
 	const destinationConfig = rawDestinationConfig || {};
 	const addaxConfig = tryParseJson(task.addaxConfig) as Record<string, any> | undefined;
 	const addaxWriterConfig = extractWriterFromAddax(addaxConfig);
+	const writerTypeFromConfig = normalizeText(
+		destinationConfig.writerType || destinationConfig.writer || destinationConfig.type,
+	);
 	const writerType =
 		normalizeText(task.destinationType) ||
+		writerTypeFromConfig ||
 		extractWriterTypeFromAddax(addaxConfig);
-	const useDefaultDestination = !writerType;
 	const syncPrefix =
 		normalizeText(
 			destinationConfig.tablePrefix ||
@@ -376,6 +487,16 @@ const mapTaskToForm = (task: IngestionTaskDTO) => {
 	const resolvedWriterConfig =
 		(rawDestinationConfig && Object.keys(rawDestinationConfig).length ? rawDestinationConfig : undefined) ||
 		(addaxWriterConfig && Object.keys(addaxWriterConfig).length ? addaxWriterConfig : undefined);
+	const writerTables = extractWriterTables(resolvedWriterConfig);
+	const writerJdbcUrls = extractWriterJdbcUrls(resolvedWriterConfig);
+	const writerColumns = extractWriterColumns(resolvedWriterConfig);
+	const writerPreSql = extractWriterSqlList(resolvedWriterConfig?.preSql);
+	const writerPostSql = extractWriterSqlList(resolvedWriterConfig?.postSql);
+	const writerExtraConfig = buildWriterExtraConfig(resolvedWriterConfig);
+	const writerUsername = normalizeText(resolvedWriterConfig?.username);
+	const writerPassword = normalizeText(resolvedWriterConfig?.password);
+	const writerSchema = normalizeText(resolvedWriterConfig?.schema || resolvedWriterConfig?.database);
+	const writerWriteMode = normalizeText(resolvedWriterConfig?.writeMode);
 	const selector = normalizeText(task.dbtModelSelector);
 	const dbtModels = selector
 		? selector
@@ -384,9 +505,10 @@ const mapTaskToForm = (task: IngestionTaskDTO) => {
 				.map((item) => item.replace("model:", ""))
 				.filter(Boolean)
 		: [];
+	const hasMapping = Array.isArray(task.tableMapping) && task.tableMapping.length > 0;
 	return {
 		editorMode: "json",
-		useDefaultDestination,
+		tableSelectionMode: hasMapping ? "manual" : "all",
 		airflowEnabled: task.airflowEnabled ?? true,
 		runNow: false,
 		name: task.name,
@@ -401,7 +523,17 @@ const mapTaskToForm = (task: IngestionTaskDTO) => {
 		readerType: task.sourceType,
 		readerConfig: JSON.stringify(sourceConfig, null, 2),
 		syncPrefix,
-		writerType,
+		writerType: writerType || undefined,
+		writerJdbcUrls: writerJdbcUrls.length ? writerJdbcUrls.join("\n") : undefined,
+		writerTables: writerTables.length ? writerTables.join("\n") : undefined,
+		writerColumns: writerColumns || undefined,
+		writerWriteMode: writerWriteMode || undefined,
+		writerUsername: writerUsername || undefined,
+		writerPassword: writerPassword || undefined,
+		writerSchema: writerSchema || undefined,
+		writerPreSql: writerPreSql || undefined,
+		writerPostSql: writerPostSql || undefined,
+		writerExtraConfig: writerExtraConfig || undefined,
 		writerConfig: resolvedWriterConfig ? JSON.stringify(resolvedWriterConfig, null, 2) : undefined,
 		jobConfig: addaxConfig ? JSON.stringify(addaxConfig, null, 2) : undefined,
 		dbtModels,
@@ -429,24 +561,29 @@ export default function TransformCreatePage() {
 	const [sqlModels, setSqlModels] = useState<Array<{ id?: string; name?: string; alias?: string }>>([]);
 	const [loadingSqlModels, setLoadingSqlModels] = useState(false);
 	const [form] = Form.useForm();
+	const lastAutoDiscoveryKeyRef = useRef("");
 	const router = useRouter();
 	const params = useParams();
 	const editId = params?.id ? Number(params.id) : undefined;
 	const isEdit = Number.isFinite(editId);
 	const userInfo = useUserInfo() as any;
-	const useDefaultDestination = Form.useWatch("useDefaultDestination", form);
 	const editorMode = Form.useWatch("editorMode", form);
+	const tableSelectionMode = Form.useWatch("tableSelectionMode", form);
 	const formValues = Form.useWatch([], form);
 	const selectedDataSourceId = Form.useWatch("sourceDataSourceId", form);
 	const selectedDataSource = useMemo(
 		() => dataSources.find((item) => String(item.id) === String(selectedDataSourceId)),
 		[dataSources, selectedDataSourceId]
 	);
+	const discoveredTableKeys = useMemo(
+		() => discoveredTables.map((item) => buildTableKey(item)),
+		[discoveredTables]
+	);
 
 	const initialValues = useMemo(
 		() => ({
 			editorMode: "visual",
-			useDefaultDestination: true,
+			tableSelectionMode: "all",
 			airflowEnabled: true,
 			runNow: true,
 			readerColumns: "*",
@@ -471,6 +608,35 @@ export default function TransformCreatePage() {
 		};
 		loadSources();
 	}, []);
+
+	useEffect(() => {
+		let active = true;
+		const loadDefaultDestination = async () => {
+			try {
+				setLoadingDefaultDestination(true);
+				setDefaultDestinationError("");
+				const status = await ingestionTaskAPI.getDefaultDestinationStatus();
+				if (active) {
+					setDefaultDestinationStatus(status);
+					if (status?.writerType) {
+						form.setFieldValue("writerType", status.writerType);
+					}
+				}
+			} catch (error: any) {
+				if (active) {
+					setDefaultDestinationError(error?.message || "无法获取默认数据湖配置");
+				}
+			} finally {
+				if (active) {
+					setLoadingDefaultDestination(false);
+				}
+			}
+		};
+		loadDefaultDestination();
+		return () => {
+			active = false;
+		};
+	}, [form]);
 
 	useEffect(() => {
 		const loadModels = async () => {
@@ -519,7 +685,29 @@ export default function TransformCreatePage() {
 		setDiscoveredTables([]);
 		setSelectedTableKeys([]);
 		setDiscoverError("");
+		lastAutoDiscoveryKeyRef.current = "";
 	}, [selectedDataSourceId]);
+
+	useEffect(() => {
+		if (tableSelectionMode !== "manual") return;
+		if (!selectedDataSourceId) return;
+		if (!selectedDataSource || !isJdbcSource(selectedDataSource)) return;
+		if (discoveringTables) return;
+		if (discoveredTables.length > 0) return;
+		const schema = normalizeText(form.getFieldValue("readerSchema"));
+		const pattern = normalizeText(form.getFieldValue("readerTablePattern"));
+		const autoKey = `${selectedDataSourceId || ""}:${schema}:${pattern}`;
+		if (lastAutoDiscoveryKeyRef.current === autoKey) return;
+		lastAutoDiscoveryKeyRef.current = autoKey;
+		void handleDiscoverTables();
+	}, [
+		tableSelectionMode,
+		selectedDataSourceId,
+		selectedDataSource,
+		discoveringTables,
+		discoveredTables.length,
+		form,
+	]);
 
 	const stepItems = useMemo(
 		() => [
@@ -564,35 +752,6 @@ export default function TransformCreatePage() {
 		loadTask();
 	}, [editId, form, isEdit]);
 
-	useEffect(() => {
-		if (!useDefaultDestination) {
-			return;
-		}
-		let active = true;
-		const loadDefaultDestination = async () => {
-			try {
-				setLoadingDefaultDestination(true);
-				setDefaultDestinationError("");
-				const status = await ingestionTaskAPI.getDefaultDestinationStatus();
-				if (active) {
-					setDefaultDestinationStatus(status);
-				}
-			} catch (error: any) {
-				if (active) {
-					setDefaultDestinationError(error?.message || "无法获取默认数据湖配置");
-				}
-			} finally {
-				if (active) {
-					setLoadingDefaultDestination(false);
-				}
-			}
-		};
-		loadDefaultDestination();
-		return () => {
-			active = false;
-		};
-	}, [useDefaultDestination]);
-
 	const handleSaveDraft = async () => {
 		if (isEdit) {
 			toast.info("编辑模式不支持保存草稿");
@@ -633,7 +792,7 @@ export default function TransformCreatePage() {
 				filter: {
 					schema: schema || undefined,
 					tablePattern: tablePattern || undefined,
-					limit: 500,
+					limit: 0,
 				},
 			});
 			const tables = Array.isArray(rawTables) ? rawTables : [];
@@ -662,26 +821,52 @@ export default function TransformCreatePage() {
 				const readerConfig = parseJson(values.readerConfig, "Reader 配置") as Record<string, any> | undefined;
 				const nextReader = applyTablesToConfig(readerConfig, tables);
 				form.setFieldValue("readerConfig", JSON.stringify(nextReader || {}, null, 2));
-				if (!values.useDefaultDestination) {
-					const writerConfig = parseJson(values.writerConfig, "Writer 配置") as Record<string, any> | undefined;
-					const nextWriter = applyTablesToConfig(writerConfig, tables);
-					form.setFieldValue("writerConfig", JSON.stringify(nextWriter || {}, null, 2));
-				}
+				const writerConfig = parseJson(values.writerConfig, "Writer 配置") as Record<string, any> | undefined;
+				const nextWriter = applyTablesToConfig(writerConfig, tables);
+				form.setFieldValue("writerConfig", JSON.stringify(nextWriter || {}, null, 2));
 			} else {
 				form.setFieldValue("readerTables", tables.join("\n"));
-				if (!values.useDefaultDestination) {
-					form.setFieldValue("writerTables", tables.join("\n"));
-				}
+				form.setFieldValue("writerTables", tables.join("\n"));
 			}
+			form.setFieldValue("tableSelectionMode", "manual");
 			toast.success("已更新表清单");
 		} catch (err: any) {
 			toast.error(err?.message || "更新表清单失败");
 		}
 	};
 
+	const readerTablesValidator = (_: any, value: string) => {
+		const mode = normalizeText(form.getFieldValue("tableSelectionMode")) || "all";
+		if (mode === "all") {
+			return Promise.resolve();
+		}
+		if (selectedTableKeys.length) {
+			return Promise.resolve();
+		}
+		const tables = splitLines(value);
+		if (tables.length) {
+			return Promise.resolve();
+		}
+		return Promise.reject(new Error("请输入表名"));
+	};
+
+	const writerTablesValidator = (_: any, value: string) => {
+		const mode = normalizeText(form.getFieldValue("tableSelectionMode")) || "all";
+		if (mode === "all") {
+			return Promise.resolve();
+		}
+		if (selectedTableKeys.length) {
+			return Promise.resolve();
+		}
+		const tables = splitLines(value);
+		if (tables.length) {
+			return Promise.resolve();
+		}
+		return Promise.reject(new Error("请填写目标表名"));
+	};
+
 	const resolveStepFields = (stepIndex: number, values: Record<string, any>) => {
 		const isJsonMode = values?.editorMode === "json";
-		const useDefault = Boolean(values?.useDefaultDestination);
 		switch (stepIndex) {
 			case 0:
 				return ["editorMode", "name", "description", "sourceSystem"];
@@ -690,10 +875,9 @@ export default function TransformCreatePage() {
 					? ["sourceDataSourceId", "readerType", "readerConfig"]
 					: ["sourceDataSourceId", "readerType", "readerTables"];
 			case 2:
-				if (useDefault) return ["useDefaultDestination", "syncPrefix"];
 				return isJsonMode
-					? ["useDefaultDestination", "writerType", "writerConfig"]
-					: ["useDefaultDestination", "writerType", "writerJdbcUrls", "writerTables"];
+					? ["writerType", "writerConfig"]
+					: ["writerType", "writerTables"];
 			case 3:
 				return ["jobConfig", "airflowEnabled", "runNow"];
 			default:
@@ -750,15 +934,44 @@ export default function TransformCreatePage() {
 			if (hasConnectionOverride(readerConfig)) {
 				throw new Error("入湖任务必须使用已配置的数据源连接，Reader 配置中不可包含连接信息");
 			}
+			if (!defaultDestinationStatus?.available) {
+				throw new Error("默认数据湖未配置，请先在管理端设置默认数据湖");
+			}
+			if (!defaultDestinationStatus.writerTypeReady) {
+				throw new Error("默认数据湖未配置写入器类型");
+			}
+			if (!defaultDestinationStatus.writerConfigReady) {
+				throw new Error("默认数据湖未配置写入器参数");
+			}
+			const defaultWriterType = normalizeText(defaultDestinationStatus.writerType);
+			if (!defaultWriterType) {
+				throw new Error("默认数据湖写入器类型不可用");
+			}
 			const sourceSystem = normalizeText(values.sourceSystem);
 			if (sourceSystem && readerConfig && typeof readerConfig === "object" && !readerConfig.sourceSystem) {
 				readerConfig.sourceSystem = sourceSystem;
 			}
-			const writerConfig = values.useDefaultDestination
-				? undefined
-				: isJsonMode
-					? parseJson(values.writerConfig, "Writer 配置")
-					: buildWriterConfig(values);
+			const selectionMode = normalizeText(values.tableSelectionMode) || "all";
+			let includeTables: string[] = [];
+			if (selectionMode === "manual") {
+				if (selectedTableKeys.length) {
+					includeTables = selectedTableKeys;
+				} else if (isJsonMode) {
+					includeTables = extractReaderTables(readerConfig);
+				} else {
+					includeTables = splitLines(values.readerTables);
+				}
+				if (!includeTables.length) {
+					throw new Error("请选择需要入湖的表");
+				}
+			}
+			const excludeTables = selectionMode === "all" ? splitLines(values.tableExclude) : [];
+			const writerConfig = isJsonMode
+				? parseJson(values.writerConfig, "Writer 配置")
+				: buildWriterConfig(values);
+			if (writerConfig && selectionMode !== "all" && !hasTableEntries(extractWriterTables(writerConfig))) {
+				throw new Error("Writer 配置缺少目标表，请填写表清单");
+			}
 			const jobConfig = parseJson(values.jobConfig, "作业参数");
 			const modelSelector = normalizeText(values.dbtModelSelector) || buildModelSelectorFromNames(values.dbtModels || []);
 			const dagSelector = normalizeText(values.dbtDagSelector);
@@ -774,7 +987,7 @@ export default function TransformCreatePage() {
 					sourceType: normalizeText(values.readerType),
 					sourceDataSourceId: values.sourceDataSourceId,
 					sourceConfig: (readerConfig as Record<string, any>) || {},
-					destinationType: values.useDefaultDestination ? undefined : normalizeText(values.writerType),
+					destinationType: defaultWriterType,
 					destinationConfig: writerConfig as Record<string, any> | undefined,
 					syncMode: editingTask?.syncMode || "full",
 					syncPrefix: normalizeText(values.syncPrefix) || undefined,
@@ -796,12 +1009,19 @@ export default function TransformCreatePage() {
 						config: readerConfig || {},
 					},
 					destination: {
-						usePlatformDefault: Boolean(values.useDefaultDestination),
-						type: values.useDefaultDestination ? undefined : normalizeText(values.writerType),
+						usePlatformDefault: true,
+						type: defaultWriterType,
 						config: writerConfig || undefined,
 					},
 					sync: {
 						prefix: normalizeText(values.syncPrefix) || undefined,
+					},
+					streams: {
+						selection: selectionMode,
+						include: selectionMode === "manual" ? includeTables : undefined,
+						exclude: selectionMode === "all" ? excludeTables : undefined,
+						schema: normalizeText(values.readerSchema) || undefined,
+						tablePattern: normalizeText(values.readerTablePattern) || undefined,
 					},
 					airflow: {
 						enabled: Boolean(values.airflowEnabled),
@@ -829,12 +1049,12 @@ export default function TransformCreatePage() {
 	const previewState = useMemo(() => {
 		if (!formValues) return { config: null, error: "" };
 		try {
-			const config = buildJobPreview(formValues, Boolean(useDefaultDestination), editorMode);
+			const config = buildJobPreview(formValues, editorMode);
 			return { config, error: "" };
 		} catch (error: any) {
 			return { config: null, error: error?.message || "无法生成预览" };
 		}
-	}, [formValues, useDefaultDestination, editorMode]);
+	}, [formValues, editorMode]);
 
 	return (
 		<div className="flex flex-col gap-6">
@@ -869,7 +1089,7 @@ export default function TransformCreatePage() {
 			<Card>
 				<Alert
 					message="提示"
-					description="请选择已配置的数据源连接并填写 Addax Reader/Writer 覆盖参数。Writer 可选择平台默认数据湖。"
+					description="入湖任务将使用管理端默认数据湖；请填写 Reader 配置与 Writer 覆盖参数（表名必填）。"
 					type="info"
 					showIcon
 					className="mb-6"
@@ -936,6 +1156,17 @@ export default function TransformCreatePage() {
 							>
 								<Input placeholder="将根据数据源自动生成" disabled />
 							</Form.Item>
+							<Form.Item name="tableSelectionMode" label="入湖表选择">
+								<Radio.Group>
+									<Radio.Button value="all">全部表（默认）</Radio.Button>
+									<Radio.Button value="manual">手动选择</Radio.Button>
+								</Radio.Group>
+							</Form.Item>
+							{tableSelectionMode === "all" ? (
+								<Form.Item name="tableExclude" label="排除表（每行一个，可选）">
+									<Input.TextArea rows={2} placeholder="schema.table 或 table_name" />
+								</Form.Item>
+							) : null}
 							{editorMode === "json" ? (
 								<Form.Item
 									name="readerConfig"
@@ -953,7 +1184,8 @@ export default function TransformCreatePage() {
 										<Form.Item
 											name="readerTables"
 											label="Reader 表（每行一个）"
-											rules={[{ required: true, message: "请输入表名" }]}
+											dependencies={["tableSelectionMode"]}
+											rules={[{ validator: readerTablesValidator }]}
 										>
 											<Input.TextArea rows={3} placeholder="source_table" />
 										</Form.Item>
@@ -1001,6 +1233,18 @@ export default function TransformCreatePage() {
 											<Button onClick={handleDiscoverTables} loading={discoveringTables}>
 												获取表清单
 											</Button>
+											<Button
+												onClick={() => setSelectedTableKeys(discoveredTableKeys)}
+												disabled={!discoveredTableKeys.length}
+											>
+												全选
+											</Button>
+											<Button
+												onClick={() => setSelectedTableKeys([])}
+												disabled={!selectedTableKeys.length}
+											>
+												清空
+											</Button>
 											<Button onClick={handleApplyTables} disabled={!selectedTableKeys.length}>
 												应用选择
 											</Button>
@@ -1027,7 +1271,7 @@ export default function TransformCreatePage() {
 									pagination={{ pageSize: 8 }}
 								/>
 								<Text type="secondary" className="block mt-2">
-									已选择 {selectedTableKeys.length} 张表
+									已发现 {discoveredTables.length} 张表，已选择 {selectedTableKeys.length} 张表
 								</Text>
 							</Card>
 						</>
@@ -1035,177 +1279,156 @@ export default function TransformCreatePage() {
 					{currentStep === 2 && (
 						<>
 							<Divider orientation="left">目标端配置</Divider>
-							<Form.Item name="useDefaultDestination" label="使用平台默认数据湖" valuePropName="checked">
-								<Switch />
-							</Form.Item>
-							<Form.Item
-								name="syncPrefix"
-								label="目标表前缀"
-								rules={[
-									{
-										required: Boolean(useDefaultDestination),
-										message: "请输入目标表前缀，用于生成 ODS 表名",
-									},
-								]}
-							>
+							{loadingDefaultDestination ? (
+								<Alert
+									type="info"
+									showIcon
+									message="正在加载默认数据湖配置"
+									className="mb-4"
+								/>
+							) : null}
+							{defaultDestinationError ? (
+								<Alert
+									type="error"
+									showIcon
+									message="默认数据湖不可用"
+									description={defaultDestinationError}
+									className="mb-4"
+								/>
+							) : null}
+							{defaultDestinationStatus ? (
+								<Alert
+									type={defaultDestinationStatus.available ? "success" : "warning"}
+									showIcon
+									message="默认数据湖"
+									description={[
+										defaultDestinationStatus.destinationName
+											? `数据湖：${defaultDestinationStatus.destinationName}`
+											: null,
+										defaultDestinationStatus.writerType
+											? `Writer：${defaultDestinationStatus.writerType}`
+											: null,
+										defaultDestinationStatus.message ? defaultDestinationStatus.message : null,
+									]
+										.filter(Boolean)
+										.join(" · ")}
+									className="mb-4"
+								/>
+							) : null}
+							<Form.Item name="syncPrefix" label="目标表前缀">
 								<Input placeholder="例如：ods_erp_" />
 							</Form.Item>
 							<Text type="secondary" className="block -mt-3 mb-4">
 								用于自动生成 ODS 表名（如：ods_erp_ + 源表名）。若 Writer 已指定目标表，可留空。
 							</Text>
-							{useDefaultDestination && (
-								<Alert
-									type="info"
-									showIcon
-									className="mb-4"
-									message="使用平台默认数据湖"
-									description="Writer 类型与配置来自管理端数据湖配置，请确保已配置写入器类型与参数，否则创建任务会失败。"
-								/>
-							)}
-							{useDefaultDestination && loadingDefaultDestination ? (
-								<Alert
-									type="info"
-									showIcon
-									className="mb-4"
-									message="默认数据湖配置加载中..."
-								/>
-							) : null}
-							{useDefaultDestination && (defaultDestinationError || defaultDestinationStatus) ? (
-								<Alert
-									type={
-										defaultDestinationError || !defaultDestinationStatus?.writerTypeReady || !defaultDestinationStatus?.writerConfigReady
-											? "warning"
-											: "success"
-									}
-									showIcon
-									className="mb-4"
-									message={
-										defaultDestinationError ||
-										defaultDestinationStatus?.message ||
-										"默认数据湖写入器配置已就绪"
-									}
-									description={
-										defaultDestinationError
-											? "请检查管理端数据湖配置，确保已发布默认数据湖与写入器参数。"
-											: !defaultDestinationStatus?.writerTypeReady
-												? "默认数据湖未配置写入器类型，请在管理端补齐。"
-												: !defaultDestinationStatus?.writerConfigReady
-													? "默认数据湖未配置写入器参数，请在管理端补齐。"
-													: defaultDestinationStatus?.destinationName
-														? `当前默认数据湖：${defaultDestinationStatus.destinationName}`
-														: "默认数据湖已配置"
-									}
-								/>
-							) : null}
-							{!useDefaultDestination && (
+							<Divider orientation="left">Writer 配置</Divider>
+							<Form.Item
+								name="writerType"
+								label="Writer 类型"
+								rules={[{ required: true, message: "请选择 Writer 类型" }]}
+							>
+								<Input placeholder="由默认数据湖自动提供" disabled />
+							</Form.Item>
+							{editorMode === "json" ? (
+								<Form.Item
+									name="writerConfig"
+									label="Writer 配置 (JSON)"
+									required
+									rules={[
+										{ required: true, message: "请输入 Writer 配置" },
+										{ validator: writerConfigValidator },
+									]}
+								>
+									<Input.TextArea
+										rows={6}
+										placeholder='{"connection":[{"table":["target_table"]}],"column":["*"]}'
+									/>
+								</Form.Item>
+							) : (
 								<>
-									<Divider orientation="left">Writer 配置</Divider>
-									<Form.Item
-										name="writerType"
-										label="Writer 类型"
-										rules={[{ required: true, message: "请输入 Writer 类型" }]}
-									>
-										<Input placeholder="例如：postgresqlwriter" />
-									</Form.Item>
-									{editorMode === "json" ? (
+									<div className="grid gap-4 md:grid-cols-2">
 										<Form.Item
-											name="writerConfig"
-											label="Writer 配置 (JSON)"
+											name="writerJdbcUrls"
+											label="Writer JDBC URL（每行一个，可选覆盖）"
+										>
+											<Input.TextArea rows={3} placeholder="jdbc:postgresql://host:5432/db" />
+										</Form.Item>
+										<Form.Item
+											name="writerTables"
+											label="Writer 表（每行一个）"
 											rules={[
-												{ required: true, message: "请输入 Writer 配置" },
-												{ validator: jsonValidator("Writer 配置") },
+												{ validator: writerTablesValidator },
 											]}
 										>
-											<Input.TextArea rows={6} placeholder='{"username":"xxx","password":"xxx","column":["*"]}' />
+											<Input.TextArea rows={3} placeholder="target_table" />
 										</Form.Item>
-									) : (
-										<>
-											<div className="grid gap-4 md:grid-cols-2">
-												<Form.Item
-													name="writerJdbcUrls"
-													label="Writer JDBC URL（每行一个）"
-													rules={[{ required: true, message: "请输入 JDBC URL" }]}
-												>
-													<Input.TextArea rows={3} placeholder="jdbc:postgresql://host:5432/db" />
-												</Form.Item>
-												<Form.Item
-													name="writerTables"
-													label="Writer 表（每行一个）"
-													rules={[{ required: true, message: "请输入表名" }]}
-												>
-													<Input.TextArea rows={3} placeholder="target_table" />
-												</Form.Item>
-											</div>
-											<div className="grid gap-4 md:grid-cols-2">
-												<Form.Item name="writerColumns" label="Writer 字段（逗号分隔）">
-													<Input placeholder="* 或 id,name,created_at" />
-												</Form.Item>
-												<Form.Item name="writerWriteMode" label="Writer 写入模式">
-													<Input placeholder="insert / replace / update" />
-												</Form.Item>
-											</div>
-											<div className="grid gap-4 md:grid-cols-2">
-												<Form.Item
-													name="writerUsername"
-													label="Writer 用户名"
-													dependencies={["useDefaultDestination", "editorMode"]}
-													rules={[
-														({ getFieldValue }) => ({
-															required: !getFieldValue("useDefaultDestination") && getFieldValue("editorMode") !== "json",
-															message: "请输入 Writer 用户名",
-														}),
-													]}
-												>
-													<Input placeholder="数据库账号" />
-												</Form.Item>
-												<Form.Item
-													name="writerPassword"
-													label="Writer 密码"
-													dependencies={["useDefaultDestination", "editorMode"]}
-													rules={[
-														({ getFieldValue }) => ({
-															required: !getFieldValue("useDefaultDestination") && getFieldValue("editorMode") !== "json",
-															message: "请输入 Writer 密码",
-														}),
-													]}
-												>
-													<Input.Password placeholder="******" />
-												</Form.Item>
-											</div>
-											<Form.Item name="writerSchema" label="Writer Schema">
-												<Input placeholder="可选，例如 public" />
-											</Form.Item>
-											<Collapse
-												ghost
-												items={[
-													{
-														key: "writer-advanced",
-														label: "Writer 高级参数",
-														children: (
-															<div className="space-y-4">
-																<Form.Item name="writerPreSql" label="Writer 前置 SQL（每行一条）">
-																	<Input.TextArea rows={3} placeholder="delete from t where ..." />
-																</Form.Item>
-																<Form.Item name="writerPostSql" label="Writer 后置 SQL（每行一条）">
-																	<Input.TextArea rows={3} placeholder="analyze table t" />
-																</Form.Item>
-																<Form.Item name="writerExtraConfig" label="Writer 扩展配置 JSON">
-																	<Input.TextArea rows={4} placeholder='{"batchSize":1000}' />
-																</Form.Item>
-															</div>
-														),
-													},
-												]}
-											/>
-										</>
-									)}
+									</div>
+									<div className="grid gap-4 md:grid-cols-2">
+										<Form.Item name="writerColumns" label="Writer 字段（逗号分隔）">
+											<Input placeholder="* 或 id,name,created_at" />
+										</Form.Item>
+										<Form.Item name="writerWriteMode" label="Writer 写入模式">
+											<Input placeholder="insert / replace / update" />
+										</Form.Item>
+									</div>
+									<div className="grid gap-4 md:grid-cols-2">
+										<Form.Item
+											name="writerUsername"
+											label="Writer 用户名"
+										>
+											<Input placeholder="数据库账号" />
+										</Form.Item>
+										<Form.Item
+											name="writerPassword"
+											label="Writer 密码"
+										>
+											<Input.Password placeholder="******" />
+										</Form.Item>
+									</div>
+									<Form.Item name="writerSchema" label="Writer Schema">
+										<Input placeholder="可选，例如 public" />
+									</Form.Item>
+									<Collapse
+										ghost
+										items={[
+											{
+												key: "writer-advanced",
+												label: "Writer 高级参数",
+												children: (
+													<div className="space-y-4">
+														<Form.Item name="writerPreSql" label="Writer 前置 SQL（每行一条）">
+															<Input.TextArea rows={3} placeholder="delete from t where ..." />
+														</Form.Item>
+														<Form.Item name="writerPostSql" label="Writer 后置 SQL（每行一条）">
+															<Input.TextArea rows={3} placeholder="analyze table t" />
+														</Form.Item>
+														<Form.Item name="writerExtraConfig" label="Writer 扩展配置 JSON">
+															<Input.TextArea rows={4} placeholder='{"batchSize":1000}' />
+														</Form.Item>
+													</div>
+												),
+											},
+										]}
+									/>
 								</>
 							)}
+							<Text type="secondary" className="block mt-2">
+								入湖任务需要提供目标表名，可使用 ${table} 占位符或具体表名。
+							</Text>
 						</>
 					)}
 					{currentStep === 3 && (
 						<>
-							<Card type="inner" title="dbt 模型联动" className="mb-4">
+							<Card
+								type="inner"
+								title="dbt 模型联动"
+								extra={
+									<Button size="small" onClick={() => router.push("/modeling/sql")}>
+										进入建模
+									</Button>
+								}
+								className="mb-4"
+							>
 								<Form.Item name="dbtModels" label="选择模型（可选）">
 									<Select
 										mode="multiple"
@@ -1241,11 +1464,6 @@ export default function TransformCreatePage() {
 										{JSON.stringify(previewState.config, null, 2)}
 									</pre>
 								)}
-								{useDefaultDestination ? (
-									<Text type="secondary" className="block mt-2">
-										Writer 使用平台默认配置，预览中仅展示占位参数。
-									</Text>
-								) : null}
 							</Card>
 							<Card type="inner" title="Airflow 触发">
 								<Form.Item name="airflowEnabled" label="启用 Airflow" valuePropName="checked">

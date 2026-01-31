@@ -9,6 +9,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.platform.service.etl.DbtManifestService;
 import com.yuzhi.dts.platform.service.etl.DbtAssetSyncService;
 import com.yuzhi.dts.platform.service.etl.DbtDagService;
+import com.yuzhi.dts.platform.service.etl.DbtArtifactSyncState;
+import com.yuzhi.dts.platform.service.etl.DbtRunResultService;
 import com.yuzhi.dts.platform.service.etl.DbtSourceService;
 import com.yuzhi.dts.platform.service.ops.ExternalRunLogService;
 import java.time.Instant;
@@ -30,6 +32,8 @@ public class EtlResource {
     private final DbtSourceService dbtSourceService;
     private final DbtAssetSyncService dbtAssetSyncService;
     private final DbtDagService dbtDagService;
+    private final DbtRunResultService dbtRunResultService;
+    private final DbtArtifactSyncState dbtArtifactSyncState;
     private final AirflowClient airflowClient;
     private final AirflowProperties airflowProperties;
     private final ExternalRunLogService externalRunLogService;
@@ -42,6 +46,8 @@ public class EtlResource {
         DbtSourceService dbtSourceService,
         DbtAssetSyncService dbtAssetSyncService,
         DbtDagService dbtDagService,
+        DbtRunResultService dbtRunResultService,
+        DbtArtifactSyncState dbtArtifactSyncState,
         AirflowClient airflowClient,
         AirflowProperties airflowProperties,
         ExternalRunLogService externalRunLogService,
@@ -53,6 +59,8 @@ public class EtlResource {
         this.dbtSourceService = dbtSourceService;
         this.dbtAssetSyncService = dbtAssetSyncService;
         this.dbtDagService = dbtDagService;
+        this.dbtRunResultService = dbtRunResultService;
+        this.dbtArtifactSyncState = dbtArtifactSyncState;
         this.airflowClient = airflowClient;
         this.airflowProperties = airflowProperties;
         this.externalRunLogService = externalRunLogService;
@@ -92,9 +100,24 @@ public class EtlResource {
 
     @PostMapping("/dbt/models/sync")
     public ApiResponse<DbtAssetSyncService.DbtAssetSyncResult> syncDbtModels() {
-        ApiResponse<DbtAssetSyncService.DbtAssetSyncResult> response = ApiResponses.ok(dbtAssetSyncService.syncFromManifest());
+        DbtAssetSyncService.DbtAssetSyncResult assetResult = dbtAssetSyncService.syncFromManifest();
+        DbtRunResultService.DbtRunSyncResult runResult = dbtRunResultService.syncFromRunResults();
+        recordDbtSyncState(assetResult, runResult);
         auditService.audit("EXECUTE", "etl.dbt.models", "sync");
-        return response;
+        auditService.record(
+            "EXECUTE",
+            "etl.dbt.runs",
+            "etl.dbt.runs",
+            "sync",
+            runResult.synced() ? "SUCCESS" : "FAILED",
+            runResult
+        );
+        return ApiResponses.ok(assetResult);
+    }
+
+    @GetMapping("/dbt/sync/status")
+    public ApiResponse<DbtArtifactSyncState.DbtArtifactSyncStatus> getDbtSyncStatus() {
+        return ApiResponses.ok(dbtArtifactSyncState.snapshot());
     }
 
     @GetMapping("/dbt/runs")
@@ -122,12 +145,16 @@ public class EtlResource {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请提供模型选择器");
         }
         String selector = request.models().trim();
-        String dagId = dbtDagService.ensureDagForSelector(selector);
+        String dagSelector = StringUtils.hasText(request.dagSelector()) ? request.dagSelector().trim() : selector;
+        String dagId = dbtDagService.ensureDagForSelector(dagSelector);
         if (!StringUtils.hasText(dagId)) {
             dagId = airflowProperties.getDagId();
         }
         Map<String, Object> conf = new LinkedHashMap<>();
         conf.put("models", selector);
+        if (StringUtils.hasText(request.dagSelector())) {
+            conf.put("dagSelector", dagSelector);
+        }
         if (request.target() != null && !request.target().isBlank()) {
             conf.put("target", request.target());
         }
@@ -143,6 +170,39 @@ public class EtlResource {
         }
         auditService.audit("EXECUTE", "etl.dbt.run", selector);
         return ApiResponses.ok(result);
+    }
+
+    private void recordDbtSyncState(
+        DbtAssetSyncService.DbtAssetSyncResult assetResult,
+        DbtRunResultService.DbtRunSyncResult runResult
+    ) {
+        if (assetResult != null) {
+            Long modified = fileModified(assetResult.manifestPath());
+            dbtArtifactSyncState.recordManifest(modified, assetResult.synced(), assetResult.message());
+            if (assetResult.stats() != null) {
+                dbtArtifactSyncState.recordStats(assetResult.stats(), assetResult.message());
+            }
+        }
+        if (runResult != null) {
+            Long modified = fileModified(runResult.runResultsPath());
+            dbtArtifactSyncState.recordRunResults(modified, runResult.synced(), runResult.message());
+        }
+    }
+
+    private Long fileModified(String path) {
+        if (!StringUtils.hasText(path)) {
+            return null;
+        }
+        try {
+            java.io.File file = new java.io.File(path);
+            if (!file.exists()) {
+                return null;
+            }
+            long modified = file.lastModified();
+            return modified > 0 ? modified : null;
+        } catch (Exception ex) {
+            return null;
+        }
     }
 
     @GetMapping("/airflow/jobs")
@@ -209,7 +269,7 @@ public class EtlResource {
         return ApiResponses.ok(result);
     }
 
-    public record DbtRunRequest(String models, String target, Map<String, Object> vars) {}
+    public record DbtRunRequest(String models, String dagSelector, String target, Map<String, Object> vars) {}
 
     private String toJsonString(Map<String, Object> vars) {
         try {

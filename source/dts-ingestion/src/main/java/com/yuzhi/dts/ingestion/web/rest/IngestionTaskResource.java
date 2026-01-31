@@ -123,7 +123,14 @@ public class IngestionTaskResource {
 
     public record NamespaceSpec(String definition, String format) {}
 
-    public record StreamsSpec(String selection, List<String> include, List<String> exclude) {}
+    public record StreamsSpec(
+        String selection,
+        List<String> include,
+        List<String> exclude,
+        String schema,
+        String tablePattern,
+        Integer limit
+    ) {}
 
     public record SchemaChangeSpec(String mode) {}
 
@@ -177,9 +184,26 @@ public class IngestionTaskResource {
 
             boolean useDefault = Boolean.TRUE.equals(request.destination().usePlatformDefault());
             boolean hasJobConfig = request.jobConfig() != null && !request.jobConfig().isEmpty();
-            Map<String, Object> readerConfig = safeMap(resolvedSource.readerConfig());
             Map<String, Object> sourceOverrides = sanitizeSourceOverrides(request.source().config());
-            Map<String, Object> mergedReaderConfig = mergeReaderOverrides(readerConfig, sourceOverrides);
+            Map<String, Object> resolvedReaderConfig = resolvedSource.readerConfig();
+            Map<String, Object> mergedReaderConfig = mergeReaderOverrides(safeMap(resolvedReaderConfig), sourceOverrides);
+            String streamSelection = resolveStreamSelection(request.streams());
+            if (isAllSelection(streamSelection) && streamTables.isEmpty()) {
+                List<String> allTables = discoverAllTables(
+                    request.source().dataSourceId(),
+                    mergedReaderConfig,
+                    request.streams()
+                );
+                streamTables = applyExcludes(allTables, request.streams());
+                if (streamTables.isEmpty()) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "未发现可用表");
+                }
+            }
+            if (!streamTables.isEmpty()) {
+                applyTables(resolvedReaderConfig, streamTables);
+                applyTables(mergedReaderConfig, streamTables);
+            }
+            Map<String, Object> readerConfig = safeMap(resolvedReaderConfig);
             Map<String, Object> writerConfig = safeMap(request.destination().config());
             String writerType = resolvePlugin(
                 useDefault ? request.destination().definitionId() : request.destination().type(),
@@ -192,16 +216,10 @@ public class IngestionTaskResource {
             }
             if (!hasJobConfig) {
                 if (!StringUtils.hasText(writerType)) {
-                    String message = useDefault
-                        ? "缺少 Addax Writer 类型，请在管理端数据湖配置中设置写入器类型"
-                        : "缺少 Addax Writer 类型";
-                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, message);
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "缺少 Addax Writer 类型");
                 }
                 if (writerConfig.isEmpty()) {
-                    String message = useDefault
-                        ? "缺少 Addax Writer 配置，请在管理端数据湖配置中完善写入器参数"
-                        : "缺少 Addax Writer 配置";
-                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, message);
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "缺少 Addax Writer 配置");
                 }
             }
             if (StringUtils.hasText(writerType) && !StringUtils.hasText(normalize(writerConfig.get("writerType")))) {
@@ -669,6 +687,65 @@ public class IngestionTaskResource {
             .map(this::normalize)
             .filter(StringUtils::hasText)
             .toList();
+    }
+
+    private String resolveStreamSelection(StreamsSpec streams) {
+        if (streams == null) {
+            return "all";
+        }
+        String selection = normalize(streams.selection());
+        return StringUtils.hasText(selection) ? selection : "all";
+    }
+
+    private boolean isAllSelection(String selection) {
+        return !StringUtils.hasText(selection) || "all".equalsIgnoreCase(selection) || "auto".equalsIgnoreCase(selection);
+    }
+
+    private List<String> discoverAllTables(
+        java.util.UUID sourceId,
+        Map<String, Object> readerConfig,
+        StreamsSpec streams
+    ) {
+        JdbcMetadataService.JdbcConnectionInfo info = sourceResolver.resolveJdbcInfo(sourceId);
+        if (!StringUtils.hasText(info.jdbcUrl())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "缺少 JDBC URL");
+        }
+        String schema = streams == null ? null : normalize(streams.schema());
+        if (!StringUtils.hasText(schema)) {
+            schema = resolveSchema(readerConfig);
+        }
+        String tablePattern = streams == null ? null : normalize(streams.tablePattern());
+        Integer limit = streams == null ? null : streams.limit();
+        List<JdbcMetadataService.TableMeta> tables = jdbcMetadataService.listTables(info, schema, tablePattern, limit == null ? 0 : limit);
+        return tables.stream()
+            .map(this::buildTableName)
+            .filter(StringUtils::hasText)
+            .toList();
+    }
+
+    private List<String> applyExcludes(List<String> tables, StreamsSpec streams) {
+        if (tables == null || tables.isEmpty() || streams == null || streams.exclude() == null || streams.exclude().isEmpty()) {
+            return tables == null ? List.of() : tables;
+        }
+        java.util.Set<String> excludes = streams.exclude().stream()
+            .map(this::normalize)
+            .filter(StringUtils::hasText)
+            .map(value -> value.toLowerCase(java.util.Locale.ROOT))
+            .collect(java.util.stream.Collectors.toSet());
+        java.util.List<String> filtered = new java.util.ArrayList<>();
+        for (String table : tables) {
+            String normalized = normalize(table);
+            if (!StringUtils.hasText(normalized)) {
+                continue;
+            }
+            String lower = normalized.toLowerCase(java.util.Locale.ROOT);
+            String simple = lower.contains(".") ? lower.substring(lower.lastIndexOf('.') + 1) : lower;
+            if (excludes.contains(lower) || excludes.contains(simple)) {
+                continue;
+            }
+            filtered.add(normalized);
+        }
+        return filtered;
     }
 
     private List<Map<String, String>> deriveTableMapping(

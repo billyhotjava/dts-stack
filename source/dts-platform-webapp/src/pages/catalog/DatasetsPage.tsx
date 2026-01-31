@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Card, Input, Select, Space, Table, Tag } from "antd";
+import { Button, Card, Input, Modal, Select, Space, Table, Tag, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
-import { listDatasets, listDomains } from "@/api/platformApi";
+import { getTechMetadataTableDetail, listDatasets, listDomains } from "@/api/platformApi";
+
+const { Text } = Typography;
 
 type AssetRow = {
 	id: string;
@@ -17,12 +19,39 @@ type AssetRow = {
 	status?: string;
 };
 
+type TableDetail = {
+	enabled?: boolean;
+	found?: boolean;
+	message?: string;
+	entity?: Record<string, any>;
+};
+
+type ColumnRow = {
+	key: string;
+	name: string;
+	type: string;
+	comment: string;
+	status?: string;
+};
+
 const TYPE_OPTIONS = [
 	{ label: "全部类型", value: "ALL" },
 	{ label: "Hive", value: "HIVE" },
 	{ label: "JDBC", value: "JDBC" },
 	{ label: "文件", value: "FILE" },
 ];
+
+const buildColumnRows = (detail?: TableDetail | null): ColumnRow[] => {
+	if (!detail?.entity) return [];
+	const columns = Array.isArray(detail.entity.columns) ? detail.entity.columns : [];
+	return columns.map((item: any, idx: number) => ({
+		key: String(item?.name || item?.displayName || idx),
+		name: String(item?.name || item?.displayName || "-").trim(),
+		type: String(item?.dataType || item?.dataTypeDisplay || "-").trim(),
+		comment: String(item?.description || item?.comment || "").trim(),
+		status: String(item?.status || "").trim(),
+	}));
+};
 
 export default function Page() {
 	const [keyword, setKeyword] = useState("");
@@ -32,6 +61,10 @@ export default function Page() {
 	const [records, setRecords] = useState<AssetRow[]>([]);
 	const [pageState, setPageState] = useState({ page: 1, size: 10, total: 0 });
 	const [domains, setDomains] = useState<{ id: string; name: string }[]>([]);
+	const [detailOpen, setDetailOpen] = useState(false);
+	const [detailLoading, setDetailLoading] = useState(false);
+	const [detailRow, setDetailRow] = useState<AssetRow | null>(null);
+	const [tableDetail, setTableDetail] = useState<TableDetail | null>(null);
 
 	useEffect(() => {
 		void loadDomains();
@@ -102,6 +135,54 @@ export default function Page() {
 		}
 	};
 
+	const openDetail = async (row: AssetRow) => {
+		if (!row?.id) return;
+		setDetailRow(row);
+		setTableDetail(null);
+		setDetailOpen(true);
+		setDetailLoading(true);
+		try {
+			const resp: any = await getTechMetadataTableDetail(`catalog:${row.id}`);
+			setTableDetail(resp || null);
+		} catch (error: any) {
+			toast.error(error?.message || "加载资产字段失败");
+			setTableDetail(null);
+		} finally {
+			setDetailLoading(false);
+		}
+	};
+
+	const columnRows = useMemo(() => buildColumnRows(tableDetail), [tableDetail]);
+	const columnStatusStats = useMemo(() => {
+		let draft = 0;
+		let active = 0;
+		let other = 0;
+		columnRows.forEach((row) => {
+			const label = String(row.status || "").toUpperCase();
+			if (label === "DRAFT") draft += 1;
+			else if (label === "ACTIVE") active += 1;
+			else other += 1;
+		});
+		return { draft, active, other };
+	}, [columnRows]);
+
+	const columnColumns: ColumnsType<ColumnRow> = [
+		{ title: "字段", dataIndex: "name" },
+		{ title: "类型", dataIndex: "type" },
+		{
+			title: "状态",
+			dataIndex: "status",
+			render: (value) => {
+				const normalized = String(value || "").toUpperCase();
+				if (!normalized) return <Tag>未知</Tag>;
+				if (normalized === "DRAFT") return <Tag color="orange">草稿</Tag>;
+				if (normalized === "ACTIVE") return <Tag color="green">正式</Tag>;
+				return <Tag>{value}</Tag>;
+			},
+		},
+		{ title: "备注", dataIndex: "comment" },
+	];
+
 	const columns: ColumnsType<AssetRow> = [
 		{
 			title: "资产名称",
@@ -138,6 +219,15 @@ export default function Page() {
 			title: "状态",
 			dataIndex: "status",
 			render: (value) => (value ? <Tag color="green">{value}</Tag> : "-"),
+		},
+		{
+			title: "操作",
+			dataIndex: "actions",
+			render: (_, row) => (
+				<Button type="link" size="small" onClick={() => void openDetail(row)}>
+					详情
+				</Button>
+			),
 		},
 	];
 
@@ -222,6 +312,36 @@ export default function Page() {
 					<EmptyState title="暂无资产" description="当前筛选条件下未找到资产。" />
 				)}
 			</Card>
+			<Modal
+				title="资产字段详情"
+				open={detailOpen}
+				onCancel={() => setDetailOpen(false)}
+				footer={<Button onClick={() => setDetailOpen(false)}>关闭</Button>}
+				width={860}
+			>
+				<Space direction="vertical" size={12} className="w-full">
+					<div className="rounded border border-slate-100 bg-slate-50/60 px-3 py-2 text-xs text-slate-600">
+						<div className="text-sm font-medium text-slate-700">
+							{detailRow?.name || "未命名资产"}
+						</div>
+						<div className="mt-1 flex flex-wrap gap-2">
+							<Tag color="orange">草稿 {columnStatusStats.draft}</Tag>
+							<Tag color="green">正式 {columnStatusStats.active}</Tag>
+							<Tag>其他 {columnStatusStats.other}</Tag>
+						</div>
+					</div>
+					<Table
+						rowKey="key"
+						columns={columnColumns}
+						dataSource={columnRows}
+						loading={detailLoading}
+						size="small"
+						pagination={false}
+						scroll={{ y: 360 }}
+					/>
+					{tableDetail?.message ? <Text type="danger">{tableDetail.message}</Text> : null}
+				</Space>
+			</Modal>
 		</div>
 	);
 }

@@ -49,7 +49,7 @@ export default function ModelsPage() {
 							{t(locale, "common.empty")}
 						</h3>
 						<p className="text-muted" style={{ marginBottom: "var(--spacing-lg)", maxWidth: 400 }}>
-							Models help you organize and curate your data, making it easier for your team to find and use the data they need.
+							{t(locale, "models.emptyDesc")}
 						</p>
 						<div style={{ display: "flex", gap: "var(--spacing-sm)" }}>
 							<Link to="/data">

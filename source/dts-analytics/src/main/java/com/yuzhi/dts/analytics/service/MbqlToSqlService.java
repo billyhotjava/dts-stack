@@ -38,7 +38,8 @@ public class MbqlToSqlService {
     }
 
     @Transactional(readOnly = true)
-    public TranslationResult translateSelect(long databaseId, JsonNode mbqlQuery, DatasetQueryService.DatasetConstraints constraints) {
+    public TranslationResult translateSelect(long databaseId, JsonNode mbqlQuery,
+            DatasetQueryService.DatasetConstraints constraints) {
         if (mbqlQuery == null || !mbqlQuery.isObject()) {
             throw new IllegalArgumentException("query must be a map.");
         }
@@ -86,7 +87,8 @@ public class MbqlToSqlService {
         String orderBy = renderOrderBy(mbqlQuery.get("order-by"), ctx, aggregations, quote);
 
         int requestedLimit = mbqlQuery.path("limit").canConvertToInt() ? mbqlQuery.path("limit").asInt() : 0;
-        int limit = constraints != null ? constraints.maxResults() : DatasetQueryService.DatasetConstraints.defaults().maxResults();
+        int limit = constraints != null ? constraints.maxResults()
+                : DatasetQueryService.DatasetConstraints.defaults().maxResults();
         if (requestedLimit > 0) {
             limit = Math.min(limit, requestedLimit);
         }
@@ -155,7 +157,8 @@ public class MbqlToSqlService {
 
             ctx.primaryTableId = tableId;
             ctx.primaryTableAlias = "t0";
-            ctx.fromClause = qualifyTable(table.getSchemaName(), table.getName(), quote) + " AS " + ctx.primaryTableAlias;
+            ctx.fromClause = qualifyTable(table.getSchemaName(), table.getName(), quote) + " AS "
+                    + ctx.primaryTableAlias;
 
             // Load fields for primary table
             for (AnalyticsField field : fieldRepository.findAllByTableIdOrderByPositionAscIdAsc(tableId)) {
@@ -387,12 +390,14 @@ public class MbqlToSqlService {
 
     /**
      * Parse MBQL joins.
-     * Format: [{"source-table": id, "condition": [...], "alias": "...", "strategy": "left-join"}]
+     * Format: [{"source-table": id, "condition": [...], "alias": "...", "strategy":
+     * "left-join"}]
      */
     private void parseJoins(JsonNode joins, QueryContext ctx, char quote) {
         int joinIndex = 1;
         for (JsonNode join : joins) {
-            if (!join.isObject()) continue;
+            if (!join.isObject())
+                continue;
 
             long joinTableId = join.path("source-table").asLong(0);
             if (joinTableId <= 0) {
@@ -412,7 +417,8 @@ public class MbqlToSqlService {
                 default -> "LEFT JOIN";
             };
 
-            String joinTableSql = qualifyTable(joinTable.getSchemaName(), joinTable.getName(), quote) + " AS " + quoteIdentifier(alias, quote);
+            String joinTableSql = qualifyTable(joinTable.getSchemaName(), joinTable.getName(), quote) + " AS "
+                    + quoteIdentifier(alias, quote);
 
             // Load fields for joined table
             for (AnalyticsField field : fieldRepository.findAllByTableIdOrderByPositionAscIdAsc(joinTableId)) {
@@ -473,7 +479,8 @@ public class MbqlToSqlService {
     }
 
     /**
-     * Parse a field reference, supporting expressions, joined tables, and regular fields.
+     * Parse a field reference, supporting expressions, joined tables, and regular
+     * fields.
      */
     private String parseFieldRef(JsonNode fieldRef, QueryContext ctx, char quote) {
         if (fieldRef == null || !fieldRef.isArray() || fieldRef.size() < 2) {
@@ -516,6 +523,70 @@ public class MbqlToSqlService {
             }
             default -> throw new IllegalArgumentException("Unsupported field reference kind: " + kind);
         };
+    }
+
+    /**
+     * Parse a field reference for numeric aggregations (SUM, AVG, STDDEV, VAR,
+     * MEDIAN).
+     * If the field is not a numeric type, wraps it with CAST(... AS NUMERIC).
+     */
+    private String parseNumericFieldRef(JsonNode fieldRef, QueryContext ctx, char quote) {
+        if (fieldRef == null || !fieldRef.isArray() || fieldRef.size() < 2) {
+            throw new IllegalArgumentException("Invalid field reference: " + fieldRef);
+        }
+
+        String kind = fieldRef.get(0).asText("");
+        if (!"field".equalsIgnoreCase(kind)) {
+            // For expressions, just use the regular parsing
+            return parseFieldRef(fieldRef, ctx, quote);
+        }
+
+        JsonNode idNode = fieldRef.get(1);
+        if (idNode.isTextual()) {
+            // Field by name (for subqueries) - assume it needs casting for safety
+            String fieldName = quoteIdentifier(idNode.asText(), quote);
+            return "CAST(" + fieldName + " AS NUMERIC)";
+        }
+
+        long fieldId = idNode.asLong(0);
+        if (fieldId <= 0) {
+            throw new IllegalArgumentException("Invalid field id: " + fieldRef);
+        }
+
+        AnalyticsField field = ctx.fieldsById.get(fieldId);
+        if (field == null) {
+            throw new IllegalArgumentException("Field not found: " + fieldId);
+        }
+
+        String alias = ctx.fieldTableAlias.get(fieldId);
+        String fieldSql;
+        if (alias != null && !ctx.isSubquery) {
+            fieldSql = quoteIdentifier(alias, quote) + "." + quoteIdentifier(field.getName(), quote);
+        } else {
+            fieldSql = quoteIdentifier(field.getName(), quote);
+        }
+
+        // Check if the field is numeric, if not wrap with CAST
+        String baseType = field.getBaseType();
+        if (isNumericType(baseType)) {
+            return fieldSql;
+        }
+        // Wrap non-numeric fields with CAST to NUMERIC
+        return "CAST(" + fieldSql + " AS NUMERIC)";
+    }
+
+    /**
+     * Check if a base type is numeric.
+     */
+    private static boolean isNumericType(String baseType) {
+        if (baseType == null) {
+            return false;
+        }
+        return "type/Integer".equals(baseType)
+                || "type/BigInteger".equals(baseType)
+                || "type/Float".equals(baseType)
+                || "type/Decimal".equals(baseType)
+                || "type/Number".equals(baseType);
     }
 
     private SqlFragment renderWhere(JsonNode filter, QueryContext ctx, char quote) {
@@ -563,7 +634,8 @@ public class MbqlToSqlService {
 
     private SqlFragment renderLogical(String join, JsonNode filter, QueryContext ctx, char quote) {
         if (filter.size() < 2) {
-            throw new IllegalArgumentException("query.filter " + join.toLowerCase(Locale.ROOT) + " requires at least one clause.");
+            throw new IllegalArgumentException(
+                    "query.filter " + join.toLowerCase(Locale.ROOT) + " requires at least one clause.");
         }
         List<String> parts = new ArrayList<>();
         List<Object> bindings = new ArrayList<>();
@@ -678,7 +750,8 @@ public class MbqlToSqlService {
 
     private SqlFragment renderLike(JsonNode filter, QueryContext ctx, char quote, String prefix, String suffix) {
         if (filter.size() != 3) {
-            throw new IllegalArgumentException("query.filter like must be [\"contains\"|\"starts-with\"|\"ends-with\", field, value].");
+            throw new IllegalArgumentException(
+                    "query.filter like must be [\"contains\"|\"starts-with\"|\"ends-with\", field, value].");
         }
         String column = parseFieldRef(filter.get(1), ctx, quote);
         JsonNode valueNode = requireScalar(filter.get(2), "like value");
@@ -688,7 +761,8 @@ public class MbqlToSqlService {
 
     private SqlFragment renderEmptyCheck(JsonNode filter, QueryContext ctx, char quote, boolean isEmpty) {
         if (filter.size() != 2) {
-            throw new IllegalArgumentException("query.filter is-empty/not-empty must be [\"is-empty\"|\"not-empty\", field].");
+            throw new IllegalArgumentException(
+                    "query.filter is-empty/not-empty must be [\"is-empty\"|\"not-empty\", field].");
         }
         String column = parseFieldRef(filter.get(1), ctx, quote);
         String sql = "(%s IS NULL OR %s = '')".formatted(column, column);
@@ -741,7 +815,8 @@ public class MbqlToSqlService {
         return " ORDER BY " + String.join(", ", clauses);
     }
 
-    private String renderOrderByClause(JsonNode node, QueryContext ctx, List<AggregationSpec> aggregations, char quote) {
+    private String renderOrderByClause(JsonNode node, QueryContext ctx, List<AggregationSpec> aggregations,
+            char quote) {
         if (node == null || !node.isArray() || node.size() < 2) {
             throw new IllegalArgumentException("query.order-by must be a list of [direction field-ref] pairs.");
         }
@@ -753,7 +828,8 @@ public class MbqlToSqlService {
         return column + " " + direction.toUpperCase(Locale.ROOT);
     }
 
-    private String parseOrderByTarget(JsonNode target, QueryContext ctx, List<AggregationSpec> aggregations, char quote) {
+    private String parseOrderByTarget(JsonNode target, QueryContext ctx, List<AggregationSpec> aggregations,
+            char quote) {
         if (target != null && target.isArray() && target.size() >= 2) {
             String kind = target.get(0).asText("");
             if ("aggregation".equalsIgnoreCase(kind)) {
@@ -842,37 +918,50 @@ public class MbqlToSqlService {
                     throw new IllegalArgumentException("aggregation count must be [\"count\"] or [\"count\", field].");
                 }
                 case "sum" -> {
-                    if (node.size() != 2) throw new IllegalArgumentException("aggregation sum must be [\"sum\", field].");
-                    yield "SUM(" + parseFieldRef(node.get(1), ctx, quote) + ")";
+                    if (node.size() != 2)
+                        throw new IllegalArgumentException("aggregation sum must be [\"sum\", field].");
+                    String sumField = parseNumericFieldRef(node.get(1), ctx, quote);
+                    yield "SUM(" + sumField + ")";
                 }
                 case "avg" -> {
-                    if (node.size() != 2) throw new IllegalArgumentException("aggregation avg must be [\"avg\", field].");
-                    yield "AVG(" + parseFieldRef(node.get(1), ctx, quote) + ")";
+                    if (node.size() != 2)
+                        throw new IllegalArgumentException("aggregation avg must be [\"avg\", field].");
+                    String avgField = parseNumericFieldRef(node.get(1), ctx, quote);
+                    yield "AVG(" + avgField + ")";
                 }
                 case "min" -> {
-                    if (node.size() != 2) throw new IllegalArgumentException("aggregation min must be [\"min\", field].");
+                    if (node.size() != 2)
+                        throw new IllegalArgumentException("aggregation min must be [\"min\", field].");
                     yield "MIN(" + parseFieldRef(node.get(1), ctx, quote) + ")";
                 }
                 case "max" -> {
-                    if (node.size() != 2) throw new IllegalArgumentException("aggregation max must be [\"max\", field].");
+                    if (node.size() != 2)
+                        throw new IllegalArgumentException("aggregation max must be [\"max\", field].");
                     yield "MAX(" + parseFieldRef(node.get(1), ctx, quote) + ")";
                 }
                 case "distinct" -> {
-                    if (node.size() != 2) throw new IllegalArgumentException("aggregation distinct must be [\"distinct\", field].");
+                    if (node.size() != 2)
+                        throw new IllegalArgumentException("aggregation distinct must be [\"distinct\", field].");
                     yield "COUNT(DISTINCT " + parseFieldRef(node.get(1), ctx, quote) + ")";
                 }
                 case "stddev" -> {
-                    if (node.size() != 2) throw new IllegalArgumentException("aggregation stddev must be [\"stddev\", field].");
-                    yield "STDDEV(" + parseFieldRef(node.get(1), ctx, quote) + ")";
+                    if (node.size() != 2)
+                        throw new IllegalArgumentException("aggregation stddev must be [\"stddev\", field].");
+                    String stddevField = parseNumericFieldRef(node.get(1), ctx, quote);
+                    yield "STDDEV(" + stddevField + ")";
                 }
                 case "var" -> {
-                    if (node.size() != 2) throw new IllegalArgumentException("aggregation var must be [\"var\", field].");
-                    yield "VARIANCE(" + parseFieldRef(node.get(1), ctx, quote) + ")";
+                    if (node.size() != 2)
+                        throw new IllegalArgumentException("aggregation var must be [\"var\", field].");
+                    String varField = parseNumericFieldRef(node.get(1), ctx, quote);
+                    yield "VARIANCE(" + varField + ")";
                 }
                 case "median" -> {
-                    if (node.size() != 2) throw new IllegalArgumentException("aggregation median must be [\"median\", field].");
+                    if (node.size() != 2)
+                        throw new IllegalArgumentException("aggregation median must be [\"median\", field].");
+                    String medianField = parseNumericFieldRef(node.get(1), ctx, quote);
                     // PostgreSQL specific - use percentile_cont for median
-                    yield "PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY " + parseFieldRef(node.get(1), ctx, quote) + ")";
+                    yield "PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY " + medianField + ")";
                 }
                 default -> throw new IllegalArgumentException("Unsupported aggregation operator: " + op);
             };
@@ -898,7 +987,8 @@ public class MbqlToSqlService {
         List<Object> joinBindings = new ArrayList<>();
     }
 
-    public record TranslationResult(long sourceTableId, String sql, List<Object> bindings) {}
+    public record TranslationResult(long sourceTableId, String sql, List<Object> bindings) {
+    }
 
     private record AggregationSpec(String sql, String alias, char quote) {
         String sqlWithAlias() {

@@ -82,10 +82,10 @@ export default function CollectionsPage() {
 										</div>
 										<div style={{ flex: 1, minWidth: 0 }}>
 											<h3 style={{ margin: 0, fontSize: "var(--font-size-md)", fontWeight: "var(--font-weight-semibold)" }}>
-												{c.name ?? "-"}
+												{c.id === "root" ? t(locale, "collections.rootName") : (c.name ?? "-")}
 											</h3>
 											<p className="text-muted" style={{ margin: "var(--spacing-xs) 0 0", fontSize: "var(--font-size-sm)" }}>
-												ID: {String(c.id)}
+												{t(locale, "common.id")}: {String(c.id)}
 											</p>
 										</div>
 									</div>

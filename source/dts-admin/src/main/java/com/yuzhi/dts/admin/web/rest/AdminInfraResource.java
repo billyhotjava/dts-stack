@@ -676,17 +676,22 @@ public class AdminInfraResource {
         if (!StringUtils.hasText(password == null ? null : password.toString())) {
             return "请填写密码";
         }
-        String destinationDefinitionId = payload.getProps() == null ? null : asString(payload.getProps().get("destinationDefinitionId"));
-        if (!StringUtils.hasText(destinationDefinitionId)) {
-            return "请选择写入器类型";
-        }
-        Object destConfigRaw = payload.getSecrets() == null ? null : payload.getSecrets().get("destinationConfig");
-        boolean hasNewConfig = destConfigRaw instanceof Map<?, ?> map && !map.isEmpty();
-        boolean hasExistingConfig = existing != null
-            && existing.getDestinationConfig() != null
-            && !existing.getDestinationConfig().isEmpty();
-        if (!hasNewConfig && !hasExistingConfig) {
-            return "请完善写入器配置";
+        boolean defaulted = payload.getDefaulted() != null
+            ? payload.getDefaulted()
+            : existing != null && existing.isDefaulted();
+        if (defaulted) {
+            String destinationDefinitionId = payload.getProps() == null ? null : asString(payload.getProps().get("destinationDefinitionId"));
+            if (!StringUtils.hasText(destinationDefinitionId)) {
+                return "请填写写入器类型";
+            }
+            Object destConfigRaw = payload.getSecrets() == null ? null : payload.getSecrets().get("destinationConfig");
+            boolean hasNewConfig = destConfigRaw instanceof Map<?, ?> map && !map.isEmpty();
+            boolean hasExistingConfig = existing != null
+                && existing.getDestinationConfig() != null
+                && !existing.getDestinationConfig().isEmpty();
+            if (!hasNewConfig && !hasExistingConfig) {
+                return "请完善写入器配置";
+            }
         }
         return null;
     }

@@ -75,6 +75,10 @@ public class InfraSettingsResource {
         Set.of("enabled", "baseUrl", "apiPath", "username", "password", "token"),
         Set.of("password", "token")
     );
+    private static final SettingsDefinition PLATFORM_DEF = new SettingsDefinition(
+        Set.of("catalogSyncOnDataSource"),
+        Set.of()
+    );
 
     private final IngestionSettingsService settingsService;
     private final RestTemplate restTemplate;
@@ -183,6 +187,7 @@ public class InfraSettingsResource {
             case IngestionSettingsService.SERVICE_AIRFLOW -> testAirflow(settings);
             case IngestionSettingsService.SERVICE_OPENMETADATA -> testOpenMetadata(settings);
             case IngestionSettingsService.SERVICE_DBT -> Map.of("success", false, "message", "DBT 接入尚未配置");
+            case IngestionSettingsService.SERVICE_PLATFORM -> Map.of("success", true, "message", "平台配置已保存");
             default -> Map.of("success", false, "message", "暂不支持该服务");
         };
     }
@@ -310,6 +315,7 @@ public class InfraSettingsResource {
             case IngestionSettingsService.SERVICE_AIRFLOW -> AIRFLOW_DEF;
             case IngestionSettingsService.SERVICE_OPENMETADATA -> OPEN_METADATA_DEF;
             case IngestionSettingsService.SERVICE_DBT -> DBT_DEF;
+            case IngestionSettingsService.SERVICE_PLATFORM -> PLATFORM_DEF;
             default -> null;
         };
     }
@@ -372,7 +378,7 @@ public class InfraSettingsResource {
         if (value == null) {
             return null;
         }
-        if ("enabled".equalsIgnoreCase(key) || "ingestionEnabled".equalsIgnoreCase(key)) {
+        if ("enabled".equalsIgnoreCase(key) || "ingestionEnabled".equalsIgnoreCase(key) || "catalogSyncOnDataSource".equalsIgnoreCase(key)) {
             if (value instanceof Boolean bool) {
                 return bool;
             }

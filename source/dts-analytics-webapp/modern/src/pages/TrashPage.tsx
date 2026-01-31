@@ -93,7 +93,7 @@ export default function TrashPage() {
 							</div>
 							<h3 style={{ margin: 0, color: "var(--color-text-secondary)" }}>{t(locale, "common.empty")}</h3>
 							<p className="text-muted" style={{ marginTop: "var(--spacing-sm)" }}>
-								Deleted items will appear here
+								{t(locale, "trash.emptyDesc")}
 							</p>
 						</div>
 					</CardBody>
@@ -112,9 +112,9 @@ export default function TrashPage() {
 									<span className="trash-item__name">{it.name ?? "-"}</span>
 									<span className="trash-item__meta">
 										<Badge variant={it.model === "dashboard" ? "info" : "success"} size="sm">
-											{String(it.model)}
+											{it.model === "dashboard" ? t(locale, "dashboards.title") : t(locale, "questions.title")}
 										</Badge>
-										<span className="text-muted">ID: {it.id}</span>
+										<span className="text-muted">{t(locale, "common.id")}: {it.id}</span>
 									</span>
 								</div>
 							</Link>

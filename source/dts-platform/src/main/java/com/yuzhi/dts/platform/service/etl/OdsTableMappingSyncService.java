@@ -3,9 +3,17 @@ package com.yuzhi.dts.platform.service.etl;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.common.audit.AuditStage;
+import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
+import com.yuzhi.dts.platform.domain.catalog.CatalogTableSchema;
 import com.yuzhi.dts.platform.domain.infra.InfraOdsTableMapping;
+import com.yuzhi.dts.platform.domain.service.InfraDataSource;
+import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
+import com.yuzhi.dts.platform.repository.catalog.CatalogTableSchemaRepository;
 import com.yuzhi.dts.platform.repository.infra.InfraOdsTableMappingRepository;
+import com.yuzhi.dts.platform.repository.service.InfraDataSourceRepository;
 import com.yuzhi.dts.platform.service.audit.AuditService;
+import com.yuzhi.dts.platform.service.catalog.CatalogColumnSyncService;
+import com.yuzhi.dts.platform.service.catalog.CatalogColumnSyncService.ColumnSpec;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -28,17 +36,29 @@ public class OdsTableMappingSyncService {
     private static final String DEFAULT_SCHEMA = "ods";
 
     private final InfraOdsTableMappingRepository mappingRepository;
+    private final InfraDataSourceRepository dataSourceRepository;
+    private final CatalogDatasetRepository datasetRepository;
+    private final CatalogTableSchemaRepository tableRepository;
+    private final CatalogColumnSyncService columnSyncService;
     private final DbtSourceService dbtSourceService;
     private final AuditService auditService;
     private final ObjectMapper objectMapper;
 
     public OdsTableMappingSyncService(
         InfraOdsTableMappingRepository mappingRepository,
+        InfraDataSourceRepository dataSourceRepository,
+        CatalogDatasetRepository datasetRepository,
+        CatalogTableSchemaRepository tableRepository,
+        CatalogColumnSyncService columnSyncService,
         DbtSourceService dbtSourceService,
         AuditService auditService,
         ObjectMapper objectMapper
     ) {
         this.mappingRepository = mappingRepository;
+        this.dataSourceRepository = dataSourceRepository;
+        this.datasetRepository = datasetRepository;
+        this.tableRepository = tableRepository;
+        this.columnSyncService = columnSyncService;
         this.dbtSourceService = dbtSourceService;
         this.auditService = auditService;
         this.objectMapper = objectMapper;
@@ -61,6 +81,7 @@ public class OdsTableMappingSyncService {
         Map<String, Object> destinationConfig = readMap(task.get("destinationConfig"));
         String taskName = normalize(task.get("name"));
         int updated = 0;
+        List<ColumnSpec> columnSpecs = resolveColumnSpecs(connectionId);
         for (Map<String, String> mapping : mappings) {
             String source = normalize(mapping.get("source"));
             String target = normalize(mapping.get("target"));
@@ -92,6 +113,9 @@ public class OdsTableMappingSyncService {
             }
             mappingRepository.save(entity);
             updated++;
+            if (!columnSpecs.isEmpty()) {
+                syncColumns(entity, targetRef, columnSpecs, connectionId);
+            }
         }
         if (updated == 0) {
             return SyncResult.empty("无可同步的表映射");
@@ -278,6 +302,169 @@ public class OdsTableMappingSyncService {
         Map<String, String> result = new LinkedHashMap<>();
         map.forEach((key, value) -> result.put(String.valueOf(key), value == null ? null : String.valueOf(value)));
         return result;
+    }
+
+    private List<ColumnSpec> resolveColumnSpecs(UUID connectionId) {
+        if (connectionId == null) {
+            return List.of();
+        }
+        InfraDataSource dataSource = dataSourceRepository.findById(connectionId).orElse(null);
+        if (dataSource == null) {
+            return List.of();
+        }
+        if (StringUtils.hasText(dataSource.getJdbcUrl())) {
+            return List.of();
+        }
+        Map<String, Object> props = readProps(dataSource.getProps());
+        if (props.isEmpty()) {
+            return List.of();
+        }
+        Map<String, Object> readerConfig = readMap(props.get("readerConfig"));
+        Object columnRaw = readerConfig.get("column");
+        if (columnRaw == null) {
+            columnRaw = readerConfig.get("columns");
+        }
+        return extractColumnSpecs(columnRaw);
+    }
+
+    private List<ColumnSpec> extractColumnSpecs(Object raw) {
+        if (raw == null) {
+            return List.of();
+        }
+        List<ColumnSpec> specs = new ArrayList<>();
+        if (raw instanceof List<?> list) {
+            for (Object item : list) {
+                ColumnSpec spec = toColumnSpec(item);
+                if (spec != null) {
+                    specs.add(spec);
+                }
+            }
+        } else if (raw instanceof Map<?, ?> map) {
+            ColumnSpec spec = toColumnSpec(map);
+            if (spec != null) {
+                specs.add(spec);
+            }
+        } else if (raw instanceof String text && StringUtils.hasText(text)) {
+            for (String name : text.split(",")) {
+                if (!StringUtils.hasText(name)) continue;
+                specs.add(new ColumnSpec(name.trim(), "string", null, null, null, null, null, null));
+            }
+        }
+        return specs;
+    }
+
+    private ColumnSpec toColumnSpec(Object item) {
+        if (item == null) {
+            return null;
+        }
+        if (item instanceof String text) {
+            String name = text.trim();
+            return StringUtils.hasText(name) ? new ColumnSpec(name, "string", null, null, null, null, null, null) : null;
+        }
+        if (item instanceof Map<?, ?> map) {
+            Map<String, Object> values = castMap(map);
+            String name = normalize(values.get("name"));
+            if (!StringUtils.hasText(name)) {
+                name = normalize(values.get("column"));
+            }
+            if (!StringUtils.hasText(name)) {
+                name = normalize(values.get("field"));
+            }
+            if (!StringUtils.hasText(name)) {
+                return null;
+            }
+            String dataType = normalize(values.get("type"));
+            if (!StringUtils.hasText(dataType)) {
+                dataType = normalize(values.get("dataType"));
+            }
+            if (!StringUtils.hasText(dataType)) {
+                dataType = "string";
+            }
+            return new ColumnSpec(name, dataType, null, null, null, null, null, null);
+        }
+        return null;
+    }
+
+    private void syncColumns(InfraOdsTableMapping mapping, TableRef targetRef, List<ColumnSpec> specs, UUID connectionId) {
+        if (mapping == null || targetRef == null || specs == null || specs.isEmpty()) {
+            return;
+        }
+        CatalogDataset dataset = ensureDataset(connectionId, targetRef);
+        if (dataset == null) {
+            return;
+        }
+        CatalogTableSchema table = ensureTable(dataset, targetRef.table());
+        if (table == null) {
+            return;
+        }
+        columnSyncService.upsertColumns(table, specs, CatalogColumnSyncService.STATUS_DRAFT);
+    }
+
+    private CatalogDataset ensureDataset(UUID connectionId, TableRef targetRef) {
+        if (connectionId == null || targetRef == null) {
+            return null;
+        }
+        String schema = StringUtils.hasText(targetRef.schema()) ? targetRef.schema() : DEFAULT_SCHEMA;
+        String table = targetRef.table();
+        CatalogDataset dataset = datasetRepository
+            .findFirstBySourceIdAndHiveDatabaseIgnoreCaseAndHiveTableIgnoreCase(connectionId, schema, table)
+            .orElseGet(() ->
+                datasetRepository
+                    .findFirstByHiveDatabaseIgnoreCaseAndHiveTableIgnoreCase(schema, table)
+                    .orElse(null)
+            );
+        boolean created = false;
+        if (dataset == null) {
+            dataset = new CatalogDataset();
+            created = true;
+        }
+        if (!StringUtils.hasText(dataset.getName())) {
+            dataset.setName(table);
+        }
+        if (!StringUtils.hasText(dataset.getHiveDatabase())) {
+            dataset.setHiveDatabase(schema);
+        }
+        if (!StringUtils.hasText(dataset.getHiveTable())) {
+            dataset.setHiveTable(table);
+        }
+        if (dataset.getSourceId() == null) {
+            dataset.setSourceId(connectionId);
+        }
+        if (!StringUtils.hasText(dataset.getWarehouseLayer())) {
+            dataset.setWarehouseLayer("ODS");
+        }
+        if (!StringUtils.hasText(dataset.getType())) {
+            dataset.setType("FILE");
+        }
+        if (created) {
+            return datasetRepository.save(dataset);
+        }
+        return datasetRepository.save(dataset);
+    }
+
+    private CatalogTableSchema ensureTable(CatalogDataset dataset, String tableName) {
+        if (dataset == null || !StringUtils.hasText(tableName)) {
+            return null;
+        }
+        return tableRepository
+            .findFirstByDatasetAndNameIgnoreCase(dataset, tableName)
+            .orElseGet(() -> {
+                CatalogTableSchema table = new CatalogTableSchema();
+                table.setDataset(dataset);
+                table.setName(tableName.trim());
+                return tableRepository.save(table);
+            });
+    }
+
+    private Map<String, Object> readProps(String props) {
+        if (!StringUtils.hasText(props)) {
+            return Map.of();
+        }
+        try {
+            return objectMapper.readValue(props, new TypeReference<Map<String, Object>>() {});
+        } catch (Exception ex) {
+            return Map.of();
+        }
     }
 
     public record SyncResult(boolean synced, int tables, String message) {

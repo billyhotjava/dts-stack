@@ -28,13 +28,16 @@ export const getDbtConfig = () => api.get({ url: "/etl/dbt/config" });
 export const updateDbtConfig = (data: any) => api.put({ url: "/etl/dbt/config", data });
 export const listDbtModels = () => api.get({ url: "/etl/dbt/models" });
 export const syncDbtModels = () => api.post({ url: "/etl/dbt/models/sync" });
+export const getDbtSyncStatus = () => api.get({ url: "/etl/dbt/sync/status" });
 export const listDbtRuns = (limit = 20) => api.get({ url: "/etl/dbt/runs", params: { limit } });
 export const triggerDbtRun = (data: any) => api.post({ url: "/etl/dbt/run", data });
 export const listSqlModels = (params?: any) => api.get({ url: "/modeling/sql-models", params });
 export const getSqlModel = (id: string) => api.get({ url: `/modeling/sql-models/${id}` });
+export const listSqlModelColumns = (id: string) => api.get({ url: `/modeling/sql-models/${id}/columns` });
 export const createSqlModel = (data: any) => api.post({ url: "/modeling/sql-models", data });
 export const updateSqlModel = (id: string, data: any) => api.put({ url: `/modeling/sql-models/${id}`, data });
 export const deleteSqlModel = (id: string) => api.delete({ url: `/modeling/sql-models/${id}` });
+export const importSqlModel = (data: FormData) => api.post({ url: "/modeling/sql-models/import", data });
 export const listAirflowJobs = (limit = 50) => api.get({ url: "/etl/airflow/jobs", params: { limit } });
 export const listAirflowJobRuns = (dagId: string, limit = 20) =>
 	api.get({ url: `/etl/airflow/jobs/${dagId}/runs`, params: { limit } });
@@ -337,7 +340,9 @@ export type CatalogSyncRequest = { includePrimary?: boolean; includeJdbc?: boole
 export const triggerCatalogSync = (data: CatalogSyncRequest = {}) => api.post({ url: "/catalog/sync", data });
 export const getCatalogSyncStatus = () => api.get({ url: "/catalog/sync/status" });
 export const listCatalogSyncPipelines = () => api.get({ url: "/catalog/sync/pipelines" });
-export const listCatalogSyncRuns = (params: { integration?: string; limit?: number; includeDetails?: boolean } = {}) =>
+export const listCatalogSyncRuns = (
+	params: { integration?: string; limit?: number; includeDetails?: boolean; sourceId?: string } = {},
+) =>
 	api.get({ url: "/catalog/sync/runs", params });
 export const triggerJdbcCatalogSync = (sourceId: string, data: { reason?: string } = {}) =>
 	api.post({ url: `/catalog/sync/jdbc/${sourceId}/run`, data });

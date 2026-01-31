@@ -78,6 +78,7 @@ public class PortalMenuService {
         Map.entry("workbench.todo", "/pages/workbench/WorkflowCenterPage"),
         Map.entry("workbench.favorites", "/pages/workbench"),
         Map.entry("resource.sources", "/pages/foundation/DataSourcesPage"),
+        Map.entry("resource.jdbcDrivers", "/pages/foundation/JdbcDriversPage"),
         Map.entry("resource.metadata", "/pages/catalog/MetadataPage"),
         Map.entry("resource.ingestion", "/pages/explore/etl/TransformPage"),
         Map.entry("resource.changes", "/pages/foundation/AccessChangesPage"),

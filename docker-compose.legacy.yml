@@ -332,7 +332,7 @@ services:
       - ./config:/opt/dts/config:ro,z
       # Optional: mount vendor PKI client jar(s) like svs-uk_custom.jar into /opt/dts/vendor
       - ./services/dts-admin/vendor:/opt/dts/vendor:ro,z
-      - ./services/dts-platform/drivers:/opt/dts/drivers:ro,z
+      - ./services/dts-platform/drivers:/opt/dts/drivers:z
     extra_hosts:
       - "${HOST_SSO}:${HOST_GATEWAY_IP:-172.17.0.1}"
     networks:
@@ -420,7 +420,7 @@ services:
       - ./services/certs/truststore.p12:/etc/dts/truststore.p12:ro,z
       - ./logs/dts-platform:/logs/dts-platform:z
       # Mount vendor JDBC driver(s) for Hive to avoid Hadoop conflicts
-      - ./services/dts-platform/drivers:/opt/dts/drivers:ro,z
+      - ./services/dts-platform/drivers:/opt/dts/drivers:z
       # Encrypted attachments storage (host-bound)
       - ./services/dts-platform/upload:/opt/dts/upload:Z
       - ./services/dts-dbt:/opt/dts/dbt:ro,z

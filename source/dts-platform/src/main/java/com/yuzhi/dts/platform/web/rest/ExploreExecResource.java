@@ -14,11 +14,10 @@ import com.yuzhi.dts.platform.service.query.QueryGateway;
 import com.yuzhi.dts.platform.service.security.AccessChecker;
 import com.yuzhi.dts.platform.service.security.DatasetDataAccessApprovalService;
 import com.yuzhi.dts.platform.security.SecurityUtils;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -42,6 +41,7 @@ public class ExploreExecResource {
     private final QueryExecutionRepository executionRepository;
     private final ResultSetRepository resultSetRepository;
     private final CatalogMaskingRuleRepository maskingRepository;
+    private final ObjectMapper objectMapper;
 
     public ExploreExecResource(
         QueryGateway queryGateway,
@@ -51,7 +51,8 @@ public class ExploreExecResource {
         DatasetDataAccessApprovalService dataAccessApprovalService,
         QueryExecutionRepository executionRepository,
         ResultSetRepository resultSetRepository,
-        CatalogMaskingRuleRepository maskingRepository
+        CatalogMaskingRuleRepository maskingRepository,
+        ObjectMapper objectMapper
     ) {
         this.queryGateway = queryGateway;
         this.audit = audit;
@@ -61,6 +62,7 @@ public class ExploreExecResource {
         this.executionRepository = executionRepository;
         this.resultSetRepository = resultSetRepository;
         this.maskingRepository = maskingRepository;
+        this.objectMapper = objectMapper;
     }
 
     public record ExecuteRequest(String sqlText, String connection, String engine, UUID datasetId, Map<String, Object> variables) {}
@@ -191,16 +193,30 @@ public class ExploreExecResource {
         }
         int ttl = req != null && req.ttlDays != null ? Math.max(1, req.ttlDays) : 7;
 
-        // Build a fake storage URI and columns from execution SQL (not parsing; placeholder)
-        String storageUri = "local://resultsets/" + UUID.randomUUID() + ".json";
-        String columns = inferColumnsFromSql(exec.getSqlText());
+        Map<String, Object> preview;
+        try {
+            preview = queryGateway.execute(exec.getSqlText());
+        } catch (Exception ex) {
+            audit.audit("ERROR", "explore.saveResult", executionId.toString());
+            return ApiResponses.error("执行结果预览失败: " + ex.getMessage());
+        }
+
+        List<String> headers = normalizeHeaders(preview.get("headers"));
+        if (headers.isEmpty()) {
+            return ApiResponses.error("未获取到结果字段，请重新执行查询");
+        }
+        String columns = String.join(",", headers);
+        String previewJson = buildPreviewJson(headers, preview.get("rows"));
 
         ResultSet rs = new ResultSet();
-        rs.setStorageUri(storageUri);
+        rs.setStorageUri("inline://result-set/pending");
         rs.setColumns(columns);
         rs.setRowCount(exec.getRowCount());
+        rs.setPreviewColumns(previewJson);
         rs.setTtlDays(ttl);
         rs.setExpiresAt(Instant.now().plus(ttl, ChronoUnit.DAYS));
+        rs = resultSetRepository.save(rs);
+        rs.setStorageUri("inline://result-set/" + rs.getId());
         rs = resultSetRepository.save(rs);
 
         exec.setResultSetId(rs.getId());
@@ -223,15 +239,25 @@ public class ExploreExecResource {
         String effDept = resolveActiveDeptContext(activeDept);
 
         List<String> headers = new ArrayList<>();
-        for (String c : rs.getColumns().split(",")) headers.add(c.trim());
-
         List<Map<String, Object>> data = new ArrayList<>();
-        var r = java.util.concurrent.ThreadLocalRandom.current();
+        if (StringUtils.hasText(rs.getPreviewColumns())) {
+            try {
+                Map<?, ?> payload = objectMapper.readValue(rs.getPreviewColumns(), Map.class);
+                headers = normalizeHeaders(payload.get("headers"));
+                data = normalizeRows(payload.get("rows"));
+            } catch (Exception ex) {
+                // ignore and fallback
+            }
+        }
+        if (headers.isEmpty()) {
+            for (String c : rs.getColumns().split(",")) headers.add(c.trim());
+        }
+        if (data.isEmpty()) {
+            return ApiResponses.error("结果集暂无可预览数据，请重新执行保存");
+        }
         int n = Math.min(Math.max(rows, 1), 1000);
-        for (int i = 0; i < n; i++) {
-            Map<String, Object> row = new LinkedHashMap<>();
-            for (String h : headers) row.put(h, r.nextInt(1, 1000));
-            data.add(row);
+        if (data.size() > n) {
+            data = data.subList(0, n);
         }
         // Apply simple masking by policy (if dataset provided/derived) or by heuristic and collect metadata
         Map<String, Object> maskingMeta = new LinkedHashMap<>();
@@ -433,25 +459,50 @@ public class ExploreExecResource {
         return s.startsWith("select") || s.startsWith("with");
     }
 
-    private static String inferColumnsFromSql(String sql) {
-        // Naive: extract words after SELECT up to FROM
-        if (sql == null) return "col1,col2,col3";
-        Matcher m = Pattern.compile("select\\s+(.+?)\\s+from", Pattern.CASE_INSENSITIVE | Pattern.DOTALL).matcher(sql);
-        if (m.find()) {
-            String part = m.group(1);
-            if (part.contains("*")) return "col1,col2,col3,col4,col5";
-            String cleaned = part.replaceAll("AS\\s+", "");
-            String[] cols = cleaned.split(",");
-            List<String> names = new ArrayList<>();
-            for (String c : cols) {
-                String n = c.trim();
-                int idx = Math.max(n.lastIndexOf(' '), Math.max(n.lastIndexOf('.'), n.lastIndexOf(')')));
-                if (idx > -1 && idx + 1 < n.length()) n = n.substring(idx + 1);
-                names.add(n);
+    private List<String> normalizeHeaders(Object raw) {
+        if (raw instanceof List<?> list) {
+            List<String> headers = new ArrayList<>();
+            for (Object item : list) {
+                if (item != null) {
+                    String text = String.valueOf(item).trim();
+                    if (!text.isEmpty()) {
+                        headers.add(text);
+                    }
+                }
             }
-            return String.join(",", names);
+            return headers;
         }
-        return "col1,col2,col3";
+        return List.of();
+    }
+
+    private List<Map<String, Object>> normalizeRows(Object raw) {
+        if (!(raw instanceof List<?> list)) {
+            return new ArrayList<>();
+        }
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (Object item : list) {
+            if (item instanceof Map<?, ?> map) {
+                Map<String, Object> row = new LinkedHashMap<>();
+                for (Map.Entry<?, ?> entry : map.entrySet()) {
+                    if (entry.getKey() != null) {
+                        row.put(String.valueOf(entry.getKey()), entry.getValue());
+                    }
+                }
+                rows.add(row);
+            }
+        }
+        return rows;
+    }
+
+    private String buildPreviewJson(List<String> headers, Object rows) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("headers", headers);
+        payload.put("rows", rows instanceof List<?> ? rows : List.of());
+        try {
+            return objectMapper.writeValueAsString(payload);
+        } catch (Exception ex) {
+            return null;
+        }
     }
 
     private static java.util.List<java.util.Map<String, Object>> applyMasking(

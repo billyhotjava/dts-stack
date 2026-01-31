@@ -144,6 +144,18 @@ export type DatabaseMetadataResponse = Record<string, unknown>;
 export type DatabaseValidateResponse = Record<string, unknown>;
 export type DatabaseCreateResponse = Record<string, unknown>;
 
+export type PlatformDataSourceItem = {
+	id: string;
+	name?: string;
+	type?: string;
+	jdbcUrl?: string;
+	description?: string | null;
+	ownerDept?: string | null;
+	status?: string | null;
+	driverVersion?: string | null;
+	lastUpdatedAt?: string | null;
+};
+
 export type TableSummary = {
 	id: number;
 	db_id?: number;
@@ -340,6 +352,7 @@ export const analyticsApi = {
 	getCurrentUser: () => fetchJson<CurrentUser>("/analytics/api/user/current"),
 	getHealth: () => fetchJson<{ status?: string }>("/analytics/api/health"),
 	listDatabases: () => fetchJson<DatabaseListResponse>("/analytics/api/database"),
+	listPlatformDataSources: () => fetchJson<PlatformDataSourceItem[]>("/analytics/api/platform/data-sources"),
 	listTables: (dbId: string | number) =>
 		fetchJson<TableSummary[]>(`/analytics/api/table?db_id=${encodeURIComponent(String(dbId))}`),
 	getTable: (tableId: string | number) =>
@@ -352,6 +365,10 @@ export const analyticsApi = {
 	createDatabase: (body: unknown) => sendJson<DatabaseCreateResponse>("/analytics/api/database", body),
 	syncDatabaseSchema: (dbId: string | number) =>
 		sendJson<Record<string, unknown>>(`/analytics/api/database/${encodeURIComponent(String(dbId))}/sync_schema`, {}),
+	updateDatabase: (id: string | number, body: unknown) =>
+		requestJson<DatabaseCreateResponse>(`/analytics/api/database/${encodeURIComponent(String(id))}`, "PUT", body),
+	deleteDatabase: (id: string | number) =>
+		requestJson<void>(`/analytics/api/database/${encodeURIComponent(String(id))}`, "DELETE"),
 	getDatabaseMetadata: (dbId: string | number) =>
 		fetchJson<DatabaseMetadataResponse>(`/analytics/api/database/${encodeURIComponent(String(dbId))}/metadata`),
 	listCollections: () => fetchJson<CollectionListItem[]>("/analytics/api/collection"),

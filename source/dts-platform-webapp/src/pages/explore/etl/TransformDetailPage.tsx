@@ -1,11 +1,14 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams } from "@/routes/hooks";
-import { Button, Card, Descriptions, Space, Tag, message, Spin, Modal } from "antd";
+import { Button, Card, Descriptions, Space, Tag, message, Spin, Modal, Form, Input, Select, Typography } from "antd";
 import { PlayCircleOutlined, EditOutlined, HistoryOutlined, ArrowLeftOutlined, SyncOutlined } from "@ant-design/icons";
 import { PageHeader } from "@/components/page-header";
 import { useRouter } from "@/routes/hooks";
 import { ingestionTaskAPI, type IngestionTaskDTO } from "@/api/ingestion";
 import dataSourcesService, { type InfraDataSource } from "@/api/services/dataSourcesService";
+import { listSqlModels } from "@/api/platformApi";
+
+const { Text } = Typography;
 
 export default function TransformDetailPage() {
     const { id } = useParams();
@@ -13,6 +16,12 @@ export default function TransformDetailPage() {
     const [task, setTask] = useState<IngestionTaskDTO | null>(null);
     const [sourceDetail, setSourceDetail] = useState<InfraDataSource | null>(null);
     const [loading, setLoading] = useState(false);
+	const [dbtModalOpen, setDbtModalOpen] = useState(false);
+	const [dbtSaving, setDbtSaving] = useState(false);
+	const [dbtModels, setDbtModels] = useState<any[]>([]);
+	const [dbtModelsLoading, setDbtModelsLoading] = useState(false);
+	const [selectedModelNames, setSelectedModelNames] = useState<string[]>([]);
+	const [dbtForm] = Form.useForm();
 
     useEffect(() => {
         if (id) {
@@ -47,6 +56,89 @@ export default function TransformDetailPage() {
             setLoading(false);
         }
     };
+
+	const normalizeText = (value?: string) => String(value || "").trim();
+
+	const parseModelNames = (selector?: string) => {
+		const raw = normalizeText(selector);
+		if (!raw) return [];
+		return raw
+			.split(/\s+/)
+			.map((token) => token.trim())
+			.filter((token) => token.toLowerCase().startsWith("model:"))
+			.map((token) => token.slice(6))
+			.filter(Boolean);
+	};
+
+	const buildModelSelectorFromNames = (names: string[]) =>
+		(names || []).filter(Boolean).map((name) => `model:${name}`).join(" ");
+
+	const loadDbtModels = async () => {
+		setDbtModelsLoading(true);
+		try {
+			const resp: any = await listSqlModels({ size: 200 });
+			const list = Array.isArray(resp) ? resp : [];
+			setDbtModels(list);
+		} catch (error: any) {
+			message.error(error?.message || "模型列表加载失败");
+		} finally {
+			setDbtModelsLoading(false);
+		}
+	};
+
+	const openDbtModal = () => {
+		const selector = normalizeText(task?.dbtModelSelector);
+		const dagSelector = normalizeText(task?.dbtDagSelector);
+		const selected = parseModelNames(selector);
+		setSelectedModelNames(selected);
+		dbtForm.setFieldsValue({
+			dbtModelSelector: selector || undefined,
+			dbtDagSelector: dagSelector || undefined,
+		});
+		setDbtModalOpen(true);
+		if (!dbtModels.length) {
+			void loadDbtModels();
+		}
+	};
+
+	const applyModelSelection = (names: string[]) => {
+		setSelectedModelNames(names);
+		if (!names.length) return;
+		const selector = buildModelSelectorFromNames(names);
+		dbtForm.setFieldsValue({ dbtModelSelector: selector });
+	};
+
+	const handleSaveDbtBinding = async () => {
+		if (!task?.id) return;
+		const values = dbtForm.getFieldsValue();
+		const modelSelector = normalizeText(values.dbtModelSelector);
+		const dagSelector = normalizeText(values.dbtDagSelector);
+		setDbtSaving(true);
+		try {
+			const payload: IngestionTaskDTO = {
+				...task,
+				dbtModelSelector: modelSelector || undefined,
+				dbtDagSelector: dagSelector || undefined,
+			};
+			await ingestionTaskAPI.updateTask(Number(task.id), payload);
+			message.success("DBT 绑定已更新");
+			setDbtModalOpen(false);
+			loadTask();
+		} catch (error: any) {
+			message.error(error?.message || "DBT 绑定更新失败");
+		} finally {
+			setDbtSaving(false);
+		}
+	};
+
+	const modelOptions = useMemo(
+		() =>
+			dbtModels.map((model) => ({
+				label: model.name || model.alias || model.modelName || "未命名模型",
+				value: model.name || model.alias || model.modelName || "",
+			})),
+		[dbtModels],
+	);
 
     const handleExecute = async () => {
         try {
@@ -170,6 +262,27 @@ export default function TransformDetailPage() {
                 </Descriptions>
             </Card>
 
+			<Card
+				title="DBT 绑定"
+				extra={
+					<Button type="link" onClick={openDbtModal}>
+						绑定模型 / DAG 族
+					</Button>
+				}
+			>
+				<Descriptions column={2} bordered>
+					<Descriptions.Item label="模型选择器">
+						{task.dbtModelSelector ? <Text code>{task.dbtModelSelector}</Text> : "未绑定"}
+					</Descriptions.Item>
+					<Descriptions.Item label="DAG 族选择器">
+						{task.dbtDagSelector ? <Text code>{task.dbtDagSelector}</Text> : "默认 DAG"}
+					</Descriptions.Item>
+				</Descriptions>
+				<div className="mt-2 text-xs text-slate-500">
+					可直接输入 selector（如：model:xxx、tag:xxx），或从模型列表快速生成。
+				</div>
+			</Card>
+
             <Card title="执行信息">
                 <Descriptions column={2} bordered>
                     <Descriptions.Item label="最后执行时间">
@@ -189,6 +302,42 @@ export default function TransformDetailPage() {
                     </Descriptions.Item>
                 </Descriptions>
             </Card>
+
+			<Modal
+				open={dbtModalOpen}
+				title="绑定 DBT 模型与 DAG 族"
+				onCancel={() => setDbtModalOpen(false)}
+				onOk={handleSaveDbtBinding}
+				okButtonProps={{ loading: dbtSaving }}
+			>
+				<Form layout="vertical" form={dbtForm}>
+					<Form.Item label="模型选择" tooltip="选中后可自动生成模型选择器（model:xxx）">
+						<Select
+							mode="multiple"
+							placeholder="从模型库选择"
+							value={selectedModelNames}
+							onChange={applyModelSelection}
+							options={modelOptions}
+							loading={dbtModelsLoading}
+							allowClear
+						/>
+					</Form.Item>
+					<Form.Item label="模型选择器" name="dbtModelSelector">
+						<Input.TextArea
+							rows={2}
+							placeholder="例如：model:order_detail model:user_profile 或 tag:crm"
+						/>
+					</Form.Item>
+					<Form.Item label="DAG 族选择器" name="dbtDagSelector">
+						<Input
+							placeholder="例如：tab:crm 或 tag:crm"
+						/>
+					</Form.Item>
+					<div className="text-xs text-slate-500">
+						不填写 DAG 族选择器将使用默认 DAG。模型选择器为空则不会触发 dbt。
+					</div>
+				</Form>
+			</Modal>
         </div>
     );
 }

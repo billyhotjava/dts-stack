@@ -22,7 +22,7 @@ import { getEffectiveLocale, t, type Locale } from "../i18n";
 import "./page.css";
 
 const VISUALIZATION_TYPES: { value: VisualizationType; label: string }[] = [
-	{ value: "table", label: "Table" },
+	{ value: "table", label: "Table" }, // Will translate in render
 	{ value: "line", label: "Line" },
 	{ value: "bar", label: "Bar" },
 	{ value: "row", label: "Horizontal Bar" },
@@ -226,10 +226,10 @@ export default function CardEditorPage() {
 				mode === "builder"
 					? builderDatasetQuery
 					: {
-							database: databaseId,
-							type: "native",
-							native: { query: trimmedSql },
-						};
+						database: databaseId,
+						type: "native",
+						native: { query: trimmedSql },
+					};
 			const body = {
 				name: trimmedName,
 				collection_id: collectionId,
@@ -423,7 +423,7 @@ export default function CardEditorPage() {
 									size="sm"
 									onClick={() => setDisplayType(vt.value)}
 								>
-									{vt.label}
+									{t(locale, `vis.${vt.value}`)}
 								</Button>
 							))}
 						</div>
@@ -504,15 +504,15 @@ export default function CardEditorPage() {
 							{/* 0-row hint */}
 							{!runState.value.error &&
 								((runState.value.row_count ?? (runState.value.data?.rows as any[] | undefined)?.length ?? 0) === 0) && (
-								<div style={{
-									padding: "var(--spacing-lg)",
-									textAlign: "center",
-									color: "var(--color-text-tertiary)",
-									fontSize: "var(--font-size-sm)",
-								}}>
-									{t(locale, "questions.noRows")}
-								</div>
-							)}
+									<div style={{
+										padding: "var(--spacing-lg)",
+										textAlign: "center",
+										color: "var(--color-text-tertiary)",
+										fontSize: "var(--font-size-sm)",
+									}}>
+										{t(locale, "questions.noRows")}
+									</div>
+								)}
 
 							{/* Chart/Table renderer */}
 							<ChartRenderer

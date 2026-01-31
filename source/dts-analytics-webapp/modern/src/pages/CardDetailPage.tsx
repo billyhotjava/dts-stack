@@ -222,7 +222,7 @@ export default function CardDetailPage() {
 											settings={(state.value.visualization_settings as VisualizationSettings) || {}}
 										/>
 									) : (
-										<p className="text-muted">No tabular result.</p>
+										<p className="text-muted">{t(locale, "questions.noTabular")}</p>
 									)}
 
 									{showRaw && (

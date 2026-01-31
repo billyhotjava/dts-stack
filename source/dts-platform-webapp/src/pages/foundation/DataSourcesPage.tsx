@@ -1,7 +1,32 @@
 import { useEffect, useMemo, useState } from "react";
-import { Button, Card, Form, Input, Modal, Select, Space, Table, Tag, Typography, message } from "antd";
+import { useNavigate } from "react-router";
+import {
+	Button,
+	Card,
+	Divider,
+	Form,
+	Input,
+	InputNumber,
+	Modal,
+	Select,
+	Space,
+	Switch,
+	Table,
+	Tag,
+	Typography,
+	Upload,
+	message,
+} from "antd";
 import { PlusOutlined, ReloadOutlined, EditOutlined, DeleteOutlined, ExperimentOutlined } from "@ant-design/icons";
-import dataSourcesService, { type DataSourceUpsertPayload, type InfraDataSource } from "@/api/services/dataSourcesService";
+import dataSourcesService, {
+	type DataSourceUpsertPayload,
+	type DataSourceUpdateImpact,
+	type ExcelImportParseResponse,
+	type ExcelImportPrepareResponse,
+	type InfraDataSource,
+} from "@/api/services/dataSourcesService";
+import jdbcDriversService, { type InfraJdbcDriver } from "@/api/services/jdbcDriversService";
+import type { UploadRequestOption } from "rc-upload/lib/interface";
 
 const { Text } = Typography;
 
@@ -50,6 +75,11 @@ const isJdbcType = (type?: string, jdbcUrl?: string) => {
 	return JDBC_TYPES.has(normalized);
 };
 
+const isFileSource = (type?: string) => {
+	const normalized = normalizeType(type);
+	return normalized === "excel" || normalized === "csv";
+};
+
 const parseJson = (value?: string) => {
 	const text = String(value || "").trim();
 	if (!text) return undefined;
@@ -65,18 +95,54 @@ const formatTime = (value?: string) => {
 
 const omitReaderType = (props?: Record<string, any>) => {
 	if (!props) return undefined;
-	const { readerType, reader, ...rest } = props;
+	const { readerType, reader, driverClass, driverVersion, ...rest } = props;
 	return rest;
 };
 
 export default function DataSourcesPage() {
+	const navigate = useNavigate();
 	const [list, setList] = useState<InfraDataSource[]>([]);
 	const [loading, setLoading] = useState(false);
+	const [drivers, setDrivers] = useState<InfraJdbcDriver[]>([]);
+	const [driversLoading, setDriversLoading] = useState(false);
 	const [modalOpen, setModalOpen] = useState(false);
 	const [saving, setSaving] = useState(false);
 	const [testingId, setTestingId] = useState<string | null>(null);
 	const [editing, setEditing] = useState<InfraDataSource | null>(null);
+	const [excelModalOpen, setExcelModalOpen] = useState(false);
+	const [excelUploading, setExcelUploading] = useState(false);
+	const [excelParsing, setExcelParsing] = useState(false);
+	const [excelPrepared, setExcelPrepared] = useState<ExcelImportPrepareResponse | null>(null);
+	const [excelSheetName, setExcelSheetName] = useState<string | undefined>();
+	const [excelHeaderRow, setExcelHeaderRow] = useState(1);
+	const [excelDataStartRow, setExcelDataStartRow] = useState(2);
+	const [excelDelimiter, setExcelDelimiter] = useState(",");
+	const [excelDateFormat, setExcelDateFormat] = useState("yyyy-MM-dd HH:mm:ss");
+	const [excelSkipErrors, setExcelSkipErrors] = useState(true);
+	const [excelFillMerged, setExcelFillMerged] = useState(true);
+	const [excelParseResult, setExcelParseResult] = useState<ExcelImportParseResponse | null>(null);
 	const [form] = Form.useForm();
+
+	const showImpact = (impact: DataSourceUpdateImpact | null) => {
+		if (!impact || !impact.connectionChanged) {
+			return;
+		}
+		const affected = impact.affectedTasks ?? 0;
+		if (affected <= 0) {
+			message.info("数据源连接已更新，未发现关联入湖任务。");
+			return;
+		}
+		Modal.info({
+			title: "数据源连接已更新",
+			content: (
+				<div className="space-y-2">
+					<div>已影响入湖任务：{affected} 个。</div>
+					<div>已登记接入变更：{impact.changeLogCreated ?? 0} 条。</div>
+					<div className="text-xs text-slate-500">请前往“接入变更记录”确认任务变更影响。</div>
+				</div>
+			),
+		});
+	};
 
 	const loadList = async () => {
 		setLoading(true);
@@ -91,14 +157,57 @@ export default function DataSourcesPage() {
 		}
 	};
 
+	const loadDrivers = async () => {
+		setDriversLoading(true);
+		try {
+			const data = await jdbcDriversService.list();
+			setDrivers(Array.isArray(data) ? data : []);
+		} catch (error: any) {
+			message.error(error?.message || "加载驱动列表失败");
+			setDrivers([]);
+		} finally {
+			setDriversLoading(false);
+		}
+	};
+
 	useEffect(() => {
 		loadList();
+		loadDrivers();
 	}, []);
+
+	useEffect(() => {
+		if (!editing || drivers.length === 0) return;
+		const match = resolveDriverMatch(editing, drivers);
+		if (match?.id) {
+			form.setFieldsValue({ driverId: match.id });
+		}
+	}, [editing, drivers, form]);
 
 	const openCreate = () => {
 		setEditing(null);
 		form.resetFields();
+		setExcelParseResult(null);
 		setModalOpen(true);
+		loadDrivers();
+	};
+
+	const resolveDriverMatch = (record: InfraDataSource | null, driverList: InfraJdbcDriver[]) => {
+		if (!record || !Array.isArray(driverList) || driverList.length === 0) return undefined;
+		const props = record.props || {};
+		const driverClass = String(props?.driverClass || "").trim().toLowerCase();
+		const driverVersion = String(props?.driverVersion || "").trim().toLowerCase();
+		if (!driverClass && !driverVersion) return undefined;
+		return driverList.find((driver) => {
+			const classMatch =
+				driverClass &&
+				driver.driverClass &&
+				driver.driverClass.trim().toLowerCase() === driverClass;
+			const versionMatch =
+				driverVersion &&
+				(driver.fileName?.trim().toLowerCase() === driverVersion ||
+					driver.version?.trim().toLowerCase() === driverVersion);
+			return classMatch || versionMatch;
+		});
 	};
 
 	const openEdit = (record: InfraDataSource) => {
@@ -110,9 +219,17 @@ export default function DataSourcesPage() {
 			username: record.username,
 			description: record.description,
 			readerType: record.props?.readerType || record.props?.reader,
+			driverClass: record.props?.driverClass,
+			driverVersion: record.props?.driverVersion,
 			propsJson: record.props ? JSON.stringify(omitReaderType(record.props), null, 2) : "",
 		});
+		const match = resolveDriverMatch(record, drivers);
+		if (match?.id) {
+			form.setFieldsValue({ driverId: match.id });
+		}
+		setExcelParseResult(null);
 		setModalOpen(true);
+		loadDrivers();
 	};
 
 	const handleDelete = (record: InfraDataSource) => {
@@ -149,6 +266,21 @@ export default function DataSourcesPage() {
 		}
 	};
 
+	const handleDriverSelect = (id?: string) => {
+		if (!id) return;
+		const driver = drivers.find((item) => item.id === id);
+		if (!driver) return;
+		const next: Record<string, string> = {};
+		if (driver.driverClass) {
+			next.driverClass = driver.driverClass;
+		}
+		const versionHint = driver.fileName || driver.version;
+		if (versionHint) {
+			next.driverVersion = versionHint;
+		}
+		form.setFieldsValue(next);
+	};
+
 	const handleSave = async () => {
 		try {
 			const values = await form.validateFields();
@@ -157,6 +289,17 @@ export default function DataSourcesPage() {
 			let props = values.propsJson ? parseJson(values.propsJson) : undefined;
 			if (values.readerType) {
 				props = { ...(props || {}), readerType: values.readerType };
+			}
+			const selectedDriver = drivers.find((item) => item.id === values.driverId);
+			const resolvedDriverClass = String(values.driverClass || selectedDriver?.driverClass || "").trim();
+			const resolvedDriverVersion = String(
+				values.driverVersion || selectedDriver?.fileName || selectedDriver?.version || ""
+			).trim();
+			if (resolvedDriverClass) {
+				props = { ...(props || {}), driverClass: resolvedDriverClass };
+			}
+			if (resolvedDriverVersion) {
+				props = { ...(props || {}), driverVersion: resolvedDriverVersion };
 			}
 			const payload: DataSourceUpsertPayload = {
 				name: String(values.name).trim(),
@@ -168,8 +311,9 @@ export default function DataSourcesPage() {
 				secrets: values.password ? { password: values.password } : undefined,
 			};
 			if (editing) {
-				await dataSourcesService.update(editing.id, payload);
+				const impact = await dataSourcesService.updateWithImpact(editing.id, payload);
 				message.success("数据源已更新");
+				showImpact(impact || null);
 			} else {
 				await dataSourcesService.create(payload);
 				message.success("数据源已创建");
@@ -181,6 +325,96 @@ export default function DataSourcesPage() {
 			message.error(error?.message || "保存失败");
 		} finally {
 			setSaving(false);
+		}
+	};
+
+	const resetExcelModal = () => {
+		setExcelPrepared(null);
+		setExcelParseResult(null);
+		setExcelSheetName(undefined);
+		setExcelHeaderRow(1);
+		setExcelDataStartRow(2);
+		setExcelDelimiter(",");
+		setExcelDateFormat("yyyy-MM-dd HH:mm:ss");
+		setExcelSkipErrors(true);
+		setExcelFillMerged(true);
+	};
+
+	const openExcelModal = () => {
+		resetExcelModal();
+		setExcelModalOpen(true);
+	};
+
+	const handleExcelUpload = async (options: UploadRequestOption) => {
+		const file = options.file as File;
+		if (!file) return;
+		const maxSize = 200 * 1024 * 1024;
+		if (file.size > maxSize) {
+			message.error("文件超过 200MB 限制");
+			options.onError?.(new Error("file_too_large"));
+			return;
+		}
+		setExcelUploading(true);
+		try {
+			const resp = await dataSourcesService.excelPrepare(file);
+			setExcelPrepared(resp);
+			setExcelSheetName(resp.sheets?.[0]?.name);
+			message.success("文件已上传，请选择 Sheet 并解析");
+			options.onSuccess?.(resp as any);
+		} catch (error: any) {
+			message.error(error?.message || "文件上传失败");
+			options.onError?.(error);
+		} finally {
+			setExcelUploading(false);
+		}
+	};
+
+	const applyExcelResultToForm = (resp: ExcelImportParseResponse) => {
+		const columns = resp.columns || [];
+		const readerConfig = {
+			path: [resp.csvContainerPath || resp.csvPath],
+			column: columns.map((col, index) => ({
+				index,
+				name: col.name,
+				type: col.dataType || "string",
+			})),
+			fieldDelimiter: excelDelimiter || ",",
+			encoding: "UTF-8",
+			skipHeader: true,
+			fileType: "csv",
+		};
+		form.setFieldsValue({
+			readerType: "txtfilereader",
+			propsJson: JSON.stringify({ readerConfig }, null, 2),
+		});
+	};
+
+	const handleExcelParse = async () => {
+		if (!excelPrepared?.fileId) {
+			message.warning("请先上传 Excel/CSV");
+			return;
+		}
+		setExcelParsing(true);
+		try {
+			const resp = await dataSourcesService.excelParse({
+				fileId: excelPrepared.fileId,
+				sheetName: excelSheetName,
+				headerRow: excelHeaderRow,
+				dataStartRow: excelDataStartRow,
+				delimiter: excelDelimiter,
+				previewLimit: 20,
+				skipErrors: excelSkipErrors,
+				fillMerged: excelFillMerged,
+				dateFormat: excelDateFormat,
+			});
+			setExcelParseResult(resp);
+			applyExcelResultToForm(resp);
+			message.success("解析完成，字段配置已填充");
+			setExcelModalOpen(false);
+		} catch (error: any) {
+			message.error(error?.message || "解析失败");
+		} finally {
+			setExcelParsing(false);
 		}
 	};
 
@@ -229,9 +463,19 @@ export default function DataSourcesPage() {
 		[testingId]
 	);
 
+	const driverOptions = useMemo(
+		() =>
+			drivers.map((driver) => ({
+				value: driver.id,
+				label: `${driver.fileName}${driver.version ? ` (${driver.version})` : ""}${driver.driverClass ? ` · ${driver.driverClass}` : ""}`,
+			})),
+		[drivers]
+	);
+
 	const typeValue = Form.useWatch("type", form);
 	const jdbcValue = Form.useWatch("jdbcUrl", form);
 	const jdbcRequired = isJdbcType(typeValue, jdbcValue);
+	const fileSource = isFileSource(typeValue);
 
 	return (
 		<Card
@@ -241,6 +485,7 @@ export default function DataSourcesPage() {
 					<Button icon={<ReloadOutlined />} onClick={loadList} disabled={loading}>
 						刷新
 					</Button>
+					<Button onClick={() => navigate("/foundation/jdbc-drivers")}>JDBC 驱动管理</Button>
 					<Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
 						新增数据源
 					</Button>
@@ -271,6 +516,29 @@ export default function DataSourcesPage() {
 					<Form.Item name="type" label="类型" rules={[{ required: true, message: "请选择类型" }]}>
 						<Select options={TYPE_OPTIONS} placeholder="请选择数据源类型" />
 					</Form.Item>
+					{jdbcRequired && (
+						<Form.Item name="driverId" label="JDBC 驱动">
+							<Select
+								options={driverOptions}
+								placeholder={driversLoading ? "驱动加载中..." : "选择驱动以自动填充"}
+								loading={driversLoading}
+								allowClear
+								showSearch
+								optionFilterProp="label"
+								onChange={(value) => handleDriverSelect(value as string)}
+							/>
+						</Form.Item>
+					)}
+					{jdbcRequired && (
+						<Form.Item name="driverClass" label="驱动主类">
+							<Input placeholder="可自动填充，例如：org.postgresql.Driver" />
+						</Form.Item>
+					)}
+					{jdbcRequired && (
+						<Form.Item name="driverVersion" label="驱动文件/版本">
+							<Input placeholder="可填 jar 文件名或版本号" />
+						</Form.Item>
+					)}
 					<Form.Item
 						name="jdbcUrl"
 						label="JDBC URL"
@@ -301,6 +569,16 @@ export default function DataSourcesPage() {
 							<Input placeholder="例如：excelreader、httpreader" />
 						</Form.Item>
 					)}
+					{!jdbcRequired && fileSource && (
+						<Form.Item label="字段解析">
+							<Space>
+								<Button onClick={openExcelModal}>上传 Excel/CSV 并解析</Button>
+								{excelParseResult?.columns?.length ? (
+									<Text type="secondary">已解析 {excelParseResult.columns.length} 列</Text>
+								) : null}
+							</Space>
+						</Form.Item>
+					)}
 					<Form.Item name="description" label="描述">
 						<Input.TextArea rows={2} placeholder="可选" />
 					</Form.Item>
@@ -327,6 +605,72 @@ export default function DataSourcesPage() {
 						<Text type="danger">最近错误：{editing.lastError}</Text>
 					)}
 				</Form>
+			</Modal>
+
+			<Modal
+				title="Excel/CSV 字段解析"
+				open={excelModalOpen}
+				onCancel={() => setExcelModalOpen(false)}
+				onOk={handleExcelParse}
+				okText="解析并应用"
+				confirmLoading={excelParsing}
+				destroyOnClose
+			>
+				<Space direction="vertical" style={{ width: "100%" }}>
+					<Upload.Dragger
+						name="file"
+						multiple={false}
+						maxCount={1}
+						showUploadList={false}
+						accept=".xlsx,.csv"
+						customRequest={handleExcelUpload}
+						disabled={excelUploading}
+					>
+						<p className="ant-upload-drag-icon">
+							<PlusOutlined />
+						</p>
+						<p className="ant-upload-text">点击或拖拽上传 Excel/CSV 文件（≤200MB）</p>
+						<p className="ant-upload-hint">{excelPrepared?.fileName || "支持 .xlsx / .csv"}</p>
+					</Upload.Dragger>
+
+					{excelPrepared?.sheets?.length ? (
+						<Form layout="vertical">
+							<Form.Item label="Sheet">
+								<Select
+									value={excelSheetName}
+									onChange={(value) => setExcelSheetName(value)}
+									options={excelPrepared.sheets.map((sheet) => ({
+										label: sheet.name,
+										value: sheet.name,
+									}))}
+								/>
+							</Form.Item>
+						</Form>
+					) : null}
+
+					<Divider />
+
+					<Form layout="vertical">
+						<Form.Item label="表头行（1-based）">
+							<InputNumber min={1} value={excelHeaderRow} onChange={(v) => setExcelHeaderRow(v || 1)} />
+						</Form.Item>
+						<Form.Item label="数据起始行（1-based）">
+							<InputNumber min={1} value={excelDataStartRow} onChange={(v) => setExcelDataStartRow(v || 2)} />
+						</Form.Item>
+						<Form.Item label="分隔符">
+							<Input value={excelDelimiter} onChange={(e) => setExcelDelimiter(e.target.value || ",")} />
+						</Form.Item>
+						<Form.Item label="日期格式">
+							<Input value={excelDateFormat} onChange={(e) => setExcelDateFormat(e.target.value)} />
+						</Form.Item>
+						<Form.Item label="合并单元格填充">
+							<Switch checked={excelFillMerged} onChange={setExcelFillMerged} />
+						</Form.Item>
+						<Form.Item label="容错跳过">
+							<Switch checked={excelSkipErrors} onChange={setExcelSkipErrors} />
+						</Form.Item>
+					</Form>
+				</Space>
 			</Modal>
 		</Card>
 	);

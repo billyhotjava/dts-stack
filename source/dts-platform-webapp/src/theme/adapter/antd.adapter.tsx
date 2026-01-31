@@ -34,33 +34,34 @@ export const AntdAdapter: UILibraryAdapter = ({ mode, children }) => {
 		colorBgElevated: popupBg,
 
 		wireframe: false,
-		fontFamily: fontFamily,
-		// Match admin baseline: keep AntD body text at the configured font size (default 14).
-		fontSize: fontSize,
+		// Enforce Analytics font stack
+		fontFamily: `"Lato", "Open Sans Variable", "Inter Variable", system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", "Noto Sans", sans-serif`,
+		// Enforce Analytics base size (14px)
+		fontSize: 14,
 
-		borderRadiusSM: removePx(baseThemeTokens.borderRadius.sm),
-		borderRadius: removePx(baseThemeTokens.borderRadius.default),
-		borderRadiusLG: removePx(baseThemeTokens.borderRadius.lg),
+		borderRadiusSM: 6, // Analytics --radius-sm
+		borderRadius: 8,   // Analytics --radius-md (base)
+		borderRadiusLG: 12, // Analytics --radius-lg
 
 		...(isDark
 			? {
-					colorText: colorTokens.text.primary,
-					colorTextSecondary: colorTokens.text.secondary,
-					colorTextTertiary: "#8A94A6",
-					colorTextQuaternary: colorTokens.text.disabled,
-					colorTextDisabled: colorTokens.text.disabled,
-					colorTextPlaceholder: "#8A94A6",
-					colorTextLightSolid: "#FFFFFF",
-					colorBorder: "rgba(255,255,255,0.10)",
-					colorBorderSecondary: "rgba(255,255,255,0.06)",
-					colorSplit: "rgba(255,255,255,0.06)",
-					colorFillAlter: "rgba(255,255,255,0.03)",
-					colorFillSecondary: "rgba(255,255,255,0.06)",
-					colorFillTertiary: "rgba(255,255,255,0.04)",
-					colorFillQuaternary: "rgba(255,255,255,0.02)",
-					colorBgTextHover: "rgba(255,255,255,0.04)",
-					colorBgTextActive: "rgba(255,255,255,0.06)",
-				}
+				colorText: colorTokens.text.primary,
+				colorTextSecondary: colorTokens.text.secondary,
+				colorTextTertiary: "#8A94A6",
+				colorTextQuaternary: colorTokens.text.disabled,
+				colorTextDisabled: colorTokens.text.disabled,
+				colorTextPlaceholder: "#8A94A6",
+				colorTextLightSolid: "#FFFFFF",
+				colorBorder: "rgba(255,255,255,0.10)",
+				colorBorderSecondary: "rgba(255,255,255,0.06)",
+				colorSplit: "rgba(255,255,255,0.06)",
+				colorFillAlter: "rgba(255,255,255,0.03)",
+				colorFillSecondary: "rgba(255,255,255,0.06)",
+				colorFillTertiary: "rgba(255,255,255,0.04)",
+				colorFillQuaternary: "rgba(255,255,255,0.02)",
+				colorBgTextHover: "rgba(255,255,255,0.04)",
+				colorBgTextActive: "rgba(255,255,255,0.06)",
+			}
 			: {}),
 	};
 
@@ -85,16 +86,16 @@ export const AntdAdapter: UILibraryAdapter = ({ mode, children }) => {
 		},
 		Button: isDark
 			? {
-					primaryColor: "#FFFFFF",
-					defaultColor: "#FFFFFF",
-					defaultHoverColor: "#FFFFFF",
-					defaultActiveColor: "#FFFFFF",
-					dangerColor: "#FFFFFF",
-					solidTextColor: "#FFFFFF",
-					textTextColor: "#FFFFFF",
-					textTextHoverColor: "#FFFFFF",
-					textTextActiveColor: "#FFFFFF",
-				}
+				primaryColor: "#FFFFFF",
+				defaultColor: "#FFFFFF",
+				defaultHoverColor: "#FFFFFF",
+				defaultActiveColor: "#FFFFFF",
+				dangerColor: "#FFFFFF",
+				solidTextColor: "#FFFFFF",
+				textTextColor: "#FFFFFF",
+				textTextHoverColor: "#FFFFFF",
+				textTextActiveColor: "#FFFFFF",
+			}
 			: {},
 		Layout: {
 			siderBg: siderBg,

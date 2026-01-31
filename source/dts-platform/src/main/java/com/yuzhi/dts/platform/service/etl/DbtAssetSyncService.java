@@ -6,11 +6,15 @@ import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.config.DbtProperties;
 import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
 import com.yuzhi.dts.platform.domain.catalog.CatalogDatasetLineage;
+import com.yuzhi.dts.platform.domain.catalog.CatalogTableSchema;
 import com.yuzhi.dts.platform.domain.infra.InfraOdsTableMapping;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetLineageRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
+import com.yuzhi.dts.platform.repository.catalog.CatalogTableSchemaRepository;
 import com.yuzhi.dts.platform.repository.infra.InfraOdsTableMappingRepository;
 import com.yuzhi.dts.platform.service.audit.AuditService;
+import com.yuzhi.dts.platform.service.catalog.CatalogColumnSyncService;
+import com.yuzhi.dts.platform.service.catalog.CatalogColumnSyncService.ColumnSpec;
 import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
@@ -38,6 +42,8 @@ public class DbtAssetSyncService {
     private final DbtConfigService configService;
     private final CatalogDatasetRepository datasetRepository;
     private final CatalogDatasetLineageRepository lineageRepository;
+    private final CatalogTableSchemaRepository tableRepository;
+    private final CatalogColumnSyncService columnSyncService;
     private final InfraOdsTableMappingRepository mappingRepository;
     private final AuditService auditService;
 
@@ -47,6 +53,8 @@ public class DbtAssetSyncService {
         DbtConfigService configService,
         CatalogDatasetRepository datasetRepository,
         CatalogDatasetLineageRepository lineageRepository,
+        CatalogTableSchemaRepository tableRepository,
+        CatalogColumnSyncService columnSyncService,
         InfraOdsTableMappingRepository mappingRepository,
         AuditService auditService
     ) {
@@ -55,6 +63,8 @@ public class DbtAssetSyncService {
         this.configService = configService;
         this.datasetRepository = datasetRepository;
         this.lineageRepository = lineageRepository;
+        this.tableRepository = tableRepository;
+        this.columnSyncService = columnSyncService;
         this.mappingRepository = mappingRepository;
         this.auditService = auditService;
     }
@@ -84,6 +94,7 @@ public class DbtAssetSyncService {
 
             Map<String, UUID> datasetByUniqueId = new HashMap<>();
             Map<String, UUID> datasetByTable = new HashMap<>();
+            Map<String, CatalogTableSchema> tableByUniqueId = new HashMap<>();
 
             SyncStats stats = new SyncStats();
             stats.odsUpdated = syncOdsMappings(datasetByTable, view, stats);
@@ -98,8 +109,11 @@ public class DbtAssetSyncService {
                     continue;
                 }
                 CatalogDataset dataset = upsertDataset(meta, view, "ODS", stats);
+                CatalogTableSchema table = ensureTable(dataset, meta.table);
                 datasetByUniqueId.put(entry.getKey(), dataset.getId());
                 datasetByTable.put(tableKey(meta.schema, meta.table), dataset.getId());
+                tableByUniqueId.put(entry.getKey(), table);
+                syncColumnsForNode(table, meta, projectDir);
             }
 
             Map<String, ModelMeta> modelNodes = new LinkedHashMap<>();
@@ -117,11 +131,16 @@ public class DbtAssetSyncService {
                     continue;
                 }
                 CatalogDataset dataset = upsertDataset(toNodeMeta(meta), view, inferLayer(meta.table), stats);
+                CatalogTableSchema table = ensureTable(dataset, meta.table);
                 datasetByUniqueId.put(entry.getKey(), dataset.getId());
                 modelNodes.put(entry.getKey(), meta);
+                tableByUniqueId.put(entry.getKey(), table);
             }
 
-            stats.lineageCreated = syncLineage(modelNodes, datasetByUniqueId);
+            LineageSyncStats lineageStats = syncLineage(modelNodes, datasetByUniqueId);
+            stats.lineageCreated = lineageStats.created();
+            stats.lineageRemoved = lineageStats.removed();
+            stats.columnsUpdated = syncColumnsForModels(modelNodes, tableByUniqueId, projectDir);
             auditService.auditAction(
                 "DBT_MODEL_SYNC",
                 AuditStage.SUCCESS,
@@ -134,7 +153,11 @@ public class DbtAssetSyncService {
                     "datasetsUpdated",
                     stats.updated,
                     "lineageCreated",
-                    stats.lineageCreated
+                    stats.lineageCreated,
+                    "lineageRemoved",
+                    stats.lineageRemoved,
+                    "columnsUpdated",
+                    stats.columnsUpdated
                 )
             );
             return DbtAssetSyncResult.success(stats, manifestPath.toString());
@@ -159,7 +182,7 @@ public class DbtAssetSyncService {
             }
             String schema = StringUtils.hasText(mapping.getOdsSchema()) ? mapping.getOdsSchema() : "ods";
             String table = mapping.getOdsTable();
-            NodeMeta meta = new NodeMeta("ods", schema, table, mapping.getConnectionId(), null);
+            NodeMeta meta = new NodeMeta("ods", schema, table, mapping.getConnectionId(), null, null, null);
             CatalogDataset dataset = upsertDataset(meta, view, "ODS", stats);
             if (dataset != null) {
                 datasetByTable.put(tableKey(schema, table), dataset.getId());
@@ -173,21 +196,37 @@ public class DbtAssetSyncService {
         return updated;
     }
 
-    private int syncLineage(Map<String, ModelMeta> modelNodes, Map<String, UUID> datasetByUniqueId) {
+    private LineageSyncStats syncLineage(Map<String, ModelMeta> modelNodes, Map<String, UUID> datasetByUniqueId) {
         int created = 0;
+        int removed = 0;
         for (ModelMeta model : modelNodes.values()) {
             UUID downstream = datasetByUniqueId.get(model.uniqueId);
             if (downstream == null) {
                 continue;
             }
+            java.util.Set<UUID> desired = new java.util.LinkedHashSet<>();
             for (String upstreamUniqueId : model.dependsOn) {
                 UUID upstream = datasetByUniqueId.get(upstreamUniqueId);
-                if (upstream == null) {
+                if (upstream != null) {
+                    desired.add(upstream);
+                }
+            }
+            List<CatalogDatasetLineage> existing =
+                lineageRepository.findByDownstreamDatasetIdAndRelationTypeIgnoreCase(downstream, "DBT");
+            for (CatalogDatasetLineage link : existing) {
+                UUID upstreamId = link.getUpstreamDatasetId();
+                if (upstreamId == null) {
                     continue;
                 }
-                Optional<CatalogDatasetLineage> existing =
+                if (!desired.contains(upstreamId)) {
+                    lineageRepository.delete(link);
+                    removed++;
+                }
+            }
+            for (UUID upstream : desired) {
+                Optional<CatalogDatasetLineage> present =
                     lineageRepository.findFirstByUpstreamDatasetIdAndDownstreamDatasetId(upstream, downstream);
-                if (existing.isPresent()) {
+                if (present.isPresent()) {
                     continue;
                 }
                 CatalogDatasetLineage link = new CatalogDatasetLineage();
@@ -198,7 +237,7 @@ public class DbtAssetSyncService {
                 created++;
             }
         }
-        return created;
+        return new LineageSyncStats(created, removed);
     }
 
     private CatalogDataset upsertDataset(NodeMeta meta, DbtConfigService.DbtConfigView view, String layer, SyncStats stats) {
@@ -235,6 +274,79 @@ public class DbtAssetSyncService {
         return saved;
     }
 
+    private CatalogTableSchema ensureTable(CatalogDataset dataset, String tableName) {
+        if (dataset == null || !StringUtils.hasText(tableName)) {
+            return null;
+        }
+        Optional<CatalogTableSchema> existing = tableRepository.findFirstByDatasetAndNameIgnoreCase(dataset, tableName);
+        if (existing.isPresent()) {
+            return existing.get();
+        }
+        CatalogTableSchema table = new CatalogTableSchema();
+        table.setDataset(dataset);
+        table.setName(tableName.trim());
+        return tableRepository.save(table);
+    }
+
+    private int syncColumnsForModels(Map<String, ModelMeta> modelNodes, Map<String, CatalogTableSchema> tableByUniqueId, String projectDir) {
+        int updated = 0;
+        if (modelNodes == null || modelNodes.isEmpty()) {
+            return updated;
+        }
+        for (ModelMeta model : modelNodes.values()) {
+            CatalogTableSchema table = tableByUniqueId.get(model.uniqueId);
+            if (table == null) continue;
+            updated += syncColumnsForNode(table, model, projectDir);
+        }
+        return updated;
+    }
+
+    private int syncColumnsForNode(CatalogTableSchema table, NodeMeta meta, String projectDir) {
+        if (table == null || meta == null) {
+            return 0;
+        }
+        int updated = 0;
+        List<ColumnSpec> csvSpecs = resolveCsvSpecs(meta.originalFilePath, projectDir);
+        List<ColumnSpec> manifestSpecs = columnSyncService.parseManifestColumns(meta.columns);
+        if (csvSpecs != null && !csvSpecs.isEmpty()) {
+            updated += columnSyncService.upsertColumns(table, csvSpecs, CatalogColumnSyncService.STATUS_DRAFT);
+        }
+        if (manifestSpecs != null && !manifestSpecs.isEmpty()) {
+            updated += columnSyncService.upsertColumns(table, manifestSpecs, CatalogColumnSyncService.STATUS_ACTIVE);
+        }
+        return updated;
+    }
+
+    private int syncColumnsForNode(CatalogTableSchema table, ModelMeta meta, String projectDir) {
+        if (table == null || meta == null) {
+            return 0;
+        }
+        int updated = 0;
+        List<ColumnSpec> csvSpecs = resolveCsvSpecs(meta.originalFilePath, projectDir);
+        List<ColumnSpec> manifestSpecs = columnSyncService.parseManifestColumns(meta.columns);
+        if (csvSpecs != null && !csvSpecs.isEmpty()) {
+            updated += columnSyncService.upsertColumns(table, csvSpecs, CatalogColumnSyncService.STATUS_DRAFT);
+        }
+        if (manifestSpecs != null && !manifestSpecs.isEmpty()) {
+            updated += columnSyncService.upsertColumns(table, manifestSpecs, CatalogColumnSyncService.STATUS_ACTIVE);
+        }
+        return updated;
+    }
+
+    private List<ColumnSpec> resolveCsvSpecs(String originalFilePath, String projectDir) {
+        if (!StringUtils.hasText(originalFilePath) || !StringUtils.hasText(projectDir)) {
+            return List.of();
+        }
+        Path sqlPath = Path.of(projectDir, originalFilePath).normalize();
+        String fileName = sqlPath.getFileName() != null ? sqlPath.getFileName().toString() : null;
+        if (!StringUtils.hasText(fileName)) {
+            return List.of();
+        }
+        String csvName = fileName.endsWith(".sql") ? fileName.substring(0, fileName.length() - 4) + ".csv" : fileName + ".csv";
+        Path csvPath = sqlPath.resolveSibling(csvName);
+        return columnSyncService.parseCsv(csvPath);
+    }
+
     private CatalogDataset findDataset(NodeMeta meta) {
         if (meta.sourceId != null) {
             Optional<CatalogDataset> existing =
@@ -267,7 +379,9 @@ public class DbtAssetSyncService {
         String table = StringUtils.hasText(alias) ? alias : name;
         List<String> dependsOn = extractDepends(node.get("depends_on"));
         String description = text(node.get("description"));
-        return new ModelMeta(uniqueId, database, schema, table, dependsOn, description);
+        Map<String, Object> columns = asMap(node.get("columns"));
+        String filePath = text(node.get("original_file_path"));
+        return new ModelMeta(uniqueId, database, schema, table, dependsOn, description, columns, filePath);
     }
 
     private NodeMeta toNodeMeta(String uniqueId, Map<String, Object> node) {
@@ -277,7 +391,9 @@ public class DbtAssetSyncService {
         String identifier = text(node.get("identifier"));
         String table = StringUtils.hasText(identifier) ? identifier : name;
         String description = text(node.get("description"));
-        return new NodeMeta(uniqueId, schema != null ? schema : database, table, null, description);
+        Map<String, Object> columns = asMap(node.get("columns"));
+        String filePath = text(node.get("original_file_path"));
+        return new NodeMeta(uniqueId, schema != null ? schema : database, table, null, description, columns, filePath);
     }
 
     private NodeMeta toNodeMeta(ModelMeta meta) {
@@ -285,7 +401,7 @@ public class DbtAssetSyncService {
             return null;
         }
         String schema = StringUtils.hasText(meta.schema) ? meta.schema : meta.database;
-        return new NodeMeta(meta.uniqueId, schema, meta.table, null, meta.description);
+        return new NodeMeta(meta.uniqueId, schema, meta.table, null, meta.description, meta.columns, meta.originalFilePath);
     }
 
     private List<String> extractDepends(Object value) {
@@ -348,7 +464,9 @@ public class DbtAssetSyncService {
         int created = 0;
         int updated = 0;
         int lineageCreated = 0;
+        int lineageRemoved = 0;
         int odsUpdated = 0;
+        int columnsUpdated = 0;
 
         public int getCreated() {
             return created;
@@ -362,8 +480,16 @@ public class DbtAssetSyncService {
             return lineageCreated;
         }
 
+        public int getLineageRemoved() {
+            return lineageRemoved;
+        }
+
         public int getOdsUpdated() {
             return odsUpdated;
+        }
+
+        public int getColumnsUpdated() {
+            return columnsUpdated;
         }
     }
 
@@ -381,7 +507,15 @@ public class DbtAssetSyncService {
         }
     }
 
-    private record NodeMeta(String uniqueId, String schema, String table, UUID sourceId, String description) {}
+    private record NodeMeta(
+        String uniqueId,
+        String schema,
+        String table,
+        UUID sourceId,
+        String description,
+        Map<String, Object> columns,
+        String originalFilePath
+    ) {}
 
     private record ModelMeta(
         String uniqueId,
@@ -389,6 +523,10 @@ public class DbtAssetSyncService {
         String schema,
         String table,
         List<String> dependsOn,
-        String description
+        String description,
+        Map<String, Object> columns,
+        String originalFilePath
     ) {}
+
+    private record LineageSyncStats(int created, int removed) {}
 }

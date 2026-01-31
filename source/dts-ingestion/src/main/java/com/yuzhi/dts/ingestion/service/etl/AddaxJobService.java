@@ -410,6 +410,7 @@ public class AddaxJobService {
         if (sourceTables.isEmpty()) {
             return;
         }
+        boolean hadPlaceholder = hasTablePlaceholderInConfig(writerConfig);
         replaceTableField(writerConfig, sourceTables);
         Object connection = writerConfig.get("connection");
         if (connection instanceof Map<?, ?> map) {
@@ -421,6 +422,33 @@ public class AddaxJobService {
                 }
             }
         }
+        if (hadPlaceholder) {
+            List<String> resolvedTargets = extractTables(writerConfig);
+            LOG.info(
+                "Resolved Addax writer table placeholder: sources={}, targets={}",
+                summarizeTables(sourceTables),
+                summarizeTables(resolvedTargets)
+            );
+        }
+    }
+
+    private boolean hasTablePlaceholderInConfig(Map<String, Object> config) {
+        if (config == null || config.isEmpty()) {
+            return false;
+        }
+        return extractTables(config).stream()
+            .anyMatch(table -> table != null && table.contains(TABLE_PLACEHOLDER));
+    }
+
+    private String summarizeTables(List<String> tables) {
+        if (tables == null || tables.isEmpty()) {
+            return "[]";
+        }
+        int max = 10;
+        if (tables.size() <= max) {
+            return tables.toString();
+        }
+        return tables.subList(0, max).toString() + "...(" + tables.size() + ")";
     }
 
     private List<String> extractTables(Map<String, Object> config) {

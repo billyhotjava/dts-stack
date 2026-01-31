@@ -118,16 +118,6 @@ export default function DataLakeConfigView() {
 				},
 			},
 			{
-				title: "写入器配置",
-				dataIndex: "destinationConfig",
-				key: "destinationConfig",
-				width: 140,
-				render: (_, record) => {
-					const hasConfig = Boolean(record.destinationConfig && Object.keys(record.destinationConfig).length);
-					return hasConfig ? <Tag color="green">已配置</Tag> : <Tag color="red">缺失</Tag>;
-				},
-			},
-			{
 				title: "操作",
 				key: "actions",
 				width: 300,

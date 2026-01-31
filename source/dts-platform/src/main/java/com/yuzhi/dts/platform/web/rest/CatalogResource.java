@@ -396,12 +396,18 @@ public class CatalogResource {
         @RequestParam(value = "size", required = false, defaultValue = "50") int size,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
-        OpenMetadataService.OpenMetadataTablePage page = openMetadataService.searchTables(keyword, size);
         String effDept = activeDept != null ? activeDept : claim("dept_code");
-        boolean localFallback = false;
-        if (page == null || !page.enabled()) {
-            page = catalogMetadataService.listLocalTables(keyword, size, effDept);
-            localFallback = true;
+        OpenMetadataService.OpenMetadataTablePage localPage = catalogMetadataService.listLocalTables(keyword, size, effDept);
+        boolean useLocal = localPage != null && localPage.items() != null && !localPage.items().isEmpty();
+        OpenMetadataService.OpenMetadataTablePage page = useLocal ? localPage : openMetadataService.searchTables(keyword, size);
+        boolean disabled = page == null || !page.enabled();
+        if (!useLocal && (disabled || page.items() == null || page.items().isEmpty())) {
+            OpenMetadataService.OpenMetadataTablePage fallback = catalogMetadataService.listLocalTables(keyword, size, effDept);
+            if (fallback != null && fallback.items() != null && !fallback.items().isEmpty()) {
+                page = fallback;
+                useLocal = true;
+                disabled = false;
+            }
         }
         Map<String, Object> auditPayload = new LinkedHashMap<>();
         auditPayload.put("summary", "浏览元数据资产");
@@ -409,7 +415,7 @@ public class CatalogResource {
             auditPayload.put("keyword", keyword);
         }
         auditPayload.put("size", size);
-        auditPayload.put("source", localFallback ? "catalog" : "openmetadata");
+        auditPayload.put("source", useLocal ? "catalog" : (disabled ? "disabled" : "openmetadata"));
         audit.auditAction("CATALOG_ASSET_VIEW", AuditStage.SUCCESS, "tech-metadata", auditPayload);
         return ApiResponses.ok(page);
     }
@@ -420,22 +426,26 @@ public class CatalogResource {
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
         String effDept = activeDept != null ? activeDept : claim("dept_code");
-        boolean localFallback = false;
         OpenMetadataService.OpenMetadataResult result;
-        if (catalogMetadataService.isLocalFqn(fqn)) {
+        boolean useLocal = catalogMetadataService.isLocalFqn(fqn);
+        if (useLocal) {
             result = catalogMetadataService.fetchLocalTableDetail(fqn, effDept);
-            localFallback = true;
         } else {
             result = openMetadataService.fetchTableByFqn(fqn);
-            if (result == null || !result.enabled()) {
-                result = catalogMetadataService.fetchLocalTableDetail(fqn, effDept);
-                localFallback = true;
+            boolean disabled = result == null || !result.enabled();
+            if (disabled || (result != null && !result.found())) {
+                OpenMetadataService.OpenMetadataResult local = catalogMetadataService.fetchLocalTableDetail(fqn, effDept);
+                if (local != null && local.found()) {
+                    result = local;
+                    useLocal = true;
+                }
             }
         }
+        boolean disabled = result == null || !result.enabled();
         Map<String, Object> auditPayload = new LinkedHashMap<>();
         auditPayload.put("summary", "查看元数据详情");
         auditPayload.put("fqn", fqn);
-        auditPayload.put("source", localFallback ? "catalog" : "openmetadata");
+        auditPayload.put("source", useLocal ? "catalog" : (disabled ? "disabled" : "openmetadata"));
         audit.auditAction("CATALOG_ASSET_VIEW", AuditStage.SUCCESS, "tech-metadata-detail", auditPayload);
         return ApiResponses.ok(result);
     }
@@ -694,6 +704,7 @@ public class CatalogResource {
                             colDto.put("nullable", col.getNullable());
                             colDto.put("tags", col.getTags());
                             colDto.put("sensitiveTags", col.getSensitiveTags());
+                            colDto.put("status", trimToNull(col.getStatus()));
                             String columnComment = StringUtils.hasText(col.getComment()) ? col.getComment().trim() : null;
                             colDto.put("comment", columnComment);
                             colDto.put("description", columnComment);
@@ -2082,6 +2093,7 @@ public class CatalogResource {
         m.put("standardId", column.getStandardId() != null ? column.getStandardId().toString() : null);
         m.put("standardRule", trimToNull(column.getStandardRule()));
         m.put("standardMismatchReason", trimToNull(column.getStandardMismatchReason()));
+        m.put("status", trimToNull(column.getStatus()));
         return m;
     }
 
@@ -2176,6 +2188,7 @@ public class CatalogResource {
         dto.put("standardId", col.getStandardId());
         dto.put("standardRule", trimToNull(col.getStandardRule()));
         dto.put("standardMismatchReason", trimToNull(col.getStandardMismatchReason()));
+        dto.put("status", trimToNull(col.getStatus()));
 
         DataStandard standard = (col.getStandardId() != null && standards != null) ? standards.get(col.getStandardId()) : null;
         if (standard != null) {

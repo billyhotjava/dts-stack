@@ -38,6 +38,11 @@ dts:
   analytics:
     jdbc:
       drivers-dir: ${ANALYTICS_JDBC_DRIVERS_DIR:}
+    platform:
+      base-url: ${DTS_ANALYTICS_PLATFORM_BASE_URL:http://dts-platform:8081}
+      api-path: ${DTS_ANALYTICS_PLATFORM_API_PATH:/api}
+      service-name: ${DTS_ANALYTICS_PLATFORM_SERVICE_NAME:dts-analytics}
+      timeout-seconds: ${DTS_ANALYTICS_PLATFORM_TIMEOUT_SECONDS:10}
     platform-auth:
       enabled: ${DTS_ANALYTICS_PLATFORM_AUTH_ENABLED:true}
       require-forwarded-headers: ${DTS_ANALYTICS_PLATFORM_AUTH_REQUIRE_FORWARDED_HEADERS:true}

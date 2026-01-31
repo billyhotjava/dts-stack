@@ -45,19 +45,18 @@ public class AirflowDagService {
             return null;
         }
         String dagId = resolveDagId(task);
-        String dagsDir = resolveDagsDir();
-        if (!StringUtils.hasText(dagsDir)) {
+        Path dagDir = resolveDagDir(task);
+        if (dagDir == null) {
             LOG.warn("[airflow] dagsDir not configured, skip DAG file generation for dagId={}", dagId);
             return dagId;
         }
-        Path dir = Path.of(dagsDir);
         try {
-            Files.createDirectories(dir);
+            Files.createDirectories(dagDir);
         } catch (IOException ex) {
-            LOG.warn("[airflow] failed to create dagsDir {}: {}", dagsDir, ex.getMessage());
+            LOG.warn("[airflow] failed to create dagsDir {}: {}", dagDir, ex.getMessage());
             return dagId;
         }
-        Path dagFile = dir.resolve(dagId + ".py");
+        Path dagFile = dagDir.resolve(dagId + ".py");
         String content = buildDagSource(dagId, task);
         try {
             if (!force && Files.exists(dagFile)) {
@@ -74,7 +73,16 @@ public class AirflowDagService {
         return dagId;
     }
 
-    private String resolveDagsDir() {
+    private Path resolveDagDir(IngestionTask task) {
+        String dagsDir = resolveDagsBaseDir();
+        if (!StringUtils.hasText(dagsDir)) {
+            return null;
+        }
+        String layerDir = resolveLayerDir(task);
+        return StringUtils.hasText(layerDir) ? Path.of(dagsDir, layerDir) : Path.of(dagsDir);
+    }
+
+    private String resolveDagsBaseDir() {
         IngestionSettingsService.SettingsSnapshot settings = settingsService.getSettings(IngestionSettingsService.SERVICE_AIRFLOW);
         String configured = settings.getString("dagsDir", null);
         String fallback = properties.getDagsDir();
@@ -89,6 +97,10 @@ public class AirflowDagService {
             return fallback;
         }
         return normalized;
+    }
+
+    private String resolveLayerDir(IngestionTask task) {
+        return "ods";
     }
 
     private String normalizePath(String value) {
@@ -110,14 +122,12 @@ public class AirflowDagService {
         if (StringUtils.hasText(task.getAirflowDagId())) {
             return task.getAirflowDagId().trim();
         }
-        String sourceKey = resolveSourceKey(task);
-        if (StringUtils.hasText(sourceKey)) {
-            return "ingestion_" + slugify(sourceKey);
-        }
-        String base = StringUtils.hasText(task.getName()) ? task.getName() : "task";
-        String slug = slugify(base);
-        String suffix = task.getId() == null ? "new" : String.valueOf(task.getId());
-        return "ingestion_" + slug + "_" + suffix;
+        String layer = resolveLayerDir(task);
+        String sourceKey = normalizeSegment(resolveSourceKey(task), "source");
+        String desc = normalizeSegment(task != null ? task.getName() : null, "ingestion");
+        String freq = normalizeSegment(resolveFrequency(task != null ? task.getSyncSchedule() : null), "manual");
+        String dagId = String.format("%s_%s_%s_%s", layer, sourceKey, desc, freq);
+        return limitLength(dagId, 200);
     }
 
     private String resolveSourceKey(IngestionTask task) {
@@ -168,11 +178,68 @@ public class AirflowDagService {
         return StringUtils.hasText(slug) ? slug : "task";
     }
 
+    private String normalizeSegment(String value, String fallback) {
+        String slug = slugify(value);
+        return StringUtils.hasText(slug) ? slug : fallback;
+    }
+
+    private String limitLength(String value, int max) {
+        if (!StringUtils.hasText(value) || value.length() <= max) {
+            return value;
+        }
+        return value.substring(0, max);
+    }
+
+    private String resolveFrequency(String schedule) {
+        if (!StringUtils.hasText(schedule)) {
+            return "manual";
+        }
+        String cron = schedule.trim().toLowerCase();
+        if ("@hourly".equals(cron) || cron.startsWith("0 *") || cron.startsWith("*/1 ")) {
+            return "hourly";
+        }
+        if ("@daily".equals(cron) || cron.startsWith("0 0 *") || cron.startsWith("0 0 ?")) {
+            return "daily";
+        }
+        if ("@weekly".equals(cron) || cron.matches("0\\s+0\\s+\\*\\s+\\*\\s+\\d+")) {
+            return "weekly";
+        }
+        if ("@monthly".equals(cron) || cron.matches("0\\s+0\\s+1\\s+\\*\\s+\\*")) {
+            return "monthly";
+        }
+        return "custom";
+    }
+
+    private String resolveTaskId(IngestionTask task) {
+        String target = resolveFirstTargetTable(task);
+        if (!StringUtils.hasText(target)) {
+            return "addax_run";
+        }
+        String slug = slugify(target);
+        return StringUtils.hasText(slug) ? "addax_" + slug : "addax_run";
+    }
+
+    private String resolveFirstTargetTable(IngestionTask task) {
+        if (task == null) return null;
+        JsonNode mapping = task.getTableMapping();
+        if (mapping == null || !mapping.isArray() || mapping.size() == 0) {
+            return null;
+        }
+        JsonNode first = mapping.get(0);
+        if (first == null || first.isNull()) {
+            return null;
+        }
+        return firstText(first, "target", "targetTable", "ods", "dest");
+    }
+
     private String buildDagSource(String dagId, IngestionTask task) {
         String sourceTag = sanitizeTag(task == null ? null : task.getSourceType(), "source");
         String nameTag = sanitizeTag(task == null ? null : task.getName(), "ingestion");
         String addaxImage = escapePythonString(resolveAddaxImage());
         String addaxJobDir = escapePythonString(resolveAddaxJobDir());
+        String schedule = normalizeSchedule(task == null ? null : task.getSyncSchedule());
+        String scheduleLiteral = schedule == null ? "None" : "\"" + escapePythonString(schedule) + "\"";
+        String taskId = resolveTaskId(task);
         return """
             from __future__ import annotations
 
@@ -217,10 +284,10 @@ public class AirflowDagService {
 
             with DAG(
                 dag_id="%s",
-                schedule=None,
+                schedule=%s,
                 start_date=datetime(2024, 1, 1),
                 catchup=False,
-                tags=["addax", "etl", "ingestion", "%s", "%s"],
+                tags=["addax", "etl", "ods", "%s", "%s"],
             ) as dag:
                 run_cmd = [
                     "sh",
@@ -229,7 +296,7 @@ public class AirflowDagService {
                 ]
 
                 addax_run = DockerOperator(
-                    task_id="addax_run",
+                    task_id="%s",
                     image=ADDAX_IMAGE,
                     api_version="auto",
                     auto_remove=True,
@@ -243,7 +310,14 @@ public class AirflowDagService {
                     environment={},
                     tty=True,
                 )
-            """.formatted(addaxImage, addaxJobDir, dagId, sourceTag, nameTag);
+            """.formatted(addaxImage, addaxJobDir, dagId, scheduleLiteral, sourceTag, nameTag, taskId);
+    }
+
+    private String normalizeSchedule(String schedule) {
+        if (!StringUtils.hasText(schedule)) {
+            return null;
+        }
+        return schedule.trim();
     }
 
     private String resolveAddaxJobDir() {

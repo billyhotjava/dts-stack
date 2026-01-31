@@ -157,14 +157,14 @@ export default function CardsPage() {
 						size="sm"
 						icon={<GridIcon />}
 						onClick={() => setViewMode("grid")}
-						aria-label="Grid view"
+						aria-label={t(locale, "common.viewAll")} // Grid view
 					/>
 					<Button
 						variant={viewMode === "list" ? "primary" : "secondary"}
 						size="sm"
 						icon={<ListIcon />}
 						onClick={() => setViewMode("list")}
-						aria-label="List view"
+						aria-label={t(locale, "common.viewAll")} // List view
 					/>
 				</div>
 			</div>

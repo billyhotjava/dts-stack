@@ -1,21 +1,47 @@
 package com.yuzhi.dts.analytics.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 @Service
 public class JdbcDetailsResolver {
 
+    private final PlatformInfraClient platformInfraClient;
+
+    public JdbcDetailsResolver(PlatformInfraClient platformInfraClient) {
+        this.platformInfraClient = platformInfraClient;
+    }
+
     public JdbcDetails resolve(String engine, JsonNode details) {
-        if (engine == null || engine.isBlank()) {
-            throw new IllegalArgumentException("engine is required");
-        }
         if (details == null || !details.isObject()) {
             throw new IllegalArgumentException("details must be a map");
         }
 
+        String platformId = resolvePlatformDataSourceId(details);
+        if (platformId != null) {
+            UUID id = parsePlatformUuid(platformId);
+            PlatformInfraClient.DataSourceDetail detail = platformInfraClient.fetchDataSourceDetail(id);
+            String jdbcUrl = detail.jdbcUrl();
+            if (!StringUtils.hasText(jdbcUrl)) {
+                throw new IllegalArgumentException("平台数据源未配置 JDBC URL");
+            }
+            String username = detail.username();
+            String password = resolvePlatformPassword(detail.secrets());
+            return new JdbcDetails(jdbcUrl, username, password);
+        }
+
+        if (engine == null || engine.isBlank()) {
+            throw new IllegalArgumentException("engine is required");
+        }
+
         String jdbcUrl = firstText(details, "jdbc-url", "jdbc_url", "jdbcUrl", "url");
+        if (jdbcUrl != null && jdbcUrl.startsWith("dbc:")) {
+            jdbcUrl = "jdbc:" + jdbcUrl.substring(4);
+        }
         String username = firstText(details, "user", "username");
         String password = firstText(details, "password");
 
@@ -102,5 +128,47 @@ public class JdbcDetailsResolver {
         return Optional.empty();
     }
 
-    public record JdbcDetails(String jdbcUrl, String username, String password) {}
+    private String resolvePlatformDataSourceId(JsonNode details) {
+        String direct = firstText(details, "platformDataSourceId", "platform_data_source_id", "platformDataSourceID");
+        if (StringUtils.hasText(direct)) {
+            return direct.trim();
+        }
+        JsonNode platform = details.get("platform");
+        if (platform != null && platform.isObject()) {
+            String nested = firstText(platform, "dataSourceId", "datasourceId", "id");
+            if (StringUtils.hasText(nested)) {
+                return nested.trim();
+            }
+        }
+        return null;
+    }
+
+    private UUID parsePlatformUuid(String raw) {
+        try {
+            return UUID.fromString(raw.trim());
+        } catch (Exception ex) {
+            throw new IllegalArgumentException("无效的平台数据源 ID: " + raw);
+        }
+    }
+
+    private String resolvePlatformPassword(Map<String, Object> secrets) {
+        if (secrets == null || secrets.isEmpty()) {
+            return null;
+        }
+        Object pwd = secrets.get("password");
+        if (pwd == null) {
+            pwd = secrets.get("pwd");
+        }
+        if (pwd == null) {
+            pwd = secrets.get("pass");
+        }
+        if (pwd == null) {
+            return null;
+        }
+        String text = pwd.toString().trim();
+        return text.isEmpty() ? null : text;
+    }
+
+    public record JdbcDetails(String jdbcUrl, String username, String password) {
+    }
 }

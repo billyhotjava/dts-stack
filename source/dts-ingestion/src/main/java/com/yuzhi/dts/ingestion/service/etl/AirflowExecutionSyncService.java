@@ -5,7 +5,10 @@ import com.yuzhi.dts.ingestion.domain.IngestionExecution;
 import com.yuzhi.dts.ingestion.domain.IngestionTask;
 import com.yuzhi.dts.ingestion.repository.IngestionExecutionRepository;
 import com.yuzhi.dts.ingestion.repository.IngestionTaskRepository;
+import com.yuzhi.dts.common.audit.AuditStage;
+import com.yuzhi.dts.ingestion.service.audit.AuditService;
 import com.yuzhi.dts.ingestion.service.infra.IngestionSettingsService;
+import com.yuzhi.dts.ingestion.service.infra.PlatformInfraClient;
 import java.time.Instant;
 import java.util.Locale;
 import java.util.Map;
@@ -28,19 +31,25 @@ public class AirflowExecutionSyncService {
     private final AirflowClient airflowClient;
     private final AirflowProperties properties;
     private final IngestionSettingsService settingsService;
+    private final PlatformInfraClient platformInfraClient;
+    private final AuditService auditService;
 
     public AirflowExecutionSyncService(
         IngestionExecutionRepository executionRepository,
         IngestionTaskRepository taskRepository,
         AirflowClient airflowClient,
         AirflowProperties properties,
-        IngestionSettingsService settingsService
+        IngestionSettingsService settingsService,
+        PlatformInfraClient platformInfraClient,
+        AuditService auditService
     ) {
         this.executionRepository = executionRepository;
         this.taskRepository = taskRepository;
         this.airflowClient = airflowClient;
         this.properties = properties;
         this.settingsService = settingsService;
+        this.platformInfraClient = platformInfraClient;
+        this.auditService = auditService;
     }
 
     @Scheduled(fixedDelayString = "${dts.airflow.execution-poll-interval-ms:15000}")
@@ -100,6 +109,9 @@ public class AirflowExecutionSyncService {
         }
         taskRepository.save(task);
         LOG.info("[airflow] synced execution {} status={}", execution.getId(), status);
+        if ("success".equalsIgnoreCase(status)) {
+            triggerDbtIfConfigured(task, execution);
+        }
     }
 
     private String toText(Object value) {
@@ -108,5 +120,49 @@ public class AirflowExecutionSyncService {
         }
         String text = value.toString().trim();
         return StringUtils.hasText(text) ? text : null;
+    }
+
+    private void triggerDbtIfConfigured(IngestionTask task, IngestionExecution execution) {
+        if (task == null) {
+            return;
+        }
+        String models = task.getDbtModelSelector();
+        if (!StringUtils.hasText(models)) {
+            return;
+        }
+        String dagSelector = task.getDbtDagSelector();
+        try {
+            Map<String, Object> result = platformInfraClient.triggerDbtRun(models, dagSelector);
+            Map<String, Object> meta = new java.util.LinkedHashMap<>();
+            meta.put("taskId", task.getId());
+            meta.put("executionId", execution.getId());
+            meta.put("models", models);
+            if (StringUtils.hasText(dagSelector)) {
+                meta.put("dagSelector", dagSelector);
+            }
+            meta.put("result", result);
+            auditService.auditAction(
+                "INGESTION_TASK_DBT_TRIGGER",
+                AuditStage.SUCCESS,
+                task.getName(),
+                meta
+            );
+        } catch (Exception ex) {
+            LOG.warn("[dbt] trigger failed task={} err={}", task.getId(), ex.getMessage());
+            Map<String, Object> meta = new java.util.LinkedHashMap<>();
+            meta.put("taskId", task.getId());
+            meta.put("executionId", execution.getId());
+            meta.put("models", models);
+            if (StringUtils.hasText(dagSelector)) {
+                meta.put("dagSelector", dagSelector);
+            }
+            meta.put("error", ex.getMessage());
+            auditService.auditAction(
+                "INGESTION_TASK_DBT_TRIGGER",
+                AuditStage.FAIL,
+                task.getName(),
+                meta
+            );
+        }
     }
 }

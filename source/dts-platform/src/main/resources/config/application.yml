@@ -256,7 +256,7 @@ dts:
     base-url: http://dts-admin:8081
     api-path: /api
     admin-api-path: /api/admin
-    service-name: ${DTS_ADMIN_SERVICE_NAME:dts-admin,dts-ingestion,dts-airflow}
+    service-name: ${DTS_ADMIN_SERVICE_NAME:dts-admin,dts-ingestion,dts-airflow,dts-analytics}
   platform:
     features:
       # Serve Keycloak localization resources from platform to avoid browser TLS trust issues to admin domain in dev

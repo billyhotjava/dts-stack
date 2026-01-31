@@ -114,21 +114,34 @@ public class CatalogSyncResource {
     public ApiResponse<List<Map<String, Object>>> listRuns(
         @RequestParam(name = "integration", required = false, defaultValue = "INCEPTOR") String integration,
         @RequestParam(name = "limit", required = false, defaultValue = "20") int limit,
-        @RequestParam(name = "includeDetails", required = false, defaultValue = "false") boolean includeDetails
+        @RequestParam(name = "includeDetails", required = false, defaultValue = "false") boolean includeDetails,
+        @RequestParam(name = "sourceId", required = false) UUID sourceId
     ) {
         String normalized = StringUtils.hasText(integration) ? integration.trim().toUpperCase(java.util.Locale.ROOT) : "INCEPTOR";
         int safeLimit = Math.max(1, Math.min(limit, 100));
         List<InfraCatalogSyncRun> runs = syncRunRepository.findTop100ByIntegrationOrderByStartedAtDesc(normalized);
-        List<Map<String, Object>> payload = runs
-            .stream()
-            .limit(safeLimit)
-            .map(run -> toDto(run, includeDetails))
-            .toList();
+        List<Map<String, Object>> payload = new ArrayList<>();
+        UUID filterSourceId = "JDBC".equalsIgnoreCase(normalized) ? sourceId : null;
+        for (InfraCatalogSyncRun run : runs) {
+            if (payload.size() >= safeLimit) {
+                break;
+            }
+            Map<String, Object> dto = filterSourceId != null
+                ? toJdbcDto(run, filterSourceId, includeDetails)
+                : toDto(run, includeDetails);
+            if (dto == null || dto.isEmpty()) {
+                continue;
+            }
+            payload.add(dto);
+        }
         Map<String, Object> auditPayload = new LinkedHashMap<>();
         auditPayload.put("summary", "查看采集运行历史");
         auditPayload.put("integration", normalized);
         auditPayload.put("limit", safeLimit);
         auditPayload.put("includeDetails", includeDetails);
+        if (filterSourceId != null) {
+            auditPayload.put("sourceId", filterSourceId.toString());
+        }
         auditService.auditAction("CATALOG_SYNC_RUN_LIST", AuditStage.SUCCESS, normalized, auditPayload);
         return ApiResponses.ok(payload);
     }
@@ -136,7 +149,9 @@ public class CatalogSyncResource {
     @GetMapping("/pipelines")
     public ApiResponse<List<Map<String, Object>>> listPipelines() {
         List<Map<String, Object>> pipelines = new ArrayList<>();
-        pipelines.add(buildPrimaryPipeline());
+        if (inceptorRegistry.getActive().isPresent()) {
+            pipelines.add(buildPrimaryPipeline());
+        }
         pipelines.addAll(buildJdbcPipelines());
         auditService.auditAction("CATALOG_SYNC_PIPELINE_LIST", AuditStage.SUCCESS, "pipelines", Map.of("summary", "查看采集任务列表"));
         return ApiResponses.ok(pipelines);
@@ -239,6 +254,66 @@ public class CatalogSyncResource {
         return dto;
     }
 
+    private Map<String, Object> toJdbcDto(InfraCatalogSyncRun run, UUID sourceId, boolean includeDetails) {
+        if (run == null || sourceId == null) {
+            return null;
+        }
+        JdbcSyncResult result = extractJdbcResult(run.getDetailsJson(), sourceId);
+        if (result == null) {
+            return null;
+        }
+        Map<String, Object> dto = toDto(run, includeDetails);
+        dto.put("sourceId", sourceId.toString());
+        dto.put("status", result.status());
+        dto.put("error", result.error());
+        dto.put("tablesDiscovered", result.tablesDiscovered());
+        dto.put("datasetsCreated", result.datasetsCreated());
+        dto.put("datasetsUpdated", result.datasetsUpdated());
+        dto.put("datasetsRemoved", result.datasetsRemoved());
+        dto.put("tablesCreated", result.tablesCreated());
+        dto.put("columnsImported", result.columnsImported());
+        return dto;
+    }
+
+    private JdbcSyncResult extractJdbcResult(String detailsJson, UUID sourceId) {
+        if (!StringUtils.hasText(detailsJson) || sourceId == null) {
+            return null;
+        }
+        try {
+            Map<String, Object> raw = objectMapper.readValue(detailsJson, new TypeReference<>() {});
+            JdbcSyncResult single = extractSingleJdbcResult(raw, sourceId);
+            if (single != null) {
+                return single;
+            }
+            Object resultsObj = raw.get("results");
+            List<JdbcSyncResult> results = objectMapper.convertValue(resultsObj, new TypeReference<List<JdbcSyncResult>>() {});
+            if (results != null) {
+                for (JdbcSyncResult result : results) {
+                    if (result != null && sourceId.equals(result.sourceId())) {
+                        return result;
+                    }
+                }
+            }
+        } catch (Exception ignored) {}
+        return null;
+    }
+
+    private JdbcSyncResult extractSingleJdbcResult(Map<String, Object> raw, UUID sourceId) {
+        if (raw == null || sourceId == null) {
+            return null;
+        }
+        Object resultObj = raw.get("result");
+        if (resultObj == null) {
+            return null;
+        }
+        try {
+            JdbcSyncResult result = objectMapper.convertValue(resultObj, JdbcSyncResult.class);
+            return result != null && sourceId.equals(result.sourceId()) ? result : null;
+        } catch (IllegalArgumentException ex) {
+            return null;
+        }
+    }
+
     private Map<String, Object> buildPrimaryPipeline() {
         Map<String, Object> pipeline = new LinkedHashMap<>();
         IntegrationStatus status = inceptorCoordinator.currentStatus();
@@ -314,6 +389,14 @@ public class CatalogSyncResource {
         }
         try {
             Map<String, Object> raw = objectMapper.readValue(lastRun.getDetailsJson(), new TypeReference<>() {});
+            Object singleObj = raw.get("result");
+            if (singleObj != null) {
+                JdbcSyncResult single = objectMapper.convertValue(singleObj, JdbcSyncResult.class);
+                if (single != null && single.sourceId() != null) {
+                    resultMap.put(single.sourceId(), single);
+                    return resultMap;
+                }
+            }
             Object resultsObj = raw.get("results");
             List<JdbcSyncResult> results = objectMapper.convertValue(resultsObj, new TypeReference<List<JdbcSyncResult>>() {});
             if (results != null) {
@@ -345,10 +428,7 @@ public class CatalogSyncResource {
                 }
                 return "Inceptor / " + (StringUtils.hasText(active.name()) ? active.name().trim() : "default");
             })
-            .orElseGet(() -> {
-                String schema = catalogFeatures != null ? catalogFeatures.getPostgresSchema() : null;
-                return "PostgreSQL / " + (StringUtils.hasText(schema) ? schema : "public");
-            });
+            .orElse("Inceptor / 未配置");
     }
 
     private String buildJdbcSourceLabel(InfraDataSource source) {

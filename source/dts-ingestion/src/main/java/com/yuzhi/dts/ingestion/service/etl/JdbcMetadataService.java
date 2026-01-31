@@ -47,7 +47,14 @@ public class JdbcMetadataService {
         if (info == null || !StringUtils.hasText(info.jdbcUrl())) {
             return List.of();
         }
-        int max = limit != null && limit > 0 ? limit : 200;
+        int max;
+        if (limit == null) {
+            max = 200;
+        } else if (limit <= 0) {
+            max = Integer.MAX_VALUE;
+        } else {
+            max = limit;
+        }
         String schema = normalize(schemaPattern);
         String table = normalize(tablePattern);
         try (Connection connection = openConnection(info)) {

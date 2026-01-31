@@ -85,6 +85,7 @@ type ColumnRow = {
 	name: string;
 	type: string;
 	comment: string;
+	status?: string;
 };
 
 const statusTag = (status?: string) => {
@@ -104,6 +105,7 @@ const buildColumnRows = (detail?: TableDetail | null): ColumnRow[] => {
 		name: String(item?.name || item?.displayName || "-").trim(),
 		type: String(item?.dataType || item?.dataTypeDisplay || "-").trim(),
 		comment: String(item?.description || item?.comment || "").trim(),
+		status: String(item?.status || "").trim(),
 	}));
 };
 
@@ -143,7 +145,7 @@ export default function MetadataPage() {
 			return;
 		}
 		void loadRuns(selectedPipeline.integration);
-	}, [selectedPipeline?.integration]);
+	}, [selectedPipeline?.integration, selectedPipeline?.sourceId]);
 
 	useEffect(() => {
 		if (!selectedFqn) {
@@ -172,7 +174,12 @@ export default function MetadataPage() {
 	const loadRuns = async (integration: string) => {
 		setLoadingRuns(true);
 		try {
-			const resp: any = await listCatalogSyncRuns({ integration, limit: 20, includeDetails: false });
+			const resp: any = await listCatalogSyncRuns({
+				integration,
+				limit: 20,
+				includeDetails: false,
+				sourceId: integration === "JDBC" ? selectedPipeline?.sourceId : undefined,
+			});
 			setRuns(Array.isArray(resp) ? (resp as SyncRun[]) : []);
 		} catch (error: any) {
 			toast.error(error?.message || "采集历史加载失败");
@@ -244,6 +251,8 @@ export default function MetadataPage() {
 		{ title: "状态", dataIndex: "status", render: statusTag },
 		{ title: "发现表", dataIndex: "tablesDiscovered" },
 		{ title: "新增表", dataIndex: "tablesCreated" },
+		{ title: "更新表", dataIndex: "datasetsUpdated" },
+		{ title: "删除表", dataIndex: "datasetsRemoved" },
 		{ title: "新增字段", dataIndex: "columnsImported" },
 		{ title: "错误", dataIndex: "error", render: (value) => <Text type="danger">{value || "-"}</Text> },
 	];
@@ -251,6 +260,17 @@ export default function MetadataPage() {
 	const columnColumns: ColumnsType<ColumnRow> = [
 		{ title: "字段", dataIndex: "name" },
 		{ title: "类型", dataIndex: "type" },
+		{
+			title: "状态",
+			dataIndex: "status",
+			render: (value) => {
+				const normalized = String(value || "").toUpperCase();
+				if (!normalized) return <Tag>未知</Tag>;
+				if (normalized === "DRAFT") return <Tag color="orange">草稿</Tag>;
+				if (normalized === "ACTIVE") return <Tag color="green">正式</Tag>;
+				return <Tag>{value}</Tag>;
+			},
+		},
 		{ title: "备注", dataIndex: "comment" },
 	];
 
@@ -259,6 +279,18 @@ export default function MetadataPage() {
 		[tables, selectedFqn],
 	);
 	const columnRows = useMemo(() => buildColumnRows(tableDetail), [tableDetail]);
+	const columnStatusStats = useMemo(() => {
+		let draft = 0;
+		let active = 0;
+		let other = 0;
+		columnRows.forEach((row) => {
+			const label = String(row.status || "").toUpperCase();
+			if (label === "DRAFT") draft += 1;
+			else if (label === "ACTIVE") active += 1;
+			else other += 1;
+		});
+		return { draft, active, other };
+	}, [columnRows]);
 
 	return (
 		<div className="space-y-4">
@@ -305,6 +337,16 @@ export default function MetadataPage() {
 								</Descriptions>
 								{selectedPipeline?.error ? (
 									<div className="mt-3 text-sm text-red-500">错误：{selectedPipeline.error}</div>
+								) : null}
+								{selectedPipeline?.logLines && selectedPipeline.logLines.length ? (
+									<div className="mt-3 rounded border bg-muted/20 p-3 text-xs text-muted-foreground">
+										<div className="mb-2 font-medium text-foreground">最近日志</div>
+										<ul className="list-disc space-y-1 pl-4">
+											{selectedPipeline.logLines.slice(0, 10).map((line, idx) => (
+												<li key={idx}>{line}</li>
+											))}
+										</ul>
+									</div>
 								) : null}
 								<Space className="mt-4">
 									<Button type="primary" onClick={handleTrigger}>立即采集</Button>
@@ -357,6 +399,13 @@ export default function MetadataPage() {
 										<Descriptions.Item label="描述">{selectedSummary?.description || "-"}</Descriptions.Item>
 										<Descriptions.Item label="字段数">{selectedSummary?.columnCount ?? "-"}</Descriptions.Item>
 									</Descriptions>
+									{columnRows.length ? (
+										<Space size={6} className="mt-3 flex flex-wrap">
+											<Tag color="orange">草稿 {columnStatusStats.draft}</Tag>
+											<Tag color="green">正式 {columnStatusStats.active}</Tag>
+											{columnStatusStats.other ? <Tag>其他 {columnStatusStats.other}</Tag> : null}
+										</Space>
+									) : null}
 									<div>
 										<Text type="secondary">字段列表</Text>
 										<Table

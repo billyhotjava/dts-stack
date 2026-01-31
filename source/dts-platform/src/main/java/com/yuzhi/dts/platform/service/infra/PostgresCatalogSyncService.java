@@ -183,7 +183,13 @@ public class PostgresCatalogSyncService {
                             new LegacyColumnValues(
                                 org.springframework.util.StringUtils.hasText(existing.getComment()) ? existing.getComment() : null,
                                 org.springframework.util.StringUtils.hasText(existing.getTags()) ? existing.getTags() : null,
-                                org.springframework.util.StringUtils.hasText(existing.getSensitiveTags()) ? existing.getSensitiveTags() : null
+                                org.springframework.util.StringUtils.hasText(existing.getSensitiveTags()) ? existing.getSensitiveTags() : null,
+                                org.springframework.util.StringUtils.hasText(existing.getStatus()) ? existing.getStatus() : null,
+                                existing.getStandardId(),
+                                org.springframework.util.StringUtils.hasText(existing.getStandardRule()) ? existing.getStandardRule() : null,
+                                org.springframework.util.StringUtils.hasText(existing.getStandardMismatchReason())
+                                    ? existing.getStandardMismatchReason()
+                                    : null
                             ),
                         (left, right) -> left,
                         java.util.LinkedHashMap::new
@@ -210,6 +216,18 @@ public class PostgresCatalogSyncService {
                     if (legacy != null) {
                         entity.setTags(legacy.tags());
                         entity.setSensitiveTags(legacy.sensitiveTags());
+                        if (org.springframework.util.StringUtils.hasText(legacy.status())) {
+                            entity.setStatus(legacy.status());
+                        }
+                        if (legacy.standardId() != null) {
+                            entity.setStandardId(legacy.standardId());
+                        }
+                        if (org.springframework.util.StringUtils.hasText(legacy.standardRule())) {
+                            entity.setStandardRule(legacy.standardRule());
+                        }
+                        if (org.springframework.util.StringUtils.hasText(legacy.standardMismatchReason())) {
+                            entity.setStandardMismatchReason(legacy.standardMismatchReason());
+                        }
                     }
                     columnEntities.add(entity);
                 }
@@ -416,5 +434,13 @@ public class PostgresCatalogSyncService {
 
     private record ColumnMeta(String name, String dataType, boolean nullable, String comment) {}
 
-    private record LegacyColumnValues(String comment, String tags, String sensitiveTags) {}
+    private record LegacyColumnValues(
+        String comment,
+        String tags,
+        String sensitiveTags,
+        String status,
+        java.util.UUID standardId,
+        String standardRule,
+        String standardMismatchReason
+    ) {}
 }

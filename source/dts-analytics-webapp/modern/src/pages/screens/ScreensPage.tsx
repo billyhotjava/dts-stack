@@ -1,6 +1,8 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router';
 import { analyticsApi, ScreenListItem } from '../../api/analyticsApi';
+import { TemplateGallery } from './components';
+import { createConfigFromTemplate, ScreenTemplate } from './screenTemplates';
 import '../page.css';
 
 export default function ScreensPage() {
@@ -8,6 +10,7 @@ export default function ScreensPage() {
     const [screens, setScreens] = useState<ScreenListItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [showTemplateGallery, setShowTemplateGallery] = useState(false);
 
     const loadScreens = useCallback(() => {
         setLoading(true);
@@ -28,7 +31,33 @@ export default function ScreensPage() {
     }, [loadScreens]);
 
     const handleCreate = () => {
-        navigate('/screens/new');
+        setShowTemplateGallery(true);
+    };
+
+    const handleTemplateSelect = async (template: ScreenTemplate) => {
+        setShowTemplateGallery(false);
+
+        // Create config from template
+        const config = createConfigFromTemplate(template);
+
+        try {
+            // Create new screen with template config
+            const response = await analyticsApi.createScreen({
+                name: config.name,
+                description: config.description,
+                width: config.width,
+                height: config.height,
+                backgroundColor: config.backgroundColor,
+                backgroundImage: config.backgroundImage,
+                components: config.components,
+            });
+            // Navigate to edit the new screen
+            navigate(`/screens/${response.id}/edit`);
+        } catch (err) {
+            console.error('Failed to create screen from template:', err);
+            // Fallback: just navigate to new screen page
+            navigate('/screens/new');
+        }
     };
 
     const handleEdit = (id: string | number) => {
@@ -267,6 +296,13 @@ export default function ScreensPage() {
                     to { transform: rotate(360deg); }
                 }
             `}</style>
+
+            {showTemplateGallery && (
+                <TemplateGallery
+                    onSelect={handleTemplateSelect}
+                    onClose={() => setShowTemplateGallery(false)}
+                />
+            )}
         </div>
     );
 }

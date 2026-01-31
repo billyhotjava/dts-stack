@@ -90,6 +90,14 @@ const SearchIcon = () => (
 	</svg>
 );
 
+const ScreenIcon = () => (
+	<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+		<rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+		<path d="M8 21h8" />
+		<path d="M12 17v4" />
+	</svg>
+);
+
 const UserIcon = () => (
 	<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
 		<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
@@ -149,10 +157,7 @@ export function AppLayout() {
 			>
 				{locale === "en" ? t(locale, "lang.zh") : t(locale, "lang.en")}
 			</DropdownItem>
-			<DropdownSeparator />
-			<DropdownItem>
-				<ThemeToggle showLabel />
-			</DropdownItem>
+
 		</Dropdown>
 	);
 
@@ -162,7 +167,15 @@ export function AppLayout() {
 				<SidebarNav
 					logo={Logo}
 					logoCollapsed={LogoCollapsed}
-					header={<SidebarSearch placeholder={t(locale, "nav.search")} />}
+					header={
+						<div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+							<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 4px' }}>
+								<span style={{ fontSize: '12px', fontWeight: 500, opacity: 0.7 }}>Theme</span>
+								<ThemeToggle showLabel={false} />
+							</div>
+							<SidebarSearch placeholder={t(locale, "nav.search")} />
+						</div>
+					}
 					footer={UserMenu}
 				>
 					<SidebarSection title={t(locale, "nav.section.core")}>
@@ -186,6 +199,7 @@ export function AppLayout() {
 					<SidebarDivider />
 
 					<SidebarSection title={t(locale, "nav.section.tools")}>
+						<SidebarItem to="/screens" icon={<ScreenIcon />} label={t(locale, "nav.screens")} />
 						<SidebarItem to="/search" icon={<SearchIcon />} label={t(locale, "nav.search")} />
 					</SidebarSection>
 				</SidebarNav>

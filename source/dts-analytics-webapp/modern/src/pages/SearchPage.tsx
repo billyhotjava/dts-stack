@@ -130,7 +130,7 @@ export default function SearchPage() {
 								/>
 							</div>
 							<Button variant="primary" type="submit" icon={<SearchIcon />}>
-								Search
+								{t(locale, "search.button")}
 							</Button>
 						</div>
 					</form>
@@ -181,9 +181,9 @@ export default function SearchPage() {
 											<span className="search-result-name">{item.name ?? "-"}</span>
 											<span className="search-result-meta">
 												<Badge variant={item.model === "dashboard" ? "info" : item.model === "card" ? "success" : "default"} size="sm">
-													{String(item.model)}
+													{item.model === "dashboard" ? t(locale, "dashboards.title") : item.model === "card" ? t(locale, "questions.title") : item.model === "collection" ? t(locale, "collections.title") : item.model}
 												</Badge>
-												<span className="text-muted">ID: {String(item.id)}</span>
+												<span className="text-muted">{t(locale, "common.id")}: {String(item.id)}</span>
 											</span>
 										</div>
 									</Link>

@@ -119,6 +119,29 @@ public class IngestionServiceClient {
         return exchangeTask("/api/ingestion/tasks/changes", HttpMethod.POST, payload, null);
     }
 
+    public Map<String, Object> getInfraSettings(String service) {
+        if (!isEnabled() || !StringUtils.hasText(service)) {
+            return Map.of();
+        }
+        ApiResponse<Object> response = exchangeObject("/api/infra/settings/" + service.trim(), HttpMethod.GET, null, null, restTemplate);
+        if (response == null || response.getData() == null) {
+            return Map.of();
+        }
+        Object data = response.getData();
+        if (data instanceof Map<?, ?> map) {
+            Map<String, Object> payload = new java.util.LinkedHashMap<>();
+            map.forEach((key, value) -> payload.put(String.valueOf(key), value));
+            Object nested = payload.get("settings");
+            if (nested instanceof Map<?, ?> nestedMap) {
+                Map<String, Object> settings = new java.util.LinkedHashMap<>();
+                nestedMap.forEach((key, value) -> settings.put(String.valueOf(key), value));
+                return settings;
+            }
+            return payload;
+        }
+        return Map.of();
+    }
+
     private ApiResponse<Map<String, Object>> exchangeTaskLong(String path, HttpMethod method, Object payload) {
         return exchangeTask(path, method, payload, null, longRestTemplate);
     }

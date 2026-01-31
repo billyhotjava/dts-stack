@@ -3,15 +3,24 @@ package com.yuzhi.dts.platform.service.infra;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.platform.config.InfraSecurityProperties;
+import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
+import com.yuzhi.dts.platform.domain.catalog.CatalogTableSchema;
 import com.yuzhi.dts.platform.domain.service.InfraConnectionTestLog;
 import com.yuzhi.dts.platform.domain.service.InfraDataSource;
 import com.yuzhi.dts.platform.domain.service.InfraDataStorage;
+import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
+import com.yuzhi.dts.platform.repository.catalog.CatalogTableSchemaRepository;
+import com.yuzhi.dts.platform.repository.infra.InfraCatalogSyncRunRepository;
 import com.yuzhi.dts.platform.repository.service.InfraConnectionTestLogRepository;
 import com.yuzhi.dts.platform.repository.service.InfraDataSourceRepository;
 import com.yuzhi.dts.platform.repository.service.InfraDataStorageRepository;
+import com.yuzhi.dts.platform.domain.infra.InfraCatalogSyncRun;
 import com.yuzhi.dts.platform.security.AuthoritiesConstants;
 import com.yuzhi.dts.platform.security.DepartmentUtils;
 import com.yuzhi.dts.platform.security.SecurityUtils;
+import com.yuzhi.dts.platform.service.audit.AuditService;
+import com.yuzhi.dts.platform.service.catalog.CatalogColumnSyncService;
+import com.yuzhi.dts.platform.service.catalog.CatalogColumnSyncService.ColumnSpec;
 import com.yuzhi.dts.platform.service.infra.HiveConnectionTestResult;
 import com.yuzhi.dts.platform.service.infra.dto.HiveConnectionPersistRequest;
 import com.yuzhi.dts.platform.service.infra.dto.ConnectionTestLogDto;
@@ -34,6 +43,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import com.yuzhi.dts.common.audit.AuditStage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
@@ -62,10 +72,21 @@ public class InfraManagementService {
     private final ApplicationEventPublisher eventPublisher;
     private final PostgresConnectionService postgresConnectionService;
     private final IngestionServiceClient ingestionServiceClient;
+    private final CatalogDatasetRepository datasetRepository;
+    private final CatalogTableSchemaRepository tableRepository;
+    private final CatalogColumnSyncService columnSyncService;
+    private final JdbcCatalogSyncService jdbcCatalogSyncService;
+    private final InfraCatalogSyncRunRepository syncRunRepository;
+    private final AuditService auditService;
 
     private static final String TYPE_INCEPTOR = "INCEPTOR";
     private static final String TYPE_POSTGRES = "POSTGRES";
     private static final String STATUS_ACTIVE = "ACTIVE";
+    private static final String DEFAULT_FILE_SCHEMA = "ods";
+    private static final String DATASET_TYPE_FILE = "file";
+    private static final String SETTINGS_KEY_CATALOG_SYNC = "catalogSyncOnDataSource";
+    private static final String SETTINGS_SERVICE_PLATFORM = "platform";
+    private static final String AUDIT_ACTION_CATALOG_SYNC = "FOUNDATION_DATASOURCE_CATALOG_SYNC";
     private static final java.util.Set<String> JDBC_TYPES = java.util.Set.of(
         "jdbc",
         "postgres",
@@ -90,7 +111,13 @@ public class InfraManagementService {
         ObjectMapper objectMapper,
         ApplicationEventPublisher eventPublisher,
         PostgresConnectionService postgresConnectionService,
-        IngestionServiceClient ingestionServiceClient
+        IngestionServiceClient ingestionServiceClient,
+        CatalogDatasetRepository datasetRepository,
+        CatalogTableSchemaRepository tableRepository,
+        CatalogColumnSyncService columnSyncService,
+        JdbcCatalogSyncService jdbcCatalogSyncService,
+        InfraCatalogSyncRunRepository syncRunRepository,
+        AuditService auditService
     ) {
         this.dataSourceRepository = dataSourceRepository;
         this.storageRepository = storageRepository;
@@ -101,6 +128,12 @@ public class InfraManagementService {
         this.eventPublisher = eventPublisher;
         this.postgresConnectionService = postgresConnectionService;
         this.ingestionServiceClient = ingestionServiceClient;
+        this.datasetRepository = datasetRepository;
+        this.tableRepository = tableRepository;
+        this.columnSyncService = columnSyncService;
+        this.jdbcCatalogSyncService = jdbcCatalogSyncService;
+        this.syncRunRepository = syncRunRepository;
+        this.auditService = auditService;
     }
 
     public List<InfraDataSourceDto> listDataSources(String activeDeptHeader) {
@@ -138,7 +171,9 @@ public class InfraManagementService {
         applyDataSource(entity, request, username);
         ensureNotSystemManaged(entity.getType(), activeDeptHeader);
         applyOwnerDept(entity, activeDeptHeader);
-        return toDto(dataSourceRepository.save(entity));
+        InfraDataSource saved = dataSourceRepository.save(entity);
+        syncCatalogIfEnabled(saved, request, username);
+        return toDto(saved);
     }
 
     @Transactional
@@ -229,6 +264,7 @@ public class InfraManagementService {
         applyDataSource(entity, request, username);
         applyOwnerDept(entity, activeDeptHeader);
         InfraDataSource saved = dataSourceRepository.save(entity);
+        syncCatalogIfEnabled(saved, request, username);
         Map<String, Object> afterProps = readProps(saved.getProps());
         Map<String, Object> afterSecrets = secretService.readSecrets(saved);
         ConnectionChange change = buildConnectionChange(
@@ -600,6 +636,29 @@ public class InfraManagementService {
             if (result != null && result.getStatus() >= 200 && result.getStatus() < 300) {
                 created++;
             }
+        }
+        if (!tasks.isEmpty()) {
+            auditService.auditAction(
+                "FOUNDATION_DATASOURCE_IMPACT",
+                AuditStage.SUCCESS,
+                dataSource.getId().toString(),
+                Map.of(
+                    "summary",
+                    "数据源连接变更影响入湖任务",
+                    "dataSourceId",
+                    dataSource.getId().toString(),
+                    "dataSourceName",
+                    dataSource.getName(),
+                    "affectedTasks",
+                    tasks.size(),
+                    "changeLogCreated",
+                    created,
+                    "taskIds",
+                    taskIds,
+                    "operator",
+                    operator
+                )
+            );
         }
         return new ImpactResult(tasks.size(), created, List.copyOf(taskIds));
     }
@@ -984,6 +1043,402 @@ public class InfraManagementService {
             entity.getCreatedDate(),
             entity.getSecureProps() != null
         );
+    }
+
+    private void syncCatalogIfEnabled(InfraDataSource dataSource, DataSourceRequest request, String operator) {
+        if (dataSource == null || request == null) {
+            return;
+        }
+        boolean enabled = shouldSyncCatalogOnDataSource();
+        if (isJdbcRequest(request)) {
+            if (!enabled) {
+                auditJdbcCatalogSync(
+                    dataSource,
+                    operator,
+                    JdbcSyncResult.skipped(dataSource.getId(), "disabled"),
+                    AuditStage.SUCCESS,
+                    null
+                );
+                return;
+            }
+            try {
+                JdbcSyncResult result = jdbcCatalogSyncService.synchronize(dataSource);
+                updateJdbcSyncResult(dataSource.getId(), result);
+                recordJdbcSyncRun(dataSource, result, "datasource-auto");
+                AuditStage stage = "FAILED".equalsIgnoreCase(result.status()) ? AuditStage.FAIL : AuditStage.SUCCESS;
+                auditJdbcCatalogSync(dataSource, operator, result, stage, result.error());
+            } catch (Exception ex) {
+                LOG.warn("[catalog-sync] jdbc sync failed for {}: {}", dataSource.getId(), ex.getMessage());
+                recordJdbcSyncRun(dataSource, JdbcSyncResult.failed(dataSource.getId(), ex.getMessage()), "datasource-auto");
+                auditJdbcCatalogSync(
+                    dataSource,
+                    operator,
+                    JdbcSyncResult.failed(dataSource.getId(), ex.getMessage()),
+                    AuditStage.FAIL,
+                    ex.getMessage()
+                );
+            }
+            return;
+        }
+        if (!enabled) {
+            auditCatalogSync(dataSource, operator, new CatalogSyncSummary(false, true, "disabled", null, null, null, 0, false), AuditStage.SUCCESS, null);
+            return;
+        }
+        try {
+            CatalogSyncSummary summary = syncFileSourceCatalog(dataSource, request, operator);
+            auditCatalogSync(dataSource, operator, summary, AuditStage.SUCCESS, null);
+        } catch (Exception ex) {
+            LOG.warn("[catalog-sync] failed to sync datasource {}: {}", dataSource.getId(), ex.getMessage());
+            auditCatalogSync(
+                dataSource,
+                operator,
+                new CatalogSyncSummary(true, false, "failed", null, null, null, 0, false),
+                AuditStage.FAIL,
+                ex.getMessage()
+            );
+        }
+    }
+
+    private boolean shouldSyncCatalogOnDataSource() {
+        Map<String, Object> settings = ingestionServiceClient.getInfraSettings(SETTINGS_SERVICE_PLATFORM);
+        if (settings == null || settings.isEmpty()) {
+            return true;
+        }
+        Object raw = settings.get(SETTINGS_KEY_CATALOG_SYNC);
+        if (raw == null) {
+            return true;
+        }
+        if (raw instanceof Boolean bool) {
+            return bool;
+        }
+        String text = raw.toString().trim();
+        return text.isEmpty() || Boolean.parseBoolean(text);
+    }
+
+    private CatalogSyncSummary syncFileSourceCatalog(InfraDataSource dataSource, DataSourceRequest request, String operator) {
+        Map<String, Object> props = request.props() == null || request.props().isEmpty()
+            ? readProps(dataSource.getProps())
+            : request.props();
+        List<ColumnSpec> specs = resolveColumnSpecsFromProps(props);
+        String schema = DEFAULT_FILE_SCHEMA;
+        String desiredTable = normalizeFileTableName(dataSource.getName());
+        String finalTable = desiredTable;
+        boolean adjusted = false;
+
+        CatalogDataset dataset = datasetRepository
+            .findFirstBySourceIdAndHiveDatabaseIgnoreCaseAndHiveTableIgnoreCase(dataSource.getId(), schema, desiredTable)
+            .orElse(null);
+        if (dataset == null) {
+            List<CatalogDataset> existing = datasetRepository.findBySourceIdAndHiveDatabaseIgnoreCase(dataSource.getId(), schema);
+            if (!existing.isEmpty()) {
+                dataset = existing.get(0);
+            }
+        }
+
+        if (dataset == null) {
+            finalTable = ensureUniqueFileTable(schema, desiredTable, dataSource.getId());
+            adjusted = !finalTable.equalsIgnoreCase(desiredTable);
+            dataset = new CatalogDataset();
+        } else {
+            String currentTable = dataset.getHiveTable();
+            if (!StringUtils.hasText(currentTable) || !currentTable.equalsIgnoreCase(desiredTable)) {
+                finalTable = ensureUniqueFileTable(schema, desiredTable, dataSource.getId());
+                adjusted = !finalTable.equalsIgnoreCase(desiredTable);
+            } else {
+                finalTable = currentTable;
+            }
+        }
+
+        dataset.setName(finalTable);
+        dataset.setType(DATASET_TYPE_FILE);
+        dataset.setSourceId(dataSource.getId());
+        dataset.setHiveDatabase(schema);
+        dataset.setHiveTable(finalTable);
+        if (!StringUtils.hasText(dataset.getWarehouseLayer())) {
+            dataset.setWarehouseLayer("ODS");
+        }
+        dataset.setDescription(dataSource.getDescription());
+        if (!StringUtils.hasText(dataset.getOwner()) && StringUtils.hasText(operator)) {
+            dataset.setOwner(operator);
+        }
+        if (!StringUtils.hasText(dataset.getOwnerDept()) && StringUtils.hasText(dataSource.getOwnerDept())) {
+            dataset.setOwnerDept(dataSource.getOwnerDept());
+        }
+        CatalogDataset savedDataset = datasetRepository.save(dataset);
+
+        CatalogTableSchema table = tableRepository
+            .findFirstByDatasetAndNameIgnoreCase(savedDataset, finalTable)
+            .orElse(null);
+        if (table == null) {
+            List<CatalogTableSchema> tables = tableRepository.findByDataset(savedDataset);
+            if (tables.size() == 1) {
+                table = tables.get(0);
+            } else {
+                table = new CatalogTableSchema();
+                table.setDataset(savedDataset);
+            }
+        }
+        table.setName(finalTable);
+        if (!StringUtils.hasText(table.getOwner()) && StringUtils.hasText(operator)) {
+            table.setOwner(operator);
+        }
+        CatalogTableSchema savedTable = tableRepository.save(table);
+
+        int columnCount = 0;
+        if (!specs.isEmpty()) {
+            columnCount = columnSyncService.upsertColumns(savedTable, specs, CatalogColumnSyncService.STATUS_DRAFT);
+        }
+        return new CatalogSyncSummary(false, false, null, schema, finalTable, savedDataset.getId(), columnCount, adjusted);
+    }
+
+    private void auditCatalogSync(
+        InfraDataSource dataSource,
+        String operator,
+        CatalogSyncSummary summary,
+        AuditStage stage,
+        String error
+    ) {
+        if (dataSource == null) {
+            return;
+        }
+        Map<String, Object> meta = new LinkedHashMap<>();
+        meta.put("summary", "同步数据源字段到元数据");
+        meta.put("dataSourceId", dataSource.getId() != null ? dataSource.getId().toString() : null);
+        meta.put("dataSourceName", dataSource.getName());
+        meta.put("dataSourceType", dataSource.getType());
+        meta.put("operator", operator);
+        if (summary != null) {
+            meta.put("syncEnabled", summary.syncEnabled());
+            meta.put("skipped", summary.skipped());
+            meta.put("skipReason", summary.skipReason());
+            meta.put("schema", summary.schema());
+            meta.put("table", summary.table());
+            meta.put("datasetId", summary.datasetId() != null ? summary.datasetId().toString() : null);
+            meta.put("columnCount", summary.columnCount());
+            meta.put("nameAdjusted", summary.nameAdjusted());
+        }
+        if (StringUtils.hasText(error)) {
+            meta.put("error", error);
+        }
+        auditService.auditAction(
+            AUDIT_ACTION_CATALOG_SYNC,
+            stage,
+            dataSource.getId() != null ? dataSource.getId().toString() : "catalog-sync",
+            meta
+        );
+    }
+
+    private void auditJdbcCatalogSync(
+        InfraDataSource dataSource,
+        String operator,
+        JdbcSyncResult result,
+        AuditStage stage,
+        String error
+    ) {
+        if (dataSource == null) {
+            return;
+        }
+        Map<String, Object> meta = new LinkedHashMap<>();
+        meta.put("summary", "同步 JDBC 数据源元数据");
+        meta.put("dataSourceId", dataSource.getId() != null ? dataSource.getId().toString() : null);
+        meta.put("dataSourceName", dataSource.getName());
+        meta.put("dataSourceType", dataSource.getType());
+        meta.put("operator", operator);
+        if (result != null) {
+            meta.put("status", result.status());
+            meta.put("schemas", result.schemas());
+            meta.put("tablesDiscovered", result.tablesDiscovered());
+            meta.put("datasetsCreated", result.datasetsCreated());
+            meta.put("datasetsUpdated", result.datasetsUpdated());
+            meta.put("datasetsRemoved", result.datasetsRemoved());
+            meta.put("tablesCreated", result.tablesCreated());
+            meta.put("columnsImported", result.columnsImported());
+            meta.put("databaseProduct", result.databaseProduct());
+            meta.put("databaseVersion", result.databaseVersion());
+            meta.put("elapsedMs", result.elapsedMs());
+        }
+        if (StringUtils.hasText(error)) {
+            meta.put("error", error);
+        }
+        auditService.auditAction(
+            AUDIT_ACTION_CATALOG_SYNC,
+            stage,
+            dataSource.getId() != null ? dataSource.getId().toString() : "catalog-sync",
+            meta
+        );
+    }
+
+    private void recordJdbcSyncRun(InfraDataSource dataSource, JdbcSyncResult result, String reason) {
+        if (dataSource == null || dataSource.getId() == null) {
+            return;
+        }
+        try {
+            InfraCatalogSyncRun run = new InfraCatalogSyncRun();
+            run.setIntegration("JDBC");
+            run.setReason(StringUtils.hasText(reason) ? reason : "datasource-auto");
+            run.setStartedAt(Instant.now());
+            run.setFinishedAt(Instant.now());
+            run.setCatalogDatasetCountBefore(safeDatasetCount());
+            run.setCatalogDatasetCountAfter(safeDatasetCount());
+            if (result != null) {
+                run.setDatasetsCreated(result.datasetsCreated());
+                run.setDatasetsUpdated(result.datasetsUpdated());
+                run.setDatasetsRemoved(result.datasetsRemoved());
+                run.setTablesCreated(result.tablesCreated());
+                run.setColumnsImported(result.columnsImported());
+                run.setError(result.error());
+                run.setStatus("FAILED".equalsIgnoreCase(result.status()) ? "FAILED" : "SUCCESS");
+                run.setDetailsJson(writeProps(Map.of("single", true, "result", result)));
+            } else {
+                run.setStatus("FAILED");
+                run.setError("empty-result");
+            }
+            syncRunRepository.save(run);
+        } catch (Exception ex) {
+            LOG.debug("[catalog-sync] failed to record jdbc sync run: {}", ex.getMessage());
+        }
+    }
+
+    private long safeDatasetCount() {
+        try {
+            return datasetRepository.count();
+        } catch (Exception ignored) {
+            return 0L;
+        }
+    }
+
+    private record CatalogSyncSummary(
+        boolean syncEnabled,
+        boolean skipped,
+        String skipReason,
+        String schema,
+        String table,
+        UUID datasetId,
+        int columnCount,
+        boolean nameAdjusted
+    ) {}
+
+    private List<ColumnSpec> resolveColumnSpecsFromProps(Map<String, Object> props) {
+        if (props == null || props.isEmpty()) {
+            return List.of();
+        }
+        Map<String, Object> readerConfig = readMap(props.get("readerConfig"));
+        Object columnRaw = readerConfig.get("column");
+        if (columnRaw == null) {
+            columnRaw = readerConfig.get("columns");
+        }
+        return extractColumnSpecs(columnRaw);
+    }
+
+    private List<ColumnSpec> extractColumnSpecs(Object raw) {
+        if (raw == null) {
+            return List.of();
+        }
+        List<ColumnSpec> specs = new java.util.ArrayList<>();
+        if (raw instanceof List<?> list) {
+            for (Object item : list) {
+                ColumnSpec spec = toColumnSpec(item);
+                if (spec != null) {
+                    specs.add(spec);
+                }
+            }
+        } else if (raw instanceof Map<?, ?> map) {
+            ColumnSpec spec = toColumnSpec(map);
+            if (spec != null) {
+                specs.add(spec);
+            }
+        } else if (raw instanceof String text && StringUtils.hasText(text)) {
+            for (String name : text.split(",")) {
+                if (!StringUtils.hasText(name)) continue;
+                specs.add(new ColumnSpec(name.trim(), "string", null, null, null, null, null, null));
+            }
+        }
+        return specs;
+    }
+
+    private ColumnSpec toColumnSpec(Object item) {
+        if (item == null) {
+            return null;
+        }
+        if (item instanceof String text) {
+            String name = text.trim();
+            return StringUtils.hasText(name) ? new ColumnSpec(name, "string", null, null, null, null, null, null) : null;
+        }
+        if (item instanceof Map<?, ?> map) {
+            Map<String, Object> values = readMap(map);
+            String name = normalizeField(values.get("name"));
+            if (!StringUtils.hasText(name)) {
+                name = normalizeField(values.get("column"));
+            }
+            if (!StringUtils.hasText(name)) {
+                name = normalizeField(values.get("field"));
+            }
+            if (!StringUtils.hasText(name)) {
+                return null;
+            }
+            String dataType = normalizeField(values.get("type"));
+            if (!StringUtils.hasText(dataType)) {
+                dataType = normalizeField(values.get("dataType"));
+            }
+            if (!StringUtils.hasText(dataType)) {
+                dataType = "string";
+            }
+            return new ColumnSpec(name, dataType, null, null, null, null, null, null);
+        }
+        return null;
+    }
+
+    private Map<String, Object> readMap(Object value) {
+        if (value instanceof Map<?, ?> map) {
+            Map<String, Object> result = new LinkedHashMap<>();
+            map.forEach((key, val) -> result.put(String.valueOf(key), val));
+            return result;
+        }
+        return Map.of();
+    }
+
+    private String normalizeField(Object value) {
+        if (value == null) {
+            return null;
+        }
+        String text = value.toString().trim();
+        return text.isEmpty() ? null : text;
+    }
+
+    private String normalizeFileTableName(String name) {
+        String base = StringUtils.hasText(name) ? name.trim().toLowerCase(Locale.ROOT) : "file_source";
+        String sanitized = base.replaceAll("[^a-z0-9]+", "_").replaceAll("^_+", "").replaceAll("_+$", "");
+        if (!StringUtils.hasText(sanitized)) {
+            sanitized = "file_source";
+        }
+        int max = 60;
+        if (sanitized.length() > max) {
+            sanitized = sanitized.substring(0, max);
+        }
+        return sanitized;
+    }
+
+    private String ensureUniqueFileTable(String schema, String base, UUID sourceId) {
+        String candidate = base;
+        int suffix = 1;
+        while (candidate.length() > 0) {
+            java.util.Optional<CatalogDataset> existing = datasetRepository.findFirstByHiveDatabaseIgnoreCaseAndHiveTableIgnoreCase(schema, candidate);
+            if (existing.isEmpty()) {
+                return candidate;
+            }
+            CatalogDataset dataset = existing.get();
+            if (sourceId != null && sourceId.equals(dataset.getSourceId())) {
+                return candidate;
+            }
+            String tail = "_" + suffix;
+            String trimmed = base;
+            if (trimmed.length() + tail.length() > 60) {
+                trimmed = trimmed.substring(0, Math.max(1, 60 - tail.length()));
+            }
+            candidate = trimmed + tail;
+            suffix++;
+        }
+        return base;
     }
 
     private String writeProps(Map<String, Object> props) {

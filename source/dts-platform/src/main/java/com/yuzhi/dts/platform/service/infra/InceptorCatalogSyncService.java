@@ -225,7 +225,13 @@ public class InceptorCatalogSyncService {
                             new LegacyColumnValues(
                                 StringUtils.hasText(existing.getComment()) ? existing.getComment() : null,
                                 StringUtils.hasText(existing.getTags()) ? existing.getTags() : null,
-                                StringUtils.hasText(existing.getSensitiveTags()) ? existing.getSensitiveTags() : null
+                                StringUtils.hasText(existing.getSensitiveTags()) ? existing.getSensitiveTags() : null,
+                                StringUtils.hasText(existing.getStatus()) ? existing.getStatus() : null,
+                                existing.getStandardId(),
+                                StringUtils.hasText(existing.getStandardRule()) ? existing.getStandardRule() : null,
+                                StringUtils.hasText(existing.getStandardMismatchReason())
+                                    ? existing.getStandardMismatchReason()
+                                    : null
                             ),
                         (left, right) -> left,
                         LinkedHashMap::new
@@ -252,6 +258,21 @@ public class InceptorCatalogSyncService {
                     if (legacy != null) {
                         entity.setTags(legacy.tags());
                         entity.setSensitiveTags(legacy.sensitiveTags());
+                        if (StringUtils.hasText(legacy.status())) {
+                            entity.setStatus(legacy.status());
+                        }
+                        if (legacy.standardId() != null) {
+                            entity.setStandardId(legacy.standardId());
+                        }
+                        if (StringUtils.hasText(legacy.standardRule())) {
+                            entity.setStandardRule(legacy.standardRule());
+                        }
+                        if (StringUtils.hasText(legacy.standardMismatchReason())) {
+                            entity.setStandardMismatchReason(legacy.standardMismatchReason());
+                        }
+                    }
+                    if (!StringUtils.hasText(entity.getStatus())) {
+                        entity.setStatus("ACTIVE");
                     }
                     columnEntities.add(entity);
                 }
@@ -604,7 +625,15 @@ public class InceptorCatalogSyncService {
         }
     }
 
-    private record LegacyColumnValues(String comment, String tags, String sensitiveTags) {}
+    private record LegacyColumnValues(
+        String comment,
+        String tags,
+        String sensitiveTags,
+        String status,
+        java.util.UUID standardId,
+        String standardRule,
+        String standardMismatchReason
+    ) {}
 
     public record CatalogSyncResult(
         String database,

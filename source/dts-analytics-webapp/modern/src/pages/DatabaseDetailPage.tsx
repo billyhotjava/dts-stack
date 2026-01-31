@@ -59,7 +59,7 @@ export default function DatabaseDetailPage() {
 
 	const reload = useCallback(() => {
 		let cancelled = false;
-		if (!dbId) return () => {};
+		if (!dbId) return () => { };
 		setState({ state: "loading" });
 		analyticsApi
 			.getDatabaseMetadata(dbId)
@@ -177,7 +177,7 @@ export default function DatabaseDetailPage() {
 			{state.state === "loaded" && tables.length === 0 && (
 				<EmptyState
 					title={t(locale, "common.empty")}
-					description="提示：需要先同步元数据（同步后才会出现表/字段）。"
+					description={t(locale, "data.metaEmpty")}
 					action={
 						<Button variant="primary" icon={<SyncIcon />} loading={syncing} onClick={syncSchema}>
 							{syncing ? t(locale, "data.syncing") : t(locale, "data.sync")}
@@ -194,7 +194,7 @@ export default function DatabaseDetailPage() {
 						<CollapsibleCard
 							key={schema}
 							title={schema}
-							subtitle={`${list.length} tables`}
+							subtitle={`${list.length} ${t(locale, "data.tables")}`}
 							defaultOpen={tablesBySchema.length <= 1}
 							style={{ marginBottom: "var(--spacing-md)" }}
 						>

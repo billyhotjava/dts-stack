@@ -2,13 +2,23 @@ package com.yuzhi.dts.platform.service.modeling;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.yuzhi.dts.common.audit.AuditStage;
+import com.yuzhi.dts.platform.domain.catalog.CatalogColumnSchema;
+import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
+import com.yuzhi.dts.platform.domain.catalog.CatalogTableSchema;
 import com.yuzhi.dts.platform.domain.modeling.ModelingPlan;
 import com.yuzhi.dts.platform.domain.modeling.ModelingSqlModel;
 import com.yuzhi.dts.platform.domain.service.InfraDataSource;
+import com.yuzhi.dts.platform.repository.catalog.CatalogColumnSchemaRepository;
+import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
+import com.yuzhi.dts.platform.repository.catalog.CatalogTableSchemaRepository;
 import com.yuzhi.dts.platform.repository.modeling.ModelingPlanRepository;
 import com.yuzhi.dts.platform.repository.modeling.ModelingSqlModelRepository;
 import com.yuzhi.dts.platform.repository.service.InfraDataSourceRepository;
 import com.yuzhi.dts.platform.security.DepartmentUtils;
+import com.yuzhi.dts.platform.service.audit.AuditService;
+import com.yuzhi.dts.platform.service.catalog.CatalogColumnSyncService;
+import com.yuzhi.dts.platform.service.catalog.CatalogColumnSyncService.ColumnSpec;
 import com.yuzhi.dts.platform.service.etl.DbtConfigService;
 import com.yuzhi.dts.platform.service.security.OrganizationVisibilityService;
 import jakarta.persistence.EntityNotFoundException;
@@ -47,6 +57,11 @@ public class ModelingSqlModelService {
     private final OrganizationVisibilityService organizationVisibilityService;
     private final DataStandardSecurity security;
     private final DbtConfigService dbtConfigService;
+    private final CatalogDatasetRepository datasetRepository;
+    private final CatalogTableSchemaRepository tableRepository;
+    private final CatalogColumnSchemaRepository columnRepository;
+    private final CatalogColumnSyncService columnSyncService;
+    private final AuditService auditService;
     private final ObjectMapper objectMapper;
 
     public ModelingSqlModelService(
@@ -56,6 +71,11 @@ public class ModelingSqlModelService {
         OrganizationVisibilityService organizationVisibilityService,
         DataStandardSecurity security,
         DbtConfigService dbtConfigService,
+        CatalogDatasetRepository datasetRepository,
+        CatalogTableSchemaRepository tableRepository,
+        CatalogColumnSchemaRepository columnRepository,
+        CatalogColumnSyncService columnSyncService,
+        AuditService auditService,
         ObjectMapper objectMapper
     ) {
         this.repo = repo;
@@ -64,6 +84,11 @@ public class ModelingSqlModelService {
         this.organizationVisibilityService = organizationVisibilityService;
         this.security = security;
         this.dbtConfigService = dbtConfigService;
+        this.datasetRepository = datasetRepository;
+        this.tableRepository = tableRepository;
+        this.columnRepository = columnRepository;
+        this.columnSyncService = columnSyncService;
+        this.auditService = auditService;
         this.objectMapper = objectMapper;
     }
 
@@ -96,13 +121,93 @@ public class ModelingSqlModelService {
         return toDto(model);
     }
 
+    public List<Map<String, Object>> listColumns(UUID id, String activeDeptHeader) {
+        String activeDept = security.resolveActiveDept(activeDeptHeader);
+        boolean instituteScope = security.hasInstituteScope();
+        ModelingSqlModel model = repo.findById(id).orElseThrow(() -> new EntityNotFoundException("模型不存在"));
+        if (!isOwnerDeptVisible(model.getOwnerDept(), activeDept, instituteScope)) {
+            throw new IllegalArgumentException("当前账号无权访问该模型");
+        }
+
+        DbtConfigService.DbtConfigView view = dbtConfigService.loadConfig();
+        String tableName = resolveModelTable(model);
+        String schemaName = resolveModelSchema(model, view);
+        if (StringUtils.hasText(tableName) && StringUtils.hasText(schemaName)) {
+            CatalogDataset dataset = datasetRepository
+                .findFirstByHiveDatabaseIgnoreCaseAndHiveTableIgnoreCase(schemaName, tableName)
+                .orElse(null);
+            if (dataset != null) {
+                CatalogTableSchema table = tableRepository
+                    .findFirstByDatasetAndNameIgnoreCase(dataset, tableName)
+                    .orElse(null);
+                if (table != null) {
+                    List<CatalogColumnSchema> columns = columnRepository.findByTable(table);
+                    return columns
+                        .stream()
+                        .map(this::toColumnPayload)
+                        .toList();
+                }
+            }
+        }
+
+        String projectDir = view != null && view.config() != null ? view.config().projectDir() : null;
+        List<ColumnSpec> specs = resolveCsvSpecs(model, projectDir);
+        if (specs.isEmpty()) {
+            return List.of();
+        }
+        List<Map<String, Object>> payload = new ArrayList<>();
+        for (ColumnSpec spec : specs) {
+            if (spec == null) {
+                continue;
+            }
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("name", spec.name());
+            item.put("dataType", spec.dataType());
+            item.put("comment", spec.comment());
+            item.put("status", CatalogColumnSyncService.STATUS_DRAFT);
+            payload.add(item);
+        }
+        return payload;
+    }
+
     public SqlModelDto create(SqlModelRequest request, String activeDeptHeader) {
         ensureWorkspaceWritable();
         ModelingSqlModel model = new ModelingSqlModel();
         apply(model, request, activeDeptHeader, true);
         ModelingSqlModel saved = repo.save(model);
         writeModelFile(saved);
+        syncDraftColumns(saved);
         return toDto(saved);
+    }
+
+    public SqlModelDto importFromFiles(SqlModelRequest request, String sqlText, String csvText, String activeDeptHeader) {
+        if (!StringUtils.hasText(sqlText)) {
+            throw new IllegalArgumentException("SQL 内容不能为空");
+        }
+        SqlModelRequest normalized = new SqlModelRequest(
+            request.planId(),
+            request.name(),
+            request.alias(),
+            request.layer(),
+            request.sourceDataSourceId(),
+            request.schemaName(),
+            request.materialized(),
+            request.tags(),
+            request.description(),
+            sqlText,
+            request.enabled(),
+            request.status(),
+            request.ownerDept()
+        );
+        SqlModelDto dto = create(normalized, activeDeptHeader);
+        if (StringUtils.hasText(csvText)) {
+            writeCsvSidecar(dto.modelPath(), csvText);
+            ModelingSqlModel saved = repo.findById(dto.id()).orElse(null);
+            if (saved != null) {
+                syncDraftColumns(saved);
+            }
+        }
+        return dto;
     }
 
     public SqlModelDto update(UUID id, SqlModelRequest request, String activeDeptHeader) {
@@ -113,7 +218,129 @@ public class ModelingSqlModelService {
         ModelingSqlModel saved = repo.save(model);
         writeModelFile(saved);
         deleteFileIfChanged(oldPath, saved.getModelPath());
+        syncDraftColumns(saved);
         return toDto(saved);
+    }
+
+    private void syncDraftColumns(ModelingSqlModel model) {
+        if (model == null) {
+            return;
+        }
+        try {
+            DbtConfigService.DbtConfigView view = dbtConfigService.loadConfig();
+            String projectDir = view != null && view.config() != null ? view.config().projectDir() : null;
+            List<ColumnSpec> specs = resolveCsvSpecs(model, projectDir);
+            if (specs.isEmpty()) {
+                return;
+            }
+            String tableName = resolveModelTable(model);
+            String schemaName = resolveModelSchema(model, view);
+            if (!StringUtils.hasText(tableName) || !StringUtils.hasText(schemaName)) {
+                return;
+            }
+            CatalogDataset dataset = datasetRepository
+                .findFirstByHiveDatabaseIgnoreCaseAndHiveTableIgnoreCase(schemaName, tableName)
+                .orElse(null);
+            if (dataset == null) {
+                dataset = new CatalogDataset();
+            }
+            dataset.setName(defaultText(dataset.getName(), tableName));
+            dataset.setHiveDatabase(defaultText(dataset.getHiveDatabase(), schemaName));
+            dataset.setHiveTable(defaultText(dataset.getHiveTable(), tableName));
+            if (!StringUtils.hasText(dataset.getWarehouseLayer()) && StringUtils.hasText(model.getLayer())) {
+                dataset.setWarehouseLayer(normalizeLayer(model.getLayer()));
+            }
+            if (!StringUtils.hasText(dataset.getType())) {
+                dataset.setType(resolveDatasetType(view));
+            }
+            if (!StringUtils.hasText(dataset.getDescription()) && StringUtils.hasText(model.getDescription())) {
+                dataset.setDescription(model.getDescription());
+            }
+            if (!StringUtils.hasText(dataset.getOwnerDept()) && StringUtils.hasText(model.getOwnerDept())) {
+                dataset.setOwnerDept(model.getOwnerDept());
+            }
+            CatalogDataset savedDataset = datasetRepository.save(dataset);
+
+            CatalogTableSchema table = tableRepository
+                .findFirstByDatasetAndNameIgnoreCase(savedDataset, tableName)
+                .orElse(null);
+            if (table == null) {
+                table = new CatalogTableSchema();
+                table.setDataset(savedDataset);
+            }
+            table.setName(tableName);
+            CatalogTableSchema savedTable = tableRepository.save(table);
+
+            int updated = columnSyncService.upsertColumns(savedTable, specs, CatalogColumnSyncService.STATUS_DRAFT);
+            auditService.auditAction(
+                "MODELING_COLUMN_SYNC",
+                AuditStage.SUCCESS,
+                savedDataset.getId() != null ? savedDataset.getId().toString() : "modeling",
+                Map.of(
+                    "summary",
+                    "模型字段草稿同步",
+                    "modelId",
+                    model.getId() != null ? model.getId().toString() : null,
+                    "schema",
+                    schemaName,
+                    "table",
+                    tableName,
+                    "columnCount",
+                    updated
+                )
+            );
+        } catch (Exception ex) {
+            LOG.warn("[dbt-model] failed to sync draft columns: {}", ex.getMessage());
+            auditService.auditAction(
+                "MODELING_COLUMN_SYNC",
+                AuditStage.FAIL,
+                model.getId() != null ? model.getId().toString() : "modeling",
+                Map.of("summary", "模型字段草稿同步失败", "error", ex.getMessage())
+            );
+        }
+    }
+
+    private List<ColumnSpec> resolveCsvSpecs(ModelingSqlModel model, String projectDir) {
+        if (model == null || !StringUtils.hasText(model.getModelPath()) || !StringUtils.hasText(projectDir)) {
+            return List.of();
+        }
+        Path projectPath = Path.of(projectDir).normalize();
+        Path sqlPath = projectPath.resolve(model.getModelPath()).normalize();
+        if (!sqlPath.startsWith(projectPath)) {
+            return List.of();
+        }
+        String baseName = sqlPath.getFileName() != null ? sqlPath.getFileName().toString() : null;
+        if (!StringUtils.hasText(baseName)) {
+            return List.of();
+        }
+        String csvName = baseName.endsWith(".sql") ? baseName.substring(0, baseName.length() - 4) + ".csv" : baseName + ".csv";
+        Path csvPath = sqlPath.resolveSibling(csvName);
+        return columnSyncService.parseCsv(csvPath);
+    }
+
+    private String resolveModelSchema(ModelingSqlModel model, DbtConfigService.DbtConfigView view) {
+        if (model != null && StringUtils.hasText(model.getSchemaName())) {
+            return model.getSchemaName().trim();
+        }
+        if (view != null && view.config() != null && StringUtils.hasText(view.config().schema())) {
+            return view.config().schema().trim();
+        }
+        return "public";
+    }
+
+    private String resolveModelTable(ModelingSqlModel model) {
+        if (model == null) return null;
+        if (StringUtils.hasText(model.getAlias())) {
+            return model.getAlias().trim();
+        }
+        return StringUtils.hasText(model.getName()) ? model.getName().trim() : null;
+    }
+
+    private String resolveDatasetType(DbtConfigService.DbtConfigView view) {
+        if (view != null && view.target() != null && StringUtils.hasText(view.target().type())) {
+            return view.target().type().toUpperCase(Locale.ROOT);
+        }
+        return null;
     }
 
     public void delete(UUID id, String activeDeptHeader) {
@@ -171,6 +398,10 @@ public class ModelingSqlModelService {
         String layer = trimToNull(request.layer());
         if (layer == null) {
             layer = inferLayer(name);
+        }
+        layer = normalizeLayer(layer);
+        if (!StringUtils.hasText(layer)) {
+            throw new IllegalArgumentException("请选择模型分层");
         }
 
         model.setPlanId(plan != null ? plan.getId() : null);
@@ -254,7 +485,8 @@ public class ModelingSqlModelService {
         if (!StringUtils.hasText(fileName)) {
             fileName = "model";
         }
-        return "models/" + planSlug + "/" + fileName + ".sql";
+        String layerDir = resolveLayerDir(model != null ? model.getLayer() : null);
+        return "models/" + layerDir + "/" + planSlug + "/" + fileName + ".sql";
     }
 
     private void ensureWorkspaceWritable() {
@@ -265,6 +497,18 @@ public class ModelingSqlModelService {
                 : "dbt 工作区未配置";
             throw new IllegalArgumentException(message);
         }
+    }
+
+    private Map<String, Object> toColumnPayload(CatalogColumnSchema column) {
+        Map<String, Object> item = new LinkedHashMap<>();
+        if (column == null) {
+            return item;
+        }
+        item.put("name", column.getName());
+        item.put("dataType", column.getDataType());
+        item.put("comment", column.getComment());
+        item.put("status", column.getStatus());
+        return item;
     }
 
     private void writeModelFile(ModelingSqlModel model) {
@@ -287,6 +531,32 @@ public class ModelingSqlModelService {
             Files.writeString(targetPath, content, StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
         } catch (IOException ex) {
             LOG.warn("[dbt-model] failed to write {}: {}", targetPath, ex.getMessage());
+        }
+    }
+
+    private void writeCsvSidecar(String modelPath, String csvText) {
+        if (!StringUtils.hasText(modelPath) || !StringUtils.hasText(csvText)) {
+            return;
+        }
+        DbtConfigService.DbtConfigView view = dbtConfigService.loadConfig();
+        if (view == null || view.config() == null || !StringUtils.hasText(view.config().projectDir())) {
+            LOG.warn("[dbt-model] projectDir 未配置，跳过 CSV 写入 {}", modelPath);
+            return;
+        }
+        Path projectDir = Path.of(view.config().projectDir()).normalize();
+        Path sqlPath = projectDir.resolve(modelPath).normalize();
+        if (!sqlPath.startsWith(projectDir)) {
+            LOG.warn("[dbt-model] invalid target path {} for csv", sqlPath);
+            return;
+        }
+        String baseName = sqlPath.getFileName().toString();
+        String csvName = baseName.endsWith(".sql") ? baseName.substring(0, baseName.length() - 4) + ".csv" : baseName + ".csv";
+        Path csvPath = sqlPath.resolveSibling(csvName);
+        try {
+            Files.createDirectories(csvPath.getParent());
+            Files.writeString(csvPath, csvText.trim() + "\n", StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+        } catch (IOException ex) {
+            LOG.warn("[dbt-model] failed to write csv {}: {}", csvPath, ex.getMessage());
         }
     }
 
@@ -333,7 +603,8 @@ public class ModelingSqlModelService {
         if (StringUtils.hasText(model.getSchemaName())) {
             configs.add("schema='" + model.getSchemaName() + "'");
         }
-        List<String> tags = splitTags(model.getTags(), sourceTag);
+        String layerTag = sanitizeTag(normalizeLayer(model.getLayer()), null);
+        List<String> tags = splitTags(model.getTags(), sourceTag, layerTag);
         if (!tags.isEmpty()) {
             String rendered = tags.stream().map(tag -> "'" + tag + "'").reduce((a, b) -> a + ", " + b).orElse("");
             configs.add("tags=[" + rendered + "]");
@@ -344,7 +615,7 @@ public class ModelingSqlModelService {
         return "{{ config(" + String.join(", ", configs) + ") }}";
     }
 
-    private List<String> splitTags(String rawTags, String sourceTag) {
+    private List<String> splitTags(String rawTags, String sourceTag, String layerTag) {
         Set<String> tags = new LinkedHashSet<>();
         if (StringUtils.hasText(rawTags)) {
             String[] parts = rawTags.split("[,;\\s]+");
@@ -357,6 +628,9 @@ public class ModelingSqlModelService {
         }
         if (StringUtils.hasText(sourceTag)) {
             tags.add(sanitizeTag(sourceTag, null));
+        }
+        if (StringUtils.hasText(layerTag)) {
+            tags.add(sanitizeTag(layerTag, null));
         }
         return new ArrayList<>(tags);
     }
@@ -436,7 +710,7 @@ public class ModelingSqlModelService {
     }
 
     private String mergeTags(String rawTags, String sourceTag) {
-        List<String> tags = splitTags(rawTags, sourceTag);
+        List<String> tags = splitTags(rawTags, sourceTag, null);
         if (tags.isEmpty()) return null;
         return String.join(",", tags);
     }
@@ -449,6 +723,34 @@ public class ModelingSqlModelService {
         if (normalized.startsWith("dws_")) return "DWS";
         if (normalized.startsWith("ads_")) return "ADS";
         return null;
+    }
+
+    private String normalizeLayer(String layer) {
+        if (!StringUtils.hasText(layer)) {
+            return null;
+        }
+        String normalized = layer.trim().toUpperCase(Locale.ROOT);
+        if ("ODS".equals(normalized) || "DWD".equals(normalized) || "DWS".equals(normalized) || "ADS".equals(normalized)) {
+            return normalized;
+        }
+        return null;
+    }
+
+    private String resolveLayerDir(String layer) {
+        String normalized = normalizeLayer(layer);
+        if ("ODS".equals(normalized)) {
+            return "ods";
+        }
+        if ("DWD".equals(normalized)) {
+            return "dwd";
+        }
+        if ("DWS".equals(normalized)) {
+            return "dws";
+        }
+        if ("ADS".equals(normalized)) {
+            return "ads";
+        }
+        return "dwh";
     }
 
     private String trimToNull(String value) {

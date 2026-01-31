@@ -180,6 +180,48 @@ public class InfraDataSourceResource {
         }
     }
 
+    @PutMapping("/{id}/impact")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ApiResponse<InfraManagementService.DataSourceUpdateImpact> updateWithImpact(
+        @PathVariable UUID id,
+        @Valid @RequestBody DataSourceRequest request,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        String operator = SecurityUtils.getCurrentUserLogin().orElse("system");
+        try {
+            InfraManagementService.DataSourceUpdateImpact impact = infraManagementService.updateDataSourceWithImpact(
+                id,
+                request,
+                operator,
+                activeDept
+            );
+            InfraDataSourceDto dto = impact.dataSource();
+            Map<String, Object> meta = new LinkedHashMap<>();
+            meta.put("summary", "更新数据源");
+            meta.put("name", dto.name());
+            meta.put("operator", operator);
+            meta.put("connectionChanged", impact.connectionChanged());
+            meta.put("affectedTasks", impact.affectedTasks());
+            meta.put("changeLogCreated", impact.changeLogCreated());
+            meta.put("taskIds", impact.taskIds());
+            auditService.auditAction(
+                "FOUNDATION_DATASOURCE_REGISTER",
+                AuditStage.SUCCESS,
+                id.toString(),
+                meta
+            );
+            return ApiResponses.ok(impact);
+        } catch (RuntimeException ex) {
+            auditService.auditAction(
+                "FOUNDATION_DATASOURCE_REGISTER",
+                AuditStage.FAIL,
+                id.toString(),
+                Map.of("summary", "更新数据源失败", "error", ex.getMessage(), "operator", operator)
+            );
+            throw ex;
+        }
+    }
+
     @DeleteMapping("/{id}")
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ApiResponse<Void> delete(
@@ -225,6 +267,10 @@ public class InfraDataSourceResource {
         Object driver = props.get("driverClass");
         if (driver != null) {
             request.setDriverClass(driver.toString());
+        }
+        Object driverVersion = props.get("driverVersion");
+        if (driverVersion != null) {
+            request.setDriverVersion(driverVersion.toString());
         }
         if (props.get("schemas") instanceof java.util.List<?> schemas) {
             request.setSchemas(schemas.stream().map(String::valueOf).toList());

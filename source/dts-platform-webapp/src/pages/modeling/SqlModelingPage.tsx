@@ -18,18 +18,23 @@ import {
 	Tooltip,
 	Tree,
 	Typography,
+	Upload,
 } from "antd";
+import type { UploadFile } from "antd/es/upload/interface";
 import type { ColumnsType } from "antd/es/table";
 import { EmptyState } from "@/components/empty-state";
 import {
 	getDbtConfig,
 	listDbtRuns,
 	listSqlModels,
+	listSqlModelColumns,
 	createSqlModel,
 	updateSqlModel,
 	deleteSqlModel,
+	importSqlModel,
 	listModelingPlans,
 	syncDbtModels,
+	getDbtSyncStatus,
 	triggerDbtRun,
 	updateDbtConfig,
 } from "@/api/platformApi";
@@ -45,6 +50,17 @@ const formatDateTime = (value?: string) => {
 	} catch {
 		return value;
 	}
+};
+
+const formatMillis = (value?: number) => {
+	if (!value) return "-";
+	const date = new Date(value);
+	return Number.isNaN(date.valueOf()) ? String(value) : date.toLocaleString();
+};
+
+const syncTag = (synced?: boolean) => {
+	if (synced == null) return <Tag>未知</Tag>;
+	return synced ? <Tag color="green">已同步</Tag> : <Tag color="red">失败</Tag>;
 };
 
 const normalizeText = (value?: string) => String(value || "").trim();
@@ -80,6 +96,30 @@ type DbtConfigView = {
 	profileStatus?: { generated?: boolean; message?: string; profilePath?: string };
 	workspaceStatus?: { ok?: boolean; message?: string; detail?: Record<string, any> };
 	target?: { id?: string; name?: string; type?: string };
+};
+
+type DbtSyncArtifactStatus = {
+	lastSyncAt?: string;
+	lastModifiedAt?: number;
+	synced?: boolean;
+	message?: string;
+};
+
+type DbtSyncStats = {
+	lastSyncAt?: string;
+	datasetsCreated?: number;
+	datasetsUpdated?: number;
+	odsUpdated?: number;
+	columnsUpdated?: number;
+	lineageCreated?: number;
+	lineageRemoved?: number;
+	message?: string;
+};
+
+type DbtSyncStatus = {
+	manifest?: DbtSyncArtifactStatus | null;
+	runResults?: DbtSyncArtifactStatus | null;
+	stats?: DbtSyncStats | null;
 };
 
 type SqlModel = {
@@ -130,6 +170,13 @@ type DagRun = {
 	end_date?: string;
 };
 
+type ModelColumn = {
+	name?: string;
+	dataType?: string;
+	comment?: string;
+	status?: string;
+};
+
 const inferLayer = (name?: string) => {
 	const normalized = (name || "").toLowerCase();
 	if (normalized.startsWith("ods_")) return "ODS";
@@ -153,6 +200,7 @@ export default function SqlModelingPage() {
 	const [configSaving, setConfigSaving] = useState(false);
 	const [configOpen, setConfigOpen] = useState(false);
 	const [dbtConfig, setDbtConfig] = useState<DbtConfigView | null>(null);
+	const [dbtSyncStatus, setDbtSyncStatus] = useState<DbtSyncStatus | null>(null);
 	const [spacesLoading, setSpacesLoading] = useState(false);
 	const [spaces, setSpaces] = useState<ProjectSpace[]>([]);
 	const [activeSpaceKey, setActiveSpaceKey] = useState<string | null>(null);
@@ -163,17 +211,24 @@ export default function SqlModelingPage() {
 	const [modelSubmitting, setModelSubmitting] = useState(false);
 	const [editingModel, setEditingModel] = useState<SqlModel | null>(null);
 	const [sqlDraft, setSqlDraft] = useState("");
+	const [importOpen, setImportOpen] = useState(false);
+	const [importSubmitting, setImportSubmitting] = useState(false);
+	const [sqlFileList, setSqlFileList] = useState<UploadFile[]>([]);
+	const [csvFileList, setCsvFileList] = useState<UploadFile[]>([]);
 	const [syncingModels, setSyncingModels] = useState(false);
 	const [runsLoading, setRunsLoading] = useState(false);
 	const [runs, setRuns] = useState<DagRun[]>([]);
 	const [runOpen, setRunOpen] = useState(false);
 	const [runSubmitting, setRunSubmitting] = useState(false);
+	const [columnsLoading, setColumnsLoading] = useState(false);
+	const [modelColumns, setModelColumns] = useState<ModelColumn[]>([]);
 	const [bottomTab, setBottomTab] = useState("preview");
 	const [keyword, setKeyword] = useState("");
 	const [activeModelKey, setActiveModelKey] = useState<string | null>(null);
 	const [form] = Form.useForm();
 	const [runForm] = Form.useForm();
 	const [modelForm] = Form.useForm();
+	const [importForm] = Form.useForm();
 
 	const loadConfig = useCallback(async () => {
 		setConfigLoading(true);
@@ -196,6 +251,15 @@ export default function SqlModelingPage() {
 			setConfigLoading(false);
 		}
 	}, [form]);
+
+	const loadSyncStatus = useCallback(async () => {
+		try {
+			const resp = (await getDbtSyncStatus()) as DbtSyncStatus;
+			setDbtSyncStatus(resp || null);
+		} catch {
+			setDbtSyncStatus(null);
+		}
+	}, []);
 
 	const loadModels = useCallback(async () => {
 		setModelsLoading(true);
@@ -243,13 +307,31 @@ export default function SqlModelingPage() {
 		}
 	}, []);
 
+	const loadModelColumns = useCallback(async (modelId?: string) => {
+		if (!modelId) {
+			setModelColumns([]);
+			return;
+		}
+		setColumnsLoading(true);
+		try {
+			const resp = (await listSqlModelColumns(modelId)) as ModelColumn[];
+			setModelColumns(Array.isArray(resp) ? resp : []);
+		} catch (err: any) {
+			toast.error(err?.message || "加载模型字段失败");
+			setModelColumns([]);
+		} finally {
+			setColumnsLoading(false);
+		}
+	}, []);
+
 	useEffect(() => {
 		void loadConfig();
+		void loadSyncStatus();
 		void loadModels();
 		void loadRuns();
 		void loadSpaces();
 		void loadSources();
-	}, [loadConfig, loadModels, loadRuns, loadSpaces, loadSources]);
+	}, [loadConfig, loadModels, loadRuns, loadSpaces, loadSources, loadSyncStatus]);
 
 	useEffect(() => {
 		if (spaces.length === 0) {
@@ -323,7 +405,14 @@ export default function SqlModelingPage() {
 		try {
 			const result: any = await syncDbtModels();
 			const message = result?.message || result?.summary || "模型已同步至资产目录";
-			toast.success(message);
+			const stats = result?.stats;
+			if (stats) {
+				const detail = `新增${stats.created ?? 0}，更新${stats.updated ?? 0}，字段${stats.columnsUpdated ?? 0}，血缘+${stats.lineageCreated ?? 0}/-${stats.lineageRemoved ?? 0}`;
+				toast.success(`${message}（${detail}）`);
+			} else {
+				toast.success(message);
+			}
+			void loadSyncStatus();
 		} catch (err: any) {
 			toast.error(err?.message || "同步模型失败");
 		} finally {
@@ -344,6 +433,19 @@ export default function SqlModelingPage() {
 		setModelDrawerOpen(true);
 	};
 
+	const openImportModel = () => {
+		importForm.resetFields();
+		setSqlFileList([]);
+		setCsvFileList([]);
+		importForm.setFieldsValue({
+			planId: activeSpace?.id || undefined,
+			layer: "DWD",
+			materialized: "table",
+			enabled: true,
+		});
+		setImportOpen(true);
+	};
+
 	const openEditModel = () => {
 		if (!activeModel) return;
 		setEditingModel(activeModel);
@@ -351,7 +453,7 @@ export default function SqlModelingPage() {
 			planId: activeModel.planId,
 			name: activeModel.name,
 			alias: activeModel.alias,
-			layer: activeModel.layer,
+			layer: activeModel.layer || inferLayer(activeModel.name),
 			sourceDataSourceId: activeModel.sourceDataSourceId,
 			schemaName: activeModel.schemaName,
 			materialized: activeModel.materialized,
@@ -369,6 +471,7 @@ export default function SqlModelingPage() {
 		try {
 			const values = await modelForm.validateFields([
 				"planId",
+				"layer",
 				"name",
 				"sourceDataSourceId",
 				"sql",
@@ -400,6 +503,46 @@ export default function SqlModelingPage() {
 			toast.error(err?.message || "保存模型失败");
 		} finally {
 			setModelSubmitting(false);
+		}
+	};
+
+	const submitImport = async () => {
+		setImportSubmitting(true);
+		try {
+			const values = await importForm.validateFields([
+				"planId",
+				"layer",
+				"name",
+				"sourceDataSourceId",
+			]);
+			if (sqlFileList.length === 0 || !sqlFileList[0]?.originFileObj) {
+				throw new Error("请选择 SQL 文件");
+			}
+			const formData = new FormData();
+			formData.append("planId", values.planId);
+			formData.append("name", normalizeText(values.name));
+			formData.append("layer", normalizeText(values.layer));
+			formData.append("sourceDataSourceId", values.sourceDataSourceId);
+			if (values.alias) formData.append("alias", normalizeText(values.alias));
+			if (values.schemaName) formData.append("schemaName", normalizeText(values.schemaName));
+			if (values.materialized) formData.append("materialized", normalizeText(values.materialized));
+			if (values.tags) formData.append("tags", normalizeText(values.tags));
+			if (values.description) formData.append("description", normalizeText(values.description));
+			if (values.status) formData.append("status", normalizeText(values.status));
+			if (values.ownerDept) formData.append("ownerDept", normalizeText(values.ownerDept));
+			formData.append("enabled", String(values.enabled ?? true));
+			formData.append("sql", sqlFileList[0].originFileObj as File);
+			if (csvFileList.length > 0 && csvFileList[0]?.originFileObj) {
+				formData.append("csv", csvFileList[0].originFileObj as File);
+			}
+			await importSqlModel(formData);
+			toast.success("模型已导入");
+			setImportOpen(false);
+			await loadModels();
+		} catch (err: any) {
+			toast.error(err?.message || "导入失败");
+		} finally {
+			setImportSubmitting(false);
 		}
 	};
 
@@ -484,6 +627,10 @@ export default function SqlModelingPage() {
 		setSqlDraft(activeModel?.sql || "");
 	}, [activeModel?.id]);
 
+	useEffect(() => {
+		void loadModelColumns(activeModel?.id);
+	}, [activeModel?.id, loadModelColumns]);
+
 	const sqlDirty = !!activeModel && sqlDraft !== (activeModel?.sql || "");
 
 	const filteredModels = useMemo(() => {
@@ -539,6 +686,27 @@ export default function SqlModelingPage() {
 		[],
 	);
 
+	const modelColumnColumns: ColumnsType<ModelColumn> = useMemo(
+		() => [
+			{ title: "字段", dataIndex: "name", key: "name", ellipsis: true },
+			{ title: "类型", dataIndex: "dataType", key: "dataType", width: 120, ellipsis: true },
+			{
+				title: "状态",
+				dataIndex: "status",
+				key: "status",
+				width: 100,
+				render: (value) => {
+					const label = normalizeUpper(value);
+					if (!label) return <Tag>未知</Tag>;
+					if (label === "DRAFT") return <Tag color="orange">草稿</Tag>;
+					if (label === "ACTIVE") return <Tag color="green">正式</Tag>;
+					return <Tag>{value}</Tag>;
+				},
+			},
+		],
+		[],
+	);
+
 	const spaceKeyMap = useMemo(() => {
 		const map = new Map<string, ProjectSpace>();
 		spaces.forEach((space, idx) => {
@@ -584,6 +752,9 @@ export default function SqlModelingPage() {
 					<Button onClick={openCreateModel} disabled={!workspaceOk}>
 						新建模型
 					</Button>
+					<Button onClick={openImportModel} disabled={!workspaceOk}>
+						导入模型
+					</Button>
 					<Button onClick={openEditModel} disabled={!activeModel || !workspaceOk}>
 						编辑模型
 					</Button>
@@ -611,6 +782,83 @@ export default function SqlModelingPage() {
 					<Button onClick={() => setConfigOpen(true)}>工作区配置</Button>
 				</Space>
 			</div>
+			<Card
+				className="mx-6 mt-4 border border-slate-200 shadow-sm"
+				title={<span className="text-sm font-semibold text-slate-700">dbt 资产同步状态</span>}
+				extra={
+					<Button size="small" onClick={handleSyncModels} loading={syncingModels} disabled={!configEnabled || !workspaceOk}>
+						立即同步
+					</Button>
+				}
+			>
+				{dbtSyncStatus ? (
+					<div className="grid gap-3 text-xs text-slate-600">
+						<div className="grid gap-3 md:grid-cols-2">
+							<div className="rounded border border-slate-100 bg-slate-50/50 px-3 py-2">
+								<div className="flex items-center gap-2">
+									<span className="font-medium text-slate-700">manifest</span>
+									{syncTag(dbtSyncStatus.manifest?.synced)}
+									<span>同步时间：{formatDateTime(dbtSyncStatus.manifest?.lastSyncAt)}</span>
+								</div>
+								<div className="mt-1 text-[11px] text-slate-400">
+									文件时间：{formatMillis(dbtSyncStatus.manifest?.lastModifiedAt)}
+									{dbtSyncStatus.manifest?.message ? ` · ${dbtSyncStatus.manifest.message}` : ""}
+								</div>
+							</div>
+							<div className="rounded border border-slate-100 bg-slate-50/50 px-3 py-2">
+								<div className="flex items-center gap-2">
+									<span className="font-medium text-slate-700">run_results</span>
+									{syncTag(dbtSyncStatus.runResults?.synced)}
+									<span>同步时间：{formatDateTime(dbtSyncStatus.runResults?.lastSyncAt)}</span>
+								</div>
+								<div className="mt-1 text-[11px] text-slate-400">
+									文件时间：{formatMillis(dbtSyncStatus.runResults?.lastModifiedAt)}
+									{dbtSyncStatus.runResults?.message ? ` · ${dbtSyncStatus.runResults.message}` : ""}
+								</div>
+							</div>
+						</div>
+						{dbtSyncStatus.stats ? (
+							<div className="rounded border border-slate-100 bg-slate-50/50 px-3 py-2">
+								<div className="flex items-center justify-between">
+									<span className="font-medium text-slate-700">资产同步统计</span>
+									<span className="text-[11px] text-slate-400">
+										同步时间：{formatDateTime(dbtSyncStatus.stats.lastSyncAt)}
+										{dbtSyncStatus.stats.message ? ` · ${dbtSyncStatus.stats.message}` : ""}
+									</span>
+								</div>
+								<div className="mt-2 grid gap-2 md:grid-cols-3">
+									<div className="flex items-center justify-between">
+										<span>新增模型</span>
+										<span className="font-semibold">{dbtSyncStatus.stats.datasetsCreated ?? 0}</span>
+									</div>
+									<div className="flex items-center justify-between">
+										<span>更新模型</span>
+										<span className="font-semibold">{dbtSyncStatus.stats.datasetsUpdated ?? 0}</span>
+									</div>
+									<div className="flex items-center justify-between">
+										<span>ODS 更新</span>
+										<span className="font-semibold">{dbtSyncStatus.stats.odsUpdated ?? 0}</span>
+									</div>
+									<div className="flex items-center justify-between">
+										<span>字段同步</span>
+										<span className="font-semibold">{dbtSyncStatus.stats.columnsUpdated ?? 0}</span>
+									</div>
+									<div className="flex items-center justify-between">
+										<span>血缘新增</span>
+										<span className="font-semibold">{dbtSyncStatus.stats.lineageCreated ?? 0}</span>
+									</div>
+									<div className="flex items-center justify-between">
+										<span>血缘移除</span>
+										<span className="font-semibold">{dbtSyncStatus.stats.lineageRemoved ?? 0}</span>
+									</div>
+								</div>
+							</div>
+						) : null}
+					</div>
+				) : (
+					<div className="text-xs text-slate-400">未获取同步状态</div>
+				)}
+			</Card>
 
 			<div className="flex flex-1 overflow-hidden">
 				<div className="w-64 border-r border-slate-200 bg-slate-50 p-4">
@@ -794,6 +1042,25 @@ export default function SqlModelingPage() {
 							<div className="text-xs text-slate-500">请选择模型查看详情。</div>
 						)}
 					</Card>
+					<Card size="small" title="字段状态" className="mb-4">
+						{activeModel ? (
+							modelColumns.length ? (
+								<Table
+									rowKey={(row, idx) => `${row.name || "col"}-${idx}`}
+									size="small"
+									pagination={false}
+									columns={modelColumnColumns}
+									dataSource={modelColumns}
+									loading={columnsLoading}
+									scroll={{ y: 200 }}
+								/>
+							) : (
+								<div className="text-xs text-slate-500">暂无字段配置。</div>
+							)
+						) : (
+							<div className="text-xs text-slate-500">请选择模型查看字段。</div>
+						)}
+					</Card>
 					<Card size="small" title="工作区配置" className="mb-4">
 						<div className="text-xs text-slate-500">
 							<div>项目目录：{dbtConfig?.config?.projectDir || "未配置"}</div>
@@ -920,7 +1187,7 @@ export default function SqlModelingPage() {
 								options={spaces.map((space) => ({ label: space.name || "未命名", value: space.id }))}
 							/>
 						</Form.Item>
-						<Form.Item name="layer" label="分层">
+						<Form.Item name="layer" label="分层" rules={[{ required: true, message: "请选择分层" }]}>
 							<Select
 								placeholder="选择分层"
 								options={[
@@ -928,7 +1195,6 @@ export default function SqlModelingPage() {
 									{ label: "DWD", value: "DWD" },
 									{ label: "DWS", value: "DWS" },
 									{ label: "ADS", value: "ADS" },
-									{ label: "其他", value: "其他" },
 								]}
 							/>
 						</Form.Item>
@@ -995,6 +1261,125 @@ export default function SqlModelingPage() {
 					</Form.Item>
 				</Form>
 			</Drawer>
+
+			<Modal
+				open={importOpen}
+				title="导入模型 (SQL + CSV)"
+				onCancel={() => setImportOpen(false)}
+				footer={
+					<Space>
+						<Button onClick={() => setImportOpen(false)}>取消</Button>
+						<Button type="primary" onClick={submitImport} loading={importSubmitting}>
+							导入
+						</Button>
+					</Space>
+				}
+			>
+				<Form layout="vertical" form={importForm} disabled={importSubmitting}>
+					<div className="grid gap-4 md:grid-cols-2">
+						<Form.Item name="planId" label="项目空间" rules={[{ required: true, message: "请选择项目空间" }]}>
+							<Select
+								placeholder="选择项目空间"
+								options={spaces.map((space) => ({ label: space.name || "未命名", value: space.id }))}
+							/>
+						</Form.Item>
+						<Form.Item name="layer" label="分层" rules={[{ required: true, message: "请选择分层" }]}>
+							<Select
+								placeholder="选择分层"
+								options={[
+									{ label: "ODS", value: "ODS" },
+									{ label: "DWD", value: "DWD" },
+									{ label: "DWS", value: "DWS" },
+									{ label: "ADS", value: "ADS" },
+								]}
+							/>
+						</Form.Item>
+					</div>
+					<div className="grid gap-4 md:grid-cols-2">
+						<Form.Item name="name" label="模型名称" rules={[{ required: true, message: "请输入模型名称" }]}>
+							<Input placeholder="例如 dwd_sales_order" />
+						</Form.Item>
+						<Form.Item name="alias" label="物理表别名">
+							<Input placeholder="可选" />
+						</Form.Item>
+					</div>
+					<Form.Item
+						name="sourceDataSourceId"
+						label="来源数据源"
+						rules={[{ required: true, message: "请选择来源数据源" }]}
+					>
+						<Select
+							placeholder="选择来源数据源"
+							options={dataSources.map((ds) => ({
+								label: ds?.name || ds?.id,
+								value: ds?.id,
+							}))}
+						/>
+					</Form.Item>
+					<div className="grid gap-4 md:grid-cols-2">
+						<Form.Item name="schemaName" label="目标 Schema">
+							<Input placeholder="例如 ods" />
+						</Form.Item>
+						<Form.Item name="materialized" label="物化方式">
+							<Select
+								placeholder="选择物化方式"
+								options={[
+									{ label: "table", value: "table" },
+									{ label: "view", value: "view" },
+									{ label: "incremental", value: "incremental" },
+								]}
+							/>
+						</Form.Item>
+					</div>
+					<div className="grid gap-4 md:grid-cols-2">
+						<Form.Item name="tags" label="标签 (逗号分隔)">
+							<Input placeholder="如 sales,ods" />
+						</Form.Item>
+						<Form.Item name="status" label="状态">
+							<Select
+								placeholder="选择状态"
+								options={[
+									{ label: "草稿", value: "DRAFT" },
+									{ label: "已发布", value: "PUBLISHED" },
+								]}
+							/>
+						</Form.Item>
+					</div>
+					<Form.Item name="description" label="描述">
+						<Input.TextArea rows={2} placeholder="模型说明" />
+					</Form.Item>
+					<div className="grid gap-4 md:grid-cols-2">
+						<Form.Item name="enabled" label="启用" valuePropName="checked">
+							<Switch />
+						</Form.Item>
+						<Form.Item name="ownerDept" label="归属部门">
+							<Input placeholder="可选" />
+						</Form.Item>
+					</div>
+					<Form.Item label="SQL 文件" required>
+						<Upload
+							accept=".sql"
+							beforeUpload={() => false}
+							maxCount={1}
+							fileList={sqlFileList}
+							onChange={({ fileList }) => setSqlFileList(fileList.slice(-1))}
+						>
+							<Button>选择 SQL</Button>
+						</Upload>
+					</Form.Item>
+					<Form.Item label="CSV 文件 (可选)">
+						<Upload
+							accept=".csv"
+							beforeUpload={() => false}
+							maxCount={1}
+							fileList={csvFileList}
+							onChange={({ fileList }) => setCsvFileList(fileList.slice(-1))}
+						>
+							<Button>选择 CSV</Button>
+						</Upload>
+					</Form.Item>
+				</Form>
+			</Modal>
 		</div>
 	);
 }

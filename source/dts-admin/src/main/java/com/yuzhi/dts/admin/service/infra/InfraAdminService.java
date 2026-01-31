@@ -192,6 +192,15 @@ public class InfraAdminService {
         if (preferred.isPresent()) {
             return preferred.map(InfraDataSourceDto::copy);
         }
+        Optional<InfraDataSourceDto> fallback = cache
+            .values()
+            .stream()
+            .filter(ds -> !"INCEPTOR".equalsIgnoreCase(ds.getType()))
+            .sorted(Comparator.comparing(InfraDataSourceDto::getLastUpdatedAt, Comparator.nullsLast(Comparator.reverseOrder())))
+            .findFirst();
+        if (fallback.isPresent()) {
+            return fallback.map(InfraDataSourceDto::copy);
+        }
         List<InfraDataSourceDto> list = listDataSources();
         if (list.size() == 1) {
             return Optional.of(list.get(0));
@@ -845,6 +854,33 @@ public class InfraAdminService {
 
     private boolean hasDefaultDataLake() {
         return cache.values().stream().anyMatch(InfraDataSourceDto::isDefaulted);
+    }
+
+    private boolean hasWriterConfig(InfraDataSourceDto dto) {
+        if (dto == null) {
+            return false;
+        }
+        Map<String, Object> props = dto.getProps();
+        String destinationDefinitionId = asString(props.get("destinationDefinitionId"));
+        if (StringUtils.hasText(destinationDefinitionId)) {
+            return true;
+        }
+        String destinationName = asString(props.get("destinationName"));
+        if (StringUtils.hasText(destinationName)) {
+            return true;
+        }
+        Map<String, Object> destinationConfig = dto.getDestinationConfig();
+        if (destinationConfig != null && !destinationConfig.isEmpty()) {
+            Object writer = destinationConfig.get("writerType");
+            if (writer == null) {
+                writer = destinationConfig.get("writer");
+            }
+            if (writer == null) {
+                writer = destinationConfig.get("type");
+            }
+            return StringUtils.hasText(asString(writer));
+        }
+        return false;
     }
 
     private InfraDataSourceDto toDto(InfraDataSource entity) {

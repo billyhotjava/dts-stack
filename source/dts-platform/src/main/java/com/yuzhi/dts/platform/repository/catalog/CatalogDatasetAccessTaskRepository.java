@@ -28,13 +28,25 @@ public interface CatalogDatasetAccessTaskRepository extends JpaRepository<Catalo
         select t from CatalogDatasetAccessTask t
         where t.status = 'PENDING'
           and t.approverRole = :role
-          and (:deptCode is null or t.deptCode is null or lower(t.deptCode) = lower(:deptCode))
         order by t.createdDate desc
         """
     )
     List<CatalogDatasetAccessTask> findPendingTasksForRole(
+        @Param("role") String role
+    );
+
+    @Query(
+        """
+        select t from CatalogDatasetAccessTask t
+        where t.status = 'PENDING'
+          and t.approverRole = :role
+          and (t.deptCode is null or lower(t.deptCode) = :deptCodeLower)
+        order by t.createdDate desc
+        """
+    )
+    List<CatalogDatasetAccessTask> findPendingTasksForRoleAndDept(
         @Param("role") String role,
-        @Param("deptCode") String deptCode
+        @Param("deptCodeLower") String deptCodeLower
     );
 
     @Query(

@@ -42,19 +42,21 @@ public class DbtDagService {
     }
 
     public String ensureDagForSelector(String selector) {
-        String tag = extractTag(selector);
-        if (!StringUtils.hasText(tag)) {
+        SelectorContext context = parseSelector(selector);
+        if (context == null || !StringUtils.hasText(context.tag())) {
             return airflowProperties.getDagId();
         }
-        return ensureDagForTag(tag);
+        return ensureDagForTag(context.tag(), context.layerGroup());
     }
 
-    public String ensureDagForTag(String tag) {
+    public String ensureDagForTag(String tag, String layerGroup) {
         String normalizedTag = normalizeTag(tag);
         InfraDataSource matched = resolveSourceByTag(normalizedTag);
         String sourceKey = resolveSourceKey(matched, normalizedTag);
-        String dagId = "dbt_" + slugify(sourceKey);
-        writeDagFile(dagId, normalizedTag, sourceKey);
+        String layer = normalizeLayerGroup(layerGroup);
+        String freq = "manual";
+        String dagId = layer + "_" + slugify(sourceKey) + "_dbt_" + freq;
+        writeDagFile(dagId, normalizedTag, sourceKey, layer);
         return dagId;
     }
 
@@ -71,6 +73,74 @@ public class DbtDagService {
             return trimmed.substring(4).trim();
         }
         return null;
+    }
+
+    private SelectorContext parseSelector(String selector) {
+        if (!StringUtils.hasText(selector)) {
+            return null;
+        }
+        String tag = extractTag(selector);
+        String layer = extractLayer(selector);
+        String group = resolveLayerGroup(layer);
+        return new SelectorContext(tag, group);
+    }
+
+    private String extractLayer(String selector) {
+        if (!StringUtils.hasText(selector)) {
+            return null;
+        }
+        String[] parts = selector.trim().toLowerCase(Locale.ROOT).split("[,\\s]+");
+        for (String part : parts) {
+            if (!StringUtils.hasText(part)) {
+                continue;
+            }
+            String value = part;
+            if (value.startsWith("tag:")) {
+                value = value.substring(4);
+            } else if (value.startsWith("layer:")) {
+                value = value.substring(6);
+            }
+            value = value.trim();
+            if (isLayerToken(value)) {
+                return value;
+            }
+        }
+        return null;
+    }
+
+    private boolean isLayerToken(String value) {
+        return "ods".equals(value) || "dwd".equals(value) || "dws".equals(value) || "ads".equals(value);
+    }
+
+    private String resolveLayerGroup(String layer) {
+        if (!StringUtils.hasText(layer)) {
+            return "dwh";
+        }
+        String normalized = layer.trim().toLowerCase(Locale.ROOT);
+        if ("ads".equals(normalized)) {
+            return "ads";
+        }
+        if ("ods".equals(normalized)) {
+            return "ods";
+        }
+        if ("dwd".equals(normalized) || "dws".equals(normalized)) {
+            return "dwh";
+        }
+        return "dwh";
+    }
+
+    private String normalizeLayerGroup(String layerGroup) {
+        if (!StringUtils.hasText(layerGroup)) {
+            return "dwh";
+        }
+        String normalized = layerGroup.trim().toLowerCase(Locale.ROOT);
+        if ("ads".equals(normalized)) {
+            return "ads";
+        }
+        if ("ods".equals(normalized)) {
+            return "ods";
+        }
+        return "dwh";
     }
 
     private InfraDataSource resolveSourceByTag(String tag) {
@@ -102,7 +172,7 @@ public class DbtDagService {
         return fallback;
     }
 
-    private String resolveDagsDir() {
+    private String resolveDagsDir(String layerGroup) {
         String dagsDir = airflowProperties.getDagsDir();
         if (StringUtils.hasText(dagsDir)) {
             return dagsDir.trim();
@@ -110,9 +180,10 @@ public class DbtDagService {
         return "/opt/airflow/dags";
     }
 
-    private void writeDagFile(String dagId, String selectorTag, String sourceKey) {
-        String dagsDir = resolveDagsDir();
-        Path dir = Path.of(dagsDir);
+    private void writeDagFile(String dagId, String selectorTag, String sourceKey, String layerGroup) {
+        String dagsDir = resolveDagsDir(layerGroup);
+        String subDir = normalizeLayerGroup(layerGroup);
+        Path dir = StringUtils.hasText(subDir) ? Path.of(dagsDir, subDir) : Path.of(dagsDir);
         try {
             Files.createDirectories(dir);
         } catch (IOException ex) {
@@ -120,7 +191,7 @@ public class DbtDagService {
             return;
         }
         Path dagFile = dir.resolve(dagId + ".py");
-        String content = buildDagSource(dagId, selectorTag, sourceKey);
+        String content = buildDagSource(dagId, selectorTag, sourceKey, subDir);
         try {
             if (Files.exists(dagFile)) {
                 String existing = Files.readString(dagFile);
@@ -135,7 +206,7 @@ public class DbtDagService {
         }
     }
 
-    private String buildDagSource(String dagId, String selectorTag, String sourceKey) {
+    private String buildDagSource(String dagId, String selectorTag, String sourceKey, String layerGroup) {
         DbtConfigService.DbtConfigView view = dbtConfigService.loadConfig();
         String projectDir = view != null && view.config() != null ? view.config().projectDir() : null;
         String profilesDir = view != null && view.config() != null ? view.config().profilesDir() : null;
@@ -146,6 +217,7 @@ public class DbtDagService {
         String tagValue = sanitizeTag(selectorTag, slugify(sourceKey));
         String selector = "tag:" + tagValue;
         String tagLabel = sanitizeTag(sourceKey, "dbt");
+        String layerTag = sanitizeTag(layerGroup, "dwh");
         return """
             from __future__ import annotations
 
@@ -182,7 +254,7 @@ public class DbtDagService {
                 schedule=None,
                 start_date=datetime(2024, 1, 1),
                 catchup=False,
-                tags=["dbt", "transform", "%s"],
+                tags=["dbt", "transform", "%s", "%s"],
             ) as dag:
                 dbt_run = DockerOperator(
                     task_id="dbt_run",
@@ -213,7 +285,7 @@ public class DbtDagService {
                 )
 
                 dbt_run >> sync_models
-            """.formatted(fallbackProject, fallbackProfiles, selector, fallbackTarget, dagId, tagLabel);
+            """.formatted(fallbackProject, fallbackProfiles, selector, fallbackTarget, dagId, layerTag, tagLabel);
     }
 
     private Map<String, Object> parseProps(String raw) {
@@ -271,4 +343,6 @@ public class DbtDagService {
         tag = tag.replaceAll("^-+", "").replaceAll("-+$", "");
         return StringUtils.hasText(tag) ? tag : fallback;
     }
+
+    private record SelectorContext(String tag, String layerGroup) {}
 }

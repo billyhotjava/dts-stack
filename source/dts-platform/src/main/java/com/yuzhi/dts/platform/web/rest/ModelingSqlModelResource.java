@@ -8,8 +8,11 @@ import com.yuzhi.dts.platform.service.modeling.ModelingSqlModelService.SqlModelR
 import com.yuzhi.dts.platform.web.rest.ApiResponses;
 import com.yuzhi.dts.platform.web.rest.ApiResponse;
 import jakarta.validation.Valid;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import org.springframework.http.MediaType;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -22,6 +25,7 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping("/api/modeling/sql-models")
@@ -62,6 +66,16 @@ public class ModelingSqlModelResource {
         return ApiResponses.ok(dto);
     }
 
+    @GetMapping("/{id}/columns")
+    public ApiResponse<List<Map<String, Object>>> listColumns(
+        @PathVariable UUID id,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        List<Map<String, Object>> columns = sqlModelService.listColumns(id, activeDept);
+        auditService.audit("READ", "modeling.sql-model.columns", id.toString());
+        return ApiResponses.ok(columns);
+    }
+
     @PostMapping
     @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
     public ApiResponse<SqlModelDto> create(
@@ -70,6 +84,47 @@ public class ModelingSqlModelResource {
     ) {
         SqlModelDto dto = sqlModelService.create(request, activeDept);
         auditService.audit("CREATE", "modeling.sql-model", dto.id().toString());
+        return ApiResponses.ok(dto);
+    }
+
+    @PostMapping(value = "/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
+    public ApiResponse<SqlModelDto> importModel(
+        @RequestParam UUID planId,
+        @RequestParam String name,
+        @RequestParam String layer,
+        @RequestParam UUID sourceDataSourceId,
+        @RequestParam(required = false) String alias,
+        @RequestParam(required = false) String schemaName,
+        @RequestParam(required = false) String materialized,
+        @RequestParam(required = false) String tags,
+        @RequestParam(required = false) String description,
+        @RequestParam(required = false) Boolean enabled,
+        @RequestParam(required = false) String status,
+        @RequestParam(required = false) String ownerDept,
+        @RequestParam("sql") MultipartFile sqlFile,
+        @RequestParam(value = "csv", required = false) MultipartFile csvFile,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        String sqlText = readText(sqlFile, "SQL");
+        String csvText = csvFile != null ? readText(csvFile, "CSV") : null;
+        SqlModelRequest request = new SqlModelRequest(
+            planId,
+            name,
+            alias,
+            layer,
+            sourceDataSourceId,
+            schemaName,
+            materialized,
+            tags,
+            description,
+            sqlText,
+            enabled,
+            status,
+            ownerDept
+        );
+        SqlModelDto dto = sqlModelService.importFromFiles(request, sqlText, csvText, activeDept);
+        auditService.audit("IMPORT", "modeling.sql-model", dto.id().toString());
         return ApiResponses.ok(dto);
     }
 
@@ -94,5 +149,16 @@ public class ModelingSqlModelResource {
         sqlModelService.delete(id, activeDept);
         auditService.audit("DELETE", "modeling.sql-model", id.toString());
         return ApiResponses.ok(null);
+    }
+
+    private String readText(MultipartFile file, String label) {
+        if (file == null || file.isEmpty()) {
+            throw new IllegalArgumentException(label + " 文件不能为空");
+        }
+        try {
+            return new String(file.getBytes(), StandardCharsets.UTF_8);
+        } catch (Exception ex) {
+            throw new IllegalArgumentException("读取 " + label + " 文件失败");
+        }
     }
 }

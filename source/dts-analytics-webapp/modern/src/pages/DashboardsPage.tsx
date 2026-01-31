@@ -118,14 +118,14 @@ export default function DashboardsPage() {
 						size="sm"
 						icon={<GridIcon />}
 						onClick={() => setViewMode("grid")}
-						aria-label="Grid view"
+						aria-label={t(locale, "common.viewAll")}
 					/>
 					<Button
 						variant={viewMode === "list" ? "primary" : "secondary"}
 						size="sm"
 						icon={<ListIcon />}
 						onClick={() => setViewMode("list")}
-						aria-label="List view"
+						aria-label={t(locale, "common.viewAll")}
 					/>
 				</div>
 			</div>

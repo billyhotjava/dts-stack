@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
 import { Text } from "@/ui/typography";
 import { toast } from "sonner";
 
-type ServiceKey = "addax" | "airflow" | "openmetadata" | "dbt";
+type ServiceKey = "addax" | "airflow" | "openmetadata" | "dbt" | "platform";
 
 interface ServicePanelProps {
 	service: ServiceKey;
@@ -19,7 +19,7 @@ interface ServicePanelProps {
 
 const normalizeSettings = (data?: InfraServiceSettingsPayload | null) => {
 	const settings = data?.settings || {};
-	return { enabled: true, ...settings };
+	return { enabled: true, catalogSyncOnDataSource: true, ...settings };
 };
 
 const buildSettingsPayload = (
@@ -94,6 +94,31 @@ function ServicePanel({ service, title, description, formContent }: ServicePanel
 export default function InfraSettingsView() {
 	const items = [
 		{
+			key: "platform",
+			label: "平台",
+			children: (
+				<ServicePanel
+					service="platform"
+					title="平台侧联动"
+					description="控制数据源创建时是否同步字段到元数据目录。"
+					formContent={() => (
+						<>
+							<Form.Item
+								label="数据源自动同步字段"
+								name="catalogSyncOnDataSource"
+								valuePropName="checked"
+							>
+								<Switch />
+							</Form.Item>
+							<Text variant="body3" className="text-muted-foreground">
+								开启后，新增/更新非 JDBC 数据源会自动将字段同步到元数据目录（ODS 层，草稿状态）。
+							</Text>
+						</>
+					)}
+				/>
+			),
+		},
+		{
 			key: "addax",
 			label: "Addax",
 			children: (
@@ -124,7 +149,7 @@ export default function InfraSettingsView() {
 								Addax 作业目录需与 Airflow DAG 目录保持一致。
 							</Text>
 							<Text variant="body3" className="text-muted-foreground">
-								写入器配置请在数据湖管理中维护，入湖任务会自动引用对应的数据湖写入参数。
+								写入器通用模板请在数据湖管理（默认数据湖）中维护，入湖任务仅填写表名等覆盖参数。
 							</Text>
 						</>
 					)}

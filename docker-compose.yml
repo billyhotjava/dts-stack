@@ -394,6 +394,10 @@ services:
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: "postgresql+psycopg2://${PG_USER_AIRFLOW}:${PG_PWD_AIRFLOW_URLENCODED:-${PG_PWD_AIRFLOW}}@${PG_HOST}:${PG_PORT}/${PG_DB_AIRFLOW}"
       AIRFLOW__CORE__SQL_ALCHEMY_CONN: "postgresql+psycopg2://${PG_USER_AIRFLOW}:${PG_PWD_AIRFLOW_URLENCODED:-${PG_PWD_AIRFLOW}}@${PG_HOST}:${PG_PORT}/${PG_DB_AIRFLOW}"
       AIRFLOW__WEBSERVER__ENABLE_PROXY_FIX: "true"
+      # Base URL for web UI when served behind Traefik
+      AIRFLOW__WEBSERVER__BASE_URL: "${AIRFLOW_WEBSERVER_BASE_URL:-https://${HOST_FLOW}}"
+      # Allow HTTP access to the native UI in dev; override to true in prod
+      AIRFLOW__WEBSERVER__SESSION_COOKIE_SECURE: "${AIRFLOW_SESSION_COOKIE_SECURE:-false}"
       AIRFLOW__API__BASE_URL: "https://${HOST_FLOW}"
       AIRFLOW__WEBSERVER__EXPOSE_CONFIG: "true"
       AIRFLOW_HOME: /opt/airflow

@@ -1,6 +1,7 @@
 package com.yuzhi.dts.platform.repository.infra;
 
 import com.yuzhi.dts.platform.domain.infra.InfraExternalExchangeFile;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -34,5 +35,6 @@ public interface InfraExternalExchangeFileRepository extends JpaRepository<Infra
         @Param("keyword") String keyword,
         @Param("enabledOnly") boolean enabledOnly
     );
-}
 
+    List<InfraExternalExchangeFile> findByEntryKeyIgnoreCaseAndReceivedAtBefore(String entryKey, Instant receivedAt);
+}

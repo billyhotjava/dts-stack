@@ -7,7 +7,9 @@ import com.yuzhi.dts.platform.service.ingestion.IngestionServiceClient;
 import com.yuzhi.dts.platform.service.infra.DefaultDestinationSyncService;
 import com.yuzhi.dts.platform.service.etl.OdsTableMappingSyncService;
 import com.yuzhi.dts.platform.service.ops.ExternalRunLogService;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -114,7 +116,9 @@ public class IngestionTaskProxyResource {
         @PathVariable("id") Long id,
         @RequestBody Map<String, Object> payload
     ) {
-        ApiResponse<Map<String, Object>> response = ingestionClient.updateTask(id, payload);
+        DefaultDestinationSyncService.DefaultDestinationSnapshot snapshot = destinationSyncService.ensureDefaultDestination();
+        Map<String, Object> resolvedPayload = applyDefaultDestinationUpdatePayload(payload, snapshot);
+        ApiResponse<Map<String, Object>> response = ingestionClient.updateTask(id, resolvedPayload);
         if (response != null && response.getStatus() >= 200 && response.getStatus() < 300) {
             try {
                 odsTableMappingSyncService.syncFromIngestionPayload(response.getData());
@@ -255,47 +259,196 @@ public class IngestionTaskProxyResource {
         Map<String, Object> payload,
         DefaultDestinationSyncService.DefaultDestinationSnapshot snapshot
     ) {
-        if (payload == null || snapshot == null || snapshot.isEmpty()) {
+        if (payload == null) {
             return payload;
         }
+        DefaultDestinationSyncService.DefaultDestinationSnapshot resolved = requireDefaultDestination(snapshot);
         Object destinationObj = payload.get("destination");
         if (!(destinationObj instanceof Map<?, ?> destinationMap)) {
-            return payload;
+            throw new org.springframework.web.server.ResponseStatusException(
+                org.springframework.http.HttpStatus.BAD_REQUEST,
+                "缺少目标端配置"
+            );
         }
-        Map<String, Object> destination = new java.util.LinkedHashMap<>();
-        destinationMap.forEach((key, value) -> destination.put(String.valueOf(key), value));
-        Object useDefaultObj = destination.get("usePlatformDefault");
-        if (Boolean.FALSE.equals(asBoolean(useDefaultObj))) {
-            return payload;
-        }
-        boolean hasDefinition = hasText(destination.get("definitionId"));
-        boolean hasConfig = destination.get("config") instanceof Map<?, ?> config && !config.isEmpty();
-        if (!hasDefinition && hasText(snapshot.destinationDefinitionId())) {
-            destination.put("definitionId", snapshot.destinationDefinitionId());
-        }
-        if (!hasConfig && snapshot.destinationConfig() != null && !snapshot.destinationConfig().isEmpty()) {
-            destination.put("config", snapshot.destinationConfig());
-        }
-        Map<String, Object> merged = new java.util.LinkedHashMap<>(payload);
+        Map<String, Object> overrides = extractConfig(destinationMap.get("config"));
+        Map<String, Object> mergedConfig = mergeDestinationConfig(resolved.destinationConfig(), overrides);
+        ensureWriterTables(mergedConfig);
+        Map<String, Object> destination = new LinkedHashMap<>();
+        destination.put("usePlatformDefault", true);
+        destination.put("definitionId", resolved.destinationDefinitionId());
+        destination.put("config", mergedConfig);
+        Map<String, Object> merged = new LinkedHashMap<>(payload);
         merged.put("destination", destination);
         return merged;
     }
 
-    private boolean hasText(Object value) {
-        return value != null && !value.toString().trim().isEmpty();
+    private Map<String, Object> applyDefaultDestinationUpdatePayload(
+        Map<String, Object> payload,
+        DefaultDestinationSyncService.DefaultDestinationSnapshot snapshot
+    ) {
+        if (payload == null) {
+            return payload;
+        }
+        DefaultDestinationSyncService.DefaultDestinationSnapshot resolved = requireDefaultDestination(snapshot);
+        Map<String, Object> overrides = extractConfig(payload.get("destinationConfig"));
+        Map<String, Object> mergedConfig = mergeDestinationConfig(resolved.destinationConfig(), overrides);
+        ensureWriterTables(mergedConfig);
+        Map<String, Object> merged = new LinkedHashMap<>(payload);
+        merged.put("destinationType", resolved.destinationDefinitionId());
+        merged.put("destinationConfig", mergedConfig);
+        return merged;
     }
 
-    private Boolean asBoolean(Object value) {
-        if (value instanceof Boolean bool) {
-            return bool;
+    private DefaultDestinationSyncService.DefaultDestinationSnapshot requireDefaultDestination(
+        DefaultDestinationSyncService.DefaultDestinationSnapshot snapshot
+    ) {
+        if (snapshot == null || snapshot.isEmpty()) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                org.springframework.http.HttpStatus.BAD_REQUEST,
+                "未配置默认数据湖"
+            );
         }
+        if (snapshot.destinationConfig() == null || snapshot.destinationConfig().isEmpty()) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                org.springframework.http.HttpStatus.BAD_REQUEST,
+                "默认数据湖未配置写入器参数"
+            );
+        }
+        if (!org.springframework.util.StringUtils.hasText(snapshot.destinationDefinitionId())) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                org.springframework.http.HttpStatus.BAD_REQUEST,
+                "默认数据湖未配置写入器类型"
+            );
+        }
+        return snapshot;
+    }
+
+    private Map<String, Object> extractConfig(Object value) {
+        if (!(value instanceof Map<?, ?> map)) {
+            return new LinkedHashMap<>();
+        }
+        Map<String, Object> output = new LinkedHashMap<>();
+        map.forEach((key, val) -> output.put(String.valueOf(key), val));
+        return output;
+    }
+
+    private Map<String, Object> mergeDestinationConfig(Map<String, Object> base, Map<String, Object> overrides) {
+        Map<String, Object> merged = new LinkedHashMap<>();
+        if (base != null) {
+            merged.putAll(base);
+        }
+        if (overrides == null || overrides.isEmpty()) {
+            return merged;
+        }
+        Object overrideConn = overrides.get("connection");
+        if (overrideConn != null) {
+            merged.put("connection", mergeConnection(merged.get("connection"), overrideConn));
+        }
+        for (Map.Entry<String, Object> entry : overrides.entrySet()) {
+            if ("connection".equals(entry.getKey())) {
+                continue;
+            }
+            merged.put(entry.getKey(), entry.getValue());
+        }
+        if (!merged.containsKey("writerType")) {
+            Object candidate = merged.get("type");
+            if (candidate != null) {
+                merged.put("writerType", candidate);
+            }
+        }
+        return merged;
+    }
+
+    private Object mergeConnection(Object baseConn, Object overrideConn) {
+        if (overrideConn == null) {
+            return baseConn;
+        }
+        if (baseConn instanceof List<?> baseList) {
+            List<Object> result = new ArrayList<>();
+            if (overrideConn instanceof Map<?, ?> overrideMap) {
+                Map<String, Object> first = new LinkedHashMap<>();
+                if (!baseList.isEmpty() && baseList.get(0) instanceof Map<?, ?> baseMap) {
+                    baseMap.forEach((key, value) -> first.put(String.valueOf(key), value));
+                }
+                overrideMap.forEach((key, value) -> first.put(String.valueOf(key), value));
+                result.add(first);
+                for (int i = 1; i < baseList.size(); i++) {
+                    result.add(baseList.get(i));
+                }
+                return result;
+            }
+            if (overrideConn instanceof List<?> overrideList) {
+                return overrideList;
+            }
+            return overrideConn;
+        }
+        if (baseConn instanceof Map<?, ?> baseMap && overrideConn instanceof Map<?, ?> overrideMap) {
+            Map<String, Object> merged = new LinkedHashMap<>();
+            baseMap.forEach((key, value) -> merged.put(String.valueOf(key), value));
+            overrideMap.forEach((key, value) -> merged.put(String.valueOf(key), value));
+            return merged;
+        }
+        return overrideConn;
+    }
+
+    private void ensureWriterTables(Map<String, Object> config) {
+        List<String> tables = extractWriterTables(config);
+        if (tables.isEmpty()) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                org.springframework.http.HttpStatus.BAD_REQUEST,
+                "缺少目标表，请在入湖任务中填写表清单"
+            );
+        }
+    }
+
+    private List<String> extractWriterTables(Map<String, Object> config) {
+        List<String> tables = new ArrayList<>();
+        if (config == null || config.isEmpty()) {
+            return tables;
+        }
+        tables.addAll(asStringList(config.get("table")));
+        tables.addAll(asStringList(config.get("tables")));
+        Object connection = config.get("connection");
+        if (connection instanceof Map<?, ?> map) {
+            tables.addAll(asStringList(map.get("table")));
+            tables.addAll(asStringList(map.get("tables")));
+        } else if (connection instanceof List<?> list && !list.isEmpty()) {
+            Object first = list.get(0);
+            if (first instanceof Map<?, ?> map) {
+                tables.addAll(asStringList(map.get("table")));
+                tables.addAll(asStringList(map.get("tables")));
+            }
+        }
+        return tables;
+    }
+
+    private List<String> asStringList(Object value) {
+        List<String> list = new ArrayList<>();
+        if (value == null) {
+            return list;
+        }
+        if (value instanceof List<?> items) {
+            for (Object item : items) {
+                String text = asText(item);
+                if (text != null) {
+                    list.add(text);
+                }
+            }
+            return list;
+        }
+        String text = asText(value);
+        if (text != null) {
+            list.add(text);
+        }
+        return list;
+    }
+
+    private String asText(Object value) {
         if (value == null) {
             return null;
         }
         String text = value.toString().trim();
-        if (text.isEmpty()) {
-            return null;
-        }
-        return Boolean.parseBoolean(text);
+        return text.isEmpty() ? null : text;
     }
+
 }

@@ -59,6 +59,7 @@
 	    <include file="config/liquibase/changelog/20251016-03_infra_data_source_audit_columns.xml" relativeToChangelogFile="false"/>
 	    <include file="config/liquibase/changelog/20251016-04_infra_data_source_secrets.xml" relativeToChangelogFile="false"/>
 	    <include file="config/liquibase/changelog/20260321-01_infra_data_source_default.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260323-01_default_data_lake_fallback.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251015-06_add_infra_audit_rules.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251015-07_add_audit_log_detail_rule.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20251015-08_delete_all_secure_views.xml" relativeToChangelogFile="false"/>
@@ -92,6 +93,7 @@
     <include file="config/liquibase/changelog/20260116-01_workflow_config_tables.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260127-03_ops_config_enhancements.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260127-04_ops_config_cleanup.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260129-01_ops_config_restore.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260127-06_force_all_editable.xml" relativeToChangelogFile="false"/>
     <!-- jhipster-needle-liquibase-add-changelog - JHipster will add liquibase changelogs here -->
     <!-- jhipster-needle-liquibase-add-constraints-changelog - JHipster will add liquibase constraints changelogs here -->

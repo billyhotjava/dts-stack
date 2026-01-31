@@ -461,10 +461,10 @@ export function QueryBuilder(props: {
 			{visibleTableIds.state === "error" && <ErrorNotice locale={locale} error={visibleTableIds.error} />}
 			{table.state === "error" && <ErrorNotice locale={locale} error={table.error} />}
 
-				<div className="row">
-					<label style={{ width: 420 }}>
-						<div className="muted">{t(locale, "builder.table")}</div>
-						<select
+			<div className="row">
+				<label style={{ width: 420 }}>
+					<div className="muted">{t(locale, "builder.table")}</div>
+					<select
 						className="input"
 						value={tableId ?? ""}
 						onChange={(e) => setTableId(Number.parseInt(e.target.value, 10) || null)}
@@ -481,10 +481,10 @@ export function QueryBuilder(props: {
 								</option>
 							))}
 					</select>
-					</label>
+				</label>
 
-					<label style={{ width: 180 }}>
-						<div className="muted">{t(locale, "builder.limit")}</div>
+				<label style={{ width: 180 }}>
+					<div className="muted">{t(locale, "builder.limit")}</div>
 					<input
 						className="input"
 						type="number"
@@ -493,158 +493,76 @@ export function QueryBuilder(props: {
 						value={limit}
 						onChange={(e) => setLimit(Number.parseInt(e.target.value, 10) || 200)}
 					/>
-					</label>
+				</label>
 
-					<label style={{ width: 220 }}>
-						<div className="muted">{t(locale, "builder.sort")}</div>
-						<select
-							className="input"
-							value={orderByKey}
-							onChange={(e) => setOrderByKey(e.target.value)}
-							disabled={table.state !== "loaded"}
-						>
-							<option value="">{t(locale, "builder.noSort")}</option>
-							{isSummarized ? (
-								<>
-									{groupByFieldIds.map((id) => (
-										<option key={`field:${id}`} value={`field:${id}`}>
-											{fieldLabelById.get(id) ?? `field:${id}`}
-										</option>
-									))}
-									{aggregations.map((agg, idx) => (
-										<option key={`agg:${idx}`} value={`agg:${idx}`}>
-											{aggregationLabel(agg, fieldLabelById)}
-										</option>
-									))}
-								</>
-							) : (
-								tableFields.map((f) => (
-									<option key={String(f.id)} value={`field:${String(f.id)}`}>
-										{f.display_name || f.name || `field:${f.id}`}
+				<label style={{ width: 220 }}>
+					<div className="muted">{t(locale, "builder.sort")}</div>
+					<select
+						className="input"
+						value={orderByKey}
+						onChange={(e) => setOrderByKey(e.target.value)}
+						disabled={table.state !== "loaded"}
+					>
+						<option value="">{t(locale, "builder.noSort")}</option>
+						{isSummarized ? (
+							<>
+								{groupByFieldIds.map((id) => (
+									<option key={`field:${id}`} value={`field:${id}`}>
+										{fieldLabelById.get(id) ?? `field:${id}`}
 									</option>
-								))
-							)}
-						</select>
-					</label>
-					<label style={{ width: 140 }}>
-						<div className="muted">{t(locale, "builder.direction")}</div>
+								))}
+								{aggregations.map((agg, idx) => (
+									<option key={`agg:${idx}`} value={`agg:${idx}`}>
+										{aggregationLabel(agg, fieldLabelById)}
+									</option>
+								))}
+							</>
+						) : (
+							tableFields.map((f) => (
+								<option key={String(f.id)} value={`field:${String(f.id)}`}>
+									{f.display_name || f.name || `field:${f.id}`}
+								</option>
+							))
+						)}
+					</select>
+				</label>
+				<label style={{ width: 140 }}>
+					<div className="muted">{t(locale, "builder.direction")}</div>
 					<select className="input" value={orderByDir} onChange={(e) => setOrderByDir(e.target.value === "desc" ? "desc" : "asc")}>
 						<option value="asc">{t(locale, "builder.asc")}</option>
 						<option value="desc">{t(locale, "builder.desc")}</option>
 					</select>
 				</label>
-				</div>
+			</div>
 
-				<div style={{ height: 12 }} />
+			<div style={{ height: 12 }} />
 
-				<div>
-					<div className="row" style={{ justifyContent: "space-between" }}>
-						<strong>{t(locale, "builder.summarize")}</strong>
-						<button className="btn" type="button" onClick={addAggregation} disabled={table.state !== "loaded"}>
-							{t(locale, "builder.addAggregation")}
-						</button>
-					</div>
-					<div style={{ height: 8 }} />
-
-					{table.state !== "loaded" ? (
-						<div className="muted">—</div>
-					) : (
-						<>
-							<div className="muted">{t(locale, "builder.groupBy")}</div>
-							<div style={{ height: 8 }} />
-							<div className="row" style={{ alignItems: "flex-start" }}>
-								{tableFields.map((f) => {
-									const id = typeof f.id === "number" ? f.id : 0;
-									if (!id) return null;
-									const checked = groupByFieldIds.includes(id);
-									return (
-										<label key={String(id)} className="tag" style={{ cursor: "pointer", userSelect: "none" }}>
-											<input
-												type="checkbox"
-												checked={checked}
-												onChange={() => toggleGroupByField(id)}
-												style={{ marginRight: 6 }}
-											/>
-											{f.display_name || f.name || `field:${id}`}
-										</label>
-									);
-								})}
-							</div>
-
-							<div style={{ height: 12 }} />
-
-							<div className="row" style={{ justifyContent: "space-between" }}>
-								<div className="muted">{t(locale, "builder.aggregations")}</div>
-								<div className="muted">{aggregations.length ? `${aggregations.length}` : "—"}</div>
-							</div>
-							<div style={{ height: 8 }} />
-
-							{aggregations.length === 0 ? <div className="muted">—</div> : null}
-							{aggregations.map((r) => (
-								<div key={r.id} className="row" style={{ marginBottom: 8 }}>
-									<select
-										className="input"
-										style={{ width: 200 }}
-										value={r.op}
-										onChange={(e) => updateAggregation(r.id, { op: e.target.value as AggregationOp })}
-										disabled={table.state !== "loaded"}
-									>
-										<option value="count">{t(locale, "builder.agg.count")}</option>
-										<option value="sum">{t(locale, "builder.agg.sum")}</option>
-										<option value="avg">{t(locale, "builder.agg.avg")}</option>
-										<option value="min">{t(locale, "builder.agg.min")}</option>
-										<option value="max">{t(locale, "builder.agg.max")}</option>
-									</select>
-
-									<select
-										className="input"
-										style={{ width: 360 }}
-										value={r.fieldId ?? ""}
-										onChange={(e) => updateAggregation(r.id, { fieldId: Number.parseInt(e.target.value, 10) || null })}
-										disabled={table.state !== "loaded"}
-									>
-										<option value="">{t(locale, "builder.agg.rows")}</option>
-										{tableFields.map((f) => (
-											<option key={String(f.id)} value={String(f.id)}>
-												{f.display_name || f.name || `field:${f.id}`}
-											</option>
-										))}
-									</select>
-
-									<button className="btn" type="button" onClick={() => removeAggregation(r.id)}>
-										{t(locale, "builder.remove")}
-									</button>
-								</div>
-							))}
-						</>
-					)}
-				</div>
-
-				<div style={{ height: 12 }} />
-
-				<div>
-					<div className="row" style={{ justifyContent: "space-between" }}>
-						<strong>{t(locale, "builder.fields")}</strong>
-						<div className="muted">
-						{t(locale, "builder.selected")}: {selectedFieldIds.length}
-					</div>
+			<div>
+				<div className="row" style={{ justifyContent: "space-between" }}>
+					<strong>{t(locale, "builder.summarize")}</strong>
+					<button className="btn" type="button" onClick={addAggregation} disabled={table.state !== "loaded"}>
+						{t(locale, "builder.addAggregation")}
+					</button>
 				</div>
 				<div style={{ height: 8 }} />
-					{table.state !== "loaded" ? (
-						<div className="muted">—</div>
-					) : (
+
+				{table.state !== "loaded" ? (
+					<div className="muted">—</div>
+				) : (
+					<>
+						<div className="muted">{t(locale, "builder.groupBy")}</div>
+						<div style={{ height: 8 }} />
 						<div className="row" style={{ alignItems: "flex-start" }}>
 							{tableFields.map((f) => {
 								const id = typeof f.id === "number" ? f.id : 0;
 								if (!id) return null;
-								const checked = selectedFieldIds.includes(id);
+								const checked = groupByFieldIds.includes(id);
 								return (
 									<label key={String(id)} className="tag" style={{ cursor: "pointer", userSelect: "none" }}>
 										<input
 											type="checkbox"
 											checked={checked}
-											onChange={() => toggleField(id)}
-											disabled={isSummarized}
+											onChange={() => toggleGroupByField(id)}
 											style={{ marginRight: 6 }}
 										/>
 										{f.display_name || f.name || `field:${id}`}
@@ -652,9 +570,91 @@ export function QueryBuilder(props: {
 								);
 							})}
 						</div>
-					)}
-					{isSummarized ? <div className="muted" style={{ marginTop: 8 }}>{t(locale, "builder.fieldsDisabled")}</div> : null}
+
+						<div style={{ height: 12 }} />
+
+						<div className="row" style={{ justifyContent: "space-between" }}>
+							<div className="muted">{t(locale, "builder.aggregations")}</div>
+							<div className="muted">{aggregations.length ? `${aggregations.length}` : "—"}</div>
+						</div>
+						<div style={{ height: 8 }} />
+
+						{aggregations.length === 0 ? <div className="muted">—</div> : null}
+						{aggregations.map((r) => (
+							<div key={r.id} className="row" style={{ marginBottom: 8 }}>
+								<select
+									className="input"
+									style={{ width: 200 }}
+									value={r.op}
+									onChange={(e) => updateAggregation(r.id, { op: e.target.value as AggregationOp })}
+									disabled={table.state !== "loaded"}
+								>
+									<option value="count">{t(locale, "builder.agg.count")}</option>
+									<option value="sum">{t(locale, "builder.agg.sum")}</option>
+									<option value="avg">{t(locale, "builder.agg.avg")}</option>
+									<option value="min">{t(locale, "builder.agg.min")}</option>
+									<option value="max">{t(locale, "builder.agg.max")}</option>
+								</select>
+
+								<select
+									className="input"
+									style={{ width: 360 }}
+									value={r.fieldId ?? ""}
+									onChange={(e) => updateAggregation(r.id, { fieldId: Number.parseInt(e.target.value, 10) || null })}
+									disabled={table.state !== "loaded"}
+								>
+									<option value="">{t(locale, "builder.agg.rows")}</option>
+									{tableFields.map((f) => (
+										<option key={String(f.id)} value={String(f.id)}>
+											{f.display_name || f.name || `field:${f.id}`}
+										</option>
+									))}
+								</select>
+
+								<button className="btn" type="button" onClick={() => removeAggregation(r.id)}>
+									{t(locale, "builder.remove")}
+								</button>
+							</div>
+						))}
+					</>
+				)}
+			</div>
+
+			<div style={{ height: 12 }} />
+
+			<div>
+				<div className="row" style={{ justifyContent: "space-between" }}>
+					<strong>{t(locale, "builder.fields")}</strong>
+					<div className="muted">
+						{t(locale, "builder.selected")}: {selectedFieldIds.length}
+					</div>
 				</div>
+				<div style={{ height: 8 }} />
+				{table.state !== "loaded" ? (
+					<div className="muted">—</div>
+				) : (
+					<div className="row" style={{ alignItems: "flex-start" }}>
+						{tableFields.map((f) => {
+							const id = typeof f.id === "number" ? f.id : 0;
+							if (!id) return null;
+							const checked = selectedFieldIds.includes(id);
+							return (
+								<label key={String(id)} className="tag" style={{ cursor: "pointer", userSelect: "none" }}>
+									<input
+										type="checkbox"
+										checked={checked}
+										onChange={() => toggleField(id)}
+										disabled={isSummarized}
+										style={{ marginRight: 6 }}
+									/>
+									{f.display_name || f.name || `field:${id}`}
+								</label>
+							);
+						})}
+					</div>
+				)}
+				{isSummarized ? <div className="muted" style={{ marginTop: 8 }}>{t(locale, "builder.fieldsDisabled")}</div> : null}
+			</div>
 
 			<div style={{ height: 12 }} />
 
@@ -737,18 +737,18 @@ export function QueryBuilder(props: {
 									}}
 									onChange={(e) => updateFilter(r.id, { value1: e.target.value })}
 									placeholder={r.op === "in" ? t(locale, "builder.csvValues") : t(locale, "builder.value")}
-									/>
-									{r.fieldId ? (
-										<datalist id={`field-values-${r.fieldId}`}>
-											{(() => {
-												const cached = fieldValues[r.fieldId];
-												if (!cached || cached.state !== "loaded") return null;
-												return cached.value.map((v: string) => <option key={v} value={v} />);
-											})()}
-										</datalist>
-									) : null}
-								</>
-							)}
+								/>
+								{r.fieldId ? (
+									<datalist id={`field-values-${r.fieldId}`}>
+										{(() => {
+											const cached = fieldValues[r.fieldId];
+											if (!cached || cached.state !== "loaded") return null;
+											return cached.value.map((v: string) => <option key={v} value={v} />);
+										})()}
+									</datalist>
+								) : null}
+							</>
+						)}
 
 						<button className="btn" type="button" onClick={() => removeFilter(r.id)} disabled={filters.length <= 1}>
 							{t(locale, "builder.remove")}

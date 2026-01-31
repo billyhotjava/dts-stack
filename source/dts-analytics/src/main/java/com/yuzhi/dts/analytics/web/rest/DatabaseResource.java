@@ -3,6 +3,7 @@ package com.yuzhi.dts.analytics.web.rest;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.yuzhi.dts.analytics.domain.AnalyticsDatabase;
 import com.yuzhi.dts.analytics.domain.AnalyticsField;
 import com.yuzhi.dts.analytics.domain.AnalyticsTable;
@@ -12,6 +13,7 @@ import com.yuzhi.dts.analytics.repository.AnalyticsTableRepository;
 import com.yuzhi.dts.analytics.service.AnalyticsSessionService;
 import com.yuzhi.dts.analytics.service.JdbcDetailsResolver;
 import com.yuzhi.dts.analytics.service.MetadataSyncService;
+import com.yuzhi.dts.analytics.service.PlatformInfraClient;
 import com.yuzhi.dts.analytics.web.support.MetabaseAuth;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
@@ -26,6 +28,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Objects;
+import java.util.UUID;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,6 +41,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.util.StringUtils;
 
 @RestController
 @RequestMapping("/api/database")
@@ -52,6 +56,7 @@ public class DatabaseResource {
     private final AnalyticsFieldRepository fieldRepository;
     private final MetadataSyncService metadataSyncService;
     private final JdbcDetailsResolver jdbcDetailsResolver;
+    private final PlatformInfraClient platformInfraClient;
     private final ObjectMapper objectMapper;
 
     public DatabaseResource(
@@ -61,6 +66,7 @@ public class DatabaseResource {
             AnalyticsFieldRepository fieldRepository,
             MetadataSyncService metadataSyncService,
             JdbcDetailsResolver jdbcDetailsResolver,
+            PlatformInfraClient platformInfraClient,
             ObjectMapper objectMapper) {
         this.sessionService = sessionService;
         this.databaseRepository = databaseRepository;
@@ -68,6 +74,7 @@ public class DatabaseResource {
         this.fieldRepository = fieldRepository;
         this.metadataSyncService = metadataSyncService;
         this.jdbcDetailsResolver = jdbcDetailsResolver;
+        this.platformInfraClient = platformInfraClient;
         this.objectMapper = objectMapper;
     }
 
@@ -89,37 +96,27 @@ public class DatabaseResource {
             return auth.get();
         }
 
-        Map<String, String> errors = new LinkedHashMap<>();
-        String name = request == null ? null : trimToNull(request.name());
-        if (name == null) {
-            errors.put("name", "value must be a non-blank string.");
-        }
-        String engine = request == null ? null : trimToNull(request.engine());
-        if (engine == null) {
-            errors.put("engine", "value must be a valid database engine.");
-        }
         JsonNode details = request == null ? null : request.details();
-        if (details == null || !details.isObject()) {
-            errors.put("details", "value must be a map.");
-        }
-        if (!errors.isEmpty()) {
-            return ResponseEntity.badRequest().body(Map.of("errors", errors));
+        UUID platformId = resolvePlatformDataSourceId(details);
+        if (platformId == null) {
+            return ResponseEntity.badRequest().body(Map.of("errors", Map.of("details", "仅支持从平台导入数据源")));
         }
 
-        AnalyticsDatabase db = new AnalyticsDatabase();
-        db.setName(name);
-        db.setEngine(engine);
-        db.setDetailsJson(details.toString());
-        db.setDescription(request.description());
-        db.setSample(Boolean.TRUE.equals(request.isSample()));
-        db.setTimezone(Optional.ofNullable(request.timezone()).orElse(ZoneId.systemDefault().getId()));
-        db.setMetadataSyncSchedule(Optional.ofNullable(request.metadataSyncSchedule()).orElse("0 50 * * * ? *"));
-        db.setCacheFieldValuesSchedule(Optional.ofNullable(request.cacheFieldValuesSchedule()).orElse("0 50 0 * * ? *"));
-        db.setAutoRunQueries(request.autoRunQueries() == null || request.autoRunQueries());
-        db.setFullSync(request.isFullSync() == null || request.isFullSync());
-        db.setOnDemand(request.isOnDemand() != null && request.isOnDemand());
+        PlatformInfraClient.DataSourceDetail platformDetail = platformInfraClient.fetchDataSourceDetail(platformId);
+        if (!StringUtils.hasText(platformDetail.jdbcUrl())) {
+            return ResponseEntity.badRequest().body(Map.of("errors", Map.of("details", "平台数据源缺少 JDBC URL")));
+        }
+        AnalyticsDatabase db = findByPlatformDataSource(platformId).orElseGet(AnalyticsDatabase::new);
+        boolean isNew = db.getId() == null;
+
+        applyPlatformDetail(db, platformId, platformDetail);
+        if (isNew) {
+            applyNewDefaults(db);
+        } else {
+            applyMissingDefaults(db);
+        }
+
         db = databaseRepository.save(db);
-
         return ResponseEntity.ok(toDatabaseGet(db, true));
     }
 
@@ -359,18 +356,19 @@ public class DatabaseResource {
         }
 
         AnalyticsDatabase db = existing.get();
-        if (trimToNull(request.name()) != null) {
-            db.setName(trimToNull(request.name()));
+        UUID platformId = resolvePlatformDataSourceId(request == null ? null : request.details());
+        if (platformId == null) {
+            platformId = resolvePlatformDataSourceId(db.getDetailsJson());
         }
-        if (trimToNull(request.engine()) != null) {
-            db.setEngine(trimToNull(request.engine()));
+        if (platformId == null) {
+            return ResponseEntity.badRequest().body(Map.of("errors", Map.of("details", "仅支持平台数据源连接")));
         }
-        if (request.details() != null && request.details().isObject()) {
-            db.setDetailsJson(request.details().toString());
+
+        PlatformInfraClient.DataSourceDetail platformDetail = platformInfraClient.fetchDataSourceDetail(platformId);
+        if (!StringUtils.hasText(platformDetail.jdbcUrl())) {
+            return ResponseEntity.badRequest().body(Map.of("errors", Map.of("details", "平台数据源缺少 JDBC URL")));
         }
-        if (request.description() != null) {
-            db.setDescription(request.description());
-        }
+        applyPlatformDetail(db, platformId, platformDetail);
         if (request.timezone() != null) {
             db.setTimezone(request.timezone());
         }
@@ -390,6 +388,7 @@ public class DatabaseResource {
             db.setOnDemand(request.isOnDemand());
         }
 
+        applyMissingDefaults(db);
         db = databaseRepository.save(db);
         return ResponseEntity.ok(toDatabaseGet(db, true));
     }
@@ -438,20 +437,20 @@ public class DatabaseResource {
         }
 
         Map<String, String> errors = new LinkedHashMap<>();
-        String engine = request == null ? null : trimToNull(request.engine());
-        if (engine == null) {
-            errors.put("engine", "value must be a valid database engine.");
-        }
         JsonNode details = request == null ? null : request.details();
         if (details == null || !details.isObject()) {
             errors.put("details", "value must be a map.");
+        }
+        UUID platformId = resolvePlatformDataSourceId(details);
+        if (platformId == null) {
+            errors.put("details", "仅支持平台数据源连接");
         }
         if (!errors.isEmpty()) {
             return ResponseEntity.badRequest().body(Map.of("errors", errors));
         }
 
         try {
-            JdbcDetailsResolver.JdbcDetails jdbcDetails = jdbcDetailsResolver.resolve(engine, details);
+            JdbcDetailsResolver.JdbcDetails jdbcDetails = jdbcDetailsResolver.resolve(request == null ? null : request.engine(), details);
             HikariConfig config = new HikariConfig();
             config.setJdbcUrl(jdbcDetails.jdbcUrl());
             if (jdbcDetails.username() != null) {
@@ -514,6 +513,140 @@ public class DatabaseResource {
         item.put("schedules", null);
         item.remove("native_permissions");
         return item;
+    }
+
+    private Optional<AnalyticsDatabase> findByPlatformDataSource(UUID platformId) {
+        if (platformId == null) {
+            return Optional.empty();
+        }
+        return databaseRepository.findAll().stream()
+            .filter(db -> platformId.equals(resolvePlatformDataSourceId(db.getDetailsJson())))
+            .findFirst();
+    }
+
+    private void applyPlatformDetail(AnalyticsDatabase db, UUID platformId, PlatformInfraClient.DataSourceDetail detail) {
+        String name = StringUtils.hasText(detail.name()) ? detail.name() : "platform-" + platformId;
+        String engine = resolveEngineFromType(detail.type(), detail.jdbcUrl());
+        db.setName(name);
+        db.setEngine(engine);
+        db.setDetailsJson(buildPlatformDetailsJson(platformId));
+        if (StringUtils.hasText(detail.description())) {
+            db.setDescription(detail.description());
+        }
+        db.setSample(false);
+    }
+
+    private void applyNewDefaults(AnalyticsDatabase db) {
+        db.setTimezone(ZoneId.systemDefault().getId());
+        db.setMetadataSyncSchedule("0 50 * * * ? *");
+        db.setCacheFieldValuesSchedule("0 50 0 * * ? *");
+        db.setAutoRunQueries(true);
+        db.setFullSync(true);
+        db.setOnDemand(false);
+    }
+
+    private void applyMissingDefaults(AnalyticsDatabase db) {
+        if (!StringUtils.hasText(db.getTimezone())) {
+            db.setTimezone(ZoneId.systemDefault().getId());
+        }
+        if (!StringUtils.hasText(db.getMetadataSyncSchedule())) {
+            db.setMetadataSyncSchedule("0 50 * * * ? *");
+        }
+        if (!StringUtils.hasText(db.getCacheFieldValuesSchedule())) {
+            db.setCacheFieldValuesSchedule("0 50 0 * * ? *");
+        }
+    }
+
+    private String buildPlatformDetailsJson(UUID platformId) {
+        ObjectNode node = objectMapper.createObjectNode();
+        node.put("platformDataSourceId", platformId.toString());
+        return node.toString();
+    }
+
+    private UUID resolvePlatformDataSourceId(JsonNode details) {
+        if (details == null || !details.isObject()) {
+            return null;
+        }
+        String direct = textOf(details, "platformDataSourceId", "platform_data_source_id", "platformDataSourceID");
+        if (StringUtils.hasText(direct)) {
+            return parseUuid(direct);
+        }
+        JsonNode platform = details.get("platform");
+        if (platform != null && platform.isObject()) {
+            String nested = textOf(platform, "dataSourceId", "datasourceId", "id");
+            if (StringUtils.hasText(nested)) {
+                return parseUuid(nested);
+            }
+        }
+        return null;
+    }
+
+    private UUID resolvePlatformDataSourceId(String detailsJson) {
+        if (!StringUtils.hasText(detailsJson)) {
+            return null;
+        }
+        try {
+            JsonNode node = objectMapper.readTree(detailsJson);
+            return resolvePlatformDataSourceId(node);
+        } catch (Exception ex) {
+            return null;
+        }
+    }
+
+    private UUID parseUuid(String raw) {
+        if (!StringUtils.hasText(raw)) {
+            return null;
+        }
+        try {
+            return UUID.fromString(raw.trim());
+        } catch (Exception ex) {
+            return null;
+        }
+    }
+
+    private String textOf(JsonNode node, String... fields) {
+        if (node == null || !node.isObject()) {
+            return null;
+        }
+        for (String field : fields) {
+            JsonNode value = node.get(field);
+            if (value != null && value.isTextual()) {
+                String text = value.asText();
+                if (StringUtils.hasText(text)) {
+                    return text;
+                }
+            }
+        }
+        return null;
+    }
+
+    private String resolveEngineFromType(String type, String jdbcUrl) {
+        String normalized = normalizeType(type);
+        if (!StringUtils.hasText(normalized) && StringUtils.hasText(jdbcUrl)) {
+            String lowerUrl = jdbcUrl.trim().toLowerCase(java.util.Locale.ROOT);
+            if (lowerUrl.startsWith("jdbc:postgresql:")) return "postgres";
+            if (lowerUrl.startsWith("jdbc:mysql:")) return "mysql";
+            if (lowerUrl.startsWith("jdbc:oracle:")) return "oracle";
+            if (lowerUrl.startsWith("jdbc:dm:")) return "dm";
+        }
+        if (!StringUtils.hasText(normalized)) {
+            return "jdbc";
+        }
+        return switch (normalized) {
+            case "postgresql", "postgres", "pg" -> "postgres";
+            case "mysql", "mariadb" -> "mysql";
+            case "oracle" -> "oracle";
+            case "dm", "dameng" -> "dm";
+            default -> normalized;
+        };
+    }
+
+    private String normalizeType(String value) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        String trimmed = value.trim().toLowerCase(java.util.Locale.ROOT);
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     private Object parseDetails(String json) {
@@ -621,14 +754,6 @@ public class DatabaseResource {
     }
 
     private static String emptyToNull(String value) {
-        if (value == null) {
-            return null;
-        }
-        String trimmed = value.trim();
-        return trimmed.isEmpty() ? null : trimmed;
-    }
-
-    private static String trimToNull(String value) {
         if (value == null) {
             return null;
         }

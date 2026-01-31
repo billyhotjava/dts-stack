@@ -50,6 +50,9 @@ public class CatalogColumnSchema extends AbstractAuditingEntity<UUID> implements
     @Column(name = "standard_mismatch_reason", length = 512)
     private String standardMismatchReason;
 
+    @Column(name = "status", length = 16, nullable = false)
+    private String status = "ACTIVE";
+
     @Override
     public UUID getId() {
         return id;
@@ -137,5 +140,13 @@ public class CatalogColumnSchema extends AbstractAuditingEntity<UUID> implements
 
     public void setStandardMismatchReason(String standardMismatchReason) {
         this.standardMismatchReason = standardMismatchReason;
+    }
+
+    public String getStatus() {
+        return status;
+    }
+
+    public void setStatus(String status) {
+        this.status = status;
     }
 }

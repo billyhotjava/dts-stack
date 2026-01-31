@@ -63,7 +63,7 @@ export default function CollectionItemsPage() {
 				breadcrumbs={
 					<Breadcrumb items={[
 						{ label: t(locale, "collections.title"), href: "/collections" },
-						{ label: id ?? "root" }
+						{ label: id === "root" ? t(locale, "collections.rootName") : (id ?? "root") }
 					]} />
 				}
 			/>
@@ -92,9 +92,9 @@ export default function CollectionItemsPage() {
 									<span className="collection-item__name">{item.name ?? "-"}</span>
 									<span className="collection-item__meta">
 										<Badge variant={item.model === "dashboard" ? "info" : "success"} size="sm">
-											{item.model}
+											{item.model === "dashboard" ? t(locale, "dashboards.title") : t(locale, "questions.title")}
 										</Badge>
-										<span className="text-muted">ID: {item.id}</span>
+										<span className="text-muted">{t(locale, "common.id")}: {item.id}</span>
 									</span>
 								</div>
 							</Link>

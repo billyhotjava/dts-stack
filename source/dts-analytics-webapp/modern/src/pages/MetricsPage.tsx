@@ -66,17 +66,17 @@ export default function MetricsPage() {
 			{/* Summary Stats */}
 			<div className="grid3" style={{ marginBottom: "var(--spacing-lg)" }}>
 				<StatCard
-					label="Analytics Metrics"
+					label={t(locale, "metrics.analytics")}
 					value={localMetrics.state === "loaded" ? localMetrics.value.length : "-"}
 					icon={<MetricIcon />}
 				/>
 				<StatCard
-					label="Platform Metrics"
+					label={t(locale, "metrics.platform")}
 					value={platformMetrics.state === "loaded" ? platformMetrics.value.length : "-"}
 					icon={<MetricIcon />}
 				/>
 				<StatCard
-					label="Total"
+					label={t(locale, "common.total")}
 					value={
 						localMetrics.state === "loaded" && platformMetrics.state === "loaded"
 							? localMetrics.value.length + platformMetrics.value.length
@@ -89,7 +89,7 @@ export default function MetricsPage() {
 			{/* Analytics Metrics */}
 			<Card style={{ marginBottom: "var(--spacing-lg)" }}>
 				<CardHeader
-					title="Analytics Metrics"
+					title={t(locale, "metrics.analytics")}
 					action={
 						localMetrics.state === "loaded" && (
 							<Badge variant="default">{localMetrics.value.length}</Badge>
@@ -104,7 +104,7 @@ export default function MetricsPage() {
 					)}
 					{localMetrics.state === "error" && <ErrorNotice locale={locale} error={localMetrics.error} />}
 					{localMetrics.state === "loaded" && localMetrics.value.length === 0 && (
-						<EmptyState title={t(locale, "common.empty")} description="当前还没有创建任何指标（Analytics 内置指标）。" />
+						<EmptyState title={t(locale, "common.empty")} description={t(locale, "metrics.analyticsEmpty")} />
 					)}
 					{localMetrics.state === "loaded" && localMetrics.value.length > 0 && (
 						<table className="table">
@@ -130,7 +130,7 @@ export default function MetricsPage() {
 			{/* Platform Metrics */}
 			<Card>
 				<CardHeader
-					title="Platform Metrics"
+					title={t(locale, "metrics.platform")}
 					action={
 						platformMetrics.state === "loaded" && (
 							<Badge variant="default">{platformMetrics.value.length}</Badge>
@@ -145,7 +145,7 @@ export default function MetricsPage() {
 					)}
 					{platformMetrics.state === "error" && <ErrorNotice locale={locale} error={platformMetrics.error} />}
 					{platformMetrics.state === "loaded" && platformMetrics.value.length === 0 && (
-						<EmptyState title={t(locale, "common.empty")} description="平台指标接口（dummy）当前返回空列表。" />
+						<EmptyState title={t(locale, "common.empty")} description={t(locale, "metrics.platformEmpty")} />
 					)}
 					{platformMetrics.state === "loaded" && platformMetrics.value.length > 0 && (
 						<table className="table">

@@ -21,6 +21,7 @@ import ModelsPage from "./pages/ModelsPage";
 import MetricsPage from "./pages/MetricsPage";
 import TrashPage from "./pages/TrashPage";
 import DatabaseNewPage from "./pages/DatabaseNewPage";
+import DatabaseEditPage from "./pages/DatabaseEditPage";
 import PublicCardPage from "./pages/PublicCardPage";
 import PublicDashboardPage from "./pages/PublicDashboardPage";
 import ScreenDesignerPage from "./pages/screens/ScreenDesignerPage";
@@ -57,6 +58,7 @@ export function createRoutes() {
 					{ path: "/questions/:id/edit", Component: CardEditorPage },
 					{ path: "/data", Component: DataPage },
 					{ path: "/data/new", Component: DatabaseNewPage },
+					{ path: "/data/:dbId/edit", Component: DatabaseEditPage },
 					{ path: "/data/:dbId", Component: DatabaseDetailPage },
 					{ path: "/data/:dbId/tables/:tableId", Component: TableDetailPage },
 					{ path: "/data/:dbId/tables/:tableId/fields/:fieldId", Component: FieldDetailPage },

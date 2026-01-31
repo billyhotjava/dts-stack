@@ -33,6 +33,56 @@ export type DataSourceUpsertPayload = {
 	secrets?: Record<string, any>;
 };
 
+export type DataSourceUpdateImpact = {
+	dataSource: InfraDataSource;
+	connectionChanged: boolean;
+	affectedTasks: number;
+	changeLogCreated: number;
+	taskIds: number[];
+};
+
+export type ExcelSheetInfo = {
+	index: number;
+	name: string;
+};
+
+export type ExcelImportPrepareResponse = {
+	fileId: string;
+	fileName: string;
+	batchCode: string;
+	sheets: ExcelSheetInfo[];
+};
+
+export type ExcelColumnSpec = {
+	name: string;
+	dataType?: string;
+};
+
+export type ExcelImportParseRequest = {
+	fileId: string;
+	sheetName?: string;
+	sheetIndex?: number;
+	headerRow?: number;
+	dataStartRow?: number;
+	delimiter?: string;
+	previewLimit?: number;
+	skipErrors?: boolean;
+	fillMerged?: boolean;
+	dateFormat?: string;
+};
+
+export type ExcelImportParseResponse = {
+	fileId: string;
+	batchCode: string;
+	sheetName?: string;
+	csvPath: string;
+	csvContainerPath: string;
+	columns: ExcelColumnSpec[];
+	preview: string[][];
+	rowCount: number;
+	errorCount: number;
+};
+
 export default {
 	list: () => apiClient.get<InfraDataSource[]>({ url: "/infra/data-sources" }),
 	detail: (id: string) => apiClient.get<InfraDataSource>({ url: `/infra/data-sources/${id}` }),
@@ -40,6 +90,15 @@ export default {
 		apiClient.post<InfraDataSource>({ url: "/infra/data-sources", data: payload }),
 	update: (id: string, payload: DataSourceUpsertPayload) =>
 		apiClient.put<InfraDataSource>({ url: `/infra/data-sources/${id}`, data: payload }),
+	updateWithImpact: (id: string, payload: DataSourceUpsertPayload) =>
+		apiClient.put<DataSourceUpdateImpact>({ url: `/infra/data-sources/${id}/impact`, data: payload }),
 	remove: (id: string) => apiClient.delete<void>({ url: `/infra/data-sources/${id}` }),
 	test: (id: string) => apiClient.post<any>({ url: `/infra/data-sources/${id}/test` }),
+	excelPrepare: (file: File) => {
+		const formData = new FormData();
+		formData.append("file", file);
+		return apiClient.post<ExcelImportPrepareResponse>({ url: "/infra/excel-import/prepare", data: formData });
+	},
+	excelParse: (payload: ExcelImportParseRequest) =>
+		apiClient.post<ExcelImportParseResponse>({ url: "/infra/excel-import/parse", data: payload }),
 };

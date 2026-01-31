@@ -5,8 +5,8 @@ export const FontFamilyPreset = {
 
 export const typographyTokens = {
 	fontFamily: {
-		openSans: FontFamilyPreset.openSans,
-		inter: FontFamilyPreset.inter,
+		openSans: `"Lato", "Open Sans Variable", "Inter Variable", system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", "Noto Sans", sans-serif`,
+		inter: `"Lato", "Open Sans Variable", "Inter Variable", system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", "Noto Sans", sans-serif`,
 	},
 	fontSize: {
 		xs: "12",

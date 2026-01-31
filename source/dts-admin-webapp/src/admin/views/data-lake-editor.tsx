@@ -74,7 +74,32 @@ const AUTH_METHOD_OPTIONS = [
 	{ value: "JDBC_PASSWORD", label: "JDBC 用户名密码" },
 ];
 
+const ADDAX_WRITER_OPTIONS = [
+	{ value: "rdbmswriter", label: "rdbmswriter（通用 JDBC）" },
+	{ value: "mysqlwriter", label: "mysqlwriter" },
+	{ value: "postgresqlwriter", label: "postgresqlwriter" },
+	{ value: "oraclewriter", label: "oraclewriter" },
+	{ value: "sqlserverwriter", label: "sqlserverwriter" },
+	{ value: "dmwriter", label: "dmwriter（达梦）" },
+	{ value: "clickhousewriter", label: "clickhousewriter" },
+	{ value: "hivewriter", label: "hivewriter" },
+	{ value: "hdfswriter", label: "hdfswriter" },
+	{ value: "hbase11xwriter", label: "hbase11xwriter" },
+	{ value: "hbase20xwriter", label: "hbase20xwriter" },
+	{ value: "eswriter", label: "eswriter" },
+	{ value: "mongodbwriter", label: "mongodbwriter" },
+	{ value: "rediswriter", label: "rediswriter" },
+	{ value: "cassandrawriter", label: "cassandrawriter" },
+	{ value: "ftpwriter", label: "ftpwriter" },
+	{ value: "txtfilewriter", label: "txtfilewriter" },
+	{ value: "streamwriter", label: "streamwriter" },
+	{ value: "odpswriter", label: "odpswriter" },
+	{ value: "adxwriter", label: "adxwriter" },
+	{ value: "customwriter", label: "customwriter" },
+];
+
 const LAKE_TYPE_SET = new Set(TYPE_OPTIONS.map((item) => item.value));
+const TABLE_PLACEHOLDER = "${table}";
 
 const DRIVER_TYPE_HINTS: Record<string, string[]> = {
 	HIVE: ["hive"],
@@ -84,14 +109,6 @@ const DRIVER_TYPE_HINTS: Record<string, string[]> = {
 	POSTGRESQL: ["postgres", "postgresql", "pgjdbc", "pg"],
 };
 
-const WRITER_OPTIONS_BY_TYPE: Record<string, { value: string; label: string }[]> = {
-	HIVE: [{ value: "hivewriter", label: "hivewriter" }],
-	INCEPTOR: [{ value: "hivewriter", label: "hivewriter" }],
-	JDBC: [{ value: "rdbmswriter", label: "rdbmswriter" }],
-	ICEBERG: [{ value: "icebergwriter", label: "icebergwriter" }],
-	CLICKHOUSE: [{ value: "clickhousewriter", label: "clickhousewriter" }],
-	POSTGRESQL: [{ value: "postgresqlwriter", label: "postgresqlwriter" }],
-};
 
 const normalizeLakeType = (value?: string) => {
 	const upper = String(value || "").trim().toUpperCase();
@@ -118,10 +135,6 @@ const buildDriverOptions = (drivers: JdbcDriverInfo[], type?: string) => {
 	return filtered.length > 0 ? filtered : options;
 };
 
-const resolveWriterOptions = (type?: string) => {
-	const normalizedType = normalizeLakeType(type);
-	return WRITER_OPTIONS_BY_TYPE[normalizedType] || [{ value: "rdbmswriter", label: "rdbmswriter" }];
-};
 
 const readFileAsText = (file: File) =>
 	new Promise<string>((resolve, reject) => {
@@ -212,9 +225,10 @@ const buildWriterTemplate = (
 		connection: [
 			{
 				jdbcUrl: [jdbcUrl],
-				table: ["${table}"],
+				table: [TABLE_PLACEHOLDER],
 			},
 		],
+		column: ["*"],
 	};
 	if (normalizedType.includes("hive") || normalizedType.includes("iceberg")) {
 		return {
@@ -223,15 +237,14 @@ const buildWriterTemplate = (
 			writeMode: "append",
 			fieldDelimiter: "\u0001",
 			nullFormat: "\\N",
-			column: ["*"],
 		};
 	}
 	return {
 		...base,
-		column: ["*"],
 		writeMode: "insert",
 	};
 };
+
 
 export default function DataLakeEditorView() {
 	const queryClient = useQueryClient();
@@ -270,11 +283,11 @@ export default function DataLakeEditorView() {
 	});
 
 	const type = Form.useWatch("type", form);
+	const defaulted = Form.useWatch("defaulted", form);
 	const authMethod = Form.useWatch("authMethod", form);
 	const useHttpTransport = Form.useWatch("useHttpTransport", form);
 	const useCustomJdbc = Form.useWatch("useCustomJdbc", form);
 	const keytabName = Form.useWatch("keytabFileName", form) as string | undefined;
-	const username = Form.useWatch("username", form) as string | undefined;
 	const destinationConfigRaw = Form.useWatch("destinationConfigRaw", form) as string | undefined;
 	const resolvedType = normalizeLakeType(type || editingType);
 	const isInceptor = resolvedType === "INCEPTOR";
@@ -282,10 +295,8 @@ export default function DataLakeEditorView() {
 	const isKerberos = authMethod !== "JDBC_PASSWORD";
 	const isKeytab = authMethod === "KEYTAB";
 	const isKerberosPassword = authMethod === "PASSWORD";
-	const writerConfigRequired = isInceptor || !isEditing || !editingLake?.hasSecrets;
-	const hasExistingWriterConfig = Boolean(
-		editingLake?.destinationConfig && Object.keys(editingLake.destinationConfig).length,
-	);
+
+	const writerConfigRequired = Boolean(defaulted);
 	const hasRawWriterConfig = useMemo(() => {
 		if (!destinationConfigRaw || !destinationConfigRaw.trim()) return false;
 		try {
@@ -295,30 +306,13 @@ export default function DataLakeEditorView() {
 			return false;
 		}
 	}, [destinationConfigRaw]);
-	const showWriterConfigAlert = !readOnly && writerConfigRequired && !hasRawWriterConfig && !hasExistingWriterConfig;
+	const showWriterConfigAlert = !readOnly && writerConfigRequired && !hasRawWriterConfig;
 
 	const driverOptions = useMemo(
 		() => buildDriverOptions(jdbcDrivers, resolvedType),
 		[jdbcDrivers, resolvedType],
 	);
 	const hasDriverOptions = driverOptions.length > 0;
-	const writerOptions = useMemo(() => resolveWriterOptions(resolvedType), [resolvedType]);
-	const writerOptionsWithFallback = useMemo(() => {
-		const list = [...writerOptions];
-		const currentId = editingLake?.props?.destinationDefinitionId;
-		if (currentId && !list.some((item) => item.value === currentId)) {
-			list.push({
-				value: currentId,
-				label: editingLake?.props?.destinationDefinitionName || currentId,
-			});
-		}
-		return list;
-	}, [writerOptions, editingLake?.props?.destinationDefinitionId, editingLake?.props?.destinationDefinitionName]);
-
-	const writerNameMap = useMemo(() => {
-		const entries = writerOptions.map((item) => [String(item.value), item.label || item.value]);
-		return new Map(entries);
-	}, [writerOptions]);
 
 	useEffect(() => {
 		if (initialized) return;
@@ -398,29 +392,10 @@ export default function DataLakeEditorView() {
 		form,
 	]);
 
-	useEffect(() => {
-		if (readOnly || isEditing) return;
-		const current = form.getFieldValue("destinationDefinitionId");
-		if (current) return;
-		const candidate = writerOptions[0]?.value;
-		if (candidate) {
-			form.setFieldsValue({ destinationDefinitionId: candidate });
-		}
-	}, [form, isEditing, readOnly, resolvedType, writerOptions]);
-
-	const buildDataLakePayload = (
-		values: FormValues,
-		destinationConfigOverride?: Record<string, any>,
-	): UpsertInfraDataSourcePayload => {
+	const buildDataLakePayload = (values: FormValues): UpsertInfraDataSourcePayload => {
 		const props: Record<string, any> = {};
 		if (values.destinationDefinitionId) {
 			props.destinationDefinitionId = values.destinationDefinitionId.trim();
-		}
-		if (values.destinationDefinitionId) {
-			const defName = writerNameMap.get(values.destinationDefinitionId);
-			if (defName) {
-				props.destinationDefinitionName = defName;
-			}
 		}
 		const destinationName = values.destinationName?.trim() || values.name?.trim();
 		if (destinationName) {
@@ -448,8 +423,8 @@ export default function DataLakeEditorView() {
 			props,
 			defaulted: Boolean(values.defaulted),
 		};
-		const destConfig = destinationConfigOverride ?? parseJsonInput(values.destinationConfigRaw);
 		const secrets: Record<string, any> = {};
+		const destConfig = parseJsonInput(values.destinationConfigRaw);
 		if (destConfig) {
 			secrets.destinationConfig = destConfig;
 		}
@@ -500,7 +475,6 @@ export default function DataLakeEditorView() {
 		const isKeytab = method === "KEYTAB";
 		const isPassword = method === "PASSWORD";
 		const isJdbcPassword = method === "JDBC_PASSWORD";
-		const destinationConfig = resolveDestinationConfig(values);
 		return {
 			name: String(values.name || "").trim(),
 			description: values.description || undefined,
@@ -528,16 +502,8 @@ export default function DataLakeEditorView() {
 			defaulted: values.defaulted ?? false,
 			destinationDefinitionId: values.destinationDefinitionId || undefined,
 			destinationName: values.destinationName?.trim() || values.name?.trim() || undefined,
-			destinationConfig,
+			destinationConfig: parseJsonInput(values.destinationConfigRaw),
 		};
-	};
-
-	const resolveDestinationConfig = (values: FormValues): Record<string, any> | undefined => {
-		const parsed = parseJsonInput(values.destinationConfigRaw);
-		if (parsed && Object.keys(parsed).length) {
-			return parsed;
-		}
-		return undefined;
 	};
 
 	const validateWriterConfig = async (_: unknown, value: string | undefined) => {
@@ -628,7 +594,7 @@ export default function DataLakeEditorView() {
 		try {
 			setSaving(true);
 			const values = await form.validateFields();
-			const destinationConfig = resolveDestinationConfig(values);
+			const destinationConfig = parseJsonInput(values.destinationConfigRaw);
 			if (writerConfigRequired && (!destinationConfig || Object.keys(destinationConfig).length === 0)) {
 				form.scrollToField("destinationConfigRaw");
 				toast.error("请完善写入器配置");
@@ -643,7 +609,7 @@ export default function DataLakeEditorView() {
 				navigate("/admin/data-lake");
 				return;
 			}
-			const payload = buildDataLakePayload(values, destinationConfig);
+			const payload = buildDataLakePayload(values);
 			if (isEditing && editingLake?.id) {
 				await adminApi.updateDataLake(editingLake.id, payload);
 				toast.success("已更新数据湖配置");
@@ -723,21 +689,12 @@ export default function DataLakeEditorView() {
 
 			<Card>
 				<CardHeader>
-					<CardTitle>连接配置</CardTitle>
-				</CardHeader>
-				<CardContent className="text-sm">
-					{showWriterConfigAlert ? (
-						<Alert
-							type="warning"
-							showIcon
-							message="写入器配置必填"
-							description="请在页面下方「写入器配置」填写 Addax Writer JSON（包含目标连接与写入参数）。"
-							className="mb-4"
-						/>
-					) : null}
-					<Form<FormValues>
-						layout="vertical"
-						form={form}
+				<CardTitle>连接配置</CardTitle>
+			</CardHeader>
+			<CardContent className="text-sm">
+				<Form<FormValues>
+					layout="vertical"
+					form={form}
 						requiredMark
 						disabled={readOnly}
 						size="small"
@@ -968,7 +925,7 @@ export default function DataLakeEditorView() {
 
 								<Collapse
 									ghost
-									defaultActiveKey={["destination"]}
+									defaultActiveKey={["advanced"]}
 									items={[
 										{
 											key: "advanced",
@@ -1007,58 +964,6 @@ export default function DataLakeEditorView() {
 												</div>
 											),
 										},
-										{
-											key: "destination",
-											label: "写入器配置",
-											children: (
-												<div className="space-y-4">
-													<div className="grid gap-4 md:grid-cols-2">
-														<Form.Item
-															name="destinationDefinitionId"
-															label="写入器类型"
-															required
-															rules={[{ required: true, message: "请选择写入器类型" }]}
-														>
-															<Select
-																options={writerOptionsWithFallback}
-																placeholder="选择写入器类型"
-																showSearch
-																allowClear
-																optionFilterProp="label"
-																notFoundContent="未提供写入器类型，请检查 Addax 配置"
-															/>
-														</Form.Item>
-														<Form.Item name="destinationName" label="写入器名称">
-															<Input placeholder="默认使用数据湖名称" />
-														</Form.Item>
-													</div>
-													<Form.Item
-														name="destinationConfigRaw"
-														label="写入器配置 JSON"
-														required={writerConfigRequired}
-														rules={[{ validator: validateWriterConfig }]}
-													>
-														<Input.TextArea
-															rows={6}
-															placeholder='填写 Addax writer 参数 JSON，例如：{"connection":[{"jdbcUrl":["jdbc:..."],"table":["target"]}],"username":"user","password":"***"}'
-														/>
-													</Form.Item>
-													<Space>
-														<AntButton onClick={handleFillWriterConfig} disabled={readOnly}>
-															生成模板
-														</AntButton>
-														<AntButton onClick={handleClearWriterConfig} disabled={readOnly}>
-															清空配置
-														</AntButton>
-													</Space>
-													<Text variant="body3" className="text-muted-foreground">
-														{writerConfigRequired
-															? "写入器配置为必填项，将同步给平台默认入湖目标，密钥字段需包含在 JSON 中。"
-															: "已存在写入器密钥，如需更新请重新填写配置 JSON。"}
-													</Text>
-												</div>
-											),
-										},
 									]}
 								/>
 							</div>
@@ -1090,57 +995,64 @@ export default function DataLakeEditorView() {
 								<Form.Item name="jdbcPropertiesRaw" label="JDBC 扩展参数（每行 key=value）">
 									<Input.TextArea rows={4} placeholder="connectTimeout=5" />
 								</Form.Item>
-								<Divider />
-								<div className="grid gap-4 md:grid-cols-2">
-									<Form.Item
-										name="destinationDefinitionId"
-										label="写入器类型"
-										required
-										rules={[{ required: true, message: "请选择写入器类型" }]}
-									>
-										<Select
-											options={writerOptionsWithFallback}
-											placeholder="选择写入器类型"
-											showSearch
-											allowClear
-											optionFilterProp="label"
-											notFoundContent="未提供写入器类型，请检查 Addax 配置"
-										/>
-									</Form.Item>
-									<Form.Item name="destinationName" label="写入器名称">
-										<Input placeholder="默认使用数据湖名称" />
-									</Form.Item>
-								</div>
-								<Form.Item
-									name="destinationConfigRaw"
-									label="写入器配置 JSON"
-									required={writerConfigRequired}
-									rules={[{ validator: validateWriterConfig }]}
-								>
-									<Input.TextArea
-										rows={6}
-										placeholder='填写 Addax writer 参数 JSON，例如：{"connection":[{"jdbcUrl":["jdbc:..."],"table":["target"]}],"username":"user","password":"***"}'
-									/>
-								</Form.Item>
-								<Space>
-									<AntButton onClick={handleFillWriterConfig} disabled={readOnly}>
-										生成模板
-									</AntButton>
-									<AntButton onClick={handleClearWriterConfig} disabled={readOnly}>
-										清空配置
-									</AntButton>
-								</Space>
-								{writerConfigRequired ? (
-									<Text variant="body3" className="text-muted-foreground">
-										写入器配置为必填项，将同步给平台默认入湖目标，密钥字段需包含在 JSON 中。
-									</Text>
-								) : editingLake?.hasSecrets ? (
-									<Text variant="body3" className="text-muted-foreground">
-										已存在写入器密钥，如需更新请重新填写配置 JSON。
-									</Text>
-								) : null}
 							</div>
 						)}
+
+						<Divider />
+
+						{showWriterConfigAlert ? (
+							<Alert
+								type="warning"
+								showIcon
+								message="写入器配置必填"
+								description={`默认数据湖需要配置通用写入器模板（可使用 ${TABLE_PLACEHOLDER} 占位符）。`}
+								className="mb-4"
+							/>
+						) : null}
+
+						<div className="space-y-4">
+							<div className="grid gap-4 md:grid-cols-2">
+								<Form.Item
+									name="destinationDefinitionId"
+									label="写入器类型"
+									required={writerConfigRequired}
+									rules={[{ required: writerConfigRequired, message: "请选择写入器类型" }]}
+								>
+									<Select
+										showSearch
+										allowClear
+										placeholder="请选择 Addax 写入器"
+										options={ADDAX_WRITER_OPTIONS}
+										optionFilterProp="label"
+									/>
+								</Form.Item>
+								<Form.Item name="destinationName" label="写入器名称">
+									<Input placeholder="默认使用数据湖名称" />
+								</Form.Item>
+							</div>
+							<Form.Item
+								name="destinationConfigRaw"
+								label="写入器配置 JSON（通用模板）"
+								required={writerConfigRequired}
+								rules={[{ validator: validateWriterConfig }]}
+							>
+								<Input.TextArea
+									rows={6}
+									placeholder={`{"connection":[{"jdbcUrl":["jdbc:..."],"table":["${TABLE_PLACEHOLDER}"]}],"username":"user","password":"***","column":["*"]}`}
+								/>
+							</Form.Item>
+							<Space>
+								<AntButton onClick={handleFillWriterConfig} disabled={readOnly}>
+									生成模板
+								</AntButton>
+								<AntButton onClick={handleClearWriterConfig} disabled={readOnly}>
+									清空配置
+								</AntButton>
+							</Space>
+							<Text variant="body3" className="text-muted-foreground">
+								通用模板不需要填写具体表名，可使用 {TABLE_PLACEHOLDER} 占位符，入湖任务会补齐目标表。
+							</Text>
+						</div>
 					</Form>
 				</CardContent>
 			</Card>

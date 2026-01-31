@@ -239,10 +239,10 @@ export default function DashboardEditorPage() {
 
 					<div style={{ marginTop: "var(--spacing-md)" }}>
 						<Input
-							label="Description"
+							label={t(locale, "common.description")}
 							value={description}
 							onChange={(e) => setDescription(e.target.value)}
-							placeholder="Optional description..."
+							placeholder={t(locale, "common.descPlaceholder")}
 						/>
 					</div>
 				</CardBody>
@@ -261,7 +261,7 @@ export default function DashboardEditorPage() {
 
 			<Card>
 				<CardHeader
-					title="Cards"
+					title={t(locale, "common.cards")}
 					action={
 						<Badge variant="default">{dashcards.length}</Badge>
 					}

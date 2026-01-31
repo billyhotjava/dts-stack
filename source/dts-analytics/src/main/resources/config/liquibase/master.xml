@@ -21,4 +21,5 @@
     <include file="config/liquibase/changelog/0014_sharing_public_links.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/0015_revisions.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/0016_public_links_scope.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0017_screens.xml" relativeToChangelogFile="false"/>
 </databaseChangeLog>

@@ -172,6 +172,7 @@ public class CatalogMetadataService {
             item.put("name", column.getName());
             item.put("dataType", column.getDataType());
             item.put("description", column.getComment());
+            item.put("status", column.getStatus());
             items.add(item);
         }
         return items;

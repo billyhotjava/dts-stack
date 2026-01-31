@@ -30,7 +30,6 @@ import {
     ScrollRankingBoard,
     WaterLevelPond,
     DigitalFlop,
-    Percent,
 } from '@jiaminghi/data-view-react';
 import type { ScreenComponent } from '../types';
 
@@ -540,18 +539,46 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component }: 
                     />
                 );
 
-            case 'percent-pond':
+            case 'percent-pond': {
+                const percentValue = config.value as number;
+                const colors = config.colors as string[] || ['#3de7c9', '#00baff'];
                 return (
-                    <Percent
-                        config={{
-                            value: config.value as number,
-                            borderWidth: config.borderWidth as number || 3,
+                    <div style={{
+                        width: '100%',
+                        height: '100%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        position: 'relative',
+                    }}>
+                        <div style={{
+                            width: '100%',
+                            height: 20,
+                            background: 'rgba(255,255,255,0.1)',
                             borderRadius: config.borderRadius as number || 5,
-                            colors: config.colors as string[] || ['#3de7c9', '#00baff'],
-                        }}
-                        style={{ width: '100%', height: '100%' }}
-                    />
+                            border: `${config.borderWidth as number || 2}px solid ${colors[0]}`,
+                            overflow: 'hidden',
+                            position: 'relative',
+                        }}>
+                            <div style={{
+                                width: `${percentValue}%`,
+                                height: '100%',
+                                background: `linear-gradient(90deg, ${colors[0]} 0%, ${colors[1] || colors[0]} 100%)`,
+                                transition: 'width 0.5s ease',
+                            }} />
+                        </div>
+                        <span style={{
+                            position: 'absolute',
+                            color: '#fff',
+                            fontSize: 14,
+                            fontWeight: 'bold',
+                            textShadow: '0 0 4px rgba(0,0,0,0.8)',
+                        }}>
+                            {percentValue}%
+                        </span>
+                    </div>
                 );
+            }
 
             default:
                 return (

@@ -49,6 +49,14 @@
           "externalLink": "/foundation/data-sources"
         },
         {
+          "key": "jdbcDrivers",
+          "path": "jdbc-drivers",
+          "icon": "solar:plug-circle-bold-duotone",
+          "titleKey": "sys.nav.portal.resourceJdbcDrivers",
+          "title": "驱动管理",
+          "externalLink": "/foundation/jdbc-drivers"
+        },
+        {
           "key": "metadata",
           "path": "metadata",
           "icon": "solar:upload-bold-duotone",
