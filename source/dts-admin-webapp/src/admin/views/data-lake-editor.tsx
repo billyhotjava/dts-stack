@@ -215,9 +215,9 @@ const buildWriterTemplate = (
 	writerType: string | undefined,
 	values: Pick<FormValues, "jdbcUrl" | "username" | "password">,
 ): Record<string, any> => {
-	const jdbcUrl = values.jdbcUrl?.trim() || "jdbc:your_database_url";
-	const username = values.username?.trim() || "your_username";
-	const password = values.password || "your_password";
+	const jdbcUrl = values.jdbcUrl?.trim() || "";
+	const username = values.username?.trim() || "";
+	const password = values.password || "";
 	const normalizedType = String(writerType || "").toLowerCase();
 	const base = {
 		username,

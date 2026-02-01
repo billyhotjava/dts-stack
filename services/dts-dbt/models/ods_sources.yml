@@ -1,0 +1,60 @@
+version: 2
+sources:
+  -
+    name: "ods"
+    schema: "ods"
+    tables:
+      -
+        name: "CUSTOMER"
+        description: "erptest1: ERPDEMO.CUSTOMER -> ods.CUSTOMER"
+        meta:
+          system: "unknown"
+          biz: "unknown"
+          entity: "CUSTOMER"
+          stream: "CUSTOMER"
+          stream_namespace: "ERPDEMO"
+      -
+        name: "DEPARTMENT"
+        description: "erptest1: ERPDEMO.DEPARTMENT -> ods.DEPARTMENT"
+        meta:
+          system: "unknown"
+          biz: "unknown"
+          entity: "DEPARTMENT"
+          stream: "DEPARTMENT"
+          stream_namespace: "ERPDEMO"
+      -
+        name: "EMPLOYEE"
+        description: "erptest1: ERPDEMO.EMPLOYEE -> ods.EMPLOYEE"
+        meta:
+          system: "unknown"
+          biz: "unknown"
+          entity: "EMPLOYEE"
+          stream: "EMPLOYEE"
+          stream_namespace: "ERPDEMO"
+      -
+        name: "ORDER_DETAIL"
+        description: "erptest1: ERPDEMO.ORDER_DETAIL -> ods.ORDER_DETAIL"
+        meta:
+          system: "unknown"
+          biz: "unknown"
+          entity: "ORDER_DETAIL"
+          stream: "ORDER_DETAIL"
+          stream_namespace: "ERPDEMO"
+      -
+        name: "ORDERS"
+        description: "erptest1: ERPDEMO.ORDERS -> ods.ORDERS"
+        meta:
+          system: "unknown"
+          biz: "unknown"
+          entity: "ORDERS"
+          stream: "ORDERS"
+          stream_namespace: "ERPDEMO"
+      -
+        name: "PRODUCT"
+        description: "erptest1: ERPDEMO.PRODUCT -> ods.PRODUCT"
+        meta:
+          system: "unknown"
+          biz: "unknown"
+          entity: "PRODUCT"
+          stream: "PRODUCT"
+          stream_namespace: "ERPDEMO"

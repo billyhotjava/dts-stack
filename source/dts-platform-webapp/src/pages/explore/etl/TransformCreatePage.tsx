@@ -95,12 +95,12 @@ const resolveSourceSystemFromDataSource = (source?: InfraDataSource | null) => {
 	const direct = normalizeText(
 		String(
 			props.sourceSystem ||
-				props.sourceName ||
-				props.system ||
-				props.app ||
-				props.appCode ||
-				props.name ||
-				"",
+			props.sourceName ||
+			props.system ||
+			props.app ||
+			props.appCode ||
+			props.name ||
+			"",
 		),
 	);
 	return direct || normalizeText(source.name);
@@ -614,9 +614,9 @@ const mapTaskToForm = (task: IngestionTaskDTO) => {
 	const syncPrefix =
 		normalizeText(
 			destinationConfig.tablePrefix ||
-				destinationConfig.prefix ||
-				destinationConfig.targetPrefix ||
-				inferPrefixFromMapping(task.tableMapping?.[0]),
+			destinationConfig.prefix ||
+			destinationConfig.targetPrefix ||
+			inferPrefixFromMapping(task.tableMapping?.[0]),
 		) || undefined;
 	const resolvedWriterConfig =
 		(rawDestinationConfig && Object.keys(rawDestinationConfig).length ? rawDestinationConfig : undefined) ||
@@ -634,10 +634,10 @@ const mapTaskToForm = (task: IngestionTaskDTO) => {
 	const selector = normalizeText(task.dbtModelSelector);
 	const dbtModels = selector
 		? selector
-				.split(/\s+/)
-				.filter((item) => item.startsWith("model:"))
-				.map((item) => item.replace("model:", ""))
-				.filter(Boolean)
+			.split(/\s+/)
+			.filter((item) => item.startsWith("model:"))
+			.map((item) => item.replace("model:", ""))
+			.filter(Boolean)
 		: [];
 	const hasMapping = Array.isArray(task.tableMapping) && task.tableMapping.length > 0;
 	const mappingTables = hasMapping ? extractMappingTables(task.tableMapping) : [];
@@ -752,55 +752,55 @@ export default function TransformCreatePage() {
 		[]
 	);
 
-const syncSelectedTablesToForm = (tables: string[], opts?: { silent?: boolean }) => {
-	const nextTables = mergeTableSelections(tables);
-	setSelectedTableKeys(nextTables);
-	selectedTableKeysRef.current = nextTables;
-	form.setFieldValue("selectedTables", nextTables.join("\n"));
-	if (!nextTables.length) {
-		form.setFieldValue("tableSelectionMode", "all");
-		form.setFieldValue("readerTables", "");
-		form.setFieldValue("writerTables", "");
-		if (!opts?.silent) {
-			toast.info("已清空表清单");
+	const syncSelectedTablesToForm = (tables: string[], opts?: { silent?: boolean }) => {
+		const nextTables = mergeTableSelections(tables);
+		setSelectedTableKeys(nextTables);
+		selectedTableKeysRef.current = nextTables;
+		form.setFieldValue("selectedTables", nextTables.join("\n"));
+		if (!nextTables.length) {
+			form.setFieldValue("tableSelectionMode", "all");
+			form.setFieldValue("readerTables", "");
+			form.setFieldValue("writerTables", "");
+			if (!opts?.silent) {
+				toast.info("已清空表清单");
+			}
+			return;
 		}
-		return;
-	}
-	const values = form.getFieldsValue(true);
-	const isJsonMode = values.editorMode === "json";
-	try {
-		if (isJsonMode) {
-			const readerConfig = parseJson(values.readerConfig, "Reader 配置") as Record<string, any> | undefined;
-			const nextReader = applyTablesToConfig(readerConfig, nextTables);
-			form.setFieldValue("readerConfig", JSON.stringify(nextReader || {}, null, 2));
-			const writerConfig = parseJson(values.writerConfig, "Writer 配置") as Record<string, any> | undefined;
-			const nextWriter = applyTablesToConfig(writerConfig, nextTables);
-			form.setFieldValue("writerConfig", JSON.stringify(nextWriter || {}, null, 2));
-		} else {
+		const values = form.getFieldsValue(true);
+		const isJsonMode = values.editorMode === "json";
+		try {
+			if (isJsonMode) {
+				const readerConfig = parseJson(values.readerConfig, "Reader 配置") as Record<string, any> | undefined;
+				const nextReader = applyTablesToConfig(readerConfig || {}, nextTables);
+				form.setFieldValue("readerConfig", JSON.stringify(nextReader || {}, null, 2));
+				const writerConfig = parseJson(values.writerConfig, "Writer 配置") as Record<string, any> | undefined;
+				const nextWriter = applyTablesToConfig(writerConfig || {}, nextTables);
+				form.setFieldValue("writerConfig", JSON.stringify(nextWriter || {}, null, 2));
+			}
+			// Always sync visual-mode fields so they persist across steps
 			form.setFieldValue("readerTables", nextTables.join("\n"));
 			form.setFieldValue("writerTables", nextTables.join("\n"));
+			form.setFieldValue("tableSelectionMode", "manual");
+			if (!opts?.silent) {
+				toast.success("已更新表清单");
+			}
+		} catch (err: any) {
+			if (!opts?.silent) {
+				toast.error(err?.message || "更新表清单失败");
+			}
 		}
-		form.setFieldValue("tableSelectionMode", "manual");
-		if (!opts?.silent) {
-			toast.success("已更新表清单");
-		}
-	} catch (err: any) {
-		if (!opts?.silent) {
-			toast.error(err?.message || "更新表清单失败");
-		}
-	}
-};
+	};
 
-const resolveSelectedTables = (values?: Record<string, any>) => {
-	const snapshot = values ?? form.getFieldsValue(true);
-	const selectionMode = normalizeText(snapshot?.tableSelectionMode) || "all";
-	const selected = snapshot?.selectedTables ?? form.getFieldValue("selectedTables");
-	const keys = mergeTableSelections(selectedTableKeysRef.current, selectedTableKeys);
-	if (selectionMode !== "manual") {
-		return mergeTableSelections(selected, keys);
-	}
-	return mergeTableSelections(selected, keys, snapshot?.readerTables, snapshot?.writerTables);
-};
+	const resolveSelectedTables = (values?: Record<string, any>) => {
+		const snapshot = values ?? form.getFieldsValue(true);
+		const selectionMode = normalizeText(snapshot?.tableSelectionMode) || "all";
+		const selected = snapshot?.selectedTables ?? form.getFieldValue("selectedTables");
+		const keys = mergeTableSelections(selectedTableKeysRef.current, selectedTableKeys);
+		if (selectionMode !== "manual") {
+			return mergeTableSelections(selected, keys);
+		}
+		return mergeTableSelections(selected, keys, snapshot?.readerTables, snapshot?.writerTables);
+	};
 
 	useEffect(() => {
 		const loadSources = async () => {
@@ -933,6 +933,33 @@ const resolveSelectedTables = (values?: Record<string, any>) => {
 		}
 	}, [tableSelectionMode, selectedTableKeys.length, selectedTablesValue]);
 
+	// Sync selected tables to writer fields when entering Step 2
+	// This ensures values persist even when writerTables/writerConfig Form.Items
+	// were not mounted (on Step 1) when the selection was made
+	useEffect(() => {
+		if (currentStep !== 2) return;
+		const selected = mergeTableSelections(
+			selectedTableKeysRef.current,
+			selectedTableKeys,
+		);
+		if (!selected.length) return;
+		const values = form.getFieldsValue(true);
+		const isJsonMode = values.editorMode === "json";
+		if (isJsonMode) {
+			const writerConfig = tryParseJson(values.writerConfig) || {};
+			const existingTables = extractWriterTables(writerConfig);
+			if (!existingTables.length) {
+				const nextWriter = applyTablesToConfig(writerConfig, selected);
+				form.setFieldValue("writerConfig", JSON.stringify(nextWriter || {}, null, 2));
+			}
+		} else {
+			const current = splitLines(values.writerTables);
+			if (!current.length) {
+				form.setFieldValue("writerTables", selected.join("\n"));
+			}
+		}
+	}, [currentStep, selectedTableKeys, form]);
+
 	const stepItems = useMemo(
 		() => [
 			{ key: "basic", title: "基础信息" },
@@ -1058,6 +1085,10 @@ const resolveSelectedTables = (values?: Record<string, any>) => {
 					? mergeTableSelections(selectedTables, selectedTableKeysRef.current)
 					: [];
 			const excludeTables = selectionMode === "all" ? splitLines(values.tableExclude) : [];
+			if (selectionMode === "manual" && includeTables.length) {
+				readerConfig = applyTablesToConfig(readerConfig, includeTables);
+				writerConfig = applyTablesToConfig(writerConfig, includeTables);
+			}
 			const draftPayload: Record<string, any> = {
 				draft: true,
 				name,
@@ -1304,7 +1335,7 @@ const resolveSelectedTables = (values?: Record<string, any>) => {
 			}
 			const airflowEnabled = mergedValues.airflowEnabled ?? editingTask?.airflowEnabled ?? true;
 			const isJsonMode = mergedValues.editorMode === "json";
-			const readerConfig = isJsonMode
+			let readerConfig = isJsonMode
 				? parseJson(mergedValues.readerConfig, "Reader 配置")
 				: buildReaderConfig(mergedValues);
 			applyReaderTypeToConfig(readerConfig as Record<string, any> | undefined, resolvedReaderType);
@@ -1338,7 +1369,7 @@ const resolveSelectedTables = (values?: Record<string, any>) => {
 				selectionMode = "manual";
 				mergedValues.tableSelectionMode = "manual";
 			}
-			const writerConfig = isJsonMode
+			let writerConfig = isJsonMode
 				? parseJson(mergedValues.writerConfig, "Writer 配置")
 				: buildWriterConfig(mergedValues);
 			const inferredManualTables = mergeTableSelections(
@@ -1374,8 +1405,8 @@ const resolveSelectedTables = (values?: Record<string, any>) => {
 				if (!includeTables.length) {
 					throw new Error("请选择需要入湖的表");
 				}
-				applyTablesToConfig(readerConfig as Record<string, any> | undefined, includeTables);
-				applyTablesToConfig(writerConfig as Record<string, any> | undefined, includeTables);
+				readerConfig = applyTablesToConfig(readerConfig as Record<string, any> | undefined, includeTables);
+				writerConfig = applyTablesToConfig(writerConfig as Record<string, any> | undefined, includeTables);
 			}
 			const excludeTables = selectionMode === "all" ? splitLines(mergedValues.tableExclude) : [];
 			if (writerConfig && selectionMode !== "all" && !hasTableEntries(extractWriterTables(writerConfig))) {
@@ -1388,13 +1419,13 @@ const resolveSelectedTables = (values?: Record<string, any>) => {
 				toast.warning("未填写 DAG 族选择器，将使用默认 DAG 触发 dbt");
 			}
 			if (isEdit && editId) {
-			const updatePayload: IngestionTaskDTO = {
-				...(editingTask || {}),
-				id: editId,
-				name: taskName,
-				description: normalizeText(mergedValues.description) || undefined,
-				sourceType: normalizeText(resolvedReaderType) || undefined,
-				sourceDataSourceId: sourceDataSourceId,
+				const updatePayload: IngestionTaskDTO = {
+					...(editingTask || {}),
+					id: editId,
+					name: taskName,
+					description: normalizeText(mergedValues.description) || undefined,
+					sourceType: normalizeText(resolvedReaderType) || undefined,
+					sourceDataSourceId: sourceDataSourceId,
 					sourceConfig: (readerConfig as Record<string, any>) || {},
 					destinationType: defaultWriterType,
 					destinationConfig: writerConfig as Record<string, any> | undefined,
@@ -1416,7 +1447,7 @@ const resolveSelectedTables = (values?: Record<string, any>) => {
 					description: normalizeText(mergedValues.description) || undefined,
 					owner: userInfo?.username || userInfo?.login,
 					source: {
-					dataSourceId: sourceDataSourceId,
+						dataSourceId: sourceDataSourceId,
 						type: normalizeText(resolvedReaderType) || undefined,
 						config: readerConfig || {},
 					},
@@ -1531,6 +1562,9 @@ const resolveSelectedTables = (values?: Record<string, any>) => {
 						className="mb-6"
 					/>
 					<Form.Item name="selectedTables" hidden>
+						<Input type="hidden" />
+					</Form.Item>
+					<Form.Item name="writerType" hidden rules={[{ required: true, message: "请选择 Writer 类型" }]}>
 						<Input type="hidden" />
 					</Form.Item>
 					{currentStep === 0 && (
@@ -1704,11 +1738,11 @@ const resolveSelectedTables = (values?: Record<string, any>) => {
 										{ title: "类型", dataIndex: "type", width: 120 },
 									]}
 									pagination={{
-									pageSize: tablePageSize,
-									showSizeChanger: true,
-									pageSizeOptions: [8, 20, 50, 100],
-									onShowSizeChange: (_current: number, size: number) => setTablePageSize(size),
-								}}
+										pageSize: tablePageSize,
+										showSizeChanger: true,
+										pageSizeOptions: [8, 20, 50, 100],
+										onShowSizeChange: (_current: number, size: number) => setTablePageSize(size),
+									}}
 								/>
 								<Text type="secondary" className="block mt-2">
 									已发现 {discoveredTables.length} 张表，已选择 {selectedTableKeys.length} 张表
@@ -1762,12 +1796,8 @@ const resolveSelectedTables = (values?: Record<string, any>) => {
 								用于自动生成 ODS 表名（如：ods_erp_ + 源表名）。若 Writer 已指定目标表，可留空。
 							</Text>
 							<Divider orientation="left">Writer 配置</Divider>
-							<Form.Item
-								name="writerType"
-								label="Writer 类型"
-								rules={[{ required: true, message: "请选择 Writer 类型" }]}
-							>
-								<Input placeholder="由默认数据湖自动提供" disabled />
+							<Form.Item label="Writer 类型" required>
+								<Input value={formValues?.writerType || ""} placeholder="由默认数据湖自动提供" disabled />
 							</Form.Item>
 							{editorMode === "json" ? (
 								<Form.Item
@@ -1900,7 +1930,7 @@ const resolveSelectedTables = (values?: Record<string, any>) => {
 								{previewState.error ? (
 									<Alert type="warning" message={previewState.error} showIcon />
 								) : (
-									<pre className="bg-gray-50 p-4 rounded overflow-auto">
+									<pre className="bg-muted p-4 rounded overflow-auto">
 										{JSON.stringify(previewState.config, null, 2)}
 									</pre>
 								)}

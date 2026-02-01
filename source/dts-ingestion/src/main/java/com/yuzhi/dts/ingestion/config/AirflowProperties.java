@@ -12,7 +12,7 @@ public class AirflowProperties {
     private String password;
     private String dagId;
     private String dagsDir;
-    private Integer dagReadyWaitSeconds = 5;
+    private Integer dagReadyWaitSeconds = 60;
     private Integer dagReadyPollSeconds = 2;
     private boolean executionPollEnabled = true;
     private Long executionPollIntervalMs = 15000L;

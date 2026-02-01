@@ -9,6 +9,7 @@ import com.yuzhi.dts.ingestion.service.dto.IngestionExecutionDTO;
 import com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO;
 import com.yuzhi.dts.ingestion.service.etl.AddaxJobService;
 import com.yuzhi.dts.ingestion.service.etl.AirflowAdapter;
+import com.yuzhi.dts.ingestion.service.etl.AirflowClient;
 import com.yuzhi.dts.ingestion.service.etl.AirflowDagService;
 import com.yuzhi.dts.ingestion.service.mapper.IngestionExecutionMapper;
 import com.yuzhi.dts.ingestion.service.mapper.IngestionTaskMapper;
@@ -46,6 +47,7 @@ public class IngestionTaskService {
     private final IngestionExecutionMapper executionMapper;
     private final AddaxJobService addaxJobService;
     private final AirflowAdapter airflowAdapter;
+    private final AirflowClient airflowClient;
     private final AirflowDagService airflowDagService;
     private final com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver sourceResolver;
     private final com.yuzhi.dts.ingestion.service.etl.TargetTableProvisioner targetTableProvisioner;
@@ -59,6 +61,7 @@ public class IngestionTaskService {
         IngestionExecutionMapper executionMapper,
         AddaxJobService addaxJobService,
         AirflowAdapter airflowAdapter,
+        AirflowClient airflowClient,
         AirflowDagService airflowDagService,
         com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver sourceResolver,
         com.yuzhi.dts.ingestion.service.etl.TargetTableProvisioner targetTableProvisioner,
@@ -71,6 +74,7 @@ public class IngestionTaskService {
         this.executionMapper = executionMapper;
         this.addaxJobService = addaxJobService;
         this.airflowAdapter = airflowAdapter;
+        this.airflowClient = airflowClient;
         this.airflowDagService = airflowDagService;
         this.sourceResolver = sourceResolver;
         this.targetTableProvisioner = targetTableProvisioner;
@@ -301,6 +305,8 @@ public class IngestionTaskService {
         com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver.ResolvedSource source = resolveSource(task, null);
         task = ensureAddaxJobExists(task, source);
         targetTableProvisioner.ensureTargetTables(task, source == null ? null : source.readerConfig());
+        // Resolve actual column names for PostgreSQL writers to work around Addax 6.0.8 quoteColumn bug
+        addaxJobService.resolveWriterColumnsIfNeeded(task.getAddaxJobPath());
         if (airflowEnabled && task.getAirflowEnabled() == null) {
             task.setAirflowEnabled(true);
             task = taskRepository.save(task);
@@ -540,6 +546,52 @@ public class IngestionTaskService {
             .map(executionMapper::toDto);
     }
 
+    @Transactional(readOnly = true)
+    public Map<String, Object> fetchExecutionLog(Long taskId, Long executionId, Integer tryNumber) {
+        IngestionTask task = taskRepository.findById(taskId)
+            .orElseThrow(() -> new IllegalArgumentException("Task not found: " + taskId));
+        IngestionExecution execution = executionRepository.findById(executionId)
+            .orElseThrow(() -> new IllegalArgumentException("Execution not found: " + executionId));
+        if (execution.getTask() == null || !taskId.equals(execution.getTask().getId())) {
+            throw new IllegalArgumentException("Execution does not belong to task: " + taskId);
+        }
+        if (!isAirflowEnabled(task)) {
+            return Map.of(
+                "taskId", taskId,
+                "executionId", executionId,
+                "message", "Airflow 未启用，暂无日志"
+            );
+        }
+        String dagId = airflowDagService.resolveDagIdForTask(task);
+        String airflowTaskId = airflowDagService.resolveTaskIdForTask(task);
+        String dagRunId = execution.getExecutionId();
+        int resolvedTry = tryNumber == null ? 1 : Math.max(1, tryNumber);
+        if (!StringUtils.hasText(dagRunId) || !StringUtils.hasText(dagId) || !StringUtils.hasText(airflowTaskId)) {
+            return Map.of(
+                "taskId", taskId,
+                "executionId", executionId,
+                "dagId", dagId,
+                "dagRunId", dagRunId,
+                "taskInstanceId", airflowTaskId,
+                "tryNumber", resolvedTry,
+                "message", "缺少 Airflow 执行信息，无法获取日志"
+            );
+        }
+        String log = airflowClient.getTaskLog(dagId, dagRunId, airflowTaskId, resolvedTry).orElse("");
+        Map<String, Object> result = new java.util.LinkedHashMap<>();
+        result.put("taskId", taskId);
+        result.put("executionId", executionId);
+        result.put("dagId", dagId);
+        result.put("dagRunId", dagRunId);
+        result.put("taskInstanceId", airflowTaskId);
+        result.put("tryNumber", resolvedTry);
+        result.put("log", log);
+        if (!StringUtils.hasText(log)) {
+            result.put("message", "日志为空或未就绪");
+        }
+        return result;
+    }
+
     public IngestionTaskDTO rebuildDag(Long taskId) {
         IngestionTask task = taskRepository.findById(taskId)
             .orElseThrow(() -> new IllegalArgumentException("Task not found: " + taskId));
@@ -561,7 +613,11 @@ public class IngestionTaskService {
         if (task == null || !isAirflowEnabled(task)) {
             return task;
         }
-        String dagId = airflowDagService.ensureDagForTask(task);
+        // Split multi-content-block job into per-table files so each Airflow operator
+        // runs Addax with a single content block (Addax only processes the first one).
+        java.util.List<AddaxJobService.PerTableJob> perTableJobs =
+            addaxJobService.splitJobIntoPerTableFiles(task.getAddaxJobPath());
+        String dagId = airflowDagService.ensureDagForTask(task, perTableJobs);
         if (!StringUtils.hasText(dagId)) {
             throw new IllegalStateException("DAG 生成失败，请检查 Airflow DAG 目录配置");
         }

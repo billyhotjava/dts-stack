@@ -741,11 +741,11 @@ export default function SqlModelingPage() {
 	}, [spaces, activeSpaceKey, filteredModels, buildLayerNodes]);
 
 	return (
-		<div className="flex min-h-[calc(100vh-120px)] flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-			<div className="flex h-16 items-center justify-between border-b bg-white px-6">
+		<div className="flex min-h-[calc(100vh-120px)] flex-col overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+			<div className="flex h-16 items-center justify-between border-b border-border bg-card px-6">
 				<Space size="large">
 					<div className="text-lg font-bold text-blue-600">Data Studio</div>
-					<div className="rounded-md bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">逻辑建模</div>
+					<div className="rounded-md bg-muted px-3 py-1 text-xs font-semibold text-foreground">逻辑建模</div>
 					<Badge status={configEnabled ? "success" : "error"} text={configEnabled ? "dbt 已连接" : "dbt 未启用"} />
 				</Space>
 				<Space>
@@ -783,8 +783,8 @@ export default function SqlModelingPage() {
 				</Space>
 			</div>
 			<Card
-				className="mx-6 mt-4 border border-slate-200 shadow-sm"
-				title={<span className="text-sm font-semibold text-slate-700">dbt 资产同步状态</span>}
+				className="mx-6 mt-4 border border-border shadow-sm"
+				title={<span className="text-sm font-semibold text-foreground">dbt 资产同步状态</span>}
 				extra={
 					<Button size="small" onClick={handleSyncModels} loading={syncingModels} disabled={!configEnabled || !workspaceOk}>
 						立即同步
@@ -792,36 +792,36 @@ export default function SqlModelingPage() {
 				}
 			>
 				{dbtSyncStatus ? (
-					<div className="grid gap-3 text-xs text-slate-600">
+					<div className="grid gap-3 text-xs text-foreground">
 						<div className="grid gap-3 md:grid-cols-2">
-							<div className="rounded border border-slate-100 bg-slate-50/50 px-3 py-2">
+							<div className="rounded border border-border bg-muted/50 px-3 py-2">
 								<div className="flex items-center gap-2">
-									<span className="font-medium text-slate-700">manifest</span>
+									<span className="font-medium text-foreground">manifest</span>
 									{syncTag(dbtSyncStatus.manifest?.synced)}
 									<span>同步时间：{formatDateTime(dbtSyncStatus.manifest?.lastSyncAt)}</span>
 								</div>
-								<div className="mt-1 text-[11px] text-slate-400">
+								<div className="mt-1 text-[11px] text-muted-foreground">
 									文件时间：{formatMillis(dbtSyncStatus.manifest?.lastModifiedAt)}
 									{dbtSyncStatus.manifest?.message ? ` · ${dbtSyncStatus.manifest.message}` : ""}
 								</div>
 							</div>
-							<div className="rounded border border-slate-100 bg-slate-50/50 px-3 py-2">
+							<div className="rounded border border-border bg-muted/50 px-3 py-2">
 								<div className="flex items-center gap-2">
-									<span className="font-medium text-slate-700">run_results</span>
+									<span className="font-medium text-foreground">run_results</span>
 									{syncTag(dbtSyncStatus.runResults?.synced)}
 									<span>同步时间：{formatDateTime(dbtSyncStatus.runResults?.lastSyncAt)}</span>
 								</div>
-								<div className="mt-1 text-[11px] text-slate-400">
+								<div className="mt-1 text-[11px] text-muted-foreground">
 									文件时间：{formatMillis(dbtSyncStatus.runResults?.lastModifiedAt)}
 									{dbtSyncStatus.runResults?.message ? ` · ${dbtSyncStatus.runResults.message}` : ""}
 								</div>
 							</div>
 						</div>
 						{dbtSyncStatus.stats ? (
-							<div className="rounded border border-slate-100 bg-slate-50/50 px-3 py-2">
+							<div className="rounded border border-border bg-muted/50 px-3 py-2">
 								<div className="flex items-center justify-between">
-									<span className="font-medium text-slate-700">资产同步统计</span>
-									<span className="text-[11px] text-slate-400">
+									<span className="font-medium text-foreground">资产同步统计</span>
+									<span className="text-[11px] text-muted-foreground">
 										同步时间：{formatDateTime(dbtSyncStatus.stats.lastSyncAt)}
 										{dbtSyncStatus.stats.message ? ` · ${dbtSyncStatus.stats.message}` : ""}
 									</span>
@@ -856,13 +856,13 @@ export default function SqlModelingPage() {
 						) : null}
 					</div>
 				) : (
-					<div className="text-xs text-slate-400">未获取同步状态</div>
+					<div className="text-xs text-muted-foreground">未获取同步状态</div>
 				)}
 			</Card>
 
 			<div className="flex flex-1 overflow-hidden">
-				<div className="w-64 border-r border-slate-200 bg-slate-50 p-4">
-					<div className="mb-3 text-xs font-bold uppercase text-slate-400">项目目录</div>
+				<div className="w-64 border-r border-border bg-muted p-4">
+					<div className="mb-3 text-xs font-bold uppercase text-muted-foreground">项目目录</div>
 					<Input
 						size="small"
 						placeholder="搜索模型..."
@@ -871,7 +871,7 @@ export default function SqlModelingPage() {
 						className="mb-3"
 					/>
 					{spacesLoading ? (
-						<Card size="small" className="border-dashed text-center text-xs text-slate-400">
+						<Card size="small" className="border-dashed text-center text-xs text-muted-foreground">
 							加载项目空间中...
 						</Card>
 					) : treeData.length === 0 ? (
@@ -905,16 +905,16 @@ export default function SqlModelingPage() {
 								}}
 							/>
 							{modelsLoading ? (
-								<div className="mt-3 text-xs text-slate-400">加载模型中...</div>
+								<div className="mt-3 text-xs text-muted-foreground">加载模型中...</div>
 							) : activeLayerNodes.length === 0 ? (
-								<div className="mt-3 text-xs text-slate-400">当前项目暂无模型。</div>
+								<div className="mt-3 text-xs text-muted-foreground">当前项目暂无模型。</div>
 							) : null}
 						</>
 					)}
 				</div>
 
 				<div className="flex flex-1 flex-col">
-					<div className="flex items-center justify-between border-b px-4 py-2">
+					<div className="flex items-center justify-between border-b border-border px-4 py-2">
 						<Space>
 							<Text strong>{activeModel?.name || "未选择模型"}</Text>
 							{layerTag(activeModel?.layer || (activeModel ? inferLayer(activeModel.name) : undefined))}
@@ -937,7 +937,7 @@ export default function SqlModelingPage() {
 						{activeModel ? (
 							<Suspense
 								fallback={
-									<div className="flex h-full items-center justify-center text-center text-xs text-slate-500">
+									<div className="flex h-full items-center justify-center text-center text-xs text-muted-foreground">
 										加载编辑器中...
 									</div>
 								}
@@ -959,13 +959,13 @@ export default function SqlModelingPage() {
 								/>
 							</Suspense>
 						) : (
-							<div className="flex h-full items-center justify-center text-center text-xs text-slate-500">
+							<div className="flex h-full items-center justify-center text-center text-xs text-muted-foreground">
 								请选择模型查看 SQL。
 							</div>
 						)}
 					</div>
 
-					<div className="h-64 border-t border-slate-200 bg-white">
+					<div className="h-64 border-t border-border bg-card">
 						<Tabs
 							activeKey={bottomTab}
 							onChange={setBottomTab}
@@ -994,7 +994,7 @@ export default function SqlModelingPage() {
 									key: "runs",
 									label: "运行记录",
 									children: runs.length === 0 && !runsLoading ? (
-										<div className="p-4 text-sm text-slate-500">暂无运行记录。</div>
+										<div className="p-4 text-sm text-muted-foreground">暂无运行记录。</div>
 									) : (
 										<Table
 											rowKey={(row) => row.dag_run_id || Math.random().toString(36)}
@@ -1012,23 +1012,23 @@ export default function SqlModelingPage() {
 					</div>
 				</div>
 
-				<div className="w-72 border-l border-slate-200 bg-white p-4">
-					<div className="mb-4 text-xs font-bold uppercase text-slate-400">项目与元数据</div>
+				<div className="w-72 border-l border-border bg-card p-4">
+					<div className="mb-4 text-xs font-bold uppercase text-muted-foreground">项目与元数据</div>
 					<Card size="small" title="项目空间" className="mb-4">
 						{activeSpace ? (
-							<div className="space-y-1 text-xs text-slate-500">
+							<div className="space-y-1 text-xs text-muted-foreground">
 								<div>名称：{activeSpace.name || "-"}</div>
 								<div>业务域：{activeSpace.domain || "-"}</div>
 								<div>负责人：{activeSpace.owner || "-"}</div>
 								<div>状态：{activeSpace.status || "-"}</div>
 							</div>
 						) : (
-							<div className="text-xs text-slate-500">请选择项目空间。</div>
+							<div className="text-xs text-muted-foreground">请选择项目空间。</div>
 						)}
 					</Card>
 					<Card size="small" title="模型信息" className="mb-4">
 						{activeModel ? (
-							<div className="space-y-1 text-xs text-slate-500">
+							<div className="space-y-1 text-xs text-muted-foreground">
 								<div>模型名称：{activeModel.name || "-"}</div>
 								<div>数据源：{activeModel.sourceDataSourceName || "-"}</div>
 								<div>来源系统：{activeModel.sourceSystem || "-"}</div>
@@ -1039,7 +1039,7 @@ export default function SqlModelingPage() {
 								<div>路径：{activeModel.modelPath || "-"}</div>
 							</div>
 						) : (
-							<div className="text-xs text-slate-500">请选择模型查看详情。</div>
+							<div className="text-xs text-muted-foreground">请选择模型查看详情。</div>
 						)}
 					</Card>
 					<Card size="small" title="字段状态" className="mb-4">
@@ -1055,20 +1055,20 @@ export default function SqlModelingPage() {
 									scroll={{ y: 200 }}
 								/>
 							) : (
-								<div className="text-xs text-slate-500">暂无字段配置。</div>
+								<div className="text-xs text-muted-foreground">暂无字段配置。</div>
 							)
 						) : (
-							<div className="text-xs text-slate-500">请选择模型查看字段。</div>
+							<div className="text-xs text-muted-foreground">请选择模型查看字段。</div>
 						)}
 					</Card>
 					<Card size="small" title="工作区配置" className="mb-4">
-						<div className="text-xs text-slate-500">
+						<div className="text-xs text-muted-foreground">
 							<div>项目目录：{dbtConfig?.config?.projectDir || "未配置"}</div>
 							<div>Profiles：{dbtConfig?.config?.profilesDir || "未配置"}</div>
 							<div>Target：{dbtConfig?.config?.targetName || "未配置"}</div>
 						</div>
 						{workspaceStatus && !workspaceStatus.ok ? (
-							<div className="mt-2 rounded border border-red-100 bg-red-50 px-2 py-1 text-xs text-red-600">
+							<div className="mt-2 rounded border border-destructive/30 bg-destructive/10 dark:bg-destructive/20 px-2 py-1 text-xs text-destructive">
 								{workspaceStatus.message || "dbt 工作区不可用"}
 							</div>
 						) : null}
@@ -1076,9 +1076,9 @@ export default function SqlModelingPage() {
 							编辑配置
 						</Button>
 					</Card>
-					<div className="rounded border border-yellow-100 bg-yellow-50 p-3">
-						<div className="text-xs font-bold text-yellow-700">元数据校验</div>
-						<div className="mt-1 text-xs text-yellow-600">质量与落标检查接口暂未接入。</div>
+					<div className="rounded border border-warning/30 bg-warning/10 dark:bg-warning/20 p-3">
+						<div className="text-xs font-bold text-warning-dark dark:text-warning-light">元数据校验</div>
+						<div className="mt-1 text-xs text-warning-dark dark:text-warning-light">质量与落标检查接口暂未接入。</div>
 					</div>
 				</div>
 			</div>

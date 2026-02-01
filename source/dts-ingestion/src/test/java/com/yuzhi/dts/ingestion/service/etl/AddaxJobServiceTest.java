@@ -36,6 +36,9 @@ class AddaxJobServiceTest {
     @Mock
     private IngestionSettingsService.SettingsSnapshot settingsSnapshot;
 
+    @Mock
+    private JdbcMetadataService jdbcMetadataService;
+
     private ObjectMapper objectMapper;
     private AddaxJobService addaxJobService;
 
@@ -45,7 +48,7 @@ class AddaxJobServiceTest {
     @BeforeEach
     void setup() {
         objectMapper = new ObjectMapper();
-        addaxJobService = new AddaxJobService(addaxProperties, settingsService, objectMapper);
+        addaxJobService = new AddaxJobService(addaxProperties, settingsService, objectMapper, jdbcMetadataService);
 
         // Mock settings service
         when(settingsService.getSettings(anyString())).thenReturn(settingsSnapshot);

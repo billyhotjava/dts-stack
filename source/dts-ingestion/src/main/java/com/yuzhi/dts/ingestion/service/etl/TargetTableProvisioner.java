@@ -65,12 +65,21 @@ public class TargetTableProvisioner {
                     continue;
                 }
                 TableId target = resolveTargetTable(mapping.target(), resolveSchema(writerConfig));
+                target = lowercaseForPostgres(target, targetInfo.jdbcUrl());
                 if (tableExists(connection, target)) {
-                    continue;
+                    if (isPostgres(targetInfo.jdbcUrl()) && hasUppercaseColumns(connection, target)) {
+                        LOG.info("Dropping table {} with uppercase columns to recreate with lowercase", target.qualifiedName());
+                        dropTable(connection, target);
+                    } else {
+                        continue;
+                    }
                 }
                 List<JdbcMetadataService.ColumnMeta> columns = resolveColumns(sourceInfo, mapping.source(), readerConfig);
                 if (columns.isEmpty()) {
                     throw new IllegalStateException("无法获取源表字段信息: " + mapping.source());
+                }
+                if (isPostgres(targetInfo.jdbcUrl())) {
+                    columns = lowercaseColumnNames(columns);
                 }
                 createSchemaIfNeeded(connection, target.schema());
                 createTable(connection, target, columns);
@@ -263,6 +272,31 @@ public class TargetTableProvisioner {
         return parsed;
     }
 
+    private TableId lowercaseForPostgres(TableId tableId, String jdbcUrl) {
+        if (tableId == null || !isPostgres(jdbcUrl)) {
+            return tableId;
+        }
+        String schema = tableId.schema() != null ? tableId.schema().toLowerCase(Locale.ROOT) : null;
+        String table = tableId.table() != null ? tableId.table().toLowerCase(Locale.ROOT) : tableId.table();
+        return new TableId(schema, table);
+    }
+
+    private boolean isPostgres(String jdbcUrl) {
+        return StringUtils.hasText(jdbcUrl) && jdbcUrl.toLowerCase(Locale.ROOT).contains("postgresql");
+    }
+
+    private List<JdbcMetadataService.ColumnMeta> lowercaseColumnNames(List<JdbcMetadataService.ColumnMeta> columns) {
+        if (columns == null || columns.isEmpty()) {
+            return columns;
+        }
+        return columns.stream()
+            .map(col -> new JdbcMetadataService.ColumnMeta(
+                col.name() != null ? col.name().toLowerCase(Locale.ROOT) : col.name(),
+                col.jdbcType(), col.typeName(), col.columnSize(), col.decimalDigits()
+            ))
+            .toList();
+    }
+
     private List<String> extractColumns(Map<String, Object> config) {
         if (config == null || config.isEmpty()) {
             return List.of();
@@ -415,6 +449,25 @@ public class TargetTableProvisioner {
             return prefix;
         }
         return normalizeText(config.get("targetPrefix"));
+    }
+
+    private boolean hasUppercaseColumns(Connection connection, TableId tableId) throws Exception {
+        DatabaseMetaData meta = connection.getMetaData();
+        try (ResultSet rs = meta.getColumns(null, tableId.schema(), tableId.table(), null)) {
+            while (rs.next()) {
+                String colName = rs.getString("COLUMN_NAME");
+                if (colName != null && !colName.equals(colName.toLowerCase(Locale.ROOT))) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private void dropTable(Connection connection, TableId tableId) throws Exception {
+        try (Statement statement = connection.createStatement()) {
+            statement.execute("DROP TABLE IF EXISTS " + tableId.qualifiedName() + " CASCADE");
+        }
     }
 
     private void createSchemaIfNeeded(Connection connection, String schema) throws Exception {

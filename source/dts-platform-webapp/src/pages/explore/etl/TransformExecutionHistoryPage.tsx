@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import { useParams } from "@/routes/hooks";
-import { Button, Card, Space, Table, Tag, message, Spin } from "antd";
+import { Button, Card, Space, Table, Tag, message, Spin, Drawer, Typography } from "antd";
 import { ArrowLeftOutlined, ReloadOutlined } from "@ant-design/icons";
 import { PageHeader } from "@/components/page-header";
 import { useRouter } from "@/routes/hooks";
-import { ingestionTaskAPI, type IngestionExecutionDTO, type IngestionTaskDTO } from "@/api/ingestion";
+import { ingestionTaskAPI, type IngestionExecutionDTO, type IngestionTaskDTO, type IngestionExecutionLog } from "@/api/ingestion";
 import { formatTimestamp, formatNumber } from "@/utils/format";
 
 export default function TransformExecutionHistoryPage() {
@@ -14,6 +14,11 @@ export default function TransformExecutionHistoryPage() {
     const [executions, setExecutions] = useState<IngestionExecutionDTO[]>([]);
     const [loading, setLoading] = useState(false);
     const [pagination, setPagination] = useState({ current: 1, pageSize: 20, total: 0 });
+    const [logVisible, setLogVisible] = useState(false);
+    const [logLoading, setLogLoading] = useState(false);
+    const [logContent, setLogContent] = useState("");
+    const [logMeta, setLogMeta] = useState<IngestionExecutionLog | null>(null);
+    const [activeExecution, setActiveExecution] = useState<IngestionExecutionDTO | null>(null);
 
     useEffect(() => {
         if (id) {
@@ -34,22 +39,45 @@ export default function TransformExecutionHistoryPage() {
     const loadExecutions = async () => {
         setLoading(true);
         try {
-			const result = await ingestionTaskAPI.getExecutions(Number(id), {
-				page: pagination.current - 1,
-				size: pagination.pageSize,
-				sort: "createdAt,desc",
-			});
-			const content = Array.isArray(result?.content) ? result.content : [];
-			setExecutions(content);
-			const total = typeof result?.totalElements === "number" ? result.totalElements : content.length;
-			setPagination((prev) => ({ ...prev, total }));
-		} catch (error: any) {
-			message.error("加载执行历史失败: " + (error.message || "未知错误"));
-			setExecutions([]);
-		} finally {
-			setLoading(false);
-		}
-	};
+            const result = await ingestionTaskAPI.getExecutions(Number(id), {
+                page: pagination.current - 1,
+                size: pagination.pageSize,
+                sort: "createdAt,desc",
+            });
+            const content = Array.isArray(result?.content) ? result.content : [];
+            setExecutions(content);
+            const total = typeof result?.totalElements === "number" ? result.totalElements : content.length;
+            setPagination((prev) => ({ ...prev, total }));
+        } catch (error: any) {
+            message.error("加载执行历史失败: " + (error.message || "未知错误"));
+            setExecutions([]);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const loadLog = async (record: IngestionExecutionDTO, opts?: { silent?: boolean }) => {
+        if (!id) return;
+        try {
+            if (!opts?.silent) {
+                setLogVisible(true);
+            }
+            setActiveExecution(record);
+            setLogLoading(true);
+            const result = await ingestionTaskAPI.getExecutionLog(Number(id), record.id, { tryNumber: 1 });
+            setLogMeta(result);
+            const content = String(result?.log || result?.message || "");
+            setLogContent(content);
+        } catch (error: any) {
+            if (!opts?.silent) {
+                message.error("获取日志失败: " + (error.message || "未知错误"));
+            }
+            setLogMeta(null);
+            setLogContent("");
+        } finally {
+            setLogLoading(false);
+        }
+    };
 
     const renderStatus = (status: string) => {
         const statusMap: Record<string, { color: string; text: string }> = {
@@ -134,6 +162,16 @@ export default function TransformExecutionHistoryPage() {
             ellipsis: true,
             render: (text: string) => text || "-",
         },
+        {
+            title: "日志",
+            key: "log",
+            width: 120,
+            render: (_: any, record: IngestionExecutionDTO) => (
+                <Button size="small" onClick={() => loadLog(record)}>
+                    查看日志
+                </Button>
+            ),
+        },
     ];
 
     if (!task) {
@@ -180,6 +218,37 @@ export default function TransformExecutionHistoryPage() {
                     }}
                 />
             </Card>
+            <Drawer
+                title="执行日志"
+                width={720}
+                open={logVisible}
+                onClose={() => setLogVisible(false)}
+                extra={
+                    <Space>
+                        <Button
+                            icon={<ReloadOutlined />}
+                            loading={logLoading}
+                            onClick={() => activeExecution && loadLog(activeExecution, { silent: true })}
+                        >
+                            刷新
+                        </Button>
+                    </Space>
+                }
+            >
+                {activeExecution ? (
+                    <Space direction="vertical" size="small" className="w-full">
+                        <Typography.Text type="secondary">
+                            执行ID：{activeExecution.executionId || activeExecution.id}
+                            {logMeta?.dagId ? ` · DAG: ${logMeta.dagId}` : ""}
+                        </Typography.Text>
+                        <div className="rounded-md bg-muted p-3 text-xs whitespace-pre-wrap overflow-auto max-h-[60vh]">
+                            {logLoading ? "日志加载中..." : logContent || "暂无日志"}
+                        </div>
+                    </Space>
+                ) : (
+                    <Typography.Text type="secondary">请选择执行记录查看日志。</Typography.Text>
+                )}
+            </Drawer>
         </div>
     );
 }

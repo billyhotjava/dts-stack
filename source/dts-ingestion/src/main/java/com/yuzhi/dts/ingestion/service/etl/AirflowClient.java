@@ -83,7 +83,7 @@ public class AirflowClient {
         }
         URI uri = buildUri(settings, "/dags/" + dagId, null);
         try {
-            HttpHeaders headers = defaultHeaders(settings);
+            HttpHeaders headers = deleteHeaders(settings);
             HttpEntity<Void> entity = new HttpEntity<>(headers);
             ResponseEntity<Void> response = restTemplate.exchange(uri, HttpMethod.DELETE, entity, Void.class);
             return response.getStatusCode().is2xxSuccessful();
@@ -112,6 +112,35 @@ public class AirflowClient {
             LOG.warn("Airflow dag run fetch failed status={} body={}", ex.getStatusCode().value(), ex.getResponseBodyAsString());
         } catch (Exception ex) {
             LOG.warn("Airflow dag run fetch error: {}", ex.getMessage());
+        }
+        return Optional.empty();
+    }
+
+    public Optional<String> getTaskLog(String dagId, String dagRunId, String taskId, int tryNumber) {
+        AirflowSettings settings = resolveSettings();
+        if (!settings.enabled()
+            || !StringUtils.hasText(settings.baseUrl())
+            || !StringUtils.hasText(dagId)
+            || !StringUtils.hasText(dagRunId)
+            || !StringUtils.hasText(taskId)) {
+            return Optional.empty();
+        }
+        int resolvedTry = Math.max(1, tryNumber);
+        URI uri = buildUri(
+            settings,
+            "/dags/" + dagId + "/dagRuns/" + dagRunId + "/taskInstances/" + taskId + "/logs/" + resolvedTry,
+            Map.of("full_content", true)
+        );
+        try {
+            HttpHeaders headers = defaultHeaders(settings);
+            headers.setAccept(List.of(MediaType.TEXT_PLAIN, MediaType.APPLICATION_JSON));
+            HttpEntity<Void> entity = new HttpEntity<>(headers);
+            ResponseEntity<String> response = restTemplate.exchange(uri, HttpMethod.GET, entity, String.class);
+            return Optional.ofNullable(response.getBody());
+        } catch (HttpStatusCodeException ex) {
+            LOG.warn("Airflow task log fetch failed status={} body={}", ex.getStatusCode().value(), ex.getResponseBodyAsString());
+        } catch (Exception ex) {
+            LOG.warn("Airflow task log fetch error: {}", ex.getMessage());
         }
         return Optional.empty();
     }
@@ -166,6 +195,17 @@ public class AirflowClient {
         HttpHeaders headers = new HttpHeaders();
         headers.setAccept(List.of(MediaType.APPLICATION_JSON));
         headers.setContentType(MediaType.APPLICATION_JSON);
+        if (StringUtils.hasText(settings.username())) {
+            String token = settings.username() + ":" + String.valueOf(settings.password());
+            String encoded = java.util.Base64.getEncoder().encodeToString(token.getBytes());
+            headers.set(HttpHeaders.AUTHORIZATION, "Basic " + encoded);
+        }
+        return headers;
+    }
+
+    private HttpHeaders deleteHeaders(AirflowSettings settings) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setAccept(List.of(MediaType.APPLICATION_JSON));
         if (StringUtils.hasText(settings.username())) {
             String token = settings.username() + ":" + String.valueOf(settings.password());
             String encoded = java.util.Base64.getEncoder().encodeToString(token.getBytes());

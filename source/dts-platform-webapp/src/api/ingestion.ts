@@ -43,6 +43,17 @@ export interface IngestionExecutionDTO {
   createdAt?: string;
 }
 
+export interface IngestionExecutionLog {
+  taskId?: number;
+  executionId?: number;
+  dagId?: string;
+  dagRunId?: string;
+  taskInstanceId?: string;
+  tryNumber?: number;
+  log?: string;
+  message?: string;
+}
+
 export interface ColumnInfo {
   name: string;
   jdbcType?: number;
@@ -198,6 +209,17 @@ class IngestionTaskAPI {
       }
       throw error;
     }
+  }
+
+  /**
+   * 获取执行日志
+   */
+  async getExecutionLog(
+    taskId: number,
+    executionId: number,
+    params?: { tryNumber?: number }
+  ): Promise<IngestionExecutionLog> {
+    return api.get({ url: `/ingestion/tasks/${taskId}/executions/${executionId}/logs`, params });
   }
 
   /**

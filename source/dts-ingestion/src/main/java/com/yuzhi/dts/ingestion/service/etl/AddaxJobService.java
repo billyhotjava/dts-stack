@@ -54,14 +54,18 @@ public class AddaxJobService {
     private final AddaxProperties properties;
     private final IngestionSettingsService settingsService;
     private final ObjectMapper objectMapper;
+    private final JdbcMetadataService jdbcMetadataService;
 
-    public AddaxJobService(AddaxProperties properties, IngestionSettingsService settingsService, ObjectMapper objectMapper) {
+    public AddaxJobService(AddaxProperties properties, IngestionSettingsService settingsService, ObjectMapper objectMapper, JdbcMetadataService jdbcMetadataService) {
         this.properties = properties;
         this.settingsService = settingsService;
         this.objectMapper = objectMapper;
+        this.jdbcMetadataService = jdbcMetadataService;
     }
 
     public record AddaxJobResult(String jobName, String jobPath, Map<String, Object> jobConfig) {}
+
+    public record PerTableJob(String tableName, String containerJobPath, String hostJobPath) {}
 
     public AddaxJobResult createJob(
         String taskName,
@@ -110,16 +114,56 @@ public class AddaxJobService {
         }
         Map<String, Object> resolvedReader = ensureDriver(readerType, safeMap(readerConfig));
         Map<String, Object> resolvedWriter = ensureDriver(writerType, safeMap(writerConfig));
-        ensureWriterConnection(resolvedWriter);
+        ensureWriterConnection(writerType, resolvedWriter);
         replaceWriterTablePlaceholders(resolvedReader, resolvedWriter);
-        Map<String, Object> content = new LinkedHashMap<>();
-        content.put("reader", Map.of("name", readerType, "parameter", resolvedReader));
-        content.put("writer", Map.of("name", writerType, "parameter", resolvedWriter));
+
+        // Split into per-table content blocks to avoid Addax multi-table writer bugs
+        List<Map<String, Object>> contentList = splitPerTable(readerType, resolvedReader, writerType, resolvedWriter);
 
         Map<String, Object> job = new LinkedHashMap<>();
         job.put("setting", Map.of("speed", Map.of("channel", 1)));
-        job.put("content", List.of(content));
+        job.put("content", contentList);
         return Map.of("job", job);
+    }
+
+    /**
+     * Split a multi-table reader/writer pair into per-table content blocks.
+     * Addax PostgresqlWriter (and some other writers) do not reliably handle
+     * multiple tables in a single content block, so we create one content block
+     * per source→target table pair.
+     */
+    private List<Map<String, Object>> splitPerTable(
+        String readerType,
+        Map<String, Object> readerConfig,
+        String writerType,
+        Map<String, Object> writerConfig
+    ) {
+        List<String> readerTables = extractTables(readerConfig);
+        List<String> writerTables = extractTables(writerConfig);
+
+        // Only split when reader and writer have matching table counts > 1
+        if (readerTables.size() <= 1 || readerTables.size() != writerTables.size()) {
+            Map<String, Object> content = new LinkedHashMap<>();
+            content.put("reader", Map.of("name", readerType, "parameter", readerConfig));
+            content.put("writer", Map.of("name", writerType, "parameter", writerConfig));
+            return List.of(content);
+        }
+
+        List<Map<String, Object>> contentList = new java.util.ArrayList<>(readerTables.size());
+        for (int i = 0; i < readerTables.size(); i++) {
+            Map<String, Object> perReader = deepCopyConfig(readerConfig);
+            setTables(perReader, List.of(readerTables.get(i)));
+
+            Map<String, Object> perWriter = deepCopyConfig(writerConfig);
+            setTables(perWriter, List.of(writerTables.get(i)));
+
+            Map<String, Object> content = new LinkedHashMap<>();
+            content.put("reader", Map.of("name", readerType, "parameter", perReader));
+            content.put("writer", Map.of("name", writerType, "parameter", perWriter));
+            contentList.add(content);
+        }
+        LOG.info("Split multi-table job into {} per-table content blocks", contentList.size());
+        return contentList;
     }
 
     private void applyJobDefaults(
@@ -195,7 +239,7 @@ public class AddaxJobService {
         }
         ensureDriver(normalizedPlugin, params);
         if ("writer".equalsIgnoreCase(key)) {
-            ensureWriterConnection(params);
+            ensureWriterConnection(pluginType, params);
         }
         if (nodeMap instanceof Map<?, ?>) {
             @SuppressWarnings("unchecked")
@@ -252,6 +296,34 @@ public class AddaxJobService {
         return value == null ? Map.of() : new LinkedHashMap<>(value);
     }
 
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> deepCopyConfig(Map<String, Object> source) {
+        if (source == null) {
+            return new LinkedHashMap<>();
+        }
+        Map<String, Object> copy = new LinkedHashMap<>();
+        for (Map.Entry<String, Object> entry : source.entrySet()) {
+            Object value = entry.getValue();
+            if (value instanceof Map<?, ?> map) {
+                copy.put(entry.getKey(), deepCopyConfig((Map<String, Object>) map));
+            } else if (value instanceof List<?> list) {
+                java.util.ArrayList<Object> listCopy = new java.util.ArrayList<>(list.size());
+                for (Object item : list) {
+                    if (item instanceof Map<?, ?> itemMap) {
+                        listCopy.add(deepCopyConfig((Map<String, Object>) itemMap));
+                    } else {
+                        listCopy.add(item);
+                    }
+                }
+                copy.put(entry.getKey(), listCopy);
+            } else {
+                copy.put(entry.getKey(), value);
+            }
+        }
+        return copy;
+    }
+
+    @SuppressWarnings("unchecked")
     private void normalizeAddaxJobConfig(Map<String, Object> jobConfig) {
         if (jobConfig == null || jobConfig.isEmpty()) {
             return;
@@ -264,12 +336,30 @@ public class AddaxJobService {
         if (!(contentObj instanceof List<?> contentList)) {
             return;
         }
+        List<Object> expanded = new java.util.ArrayList<>();
         for (Object item : contentList) {
             if (item instanceof Map<?, ?> contentMap) {
                 Map<String, Object> readerParams = normalizeReaderWriter(contentMap, "reader");
                 Map<String, Object> writerParams = normalizeReaderWriter(contentMap, "writer");
                 replaceWriterTablePlaceholders(readerParams, writerParams);
+                // Split multi-table content blocks into per-table blocks
+                if (readerParams != null && writerParams != null) {
+                    String rName = normalizeText(((Map<?, ?>) contentMap.get("reader")).get("name"));
+                    String wName = normalizeText(((Map<?, ?>) contentMap.get("writer")).get("name"));
+                    List<Map<String, Object>> split = splitPerTable(
+                        rName != null ? rName : "", readerParams,
+                        wName != null ? wName : "", writerParams
+                    );
+                    if (split.size() > 1) {
+                        expanded.addAll(split);
+                        continue;
+                    }
+                }
             }
+            expanded.add(item);
+        }
+        if (expanded.size() != contentList.size()) {
+            ((Map<Object, Object>) jobMap).put("content", expanded);
         }
     }
 
@@ -298,7 +388,7 @@ public class AddaxJobService {
         }
         ensureDriver(pluginType, params);
         if ("writer".equalsIgnoreCase(key)) {
-            ensureWriterConnection(params);
+            ensureWriterConnection(pluginType, params);
         }
         if ("writer".equalsIgnoreCase(key) && StringUtils.hasText(pluginType) && !StringUtils.hasText(normalizeText(params.get("writerType")))) {
             params.put("writerType", pluginType);
@@ -317,6 +407,9 @@ public class AddaxJobService {
         }
         String normalized = pluginType.trim();
         String lower = normalized.toLowerCase(Locale.ROOT);
+        if ("dm".equals(lower) || "dameng".equals(lower) || "dm8".equals(lower) || "dameng8".equals(lower)) {
+            return "reader".equalsIgnoreCase(key) ? "rdbmsreader" : "rdbmswriter";
+        }
         if ("dmreader".equals(lower)) {
             return "rdbmsreader";
         }
@@ -332,21 +425,27 @@ public class AddaxJobService {
         return normalized;
     }
 
-    private void ensureWriterConnection(Map<String, Object> params) {
+    private void ensureWriterConnection(String pluginType, Map<String, Object> params) {
         if (params == null || params.isEmpty()) {
             return;
         }
         List<String> jdbcUrls = normalizeJdbcUrlList(params.get("jdbcUrl"));
+        if (jdbcUrls.isEmpty()) {
+            fillJdbcUrlIfMissing(pluginType, params);
+            jdbcUrls = normalizeJdbcUrlList(params.get("jdbcUrl"));
+        }
         Object connection = params.get("connection");
         if (connection instanceof List<?> list) {
             if (!list.isEmpty() && list.get(0) instanceof Map<?, ?> map) {
                 @SuppressWarnings("unchecked")
                 Map<String, Object> connMap = new LinkedHashMap<>((Map<String, Object>) map);
                 if (jdbcUrls.isEmpty()) {
+                    fillJdbcUrlIfMissing(pluginType, connMap);
                     jdbcUrls = normalizeJdbcUrlList(connMap.get("jdbcUrl"));
                 }
                 if (!jdbcUrls.isEmpty()) {
-                    connMap.put("jdbcUrl", jdbcUrls);
+                    // Writer jdbcUrl must be a plain string, not a list
+                    connMap.put("jdbcUrl", jdbcUrls.get(0));
                 }
                 if (!connMap.containsKey("table")) {
                     List<String> tables = extractTables(params);
@@ -364,10 +463,12 @@ public class AddaxJobService {
             @SuppressWarnings("unchecked")
             Map<String, Object> connMap = new LinkedHashMap<>((Map<String, Object>) map);
             if (jdbcUrls.isEmpty()) {
+                fillJdbcUrlIfMissing(pluginType, connMap);
                 jdbcUrls = normalizeJdbcUrlList(connMap.get("jdbcUrl"));
             }
             if (!jdbcUrls.isEmpty()) {
-                connMap.put("jdbcUrl", jdbcUrls);
+                // Writer jdbcUrl must be a plain string, not a list
+                connMap.put("jdbcUrl", jdbcUrls.get(0));
             }
             if (!connMap.containsKey("table")) {
                 List<String> tables = extractTables(params);
@@ -381,7 +482,8 @@ public class AddaxJobService {
         }
         if (!jdbcUrls.isEmpty()) {
             Map<String, Object> connMap = new LinkedHashMap<>();
-            connMap.put("jdbcUrl", jdbcUrls);
+            // Writer jdbcUrl must be a plain string, not a list
+            connMap.put("jdbcUrl", jdbcUrls.get(0));
             List<String> tables = extractTables(params);
             if (!tables.isEmpty()) {
                 connMap.put("table", tables);
@@ -697,14 +799,15 @@ public class AddaxJobService {
             return;
         }
         boolean hadPlaceholder = hasTablePlaceholderInConfig(writerConfig);
-        replaceTableField(writerConfig, sourceTables);
+        List<String> targetTables = normalizeWriterTables(writerConfig, sourceTables);
+        replaceTableField(writerConfig, targetTables);
         Object connection = writerConfig.get("connection");
         if (connection instanceof Map<?, ?> map) {
-            replaceTableField(map, sourceTables);
+            replaceTableField(map, targetTables);
         } else if (connection instanceof List<?> list) {
             for (Object entry : list) {
                 if (entry instanceof Map<?, ?> entryMap) {
-                    replaceTableField(entryMap, sourceTables);
+                    replaceTableField(entryMap, targetTables);
                 }
             }
         }
@@ -716,6 +819,35 @@ public class AddaxJobService {
                 summarizeTables(resolvedTargets)
             );
         }
+    }
+
+    private List<String> normalizeWriterTables(Map<String, Object> writerConfig, List<String> sourceTables) {
+        if (sourceTables == null || sourceTables.isEmpty()) {
+            return List.of();
+        }
+        String prefix = normalizeText(writerConfig == null ? null : writerConfig.get("tablePrefix"));
+        if (!StringUtils.hasText(prefix) && writerConfig != null) {
+            prefix = normalizeText(writerConfig.get("prefix"));
+        }
+        if (!StringUtils.hasText(prefix) && writerConfig != null) {
+            prefix = normalizeText(writerConfig.get("targetPrefix"));
+        }
+        List<String> normalized = new java.util.ArrayList<>(sourceTables.size());
+        for (String source : sourceTables) {
+            String value = normalizeText(source);
+            if (!StringUtils.hasText(value)) {
+                continue;
+            }
+            String base = value;
+            if (value.contains(".")) {
+                base = value.substring(value.lastIndexOf('.') + 1);
+            }
+            if (StringUtils.hasText(prefix)) {
+                base = prefix + base;
+            }
+            normalized.add(base);
+        }
+        return normalized.isEmpty() ? sourceTables : normalized;
     }
 
     private boolean hasTablePlaceholderInConfig(Map<String, Object> config) {
@@ -872,16 +1004,17 @@ public class AddaxJobService {
         Map<String, Object> writerConfig = task.getDestinationConfig() != null
             ? jsonNodeToMap(task.getDestinationConfig())
             : Map.of();
-        applyTableMapping(task.getTableMapping(), readerConfig, writerConfig);
-        Map<String, Object> jobConfig = task.getAddaxConfig() != null 
-            ? jsonNodeToMap(task.getAddaxConfig()) 
+        String writerType = normalizeWriterType(task.getDestinationType() != null ? task.getDestinationType() : "postgresqlwriter");
+        applyTableMapping(task.getTableMapping(), readerConfig, writerConfig, writerType);
+        Map<String, Object> jobConfig = task.getAddaxConfig() != null
+            ? jsonNodeToMap(task.getAddaxConfig())
             : null;
 
         return createJob(
             task.getName(),
             normalizeReaderType(StringUtils.hasText(readerTypeOverride) ? readerTypeOverride : task.getSourceType()),
             readerConfig,
-            normalizeWriterType(task.getDestinationType() != null ? task.getDestinationType() : "postgresqlwriter"),
+            writerType,
             writerConfig,
             jobConfig
         );
@@ -892,6 +1025,10 @@ public class AddaxJobService {
             return readerType;
         }
         String normalized = readerType.trim();
+        String lower = normalized.toLowerCase(Locale.ROOT);
+        if ("dm".equals(lower) || "dameng".equals(lower) || "dm8".equals(lower) || "dameng8".equals(lower)) {
+            return "rdbmsreader";
+        }
         if ("dmreader".equalsIgnoreCase(normalized)) {
             return "rdbmsreader";
         }
@@ -903,6 +1040,10 @@ public class AddaxJobService {
             return writerType;
         }
         String normalized = writerType.trim();
+        String lower = normalized.toLowerCase(Locale.ROOT);
+        if ("dm".equals(lower) || "dameng".equals(lower) || "dm8".equals(lower) || "dameng8".equals(lower)) {
+            return "rdbmswriter";
+        }
         if ("dmwriter".equalsIgnoreCase(normalized)) {
             return "rdbmswriter";
         }
@@ -1250,6 +1391,219 @@ public class AddaxJobService {
     }
 
     /**
+     * Split a multi-content-block job JSON into per-table JSON files.
+     * Addax processes only the first content block in a job, so for multi-table tasks
+     * we need one JSON file per table and one Airflow operator per file.
+     *
+     * @param baseJobPath path to the base job JSON (may have multiple content blocks)
+     * @return list of per-table jobs; single-element list if only one content block
+     */
+    @SuppressWarnings("unchecked")
+    public List<PerTableJob> splitJobIntoPerTableFiles(String baseJobPath) {
+        if (!StringUtils.hasText(baseJobPath)) {
+            return List.of();
+        }
+        Path basePath = Paths.get(baseJobPath.trim());
+        if (!Files.exists(basePath)) {
+            return List.of();
+        }
+        try {
+            Map<String, Object> jobConfig = objectMapper.readValue(
+                basePath.toFile(),
+                new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {}
+            );
+            Object jobObj = jobConfig.get("job");
+            if (!(jobObj instanceof Map<?, ?> jobMap)) {
+                return List.of(new PerTableJob("run", toContainerJobPath(baseJobPath), baseJobPath));
+            }
+            Object contentObj = jobMap.get("content");
+            if (!(contentObj instanceof List<?> contentList)) {
+                return List.of(new PerTableJob("run", toContainerJobPath(baseJobPath), baseJobPath));
+            }
+            if (contentList.size() <= 1) {
+                String tableName = !contentList.isEmpty()
+                    ? extractTableNameFromContent(contentList.get(0)) : "run";
+                return List.of(new PerTableJob(
+                    StringUtils.hasText(tableName) ? tableName : "run",
+                    toContainerJobPath(baseJobPath),
+                    baseJobPath
+                ));
+            }
+            // Multiple content blocks — split into per-table files
+            String baseName = basePath.getFileName().toString().replaceAll("\\.json$", "");
+            Path dir = basePath.getParent();
+            List<PerTableJob> results = new java.util.ArrayList<>();
+            for (int i = 0; i < contentList.size(); i++) {
+                Object content = contentList.get(i);
+                String tableName = extractTableNameFromContent(content);
+                if (!StringUtils.hasText(tableName)) {
+                    tableName = "table_" + i;
+                }
+                String slug = tableName.toLowerCase(Locale.ROOT)
+                    .replaceAll("[^a-z0-9]+", "_")
+                    .replaceAll("^_+", "").replaceAll("_+$", "");
+                if (!StringUtils.hasText(slug)) {
+                    slug = "table_" + i;
+                }
+                Map<String, Object> perTableConfig = new LinkedHashMap<>();
+                Map<String, Object> perJob = new LinkedHashMap<>();
+                perJob.put("setting", jobMap.get("setting"));
+                perJob.put("content", List.of(content));
+                perTableConfig.put("job", perJob);
+                String fileName = baseName + "_" + slug + ".json";
+                Path filePath = dir.resolve(fileName);
+                objectMapper.writerWithDefaultPrettyPrinter().writeValue(filePath.toFile(), perTableConfig);
+                results.add(new PerTableJob(tableName, toContainerJobPath(filePath.toString()), filePath.toString()));
+            }
+            LOG.info("Split base job {} into {} per-table job files", basePath.getFileName(), results.size());
+            return results;
+        } catch (Exception ex) {
+            LOG.warn("Failed to split job into per-table files: {}", ex.getMessage());
+            return List.of(new PerTableJob("run", toContainerJobPath(baseJobPath), baseJobPath));
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private String extractTableNameFromContent(Object content) {
+        if (!(content instanceof Map<?, ?> contentMap)) {
+            return null;
+        }
+        // Try writer table first (target table name is more meaningful)
+        Object writerObj = contentMap.get("writer");
+        if (writerObj instanceof Map<?, ?> writerMap) {
+            Object paramObj = writerMap.get("parameter");
+            if (paramObj instanceof Map<?, ?> paramMap) {
+                Map<String, Object> params = new LinkedHashMap<>();
+                paramMap.forEach((k, v) -> { if (k != null) params.put(k.toString(), v); });
+                List<String> tables = extractTables(params);
+                if (!tables.isEmpty()) {
+                    return tables.get(0);
+                }
+            }
+        }
+        // Fallback to reader table
+        Object readerObj = contentMap.get("reader");
+        if (readerObj instanceof Map<?, ?> readerMap) {
+            Object paramObj = readerMap.get("parameter");
+            if (paramObj instanceof Map<?, ?> paramMap) {
+                Map<String, Object> params = new LinkedHashMap<>();
+                paramMap.forEach((k, v) -> { if (k != null) params.put(k.toString(), v); });
+                List<String> tables = extractTables(params);
+                if (!tables.isEmpty()) {
+                    return tables.get(0);
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Workaround for Addax 6.0.8 bug: DataBaseType.quoteColumn() returns null for PostgreSQL,
+     * causing dealColumnConf to corrupt column ["*"] into [null, null, ...] → invalid SQL.
+     * This method resolves actual column names from the target database and replaces ["*"]
+     * in PostgreSQL writer configs so Addax skips its broken column resolution.
+     */
+    @SuppressWarnings("unchecked")
+    public void resolveWriterColumnsIfNeeded(String jobPath) {
+        if (!StringUtils.hasText(jobPath)) {
+            return;
+        }
+        Path path = Paths.get(jobPath.trim());
+        if (!Files.exists(path)) {
+            return;
+        }
+        try {
+            Map<String, Object> jobConfig = objectMapper.readValue(
+                path.toFile(),
+                new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {}
+            );
+            Object jobObj = jobConfig.get("job");
+            if (!(jobObj instanceof Map<?, ?> jobMap)) {
+                return;
+            }
+            Object contentObj = jobMap.get("content");
+            if (!(contentObj instanceof List<?> contentList)) {
+                return;
+            }
+            boolean modified = false;
+            for (Object item : contentList) {
+                if (!(item instanceof Map<?, ?> contentMap)) {
+                    continue;
+                }
+                Object writerObj = contentMap.get("writer");
+                if (!(writerObj instanceof Map<?, ?> writerMap)) {
+                    continue;
+                }
+                String writerName = normalizeText(writerMap.get("name"));
+                if (!isPostgresWriter(writerName)) {
+                    continue;
+                }
+                Object paramObj = writerMap.get("parameter");
+                if (!(paramObj instanceof Map<?, ?> paramMap)) {
+                    continue;
+                }
+                // Check if column is ["*"]
+                Object columnObj = paramMap.get("column");
+                if (!isWildcardColumn(columnObj)) {
+                    continue;
+                }
+                // Extract writer connection info
+                Map<String, Object> params = new LinkedHashMap<>();
+                paramMap.forEach((k, v) -> {
+                    if (k != null) params.put(k.toString(), v);
+                });
+                String jdbcUrl = resolveJdbcUrl(params);
+                String username = normalizeText(params.get("username"));
+                String password = normalizeText(params.get("password"));
+                String driver = normalizeText(params.get("driver"));
+                if (!StringUtils.hasText(jdbcUrl)) {
+                    continue;
+                }
+                // Get the target table name
+                List<String> tables = extractTables(params);
+                if (tables.isEmpty()) {
+                    continue;
+                }
+                String tableName = tables.get(0);
+                // Query actual columns from target database
+                JdbcMetadataService.JdbcConnectionInfo connInfo = new JdbcMetadataService.JdbcConnectionInfo(
+                    jdbcUrl, username, password, driver, null, null
+                );
+                List<JdbcMetadataService.ColumnMeta> columns = jdbcMetadataService.getTableColumns(connInfo, tableName);
+                if (columns.isEmpty()) {
+                    LOG.warn("Could not resolve columns for target table {} — keeping [\"*\"]", tableName);
+                    continue;
+                }
+                List<String> columnNames = columns.stream()
+                    .map(JdbcMetadataService.ColumnMeta::name)
+                    .map(name -> name != null ? name.toLowerCase(Locale.ROOT) : name)
+                    .toList();
+                // Replace ["*"] with actual column names
+                ((Map<String, Object>) paramMap).put("column", columnNames);
+                modified = true;
+                LOG.info("Resolved {} writer columns for table {}: {}", columnNames.size(), tableName,
+                    columnNames.size() <= 20 ? columnNames : columnNames.subList(0, 20) + "...(" + columnNames.size() + ")");
+            }
+            if (modified) {
+                objectMapper.writerWithDefaultPrettyPrinter().writeValue(path.toFile(), jobConfig);
+                LOG.info("Updated Addax job with resolved writer columns: {}", path);
+            }
+        } catch (Exception ex) {
+            LOG.warn("Failed to resolve writer columns for job {}: {}", jobPath, ex.getMessage());
+        }
+    }
+
+    private boolean isWildcardColumn(Object columnObj) {
+        if (columnObj instanceof List<?> list) {
+            return list.size() == 1 && "*".equals(normalizeText(list.get(0)));
+        }
+        if (columnObj instanceof String str) {
+            return "*".equals(normalizeText(str));
+        }
+        return false;
+    }
+
+    /**
      * 将JsonNode转换为Map
      */
     private Map<String, Object> jsonNodeToMap(com.fasterxml.jackson.databind.JsonNode node) {
@@ -1264,10 +1618,11 @@ public class AddaxJobService {
         }
     }
 
-    private void applyTableMapping(JsonNode tableMapping, Map<String, Object> readerConfig, Map<String, Object> writerConfig) {
+    private void applyTableMapping(JsonNode tableMapping, Map<String, Object> readerConfig, Map<String, Object> writerConfig, String writerType) {
         if (readerConfig == null || writerConfig == null) {
             return;
         }
+        String writerSchema = resolveSchema(writerConfig);
         List<TableMapping> mappings = parseTableMapping(tableMapping);
         if (!mappings.isEmpty()) {
             List<String> sourceTables = mappings.stream()
@@ -1282,7 +1637,8 @@ public class AddaxJobService {
                 setTables(readerConfig, sourceTables);
             }
             if (!targetTables.isEmpty()) {
-                setTables(writerConfig, applySchemaPrefix(targetTables, resolveSchema(writerConfig)));
+                targetTables = resolveTargetTableNames(targetTables, writerSchema, writerType);
+                setTables(writerConfig, targetTables);
             }
             return;
         }
@@ -1296,11 +1652,47 @@ public class AddaxJobService {
             targetTables = sourceTables.stream()
                 .map(table -> StringUtils.hasText(prefix) ? prefix + table : table)
                 .toList();
-            setTables(writerConfig, targetTables);
         }
-        if (!targetTables.isEmpty()) {
-            setTables(writerConfig, applySchemaPrefix(targetTables, resolveSchema(writerConfig)));
+        targetTables = resolveTargetTableNames(targetTables, writerSchema, writerType);
+        setTables(writerConfig, targetTables);
+    }
+
+    /**
+     * Resolve final target table names:
+     * - If table already has schema prefix (e.g. ERPDEMO.CUSTOMER), keep that schema
+     * - If table has no schema, apply writerSchema as prefix
+     * - For PostgreSQL writer, lowercase everything
+     */
+    private List<String> resolveTargetTableNames(List<String> tables, String writerSchema, String writerType) {
+        if (tables == null || tables.isEmpty()) {
+            return tables;
         }
+        List<String> resolved = new java.util.ArrayList<>(tables.size());
+        for (String table : tables) {
+            String name = normalizeText(table);
+            if (!StringUtils.hasText(name)) {
+                continue;
+            }
+            String base = name;
+            String schemaPart = null;
+            int idx = name.indexOf('.');
+            if (idx > 0 && idx < name.length() - 1) {
+                schemaPart = name.substring(0, idx);
+                base = name.substring(idx + 1);
+            }
+            if (StringUtils.hasText(writerSchema)) {
+                if (!StringUtils.hasText(schemaPart) || !schemaPart.equalsIgnoreCase(writerSchema)) {
+                    name = writerSchema.trim() + "." + base;
+                } else {
+                    name = writerSchema.trim() + "." + base;
+                }
+            } else if (StringUtils.hasText(schemaPart)) {
+                // avoid leaking source schema into target when no writer schema is specified
+                name = base;
+            }
+            resolved.add(name);
+        }
+        return lowercaseTablesForPostgres(resolved, writerType);
     }
 
     private List<TableMapping> parseTableMapping(JsonNode node) {
@@ -1424,6 +1816,23 @@ public class AddaxJobService {
                 return normalized + "." + name;
             })
             .toList();
+    }
+
+    private List<String> lowercaseTablesForPostgres(List<String> tables, String writerType) {
+        if (tables == null || tables.isEmpty() || !isPostgresWriter(writerType)) {
+            return tables;
+        }
+        return tables.stream()
+            .map(table -> table != null ? table.toLowerCase(Locale.ROOT) : table)
+            .toList();
+    }
+
+    private boolean isPostgresWriter(String writerType) {
+        if (!StringUtils.hasText(writerType)) {
+            return false;
+        }
+        String lower = writerType.toLowerCase(Locale.ROOT);
+        return lower.contains("postgres");
     }
 
     private record TableMapping(String source, String target) {}

@@ -278,8 +278,13 @@ public class IngestionTaskResource {
 
             boolean hasJobConfig = request.jobConfig() != null && !request.jobConfig().isEmpty();
             String streamSelection = resolveStreamSelection(request.streams());
+            List<String> configTables = mergeTables(extractTables(mergedReaderConfig), extractTables(writerConfig));
+            if (streamTables.isEmpty() && !configTables.isEmpty()) {
+                streamTables = configTables;
+                streamSelection = "manual";
+            }
             if (streamTables.isEmpty() && !isAllSelection(streamSelection)) {
-                streamTables = mergeTables(extractTables(mergedReaderConfig), extractTables(writerConfig));
+                streamTables = configTables;
             }
             if (!isDraft && !isAllSelection(streamSelection) && streamTables.isEmpty() && !hasJobConfig) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请选择需要入湖的表");
@@ -298,6 +303,8 @@ public class IngestionTaskResource {
             if (!streamTables.isEmpty()) {
                 applyTables(resolvedReaderConfig, streamTables);
                 applyTables(mergedReaderConfig, streamTables);
+                List<String> writerTables = stripSchemaTables(streamTables);
+                applyTables(writerConfig, writerTables);
             }
             Map<String, Object> readerConfig = safeMap(resolvedReaderConfig);
             if (!hasJobConfig) {
@@ -871,14 +878,15 @@ public class IngestionTaskResource {
             final String prefixValue = prefix;
             List<String> computedTargets = new java.util.ArrayList<>(sources.size());
             for (String source : sources) {
-                computedTargets.add(StringUtils.hasText(prefixValue) ? prefixValue + source : source);
+                String base = stripSchema(source);
+                computedTargets.add(StringUtils.hasText(prefixValue) ? prefixValue + base : base);
             }
             targets = computedTargets;
         } else if (targets.size() == 1 && targets.get(0).contains("${table}")) {
             String template = targets.get(0);
             List<String> computedTargets = new java.util.ArrayList<>(sources.size());
             for (String source : sources) {
-                computedTargets.add(template.replace("${table}", source));
+                computedTargets.add(template.replace("${table}", stripSchema(source)));
             }
             targets = computedTargets;
         }
@@ -920,6 +928,32 @@ public class IngestionTaskResource {
         config.put("table", tables);
     }
 
+    private List<String> stripSchemaTables(List<String> tables) {
+        if (tables == null || tables.isEmpty()) {
+            return List.of();
+        }
+        java.util.List<String> cleaned = new java.util.ArrayList<>(tables.size());
+        for (String table : tables) {
+            String stripped = stripSchema(table);
+            if (StringUtils.hasText(stripped)) {
+                cleaned.add(stripped);
+            }
+        }
+        return cleaned.isEmpty() ? List.of() : cleaned;
+    }
+
+    private String stripSchema(String table) {
+        String normalized = normalize(table);
+        if (!StringUtils.hasText(normalized)) {
+            return normalized;
+        }
+        int idx = normalized.lastIndexOf('.');
+        if (idx > -1 && idx < normalized.length() - 1) {
+            return normalized.substring(idx + 1);
+        }
+        return normalized;
+    }
+
     @SafeVarargs
     private final List<String> mergeTables(List<String>... sources) {
         java.util.LinkedHashSet<String> merged = new java.util.LinkedHashSet<>();
@@ -955,6 +989,9 @@ public class IngestionTaskResource {
         }
         String normalized = pluginType.trim();
         String lower = normalized.toLowerCase(java.util.Locale.ROOT);
+        if ("dm".equals(lower) || "dameng".equals(lower) || "dm8".equals(lower) || "dameng8".equals(lower)) {
+            return reader ? "rdbmsreader" : "rdbmswriter";
+        }
         if ("dmreader".equals(lower)) {
             return "rdbmsreader";
         }
@@ -1150,37 +1187,60 @@ public class IngestionTaskResource {
             }
         }
         String syncPrefix = normalize(taskDTO.getSyncPrefix());
+        Map<String, Object> writerConfigForUpdate = jsonNodeToMap(taskDTO.getDestinationConfig());
+        List<String> requestedTables = mergeTables(extractTables(sourceOverrides), extractTables(writerConfigForUpdate));
         boolean rebuildMapping = taskDTO.getTableMapping() == null || taskDTO.getTableMapping().isNull();
-        if (StringUtils.hasText(syncPrefix)) {
+        if (StringUtils.hasText(syncPrefix) || !requestedTables.isEmpty()) {
             rebuildMapping = true;
+        }
+        com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver.ResolvedSource resolvedSource = null;
+        if (!StringUtils.hasText(taskDTO.getSourceType()) || rebuildMapping) {
+            resolvedSource = sourceResolver.resolve(taskDTO.getSourceDataSourceId(), List.of());
+        }
+        if (!StringUtils.hasText(taskDTO.getSourceType())) {
+            String inferred = resolvePlugin(null, sourceOverrides, List.of("readerType", "reader", "type", "name", "sourceType"));
+            if (!StringUtils.hasText(inferred) && resolvedSource != null) {
+                inferred = resolvePlugin(null, safeMap(resolvedSource.readerConfig()), List.of("readerType", "reader", "type", "name"));
+                if (!StringUtils.hasText(inferred)) {
+                    inferred = resolvedSource.readerType();
+                }
+            }
+            if (!StringUtils.hasText(inferred) && resolvedSource != null) {
+                String jdbcUrl = normalize(resolvedSource.detail() == null ? null : resolvedSource.detail().jdbcUrl());
+                if (StringUtils.hasText(jdbcUrl)) {
+                    inferred = "rdbmsreader";
+                }
+            }
+            if (StringUtils.hasText(inferred)) {
+                taskDTO.setSourceType(inferred);
+            }
+        }
+        if (StringUtils.hasText(taskDTO.getSourceType())) {
+            taskDTO.setSourceType(normalizeAddaxPlugin(taskDTO.getSourceType(), true));
+        }
+        if (StringUtils.hasText(taskDTO.getDestinationType())) {
+            taskDTO.setDestinationType(normalizeAddaxPlugin(taskDTO.getDestinationType(), false));
         }
         if (rebuildMapping) {
             com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver.ResolvedSource resolved =
-                sourceResolver.resolve(taskDTO.getSourceDataSourceId(), List.of());
+                resolvedSource != null ? resolvedSource : sourceResolver.resolve(taskDTO.getSourceDataSourceId(), List.of());
             Map<String, Object> readerConfig = mergeReaderOverrides(safeMap(resolved.readerConfig()), sourceOverrides);
-            if (!StringUtils.hasText(taskDTO.getSourceType())) {
-                String inferredType = resolvePlugin(null, readerConfig, List.of("readerType", "reader", "type", "name"));
-                if (!StringUtils.hasText(inferredType)) {
-                    inferredType = resolved.readerType();
-                }
-                if (!StringUtils.hasText(inferredType)) {
-                    String jdbcUrl = normalize(resolved.detail() == null ? null : resolved.detail().jdbcUrl());
-                    if (StringUtils.hasText(jdbcUrl)) {
-                        inferredType = "rdbmsreader";
-                    }
-                }
-                if (StringUtils.hasText(inferredType)) {
-                    taskDTO.setSourceType(inferredType);
-                    readerConfig.putIfAbsent("readerType", inferredType);
-                }
-            } else {
+            if (StringUtils.hasText(taskDTO.getSourceType())) {
                 readerConfig.putIfAbsent("readerType", taskDTO.getSourceType());
             }
             Map<String, Object> writerConfig = jsonNodeToMap(taskDTO.getDestinationConfig());
+            List<String> selectionTables = mergeTables(extractTables(readerConfig), extractTables(writerConfig));
+            if (!selectionTables.isEmpty()) {
+                applyTables(readerConfig, selectionTables);
+                applyTables(writerConfig, stripSchemaTables(selectionTables));
+            }
             SyncSpec syncSpec = StringUtils.hasText(syncPrefix) ? new SyncSpec(null, null, null, null, syncPrefix) : null;
             List<Map<String, String>> tableMapping = deriveTableMapping(readerConfig, writerConfig, syncSpec);
             if (!tableMapping.isEmpty()) {
                 taskDTO.setTableMapping(toJsonNode(tableMapping));
+            }
+            if (!writerConfig.isEmpty()) {
+                taskDTO.setDestinationConfig(toJsonNode(writerConfig));
             }
         }
         String operator = SecurityUtils.getCurrentUserLogin().orElse("system");
@@ -1392,5 +1452,25 @@ public class IngestionTaskResource {
         return ingestionTaskService.getLatestExecution(id)
             .map(ResponseEntity::ok)
             .orElse(ResponseEntity.<com.yuzhi.dts.ingestion.service.dto.IngestionExecutionDTO>notFound().build());
+    }
+
+    /**
+     * GET /api/ingestion/tasks/{id}/executions/{executionId}/logs : 获取执行日志
+     */
+    @GetMapping("/tasks/{id}/executions/{executionId}/logs")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ResponseEntity<Map<String, Object>> getExecutionLog(
+        @PathVariable Long id,
+        @PathVariable Long executionId,
+        @RequestParam(value = "tryNumber", required = false) Integer tryNumber
+    ) {
+        try {
+            Map<String, Object> result = ingestionTaskService.fetchExecutionLog(id, executionId, tryNumber);
+            return ResponseEntity.ok(result);
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage());
+        } catch (IllegalStateException e) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, e.getMessage());
+        }
     }
 }

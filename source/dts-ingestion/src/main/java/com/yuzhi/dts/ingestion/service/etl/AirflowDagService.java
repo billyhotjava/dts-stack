@@ -10,6 +10,9 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
 import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -40,11 +43,15 @@ public class AirflowDagService {
     }
 
     public String ensureDagForTask(IngestionTask task) {
-        return ensureDagForTask(task, false);
+        return ensureDagForTask(task, null, false);
+    }
+
+    public String ensureDagForTask(IngestionTask task, List<AddaxJobService.PerTableJob> perTableJobs) {
+        return ensureDagForTask(task, perTableJobs, false);
     }
 
     public String rebuildDagForTask(IngestionTask task) {
-        return ensureDagForTask(task, true);
+        return ensureDagForTask(task, null, true);
     }
 
     public boolean deleteDagForTask(IngestionTask task) {
@@ -80,7 +87,21 @@ public class AirflowDagService {
         }
     }
 
-    private String ensureDagForTask(IngestionTask task, boolean force) {
+    public String resolveDagIdForTask(IngestionTask task) {
+        if (task == null) {
+            return null;
+        }
+        return resolveDagId(task);
+    }
+
+    public String resolveTaskIdForTask(IngestionTask task) {
+        if (task == null) {
+            return null;
+        }
+        return resolveTaskId(task);
+    }
+
+    private String ensureDagForTask(IngestionTask task, List<AddaxJobService.PerTableJob> perTableJobs, boolean force) {
         if (task == null) {
             return null;
         }
@@ -115,7 +136,7 @@ public class AirflowDagService {
             }
         }
         Path dagFile = dagDir.resolve(dagId + ".py");
-        String content = buildDagSource(dagId, task);
+        String content = buildDagSource(dagId, task, perTableJobs);
         boolean written = false;
         try {
             if (StringUtils.hasText(previousDagId) && !previousDagId.equals(dagId)) {
@@ -329,7 +350,10 @@ public class AirflowDagService {
         return firstText(first, "target", "targetTable", "ods", "dest");
     }
 
-    private String buildDagSource(String dagId, IngestionTask task) {
+    private String buildDagSource(String dagId, IngestionTask task, List<AddaxJobService.PerTableJob> perTableJobs) {
+        if (perTableJobs != null && perTableJobs.size() > 1) {
+            return buildMultiTaskDagSource(dagId, task, perTableJobs);
+        }
         String sourceTag = sanitizeTag(task == null ? null : task.getSourceType(), "source");
         String nameTag = sanitizeTag(task == null ? null : task.getName(), "ingestion");
         String addaxImage = escapePythonString(resolveAddaxImage());
@@ -411,6 +435,95 @@ public class AirflowDagService {
                     tty=True,
                 )
             """.formatted(addaxImage, addaxJobDir, defaultJobPath, dagId, scheduleLiteral, sourceTag, nameTag, taskId);
+    }
+
+    /**
+     * Generate a DAG with one DockerOperator per table.
+     * Each operator runs Addax with its own per-table job JSON file.
+     */
+    private String buildMultiTaskDagSource(String dagId, IngestionTask task, List<AddaxJobService.PerTableJob> perTableJobs) {
+        String sourceTag = sanitizeTag(task == null ? null : task.getSourceType(), "source");
+        String nameTag = sanitizeTag(task == null ? null : task.getName(), "ingestion");
+        String addaxImage = escapePythonString(resolveAddaxImage());
+        String addaxJobDir = escapePythonString(resolveAddaxJobDir());
+        String schedule = normalizeSchedule(task == null ? null : task.getSyncSchedule());
+        String scheduleLiteral = schedule == null ? "None" : "\"" + escapePythonString(schedule) + "\"";
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("from __future__ import annotations\n\n");
+        sb.append("import os\n");
+        sb.append("from datetime import datetime\n\n");
+        sb.append("from airflow import DAG\n");
+        sb.append("from airflow.providers.docker.operators.docker import DockerOperator\n");
+        sb.append("from docker.types import Mount\n\n");
+        sb.append(String.format("ADDAX_IMAGE = os.getenv(\"ADDAX_IMAGE\", \"%s\")\n", addaxImage));
+        sb.append(String.format("ADDAX_JOB_DIR = os.getenv(\"ADDAX_JOB_DIR\", \"%s\")\n", addaxJobDir));
+        sb.append("ADDAX_DRIVER_DIR = os.getenv(\"ADDAX_DRIVER_DIR\", \"\")\n");
+        sb.append("ADDAX_DRIVER_JARS = os.getenv(\"ADDAX_DRIVER_JARS\", \"\")\n\n\n");
+        sb.append("def build_driver_mounts():\n");
+        sb.append("    mounts = []\n");
+        sb.append("    if not ADDAX_DRIVER_DIR or not ADDAX_DRIVER_JARS:\n");
+        sb.append("        return mounts\n");
+        sb.append("    target_dirs = [\n");
+        sb.append("        \"/opt/addax/plugin/reader/rdbmsreader/lib\",\n");
+        sb.append("        \"/opt/addax/plugin/reader/rdbmsreader/libs\",\n");
+        sb.append("        \"/opt/addax/plugin/writer/rdbmswriter/lib\",\n");
+        sb.append("        \"/opt/addax/plugin/writer/rdbmswriter/libs\",\n");
+        sb.append("    ]\n");
+        sb.append("    for jar_name in [jar.strip() for jar in ADDAX_DRIVER_JARS.split(\",\") if jar.strip()]:\n");
+        sb.append("        host_path = os.path.join(ADDAX_DRIVER_DIR, jar_name)\n");
+        sb.append("        if not os.path.exists(host_path):\n");
+        sb.append("            continue\n");
+        sb.append("        for target_dir in target_dirs:\n");
+        sb.append("            mounts.append(\n");
+        sb.append("                Mount(\n");
+        sb.append("                    source=host_path,\n");
+        sb.append("                    target=f\"{target_dir}/{jar_name}\",\n");
+        sb.append("                    type=\"bind\",\n");
+        sb.append("                    read_only=True,\n");
+        sb.append("                )\n");
+        sb.append("            )\n");
+        sb.append("    return mounts\n\n\n");
+
+        sb.append(String.format("with DAG(\n"));
+        sb.append(String.format("    dag_id=\"%s\",\n", escapePythonString(dagId)));
+        sb.append(String.format("    schedule=%s,\n", scheduleLiteral));
+        sb.append("    start_date=datetime(2024, 1, 1),\n");
+        sb.append("    catchup=False,\n");
+        sb.append("    is_paused_upon_creation=False,\n");
+        sb.append(String.format("    tags=[\"addax\", \"etl\", \"ods\", \"%s\", \"%s\"],\n", sourceTag, nameTag));
+        sb.append(") as dag:\n");
+
+        // Generate one DockerOperator per table, deduplicating task IDs
+        Set<String> usedIds = new LinkedHashSet<>();
+        for (AddaxJobService.PerTableJob job : perTableJobs) {
+            String baseId = "addax_" + slugify(job.tableName());
+            String opTaskId = baseId;
+            int suffix = 2;
+            while (usedIds.contains(opTaskId)) {
+                opTaskId = baseId + "_" + suffix++;
+            }
+            usedIds.add(opTaskId);
+            String jobPath = escapePythonString(job.containerJobPath());
+
+            sb.append(String.format("    %s = DockerOperator(\n", opTaskId));
+            sb.append(String.format("        task_id=\"%s\",\n", opTaskId));
+            sb.append("        image=ADDAX_IMAGE,\n");
+            sb.append("        api_version=\"auto\",\n");
+            sb.append("        auto_remove=True,\n");
+            sb.append("        docker_url=\"unix://var/run/docker.sock\",\n");
+            sb.append(String.format("        command=[\"sh\", \"-lc\", \"/opt/addax/bin/addax.sh %s\"],\n", jobPath));
+            sb.append("        mount_tmp_dir=False,\n");
+            sb.append("        mounts=[\n");
+            sb.append("            Mount(source=ADDAX_JOB_DIR, target=\"/opt/addax/jobs\", type=\"bind\"),\n");
+            sb.append("            *build_driver_mounts(),\n");
+            sb.append("        ],\n");
+            sb.append("        environment={},\n");
+            sb.append("        tty=True,\n");
+            sb.append("    )\n\n");
+        }
+
+        return sb.toString();
     }
 
     private String normalizeSchedule(String schedule) {

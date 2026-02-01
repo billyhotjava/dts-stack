@@ -131,6 +131,8 @@ public class IngestionTaskProxyResource {
     ) {
         DefaultDestinationSyncService.DefaultDestinationSnapshot snapshot = destinationSyncService.ensureDefaultDestination();
         Map<String, Object> resolvedPayload = applyDefaultDestinationUpdatePayload(payload, snapshot);
+        // Preserve the existing task's password when the update payload does not include one
+        preserveExistingPassword(id, resolvedPayload, payload);
         ApiResponse<Map<String, Object>> response = ingestionClient.updateTask(id, resolvedPayload);
         if (response != null && response.getStatus() >= 200 && response.getStatus() < 300) {
             try {
@@ -268,6 +270,20 @@ public class IngestionTaskProxyResource {
             }
         }
         return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/tasks/{id}/executions/{executionId}/logs")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getExecutionLog(
+        @PathVariable("id") Long id,
+        @PathVariable("executionId") Long executionId,
+        @RequestParam Map<String, String> params
+    ) {
+        Map<String, Object> query = new LinkedHashMap<>();
+        if (params != null) {
+            query.putAll(params);
+        }
+        return ResponseEntity.ok(ingestionClient.getExecutionLog(id, executionId, query));
     }
 
     @PostMapping("/metadata/tables")
@@ -444,6 +460,44 @@ public class IngestionTaskProxyResource {
             return merged;
         }
         return overrideConn;
+    }
+
+    /**
+     * When the update payload does not include a password, fetch the existing
+     * task and keep its stored password instead of falling back to the default
+     * data-lake template value.
+     */
+    private void preserveExistingPassword(Long id, Map<String, Object> resolvedPayload, Map<String, Object> originalPayload) {
+        Map<String, Object> userDestConfig = extractConfig(originalPayload.get("destinationConfig"));
+        boolean userProvidedPassword = userDestConfig.containsKey("password")
+            && StringUtils.hasText(String.valueOf(userDestConfig.get("password")));
+        if (userProvidedPassword) {
+            return;
+        }
+        Object destCfgObj = resolvedPayload.get("destinationConfig");
+        if (!(destCfgObj instanceof Map<?, ?> destCfg)) {
+            return;
+        }
+        try {
+            ApiResponse<Map<String, Object>> existing = ingestionClient.getTask(id);
+            if (existing == null || existing.getData() == null) {
+                return;
+            }
+            Map<String, Object> existingData = existing.getData();
+            Object existingDestCfg = existingData.get("destinationConfig");
+            String existingPassword = null;
+            if (existingDestCfg instanceof Map<?, ?> m) {
+                Object pw = m.get("password");
+                existingPassword = pw == null ? null : String.valueOf(pw).trim();
+            }
+            if (StringUtils.hasText(existingPassword)) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> mutable = (Map<String, Object>) destCfg;
+                mutable.put("password", existingPassword);
+            }
+        } catch (Exception ex) {
+            // best-effort: if we can't fetch the task, proceed with whatever we have
+        }
     }
 
     private void ensureWriterTables(Map<String, Object> config) {

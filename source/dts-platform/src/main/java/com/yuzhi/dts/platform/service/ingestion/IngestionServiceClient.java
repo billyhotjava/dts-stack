@@ -107,6 +107,10 @@ public class IngestionServiceClient {
         return exchangeTask("/api/ingestion/tasks/" + id + "/executions/latest", HttpMethod.GET, null, null);
     }
 
+    public ApiResponse<Map<String, Object>> getExecutionLog(Long taskId, Long executionId, Map<String, ?> params) {
+        return exchangeTask("/api/ingestion/tasks/" + taskId + "/executions/" + executionId + "/logs", HttpMethod.GET, null, params);
+    }
+
     public ApiResponse<Object> discoverTables(Object payload) {
         return exchangeObject("/api/ingestion/metadata/tables", HttpMethod.POST, payload, null, longRestTemplate);
     }
@@ -184,6 +188,10 @@ public class IngestionServiceClient {
             if (body instanceof Map<?, ?> map) {
                 Map<String, Object> payloadMap = new java.util.LinkedHashMap<>();
                 map.forEach((key, value) -> payloadMap.put(String.valueOf(key), value));
+                ApiResponse<Map<String, Object>> unwrapped = unwrapTaskResponseMap(payloadMap);
+                if (unwrapped != null) {
+                    return unwrapped;
+                }
                 return new ApiResponse<>(response.getStatusCode().value(), "ok", payloadMap);
             }
             return new ApiResponse<>(response.getStatusCode().value(), "ok", Map.of("value", body));
@@ -236,6 +244,36 @@ public class IngestionServiceClient {
             LOG.warn("Ingestion API {} error: {}", path, ex.getMessage());
             return new ApiResponse<>(500, "ingestion service error", null);
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private ApiResponse<Map<String, Object>> unwrapTaskResponseMap(Map<String, Object> map) {
+        if (map == null || map.isEmpty()) {
+            return null;
+        }
+        if (!map.containsKey("status") || !map.containsKey("data")) {
+            return null;
+        }
+        int status = parseStatus(map.get("status"), ResultStatus.SUCCESS.getCode());
+        String message = map.get("message") == null ? "ok" : String.valueOf(map.get("message"));
+        Object data = map.get("data");
+        Map<String, Object> dataMap;
+        if (data instanceof Map<?, ?> dm) {
+            Map<String, Object> tmp = new java.util.LinkedHashMap<>();
+            dm.forEach((key, value) -> tmp.put(String.valueOf(key), value));
+            dataMap = tmp;
+        } else {
+            dataMap = null;
+        }
+        ApiResponse<Map<String, Object>> response = new ApiResponse<>(status, message, dataMap);
+        Object code = map.get("code");
+        if (code != null) {
+            String text = String.valueOf(code).trim();
+            if (!text.isEmpty()) {
+                response.setCode(text);
+            }
+        }
+        return response;
     }
 
     private ApiResponse<Object> unwrapApiResponseMap(Map<?, ?> map) {
