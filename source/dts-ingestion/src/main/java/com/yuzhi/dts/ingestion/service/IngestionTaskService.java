@@ -673,6 +673,16 @@ public class IngestionTaskService {
         if (task == null || task.getSourceDataSourceId() == null) {
             return null;
         }
+        // File sources have no dataSourceId-based connection
+        if (isFileSourceType(task.getSourceType())) {
+            return null;
+        }
         return sourceResolver.resolve(task.getSourceDataSourceId(), List.of());
+    }
+
+    private boolean isFileSourceType(String sourceType) {
+        if (!org.springframework.util.StringUtils.hasText(sourceType)) return false;
+        String lower = sourceType.toLowerCase(java.util.Locale.ROOT);
+        return "excel".equals(lower) || "csv".equals(lower) || "excelreader".equals(lower) || "txtfilereader".equals(lower);
     }
 }

@@ -132,6 +132,11 @@ export default function TransformPage() {
 			dataIndex: "syncMode",
 			key: "syncMode",
 			width: 120,
+			render: (mode: string) => {
+				if (mode === "full_refresh") return <Tag color="blue">全量</Tag>;
+				if (mode === "incremental") return <Tag color="green">增量</Tag>;
+				return <Tag>{mode || "-"}</Tag>;
+			},
 		},
 		{
 			title: "状态",

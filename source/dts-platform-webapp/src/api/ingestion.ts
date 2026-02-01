@@ -105,6 +105,14 @@ export interface IngestionChangeLogDTO {
   createdDate?: string;
 }
 
+export interface FileUploadResult {
+  hostPath: string;
+  containerPath: string;
+  fileType: string;
+  columns: Array<{ name: string; type: string }>;
+  originalName: string;
+}
+
 export interface DefaultDestinationStatus {
   available: boolean;
   writerTypeReady: boolean;
@@ -220,6 +228,19 @@ class IngestionTaskAPI {
     params?: { tryNumber?: number }
   ): Promise<IngestionExecutionLog> {
     return api.get({ url: `/ingestion/tasks/${taskId}/executions/${executionId}/logs`, params });
+  }
+
+  /**
+   * 上传 Excel/CSV 文件
+   */
+  async uploadFile(file: File): Promise<FileUploadResult> {
+    const formData = new FormData();
+    formData.append("file", file);
+    return api.post({
+      url: "/ingestion/files/upload",
+      data: formData,
+      headers: { "Content-Type": "multipart/form-data" },
+    });
   }
 
   /**

@@ -76,6 +76,11 @@ public class TargetTableProvisioner {
                 }
                 List<JdbcMetadataService.ColumnMeta> columns = resolveColumns(sourceInfo, mapping.source(), readerConfig);
                 if (columns.isEmpty()) {
+                    // For file sources, _fileColumns may provide columns
+                    LOG.warn("无法获取源表字段信息: {} — 尝试使用文件列元数据", mapping.source());
+                    columns = resolveFileColumns(readerConfig);
+                }
+                if (columns.isEmpty()) {
                     throw new IllegalStateException("无法获取源表字段信息: " + mapping.source());
                 }
                 if (isPostgres(targetInfo.jdbcUrl())) {
@@ -204,10 +209,61 @@ public class TargetTableProvisioner {
             }
             return cols;
         }
+        // Support file upload columns metadata
+        List<JdbcMetadataService.ColumnMeta> fileCols = resolveFileColumns(readerConfig);
+        if (!fileCols.isEmpty()) {
+            return fileCols;
+        }
         if (!StringUtils.hasText(sourceInfo.jdbcUrl())) {
             return List.of();
         }
         return metadataService.getTableColumns(sourceInfo, sourceTable);
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<JdbcMetadataService.ColumnMeta> resolveFileColumns(Map<String, Object> readerConfig) {
+        if (readerConfig == null || !readerConfig.containsKey("_fileColumns")) {
+            return List.of();
+        }
+        Object fileColumnsObj = readerConfig.get("_fileColumns");
+        if (!(fileColumnsObj instanceof List<?> fileColumnsList) || fileColumnsList.isEmpty()) {
+            return List.of();
+        }
+        List<JdbcMetadataService.ColumnMeta> cols = new ArrayList<>();
+        for (Object item : fileColumnsList) {
+            if (item instanceof Map<?, ?> colMap) {
+                String name = normalizeText(colMap.get("name"));
+                String type = normalizeText(colMap.get("type"));
+                if (!StringUtils.hasText(name)) continue;
+                int jdbcType = mapFileTypeToJdbc(type);
+                String typeName = mapFileTypeToSql(type);
+                Integer size = "string".equals(type) ? 500 : null;
+                cols.add(new JdbcMetadataService.ColumnMeta(name, jdbcType, typeName, size, null));
+            }
+        }
+        return cols;
+    }
+
+    private int mapFileTypeToJdbc(String fileType) {
+        if (!StringUtils.hasText(fileType)) return Types.VARCHAR;
+        return switch (fileType.toLowerCase(Locale.ROOT)) {
+            case "long" -> Types.BIGINT;
+            case "double" -> Types.DOUBLE;
+            case "date" -> Types.TIMESTAMP;
+            case "boolean" -> Types.BOOLEAN;
+            default -> Types.VARCHAR;
+        };
+    }
+
+    private String mapFileTypeToSql(String fileType) {
+        if (!StringUtils.hasText(fileType)) return "TEXT";
+        return switch (fileType.toLowerCase(Locale.ROOT)) {
+            case "long" -> "BIGINT";
+            case "double" -> "DOUBLE PRECISION";
+            case "date" -> "TIMESTAMP";
+            case "boolean" -> "BOOLEAN";
+            default -> "VARCHAR(500)";
+        };
     }
 
     private List<TableMapping> resolveMappings(JsonNode mappingNode, Map<String, Object> readerConfig, Map<String, Object> writerConfig) {

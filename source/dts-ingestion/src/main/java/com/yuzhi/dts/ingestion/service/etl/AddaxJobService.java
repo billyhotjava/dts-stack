@@ -75,7 +75,22 @@ public class AddaxJobService {
         Map<String, Object> writerConfig,
         Map<String, Object> jobConfig
     ) {
+        return createJob(taskName, readerType, readerConfig, writerType, writerConfig, jobConfig, null);
+    }
+
+    public AddaxJobResult createJob(
+        String taskName,
+        String readerType,
+        Map<String, Object> readerConfig,
+        String writerType,
+        Map<String, Object> writerConfig,
+        Map<String, Object> jobConfig,
+        String syncMode
+    ) {
         Map<String, Object> resolvedJob = resolveJobConfig(readerType, readerConfig, writerType, writerConfig, jobConfig);
+        if ("full_refresh".equalsIgnoreCase(syncMode)) {
+            applyFullRefreshPreSql(resolvedJob);
+        }
         String jobDir = resolveJobDir();
         String jobName = buildJobName(taskName);
         Path dir = Paths.get(jobDir);
@@ -96,6 +111,10 @@ public class AddaxJobService {
         }
     }
 
+    private static final List<String> FILE_METADATA_KEYS = List.of(
+        "_filePath", "_containerPath", "_fileType", "_fileColumns", "_originalName"
+    );
+
     private Map<String, Object> resolveJobConfig(
         String readerType,
         Map<String, Object> readerConfig,
@@ -112,10 +131,18 @@ public class AddaxJobService {
         if (!StringUtils.hasText(readerType) || !StringUtils.hasText(writerType)) {
             throw new IllegalArgumentException("缺少 Addax Reader/Writer 类型");
         }
-        Map<String, Object> resolvedReader = ensureDriver(readerType, safeMap(readerConfig));
+        Map<String, Object> resolvedReader = safeMap(readerConfig);
+        if (isFileReaderType(readerType)) {
+            ensureFileReaderConfig(readerType, resolvedReader);
+            stripFileMetadataKeys(resolvedReader);
+        } else {
+            resolvedReader = ensureDriver(readerType, resolvedReader);
+        }
         Map<String, Object> resolvedWriter = ensureDriver(writerType, safeMap(writerConfig));
         ensureWriterConnection(writerType, resolvedWriter);
-        replaceWriterTablePlaceholders(resolvedReader, resolvedWriter);
+        if (!isFileReaderType(readerType)) {
+            replaceWriterTablePlaceholders(resolvedReader, resolvedWriter);
+        }
 
         // Split into per-table content blocks to avoid Addax multi-table writer bugs
         List<Map<String, Object>> contentList = splitPerTable(readerType, resolvedReader, writerType, resolvedWriter);
@@ -1010,14 +1037,67 @@ public class AddaxJobService {
             ? jsonNodeToMap(task.getAddaxConfig())
             : null;
 
+        String resolvedReaderType = normalizeReaderType(StringUtils.hasText(readerTypeOverride) ? readerTypeOverride : task.getSourceType());
+        // Map file source types to Addax plugin names
+        if (StringUtils.hasText(resolvedReaderType)) {
+            String lower = resolvedReaderType.toLowerCase(Locale.ROOT);
+            if ("excel".equals(lower)) resolvedReaderType = "excelreader";
+            else if ("csv".equals(lower)) resolvedReaderType = "txtfilereader";
+        }
         return createJob(
             task.getName(),
-            normalizeReaderType(StringUtils.hasText(readerTypeOverride) ? readerTypeOverride : task.getSourceType()),
+            resolvedReaderType,
             readerConfig,
             writerType,
             writerConfig,
-            jobConfig
+            jobConfig,
+            task.getSyncMode()
         );
+    }
+
+    private boolean isFileReaderType(String readerType) {
+        if (!StringUtils.hasText(readerType)) return false;
+        String lower = readerType.toLowerCase(Locale.ROOT);
+        return "excelreader".equals(lower) || "txtfilereader".equals(lower)
+            || "excel".equals(lower) || "csv".equals(lower);
+    }
+
+    private void ensureFileReaderConfig(String readerType, Map<String, Object> config) {
+        if (config == null) return;
+        String containerPath = normalizeText(config.get("_containerPath"));
+        if (!StringUtils.hasText(containerPath)) {
+            containerPath = normalizeText(config.get("path"));
+        }
+        if (!StringUtils.hasText(containerPath)) {
+            throw new IllegalArgumentException("文件源缺少文件路径");
+        }
+        String lower = readerType.toLowerCase(Locale.ROOT);
+        if ("excelreader".equals(lower) || "excel".equals(lower)) {
+            config.putIfAbsent("path", List.of(containerPath));
+            config.putIfAbsent("header", true);
+        } else {
+            // txtfilereader for CSV
+            config.putIfAbsent("path", List.of(containerPath));
+            config.putIfAbsent("encoding", "UTF-8");
+            config.putIfAbsent("fieldDelimiter", ",");
+            config.putIfAbsent("skipHeader", true);
+            config.putIfAbsent("column", List.of("*"));
+        }
+        // Ensure path is a list containing the container path
+        Object pathObj = config.get("path");
+        if (pathObj instanceof String str) {
+            config.put("path", List.of(str));
+        }
+    }
+
+    private void stripFileMetadataKeys(Map<String, Object> config) {
+        if (config == null) return;
+        for (String key : FILE_METADATA_KEYS) {
+            config.remove(key);
+        }
+        // Also remove non-Addax keys
+        config.remove("readerType");
+        config.remove("sourceSystem");
     }
 
     private String normalizeReaderType(String readerType) {
@@ -1590,6 +1670,56 @@ public class AddaxJobService {
             }
         } catch (Exception ex) {
             LOG.warn("Failed to resolve writer columns for job {}: {}", jobPath, ex.getMessage());
+        }
+    }
+
+    /**
+     * For full_refresh sync mode, add preSql: ["TRUNCATE TABLE <table>"] to each writer.
+     * This ensures the target table is cleared before inserting fresh data.
+     */
+    @SuppressWarnings("unchecked")
+    private void applyFullRefreshPreSql(Map<String, Object> jobConfig) {
+        if (jobConfig == null || jobConfig.isEmpty()) {
+            return;
+        }
+        Object jobObj = jobConfig.get("job");
+        if (!(jobObj instanceof Map<?, ?> jobMap)) {
+            return;
+        }
+        Object contentObj = jobMap.get("content");
+        if (!(contentObj instanceof List<?> contentList)) {
+            return;
+        }
+        for (Object item : contentList) {
+            if (!(item instanceof Map<?, ?> contentMap)) {
+                continue;
+            }
+            Object writerObj = contentMap.get("writer");
+            if (!(writerObj instanceof Map<?, ?> writerMap)) {
+                continue;
+            }
+            Object paramObj = writerMap.get("parameter");
+            if (!(paramObj instanceof Map<?, ?> paramMap)) {
+                continue;
+            }
+            Map<String, Object> params = new LinkedHashMap<>();
+            paramMap.forEach((k, v) -> { if (k != null) params.put(k.toString(), v); });
+            // Skip if preSql is already configured
+            if (params.containsKey("preSql")) {
+                continue;
+            }
+            List<String> tables = extractTables(params);
+            if (tables.isEmpty()) {
+                continue;
+            }
+            List<String> truncateStatements = tables.stream()
+                .filter(StringUtils::hasText)
+                .map(table -> "TRUNCATE TABLE " + table)
+                .toList();
+            if (!truncateStatements.isEmpty()) {
+                ((Map<String, Object>) paramMap).put("preSql", truncateStatements);
+                LOG.info("Added full_refresh preSql for tables: {}", tables);
+            }
         }
     }
 

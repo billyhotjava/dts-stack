@@ -123,6 +123,43 @@ public class IngestionServiceClient {
         return exchangeTask("/api/ingestion/tasks/changes", HttpMethod.POST, payload, null);
     }
 
+    public ApiResponse<Object> uploadFile(org.springframework.web.multipart.MultipartFile file) {
+        if (!isEnabled()) {
+            return new ApiResponse<>(503, "ingestion service disabled", null);
+        }
+        URI uri = buildAbsoluteUri("/api/ingestion/files/upload");
+        try {
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.MULTIPART_FORM_DATA);
+            if (StringUtils.hasText(properties.getServiceName())) {
+                headers.set(SERVICE_HEADER, properties.getServiceName());
+            }
+            org.springframework.util.LinkedMultiValueMap<String, Object> body = new org.springframework.util.LinkedMultiValueMap<>();
+            body.add("file", new org.springframework.core.io.ByteArrayResource(file.getBytes()) {
+                @Override
+                public String getFilename() {
+                    return file.getOriginalFilename();
+                }
+            });
+            HttpEntity<org.springframework.util.LinkedMultiValueMap<String, Object>> entity = new HttpEntity<>(body, headers);
+            ResponseEntity<Object> response = longRestTemplate.exchange(uri, HttpMethod.POST, entity, Object.class);
+            Object responseBody = response.getBody();
+            if (responseBody instanceof Map<?, ?> map) {
+                ApiResponse<Object> unwrapped = unwrapApiResponseMap(map);
+                if (unwrapped != null) {
+                    return unwrapped;
+                }
+            }
+            return new ApiResponse<>(response.getStatusCode().value(), "ok", responseBody);
+        } catch (HttpStatusCodeException ex) {
+            LOG.warn("Ingestion file upload failed status={} body={}", ex.getStatusCode().value(), ex.getResponseBodyAsString());
+            return new ApiResponse<>(ex.getStatusCode().value(), "文件上传失败", null);
+        } catch (Exception ex) {
+            LOG.warn("Ingestion file upload error: {}", ex.getMessage());
+            return new ApiResponse<>(500, "文件上传失败: " + ex.getMessage(), null);
+        }
+    }
+
     public Map<String, Object> getInfraSettings(String service) {
         if (!isEnabled() || !StringUtils.hasText(service)) {
             return Map.of();

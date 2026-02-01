@@ -177,42 +177,48 @@ public class IngestionTaskResource {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "缺少目标端配置");
             }
 
-            if (request.source().dataSourceId() == null) {
+            boolean isFileSource = isFileSourceType(normalize(request.source().type()));
+            if (!isFileSource && request.source().dataSourceId() == null) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请选择数据源连接");
             }
-            if (hasConnectionOverride(request.source().config())) {
+            if (!isFileSource && hasConnectionOverride(request.source().config())) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "入湖任务必须使用已配置的数据源连接");
             }
             List<String> streamTables = resolveStreamTables(request.streams());
             com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver.ResolvedSource resolvedSource =
-                sourceResolver.resolve(request.source().dataSourceId(), streamTables);
+                isFileSource ? null : sourceResolver.resolve(request.source().dataSourceId(), streamTables);
             String readerType = resolvePlugin(
                 request.source().type(),
                 safeMap(request.source().config()),
                 List.of("readerType", "reader", "type", "name", "sourceType")
             );
-            if (!StringUtils.hasText(readerType)) {
+            if (!StringUtils.hasText(readerType) && resolvedSource != null) {
                 readerType = resolvePlugin(null, resolvedSource.readerConfig(), List.of("readerType", "reader", "type", "name"));
             }
-            if (!StringUtils.hasText(readerType)) {
+            if (!StringUtils.hasText(readerType) && resolvedSource != null) {
                 readerType = resolvedSource.readerType();
             }
-            if (!StringUtils.hasText(readerType)) {
+            if (!StringUtils.hasText(readerType) && resolvedSource != null) {
                 String jdbcUrl = normalize(resolvedSource.detail() == null ? null : resolvedSource.detail().jdbcUrl());
                 if (StringUtils.hasText(jdbcUrl)) {
                     readerType = "rdbmsreader";
                 }
             }
+            if (!StringUtils.hasText(readerType) && isFileSource) {
+                readerType = resolveFileReaderType(normalize(request.source().type()));
+            }
             readerType = normalizeAddaxPlugin(readerType, true);
             if (!StringUtils.hasText(readerType)) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "缺少 Addax Reader 类型");
             }
-            Map<String, Object> sourceOverrides = sanitizeSourceOverrides(request.source().config());
-            Map<String, Object> resolvedReaderConfig = resolvedSource.readerConfig();
+            Map<String, Object> sourceOverrides = isFileSource
+                ? safeMap(request.source().config())
+                : sanitizeSourceOverrides(request.source().config());
+            Map<String, Object> resolvedReaderConfig = resolvedSource != null ? resolvedSource.readerConfig() : safeMap(request.source().config());
             Map<String, Object> mergedReaderConfig = mergeReaderOverrides(safeMap(resolvedReaderConfig), sourceOverrides);
             if (StringUtils.hasText(readerType)) {
                 mergedReaderConfig.putIfAbsent("readerType", readerType);
-                if (resolvedReaderConfig != null) {
+                if (resolvedReaderConfig != null && resolvedReaderConfig instanceof java.util.LinkedHashMap) {
                     resolvedReaderConfig.putIfAbsent("readerType", readerType);
                 }
             }
@@ -1062,6 +1068,26 @@ public class IngestionTaskResource {
         return List.of();
     }
 
+    private boolean isFileSourceType(String sourceType) {
+        if (!StringUtils.hasText(sourceType)) {
+            return false;
+        }
+        String lower = sourceType.toLowerCase(java.util.Locale.ROOT);
+        return "excel".equals(lower) || "csv".equals(lower) || "excelreader".equals(lower) || "txtfilereader".equals(lower);
+    }
+
+    private String resolveFileReaderType(String sourceType) {
+        if (!StringUtils.hasText(sourceType)) {
+            return null;
+        }
+        String lower = sourceType.toLowerCase(java.util.Locale.ROOT);
+        return switch (lower) {
+            case "excel", "excelreader" -> "excelreader";
+            case "csv", "txtfilereader" -> "txtfilereader";
+            default -> null;
+        };
+    }
+
     private String resolveTablePrefix(Map<String, Object> writerConfig) {
         if (writerConfig == null || writerConfig.isEmpty()) {
             return null;
@@ -1172,11 +1198,14 @@ public class IngestionTaskResource {
         if (!id.equals(taskDTO.getId())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "ID不匹配");
         }
-        if (taskDTO.getSourceDataSourceId() == null) {
+        boolean isFileSourceUpdate = isFileSourceType(normalize(taskDTO.getSourceType()));
+        if (!isFileSourceUpdate && taskDTO.getSourceDataSourceId() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请选择数据源连接");
         }
-        Map<String, Object> sourceOverrides = sanitizeSourceOverrides(jsonNodeToMap(taskDTO.getSourceConfig()));
-        if (hasConnectionOverride(jsonNodeToMap(taskDTO.getSourceConfig()))) {
+        Map<String, Object> sourceOverrides = isFileSourceUpdate
+            ? safeMap(jsonNodeToMap(taskDTO.getSourceConfig()))
+            : sanitizeSourceOverrides(jsonNodeToMap(taskDTO.getSourceConfig()));
+        if (!isFileSourceUpdate && hasConnectionOverride(jsonNodeToMap(taskDTO.getSourceConfig()))) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "入湖任务必须使用已配置的数据源连接");
         }
         taskDTO.setSourceConfig(sourceOverrides.isEmpty() ? null : toJsonNode(sourceOverrides));

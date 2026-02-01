@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Alert, Button, Card, Collapse, Divider, Form, Input, Radio, Select, Space, Steps, Switch, Table, Typography } from "antd";
-import { SaveOutlined } from "@ant-design/icons";
+import { Alert, Button, Card, Collapse, Divider, Form, Input, Radio, Select, Space, Steps, Switch, Table, Tag, Typography, Upload } from "antd";
+import { SaveOutlined, InboxOutlined } from "@ant-design/icons";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
 import { createIngestionTask, listSqlModels } from "@/api/platformApi";
@@ -9,6 +9,7 @@ import { useParams, useRouter } from "@/routes/hooks";
 import {
 	ingestionTaskAPI,
 	type DefaultDestinationStatus,
+	type FileUploadResult,
 	type IngestionTaskDTO,
 	type TableInfo,
 } from "@/api/ingestion";
@@ -436,6 +437,29 @@ const applyTablesToConfig = (rawConfig: Record<string, any> | undefined, tables:
 	return config;
 };
 
+const shouldApplyWriterTables = (
+	writerConfig: Record<string, any> | undefined,
+	values: Record<string, any>,
+) => {
+	const explicitTables = extractWriterTables(writerConfig).length > 0 || splitLines(values.writerTables).length > 0;
+	if (explicitTables) return true;
+	const prefix = normalizeText(values.syncPrefix);
+	return !prefix;
+};
+
+const applyPrefixToTables = (tables: string[], prefix?: string) => {
+	const normalizedPrefix = normalizeText(prefix);
+	if (!normalizedPrefix) return tables;
+	return tables
+		.map((table) => {
+			const normalized = normalizeText(table);
+			if (!normalized) return "";
+			const base = normalized.includes(".") ? normalized.split(".").pop() || normalized : normalized;
+			return `${normalizedPrefix}${base}`;
+		})
+		.filter(Boolean);
+};
+
 const buildReaderConfig = (values: Record<string, any>) => {
 	const tables = splitLines(values.readerTables);
 	const columns = splitColumns(values.readerColumns);
@@ -643,6 +667,7 @@ const mapTaskToForm = (task: IngestionTaskDTO) => {
 	const mappingTables = hasMapping ? extractMappingTables(task.tableMapping) : [];
 	return {
 		editorMode: "json",
+		syncMode: task.syncMode || "full_refresh",
 		tableSelectionMode: hasMapping ? "manual" : "all",
 		airflowEnabled: task.airflowEnabled ?? true,
 		runNow: false,
@@ -702,6 +727,8 @@ export default function TransformCreatePage() {
 	const [loadingDataSources, setLoadingDataSources] = useState(false);
 	const [sqlModels, setSqlModels] = useState<Array<{ id?: string; name?: string; alias?: string }>>([]);
 	const [loadingSqlModels, setLoadingSqlModels] = useState(false);
+	const [fileUploadResult, setFileUploadResult] = useState<FileUploadResult | null>(null);
+	const [uploadingFile, setUploadingFile] = useState(false);
 	const [form] = Form.useForm();
 	const lastAutoDiscoveryKeyRef = useRef("");
 	const router = useRouter();
@@ -710,6 +737,7 @@ export default function TransformCreatePage() {
 	const isEdit = Number.isFinite(editId);
 	const userInfo = useUserInfo() as any;
 	const editorMode = Form.useWatch("editorMode", form);
+	const sourceCategory = Form.useWatch("sourceCategory", form);
 	const tableSelectionMode = Form.useWatch("tableSelectionMode", form);
 	const formValues = Form.useWatch([], form);
 	const selectedTablesValue = Form.useWatch("selectedTables", form);
@@ -742,6 +770,8 @@ export default function TransformCreatePage() {
 	const initialValues = useMemo(
 		() => ({
 			editorMode: "visual",
+			sourceCategory: "database",
+			syncMode: "full_refresh",
 			tableSelectionMode: "all",
 			airflowEnabled: true,
 			runNow: true,
@@ -768,18 +798,19 @@ export default function TransformCreatePage() {
 		}
 		const values = form.getFieldsValue(true);
 		const isJsonMode = values.editorMode === "json";
+		const writerTables = applyPrefixToTables(nextTables, values.syncPrefix);
 		try {
 			if (isJsonMode) {
 				const readerConfig = parseJson(values.readerConfig, "Reader 配置") as Record<string, any> | undefined;
 				const nextReader = applyTablesToConfig(readerConfig || {}, nextTables);
 				form.setFieldValue("readerConfig", JSON.stringify(nextReader || {}, null, 2));
 				const writerConfig = parseJson(values.writerConfig, "Writer 配置") as Record<string, any> | undefined;
-				const nextWriter = applyTablesToConfig(writerConfig || {}, nextTables);
+				const nextWriter = applyTablesToConfig(writerConfig || {}, writerTables);
 				form.setFieldValue("writerConfig", JSON.stringify(nextWriter || {}, null, 2));
 			}
 			// Always sync visual-mode fields so they persist across steps
 			form.setFieldValue("readerTables", nextTables.join("\n"));
-			form.setFieldValue("writerTables", nextTables.join("\n"));
+			form.setFieldValue("writerTables", writerTables.join("\n"));
 			form.setFieldValue("tableSelectionMode", "manual");
 			if (!opts?.silent) {
 				toast.success("已更新表清单");
@@ -937,7 +968,7 @@ export default function TransformCreatePage() {
 	// This ensures values persist even when writerTables/writerConfig Form.Items
 	// were not mounted (on Step 1) when the selection was made
 	useEffect(() => {
-		if (currentStep !== 2) return;
+		if (isFileFlow || currentStep !== 2) return;
 		const selected = mergeTableSelections(
 			selectedTableKeysRef.current,
 			selectedTableKeys,
@@ -945,22 +976,24 @@ export default function TransformCreatePage() {
 		if (!selected.length) return;
 		const values = form.getFieldsValue(true);
 		const isJsonMode = values.editorMode === "json";
+		const writerTables = applyPrefixToTables(selected, values.syncPrefix);
 		if (isJsonMode) {
 			const writerConfig = tryParseJson(values.writerConfig) || {};
 			const existingTables = extractWriterTables(writerConfig);
 			if (!existingTables.length) {
-				const nextWriter = applyTablesToConfig(writerConfig, selected);
+				const nextWriter = applyTablesToConfig(writerConfig, writerTables);
 				form.setFieldValue("writerConfig", JSON.stringify(nextWriter || {}, null, 2));
 			}
 		} else {
 			const current = splitLines(values.writerTables);
 			if (!current.length) {
-				form.setFieldValue("writerTables", selected.join("\n"));
+				form.setFieldValue("writerTables", writerTables.join("\n"));
 			}
 		}
 	}, [currentStep, selectedTableKeys, form]);
 
-	const stepItems = useMemo(
+	const isFileFlow = sourceCategory === "file";
+	const dbStepItems = useMemo(
 		() => [
 			{ key: "basic", title: "基础信息" },
 			{ key: "reader", title: "源端配置" },
@@ -969,6 +1002,19 @@ export default function TransformCreatePage() {
 		],
 		[]
 	);
+	const fileStepItems = useMemo(
+		() => [
+			{ key: "basic", title: "基础信息" },
+			{ key: "writer", title: "目标配置" },
+			{ key: "review", title: "预览与执行" },
+		],
+		[]
+	);
+	const stepItems = isFileFlow ? fileStepItems : dbStepItems;
+
+	useEffect(() => {
+		setCurrentStep(0);
+	}, [sourceCategory]);
 
 	// Load draft on mount
 	useEffect(() => {
@@ -1025,19 +1071,24 @@ export default function TransformCreatePage() {
 			if (!name) {
 				throw new Error("请填写任务名称");
 			}
+			const isFileDraft = values.sourceCategory === "file";
 			const sourceDataSourceId = normalizeText(values.sourceDataSourceId);
-			if (!sourceDataSourceId) {
+			if (!isFileDraft && !sourceDataSourceId) {
 				throw new Error("请选择数据源连接");
 			}
 			let resolvedReaderType = normalizeReaderType(values.readerType);
-			if (!resolvedReaderType) {
-				resolvedReaderType = resolveReaderTypeFromValues(values);
-			}
-			if (!resolvedReaderType) {
-				resolvedReaderType = resolveReaderTypeFromSourceId(sourceDataSourceId, dataSources, selectedDataSource);
-			}
-			if (!resolvedReaderType && sourceDataSourceId) {
-				resolvedReaderType = GENERIC_JDBC_READER;
+			if (isFileDraft && fileUploadResult) {
+				resolvedReaderType = fileUploadResult.fileType === "excel" ? "excelreader" : "txtfilereader";
+			} else {
+				if (!resolvedReaderType) {
+					resolvedReaderType = resolveReaderTypeFromValues(values);
+				}
+				if (!resolvedReaderType) {
+					resolvedReaderType = resolveReaderTypeFromSourceId(sourceDataSourceId, dataSources, selectedDataSource);
+				}
+				if (!resolvedReaderType && sourceDataSourceId) {
+					resolvedReaderType = GENERIC_JDBC_READER;
+				}
 			}
 			if (resolvedReaderType) {
 				values.readerType = resolvedReaderType;
@@ -1087,7 +1138,9 @@ export default function TransformCreatePage() {
 			const excludeTables = selectionMode === "all" ? splitLines(values.tableExclude) : [];
 			if (selectionMode === "manual" && includeTables.length) {
 				readerConfig = applyTablesToConfig(readerConfig, includeTables);
-				writerConfig = applyTablesToConfig(writerConfig, includeTables);
+				if (shouldApplyWriterTables(writerConfig, values)) {
+					writerConfig = applyTablesToConfig(writerConfig, includeTables);
+				}
 			}
 			const draftPayload: Record<string, any> = {
 				draft: true,
@@ -1247,6 +1300,18 @@ export default function TransformCreatePage() {
 
 	const resolveStepFields = (stepIndex: number, values: Record<string, any>) => {
 		const isJsonMode = values?.editorMode === "json";
+		if (values?.sourceCategory === "file") {
+			switch (stepIndex) {
+				case 0:
+					return ["name"];
+				case 1:
+					return ["writerType"];
+				case 2:
+					return ["airflowEnabled", "runNow"];
+				default:
+					return [];
+			}
+		}
 		switch (stepIndex) {
 			case 0:
 				return ["editorMode", "name", "description", "sourceSystem"];
@@ -1297,6 +1362,10 @@ export default function TransformCreatePage() {
 			toast.error("请先完成当前步骤必填项");
 			return;
 		}
+		if (currentStep === 0 && isFileFlow && !fileUploadResult) {
+			toast.error("请先上传文件");
+			return;
+		}
 		setCurrentStep((prev) => prev + 1);
 	};
 
@@ -1316,31 +1385,49 @@ export default function TransformCreatePage() {
 				throw new Error("请填写任务名称");
 			}
 			mergedValues.name = taskName;
+			const isFileSource = mergedValues.sourceCategory === "file" && fileUploadResult;
 			const sourceDataSourceId = normalizeText(mergedValues.sourceDataSourceId);
-			if (!sourceDataSourceId) {
+			if (!isFileSource && !sourceDataSourceId) {
 				throw new Error("请选择数据源连接");
 			}
+			if (isFileSource && !fileUploadResult) {
+				throw new Error("请先上传文件");
+			}
 			let resolvedReaderType = normalizeReaderType(mergedValues.readerType);
-			if (!resolvedReaderType) {
-				resolvedReaderType = resolveReaderTypeFromValues(mergedValues);
-			}
-			if (!resolvedReaderType) {
-				resolvedReaderType = resolveReaderTypeFromSourceId(sourceDataSourceId, dataSources, selectedDataSource);
-			}
-			if (!resolvedReaderType && sourceDataSourceId) {
-				resolvedReaderType = GENERIC_JDBC_READER;
+			if (isFileSource) {
+				resolvedReaderType = fileUploadResult.fileType === "excel" ? "excelreader" : "txtfilereader";
+			} else {
+				if (!resolvedReaderType) {
+					resolvedReaderType = resolveReaderTypeFromValues(mergedValues);
+				}
+				if (!resolvedReaderType) {
+					resolvedReaderType = resolveReaderTypeFromSourceId(sourceDataSourceId, dataSources, selectedDataSource);
+				}
+				if (!resolvedReaderType && sourceDataSourceId) {
+					resolvedReaderType = GENERIC_JDBC_READER;
+				}
 			}
 			if (resolvedReaderType) {
 				mergedValues.readerType = resolvedReaderType;
 			}
 			const airflowEnabled = mergedValues.airflowEnabled ?? editingTask?.airflowEnabled ?? true;
 			const isJsonMode = mergedValues.editorMode === "json";
-			let readerConfig = isJsonMode
-				? parseJson(mergedValues.readerConfig, "Reader 配置")
-				: buildReaderConfig(mergedValues);
-			applyReaderTypeToConfig(readerConfig as Record<string, any> | undefined, resolvedReaderType);
-			if (hasConnectionOverride(readerConfig)) {
-				throw new Error("入湖任务必须使用已配置的数据源连接，Reader 配置中不可包含连接信息");
+			let readerConfig: Record<string, any>;
+			if (isFileSource) {
+				readerConfig = {
+					_filePath: fileUploadResult.hostPath,
+					_containerPath: fileUploadResult.containerPath,
+					_fileType: fileUploadResult.fileType,
+					_fileColumns: fileUploadResult.columns,
+				};
+			} else {
+				readerConfig = (isJsonMode
+					? parseJson(mergedValues.readerConfig, "Reader 配置")
+					: buildReaderConfig(mergedValues)) as Record<string, any>;
+				applyReaderTypeToConfig(readerConfig, resolvedReaderType);
+				if (hasConnectionOverride(readerConfig)) {
+					throw new Error("入湖任务必须使用已配置的数据源连接，Reader 配置中不可包含连接信息");
+				}
 			}
 			if (!defaultDestinationStatus?.available) {
 				throw new Error("默认数据湖未配置，请先在管理端设置默认数据湖");
@@ -1358,6 +1445,77 @@ export default function TransformCreatePage() {
 			const sourceSystem = normalizeText(mergedValues.sourceSystem);
 			if (sourceSystem && readerConfig && typeof readerConfig === "object" && !readerConfig.sourceSystem) {
 				readerConfig.sourceSystem = sourceSystem;
+			}
+			if (isFileSource) {
+				const baseName = (fileUploadResult.originalName || "uploaded_file")
+					.replace(/\.[^.]+$/, "")
+					.replace(/[^a-zA-Z0-9_]/g, "_")
+					.toLowerCase();
+				const fileTableName = normalizeText(mergedValues.syncPrefix) + baseName;
+				const fileIncludeTables = [fileTableName];
+				const writerConfig = {};
+				const jobConfig = parseJson(mergedValues.jobConfig, "作业参数");
+				const modelSelector = normalizeText(mergedValues.dbtModelSelector) || buildModelSelectorFromNames(mergedValues.dbtModels || []);
+				const dagSelector = normalizeText(mergedValues.dbtDagSelector);
+				if (isEdit && editId) {
+					const updatePayload: IngestionTaskDTO = {
+						...(editingTask || {}),
+						id: editId,
+						name: taskName,
+						description: normalizeText(mergedValues.description) || undefined,
+						sourceType: resolvedReaderType,
+						sourceConfig: readerConfig,
+						destinationType: defaultWriterType,
+						destinationConfig: writerConfig,
+						syncMode: mergedValues.syncMode || "full_refresh",
+						syncPrefix: normalizeText(mergedValues.syncPrefix) || undefined,
+						addaxConfig: (jobConfig as Record<string, any>) || editingTask?.addaxConfig,
+						airflowEnabled: Boolean(airflowEnabled),
+						tableMapping: [{ source: baseName, target: fileTableName }],
+						dbtModelSelector: modelSelector || undefined,
+						dbtDagSelector: dagSelector || undefined,
+					};
+					await ingestionTaskAPI.updateTask(editId, updatePayload);
+					toast.success("入湖任务已更新");
+					router.push(`/explore/etl/transform/${editId}`);
+				} else {
+					const payload = {
+						taskName,
+						name: taskName,
+						description: normalizeText(mergedValues.description) || undefined,
+						owner: userInfo?.username || userInfo?.login,
+						source: {
+							type: resolvedReaderType,
+							config: readerConfig,
+						},
+						destination: {
+							usePlatformDefault: true,
+							type: defaultWriterType,
+							config: writerConfig,
+						},
+						sync: {
+							mode: mergedValues.syncMode || "full_refresh",
+							prefix: normalizeText(mergedValues.syncPrefix) || undefined,
+						},
+						streams: {
+							selection: "manual",
+							include: fileIncludeTables,
+						},
+						airflow: { enabled: airflowEnabled },
+						dbt: {
+							modelSelector: modelSelector || undefined,
+							dagSelector: dagSelector || undefined,
+						},
+						runNow: Boolean(mergedValues.runNow),
+						jobConfig: jobConfig || undefined,
+					};
+					await createIngestionTask(payload);
+					clearDraft();
+					setHasDraft(false);
+					toast.success("入湖任务已提交");
+					router.push("/explore/etl/transform");
+				}
+				return;
 			}
 			const selectedTables = mergeTableSelections(
 				mergedValues.selectedTables,
@@ -1406,7 +1564,9 @@ export default function TransformCreatePage() {
 					throw new Error("请选择需要入湖的表");
 				}
 				readerConfig = applyTablesToConfig(readerConfig as Record<string, any> | undefined, includeTables);
-				writerConfig = applyTablesToConfig(writerConfig as Record<string, any> | undefined, includeTables);
+				if (shouldApplyWriterTables(writerConfig as Record<string, any> | undefined, mergedValues)) {
+					writerConfig = applyTablesToConfig(writerConfig as Record<string, any> | undefined, includeTables);
+				}
 			}
 			const excludeTables = selectionMode === "all" ? splitLines(mergedValues.tableExclude) : [];
 			if (writerConfig && selectionMode !== "all" && !hasTableEntries(extractWriterTables(writerConfig))) {
@@ -1429,7 +1589,7 @@ export default function TransformCreatePage() {
 					sourceConfig: (readerConfig as Record<string, any>) || {},
 					destinationType: defaultWriterType,
 					destinationConfig: writerConfig as Record<string, any> | undefined,
-					syncMode: editingTask?.syncMode || "full",
+					syncMode: mergedValues.syncMode || editingTask?.syncMode || "full_refresh",
 					syncPrefix: normalizeText(mergedValues.syncPrefix) || undefined,
 					addaxConfig: (jobConfig as Record<string, any>) || editingTask?.addaxConfig,
 					airflowEnabled: Boolean(mergedValues.airflowEnabled),
@@ -1457,6 +1617,7 @@ export default function TransformCreatePage() {
 						config: writerConfig || undefined,
 					},
 					sync: {
+						mode: mergedValues.syncMode || "full_refresh",
 						prefix: normalizeText(mergedValues.syncPrefix) || undefined,
 					},
 					streams: {
@@ -1567,6 +1728,144 @@ export default function TransformCreatePage() {
 					<Form.Item name="writerType" hidden rules={[{ required: true, message: "请选择 Writer 类型" }]}>
 						<Input type="hidden" />
 					</Form.Item>
+					{isFileFlow ? (
+					<>
+					{/* ===== 文件上传模式 ===== */}
+					{currentStep === 0 && (
+						<>
+							<Form.Item
+								name="name"
+								label="任务名称"
+								rules={[{ required: true, message: "请输入任务名称" }]}
+							>
+								<Input placeholder="例如：csv-import-task" />
+							</Form.Item>
+							<Form.Item name="description" label="任务描述">
+								<Input.TextArea rows={2} placeholder="可选，说明任务用途" />
+							</Form.Item>
+							<Form.Item name="syncMode" label="同步模式" tooltip="全量同步：每次执行前清空目标表后重新写入">
+								<Radio.Group>
+									<Radio.Button value="full_refresh">全量同步</Radio.Button>
+									<Radio.Button value="incremental" disabled>增量同步</Radio.Button>
+								</Radio.Group>
+							</Form.Item>
+							<Form.Item name="sourceCategory" label="数据来源">
+								<Radio.Group>
+									<Radio.Button value="database">数据库</Radio.Button>
+									<Radio.Button value="file">文件上传</Radio.Button>
+								</Radio.Group>
+							</Form.Item>
+							<Form.Item label="上传文件" required>
+								<Upload.Dragger
+									accept=".xlsx,.xls,.csv"
+									maxCount={1}
+									showUploadList={false}
+									customRequest={async ({ file, onSuccess, onError }) => {
+										try {
+											setUploadingFile(true);
+											setFileUploadResult(null);
+											const result = await ingestionTaskAPI.uploadFile(file as File);
+											setFileUploadResult(result);
+											onSuccess?.(result);
+											toast.success(`文件解析成功，检测到 ${result.columns?.length || 0} 列`);
+										} catch (err: any) {
+											onError?.(err);
+											toast.error(err?.message || "文件上传失败");
+										} finally {
+											setUploadingFile(false);
+										}
+									}}
+									disabled={uploadingFile}
+								>
+									<p className="ant-upload-drag-icon">
+										<InboxOutlined />
+									</p>
+									<p className="ant-upload-text">
+										{uploadingFile ? "上传中..." : "点击或拖拽上传 Excel / CSV 文件"}
+									</p>
+									<p className="ant-upload-hint">支持 .xlsx, .xls, .csv 格式</p>
+								</Upload.Dragger>
+							</Form.Item>
+							{fileUploadResult && (
+								<Card type="inner" title={`已解析文件: ${fileUploadResult.originalName}`} className="mb-4">
+									<Text type="secondary" className="block mb-2">
+										文件类型: <Tag>{fileUploadResult.fileType}</Tag>
+										检测到 {fileUploadResult.columns?.length || 0} 列
+									</Text>
+									<Table
+										size="small"
+										dataSource={fileUploadResult.columns || []}
+										rowKey="name"
+										pagination={false}
+										columns={[
+											{ title: "列名", dataIndex: "name" },
+											{ title: "推断类型", dataIndex: "type", width: 120, render: (t: string) => <Tag>{t}</Tag> },
+										]}
+									/>
+								</Card>
+							)}
+						</>
+					)}
+					{currentStep === 1 && (
+						<>
+							<Divider orientation="left">目标配置</Divider>
+							{defaultDestinationStatus ? (
+								<Alert
+									type={defaultDestinationStatus.available ? "success" : "warning"}
+									showIcon
+									message="默认数据湖"
+									description={[
+										defaultDestinationStatus.destinationName
+											? `数据湖：${defaultDestinationStatus.destinationName}`
+											: null,
+										defaultDestinationStatus.writerType
+											? `Writer：${defaultDestinationStatus.writerType}`
+											: null,
+										defaultDestinationStatus.message ? defaultDestinationStatus.message : null,
+									]
+										.filter(Boolean)
+										.join(" · ")}
+									className="mb-4"
+								/>
+							) : null}
+							<Form.Item name="syncPrefix" label="目标表前缀">
+								<Input placeholder="例如：ods_erp_" />
+							</Form.Item>
+							<Text type="secondary" className="block -mt-3 mb-4">
+								目标表名 = 前缀 + 文件名（去除扩展名）。例如：ods_erp_ + sales_data → ods_erp_sales_data
+							</Text>
+							{fileUploadResult && (
+								<Alert
+									type="info"
+									showIcon
+									message={`目标表预览：${normalizeText(form.getFieldValue("syncPrefix"))}${(fileUploadResult.originalName || "file").replace(/\.[^.]+$/, "").replace(/[^a-zA-Z0-9_]/g, "_").toLowerCase()}`}
+									className="mb-4"
+								/>
+							)}
+						</>
+					)}
+					{currentStep === 2 && (
+						<>
+							<Form.Item name="jobConfig" label="作业参数 (JSON，可选)" rules={[{ validator: jsonValidator("作业参数") }]}>
+								<Input.TextArea rows={4} placeholder='{"setting":{"speed":{"channel":3}}}' />
+							</Form.Item>
+							<Card type="inner" title="Airflow 触发">
+								<Form.Item name="airflowEnabled" label="启用 Airflow" valuePropName="checked">
+									<Switch />
+								</Form.Item>
+								<Form.Item name="runNow" label="立即触发" valuePropName="checked">
+									<Switch />
+								</Form.Item>
+								<Text type="secondary">
+									若未勾选立即触发，仅保存作业配置，后续可在 Airflow 中手动运行。
+								</Text>
+							</Card>
+						</>
+					)}
+					</>
+					) : (
+					<>
+					{/* ===== 数据库模式 ===== */}
 					{currentStep === 0 && (
 						<>
 							<Form.Item name="editorMode" label="配置方式">
@@ -1588,6 +1887,19 @@ export default function TransformCreatePage() {
 							<Form.Item name="sourceSystem" label="源系统标识">
 								<Input placeholder="可选，例如：erp、crm（用于绑定 DAG）" />
 							</Form.Item>
+							<Form.Item name="syncMode" label="同步模式" tooltip="全量同步：每次执行前清空目标表后重新写入；增量同步：仅追加新数据（暂未实现）">
+								<Radio.Group>
+									<Radio.Button value="full_refresh">全量同步</Radio.Button>
+									<Radio.Button value="incremental" disabled>增量同步</Radio.Button>
+								</Radio.Group>
+							</Form.Item>
+							<Form.Item name="sourceCategory" label="数据来源">
+								<Radio.Group>
+									<Radio.Button value="database">数据库</Radio.Button>
+									<Radio.Button value="file">文件上传</Radio.Button>
+								</Radio.Group>
+							</Form.Item>
+							
 						</>
 					)}
 					{currentStep === 1 && (
@@ -1947,6 +2259,8 @@ export default function TransformCreatePage() {
 								</Text>
 							</Card>
 						</>
+					)}
+					</>
 					)}
 					<Divider />
 					<Space>

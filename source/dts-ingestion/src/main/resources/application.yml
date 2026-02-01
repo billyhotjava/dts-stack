@@ -11,6 +11,10 @@ spring:
   liquibase:
     change-log: classpath:config/liquibase/master.xml
     enabled: true
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 60MB
   jpa:
     open-in-view: false
     hibernate:

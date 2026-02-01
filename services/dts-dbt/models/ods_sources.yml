@@ -14,6 +14,14 @@ sources:
           stream: "CUSTOMER"
           stream_namespace: "ERPDEMO"
       -
+        name: "customer_202602020332"
+        description: "exceldemo1: customer_202602020332 -> ods.customer_202602020332"
+        meta:
+          system: "unknown"
+          biz: "unknown"
+          entity: "customer_202602020332"
+          stream: "customer_202602020332"
+      -
         name: "DEPARTMENT"
         description: "erptest1: ERPDEMO.DEPARTMENT -> ods.DEPARTMENT"
         meta:
