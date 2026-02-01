@@ -113,7 +113,7 @@
   padding: var(--spacing-sm) var(--spacing-md);
   margin: 0 var(--spacing-sm);
   border: none;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   background: transparent;
   color: rgba(255, 255, 255, 0.8);
   font-family: inherit;
@@ -132,12 +132,13 @@
 }
 
 .mb-sidebar__item--active {
-  background: rgba(80, 158, 227, 0.2);
-  color: var(--color-brand-light);
+  background: color-mix(in srgb, var(--color-brand) 15%, transparent);
+  color: var(--color-brand-light, #C7E0F4);
+  font-weight: var(--font-weight-semibold);
 }
 
 .mb-sidebar__item--active:hover {
-  background: rgba(80, 158, 227, 0.25);
+  background: color-mix(in srgb, var(--color-brand) 20%, transparent);
 }
 
 .mb-sidebar--collapsed .mb-sidebar__item {

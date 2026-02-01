@@ -97,7 +97,8 @@ public class IngestionTaskResource {
         AirflowSpec airflow,
         DbtSpec dbt,
         Boolean runNow,
-        Map<String, Object> jobConfig
+        Map<String, Object> jobConfig,
+        Boolean draft
     ) {}
 
     public record SourceSpec(
@@ -167,8 +168,12 @@ public class IngestionTaskResource {
             if (request == null || !StringUtils.hasText(request.name())) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "任务名称不能为空");
             }
-            if (request.source() == null || request.destination() == null) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "缺少源端或目标端配置");
+            boolean isDraft = Boolean.TRUE.equals(request.draft());
+            if (request.source() == null) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "缺少源端配置");
+            }
+            if (!isDraft && request.destination() == null) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "缺少目标端配置");
             }
 
             if (request.source().dataSourceId() == null) {
@@ -181,12 +186,73 @@ public class IngestionTaskResource {
             com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver.ResolvedSource resolvedSource =
                 sourceResolver.resolve(request.source().dataSourceId(), streamTables);
             String readerType = resolvedSource.readerType();
-
-            boolean useDefault = Boolean.TRUE.equals(request.destination().usePlatformDefault());
-            boolean hasJobConfig = request.jobConfig() != null && !request.jobConfig().isEmpty();
+            if (!StringUtils.hasText(readerType)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "缺少 Addax Reader 类型");
+            }
             Map<String, Object> sourceOverrides = sanitizeSourceOverrides(request.source().config());
             Map<String, Object> resolvedReaderConfig = resolvedSource.readerConfig();
             Map<String, Object> mergedReaderConfig = mergeReaderOverrides(safeMap(resolvedReaderConfig), sourceOverrides);
+            Map<String, Object> writerConfig = safeMap(request.destination() == null ? null : request.destination().config());
+            boolean useDefault = request.destination() != null && Boolean.TRUE.equals(request.destination().usePlatformDefault());
+            String writerType = resolvePlugin(
+                request.destination() == null ? null : (useDefault ? request.destination().definitionId() : request.destination().type()),
+                writerConfig,
+                List.of("writerType", "writer", "type")
+            );
+
+            if (isDraft) {
+                AirflowAdapter.AirflowRequest airflowRequest = buildAirflowRequest(request.airflow());
+                com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO taskDTO =
+                    new com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO();
+                taskDTO.setName(request.name());
+                taskDTO.setDescription(request.description());
+                taskDTO.setSourceType(readerType);
+                taskDTO.setSourceDataSourceId(request.source().dataSourceId());
+                if (!sourceOverrides.isEmpty()) {
+                    taskDTO.setSourceConfig(toJsonNode(sourceOverrides));
+                }
+                if (StringUtils.hasText(writerType)) {
+                    taskDTO.setDestinationType(writerType);
+                }
+                if (!writerConfig.isEmpty()) {
+                    if (StringUtils.hasText(writerType) && !StringUtils.hasText(normalize(writerConfig.get("writerType")))) {
+                        writerConfig.put("writerType", writerType);
+                    }
+                    taskDTO.setDestinationConfig(toJsonNode(writerConfig));
+                }
+                taskDTO.setSyncMode(resolveSyncMode(request.sync()));
+                taskDTO.setSyncSchedule(resolveSyncSchedule(request.sync()));
+                taskDTO.setAddaxConfig(toJsonNode(request.jobConfig()));
+                taskDTO.setAirflowEnabled(airflowRequest == null ? null : airflowRequest.enabled());
+                taskDTO.setAirflowDagId(airflowRequest == null ? null : normalize(airflowRequest.dagId()));
+                if (request.dbt() != null) {
+                    taskDTO.setDbtModelSelector(normalize(request.dbt().modelSelector()));
+                    taskDTO.setDbtDagSelector(normalize(request.dbt().dagSelector()));
+                }
+
+                com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO createdTask =
+                    ingestionTaskService.create(taskDTO, resolvedSource, true);
+                Map<String, Object> result = new LinkedHashMap<>();
+                result.put("task", createdTask);
+                auditService.auditAction(
+                    "INGESTION_TASK_CREATE",
+                    AuditStage.SUCCESS,
+                    request.name(),
+                    Map.of(
+                        "summary",
+                        "保存入湖草稿",
+                        "name",
+                        request.name(),
+                        "taskId",
+                        createdTask.getId(),
+                        "operator",
+                        operator
+                    )
+                );
+                return ApiResponses.ok(result);
+            }
+
+            boolean hasJobConfig = request.jobConfig() != null && !request.jobConfig().isEmpty();
             String streamSelection = resolveStreamSelection(request.streams());
             if (isAllSelection(streamSelection) && streamTables.isEmpty()) {
                 List<String> allTables = discoverAllTables(
@@ -204,16 +270,6 @@ public class IngestionTaskResource {
                 applyTables(mergedReaderConfig, streamTables);
             }
             Map<String, Object> readerConfig = safeMap(resolvedReaderConfig);
-            Map<String, Object> writerConfig = safeMap(request.destination().config());
-            String writerType = resolvePlugin(
-                useDefault ? request.destination().definitionId() : request.destination().type(),
-                writerConfig,
-                List.of("writerType", "writer", "type")
-            );
-
-            if (!StringUtils.hasText(readerType)) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "缺少 Addax Reader 类型");
-            }
             if (!hasJobConfig) {
                 if (!StringUtils.hasText(writerType)) {
                     throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "缺少 Addax Writer 类型");

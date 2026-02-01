@@ -6,7 +6,7 @@
   justify-content: center;
   gap: var(--spacing-sm);
   border: 1px solid transparent;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-lg, 12px);
   font-family: inherit;
   font-weight: var(--font-weight-semibold);
   cursor: pointer;
@@ -51,6 +51,7 @@
   background: var(--color-brand);
   border-color: var(--color-brand);
   color: var(--color-text-inverse);
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--color-brand) 25%, transparent);
 }
 
 .mb-button--primary:hover:not(:disabled) {
@@ -184,8 +185,8 @@
 }
 
 .mb-button__icon svg {
-  width: 1em;
-  height: 1em;
+  width: 1.15em;
+  height: 1.15em;
 }
 
 /* Label */
@@ -210,13 +211,13 @@
 }
 
 .mb-button-group .mb-button:first-child {
-  border-top-left-radius: var(--radius-sm);
-  border-bottom-left-radius: var(--radius-sm);
+  border-top-left-radius: var(--radius-lg, 12px);
+  border-bottom-left-radius: var(--radius-lg, 12px);
 }
 
 .mb-button-group .mb-button:last-child {
-  border-top-right-radius: var(--radius-sm);
-  border-bottom-right-radius: var(--radius-sm);
+  border-top-right-radius: var(--radius-lg, 12px);
+  border-bottom-right-radius: var(--radius-lg, 12px);
 }
 
 .mb-button-group .mb-button:not(:first-child) {

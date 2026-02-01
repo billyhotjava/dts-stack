@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd"
+>
+    <changeSet id="20260203-01-infra-ods-table-mapping" author="platform">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="infra_ods_table_mapping"/>
+            </not>
+        </preConditions>
+        <createTable tableName="infra_ods_table_mapping">
+            <column name="id" type="uuid">
+                <constraints primaryKey="true"/>
+            </column>
+            <column name="connection_id" type="uuid">
+                <constraints nullable="false"/>
+            </column>
+            <column name="stream_name" type="varchar(256)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="stream_namespace" type="varchar(256)"/>
+            <column name="system_code" type="varchar(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="biz_code" type="varchar(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="entity_code" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="ods_schema" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="ods_table" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="dataset_id" type="uuid"/>
+            <column name="owner" type="varchar(64)"/>
+            <column name="owner_dept" type="varchar(64)"/>
+            <column name="enabled" type="boolean" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+            <column name="description" type="varchar(512)"/>
+            <column name="created_by" type="varchar(50)"/>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+        <createIndex indexName="idx_infra_ods_mapping_connection" tableName="infra_ods_table_mapping">
+            <column name="connection_id"/>
+        </createIndex>
+        <createIndex indexName="idx_infra_ods_mapping_stream" tableName="infra_ods_table_mapping">
+            <column name="stream_name"/>
+            <column name="stream_namespace"/>
+        </createIndex>
+        <createIndex indexName="idx_infra_ods_mapping_ods" tableName="infra_ods_table_mapping">
+            <column name="ods_schema"/>
+            <column name="ods_table"/>
+        </createIndex>
+        <createIndex indexName="idx_infra_ods_mapping_enabled" tableName="infra_ods_table_mapping">
+            <column name="enabled"/>
+        </createIndex>
+    </changeSet>
+</databaseChangeLog>

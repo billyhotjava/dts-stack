@@ -16,6 +16,8 @@ import org.springframework.util.StringUtils;
 public class IngestionSettingsSeeder implements ApplicationRunner {
 
     private static final Logger LOG = LoggerFactory.getLogger(IngestionSettingsSeeder.class);
+    private static final String DEFAULT_PLATFORM_BASE_URL = "http://dts-platform:8081";
+    private static final String DEFAULT_PLATFORM_API_PATH = "/api";
 
     private final InfraServiceSettingsRepository repository;
     private final AddaxProperties addaxProperties;
@@ -102,6 +104,8 @@ public class IngestionSettingsSeeder implements ApplicationRunner {
     private Map<String, Object> buildPlatformSettings() {
         Map<String, Object> settings = new LinkedHashMap<>();
         settings.put("catalogSyncOnDataSource", Boolean.TRUE);
+        settings.put("baseUrl", DEFAULT_PLATFORM_BASE_URL);
+        settings.put("apiPath", DEFAULT_PLATFORM_API_PATH);
         return settings;
     }
 

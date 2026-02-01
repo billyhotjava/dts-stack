@@ -9,11 +9,11 @@ export const typographyTokens = {
 		inter: `"Lato", "Open Sans Variable", "Inter Variable", system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", "Noto Sans", sans-serif`,
 	},
 	fontSize: {
-		xs: "12",
-		sm: "14",
-		default: "16",
-		lg: "18",
-		xl: "20",
+		xs: "11",      // Analytics --font-size-xs: labels, badges
+		sm: "12",      // Analytics --font-size-sm: captions, secondary text
+		default: "14", // Analytics --font-size-md: body text (base)
+		lg: "17",      // Analytics --font-size-lg: subheadings
+		xl: "21",      // Analytics --font-size-xl: headings
 	},
 	fontWeight: {
 		light: "300",
@@ -25,7 +25,7 @@ export const typographyTokens = {
 	lineHeight: {
 		none: "1",
 		tight: "1.25",
-		normal: "1.375",
-		relaxed: "1.5",
+		normal: "1.5",
+		relaxed: "1.75",
 	},
 };

@@ -76,7 +76,7 @@ public class InfraSettingsResource {
         Set.of("password", "token")
     );
     private static final SettingsDefinition PLATFORM_DEF = new SettingsDefinition(
-        Set.of("catalogSyncOnDataSource"),
+        Set.of("catalogSyncOnDataSource", "baseUrl", "apiPath"),
         Set.of()
     );
 

@@ -83,39 +83,61 @@ public class IngestionTaskService {
      * 审计信息会自动填充（createdBy, createdDate）
      */
     public IngestionTaskDTO create(IngestionTaskDTO dto) {
-        return create(dto, null);
+        return create(dto, null, false);
     }
 
     public IngestionTaskDTO create(IngestionTaskDTO dto, com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver.ResolvedSource resolvedSource) {
-        log.info("Creating new ingestion task: {}", dto.getName());
+        return create(dto, resolvedSource, false);
+    }
+
+    public IngestionTaskDTO create(
+        IngestionTaskDTO dto,
+        com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver.ResolvedSource resolvedSource,
+        boolean skipJob
+    ) {
+        log.info("Creating new ingestion task: {} (skipJob={})", dto.getName(), skipJob);
 
         IngestionTask task = taskMapper.toEntity(dto);
 
-        // 生成Addax Job JSON
-        try {
-            com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver.ResolvedSource source =
-                resolveSource(task, resolvedSource);
-            AddaxJobService.AddaxJobResult jobResult = source == null
-                ? addaxJobService.createJobFromTask(task)
-                : addaxJobService.createJobFromTask(task, source.readerType(), source.readerConfig());
-            if (source != null && StringUtils.hasText(source.readerType())) {
-                task.setSourceType(source.readerType());
+        if (!skipJob) {
+            // 生成Addax Job JSON
+            try {
+                com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver.ResolvedSource source =
+                    resolveSource(task, resolvedSource);
+                AddaxJobService.AddaxJobResult jobResult = source == null
+                    ? addaxJobService.createJobFromTask(task)
+                    : addaxJobService.createJobFromTask(task, source.readerType(), source.readerConfig());
+                if (source != null && StringUtils.hasText(source.readerType())) {
+                    task.setSourceType(source.readerType());
+                }
+                task.setAddaxJobPath(jobResult.jobPath());
+            } catch (Exception e) {
+                log.error("Failed to generate Addax job for task: {}", dto.getName(), e);
+                auditService.auditAction(
+                    "INGESTION_TASK_CREATE",
+                    AuditStage.FAIL,
+                    dto.getName(),
+                    Map.of("error", e.getMessage())
+                );
+                throw new RuntimeException("Failed to generate Addax job", e);
             }
-            task.setAddaxJobPath(jobResult.jobPath());
-        } catch (Exception e) {
-            log.error("Failed to generate Addax job for task: {}", dto.getName(), e);
-            auditService.auditAction(
-                "INGESTION_TASK_CREATE",
-                AuditStage.FAIL,
-                dto.getName(),
-                Map.of("error", e.getMessage())
-            );
-            throw new RuntimeException("Failed to generate Addax job", e);
+        } else {
+            try {
+                com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver.ResolvedSource source =
+                    resolveSource(task, resolvedSource);
+                if (source != null && StringUtils.hasText(source.readerType())) {
+                    task.setSourceType(source.readerType());
+                }
+            } catch (Exception ex) {
+                log.warn("Skip Addax job generation; failed to resolve source type: {}", ex.getMessage());
+            }
         }
 
         task.setStatus("draft");
         IngestionTask savedTask = taskRepository.save(task);
-        savedTask = ensureAirflowDag(savedTask);
+        if (!skipJob) {
+            savedTask = ensureAirflowDag(savedTask);
+        }
 
         log.info("Created ingestion task with ID: {} by user: {}", savedTask.getId(), savedTask.getCreatedBy());
 

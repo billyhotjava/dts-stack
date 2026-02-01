@@ -10,19 +10,39 @@ import org.springframework.data.repository.query.Param;
 public interface IngestionTaskChangeLogRepository extends JpaRepository<IngestionTaskChangeLog, Long> {
 
     @Query(
-        """
-        select c from IngestionTaskChangeLog c
-        where (:taskId is null or c.taskId = :taskId)
-          and (:objType is null or c.objType = :objType)
-          and (:changeType is null or c.changeType = :changeType)
+        value = """
+        select * from ingestion_task_change_log c
+        where (:taskId is null or c.task_id = :taskId)
+          and (:objType is null or c.obj_type = :objType)
+          and (:changeType is null or c.change_type = :changeType)
           and (:status is null or c.status = :status)
           and (
             :keyword is null
-            or lower(c.taskName) like lower(concat('%', :keyword, '%'))
-            or lower(c.summary) like lower(concat('%', :keyword, '%'))
-            or lower(c.detail) like lower(concat('%', :keyword, '%'))
+            or :keyword = ''
+            or (
+                lower(cast(c.task_name as text)) like lower(concat('%', :keyword, '%'))
+                or lower(cast(c.summary as text)) like lower(concat('%', :keyword, '%'))
+                or lower(cast(c.detail as text)) like lower(concat('%', :keyword, '%'))
+            )
           )
-        """
+        """,
+        countQuery = """
+        select count(1) from ingestion_task_change_log c
+        where (:taskId is null or c.task_id = :taskId)
+          and (:objType is null or c.obj_type = :objType)
+          and (:changeType is null or c.change_type = :changeType)
+          and (:status is null or c.status = :status)
+          and (
+            :keyword is null
+            or :keyword = ''
+            or (
+                lower(cast(c.task_name as text)) like lower(concat('%', :keyword, '%'))
+                or lower(cast(c.summary as text)) like lower(concat('%', :keyword, '%'))
+                or lower(cast(c.detail as text)) like lower(concat('%', :keyword, '%'))
+            )
+          )
+        """,
+        nativeQuery = true
     )
     Page<IngestionTaskChangeLog> search(
         @Param("taskId") Long taskId,

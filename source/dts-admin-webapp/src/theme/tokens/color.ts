@@ -111,14 +111,14 @@ export const lightColorTokens = {
 	common: commonColors,
 	action: actionColors,
 	text: {
-		primary: paletteColors.gray[800],
-		secondary: paletteColors.gray[600],
-		disabled: paletteColors.gray[500],
+		primary: "hsla(204, 66%, 8%, 0.84)", // orionAlpha[80]
+		secondary: "hsla(204, 66%, 8%, 0.62)", // orionAlpha[60]
+		disabled: "hsla(204, 66%, 8%, 0.44)", // orionAlpha[40]
 	},
 	background: {
-		default: commonColors.white,
-		paper: commonColors.white,
-		neutral: paletteColors.gray[200],
+		default: "#f8fafc", // slate-50 — off-white page bg
+		paper: commonColors.white, // cards remain white
+		neutral: "hsla(240, 4%, 95%, 1)", // orion[10]
 	},
 };
 
@@ -127,13 +127,13 @@ export const darkColorTokens = {
 	common: commonColors,
 	action: actionColors,
 	text: {
-		primary: "#E6E8EE",
-		secondary: "#A1A9B7",
-		disabled: "#667085",
+		primary: "hsla(0, 0%, 100%, 0.95)", // orionAlphaInverse[80]
+		secondary: "hsla(0, 0%, 100%, 0.69)", // orionAlphaInverse[60]
+		disabled: "hsla(0, 0%, 100%, 0.46)", // orionAlphaInverse[40]
 	},
 	background: {
-		default: "#171A21",
-		paper: "#1F2430",
-		neutral: "#2A3341",
+		default: "#09090b", // zinc-950 — deepest page bg
+		paper: "#18181b", // zinc-900 — card / elevated surfaces
+		neutral: "#27272a", // zinc-800 — popover / highest elevation
 	},
 };

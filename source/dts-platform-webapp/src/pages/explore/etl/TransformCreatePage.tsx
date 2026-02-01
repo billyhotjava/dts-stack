@@ -59,6 +59,8 @@ const JDBC_READER_BY_URL: Record<string, string> = {
 	"jdbc:sqlite:": "sqlitereader",
 };
 
+const TABLE_PLACEHOLDER = "${table}";
+
 const normalizeText = (value?: string) => String(value || "").trim();
 
 const normalizeType = (value?: string) => normalizeText(value).toLowerCase();
@@ -757,15 +759,96 @@ export default function TransformCreatePage() {
 			toast.info("编辑模式不支持保存草稿");
 			return;
 		}
+		let values: Record<string, any> | undefined;
 		try {
 			setSavingDraft(true);
-			const values = form.getFieldsValue();
-			if (saveDraft(values)) {
-				setHasDraft(true);
-				toast.success("草稿已保存");
-			} else {
-				toast.error("保存草稿失败");
+			values = form.getFieldsValue(true);
+			const name = normalizeText(values.name);
+			if (!name) {
+				throw new Error("请填写任务名称");
 			}
+			if (!values.sourceDataSourceId) {
+				throw new Error("请选择数据源连接");
+			}
+			const isJsonMode = values.editorMode === "json";
+			const safeParse = (raw: string, label: string) => {
+				if (!normalizeText(raw)) return undefined;
+				try {
+					return parseJson(raw, label) as Record<string, any>;
+				} catch {
+					toast.warning(`${label} 格式不完整，已忽略该部分内容`);
+					return undefined;
+				}
+			};
+			let readerConfig: Record<string, any> | undefined;
+			let writerConfig: Record<string, any> | undefined;
+			if (isJsonMode) {
+				readerConfig = safeParse(values.readerConfig, "Reader 配置");
+				writerConfig = safeParse(values.writerConfig, "Writer 配置");
+			} else {
+				try {
+					readerConfig = buildReaderConfig(values);
+				} catch {
+					toast.warning("Reader 配置尚未完整，已忽略该部分内容");
+				}
+				try {
+					writerConfig = buildWriterConfig(values);
+				} catch {
+					toast.warning("Writer 配置尚未完整，已忽略该部分内容");
+				}
+			}
+			const jobConfig = safeParse(values.jobConfig, "作业参数");
+			const selectionMode = normalizeText(values.tableSelectionMode) || "all";
+			const includeTables = selectionMode === "manual" ? selectedTableKeys : [];
+			const excludeTables = selectionMode === "all" ? splitLines(values.tableExclude) : [];
+			const draftPayload: Record<string, any> = {
+				draft: true,
+				name,
+				description: normalizeText(values.description) || undefined,
+				owner: userInfo?.username || userInfo?.login,
+				source: {
+					dataSourceId: values.sourceDataSourceId,
+					config: readerConfig || {},
+				},
+				sync: {
+					prefix: normalizeText(values.syncPrefix) || undefined,
+				},
+				streams: {
+					selection: selectionMode,
+					include: selectionMode === "manual" && includeTables.length ? includeTables : undefined,
+					exclude: selectionMode === "all" && excludeTables.length ? excludeTables : undefined,
+					schema: normalizeText(values.readerSchema) || undefined,
+					tablePattern: normalizeText(values.readerTablePattern) || undefined,
+				},
+				airflow: {
+					enabled: Boolean(values.airflowEnabled),
+				},
+				dbt: {
+					modelSelector: normalizeText(values.dbtModelSelector) || undefined,
+					dagSelector: normalizeText(values.dbtDagSelector) || undefined,
+				},
+				jobConfig: jobConfig || undefined,
+			};
+			if (writerConfig && Object.keys(writerConfig).length > 0) {
+				draftPayload.destination = {
+					usePlatformDefault: true,
+					config: writerConfig,
+				};
+			}
+			const draftResult: any = await createIngestionTask(draftPayload);
+			const taskId =
+				draftResult?.task?.id ?? draftResult?.taskId ?? draftResult?.task?.taskId ?? undefined;
+			clearDraft();
+			setHasDraft(false);
+			toast.success("草稿已保存");
+			if (taskId) {
+				router.push(`/explore/etl/transform/${taskId}/edit`);
+			}
+		} catch (err: any) {
+			if (values && saveDraft(values)) {
+				setHasDraft(true);
+			}
+			toast.error(err?.message || "保存草稿失败");
 		} finally {
 			setSavingDraft(false);
 		}
@@ -927,10 +1010,15 @@ export default function TransformCreatePage() {
 	const handleSubmit = async (values: any) => {
 		try {
 			setSaving(true);
-			const isJsonMode = values.editorMode === "json";
+			const mergedValues = { ...form.getFieldsValue(true), ...(values || {}) };
+			const taskName = normalizeText(mergedValues.name);
+			if (!taskName) {
+				throw new Error("请填写任务名称");
+			}
+			const isJsonMode = mergedValues.editorMode === "json";
 			const readerConfig = isJsonMode
-				? parseJson(values.readerConfig, "Reader 配置")
-				: buildReaderConfig(values);
+				? parseJson(mergedValues.readerConfig, "Reader 配置")
+				: buildReaderConfig(mergedValues);
 			if (hasConnectionOverride(readerConfig)) {
 				throw new Error("入湖任务必须使用已配置的数据源连接，Reader 配置中不可包含连接信息");
 			}
@@ -947,11 +1035,11 @@ export default function TransformCreatePage() {
 			if (!defaultWriterType) {
 				throw new Error("默认数据湖写入器类型不可用");
 			}
-			const sourceSystem = normalizeText(values.sourceSystem);
+			const sourceSystem = normalizeText(mergedValues.sourceSystem);
 			if (sourceSystem && readerConfig && typeof readerConfig === "object" && !readerConfig.sourceSystem) {
 				readerConfig.sourceSystem = sourceSystem;
 			}
-			const selectionMode = normalizeText(values.tableSelectionMode) || "all";
+			const selectionMode = normalizeText(mergedValues.tableSelectionMode) || "all";
 			let includeTables: string[] = [];
 			if (selectionMode === "manual") {
 				if (selectedTableKeys.length) {
@@ -959,22 +1047,22 @@ export default function TransformCreatePage() {
 				} else if (isJsonMode) {
 					includeTables = extractReaderTables(readerConfig);
 				} else {
-					includeTables = splitLines(values.readerTables);
+					includeTables = splitLines(mergedValues.readerTables);
 				}
 				if (!includeTables.length) {
 					throw new Error("请选择需要入湖的表");
 				}
 			}
-			const excludeTables = selectionMode === "all" ? splitLines(values.tableExclude) : [];
+			const excludeTables = selectionMode === "all" ? splitLines(mergedValues.tableExclude) : [];
 			const writerConfig = isJsonMode
-				? parseJson(values.writerConfig, "Writer 配置")
-				: buildWriterConfig(values);
+				? parseJson(mergedValues.writerConfig, "Writer 配置")
+				: buildWriterConfig(mergedValues);
 			if (writerConfig && selectionMode !== "all" && !hasTableEntries(extractWriterTables(writerConfig))) {
 				throw new Error("Writer 配置缺少目标表，请填写表清单");
 			}
-			const jobConfig = parseJson(values.jobConfig, "作业参数");
-			const modelSelector = normalizeText(values.dbtModelSelector) || buildModelSelectorFromNames(values.dbtModels || []);
-			const dagSelector = normalizeText(values.dbtDagSelector);
+			const jobConfig = parseJson(mergedValues.jobConfig, "作业参数");
+			const modelSelector = normalizeText(mergedValues.dbtModelSelector) || buildModelSelectorFromNames(mergedValues.dbtModels || []);
+			const dagSelector = normalizeText(mergedValues.dbtDagSelector);
 			if (modelSelector && !dagSelector) {
 				toast.warning("未填写 DAG 族选择器，将使用默认 DAG 触发 dbt");
 			}
@@ -982,17 +1070,17 @@ export default function TransformCreatePage() {
 				const updatePayload: IngestionTaskDTO = {
 					...(editingTask || {}),
 					id: editId,
-					name: normalizeText(values.name),
-					description: normalizeText(values.description) || undefined,
-					sourceType: normalizeText(values.readerType),
-					sourceDataSourceId: values.sourceDataSourceId,
+					name: taskName,
+					description: normalizeText(mergedValues.description) || undefined,
+					sourceType: normalizeText(mergedValues.readerType),
+					sourceDataSourceId: mergedValues.sourceDataSourceId,
 					sourceConfig: (readerConfig as Record<string, any>) || {},
 					destinationType: defaultWriterType,
 					destinationConfig: writerConfig as Record<string, any> | undefined,
 					syncMode: editingTask?.syncMode || "full",
-					syncPrefix: normalizeText(values.syncPrefix) || undefined,
+					syncPrefix: normalizeText(mergedValues.syncPrefix) || undefined,
 					addaxConfig: (jobConfig as Record<string, any>) || editingTask?.addaxConfig,
-					airflowEnabled: Boolean(values.airflowEnabled),
+					airflowEnabled: Boolean(mergedValues.airflowEnabled),
 					dbtModelSelector: modelSelector || undefined,
 					dbtDagSelector: dagSelector || undefined,
 				};
@@ -1001,11 +1089,11 @@ export default function TransformCreatePage() {
 				router.push(`/explore/etl/transform/${editId}`);
 			} else {
 				const payload = {
-					name: normalizeText(values.name),
-					description: normalizeText(values.description) || undefined,
+					name: taskName,
+					description: normalizeText(mergedValues.description) || undefined,
 					owner: userInfo?.username || userInfo?.login,
 					source: {
-						dataSourceId: values.sourceDataSourceId,
+						dataSourceId: mergedValues.sourceDataSourceId,
 						config: readerConfig || {},
 					},
 					destination: {
@@ -1014,23 +1102,23 @@ export default function TransformCreatePage() {
 						config: writerConfig || undefined,
 					},
 					sync: {
-						prefix: normalizeText(values.syncPrefix) || undefined,
+						prefix: normalizeText(mergedValues.syncPrefix) || undefined,
 					},
 					streams: {
 						selection: selectionMode,
 						include: selectionMode === "manual" ? includeTables : undefined,
 						exclude: selectionMode === "all" ? excludeTables : undefined,
-						schema: normalizeText(values.readerSchema) || undefined,
-						tablePattern: normalizeText(values.readerTablePattern) || undefined,
+						schema: normalizeText(mergedValues.readerSchema) || undefined,
+						tablePattern: normalizeText(mergedValues.readerTablePattern) || undefined,
 					},
 					airflow: {
-						enabled: Boolean(values.airflowEnabled),
+						enabled: Boolean(mergedValues.airflowEnabled),
 					},
 					dbt: {
 						modelSelector: modelSelector || undefined,
 						dagSelector: dagSelector || undefined,
 					},
-					runNow: Boolean(values.runNow),
+					runNow: Boolean(mergedValues.runNow),
 					jobConfig: jobConfig || undefined,
 				};
 				await createIngestionTask(payload);
@@ -1047,14 +1135,24 @@ export default function TransformCreatePage() {
 	};
 
 	const previewState = useMemo(() => {
-		if (!formValues) return { config: null, error: "" };
+		const snapshot = form.getFieldsValue(true);
+		const mergedValues = { ...snapshot, ...(formValues || {}) } as Record<string, any>;
+		if (!normalizeText(mergedValues.readerType) && selectedDataSource) {
+			const inferredReader = resolveReaderTypeFromDataSource(selectedDataSource);
+			if (inferredReader) {
+				mergedValues.readerType = inferredReader;
+			}
+		}
+		if (!normalizeText(mergedValues.writerType) && defaultDestinationStatus?.writerType) {
+			mergedValues.writerType = normalizeText(defaultDestinationStatus.writerType);
+		}
 		try {
-			const config = buildJobPreview(formValues, editorMode);
+			const config = buildJobPreview(mergedValues, editorMode);
 			return { config, error: "" };
 		} catch (error: any) {
 			return { config: null, error: error?.message || "无法生成预览" };
 		}
-	}, [formValues, editorMode]);
+	}, [formValues, editorMode, form, currentStep, selectedDataSource, defaultDestinationStatus]);
 
 	return (
 		<div className="flex flex-col gap-6">
@@ -1413,7 +1511,7 @@ export default function TransformCreatePage() {
 								</>
 							)}
 							<Text type="secondary" className="block mt-2">
-								入湖任务需要提供目标表名，可使用 ${table} 占位符或具体表名。
+								入湖任务需要提供目标表名，可使用 {TABLE_PLACEHOLDER} 占位符或具体表名。
 							</Text>
 						</>
 					)}

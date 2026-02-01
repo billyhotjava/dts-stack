@@ -5,19 +5,19 @@
   --color-brand-light: #C7E0F4;
   --color-brand-dark: #2E6FAF;
 
-  /* Text Colors */
-  --color-text-primary: #4C5773;
-  --color-text-secondary: #697387;
-  --color-text-tertiary: #949AAB;
-  --color-text-inverse: #FFFFFF;
+  /* Text Colors — Metabase Orion Alpha */
+  --color-text-primary: hsla(204, 66%, 8%, 0.84); /* orionAlpha[80] */
+  --color-text-secondary: hsla(204, 66%, 8%, 0.62); /* orionAlpha[60] */
+  --color-text-tertiary: hsla(204, 66%, 8%, 0.44); /* orionAlpha[40] */
+  --color-text-inverse: hsla(0, 0%, 100%, 0.95); /* orionAlphaInverse[80] */
   --color-text-link: #509EE3;
 
-  /* Background Colors */
-  --color-bg-primary: #FFFFFF;
-  --color-bg-secondary: #F9FBFC;
-  --color-bg-tertiary: #F1F3F5;
-  --color-bg-dark: #2E353B;
-  --color-bg-sidebar: #2E353B;
+  /* Background Colors — Metabase Orion */
+  --color-bg-primary: hsla(0, 0%, 100%, 1); /* white */
+  --color-bg-secondary: #f8fafc; /* slate-50 — off-white page bg */
+  --color-bg-tertiary: hsla(240, 4%, 95%, 1); /* orion[10] */
+  --color-bg-dark: hsla(205, 19%, 23%, 1); /* orion[80] */
+  --color-bg-sidebar: hsla(205, 19%, 23%, 1); /* orion[80] */
   --color-bg-hover: rgba(80, 158, 227, 0.08);
 
   /* Semantic Colors */
@@ -30,11 +30,11 @@
   --color-info: #509EE3;
   --color-info-light: #E6F1FB;
 
-  /* Border Colors */
-  --color-border: rgba(0, 0, 0, 0.08);
-  --color-border-hover: rgba(0, 0, 0, 0.12);
+  /* Border Colors — Metabase Orion Alpha */
+  --color-border: hsla(204, 66%, 8%, 0.05); /* orionAlpha[10] */
+  --color-border-hover: hsla(204, 66%, 8%, 0.17); /* orionAlpha[20] */
   --color-border-focus: #509EE3;
-  --color-border-strong: rgba(0, 0, 0, 0.18);
+  --color-border-strong: hsla(204, 66%, 8%, 0.29); /* orionAlpha[30] */
 
   /* Typography */
   --font-family: "Lato", "Open Sans Variable", "Inter Variable", system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", "Noto Sans", sans-serif;
@@ -76,8 +76,8 @@
   --radius-full: 9999px;
 
   /* Shadows */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.08);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
   --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.12);
   --shadow-xl: 0 8px 32px rgba(0, 0, 0, 0.16);
   --shadow-focus: 0 0 0 3px rgba(80, 158, 227, 0.25);
@@ -113,23 +113,31 @@
   --chart-color-8: #7172AD;
 }
 
-/* Dark Mode */
+/* Smooth theme transition */
+html, body {
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Dark Mode — Elevation: deeper bg → card → popover */
 [data-theme="dark"] {
   --color-brand: #6FB3F2;
   --color-brand-light: #1A3A5C;
   --color-brand-dark: #8FCBFF;
 
-  --color-text-primary: #E8ECF1;
-  --color-text-secondary: #A8B3C5;
-  --color-text-tertiary: #6B7A99;
-  --color-text-inverse: #1A1D21;
+  /* Text Colors — Metabase Orion Alpha Inverse */
+  --color-text-primary: hsla(0, 0%, 100%, 0.95); /* orionAlphaInverse[80] */
+  --color-text-secondary: hsla(0, 0%, 100%, 0.69); /* orionAlphaInverse[60] */
+  --color-text-tertiary: hsla(0, 0%, 100%, 0.46); /* orionAlphaInverse[40] */
+  --color-text-inverse: hsla(204, 66%, 8%, 0.84); /* orionAlpha[80] */
   --color-text-link: #6FB3F2;
 
-  --color-bg-primary: #1A1D21;
-  --color-bg-secondary: #22262B;
-  --color-bg-tertiary: #2C3138;
-  --color-bg-dark: #13161A;
-  --color-bg-sidebar: #2E353B;
+  /* Background Colors — Zinc elevation layers */
+  --color-bg-primary: #09090b; /* zinc-950 — page bg */
+  --color-bg-card: #18181b; /* zinc-900 — card elevated above bg */
+  --color-bg-secondary: #09090b; /* zinc-950 */
+  --color-bg-tertiary: #27272a; /* zinc-800 */
+  --color-bg-dark: #09090b; /* zinc-950 */
+  --color-bg-sidebar: #18181b; /* zinc-900 */
   --color-bg-hover: rgba(111, 179, 242, 0.12);
 
   --color-success-light: #1E3D1E;
@@ -137,14 +145,15 @@
   --color-error-light: #3D1E1E;
   --color-info-light: #1E2E3D;
 
-  --color-border: rgba(255, 255, 255, 0.08);
-  --color-border-hover: rgba(255, 255, 255, 0.12);
-  --color-border-strong: rgba(255, 255, 255, 0.18);
+  /* Border Colors — neutral white alpha */
+  --color-border: rgba(255, 255, 255, 0.05);
+  --color-border-hover: rgba(255, 255, 255, 0.15);
+  --color-border-strong: rgba(255, 255, 255, 0.25);
 
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.4);
-  --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.5);
-  --shadow-xl: 0 8px 32px rgba(0, 0, 0, 0.6);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.2), 0 1px 2px -1px rgba(0, 0, 0, 0.2);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.2), 0 2px 4px -2px rgba(0, 0, 0, 0.2);
+  --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.4);
+  --shadow-xl: 0 8px 32px rgba(0, 0, 0, 0.5);
   --shadow-focus: 0 0 0 3px rgba(111, 179, 242, 0.35);
 
   --chart-color-1: #6FB3F2;
@@ -155,4 +164,25 @@
   --chart-color-6: #C4A6E3;
   --chart-color-7: #A8E9E9;
   --chart-color-8: #8E8FC7;
+}
+
+/* Table refinement */
+.table thead th {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-secondary);
+}
+
+.table tbody tr {
+  transition: background-color var(--transition-fast);
+}
+
+.table tbody td {
+  border-bottom: 1px solid var(--color-border);
+}
+
+[data-theme="dark"] .table tbody td {
+  border-color: rgba(255, 255, 255, 0.04);
 }

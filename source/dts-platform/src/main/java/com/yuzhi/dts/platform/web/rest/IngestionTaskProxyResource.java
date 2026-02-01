@@ -54,8 +54,12 @@ public class IngestionTaskProxyResource {
     @PostMapping("/tasks")
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ApiResponse<Map<String, Object>> createTask(@RequestBody Map<String, Object> payload) {
-        DefaultDestinationSyncService.DefaultDestinationSnapshot snapshot = destinationSyncService.ensureDefaultDestination();
-        Map<String, Object> resolvedPayload = applyDefaultDestinationPayload(payload, snapshot);
+        boolean draft = payload != null && Boolean.parseBoolean(String.valueOf(payload.getOrDefault("draft", "false")));
+        Map<String, Object> resolvedPayload = payload;
+        if (!draft) {
+            DefaultDestinationSyncService.DefaultDestinationSnapshot snapshot = destinationSyncService.ensureDefaultDestination();
+            resolvedPayload = applyDefaultDestinationPayload(payload, snapshot);
+        }
         ApiResponse<Map<String, Object>> response = ingestionClient.createIngestionTask(resolvedPayload);
         String operator = SecurityUtils.getCurrentUserLogin().orElse("system");
         String taskName = payload == null ? null : String.valueOf(payload.getOrDefault("name", ""));

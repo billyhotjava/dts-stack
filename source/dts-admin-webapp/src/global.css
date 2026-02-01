@@ -28,14 +28,15 @@
 		/* Base font scale: aligned with dts-analytics */
 		font-family: "Lato", "Open Sans Variable", "Inter Variable", system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", "Noto Sans", sans-serif;
 		font-size: 16px;
-		/* Reset to standard base */
+		/* Smooth theme mode transition */
+		transition: background-color 0.3s ease, color 0.3s ease;
 	}
 
 	body {
 		background-color: var(--background);
 		color: var(--foreground);
 		line-height: 1.5;
-		/* --line-height-normal */
+		transition: background-color 0.3s ease, color 0.3s ease;
 	}
 
 	/* Normalize content area typography (exclude header/nav/tabs) */
@@ -133,8 +134,8 @@
 /* Shadcn UI Light Theme */
 :root {
 	--radius: 0.5rem;
-	--background: var(--colors-common-white);
-	--foreground: #4C5773;
+	--background: #f8fafc; /* slate-50 */
+	--foreground: hsla(204, 66%, 8%, 0.84); /* orionAlpha[80] */
 	--card: var(--colors-common-white);
 	--card-foreground: var(--colors-common-black);
 	--popover: var(--colors-common-white);
@@ -166,14 +167,14 @@
 	--sidebar-ring: var(--colors-palette-primary-default);
 }
 
-/* Shadcn UI Dark Theme */
+/* Shadcn UI Dark Theme — Elevation: darker bg → lighter card → lighter popover */
 [data-theme-mode="dark"] {
-	--background: #2E353B;
-	--foreground: #E8ECF1;
-	--card: var(--colors-background-paper);
-	--card-foreground: var(--colors-text-primary);
-	--popover: var(--colors-background-paper);
-	--popover-foreground: var(--colors-text-primary);
+	--background: #09090b; /* zinc-950 — deepest level */
+	--foreground: hsla(0, 0%, 100%, 0.95); /* orionAlphaInverse[80] */
+	--card: #18181b; /* zinc-900 — elevated above bg */
+	--card-foreground: hsla(0, 0%, 100%, 0.95);
+	--popover: #27272a; /* zinc-800 — highest elevation */
+	--popover-foreground: hsla(0, 0%, 100%, 0.95);
 	--primary: var(--colors-palette-primary-default);
 	--primary-foreground: var(--colors-common-white);
 	--secondary: var(--colors-background-neutral);
@@ -201,11 +202,19 @@
 	--sidebar-border: rgba(var(--colors-palette-gray-500Channel) / var(--opacity-border));
 	--sidebar-ring: var(--colors-palette-primary-default);
 
-	/* Override text colors for dark mode to ensure visibility on dark background */
-	--colors-text-primary: #FFFFFF;
-	--colors-text-secondary: #A8B3C5;
-	--colors-text-tertiary: #6B7A99;
-	--colors-text-disabled: #4C5773;
+	/* Override text colors for dark mode — Metabase Orion Alpha Inverse */
+	--colors-text-primary: hsla(0, 0%, 100%, 0.95); /* orionAlphaInverse[80] */
+	--colors-text-secondary: hsla(0, 0%, 100%, 0.69); /* orionAlphaInverse[60] */
+	--colors-text-tertiary: hsla(0, 0%, 100%, 0.46); /* orionAlphaInverse[40] */
+	--colors-text-disabled: hsla(0, 0%, 100%, 0.33); /* orionAlphaInverse[30] */
+
+	/* Elevation border hint */
+	--border: rgba(255, 255, 255, 0.05);
+}
+
+/* Dark mode card elevation styling */
+[data-theme-mode="dark"] [data-slot="card"] {
+	border-color: rgba(255, 255, 255, 0.05);
 }
 
 /* slash layout */
@@ -217,27 +226,50 @@
 	--layout-multi-tabs-height: 48px;
 }
 
-/* tighten ant table dividers */
+/* Refined table styling */
 @layer base {
 
+	/* Table: ultra-light horizontal dividers */
 	:where(.ant-table-thead > tr > th),
 	:where(.ant-table-tbody > tr > td),
 	:where(.ant-table tfoot > tr > th),
 	:where(.ant-table tfoot > tr > td) {
-		border-bottom-width: 1.5px;
+		border-bottom-width: 1px;
 	}
 
-	/* Unify antd table font size */
-	:where(.ant-table-wrapper) :is(td, th) {
+	/* Table header: uppercase, semibold, secondary color */
+	:where(.ant-table-wrapper) :where(.ant-table-thead > tr > th) {
+		font-size: 0.75rem !important;
+		font-weight: 600 !important;
+		text-transform: uppercase !important;
+		letter-spacing: 0.05em !important;
+	}
+
+	/* Table body: inherit content size */
+	:where(.ant-table-wrapper) :where(.ant-table-tbody > tr > td) {
 		font-size: 0.875rem !important;
+	}
+
+	/* Smooth hover row transition */
+	:where(.ant-table-wrapper) :where(.ant-table-tbody > tr > td) {
+		transition: background-color 0.15s ease;
 	}
 
 	/* Ensure table section titles match table header font size */
 	main[data-slot="slash-layout-main"] [data-slot="card"] [data-slot="card-title"] {
 		font-size: 0.875rem !important;
-		/* match antd th (text-sm) */
 		line-height: 1.25rem !important;
 	}
+}
+
+/* Dark mode: refined table elevation */
+[data-theme-mode="dark"] :where(.ant-table-wrapper) :where(.ant-table-thead > tr > th) {
+	background: rgba(255, 255, 255, 0.02) !important;
+	border-bottom-color: rgba(255, 255, 255, 0.05) !important;
+}
+
+[data-theme-mode="dark"] :where(.ant-table-wrapper) :where(.ant-table-tbody > tr > td) {
+	border-bottom-color: rgba(255, 255, 255, 0.04) !important;
 }
 
 /* Provide sRGB fallbacks for browsers without OKLCH (e.g., Chrome 109) */

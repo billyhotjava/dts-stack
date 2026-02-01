@@ -14,8 +14,8 @@ export const navItemStyles: NavItemStyles = {
 	icon: {
 		display: "inline-flex",
 		flexShrink: 0,
-		width: 22,
-		height: 22,
+		width: 24,
+		height: 24,
 		justifyContent: "center",
 		alignItems: "center",
 	},

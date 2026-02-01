@@ -46,22 +46,22 @@ export const AntdAdapter: UILibraryAdapter = ({ mode, children }) => {
 
 		...(isDark
 			? {
-				colorText: colorTokens.text.primary,
-				colorTextSecondary: colorTokens.text.secondary,
-				colorTextTertiary: "#8A94A6",
-				colorTextQuaternary: colorTokens.text.disabled,
-				colorTextDisabled: colorTokens.text.disabled,
-				colorTextPlaceholder: "#8A94A6",
-				colorTextLightSolid: "#FFFFFF",
-				colorBorder: "rgba(255,255,255,0.10)",
-				colorBorderSecondary: "rgba(255,255,255,0.06)",
-				colorSplit: "rgba(255,255,255,0.06)",
-				colorFillAlter: "rgba(255,255,255,0.03)",
-				colorFillSecondary: "rgba(255,255,255,0.06)",
-				colorFillTertiary: "rgba(255,255,255,0.04)",
-				colorFillQuaternary: "rgba(255,255,255,0.02)",
-				colorBgTextHover: "rgba(255,255,255,0.04)",
-				colorBgTextActive: "rgba(255,255,255,0.06)",
+				colorText: "hsla(0, 0%, 100%, 0.95)", // orionAlphaInverse[80]
+				colorTextSecondary: "hsla(0, 0%, 100%, 0.69)", // orionAlphaInverse[60]
+				colorTextTertiary: "hsla(0, 0%, 100%, 0.46)", // orionAlphaInverse[40]
+				colorTextQuaternary: "hsla(0, 0%, 100%, 0.33)", // orionAlphaInverse[30]
+				colorTextDisabled: "hsla(0, 0%, 100%, 0.33)", // orionAlphaInverse[30]
+				colorTextPlaceholder: "hsla(0, 0%, 100%, 0.46)", // orionAlphaInverse[40]
+				colorTextLightSolid: "hsla(0, 0%, 100%, 1)", // orionAlphaInverse[100]
+				colorBorder: "hsla(0, 0%, 100%, 0.21)", // orionAlphaInverse[20]
+				colorBorderSecondary: "hsla(0, 0%, 100%, 0.10)", // orionAlphaInverse[10]
+				colorSplit: "hsla(0, 0%, 100%, 0.10)", // orionAlphaInverse[10]
+				colorFillAlter: "hsla(0, 0%, 100%, 0.05)",
+				colorFillSecondary: "hsla(0, 0%, 100%, 0.10)", // orionAlphaInverse[10]
+				colorFillTertiary: "hsla(0, 0%, 100%, 0.05)",
+				colorFillQuaternary: "hsla(0, 0%, 100%, 0.03)",
+				colorBgTextHover: "hsla(0, 0%, 100%, 0.05)",
+				colorBgTextActive: "hsla(0, 0%, 100%, 0.10)", // orionAlphaInverse[10]
 			}
 			: {}),
 	};
@@ -98,6 +98,15 @@ export const AntdAdapter: UILibraryAdapter = ({ mode, children }) => {
 				textTextActiveColor: "#FFFFFF",
 			}
 			: {},
+		Tag: {
+			borderRadiusSM: 99, // pill shape
+			...(isDark
+				? {
+					defaultBg: "hsla(0, 0%, 100%, 0.06)",
+					defaultColor: "hsla(0, 0%, 100%, 0.85)",
+				}
+				: {}),
+		},
 		Layout: {
 			siderBg: siderBg,
 			headerBg: siderBg,
@@ -112,7 +121,7 @@ export const AntdAdapter: UILibraryAdapter = ({ mode, children }) => {
 			theme={{ algorithm, token, components }}
 			tag={{
 				style: {
-					borderRadius: removePx(baseThemeTokens.borderRadius.md),
+					borderRadius: 99,
 					fontWeight: 700,
 					padding: `0 ${baseThemeTokens.spacing[1]}`,
 					margin: `0 ${baseThemeTokens.spacing[1]}`,

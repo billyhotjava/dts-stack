@@ -38,7 +38,7 @@ const useSettingStore = create<SettingStore>()(
 				multiTab: false,
 				darkSidebar: false,
 				fontFamily: FontFamilyPreset.openSans,
-				fontSize: Number(typographyTokens.fontSize.sm),
+				fontSize: Number(typographyTokens.fontSize.default),
 				direction: "ltr",
 			},
 			actions: {
@@ -64,7 +64,7 @@ const useSettingStore = create<SettingStore>()(
 					const raw = settings.fontSize;
 					let next = typeof raw === "string" ? parseFloat(raw) : raw;
 					if (!Number.isFinite(next)) {
-						next = Number(typographyTokens.fontSize.sm);
+						next = Number(typographyTokens.fontSize.default);
 					}
 					if (next < 12) next = 12;
 					if (next > 24) next = 24;

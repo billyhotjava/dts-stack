@@ -3,8 +3,14 @@
 .mb-card {
   background: var(--color-bg-primary);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  transition: box-shadow var(--transition-fast), border-color var(--transition-fast);
+  border-radius: var(--radius-xl, 16px);
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow var(--transition-fast), border-color var(--transition-fast), transform var(--transition-fast);
+}
+
+[data-theme="dark"] .mb-card {
+  background: var(--color-bg-card, var(--color-bg-primary));
+  border-color: rgba(255, 255, 255, 0.05);
 }
 
 /* Variants */
@@ -86,10 +92,10 @@
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  width: 40px;
-  height: 40px;
-  border-radius: var(--radius-sm);
-  background: var(--color-bg-hover);
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--color-brand) 10%, transparent);
   color: var(--color-brand);
 }
 
@@ -233,17 +239,19 @@
 }
 
 .mb-stat-card__label {
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
-  color: var(--color-text-secondary);
+  font-size: 11px;
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-tertiary);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.08em;
 }
 
 .mb-stat-card__value {
-  font-size: var(--font-size-2xl);
+  font-size: var(--font-size-3xl, 32px);
   font-weight: var(--font-weight-bold);
   color: var(--color-text-primary);
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
 }
 
 .mb-stat-card__change {
@@ -272,7 +280,7 @@
   justify-content: center;
   width: 48px;
   height: 48px;
-  border-radius: var(--radius-full);
-  background: var(--color-bg-hover);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--color-brand) 10%, transparent);
   color: var(--color-brand);
 }

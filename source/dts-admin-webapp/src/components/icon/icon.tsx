@@ -19,7 +19,7 @@ interface IconProps extends IconifyIconProps {
 
 export default function Icon({
 	icon,
-	size = "1em",
+	size = 20,
 	color = "currentColor",
 	className = "",
 	style = {},

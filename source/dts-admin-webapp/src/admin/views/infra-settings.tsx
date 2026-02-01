@@ -111,7 +111,7 @@ export default function InfraSettingsView() {
 								<Switch />
 							</Form.Item>
 							<Text variant="body3" className="text-muted-foreground">
-								开启后，新增/更新非 JDBC 数据源会自动将字段同步到元数据目录（ODS 层，草稿状态）。
+								开启后，新增/更新数据源会自动同步元数据（JDBC 走元数据抓取，文件类走字段解析，ODS 草稿）。
 							</Text>
 						</>
 					)}

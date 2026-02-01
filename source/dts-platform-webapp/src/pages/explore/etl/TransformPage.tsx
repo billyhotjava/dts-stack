@@ -20,11 +20,14 @@ export default function TransformPage() {
 	const loadTasks = async () => {
 		setLoading(true);
 		try {
-			const result = await ingestionTaskAPI.getTasks({
-				status: statusFilter,
+			const params: Record<string, any> = {
 				page: pagination.current - 1,
 				size: pagination.pageSize,
-			});
+			};
+			if (statusFilter) {
+				params.status = statusFilter;
+			}
+			const result = await ingestionTaskAPI.getTasks(params);
 			const content = Array.isArray(result?.content) ? result.content : [];
 			setTasks(content);
 			const total = typeof result?.totalElements === "number" ? result.totalElements : content.length;

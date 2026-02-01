@@ -20,11 +20,11 @@ export const baseThemeTokens = {
 	},
 	borderRadius: {
 		none: "0px",
-		sm: "2px",
-		default: "4px",
-		md: "6px",
-		lg: "8px",
-		xl: "12px",
+		sm: "4px",      // Analytics --radius-xs
+		default: "6px", // Analytics --radius-sm
+		md: "8px",      // Analytics --radius-md
+		lg: "12px",     // Analytics --radius-lg
+		xl: "16px",     // Analytics --radius-xl
 		full: "9999px",
 	},
 	screens: breakpointsTokens,

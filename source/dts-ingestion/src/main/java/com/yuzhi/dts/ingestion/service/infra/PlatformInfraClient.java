@@ -24,7 +24,7 @@ import org.springframework.web.util.UriComponentsBuilder;
 public class PlatformInfraClient {
 
     private static final Logger LOG = LoggerFactory.getLogger(PlatformInfraClient.class);
-    private static final String DEFAULT_BASE_URL = "http://dts-platform:8082";
+    private static final String DEFAULT_BASE_URL = "http://dts-platform:8081";
     private static final String DEFAULT_API_PATH = "/api";
     private static final String SERVICE_HEADER = "X-DTS-Service";
     private static final String SERVICE_NAME = "dts-ingestion";

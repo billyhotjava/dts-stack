@@ -63,7 +63,7 @@ const lookupLucideIcon = (name: string): LucideIconComponent | null => {
 export default function Icon({
 	icon,
 	name,
-	size = "1em",
+	size = 20,
 	color = "currentColor",
 	className = "",
 	style = {},
