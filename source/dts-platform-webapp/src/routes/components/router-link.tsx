@@ -20,8 +20,8 @@ export const RouterLink: React.FC<RouterLinkProps> = ({ href, children, classNam
 				href={href}
 				className={className}
 				onClick={onClick}
-				target={isExternal ? "_blank" : undefined}
-				rel={isExternal ? "noreferrer noopener" : undefined}
+				target="_blank"
+				rel="noreferrer noopener"
 			>
 				{children}
 			</a>

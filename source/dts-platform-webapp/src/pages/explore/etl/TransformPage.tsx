@@ -75,7 +75,7 @@ export default function TransformPage() {
 	const handleDelete = async (id: number, name: string) => {
 		Modal.confirm({
 			title: "确认删除",
-			content: `确定要删除任务 "${name}" 吗？此操作为软删除，可以恢复。`,
+			content: `确定要删除任务 "${name}" 吗？该操作会移除任务配置、DAG、执行记录与运行日志，且不可恢复。`,
 			okText: "删除",
 			okType: "danger",
 			onOk: async () => {

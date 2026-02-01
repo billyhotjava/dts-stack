@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'react-router';
 import { analyticsApi, ScreenDetail } from '../../api/analyticsApi';
 import { ComponentRenderer } from './components/ComponentRenderer';
@@ -9,6 +9,7 @@ export default function ScreenPreviewPage() {
     const [screen, setScreen] = useState<ScreenDetail | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [scale, setScale] = useState(1);
 
     useEffect(() => {
         if (!id) {
@@ -29,27 +30,41 @@ export default function ScreenPreviewPage() {
             });
     }, [id]);
 
+    const computeScale = useCallback(() => {
+        if (!screen) return;
+        const vw = window.innerWidth;
+        const vh = window.innerHeight;
+        const sx = vw / screen.width;
+        const sy = vh / screen.height;
+        setScale(Math.min(sx, sy));
+    }, [screen]);
+
+    useEffect(() => {
+        computeScale();
+        window.addEventListener('resize', computeScale);
+        return () => window.removeEventListener('resize', computeScale);
+    }, [computeScale]);
+
     if (loading) {
         return (
-            <div className="screen-preview-loading">
-                <div className="loading-spinner" />
+            <div style={{
+                position: 'fixed', inset: 0, display: 'flex',
+                alignItems: 'center', justifyContent: 'center',
+                background: '#000', color: '#fff', fontSize: 16,
+            }}>
                 <span>加载中...</span>
             </div>
         );
     }
 
-    if (error) {
+    if (error || !screen) {
         return (
-            <div className="screen-preview-error">
-                <span>❌ {error}</span>
-            </div>
-        );
-    }
-
-    if (!screen) {
-        return (
-            <div className="screen-preview-error">
-                <span>未找到大屏</span>
+            <div style={{
+                position: 'fixed', inset: 0, display: 'flex',
+                alignItems: 'center', justifyContent: 'center',
+                background: '#000', color: '#fff', fontSize: 16,
+            }}>
+                <span>{error || '未找到大屏'}</span>
             </div>
         );
     }
@@ -61,36 +76,49 @@ export default function ScreenPreviewPage() {
 
     return (
         <div
-            className="screen-preview"
             style={{
-                width: screen.width,
-                height: screen.height,
-                backgroundColor: screen.backgroundColor || '#0d1b2a',
-                backgroundImage: screen.backgroundImage ? `url(${screen.backgroundImage})` : undefined,
-                backgroundSize: 'cover',
-                backgroundPosition: 'center',
-                position: 'relative',
+                position: 'fixed',
+                inset: 0,
+                background: '#000',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
                 overflow: 'hidden',
             }}
         >
-            {components
-                .filter(c => c.visible)
-                .sort((a, b) => a.zIndex - b.zIndex)
-                .map((component) => (
-                    <div
-                        key={component.id}
-                        style={{
-                            position: 'absolute',
-                            left: component.x,
-                            top: component.y,
-                            width: component.width,
-                            height: component.height,
-                            zIndex: component.zIndex,
-                        }}
-                    >
-                        <ComponentRenderer component={component} />
-                    </div>
-                ))}
+            <div
+                style={{
+                    width: screen.width,
+                    height: screen.height,
+                    backgroundColor: screen.backgroundColor || '#0d1b2a',
+                    backgroundImage: screen.backgroundImage ? `url(${screen.backgroundImage})` : undefined,
+                    backgroundSize: 'cover',
+                    backgroundPosition: 'center',
+                    position: 'relative',
+                    overflow: 'hidden',
+                    transform: `scale(${scale})`,
+                    transformOrigin: 'center center',
+                }}
+            >
+                {components
+                    .filter(c => c.visible)
+                    .sort((a, b) => a.zIndex - b.zIndex)
+                    .map((component) => (
+                        <div
+                            key={component.id}
+                            style={{
+                                position: 'absolute',
+                                left: component.x,
+                                top: component.y,
+                                width: component.width,
+                                height: component.height,
+                                zIndex: component.zIndex,
+                            }}
+                        >
+                            <ComponentRenderer component={component} />
+                        </div>
+                    ))}
+            </div>
         </div>
     );
 }

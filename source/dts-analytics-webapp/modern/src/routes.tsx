@@ -40,6 +40,10 @@ function ModernAliasRedirect() {
 export function createRoutes() {
 	return createBrowserRouter(
 		[
+			// Fullscreen routes — no sidebar/layout wrapper
+			{ path: "/screens/new", Component: ScreenDesignerPage },
+			{ path: "/screens/:id/edit", Component: ScreenDesignerPage },
+			{ path: "/screens/:id/preview", Component: ScreenPreviewPage },
 			{
 				Component: AppLayout,
 				children: [
@@ -68,9 +72,6 @@ export function createRoutes() {
 					{ path: "/public/card/:uuid", Component: PublicCardPage },
 					{ path: "/public/dashboard/:uuid", Component: PublicDashboardPage },
 					{ path: "/screens", Component: ScreensPage },
-					{ path: "/screens/new", Component: ScreenDesignerPage },
-					{ path: "/screens/:id/edit", Component: ScreenDesignerPage },
-					{ path: "/screens/:id/preview", Component: ScreenPreviewPage },
 					{ path: "/search", Component: SearchPage },
 					{ path: "*", Component: NotFoundPage },
 				],

@@ -21,7 +21,7 @@ services/dts-airflow/dags/*.json
 services/jdbc/*.jar
 services/jdbc/*.JAR
 service/dts-addax/jobs/
-services/dts-airflow/dags/*.json
+services/dts-airflow/dags/
 services/dts-airflow/logs/
 builds/offline/
 # Local Maven cache used by dts-admin dev container

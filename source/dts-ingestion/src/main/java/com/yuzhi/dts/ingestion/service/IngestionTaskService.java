@@ -252,16 +252,36 @@ public class IngestionTaskService {
     }
 
     /**
-     * 删除任务（软删除）
-     * 审计信息会自动更新
+     * 删除任务（硬删除 + 级联清理）
+     * 清理执行记录、变更记录、Addax 作业与 DAG 文件
      */
-    public void delete(Long id) {
+    public IngestionTaskDTO delete(Long id) {
         log.info("Request to delete IngestionTask : {}", id);
-        taskRepository.findById(id).ifPresent(task -> {
-            task.setStatus("deleted");
-            taskRepository.save(task);
-            log.info("Deleted (soft) ingestion task ID: {} by user: {}", id, task.getLastModifiedBy());
-        });
+        IngestionTask task = taskRepository.findById(id)
+            .orElseThrow(() -> new IllegalArgumentException("Task not found: " + id));
+        try {
+            executionRepository.deleteByTaskId(id);
+        } catch (Exception ex) {
+            log.warn("Failed to delete executions for task {}: {}", id, ex.getMessage());
+        }
+        try {
+            changeLogService.deleteByTaskId(id);
+        } catch (Exception ex) {
+            log.warn("Failed to delete change logs for task {}: {}", id, ex.getMessage());
+        }
+        try {
+            addaxJobService.deleteJobIfExists(task.getAddaxJobPath());
+        } catch (Exception ex) {
+            log.warn("Failed to delete Addax job for task {}: {}", id, ex.getMessage());
+        }
+        try {
+            airflowDagService.deleteDagForTask(task);
+        } catch (Exception ex) {
+            log.warn("Failed to delete Airflow DAG for task {}: {}", id, ex.getMessage());
+        }
+        taskRepository.delete(task);
+        log.info("Deleted ingestion task ID: {} by user: {}", id, task.getLastModifiedBy());
+        return taskMapper.toDto(task);
     }
 
     /**
@@ -277,10 +297,17 @@ public class IngestionTaskService {
         if (!"active".equals(task.getStatus()) && !"draft".equals(task.getStatus())) {
             throw new IllegalStateException("Task is not in executable status: " + task.getStatus());
         }
+        boolean airflowEnabled = isAirflowEnabled(task);
         com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver.ResolvedSource source = resolveSource(task, null);
         task = ensureAddaxJobExists(task, source);
         targetTableProvisioner.ensureTargetTables(task, source == null ? null : source.readerConfig());
-        task = ensureAirflowDag(task);
+        if (airflowEnabled && task.getAirflowEnabled() == null) {
+            task.setAirflowEnabled(true);
+            task = taskRepository.save(task);
+        }
+        if (airflowEnabled) {
+            task = ensureAirflowDag(task);
+        }
 
         // 创建执行记录
         IngestionExecution execution = new IngestionExecution();
@@ -290,7 +317,7 @@ public class IngestionTaskService {
 
         try {
             // 触发Airflow DAG
-            if (Boolean.TRUE.equals(task.getAirflowEnabled())) {
+            if (airflowEnabled) {
                 String airflowJobPath = addaxJobService.toContainerJobPath(task.getAddaxJobPath());
                 Map<String, Object> conf = Map.of(
                     "job_path", airflowJobPath,
@@ -309,6 +336,7 @@ public class IngestionTaskService {
                     conf,
                     true // runNow
                 );
+                log.info("Airflow trigger result for task {}: {}", taskId, airflowResult);
                 String status = airflowResult == null ? null : String.valueOf(airflowResult.get("status"));
                 if (!"triggered".equalsIgnoreCase(status)) {
                     String message = airflowResult == null ? null : String.valueOf(airflowResult.get("message"));
@@ -530,15 +558,29 @@ public class IngestionTaskService {
     }
 
     private IngestionTask ensureAirflowDag(IngestionTask task) {
-        if (task == null || !Boolean.TRUE.equals(task.getAirflowEnabled())) {
+        if (task == null || !isAirflowEnabled(task)) {
             return task;
         }
         String dagId = airflowDagService.ensureDagForTask(task);
-        if (StringUtils.hasText(dagId) && !dagId.equals(task.getAirflowDagId())) {
+        if (!StringUtils.hasText(dagId)) {
+            throw new IllegalStateException("DAG 生成失败，请检查 Airflow DAG 目录配置");
+        }
+        if (!dagId.equals(task.getAirflowDagId())) {
             task.setAirflowDagId(dagId);
             return taskRepository.save(task);
         }
         return task;
+    }
+
+    private boolean isAirflowEnabled(IngestionTask task) {
+        if (task == null) {
+            return false;
+        }
+        if (!airflowAdapter.isEnabled()) {
+            return false;
+        }
+        Boolean enabled = task.getAirflowEnabled();
+        return enabled == null || Boolean.TRUE.equals(enabled);
     }
 
     private IngestionTask snapshot(IngestionTask task) {

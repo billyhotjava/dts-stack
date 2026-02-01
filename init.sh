@@ -294,6 +294,8 @@ prepare_data_dirs(){
     "services/dts-airflow/logs"
     "services/dts-airflow/logs/scheduler"
     "services/dts-airflow/extra"
+    "services/dts-airflow/dags"
+    "services/dts-airflow/dags/ods"
   )
   if [[ "${ENABLE_MINIO:-false}" == "true" ]]; then
     data_dirs+=("services/dts-minio/data")
@@ -311,6 +313,16 @@ prepare_data_dirs(){
       if [[ "$(getenforce 2>/dev/null || true)" != "Disabled" ]]; then
         if command -v chcon >/dev/null 2>&1; then
           chcon -Rt svirt_sandbox_file_t services/dts-airflow/logs 2>/dev/null || true
+        fi
+      fi
+    fi
+  fi
+  if [[ -d "services/dts-airflow/dags" ]]; then
+    chmod -R 777 services/dts-airflow/dags || true
+    if command -v getenforce >/dev/null 2>&1; then
+      if [[ "$(getenforce 2>/dev/null || true)" != "Disabled" ]]; then
+        if command -v chcon >/dev/null 2>&1; then
+          chcon -Rt svirt_sandbox_file_t services/dts-airflow/dags 2>/dev/null || true
         fi
       fi
     fi
@@ -649,6 +661,8 @@ generate_env_base(){
   : "${AIRFLOW_ADMIN_EMAIL:=airflow@example.com}"
   : "${AIRFLOW_ADMIN_FIRSTNAME:=Airflow}"
   : "${AIRFLOW_ADMIN_LASTNAME:=Admin}"
+  : "${DTS_AIRFLOW_USERNAME:=${AIRFLOW_ADMIN_USERNAME}}"
+  : "${DTS_AIRFLOW_PASSWORD:=${AIRFLOW_ADMIN_PASSWORD}}"
   : "${DOCKER_GID:=$(detect_docker_gid)}"
 
   # ---------- Addax ----------
@@ -717,6 +731,8 @@ generate_env_base(){
   : "${AIRFLOW_ADMIN_EMAIL:=airflow@example.com}"
   : "${AIRFLOW_ADMIN_FIRSTNAME:=Airflow}"
   : "${AIRFLOW_ADMIN_LASTNAME:=Admin}"
+  : "${DTS_AIRFLOW_USERNAME:=${AIRFLOW_ADMIN_USERNAME}}"
+  : "${DTS_AIRFLOW_PASSWORD:=${AIRFLOW_ADMIN_PASSWORD}}"
 
   # ---------- MDM Gateway ----------
   : "${DTS_MDM_GATEWAY_ENABLED:=true}"
@@ -1006,6 +1022,8 @@ AIRFLOW_ADMIN_PASSWORD=${AIRFLOW_ADMIN_PASSWORD}
 AIRFLOW_ADMIN_EMAIL=${AIRFLOW_ADMIN_EMAIL}
 AIRFLOW_ADMIN_FIRSTNAME=${AIRFLOW_ADMIN_FIRSTNAME}
 AIRFLOW_ADMIN_LASTNAME=${AIRFLOW_ADMIN_LASTNAME}
+DTS_AIRFLOW_USERNAME=${DTS_AIRFLOW_USERNAME}
+DTS_AIRFLOW_PASSWORD=${DTS_AIRFLOW_PASSWORD}
 
 # ====== MDM Gateway (new keys) ======
 DTS_MDM_GATEWAY_ENABLED=${DTS_MDM_GATEWAY_ENABLED}

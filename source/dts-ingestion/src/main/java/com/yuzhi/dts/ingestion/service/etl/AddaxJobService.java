@@ -76,7 +76,13 @@ public class AddaxJobService {
         String jobName = buildJobName(taskName);
         Path dir = Paths.get(jobDir);
         try {
+            if (Files.exists(dir) && !Files.isDirectory(dir)) {
+                throw new IllegalStateException("Addax 作业目录不是有效目录: " + jobDir);
+            }
             Files.createDirectories(dir);
+            if (!Files.isWritable(dir)) {
+                throw new IllegalStateException("Addax 作业目录不可写: " + jobDir);
+            }
             Path jobPath = dir.resolve(jobName);
             objectMapper.writerWithDefaultPrettyPrinter().writeValue(jobPath.toFile(), resolvedJob);
             return new AddaxJobResult(jobName, jobPath.toString(), resolvedJob);
@@ -96,6 +102,7 @@ public class AddaxJobService {
         if (jobConfig != null && !jobConfig.isEmpty()) {
             Map<String, Object> normalized = new LinkedHashMap<>(jobConfig);
             normalizeAddaxJobConfig(normalized);
+            applyJobDefaults(normalized, readerType, readerConfig, writerType, writerConfig);
             return normalized;
         }
         if (!StringUtils.hasText(readerType) || !StringUtils.hasText(writerType)) {
@@ -103,6 +110,7 @@ public class AddaxJobService {
         }
         Map<String, Object> resolvedReader = ensureDriver(readerType, safeMap(readerConfig));
         Map<String, Object> resolvedWriter = ensureDriver(writerType, safeMap(writerConfig));
+        ensureWriterConnection(resolvedWriter);
         replaceWriterTablePlaceholders(resolvedReader, resolvedWriter);
         Map<String, Object> content = new LinkedHashMap<>();
         content.put("reader", Map.of("name", readerType, "parameter", resolvedReader));
@@ -112,6 +120,97 @@ public class AddaxJobService {
         job.put("setting", Map.of("speed", Map.of("channel", 1)));
         job.put("content", List.of(content));
         return Map.of("job", job);
+    }
+
+    private void applyJobDefaults(
+        Map<String, Object> jobConfig,
+        String readerType,
+        Map<String, Object> readerConfig,
+        String writerType,
+        Map<String, Object> writerConfig
+    ) {
+        if (jobConfig == null || jobConfig.isEmpty()) {
+            return;
+        }
+        Object jobObj = jobConfig.get("job");
+        if (!(jobObj instanceof Map<?, ?> jobMap)) {
+            return;
+        }
+        Object contentObj = jobMap.get("content");
+        if (!(contentObj instanceof List<?> list) || list.isEmpty()) {
+            return;
+        }
+        Object first = list.get(0);
+        if (!(first instanceof Map<?, ?> contentMap)) {
+            return;
+        }
+        applyNodeDefaults(contentMap, "reader", readerType, readerConfig);
+        applyNodeDefaults(contentMap, "writer", writerType, writerConfig);
+    }
+
+    private void applyNodeDefaults(
+        Map<?, ?> contentMap,
+        String key,
+        String pluginType,
+        Map<String, Object> fallbackConfig
+    ) {
+        Object nodeObj = contentMap.get(key);
+        if (!(nodeObj instanceof Map<?, ?> nodeMap)) {
+            return;
+        }
+        Object paramObj = nodeMap.get("parameter");
+        if (!(paramObj instanceof Map<?, ?> paramMap)) {
+            return;
+        }
+        Map<String, Object> params = new LinkedHashMap<>();
+        paramMap.forEach((k, v) -> {
+            if (k != null) {
+                params.put(k.toString(), v);
+            }
+        });
+        String normalizedPlugin = normalizePluginName(
+            StringUtils.hasText(normalizeText(nodeMap.get("name"))) ? normalizeText(nodeMap.get("name")) : pluginType,
+            key
+        );
+        if (StringUtils.hasText(normalizedPlugin) && nodeMap instanceof Map<?, ?>) {
+            @SuppressWarnings("unchecked")
+            Map<Object, Object> mutable = (Map<Object, Object>) nodeMap;
+            mutable.put("name", normalizedPlugin);
+        }
+        if (fallbackConfig != null && !fallbackConfig.isEmpty()) {
+            mergeMissing(params, fallbackConfig, "jdbcUrl");
+            mergeMissing(params, fallbackConfig, "jdbc_url");
+            mergeMissing(params, fallbackConfig, "url");
+            mergeMissing(params, fallbackConfig, "jdbc");
+            mergeMissing(params, fallbackConfig, "jdbcURL");
+            mergeMissing(params, fallbackConfig, "username");
+            mergeMissing(params, fallbackConfig, "password");
+            mergeMissing(params, fallbackConfig, "host");
+            mergeMissing(params, fallbackConfig, "port");
+            mergeMissing(params, fallbackConfig, "database");
+            mergeMissing(params, fallbackConfig, "schema");
+            mergeMissing(params, fallbackConfig, "connection");
+            mergeMissing(params, fallbackConfig, "table");
+            mergeMissing(params, fallbackConfig, "tables");
+        }
+        ensureDriver(normalizedPlugin, params);
+        if ("writer".equalsIgnoreCase(key)) {
+            ensureWriterConnection(params);
+        }
+        if (nodeMap instanceof Map<?, ?>) {
+            @SuppressWarnings("unchecked")
+            Map<Object, Object> mutable = (Map<Object, Object>) nodeMap;
+            mutable.put("parameter", params);
+        }
+    }
+
+    private void mergeMissing(Map<String, Object> target, Map<String, Object> source, String key) {
+        if (target == null || source == null || !source.containsKey(key)) {
+            return;
+        }
+        if (!target.containsKey(key) || !StringUtils.hasText(normalizeText(target.get(key)))) {
+            target.put(key, source.get(key));
+        }
     }
 
     private String resolveJobDir() {
@@ -180,6 +279,7 @@ public class AddaxJobService {
             return null;
         }
         String pluginType = normalizeText(nodeMap.get("name"));
+        String normalizedPlugin = normalizePluginName(pluginType, key);
         Object paramObj = nodeMap.get("parameter");
         if (!(paramObj instanceof Map<?, ?> paramMap)) {
             return null;
@@ -190,7 +290,16 @@ public class AddaxJobService {
                 params.put(k.toString(), v);
             }
         });
+        if (StringUtils.hasText(normalizedPlugin) && nodeMap instanceof Map<?, ?>) {
+            @SuppressWarnings("unchecked")
+            Map<Object, Object> mutable = (Map<Object, Object>) nodeMap;
+            mutable.put("name", normalizedPlugin);
+            pluginType = normalizedPlugin;
+        }
         ensureDriver(pluginType, params);
+        if ("writer".equalsIgnoreCase(key)) {
+            ensureWriterConnection(params);
+        }
         if ("writer".equalsIgnoreCase(key) && StringUtils.hasText(pluginType) && !StringUtils.hasText(normalizeText(params.get("writerType")))) {
             params.put("writerType", pluginType);
         }
@@ -200,6 +309,104 @@ public class AddaxJobService {
             mutable.put("parameter", params);
         }
         return params;
+    }
+
+    private String normalizePluginName(String pluginType, String key) {
+        if (!StringUtils.hasText(pluginType)) {
+            return pluginType;
+        }
+        String normalized = pluginType.trim();
+        String lower = normalized.toLowerCase(Locale.ROOT);
+        if ("dmreader".equals(lower)) {
+            return "rdbmsreader";
+        }
+        if ("dmwriter".equals(lower)) {
+            return "rdbmswriter";
+        }
+        if ("reader".equalsIgnoreCase(key) && "rdbms".equals(lower)) {
+            return "rdbmsreader";
+        }
+        if ("writer".equalsIgnoreCase(key) && "rdbms".equals(lower)) {
+            return "rdbmswriter";
+        }
+        return normalized;
+    }
+
+    private void ensureWriterConnection(Map<String, Object> params) {
+        if (params == null || params.isEmpty()) {
+            return;
+        }
+        List<String> jdbcUrls = normalizeJdbcUrlList(params.get("jdbcUrl"));
+        Object connection = params.get("connection");
+        if (connection instanceof List<?> list) {
+            if (!list.isEmpty() && list.get(0) instanceof Map<?, ?> map) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> connMap = new LinkedHashMap<>((Map<String, Object>) map);
+                if (jdbcUrls.isEmpty()) {
+                    jdbcUrls = normalizeJdbcUrlList(connMap.get("jdbcUrl"));
+                }
+                if (!jdbcUrls.isEmpty()) {
+                    connMap.put("jdbcUrl", jdbcUrls);
+                }
+                if (!connMap.containsKey("table")) {
+                    List<String> tables = extractTables(params);
+                    if (!tables.isEmpty()) {
+                        connMap.put("table", tables);
+                    }
+                }
+                java.util.ArrayList<Object> next = new java.util.ArrayList<>(list);
+                next.set(0, connMap);
+                params.put("connection", next);
+            }
+            return;
+        }
+        if (connection instanceof Map<?, ?> map) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> connMap = new LinkedHashMap<>((Map<String, Object>) map);
+            if (jdbcUrls.isEmpty()) {
+                jdbcUrls = normalizeJdbcUrlList(connMap.get("jdbcUrl"));
+            }
+            if (!jdbcUrls.isEmpty()) {
+                connMap.put("jdbcUrl", jdbcUrls);
+            }
+            if (!connMap.containsKey("table")) {
+                List<String> tables = extractTables(params);
+                if (!tables.isEmpty()) {
+                    connMap.put("table", tables);
+                }
+            }
+            params.put("connection", List.of(connMap));
+            params.remove("jdbcUrl");
+            return;
+        }
+        if (!jdbcUrls.isEmpty()) {
+            Map<String, Object> connMap = new LinkedHashMap<>();
+            connMap.put("jdbcUrl", jdbcUrls);
+            List<String> tables = extractTables(params);
+            if (!tables.isEmpty()) {
+                connMap.put("table", tables);
+            }
+            params.put("connection", List.of(connMap));
+            params.remove("jdbcUrl");
+        }
+    }
+
+    private List<String> normalizeJdbcUrlList(Object value) {
+        List<String> urls = new java.util.ArrayList<>();
+        if (value instanceof Iterable<?> iterable) {
+            for (Object item : iterable) {
+                String text = normalizeText(item);
+                if (StringUtils.hasText(text)) {
+                    urls.add(text);
+                }
+            }
+        } else {
+            String text = normalizeText(value);
+            if (StringUtils.hasText(text)) {
+                urls.add(text);
+            }
+        }
+        return urls;
     }
 
     private Map<String, Object> ensureDriver(String pluginType, Map<String, Object> config) {
@@ -228,18 +435,97 @@ public class AddaxJobService {
         if (config == null || config.isEmpty()) {
             return;
         }
+        fillJdbcUrlIfMissing(pluginType, config);
         boolean preferList = !isWriter(pluginType);
         normalizeJdbcUrlField(config, "jdbcUrl", preferList);
         Object connection = config.get("connection");
         if (connection instanceof Map<?, ?> map) {
+            fillJdbcUrlIfMissing(pluginType, map);
             normalizeJdbcUrlField(map, "jdbcUrl", preferList);
         } else if (connection instanceof List<?> list) {
             for (Object entry : list) {
                 if (entry instanceof Map<?, ?> entryMap) {
+                    fillJdbcUrlIfMissing(pluginType, entryMap);
                     normalizeJdbcUrlField(entryMap, "jdbcUrl", preferList);
                 }
             }
         }
+    }
+
+    private void fillJdbcUrlIfMissing(String pluginType, Map<?, ?> map) {
+        if (map == null) {
+            return;
+        }
+        Object direct = map.get("jdbcUrl");
+        if (StringUtils.hasText(normalizeText(direct))) {
+            return;
+        }
+        Object legacy = firstNonBlank(map.get("jdbc_url"), map.get("url"), map.get("jdbc"), map.get("jdbcURL"));
+        String legacyUrl = normalizeText(legacy);
+        if (StringUtils.hasText(legacyUrl) && map instanceof Map<?, ?>) {
+            @SuppressWarnings("unchecked")
+            Map<Object, Object> mutable = (Map<Object, Object>) map;
+            mutable.put("jdbcUrl", legacyUrl);
+            return;
+        }
+        String host = normalizeText(map.get("host"));
+        String port = normalizeText(map.get("port"));
+        String database = normalizeText(map.get("database"));
+        if (!StringUtils.hasText(database)) {
+            database = normalizeText(map.get("db"));
+        }
+        if (!StringUtils.hasText(database)) {
+            database = normalizeText(map.get("schema"));
+        }
+        if (!StringUtils.hasText(host) || !StringUtils.hasText(database)) {
+            return;
+        }
+        String jdbcUrl = buildJdbcUrlFromParts(pluginType, host, port, database);
+        if (StringUtils.hasText(jdbcUrl) && map instanceof Map<?, ?>) {
+            @SuppressWarnings("unchecked")
+            Map<Object, Object> mutable = (Map<Object, Object>) map;
+            mutable.put("jdbcUrl", jdbcUrl);
+        }
+    }
+
+    private String buildJdbcUrlFromParts(String pluginType, String host, String port, String database) {
+        if (!StringUtils.hasText(host) || !StringUtils.hasText(database)) {
+            return null;
+        }
+        String type = normalizeText(pluginType).toLowerCase(Locale.ROOT);
+        String resolvedPort = StringUtils.hasText(port) ? port : null;
+        if (type.contains("postgres")) {
+            return "jdbc:postgresql://" + host + (resolvedPort == null ? "" : ":" + resolvedPort) + "/" + database;
+        }
+        if (type.contains("mysql") || type.contains("mariadb")) {
+            return "jdbc:mysql://" + host + (resolvedPort == null ? "" : ":" + resolvedPort) + "/" + database;
+        }
+        if (type.contains("oracle")) {
+            return "jdbc:oracle:thin:@" + host + (resolvedPort == null ? "" : ":" + resolvedPort) + ":" + database;
+        }
+        if (type.contains("sqlserver") || type.contains("mssql")) {
+            return "jdbc:sqlserver://" + host + (resolvedPort == null ? "" : ":" + resolvedPort) + ";databaseName=" + database;
+        }
+        if (type.contains("dm")) {
+            return "jdbc:dm://" + host + (resolvedPort == null ? "" : ":" + resolvedPort);
+        }
+        if (type.contains("rdbms")) {
+            return "jdbc:postgresql://" + host + (resolvedPort == null ? "" : ":" + resolvedPort) + "/" + database;
+        }
+        return null;
+    }
+
+    private Object firstNonBlank(Object... values) {
+        if (values == null) {
+            return null;
+        }
+        for (Object value : values) {
+            String text = normalizeText(value);
+            if (StringUtils.hasText(text)) {
+                return value;
+            }
+        }
+        return null;
     }
 
     private void normalizeJdbcUrlField(Map<?, ?> map, String key, boolean preferList) {
@@ -593,12 +879,34 @@ public class AddaxJobService {
 
         return createJob(
             task.getName(),
-            StringUtils.hasText(readerTypeOverride) ? readerTypeOverride : task.getSourceType(),
+            normalizeReaderType(StringUtils.hasText(readerTypeOverride) ? readerTypeOverride : task.getSourceType()),
             readerConfig,
-            task.getDestinationType() != null ? task.getDestinationType() : "postgresqlwriter",
+            normalizeWriterType(task.getDestinationType() != null ? task.getDestinationType() : "postgresqlwriter"),
             writerConfig,
             jobConfig
         );
+    }
+
+    private String normalizeReaderType(String readerType) {
+        if (!StringUtils.hasText(readerType)) {
+            return readerType;
+        }
+        String normalized = readerType.trim();
+        if ("dmreader".equalsIgnoreCase(normalized)) {
+            return "rdbmsreader";
+        }
+        return normalized;
+    }
+
+    private String normalizeWriterType(String writerType) {
+        if (!StringUtils.hasText(writerType)) {
+            return writerType;
+        }
+        String normalized = writerType.trim();
+        if ("dmwriter".equalsIgnoreCase(normalized)) {
+            return "rdbmswriter";
+        }
+        return normalized;
     }
 
     private Map<String, Object> mergeReaderConfig(Map<String, Object> baseConfig, JsonNode overrideNode) {
@@ -921,6 +1229,23 @@ public class AddaxJobService {
         } catch (Exception ex) {
             LOG.warn("Failed to save job JSON for task {}: {}", taskId, ex.getMessage());
             throw new IllegalStateException("保存 Addax 作业失败: " + ex.getMessage(), ex);
+        }
+    }
+
+    public boolean deleteJobIfExists(String jobPath) {
+        if (!StringUtils.hasText(jobPath)) {
+            return false;
+        }
+        try {
+            Path path = Paths.get(jobPath.trim());
+            boolean deleted = Files.deleteIfExists(path);
+            if (deleted) {
+                LOG.info("Deleted Addax job file: {}", path);
+            }
+            return deleted;
+        } catch (Exception ex) {
+            LOG.warn("Failed to delete Addax job file {}: {}", jobPath, ex.getMessage());
+            return false;
         }
     }
 

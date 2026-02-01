@@ -76,6 +76,27 @@ public class AirflowClient {
         return Optional.empty();
     }
 
+    public boolean deleteDag(String dagId) {
+        AirflowSettings settings = resolveSettings();
+        if (!settings.enabled() || !StringUtils.hasText(settings.baseUrl()) || !StringUtils.hasText(dagId)) {
+            return false;
+        }
+        URI uri = buildUri(settings, "/dags/" + dagId, null);
+        try {
+            HttpHeaders headers = defaultHeaders(settings);
+            HttpEntity<Void> entity = new HttpEntity<>(headers);
+            ResponseEntity<Void> response = restTemplate.exchange(uri, HttpMethod.DELETE, entity, Void.class);
+            return response.getStatusCode().is2xxSuccessful();
+        } catch (HttpStatusCodeException ex) {
+            if (ex.getStatusCode().value() != 404) {
+                LOG.warn("Airflow dag delete failed status={} body={}", ex.getStatusCode().value(), ex.getResponseBodyAsString());
+            }
+        } catch (Exception ex) {
+            LOG.warn("Airflow dag delete error: {}", ex.getMessage());
+        }
+        return false;
+    }
+
     public Optional<Map<String, Object>> getDagRun(String dagId, String dagRunId) {
         AirflowSettings settings = resolveSettings();
         if (!settings.enabled() || !StringUtils.hasText(settings.baseUrl()) || !StringUtils.hasText(dagId) || !StringUtils.hasText(dagRunId)) {
@@ -170,6 +191,14 @@ public class AirflowClient {
         String apiPath = settings.getString("apiPath", properties.getApiPath());
         String username = settings.getString("username", properties.getUsername());
         String password = settings.getString("password", properties.getPassword());
+        String fallbackUser = properties.getUsername();
+        String fallbackPass = properties.getPassword();
+        if ("airflow".equals(username) && StringUtils.hasText(fallbackUser) && !fallbackUser.equals(username)) {
+            username = fallbackUser;
+        }
+        if ("airflow".equals(password) && StringUtils.hasText(fallbackPass) && !fallbackPass.equals(password)) {
+            password = fallbackPass;
+        }
         return new AirflowSettings(enabled, baseUrl, apiPath, username, password);
     }
 

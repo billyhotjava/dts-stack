@@ -158,7 +158,7 @@ public class MbqlToSqlService {
             ctx.primaryTableId = tableId;
             ctx.primaryTableAlias = "t0";
             ctx.fromClause = qualifyTable(table.getSchemaName(), table.getName(), quote) + " AS "
-                    + ctx.primaryTableAlias;
+                    + quoteIdentifier(ctx.primaryTableAlias, quote);
 
             // Load fields for primary table
             for (AnalyticsField field : fieldRepository.findAllByTableIdOrderByPositionAscIdAsc(tableId)) {

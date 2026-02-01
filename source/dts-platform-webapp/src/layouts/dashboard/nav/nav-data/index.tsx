@@ -322,20 +322,91 @@ const resolveDedupeKey = (node: MenuTree, meta: Record<string, any> | null): str
 	return null;
 };
 
+/**
+ * Menu category definitions — each group is separated by a divider in the sidebar.
+ * `keys` match the `sectionKey` (or `key`) from menu metadata.
+ * `flatten` strips children so the item renders as a single external link.
+ */
+const NAV_CATEGORY_GROUPS: { name?: string; keys: string[]; flatten?: boolean }[] = [
+	{ name: undefined, keys: ["workbench"] },
+	{ name: "数据集成", keys: ["resource", "studio"] },
+	{ name: "治理与资产", keys: ["governance", "portal"] },
+	{ name: "运维与服务", keys: ["ops", "services"] },
+	{ name: "可视化", keys: ["visual-analytics"], flatten: true },
+];
+
+const resolveSectionKey = (node: MenuTree): string => {
+	const meta = parseMenuMetadata(node.metadata);
+	const raw = meta?.sectionKey ?? meta?.key;
+	return typeof raw === "string" ? raw.trim().toLowerCase() : "";
+};
+
 const buildNavGroups = (menus: MenuTree[]): NavProps["data"] => {
 	if (!Array.isArray(menus) || menus.length === 0) {
 		return [];
 	}
-	const items = buildNavItems(menus);
-	if (items.length === 0) {
-		return [];
+
+	// Index top-level nodes by section key
+	const keyToNodes = new Map<string, MenuTree[]>();
+	const uncategorized: MenuTree[] = [];
+	for (const node of menus) {
+		const sk = resolveSectionKey(node);
+		if (!sk) {
+			uncategorized.push(node);
+			continue;
+		}
+		const list = keyToNodes.get(sk);
+		if (list) {
+			list.push(node);
+		} else {
+			keyToNodes.set(sk, [node]);
+		}
 	}
-	return [
-		{
-			name: undefined,
-			items,
-		},
-	];
+
+	const visited = new Set<string>();
+	const groups: NavProps["data"] = [];
+
+	for (const { name, keys, flatten } of NAV_CATEGORY_GROUPS) {
+		const nodes: MenuTree[] = [];
+		for (const key of keys) {
+			const matched = keyToNodes.get(key);
+			if (matched) {
+				nodes.push(...matched);
+				keyToNodes.delete(key);
+			}
+		}
+		if (nodes.length === 0) continue;
+
+		const items = buildNavItemsInternal(nodes, undefined, visited);
+		if (items.length === 0) continue;
+
+		// Flatten: strip children so item acts as a single (external) link.
+		// Use the first child's path when the parent's own path isn't external.
+		if (flatten) {
+			for (const item of items) {
+				if (item.children?.length && !isExternalPath(item.path)) {
+					item.path = item.children[0].path;
+				}
+				item.children = undefined;
+			}
+		}
+
+		groups.push({ name, items });
+	}
+
+	// Append any nodes whose sectionKey didn't match a defined category
+	const remaining: MenuTree[] = [...uncategorized];
+	for (const nodes of keyToNodes.values()) {
+		remaining.push(...nodes);
+	}
+	if (remaining.length > 0) {
+		const items = buildNavItemsInternal(remaining, undefined, visited);
+		if (items.length > 0) {
+			groups.push({ name: undefined, items });
+		}
+	}
+
+	return groups;
 };
 
 const isPathAllowed = (path: string, allowedPaths: Set<string>): boolean => {

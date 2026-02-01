@@ -92,8 +92,8 @@ services:
       SPRING_LIQUIBASE_ENABLED: ${SPRING_LIQUIBASE_ENABLED:-true}
       EUREKA_CLIENT_ENABLED: ${EUREKA_CLIENT_ENABLED:-false}
       SPRING_CLOUD_CONFIG_ENABLED: ${SPRING_CLOUD_CONFIG_ENABLED:-false}
-      SPRING_SECURITY_OAUTH2_CLIENT_PROVIDER_OIDC_ISSUER_URI: ${OIDC_ISSUER_URI}
-      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: ${OIDC_ISSUER_URI}
+      SPRING_SECURITY_OAUTH2_CLIENT_PROVIDER_OIDC_ISSUER_URI: ${OIDC_ISSUER_INTERNAL_URI:-${OIDC_ISSUER_URI}}
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: ${OIDC_ISSUER_INTERNAL_URI:-${OIDC_ISSUER_URI}}
       SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_OIDC_CLIENT_ID: "${OAUTH2_ADMIN_CLIENT_ID:-dts-admin}"
       SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_OIDC_CLIENT_SECRET: "${OAUTH2_ADMIN_CLIENT_SECRET:-}"
       DTS_KEYCLOAK_ADMIN_CLIENT_ID: "${OAUTH2_ADMIN_CLIENT_ID:-dts-admin}"
@@ -281,8 +281,8 @@ services:
       DTS_DBT_PROFILES_DIR: /opt/dts/dbt-profiles
       DTS_DBT_CONFIG_PATH: /opt/dts/upload/dbt-config.json
       DTS_AIRFLOW_BASE_URL: ${DTS_AIRFLOW_BASE_URL:-http://dts-airflow-webserver:8080}
-      DTS_AIRFLOW_USERNAME: ${DTS_AIRFLOW_USERNAME:-airflow}
-      DTS_AIRFLOW_PASSWORD: ${DTS_AIRFLOW_PASSWORD:-airflow}
+      DTS_AIRFLOW_USERNAME: ${DTS_AIRFLOW_USERNAME:-${AIRFLOW_ADMIN_USERNAME:-airflow}}
+      DTS_AIRFLOW_PASSWORD: ${DTS_AIRFLOW_PASSWORD:-${AIRFLOW_ADMIN_PASSWORD:-airflow}}
       DTS_AIRFLOW_DAG_ID: ${DTS_AIRFLOW_DAG_ID:-dbt_load}
       DTS_INGESTION_BASE_URL: ${DTS_INGESTION_BASE_URL:-http://dts-ingestion:8083}
       DTS_INGESTION_SERVICE_NAME: ${DTS_INGESTION_SERVICE_NAME:-dts-platform}
@@ -337,7 +337,7 @@ services:
       - ./services/certs/truststore.p12:/etc/dts/truststore.p12:ro,z
       - ./services/dts-platform/drivers:/opt/dts/drivers:z
       - ./services/dts-platform/upload:/opt/dts/upload:Z
-      - ./services/dts-dbt:/opt/dts/dbt:ro,z
+      - ./services/dts-dbt:/opt/dts/dbt:Z
       - ./services/dts-dbt/profiles:/opt/dts/dbt-profiles:Z
       - ./services/dts-airflow/dags:/opt/airflow/dags:Z
       - ./builds/patch-app-dev-yml.sh:/patches/patch-app-dev-yml.sh:ro,z
@@ -473,7 +473,7 @@ services:
       - ./source:/workspace-src:z
       - dts-analytics-target:/workspace-src/dts-analytics/target
       - maven-cache:/root/.m2
-      - ./services/jdbc:/opt/dts/jdbc:ro,z
+      - ./services/dts-platform/drivers:/opt/dts/jdbc:ro,z
       - ./logs/dts-analytics:/workspace/logs/dts-analytics:z
     healthcheck:
       test: ["CMD-SHELL","curl -fsS http://127.0.0.1:3000/api/health >/dev/null || wget -qO- http://127.0.0.1:3000/api/health >/dev/null"]

@@ -56,7 +56,42 @@ public class DefaultDestinationSyncService {
         if (lake == null || lake.getDestinationConfig() == null) {
             return new LinkedHashMap<>();
         }
-        return new LinkedHashMap<>(lake.getDestinationConfig());
+        Map<String, Object> config = new LinkedHashMap<>(lake.getDestinationConfig());
+        String jdbcUrl = normalize(config.get("jdbcUrl"));
+        if (!StringUtils.hasText(jdbcUrl)) {
+            Object legacy = firstNonEmptyValue(config.get("jdbc_url"), config.get("url"), config.get("jdbc"), config.get("jdbcURL"));
+            jdbcUrl = normalize(legacy);
+            if (StringUtils.hasText(jdbcUrl)) {
+                config.put("jdbcUrl", jdbcUrl);
+            }
+        }
+        if (!StringUtils.hasText(jdbcUrl) && StringUtils.hasText(lake.getJdbcUrl())) {
+            jdbcUrl = lake.getJdbcUrl();
+            config.put("jdbcUrl", jdbcUrl);
+        }
+        if (!StringUtils.hasText(jdbcUrl)) {
+            String host = normalize(config.get("host"));
+            String database = normalize(config.get("database"));
+            String port = normalize(config.get("port"));
+            String writerType = normalize(
+                firstNonEmpty(
+                    normalize(config.get("writerType")),
+                    normalize(config.get("type")),
+                    lake.getDestinationDefinitionId()
+                )
+            );
+            String built = buildJdbcUrl(writerType, host, port, database);
+            if (StringUtils.hasText(built)) {
+                config.put("jdbcUrl", built);
+            }
+        }
+        if (!StringUtils.hasText(normalize(config.get("username"))) && StringUtils.hasText(lake.getUsername())) {
+            config.put("username", lake.getUsername());
+        }
+        if (!StringUtils.hasText(normalize(config.get("password"))) && StringUtils.hasText(lake.getPassword())) {
+            config.put("password", lake.getPassword());
+        }
+        return config;
     }
 
     private String resolveWriterType(AdminInfraClient.AdminDataLakeConfig lake, Map<String, Object> config) {
@@ -92,6 +127,50 @@ public class DefaultDestinationSyncService {
             if (StringUtils.hasText(value)) {
                 return value.trim();
             }
+        }
+        return null;
+    }
+
+    private Object firstNonEmptyValue(Object... values) {
+        if (values == null) {
+            return null;
+        }
+        for (Object value : values) {
+            String text = normalize(value);
+            if (StringUtils.hasText(text)) {
+                return value;
+            }
+        }
+        return null;
+    }
+
+    private String buildJdbcUrl(String writerType, String host, String port, String database) {
+        if (!StringUtils.hasText(host) || !StringUtils.hasText(database)) {
+            return null;
+        }
+        String type = normalize(writerType);
+        if (!StringUtils.hasText(type)) {
+            return null;
+        }
+        String lower = type.toLowerCase();
+        String resolvedPort = StringUtils.hasText(port) ? port.trim() : null;
+        if (lower.contains("postgres")) {
+            return "jdbc:postgresql://" + host + (resolvedPort == null ? "" : ":" + resolvedPort) + "/" + database;
+        }
+        if (lower.contains("mysql") || lower.contains("mariadb")) {
+            return "jdbc:mysql://" + host + (resolvedPort == null ? "" : ":" + resolvedPort) + "/" + database;
+        }
+        if (lower.contains("oracle")) {
+            return "jdbc:oracle:thin:@" + host + (resolvedPort == null ? "" : ":" + resolvedPort) + ":" + database;
+        }
+        if (lower.contains("sqlserver") || lower.contains("mssql")) {
+            return "jdbc:sqlserver://" + host + (resolvedPort == null ? "" : ":" + resolvedPort) + ";databaseName=" + database;
+        }
+        if (lower.contains("dm")) {
+            return "jdbc:dm://" + host + (resolvedPort == null ? "" : ":" + resolvedPort);
+        }
+        if (lower.contains("rdbms")) {
+            return "jdbc:postgresql://" + host + (resolvedPort == null ? "" : ":" + resolvedPort) + "/" + database;
         }
         return null;
     }

@@ -479,7 +479,17 @@ public class InfraManagementService {
         entity.setJdbcUrl(request.jdbcUrl());
         entity.setUsername(request.username());
         entity.setDescription(request.description());
-        entity.setProps(writeProps(request.props()));
+        Map<String, Object> props = request.props() == null ? new LinkedHashMap<>() : new LinkedHashMap<>(request.props());
+        if (isJdbcRequest(request)) {
+            String readerType = extractReaderType(props);
+            if (!StringUtils.hasText(readerType)) {
+                String resolved = resolveJdbcReaderType(request, props);
+                if (StringUtils.hasText(resolved)) {
+                    props.put("readerType", resolved);
+                }
+            }
+        }
+        entity.setProps(writeProps(props));
         if (request.secrets() != null) {
             secretService.applySecrets(entity, request.secrets());
         }
@@ -488,6 +498,80 @@ public class InfraManagementService {
         if (!StringUtils.hasText(entity.getStatus())) {
             entity.setStatus(STATUS_ACTIVE);
         }
+    }
+
+    private String resolveJdbcReaderType(DataSourceRequest request, Map<String, Object> props) {
+        String type = normalizeType(request == null ? null : request.type());
+        if (StringUtils.hasText(type)) {
+            if (type.contains("dm")) {
+                return "rdbmsreader";
+            }
+            if (type.contains("postgres")) {
+                return "postgresqlreader";
+            }
+            if (type.contains("mysql") || type.contains("mariadb")) {
+                return "mysqlreader";
+            }
+            if (type.contains("oracle")) {
+                return "oraclereader";
+            }
+            if (type.contains("sqlserver") || type.contains("mssql")) {
+                return "sqlserverreader";
+            }
+            if (type.contains("clickhouse")) {
+                return "clickhousereader";
+            }
+            if (type.contains("hive")) {
+                return "hivereader";
+            }
+            if (type.contains("db2")) {
+                return "db2reader";
+            }
+            if (type.contains("sqlite")) {
+                return "sqlitereader";
+            }
+            if (type.contains("jdbc")) {
+                return "rdbmsreader";
+            }
+        }
+        String jdbcUrl = normalizeText(request == null ? null : request.jdbcUrl());
+        if (!StringUtils.hasText(jdbcUrl) && props != null) {
+            Object raw = props.get("jdbcUrl");
+            if (raw != null) {
+                jdbcUrl = normalizeText(raw);
+            }
+        }
+        if (StringUtils.hasText(jdbcUrl)) {
+            String lower = jdbcUrl.toLowerCase(Locale.ROOT);
+            if (lower.startsWith("jdbc:dm:")) {
+                return "rdbmsreader";
+            }
+            if (lower.startsWith("jdbc:postgresql:")) {
+                return "postgresqlreader";
+            }
+            if (lower.startsWith("jdbc:mysql:") || lower.startsWith("jdbc:mariadb:")) {
+                return "mysqlreader";
+            }
+            if (lower.startsWith("jdbc:oracle:")) {
+                return "oraclereader";
+            }
+            if (lower.startsWith("jdbc:sqlserver:")) {
+                return "sqlserverreader";
+            }
+            if (lower.startsWith("jdbc:clickhouse:")) {
+                return "clickhousereader";
+            }
+            if (lower.startsWith("jdbc:hive2:")) {
+                return "hivereader";
+            }
+            if (lower.startsWith("jdbc:db2:")) {
+                return "db2reader";
+            }
+            if (lower.startsWith("jdbc:sqlite:")) {
+                return "sqlitereader";
+            }
+        }
+        return "rdbmsreader";
     }
 
     private record ConnectionChange(

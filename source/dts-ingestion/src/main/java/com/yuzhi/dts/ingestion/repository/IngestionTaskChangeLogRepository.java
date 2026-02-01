@@ -25,6 +25,7 @@ public interface IngestionTaskChangeLogRepository extends JpaRepository<Ingestio
                 or lower(cast(c.detail as text)) like lower(concat('%', :keyword, '%'))
             )
           )
+        order by c.created_date desc
         """,
         countQuery = """
         select count(1) from ingestion_task_change_log c
@@ -52,4 +53,6 @@ public interface IngestionTaskChangeLogRepository extends JpaRepository<Ingestio
         @Param("keyword") String keyword,
         Pageable pageable
     );
+
+    void deleteByTaskId(Long taskId);
 }

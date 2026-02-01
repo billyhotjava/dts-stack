@@ -62,6 +62,9 @@ public class IngestionTaskChangeLogService {
         String cleanChangeType = normalize(changeType);
         String cleanStatus = normalize(status);
         String cleanKeyword = normalize(keyword);
+        Pageable safePageable = pageable == null
+            ? Pageable.unpaged()
+            : org.springframework.data.domain.PageRequest.of(pageable.getPageNumber(), pageable.getPageSize());
         return repository
             .search(
                 taskId,
@@ -69,7 +72,7 @@ public class IngestionTaskChangeLogService {
                 cleanChangeType,
                 cleanStatus,
                 cleanKeyword,
-                pageable
+                safePageable
             )
             .map(mapper::toDto);
     }
@@ -202,6 +205,13 @@ public class IngestionTaskChangeLogService {
             return null;
         }
         return value.trim();
+    }
+
+    public void deleteByTaskId(Long taskId) {
+        if (taskId == null) {
+            return;
+        }
+        repository.deleteByTaskId(taskId);
     }
 
     private record ChangeSummary(String changeType, String summary, String detail, String riskLevel) {}

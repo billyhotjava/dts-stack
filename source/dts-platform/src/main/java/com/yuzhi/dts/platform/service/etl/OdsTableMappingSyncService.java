@@ -130,6 +130,53 @@ public class OdsTableMappingSyncService {
         return SyncResult.success(updated, refresh.message());
     }
 
+    @Transactional
+    public SyncResult removeFromIngestionPayload(Map<String, Object> payload) {
+        Map<String, Object> task = unwrapTask(payload);
+        if (task == null || task.isEmpty()) {
+            return SyncResult.empty("未发现任务数据");
+        }
+        List<Map<String, String>> mappings = readTableMappings(task.get("tableMapping"));
+        if (mappings.isEmpty()) {
+            return SyncResult.empty("未发现表映射");
+        }
+        UUID connectionId = resolveConnectionId(task);
+        if (connectionId == null) {
+            return SyncResult.empty("未解析到数据源连接 ID");
+        }
+        String taskName = normalize(task.get("name"));
+        int deleted = 0;
+        for (Map<String, String> mapping : mappings) {
+            String source = normalize(mapping.get("source"));
+            if (!StringUtils.hasText(source)) {
+                continue;
+            }
+            TableRef sourceRef = splitTable(source);
+            String namespace = normalizeNamespace(sourceRef.namespace());
+            Optional<InfraOdsTableMapping> existing =
+                mappingRepository.findFirstByConnectionIdAndStreamNameIgnoreCaseAndStreamNamespaceIgnoreCase(
+                    connectionId,
+                    sourceRef.name(),
+                    namespace
+                );
+            if (existing.isPresent()) {
+                mappingRepository.delete(existing.get());
+                deleted++;
+            }
+        }
+        if (deleted == 0) {
+            return SyncResult.empty("未发现可删除的表映射");
+        }
+        DbtSourceService.DbtSourceRefreshResult refresh = dbtSourceService.refreshOdsSources();
+        auditService.auditAction(
+            "INGESTION_MAPPING_DELETE",
+            AuditStage.SUCCESS,
+            taskName,
+            Map.of("summary", "删除 ODS 映射", "task", taskName, "tables", deleted, "dbt", refresh.message())
+        );
+        return SyncResult.success(deleted, refresh.message());
+    }
+
     private Map<String, Object> unwrapTask(Map<String, Object> payload) {
         if (payload == null || payload.isEmpty()) {
             return null;

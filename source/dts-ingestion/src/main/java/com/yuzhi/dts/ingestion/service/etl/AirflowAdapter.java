@@ -30,6 +30,11 @@ public class AirflowAdapter {
 
     public record AirflowRequest(Boolean enabled, String dagId, String scheduleType, String cron, Integer intervalMinutes) {}
 
+    public boolean isEnabled() {
+        IngestionSettingsService.SettingsSnapshot settings = settingsService.getSettings(IngestionSettingsService.SERVICE_AIRFLOW);
+        return settings.getBoolean("enabled", properties.isEnabled());
+    }
+
     public Map<String, Object> triggerIfRequested(AirflowRequest request, Map<String, Object> conf, boolean runNow) {
         Map<String, Object> result = new LinkedHashMap<>();
         IngestionSettingsService.SettingsSnapshot settings = settingsService.getSettings(IngestionSettingsService.SERVICE_AIRFLOW);
@@ -79,15 +84,11 @@ public class AirflowAdapter {
         AirflowClient.TriggerResult lastFailure = null;
         for (String dagId : candidates) {
             if (waitSeconds > 0) {
-                boolean ready = client.waitForDag(
+                client.waitForDag(
                     dagId,
                     java.time.Duration.ofSeconds(waitSeconds),
                     java.time.Duration.ofSeconds(Math.max(1, pollSeconds))
                 );
-                if (!ready) {
-                    lastFailure = new AirflowClient.TriggerResult(false, 404, "DAG 未就绪: " + dagId, null);
-                    continue;
-                }
             }
             AirflowClient.TriggerResult response = triggerWithRetry(dagId, payload);
             if (response.success()) {
@@ -117,9 +118,9 @@ public class AirflowAdapter {
         if (response.success() || response.statusCode() != 404) {
             return response;
         }
-        for (int attempt = 0; attempt < 2; attempt++) {
+        for (int attempt = 0; attempt < 5; attempt++) {
             try {
-                Thread.sleep(1500L);
+                Thread.sleep(2000L);
             } catch (InterruptedException ignored) {
                 Thread.currentThread().interrupt();
                 break;

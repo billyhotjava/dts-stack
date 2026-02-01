@@ -533,7 +533,7 @@ services:
     ports: []
     volumes:
       - ./logs/dts-analytics:/logs/dts-analytics:z
-      - ./services/jdbc:/opt/dts/jdbc:ro,z
+      - ./services/dts-platform/drivers:/opt/dts/jdbc:ro,z
     networks:
       - dts-core
     labels:

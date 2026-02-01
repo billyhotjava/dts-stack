@@ -27,6 +27,10 @@ public interface InfraExternalRunLogRepository extends JpaRepository<InfraExtern
         String externalRunId
     );
 
+    long deleteByEntryKeyIgnoreCaseAndArtifactNameIgnoreCase(String entryKey, String artifactName);
+
+    long deleteByEntryKeyIgnoreCaseAndArtifactId(String entryKey, UUID artifactId);
+
     @Query(
         """
         select r from InfraExternalRunLog r

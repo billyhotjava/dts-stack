@@ -33,4 +33,9 @@ public interface IngestionExecutionRepository extends JpaRepository<IngestionExe
      * 查询任务的最新一次执行记录
      */
     Optional<IngestionExecution> findFirstByTaskIdOrderByCreatedAtDesc(Long taskId);
+
+    /**
+     * 删除任务的全部执行记录
+     */
+    void deleteByTaskId(Long taskId);
 }

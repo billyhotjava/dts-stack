@@ -1,6 +1,7 @@
 package com.yuzhi.dts.ingestion.web.rest;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.annotation.JsonAlias;
 import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.ingestion.security.SecurityUtils;
 import com.yuzhi.dts.ingestion.service.audit.AuditService;
@@ -85,7 +86,7 @@ public class IngestionTaskResource {
     }
 
     public record IngestionTaskRequest(
-        String name,
+        @JsonAlias({"taskName", "title"}) String name,
         String owner,
         String description,
         SourceSpec source,
@@ -185,13 +186,36 @@ public class IngestionTaskResource {
             List<String> streamTables = resolveStreamTables(request.streams());
             com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver.ResolvedSource resolvedSource =
                 sourceResolver.resolve(request.source().dataSourceId(), streamTables);
-            String readerType = resolvedSource.readerType();
+            String readerType = resolvePlugin(
+                request.source().type(),
+                safeMap(request.source().config()),
+                List.of("readerType", "reader", "type", "name", "sourceType")
+            );
+            if (!StringUtils.hasText(readerType)) {
+                readerType = resolvePlugin(null, resolvedSource.readerConfig(), List.of("readerType", "reader", "type", "name"));
+            }
+            if (!StringUtils.hasText(readerType)) {
+                readerType = resolvedSource.readerType();
+            }
+            if (!StringUtils.hasText(readerType)) {
+                String jdbcUrl = normalize(resolvedSource.detail() == null ? null : resolvedSource.detail().jdbcUrl());
+                if (StringUtils.hasText(jdbcUrl)) {
+                    readerType = "rdbmsreader";
+                }
+            }
+            readerType = normalizeAddaxPlugin(readerType, true);
             if (!StringUtils.hasText(readerType)) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "缺少 Addax Reader 类型");
             }
             Map<String, Object> sourceOverrides = sanitizeSourceOverrides(request.source().config());
             Map<String, Object> resolvedReaderConfig = resolvedSource.readerConfig();
             Map<String, Object> mergedReaderConfig = mergeReaderOverrides(safeMap(resolvedReaderConfig), sourceOverrides);
+            if (StringUtils.hasText(readerType)) {
+                mergedReaderConfig.putIfAbsent("readerType", readerType);
+                if (resolvedReaderConfig != null) {
+                    resolvedReaderConfig.putIfAbsent("readerType", readerType);
+                }
+            }
             Map<String, Object> writerConfig = safeMap(request.destination() == null ? null : request.destination().config());
             boolean useDefault = request.destination() != null && Boolean.TRUE.equals(request.destination().usePlatformDefault());
             String writerType = resolvePlugin(
@@ -254,6 +278,12 @@ public class IngestionTaskResource {
 
             boolean hasJobConfig = request.jobConfig() != null && !request.jobConfig().isEmpty();
             String streamSelection = resolveStreamSelection(request.streams());
+            if (streamTables.isEmpty() && !isAllSelection(streamSelection)) {
+                streamTables = mergeTables(extractTables(mergedReaderConfig), extractTables(writerConfig));
+            }
+            if (!isDraft && !isAllSelection(streamSelection) && streamTables.isEmpty() && !hasJobConfig) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请选择需要入湖的表");
+            }
             if (isAllSelection(streamSelection) && streamTables.isEmpty()) {
                 List<String> allTables = discoverAllTables(
                     request.source().dataSourceId(),
@@ -369,8 +399,21 @@ public class IngestionTaskResource {
             airflowConf.put("job_name", jobName);
             airflowConf.put("taskName", request.name());
             airflowConf.put("taskId", createdTask.getId());
+            AirflowAdapter.AirflowRequest triggerRequest = airflowRequest;
+            if (airflowRequest != null
+                && Boolean.TRUE.equals(airflowRequest.enabled())
+                && !StringUtils.hasText(airflowRequest.dagId())
+                && StringUtils.hasText(createdTask.getAirflowDagId())) {
+                triggerRequest = new AirflowAdapter.AirflowRequest(
+                    airflowRequest.enabled(),
+                    createdTask.getAirflowDagId(),
+                    airflowRequest.scheduleType(),
+                    airflowRequest.cron(),
+                    airflowRequest.intervalMinutes()
+                );
+            }
             Map<String, Object> airflowResult = airflowAdapter.triggerIfRequested(
-                airflowRequest,
+                triggerRequest,
                 airflowConf,
                 Boolean.TRUE.equals(request.runNow())
             );
@@ -453,7 +496,7 @@ public class IngestionTaskResource {
 
     private String resolvePlugin(String direct, Map<String, Object> config, List<String> keys) {
         String value = normalize(direct);
-        if (StringUtils.hasText(value)) {
+        if (StringUtils.hasText(value) && !"auto".equalsIgnoreCase(value)) {
             return value;
         }
         if (config == null || config.isEmpty() || keys == null) {
@@ -462,7 +505,7 @@ public class IngestionTaskResource {
         for (String key : keys) {
             Object candidate = config.get(key);
             String text = normalize(candidate);
-            if (StringUtils.hasText(text)) {
+            if (StringUtils.hasText(text) && !"auto".equalsIgnoreCase(text)) {
                 return text;
             }
         }
@@ -750,7 +793,13 @@ public class IngestionTaskResource {
             return "all";
         }
         String selection = normalize(streams.selection());
-        return StringUtils.hasText(selection) ? selection : "all";
+        if (StringUtils.hasText(selection)) {
+            return selection;
+        }
+        if (streams.include() != null && !streams.include().isEmpty()) {
+            return "manual";
+        }
+        return "all";
     }
 
     private boolean isAllSelection(String selection) {
@@ -871,6 +920,26 @@ public class IngestionTaskResource {
         config.put("table", tables);
     }
 
+    @SafeVarargs
+    private final List<String> mergeTables(List<String>... sources) {
+        java.util.LinkedHashSet<String> merged = new java.util.LinkedHashSet<>();
+        if (sources == null) {
+            return List.of();
+        }
+        for (List<String> source : sources) {
+            if (source == null || source.isEmpty()) {
+                continue;
+            }
+            for (String item : source) {
+                String text = normalize(item);
+                if (StringUtils.hasText(text)) {
+                    merged.add(text);
+                }
+            }
+        }
+        return merged.isEmpty() ? List.of() : new java.util.ArrayList<>(merged);
+    }
+
     private void setTableField(Map<?, ?> map, List<String> tables) {
         if (map == null) {
             return;
@@ -878,6 +947,24 @@ public class IngestionTaskResource {
         @SuppressWarnings("unchecked")
         Map<Object, Object> mutable = (Map<Object, Object>) map;
         mutable.put("table", tables);
+    }
+
+    private String normalizeAddaxPlugin(String pluginType, boolean reader) {
+        if (!StringUtils.hasText(pluginType)) {
+            return pluginType;
+        }
+        String normalized = pluginType.trim();
+        String lower = normalized.toLowerCase(java.util.Locale.ROOT);
+        if ("dmreader".equals(lower)) {
+            return "rdbmsreader";
+        }
+        if ("dmwriter".equals(lower)) {
+            return "rdbmswriter";
+        }
+        if ("rdbms".equals(lower)) {
+            return reader ? "rdbmsreader" : "rdbmswriter";
+        }
+        return normalized;
     }
 
     private List<String> extractTables(Map<String, Object> config) {
@@ -1056,6 +1143,12 @@ public class IngestionTaskResource {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "入湖任务必须使用已配置的数据源连接");
         }
         taskDTO.setSourceConfig(sourceOverrides.isEmpty() ? null : toJsonNode(sourceOverrides));
+        if (!StringUtils.hasText(taskDTO.getSourceType())) {
+            String inferred = resolvePlugin(null, sourceOverrides, List.of("readerType", "reader", "type", "name", "sourceType"));
+            if (StringUtils.hasText(inferred)) {
+                taskDTO.setSourceType(inferred);
+            }
+        }
         String syncPrefix = normalize(taskDTO.getSyncPrefix());
         boolean rebuildMapping = taskDTO.getTableMapping() == null || taskDTO.getTableMapping().isNull();
         if (StringUtils.hasText(syncPrefix)) {
@@ -1065,6 +1158,24 @@ public class IngestionTaskResource {
             com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver.ResolvedSource resolved =
                 sourceResolver.resolve(taskDTO.getSourceDataSourceId(), List.of());
             Map<String, Object> readerConfig = mergeReaderOverrides(safeMap(resolved.readerConfig()), sourceOverrides);
+            if (!StringUtils.hasText(taskDTO.getSourceType())) {
+                String inferredType = resolvePlugin(null, readerConfig, List.of("readerType", "reader", "type", "name"));
+                if (!StringUtils.hasText(inferredType)) {
+                    inferredType = resolved.readerType();
+                }
+                if (!StringUtils.hasText(inferredType)) {
+                    String jdbcUrl = normalize(resolved.detail() == null ? null : resolved.detail().jdbcUrl());
+                    if (StringUtils.hasText(jdbcUrl)) {
+                        inferredType = "rdbmsreader";
+                    }
+                }
+                if (StringUtils.hasText(inferredType)) {
+                    taskDTO.setSourceType(inferredType);
+                    readerConfig.putIfAbsent("readerType", inferredType);
+                }
+            } else {
+                readerConfig.putIfAbsent("readerType", taskDTO.getSourceType());
+            }
             Map<String, Object> writerConfig = jsonNodeToMap(taskDTO.getDestinationConfig());
             SyncSpec syncSpec = StringUtils.hasText(syncPrefix) ? new SyncSpec(null, null, null, null, syncPrefix) : null;
             List<Map<String, String>> tableMapping = deriveTableMapping(readerConfig, writerConfig, syncSpec);
@@ -1110,8 +1221,10 @@ public class IngestionTaskResource {
         @PathVariable Long id
     ) {
         String operator = SecurityUtils.getCurrentUserLogin().orElse("system");
-        java.util.Optional<com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO> taskOpt = ingestionTaskService.findOne(id);
-        if (taskOpt.isEmpty()) {
+        com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO task;
+        try {
+            task = ingestionTaskService.delete(id);
+        } catch (IllegalArgumentException ex) {
             auditService.auditAction(
                 "INGESTION_TASK_DELETE",
                 AuditStage.FAIL,
@@ -1120,9 +1233,6 @@ public class IngestionTaskResource {
             );
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "任务不存在");
         }
-
-        com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO task = taskOpt.get();
-        ingestionTaskService.delete(id);
         auditService.auditAction(
             "INGESTION_TASK_DELETE",
             AuditStage.SUCCESS,
@@ -1130,6 +1240,7 @@ public class IngestionTaskResource {
             Map.of("summary", "删除入湖任务", "taskId", id, "operator", operator)
         );
         Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("task", task);
         payload.put("taskId", id);
         payload.put("status", "deleted");
         return ResponseEntity.ok(ApiResponses.ok(payload));

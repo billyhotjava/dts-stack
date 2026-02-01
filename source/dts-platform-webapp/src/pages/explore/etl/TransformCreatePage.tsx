@@ -30,8 +30,10 @@ const CONNECTION_KEYS = [
 ];
 
 const JDBC_READER_BY_TYPE: Record<string, string> = {
-	dm: "dmreader",
-	dameng: "dmreader",
+	dm: "rdbmsreader",
+	dameng: "rdbmsreader",
+	dm8: "rdbmsreader",
+	dameng8: "rdbmsreader",
 	postgres: "postgresqlreader",
 	postgresql: "postgresqlreader",
 	pg: "postgresqlreader",
@@ -46,8 +48,19 @@ const JDBC_READER_BY_TYPE: Record<string, string> = {
 	sqlite: "sqlitereader",
 };
 
+const FILE_READER_BY_TYPE: Record<string, string> = {
+	excel: "txtfilereader",
+	csv: "txtfilereader",
+	json: "jsonreader",
+	api: "httpreader",
+	http: "httpreader",
+	file: "txtfilereader",
+};
+
+const GENERIC_JDBC_READER = "rdbmsreader";
+
 const JDBC_READER_BY_URL: Record<string, string> = {
-	"jdbc:dm:": "dmreader",
+	"jdbc:dm:": "rdbmsreader",
 	"jdbc:postgresql:": "postgresqlreader",
 	"jdbc:mysql:": "mysqlreader",
 	"jdbc:mariadb:": "mysqlreader",
@@ -62,6 +75,15 @@ const JDBC_READER_BY_URL: Record<string, string> = {
 const TABLE_PLACEHOLDER = "${table}";
 
 const normalizeText = (value?: string) => String(value || "").trim();
+
+const normalizeReaderType = (value?: string) => {
+	const text = normalizeText(value);
+	if (!text) return "";
+	if (text.toLowerCase() === "dmreader") {
+		return GENERIC_JDBC_READER;
+	}
+	return text;
+};
 
 const normalizeType = (value?: string) => normalizeText(value).toLowerCase();
 
@@ -87,20 +109,78 @@ const resolveSourceSystemFromDataSource = (source?: InfraDataSource | null) => {
 const resolveReaderTypeFromDataSource = (source?: InfraDataSource | null) => {
 	if (!source) return "";
 	const props = source.props || {};
-	const direct = normalizeText(String(props.readerType || props.reader || props.type || ""));
+	const direct = normalizeReaderType(String(props.readerType || props.reader || props.type || ""));
 	if (direct) return direct;
 	const type = normalizeType(source.type);
+	if (type === "jdbc") {
+		return GENERIC_JDBC_READER;
+	}
+	if (type && type.includes("jdbc")) {
+		return GENERIC_JDBC_READER;
+	}
 	if (type && JDBC_READER_BY_TYPE[type]) {
-		return JDBC_READER_BY_TYPE[type];
+		return normalizeReaderType(JDBC_READER_BY_TYPE[type]);
+	}
+	if (type && FILE_READER_BY_TYPE[type]) {
+		return FILE_READER_BY_TYPE[type];
 	}
 	const jdbcUrl = normalizeText(source.jdbcUrl).toLowerCase();
 	if (jdbcUrl) {
 		for (const [prefix, reader] of Object.entries(JDBC_READER_BY_URL)) {
 			if (jdbcUrl.startsWith(prefix)) {
-				return reader;
+				return normalizeReaderType(reader);
 			}
 		}
 	}
+	return "";
+};
+
+const resolveReaderTypeFromSourceId = (
+	sourceId?: string,
+	candidates?: InfraDataSource[],
+	fallback?: InfraDataSource | null
+) => {
+	if (fallback) {
+		const inferred = resolveReaderTypeFromDataSource(fallback);
+		if (inferred) return inferred;
+	}
+	if (!sourceId || !Array.isArray(candidates)) return "";
+	const hit = candidates.find((item) => normalizeText(item.id) === normalizeText(sourceId));
+	return resolveReaderTypeFromDataSource(hit || null);
+};
+
+const extractMappingTables = (mapping?: Array<{ source?: string; target?: string }>) =>
+	(Array.isArray(mapping) ? mapping : [])
+		.map((item) => normalizeText(item?.source))
+		.filter(Boolean);
+
+const applyReaderTypeToConfig = (config: Record<string, any> | undefined, readerType?: string) => {
+	const resolved = normalizeText(readerType);
+	if (!resolved || resolved.toLowerCase() === "auto" || !config) return config;
+	if (!normalizeText(config.readerType || config.reader || config.type || config.name)) {
+		config.readerType = resolved;
+	}
+	return config;
+};
+
+const resolveReaderTypeFromValues = (values: Record<string, any>) => {
+	const direct = normalizeText(values?.readerType || values?.reader || values?.sourceType || "");
+	if (direct) return direct;
+	const safeParse = (raw?: string) => {
+		const text = normalizeText(raw);
+		if (!text) return undefined;
+		try {
+			return JSON.parse(text);
+		} catch {
+			return undefined;
+		}
+	};
+	const readerConfig = safeParse(values?.readerConfig);
+	const fromConfig = normalizeReaderType(readerConfig?.readerType || readerConfig?.type || readerConfig?.name || "");
+	if (fromConfig) return fromConfig;
+	const jobConfig = safeParse(values?.jobConfig);
+	const fromJob = normalizeReaderType(jobConfig?.job?.content?.[0]?.reader?.name || "");
+	if (fromJob) return fromJob;
 	return "";
 };
 
@@ -108,7 +188,17 @@ const isJdbcSource = (source?: InfraDataSource | null) => {
 	if (!source) return false;
 	if (normalizeText(source.jdbcUrl)) return true;
 	const type = normalizeType(source.type);
-	return Boolean(type && JDBC_READER_BY_TYPE[type]);
+	return Boolean(type && (type === "jdbc" || JDBC_READER_BY_TYPE[type]));
+};
+
+const resolveTaskName = (values: Record<string, any>, form?: any) => {
+	const fallback = form ? normalizeText(form.getFieldValue("name")) : "";
+	return (
+		normalizeText(values?.name) ||
+		normalizeText(values?.taskName) ||
+		normalizeText(values?.title) ||
+		fallback
+	);
 };
 
 const splitLines = (value?: string) =>
@@ -152,6 +242,35 @@ const normalizeList = (value: any): string[] => {
 	const text = normalizeText(value);
 	if (!text) return [];
 	return [text];
+};
+
+const normalizeTableList = (value: any): string[] => {
+	if (Array.isArray(value)) {
+		return value.map((item) => normalizeText(item)).filter(Boolean);
+	}
+	if (typeof value === "string") {
+		return splitLines(value);
+	}
+	return [];
+};
+
+const mergeTableSelections = (...sources: any[]): string[] => {
+	const merged: string[] = [];
+	sources.forEach((source) => {
+		normalizeTableList(source).forEach((item) => {
+			const text = normalizeText(item);
+			if (!text) return;
+			if (!merged.includes(text)) {
+				merged.push(text);
+			}
+		});
+	});
+	return merged;
+};
+
+const isSameTableList = (left: string[], right: string[]) => {
+	if (left.length !== right.length) return false;
+	return left.every((value, index) => value === right[index]);
 };
 
 const extractWriterTables = (config?: Record<string, any>) => {
@@ -364,11 +483,17 @@ const buildWriterConfig = (values: Record<string, any>) => {
 	return mergeConfig(config, extra);
 };
 
-const buildJobPreview = (values: Record<string, any>, editorMode?: string) => {
-	const readerType = normalizeText(values.readerType);
-	if (!readerType) throw new Error("Reader 类型不能为空");
+const buildJobPreview = (values: Record<string, any>, editorMode?: string, readerFallback?: string) => {
 	const jobConfig = parseJson(values.jobConfig, "作业参数") as Record<string, any> | undefined;
 	if (jobConfig) return jobConfig;
+
+	let readerType = normalizeText(values.readerType);
+	if (!readerType) {
+		readerType = resolveReaderTypeFromValues(values);
+	}
+	if (!readerType) {
+		readerType = normalizeText(readerFallback) || GENERIC_JDBC_READER;
+	}
 
 	const writerType = normalizeText(values.writerType);
 	if (!writerType) throw new Error("Writer 类型不能为空");
@@ -387,6 +512,7 @@ const buildJobPreview = (values: Record<string, any>, editorMode?: string) => {
 		readerConfig = buildReaderConfig(values);
 		writerConfig = buildWriterConfig(values);
 	}
+	applyReaderTypeToConfig(readerConfig, readerType);
 
 	return {
 		job: {
@@ -472,6 +598,10 @@ const mapTaskToForm = (task: IngestionTaskDTO) => {
 	const destinationConfig = rawDestinationConfig || {};
 	const addaxConfig = tryParseJson(task.addaxConfig) as Record<string, any> | undefined;
 	const addaxWriterConfig = extractWriterFromAddax(addaxConfig);
+	const readerTypeFromConfig = normalizeReaderType(
+		sourceConfig.readerType || sourceConfig.reader || sourceConfig.type || sourceConfig.name,
+	);
+	const readerTypeFromAddax = normalizeReaderType(addaxConfig?.job?.content?.[0]?.reader?.name);
 	const writerTypeFromConfig = normalizeText(
 		destinationConfig.writerType || destinationConfig.writer || destinationConfig.type,
 	);
@@ -479,6 +609,8 @@ const mapTaskToForm = (task: IngestionTaskDTO) => {
 		normalizeText(task.destinationType) ||
 		writerTypeFromConfig ||
 		extractWriterTypeFromAddax(addaxConfig);
+	const resolvedReaderType =
+		normalizeReaderType(task.sourceType) || readerTypeFromConfig || readerTypeFromAddax || undefined;
 	const syncPrefix =
 		normalizeText(
 			destinationConfig.tablePrefix ||
@@ -508,6 +640,7 @@ const mapTaskToForm = (task: IngestionTaskDTO) => {
 				.filter(Boolean)
 		: [];
 	const hasMapping = Array.isArray(task.tableMapping) && task.tableMapping.length > 0;
+	const mappingTables = hasMapping ? extractMappingTables(task.tableMapping) : [];
 	return {
 		editorMode: "json",
 		tableSelectionMode: hasMapping ? "manual" : "all",
@@ -522,8 +655,13 @@ const mapTaskToForm = (task: IngestionTaskDTO) => {
 			sourceConfig.system ||
 			sourceConfig.name,
 		sourceDataSourceId: task.sourceDataSourceId,
-		readerType: task.sourceType,
+		readerType: resolvedReaderType,
 		readerConfig: JSON.stringify(sourceConfig, null, 2),
+		selectedTables: mappingTables.length ? mappingTables.join("\n") : undefined,
+		readerTables:
+			mappingTables.length && !extractReaderTables(sourceConfig).length
+				? mappingTables.join("\n")
+				: undefined,
 		syncPrefix,
 		writerType: writerType || undefined,
 		writerJdbcUrls: writerJdbcUrls.length ? writerJdbcUrls.join("\n") : undefined,
@@ -553,7 +691,9 @@ export default function TransformCreatePage() {
 	const [discoveringTables, setDiscoveringTables] = useState(false);
 	const [discoveredTables, setDiscoveredTables] = useState<TableInfo[]>([]);
 	const [selectedTableKeys, setSelectedTableKeys] = useState<string[]>([]);
+	const selectedTableKeysRef = useRef<string[]>([]);
 	const [discoverError, setDiscoverError] = useState("");
+	const [tablePageSize, setTablePageSize] = useState(8);
 	const [defaultDestinationStatus, setDefaultDestinationStatus] = useState<DefaultDestinationStatus | null>(null);
 	const [loadingDefaultDestination, setLoadingDefaultDestination] = useState(false);
 	const [defaultDestinationError, setDefaultDestinationError] = useState("");
@@ -572,6 +712,7 @@ export default function TransformCreatePage() {
 	const editorMode = Form.useWatch("editorMode", form);
 	const tableSelectionMode = Form.useWatch("tableSelectionMode", form);
 	const formValues = Form.useWatch([], form);
+	const selectedTablesValue = Form.useWatch("selectedTables", form);
 	const selectedDataSourceId = Form.useWatch("sourceDataSourceId", form);
 	const selectedDataSource = useMemo(
 		() => dataSources.find((item) => String(item.id) === String(selectedDataSourceId)),
@@ -581,6 +722,22 @@ export default function TransformCreatePage() {
 		() => discoveredTables.map((item) => buildTableKey(item)),
 		[discoveredTables]
 	);
+
+	useEffect(() => {
+		const normalized = mergeTableSelections(selectedTablesValue);
+		const currentMode = normalizeText(form.getFieldValue("tableSelectionMode")) || normalizeText(tableSelectionMode) || "all";
+		if (!normalized.length) {
+			if (selectedTableKeys.length && currentMode === "all") {
+				setSelectedTableKeys([]);
+			}
+			selectedTableKeysRef.current = normalized;
+			return;
+		}
+		if (!isSameTableList(normalized, selectedTableKeys)) {
+			setSelectedTableKeys(normalized);
+		}
+		selectedTableKeysRef.current = normalized;
+	}, [selectedTablesValue, selectedTableKeys, tableSelectionMode, form]);
 
 	const initialValues = useMemo(
 		() => ({
@@ -594,6 +751,56 @@ export default function TransformCreatePage() {
 		}),
 		[]
 	);
+
+const syncSelectedTablesToForm = (tables: string[], opts?: { silent?: boolean }) => {
+	const nextTables = mergeTableSelections(tables);
+	setSelectedTableKeys(nextTables);
+	selectedTableKeysRef.current = nextTables;
+	form.setFieldValue("selectedTables", nextTables.join("\n"));
+	if (!nextTables.length) {
+		form.setFieldValue("tableSelectionMode", "all");
+		form.setFieldValue("readerTables", "");
+		form.setFieldValue("writerTables", "");
+		if (!opts?.silent) {
+			toast.info("已清空表清单");
+		}
+		return;
+	}
+	const values = form.getFieldsValue(true);
+	const isJsonMode = values.editorMode === "json";
+	try {
+		if (isJsonMode) {
+			const readerConfig = parseJson(values.readerConfig, "Reader 配置") as Record<string, any> | undefined;
+			const nextReader = applyTablesToConfig(readerConfig, nextTables);
+			form.setFieldValue("readerConfig", JSON.stringify(nextReader || {}, null, 2));
+			const writerConfig = parseJson(values.writerConfig, "Writer 配置") as Record<string, any> | undefined;
+			const nextWriter = applyTablesToConfig(writerConfig, nextTables);
+			form.setFieldValue("writerConfig", JSON.stringify(nextWriter || {}, null, 2));
+		} else {
+			form.setFieldValue("readerTables", nextTables.join("\n"));
+			form.setFieldValue("writerTables", nextTables.join("\n"));
+		}
+		form.setFieldValue("tableSelectionMode", "manual");
+		if (!opts?.silent) {
+			toast.success("已更新表清单");
+		}
+	} catch (err: any) {
+		if (!opts?.silent) {
+			toast.error(err?.message || "更新表清单失败");
+		}
+	}
+};
+
+const resolveSelectedTables = (values?: Record<string, any>) => {
+	const snapshot = values ?? form.getFieldsValue(true);
+	const selectionMode = normalizeText(snapshot?.tableSelectionMode) || "all";
+	const selected = snapshot?.selectedTables ?? form.getFieldValue("selectedTables");
+	const keys = mergeTableSelections(selectedTableKeysRef.current, selectedTableKeys);
+	if (selectionMode !== "manual") {
+		return mergeTableSelections(selected, keys);
+	}
+	return mergeTableSelections(selected, keys, snapshot?.readerTables, snapshot?.writerTables);
+};
 
 	useEffect(() => {
 		const loadSources = async () => {
@@ -711,6 +918,21 @@ export default function TransformCreatePage() {
 		form,
 	]);
 
+	useEffect(() => {
+		if (tableSelectionMode !== "all") {
+			return;
+		}
+		// Guard against race condition: form value may already be "manual"
+		// while Form.useWatch hasn't re-rendered yet
+		const currentMode = normalizeText(form.getFieldValue("tableSelectionMode")) || "all";
+		if (currentMode !== "all") {
+			return;
+		}
+		if (selectedTableKeys.length || normalizeText(selectedTablesValue)) {
+			syncSelectedTablesToForm([], { silent: true });
+		}
+	}, [tableSelectionMode, selectedTableKeys.length, selectedTablesValue]);
+
 	const stepItems = useMemo(
 		() => [
 			{ key: "basic", title: "基础信息" },
@@ -745,6 +967,12 @@ export default function TransformCreatePage() {
 				const task = await ingestionTaskAPI.getTask(editId);
 				setEditingTask(task);
 				form.setFieldsValue(mapTaskToForm(task));
+				const mappingTables = extractMappingTables(task.tableMapping);
+				if (mappingTables.length) {
+					setSelectedTableKeys(mappingTables);
+					form.setFieldValue("selectedTables", mappingTables.join("\n"));
+					syncSelectedTablesToForm(mappingTables, { silent: true });
+				}
 			} catch (error: any) {
 				toast.error(`加载任务失败: ${error?.message || "未知错误"}`);
 			} finally {
@@ -763,12 +991,29 @@ export default function TransformCreatePage() {
 		try {
 			setSavingDraft(true);
 			values = form.getFieldsValue(true);
-			const name = normalizeText(values.name);
+			let name = resolveTaskName(values, form);
+			if (!name && selectedDataSource) {
+				name = normalizeText(selectedDataSource.name);
+			}
 			if (!name) {
 				throw new Error("请填写任务名称");
 			}
-			if (!values.sourceDataSourceId) {
+			const sourceDataSourceId = normalizeText(values.sourceDataSourceId);
+			if (!sourceDataSourceId) {
 				throw new Error("请选择数据源连接");
+			}
+			let resolvedReaderType = normalizeReaderType(values.readerType);
+			if (!resolvedReaderType) {
+				resolvedReaderType = resolveReaderTypeFromValues(values);
+			}
+			if (!resolvedReaderType) {
+				resolvedReaderType = resolveReaderTypeFromSourceId(sourceDataSourceId, dataSources, selectedDataSource);
+			}
+			if (!resolvedReaderType && sourceDataSourceId) {
+				resolvedReaderType = GENERIC_JDBC_READER;
+			}
+			if (resolvedReaderType) {
+				values.readerType = resolvedReaderType;
 			}
 			const isJsonMode = values.editorMode === "json";
 			const safeParse = (raw: string, label: string) => {
@@ -797,9 +1042,21 @@ export default function TransformCreatePage() {
 					toast.warning("Writer 配置尚未完整，已忽略该部分内容");
 				}
 			}
+			readerConfig = applyReaderTypeToConfig(readerConfig, resolvedReaderType);
 			const jobConfig = safeParse(values.jobConfig, "作业参数");
-			const selectionMode = normalizeText(values.tableSelectionMode) || "all";
-			const includeTables = selectionMode === "manual" ? selectedTableKeys : [];
+			const selectedTables = mergeTableSelections(
+				values.selectedTables,
+				selectedTableKeysRef.current,
+				resolveSelectedTables(values)
+			);
+			let selectionMode = normalizeText(values.tableSelectionMode) || "all";
+			if (selectedTables.length) {
+				selectionMode = "manual";
+			}
+			const includeTables =
+				selectionMode === "manual"
+					? mergeTableSelections(selectedTables, selectedTableKeysRef.current)
+					: [];
 			const excludeTables = selectionMode === "all" ? splitLines(values.tableExclude) : [];
 			const draftPayload: Record<string, any> = {
 				draft: true,
@@ -807,7 +1064,8 @@ export default function TransformCreatePage() {
 				description: normalizeText(values.description) || undefined,
 				owner: userInfo?.username || userInfo?.login,
 				source: {
-					dataSourceId: values.sourceDataSourceId,
+					dataSourceId: sourceDataSourceId,
+					type: resolvedReaderType || undefined,
 					config: readerConfig || {},
 				},
 				sync: {
@@ -821,7 +1079,7 @@ export default function TransformCreatePage() {
 					tablePattern: normalizeText(values.readerTablePattern) || undefined,
 				},
 				airflow: {
-					enabled: Boolean(values.airflowEnabled),
+					enabled: values.airflowEnabled ?? true,
 				},
 				dbt: {
 					modelSelector: normalizeText(values.dbtModelSelector) || undefined,
@@ -881,6 +1139,7 @@ export default function TransformCreatePage() {
 			const tables = Array.isArray(rawTables) ? rawTables : [];
 			setDiscoveredTables(tables);
 			setSelectedTableKeys([]);
+			form.setFieldValue("selectedTables", "");
 			if (tables.length === 0) {
 				setDiscoverError("未发现可用表");
 			}
@@ -896,26 +1155,7 @@ export default function TransformCreatePage() {
 			toast.error("请先选择表");
 			return;
 		}
-		try {
-			const tables = selectedTableKeys;
-			const values = form.getFieldsValue(true);
-			const isJsonMode = values.editorMode === "json";
-			if (isJsonMode) {
-				const readerConfig = parseJson(values.readerConfig, "Reader 配置") as Record<string, any> | undefined;
-				const nextReader = applyTablesToConfig(readerConfig, tables);
-				form.setFieldValue("readerConfig", JSON.stringify(nextReader || {}, null, 2));
-				const writerConfig = parseJson(values.writerConfig, "Writer 配置") as Record<string, any> | undefined;
-				const nextWriter = applyTablesToConfig(writerConfig, tables);
-				form.setFieldValue("writerConfig", JSON.stringify(nextWriter || {}, null, 2));
-			} else {
-				form.setFieldValue("readerTables", tables.join("\n"));
-				form.setFieldValue("writerTables", tables.join("\n"));
-			}
-			form.setFieldValue("tableSelectionMode", "manual");
-			toast.success("已更新表清单");
-		} catch (err: any) {
-			toast.error(err?.message || "更新表清单失败");
-		}
+		syncSelectedTablesToForm(selectedTableKeys);
 	};
 
 	const readerTablesValidator = (_: any, value: string) => {
@@ -923,7 +1163,7 @@ export default function TransformCreatePage() {
 		if (mode === "all") {
 			return Promise.resolve();
 		}
-		if (selectedTableKeys.length) {
+		if (resolveSelectedTables().length) {
 			return Promise.resolve();
 		}
 		const tables = splitLines(value);
@@ -938,7 +1178,7 @@ export default function TransformCreatePage() {
 		if (mode === "all") {
 			return Promise.resolve();
 		}
-		if (selectedTableKeys.length) {
+		if (resolveSelectedTables().length) {
 			return Promise.resolve();
 		}
 		const tables = splitLines(value);
@@ -946,6 +1186,32 @@ export default function TransformCreatePage() {
 			return Promise.resolve();
 		}
 		return Promise.reject(new Error("请填写目标表名"));
+	};
+
+	const readerTypeValidator = (_: any, value: string) => {
+		const direct = normalizeText(value);
+		if (direct) {
+			return Promise.resolve();
+		}
+		const dataSourceId = normalizeText(form.getFieldValue("sourceDataSourceId"));
+		if (!dataSourceId) {
+			return Promise.reject(new Error("请选择数据源连接"));
+		}
+		const inferred = resolveReaderTypeFromDataSource(selectedDataSource);
+		if (inferred) {
+			form.setFieldValue("readerType", inferred);
+			return Promise.resolve();
+		}
+		if (!selectedDataSource && dataSourceId) {
+			form.setFieldValue("readerType", GENERIC_JDBC_READER);
+			return Promise.resolve();
+		}
+		if (selectedDataSource && isJdbcSource(selectedDataSource)) {
+			form.setFieldValue("readerType", GENERIC_JDBC_READER);
+			return Promise.resolve();
+		}
+		form.setFieldValue("readerType", GENERIC_JDBC_READER);
+		return Promise.resolve();
 	};
 
 	const resolveStepFields = (stepIndex: number, values: Record<string, any>) => {
@@ -1011,14 +1277,37 @@ export default function TransformCreatePage() {
 		try {
 			setSaving(true);
 			const mergedValues = { ...form.getFieldsValue(true), ...(values || {}) };
-			const taskName = normalizeText(mergedValues.name);
+			let taskName = resolveTaskName(mergedValues, form);
+			if (!taskName && selectedDataSource) {
+				taskName = normalizeText(selectedDataSource.name);
+			}
 			if (!taskName) {
 				throw new Error("请填写任务名称");
 			}
+			mergedValues.name = taskName;
+			const sourceDataSourceId = normalizeText(mergedValues.sourceDataSourceId);
+			if (!sourceDataSourceId) {
+				throw new Error("请选择数据源连接");
+			}
+			let resolvedReaderType = normalizeReaderType(mergedValues.readerType);
+			if (!resolvedReaderType) {
+				resolvedReaderType = resolveReaderTypeFromValues(mergedValues);
+			}
+			if (!resolvedReaderType) {
+				resolvedReaderType = resolveReaderTypeFromSourceId(sourceDataSourceId, dataSources, selectedDataSource);
+			}
+			if (!resolvedReaderType && sourceDataSourceId) {
+				resolvedReaderType = GENERIC_JDBC_READER;
+			}
+			if (resolvedReaderType) {
+				mergedValues.readerType = resolvedReaderType;
+			}
+			const airflowEnabled = mergedValues.airflowEnabled ?? editingTask?.airflowEnabled ?? true;
 			const isJsonMode = mergedValues.editorMode === "json";
 			const readerConfig = isJsonMode
 				? parseJson(mergedValues.readerConfig, "Reader 配置")
 				: buildReaderConfig(mergedValues);
+			applyReaderTypeToConfig(readerConfig as Record<string, any> | undefined, resolvedReaderType);
 			if (hasConnectionOverride(readerConfig)) {
 				throw new Error("入湖任务必须使用已配置的数据源连接，Reader 配置中不可包含连接信息");
 			}
@@ -1039,24 +1328,56 @@ export default function TransformCreatePage() {
 			if (sourceSystem && readerConfig && typeof readerConfig === "object" && !readerConfig.sourceSystem) {
 				readerConfig.sourceSystem = sourceSystem;
 			}
-			const selectionMode = normalizeText(mergedValues.tableSelectionMode) || "all";
+			const selectedTables = mergeTableSelections(
+				mergedValues.selectedTables,
+				selectedTableKeysRef.current,
+				resolveSelectedTables(mergedValues)
+			);
+			let selectionMode = normalizeText(mergedValues.tableSelectionMode) || "all";
+			if (selectedTables.length || selectedTableKeysRef.current.length) {
+				selectionMode = "manual";
+				mergedValues.tableSelectionMode = "manual";
+			}
+			const writerConfig = isJsonMode
+				? parseJson(mergedValues.writerConfig, "Writer 配置")
+				: buildWriterConfig(mergedValues);
+			const inferredManualTables = mergeTableSelections(
+				selectedTables,
+				extractReaderTables(readerConfig),
+				extractWriterTables(writerConfig),
+				mergedValues.readerTables,
+				mergedValues.writerTables
+			);
+			if (selectionMode === "manual" && !selectedTables.length && inferredManualTables.length) {
+				mergedValues.selectedTables = inferredManualTables.join("\n");
+			}
+			if (selectionMode === "all" && inferredManualTables.length) {
+				selectionMode = "manual";
+				mergedValues.tableSelectionMode = "manual";
+			}
 			let includeTables: string[] = [];
 			if (selectionMode === "manual") {
-				if (selectedTableKeys.length) {
-					includeTables = selectedTableKeys;
-				} else if (isJsonMode) {
-					includeTables = extractReaderTables(readerConfig);
-				} else {
-					includeTables = splitLines(mergedValues.readerTables);
+				includeTables = mergeTableSelections(selectedTables, selectedTableKeysRef.current, inferredManualTables);
+				if (!includeTables.length) {
+					if (isJsonMode) {
+						includeTables = extractReaderTables(readerConfig);
+					} else {
+						includeTables = splitLines(mergedValues.readerTables);
+					}
+				}
+				if (!includeTables.length) {
+					includeTables = extractWriterTables(writerConfig);
+				}
+				if (!includeTables.length && !isJsonMode) {
+					includeTables = splitLines(mergedValues.writerTables);
 				}
 				if (!includeTables.length) {
 					throw new Error("请选择需要入湖的表");
 				}
+				applyTablesToConfig(readerConfig as Record<string, any> | undefined, includeTables);
+				applyTablesToConfig(writerConfig as Record<string, any> | undefined, includeTables);
 			}
 			const excludeTables = selectionMode === "all" ? splitLines(mergedValues.tableExclude) : [];
-			const writerConfig = isJsonMode
-				? parseJson(mergedValues.writerConfig, "Writer 配置")
-				: buildWriterConfig(mergedValues);
 			if (writerConfig && selectionMode !== "all" && !hasTableEntries(extractWriterTables(writerConfig))) {
 				throw new Error("Writer 配置缺少目标表，请填写表清单");
 			}
@@ -1067,13 +1388,13 @@ export default function TransformCreatePage() {
 				toast.warning("未填写 DAG 族选择器，将使用默认 DAG 触发 dbt");
 			}
 			if (isEdit && editId) {
-				const updatePayload: IngestionTaskDTO = {
-					...(editingTask || {}),
-					id: editId,
-					name: taskName,
-					description: normalizeText(mergedValues.description) || undefined,
-					sourceType: normalizeText(mergedValues.readerType),
-					sourceDataSourceId: mergedValues.sourceDataSourceId,
+			const updatePayload: IngestionTaskDTO = {
+				...(editingTask || {}),
+				id: editId,
+				name: taskName,
+				description: normalizeText(mergedValues.description) || undefined,
+				sourceType: normalizeText(resolvedReaderType) || undefined,
+				sourceDataSourceId: sourceDataSourceId,
 					sourceConfig: (readerConfig as Record<string, any>) || {},
 					destinationType: defaultWriterType,
 					destinationConfig: writerConfig as Record<string, any> | undefined,
@@ -1084,16 +1405,19 @@ export default function TransformCreatePage() {
 					dbtModelSelector: modelSelector || undefined,
 					dbtDagSelector: dagSelector || undefined,
 				};
+				updatePayload.airflowEnabled = airflowEnabled;
 				await ingestionTaskAPI.updateTask(editId, updatePayload);
 				toast.success("入湖任务已更新");
 				router.push(`/explore/etl/transform/${editId}`);
 			} else {
 				const payload = {
+					taskName: taskName,
 					name: taskName,
 					description: normalizeText(mergedValues.description) || undefined,
 					owner: userInfo?.username || userInfo?.login,
 					source: {
-						dataSourceId: mergedValues.sourceDataSourceId,
+					dataSourceId: sourceDataSourceId,
+						type: normalizeText(resolvedReaderType) || undefined,
 						config: readerConfig || {},
 					},
 					destination: {
@@ -1112,7 +1436,7 @@ export default function TransformCreatePage() {
 						tablePattern: normalizeText(mergedValues.readerTablePattern) || undefined,
 					},
 					airflow: {
-						enabled: Boolean(mergedValues.airflowEnabled),
+						enabled: airflowEnabled,
 					},
 					dbt: {
 						modelSelector: modelSelector || undefined,
@@ -1125,7 +1449,7 @@ export default function TransformCreatePage() {
 				clearDraft();
 				setHasDraft(false);
 				toast.success("入湖任务已提交");
-				router.push("/explore/etl/transform/new");
+				router.push("/explore/etl/transform");
 			}
 		} catch (err: any) {
 			toast.error(err?.message || (isEdit ? "更新入湖任务失败" : "创建入湖任务失败"));
@@ -1147,7 +1471,8 @@ export default function TransformCreatePage() {
 			mergedValues.writerType = normalizeText(defaultDestinationStatus.writerType);
 		}
 		try {
-			const config = buildJobPreview(mergedValues, editorMode);
+			const readerFallback = selectedDataSource ? resolveReaderTypeFromDataSource(selectedDataSource) : "";
+			const config = buildJobPreview(mergedValues, editorMode, readerFallback);
 			return { config, error: "" };
 		} catch (error: any) {
 			return { config: null, error: error?.message || "无法生成预览" };
@@ -1205,6 +1530,9 @@ export default function TransformCreatePage() {
 						onChange={handleStepChange}
 						className="mb-6"
 					/>
+					<Form.Item name="selectedTables" hidden>
+						<Input type="hidden" />
+					</Form.Item>
 					{currentStep === 0 && (
 						<>
 							<Form.Item name="editorMode" label="配置方式">
@@ -1250,7 +1578,7 @@ export default function TransformCreatePage() {
 							<Form.Item
 								name="readerType"
 								label="Reader 类型"
-								rules={[{ required: true, message: "Reader 类型未解析，请检查数据源配置" }]}
+								rules={[{ validator: readerTypeValidator }]}
 							>
 								<Input placeholder="将根据数据源自动生成" disabled />
 							</Form.Item>
@@ -1332,13 +1660,19 @@ export default function TransformCreatePage() {
 												获取表清单
 											</Button>
 											<Button
-												onClick={() => setSelectedTableKeys(discoveredTableKeys)}
+												onClick={() => {
+													setSelectedTableKeys(discoveredTableKeys);
+													syncSelectedTablesToForm(discoveredTableKeys, { silent: true });
+												}}
 												disabled={!discoveredTableKeys.length}
 											>
 												全选
 											</Button>
 											<Button
-												onClick={() => setSelectedTableKeys([])}
+												onClick={() => {
+													setSelectedTableKeys([]);
+													syncSelectedTablesToForm([], { silent: true });
+												}}
 												disabled={!selectedTableKeys.length}
 											>
 												清空
@@ -1359,14 +1693,22 @@ export default function TransformCreatePage() {
 									dataSource={discoveredTables}
 									rowSelection={{
 										selectedRowKeys: selectedTableKeys,
-										onChange: (keys) => setSelectedTableKeys(keys.map((key) => String(key))),
+										onChange: (keys) => {
+											const nextKeys = keys.map((key) => String(key));
+											syncSelectedTablesToForm(nextKeys, { silent: true });
+										},
 									}}
 									columns={[
 										{ title: "Schema", dataIndex: "schema", width: 140 },
 										{ title: "表名", dataIndex: "name" },
 										{ title: "类型", dataIndex: "type", width: 120 },
 									]}
-									pagination={{ pageSize: 8 }}
+									pagination={{
+									pageSize: tablePageSize,
+									showSizeChanger: true,
+									pageSizeOptions: [8, 20, 50, 100],
+									onShowSizeChange: (_current: number, size: number) => setTablePageSize(size),
+								}}
 								/>
 								<Text type="secondary" className="block mt-2">
 									已发现 {discoveredTables.length} 张表，已选择 {selectedTableKeys.length} 张表

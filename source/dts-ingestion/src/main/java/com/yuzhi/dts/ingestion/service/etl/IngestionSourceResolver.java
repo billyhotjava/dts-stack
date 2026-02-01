@@ -14,8 +14,10 @@ import org.springframework.util.StringUtils;
 public class IngestionSourceResolver {
 
     private static final Map<String, String> JDBC_TYPE_READERS = Map.ofEntries(
-        Map.entry("dm", "dmreader"),
-        Map.entry("dameng", "dmreader"),
+        Map.entry("dm", "rdbmsreader"),
+        Map.entry("dameng", "rdbmsreader"),
+        Map.entry("dm8", "rdbmsreader"),
+        Map.entry("dameng8", "rdbmsreader"),
         Map.entry("postgres", "postgresqlreader"),
         Map.entry("postgresql", "postgresqlreader"),
         Map.entry("pg", "postgresqlreader"),
@@ -27,11 +29,18 @@ public class IngestionSourceResolver {
         Map.entry("clickhouse", "clickhousereader"),
         Map.entry("hive", "hivereader"),
         Map.entry("db2", "db2reader"),
-        Map.entry("sqlite", "sqlitereader")
+        Map.entry("sqlite", "sqlitereader"),
+        Map.entry("jdbc", "rdbmsreader"),
+        Map.entry("excel", "txtfilereader"),
+        Map.entry("csv", "txtfilereader"),
+        Map.entry("json", "jsonreader"),
+        Map.entry("api", "httpreader"),
+        Map.entry("http", "httpreader"),
+        Map.entry("file", "txtfilereader")
     );
 
     private static final Map<String, String> JDBC_URL_READERS = Map.ofEntries(
-        Map.entry("jdbc:dm:", "dmreader"),
+        Map.entry("jdbc:dm:", "rdbmsreader"),
         Map.entry("jdbc:postgresql:", "postgresqlreader"),
         Map.entry("jdbc:mysql:", "mysqlreader"),
         Map.entry("jdbc:mariadb:", "mysqlreader"),
@@ -52,24 +61,22 @@ public class IngestionSourceResolver {
     public ResolvedSource resolve(UUID dataSourceId, List<String> tables) {
         PlatformInfraClient.DataSourceDetail detail = platformInfraClient.fetchDataSourceDetail(dataSourceId);
         Map<String, Object> props = safeMap(detail.props());
+        String jdbcUrl = resolveJdbcUrl(detail, props);
         Map<String, Object> readerConfig = resolveReaderConfig(props);
-        applyJdbcConnection(readerConfig, detail);
+        applyJdbcConnection(readerConfig, jdbcUrl);
         applyCredentials(readerConfig, detail);
         applySecrets(readerConfig, detail.secrets());
         applyTables(readerConfig, tables);
-        String readerType = resolveReaderType(detail, props, readerConfig);
-        if (!StringUtils.hasText(readerType)) {
-            throw new IllegalStateException("无法解析 Reader 类型，请在数据源中配置 readerType");
-        }
+        String readerType = resolveReaderType(detail, props, readerConfig, jdbcUrl);
         return new ResolvedSource(readerType, readerConfig, detail);
     }
 
     public JdbcMetadataService.JdbcConnectionInfo resolveJdbcInfo(UUID dataSourceId) {
         PlatformInfraClient.DataSourceDetail detail = platformInfraClient.fetchDataSourceDetail(dataSourceId);
-        String jdbcUrl = StringUtils.hasText(detail.jdbcUrl()) ? detail.jdbcUrl().trim() : null;
+        Map<String, Object> props = safeMap(detail.props());
+        String jdbcUrl = resolveJdbcUrl(detail, props);
         String username = StringUtils.hasText(detail.username()) ? detail.username().trim() : null;
         String password = extractSecret(detail.secrets(), "password");
-        Map<String, Object> props = safeMap(detail.props());
         String driver = extractString(props, "driverClass", "driver");
         String driverVersion = extractString(props, "driverVersion");
         Map<String, String> jdbcProps = resolveJdbcProperties(props);
@@ -95,33 +102,48 @@ public class IngestionSourceResolver {
         return new LinkedHashMap<>();
     }
 
-    private String resolveReaderType(PlatformInfraClient.DataSourceDetail detail, Map<String, Object> props, Map<String, Object> readerConfig) {
+    private String resolveReaderType(
+        PlatformInfraClient.DataSourceDetail detail,
+        Map<String, Object> props,
+        Map<String, Object> readerConfig,
+        String jdbcUrl
+    ) {
         String fromProps = extractString(props, "readerType", "reader");
         if (StringUtils.hasText(fromProps)) {
-            return fromProps;
+            return normalizeReaderType(fromProps);
         }
-        String fromConfig = extractString(readerConfig, "readerType", "type");
+        String fromConfig = extractString(readerConfig, "readerType", "type", "name");
         if (StringUtils.hasText(fromConfig)) {
-            return fromConfig;
+            return normalizeReaderType(fromConfig);
         }
         String type = detail.type() == null ? null : detail.type().trim().toLowerCase(Locale.ROOT);
         if (StringUtils.hasText(type) && JDBC_TYPE_READERS.containsKey(type)) {
-            return JDBC_TYPE_READERS.get(type);
+            return normalizeReaderType(JDBC_TYPE_READERS.get(type));
         }
-        String jdbcUrl = detail.jdbcUrl();
         if (StringUtils.hasText(jdbcUrl)) {
             String lower = jdbcUrl.trim().toLowerCase(Locale.ROOT);
             for (Map.Entry<String, String> entry : JDBC_URL_READERS.entrySet()) {
                 if (lower.startsWith(entry.getKey())) {
-                    return entry.getValue();
+                    return normalizeReaderType(entry.getValue());
                 }
             }
+            return "rdbmsreader";
         }
         return null;
     }
 
-    private void applyJdbcConnection(Map<String, Object> readerConfig, PlatformInfraClient.DataSourceDetail detail) {
-        String jdbcUrl = detail.jdbcUrl();
+    private String normalizeReaderType(String readerType) {
+        if (!StringUtils.hasText(readerType)) {
+            return readerType;
+        }
+        String normalized = readerType.trim();
+        if ("dmreader".equalsIgnoreCase(normalized)) {
+            return "rdbmsreader";
+        }
+        return normalized;
+    }
+
+    private void applyJdbcConnection(Map<String, Object> readerConfig, String jdbcUrl) {
         if (!StringUtils.hasText(jdbcUrl)) {
             return;
         }
@@ -226,6 +248,27 @@ public class IngestionSourceResolver {
             return List.of(str);
         }
         return List.of();
+    }
+
+    private String resolveJdbcUrl(PlatformInfraClient.DataSourceDetail detail, Map<String, Object> props) {
+        if (detail != null && StringUtils.hasText(detail.jdbcUrl())) {
+            return detail.jdbcUrl().trim();
+        }
+        if (props == null || props.isEmpty()) {
+            return null;
+        }
+        Object raw = props.get("jdbcUrl");
+        if (raw == null) {
+            raw = props.get("jdbc_url");
+        }
+        if (raw == null) {
+            raw = props.get("url");
+        }
+        if (raw == null) {
+            return null;
+        }
+        String text = raw.toString().trim();
+        return text.isEmpty() ? null : text;
     }
 
     private Map<String, String> resolveJdbcProperties(Map<String, Object> props) {

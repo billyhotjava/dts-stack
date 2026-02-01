@@ -23,6 +23,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.util.StringUtils;
 
 @RestController
 @RequestMapping("/api/ingestion")
@@ -55,6 +56,15 @@ public class IngestionTaskProxyResource {
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ApiResponse<Map<String, Object>> createTask(@RequestBody Map<String, Object> payload) {
         boolean draft = payload != null && Boolean.parseBoolean(String.valueOf(payload.getOrDefault("draft", "false")));
+        String taskName = payload == null ? null : String.valueOf(payload.getOrDefault("name", ""));
+        if (!StringUtils.hasText(taskName) && payload != null) {
+            Object alt = payload.getOrDefault("taskName", payload.getOrDefault("title", ""));
+            String fallback = String.valueOf(alt == null ? "" : alt).trim();
+            if (StringUtils.hasText(fallback)) {
+                payload.put("name", fallback);
+                taskName = fallback;
+            }
+        }
         Map<String, Object> resolvedPayload = payload;
         if (!draft) {
             DefaultDestinationSyncService.DefaultDestinationSnapshot snapshot = destinationSyncService.ensureDefaultDestination();
@@ -62,7 +72,6 @@ public class IngestionTaskProxyResource {
         }
         ApiResponse<Map<String, Object>> response = ingestionClient.createIngestionTask(resolvedPayload);
         String operator = SecurityUtils.getCurrentUserLogin().orElse("system");
-        String taskName = payload == null ? null : String.valueOf(payload.getOrDefault("name", ""));
         if (response != null && response.getStatus() >= 200 && response.getStatus() < 300) {
             auditService.auditAction(
                 "INGESTION_TASK_CREATE",
@@ -142,7 +151,49 @@ public class IngestionTaskProxyResource {
     @DeleteMapping("/tasks/{id}")
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ResponseEntity<ApiResponse<Map<String, Object>>> deleteTask(@PathVariable("id") Long id) {
-        return ResponseEntity.ok(ingestionClient.deleteTask(id));
+        ApiResponse<Map<String, Object>> response = ingestionClient.deleteTask(id);
+        if (response != null && response.getStatus() >= 200 && response.getStatus() < 300) {
+            try {
+                odsTableMappingSyncService.removeFromIngestionPayload(response.getData());
+            } catch (RuntimeException ex) {
+                String operator = SecurityUtils.getCurrentUserLogin().orElse("system");
+                auditService.auditAction(
+                    "INGESTION_MAPPING_DELETE",
+                    AuditStage.FAIL,
+                    String.valueOf(id),
+                    Map.of("summary", "删除 ODS 映射失败", "taskId", id, "operator", operator, "error", ex.getMessage())
+                );
+            }
+            try {
+                String taskName = null;
+                Map<String, Object> data = response.getData();
+                if (data != null) {
+                    Object taskObj = data.get("task");
+                    if (taskObj instanceof Map<?, ?> map) {
+                        Object nameObj = map.get("name");
+                        if (nameObj != null) {
+                            taskName = String.valueOf(nameObj).trim();
+                        }
+                    }
+                    if (!StringUtils.hasText(taskName)) {
+                        Object nameObj = data.get("name");
+                        if (nameObj != null) {
+                            taskName = String.valueOf(nameObj).trim();
+                        }
+                    }
+                }
+                externalRunLogService.deleteIngestionRuns(taskName, id);
+            } catch (RuntimeException ex) {
+                String operator = SecurityUtils.getCurrentUserLogin().orElse("system");
+                auditService.auditAction(
+                    "INGESTION_RUNLOG_DELETE",
+                    AuditStage.FAIL,
+                    String.valueOf(id),
+                    Map.of("summary", "删除入湖运行日志失败", "taskId", id, "operator", operator, "error", ex.getMessage())
+                );
+            }
+        }
+        return ResponseEntity.ok(response);
     }
 
     @PostMapping("/tasks/{id}/execute")

@@ -6,7 +6,10 @@ export function NavVertical({ data, className, ...props }: NavProps) {
 	return (
 		<nav className={cn("flex w-full flex-col gap-1", className)} {...props}>
 			{data.map((group, index) => (
-				<NavGroup key={group.name || index} name={group.name} items={group.items} />
+				<div key={group.name || index}>
+					{index > 0 && <hr className="border-t border-border/40 mx-3 my-2" />}
+					<NavGroup name={group.name} items={group.items} />
+				</div>
 			))}
 		</nav>
 	);

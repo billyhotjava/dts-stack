@@ -25,11 +25,18 @@ public class AirflowDagService {
     private final AirflowProperties properties;
     private final AddaxProperties addaxProperties;
     private final IngestionSettingsService settingsService;
+    private final AirflowClient airflowClient;
 
-    public AirflowDagService(AirflowProperties properties, AddaxProperties addaxProperties, IngestionSettingsService settingsService) {
+    public AirflowDagService(
+        AirflowProperties properties,
+        AddaxProperties addaxProperties,
+        IngestionSettingsService settingsService,
+        AirflowClient airflowClient
+    ) {
         this.properties = properties;
         this.addaxProperties = addaxProperties;
         this.settingsService = settingsService;
+        this.airflowClient = airflowClient;
     }
 
     public String ensureDagForTask(IngestionTask task) {
@@ -40,25 +47,97 @@ public class AirflowDagService {
         return ensureDagForTask(task, true);
     }
 
+    public boolean deleteDagForTask(IngestionTask task) {
+        if (task == null) {
+            return false;
+        }
+        String dagId = resolveDagId(task);
+        if (StringUtils.hasText(dagId)) {
+            try {
+                boolean deletedRemote = airflowClient.deleteDag(dagId);
+                if (deletedRemote) {
+                    LOG.info("[airflow] deleted dag {} via API", dagId);
+                }
+            } catch (Exception ex) {
+                LOG.warn("[airflow] failed to delete dag {} via API: {}", dagId, ex.getMessage());
+            }
+        }
+        Path dagDir = resolveDagDir(task);
+        if (dagDir == null) {
+            LOG.warn("[airflow] dagsDir not configured, skip delete dag file for dagId={}", dagId);
+            return false;
+        }
+        Path dagFile = dagDir.resolve(dagId + ".py");
+        try {
+            boolean deleted = Files.deleteIfExists(dagFile);
+            if (deleted) {
+                LOG.info("[airflow] deleted dag file {}", dagFile);
+            }
+            return deleted;
+        } catch (IOException ex) {
+            LOG.warn("[airflow] failed to delete dag file {}: {}", dagFile, ex.getMessage());
+            return false;
+        }
+    }
+
     private String ensureDagForTask(IngestionTask task, boolean force) {
         if (task == null) {
             return null;
         }
         String dagId = resolveDagId(task);
+        String previousDagId = task.getAirflowDagId();
         Path dagDir = resolveDagDir(task);
+        Path baseDir = resolveDagsBasePath();
         if (dagDir == null) {
             LOG.warn("[airflow] dagsDir not configured, skip DAG file generation for dagId={}", dagId);
-            return dagId;
+            return null;
         }
         try {
+            if (Files.exists(dagDir) && !Files.isDirectory(dagDir)) {
+                throw new IOException("dagsDir is not a directory");
+            }
             Files.createDirectories(dagDir);
         } catch (IOException ex) {
             LOG.warn("[airflow] failed to create dagsDir {}: {}", dagDir, ex.getMessage());
-            return dagId;
+            if (baseDir != null && !baseDir.equals(dagDir)) {
+                try {
+                    if (Files.exists(baseDir) && !Files.isDirectory(baseDir)) {
+                        throw new IOException("fallback dagsDir is not a directory");
+                    }
+                    Files.createDirectories(baseDir);
+                    dagDir = baseDir;
+                } catch (IOException inner) {
+                    LOG.warn("[airflow] failed to create fallback dagsDir {}: {}", baseDir, inner.getMessage());
+                    return null;
+                }
+            } else {
+                return null;
+            }
         }
         Path dagFile = dagDir.resolve(dagId + ".py");
         String content = buildDagSource(dagId, task);
+        boolean written = false;
         try {
+            if (StringUtils.hasText(previousDagId) && !previousDagId.equals(dagId)) {
+                Path previousFile = dagDir.resolve(previousDagId + ".py");
+                try {
+                    if (Files.deleteIfExists(previousFile)) {
+                        LOG.info("[airflow] removed old dag file {}", previousFile);
+                    }
+                } catch (IOException ex) {
+                    LOG.warn("[airflow] failed to delete old dag file {}: {}", previousFile, ex.getMessage());
+                }
+            }
+            if (baseDir != null && !baseDir.equals(dagDir)) {
+                Path legacyFile = baseDir.resolve(dagId + ".py");
+                try {
+                    if (Files.deleteIfExists(legacyFile)) {
+                        LOG.info("[airflow] removed legacy dag file {}", legacyFile);
+                    }
+                } catch (IOException ex) {
+                    LOG.warn("[airflow] failed to delete legacy dag file {}: {}", legacyFile, ex.getMessage());
+                }
+            }
             if (!force && Files.exists(dagFile)) {
                 String existing = Files.readString(dagFile);
                 if (existing.equals(content)) {
@@ -67,10 +146,11 @@ public class AirflowDagService {
             }
             Files.writeString(dagFile, content, StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
             LOG.info("[airflow] {} dag file {}", force ? "rebuilt" : "ensured", dagFile);
+            written = true;
         } catch (IOException ex) {
             LOG.warn("[airflow] failed to write dag file {}: {}", dagFile, ex.getMessage());
         }
-        return dagId;
+        return written ? dagId : null;
     }
 
     private Path resolveDagDir(IngestionTask task) {
@@ -79,7 +159,19 @@ public class AirflowDagService {
             return null;
         }
         String layerDir = resolveLayerDir(task);
-        return StringUtils.hasText(layerDir) ? Path.of(dagsDir, layerDir) : Path.of(dagsDir);
+        if (!StringUtils.hasText(layerDir)) {
+            return Path.of(dagsDir);
+        }
+        Path base = Path.of(dagsDir);
+        if (base.endsWith(layerDir)) {
+            return base;
+        }
+        return base.resolve(layerDir);
+    }
+
+    private Path resolveDagsBasePath() {
+        String dagsDir = resolveDagsBaseDir();
+        return StringUtils.hasText(dagsDir) ? Path.of(dagsDir) : null;
     }
 
     private String resolveDagsBaseDir() {
@@ -87,7 +179,7 @@ public class AirflowDagService {
         String configured = settings.getString("dagsDir", null);
         String fallback = properties.getDagsDir();
         String normalized = normalizePath(configured);
-        if (StringUtils.hasText(normalized) && Files.exists(Path.of(normalized))) {
+        if (StringUtils.hasText(normalized)) {
             return normalized;
         }
         if (StringUtils.hasText(fallback)) {
@@ -96,11 +188,16 @@ public class AirflowDagService {
             }
             return fallback;
         }
-        return normalized;
+        return null;
     }
 
     private String resolveLayerDir(IngestionTask task) {
-        return "ods";
+        IngestionSettingsService.SettingsSnapshot settings = settingsService.getSettings(IngestionSettingsService.SERVICE_AIRFLOW);
+        String configured = settings.getString("layerDir", null);
+        if (StringUtils.hasText(configured)) {
+            return configured.trim();
+        }
+        return null;
     }
 
     private String normalizePath(String value) {
@@ -122,7 +219,7 @@ public class AirflowDagService {
         if (StringUtils.hasText(task.getAirflowDagId())) {
             return task.getAirflowDagId().trim();
         }
-        String layer = resolveLayerDir(task);
+        String layer = normalizeSegment(resolveLayerDir(task), "ods");
         String sourceKey = normalizeSegment(resolveSourceKey(task), "source");
         String desc = normalizeSegment(task != null ? task.getName() : null, "ingestion");
         String freq = normalizeSegment(resolveFrequency(task != null ? task.getSyncSchedule() : null), "manual");
@@ -237,6 +334,7 @@ public class AirflowDagService {
         String nameTag = sanitizeTag(task == null ? null : task.getName(), "ingestion");
         String addaxImage = escapePythonString(resolveAddaxImage());
         String addaxJobDir = escapePythonString(resolveAddaxJobDir());
+        String defaultJobPath = escapePythonString(resolveDefaultJobPath(task));
         String schedule = normalizeSchedule(task == null ? null : task.getSyncSchedule());
         String scheduleLiteral = schedule == null ? "None" : "\"" + escapePythonString(schedule) + "\"";
         String taskId = resolveTaskId(task);
@@ -254,6 +352,7 @@ public class AirflowDagService {
             ADDAX_JOB_DIR = os.getenv("ADDAX_JOB_DIR", "%s")
             ADDAX_DRIVER_DIR = os.getenv("ADDAX_DRIVER_DIR", "")
             ADDAX_DRIVER_JARS = os.getenv("ADDAX_DRIVER_JARS", "")
+            DEFAULT_JOB_PATH = os.getenv("ADDAX_JOB_DEFAULT", "%s")
 
 
             def build_driver_mounts():
@@ -287,12 +386,13 @@ public class AirflowDagService {
                 schedule=%s,
                 start_date=datetime(2024, 1, 1),
                 catchup=False,
+                is_paused_upon_creation=False,
                 tags=["addax", "etl", "ods", "%s", "%s"],
             ) as dag:
                 run_cmd = [
                     "sh",
                     "-lc",
-                    "/opt/addax/bin/addax.sh {{ dag_run.conf.get('job_path', '/opt/addax/jobs/job.json') }}",
+                    "/opt/addax/bin/addax.sh {{ dag_run.conf.get('job_path', DEFAULT_JOB_PATH) }}",
                 ]
 
                 addax_run = DockerOperator(
@@ -310,7 +410,7 @@ public class AirflowDagService {
                     environment={},
                     tty=True,
                 )
-            """.formatted(addaxImage, addaxJobDir, dagId, scheduleLiteral, sourceTag, nameTag, taskId);
+            """.formatted(addaxImage, addaxJobDir, defaultJobPath, dagId, scheduleLiteral, sourceTag, nameTag, taskId);
     }
 
     private String normalizeSchedule(String schedule) {
@@ -325,6 +425,18 @@ public class AirflowDagService {
         String configured = settings.getString("jobDir", null);
         String fallback = addaxProperties.getJobDir();
         return normalizePath(configured, fallback != null ? fallback : "/opt/airflow/dags");
+    }
+
+    private String resolveDefaultJobPath(IngestionTask task) {
+        String jobPath = task == null ? null : task.getAddaxJobPath();
+        if (StringUtils.hasText(jobPath)) {
+            Path path = Path.of(jobPath.trim());
+            Path file = path.getFileName();
+            if (file != null) {
+                return "/opt/addax/jobs/" + file.toString();
+            }
+        }
+        return "/opt/addax/jobs/job.json";
     }
 
     private String resolveAddaxImage() {

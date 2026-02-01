@@ -56,27 +56,28 @@ export default function BreadCrumb({ maxItems = 3 }: BreadCrumbProps) {
 	const breadCrumbs = useMemo(() => {
 		const paths = matches.filter((item) => item.pathname !== "/").map((item) => item.pathname);
 
-		return paths
-			.map((path) => {
-				const navItems = navData.flatMap((section) => section.items);
-				const pathItems = findPathInNavData(path, navItems);
+		// Use the deepest matched path and show its full nav tree path
+		const deepestPath = paths[paths.length - 1];
+		if (!deepestPath) return [];
 
-				if (pathItems.length === 0) return null;
+		const navItems = navData.flatMap((section) => section.items);
+		const pathItems = findPathInNavData(deepestPath, navItems);
 
-				const currentItem = pathItems[pathItems.length - 1];
-				const children =
-					currentItem.children?.map((child) => ({
-						key: child.path,
-						label: t(child.title),
-					})) ?? [];
+		if (pathItems.length === 0) return [];
 
-				return {
-					key: currentItem.path,
-					label: t(currentItem.title),
-					items: children,
-				};
-			})
-			.filter((item): item is BreadcrumbItemData => item !== null);
+		return pathItems.map((item) => {
+			const children =
+				item.children?.map((child) => ({
+					key: child.path,
+					label: t(child.title),
+				})) ?? [];
+
+			return {
+				key: item.path,
+				label: t(item.title),
+				items: children,
+			};
+		});
 	}, [matches, t, findPathInNavData, navData]);
 
 	const renderBreadcrumbItem = (item: BreadcrumbItemData, isLast: boolean) => {

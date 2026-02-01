@@ -4,11 +4,13 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.platform.domain.infra.InfraExternalRunLog;
 import com.yuzhi.dts.platform.repository.infra.InfraExternalRunLogRepository;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -48,6 +50,7 @@ public class ExternalRunLogService {
         metrics.put("taskId", raw.get("taskId"));
         metrics.put("taskName", taskName);
         metrics.put("logPath", raw.get("logPath"));
+        UUID artifactId = resolveIngestionArtifactId(raw.get("taskId"));
         return Optional.of(
             upsertExternalRun(
                 ENTRY_INGESTION,
@@ -59,7 +62,8 @@ public class ExternalRunLogService {
                 endTime,
                 message,
                 toJson(metrics),
-                ownerDept
+                ownerDept,
+                artifactId
             )
         );
     }
@@ -121,7 +125,8 @@ public class ExternalRunLogService {
                 null,
                 null,
                 toJson(metrics),
-                ownerDept
+                ownerDept,
+                null
             )
         );
     }
@@ -168,7 +173,8 @@ public class ExternalRunLogService {
                 endAt,
                 null,
                 toJson(metrics),
-                ownerDept
+                ownerDept,
+                null
             );
             updated++;
         }
@@ -187,12 +193,43 @@ public class ExternalRunLogService {
         String metricsJson,
         String ownerDept
     ) {
+        return upsertExternalRun(
+            entryKey,
+            artifactType,
+            artifactName,
+            externalRunId,
+            status,
+            startedAt,
+            finishedAt,
+            message,
+            metricsJson,
+            ownerDept,
+            null
+        );
+    }
+
+    public InfraExternalRunLog upsertExternalRun(
+        String entryKey,
+        String artifactType,
+        String artifactName,
+        String externalRunId,
+        String status,
+        Instant startedAt,
+        Instant finishedAt,
+        String message,
+        String metricsJson,
+        String ownerDept,
+        UUID artifactId
+    ) {
         InfraExternalRunLog log = repository
             .findFirstByEntryKeyIgnoreCaseAndExternalRunId(entryKey, externalRunId)
             .orElseGet(InfraExternalRunLog::new);
         log.setEntryKey(entryKey);
         log.setArtifactType(artifactType);
         log.setArtifactName(artifactName);
+        if (artifactId != null) {
+            log.setArtifactId(artifactId);
+        }
         log.setExternalRunId(externalRunId);
         if (StringUtils.hasText(status)) {
             log.setStatus(status.toUpperCase(Locale.ROOT));
@@ -219,6 +256,32 @@ public class ExternalRunLogService {
         log.setClassification("INTERNAL");
         log.setDurationMs(computeDuration(log.getStartedAt(), log.getFinishedAt(), log.getDurationMs()));
         return repository.save(log);
+    }
+
+    public int deleteIngestionRuns(String taskName, Long taskId) {
+        int removed = 0;
+        UUID artifactId = resolveIngestionArtifactId(taskId);
+        if (artifactId != null) {
+            removed += repository.deleteByEntryKeyIgnoreCaseAndArtifactId(ENTRY_INGESTION, artifactId);
+        }
+        if (StringUtils.hasText(taskName)) {
+            removed += repository.deleteByEntryKeyIgnoreCaseAndArtifactNameIgnoreCase(ENTRY_INGESTION, taskName);
+        }
+        if (removed > 0) {
+            LOG.info("Deleted {} ingestion run logs for task {}", removed, taskName);
+        }
+        return removed;
+    }
+
+    private UUID resolveIngestionArtifactId(Object taskId) {
+        if (taskId == null) {
+            return null;
+        }
+        String value = String.valueOf(taskId).trim();
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        return UUID.nameUUIDFromBytes(("ingestion-task:" + value).getBytes(StandardCharsets.UTF_8));
     }
 
     private String normalizeStatus(String status) {

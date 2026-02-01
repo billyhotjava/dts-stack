@@ -39,7 +39,8 @@ public class ExternalJdbcDriverLoader {
         if (!driversDir.isBlank()) {
             candidates.add(Path.of(driversDir));
         }
-        // Fallback paths
+        // Fallback paths (container mount, host dev path, relative)
+        candidates.add(Path.of("/opt/dts/jdbc"));
         candidates.add(Path.of("/opt/prod/s10/dts-stack/services/dts-platform/drivers"));
         candidates.add(Path.of("../dts-platform/drivers"));
         candidates.add(Path.of("drivers"));
