@@ -4,6 +4,8 @@ ARG RUNTIME_BASE_IMAGE=eclipse-temurin:21-jre
 # Use official Maven with Temurin JDK 21 for cross-platform builds
 # syntax=docker/dockerfile:1.6
 FROM maven:3.9.9-eclipse-temurin-21 AS build
+ENV JAVA_HOME=/opt/java/openjdk \
+    PATH="/opt/java/openjdk/bin:${PATH}"
 
 ARG UBUNTU_PORTS_MIRROR=https://mirrors.aliyun.com/ubuntu-ports
 ARG UBUNTU_ARCHIVE_MIRROR=https://mirrors.aliyun.com/ubuntu

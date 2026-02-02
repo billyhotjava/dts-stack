@@ -18,6 +18,7 @@ MAVEN_SECURITY_OPT="${MAVEN_SECURITY_OPT:-}"
 LEGACY_USE_HOST_MAVEN="${LEGACY_USE_HOST_MAVEN:-}"
 MAVEN_DEBUG="${MAVEN_DEBUG:-}"
 LEGACY_UNRESTRICTED="${LEGACY_UNRESTRICTED:-1}"
+MAVEN_UNRESTRICTED="${MAVEN_UNRESTRICTED:-${LEGACY_UNRESTRICTED:-}}"
 MAVEN_MIRROR_URL="${MAVEN_MIRROR_URL:-https://maven.aliyun.com/repository/public}"
 MAVEN_SETTINGS_FILE="${MAVEN_SETTINGS_FILE:-/root/.m2/settings.xml}"
 PREBUILD_JARS="${PREBUILD_JARS:-1}"
@@ -94,13 +95,13 @@ build_maven_module() {
 EOF
     fi
     mvn -B -e -DskipTests -s "$MAVEN_SETTINGS_FILE" -f "${REPO_ROOT}/source/pom.xml" -pl "$module" -am package
-    else
-      echo "[buildAll] Building ${module} jar via ${MAVEN_IMAGE}"
-      local security_opts=()
-      if [[ -n "$MAVEN_SECURITY_OPT" ]]; then
-        security_opts+=(--security-opt "$MAVEN_SECURITY_OPT")
+  else
+    echo "[buildAll] Building ${module} jar via ${MAVEN_IMAGE}"
+    local security_opts=()
+    if [[ -n "$MAVEN_SECURITY_OPT" ]]; then
+      security_opts+=(--security-opt "$MAVEN_SECURITY_OPT")
     fi
-    if [[ "$MODE" == "legacy" && -n "$LEGACY_UNRESTRICTED" ]]; then
+    if [[ "${MAVEN_UNRESTRICTED}" == "1" ]]; then
       security_opts+=(--security-opt "seccomp=unconfined" --pids-limit=-1 --ulimit "nproc=65535:65535")
     fi
     local maven_args=(-B -e -DskipTests -f pom.xml -pl "$module" -am)
@@ -155,6 +156,7 @@ EOF
         mvn "$@" package' \
         -- "${maven_args[@]}"
     fi
+  fi
   fi
 
   local jar_path
