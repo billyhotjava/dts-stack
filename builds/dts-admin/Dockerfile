@@ -2,7 +2,7 @@ ARG RUNTIME_BASE_IMAGE=eclipse-temurin:21-jre
 # ---------- build stage ----------
 # Build against Maven 3.9.9 with Temurin JDK 21
 # Use official Maven with Temurin JDK 21 for cross-platform builds
-# syntax=docker/dockerfile:1.6
+# syntax=docker/dockerfile:1
 FROM maven:3.9.9-eclipse-temurin-21 AS build
 ENV JAVA_HOME=/opt/java/openjdk \
     PATH="/opt/java/openjdk/bin:${PATH}"
