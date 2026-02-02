@@ -168,7 +168,7 @@ public class TargetTableProvisioner {
     }
 
     private JdbcMetadataService.JdbcConnectionInfo buildConnectionInfo(Map<String, Object> config) {
-        String jdbcUrl = resolveJdbcUrl(config);
+        String jdbcUrl = appendPostgresSslDisable(resolveJdbcUrl(config));
         String username = normalizeText(config.get("username"));
         String password = normalizeText(config.get("password"));
         String driverClass = normalizeText(config.get("driver"));
@@ -450,6 +450,16 @@ public class TargetTableProvisioner {
             }
         }
         return null;
+    }
+
+    private String appendPostgresSslDisable(String url) {
+        if (url == null || !url.startsWith("jdbc:postgresql:")) {
+            return url;
+        }
+        if (url.contains("sslmode=") || url.contains("ssl=")) {
+            return url;
+        }
+        return url + (url.contains("?") ? "&" : "?") + "sslmode=disable";
     }
 
     private String firstStringValue(Object value) {

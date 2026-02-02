@@ -362,6 +362,50 @@ public class AirflowDagService {
         String schedule = normalizeSchedule(task == null ? null : task.getSyncSchedule());
         String scheduleLiteral = schedule == null ? "None" : "\"" + escapePythonString(schedule) + "\"";
         String taskId = resolveTaskId(task);
+
+        // For file source tasks, add a PythonOperator pre-task to create the target table.
+        // Addax 6.0.8 validates table metadata during init (before preSql), so the table
+        // must exist before the Addax DockerOperator starts.
+        boolean fileSource = isFileSourceType(task);
+        String initTableBlock = "";
+        String dependencyBlock = "";
+        String extraImports = "";
+        if (fileSource) {
+            String createTableDdl = buildCreateTableDdl(task);
+            if (StringUtils.hasText(createTableDdl)) {
+                FileSourceDbInfo dbInfo = extractFileSourceDbInfo(task);
+                extraImports = "\nfrom airflow.operators.python import PythonOperator\n";
+                // Indentation must be 4 spaces to align with other statements inside "with DAG" block
+                // (the outer text block strips 12 chars of leading whitespace)
+                initTableBlock = """
+
+    def _init_target_table():
+        import psycopg2
+        conn = psycopg2.connect(host="%s", port=%d, dbname="%s", user="%s", password="%s")
+        try:
+            cur = conn.cursor()
+            cur.execute(\"\"\"%s\"\"\")
+            conn.commit()
+        finally:
+            conn.close()
+
+    init_table = PythonOperator(
+        task_id="init_target_table",
+        python_callable=_init_target_table,
+    )
+
+""".formatted(
+                    escapePythonString(dbInfo.host),
+                    dbInfo.port,
+                    escapePythonString(dbInfo.dbname),
+                    escapePythonString(dbInfo.username),
+                    escapePythonString(dbInfo.password),
+                    escapePythonString(createTableDdl)
+                );
+                dependencyBlock = "\n    init_table >> addax_run\n";
+            }
+        }
+
         return """
             from __future__ import annotations
 
@@ -371,7 +415,7 @@ public class AirflowDagService {
             from airflow import DAG
             from airflow.providers.docker.operators.docker import DockerOperator
             from docker.types import Mount
-
+            %s
             ADDAX_IMAGE = os.getenv("ADDAX_IMAGE", "%s")
             ADDAX_JOB_DIR = os.getenv("ADDAX_JOB_DIR", "%s")
             ADDAX_DRIVER_DIR = os.getenv("ADDAX_DRIVER_DIR", "")
@@ -418,7 +462,7 @@ public class AirflowDagService {
                     "-lc",
                     "/opt/addax/bin/addax.sh {{ dag_run.conf.get('job_path', DEFAULT_JOB_PATH) }}",
                 ]
-
+            %s
                 addax_run = DockerOperator(
                     task_id="%s",
                     image=ADDAX_IMAGE,
@@ -434,7 +478,10 @@ public class AirflowDagService {
                     environment={},
                     tty=True,
                 )
-            """.formatted(addaxImage, addaxJobDir, defaultJobPath, dagId, scheduleLiteral, sourceTag, nameTag, taskId);
+            %s
+            """.formatted(extraImports, addaxImage, addaxJobDir, defaultJobPath,
+                dagId, scheduleLiteral, sourceTag, nameTag,
+                initTableBlock, taskId, dependencyBlock);
     }
 
     /**
@@ -564,6 +611,150 @@ public class AirflowDagService {
             return "";
         }
         return value.replace("\\", "\\\\").replace("\"", "\\\"");
+    }
+
+    // ---- File source helpers for DAG pre-task table creation ----
+
+    private boolean isFileSourceType(IngestionTask task) {
+        if (task == null) return false;
+        String st = task.getSourceType();
+        if (!StringUtils.hasText(st)) return false;
+        String lower = st.trim().toLowerCase();
+        return "excel".equals(lower) || "csv".equals(lower)
+            || "excelreader".equals(lower) || "txtfilereader".equals(lower);
+    }
+
+    private record FileSourceDbInfo(String host, int port, String dbname, String username, String password) {}
+
+    /**
+     * Extract PostgreSQL connection info from the task's destination config.
+     * Parses JDBC URL like jdbc:postgresql://host:port/dbname
+     */
+    private FileSourceDbInfo extractFileSourceDbInfo(IngestionTask task) {
+        JsonNode destConfig = task.getDestinationConfig();
+        if (destConfig == null || destConfig.isNull()) {
+            return new FileSourceDbInfo("localhost", 5432, "postgres", "postgres", "");
+        }
+        String jdbcUrl = firstText(destConfig, "jdbcUrl");
+        if (!StringUtils.hasText(jdbcUrl)) {
+            // Try connection[0].jdbcUrl
+            JsonNode conn = destConfig.get("connection");
+            if (conn != null && conn.isArray() && conn.size() > 0) {
+                jdbcUrl = firstText(conn.get(0), "jdbcUrl");
+            } else if (conn != null && conn.isObject()) {
+                jdbcUrl = firstText(conn, "jdbcUrl");
+            }
+        }
+        String username = firstText(destConfig, "username");
+        String password = firstText(destConfig, "password");
+        if (!StringUtils.hasText(username)) username = "postgres";
+        if (!StringUtils.hasText(password)) password = "";
+
+        // Parse JDBC URL: jdbc:postgresql://host:port/dbname?params
+        String host = "localhost";
+        int port = 5432;
+        String dbname = "postgres";
+        if (StringUtils.hasText(jdbcUrl)) {
+            String remainder = jdbcUrl;
+            if (remainder.startsWith("jdbc:postgresql://")) {
+                remainder = remainder.substring("jdbc:postgresql://".length());
+            } else if (remainder.startsWith("jdbc:")) {
+                remainder = remainder.substring(5);
+                int slashIdx = remainder.indexOf("//");
+                if (slashIdx >= 0) remainder = remainder.substring(slashIdx + 2);
+            }
+            // Remove query params
+            int qIdx = remainder.indexOf('?');
+            if (qIdx >= 0) remainder = remainder.substring(0, qIdx);
+            // Split host:port/dbname
+            int slashIdx = remainder.indexOf('/');
+            String hostPort = slashIdx >= 0 ? remainder.substring(0, slashIdx) : remainder;
+            if (slashIdx >= 0 && slashIdx < remainder.length() - 1) {
+                dbname = remainder.substring(slashIdx + 1);
+            }
+            int colonIdx = hostPort.indexOf(':');
+            if (colonIdx >= 0) {
+                host = hostPort.substring(0, colonIdx);
+                try { port = Integer.parseInt(hostPort.substring(colonIdx + 1)); } catch (NumberFormatException ignored) {}
+            } else {
+                host = hostPort;
+            }
+        }
+        return new FileSourceDbInfo(host, port, dbname, username, password);
+    }
+
+    /**
+     * Build CREATE TABLE IF NOT EXISTS DDL from file columns in the task's source config.
+     */
+    private String buildCreateTableDdl(IngestionTask task) {
+        if (task == null) return null;
+        // Get target table name from table mapping
+        String targetTable = resolveFirstTargetTable(task);
+        if (!StringUtils.hasText(targetTable)) {
+            // Fallback: try to get from destination config connection.table
+            JsonNode destConfig = task.getDestinationConfig();
+            if (destConfig != null) {
+                JsonNode conn = destConfig.get("connection");
+                if (conn != null && conn.isArray() && conn.size() > 0) {
+                    targetTable = firstText(conn.get(0), "table");
+                } else if (conn != null && conn.isObject()) {
+                    targetTable = firstText(conn, "table");
+                }
+                if (!StringUtils.hasText(targetTable)) {
+                    targetTable = firstText(destConfig, "table");
+                }
+            }
+        }
+        if (!StringUtils.hasText(targetTable)) return null;
+
+        // Parse schema.table if present
+        String schema = null;
+        String tableName = targetTable.trim().toLowerCase();
+        int dotIdx = tableName.indexOf('.');
+        if (dotIdx > 0 && dotIdx < tableName.length() - 1) {
+            schema = tableName.substring(0, dotIdx);
+            tableName = tableName.substring(dotIdx + 1);
+        }
+
+        // Get file columns from source config
+        JsonNode sourceConfig = task.getSourceConfig();
+        if (sourceConfig == null || sourceConfig.isNull()) return null;
+        JsonNode fileColumnsNode = sourceConfig.get("_fileColumns");
+        if (fileColumnsNode == null || !fileColumnsNode.isArray() || fileColumnsNode.size() == 0) return null;
+
+        StringBuilder ddl = new StringBuilder("CREATE TABLE IF NOT EXISTS ");
+        if (StringUtils.hasText(schema) && !"public".equalsIgnoreCase(schema)) {
+            ddl.append(pgQuote(schema)).append(".");
+        }
+        ddl.append(pgQuote(tableName)).append(" (");
+        boolean first = true;
+        for (JsonNode col : fileColumnsNode) {
+            String colName = col.has("name") ? col.get("name").asText("") : "";
+            String colType = col.has("type") ? col.get("type").asText("string") : "string";
+            if (!StringUtils.hasText(colName)) continue;
+            if (!first) ddl.append(", ");
+            first = false;
+            ddl.append(pgQuote(colName.trim().toLowerCase()))
+               .append(" ").append(mapFileTypeToPg(colType));
+        }
+        ddl.append(")");
+        return ddl.toString();
+    }
+
+    private String pgQuote(String identifier) {
+        if (!StringUtils.hasText(identifier)) return identifier;
+        return "\"" + identifier.replace("\"", "\"\"") + "\"";
+    }
+
+    private String mapFileTypeToPg(String fileType) {
+        if (!StringUtils.hasText(fileType)) return "text";
+        return switch (fileType.trim().toLowerCase()) {
+            case "long" -> "bigint";
+            case "double" -> "double precision";
+            case "date" -> "timestamp";
+            case "boolean" -> "boolean";
+            default -> "varchar(500)";
+        };
     }
 
     private String sanitizeTag(String value, String fallback) {

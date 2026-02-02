@@ -304,7 +304,12 @@ public class IngestionTaskService {
         boolean airflowEnabled = isAirflowEnabled(task);
         com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver.ResolvedSource source = resolveSource(task, null);
         task = ensureAddaxJobExists(task, source);
-        targetTableProvisioner.ensureTargetTables(task, source == null ? null : source.readerConfig());
+        // File sources cannot use ensureTargetTables because dts-ingestion cannot reach the
+        // target database directly.  CREATE TABLE DDL is injected into the Addax writer preSql
+        // instead (see AddaxJobService.injectFileSourceCreateTablePreSql).
+        if (!isFileSourceType(task.getSourceType())) {
+            targetTableProvisioner.ensureTargetTables(task, source == null ? null : source.readerConfig());
+        }
         // Resolve actual column names for PostgreSQL writers to work around Addax 6.0.8 quoteColumn bug
         addaxJobService.resolveWriterColumnsIfNeeded(task.getAddaxJobPath());
         if (airflowEnabled && task.getAirflowEnabled() == null) {
@@ -420,6 +425,11 @@ public class IngestionTaskService {
         }
         if (resolvedSource != null || task.getSourceDataSourceId() != null) {
             return rebuildAddaxJob(task, resolvedSource);
+        }
+        // File source tasks always rebuild to ensure preSql CREATE TABLE and
+        // explicit writer columns are up-to-date with current file metadata.
+        if (isFileSourceType(task.getSourceType())) {
+            return rebuildAddaxJob(task, null);
         }
         String jobPath = task.getAddaxJobPath();
         if (StringUtils.hasText(jobPath)) {

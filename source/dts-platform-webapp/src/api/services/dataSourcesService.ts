@@ -77,10 +77,25 @@ export type ExcelImportParseResponse = {
 	sheetName?: string;
 	csvPath: string;
 	csvContainerPath: string;
+	errorPath?: string;
+	errorContainerPath?: string;
+	delimiter?: string;
 	columns: ExcelColumnSpec[];
 	preview: string[][];
 	rowCount: number;
 	errorCount: number;
+};
+
+export type ExcelImportErrorRow = {
+	rowIndex?: number;
+	message?: string;
+};
+
+export type ExcelImportErrorPreviewResponse = {
+	fileId: string;
+	errorCount: number;
+	limit: number;
+	rows: ExcelImportErrorRow[];
 };
 
 export default {
@@ -101,4 +116,6 @@ export default {
 	},
 	excelParse: (payload: ExcelImportParseRequest) =>
 		apiClient.post<ExcelImportParseResponse>({ url: "/infra/excel-import/parse", data: payload }),
+	excelErrors: (params: { fileId: string; limit?: number }) =>
+		apiClient.get<ExcelImportErrorPreviewResponse>({ url: "/infra/excel-import/errors", params }),
 };

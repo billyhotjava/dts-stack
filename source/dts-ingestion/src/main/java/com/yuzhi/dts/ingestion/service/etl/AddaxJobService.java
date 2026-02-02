@@ -132,6 +132,8 @@ public class AddaxJobService {
             throw new IllegalArgumentException("缺少 Addax Reader/Writer 类型");
         }
         Map<String, Object> resolvedReader = safeMap(readerConfig);
+        // Capture file columns before metadata keys are stripped
+        List<Map<String, Object>> fileColumns = isFileReaderType(readerType) ? extractFileColumns(readerConfig) : List.of();
         if (isFileReaderType(readerType)) {
             ensureFileReaderConfig(readerType, resolvedReader);
             stripFileMetadataKeys(resolvedReader);
@@ -140,6 +142,9 @@ public class AddaxJobService {
         }
         Map<String, Object> resolvedWriter = ensureDriver(writerType, safeMap(writerConfig));
         ensureWriterConnection(writerType, resolvedWriter);
+        if (isFileReaderType(readerType) && !fileColumns.isEmpty()) {
+            injectFileSourceCreateTablePreSql(resolvedWriter, fileColumns);
+        }
         if (!isFileReaderType(readerType)) {
             replaceWriterTablePlaceholders(resolvedReader, resolvedWriter);
         }
@@ -484,6 +489,7 @@ public class AddaxJobService {
                 next.set(0, connMap);
                 params.put("connection", next);
             }
+            ensurePostgresSslMode(params);
             return;
         }
         if (connection instanceof Map<?, ?> map) {
@@ -505,6 +511,7 @@ public class AddaxJobService {
             }
             params.put("connection", List.of(connMap));
             params.remove("jdbcUrl");
+            ensurePostgresSslMode(params);
             return;
         }
         if (!jdbcUrls.isEmpty()) {
@@ -518,6 +525,47 @@ public class AddaxJobService {
             params.put("connection", List.of(connMap));
             params.remove("jdbcUrl");
         }
+        ensurePostgresSslMode(params);
+    }
+
+    /**
+     * Append {@code sslmode=disable} to PostgreSQL JDBC URLs that don't already
+     * specify an SSL mode.  This avoids SSL handshake failures when the target
+     * PostgreSQL server does not have SSL enabled.
+     */
+    private void ensurePostgresSslMode(Map<String, Object> params) {
+        if (params == null) {
+            return;
+        }
+        // top-level jdbcUrl
+        Object topUrl = params.get("jdbcUrl");
+        if (topUrl instanceof String s) {
+            params.put("jdbcUrl", appendSslDisable(s));
+        }
+        // connection list
+        Object conn = params.get("connection");
+        if (conn instanceof List<?> list) {
+            for (Object entry : list) {
+                if (entry instanceof Map<?, ?>) {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> m = (Map<String, Object>) entry;
+                    Object url = m.get("jdbcUrl");
+                    if (url instanceof String s) {
+                        m.put("jdbcUrl", appendSslDisable(s));
+                    }
+                }
+            }
+        }
+    }
+
+    private String appendSslDisable(String url) {
+        if (url == null || !url.startsWith("jdbc:postgresql:")) {
+            return url;
+        }
+        if (url.contains("sslmode=") || url.contains("ssl=")) {
+            return url;
+        }
+        return url + (url.contains("?") ? "&" : "?") + "sslmode=disable";
     }
 
     private List<String> normalizeJdbcUrlList(Object value) {
@@ -1098,6 +1146,122 @@ public class AddaxJobService {
         // Also remove non-Addax keys
         config.remove("readerType");
         config.remove("sourceSystem");
+    }
+
+    /**
+     * Extract _fileColumns from readerConfig before metadata keys are stripped.
+     */
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> extractFileColumns(Map<String, Object> readerConfig) {
+        if (readerConfig == null) return List.of();
+        Object obj = readerConfig.get("_fileColumns");
+        if (!(obj instanceof List<?> list) || list.isEmpty()) return List.of();
+        List<Map<String, Object>> result = new java.util.ArrayList<>();
+        for (Object item : list) {
+            if (item instanceof Map<?, ?> map) {
+                Map<String, Object> col = new LinkedHashMap<>();
+                map.forEach((k, v) -> { if (k != null) col.put(k.toString(), v); });
+                result.add(col);
+            }
+        }
+        return result;
+    }
+
+    /**
+     * For file source tasks, inject CREATE TABLE IF NOT EXISTS DDL into writer preSql.
+     * This is necessary because dts-ingestion service cannot reach the target database,
+     * but the Addax Docker container can. The DDL runs as part of the Addax job execution.
+     */
+    @SuppressWarnings("unchecked")
+    private void injectFileSourceCreateTablePreSql(Map<String, Object> writerConfig, List<Map<String, Object>> fileColumns) {
+        if (writerConfig == null || fileColumns == null || fileColumns.isEmpty()) return;
+        List<String> tables = extractTables(writerConfig);
+        if (tables.isEmpty()) return;
+        String rawTable = tables.get(0).toLowerCase(Locale.ROOT);
+        String schema = normalizeText(writerConfig.get("schema"));
+
+        // Parse schema.table if the table name contains a dot
+        String tableName = rawTable;
+        int dotIdx = rawTable.indexOf('.');
+        if (dotIdx > 0 && dotIdx < rawTable.length() - 1) {
+            String parsedSchema = rawTable.substring(0, dotIdx);
+            tableName = rawTable.substring(dotIdx + 1);
+            if (!StringUtils.hasText(schema)) {
+                schema = parsedSchema;
+            }
+        }
+
+        // Build qualified table reference
+        String qualifiedTable = StringUtils.hasText(schema) && !"public".equalsIgnoreCase(schema)
+            ? quoteIdentifier(schema) + "." + quoteIdentifier(tableName)
+            : quoteIdentifier(tableName);
+
+        // Build CREATE TABLE IF NOT EXISTS DDL
+        StringBuilder ddl = new StringBuilder("CREATE TABLE IF NOT EXISTS ");
+        ddl.append(qualifiedTable).append(" (");
+        boolean first = true;
+        for (Map<String, Object> col : fileColumns) {
+            String colName = normalizeText(col.get("name"));
+            String colType = normalizeText(col.get("type"));
+            if (!StringUtils.hasText(colName)) continue;
+            if (!first) ddl.append(", ");
+            first = false;
+            ddl.append(quoteIdentifier(colName.toLowerCase(Locale.ROOT)))
+               .append(" ").append(mapFileTypeToPostgres(colType));
+        }
+        ddl.append(")");
+
+        // Prepend CREATE TABLE to preSql, then TRUNCATE
+        List<String> preSql = new java.util.ArrayList<>();
+        preSql.add(ddl.toString());
+        preSql.add("TRUNCATE TABLE " + qualifiedTable);
+
+        // Preserve existing preSql entries (skip duplicate TRUNCATE)
+        Object existing = writerConfig.get("preSql");
+        if (existing instanceof List<?> list) {
+            for (Object item : list) {
+                String s = normalizeText(item);
+                if (StringUtils.hasText(s) && !s.toUpperCase(Locale.ROOT).contains("TRUNCATE")) {
+                    preSql.add(s);
+                }
+            }
+        }
+        writerConfig.put("preSql", preSql);
+
+        // Replace column: ["*"] with explicit column names so Addax does not need to
+        // query the (potentially non-existent) table to resolve the wildcard.
+        Object colObj = writerConfig.get("column");
+        if (colObj == null || isWildcardColumn(colObj)) {
+            List<String> colNames = new java.util.ArrayList<>();
+            for (Map<String, Object> col : fileColumns) {
+                String colName = normalizeText(col.get("name"));
+                if (StringUtils.hasText(colName)) {
+                    colNames.add(quoteIdentifier(colName.toLowerCase(Locale.ROOT)));
+                }
+            }
+            if (!colNames.isEmpty()) {
+                writerConfig.put("column", colNames);
+                LOG.info("Resolved writer column wildcard to explicit columns: {}", colNames);
+            }
+        }
+
+        LOG.info("Injected CREATE TABLE preSql for file source table: {}", tableName);
+    }
+
+    private String quoteIdentifier(String name) {
+        if (!StringUtils.hasText(name)) return name;
+        return "\"" + name.replace("\"", "\"\"") + "\"";
+    }
+
+    private String mapFileTypeToPostgres(String fileType) {
+        if (!StringUtils.hasText(fileType)) return "text";
+        return switch (fileType.toLowerCase(Locale.ROOT)) {
+            case "long" -> "bigint";
+            case "double" -> "double precision";
+            case "date" -> "timestamp";
+            case "boolean" -> "boolean";
+            default -> "varchar(500)";
+        };
     }
 
     private String normalizeReaderType(String readerType) {

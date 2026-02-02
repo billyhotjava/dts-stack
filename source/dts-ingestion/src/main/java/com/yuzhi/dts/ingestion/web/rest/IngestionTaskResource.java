@@ -1223,7 +1223,8 @@ public class IngestionTaskResource {
             rebuildMapping = true;
         }
         com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver.ResolvedSource resolvedSource = null;
-        if (!StringUtils.hasText(taskDTO.getSourceType()) || rebuildMapping) {
+        if ((!StringUtils.hasText(taskDTO.getSourceType()) || rebuildMapping)
+                && !isFileSourceUpdate && taskDTO.getSourceDataSourceId() != null) {
             resolvedSource = sourceResolver.resolve(taskDTO.getSourceDataSourceId(), List.of());
         }
         if (!StringUtils.hasText(taskDTO.getSourceType())) {
@@ -1252,8 +1253,13 @@ public class IngestionTaskResource {
         }
         if (rebuildMapping) {
             com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver.ResolvedSource resolved =
-                resolvedSource != null ? resolvedSource : sourceResolver.resolve(taskDTO.getSourceDataSourceId(), List.of());
-            Map<String, Object> readerConfig = mergeReaderOverrides(safeMap(resolved.readerConfig()), sourceOverrides);
+                (resolvedSource != null) ? resolvedSource
+                : (!isFileSourceUpdate && taskDTO.getSourceDataSourceId() != null)
+                    ? sourceResolver.resolve(taskDTO.getSourceDataSourceId(), List.of())
+                    : null;
+            Map<String, Object> readerConfig = resolved != null
+                ? mergeReaderOverrides(safeMap(resolved.readerConfig()), sourceOverrides)
+                : new java.util.LinkedHashMap<>(sourceOverrides);
             if (StringUtils.hasText(taskDTO.getSourceType())) {
                 readerConfig.putIfAbsent("readerType", taskDTO.getSourceType());
             }

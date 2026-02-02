@@ -58,3 +58,23 @@ sources:
           entity: "PRODUCT"
           stream: "PRODUCT"
           stream_namespace: "ERPDEMO"
+  -
+    name: "public"
+    schema: "public"
+    tables:
+      -
+        name: "customer_202602020332"
+        description: "filedemo1: customer_202602020332 -> public.customer_202602020332"
+        meta:
+          system: "unknown"
+          biz: "unknown"
+          entity: "customer_202602020332"
+          stream: "customer_202602020332"
+      -
+        name: "newcust"
+        description: "exceldemo1: newcust -> public.newcust"
+        meta:
+          system: "unknown"
+          biz: "unknown"
+          entity: "newcust"
+          stream: "newcust"

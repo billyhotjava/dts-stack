@@ -14,6 +14,8 @@ import com.yuzhi.dts.platform.domain.infra.InfraExternalExchangeFile;
 import com.yuzhi.dts.platform.repository.infra.InfraExternalExchangeFileRepository;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.infra.dto.ExcelColumnSpecDto;
+import com.yuzhi.dts.platform.service.infra.dto.ExcelImportErrorPreviewResponse;
+import com.yuzhi.dts.platform.service.infra.dto.ExcelImportErrorRow;
 import com.yuzhi.dts.platform.service.infra.dto.ExcelImportParseRequest;
 import com.yuzhi.dts.platform.service.infra.dto.ExcelImportParseResponse;
 import com.yuzhi.dts.platform.service.infra.dto.ExcelImportPrepareResponse;
@@ -64,6 +66,7 @@ public class ExcelImportService {
     private static final int DEFAULT_DATA_START_ROW = 2;
     private static final String DEFAULT_DELIMITER = ",";
     private static final String DEFAULT_DATE_FORMAT = "yyyy-MM-dd HH:mm:ss";
+    private static final int DEFAULT_ERROR_PREVIEW_LIMIT = 50;
     private static final Duration RETENTION = Duration.ofDays(7);
     private static final String DEFAULT_BASE_DIR = "/opt/airflow/dags";
     private static final String DEFAULT_CONTAINER_DIR = "/opt/addax/jobs";
@@ -147,20 +150,7 @@ public class ExcelImportService {
         if (request == null || request.fileId() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "fileId 不能为空");
         }
-        InfraExternalExchangeFile entity = repository
-            .findById(request.fileId())
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "文件不存在"));
-        if (!privileged) {
-            String targetDept = entity.getOwnerDept();
-            if (StringUtils.hasText(targetDept)) {
-                if (!StringUtils.hasText(ownerDept) || !targetDept.equalsIgnoreCase(ownerDept.trim())) {
-                    throw new ResponseStatusException(HttpStatus.FORBIDDEN, "无权限访问该文件");
-                }
-            }
-        }
-        if (!Boolean.TRUE.equals(entity.getEnabled())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "文件已失效");
-        }
+        InfraExternalExchangeFile entity = loadFile(request.fileId(), ownerDept, privileged);
         String filePath = entity.getFilePath();
         if (!StringUtils.hasText(filePath)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "文件路径为空");
@@ -205,6 +195,8 @@ public class ExcelImportService {
         props.put("csvPath", csvPath.toString());
         props.put("csvContainerPath", csvContainerPath);
         props.put("errorPath", errorPath.toString());
+        props.put("errorContainerPath", toContainerPath(errorPath));
+        props.put("delimiter", ctx.delimiter);
         props.put("columns", columns);
         props.put("rowCount", ctx.rowCount);
         props.put("errorCount", ctx.errorCount);
@@ -238,11 +230,67 @@ public class ExcelImportService {
             ctx.sheetName,
             csvPath.toString(),
             csvContainerPath,
+            errorPath.toString(),
+            toContainerPath(errorPath),
+            ctx.delimiter,
             columns,
             ctx.preview,
             ctx.rowCount,
             ctx.errorCount
         );
+    }
+
+    public ExcelImportErrorPreviewResponse errorPreview(UUID fileId, Integer limit, String operator, String ownerDept, boolean privileged) {
+        if (fileId == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "fileId 不能为空");
+        }
+        InfraExternalExchangeFile entity = loadFile(fileId, ownerDept, privileged);
+        Map<String, Object> props = readProps(entity.getProps());
+        String errorPath = text(props.get("errorPath"));
+        String delimiter = text(props.get("delimiter"));
+        int resolvedLimit = normalizeInt(limit, DEFAULT_ERROR_PREVIEW_LIMIT);
+        List<ExcelImportErrorRow> rows = new ArrayList<>();
+        if (StringUtils.hasText(errorPath)) {
+            Path path = Path.of(errorPath);
+            if (Files.exists(path)) {
+                try (BufferedReader reader = Files.newBufferedReader(path, StandardCharsets.UTF_8)) {
+                    String line;
+                    int count = 0;
+                    while ((line = reader.readLine()) != null && count < resolvedLimit) {
+                        List<String> values = parseCsvLine(line, delimiter);
+                        if (values.isEmpty()) {
+                            continue;
+                        }
+                        Integer rowIndex = parseRowIndex(values.size() > 0 ? values.get(0) : null);
+                        String message = values.size() > 1 ? values.get(1) : "";
+                        rows.add(new ExcelImportErrorRow(rowIndex, message));
+                        count++;
+                    }
+                } catch (Exception ex) {
+                    LOG.warn("[excel-import] read error preview failed: {}", ex.getMessage());
+                }
+            }
+        }
+        Integer errorCount = parseRowIndex(text(props.get("errorCount")));
+        if (errorCount == null) {
+            errorCount = rows.size();
+        }
+        auditService.auditAction(
+            "INFRA_EXCEL_IMPORT",
+            AuditStage.SUCCESS,
+            entity.getId().toString(),
+            Map.of(
+                "summary",
+                "查看错误行预览",
+                "batch",
+                entity.getBatchCode(),
+                "errors",
+                errorCount,
+                "operator",
+                operator
+            )
+        );
+        return new ExcelImportErrorPreviewResponse(entity.getId(), errorCount, resolvedLimit, rows);
     }
 
     private void parseCsv(Path source, Path csvPath, Path errorPath, ParseContext ctx) {
@@ -436,6 +484,17 @@ public class ExcelImportService {
         return value;
     }
 
+    private Integer parseRowIndex(String value) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        try {
+            return Integer.parseInt(value.trim());
+        } catch (Exception ex) {
+            return null;
+        }
+    }
+
     private String toContainerPath(Path csvPath) {
         Path baseDir = resolveBaseDir();
         Path normalized = csvPath.toAbsolutePath().normalize();
@@ -529,6 +588,24 @@ public class ExcelImportService {
         return out;
     }
 
+    private InfraExternalExchangeFile loadFile(UUID fileId, String ownerDept, boolean privileged) {
+        InfraExternalExchangeFile entity = repository
+            .findById(fileId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "文件不存在"));
+        if (!privileged) {
+            String targetDept = entity.getOwnerDept();
+            if (StringUtils.hasText(targetDept)) {
+                if (!StringUtils.hasText(ownerDept) || !targetDept.equalsIgnoreCase(ownerDept.trim())) {
+                    throw new ResponseStatusException(HttpStatus.FORBIDDEN, "无权限访问该文件");
+                }
+            }
+        }
+        if (!Boolean.TRUE.equals(entity.getEnabled())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "文件已失效");
+        }
+        return entity;
+    }
+
     private static final class ParseContext {
         private final int headerRow;
         private final int dataStartRow;
@@ -554,7 +631,7 @@ public class ExcelImportService {
         }
     }
 
-    private final class ExcelRowListener extends AnalysisEventListener<Map<Integer, ReadCellData<?>>> {
+    private final class ExcelRowListener extends AnalysisEventListener<Map<Integer, Object>> {
         private final ParseContext ctx;
         private final BufferedWriter writer;
         private final BufferedWriter errorWriter;
@@ -567,7 +644,7 @@ public class ExcelImportService {
         }
 
         @Override
-        public void invoke(Map<Integer, ReadCellData<?>> data, AnalysisContext context) {
+        public void invoke(Map<Integer, Object> data, AnalysisContext context) {
             int rowIndex = context.readRowHolder().getRowIndex() + 1;
             try {
                 List<String> values = readValues(data);
@@ -604,15 +681,21 @@ public class ExcelImportService {
         @Override
         public void doAfterAllAnalysed(AnalysisContext context) {}
 
-        private List<String> readValues(Map<Integer, ReadCellData<?>> data) {
+        private List<String> readValues(Map<Integer, Object> data) {
             List<String> values = new ArrayList<>();
             if (data == null || data.isEmpty()) {
                 return values;
             }
             int maxIndex = data.keySet().stream().filter(Objects::nonNull).mapToInt(Integer::intValue).max().orElse(-1);
             for (int i = 0; i <= maxIndex; i++) {
-                ReadCellData<?> cell = data.get(i);
-                values.add(cellToString(cell, ctx.dateFormat));
+                Object raw = data.get(i);
+                if (raw instanceof ReadCellData<?> cell) {
+                    values.add(cellToString(cell, ctx.dateFormat));
+                } else if (raw != null) {
+                    values.add(raw.toString().trim());
+                } else {
+                    values.add("");
+                }
             }
             return values;
         }

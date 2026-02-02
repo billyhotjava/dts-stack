@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Alert, Button, Card, Collapse, Divider, Form, Input, Radio, Select, Space, Steps, Switch, Table, Tag, Typography, Upload } from "antd";
+import { Alert, Button, Card, Collapse, Divider, Form, Input, InputNumber, Modal, Radio, Select, Space, Steps, Switch, Table, Tag, Typography, Upload } from "antd";
 import { SaveOutlined, InboxOutlined } from "@ant-design/icons";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
@@ -13,7 +13,7 @@ import {
 	type IngestionTaskDTO,
 	type TableInfo,
 } from "@/api/ingestion";
-import dataSourcesService, { type InfraDataSource } from "@/api/services/dataSourcesService";
+import dataSourcesService, { type ExcelImportErrorRow, type InfraDataSource } from "@/api/services/dataSourcesService";
 
 const { Text } = Typography;
 
@@ -767,6 +767,13 @@ export default function TransformCreatePage() {
 	const [loadingSqlModels, setLoadingSqlModels] = useState(false);
 	const [fileUploadResult, setFileUploadResult] = useState<FileUploadResult | null>(null);
 	const [uploadingFile, setUploadingFile] = useState(false);
+	const [filePreviewRows, setFilePreviewRows] = useState(20);
+	const [filePreviewCols, setFilePreviewCols] = useState(8);
+	const [previewRefreshing, setPreviewRefreshing] = useState(false);
+	const [errorPreviewOpen, setErrorPreviewOpen] = useState(false);
+	const [errorPreviewLoading, setErrorPreviewLoading] = useState(false);
+	const [errorPreviewRows, setErrorPreviewRows] = useState<ExcelImportErrorRow[]>([]);
+	const [errorPreviewLimit, setErrorPreviewLimit] = useState(50);
 	const [form] = Form.useForm();
 	const lastAutoDiscoveryKeyRef = useRef("");
 	const router = useRouter();
@@ -775,7 +782,7 @@ export default function TransformCreatePage() {
 	const isEdit = Number.isFinite(editId);
 	const userInfo = useUserInfo() as any;
 	const editorMode = Form.useWatch("editorMode", form);
-	const sourceCategory = Form.useWatch("sourceCategory", form);
+	const [sourceCategory, setSourceCategory] = useState<string>("database");
 	const tableSelectionMode = Form.useWatch("tableSelectionMode", form);
 	const formValues = Form.useWatch([], form);
 	const selectedTablesValue = Form.useWatch("selectedTables", form);
@@ -1064,6 +1071,9 @@ export default function TransformCreatePage() {
 			setHasDraft(true);
 			const { savedAt, ...formValues } = draft;
 			form.setFieldsValue(formValues);
+			if (formValues.sourceCategory) {
+				setSourceCategory(formValues.sourceCategory);
+			}
 			toast.info(`已恢复草稿 (${new Date(savedAt).toLocaleString()})`);
 		}
 	}, [form, isEdit]);
@@ -1082,6 +1092,7 @@ export default function TransformCreatePage() {
 				if (fileMeta) {
 					setFileUploadResult(fileMeta);
 					form.setFieldValue("sourceCategory", "file");
+					setSourceCategory("file");
 					form.setFieldValue("readerType", "txtfilereader");
 				}
 				const mappingTables = extractMappingTables(task.tableMapping);
@@ -1256,6 +1267,9 @@ export default function TransformCreatePage() {
 		parseResult: {
 			csvPath: string;
 			csvContainerPath: string;
+			errorPath?: string;
+			errorContainerPath?: string;
+			delimiter?: string;
 			columns: Array<{ name: string; dataType?: string }>;
 			preview?: string[][];
 			rowCount?: number;
@@ -1285,6 +1299,9 @@ export default function TransformCreatePage() {
 			sheetIndex: selectedSheet?.index,
 			csvPath: parseResult.csvPath,
 			csvContainerPath: parseResult.csvContainerPath,
+			errorPath: parseResult.errorPath,
+			errorContainerPath: parseResult.errorContainerPath,
+			delimiter: parseResult.delimiter,
 			preview: parseResult.preview,
 			rowCount: parseResult.rowCount,
 			errorCount: parseResult.errorCount,
@@ -1296,7 +1313,8 @@ export default function TransformCreatePage() {
 		fileName: string,
 		batchCode: string,
 		sheets: Array<{ index: number; name: string }> | undefined,
-		selectedSheet?: { index?: number; name?: string }
+		selectedSheet?: { index?: number; name?: string },
+		previewLimit: number = filePreviewRows
 	) => {
 		const sheetIndex = selectedSheet?.index;
 		const sheetName = selectedSheet?.name;
@@ -1306,13 +1324,59 @@ export default function TransformCreatePage() {
 			sheetName,
 			headerRow: 1,
 			dataStartRow: 2,
-			previewLimit: 20,
+			previewLimit: previewLimit || 20,
 			delimiter: ",",
 			skipErrors: true,
 			fillMerged: true,
 			dateFormat: "yyyy-MM-dd HH:mm:ss",
 		});
 		return buildFileUploadResult(fileName, batchCode, fileId, sheets, parseResult, selectedSheet);
+	};
+
+	const refreshFilePreview = async () => {
+		if (!fileUploadResult?.fileId) {
+			return;
+		}
+		try {
+			setPreviewRefreshing(true);
+			const selectedSheet = fileUploadResult.sheetName
+				? { name: fileUploadResult.sheetName, index: fileUploadResult.sheetIndex }
+				: undefined;
+			const parsed = await parseFile(
+				fileUploadResult.fileId,
+				fileUploadResult.originalName,
+				fileUploadResult.batchCode || "",
+				fileUploadResult.sheets,
+				selectedSheet,
+				filePreviewRows
+			);
+			setFileUploadResult(parsed);
+			toast.success("预览已刷新");
+		} catch (err: any) {
+			toast.error(err?.message || "刷新预览失败");
+		} finally {
+			setPreviewRefreshing(false);
+		}
+	};
+
+	const openErrorPreview = async () => {
+		if (!fileUploadResult?.fileId) {
+			toast.error("缺少文件标识，无法查看错误行");
+			return;
+		}
+		try {
+			setErrorPreviewLoading(true);
+			const resp = await dataSourcesService.excelErrors({
+				fileId: fileUploadResult.fileId,
+				limit: errorPreviewLimit,
+			});
+			setErrorPreviewRows(resp.rows || []);
+			setErrorPreviewOpen(true);
+		} catch (err: any) {
+			toast.error(err?.message || "获取错误行失败");
+		} finally {
+			setErrorPreviewLoading(false);
+		}
 	};
 
 	const handleDiscoverTables = async () => {
@@ -1476,13 +1540,25 @@ export default function TransformCreatePage() {
 
 	const handleNextStep = async () => {
 		if (currentStep >= stepItems.length - 1) return;
+		const vals = form.getFieldsValue(true);
+		const fileFlow = vals.sourceCategory === "file";
+		if (fileFlow) {
+			if (currentStep === 0) {
+				if (!normalizeText(vals.name)) {
+					toast.error("请输入任务名称");
+					return;
+				}
+				if (!fileUploadResult) {
+					toast.error("请先上传文件");
+					return;
+				}
+			}
+			setCurrentStep((prev) => prev + 1);
+			return;
+		}
 		const ok = await validateStep(currentStep);
 		if (!ok) {
 			toast.error("请先完成当前步骤必填项");
-			return;
-		}
-		if (currentStep === 0 && isFileFlow && !fileUploadResult) {
-			toast.error("请先上传文件");
 			return;
 		}
 		setCurrentStep((prev) => prev + 1);
@@ -1573,7 +1649,19 @@ export default function TransformCreatePage() {
 					.toLowerCase();
 				const fileTableName = normalizeText(mergedValues.syncPrefix) + baseName;
 				const fileIncludeTables = [fileTableName];
-				const writerConfig = {};
+				const writerConfig: Record<string, any> = {};
+				const fileWriterUsername = normalizeText(mergedValues.writerUsername);
+				const fileWriterPassword = normalizeText(mergedValues.writerPassword);
+				const fileWriterSchema = normalizeText(mergedValues.writerSchema);
+				const fileWriterJdbc = normalizeText(mergedValues.writerJdbcUrls);
+				if (fileWriterUsername) writerConfig.username = fileWriterUsername;
+				if (fileWriterPassword) writerConfig.password = fileWriterPassword;
+				if (fileWriterSchema) writerConfig.schema = fileWriterSchema;
+				const fileConn: Record<string, any> = { table: [fileTableName] };
+				if (fileWriterJdbc) {
+					fileConn.jdbcUrl = splitLines(fileWriterJdbc);
+				}
+				writerConfig.connection = [fileConn];
 				const jobConfig = parseJson(mergedValues.jobConfig, "作业参数");
 				const modelSelector = normalizeText(mergedValues.dbtModelSelector) || buildModelSelectorFromNames(mergedValues.dbtModels || []);
 				const dagSelector = normalizeText(mergedValues.dbtDagSelector);
@@ -1816,9 +1904,12 @@ export default function TransformCreatePage() {
 						<Button
 							onClick={() => {
 								if (isEdit && editingTask) {
-									form.setFieldsValue(mapTaskToForm(editingTask));
+									const mapped = mapTaskToForm(editingTask);
+									form.setFieldsValue(mapped);
+									setSourceCategory(mapped.sourceCategory || "database");
 								} else {
 									form.resetFields();
+									setSourceCategory("database");
 								}
 								setCurrentStep(0);
 							}}
@@ -1885,7 +1976,7 @@ export default function TransformCreatePage() {
 								</Radio.Group>
 							</Form.Item>
 							<Form.Item name="sourceCategory" label="数据来源">
-								<Radio.Group>
+								<Radio.Group onChange={(e) => setSourceCategory(e.target.value)}>
 									<Radio.Button value="database">数据库</Radio.Button>
 									<Radio.Button value="file">文件上传</Radio.Button>
 								</Radio.Group>
@@ -1907,7 +1998,8 @@ export default function TransformCreatePage() {
 												prepare.fileName,
 												prepare.batchCode,
 												sheets,
-												defaultSheet
+												defaultSheet,
+												filePreviewRows
 											);
 											setFileUploadResult(parsed);
 											form.setFieldValue("readerType", "txtfilereader");
@@ -1970,7 +2062,8 @@ export default function TransformCreatePage() {
 															fileUploadResult.originalName,
 															fileUploadResult.batchCode || "",
 															fileUploadResult.sheets,
-															{ index: targetSheet.index, name: targetSheet.name }
+															{ index: targetSheet.index, name: targetSheet.name },
+															filePreviewRows
 														);
 														setFileUploadResult(parsed);
 														form.setFieldValue("readerType", "txtfilereader");
@@ -1984,6 +2077,30 @@ export default function TransformCreatePage() {
 											/>
 										</Space>
 									)}
+									<Space className="mb-3" wrap>
+										<Text type="secondary">预览行数</Text>
+										<InputNumber
+											min={1}
+											max={2000}
+											value={filePreviewRows}
+											onChange={(value) => setFilePreviewRows(value ? Number(value) : 20)}
+										/>
+										<Text type="secondary">预览列数</Text>
+										<InputNumber
+											min={1}
+											max={50}
+											value={filePreviewCols}
+											onChange={(value) => setFilePreviewCols(value ? Number(value) : 8)}
+										/>
+										<Button size="small" onClick={refreshFilePreview} loading={previewRefreshing}>
+											刷新预览
+										</Button>
+										{(fileUploadResult.errorCount || 0) > 0 && (
+											<Button size="small" onClick={openErrorPreview} loading={errorPreviewLoading}>
+												查看错误行
+											</Button>
+										)}
+									</Space>
 									<Table
 										size="small"
 										dataSource={fileUploadResult.columns || []}
@@ -1997,7 +2114,7 @@ export default function TransformCreatePage() {
 									{Array.isArray(fileUploadResult.preview) && fileUploadResult.preview.length > 0 && (
 										<>
 											<Divider orientation="left" className="mt-4">
-												预览数据（最多 20 行）
+												预览数据（最多 {filePreviewRows} 行）
 											</Divider>
 											<Table
 												size="small"
@@ -2007,7 +2124,7 @@ export default function TransformCreatePage() {
 												dataSource={fileUploadResult.preview.map((row, index) => {
 													const record: Record<string, any> = { __row: index + 1 };
 													(fileUploadResult.columns || []).forEach((col, colIndex) => {
-														if (colIndex >= 8) return;
+														if (colIndex >= Math.max(1, filePreviewCols)) return;
 														record[col.name] = row?.[colIndex] ?? "";
 													});
 													return record;
@@ -2015,7 +2132,7 @@ export default function TransformCreatePage() {
 												columns={[
 													{ title: "行号", dataIndex: "__row", width: 80 },
 													...(fileUploadResult.columns || [])
-														.slice(0, 8)
+														.slice(0, Math.max(1, filePreviewCols))
 														.map((col) => ({
 															title: col.name,
 															dataIndex: col.name,
@@ -2023,9 +2140,9 @@ export default function TransformCreatePage() {
 														})),
 												]}
 											/>
-											{(fileUploadResult.columns || []).length > 8 && (
+											{(fileUploadResult.columns || []).length > Math.max(1, filePreviewCols) && (
 												<Text type="secondary" className="block mt-2">
-													仅展示前 8 列，剩余列已省略。
+													仅展示前 {Math.max(1, filePreviewCols)} 列，剩余列已省略。
 												</Text>
 											)}
 										</>
@@ -2070,6 +2187,24 @@ export default function TransformCreatePage() {
 									className="mb-4"
 								/>
 							)}
+							<Divider orientation="left">数据湖连接（可选覆盖）</Divider>
+							<Text type="secondary" className="block mb-4">
+								若默认数据湖凭据不可用，可在此处手动指定目标库连接信息。留空则使用默认数据湖配置。
+							</Text>
+							<div className="grid gap-4 md:grid-cols-2">
+								<Form.Item name="writerUsername" label="用户名">
+									<Input placeholder="数据库账号" />
+								</Form.Item>
+								<Form.Item name="writerPassword" label="密码">
+									<Input.Password placeholder="数据库密码" />
+								</Form.Item>
+							</div>
+							<Form.Item name="writerJdbcUrls" label="JDBC URL（可选覆盖）">
+								<Input placeholder="jdbc:postgresql://host:5432/db" />
+							</Form.Item>
+							<Form.Item name="writerSchema" label="Schema（可选）">
+								<Input placeholder="例如 public" />
+							</Form.Item>
 						</>
 					)}
 					{currentStep === 2 && (
@@ -2122,12 +2257,12 @@ export default function TransformCreatePage() {
 								</Radio.Group>
 							</Form.Item>
 							<Form.Item name="sourceCategory" label="数据来源">
-								<Radio.Group>
+								<Radio.Group onChange={(e) => setSourceCategory(e.target.value)}>
 									<Radio.Button value="database">数据库</Radio.Button>
 									<Radio.Button value="file">文件上传</Radio.Button>
 								</Radio.Group>
 							</Form.Item>
-							
+
 						</>
 					)}
 					{currentStep === 1 && (
@@ -2507,6 +2642,38 @@ export default function TransformCreatePage() {
 					</Space>
 				</Form>
 			</Card>
+			<Modal
+				title="错误行明细"
+				open={errorPreviewOpen}
+				onCancel={() => setErrorPreviewOpen(false)}
+				footer={null}
+				width={720}
+			>
+				<Space className="mb-3" wrap>
+					<Text type="secondary">预览条数</Text>
+					<InputNumber
+						min={1}
+						max={500}
+						value={errorPreviewLimit}
+						onChange={(value) => setErrorPreviewLimit(value ? Number(value) : 50)}
+					/>
+					<Button size="small" onClick={openErrorPreview} loading={errorPreviewLoading}>
+						刷新
+					</Button>
+				</Space>
+				<Table
+					size="small"
+					rowKey={(record, index) => `${record?.rowIndex || "row"}-${index}`}
+					pagination={false}
+					loading={errorPreviewLoading}
+					dataSource={errorPreviewRows || []}
+					locale={{ emptyText: "暂无错误行" }}
+					columns={[
+						{ title: "行号", dataIndex: "rowIndex", width: 100 },
+						{ title: "错误信息", dataIndex: "message", ellipsis: true },
+					]}
+				/>
+			</Modal>
 		</div>
 	);
 }

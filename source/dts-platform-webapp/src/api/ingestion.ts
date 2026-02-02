@@ -117,6 +117,9 @@ export interface FileUploadResult {
   sheetIndex?: number;
   csvPath?: string;
   csvContainerPath?: string;
+  errorPath?: string;
+  errorContainerPath?: string;
+  delimiter?: string;
   preview?: string[][];
   rowCount?: number;
   errorCount?: number;
