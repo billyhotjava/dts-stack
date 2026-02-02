@@ -94,11 +94,11 @@ build_maven_module() {
 EOF
     fi
     mvn -B -e -DskipTests -s "$MAVEN_SETTINGS_FILE" -f "${REPO_ROOT}/source/pom.xml" -pl "$module" -am package
-  else
-    echo "[buildAll] Building ${module} jar via ${MAVEN_IMAGE}"
-    local security_opts=()
-    if [[ -n "$MAVEN_SECURITY_OPT" ]]; then
-      security_opts+=(--security-opt "$MAVEN_SECURITY_OPT")
+    else
+      echo "[buildAll] Building ${module} jar via ${MAVEN_IMAGE}"
+      local security_opts=()
+      if [[ -n "$MAVEN_SECURITY_OPT" ]]; then
+        security_opts+=(--security-opt "$MAVEN_SECURITY_OPT")
     fi
     if [[ "$MODE" == "legacy" && -n "$LEGACY_UNRESTRICTED" ]]; then
       security_opts+=(--security-opt "seccomp=unconfined" --pids-limit=-1 --ulimit "nproc=65535:65535")
@@ -111,13 +111,11 @@ EOF
     if [[ -n "$MAVEN_DEBUG" ]]; then
       docker run --rm "${security_opts[@]}" \
         -e "MAVEN_MIRROR_URL=${MAVEN_MIRROR_URL}" \
-        -e "JAVA_HOME=/opt/java/openjdk" \
-        -e "PATH=/opt/java/openjdk/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
         -v "${REPO_ROOT}/source:/workspace" \
         -v "/root/.m2:/root/.m2" \
         -w /workspace \
         "$MAVEN_IMAGE" \
-        sh -lc 'set -eux; env | grep -E "JAVA_HOME|PATH"; command -v java; java -version; ls -la /opt/java/openjdk/bin/java; \
+        sh -lc 'set -eux; JAVA_BIN=$(command -v java || true); if [ -z "$JAVA_BIN" ]; then echo >&2 "java not found"; exit 1; fi; JAVA_HOME="$(dirname "$(dirname "$(readlink -f "$JAVA_BIN")")")"; export JAVA_HOME; env | grep -E "JAVA_HOME|PATH"; java -version; ls -la "$JAVA_HOME/bin/java"; \
           if [ ! -f /root/.m2/settings.xml ]; then \
             printf "%s\n" \
               "<settings xmlns=\"http://maven.apache.org/SETTINGS/1.0.0\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://maven.apache.org/SETTINGS/1.0.0 https://maven.apache.org/xsd/settings-1.0.0.xsd\">" \
@@ -136,13 +134,12 @@ EOF
     else
       docker run --rm "${security_opts[@]}" \
         -e "MAVEN_MIRROR_URL=${MAVEN_MIRROR_URL}" \
-        -e "JAVA_HOME=/opt/java/openjdk" \
-        -e "PATH=/opt/java/openjdk/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
         -v "${REPO_ROOT}/source:/workspace" \
         -v "/root/.m2:/root/.m2" \
         -w /workspace \
         "$MAVEN_IMAGE" \
-        sh -lc 'if [ ! -f /root/.m2/settings.xml ]; then \
+        sh -lc 'JAVA_BIN=$(command -v java || true); if [ -z "$JAVA_BIN" ]; then echo >&2 "java not found"; exit 1; fi; JAVA_HOME="$(dirname "$(dirname "$(readlink -f "$JAVA_BIN")")")"; export JAVA_HOME; \
+        if [ ! -f /root/.m2/settings.xml ]; then \
           printf "%s\n" \
             "<settings xmlns=\"http://maven.apache.org/SETTINGS/1.0.0\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://maven.apache.org/SETTINGS/1.0.0 https://maven.apache.org/xsd/settings-1.0.0.xsd\">" \
             "  <mirrors>" \
