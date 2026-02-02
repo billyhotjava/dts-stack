@@ -80,7 +80,11 @@ const normalizeText = (value?: string) => String(value || "").trim();
 const normalizeReaderType = (value?: string) => {
 	const text = normalizeText(value);
 	if (!text) return "";
-	if (text.toLowerCase() === "dmreader") {
+	const lower = text.toLowerCase();
+	if (lower === "dmreader" || lower === "dm" || lower === "dameng" || lower === "dm8" || lower === "dameng8") {
+		return GENERIC_JDBC_READER;
+	}
+	if (lower === "rdbms" || lower === "jdbc") {
 		return GENERIC_JDBC_READER;
 	}
 	return text;
@@ -130,6 +134,9 @@ const resolveReaderTypeFromDataSource = (source?: InfraDataSource | null) => {
 	if (type && JDBC_READER_BY_TYPE[type]) {
 		return normalizeReaderType(JDBC_READER_BY_TYPE[type]);
 	}
+	if (type === "jdbc" || type === "rdbms") {
+		return GENERIC_JDBC_READER;
+	}
 	if (type && FILE_READER_BY_TYPE[type]) {
 		return FILE_READER_BY_TYPE[type];
 	}
@@ -140,6 +147,7 @@ const resolveReaderTypeFromDataSource = (source?: InfraDataSource | null) => {
 				return normalizeReaderType(reader);
 			}
 		}
+		return GENERIC_JDBC_READER;
 	}
 	return "";
 };
@@ -173,7 +181,7 @@ const applyReaderTypeToConfig = (config: Record<string, any> | undefined, reader
 };
 
 const resolveReaderTypeFromValues = (values: Record<string, any>) => {
-	const direct = normalizeText(values?.readerType || values?.reader || values?.sourceType || "");
+	const direct = normalizeReaderType(values?.readerType || values?.reader || values?.sourceType || "");
 	if (direct) return direct;
 	const safeParse = (raw?: string) => {
 		const text = normalizeText(raw);
@@ -449,6 +457,10 @@ const shouldApplyWriterTables = (
 	writerConfig: Record<string, any> | undefined,
 	values: Record<string, any>,
 ) => {
+	const mode = normalizeText(values.tableSelectionMode) || "all";
+	if (mode === "manual") {
+		return true;
+	}
 	const explicitTables = extractWriterTables(writerConfig).length > 0 || splitLines(values.writerTables).length > 0;
 	if (explicitTables) return true;
 	const prefix = normalizeText(values.syncPrefix);
@@ -519,12 +531,12 @@ const buildJobPreview = (values: Record<string, any>, editorMode?: string, reade
 	const jobConfig = parseJson(values.jobConfig, "作业参数") as Record<string, any> | undefined;
 	if (jobConfig) return jobConfig;
 
-	let readerType = normalizeText(values.readerType);
+	let readerType = normalizeReaderType(values.readerType);
 	if (!readerType) {
 		readerType = resolveReaderTypeFromValues(values);
 	}
 	if (!readerType) {
-		readerType = normalizeText(readerFallback) || GENERIC_JDBC_READER;
+		readerType = normalizeReaderType(readerFallback) || GENERIC_JDBC_READER;
 	}
 
 	const writerType = normalizeText(values.writerType);
@@ -997,20 +1009,7 @@ export default function TransformCreatePage() {
 		form,
 	]);
 
-	useEffect(() => {
-		if (tableSelectionMode !== "all") {
-			return;
-		}
-		// Guard against race condition: form value may already be "manual"
-		// while Form.useWatch hasn't re-rendered yet
-		const currentMode = normalizeText(form.getFieldValue("tableSelectionMode")) || "all";
-		if (currentMode !== "all") {
-			return;
-		}
-		if (selectedTableKeys.length || normalizeText(selectedTablesValue)) {
-			syncSelectedTablesToForm([], { silent: true });
-		}
-	}, [tableSelectionMode, selectedTableKeys.length, selectedTablesValue]);
+	// Selection clearing is handled explicitly when用户切换到“全部表”
 
 	// Sync selected tables to writer fields when entering Step 2
 	// This ensures values persist even when writerTables/writerConfig Form.Items
@@ -1778,7 +1777,14 @@ export default function TransformCreatePage() {
 				}
 				readerConfig = applyTablesToConfig((readerConfig as Record<string, any>) ?? {}, includeTables) ?? {};
 				if (shouldApplyWriterTables((writerConfig as Record<string, any>) ?? {}, mergedValues)) {
-					writerConfig = applyTablesToConfig((writerConfig as Record<string, any>) ?? {}, includeTables) ?? {};
+					const explicitWriterTables = mergeTableSelections(
+						splitLines(mergedValues.writerTables),
+						extractWriterTables(writerConfig as Record<string, any>)
+					);
+					const derivedWriterTables = explicitWriterTables.length
+						? explicitWriterTables
+						: applyPrefixToTables(includeTables, mergedValues.syncPrefix);
+					writerConfig = applyTablesToConfig((writerConfig as Record<string, any>) ?? {}, derivedWriterTables) ?? {};
 				}
 			}
 			const excludeTables = selectionMode === "all" ? splitLines(mergedValues.tableExclude) : [];
@@ -1892,13 +1898,26 @@ export default function TransformCreatePage() {
 			mergedValues.writerType = normalizeText(defaultDestinationStatus.writerType);
 		}
 		try {
-			const readerFallback = selectedDataSource ? resolveReaderTypeFromDataSource(selectedDataSource) : "";
+			const readerFallback = resolveReaderTypeFromSourceId(
+				mergedValues.sourceDataSourceId,
+				dataSources,
+				selectedDataSource
+			);
 			const config = buildJobPreview(mergedValues, isFilePreview ? "json" : editorMode, readerFallback);
 			return { config, error: "" };
 		} catch (error: any) {
 			return { config: null, error: error?.message || "无法生成预览" };
 		}
-	}, [formValues, editorMode, form, currentStep, selectedDataSource, defaultDestinationStatus, fileUploadResult]);
+	}, [
+		formValues,
+		editorMode,
+		form,
+		currentStep,
+		selectedDataSource,
+		defaultDestinationStatus,
+		fileUploadResult,
+		dataSources,
+	]);
 
 	return (
 		<div className="flex flex-col gap-6">
@@ -2306,7 +2325,14 @@ export default function TransformCreatePage() {
 								<Input placeholder="将根据数据源自动生成" disabled />
 							</Form.Item>
 							<Form.Item name="tableSelectionMode" label="入湖表选择">
-								<Radio.Group>
+								<Radio.Group
+									onChange={(e) => {
+										const next = normalizeText(e.target?.value) || "all";
+										if (next === "all") {
+											syncSelectedTablesToForm([], { silent: true });
+										}
+									}}
+								>
 									<Radio.Button value="all">全部表（默认）</Radio.Button>
 									<Radio.Button value="manual">手动选择</Radio.Button>
 								</Radio.Group>

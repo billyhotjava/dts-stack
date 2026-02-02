@@ -128,6 +128,8 @@ public class AddaxJobService {
             applyJobDefaults(normalized, readerType, readerConfig, writerType, writerConfig);
             return normalized;
         }
+        readerType = normalizePluginName(readerType, "reader");
+        writerType = normalizePluginName(writerType, "writer");
         if (!StringUtils.hasText(readerType) || !StringUtils.hasText(writerType)) {
             throw new IllegalArgumentException("缺少 Addax Reader/Writer 类型");
         }

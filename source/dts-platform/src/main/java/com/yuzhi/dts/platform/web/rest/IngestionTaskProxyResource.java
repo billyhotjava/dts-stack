@@ -458,6 +458,20 @@ public class IngestionTaskProxyResource {
                 return result;
             }
             if (overrideConn instanceof List<?> overrideList) {
+                if (overrideList.isEmpty()) {
+                    return baseList;
+                }
+                Object firstOverride = overrideList.get(0);
+                if (!baseList.isEmpty() && baseList.get(0) instanceof Map<?, ?> baseMap && firstOverride instanceof Map<?, ?> overrideMap) {
+                    Map<String, Object> first = new LinkedHashMap<>();
+                    baseMap.forEach((key, value) -> first.put(String.valueOf(key), value));
+                    overrideMap.forEach((key, value) -> first.put(String.valueOf(key), value));
+                    result.add(first);
+                    for (int i = 1; i < overrideList.size(); i++) {
+                        result.add(overrideList.get(i));
+                    }
+                    return result;
+                }
                 return overrideList;
             }
             return overrideConn;
@@ -511,12 +525,28 @@ public class IngestionTaskProxyResource {
 
     private void ensureWriterTables(Map<String, Object> config) {
         List<String> tables = extractWriterTables(config);
-        if (tables.isEmpty()) {
-            throw new org.springframework.web.server.ResponseStatusException(
-                org.springframework.http.HttpStatus.BAD_REQUEST,
-                "缺少目标表，请在入湖任务中填写表清单"
-            );
+        if (!tables.isEmpty() || config == null) {
+            return;
         }
+        // 当任务选择“全部表”时，允许先用占位符，后续由 ingestion 按实际表清单替换
+        String placeholder = "${table}";
+        Object connection = config.get("connection");
+        if (connection instanceof Map<?, ?> map) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> connMap = (Map<String, Object>) map;
+            connMap.putIfAbsent("table", java.util.List.of(placeholder));
+            return;
+        }
+        if (connection instanceof List<?> list && !list.isEmpty() && list.get(0) instanceof Map<?, ?> map) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> connMap = (Map<String, Object>) map;
+            connMap.putIfAbsent("table", java.util.List.of(placeholder));
+            java.util.ArrayList<Object> next = new java.util.ArrayList<>(list);
+            next.set(0, connMap);
+            config.put("connection", next);
+            return;
+        }
+        config.put("table", java.util.List.of(placeholder));
     }
 
     private List<String> extractWriterTables(Map<String, Object> config) {
