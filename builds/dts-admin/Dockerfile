@@ -82,12 +82,12 @@ RUN set -eux; \
     if [ "${USE_MAVEN}" = "true" ]; then \
       echo "[build] Building dts-admin via Maven"; \
       sed -i "s|__MIRROR_URL__|${MAVEN_MIRROR_URL}|g" /root/.m2/settings.xml; \
-      JAVA_BIN=$(command -v java); \
-      JAVA_HOME="$(dirname "$(dirname "$(readlink -f "$JAVA_BIN")")")"; \
-      if [ ! -x "${JAVA_HOME}/bin/java" ]; then \
-        echo >&2 "[build] JAVA_HOME does not contain java: ${JAVA_HOME}"; \
+      JAVA_BIN=$(command -v java || true); \
+      if [ -z "${JAVA_BIN}" ]; then \
+        echo >&2 "[build] java not found in PATH"; \
         exit 1; \
       fi; \
+      JAVA_HOME="$(dirname "$(dirname "$(readlink -f "$JAVA_BIN")")")"; \
       export JAVA_HOME; \
       /usr/share/maven/bin/mvn -s /root/.m2/settings.xml -q -DskipTests -f "$BUILD_POM" -pl dts-admin -am package; \
     else \

@@ -73,12 +73,12 @@ RUN mkdir -p /root/.m2 && \
 RUN set -eux; \
     BUILD_POM=$(cat /workspace/.build-pom); \
     if [ "${ENABLE_MAVEN_BUILD}" = "true" ]; then \
-      JAVA_BIN=$(command -v java); \
-      JAVA_HOME="$(dirname "$(dirname "$(readlink -f "$JAVA_BIN")")")"; \
-      if [ ! -x "${JAVA_HOME}/bin/java" ]; then \
-        echo >&2 "[build] JAVA_HOME does not contain java: ${JAVA_HOME}"; \
+      JAVA_BIN=$(command -v java || true); \
+      if [ -z "${JAVA_BIN}" ]; then \
+        echo >&2 "[build] java not found in PATH"; \
         exit 1; \
       fi; \
+      JAVA_HOME="$(dirname "$(dirname "$(readlink -f "$JAVA_BIN")")")"; \
       echo "Using JAVA_HOME=${JAVA_HOME}"; \
       export JAVA_HOME; \
       sed -i "s|__MIRROR_URL__|${MAVEN_MIRROR_URL}|g" /root/.m2/settings.xml; \
