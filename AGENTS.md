@@ -45,6 +45,7 @@
 
 ## Recent Progress (2026-02-02)
 - Added a custom dbt image definition under `builds/dts-dbt/` (ARM-friendly), removed `source/dts-dbt/`.
+- `builds/dts-dbt/Dockerfile` now supports `INSTALL_APT_DEPS=0` (default) to skip apt installs; added `PIP_NO_CACHE_DIR=1`.
 - Added PKI doc: `docs/intergration/pki/pki-crypto-modes.md` (普密/商密对照 + 配置示例).
 - `builds/buildAll.sh` now prebuilds Java jars by default (`PREBUILD_JARS=1`) and skips Maven inside Dockerfiles; added `MAVEN_UNRESTRICTED` to relax container limits for Maven.
 - Build-stage Dockerfiles for `dts-admin`, `dts-platform`, `dts-ingestion` now set `JAVA_HOME` explicitly.
@@ -58,5 +59,8 @@
   - Delete the corrupted snapshot under `/root/.m2/repository/com/yuzhi/dts/common/dts-common/0.0.1-SNAPSHOT` and rebuild.
 - `dbt 项目目录或 target 目录不可写`:
   - Ensure `services/dts-dbt/` (and `services/dts-dbt/target`) are writable; avoid mounting the project directory as `:ro`.
+- `dpkg`/`lzma` errors during `apt-get install` in `dts-dbt` build:
+  - Default to `INSTALL_APT_DEPS=0` to skip apt; only enable when adapters need build deps.
+  - If enabling apt, keep `INSTALL_BUILD_DEPS=0` and `INSTALL_GIT=0` unless needed; pass proxy/mirror via `HTTP_PROXY`/`APT_MIRROR`.
 - `Unable to resolve Configuration with the provided Issuer` (OIDC issuer timeout):
   - Check container DNS/host mapping for the Keycloak/SSO domain; ensure it resolves to the host gateway inside containers.

@@ -12,7 +12,9 @@ ARG NO_PROXY
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1
+    PIP_NO_CACHE_DIR=1 \
+    PIP_PROGRESS_BAR=off \
+    PIP_NO_INPUT=1
 
 # 常见依赖（编译部分 adapter 可能需要 gcc 等）
 # 部分环境下 docker-clean 的 Post-Invoke 会报错，先移除以避免 build 失败
@@ -51,8 +53,8 @@ RUN if [ "${INSTALL_APT_DEPS}" = "1" ] || [ "${INSTALL_APT_DEPS}" = "true" ]; th
       rm -rf /var/lib/apt/lists/*; \
     fi
 
-RUN python -m pip install --upgrade pip \
- && pip install --no-cache-dir "dbt-core==1.11.2"
+RUN python -m pip install --upgrade pip --progress-bar off \
+ && pip install --no-cache-dir --progress-bar off "dbt-core==1.11.2"
 
 # 如果你用 Postgres / Doris / Trino 等，按需加 adapter：
 # RUN pip install "dbt-postgres==1.11.2"
