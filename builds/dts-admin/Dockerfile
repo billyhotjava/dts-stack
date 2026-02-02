@@ -84,11 +84,13 @@ RUN set -eux; \
       echo "[build] Building dts-admin via Maven"; \
       sed -i "s|__MIRROR_URL__|${MAVEN_MIRROR_URL}|g" /root/.m2/settings.xml; \
       echo "[debug] JAVA_HOME=${JAVA_HOME:-UNSET}"; \
-      echo "[debug] which mvn: $(which mvn 2>/dev/null)"; \
-      echo "[debug] mvn target: $(readlink -f "$(which mvn)" 2>/dev/null)"; \
-      head -3 "$(which mvn)" 2>/dev/null; \
-      echo "[debug] test -x check: $(test -x "${JAVA_HOME}/bin/java" && echo PASS || echo FAIL)"; \
-      java -cp "/usr/share/maven/boot/plexus-classworlds-"*.jar \
+      echo "[debug] PATH=${PATH}"; \
+      echo "[debug] ls /usr/share/maven/bin/:"; ls -la /usr/share/maven/bin/ 2>/dev/null || echo "NOT FOUND"; \
+      echo "[debug] ls /usr/bin/mvn:"; ls -la /usr/bin/mvn 2>/dev/null || echo "NOT FOUND"; \
+      echo "[debug] ls /usr/local/bin/mvn:"; ls -la /usr/local/bin/mvn 2>/dev/null || echo "NOT FOUND"; \
+      echo "[debug] java -version:"; "${JAVA_HOME}/bin/java" -version 2>&1 || echo "java failed"; \
+      "${JAVA_HOME}/bin/java" \
+        -cp "/usr/share/maven/boot/plexus-classworlds-"*.jar \
         "-Dclassworlds.conf=/usr/share/maven/bin/m2.conf" \
         "-Dmaven.home=/usr/share/maven" \
         "-Dmaven.multiModuleProjectDirectory=$(pwd)" \
