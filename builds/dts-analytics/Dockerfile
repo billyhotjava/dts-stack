@@ -34,15 +34,33 @@ RUN set -eux; \
     test -f /workspace/dts-analytics/src/main/java/com/yuzhi/dts/analytics/repository/AnalyticsUserRepository.java
 
 ARG MAVEN_ARGS="-B -e -DskipTests"
+ARG ENABLE_MAVEN_BUILD=false
 RUN set -eux; \
     BUILD_POM=$(cat /workspace/.build-pom); \
-    mvn ${MAVEN_ARGS} -f "${BUILD_POM}" -pl dts-analytics -am package
+    PREBUILT_JAR="/workspace/builds/dts-analytics/dts-analytics.jar"; \
+    USE_MAVEN="${ENABLE_MAVEN_BUILD}"; \
+    if [ ! -f "${PREBUILT_JAR}" ]; then \
+      echo "[build] Prebuilt jar missing at ${PREBUILT_JAR}; forcing Maven build"; \
+      USE_MAVEN="true"; \
+    fi; \
+    if [ "${USE_MAVEN}" = "true" ]; then \
+      echo "[build] Building dts-analytics via Maven"; \
+      mvn ${MAVEN_ARGS} -f "${BUILD_POM}" -pl dts-analytics -am package; \
+    else \
+      echo "[build] Using prebuilt jar from ${PREBUILT_JAR}"; \
+      mkdir -p /workspace/dts-analytics/target; \
+      cp "${PREBUILT_JAR}" /workspace/dts-analytics/target/dts-analytics-prebuilt.jar; \
+    fi
 
 RUN set -eux; \
     mkdir -p /workspace/dist; \
-    JAR="$(find /workspace/dts-analytics/target -maxdepth 1 -type f -name '*.jar' ! -name '*.original' | head -n 1)"; \
-    test -n "${JAR:-}"; \
-    cp "${JAR}" /workspace/dist/app.jar
+    if [ -f /workspace/dts-analytics/target/dts-analytics-prebuilt.jar ]; then \
+      cp /workspace/dts-analytics/target/dts-analytics-prebuilt.jar /workspace/dist/app.jar; \
+    else \
+      JAR="$(find /workspace/dts-analytics/target -maxdepth 1 -type f -name '*.jar' ! -name '*.original' | head -n 1)"; \
+      test -n "${JAR:-}"; \
+      cp "${JAR}" /workspace/dist/app.jar; \
+    fi
 
 FROM ${RUNTIME_BASE_IMAGE} AS runtime
 
