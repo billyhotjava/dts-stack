@@ -1,4 +1,3 @@
-# syntax=docker/dockerfile:1
 #
 # Online build image for dts-analytics (mirrors the general approach used by other modules):
 # - Build inside Docker with Maven
