@@ -73,14 +73,6 @@ RUN mkdir -p /root/.m2 && \
 RUN set -eux; \
     BUILD_POM=$(cat /workspace/.build-pom); \
     if [ "${ENABLE_MAVEN_BUILD}" = "true" ]; then \
-      JAVA_BIN=$(command -v java || true); \
-      if [ -z "${JAVA_BIN}" ]; then \
-        echo >&2 "[build] java not found in PATH"; \
-        exit 1; \
-      fi; \
-      JAVA_HOME="$(dirname "$(dirname "$(readlink -f "$JAVA_BIN")")")"; \
-      echo "Using JAVA_HOME=${JAVA_HOME}"; \
-      export JAVA_HOME; \
       sed -i "s|__MIRROR_URL__|${MAVEN_MIRROR_URL}|g" /root/.m2/settings.xml; \
       mvn -s /root/.m2/settings.xml -q -DskipTests -f "$BUILD_POM" -pl dts-ingestion -am package; \
     else \
