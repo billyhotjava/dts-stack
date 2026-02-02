@@ -42,7 +42,6 @@ ARG ENABLE_MAVEN_BUILD=false
 RUN apt-get -o Acquire::AllowInsecureRepositories=true -o Acquire::AllowDowngradeToInsecureRepositories=true update || true && \
     apt-get install -y --no-install-recommends --allow-unauthenticated ca-certificates && \
     rm -rf /var/lib/apt/lists/*
-ENV JAVA_HOME=/opt/java/openjdk
 WORKDIR /workspace
 COPY . .
 RUN set -eu; \
@@ -83,19 +82,7 @@ RUN set -eux; \
     if [ "${USE_MAVEN}" = "true" ]; then \
       echo "[build] Building dts-admin via Maven"; \
       sed -i "s|__MIRROR_URL__|${MAVEN_MIRROR_URL}|g" /root/.m2/settings.xml; \
-      echo "[debug] JAVA_HOME=${JAVA_HOME:-UNSET}"; \
-      echo "[debug] PATH=${PATH}"; \
-      echo "[debug] ls /usr/share/maven/bin/:"; ls -la /usr/share/maven/bin/ 2>/dev/null || echo "NOT FOUND"; \
-      echo "[debug] ls /usr/bin/mvn:"; ls -la /usr/bin/mvn 2>/dev/null || echo "NOT FOUND"; \
-      echo "[debug] ls /usr/local/bin/mvn:"; ls -la /usr/local/bin/mvn 2>/dev/null || echo "NOT FOUND"; \
-      echo "[debug] java -version:"; "${JAVA_HOME}/bin/java" -version 2>&1 || echo "java failed"; \
-      "${JAVA_HOME}/bin/java" \
-        -cp "/usr/share/maven/boot/plexus-classworlds-"*.jar \
-        "-Dclassworlds.conf=/usr/share/maven/bin/m2.conf" \
-        "-Dmaven.home=/usr/share/maven" \
-        "-Dmaven.multiModuleProjectDirectory=$(pwd)" \
-        org.codehaus.plexus.classworlds.launcher.Launcher \
-        -s /root/.m2/settings.xml -q -DskipTests -f "$BUILD_POM" -pl dts-admin -am package; \
+      /usr/share/maven/bin/mvn -s /root/.m2/settings.xml -q -DskipTests -f "$BUILD_POM" -pl dts-admin -am package; \
     else \
       echo "[build] Using prebuilt jar from ${PREBUILT_JAR}"; \
       mkdir -p /workspace/dts-admin/target; \

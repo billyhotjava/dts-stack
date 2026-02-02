@@ -4,6 +4,10 @@ set -euo pipefail
 REPO_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 MODE="${1:-both}"
 
+# Force BuildKit – the legacy builder's seccomp profile blocks JVM thread
+# creation (pthread_create EPERM) which breaks Maven builds inside docker build.
+export DOCKER_BUILDKIT=1
+
 NORMAL_DIST="${REPO_ROOT}/builds/dist"
 LEGACY_DIST="${REPO_ROOT}/builds/legacy-dist"
 NODE_IMAGE="${NODE_IMAGE:-node:20.17.0-alpine3.20}"
@@ -16,6 +20,7 @@ MAVEN_DEBUG="${MAVEN_DEBUG:-}"
 LEGACY_UNRESTRICTED="${LEGACY_UNRESTRICTED:-1}"
 MAVEN_MIRROR_URL="${MAVEN_MIRROR_URL:-https://maven.aliyun.com/repository/public}"
 MAVEN_SETTINGS_FILE="${MAVEN_SETTINGS_FILE:-/root/.m2/settings.xml}"
+PREBUILD_JARS="${PREBUILD_JARS:-1}"
 
 require_cmd() {
   if ! command -v "$1" >/dev/null 2>&1; then
@@ -187,12 +192,20 @@ if [[ "$MODE" == "normal" || "$MODE" == "both" ]]; then
   IMAGE_DTS_ANALYTICS_WEBAPP_MODERN="${IMAGE_DTS_ANALYTICS_WEBAPP_MODERN:-dts-analytics-webapp-modern:local}"
   IMAGE_DTS_AIRFLOW_OM="${IMAGE_DTS_AIRFLOW_OM:-${IMAGE_AIRFLOW:-dts-airflow-om:local}}"
 
+  ENABLE_MAVEN_BUILD_ARG="${ENABLE_MAVEN_BUILD:-true}"
+  if [[ "${PREBUILD_JARS}" == "1" ]]; then
+    build_maven_module "dts-admin" "dts-admin-*.jar" "${REPO_ROOT}/builds/dts-admin/dts-admin.jar"
+    build_maven_module "dts-platform" "dts-platform-*.jar" "${REPO_ROOT}/builds/dts-platform/dts-platform.jar"
+    build_maven_module "dts-ingestion" "dts-ingestion-*.jar" "${REPO_ROOT}/builds/dts-ingestion/dts-ingestion.jar"
+    ENABLE_MAVEN_BUILD_ARG="false"
+  fi
+
   build_image "dts-admin" "$IMAGE_DTS_ADMIN" "${REPO_ROOT}/builds/dts-admin/Dockerfile" "$NORMAL_DIST" \
-    --build-arg ENABLE_MAVEN_BUILD="${ENABLE_MAVEN_BUILD:-true}"
+    --build-arg ENABLE_MAVEN_BUILD="${ENABLE_MAVEN_BUILD_ARG}"
   build_image "dts-platform" "$IMAGE_DTS_PLATFORM" "${REPO_ROOT}/builds/dts-platform/Dockerfile" "$NORMAL_DIST" \
-    --build-arg ENABLE_MAVEN_BUILD="${ENABLE_MAVEN_BUILD:-true}"
+    --build-arg ENABLE_MAVEN_BUILD="${ENABLE_MAVEN_BUILD_ARG}"
   build_image "dts-ingestion" "$IMAGE_DTS_INGESTION" "${REPO_ROOT}/builds/dts-ingestion/Dockerfile" "$NORMAL_DIST" \
-    --build-arg ENABLE_MAVEN_BUILD="${ENABLE_MAVEN_BUILD:-true}"
+    --build-arg ENABLE_MAVEN_BUILD="${ENABLE_MAVEN_BUILD_ARG}"
   build_image "dts-analytics" "$IMAGE_DTS_ANALYTICS" "${REPO_ROOT}/builds/dts-analytics/Dockerfile" "$NORMAL_DIST"
   build_image "dts-admin-webapp" "$IMAGE_DTS_ADMIN_WEBAPP" "${REPO_ROOT}/builds/dts-admin-webapp/Dockerfile" "$NORMAL_DIST" \
     --build-arg PNPM_VERSION="${PNPM_VERSION}" \
