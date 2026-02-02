@@ -53,7 +53,7 @@ RUN if [ "${INSTALL_APT_DEPS}" = "1" ] || [ "${INSTALL_APT_DEPS}" = "true" ]; th
       rm -rf /var/lib/apt/lists/*; \
     fi
 
-RUN python -m pip install --upgrade pip --progress-bar off \
+RUN python -m pip install --no-cache-dir --progress-bar off pip==26.0 \
  && pip install --no-cache-dir --progress-bar off "dbt-core==1.11.2"
 
 # 如果你用 Postgres / Doris / Trino 等，按需加 adapter：

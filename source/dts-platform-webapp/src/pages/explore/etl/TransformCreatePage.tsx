@@ -962,8 +962,12 @@ export default function TransformCreatePage() {
 			return;
 		}
 		const readerType = resolveReaderTypeFromDataSource(selectedDataSource);
-		if (readerType && form.getFieldValue("readerType") !== readerType) {
-			form.setFieldValue("readerType", readerType);
+		if (readerType) {
+			if (form.getFieldValue("readerType") !== readerType) {
+				form.setFieldValue("readerType", readerType);
+			}
+		} else if (isJdbcSource(selectedDataSource)) {
+			form.setFieldValue("readerType", GENERIC_JDBC_READER);
 		}
 		const currentSourceSystem = normalizeText(form.getFieldValue("sourceSystem"));
 		if (!currentSourceSystem) {
@@ -1759,6 +1763,9 @@ export default function TransformCreatePage() {
 			let includeTables: string[] = [];
 			if (selectionMode === "manual") {
 				includeTables = mergeTableSelections(selectedTables, selectedTableKeysRef.current, inferredManualTables);
+				if (!includeTables.length) {
+					includeTables = mergeTableSelections(selectedTableKeysRef.current, selectedTableKeys);
+				}
 				if (!includeTables.length) {
 					if (isJsonMode) {
 						includeTables = extractReaderTables(readerConfig);

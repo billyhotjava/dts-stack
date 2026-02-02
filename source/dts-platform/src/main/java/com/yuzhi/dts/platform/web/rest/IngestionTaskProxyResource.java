@@ -352,6 +352,7 @@ public class IngestionTaskProxyResource {
         }
         Map<String, Object> overrides = extractConfig(destinationMap.get("config"));
         Map<String, Object> mergedConfig = mergeDestinationConfig(resolved.destinationConfig(), overrides);
+        ensureWriterJdbcUrl(mergedConfig);
         ensureWriterTables(mergedConfig);
         Map<String, Object> destination = new LinkedHashMap<>();
         destination.put("usePlatformDefault", true);
@@ -372,6 +373,7 @@ public class IngestionTaskProxyResource {
         DefaultDestinationSyncService.DefaultDestinationSnapshot resolved = requireDefaultDestination(snapshot);
         Map<String, Object> overrides = extractConfig(payload.get("destinationConfig"));
         Map<String, Object> mergedConfig = mergeDestinationConfig(resolved.destinationConfig(), overrides);
+        ensureWriterJdbcUrl(mergedConfig);
         ensureWriterTables(mergedConfig);
         Map<String, Object> merged = new LinkedHashMap<>(payload);
         merged.put("destinationType", resolved.destinationDefinitionId());
@@ -547,6 +549,79 @@ public class IngestionTaskProxyResource {
             return;
         }
         config.put("table", java.util.List.of(placeholder));
+    }
+
+    private void ensureWriterJdbcUrl(Map<String, Object> config) {
+        if (config == null || config.isEmpty()) {
+            return;
+        }
+        Object jdbcUrl = firstNonBlank(
+            config.get("jdbcUrl"),
+            config.get("jdbc_url"),
+            config.get("url"),
+            config.get("jdbc"),
+            config.get("jdbcURL")
+        );
+        if (jdbcUrl != null) {
+            config.put("jdbcUrl", jdbcUrl);
+        }
+        Object connection = config.get("connection");
+        if (connection instanceof Map<?, ?> map) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> connMap = (Map<String, Object>) map;
+            Object connJdbc = firstNonBlank(
+                connMap.get("jdbcUrl"),
+                connMap.get("jdbc_url"),
+                connMap.get("url"),
+                connMap.get("jdbc"),
+                connMap.get("jdbcURL"),
+                jdbcUrl
+            );
+            if (connJdbc != null) {
+                connMap.put("jdbcUrl", connJdbc);
+            }
+            return;
+        }
+        if (connection instanceof List<?> list && !list.isEmpty() && list.get(0) instanceof Map<?, ?> map) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> connMap = new LinkedHashMap<>((Map<String, Object>) map);
+            Object connJdbc = firstNonBlank(
+                connMap.get("jdbcUrl"),
+                connMap.get("jdbc_url"),
+                connMap.get("url"),
+                connMap.get("jdbc"),
+                connMap.get("jdbcURL"),
+                jdbcUrl
+            );
+            if (connJdbc != null) {
+                connMap.put("jdbcUrl", connJdbc);
+            }
+            java.util.ArrayList<Object> next = new java.util.ArrayList<>(list);
+            next.set(0, connMap);
+            config.put("connection", next);
+        }
+    }
+
+    private Object firstNonBlank(Object... values) {
+        if (values == null) {
+            return null;
+        }
+        for (Object value : values) {
+            if (value == null) {
+                continue;
+            }
+            if (value instanceof java.util.List<?> list) {
+                if (!list.isEmpty()) {
+                    return value;
+                }
+                continue;
+            }
+            String text = value.toString().trim();
+            if (!text.isEmpty()) {
+                return value;
+            }
+        }
+        return null;
     }
 
     private List<String> extractWriterTables(Map<String, Object> config) {
