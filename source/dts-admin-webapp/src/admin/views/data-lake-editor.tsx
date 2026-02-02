@@ -498,7 +498,7 @@ export default function DataLakeEditorView() {
 			customJdbcUrl: values.customJdbcUrl || undefined,
 			lastTestElapsedMillis: result?.elapsedMillis ?? undefined,
 			engineVersion: result?.engineVersion ?? null,
-			driverVersion: result?.driverVersion ?? values.driverVersion ?? null,
+			driverVersion: result?.driverVersion ?? values.driverVersion ?? undefined,
 			defaulted: values.defaulted ?? false,
 			destinationDefinitionId: values.destinationDefinitionId || undefined,
 			destinationName: values.destinationName?.trim() || values.name?.trim() || undefined,
