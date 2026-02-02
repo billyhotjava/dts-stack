@@ -5,7 +5,10 @@ ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PYTHONUNBUFFERED=1
 
 # 常见依赖（编译部分 adapter 可能需要 gcc 等）
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# 部分环境下 docker-clean 的 Post-Invoke 会报错，先移除以避免 build 失败
+RUN rm -f /etc/apt/apt.conf.d/docker-clean \
+ && apt-get update \
+ && apt-get install -y --no-install-recommends \
     git ca-certificates build-essential \
  && rm -rf /var/lib/apt/lists/*
 

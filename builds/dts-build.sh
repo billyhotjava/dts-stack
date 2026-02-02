@@ -1,0 +1,470 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
+
+MODE=""
+IMAGE_ONLY=""
+
+usage() {
+  cat <<USAGE
+Usage:
+  ${0##*/} -all
+  ${0##*/} --image <name>
+
+Options:
+  -all, --all         Build all images (same as legacy buildAll.sh behavior).
+  --image <name>      Build a single image and save tarballs to both dist/ and legacy-dist/.
+
+Examples:
+  ${0##*/} -all
+  ${0##*/} --image dts-admin
+  ${0##*/} --image dts-dbt
+USAGE
+}
+
+if [[ $# -eq 0 ]]; then
+  usage
+  exit 1
+fi
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -all|--all)
+      MODE="all"
+      shift
+      ;;
+    --image)
+      IMAGE_ONLY="${2:-}"
+      if [[ -z "${IMAGE_ONLY}" ]]; then
+        echo "[dts-build] ERROR: --image requires a value" >&2
+        exit 1
+      fi
+      shift 2
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "[dts-build] ERROR: Unknown argument: $1" >&2
+      usage
+      exit 1
+      ;;
+  esac
+done
+
+if [[ -n "${MODE}" && -n "${IMAGE_ONLY}" ]]; then
+  echo "[dts-build] ERROR: --all and --image cannot be used together" >&2
+  exit 1
+fi
+
+BUILD_TS="${BUILD_TS:-$(date +%Y%m%d-%H%M%S)}"
+
+NORMAL_DIST="${REPO_ROOT}/builds/dist"
+LEGACY_DIST="${REPO_ROOT}/builds/legacy-dist"
+NODE_IMAGE="${NODE_IMAGE:-node:20.17.0-alpine3.20}"
+PNPM_VERSION="${PNPM_VERSION:-10.28.0}"
+IMGVERSION_FILE="${IMGVERSION_FILE:-${REPO_ROOT}/imgversion.conf}"
+MAVEN_IMAGE="${MAVEN_IMAGE:-maven:3.9.9-eclipse-temurin-21}"
+MAVEN_SECURITY_OPT="${MAVEN_SECURITY_OPT:-}"
+LEGACY_USE_HOST_MAVEN="${LEGACY_USE_HOST_MAVEN:-}"
+MAVEN_DEBUG="${MAVEN_DEBUG:-}"
+LEGACY_UNRESTRICTED="${LEGACY_UNRESTRICTED:-1}"
+MAVEN_UNRESTRICTED="${MAVEN_UNRESTRICTED:-${LEGACY_UNRESTRICTED:-}}"
+MAVEN_MIRROR_URL="${MAVEN_MIRROR_URL:-https://maven.aliyun.com/repository/public}"
+MAVEN_SETTINGS_FILE="${MAVEN_SETTINGS_FILE:-/root/.m2/settings.xml}"
+PREBUILD_JARS="${PREBUILD_JARS:-1}"
+
+require_cmd() {
+  if ! command -v "$1" >/dev/null 2>&1; then
+    echo "[dts-build] ERROR: '$1' not found in PATH" >&2
+    exit 1
+  fi
+}
+
+load_image_versions() {
+  if [[ -f "$IMGVERSION_FILE" ]]; then
+    set -a
+    # shellcheck source=/dev/null
+    . "$IMGVERSION_FILE"
+    set +a
+  else
+    echo "[dts-build] WARN: ${IMGVERSION_FILE} not found; using default image tags" >&2
+  fi
+}
+
+sanitize_tag() {
+  echo "$1" | tr '/:' '__'
+}
+
+save_image() {
+  local tag="$1"
+  local output_dir="$2"
+  mkdir -p "$output_dir"
+  local tar_path="${output_dir}/$(sanitize_tag "$tag")-${BUILD_TS}.tar"
+  docker save "$tag" -o "$tar_path"
+  echo "[dts-build] Saved ${tar_path}"
+}
+
+build_image() {
+  local name="$1"
+  local tag="$2"
+  local dockerfile="$3"
+  local output_dir="$4"
+  shift 4
+  local args=("$@")
+
+  echo "[dts-build] Building ${name} -> ${tag}"
+  docker build -t "$tag" -f "$dockerfile" "${args[@]}" "$REPO_ROOT"
+  save_image "$tag" "$output_dir"
+}
+
+build_maven_module() {
+  local module="$1"
+  local jar_glob="$2"
+  local out_jar="$3"
+
+  if [[ -f "$out_jar" ]]; then
+    echo "[dts-build] Using prebuilt jar for ${module}: ${out_jar}"
+    return
+  fi
+  if [[ "${LEGACY_USE_PREBUILT_JARS:-}" == "1" ]]; then
+    echo "[dts-build] ERROR: ${out_jar} missing (LEGACY_USE_PREBUILT_JARS=1)" >&2
+    exit 1
+  fi
+
+  if [[ -n "$LEGACY_USE_HOST_MAVEN" ]]; then
+    require_cmd mvn
+    echo "[dts-build] Building ${module} jar via host Maven"
+    if [[ ! -f "$MAVEN_SETTINGS_FILE" ]]; then
+      mkdir -p "$(dirname "$MAVEN_SETTINGS_FILE")"
+      cat > "$MAVEN_SETTINGS_FILE" <<'MAVEN_SETTINGS_EOF'
+<settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0 https://maven.apache.org/xsd/settings-1.0.0.xsd">
+  <mirrors>
+    <mirror>
+      <id>aliyun</id>
+      <mirrorOf>*</mirrorOf>
+      <url>__MAVEN_MIRROR_URL__</url>
+    </mirror>
+  </mirrors>
+</settings>
+MAVEN_SETTINGS_EOF
+      sed -i "s|__MAVEN_MIRROR_URL__|${MAVEN_MIRROR_URL}|g" "$MAVEN_SETTINGS_FILE"
+    fi
+    mvn -B -e -DskipTests -s "$MAVEN_SETTINGS_FILE" -f "${REPO_ROOT}/source/pom.xml" -pl "$module" -am package
+  else
+    echo "[dts-build] Building ${module} jar via ${MAVEN_IMAGE}"
+    local security_opts=()
+    if [[ -n "$MAVEN_SECURITY_OPT" ]]; then
+      security_opts+=(--security-opt "$MAVEN_SECURITY_OPT")
+    fi
+    if [[ "${MAVEN_UNRESTRICTED}" == "1" ]]; then
+      security_opts+=(--security-opt "seccomp=unconfined" --pids-limit=-1 --ulimit "nproc=65535:65535")
+    fi
+    local maven_args=(-B -e -DskipTests -f pom.xml -pl "$module" -am)
+    if [[ -f "$MAVEN_SETTINGS_FILE" ]]; then
+      maven_args=(-B -e -DskipTests -s "$MAVEN_SETTINGS_FILE" -f pom.xml -pl "$module" -am)
+    fi
+
+    if [[ -n "$MAVEN_DEBUG" ]]; then
+      docker run --rm "${security_opts[@]}" \
+        -e "MAVEN_MIRROR_URL=${MAVEN_MIRROR_URL}" \
+        -v "${REPO_ROOT}/source:/workspace" \
+        -v "/root/.m2:/root/.m2" \
+        -w /workspace \
+        "$MAVEN_IMAGE" \
+        sh -lc 'set -eux; JAVA_BIN=$(command -v java || true); if [ -z "$JAVA_BIN" ]; then echo >&2 "java not found"; exit 1; fi; JAVA_HOME="$(dirname "$(dirname "$(readlink -f "$JAVA_BIN")")")"; export JAVA_HOME; env | grep -E "JAVA_HOME|PATH"; java -version; ls -la "$JAVA_HOME/bin/java"; \
+          if [ ! -f /root/.m2/settings.xml ]; then \
+            printf "%s\n" \
+              "<settings xmlns=\"http://maven.apache.org/SETTINGS/1.0.0\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://maven.apache.org/SETTINGS/1.0.0 https://maven.apache.org/xsd/settings-1.0.0.xsd\">" \
+              "  <mirrors>" \
+              "    <mirror>" \
+              "      <id>aliyun</id>" \
+              "      <mirrorOf>*</mirrorOf>" \
+              "      <url>${MAVEN_MIRROR_URL}</url>" \
+              "    </mirror>" \
+              "  </mirrors>" \
+              "</settings>" \
+              > /root/.m2/settings.xml; \
+          fi; \
+          mvn -v; mvn "$@" package' \
+        -- "${maven_args[@]}"
+    else
+      docker run --rm "${security_opts[@]}" \
+        -e "MAVEN_MIRROR_URL=${MAVEN_MIRROR_URL}" \
+        -v "${REPO_ROOT}/source:/workspace" \
+        -v "/root/.m2:/root/.m2" \
+        -w /workspace \
+        "$MAVEN_IMAGE" \
+        sh -lc 'JAVA_BIN=$(command -v java || true); if [ -z "$JAVA_BIN" ]; then echo >&2 "java not found"; exit 1; fi; JAVA_HOME="$(dirname "$(dirname "$(readlink -f "$JAVA_BIN")")")"; export JAVA_HOME; \
+        if [ ! -f /root/.m2/settings.xml ]; then \
+          printf "%s\n" \
+            "<settings xmlns=\"http://maven.apache.org/SETTINGS/1.0.0\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://maven.apache.org/SETTINGS/1.0.0 https://maven.apache.org/xsd/settings-1.0.0.xsd\">" \
+            "  <mirrors>" \
+            "    <mirror>" \
+            "      <id>aliyun</id>" \
+            "      <mirrorOf>*</mirrorOf>" \
+            "      <url>${MAVEN_MIRROR_URL}</url>" \
+            "    </mirror>" \
+            "  </mirrors>" \
+            "</settings>" \
+            > /root/.m2/settings.xml; \
+        fi; \
+        mvn "$@" package' \
+        -- "${maven_args[@]}"
+    fi
+  fi
+
+  local jar_path
+  jar_path="$(ls -1t ${REPO_ROOT}/source/${module}/target/${jar_glob} 2>/dev/null | head -n 1 || true)"
+  if [[ -z "$jar_path" ]]; then
+    echo "[dts-build] ERROR: ${module} jar not found under source/${module}/target" >&2
+    exit 1
+  fi
+  mkdir -p "$(dirname "$out_jar")"
+  cp "$jar_path" "$out_jar"
+  echo "[dts-build] Copied ${jar_path} -> ${out_jar}"
+}
+
+init_images_normal() {
+  load_image_versions
+  IMAGE_DTS_ADMIN="${IMAGE_DTS_ADMIN:-dts-admin:local}"
+  IMAGE_DTS_PLATFORM="${IMAGE_DTS_PLATFORM:-dts-platform:local}"
+  IMAGE_DTS_INGESTION="${IMAGE_DTS_INGESTION:-dts-ingestion:local}"
+  IMAGE_DTS_ANALYTICS="${IMAGE_DTS_ANALYTICS:-dts-analytics:local}"
+  IMAGE_DTS_ADMIN_WEBAPP="${IMAGE_DTS_ADMIN_WEBAPP:-dts-admin-webapp:local}"
+  IMAGE_DTS_PLATFORM_WEBAPP="${IMAGE_DTS_PLATFORM_WEBAPP:-dts-platform-webapp:local}"
+  IMAGE_DTS_ANALYTICS_WEBAPP_MODERN="${IMAGE_DTS_ANALYTICS_WEBAPP_MODERN:-dts-analytics-webapp-modern:local}"
+  IMAGE_DTS_AIRFLOW_OM="${IMAGE_DTS_AIRFLOW_OM:-${IMAGE_AIRFLOW:-dts-airflow-om:local}}"
+  IMAGE_DTS_DBT="${IMAGE_DTS_DBT:-${IMAGE_DBT:-dts-dbt:1.11.2}}"
+}
+
+init_images_legacy() {
+  load_image_versions
+  IMAGE_DTS_ADMIN="${IMAGE_DTS_ADMIN:-dts-admin:local}"
+  IMAGE_DTS_PLATFORM="${IMAGE_DTS_PLATFORM:-dts-platform:local}"
+  IMAGE_DTS_INGESTION="${IMAGE_DTS_INGESTION:-dts-ingestion:local}"
+  IMAGE_DTS_ANALYTICS="${IMAGE_DTS_ANALYTICS:-dts-analytics:local}"
+  IMAGE_DTS_ADMIN_WEBAPP="${IMAGE_DTS_ADMIN_WEBAPP:-dts-admin-webapp:local}"
+  IMAGE_DTS_PLATFORM_WEBAPP="${IMAGE_DTS_PLATFORM_WEBAPP:-dts-platform-webapp:local}"
+  IMAGE_DTS_ANALYTICS_WEBAPP_LEGACY="${IMAGE_DTS_ANALYTICS_WEBAPP_LEGACY:-dts-analytics-webapp:local}"
+  IMAGE_DTS_AIRFLOW_OM="${IMAGE_DTS_AIRFLOW_OM:-${IMAGE_AIRFLOW:-dts-airflow-om:local}}"
+  IMAGE_DTS_DBT="${IMAGE_DTS_DBT:-${IMAGE_DBT:-dts-dbt:1.11.2}}"
+}
+
+resolve_image() {
+  local name="$1"
+  local mode="$2"
+  local tag=""
+  local dockerfile=""
+  case "$name" in
+    dts-admin)
+      tag="$IMAGE_DTS_ADMIN"
+      dockerfile="${REPO_ROOT}/builds/dts-admin/${mode}"
+      ;;
+    dts-platform)
+      tag="$IMAGE_DTS_PLATFORM"
+      dockerfile="${REPO_ROOT}/builds/dts-platform/${mode}"
+      ;;
+    dts-ingestion)
+      tag="$IMAGE_DTS_INGESTION"
+      dockerfile="${REPO_ROOT}/builds/dts-ingestion/${mode}"
+      ;;
+    dts-analytics)
+      tag="$IMAGE_DTS_ANALYTICS"
+      dockerfile="${REPO_ROOT}/builds/dts-analytics/${mode}"
+      ;;
+    dts-admin-webapp)
+      tag="$IMAGE_DTS_ADMIN_WEBAPP"
+      dockerfile="${REPO_ROOT}/builds/dts-admin-webapp/Dockerfile"
+      ;;
+    dts-platform-webapp)
+      tag="$IMAGE_DTS_PLATFORM_WEBAPP"
+      dockerfile="${REPO_ROOT}/builds/dts-platform-webapp/Dockerfile"
+      ;;
+    dts-analytics-webapp-modern)
+      tag="$IMAGE_DTS_ANALYTICS_WEBAPP_MODERN"
+      dockerfile="${REPO_ROOT}/builds/dts-analytics-webapp/modern/Dockerfile"
+      ;;
+    dts-analytics-webapp)
+      tag="$IMAGE_DTS_ANALYTICS_WEBAPP_LEGACY"
+      dockerfile="${REPO_ROOT}/builds/dts-analytics-webapp/Dockerfile"
+      ;;
+    dts-airflow-om)
+      tag="$IMAGE_DTS_AIRFLOW_OM"
+      dockerfile="${REPO_ROOT}/source/dts-airflow-om/Dockerfile"
+      ;;
+    dts-dbt)
+      tag="$IMAGE_DTS_DBT"
+      dockerfile="${REPO_ROOT}/builds/dts-dbt/Dockerfile"
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+
+  echo "$tag|$dockerfile"
+}
+
+build_all_normal() {
+  init_images_normal
+  local enable_maven_build_arg="${ENABLE_MAVEN_BUILD:-true}"
+  if [[ "${PREBUILD_JARS}" == "1" ]]; then
+    build_maven_module "dts-admin" "dts-admin-*.jar" "${REPO_ROOT}/builds/dts-admin/dts-admin.jar"
+    build_maven_module "dts-platform" "dts-platform-*.jar" "${REPO_ROOT}/builds/dts-platform/dts-platform.jar"
+    build_maven_module "dts-ingestion" "dts-ingestion-*.jar" "${REPO_ROOT}/builds/dts-ingestion/dts-ingestion.jar"
+    enable_maven_build_arg="false"
+  fi
+
+  build_image "dts-admin" "$IMAGE_DTS_ADMIN" "${REPO_ROOT}/builds/dts-admin/Dockerfile" "$NORMAL_DIST" \
+    --build-arg ENABLE_MAVEN_BUILD="${enable_maven_build_arg}"
+  build_image "dts-platform" "$IMAGE_DTS_PLATFORM" "${REPO_ROOT}/builds/dts-platform/Dockerfile" "$NORMAL_DIST" \
+    --build-arg ENABLE_MAVEN_BUILD="${enable_maven_build_arg}"
+  build_image "dts-ingestion" "$IMAGE_DTS_INGESTION" "${REPO_ROOT}/builds/dts-ingestion/Dockerfile" "$NORMAL_DIST" \
+    --build-arg ENABLE_MAVEN_BUILD="${enable_maven_build_arg}"
+  build_image "dts-analytics" "$IMAGE_DTS_ANALYTICS" "${REPO_ROOT}/builds/dts-analytics/Dockerfile" "$NORMAL_DIST"
+  build_image "dts-admin-webapp" "$IMAGE_DTS_ADMIN_WEBAPP" "${REPO_ROOT}/builds/dts-admin-webapp/Dockerfile" "$NORMAL_DIST" \
+    --build-arg PNPM_VERSION="${PNPM_VERSION}" \
+    --build-arg WEBAPP_BUILD_CMD="build:modern"
+  build_image "dts-platform-webapp" "$IMAGE_DTS_PLATFORM_WEBAPP" "${REPO_ROOT}/builds/dts-platform-webapp/Dockerfile" "$NORMAL_DIST" \
+    --build-arg PNPM_VERSION="${PNPM_VERSION}" \
+    --build-arg WEBAPP_BUILD_CMD="build:modern"
+  build_image "dts-analytics-webapp-modern" "$IMAGE_DTS_ANALYTICS_WEBAPP_MODERN" "${REPO_ROOT}/builds/dts-analytics-webapp/modern/Dockerfile" "$NORMAL_DIST" \
+    --build-arg PNPM_VERSION="${PNPM_VERSION}"
+  build_image "dts-airflow-om" "$IMAGE_DTS_AIRFLOW_OM" "${REPO_ROOT}/source/dts-airflow-om/Dockerfile" "$NORMAL_DIST" \
+    --build-arg PIP_INDEX_URL="${PIP_INDEX_URL:-}" \
+    --build-arg PIP_TRUSTED_HOST="${PIP_TRUSTED_HOST:-}" \
+    --build-arg PIP_DEFAULT_TIMEOUT="${PIP_DEFAULT_TIMEOUT:-60}" \
+    --build-arg PIP_RETRIES="${PIP_RETRIES:-10}" \
+    --build-arg HTTP_PROXY="${HTTP_PROXY:-}" \
+    --build-arg HTTPS_PROXY="${HTTPS_PROXY:-}" \
+    --build-arg NO_PROXY="${NO_PROXY:-}"
+  build_image "dts-dbt" "$IMAGE_DTS_DBT" "${REPO_ROOT}/builds/dts-dbt/Dockerfile" "$NORMAL_DIST"
+}
+
+build_all_legacy() {
+  init_images_legacy
+  build_image "dts-admin" "$IMAGE_DTS_ADMIN" "${REPO_ROOT}/builds/dts-admin/Dockerfile.offline" "$LEGACY_DIST"
+  build_image "dts-platform" "$IMAGE_DTS_PLATFORM" "${REPO_ROOT}/builds/dts-platform/Dockerfile.offline" "$LEGACY_DIST"
+  build_image "dts-ingestion" "$IMAGE_DTS_INGESTION" "${REPO_ROOT}/builds/dts-ingestion/Dockerfile.offline" "$LEGACY_DIST"
+  build_image "dts-analytics" "$IMAGE_DTS_ANALYTICS" "${REPO_ROOT}/builds/dts-analytics/Dockerfile.offline" "$LEGACY_DIST"
+  build_image "dts-admin-webapp" "$IMAGE_DTS_ADMIN_WEBAPP" "${REPO_ROOT}/builds/dts-admin-webapp/Dockerfile" "$LEGACY_DIST" \
+    --build-arg PNPM_VERSION="${PNPM_VERSION}" \
+    --build-arg WEBAPP_BUILD_CMD="build:modern"
+  build_image "dts-platform-webapp" "$IMAGE_DTS_PLATFORM_WEBAPP" "${REPO_ROOT}/builds/dts-platform-webapp/Dockerfile" "$LEGACY_DIST" \
+    --build-arg PNPM_VERSION="${PNPM_VERSION}" \
+    --build-arg WEBAPP_BUILD_CMD="build:modern"
+  build_image "dts-analytics-webapp" "$IMAGE_DTS_ANALYTICS_WEBAPP_LEGACY" "${REPO_ROOT}/builds/dts-analytics-webapp/Dockerfile" "$LEGACY_DIST"
+  build_image "dts-airflow-om" "$IMAGE_DTS_AIRFLOW_OM" "${REPO_ROOT}/source/dts-airflow-om/Dockerfile" "$LEGACY_DIST" \
+    --build-arg PIP_INDEX_URL="${PIP_INDEX_URL:-}" \
+    --build-arg PIP_TRUSTED_HOST="${PIP_TRUSTED_HOST:-}" \
+    --build-arg PIP_DEFAULT_TIMEOUT="${PIP_DEFAULT_TIMEOUT:-60}" \
+    --build-arg PIP_RETRIES="${PIP_RETRIES:-10}" \
+    --build-arg HTTP_PROXY="${HTTP_PROXY:-}" \
+    --build-arg HTTPS_PROXY="${HTTPS_PROXY:-}" \
+    --build-arg NO_PROXY="${NO_PROXY:-}"
+  build_image "dts-dbt" "$IMAGE_DTS_DBT" "${REPO_ROOT}/builds/dts-dbt/Dockerfile" "$LEGACY_DIST"
+}
+
+build_single_image() {
+  local name="$1"
+
+  init_images_normal
+  init_images_legacy
+
+  local enable_maven_build_arg="${ENABLE_MAVEN_BUILD:-true}"
+  if [[ "${PREBUILD_JARS}" == "1" ]]; then
+    case "$name" in
+      dts-admin)
+        build_maven_module "dts-admin" "dts-admin-*.jar" "${REPO_ROOT}/builds/dts-admin/dts-admin.jar"
+        enable_maven_build_arg="false"
+        ;;
+      dts-platform)
+        build_maven_module "dts-platform" "dts-platform-*.jar" "${REPO_ROOT}/builds/dts-platform/dts-platform.jar"
+        enable_maven_build_arg="false"
+        ;;
+      dts-ingestion)
+        build_maven_module "dts-ingestion" "dts-ingestion-*.jar" "${REPO_ROOT}/builds/dts-ingestion/dts-ingestion.jar"
+        enable_maven_build_arg="false"
+        ;;
+    esac
+  fi
+
+  local normal_res
+  if ! normal_res=$(resolve_image "$name" "Dockerfile"); then
+    echo "[dts-build] ERROR: unknown image name: ${name}" >&2
+    exit 1
+  fi
+  local normal_tag="${normal_res%%|*}"
+  local normal_df="${normal_res##*|}"
+  local legacy_df=""
+
+  case "$name" in
+    dts-admin)
+      legacy_df="${REPO_ROOT}/builds/dts-admin/Dockerfile.offline"
+      ;;
+    dts-platform)
+      legacy_df="${REPO_ROOT}/builds/dts-platform/Dockerfile.offline"
+      ;;
+    dts-ingestion)
+      legacy_df="${REPO_ROOT}/builds/dts-ingestion/Dockerfile.offline"
+      ;;
+    dts-analytics)
+      legacy_df="${REPO_ROOT}/builds/dts-analytics/Dockerfile.offline"
+      ;;
+    dts-analytics-webapp)
+      legacy_df="${REPO_ROOT}/builds/dts-analytics-webapp/Dockerfile"
+      ;;
+    *)
+      legacy_df=""
+      ;;
+  esac
+
+  local build_args=()
+  case "$name" in
+    dts-admin|dts-platform|dts-ingestion)
+      build_args+=(--build-arg ENABLE_MAVEN_BUILD="${enable_maven_build_arg}")
+      ;;
+    dts-admin-webapp|dts-platform-webapp)
+      build_args+=(--build-arg PNPM_VERSION="${PNPM_VERSION}" --build-arg WEBAPP_BUILD_CMD="build:modern")
+      ;;
+    dts-analytics-webapp-modern)
+      build_args+=(--build-arg PNPM_VERSION="${PNPM_VERSION}")
+      ;;
+    dts-airflow-om)
+      build_args+=(
+        --build-arg PIP_INDEX_URL="${PIP_INDEX_URL:-}" 
+        --build-arg PIP_TRUSTED_HOST="${PIP_TRUSTED_HOST:-}" 
+        --build-arg PIP_DEFAULT_TIMEOUT="${PIP_DEFAULT_TIMEOUT:-60}" 
+        --build-arg PIP_RETRIES="${PIP_RETRIES:-10}" 
+        --build-arg HTTP_PROXY="${HTTP_PROXY:-}" 
+        --build-arg HTTPS_PROXY="${HTTPS_PROXY:-}" 
+        --build-arg NO_PROXY="${NO_PROXY:-}"
+      )
+      ;;
+  esac
+
+  build_image "$name" "$normal_tag" "$normal_df" "$NORMAL_DIST" "${build_args[@]}"
+
+  if [[ -n "$legacy_df" && -f "$legacy_df" ]]; then
+    build_image "$name" "$normal_tag" "$legacy_df" "$LEGACY_DIST" "${build_args[@]}"
+  else
+    save_image "$normal_tag" "$LEGACY_DIST"
+  fi
+}
+
+require_cmd docker
+
+if [[ "$MODE" == "all" ]]; then
+  build_all_normal
+  build_all_legacy
+elif [[ -n "$IMAGE_ONLY" ]]; then
+  build_single_image "$IMAGE_ONLY"
+else
+  usage
+  exit 1
+fi
