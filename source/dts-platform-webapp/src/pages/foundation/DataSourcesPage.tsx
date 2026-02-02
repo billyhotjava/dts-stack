@@ -17,8 +17,9 @@ import {
 	Upload,
 	message,
 } from "antd";
-import { PlusOutlined, ReloadOutlined, EditOutlined, DeleteOutlined, ExperimentOutlined } from "@ant-design/icons";
+import { PlusOutlined, ReloadOutlined, EditOutlined, DeleteOutlined, ExperimentOutlined, CheckCircleOutlined, CloseCircleOutlined } from "@ant-design/icons";
 import dataSourcesService, {
+	type ConnectionTestResult,
 	type DataSourceUpsertPayload,
 	type DataSourceUpdateImpact,
 	type ExcelImportParseResponse,
@@ -249,6 +250,33 @@ export default function DataSourcesPage() {
 		});
 	};
 
+	const showTestResult = (name: string, result: ConnectionTestResult) => {
+		const isOk = result.success;
+		const details: string[] = [];
+		if (result.elapsedMillis != null) details.push(`耗时：${result.elapsedMillis} ms`);
+		if (result.engineVersion) details.push(`数据库版本：${result.engineVersion}`);
+		if (result.driverVersion) details.push(`驱动版本：${result.driverVersion}`);
+		if (result.warnings?.length) details.push(`警告：${result.warnings.join("; ")}`);
+
+		Modal[isOk ? "success" : "error"]({
+			title: isOk ? `${name} 连接成功` : `${name} 连接失败`,
+			icon: isOk ? <CheckCircleOutlined /> : <CloseCircleOutlined />,
+			content: (
+				<div style={{ maxHeight: 300, overflow: "auto" }}>
+					{result.message && <div style={{ marginBottom: 8, wordBreak: "break-all" }}>{result.message}</div>}
+					{details.length > 0 && (
+						<div style={{ fontSize: 12, color: "#666" }}>
+							{details.map((d, i) => (
+								<div key={i}>{d}</div>
+							))}
+						</div>
+					)}
+				</div>
+			),
+			width: 520,
+		});
+	};
+
 	const handleTest = async (record: InfraDataSource) => {
 		if (!record.jdbcUrl) {
 			message.warning("非 JDBC 数据源无需测试连接");
@@ -256,11 +284,19 @@ export default function DataSourcesPage() {
 		}
 		try {
 			setTestingId(record.id);
-			await dataSourcesService.test(record.id);
-			message.success("连接测试已触发");
+			const result = await dataSourcesService.test(record.id);
+			if (result?.success) {
+				showTestResult(record.name, result);
+			} else {
+				showTestResult(record.name, result || { success: false, message: "未获取到测试结果" });
+			}
 			loadList();
 		} catch (error: any) {
-			message.error(error?.message || "连接测试失败");
+			Modal.error({
+				title: `${record.name} 连接测试异常`,
+				content: error?.message || "连接测试请求失败，请检查网络或服务状态。",
+				width: 520,
+			});
 		} finally {
 			setTestingId(null);
 		}

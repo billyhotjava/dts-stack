@@ -284,7 +284,9 @@ public class IngestionTaskResource {
 
             boolean hasJobConfig = request.jobConfig() != null && !request.jobConfig().isEmpty();
             String streamSelection = resolveStreamSelection(request.streams());
-            List<String> configTables = mergeTables(extractTables(mergedReaderConfig), extractTables(writerConfig));
+            List<String> configTables = stripTablePlaceholders(
+                mergeTables(extractTables(mergedReaderConfig), extractTables(writerConfig))
+            );
             if (streamTables.isEmpty() && !configTables.isEmpty()) {
                 streamTables = configTables;
                 streamSelection = "manual";
@@ -948,6 +950,25 @@ public class IngestionTaskResource {
         return cleaned.isEmpty() ? List.of() : cleaned;
     }
 
+    private List<String> stripTablePlaceholders(List<String> tables) {
+        if (tables == null || tables.isEmpty()) {
+            return List.of();
+        }
+        java.util.List<String> cleaned = new java.util.ArrayList<>(tables.size());
+        for (String table : tables) {
+            String normalized = normalize(table);
+            if (!StringUtils.hasText(normalized)) {
+                continue;
+            }
+            String lower = normalized.toLowerCase(java.util.Locale.ROOT);
+            if ("${table}".equals(lower) || "{table}".equals(lower) || "{{table}}".equals(lower)) {
+                continue;
+            }
+            cleaned.add(normalized);
+        }
+        return cleaned.isEmpty() ? List.of() : cleaned;
+    }
+
     private String stripSchema(String table) {
         String normalized = normalize(table);
         if (!StringUtils.hasText(normalized)) {
@@ -1217,7 +1238,9 @@ public class IngestionTaskResource {
         }
         String syncPrefix = normalize(taskDTO.getSyncPrefix());
         Map<String, Object> writerConfigForUpdate = jsonNodeToMap(taskDTO.getDestinationConfig());
-        List<String> requestedTables = mergeTables(extractTables(sourceOverrides), extractTables(writerConfigForUpdate));
+        List<String> requestedTables = stripTablePlaceholders(
+            mergeTables(extractTables(sourceOverrides), extractTables(writerConfigForUpdate))
+        );
         boolean rebuildMapping = taskDTO.getTableMapping() == null || taskDTO.getTableMapping().isNull();
         if (StringUtils.hasText(syncPrefix) || !requestedTables.isEmpty()) {
             rebuildMapping = true;

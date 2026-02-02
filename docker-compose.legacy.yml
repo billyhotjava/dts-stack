@@ -247,6 +247,8 @@ services:
     depends_on:
       dts-pg:
         condition: service_healthy
+      dts-keycloak:
+        condition: service_started
     environment:
       SPRING_PROFILES_ACTIVE: ${DTS_PROFILE:-prod}
       SPRING_DATASOURCE_URL: jdbc:postgresql://dts-pg:5432/${PG_DB_DTADMIN:-dts_admin}
@@ -832,6 +834,8 @@ services:
     image: ${IMAGE_AIRFLOW}
     container_name: dts-airflow-webserver
     command: webserver
+    group_add:
+      - "${DOCKER_GID:-985}"
     depends_on:
       dts-airflow-init:
         condition: service_completed_successfully
@@ -892,6 +896,8 @@ services:
     image: ${IMAGE_AIRFLOW}
     container_name: dts-airflow-scheduler
     command: scheduler
+    group_add:
+      - "${DOCKER_GID:-985}"
     depends_on:
       dts-airflow-init:
         condition: service_completed_successfully

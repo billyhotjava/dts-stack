@@ -281,11 +281,17 @@ public class InfraDataSourceResource {
             request.setPassword(password.toString());
         }
         HiveConnectionTestResult result = jdbcConnectionTestService.testConnection(request);
+        // Persist test log and update lastVerifiedAt on success
+        String username = SecurityUtils.getCurrentUserLogin().orElse("system");
+        infraManagementService.recordConnectionTest(id, request, result, username);
+        if (result.success()) {
+            infraManagementService.markDataSourceVerified(id);
+        }
         auditService.auditAction(
             "FOUNDATION_DATASOURCE_TEST",
-            AuditStage.SUCCESS,
+            result.success() ? AuditStage.SUCCESS : AuditStage.FAIL,
             id.toString(),
-            Map.of("summary", "测试数据源连接", "id", id.toString())
+            Map.of("summary", "测试数据源连接", "id", id.toString(), "result", result.success() ? "SUCCESS" : "FAILED")
         );
         return ApiResponses.ok(result);
     }

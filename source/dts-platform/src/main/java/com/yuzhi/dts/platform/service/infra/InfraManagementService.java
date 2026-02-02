@@ -416,6 +416,14 @@ public class InfraManagementService {
         }
     }
 
+    @Transactional
+    public void markDataSourceVerified(UUID dataSourceId) {
+        dataSourceRepository.findById(dataSourceId).ifPresent(entity -> {
+            entity.setLastVerifiedAt(Instant.now());
+            dataSourceRepository.save(entity);
+        });
+    }
+
     private Object redactPayload(Object payload) {
         if (payload == null) {
             return null;
@@ -431,6 +439,15 @@ public class InfraManagementService {
             safe.put("remarks", request.getRemarks());
             safe.put("krb5Provided", StringUtils.hasText(request.getKrb5Conf()));
             safe.put("keytabProvided", StringUtils.hasText(request.getKeytabBase64()));
+            safe.put("passwordProvided", StringUtils.hasText(request.getPassword()));
+            return safe;
+        }
+        if (payload instanceof com.yuzhi.dts.platform.web.rest.infra.JdbcConnectionTestRequest request) {
+            Map<String, Object> safe = new LinkedHashMap<>();
+            safe.put("jdbcUrl", request.getJdbcUrl());
+            safe.put("driverClass", request.getDriverClass());
+            safe.put("driverVersion", request.getDriverVersion());
+            safe.put("username", request.getUsername());
             safe.put("passwordProvided", StringUtils.hasText(request.getPassword()));
             return safe;
         }

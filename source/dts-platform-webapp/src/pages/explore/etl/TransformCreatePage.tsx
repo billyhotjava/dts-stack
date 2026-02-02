@@ -959,6 +959,9 @@ export default function TransformCreatePage() {
 			if (!selectedDataSourceId && sourceCategory !== "file" && form.getFieldValue("readerType")) {
 				form.setFieldValue("readerType", undefined);
 			}
+			if (selectedDataSourceId && sourceCategory !== "file") {
+				form.setFieldValue("readerType", GENERIC_JDBC_READER);
+			}
 			return;
 		}
 		const readerType = resolveReaderTypeFromDataSource(selectedDataSource);

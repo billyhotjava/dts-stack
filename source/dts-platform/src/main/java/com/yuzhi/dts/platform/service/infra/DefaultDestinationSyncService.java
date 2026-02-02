@@ -105,10 +105,47 @@ public class DefaultDestinationSyncService {
                 writerType = normalize(config.get("type"));
             }
         }
+        // Fallback: infer writer type from the data lake's type or jdbcUrl
+        if (!StringUtils.hasText(writerType) && lake != null) {
+            writerType = inferWriterTypeFromLake(lake);
+        }
         if (StringUtils.hasText(writerType) && config != null && !StringUtils.hasText(normalize(config.get("writerType")))) {
             config.put("writerType", writerType);
         }
         return writerType;
+    }
+
+    private String inferWriterTypeFromLake(AdminInfraClient.AdminDataLakeConfig lake) {
+        // Try from lake type field
+        String type = normalize(lake.getType());
+        if (StringUtils.hasText(type)) {
+            String inferred = inferWriterFromTypeString(type.toLowerCase());
+            if (inferred != null) return inferred;
+        }
+        // Try from JDBC URL
+        String jdbcUrl = normalize(lake.getJdbcUrl());
+        if (StringUtils.hasText(jdbcUrl)) {
+            String lower = jdbcUrl.toLowerCase();
+            if (lower.startsWith("jdbc:postgresql:")) return "postgresqlwriter";
+            if (lower.startsWith("jdbc:mysql:") || lower.startsWith("jdbc:mariadb:")) return "mysqlwriter";
+            if (lower.startsWith("jdbc:oracle:")) return "oraclewriter";
+            if (lower.startsWith("jdbc:sqlserver:")) return "sqlserverwriter";
+            if (lower.startsWith("jdbc:dm:")) return "rdbmswriter";
+            if (lower.startsWith("jdbc:clickhouse:")) return "clickhousewriter";
+            if (lower.startsWith("jdbc:hive2:")) return "hivewriter";
+        }
+        return null;
+    }
+
+    private String inferWriterFromTypeString(String type) {
+        if (type.contains("postgres") || type.contains("pg")) return "postgresqlwriter";
+        if (type.contains("mysql") || type.contains("mariadb")) return "mysqlwriter";
+        if (type.contains("oracle")) return "oraclewriter";
+        if (type.contains("sqlserver") || type.contains("mssql")) return "sqlserverwriter";
+        if (type.contains("dm") || type.contains("dameng")) return "rdbmswriter";
+        if (type.contains("clickhouse")) return "clickhousewriter";
+        if (type.contains("hive")) return "hivewriter";
+        return null;
     }
 
     private String normalize(Object value) {

@@ -1,5 +1,14 @@
 import apiClient from "../apiClient";
 
+export type ConnectionTestResult = {
+	success: boolean;
+	message?: string;
+	elapsedMillis?: number;
+	engineVersion?: string;
+	driverVersion?: string;
+	warnings?: string[];
+};
+
 export type InfraDataSource = {
 	id: string;
 	name: string;
@@ -108,7 +117,7 @@ export default {
 	updateWithImpact: (id: string, payload: DataSourceUpsertPayload) =>
 		apiClient.put<DataSourceUpdateImpact>({ url: `/infra/data-sources/${id}/impact`, data: payload }),
 	remove: (id: string) => apiClient.delete<void>({ url: `/infra/data-sources/${id}` }),
-	test: (id: string) => apiClient.post<any>({ url: `/infra/data-sources/${id}/test` }),
+	test: (id: string) => apiClient.post<ConnectionTestResult>({ url: `/infra/data-sources/${id}/test` }),
 	excelPrepare: (file: File) => {
 		const formData = new FormData();
 		formData.append("file", file);
