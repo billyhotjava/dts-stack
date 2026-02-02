@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
-import { Button, Card, Space, Table, Tag, message, Modal, Descriptions } from "antd";
+import { Button, Card, Space, Table, Tag, message, Modal } from "antd";
 import { PlayCircleOutlined, EditOutlined, DeleteOutlined, HistoryOutlined, ReloadOutlined, SyncOutlined } from "@ant-design/icons";
 import { PageHeader } from "@/components/page-header";
 import { useRouter } from "@/routes/hooks";
-import { ingestionTaskAPI, type IngestionTaskDTO, type PageResult } from "@/api/ingestion";
+import { ingestionTaskAPI, type IngestionTaskDTO } from "@/api/ingestion";
 import { formatTimestamp } from "@/utils/format";
 
 export default function TransformPage() {

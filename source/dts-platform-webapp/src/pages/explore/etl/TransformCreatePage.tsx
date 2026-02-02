@@ -1118,10 +1118,10 @@ export default function TransformCreatePage() {
 			toast.info("编辑模式不支持保存草稿");
 			return;
 		}
-		let values: Record<string, any> | undefined;
+		let values: Record<string, any> = {};
 		try {
 			setSavingDraft(true);
-			values = form.getFieldsValue(true);
+			values = form.getFieldsValue(true) ?? {};
 			let name = resolveTaskName(values, form);
 			if (!name && selectedDataSource) {
 				name = normalizeText(selectedDataSource.name);
@@ -1776,9 +1776,9 @@ export default function TransformCreatePage() {
 				if (!includeTables.length) {
 					throw new Error("请选择需要入湖的表");
 				}
-				readerConfig = applyTablesToConfig(readerConfig as Record<string, any> | undefined, includeTables);
-				if (shouldApplyWriterTables(writerConfig as Record<string, any> | undefined, mergedValues)) {
-					writerConfig = applyTablesToConfig(writerConfig as Record<string, any> | undefined, includeTables);
+				readerConfig = applyTablesToConfig((readerConfig as Record<string, any>) ?? {}, includeTables) ?? {};
+				if (shouldApplyWriterTables((writerConfig as Record<string, any>) ?? {}, mergedValues)) {
+					writerConfig = applyTablesToConfig((writerConfig as Record<string, any>) ?? {}, includeTables) ?? {};
 				}
 			}
 			const excludeTables = selectionMode === "all" ? splitLines(mergedValues.tableExclude) : [];
@@ -1797,7 +1797,7 @@ export default function TransformCreatePage() {
 					id: editId,
 					name: taskName,
 					description: normalizeText(mergedValues.description) || undefined,
-					sourceType: normalizeText(resolvedReaderType) || undefined,
+					sourceType: normalizeText(resolvedReaderType) || "",
 					sourceDataSourceId: sourceDataSourceId,
 					sourceConfig: (readerConfig as Record<string, any>) || {},
 					destinationType: defaultWriterType,

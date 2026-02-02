@@ -290,7 +290,7 @@ export default function ReferenceCodesPage() {
 			cancelText: "取消",
 			onOk: async () => {
 				try {
-					await deleteReferenceCodeMapping(activeDirectory.codeTypeId, row.mapId);
+					await deleteReferenceCodeMapping(activeDirectory.codeTypeId, row.mapId!);
 					toast.success("映射已删除");
 					await refreshMappings();
 				} catch (err: any) {
@@ -353,7 +353,7 @@ export default function ReferenceCodesPage() {
 			cancelText: "取消",
 			onOk: async () => {
 				try {
-					await deleteReferenceCodeItem(activeDirectory.codeTypeId, row.itemId);
+					await deleteReferenceCodeItem(activeDirectory.codeTypeId, row.itemId!);
 					toast.success("码表项已删除");
 					await refreshItems();
 				} catch (err: any) {

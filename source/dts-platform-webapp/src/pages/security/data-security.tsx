@@ -60,7 +60,7 @@ export default function Page() {
 	const [editingMasking, setEditingMasking] = useState<MaskingRule | null>(null);
 	const [maskingForm] = Form.useForm<MaskingRule & { datasetId?: string }>();
 	const [selectedDataset, setSelectedDataset] = useState<string | undefined>();
-	const [securityMapping, setSecurityMapping] = useState<any>(null);
+	const [, setSecurityMapping] = useState<any>(null);
 	const [securityForm] = Form.useForm();
 
 	const datasetOptions = useMemo(
@@ -107,8 +107,8 @@ export default function Page() {
 			const result = await getDatasetSecurityMapping(datasetId);
 			setSecurityMapping(result || null);
 			securityForm.setFieldsValue({
-				dataLevelField: result?.dataLevelField || "",
-				deptField: result?.deptField || "",
+				dataLevelField: (result as any)?.dataLevelField || "",
+				deptField: (result as any)?.deptField || "",
 			});
 		} catch (error: any) {
 			toast.error(error?.message || "安全字段加载失败");

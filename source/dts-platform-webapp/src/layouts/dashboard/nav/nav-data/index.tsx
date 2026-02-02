@@ -183,7 +183,7 @@ const collectAllowedRoutes = (menus: MenuTree[]): AllowedRouteIndex => {
 	return allowed;
 };
 
-const buildNavItems = (nodes: MenuTree[]): NavItemDataProps[] => {
+const _buildNavItems = (nodes: MenuTree[]): NavItemDataProps[] => {
 	return buildNavItemsInternal(nodes, undefined, new Set<string>());
 };
 

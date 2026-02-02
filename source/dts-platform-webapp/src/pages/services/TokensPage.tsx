@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Button, Card, Modal, Space, Table, Tag, Typography } from "antd";
+import { Button, Card, Modal, Table, Tag, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { PlusOutlined, DeleteOutlined } from "@ant-design/icons";
 import { PageHeader } from "@/components/page-header";

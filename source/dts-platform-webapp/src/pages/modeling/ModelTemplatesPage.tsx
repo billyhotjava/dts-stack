@@ -205,7 +205,7 @@ export default function Page() {
 			cancelText: "取消",
 			onOk: async () => {
 				try {
-					await archiveModelingPlan(row.id);
+					await archiveModelingPlan(row.id!);
 					toast.success("已归档");
 					await loadSpaces();
 				} catch (err: any) {
@@ -223,7 +223,7 @@ export default function Page() {
 			cancelText: "取消",
 			onOk: async () => {
 				try {
-					await restoreModelingPlan(row.id);
+					await restoreModelingPlan(row.id!);
 					toast.success("已恢复");
 					await loadSpaces();
 				} catch (err: any) {

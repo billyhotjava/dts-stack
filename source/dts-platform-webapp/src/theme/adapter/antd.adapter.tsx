@@ -11,7 +11,7 @@ import type { UILibraryAdapter } from "../type";
 
 export const AntdAdapter: UILibraryAdapter = ({ mode, children }) => {
 	const { language } = useLocale();
-	const { themeColorPresets, fontFamily, fontSize } = useSettings();
+	const { themeColorPresets } = useSettings();
 	const algorithm = mode === ThemeMode.Light ? theme.defaultAlgorithm : theme.darkAlgorithm;
 
 	const colorTokens = mode === ThemeMode.Light ? lightColorTokens : darkColorTokens;

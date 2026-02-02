@@ -238,7 +238,7 @@ export default function Page() {
 		});
 	};
 
-	const handlePurge = (record: ReportLink) => {
+	const _handlePurge = (record: ReportLink) => {
 		if (!record?.id) return;
 		Modal.confirm({
 			title: "确认彻底删除该 BI 链接？",

@@ -26,7 +26,7 @@ import dataSourcesService, {
 	type InfraDataSource,
 } from "@/api/services/dataSourcesService";
 import jdbcDriversService, { type InfraJdbcDriver } from "@/api/services/jdbcDriversService";
-import type { UploadRequestOption } from "rc-upload/lib/interface";
+type UploadRequestOption = Parameters<NonNullable<import("antd").UploadProps["customRequest"]>>[0];
 
 const { Text } = Typography;
 

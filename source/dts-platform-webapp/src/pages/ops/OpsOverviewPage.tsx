@@ -6,7 +6,7 @@ import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
 import opsService, { type OpsAlert, type OpsOverview } from "@/api/services/opsService";
 
-const { Title, Text } = Typography;
+const { Text } = Typography;
 
 const alertColumns: ColumnsType<OpsAlert> = [
 	{ title: "类型", dataIndex: "type", width: 120 },
