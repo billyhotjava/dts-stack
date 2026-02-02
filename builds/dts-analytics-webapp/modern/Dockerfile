@@ -42,17 +42,14 @@ RUN set -eux; \
 COPY source/dts-analytics-webapp/modern/ ./
 RUN pnpm build
 
-ARG BASE_IMAGE_NODE=node:20.17.0-alpine3.20
-FROM ${BASE_IMAGE_NODE} AS runtime
+FROM nginx:stable-alpine AS runtime
 
-RUN set -eux; \
-    apk add --no-cache nginx; \
-    rm -f /etc/nginx/http.d/default.conf /etc/nginx/conf.d/default.conf; \
+RUN rm -f /etc/nginx/conf.d/default.conf; \
     mkdir -p /usr/share/nginx/html
 
 WORKDIR /usr/share/nginx/html
 COPY --from=builder /app/dist ./
-COPY builds/dts-analytics-webapp/modern/nginx.conf /etc/nginx/http.d/default.conf
+COPY builds/dts-analytics-webapp/modern/nginx.conf /etc/nginx/conf.d/default.conf
 
 EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]
