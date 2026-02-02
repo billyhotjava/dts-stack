@@ -1,0 +1,19 @@
+# Common ignores for Docker build context (dbt image)
+.git
+.gitignore
+.idea
+.vscode
+.DS_Store
+*.log
+*.iml
+
+# Build outputs
+node_modules/
+dist/
+coverage/
+target/
+.mvn/
+
+# Local env/config
+.env
+.env.*
