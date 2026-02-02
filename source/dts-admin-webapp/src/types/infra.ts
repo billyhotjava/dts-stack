@@ -29,7 +29,7 @@ export interface HiveConnectionPersistRequest extends HiveConnectionTestRequest 
 	customJdbcUrl?: string;
 	lastTestElapsedMillis?: number;
 	engineVersion?: string | null;
-	driverVersion?: string | null;
+	driverVersion?: string;
 	defaulted?: boolean;
 	destinationId?: string;
 	destinationDefinitionId?: string;

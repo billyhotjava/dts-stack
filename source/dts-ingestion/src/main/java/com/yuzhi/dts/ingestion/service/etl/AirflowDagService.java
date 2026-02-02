@@ -721,6 +721,7 @@ public class AirflowDagService {
         if (sourceConfig == null || sourceConfig.isNull()) return null;
         JsonNode fileColumnsNode = sourceConfig.get("_fileColumns");
         if (fileColumnsNode == null || !fileColumnsNode.isArray() || fileColumnsNode.size() == 0) return null;
+        boolean autoId = sourceConfig.has("_autoId") && sourceConfig.get("_autoId").asBoolean(false);
 
         StringBuilder ddl = new StringBuilder("CREATE TABLE IF NOT EXISTS ");
         if (StringUtils.hasText(schema) && !"public".equalsIgnoreCase(schema)) {
@@ -728,6 +729,10 @@ public class AirflowDagService {
         }
         ddl.append(pgQuote(tableName)).append(" (");
         boolean first = true;
+        if (autoId) {
+            ddl.append("\"id\" bigserial primary key");
+            first = false;
+        }
         for (JsonNode col : fileColumnsNode) {
             String colName = col.has("name") ? col.get("name").asText("") : "";
             String colType = col.has("type") ? col.get("type").asText("string") : "string";

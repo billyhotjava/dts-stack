@@ -675,6 +675,7 @@ const mapTaskToForm = (task: IngestionTaskDTO) => {
 		: [];
 	const hasMapping = Array.isArray(task.tableMapping) && task.tableMapping.length > 0;
 	const mappingTables = hasMapping ? extractMappingTables(task.tableMapping) : [];
+	const fileAutoId = typeof sourceConfig._autoId === "boolean" ? sourceConfig._autoId : true;
 	return {
 		editorMode: isFileReader ? "visual" : "json",
 		sourceCategory: isFileReader ? "file" : "database",
@@ -693,6 +694,7 @@ const mapTaskToForm = (task: IngestionTaskDTO) => {
 		sourceDataSourceId: task.sourceDataSourceId,
 		readerType: resolvedReaderType,
 		readerConfig: JSON.stringify(sourceConfig, null, 2),
+		fileAutoId: fileAutoId,
 		selectedTables: mappingTables.length ? mappingTables.join("\n") : undefined,
 		readerTables:
 			mappingTables.length && !extractReaderTables(sourceConfig).length
@@ -823,6 +825,7 @@ export default function TransformCreatePage() {
 			readerColumns: "*",
 			writerColumns: "*",
 			syncPrefix: "",
+			fileAutoId: true,
 		}),
 		[]
 	);
@@ -1167,6 +1170,7 @@ export default function TransformCreatePage() {
 					_fileType: "csv",
 					_fileColumns: fileUploadResult.columns,
 					_originalName: fileUploadResult.originalName,
+					_autoId: Boolean(values?.fileAutoId ?? true),
 				};
 			} else if (isJsonMode) {
 				readerConfig = safeParse(values.readerConfig, "Reader 配置");
@@ -1615,6 +1619,7 @@ export default function TransformCreatePage() {
 					_fileType: "csv",
 					_fileColumns: fileUploadResult.columns,
 					_originalName: fileUploadResult.originalName,
+					_autoId: Boolean(mergedValues?.fileAutoId ?? true),
 				};
 			} else {
 				readerConfig = (isJsonMode
@@ -1871,6 +1876,7 @@ export default function TransformCreatePage() {
 					_fileType: "csv",
 					_fileColumns: fileUploadResult.columns,
 					_originalName: fileUploadResult.originalName,
+					_autoId: Boolean(mergedValues?.fileAutoId ?? true),
 				},
 				null,
 				2
@@ -2175,6 +2181,14 @@ export default function TransformCreatePage() {
 							) : null}
 							<Form.Item name="syncPrefix" label="目标表前缀">
 								<Input placeholder="例如：ods_erp_" />
+							</Form.Item>
+							<Form.Item
+								name="fileAutoId"
+								label="自动生成ID"
+								valuePropName="checked"
+								tooltip="为文件入湖的目标表追加自增 ID 字段（默认开启）"
+							>
+								<Switch />
 							</Form.Item>
 							<Text type="secondary" className="block -mt-3 mb-4">
 								目标表名 = 前缀 + 文件名（去除扩展名）。例如：ods_erp_ + sales_data → ods_erp_sales_data

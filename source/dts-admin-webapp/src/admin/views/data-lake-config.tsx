@@ -39,7 +39,7 @@ export default function DataLakeConfigView() {
 	const dataLakeNameMap = useMemo(() => {
 		const entries = dataLakes
 			.filter((lake) => lake.id)
-			.map((lake) => [lake.id as string, lake.name]);
+			.map((lake) => [lake.id as string, lake.name] as const);
 		return new Map(entries);
 	}, [dataLakes]);
 

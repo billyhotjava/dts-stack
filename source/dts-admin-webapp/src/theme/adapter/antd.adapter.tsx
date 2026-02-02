@@ -6,13 +6,12 @@ import useLocale from "@/locales/use-locale";
 import { useSettings } from "@/store/settingStore";
 import { removePx, rgbAlpha } from "@/utils/theme";
 import { baseThemeTokens } from "../tokens/base";
-import { typographyTokens } from "../tokens/typography";
 import { darkColorTokens, lightColorTokens, presetsColors } from "../tokens/color";
 import type { UILibraryAdapter } from "../type";
 
 export const AntdAdapter: UILibraryAdapter = ({ mode, children }) => {
 	const { language } = useLocale();
-	const { themeColorPresets, fontFamily, fontSize } = useSettings();
+	const { themeColorPresets } = useSettings();
 	const algorithm = mode === ThemeMode.Light ? theme.defaultAlgorithm : theme.darkAlgorithm;
 
 	const colorTokens = mode === ThemeMode.Light ? lightColorTokens : darkColorTokens;

@@ -112,7 +112,7 @@ public class AddaxJobService {
     }
 
     private static final List<String> FILE_METADATA_KEYS = List.of(
-        "_filePath", "_containerPath", "_fileType", "_fileColumns", "_originalName"
+        "_filePath", "_containerPath", "_fileType", "_fileColumns", "_originalName", "_autoId"
     );
 
     private Map<String, Object> resolveJobConfig(
@@ -134,6 +134,7 @@ public class AddaxJobService {
         Map<String, Object> resolvedReader = safeMap(readerConfig);
         // Capture file columns before metadata keys are stripped
         List<Map<String, Object>> fileColumns = isFileReaderType(readerType) ? extractFileColumns(readerConfig) : List.of();
+        boolean fileAutoId = isFileReaderType(readerType) && resolveFileAutoId(readerConfig);
         if (isFileReaderType(readerType)) {
             ensureFileReaderConfig(readerType, resolvedReader);
             stripFileMetadataKeys(resolvedReader);
@@ -143,7 +144,7 @@ public class AddaxJobService {
         Map<String, Object> resolvedWriter = ensureDriver(writerType, safeMap(writerConfig));
         ensureWriterConnection(writerType, resolvedWriter);
         if (isFileReaderType(readerType) && !fileColumns.isEmpty()) {
-            injectFileSourceCreateTablePreSql(resolvedWriter, fileColumns);
+            injectFileSourceCreateTablePreSql(resolvedWriter, fileColumns, fileAutoId, writerType);
         }
         if (!isFileReaderType(readerType)) {
             replaceWriterTablePlaceholders(resolvedReader, resolvedWriter);
@@ -1173,7 +1174,12 @@ public class AddaxJobService {
      * but the Addax Docker container can. The DDL runs as part of the Addax job execution.
      */
     @SuppressWarnings("unchecked")
-    private void injectFileSourceCreateTablePreSql(Map<String, Object> writerConfig, List<Map<String, Object>> fileColumns) {
+    private void injectFileSourceCreateTablePreSql(
+        Map<String, Object> writerConfig,
+        List<Map<String, Object>> fileColumns,
+        boolean autoId,
+        String writerType
+    ) {
         if (writerConfig == null || fileColumns == null || fileColumns.isEmpty()) return;
         List<String> tables = extractTables(writerConfig);
         if (tables.isEmpty()) return;
@@ -1200,6 +1206,10 @@ public class AddaxJobService {
         StringBuilder ddl = new StringBuilder("CREATE TABLE IF NOT EXISTS ");
         ddl.append(qualifiedTable).append(" (");
         boolean first = true;
+        if (autoId && isPostgresWriter(writerType)) {
+            ddl.append("\"id\" bigserial primary key");
+            first = false;
+        }
         for (Map<String, Object> col : fileColumns) {
             String colName = normalizeText(col.get("name"));
             String colType = normalizeText(col.get("type"));
@@ -1246,6 +1256,26 @@ public class AddaxJobService {
         }
 
         LOG.info("Injected CREATE TABLE preSql for file source table: {}", tableName);
+    }
+
+    private boolean resolveFileAutoId(Map<String, Object> readerConfig) {
+        if (readerConfig == null) return false;
+        Object value = readerConfig.get("_autoId");
+        if (value instanceof Boolean flag) {
+            return flag;
+        }
+        if (value != null) {
+            String text = value.toString().trim();
+            if ("true".equalsIgnoreCase(text)) return true;
+            if ("false".equalsIgnoreCase(text)) return false;
+        }
+        return false;
+    }
+
+    private boolean isPostgresWriter(String writerType) {
+        if (!StringUtils.hasText(writerType)) return true;
+        String lower = writerType.toLowerCase(Locale.ROOT);
+        return lower.contains("postgres");
     }
 
     private String quoteIdentifier(String name) {

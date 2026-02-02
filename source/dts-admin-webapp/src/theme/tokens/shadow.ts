@@ -1,5 +1,5 @@
 import Color from "color";
-import { commonColors, paletteColors } from "./color";
+import { paletteColors } from "./color";
 
 // Zinc-950 — neutral dark base for shadows
 const orionDark = Color("#09090b");

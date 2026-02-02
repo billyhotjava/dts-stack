@@ -126,7 +126,7 @@ export default function InfraSettingsView() {
 					service="addax"
 					title="Addax 作业"
 					description="用于生成 Addax 作业文件并配合 Airflow 执行。"
-					formContent={(form) => (
+					formContent={(_form) => (
 						<>
 							<Form.Item label="启用" name="enabled" valuePropName="checked">
 								<Switch />
