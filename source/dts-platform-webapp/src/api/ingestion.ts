@@ -111,6 +111,17 @@ export interface FileUploadResult {
   fileType: string;
   columns: Array<{ name: string; type: string }>;
   originalName: string;
+  fileId?: string;
+  batchCode?: string;
+  sheetName?: string;
+  sheetIndex?: number;
+  csvPath?: string;
+  csvContainerPath?: string;
+  preview?: string[][];
+  rowCount?: number;
+  errorCount?: number;
+  sourceFileType?: string;
+  sheets?: Array<{ index: number; name: string }>;
 }
 
 export interface DefaultDestinationStatus {

@@ -90,6 +90,14 @@ const normalizeType = (value?: string) => normalizeText(value).toLowerCase();
 
 const normalizeTag = (value?: string) => normalizeText(value).toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "");
 
+const resolveFileTypeFromName = (name?: string) => {
+	const normalized = normalizeText(name).toLowerCase();
+	if (!normalized) return "csv";
+	if (normalized.endsWith(".xlsx") || normalized.endsWith(".xls")) return "excel";
+	if (normalized.endsWith(".csv")) return "csv";
+	return "csv";
+};
+
 const resolveSourceSystemFromDataSource = (source?: InfraDataSource | null) => {
 	if (!source) return "";
 	const props = source.props || {};
@@ -635,6 +643,8 @@ const mapTaskToForm = (task: IngestionTaskDTO) => {
 		extractWriterTypeFromAddax(addaxConfig);
 	const resolvedReaderType =
 		normalizeReaderType(task.sourceType) || readerTypeFromConfig || readerTypeFromAddax || undefined;
+	const isFileReader =
+		resolvedReaderType && ["txtfilereader", "excelreader", "csv", "excel"].includes(resolvedReaderType.toLowerCase());
 	const syncPrefix =
 		normalizeText(
 			destinationConfig.tablePrefix ||
@@ -666,7 +676,8 @@ const mapTaskToForm = (task: IngestionTaskDTO) => {
 	const hasMapping = Array.isArray(task.tableMapping) && task.tableMapping.length > 0;
 	const mappingTables = hasMapping ? extractMappingTables(task.tableMapping) : [];
 	return {
-		editorMode: "json",
+		editorMode: isFileReader ? "visual" : "json",
+		sourceCategory: isFileReader ? "file" : "database",
 		syncMode: task.syncMode || "full_refresh",
 		tableSelectionMode: hasMapping ? "manual" : "all",
 		airflowEnabled: task.airflowEnabled ?? true,
@@ -704,6 +715,33 @@ const mapTaskToForm = (task: IngestionTaskDTO) => {
 		dbtModels,
 		dbtModelSelector: task.dbtModelSelector,
 		dbtDagSelector: task.dbtDagSelector,
+	};
+};
+
+const extractFileUploadResult = (task: IngestionTaskDTO): FileUploadResult | null => {
+	if (!task) return null;
+	const sourceConfig = tryParseJson(task.sourceConfig) || {};
+	const rawPath = sourceConfig._filePath || sourceConfig.filePath || sourceConfig.path;
+	const hostPath = normalizeText(Array.isArray(rawPath) ? rawPath[0] : rawPath);
+	const containerPath = normalizeText(sourceConfig._containerPath) || hostPath;
+	if (!hostPath && !containerPath) return null;
+	const originalName = normalizeText(sourceConfig._originalName) || normalizeText(task.name) || "uploaded_file";
+	const fileType = normalizeText(sourceConfig._fileType) || "csv";
+	const sourceFileType = resolveFileTypeFromName(originalName);
+	const rawColumns = Array.isArray(sourceConfig._fileColumns) ? sourceConfig._fileColumns : [];
+	const columns = rawColumns
+		.map((col: any) => ({
+			name: normalizeText(col?.name || col?.column || col?.field),
+			type: normalizeText(col?.type || col?.dataType) || "string",
+		}))
+		.filter((col: any) => col.name);
+	return {
+		hostPath: hostPath || containerPath,
+		containerPath: containerPath || hostPath,
+		fileType: fileType || "csv",
+		sourceFileType,
+		columns,
+		originalName,
 	};
 };
 
@@ -896,7 +934,7 @@ export default function TransformCreatePage() {
 
 	useEffect(() => {
 		if (!selectedDataSource) {
-			if (!selectedDataSourceId && form.getFieldValue("readerType")) {
+			if (!selectedDataSourceId && sourceCategory !== "file" && form.getFieldValue("readerType")) {
 				form.setFieldValue("readerType", undefined);
 			}
 			return;
@@ -919,7 +957,7 @@ export default function TransformCreatePage() {
 				form.setFieldValue("dbtDagSelector", `tab:${normalizeTag(sourceSystem)}`);
 			}
 		}
-	}, [form, selectedDataSource]);
+	}, [form, selectedDataSource, selectedDataSourceId, sourceCategory]);
 
 	useEffect(() => {
 		setDiscoveredTables([]);
@@ -1040,6 +1078,12 @@ export default function TransformCreatePage() {
 				const task = await ingestionTaskAPI.getTask(editId);
 				setEditingTask(task);
 				form.setFieldsValue(mapTaskToForm(task));
+				const fileMeta = extractFileUploadResult(task);
+				if (fileMeta) {
+					setFileUploadResult(fileMeta);
+					form.setFieldValue("sourceCategory", "file");
+					form.setFieldValue("readerType", "txtfilereader");
+				}
 				const mappingTables = extractMappingTables(task.tableMapping);
 				if (mappingTables.length) {
 					setSelectedTableKeys(mappingTables);
@@ -1078,7 +1122,7 @@ export default function TransformCreatePage() {
 			}
 			let resolvedReaderType = normalizeReaderType(values.readerType);
 			if (isFileDraft && fileUploadResult) {
-				resolvedReaderType = fileUploadResult.fileType === "excel" ? "excelreader" : "txtfilereader";
+				resolvedReaderType = "txtfilereader";
 			} else {
 				if (!resolvedReaderType) {
 					resolvedReaderType = resolveReaderTypeFromValues(values);
@@ -1105,7 +1149,15 @@ export default function TransformCreatePage() {
 			};
 			let readerConfig: Record<string, any> | undefined;
 			let writerConfig: Record<string, any> | undefined;
-			if (isJsonMode) {
+			if (isFileDraft && fileUploadResult) {
+				readerConfig = {
+					_filePath: fileUploadResult.hostPath,
+					_containerPath: fileUploadResult.containerPath,
+					_fileType: "csv",
+					_fileColumns: fileUploadResult.columns,
+					_originalName: fileUploadResult.originalName,
+				};
+			} else if (isJsonMode) {
 				readerConfig = safeParse(values.readerConfig, "Reader 配置");
 				writerConfig = safeParse(values.writerConfig, "Writer 配置");
 			} else {
@@ -1148,7 +1200,7 @@ export default function TransformCreatePage() {
 				description: normalizeText(values.description) || undefined,
 				owner: userInfo?.username || userInfo?.login,
 				source: {
-					dataSourceId: sourceDataSourceId,
+					dataSourceId: isFileDraft ? undefined : sourceDataSourceId,
 					type: resolvedReaderType || undefined,
 					config: readerConfig || {},
 				},
@@ -1194,6 +1246,73 @@ export default function TransformCreatePage() {
 		} finally {
 			setSavingDraft(false);
 		}
+	};
+
+	const buildFileUploadResult = (
+		fileName: string,
+		batchCode: string,
+		fileId: string,
+		sheets: Array<{ index: number; name: string }> | undefined,
+		parseResult: {
+			csvPath: string;
+			csvContainerPath: string;
+			columns: Array<{ name: string; dataType?: string }>;
+			preview?: string[][];
+			rowCount?: number;
+			errorCount?: number;
+			sheetName?: string;
+		},
+		selectedSheet?: { index?: number; name?: string }
+	): FileUploadResult => {
+		const sourceFileType = resolveFileTypeFromName(fileName);
+		const columns = (parseResult.columns || [])
+			.map((col) => ({
+				name: normalizeText(col.name),
+				type: normalizeText(col.dataType) || "string",
+			}))
+			.filter((col) => col.name);
+		return {
+			hostPath: parseResult.csvPath,
+			containerPath: parseResult.csvContainerPath,
+			fileType: "csv",
+			sourceFileType,
+			columns,
+			originalName: fileName,
+			fileId,
+			batchCode,
+			sheets,
+			sheetName: parseResult.sheetName || selectedSheet?.name,
+			sheetIndex: selectedSheet?.index,
+			csvPath: parseResult.csvPath,
+			csvContainerPath: parseResult.csvContainerPath,
+			preview: parseResult.preview,
+			rowCount: parseResult.rowCount,
+			errorCount: parseResult.errorCount,
+		};
+	};
+
+	const parseFile = async (
+		fileId: string,
+		fileName: string,
+		batchCode: string,
+		sheets: Array<{ index: number; name: string }> | undefined,
+		selectedSheet?: { index?: number; name?: string }
+	) => {
+		const sheetIndex = selectedSheet?.index;
+		const sheetName = selectedSheet?.name;
+		const parseResult = await dataSourcesService.excelParse({
+			fileId,
+			sheetIndex,
+			sheetName,
+			headerRow: 1,
+			dataStartRow: 2,
+			previewLimit: 20,
+			delimiter: ",",
+			skipErrors: true,
+			fillMerged: true,
+			dateFormat: "yyyy-MM-dd HH:mm:ss",
+		});
+		return buildFileUploadResult(fileName, batchCode, fileId, sheets, parseResult, selectedSheet);
 	};
 
 	const handleDiscoverTables = async () => {
@@ -1395,7 +1514,7 @@ export default function TransformCreatePage() {
 			}
 			let resolvedReaderType = normalizeReaderType(mergedValues.readerType);
 			if (isFileSource) {
-				resolvedReaderType = fileUploadResult.fileType === "excel" ? "excelreader" : "txtfilereader";
+				resolvedReaderType = "txtfilereader";
 			} else {
 				if (!resolvedReaderType) {
 					resolvedReaderType = resolveReaderTypeFromValues(mergedValues);
@@ -1417,8 +1536,9 @@ export default function TransformCreatePage() {
 				readerConfig = {
 					_filePath: fileUploadResult.hostPath,
 					_containerPath: fileUploadResult.containerPath,
-					_fileType: fileUploadResult.fileType,
+					_fileType: "csv",
 					_fileColumns: fileUploadResult.columns,
+					_originalName: fileUploadResult.originalName,
 				};
 			} else {
 				readerConfig = (isJsonMode
@@ -1607,7 +1727,7 @@ export default function TransformCreatePage() {
 					description: normalizeText(mergedValues.description) || undefined,
 					owner: userInfo?.username || userInfo?.login,
 					source: {
-						dataSourceId: sourceDataSourceId,
+						dataSourceId: isFileSource ? undefined : sourceDataSourceId,
 						type: normalizeText(resolvedReaderType) || undefined,
 						config: readerConfig || {},
 					},
@@ -1653,6 +1773,21 @@ export default function TransformCreatePage() {
 	const previewState = useMemo(() => {
 		const snapshot = form.getFieldsValue(true);
 		const mergedValues = { ...snapshot, ...(formValues || {}) } as Record<string, any>;
+		const isFilePreview = mergedValues.sourceCategory === "file" && fileUploadResult;
+		if (isFilePreview) {
+			mergedValues.readerType = "txtfilereader";
+			mergedValues.readerConfig = JSON.stringify(
+				{
+					_filePath: fileUploadResult.hostPath,
+					_containerPath: fileUploadResult.containerPath,
+					_fileType: "csv",
+					_fileColumns: fileUploadResult.columns,
+					_originalName: fileUploadResult.originalName,
+				},
+				null,
+				2
+			);
+		}
 		if (!normalizeText(mergedValues.readerType) && selectedDataSource) {
 			const inferredReader = resolveReaderTypeFromDataSource(selectedDataSource);
 			if (inferredReader) {
@@ -1664,12 +1799,12 @@ export default function TransformCreatePage() {
 		}
 		try {
 			const readerFallback = selectedDataSource ? resolveReaderTypeFromDataSource(selectedDataSource) : "";
-			const config = buildJobPreview(mergedValues, editorMode, readerFallback);
+			const config = buildJobPreview(mergedValues, isFilePreview ? "json" : editorMode, readerFallback);
 			return { config, error: "" };
 		} catch (error: any) {
 			return { config: null, error: error?.message || "无法生成预览" };
 		}
-	}, [formValues, editorMode, form, currentStep, selectedDataSource, defaultDestinationStatus]);
+	}, [formValues, editorMode, form, currentStep, selectedDataSource, defaultDestinationStatus, fileUploadResult]);
 
 	return (
 		<div className="flex flex-col gap-6">
@@ -1757,17 +1892,27 @@ export default function TransformCreatePage() {
 							</Form.Item>
 							<Form.Item label="上传文件" required>
 								<Upload.Dragger
-									accept=".xlsx,.xls,.csv"
+									accept=".xlsx,.csv"
 									maxCount={1}
 									showUploadList={false}
 									customRequest={async ({ file, onSuccess, onError }) => {
 										try {
 											setUploadingFile(true);
 											setFileUploadResult(null);
-											const result = await ingestionTaskAPI.uploadFile(file as File);
-											setFileUploadResult(result);
-											onSuccess?.(result);
-											toast.success(`文件解析成功，检测到 ${result.columns?.length || 0} 列`);
+											const prepare = await dataSourcesService.excelPrepare(file as File);
+											const sheets = prepare.sheets || [];
+											const defaultSheet = sheets.length ? sheets[0] : undefined;
+											const parsed = await parseFile(
+												prepare.fileId,
+												prepare.fileName,
+												prepare.batchCode,
+												sheets,
+												defaultSheet
+											);
+											setFileUploadResult(parsed);
+											form.setFieldValue("readerType", "txtfilereader");
+											onSuccess?.(parsed);
+											toast.success(`文件解析成功，检测到 ${parsed.columns?.length || 0} 列`);
 										} catch (err: any) {
 											onError?.(err);
 											toast.error(err?.message || "文件上传失败");
@@ -1783,15 +1928,62 @@ export default function TransformCreatePage() {
 									<p className="ant-upload-text">
 										{uploadingFile ? "上传中..." : "点击或拖拽上传 Excel / CSV 文件"}
 									</p>
-									<p className="ant-upload-hint">支持 .xlsx, .xls, .csv 格式</p>
+									<p className="ant-upload-hint">支持 .xlsx, .csv 格式</p>
 								</Upload.Dragger>
 							</Form.Item>
 							{fileUploadResult && (
 								<Card type="inner" title={`已解析文件: ${fileUploadResult.originalName}`} className="mb-4">
 									<Text type="secondary" className="block mb-2">
-										文件类型: <Tag>{fileUploadResult.fileType}</Tag>
+										文件类型: <Tag>{fileUploadResult.sourceFileType || fileUploadResult.fileType}</Tag>
 										检测到 {fileUploadResult.columns?.length || 0} 列
+										{typeof fileUploadResult.rowCount === "number" && (
+											<>
+												{" · "}预览总行数: <Tag color="blue">{fileUploadResult.rowCount}</Tag>
+											</>
+										)}
+										{typeof fileUploadResult.errorCount === "number" && (
+											<>
+												{" · "}错误行:{" "}
+												<Tag color={fileUploadResult.errorCount > 0 ? "red" : "green"}>
+													{fileUploadResult.errorCount}
+												</Tag>
+											</>
+										)}
 									</Text>
+									{Array.isArray(fileUploadResult.sheets) && fileUploadResult.sheets.length > 1 && (
+										<Space className="mb-3" wrap>
+											<Text type="secondary">选择 Sheet：</Text>
+											<Select
+												style={{ minWidth: 200 }}
+												value={fileUploadResult.sheetIndex}
+												options={fileUploadResult.sheets.map((sheet) => ({
+													label: sheet.name,
+													value: sheet.index,
+												}))}
+												onChange={async (value) => {
+													const targetSheet = fileUploadResult.sheets?.find((item) => item.index === value);
+													if (!targetSheet || !fileUploadResult.fileId) return;
+													try {
+														setUploadingFile(true);
+														const parsed = await parseFile(
+															fileUploadResult.fileId,
+															fileUploadResult.originalName,
+															fileUploadResult.batchCode || "",
+															fileUploadResult.sheets,
+															{ index: targetSheet.index, name: targetSheet.name }
+														);
+														setFileUploadResult(parsed);
+														form.setFieldValue("readerType", "txtfilereader");
+														toast.success(`已切换到 ${targetSheet.name}，检测到 ${parsed.columns?.length || 0} 列`);
+													} catch (err: any) {
+														toast.error(err?.message || "解析 Sheet 失败");
+													} finally {
+														setUploadingFile(false);
+													}
+												}}
+											/>
+										</Space>
+									)}
 									<Table
 										size="small"
 										dataSource={fileUploadResult.columns || []}
@@ -1802,6 +1994,42 @@ export default function TransformCreatePage() {
 											{ title: "推断类型", dataIndex: "type", width: 120, render: (t: string) => <Tag>{t}</Tag> },
 										]}
 									/>
+									{Array.isArray(fileUploadResult.preview) && fileUploadResult.preview.length > 0 && (
+										<>
+											<Divider orientation="left" className="mt-4">
+												预览数据（最多 20 行）
+											</Divider>
+											<Table
+												size="small"
+												pagination={false}
+												rowKey="__row"
+												scroll={{ x: true }}
+												dataSource={fileUploadResult.preview.map((row, index) => {
+													const record: Record<string, any> = { __row: index + 1 };
+													(fileUploadResult.columns || []).forEach((col, colIndex) => {
+														if (colIndex >= 8) return;
+														record[col.name] = row?.[colIndex] ?? "";
+													});
+													return record;
+												})}
+												columns={[
+													{ title: "行号", dataIndex: "__row", width: 80 },
+													...(fileUploadResult.columns || [])
+														.slice(0, 8)
+														.map((col) => ({
+															title: col.name,
+															dataIndex: col.name,
+															ellipsis: true,
+														})),
+												]}
+											/>
+											{(fileUploadResult.columns || []).length > 8 && (
+												<Text type="secondary" className="block mt-2">
+													仅展示前 8 列，剩余列已省略。
+												</Text>
+											)}
+										</>
+									)}
 								</Card>
 							)}
 						</>
