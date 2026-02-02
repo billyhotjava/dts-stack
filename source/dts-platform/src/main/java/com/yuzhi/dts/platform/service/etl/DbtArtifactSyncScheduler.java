@@ -63,7 +63,7 @@ public class DbtArtifactSyncScheduler {
     }
 
     private void syncManifestIfChanged(String projectDir) {
-        File manifest = java.nio.file.Paths.get(projectDir + MANIFEST_PATH).toFile();
+        File manifest = java.nio.file.Path.of(projectDir + MANIFEST_PATH).toFile();
         if (!manifest.exists()) {
             return;
         }
@@ -82,7 +82,7 @@ public class DbtArtifactSyncScheduler {
     }
 
     private void syncRunResultsIfChanged(String projectDir) {
-        File runResults = java.nio.file.Paths.get(projectDir + RUN_RESULTS_PATH).toFile();
+        File runResults = java.nio.file.Path.of(projectDir + RUN_RESULTS_PATH).toFile();
         if (!runResults.exists()) {
             return;
         }
