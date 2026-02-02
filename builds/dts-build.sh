@@ -108,6 +108,20 @@ save_image() {
   echo "[dts-build] Saved ${tar_path}"
 }
 
+build_image_ctx() {
+  local name="$1"
+  local tag="$2"
+  local dockerfile="$3"
+  local context_dir="$4"
+  local output_dir="$5"
+  shift 5
+  local args=("$@")
+
+  echo "[dts-build] Building ${name} -> ${tag}"
+  docker build -t "$tag" -f "$dockerfile" "${args[@]}" "$context_dir"
+  save_image "$tag" "$output_dir"
+}
+
 build_image() {
   local name="$1"
   local tag="$2"
@@ -116,9 +130,7 @@ build_image() {
   shift 4
   local args=("$@")
 
-  echo "[dts-build] Building ${name} -> ${tag}"
-  docker build -t "$tag" -f "$dockerfile" "${args[@]}" "$REPO_ROOT"
-  save_image "$tag" "$output_dir"
+  build_image_ctx "$name" "$tag" "$dockerfile" "$REPO_ROOT" "$output_dir" "${args[@]}"
 }
 
 build_maven_module() {
@@ -343,7 +355,7 @@ build_all_normal() {
     --build-arg HTTP_PROXY="${HTTP_PROXY:-}" \
     --build-arg HTTPS_PROXY="${HTTPS_PROXY:-}" \
     --build-arg NO_PROXY="${NO_PROXY:-}"
-  build_image "dts-dbt" "$IMAGE_DTS_DBT" "${REPO_ROOT}/builds/dts-dbt/Dockerfile" "$NORMAL_DIST"
+  build_image_ctx "dts-dbt" "$IMAGE_DTS_DBT" "${REPO_ROOT}/builds/dts-dbt/Dockerfile" "${REPO_ROOT}/builds/dts-dbt" "$NORMAL_DIST"
 }
 
 build_all_legacy() {
@@ -367,7 +379,7 @@ build_all_legacy() {
     --build-arg HTTP_PROXY="${HTTP_PROXY:-}" \
     --build-arg HTTPS_PROXY="${HTTPS_PROXY:-}" \
     --build-arg NO_PROXY="${NO_PROXY:-}"
-  build_image "dts-dbt" "$IMAGE_DTS_DBT" "${REPO_ROOT}/builds/dts-dbt/Dockerfile" "$LEGACY_DIST"
+  build_image_ctx "dts-dbt" "$IMAGE_DTS_DBT" "${REPO_ROOT}/builds/dts-dbt/Dockerfile" "${REPO_ROOT}/builds/dts-dbt" "$LEGACY_DIST"
 }
 
 build_single_image() {
@@ -448,10 +460,18 @@ build_single_image() {
       ;;
   esac
 
-  build_image "$name" "$normal_tag" "$normal_df" "$NORMAL_DIST" "${build_args[@]}"
+  if [[ "$name" == "dts-dbt" ]]; then
+    build_image_ctx "$name" "$normal_tag" "$normal_df" "${REPO_ROOT}/builds/dts-dbt" "$NORMAL_DIST" "${build_args[@]}"
+  else
+    build_image "$name" "$normal_tag" "$normal_df" "$NORMAL_DIST" "${build_args[@]}"
+  fi
 
   if [[ -n "$legacy_df" && -f "$legacy_df" ]]; then
-    build_image "$name" "$normal_tag" "$legacy_df" "$LEGACY_DIST" "${build_args[@]}"
+    if [[ "$name" == "dts-dbt" ]]; then
+      build_image_ctx "$name" "$normal_tag" "$legacy_df" "${REPO_ROOT}/builds/dts-dbt" "$LEGACY_DIST" "${build_args[@]}"
+    else
+      build_image "$name" "$normal_tag" "$legacy_df" "$LEGACY_DIST" "${build_args[@]}"
+    fi
   else
     save_image "$normal_tag" "$LEGACY_DIST"
   fi
