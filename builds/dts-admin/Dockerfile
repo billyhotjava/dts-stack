@@ -84,9 +84,16 @@ RUN set -eux; \
       echo "[build] Building dts-admin via Maven"; \
       sed -i "s|__MIRROR_URL__|${MAVEN_MIRROR_URL}|g" /root/.m2/settings.xml; \
       echo "[debug] JAVA_HOME=${JAVA_HOME:-UNSET}"; \
-      echo "[debug] java at: $(command -v java 2>/dev/null || echo NOT_FOUND)"; \
-      ls -la "${JAVA_HOME}/bin/java" 2>/dev/null || echo "[debug] ${JAVA_HOME}/bin/java does not exist"; \
-      mvn -s /root/.m2/settings.xml -q -DskipTests -f "$BUILD_POM" -pl dts-admin -am package; \
+      echo "[debug] which mvn: $(which mvn 2>/dev/null)"; \
+      echo "[debug] mvn target: $(readlink -f "$(which mvn)" 2>/dev/null)"; \
+      head -3 "$(which mvn)" 2>/dev/null; \
+      echo "[debug] test -x check: $(test -x "${JAVA_HOME}/bin/java" && echo PASS || echo FAIL)"; \
+      java -cp "/usr/share/maven/boot/plexus-classworlds-"*.jar \
+        "-Dclassworlds.conf=/usr/share/maven/bin/m2.conf" \
+        "-Dmaven.home=/usr/share/maven" \
+        "-Dmaven.multiModuleProjectDirectory=$(pwd)" \
+        org.codehaus.plexus.classworlds.launcher.Launcher \
+        -s /root/.m2/settings.xml -q -DskipTests -f "$BUILD_POM" -pl dts-admin -am package; \
     else \
       echo "[build] Using prebuilt jar from ${PREBUILT_JAR}"; \
       mkdir -p /workspace/dts-admin/target; \
