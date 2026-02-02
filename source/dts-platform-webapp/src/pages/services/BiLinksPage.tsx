@@ -238,27 +238,6 @@ export default function Page() {
 		});
 	};
 
-	const _handlePurge = (record: ReportLink) => {
-		if (!record?.id) return;
-		Modal.confirm({
-			title: "确认彻底删除该 BI 链接？",
-			icon: <ExclamationCircleOutlined />,
-			content: "此操作不可恢复，仅在排障或误配置时使用。",
-			okText: "确认删除",
-			okButtonProps: { danger: true },
-			cancelText: "取消",
-			onOk: async () => {
-				try {
-					await reportsService.purge(record.id);
-					setRecords((prev) => prev.filter((item) => item.id !== record.id));
-					toast.success("已删除");
-				} catch (error: any) {
-					toast.error(error?.message || "删除失败");
-				}
-			},
-		});
-	};
-
 	const handleOpen = async (record: ReportLink) => {
 		const url = normalizeText(record?.url);
 		if (!url) {

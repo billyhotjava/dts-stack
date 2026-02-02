@@ -1,12 +1,11 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Card, Col, Row, Statistic, Table, Typography } from "antd";
+import { Card, Col, Row, Statistic, Table } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
 import opsService, { type OpsAlert, type OpsOverview } from "@/api/services/opsService";
 
-const { Text } = Typography;
 
 const alertColumns: ColumnsType<OpsAlert> = [
 	{ title: "类型", dataIndex: "type", width: 120 },
