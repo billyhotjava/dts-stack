@@ -160,7 +160,7 @@ public class OdsTableMappingSyncService {
                     namespace
                 );
             if (existing.isPresent()) {
-                mappingRepository.delete(existing.get());
+                mappingRepository.delete(existing.orElseThrow());
                 deleted++;
             }
         }

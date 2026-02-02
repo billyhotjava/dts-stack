@@ -48,7 +48,7 @@ public class DbtRunResultService {
             return DbtRunSyncResult.empty("dbt 项目目录未配置");
         }
         String runResultsPath = projectDir + "/target/run_results.json";
-        File file = new File(runResultsPath);
+        File file = java.nio.file.Paths.get(runResultsPath).toFile();
         if (!file.exists()) {
             return DbtRunSyncResult.empty("run_results.json 不存在，请先执行 dbt run");
         }

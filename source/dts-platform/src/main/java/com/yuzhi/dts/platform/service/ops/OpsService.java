@@ -156,9 +156,9 @@ public class OpsService {
         Optional<Map<String, Object>> triggered = airflowClient.triggerDag(dagId, Map.of("conf", payload));
         if (triggered.isPresent()) {
             request.setStatus("RUNNING");
-            Object runId = triggered.get().get("dag_run_id");
+            Object runId = triggered.orElseThrow().get("dag_run_id");
             if (runId == null) {
-                runId = triggered.get().get("run_id");
+                runId = triggered.orElseThrow().get("run_id");
             }
             if (runId != null) {
                 request.setExternalRunId(String.valueOf(runId));

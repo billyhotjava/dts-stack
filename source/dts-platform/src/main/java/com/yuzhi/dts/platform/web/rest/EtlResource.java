@@ -194,7 +194,7 @@ public class EtlResource {
             return null;
         }
         try {
-            java.io.File file = new java.io.File(path);
+            java.io.File file = java.nio.file.Paths.get(path).toFile();
             if (!file.exists()) {
                 return null;
             }

@@ -1510,7 +1510,7 @@ public class InfraManagementService {
             if (existing.isEmpty()) {
                 return candidate;
             }
-            CatalogDataset dataset = existing.get();
+            CatalogDataset dataset = existing.orElseThrow();
             if (sourceId != null && sourceId.equals(dataset.getSourceId())) {
                 return candidate;
             }

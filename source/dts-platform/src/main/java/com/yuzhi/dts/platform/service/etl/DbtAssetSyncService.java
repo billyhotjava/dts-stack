@@ -280,7 +280,7 @@ public class DbtAssetSyncService {
         }
         Optional<CatalogTableSchema> existing = tableRepository.findFirstByDatasetAndNameIgnoreCase(dataset, tableName);
         if (existing.isPresent()) {
-            return existing.get();
+            return existing.orElseThrow();
         }
         CatalogTableSchema table = new CatalogTableSchema();
         table.setDataset(dataset);
@@ -356,7 +356,7 @@ public class DbtAssetSyncService {
                     meta.table
                 );
             if (existing.isPresent()) {
-                return existing.get();
+                return existing.orElseThrow();
             }
         }
         return datasetRepository
