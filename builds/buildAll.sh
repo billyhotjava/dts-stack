@@ -189,6 +189,7 @@ if [[ "$MODE" == "normal" || "$MODE" == "both" ]]; then
   IMAGE_DTS_PLATFORM_WEBAPP="${IMAGE_DTS_PLATFORM_WEBAPP:-dts-platform-webapp:local}"
   IMAGE_DTS_ANALYTICS_WEBAPP_MODERN="${IMAGE_DTS_ANALYTICS_WEBAPP_MODERN:-dts-analytics-webapp-modern:local}"
   IMAGE_DTS_AIRFLOW_OM="${IMAGE_DTS_AIRFLOW_OM:-${IMAGE_AIRFLOW:-dts-airflow-om:local}}"
+  IMAGE_DTS_DBT="${IMAGE_DTS_DBT:-${IMAGE_DBT:-dts-dbt:1.11.2}}"
 
   ENABLE_MAVEN_BUILD_ARG="${ENABLE_MAVEN_BUILD:-true}"
   if [[ "${PREBUILD_JARS}" == "1" ]]; then
@@ -223,6 +224,7 @@ if [[ "$MODE" == "normal" || "$MODE" == "both" ]]; then
     --build-arg HTTP_PROXY="${HTTP_PROXY:-}" \
     --build-arg HTTPS_PROXY="${HTTPS_PROXY:-}" \
     --build-arg NO_PROXY="${NO_PROXY:-}"
+  build_image "dts-dbt" "$IMAGE_DTS_DBT" "${REPO_ROOT}/builds/dts-dbt/Dockerfile" "$NORMAL_DIST"
 fi
 
 if [[ "$MODE" == "legacy" || "$MODE" == "both" ]]; then
@@ -235,6 +237,7 @@ if [[ "$MODE" == "legacy" || "$MODE" == "both" ]]; then
   IMAGE_DTS_PLATFORM_WEBAPP="${IMAGE_DTS_PLATFORM_WEBAPP:-dts-platform-webapp:local}"
   IMAGE_DTS_ANALYTICS_WEBAPP_LEGACY="${IMAGE_DTS_ANALYTICS_WEBAPP_LEGACY:-dts-analytics-webapp:local}"
   IMAGE_DTS_AIRFLOW_OM="${IMAGE_DTS_AIRFLOW_OM:-${IMAGE_AIRFLOW:-dts-airflow-om:local}}"
+  IMAGE_DTS_DBT="${IMAGE_DTS_DBT:-${IMAGE_DBT:-dts-dbt:1.11.2}}"
 
   build_maven_module "dts-admin" "dts-admin-*.jar" "${REPO_ROOT}/builds/dts-admin/dts-admin.jar"
   build_maven_module "dts-platform" "dts-platform-*.jar" "${REPO_ROOT}/builds/dts-platform/dts-platform.jar"
@@ -260,6 +263,7 @@ if [[ "$MODE" == "legacy" || "$MODE" == "both" ]]; then
     --build-arg HTTP_PROXY="${HTTP_PROXY:-}" \
     --build-arg HTTPS_PROXY="${HTTPS_PROXY:-}" \
     --build-arg NO_PROXY="${NO_PROXY:-}"
+  build_image "dts-dbt" "$IMAGE_DTS_DBT" "${REPO_ROOT}/builds/dts-dbt/Dockerfile" "$LEGACY_DIST"
 fi
 
 echo "[buildAll] Done. normal=${NORMAL_DIST} legacy=${LEGACY_DIST}"

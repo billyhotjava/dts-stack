@@ -971,7 +971,7 @@ services:
       - dts-core
 
   dts-dbt:
-    image: ${IMAGE_DBT:-dbt-core:1.11.2}
+    image: ${IMAGE_DBT:-dts-dbt:1.11.2}
     container_name: dts-dbt
     entrypoint: /bin/bash
     command: ["-lc", "sleep infinity"]

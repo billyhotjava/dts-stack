@@ -1219,14 +1219,14 @@ ensure_env LEGACY_STACK "${LEGACY_STACK}"
 # 加载镜像版本 & 目录
 load_img_versions
 if [[ "${LEGACY_STACK}" == "true" ]]; then
-  if [[ -z "${IMAGE_DBT:-}" || "${IMAGE_DBT}" == "ghcr.io/dbt-labs/dbt-core:1.11.2" ]]; then
-    ensure_env IMAGE_DBT "dbt-core:1.11.2"
-    echo "[init.sh] Using local dbt-core image for legacy stack: dbt-core:1.11.2"
+  if [[ -z "${IMAGE_DBT:-}" || "${IMAGE_DBT}" == "ghcr.io/dbt-labs/dbt-core:1.11.2" || "${IMAGE_DBT}" == "dbt-core:1.11.2" ]]; then
+    ensure_env IMAGE_DBT "dts-dbt:1.11.2"
+    echo "[init.sh] Using custom dbt image for legacy stack: dts-dbt:1.11.2"
   fi
 else
-  if [[ -z "${IMAGE_DBT:-}" || "${IMAGE_DBT}" == "dbt-core:1.11.2" ]]; then
-    ensure_env IMAGE_DBT "ghcr.io/dbt-labs/dbt-core:1.11.2"
-    echo "[init.sh] Using ghcr dbt-core image for non-legacy stack: ghcr.io/dbt-labs/dbt-core:1.11.2"
+  if [[ -z "${IMAGE_DBT:-}" || "${IMAGE_DBT}" == "ghcr.io/dbt-labs/dbt-core:1.11.2" || "${IMAGE_DBT}" == "dbt-core:1.11.2" ]]; then
+    ensure_env IMAGE_DBT "dts-dbt:1.11.2"
+    echo "[init.sh] Using custom dbt image for non-legacy stack: dts-dbt:1.11.2"
   fi
 fi
 
@@ -1236,14 +1236,14 @@ if [[ "${RESET_ENV}" == "true" ]]; then
   generate_env_base
   load_img_versions
   if [[ "${LEGACY_STACK}" == "true" ]]; then
-    if [[ -z "${IMAGE_DBT:-}" || "${IMAGE_DBT}" == "ghcr.io/dbt-labs/dbt-core:1.11.2" ]]; then
-      ensure_env IMAGE_DBT "dbt-core:1.11.2"
-      echo "[init.sh] Using local dbt-core image for legacy stack: dbt-core:1.11.2"
+    if [[ -z "${IMAGE_DBT:-}" || "${IMAGE_DBT}" == "ghcr.io/dbt-labs/dbt-core:1.11.2" || "${IMAGE_DBT}" == "dbt-core:1.11.2" ]]; then
+      ensure_env IMAGE_DBT "dts-dbt:1.11.2"
+      echo "[init.sh] Using custom dbt image for legacy stack: dts-dbt:1.11.2"
     fi
   else
-    if [[ -z "${IMAGE_DBT:-}" || "${IMAGE_DBT}" == "dbt-core:1.11.2" ]]; then
-      ensure_env IMAGE_DBT "ghcr.io/dbt-labs/dbt-core:1.11.2"
-      echo "[init.sh] Using ghcr dbt-core image for non-legacy stack: ghcr.io/dbt-labs/dbt-core:1.11.2"
+    if [[ -z "${IMAGE_DBT:-}" || "${IMAGE_DBT}" == "ghcr.io/dbt-labs/dbt-core:1.11.2" || "${IMAGE_DBT}" == "dbt-core:1.11.2" ]]; then
+      ensure_env IMAGE_DBT "dts-dbt:1.11.2"
+      echo "[init.sh] Using custom dbt image for non-legacy stack: dts-dbt:1.11.2"
     fi
   fi
 fi
