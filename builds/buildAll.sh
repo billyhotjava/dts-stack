@@ -157,7 +157,6 @@ EOF
         -- "${maven_args[@]}"
     fi
   fi
-  fi
 
   local jar_path
   jar_path="$(ls -1t ${REPO_ROOT}/source/${module}/target/${jar_glob} 2>/dev/null | head -n 1 || true)"
