@@ -255,6 +255,7 @@ init_images_normal() {
   IMAGE_DTS_ANALYTICS_WEBAPP_MODERN="${IMAGE_DTS_ANALYTICS_WEBAPP_MODERN:-dts-analytics-webapp-modern:local}"
   IMAGE_DTS_AIRFLOW_OM="${IMAGE_DTS_AIRFLOW_OM:-${IMAGE_AIRFLOW:-dts-airflow-om:local}}"
   IMAGE_DTS_DBT="${IMAGE_DTS_DBT:-${IMAGE_DBT:-dts-dbt:1.11.2}}"
+  IMAGE_DTS_ADDAX="${IMAGE_DTS_ADDAX:-${IMAGE_ADDAX:-dts-addax:6.0.8}}"
 }
 
 init_images_legacy() {
@@ -268,6 +269,7 @@ init_images_legacy() {
   IMAGE_DTS_ANALYTICS_WEBAPP_LEGACY="${IMAGE_DTS_ANALYTICS_WEBAPP_LEGACY:-dts-analytics-webapp:local}"
   IMAGE_DTS_AIRFLOW_OM="${IMAGE_DTS_AIRFLOW_OM:-${IMAGE_AIRFLOW:-dts-airflow-om:local}}"
   IMAGE_DTS_DBT="${IMAGE_DTS_DBT:-${IMAGE_DBT:-dts-dbt:1.11.2}}"
+  IMAGE_DTS_ADDAX="${IMAGE_DTS_ADDAX:-${IMAGE_ADDAX:-dts-addax:6.0.8}}"
 }
 
 resolve_image() {
@@ -316,6 +318,10 @@ resolve_image() {
       tag="$IMAGE_DTS_DBT"
       dockerfile="${REPO_ROOT}/builds/dts-dbt/Dockerfile"
       ;;
+    dts-addax)
+      tag="$IMAGE_DTS_ADDAX"
+      dockerfile="${REPO_ROOT}/builds/dts-addax/Dockerfile"
+      ;;
     *)
       return 1
       ;;
@@ -358,6 +364,11 @@ build_all_normal() {
     --build-arg HTTPS_PROXY="${HTTPS_PROXY:-}" \
     --build-arg NO_PROXY="${NO_PROXY:-}"
   build_image_ctx "dts-dbt" "$IMAGE_DTS_DBT" "${REPO_ROOT}/builds/dts-dbt/Dockerfile" "${REPO_ROOT}/builds/dts-dbt" "$NORMAL_DIST"
+  build_image_ctx "dts-addax" "$IMAGE_DTS_ADDAX" "${REPO_ROOT}/builds/dts-addax/Dockerfile" "${REPO_ROOT}/builds/dts-addax" "$NORMAL_DIST" \
+    --build-arg MAVEN_MIRROR_URL="${MAVEN_MIRROR_URL}" \
+    --build-arg HTTP_PROXY="${HTTP_PROXY:-}" \
+    --build-arg HTTPS_PROXY="${HTTPS_PROXY:-}" \
+    --build-arg NO_PROXY="${NO_PROXY:-}"
 }
 
 build_all_legacy() {
@@ -382,6 +393,11 @@ build_all_legacy() {
     --build-arg HTTPS_PROXY="${HTTPS_PROXY:-}" \
     --build-arg NO_PROXY="${NO_PROXY:-}"
   build_image_ctx "dts-dbt" "$IMAGE_DTS_DBT" "${REPO_ROOT}/builds/dts-dbt/Dockerfile" "${REPO_ROOT}/builds/dts-dbt" "$LEGACY_DIST"
+  build_image_ctx "dts-addax" "$IMAGE_DTS_ADDAX" "${REPO_ROOT}/builds/dts-addax/Dockerfile" "${REPO_ROOT}/builds/dts-addax" "$LEGACY_DIST" \
+    --build-arg MAVEN_MIRROR_URL="${MAVEN_MIRROR_URL}" \
+    --build-arg HTTP_PROXY="${HTTP_PROXY:-}" \
+    --build-arg HTTPS_PROXY="${HTTPS_PROXY:-}" \
+    --build-arg NO_PROXY="${NO_PROXY:-}"
 }
 
 build_single_image() {
@@ -451,26 +467,34 @@ build_single_image() {
       ;;
     dts-airflow-om)
       build_args+=(
-        --build-arg PIP_INDEX_URL="${PIP_INDEX_URL:-}" 
-        --build-arg PIP_TRUSTED_HOST="${PIP_TRUSTED_HOST:-}" 
-        --build-arg PIP_DEFAULT_TIMEOUT="${PIP_DEFAULT_TIMEOUT:-60}" 
-        --build-arg PIP_RETRIES="${PIP_RETRIES:-10}" 
-        --build-arg HTTP_PROXY="${HTTP_PROXY:-}" 
-        --build-arg HTTPS_PROXY="${HTTPS_PROXY:-}" 
+        --build-arg PIP_INDEX_URL="${PIP_INDEX_URL:-}"
+        --build-arg PIP_TRUSTED_HOST="${PIP_TRUSTED_HOST:-}"
+        --build-arg PIP_DEFAULT_TIMEOUT="${PIP_DEFAULT_TIMEOUT:-60}"
+        --build-arg PIP_RETRIES="${PIP_RETRIES:-10}"
+        --build-arg HTTP_PROXY="${HTTP_PROXY:-}"
+        --build-arg HTTPS_PROXY="${HTTPS_PROXY:-}"
+        --build-arg NO_PROXY="${NO_PROXY:-}"
+      )
+      ;;
+    dts-addax)
+      build_args+=(
+        --build-arg MAVEN_MIRROR_URL="${MAVEN_MIRROR_URL}"
+        --build-arg HTTP_PROXY="${HTTP_PROXY:-}"
+        --build-arg HTTPS_PROXY="${HTTPS_PROXY:-}"
         --build-arg NO_PROXY="${NO_PROXY:-}"
       )
       ;;
   esac
 
-  if [[ "$name" == "dts-dbt" ]]; then
-    build_image_ctx "$name" "$normal_tag" "$normal_df" "${REPO_ROOT}/builds/dts-dbt" "$NORMAL_DIST" "${build_args[@]}"
+  if [[ "$name" == "dts-dbt" || "$name" == "dts-addax" ]]; then
+    build_image_ctx "$name" "$normal_tag" "$normal_df" "${REPO_ROOT}/builds/${name}" "$NORMAL_DIST" "${build_args[@]}"
   else
     build_image "$name" "$normal_tag" "$normal_df" "$NORMAL_DIST" "${build_args[@]}"
   fi
 
   if [[ -n "$legacy_df" && -f "$legacy_df" ]]; then
-    if [[ "$name" == "dts-dbt" ]]; then
-      build_image_ctx "$name" "$normal_tag" "$legacy_df" "${REPO_ROOT}/builds/dts-dbt" "$LEGACY_DIST" "${build_args[@]}"
+    if [[ "$name" == "dts-dbt" || "$name" == "dts-addax" ]]; then
+      build_image_ctx "$name" "$normal_tag" "$legacy_df" "${REPO_ROOT}/builds/${name}" "$LEGACY_DIST" "${build_args[@]}"
     else
       build_image "$name" "$normal_tag" "$legacy_df" "$LEGACY_DIST" "${build_args[@]}"
     fi

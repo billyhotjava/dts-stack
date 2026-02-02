@@ -93,13 +93,70 @@
 		line-height: 1rem !important;
 	}
 
-	/* Dark mode: force all button text to white (including antd + shadcn variants) */
-	[data-theme-mode="dark"] :where(button, [role="button"], .ant-btn) {
+	/* Dark mode: force button text to white for buttons in dark containers */
+	/* Exclude modal buttons since modals have light backgrounds by default */
+	[data-theme-mode="dark"] :where(button, [role="button"], .ant-btn):not(.ant-modal-content *):not(.ant-modal-wrap *) {
 		color: var(--colors-common-white) !important;
 	}
 
-	[data-theme-mode="dark"] :where(.ant-btn) :where(span) {
+	[data-theme-mode="dark"] :where(.ant-btn):not(.ant-modal-content *):not(.ant-modal-wrap *) :where(span) {
 		color: inherit !important;
+	}
+
+	/* Dark mode: style antd modal for dark theme */
+	[data-theme-mode="dark"] .ant-modal-content {
+		background: var(--card) !important;
+		color: var(--foreground) !important;
+	}
+
+	[data-theme-mode="dark"] .ant-modal-header {
+		background: transparent !important;
+		border-bottom-color: var(--border) !important;
+	}
+
+	[data-theme-mode="dark"] .ant-modal-title {
+		color: var(--foreground) !important;
+	}
+
+	[data-theme-mode="dark"] .ant-modal-body {
+		color: var(--foreground) !important;
+	}
+
+	[data-theme-mode="dark"] .ant-modal-footer {
+		border-top-color: var(--border) !important;
+	}
+
+	/* Modal confirm (antd Modal.confirm) uses .ant-modal-confirm-body-wrapper */
+	[data-theme-mode="dark"] .ant-modal-confirm-body-wrapper {
+		color: var(--foreground) !important;
+	}
+
+	[data-theme-mode="dark"] .ant-modal-confirm-title {
+		color: var(--foreground) !important;
+	}
+
+	[data-theme-mode="dark"] .ant-modal-confirm-content {
+		color: var(--muted-foreground) !important;
+	}
+
+	/* Modal buttons should also use proper dark styling now that modal is dark themed */
+	[data-theme-mode="dark"] .ant-modal-content .ant-btn-default {
+		background: var(--muted) !important;
+		border-color: var(--border) !important;
+		color: var(--foreground) !important;
+	}
+
+	[data-theme-mode="dark"] .ant-modal-content .ant-btn-default:hover {
+		background: var(--accent) !important;
+		border-color: var(--border) !important;
+	}
+
+	[data-theme-mode="dark"] .ant-modal-content .ant-btn-primary {
+		color: var(--primary-foreground) !important;
+	}
+
+	[data-theme-mode="dark"] .ant-modal-content .ant-btn-dangerous {
+		color: var(--destructive-foreground, #fff) !important;
 	}
 }
 
