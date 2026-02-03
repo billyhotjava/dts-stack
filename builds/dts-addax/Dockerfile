@@ -43,13 +43,11 @@ RUN chmod +x /build/shrink_package.sh \
  && tar cf /tmp/addax.tar -C "$(dirname "$ADDAX_DIR")" "$(basename "$ADDAX_DIR")"
 
 # ── Runtime stage ────────────────────────────────────────────────────
-FROM eclipse-temurin:17-jre-jammy
+FROM eclipse-temurin:17-jre-alpine
 
 LABEL maintainer="DTS Build"
 
-RUN apt-get update \
- && apt-get install -y --no-install-recommends procps \
- && rm -rf /var/lib/apt/lists/*
+RUN apk add --no-cache procps bash
 
 # Use tar to preserve symlinks from the shrink step
 COPY --from=builder /tmp/addax.tar /tmp/addax.tar
