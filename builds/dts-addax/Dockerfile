@@ -48,6 +48,7 @@ FROM eclipse-temurin:17-jre-noble
 LABEL maintainer="DTS Build"
 
 RUN apt-get update \
+ || (apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 871920D1991BC93C && apt-get update) \
  && apt-get install -y --no-install-recommends procps \
  && rm -rf /var/lib/apt/lists/*
 
