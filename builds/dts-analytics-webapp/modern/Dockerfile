@@ -50,6 +50,7 @@ RUN rm -f /etc/nginx/conf.d/default.conf; \
 WORKDIR /usr/share/nginx/html
 COPY --from=builder /app/dist ./
 COPY builds/dts-analytics-webapp/modern/nginx.conf /etc/nginx/conf.d/default.conf
+RUN chmod -R a+rX /usr/share/nginx/html
 
 EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]

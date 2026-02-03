@@ -734,7 +734,13 @@ public class AirflowDagService {
             first = false;
         }
         for (JsonNode col : fileColumnsNode) {
-            String colName = col.has("name") ? col.get("name").asText("") : "";
+            String colName = col.has("safeName") ? col.get("safeName").asText("") : "";
+            if (!StringUtils.hasText(colName)) {
+                colName = col.has("name") ? col.get("name").asText("") : "";
+            }
+            if (!StringUtils.hasText(colName)) {
+                colName = col.has("label") ? col.get("label").asText("") : "";
+            }
             String colType = col.has("type") ? col.get("type").asText("string") : "string";
             if (!StringUtils.hasText(colName)) continue;
             if (!first) ddl.append(", ");

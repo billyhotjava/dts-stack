@@ -184,9 +184,14 @@ public class ExcelImportService {
 
         String csvContainerPath = toContainerPath(csvPath);
         List<ExcelColumnSpecDto> columns = new ArrayList<>();
-        for (String name : ctx.columns) {
-            if (!StringUtils.hasText(name)) continue;
-            columns.add(new ExcelColumnSpecDto(name, "string"));
+        for (int i = 0; i < ctx.columns.size(); i++) {
+            String safeName = ctx.columns.get(i);
+            String label = i < ctx.rawColumns.size() ? ctx.rawColumns.get(i) : "";
+            label = StringUtils.hasText(label) ? label.trim() : "";
+            if (!StringUtils.hasText(label)) {
+                label = safeName;
+            }
+            columns.add(new ExcelColumnSpecDto(safeName, "string", label));
         }
 
         Map<String, Object> props = new LinkedHashMap<>();
@@ -306,6 +311,7 @@ public class ExcelImportService {
                 rowIndex++;
                 List<String> values = parseCsvLine(line, ctx.delimiter);
                 if (rowIndex == ctx.headerRow) {
+                    ctx.rawColumns = new ArrayList<>(values);
                     ctx.columns = normalizeHeaders(values);
                     lastValues = new ArrayList<>(ctx.columns.size());
                     for (int i = 0; i < ctx.columns.size(); i++) {
@@ -507,19 +513,33 @@ public class ExcelImportService {
         return normalized.toString();
     }
 
+    private String normalizeColumnName(String raw, int index, Set<String> used) {
+        String base = StringUtils.hasText(raw) ? raw.trim() : "";
+        String safe = base.toLowerCase(Locale.ROOT)
+            .replaceAll("[^a-z0-9_]+", "_")
+            .replaceAll("^_+|_+$", "")
+            .replaceAll("_+", "_");
+        if (!StringUtils.hasText(safe)) {
+            safe = "col_" + (index + 1);
+        }
+        if (Character.isDigit(safe.charAt(0))) {
+            safe = "col_" + safe;
+        }
+        String candidate = safe;
+        int counter = 1;
+        while (used.contains(candidate)) {
+            candidate = safe + "_" + counter++;
+        }
+        used.add(candidate);
+        return candidate;
+    }
+
     private List<String> normalizeHeaders(List<String> values) {
         List<String> headers = new ArrayList<>();
         Set<String> seen = new LinkedHashSet<>();
         for (int i = 0; i < values.size(); i++) {
             String raw = values.get(i);
-            String name = StringUtils.hasText(raw) ? raw.trim() : "col_" + (i + 1);
-            String candidate = name;
-            int suffix = 1;
-            while (seen.contains(candidate.toLowerCase(Locale.ROOT))) {
-                suffix++;
-                candidate = name + "_" + suffix;
-            }
-            seen.add(candidate.toLowerCase(Locale.ROOT));
+            String candidate = normalizeColumnName(raw, i, seen);
             headers.add(candidate);
         }
         return headers;
@@ -616,6 +636,7 @@ public class ExcelImportService {
         private final String dateFormat;
         private final List<List<String>> preview = new ArrayList<>();
         private List<String> columns = new ArrayList<>();
+        private List<String> rawColumns = new ArrayList<>();
         private int rowCount = 0;
         private int errorCount = 0;
         private String sheetName;
@@ -649,6 +670,7 @@ public class ExcelImportService {
             try {
                 List<String> values = readValues(data);
                 if (rowIndex == ctx.headerRow) {
+                    ctx.rawColumns = new ArrayList<>(values);
                     ctx.columns = normalizeHeaders(values);
                     lastValues = new ArrayList<>(ctx.columns.size());
                     for (int i = 0; i < ctx.columns.size(); i++) {

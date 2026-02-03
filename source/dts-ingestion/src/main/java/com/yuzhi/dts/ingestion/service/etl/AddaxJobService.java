@@ -1213,7 +1213,7 @@ public class AddaxJobService {
             first = false;
         }
         for (Map<String, Object> col : fileColumns) {
-            String colName = normalizeText(col.get("name"));
+            String colName = resolveFileColumnName(col);
             String colType = normalizeText(col.get("type"));
             if (!StringUtils.hasText(colName)) continue;
             if (!first) ddl.append(", ");
@@ -1246,7 +1246,7 @@ public class AddaxJobService {
         if (colObj == null || isWildcardColumn(colObj)) {
             List<String> colNames = new java.util.ArrayList<>();
             for (Map<String, Object> col : fileColumns) {
-                String colName = normalizeText(col.get("name"));
+                String colName = resolveFileColumnName(col);
                 if (StringUtils.hasText(colName)) {
                     colNames.add(quoteIdentifier(colName.toLowerCase(Locale.ROOT)));
                 }
@@ -1274,8 +1274,22 @@ public class AddaxJobService {
         return false;
     }
 
+    private String resolveFileColumnName(Map<String, Object> col) {
+        if (col == null) return "";
+        String name = normalizeText(col.get("safeName"));
+        if (!StringUtils.hasText(name)) {
+            name = normalizeText(col.get("name"));
+        }
+        if (!StringUtils.hasText(name)) {
+            name = normalizeText(col.get("label"));
+        }
+        return name;
+    }
+
     private boolean isPostgresWriter(String writerType) {
-        if (!StringUtils.hasText(writerType)) return true;
+        if (!StringUtils.hasText(writerType)) {
+            return false;
+        }
         String lower = writerType.toLowerCase(Locale.ROOT);
         return lower.contains("postgres");
     }
@@ -2151,14 +2165,6 @@ public class AddaxJobService {
         return tables.stream()
             .map(table -> table != null ? table.toLowerCase(Locale.ROOT) : table)
             .toList();
-    }
-
-    private boolean isPostgresWriter(String writerType) {
-        if (!StringUtils.hasText(writerType)) {
-            return false;
-        }
-        String lower = writerType.toLowerCase(Locale.ROOT);
-        return lower.contains("postgres");
     }
 
     private record TableMapping(String source, String target) {}

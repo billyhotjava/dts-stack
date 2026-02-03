@@ -77,6 +77,33 @@ const TABLE_PLACEHOLDER = "${table}";
 
 const normalizeText = (value?: string) => String(value || "").trim();
 
+const normalizeIdentifier = (value?: string) => {
+	const text = normalizeText(value).toLowerCase();
+	if (!text) return "";
+	let safe = text.replace(/[^a-z0-9_]+/g, "_").replace(/^_+|_+$/g, "").replace(/_+/g, "_");
+	if (!safe) return "";
+	if (/^\d/.test(safe)) {
+		safe = `col_${safe}`;
+	}
+	return safe;
+};
+
+const normalizeTableName = (value?: string) => {
+	const text = normalizeText(value);
+	if (!text) return "";
+	const parts = text.split(".").filter(Boolean);
+	if (!parts.length) return "";
+	const normalized = parts.map((part) => normalizeIdentifier(part)).filter(Boolean);
+	if (normalized.length !== parts.length) return "";
+	return normalized.join(".");
+};
+
+const buildFileBaseName = (filename?: string) => {
+	const base = normalizeText(filename || "file").replace(/\.[^.]+$/, "");
+	const safe = normalizeIdentifier(base);
+	return safe || "file";
+};
+
 const normalizeReaderType = (value?: string) => {
 	const text = normalizeText(value);
 	if (!text) return "";
@@ -707,6 +734,7 @@ const mapTaskToForm = (task: IngestionTaskDTO) => {
 		readerType: resolvedReaderType,
 		readerConfig: JSON.stringify(sourceConfig, null, 2),
 		fileAutoId: fileAutoId,
+		fileTableName: isFileReader && writerTables.length ? writerTables[0] : undefined,
 		selectedTables: mappingTables.length ? mappingTables.join("\n") : undefined,
 		readerTables:
 			mappingTables.length && !extractReaderTables(sourceConfig).length
@@ -745,8 +773,9 @@ const extractFileUploadResult = (task: IngestionTaskDTO): FileUploadResult | nul
 	const rawColumns = Array.isArray(sourceConfig._fileColumns) ? sourceConfig._fileColumns : [];
 	const columns = rawColumns
 		.map((col: any) => ({
-			name: normalizeText(col?.name || col?.column || col?.field),
+			name: normalizeText(col?.safeName || col?.name || col?.column || col?.field),
 			type: normalizeText(col?.type || col?.dataType) || "string",
+			label: normalizeText(col?.label || col?.name || col?.column || col?.field),
 		}))
 		.filter((col: any) => col.name);
 	return {
@@ -1280,7 +1309,7 @@ export default function TransformCreatePage() {
 			errorPath?: string;
 			errorContainerPath?: string;
 			delimiter?: string;
-			columns: Array<{ name: string; dataType?: string }>;
+			columns: Array<{ name: string; dataType?: string; label?: string }>;
 			preview?: string[][];
 			rowCount?: number;
 			errorCount?: number;
@@ -1293,6 +1322,7 @@ export default function TransformCreatePage() {
 			.map((col) => ({
 				name: normalizeText(col.name),
 				type: normalizeText(col.dataType) || "string",
+				label: normalizeText(col.label),
 			}))
 			.filter((col) => col.name);
 		return {
@@ -1316,6 +1346,17 @@ export default function TransformCreatePage() {
 			rowCount: parseResult.rowCount,
 			errorCount: parseResult.errorCount,
 		};
+	};
+
+	const ensureFileTableName = (parsed: FileUploadResult) => {
+		const current = normalizeText(form.getFieldValue("fileTableName"));
+		if (current) return;
+		const prefix = normalizeText(form.getFieldValue("syncPrefix"));
+		const baseName = buildFileBaseName(parsed.originalName);
+		const suggested = normalizeTableName(`${prefix}${baseName}`) || `${prefix}${baseName}`;
+		if (suggested) {
+			form.setFieldValue("fileTableName", suggested);
+		}
 	};
 
 	const parseFile = async (
@@ -1450,11 +1491,11 @@ export default function TransformCreatePage() {
 		return Promise.reject(new Error("请输入表名"));
 	};
 
-	const writerTablesValidator = (_: any, value: string) => {
-		const mode = normalizeText(form.getFieldValue("tableSelectionMode")) || "all";
-		if (mode === "all") {
-			return Promise.resolve();
-		}
+const writerTablesValidator = (_: any, value: string) => {
+	const mode = normalizeText(form.getFieldValue("tableSelectionMode")) || "all";
+	if (mode === "all") {
+		return Promise.resolve();
+	}
 		if (resolveSelectedTables().length) {
 			return Promise.resolve();
 		}
@@ -1462,8 +1503,20 @@ export default function TransformCreatePage() {
 		if (tables.length) {
 			return Promise.resolve();
 		}
-		return Promise.reject(new Error("请填写目标表名"));
-	};
+	return Promise.reject(new Error("请填写目标表名"));
+};
+
+const fileTableNameValidator = (_: any, value: string) => {
+	const text = normalizeText(value);
+	if (!text) {
+		return Promise.resolve();
+	}
+	const normalized = normalizeTableName(text);
+	if (!normalized) {
+		return Promise.reject(new Error("目标表名仅支持字母、数字、下划线，可包含 schema"));
+	}
+	return Promise.resolve();
+};
 
 	const readerTypeValidator = (_: any, value: string) => {
 		const direct = normalizeText(value);
@@ -1498,7 +1551,7 @@ export default function TransformCreatePage() {
 				case 0:
 					return ["name"];
 				case 1:
-					return ["writerType"];
+					return ["writerType", "fileTableName"];
 				case 2:
 					return ["airflowEnabled", "runNow"];
 				default:
@@ -1654,11 +1707,17 @@ export default function TransformCreatePage() {
 				readerConfig.sourceSystem = sourceSystem;
 			}
 			if (isFileSource) {
-				const baseName = (fileUploadResult.originalName || "uploaded_file")
-					.replace(/\.[^.]+$/, "")
-					.replace(/[^a-zA-Z0-9_]/g, "_")
-					.toLowerCase();
-				const fileTableName = normalizeText(mergedValues.syncPrefix) + baseName;
+				const baseName = buildFileBaseName(fileUploadResult.originalName);
+				const fileTableInput = normalizeText(mergedValues.fileTableName);
+				const requestedFileTable = normalizeTableName(fileTableInput);
+				if (fileTableInput && !requestedFileTable) {
+					throw new Error("目标表名格式不合法，仅支持字母、数字、下划线，可包含 schema");
+				}
+				const autoTableName = normalizeTableName(`${normalizeText(mergedValues.syncPrefix)}${baseName}`);
+				const fileTableName = requestedFileTable || autoTableName || `${normalizeText(mergedValues.syncPrefix)}${baseName}`;
+				if (!fileTableName) {
+					throw new Error("请填写目标表名");
+				}
 				const fileIncludeTables = [fileTableName];
 				const writerConfig: Record<string, any> = {};
 				const fileWriterUsername = normalizeText(mergedValues.writerUsername);
@@ -1884,6 +1943,11 @@ export default function TransformCreatePage() {
 		const mergedValues = { ...snapshot, ...(formValues || {}) } as Record<string, any>;
 		const isFilePreview = mergedValues.sourceCategory === "file" && fileUploadResult;
 		if (isFilePreview) {
+			const fileTableName = normalizeTableName(mergedValues.fileTableName) ||
+				normalizeTableName(`${normalizeText(mergedValues.syncPrefix)}${buildFileBaseName(fileUploadResult.originalName)}`);
+			if (fileTableName) {
+				mergedValues.writerTables = fileTableName;
+			}
 			mergedValues.readerType = "txtfilereader";
 			mergedValues.readerConfig = JSON.stringify(
 				{
@@ -2038,6 +2102,7 @@ export default function TransformCreatePage() {
 											);
 											setFileUploadResult(parsed);
 											form.setFieldValue("readerType", "txtfilereader");
+											ensureFileTableName(parsed);
 											onSuccess?.(parsed);
 											toast.success(`文件解析成功，检测到 ${parsed.columns?.length || 0} 列`);
 										} catch (err: any) {
@@ -2102,6 +2167,7 @@ export default function TransformCreatePage() {
 														);
 														setFileUploadResult(parsed);
 														form.setFieldValue("readerType", "txtfilereader");
+														ensureFileTableName(parsed);
 														toast.success(`已切换到 ${targetSheet.name}，检测到 ${parsed.columns?.length || 0} 列`);
 													} catch (err: any) {
 														toast.error(err?.message || "解析 Sheet 失败");
@@ -2142,7 +2208,12 @@ export default function TransformCreatePage() {
 										rowKey="name"
 										pagination={false}
 										columns={[
-											{ title: "列名", dataIndex: "name" },
+											{
+												title: "原始列名",
+												dataIndex: "label",
+												render: (_: any, record: any) => record.label || record.name,
+											},
+											{ title: "字段名", dataIndex: "name" },
 											{ title: "推断类型", dataIndex: "type", width: 120, render: (t: string) => <Tag>{t}</Tag> },
 										]}
 									/>
@@ -2169,7 +2240,7 @@ export default function TransformCreatePage() {
 													...(fileUploadResult.columns || [])
 														.slice(0, Math.max(1, filePreviewCols))
 														.map((col) => ({
-															title: col.name,
+															title: col.label || col.name,
 															dataIndex: col.name,
 															ellipsis: true,
 														})),
@@ -2208,6 +2279,14 @@ export default function TransformCreatePage() {
 									className="mb-4"
 								/>
 							) : null}
+							<Form.Item
+								name="fileTableName"
+								label="目标表名"
+								rules={[{ validator: fileTableNameValidator }]}
+								tooltip="仅允许字母、数字、下划线，可包含 schema.table"
+							>
+								<Input placeholder="例如：ods_patent_info" />
+							</Form.Item>
 							<Form.Item name="syncPrefix" label="目标表前缀">
 								<Input placeholder="例如：ods_erp_" />
 							</Form.Item>
@@ -2220,13 +2299,13 @@ export default function TransformCreatePage() {
 								<Switch />
 							</Form.Item>
 							<Text type="secondary" className="block -mt-3 mb-4">
-								目标表名 = 前缀 + 文件名（去除扩展名）。例如：ods_erp_ + sales_data → ods_erp_sales_data
+								未填写目标表名时，系统将使用：前缀 + 文件名（去除扩展名）。例如：ods_erp_ + sales_data → ods_erp_sales_data
 							</Text>
 							{fileUploadResult && (
 								<Alert
 									type="info"
 									showIcon
-									message={`目标表预览：${normalizeText(form.getFieldValue("syncPrefix"))}${(fileUploadResult.originalName || "file").replace(/\.[^.]+$/, "").replace(/[^a-zA-Z0-9_]/g, "_").toLowerCase()}`}
+									message={`目标表预览：${normalizeText(form.getFieldValue("fileTableName")) || normalizeText(form.getFieldValue("syncPrefix")) + buildFileBaseName(fileUploadResult.originalName)}`}
 									className="mb-4"
 								/>
 							)}

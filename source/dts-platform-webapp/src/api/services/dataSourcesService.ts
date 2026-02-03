@@ -65,6 +65,7 @@ export type ExcelImportPrepareResponse = {
 export type ExcelColumnSpec = {
 	name: string;
 	dataType?: string;
+	label?: string;
 };
 
 export type ExcelImportParseRequest = {

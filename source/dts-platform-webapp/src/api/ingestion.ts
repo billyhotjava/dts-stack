@@ -109,7 +109,7 @@ export interface FileUploadResult {
   hostPath: string;
   containerPath: string;
   fileType: string;
-  columns: Array<{ name: string; type: string }>;
+  columns: Array<{ name: string; type: string; label?: string }>;
   originalName: string;
   fileId?: string;
   batchCode?: string;

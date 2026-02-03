@@ -232,7 +232,13 @@ public class TargetTableProvisioner {
         List<JdbcMetadataService.ColumnMeta> cols = new ArrayList<>();
         for (Object item : fileColumnsList) {
             if (item instanceof Map<?, ?> colMap) {
-                String name = normalizeText(colMap.get("name"));
+                String name = normalizeText(colMap.get("safeName"));
+                if (!StringUtils.hasText(name)) {
+                    name = normalizeText(colMap.get("name"));
+                }
+                if (!StringUtils.hasText(name)) {
+                    name = normalizeText(colMap.get("label"));
+                }
                 String type = normalizeText(colMap.get("type"));
                 if (!StringUtils.hasText(name)) continue;
                 int jdbcType = mapFileTypeToJdbc(type);
