@@ -306,10 +306,6 @@ resolve_image() {
       tag="$IMAGE_DTS_ANALYTICS_WEBAPP_MODERN"
       dockerfile="${REPO_ROOT}/builds/dts-analytics-webapp/modern/Dockerfile"
       ;;
-    dts-analytics-webapp)
-      tag="$IMAGE_DTS_ANALYTICS_WEBAPP_LEGACY"
-      dockerfile="${REPO_ROOT}/builds/dts-analytics-webapp/Dockerfile"
-      ;;
     dts-airflow-om)
       tag="$IMAGE_DTS_AIRFLOW_OM"
       dockerfile="${REPO_ROOT}/source/dts-airflow-om/Dockerfile"
@@ -452,9 +448,6 @@ build_single_image() {
       ;;
     dts-analytics)
       legacy_df="${REPO_ROOT}/builds/dts-analytics/Dockerfile.offline"
-      ;;
-    dts-analytics-webapp)
-      legacy_df="${REPO_ROOT}/builds/dts-analytics-webapp/Dockerfile"
       ;;
     *)
       legacy_df=""
