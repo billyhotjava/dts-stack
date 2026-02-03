@@ -30,7 +30,7 @@ WORKDIR /build
 
 # Download source tarball (avoids git clone thread issue on restricted seccomp)
 ADD https://github.com/wgzhao/addax/archive/refs/tags/${ADDAX_VERSION}.tar.gz /tmp/addax-src.tar.gz
-RUN tar xzf /tmp/addax-src.tar.gz -C /build --strip-components=1 && rm /tmp/addax-src.tar.gz
+RUN tar xzf /tmp/addax-src.tar.gz -C /build --strip-components=1 --no-same-permissions --no-same-owner && rm /tmp/addax-src.tar.gz
 
 # Build: first compile, then create distribution package
 RUN mvn -B -e -DskipTests clean package \
