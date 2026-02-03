@@ -266,7 +266,7 @@ init_images_legacy() {
   IMAGE_DTS_ANALYTICS="${IMAGE_DTS_ANALYTICS:-dts-analytics:local}"
   IMAGE_DTS_ADMIN_WEBAPP="${IMAGE_DTS_ADMIN_WEBAPP:-dts-admin-webapp:local}"
   IMAGE_DTS_PLATFORM_WEBAPP="${IMAGE_DTS_PLATFORM_WEBAPP:-dts-platform-webapp:local}"
-  IMAGE_DTS_ANALYTICS_WEBAPP_LEGACY="${IMAGE_DTS_ANALYTICS_WEBAPP_LEGACY:-dts-analytics-webapp:local}"
+  IMAGE_DTS_ANALYTICS_WEBAPP_MODERN="${IMAGE_DTS_ANALYTICS_WEBAPP_MODERN:-dts-analytics-webapp-modern:local}"
   IMAGE_DTS_AIRFLOW_OM="${IMAGE_DTS_AIRFLOW_OM:-${IMAGE_AIRFLOW:-dts-airflow-om:local}}"
   IMAGE_DTS_DBT="${IMAGE_DTS_DBT:-${IMAGE_DBT:-dts-dbt:1.11.2}}"
   IMAGE_DTS_ADDAX="${IMAGE_DTS_ADDAX:-${IMAGE_ADDAX:-dts-addax:6.0.8}}"
@@ -337,6 +337,7 @@ build_all_normal() {
     build_maven_module "dts-admin" "dts-admin-*.jar" "${REPO_ROOT}/builds/dts-admin/dts-admin.jar"
     build_maven_module "dts-platform" "dts-platform-*.jar" "${REPO_ROOT}/builds/dts-platform/dts-platform.jar"
     build_maven_module "dts-ingestion" "dts-ingestion-*.jar" "${REPO_ROOT}/builds/dts-ingestion/dts-ingestion.jar"
+    build_maven_module "dts-analytics" "dts-analytics-*.jar" "${REPO_ROOT}/builds/dts-analytics/dts-analytics.jar"
     enable_maven_build_arg="false"
   fi
 
@@ -346,7 +347,8 @@ build_all_normal() {
     --build-arg ENABLE_MAVEN_BUILD="${enable_maven_build_arg}"
   build_image "dts-ingestion" "$IMAGE_DTS_INGESTION" "${REPO_ROOT}/builds/dts-ingestion/Dockerfile" "$NORMAL_DIST" \
     --build-arg ENABLE_MAVEN_BUILD="${enable_maven_build_arg}"
-  build_image "dts-analytics" "$IMAGE_DTS_ANALYTICS" "${REPO_ROOT}/builds/dts-analytics/Dockerfile" "$NORMAL_DIST"
+  build_image "dts-analytics" "$IMAGE_DTS_ANALYTICS" "${REPO_ROOT}/builds/dts-analytics/Dockerfile" "$NORMAL_DIST" \
+    --build-arg ENABLE_MAVEN_BUILD="${enable_maven_build_arg}"
   build_image "dts-admin-webapp" "$IMAGE_DTS_ADMIN_WEBAPP" "${REPO_ROOT}/builds/dts-admin-webapp/Dockerfile" "$NORMAL_DIST" \
     --build-arg PNPM_VERSION="${PNPM_VERSION}" \
     --build-arg WEBAPP_BUILD_CMD="build:modern"
@@ -383,7 +385,8 @@ build_all_legacy() {
   build_image "dts-platform-webapp" "$IMAGE_DTS_PLATFORM_WEBAPP" "${REPO_ROOT}/builds/dts-platform-webapp/Dockerfile" "$LEGACY_DIST" \
     --build-arg PNPM_VERSION="${PNPM_VERSION}" \
     --build-arg WEBAPP_BUILD_CMD="build:modern"
-  build_image "dts-analytics-webapp" "$IMAGE_DTS_ANALYTICS_WEBAPP_LEGACY" "${REPO_ROOT}/builds/dts-analytics-webapp/Dockerfile" "$LEGACY_DIST"
+  build_image "dts-analytics-webapp-modern" "$IMAGE_DTS_ANALYTICS_WEBAPP_MODERN" "${REPO_ROOT}/builds/dts-analytics-webapp/modern/Dockerfile" "$LEGACY_DIST" \
+    --build-arg PNPM_VERSION="${PNPM_VERSION}"
   build_image "dts-airflow-om" "$IMAGE_DTS_AIRFLOW_OM" "${REPO_ROOT}/source/dts-airflow-om/Dockerfile" "$LEGACY_DIST" \
     --build-arg PIP_INDEX_URL="${PIP_INDEX_URL:-}" \
     --build-arg PIP_TRUSTED_HOST="${PIP_TRUSTED_HOST:-}" \
@@ -421,6 +424,10 @@ build_single_image() {
         build_maven_module "dts-ingestion" "dts-ingestion-*.jar" "${REPO_ROOT}/builds/dts-ingestion/dts-ingestion.jar"
         enable_maven_build_arg="false"
         ;;
+      dts-analytics)
+        build_maven_module "dts-analytics" "dts-analytics-*.jar" "${REPO_ROOT}/builds/dts-analytics/dts-analytics.jar"
+        enable_maven_build_arg="false"
+        ;;
     esac
   fi
 
@@ -456,7 +463,7 @@ build_single_image() {
 
   local build_args=()
   case "$name" in
-    dts-admin|dts-platform|dts-ingestion)
+    dts-admin|dts-platform|dts-ingestion|dts-analytics)
       build_args+=(--build-arg ENABLE_MAVEN_BUILD="${enable_maven_build_arg}")
       ;;
     dts-admin-webapp|dts-platform-webapp)
