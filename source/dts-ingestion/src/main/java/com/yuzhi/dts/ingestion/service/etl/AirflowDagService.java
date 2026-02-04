@@ -457,7 +457,7 @@ public class AirflowDagService {
                 is_paused_upon_creation=False,
                 tags=["addax", "etl", "ods", "%s", "%s"],
             ) as dag:
-                run_cmd = "/opt/addax/bin/addax.sh {{ dag_run.conf.get('job_path', '%s') }}"
+                run_cmd = "{{ dag_run.conf.get('job_path', '%s') }}"
             %s
                 addax_run = DockerOperator(
                     task_id="%s",
@@ -555,7 +555,7 @@ public class AirflowDagService {
             sb.append("        api_version=\"auto\",\n");
             sb.append("        auto_remove=True,\n");
             sb.append("        docker_url=\"unix://var/run/docker.sock\",\n");
-            sb.append(String.format("        command=\"/opt/addax/bin/addax.sh %s\",\n", jobPath));
+            sb.append(String.format("        command=\"%s\",\n", jobPath));
             sb.append("        mount_tmp_dir=False,\n");
             sb.append("        mounts=[\n");
             sb.append("            Mount(source=ADDAX_JOB_DIR, target=\"/opt/addax/jobs\", type=\"bind\"),\n");

@@ -17,5 +17,4 @@ RUN tar xzf /tmp/addax.tar.gz -C /opt/ --no-same-permissions --no-same-owner \
 
 WORKDIR /opt/addax
 
-ENTRYPOINT ["sh", "-c"]
-CMD ["/opt/addax/bin/addax.sh"]
+ENTRYPOINT ["/opt/addax/bin/addax.sh"]
