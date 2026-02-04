@@ -419,6 +419,7 @@ public class AirflowDagService {
             %s
             ADDAX_IMAGE = os.getenv("ADDAX_IMAGE", "%s")
             ADDAX_JOB_DIR = os.getenv("ADDAX_JOB_DIR", "%s")
+            ADDAX_LOG_DIR = os.getenv("ADDAX_LOG_DIR", "/opt/dts/logs/addax")
             ADDAX_DRIVER_DIR = os.getenv("ADDAX_DRIVER_DIR", "")
             ADDAX_DRIVER_JARS = os.getenv("ADDAX_DRIVER_JARS", "")
             DEFAULT_JOB_PATH = os.getenv("ADDAX_JOB_DEFAULT", "%s")
@@ -470,6 +471,7 @@ public class AirflowDagService {
                     mount_tmp_dir=False,
                     mounts=[
                         Mount(source=ADDAX_JOB_DIR, target="/opt/addax/jobs", type="bind"),
+                        Mount(source=ADDAX_LOG_DIR, target="/opt/addax/log", type="bind"),
                         *build_driver_mounts(),
                     ],
                     environment={},
@@ -502,6 +504,7 @@ public class AirflowDagService {
         sb.append("from docker.types import Mount\n\n");
         sb.append(String.format("ADDAX_IMAGE = os.getenv(\"ADDAX_IMAGE\", \"%s\")\n", addaxImage));
         sb.append(String.format("ADDAX_JOB_DIR = os.getenv(\"ADDAX_JOB_DIR\", \"%s\")\n", addaxJobDir));
+        sb.append("ADDAX_LOG_DIR = os.getenv(\"ADDAX_LOG_DIR\", \"/opt/dts/logs/addax\")\n");
         sb.append("ADDAX_DRIVER_DIR = os.getenv(\"ADDAX_DRIVER_DIR\", \"\")\n");
         sb.append("ADDAX_DRIVER_JARS = os.getenv(\"ADDAX_DRIVER_JARS\", \"\")\n\n\n");
         sb.append("def build_driver_mounts():\n");
@@ -559,7 +562,8 @@ public class AirflowDagService {
             sb.append(String.format("        command=\"%s\",\n", jobPath));
             sb.append("        mount_tmp_dir=False,\n");
             sb.append("        mounts=[\n");
-            sb.append("            Mount(source=ADDAX_JOB_DIR, target=\"/opt/addax/jobs\", type=\"bind\"),\n");
+        sb.append("            Mount(source=ADDAX_JOB_DIR, target=\"/opt/addax/jobs\", type=\"bind\"),\n");
+        sb.append("            Mount(source=ADDAX_LOG_DIR, target=\"/opt/addax/log\", type=\"bind\"),\n");
             sb.append("            *build_driver_mounts(),\n");
             sb.append("        ],\n");
             sb.append("        environment={},\n");

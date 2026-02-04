@@ -1,0 +1,6 @@
+log:
+  level: INFO
+  filePath: /logs/traefik/traefik.log
+
+accessLog:
+  filePath: /logs/traefik/access.log

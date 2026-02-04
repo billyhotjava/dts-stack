@@ -382,6 +382,7 @@ services:
       DTS_ADDAX_DAG_ID: ${DTS_ADDAX_DAG_ID:-addax_job}
       ADDAX_DRIVER_DIR: ${STACK_ROOT}/services/dts-platform/drivers
       ADDAX_DRIVER_JARS: ${ADDAX_DRIVER_JARS:-DmJdbcDriver11.jar,postgresql-42.7.9.jar}
+      ADDAX_LOG_DIR: ${STACK_ROOT}/logs/addax
       DTS_AIRFLOW_ENABLED: ${DTS_AIRFLOW_ENABLED:-true}
       DTS_AIRFLOW_BASE_URL: ${DTS_AIRFLOW_BASE_URL:-http://dts-airflow-webserver:8080}
       DTS_AIRFLOW_API_PATH: ${DTS_AIRFLOW_API_PATH:-/api/v1}
@@ -415,6 +416,7 @@ services:
       DTS_INGESTION_TRUSTED_SERVICE_NAME: ${DTS_INGESTION_TRUSTED_SERVICE_NAME:-dts-platform}
       DTS_INFRA_ENCRYPTION_KEY: ${DTS_INFRA_ENCRYPTION_KEY:-}
       DTS_INFRA_KEY_VERSION: ${DTS_INFRA_KEY_VERSION:-v1}
+      LOG_ROOT: "${LOG_ROOT:-/workspace/logs}"
       STACK_ROOT: ${STACK_ROOT}
     command:
       - bash
@@ -691,6 +693,7 @@ services:
       ES_JAVA_OPTS: "-Xms512m -Xmx512m"
     volumes:
       - elasticsearch-data:/usr/share/elasticsearch/data
+      - ./logs/elasticsearch:/usr/share/elasticsearch/logs:z
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:9200 >/dev/null || exit 1"]
       <<: *hc
@@ -732,6 +735,8 @@ services:
       SERVER_HOST_API_URL: "http://dts-openmetadata:8585/api"
     ports:
       - "${OPENMETADATA_HTTP_PORT:-8585}:8585"
+    volumes:
+      - ./logs/openmetadata:/opt/openmetadata/logs:z
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=dts-core"
@@ -773,6 +778,8 @@ services:
       ELASTICSEARCH_HOST: dts-elasticsearch
       ELASTICSEARCH_PORT: 9200
       ELASTICSEARCH_SCHEME: http
+    volumes:
+      - ./logs/openmetadata:/opt/openmetadata/logs:z
     restart: "no"
     networks:
       - dts-core
@@ -847,12 +854,13 @@ services:
       ADDAX_JOB_DIR: ${STACK_ROOT}/services/dts-airflow/dags
       ADDAX_DRIVER_DIR: ${STACK_ROOT}/services/dts-platform/drivers
       ADDAX_DRIVER_JARS: ${ADDAX_DRIVER_JARS:-DmJdbcDriver11.jar,postgresql-42.7.9.jar}
+      ADDAX_LOG_DIR: ${STACK_ROOT}/logs/addax
     depends_on:
       dts-pg:
         condition: service_healthy
     volumes:
       - ./services/dts-airflow/dags:/opt/airflow/dags
-      - ./services/dts-airflow/logs:/opt/airflow/logs
+      - ./logs/airflow:/opt/airflow/logs
       - ./services/dts-airflow/plugins:/opt/airflow/plugins
       - ./services/dts-airflow/extra:/opt/airflow/extra:ro,z
       - ./services/dts-airflow/config:/opt/airflow/config
@@ -894,11 +902,12 @@ services:
       ADDAX_JOB_DIR: ${STACK_ROOT}/services/dts-airflow/dags
       ADDAX_DRIVER_DIR: ${STACK_ROOT}/services/dts-platform/drivers
       ADDAX_DRIVER_JARS: ${ADDAX_DRIVER_JARS:-DmJdbcDriver11.jar,postgresql-42.7.9.jar}
+      ADDAX_LOG_DIR: ${STACK_ROOT}/logs/addax
     ports:
       - "${AIRFLOW_WEBSERVER_PORT:-18090}:8080"
     volumes:
       - ./services/dts-airflow/dags:/opt/airflow/dags
-      - ./services/dts-airflow/logs:/opt/airflow/logs
+      - ./logs/airflow:/opt/airflow/logs
       - ./services/dts-airflow/plugins:/opt/airflow/plugins
       - ./services/dts-airflow/extra:/opt/airflow/extra:ro,z
       - ./services/dts-airflow/config:/opt/airflow/config
@@ -953,9 +962,10 @@ services:
       ADDAX_JOB_DIR: ${STACK_ROOT}/services/dts-airflow/dags
       ADDAX_DRIVER_DIR: ${STACK_ROOT}/services/dts-platform/drivers
       ADDAX_DRIVER_JARS: ${ADDAX_DRIVER_JARS:-DmJdbcDriver11.jar,postgresql-42.7.9.jar}
+      ADDAX_LOG_DIR: ${STACK_ROOT}/logs/addax
     volumes:
       - ./services/dts-airflow/dags:/opt/airflow/dags
-      - ./services/dts-airflow/logs:/opt/airflow/logs
+      - ./logs/airflow:/opt/airflow/logs
       - ./services/dts-airflow/plugins:/opt/airflow/plugins
       - ./services/dts-airflow/extra:/opt/airflow/extra:ro,z
       - ./services/dts-airflow/config:/opt/airflow/config
@@ -994,9 +1004,10 @@ services:
       ADDAX_JOB_DIR: ${STACK_ROOT}/services/dts-airflow/dags
       ADDAX_DRIVER_DIR: ${STACK_ROOT}/services/dts-platform/drivers
       ADDAX_DRIVER_JARS: ${ADDAX_DRIVER_JARS:-DmJdbcDriver11.jar,postgresql-42.7.9.jar}
+      ADDAX_LOG_DIR: ${STACK_ROOT}/logs/addax
     volumes:
       - ./services/dts-airflow/dags:/opt/airflow/dags
-      - ./services/dts-airflow/logs:/opt/airflow/logs
+      - ./logs/airflow:/opt/airflow/logs
       - ./services/dts-airflow/plugins:/opt/airflow/plugins
       - ./services/dts-airflow/extra:/opt/airflow/extra:ro,z
       - ./services/dts-airflow/config:/opt/airflow/config
@@ -1012,9 +1023,12 @@ services:
     entrypoint: /bin/bash
     command: ["-lc", "sleep infinity"]
     working_dir: /opt/dbt
+    environment:
+      DBT_LOG_PATH: /opt/dbt-logs
     volumes:
       - ./services/dts-dbt:/opt/dbt
       - ./services/dts-dbt/profiles:/root/.dbt
+      - ./logs/dbt:/opt/dbt-logs:z
     restart: unless-stopped
     networks:
       - dts-core

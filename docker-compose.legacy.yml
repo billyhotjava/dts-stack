@@ -24,6 +24,7 @@ services:
       # Hetu upstream target (defaults to localhost in legacy host-network mode).
       - "hetu.upstream:${HETU_UPSTREAM_IP:-127.0.0.1}"
     command:
+      - "--configFile=/etc/traefik/traefik.yml"
       #- "--api.dashboard=${TRAEFIK_DASHBOARD}"
       #- "--api.insecure=${TRAEFIK_DASHBOARD}"
       - "--entrypoints.traefik.address=127.0.0.1:38080"
@@ -51,10 +52,12 @@ services:
     volumes:
       # Do not relabel docker.sock; keep read-only
       - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./services/dts-proxy/traefik.yml:/etc/traefik/traefik.yml:ro,z
       - ./services/dts-proxy/dynamic:/etc/traefik/dynamic:ro,z
       - ./services/certs:/etc/traefik/certs:ro,z
       - ./services/certs/server.crt:/certs/server.crt:ro,z
       - ./services/certs/server.key:/certs/server.key:ro,z
+      - ./logs/traefik:/logs/traefik:z
     labels:
       - "traefik.enable=true"
       # Avoid "port is missing" error for host-network Traefik container.
@@ -136,7 +139,7 @@ services:
   dts-pg:
     platform: linux/arm64
     image: ${IMAGE_POSTGRES}
-    command: ["postgres", "-c", "shared_preload_libraries=pg_stat_statements", "-c", "max_connections=300"]
+    command: ["postgres", "-c", "shared_preload_libraries=pg_stat_statements", "-c", "max_connections=300", "-c", "logging_collector=on", "-c", "log_directory=/var/lib/postgresql/data/log", "-c", "log_filename=postgresql-%Y-%m-%d.log", "-c", "log_rotation_age=1d", "-c", "log_rotation_size=0"]
     environment:
       POSTGRES_PASSWORD: ${PG_SUPER_PASSWORD}
       POSTGRES_USER: ${PG_SUPER_USER}
@@ -170,6 +173,7 @@ services:
     volumes:
       - ./services/dts-pg/data:/var/lib/postgresql/data
       - ./services/dts-pg/init:/docker-entrypoint-initdb.d:ro
+      - ./logs/postgresql:/var/lib/postgresql/data/log:z
     healthcheck:
       # Keep healthcheck lightweight and deterministic; do not rely on container env expansion
       test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 5432 -U ${PG_SUPER_USER} -d postgres && psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -p 5432 -U ${PG_SUPER_USER} -d postgres -c 'SELECT 1' >/dev/null"]
@@ -198,6 +202,8 @@ services:
       KC_PROXY: edge
       KEYCLOAK_ADMIN: ${KC_ADMIN}
       KEYCLOAK_ADMIN_PASSWORD: ${KC_ADMIN_PWD}
+      KC_LOG: "console,file"
+      KC_LOG_FILE: "/opt/keycloak/data/log/keycloak.log"
       KC_DB: postgres
       KC_DB_URL: jdbc:postgresql://${PG_HOST}:${PG_PORT}/${PG_DB_KEYCLOAK}
       KC_DB_USERNAME: ${PG_USER_KEYCLOAK}
@@ -215,6 +221,8 @@ services:
     depends_on:
       dts-pg:
         condition: service_healthy
+    volumes:
+      - ./logs/keycloak:/opt/keycloak/data/log:z
     security_opt:
       - seccomp=unconfined  # loosen for legacy Docker; remove after engine upgrade
     labels:
@@ -468,6 +476,7 @@ services:
       DTS_ADDAX_DAG_ID: ${DTS_ADDAX_DAG_ID:-addax_job}
       ADDAX_DRIVER_DIR: ${STACK_ROOT}/services/dts-platform/drivers
       ADDAX_DRIVER_JARS: ${ADDAX_DRIVER_JARS:-DmJdbcDriver11.jar,postgresql-42.7.9.jar}
+      ADDAX_LOG_DIR: ${STACK_ROOT}/logs/addax
       DTS_AIRFLOW_ENABLED: ${DTS_AIRFLOW_ENABLED:-true}
       DTS_AIRFLOW_BASE_URL: ${DTS_AIRFLOW_BASE_URL:-http://dts-airflow-webserver:8080}
       DTS_AIRFLOW_API_PATH: ${DTS_AIRFLOW_API_PATH:-/api/v1}
@@ -501,6 +510,7 @@ services:
       DTS_INGESTION_TRUSTED_SERVICE_NAME: ${DTS_INGESTION_TRUSTED_SERVICE_NAME:-dts-platform}
       DTS_INFRA_ENCRYPTION_KEY: ${DTS_INFRA_ENCRYPTION_KEY:-}
       DTS_INFRA_KEY_VERSION: ${DTS_INFRA_KEY_VERSION:-v1}
+      LOG_ROOT: /logs
       STACK_ROOT: ${STACK_ROOT}
     volumes:
       - ./logs/dts-ingestion:/logs/dts-ingestion:z
@@ -658,6 +668,7 @@ services:
       - seccomp=unconfined
     volumes:
       - elasticsearch-data:/usr/share/elasticsearch/data
+      - ./logs/elasticsearch:/usr/share/elasticsearch/logs:z
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:9200 >/dev/null || exit 1"]
       <<: *hc
@@ -707,6 +718,8 @@ services:
       - "traefik.http.routers.dts-openmetadata.tls=true"
       - "traefik.http.services.dts-openmetadata.loadbalancer.server.port=8585"
       - "traefik.http.routers.dts-openmetadata.middlewares=platform-forward-auth@file,security-headers@file"
+    volumes:
+      - ./logs/openmetadata:/opt/openmetadata/logs:z
     restart: unless-stopped
     networks:
       - dts-core
@@ -740,6 +753,8 @@ services:
       ELASTICSEARCH_HOST: dts-elasticsearch
       ELASTICSEARCH_PORT: 9200
       ELASTICSEARCH_SCHEME: http
+    volumes:
+      - ./logs/openmetadata:/opt/openmetadata/logs:z
     restart: "no"
     networks:
       - dts-core
@@ -810,6 +825,7 @@ services:
       ADDAX_JOB_DIR: ${STACK_ROOT}/services/dts-airflow/dags
       ADDAX_DRIVER_DIR: ${STACK_ROOT}/services/dts-platform/drivers
       ADDAX_DRIVER_JARS: ${ADDAX_DRIVER_JARS:-DmJdbcDriver11.jar,postgresql-42.7.9.jar}
+      ADDAX_LOG_DIR: ${STACK_ROOT}/logs/addax
       OPENMETADATA_INGEST_IMAGE: ${IMAGE_OPENMETADATA_INGESTION}
       OPENMETADATA_INGEST_CONFIG_DIR: ${OPENMETADATA_INGEST_CONFIG_DIR}
       OPENMETADATA_API_ENDPOINT: ${DTS_PLATFORM_OPENMETADATA_BASE_URL}/api/v1
@@ -820,7 +836,7 @@ services:
         condition: service_healthy
     volumes:
       - ./services/dts-airflow/dags:/opt/airflow/dags
-      - ./services/dts-airflow/logs:/opt/airflow/logs
+      - ./logs/airflow:/opt/airflow/logs
       - ./services/dts-airflow/plugins:/opt/airflow/plugins
       - ./services/dts-airflow/extra:/opt/airflow/extra:ro,z
       - ./services/dts-airflow/config:/opt/airflow/config
@@ -859,6 +875,7 @@ services:
       ADDAX_JOB_DIR: ${STACK_ROOT}/services/dts-airflow/dags
       ADDAX_DRIVER_DIR: ${STACK_ROOT}/services/dts-platform/drivers
       ADDAX_DRIVER_JARS: ${ADDAX_DRIVER_JARS:-DmJdbcDriver11.jar,postgresql-42.7.9.jar}
+      ADDAX_LOG_DIR: ${STACK_ROOT}/logs/addax
       OPENMETADATA_INGEST_IMAGE: ${IMAGE_OPENMETADATA_INGESTION}
       OPENMETADATA_INGEST_CONFIG_DIR: ${OPENMETADATA_INGEST_CONFIG_DIR}
       OPENMETADATA_API_ENDPOINT: ${DTS_PLATFORM_OPENMETADATA_BASE_URL}/api/v1
@@ -868,7 +885,7 @@ services:
       - "${AIRFLOW_WEBSERVER_PORT:-18090}:8080"
     volumes:
       - ./services/dts-airflow/dags:/opt/airflow/dags
-      - ./services/dts-airflow/logs:/opt/airflow/logs
+      - ./logs/airflow:/opt/airflow/logs
       - ./services/dts-airflow/plugins:/opt/airflow/plugins
       - ./services/dts-airflow/extra:/opt/airflow/extra:ro,z
       - ./services/dts-airflow/config:/opt/airflow/config
@@ -918,6 +935,7 @@ services:
       ADDAX_JOB_DIR: ${STACK_ROOT}/services/dts-airflow/dags
       ADDAX_DRIVER_DIR: ${STACK_ROOT}/services/dts-platform/drivers
       ADDAX_DRIVER_JARS: ${ADDAX_DRIVER_JARS:-DmJdbcDriver11.jar,postgresql-42.7.9.jar}
+      ADDAX_LOG_DIR: ${STACK_ROOT}/logs/addax
       OPENMETADATA_INGEST_IMAGE: ${IMAGE_OPENMETADATA_INGESTION}
       OPENMETADATA_INGEST_CONFIG_DIR: ${OPENMETADATA_INGEST_CONFIG_DIR}
       OPENMETADATA_API_ENDPOINT: ${DTS_PLATFORM_OPENMETADATA_BASE_URL}/api/v1
@@ -925,7 +943,7 @@ services:
       OPENMETADATA_DBT_SERVICE: ${DTS_PLATFORM_OPENMETADATA_SERVICE_NAME:-hive}
     volumes:
       - ./services/dts-airflow/dags:/opt/airflow/dags
-      - ./services/dts-airflow/logs:/opt/airflow/logs
+      - ./logs/airflow:/opt/airflow/logs
       - ./services/dts-airflow/plugins:/opt/airflow/plugins
       - ./services/dts-airflow/extra:/opt/airflow/extra:ro,z
       - ./services/dts-airflow/config:/opt/airflow/config
@@ -959,6 +977,7 @@ services:
       ADDAX_JOB_DIR: ${STACK_ROOT}/services/dts-airflow/dags
       ADDAX_DRIVER_DIR: ${STACK_ROOT}/services/dts-platform/drivers
       ADDAX_DRIVER_JARS: ${ADDAX_DRIVER_JARS:-DmJdbcDriver11.jar,postgresql-42.7.9.jar}
+      ADDAX_LOG_DIR: ${STACK_ROOT}/logs/addax
       OPENMETADATA_INGEST_IMAGE: ${IMAGE_OPENMETADATA_INGESTION}
       OPENMETADATA_INGEST_CONFIG_DIR: ${OPENMETADATA_INGEST_CONFIG_DIR}
       OPENMETADATA_API_ENDPOINT: ${DTS_PLATFORM_OPENMETADATA_BASE_URL}/api/v1
@@ -966,7 +985,7 @@ services:
       OPENMETADATA_DBT_SERVICE: ${DTS_PLATFORM_OPENMETADATA_SERVICE_NAME:-hive}
     volumes:
       - ./services/dts-airflow/dags:/opt/airflow/dags
-      - ./services/dts-airflow/logs:/opt/airflow/logs
+      - ./logs/airflow:/opt/airflow/logs
       - ./services/dts-airflow/plugins:/opt/airflow/plugins
       - ./services/dts-airflow/extra:/opt/airflow/extra:ro,z
       - ./services/dts-airflow/config:/opt/airflow/config
@@ -982,9 +1001,12 @@ services:
     entrypoint: /bin/bash
     command: ["-lc", "sleep infinity"]
     working_dir: /opt/dbt
+    environment:
+      DBT_LOG_PATH: /opt/dbt-logs
     volumes:
       - ./services/dts-dbt:/opt/dbt
       - ./services/dts-dbt/profiles:/root/.dbt
+      - ./logs/dbt:/opt/dbt-logs:z
     restart: unless-stopped
     networks:
       - dts-core

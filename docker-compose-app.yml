@@ -263,6 +263,7 @@ services:
       DTS_ADDAX_DAG_ID: ${DTS_ADDAX_DAG_ID:-addax_job}
       ADDAX_DRIVER_DIR: ${STACK_ROOT}/services/dts-platform/drivers
       ADDAX_DRIVER_JARS: ${ADDAX_DRIVER_JARS:-DmJdbcDriver11.jar,postgresql-42.7.9.jar}
+      ADDAX_LOG_DIR: ${STACK_ROOT}/logs/addax
       DTS_AIRFLOW_ENABLED: ${DTS_AIRFLOW_ENABLED:-true}
       DTS_AIRFLOW_BASE_URL: ${DTS_AIRFLOW_BASE_URL:-http://dts-airflow-webserver:8080}
       DTS_AIRFLOW_API_PATH: ${DTS_AIRFLOW_API_PATH:-/api/v1}
@@ -296,6 +297,7 @@ services:
       DTS_INGESTION_TRUSTED_SERVICE_NAME: ${DTS_INGESTION_TRUSTED_SERVICE_NAME:-dts-platform}
       DTS_INFRA_ENCRYPTION_KEY: ${DTS_INFRA_ENCRYPTION_KEY:-}
       DTS_INFRA_KEY_VERSION: ${DTS_INFRA_KEY_VERSION:-v1}
+      LOG_ROOT: /logs
       STACK_ROOT: ${STACK_ROOT}
     volumes:
       - ./logs/dts-ingestion:/logs/dts-ingestion:z

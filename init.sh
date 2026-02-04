@@ -291,11 +291,18 @@ prepare_data_dirs(){
     "services/dts-analytics/data"
     "services/dts-analytics/plugins"
     "services/dts-openmetadata/ingestion"
-    "services/dts-airflow/logs"
-    "services/dts-airflow/logs/scheduler"
     "services/dts-airflow/extra"
     "services/dts-airflow/dags"
     "services/dts-airflow/dags/ods"
+    "logs/airflow"
+    "logs/airflow/scheduler"
+    "logs/addax"
+    "logs/dbt"
+    "logs/openmetadata"
+    "logs/keycloak"
+    "logs/elasticsearch"
+    "logs/postgresql"
+    "logs/traefik"
   )
   if [[ "${ENABLE_MINIO:-false}" == "true" ]]; then
     data_dirs+=("services/dts-minio/data")
@@ -307,16 +314,41 @@ prepare_data_dirs(){
   if [[ "${ENABLE_MINIO:-false}" == "true" ]]; then
     chmod -R 777 services/dts-minio/data || true
   fi
-  if [[ -d "services/dts-airflow/logs" ]]; then
-    chmod -R 777 services/dts-airflow/logs || true
+  if [[ -d "logs/airflow" ]]; then
+    chmod -R 777 logs/airflow || true
     if command -v getenforce >/dev/null 2>&1; then
       if [[ "$(getenforce 2>/dev/null || true)" != "Disabled" ]]; then
         if command -v chcon >/dev/null 2>&1; then
-          chcon -Rt svirt_sandbox_file_t services/dts-airflow/logs 2>/dev/null || true
+          chcon -Rt svirt_sandbox_file_t logs/airflow 2>/dev/null || true
         fi
       fi
     fi
   fi
+  local -a log_dirs=(
+    "logs/addax"
+    "logs/dbt"
+    "logs/openmetadata"
+    "logs/keycloak"
+    "logs/elasticsearch"
+    "logs/postgresql"
+    "logs/traefik"
+    "logs/dts-admin"
+    "logs/dts-platform"
+    "logs/dts-ingestion"
+    "logs/dts-analytics"
+  )
+  for dir in "${log_dirs[@]}"; do
+    if [[ -d "${dir}" ]]; then
+      chmod -R 777 "${dir}" || true
+      if command -v getenforce >/dev/null 2>&1; then
+        if [[ "$(getenforce 2>/dev/null || true)" != "Disabled" ]]; then
+          if command -v chcon >/dev/null 2>&1; then
+            chcon -Rt svirt_sandbox_file_t "${dir}" 2>/dev/null || true
+          fi
+        fi
+      fi
+    fi
+  done
   if [[ -d "services/dts-airflow/dags" ]]; then
     chmod -R 777 services/dts-airflow/dags || true
     if command -v getenforce >/dev/null 2>&1; then

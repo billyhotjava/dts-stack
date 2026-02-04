@@ -421,14 +421,16 @@ public class DbtConfigService {
                 return DbtWorkspaceStatus.failed("dbt 项目目录不可用: " + projectDir);
             }
             detail.put("projectDir", projectPath.toString());
-            detail.put("projectWritable", Files.isWritable(projectPath));
+            boolean projectWritable = probeWritable(projectPath);
+            detail.put("projectWritable", projectWritable);
             Path targetDir = projectPath.resolve("target");
             if (createIfMissing) {
                 Files.createDirectories(targetDir);
             }
             detail.put("targetDir", targetDir.toString());
-            detail.put("targetWritable", Files.isWritable(targetDir));
-            if (!Files.isWritable(projectPath) || !Files.isWritable(targetDir)) {
+            boolean targetWritable = probeWritable(targetDir);
+            detail.put("targetWritable", targetWritable);
+            if (!projectWritable || !targetWritable) {
                 return DbtWorkspaceStatus.failed("dbt 项目目录或 target 目录不可写");
             }
         } catch (Exception ex) {
@@ -444,14 +446,26 @@ public class DbtConfigService {
                 return DbtWorkspaceStatus.failed("profiles 目录不可用: " + profilesDir);
             }
             detail.put("profilesDir", profilesPath.toString());
-            detail.put("profilesWritable", Files.isWritable(profilesPath));
-            if (!Files.isWritable(profilesPath)) {
+            boolean profilesWritable = probeWritable(profilesPath);
+            detail.put("profilesWritable", profilesWritable);
+            if (!profilesWritable) {
                 return DbtWorkspaceStatus.failed("profiles 目录不可写");
             }
         } catch (Exception ex) {
             return DbtWorkspaceStatus.failed("profiles 目录检查失败: " + ex.getMessage());
         }
         return DbtWorkspaceStatus.success("dbt 工作区可用", detail);
+    }
+
+    /** Probe writability by creating and deleting a temp file instead of relying on access() which is unreliable on some ARM bind mounts. */
+    private static boolean probeWritable(Path dir) {
+        try {
+            Path probe = Files.createTempFile(dir, ".dts_probe_", ".tmp");
+            Files.deleteIfExists(probe);
+            return true;
+        } catch (Exception ex) {
+            return false;
+        }
     }
 
     private static final class YamlWriter {
