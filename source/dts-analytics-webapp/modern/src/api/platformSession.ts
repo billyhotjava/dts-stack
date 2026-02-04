@@ -35,8 +35,9 @@ export function getPlatformTokens(storeKey: string = DEFAULT_STORE_KEY): Platfor
 	const state = asObject(store?.state);
 	const userToken = asObject(state?.userToken);
 
-	const accessToken = pickString(userToken, ["accessToken", "access_token", "token"]);
-	const refreshToken = pickString(userToken, ["refreshToken", "refresh_token"]);
+	// Prefer adminAccessToken (real Keycloak JWT) over accessToken (may be a demo/internal token)
+	const accessToken = pickString(userToken, ["adminAccessToken", "accessToken", "access_token", "token"]);
+	const refreshToken = pickString(userToken, ["adminRefreshToken", "refreshToken", "refresh_token"]);
 	return { accessToken, refreshToken };
 }
 
