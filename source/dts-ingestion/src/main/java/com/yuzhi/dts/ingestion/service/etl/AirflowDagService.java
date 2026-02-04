@@ -761,12 +761,16 @@ public class AirflowDagService {
     private String mapFileTypeToPg(String fileType) {
         if (!StringUtils.hasText(fileType)) return "text";
         return switch (fileType.trim().toLowerCase()) {
-            case "long" -> "bigint";
+            case "long", "bigint" -> "bigint";
+            case "integer", "int" -> "integer";
             case "double" -> "double precision";
-            case "date" -> "timestamp";
+            case "numeric", "decimal" -> "numeric";
+            case "date" -> "date";
+            case "timestamp" -> "timestamp";
             case "boolean" -> "boolean";
+            case "text" -> "text";
+            case "jsonb" -> "jsonb";
             default -> "varchar(500)";
-        };
     }
 
     private String sanitizeTag(String value, String fallback) {

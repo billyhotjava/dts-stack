@@ -359,6 +359,18 @@ prepare_data_dirs(){
       fi
     fi
   fi
+  # Ensure JDBC driver jars are readable by non-root container users (e.g. airflow).
+  if [[ -d "services/dts-platform/drivers" ]]; then
+    chmod 755 services/dts-platform/drivers
+    chmod -R a+rX services/dts-platform/drivers || true
+    if command -v getenforce >/dev/null 2>&1; then
+      if [[ "$(getenforce 2>/dev/null || true)" != "Disabled" ]]; then
+        if command -v chcon >/dev/null 2>&1; then
+          chcon -Rt svirt_sandbox_file_t services/dts-platform/drivers 2>/dev/null || true
+        fi
+      fi
+    fi
+  fi
   # Ensure ingestion scripts are readable inside containers (SELinux-safe when possible).
   if [[ -d "services/dts-openmetadata/ingestion" ]]; then
     chmod -R a+rX services/dts-openmetadata/ingestion || true

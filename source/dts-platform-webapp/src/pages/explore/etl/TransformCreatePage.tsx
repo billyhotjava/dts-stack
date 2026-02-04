@@ -2205,7 +2205,7 @@ const fileTableNameValidator = (_: any, value: string) => {
 									<Table
 										size="small"
 										dataSource={fileUploadResult.columns || []}
-										rowKey="name"
+										rowKey={(_: any, index: any) => String(index)}
 										pagination={false}
 										columns={[
 											{
@@ -2213,8 +2213,50 @@ const fileTableNameValidator = (_: any, value: string) => {
 												dataIndex: "label",
 												render: (_: any, record: any) => record.label || record.name,
 											},
-											{ title: "字段名", dataIndex: "name" },
-											{ title: "推断类型", dataIndex: "type", width: 120, render: (t: string) => <Tag>{t}</Tag> },
+											{
+												title: "字段名",
+												dataIndex: "name",
+												render: (value: string, _: any, index: number) => (
+													<Input
+														size="small"
+														value={value}
+														onChange={(e) => {
+															const cols = [...(fileUploadResult.columns || [])];
+															cols[index] = { ...cols[index], name: e.target.value };
+															setFileUploadResult({ ...fileUploadResult, columns: cols });
+														}}
+													/>
+												),
+											},
+											{
+												title: "数据类型",
+												dataIndex: "type",
+												width: 180,
+												render: (value: string, _: any, index: number) => (
+													<Select
+														size="small"
+														value={value}
+														style={{ width: "100%" }}
+														onChange={(v) => {
+															const cols = [...(fileUploadResult.columns || [])];
+															cols[index] = { ...cols[index], type: v };
+															setFileUploadResult({ ...fileUploadResult, columns: cols });
+														}}
+														options={[
+															{ label: "VARCHAR", value: "string" },
+															{ label: "TEXT", value: "text" },
+															{ label: "INTEGER", value: "integer" },
+															{ label: "BIGINT", value: "long" },
+															{ label: "NUMERIC", value: "numeric" },
+															{ label: "DOUBLE PRECISION", value: "double" },
+															{ label: "BOOLEAN", value: "boolean" },
+															{ label: "DATE", value: "date" },
+															{ label: "TIMESTAMP", value: "timestamp" },
+															{ label: "JSONB", value: "jsonb" },
+														]}
+													/>
+												),
+											},
 										]}
 									/>
 									{Array.isArray(fileUploadResult.preview) && fileUploadResult.preview.length > 0 && (

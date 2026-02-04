@@ -243,7 +243,7 @@ public class TargetTableProvisioner {
                 if (!StringUtils.hasText(name)) continue;
                 int jdbcType = mapFileTypeToJdbc(type);
                 String typeName = mapFileTypeToSql(type);
-                Integer size = "string".equals(type) ? 500 : null;
+                Integer size = "string".equalsIgnoreCase(type) ? 500 : null;
                 cols.add(new JdbcMetadataService.ColumnMeta(name, jdbcType, typeName, size, null));
             }
         }
@@ -253,10 +253,15 @@ public class TargetTableProvisioner {
     private int mapFileTypeToJdbc(String fileType) {
         if (!StringUtils.hasText(fileType)) return Types.VARCHAR;
         return switch (fileType.toLowerCase(Locale.ROOT)) {
-            case "long" -> Types.BIGINT;
+            case "long", "bigint" -> Types.BIGINT;
+            case "integer", "int" -> Types.INTEGER;
             case "double" -> Types.DOUBLE;
-            case "date" -> Types.TIMESTAMP;
+            case "numeric", "decimal" -> Types.NUMERIC;
+            case "date" -> Types.DATE;
+            case "timestamp" -> Types.TIMESTAMP;
             case "boolean" -> Types.BOOLEAN;
+            case "text" -> Types.LONGVARCHAR;
+            case "jsonb" -> Types.OTHER;
             default -> Types.VARCHAR;
         };
     }
@@ -264,10 +269,15 @@ public class TargetTableProvisioner {
     private String mapFileTypeToSql(String fileType) {
         if (!StringUtils.hasText(fileType)) return "TEXT";
         return switch (fileType.toLowerCase(Locale.ROOT)) {
-            case "long" -> "BIGINT";
+            case "long", "bigint" -> "BIGINT";
+            case "integer", "int" -> "INTEGER";
             case "double" -> "DOUBLE PRECISION";
-            case "date" -> "TIMESTAMP";
+            case "numeric", "decimal" -> "NUMERIC";
+            case "date" -> "DATE";
+            case "timestamp" -> "TIMESTAMP";
             case "boolean" -> "BOOLEAN";
+            case "text" -> "TEXT";
+            case "jsonb" -> "JSONB";
             default -> "VARCHAR(500)";
         };
     }
