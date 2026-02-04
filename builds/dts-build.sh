@@ -76,6 +76,7 @@ MAVEN_DEBUG="${MAVEN_DEBUG:-}"
 LEGACY_UNRESTRICTED="${LEGACY_UNRESTRICTED:-1}"
 MAVEN_UNRESTRICTED="${MAVEN_UNRESTRICTED:-${LEGACY_UNRESTRICTED:-}}"
 MAVEN_MIRROR_URL="${MAVEN_MIRROR_URL:-https://maven.aliyun.com/repository/public}"
+NPM_REGISTRY="${NPM_REGISTRY:-https://registry.npmmirror.com}"
 MAVEN_SETTINGS_FILE="${MAVEN_SETTINGS_FILE:-/root/.m2/settings.xml}"
 PREBUILD_JARS="${PREBUILD_JARS:-1}"
 
@@ -386,12 +387,21 @@ build_all_legacy() {
   build_image "dts-analytics" "$IMAGE_DTS_ANALYTICS" "${REPO_ROOT}/builds/dts-analytics/Dockerfile.offline" "$LEGACY_DIST"
   build_image "dts-admin-webapp" "$IMAGE_DTS_ADMIN_WEBAPP" "${REPO_ROOT}/builds/dts-admin-webapp/Dockerfile" "$LEGACY_DIST" \
     --build-arg PNPM_VERSION="${PNPM_VERSION}" \
-    --build-arg WEBAPP_BUILD_CMD="build:modern"
+    --build-arg WEBAPP_BUILD_CMD="build:modern" \
+    --build-arg NPM_REGISTRY="${NPM_REGISTRY:-}" \
+    --build-arg NPM_HTTP_PROXY="${NPM_HTTP_PROXY:-${HTTP_PROXY:-}}" \
+    --build-arg NPM_HTTPS_PROXY="${NPM_HTTPS_PROXY:-${HTTPS_PROXY:-}}"
   build_image "dts-platform-webapp" "$IMAGE_DTS_PLATFORM_WEBAPP" "${REPO_ROOT}/builds/dts-platform-webapp/Dockerfile" "$LEGACY_DIST" \
     --build-arg PNPM_VERSION="${PNPM_VERSION}" \
-    --build-arg WEBAPP_BUILD_CMD="build:modern"
+    --build-arg WEBAPP_BUILD_CMD="build:modern" \
+    --build-arg NPM_REGISTRY="${NPM_REGISTRY:-}" \
+    --build-arg NPM_HTTP_PROXY="${NPM_HTTP_PROXY:-${HTTP_PROXY:-}}" \
+    --build-arg NPM_HTTPS_PROXY="${NPM_HTTPS_PROXY:-${HTTPS_PROXY:-}}"
   build_image "dts-analytics-webapp-modern" "$IMAGE_DTS_ANALYTICS_WEBAPP_MODERN" "${REPO_ROOT}/builds/dts-analytics-webapp/modern/Dockerfile" "$LEGACY_DIST" \
-    --build-arg PNPM_VERSION="${PNPM_VERSION}"
+    --build-arg PNPM_VERSION="${PNPM_VERSION}" \
+    --build-arg NPM_REGISTRY="${NPM_REGISTRY:-}" \
+    --build-arg NPM_HTTP_PROXY="${NPM_HTTP_PROXY:-${HTTP_PROXY:-}}" \
+    --build-arg NPM_HTTPS_PROXY="${NPM_HTTPS_PROXY:-${HTTPS_PROXY:-}}"
   build_image "dts-airflow-om" "$IMAGE_DTS_AIRFLOW_OM" "${REPO_ROOT}/source/dts-airflow-om/Dockerfile" "$LEGACY_DIST" \
     --build-arg PIP_INDEX_URL="${PIP_INDEX_URL:-}" \
     --build-arg PIP_TRUSTED_HOST="${PIP_TRUSTED_HOST:-}" \
