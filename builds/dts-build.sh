@@ -141,8 +141,8 @@ build_maven_module() {
   local out_jar="$3"
 
   if [[ -f "$out_jar" ]]; then
-    echo "[dts-build] Using prebuilt jar for ${module}: ${out_jar}"
-    return
+    echo "[dts-build] Removing stale prebuilt jar: ${out_jar}"
+    rm -f "$out_jar"
   fi
   if [[ "${LEGACY_USE_PREBUILT_JARS:-}" == "1" ]]; then
     echo "[dts-build] ERROR: ${out_jar} missing (LEGACY_USE_PREBUILT_JARS=1)" >&2
