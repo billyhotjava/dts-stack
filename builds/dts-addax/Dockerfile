@@ -15,9 +15,6 @@ RUN tar xzf /tmp/addax.tar.gz -C /opt/ --no-same-permissions --no-same-owner \
  && rm /tmp/addax.tar.gz \
  && chmod +x /opt/addax/bin/*.sh
 
-# Jobs and drivers are mounted at runtime via Docker volumes
-VOLUME ["/opt/addax/jobs"]
-
 WORKDIR /opt/addax
 
 ENTRYPOINT ["sh", "-c"]
