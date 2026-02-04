@@ -28,10 +28,8 @@ services:
       - "--ping=${TRAEFIK_ENABLE_PING}"
       - "--entrypoints.metrics.address=:${TRAEFIK_METRICS_PORT}"
       - "--accesslog=true"
-      - "--accesslog.filepath=/logs/traefik/access.log"
       - "--serversTransport.insecureSkipVerify=true"
       - "--log.level=INFO"
-      - "--log.filePath=/logs/traefik/traefik.log"
       - "--metrics.prometheus=true"
       - "--metrics.prometheus.entryPoint=metrics"
       - "--metrics.prometheus.addEntryPointsLabels=true"
@@ -57,7 +55,6 @@ services:
       - ./services/certs:/etc/traefik/certs:ro,z
       - ./services/certs/server.crt:/certs/server.crt:ro,z
       - ./services/certs/server.key:/certs/server.key:ro,z
-      - ./logs/traefik:/logs/traefik:z
     labels:
       - "traefik.enable=true"
       # - "traefik.http.routers.default-secure.tls=true"

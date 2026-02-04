@@ -24,7 +24,6 @@ services:
       # Hetu upstream target (defaults to localhost in legacy host-network mode).
       - "hetu.upstream:${HETU_UPSTREAM_IP:-127.0.0.1}"
     command:
-      - "--configFile=/etc/traefik/traefik.yml"
       #- "--api.dashboard=${TRAEFIK_DASHBOARD}"
       #- "--api.insecure=${TRAEFIK_DASHBOARD}"
       - "--entrypoints.traefik.address=127.0.0.1:38080"
@@ -52,12 +51,10 @@ services:
     volumes:
       # Do not relabel docker.sock; keep read-only
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      - ./services/dts-proxy/traefik.yml:/etc/traefik/traefik.yml:ro,z
       - ./services/dts-proxy/dynamic:/etc/traefik/dynamic:ro,z
       - ./services/certs:/etc/traefik/certs:ro,z
       - ./services/certs/server.crt:/certs/server.crt:ro,z
       - ./services/certs/server.key:/certs/server.key:ro,z
-      - ./logs/traefik:/logs/traefik:z
     labels:
       - "traefik.enable=true"
       # Avoid "port is missing" error for host-network Traefik container.
