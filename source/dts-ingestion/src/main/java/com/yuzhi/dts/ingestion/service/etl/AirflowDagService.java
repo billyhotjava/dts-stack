@@ -457,11 +457,7 @@ public class AirflowDagService {
                 is_paused_upon_creation=False,
                 tags=["addax", "etl", "ods", "%s", "%s"],
             ) as dag:
-                run_cmd = [
-                    "sh",
-                    "-lc",
-                    "/opt/addax/bin/addax.sh {{ dag_run.conf.get('job_path', DEFAULT_JOB_PATH) }}",
-                ]
+                run_cmd = "/opt/addax/bin/addax.sh {{ dag_run.conf.get('job_path', DEFAULT_JOB_PATH) }}"
             %s
                 addax_run = DockerOperator(
                     task_id="%s",
