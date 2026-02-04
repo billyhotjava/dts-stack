@@ -363,6 +363,8 @@ services:
 
   dts-analytics-webapp-modern:
     image: ${IMAGE_DTS_ANALYTICS_WEBAPP_MODERN:-dts-analytics-webapp-modern:local}
+    depends_on:
+      - dts-analytics
     ports: []
     networks:
       - dts-core
