@@ -1,11 +1,11 @@
 import { NavLink } from "react-router";
 import { Icon } from "@/components/icon";
 import { GLOBAL_CONFIG } from "@/global-config";
-import { useBilingualText } from "@/hooks/useBilingualText";
+// import { useBilingualText } from "@/hooks/useBilingualText";
 
 export default function Brand() {
-	const bilingual = useBilingualText();
-	const classified = bilingual("sys.brand.classified") || "机密";
+	// const bilingual = useBilingualText();
+	// const classified = bilingual("sys.brand.classified") || "机密";
 	const appName = (GLOBAL_CONFIG.appName || "BI数智平台")
 		.replace("系统端", "")
 		.replace(/[（(]机密[)）]/g, "")
@@ -15,7 +15,7 @@ export default function Brand() {
 			<Icon icon="mdi:star" size={22} className="text-red-500" color="#ef4444" />
 			<span className="flex flex-col leading-tight">
 				<span className="text-base font-semibold text-foreground">{appName}</span>
-				<span className="text-red-600 font-bold">{classified}</span>
+				{/* <span className="text-red-600 font-bold">{classified}</span> */}
 			</span>
 		</NavLink>
 	);

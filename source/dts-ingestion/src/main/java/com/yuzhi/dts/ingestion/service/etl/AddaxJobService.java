@@ -1219,7 +1219,7 @@ public class AddaxJobService {
             if (!first) ddl.append(", ");
             first = false;
             ddl.append(quoteIdentifier(colName.toLowerCase(Locale.ROOT)))
-               .append(" ").append(mapFileTypeToPostgres(colType));
+               .append(" ").append(mapFileTypeToPostgres(colType, col));
         }
         ddl.append(")");
 
@@ -1299,20 +1299,33 @@ public class AddaxJobService {
         return "\"" + name.replace("\"", "\"\"") + "\"";
     }
 
-    private String mapFileTypeToPostgres(String fileType) {
+    private String mapFileTypeToPostgres(String fileType, Map<String, Object> col) {
         if (!StringUtils.hasText(fileType)) return "text";
         return switch (fileType.toLowerCase(Locale.ROOT)) {
             case "long", "bigint" -> "bigint";
             case "integer", "int" -> "integer";
             case "double" -> "double precision";
-            case "numeric", "decimal" -> "numeric";
+            case "numeric", "decimal" -> {
+                int precision = toInt(col.get("precision"), 18);
+                int scale = toInt(col.get("scale"), 2);
+                yield "numeric(" + precision + "," + scale + ")";
+            }
             case "date" -> "date";
             case "timestamp" -> "timestamp";
             case "boolean" -> "boolean";
             case "text" -> "text";
             case "jsonb" -> "jsonb";
-            default -> "varchar(500)";
+            default -> {
+                int length = toInt(col.get("length"), 500);
+                yield "varchar(" + length + ")";
+            }
         };
+    }
+
+    private int toInt(Object value, int defaultValue) {
+        if (value == null) return defaultValue;
+        if (value instanceof Number num) return num.intValue();
+        try { return Integer.parseInt(value.toString().trim()); } catch (NumberFormatException e) { return defaultValue; }
     }
 
     private String normalizeReaderType(String readerType) {

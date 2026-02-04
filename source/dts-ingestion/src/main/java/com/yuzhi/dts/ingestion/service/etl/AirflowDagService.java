@@ -747,7 +747,7 @@ public class AirflowDagService {
             if (!first) ddl.append(", ");
             first = false;
             ddl.append(pgQuote(colName.trim().toLowerCase()))
-               .append(" ").append(mapFileTypeToPg(colType));
+               .append(" ").append(mapFileTypeToPg(colType, col));
         }
         ddl.append(")");
         return ddl.toString();
@@ -758,19 +758,26 @@ public class AirflowDagService {
         return "\"" + identifier.replace("\"", "\"\"") + "\"";
     }
 
-    private String mapFileTypeToPg(String fileType) {
+    private String mapFileTypeToPg(String fileType, JsonNode col) {
         if (!StringUtils.hasText(fileType)) return "text";
         return switch (fileType.trim().toLowerCase()) {
             case "long", "bigint" -> "bigint";
             case "integer", "int" -> "integer";
             case "double" -> "double precision";
-            case "numeric", "decimal" -> "numeric";
+            case "numeric", "decimal" -> {
+                int precision = col.has("precision") ? col.get("precision").asInt(18) : 18;
+                int scale = col.has("scale") ? col.get("scale").asInt(2) : 2;
+                yield "numeric(" + precision + "," + scale + ")";
+            }
             case "date" -> "date";
             case "timestamp" -> "timestamp";
             case "boolean" -> "boolean";
             case "text" -> "text";
             case "jsonb" -> "jsonb";
-            default -> "varchar(500)";
+            default -> {
+                int length = col.has("length") ? col.get("length").asInt(500) : 500;
+                yield "varchar(" + length + ")";
+            }
         };
     }
 

@@ -28,6 +28,7 @@ import {
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
 import reportsService, { type ReportLink, type ReportLinkUpsertRequest } from "@/api/services/reportsService";
+import { normalizeBiLinkForSave, resolveBiLinkForOpen } from "@/utils/biLinkUrl";
 
 const { Text } = Typography;
 
@@ -83,7 +84,7 @@ const normalizeText = (value?: string | null) => {
 const toRequestPayload = (values: FormValues): ReportLinkUpsertRequest => ({
 	code: normalizeText(values.code) || "",
 	title: normalizeText(values.title) || "",
-	url: normalizeText(values.url) || "",
+	url: normalizeBiLinkForSave(values.url, values.engine),
 	engine: normalizeText(values.engine)?.toUpperCase() || "HETU",
 	reportType: normalizeText(values.reportType),
 	deptCodes: normalizeCodes(values.deptCodes),
@@ -239,7 +240,7 @@ export default function Page() {
 	};
 
 	const handleOpen = async (record: ReportLink) => {
-		const url = normalizeText(record?.url);
+		const url = resolveBiLinkForOpen(record?.url, record?.engine);
 		if (!url) {
 			toast.error("未配置跳转地址");
 			return;

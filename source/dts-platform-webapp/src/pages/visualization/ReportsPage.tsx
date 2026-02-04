@@ -4,6 +4,7 @@ import { Button, Card, Col, Row, Select, Table, Tag, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { PageHeader } from "@/components/page-header";
 import reportsService, { type ReportLink } from "@/api/services/reportsService";
+import { resolveBiLinkForOpen } from "@/utils/biLinkUrl";
 
 const { Text } = Typography;
 
@@ -50,16 +51,17 @@ export default function Page() {
 					type="link"
 					onClick={async () => {
 						try {
+							const resolvedUrl = resolveBiLinkForOpen(record.url, record.engine);
 							await reportsService.visit({
 								id: record.id,
 								code: record.code,
 								title: record.title,
-								url: record.url,
+								url: resolvedUrl,
 								engine: record.engine,
 								classification: record.classification,
 							});
-							if (record.url) {
-								window.open(record.url, "_blank", "noopener,noreferrer");
+							if (resolvedUrl) {
+								window.open(resolvedUrl, "_blank", "noopener,noreferrer");
 							}
 						} catch (error: any) {
 							toast.error(error?.message || "访问失败");

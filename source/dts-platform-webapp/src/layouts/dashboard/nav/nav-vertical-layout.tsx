@@ -49,7 +49,7 @@ export function NavVerticalLayout({ data, className }: Props) {
 								<span className="text-base font-semibold text-foreground">
 									{(GLOBAL_CONFIG.appName || "BI数智平台").replace("管理", "")}
 								</span>
-								<span className="text-sm font-bold text-red-600">机密</span>
+								{/* <span className="text-sm font-bold text-red-600">机密</span> */}
 							</span>
 						</div>
 					</div>

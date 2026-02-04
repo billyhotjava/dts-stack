@@ -242,8 +242,8 @@ public class TargetTableProvisioner {
                 String type = normalizeText(colMap.get("type"));
                 if (!StringUtils.hasText(name)) continue;
                 int jdbcType = mapFileTypeToJdbc(type);
-                String typeName = mapFileTypeToSql(type);
-                Integer size = "string".equalsIgnoreCase(type) ? 500 : null;
+                String typeName = mapFileTypeToSql(type, colMap);
+                Integer size = "string".equalsIgnoreCase(type) ? toInt(colMap.get("length"), 500) : null;
                 cols.add(new JdbcMetadataService.ColumnMeta(name, jdbcType, typeName, size, null));
             }
         }
@@ -266,20 +266,33 @@ public class TargetTableProvisioner {
         };
     }
 
-    private String mapFileTypeToSql(String fileType) {
+    private String mapFileTypeToSql(String fileType, Map<?, ?> colMap) {
         if (!StringUtils.hasText(fileType)) return "TEXT";
         return switch (fileType.toLowerCase(Locale.ROOT)) {
             case "long", "bigint" -> "BIGINT";
             case "integer", "int" -> "INTEGER";
             case "double" -> "DOUBLE PRECISION";
-            case "numeric", "decimal" -> "NUMERIC";
+            case "numeric", "decimal" -> {
+                int precision = toInt(colMap.get("precision"), 18);
+                int scale = toInt(colMap.get("scale"), 2);
+                yield "NUMERIC(" + precision + "," + scale + ")";
+            }
             case "date" -> "DATE";
             case "timestamp" -> "TIMESTAMP";
             case "boolean" -> "BOOLEAN";
             case "text" -> "TEXT";
             case "jsonb" -> "JSONB";
-            default -> "VARCHAR(500)";
+            default -> {
+                int length = toInt(colMap.get("length"), 500);
+                yield "VARCHAR(" + length + ")";
+            }
         };
+    }
+
+    private int toInt(Object value, int defaultValue) {
+        if (value == null) return defaultValue;
+        if (value instanceof Number num) return num.intValue();
+        try { return Integer.parseInt(value.toString().trim()); } catch (NumberFormatException e) { return defaultValue; }
     }
 
     private List<TableMapping> resolveMappings(JsonNode mappingNode, Map<String, Object> readerConfig, Map<String, Object> writerConfig) {

@@ -2231,7 +2231,7 @@ const fileTableNameValidator = (_: any, value: string) => {
 											{
 												title: "数据类型",
 												dataIndex: "type",
-												width: 180,
+												width: 170,
 												render: (value: string, _: any, index: number) => (
 													<Select
 														size="small"
@@ -2239,7 +2239,12 @@ const fileTableNameValidator = (_: any, value: string) => {
 														style={{ width: "100%" }}
 														onChange={(v) => {
 															const cols = [...(fileUploadResult.columns || [])];
-															cols[index] = { ...cols[index], type: v };
+															const patch: Record<string, any> = { type: v };
+															if (v === "string" && !cols[index].length) patch.length = 500;
+															if (v === "numeric" && !cols[index].precision) { patch.precision = 18; patch.scale = 2; }
+															if (v !== "string") patch.length = undefined;
+															if (v !== "numeric") { patch.precision = undefined; patch.scale = undefined; }
+															cols[index] = { ...cols[index], ...patch };
 															setFileUploadResult({ ...fileUploadResult, columns: cols });
 														}}
 														options={[
@@ -2256,6 +2261,63 @@ const fileTableNameValidator = (_: any, value: string) => {
 														]}
 													/>
 												),
+											},
+											{
+												title: "类型参数",
+												dataIndex: "length",
+												width: 180,
+												render: (_: any, record: any, index: number) => {
+													if (record.type === "string") {
+														return (
+															<InputNumber
+																size="small"
+																min={1}
+																max={10485760}
+																value={record.length ?? 500}
+																addonBefore="长度"
+																style={{ width: "100%" }}
+																onChange={(v) => {
+																	const cols = [...(fileUploadResult.columns || [])];
+																	cols[index] = { ...cols[index], length: v ?? 500 };
+																	setFileUploadResult({ ...fileUploadResult, columns: cols });
+																}}
+															/>
+														);
+													}
+													if (record.type === "numeric") {
+														return (
+															<Space size={4}>
+																<InputNumber
+																	size="small"
+																	min={1}
+																	max={1000}
+																	value={record.precision ?? 18}
+																	addonBefore="精度"
+																	style={{ width: 110 }}
+																	onChange={(v) => {
+																		const cols = [...(fileUploadResult.columns || [])];
+																		cols[index] = { ...cols[index], precision: v ?? 18 };
+																		setFileUploadResult({ ...fileUploadResult, columns: cols });
+																	}}
+																/>
+																<InputNumber
+																	size="small"
+																	min={0}
+																	max={100}
+																	value={record.scale ?? 2}
+																	addonBefore="标度"
+																	style={{ width: 110 }}
+																	onChange={(v) => {
+																		const cols = [...(fileUploadResult.columns || [])];
+																		cols[index] = { ...cols[index], scale: v ?? 2 };
+																		setFileUploadResult({ ...fileUploadResult, columns: cols });
+																	}}
+																/>
+															</Space>
+														);
+													}
+													return <Text type="secondary">-</Text>;
+												},
 											},
 										]}
 									/>
