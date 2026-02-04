@@ -15,6 +15,7 @@ RUN tar xzf /tmp/addax.tar.gz -C /opt/ --no-same-permissions --no-same-owner \
  && rm /tmp/addax.tar.gz \
  && chmod +x /opt/addax/bin/*.sh \
  && sed -i 's/if \[ ! -r "${JOB_FILE}" \]/if false/' /opt/addax/bin/addax.sh \
+ && sed -i 's/if \[ ! -w "${LOG_DIR}" \]/if false/' /opt/addax/bin/addax.sh \
  && mkdir -p /opt/addax/log && chmod 777 /opt/addax/log
 
 WORKDIR /opt/addax
