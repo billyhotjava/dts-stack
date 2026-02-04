@@ -43,7 +43,7 @@ dts:
   addax:
     enabled: ${DTS_ADDAX_ENABLED:true}
     job-dir: ${DTS_ADDAX_JOB_DIR:/opt/airflow/dags}
-    image: ${IMAGE_ADDAX:quay.io/wgzhao/addax:6.0.8}
+    image: ${IMAGE_ADDAX:dts-addax:6.0.8}
   airflow:
     enabled: ${DTS_AIRFLOW_ENABLED:true}
     base-url: ${DTS_AIRFLOW_BASE_URL:http://dts-airflow-webserver:8080}

@@ -404,7 +404,7 @@ services:
       DBT_PROJECT_DIR: ${DBT_PROJECT_DIR}
       DBT_PROFILES_DIR: ${DBT_PROFILES_DIR}
       DBT_IMAGE: ${IMAGE_DBT:-dts-dbt:1.11.2}
-      ADDAX_IMAGE: ${IMAGE_ADDAX:-quay.io/wgzhao/addax:6.0.8}
+      ADDAX_IMAGE: ${IMAGE_ADDAX:-dts-addax:6.0.8}
       ADDAX_JOB_DIR: ${STACK_ROOT}/services/dts-airflow/dags
       ADDAX_DRIVER_DIR: ${STACK_ROOT}/services/dts-platform/drivers
       ADDAX_DRIVER_JARS: ${ADDAX_DRIVER_JARS:-DmJdbcDriver11.jar,postgresql-42.7.9.jar}
@@ -451,7 +451,7 @@ services:
       DBT_PROJECT_DIR: ${DBT_PROJECT_DIR}
       DBT_PROFILES_DIR: ${DBT_PROFILES_DIR}
       DBT_IMAGE: ${IMAGE_DBT:-dts-dbt:1.11.2}
-      ADDAX_IMAGE: ${IMAGE_ADDAX:-quay.io/wgzhao/addax:6.0.8}
+      ADDAX_IMAGE: ${IMAGE_ADDAX:-dts-addax:6.0.8}
       ADDAX_JOB_DIR: ${STACK_ROOT}/services/dts-airflow/dags
       ADDAX_DRIVER_DIR: ${STACK_ROOT}/services/dts-platform/drivers
       ADDAX_DRIVER_JARS: ${ADDAX_DRIVER_JARS:-DmJdbcDriver11.jar,postgresql-42.7.9.jar}
@@ -512,7 +512,7 @@ services:
       DBT_PROJECT_DIR: ${DBT_PROJECT_DIR}
       DBT_PROFILES_DIR: ${DBT_PROFILES_DIR}
       DBT_IMAGE: ${IMAGE_DBT:-dts-dbt:1.11.2}
-      ADDAX_IMAGE: ${IMAGE_ADDAX:-quay.io/wgzhao/addax:6.0.8}
+      ADDAX_IMAGE: ${IMAGE_ADDAX:-dts-addax:6.0.8}
       ADDAX_JOB_DIR: ${STACK_ROOT}/services/dts-airflow/dags
       ADDAX_DRIVER_DIR: ${STACK_ROOT}/services/dts-platform/drivers
       ADDAX_DRIVER_JARS: ${ADDAX_DRIVER_JARS:-DmJdbcDriver11.jar,postgresql-42.7.9.jar}
@@ -553,7 +553,7 @@ services:
       DBT_PROJECT_DIR: ${DBT_PROJECT_DIR}
       DBT_PROFILES_DIR: ${DBT_PROFILES_DIR}
       DBT_IMAGE: ${IMAGE_DBT:-dts-dbt:1.11.2}
-      ADDAX_IMAGE: ${IMAGE_ADDAX:-quay.io/wgzhao/addax:6.0.8}
+      ADDAX_IMAGE: ${IMAGE_ADDAX:-dts-addax:6.0.8}
       ADDAX_JOB_DIR: ${STACK_ROOT}/services/dts-airflow/dags
       ADDAX_DRIVER_DIR: ${STACK_ROOT}/services/dts-platform/drivers
       ADDAX_DRIVER_JARS: ${ADDAX_DRIVER_JARS:-DmJdbcDriver11.jar,postgresql-42.7.9.jar}

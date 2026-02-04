@@ -464,7 +464,7 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${PG_PWD_DTPS:-dts_platform}
       DTS_ADDAX_ENABLED: ${DTS_ADDAX_ENABLED:-true}
       DTS_ADDAX_JOB_DIR: ${DTS_AIRFLOW_DAGS_DIR:-/opt/airflow/dags}
-      DTS_ADDAX_IMAGE: ${IMAGE_ADDAX:-quay.io/wgzhao/addax:6.0.8}
+      DTS_ADDAX_IMAGE: ${IMAGE_ADDAX:-dts-addax:6.0.8}
       DTS_ADDAX_DAG_ID: ${DTS_ADDAX_DAG_ID:-addax_job}
       ADDAX_DRIVER_DIR: ${STACK_ROOT}/services/dts-platform/drivers
       ADDAX_DRIVER_JARS: ${ADDAX_DRIVER_JARS:-DmJdbcDriver11.jar,postgresql-42.7.9.jar}
@@ -806,7 +806,7 @@ services:
       DBT_PROJECT_DIR: ${DBT_PROJECT_DIR}
       DBT_PROFILES_DIR: ${DBT_PROFILES_DIR}
       DBT_IMAGE: ${IMAGE_DBT}
-      ADDAX_IMAGE: ${IMAGE_ADDAX:-quay.io/wgzhao/addax:6.0.8}
+      ADDAX_IMAGE: ${IMAGE_ADDAX:-dts-addax:6.0.8}
       ADDAX_JOB_DIR: ${STACK_ROOT}/services/dts-airflow/dags
       ADDAX_DRIVER_DIR: ${STACK_ROOT}/services/dts-platform/drivers
       ADDAX_DRIVER_JARS: ${ADDAX_DRIVER_JARS:-DmJdbcDriver11.jar,postgresql-42.7.9.jar}
@@ -855,7 +855,7 @@ services:
       DBT_PROJECT_DIR: ${DBT_PROJECT_DIR}
       DBT_PROFILES_DIR: ${DBT_PROFILES_DIR}
       DBT_IMAGE: ${IMAGE_DBT}
-      ADDAX_IMAGE: ${IMAGE_ADDAX:-quay.io/wgzhao/addax:6.0.8}
+      ADDAX_IMAGE: ${IMAGE_ADDAX:-dts-addax:6.0.8}
       ADDAX_JOB_DIR: ${STACK_ROOT}/services/dts-airflow/dags
       ADDAX_DRIVER_DIR: ${STACK_ROOT}/services/dts-platform/drivers
       ADDAX_DRIVER_JARS: ${ADDAX_DRIVER_JARS:-DmJdbcDriver11.jar,postgresql-42.7.9.jar}
@@ -914,7 +914,7 @@ services:
       DBT_PROJECT_DIR: ${DBT_PROJECT_DIR}
       DBT_PROFILES_DIR: ${DBT_PROFILES_DIR}
       DBT_IMAGE: ${IMAGE_DBT}
-      ADDAX_IMAGE: ${IMAGE_ADDAX:-quay.io/wgzhao/addax:6.0.8}
+      ADDAX_IMAGE: ${IMAGE_ADDAX:-dts-addax:6.0.8}
       ADDAX_JOB_DIR: ${STACK_ROOT}/services/dts-airflow/dags
       ADDAX_DRIVER_DIR: ${STACK_ROOT}/services/dts-platform/drivers
       ADDAX_DRIVER_JARS: ${ADDAX_DRIVER_JARS:-DmJdbcDriver11.jar,postgresql-42.7.9.jar}
@@ -955,7 +955,7 @@ services:
       DBT_PROJECT_DIR: ${DBT_PROJECT_DIR}
       DBT_PROFILES_DIR: ${DBT_PROFILES_DIR}
       DBT_IMAGE: ${IMAGE_DBT}
-      ADDAX_IMAGE: ${IMAGE_ADDAX:-quay.io/wgzhao/addax:6.0.8}
+      ADDAX_IMAGE: ${IMAGE_ADDAX:-dts-addax:6.0.8}
       ADDAX_JOB_DIR: ${STACK_ROOT}/services/dts-airflow/dags
       ADDAX_DRIVER_DIR: ${STACK_ROOT}/services/dts-platform/drivers
       ADDAX_DRIVER_JARS: ${ADDAX_DRIVER_JARS:-DmJdbcDriver11.jar,postgresql-42.7.9.jar}

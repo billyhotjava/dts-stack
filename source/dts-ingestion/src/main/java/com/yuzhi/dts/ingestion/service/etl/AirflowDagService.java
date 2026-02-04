@@ -603,7 +603,7 @@ public class AirflowDagService {
         IngestionSettingsService.SettingsSnapshot settings = settingsService.getSettings(IngestionSettingsService.SERVICE_ADDAX);
         String configured = settings.getString("image", null);
         String fallback = addaxProperties.getImage();
-        return StringUtils.hasText(configured) ? configured.trim() : (StringUtils.hasText(fallback) ? fallback.trim() : "quay.io/wgzhao/addax:6.0.8");
+        return StringUtils.hasText(configured) ? configured.trim() : (StringUtils.hasText(fallback) ? fallback.trim() : "dts-addax:6.0.8");
     }
 
     private String escapePythonString(String value) {
