@@ -771,6 +771,7 @@ public class AirflowDagService {
             case "text" -> "text";
             case "jsonb" -> "jsonb";
             default -> "varchar(500)";
+        };
     }
 
     private String sanitizeTag(String value, String fallback) {
