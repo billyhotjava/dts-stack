@@ -9,9 +9,33 @@ const isIpv4 = (host: string) => {
 	});
 };
 
+const resolveRuntimePlatformBase = () => {
+	if (typeof window === "undefined") return "";
+	const rc = (window as any).__RUNTIME_CONFIG__ as { platformBaseUrl?: string } | undefined;
+	return String(rc?.platformBaseUrl || "").trim();
+};
+
+const normalizeOrigin = (raw: string) => {
+	const trimmed = raw.trim().replace(/\/+$/, "");
+	if (!trimmed) return "";
+	if (trimmed.startsWith("//")) {
+		return `${window.location.protocol}${trimmed}`.replace(/\/+$/, "");
+	}
+	if (/^[a-zA-Z][a-zA-Z\d+.-]*:\/\//.test(trimmed)) {
+		try {
+			return new URL(trimmed).origin;
+		} catch {
+			return trimmed;
+		}
+	}
+	return `https://${trimmed}`;
+};
+
 const getOrigin = () => {
 	if (typeof window === "undefined") return "";
-	return window.location.origin;
+	const runtimeBase = resolveRuntimePlatformBase();
+	const normalized = runtimeBase ? normalizeOrigin(runtimeBase) : "";
+	return normalized || window.location.origin;
 };
 
 const toAbsolute = (path: string) => {

@@ -41,6 +41,7 @@ fi
 #   - KOAL_PKI_ENDPOINTS: comma-separated local agent endpoints
 #   - WEBAPP_PASSWORD_LOGIN_ENABLED: enable password login UI
 #   - VITE_HIDE_PASSWORD_LOGIN: hide password login UI
+#   - PLATFORM_PUBLIC_BASE_URL: preferred absolute domain for BI links (e.g., https://bi.example.com)
 RUNTIME_JS="/usr/share/nginx/html/runtime-config.js"
 # Initialize stub to ensure file exists
 printf '%s\n' '(function(w){w.__RUNTIME_CONFIG__=w.__RUNTIME_CONFIG__||{};})(window);' > "$RUNTIME_JS"
@@ -64,6 +65,12 @@ if [ -n "${VITE_HIDE_PASSWORD_LOGIN:-}" ]; then
   val=$(printf '%s' "$VITE_HIDE_PASSWORD_LOGIN" | tr '[:upper:]' '[:lower:]')
   printf '%s\n' "(function(w){w.__RUNTIME_CONFIG__=w.__RUNTIME_CONFIG__||{};w.__RUNTIME_CONFIG__.hidePasswordLogin='${val}';})(window);" >> "$RUNTIME_JS"
   echo "[entrypoint] runtime-config.js: hidePasswordLogin=${VITE_HIDE_PASSWORD_LOGIN}"
+fi
+
+if [ -n "${PLATFORM_PUBLIC_BASE_URL:-}" ]; then
+  val=$(printf '%s' "$PLATFORM_PUBLIC_BASE_URL" | tr -d '\r\n')
+  printf '%s\n' "(function(w){w.__RUNTIME_CONFIG__=w.__RUNTIME_CONFIG__||{};w.__RUNTIME_CONFIG__.platformBaseUrl='${val}';})(window);" >> "$RUNTIME_JS"
+  echo "[entrypoint] runtime-config.js: platformBaseUrl=${PLATFORM_PUBLIC_BASE_URL}"
 fi
 
 # Fix permissions for vendor assets so nginx workers can read them (avoid 403 -> HTML)

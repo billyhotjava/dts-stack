@@ -647,6 +647,8 @@ services:
       # Admin API base URL used by the frontend code. Use same-origin path to avoid browser CORS in dev,
       # and let Vite proxy '/admin/api' to the real admin service (see VITE_ADMIN_PROXY_TARGET below).
       VITE_ADMIN_API_BASE_URL: "/admin/api"
+      # Preferred public domain for BI links (used to rewrite Hetu IP links)
+      PLATFORM_PUBLIC_BASE_URL: "https://${HOST_PLATFORM_UI}"
       # Vite dev proxy target for admin API; use direct container address in dev to avoid TLS and Traefik
       # Note: vite.config rewrites '/admin/api' -> '/api' for the target, so do NOT include '/api' suffix here.
       VITE_ADMIN_PROXY_TARGET: "http://dts-admin:8081"
