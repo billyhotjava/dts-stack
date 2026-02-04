@@ -666,7 +666,7 @@ generate_env_base(){
   : "${DOCKER_GID:=$(detect_docker_gid)}"
 
   # ---------- Addax ----------
-  : "${IMAGE_ADDAX:=quay.io/wgzhao/addax:6.0.8}"
+  : "${IMAGE_ADDAX:=dts-addax:6.0.8}"
 
   # Airflow
   : "${PG_DB_AIRFLOW:=airflow}"

@@ -41,6 +41,11 @@ source/dts-analytics-webapp/modern/dist/
 source/dts-ingestion/target/
 builds/*/*.jar
 source/dts-bi-analytics/
+
+# dts build 
+builds/dist/
+builds/legacy-dist/
+
 .m2/
 .env.bak
 .env
