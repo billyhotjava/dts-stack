@@ -559,7 +559,7 @@ public class AirflowDagService {
             sb.append("        api_version=\"auto\",\n");
             sb.append("        auto_remove=True,\n");
             sb.append("        docker_url=\"unix://var/run/docker.sock\",\n");
-            sb.append(String.format("        command=[\"sh\", \"-lc\", \"/opt/addax/bin/addax.sh %s\"],\n", jobPath));
+            sb.append(String.format("        command=\"/opt/addax/bin/addax.sh %s\",\n", jobPath));
             sb.append("        mount_tmp_dir=False,\n");
             sb.append("        mounts=[\n");
             sb.append("            Mount(source=ADDAX_JOB_DIR, target=\"/opt/addax/jobs\", type=\"bind\"),\n");
