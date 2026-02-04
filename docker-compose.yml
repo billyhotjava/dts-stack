@@ -13,7 +13,6 @@ services:
     image: ${IMAGE_TRAEFIK}
     container_name: dts-proxy
     command:
-      - "--configFile=/etc/traefik/traefik.yml"
       - "--api.dashboard=${TRAEFIK_DASHBOARD}"
       - "--api.insecure=${TRAEFIK_DASHBOARD}"
       - "--providers.docker=true"
@@ -29,8 +28,10 @@ services:
       - "--ping=${TRAEFIK_ENABLE_PING}"
       - "--entrypoints.metrics.address=:${TRAEFIK_METRICS_PORT}"
       - "--accesslog=true"
+      - "--accesslog.filepath=/logs/traefik/access.log"
       - "--serversTransport.insecureSkipVerify=true"
       - "--log.level=INFO"
+      - "--log.filePath=/logs/traefik/traefik.log"
       - "--metrics.prometheus=true"
       - "--metrics.prometheus.entryPoint=metrics"
       - "--metrics.prometheus.addEntryPointsLabels=true"
@@ -52,7 +53,6 @@ services:
     volumes:
       # Do not relabel docker.sock; keep read-only
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      - ./services/dts-proxy/traefik.yml:/etc/traefik/traefik.yml:ro,z
       - ./services/dts-proxy/dynamic:/etc/traefik/dynamic:ro,z
       - ./services/certs:/etc/traefik/certs:ro,z
       - ./services/certs/server.crt:/certs/server.crt:ro,z
