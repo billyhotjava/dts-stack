@@ -74,8 +74,10 @@ export default defineConfig(({ mode }) => {
     const hideRaw = (env as any).VITE_HIDE_PASSWORD_LOGIN ?? "";
     const vendorBase = (env as any).KOAL_VENDOR_BASE || (env as any).VITE_KOAL_VENDOR_BASE || "";
     const platformBase = (env as any).PLATFORM_PUBLIC_BASE_URL || (env as any).VITE_PLATFORM_PUBLIC_BASE_URL || "";
+    const sqlWorkbenchRaw = (env as any).VITE_ENABLE_SQL_WORKBENCH ?? (env as any).WEBAPP_ENABLE_SQL_WORKBENCH ?? "";
     const enable = String(enableRaw).trim().toLowerCase();
     const hide = String(hideRaw).trim().toLowerCase();
+    const sqlWorkbench = String(sqlWorkbenchRaw).trim().toLowerCase();
     return {
       name: "dev-runtime-config",
       apply: "serve",
@@ -91,6 +93,9 @@ export default defineConfig(({ mode }) => {
             }
             if (hide) {
               js += `w.__RUNTIME_CONFIG__.hidePasswordLogin=${JSON.stringify(hide)};`;
+            }
+            if (sqlWorkbench) {
+              js += `w.__RUNTIME_CONFIG__.enableSqlWorkbench=${JSON.stringify(sqlWorkbench)};`;
             }
             if (String(vendorBase).trim()) {
               js += `w.__RUNTIME_CONFIG__.koalVendorBase=${JSON.stringify(String(vendorBase).trim())};`;

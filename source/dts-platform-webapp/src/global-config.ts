@@ -127,7 +127,12 @@ const resolveAllowedLoginRoles = (): string[] => {
 };
 
 declare global {
-    interface Window { __RUNTIME_CONFIG__?: { koalPkiEndpoints?: string[] } }
+    interface Window {
+        __RUNTIME_CONFIG__?: {
+            koalPkiEndpoints?: string[];
+            enableSqlWorkbench?: string | boolean;
+        };
+    }
 }
 
 const resolveKoalPkiEndpoints = (): string[] => {
@@ -150,6 +155,17 @@ const resolveKoalPkiEndpoints = (): string[] => {
     return [];
 };
 
+const resolveEnableSqlWorkbench = (): boolean => {
+    try {
+        const rc = (typeof window !== "undefined" && window.__RUNTIME_CONFIG__) || {};
+        if (rc && typeof rc.enableSqlWorkbench !== "undefined") {
+            const raw = String(rc.enableSqlWorkbench).trim().toLowerCase();
+            if (raw === "true" || raw === "1") return true;
+            if (raw === "false" || raw === "0") return false;
+        }
+    } catch {}
+    return String(import.meta.env.VITE_ENABLE_SQL_WORKBENCH || "false").toLowerCase() === "true";
+};
 
 export const GLOBAL_CONFIG: GlobalConfig = {
 	appName: import.meta.env.VITE_APP_NAME || "BI数智平台",
@@ -164,7 +180,7 @@ export const GLOBAL_CONFIG: GlobalConfig = {
 		| "browser"
 		| "hash",
     enablePortalMenuMgmt: String(import.meta.env.VITE_ENABLE_PORTAL_MENU_MGMT || "true").toLowerCase() === "true",
-    enableSqlWorkbench: String(import.meta.env.VITE_ENABLE_SQL_WORKBENCH || "false").toLowerCase() === "true",
+    enableSqlWorkbench: resolveEnableSqlWorkbench(),
     allowedLoginRoles: resolveAllowedLoginRoles(),
     adminApiBaseUrl: resolveAdminApiBaseUrl(),
     koalPkiEndpoints: resolveKoalPkiEndpoints(),

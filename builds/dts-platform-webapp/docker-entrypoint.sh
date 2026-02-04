@@ -41,6 +41,7 @@ fi
 #   - KOAL_PKI_ENDPOINTS: comma-separated local agent endpoints
 #   - WEBAPP_PASSWORD_LOGIN_ENABLED: enable password login UI
 #   - VITE_HIDE_PASSWORD_LOGIN: hide password login UI
+#   - VITE_ENABLE_SQL_WORKBENCH: enable SQL Workbench at runtime
 #   - PLATFORM_PUBLIC_BASE_URL: preferred absolute domain for BI links (e.g., https://bi.example.com)
 RUNTIME_JS="/usr/share/nginx/html/runtime-config.js"
 # Initialize stub to ensure file exists
@@ -65,6 +66,12 @@ if [ -n "${VITE_HIDE_PASSWORD_LOGIN:-}" ]; then
   val=$(printf '%s' "$VITE_HIDE_PASSWORD_LOGIN" | tr '[:upper:]' '[:lower:]')
   printf '%s\n' "(function(w){w.__RUNTIME_CONFIG__=w.__RUNTIME_CONFIG__||{};w.__RUNTIME_CONFIG__.hidePasswordLogin='${val}';})(window);" >> "$RUNTIME_JS"
   echo "[entrypoint] runtime-config.js: hidePasswordLogin=${VITE_HIDE_PASSWORD_LOGIN}"
+fi
+
+if [ -n "${VITE_ENABLE_SQL_WORKBENCH:-}" ]; then
+  val=$(printf '%s' "$VITE_ENABLE_SQL_WORKBENCH" | tr '[:upper:]' '[:lower:]')
+  printf '%s\n' "(function(w){w.__RUNTIME_CONFIG__=w.__RUNTIME_CONFIG__||{};w.__RUNTIME_CONFIG__.enableSqlWorkbench='${val}';})(window);" >> "$RUNTIME_JS"
+  echo "[entrypoint] runtime-config.js: enableSqlWorkbench=${VITE_ENABLE_SQL_WORKBENCH}"
 fi
 
 if [ -n "${PLATFORM_PUBLIC_BASE_URL:-}" ]; then

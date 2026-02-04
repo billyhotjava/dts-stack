@@ -347,12 +347,21 @@ build_all_normal() {
     --build-arg ENABLE_MAVEN_BUILD="${enable_maven_build_arg}"
   build_image "dts-admin-webapp" "$IMAGE_DTS_ADMIN_WEBAPP" "${REPO_ROOT}/builds/dts-admin-webapp/Dockerfile" "$NORMAL_DIST" \
     --build-arg PNPM_VERSION="${PNPM_VERSION}" \
-    --build-arg WEBAPP_BUILD_CMD="build:modern"
+    --build-arg WEBAPP_BUILD_CMD="build:modern" \
+    --build-arg NPM_REGISTRY="${NPM_REGISTRY:-}" \
+    --build-arg NPM_HTTP_PROXY="${NPM_HTTP_PROXY:-${HTTP_PROXY:-}}" \
+    --build-arg NPM_HTTPS_PROXY="${NPM_HTTPS_PROXY:-${HTTPS_PROXY:-}}"
   build_image "dts-platform-webapp" "$IMAGE_DTS_PLATFORM_WEBAPP" "${REPO_ROOT}/builds/dts-platform-webapp/Dockerfile" "$NORMAL_DIST" \
     --build-arg PNPM_VERSION="${PNPM_VERSION}" \
-    --build-arg WEBAPP_BUILD_CMD="build:modern"
+    --build-arg WEBAPP_BUILD_CMD="build:modern" \
+    --build-arg NPM_REGISTRY="${NPM_REGISTRY:-}" \
+    --build-arg NPM_HTTP_PROXY="${NPM_HTTP_PROXY:-${HTTP_PROXY:-}}" \
+    --build-arg NPM_HTTPS_PROXY="${NPM_HTTPS_PROXY:-${HTTPS_PROXY:-}}"
   build_image "dts-analytics-webapp-modern" "$IMAGE_DTS_ANALYTICS_WEBAPP_MODERN" "${REPO_ROOT}/builds/dts-analytics-webapp/modern/Dockerfile" "$NORMAL_DIST" \
-    --build-arg PNPM_VERSION="${PNPM_VERSION}"
+    --build-arg PNPM_VERSION="${PNPM_VERSION}" \
+    --build-arg NPM_REGISTRY="${NPM_REGISTRY:-}" \
+    --build-arg NPM_HTTP_PROXY="${NPM_HTTP_PROXY:-${HTTP_PROXY:-}}" \
+    --build-arg NPM_HTTPS_PROXY="${NPM_HTTPS_PROXY:-${HTTPS_PROXY:-}}"
   build_image "dts-airflow-om" "$IMAGE_DTS_AIRFLOW_OM" "${REPO_ROOT}/source/dts-airflow-om/Dockerfile" "$NORMAL_DIST" \
     --build-arg PIP_INDEX_URL="${PIP_INDEX_URL:-}" \
     --build-arg PIP_TRUSTED_HOST="${PIP_TRUSTED_HOST:-}" \
@@ -460,10 +469,16 @@ build_single_image() {
       build_args+=(--build-arg ENABLE_MAVEN_BUILD="${enable_maven_build_arg}")
       ;;
     dts-admin-webapp|dts-platform-webapp)
-      build_args+=(--build-arg PNPM_VERSION="${PNPM_VERSION}" --build-arg WEBAPP_BUILD_CMD="build:modern")
+      build_args+=(--build-arg PNPM_VERSION="${PNPM_VERSION}" --build-arg WEBAPP_BUILD_CMD="build:modern"
+        --build-arg NPM_REGISTRY="${NPM_REGISTRY:-}"
+        --build-arg NPM_HTTP_PROXY="${NPM_HTTP_PROXY:-${HTTP_PROXY:-}}"
+        --build-arg NPM_HTTPS_PROXY="${NPM_HTTPS_PROXY:-${HTTPS_PROXY:-}}")
       ;;
     dts-analytics-webapp-modern)
-      build_args+=(--build-arg PNPM_VERSION="${PNPM_VERSION}")
+      build_args+=(--build-arg PNPM_VERSION="${PNPM_VERSION}"
+        --build-arg NPM_REGISTRY="${NPM_REGISTRY:-}"
+        --build-arg NPM_HTTP_PROXY="${NPM_HTTP_PROXY:-${HTTP_PROXY:-}}"
+        --build-arg NPM_HTTPS_PROXY="${NPM_HTTPS_PROXY:-${HTTPS_PROXY:-}}")
       ;;
     dts-airflow-om)
       build_args+=(
