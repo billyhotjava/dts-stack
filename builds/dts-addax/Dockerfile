@@ -20,5 +20,5 @@ VOLUME ["/opt/addax/jobs"]
 
 WORKDIR /opt/addax
 
-ENTRYPOINT ["sh", "-lc"]
+ENTRYPOINT ["sh", "-c"]
 CMD ["/opt/addax/bin/addax.sh"]
