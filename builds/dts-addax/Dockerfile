@@ -13,7 +13,8 @@ ADD ${ADDAX_RELEASE_URL} /tmp/addax.tar.gz
 RUN tar xzf /tmp/addax.tar.gz -C /opt/ --no-same-permissions --no-same-owner \
  && mv /opt/addax-${ADDAX_VERSION} /opt/addax \
  && rm /tmp/addax.tar.gz \
- && chmod +x /opt/addax/bin/*.sh
+ && chmod +x /opt/addax/bin/*.sh \
+ && sed -i 's/if \[ ! -r "${JOB_FILE}" \]/if false/' /opt/addax/bin/addax.sh
 
 WORKDIR /opt/addax
 

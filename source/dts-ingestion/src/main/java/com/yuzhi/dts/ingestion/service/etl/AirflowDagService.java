@@ -166,6 +166,7 @@ public class AirflowDagService {
                 }
             }
             Files.writeString(dagFile, content, StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+            try { java.nio.file.Files.setPosixFilePermissions(dagFile, java.nio.file.attribute.PosixFilePermissions.fromString("rw-r--r--")); } catch (Exception ignored) {}
             LOG.info("[airflow] {} dag file {}", force ? "rebuilt" : "ensured", dagFile);
             written = true;
         } catch (IOException ex) {

@@ -1656,6 +1656,7 @@ public class AddaxJobService {
             Files.createDirectories(dir);
             Path jobPath = dir.resolve(jobName);
             Files.writeString(jobPath, jobJson);
+            try { Files.setPosixFilePermissions(jobPath, java.nio.file.attribute.PosixFilePermissions.fromString("rw-r--r--")); } catch (Exception ignored) {}
             return jobPath.toString();
         } catch (Exception ex) {
             LOG.warn("Failed to save job JSON for task {}: {}", taskId, ex.getMessage());
@@ -1743,6 +1744,7 @@ public class AddaxJobService {
                 String fileName = baseName + "_" + slug + ".json";
                 Path filePath = dir.resolve(fileName);
                 objectMapper.writerWithDefaultPrettyPrinter().writeValue(filePath.toFile(), perTableConfig);
+                try { Files.setPosixFilePermissions(filePath, java.nio.file.attribute.PosixFilePermissions.fromString("rw-r--r--")); } catch (Exception ignored) {}
                 results.add(new PerTableJob(tableName, toContainerJobPath(filePath.toString()), filePath.toString()));
             }
             LOG.info("Split base job {} into {} per-table job files", basePath.getFileName(), results.size());
