@@ -430,7 +430,7 @@ services:
       - ./services/dts-platform/drivers:/opt/dts/drivers:z
       # Encrypted attachments storage (host-bound)
       - ./services/dts-platform/upload:/opt/dts/upload:Z
-      - ./services/dts-dbt:/opt/dts/dbt:ro,z
+      - ./services/dts-dbt:/opt/dts/dbt:Z
       - ./services/dts-dbt/profiles:/opt/dts/dbt-profiles:Z
       - ./services/dts-airflow/dags:/opt/airflow/dags:Z
     extra_hosts:
