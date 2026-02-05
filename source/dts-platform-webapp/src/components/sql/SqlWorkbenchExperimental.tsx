@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { ChangeEvent, ReactElement } from "react";
+import type { ChangeEvent } from "react";
 import { toast } from "sonner";
 import type {
 	SqlCatalogNode,
