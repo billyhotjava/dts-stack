@@ -243,10 +243,10 @@ public class DbtDagService {
                 selector = "{{ dag_run.conf.get('models', '%s') }}"
                 target = "{{ dag_run.conf.get('target', '%s') }}"
                 vars_payload = "{{ dag_run.conf.get('vars', '') }}"
-                cmd = f"dbt run --project-dir {DBT_PROJECT_MOUNT} --profiles-dir {DBT_PROFILES_MOUNT} --select '{selector}' --target '{target}'"
+                parts = ["run", "--project-dir", DBT_PROJECT_MOUNT, "--profiles-dir", DBT_PROFILES_MOUNT, "--select", selector, "--target", target]
                 if vars_payload:
-                    cmd = cmd + f" --vars '{vars_payload}'"
-                return ["sh", "-lc", cmd]
+                    parts.extend(["--vars", vars_payload])
+                return parts
 
 
             with DAG(
@@ -275,11 +275,11 @@ public class DbtDagService {
                 sync_models = BashOperator(
                     task_id="sync_models",
                     bash_command=(
-                        "curl -sSf -X POST "
-                        "-H \\"Content-Type: application/json\\" "
-                        "-H \\"X-DTS-Service: ${DTS_PLATFORM_SERVICE}\\" "
-                        "\\"${DTS_PLATFORM_BASE_URL}${DTS_PLATFORM_SYNC_PATH}\\" "
-                        "|| true"
+                        f"curl -sSf -X POST "
+                        f"-H \\"Content-Type: application/json\\" "
+                        f"-H \\"X-DTS-Service: {DTS_PLATFORM_SERVICE}\\" "
+                        f"\\"{DTS_PLATFORM_BASE_URL}{DTS_PLATFORM_SYNC_PATH}\\" "
+                        f"|| true"
                     ),
                     trigger_rule="all_done",
                 )
