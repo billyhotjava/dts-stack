@@ -585,7 +585,7 @@ export const SqlWorkbenchExperimental = () => {
 					</div>
 
 					{/* SQL 编辑器 - 减小高度 */}
-					<div className="h-32 min-h-[120px] relative border-b">
+					<div className="h-64 min-h-[240px] relative border-b">
 						<div className="absolute inset-0 flex">
 							<div className="w-8 bg-muted/50 border-r text-right pr-2 pt-2 text-xs font-mono text-muted-foreground select-none overflow-hidden">
 								{lineNumbers.map((num) => (
