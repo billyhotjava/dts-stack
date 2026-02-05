@@ -258,6 +258,7 @@ public class DbtDagService {
                     api_version="auto",
                     auto_remove=True,
                     docker_url="unix://var/run/docker.sock",
+                    network_mode="bridge",
                     command=build_command(),
                     mount_tmp_dir=False,
                     mounts=[
@@ -266,6 +267,8 @@ public class DbtDagService {
                     ],
                     environment={},
                     tty=True,
+                    extra_hosts={"host.docker.internal": "host-gateway"},
+                    privileged=True,
                 )
 
                 sync_models = BashOperator(
