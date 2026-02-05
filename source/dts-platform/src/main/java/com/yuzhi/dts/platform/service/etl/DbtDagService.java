@@ -267,7 +267,6 @@ public class DbtDagService {
                     ],
                     environment={},
                     tty=True,
-                    extra_hosts={"host.docker.internal": "host-gateway"},
                     privileged=True,
                 )
 
