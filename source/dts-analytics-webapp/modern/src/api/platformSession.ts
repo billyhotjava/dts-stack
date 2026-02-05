@@ -35,9 +35,11 @@ export function getPlatformTokens(storeKey: string = DEFAULT_STORE_KEY): Platfor
 	const state = asObject(store?.state);
 	const userToken = asObject(state?.userToken);
 
-	// Prefer adminAccessToken (real Keycloak JWT) over accessToken (may be a demo/internal token)
-	const accessToken = pickString(userToken, ["adminAccessToken", "accessToken", "access_token", "token"]);
-	const refreshToken = pickString(userToken, ["adminRefreshToken", "refreshToken", "refresh_token"]);
+	// Prefer portal access token for platform forward-auth (opaque token expected by dts-platform).
+	// Fall back to adminAccessToken only when portal token is missing.
+	const accessToken = pickString(userToken, ["accessToken", "access_token", "token", "adminAccessToken"]);
+	// Refresh should use portal refresh token; adminRefreshToken is not accepted by platform refresh endpoint.
+	const refreshToken = pickString(userToken, ["refreshToken", "refresh_token"]);
 	return { accessToken, refreshToken };
 }
 
@@ -86,4 +88,3 @@ export async function refreshPlatformAccessToken(refreshToken: string): Promise<
 	setPlatformTokens({ accessToken: tokens.accessToken, refreshToken: tokens.refreshToken || rt });
 	return { accessToken: tokens.accessToken, refreshToken: tokens.refreshToken || rt };
 }
-
