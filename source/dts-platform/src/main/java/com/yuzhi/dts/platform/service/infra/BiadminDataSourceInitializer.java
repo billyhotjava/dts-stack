@@ -2,7 +2,6 @@ package com.yuzhi.dts.platform.service.infra;
 
 import com.yuzhi.dts.platform.domain.service.InfraDataSource;
 import com.yuzhi.dts.platform.repository.service.InfraDataSourceRepository;
-import com.yuzhi.dts.platform.service.infra.dto.DataSourceRequest;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -10,6 +9,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
@@ -23,9 +23,10 @@ public class BiadminDataSourceInitializer {
     private static final Logger LOG = LoggerFactory.getLogger(BiadminDataSourceInitializer.class);
     private static final String BIADMIN_DATASOURCE_NAME = "数仓 (biadmin)";
     private static final String BIADMIN_TYPE = "postgres";
+    private static final String STATUS_ACTIVE = "ACTIVE";
 
     private final InfraDataSourceRepository dataSourceRepository;
-    private final InfraManagementService managementService;
+    private final InfraSecretService secretService;
 
     @Value("${PG_HOST:dts-pg}")
     private String pgHost;
@@ -47,14 +48,14 @@ public class BiadminDataSourceInitializer {
 
     public BiadminDataSourceInitializer(
         InfraDataSourceRepository dataSourceRepository,
-        InfraManagementService managementService
+        InfraSecretService secretService
     ) {
         this.dataSourceRepository = dataSourceRepository;
-        this.managementService = managementService;
+        this.secretService = secretService;
     }
 
     @EventListener(ApplicationReadyEvent.class)
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void initializeBiadminDataSource() {
         if (!autoRegister) {
             LOG.info("[biadmin-init] Auto-registration disabled, skipping biadmin datasource initialization");
@@ -80,24 +81,23 @@ public class BiadminDataSourceInitializer {
                 return;
             }
 
-            // 创建 biadmin 数据源
+            // 直接创建实体，绕过安全检查（系统启动时无安全上下文）
             String jdbcUrl = String.format("jdbc:postgresql://%s:%s/%s", pgHost, pgPort, pgDbBiadmin);
 
-            DataSourceRequest request = new DataSourceRequest(
-                BIADMIN_DATASOURCE_NAME,
-                BIADMIN_TYPE,
-                jdbcUrl,
-                pgUserBiadmin,
-                "数仓专用数据库，用于存储 dbt 模型输出和即席查询",
-                Map.of(
-                    "sourceSystem", "数仓",
-                    "layer", "DW",
-                    "autoRegistered", true
-                ),
-                Map.of("password", pgPwdBiadmin)
-            );
+            InfraDataSource entity = new InfraDataSource();
+            entity.setName(BIADMIN_DATASOURCE_NAME);
+            entity.setType(BIADMIN_TYPE);
+            entity.setJdbcUrl(jdbcUrl);
+            entity.setUsername(pgUserBiadmin);
+            entity.setDescription("数仓专用数据库，用于存储 dbt 模型输出和即席查询");
+            entity.setStatus(STATUS_ACTIVE);
+            entity.setCreatedBy("system");
+            entity.setLastModifiedBy("system");
 
-            managementService.createDataSource(request, "system", null);
+            // 加密保存密码
+            secretService.applySecrets(entity, Map.of("password", pgPwdBiadmin));
+
+            dataSourceRepository.save(entity);
             LOG.info("[biadmin-init] Successfully registered biadmin datasource: {}", jdbcUrl);
 
         } catch (Exception ex) {
