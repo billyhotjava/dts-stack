@@ -27,7 +27,6 @@ import {
 	EditOutlined,
 	DeleteOutlined,
 	SaveOutlined,
-	PlayCircleOutlined,
 	SettingOutlined,
 	DownOutlined,
 	ImportOutlined,
@@ -69,12 +68,6 @@ const formatDateTime = (value?: string) => {
 	} catch {
 		return value;
 	}
-};
-
-const formatMillis = (value?: number) => {
-	if (!value) return "-";
-	const date = new Date(value);
-	return Number.isNaN(date.valueOf()) ? String(value) : date.toLocaleString();
 };
 
 const syncTag = (synced?: boolean) => {
