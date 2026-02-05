@@ -136,7 +136,7 @@ services:
   dts-pg:
     platform: linux/arm64
     image: ${IMAGE_POSTGRES}
-    command: ["postgres", "-c", "shared_preload_libraries=pg_stat_statements", "-c", "max_connections=300", "-c", "logging_collector=on", "-c", "log_directory=/var/lib/postgresql/data/log", "-c", "log_filename=postgresql-%Y-%m-%d.log", "-c", "log_rotation_age=1d", "-c", "log_rotation_size=0"]
+    command: [ "postgres", "-c", "shared_preload_libraries=pg_stat_statements", "-c", "max_connections=300", "-c", "logging_collector=on", "-c", "log_directory=/var/lib/postgresql/data/log", "-c", "log_filename=postgresql-%Y-%m-%d.log", "-c", "log_rotation_age=1d", "-c", "log_rotation_size=0" ]
     environment:
       POSTGRES_PASSWORD: ${PG_SUPER_PASSWORD}
       POSTGRES_USER: ${PG_SUPER_USER}
@@ -173,13 +173,13 @@ services:
       - ./logs/postgresql:/var/lib/postgresql/data/log:z
     healthcheck:
       # Keep healthcheck lightweight and deterministic; do not rely on container env expansion
-      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 5432 -U ${PG_SUPER_USER} -d postgres && psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -p 5432 -U ${PG_SUPER_USER} -d postgres -c 'SELECT 1' >/dev/null"]
+      test: [ "CMD-SHELL", "pg_isready -h 127.0.0.1 -p 5432 -U ${PG_SUPER_USER} -d postgres && psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -p 5432 -U ${PG_SUPER_USER} -d postgres -c 'SELECT 1' >/dev/null" ]
       interval: 10s
       timeout: 30s
       retries: 10
       start_period: 30s
     security_opt:
-      - seccomp=unconfined  # legacy Docker on Kunpeng lacks clone3 support
+      - seccomp=unconfined # legacy Docker on Kunpeng lacks clone3 support
     restart: unless-stopped
     ports:
       - 5432:5432
@@ -221,7 +221,7 @@ services:
     volumes:
       - ./logs/keycloak:/opt/keycloak/data/log:z
     security_opt:
-      - seccomp=unconfined  # loosen for legacy Docker; remove after engine upgrade
+      - seccomp=unconfined # loosen for legacy Docker; remove after engine upgrade
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.kc-redirect.rule=Host(`${HOST_SSO}`)"
@@ -248,7 +248,7 @@ services:
   dts-admin:
     image: ${IMAGE_DTS_ADMIN:?Set IMAGE_DTS_ADMIN in imgversion.conf or .env}
     ports:
-      - "38012:8081"  # 为院端 IP 回调暴露 HTTP 端口（MDM）
+      - "38012:8081" # 为院端 IP 回调暴露 HTTP 端口（MDM）
     depends_on:
       dts-pg:
         condition: service_healthy
@@ -627,6 +627,8 @@ services:
       VITE_ADMIN_API_BASE_URL: "https://${HOST_ADMIN_UI}/api"
       # Preferred public domain for BI links (used to rewrite Hetu IP links)
       PLATFORM_PUBLIC_BASE_URL: "https://${HOST_PLATFORM_UI}"
+      # Enable experimental SQL workbench by default (can be overridden in .env)
+      VITE_ENABLE_SQL_WORKBENCH: ${VITE_ENABLE_SQL_WORKBENCH:-true}
       # Unified PKI endpoints for both webapps (optional). Comma-separated list.
       KOAL_PKI_ENDPOINTS: ${KOAL_PKI_ENDPOINTS:-}
       # Optional explicit Koal SDK base (mirrors runtime-config koalVendorBase)
@@ -668,7 +670,7 @@ services:
       - elasticsearch-data:/usr/share/elasticsearch/data
       - ./logs/elasticsearch:/usr/share/elasticsearch/logs:z
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:9200 >/dev/null || exit 1"]
+      test: [ "CMD-SHELL", "curl -fsS http://127.0.0.1:9200 >/dev/null || exit 1" ]
       <<: *hc
     restart: unless-stopped
     networks:
@@ -778,7 +780,7 @@ services:
     volumes:
       - ./services/dts-openmetadata/ingestion:/opt/openmetadata/ingestion:ro,z
       - ./services/dts-dbt:/opt/dbt:ro,z
-    command: ["-c", "sh /opt/openmetadata/ingestion/run-dbt-ingestion.sh"]
+    command: [ "-c", "sh /opt/openmetadata/ingestion/run-dbt-ingestion.sh" ]
     restart: "no"
     networks:
       - dts-core
@@ -899,7 +901,7 @@ services:
       - "traefik.http.routers.dts-airflow.middlewares=platform-forward-auth@file,security-headers@file"
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/api/v1/health >/dev/null || exit 1"]
+      test: [ "CMD-SHELL", "curl -fsS http://127.0.0.1:8080/api/v1/health >/dev/null || exit 1" ]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -997,7 +999,7 @@ services:
     image: ${IMAGE_DBT:-dts-dbt:1.11.2}
     container_name: dts-dbt
     entrypoint: /bin/bash
-    command: ["-lc", "sleep infinity"]
+    command: [ "-lc", "sleep infinity" ]
     working_dir: /opt/dbt
     environment:
       DBT_LOG_PATH: /opt/dbt-logs
@@ -1009,12 +1011,12 @@ services:
     networks:
       - dts-core
 
-
 volumes:
   maven-cache:
   elasticsearch-data:
 
+
 networks:
   dts-core:
-    name: dts-core        # Real Docker network name
+    name: dts-core # Real Docker network name
     driver: bridge

@@ -139,7 +139,7 @@ services:
 
   dts-pg:
     image: ${IMAGE_POSTGRES}
-    command: ["postgres", "-c", "shared_preload_libraries=pg_stat_statements", "-c", "max_connections=300", "-c", "logging_collector=on", "-c", "log_directory=/var/lib/postgresql/data/log", "-c", "log_filename=postgresql-%Y-%m-%d.log", "-c", "log_rotation_age=1d", "-c", "log_rotation_size=0"]
+    command: [ "postgres", "-c", "shared_preload_libraries=pg_stat_statements", "-c", "max_connections=300", "-c", "logging_collector=on", "-c", "log_directory=/var/lib/postgresql/data/log", "-c", "log_filename=postgresql-%Y-%m-%d.log", "-c", "log_rotation_age=1d", "-c", "log_rotation_size=0" ]
     environment:
       POSTGRES_PASSWORD: ${PG_SUPER_PASSWORD}
       POSTGRES_USER: ${PG_SUPER_USER}
@@ -180,11 +180,11 @@ services:
       - ./logs/postgresql:/var/lib/postgresql/data/log:z
     healthcheck:
       # Keep healthcheck lightweight and deterministic; do not rely on container env expansion
-      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 5432 -U ${PG_SUPER_USER} -d postgres && psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -p 5432 -U ${PG_SUPER_USER} -d postgres -c 'SELECT 1' >/dev/null"]
+      test: [ "CMD-SHELL", "pg_isready -h 127.0.0.1 -p 5432 -U ${PG_SUPER_USER} -d postgres && psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -p 5432 -U ${PG_SUPER_USER} -d postgres -c 'SELECT 1' >/dev/null" ]
       interval: 10s
       timeout: 30s
       retries: 10
-      start_period: 30s   
+      start_period: 30s
     security_opt:
       - label=disable
     restart: unless-stopped
@@ -192,7 +192,6 @@ services:
       - 5432:5432
     networks:
       - dts-core
-
 
   dts-keycloak:
     image: ${IMAGE_KEYCLOAK}
@@ -260,7 +259,7 @@ services:
       - elasticsearch-data:/usr/share/elasticsearch/data
       - ./logs/elasticsearch:/usr/share/elasticsearch/logs:z
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:9200 >/dev/null || exit 1"]
+      test: [ "CMD-SHELL", "curl -fsS http://127.0.0.1:9200 >/dev/null || exit 1" ]
       <<: *hc
     restart: unless-stopped
     networks:
@@ -370,7 +369,7 @@ services:
     volumes:
       - ./services/dts-openmetadata/ingestion:/opt/openmetadata/ingestion:ro,z
       - ./services/dts-dbt:/opt/dbt:ro,z
-    command: ["-c", "/opt/openmetadata/ingestion/run-dbt-ingestion.sh"]
+    command: [ "-c", "/opt/openmetadata/ingestion/run-dbt-ingestion.sh" ]
     restart: "no"
     networks:
       - dts-core
@@ -418,9 +417,6 @@ services:
       ADDAX_JOB_DIR: ${STACK_ROOT}/services/dts-airflow/dags
       ADDAX_DRIVER_DIR: ${STACK_ROOT}/services/dts-platform/drivers
       ADDAX_DRIVER_JARS: ${ADDAX_DRIVER_JARS:-DmJdbcDriver11.jar,postgresql-42.7.9.jar}
-      ADDAX_LOG_DIR: ${STACK_ROOT}/logs/addax
-      ADDAX_LOG_DIR: ${STACK_ROOT}/logs/addax
-      ADDAX_LOG_DIR: ${STACK_ROOT}/logs/addax
       ADDAX_LOG_DIR: ${STACK_ROOT}/logs/addax
       OPENMETADATA_INGEST_IMAGE: ${IMAGE_OPENMETADATA_INGESTION}
       OPENMETADATA_INGEST_CONFIG_DIR: ${OPENMETADATA_INGEST_CONFIG_DIR}
@@ -494,7 +490,7 @@ services:
       - "traefik.http.routers.dts-airflow.middlewares=platform-forward-auth@file,security-headers@file"
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/api/v1/health >/dev/null || exit 1"]
+      test: [ "CMD-SHELL", "curl -fsS http://127.0.0.1:8080/api/v1/health >/dev/null || exit 1" ]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -592,7 +588,7 @@ services:
     image: ${IMAGE_DBT:-dts-dbt:1.11.2}
     container_name: dts-dbt
     entrypoint: /bin/bash
-    command: ["-lc", "sleep infinity"]
+    command: [ "-lc", "sleep infinity" ]
     working_dir: /opt/dbt
     environment:
       DBT_LOG_PATH: /opt/dbt-logs
@@ -608,7 +604,8 @@ volumes:
   maven-cache:
   elasticsearch-data:
 
+
 networks:
   dts-core:
-    name: dts-core        # Real Docker network name
+    name: dts-core # Real Docker network name
     driver: bridge
