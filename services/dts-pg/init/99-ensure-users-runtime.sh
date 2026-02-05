@@ -42,6 +42,26 @@ ensure_db() {
   fi
 }
 
+# Grant enhanced privileges for data warehouse roles (biadmin)
+grant_dw_privileges() {
+  local user="$1" db="$2"
+  # Grant CREATEDB for creating additional schemas/databases
+  "${psqlb[@]}" -c "ALTER ROLE ${user} WITH CREATEDB;" >/dev/null 2>&1 || true
+  # Grant full privileges on database
+  "${psqlb[@]}" -c "GRANT ALL PRIVILEGES ON DATABASE ${db} TO ${user};" >/dev/null 2>&1 || true
+  # Connect to the specific database and grant schema privileges
+  psql -v ON_ERROR_STOP=0 -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -d "$db" <<SQL || true
+-- Grant usage and create on public schema
+GRANT ALL ON SCHEMA public TO ${user};
+-- Grant default privileges for future objects
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO ${user};
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO ${user};
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON FUNCTIONS TO ${user};
+-- Allow creating schemas
+GRANT CREATE ON DATABASE ${db} TO ${user};
+SQL
+}
+
 # 遍历三元组，补齐用户/库并刷新口令哈希
 while IFS='=' read -r k v; do
   [[ "$k" == PG_DB_* ]] || continue
@@ -55,6 +75,11 @@ while IFS='=' read -r k v; do
 
   ensure_role "$user" "$pass"
   ensure_db "$db" "$user"
+
+  # 为数仓用户(biadmin)授予额外权限
+  if [[ "$suf" == "BIADMIN" ]]; then
+    grant_dw_privileges "$user" "$db"
+  fi
 done < <(env)
 
 echo "ok"

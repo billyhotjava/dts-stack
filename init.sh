@@ -718,6 +718,11 @@ generate_env_base(){
   : "${PG_PWD_AIRFLOW:=${SECRET}}"
   : "${PG_PWD_AIRFLOW_URLENCODED:=$(urlencode "${PG_PWD_AIRFLOW}")}"
 
+  # BI Admin (数仓专用)
+  : "${PG_DB_BIADMIN:=biadmin}"
+  : "${PG_USER_BIADMIN:=biadmin}"
+  : "${PG_PWD_BIADMIN:=${SECRET}}"
+
   # ---------- Ranger（Admin） ----------
   : "${PG_DB_RANGER:=dts_ranger}"
   : "${PG_USER_RANGER:=dts_ranger}"
@@ -970,6 +975,10 @@ PG_USER_AIRFLOW=${PG_USER_AIRFLOW}
 PG_PWD_AIRFLOW=${PG_PWD_AIRFLOW}
 PG_PWD_AIRFLOW_URLENCODED=${PG_PWD_AIRFLOW_URLENCODED}
 
+# --- BI Admin triplet (数仓) ---
+PG_DB_BIADMIN=${PG_DB_BIADMIN}
+PG_USER_BIADMIN=${PG_USER_BIADMIN}
+PG_PWD_BIADMIN=${PG_PWD_BIADMIN}
 
 # ====== OIDC Clients ======
 OAUTH2_ADMIN_CLIENT_ID=${OAUTH2_ADMIN_CLIENT_ID}
