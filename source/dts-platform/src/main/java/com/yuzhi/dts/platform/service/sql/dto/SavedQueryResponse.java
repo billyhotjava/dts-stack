@@ -1,6 +1,5 @@
 package com.yuzhi.dts.platform.service.sql.dto;
 
-import java.time.Instant;
 import java.util.UUID;
 
 public record SavedQueryResponse(
@@ -11,6 +10,6 @@ public record SavedQueryResponse(
     UUID datasourceId,
     String datasourceName,
     String createdBy,
-    Instant createdAt,
-    Instant updatedAt
+    String createdAt,
+    String updatedAt
 ) {}

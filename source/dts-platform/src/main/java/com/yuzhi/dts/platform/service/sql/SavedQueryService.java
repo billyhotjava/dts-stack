@@ -1,11 +1,11 @@
 package com.yuzhi.dts.platform.service.sql;
 
-import com.yuzhi.dts.platform.domain.sql.SavedQuery;
-import com.yuzhi.dts.platform.repository.sql.SavedQueryRepository;
+import com.yuzhi.dts.platform.domain.explore.ExecEnums;
+import com.yuzhi.dts.platform.domain.explore.SavedQuery;
+import com.yuzhi.dts.platform.repository.explore.SavedQueryRepository;
 import com.yuzhi.dts.platform.service.sql.dto.SavedQueryRequest;
 import com.yuzhi.dts.platform.service.sql.dto.SavedQueryResponse;
 import java.security.Principal;
-import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
@@ -24,17 +24,13 @@ public class SavedQueryService {
 
     @Transactional
     public SavedQueryResponse save(SavedQueryRequest request, Principal principal) {
-        String username = principal != null ? principal.getName() : "anonymous";
-
         SavedQuery entity = new SavedQuery();
-        entity.setName(request.name());
-        entity.setDescription(request.description());
+        entity.setTitle(request.name());
         entity.setSqlText(request.sqlText());
-        entity.setDatasourceId(request.datasourceId());
-        entity.setDatasourceName(request.datasourceName());
-        entity.setCreatedBy(username);
-        entity.setCreatedAt(Instant.now());
-        entity.setUpdatedAt(Instant.now());
+        entity.setEngine(ExecEnums.ExecEngine.TRINO);
+        entity.setLevel(ExecEnums.SecurityLevel.INTERNAL);
+        entity.setConnection(request.datasourceName());
+        entity.setTags(request.description());
 
         SavedQuery saved = repository.save(entity);
         return toResponse(saved);
@@ -45,12 +41,10 @@ public class SavedQueryService {
         SavedQuery entity = repository.findById(id)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "查询不存在"));
 
-        entity.setName(request.name());
-        entity.setDescription(request.description());
+        entity.setTitle(request.name());
         entity.setSqlText(request.sqlText());
-        entity.setDatasourceId(request.datasourceId());
-        entity.setDatasourceName(request.datasourceName());
-        entity.setUpdatedAt(Instant.now());
+        entity.setConnection(request.datasourceName());
+        entity.setTags(request.description());
 
         SavedQuery saved = repository.save(entity);
         return toResponse(saved);
@@ -58,8 +52,7 @@ public class SavedQueryService {
 
     @Transactional(readOnly = true)
     public List<SavedQueryResponse> list(Principal principal) {
-        // 返回所有用户的保存查询，方便共享
-        return repository.findAllByOrderByUpdatedAtDesc()
+        return repository.findAll()
             .stream()
             .map(this::toResponse)
             .toList();
@@ -83,14 +76,14 @@ public class SavedQueryService {
     private SavedQueryResponse toResponse(SavedQuery entity) {
         return new SavedQueryResponse(
             entity.getId(),
-            entity.getName(),
-            entity.getDescription(),
+            entity.getTitle(),
+            entity.getTags(),
             entity.getSqlText(),
-            entity.getDatasourceId(),
-            entity.getDatasourceName(),
+            null,
+            entity.getConnection(),
             entity.getCreatedBy(),
-            entity.getCreatedAt(),
-            entity.getUpdatedAt()
+            entity.getCreatedDate() != null ? entity.getCreatedDate().toString() : null,
+            entity.getLastModifiedDate() != null ? entity.getLastModifiedDate().toString() : null
         );
     }
 }
