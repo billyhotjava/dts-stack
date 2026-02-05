@@ -5,6 +5,11 @@
     xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
 
     <changeSet id="20260206-01" author="system">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="saved_query"/>
+            </not>
+        </preConditions>
         <comment>创建保存的 SQL 查询表</comment>
         <createTable tableName="saved_query">
             <column name="id" type="${uuidType}">
