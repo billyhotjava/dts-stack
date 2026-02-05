@@ -147,59 +147,94 @@ DROP TABLE IF EXISTS public.dwd_patent;
 DO $$
 DECLARE
   ods_table text := current_setting('dts.ods_table', true);
+  cols text[];
+  patent_no_expr text;
+  patent_title_expr text;
+  patent_type_expr text;
+  state_expr text;
+  app_date_expr text;
+  accept_date_expr text;
+  grant_date_expr text;
+  first_pub_expr text;
+  assignee_expr text;
+  agent_expr text;
+  dept_name_expr text;
+  dept_code_expr text;
+  inventor_expr text;
 BEGIN
   IF ods_table IS NULL OR ods_table = '' THEN
     ods_table := 'ods_patent_info';
   END IF;
+  SELECT array_agg(lower(column_name))
+    INTO cols
+    FROM information_schema.columns
+   WHERE table_schema = 'public'
+     AND lower(table_name) = lower(ods_table);
+
+  -- Helper: return column reference or NULL::text
+  patent_no_expr := CASE WHEN cols @> ARRAY['patent_no'] THEN 'o.patent_no' ELSE 'NULL::text' END;
+  patent_title_expr := CASE WHEN cols @> ARRAY['patent_title_cn'] THEN 'o.patent_title_cn' ELSE 'NULL::text' END;
+  patent_type_expr := CASE WHEN cols @> ARRAY['patent_type'] THEN 'o.patent_type' ELSE 'NULL::text' END;
+  state_expr := CASE WHEN cols @> ARRAY['state'] THEN 'o.state' ELSE 'NULL::text' END;
+  app_date_expr := CASE WHEN cols @> ARRAY['application_date'] THEN 'o.application_date' ELSE 'NULL::text' END;
+  accept_date_expr := CASE WHEN cols @> ARRAY['accept_date'] THEN 'o.accept_date' ELSE 'NULL::text' END;
+  grant_date_expr := CASE WHEN cols @> ARRAY['grant_date'] THEN 'o.grant_date' ELSE 'NULL::text' END;
+  first_pub_expr := CASE WHEN cols @> ARRAY['first_publication_date'] THEN 'o.first_publication_date' ELSE 'NULL::text' END;
+  assignee_expr := CASE WHEN cols @> ARRAY['assignee_name'] THEN 'o.assignee_name' ELSE 'NULL::text' END;
+  agent_expr := CASE WHEN cols @> ARRAY['agent_org_name'] THEN 'o.agent_org_name' ELSE 'NULL::text' END;
+  dept_name_expr := CASE WHEN cols @> ARRAY['dept_name'] THEN 'o.dept_name' ELSE 'NULL::text' END;
+  dept_code_expr := CASE WHEN cols @> ARRAY['dept_code'] THEN 'o.dept_code' ELSE 'NULL::text' END;
+  inventor_expr := CASE WHEN cols @> ARRAY['inventor_names'] THEN 'o.inventor_names' ELSE 'NULL::text' END;
+
   EXECUTE format($fmt$
 CREATE TABLE public.dwd_patent AS
 SELECT
   COALESCE(
-    NULLIF(btrim(o.patent_no), ''),
+    NULLIF(btrim(%s), ''),
     md5(
-      COALESCE(btrim(o.patent_title_cn), '') || '|' ||
-      COALESCE(parse_date_safe(COALESCE(NULLIF(btrim(o.application_date), ''), NULLIF(btrim(o.accept_date), '')))::text, '') || '|' ||
-      COALESCE(btrim(o.assignee_name), '')
+      COALESCE(btrim(%s), '') || '|' ||
+      COALESCE(parse_date_safe(COALESCE(NULLIF(btrim(%s), ''), NULLIF(btrim(%s), '')))::text, '') || '|' ||
+      COALESCE(btrim(%s), '')
     )
   ) AS patent_id,
 
-  NULLIF(btrim(o.patent_no), '')               AS patent_no,
-  NULLIF(btrim(o.patent_title_cn), '')         AS patent_title_cn,
-  NULLIF(btrim(o.patent_type), '')             AS patent_type,
+  NULLIF(btrim(%s), '')               AS patent_no,
+  NULLIF(btrim(%s), '')               AS patent_title_cn,
+  NULLIF(btrim(%s), '')               AS patent_type,
 
-  NULLIF(btrim(o.state), '')                   AS patent_status_raw,
+  NULLIF(btrim(%s), '')                   AS patent_status_raw,
   COALESCE(s.status_std, 'other')              AS patent_status_std,
   COALESCE(s.is_accepted, false)               AS is_accepted,
   COALESCE(s.is_granted, false)                AS is_granted,
 
   parse_date_safe(
-    COALESCE(NULLIF(btrim(o.application_date), ''), NULLIF(btrim(o.accept_date), ''))
+    COALESCE(NULLIF(btrim(%s), ''), NULLIF(btrim(%s), ''))
   ) AS application_date,
-  parse_date_safe(NULLIF(btrim(o.accept_date), '')) AS accept_date,
-  parse_date_safe(o.grant_date)               AS grant_date,
-  parse_date_safe(o.first_publication_date)   AS first_publication_date,
+  parse_date_safe(NULLIF(btrim(%s), '')) AS accept_date,
+  parse_date_safe(%s)               AS grant_date,
+  parse_date_safe(%s)   AS first_publication_date,
 
-  NULLIF(btrim(o.assignee_name), '')          AS assignee_name,
-  NULLIF(btrim(o.agent_org_name), '')         AS agent_org_name,
-  NULLIF(btrim(o.dept_name), '')              AS dept_name,
-  NULLIF(btrim(o.dept_code), '')              AS dept_code,
-  NULLIF(btrim(o.inventor_names), '')         AS inventor_names,
+  NULLIF(btrim(%s), '')          AS assignee_name,
+  NULLIF(btrim(%s), '')         AS agent_org_name,
+  NULLIF(btrim(%s), '')              AS dept_name,
+  NULLIF(btrim(%s), '')              AS dept_code,
+  NULLIF(btrim(%s), '')         AS inventor_names,
 
   EXTRACT(YEAR FROM parse_date_safe(
-    COALESCE(NULLIF(btrim(o.application_date), ''), NULLIF(btrim(o.accept_date), ''))
+    COALESCE(NULLIF(btrim(%s), ''), NULLIF(btrim(%s), ''))
   ))::int AS application_year,
   to_char(
-    parse_date_safe(COALESCE(NULLIF(btrim(o.application_date), ''), NULLIF(btrim(o.accept_date), ''))),
+    parse_date_safe(COALESCE(NULLIF(btrim(%s), ''), NULLIF(btrim(%s), ''))),
     'YYYY-MM'
   ) AS application_month,
-  EXTRACT(YEAR FROM parse_date_safe(o.grant_date))::int AS grant_year,
-  to_char(parse_date_safe(o.grant_date), 'YYYY-MM')     AS grant_month,
+  EXTRACT(YEAR FROM parse_date_safe(%s))::int AS grant_year,
+  to_char(parse_date_safe(%s), 'YYYY-MM')     AS grant_month,
 
   CASE
-    WHEN parse_date_safe(COALESCE(NULLIF(btrim(o.application_date), ''), NULLIF(btrim(o.accept_date), ''))) IS NOT NULL
-     AND parse_date_safe(o.grant_date) IS NOT NULL
-    THEN (parse_date_safe(o.grant_date) - parse_date_safe(
-      COALESCE(NULLIF(btrim(o.application_date), ''), NULLIF(btrim(o.accept_date), ''))
+    WHEN parse_date_safe(COALESCE(NULLIF(btrim(%s), ''), NULLIF(btrim(%s), ''))) IS NOT NULL
+     AND parse_date_safe(%s) IS NOT NULL
+    THEN (parse_date_safe(%s) - parse_date_safe(
+      COALESCE(NULLIF(btrim(%s), ''), NULLIF(btrim(%s), ''))
     ))::int
   END AS days_to_grant,
 
@@ -208,8 +243,37 @@ SELECT
 
 FROM public.%I o
 LEFT JOIN public.dim_patent_status s
-  ON s.status_code = NULLIF(btrim(o.state), '');
-$fmt$, ods_table, ods_table);
+  ON s.status_code = NULLIF(btrim(%s), '');
+$fmt$,
+    patent_no_expr,
+    patent_title_expr,
+    app_date_expr, accept_date_expr,
+    assignee_expr,
+    patent_no_expr,
+    patent_title_expr,
+    patent_type_expr,
+    state_expr,
+    app_date_expr, accept_date_expr,
+    accept_date_expr,
+    grant_date_expr,
+    first_pub_expr,
+    assignee_expr,
+    agent_expr,
+    dept_name_expr,
+    dept_code_expr,
+    inventor_expr,
+    app_date_expr, accept_date_expr,
+    app_date_expr, accept_date_expr,
+    grant_date_expr,
+    grant_date_expr,
+    app_date_expr, accept_date_expr,
+    grant_date_expr,
+    grant_date_expr,
+    app_date_expr, accept_date_expr,
+    ods_table,
+    ods_table,
+    state_expr
+  );
 END $$;
 
 CREATE INDEX IF NOT EXISTS idx_dwd_patent_year ON public.dwd_patent(application_year);
