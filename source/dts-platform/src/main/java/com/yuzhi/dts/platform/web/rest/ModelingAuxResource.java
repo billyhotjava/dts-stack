@@ -728,6 +728,53 @@ public class ModelingAuxResource {
         return ApiResponses.ok(list);
     }
 
+    /**
+     * 获取所有模型分层类型（从标准模板中提取去重）
+     * 返回格式：[{layer, name, description}]
+     */
+    @GetMapping("/templates/layers")
+    public ApiResponse<List<Map<String, Object>>> listTemplateLayers() {
+        List<ModelingTemplate> templates = templateRepo.findAll();
+        Set<String> seenLayers = new LinkedHashSet<>();
+        List<Map<String, Object>> result = new ArrayList<>();
+
+        // 按 layer 分组，取第一个模板的名称作为描述
+        for (ModelingTemplate template : templates) {
+            String layer = StringUtils.trimToNull(template.getLayer());
+            if (layer == null || seenLayers.contains(layer.toUpperCase(Locale.ROOT))) {
+                continue;
+            }
+            seenLayers.add(layer.toUpperCase(Locale.ROOT));
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("layer", layer.toUpperCase(Locale.ROOT));
+            row.put("name", template.getName());
+            row.put("description", getLayerDescription(layer));
+            result.add(row);
+        }
+
+        // 如果没有模板数据，返回默认分层
+        if (result.isEmpty()) {
+            result.add(Map.of("layer", "ODS", "name", "ODS", "description", "操作数据层（原始数据）"));
+            result.add(Map.of("layer", "DWD", "name", "DWD", "description", "明细数据层（清洗数据）"));
+            result.add(Map.of("layer", "DWS", "name", "DWS", "description", "汇总数据层（轻度聚合）"));
+            result.add(Map.of("layer", "ADS", "name", "ADS", "description", "应用数据层（报表数据）"));
+        }
+
+        auditService.audit("READ", "modeling.template.layers", "list");
+        return ApiResponses.ok(result);
+    }
+
+    private String getLayerDescription(String layer) {
+        if (layer == null) return "";
+        return switch (layer.toUpperCase(Locale.ROOT)) {
+            case "ODS" -> "操作数据层（原始数据）";
+            case "DWD" -> "明细数据层（清洗数据）";
+            case "DWS" -> "汇总数据层（轻度聚合）";
+            case "ADS" -> "应用数据层（报表数据）";
+            default -> "";
+        };
+    }
+
     @GetMapping("/templates/{id}")
     public ApiResponse<ModelingTemplate> getTemplate(@PathVariable UUID id) {
         ModelingTemplate template = templateRepo.findById(id).orElseThrow(() -> new EntityNotFoundException("模型模板不存在"));

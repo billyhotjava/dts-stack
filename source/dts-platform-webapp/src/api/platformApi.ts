@@ -216,6 +216,8 @@ export const updateGlossaryTerm = (id: string, data: any) => api.put({ url: `/mo
 export const deleteGlossaryTerm = (id: string) => api.delete({ url: `/modeling/glossary/terms/${id}` });
 
 export const listModelTemplates = () => api.get<any[]>({ url: "/modeling/templates" });
+export const listTemplateLayers = () =>
+	api.get<{ layer: string; name: string; description: string }[]>({ url: "/modeling/templates/layers" });
 export const getModelTemplate = (id: string) => api.get({ url: `/modeling/templates/${id}` });
 export const createModelTemplate = (data: any) => api.post({ url: "/modeling/templates", data });
 export const updateModelTemplate = (id: string, data: any) => api.put({ url: `/modeling/templates/${id}`, data });

@@ -55,6 +55,7 @@ import {
 	updateDbtConfig,
 	listDbtSources,
 	listDbtRefs,
+	listTemplateLayers,
 } from "@/api/platformApi";
 import dataSourcesService, { type InfraDataSource } from "@/api/services/dataSourcesService";
 
@@ -239,6 +240,7 @@ export default function SqlModelingPage() {
 	const [modelsLoading, setModelsLoading] = useState(false);
 	const [sqlModels, setSqlModels] = useState<SqlModel[]>([]);
 	const [dataSources, setDataSources] = useState<InfraDataSource[]>([]);
+	const [layers, setLayers] = useState<{ layer: string; name: string; description: string }[]>([]);
 	const [modelDrawerOpen, setModelDrawerOpen] = useState(false);
 	const [modelSubmitting, setModelSubmitting] = useState(false);
 	const [editingModel, setEditingModel] = useState<SqlModel | null>(null);
@@ -321,6 +323,21 @@ export default function SqlModelingPage() {
 		}
 	}, []);
 
+	const loadLayers = useCallback(async () => {
+		try {
+			const resp = await listTemplateLayers();
+			setLayers(Array.isArray(resp) ? resp : []);
+		} catch {
+			// 如果获取分层失败，使用默认值
+			setLayers([
+				{ layer: "ODS", name: "ODS", description: "操作数据层（原始数据）" },
+				{ layer: "DWD", name: "DWD", description: "明细数据层（清洗数据）" },
+				{ layer: "DWS", name: "DWS", description: "汇总数据层（轻度聚合）" },
+				{ layer: "ADS", name: "ADS", description: "应用数据层（报表数据）" },
+			]);
+		}
+	}, []);
+
 	const loadSpaces = useCallback(async () => {
 		setSpacesLoading(true);
 		try {
@@ -396,9 +413,10 @@ export default function SqlModelingPage() {
 		void loadRuns();
 		void loadSpaces();
 		void loadSources();
+		void loadLayers();
 		void loadDbtSources();
 		void loadDbtRefs();
-	}, [loadConfig, loadModels, loadRuns, loadSpaces, loadSources, loadSyncStatus, loadDbtSources, loadDbtRefs]);
+	}, [loadConfig, loadModels, loadRuns, loadSpaces, loadSources, loadLayers, loadSyncStatus, loadDbtSources, loadDbtRefs]);
 
 	useEffect(() => {
 		if (spaces.length === 0) {
@@ -1369,12 +1387,10 @@ export default function SqlModelingPage() {
 						>
 							<Select
 								placeholder="选择分层"
-								options={[
-									{ label: "ODS - 操作数据层（原始数据）", value: "ODS" },
-									{ label: "DWD - 明细数据层（清洗数据）", value: "DWD" },
-									{ label: "DWS - 汇总数据层（轻度聚合）", value: "DWS" },
-									{ label: "ADS - 应用数据层（报表数据）", value: "ADS" },
-								]}
+								options={layers.map((l) => ({
+									label: `${l.layer} - ${l.description || l.name}`,
+									value: l.layer,
+								}))}
 							/>
 						</Form.Item>
 					</div>
@@ -1390,12 +1406,12 @@ export default function SqlModelingPage() {
 						<Form.Item
 							name="sourceDataSourceId"
 							label="来源数据源"
-							rules={[{ required: true, message: "请选择来源数据源" }]}
-							tooltip="选择数据来源系统，用于自动生成调度标签"
+							tooltip="选择数据来源系统，用于自动生成调度标签；Excel/手工录入场景可不选"
 						>
 							<Select
-								placeholder="选择来源数据源"
+								placeholder="选择来源数据源（可选）"
 								showSearch
+								allowClear
 								optionFilterProp="label"
 								options={dataSources.map((ds) => ({
 									label: ds?.name || ds?.id,

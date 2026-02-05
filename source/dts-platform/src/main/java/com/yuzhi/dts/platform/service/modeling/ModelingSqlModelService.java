@@ -370,12 +370,10 @@ public class ModelingSqlModelService {
             throw new IllegalArgumentException("SQL 内容不能为空");
         }
         UUID sourceId = request.sourceDataSourceId();
-        if (sourceId == null) {
-            throw new IllegalArgumentException("请选择来源数据源");
-        }
+        // sourceDataSourceId 可选，支持 Excel 等无数据库连接的场景
 
         ModelingPlan plan = resolvePlan(request.planId(), activeDeptHeader);
-        InfraDataSource source = resolveSource(sourceId, activeDeptHeader);
+        InfraDataSource source = sourceId != null ? resolveSource(sourceId, activeDeptHeader) : null;
 
         String activeDept = security.resolveActiveDept(activeDeptHeader);
         if (isCreate) {
@@ -391,10 +389,10 @@ public class ModelingSqlModelService {
             model.setOwnerDept(trimToNull(request.ownerDept()));
         }
 
-        String sourceKey = resolveSourceKey(source);
-        String sourceTag = sanitizeTag(sourceKey, slugify(sourceKey));
+        String sourceKey = source != null ? resolveSourceKey(source) : null;
+        String sourceTag = StringUtils.hasText(sourceKey) ? sanitizeTag(sourceKey, slugify(sourceKey)) : null;
         String mergedTags = mergeTags(request.tags(), sourceTag);
-        String dagSelector = "tab:" + sourceTag;
+        String dagSelector = StringUtils.hasText(sourceTag) ? "tab:" + sourceTag : null;
         String layer = trimToNull(request.layer());
         if (layer == null) {
             layer = inferLayer(name);
