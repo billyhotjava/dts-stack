@@ -19,7 +19,7 @@ import {
 	SelectValue,
 } from "@/ui/select";
 import { Input } from "@/ui/input";
-import { cn } from "@/lib/utils";
+import { cn } from "@/utils";
 
 const DEFAULT_SQL = `-- 选择数据源，输入 SQL 语句
 SELECT * FROM your_table LIMIT 100;`;
