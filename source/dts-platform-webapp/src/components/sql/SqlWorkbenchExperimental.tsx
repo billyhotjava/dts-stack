@@ -1,11 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
 import { toast } from "sonner";
-import type { TableInfo, SqlResultPreview } from "@/api/sql-workbench";
+import type { TableInfo, SqlResultPreview, SavedQueryResponse } from "@/api/sql-workbench";
 import {
+	auditCopy,
 	cancelSql,
+	deleteSavedQuery,
 	getSqlStatus,
+	listSavedQueries,
 	listTables,
+	saveQuery,
 	submitSql,
 } from "@/api/sql-workbench";
 import dataSourcesService, { type InfraDataSource } from "@/api/services/dataSourcesService";
@@ -19,43 +23,71 @@ import {
 	SelectValue,
 } from "@/ui/select";
 import { Input } from "@/ui/input";
+import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+} from "@/ui/dialog";
 import { cn } from "@/utils";
 
-const DEFAULT_SQL = `-- 选择数据源，输入 SQL 语句
-SELECT * FROM your_table LIMIT 100;`;
+const DEFAULT_SQL = `SELECT * FROM your_table LIMIT 100;`;
 
-// 导出 CSV
-const downloadCsv = (headers: string[], rows: Record<string, unknown>[], filename: string) => {
-	const escapeCell = (val: unknown) => {
-		if (val == null) return "";
-		const str = String(val);
-		if (str.includes(",") || str.includes('"') || str.includes("\n")) {
-			return `"${str.replace(/"/g, '""')}"`;
-		}
-		return str;
-	};
-	const csvContent = [
-		headers.map(escapeCell).join(","),
-		...rows.map((row) => headers.map((h) => escapeCell(row[h])).join(",")),
-	].join("\n");
-	const blob = new Blob(["\ufeff" + csvContent], { type: "text/csv;charset=utf-8" });
-	const url = URL.createObjectURL(blob);
-	const link = document.createElement("a");
-	link.href = url;
-	link.download = filename;
-	link.click();
-	URL.revokeObjectURL(url);
+// SQL 格式化（简单实现）
+const formatSql = (sql: string): string => {
+	const keywords = [
+		"SELECT", "FROM", "WHERE", "AND", "OR", "ORDER BY", "GROUP BY",
+		"HAVING", "JOIN", "LEFT JOIN", "RIGHT JOIN", "INNER JOIN", "OUTER JOIN",
+		"ON", "AS", "LIMIT", "OFFSET", "INSERT INTO", "VALUES", "UPDATE", "SET",
+		"DELETE FROM", "CREATE TABLE", "ALTER TABLE", "DROP TABLE", "UNION", "UNION ALL"
+	];
+
+	let formatted = sql.trim();
+
+	// 先规范化空白
+	formatted = formatted.replace(/\s+/g, " ");
+
+	// 在关键字前换行
+	for (const keyword of keywords) {
+		const regex = new RegExp(`\\s+(${keyword})\\s+`, "gi");
+		formatted = formatted.replace(regex, `\n${keyword} `);
+	}
+
+	// SELECT 后的字段换行
+	formatted = formatted.replace(/SELECT\s+/gi, "SELECT\n    ");
+	formatted = formatted.replace(/,\s*/g, ",\n    ");
+
+	// 清理开头
+	formatted = formatted.replace(/^\n+/, "");
+
+	return formatted;
 };
 
 // 复制到剪贴板
-const copyToClipboard = (headers: string[], rows: Record<string, unknown>[]) => {
+const copyToClipboard = async (
+	headers: string[],
+	rows: Record<string, unknown>[],
+	executionId: string | null
+) => {
 	const text = [
 		headers.join("\t"),
 		...rows.map((row) => headers.map((h) => row[h] ?? "").join("\t")),
 	].join("\n");
-	navigator.clipboard.writeText(text).then(() => {
+
+	try {
+		await navigator.clipboard.writeText(text);
+		// 记录审计日志
+		await auditCopy({
+			rowCount: rows.length,
+			columnCount: headers.length,
+			executionId: executionId || undefined,
+		});
 		toast.success("已复制到剪贴板");
-	});
+	} catch {
+		toast.error("复制失败");
+	}
 };
 
 // 按 schema 分组表
@@ -69,6 +101,17 @@ const groupTablesBySchema = (tables: TableInfo[]) => {
 		grouped[schema].push(table);
 	}
 	return grouped;
+};
+
+// 格式化时间
+const formatTime = (isoString: string) => {
+	const date = new Date(isoString);
+	return date.toLocaleString("zh-CN", {
+		month: "2-digit",
+		day: "2-digit",
+		hour: "2-digit",
+		minute: "2-digit",
+	});
 };
 
 export const SqlWorkbenchExperimental = () => {
@@ -87,6 +130,14 @@ export const SqlWorkbenchExperimental = () => {
 	const [tableSearch, setTableSearch] = useState("");
 	const [expandedSchemas, setExpandedSchemas] = useState<Set<string>>(new Set());
 	const [selectedTable, setSelectedTable] = useState<string | null>(null);
+
+	// 保存的查询
+	const [savedQueries, setSavedQueries] = useState<SavedQueryResponse[]>([]);
+	const [savedQueriesLoading, setSavedQueriesLoading] = useState(false);
+	const [showSaveDialog, setShowSaveDialog] = useState(false);
+	const [saveQueryName, setSaveQueryName] = useState("");
+	const [saveQueryDesc, setSaveQueryDesc] = useState("");
+	const [showSavedQueries, setShowSavedQueries] = useState(false);
 
 	// 结果
 	const [activeTab, setActiveTab] = useState<"results" | "logs">("results");
@@ -122,6 +173,19 @@ export const SqlWorkbenchExperimental = () => {
 			.finally(() => setDatasourcesLoading(false));
 	}, []);
 
+	// 加载保存的查询
+	const loadSavedQueries = useCallback(() => {
+		setSavedQueriesLoading(true);
+		listSavedQueries()
+			.then(setSavedQueries)
+			.catch(() => toast.error("加载保存的查询失败"))
+			.finally(() => setSavedQueriesLoading(false));
+	}, []);
+
+	useEffect(() => {
+		loadSavedQueries();
+	}, [loadSavedQueries]);
+
 	// 加载表列表
 	useEffect(() => {
 		if (!selectedDatasourceId) {
@@ -132,7 +196,6 @@ export const SqlWorkbenchExperimental = () => {
 		listTables(selectedDatasourceId)
 			.then((data) => {
 				setTables(data);
-				// 自动展开第一个 schema
 				const schemas = Object.keys(groupTablesBySchema(data));
 				if (schemas.length > 0) {
 					setExpandedSchemas(new Set([schemas[0]]));
@@ -140,7 +203,6 @@ export const SqlWorkbenchExperimental = () => {
 			})
 			.catch(() => {
 				setTables([]);
-				toast.error("加载表列表失败");
 			})
 			.finally(() => setTablesLoading(false));
 	}, [selectedDatasourceId]);
@@ -194,6 +256,60 @@ export const SqlWorkbenchExperimental = () => {
 		},
 		[sqlText]
 	);
+
+	// 格式化 SQL
+	const handleFormat = () => {
+		const formatted = formatSql(sqlText);
+		setSqlText(formatted);
+		toast.success("SQL 已格式化");
+	};
+
+	// 保存查询
+	const handleSave = async () => {
+		if (!saveQueryName.trim()) {
+			toast.error("请输入查询名称");
+			return;
+		}
+		try {
+			await saveQuery({
+				name: saveQueryName.trim(),
+				description: saveQueryDesc.trim() || undefined,
+				sqlText,
+				datasourceId: selectedDatasourceId || undefined,
+				datasourceName: selectedDatasource?.name,
+			});
+			toast.success("查询已保存");
+			setShowSaveDialog(false);
+			setSaveQueryName("");
+			setSaveQueryDesc("");
+			loadSavedQueries();
+		} catch {
+			toast.error("保存失败");
+		}
+	};
+
+	// 加载保存的查询
+	const handleLoadSavedQuery = (query: SavedQueryResponse) => {
+		setSqlText(query.sqlText);
+		if (query.datasourceId && dataSources.some((ds) => ds.id === query.datasourceId)) {
+			setSelectedDatasourceId(query.datasourceId);
+		}
+		setShowSavedQueries(false);
+		toast.success(`已加载: ${query.name}`);
+	};
+
+	// 删除保存的查询
+	const handleDeleteSavedQuery = async (id: string, e: React.MouseEvent) => {
+		e.stopPropagation();
+		if (!confirm("确定要删除这个查询吗？")) return;
+		try {
+			await deleteSavedQuery(id);
+			toast.success("已删除");
+			loadSavedQueries();
+		} catch {
+			toast.error("删除失败");
+		}
+	};
 
 	// 执行查询
 	const handleSubmit = async () => {
@@ -269,10 +385,10 @@ export const SqlWorkbenchExperimental = () => {
 			{/* 主体 */}
 			<div className="flex-1 flex overflow-hidden">
 				{/* 左侧边栏 */}
-				<aside className="w-72 border-r bg-card flex flex-col flex-shrink-0">
+				<aside className="w-64 border-r bg-card flex flex-col flex-shrink-0">
 					{/* 数据源选择 */}
-					<div className="p-4 border-b">
-						<label className="block text-xs font-semibold text-muted-foreground uppercase mb-2">
+					<div className="p-3 border-b">
+						<label className="block text-xs font-medium text-muted-foreground mb-1.5">
 							数据源
 						</label>
 						<Select
@@ -280,7 +396,7 @@ export const SqlWorkbenchExperimental = () => {
 							onValueChange={setSelectedDatasourceId}
 							disabled={datasourcesLoading}
 						>
-							<SelectTrigger className="w-full">
+							<SelectTrigger className="w-full h-8 text-sm">
 								<SelectValue placeholder={datasourcesLoading ? "加载中..." : "选择数据源"} />
 							</SelectTrigger>
 							<SelectContent>
@@ -289,11 +405,11 @@ export const SqlWorkbenchExperimental = () => {
 										<div className="flex items-center gap-2">
 											<span
 												className={cn(
-													"w-2 h-2 rounded-full",
+													"w-1.5 h-1.5 rounded-full",
 													ds.status === "ACTIVE" ? "bg-green-500" : "bg-gray-400"
 												)}
 											/>
-											<span>{ds.name}</span>
+											<span className="truncate">{ds.name}</span>
 										</div>
 									</SelectItem>
 								))}
@@ -302,52 +418,37 @@ export const SqlWorkbenchExperimental = () => {
 					</div>
 
 					{/* 搜索 */}
-					<div className="p-4 border-b">
-						<div className="relative">
-							<Input
-								placeholder="搜索表..."
-								value={tableSearch}
-								onChange={(e) => setTableSearch(e.target.value)}
-								className="pl-8"
-							/>
-							<svg
-								className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground"
-								fill="none"
-								stroke="currentColor"
-								viewBox="0 0 24 24"
-							>
-								<path
-									strokeLinecap="round"
-									strokeLinejoin="round"
-									strokeWidth={2}
-									d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-								/>
-							</svg>
-						</div>
+					<div className="p-3 border-b">
+						<Input
+							placeholder="搜索表..."
+							value={tableSearch}
+							onChange={(e) => setTableSearch(e.target.value)}
+							className="h-8 text-sm"
+						/>
 					</div>
 
 					{/* 表列表 */}
 					<ScrollArea className="flex-1">
 						<div className="p-2">
 							{tablesLoading ? (
-								<div className="text-sm text-muted-foreground p-4 text-center">加载中...</div>
+								<div className="text-xs text-muted-foreground p-3 text-center">加载中...</div>
 							) : !selectedDatasourceId ? (
-								<div className="text-sm text-muted-foreground p-4 text-center">请选择数据源</div>
+								<div className="text-xs text-muted-foreground p-3 text-center">请选择数据源</div>
 							) : Object.keys(groupedTables).length === 0 ? (
-								<div className="text-sm text-muted-foreground p-4 text-center">
-									{tableSearch ? "无匹配的表" : "暂无表"}
+								<div className="text-xs text-muted-foreground p-3 text-center">
+									{tableSearch ? "无匹配" : "暂无表"}
 								</div>
 							) : (
-								<ul className="text-sm">
+								<ul className="text-xs">
 									{Object.entries(groupedTables).map(([schema, schemaTables]) => (
-										<li key={schema} className="mb-2">
+										<li key={schema} className="mb-1">
 											<div
-												className="flex items-center font-semibold cursor-pointer hover:bg-muted p-1.5 rounded"
+												className="flex items-center font-medium cursor-pointer hover:bg-muted p-1 rounded"
 												onClick={() => toggleSchema(schema)}
 											>
 												<svg
 													className={cn(
-														"w-3 h-3 mr-2 transition-transform text-muted-foreground",
+														"w-3 h-3 mr-1 transition-transform text-muted-foreground",
 														expandedSchemas.has(schema) && "rotate-90"
 													)}
 													fill="currentColor"
@@ -355,60 +456,24 @@ export const SqlWorkbenchExperimental = () => {
 												>
 													<path d="M6 6L14 10L6 14V6Z" />
 												</svg>
-												<svg
-													className="w-4 h-4 mr-2 text-blue-500"
-													fill="none"
-													stroke="currentColor"
-													viewBox="0 0 24 24"
-												>
-													<path
-														strokeLinecap="round"
-														strokeLinejoin="round"
-														strokeWidth={2}
-														d="M4 7v10c0 2 1 3 3 3h10c2 0 3-1 3-3V7c0-2-1-3-3-3H7c-2 0-3 1-3 3z"
-													/>
-												</svg>
-												{schema}
-												<span className="ml-auto text-xs text-muted-foreground">
-													{schemaTables.length}
-												</span>
+												<span className="truncate">{schema}</span>
+												<span className="ml-auto text-muted-foreground">{schemaTables.length}</span>
 											</div>
 											{expandedSchemas.has(schema) && (
-												<ul className="ml-6 mt-1 space-y-0.5">
+												<ul className="ml-4 mt-0.5 space-y-px">
 													{schemaTables.map((table) => (
 														<li
 															key={`${table.schema}.${table.name}`}
 															className={cn(
-																"flex items-center p-1.5 rounded cursor-pointer group",
+																"flex items-center p-1 rounded cursor-pointer",
 																selectedTable === `${table.schema}.${table.name}`
-																	? "bg-blue-50 text-blue-600 dark:bg-blue-950"
+																	? "bg-primary/10 text-primary"
 																	: "hover:bg-muted"
 															)}
 															onClick={() => handleTableClick(table)}
-															title="点击插入表名到 SQL"
+															title="点击插入表名"
 														>
-															<svg
-																className={cn(
-																	"w-4 h-4 mr-2",
-																	table.type === "VIEW"
-																		? "text-purple-500"
-																		: "text-muted-foreground"
-																)}
-																fill="none"
-																stroke="currentColor"
-																viewBox="0 0 24 24"
-															>
-																<path
-																	strokeLinecap="round"
-																	strokeLinejoin="round"
-																	strokeWidth={2}
-																	d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"
-																/>
-															</svg>
 															<span className="truncate">{table.name}</span>
-															{table.type === "VIEW" && (
-																<span className="ml-auto text-xs text-purple-500">VIEW</span>
-															)}
 														</li>
 													))}
 												</ul>
@@ -419,91 +484,118 @@ export const SqlWorkbenchExperimental = () => {
 							)}
 						</div>
 					</ScrollArea>
+
+					{/* 保存的查询 */}
+					<div className="border-t">
+						<button
+							className="w-full p-2 text-xs text-left hover:bg-muted flex items-center justify-between"
+							onClick={() => setShowSavedQueries(!showSavedQueries)}
+						>
+							<span className="font-medium">保存的查询</span>
+							<span className="text-muted-foreground">{savedQueries.length}</span>
+						</button>
+						{showSavedQueries && (
+							<ScrollArea className="h-32 border-t">
+								<div className="p-1">
+									{savedQueriesLoading ? (
+										<div className="text-xs text-muted-foreground p-2 text-center">加载中...</div>
+									) : savedQueries.length === 0 ? (
+										<div className="text-xs text-muted-foreground p-2 text-center">暂无保存的查询</div>
+									) : (
+										savedQueries.map((q) => (
+											<div
+												key={q.id}
+												className="p-1.5 rounded hover:bg-muted cursor-pointer text-xs group flex items-center justify-between"
+												onClick={() => handleLoadSavedQuery(q)}
+											>
+												<div className="min-w-0 flex-1">
+													<div className="font-medium truncate">{q.name}</div>
+													<div className="text-muted-foreground truncate">
+														{formatTime(q.updatedAt)} · {q.createdBy}
+													</div>
+												</div>
+												<button
+													className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive p-1"
+													onClick={(e) => handleDeleteSavedQuery(q.id, e)}
+												>
+													<svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+														<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+													</svg>
+												</button>
+											</div>
+										))
+									)}
+								</div>
+							</ScrollArea>
+						)}
+					</div>
 				</aside>
 
 				{/* 主区域 */}
 				<main className="flex-1 flex flex-col min-w-0">
 					{/* 工具栏 */}
-					<div className="h-12 border-b flex items-center justify-between px-4 bg-muted/30">
-						<div className="flex items-center gap-2">
+					<div className="h-10 border-b flex items-center justify-between px-3 bg-muted/30">
+						<div className="flex items-center gap-1.5">
 							<Button
 								onClick={handleSubmit}
 								disabled={isSubmitting || !selectedDatasourceId}
 								size="sm"
-								className="gap-2"
+								className="h-7 gap-1.5 text-xs"
 							>
 								{isSubmitting ? (
 									<>
-										<svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-											<circle
-												className="opacity-25"
-												cx="12"
-												cy="12"
-												r="10"
-												stroke="currentColor"
-												strokeWidth="4"
-												fill="none"
-											/>
-											<path
-												className="opacity-75"
-												fill="currentColor"
-												d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-											/>
+										<svg className="animate-spin h-3 w-3" viewBox="0 0 24 24">
+											<circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+											<path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
 										</svg>
-										执行中...
+										执行中
 									</>
 								) : (
 									<>
-										<svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+										<svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
 											<path d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z" />
 										</svg>
-										运行查询
+										运行
 									</>
 								)}
 							</Button>
 							{isSubmitting && (
-								<Button variant="outline" size="sm" onClick={handleCancel}>
+								<Button variant="outline" size="sm" className="h-7 text-xs" onClick={handleCancel}>
 									取消
 								</Button>
 							)}
+							<Button variant="outline" size="sm" className="h-7 text-xs" onClick={handleFormat}>
+								格式化
+							</Button>
+							<Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setShowSaveDialog(true)}>
+								保存
+							</Button>
 						</div>
-						<div className="flex items-center gap-4 text-xs text-muted-foreground">
+						<div className="flex items-center gap-3 text-xs text-muted-foreground">
 							<span className="flex items-center gap-1">
-								限制行数:
+								行数限制:
 								<Input
 									type="number"
 									value={rowLimit}
 									onChange={(e) => setRowLimit(Number(e.target.value) || 1000)}
-									className="w-20 h-7 text-xs"
+									className="w-16 h-6 text-xs"
 								/>
 							</span>
-							{selectedDatasource && (
-								<span>
-									数据源:{" "}
-									<span className="font-mono bg-muted px-1.5 py-0.5 rounded">
-										{selectedDatasource.name}
-									</span>
-								</span>
-							)}
 						</div>
 					</div>
 
-					{/* SQL 编辑器 */}
-					<div className="flex-1 relative min-h-[200px]">
+					{/* SQL 编辑器 - 减小高度 */}
+					<div className="h-32 min-h-[120px] relative border-b">
 						<div className="absolute inset-0 flex">
-							{/* 行号 */}
-							<div className="w-12 bg-muted/50 border-r text-right pr-3 pt-4 text-xs font-mono text-muted-foreground select-none overflow-hidden">
+							<div className="w-8 bg-muted/50 border-r text-right pr-2 pt-2 text-xs font-mono text-muted-foreground select-none overflow-hidden">
 								{lineNumbers.map((num) => (
-									<div key={num} className="leading-6">
-										{num}
-									</div>
+									<div key={num} className="leading-5">{num}</div>
 								))}
 							</div>
-							{/* 编辑区 */}
 							<textarea
 								ref={textareaRef}
 								spellCheck={false}
-								className="flex-1 p-4 font-mono text-sm leading-6 bg-background text-foreground focus:outline-none resize-none"
+								className="flex-1 p-2 font-mono text-sm leading-5 bg-background text-foreground focus:outline-none resize-none"
 								value={sqlText}
 								onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setSqlText(e.target.value)}
 								placeholder="输入 SQL 语句..."
@@ -512,12 +604,12 @@ export const SqlWorkbenchExperimental = () => {
 					</div>
 
 					{/* 结果区 */}
-					<div className="h-[45%] min-h-[200px] border-t flex flex-col">
+					<div className="flex-1 flex flex-col min-h-0">
 						{/* 选项卡 */}
 						<div className="flex border-b bg-muted/30">
 							<button
 								className={cn(
-									"px-6 py-2 text-sm font-medium transition-colors",
+									"px-4 py-1.5 text-xs font-medium transition-colors",
 									activeTab === "results"
 										? "bg-background border-t-2 border-primary text-primary"
 										: "text-muted-foreground hover:text-foreground"
@@ -528,7 +620,7 @@ export const SqlWorkbenchExperimental = () => {
 							</button>
 							<button
 								className={cn(
-									"px-6 py-2 text-sm font-medium transition-colors",
+									"px-4 py-1.5 text-xs font-medium transition-colors",
 									activeTab === "logs"
 										? "bg-background border-t-2 border-primary text-primary"
 										: "text-muted-foreground hover:text-foreground"
@@ -541,111 +633,61 @@ export const SqlWorkbenchExperimental = () => {
 
 						{/* 结果工具栏 */}
 						{result && activeTab === "results" && (
-							<div className="px-4 py-2 border-b flex justify-between items-center text-xs">
-								<div className="text-muted-foreground flex gap-4">
+							<div className="px-3 py-1.5 border-b flex justify-between items-center text-xs">
+								<div className="text-muted-foreground flex gap-3">
 									{result.elapsedMs != null && (
-										<span>
-											耗时: <span className="text-green-600 font-semibold">{result.elapsedMs}ms</span>
-										</span>
+										<span>耗时: <span className="text-green-600 font-medium">{result.elapsedMs}ms</span></span>
 									)}
 									{result.rowCount != null && (
-										<span>
-											结果行数: <span className="font-semibold">{result.rowCount} 行</span>
-										</span>
+										<span>行数: <span className="font-medium">{result.rowCount}</span></span>
 									)}
 									<span>
 										状态:{" "}
-										<span
-											className={cn(
-												"font-semibold",
-												result.status === "SUCCESS"
-													? "text-green-600"
-													: result.status === "FAILED"
-														? "text-red-600"
-														: "text-yellow-600"
-											)}
-										>
-											{result.status === "SUCCESS"
-												? "成功"
-												: result.status === "FAILED"
-													? "失败"
-													: result.status}
+										<span className={cn(
+											"font-medium",
+											result.status === "SUCCESS" ? "text-green-600" : result.status === "FAILED" ? "text-red-600" : "text-yellow-600"
+										)}>
+											{result.status === "SUCCESS" ? "成功" : result.status === "FAILED" ? "失败" : result.status}
 										</span>
 									</span>
 								</div>
 								{preview?.headers?.length ? (
-									<div className="flex gap-3">
-										<button
-											className="text-muted-foreground hover:text-primary flex items-center gap-1"
-											onClick={() =>
-												downloadCsv(
-													preview.headers,
-													preview.rows,
-													`query-${new Date().toISOString().slice(0, 10)}.csv`
-												)
-											}
-										>
-											<svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-												<path
-													strokeLinecap="round"
-													strokeLinejoin="round"
-													strokeWidth={2}
-													d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-												/>
-											</svg>
-											下载 CSV
-										</button>
-										<button
-											className="text-muted-foreground hover:text-primary flex items-center gap-1"
-											onClick={() => copyToClipboard(preview.headers, preview.rows)}
-										>
-											<svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-												<path
-													strokeLinecap="round"
-													strokeLinejoin="round"
-													strokeWidth={2}
-													d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
-												/>
-											</svg>
-											复制
-										</button>
-									</div>
+									<button
+										className="text-muted-foreground hover:text-primary flex items-center gap-1"
+										onClick={() => copyToClipboard(preview.headers, preview.rows, executionId)}
+									>
+										<svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+											<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+										</svg>
+										复制
+									</button>
 								) : null}
 							</div>
 						)}
 
 						{/* 内容 */}
-						<div className="flex-1 overflow-auto">
+						<ScrollArea className="flex-1">
 							{activeTab === "results" ? (
 								!result ? (
-									<div className="h-full flex items-center justify-center text-muted-foreground text-sm">
-										选择数据源，输入 SQL 语句，点击"运行查询"
+									<div className="h-full flex items-center justify-center text-muted-foreground text-sm p-8">
+										选择数据源，输入 SQL 语句，点击"运行"
 									</div>
 								) : preview?.headers?.length ? (
-									<table className="w-full text-sm text-left border-collapse">
+									<table className="w-full text-xs text-left border-collapse">
 										<thead className="bg-muted/50 sticky top-0">
 											<tr>
-												<th className="px-4 py-2 font-mono text-muted-foreground border-r w-12 text-center">
-													#
-												</th>
+												<th className="px-2 py-1.5 font-mono text-muted-foreground border-r w-10 text-center">#</th>
 												{preview.headers.map((header) => (
-													<th
-														key={header}
-														className="px-4 py-2 font-semibold border-r whitespace-nowrap"
-													>
-														{header}
-													</th>
+													<th key={header} className="px-2 py-1.5 font-semibold border-r whitespace-nowrap">{header}</th>
 												))}
 											</tr>
 										</thead>
-										<tbody className="divide-y font-mono text-xs">
+										<tbody className="divide-y font-mono">
 											{preview.rows.map((row, idx) => (
-												<tr key={idx} className="hover:bg-muted/30 transition-colors">
-													<td className="px-4 py-2 text-muted-foreground bg-muted/30 border-r text-center">
-														{idx + 1}
-													</td>
+												<tr key={idx} className="hover:bg-muted/30">
+													<td className="px-2 py-1 text-muted-foreground bg-muted/30 border-r text-center">{idx + 1}</td>
 													{preview.headers.map((header) => (
-														<td key={header} className="px-4 py-2 border-r">
+														<td key={header} className="px-2 py-1 border-r">
 															{row[header] == null ? (
 																<span className="text-muted-foreground italic">NULL</span>
 															) : (
@@ -663,13 +705,11 @@ export const SqlWorkbenchExperimental = () => {
 									</div>
 								) : null
 							) : (
-								<div className="p-4 font-mono text-xs">
+								<div className="p-3 font-mono text-xs">
 									{result?.errorMessage ? (
-										<div className="p-4 rounded bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800">
-											<div className="font-semibold text-red-600 mb-2">执行错误</div>
-											<pre className="whitespace-pre-wrap text-red-700 dark:text-red-400">
-												{result.errorMessage}
-											</pre>
+										<div className="p-3 rounded bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800">
+											<div className="font-semibold text-red-600 mb-1">执行错误</div>
+											<pre className="whitespace-pre-wrap text-red-700 dark:text-red-400">{result.errorMessage}</pre>
 										</div>
 									) : result ? (
 										<div className="text-green-600">查询执行成功</div>
@@ -678,22 +718,56 @@ export const SqlWorkbenchExperimental = () => {
 									)}
 								</div>
 							)}
-						</div>
+						</ScrollArea>
 					</div>
 				</main>
 			</div>
 
 			{/* 状态栏 */}
-			<footer className="h-6 bg-muted border-t px-4 flex justify-between items-center text-[10px] text-muted-foreground uppercase tracking-wider">
-				<div className="flex gap-4">
-					{selectedDatasource && <span>数据源: {selectedDatasource.name}</span>}
+			<footer className="h-5 bg-muted border-t px-3 flex justify-between items-center text-[10px] text-muted-foreground">
+				<div className="flex gap-3">
+					{selectedDatasource && <span>{selectedDatasource.name}</span>}
 					<span className="text-green-500 flex items-center gap-1">
-						<span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+						<span className="w-1 h-1 rounded-full bg-green-500" />
 						已连接
 					</span>
 				</div>
-				<div>UTF-8 | SQL</div>
+				<div>SQL</div>
 			</footer>
+
+			{/* 保存对话框 */}
+			<Dialog open={showSaveDialog} onOpenChange={setShowSaveDialog}>
+				<DialogContent className="sm:max-w-md">
+					<DialogHeader>
+						<DialogTitle>保存查询</DialogTitle>
+						<DialogDescription>为当前 SQL 语句命名并保存，方便下次使用</DialogDescription>
+					</DialogHeader>
+					<div className="space-y-3 py-3">
+						<div>
+							<label className="text-sm font-medium">名称 *</label>
+							<Input
+								value={saveQueryName}
+								onChange={(e) => setSaveQueryName(e.target.value)}
+								placeholder="例如：每日销售统计"
+								className="mt-1"
+							/>
+						</div>
+						<div>
+							<label className="text-sm font-medium">描述</label>
+							<Input
+								value={saveQueryDesc}
+								onChange={(e) => setSaveQueryDesc(e.target.value)}
+								placeholder="可选，简要说明查询用途"
+								className="mt-1"
+							/>
+						</div>
+					</div>
+					<DialogFooter>
+						<Button variant="outline" onClick={() => setShowSaveDialog(false)}>取消</Button>
+						<Button onClick={handleSave}>保存</Button>
+					</DialogFooter>
+				</DialogContent>
+			</Dialog>
 		</div>
 	);
 };

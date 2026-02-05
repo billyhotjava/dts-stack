@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260206-01" author="system">
+        <comment>创建保存的 SQL 查询表</comment>
+        <createTable tableName="saved_query">
+            <column name="id" type="${uuidType}">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="name" type="varchar(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="description" type="text"/>
+            <column name="sql_text" type="text">
+                <constraints nullable="false"/>
+            </column>
+            <column name="datasource_id" type="${uuidType}"/>
+            <column name="datasource_name" type="varchar(255)"/>
+            <column name="created_by" type="varchar(100)"/>
+            <column name="created_at" type="timestamp"/>
+            <column name="updated_at" type="timestamp"/>
+        </createTable>
+
+        <createIndex tableName="saved_query" indexName="idx_saved_query_created_by">
+            <column name="created_by"/>
+        </createIndex>
+
+        <createIndex tableName="saved_query" indexName="idx_saved_query_updated_at">
+            <column name="updated_at"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

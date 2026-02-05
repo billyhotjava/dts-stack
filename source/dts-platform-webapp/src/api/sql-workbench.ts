@@ -134,6 +134,46 @@ export const listTables = (datasourceId: string) =>
 export const listColumns = (datasourceId: string, schema: string, table: string) =>
 	api.get<ColumnInfo[]>({ url: `/sql/columns/${datasourceId}`, params: { schema, table } });
 
+// 保存的查询
+export type SavedQueryRequest = {
+	name: string;
+	description?: string;
+	sqlText: string;
+	datasourceId?: string;
+	datasourceName?: string;
+};
+
+export type SavedQueryResponse = {
+	id: string;
+	name: string;
+	description?: string;
+	sqlText: string;
+	datasourceId?: string;
+	datasourceName?: string;
+	createdBy: string;
+	createdAt: string;
+	updatedAt: string;
+};
+
+export const saveQuery = (payload: SavedQueryRequest) =>
+	api.post<SavedQueryResponse>({ url: "/sql/saved-queries", data: payload });
+
+export const updateSavedQuery = (id: string, payload: SavedQueryRequest) =>
+	api.put<SavedQueryResponse>({ url: `/sql/saved-queries/${id}`, data: payload });
+
+export const listSavedQueries = () =>
+	api.get<SavedQueryResponse[]>({ url: "/sql/saved-queries" });
+
+export const getSavedQuery = (id: string) =>
+	api.get<SavedQueryResponse>({ url: `/sql/saved-queries/${id}` });
+
+export const deleteSavedQuery = (id: string) =>
+	api.delete<boolean>({ url: `/sql/saved-queries/${id}` });
+
+// 审计日志
+export const auditCopy = (payload: { rowCount: number; columnCount: number; executionId?: string }) =>
+	api.post<boolean>({ url: "/sql/audit/copy", data: payload });
+
 export const validateSql = (payload: SqlValidateRequest) =>
 	api.post<SqlValidateResponse>({ url: "/sql/validate", data: payload });
 
