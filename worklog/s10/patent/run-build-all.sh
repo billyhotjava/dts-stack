@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-SQL_FILE="${ROOT_DIR}/worklog/s10/patent/99-build-all.sql"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
+SQL_FILE="${SQL_FILE:-${SCRIPT_DIR}/99-build-all.sql}"
 
 PG_HOST="${PG_HOST:-127.0.0.1}"
 PG_PORT="${PG_PORT:-5432}"
@@ -25,8 +26,13 @@ for arg in "$@"; do
 done
 
 if [[ ! -f "${SQL_FILE}" ]]; then
-  echo "SQL file not found: ${SQL_FILE}" >&2
-  exit 1
+  ALT_SQL="${ROOT_DIR}/worklog/s10/patent/99-build-all.sql"
+  if [[ -f "${ALT_SQL}" ]]; then
+    SQL_FILE="${ALT_SQL}"
+  else
+    echo "SQL file not found: ${SQL_FILE}" >&2
+    exit 1
+  fi
 fi
 
 if [[ -z "${PG_PASSWORD}" ]]; then
