@@ -16,6 +16,7 @@
 -- 字段说明：
 --   - stat_year: 申请年份
 --   - dept_name: 部门名称（空值归为"未知"）
+--   - dept_code: 部门编码
 --   - apply_cnt: 该年度该部门的申请数量
 -- ============================================================
 
@@ -24,8 +25,9 @@
 SELECT
   application_year                              AS stat_year,
   COALESCE(NULLIF(dept_name, ''), '未知')       AS dept_name,
+  NULLIF(dept_code, '')                         AS dept_code,
   COUNT(*)                                      AS apply_cnt
 
 FROM {{ ref('dwd_patent') }}
 WHERE application_year IS NOT NULL
-GROUP BY application_year, COALESCE(NULLIF(dept_name, ''), '未知')
+GROUP BY application_year, COALESCE(NULLIF(dept_name, ''), '未知'), NULLIF(dept_code, '')

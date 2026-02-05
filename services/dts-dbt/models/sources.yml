@@ -1,0 +1,9 @@
+version: 2
+
+sources:
+  - name: public
+    schema: public
+    description: "ODS 层源表"
+    tables:
+      - name: ods_patent_info
+        description: "专利信息ODS源表"

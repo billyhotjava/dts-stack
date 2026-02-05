@@ -88,6 +88,8 @@ export type SqlSubmitResponse = {
 	executionId: string;
 	trinoQueryId?: string | null;
 	queued: boolean;
+	resultSetId?: string | null;
+	preview?: SqlResultPreview | null;
 };
 
 export type SqlStatusResponse = {
@@ -100,6 +102,14 @@ export type SqlStatusResponse = {
 	errorMessage?: string;
 	resultSetId?: string;
 	plan?: SqlPlanSnippet | null;
+	preview?: SqlResultPreview | null;
+};
+
+export type SqlResultPreview = {
+	headers: string[];
+	rows: Array<Record<string, any>>;
+	rowCount?: number;
+	truncated?: boolean;
 };
 
 export const fetchCatalogTree = (payload: SqlCatalogRequest = {}) =>

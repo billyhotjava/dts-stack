@@ -69,9 +69,7 @@ public class DbtDagService {
         if (normalized.startsWith("tag:")) {
             return trimmed.substring(4).trim();
         }
-        if (normalized.startsWith("tab:")) {
-            return trimmed.substring(4).trim();
-        }
+        // 不再支持 tab: 这个 typo，只支持标准的 tag:
         return null;
     }
 
@@ -218,6 +216,13 @@ public class DbtDagService {
         String selector = "tag:" + tagValue;
         String tagLabel = sanitizeTag(sourceKey, "dbt");
         String layerTag = sanitizeTag(layerGroup, "dwh");
+
+        // 从配置读取 Docker 网络和权限设置
+        String dockerNetwork = airflowProperties.getDockerNetwork();
+        boolean dockerPrivileged = airflowProperties.isDockerPrivileged();
+        String networkMode = StringUtils.hasText(dockerNetwork) ? dockerNetwork : "dts-core";
+        String privilegedStr = dockerPrivileged ? "True" : "False";
+
         return """
             from __future__ import annotations
 
@@ -229,7 +234,7 @@ public class DbtDagService {
             from airflow.providers.docker.operators.docker import DockerOperator
             from docker.types import Mount
 
-            DBT_IMAGE = os.getenv("DBT_IMAGE", "ghcr.io/dbt-labs/dbt-core:1.11.2")
+            DBT_IMAGE = os.getenv("DBT_IMAGE", "dts-dbt:1.10.0")
             DBT_PROJECT_DIR = os.getenv("DBT_PROJECT_DIR", "%s")
             DBT_PROFILES_DIR = os.getenv("DBT_PROFILES_DIR", "%s")
             DBT_PROJECT_MOUNT = os.getenv("DBT_PROJECT_MOUNT", "/opt/dbt")
@@ -258,16 +263,16 @@ public class DbtDagService {
                     api_version="auto",
                     auto_remove=True,
                     docker_url="unix://var/run/docker.sock",
-                    network_mode="bridge",
+                    network_mode="%s",
                     command=build_command(),
                     mount_tmp_dir=False,
                     mounts=[
                         Mount(source=DBT_PROJECT_DIR, target=DBT_PROJECT_MOUNT, type="bind"),
                         Mount(source=DBT_PROFILES_DIR, target=DBT_PROFILES_MOUNT, type="bind"),
                     ],
-                    environment={},
+                    environment={"DBT_USE_EXPERIMENTAL_PARSER": "false"},
                     tty=True,
-                    privileged=True,
+                    privileged=%s,
                 )
 
                 sync_models = BashOperator(
@@ -283,7 +288,7 @@ public class DbtDagService {
                 )
 
                 dbt_run >> sync_models
-            """.formatted(fallbackProject, fallbackProfiles, selector, fallbackTarget, dagId, layerTag, tagLabel);
+            """.formatted(fallbackProject, fallbackProfiles, selector, fallbackTarget, dagId, layerTag, tagLabel, networkMode, privilegedStr);
     }
 
     private Map<String, Object> parseProps(String raw) {

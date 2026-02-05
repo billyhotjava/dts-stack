@@ -24,6 +24,7 @@
 --   - patent_no:         专利号
 --   - patent_title_cn:   专利名称
 --   - dept_name:         所属部门
+--   - dept_code:         部门编码
 --   - patent_status_std: 当前标准化状态
 --   - overdue_days:      超期天数（当前日期 - 申请日期）
 --
@@ -37,6 +38,7 @@ SELECT
   patent_no,
   patent_title_cn,
   dept_name,
+  dept_code,
   patent_status_std,
   (current_date - application_date)::int AS overdue_days
 

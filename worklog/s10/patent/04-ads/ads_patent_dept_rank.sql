@@ -20,6 +20,7 @@
 -- 字段说明：
 --   - stat_year: 当年年份
 --   - dept_name: 部门名称
+--   - dept_code: 部门编码
 --   - apply_cnt: 申请数量
 --   - rank_no:   排名序号（1 = 最多）
 -- ============================================================
@@ -29,6 +30,7 @@
 SELECT
   stat_year,
   dept_name,
+  dept_code,
   apply_cnt,
   ROW_NUMBER() OVER (ORDER BY apply_cnt DESC, dept_name) AS rank_no
 

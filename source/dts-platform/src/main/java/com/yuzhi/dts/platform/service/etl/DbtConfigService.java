@@ -51,9 +51,10 @@ public class DbtConfigService {
         }
         try {
             Path path = configPath();
+            DbtWorkspaceConfig config;
             if (!Files.exists(path)) {
                 Files.createDirectories(path.getParent());
-                DbtWorkspaceConfig config = new DbtWorkspaceConfig(
+                config = new DbtWorkspaceConfig(
                     true,
                     properties.getProjectDir(),
                     properties.getProfilesDir(),
@@ -65,7 +66,11 @@ public class DbtConfigService {
                     Collections.emptyMap()
                 );
                 writeConfig(config);
+            } else {
+                config = readConfig();
             }
+            // 确保 dbt 宏文件存在
+            ensureDbtMacros(config);
         } catch (IOException ex) {
             LOG.warn("Failed to initialize dbt config file: {}", ex.getMessage());
         }
@@ -103,8 +108,42 @@ public class DbtConfigService {
         }
         writeConfig(config);
         DbtProfileStatus profileStatus = buildProfile(config);
+        ensureDbtMacros(config);
         InfraDataSourceDto target = resolveTarget(config.targetDataSourceId());
         return new DbtConfigView(true, config, profileStatus, target, workspaceStatus);
+    }
+
+    /**
+     * 确保 dbt 项目目录下存在必要的宏文件。
+     * macros/get_custom_schema.sql 用于覆盖 dbt 默认的 schema 拼接行为，
+     * 直接使用用户指定的 schema 名称，避免生成 public_public 这样的结果。
+     */
+    private void ensureDbtMacros(DbtWorkspaceConfig config) {
+        if (config == null || !StringUtils.hasText(config.projectDir())) {
+            return;
+        }
+        try {
+            Path macrosDir = Path.of(config.projectDir(), "macros");
+            Files.createDirectories(macrosDir);
+            Path macroFile = macrosDir.resolve("get_custom_schema.sql");
+            String macroContent = """
+                {% macro generate_schema_name(custom_schema_name, node) -%}
+                    {%- if custom_schema_name is none -%}
+                        {{ target.schema }}
+                    {%- else -%}
+                        {{ custom_schema_name | trim }}
+                    {%- endif -%}
+                {%- endmacro %}
+                """;
+            // 只在文件不存在时创建，避免覆盖用户自定义的宏
+            if (!Files.exists(macroFile)) {
+                Files.writeString(macroFile, macroContent, StandardCharsets.UTF_8,
+                    StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+                LOG.info("[dbt] created macro file: {}", macroFile);
+            }
+        } catch (IOException ex) {
+            LOG.warn("[dbt] failed to create macro file: {}", ex.getMessage());
+        }
     }
 
     private DbtProfileStatus buildProfile(DbtWorkspaceConfig config) {

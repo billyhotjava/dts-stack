@@ -25,6 +25,7 @@
 --   - patent_status_std: 标准化状态
 --   - patent_status_raw: 原始状态（便于用户对照）
 --   - dept_name:         所属部门
+--   - dept_code:         部门编码
 --   - assignee_name:     申请人
 -- ============================================================
 
@@ -39,6 +40,7 @@ SELECT
   patent_status_std,
   patent_status_raw,
   dept_name,
+  dept_code,
   assignee_name
 
 FROM {{ ref('dwd_patent') }}

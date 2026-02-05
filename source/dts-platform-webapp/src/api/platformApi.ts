@@ -38,6 +38,10 @@ export const createSqlModel = (data: any) => api.post({ url: "/modeling/sql-mode
 export const updateSqlModel = (id: string, data: any) => api.put({ url: `/modeling/sql-models/${id}`, data });
 export const deleteSqlModel = (id: string) => api.delete({ url: `/modeling/sql-models/${id}` });
 export const importSqlModel = (data: FormData) => api.post({ url: "/modeling/sql-models/import", data });
+export const listDbtSources = (params?: { keyword?: string }) =>
+	api.get({ url: "/modeling/sql-models/dbt/sources", params });
+export const listDbtRefs = (params?: { keyword?: string; layer?: string }) =>
+	api.get({ url: "/modeling/sql-models/dbt/refs", params });
 export const listAirflowJobs = (limit = 50) => api.get({ url: "/etl/airflow/jobs", params: { limit } });
 export const listAirflowJobRuns = (dagId: string, limit = 20) =>
 	api.get({ url: `/etl/airflow/jobs/${dagId}/runs`, params: { limit } });

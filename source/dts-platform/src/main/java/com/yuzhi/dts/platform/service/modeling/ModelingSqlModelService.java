@@ -585,6 +585,10 @@ public class ModelingSqlModelService {
 
     private String buildSqlContent(ModelingSqlModel model, String sourceTag) {
         String body = trimToEmpty(model.getSqlText());
+        // 如果用户的 SQL 已经包含 {{ config，不再自动添加
+        if (body.contains("{{ config") || body.contains("{{config")) {
+            return body + "\n";
+        }
         String configLine = buildConfigLine(model, sourceTag);
         if (!StringUtils.hasText(configLine)) {
             return body + "\n";
@@ -600,9 +604,8 @@ public class ModelingSqlModelService {
         if (StringUtils.hasText(model.getAlias())) {
             configs.add("alias='" + model.getAlias() + "'");
         }
-        if (StringUtils.hasText(model.getSchemaName())) {
-            configs.add("schema='" + model.getSchemaName() + "'");
-        }
+        // 不自动添加 schema 参数，让 dbt 使用 profiles.yml 里配置的默认 schema
+        // 避免生成 public_public 这样的拼接 schema 名
         String layerTag = sanitizeTag(normalizeLayer(model.getLayer()), null);
         List<String> tags = splitTags(model.getTags(), sourceTag, layerTag);
         if (!tags.isEmpty()) {

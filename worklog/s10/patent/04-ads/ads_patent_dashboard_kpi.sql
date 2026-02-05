@@ -13,7 +13,7 @@
 --   - 去年申请总量
 --   - 同比增长率
 --   - 今年受理数
---   - 今年授权数
+--   - 今年授权数（授权年口径）
 --   - 今年授权率
 --
 -- 为什么单独建 ADS 表：
@@ -23,6 +23,7 @@
 --
 -- 数据源：dws_patent_year_kpi
 -- 关联方式：当年 LEFT JOIN 上一年，计算同比
+-- 授权数来源：dws_patent_year_grant（授权年口径）
 -- ============================================================
 
 {{ config(materialized='table', alias='ads_patent_dashboard_kpi', schema='public', tags=['ads', 'patent']) }}
@@ -45,9 +46,10 @@ SELECT
   END                                              AS yoy_growth_rate,
 
   COALESCE(k1.accepted_cnt, 0)                    AS this_year_accepted_cnt,
-  COALESCE(k1.granted_cnt_app, 0)                 AS this_year_granted_cnt,
+  COALESCE(g1.granted_cnt, 0)                     AS this_year_granted_cnt,
   COALESCE(k1.grant_rate_app, 0)                  AS this_year_grant_rate
 
 FROM this
 LEFT JOIN {{ ref('dws_patent_year_kpi') }} k1 ON k1.stat_year = this.yr
 LEFT JOIN {{ ref('dws_patent_year_kpi') }} k0 ON k0.stat_year = this.yr - 1
+LEFT JOIN {{ ref('dws_patent_year_grant') }} g1 ON g1.stat_year = this.yr

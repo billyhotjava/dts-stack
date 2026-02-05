@@ -12,5 +12,6 @@ public record SqlStatusResponse(
     Integer queuePosition,
     String errorMessage,
     UUID resultSetId,
-    PlanSnippet plan
+    PlanSnippet plan,
+    SqlResultPreview preview
 ) {}

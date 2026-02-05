@@ -16,18 +16,20 @@
 | patent_title_cn | varchar(500) | 专利中文名称 |
 | patent_type | varchar(500) | 专利类型（发明/实用新型/外观设计） |
 | patent_no | varchar(500) | 专利号 |
-| application_date | varchar(500) | 申请日期（字符串，格式不统一） |
+| application_date | varchar(500) | 申请日期（字符串，格式不统一；默认可由受理日映射） |
+| accept_date | varchar(500) | 受理日期（字符串，可作为申请日期兜底） |
 | grant_date | varchar(500) | 授权日期（字符串） |
 | first_publication_date | varchar(500) | 首次公开日期（字符串） |
 | assignee_name | varchar(500) | 申请人/权利人 |
 | inventor_names | varchar(500) | 发明人（可能多人） |
 | dept_name | varchar(500) | 所属部门 |
+| dept_code | varchar(500) | 所属部门编码 |
 | agent_org_name | varchar(500) | 代理机构 |
-| state | varchar(500) | 专利状态（在审/受理/已公开/已授权/失效/无效等） |
+| state | varchar(500) | 专利状态（受理/初审/公布/实审/授权/失效/无效等） |
 
 **数据质量问题**：
 - 日期字段为字符串，格式混杂（YYYY-MM-DD、YYYY/MM/DD、YYYY.MM.DD、YYYYMMDD）
-- 状态字段为自由文本，需要标准化映射
+- 状态字段为自由文本，需要标准化映射（受理/初审/实审/公布/授权…）
 - 专利号可能为空（手动录入数据）
 - 所有字段均为 varchar(500)，无类型约束
 
@@ -94,17 +96,18 @@ ods_patent_info (source)
 |---|---|---|---|---|---|
 | 1 | dim_patent_status | DIM | table | 专利状态维度映射 | 01-dim/ |
 | 2 | dwd_patent | DWD | table | 专利明细宽表 | 02-dwd/ |
-| 3 | dws_patent_year_kpi | DWS | table | 年度核心指标 | 03-dws/ |
-| 4 | dws_patent_year_type | DWS | table | 年度-类型分布 | 03-dws/ |
-| 5 | dws_patent_month_trend | DWS | table | 月度趋势 | 03-dws/ |
-| 6 | dws_patent_year_dept | DWS | table | 年度-部门分布 | 03-dws/ |
-| 7 | ads_patent_dashboard_kpi | ADS | table | 仪表盘核心 KPI | 04-ads/ |
-| 8 | ads_patent_type_share | ADS | table | 类型占比 | 04-ads/ |
-| 9 | ads_patent_month_trend | ADS | table | 当年月度趋势 | 04-ads/ |
-| 10 | ads_patent_dept_rank | ADS | table | 部门排名 TOP20 | 04-ads/ |
-| 11 | ads_patent_recent_grant | ADS | table | 近 30 天授权列表 | 04-ads/ |
-| 12 | ads_patent_detail_year | ADS | table | 当年专利明细 | 04-ads/ |
-| 13 | ads_patent_overdue_list | ADS | table | 超期未授权预警 | 04-ads/ |
+| 3 | dws_patent_year_kpi | DWS | table | 年度核心指标（申请年口径） | 03-dws/ |
+| 4 | dws_patent_year_grant | DWS | table | 年度授权数量（授权年口径） | 03-dws/ |
+| 5 | dws_patent_year_type | DWS | table | 年度-类型分布 | 03-dws/ |
+| 6 | dws_patent_month_trend | DWS | table | 月度趋势 | 03-dws/ |
+| 7 | dws_patent_year_dept | DWS | table | 年度-部门分布 | 03-dws/ |
+| 8 | ads_patent_dashboard_kpi | ADS | table | 仪表盘核心 KPI | 04-ads/ |
+| 9 | ads_patent_type_share | ADS | table | 类型占比 | 04-ads/ |
+| 10 | ads_patent_month_trend | ADS | table | 当年月度趋势 | 04-ads/ |
+| 11 | ads_patent_dept_rank | ADS | table | 部门排名 TOP20 | 04-ads/ |
+| 12 | ads_patent_recent_grant | ADS | table | 近 30 天授权列表 | 04-ads/ |
+| 13 | ads_patent_detail_year | ADS | table | 当年专利明细 | 04-ads/ |
+| 14 | ads_patent_overdue_list | ADS | table | 超期未授权预警 | 04-ads/ |
 
 ## 6. 前置依赖
 

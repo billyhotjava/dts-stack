@@ -3,6 +3,7 @@ import type { ChangeEvent, ReactElement } from "react";
 import { toast } from "sonner";
 import type {
 	SqlCatalogNode,
+	SqlResultPreview,
 	SqlStatusResponse,
 	SqlValidateResponse,
 } from "@/api/sql-workbench";
@@ -126,6 +127,7 @@ export const SqlWorkbenchExperimental = () => {
 
 	const validationSummary = useMemo(() => summarizeValidation(validation), [validation]);
 	const executionSummary = useMemo(() => statusLabel(execution), [execution]);
+	const preview: SqlResultPreview | null | undefined = execution?.preview;
 
 	return (
 		<div className="space-y-4">
@@ -233,17 +235,53 @@ export const SqlWorkbenchExperimental = () => {
 				<CardHeader>
 					<CardTitle className="text-base">执行结果</CardTitle>
 				</CardHeader>
-				<CardContent className="text-sm text-muted-foreground space-y-2">
+				<CardContent className="space-y-3">
 					{execution ? (
-						<div className="space-y-1">
-							<p>状态：{execution.status}</p>
-							{execution.rows != null && <p>行数：{execution.rows}</p>}
-							{execution.bytes != null && <p>字节：{execution.bytes}</p>}
-							{execution.queuePosition != null && <p>队列位置：{execution.queuePosition}</p>}
+						<div className="space-y-2 text-sm">
+							<div className="flex flex-wrap gap-4 text-muted-foreground">
+								<span>状态：{execution.status}</span>
+								{execution.rows != null && <span>行数：{execution.rows}</span>}
+								{execution.bytes != null && <span>字节：{execution.bytes}</span>}
+								{execution.queuePosition != null && <span>队列位置：{execution.queuePosition}</span>}
+							</div>
 							{execution.errorMessage && <p className="text-destructive">错误：{execution.errorMessage}</p>}
+							{preview?.headers?.length ? (
+								<div className="border rounded-md">
+									<div className="flex items-center justify-between border-b px-3 py-2 text-xs text-muted-foreground">
+										<span>结果预览（最多 100 行）</span>
+										{preview.truncated && <span>已截断显示</span>}
+									</div>
+									<ScrollArea className="h-64">
+										<table className="min-w-full text-xs">
+											<thead className="sticky top-0 bg-muted/50">
+												<tr>
+													{preview.headers.map((header) => (
+														<th key={header} className="px-3 py-2 text-left font-medium text-text-primary">
+															{header}
+														</th>
+													))}
+												</tr>
+											</thead>
+											<tbody>
+												{preview.rows?.map((row, idx) => (
+													<tr key={`row-${idx}`} className="border-t">
+														{preview.headers.map((header) => (
+															<td key={`${idx}-${header}`} className="px-3 py-2 align-top text-muted-foreground">
+																{row?.[header] ?? ""}
+															</td>
+														))}
+													</tr>
+												))}
+											</tbody>
+										</table>
+									</ScrollArea>
+								</div>
+							) : (
+								<p className="text-muted-foreground">暂无可展示的结果</p>
+							)}
 						</div>
 					) : (
-						<p>尚未执行查询</p>
+						<p className="text-sm text-muted-foreground">尚未执行查询</p>
 					)}
 				</CardContent>
 			</Card>

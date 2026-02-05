@@ -42,8 +42,12 @@ SELECT
 FROM (VALUES
   ('在审',   'accepted',  true,  false, '在审/审查中'),
   ('受理',   'accepted',  true,  false, '受理'),
+  ('初审',   'accepted',  true,  false, '初审'),
+  ('实审',   'accepted',  true,  false, '实审'),
   ('已公开', 'published', false, false, '已公开/公示'),
+  ('公布',   'published', false, false, '公布'),
   ('已授权', 'granted',   false, true,  '已授权'),
+  ('授权',   'granted',   false, true,  '授权'),
   ('失效',   'invalid',   false, false, '失效/终止'),
   ('无效',   'invalid',   false, false, '无效/宣告无效')
 ) AS t(status_code, status_std, is_accepted, is_granted, remark)

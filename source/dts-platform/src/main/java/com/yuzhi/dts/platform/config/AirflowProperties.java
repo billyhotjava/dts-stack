@@ -11,6 +11,8 @@ public class AirflowProperties {
     private String password;
     private String dagId = "dbt_load";
     private String dagsDir;
+    private String dockerNetwork = "dts-core";
+    private boolean dockerPrivileged = true;
 
     public boolean isEnabled() {
         return enabled;
@@ -58,5 +60,21 @@ public class AirflowProperties {
 
     public void setDagsDir(String dagsDir) {
         this.dagsDir = dagsDir;
+    }
+
+    public String getDockerNetwork() {
+        return dockerNetwork;
+    }
+
+    public void setDockerNetwork(String dockerNetwork) {
+        this.dockerNetwork = dockerNetwork;
+    }
+
+    public boolean isDockerPrivileged() {
+        return dockerPrivileged;
+    }
+
+    public void setDockerPrivileged(boolean dockerPrivileged) {
+        this.dockerPrivileged = dockerPrivileged;
     }
 }

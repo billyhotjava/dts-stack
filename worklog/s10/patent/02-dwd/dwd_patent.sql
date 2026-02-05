@@ -33,11 +33,13 @@
 -- is_accepted            : 是否已受理
 -- is_granted             : 是否已授权
 -- application_date       : 申请日期 (date)
+-- accept_date            : 受理日期 (date)
 -- grant_date             : 授权日期 (date)
 -- first_publication_date : 首次公开日期 (date)
 -- assignee_name          : 申请人/权利人
 -- agent_org_name         : 代理机构
 -- dept_name              : 所属部门
+-- dept_code              : 所属部门编码
 -- inventor_names         : 发明人
 -- application_year       : 申请年份 (int)，从 application_date 提取
 -- application_month      : 申请月份 (YYYY-MM)，用于月度趋势
@@ -73,7 +75,10 @@ SELECT
   COALESCE(s.is_granted, false)                 AS is_granted,
 
   -- ---- 日期清洗（字符串 → date）----
-  parse_date_safe(o.application_date)            AS application_date,
+  parse_date_safe(
+    COALESCE(NULLIF(btrim(o.application_date), ''), NULLIF(btrim(o.accept_date), ''))
+  ) AS application_date,
+  parse_date_safe(NULLIF(btrim(o.accept_date), '')) AS accept_date,
   parse_date_safe(o.grant_date)                  AS grant_date,
   parse_date_safe(o.first_publication_date)       AS first_publication_date,
 
@@ -81,19 +86,27 @@ SELECT
   NULLIF(btrim(o.assignee_name), '')             AS assignee_name,
   NULLIF(btrim(o.agent_org_name), '')            AS agent_org_name,
   NULLIF(btrim(o.dept_name), '')                 AS dept_name,
+  NULLIF(btrim(o.dept_code), '')                 AS dept_code,
   NULLIF(btrim(o.inventor_names), '')            AS inventor_names,
 
   -- ---- 衍生时间维度 ----
-  EXTRACT(YEAR FROM parse_date_safe(o.application_date))::int   AS application_year,
-  to_char(parse_date_safe(o.application_date), 'YYYY-MM')       AS application_month,
+  EXTRACT(YEAR FROM parse_date_safe(
+    COALESCE(NULLIF(btrim(o.application_date), ''), NULLIF(btrim(o.accept_date), ''))
+  ))::int AS application_year,
+  to_char(
+    parse_date_safe(COALESCE(NULLIF(btrim(o.application_date), ''), NULLIF(btrim(o.accept_date), ''))),
+    'YYYY-MM'
+  ) AS application_month,
   EXTRACT(YEAR FROM parse_date_safe(o.grant_date))::int          AS grant_year,
   to_char(parse_date_safe(o.grant_date), 'YYYY-MM')              AS grant_month,
 
   -- ---- 审批效率 ----
   CASE
-    WHEN parse_date_safe(o.application_date) IS NOT NULL
+    WHEN parse_date_safe(COALESCE(NULLIF(btrim(o.application_date), ''), NULLIF(btrim(o.accept_date), ''))) IS NOT NULL
      AND parse_date_safe(o.grant_date) IS NOT NULL
-    THEN (parse_date_safe(o.grant_date) - parse_date_safe(o.application_date))::int
+    THEN (parse_date_safe(o.grant_date) - parse_date_safe(
+      COALESCE(NULLIF(btrim(o.application_date), ''), NULLIF(btrim(o.accept_date), ''))
+    ))::int
   END AS days_to_grant,
 
   -- ---- ETL 标记 ----

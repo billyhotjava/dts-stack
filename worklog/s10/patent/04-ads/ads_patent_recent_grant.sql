@@ -19,6 +19,7 @@
 --   - patent_title_cn: 专利名称
 --   - assignee_name:   申请人
 --   - dept_name:       所属部门
+--   - dept_code:       部门编码
 --   - agent_org_name:  代理机构
 --
 -- 限制 200 条，避免数据量过大
@@ -32,6 +33,7 @@ SELECT
   patent_title_cn,
   assignee_name,
   dept_name,
+  dept_code,
   agent_org_name
 
 FROM {{ ref('dwd_patent') }}

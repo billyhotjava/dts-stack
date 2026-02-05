@@ -5,7 +5,9 @@ import {
 	Badge,
 	Button,
 	Card,
+	Divider,
 	Drawer,
+	Dropdown,
 	Form,
 	Input,
 	Modal,
@@ -20,6 +22,21 @@ import {
 	Typography,
 	Upload,
 } from "antd";
+import {
+	PlusOutlined,
+	EditOutlined,
+	DeleteOutlined,
+	SaveOutlined,
+	PlayCircleOutlined,
+	SettingOutlined,
+	DownOutlined,
+	ImportOutlined,
+	CodeOutlined,
+	TableOutlined,
+	LinkOutlined,
+	SyncOutlined,
+	RocketOutlined,
+} from "@ant-design/icons";
 import type { UploadFile } from "antd/es/upload/interface";
 import type { ColumnsType } from "antd/es/table";
 import { EmptyState } from "@/components/empty-state";
@@ -37,6 +54,8 @@ import {
 	getDbtSyncStatus,
 	triggerDbtRun,
 	updateDbtConfig,
+	listDbtSources,
+	listDbtRefs,
 } from "@/api/platformApi";
 import dataSourcesService, { type InfraDataSource } from "@/api/services/dataSourcesService";
 
@@ -177,6 +196,26 @@ type ModelColumn = {
 	status?: string;
 };
 
+type DbtSourceItem = {
+	schema?: string;
+	table?: string;
+	description?: string;
+	systemCode?: string;
+	bizCode?: string;
+	entityCode?: string;
+	sourceSnippet?: string;
+};
+
+type DbtRefItem = {
+	id?: string;
+	name?: string;
+	layer?: string;
+	description?: string;
+	tags?: string;
+	sourceSystem?: string;
+	refSnippet?: string;
+};
+
 const inferLayer = (name?: string) => {
 	const normalized = (name || "").toLowerCase();
 	if (normalized.startsWith("ods_")) return "ODS";
@@ -225,6 +264,13 @@ export default function SqlModelingPage() {
 	const [bottomTab, setBottomTab] = useState("preview");
 	const [keyword, setKeyword] = useState("");
 	const [activeModelKey, setActiveModelKey] = useState<string | null>(null);
+	const [dbtSources, setDbtSources] = useState<DbtSourceItem[]>([]);
+	const [dbtRefs, setDbtRefs] = useState<DbtRefItem[]>([]);
+	const [sourcesLoading, setSourcesLoading] = useState(false);
+	const [refsLoading, setRefsLoading] = useState(false);
+	const [snippetDrawerOpen, setSnippetDrawerOpen] = useState(false);
+	const [snippetTab, setSnippetTab] = useState<"source" | "ref">("source");
+	const [snippetKeyword, setSnippetKeyword] = useState("");
 	const [form] = Form.useForm();
 	const [runForm] = Form.useForm();
 	const [modelForm] = Form.useForm();
@@ -324,6 +370,32 @@ export default function SqlModelingPage() {
 		}
 	}, []);
 
+	const loadDbtSources = useCallback(async () => {
+		setSourcesLoading(true);
+		try {
+			const resp = (await listDbtSources()) as DbtSourceItem[];
+			setDbtSources(Array.isArray(resp) ? resp : []);
+		} catch (err: any) {
+			toast.error(err?.message || "加载源表列表失败");
+			setDbtSources([]);
+		} finally {
+			setSourcesLoading(false);
+		}
+	}, []);
+
+	const loadDbtRefs = useCallback(async () => {
+		setRefsLoading(true);
+		try {
+			const resp = (await listDbtRefs()) as DbtRefItem[];
+			setDbtRefs(Array.isArray(resp) ? resp : []);
+		} catch (err: any) {
+			toast.error(err?.message || "加载引用模型列表失败");
+			setDbtRefs([]);
+		} finally {
+			setRefsLoading(false);
+		}
+	}, []);
+
 	useEffect(() => {
 		void loadConfig();
 		void loadSyncStatus();
@@ -331,7 +403,9 @@ export default function SqlModelingPage() {
 		void loadRuns();
 		void loadSpaces();
 		void loadSources();
-	}, [loadConfig, loadModels, loadRuns, loadSpaces, loadSources, loadSyncStatus]);
+		void loadDbtSources();
+		void loadDbtRefs();
+	}, [loadConfig, loadModels, loadRuns, loadSpaces, loadSources, loadSyncStatus, loadDbtSources, loadDbtRefs]);
 
 	useEffect(() => {
 		if (spaces.length === 0) {
@@ -589,6 +663,43 @@ export default function SqlModelingPage() {
 		}
 	};
 
+	const insertSnippet = (snippet: string) => {
+		const newSql = sqlDraft + "\n" + snippet;
+		setSqlDraft(newSql);
+		setSnippetDrawerOpen(false);
+		toast.success("代码片段已插入");
+	};
+
+	const openSnippetDrawer = (tab: "source" | "ref") => {
+		setSnippetTab(tab);
+		setSnippetKeyword("");
+		setSnippetDrawerOpen(true);
+	};
+
+	const filteredDbtSources = useMemo(() => {
+		if (!snippetKeyword.trim()) return dbtSources;
+		const kw = snippetKeyword.toLowerCase();
+		return dbtSources.filter(
+			(s) =>
+				(s.table || "").toLowerCase().includes(kw) ||
+				(s.schema || "").toLowerCase().includes(kw) ||
+				(s.description || "").toLowerCase().includes(kw) ||
+				(s.systemCode || "").toLowerCase().includes(kw),
+		);
+	}, [dbtSources, snippetKeyword]);
+
+	const filteredDbtRefs = useMemo(() => {
+		if (!snippetKeyword.trim()) return dbtRefs;
+		const kw = snippetKeyword.toLowerCase();
+		return dbtRefs.filter(
+			(r) =>
+				(r.name || "").toLowerCase().includes(kw) ||
+				(r.layer || "").toLowerCase().includes(kw) ||
+				(r.description || "").toLowerCase().includes(kw) ||
+				(r.tags || "").toLowerCase().includes(kw),
+		);
+	}, [dbtRefs, snippetKeyword]);
+
 	const models = sqlModels || [];
 	const configEnabled = dbtConfig?.enabled !== false;
 	const profileStatus = dbtConfig?.profileStatus;
@@ -740,125 +851,147 @@ export default function SqlModelingPage() {
 		});
 	}, [spaces, activeSpaceKey, filteredModels, buildLayerNodes]);
 
+	// 模型操作下拉菜单
+	const modelMenuItems = [
+		{
+			key: "create",
+			icon: <PlusOutlined />,
+			label: "新建模型",
+			disabled: !workspaceOk,
+			onClick: openCreateModel,
+		},
+		{
+			key: "import",
+			icon: <ImportOutlined />,
+			label: "导入模型",
+			disabled: !workspaceOk,
+			onClick: openImportModel,
+		},
+		{
+			key: "edit",
+			icon: <EditOutlined />,
+			label: "编辑模型",
+			disabled: !activeModel || !workspaceOk,
+			onClick: openEditModel,
+		},
+		{ type: "divider" as const },
+		{
+			key: "delete",
+			icon: <DeleteOutlined />,
+			label: "删除模型",
+			disabled: !activeModel,
+			danger: true,
+			onClick: removeModel,
+		},
+	];
+
+	// 插入代码下拉菜单
+	const insertMenuItems = [
+		{
+			key: "source",
+			icon: <TableOutlined />,
+			label: "插入源表 (ODS)",
+			disabled: !activeModel,
+			onClick: () => openSnippetDrawer("source"),
+		},
+		{
+			key: "ref",
+			icon: <LinkOutlined />,
+			label: "插入模型引用",
+			disabled: !activeModel,
+			onClick: () => openSnippetDrawer("ref"),
+		},
+	];
+
 	return (
 		<div className="flex min-h-[calc(100vh-120px)] flex-col overflow-hidden rounded-xl border border-border bg-card shadow-sm">
-			<div className="flex h-16 items-center justify-between border-b border-border bg-card px-6">
-				<Space size="large">
-					<div className="text-lg font-bold text-blue-600">Data Studio</div>
-					<div className="rounded-md bg-muted px-3 py-1 text-xs font-semibold text-foreground">逻辑建模</div>
-					<Badge status={configEnabled ? "success" : "error"} text={configEnabled ? "dbt 已连接" : "dbt 未启用"} />
-				</Space>
-				<Space>
-					<Button onClick={openCreateModel} disabled={!workspaceOk}>
-						新建模型
+			{/* 顶部工具栏 */}
+			<div className="flex h-14 items-center justify-between border-b border-border bg-card px-4">
+				<div className="flex items-center gap-4">
+					<div className="flex items-center gap-2">
+						<span className="text-base font-semibold text-foreground">逻辑建模</span>
+						<Badge
+							status={configEnabled ? "success" : "error"}
+							text={
+								<span className="text-xs text-muted-foreground">
+									{configEnabled ? "dbt 已连接" : "dbt 未启用"}
+								</span>
+							}
+						/>
+					</div>
+					<Divider type="vertical" className="h-6" />
+					{/* 模型操作 */}
+					<Dropdown menu={{ items: modelMenuItems }} trigger={["click"]}>
+						<Button icon={<PlusOutlined />}>
+							模型 <DownOutlined className="text-xs" />
+						</Button>
+					</Dropdown>
+					{/* 保存按钮 */}
+					<Button
+						icon={<SaveOutlined />}
+						onClick={saveSqlDraft}
+						disabled={!activeModel || !sqlDirty || !workspaceOk}
+					>
+						保存
 					</Button>
-					<Button onClick={openImportModel} disabled={!workspaceOk}>
-						导入模型
-					</Button>
-					<Button onClick={openEditModel} disabled={!activeModel || !workspaceOk}>
-						编辑模型
-					</Button>
-					<Button onClick={saveSqlDraft} disabled={!activeModel || !sqlDirty || !workspaceOk}>
-						保存 SQL
-					</Button>
-					<Button danger onClick={removeModel} disabled={!activeModel}>
-						删除模型
-					</Button>
-					<Tooltip title="语法校验接口暂未接入">
+					{/* 插入代码 */}
+					<Dropdown menu={{ items: insertMenuItems }} trigger={["click"]}>
+						<Button icon={<CodeOutlined />} disabled={!activeModel}>
+							插入 <DownOutlined className="text-xs" />
+						</Button>
+					</Dropdown>
+				</div>
+				<div className="flex items-center gap-2">
+					{/* 同步按钮 */}
+					<Tooltip title="同步模型到资产目录">
 						<Button
-							onClick={() => {
-								toast.info("语法校验接口暂未接入");
-								setBottomTab("compile");
-							}}
-							disabled={!configEnabled || !activeModelKey}
+							icon={<SyncOutlined spin={syncingModels} />}
+							onClick={handleSyncModels}
+							loading={syncingModels}
+							disabled={!configEnabled || !workspaceOk}
 						>
-							语法校验
+							同步
 						</Button>
 					</Tooltip>
-					<Button onClick={() => setBottomTab("preview")}>运行预览</Button>
-					<Button type="primary" onClick={openRun} disabled={!configEnabled || !workspaceOk}>
+					{/* 提交上线 */}
+					<Button
+						type="primary"
+						icon={<RocketOutlined />}
+						onClick={openRun}
+						disabled={!configEnabled || !workspaceOk}
+					>
 						提交上线
 					</Button>
-					<Button onClick={() => setConfigOpen(true)}>工作区配置</Button>
-				</Space>
+					{/* 配置按钮 */}
+					<Tooltip title="工作区配置">
+						<Button icon={<SettingOutlined />} onClick={() => setConfigOpen(true)} />
+					</Tooltip>
+				</div>
 			</div>
-			<Card
-				className="mx-6 mt-4 border border-border shadow-sm"
-				title={<span className="text-sm font-semibold text-foreground">dbt 资产同步状态</span>}
-				extra={
-					<Button size="small" onClick={handleSyncModels} loading={syncingModels} disabled={!configEnabled || !workspaceOk}>
-						立即同步
-					</Button>
-				}
-			>
-				{dbtSyncStatus ? (
-					<div className="grid gap-3 text-xs text-foreground">
-						<div className="grid gap-3 md:grid-cols-2">
-							<div className="rounded border border-border bg-muted/50 px-3 py-2">
-								<div className="flex items-center gap-2">
-									<span className="font-medium text-foreground">manifest</span>
-									{syncTag(dbtSyncStatus.manifest?.synced)}
-									<span>同步时间：{formatDateTime(dbtSyncStatus.manifest?.lastSyncAt)}</span>
-								</div>
-								<div className="mt-1 text-[11px] text-muted-foreground">
-									文件时间：{formatMillis(dbtSyncStatus.manifest?.lastModifiedAt)}
-									{dbtSyncStatus.manifest?.message ? ` · ${dbtSyncStatus.manifest.message}` : ""}
-								</div>
-							</div>
-							<div className="rounded border border-border bg-muted/50 px-3 py-2">
-								<div className="flex items-center gap-2">
-									<span className="font-medium text-foreground">run_results</span>
-									{syncTag(dbtSyncStatus.runResults?.synced)}
-									<span>同步时间：{formatDateTime(dbtSyncStatus.runResults?.lastSyncAt)}</span>
-								</div>
-								<div className="mt-1 text-[11px] text-muted-foreground">
-									文件时间：{formatMillis(dbtSyncStatus.runResults?.lastModifiedAt)}
-									{dbtSyncStatus.runResults?.message ? ` · ${dbtSyncStatus.runResults.message}` : ""}
-								</div>
-							</div>
-						</div>
-						{dbtSyncStatus.stats ? (
-							<div className="rounded border border-border bg-muted/50 px-3 py-2">
-								<div className="flex items-center justify-between">
-									<span className="font-medium text-foreground">资产同步统计</span>
-									<span className="text-[11px] text-muted-foreground">
-										同步时间：{formatDateTime(dbtSyncStatus.stats.lastSyncAt)}
-										{dbtSyncStatus.stats.message ? ` · ${dbtSyncStatus.stats.message}` : ""}
-									</span>
-								</div>
-								<div className="mt-2 grid gap-2 md:grid-cols-3">
-									<div className="flex items-center justify-between">
-										<span>新增模型</span>
-										<span className="font-semibold">{dbtSyncStatus.stats.datasetsCreated ?? 0}</span>
-									</div>
-									<div className="flex items-center justify-between">
-										<span>更新模型</span>
-										<span className="font-semibold">{dbtSyncStatus.stats.datasetsUpdated ?? 0}</span>
-									</div>
-									<div className="flex items-center justify-between">
-										<span>ODS 更新</span>
-										<span className="font-semibold">{dbtSyncStatus.stats.odsUpdated ?? 0}</span>
-									</div>
-									<div className="flex items-center justify-between">
-										<span>字段同步</span>
-										<span className="font-semibold">{dbtSyncStatus.stats.columnsUpdated ?? 0}</span>
-									</div>
-									<div className="flex items-center justify-between">
-										<span>血缘新增</span>
-										<span className="font-semibold">{dbtSyncStatus.stats.lineageCreated ?? 0}</span>
-									</div>
-									<div className="flex items-center justify-between">
-										<span>血缘移除</span>
-										<span className="font-semibold">{dbtSyncStatus.stats.lineageRemoved ?? 0}</span>
-									</div>
-								</div>
-							</div>
-						) : null}
+			{/* 紧凑的同步状态栏 */}
+			{dbtSyncStatus && (
+				<div className="flex items-center justify-between border-b border-border bg-muted/30 px-4 py-2 text-xs">
+					<div className="flex items-center gap-4">
+						<span className="text-muted-foreground">同步状态:</span>
+						<span className="flex items-center gap-1">
+							manifest {syncTag(dbtSyncStatus.manifest?.synced)}
+						</span>
+						<span className="flex items-center gap-1">
+							run_results {syncTag(dbtSyncStatus.runResults?.synced)}
+						</span>
+						{dbtSyncStatus.stats && (
+							<span className="text-muted-foreground">
+								| 模型 +{dbtSyncStatus.stats.datasetsCreated ?? 0}/~{dbtSyncStatus.stats.datasetsUpdated ?? 0}
+								, 字段 {dbtSyncStatus.stats.columnsUpdated ?? 0}
+								, 血缘 +{dbtSyncStatus.stats.lineageCreated ?? 0}/-{dbtSyncStatus.stats.lineageRemoved ?? 0}
+							</span>
+						)}
 					</div>
-				) : (
-					<div className="text-xs text-muted-foreground">未获取同步状态</div>
-				)}
-			</Card>
+					<span className="text-muted-foreground">
+						上次同步: {formatDateTime(dbtSyncStatus.stats?.lastSyncAt || dbtSyncStatus.manifest?.lastSyncAt)}
+					</span>
+				</div>
+			)}
 
 			<div className="flex flex-1 overflow-hidden">
 				<div className="w-64 border-r border-border bg-muted p-4">
@@ -914,22 +1047,19 @@ export default function SqlModelingPage() {
 				</div>
 
 				<div className="flex flex-1 flex-col">
-					<div className="flex items-center justify-between border-b border-border px-4 py-2">
-						<Space>
-							<Text strong>{activeModel?.name || "未选择模型"}</Text>
-							{layerTag(activeModel?.layer || (activeModel ? inferLayer(activeModel.name) : undefined))}
-							<Text type="secondary">{activeModel?.modelPath || "尚未定位模型路径"}</Text>
-						</Space>
-						<Space>
-							<Button size="small" onClick={handleSyncModels} loading={syncingModels} disabled={!workspaceOk}>
-								同步模型
-							</Button>
-							<Button size="small" onClick={loadModels} loading={modelsLoading}>
-								刷新模型
-							</Button>
-							<Button size="small" onClick={loadRuns} loading={runsLoading}>
-								刷新运行
-							</Button>
+					<div className="flex items-center justify-between border-b border-border bg-muted/20 px-4 py-1.5">
+						<div className="flex items-center gap-2">
+							<Text strong className="text-sm">{activeModel?.name || "未选择模型"}</Text>
+							{activeModel && layerTag(activeModel?.layer || inferLayer(activeModel.name))}
+							{activeModel?.modelPath && (
+								<Text type="secondary" className="text-xs">{activeModel.modelPath}</Text>
+							)}
+							{sqlDirty && <Tag color="orange" className="text-xs">未保存</Tag>}
+						</div>
+						<Space size="small">
+							<Tooltip title="刷新模型列表">
+								<Button size="small" icon={<SyncOutlined />} onClick={loadModels} loading={modelsLoading} />
+							</Tooltip>
 						</Space>
 					</div>
 
@@ -1012,74 +1142,121 @@ export default function SqlModelingPage() {
 					</div>
 				</div>
 
-				<div className="w-72 border-l border-border bg-card p-4">
-					<div className="mb-4 text-xs font-bold uppercase text-muted-foreground">项目与元数据</div>
-					<Card size="small" title="项目空间" className="mb-4">
-						{activeSpace ? (
-							<div className="space-y-1 text-xs text-muted-foreground">
-								<div>名称：{activeSpace.name || "-"}</div>
-								<div>业务域：{activeSpace.domain || "-"}</div>
-								<div>负责人：{activeSpace.owner || "-"}</div>
-								<div>状态：{activeSpace.status || "-"}</div>
-							</div>
-						) : (
-							<div className="text-xs text-muted-foreground">请选择项目空间。</div>
-						)}
-					</Card>
-					<Card size="small" title="模型信息" className="mb-4">
-						{activeModel ? (
-							<div className="space-y-1 text-xs text-muted-foreground">
-								<div>模型名称：{activeModel.name || "-"}</div>
-								<div>数据源：{activeModel.sourceDataSourceName || "-"}</div>
-								<div>来源系统：{activeModel.sourceSystem || "-"}</div>
-								<div>Schema：{activeModel.schemaName || "-"}</div>
-								<div>物化方式：{activeModel.materialized || "-"}</div>
-								<div>标签：{activeModel.tags || "-"}</div>
-								<div>DAG 选择器：{activeModel.dagSelector || "-"}</div>
-								<div>路径：{activeModel.modelPath || "-"}</div>
-							</div>
-						) : (
-							<div className="text-xs text-muted-foreground">请选择模型查看详情。</div>
-						)}
-					</Card>
-					<Card size="small" title="字段状态" className="mb-4">
-						{activeModel ? (
-							modelColumns.length ? (
-								<Table
-									rowKey={(row, idx) => `${row.name || "col"}-${idx}`}
-									size="small"
-									pagination={false}
-									columns={modelColumnColumns}
-									dataSource={modelColumns}
-									loading={columnsLoading}
-									scroll={{ y: 200 }}
-								/>
-							) : (
-								<div className="text-xs text-muted-foreground">暂无字段配置。</div>
-							)
-						) : (
-							<div className="text-xs text-muted-foreground">请选择模型查看字段。</div>
-						)}
-					</Card>
-					<Card size="small" title="工作区配置" className="mb-4">
-						<div className="text-xs text-muted-foreground">
-							<div>项目目录：{dbtConfig?.config?.projectDir || "未配置"}</div>
-							<div>Profiles：{dbtConfig?.config?.profilesDir || "未配置"}</div>
-							<div>Target：{dbtConfig?.config?.targetName || "未配置"}</div>
-						</div>
-						{workspaceStatus && !workspaceStatus.ok ? (
-							<div className="mt-2 rounded border border-destructive/30 bg-destructive/10 dark:bg-destructive/20 px-2 py-1 text-xs text-destructive">
-								{workspaceStatus.message || "dbt 工作区不可用"}
-							</div>
-						) : null}
-						<Button size="small" className="mt-3" onClick={() => setConfigOpen(true)}>
-							编辑配置
-						</Button>
-					</Card>
-					<div className="rounded border border-warning/30 bg-warning/10 dark:bg-warning/20 p-3">
-						<div className="text-xs font-bold text-warning-dark dark:text-warning-light">元数据校验</div>
-						<div className="mt-1 text-xs text-warning-dark dark:text-warning-light">质量与落标检查接口暂未接入。</div>
-					</div>
+				<div className="w-64 border-l border-border bg-card overflow-y-auto">
+					<Tabs
+						size="small"
+						className="px-2"
+						items={[
+							{
+								key: "model",
+								label: "模型",
+								children: (
+									<div className="px-2 pb-4">
+										{activeModel ? (
+											<div className="space-y-3">
+												<div className="space-y-1 text-xs">
+													<div className="flex justify-between">
+														<span className="text-muted-foreground">数据源</span>
+														<span className="font-medium">{activeModel.sourceDataSourceName || "-"}</span>
+													</div>
+													<div className="flex justify-between">
+														<span className="text-muted-foreground">来源系统</span>
+														<span className="font-medium">{activeModel.sourceSystem || "-"}</span>
+													</div>
+													<div className="flex justify-between">
+														<span className="text-muted-foreground">物化方式</span>
+														<span className="font-medium">{activeModel.materialized || "table"}</span>
+													</div>
+													<div className="flex justify-between">
+														<span className="text-muted-foreground">Schema</span>
+														<span className="font-medium">{activeModel.schemaName || "默认"}</span>
+													</div>
+													{activeModel.tags && (
+														<div className="flex justify-between">
+															<span className="text-muted-foreground">标签</span>
+															<span className="font-medium">{activeModel.tags}</span>
+														</div>
+													)}
+												</div>
+												<Divider className="my-2" />
+												<div className="text-xs font-medium text-muted-foreground mb-2">字段列表</div>
+												{modelColumns.length ? (
+													<Table
+														rowKey={(row, idx) => `${row.name || "col"}-${idx}`}
+														size="small"
+														pagination={false}
+														columns={modelColumnColumns}
+														dataSource={modelColumns}
+														loading={columnsLoading}
+														scroll={{ y: 180 }}
+													/>
+												) : (
+													<div className="text-xs text-muted-foreground">暂无字段配置</div>
+												)}
+											</div>
+										) : (
+											<div className="text-xs text-muted-foreground py-4 text-center">请选择模型</div>
+										)}
+									</div>
+								),
+							},
+							{
+								key: "project",
+								label: "项目",
+								children: (
+									<div className="px-2 pb-4 space-y-3">
+										{activeSpace ? (
+											<div className="space-y-1 text-xs">
+												<div className="flex justify-between">
+													<span className="text-muted-foreground">名称</span>
+													<span className="font-medium">{activeSpace.name || "-"}</span>
+												</div>
+												<div className="flex justify-between">
+													<span className="text-muted-foreground">业务域</span>
+													<span className="font-medium">{activeSpace.domain || "-"}</span>
+												</div>
+												<div className="flex justify-between">
+													<span className="text-muted-foreground">负责人</span>
+													<span className="font-medium">{activeSpace.owner || "-"}</span>
+												</div>
+												<div className="flex justify-between">
+													<span className="text-muted-foreground">状态</span>
+													<span className="font-medium">{activeSpace.status || "-"}</span>
+												</div>
+											</div>
+										) : (
+											<div className="text-xs text-muted-foreground py-4 text-center">请选择项目</div>
+										)}
+										<Divider className="my-2" />
+										<div className="text-xs font-medium text-muted-foreground mb-2">dbt 配置</div>
+										<div className="space-y-1 text-xs">
+											<div className="flex justify-between">
+												<span className="text-muted-foreground">项目目录</span>
+												<span className="font-medium truncate max-w-[120px]" title={dbtConfig?.config?.projectDir}>
+													{dbtConfig?.config?.projectDir ? "已配置" : "未配置"}
+												</span>
+											</div>
+											<div className="flex justify-between">
+												<span className="text-muted-foreground">Target</span>
+												<span className="font-medium">{dbtConfig?.config?.targetName || "未配置"}</span>
+											</div>
+											<div className="flex justify-between">
+												<span className="text-muted-foreground">状态</span>
+												<Tag color={workspaceStatus?.ok ? "green" : "red"} className="text-xs">
+													{workspaceStatus?.ok ? "可用" : "不可用"}
+												</Tag>
+											</div>
+										</div>
+										{workspaceStatus && !workspaceStatus.ok && (
+											<div className="mt-2 rounded border border-destructive/30 bg-destructive/10 px-2 py-1 text-xs text-destructive">
+												{workspaceStatus.message || "工作区不可用"}
+											</div>
+										)}
+									</div>
+								),
+							},
+						]}
+					/>
 				</div>
 			</div>
 
@@ -1180,6 +1357,10 @@ export default function SqlModelingPage() {
 				}
 			>
 				<Form layout="vertical" form={modelForm} disabled={modelSubmitting}>
+					{/* 基本信息 */}
+					<div className="mb-4 pb-2 border-b border-border">
+						<div className="text-sm font-semibold text-foreground">基本信息</div>
+					</div>
 					<div className="grid gap-4 md:grid-cols-2">
 						<Form.Item name="planId" label="项目空间" rules={[{ required: true, message: "请选择项目空间" }]}>
 							<Select
@@ -1187,78 +1368,137 @@ export default function SqlModelingPage() {
 								options={spaces.map((space) => ({ label: space.name || "未命名", value: space.id }))}
 							/>
 						</Form.Item>
-						<Form.Item name="layer" label="分层" rules={[{ required: true, message: "请选择分层" }]}>
+						<Form.Item
+							name="layer"
+							label="数仓分层"
+							rules={[{ required: true, message: "请选择分层" }]}
+							tooltip="选择模型所在的数仓层级，系统会自动添加对应标签"
+						>
 							<Select
 								placeholder="选择分层"
 								options={[
-									{ label: "ODS", value: "ODS" },
-									{ label: "DWD", value: "DWD" },
-									{ label: "DWS", value: "DWS" },
-									{ label: "ADS", value: "ADS" },
+									{ label: "ODS - 操作数据层（原始数据）", value: "ODS" },
+									{ label: "DWD - 明细数据层（清洗数据）", value: "DWD" },
+									{ label: "DWS - 汇总数据层（轻度聚合）", value: "DWS" },
+									{ label: "ADS - 应用数据层（报表数据）", value: "ADS" },
 								]}
 							/>
 						</Form.Item>
 					</div>
 					<div className="grid gap-4 md:grid-cols-2">
-						<Form.Item name="name" label="模型名称" rules={[{ required: true, message: "请输入模型名称" }]}>
+						<Form.Item
+							name="name"
+							label="模型名称"
+							rules={[{ required: true, message: "请输入模型名称" }]}
+							tooltip="建议以分层前缀开头，如 dwd_sales_order"
+						>
 							<Input placeholder="例如 dwd_sales_order" />
 						</Form.Item>
-						<Form.Item name="alias" label="物理表别名">
-							<Input placeholder="可选" />
+						<Form.Item
+							name="sourceDataSourceId"
+							label="来源数据源"
+							rules={[{ required: true, message: "请选择来源数据源" }]}
+							tooltip="选择数据来源系统，用于自动生成调度标签"
+						>
+							<Select
+								placeholder="选择来源数据源"
+								showSearch
+								optionFilterProp="label"
+								options={dataSources.map((ds) => ({
+									label: ds?.name || ds?.id,
+									value: ds?.id,
+								}))}
+							/>
 						</Form.Item>
 					</div>
-					<Form.Item
-						name="sourceDataSourceId"
-						label="来源数据源"
-						rules={[{ required: true, message: "请选择来源数据源" }]}
-					>
-						<Select
-							placeholder="选择来源数据源"
-							options={dataSources.map((ds) => ({
-								label: ds?.name || ds?.id,
-								value: ds?.id,
-							}))}
-						/>
+					<Form.Item name="description" label="模型说明">
+						<Input.TextArea rows={2} placeholder="描述模型的业务含义和用途" />
 					</Form.Item>
-					<div className="grid gap-4 md:grid-cols-2">
-						<Form.Item name="schemaName" label="目标 Schema">
-							<Input placeholder="例如 ods" />
-						</Form.Item>
-						<Form.Item name="materialized" label="物化方式">
+
+					{/* dbt 配置 */}
+					<div className="mb-4 mt-6 pb-2 border-b border-border">
+						<div className="text-sm font-semibold text-foreground">dbt 配置</div>
+						<div className="text-xs text-muted-foreground mt-1">
+							以下配置会自动生成 dbt 的 config 块，您无需手动编写
+						</div>
+					</div>
+					<div className="grid gap-4 md:grid-cols-3">
+						<Form.Item
+							name="materialized"
+							label="物化方式"
+							tooltip="table: 全量重建表；view: 视图；incremental: 增量更新"
+						>
 							<Select
 								placeholder="选择物化方式"
 								options={[
-									{ label: "table", value: "table" },
+									{ label: "table（推荐）", value: "table" },
 									{ label: "view", value: "view" },
 									{ label: "incremental", value: "incremental" },
 								]}
 							/>
 						</Form.Item>
+						<Form.Item
+							name="alias"
+							label="物理表别名"
+							tooltip="如果物理表名需要与模型名不同，在此指定"
+						>
+							<Input placeholder="可选，默认使用模型名" />
+						</Form.Item>
+						<Form.Item
+							name="schemaName"
+							label="目标 Schema"
+							tooltip="模型输出的目标 Schema，留空使用默认配置"
+						>
+							<Input placeholder="留空使用默认" />
+						</Form.Item>
+					</div>
+					<Form.Item
+						name="tags"
+						label="标签"
+						tooltip="用于调度选择器和分组管理，系统会自动添加来源系统和分层标签"
+					>
+						<Input placeholder="多个标签用逗号分隔，如: daily,core" />
+					</Form.Item>
+
+					{/* SQL 编辑 */}
+					<div className="mb-4 mt-6 pb-2 border-b border-border">
+						<div className="text-sm font-semibold text-foreground">SQL 定义</div>
+						<div className="text-xs text-muted-foreground mt-1">
+							只需编写 SELECT 语句，使用 {"{{ source('schema', 'table') }}"} 引用源表，使用 {"{{ ref('model') }}"} 引用其他模型
+						</div>
+					</div>
+					<Form.Item name="sql" rules={[{ required: true, message: "请输入 SQL" }]}>
+						<Input.TextArea
+							rows={12}
+							className="font-mono text-sm"
+							placeholder={`SELECT
+  id,
+  name,
+  created_at
+FROM {{ source('public', 'ods_your_table') }}
+WHERE status = 'active'`}
+						/>
+					</Form.Item>
+
+					{/* 状态管理 */}
+					<div className="mb-4 mt-6 pb-2 border-b border-border">
+						<div className="text-sm font-semibold text-foreground">状态管理</div>
 					</div>
 					<div className="grid gap-4 md:grid-cols-2">
-						<Form.Item name="tags" label="标签 (逗号分隔)">
-							<Input placeholder="如 sales,ods" />
-						</Form.Item>
-						<Form.Item name="status" label="状态">
+						<Form.Item name="status" label="模型状态">
 							<Select
 								placeholder="选择状态"
 								options={[
-									{ label: "草稿", value: "DRAFT" },
-									{ label: "启用", value: "READY" },
-									{ label: "停用", value: "PAUSED" },
+									{ label: "草稿 - 开发中", value: "DRAFT" },
+									{ label: "就绪 - 可上线", value: "READY" },
+									{ label: "暂停 - 暂停调度", value: "PAUSED" },
 								]}
 							/>
 						</Form.Item>
+						<Form.Item name="enabled" label="启用调度" valuePropName="checked">
+							<Switch checkedChildren="启用" unCheckedChildren="禁用" />
+						</Form.Item>
 					</div>
-					<Form.Item name="description" label="描述">
-						<Input.TextArea rows={2} placeholder="模型说明" />
-					</Form.Item>
-					<Form.Item name="sql" label="SQL" rules={[{ required: true, message: "请输入 SQL" }]}>
-						<Input.TextArea rows={10} className="font-mono" placeholder="编写模型 SQL" />
-					</Form.Item>
-					<Form.Item name="enabled" label="是否启用" valuePropName="checked">
-						<Switch />
-					</Form.Item>
 				</Form>
 			</Drawer>
 
@@ -1380,6 +1620,109 @@ export default function SqlModelingPage() {
 					</Form.Item>
 				</Form>
 			</Modal>
+
+			<Drawer
+				open={snippetDrawerOpen}
+				title={snippetTab === "source" ? "插入源表 (ODS)" : "插入模型引用"}
+				width={560}
+				onClose={() => setSnippetDrawerOpen(false)}
+			>
+				<div className="mb-4">
+					<Input
+						placeholder={snippetTab === "source" ? "搜索源表..." : "搜索模型..."}
+						value={snippetKeyword}
+						onChange={(e) => setSnippetKeyword(e.target.value)}
+					/>
+				</div>
+				<Tabs
+					activeKey={snippetTab}
+					onChange={(key) => setSnippetTab(key as "source" | "ref")}
+					items={[
+						{
+							key: "source",
+							label: "ODS 源表",
+							children: sourcesLoading ? (
+								<div className="text-center text-sm text-muted-foreground py-8">加载中...</div>
+							) : filteredDbtSources.length === 0 ? (
+								<EmptyState title="暂无源表" description="请先在数据集成中配置 ODS 表映射。" compact />
+							) : (
+								<div className="max-h-[400px] overflow-y-auto space-y-2">
+									{filteredDbtSources.map((item, idx) => (
+										<Card
+											key={`${item.schema}-${item.table}-${idx}`}
+											size="small"
+											className="cursor-pointer hover:border-primary transition-colors"
+											onClick={() => insertSnippet(item.sourceSnippet || `{{ source('${item.schema}', '${item.table}') }}`)}
+										>
+											<div className="flex items-center justify-between">
+												<div>
+													<div className="font-medium text-foreground">
+														{item.table}
+													</div>
+													<div className="text-xs text-muted-foreground">
+														Schema: {item.schema} {item.systemCode ? `· 系统: ${item.systemCode}` : ""}
+													</div>
+													{item.description && (
+														<div className="text-xs text-muted-foreground mt-1">{item.description}</div>
+													)}
+												</div>
+												<Button size="small" type="link">
+													插入
+												</Button>
+											</div>
+											<div className="mt-2 rounded bg-muted px-2 py-1 font-mono text-xs text-muted-foreground">
+												{item.sourceSnippet || `{{ source('${item.schema}', '${item.table}') }}`}
+											</div>
+										</Card>
+									))}
+								</div>
+							),
+						},
+						{
+							key: "ref",
+							label: "模型引用",
+							children: refsLoading ? (
+								<div className="text-center text-sm text-muted-foreground py-8">加载中...</div>
+							) : filteredDbtRefs.length === 0 ? (
+								<EmptyState title="暂无模型" description="请先创建 SQL 模型。" compact />
+							) : (
+								<div className="max-h-[400px] overflow-y-auto space-y-2">
+									{filteredDbtRefs.map((item, idx) => (
+										<Card
+											key={`${item.id || item.name}-${idx}`}
+											size="small"
+											className="cursor-pointer hover:border-primary transition-colors"
+											onClick={() => insertSnippet(item.refSnippet || `{{ ref('${item.name}') }}`)}
+										>
+											<div className="flex items-center justify-between">
+												<div>
+													<div className="flex items-center gap-2">
+														<span className="font-medium text-foreground">{item.name}</span>
+														{layerTag(item.layer)}
+													</div>
+													<div className="text-xs text-muted-foreground">
+														{item.sourceSystem ? `来源: ${item.sourceSystem}` : ""}
+														{item.tags ? ` · 标签: ${item.tags}` : ""}
+													</div>
+													{item.description && (
+														<div className="text-xs text-muted-foreground mt-1">{item.description}</div>
+													)}
+												</div>
+												<Button size="small" type="link">
+													插入
+												</Button>
+											</div>
+											<div className="mt-2 rounded bg-muted px-2 py-1 font-mono text-xs text-muted-foreground">
+												{item.refSnippet || `{{ ref('${item.name}') }}`}
+											</div>
+										</Card>
+									))}
+								</div>
+							),
+						},
+					]}
+				/>
+			</Drawer>
 		</div>
 	);
 }
