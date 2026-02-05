@@ -22,6 +22,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.springframework.util.StringUtils;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -91,7 +92,8 @@ public class SqlExecutionService {
             if (validation.limitInfo() != null) {
                 saved.setLimitApplied(validation.limitInfo().enforced());
             }
-            Map<String, Object> payload = queryGateway.execute(effectiveSql);
+            UUID datasourceId = parseDatasourceId(request.datasource());
+            Map<String, Object> payload = queryGateway.execute(effectiveSql, datasourceId);
 
             List<String> headers = normalizeHeaders(payload.get("headers"));
             List<Map<String, Object>> rows = normalizeRows(payload.get("rows"));
@@ -311,5 +313,17 @@ public class SqlExecutionService {
             return message;
         }
         return ex.getClass().getSimpleName();
+    }
+
+    private UUID parseDatasourceId(String datasource) {
+        if (!StringUtils.hasText(datasource)) {
+            return null;
+        }
+        try {
+            return UUID.fromString(datasource);
+        } catch (IllegalArgumentException ex) {
+            // Not a valid UUID, return null to use default execution
+            return null;
+        }
     }
 }

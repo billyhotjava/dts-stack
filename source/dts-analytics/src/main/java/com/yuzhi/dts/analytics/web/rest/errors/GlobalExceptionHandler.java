@@ -4,7 +4,10 @@ import com.yuzhi.dts.analytics.web.filter.RequestIdFilter;
 import com.yuzhi.dts.analytics.web.support.RequestContextUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.OffsetDateTime;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
+import org.springframework.dao.DataAccessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MissingServletRequestParameterException;
@@ -14,6 +17,8 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
     @ExceptionHandler(MissingServletRequestParameterException.class)
     public ResponseEntity<ApiError> handleMissingParam(
@@ -28,8 +33,18 @@ public class GlobalExceptionHandler {
         return buildError(HttpStatus.BAD_REQUEST, message, request);
     }
 
+    @ExceptionHandler(DataAccessException.class)
+    public ResponseEntity<ApiError> handleDataAccess(DataAccessException ex, HttpServletRequest request) {
+        log.error("[analytics] Database error on {}: {}", request.getRequestURI(), ex.getMessage(), ex);
+        return buildError(
+                HttpStatus.SERVICE_UNAVAILABLE,
+                "Analytics database unavailable or not initialized",
+                request);
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiError> handleDefault(Exception ex, HttpServletRequest request) {
+        log.error("[analytics] Unhandled error on {}: {}", request.getRequestURI(), ex.getMessage(), ex);
         return buildError(HttpStatus.INTERNAL_SERVER_ERROR, ex.getMessage(), request);
     }
 

@@ -23,6 +23,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -137,6 +138,26 @@ public class HiveQueryGateway implements QueryGateway {
             LOG.error("Hive query failure. sql='{}', reason={}", effectiveSql, message, e);
             throw new IllegalStateException("Hive 查询失败: " + message, e);
         }
+    }
+
+    @Override
+    public Map<String, Object> execute(String effectiveSql, UUID datasourceId) {
+        if (datasourceId == null) {
+            return execute(effectiveSql);
+        }
+
+        // 尝试根据 ID 查找数据源
+        return infraDataSourceRepository.findById(datasourceId)
+            .filter(ds -> StringUtils.hasText(ds.getJdbcUrl()) && StringUtils.hasText(ds.getUsername()))
+            .map(ds -> {
+                Map<String, Object> secrets = infraSecretService.readSecrets(ds);
+                String password = secrets.get("password") != null ? secrets.get("password").toString() : null;
+                return executeWithJdbcConnection(effectiveSql, ds.getJdbcUrl(), ds.getUsername(), password, ds.getName());
+            })
+            .orElseGet(() -> {
+                LOG.warn("Datasource not found or incomplete: {}, falling back to default execution", datasourceId);
+                return execute(effectiveSql);
+            });
     }
 
     private Map<String, Object> executeWithPostgres(String effectiveSql) {
