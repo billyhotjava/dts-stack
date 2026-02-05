@@ -7,6 +7,22 @@
 BEGIN;
 
 -- ------------------------------------------------------------
+-- 可选：指定统计年份（psql 参数 report_year）
+-- 用法：
+--   psql -v report_year=2024 -f 99-build-all.sql
+-- 若未指定，则默认取当前年份
+-- ------------------------------------------------------------
+\if :{?report_year}
+SELECT set_config('dts.report_year', :'report_year', false);
+\endif
+\if :{?report_years}
+SELECT set_config('dts.report_years', :'report_years', false);
+\endif
+\if :{?ods_table}
+SELECT set_config('dts.ods_table', :'ods_table', false);
+\endif
+
+-- ------------------------------------------------------------
 -- 0) 前置函数：安全解析日期（若已存在可重复执行）
 -- ------------------------------------------------------------
 CREATE OR REPLACE FUNCTION parse_date_safe(p_text text)
@@ -43,10 +59,18 @@ $$;
 
 -- ------------------------------------------------------------
 -- 1) ODS 兜底字段（若 Excel 导入后缺列则补齐）
+--    支持参数 ods_table（不需要手工建 view）
 -- ------------------------------------------------------------
-ALTER TABLE public.ods_patent_info
-  ADD COLUMN IF NOT EXISTS accept_date varchar(500),
-  ADD COLUMN IF NOT EXISTS dept_code varchar(500);
+DO $$
+DECLARE
+  ods_table text := current_setting('dts.ods_table', true);
+BEGIN
+  IF ods_table IS NULL OR ods_table = '' THEN
+    ods_table := 'ods_patent_info';
+  END IF;
+  EXECUTE format('ALTER TABLE public.%I ADD COLUMN IF NOT EXISTS accept_date varchar(500);', ods_table);
+  EXECUTE format('ALTER TABLE public.%I ADD COLUMN IF NOT EXISTS dept_code varchar(500);', ods_table);
+END $$;
 
 -- ------------------------------------------------------------
 -- 2) 如 Excel header 为中文且列名未标准化，可用视图映射
@@ -70,6 +94,24 @@ ALTER TABLE public.ods_patent_info
 -- FROM public.ods_patent_info;
 --
 -- 若使用映射视图，请在后续 DWD 中将来源表替换为 ods_patent_info_std
+
+-- ------------------------------------------------------------
+-- 2.1) ODS 来源表选择
+-- 逻辑：
+--  - 若传入 ods_table 参数，则使用该表
+--  - 否则若存在 ods_patent_info_std（中文映射视图）则优先使用
+--  - 否则回退 ods_patent_info
+-- ------------------------------------------------------------
+DO $$
+BEGIN
+  IF current_setting('dts.ods_table', true) IS NULL OR current_setting('dts.ods_table', true) = '' THEN
+    IF to_regclass('public.ods_patent_info_std') IS NOT NULL THEN
+      PERFORM set_config('dts.ods_table', 'ods_patent_info_std', false);
+    ELSE
+      PERFORM set_config('dts.ods_table', 'ods_patent_info', false);
+    END IF;
+  END IF;
+END $$;
 
 -- ------------------------------------------------------------
 -- 3) DIM：专利状态维度
@@ -102,6 +144,14 @@ CREATE INDEX IF NOT EXISTS idx_dim_patent_status_code
 -- 4) DWD：专利明细
 -- ------------------------------------------------------------
 DROP TABLE IF EXISTS public.dwd_patent;
+DO $$
+DECLARE
+  ods_table text := current_setting('dts.ods_table', true);
+BEGIN
+  IF ods_table IS NULL OR ods_table = '' THEN
+    ods_table := 'ods_patent_info';
+  END IF;
+  EXECUTE format($fmt$
 CREATE TABLE public.dwd_patent AS
 SELECT
   COALESCE(
@@ -153,12 +203,14 @@ SELECT
     ))::int
   END AS days_to_grant,
 
-  'ods_patent_info'::text AS source_table,
+  %L::text AS source_table,
   now()                   AS etl_time
 
-FROM public.ods_patent_info o
+FROM public.%I o
 LEFT JOIN public.dim_patent_status s
   ON s.status_code = NULLIF(btrim(o.state), '');
+$fmt$, ods_table, ods_table);
+END $$;
 
 CREATE INDEX IF NOT EXISTS idx_dwd_patent_year ON public.dwd_patent(application_year);
 CREATE INDEX IF NOT EXISTS idx_dwd_patent_grant_year ON public.dwd_patent(grant_year);
@@ -248,13 +300,16 @@ GROUP BY application_year, COALESCE(NULLIF(dept_name, ''), '未知'), NULLIF(dep
 -- ------------------------------------------------------------
 -- 6) ADS：应用层
 -- ------------------------------------------------------------
-DROP TABLE IF EXISTS public.ads_patent_dashboard_kpi;
-CREATE TABLE public.ads_patent_dashboard_kpi AS
-WITH this AS (
-  SELECT EXTRACT(YEAR FROM current_date)::int AS yr
+\if :{?report_year}
+-- ----------------------------
+-- 单年增量刷新
+-- ----------------------------
+CREATE TABLE IF NOT EXISTS public.ads_patent_dashboard_kpi AS
+WITH params AS (
+  SELECT :report_year::int AS yr
 )
 SELECT
-  this.yr                                          AS stat_year,
+  k1.stat_year                                     AS stat_year,
   COALESCE(k1.apply_cnt, 0)                       AS this_year_apply_cnt,
   COALESCE(k0.apply_cnt, 0)                       AS last_year_apply_cnt,
   CASE
@@ -264,47 +319,316 @@ SELECT
   COALESCE(k1.accepted_cnt, 0)                    AS this_year_accepted_cnt,
   COALESCE(g1.granted_cnt, 0)                     AS this_year_granted_cnt,
   COALESCE(k1.grant_rate_app, 0)                  AS this_year_grant_rate
-FROM this
-LEFT JOIN public.dws_patent_year_kpi k1 ON k1.stat_year = this.yr
-LEFT JOIN public.dws_patent_year_kpi k0 ON k0.stat_year = this.yr - 1
-LEFT JOIN public.dws_patent_year_grant g1 ON g1.stat_year = this.yr;
+FROM public.dws_patent_year_kpi k1
+LEFT JOIN public.dws_patent_year_kpi k0 ON k0.stat_year = k1.stat_year - 1
+LEFT JOIN public.dws_patent_year_grant g1 ON g1.stat_year = k1.stat_year
+WHERE k1.stat_year = (SELECT yr FROM params)
+LIMIT 0;
 
-DROP TABLE IF EXISTS public.ads_patent_type_share;
-CREATE TABLE public.ads_patent_type_share AS
+DELETE FROM public.ads_patent_dashboard_kpi WHERE stat_year = :report_year::int;
+INSERT INTO public.ads_patent_dashboard_kpi
+SELECT
+  k1.stat_year                                     AS stat_year,
+  COALESCE(k1.apply_cnt, 0)                       AS this_year_apply_cnt,
+  COALESCE(k0.apply_cnt, 0)                       AS last_year_apply_cnt,
+  CASE
+    WHEN COALESCE(k0.apply_cnt, 0) = 0 THEN 0
+    ELSE ROUND((COALESCE(k1.apply_cnt, 0) - k0.apply_cnt)::numeric / k0.apply_cnt::numeric, 4)
+  END                                              AS yoy_growth_rate,
+  COALESCE(k1.accepted_cnt, 0)                    AS this_year_accepted_cnt,
+  COALESCE(g1.granted_cnt, 0)                     AS this_year_granted_cnt,
+  COALESCE(k1.grant_rate_app, 0)                  AS this_year_grant_rate
+FROM public.dws_patent_year_kpi k1
+LEFT JOIN public.dws_patent_year_kpi k0 ON k0.stat_year = k1.stat_year - 1
+LEFT JOIN public.dws_patent_year_grant g1 ON g1.stat_year = k1.stat_year
+WHERE k1.stat_year = :report_year::int;
+
+CREATE TABLE IF NOT EXISTS public.ads_patent_type_share AS
+WITH params AS (
+  SELECT :report_year::int AS yr
+)
 SELECT
   stat_year,
   patent_type,
   apply_cnt,
   CASE
-    WHEN SUM(apply_cnt) OVER () = 0 THEN 0
-    ELSE ROUND(apply_cnt::numeric / SUM(apply_cnt) OVER ()::numeric, 4)
+    WHEN SUM(apply_cnt) OVER (PARTITION BY stat_year) = 0 THEN 0
+    ELSE ROUND(apply_cnt::numeric / SUM(apply_cnt) OVER (PARTITION BY stat_year)::numeric, 4)
   END AS share
 FROM public.dws_patent_year_type
-WHERE stat_year = EXTRACT(YEAR FROM current_date)::int;
+WHERE stat_year = (SELECT yr FROM params)
+LIMIT 0;
 
-DROP TABLE IF EXISTS public.ads_patent_month_trend;
-CREATE TABLE public.ads_patent_month_trend AS
+DELETE FROM public.ads_patent_type_share WHERE stat_year = :report_year::int;
+INSERT INTO public.ads_patent_type_share
+SELECT
+  stat_year,
+  patent_type,
+  apply_cnt,
+  CASE
+    WHEN SUM(apply_cnt) OVER (PARTITION BY stat_year) = 0 THEN 0
+    ELSE ROUND(apply_cnt::numeric / SUM(apply_cnt) OVER (PARTITION BY stat_year)::numeric, 4)
+  END AS share
+FROM public.dws_patent_year_type
+WHERE stat_year = :report_year::int;
+
+CREATE TABLE IF NOT EXISTS public.ads_patent_month_trend AS
+WITH params AS (
+  SELECT :report_year::int AS yr
+)
 SELECT
   stat_year,
   stat_month,
   accepted_cnt,
   granted_cnt
 FROM public.dws_patent_month_trend
-WHERE stat_year = EXTRACT(YEAR FROM current_date)::int
-ORDER BY stat_month;
+WHERE stat_year = (SELECT yr FROM params)
+LIMIT 0;
+
+DELETE FROM public.ads_patent_month_trend WHERE stat_year = :report_year::int;
+INSERT INTO public.ads_patent_month_trend
+SELECT
+  stat_year,
+  stat_month,
+  accepted_cnt,
+  granted_cnt
+FROM public.dws_patent_month_trend
+WHERE stat_year = :report_year::int;
+
+CREATE TABLE IF NOT EXISTS public.ads_patent_dept_rank AS
+WITH params AS (
+  SELECT :report_year::int AS yr
+),
+ranked AS (
+  SELECT
+    stat_year,
+    dept_name,
+    dept_code,
+    apply_cnt,
+    ROW_NUMBER() OVER (PARTITION BY stat_year ORDER BY apply_cnt DESC, dept_name) AS rank_no
+  FROM public.dws_patent_year_dept
+  WHERE stat_year = (SELECT yr FROM params)
+)
+SELECT *
+FROM ranked
+WHERE rank_no <= 20
+ORDER BY stat_year, rank_no
+LIMIT 0;
+
+DELETE FROM public.ads_patent_dept_rank WHERE stat_year = :report_year::int;
+INSERT INTO public.ads_patent_dept_rank
+WITH ranked AS (
+  SELECT
+    stat_year,
+    dept_name,
+    dept_code,
+    apply_cnt,
+    ROW_NUMBER() OVER (PARTITION BY stat_year ORDER BY apply_cnt DESC, dept_name) AS rank_no
+  FROM public.dws_patent_year_dept
+  WHERE stat_year = :report_year::int
+)
+SELECT *
+FROM ranked
+WHERE rank_no <= 20
+ORDER BY stat_year, rank_no;
+
+CREATE TABLE IF NOT EXISTS public.ads_patent_recent_grant AS
+SELECT
+  grant_date,
+  patent_no,
+  patent_title_cn,
+  assignee_name,
+  dept_name,
+  dept_code,
+  agent_org_name
+FROM public.dwd_patent
+WHERE grant_date >= (current_date - INTERVAL '30 day')::date
+LIMIT 0;
+
+TRUNCATE public.ads_patent_recent_grant;
+INSERT INTO public.ads_patent_recent_grant
+SELECT
+  grant_date,
+  patent_no,
+  patent_title_cn,
+  assignee_name,
+  dept_name,
+  dept_code,
+  agent_org_name
+FROM public.dwd_patent
+WHERE grant_date >= (current_date - INTERVAL '30 day')::date
+ORDER BY grant_date DESC NULLS LAST
+LIMIT 200;
+
+CREATE TABLE IF NOT EXISTS public.ads_patent_detail_year (
+  stat_year int NOT NULL,
+  application_date date,
+  grant_date date,
+  patent_no text,
+  patent_title_cn text,
+  patent_type text,
+  patent_status_std text,
+  patent_status_raw text,
+  dept_name text,
+  dept_code text,
+  assignee_name text
+) PARTITION BY LIST (stat_year);
+
+DO $$
+DECLARE
+  yr int := :report_year::int;
+BEGIN
+  EXECUTE format('CREATE TABLE IF NOT EXISTS public.ads_patent_detail_year_%s PARTITION OF public.ads_patent_detail_year FOR VALUES IN (%s);', yr, yr);
+END $$;
+
+DELETE FROM public.ads_patent_detail_year WHERE stat_year = :report_year::int;
+INSERT INTO public.ads_patent_detail_year
+SELECT
+  application_year AS stat_year,
+  application_date,
+  grant_date,
+  patent_no,
+  patent_title_cn,
+  patent_type,
+  patent_status_std,
+  patent_status_raw,
+  dept_name,
+  dept_code,
+  assignee_name
+FROM public.dwd_patent
+WHERE application_year = :report_year::int
+
+UNION ALL
+
+SELECT
+  grant_year AS stat_year,
+  application_date,
+  grant_date,
+  patent_no,
+  patent_title_cn,
+  patent_type,
+  patent_status_std,
+  patent_status_raw,
+  dept_name,
+  dept_code,
+  assignee_name
+FROM public.dwd_patent
+WHERE grant_year = :report_year::int
+  AND (application_year IS DISTINCT FROM grant_year);
+
+CREATE TABLE IF NOT EXISTS public.ads_patent_overdue_list AS
+SELECT
+  application_date,
+  patent_no,
+  patent_title_cn,
+  dept_name,
+  dept_code,
+  patent_status_std,
+  (current_date - application_date)::int AS overdue_days
+FROM public.dwd_patent
+WHERE application_date IS NOT NULL
+  AND is_granted = false
+  AND (current_date - application_date) > 365
+LIMIT 0;
+
+TRUNCATE public.ads_patent_overdue_list;
+INSERT INTO public.ads_patent_overdue_list
+SELECT
+  application_date,
+  patent_no,
+  patent_title_cn,
+  dept_name,
+  dept_code,
+  patent_status_std,
+  (current_date - application_date)::int AS overdue_days
+FROM public.dwd_patent
+WHERE application_date IS NOT NULL
+  AND is_granted = false
+  AND (current_date - application_date) > 365
+ORDER BY overdue_days DESC
+LIMIT 2000;
+\else
+-- ----------------------------
+-- 多年份缓存（默认最近 N 年）
+-- ----------------------------
+DROP TABLE IF EXISTS public.ads_patent_dashboard_kpi;
+CREATE TABLE public.ads_patent_dashboard_kpi AS
+WITH scope AS (
+  SELECT
+    EXTRACT(YEAR FROM current_date)::int AS cur_year,
+    COALESCE(NULLIF(current_setting('dts.report_years', true), '')::int, 5) AS years
+)
+SELECT
+  k1.stat_year                                     AS stat_year,
+  COALESCE(k1.apply_cnt, 0)                       AS this_year_apply_cnt,
+  COALESCE(k0.apply_cnt, 0)                       AS last_year_apply_cnt,
+  CASE
+    WHEN COALESCE(k0.apply_cnt, 0) = 0 THEN 0
+    ELSE ROUND((COALESCE(k1.apply_cnt, 0) - k0.apply_cnt)::numeric / k0.apply_cnt::numeric, 4)
+  END                                              AS yoy_growth_rate,
+  COALESCE(k1.accepted_cnt, 0)                    AS this_year_accepted_cnt,
+  COALESCE(g1.granted_cnt, 0)                     AS this_year_granted_cnt,
+  COALESCE(k1.grant_rate_app, 0)                  AS this_year_grant_rate
+FROM public.dws_patent_year_kpi k1
+LEFT JOIN public.dws_patent_year_kpi k0 ON k0.stat_year = k1.stat_year - 1
+LEFT JOIN public.dws_patent_year_grant g1 ON g1.stat_year = k1.stat_year
+WHERE k1.stat_year BETWEEN (SELECT cur_year - (years - 1) FROM scope) AND (SELECT cur_year FROM scope);
+
+DROP TABLE IF EXISTS public.ads_patent_type_share;
+CREATE TABLE public.ads_patent_type_share AS
+WITH scope AS (
+  SELECT
+    EXTRACT(YEAR FROM current_date)::int AS cur_year,
+    COALESCE(NULLIF(current_setting('dts.report_years', true), '')::int, 5) AS years
+)
+SELECT
+  stat_year,
+  patent_type,
+  apply_cnt,
+  CASE
+    WHEN SUM(apply_cnt) OVER (PARTITION BY stat_year) = 0 THEN 0
+    ELSE ROUND(apply_cnt::numeric / SUM(apply_cnt) OVER (PARTITION BY stat_year)::numeric, 4)
+  END AS share
+FROM public.dws_patent_year_type
+WHERE stat_year BETWEEN (SELECT cur_year - (years - 1) FROM scope) AND (SELECT cur_year FROM scope);
+
+DROP TABLE IF EXISTS public.ads_patent_month_trend;
+CREATE TABLE public.ads_patent_month_trend AS
+WITH scope AS (
+  SELECT
+    EXTRACT(YEAR FROM current_date)::int AS cur_year,
+    COALESCE(NULLIF(current_setting('dts.report_years', true), '')::int, 5) AS years
+)
+SELECT
+  stat_year,
+  stat_month,
+  accepted_cnt,
+  granted_cnt
+FROM public.dws_patent_month_trend
+WHERE stat_year BETWEEN (SELECT cur_year - (years - 1) FROM scope) AND (SELECT cur_year FROM scope)
+ORDER BY stat_year, stat_month;
 
 DROP TABLE IF EXISTS public.ads_patent_dept_rank;
 CREATE TABLE public.ads_patent_dept_rank AS
-SELECT
-  stat_year,
-  dept_name,
-  dept_code,
-  apply_cnt,
-  ROW_NUMBER() OVER (ORDER BY apply_cnt DESC, dept_name) AS rank_no
-FROM public.dws_patent_year_dept
-WHERE stat_year = EXTRACT(YEAR FROM current_date)::int
-ORDER BY apply_cnt DESC
-LIMIT 20;
+WITH scope AS (
+  SELECT
+    EXTRACT(YEAR FROM current_date)::int AS cur_year,
+    COALESCE(NULLIF(current_setting('dts.report_years', true), '')::int, 5) AS years
+),
+ranked AS (
+  SELECT
+    stat_year,
+    dept_name,
+    dept_code,
+    apply_cnt,
+    ROW_NUMBER() OVER (PARTITION BY stat_year ORDER BY apply_cnt DESC, dept_name) AS rank_no
+  FROM public.dws_patent_year_dept
+  WHERE stat_year BETWEEN (SELECT cur_year - (years - 1) FROM scope) AND (SELECT cur_year FROM scope)
+)
+SELECT *
+FROM ranked
+WHERE rank_no <= 20
+ORDER BY stat_year, rank_no;
 
 DROP TABLE IF EXISTS public.ads_patent_recent_grant;
 CREATE TABLE public.ads_patent_recent_grant AS
@@ -322,8 +646,35 @@ ORDER BY grant_date DESC NULLS LAST
 LIMIT 200;
 
 DROP TABLE IF EXISTS public.ads_patent_detail_year;
-CREATE TABLE public.ads_patent_detail_year AS
+CREATE TABLE public.ads_patent_detail_year (
+  stat_year int NOT NULL,
+  application_date date,
+  grant_date date,
+  patent_no text,
+  patent_title_cn text,
+  patent_type text,
+  patent_status_std text,
+  patent_status_raw text,
+  dept_name text,
+  dept_code text,
+  assignee_name text
+) PARTITION BY LIST (stat_year);
+
+DO $$
+DECLARE
+  cur_year int := EXTRACT(YEAR FROM current_date)::int;
+  years int := COALESCE(NULLIF(current_setting('dts.report_years', true), '')::int, 5);
+  start_year int := cur_year - (years - 1);
+  yr int;
+BEGIN
+  FOR yr IN start_year..cur_year LOOP
+    EXECUTE format('CREATE TABLE IF NOT EXISTS public.ads_patent_detail_year_%s PARTITION OF public.ads_patent_detail_year FOR VALUES IN (%s);', yr, yr);
+  END LOOP;
+END $$;
+
+INSERT INTO public.ads_patent_detail_year
 SELECT
+  application_year AS stat_year,
   application_date,
   grant_date,
   patent_no,
@@ -335,10 +686,27 @@ SELECT
   dept_code,
   assignee_name
 FROM public.dwd_patent
-WHERE application_year = EXTRACT(YEAR FROM current_date)::int
-   OR grant_year = EXTRACT(YEAR FROM current_date)::int
-ORDER BY COALESCE(application_date, grant_date) DESC NULLS LAST
-LIMIT 5000;
+WHERE application_year BETWEEN (EXTRACT(YEAR FROM current_date)::int - (COALESCE(NULLIF(current_setting('dts.report_years', true), '')::int, 5) - 1))
+  AND EXTRACT(YEAR FROM current_date)::int
+
+UNION ALL
+
+SELECT
+  grant_year AS stat_year,
+  application_date,
+  grant_date,
+  patent_no,
+  patent_title_cn,
+  patent_type,
+  patent_status_std,
+  patent_status_raw,
+  dept_name,
+  dept_code,
+  assignee_name
+FROM public.dwd_patent
+WHERE grant_year BETWEEN (EXTRACT(YEAR FROM current_date)::int - (COALESCE(NULLIF(current_setting('dts.report_years', true), '')::int, 5) - 1))
+  AND EXTRACT(YEAR FROM current_date)::int
+  AND (application_year IS DISTINCT FROM grant_year);
 
 DROP TABLE IF EXISTS public.ads_patent_overdue_list;
 CREATE TABLE public.ads_patent_overdue_list AS
@@ -356,8 +724,22 @@ WHERE application_date IS NOT NULL
   AND (current_date - application_date) > 365
 ORDER BY overdue_days DESC
 LIMIT 2000;
+\endif
 
 COMMIT;
+
+-- ------------------------------------------------------------
+-- 7) ADS 索引（便于前端检索与筛选）
+-- ------------------------------------------------------------
+CREATE INDEX IF NOT EXISTS idx_ads_patent_kpi_year ON public.ads_patent_dashboard_kpi(stat_year);
+CREATE INDEX IF NOT EXISTS idx_ads_patent_type_share_year ON public.ads_patent_type_share(stat_year);
+CREATE INDEX IF NOT EXISTS idx_ads_patent_month_trend_year ON public.ads_patent_month_trend(stat_year);
+CREATE INDEX IF NOT EXISTS idx_ads_patent_month_trend_month ON public.ads_patent_month_trend(stat_month);
+CREATE INDEX IF NOT EXISTS idx_ads_patent_dept_rank_year ON public.ads_patent_dept_rank(stat_year);
+CREATE INDEX IF NOT EXISTS idx_ads_patent_dept_rank_rank ON public.ads_patent_dept_rank(rank_no);
+CREATE INDEX IF NOT EXISTS idx_ads_patent_recent_grant_date ON public.ads_patent_recent_grant(grant_date);
+CREATE INDEX IF NOT EXISTS idx_ads_patent_detail_year ON public.ads_patent_detail_year(stat_year);
+CREATE INDEX IF NOT EXISTS idx_ads_patent_overdue_days ON public.ads_patent_overdue_list(overdue_days);
 
 ANALYZE public.dim_patent_status;
 ANALYZE public.dwd_patent;

@@ -31,6 +31,9 @@
 
 {{ config(materialized='table', alias='ads_patent_detail_year', schema='public', tags=['ads', 'patent']) }}
 
+WITH params AS (
+  SELECT NULLIF(current_setting('dts.report_year', true), '')::int AS yr
+)
 SELECT
   application_date,
   grant_date,
@@ -44,7 +47,8 @@ SELECT
   assignee_name
 
 FROM {{ ref('dwd_patent') }}
-WHERE application_year = EXTRACT(YEAR FROM current_date)::int
-   OR grant_year = EXTRACT(YEAR FROM current_date)::int
+WHERE (SELECT yr FROM params) IS NULL
+   OR application_year = (SELECT yr FROM params)
+   OR grant_year = (SELECT yr FROM params)
 ORDER BY COALESCE(application_date, grant_date) DESC NULLS LAST
 LIMIT 5000

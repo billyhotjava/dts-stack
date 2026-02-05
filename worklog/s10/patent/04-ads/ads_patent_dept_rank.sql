@@ -27,14 +27,20 @@
 
 {{ config(materialized='table', alias='ads_patent_dept_rank', schema='public', tags=['ads', 'patent']) }}
 
-SELECT
-  stat_year,
-  dept_name,
-  dept_code,
-  apply_cnt,
-  ROW_NUMBER() OVER (ORDER BY apply_cnt DESC, dept_name) AS rank_no
-
-FROM {{ ref('dws_patent_year_dept') }}
-WHERE stat_year = EXTRACT(YEAR FROM current_date)::int
-ORDER BY apply_cnt DESC
-LIMIT 20
+WITH params AS (
+  SELECT NULLIF(current_setting('dts.report_year', true), '')::int AS yr
+),
+ranked AS (
+  SELECT
+    stat_year,
+    dept_name,
+    dept_code,
+    apply_cnt,
+    ROW_NUMBER() OVER (PARTITION BY stat_year ORDER BY apply_cnt DESC, dept_name) AS rank_no
+  FROM {{ ref('dws_patent_year_dept') }}
+  WHERE (SELECT yr FROM params) IS NULL OR stat_year = (SELECT yr FROM params)
+)
+SELECT *
+FROM ranked
+WHERE rank_no <= 20
+ORDER BY stat_year, rank_no

@@ -22,14 +22,17 @@
 
 {{ config(materialized='table', alias='ads_patent_type_share', schema='public', tags=['ads', 'patent']) }}
 
+WITH params AS (
+  SELECT NULLIF(current_setting('dts.report_year', true), '')::int AS yr
+)
 SELECT
   stat_year,
   patent_type,
   apply_cnt,
   CASE
-    WHEN SUM(apply_cnt) OVER () = 0 THEN 0
-    ELSE ROUND(apply_cnt::numeric / SUM(apply_cnt) OVER ()::numeric, 4)
+    WHEN SUM(apply_cnt) OVER (PARTITION BY stat_year) = 0 THEN 0
+    ELSE ROUND(apply_cnt::numeric / SUM(apply_cnt) OVER (PARTITION BY stat_year)::numeric, 4)
   END AS share
 
 FROM {{ ref('dws_patent_year_type') }}
-WHERE stat_year = EXTRACT(YEAR FROM current_date)::int
+WHERE (SELECT yr FROM params) IS NULL OR stat_year = (SELECT yr FROM params)

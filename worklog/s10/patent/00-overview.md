@@ -131,3 +131,51 @@ dbt 才能通过 `{{ source('public', 'ods_patent_info') }}` 引用。
    - SQL = 只填 SELECT 语句（不含 `{{ config(...) }}`，平台自动生成）
 3. 按依赖顺序提交运行（dim -> dwd -> dws -> ads）
 4. 或配置调度，一键运行整个链路
+
+> 说明：如需指定统计年份，可在执行前设置：
+> `SET dts.report_year='2024';`  
+> 未设置时默认生成“多年份缓存”，ADS 会包含最近 N 年。
+
+可选：指定“最近 N 年”范围：
+`SET dts.report_years='5';`
+
+可选：指定 ODS 表名（无需手工建 view）：
+`SET dts.ods_table='ods_patent_info_202602';`
+
+## 9. 自定义 ODS 表名 / 中文表头适配
+
+如果 Excel/CSV 导入后的 ODS 表名不是 `ods_patent_info`，建议用参数指定：
+
+```sql
+SET dts.ods_table='ods_patent_info_202602';
+```
+
+也可以创建一个同名视图做别名：
+
+```sql
+CREATE OR REPLACE VIEW public.ods_patent_info AS
+SELECT * FROM public.<你的ODS表名>;
+```
+
+如果 Excel header 为中文，可创建 `ods_patent_info_std` 视图进行字段映射：
+
+```sql
+CREATE OR REPLACE VIEW public.ods_patent_info_std AS
+SELECT
+  "序号"       AS seq_no,
+  "专利名称"   AS patent_title_cn,
+  "专利类型"   AS patent_type,
+  "专利号"     AS patent_no,
+  "受理日"     AS accept_date,
+  "首次公开日" AS first_publication_date,
+  "授权日"     AS grant_date,
+  "专利权人"   AS assignee_name,
+  "发明人"     AS inventor_names,
+  "部门"       AS dept_name,
+  "代理公司 "  AS agent_org_name,
+  "状态"       AS state,
+  dept_code    AS dept_code
+FROM public.ods_patent_info;
+```
+
+> `99-build-all.sql` 会优先使用 `ods_patent_info_std` 作为数据来源。

@@ -10,6 +10,9 @@ PG_DB="${PG_DB:-biadmin}"
 PG_USER="${PG_USER:-biadmin}"
 PG_PASSWORD="${PG_PASSWORD:-}"
 FORCE_DOCKER=0
+REPORT_YEAR="${REPORT_YEAR:-}"
+REPORT_YEARS="${REPORT_YEARS:-}"
+ODS_TABLE="${ODS_TABLE:-}"
 
 for arg in "$@"; do
   case "$arg" in
@@ -29,6 +32,8 @@ fi
 if [[ -z "${PG_PASSWORD}" ]]; then
   echo "PG_PASSWORD is required. Example:"
   echo "  PG_PASSWORD='Devops123@' ./worklog/s10/patent/run-build-all.sh"
+  echo "Optional: set REPORT_YEAR=2024 to build ADS for specific year"
+  echo "Optional: set ODS_TABLE=ods_patent_info_202602 to target a custom ODS table"
   exit 1
 fi
 
@@ -38,6 +43,9 @@ run_psql() {
     -p "${PG_PORT}" \
     -U "${PG_USER}" \
     -d "${PG_DB}" \
+    ${REPORT_YEAR:+-v report_year="${REPORT_YEAR}"} \
+    ${REPORT_YEARS:+-v report_years="${REPORT_YEARS}"} \
+    ${ODS_TABLE:+-v ods_table="${ODS_TABLE}"} \
     -v ON_ERROR_STOP=1 \
     -f "${SQL_FILE}"
 }
@@ -47,6 +55,9 @@ run_docker_psql() {
     -e PGPASSWORD="${PG_PASSWORD}" \
     postgres:17.6 \
     psql -h "${PG_HOST}" -p "${PG_PORT}" -U "${PG_USER}" -d "${PG_DB}" \
+    ${REPORT_YEAR:+-v report_year="${REPORT_YEAR}"} \
+    ${REPORT_YEARS:+-v report_years="${REPORT_YEARS}"} \
+    ${ODS_TABLE:+-v ods_table="${ODS_TABLE}"} \
     -v ON_ERROR_STOP=1 -f "${SQL_FILE}"
 }
 

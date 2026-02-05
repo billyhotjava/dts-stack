@@ -28,11 +28,11 @@
 
 {{ config(materialized='table', alias='ads_patent_dashboard_kpi', schema='public', tags=['ads', 'patent']) }}
 
-WITH this AS (
-  SELECT EXTRACT(YEAR FROM current_date)::int AS yr
+WITH params AS (
+  SELECT NULLIF(current_setting('dts.report_year', true), '')::int AS yr
 )
 SELECT
-  this.yr                                          AS stat_year,
+  k1.stat_year                                     AS stat_year,
 
   COALESCE(k1.apply_cnt, 0)                       AS this_year_apply_cnt,
   COALESCE(k0.apply_cnt, 0)                       AS last_year_apply_cnt,
@@ -49,7 +49,7 @@ SELECT
   COALESCE(g1.granted_cnt, 0)                     AS this_year_granted_cnt,
   COALESCE(k1.grant_rate_app, 0)                  AS this_year_grant_rate
 
-FROM this
-LEFT JOIN {{ ref('dws_patent_year_kpi') }} k1 ON k1.stat_year = this.yr
-LEFT JOIN {{ ref('dws_patent_year_kpi') }} k0 ON k0.stat_year = this.yr - 1
-LEFT JOIN {{ ref('dws_patent_year_grant') }} g1 ON g1.stat_year = this.yr
+FROM {{ ref('dws_patent_year_kpi') }} k1
+LEFT JOIN {{ ref('dws_patent_year_kpi') }} k0 ON k0.stat_year = k1.stat_year - 1
+LEFT JOIN {{ ref('dws_patent_year_grant') }} g1 ON g1.stat_year = k1.stat_year
+WHERE (SELECT yr FROM params) IS NULL OR k1.stat_year = (SELECT yr FROM params)

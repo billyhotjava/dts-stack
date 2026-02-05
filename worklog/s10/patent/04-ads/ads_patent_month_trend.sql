@@ -22,6 +22,9 @@
 
 {{ config(materialized='table', alias='ads_patent_month_trend', schema='public', tags=['ads', 'patent']) }}
 
+WITH params AS (
+  SELECT NULLIF(current_setting('dts.report_year', true), '')::int AS yr
+)
 SELECT
   stat_year,
   stat_month,
@@ -29,5 +32,5 @@ SELECT
   granted_cnt
 
 FROM {{ ref('dws_patent_month_trend') }}
-WHERE stat_year = EXTRACT(YEAR FROM current_date)::int
-ORDER BY stat_month
+WHERE (SELECT yr FROM params) IS NULL OR stat_year = (SELECT yr FROM params)
+ORDER BY stat_year, stat_month
