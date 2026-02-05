@@ -51,14 +51,16 @@ run_psql() {
 }
 
 run_docker_psql() {
+  local docker_sql="/tmp/patent-build.sql"
   docker run --rm --network host \
     -e PGPASSWORD="${PG_PASSWORD}" \
+    -v "${SQL_FILE}:${docker_sql}:ro" \
     postgres:17.6 \
     psql -h "${PG_HOST}" -p "${PG_PORT}" -U "${PG_USER}" -d "${PG_DB}" \
     ${REPORT_YEAR:+-v report_year="${REPORT_YEAR}"} \
     ${REPORT_YEARS:+-v report_years="${REPORT_YEARS}"} \
     ${ODS_TABLE:+-v ods_table="${ODS_TABLE}"} \
-    -v ON_ERROR_STOP=1 -f "${SQL_FILE}"
+    -v ON_ERROR_STOP=1 -f "${docker_sql}"
 }
 
 if [[ "${FORCE_DOCKER}" -eq 0 ]] && command -v psql >/dev/null 2>&1; then
