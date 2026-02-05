@@ -56,8 +56,8 @@ RUN if [ "${INSTALL_APT_DEPS}" = "1" ] || [ "${INSTALL_APT_DEPS}" = "true" ]; th
 RUN python -m pip install --no-cache-dir --progress-bar off pip==26.0 \
  && pip install --no-cache-dir --progress-bar off "dbt-core==1.11.2"
 
-# 如果你用 Postgres / Doris / Trino 等，按需加 adapter：
-# RUN pip install "dbt-postgres==1.11.2"
+# 安装数据库 adapter
+RUN pip install --no-cache-dir --progress-bar off "dbt-postgres==1.11.2"
 # RUN pip install "dbt-trino==1.11.2"
 
 WORKDIR /workspace
