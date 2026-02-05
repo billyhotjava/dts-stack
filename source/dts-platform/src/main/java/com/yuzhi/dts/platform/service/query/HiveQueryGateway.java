@@ -141,23 +141,15 @@ public class HiveQueryGateway implements QueryGateway {
 
     private Map<String, Object> executeWithPostgres(String effectiveSql) {
         // Try to use the registered PostgreSQL datasource (e.g., biadmin) first
-        Optional<InfraDataSource> registeredDs = infraDataSourceRepository
-            .findFirstByTypeIgnoreCaseAndStatusIgnoreCase(TYPE_POSTGRES, STATUS_ACTIVE);
-
-        if (registeredDs.isPresent()) {
-            InfraDataSource ds = registeredDs.get();
-            String jdbcUrl = ds.getJdbcUrl();
-            String username = ds.getUsername();
-            Map<String, Object> secrets = infraSecretService.readSecrets(ds);
-            String password = secrets.get("password") != null ? secrets.get("password").toString() : null;
-
-            if (StringUtils.hasText(jdbcUrl) && StringUtils.hasText(username)) {
-                return executeWithJdbcConnection(effectiveSql, jdbcUrl, username, password, ds.getName());
-            }
-        }
-
-        // Fallback to platform database
-        return executeWithPlatformDataSource(effectiveSql);
+        return infraDataSourceRepository
+            .findFirstByTypeIgnoreCaseAndStatusIgnoreCase(TYPE_POSTGRES, STATUS_ACTIVE)
+            .filter(ds -> StringUtils.hasText(ds.getJdbcUrl()) && StringUtils.hasText(ds.getUsername()))
+            .map(ds -> {
+                Map<String, Object> secrets = infraSecretService.readSecrets(ds);
+                String password = secrets.get("password") != null ? secrets.get("password").toString() : null;
+                return executeWithJdbcConnection(effectiveSql, ds.getJdbcUrl(), ds.getUsername(), password, ds.getName());
+            })
+            .orElseGet(() -> executeWithPlatformDataSource(effectiveSql));
     }
 
     private Map<String, Object> executeWithJdbcConnection(
