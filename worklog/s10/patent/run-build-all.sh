@@ -2,7 +2,6 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ROOT_DIR="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 SQL_FILE="${SQL_FILE:-${SCRIPT_DIR}/99-build-all.sql}"
 
 PG_HOST="${PG_HOST:-127.0.0.1}"
@@ -26,13 +25,8 @@ for arg in "$@"; do
 done
 
 if [[ ! -f "${SQL_FILE}" ]]; then
-  ALT_SQL="${ROOT_DIR}/worklog/s10/patent/99-build-all.sql"
-  if [[ -f "${ALT_SQL}" ]]; then
-    SQL_FILE="${ALT_SQL}"
-  else
-    echo "SQL file not found: ${SQL_FILE}" >&2
-    exit 1
-  fi
+  echo "SQL file not found: ${SQL_FILE}" >&2
+  exit 1
 fi
 
 if [[ -z "${PG_PASSWORD}" ]]; then
