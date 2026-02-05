@@ -1,13 +1,18 @@
 package com.yuzhi.dts.platform.service.query;
 
 import com.yuzhi.dts.platform.config.CatalogFeatureProperties;
+import com.yuzhi.dts.platform.domain.service.InfraDataSource;
+import com.yuzhi.dts.platform.repository.service.InfraDataSourceRepository;
 import com.yuzhi.dts.platform.service.infra.HiveConnectionService;
 import com.yuzhi.dts.platform.service.infra.InceptorDataSourceRegistry;
 import com.yuzhi.dts.platform.service.infra.InceptorDataSourceRegistry.InceptorDataSourceState;
+import com.yuzhi.dts.platform.service.infra.InfraSecretService;
 import com.yuzhi.dts.platform.service.infra.PostgresCatalogSyncService;
 import com.yuzhi.dts.platform.web.rest.infra.HiveConnectionTestRequest;
 import java.sql.Blob;
 import java.sql.Clob;
+import java.sql.Connection;
+import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
@@ -32,25 +37,33 @@ public class HiveQueryGateway implements QueryGateway {
 
     private static final Logger LOG = LoggerFactory.getLogger(HiveQueryGateway.class);
     private static final int MAX_ROWS = 5000;
+    private static final String TYPE_POSTGRES = "POSTGRES";
+    private static final String STATUS_ACTIVE = "ACTIVE";
 
     private final HiveConnectionService connectionService;
     private final InceptorDataSourceRegistry registry;
     private final PostgresCatalogSyncService postgresCatalogSyncService;
     private final DataSource dataSource;
     private final CatalogFeatureProperties catalogFeatureProperties;
+    private final InfraDataSourceRepository infraDataSourceRepository;
+    private final InfraSecretService infraSecretService;
 
     public HiveQueryGateway(
         HiveConnectionService connectionService,
         InceptorDataSourceRegistry registry,
         PostgresCatalogSyncService postgresCatalogSyncService,
         DataSource dataSource,
-        CatalogFeatureProperties catalogFeatureProperties
+        CatalogFeatureProperties catalogFeatureProperties,
+        InfraDataSourceRepository infraDataSourceRepository,
+        InfraSecretService infraSecretService
     ) {
         this.connectionService = connectionService;
         this.registry = registry;
         this.postgresCatalogSyncService = postgresCatalogSyncService;
         this.dataSource = dataSource;
         this.catalogFeatureProperties = catalogFeatureProperties;
+        this.infraDataSourceRepository = infraDataSourceRepository;
+        this.infraSecretService = infraSecretService;
     }
 
     @Override
@@ -127,8 +140,86 @@ public class HiveQueryGateway implements QueryGateway {
     }
 
     private Map<String, Object> executeWithPostgres(String effectiveSql) {
+        // Try to use the registered PostgreSQL datasource (e.g., biadmin) first
+        Optional<InfraDataSource> registeredDs = infraDataSourceRepository
+            .findFirstByTypeIgnoreCaseAndStatusIgnoreCase(TYPE_POSTGRES, STATUS_ACTIVE);
+
+        if (registeredDs.isPresent()) {
+            InfraDataSource ds = registeredDs.get();
+            String jdbcUrl = ds.getJdbcUrl();
+            String username = ds.getUsername();
+            Map<String, Object> secrets = infraSecretService.readSecrets(ds);
+            String password = secrets.get("password") != null ? secrets.get("password").toString() : null;
+
+            if (StringUtils.hasText(jdbcUrl) && StringUtils.hasText(username)) {
+                return executeWithJdbcConnection(effectiveSql, jdbcUrl, username, password, ds.getName());
+            }
+        }
+
+        // Fallback to platform database
+        return executeWithPlatformDataSource(effectiveSql);
+    }
+
+    private Map<String, Object> executeWithJdbcConnection(
+        String effectiveSql,
+        String jdbcUrl,
+        String username,
+        String password,
+        String datasourceName
+    ) {
         long connectStart = System.nanoTime();
-        try (java.sql.Connection connection = dataSource.getConnection()) {
+        try (Connection connection = DriverManager.getConnection(jdbcUrl, username, password)) {
+            long connectMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - connectStart);
+            long queryStart = System.nanoTime();
+
+            List<String> headers = new ArrayList<>();
+            List<Map<String, Object>> rows = new ArrayList<>();
+            try (Statement stmt = connection.createStatement()) {
+                stmt.setMaxRows(MAX_ROWS);
+                stmt.setFetchSize(2000);
+                try (ResultSet rs = stmt.executeQuery(effectiveSql)) {
+                    ResultSetMetaData meta = rs.getMetaData();
+                    int columnCount = meta.getColumnCount();
+                    for (int i = 1; i <= columnCount; i++) {
+                        headers.add(meta.getColumnLabel(i));
+                    }
+                    while (rs.next()) {
+                        Map<String, Object> row = new LinkedHashMap<>();
+                        for (int i = 1; i <= columnCount; i++) {
+                            row.put(headers.get(i - 1), readValue(rs, i));
+                        }
+                        rows.add(row);
+                    }
+                }
+            }
+
+            long queryMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - queryStart);
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("headers", headers);
+            result.put("rows", rows);
+            result.put("rowCount", rows.size());
+            result.put("connectMillis", connectMillis);
+            result.put("queryMillis", queryMillis);
+            result.put("effectiveSql", effectiveSql);
+            result.put(
+                "executionContext",
+                Map.of(
+                    "database", datasourceName != null ? datasourceName : "PostgreSQL",
+                    "timestamp", Instant.now()
+                )
+            );
+            LOG.debug("PostgreSQL query executed via registered datasource. rows={}, connect={}ms, query={}ms", rows.size(), connectMillis, queryMillis);
+            return result;
+        } catch (SQLException e) {
+            String message = resolveMessage(e);
+            LOG.error("PostgreSQL query failure. datasource='{}', sql='{}', reason={}", datasourceName, effectiveSql, message, e);
+            throw new IllegalStateException("PostgreSQL 查询失败: " + message, e);
+        }
+    }
+
+    private Map<String, Object> executeWithPlatformDataSource(String effectiveSql) {
+        long connectStart = System.nanoTime();
+        try (Connection connection = dataSource.getConnection()) {
             long connectMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - connectStart);
             long queryStart = System.nanoTime();
 
@@ -170,7 +261,7 @@ public class HiveQueryGateway implements QueryGateway {
                     Instant.now()
                 )
             );
-            LOG.debug("PostgreSQL query executed. rows={}, connect={}ms, query={}ms", rows.size(), connectMillis, queryMillis);
+            LOG.debug("PostgreSQL query executed via platform datasource. rows={}, connect={}ms, query={}ms", rows.size(), connectMillis, queryMillis);
             return result;
         } catch (SQLException e) {
             String message = resolveMessage(e);

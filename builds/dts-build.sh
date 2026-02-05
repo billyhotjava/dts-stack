@@ -8,21 +8,31 @@ export DOCKER_BUILDKIT=1
 
 MODE=""
 IMAGE_ONLY=""
+PACK_MODE=""
+PACK_OUTPUT=""
+PACK_INCLUDE_IMAGES="true"
 
 usage() {
   cat <<USAGE
 Usage:
   ${0##*/} -all
   ${0##*/} --image <name>
+  ${0##*/} --pack [--output <path>] [--no-images]
 
 Options:
-  -all, --all         Build all images (same as legacy buildAll.sh behavior).
-  --image <name>      Build a single image and save tarballs to both dist/ and legacy-dist/.
+  -all, --all           Build all images (same as legacy buildAll.sh behavior).
+  --image <name>        Build a single image and save tarballs to both dist/ and legacy-dist/.
+  --pack                Package dts-stack for deployment (excludes source, logs, git, etc.).
+  --output <path>       Output path for the package tarball (default: ./dts-stack-<timestamp>.tar.gz).
+  --no-images           Exclude image tarballs from package (smaller package, images loaded separately).
 
 Examples:
   ${0##*/} -all
   ${0##*/} --image dts-admin
   ${0##*/} --image dts-dbt
+  ${0##*/} --pack
+  ${0##*/} --pack --output /tmp/dts-deploy.tar.gz
+  ${0##*/} --pack --no-images
 USAGE
 }
 
@@ -45,6 +55,22 @@ while [[ $# -gt 0 ]]; do
       fi
       shift 2
       ;;
+    --pack)
+      PACK_MODE="true"
+      shift
+      ;;
+    --output)
+      PACK_OUTPUT="${2:-}"
+      if [[ -z "${PACK_OUTPUT}" ]]; then
+        echo "[dts-build] ERROR: --output requires a value" >&2
+        exit 1
+      fi
+      shift 2
+      ;;
+    --no-images)
+      PACK_INCLUDE_IMAGES="false"
+      shift
+      ;;
     -h|--help)
       usage
       exit 0
@@ -59,6 +85,11 @@ done
 
 if [[ -n "${MODE}" && -n "${IMAGE_ONLY}" ]]; then
   echo "[dts-build] ERROR: --all and --image cannot be used together" >&2
+  exit 1
+fi
+
+if [[ -n "${PACK_MODE}" && ( -n "${MODE}" || -n "${IMAGE_ONLY}" ) ]]; then
+  echo "[dts-build] ERROR: --pack cannot be used with --all or --image" >&2
   exit 1
 fi
 
@@ -527,6 +558,218 @@ build_single_image() {
     save_image "$normal_tag" "$LEGACY_DIST"
   fi
 }
+
+pack_deployment() {
+  local output_path="${PACK_OUTPUT:-}"
+  local include_images="${PACK_INCLUDE_IMAGES:-true}"
+  local timestamp
+  timestamp="$(date +%Y%m%d-%H%M%S)"
+
+  if [[ -z "$output_path" ]]; then
+    output_path="${REPO_ROOT}/dts-stack-${timestamp}.tar.gz"
+  fi
+
+  echo "[dts-build] Packaging dts-stack for deployment..."
+  echo "[dts-build] Output: ${output_path}"
+  echo "[dts-build] Include images: ${include_images}"
+
+  # Create temporary directory for packaging
+  local tmp_dir
+  tmp_dir="$(mktemp -d)"
+  local pack_dir="${tmp_dir}/dts-stack"
+  mkdir -p "${pack_dir}"
+
+  # Define files/directories to include
+  local include_files=(
+    # Core scripts
+    "init.sh"
+    "start.sh"
+    "stop.sh"
+    "encry.sh"
+    # Compose files
+    "docker-compose.yml"
+    "docker-compose.legacy.yml"
+    "docker-compose-app.yml"
+    # Config files
+    "imgversion.conf"
+    "imgversion.dts-source.conf"
+    ".dockerignore"
+  )
+
+  local include_dirs=(
+    # Service configurations
+    "services/certs"
+    "services/dts-admin"
+    "services/dts-addax"
+    "services/dts-airflow/config"
+    "services/dts-airflow/plugins"
+    "services/dts-airflow/extra"
+    "services/dts-analytics"
+    "services/dts-dbt/macros"
+    "services/dts-dbt/profiles"
+    "services/dts-elasticsearch"
+    "services/dts-keycloak"
+    "services/dts-minio-init"
+    "services/dts-openmetadata"
+    "services/dts-pg/init"
+    "services/dts-platform"
+    "services/dts-proxy"
+    "services/dts-ranger"
+    "services/dts-trino"
+    "services/jdbc"
+    # Tools
+    "tools"
+    # Config
+    "config"
+    # Builds (scripts only, not intermediate files)
+    "builds/airflow"
+  )
+
+  # Copy individual files
+  for file in "${include_files[@]}"; do
+    if [[ -f "${REPO_ROOT}/${file}" ]]; then
+      cp "${REPO_ROOT}/${file}" "${pack_dir}/"
+      echo "[dts-build]   + ${file}"
+    fi
+  done
+
+  # Copy directories
+  for dir in "${include_dirs[@]}"; do
+    if [[ -d "${REPO_ROOT}/${dir}" ]]; then
+      mkdir -p "${pack_dir}/$(dirname "${dir}")"
+      cp -r "${REPO_ROOT}/${dir}" "${pack_dir}/$(dirname "${dir}")/"
+      echo "[dts-build]   + ${dir}/"
+    fi
+  done
+
+  # Copy dbt project files (but not target/logs)
+  mkdir -p "${pack_dir}/services/dts-dbt"
+  cp "${REPO_ROOT}/services/dts-dbt/dbt_project.yml" "${pack_dir}/services/dts-dbt/" 2>/dev/null || true
+  cp "${REPO_ROOT}/services/dts-dbt/run-tests.sh" "${pack_dir}/services/dts-dbt/" 2>/dev/null || true
+  mkdir -p "${pack_dir}/services/dts-dbt/models"
+  # Copy model structure but not content (will be regenerated)
+  find "${REPO_ROOT}/services/dts-dbt/models" -type d -exec mkdir -p "${pack_dir}/services/dts-dbt/models/{}" \; 2>/dev/null || true
+
+  # Copy build scripts
+  mkdir -p "${pack_dir}/builds"
+  cp "${REPO_ROOT}/builds/dts-build.sh" "${pack_dir}/builds/"
+  cp "${REPO_ROOT}/builds/pull-images.sh" "${pack_dir}/builds/" 2>/dev/null || true
+  echo "[dts-build]   + builds/dts-build.sh"
+
+  # Copy image tarballs if requested
+  if [[ "${include_images}" == "true" ]]; then
+    if [[ -d "${REPO_ROOT}/builds/dist" ]] && [[ -n "$(ls -A "${REPO_ROOT}/builds/dist" 2>/dev/null)" ]]; then
+      mkdir -p "${pack_dir}/builds/dist"
+      cp "${REPO_ROOT}/builds/dist/"*.tar "${pack_dir}/builds/dist/" 2>/dev/null || true
+      echo "[dts-build]   + builds/dist/*.tar"
+    fi
+    if [[ -d "${REPO_ROOT}/builds/legacy-dist" ]] && [[ -n "$(ls -A "${REPO_ROOT}/builds/legacy-dist" 2>/dev/null)" ]]; then
+      mkdir -p "${pack_dir}/builds/legacy-dist"
+      cp "${REPO_ROOT}/builds/legacy-dist/"*.tar "${pack_dir}/builds/legacy-dist/" 2>/dev/null || true
+      echo "[dts-build]   + builds/legacy-dist/*.tar"
+    fi
+  fi
+
+  # Create empty directories that init.sh expects
+  mkdir -p "${pack_dir}/logs"
+  mkdir -p "${pack_dir}/services/dts-pg/data"
+  mkdir -p "${pack_dir}/services/dts-airflow/dags"
+  mkdir -p "${pack_dir}/services/dts-airflow/logs"
+  mkdir -p "${pack_dir}/services/dts-dbt/target"
+  mkdir -p "${pack_dir}/services/dts-dbt/logs"
+
+  # Create .env template (without secrets)
+  cat > "${pack_dir}/.env.template" <<'ENV_TEMPLATE'
+# DTS Stack Environment Configuration Template
+# Copy this file to .env and modify as needed, or run init.sh to generate
+
+# Base domain (required)
+# BASE_DOMAIN=dts.local
+
+# TLS port
+# TLS_PORT=443
+
+# Postgres mode: embedded or external
+# PG_MODE=embedded
+# PG_HOST=dts-pg
+
+# For external Postgres, set these:
+# PG_HOST=your-pg-host
+# PG_PORT=5432
+# PG_SUPER_USER=postgres
+# PG_SUPER_PASSWORD=your-password
+
+# Run init.sh to generate full configuration with secure passwords
+ENV_TEMPLATE
+  echo "[dts-build]   + .env.template"
+
+  # Create README for deployment
+  cat > "${pack_dir}/DEPLOY.md" <<'DEPLOY_README'
+# DTS Stack Deployment Guide
+
+## Quick Start
+
+1. Extract the package:
+   ```bash
+   tar -xzf dts-stack-*.tar.gz
+   cd dts-stack
+   ```
+
+2. Run initialization:
+   ```bash
+   ./init.sh single <your-password> <your-domain>
+   ```
+   Or for interactive mode:
+   ```bash
+   ./init.sh
+   ```
+
+3. Wait for services to start, then access:
+   - Platform UI: https://bi.<your-domain>
+   - Admin UI: https://biadmin.<your-domain>
+   - SSO: https://sso.<your-domain>
+
+## Loading Images (if --no-images was used)
+
+If images were not included in the package, load them:
+```bash
+for tar in builds/dist/*.tar; do docker load -i "$tar"; done
+```
+
+## Directory Structure
+
+- `services/` - Service configurations
+- `builds/` - Build scripts and image tarballs
+- `tools/` - Helper tools
+- `config/` - Additional configurations
+- `logs/` - Runtime logs (created on first run)
+
+## Important Notes
+
+- Run as root or with docker permissions
+- Ensure ports 80, 443, and other required ports are available
+- For production, use proper TLS certificates in services/certs/
+DEPLOY_README
+  echo "[dts-build]   + DEPLOY.md"
+
+  # Create the tarball
+  echo "[dts-build] Creating tarball..."
+  tar -czf "${output_path}" -C "${tmp_dir}" "dts-stack"
+
+  # Cleanup
+  rm -rf "${tmp_dir}"
+
+  # Show result
+  local size
+  size="$(du -h "${output_path}" | cut -f1)"
+  echo "[dts-build] Package created: ${output_path} (${size})"
+  echo "[dts-build] Done!"
+}
+
+if [[ -n "${PACK_MODE}" ]]; then
+  pack_deployment
+  exit 0
+fi
 
 require_cmd docker
 

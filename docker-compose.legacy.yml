@@ -421,6 +421,12 @@ services:
       DATA_STANDARD_ENCRYPTION_KEY: "MDEyMzQ1Njc4OWFiY2RlZg=="
       DTS_ADMIN_BASE_URL: "http://dts-admin:8081"
       DTS_ADMIN_API_PATH: "/api"
+      # Biadmin datasource for data warehouse (dbt output, ad-hoc queries)
+      PG_HOST: ${PG_HOST:-dts-pg}
+      PG_PORT: ${PG_PORT:-5432}
+      PG_DB_BIADMIN: ${PG_DB_BIADMIN:-biadmin}
+      PG_USER_BIADMIN: ${PG_USER_BIADMIN:-biadmin}
+      PG_PWD_BIADMIN: ${PG_PWD_BIADMIN:-}
     security_opt:
       - seccomp=unconfined
     volumes:
