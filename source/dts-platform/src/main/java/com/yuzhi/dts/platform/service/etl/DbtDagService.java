@@ -242,11 +242,7 @@ public class DbtDagService {
             def build_command():
                 selector = "{{ dag_run.conf.get('models', '%s') }}"
                 target = "{{ dag_run.conf.get('target', '%s') }}"
-                vars_payload = "{{ dag_run.conf.get('vars', '') }}"
-                parts = ["run", "--project-dir", DBT_PROJECT_MOUNT, "--profiles-dir", DBT_PROFILES_MOUNT, "--select", selector, "--target", target]
-                if vars_payload:
-                    parts.extend(["--vars", vars_payload])
-                return parts
+                return ["run", "--project-dir", DBT_PROJECT_MOUNT, "--profiles-dir", DBT_PROFILES_MOUNT, "--select", selector, "--target", target]
 
 
             with DAG(
