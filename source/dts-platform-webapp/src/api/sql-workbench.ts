@@ -112,8 +112,27 @@ export type SqlResultPreview = {
 	truncated?: boolean;
 };
 
+export type TableInfo = {
+	schema: string;
+	name: string;
+	type: string;
+	rowCount?: number;
+};
+
+export type ColumnInfo = {
+	name: string;
+	type: string;
+	nullable: string;
+};
+
 export const fetchCatalogTree = (payload: SqlCatalogRequest = {}) =>
 	api.post<SqlCatalogNode>({ url: "/sql/catalog", data: payload });
+
+export const listTables = (datasourceId: string) =>
+	api.get<TableInfo[]>({ url: `/sql/tables/${datasourceId}` });
+
+export const listColumns = (datasourceId: string, schema: string, table: string) =>
+	api.get<ColumnInfo[]>({ url: `/sql/columns/${datasourceId}`, params: { schema, table } });
 
 export const validateSql = (payload: SqlValidateRequest) =>
 	api.post<SqlValidateResponse>({ url: "/sql/validate", data: payload });

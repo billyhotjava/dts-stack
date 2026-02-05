@@ -3,6 +3,7 @@ package com.yuzhi.dts.platform.web.rest.sql;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.sql.SqlCatalogService;
 import com.yuzhi.dts.platform.service.sql.SqlExecutionService;
+import com.yuzhi.dts.platform.service.sql.SqlMetadataService;
 import com.yuzhi.dts.platform.service.sql.SqlValidationService;
 import com.yuzhi.dts.platform.service.sql.dto.SqlCatalogNode;
 import com.yuzhi.dts.platform.service.sql.dto.SqlCatalogRequest;
@@ -11,15 +12,19 @@ import com.yuzhi.dts.platform.service.sql.dto.SqlSubmitRequest;
 import com.yuzhi.dts.platform.service.sql.dto.SqlSubmitResponse;
 import com.yuzhi.dts.platform.service.sql.dto.SqlValidateRequest;
 import com.yuzhi.dts.platform.service.sql.dto.SqlValidateResponse;
+import com.yuzhi.dts.platform.service.sql.dto.TableInfo;
 import com.yuzhi.dts.platform.web.rest.ApiResponse;
 import com.yuzhi.dts.platform.web.rest.ApiResponses;
 import java.security.Principal;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -29,17 +34,20 @@ public class SqlWorkbenchResource {
     private final SqlCatalogService catalogService;
     private final SqlValidationService validationService;
     private final SqlExecutionService executionService;
+    private final SqlMetadataService metadataService;
     private final AuditService auditService;
 
     public SqlWorkbenchResource(
         SqlCatalogService catalogService,
         SqlValidationService validationService,
         SqlExecutionService executionService,
+        SqlMetadataService metadataService,
         AuditService auditService
     ) {
         this.catalogService = catalogService;
         this.validationService = validationService;
         this.executionService = executionService;
+        this.metadataService = metadataService;
         this.auditService = auditService;
     }
 
@@ -76,5 +84,30 @@ public class SqlWorkbenchResource {
         executionService.cancel(id, principal);
         auditService.audit("CANCEL", "sql.workbench.cancel", id.toString());
         return ApiResponses.ok(Boolean.TRUE);
+    }
+
+    /**
+     * 列出数据源中的所有表
+     */
+    @GetMapping("/tables/{datasourceId}")
+    public ApiResponse<List<TableInfo>> listTables(@PathVariable UUID datasourceId, Principal principal) {
+        List<TableInfo> tables = metadataService.listTables(datasourceId);
+        auditService.audit("READ", "sql.workbench.tables", principal != null ? principal.getName() : "anonymous");
+        return ApiResponses.ok(tables);
+    }
+
+    /**
+     * 列出表的列信息
+     */
+    @GetMapping("/columns/{datasourceId}")
+    public ApiResponse<List<Map<String, String>>> listColumns(
+        @PathVariable UUID datasourceId,
+        @RequestParam String schema,
+        @RequestParam String table,
+        Principal principal
+    ) {
+        List<Map<String, String>> columns = metadataService.listColumns(datasourceId, schema, table);
+        auditService.audit("READ", "sql.workbench.columns", principal != null ? principal.getName() : "anonymous");
+        return ApiResponses.ok(columns);
     }
 }
