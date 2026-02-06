@@ -93,13 +93,6 @@ function fileNodeToTreeData(node: FileNode): DataNode {
 	} as DataNode & { data: FileNode };
 }
 
-function _detectLanguage(path: string): string {
-	if (path.endsWith(".sql")) return "sql";
-	if (path.endsWith(".yml") || path.endsWith(".yaml")) return "yaml";
-	if (path.endsWith(".md")) return "markdown";
-	return "plaintext";
-}
-
 // ── Component ─────────────────────────────────────────────────
 
 export default function DbtFileBrowserPage() {
