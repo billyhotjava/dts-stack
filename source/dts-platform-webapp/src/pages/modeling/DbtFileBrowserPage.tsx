@@ -6,7 +6,6 @@ import {
 	Dropdown,
 	Input,
 	Modal,
-	Space,
 	Spin,
 	Tooltip,
 	Tree,
@@ -17,7 +16,6 @@ import {
 	FileOutlined,
 	FileTextOutlined,
 	FolderOutlined,
-	FolderOpenOutlined,
 	PlusOutlined,
 	DeleteOutlined,
 	SaveOutlined,
@@ -95,7 +93,7 @@ function fileNodeToTreeData(node: FileNode): DataNode {
 	} as DataNode & { data: FileNode };
 }
 
-function detectLanguage(path: string): string {
+function _detectLanguage(path: string): string {
 	if (path.endsWith(".sql")) return "sql";
 	if (path.endsWith(".yml") || path.endsWith(".yaml")) return "yaml";
 	if (path.endsWith(".md")) return "markdown";
@@ -494,7 +492,7 @@ export default function DbtFileBrowserPage() {
 										expandedKeys={expandedKeys}
 										selectedKeys={selectedKey ? [selectedKey] : []}
 										onExpand={(keys) => setExpandedKeys(keys)}
-										onSelect={(keys, info) => {
+										onSelect={(_keys, info) => {
 											const node = (info.node as any)?.data as FileNode | undefined;
 											if (node?.type === "file") {
 												loadFile(node.path);
