@@ -31,13 +31,13 @@ const useSettingStore = create<SettingStore>()(
 		(set) => ({
 			settings: {
 				themeColorPresets: ThemeColorPresets.Default,
-				themeMode: ThemeMode.Dark,
+				themeMode: ThemeMode.Light,
 				themeLayout: ThemeLayout.Vertical,
 				themeStretch: false,
 				breadCrumb: true,
 				accordion: false,
 				multiTab: false,
-				darkSidebar: false,
+				darkSidebar: true,
 				fontFamily: FontFamilyPreset.openSans,
 				fontSize: Number(typographyTokens.fontSize.default),
 				direction: "ltr",
@@ -58,16 +58,16 @@ const useSettingStore = create<SettingStore>()(
 			name: StorageEnum.Settings, // name of the item in the storage (must be unique)
 			storage: createJSONStorage(() => localStorage), // (optional) by default, 'localStorage' is used
 			partialize: (state) => ({ [StorageEnum.Settings]: state.settings }),
-			version: 3,
+			version: 4,
 			migrate: (persistedState: any, version) => {
 				try {
-					// mark version as used to satisfy noUnusedParameters
 					const key = (StorageEnum as any).Settings || "settings";
 					const settings = (persistedState && (persistedState[key] || persistedState.settings)) || {};
 
-					// v3: default portal theme to dark (users can still switch in settings)
-					if (typeof version === "number" && version < 3) {
-						settings.themeMode = ThemeMode.Dark;
+					// v4: switch default to Light theme + dark sidebar
+					if (typeof version === "number" && version < 4) {
+						settings.themeMode = ThemeMode.Light;
+						settings.darkSidebar = true;
 					}
 					// Coerce fontSize to a valid number and clamp sane range
 					const raw = settings.fontSize;

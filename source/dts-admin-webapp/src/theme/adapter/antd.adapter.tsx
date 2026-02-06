@@ -141,6 +141,9 @@ export const AntdAdapter: UILibraryAdapter = ({ mode, children }) => {
 				}
 				: {}),
 		},
+		Card: {
+			borderRadiusLG: 16, // analytics --radius-xl for cards
+		},
 		Layout: {
 			siderBg: siderBg,
 			headerBg: siderBg,
