@@ -45,6 +45,8 @@ const PATH_COMPONENT_OVERRIDES: Record<string, string> = {
 	"/services/products": "/pages/services/DataProductsPage",
 	"/services/tokens": "/pages/services/TokensPage",
 	"/services/bi-links": "/pages/services/BiLinksPage",
+	"/modeling/dbt-files": "/pages/modeling/DbtFileBrowserPage",
+	"/visual-analytics": "/pages/visualization/ReportsPage",
 };
 
 export function DynamicMenuResolver({ base }: Props) {

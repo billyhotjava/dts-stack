@@ -69,7 +69,7 @@ public class PortalMenuService {
         "services",
         "iam"
     );
-    private static final Set<String> BASE_READ_SECTIONS = Set.of("workbench", "portal", "services");
+    private static final Set<String> BASE_READ_SECTIONS = Set.of("workbench", "portal", "services", "visual-analytics");
     private static final Set<String> WRITE_SECTIONS = Set.of("studio", "governance");
     private static final Set<String> FOUNDATION_SECTIONS = Set.of("resource", "ops");
     private static final Set<String> IAM_SECTIONS = Set.of();
@@ -87,6 +87,7 @@ public class PortalMenuService {
         Map.entry("studio.scripts", "/pages/explore/etl/ScriptStudioPage"),
         Map.entry("studio.orchestration", "/pages/explore/etl/OrchestrationPage"),
         Map.entry("studio.adhoc", "/pages/explore/QueryWorkbenchPage"),
+        Map.entry("studio.dbt-files", "/pages/modeling/DbtFileBrowserPage"),
         Map.entry("governance.subjects", "/pages/governance/SubjectAreasPage"),
         Map.entry("governance.standards.glossary", "/pages/governance/GlossaryPage"),
         Map.entry("governance.standards.elements", "/pages/governance/ElementsPage"),
@@ -109,9 +110,7 @@ public class PortalMenuService {
         Map.entry("services.outbound", "/pages/services/DataProductsPage"),
         Map.entry("services.exchange", "/pages/services/TokensPage"),
         Map.entry("services.bi-links", "/pages/services/BiLinksPage"),
-        Map.entry("visual-analytics.dashboards", "/pages/visualization/ReportsPage"),
-        Map.entry("visual-analytics.exploration", "/pages/visualization/AnalyticsPage"),
-        Map.entry("visual-analytics.datasets", "/pages/visualization/ReportsManagePage")
+        Map.entry("visual-analytics", "/pages/visualization/ReportsPage")
     );
 
     private final PortalMenuRepository menuRepo;

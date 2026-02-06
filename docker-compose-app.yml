@@ -80,6 +80,7 @@ services:
       dts-pg:
         condition: service_healthy
     environment:
+      TZ: ${TZ:-Asia/Shanghai}
       SPRING_PROFILES_ACTIVE: ${DTS_PROFILE:-prod}
       SPRING_DATASOURCE_URL: jdbc:postgresql://dts-pg:5432/${PG_DB_DTADMIN:-dts_admin}
       SPRING_DATASOURCE_USERNAME: ${PG_USER_DTADMIN:-dts_admin}
@@ -175,6 +176,7 @@ services:
       dts-ingestion:
         condition: service_started
     environment:
+      TZ: ${TZ:-Asia/Shanghai}
       SPRING_PROFILES_ACTIVE: ${DTS_PROFILE:-prod}
       DTS_PLATFORM_CATALOG_MULTI_SOURCE_ENABLED: "true"
       DTS_PLATFORM_CATALOG_DEFAULT_SOURCE_TYPE: "POSTGRES"
@@ -260,6 +262,7 @@ services:
       dts-pg:
         condition: service_healthy
     environment:
+      TZ: ${TZ:-Asia/Shanghai}
       SPRING_DATASOURCE_URL: jdbc:postgresql://dts-pg:5432/${PG_DB_DTPS:-dts_platform}
       SPRING_DATASOURCE_USERNAME: ${PG_USER_DTPS:-dts_platform}
       SPRING_DATASOURCE_PASSWORD: ${PG_PWD_DTPS:-dts_platform}
@@ -325,6 +328,7 @@ services:
     security_opt:
       - seccomp=unconfined
     environment:
+      TZ: ${TZ:-Asia/Shanghai}
       SPRING_PROFILES_ACTIVE: ${DTS_PROFILE:-prod}
       SPRING_DATASOURCE_URL: jdbc:postgresql://dts-pg:5432/${PG_DB_ANALYTICS:-dts_analytics}
       SPRING_DATASOURCE_USERNAME: ${PG_USER_ANALYTICS:-dts_analytics}
@@ -369,6 +373,8 @@ services:
 
   dts-analytics-webapp-modern:
     image: ${IMAGE_DTS_ANALYTICS_WEBAPP_MODERN:-dts-analytics-webapp-modern:local}
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
     depends_on:
       - dts-analytics
     ports: []
@@ -389,6 +395,7 @@ services:
   dts-admin-webapp:
     image: ${IMAGE_DTS_ADMIN_WEBAPP:?Set IMAGE_DTS_ADMIN_WEBAPP in imgversion.conf or .env}
     environment:
+      TZ: ${TZ:-Asia/Shanghai}
       # Unified PKI endpoints for both webapps (optional). Comma-separated list.
       # Example: "https://127.0.0.1:18080/multiplex,http://127.0.0.1:18080/multiplex"
       KOAL_PKI_ENDPOINTS: ${KOAL_PKI_ENDPOINTS:-}
@@ -414,6 +421,7 @@ services:
     image: ${IMAGE_DTS_PLATFORM_WEBAPP:?Set IMAGE_DTS_PLATFORM_WEBAPP in imgversion.conf or .env}
     ports: []
     environment:
+      TZ: ${TZ:-Asia/Shanghai}
       API_PROXY_TARGET: http://dts-platform:8081
       # Admin API base URL for Keycloak localization and other admin-proxied calls
       VITE_ADMIN_API_BASE_URL: "https://${HOST_ADMIN_UI}/api"

@@ -126,6 +126,14 @@
           "titleKey": "sys.nav.portal.studioAdhoc",
           "title": "即席查询",
           "externalLink": "/explore/workbench"
+        },
+        {
+          "key": "dbt-files",
+          "path": "dbt-files",
+          "icon": "solar:folder-2-bold-duotone",
+          "titleKey": "sys.nav.portal.studioDbtFiles",
+          "title": "dbt 项目文件",
+          "externalLink": "/modeling/dbt-files"
         }
       ]
     },
@@ -349,51 +357,9 @@
     {
       "key": "visual-analytics",
       "path": "visual-analytics",
-      "icon": "solar:chart-square-bold-duotone",
+      "icon": "solar:pie-chart-bold-duotone",
       "titleKey": "sys.nav.portal.visualAnalytics",
-      "title": "BI 可视化",
-      "children": [
-        {
-          "key": "analyze",
-          "path": "analyze",
-          "icon": "solar:graph-new-bold-duotone",
-          "titleKey": "sys.nav.portal.visualAnalyze",
-          "title": "分析中心",
-          "externalLink": "/analytics/analyze"
-        },
-        {
-          "key": "questions",
-          "path": "questions",
-          "icon": "solar:document-text-bold-duotone",
-          "titleKey": "sys.nav.portal.visualQuestions",
-          "title": "问题",
-          "externalLink": "/analytics/questions"
-        },
-        {
-          "key": "dashboards",
-          "path": "dashboards",
-          "icon": "solar:chart-2-bold-duotone",
-          "titleKey": "sys.nav.portal.visualDashboards",
-          "title": "仪表盘",
-          "externalLink": "/analytics/dashboards"
-        },
-        {
-          "key": "collections",
-          "path": "collections",
-          "icon": "solar:folder-with-files-bold-duotone",
-          "titleKey": "sys.nav.portal.visualCollections",
-          "title": "集合",
-          "externalLink": "/analytics/collections"
-        },
-        {
-          "key": "data",
-          "path": "data",
-          "icon": "solar:database-bold-duotone",
-          "titleKey": "sys.nav.portal.visualData",
-          "title": "数据源",
-          "externalLink": "/analytics/data"
-        }
-      ]
+      "title": "数据可视化"
     }
   ]
 }

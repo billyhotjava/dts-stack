@@ -85,6 +85,7 @@ services:
       dts-pg:
         condition: service_healthy
     environment:
+      TZ: ${TZ:-Asia/Shanghai}
       SPRING_PROFILES_ACTIVE: ${DTS_PROFILE:-dev}
       SPRING_DATASOURCE_URL: jdbc:postgresql://dts-pg:5432/${PG_DB_DTADMIN:-dts_admin}
       SPRING_DATASOURCE_USERNAME: ${PG_USER_DTADMIN:-dts_admin}
@@ -251,6 +252,7 @@ services:
       dts-ingestion:
         condition: service_started
     environment:
+      TZ: ${TZ:-Asia/Shanghai}
       SPRING_PROFILES_ACTIVE: ${DTS_PROFILE:-dev}
       DTS_PLATFORM_CATALOG_MULTI_SOURCE_ENABLED: "true"
       DTS_PLATFORM_CATALOG_DEFAULT_SOURCE_TYPE: "POSTGRES"
@@ -373,6 +375,7 @@ services:
       dts-pg:
         condition: service_healthy
     environment:
+      TZ: ${TZ:-Asia/Shanghai}
       SPRING_DATASOURCE_URL: jdbc:postgresql://dts-pg:5432/${PG_DB_DTPS:-dts_platform}
       SPRING_DATASOURCE_USERNAME: ${PG_USER_DTPS:-dts_platform}
       SPRING_DATASOURCE_PASSWORD: ${PG_PWD_DTPS:-dts_platform}
@@ -448,6 +451,7 @@ services:
       dts-pg:
         condition: service_healthy
     environment:
+      TZ: ${TZ:-Asia/Shanghai}
       SPRING_PROFILES_ACTIVE: ${DTS_PROFILE:-dev}
       SPRING_DATASOURCE_URL: jdbc:postgresql://dts-pg:5432/${PG_DB_ANALYTICS:-dts_analytics}
       SPRING_DATASOURCE_USERNAME: ${PG_USER_ANALYTICS:-dts_analytics}
@@ -518,6 +522,7 @@ services:
     depends_on:
       - dts-analytics
     environment:
+      TZ: ${TZ:-Asia/Shanghai}
       PNPM_STORE_DIR: /pnpm-store
       # Use a host-accessible proxy when containers cannot resolve public registries directly.
       HTTP_PROXY: ${DTS_DOCKER_HTTP_PROXY:-http://172.18.0.1:10808}
@@ -578,6 +583,7 @@ services:
     depends_on:
       - dts-admin
     environment:
+      TZ: ${TZ:-Asia/Shanghai}
       PNPM_STORE_DIR: /pnpm-store
       BROWSER: none
       VITE_OPEN: "false"
@@ -626,6 +632,7 @@ services:
     depends_on:
       - dts-platform
     environment:
+      TZ: ${TZ:-Asia/Shanghai}
       PNPM_STORE_DIR: /pnpm-store
       BROWSER: none
       VITE_OPEN: "false"
@@ -690,6 +697,7 @@ services:
     image: ${IMAGE_ELASTICSEARCH}
     container_name: dts-elasticsearch
     environment:
+      TZ: ${TZ:-Asia/Shanghai}
       discovery.type: single-node
       xpack.security.enabled: "false"
       ES_JAVA_OPTS: "-Xms512m -Xmx512m"
@@ -716,6 +724,7 @@ services:
       dts-airflow-webserver:
         condition: service_healthy
     environment:
+      TZ: ${TZ:-Asia/Shanghai}
       OPENMETADATA_CLUSTER_NAME: dts-openmetadata
       OPENMETADATA_SERVER_PORT: 8585
       OPENMETADATA_JWT_SECRET: ${OPENMETADATA_JWT_SECRET}
@@ -765,6 +774,7 @@ services:
       dts-elasticsearch:
         condition: service_healthy
     environment:
+      TZ: ${TZ:-Asia/Shanghai}
       OPENMETADATA_CLUSTER_NAME: dts-openmetadata
       OPENMETADATA_SERVER_PORT: 8585
       OPENMETADATA_JWT_SECRET: ${OPENMETADATA_JWT_SECRET}
@@ -793,6 +803,7 @@ services:
       dts-openmetadata:
         condition: service_started
     environment:
+      TZ: ${TZ:-Asia/Shanghai}
       OPENMETADATA_API_ENDPOINT: "http://dts-openmetadata:8585/api/v1"
       OPENMETADATA_HOST_PORT: "http://dts-openmetadata:8585/api"
       OPENMETADATA_AUTH_TOKEN: ${DTS_PLATFORM_OPENMETADATA_AUTH_TOKEN:-}
@@ -830,6 +841,7 @@ services:
             --email "${AIRFLOW_ADMIN_EMAIL}" || true
         fi
     environment:
+      TZ: ${TZ:-Asia/Shanghai}
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
       AIRFLOW__SCHEDULER__DAG_DIR_LIST_INTERVAL: ${AIRFLOW_DAG_DIR_LIST_INTERVAL:-10}
@@ -880,6 +892,7 @@ services:
       dts-airflow-init:
         condition: service_completed_successfully
     environment:
+      TZ: ${TZ:-Asia/Shanghai}
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
       AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
@@ -941,6 +954,7 @@ services:
       dts-airflow-init:
         condition: service_completed_successfully
     environment:
+      TZ: ${TZ:-Asia/Shanghai}
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
       AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
@@ -985,6 +999,7 @@ services:
       dts-airflow-init:
         condition: service_completed_successfully
     environment:
+      TZ: ${TZ:-Asia/Shanghai}
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
       AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
@@ -1026,6 +1041,7 @@ services:
     command: ["-lc", "sleep infinity"]
     working_dir: /opt/dbt
     environment:
+      TZ: ${TZ:-Asia/Shanghai}
       DBT_LOG_PATH: /opt/dbt-logs
     volumes:
       - ./services/dts-dbt:/opt/dbt

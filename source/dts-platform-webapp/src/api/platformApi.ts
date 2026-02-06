@@ -26,6 +26,21 @@ export const searchCatalog = (params: { keyword: string; types?: string; limit?:
 	api.get({ url: "/catalog/search", params });
 export const getDbtConfig = () => api.get({ url: "/etl/dbt/config" });
 export const updateDbtConfig = (data: any) => api.put({ url: "/etl/dbt/config", data });
+
+// dbt project file management
+export const getDbtFileTree = () => api.get({ url: "/etl/dbt/files/tree" });
+export const getDbtFileContent = (path: string) =>
+	api.get({ url: "/etl/dbt/files/content", params: { path } });
+export const saveDbtFileContent = (data: { path: string; content: string }) =>
+	api.put({ url: "/etl/dbt/files/content", data });
+export const createDbtFile = (data: { path: string; type: "file" | "directory"; content?: string }) =>
+	api.post({ url: "/etl/dbt/files", data });
+export const deleteDbtFile = (path: string) =>
+	api.delete({ url: "/etl/dbt/files", params: { path } });
+export const renameDbtFile = (data: { oldPath: string; newPath: string }) =>
+	api.put({ url: "/etl/dbt/files/rename", data });
+export const uploadDbtZip = (formData: FormData) =>
+	api.post({ url: "/etl/dbt/files/upload", data: formData });
 export const listDbtModels = () => api.get({ url: "/etl/dbt/models" });
 export const syncDbtModels = () => api.post({ url: "/etl/dbt/models/sync" });
 export const getDbtSyncStatus = () => api.get({ url: "/etl/dbt/sync/status" });

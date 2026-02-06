@@ -1,0 +1,277 @@
+#!/usr/bin/env bash
+# ──────────────────────────────────────────────────────────────
+# dts-dbt-import — Import a dbt model package (ZIP) into the
+#                   dts-dbt project directory.
+#
+# Usage:
+#   dts-dbt-import <zipfile>               Import models
+#   dts-dbt-import <zipfile> --dry-run     Preview only
+#   dts-dbt-import <zipfile> --clean       Remove existing models before import
+# ──────────────────────────────────────────────────────────────
+set -euo pipefail
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# Default dbt project directory — matches docker-compose volume mount
+DBT_PROJECT_DIR="${DBT_PROJECT_DIR:-$PROJECT_ROOT/services/dts-dbt}"
+
+# Allowed dbt sub-directories that may appear in the ZIP
+ALLOWED_DIRS="models macros seeds tests snapshots analyses"
+
+# Allowed file extensions
+ALLOWED_EXTS="sql yml yaml csv md txt"
+
+# Protected files that must NOT be overwritten
+PROTECTED_FILES="dbt_project.yml profiles/profiles.yml profiles/.user.yml"
+
+DRY_RUN=false
+CLEAN=false
+ZIP_FILE=""
+
+# ── Helpers ────────────────────────────────────────────────────
+
+red()    { printf '\033[0;31m%s\033[0m\n' "$*"; }
+green()  { printf '\033[0;32m%s\033[0m\n' "$*"; }
+yellow() { printf '\033[0;33m%s\033[0m\n' "$*"; }
+info()   { echo "[dts-dbt-import] $*"; }
+warn()   { yellow "[dts-dbt-import] WARNING: $*"; }
+die()    { red "[dts-dbt-import] ERROR: $*" >&2; exit 1; }
+
+usage() {
+  cat <<EOF
+Usage: $(basename "$0") <zipfile> [OPTIONS]
+
+Options:
+  --dry-run    Preview files without extracting
+  --clean      Remove existing model directories before import
+  -h, --help   Show this help
+
+Environment:
+  DBT_PROJECT_DIR   Override dbt project directory
+                    (default: $PROJECT_ROOT/services/dts-dbt)
+
+The ZIP file should contain standard dbt directories:
+  models/  macros/  seeds/  tests/  snapshots/  analyses/
+EOF
+  exit 0
+}
+
+# Check if a file extension is allowed
+is_allowed_ext() {
+  local file="$1"
+  local ext="${file##*.}"
+  ext="${ext,,}" # lowercase
+  for allowed in $ALLOWED_EXTS; do
+    [[ "$ext" == "$allowed" ]] && return 0
+  done
+  return 1
+}
+
+# Check if a file is protected
+is_protected() {
+  local relpath="$1"
+  for pf in $PROTECTED_FILES; do
+    [[ "$relpath" == "$pf" ]] && return 0
+  done
+  return 1
+}
+
+# Check if a path starts with an allowed directory
+is_allowed_path() {
+  local relpath="$1"
+  for dir in $ALLOWED_DIRS; do
+    [[ "$relpath" == "$dir/"* ]] && return 0
+  done
+  return 1
+}
+
+# ── Parse Arguments ────────────────────────────────────────────
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --dry-run)  DRY_RUN=true; shift ;;
+    --clean)    CLEAN=true; shift ;;
+    -h|--help)  usage ;;
+    -*)         die "Unknown option: $1" ;;
+    *)
+      [[ -z "$ZIP_FILE" ]] && ZIP_FILE="$1" || die "Unexpected argument: $1"
+      shift
+      ;;
+  esac
+done
+
+[[ -z "$ZIP_FILE" ]] && die "No ZIP file specified. Run with --help for usage."
+[[ -f "$ZIP_FILE" ]] || die "File not found: $ZIP_FILE"
+
+# Validate file type
+file_type="$(file -b --mime-type "$ZIP_FILE" 2>/dev/null || echo "unknown")"
+if [[ "$file_type" != "application/zip" && "$file_type" != "application/x-zip-compressed" ]]; then
+  # Fallback: check extension
+  [[ "${ZIP_FILE,,}" == *.zip ]] || die "Not a ZIP file: $ZIP_FILE (type: $file_type)"
+fi
+
+[[ -d "$DBT_PROJECT_DIR" ]] || die "dbt project directory not found: $DBT_PROJECT_DIR"
+
+# ── Analyze ZIP Contents ───────────────────────────────────────
+
+info "Analyzing: $ZIP_FILE"
+info "Target:    $DBT_PROJECT_DIR"
+
+TMPDIR_WORK="$(mktemp -d)"
+trap 'rm -rf "$TMPDIR_WORK"' EXIT
+
+# List ZIP entries
+zipfile_list="$TMPDIR_WORK/entries.txt"
+unzip -Z1 "$ZIP_FILE" > "$zipfile_list" 2>/dev/null || die "Failed to read ZIP file"
+
+total_entries=0
+accepted_files=0
+skipped_files=0
+protected_skipped=0
+new_files=0
+overwrite_files=0
+
+accepted_list="$TMPDIR_WORK/accepted.txt"
+skipped_list="$TMPDIR_WORK/skipped.txt"
+: > "$accepted_list"
+: > "$skipped_list"
+
+while IFS= read -r entry; do
+  # Skip directories
+  [[ "$entry" == */ ]] && continue
+
+  # Normalize: strip leading ./ if present
+  entry="${entry#./}"
+
+  ((total_entries++)) || true
+
+  # Must be under an allowed directory
+  if ! is_allowed_path "$entry"; then
+    echo "  [SKIP] not in allowed directory: $entry" >> "$skipped_list"
+    ((skipped_files++)) || true
+    continue
+  fi
+
+  # Must not be a protected file
+  if is_protected "$entry"; then
+    echo "  [SKIP] protected file: $entry" >> "$skipped_list"
+    ((protected_skipped++)) || true
+    continue
+  fi
+
+  # Must have an allowed extension
+  if ! is_allowed_ext "$entry"; then
+    echo "  [SKIP] disallowed extension: $entry" >> "$skipped_list"
+    ((skipped_files++)) || true
+    continue
+  fi
+
+  # Check for path traversal
+  if [[ "$entry" == *".."* ]]; then
+    echo "  [SKIP] path traversal: $entry" >> "$skipped_list"
+    ((skipped_files++)) || true
+    continue
+  fi
+
+  # Check new vs overwrite
+  if [[ -f "$DBT_PROJECT_DIR/$entry" ]]; then
+    echo "$entry" >> "$accepted_list"
+    ((overwrite_files++)) || true
+  else
+    echo "$entry" >> "$accepted_list"
+    ((new_files++)) || true
+  fi
+  ((accepted_files++)) || true
+done < "$zipfile_list"
+
+# ── Print Summary ──────────────────────────────────────────────
+
+echo ""
+info "═══ Import Summary ═══"
+info "Total entries in ZIP:   $total_entries"
+green "  Accepted:             $accepted_files (new: $new_files, overwrite: $overwrite_files)"
+if [[ $skipped_files -gt 0 || $protected_skipped -gt 0 ]]; then
+  yellow "  Skipped:              $((skipped_files + protected_skipped)) (protected: $protected_skipped)"
+fi
+echo ""
+
+if [[ -s "$skipped_list" ]]; then
+  info "Skipped files:"
+  cat "$skipped_list"
+  echo ""
+fi
+
+if [[ $accepted_files -eq 0 ]]; then
+  warn "No files to import."
+  exit 0
+fi
+
+if [[ "$DRY_RUN" == true ]]; then
+  info "Files to import:"
+  while IFS= read -r f; do
+    if [[ -f "$DBT_PROJECT_DIR/$f" ]]; then
+      yellow "  [OVERWRITE] $f"
+    else
+      green "  [NEW]       $f"
+    fi
+  done < "$accepted_list"
+  echo ""
+  info "(dry-run mode — no files were modified)"
+  exit 0
+fi
+
+# ── Clean Mode ─────────────────────────────────────────────────
+
+if [[ "$CLEAN" == true ]]; then
+  echo ""
+  warn "Clean mode: removing existing model directories..."
+  read -r -p "Are you sure? [y/N] " confirm
+  if [[ "${confirm,,}" != "y" ]]; then
+    info "Aborted."
+    exit 0
+  fi
+  for dir in $ALLOWED_DIRS; do
+    target="$DBT_PROJECT_DIR/$dir"
+    if [[ -d "$target" ]]; then
+      info "  Removing $target"
+      rm -rf "$target"
+    fi
+  done
+fi
+
+# ── Extract ────────────────────────────────────────────────────
+
+info "Extracting files..."
+
+# Extract to temp directory first for safety
+extract_dir="$TMPDIR_WORK/extract"
+unzip -q -o "$ZIP_FILE" -d "$extract_dir" || die "Failed to extract ZIP"
+
+# Copy accepted files only
+imported=0
+while IFS= read -r relpath; do
+  src="$extract_dir/$relpath"
+  dst="$DBT_PROJECT_DIR/$relpath"
+
+  if [[ ! -f "$src" ]]; then
+    # Try without leading path adjustments
+    continue
+  fi
+
+  # Ensure target directory exists
+  mkdir -p "$(dirname "$dst")"
+
+  cp -f "$src" "$dst"
+  ((imported++)) || true
+done < "$accepted_list"
+
+echo ""
+green "═══ Import Complete ═══"
+green "  Imported: $imported files"
+info "  Target:   $DBT_PROJECT_DIR"
+echo ""
+info "Next steps:"
+info "  1. Review changes in the Web file browser"
+info "  2. Run 'docker exec dts-dbt dbt compile' to validate"
+info "  3. Trigger dbt run from the Web UI"
