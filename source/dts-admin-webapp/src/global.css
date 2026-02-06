@@ -217,6 +217,22 @@
 	border-color: rgba(255, 255, 255, 0.05);
 }
 
+/* Dark sidebar in light mode — match analytics sidebar bg */
+:root:not([data-theme-mode="dark"]) [data-dark-sidebar="true"] {
+	--background: hsla(205, 19%, 23%, 1);
+	--foreground: hsla(0, 0%, 100%, 0.95);
+	--border: rgba(255, 255, 255, 0.08);
+	--input: rgba(255, 255, 255, 0.08);
+	--accent: rgba(255, 255, 255, 0.08);
+	--accent-foreground: hsla(0, 0%, 100%, 0.95);
+	--colors-text-primary: hsla(0, 0%, 100%, 0.95);
+	--colors-text-secondary: hsla(0, 0%, 100%, 0.69);
+	--colors-text-disabled: hsla(0, 0%, 100%, 0.46);
+	--colors-text-primaryChannel: 255 255 255;
+	--colors-text-secondaryChannel: 255 255 255;
+	--colors-text-disabledChannel: 255 255 255;
+}
+
 /* slash layout */
 :root {
 	--layout-nav-width: 260px;
@@ -237,12 +253,10 @@
 		border-bottom-width: 1px;
 	}
 
-	/* Table header: uppercase, semibold, secondary color */
+	/* Table header: semibold, secondary color */
 	:where(.ant-table-wrapper) :where(.ant-table-thead > tr > th) {
-		font-size: 0.75rem !important;
+		font-size: 0.875rem !important;
 		font-weight: 600 !important;
-		text-transform: uppercase !important;
-		letter-spacing: 0.05em !important;
 	}
 
 	/* Table body: inherit content size */

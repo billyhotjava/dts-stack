@@ -4,7 +4,7 @@ import type { NavProps } from "@/components/nav/types";
 import { GLOBAL_CONFIG } from "@/global-config";
 import { Icon } from "@/components/icon";
 import { useSettingActions, useSettings } from "@/store/settingStore";
-import { ThemeLayout } from "@/types/enum";
+import { ThemeLayout, ThemeMode } from "@/types/enum";
 import { Button } from "@/ui/button";
 import { ScrollArea } from "@/ui/scroll-area";
 import { cn } from "@/utils";
@@ -15,8 +15,9 @@ type Props = {
 };
 
 export function NavVerticalLayout({ data, className }: Props) {
-	const { themeLayout } = useSettings();
+	const { themeLayout, darkSidebar, themeMode } = useSettings();
 	const { setThemeLayout } = useSettingActions();
+	const isDarkSidebar = darkSidebar && themeMode !== ThemeMode.Dark;
 
 	const navWidth = themeLayout === ThemeLayout.Vertical ? "var(--layout-nav-width)" : "var(--layout-nav-width-mini)";
 	const handleToggle = () => {
@@ -25,6 +26,7 @@ export function NavVerticalLayout({ data, className }: Props) {
 	return (
 		<nav
 			data-slot="slash-layout-nav"
+			data-dark-sidebar={isDarkSidebar ? "true" : undefined}
 			className={cn(
 				"fixed inset-y-0 left-0 flex-col h-full bg-background border-r border-dashed z-nav transition-[width] duration-300 ease-in-out",
 				className,
