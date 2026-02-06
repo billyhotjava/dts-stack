@@ -712,6 +712,7 @@ services:
         condition: service_healthy
     environment:
       TZ: ${TZ:-Asia/Shanghai}
+      JAVA_TOOL_OPTIONS: "-Duser.timezone=Asia/Shanghai"
       OPENMETADATA_CLUSTER_NAME: dts-openmetadata
       OPENMETADATA_SERVER_PORT: 8585
       OPENMETADATA_JWT_SECRET: ${OPENMETADATA_JWT_SECRET}
@@ -742,6 +743,7 @@ services:
       - "traefik.http.services.dts-openmetadata.loadbalancer.server.port=8585"
       - "traefik.http.routers.dts-openmetadata.middlewares=platform-forward-auth@file,security-headers@file"
     volumes:
+      - /etc/localtime:/etc/localtime:ro
       - ./logs/openmetadata:/opt/openmetadata/logs:z
     restart: unless-stopped
     networks:
@@ -762,6 +764,7 @@ services:
         condition: service_healthy
     environment:
       TZ: ${TZ:-Asia/Shanghai}
+      JAVA_TOOL_OPTIONS: "-Duser.timezone=Asia/Shanghai"
       OPENMETADATA_CLUSTER_NAME: dts-openmetadata
       OPENMETADATA_SERVER_PORT: 8585
       OPENMETADATA_JWT_SECRET: ${OPENMETADATA_JWT_SECRET}
@@ -778,6 +781,7 @@ services:
       ELASTICSEARCH_PORT: 9200
       ELASTICSEARCH_SCHEME: http
     volumes:
+      - /etc/localtime:/etc/localtime:ro
       - ./logs/openmetadata:/opt/openmetadata/logs:z
     restart: "no"
     networks:
@@ -803,6 +807,7 @@ services:
       PG_PORT: ${PG_PORT}
       PG_DB_DTPS: ${PG_DB_DTPS}
     volumes:
+      - /etc/localtime:/etc/localtime:ro
       - ./services/dts-openmetadata/ingestion:/opt/openmetadata/ingestion:ro,z
       - ./services/dts-dbt:/opt/dbt:ro,z
     command: [ "-c", "sh /opt/openmetadata/ingestion/run-dbt-ingestion.sh" ]

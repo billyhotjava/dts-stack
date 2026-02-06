@@ -143,6 +143,79 @@ save_image() {
   echo "[dts-build] Saved ${tar_path}"
 }
 
+assert_distinct_backend_images() {
+  local specs=(
+    "dts-admin|${IMAGE_DTS_ADMIN}"
+    "dts-platform|${IMAGE_DTS_PLATFORM}"
+    "dts-ingestion|${IMAGE_DTS_INGESTION}"
+    "dts-analytics|${IMAGE_DTS_ANALYTICS}"
+  )
+  declare -A seen=()
+  local spec name tag
+  for spec in "${specs[@]}"; do
+    name="${spec%%|*}"
+    tag="${spec#*|}"
+    if [[ -n "${seen[$tag]:-}" ]]; then
+      echo "[dts-build] ERROR: image tag collision detected: ${name} and ${seen[$tag]} both use '${tag}'." >&2
+      echo "[dts-build]        Check IMAGE_DTS_* values in ${IMGVERSION_FILE} / .env." >&2
+      exit 1
+    fi
+    seen["$tag"]="$name"
+  done
+}
+
+list_jar_entries() {
+  local jar_path="$1"
+  if command -v unzip >/dev/null 2>&1; then
+    unzip -Z1 "$jar_path"
+    return 0
+  fi
+  if command -v jar >/dev/null 2>&1; then
+    jar tf "$jar_path"
+    return 0
+  fi
+  return 1
+}
+
+validate_module_jar_identity() {
+  local module="$1"
+  local jar_path="$2"
+  local expected=""
+  case "$module" in
+    dts-analytics)
+      expected="com/yuzhi/dts/analytics/DtsAnalyticsApp.class"
+      ;;
+    dts-ingestion)
+      expected="com/yuzhi/dts/ingestion/DtsIngestionApp.class"
+      ;;
+    *)
+      return 0
+      ;;
+  esac
+
+  if ! list_jar_entries "$jar_path" >/tmp/.dts-build-jar-entries.$$ 2>/dev/null; then
+    echo "[dts-build] WARN: cannot inspect ${jar_path} (missing 'unzip' or 'jar'); skip identity check for ${module}." >&2
+    return 0
+  fi
+
+  if ! grep -Fq "$expected" "/tmp/.dts-build-jar-entries.$$"; then
+    echo "[dts-build] ERROR: ${jar_path} does not look like ${module} artifact (missing ${expected})." >&2
+    rm -f "/tmp/.dts-build-jar-entries.$$"
+    exit 1
+  fi
+  rm -f "/tmp/.dts-build-jar-entries.$$"
+}
+
+verify_prebuilt_module_jar() {
+  local module="$1"
+  local jar_path="$2"
+  if [[ ! -f "$jar_path" ]]; then
+    echo "[dts-build] ERROR: required prebuilt jar missing: ${jar_path}" >&2
+    exit 1
+  fi
+  validate_module_jar_identity "$module" "$jar_path"
+}
+
 build_image_ctx() {
   local name="$1"
   local tag="$2"
@@ -275,6 +348,7 @@ MAVEN_SETTINGS_EOF
   mkdir -p "$(dirname "$out_jar")"
   cp "$jar_path" "$out_jar"
   echo "[dts-build] Copied ${jar_path} -> ${out_jar}"
+  validate_module_jar_identity "$module" "$out_jar"
 }
 
 init_images_normal() {
@@ -289,6 +363,7 @@ init_images_normal() {
   IMAGE_DTS_AIRFLOW_OM="${IMAGE_DTS_AIRFLOW_OM:-${IMAGE_AIRFLOW:-dts-airflow-om:local}}"
   IMAGE_DTS_DBT="${IMAGE_DTS_DBT:-${IMAGE_DBT:-dts-dbt:1.11.2}}"
   IMAGE_DTS_ADDAX="${IMAGE_DTS_ADDAX:-${IMAGE_ADDAX:-dts-addax:6.0.8}}"
+  assert_distinct_backend_images
 }
 
 init_images_legacy() {
@@ -303,6 +378,7 @@ init_images_legacy() {
   IMAGE_DTS_AIRFLOW_OM="${IMAGE_DTS_AIRFLOW_OM:-${IMAGE_AIRFLOW:-dts-airflow-om:local}}"
   IMAGE_DTS_DBT="${IMAGE_DTS_DBT:-${IMAGE_DBT:-dts-dbt:1.11.2}}"
   IMAGE_DTS_ADDAX="${IMAGE_DTS_ADDAX:-${IMAGE_ADDAX:-dts-addax:6.0.8}}"
+  assert_distinct_backend_images
 }
 
 resolve_image() {
@@ -368,6 +444,13 @@ build_all_normal() {
     build_maven_module "dts-ingestion" "dts-ingestion-*.jar" "${REPO_ROOT}/builds/dts-ingestion/dts-ingestion.jar"
     build_maven_module "dts-analytics" "dts-analytics-*.jar" "${REPO_ROOT}/builds/dts-analytics/dts-analytics.jar"
     enable_maven_build_arg="false"
+  fi
+  if [[ "${PREBUILD_JARS}" != "1" && "${enable_maven_build_arg}" != "true" ]]; then
+    echo "[dts-build] INFO: ENABLE_MAVEN_BUILD=false and PREBUILD_JARS!=1, validating existing prebuilt backend jars."
+    verify_prebuilt_module_jar "dts-admin" "${REPO_ROOT}/builds/dts-admin/dts-admin.jar"
+    verify_prebuilt_module_jar "dts-platform" "${REPO_ROOT}/builds/dts-platform/dts-platform.jar"
+    verify_prebuilt_module_jar "dts-ingestion" "${REPO_ROOT}/builds/dts-ingestion/dts-ingestion.jar"
+    verify_prebuilt_module_jar "dts-analytics" "${REPO_ROOT}/builds/dts-analytics/dts-analytics.jar"
   fi
 
   build_image "dts-admin" "$IMAGE_DTS_ADMIN" "${REPO_ROOT}/builds/dts-admin/Dockerfile" "$NORMAL_DIST" \
@@ -476,6 +559,22 @@ build_single_image() {
       dts-analytics)
         build_maven_module "dts-analytics" "dts-analytics-*.jar" "${REPO_ROOT}/builds/dts-analytics/dts-analytics.jar"
         enable_maven_build_arg="false"
+        ;;
+    esac
+  fi
+  if [[ "${PREBUILD_JARS}" != "1" && "${enable_maven_build_arg}" != "true" ]]; then
+    case "$name" in
+      dts-admin)
+        verify_prebuilt_module_jar "dts-admin" "${REPO_ROOT}/builds/dts-admin/dts-admin.jar"
+        ;;
+      dts-platform)
+        verify_prebuilt_module_jar "dts-platform" "${REPO_ROOT}/builds/dts-platform/dts-platform.jar"
+        ;;
+      dts-ingestion)
+        verify_prebuilt_module_jar "dts-ingestion" "${REPO_ROOT}/builds/dts-ingestion/dts-ingestion.jar"
+        ;;
+      dts-analytics)
+        verify_prebuilt_module_jar "dts-analytics" "${REPO_ROOT}/builds/dts-analytics/dts-analytics.jar"
         ;;
     esac
   fi
