@@ -11,6 +11,7 @@ ARG NPM_HTTP_PROXY
 ARG NPM_HTTPS_PROXY
 ARG NPM_REGISTRY
 ARG PNPM_VERSION=10.8.0
+ARG WEBAPP_BUILD_CMD=build
 
 RUN set -eux; \
     if [ -n "${NPM_REGISTRY:-}" ]; then export npm_config_registry="${NPM_REGISTRY}"; fi; \
@@ -40,7 +41,7 @@ RUN set -eux; \
     unset npm_config_registry npm_config_proxy npm_config_https_proxy http_proxy https_proxy
 
 COPY source/dts-analytics-webapp/modern/ ./
-RUN pnpm build
+RUN pnpm "${WEBAPP_BUILD_CMD}"
 
 FROM nginx:stable-alpine AS runtime
 

@@ -1,4 +1,5 @@
-import { StyleProvider } from "@ant-design/cssinjs";
+import { StyleProvider, legacyLogicalPropertiesTransformer } from "@ant-design/cssinjs";
+import type { Transformer } from "@ant-design/cssinjs";
 import type { ThemeConfig } from "antd";
 import { App, ConfigProvider, theme } from "antd";
 import { ThemeMode } from "#/enum";
@@ -8,6 +9,40 @@ import { removePx, rgbAlpha } from "@/utils/theme";
 import { baseThemeTokens } from "../tokens/base";
 import { darkColorTokens, lightColorTokens, presetsColors } from "../tokens/color";
 import type { UILibraryAdapter } from "../type";
+
+const hasFocusVisiblePattern = /:has\(\s*:focus-visible\s*\)/g;
+const hasAdjacentSiblingPattern = /:has\(\s*\+\s*[^)]+\)/g;
+
+const createLegacyHasSelector = (selector: string) => {
+	if (!selector.includes(":has(")) {
+		return null;
+	}
+
+	const fallbackSelector = selector
+		.replace(hasFocusVisiblePattern, ":focus-within")
+		.replace(hasAdjacentSiblingPattern, ":not(:last-child)");
+
+	if (fallbackSelector === selector || fallbackSelector.includes(":has(") || fallbackSelector.includes(":not()")) {
+		return null;
+	}
+
+	return fallbackSelector;
+};
+
+const legacyHasSelectorTransformer: Transformer = {
+	visit: (cssObj) => {
+		const transformed = { ...cssObj };
+		for (const [selector, style] of Object.entries(cssObj)) {
+			const fallbackSelector = createLegacyHasSelector(selector);
+			if (!fallbackSelector || transformed[fallbackSelector]) {
+				continue;
+			}
+			transformed[fallbackSelector] = style;
+		}
+
+		return transformed;
+	},
+};
 
 export const AntdAdapter: UILibraryAdapter = ({ mode, children }) => {
 	const { language } = useLocale();
@@ -128,7 +163,10 @@ export const AntdAdapter: UILibraryAdapter = ({ mode, children }) => {
 				},
 			}}
 		>
-			<StyleProvider hashPriority="high">
+			<StyleProvider
+				hashPriority="high"
+				transformers={[legacyLogicalPropertiesTransformer, legacyHasSelectorTransformer]}
+			>
 				<App>{children}</App>
 			</StyleProvider>
 		</ConfigProvider>

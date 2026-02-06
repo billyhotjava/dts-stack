@@ -51,7 +51,7 @@
   background: var(--color-brand);
   border-color: var(--color-brand);
   color: var(--color-text-inverse);
-  box-shadow: 0 4px 14px color-mix(in srgb, var(--color-brand) 25%, transparent);
+  box-shadow: 0 4px 14px var(--color-brand-alpha-25);
 }
 
 .mb-button--primary:hover:not(:disabled) {

@@ -46,7 +46,7 @@ function LoginPage() {
 	const brandIllustrationAlt = bilingual("sys.login.brandIllustrationAlt");
 
 	return (
-		<div className="relative grid min-h-screen min-h-svh lg:grid-cols-2 bg-background">
+		<div className="relative grid min-h-screen lg:grid-cols-2 bg-background">
 			{/* Illustration at left on desktop to distinguish from admin style */}
 			<div className="relative hidden bg-background lg:block">
 				<img

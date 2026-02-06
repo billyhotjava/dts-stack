@@ -32,6 +32,7 @@ import {
 	DialogTitle,
 } from "@/ui/dialog";
 import { cn } from "@/utils";
+import { writeTextToClipboard } from "@/utils/clipboard";
 
 const DEFAULT_SQL = `SELECT * FROM your_table LIMIT 100;`;
 
@@ -77,7 +78,10 @@ const copyToClipboard = async (
 	].join("\n");
 
 	try {
-		await navigator.clipboard.writeText(text);
+		const copied = await writeTextToClipboard(text);
+		if (!copied) {
+			throw new Error("copy failed");
+		}
 		// 记录审计日志
 		await auditCopy({
 			rowCount: rows.length,

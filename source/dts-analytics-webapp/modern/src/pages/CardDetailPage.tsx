@@ -10,6 +10,7 @@ import { Input } from "../ui/Input/Input";
 import { Badge } from "../ui/Badge/Badge";
 import { Spinner } from "../ui/Loading/Spinner";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
+import { writeTextToClipboard } from "../hooks/clipboard";
 import "./page.css";
 
 type LoadState<T> =
@@ -147,10 +148,10 @@ export default function CardDetailPage() {
 										icon={shareCopied ? <CheckIcon /> : <CopyIcon />}
 										onClick={async () => {
 											const link = `${window.location.origin}/analytics/public/card/${encodeURIComponent(shareUuid)}`;
-											try {
-												await navigator.clipboard.writeText(link);
+											const copied = await writeTextToClipboard(link);
+											if (copied) {
 												setShareCopied(true);
-											} catch {
+											} else {
 												window.prompt("Copy link:", link);
 												setShareCopied(true);
 											}

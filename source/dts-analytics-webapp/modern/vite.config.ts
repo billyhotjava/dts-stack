@@ -1,9 +1,18 @@
 import react from "@vitejs/plugin-react";
-import { defineConfig } from "vite";
+import { defineConfig, loadEnv } from "vite";
 
 const publicBase = "/analytics/";
 
-export default defineConfig(() => {
+export default defineConfig(({ mode }) => {
+	const rawEnv = loadEnv(mode, process.cwd(), "");
+	const isProduction = mode === "production";
+	const legacyFlagRaw =
+		rawEnv.LEGACY_BROWSER_BUILD ??
+		rawEnv.VITE_LEGACY_BUILD ??
+		(isProduction ? "1" : "0");
+	const normalizedLegacyFlag = String(legacyFlagRaw).trim().toLowerCase();
+	const legacyEnabled = normalizedLegacyFlag !== "0" && normalizedLegacyFlag !== "false";
+	const buildTarget = legacyEnabled ? "chrome95" : "chrome109";
 	const port = Number.parseInt(process.env.PORT ?? "3002", 10);
 	return {
 		base: publicBase,
@@ -20,10 +29,10 @@ export default defineConfig(() => {
 			strictPort: true,
 		},
 		build: {
-			target: "chrome98",
+			target: buildTarget,
 		},
 		esbuild: {
-			target: "chrome98",
+			target: buildTarget,
 		},
 	};
 });

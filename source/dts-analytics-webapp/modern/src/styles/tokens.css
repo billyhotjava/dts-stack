@@ -19,6 +19,10 @@
   --color-bg-dark: hsla(205, 19%, 23%, 1); /* orion[80] */
   --color-bg-sidebar: hsla(205, 19%, 23%, 1); /* orion[80] */
   --color-bg-hover: rgba(80, 158, 227, 0.08);
+  --color-brand-alpha-10: rgba(80, 158, 227, 0.1);
+  --color-brand-alpha-15: rgba(80, 158, 227, 0.15);
+  --color-brand-alpha-20: rgba(80, 158, 227, 0.2);
+  --color-brand-alpha-25: rgba(80, 158, 227, 0.25);
 
   /* Semantic Colors */
   --color-success: #88BF4D;
@@ -139,6 +143,10 @@ html, body {
   --color-bg-dark: #09090b; /* zinc-950 */
   --color-bg-sidebar: #18181b; /* zinc-900 */
   --color-bg-hover: rgba(111, 179, 242, 0.12);
+  --color-brand-alpha-10: rgba(111, 179, 242, 0.1);
+  --color-brand-alpha-15: rgba(111, 179, 242, 0.15);
+  --color-brand-alpha-20: rgba(111, 179, 242, 0.2);
+  --color-brand-alpha-25: rgba(111, 179, 242, 0.25);
 
   --color-success-light: #1E3D1E;
   --color-warning-light: #3D3520;

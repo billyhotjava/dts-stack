@@ -11,6 +11,7 @@ import { NativeSelect } from "../ui/Input/Select";
 import { Badge } from "../ui/Badge/Badge";
 import { Spinner } from "../ui/Loading/Spinner";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
+import { writeTextToClipboard } from "../hooks/clipboard";
 import "./page.css";
 
 type LoadState<T> =
@@ -235,10 +236,10 @@ export default function DashboardDetailPage() {
 										icon={shareCopied ? <CheckIcon /> : <CopyIcon />}
 										onClick={async () => {
 											const link = `${window.location.origin}/analytics/public/dashboard/${encodeURIComponent(shareUuid)}`;
-											try {
-												await navigator.clipboard.writeText(link);
+											const copied = await writeTextToClipboard(link);
+											if (copied) {
 												setShareCopied(true);
-											} catch {
+											} else {
 												window.prompt("Copy link:", link);
 												setShareCopied(true);
 											}

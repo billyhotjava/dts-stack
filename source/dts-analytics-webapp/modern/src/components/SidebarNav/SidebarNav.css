@@ -132,13 +132,13 @@
 }
 
 .mb-sidebar__item--active {
-  background: color-mix(in srgb, var(--color-brand) 15%, transparent);
+  background: var(--color-brand-alpha-15);
   color: var(--color-brand-light, #C7E0F4);
   font-weight: var(--font-weight-semibold);
 }
 
 .mb-sidebar__item--active:hover {
-  background: color-mix(in srgb, var(--color-brand) 20%, transparent);
+  background: var(--color-brand-alpha-20);
 }
 
 .mb-sidebar--collapsed .mb-sidebar__item {

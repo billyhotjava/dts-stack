@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import { resolve as resolvePath } from "node:path";
 import legacy from "@vitejs/plugin-legacy";
 import { unwrapCssLayers } from "./tools/postcss/unwrap-css-layers";
+import { legacyCssFallbacks } from "./tools/postcss/legacy-css-fallbacks";
 
 const rootDir = fileURLToPath(new URL(".", import.meta.url));
 const legacySupportedBrowsers = ["chrome >= 95", "edge >= 95", "firefox >= 102", "safari >= 15.4", "ios >= 15.5", "android >= 95"];
@@ -207,7 +208,7 @@ export default defineConfig(({ mode }) => {
 				},
 			},
 			postcss: {
-				plugins: legacyEnabled ? [unwrapCssLayers()] : [],
+				plugins: legacyEnabled ? [unwrapCssLayers(), legacyCssFallbacks()] : [],
 			},
 		},
 	};

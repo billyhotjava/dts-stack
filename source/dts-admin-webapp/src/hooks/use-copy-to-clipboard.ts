@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { toast } from "sonner";
+import { writeTextToClipboard } from "@/utils/clipboard";
 
 type CopiedValue = string | null;
 type CopyFn = (text: string) => Promise<boolean>;
@@ -12,14 +13,13 @@ export const useCopyToClipboard = (): ReturnType => {
 	const [copiedText, setCopiedText] = useState<CopiedValue>(null);
 
 	const copyFn: CopyFn = async (text) => {
-		if (!navigator?.clipboard) {
-			console.warn("Clipboard not supported");
-			return false;
-		}
-
-		// Try to save to clipboard then save it in the state if worked
 		try {
-			await navigator.clipboard.writeText(text);
+			const copied = await writeTextToClipboard(text);
+			if (!copied) {
+				console.warn("Clipboard not supported");
+				setCopiedText(null);
+				return false;
+			}
 			setCopiedText(text);
 			toast.success("Copied!");
 			return true;

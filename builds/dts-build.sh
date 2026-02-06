@@ -110,6 +110,7 @@ MAVEN_MIRROR_URL="${MAVEN_MIRROR_URL:-https://maven.aliyun.com/repository/public
 NPM_REGISTRY="${NPM_REGISTRY:-https://registry.npmmirror.com}"
 MAVEN_SETTINGS_FILE="${MAVEN_SETTINGS_FILE:-/root/.m2/settings.xml}"
 PREBUILD_JARS="${PREBUILD_JARS:-1}"
+WEBAPP_BUILD_CMD="${WEBAPP_BUILD_CMD:-build}"
 
 require_cmd() {
   if ! command -v "$1" >/dev/null 2>&1; then
@@ -379,18 +380,19 @@ build_all_normal() {
     --build-arg ENABLE_MAVEN_BUILD="${enable_maven_build_arg}"
   build_image "dts-admin-webapp" "$IMAGE_DTS_ADMIN_WEBAPP" "${REPO_ROOT}/builds/dts-admin-webapp/Dockerfile" "$NORMAL_DIST" \
     --build-arg PNPM_VERSION="${PNPM_VERSION}" \
-    --build-arg WEBAPP_BUILD_CMD="build:modern" \
+    --build-arg WEBAPP_BUILD_CMD="${WEBAPP_BUILD_CMD}" \
     --build-arg NPM_REGISTRY="${NPM_REGISTRY:-}" \
     --build-arg NPM_HTTP_PROXY="${NPM_HTTP_PROXY:-${HTTP_PROXY:-}}" \
     --build-arg NPM_HTTPS_PROXY="${NPM_HTTPS_PROXY:-${HTTPS_PROXY:-}}"
   build_image "dts-platform-webapp" "$IMAGE_DTS_PLATFORM_WEBAPP" "${REPO_ROOT}/builds/dts-platform-webapp/Dockerfile" "$NORMAL_DIST" \
     --build-arg PNPM_VERSION="${PNPM_VERSION}" \
-    --build-arg WEBAPP_BUILD_CMD="build:modern" \
+    --build-arg WEBAPP_BUILD_CMD="${WEBAPP_BUILD_CMD}" \
     --build-arg NPM_REGISTRY="${NPM_REGISTRY:-}" \
     --build-arg NPM_HTTP_PROXY="${NPM_HTTP_PROXY:-${HTTP_PROXY:-}}" \
     --build-arg NPM_HTTPS_PROXY="${NPM_HTTPS_PROXY:-${HTTPS_PROXY:-}}"
   build_image "dts-analytics-webapp-modern" "$IMAGE_DTS_ANALYTICS_WEBAPP_MODERN" "${REPO_ROOT}/builds/dts-analytics-webapp/modern/Dockerfile" "$NORMAL_DIST" \
     --build-arg PNPM_VERSION="${PNPM_VERSION}" \
+    --build-arg WEBAPP_BUILD_CMD="${WEBAPP_BUILD_CMD}" \
     --build-arg NPM_REGISTRY="${NPM_REGISTRY:-}" \
     --build-arg NPM_HTTP_PROXY="${NPM_HTTP_PROXY:-${HTTP_PROXY:-}}" \
     --build-arg NPM_HTTPS_PROXY="${NPM_HTTPS_PROXY:-${HTTPS_PROXY:-}}"
@@ -418,18 +420,19 @@ build_all_legacy() {
   build_image "dts-analytics" "$IMAGE_DTS_ANALYTICS" "${REPO_ROOT}/builds/dts-analytics/Dockerfile.offline" "$LEGACY_DIST"
   build_image "dts-admin-webapp" "$IMAGE_DTS_ADMIN_WEBAPP" "${REPO_ROOT}/builds/dts-admin-webapp/Dockerfile" "$LEGACY_DIST" \
     --build-arg PNPM_VERSION="${PNPM_VERSION}" \
-    --build-arg WEBAPP_BUILD_CMD="build:modern" \
+    --build-arg WEBAPP_BUILD_CMD="${WEBAPP_BUILD_CMD}" \
     --build-arg NPM_REGISTRY="${NPM_REGISTRY:-}" \
     --build-arg NPM_HTTP_PROXY="${NPM_HTTP_PROXY:-${HTTP_PROXY:-}}" \
     --build-arg NPM_HTTPS_PROXY="${NPM_HTTPS_PROXY:-${HTTPS_PROXY:-}}"
   build_image "dts-platform-webapp" "$IMAGE_DTS_PLATFORM_WEBAPP" "${REPO_ROOT}/builds/dts-platform-webapp/Dockerfile" "$LEGACY_DIST" \
     --build-arg PNPM_VERSION="${PNPM_VERSION}" \
-    --build-arg WEBAPP_BUILD_CMD="build:modern" \
+    --build-arg WEBAPP_BUILD_CMD="${WEBAPP_BUILD_CMD}" \
     --build-arg NPM_REGISTRY="${NPM_REGISTRY:-}" \
     --build-arg NPM_HTTP_PROXY="${NPM_HTTP_PROXY:-${HTTP_PROXY:-}}" \
     --build-arg NPM_HTTPS_PROXY="${NPM_HTTPS_PROXY:-${HTTPS_PROXY:-}}"
   build_image "dts-analytics-webapp-modern" "$IMAGE_DTS_ANALYTICS_WEBAPP_MODERN" "${REPO_ROOT}/builds/dts-analytics-webapp/modern/Dockerfile" "$LEGACY_DIST" \
     --build-arg PNPM_VERSION="${PNPM_VERSION}" \
+    --build-arg WEBAPP_BUILD_CMD="${WEBAPP_BUILD_CMD}" \
     --build-arg NPM_REGISTRY="${NPM_REGISTRY:-}" \
     --build-arg NPM_HTTP_PROXY="${NPM_HTTP_PROXY:-${HTTP_PROXY:-}}" \
     --build-arg NPM_HTTPS_PROXY="${NPM_HTTPS_PROXY:-${HTTPS_PROXY:-}}"
@@ -510,13 +513,14 @@ build_single_image() {
       build_args+=(--build-arg ENABLE_MAVEN_BUILD="${enable_maven_build_arg}")
       ;;
     dts-admin-webapp|dts-platform-webapp)
-      build_args+=(--build-arg PNPM_VERSION="${PNPM_VERSION}" --build-arg WEBAPP_BUILD_CMD="build:modern"
+      build_args+=(--build-arg PNPM_VERSION="${PNPM_VERSION}" --build-arg WEBAPP_BUILD_CMD="${WEBAPP_BUILD_CMD}"
         --build-arg NPM_REGISTRY="${NPM_REGISTRY:-}"
         --build-arg NPM_HTTP_PROXY="${NPM_HTTP_PROXY:-${HTTP_PROXY:-}}"
         --build-arg NPM_HTTPS_PROXY="${NPM_HTTPS_PROXY:-${HTTPS_PROXY:-}}")
       ;;
     dts-analytics-webapp-modern)
       build_args+=(--build-arg PNPM_VERSION="${PNPM_VERSION}"
+        --build-arg WEBAPP_BUILD_CMD="${WEBAPP_BUILD_CMD}"
         --build-arg NPM_REGISTRY="${NPM_REGISTRY:-}"
         --build-arg NPM_HTTP_PROXY="${NPM_HTTP_PROXY:-${HTTP_PROXY:-}}"
         --build-arg NPM_HTTPS_PROXY="${NPM_HTTPS_PROXY:-${HTTPS_PROXY:-}}")
