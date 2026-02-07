@@ -172,14 +172,14 @@
 /* Shadcn UI Dark Theme — Elevation: darker bg → lighter card → lighter popover */
 [data-theme-mode="dark"] {
 	--background: #212121;
-	/* content area gray — lighter than sidebar */
+	/* lighter gray — content area background */
 	--foreground: hsla(0, 0%, 100%, 0.95);
 	/* orionAlphaInverse[80] */
 	--card: #2a2a2a;
-	/* slightly lighter for elevated cards */
+	/* slightly lighter — elevated cards */
 	--card-foreground: hsla(0, 0%, 100%, 0.95);
 	--popover: #333333;
-	/* even lighter for highest elevation */
+	/* even lighter for popovers */
 	/* even lighter — highest elevation */
 	--popover-foreground: hsla(0, 0%, 100%, 0.95);
 	--primary: var(--colors-palette-primary-default);

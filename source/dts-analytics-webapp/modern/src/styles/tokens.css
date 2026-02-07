@@ -154,15 +154,15 @@ body {
 
   /* Background Colors — ChatGPT-inspired dark theme */
   --color-bg-primary: #212121;
-  /* content area gray — lighter than sidebar */
+  /* lighter gray — content area background */
   --color-bg-card: #2a2a2a;
-  /* slightly lighter for elevated cards */
+  /* slightly lighter — elevated cards */
   --color-bg-secondary: #212121;
-  /* content area gray */
+  /* lighter gray */
   --color-bg-tertiary: #333333;
-  /* even lighter for highest elevation */
-  --color-bg-dark: #212121;
-  /* content area gray */
+  /* even lighter for popovers */
+  --color-bg-dark: #171717;
+  /* dark black for sidebar */
   --color-bg-sidebar: #171717;
   /* dark black for sidebar */
   --color-bg-hover: rgba(111, 179, 242, 0.12);
