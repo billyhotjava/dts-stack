@@ -134,8 +134,10 @@
 /* Shadcn UI Light Theme */
 :root {
 	--radius: 0.5rem;
-	--background: #f8fafc; /* slate-50 */
-	--foreground: hsla(204, 66%, 8%, 0.84); /* orionAlpha[80] */
+	--background: #f8fafc;
+	/* slate-50 */
+	--foreground: hsla(204, 66%, 8%, 0.84);
+	/* orionAlpha[80] */
 	--card: var(--colors-common-white);
 	--card-foreground: var(--colors-common-black);
 	--popover: var(--colors-common-white);
@@ -169,11 +171,15 @@
 
 /* Shadcn UI Dark Theme — Elevation: darker bg → lighter card → lighter popover */
 [data-theme-mode="dark"] {
-	--background: #2f2f2f; /* dark gray — content area (ChatGPT-inspired) */
-	--foreground: hsla(0, 0%, 100%, 0.95); /* orionAlphaInverse[80] */
-	--card: #3a3a3a; /* lighter gray — elevated cards */
+	--background: #343541;
+	/* ChatGPT content gray — lighter for readability */
+	--foreground: hsla(0, 0%, 100%, 0.95);
+	/* orionAlphaInverse[80] */
+	--card: #444654;
+	/* slightly lighter — elevated cards */
 	--card-foreground: hsla(0, 0%, 100%, 0.95);
-	--popover: #424242; /* even lighter gray — highest elevation */
+	--popover: #4e4f5e;
+	/* even lighter — highest elevation */
 	--popover-foreground: hsla(0, 0%, 100%, 0.95);
 	--primary: var(--colors-palette-primary-default);
 	--primary-foreground: var(--colors-common-white);
@@ -193,7 +199,8 @@
 	--chart-3: #f59e0b;
 	--chart-4: #d946ef;
 	--chart-5: #ef4444;
-	--sidebar: #171717; /* very dark black — sidebar (ChatGPT-inspired) */
+	--sidebar: #0d0d0d;
+	/* very dark black — sidebar (ChatGPT left panel) */
 	--sidebar-foreground: var(--colors-text-primary);
 	--sidebar-primary: var(--colors-palette-primary-default);
 	--sidebar-primary-foreground: var(--colors-common-white);
@@ -203,10 +210,14 @@
 	--sidebar-ring: var(--colors-palette-primary-default);
 
 	/* Override text colors for dark mode — Metabase Orion Alpha Inverse */
-	--colors-text-primary: hsla(0, 0%, 100%, 0.95); /* orionAlphaInverse[80] */
-	--colors-text-secondary: hsla(0, 0%, 100%, 0.69); /* orionAlphaInverse[60] */
-	--colors-text-tertiary: hsla(0, 0%, 100%, 0.46); /* orionAlphaInverse[40] */
-	--colors-text-disabled: hsla(0, 0%, 100%, 0.33); /* orionAlphaInverse[30] */
+	--colors-text-primary: hsla(0, 0%, 100%, 0.95);
+	/* orionAlphaInverse[80] */
+	--colors-text-secondary: hsla(0, 0%, 100%, 0.69);
+	/* orionAlphaInverse[60] */
+	--colors-text-tertiary: hsla(0, 0%, 100%, 0.46);
+	/* orionAlphaInverse[40] */
+	--colors-text-disabled: hsla(0, 0%, 100%, 0.33);
+	/* orionAlphaInverse[30] */
 
 	/* Elevation border hint */
 	--border: rgba(255, 255, 255, 0.05);

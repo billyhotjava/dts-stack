@@ -235,15 +235,15 @@
 
 /* Shadcn UI Dark Theme — Elevation: darker bg → lighter card → lighter popover */
 [data-theme-mode="dark"] {
-	--background: #2f2f2f;
-	/* dark gray — content area (ChatGPT-inspired) */
+	--background: #343541;
+	/* ChatGPT content gray — lighter for readability */
 	--foreground: hsla(0, 0%, 100%, 0.95);
 	/* orionAlphaInverse[80] */
-	--card: #3a3a3a;
-	/* lighter gray — elevated cards */
+	--card: #444654;
+	/* slightly lighter — elevated cards */
 	--card-foreground: hsla(0, 0%, 100%, 0.95);
-	--popover: #424242;
-	/* even lighter gray — highest elevation */
+	--popover: #4e4f5e;
+	/* even lighter — highest elevation */
 	--popover-foreground: hsla(0, 0%, 100%, 0.95);
 	--primary: var(--colors-palette-primary-default);
 	--primary-foreground: var(--colors-common-white);
@@ -263,8 +263,8 @@
 	--chart-3: #f59e0b;
 	--chart-4: #d946ef;
 	--chart-5: #ef4444;
-	--sidebar: #171717;
-	/* very dark black — sidebar (ChatGPT-inspired) */
+	--sidebar: #0d0d0d;
+	/* very dark black — sidebar (ChatGPT left panel) */
 	--sidebar-foreground: var(--colors-text-primary);
 	--sidebar-primary: var(--colors-palette-primary-default);
 	--sidebar-primary-foreground: var(--colors-common-white);

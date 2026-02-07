@@ -153,18 +153,18 @@ body {
   --color-text-link: #6FB3F2;
 
   /* Background Colors — Zinc elevation layers */
-  --color-bg-primary: #2f2f2f;
-  /* dark gray — content area (ChatGPT-inspired) */
-  --color-bg-card: #3a3a3a;
-  /* lighter gray — elevated cards */
-  --color-bg-secondary: #2f2f2f;
-  /* dark gray — content area */
-  --color-bg-tertiary: #424242;
-  /* even lighter gray — highest elevation */
-  --color-bg-dark: #2f2f2f;
-  /* dark gray — content area */
-  --color-bg-sidebar: #171717;
-  /* very dark black — sidebar (ChatGPT-inspired) */
+  --color-bg-primary: #343541;
+  /* ChatGPT content gray — lighter for readability */
+  --color-bg-card: #444654;
+  /* slightly lighter — elevated cards */
+  --color-bg-secondary: #343541;
+  /* ChatGPT content gray */
+  --color-bg-tertiary: #4e4f5e;
+  /* even lighter — highest elevation */
+  --color-bg-dark: #343541;
+  /* ChatGPT content gray */
+  --color-bg-sidebar: #0d0d0d;
+  /* very dark black — sidebar (ChatGPT left panel) */
   --color-bg-hover: rgba(111, 179, 242, 0.12);
   --color-brand-alpha-10: rgba(111, 179, 242, 0.1);
   --color-brand-alpha-15: rgba(111, 179, 242, 0.15);
