@@ -1,7 +1,5 @@
 import { NavLink } from "react-router";
 import { Icon } from "@/components/icon";
-import { GLOBAL_CONFIG } from "@/global-config";
-// import { useBilingualText } from "@/hooks/useBilingualText";
 
 export default function Brand() {
 	// const bilingual = useBilingualText();
