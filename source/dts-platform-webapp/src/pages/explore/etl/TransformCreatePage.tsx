@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Alert, Button, Card, Collapse, Divider, Form, Input, InputNumber, Modal, Radio, Select, Space, Steps, Switch, Table, Tag, Typography, Upload } from "antd";
-import { SaveOutlined, InboxOutlined } from "@ant-design/icons";
+import { SaveOutlined, InboxOutlined, PlusOutlined, DeleteOutlined } from "@ant-design/icons";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
 import { createIngestionTask, listSqlModels } from "@/api/platformApi";
@@ -2209,9 +2209,20 @@ export default function TransformCreatePage() {
 												pagination={false}
 												columns={[
 													{
-														title: "原始列名",
+														title: "显示名称",
 														dataIndex: "label",
-														render: (_: any, record: any) => record.label || record.name,
+														render: (value: string, _: any, index: number) => (
+															<Input
+																size="small"
+																value={value || ""}
+																placeholder="中文名/显示名"
+																onChange={(e) => {
+																	const cols = [...(fileUploadResult.columns || [])];
+																	cols[index] = { ...cols[index], label: e.target.value };
+																	setFileUploadResult({ ...fileUploadResult, columns: cols });
+																}}
+															/>
+														),
 													},
 													{
 														title: "字段名",
@@ -2220,6 +2231,7 @@ export default function TransformCreatePage() {
 															<Input
 																size="small"
 																value={value}
+																placeholder="英文字段名"
 																onChange={(e) => {
 																	const cols = [...(fileUploadResult.columns || [])];
 																	cols[index] = { ...cols[index], name: e.target.value };
@@ -2319,8 +2331,40 @@ export default function TransformCreatePage() {
 															return <Text type="secondary">-</Text>;
 														},
 													},
+													{
+														title: "操作",
+														width: 60,
+														align: "center" as const,
+														render: (_: any, __: any, index: number) => (
+															<Button
+																type="text"
+																danger
+																size="small"
+																icon={<DeleteOutlined />}
+																onClick={() => {
+																	const cols = [...(fileUploadResult.columns || [])];
+																	cols.splice(index, 1);
+																	setFileUploadResult({ ...fileUploadResult, columns: cols });
+																}}
+															/>
+														),
+													},
 												]}
 											/>
+											<Button
+												type="dashed"
+												size="small"
+												icon={<PlusOutlined />}
+												className="mt-2"
+												onClick={() => {
+													const cols = [...(fileUploadResult.columns || [])];
+													const idx = cols.length + 1;
+													cols.push({ name: `col_${idx}`, type: "string", label: "", length: 500 });
+													setFileUploadResult({ ...fileUploadResult, columns: cols });
+												}}
+											>
+												添加列
+											</Button>
 											{Array.isArray(fileUploadResult.preview) && fileUploadResult.preview.length > 0 && (
 												<>
 													<Divider orientation="left" className="mt-4">
