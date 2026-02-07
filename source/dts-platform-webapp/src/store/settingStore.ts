@@ -58,14 +58,14 @@ const useSettingStore = create<SettingStore>()(
 			name: StorageEnum.Settings, // name of the item in the storage (must be unique)
 			storage: createJSONStorage(() => localStorage), // (optional) by default, 'localStorage' is used
 			partialize: (state) => ({ [StorageEnum.Settings]: state.settings }),
-			version: 5,
+			version: 6,
 			migrate: (persistedState: any, version) => {
 				try {
 					const key = (StorageEnum as any).Settings || "settings";
 					const settings = (persistedState && (persistedState[key] || persistedState.settings)) || {};
 
-					// v5: ensure dark sidebar enabled
-					if (typeof version === "number" && version < 5) {
+					// v6: ensure dark sidebar enabled
+					if (typeof version === "number" && version < 6) {
 						settings.themeMode = ThemeMode.Light;
 						settings.darkSidebar = true;
 					}

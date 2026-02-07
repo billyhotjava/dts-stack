@@ -7,10 +7,71 @@
 
 .main {
   flex: 1;
+  display: flex;
+  flex-direction: column;
   background: var(--color-bg-secondary);
   color: var(--color-text-primary);
   overflow-y: auto;
   overflow-x: hidden;
+}
+
+/* Top header bar — matches admin/platform */
+.main-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--spacing-lg);
+  height: 56px;
+  min-height: 56px;
+  background: var(--color-bg-primary);
+  border-bottom: 1px solid var(--color-border);
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky);
+}
+
+.main-header__left {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  font-size: var(--font-size-md);
+  color: var(--color-text-secondary);
+}
+
+.main-header__right {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.main-content {
+  flex: 1;
+}
+
+/* Header user trigger (in content area, not sidebar) */
+.header-user-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: background-color var(--transition-fast), color var(--transition-fast);
+}
+
+.header-user-trigger:hover {
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-primary);
+}
+
+.header-user-trigger:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
 }
 
 /* Sidebar Logo Link */

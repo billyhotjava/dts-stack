@@ -54,7 +54,7 @@ const useSettingStore = create<SettingStore>()(
 			name: StorageEnum.Settings, // name of the item in the storage (must be unique)
 			storage: createJSONStorage(() => localStorage), // (optional) by default, 'localStorage' is used
 			partialize: (state) => ({ [StorageEnum.Settings]: state.settings }),
-			version: 4,
+			version: 5,
 			migrate: (persistedState: any, version) => {
 				try {
 					const key = (StorageEnum as any).Settings || "settings";
@@ -70,8 +70,8 @@ const useSettingStore = create<SettingStore>()(
 					if (!settings.fontFamily || typeof settings.fontFamily !== "string") {
 						settings.fontFamily = FontFamilyPreset.openSans;
 					}
-					// v4: ensure dark sidebar enabled
-					if (typeof version === "number" && version < 4) {
+					// v5: ensure dark sidebar enabled
+					if (typeof version === "number" && version < 5) {
 						settings.darkSidebar = true;
 					}
 					persistedState[key] = { ...settings };

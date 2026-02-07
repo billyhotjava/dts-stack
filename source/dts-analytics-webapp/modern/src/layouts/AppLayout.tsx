@@ -142,8 +142,8 @@ export function AppLayout() {
 				<path d="M50 40 l2 -2 m-4 0 l3 -3" stroke="currentColor" strokeOpacity="0.5" strokeWidth="2" />
 			</svg>
 			<div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1 }}>
-				<span style={{ fontSize: '18px', fontWeight: 700, letterSpacing: '-0.025em', color: 'var(--color-text-primary)' }}>BI数智平台</span>
-				<span style={{ fontSize: '10px', fontWeight: 500, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginTop: '4px', opacity: 0.8 }}>机密 (Confidential)</span>
+				<span style={{ fontSize: '18px', fontWeight: 700, letterSpacing: '-0.025em', color: 'var(--color-sidebar-text)' }}>BI数智平台</span>
+				<span style={{ fontSize: '10px', fontWeight: 500, color: 'var(--color-sidebar-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginTop: '4px', opacity: 0.8 }}>机密 (Confidential)</span>
 			</div>
 		</Link>
 	);
@@ -174,7 +174,7 @@ export function AppLayout() {
 	const UserMenu = (
 		<Dropdown
 			trigger={
-				<button className="user-menu-trigger" type="button">
+				<button className="header-user-trigger" type="button">
 					<UserIcon />
 				</button>
 			}
@@ -197,15 +197,9 @@ export function AppLayout() {
 					logo={Logo}
 					logoCollapsed={LogoCollapsed}
 					header={
-						<div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-							<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 4px' }}>
-								<span style={{ fontSize: '12px', fontWeight: 500, opacity: 0.7 }}>Theme</span>
-								<ThemeToggle showLabel={false} />
-							</div>
-							<SidebarSearch placeholder={t(locale, "nav.search")} />
-						</div>
+						<SidebarSearch placeholder={t(locale, "nav.search")} />
 					}
-					footer={UserMenu}
+					footer={null}
 				>
 					<SidebarSection title={t(locale, "nav.section.core")}>
 						<SidebarItem to="/" icon={<HomeIcon />} label={t(locale, "nav.home")} end />
@@ -234,9 +228,20 @@ export function AppLayout() {
 				</SidebarNav>
 
 				<main className="main">
-					<ErrorBoundary>
-						<Outlet />
-					</ErrorBoundary>
+					<header className="main-header">
+						<div className="main-header__left">
+							{/* breadcrumb placeholder */}
+						</div>
+						<div className="main-header__right">
+							<ThemeToggle showLabel={false} />
+							{UserMenu}
+						</div>
+					</header>
+					<div className="main-content">
+						<ErrorBoundary>
+							<Outlet />
+						</ErrorBoundary>
+					</div>
 				</main>
 			</div>
 		</SidebarProvider>
