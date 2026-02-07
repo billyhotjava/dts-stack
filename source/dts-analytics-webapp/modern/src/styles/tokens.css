@@ -152,15 +152,15 @@ body {
   /* orionAlpha[80] */
   --color-text-link: #6FB3F2;
 
-  /* Background Colors — ChatGPT-inspired dark theme */
+  /* Background Colors — Unified gray for content area */
   --color-bg-primary: #212121;
-  /* lighter gray — content area background */
-  --color-bg-card: #2a2a2a;
-  /* slightly lighter — elevated cards */
+  /* unified gray — content area */
+  --color-bg-card: #212121;
+  /* SAME as background */
   --color-bg-secondary: #212121;
-  /* lighter gray */
-  --color-bg-tertiary: #333333;
-  /* even lighter for popovers */
+  /* SAME as background */
+  --color-bg-tertiary: #212121;
+  /* SAME as background */
   --color-bg-dark: #171717;
   /* dark black for sidebar */
   --color-bg-sidebar: #171717;
