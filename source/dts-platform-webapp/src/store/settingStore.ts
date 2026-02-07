@@ -37,7 +37,7 @@ const useSettingStore = create<SettingStore>()(
 				breadCrumb: true,
 				accordion: false,
 				multiTab: false,
-				darkSidebar: false,
+				darkSidebar: true,
 				fontFamily: FontFamilyPreset.openSans,
 				fontSize: Number(typographyTokens.fontSize.default),
 				direction: "ltr",
@@ -64,10 +64,10 @@ const useSettingStore = create<SettingStore>()(
 					const key = (StorageEnum as any).Settings || "settings";
 					const settings = (persistedState && (persistedState[key] || persistedState.settings)) || {};
 
-					// v5: Linear-style light sidebar
+					// v5: ensure dark sidebar enabled
 					if (typeof version === "number" && version < 5) {
 						settings.themeMode = ThemeMode.Light;
-						settings.darkSidebar = false;
+						settings.darkSidebar = true;
 					}
 					// Coerce fontSize to a valid number and clamp sane range
 					const raw = settings.fontSize;

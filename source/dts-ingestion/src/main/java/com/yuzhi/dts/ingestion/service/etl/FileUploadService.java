@@ -10,8 +10,10 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.UUID;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellType;
@@ -104,11 +106,11 @@ public class FileUploadService {
                 return columns;
             }
             Row sampleRow = sheet.getRow(1);
-            List<String> used = new ArrayList<>();
+            Set<String> used = new LinkedHashSet<>();
             for (int i = 0; i < headerRow.getLastCellNum(); i++) {
                 Cell headerCell = headerRow.getCell(i);
                 String label = cellToString(headerCell);
-                String name = normalizeColumnName(label, i, used);
+                String name = SqlFieldNameResolver.resolve(label, i, used);
                 String type = "string";
                 if (sampleRow != null) {
                     Cell sampleCell = sampleRow.getCell(i);
@@ -135,14 +137,14 @@ public class FileUploadService {
             String[] headers = headerLine.split(",", -1);
             String sampleLine = reader.readLine();
             String[] samples = sampleLine != null ? sampleLine.split(",", -1) : new String[0];
-            List<String> used = new ArrayList<>();
+            Set<String> used = new LinkedHashSet<>();
             for (int i = 0; i < headers.length; i++) {
                 String label = headers[i].trim();
                 // Strip surrounding quotes
                 if (label.startsWith("\"") && label.endsWith("\"")) {
                     label = label.substring(1, label.length() - 1);
                 }
-                String name = normalizeColumnName(label, i, used);
+                String name = SqlFieldNameResolver.resolve(label, i, used);
                 String type = "string";
                 if (i < samples.length) {
                     type = inferTypeFromString(samples[i].trim());
@@ -227,27 +229,6 @@ public class FileUploadService {
             return "upload";
         }
         return name.replaceAll("[^a-zA-Z0-9._-]", "_");
-    }
-
-    private String normalizeColumnName(String raw, int index, List<String> used) {
-        String base = StringUtils.hasText(raw) ? raw.trim() : "";
-        String safe = base.toLowerCase(Locale.ROOT)
-            .replaceAll("[^a-z0-9_]+", "_")
-            .replaceAll("^_+|_+$", "")
-            .replaceAll("_+", "_");
-        if (!StringUtils.hasText(safe)) {
-            safe = "col_" + (index + 1);
-        }
-        if (Character.isDigit(safe.charAt(0))) {
-            safe = "col_" + safe;
-        }
-        String candidate = safe;
-        int counter = 1;
-        while (used.contains(candidate)) {
-            candidate = safe + "_" + counter++;
-        }
-        used.add(candidate);
-        return candidate;
     }
 
     private String resolveJobDir() {

@@ -70,9 +70,9 @@ const useSettingStore = create<SettingStore>()(
 					if (!settings.fontFamily || typeof settings.fontFamily !== "string") {
 						settings.fontFamily = FontFamilyPreset.openSans;
 					}
-					// v4: Linear-style light sidebar
+					// v4: ensure dark sidebar enabled
 					if (typeof version === "number" && version < 4) {
-						settings.darkSidebar = false;
+						settings.darkSidebar = true;
 					}
 					persistedState[key] = { ...settings };
 				} catch {

@@ -514,24 +514,7 @@ public class ExcelImportService {
     }
 
     private String normalizeColumnName(String raw, int index, Set<String> used) {
-        String base = StringUtils.hasText(raw) ? raw.trim() : "";
-        String safe = base.toLowerCase(Locale.ROOT)
-            .replaceAll("[^a-z0-9_]+", "_")
-            .replaceAll("^_+|_+$", "")
-            .replaceAll("_+", "_");
-        if (!StringUtils.hasText(safe)) {
-            safe = "col_" + (index + 1);
-        }
-        if (Character.isDigit(safe.charAt(0))) {
-            safe = "col_" + safe;
-        }
-        String candidate = safe;
-        int counter = 1;
-        while (used.contains(candidate)) {
-            candidate = safe + "_" + counter++;
-        }
-        used.add(candidate);
-        return candidate;
+        return SqlFieldNameResolver.resolve(raw, index, used);
     }
 
     private List<String> normalizeHeaders(List<String> values) {

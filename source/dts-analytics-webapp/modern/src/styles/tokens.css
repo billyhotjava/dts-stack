@@ -16,16 +16,16 @@
   --color-bg-primary: #FFFFFF;
   --color-bg-secondary: #FFFFFF;
   --color-bg-tertiary: #F5F5F5;
-  --color-bg-dark: #F5F5F5;
-  --color-bg-sidebar: #F5F5F5;
+  --color-bg-dark: hsla(205, 19%, 23%, 1);
+  --color-bg-sidebar: hsla(205, 19%, 23%, 1);
   --color-bg-hover: rgba(80, 158, 227, 0.08);
 
-  /* Sidebar-specific variables */
-  --color-sidebar-text: rgba(0, 0, 0, 0.85);
-  --color-sidebar-text-muted: rgba(0, 0, 0, 0.55);
-  --color-sidebar-hover: rgba(0, 0, 0, 0.04);
-  --color-sidebar-border: rgba(0, 0, 0, 0.08);
-  --color-sidebar-input-bg: rgba(0, 0, 0, 0.04);
+  /* Sidebar-specific variables (dark blue sidebar in light mode) */
+  --color-sidebar-text: rgba(255, 255, 255, 0.92);
+  --color-sidebar-text-muted: rgba(255, 255, 255, 0.55);
+  --color-sidebar-hover: rgba(255, 255, 255, 0.08);
+  --color-sidebar-border: rgba(255, 255, 255, 0.08);
+  --color-sidebar-input-bg: rgba(255, 255, 255, 0.05);
   --color-brand-alpha-10: rgba(80, 158, 227, 0.1);
   --color-brand-alpha-15: rgba(80, 158, 227, 0.15);
   --color-brand-alpha-20: rgba(80, 158, 227, 0.2);

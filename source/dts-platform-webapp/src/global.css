@@ -1,7 +1,3 @@
-/* import font */
-@import "@fontsource-variable/open-sans";
-@import "@fontsource-variable/inter";
-
 /* editor */
 @import "react-quill/dist/quill.snow.css";
 
@@ -297,6 +293,24 @@
 
 [data-theme-mode="dark"] :where(.ant-table-wrapper) :where(.ant-table-tbody > tr > td) {
 	border-bottom-color: rgba(255, 255, 255, 0.06) !important;
+}
+
+/* Dark sidebar in light mode — analytics-style dark blue sidebar */
+:root:not([data-theme-mode="dark"]) [data-dark-sidebar="true"] {
+	--background: hsla(205, 19%, 23%, 1);
+	--foreground: rgba(255, 255, 255, 0.92);
+	--border: rgba(255, 255, 255, 0.08);
+	--input: rgba(255, 255, 255, 0.08);
+	--accent: rgba(255, 255, 255, 0.08);
+	--accent-foreground: rgba(255, 255, 255, 0.92);
+	--primary: #7AB8E8;
+	--muted-foreground: rgba(255, 255, 255, 0.55);
+	--colors-text-primary: rgba(255, 255, 255, 0.92);
+	--colors-text-secondary: rgba(255, 255, 255, 0.60);
+	--colors-text-disabled: rgba(255, 255, 255, 0.38);
+	--colors-text-primaryChannel: 255 255 255;
+	--colors-text-secondaryChannel: 255 255 255;
+	--colors-text-disabledChannel: 255 255 255;
 }
 
 /* slash layout */

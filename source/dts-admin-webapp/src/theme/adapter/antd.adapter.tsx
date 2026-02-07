@@ -46,7 +46,7 @@ const legacyHasSelectorTransformer: Transformer = {
 
 export const AntdAdapter: UILibraryAdapter = ({ mode, children }) => {
 	const { language } = useLocale();
-	const { themeColorPresets } = useSettings();
+	const { themeColorPresets, darkSidebar } = useSettings();
 	const algorithm = mode === ThemeMode.Light ? theme.defaultAlgorithm : theme.darkAlgorithm;
 
 	const colorTokens = mode === ThemeMode.Light ? lightColorTokens : darkColorTokens;
@@ -54,7 +54,7 @@ export const AntdAdapter: UILibraryAdapter = ({ mode, children }) => {
 	const primaryColorToken = presetsColors[themeColorPresets];
 
 	const isDark = mode === ThemeMode.Dark;
-	const siderBg = isDark ? "#161616" : "#F5F5F5";
+	const siderBg = isDark ? "#161616" : darkSidebar ? "hsla(205, 19%, 23%, 1)" : "#F5F5F5";
 	const popupBg = isDark ? colorTokens.background.neutral : colorTokens.background.paper;
 
 	const token: ThemeConfig["token"] = {
@@ -112,12 +112,12 @@ export const AntdAdapter: UILibraryAdapter = ({ mode, children }) => {
 			darkItemBg: siderBg,
 			darkPopupBg: popupBg,
 			darkSubMenuItemBg: siderBg,
-			darkItemColor: colorTokens.text.secondary,
-			darkItemHoverBg: "rgba(255,255,255,0.04)",
-			darkItemHoverColor: colorTokens.text.primary,
+			darkItemColor: "rgba(255,255,255,0.60)",
+			darkItemHoverBg: "rgba(255,255,255,0.08)",
+			darkItemHoverColor: "rgba(255,255,255,0.92)",
 			darkItemSelectedBg: rgbAlpha(primaryColorToken.default, 0.16),
-			darkItemSelectedColor: colorTokens.text.primary,
-			darkItemDisabledColor: colorTokens.text.disabled,
+			darkItemSelectedColor: "#C7E0F4",
+			darkItemDisabledColor: "rgba(255,255,255,0.38)",
 		},
 		Button: isDark
 			? {
