@@ -6,17 +6,15 @@ import { GLOBAL_CONFIG } from "@/global-config";
 export default function Brand() {
 	// const bilingual = useBilingualText();
 	// const classified = bilingual("sys.brand.classified") || "机密";
-	const appName = (GLOBAL_CONFIG.appName || "BI数智平台")
-		.replace("系统端", "")
-		.replace(/[（(]机密[)）]/g, "")
-		.trim();
+	const appName = "BI数智平台";
+
 	return (
-		<NavLink to="/" className="inline-flex items-start gap-2 select-none">
-			<Icon icon="mdi:star" size={22} className="text-red-500" color="#ef4444" />
-			<span className="flex flex-col leading-tight">
-				<span className="text-base font-semibold text-foreground">{appName}</span>
-				{/* <span className="text-red-600 font-bold">{classified}</span> */}
-			</span>
+		<NavLink to="/" className="inline-flex items-center gap-3 select-none px-2">
+			<Icon icon="local:ic-logo-sci-fi-data" size={32} className="text-primary" color="var(--colors-palette-primary-default)" />
+			<div className="flex flex-col leading-none">
+				<span className="text-lg font-bold tracking-tight text-foreground">{appName}</span>
+				<span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider mt-1 opacity-80">机密 (Confidential)</span>
+			</div>
 		</NavLink>
 	);
 }

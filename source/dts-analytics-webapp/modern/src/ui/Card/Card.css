@@ -10,7 +10,7 @@
 
 [data-theme="dark"] .mb-card {
   background: var(--color-bg-card, var(--color-bg-primary));
-  border-color: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.08);
 }
 
 /* Variants */

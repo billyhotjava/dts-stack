@@ -81,15 +81,15 @@ export const paletteColors = {
 		darker: "#003768",
 	},
 	gray: {
-		"100": "#F9FAFB",
-		"200": "#F4F6F8",
-		"300": "#DFE3E8",
-		"400": "#C4CDD5",
-		"500": "#919EAB",
-		"600": "#637381",
-		"700": "#454F5B",
-		"800": "#1C252E",
-		"900": "#141A21",
+		"100": "#FAFAFA",
+		"200": "#F5F5F5",
+		"300": "#E8E8E8",
+		"400": "#C8C8C8",
+		"500": "#999999",
+		"600": "#6B6B6B",
+		"700": "#4D4D4D",
+		"800": "#2D2D2D",
+		"900": "#1A1A1A",
 	},
 };
 
@@ -111,14 +111,14 @@ export const lightColorTokens = {
 	common: commonColors,
 	action: actionColors,
 	text: {
-		primary: "hsla(204, 66%, 8%, 0.84)", // orionAlpha[80]
-		secondary: "hsla(204, 66%, 8%, 0.62)", // orionAlpha[60]
-		disabled: "hsla(204, 66%, 8%, 0.44)", // orionAlpha[40]
+		primary: "rgba(0, 0, 0, 0.85)",
+		secondary: "rgba(0, 0, 0, 0.55)",
+		disabled: "rgba(0, 0, 0, 0.35)",
 	},
 	background: {
-		default: "#f8fafc", // slate-50 — off-white page bg
-		paper: commonColors.white, // cards remain white
-		neutral: "hsla(240, 4%, 95%, 1)", // orion[10]
+		default: "#FFFFFF", // pure white page bg
+		paper: "#FFFFFF", // card — same as page, use border to distinguish
+		neutral: "#F5F5F5", // muted / secondary surfaces
 	},
 };
 
@@ -127,13 +127,13 @@ export const darkColorTokens = {
 	common: commonColors,
 	action: actionColors,
 	text: {
-		primary: "hsla(0, 0%, 100%, 0.95)", // orionAlphaInverse[80]
-		secondary: "hsla(0, 0%, 100%, 0.69)", // orionAlphaInverse[60]
-		disabled: "hsla(0, 0%, 100%, 0.46)", // orionAlphaInverse[40]
+		primary: "rgba(255, 255, 255, 0.92)",
+		secondary: "rgba(255, 255, 255, 0.60)",
+		disabled: "rgba(255, 255, 255, 0.38)",
 	},
 	background: {
-		default: "#09090b", // zinc-950 — deepest page bg
-		paper: "#18181b", // zinc-900 — card / elevated surfaces
-		neutral: "#27272a", // zinc-800 — popover / highest elevation
+		default: "#1C1C1C", // comfortable dark page bg
+		paper: "#232323", // card — lighter than page bg for layering
+		neutral: "#2A2A2A", // popover / highest elevation
 	},
 };

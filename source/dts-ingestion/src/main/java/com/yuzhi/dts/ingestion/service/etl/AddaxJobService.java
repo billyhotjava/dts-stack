@@ -115,6 +115,10 @@ public class AddaxJobService {
         "_filePath", "_containerPath", "_fileType", "_fileColumns", "_originalName", "_autoId"
     );
 
+    private static final List<String> COLUMN_RULE_KEYS = List.of(
+        "_columnPrefix", "_columnSuffix", "_extraColumns"
+    );
+
     private Map<String, Object> resolveJobConfig(
         String readerType,
         Map<String, Object> readerConfig,
@@ -150,6 +154,14 @@ public class AddaxJobService {
         }
         if (!isFileReaderType(readerType)) {
             replaceWriterTablePlaceholders(resolvedReader, resolvedWriter);
+        }
+
+        // Inject extra columns via postSql (ALTER TABLE + UPDATE) if configured
+        injectExtraColumnsPostSql(resolvedWriter, writerType);
+
+        // Strip column rule metadata keys from writer config
+        for (String key : COLUMN_RULE_KEYS) {
+            resolvedWriter.remove(key);
         }
 
         // Split into per-table content blocks to avoid Addax multi-table writer bugs
@@ -1204,6 +1216,12 @@ public class AddaxJobService {
             ? quoteIdentifier(schema) + "." + quoteIdentifier(tableName)
             : quoteIdentifier(tableName);
 
+        // Resolve column prefix/suffix rules
+        String colPrefix = normalizeText(writerConfig.get("_columnPrefix"));
+        String colSuffix = normalizeText(writerConfig.get("_columnSuffix"));
+        String safeColPrefix = StringUtils.hasText(colPrefix) ? colPrefix : "";
+        String safeColSuffix = StringUtils.hasText(colSuffix) ? colSuffix : "";
+
         // Build CREATE TABLE IF NOT EXISTS DDL
         StringBuilder ddl = new StringBuilder("CREATE TABLE IF NOT EXISTS ");
         ddl.append(qualifiedTable).append(" (");
@@ -1212,14 +1230,36 @@ public class AddaxJobService {
             ddl.append("\"id\" bigserial primary key");
             first = false;
         }
+        // Source columns (with prefix/suffix applied)
+        List<String> writerColNames = new java.util.ArrayList<>();
         for (Map<String, Object> col : fileColumns) {
             String colName = resolveFileColumnName(col);
             String colType = normalizeText(col.get("type"));
             if (!StringUtils.hasText(colName)) continue;
+            String targetColName = (safeColPrefix + colName + safeColSuffix).toLowerCase(Locale.ROOT);
             if (!first) ddl.append(", ");
             first = false;
-            ddl.append(quoteIdentifier(colName.toLowerCase(Locale.ROOT)))
+            ddl.append(quoteIdentifier(targetColName))
                .append(" ").append(mapFileTypeToPostgres(colType, col));
+            writerColNames.add(quoteIdentifier(targetColName));
+        }
+        // Extra columns (with DEFAULT values, not included in writer column list)
+        Object extraObj = writerConfig.get("_extraColumns");
+        if (extraObj instanceof List<?> extraList && !extraList.isEmpty()) {
+            for (Object item : extraList) {
+                if (!(item instanceof Map<?, ?> extraMap)) continue;
+                String extraName = normalizeText(extraMap.get("name"));
+                String extraType = normalizeText(extraMap.get("type"));
+                String extraDefault = normalizeText(extraMap.get("defaultValue"));
+                if (!StringUtils.hasText(extraName)) continue;
+                if (!first) ddl.append(", ");
+                first = false;
+                ddl.append(quoteIdentifier(extraName.toLowerCase(Locale.ROOT)))
+                   .append(" ").append(mapExtraColumnType(extraType, (Map<?, ?>) item));
+                if (StringUtils.hasText(extraDefault)) {
+                    ddl.append(" DEFAULT ").append(extraDefault);
+                }
+            }
         }
         ddl.append(")");
 
@@ -1240,24 +1280,95 @@ public class AddaxJobService {
         }
         writerConfig.put("preSql", preSql);
 
-        // Replace column: ["*"] with explicit column names so Addax does not need to
-        // query the (potentially non-existent) table to resolve the wildcard.
+        // Set explicit writer columns (source columns with prefix/suffix, excluding extras)
         Object colObj = writerConfig.get("column");
-        if (colObj == null || isWildcardColumn(colObj)) {
-            List<String> colNames = new java.util.ArrayList<>();
-            for (Map<String, Object> col : fileColumns) {
-                String colName = resolveFileColumnName(col);
-                if (StringUtils.hasText(colName)) {
-                    colNames.add(quoteIdentifier(colName.toLowerCase(Locale.ROOT)));
-                }
-            }
-            if (!colNames.isEmpty()) {
-                writerConfig.put("column", colNames);
-                LOG.info("Resolved writer column wildcard to explicit columns: {}", colNames);
-            }
+        if ((colObj == null || isWildcardColumn(colObj)) && !writerColNames.isEmpty()) {
+            writerConfig.put("column", writerColNames);
+            LOG.info("Resolved writer columns to: {}", writerColNames);
         }
 
         LOG.info("Injected CREATE TABLE preSql for file source table: {}", tableName);
+    }
+
+    /**
+     * If _extraColumns is configured in writerConfig, inject ALTER TABLE + UPDATE as postSql.
+     * Extra columns are added AFTER data load to avoid column count mismatch with the reader.
+     */
+    @SuppressWarnings("unchecked")
+    private void injectExtraColumnsPostSql(Map<String, Object> writerConfig, String writerType) {
+        if (writerConfig == null) return;
+        Object extraObj = writerConfig.get("_extraColumns");
+        if (!(extraObj instanceof List<?> extraList) || extraList.isEmpty()) return;
+        if (!isPostgresWriter(writerType)) return;
+
+        List<String> tables = extractTables(writerConfig);
+        if (tables.isEmpty()) return;
+
+        List<String> postSql = new java.util.ArrayList<>();
+        // Preserve existing postSql
+        Object existing = writerConfig.get("postSql");
+        if (existing instanceof List<?> list) {
+            for (Object item : list) {
+                String s = normalizeText(item);
+                if (StringUtils.hasText(s)) postSql.add(s);
+            }
+        }
+
+        for (String rawTable : tables) {
+            String tableName = rawTable.toLowerCase(Locale.ROOT);
+            String schema = normalizeText(writerConfig.get("schema"));
+            int dotIdx = tableName.indexOf('.');
+            if (dotIdx > 0 && dotIdx < tableName.length() - 1) {
+                if (!StringUtils.hasText(schema)) schema = tableName.substring(0, dotIdx);
+                tableName = tableName.substring(dotIdx + 1);
+            }
+            String qualifiedTable = StringUtils.hasText(schema) && !"public".equalsIgnoreCase(schema)
+                ? quoteIdentifier(schema) + "." + quoteIdentifier(tableName)
+                : quoteIdentifier(tableName);
+
+            StringBuilder updateSet = new StringBuilder();
+            for (Object item : extraList) {
+                if (!(item instanceof Map<?, ?> colMap)) continue;
+                String colName = normalizeText(colMap.get("name"));
+                String colType = normalizeText(colMap.get("type"));
+                String defaultVal = normalizeText(colMap.get("defaultValue"));
+                if (!StringUtils.hasText(colName)) continue;
+                String sqlType = mapExtraColumnType(colType, colMap);
+                String quotedCol = quoteIdentifier(colName.toLowerCase(Locale.ROOT));
+
+                postSql.add("ALTER TABLE " + qualifiedTable
+                    + " ADD COLUMN IF NOT EXISTS " + quotedCol + " " + sqlType);
+
+                if (StringUtils.hasText(defaultVal)) {
+                    if (!updateSet.isEmpty()) updateSet.append(", ");
+                    updateSet.append(quotedCol).append(" = ").append(defaultVal);
+                }
+            }
+            if (!updateSet.isEmpty()) {
+                postSql.add("UPDATE " + qualifiedTable + " SET " + updateSet + " WHERE TRUE");
+            }
+        }
+
+        if (!postSql.isEmpty()) {
+            writerConfig.put("postSql", postSql);
+            LOG.info("Injected extra columns postSql: {}", postSql);
+        }
+    }
+
+    private String mapExtraColumnType(String type, Map<?, ?> colMap) {
+        if (!StringUtils.hasText(type)) return "TEXT";
+        return switch (type.toLowerCase(Locale.ROOT)) {
+            case "integer", "int" -> "INTEGER";
+            case "long", "bigint" -> "BIGINT";
+            case "double" -> "DOUBLE PRECISION";
+            case "numeric", "decimal" -> "NUMERIC";
+            case "boolean" -> "BOOLEAN";
+            case "date" -> "DATE";
+            case "timestamp" -> "TIMESTAMP";
+            case "text" -> "TEXT";
+            case "jsonb" -> "JSONB";
+            default -> "VARCHAR(500)";
+        };
     }
 
     private boolean resolveFileAutoId(Map<String, Object> readerConfig) {

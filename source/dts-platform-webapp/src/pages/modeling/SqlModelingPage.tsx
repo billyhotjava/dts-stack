@@ -48,6 +48,7 @@ import {
 	updateSqlModel,
 	deleteSqlModel,
 	importSqlModel,
+	importSqlModelsZip,
 	listModelingPlans,
 	syncDbtModels,
 	getDbtSyncStatus,
@@ -210,6 +211,16 @@ type DbtRefItem = {
 	refSnippet?: string;
 };
 
+type SqlModelZipImportResult = {
+	totalFiles?: number;
+	newFiles?: number;
+	overwrittenFiles?: number;
+	modelFiles?: string[];
+	modelsCreated?: number;
+	modelsUpdated?: number;
+	skippedModels?: string[];
+};
+
 const inferLayer = (name?: string) => {
 	const normalized = (name || "").toLowerCase();
 	if (normalized.startsWith("ods_")) return "ODS";
@@ -249,6 +260,9 @@ export default function SqlModelingPage() {
 	const [importSubmitting, setImportSubmitting] = useState(false);
 	const [sqlFileList, setSqlFileList] = useState<UploadFile[]>([]);
 	const [csvFileList, setCsvFileList] = useState<UploadFile[]>([]);
+	const [zipImportOpen, setZipImportOpen] = useState(false);
+	const [zipImportSubmitting, setZipImportSubmitting] = useState(false);
+	const [zipFileList, setZipFileList] = useState<UploadFile[]>([]);
 	const [syncingModels, setSyncingModels] = useState(false);
 	const [runsLoading, setRunsLoading] = useState(false);
 	const [runs, setRuns] = useState<DagRun[]>([]);
@@ -270,6 +284,7 @@ export default function SqlModelingPage() {
 	const [runForm] = Form.useForm();
 	const [modelForm] = Form.useForm();
 	const [importForm] = Form.useForm();
+	const [zipImportForm] = Form.useForm();
 
 	const loadConfig = useCallback(async () => {
 		setConfigLoading(true);
@@ -531,6 +546,18 @@ export default function SqlModelingPage() {
 		setImportOpen(true);
 	};
 
+	const openZipImportModel = () => {
+		zipImportForm.resetFields();
+		setZipFileList([]);
+		zipImportForm.setFieldsValue({
+			planId: activeSpace?.id || undefined,
+			defaultLayer: "DWD",
+			materialized: "table",
+			enabled: true,
+		});
+		setZipImportOpen(true);
+	};
+
 	const openEditModel = () => {
 		if (!activeModel) return;
 		setEditingModel(activeModel);
@@ -628,6 +655,58 @@ export default function SqlModelingPage() {
 			toast.error(err?.message || "导入失败");
 		} finally {
 			setImportSubmitting(false);
+		}
+	};
+
+	const submitZipImport = async () => {
+		setZipImportSubmitting(true);
+		try {
+			const values = await zipImportForm.validateFields(["planId", "sourceDataSourceId"]);
+			if (zipFileList.length === 0 || !zipFileList[0]?.originFileObj) {
+				throw new Error("请选择 ZIP 文件");
+			}
+			const formData = new FormData();
+			formData.append("planId", values.planId);
+			if (values.sourceDataSourceId) formData.append("sourceDataSourceId", values.sourceDataSourceId);
+			if (values.defaultLayer) formData.append("defaultLayer", normalizeText(values.defaultLayer));
+			if (values.schemaName) formData.append("schemaName", normalizeText(values.schemaName));
+			if (values.materialized) formData.append("materialized", normalizeText(values.materialized));
+			if (values.tags) formData.append("tags", normalizeText(values.tags));
+			if (values.description) formData.append("description", normalizeText(values.description));
+			if (values.status) formData.append("status", normalizeText(values.status));
+			if (values.ownerDept) formData.append("ownerDept", normalizeText(values.ownerDept));
+			if (values.enabled != null) formData.append("enabled", String(values.enabled));
+			formData.append("file", zipFileList[0].originFileObj as File);
+
+			const result = (await importSqlModelsZip(formData)) as SqlModelZipImportResult;
+			const summary = `模型导入完成：新增 ${result?.modelsCreated || 0}，更新 ${result?.modelsUpdated || 0}`;
+			if ((result?.skippedModels || []).length > 0) {
+				Modal.info({
+					title: "ZIP 导入结果",
+					width: 620,
+					content: (
+						<div>
+							<p>{summary}</p>
+							<p>文件处理：导入 {result?.totalFiles || 0}（新增 {result?.newFiles || 0}，覆盖 {result?.overwrittenFiles || 0}）</p>
+							<p style={{ marginTop: 8, fontWeight: 600 }}>跳过的模型：</p>
+							<ul style={{ maxHeight: 220, overflow: "auto", fontSize: 12, paddingLeft: 20 }}>
+								{(result?.skippedModels || []).map((item, idx) => (
+									<li key={`${item}-${idx}`}>{item}</li>
+								))}
+							</ul>
+						</div>
+					),
+				});
+			} else {
+				toast.success(summary);
+			}
+			setZipImportOpen(false);
+			setActiveSpaceKey(`space-${values.planId}`);
+			await loadModels();
+		} catch (err: any) {
+			toast.error(err?.message || "ZIP 导入失败");
+		} finally {
+			setZipImportSubmitting(false);
 		}
 	};
 
@@ -877,6 +956,13 @@ export default function SqlModelingPage() {
 			label: "导入模型",
 			disabled: !workspaceOk,
 			onClick: openImportModel,
+		},
+		{
+			key: "import-zip",
+			icon: <ImportOutlined />,
+			label: "批量导入 ZIP",
+			disabled: !workspaceOk,
+			onClick: openZipImportModel,
 		},
 		{
 			key: "edit",
@@ -1626,6 +1712,113 @@ WHERE status = 'active'`}
 						>
 							<Button>选择 CSV</Button>
 						</Upload>
+					</Form.Item>
+				</Form>
+			</Modal>
+
+			<Modal
+				open={zipImportOpen}
+				title="批量导入模型 ZIP"
+				onCancel={() => setZipImportOpen(false)}
+				footer={
+					<Space>
+						<Button onClick={() => setZipImportOpen(false)}>取消</Button>
+						<Button type="primary" onClick={submitZipImport} loading={zipImportSubmitting}>
+							导入
+						</Button>
+					</Space>
+				}
+			>
+				<Form layout="vertical" form={zipImportForm} disabled={zipImportSubmitting}>
+					<div className="grid gap-4 md:grid-cols-2">
+						<Form.Item name="planId" label="项目空间" rules={[{ required: true, message: "请选择项目空间" }]}>
+							<Select
+								placeholder="选择项目空间"
+								options={spaces.map((space) => ({ label: space.name || "未命名", value: space.id }))}
+							/>
+						</Form.Item>
+						<Form.Item name="defaultLayer" label="默认分层">
+							<Select
+								allowClear
+								placeholder="自动识别失败时使用"
+								options={[
+									{ label: "ODS", value: "ODS" },
+									{ label: "DWD", value: "DWD" },
+									{ label: "DWS", value: "DWS" },
+									{ label: "ADS", value: "ADS" },
+								]}
+							/>
+						</Form.Item>
+					</div>
+					<Form.Item
+						name="sourceDataSourceId"
+						label="来源数据源"
+						rules={[{ required: true, message: "请选择来源数据源" }]}
+					>
+						<Select
+							allowClear
+							placeholder="批量绑定同一来源"
+							options={dataSources.map((ds) => ({
+								label: ds?.name || ds?.id,
+								value: ds?.id,
+							}))}
+						/>
+					</Form.Item>
+					<div className="grid gap-4 md:grid-cols-2">
+						<Form.Item name="schemaName" label="目标 Schema">
+							<Input placeholder="可选，如 dwd" />
+						</Form.Item>
+						<Form.Item name="materialized" label="物化方式">
+							<Select
+								allowClear
+								placeholder="可选"
+								options={[
+									{ label: "table", value: "table" },
+									{ label: "view", value: "view" },
+									{ label: "incremental", value: "incremental" },
+								]}
+							/>
+						</Form.Item>
+					</div>
+					<div className="grid gap-4 md:grid-cols-2">
+						<Form.Item name="status" label="状态">
+							<Select
+								allowClear
+								placeholder="可选"
+								options={[
+									{ label: "草稿", value: "DRAFT" },
+									{ label: "已发布", value: "PUBLISHED" },
+								]}
+							/>
+						</Form.Item>
+						<Form.Item name="enabled" label="启用" valuePropName="checked">
+							<Switch />
+						</Form.Item>
+					</div>
+					<div className="grid gap-4 md:grid-cols-2">
+						<Form.Item name="tags" label="标签 (逗号分隔)">
+							<Input placeholder="可选，如 sales,customer" />
+						</Form.Item>
+						<Form.Item name="ownerDept" label="归属部门">
+							<Input placeholder="可选" />
+						</Form.Item>
+					</div>
+					<Form.Item name="description" label="描述">
+						<Input.TextArea rows={2} placeholder="可选，统一描述" />
+					</Form.Item>
+					<Form.Item label="ZIP 文件" required>
+						<Upload
+							accept=".zip"
+							beforeUpload={() => false}
+							maxCount={1}
+							fileList={zipFileList}
+							onChange={({ fileList }) => setZipFileList(fileList.slice(-1))}
+						>
+							<Button>选择 ZIP</Button>
+						</Upload>
+						<div className="mt-2 text-xs text-muted-foreground">
+							支持标准 dbt 包结构，系统将解析 `models/**/*.sql` 并挂靠到所选项目空间。
+						</div>
 					</Form.Item>
 				</Form>
 			</Modal>

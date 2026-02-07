@@ -53,6 +53,7 @@ export const createSqlModel = (data: any) => api.post({ url: "/modeling/sql-mode
 export const updateSqlModel = (id: string, data: any) => api.put({ url: `/modeling/sql-models/${id}`, data });
 export const deleteSqlModel = (id: string) => api.delete({ url: `/modeling/sql-models/${id}` });
 export const importSqlModel = (data: FormData) => api.post({ url: "/modeling/sql-models/import", data });
+export const importSqlModelsZip = (data: FormData) => api.post({ url: "/modeling/sql-models/import-zip", data });
 export const listDbtSources = (params?: { keyword?: string }) =>
 	api.get({ url: "/modeling/sql-models/dbt/sources", params });
 export const listDbtRefs = (params?: { keyword?: string; layer?: string }) =>

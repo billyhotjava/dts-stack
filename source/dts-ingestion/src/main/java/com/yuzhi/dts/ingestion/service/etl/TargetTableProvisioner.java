@@ -83,6 +83,8 @@ public class TargetTableProvisioner {
                 if (columns.isEmpty()) {
                     throw new IllegalStateException("无法获取源表字段信息: " + mapping.source());
                 }
+                // Apply column prefix/suffix rules if configured
+                columns = applyColumnPrefixSuffix(columns, writerConfig);
                 if (isPostgres(targetInfo.jdbcUrl())) {
                     columns = lowercaseColumnNames(columns);
                 }
@@ -377,6 +379,28 @@ public class TargetTableProvisioner {
         return columns.stream()
             .map(col -> new JdbcMetadataService.ColumnMeta(
                 col.name() != null ? col.name().toLowerCase(Locale.ROOT) : col.name(),
+                col.jdbcType(), col.typeName(), col.columnSize(), col.decimalDigits()
+            ))
+            .toList();
+    }
+
+    private List<JdbcMetadataService.ColumnMeta> applyColumnPrefixSuffix(
+        List<JdbcMetadataService.ColumnMeta> columns,
+        Map<String, Object> writerConfig
+    ) {
+        if (columns == null || columns.isEmpty() || writerConfig == null) {
+            return columns;
+        }
+        String prefix = normalizeText(writerConfig.get("_columnPrefix"));
+        String suffix = normalizeText(writerConfig.get("_columnSuffix"));
+        if (!StringUtils.hasText(prefix) && !StringUtils.hasText(suffix)) {
+            return columns;
+        }
+        String safePrefix = StringUtils.hasText(prefix) ? prefix : "";
+        String safeSuffix = StringUtils.hasText(suffix) ? suffix : "";
+        return columns.stream()
+            .map(col -> new JdbcMetadataService.ColumnMeta(
+                safePrefix + col.name() + safeSuffix,
                 col.jdbcType(), col.typeName(), col.columnSize(), col.decimalDigits()
             ))
             .toList();

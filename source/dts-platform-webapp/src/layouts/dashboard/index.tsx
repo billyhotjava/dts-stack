@@ -1,5 +1,5 @@
 import { ThemeLayout } from "#/enum";
-import Logo from "@/components/logo";
+import Brand from "@/components/brand";
 import { down, useMediaQuery } from "@/hooks";
 import { useSettings } from "@/store/settingStore";
 import Header from "./header";
@@ -39,7 +39,7 @@ function PcHorizontalLayout() {
 	return (
 		<>
 			{/* Sticky Header */}
-			<Header leftSlot={<Logo />} />
+			<Header leftSlot={<Brand />} />
 			{/* Sticky Nav */}
 			<NavHorizontalLayout data={navData} />
 

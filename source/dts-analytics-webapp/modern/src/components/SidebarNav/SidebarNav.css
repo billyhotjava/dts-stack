@@ -6,7 +6,7 @@
   width: var(--sidebar-width);
   height: 100vh;
   background: var(--color-bg-sidebar);
-  color: var(--color-text-inverse);
+  color: var(--color-sidebar-text);
   transition: width var(--transition-normal);
   flex-shrink: 0;
   overflow: hidden;
@@ -22,7 +22,7 @@
   align-items: center;
   justify-content: space-between;
   padding: var(--spacing-md);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid var(--color-sidebar-border);
   flex-shrink: 0;
 }
 
@@ -32,7 +32,7 @@
   gap: var(--spacing-sm);
   font-size: var(--font-size-lg);
   font-weight: var(--font-weight-bold);
-  color: var(--color-text-inverse);
+  color: var(--color-sidebar-text);
   text-decoration: none;
   overflow: hidden;
   white-space: nowrap;
@@ -52,7 +52,7 @@
   border: none;
   border-radius: var(--radius-sm);
   background: transparent;
-  color: var(--color-text-inverse);
+  color: var(--color-sidebar-text);
   opacity: 0.6;
   cursor: pointer;
   transition: opacity var(--transition-fast), background-color var(--transition-fast);
@@ -60,7 +60,7 @@
 
 .mb-sidebar__toggle:hover {
   opacity: 1;
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--color-sidebar-hover);
 }
 
 .mb-sidebar__toggle-icon--collapsed {
@@ -94,7 +94,7 @@
   padding: var(--spacing-sm) var(--spacing-md);
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-semibold);
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--color-sidebar-text-muted);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
@@ -115,7 +115,7 @@
   border: none;
   border-radius: var(--radius-md);
   background: transparent;
-  color: rgba(255, 255, 255, 0.8);
+  color: var(--color-sidebar-text);
   font-family: inherit;
   font-size: var(--font-size-md);
   font-weight: var(--font-weight-medium);
@@ -127,8 +127,8 @@
 }
 
 .mb-sidebar__item:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: var(--color-text-inverse);
+  background: var(--color-sidebar-hover);
+  color: var(--color-sidebar-text);
 }
 
 .mb-sidebar__item--active {
@@ -177,13 +177,13 @@
 .mb-sidebar__divider {
   height: 1px;
   margin: var(--spacing-sm) var(--spacing-md);
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--color-sidebar-border);
 }
 
 /* Footer */
 .mb-sidebar__footer {
   padding: var(--spacing-md);
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid var(--color-sidebar-border);
   flex-shrink: 0;
 }
 
@@ -198,30 +198,30 @@
 .mb-sidebar__search-icon {
   position: absolute;
   left: var(--spacing-sm);
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--color-sidebar-text-muted);
   pointer-events: none;
 }
 
 .mb-sidebar__search-input {
   width: 100%;
   padding: var(--spacing-sm) var(--spacing-sm) var(--spacing-sm) 36px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--color-sidebar-border);
   border-radius: var(--radius-sm);
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--color-text-inverse);
+  background: var(--color-sidebar-input-bg);
+  color: var(--color-sidebar-text);
   font-family: inherit;
   font-size: var(--font-size-sm);
   transition: border-color var(--transition-fast), background-color var(--transition-fast);
 }
 
 .mb-sidebar__search-input::placeholder {
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--color-sidebar-text-muted);
 }
 
 .mb-sidebar__search-input:focus {
   outline: none;
-  border-color: rgba(255, 255, 255, 0.3);
-  background: rgba(255, 255, 255, 0.1);
+  border-color: var(--color-border-hover);
+  background: var(--color-sidebar-hover);
 }
 
 .mb-sidebar__search-collapsed {
@@ -234,14 +234,14 @@
   border: none;
   border-radius: var(--radius-sm);
   background: transparent;
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--color-sidebar-text-muted);
   cursor: pointer;
   transition: background-color var(--transition-fast), color var(--transition-fast);
 }
 
 .mb-sidebar__search-collapsed:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: var(--color-text-inverse);
+  background: var(--color-sidebar-hover);
+  color: var(--color-sidebar-text);
 }
 
 /* Scrollbar */
@@ -254,10 +254,10 @@
 }
 
 .mb-sidebar__nav::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.2);
+  background: var(--color-sidebar-text-muted);
   border-radius: var(--radius-full);
 }
 
 .mb-sidebar__nav::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.3);
+  background: var(--color-sidebar-text);
 }

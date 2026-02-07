@@ -131,129 +131,98 @@
 	}
 }
 
-/* Shadcn UI Light Theme */
+/* Shadcn UI Light Theme — Pure Light */
 :root {
 	--radius: 0.5rem;
-	--background: #f8fafc;
-	/* slate-50 */
-	--foreground: hsla(204, 66%, 8%, 0.84);
-	/* orionAlpha[80] */
-	--card: var(--colors-common-white);
-	--card-foreground: var(--colors-common-black);
-	--popover: var(--colors-common-white);
-	--popover-foreground: var(--colors-common-black);
+	--background: #FFFFFF;
+	--foreground: rgba(0, 0, 0, 0.85);
+	--card: #FFFFFF;
+	--card-foreground: rgba(0, 0, 0, 0.85);
+	--popover: #FFFFFF;
+	--popover-foreground: rgba(0, 0, 0, 0.85);
 	--primary: var(--colors-palette-primary-default);
 	--primary-foreground: var(--colors-palette-primary-lighter);
-	--secondary: var(--colors-palette-gray-200);
+	--secondary: #F5F5F5;
 	--secondary-foreground: var(--colors-palette-gray-600);
-	--muted: var(--colors-palette-gray-200);
+	--muted: #F5F5F5;
 	--muted-foreground: var(--colors-palette-gray-500);
-	--accent: var(--colors-palette-gray-200);
+	--accent: #F5F5F5;
 	--accent-foreground: var(--colors-palette-gray-600);
 	--destructive: var(--colors-palette-error-default);
-	--border: rgba(var(--colors-palette-gray-500Channel) / var(--opacity-border));
-	--input: rgba(var(--colors-palette-gray-500Channel) / var(--opacity-border));
+	--border: rgba(0, 0, 0, 0.08);
+	--input: rgba(0, 0, 0, 0.08);
 	--ring: var(--colors-palette-primary-default);
 	--chart-1: #f97316;
 	--chart-2: #14b8a6;
 	--chart-3: #334155;
 	--chart-4: #eab308;
 	--chart-5: #f59e0b;
-	--sidebar: var(--colors-palette-gray-300);
+	--sidebar: #F5F5F5;
 	--sidebar-foreground: var(--colors-palette-gray-800);
 	--sidebar-primary: var(--colors-palette-primary-default);
 	--sidebar-primary-foreground: var(--colors-palette-primary-lighter);
-	--sidebar-accent: var(--colors-palette-gray-300);
+	--sidebar-accent: #E8E8E8;
 	--sidebar-accent-foreground: var(--colors-palette-gray-800);
-	--sidebar-border: var(--colors-palette-gray-300);
+	--sidebar-border: rgba(0, 0, 0, 0.08);
 	--sidebar-ring: var(--colors-palette-primary-default);
 }
 
-/* Shadcn UI Dark Theme — Elevation: darker bg → lighter card → lighter popover */
+/* Shadcn UI Dark Theme — Classic Dark with layered elevation */
 [data-theme-mode="dark"] {
-	--background: #212121;
-	/* unified gray — content area */
-	--foreground: hsla(0, 0%, 100%, 0.95);
-	/* orionAlphaInverse[80] */
-	--card: #212121;
-	/* SAME as background — no elevation difference */
-	--card-foreground: hsla(0, 0%, 100%, 0.95);
-	--popover: #212121;
-	/* SAME as background */
-	--popover-foreground: hsla(0, 0%, 100%, 0.95);
+	--background: #1C1C1C;
+	--foreground: rgba(255, 255, 255, 0.92);
+	--card: #232323;
+	--card-foreground: rgba(255, 255, 255, 0.92);
+	--popover: #2A2A2A;
+	--popover-foreground: rgba(255, 255, 255, 0.92);
 	--primary: var(--colors-palette-primary-default);
 	--primary-foreground: var(--colors-common-white);
-	--secondary: var(--colors-background-neutral);
+	--secondary: #2A2A2A;
 	--secondary-foreground: var(--colors-common-white);
-	--muted: var(--colors-background-neutral);
+	--muted: #2A2A2A;
 	--muted-foreground: var(--colors-palette-gray-400);
-	--accent: var(--colors-background-neutral);
+	--accent: #2A2A2A;
 	--accent-foreground: var(--colors-common-white);
 	--destructive: var(--colors-palette-error-default);
 	--destructive-foreground: var(--colors-common-white);
-	--border: rgba(var(--colors-palette-gray-500Channel) / var(--opacity-border));
-	--input: rgba(var(--colors-palette-gray-500Channel) / var(--opacity-border));
+	--border: rgba(255, 255, 255, 0.08);
+	--input: rgba(255, 255, 255, 0.08);
 	--ring: var(--colors-palette-primary-default);
 	--chart-1: #8b5cf6;
 	--chart-2: #10b981;
 	--chart-3: #f59e0b;
 	--chart-4: #d946ef;
 	--chart-5: #ef4444;
-	--sidebar: #0d0d0d;
-	/* very dark black — sidebar (ChatGPT left panel) */
-	--sidebar-foreground: var(--colors-text-primary);
+	--sidebar: #161616;
+	--sidebar-foreground: rgba(255, 255, 255, 0.92);
 	--sidebar-primary: var(--colors-palette-primary-default);
 	--sidebar-primary-foreground: var(--colors-common-white);
-	--sidebar-accent: var(--colors-background-neutral);
-	--sidebar-accent-foreground: var(--colors-text-primary);
-	--sidebar-border: rgba(var(--colors-palette-gray-500Channel) / var(--opacity-border));
+	--sidebar-accent: rgba(255, 255, 255, 0.08);
+	--sidebar-accent-foreground: rgba(255, 255, 255, 0.92);
+	--sidebar-border: rgba(255, 255, 255, 0.08);
 	--sidebar-ring: var(--colors-palette-primary-default);
 
-	/* Override text colors for dark mode — Metabase Orion Alpha Inverse */
-	--colors-text-primary: hsla(0, 0%, 100%, 0.95);
-	/* orionAlphaInverse[80] */
-	--colors-text-secondary: hsla(0, 0%, 100%, 0.69);
-	/* orionAlphaInverse[60] */
-	--colors-text-tertiary: hsla(0, 0%, 100%, 0.46);
-	/* orionAlphaInverse[40] */
-	--colors-text-disabled: hsla(0, 0%, 100%, 0.33);
-	/* orionAlphaInverse[30] */
-
-	/* Elevation border hint */
-	--border: rgba(255, 255, 255, 0.05);
+	/* Override text colors for dark mode */
+	--colors-text-primary: rgba(255, 255, 255, 0.92);
+	--colors-text-secondary: rgba(255, 255, 255, 0.60);
+	--colors-text-tertiary: rgba(255, 255, 255, 0.38);
+	--colors-text-disabled: rgba(255, 255, 255, 0.38);
 }
 
 /* Dark mode card elevation styling */
 [data-theme-mode="dark"] [data-slot="card"] {
-	border-color: rgba(255, 255, 255, 0.05);
+	border-color: rgba(255, 255, 255, 0.08);
 }
 
-/* Dark mode: sidebar nav uses darker black background (ChatGPT-inspired) */
+/* Dark mode: sidebar nav uses deeper background */
 [data-theme-mode="dark"] [data-slot="slash-layout-nav"] {
-	--background: #171717;
-	/* very dark black for sidebar */
-	background-color: #171717 !important;
-	border-color: rgba(255, 255, 255, 0.05);
+	--background: #161616;
+	background-color: #161616 !important;
+	border-color: rgba(255, 255, 255, 0.08);
 }
 
 [data-theme-mode="dark"] [data-slot="slash-layout-nav"] .bg-background {
-	background-color: #171717 !important;
-}
-
-/* Dark sidebar in light mode — match analytics sidebar bg */
-:root:not([data-theme-mode="dark"]) [data-dark-sidebar="true"] {
-	--background: hsla(205, 19%, 23%, 1);
-	--foreground: hsla(0, 0%, 100%, 0.95);
-	--border: rgba(255, 255, 255, 0.08);
-	--input: rgba(255, 255, 255, 0.08);
-	--accent: rgba(255, 255, 255, 0.08);
-	--accent-foreground: hsla(0, 0%, 100%, 0.95);
-	--colors-text-primary: hsla(0, 0%, 100%, 0.95);
-	--colors-text-secondary: hsla(0, 0%, 100%, 0.69);
-	--colors-text-disabled: hsla(0, 0%, 100%, 0.46);
-	--colors-text-primaryChannel: 255 255 255;
-	--colors-text-secondaryChannel: 255 255 255;
-	--colors-text-disabledChannel: 255 255 255;
+	background-color: #161616 !important;
 }
 
 /* slash layout */
@@ -302,11 +271,11 @@
 /* Dark mode: refined table elevation */
 [data-theme-mode="dark"] :where(.ant-table-wrapper) :where(.ant-table-thead > tr > th) {
 	background: rgba(255, 255, 255, 0.02) !important;
-	border-bottom-color: rgba(255, 255, 255, 0.05) !important;
+	border-bottom-color: rgba(255, 255, 255, 0.08) !important;
 }
 
 [data-theme-mode="dark"] :where(.ant-table-wrapper) :where(.ant-table-tbody > tr > td) {
-	border-bottom-color: rgba(255, 255, 255, 0.04) !important;
+	border-bottom-color: rgba(255, 255, 255, 0.06) !important;
 }
 
 /* Provide sRGB fallbacks for browsers without OKLCH (e.g., Chrome 109) */

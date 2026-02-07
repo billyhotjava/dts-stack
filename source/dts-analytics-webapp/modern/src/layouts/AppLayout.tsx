@@ -122,22 +122,51 @@ export function AppLayout() {
 	};
 
 	const Logo = (
-		<Link to="/" className="sidebar-logo-link">
-			<svg width="28" height="28" viewBox="0 0 32 32" fill="none">
-				<rect width="32" height="32" rx="8" fill="var(--color-brand)" />
-				<path d="M8 22V14l8-6 8 6v8" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-				<path d="M12 22v-6h8v6" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+		<Link to="/" className="sidebar-logo-link" style={{ display: 'flex', alignItems: 'center', gap: '12px', textDecoration: 'none', paddingLeft: '8px' }}>
+			<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none" width="32" height="32" style={{ color: 'var(--color-brand)', flexShrink: 0 }}>
+				<circle cx="32" cy="32" r="29" stroke="currentColor" strokeOpacity="0.35" strokeWidth="2" />
+				<circle cx="32" cy="32" r="22" stroke="currentColor" strokeOpacity="0.25" strokeWidth="2" strokeDasharray="5 4" />
+				<circle cx="32" cy="32" r="14" stroke="currentColor" strokeOpacity="0.25" strokeWidth="2" />
+				<path d="M10 30 C18 18, 46 18, 54 30" stroke="currentColor" strokeOpacity="0.35" strokeWidth="2" fill="none" />
+				<path d="M10 34 C18 46, 46 46, 54 34" stroke="currentColor" strokeOpacity="0.35" strokeWidth="2" fill="none" />
+				<line x1="32" y1="32" x2="32" y2="8" stroke="currentColor" strokeOpacity="0.6" strokeWidth="2" />
+				<line x1="32" y1="32" x2="54" y2="32" stroke="currentColor" strokeOpacity="0.6" strokeWidth="2" />
+				<line x1="32" y1="32" x2="10" y2="32" stroke="currentColor" strokeOpacity="0.4" strokeWidth="2" />
+				<line x1="32" y1="32" x2="45" y2="19" stroke="currentColor" strokeOpacity="0.4" strokeWidth="2" />
+				<circle cx="32" cy="32" r="4.5" fill="currentColor" fillOpacity="0.95" />
+				<circle cx="32" cy="8" r="3" fill="currentColor" fillOpacity="0.9" />
+				<circle cx="54" cy="32" r="2.6" fill="currentColor" fillOpacity="0.85" />
+				<circle cx="10" cy="32" r="2.6" fill="currentColor" fillOpacity="0.75" />
+				<circle cx="45" cy="19" r="2.4" fill="currentColor" fillOpacity="0.8" />
+				<path d="M26 12 l2 -2 m-2 6 l3 -3" stroke="currentColor" strokeOpacity="0.6" strokeWidth="2" />
+				<path d="M50 40 l2 -2 m-4 0 l3 -3" stroke="currentColor" strokeOpacity="0.5" strokeWidth="2" />
 			</svg>
-			<span className="sidebar-logo-text">DTS Analytics</span>
+			<div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1 }}>
+				<span style={{ fontSize: '18px', fontWeight: 700, letterSpacing: '-0.025em', color: 'var(--color-text-primary)' }}>BI数智平台</span>
+				<span style={{ fontSize: '10px', fontWeight: 500, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginTop: '4px', opacity: 0.8 }}>机密 (Confidential)</span>
+			</div>
 		</Link>
 	);
 
 	const LogoCollapsed = (
-		<Link to="/" className="sidebar-logo-link">
-			<svg width="28" height="28" viewBox="0 0 32 32" fill="none">
-				<rect width="32" height="32" rx="8" fill="var(--color-brand)" />
-				<path d="M8 22V14l8-6 8 6v8" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-				<path d="M12 22v-6h8v6" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+		<Link to="/" className="sidebar-logo-link" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+			<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none" width="32" height="32" style={{ color: 'var(--color-brand)' }}>
+				<circle cx="32" cy="32" r="29" stroke="currentColor" strokeOpacity="0.35" strokeWidth="2" />
+				<circle cx="32" cy="32" r="22" stroke="currentColor" strokeOpacity="0.25" strokeWidth="2" strokeDasharray="5 4" />
+				<circle cx="32" cy="32" r="14" stroke="currentColor" strokeOpacity="0.25" strokeWidth="2" />
+				<path d="M10 30 C18 18, 46 18, 54 30" stroke="currentColor" strokeOpacity="0.35" strokeWidth="2" fill="none" />
+				<path d="M10 34 C18 46, 46 46, 54 34" stroke="currentColor" strokeOpacity="0.35" strokeWidth="2" fill="none" />
+				<line x1="32" y1="32" x2="32" y2="8" stroke="currentColor" strokeOpacity="0.6" strokeWidth="2" />
+				<line x1="32" y1="32" x2="54" y2="32" stroke="currentColor" strokeOpacity="0.6" strokeWidth="2" />
+				<line x1="32" y1="32" x2="10" y2="32" stroke="currentColor" strokeOpacity="0.4" strokeWidth="2" />
+				<line x1="32" y1="32" x2="45" y2="19" stroke="currentColor" strokeOpacity="0.4" strokeWidth="2" />
+				<circle cx="32" cy="32" r="4.5" fill="currentColor" fillOpacity="0.95" />
+				<circle cx="32" cy="8" r="3" fill="currentColor" fillOpacity="0.9" />
+				<circle cx="54" cy="32" r="2.6" fill="currentColor" fillOpacity="0.85" />
+				<circle cx="10" cy="32" r="2.6" fill="currentColor" fillOpacity="0.75" />
+				<circle cx="45" cy="19" r="2.4" fill="currentColor" fillOpacity="0.8" />
+				<path d="M26 12 l2 -2 m-2 6 l3 -3" stroke="currentColor" strokeOpacity="0.6" strokeWidth="2" />
+				<path d="M50 40 l2 -2 m-4 0 l3 -3" stroke="currentColor" strokeOpacity="0.5" strokeWidth="2" />
 			</svg>
 		</Link>
 	);

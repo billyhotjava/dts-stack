@@ -54,7 +54,7 @@ export const AntdAdapter: UILibraryAdapter = ({ mode, children }) => {
 	const primaryColorToken = presetsColors[themeColorPresets];
 
 	const isDark = mode === ThemeMode.Dark;
-	const siderBg = isDark ? colorTokens.background.paper : colorTokens.background.default;
+	const siderBg = isDark ? "#161616" : "#F5F5F5";
 	const popupBg = isDark ? colorTokens.background.neutral : colorTokens.background.paper;
 
 	const token: ThemeConfig["token"] = {
@@ -80,22 +80,22 @@ export const AntdAdapter: UILibraryAdapter = ({ mode, children }) => {
 
 		...(isDark
 			? {
-				colorText: "hsla(0, 0%, 100%, 0.95)", // orionAlphaInverse[80]
-				colorTextSecondary: "hsla(0, 0%, 100%, 0.69)", // orionAlphaInverse[60]
-				colorTextTertiary: "hsla(0, 0%, 100%, 0.46)", // orionAlphaInverse[40]
-				colorTextQuaternary: "hsla(0, 0%, 100%, 0.33)", // orionAlphaInverse[30]
-				colorTextDisabled: "hsla(0, 0%, 100%, 0.33)", // orionAlphaInverse[30]
-				colorTextPlaceholder: "hsla(0, 0%, 100%, 0.46)", // orionAlphaInverse[40]
-				colorTextLightSolid: "hsla(0, 0%, 100%, 1)", // orionAlphaInverse[100]
-				colorBorder: "hsla(0, 0%, 100%, 0.21)", // orionAlphaInverse[20]
-				colorBorderSecondary: "hsla(0, 0%, 100%, 0.10)", // orionAlphaInverse[10]
-				colorSplit: "hsla(0, 0%, 100%, 0.10)", // orionAlphaInverse[10]
-				colorFillAlter: "hsla(0, 0%, 100%, 0.05)",
-				colorFillSecondary: "hsla(0, 0%, 100%, 0.10)", // orionAlphaInverse[10]
-				colorFillTertiary: "hsla(0, 0%, 100%, 0.05)",
-				colorFillQuaternary: "hsla(0, 0%, 100%, 0.03)",
-				colorBgTextHover: "hsla(0, 0%, 100%, 0.05)",
-				colorBgTextActive: "hsla(0, 0%, 100%, 0.10)", // orionAlphaInverse[10]
+				colorText: "rgba(255, 255, 255, 0.92)",
+				colorTextSecondary: "rgba(255, 255, 255, 0.60)",
+				colorTextTertiary: "rgba(255, 255, 255, 0.38)",
+				colorTextQuaternary: "rgba(255, 255, 255, 0.38)",
+				colorTextDisabled: "rgba(255, 255, 255, 0.38)",
+				colorTextPlaceholder: "rgba(255, 255, 255, 0.38)",
+				colorTextLightSolid: "rgba(255, 255, 255, 1)",
+				colorBorder: "rgba(255, 255, 255, 0.15)",
+				colorBorderSecondary: "rgba(255, 255, 255, 0.08)",
+				colorSplit: "rgba(255, 255, 255, 0.08)",
+				colorFillAlter: "rgba(255, 255, 255, 0.05)",
+				colorFillSecondary: "rgba(255, 255, 255, 0.08)",
+				colorFillTertiary: "rgba(255, 255, 255, 0.05)",
+				colorFillQuaternary: "rgba(255, 255, 255, 0.03)",
+				colorBgTextHover: "rgba(255, 255, 255, 0.05)",
+				colorBgTextActive: "rgba(255, 255, 255, 0.08)",
 			}
 			: {}),
 	};

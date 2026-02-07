@@ -36,7 +36,7 @@ const useSettingStore = create<SettingStore>()(
 				breadCrumb: true,
 				accordion: false,
 				multiTab: false,
-				darkSidebar: true,
+				darkSidebar: false,
 				fontFamily: FontFamilyPreset.openSans,
 				fontSize: Number(typographyTokens.fontSize.default),
 				direction: "ltr",
@@ -54,7 +54,7 @@ const useSettingStore = create<SettingStore>()(
 			name: StorageEnum.Settings, // name of the item in the storage (must be unique)
 			storage: createJSONStorage(() => localStorage), // (optional) by default, 'localStorage' is used
 			partialize: (state) => ({ [StorageEnum.Settings]: state.settings }),
-			version: 3,
+			version: 4,
 			migrate: (persistedState: any, version) => {
 				try {
 					const key = (StorageEnum as any).Settings || "settings";
@@ -70,9 +70,9 @@ const useSettingStore = create<SettingStore>()(
 					if (!settings.fontFamily || typeof settings.fontFamily !== "string") {
 						settings.fontFamily = FontFamilyPreset.openSans;
 					}
-					// v3: enable dark sidebar by default
-					if (typeof version === "number" && version < 3) {
-						settings.darkSidebar = true;
+					// v4: Linear-style light sidebar
+					if (typeof version === "number" && version < 4) {
+						settings.darkSidebar = false;
 					}
 					persistedState[key] = { ...settings };
 				} catch {

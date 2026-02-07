@@ -20,6 +20,7 @@ import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.catalog.CatalogColumnSyncService;
 import com.yuzhi.dts.platform.service.catalog.CatalogColumnSyncService.ColumnSpec;
 import com.yuzhi.dts.platform.service.etl.DbtConfigService;
+import com.yuzhi.dts.platform.service.etl.DbtFileService;
 import com.yuzhi.dts.platform.service.security.OrganizationVisibilityService;
 import jakarta.persistence.EntityNotFoundException;
 import java.io.IOException;
@@ -42,6 +43,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
+import org.springframework.web.multipart.MultipartFile;
 
 @Service
 @Transactional
@@ -57,6 +59,7 @@ public class ModelingSqlModelService {
     private final OrganizationVisibilityService organizationVisibilityService;
     private final DataStandardSecurity security;
     private final DbtConfigService dbtConfigService;
+    private final DbtFileService dbtFileService;
     private final CatalogDatasetRepository datasetRepository;
     private final CatalogTableSchemaRepository tableRepository;
     private final CatalogColumnSchemaRepository columnRepository;
@@ -71,6 +74,7 @@ public class ModelingSqlModelService {
         OrganizationVisibilityService organizationVisibilityService,
         DataStandardSecurity security,
         DbtConfigService dbtConfigService,
+        DbtFileService dbtFileService,
         CatalogDatasetRepository datasetRepository,
         CatalogTableSchemaRepository tableRepository,
         CatalogColumnSchemaRepository columnRepository,
@@ -84,6 +88,7 @@ public class ModelingSqlModelService {
         this.organizationVisibilityService = organizationVisibilityService;
         this.security = security;
         this.dbtConfigService = dbtConfigService;
+        this.dbtFileService = dbtFileService;
         this.datasetRepository = datasetRepository;
         this.tableRepository = tableRepository;
         this.columnRepository = columnRepository;
@@ -210,6 +215,147 @@ public class ModelingSqlModelService {
         return dto;
     }
 
+    public SqlModelZipImportResult importFromZip(SqlModelZipImportRequest request, MultipartFile file, String activeDeptHeader) {
+        if (request == null || request.planId() == null) {
+            throw new IllegalArgumentException("请选择项目空间");
+        }
+        if (file == null || file.isEmpty()) {
+            throw new IllegalArgumentException("请上传 ZIP 文件");
+        }
+
+        ensureWorkspaceWritable();
+        ModelingPlan plan = resolvePlan(request.planId(), activeDeptHeader);
+        InfraDataSource source = request.sourceDataSourceId() != null ? resolveSource(request.sourceDataSourceId(), activeDeptHeader) : null;
+        String sourceKey = source != null ? resolveSourceKey(source) : null;
+        String sourceTag = StringUtils.hasText(sourceKey) ? sanitizeTag(sourceKey, slugify(sourceKey)) : null;
+        String mergedTags = mergeTags(request.tags(), sourceTag);
+        String dagSelector = StringUtils.hasText(sourceTag) ? "tab:" + sourceTag : null;
+
+        String ownerDept = trimToNull(request.ownerDept());
+        if (!StringUtils.hasText(ownerDept)) {
+            ownerDept = trimToNull(security.resolveActiveDept(activeDeptHeader));
+        }
+        if (!StringUtils.hasText(ownerDept) && plan != null) {
+            ownerDept = trimToNull(plan.getOwnerDept());
+        }
+
+        String normalizedDefaultLayer = normalizeLayer(request.defaultLayer());
+        DbtFileService.DbtImportResult dbtImport = dbtFileService.importZip(file);
+        Path projectDir = resolveProjectDir();
+
+        int modelsCreated = 0;
+        int modelsUpdated = 0;
+        List<String> modelFiles = new ArrayList<>();
+        List<String> skippedModels = new ArrayList<>();
+        Set<String> processedNames = new LinkedHashSet<>();
+
+        for (String relativePath : dbtImport.importedFiles()) {
+            if (!isSqlModelFile(relativePath)) {
+                continue;
+            }
+            modelFiles.add(relativePath);
+            String modelName = extractModelName(relativePath);
+            if (!StringUtils.hasText(modelName) || !MODEL_NAME_PATTERN.matcher(modelName).matches()) {
+                skippedModels.add(relativePath + " (模型名不合法)");
+                continue;
+            }
+            String modelKey = modelName.trim().toLowerCase(Locale.ROOT);
+            if (processedNames.contains(modelKey)) {
+                skippedModels.add(relativePath + " (ZIP 内模型名重复)");
+                continue;
+            }
+            processedNames.add(modelKey);
+
+            String layer = resolveLayerFromPath(relativePath, modelName, normalizedDefaultLayer);
+            if (!StringUtils.hasText(layer)) {
+                skippedModels.add(relativePath + " (无法识别分层，请使用 ods/dwd/dws/ads 目录或模型名前缀)");
+                continue;
+            }
+
+            Path modelFile = projectDir.resolve(relativePath).normalize();
+            if (!modelFile.startsWith(projectDir) || !Files.isRegularFile(modelFile)) {
+                skippedModels.add(relativePath + " (模型文件不存在)");
+                continue;
+            }
+            String sqlText;
+            try {
+                sqlText = Files.readString(modelFile, StandardCharsets.UTF_8);
+            } catch (IOException ex) {
+                skippedModels.add(relativePath + " (读取失败: " + ex.getMessage() + ")");
+                continue;
+            }
+            if (!StringUtils.hasText(sqlText)) {
+                skippedModels.add(relativePath + " (SQL 为空)");
+                continue;
+            }
+
+            ModelingSqlModel model = repo.findFirstByPlanIdAndNameIgnoreCase(plan.getId(), modelName).orElse(null);
+            boolean exists = model != null;
+            if (!exists && request.sourceDataSourceId() == null) {
+                skippedModels.add(relativePath + " (缺少来源数据源 sourceDataSourceId)");
+                continue;
+            }
+            if (model == null) {
+                model = new ModelingSqlModel();
+                model.setPlanId(plan.getId());
+                model.setName(modelName);
+                model.setSourceDataSourceId(request.sourceDataSourceId());
+                model.setEnabled(request.enabled() == null ? Boolean.TRUE : request.enabled());
+                model.setStatus(defaultText(trimToNull(request.status()), "DRAFT"));
+                model.setMaterialized(defaultText(trimToNull(request.materialized()), "table"));
+                model.setOwnerDept(ownerDept);
+            } else {
+                if (request.sourceDataSourceId() != null) {
+                    model.setSourceDataSourceId(request.sourceDataSourceId());
+                }
+                if (request.enabled() != null) {
+                    model.setEnabled(request.enabled());
+                }
+                if (StringUtils.hasText(request.status())) {
+                    model.setStatus(trimToNull(request.status()));
+                }
+                if (StringUtils.hasText(request.materialized())) {
+                    model.setMaterialized(trimToNull(request.materialized()));
+                }
+                if (StringUtils.hasText(ownerDept)) {
+                    model.setOwnerDept(ownerDept);
+                }
+            }
+
+            if (StringUtils.hasText(request.schemaName())) {
+                model.setSchemaName(trimToNull(request.schemaName()));
+            }
+            if (StringUtils.hasText(request.description())) {
+                model.setDescription(trimToNull(request.description()));
+            }
+            model.setLayer(layer);
+            model.setTags(mergedTags);
+            model.setDagSelector(dagSelector);
+            model.setSqlText(sqlText);
+            model.setModelPath(relativePath);
+
+            ModelingSqlModel saved = repo.save(model);
+            syncDraftColumns(saved);
+            if (exists) {
+                modelsUpdated++;
+            } else {
+                modelsCreated++;
+            }
+        }
+
+        return new SqlModelZipImportResult(
+            dbtImport.totalFiles(),
+            dbtImport.newFiles(),
+            dbtImport.overwrittenFiles(),
+            dbtImport.skippedFiles(),
+            dbtImport.importedFiles(),
+            modelFiles,
+            modelsCreated,
+            modelsUpdated,
+            skippedModels
+        );
+    }
+
     public SqlModelDto update(UUID id, SqlModelRequest request, String activeDeptHeader) {
         ensureWorkspaceWritable();
         ModelingSqlModel model = repo.findById(id).orElseThrow(() -> new EntityNotFoundException("模型不存在"));
@@ -316,6 +462,58 @@ public class ModelingSqlModelService {
         String csvName = baseName.endsWith(".sql") ? baseName.substring(0, baseName.length() - 4) + ".csv" : baseName + ".csv";
         Path csvPath = sqlPath.resolveSibling(csvName);
         return columnSyncService.parseCsv(csvPath);
+    }
+
+    private boolean isSqlModelFile(String relativePath) {
+        if (!StringUtils.hasText(relativePath)) {
+            return false;
+        }
+        String normalized = relativePath.replace('\\', '/').toLowerCase(Locale.ROOT);
+        return normalized.startsWith("models/") && normalized.endsWith(".sql");
+    }
+
+    private String extractModelName(String relativePath) {
+        if (!StringUtils.hasText(relativePath)) {
+            return null;
+        }
+        String normalized = relativePath.replace('\\', '/');
+        int slash = normalized.lastIndexOf('/');
+        String fileName = slash >= 0 ? normalized.substring(slash + 1) : normalized;
+        if (!fileName.toLowerCase(Locale.ROOT).endsWith(".sql")) {
+            return null;
+        }
+        return fileName.substring(0, fileName.length() - 4);
+    }
+
+    private String resolveLayerFromPath(String relativePath, String modelName, String defaultLayer) {
+        if (StringUtils.hasText(relativePath)) {
+            String normalized = relativePath.replace('\\', '/').toLowerCase(Locale.ROOT);
+            if (normalized.startsWith("models/")) {
+                String withoutRoot = normalized.substring("models/".length());
+                int slash = withoutRoot.indexOf('/');
+                if (slash > 0) {
+                    String firstDir = withoutRoot.substring(0, slash);
+                    String dirLayer = normalizeLayer(firstDir);
+                    if (StringUtils.hasText(dirLayer)) {
+                        return dirLayer;
+                    }
+                }
+            }
+        }
+        String inferred = inferLayer(modelName);
+        if (StringUtils.hasText(inferred)) {
+            return inferred;
+        }
+        return normalizeLayer(defaultLayer);
+    }
+
+    private Path resolveProjectDir() {
+        DbtConfigService.DbtConfigView view = dbtConfigService.loadConfig();
+        String projectDir = view != null && view.config() != null ? view.config().projectDir() : null;
+        if (!StringUtils.hasText(projectDir)) {
+            throw new IllegalArgumentException("dbt 项目目录未配置");
+        }
+        return Path.of(projectDir).normalize();
     }
 
     private String resolveModelSchema(ModelingSqlModel model, DbtConfigService.DbtConfigView view) {
@@ -767,6 +965,31 @@ public class ModelingSqlModelService {
     private String defaultText(String value, String fallback) {
         return StringUtils.hasText(value) ? value : fallback;
     }
+
+    public record SqlModelZipImportRequest(
+        UUID planId,
+        UUID sourceDataSourceId,
+        String defaultLayer,
+        String schemaName,
+        String materialized,
+        String tags,
+        String description,
+        Boolean enabled,
+        String status,
+        String ownerDept
+    ) {}
+
+    public record SqlModelZipImportResult(
+        int totalFiles,
+        int newFiles,
+        int overwrittenFiles,
+        List<String> skippedFiles,
+        List<String> importedFiles,
+        List<String> modelFiles,
+        int modelsCreated,
+        int modelsUpdated,
+        List<String> skippedModels
+    ) {}
 
     public record SqlModelRequest(
         UUID planId,
