@@ -171,14 +171,15 @@
 
 /* Shadcn UI Dark Theme — Elevation: darker bg → lighter card → lighter popover */
 [data-theme-mode="dark"] {
-	--background: #343541;
-	/* ChatGPT content gray — lighter for readability */
+	--background: #212121;
+	/* content area gray — lighter than sidebar */
 	--foreground: hsla(0, 0%, 100%, 0.95);
 	/* orionAlphaInverse[80] */
-	--card: #444654;
-	/* slightly lighter — elevated cards */
+	--card: #2a2a2a;
+	/* slightly lighter for elevated cards */
 	--card-foreground: hsla(0, 0%, 100%, 0.95);
-	--popover: #4e4f5e;
+	--popover: #333333;
+	/* even lighter for highest elevation */
 	/* even lighter — highest elevation */
 	--popover-foreground: hsla(0, 0%, 100%, 0.95);
 	--primary: var(--colors-palette-primary-default);
@@ -226,6 +227,18 @@
 /* Dark mode card elevation styling */
 [data-theme-mode="dark"] [data-slot="card"] {
 	border-color: rgba(255, 255, 255, 0.05);
+}
+
+/* Dark mode: sidebar nav uses darker black background (ChatGPT-inspired) */
+[data-theme-mode="dark"] [data-slot="slash-layout-nav"] {
+	--background: #171717;
+	/* very dark black for sidebar */
+	background-color: #171717 !important;
+	border-color: rgba(255, 255, 255, 0.05);
+}
+
+[data-theme-mode="dark"] [data-slot="slash-layout-nav"] .bg-background {
+	background-color: #171717 !important;
 }
 
 /* Dark sidebar in light mode — match analytics sidebar bg */

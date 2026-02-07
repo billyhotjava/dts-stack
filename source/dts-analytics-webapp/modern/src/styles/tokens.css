@@ -152,19 +152,19 @@ body {
   /* orionAlpha[80] */
   --color-text-link: #6FB3F2;
 
-  /* Background Colors — Zinc elevation layers */
-  --color-bg-primary: #343541;
-  /* ChatGPT content gray — lighter for readability */
-  --color-bg-card: #444654;
-  /* slightly lighter — elevated cards */
-  --color-bg-secondary: #343541;
-  /* ChatGPT content gray */
-  --color-bg-tertiary: #4e4f5e;
-  /* even lighter — highest elevation */
-  --color-bg-dark: #343541;
-  /* ChatGPT content gray */
-  --color-bg-sidebar: #0d0d0d;
-  /* very dark black — sidebar (ChatGPT left panel) */
+  /* Background Colors — ChatGPT-inspired dark theme */
+  --color-bg-primary: #212121;
+  /* content area gray — lighter than sidebar */
+  --color-bg-card: #2a2a2a;
+  /* slightly lighter for elevated cards */
+  --color-bg-secondary: #212121;
+  /* content area gray */
+  --color-bg-tertiary: #333333;
+  /* even lighter for highest elevation */
+  --color-bg-dark: #212121;
+  /* content area gray */
+  --color-bg-sidebar: #171717;
+  /* dark black for sidebar */
   --color-bg-hover: rgba(111, 179, 242, 0.12);
   --color-brand-alpha-10: rgba(111, 179, 242, 0.1);
   --color-brand-alpha-15: rgba(111, 179, 242, 0.15);
