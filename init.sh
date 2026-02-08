@@ -59,7 +59,21 @@ prompt_base_domain(){
 pick_mode(){ echo "1) single  2) ha2  3) cluster"; read -rp "Choice: " c; case "$c" in 1) MODE=single;;2) MODE=ha2;;3) MODE=cluster;;*) exit 1;; esac; }
 read_secret(){ while true; do read -rsp "Password: " p1; echo; read -rsp "Confirm: " p2; echo; [[ "$p1" == "$p2" ]] || { echo "Mismatch"; continue; }; [[ ${#p1} -ge 10 && "$p1" =~ [A-Z] && "$p1" =~ [a-z] && "$p1" =~ [0-9] && "$p1" =~ [^A-Za-z0-9] ]] || { echo "Weak"; continue; }; SECRET="$p1"; break; done; }
 ensure_env(){ k="$1"; shift; v="$*"; if grep -qE "^${k}=" .env 2>/dev/null; then sed -i -E "s|^${k}=.*|${k}=${v}|g" .env; else echo "${k}=${v}" >> .env; fi; }
-load_img_versions(){ conf="imgversion.conf"; [[ -f "$conf" ]] || return 0; while IFS='=' read -r k v; do [[ -z "${k// }" || "${k#\#}" != "$k" ]] && continue; v="$(echo "$v"|sed -E 's/^\s+|\s+$//g')"; ensure_env "$k" "$v"; done < <(grep -E '^[[:space:]]*([A-Z0-9_]+)[[:space:]]*=' "$conf" || true); echo "[init.sh] loaded image versions"; }
+load_img_versions(){
+  conf="imgversion.conf"
+  [[ -f "$conf" ]] || return 0
+  # Source into shell env (imgversion.conf overrides stale .env values and shell defaults).
+  # This is critical: docker-compose prioritises shell env vars over .env file,
+  # so we must update both the shell env AND the .env file.
+  set -a; . "./$conf"; set +a
+  # Also sync every key into .env so the file stays consistent.
+  while IFS='=' read -r k v; do
+    [[ -z "${k// }" || "${k#\#}" != "$k" ]] && continue
+    v="$(echo "$v" | sed -E 's/^\s+|\s+$//g')"
+    ensure_env "$k" "$v"
+  done < <(grep -E '^[[:space:]]*[A-Z0-9_]+[[:space:]]*=' "$conf" || true)
+  echo "[init.sh] loaded image versions from $conf"
+}
 urlencode(){
   local input="${1:-}"
   local out="" i ch hex
