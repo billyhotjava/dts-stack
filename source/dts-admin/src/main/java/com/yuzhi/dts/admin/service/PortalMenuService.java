@@ -109,8 +109,7 @@ public class PortalMenuService {
         Map.entry("services.api", "/pages/services/ApiServicesPage"),
         Map.entry("services.outbound", "/pages/services/DataProductsPage"),
         Map.entry("services.exchange", "/pages/services/TokensPage"),
-        Map.entry("services.bi-links", "/pages/services/BiLinksPage"),
-        Map.entry("visual-analytics", "/pages/visualization/ReportsPage")
+        Map.entry("visual-analytics.reports", "/pages/visualization/ReportsPage")
     );
 
     private final PortalMenuRepository menuRepo;

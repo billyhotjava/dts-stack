@@ -44,7 +44,7 @@ export function NavList({ data, depth = 1 }: NavListProps) {
 			</CollapsibleTrigger>
 			{hasChild && (
 				<CollapsibleContent>
-					<div className="ml-4 mt-1 flex flex-col gap-1">
+					<div className="ml-4 mt-1 flex flex-col gap-0.5">
 						{data.children?.map((child) => (
 							<NavList key={child.title} data={child} depth={depth + 1} />
 						))}

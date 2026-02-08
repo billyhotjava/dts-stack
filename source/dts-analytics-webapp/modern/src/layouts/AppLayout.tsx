@@ -1,16 +1,15 @@
-import { Link, Outlet } from "react-router";
+import { Link, Outlet, useLocation } from "react-router";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import {
 	SidebarProvider,
 	SidebarNav,
 	SidebarSection,
 	SidebarItem,
-	SidebarSearch,
 	SidebarDivider,
 } from "../components/SidebarNav/SidebarNav";
 import { ThemeToggle } from "../ui/ThemeToggle/ThemeToggle";
 import { Dropdown, DropdownItem, DropdownSeparator } from "../ui/Dropdown/Dropdown";
-import { getEffectiveLocale, setEffectiveLocale, t, toggleLocale } from "../i18n";
+import { getEffectiveLocale, t } from "../i18n";
 import "./layout.css";
 
 // Icons
@@ -105,20 +104,110 @@ const UserIcon = () => (
 	</svg>
 );
 
-const GlobeIcon = () => (
+const LogoutIcon = () => (
 	<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-		<circle cx="12" cy="12" r="10" />
-		<path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" />
-		<path d="M2 12h20" />
+		<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+		<polyline points="16 17 21 12 16 7" />
+		<line x1="21" y1="12" x2="9" y2="12" />
 	</svg>
 );
 
+const ChevronRightIcon = () => (
+	<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+		<path d="m9 18 6-6-6-6" />
+	</svg>
+);
+
+// Read user info from platform's shared localStorage store
+function getUserInfo(): { username: string; fullName: string; email: string } {
+	try {
+		const raw = localStorage.getItem("userStore");
+		if (!raw) return { username: "", fullName: "", email: "" };
+		const store = JSON.parse(raw);
+		const state = store?.state;
+		const userInfo = state?.userInfo;
+		if (!userInfo || typeof userInfo !== "object") return { username: "", fullName: "", email: "" };
+		return {
+			username: String(userInfo.username ?? ""),
+			fullName: String(userInfo.fullName ?? ""),
+			email: String(userInfo.email ?? ""),
+		};
+	} catch {
+		return { username: "", fullName: "", email: "" };
+	}
+}
+
+// Route → [sectionKey, navKey] mapping for breadcrumb
+const ROUTE_NAV_MAP: { path: string; section: string; nav?: string }[] = [
+	{ path: "/", section: "nav.section.core" },
+	{ path: "/analyze", section: "nav.section.core", nav: "nav.analyze" },
+	{ path: "/questions", section: "nav.section.core", nav: "nav.questions" },
+	{ path: "/dashboards", section: "nav.section.core", nav: "nav.dashboards" },
+	{ path: "/collections", section: "nav.section.core", nav: "nav.collections" },
+	{ path: "/data", section: "nav.section.data", nav: "nav.data" },
+	{ path: "/models", section: "nav.section.data", nav: "nav.models" },
+	{ path: "/metrics", section: "nav.section.data", nav: "nav.metrics" },
+	{ path: "/trash", section: "nav.section.data", nav: "nav.trash" },
+	{ path: "/screens", section: "nav.section.tools", nav: "nav.screens" },
+	{ path: "/search", section: "nav.section.tools", nav: "nav.search" },
+];
+
+function HeaderBreadcrumb() {
+	const locale = getEffectiveLocale();
+	const location = useLocation();
+	const path = location.pathname;
+
+	let matched: { section: string; nav?: string } | null = null;
+	for (const route of ROUTE_NAV_MAP) {
+		if (route.path === "/") {
+			if (path === "/") { matched = route; break; }
+			continue;
+		}
+		if (path === route.path || path.startsWith(route.path + "/")) {
+			matched = route;
+			break;
+		}
+	}
+
+	const sectionLabel = matched ? t(locale, matched.section) : null;
+	const navLabel = matched?.nav ? t(locale, matched.nav) : null;
+
+	return (
+		<nav className="header-breadcrumb">
+			{sectionLabel && (
+				<span className={navLabel ? "header-breadcrumb__link" : "header-breadcrumb__current"}>{sectionLabel}</span>
+			)}
+			{navLabel && (
+				<>
+					<span className="header-breadcrumb__separator"><ChevronRightIcon /></span>
+					<span className="header-breadcrumb__current">{navLabel}</span>
+				</>
+			)}
+		</nav>
+	);
+}
+
 export function AppLayout() {
 	const locale = getEffectiveLocale();
+	const userInfo = getUserInfo();
+	const displayName = userInfo.fullName || userInfo.username || "用户";
 
-	const handleLanguageToggle = () => {
-		setEffectiveLocale(toggleLocale(locale));
-		window.location.reload();
+	const handleLogout = () => {
+		try {
+			// Clear tokens from userStore
+			const raw = localStorage.getItem("userStore");
+			if (raw) {
+				const store = JSON.parse(raw);
+				if (store?.state?.userToken) {
+					store.state.userToken = {};
+				}
+				localStorage.setItem("userStore", JSON.stringify(store));
+			}
+		} catch {
+			// ignore
+		}
+		// Redirect to platform root (which will trigger login redirect)
+		window.location.href = "/";
 	};
 
 	const Logo = (
@@ -180,13 +269,28 @@ export function AppLayout() {
 			}
 			placement="bottom-end"
 		>
+			<div className="header-user-info">
+				<div className="header-user-info__avatar">
+					<UserIcon />
+				</div>
+				<div className="header-user-info__details">
+					<div className="header-user-info__name">{displayName}</div>
+					{userInfo.email && (
+						<div className="header-user-info__email">
+							{userInfo.email}
+							{userInfo.username ? `（${userInfo.username}）` : null}
+						</div>
+					)}
+				</div>
+			</div>
+			<DropdownSeparator />
 			<DropdownItem
-				icon={<GlobeIcon />}
-				onClick={handleLanguageToggle}
+				icon={<LogoutIcon />}
+				danger
+				onClick={handleLogout}
 			>
-				{locale === "en" ? t(locale, "lang.zh") : t(locale, "lang.en")}
+				退出
 			</DropdownItem>
-
 		</Dropdown>
 	);
 
@@ -196,9 +300,6 @@ export function AppLayout() {
 				<SidebarNav
 					logo={Logo}
 					logoCollapsed={LogoCollapsed}
-					header={
-						<SidebarSearch placeholder={t(locale, "nav.search")} />
-					}
 					footer={null}
 				>
 					<SidebarSection title={t(locale, "nav.section.core")}>
@@ -230,7 +331,7 @@ export function AppLayout() {
 				<main className="main">
 					<header className="main-header">
 						<div className="main-header__left">
-							{/* breadcrumb placeholder */}
+							<HeaderBreadcrumb />
 						</div>
 						<div className="main-header__right">
 							<ThemeToggle showLabel={false} />

@@ -62,8 +62,12 @@ export function NavVerticalLayout({ data, className }: Props) {
 				</Button>
 			</div>
 
+			<hr className="border-t border-border/40 mx-3" />
+
 			<ScrollArea className={cn("h-[calc(100vh-var(--layout-header-height))] px-2 bg-background")}>
-				{themeLayout === ThemeLayout.Mini ? <NavMini data={data} /> : <NavVertical data={data} />}
+				<div className="pb-16">
+					{themeLayout === ThemeLayout.Mini ? <NavMini data={data} /> : <NavVertical data={data} />}
+				</div>
 			</ScrollArea>
 		</nav>
 	);

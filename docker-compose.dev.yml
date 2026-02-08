@@ -524,11 +524,11 @@ services:
     environment:
       TZ: ${TZ:-Asia/Shanghai}
       PNPM_STORE_DIR: /pnpm-store
-      # Use a host-accessible proxy when containers cannot resolve public registries directly.
-      HTTP_PROXY: ${DTS_DOCKER_HTTP_PROXY:-http://172.18.0.1:10808}
-      HTTPS_PROXY: ${DTS_DOCKER_HTTPS_PROXY:-http://172.18.0.1:10808}
-      http_proxy: ${DTS_DOCKER_HTTP_PROXY:-http://172.18.0.1:10808}
-      https_proxy: ${DTS_DOCKER_HTTPS_PROXY:-http://172.18.0.1:10808}
+      # Optional: set DTS_DOCKER_HTTP_PROXY in .env to route container traffic through a proxy.
+      HTTP_PROXY: ${DTS_DOCKER_HTTP_PROXY:-}
+      HTTPS_PROXY: ${DTS_DOCKER_HTTPS_PROXY:-}
+      http_proxy: ${DTS_DOCKER_HTTP_PROXY:-}
+      https_proxy: ${DTS_DOCKER_HTTPS_PROXY:-}
       NO_PROXY: "${DTS_DOCKER_NO_PROXY:-localhost,127.0.0.1,::1},dts-analytics,dts-pg,dts-platform,dts-admin,dts-proxy"
       no_proxy: "${DTS_DOCKER_NO_PROXY:-localhost,127.0.0.1,::1},dts-analytics,dts-pg,dts-platform,dts-admin,dts-proxy"
       BROWSER: none
@@ -863,7 +863,7 @@ services:
       AIRFLOW_HOME: /opt/airflow
       DBT_PROJECT_DIR: ${DBT_PROJECT_DIR}
       DBT_PROFILES_DIR: ${DBT_PROFILES_DIR}
-      DBT_IMAGE: ${IMAGE_DBT:-dts-dbt:1.11.2}
+      DBT_IMAGE: ${IMAGE_DBT:-dts-dbt:1.10.0}
       OPENMETADATA_INGEST_IMAGE: ${IMAGE_OPENMETADATA_INGESTION}
       OPENMETADATA_INGEST_CONFIG_DIR: ${OPENMETADATA_INGEST_CONFIG_DIR}
       OPENMETADATA_API_ENDPOINT: ${DTS_PLATFORM_OPENMETADATA_BASE_URL}/api/v1
@@ -912,7 +912,7 @@ services:
       AIRFLOW_HOME: /opt/airflow
       DBT_PROJECT_DIR: ${DBT_PROJECT_DIR}
       DBT_PROFILES_DIR: ${DBT_PROFILES_DIR}
-      DBT_IMAGE: ${IMAGE_DBT:-dts-dbt:1.11.2}
+      DBT_IMAGE: ${IMAGE_DBT:-dts-dbt:1.10.0}
       OPENMETADATA_INGEST_IMAGE: ${IMAGE_OPENMETADATA_INGESTION}
       OPENMETADATA_INGEST_CONFIG_DIR: ${OPENMETADATA_INGEST_CONFIG_DIR}
       OPENMETADATA_API_ENDPOINT: ${DTS_PLATFORM_OPENMETADATA_BASE_URL}/api/v1
@@ -973,7 +973,7 @@ services:
       AIRFLOW_HOME: /opt/airflow
       DBT_PROJECT_DIR: ${DBT_PROJECT_DIR}
       DBT_PROFILES_DIR: ${DBT_PROFILES_DIR}
-      DBT_IMAGE: ${IMAGE_DBT:-dts-dbt:1.11.2}
+      DBT_IMAGE: ${IMAGE_DBT:-dts-dbt:1.10.0}
       OPENMETADATA_INGEST_IMAGE: ${IMAGE_OPENMETADATA_INGESTION}
       OPENMETADATA_INGEST_CONFIG_DIR: ${OPENMETADATA_INGEST_CONFIG_DIR}
       OPENMETADATA_API_ENDPOINT: ${DTS_PLATFORM_OPENMETADATA_BASE_URL}/api/v1
@@ -1016,7 +1016,7 @@ services:
       AIRFLOW_HOME: /opt/airflow
       DBT_PROJECT_DIR: ${DBT_PROJECT_DIR}
       DBT_PROFILES_DIR: ${DBT_PROFILES_DIR}
-      DBT_IMAGE: ${IMAGE_DBT:-dts-dbt:1.11.2}
+      DBT_IMAGE: ${IMAGE_DBT:-dts-dbt:1.10.0}
       OPENMETADATA_INGEST_IMAGE: ${IMAGE_OPENMETADATA_INGESTION}
       OPENMETADATA_INGEST_CONFIG_DIR: ${OPENMETADATA_INGEST_CONFIG_DIR}
       OPENMETADATA_API_ENDPOINT: ${DTS_PLATFORM_OPENMETADATA_BASE_URL}/api/v1
@@ -1040,7 +1040,7 @@ services:
       - dts-core
 
   dts-dbt:
-    image: ${IMAGE_DBT:-dts-dbt:1.11.2}
+    image: ${IMAGE_DBT:-dts-dbt:1.10.0}
     container_name: dts-dbt
     entrypoint: /bin/bash
     command: ["-lc", "sleep infinity"]

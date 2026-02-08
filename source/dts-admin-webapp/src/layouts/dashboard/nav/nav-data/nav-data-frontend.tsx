@@ -8,9 +8,10 @@ const AUDIT_ALLOWED_ROLES = Array.from(new Set([...AUDITADMIN_ROLES, ...AUTHADMI
 
 export const frontendNavData: NavProps["data"] = [
 	{
+		name: "三元管理",
 		items: [
 			{
-				title: "sys.nav.usermgmt.system.my_changes",
+				title: "申请记录",
 				path: "/admin/my-changes",
 				icon: <Icon icon="local:ic-my-requests" size={24} />,
 				auth: SYSADMIN_ROLES,
@@ -33,12 +34,22 @@ export const frontendNavData: NavProps["data"] = [
 				icon: <Icon icon="local:ic-menu" size={24} />,
 				auth: SYSADMIN_ROLES,
 			},
+		],
+	},
+	{
+		name: "主数据管理",
+		items: [
 			{
 				title: "sys.nav.usermgmt.system.group",
 				path: "/admin/orgs",
 				icon: <Icon icon="local:ic-orgs" size={24} />,
 				auth: SYSADMIN_ROLES,
 			},
+		],
+	},
+	{
+		name: "基础管理",
+		items: [
 			{
 				title: "sys.nav.usermgmt.system.system_config",
 				path: "/admin/system",

@@ -1,35 +1,30 @@
 #!/usr/bin/env bash
-# ──────────────────────────────────────────────────────────────
-# dts-dbt-import — Import a dbt model package (ZIP) into the
-#                   dts-dbt project directory.
+# dts-dbt-import
+# Batch import externally-generated dbt SQL models into Platform logical modeling.
+# Transport: POST /api/modeling/sql-models/import (multipart/form-data)
 #
-# Usage:
-#   dts-dbt-import <zipfile>               Import models
-#   dts-dbt-import <zipfile> --dry-run     Preview only
-#   dts-dbt-import <zipfile> --clean       Remove existing models before import
-# ──────────────────────────────────────────────────────────────
+# Legacy note:
+#   ZIP import was removed. If you pass a .zip path, this command fails fast.
+
 set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-# Default dbt project directory — matches docker-compose volume mount
-DBT_PROJECT_DIR="${DBT_PROJECT_DIR:-$PROJECT_ROOT/services/dts-dbt}"
+DEFAULT_MANIFEST_PATH="$PROJECT_ROOT/docs/intergration/etl/sample-cli-model-import/manifest/models.tsv"
 
-# Allowed dbt sub-directories that may appear in the ZIP
-ALLOWED_DIRS="models macros seeds tests snapshots analyses"
-
-# Allowed file extensions
-ALLOWED_EXTS="sql yml yaml csv md txt"
-
-# Protected files that must NOT be overwritten
-PROTECTED_FILES="dbt_project.yml profiles/profiles.yml profiles/.user.yml"
+MANIFEST_PATH="${MANIFEST_PATH:-}"
+API_BASE="${API_BASE:-}"
+TOKEN="${TOKEN:-}"
+PLAN_ID="${PLAN_ID:-}"
+SOURCE_DATA_SOURCE_ID="${SOURCE_DATA_SOURCE_ID:-}"
+ACTIVE_DEPT="${ACTIVE_DEPT:-}"
 
 DRY_RUN=false
-CLEAN=false
-ZIP_FILE=""
-
-# ── Helpers ────────────────────────────────────────────────────
+CONTINUE_ON_ERROR=false
+SHOW_RESPONSE=false
+SKIP_EXISTING=false
+INSECURE=false
 
 red()    { printf '\033[0;31m%s\033[0m\n' "$*"; }
 green()  { printf '\033[0;32m%s\033[0m\n' "$*"; }
@@ -40,238 +35,460 @@ die()    { red "[dts-dbt-import] ERROR: $*" >&2; exit 1; }
 
 usage() {
   cat <<EOF
-Usage: $(basename "$0") <zipfile> [OPTIONS]
+Usage:
+  $(basename "$0") --manifest <models.tsv> [OPTIONS]
+  $(basename "$0") <models.tsv> [OPTIONS]
+
+Purpose:
+  Batch import SQL models via API endpoint:
+    POST /api/modeling/sql-models/import
 
 Options:
-  --dry-run    Preview files without extracting
-  --clean      Remove existing model directories before import
-  -h, --help   Show this help
+  --manifest <path>             TSV manifest path
+  --api-base <url>              Platform base URL, e.g. https://bi.example.com
+  --token <bearer-token>        Access token
+  --plan-id <uuid>              Project space UUID
+  --source-data-source-id <id>  Default sourceDataSourceId UUID (row value overrides)
+  --active-dept <dept>          X-Active-Dept header (optional)
+  --skip-existing               Skip rows if same name already exists in the project
+  --continue-on-error           Continue importing when a row fails
+  --show-response               Print API response body for each row
+  --insecure                    Add curl -k (ignore TLS cert errors)
+  --dry-run                     Validate manifest and print import plan only
+  -h, --help                    Show this help
 
-Environment:
-  DBT_PROJECT_DIR   Override dbt project directory
-                    (default: $PROJECT_ROOT/services/dts-dbt)
+Manifest format (TSV, first line header):
+  name  layer  sql_path  source_data_source_id  alias  schema_name  materialized
+  tags  status  enabled  owner_dept  description  csv_path
 
-The ZIP file should contain standard dbt directories:
-  models/  macros/  seeds/  tests/  snapshots/  analyses/
+Environment fallback:
+  MANIFEST_PATH
+  API_BASE
+  TOKEN
+  PLAN_ID
+  SOURCE_DATA_SOURCE_ID
+  ACTIVE_DEPT
+
+Default manifest path:
+  $DEFAULT_MANIFEST_PATH
+
+Legacy:
+  ZIP import is removed. Pass a TSV manifest instead of ZIP.
 EOF
   exit 0
 }
 
-# Check if a file extension is allowed
-is_allowed_ext() {
+strip_cr() {
+  local value="$1"
+  value="${value%$'\r'}"
+  printf '%s' "$value"
+}
+
+normalize_bool() {
+  local value
+  value="$(strip_cr "$1")"
+  if [[ -z "$value" ]]; then
+    echo ""
+    return 0
+  fi
+  local lower="${value,,}"
+  case "$lower" in
+    true|false) echo "$lower" ;;
+    *) die "enabled must be true/false, got: $value" ;;
+  esac
+}
+
+validate_layer() {
+  local layer="${1^^}"
+  case "$layer" in
+    ODS|DWD|DWS|ADS) echo "$layer" ;;
+    *) die "invalid layer: $1 (allowed: ODS,DWD,DWS,ADS)" ;;
+  esac
+}
+
+validate_model_name() {
+  local name="$1"
+  [[ "$name" =~ ^[A-Za-z][A-Za-z0-9_]*$ ]] || die "invalid model name: $name"
+}
+
+validate_uuid_loose() {
+  local value="$1"
+  [[ "$value" =~ ^[0-9a-fA-F-]{36}$ ]] || die "invalid UUID format: $value"
+}
+
+resolve_path() {
+  local base="$1"
+  local path="$2"
+  if [[ "$path" = /* ]]; then
+    printf '%s' "$path"
+  else
+    printf '%s/%s' "$base" "$path"
+  fi
+}
+
+resolve_existing_path() {
+  local path="$1"
+  local manifest_dir="$2"
+  local candidates=()
+  if [[ "$path" = /* ]]; then
+    candidates+=("$path")
+  else
+    candidates+=("$manifest_dir/$path")
+    candidates+=("$manifest_dir/../$path")
+    candidates+=("$PROJECT_ROOT/$path")
+    candidates+=("$(pwd)/$path")
+  fi
+
+  local c
+  for c in "${candidates[@]}"; do
+    if [[ -f "$c" ]]; then
+      printf '%s' "$c"
+      return 0
+    fi
+  done
+  # Return first candidate for error output
+  printf '%s' "${candidates[0]}"
+}
+
+json_get_status() {
   local file="$1"
-  local ext="${file##*.}"
-  ext="${ext,,}" # lowercase
-  for allowed in $ALLOWED_EXTS; do
-    [[ "$ext" == "$allowed" ]] && return 0
-  done
-  return 1
+  if command -v jq >/dev/null 2>&1; then
+    jq -r '.status // empty' "$file" 2>/dev/null || true
+  else
+    sed -n 's/.*"status"[[:space:]]*:[[:space:]]*\(-\?[0-9]\+\).*/\1/p' "$file" | head -n1
+  fi
 }
 
-# Check if a file is protected
-is_protected() {
-  local relpath="$1"
-  for pf in $PROTECTED_FILES; do
-    [[ "$relpath" == "$pf" ]] && return 0
-  done
-  return 1
+json_get_message() {
+  local file="$1"
+  if command -v jq >/dev/null 2>&1; then
+    jq -r '.message // empty' "$file" 2>/dev/null || true
+  else
+    sed -n 's/.*"message"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$file" | head -n1
+  fi
 }
 
-# Check if a path starts with an allowed directory
-is_allowed_path() {
-  local relpath="$1"
-  for dir in $ALLOWED_DIRS; do
-    [[ "$relpath" == "$dir/"* ]] && return 0
-  done
-  return 1
+append_text_form_if_present() {
+  local key="$1"
+  local value="$2"
+  if [[ -n "$value" ]]; then
+    CURL_ARGS+=( --form-string "$key=$value" )
+  fi
 }
 
-# ── Parse Arguments ────────────────────────────────────────────
+row_exists_remote() {
+  local model_name="$1"
+  local response_file="$2"
+  local url="${API_BASE%/}/api/modeling/sql-models?planId=${PLAN_ID}&keyword=${model_name}"
 
+  local args=(-sS -o "$response_file" -w '%{http_code}' "$url" -H "Authorization: Bearer $TOKEN")
+  if [[ -n "$ACTIVE_DEPT" ]]; then
+    args+=(-H "X-Active-Dept: $ACTIVE_DEPT")
+  fi
+  if [[ "$INSECURE" == true ]]; then
+    args+=(-k)
+  fi
+
+  local http_code
+  if ! http_code="$(curl "${args[@]}")"; then
+    return 2
+  fi
+  if [[ "$http_code" -lt 200 || "$http_code" -ge 300 ]]; then
+    return 2
+  fi
+
+  if command -v jq >/dev/null 2>&1; then
+    jq -e --arg name "${model_name,,}" '.data[]? | (.name // "") | ascii_downcase == $name' "$response_file" >/dev/null 2>&1
+  else
+    grep -qi "\"name\"[[:space:]]*:[[:space:]]*\"${model_name}\"" "$response_file"
+  fi
+}
+
+import_one_row() {
+  local row_no="$1"
+  local model_name="$2"
+  local layer="$3"
+  local sql_file="$4"
+  local source_ds_id="$5"
+  local alias="$6"
+  local schema_name="$7"
+  local materialized="$8"
+  local tags="$9"
+  local status="${10}"
+  local enabled="${11}"
+  local owner_dept="${12}"
+  local description="${13}"
+  local csv_file="${14}"
+
+  if [[ "$DRY_RUN" == true ]]; then
+    info "DRY-RUN row=$row_no name=$model_name layer=$layer sql=$sql_file sourceDataSourceId=$source_ds_id"
+    return 0
+  fi
+
+  local response_file
+  response_file="$(mktemp)"
+  local check_file=""
+  trap 'rm -f "$response_file" "$check_file"' RETURN
+
+  if [[ "$SKIP_EXISTING" == true ]]; then
+    check_file="$(mktemp)"
+    if row_exists_remote "$model_name" "$check_file"; then
+      warn "row=$row_no name=$model_name already exists in plan=$PLAN_ID, skipped"
+      return 10
+    fi
+    if [[ "$?" -eq 2 ]]; then
+      warn "row=$row_no name=$model_name pre-check failed, continue importing"
+    fi
+  fi
+
+  CURL_ARGS=(
+    -sS
+    -o "$response_file"
+    -w '%{http_code}'
+    -X POST
+    "${API_BASE%/}/api/modeling/sql-models/import"
+    -H "Authorization: Bearer $TOKEN"
+    --form-string "planId=$PLAN_ID"
+    --form-string "name=$model_name"
+    --form-string "layer=$layer"
+    --form-string "sourceDataSourceId=$source_ds_id"
+    -F "sql=@${sql_file};type=text/plain"
+  )
+  if [[ -n "$ACTIVE_DEPT" ]]; then
+    CURL_ARGS+=(-H "X-Active-Dept: $ACTIVE_DEPT")
+  fi
+  if [[ "$INSECURE" == true ]]; then
+    CURL_ARGS+=(-k)
+  fi
+
+  append_text_form_if_present "alias" "$alias"
+  append_text_form_if_present "schemaName" "$schema_name"
+  append_text_form_if_present "materialized" "$materialized"
+  append_text_form_if_present "tags" "$tags"
+  append_text_form_if_present "description" "$description"
+  append_text_form_if_present "status" "$status"
+  append_text_form_if_present "enabled" "$enabled"
+  append_text_form_if_present "ownerDept" "$owner_dept"
+  if [[ -n "$csv_file" ]]; then
+    CURL_ARGS+=(-F "csv=@${csv_file};type=text/csv")
+  fi
+
+  local http_code
+  if ! http_code="$(curl "${CURL_ARGS[@]}")"; then
+    warn "row=$row_no name=$model_name curl failed"
+    return 1
+  fi
+
+  local api_status
+  local api_message
+  api_status="$(json_get_status "$response_file")"
+  api_message="$(json_get_message "$response_file")"
+
+  if [[ "$SHOW_RESPONSE" == true ]]; then
+    info "row=$row_no response: $(cat "$response_file")"
+  fi
+
+  if [[ "$http_code" -lt 200 || "$http_code" -ge 300 ]]; then
+    warn "row=$row_no name=$model_name http=$http_code message=${api_message:-N/A}"
+    return 1
+  fi
+  if [[ -n "$api_status" && "$api_status" != "200" ]]; then
+    warn "row=$row_no name=$model_name api_status=$api_status message=${api_message:-N/A}"
+    return 1
+  fi
+
+  info "row=$row_no imported name=$model_name layer=$layer"
+  return 0
+}
+
+POSITIONAL_MANIFEST=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --dry-run)  DRY_RUN=true; shift ;;
-    --clean)    CLEAN=true; shift ;;
-    -h|--help)  usage ;;
-    -*)         die "Unknown option: $1" ;;
+    --manifest) MANIFEST_PATH="$2"; shift 2 ;;
+    --api-base) API_BASE="$2"; shift 2 ;;
+    --token) TOKEN="$2"; shift 2 ;;
+    --plan-id) PLAN_ID="$2"; shift 2 ;;
+    --source-data-source-id) SOURCE_DATA_SOURCE_ID="$2"; shift 2 ;;
+    --active-dept) ACTIVE_DEPT="$2"; shift 2 ;;
+    --skip-existing) SKIP_EXISTING=true; shift ;;
+    --continue-on-error) CONTINUE_ON_ERROR=true; shift ;;
+    --show-response) SHOW_RESPONSE=true; shift ;;
+    --insecure) INSECURE=true; shift ;;
+    --dry-run) DRY_RUN=true; shift ;;
+    -h|--help) usage ;;
+    -*) die "unknown option: $1" ;;
     *)
-      [[ -z "$ZIP_FILE" ]] && ZIP_FILE="$1" || die "Unexpected argument: $1"
-      shift
+      if [[ -z "$POSITIONAL_MANIFEST" ]]; then
+        POSITIONAL_MANIFEST="$1"
+        shift
+      else
+        die "unexpected argument: $1"
+      fi
       ;;
   esac
 done
 
-[[ -z "$ZIP_FILE" ]] && die "No ZIP file specified. Run with --help for usage."
-[[ -f "$ZIP_FILE" ]] || die "File not found: $ZIP_FILE"
-
-# Validate file type
-file_type="$(file -b --mime-type "$ZIP_FILE" 2>/dev/null || echo "unknown")"
-if [[ "$file_type" != "application/zip" && "$file_type" != "application/x-zip-compressed" ]]; then
-  # Fallback: check extension
-  [[ "${ZIP_FILE,,}" == *.zip ]] || die "Not a ZIP file: $ZIP_FILE (type: $file_type)"
+if [[ -z "$MANIFEST_PATH" && -n "$POSITIONAL_MANIFEST" ]]; then
+  MANIFEST_PATH="$POSITIONAL_MANIFEST"
+fi
+if [[ -z "$MANIFEST_PATH" && -f "$DEFAULT_MANIFEST_PATH" ]]; then
+  MANIFEST_PATH="$DEFAULT_MANIFEST_PATH"
 fi
 
-[[ -d "$DBT_PROJECT_DIR" ]] || die "dbt project directory not found: $DBT_PROJECT_DIR"
+if [[ -n "$POSITIONAL_MANIFEST" && "${POSITIONAL_MANIFEST,,}" == *.zip ]]; then
+  die "ZIP import was removed. Please provide a TSV manifest. See docs/intergration/etl/external-llm-cli-import-spec.md"
+fi
 
-# ── Analyze ZIP Contents ───────────────────────────────────────
+[[ -n "$MANIFEST_PATH" ]] || die "manifest path is required"
+[[ -f "$MANIFEST_PATH" ]] || die "manifest not found: $MANIFEST_PATH"
+[[ -n "$API_BASE" ]] || die "API_BASE is required (--api-base or env)"
+[[ -n "$TOKEN" ]] || die "TOKEN is required (--token or env)"
+[[ -n "$PLAN_ID" ]] || die "PLAN_ID is required (--plan-id or env)"
 
-info "Analyzing: $ZIP_FILE"
-info "Target:    $DBT_PROJECT_DIR"
+validate_uuid_loose "$PLAN_ID"
+if [[ -n "$SOURCE_DATA_SOURCE_ID" ]]; then
+  validate_uuid_loose "$SOURCE_DATA_SOURCE_ID"
+fi
 
-TMPDIR_WORK="$(mktemp -d)"
-trap 'rm -rf "$TMPDIR_WORK"' EXIT
-
-# List ZIP entries
-zipfile_list="$TMPDIR_WORK/entries.txt"
-unzip -Z1 "$ZIP_FILE" > "$zipfile_list" 2>/dev/null || die "Failed to read ZIP file"
-
-total_entries=0
-accepted_files=0
-skipped_files=0
-protected_skipped=0
-new_files=0
-overwrite_files=0
-
-accepted_list="$TMPDIR_WORK/accepted.txt"
-skipped_list="$TMPDIR_WORK/skipped.txt"
-: > "$accepted_list"
-: > "$skipped_list"
-
-while IFS= read -r entry; do
-  # Skip directories
-  [[ "$entry" == */ ]] && continue
-
-  # Normalize: strip leading ./ if present
-  entry="${entry#./}"
-
-  ((total_entries++)) || true
-
-  # Must be under an allowed directory
-  if ! is_allowed_path "$entry"; then
-    echo "  [SKIP] not in allowed directory: $entry" >> "$skipped_list"
-    ((skipped_files++)) || true
-    continue
-  fi
-
-  # Must not be a protected file
-  if is_protected "$entry"; then
-    echo "  [SKIP] protected file: $entry" >> "$skipped_list"
-    ((protected_skipped++)) || true
-    continue
-  fi
-
-  # Must have an allowed extension
-  if ! is_allowed_ext "$entry"; then
-    echo "  [SKIP] disallowed extension: $entry" >> "$skipped_list"
-    ((skipped_files++)) || true
-    continue
-  fi
-
-  # Check for path traversal
-  if [[ "$entry" == *".."* ]]; then
-    echo "  [SKIP] path traversal: $entry" >> "$skipped_list"
-    ((skipped_files++)) || true
-    continue
-  fi
-
-  # Check new vs overwrite
-  if [[ -f "$DBT_PROJECT_DIR/$entry" ]]; then
-    echo "$entry" >> "$accepted_list"
-    ((overwrite_files++)) || true
-  else
-    echo "$entry" >> "$accepted_list"
-    ((new_files++)) || true
-  fi
-  ((accepted_files++)) || true
-done < "$zipfile_list"
-
-# ── Print Summary ──────────────────────────────────────────────
+manifest_dir="$(cd -- "$(dirname -- "$MANIFEST_PATH")" && pwd)"
 
 echo ""
-info "═══ Import Summary ═══"
-info "Total entries in ZIP:   $total_entries"
-green "  Accepted:             $accepted_files (new: $new_files, overwrite: $overwrite_files)"
-if [[ $skipped_files -gt 0 || $protected_skipped -gt 0 ]]; then
-  yellow "  Skipped:              $((skipped_files + protected_skipped)) (protected: $protected_skipped)"
+info "manifest: $MANIFEST_PATH"
+info "api_base: $API_BASE"
+info "plan_id : $PLAN_ID"
+if [[ -n "$SOURCE_DATA_SOURCE_ID" ]]; then
+  info "default source_data_source_id: $SOURCE_DATA_SOURCE_ID"
 fi
-echo ""
-
-if [[ -s "$skipped_list" ]]; then
-  info "Skipped files:"
-  cat "$skipped_list"
-  echo ""
-fi
-
-if [[ $accepted_files -eq 0 ]]; then
-  warn "No files to import."
-  exit 0
-fi
-
 if [[ "$DRY_RUN" == true ]]; then
-  info "Files to import:"
-  while IFS= read -r f; do
-    if [[ -f "$DBT_PROJECT_DIR/$f" ]]; then
-      yellow "  [OVERWRITE] $f"
-    else
-      green "  [NEW]       $f"
-    fi
-  done < "$accepted_list"
-  echo ""
-  info "(dry-run mode — no files were modified)"
-  exit 0
+  warn "running in dry-run mode, no API call will be made"
 fi
+echo ""
 
-# ── Clean Mode ─────────────────────────────────────────────────
+line_no=0
+rows_seen=0
+rows_imported=0
+rows_skipped=0
+rows_failed=0
+tsv_sep=$'\x1f'
 
-if [[ "$CLEAN" == true ]]; then
-  echo ""
-  warn "Clean mode: removing existing model directories..."
-  read -r -p "Are you sure? [y/N] " confirm
-  if [[ "${confirm,,}" != "y" ]]; then
-    info "Aborted."
-    exit 0
-  fi
-  for dir in $ALLOWED_DIRS; do
-    target="$DBT_PROJECT_DIR/$dir"
-    if [[ -d "$target" ]]; then
-      info "  Removing $target"
-      rm -rf "$target"
-    fi
-  done
-fi
+while IFS= read -r raw_line || [[ -n "$raw_line" ]]; do
+  line_no=$((line_no + 1))
 
-# ── Extract ────────────────────────────────────────────────────
+  raw_line="$(strip_cr "$raw_line")"
+  parsed_line="${raw_line//$'\t'/$tsv_sep}"
+  IFS="$tsv_sep" read -r name layer sql_path source_ds_id alias schema_name materialized tags status enabled owner_dept description csv_path _extra <<< "$parsed_line"
 
-info "Extracting files..."
+  name="$(strip_cr "${name:-}")"
+  layer="$(strip_cr "${layer:-}")"
+  sql_path="$(strip_cr "${sql_path:-}")"
+  source_ds_id="$(strip_cr "${source_ds_id:-}")"
+  alias="$(strip_cr "${alias:-}")"
+  schema_name="$(strip_cr "${schema_name:-}")"
+  materialized="$(strip_cr "${materialized:-}")"
+  tags="$(strip_cr "${tags:-}")"
+  status="$(strip_cr "${status:-}")"
+  enabled="$(strip_cr "${enabled:-}")"
+  owner_dept="$(strip_cr "${owner_dept:-}")"
+  description="$(strip_cr "${description:-}")"
+  csv_path="$(strip_cr "${csv_path:-}")"
 
-# Extract to temp directory first for safety
-extract_dir="$TMPDIR_WORK/extract"
-unzip -q -o "$ZIP_FILE" -d "$extract_dir" || die "Failed to extract ZIP"
-
-# Copy accepted files only
-imported=0
-while IFS= read -r relpath; do
-  src="$extract_dir/$relpath"
-  dst="$DBT_PROJECT_DIR/$relpath"
-
-  if [[ ! -f "$src" ]]; then
-    # Try without leading path adjustments
+  if [[ "$line_no" -eq 1 && "${name,,}" == "name" ]]; then
     continue
   fi
+  if [[ -z "$name" || "${name:0:1}" == "#" ]]; then
+    continue
+  fi
+  enabled="$(normalize_bool "$enabled")"
 
-  # Ensure target directory exists
-  mkdir -p "$(dirname "$dst")"
+  rows_seen=$((rows_seen + 1))
 
-  cp -f "$src" "$dst"
-  ((imported++)) || true
-done < "$accepted_list"
+  if [[ -z "$layer" || -z "$sql_path" ]]; then
+    warn "row=$line_no missing required column(s): layer/sql_path"
+    rows_failed=$((rows_failed + 1))
+    if [[ "$CONTINUE_ON_ERROR" == true ]]; then
+      continue
+    fi
+    exit 1
+  fi
+
+  if ! validate_model_name "$name" || ! layer_norm="$(validate_layer "$layer")"; then
+    rows_failed=$((rows_failed + 1))
+    if [[ "$CONTINUE_ON_ERROR" == true ]]; then
+      continue
+    fi
+    exit 1
+  fi
+  layer="$layer_norm"
+
+  ds_id="$source_ds_id"
+  if [[ -z "$ds_id" ]]; then
+    ds_id="$SOURCE_DATA_SOURCE_ID"
+  fi
+  if [[ -z "$ds_id" ]]; then
+    warn "row=$line_no name=$name missing sourceDataSourceId (row + default both empty)"
+    rows_failed=$((rows_failed + 1))
+    if [[ "$CONTINUE_ON_ERROR" == true ]]; then
+      continue
+    fi
+    exit 1
+  fi
+  validate_uuid_loose "$ds_id"
+
+  sql_abs="$(resolve_existing_path "$sql_path" "$manifest_dir")"
+  if [[ ! -f "$sql_abs" ]]; then
+    warn "row=$line_no name=$name sql file not found: $sql_abs"
+    rows_failed=$((rows_failed + 1))
+    if [[ "$CONTINUE_ON_ERROR" == true ]]; then
+      continue
+    fi
+    exit 1
+  fi
+
+  csv_abs=""
+  if [[ -n "$csv_path" ]]; then
+    csv_abs="$(resolve_existing_path "$csv_path" "$manifest_dir")"
+    if [[ ! -f "$csv_abs" ]]; then
+      warn "row=$line_no name=$name csv file not found: $csv_abs"
+      rows_failed=$((rows_failed + 1))
+      if [[ "$CONTINUE_ON_ERROR" == true ]]; then
+        continue
+      fi
+      exit 1
+    fi
+  fi
+
+  if import_one_row "$line_no" "$name" "$layer" "$sql_abs" "$ds_id" "$alias" "$schema_name" "$materialized" "$tags" "$status" "$enabled" "$owner_dept" "$description" "$csv_abs"; then
+    if [[ "$DRY_RUN" == true ]]; then
+      rows_skipped=$((rows_skipped + 1))
+    else
+      rows_imported=$((rows_imported + 1))
+    fi
+  else
+    rc="$?"
+    if [[ "$rc" -eq 10 ]]; then
+      rows_skipped=$((rows_skipped + 1))
+      continue
+    fi
+    rows_failed=$((rows_failed + 1))
+    if [[ "$CONTINUE_ON_ERROR" != true ]]; then
+      break
+    fi
+  fi
+done < "$MANIFEST_PATH"
 
 echo ""
-green "═══ Import Complete ═══"
-green "  Imported: $imported files"
-info "  Target:   $DBT_PROJECT_DIR"
-echo ""
-info "Next steps:"
-info "  1. Review changes in the Web file browser"
-info "  2. Run 'docker exec dts-dbt dbt compile' to validate"
-info "  3. Trigger dbt run from the Web UI"
+info "summary:"
+info "  rows seen     : $rows_seen"
+if [[ "$DRY_RUN" == true ]]; then
+  info "  rows validated: $rows_skipped"
+else
+  info "  rows imported : $rows_imported"
+  info "  rows skipped  : $rows_skipped"
+fi
+info "  rows failed   : $rows_failed"
+
+if [[ "$rows_failed" -gt 0 ]]; then
+  exit 1
+fi
+
+green "[dts-dbt-import] completed successfully"

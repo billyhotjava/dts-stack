@@ -6,12 +6,14 @@ import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.domain.catalog.CatalogColumnSchema;
 import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
 import com.yuzhi.dts.platform.domain.catalog.CatalogTableSchema;
+import com.yuzhi.dts.platform.domain.infra.InfraOdsTableMapping;
 import com.yuzhi.dts.platform.domain.modeling.ModelingPlan;
 import com.yuzhi.dts.platform.domain.modeling.ModelingSqlModel;
 import com.yuzhi.dts.platform.domain.service.InfraDataSource;
 import com.yuzhi.dts.platform.repository.catalog.CatalogColumnSchemaRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogTableSchemaRepository;
+import com.yuzhi.dts.platform.repository.infra.InfraOdsTableMappingRepository;
 import com.yuzhi.dts.platform.repository.modeling.ModelingPlanRepository;
 import com.yuzhi.dts.platform.repository.modeling.ModelingSqlModelRepository;
 import com.yuzhi.dts.platform.repository.service.InfraDataSourceRepository;
@@ -20,7 +22,6 @@ import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.catalog.CatalogColumnSyncService;
 import com.yuzhi.dts.platform.service.catalog.CatalogColumnSyncService.ColumnSpec;
 import com.yuzhi.dts.platform.service.etl.DbtConfigService;
-import com.yuzhi.dts.platform.service.etl.DbtFileService;
 import com.yuzhi.dts.platform.service.security.OrganizationVisibilityService;
 import jakarta.persistence.EntityNotFoundException;
 import java.io.IOException;
@@ -37,13 +38,13 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.Comparator;
 import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
-import org.springframework.web.multipart.MultipartFile;
 
 @Service
 @Transactional
@@ -55,11 +56,11 @@ public class ModelingSqlModelService {
 
     private final ModelingSqlModelRepository repo;
     private final ModelingPlanRepository planRepo;
+    private final InfraOdsTableMappingRepository odsTableMappingRepository;
     private final InfraDataSourceRepository dataSourceRepository;
     private final OrganizationVisibilityService organizationVisibilityService;
     private final DataStandardSecurity security;
     private final DbtConfigService dbtConfigService;
-    private final DbtFileService dbtFileService;
     private final CatalogDatasetRepository datasetRepository;
     private final CatalogTableSchemaRepository tableRepository;
     private final CatalogColumnSchemaRepository columnRepository;
@@ -70,11 +71,11 @@ public class ModelingSqlModelService {
     public ModelingSqlModelService(
         ModelingSqlModelRepository repo,
         ModelingPlanRepository planRepo,
+        InfraOdsTableMappingRepository odsTableMappingRepository,
         InfraDataSourceRepository dataSourceRepository,
         OrganizationVisibilityService organizationVisibilityService,
         DataStandardSecurity security,
         DbtConfigService dbtConfigService,
-        DbtFileService dbtFileService,
         CatalogDatasetRepository datasetRepository,
         CatalogTableSchemaRepository tableRepository,
         CatalogColumnSchemaRepository columnRepository,
@@ -84,11 +85,11 @@ public class ModelingSqlModelService {
     ) {
         this.repo = repo;
         this.planRepo = planRepo;
+        this.odsTableMappingRepository = odsTableMappingRepository;
         this.dataSourceRepository = dataSourceRepository;
         this.organizationVisibilityService = organizationVisibilityService;
         this.security = security;
         this.dbtConfigService = dbtConfigService;
-        this.dbtFileService = dbtFileService;
         this.datasetRepository = datasetRepository;
         this.tableRepository = tableRepository;
         this.columnRepository = columnRepository;
@@ -215,144 +216,163 @@ public class ModelingSqlModelService {
         return dto;
     }
 
-    public SqlModelZipImportResult importFromZip(SqlModelZipImportRequest request, MultipartFile file, String activeDeptHeader) {
+    public SqlModelOdsGenerateResult generateFromOds(SqlModelOdsGenerateRequest request, String activeDeptHeader) {
         if (request == null || request.planId() == null) {
             throw new IllegalArgumentException("请选择项目空间");
         }
-        if (file == null || file.isEmpty()) {
-            throw new IllegalArgumentException("请上传 ZIP 文件");
+        if (request.mappingIds() == null || request.mappingIds().isEmpty()) {
+            throw new IllegalArgumentException("请至少选择一个 ODS 表");
         }
 
+        boolean createDwd = request.createDwd() == null || request.createDwd();
+        boolean createDws = request.createDws() == null || request.createDws();
+        boolean createAds = request.createAds() == null || request.createAds();
+        if (!createDwd && !createDws && !createAds) {
+            throw new IllegalArgumentException("请至少选择一个分层（DWD/DWS/ADS）");
+        }
+
+        String activeDept = security.resolveActiveDept(activeDeptHeader);
+        boolean instituteScope = security.hasInstituteScope();
         ensureWorkspaceWritable();
-        ModelingPlan plan = resolvePlan(request.planId(), activeDeptHeader);
-        InfraDataSource source = request.sourceDataSourceId() != null ? resolveSource(request.sourceDataSourceId(), activeDeptHeader) : null;
-        String sourceKey = source != null ? resolveSourceKey(source) : null;
-        String sourceTag = StringUtils.hasText(sourceKey) ? sanitizeTag(sourceKey, slugify(sourceKey)) : null;
-        String mergedTags = mergeTags(request.tags(), sourceTag);
-        String dagSelector = StringUtils.hasText(sourceTag) ? "tab:" + sourceTag : null;
-
-        String ownerDept = trimToNull(request.ownerDept());
-        if (!StringUtils.hasText(ownerDept)) {
-            ownerDept = trimToNull(security.resolveActiveDept(activeDeptHeader));
-        }
-        if (!StringUtils.hasText(ownerDept) && plan != null) {
-            ownerDept = trimToNull(plan.getOwnerDept());
+        resolvePlan(request.planId(), activeDeptHeader);
+        if (request.sourceDataSourceId() != null) {
+            resolveSource(request.sourceDataSourceId(), activeDeptHeader);
         }
 
-        String normalizedDefaultLayer = normalizeLayer(request.defaultLayer());
-        DbtFileService.DbtImportResult dbtImport = dbtFileService.importZip(file);
-        Path projectDir = resolveProjectDir();
+        Set<UUID> selectedIds = new LinkedHashSet<>(request.mappingIds());
+        List<InfraOdsTableMapping> mappings = odsTableMappingRepository.findAllById(selectedIds)
+            .stream()
+            .filter(mapping -> mapping != null && Boolean.TRUE.equals(mapping.getEnabled()) && isOwnerDeptVisible(mapping.getOwnerDept(), activeDept, instituteScope))
+            .sorted(
+                Comparator.comparing((InfraOdsTableMapping m) -> defaultText(trimToNull(m.getOdsSchema()), "public"), String.CASE_INSENSITIVE_ORDER)
+                    .thenComparing(m -> defaultText(trimToNull(m.getOdsTable()), ""))
+            )
+            .toList();
 
-        int modelsCreated = 0;
-        int modelsUpdated = 0;
-        List<String> modelFiles = new ArrayList<>();
-        List<String> skippedModels = new ArrayList<>();
-        Set<String> processedNames = new LinkedHashSet<>();
+        if (mappings.isEmpty()) {
+            throw new IllegalArgumentException("未找到可用的 ODS 表映射");
+        }
 
-        for (String relativePath : dbtImport.importedFiles()) {
-            if (!isSqlModelFile(relativePath)) {
-                continue;
-            }
-            modelFiles.add(relativePath);
-            String modelName = extractModelName(relativePath);
-            if (!StringUtils.hasText(modelName) || !MODEL_NAME_PATTERN.matcher(modelName).matches()) {
-                skippedModels.add(relativePath + " (模型名不合法)");
-                continue;
-            }
-            String modelKey = modelName.trim().toLowerCase(Locale.ROOT);
-            if (processedNames.contains(modelKey)) {
-                skippedModels.add(relativePath + " (ZIP 内模型名重复)");
-                continue;
-            }
-            processedNames.add(modelKey);
+        int created = 0;
+        int updated = 0;
+        List<String> createdModels = new ArrayList<>();
+        List<String> updatedModels = new ArrayList<>();
+        List<String> skipped = new ArrayList<>();
+        boolean overwrite = request.overwriteExisting() == null || request.overwriteExisting();
 
-            String layer = resolveLayerFromPath(relativePath, modelName, normalizedDefaultLayer);
-            if (!StringUtils.hasText(layer)) {
-                skippedModels.add(relativePath + " (无法识别分层，请使用 ods/dwd/dws/ads 目录或模型名前缀)");
+        for (InfraOdsTableMapping mapping : mappings) {
+            String odsSchema = defaultText(trimToNull(mapping.getOdsSchema()), "public");
+            String odsTable = trimToNull(mapping.getOdsTable());
+            if (!StringUtils.hasText(odsTable)) {
+                skipped.add("mapping:" + mapping.getId() + " (ODS 表名为空)");
                 continue;
             }
 
-            Path modelFile = projectDir.resolve(relativePath).normalize();
-            if (!modelFile.startsWith(projectDir) || !Files.isRegularFile(modelFile)) {
-                skippedModels.add(relativePath + " (模型文件不存在)");
-                continue;
-            }
-            String sqlText;
-            try {
-                sqlText = Files.readString(modelFile, StandardCharsets.UTF_8);
-            } catch (IOException ex) {
-                skippedModels.add(relativePath + " (读取失败: " + ex.getMessage() + ")");
-                continue;
-            }
-            if (!StringUtils.hasText(sqlText)) {
-                skippedModels.add(relativePath + " (SQL 为空)");
+            String entityToken = resolveEntityToken(mapping, odsTable);
+            if (!StringUtils.hasText(entityToken)) {
+                skipped.add(odsSchema + "." + odsTable + " (无法推断模型名)");
                 continue;
             }
 
-            ModelingSqlModel model = repo.findFirstByPlanIdAndNameIgnoreCase(plan.getId(), modelName).orElse(null);
-            boolean exists = model != null;
-            if (!exists && request.sourceDataSourceId() == null) {
-                skippedModels.add(relativePath + " (缺少来源数据源 sourceDataSourceId)");
-                continue;
-            }
-            if (model == null) {
-                model = new ModelingSqlModel();
-                model.setPlanId(plan.getId());
-                model.setName(modelName);
-                model.setSourceDataSourceId(request.sourceDataSourceId());
-                model.setEnabled(request.enabled() == null ? Boolean.TRUE : request.enabled());
-                model.setStatus(defaultText(trimToNull(request.status()), "DRAFT"));
-                model.setMaterialized(defaultText(trimToNull(request.materialized()), "table"));
-                model.setOwnerDept(ownerDept);
-            } else {
-                if (request.sourceDataSourceId() != null) {
-                    model.setSourceDataSourceId(request.sourceDataSourceId());
-                }
-                if (request.enabled() != null) {
-                    model.setEnabled(request.enabled());
-                }
-                if (StringUtils.hasText(request.status())) {
-                    model.setStatus(trimToNull(request.status()));
-                }
-                if (StringUtils.hasText(request.materialized())) {
-                    model.setMaterialized(trimToNull(request.materialized()));
-                }
-                if (StringUtils.hasText(ownerDept)) {
-                    model.setOwnerDept(ownerDept);
-                }
+            String extraTags = mergeTags(trimToNull(request.tags()), trimToNull(mapping.getSystemCode()));
+            String descriptionBase = trimToNull(mapping.getDescription());
+
+            GenerateLayerResult dwdResult = null;
+            if (createDwd) {
+                dwdResult = upsertGeneratedModel(
+                    request.planId(),
+                    request.sourceDataSourceId(),
+                    "dwd_" + entityToken,
+                    "DWD",
+                    request.schemaName(),
+                    request.materialized(),
+                    extraTags,
+                    buildLayerDescription("DWD", odsSchema, odsTable, descriptionBase),
+                    request.enabled(),
+                    request.status(),
+                    request.ownerDept(),
+                    """
+                    select
+                      *
+                    from {{ source('%s', '%s') }}
+                    """.formatted(odsSchema, odsTable),
+                    activeDeptHeader,
+                    overwrite
+                );
+                created += dwdResult.created() ? 1 : 0;
+                updated += dwdResult.updated() ? 1 : 0;
+                if (dwdResult.created()) createdModels.add(dwdResult.modelName());
+                if (dwdResult.updated()) updatedModels.add(dwdResult.modelName());
+                if (dwdResult.skippedReason() != null) skipped.add(dwdResult.skippedReason());
             }
 
-            if (StringUtils.hasText(request.schemaName())) {
-                model.setSchemaName(trimToNull(request.schemaName()));
+            GenerateLayerResult dwsResult = null;
+            if (createDws) {
+                String dwdRef = dwdResult != null ? dwdResult.modelName() : "dwd_" + entityToken;
+                dwsResult = upsertGeneratedModel(
+                    request.planId(),
+                    request.sourceDataSourceId(),
+                    "dws_" + entityToken,
+                    "DWS",
+                    request.schemaName(),
+                    request.materialized(),
+                    extraTags,
+                    buildLayerDescription("DWS", odsSchema, odsTable, descriptionBase),
+                    request.enabled(),
+                    request.status(),
+                    request.ownerDept(),
+                    """
+                    select
+                      *
+                    from {{ ref('%s') }}
+                    """.formatted(dwdRef),
+                    activeDeptHeader,
+                    overwrite
+                );
+                created += dwsResult.created() ? 1 : 0;
+                updated += dwsResult.updated() ? 1 : 0;
+                if (dwsResult.created()) createdModels.add(dwsResult.modelName());
+                if (dwsResult.updated()) updatedModels.add(dwsResult.modelName());
+                if (dwsResult.skippedReason() != null) skipped.add(dwsResult.skippedReason());
             }
-            if (StringUtils.hasText(request.description())) {
-                model.setDescription(trimToNull(request.description()));
-            }
-            model.setLayer(layer);
-            model.setTags(mergedTags);
-            model.setDagSelector(dagSelector);
-            model.setSqlText(sqlText);
-            model.setModelPath(relativePath);
 
-            ModelingSqlModel saved = repo.save(model);
-            syncDraftColumns(saved);
-            if (exists) {
-                modelsUpdated++;
-            } else {
-                modelsCreated++;
+            if (createAds) {
+                String dwsRef = dwsResult != null ? dwsResult.modelName() : "dws_" + entityToken;
+                GenerateLayerResult adsResult = upsertGeneratedModel(
+                    request.planId(),
+                    request.sourceDataSourceId(),
+                    "ads_" + entityToken,
+                    "ADS",
+                    request.schemaName(),
+                    request.materialized(),
+                    extraTags,
+                    buildLayerDescription("ADS", odsSchema, odsTable, descriptionBase),
+                    request.enabled(),
+                    request.status(),
+                    request.ownerDept(),
+                    """
+                    select
+                      *
+                    from {{ ref('%s') }}
+                    """.formatted(dwsRef),
+                    activeDeptHeader,
+                    overwrite
+                );
+                created += adsResult.created() ? 1 : 0;
+                updated += adsResult.updated() ? 1 : 0;
+                if (adsResult.created()) createdModels.add(adsResult.modelName());
+                if (adsResult.updated()) updatedModels.add(adsResult.modelName());
+                if (adsResult.skippedReason() != null) skipped.add(adsResult.skippedReason());
             }
         }
 
-        return new SqlModelZipImportResult(
-            dbtImport.totalFiles(),
-            dbtImport.newFiles(),
-            dbtImport.overwrittenFiles(),
-            dbtImport.skippedFiles(),
-            dbtImport.importedFiles(),
-            modelFiles,
-            modelsCreated,
-            modelsUpdated,
-            skippedModels
+        return new SqlModelOdsGenerateResult(
+            mappings.size(),
+            created,
+            updated,
+            createdModels,
+            updatedModels,
+            skipped
         );
     }
 
@@ -462,58 +482,6 @@ public class ModelingSqlModelService {
         String csvName = baseName.endsWith(".sql") ? baseName.substring(0, baseName.length() - 4) + ".csv" : baseName + ".csv";
         Path csvPath = sqlPath.resolveSibling(csvName);
         return columnSyncService.parseCsv(csvPath);
-    }
-
-    private boolean isSqlModelFile(String relativePath) {
-        if (!StringUtils.hasText(relativePath)) {
-            return false;
-        }
-        String normalized = relativePath.replace('\\', '/').toLowerCase(Locale.ROOT);
-        return normalized.startsWith("models/") && normalized.endsWith(".sql");
-    }
-
-    private String extractModelName(String relativePath) {
-        if (!StringUtils.hasText(relativePath)) {
-            return null;
-        }
-        String normalized = relativePath.replace('\\', '/');
-        int slash = normalized.lastIndexOf('/');
-        String fileName = slash >= 0 ? normalized.substring(slash + 1) : normalized;
-        if (!fileName.toLowerCase(Locale.ROOT).endsWith(".sql")) {
-            return null;
-        }
-        return fileName.substring(0, fileName.length() - 4);
-    }
-
-    private String resolveLayerFromPath(String relativePath, String modelName, String defaultLayer) {
-        if (StringUtils.hasText(relativePath)) {
-            String normalized = relativePath.replace('\\', '/').toLowerCase(Locale.ROOT);
-            if (normalized.startsWith("models/")) {
-                String withoutRoot = normalized.substring("models/".length());
-                int slash = withoutRoot.indexOf('/');
-                if (slash > 0) {
-                    String firstDir = withoutRoot.substring(0, slash);
-                    String dirLayer = normalizeLayer(firstDir);
-                    if (StringUtils.hasText(dirLayer)) {
-                        return dirLayer;
-                    }
-                }
-            }
-        }
-        String inferred = inferLayer(modelName);
-        if (StringUtils.hasText(inferred)) {
-            return inferred;
-        }
-        return normalizeLayer(defaultLayer);
-    }
-
-    private Path resolveProjectDir() {
-        DbtConfigService.DbtConfigView view = dbtConfigService.loadConfig();
-        String projectDir = view != null && view.config() != null ? view.config().projectDir() : null;
-        if (!StringUtils.hasText(projectDir)) {
-            throw new IllegalArgumentException("dbt 项目目录未配置");
-        }
-        return Path.of(projectDir).normalize();
     }
 
     private String resolveModelSchema(ModelingSqlModel model, DbtConfigService.DbtConfigView view) {
@@ -966,29 +934,104 @@ public class ModelingSqlModelService {
         return StringUtils.hasText(value) ? value : fallback;
     }
 
-    public record SqlModelZipImportRequest(
+    private String resolveEntityToken(InfraOdsTableMapping mapping, String odsTable) {
+        String candidate = trimToNull(mapping != null ? mapping.getEntityCode() : null);
+        if (!StringUtils.hasText(candidate)) {
+            candidate = trimToNull(odsTable);
+        }
+        if (!StringUtils.hasText(candidate)) {
+            return null;
+        }
+        String normalized = slugify(candidate);
+        if (normalized.startsWith("ods_")) {
+            normalized = normalized.substring(4);
+        }
+        normalized = normalized.replaceAll("^_+", "").replaceAll("_+$", "");
+        return StringUtils.hasText(normalized) ? normalized : null;
+    }
+
+    private String buildLayerDescription(String layer, String odsSchema, String odsTable, String baseDescription) {
+        String layerText = defaultText(layer, "DWD");
+        String sourceText = odsSchema + "." + odsTable;
+        if (StringUtils.hasText(baseDescription)) {
+            return layerText + " 自动生成模型，来源 " + sourceText + "；" + baseDescription;
+        }
+        return layerText + " 自动生成模型，来源 " + sourceText;
+    }
+
+    private GenerateLayerResult upsertGeneratedModel(
         UUID planId,
         UUID sourceDataSourceId,
-        String defaultLayer,
+        String modelName,
+        String layer,
         String schemaName,
         String materialized,
         String tags,
         String description,
         Boolean enabled,
         String status,
-        String ownerDept
+        String ownerDept,
+        String sql,
+        String activeDeptHeader,
+        boolean overwrite
+    ) {
+        ModelingSqlModel existing = repo.findFirstByPlanIdAndNameIgnoreCase(planId, modelName).orElse(null);
+        if (existing != null && !overwrite) {
+            return new GenerateLayerResult(modelName, false, false, modelName + " (已存在，未覆盖)");
+        }
+        SqlModelRequest payload = new SqlModelRequest(
+            planId,
+            modelName,
+            null,
+            layer,
+            sourceDataSourceId,
+            trimToNull(schemaName),
+            defaultText(trimToNull(materialized), "table"),
+            tags,
+            description,
+            sql,
+            enabled,
+            trimToNull(status),
+            trimToNull(ownerDept)
+        );
+        if (existing == null) {
+            create(payload, activeDeptHeader);
+            return new GenerateLayerResult(modelName, true, false, null);
+        }
+        update(existing.getId(), payload, activeDeptHeader);
+        return new GenerateLayerResult(modelName, false, true, null);
+    }
+
+    public record SqlModelOdsGenerateRequest(
+        UUID planId,
+        UUID sourceDataSourceId,
+        List<UUID> mappingIds,
+        String schemaName,
+        String materialized,
+        String tags,
+        String ownerDept,
+        Boolean enabled,
+        String status,
+        Boolean createDwd,
+        Boolean createDws,
+        Boolean createAds,
+        Boolean overwriteExisting
     ) {}
 
-    public record SqlModelZipImportResult(
-        int totalFiles,
-        int newFiles,
-        int overwrittenFiles,
-        List<String> skippedFiles,
-        List<String> importedFiles,
-        List<String> modelFiles,
+    public record SqlModelOdsGenerateResult(
+        int mappingsTotal,
         int modelsCreated,
         int modelsUpdated,
-        List<String> skippedModels
+        List<String> createdModels,
+        List<String> updatedModels,
+        List<String> skipped
+    ) {}
+
+    private record GenerateLayerResult(
+        String modelName,
+        boolean created,
+        boolean updated,
+        String skippedReason
     ) {}
 
     public record SqlModelRequest(

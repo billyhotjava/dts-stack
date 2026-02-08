@@ -7,8 +7,6 @@ import com.yuzhi.dts.platform.service.etl.DbtFileService.DbtFileCreateRequest;
 import com.yuzhi.dts.platform.service.etl.DbtFileService.DbtFileNode;
 import com.yuzhi.dts.platform.service.etl.DbtFileService.DbtFileRenameRequest;
 import com.yuzhi.dts.platform.service.etl.DbtFileService.DbtFileSaveRequest;
-import com.yuzhi.dts.platform.service.etl.DbtFileService.DbtImportResult;
-import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -16,9 +14,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping("/api/etl/dbt/files")
@@ -74,10 +70,4 @@ public class DbtFileResource {
         return ApiResponses.ok(null);
     }
 
-    @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ApiResponse<DbtImportResult> uploadZip(@RequestPart("file") MultipartFile file) {
-        DbtImportResult result = fileService.importZip(file);
-        auditService.audit("EXECUTE", "etl.dbt.files", "upload:" + file.getOriginalFilename());
-        return ApiResponses.ok(result);
-    }
 }

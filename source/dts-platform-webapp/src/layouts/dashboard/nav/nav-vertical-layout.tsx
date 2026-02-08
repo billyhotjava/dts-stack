@@ -1,7 +1,7 @@
 import Logo from "@/components/logo";
+import Brand from "@/components/brand";
 import { NavMini, NavVertical } from "@/components/nav";
 import type { NavProps } from "@/components/nav/types";
-import { GLOBAL_CONFIG } from "@/global-config";
 import { Icon } from "@/components/icon";
 import { useSettingActions, useSettings } from "@/store/settingStore";
 import { ThemeLayout, ThemeMode } from "@/types/enum";
@@ -40,22 +40,9 @@ export function NavVerticalLayout({ data, className }: Props) {
 					"justify-center": themeLayout === ThemeLayout.Mini,
 				})}
 			>
-				{themeLayout === ThemeLayout.Mini ? (
-					<Logo />
-				) : (
-					<div className="flex items-center gap-3">
-						<Logo />
-						<div className="flex items-start gap-2 whitespace-nowrap">
-							<Icon icon="mdi:star" size={22} className="text-red-500" color="#ef4444" />
-							<span className="flex flex-col leading-tight">
-								<span className="text-base font-semibold text-foreground">
-									{(GLOBAL_CONFIG.appName || "BI数智平台").replace("管理", "")}
-								</span>
-								{/* <span className="text-sm font-bold text-red-600">机密</span> */}
-							</span>
-						</div>
-					</div>
-				)}
+				<div className="flex items-center justify-center">
+					{themeLayout === ThemeLayout.Mini ? <Logo /> : <Brand />}
+				</div>
 
 				<Button
 					variant="outline"
@@ -71,8 +58,12 @@ export function NavVerticalLayout({ data, className }: Props) {
 				</Button>
 			</div>
 
+			<hr className="border-t border-border/40 mx-3" />
+
 			<ScrollArea className={cn("h-[calc(100vh-var(--layout-header-height))] px-2 bg-background")}>
-				{themeLayout === ThemeLayout.Mini ? <NavMini data={data} /> : <NavVertical data={data} />}
+				<div className="pb-16">
+					{themeLayout === ThemeLayout.Mini ? <NavMini data={data} /> : <NavVertical data={data} />}
+				</div>
 			</ScrollArea>
 		</nav>
 	);

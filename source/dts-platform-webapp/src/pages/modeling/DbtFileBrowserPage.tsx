@@ -10,7 +10,6 @@ import {
 	Tooltip,
 	Tree,
 	Typography,
-	Upload,
 } from "antd";
 import {
 	FileOutlined,
@@ -20,10 +19,8 @@ import {
 	DeleteOutlined,
 	SaveOutlined,
 	ReloadOutlined,
-	UploadOutlined,
 	EditOutlined,
 	ExclamationCircleOutlined,
-	InboxOutlined,
 	RocketOutlined,
 } from "@ant-design/icons";
 import type { DataNode } from "antd/es/tree";
@@ -34,12 +31,11 @@ import {
 	createDbtFile,
 	deleteDbtFile,
 	renameDbtFile,
-	uploadDbtZip,
 	triggerDbtRun,
 } from "@/api/platformApi";
+import { useRouter } from "@/routes/hooks";
 
 const { Text } = Typography;
-const { Dragger } = Upload;
 
 // ── Types ─────────────────────────────────────────────────────
 
@@ -59,15 +55,6 @@ interface FileContent {
 	language: string;
 	size: number;
 	readOnly: boolean;
-}
-
-interface ImportResult {
-	totalFiles: number;
-	newFiles: number;
-	overwrittenFiles: number;
-	directories: string[];
-	skippedFiles: string[];
-	importedFiles: string[];
 }
 
 // ── Helpers ───────────────────────────────────────────────────
@@ -96,6 +83,7 @@ function fileNodeToTreeData(node: FileNode): DataNode {
 // ── Component ─────────────────────────────────────────────────
 
 export default function DbtFileBrowserPage() {
+	const router = useRouter();
 	// Tree state
 	const [treeData, setTreeData] = useState<FileNode | null>(null);
 	const [treeLoading, setTreeLoading] = useState(false);
@@ -108,10 +96,6 @@ export default function DbtFileBrowserPage() {
 	const [dirty, setDirty] = useState(false);
 	const [saving, setSaving] = useState(false);
 	const [fileLoading, setFileLoading] = useState(false);
-
-	// Upload modal
-	const [uploadOpen, setUploadOpen] = useState(false);
-	const [uploading, setUploading] = useState(false);
 
 	// Create file/dir modal
 	const [createOpen, setCreateOpen] = useState(false);
@@ -217,48 +201,6 @@ export default function DbtFileBrowserPage() {
 		window.addEventListener("keydown", handler);
 		return () => window.removeEventListener("keydown", handler);
 	}, [saveFile]);
-
-	// ── Upload ZIP ────────────────────────────────────────────
-
-	const handleUpload = useCallback(
-		async (file: File) => {
-			setUploading(true);
-			try {
-				const formData = new FormData();
-				formData.append("file", file);
-				const result = (await uploadDbtZip(formData)) as any as ImportResult;
-				setUploadOpen(false);
-				const msg = `导入完成: ${result.totalFiles} 个文件 (新增 ${result.newFiles}, 覆盖 ${result.overwrittenFiles})`;
-				if (result.skippedFiles?.length > 0) {
-					Modal.info({
-						title: "导入结果",
-						width: 560,
-						content: (
-							<div>
-								<p>{msg}</p>
-								<p style={{ marginTop: 8 }}>
-									<strong>跳过的文件:</strong>
-								</p>
-								<ul style={{ maxHeight: 200, overflow: "auto", fontSize: 12 }}>
-									{result.skippedFiles.map((f, i) => (
-										<li key={i}>{f}</li>
-									))}
-								</ul>
-							</div>
-						),
-					});
-				} else {
-					toast.success(msg);
-				}
-				loadTree();
-			} catch (err: any) {
-				toast.error("上传失败: " + (err?.message || "未知错误"));
-			} finally {
-				setUploading(false);
-			}
-		},
-		[loadTree],
-	);
 
 	// ── Create File/Dir ───────────────────────────────────────
 
@@ -411,9 +353,6 @@ export default function DbtFileBrowserPage() {
 					flexShrink: 0,
 				}}
 			>
-				<Button icon={<UploadOutlined />} onClick={() => setUploadOpen(true)}>
-					上传模型包
-				</Button>
 				<Dropdown
 					menu={{
 						items: [
@@ -456,10 +395,36 @@ export default function DbtFileBrowserPage() {
 						运行 dbt
 					</Button>
 				</Tooltip>
-			</div>
+				</div>
 
-			{/* Main content */}
-			<div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
+				<div
+					style={{
+						display: "flex",
+						alignItems: "center",
+						justifyContent: "space-between",
+						gap: 8,
+						padding: "8px 12px",
+						borderBottom: "1px solid #f0f0f0",
+						background: "#fafafa",
+						fontSize: 12,
+						flexShrink: 0,
+					}}
+				>
+					<div>
+						<strong>下一步建议:</strong> 在逻辑建模页完成 ODS 一键生成后，这里用于模型微调与运行验证，不再提供 ZIP 导入。
+					</div>
+					<div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+						<Button size="small" onClick={() => router.push("/modeling/sql")}>
+							回到逻辑建模
+						</Button>
+						<Button size="small" type="link" onClick={() => router.push("/foundation/data-sources")}>
+							去 ODS 接入
+						</Button>
+					</div>
+				</div>
+
+				{/* Main content */}
+				<div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
 				{/* File tree */}
 				<div
 					style={{
@@ -501,7 +466,7 @@ export default function DbtFileBrowserPage() {
 						) : (
 							!treeLoading && (
 								<div style={{ padding: 16, textAlign: "center", color: "#999" }}>
-									暂无文件，请上传模型包
+									暂无文件，请先新建目录或文件
 								</div>
 							)
 						)}
@@ -582,40 +547,10 @@ export default function DbtFileBrowserPage() {
 						>
 							<FileTextOutlined style={{ fontSize: 48, opacity: 0.3 }} />
 							<span>选择一个文件开始编辑</span>
-							<span style={{ fontSize: 12 }}>或上传 dbt 模型包 (.zip)</span>
 						</div>
 					)}
 				</div>
 			</div>
-
-			{/* Upload Modal */}
-			<Modal
-				title="上传 dbt 模型包"
-				open={uploadOpen}
-				onCancel={() => !uploading && setUploadOpen(false)}
-				footer={null}
-				width={480}
-			>
-				<div style={{ marginBottom: 12 }}>
-					<Text type="secondary">
-						上传标准 dbt 项目结构的 ZIP 包，包含 models/、macros/、seeds/ 等目录。
-						同名文件将被覆盖，系统配置文件不受影响。
-					</Text>
-				</div>
-				<Dragger
-					accept=".zip"
-					multiple={false}
-					showUploadList={false}
-					disabled={uploading}
-					customRequest={({ file }) => handleUpload(file as File)}
-				>
-					<p className="ant-upload-drag-icon">
-						<InboxOutlined />
-					</p>
-					<p className="ant-upload-text">{uploading ? "正在导入..." : "点击或拖拽 ZIP 文件到此处"}</p>
-					<p className="ant-upload-hint">仅支持 .zip 格式，最大 50 MB</p>
-				</Dragger>
-			</Modal>
 
 			{/* Create File/Dir Modal */}
 			<Modal

@@ -7,9 +7,9 @@ import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.modeling.DataStandardSecurity;
 import com.yuzhi.dts.platform.service.modeling.ModelingSqlModelService;
 import com.yuzhi.dts.platform.service.modeling.ModelingSqlModelService.SqlModelDto;
+import com.yuzhi.dts.platform.service.modeling.ModelingSqlModelService.SqlModelOdsGenerateRequest;
+import com.yuzhi.dts.platform.service.modeling.ModelingSqlModelService.SqlModelOdsGenerateResult;
 import com.yuzhi.dts.platform.service.modeling.ModelingSqlModelService.SqlModelRequest;
-import com.yuzhi.dts.platform.service.modeling.ModelingSqlModelService.SqlModelZipImportRequest;
-import com.yuzhi.dts.platform.service.modeling.ModelingSqlModelService.SqlModelZipImportResult;
 import com.yuzhi.dts.platform.web.rest.ApiResponses;
 import com.yuzhi.dts.platform.web.rest.ApiResponse;
 import jakarta.validation.Valid;
@@ -147,36 +147,14 @@ public class ModelingSqlModelResource {
         return ApiResponses.ok(dto);
     }
 
-    @PostMapping(value = "/import-zip", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PostMapping("/generate-from-ods")
     @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
-    public ApiResponse<SqlModelZipImportResult> importZip(
-        @RequestParam UUID planId,
-        @RequestParam(value = "sourceDataSourceId", required = false) UUID sourceDataSourceId,
-        @RequestParam(value = "defaultLayer", required = false) String defaultLayer,
-        @RequestParam(value = "schemaName", required = false) String schemaName,
-        @RequestParam(value = "materialized", required = false) String materialized,
-        @RequestParam(value = "tags", required = false) String tags,
-        @RequestParam(value = "description", required = false) String description,
-        @RequestParam(value = "enabled", required = false) Boolean enabled,
-        @RequestParam(value = "status", required = false) String status,
-        @RequestParam(value = "ownerDept", required = false) String ownerDept,
-        @RequestParam("file") MultipartFile zipFile,
+    public ApiResponse<SqlModelOdsGenerateResult> generateFromOds(
+        @Valid @RequestBody SqlModelOdsGenerateRequest request,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
-        SqlModelZipImportRequest request = new SqlModelZipImportRequest(
-            planId,
-            sourceDataSourceId,
-            defaultLayer,
-            schemaName,
-            materialized,
-            tags,
-            description,
-            enabled,
-            status,
-            ownerDept
-        );
-        SqlModelZipImportResult result = sqlModelService.importFromZip(request, zipFile, activeDept);
-        auditService.audit("IMPORT", "modeling.sql-model", "zip:" + zipFile.getOriginalFilename());
+        SqlModelOdsGenerateResult result = sqlModelService.generateFromOds(request, activeDept);
+        auditService.audit("GENERATE", "modeling.sql-model", "ods");
         return ApiResponses.ok(result);
     }
 
@@ -233,6 +211,7 @@ public class ModelingSqlModelResource {
             }
 
             Map<String, Object> row = new LinkedHashMap<>();
+            row.put("id", mapping.getId());
             row.put("schema", schema);
             row.put("table", table);
             row.put("description", mapping.getDescription());

@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Button, Card, Col, Row, Select, Table, Tag, Typography } from "antd";
+import { Button, Card, Col, Drawer, Row, Select, Table, Tag, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
+import { SettingOutlined } from "@ant-design/icons";
 import { PageHeader } from "@/components/page-header";
 import reportsService, { type ReportLink } from "@/api/services/reportsService";
 import { resolveBiLinkForOpen } from "@/utils/biLinkUrl";
+import BiLinksPage from "@/pages/services/BiLinksPage";
 
 const { Text } = Typography;
 
@@ -12,6 +14,7 @@ export default function Page() {
 	const [reports, setReports] = useState<ReportLink[]>([]);
 	const [loading, setLoading] = useState(false);
 	const [typeFilter, setTypeFilter] = useState<string | undefined>(undefined);
+	const [manageOpen, setManageOpen] = useState(false);
 
 	const loadReports = async () => {
 		setLoading(true);
@@ -77,22 +80,27 @@ export default function Page() {
 	return (
 		<div className="space-y-6">
 			<PageHeader
-				title="BI 可视化 / 看板中心"
+				title="数据可视化 / 看板中心"
 				description="统一管理可视化看板与外部 BI 入口。"
 				actions={
-					<Select
-						placeholder="筛选类型"
-						value={typeFilter}
-						onChange={setTypeFilter}
-						allowClear
-						options={[
-							{ label: "驾驶舱", value: "COCKPIT" },
-							{ label: "主题看板", value: "DASHBOARD" },
-							{ label: "分析报表", value: "REPORT" },
-							{ label: "业务应用", value: "APP" },
-						]}
-						style={{ minWidth: 160 }}
-					/>
+					<div className="flex items-center gap-2">
+						<Button icon={<SettingOutlined />} onClick={() => setManageOpen(true)}>
+							管理 BI 链接
+						</Button>
+						<Select
+							placeholder="筛选类型"
+							value={typeFilter}
+							onChange={setTypeFilter}
+							allowClear
+							options={[
+								{ label: "驾驶舱", value: "COCKPIT" },
+								{ label: "主题看板", value: "DASHBOARD" },
+								{ label: "分析报表", value: "REPORT" },
+								{ label: "业务应用", value: "APP" },
+							]}
+							style={{ minWidth: 160 }}
+						/>
+					</div>
 				}
 			/>
 
@@ -120,6 +128,20 @@ export default function Page() {
 			<Card>
 				<Table rowKey={(record) => record.id} columns={columns} dataSource={reports} loading={loading} />
 			</Card>
+
+			<Drawer
+				title="外部 BI 链接管理"
+				placement="right"
+				width="85%"
+				open={manageOpen}
+				onClose={() => {
+					setManageOpen(false);
+					void loadReports();
+				}}
+				destroyOnClose
+			>
+				<BiLinksPage embedded />
+			</Drawer>
 		</div>
 	);
 }

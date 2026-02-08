@@ -229,6 +229,29 @@ set -a
 source "$ENV_RUNTIME"
 set +a
 
+# Auto-detect current host IP and override the (possibly stale) HOST_GATEWAY_IP from .env.
+# This avoids "Connect timed out" errors when the host IP changes after init.sh was run.
+_detect_host_ip(){
+  if command -v ip >/dev/null 2>&1; then
+    local ip4
+    ip4=$(ip -4 route get 1.1.1.1 2>/dev/null | awk '/src/ {for(i=1;i<=NF;i++) if($i=="src"){print $(i+1); exit}}') || true
+    if [[ -n "${ip4:-}" && "${ip4}" != 127.* ]]; then printf '%s' "$ip4"; return 0; fi
+  fi
+  if command -v hostname >/dev/null 2>&1; then
+    local first
+    first=$(hostname -I 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i ~ /^[0-9.]+$/ && $i !~ /^127\./){print $i; exit}}') || true
+    if [[ -n "${first:-}" ]]; then printf '%s' "$first"; return 0; fi
+  fi
+  printf '%s' "${HOST_GATEWAY_IP:-172.17.0.1}"
+}
+_fresh_ip="$(_detect_host_ip)"
+if [[ -n "${_fresh_ip}" && "${_fresh_ip}" != "${HOST_GATEWAY_IP:-}" ]]; then
+  echo "[dev-up] HOST_GATEWAY_IP refreshed: ${HOST_GATEWAY_IP:-<unset>} -> ${_fresh_ip}"
+  export HOST_GATEWAY_IP="${_fresh_ip}"
+  export DOCKER_HOST_GATEWAY_IP="${_fresh_ip}"
+fi
+unset _fresh_ip
+
 # Ensure source/logs does not get recreated; logs live at repo root.
 if [[ -d "source/logs" ]]; then
   rm -rf "source/logs"

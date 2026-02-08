@@ -129,9 +129,8 @@ export default function HomePage() {
 			<div className="welcome-banner">
 				<div className="welcome-banner__content">
 					<h1 className="welcome-banner__title">
-						{user.state === "loaded" ? `${t(locale, "home.welcome")}, ${userName}!` : t(locale, "title")}
+						{t(locale, "home.welcome")}
 					</h1>
-					<p className="welcome-banner__subtitle">{t(locale, "subtitle")}</p>
 				</div>
 				<div className="welcome-banner__status">
 					<Badge variant={healthStatus === "ok" ? "success" : healthStatus === "loading" ? "default" : "error"}>
@@ -278,22 +277,19 @@ export default function HomePage() {
 					display: flex;
 					align-items: center;
 					justify-content: space-between;
-					padding: var(--spacing-xl);
+					padding: var(--spacing-lg) var(--spacing-xl);
 					background: linear-gradient(135deg, var(--color-brand) 0%, var(--color-brand-dark) 100%);
 					border-radius: var(--radius-lg);
 					color: var(--color-text-inverse);
 					margin-bottom: var(--spacing-xl);
+					min-height: 64px;
 				}
 
 				.welcome-banner__title {
 					margin: 0;
-					font-size: var(--font-size-2xl);
+					font-size: var(--font-size-xl);
 					font-weight: var(--font-weight-bold);
-				}
-
-				.welcome-banner__subtitle {
-					margin: var(--spacing-xs) 0 0;
-					opacity: 0.9;
+					line-height: 1;
 				}
 
 				.quick-action-card {

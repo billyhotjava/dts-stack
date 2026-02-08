@@ -39,8 +39,6 @@ export const deleteDbtFile = (path: string) =>
 	api.delete({ url: "/etl/dbt/files", params: { path } });
 export const renameDbtFile = (data: { oldPath: string; newPath: string }) =>
 	api.put({ url: "/etl/dbt/files/rename", data });
-export const uploadDbtZip = (formData: FormData) =>
-	api.post({ url: "/etl/dbt/files/upload", data: formData });
 export const listDbtModels = () => api.get({ url: "/etl/dbt/models" });
 export const syncDbtModels = () => api.post({ url: "/etl/dbt/models/sync" });
 export const getDbtSyncStatus = () => api.get({ url: "/etl/dbt/sync/status" });
@@ -53,7 +51,7 @@ export const createSqlModel = (data: any) => api.post({ url: "/modeling/sql-mode
 export const updateSqlModel = (id: string, data: any) => api.put({ url: `/modeling/sql-models/${id}`, data });
 export const deleteSqlModel = (id: string) => api.delete({ url: `/modeling/sql-models/${id}` });
 export const importSqlModel = (data: FormData) => api.post({ url: "/modeling/sql-models/import", data });
-export const importSqlModelsZip = (data: FormData) => api.post({ url: "/modeling/sql-models/import-zip", data });
+export const generateSqlModelsFromOds = (data: any) => api.post({ url: "/modeling/sql-models/generate-from-ods", data });
 export const listDbtSources = (params?: { keyword?: string }) =>
 	api.get({ url: "/modeling/sql-models/dbt/sources", params });
 export const listDbtRefs = (params?: { keyword?: string; layer?: string }) =>

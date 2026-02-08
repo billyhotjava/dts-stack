@@ -343,14 +343,6 @@
           "titleKey": "sys.nav.portal.serviceExchange",
           "title": "共享交换",
           "externalLink": "/services/tokens"
-        },
-        {
-          "key": "bi-links",
-          "path": "bi-links",
-          "icon": "solar:link-circle-bold-duotone",
-          "titleKey": "sys.nav.portal.serviceBiLinks",
-          "title": "外部 BI 集成",
-          "externalLink": "/services/bi-links"
         }
       ]
     },
@@ -359,7 +351,25 @@
       "path": "visual-analytics",
       "icon": "solar:pie-chart-bold-duotone",
       "titleKey": "sys.nav.portal.visualAnalytics",
-      "title": "数据可视化"
+      "title": "数据可视化",
+      "children": [
+        {
+          "key": "reports",
+          "path": "reports",
+          "icon": "solar:chart-square-bold-duotone",
+          "titleKey": "sys.nav.portal.visualReports",
+          "title": "看板中心",
+          "externalLink": "/visual-analytics/reports"
+        },
+        {
+          "key": "self-service",
+          "path": "self-service",
+          "icon": "solar:magic-stick-3-bold-duotone",
+          "titleKey": "sys.nav.portal.visualSelfService",
+          "title": "智能自助分析",
+          "externalLink": "/analytics"
+        }
+      ]
     }
   ]
 }

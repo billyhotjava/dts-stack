@@ -99,25 +99,41 @@ export function getBackendDashboardRoutes() {
 }
 
 function mapPortalMenusToMenuTree(items: PortalMenuItem[]): MenuTree[] {
-	const parseMeta = (metadata?: string): { icon?: string } | undefined => {
+	const parseMeta = (metadata?: string): Record<string, any> | undefined => {
 		if (!metadata) return undefined;
 		try {
-			return JSON.parse(metadata) as { icon?: string };
+			const parsed = JSON.parse(metadata);
+			// Handle double-encoded JSON string
+			if (typeof parsed === "string") {
+				try {
+					return JSON.parse(parsed) as Record<string, any>;
+				} catch {
+					return undefined;
+				}
+			}
+			return parsed as Record<string, any>;
 		} catch {
 			return undefined;
 		}
+	};
+	const resolveExternalLink = (meta: Record<string, any> | undefined): string | undefined => {
+		if (!meta) return undefined;
+		const external = meta.externalLink ?? meta.external_link ?? meta.url ?? meta.href ?? meta.link ?? meta.src;
+		return typeof external === "string" && external.trim() ? external.trim() : undefined;
 	};
 	const walk = (nodes: PortalMenuItem[], parent?: PortalMenuItem): MenuTree[] => {
 		return (nodes || []).map((node) => {
 			const meta = parseMeta(node.metadata);
 			const hasChildren = Array.isArray(node.children) && node.children.length > 0;
+			const externalLink = resolveExternalLink(meta);
 			const n: MenuTree = {
 				id: String(node.id ?? `${parent?.path || ""}/${node.path}`),
 				parentId: parent ? String(parent.id ?? parent.path ?? parent?.name) : "",
 				name: node.displayName ?? node.name,
-				path: node.path || "",
+				path: externalLink || node.path || "",
 				component: node.component || "",
 				icon: node.icon ?? meta?.icon,
+				externalLink: externalLink as unknown as URL,
 				type: hasChildren ? 1 : 2,
 				children: [],
 			} as unknown as MenuTree;

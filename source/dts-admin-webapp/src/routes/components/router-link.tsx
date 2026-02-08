@@ -6,6 +6,31 @@ interface RouterLinkProps extends Omit<LinkProps, "to"> {
 	ref?: React.Ref<HTMLAnchorElement>;
 }
 
-export const RouterLink: React.FC<RouterLinkProps> = ({ href, ...props }) => (
-	<Link ref={props.ref} to={href} {...props} />
-);
+export const RouterLink: React.FC<RouterLinkProps> = ({ href, children, className, onClick, ...props }) => {
+	const isExternal = /^https?:\/\//i.test(href);
+	// Some routes (e.g. reverse-proxied BI tools) must trigger a full page load.
+	const isProxyEscape =
+		href.startsWith("/dashboards") ||
+		href.startsWith("/analytics") ||
+		href.startsWith("/screen");
+
+	if (isExternal || isProxyEscape) {
+		return (
+			<a
+				href={href}
+				className={className}
+				onClick={onClick}
+				target="_blank"
+				rel="noreferrer noopener"
+			>
+				{children}
+			</a>
+		);
+	}
+
+	return (
+		<Link ref={props.ref} to={href} className={className} onClick={onClick} {...props}>
+			{children}
+		</Link>
+	);
+};

@@ -1,0 +1,12 @@
+# dbt runtime artifacts
+target/
+logs/
+dbt_packages/
+
+# local runtime/config state
+profiles/.user.yml
+.user.yml
+
+# editor/system noise
+.DS_Store
+*.swp

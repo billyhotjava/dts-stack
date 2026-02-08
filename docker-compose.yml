@@ -425,7 +425,7 @@ services:
       AIRFLOW_HOME: /opt/airflow
       DBT_PROJECT_DIR: ${DBT_PROJECT_DIR}
       DBT_PROFILES_DIR: ${DBT_PROFILES_DIR}
-      DBT_IMAGE: ${IMAGE_DBT:-dts-dbt:1.11.2}
+      DBT_IMAGE: ${IMAGE_DBT:-dts-dbt:1.10.0}
       ADDAX_IMAGE: ${IMAGE_ADDAX:-dts-addax:6.0.8}
       ADDAX_JOB_DIR: ${STACK_ROOT}/services/dts-airflow/dags
       ADDAX_DRIVER_DIR: ${STACK_ROOT}/services/dts-platform/drivers
@@ -474,7 +474,7 @@ services:
       AIRFLOW_HOME: /opt/airflow
       DBT_PROJECT_DIR: ${DBT_PROJECT_DIR}
       DBT_PROFILES_DIR: ${DBT_PROFILES_DIR}
-      DBT_IMAGE: ${IMAGE_DBT:-dts-dbt:1.11.2}
+      DBT_IMAGE: ${IMAGE_DBT:-dts-dbt:1.10.0}
       ADDAX_IMAGE: ${IMAGE_ADDAX:-dts-addax:6.0.8}
       ADDAX_JOB_DIR: ${STACK_ROOT}/services/dts-airflow/dags
       ADDAX_DRIVER_DIR: ${STACK_ROOT}/services/dts-platform/drivers
@@ -536,7 +536,7 @@ services:
       AIRFLOW_HOME: /opt/airflow
       DBT_PROJECT_DIR: ${DBT_PROJECT_DIR}
       DBT_PROFILES_DIR: ${DBT_PROFILES_DIR}
-      DBT_IMAGE: ${IMAGE_DBT:-dts-dbt:1.11.2}
+      DBT_IMAGE: ${IMAGE_DBT:-dts-dbt:1.10.0}
       ADDAX_IMAGE: ${IMAGE_ADDAX:-dts-addax:6.0.8}
       ADDAX_JOB_DIR: ${STACK_ROOT}/services/dts-airflow/dags
       ADDAX_DRIVER_DIR: ${STACK_ROOT}/services/dts-platform/drivers
@@ -578,7 +578,7 @@ services:
       AIRFLOW_HOME: /opt/airflow
       DBT_PROJECT_DIR: ${DBT_PROJECT_DIR}
       DBT_PROFILES_DIR: ${DBT_PROFILES_DIR}
-      DBT_IMAGE: ${IMAGE_DBT:-dts-dbt:1.11.2}
+      DBT_IMAGE: ${IMAGE_DBT:-dts-dbt:1.10.0}
       ADDAX_IMAGE: ${IMAGE_ADDAX:-dts-addax:6.0.8}
       ADDAX_JOB_DIR: ${STACK_ROOT}/services/dts-airflow/dags
       ADDAX_DRIVER_DIR: ${STACK_ROOT}/services/dts-platform/drivers
@@ -601,7 +601,7 @@ services:
       - dts-core
 
   dts-dbt:
-    image: ${IMAGE_DBT:-dts-dbt:1.11.2}
+    image: ${IMAGE_DBT:-dts-dbt:1.10.0}
     container_name: dts-dbt
     entrypoint: /bin/bash
     command: [ "-lc", "sleep infinity" ]

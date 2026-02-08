@@ -2,9 +2,11 @@ import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import Editor from "@monaco-editor/react";
 import { toast } from "sonner";
 import {
+	Alert,
 	Badge,
 	Button,
 	Card,
+	Checkbox,
 	Divider,
 	Drawer,
 	Dropdown,
@@ -48,7 +50,7 @@ import {
 	updateSqlModel,
 	deleteSqlModel,
 	importSqlModel,
-	importSqlModelsZip,
+	generateSqlModelsFromOds,
 	listModelingPlans,
 	syncDbtModels,
 	getDbtSyncStatus,
@@ -59,6 +61,7 @@ import {
 	listTemplateLayers,
 } from "@/api/platformApi";
 import dataSourcesService, { type InfraDataSource } from "@/api/services/dataSourcesService";
+import { useRouter } from "@/routes/hooks";
 
 const { Text } = Typography;
 const { DirectoryTree } = Tree;
@@ -192,6 +195,7 @@ type ModelColumn = {
 };
 
 type DbtSourceItem = {
+	id?: string;
 	schema?: string;
 	table?: string;
 	description?: string;
@@ -211,14 +215,13 @@ type DbtRefItem = {
 	refSnippet?: string;
 };
 
-type SqlModelZipImportResult = {
-	totalFiles?: number;
-	newFiles?: number;
-	overwrittenFiles?: number;
-	modelFiles?: string[];
+type SqlModelOdsGenerateResult = {
+	mappingsTotal?: number;
 	modelsCreated?: number;
 	modelsUpdated?: number;
-	skippedModels?: string[];
+	createdModels?: string[];
+	updatedModels?: string[];
+	skipped?: string[];
 };
 
 const inferLayer = (name?: string) => {
@@ -240,6 +243,7 @@ const resolveModelKey = (model: SqlModel, fallback: string) => model.id || model
 const resolveSpaceKey = (space: ProjectSpace, index: number) => `space-${space.id || index}`;
 
 export default function SqlModelingPage() {
+	const router = useRouter();
 	const [configLoading, setConfigLoading] = useState(false);
 	const [configSaving, setConfigSaving] = useState(false);
 	const [configOpen, setConfigOpen] = useState(false);
@@ -260,9 +264,8 @@ export default function SqlModelingPage() {
 	const [importSubmitting, setImportSubmitting] = useState(false);
 	const [sqlFileList, setSqlFileList] = useState<UploadFile[]>([]);
 	const [csvFileList, setCsvFileList] = useState<UploadFile[]>([]);
-	const [zipImportOpen, setZipImportOpen] = useState(false);
-	const [zipImportSubmitting, setZipImportSubmitting] = useState(false);
-	const [zipFileList, setZipFileList] = useState<UploadFile[]>([]);
+	const [odsGenerateOpen, setOdsGenerateOpen] = useState(false);
+	const [odsGenerateSubmitting, setOdsGenerateSubmitting] = useState(false);
 	const [syncingModels, setSyncingModels] = useState(false);
 	const [runsLoading, setRunsLoading] = useState(false);
 	const [runs, setRuns] = useState<DagRun[]>([]);
@@ -280,11 +283,12 @@ export default function SqlModelingPage() {
 	const [snippetDrawerOpen, setSnippetDrawerOpen] = useState(false);
 	const [snippetTab, setSnippetTab] = useState<"source" | "ref">("source");
 	const [snippetKeyword, setSnippetKeyword] = useState("");
+	const [guideCollapsed, setGuideCollapsed] = useState(false);
 	const [form] = Form.useForm();
 	const [runForm] = Form.useForm();
 	const [modelForm] = Form.useForm();
 	const [importForm] = Form.useForm();
-	const [zipImportForm] = Form.useForm();
+	const [odsGenerateForm] = Form.useForm();
 
 	const loadConfig = useCallback(async () => {
 		setConfigLoading(true);
@@ -546,16 +550,19 @@ export default function SqlModelingPage() {
 		setImportOpen(true);
 	};
 
-	const openZipImportModel = () => {
-		zipImportForm.resetFields();
-		setZipFileList([]);
-		zipImportForm.setFieldsValue({
+	const openOdsGenerateModel = () => {
+		odsGenerateForm.resetFields();
+		odsGenerateForm.setFieldsValue({
 			planId: activeSpace?.id || undefined,
-			defaultLayer: "DWD",
 			materialized: "table",
 			enabled: true,
+			status: "DRAFT",
+			createDwd: true,
+			createDws: true,
+			createAds: true,
+			overwriteExisting: true,
 		});
-		setZipImportOpen(true);
+		setOdsGenerateOpen(true);
 	};
 
 	const openEditModel = () => {
@@ -658,55 +665,73 @@ export default function SqlModelingPage() {
 		}
 	};
 
-	const submitZipImport = async () => {
-		setZipImportSubmitting(true);
+	const submitOdsGenerate = async () => {
+		setOdsGenerateSubmitting(true);
 		try {
-			const values = await zipImportForm.validateFields(["planId", "sourceDataSourceId"]);
-			if (zipFileList.length === 0 || !zipFileList[0]?.originFileObj) {
-				throw new Error("请选择 ZIP 文件");
-			}
-			const formData = new FormData();
-			formData.append("planId", values.planId);
-			if (values.sourceDataSourceId) formData.append("sourceDataSourceId", values.sourceDataSourceId);
-			if (values.defaultLayer) formData.append("defaultLayer", normalizeText(values.defaultLayer));
-			if (values.schemaName) formData.append("schemaName", normalizeText(values.schemaName));
-			if (values.materialized) formData.append("materialized", normalizeText(values.materialized));
-			if (values.tags) formData.append("tags", normalizeText(values.tags));
-			if (values.description) formData.append("description", normalizeText(values.description));
-			if (values.status) formData.append("status", normalizeText(values.status));
-			if (values.ownerDept) formData.append("ownerDept", normalizeText(values.ownerDept));
-			if (values.enabled != null) formData.append("enabled", String(values.enabled));
-			formData.append("file", zipFileList[0].originFileObj as File);
-
-			const result = (await importSqlModelsZip(formData)) as SqlModelZipImportResult;
-			const summary = `模型导入完成：新增 ${result?.modelsCreated || 0}，更新 ${result?.modelsUpdated || 0}`;
-			if ((result?.skippedModels || []).length > 0) {
-				Modal.info({
-					title: "ZIP 导入结果",
-					width: 620,
-					content: (
-						<div>
-							<p>{summary}</p>
-							<p>文件处理：导入 {result?.totalFiles || 0}（新增 {result?.newFiles || 0}，覆盖 {result?.overwrittenFiles || 0}）</p>
-							<p style={{ marginTop: 8, fontWeight: 600 }}>跳过的模型：</p>
-							<ul style={{ maxHeight: 220, overflow: "auto", fontSize: 12, paddingLeft: 20 }}>
-								{(result?.skippedModels || []).map((item, idx) => (
-									<li key={`${item}-${idx}`}>{item}</li>
-								))}
-							</ul>
+			const values = await odsGenerateForm.validateFields(["planId", "mappingIds"]);
+			const payload = {
+				planId: values.planId,
+				sourceDataSourceId: values.sourceDataSourceId || undefined,
+				mappingIds: Array.isArray(values.mappingIds) ? values.mappingIds : [],
+				schemaName: normalizeText(values.schemaName) || undefined,
+				materialized: normalizeText(values.materialized) || undefined,
+				tags: normalizeText(values.tags) || undefined,
+				ownerDept: normalizeText(values.ownerDept) || undefined,
+				enabled: values.enabled ?? true,
+				status: normalizeText(values.status) || undefined,
+				createDwd: values.createDwd !== false,
+				createDws: values.createDws !== false,
+				createAds: values.createAds !== false,
+				overwriteExisting: values.overwriteExisting !== false,
+			};
+			const result = (await generateSqlModelsFromOds(payload)) as SqlModelOdsGenerateResult;
+			const summary = `已处理 ${result?.mappingsTotal || 0} 个 ODS 表，新增 ${result?.modelsCreated || 0}，更新 ${result?.modelsUpdated || 0}`;
+			const skipped = result?.skipped || [];
+			Modal.info({
+				title: "一键生成结果",
+				width: 720,
+				content: (
+					<div>
+						<p>{summary}</p>
+						<p style={{ marginTop: 8, color: "rgba(0,0,0,0.65)" }}>
+							系统已按所选映射生成或更新 DWD / DWS / ADS 模型模板。
+						</p>
+						{skipped.length > 0 && (
+							<>
+								<p style={{ marginTop: 8, fontWeight: 600 }}>跳过项：</p>
+								<ul style={{ maxHeight: 220, overflow: "auto", fontSize: 12, paddingLeft: 20 }}>
+									{skipped.map((item, idx) => (
+										<li key={`${item}-${idx}`}>{item}</li>
+									))}
+								</ul>
+							</>
+						)}
+						<div
+							style={{
+								marginTop: 12,
+								padding: "8px 10px",
+								border: "1px solid #f0f0f0",
+								borderRadius: 6,
+								background: "#fafafa",
+							}}
+						>
+							<p style={{ marginBottom: 6, fontWeight: 600 }}>下一步建议</p>
+							<ol style={{ margin: 0, paddingLeft: 20, fontSize: 12 }}>
+								<li>检查模型列表中的命名与分层是否符合预期。</li>
+								<li>进入 dbt 文件浏览器按业务口径微调 SQL 并运行 dbt。</li>
+								<li>完成验证后回到逻辑建模执行“提交上线”。</li>
+							</ol>
 						</div>
-					),
-				});
-			} else {
-				toast.success(summary);
-			}
-			setZipImportOpen(false);
+					</div>
+				),
+			});
+			setOdsGenerateOpen(false);
 			setActiveSpaceKey(`space-${values.planId}`);
 			await loadModels();
 		} catch (err: any) {
-			toast.error(err?.message || "ZIP 导入失败");
+			toast.error(err?.message || "生成失败");
 		} finally {
-			setZipImportSubmitting(false);
+			setOdsGenerateSubmitting(false);
 		}
 	};
 
@@ -789,6 +814,17 @@ export default function SqlModelingPage() {
 				(r.tags || "").toLowerCase().includes(kw),
 		);
 	}, [dbtRefs, snippetKeyword]);
+
+	const odsSourceOptions = useMemo(
+		() =>
+			dbtSources
+				.filter((item) => !!item.id)
+				.map((item) => ({
+					label: `${item.schema}.${item.table}${item.systemCode ? ` · ${item.systemCode}` : ""}`,
+					value: item.id as string,
+				})),
+		[dbtSources],
+	);
 
 	const models = sqlModels || [];
 	const configEnabled = dbtConfig?.enabled !== false;
@@ -958,11 +994,11 @@ export default function SqlModelingPage() {
 			onClick: openImportModel,
 		},
 		{
-			key: "import-zip",
+			key: "generate-ods",
 			icon: <ImportOutlined />,
-			label: "批量导入 ZIP",
+			label: "从 ODS 一键生成",
 			disabled: !workspaceOk,
-			onClick: openZipImportModel,
+			onClick: openOdsGenerateModel,
 		},
 		{
 			key: "edit",
@@ -1089,6 +1125,32 @@ export default function SqlModelingPage() {
 					</span>
 				</div>
 			)}
+			<div className="border-b border-border bg-muted/20 px-4 py-2">
+				<div className="flex items-center justify-between gap-2">
+						<div className="text-sm font-medium text-foreground">
+							{"主流程：ODS 接入 -> 选择映射 -> 一键生成 DWD/DWS/ADS -> 校验并上线"}
+						</div>
+					<Space size={8}>
+						<Button size="small" onClick={() => router.push("/foundation/data-sources")}>
+							去 ODS 接入
+						</Button>
+						<Button size="small" type="primary" ghost onClick={openOdsGenerateModel} disabled={!workspaceOk}>
+							打开一键生成
+						</Button>
+						<Button size="small" type="link" onClick={() => setGuideCollapsed((prev) => !prev)}>
+							{guideCollapsed ? "展开" : "收起"}
+						</Button>
+					</Space>
+				</div>
+				{!guideCollapsed && (
+					<ol className="mt-2 list-decimal pl-5 text-xs text-muted-foreground">
+						<li>先在数据集成完成 ODS 表接入或源库映射。</li>
+						<li>在本页选择项目空间和 ODS 映射后执行一键生成。</li>
+						<li>系统自动产出 dwd_ / dws_ / ads_ 模型模板。</li>
+						<li>在 dbt 文件浏览器微调并运行，最后提交上线。</li>
+					</ol>
+				)}
+			</div>
 
 			<div className="flex flex-1 overflow-hidden">
 				<div className="w-64 border-r border-border bg-muted p-4">
@@ -1717,19 +1779,19 @@ WHERE status = 'active'`}
 			</Modal>
 
 			<Modal
-				open={zipImportOpen}
-				title="批量导入模型 ZIP"
-				onCancel={() => setZipImportOpen(false)}
+				open={odsGenerateOpen}
+				title="从 ODS 一键生成 DWD / DWS / ADS"
+				onCancel={() => setOdsGenerateOpen(false)}
 				footer={
 					<Space>
-						<Button onClick={() => setZipImportOpen(false)}>取消</Button>
-						<Button type="primary" onClick={submitZipImport} loading={zipImportSubmitting}>
-							导入
+						<Button onClick={() => setOdsGenerateOpen(false)}>取消</Button>
+						<Button type="primary" onClick={submitOdsGenerate} loading={odsGenerateSubmitting}>
+							开始生成
 						</Button>
 					</Space>
 				}
 			>
-				<Form layout="vertical" form={zipImportForm} disabled={zipImportSubmitting}>
+				<Form layout="vertical" form={odsGenerateForm} disabled={odsGenerateSubmitting}>
 					<div className="grid gap-4 md:grid-cols-2">
 						<Form.Item name="planId" label="项目空间" rules={[{ required: true, message: "请选择项目空间" }]}>
 							<Select
@@ -1737,41 +1799,54 @@ WHERE status = 'active'`}
 								options={spaces.map((space) => ({ label: space.name || "未命名", value: space.id }))}
 							/>
 						</Form.Item>
-						<Form.Item name="defaultLayer" label="默认分层">
+						<Form.Item name="sourceDataSourceId" label="来源数据源（可选）">
 							<Select
 								allowClear
-								placeholder="自动识别失败时使用"
-								options={[
-									{ label: "ODS", value: "ODS" },
-									{ label: "DWD", value: "DWD" },
-									{ label: "DWS", value: "DWS" },
-									{ label: "ADS", value: "ADS" },
-								]}
+								placeholder="用于补充来源标签和调度选择器"
+								options={dataSources.map((ds) => ({
+									label: ds?.name || ds?.id,
+									value: ds?.id,
+								}))}
 							/>
 						</Form.Item>
 					</div>
 					<Form.Item
-						name="sourceDataSourceId"
-						label="来源数据源"
-						rules={[{ required: true, message: "请选择来源数据源" }]}
+						name="mappingIds"
+						label="选择 ODS 表"
+						rules={[{ required: true, message: "请至少选择一个 ODS 表" }]}
 					>
 						<Select
-							allowClear
-							placeholder="批量绑定同一来源"
-							options={dataSources.map((ds) => ({
-								label: ds?.name || ds?.id,
-								value: ds?.id,
-							}))}
+							mode="multiple"
+							showSearch
+							optionFilterProp="label"
+							placeholder={sourcesLoading ? "ODS 列表加载中..." : "选择一个或多个 ODS 表"}
+							options={odsSourceOptions}
 						/>
 					</Form.Item>
+					{!sourcesLoading && odsSourceOptions.length === 0 && (
+						<Alert
+							type="warning"
+							showIcon
+							message="未发现 ODS 映射"
+							description={
+								<div>
+									请先在数据集成中完成 ODS 接入，然后回到本页刷新后选择映射。
+									<Button type="link" size="small" onClick={() => router.push("/foundation/data-sources")}>
+										去 ODS 接入
+									</Button>
+								</div>
+							}
+							className="mb-4"
+						/>
+					)}
 					<div className="grid gap-4 md:grid-cols-2">
 						<Form.Item name="schemaName" label="目标 Schema">
-							<Input placeholder="可选，如 dwd" />
+							<Input placeholder="可选，留空使用默认 schema" />
 						</Form.Item>
 						<Form.Item name="materialized" label="物化方式">
 							<Select
 								allowClear
-								placeholder="可选"
+								placeholder="默认 table"
 								options={[
 									{ label: "table", value: "table" },
 									{ label: "view", value: "view" },
@@ -1784,9 +1859,10 @@ WHERE status = 'active'`}
 						<Form.Item name="status" label="状态">
 							<Select
 								allowClear
-								placeholder="可选"
+								placeholder="默认 DRAFT"
 								options={[
 									{ label: "草稿", value: "DRAFT" },
+									{ label: "就绪", value: "READY" },
 									{ label: "已发布", value: "PUBLISHED" },
 								]}
 							/>
@@ -1796,30 +1872,40 @@ WHERE status = 'active'`}
 						</Form.Item>
 					</div>
 					<div className="grid gap-4 md:grid-cols-2">
-						<Form.Item name="tags" label="标签 (逗号分隔)">
-							<Input placeholder="可选，如 sales,customer" />
+						<Form.Item name="tags" label="额外标签 (逗号分隔)">
+							<Input placeholder="可选，如 finance,patent" />
 						</Form.Item>
 						<Form.Item name="ownerDept" label="归属部门">
 							<Input placeholder="可选" />
 						</Form.Item>
 					</div>
-					<Form.Item name="description" label="描述">
-						<Input.TextArea rows={2} placeholder="可选，统一描述" />
+					<Form.Item label="生成分层">
+						<Space size={24}>
+							<Form.Item name="createDwd" valuePropName="checked" noStyle>
+								<Checkbox>DWD</Checkbox>
+							</Form.Item>
+							<Form.Item name="createDws" valuePropName="checked" noStyle>
+								<Checkbox>DWS</Checkbox>
+							</Form.Item>
+							<Form.Item name="createAds" valuePropName="checked" noStyle>
+								<Checkbox>ADS</Checkbox>
+							</Form.Item>
+						</Space>
 					</Form.Item>
-					<Form.Item label="ZIP 文件" required>
-						<Upload
-							accept=".zip"
-							beforeUpload={() => false}
-							maxCount={1}
-							fileList={zipFileList}
-							onChange={({ fileList }) => setZipFileList(fileList.slice(-1))}
-						>
-							<Button>选择 ZIP</Button>
-						</Upload>
-						<div className="mt-2 text-xs text-muted-foreground">
-							支持标准 dbt 包结构，系统将解析 `models/**/*.sql` 并挂靠到所选项目空间。
+					<Form.Item name="overwriteExisting" valuePropName="checked">
+						<Checkbox>已存在模型时覆盖更新</Checkbox>
+					</Form.Item>
+					<div className="rounded border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+						<div className="font-medium text-foreground">生成说明</div>
+						<ol className="mt-1 list-decimal pl-4">
+							<li>先选择项目空间与 ODS 映射，至少选择 1 张 ODS 表。</li>
+							<li>默认按映射自动生成 DWD / DWS / ADS 三层模型。</li>
+							<li>建议先勾选 DWD，再按需勾选 DWS、ADS。</li>
+						</ol>
+						<div className="mt-2 text-amber-700">
+							已移除 ZIP 导入。请使用 ODS 映射作为唯一建模入口。
 						</div>
-					</Form.Item>
+					</div>
 				</Form>
 			</Modal>
 

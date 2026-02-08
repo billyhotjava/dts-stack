@@ -1,9 +1,35 @@
 import { useCallback, useEffect } from "react";
 import menuService from "@/api/services/menuService";
-import { useUserInfo, useUserToken } from "@/store/userStore";
+import useUserStore, { useUserInfo, useUserToken } from "@/store/userStore";
 import { LOGIN_ROUTE } from "../constants";
 import { useRouter } from "../hooks";
 import { GLOBAL_CONFIG } from "@/global-config";
+
+/** Decode JWT exp claim. Returns expiry in ms or null if not a valid JWT. */
+function decodeJwtExp(token?: string): number | null {
+	if (!token) return null;
+	try {
+		const parts = token.split(".");
+		if (parts.length < 2) return null;
+		let payload = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+		while (payload.length % 4 !== 0) payload += "=";
+		const json = atob(payload);
+		const obj = JSON.parse(json);
+		return typeof obj?.exp === "number" ? obj.exp * 1000 : null;
+	} catch {
+		return null;
+	}
+}
+
+/** Check whether a JWT access token is expired (with 10s skew). */
+function isTokenExpired(token?: string): boolean {
+	if (!token) return true;
+	// Dev tokens are not JWTs; treat them as always valid.
+	if (token.startsWith("dev-access-")) return false;
+	const exp = decodeJwtExp(token);
+	if (exp === null) return false; // Opaque token; can't check locally, trust it.
+	return Date.now() > exp - 10_000;
+}
 
 type Props = {
 	children: React.ReactNode;
@@ -16,7 +42,11 @@ export default function LoginAuthGuard({ children }: Props) {
 	const isLocalDevToken = (token?: string) => Boolean(token?.startsWith("dev-access-"));
 
     const check = useCallback(() => {
-        if (!accessToken) {
+        if (!accessToken || isTokenExpired(accessToken)) {
+            // Clear stale token so the user doesn't flash the dashboard on next visit.
+            if (accessToken) {
+                useUserStore.getState().actions.clearUserInfoAndToken();
+            }
             router.replace(LOGIN_ROUTE);
             return;
         }
@@ -61,6 +91,11 @@ export default function LoginAuthGuard({ children }: Props) {
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [accessToken]);
+
+	// Block rendering if the token is missing or expired — prevents dashboard flash before redirect.
+	if (!accessToken || isTokenExpired(accessToken)) {
+		return null;
+	}
 
 	return <>{children}</>;
 }

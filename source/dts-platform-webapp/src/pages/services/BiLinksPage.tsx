@@ -129,7 +129,9 @@ const renderCodeTags = (values?: string[]) => {
 	);
 };
 
-export default function Page() {
+type Props = { embedded?: boolean };
+
+export default function Page({ embedded }: Props) {
 	const [loading, setLoading] = useState(false);
 	const [saving, setSaving] = useState(false);
 	const [keyword, setKeyword] = useState("");
@@ -346,10 +348,24 @@ export default function Page() {
 
 	return (
 		<div className="space-y-6">
-			<PageHeader
-				title="数据服务中心 / 外部 BI 集成"
-				description="统一管理河图、Tableau、Superset 等外部 BI 的入口与访问策略。"
-				actions={
+			{!embedded && (
+				<PageHeader
+					title="数据可视化 / 外部 BI 集成"
+					description="统一管理河图、Tableau、Superset 等外部 BI 的入口与访问策略。"
+					actions={
+						<div className="flex items-center gap-2">
+							<Button icon={<PlusOutlined />} type="primary" onClick={openCreate}>
+								新增 BI 链接
+							</Button>
+							<Button icon={<ReloadOutlined />} onClick={() => fetchList()}>
+								刷新
+							</Button>
+						</div>
+					}
+				/>
+			)}
+			{embedded && (
+				<div className="flex items-center justify-between">
 					<div className="flex items-center gap-2">
 						<Button icon={<PlusOutlined />} type="primary" onClick={openCreate}>
 							新增 BI 链接
@@ -358,8 +374,8 @@ export default function Page() {
 							刷新
 						</Button>
 					</div>
-				}
-			/>
+				</div>
+			)}
 
 			<Card>
 				<div className="flex flex-wrap items-center justify-between gap-3 pb-4">

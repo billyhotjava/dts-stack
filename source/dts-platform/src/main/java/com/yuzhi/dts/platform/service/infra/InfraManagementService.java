@@ -78,6 +78,7 @@ public class InfraManagementService {
     private final JdbcCatalogSyncService jdbcCatalogSyncService;
     private final InfraCatalogSyncRunRepository syncRunRepository;
     private final AuditService auditService;
+    private final AdminInfraClient adminInfraClient;
 
     private static final String TYPE_INCEPTOR = "INCEPTOR";
     private static final String TYPE_POSTGRES = "POSTGRES";
@@ -117,7 +118,8 @@ public class InfraManagementService {
         CatalogColumnSyncService columnSyncService,
         JdbcCatalogSyncService jdbcCatalogSyncService,
         InfraCatalogSyncRunRepository syncRunRepository,
-        AuditService auditService
+        AuditService auditService,
+        AdminInfraClient adminInfraClient
     ) {
         this.dataSourceRepository = dataSourceRepository;
         this.storageRepository = storageRepository;
@@ -134,6 +136,7 @@ public class InfraManagementService {
         this.jdbcCatalogSyncService = jdbcCatalogSyncService;
         this.syncRunRepository = syncRunRepository;
         this.auditService = auditService;
+        this.adminInfraClient = adminInfraClient;
     }
 
     public List<InfraDataSourceDto> listDataSources(String activeDeptHeader) {
@@ -155,11 +158,69 @@ public class InfraManagementService {
                     })
                     .toList();
             }
-            return sources.stream().map(this::toDto).collect(Collectors.toList());
+            List<InfraDataSourceDto> result = new java.util.ArrayList<>(sources.stream().map(this::toDto).toList());
+            mergeAdminDataLake(result);
+            return result;
         } catch (RuntimeException ex) {
-            // If Liquibase hasn’t created infra tables yet, return empty to keep UI usable
+            // If Liquibase hasn't created infra tables yet, return empty to keep UI usable
             LOG.warn("listDataSources failed (likely missing table). Returning empty list. cause={}", ex.getMessage());
             return List.of();
+        }
+    }
+
+    /**
+     * Merge the default data lake from admin into the data source list.
+     * If the data lake's id or jdbcUrl already matches a local record, skip it.
+     */
+    private void mergeAdminDataLake(List<InfraDataSourceDto> result) {
+        try {
+            AdminInfraClient.AdminDataLakeConfig lake = adminInfraClient.fetchDefaultDataLake().orElse(null);
+            if (lake == null || lake.getId() == null) {
+                return;
+            }
+            // Check if already present by id or jdbcUrl
+            for (InfraDataSourceDto dto : result) {
+                if (lake.getId().equals(dto.id())) {
+                    return;
+                }
+                if (StringUtils.hasText(lake.getJdbcUrl()) && lake.getJdbcUrl().equals(dto.jdbcUrl())) {
+                    return;
+                }
+            }
+            Map<String, Object> props = new LinkedHashMap<>();
+            props.put("source", "admin-data-lake");
+            props.put("defaulted", Boolean.TRUE.equals(lake.getDefaulted()));
+            if (StringUtils.hasText(lake.getEngineVersion())) {
+                props.put("engineVersion", lake.getEngineVersion());
+            }
+            if (StringUtils.hasText(lake.getDriverVersion())) {
+                props.put("driverVersion", lake.getDriverVersion());
+            }
+            InfraDataSourceDto dto = new InfraDataSourceDto(
+                lake.getId(),
+                StringUtils.hasText(lake.getName()) ? lake.getName() : "默认数据湖",
+                StringUtils.hasText(lake.getType()) ? lake.getType() : "DATA_LAKE",
+                lake.getJdbcUrl(),
+                lake.getUsername(),
+                StringUtils.hasText(lake.getDescription()) ? lake.getDescription() : "由管理员在系统管理中配置的默认数据湖",
+                null,
+                props,
+                null,
+                null,
+                lake.getLastVerifiedAt(),
+                StringUtils.hasText(lake.getStatus()) ? lake.getStatus() : STATUS_ACTIVE,
+                StringUtils.hasText(lake.getPassword()),
+                lake.getEngineVersion(),
+                lake.getDriverVersion(),
+                lake.getLastTestElapsedMillis(),
+                lake.getLastHeartbeatAt(),
+                lake.getHeartbeatStatus(),
+                lake.getHeartbeatFailureCount(),
+                lake.getLastError()
+            );
+            result.add(0, dto);
+        } catch (Exception ex) {
+            LOG.debug("Failed to merge admin data lake into data source list: {}", ex.getMessage());
         }
     }
 

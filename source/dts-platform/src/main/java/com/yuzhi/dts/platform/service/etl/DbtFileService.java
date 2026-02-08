@@ -2,7 +2,6 @@ package com.yuzhi.dts.platform.service.etl;
 
 import com.yuzhi.dts.platform.config.DbtProperties;
 import java.io.IOException;
-import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
@@ -15,13 +14,10 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipInputStream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
-import org.springframework.web.multipart.MultipartFile;
 
 @Service
 public class DbtFileService {
@@ -30,10 +26,6 @@ public class DbtFileService {
 
     private static final Set<String> ALLOWED_EXTENSIONS = Set.of(
         ".sql", ".yml", ".yaml", ".csv", ".md", ".txt"
-    );
-
-    private static final Set<String> ALLOWED_DIRS = Set.of(
-        "models", "macros", "seeds", "tests", "snapshots", "analyses"
     );
 
     private static final Set<String> IGNORED_DIRS = Set.of(
@@ -45,8 +37,6 @@ public class DbtFileService {
     );
 
     private static final long MAX_FILE_SIZE = 1024 * 1024; // 1 MB
-    private static final long MAX_ZIP_SIZE = 50 * 1024 * 1024; // 50 MB
-
     private final DbtProperties properties;
 
     public DbtFileService(DbtProperties properties) {
@@ -219,104 +209,6 @@ public class DbtFileService {
         }
     }
 
-    // ── ZIP Upload & Extract ──────────────────────────────────
-
-    public DbtImportResult importZip(MultipartFile file) {
-        String originalName = file.getOriginalFilename();
-        if (originalName == null || !originalName.toLowerCase().endsWith(".zip")) {
-            throw new IllegalArgumentException("请上传 .zip 文件");
-        }
-        if (file.getSize() > MAX_ZIP_SIZE) {
-            throw new IllegalArgumentException("ZIP 文件过大，最大允许 50 MB");
-        }
-
-        Path projectDir = resolveProjectDir();
-        int newFiles = 0;
-        int overwrittenFiles = 0;
-        List<String> skippedFiles = new ArrayList<>();
-        List<String> importedFiles = new ArrayList<>();
-        List<String> directories = new ArrayList<>();
-
-        try (InputStream is = file.getInputStream();
-             ZipInputStream zis = new ZipInputStream(is, StandardCharsets.UTF_8)) {
-
-            ZipEntry entry;
-            while ((entry = zis.getNextEntry()) != null) {
-                String entryName = entry.getName().replace('\\', '/');
-                // Strip leading ./
-                if (entryName.startsWith("./")) {
-                    entryName = entryName.substring(2);
-                }
-
-                // Skip directories — they'll be created as needed
-                if (entry.isDirectory()) {
-                    continue;
-                }
-
-                // Must be under an allowed directory
-                if (!isAllowedImportPath(entryName)) {
-                    skippedFiles.add(entryName + " (不在允许的目录下)");
-                    continue;
-                }
-
-                // Path traversal check
-                if (entryName.contains("..")) {
-                    skippedFiles.add(entryName + " (路径不安全)");
-                    continue;
-                }
-
-                // Extension check
-                if (!hasAllowedExtension(entryName)) {
-                    skippedFiles.add(entryName + " (文件类型不允许)");
-                    continue;
-                }
-
-                // Protected file check
-                if (READ_ONLY_FILES.contains(entryName)) {
-                    skippedFiles.add(entryName + " (系统保护文件)");
-                    continue;
-                }
-
-                // Resolve and validate the target path
-                Path targetFile = projectDir.resolve(entryName).normalize();
-                if (!targetFile.startsWith(projectDir)) {
-                    skippedFiles.add(entryName + " (路径越权)");
-                    continue;
-                }
-
-                // Track directory
-                String topDir = entryName.contains("/") ? entryName.substring(0, entryName.indexOf('/')) : entryName;
-                if (!directories.contains(topDir)) {
-                    directories.add(topDir);
-                }
-
-                // Check new vs overwrite
-                boolean exists = Files.isRegularFile(targetFile);
-
-                // Extract
-                Files.createDirectories(targetFile.getParent());
-                Files.copy(zis, targetFile, StandardCopyOption.REPLACE_EXISTING);
-
-                if (exists) {
-                    overwrittenFiles++;
-                } else {
-                    newFiles++;
-                }
-                importedFiles.add(entryName);
-
-                zis.closeEntry();
-            }
-        } catch (IOException ex) {
-            throw new IllegalStateException("解压 ZIP 失败: " + ex.getMessage(), ex);
-        }
-
-        int totalFiles = newFiles + overwrittenFiles;
-        LOG.info("[dbt-files] imported ZIP '{}': {} files (new={}, overwrite={}, skipped={})",
-            originalName, totalFiles, newFiles, overwrittenFiles, skippedFiles.size());
-
-        return new DbtImportResult(totalFiles, newFiles, overwrittenFiles, directories, skippedFiles, importedFiles);
-    }
-
     // ── Security Helpers ──────────────────────────────────────
 
     private Path resolveProjectDir() {
@@ -366,13 +258,6 @@ public class DbtFileService {
         return "dbt_project.yml".equals(relativePath);
     }
 
-    private boolean isAllowedImportPath(String entryName) {
-        for (String dir : ALLOWED_DIRS) {
-            if (entryName.startsWith(dir + "/")) return true;
-        }
-        return false;
-    }
-
     private String detectLanguage(String path) {
         String lower = path.toLowerCase();
         if (lower.endsWith(".sql")) return "sql";
@@ -400,15 +285,6 @@ public class DbtFileService {
         String language,
         long size,
         boolean readOnly
-    ) {}
-
-    public record DbtImportResult(
-        int totalFiles,
-        int newFiles,
-        int overwrittenFiles,
-        List<String> directories,
-        List<String> skippedFiles,
-        List<String> importedFiles
     ) {}
 
     public record DbtFileSaveRequest(String path, String content) {}

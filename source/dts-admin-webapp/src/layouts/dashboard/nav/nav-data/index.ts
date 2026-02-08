@@ -1,12 +1,54 @@
 import { useMemo } from "react";
-import type { NavItemDataProps } from "@/components/nav/types";
+import type { NavItemDataProps, NavProps } from "@/components/nav/types";
 import { GLOBAL_CONFIG } from "@/global-config";
 import { useUserRoles } from "@/store/userStore";
 import { checkAny } from "@/utils";
 import { getBackendNavData } from "./nav-data-backend";
 import { frontendNavData } from "./nav-data-frontend";
 
-const getNavData = () => (GLOBAL_CONFIG.routerMode === "backend" ? getBackendNavData() : frontendNavData);
+/** Paths that are served by other webapps (analytics, BI tools) — not SPA routes. */
+const isExternalPath = (path: string): boolean => {
+	const lower = (path || "").toLowerCase();
+	return (
+		/^https?:\/\//i.test(lower) ||
+		lower.startsWith("/analytics") ||
+		lower.startsWith("/dashboards") ||
+		lower.startsWith("/screen") ||
+		lower.startsWith("/dashboard/hetu")
+	);
+};
+
+/** Check if a nav item (or any descendant) points to an external/proxy path. */
+const hasExternalDescendant = (item: NavItemDataProps): boolean => {
+	if (isExternalPath(item.path)) return true;
+	return item.children?.some(hasExternalDescendant) ?? false;
+};
+
+/** Extract visualization / external-link items from portal menus and append them to frontend nav data. */
+const getNavData = (): NavProps["data"] => {
+	if (GLOBAL_CONFIG.routerMode === "backend") {
+		return getBackendNavData();
+	}
+	// Frontend mode: use hardcoded admin menus + visualization items from portal menus
+	const base = [...frontendNavData];
+	try {
+		const portalNav = getBackendNavData();
+		const externalItems: NavItemDataProps[] = [];
+		for (const group of portalNav) {
+			for (const item of group.items) {
+				if (hasExternalDescendant(item)) {
+					externalItems.push(item);
+				}
+			}
+		}
+		if (externalItems.length > 0) {
+			base.push({ name: "数据可视化", items: externalItems });
+		}
+	} catch {
+		// Portal menus may not be loaded yet; skip silently.
+	}
+	return base;
+};
 
 /**
  * 递归处理导航数据，过滤掉没有权限的项目

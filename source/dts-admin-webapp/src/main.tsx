@@ -17,14 +17,15 @@ await registerLocalIcons();
 
 if (GLOBAL_CONFIG.routerMode === "backend") {
 	await menuService.getMenuList();
-	try {
-		const menus = await adminApi.getPortalMenus();
-		setPortalMenus(menus?.menus ?? [], menus?.allMenus ?? menus?.menus ?? []);
-	} catch (e) {
-		// eslint-disable-next-line no-console
-		console.warn("[main] Failed to prefetch portal menus:", e);
-		setPortalMenus([]);
-	}
+}
+// Always load portal menus so visualization items appear in the sidebar regardless of routing mode.
+try {
+	const menus = await adminApi.getPortalMenus();
+	setPortalMenus(menus?.menus ?? [], menus?.allMenus ?? menus?.menus ?? []);
+} catch (e) {
+	// eslint-disable-next-line no-console
+	console.warn("[main] Failed to prefetch portal menus:", e);
+	setPortalMenus([]);
 }
 
 const router = createBrowserRouter(
