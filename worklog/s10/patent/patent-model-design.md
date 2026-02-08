@@ -386,9 +386,9 @@ BEGIN
       SELECT grant_year AS y FROM public.ads_patent_detail_year WHERE grant_year IS NOT NULL
     ) t ORDER BY y
   LOOP
-    EXECUTE format('DROP TABLE IF EXISTS public.ads_patent_detail_%s', yr);
+    EXECUTE format('DROP TABLE IF EXISTS public.ads_patent_detail_year_%s', yr);
     EXECUTE format(
-      'CREATE TABLE public.ads_patent_detail_%s AS
+      'CREATE TABLE public.ads_patent_detail_year_%s AS
        SELECT application_date, grant_date, patent_no, patent_title_cn, patent_type,
               patent_status_std, patent_status_raw, dept_name, assignee_name
        FROM public.ads_patent_detail_year
@@ -402,15 +402,15 @@ END $$;
 
 **生成结果**：
 - `ads_patent_detail_year` — 全量主表
-- `ads_patent_detail_2023` — 2023 年明细
-- `ads_patent_detail_2024` — 2024 年明细
-- `ads_patent_detail_2025` — 2025 年明细
+- `ads_patent_detail_year_2023` — 2023 年明细
+- `ads_patent_detail_year_2024` — 2024 年明细
+- `ads_patent_detail_year_2025` — 2025 年明细
 - ...（年份从数据中自动发现）
 
 **分年口径**：该年申请 OR 该年授权（并集）。
-一条专利如果 2023 年申请、2025 年授权，会同时出现在 `ads_patent_detail_2023` 和 `ads_patent_detail_2025` 中。
+一条专利如果 2023 年申请、2025 年授权，会同时出现在 `ads_patent_detail_year_2023` 和 `ads_patent_detail_year_2025` 中。
 
-> **查询示例**: `SELECT * FROM ads_patent_detail_2025`
+> **查询示例**: `SELECT * FROM ads_patent_detail_year_2025`
 
 ---
 
