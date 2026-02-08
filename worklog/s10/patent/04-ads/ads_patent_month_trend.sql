@@ -6,25 +6,16 @@
 --
 -- 设计说明
 -- --------
--- 当年月度受理/授权趋势数据，供仪表盘折线图使用。
+-- 全量月度受理/授权趋势数据，供仪表盘折线图使用。
 --
--- 与 DWS 层 dws_patent_month_trend 的区别：
---   - DWS 保留所有年份的月度数据（历史全量）
---   - ADS 只保留当年数据，减少前端数据量
---   - ADS 按月份排序，前端可直接渲染
+-- 保留所有年份数据，前端按 stat_year 过滤当年。
 --
--- 字段说明：
---   - stat_year:    当年年份
---   - stat_month:   月份（YYYY-MM）
---   - accepted_cnt: 当月受理数
---   - granted_cnt:  当月授权数
+-- 查询示例：
+--   SELECT * FROM ads_patent_month_trend WHERE stat_year = 2025
 -- ============================================================
 
 {{ config(materialized='table', alias='ads_patent_month_trend', schema='public', tags=['ads', 'patent']) }}
 
-WITH params AS (
-  SELECT NULLIF(current_setting('dts.report_year', true), '')::int AS yr
-)
 SELECT
   stat_year,
   stat_month,
@@ -32,5 +23,4 @@ SELECT
   granted_cnt
 
 FROM {{ ref('dws_patent_month_trend') }}
-WHERE (SELECT yr FROM params) IS NULL OR stat_year = (SELECT yr FROM params)
 ORDER BY stat_year, stat_month

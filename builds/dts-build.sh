@@ -497,6 +497,12 @@ build_all_normal() {
 
 build_all_legacy() {
   init_images_legacy
+  # Legacy/offline Dockerfiles consume prebuilt backend jars directly.
+  # Validate identities before image build to avoid cross-module artifact mix-ups.
+  verify_prebuilt_module_jar "dts-admin" "${REPO_ROOT}/builds/dts-admin/dts-admin.jar"
+  verify_prebuilt_module_jar "dts-platform" "${REPO_ROOT}/builds/dts-platform/dts-platform.jar"
+  verify_prebuilt_module_jar "dts-ingestion" "${REPO_ROOT}/builds/dts-ingestion/dts-ingestion.jar"
+  verify_prebuilt_module_jar "dts-analytics" "${REPO_ROOT}/builds/dts-analytics/dts-analytics.jar"
   build_image "dts-admin" "$IMAGE_DTS_ADMIN" "${REPO_ROOT}/builds/dts-admin/Dockerfile.offline" "$LEGACY_DIST"
   build_image "dts-platform" "$IMAGE_DTS_PLATFORM" "${REPO_ROOT}/builds/dts-platform/Dockerfile.offline" "$LEGACY_DIST"
   build_image "dts-ingestion" "$IMAGE_DTS_INGESTION" "${REPO_ROOT}/builds/dts-ingestion/Dockerfile.offline" "$LEGACY_DIST"

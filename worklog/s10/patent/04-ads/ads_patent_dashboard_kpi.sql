@@ -6,31 +6,25 @@
 --
 -- 设计说明
 -- --------
--- 仪表盘首页核心 KPI 卡片数据。只保留当年一行记录。
+-- 仪表盘首页核心 KPI 卡片数据。每年一行，含同比增长率。
 --
 -- 展示指标：
---   - 今年申请总量
---   - 去年申请总量
+--   - 当年申请总量
+--   - 上年申请总量
 --   - 同比增长率
---   - 今年受理数
---   - 今年授权数（授权年口径）
---   - 今年授权率
+--   - 当年受理数
+--   - 当年授权数（授权年口径）
+--   - 当年授权率
 --
--- 为什么单独建 ADS 表：
---   - 仪表盘加载时只需 SELECT * FROM ads_patent_dashboard_kpi WHERE stat_year = 2026
---   - 避免前端实时做同比计算（需要跨行关联）
---   - 计算逻辑固化在 SQL 中，保证口径一致
---
--- 数据源：dws_patent_year_kpi
+-- 数据源：dws_patent_year_kpi + dws_patent_year_grant
 -- 关联方式：当年 LEFT JOIN 上一年，计算同比
--- 授权数来源：dws_patent_year_grant（授权年口径）
+--
+-- 查询示例：
+--   SELECT * FROM ads_patent_dashboard_kpi WHERE stat_year = 2025
 -- ============================================================
 
 {{ config(materialized='table', alias='ads_patent_dashboard_kpi', schema='public', tags=['ads', 'patent']) }}
 
-WITH params AS (
-  SELECT NULLIF(current_setting('dts.report_year', true), '')::int AS yr
-)
 SELECT
   k1.stat_year                                     AS stat_year,
 
@@ -52,4 +46,4 @@ SELECT
 FROM {{ ref('dws_patent_year_kpi') }} k1
 LEFT JOIN {{ ref('dws_patent_year_kpi') }} k0 ON k0.stat_year = k1.stat_year - 1
 LEFT JOIN {{ ref('dws_patent_year_grant') }} g1 ON g1.stat_year = k1.stat_year
-WHERE (SELECT yr FROM params) IS NULL OR k1.stat_year = (SELECT yr FROM params)
+ORDER BY k1.stat_year

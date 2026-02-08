@@ -354,11 +354,13 @@ ORDER BY grant_date DESC NULLS LAST
 
 ---
 
-### 12. ads_patent_detail_year
+### 12. ads_patent_detail_year（动态分年表）
 
 - **层级**: ADS
-- **物化**: table
-- **说明**: 全量专利明细，暴露年份字段供查询端过滤
+- **物化**: table + post_hook 动态分年
+- **说明**: 主表 `ads_patent_detail_year` 包含全量明细；模型执行后通过 `post_hook` 自动按年创建分年表
+
+**主表 SQL**（全量，含年份字段）：
 
 ```sql
 SELECT
@@ -370,7 +372,45 @@ FROM {{ ref('dwd_patent') }}
 ORDER BY COALESCE(application_date, grant_date) DESC NULLS LAST
 ```
 
-> **查询示例**: `SELECT * FROM ads_patent_detail_year WHERE application_year = 2025 OR grant_year = 2025`
+**post_hook**（PL/pgSQL，dbt 执行完主表后自动运行）：
+
+```sql
+DO $$
+DECLARE
+  yr int;
+BEGIN
+  FOR yr IN
+    SELECT DISTINCT y FROM (
+      SELECT application_year AS y FROM public.ads_patent_detail_year WHERE application_year IS NOT NULL
+      UNION
+      SELECT grant_year AS y FROM public.ads_patent_detail_year WHERE grant_year IS NOT NULL
+    ) t ORDER BY y
+  LOOP
+    EXECUTE format('DROP TABLE IF EXISTS public.ads_patent_detail_%s', yr);
+    EXECUTE format(
+      'CREATE TABLE public.ads_patent_detail_%s AS
+       SELECT application_date, grant_date, patent_no, patent_title_cn, patent_type,
+              patent_status_std, patent_status_raw, dept_name, assignee_name
+       FROM public.ads_patent_detail_year
+       WHERE application_year = %s OR grant_year = %s
+       ORDER BY COALESCE(application_date, grant_date) DESC NULLS LAST',
+      yr, yr, yr
+    );
+  END LOOP;
+END $$;
+```
+
+**生成结果**：
+- `ads_patent_detail_year` — 全量主表
+- `ads_patent_detail_2023` — 2023 年明细
+- `ads_patent_detail_2024` — 2024 年明细
+- `ads_patent_detail_2025` — 2025 年明细
+- ...（年份从数据中自动发现）
+
+**分年口径**：该年申请 OR 该年授权（并集）。
+一条专利如果 2023 年申请、2025 年授权，会同时出现在 `ads_patent_detail_2023` 和 `ads_patent_detail_2025` 中。
+
+> **查询示例**: `SELECT * FROM ads_patent_detail_2025`
 
 ---
 

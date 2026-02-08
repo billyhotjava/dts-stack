@@ -14,6 +14,12 @@ ENV TZ=Asia/Shanghai \
 WORKDIR /app
 # Copy prebuilt jar from repository path: builds/dts-analytics/dts-analytics.jar
 COPY builds/dts-analytics/dts-analytics.jar /app/app.jar
+RUN set -eux; \
+    grep -aFq "com/yuzhi/dts/analytics/DtsAnalyticsApp.class" /app/app.jar; \
+    if grep -aFq "com/yuzhi/dts/ingestion/DtsIngestionApp.class" /app/app.jar; then \
+      echo >&2 "[build] ERROR: detected ingestion main class inside dts-analytics artifact"; \
+      exit 1; \
+    fi
 
 EXPOSE 3000
 ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar /app/app.jar"]

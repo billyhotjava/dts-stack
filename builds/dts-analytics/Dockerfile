@@ -62,6 +62,15 @@ RUN set -eux; \
       cp "${JAR}" /workspace/dist/app.jar; \
     fi
 
+# Defensive check: fail fast if the copied artifact is not dts-analytics.
+RUN set -eux; \
+    test -f /workspace/dist/app.jar; \
+    grep -aFq "com/yuzhi/dts/analytics/DtsAnalyticsApp.class" /workspace/dist/app.jar; \
+    if grep -aFq "com/yuzhi/dts/ingestion/DtsIngestionApp.class" /workspace/dist/app.jar; then \
+      echo >&2 "[build] ERROR: detected ingestion main class inside dts-analytics artifact"; \
+      exit 1; \
+    fi
+
 FROM ${RUNTIME_BASE_IMAGE} AS runtime
 
 ENV TZ=Asia/Shanghai \

@@ -382,6 +382,20 @@ prepare_data_dirs(){
   done
   if [[ -d "services/dts-airflow/dags" ]]; then
     chmod -R 777 services/dts-airflow/dags 2>/dev/null || true
+    # Keep Airflow focused on Python DAG files; Addax job/data artifacts live in the
+    # same directory and can significantly delay DAG discovery if not ignored.
+    printf '%s\n' \
+      '^.*/__pycache__/.*$' \
+      '^.*\.pyc$' \
+      '^.*\.json$' \
+      '^.*\.csv$' \
+      '^.*\.tsv$' \
+      '^.*\.xlsx$' \
+      '^.*\.xls$' \
+      '^.*\.parquet$' \
+      '^.*/exchange/.*$' \
+      > services/dts-airflow/dags/.airflowignore 2>/dev/null || true
+    chmod 644 services/dts-airflow/dags/.airflowignore 2>/dev/null || true
     if command -v getenforce >/dev/null 2>&1; then
       if [[ "$(getenforce 2>/dev/null || true)" != "Disabled" ]]; then
         if command -v chcon >/dev/null 2>&1; then
@@ -805,6 +819,8 @@ generate_env_base(){
   : "${IMAGE_DTS_PLATFORM_WEBAPP:=dts-platform-webapp:1.0.0}"
   : "${IMAGE_DTS_ANALYTICS:=dts-analytics:1.0.0}"
   : "${IMAGE_DTS_ANALYTICS_WEBAPP_MODERN:=dts-analytics-webapp-modern:1.0.0}"
+  # Traefik upstream port for analytics modern webapp (nginx image defaults to 80).
+  : "${DTS_ANALYTICS_WEBAPP_MODERN_PORT:=80}"
   : "${ANALYTICS_ENCRYPTION_SECRET:=$(generate_fernet)}"
   # Prefer same-domain mount under platform UI to keep user-facing URLs consistent and avoid extra DNS/ports.
   : "${ANALYTICS_SITE_URL:=https://${HOST_PLATFORM_UI}/analytics}"
@@ -1190,6 +1206,7 @@ IMAGE_DTS_ADMIN_WEBAPP=${IMAGE_DTS_ADMIN_WEBAPP}
 IMAGE_DTS_PLATFORM_WEBAPP=${IMAGE_DTS_PLATFORM_WEBAPP}
 IMAGE_DTS_ANALYTICS=${IMAGE_DTS_ANALYTICS}
 IMAGE_DTS_ANALYTICS_WEBAPP_MODERN=${IMAGE_DTS_ANALYTICS_WEBAPP_MODERN}
+DTS_ANALYTICS_WEBAPP_MODERN_PORT=${DTS_ANALYTICS_WEBAPP_MODERN_PORT}
 EOF
 
   # Append optional hosts/env blocks conditionally to .env

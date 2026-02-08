@@ -606,7 +606,7 @@ services:
       - "traefik.http.routers.dts-analytics-ui.tls=true"
       - "traefik.http.routers.dts-analytics-ui.priority=230"
       - "traefik.http.routers.dts-analytics-ui.service=dts-analytics-webapp-modern"
-      - "traefik.http.services.dts-analytics-webapp-modern.loadbalancer.server.port=80"
+      - "traefik.http.services.dts-analytics-webapp-modern.loadbalancer.server.port=${DTS_ANALYTICS_WEBAPP_MODERN_PORT:-80}"
       - "traefik.http.routers.dts-analytics-ui.middlewares=dts-strip-analytics-ui@docker,security-headers@file"
 
   dts-admin-webapp:
@@ -838,8 +838,9 @@ services:
       TZ: ${TZ:-Asia/Shanghai}
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
-      AIRFLOW__SCHEDULER__DAG_DIR_LIST_INTERVAL: ${AIRFLOW_DAG_DIR_LIST_INTERVAL:-10}
-      AIRFLOW__SCHEDULER__MIN_FILE_PROCESS_INTERVAL: ${AIRFLOW_MIN_FILE_PROCESS_INTERVAL:-10}
+      AIRFLOW__CORE__DAG_IGNORE_FILE_SYNTAX: "regexp"
+      AIRFLOW__SCHEDULER__DAG_DIR_LIST_INTERVAL: ${AIRFLOW_DAG_DIR_LIST_INTERVAL:-3}
+      AIRFLOW__SCHEDULER__MIN_FILE_PROCESS_INTERVAL: ${AIRFLOW_MIN_FILE_PROCESS_INTERVAL:-3}
       AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
       PIP_ADDITIONAL_REQUIREMENTS: "${AIRFLOW_PIP_ADDITIONAL_REQUIREMENTS:-openmetadata-managed-apis==${OPENMETADATA_MANAGED_APIS_VERSION:-1.11.5.0} openmetadata-ingestion==${OPENMETADATA_INGESTION_VERSION:-1.11.5.0}}"
       AIRFLOW__API__AUTH_BACKENDS: "airflow.api.auth.backend.basic_auth"
@@ -892,6 +893,7 @@ services:
       TZ: ${TZ:-Asia/Shanghai}
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__CORE__DAG_IGNORE_FILE_SYNTAX: "regexp"
       AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
       PIP_ADDITIONAL_REQUIREMENTS: "${AIRFLOW_PIP_ADDITIONAL_REQUIREMENTS:-openmetadata-managed-apis==${OPENMETADATA_MANAGED_APIS_VERSION:-1.11.5.0} openmetadata-ingestion==${OPENMETADATA_INGESTION_VERSION:-1.11.5.0}}"
       AIRFLOW__API__AUTH_BACKENDS: "airflow.api.auth.backend.basic_auth"
@@ -957,6 +959,7 @@ services:
       TZ: ${TZ:-Asia/Shanghai}
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__CORE__DAG_IGNORE_FILE_SYNTAX: "regexp"
       AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
       PIP_ADDITIONAL_REQUIREMENTS: "${AIRFLOW_PIP_ADDITIONAL_REQUIREMENTS:-openmetadata-managed-apis==${OPENMETADATA_MANAGED_APIS_VERSION:-1.11.5.0} openmetadata-ingestion==${OPENMETADATA_INGESTION_VERSION:-1.11.5.0}}"
       AIRFLOW__API__AUTH_BACKENDS: "airflow.api.auth.backend.basic_auth"
@@ -1001,6 +1004,7 @@ services:
       TZ: ${TZ:-Asia/Shanghai}
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__CORE__DAG_IGNORE_FILE_SYNTAX: "regexp"
       AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
       PIP_ADDITIONAL_REQUIREMENTS: "${AIRFLOW_PIP_ADDITIONAL_REQUIREMENTS:-openmetadata-managed-apis==${OPENMETADATA_MANAGED_APIS_VERSION:-1.11.5.0} openmetadata-ingestion==${OPENMETADATA_INGESTION_VERSION:-1.11.5.0}}"
       AIRFLOW__API__AUTH_BACKENDS: "airflow.api.auth.backend.basic_auth"
