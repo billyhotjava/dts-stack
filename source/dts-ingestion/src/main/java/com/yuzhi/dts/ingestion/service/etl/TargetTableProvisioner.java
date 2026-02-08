@@ -299,25 +299,63 @@ public class TargetTableProvisioner {
 
     private List<TableMapping> resolveMappings(JsonNode mappingNode, Map<String, Object> readerConfig, Map<String, Object> writerConfig) {
         List<TableMapping> mappings = parseTableMapping(mappingNode);
+        List<String> sources = extractTables(readerConfig);
+        List<String> targets = extractTables(writerConfig);
         if (!mappings.isEmpty()) {
+            List<String> mappingSources = mappings.stream()
+                .map(TableMapping::source)
+                .filter(StringUtils::hasText)
+                .toList();
+            List<String> mappingTargets = mappings.stream()
+                .map(TableMapping::target)
+                .filter(StringUtils::hasText)
+                .toList();
+            if (!mappingSources.isEmpty() && !mappingTargets.isEmpty()) {
+                String prefix = resolveTablePrefix(writerConfig);
+                if (!StringUtils.hasText(prefix)) {
+                    prefix = inferTablePrefixFromTargets(mappingSources, targets);
+                }
+                if (isSourceAlignedTables(mappingSources, mappingTargets)) {
+                    if (!targets.isEmpty() && !isSourceAlignedTables(mappingSources, targets)) {
+                        mappingTargets = targets;
+                    } else {
+                        final String resolvedPrefix = prefix;
+                        mappingTargets = mappingSources.stream()
+                            .map(source -> buildTargetTableName(source, resolvedPrefix))
+                            .toList();
+                    }
+                }
+                int size = Math.min(mappingSources.size(), mappingTargets.size());
+                List<TableMapping> normalized = new ArrayList<>();
+                for (int i = 0; i < size; i++) {
+                    normalized.add(new TableMapping(mappingSources.get(i), mappingTargets.get(i)));
+                }
+                return normalized;
+            }
             return mappings;
         }
-        List<String> sources = extractTables(readerConfig);
         if (sources.isEmpty()) {
             return List.of();
         }
-        List<String> targets = extractTables(writerConfig);
         String prefix = resolveTablePrefix(writerConfig);
+        if (!StringUtils.hasText(prefix)) {
+            prefix = inferTablePrefixFromTargets(sources, targets);
+        }
         if (targets.isEmpty()) {
+            final String resolvedPrefix = prefix;
             targets = sources.stream()
-                .map(source -> buildTargetTableName(source, prefix))
+                .map(source -> buildTargetTableName(source, resolvedPrefix))
                 .toList();
         } else if (targets.size() == 1 && targets.get(0).contains(TABLE_PLACEHOLDER)) {
             String template = targets.get(0);
-            targets = sources.stream().map(src -> template.replace(TABLE_PLACEHOLDER, src)).toList();
-        } else if (isSourceAlignedTables(sources, targets) && StringUtils.hasText(prefix)) {
+            final String resolvedPrefix = prefix;
             targets = sources.stream()
-                .map(source -> buildTargetTableName(source, prefix))
+                .map(src -> template.replace(TABLE_PLACEHOLDER, buildTargetTableName(src, resolvedPrefix)))
+                .toList();
+        } else if (isSourceAlignedTables(sources, targets) && StringUtils.hasText(prefix)) {
+            final String resolvedPrefix = prefix;
+            targets = sources.stream()
+                .map(source -> buildTargetTableName(source, resolvedPrefix))
                 .toList();
         }
         int size = Math.min(sources.size(), targets.size());
@@ -600,6 +638,36 @@ public class TargetTableProvisioner {
             return base;
         }
         return StringUtils.hasText(prefix) ? prefix + base : base;
+    }
+
+    private String inferTablePrefixFromTargets(List<String> sourceTables, List<String> targetTables) {
+        if (sourceTables == null || targetTables == null || sourceTables.isEmpty() || targetTables.isEmpty()) {
+            return null;
+        }
+        int size = Math.min(sourceTables.size(), targetTables.size());
+        String inferred = null;
+        for (int i = 0; i < size; i++) {
+            String sourceBase = stripSchema(sourceTables.get(i));
+            String targetBase = stripSchema(targetTables.get(i));
+            if (!StringUtils.hasText(sourceBase) || !StringUtils.hasText(targetBase)) {
+                continue;
+            }
+            String sourceLower = sourceBase.toLowerCase(Locale.ROOT);
+            String targetLower = targetBase.toLowerCase(Locale.ROOT);
+            if (!targetLower.endsWith(sourceLower)) {
+                continue;
+            }
+            String candidate = targetBase.substring(0, targetBase.length() - sourceBase.length());
+            if (!StringUtils.hasText(candidate)) {
+                continue;
+            }
+            if (inferred == null) {
+                inferred = candidate;
+            } else if (!inferred.equals(candidate)) {
+                return null;
+            }
+        }
+        return inferred;
     }
 
     private String stripSchema(String table) {

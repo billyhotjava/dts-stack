@@ -5,59 +5,32 @@ sources:
     schema: "ods"
     tables:
       -
-        name: "CITY"
-        description: "dm8testtestst1: DMHR.CITY -> ods.CITY"
+        name: "CUSTOMER"
+        description: "dm8test1: ERPDEMO.CUSTOMER -> ods.CUSTOMER"
         meta:
           system: "unknown"
           biz: "unknown"
-          entity: "CITY"
-          stream: "CITY"
-          stream_namespace: "DMHR"
+          entity: "CUSTOMER"
+          stream: "CUSTOMER"
+          stream_namespace: "ERPDEMO"
       -
         name: "DEPARTMENT"
-        description: "dm8testtestst1: DMHR.DEPARTMENT -> ods.DEPARTMENT"
+        description: "dm8test1: ERPDEMO.DEPARTMENT -> ods.DEPARTMENT"
         meta:
           system: "unknown"
           biz: "unknown"
           entity: "DEPARTMENT"
           stream: "DEPARTMENT"
-          stream_namespace: "DMHR"
+          stream_namespace: "ERPDEMO"
       -
         name: "EMPLOYEE"
-        description: "dm8testtestst1: DMHR.EMPLOYEE -> ods.EMPLOYEE"
+        description: "dm8test1: ERPDEMO.EMPLOYEE -> ods.EMPLOYEE"
         meta:
           system: "unknown"
           biz: "unknown"
           entity: "EMPLOYEE"
           stream: "EMPLOYEE"
-          stream_namespace: "DMHR"
-      -
-        name: "JOB"
-        description: "dm8testtestst1: DMHR.JOB -> ods.JOB"
-        meta:
-          system: "unknown"
-          biz: "unknown"
-          entity: "JOB"
-          stream: "JOB"
-          stream_namespace: "DMHR"
-      -
-        name: "JOB_HISTORY"
-        description: "dm8testtestst1: DMHR.JOB_HISTORY -> ods.JOB_HISTORY"
-        meta:
-          system: "unknown"
-          biz: "unknown"
-          entity: "JOB_HISTORY"
-          stream: "JOB_HISTORY"
-          stream_namespace: "DMHR"
-      -
-        name: "LOCATION"
-        description: "dm8testtestst1: DMHR.LOCATION -> ods.LOCATION"
-        meta:
-          system: "unknown"
-          biz: "unknown"
-          entity: "LOCATION"
-          stream: "LOCATION"
-          stream_namespace: "DMHR"
+          stream_namespace: "ERPDEMO"
       -
         name: "ods_patent_info"
         description: "myfile1: patent_info -> ods.ods_patent_info"
@@ -67,11 +40,29 @@ sources:
           entity: "unknown"
           stream: "patent_info"
       -
-        name: "REGION"
-        description: "dm8testtestst1: DMHR.REGION -> ods.REGION"
+        name: "ORDER_DETAIL"
+        description: "dm8test1: ERPDEMO.ORDER_DETAIL -> ods.ORDER_DETAIL"
         meta:
           system: "unknown"
           biz: "unknown"
-          entity: "REGION"
-          stream: "REGION"
-          stream_namespace: "DMHR"
+          entity: "ORDER_DETAIL"
+          stream: "ORDER_DETAIL"
+          stream_namespace: "ERPDEMO"
+      -
+        name: "ORDERS"
+        description: "dm8test1: ERPDEMO.ORDERS -> ods.ORDERS"
+        meta:
+          system: "unknown"
+          biz: "unknown"
+          entity: "ORDERS"
+          stream: "ORDERS"
+          stream_namespace: "ERPDEMO"
+      -
+        name: "PRODUCT"
+        description: "dm8test1: ERPDEMO.PRODUCT -> ods.PRODUCT"
+        meta:
+          system: "unknown"
+          biz: "unknown"
+          entity: "PRODUCT"
+          stream: "PRODUCT"
+          stream_namespace: "ERPDEMO"
