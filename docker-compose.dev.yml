@@ -386,6 +386,7 @@ services:
       ADDAX_DRIVER_DIR: ${STACK_ROOT}/services/dts-platform/drivers
       ADDAX_DRIVER_JARS: ${ADDAX_DRIVER_JARS:-DmJdbcDriver11.jar,postgresql-42.7.9.jar}
       ADDAX_LOG_DIR: ${STACK_ROOT}/logs/addax
+      ADDAX_DOCKER_NETWORK: ${ADDAX_DOCKER_NETWORK:-dts-core}
       DTS_AIRFLOW_ENABLED: ${DTS_AIRFLOW_ENABLED:-true}
       DTS_AIRFLOW_BASE_URL: ${DTS_AIRFLOW_BASE_URL:-http://dts-airflow-webserver:8080}
       DTS_AIRFLOW_API_PATH: ${DTS_AIRFLOW_API_PATH:-/api/v1}
@@ -874,6 +875,7 @@ services:
       ADDAX_DRIVER_DIR: ${STACK_ROOT}/services/dts-platform/drivers
       ADDAX_DRIVER_JARS: ${ADDAX_DRIVER_JARS:-DmJdbcDriver11.jar,postgresql-42.7.9.jar}
       ADDAX_LOG_DIR: ${STACK_ROOT}/logs/addax
+      ADDAX_DOCKER_NETWORK: ${ADDAX_DOCKER_NETWORK:-dts-core}
     depends_on:
       dts-pg:
         condition: service_healthy
@@ -923,6 +925,7 @@ services:
       ADDAX_DRIVER_DIR: ${STACK_ROOT}/services/dts-platform/drivers
       ADDAX_DRIVER_JARS: ${ADDAX_DRIVER_JARS:-DmJdbcDriver11.jar,postgresql-42.7.9.jar}
       ADDAX_LOG_DIR: ${STACK_ROOT}/logs/addax
+      ADDAX_DOCKER_NETWORK: ${ADDAX_DOCKER_NETWORK:-dts-core}
     ports:
       - "${AIRFLOW_WEBSERVER_PORT:-18090}:8080"
     volumes:
@@ -984,6 +987,7 @@ services:
       ADDAX_DRIVER_DIR: ${STACK_ROOT}/services/dts-platform/drivers
       ADDAX_DRIVER_JARS: ${ADDAX_DRIVER_JARS:-DmJdbcDriver11.jar,postgresql-42.7.9.jar}
       ADDAX_LOG_DIR: ${STACK_ROOT}/logs/addax
+      ADDAX_DOCKER_NETWORK: ${ADDAX_DOCKER_NETWORK:-dts-core}
     volumes:
       - ./services/dts-airflow/dags:/opt/airflow/dags
       - ./logs/airflow:/opt/airflow/logs

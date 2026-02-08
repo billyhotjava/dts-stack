@@ -118,6 +118,8 @@ public class AddaxJobService {
     private static final List<String> COLUMN_RULE_KEYS = List.of(
         "_columnPrefix", "_columnSuffix", "_extraColumns"
     );
+    private static final String EXTRA_COL_SOURCE_SYSTEM = "source_system";
+    private static final String EXTRA_COL_IMPORT_TIME = "import_time";
 
     private Map<String, Object> resolveJobConfig(
         String readerType,
@@ -149,6 +151,7 @@ public class AddaxJobService {
         }
         Map<String, Object> resolvedWriter = ensureDriver(writerType, safeMap(writerConfig));
         ensureWriterConnection(writerType, resolvedWriter);
+        ensureDefaultExtraColumns(readerConfig, resolvedReader, resolvedWriter, readerType, writerType);
         if (isFileReaderType(readerType) && !fileColumns.isEmpty()) {
             injectFileSourceCreateTablePreSql(resolvedWriter, fileColumns, fileAutoId, writerType);
         }
@@ -888,7 +891,12 @@ public class AddaxJobService {
         if (sourceTables.isEmpty()) {
             return;
         }
+        List<String> existingTargets = extractTables(writerConfig);
         boolean hadPlaceholder = hasTablePlaceholderInConfig(writerConfig);
+        if (!hadPlaceholder && !existingTargets.isEmpty()) {
+            // Keep explicit writer table mapping as-is (e.g. prefixed targets like ods_erp_*).
+            return;
+        }
         List<String> targetTables = normalizeWriterTables(writerConfig, sourceTables);
         replaceTableField(writerConfig, targetTables);
         Object connection = writerConfig.get("connection");
@@ -1353,6 +1361,171 @@ public class AddaxJobService {
             writerConfig.put("postSql", postSql);
             LOG.info("Injected extra columns postSql: {}", postSql);
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void ensureDefaultExtraColumns(
+        Map<String, Object> rawReaderConfig,
+        Map<String, Object> readerConfig,
+        Map<String, Object> writerConfig,
+        String readerType,
+        String writerType
+    ) {
+        if (writerConfig == null) {
+            return;
+        }
+        java.util.List<Map<String, Object>> extras = new java.util.ArrayList<>();
+        Map<String, Map<String, Object>> indexByName = new java.util.LinkedHashMap<>();
+        Object existing = writerConfig.get("_extraColumns");
+        if (existing instanceof List<?> list) {
+            for (Object item : list) {
+                if (item instanceof Map<?, ?> map) {
+                    Map<String, Object> extra = new LinkedHashMap<>();
+                    map.forEach((k, v) -> {
+                        if (k != null) {
+                            extra.put(k.toString(), v);
+                        }
+                    });
+                    if (!extra.isEmpty()) {
+                        extras.add(extra);
+                        String name = normalizeText(extra.get("name"));
+                        if (StringUtils.hasText(name)) {
+                            indexByName.put(name.toLowerCase(Locale.ROOT), extra);
+                        }
+                    }
+                }
+            }
+        }
+
+        java.util.Set<String> names = new java.util.HashSet<>();
+        for (Map<String, Object> extra : extras) {
+            String name = normalizeText(extra.get("name"));
+            if (StringUtils.hasText(name)) {
+                names.add(name.toLowerCase(Locale.ROOT));
+            }
+        }
+
+        boolean changed = false;
+        boolean fileSource = isFileReaderType(readerType);
+        String sourceSystem = resolveSourceSystemForExtra(
+            fileSource && rawReaderConfig != null ? rawReaderConfig : readerConfig,
+            fileSource
+        );
+        String sourceSystemValue = quoteSqlString(sourceSystem);
+        Map<String, Object> sourceSystemCol = indexByName.get(EXTRA_COL_SOURCE_SYSTEM);
+        if (sourceSystemCol == null) {
+            sourceSystemCol = new LinkedHashMap<>();
+            sourceSystemCol.put("name", EXTRA_COL_SOURCE_SYSTEM);
+            extras.add(sourceSystemCol);
+            changed = true;
+        }
+        if (!"来源系统".equals(normalizeText(sourceSystemCol.get("label")))) {
+            sourceSystemCol.put("label", "来源系统");
+            changed = true;
+        }
+        if (!"string".equalsIgnoreCase(normalizeText(sourceSystemCol.get("type")))) {
+            sourceSystemCol.put("type", "string");
+            changed = true;
+        }
+        if (!sourceSystemValue.equals(normalizeText(sourceSystemCol.get("defaultValue")))) {
+            sourceSystemCol.put("defaultValue", sourceSystemValue);
+            changed = true;
+        }
+
+        String importTimeExpr = resolveImportTimeDefault(writerType);
+        Map<String, Object> importTimeCol = indexByName.get(EXTRA_COL_IMPORT_TIME);
+        if (importTimeCol == null) {
+            importTimeCol = new LinkedHashMap<>();
+            importTimeCol.put("name", EXTRA_COL_IMPORT_TIME);
+            extras.add(importTimeCol);
+            changed = true;
+        }
+        if (!"导入时间".equals(normalizeText(importTimeCol.get("label")))) {
+            importTimeCol.put("label", "导入时间");
+            changed = true;
+        }
+        if (!"timestamp".equalsIgnoreCase(normalizeText(importTimeCol.get("type")))) {
+            importTimeCol.put("type", "timestamp");
+            changed = true;
+        }
+        if (!importTimeExpr.equals(normalizeText(importTimeCol.get("defaultValue")))) {
+            importTimeCol.put("defaultValue", importTimeExpr);
+            changed = true;
+        }
+
+        if (changed) {
+            writerConfig.put("_extraColumns", extras);
+        }
+    }
+
+    private String resolveSourceSystemForExtra(Map<String, Object> readerConfig, boolean fileSource) {
+        if (fileSource) {
+            return resolveFileSourceSystem(readerConfig);
+        }
+        if (readerConfig == null || readerConfig.isEmpty()) {
+            return "unknown";
+        }
+        String source = normalizeText(readerConfig.get("sourceSystem"));
+        if (!StringUtils.hasText(source)) {
+            source = normalizeText(readerConfig.get("sourceApp"));
+        }
+        if (!StringUtils.hasText(source)) {
+            source = normalizeText(readerConfig.get("appCode"));
+        }
+        if (!StringUtils.hasText(source)) {
+            source = normalizeText(readerConfig.get("system"));
+        }
+        if (!StringUtils.hasText(source)) {
+            source = normalizeText(readerConfig.get("name"));
+        }
+        return StringUtils.hasText(source) ? source : "unknown";
+    }
+
+    private String resolveFileSourceSystem(Map<String, Object> readerConfig) {
+        if (readerConfig == null || readerConfig.isEmpty()) {
+            return "unknown";
+        }
+        String source = extractFileName(normalizeText(readerConfig.get("_originalName")));
+        if (!StringUtils.hasText(source)) {
+            source = extractFileName(firstStringValue(readerConfig.get("_filePath")));
+        }
+        if (!StringUtils.hasText(source)) {
+            source = extractFileName(firstStringValue(readerConfig.get("_containerPath")));
+        }
+        if (!StringUtils.hasText(source)) {
+            source = extractFileName(firstStringValue(readerConfig.get("path")));
+        }
+        if (!StringUtils.hasText(source)) {
+            source = normalizeText(readerConfig.get("sourceSystem"));
+        }
+        return StringUtils.hasText(source) ? source : "unknown";
+    }
+
+    private String extractFileName(String value) {
+        String normalized = normalizeText(value);
+        if (!StringUtils.hasText(normalized)) {
+            return null;
+        }
+        int slash = Math.max(normalized.lastIndexOf('/'), normalized.lastIndexOf('\\'));
+        String filename = slash >= 0 && slash < normalized.length() - 1
+            ? normalized.substring(slash + 1)
+            : normalized;
+        return normalizeText(filename);
+    }
+
+    private String resolveImportTimeDefault(String writerType) {
+        String type = normalizeText(writerType);
+        String normalized = StringUtils.hasText(type) ? type.toLowerCase(Locale.ROOT) : "";
+        if (normalized.contains("postgres")) {
+            // Persist local Shanghai time in timestamp column (without timezone)
+            return "CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Shanghai'";
+        }
+        return "CURRENT_TIMESTAMP";
+    }
+
+    private String quoteSqlString(String value) {
+        String resolved = StringUtils.hasText(value) ? value : "unknown";
+        return "'" + resolved.replace("'", "''") + "'";
     }
 
     private String mapExtraColumnType(String type, Map<?, ?> colMap) {
@@ -2094,6 +2267,7 @@ public class AddaxJobService {
             return;
         }
         String writerSchema = resolveSchema(writerConfig);
+        List<String> configuredWriterTables = extractTables(writerConfig);
         List<TableMapping> mappings = parseTableMapping(tableMapping);
         if (!mappings.isEmpty()) {
             List<String> sourceTables = mappings.stream()
@@ -2108,6 +2282,20 @@ public class AddaxJobService {
                 setTables(readerConfig, sourceTables);
             }
             if (!targetTables.isEmpty()) {
+                String prefix = resolveTablePrefix(writerConfig);
+                if (!StringUtils.hasText(prefix)) {
+                    prefix = inferTablePrefixFromTargets(sourceTables, configuredWriterTables);
+                }
+                if (isSourceAlignedTables(sourceTables, targetTables)) {
+                    if (!configuredWriterTables.isEmpty() && !isSourceAlignedTables(sourceTables, configuredWriterTables)) {
+                        targetTables = configuredWriterTables;
+                    } else {
+                        final String resolvedPrefix = prefix;
+                        targetTables = sourceTables.stream()
+                            .map(source -> buildTargetTableName(source, resolvedPrefix))
+                            .toList();
+                    }
+                }
                 targetTables = resolveTargetTableNames(targetTables, writerSchema, writerType);
                 setTables(writerConfig, targetTables);
             }
@@ -2118,10 +2306,26 @@ public class AddaxJobService {
             return;
         }
         List<String> targetTables = extractTables(writerConfig);
+        if (!targetTables.isEmpty() && isSourceAlignedTables(sourceTables, targetTables)) {
+            String prefix = resolveTablePrefix(writerConfig);
+            if (!StringUtils.hasText(prefix)) {
+                prefix = inferTablePrefixFromTargets(sourceTables, configuredWriterTables);
+            }
+            if (StringUtils.hasText(prefix)) {
+                final String resolvedPrefix = prefix;
+                targetTables = sourceTables.stream()
+                    .map(source -> buildTargetTableName(source, resolvedPrefix))
+                    .toList();
+            }
+        }
         if (targetTables.isEmpty()) {
             String prefix = resolveTablePrefix(writerConfig);
+            if (!StringUtils.hasText(prefix)) {
+                prefix = inferTablePrefixFromTargets(sourceTables, configuredWriterTables);
+            }
+            final String resolvedPrefix = prefix;
             targetTables = sourceTables.stream()
-                .map(table -> StringUtils.hasText(prefix) ? prefix + table : table)
+                .map(table -> buildTargetTableName(table, resolvedPrefix))
                 .toList();
         }
         targetTables = resolveTargetTableNames(targetTables, writerSchema, writerType);
@@ -2164,6 +2368,81 @@ public class AddaxJobService {
             resolved.add(name);
         }
         return lowercaseTablesForPostgres(resolved, writerType);
+    }
+
+    private boolean isSourceAlignedTables(List<String> sourceTables, List<String> targetTables) {
+        if (sourceTables == null || targetTables == null || sourceTables.isEmpty() || targetTables.isEmpty()) {
+            return false;
+        }
+        if (sourceTables.size() != targetTables.size()) {
+            return false;
+        }
+        for (int i = 0; i < sourceTables.size(); i++) {
+            String source = normalizeText(sourceTables.get(i));
+            String target = normalizeText(targetTables.get(i));
+            if (!StringUtils.hasText(source) || !StringUtils.hasText(target)) {
+                return false;
+            }
+            if (source.equalsIgnoreCase(target)) {
+                continue;
+            }
+            if (!stripSchema(source).equalsIgnoreCase(stripSchema(target))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private String buildTargetTableName(String sourceTable, String prefix) {
+        String base = stripSchema(sourceTable);
+        if (!StringUtils.hasText(base)) {
+            return base;
+        }
+        return StringUtils.hasText(prefix) ? prefix + base : base;
+    }
+
+    private String inferTablePrefixFromTargets(List<String> sourceTables, List<String> targetTables) {
+        if (sourceTables == null || targetTables == null || sourceTables.isEmpty() || targetTables.isEmpty()) {
+            return null;
+        }
+        int size = Math.min(sourceTables.size(), targetTables.size());
+        String inferred = null;
+        for (int i = 0; i < size; i++) {
+            String sourceBase = stripSchema(sourceTables.get(i));
+            String targetBase = stripSchema(targetTables.get(i));
+            if (!StringUtils.hasText(sourceBase) || !StringUtils.hasText(targetBase)) {
+                continue;
+            }
+            String sourceLower = sourceBase.toLowerCase(Locale.ROOT);
+            String targetLower = targetBase.toLowerCase(Locale.ROOT);
+            if (!targetLower.endsWith(sourceLower)) {
+                continue;
+            }
+            String candidate = targetBase.substring(0, targetBase.length() - sourceBase.length());
+            if (!StringUtils.hasText(candidate)) {
+                continue;
+            }
+            if (inferred == null) {
+                inferred = candidate;
+                continue;
+            }
+            if (!inferred.equals(candidate)) {
+                return null;
+            }
+        }
+        return inferred;
+    }
+
+    private String stripSchema(String table) {
+        String normalized = normalizeText(table);
+        if (!StringUtils.hasText(normalized)) {
+            return normalized;
+        }
+        int idx = normalized.lastIndexOf('.');
+        if (idx > -1 && idx < normalized.length() - 1) {
+            return normalized.substring(idx + 1);
+        }
+        return normalized;
     }
 
     private List<TableMapping> parseTableMapping(JsonNode node) {

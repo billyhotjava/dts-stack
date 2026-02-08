@@ -4,5 +4,7 @@
   "profilesDir" : "/opt/dts/dbt-profiles",
   "profileName" : "dts",
   "targetName" : "dev",
-  "targetDataSourceId" : "6d1be5dc-5f0b-4f82-bb98-16dcf9a47094"
+  "targetDataSourceId" : "6d1be5dc-5f0b-4f82-bb98-16dcf9a47094",
+  "database" : "biadmin",
+  "schema" : "public"
 }

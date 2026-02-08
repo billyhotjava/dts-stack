@@ -328,10 +328,10 @@ prepare_data_dirs(){
     mkdir -p "${dir}"
   done
   if [[ "${ENABLE_MINIO:-false}" == "true" ]]; then
-    chmod -R 777 services/dts-minio/data || true
+    chmod -R 777 services/dts-minio/data 2>/dev/null || true
   fi
   if [[ -d "logs/airflow" ]]; then
-    chmod -R 777 logs/airflow || true
+    chmod -R 777 logs/airflow 2>/dev/null || true
     if command -v getenforce >/dev/null 2>&1; then
       if [[ "$(getenforce 2>/dev/null || true)" != "Disabled" ]]; then
         if command -v chcon >/dev/null 2>&1; then
@@ -355,7 +355,7 @@ prepare_data_dirs(){
   )
   for dir in "${log_dirs[@]}"; do
     if [[ -d "${dir}" ]]; then
-      chmod -R 777 "${dir}" || true
+      chmod -R 777 "${dir}" 2>/dev/null || true
       if command -v getenforce >/dev/null 2>&1; then
         if [[ "$(getenforce 2>/dev/null || true)" != "Disabled" ]]; then
           if command -v chcon >/dev/null 2>&1; then
@@ -366,7 +366,7 @@ prepare_data_dirs(){
     fi
   done
   if [[ -d "services/dts-airflow/dags" ]]; then
-    chmod -R 777 services/dts-airflow/dags || true
+    chmod -R 777 services/dts-airflow/dags 2>/dev/null || true
     if command -v getenforce >/dev/null 2>&1; then
       if [[ "$(getenforce 2>/dev/null || true)" != "Disabled" ]]; then
         if command -v chcon >/dev/null 2>&1; then
@@ -377,8 +377,8 @@ prepare_data_dirs(){
   fi
   # Ensure JDBC driver jars are readable by non-root container users (e.g. airflow).
   if [[ -d "services/dts-platform/drivers" ]]; then
-    chmod 755 services/dts-platform/drivers
-    chmod -R a+rX services/dts-platform/drivers || true
+    chmod 755 services/dts-platform/drivers 2>/dev/null || true
+    chmod -R a+rX services/dts-platform/drivers 2>/dev/null || true
     if command -v getenforce >/dev/null 2>&1; then
       if [[ "$(getenforce 2>/dev/null || true)" != "Disabled" ]]; then
         if command -v chcon >/dev/null 2>&1; then
@@ -729,6 +729,7 @@ generate_env_base(){
 
   # ---------- Addax ----------
   : "${IMAGE_ADDAX:=dts-addax:6.0.8}"
+  : "${ADDAX_DOCKER_NETWORK:=dts-core}"
 
   # Airflow
   : "${PG_DB_AIRFLOW:=airflow}"
@@ -1086,6 +1087,7 @@ DTS_DBT_PROFILES_DIR=${DTS_DBT_PROFILES_DIR}
 DTS_DBT_CONFIG_PATH=${DTS_DBT_CONFIG_PATH}
 DOCKER_GID=${DOCKER_GID}
 IMAGE_ADDAX=${IMAGE_ADDAX}
+ADDAX_DOCKER_NETWORK=${ADDAX_DOCKER_NETWORK}
 
 # ====== Airflow ======
 AIRFLOW_WEBSERVER_PORT=${AIRFLOW_WEBSERVER_PORT}

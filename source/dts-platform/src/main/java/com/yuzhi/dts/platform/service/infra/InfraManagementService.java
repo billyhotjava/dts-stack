@@ -41,6 +41,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import com.yuzhi.dts.common.audit.AuditStage;
@@ -83,6 +84,7 @@ public class InfraManagementService {
     private static final String TYPE_INCEPTOR = "INCEPTOR";
     private static final String TYPE_POSTGRES = "POSTGRES";
     private static final String STATUS_ACTIVE = "ACTIVE";
+    private static final String SOURCE_ADMIN_DATA_LAKE = "admin-data-lake";
     private static final String DEFAULT_FILE_SCHEMA = "ods";
     private static final String DATASET_TYPE_FILE = "file";
     private static final String SETTINGS_KEY_CATALOG_SYNC = "catalogSyncOnDataSource";
@@ -187,37 +189,7 @@ public class InfraManagementService {
                     return;
                 }
             }
-            Map<String, Object> props = new LinkedHashMap<>();
-            props.put("source", "admin-data-lake");
-            props.put("defaulted", Boolean.TRUE.equals(lake.getDefaulted()));
-            if (StringUtils.hasText(lake.getEngineVersion())) {
-                props.put("engineVersion", lake.getEngineVersion());
-            }
-            if (StringUtils.hasText(lake.getDriverVersion())) {
-                props.put("driverVersion", lake.getDriverVersion());
-            }
-            InfraDataSourceDto dto = new InfraDataSourceDto(
-                lake.getId(),
-                StringUtils.hasText(lake.getName()) ? lake.getName() : "默认数据湖",
-                StringUtils.hasText(lake.getType()) ? lake.getType() : "DATA_LAKE",
-                lake.getJdbcUrl(),
-                lake.getUsername(),
-                StringUtils.hasText(lake.getDescription()) ? lake.getDescription() : "由管理员在系统管理中配置的默认数据湖",
-                null,
-                props,
-                null,
-                null,
-                lake.getLastVerifiedAt(),
-                StringUtils.hasText(lake.getStatus()) ? lake.getStatus() : STATUS_ACTIVE,
-                StringUtils.hasText(lake.getPassword()),
-                lake.getEngineVersion(),
-                lake.getDriverVersion(),
-                lake.getLastTestElapsedMillis(),
-                lake.getLastHeartbeatAt(),
-                lake.getHeartbeatStatus(),
-                lake.getHeartbeatFailureCount(),
-                lake.getLastError()
-            );
+            InfraDataSourceDto dto = toDto(lake);
             result.add(0, dto);
         } catch (Exception ex) {
             LOG.debug("Failed to merge admin data lake into data source list: {}", ex.getMessage());
@@ -357,29 +329,39 @@ public class InfraManagementService {
 
     @Transactional(readOnly = true)
     public InfraDataSourceDto getDataSource(UUID id, String activeDeptHeader) {
-        InfraDataSource entity = dataSourceRepository.findById(id).orElseThrow(EntityNotFoundException::new);
-        ensureDeptScopeReadable(entity, activeDeptHeader);
-        return toDto(entity);
+        InfraDataSource entity = dataSourceRepository.findById(id).orElse(null);
+        if (entity != null) {
+            ensureDeptScopeReadable(entity, activeDeptHeader);
+            return toDto(entity);
+        }
+        return findAdminDataLakeById(id)
+            .map(this::toDto)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "数据源不存在: " + id));
     }
 
     @Transactional(readOnly = true)
     public com.yuzhi.dts.platform.service.infra.dto.InfraDataSourceDetailDto getDataSourceDetail(UUID id) {
-        InfraDataSource entity = dataSourceRepository.findById(id).orElseThrow(EntityNotFoundException::new);
-        Map<String, Object> secrets = secretService.readSecrets(entity);
-        Map<String, Object> props = readProps(entity.getProps());
-        return new com.yuzhi.dts.platform.service.infra.dto.InfraDataSourceDetailDto(
-            entity.getId(),
-            entity.getName(),
-            entity.getType(),
-            entity.getJdbcUrl(),
-            entity.getUsername(),
-            entity.getDescription(),
-            entity.getOwnerDept(),
-            props,
-            secrets,
-            entity.getStatus(),
-            entity.getLastVerifiedAt()
-        );
+        InfraDataSource entity = dataSourceRepository.findById(id).orElse(null);
+        if (entity != null) {
+            Map<String, Object> secrets = secretService.readSecrets(entity);
+            Map<String, Object> props = readProps(entity.getProps());
+            return new com.yuzhi.dts.platform.service.infra.dto.InfraDataSourceDetailDto(
+                entity.getId(),
+                entity.getName(),
+                entity.getType(),
+                entity.getJdbcUrl(),
+                entity.getUsername(),
+                entity.getDescription(),
+                entity.getOwnerDept(),
+                props,
+                secrets,
+                entity.getStatus(),
+                entity.getLastVerifiedAt()
+            );
+        }
+        return findAdminDataLakeById(id)
+            .map(this::toDetailDto)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "数据源不存在: " + id));
     }
 
     @Transactional
@@ -1191,6 +1173,82 @@ public class InfraManagementService {
             null,
             null
         );
+    }
+
+    private InfraDataSourceDto toDto(AdminInfraClient.AdminDataLakeConfig lake) {
+        Map<String, Object> props = new LinkedHashMap<>();
+        props.put("source", SOURCE_ADMIN_DATA_LAKE);
+        props.put("defaulted", Boolean.TRUE.equals(lake.getDefaulted()));
+        if (lake.getJdbcProperties() != null && !lake.getJdbcProperties().isEmpty()) {
+            props.putAll(lake.getJdbcProperties());
+        }
+        if (StringUtils.hasText(lake.getEngineVersion())) {
+            props.put("engineVersion", lake.getEngineVersion());
+        }
+        if (StringUtils.hasText(lake.getDriverVersion())) {
+            props.put("driverVersion", lake.getDriverVersion());
+        }
+        return new InfraDataSourceDto(
+            lake.getId(),
+            StringUtils.hasText(lake.getName()) ? lake.getName() : "默认数据湖",
+            StringUtils.hasText(lake.getType()) ? lake.getType() : "DATA_LAKE",
+            lake.getJdbcUrl(),
+            lake.getUsername(),
+            StringUtils.hasText(lake.getDescription()) ? lake.getDescription() : "由管理员在系统管理中配置的默认数据湖",
+            null,
+            props,
+            null,
+            null,
+            lake.getLastVerifiedAt(),
+            StringUtils.hasText(lake.getStatus()) ? lake.getStatus() : STATUS_ACTIVE,
+            StringUtils.hasText(lake.getPassword()),
+            lake.getEngineVersion(),
+            lake.getDriverVersion(),
+            lake.getLastTestElapsedMillis(),
+            lake.getLastHeartbeatAt(),
+            lake.getHeartbeatStatus(),
+            lake.getHeartbeatFailureCount(),
+            lake.getLastError()
+        );
+    }
+
+    private com.yuzhi.dts.platform.service.infra.dto.InfraDataSourceDetailDto toDetailDto(AdminInfraClient.AdminDataLakeConfig lake) {
+        Map<String, Object> props = new LinkedHashMap<>();
+        props.put("source", SOURCE_ADMIN_DATA_LAKE);
+        props.put("defaulted", Boolean.TRUE.equals(lake.getDefaulted()));
+        if (lake.getJdbcProperties() != null && !lake.getJdbcProperties().isEmpty()) {
+            props.putAll(lake.getJdbcProperties());
+        }
+        if (StringUtils.hasText(lake.getEngineVersion())) {
+            props.put("engineVersion", lake.getEngineVersion());
+        }
+        if (StringUtils.hasText(lake.getDriverVersion())) {
+            props.put("driverVersion", lake.getDriverVersion());
+        }
+        Map<String, Object> secrets = new LinkedHashMap<>();
+        if (StringUtils.hasText(lake.getPassword())) {
+            secrets.put("password", lake.getPassword());
+        }
+        return new com.yuzhi.dts.platform.service.infra.dto.InfraDataSourceDetailDto(
+            lake.getId(),
+            StringUtils.hasText(lake.getName()) ? lake.getName() : "默认数据湖",
+            StringUtils.hasText(lake.getType()) ? lake.getType() : "DATA_LAKE",
+            lake.getJdbcUrl(),
+            lake.getUsername(),
+            StringUtils.hasText(lake.getDescription()) ? lake.getDescription() : "由管理员在系统管理中配置的默认数据湖",
+            null,
+            props,
+            secrets,
+            StringUtils.hasText(lake.getStatus()) ? lake.getStatus() : STATUS_ACTIVE,
+            lake.getLastVerifiedAt()
+        );
+    }
+
+    private Optional<AdminInfraClient.AdminDataLakeConfig> findAdminDataLakeById(UUID id) {
+        if (id == null) {
+            return Optional.empty();
+        }
+        return adminInfraClient.fetchDefaultDataLake().filter(lake -> id.equals(lake.getId()));
     }
 
     private InfraDataStorageDto toDto(InfraDataStorage entity) {

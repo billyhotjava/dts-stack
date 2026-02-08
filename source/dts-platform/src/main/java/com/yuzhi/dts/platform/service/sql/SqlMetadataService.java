@@ -2,6 +2,7 @@ package com.yuzhi.dts.platform.service.sql;
 
 import com.yuzhi.dts.platform.domain.service.InfraDataSource;
 import com.yuzhi.dts.platform.repository.service.InfraDataSourceRepository;
+import com.yuzhi.dts.platform.service.infra.AdminInfraClient;
 import com.yuzhi.dts.platform.service.infra.InfraSecretService;
 import com.yuzhi.dts.platform.service.sql.dto.TableInfo;
 import java.sql.Connection;
@@ -31,31 +32,26 @@ public class SqlMetadataService {
 
     private final InfraDataSourceRepository dataSourceRepository;
     private final InfraSecretService secretService;
+    private final AdminInfraClient adminInfraClient;
 
     public SqlMetadataService(
         InfraDataSourceRepository dataSourceRepository,
-        InfraSecretService secretService
+        InfraSecretService secretService,
+        AdminInfraClient adminInfraClient
     ) {
         this.dataSourceRepository = dataSourceRepository;
         this.secretService = secretService;
+        this.adminInfraClient = adminInfraClient;
     }
 
     /**
      * 列出数据源中的所有表
      */
     public List<TableInfo> listTables(UUID datasourceId) {
-        InfraDataSource ds = dataSourceRepository.findById(datasourceId)
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "数据源不存在"));
-
-        if (!StringUtils.hasText(ds.getJdbcUrl()) || !StringUtils.hasText(ds.getUsername())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "数据源配置不完整");
-        }
-
-        Map<String, Object> secrets = secretService.readSecrets(ds);
-        String password = secrets.get("password") != null ? secrets.get("password").toString() : null;
+        JdbcConnectionTarget target = resolveConnectionTarget(datasourceId);
 
         List<TableInfo> tables = new ArrayList<>();
-        try (Connection conn = DriverManager.getConnection(ds.getJdbcUrl(), ds.getUsername(), password)) {
+        try (Connection conn = DriverManager.getConnection(target.jdbcUrl(), target.username(), target.password())) {
             DatabaseMetaData meta = conn.getMetaData();
 
             // 获取所有 schema
@@ -64,7 +60,7 @@ public class SqlMetadataService {
                 while (rs.next()) {
                     String schemaName = rs.getString("TABLE_SCHEM");
                     // 过滤系统 schema
-                    if (shouldIncludeSchema(schemaName, ds.getType())) {
+                    if (shouldIncludeSchema(schemaName, target.type())) {
                         schemas.add(schemaName);
                     }
                 }
@@ -84,7 +80,7 @@ public class SqlMetadataService {
                         String tableSchema = rs.getString("TABLE_SCHEM");
 
                         // 过滤系统表
-                        if (shouldIncludeTable(tableName, tableSchema, ds.getType())) {
+                        if (shouldIncludeTable(tableName, tableSchema, target.type())) {
                             tables.add(new TableInfo(
                                 tableSchema != null ? tableSchema : "public",
                                 tableName,
@@ -96,9 +92,9 @@ public class SqlMetadataService {
                 }
             }
 
-            LOG.debug("Listed {} tables from datasource {}", tables.size(), ds.getName());
+            LOG.debug("Listed {} tables from datasource {}", tables.size(), target.name());
         } catch (SQLException ex) {
-            LOG.error("Failed to list tables from datasource {}: {}", ds.getName(), ex.getMessage());
+            LOG.error("Failed to list tables from datasource {}: {}", target.name(), ex.getMessage());
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "获取表列表失败: " + ex.getMessage());
         }
 
@@ -109,18 +105,10 @@ public class SqlMetadataService {
      * 列出表的列信息
      */
     public List<Map<String, String>> listColumns(UUID datasourceId, String schema, String tableName) {
-        InfraDataSource ds = dataSourceRepository.findById(datasourceId)
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "数据源不存在"));
-
-        if (!StringUtils.hasText(ds.getJdbcUrl()) || !StringUtils.hasText(ds.getUsername())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "数据源配置不完整");
-        }
-
-        Map<String, Object> secrets = secretService.readSecrets(ds);
-        String password = secrets.get("password") != null ? secrets.get("password").toString() : null;
+        JdbcConnectionTarget target = resolveConnectionTarget(datasourceId);
 
         List<Map<String, String>> columns = new ArrayList<>();
-        try (Connection conn = DriverManager.getConnection(ds.getJdbcUrl(), ds.getUsername(), password)) {
+        try (Connection conn = DriverManager.getConnection(target.jdbcUrl(), target.username(), target.password())) {
             DatabaseMetaData meta = conn.getMetaData();
             try (ResultSet rs = meta.getColumns(null, schema, tableName, "%")) {
                 while (rs.next()) {
@@ -138,6 +126,36 @@ public class SqlMetadataService {
 
         return columns;
     }
+
+    private JdbcConnectionTarget resolveConnectionTarget(UUID datasourceId) {
+        InfraDataSource local = dataSourceRepository.findById(datasourceId).orElse(null);
+        if (local != null) {
+            if (!StringUtils.hasText(local.getJdbcUrl()) || !StringUtils.hasText(local.getUsername())) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "数据源配置不完整");
+            }
+            Map<String, Object> secrets = secretService.readSecrets(local);
+            String password = secrets.get("password") != null ? secrets.get("password").toString() : null;
+            return new JdbcConnectionTarget(local.getName(), local.getType(), local.getJdbcUrl(), local.getUsername(), password);
+        }
+
+        AdminInfraClient.AdminDataLakeConfig lake = adminInfraClient
+            .fetchDefaultDataLake()
+            .filter(cfg -> cfg.getId() != null && cfg.getId().equals(datasourceId))
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "数据源不存在"));
+
+        if (!StringUtils.hasText(lake.getJdbcUrl()) || !StringUtils.hasText(lake.getUsername())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "数据源配置不完整");
+        }
+        return new JdbcConnectionTarget(
+            lake.getName(),
+            lake.getType(),
+            lake.getJdbcUrl(),
+            lake.getUsername(),
+            StringUtils.hasText(lake.getPassword()) ? lake.getPassword() : null
+        );
+    }
+
+    private record JdbcConnectionTarget(String name, String type, String jdbcUrl, String username, String password) {}
 
     private boolean shouldIncludeSchema(String schemaName, String dbType) {
         if (schemaName == null) {

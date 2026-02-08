@@ -420,6 +420,7 @@ public class AirflowDagService {
             ADDAX_IMAGE = os.getenv("ADDAX_IMAGE", "%s")
             ADDAX_JOB_DIR = os.getenv("ADDAX_JOB_DIR", "%s")
             ADDAX_LOG_DIR = os.getenv("ADDAX_LOG_DIR", "/opt/dts/logs/addax")
+            ADDAX_DOCKER_NETWORK = os.getenv("ADDAX_DOCKER_NETWORK", "dts-core")
             ADDAX_DRIVER_DIR = os.getenv("ADDAX_DRIVER_DIR", "")
             ADDAX_DRIVER_JARS = os.getenv("ADDAX_DRIVER_JARS", "")
             DEFAULT_JOB_PATH = os.getenv("ADDAX_JOB_DEFAULT", "%s")
@@ -459,7 +460,7 @@ public class AirflowDagService {
                 is_paused_upon_creation=False,
                 tags=["addax", "etl", "ods", "%s", "%s"],
             ) as dag:
-                run_cmd = ["bash", "-lc", "exec /opt/addax/bin/addax.sh {{ dag_run.conf.get('job_path', '%s') }}"]
+                run_cmd = "{{ dag_run.conf.get('job_path', '%s') }}"
             %s
                 addax_run = DockerOperator(
                     task_id="%s",
@@ -467,7 +468,9 @@ public class AirflowDagService {
                     api_version="auto",
                     auto_remove=True,
                     docker_url="unix://var/run/docker.sock",
+                    entrypoint="/opt/addax/bin/addax.sh",
                     command=run_cmd,
+                    network_mode=ADDAX_DOCKER_NETWORK,
                     mount_tmp_dir=False,
                     mounts=[
                         Mount(source=ADDAX_JOB_DIR, target="/opt/addax/jobs", type="bind"),
@@ -475,7 +478,7 @@ public class AirflowDagService {
                         *build_driver_mounts(),
                     ],
                     environment={},
-                    tty=True,
+                    tty=False,
                 )
             %s
             """.formatted(extraImports, addaxImage, addaxJobDir, defaultJobPath,
@@ -505,6 +508,7 @@ public class AirflowDagService {
         sb.append(String.format("ADDAX_IMAGE = os.getenv(\"ADDAX_IMAGE\", \"%s\")\n", addaxImage));
         sb.append(String.format("ADDAX_JOB_DIR = os.getenv(\"ADDAX_JOB_DIR\", \"%s\")\n", addaxJobDir));
         sb.append("ADDAX_LOG_DIR = os.getenv(\"ADDAX_LOG_DIR\", \"/opt/dts/logs/addax\")\n");
+        sb.append("ADDAX_DOCKER_NETWORK = os.getenv(\"ADDAX_DOCKER_NETWORK\", \"dts-core\")\n");
         sb.append("ADDAX_DRIVER_DIR = os.getenv(\"ADDAX_DRIVER_DIR\", \"\")\n");
         sb.append("ADDAX_DRIVER_JARS = os.getenv(\"ADDAX_DRIVER_JARS\", \"\")\n\n\n");
         sb.append("def build_driver_mounts():\n");
@@ -559,7 +563,9 @@ public class AirflowDagService {
             sb.append("        api_version=\"auto\",\n");
             sb.append("        auto_remove=True,\n");
             sb.append("        docker_url=\"unix://var/run/docker.sock\",\n");
-            sb.append(String.format("        command=[\"bash\", \"-lc\", \"exec /opt/addax/bin/addax.sh %s\"],\n", jobPath));
+            sb.append("        entrypoint=\"/opt/addax/bin/addax.sh\",\n");
+            sb.append(String.format("        command=\"%s\",\n", jobPath));
+            sb.append("        network_mode=ADDAX_DOCKER_NETWORK,\n");
             sb.append("        mount_tmp_dir=False,\n");
             sb.append("        mounts=[\n");
         sb.append("            Mount(source=ADDAX_JOB_DIR, target=\"/opt/addax/jobs\", type=\"bind\"),\n");
@@ -567,7 +573,7 @@ public class AirflowDagService {
             sb.append("            *build_driver_mounts(),\n");
             sb.append("        ],\n");
             sb.append("        environment={},\n");
-            sb.append("        tty=True,\n");
+            sb.append("        tty=False,\n");
             sb.append("    )\n\n");
         }
 

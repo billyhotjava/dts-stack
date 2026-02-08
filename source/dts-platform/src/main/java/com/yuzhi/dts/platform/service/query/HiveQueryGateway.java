@@ -3,6 +3,7 @@ package com.yuzhi.dts.platform.service.query;
 import com.yuzhi.dts.platform.config.CatalogFeatureProperties;
 import com.yuzhi.dts.platform.domain.service.InfraDataSource;
 import com.yuzhi.dts.platform.repository.service.InfraDataSourceRepository;
+import com.yuzhi.dts.platform.service.infra.AdminInfraClient;
 import com.yuzhi.dts.platform.service.infra.HiveConnectionService;
 import com.yuzhi.dts.platform.service.infra.InceptorDataSourceRegistry;
 import com.yuzhi.dts.platform.service.infra.InceptorDataSourceRegistry.InceptorDataSourceState;
@@ -48,6 +49,7 @@ public class HiveQueryGateway implements QueryGateway {
     private final CatalogFeatureProperties catalogFeatureProperties;
     private final InfraDataSourceRepository infraDataSourceRepository;
     private final InfraSecretService infraSecretService;
+    private final AdminInfraClient adminInfraClient;
 
     public HiveQueryGateway(
         HiveConnectionService connectionService,
@@ -56,7 +58,8 @@ public class HiveQueryGateway implements QueryGateway {
         DataSource dataSource,
         CatalogFeatureProperties catalogFeatureProperties,
         InfraDataSourceRepository infraDataSourceRepository,
-        InfraSecretService infraSecretService
+        InfraSecretService infraSecretService,
+        AdminInfraClient adminInfraClient
     ) {
         this.connectionService = connectionService;
         this.registry = registry;
@@ -65,6 +68,7 @@ public class HiveQueryGateway implements QueryGateway {
         this.catalogFeatureProperties = catalogFeatureProperties;
         this.infraDataSourceRepository = infraDataSourceRepository;
         this.infraSecretService = infraSecretService;
+        this.adminInfraClient = adminInfraClient;
     }
 
     @Override
@@ -147,7 +151,8 @@ public class HiveQueryGateway implements QueryGateway {
         }
 
         // 尝试根据 ID 查找数据源
-        return infraDataSourceRepository.findById(datasourceId)
+        return infraDataSourceRepository
+            .findById(datasourceId)
             .filter(ds -> StringUtils.hasText(ds.getJdbcUrl()) && StringUtils.hasText(ds.getUsername()))
             .map(ds -> {
                 Map<String, Object> secrets = infraSecretService.readSecrets(ds);
@@ -155,6 +160,21 @@ public class HiveQueryGateway implements QueryGateway {
                 return executeWithJdbcConnection(effectiveSql, ds.getJdbcUrl(), ds.getUsername(), password, ds.getName());
             })
             .orElseGet(() -> {
+                Optional<AdminInfraClient.AdminDataLakeConfig> adminDataLake = adminInfraClient
+                    .fetchDefaultDataLake()
+                    .filter(lake -> lake.getId() != null && lake.getId().equals(datasourceId))
+                    .filter(lake -> StringUtils.hasText(lake.getJdbcUrl()) && StringUtils.hasText(lake.getUsername()));
+                if (adminDataLake.isPresent()) {
+                    AdminInfraClient.AdminDataLakeConfig lake = adminDataLake.get();
+                    LOG.info("Using admin managed default data lake for datasource {}", datasourceId);
+                    return executeWithJdbcConnection(
+                        effectiveSql,
+                        lake.getJdbcUrl(),
+                        lake.getUsername(),
+                        lake.getPassword(),
+                        lake.getName()
+                    );
+                }
                 LOG.warn("Datasource not found or incomplete: {}, falling back to default execution", datasourceId);
                 return execute(effectiveSql);
             });

@@ -170,6 +170,7 @@ public class IngestionTaskResource {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "任务名称不能为空");
             }
             boolean isDraft = Boolean.TRUE.equals(request.draft());
+            boolean runNow = Boolean.TRUE.equals(request.runNow());
             if (request.source() == null) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "缺少源端配置");
             }
@@ -229,6 +230,8 @@ public class IngestionTaskResource {
                 writerConfig,
                 List.of("writerType", "writer", "type")
             );
+            String syncPrefix = request.sync() == null ? null : normalize(request.sync().prefix());
+            applySyncPrefixToWriterConfig(writerConfig, syncPrefix);
 
             if (isDraft) {
                 AirflowAdapter.AirflowRequest airflowRequest = buildAirflowRequest(request.airflow());
@@ -252,6 +255,7 @@ public class IngestionTaskResource {
                 }
                 taskDTO.setSyncMode(resolveSyncMode(request.sync()));
                 taskDTO.setSyncSchedule(resolveSyncSchedule(request.sync()));
+                taskDTO.setSyncPrefix(syncPrefix);
                 taskDTO.setAddaxConfig(toJsonNode(request.jobConfig()));
                 taskDTO.setAirflowEnabled(airflowRequest == null ? null : airflowRequest.enabled());
                 taskDTO.setAirflowDagId(airflowRequest == null ? null : normalize(airflowRequest.dagId()));
@@ -311,8 +315,15 @@ public class IngestionTaskResource {
             if (!streamTables.isEmpty()) {
                 applyTables(resolvedReaderConfig, streamTables);
                 applyTables(mergedReaderConfig, streamTables);
-                List<String> writerTables = stripSchemaTables(streamTables);
-                applyTables(writerConfig, writerTables);
+                List<String> requestedWriterTables = stripTablePlaceholders(extractTables(writerConfig));
+                String tablePrefix = syncPrefix;
+                if (!StringUtils.hasText(tablePrefix)) {
+                    tablePrefix = resolveTablePrefix(writerConfig);
+                }
+                if (requestedWriterTables.isEmpty() || isSourceAlignedTables(streamTables, requestedWriterTables)) {
+                    List<String> writerTables = applyPrefixToTables(stripSchemaTables(streamTables), tablePrefix);
+                    applyTables(writerConfig, writerTables);
+                }
             }
             Map<String, Object> readerConfig = safeMap(resolvedReaderConfig);
             if (!hasJobConfig) {
@@ -341,6 +352,7 @@ public class IngestionTaskResource {
             taskDTO.setDestinationConfig(toJsonNode(safeMap(writerConfig)));
             taskDTO.setSyncMode(resolveSyncMode(request.sync()));
             taskDTO.setSyncSchedule(resolveSyncSchedule(request.sync()));
+            taskDTO.setSyncPrefix(syncPrefix);
             taskDTO.setAddaxConfig(toJsonNode(request.jobConfig()));
             taskDTO.setAirflowEnabled(airflowRequest == null ? null : airflowRequest.enabled());
             taskDTO.setAirflowDagId(airflowRequest == null ? null : normalize(airflowRequest.dagId()));
@@ -401,39 +413,46 @@ public class IngestionTaskResource {
                     request.name(),
                     safeMap(writerConfig),
                     null,
-                    Boolean.TRUE.equals(request.runNow())
+                    runNow
                 )
             );
             if (ingestionResult != null && !ingestionResult.isEmpty()) {
                 result.put("openmetadataIngestion", ingestionResult);
             }
 
-            String airflowJobPath = addaxJobService.toContainerJobPath(jobPath);
-            Map<String, Object> airflowConf = new LinkedHashMap<>();
-            airflowConf.put("job_path", airflowJobPath);
-            airflowConf.put("job_name", jobName);
-            airflowConf.put("taskName", request.name());
-            airflowConf.put("taskId", createdTask.getId());
-            AirflowAdapter.AirflowRequest triggerRequest = airflowRequest;
-            if (airflowRequest != null
-                && Boolean.TRUE.equals(airflowRequest.enabled())
-                && !StringUtils.hasText(airflowRequest.dagId())
-                && StringUtils.hasText(createdTask.getAirflowDagId())) {
-                triggerRequest = new AirflowAdapter.AirflowRequest(
-                    airflowRequest.enabled(),
-                    createdTask.getAirflowDagId(),
-                    airflowRequest.scheduleType(),
-                    airflowRequest.cron(),
-                    airflowRequest.intervalMinutes()
+            if (runNow) {
+                com.yuzhi.dts.ingestion.service.dto.IngestionExecutionDTO execution = ingestionTaskService.execute(createdTask.getId());
+                if (execution != null) {
+                    result.put("execution", execution);
+                }
+            } else {
+                String airflowJobPath = addaxJobService.toContainerJobPath(jobPath);
+                Map<String, Object> airflowConf = new LinkedHashMap<>();
+                airflowConf.put("job_path", airflowJobPath);
+                airflowConf.put("job_name", jobName);
+                airflowConf.put("taskName", request.name());
+                airflowConf.put("taskId", createdTask.getId());
+                AirflowAdapter.AirflowRequest triggerRequest = airflowRequest;
+                if (airflowRequest != null
+                    && Boolean.TRUE.equals(airflowRequest.enabled())
+                    && !StringUtils.hasText(airflowRequest.dagId())
+                    && StringUtils.hasText(createdTask.getAirflowDagId())) {
+                    triggerRequest = new AirflowAdapter.AirflowRequest(
+                        airflowRequest.enabled(),
+                        createdTask.getAirflowDagId(),
+                        airflowRequest.scheduleType(),
+                        airflowRequest.cron(),
+                        airflowRequest.intervalMinutes()
+                    );
+                }
+                Map<String, Object> airflowResult = airflowAdapter.triggerIfRequested(
+                    triggerRequest,
+                    airflowConf,
+                    false
                 );
-            }
-            Map<String, Object> airflowResult = airflowAdapter.triggerIfRequested(
-                triggerRequest,
-                airflowConf,
-                Boolean.TRUE.equals(request.runNow())
-            );
-            if (airflowResult != null && !airflowResult.isEmpty()) {
-                result.put("airflow", airflowResult);
+                if (airflowResult != null && !airflowResult.isEmpty()) {
+                    result.put("airflow", airflowResult);
+                }
             }
 
             auditService.auditAction(
@@ -890,11 +909,30 @@ public class IngestionTaskResource {
                 computedTargets.add(StringUtils.hasText(prefixValue) ? prefixValue + base : base);
             }
             targets = computedTargets;
-        } else if (targets.size() == 1 && targets.get(0).contains("${table}")) {
-            String template = targets.get(0);
+        } else if (isSourceAlignedTables(sources, targets)) {
+            String prefix = sync == null ? null : normalize(sync.prefix());
+            if (!StringUtils.hasText(prefix)) {
+                prefix = resolveTablePrefix(writerConfig);
+            }
+            final String prefixValue = prefix;
             List<String> computedTargets = new java.util.ArrayList<>(sources.size());
             for (String source : sources) {
-                computedTargets.add(template.replace("${table}", stripSchema(source)));
+                String base = stripSchema(source);
+                computedTargets.add(StringUtils.hasText(prefixValue) ? prefixValue + base : base);
+            }
+            targets = computedTargets;
+        } else if (targets.size() == 1 && hasTablePlaceholder(targets.get(0))) {
+            String template = targets.get(0);
+            String prefix = sync == null ? null : normalize(sync.prefix());
+            if (!StringUtils.hasText(prefix)) {
+                prefix = resolveTablePrefix(writerConfig);
+            }
+            final String prefixValue = prefix;
+            List<String> computedTargets = new java.util.ArrayList<>(sources.size());
+            for (String source : sources) {
+                String base = stripSchema(source);
+                String tableName = StringUtils.hasText(prefixValue) ? prefixValue + base : base;
+                computedTargets.add(replaceTablePlaceholder(template, tableName));
             }
             targets = computedTargets;
         }
@@ -950,6 +988,22 @@ public class IngestionTaskResource {
         return cleaned.isEmpty() ? List.of() : cleaned;
     }
 
+    private List<String> applyPrefixToTables(List<String> tables, String prefix) {
+        if (tables == null || tables.isEmpty()) {
+            return List.of();
+        }
+        String normalizedPrefix = normalize(prefix);
+        java.util.List<String> resolved = new java.util.ArrayList<>(tables.size());
+        for (String table : tables) {
+            String base = stripSchema(table);
+            if (!StringUtils.hasText(base)) {
+                continue;
+            }
+            resolved.add(StringUtils.hasText(normalizedPrefix) ? normalizedPrefix + base : base);
+        }
+        return resolved.isEmpty() ? List.of() : resolved;
+    }
+
     private List<String> stripTablePlaceholders(List<String> tables) {
         if (tables == null || tables.isEmpty()) {
             return List.of();
@@ -960,13 +1014,30 @@ public class IngestionTaskResource {
             if (!StringUtils.hasText(normalized)) {
                 continue;
             }
-            String lower = normalized.toLowerCase(java.util.Locale.ROOT);
-            if ("${table}".equals(lower) || "{table}".equals(lower) || "{{table}}".equals(lower)) {
+            if (hasTablePlaceholder(normalized)) {
                 continue;
             }
             cleaned.add(normalized);
         }
         return cleaned.isEmpty() ? List.of() : cleaned;
+    }
+
+    private boolean hasTablePlaceholder(String tableValue) {
+        String normalized = normalize(tableValue);
+        if (!StringUtils.hasText(normalized)) {
+            return false;
+        }
+        String lower = normalized.toLowerCase(java.util.Locale.ROOT);
+        return lower.contains("${table}") || lower.contains("{table}") || lower.contains("{{table}}");
+    }
+
+    private String replaceTablePlaceholder(String template, String tableName) {
+        String resolvedTemplate = StringUtils.hasText(template) ? template : "${table}";
+        String resolvedTable = StringUtils.hasText(tableName) ? tableName : "table";
+        return resolvedTemplate
+            .replace("${table}", resolvedTable)
+            .replace("{table}", resolvedTable)
+            .replace("{{table}}", resolvedTable);
     }
 
     private String stripSchema(String table) {
@@ -979,6 +1050,33 @@ public class IngestionTaskResource {
             return normalized.substring(idx + 1);
         }
         return normalized;
+    }
+
+    private boolean isSourceAlignedTables(List<String> sourceTables, List<String> writerTables) {
+        if (sourceTables == null || writerTables == null || sourceTables.isEmpty() || writerTables.isEmpty()) {
+            return false;
+        }
+        if (sourceTables.size() != writerTables.size()) {
+            return false;
+        }
+        for (int i = 0; i < sourceTables.size(); i++) {
+            String source = normalize(sourceTables.get(i));
+            String writer = normalize(writerTables.get(i));
+            if (!StringUtils.hasText(source) || !StringUtils.hasText(writer)) {
+                return false;
+            }
+            String sourceLower = source.toLowerCase(java.util.Locale.ROOT);
+            String writerLower = writer.toLowerCase(java.util.Locale.ROOT);
+            if (sourceLower.equals(writerLower)) {
+                continue;
+            }
+            String sourceBase = stripSchema(source).toLowerCase(java.util.Locale.ROOT);
+            String writerBase = stripSchema(writer).toLowerCase(java.util.Locale.ROOT);
+            if (!sourceBase.equals(writerBase)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     @SafeVarargs
@@ -1122,6 +1220,15 @@ public class IngestionTaskResource {
             return prefix;
         }
         return normalize(writerConfig.get("targetPrefix"));
+    }
+
+    private void applySyncPrefixToWriterConfig(Map<String, Object> writerConfig, String syncPrefix) {
+        if (writerConfig == null || writerConfig.isEmpty() || !StringUtils.hasText(syncPrefix)) {
+            return;
+        }
+        if (!StringUtils.hasText(normalize(writerConfig.get("tablePrefix")))) {
+            writerConfig.put("tablePrefix", syncPrefix);
+        }
     }
 
     private String resolveSyncMode(SyncSpec sync) {
@@ -1290,7 +1397,12 @@ public class IngestionTaskResource {
             List<String> selectionTables = mergeTables(extractTables(readerConfig), extractTables(writerConfig));
             if (!selectionTables.isEmpty()) {
                 applyTables(readerConfig, selectionTables);
-                applyTables(writerConfig, stripSchemaTables(selectionTables));
+                List<String> existingWriterTables = stripTablePlaceholders(extractTables(writerConfig));
+                String prefix = StringUtils.hasText(syncPrefix) ? syncPrefix : resolveTablePrefix(writerConfig);
+                if (existingWriterTables.isEmpty() || isSourceAlignedTables(selectionTables, existingWriterTables)) {
+                    List<String> writerTables = applyPrefixToTables(stripSchemaTables(selectionTables), prefix);
+                    applyTables(writerConfig, writerTables);
+                }
             }
             SyncSpec syncSpec = StringUtils.hasText(syncPrefix) ? new SyncSpec(null, null, null, null, syncPrefix) : null;
             List<Map<String, String>> tableMapping = deriveTableMapping(readerConfig, writerConfig, syncSpec);

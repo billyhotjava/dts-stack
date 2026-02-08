@@ -81,6 +81,8 @@ const isFileSource = (type?: string) => {
 	return normalized === "excel" || normalized === "csv";
 };
 
+const isAdminManagedSource = (source?: InfraDataSource | null) => source?.props?.source === "admin-data-lake";
+
 const parseJson = (value?: string) => {
 	const text = String(value || "").trim();
 	if (!text) return undefined;
@@ -212,6 +214,10 @@ export default function DataSourcesPage() {
 	};
 
 	const openEdit = (record: InfraDataSource) => {
+		if (isAdminManagedSource(record)) {
+			message.info("默认数据湖由系统管理端维护，平台侧不支持编辑");
+			return;
+		}
 		setEditing(record);
 		form.setFieldsValue({
 			name: record.name,
@@ -234,6 +240,10 @@ export default function DataSourcesPage() {
 	};
 
 	const handleDelete = (record: InfraDataSource) => {
+		if (isAdminManagedSource(record)) {
+			message.info("默认数据湖由系统管理端维护，平台侧不支持删除");
+			return;
+		}
 		Modal.confirm({
 			title: "确认删除",
 			content: `确定删除数据源 "${record.name}" 吗？`,
@@ -481,19 +491,22 @@ export default function DataSourcesPage() {
 				title: "操作",
 				key: "action",
 				width: 220,
-				render: (_: any, record: InfraDataSource) => (
-					<Space>
-						<Button size="small" icon={<ExperimentOutlined />} loading={testingId === record.id} onClick={() => handleTest(record)}>
-							测试
-						</Button>
-						<Button size="small" icon={<EditOutlined />} onClick={() => openEdit(record)}>
-							编辑
-						</Button>
-						<Button size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record)}>
-							删除
-						</Button>
-					</Space>
-				),
+				render: (_: any, record: InfraDataSource) => {
+					const adminManaged = isAdminManagedSource(record);
+					return (
+						<Space>
+							<Button size="small" icon={<ExperimentOutlined />} loading={testingId === record.id} onClick={() => handleTest(record)}>
+								测试
+							</Button>
+							<Button size="small" icon={<EditOutlined />} disabled={adminManaged} onClick={() => openEdit(record)}>
+								编辑
+							</Button>
+							<Button size="small" danger icon={<DeleteOutlined />} disabled={adminManaged} onClick={() => handleDelete(record)}>
+								删除
+							</Button>
+						</Space>
+					);
+				},
 			},
 		],
 		[testingId]

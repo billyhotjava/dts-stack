@@ -496,15 +496,32 @@ const shouldApplyWriterTables = (
 
 const applyPrefixToTables = (tables: string[], prefix?: string) => {
 	const normalizedPrefix = normalizeText(prefix);
-	if (!normalizedPrefix) return tables;
 	return tables
 		.map((table) => {
 			const normalized = normalizeText(table);
 			if (!normalized) return "";
 			const base = normalized.includes(".") ? normalized.split(".").pop() || normalized : normalized;
-			return `${normalizedPrefix}${base}`;
+			return normalizedPrefix ? `${normalizedPrefix}${base}` : base;
 		})
 		.filter(Boolean);
+};
+
+const stripSchemaFromTable = (table?: string) => {
+	const normalized = normalizeText(table);
+	if (!normalized) return "";
+	return normalized.includes(".") ? normalized.split(".").pop() || normalized : normalized;
+};
+
+const isSourceAlignedTables = (sourceTables: string[], writerTables: string[]) => {
+	if (!sourceTables.length || sourceTables.length !== writerTables.length) return false;
+	for (let i = 0; i < sourceTables.length; i += 1) {
+		const source = normalizeText(sourceTables[i]).toLowerCase();
+		const writer = normalizeText(writerTables[i]).toLowerCase();
+		if (!source || !writer) return false;
+		if (source === writer) continue;
+		if (stripSchemaFromTable(source) !== stripSchemaFromTable(writer)) return false;
+	}
+	return true;
 };
 
 const buildReaderConfig = (values: Record<string, any>) => {
@@ -584,6 +601,31 @@ const buildJobPreview = (values: Record<string, any>, editorMode?: string, reade
 		writerConfig = buildWriterConfig(values);
 	}
 	applyReaderTypeToConfig(readerConfig, readerType);
+	const selectedTables = mergeTableSelections(
+		values.selectedTables,
+		values.readerTables,
+		extractReaderTables(readerConfig),
+	);
+	if (selectedTables.length) {
+		readerConfig = applyTablesToConfig((readerConfig as Record<string, any>) ?? {}, selectedTables) ?? {};
+	}
+	const explicitWriterTables = splitLines(values.writerTables);
+	const normalizedExplicitWriterTables =
+		selectedTables.length && isSourceAlignedTables(selectedTables, explicitWriterTables)
+			? applyPrefixToTables(selectedTables, values.syncPrefix)
+			: explicitWriterTables;
+	const existingWriterTables = extractWriterTables(writerConfig);
+	const shouldDeriveWriterTables =
+		!normalizedExplicitWriterTables.length &&
+		(!existingWriterTables.length || isSourceAlignedTables(selectedTables, existingWriterTables));
+	const resolvedWriterTables = normalizedExplicitWriterTables.length
+		? normalizedExplicitWriterTables
+		: shouldDeriveWriterTables
+			? applyPrefixToTables(selectedTables, values.syncPrefix)
+			: existingWriterTables;
+	if (resolvedWriterTables.length) {
+		writerConfig = applyTablesToConfig((writerConfig as Record<string, any>) ?? {}, resolvedWriterTables) ?? {};
+	}
 
 	return {
 		job: {
@@ -1871,18 +1913,22 @@ export default function TransformCreatePage() {
 				if (!includeTables.length) {
 					throw new Error("请选择需要入湖的表");
 				}
-				readerConfig = applyTablesToConfig((readerConfig as Record<string, any>) ?? {}, includeTables) ?? {};
-				if (shouldApplyWriterTables((writerConfig as Record<string, any>) ?? {}, mergedValues)) {
-					const explicitWriterTables = mergeTableSelections(
-						splitLines(mergedValues.writerTables),
-						extractWriterTables(writerConfig as Record<string, any>)
-					);
-					const derivedWriterTables = explicitWriterTables.length
-						? explicitWriterTables
-						: applyPrefixToTables(includeTables, mergedValues.syncPrefix);
-					writerConfig = applyTablesToConfig((writerConfig as Record<string, any>) ?? {}, derivedWriterTables) ?? {};
+					readerConfig = applyTablesToConfig((readerConfig as Record<string, any>) ?? {}, includeTables) ?? {};
+					if (shouldApplyWriterTables((writerConfig as Record<string, any>) ?? {}, mergedValues)) {
+						const explicitWriterTables = splitLines(mergedValues.writerTables);
+						const normalizedExplicitWriterTables =
+							includeTables.length && isSourceAlignedTables(includeTables, explicitWriterTables)
+								? applyPrefixToTables(includeTables, mergedValues.syncPrefix)
+								: explicitWriterTables;
+						const existingWriterTables = extractWriterTables(writerConfig as Record<string, any>);
+						const derivedWriterTables = normalizedExplicitWriterTables.length
+							? normalizedExplicitWriterTables
+							: (!existingWriterTables.length || isSourceAlignedTables(includeTables, existingWriterTables))
+								? applyPrefixToTables(includeTables, mergedValues.syncPrefix)
+								: existingWriterTables;
+						writerConfig = applyTablesToConfig((writerConfig as Record<string, any>) ?? {}, derivedWriterTables) ?? {};
+					}
 				}
-			}
 			const excludeTables = selectionMode === "all" ? splitLines(mergedValues.tableExclude) : [];
 			if (writerConfig && selectionMode !== "all" && !hasTableEntries(extractWriterTables(writerConfig))) {
 				throw new Error("Writer 配置缺少目标表，请填写表清单");

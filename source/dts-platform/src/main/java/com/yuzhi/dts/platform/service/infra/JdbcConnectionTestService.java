@@ -18,6 +18,7 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -29,6 +30,7 @@ public class JdbcConnectionTestService {
 
     private static final Logger LOG = LoggerFactory.getLogger(JdbcConnectionTestService.class);
     private static final Set<String> REGISTERED_DRIVERS = ConcurrentHashMap.newKeySet();
+    private static final Pattern SEMVER_LIKE = Pattern.compile("^[0-9]+(?:\\.[0-9A-Za-z_-]+)*$");
 
     private final HiveConnectionService hiveConnectionService;
 
@@ -49,12 +51,16 @@ public class JdbcConnectionTestService {
 
         ClassLoader previousCl = Thread.currentThread().getContextClassLoader();
         ClassLoader jdbcLoader = null;
+        String loaderWarning = null;
+        String rawDriverHint = StringUtils.trimWhitespace(request.getDriverVersion());
+        String driverHint = normalizeDriverHint(rawDriverHint);
         try {
-            jdbcLoader = hiveConnectionService != null
-                ? hiveConnectionService.resolveJdbcDriverClassLoader(request.getDriverVersion())
-                : null;
+            jdbcLoader = hiveConnectionService != null ? hiveConnectionService.resolveJdbcDriverClassLoader(driverHint) : null;
         } catch (IllegalArgumentException ex) {
-            return HiveConnectionTestResult.failure(ex.getMessage(), elapsedMillis(start));
+            // For JDBC tests, treat unresolved external driver as a soft warning and keep trying with classpath/default drivers.
+            loaderWarning = ex.getMessage();
+            LOG.warn("JDBC test driver hint '{}' unresolved, fallback to default classpath: {}", rawDriverHint, ex.getMessage());
+            jdbcLoader = null;
         }
         if (jdbcLoader != null) {
             Thread.currentThread().setContextClassLoader(jdbcLoader);
@@ -102,12 +108,16 @@ public class JdbcConnectionTestService {
                 long connectMillis = elapsedMillis(connectStart);
                 DatabaseMetaData meta = connection.getMetaData();
                 runValidationQuery(connection, request.getTestQuery());
+                List<String> warnings = collectWarnings(connection.getWarnings());
+                if (StringUtils.hasText(loaderWarning)) {
+                    warnings.add("驱动提示已忽略并回退默认加载: " + loaderWarning);
+                }
                 return HiveConnectionTestResult.success(
                     "连接成功",
                     connectMillis,
                     safe(meta::getDatabaseProductVersion),
                     safe(meta::getDriverVersion),
-                    collectWarnings(connection.getWarnings())
+                    warnings
                 );
             }
         } catch (Exception ex) {
@@ -131,6 +141,22 @@ public class JdbcConnectionTestService {
             return "org.apache.hive.jdbc.HiveDriver";
         }
         return null;
+    }
+
+    private static String normalizeDriverHint(String rawHint) {
+        if (!StringUtils.hasText(rawHint)) {
+            return null;
+        }
+        String hint = rawHint.trim();
+        String lower = hint.toLowerCase(Locale.ROOT);
+        if (lower.endsWith(".jar")) {
+            return hint;
+        }
+        // Pure semantic versions like 42.7.5 are metadata, not concrete jar hints.
+        if (SEMVER_LIKE.matcher(hint).matches()) {
+            return null;
+        }
+        return hint;
     }
 
     private void registerDriverIfNeeded(Class<?> driverClazz) throws Exception {

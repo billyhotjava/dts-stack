@@ -309,15 +309,16 @@ public class TargetTableProvisioner {
         List<String> targets = extractTables(writerConfig);
         String prefix = resolveTablePrefix(writerConfig);
         if (targets.isEmpty()) {
-            targets = sources;
-            if (StringUtils.hasText(prefix)) {
-                targets = sources.stream()
-                    .map(source -> prefix + source)
-                    .toList();
-            }
+            targets = sources.stream()
+                .map(source -> buildTargetTableName(source, prefix))
+                .toList();
         } else if (targets.size() == 1 && targets.get(0).contains(TABLE_PLACEHOLDER)) {
             String template = targets.get(0);
             targets = sources.stream().map(src -> template.replace(TABLE_PLACEHOLDER, src)).toList();
+        } else if (isSourceAlignedTables(sources, targets) && StringUtils.hasText(prefix)) {
+            targets = sources.stream()
+                .map(source -> buildTargetTableName(source, prefix))
+                .toList();
         }
         int size = Math.min(sources.size(), targets.size());
         List<TableMapping> resolved = new ArrayList<>();
@@ -568,6 +569,49 @@ public class TargetTableProvisioner {
             return prefix;
         }
         return normalizeText(config.get("targetPrefix"));
+    }
+
+    private boolean isSourceAlignedTables(List<String> sourceTables, List<String> targetTables) {
+        if (sourceTables == null || targetTables == null || sourceTables.isEmpty() || targetTables.isEmpty()) {
+            return false;
+        }
+        if (sourceTables.size() != targetTables.size()) {
+            return false;
+        }
+        for (int i = 0; i < sourceTables.size(); i++) {
+            String source = normalizeText(sourceTables.get(i));
+            String target = normalizeText(targetTables.get(i));
+            if (!StringUtils.hasText(source) || !StringUtils.hasText(target)) {
+                return false;
+            }
+            if (source.equalsIgnoreCase(target)) {
+                continue;
+            }
+            if (!stripSchema(source).equalsIgnoreCase(stripSchema(target))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private String buildTargetTableName(String sourceTable, String prefix) {
+        String base = stripSchema(sourceTable);
+        if (!StringUtils.hasText(base)) {
+            return base;
+        }
+        return StringUtils.hasText(prefix) ? prefix + base : base;
+    }
+
+    private String stripSchema(String table) {
+        String normalized = normalizeText(table);
+        if (!StringUtils.hasText(normalized)) {
+            return normalized;
+        }
+        int idx = normalized.lastIndexOf('.');
+        if (idx > -1 && idx < normalized.length() - 1) {
+            return normalized.substring(idx + 1);
+        }
+        return normalized;
     }
 
     private boolean hasUppercaseColumns(Connection connection, TableId tableId) throws Exception {

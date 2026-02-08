@@ -5,10 +5,73 @@ sources:
     schema: "ods"
     tables:
       -
-        name: "col_1000"
-        description: "patent_testxls1: col_1000 -> ods.col_1000"
+        name: "CITY"
+        description: "dm8testtestst1: DMHR.CITY -> ods.CITY"
         meta:
           system: "unknown"
           biz: "unknown"
-          entity: "col_1000"
-          stream: "col_1000"
+          entity: "CITY"
+          stream: "CITY"
+          stream_namespace: "DMHR"
+      -
+        name: "DEPARTMENT"
+        description: "dm8testtestst1: DMHR.DEPARTMENT -> ods.DEPARTMENT"
+        meta:
+          system: "unknown"
+          biz: "unknown"
+          entity: "DEPARTMENT"
+          stream: "DEPARTMENT"
+          stream_namespace: "DMHR"
+      -
+        name: "EMPLOYEE"
+        description: "dm8testtestst1: DMHR.EMPLOYEE -> ods.EMPLOYEE"
+        meta:
+          system: "unknown"
+          biz: "unknown"
+          entity: "EMPLOYEE"
+          stream: "EMPLOYEE"
+          stream_namespace: "DMHR"
+      -
+        name: "JOB"
+        description: "dm8testtestst1: DMHR.JOB -> ods.JOB"
+        meta:
+          system: "unknown"
+          biz: "unknown"
+          entity: "JOB"
+          stream: "JOB"
+          stream_namespace: "DMHR"
+      -
+        name: "JOB_HISTORY"
+        description: "dm8testtestst1: DMHR.JOB_HISTORY -> ods.JOB_HISTORY"
+        meta:
+          system: "unknown"
+          biz: "unknown"
+          entity: "JOB_HISTORY"
+          stream: "JOB_HISTORY"
+          stream_namespace: "DMHR"
+      -
+        name: "LOCATION"
+        description: "dm8testtestst1: DMHR.LOCATION -> ods.LOCATION"
+        meta:
+          system: "unknown"
+          biz: "unknown"
+          entity: "LOCATION"
+          stream: "LOCATION"
+          stream_namespace: "DMHR"
+      -
+        name: "ods_patent_info"
+        description: "myfile1: patent_info -> ods.ods_patent_info"
+        meta:
+          system: "patent"
+          biz: "info"
+          entity: "unknown"
+          stream: "patent_info"
+      -
+        name: "REGION"
+        description: "dm8testtestst1: DMHR.REGION -> ods.REGION"
+        meta:
+          system: "unknown"
+          biz: "unknown"
+          entity: "REGION"
+          stream: "REGION"
+          stream_namespace: "DMHR"
