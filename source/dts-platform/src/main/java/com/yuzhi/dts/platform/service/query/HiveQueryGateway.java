@@ -159,25 +159,26 @@ public class HiveQueryGateway implements QueryGateway {
                 String password = secrets.get("password") != null ? secrets.get("password").toString() : null;
                 return executeWithJdbcConnection(effectiveSql, ds.getJdbcUrl(), ds.getUsername(), password, ds.getName());
             })
-            .orElseGet(() -> {
-                Optional<AdminInfraClient.AdminDataLakeConfig> adminDataLake = adminInfraClient
+            .orElseGet(() ->
+                adminInfraClient
                     .fetchDefaultDataLake()
                     .filter(lake -> lake.getId() != null && lake.getId().equals(datasourceId))
-                    .filter(lake -> StringUtils.hasText(lake.getJdbcUrl()) && StringUtils.hasText(lake.getUsername()));
-                if (adminDataLake.isPresent()) {
-                    AdminInfraClient.AdminDataLakeConfig lake = adminDataLake.get();
-                    LOG.info("Using admin managed default data lake for datasource {}", datasourceId);
-                    return executeWithJdbcConnection(
-                        effectiveSql,
-                        lake.getJdbcUrl(),
-                        lake.getUsername(),
-                        lake.getPassword(),
-                        lake.getName()
-                    );
-                }
-                LOG.warn("Datasource not found or incomplete: {}, falling back to default execution", datasourceId);
-                return execute(effectiveSql);
-            });
+                    .filter(lake -> StringUtils.hasText(lake.getJdbcUrl()) && StringUtils.hasText(lake.getUsername()))
+                    .map(lake -> {
+                        LOG.info("Using admin managed default data lake for datasource {}", datasourceId);
+                        return executeWithJdbcConnection(
+                            effectiveSql,
+                            lake.getJdbcUrl(),
+                            lake.getUsername(),
+                            lake.getPassword(),
+                            lake.getName()
+                        );
+                    })
+                    .orElseGet(() -> {
+                        LOG.warn("Datasource not found or incomplete: {}, falling back to default execution", datasourceId);
+                        return execute(effectiveSql);
+                    })
+            );
     }
 
     private Map<String, Object> executeWithPostgres(String effectiveSql) {
