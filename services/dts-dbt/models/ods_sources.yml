@@ -33,7 +33,7 @@ sources:
           stream_namespace: "ERPDEMO"
       -
         name: "ods_patent_info"
-        description: "myfile1: patent_info -> ods.ods_patent_info"
+        description: "testfil1: patent_info -> ods.ods_patent_info"
         meta:
           system: "patent"
           biz: "info"

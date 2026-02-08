@@ -244,25 +244,26 @@ GROUP BY application_year, COALESCE(NULLIF(dept_name, ''), '未知')
 
 - **层级**: ADS
 - **物化**: table
+- **说明**: 每年一行，含同比增长率（自动关联上一年）
 
 ```sql
-WITH this AS (
-  SELECT EXTRACT(YEAR FROM current_date)::int AS yr
-)
 SELECT
-  this.yr                                          AS stat_year,
-  COALESCE(k1.apply_cnt, 0)                       AS this_year_apply_cnt,
-  COALESCE(k0.apply_cnt, 0)                       AS last_year_apply_cnt,
+  k.stat_year,
+  k.apply_cnt,
+  k.accepted_cnt,
+  k.granted_cnt_app                                AS granted_cnt,
+  k.grant_rate_app                                 AS grant_rate,
+  COALESCE(k0.apply_cnt, 0)                       AS prev_year_apply_cnt,
   CASE WHEN COALESCE(k0.apply_cnt, 0) = 0 THEN 0
-       ELSE ROUND((COALESCE(k1.apply_cnt,0) - k0.apply_cnt)::numeric / k0.apply_cnt::numeric, 4)
-  END                                              AS yoy_growth_rate,
-  COALESCE(k1.accepted_cnt, 0)                    AS this_year_accepted_cnt,
-  COALESCE(k1.granted_cnt_app, 0)                 AS this_year_granted_cnt,
-  COALESCE(k1.grant_rate_app, 0)                  AS this_year_grant_rate
-FROM this
-LEFT JOIN {{ ref('dws_patent_year_kpi') }} k1 ON k1.stat_year = this.yr
-LEFT JOIN {{ ref('dws_patent_year_kpi') }} k0 ON k0.stat_year = this.yr - 1
+       ELSE ROUND((k.apply_cnt - k0.apply_cnt)::numeric / k0.apply_cnt::numeric, 4)
+  END                                              AS yoy_growth_rate
+FROM {{ ref('dws_patent_year_kpi') }} k
+LEFT JOIN {{ ref('dws_patent_year_kpi') }} k0
+  ON k0.stat_year = k.stat_year - 1
+ORDER BY k.stat_year
 ```
+
+> **查询示例**: `SELECT * FROM ads_patent_dashboard_kpi WHERE stat_year = 2025`
 
 ---
 
@@ -270,18 +271,21 @@ LEFT JOIN {{ ref('dws_patent_year_kpi') }} k0 ON k0.stat_year = this.yr - 1
 
 - **层级**: ADS
 - **物化**: table
+- **说明**: 每年每类型一行，share 按年内占比计算
 
 ```sql
 SELECT
   stat_year,
   patent_type,
   apply_cnt,
-  CASE WHEN SUM(apply_cnt) OVER () = 0 THEN 0
-       ELSE ROUND(apply_cnt::numeric / SUM(apply_cnt) OVER ()::numeric, 4)
+  CASE WHEN SUM(apply_cnt) OVER (PARTITION BY stat_year) = 0 THEN 0
+       ELSE ROUND(apply_cnt::numeric / SUM(apply_cnt) OVER (PARTITION BY stat_year)::numeric, 4)
   END AS share
 FROM {{ ref('dws_patent_year_type') }}
-WHERE stat_year = EXTRACT(YEAR FROM current_date)::int
+ORDER BY stat_year, apply_cnt DESC
 ```
+
+> **查询示例**: `SELECT * FROM ads_patent_type_share WHERE stat_year = 2025`
 
 ---
 
@@ -289,13 +293,15 @@ WHERE stat_year = EXTRACT(YEAR FROM current_date)::int
 
 - **层级**: ADS
 - **物化**: table
+- **说明**: 全量月度趋势，按年+月排序
 
 ```sql
 SELECT stat_year, stat_month, accepted_cnt, granted_cnt
 FROM {{ ref('dws_patent_month_trend') }}
-WHERE stat_year = EXTRACT(YEAR FROM current_date)::int
-ORDER BY stat_month
+ORDER BY stat_year, stat_month
 ```
+
+> **查询示例**: `SELECT * FROM ads_patent_month_trend WHERE stat_year = 2025`
 
 ---
 
@@ -303,18 +309,24 @@ ORDER BY stat_month
 
 - **层级**: ADS
 - **物化**: table
+- **说明**: 每年部门排名，按年分区取 TOP 20
 
 ```sql
-SELECT
-  stat_year,
-  dept_name,
-  apply_cnt,
-  ROW_NUMBER() OVER (ORDER BY apply_cnt DESC, dept_name) AS rank_no
-FROM {{ ref('dws_patent_year_dept') }}
-WHERE stat_year = EXTRACT(YEAR FROM current_date)::int
-ORDER BY apply_cnt DESC
-LIMIT 20
+WITH ranked AS (
+  SELECT
+    stat_year,
+    dept_name,
+    apply_cnt,
+    ROW_NUMBER() OVER (PARTITION BY stat_year ORDER BY apply_cnt DESC, dept_name) AS rank_no
+  FROM {{ ref('dws_patent_year_dept') }}
+)
+SELECT stat_year, dept_name, apply_cnt, rank_no
+FROM ranked
+WHERE rank_no <= 20
+ORDER BY stat_year, rank_no
 ```
+
+> **查询示例**: `SELECT * FROM ads_patent_dept_rank WHERE stat_year = 2025`
 
 ---
 
@@ -322,9 +334,11 @@ LIMIT 20
 
 - **层级**: ADS
 - **物化**: table
+- **说明**: 全量授权记录，按授权年+日期排序
 
 ```sql
 SELECT
+  grant_year,
   grant_date,
   patent_no,
   patent_title_cn,
@@ -332,10 +346,11 @@ SELECT
   dept_name,
   agent_org_name
 FROM {{ ref('dwd_patent') }}
-WHERE grant_date >= (current_date - INTERVAL '30 day')::date
+WHERE grant_date IS NOT NULL
 ORDER BY grant_date DESC NULLS LAST
-LIMIT 200
 ```
+
+> **查询示例**: `SELECT * FROM ads_patent_recent_grant WHERE grant_year = 2025`
 
 ---
 
@@ -343,17 +358,19 @@ LIMIT 200
 
 - **层级**: ADS
 - **物化**: table
+- **说明**: 全量专利明细，暴露年份字段供查询端过滤
 
 ```sql
 SELECT
+  application_year,
+  grant_year,
   application_date, grant_date, patent_no, patent_title_cn, patent_type,
   patent_status_std, patent_status_raw, dept_name, assignee_name
 FROM {{ ref('dwd_patent') }}
-WHERE application_year = EXTRACT(YEAR FROM current_date)::int
-   OR grant_year = EXTRACT(YEAR FROM current_date)::int
 ORDER BY COALESCE(application_date, grant_date) DESC NULLS LAST
-LIMIT 5000
 ```
+
+> **查询示例**: `SELECT * FROM ads_patent_detail_year WHERE application_year = 2025 OR grant_year = 2025`
 
 ---
 

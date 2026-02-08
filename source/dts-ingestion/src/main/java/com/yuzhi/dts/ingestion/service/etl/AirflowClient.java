@@ -4,6 +4,8 @@ import com.yuzhi.dts.ingestion.config.AirflowProperties;
 import com.yuzhi.dts.ingestion.service.infra.IngestionSettingsService;
 import java.net.URI;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -161,6 +163,48 @@ public class AirflowClient {
             LOG.warn("Airflow task log fetch failed status={} body={}", ex.getStatusCode().value(), ex.getResponseBodyAsString());
         } catch (Exception ex) {
             LOG.warn("Airflow task log fetch error: {}", ex.getMessage());
+        }
+        return Optional.empty();
+    }
+
+    public Optional<List<Map<String, Object>>> listTaskInstances(String dagId, String dagRunId) {
+        AirflowSettings settings = resolveSettings();
+        if (!settings.enabled()
+            || !StringUtils.hasText(settings.baseUrl())
+            || !StringUtils.hasText(dagId)
+            || !StringUtils.hasText(dagRunId)) {
+            return Optional.empty();
+        }
+        URI uri = buildUri(
+            settings,
+            "/dags/" + dagId + "/dagRuns/" + dagRunId + "/taskInstances",
+            Map.of("limit", 200)
+        );
+        try {
+            HttpHeaders headers = defaultHeaders(settings);
+            HttpEntity<Void> entity = new HttpEntity<>(headers);
+            ResponseEntity<Map> response = restTemplate.exchange(uri, HttpMethod.GET, entity, Map.class);
+            Map body = response.getBody();
+            if (body == null || !(body.get("task_instances") instanceof List<?> list)) {
+                return Optional.of(List.of());
+            }
+            List<Map<String, Object>> instances = new ArrayList<>();
+            for (Object item : list) {
+                if (item instanceof Map<?, ?> map) {
+                    Map<String, Object> converted = new LinkedHashMap<>();
+                    map.forEach((k, v) -> {
+                        if (k != null) {
+                            converted.put(k.toString(), v);
+                        }
+                    });
+                    instances.add(converted);
+                }
+            }
+            return Optional.of(instances);
+        } catch (HttpStatusCodeException ex) {
+            LOG.warn("Airflow task instance list failed status={} body={}", ex.getStatusCode().value(), ex.getResponseBodyAsString());
+        } catch (Exception ex) {
+            LOG.warn("Airflow task instance list error: {}", ex.getMessage());
         }
         return Optional.empty();
     }

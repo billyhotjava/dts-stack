@@ -1517,8 +1517,9 @@ public class AddaxJobService {
         String type = normalizeText(writerType);
         String normalized = StringUtils.hasText(type) ? type.toLowerCase(Locale.ROOT) : "";
         if (normalized.contains("postgres")) {
-            // Persist local Shanghai time in timestamp column (without timezone)
-            return "CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Shanghai'";
+            // PostgreSQL column DEFAULT does not reliably accept "AT TIME ZONE" form here.
+            // Use timezone(text, now()) to get timestamp without time zone in Asia/Shanghai.
+            return "timezone('Asia/Shanghai', now())";
         }
         return "CURRENT_TIMESTAMP";
     }

@@ -669,28 +669,42 @@ public class IngestionTaskService {
             );
         }
         String dagId = airflowDagService.resolveDagIdForTask(task);
-        String airflowTaskId = airflowDagService.resolveTaskIdForTask(task);
+        String preferredTaskId = airflowDagService.resolveTaskIdForTask(task);
         String dagRunId = execution.getExecutionId();
         int resolvedTry = tryNumber == null ? 1 : Math.max(1, tryNumber);
-        if (!StringUtils.hasText(dagRunId) || !StringUtils.hasText(dagId) || !StringUtils.hasText(airflowTaskId)) {
+        if (!StringUtils.hasText(dagRunId) || !StringUtils.hasText(dagId)) {
             return Map.of(
                 "taskId", taskId,
                 "executionId", executionId,
                 "dagId", dagId,
                 "dagRunId", dagRunId,
-                "taskInstanceId", airflowTaskId,
+                "taskInstanceId", preferredTaskId,
                 "tryNumber", resolvedTry,
                 "message", "缺少 Airflow 执行信息，无法获取日志"
             );
         }
-        String log = airflowClient.getTaskLog(dagId, dagRunId, airflowTaskId, resolvedTry).orElse("");
+        List<String> candidates = resolveTaskLogCandidates(dagId, dagRunId, preferredTaskId);
+        String selectedTaskId = StringUtils.hasText(preferredTaskId) ? preferredTaskId : null;
+        String log = "";
+        for (String candidate : candidates) {
+            if (!StringUtils.hasText(candidate)) {
+                continue;
+            }
+            String fetched = airflowClient.getTaskLog(dagId, dagRunId, candidate, resolvedTry).orElse("");
+            if (StringUtils.hasText(fetched)) {
+                selectedTaskId = candidate;
+                log = fetched;
+                break;
+            }
+        }
         Map<String, Object> result = new java.util.LinkedHashMap<>();
         result.put("taskId", taskId);
         result.put("executionId", executionId);
         result.put("dagId", dagId);
         result.put("dagRunId", dagRunId);
-        result.put("taskInstanceId", airflowTaskId);
+        result.put("taskInstanceId", selectedTaskId);
         result.put("tryNumber", resolvedTry);
+        result.put("taskInstanceCandidates", candidates);
         result.put("log", log);
         if (!StringUtils.hasText(log)) {
             result.put("message", "日志为空或未就绪");
@@ -790,5 +804,41 @@ public class IngestionTaskService {
         if (!org.springframework.util.StringUtils.hasText(sourceType)) return false;
         String lower = sourceType.toLowerCase(java.util.Locale.ROOT);
         return "excel".equals(lower) || "csv".equals(lower) || "excelreader".equals(lower) || "txtfilereader".equals(lower);
+    }
+
+    private List<String> resolveTaskLogCandidates(String dagId, String dagRunId, String preferredTaskId) {
+        java.util.LinkedHashSet<String> ordered = new java.util.LinkedHashSet<>();
+        List<Map<String, Object>> instances = airflowClient.listTaskInstances(dagId, dagRunId).orElse(List.of());
+        java.util.LinkedHashSet<String> addaxTasks = new java.util.LinkedHashSet<>();
+        java.util.LinkedHashSet<String> otherTasks = new java.util.LinkedHashSet<>();
+        java.util.LinkedHashSet<String> discovered = new java.util.LinkedHashSet<>();
+        for (Map<String, Object> instance : instances) {
+            if (instance == null || instance.isEmpty()) {
+                continue;
+            }
+            String taskId = toText(instance.get("task_id"));
+            if (!StringUtils.hasText(taskId)) {
+                taskId = toText(instance.get("taskId"));
+            }
+            if (!StringUtils.hasText(taskId)) {
+                continue;
+            }
+            String normalized = taskId.trim();
+            discovered.add(normalized);
+            if (normalized.startsWith("addax_")) {
+                addaxTasks.add(normalized);
+            } else {
+                otherTasks.add(normalized);
+            }
+        }
+        if (StringUtils.hasText(preferredTaskId)) {
+            String preferred = preferredTaskId.trim();
+            if (discovered.isEmpty() || discovered.contains(preferred)) {
+                ordered.add(preferred);
+            }
+        }
+        ordered.addAll(addaxTasks);
+        ordered.addAll(otherTasks);
+        return new java.util.ArrayList<>(ordered);
     }
 }
