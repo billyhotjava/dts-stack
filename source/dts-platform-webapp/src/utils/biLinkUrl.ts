@@ -57,30 +57,19 @@ const extractPathLike = (raw: string) => {
 	}
 };
 
-const isHetuLegacyPath = (rawPath: string) => {
-	const path = rawPath.toLowerCase();
+const shouldRedirectHetuEntryToAnalytics = (rawPath: string) => {
+	const plainPath = String(rawPath || "").split("#")[0].split("?")[0] || "";
+	const path = plainPath.toLowerCase().replace(/\/+$/, "");
+	// Only convert Hetu entry pages to /analytics.
+	// Keep deep links (e.g. /screen/share/...) untouched.
 	return (
 		path === "/screen" ||
-		path.startsWith("/screen/") ||
-		path.startsWith("/screen-") ||
 		path === "/dashboards" ||
-		path.startsWith("/dashboards/") ||
 		path === "/dashboard/hetu" ||
-		path.startsWith("/dashboard/hetu/") ||
 		path === "/system" ||
-		path.startsWith("/system/") ||
 		path === "/tdv" ||
-		path.startsWith("/tdv/") ||
 		path === "/account" ||
-		path.startsWith("/account/") ||
-		path === "/hetu" ||
-		path.startsWith("/hetu/") ||
-		path === "/static" ||
-		path.startsWith("/static/") ||
-		path.startsWith("/core") ||
-		path.startsWith("/default~") ||
-		path.startsWith("/vendors~") ||
-		path.startsWith("/runtime~")
+		path === "/hetu"
 	);
 };
 
@@ -108,7 +97,7 @@ export const normalizeBiLinkForSave = (raw?: string | null, engine?: string | nu
 	const normalizedEngine = String(engine || "").trim().toUpperCase();
 	if (normalizedEngine !== "HETU") return text;
 	const resolved = normalizeHetuUrl(text, true);
-	if (isHetuLegacyPath(extractPathLike(resolved))) {
+	if (shouldRedirectHetuEntryToAnalytics(extractPathLike(resolved))) {
 		return toAbsolute("/analytics");
 	}
 	return resolved;
@@ -122,7 +111,7 @@ export const resolveBiLinkForOpen = (raw?: string | null, engine?: string | null
 		return text.startsWith("/") ? toAbsolute(text) : text;
 	}
 	const resolved = normalizeHetuUrl(text, true);
-	if (isHetuLegacyPath(extractPathLike(resolved))) {
+	if (shouldRedirectHetuEntryToAnalytics(extractPathLike(resolved))) {
 		return toAbsolute("/analytics");
 	}
 	return resolved.startsWith("/") ? toAbsolute(resolved) : resolved;
