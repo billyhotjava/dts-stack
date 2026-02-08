@@ -116,6 +116,26 @@ public class AirflowClient {
         return Optional.empty();
     }
 
+    public Optional<Map<String, Object>> listDagRuns(String dagId, int limit) {
+        AirflowSettings settings = resolveSettings();
+        if (!settings.enabled() || !StringUtils.hasText(settings.baseUrl()) || !StringUtils.hasText(dagId)) {
+            return Optional.empty();
+        }
+        int safeLimit = Math.max(1, Math.min(limit, 200));
+        URI uri = buildUri(settings, "/dags/" + dagId + "/dagRuns", Map.of("limit", safeLimit, "order_by", "-start_date"));
+        try {
+            HttpHeaders headers = defaultHeaders(settings);
+            HttpEntity<Void> entity = new HttpEntity<>(headers);
+            ResponseEntity<Map> response = restTemplate.exchange(uri, HttpMethod.GET, entity, Map.class);
+            return Optional.ofNullable(response.getBody());
+        } catch (HttpStatusCodeException ex) {
+            LOG.warn("Airflow dag runs list failed status={} body={}", ex.getStatusCode().value(), ex.getResponseBodyAsString());
+        } catch (Exception ex) {
+            LOG.warn("Airflow dag runs list error: {}", ex.getMessage());
+        }
+        return Optional.empty();
+    }
+
     public Optional<String> getTaskLog(String dagId, String dagRunId, String taskId, int tryNumber) {
         AirflowSettings settings = resolveSettings();
         if (!settings.enabled()

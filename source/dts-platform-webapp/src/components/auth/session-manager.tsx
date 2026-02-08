@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef } from "react";
 import { toast } from "sonner";
-import { LOGIN_ROUTE } from "@/routes/constants";
-import { useRouter } from "@/routes/hooks";
+import { resolveLoginHref } from "@/routes/constants";
 import { useUserActions, useUserInfo, useUserToken } from "@/store/userStore";
 import userService from "@/api/services/userService";
 
@@ -9,6 +8,7 @@ const STORAGE_KEYS = {
 	SESSION_ID: "dts.session.id",
 	SESSION_USER: "dts.session.user",
 	LOGOUT_TS: "dts.session.logoutTs",
+	LAST_ACTIVITY: "dts.session.lastActivity",
 } as const;
 
 const SESSION_TIMEOUT_MINUTES = Math.max(
@@ -49,15 +49,35 @@ function nextRefreshDelayMs(accessToken?: string): number {
 	return ms;
 }
 
+function readLastActivity(): number {
+	try {
+		const stored = localStorage.getItem(STORAGE_KEYS.LAST_ACTIVITY);
+		if (stored) {
+			const ts = Number(stored);
+			if (ts > 0) return ts;
+		}
+	} catch {}
+	return Date.now();
+}
+
+function writeLastActivity(ts: number, lastWriteRef: { current: number }) {
+	// Throttle writes to localStorage: at most once per 10 seconds
+	if (ts - lastWriteRef.current < 10_000) return;
+	lastWriteRef.current = ts;
+	try {
+		localStorage.setItem(STORAGE_KEYS.LAST_ACTIVITY, String(ts));
+	} catch {}
+}
+
 export default function SessionManager() {
-	const router = useRouter();
 	const user = useUserInfo();
 	const token = useUserToken();
 	const { setUserToken, clearUserInfoAndToken } = useUserActions();
 
 	const tabIdRef = useRef<string>(genId());
 	const mySessionIdRef = useRef<string | null>(null);
-	const lastActivityRef = useRef<number>(Date.now());
+	const lastActivityRef = useRef<number>(readLastActivity());
+	const lastActivityWriteRef = useRef<number>(0);
 	const logoutInProgressRef = useRef(false);
 
 	const isLoggedIn = useMemo(() => Boolean(token?.accessToken), [token?.accessToken]);
@@ -69,7 +89,9 @@ export default function SessionManager() {
 			logoutInProgressRef.current = false;
 			return;
 		}
-		lastActivityRef.current = Date.now();
+		const now = Date.now();
+		lastActivityRef.current = now;
+		writeLastActivity(now, lastActivityWriteRef);
 		const current = localStorage.getItem(STORAGE_KEYS.SESSION_ID);
 		if (!current) {
 			const newId = `${loginName || "user"}#${genId()}#${tabIdRef.current}`;
@@ -91,7 +113,7 @@ export default function SessionManager() {
 					toast.error("账号已在其他位置登录，本会话已退出", { id: "session-conflict" });
 					clearUserInfoAndToken();
 					localStorage.setItem(STORAGE_KEYS.LOGOUT_TS, String(Date.now()));
-					router.replace(LOGIN_ROUTE);
+					window.location.replace(resolveLoginHref());
 				}
 			}
 			if (e.key === STORAGE_KEYS.LOGOUT_TS && e.newValue) {
@@ -99,24 +121,28 @@ export default function SessionManager() {
 					logoutInProgressRef.current = true;
 					toast.error("账号已在其他位置登录，本会话已退出", { id: "session-conflict" });
 					clearUserInfoAndToken();
-					router.replace(LOGIN_ROUTE);
+					window.location.replace(resolveLoginHref());
 				}
 			}
 		};
 		window.addEventListener("storage", onStorage);
 		return () => window.removeEventListener("storage", onStorage);
-	}, [isLoggedIn, clearUserInfoAndToken, router]);
+	}, [isLoggedIn, clearUserInfoAndToken]);
 
 	useEffect(() => {
 		if (!isLoggedIn) return;
 		const updateActivity = () => {
-			lastActivityRef.current = Date.now();
+			const now = Date.now();
+			lastActivityRef.current = now;
+			writeLastActivity(now, lastActivityWriteRef);
 		};
 		const events: Array<keyof DocumentEventMap> = ["click", "keydown", "mousemove", "scroll", "touchstart"];
 		events.forEach((event) => window.addEventListener(event, updateActivity, { passive: true, capture: true }));
 		const visibilityHandler = () => {
 			if (document.visibilityState === "visible") {
-				lastActivityRef.current = Date.now();
+				const now = Date.now();
+				lastActivityRef.current = now;
+				writeLastActivity(now, lastActivityWriteRef);
 			}
 		};
 		document.addEventListener("visibilitychange", visibilityHandler);
@@ -145,7 +171,7 @@ export default function SessionManager() {
 					toast.error("会话已过期，请重新登录", { id: "session-expired" });
 					clearUserInfoAndToken();
 					localStorage.setItem(STORAGE_KEYS.LOGOUT_TS, String(Date.now()));
-					router.replace(LOGIN_ROUTE);
+					window.location.replace(resolveLoginHref());
 				}
 				cancelled = true;
 				return;
@@ -191,7 +217,7 @@ export default function SessionManager() {
 					toast.error("会话已过期，请重新登录", { id: "session-expired" });
 					clearUserInfoAndToken();
 					localStorage.setItem(STORAGE_KEYS.LOGOUT_TS, String(Date.now()));
-					router.replace(LOGIN_ROUTE);
+					window.location.replace(resolveLoginHref());
 				}
 				cancelled = true;
 			}
@@ -203,7 +229,7 @@ export default function SessionManager() {
 			cancelled = true;
 			if (timer) window.clearTimeout(timer);
 		};
-	}, [isLoggedIn, token?.refreshToken, token?.accessToken, setUserToken, clearUserInfoAndToken, router]);
+	}, [isLoggedIn, token?.refreshToken, token?.accessToken, setUserToken, clearUserInfoAndToken]);
 
 	useEffect(() => {
 		if (!isLoggedIn) return;
@@ -220,7 +246,7 @@ export default function SessionManager() {
 			toast.error("长时间未操作，已自动退出，请重新登录", { id: "session-expired" });
 			clearUserInfoAndToken();
 			localStorage.setItem(STORAGE_KEYS.LOGOUT_TS, String(Date.now()));
-			router.replace(LOGIN_ROUTE);
+			window.location.replace(resolveLoginHref());
 		};
 
 		const resetTimer = () => {
@@ -237,7 +263,7 @@ export default function SessionManager() {
 			if (timer) window.clearTimeout(timer);
 			events.forEach((event) => window.removeEventListener(event, resetTimer, true));
 		};
-	}, [isLoggedIn, clearUserInfoAndToken, router, token?.refreshToken, user?.username, user?.email]);
+	}, [isLoggedIn, clearUserInfoAndToken, token?.refreshToken, user?.username, user?.email]);
 
 	return null;
 }

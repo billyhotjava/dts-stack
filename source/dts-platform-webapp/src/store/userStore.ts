@@ -77,6 +77,7 @@ const useUserStore = create<UserStore>()(
 						const ctx = useContextStore.getState();
 					ctx.actions.setActiveDept(undefined);
 						localStorage.removeItem("dts.session.loginTs");
+						localStorage.removeItem("dts.session.lastActivity");
 					} catch {
 						// ignore store access errors (e.g., during SSR)
 					}

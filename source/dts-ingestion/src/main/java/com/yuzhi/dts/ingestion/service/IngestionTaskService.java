@@ -508,6 +508,94 @@ public class IngestionTaskService {
         return "system";
     }
 
+    private void backfillExecutionsFromAirflow(Long taskId, int limit) {
+        if (taskId == null || limit <= 0) {
+            return;
+        }
+        IngestionTask task = taskRepository.findById(taskId).orElse(null);
+        if (task == null || !isAirflowEnabled(task) || !StringUtils.hasText(task.getAirflowDagId())) {
+            return;
+        }
+        Map<String, Object> payload = airflowClient.listDagRuns(task.getAirflowDagId(), Math.max(limit, 20)).orElse(null);
+        if (payload == null || !(payload.get("dag_runs") instanceof java.util.List<?> dagRuns)) {
+            return;
+        }
+        int inserted = 0;
+        for (Object runObj : dagRuns) {
+            if (!(runObj instanceof Map<?, ?> run)) {
+                continue;
+            }
+            Object runIdObj = firstNonBlank(run.get("dag_run_id"), run.get("dagRunId"), run.get("run_id"), run.get("runId"));
+            if (runIdObj == null) {
+                continue;
+            }
+            String runId = runIdObj.toString().trim();
+            if (!StringUtils.hasText(runId)) {
+                continue;
+            }
+            if (executionRepository.findFirstByTaskIdAndExecutionId(taskId, runId).isPresent()) {
+                continue;
+            }
+            IngestionExecution execution = new IngestionExecution();
+            execution.setTask(task);
+            execution.setExecutionId(runId);
+            execution.setStatus(mapAirflowState(toText(run.get("state"))));
+            execution.setStartTime(parseAirflowInstant(firstNonBlank(run.get("start_date"), run.get("execution_date"), run.get("logical_date"))));
+            execution.setEndTime(parseAirflowInstant(run.get("end_date")));
+            if (execution.getStartTime() == null) {
+                execution.setStartTime(Instant.now());
+            }
+            if ("failed".equalsIgnoreCase(execution.getStatus())) {
+                String note = toText(firstNonBlank(run.get("note"), run.get("message")));
+                if (StringUtils.hasText(note)) {
+                    execution.setErrorMessage(note);
+                }
+            }
+            executionRepository.save(execution);
+            inserted++;
+        }
+        if (inserted > 0) {
+            log.info("Backfilled {} execution records for task {} from Airflow dag {}", inserted, taskId, task.getAirflowDagId());
+        }
+    }
+
+    private String mapAirflowState(String state) {
+        if (!StringUtils.hasText(state)) {
+            return "running";
+        }
+        String normalized = state.trim().toLowerCase(java.util.Locale.ROOT);
+        if ("success".equals(normalized)) {
+            return "success";
+        }
+        if ("failed".equals(normalized) || "error".equals(normalized)) {
+            return "failed";
+        }
+        return "running";
+    }
+
+    private String toText(Object value) {
+        if (value == null) {
+            return null;
+        }
+        String text = value.toString().trim();
+        return StringUtils.hasText(text) ? text : null;
+    }
+
+    private Instant parseAirflowInstant(Object value) {
+        if (value == null) {
+            return null;
+        }
+        String text = value.toString().trim();
+        if (!StringUtils.hasText(text)) {
+            return null;
+        }
+        try {
+            return Instant.parse(text);
+        } catch (Exception ex) {
+            return null;
+        }
+    }
+
     private String extractDagRunId(Map<String, Object> airflowResult) {
         if (airflowResult == null) {
             return null;
@@ -540,20 +628,28 @@ public class IngestionTaskService {
     /**
      * 获取任务的执行历史
      */
-    @Transactional(readOnly = true)
+    @Transactional
     public Page<IngestionExecutionDTO> getExecutions(Long taskId, Pageable pageable) {
         log.debug("Request to get executions for task: {}", taskId);
-        return executionRepository.findByTaskId(taskId, pageable)
-            .map(executionMapper::toDto);
+        Page<IngestionExecutionDTO> page = executionRepository.findByTaskId(taskId, pageable).map(executionMapper::toDto);
+        if (page.hasContent()) {
+            return page;
+        }
+        backfillExecutionsFromAirflow(taskId, pageable == null ? 20 : pageable.getPageSize());
+        return executionRepository.findByTaskId(taskId, pageable).map(executionMapper::toDto);
     }
 
     /**
      * 获取最新的执行记录
      */
-    @Transactional(readOnly = true)
+    @Transactional
     public Optional<IngestionExecutionDTO> getLatestExecution(Long taskId) {
-        return executionRepository.findFirstByTaskIdOrderByCreatedAtDesc(taskId)
-            .map(executionMapper::toDto);
+        Optional<IngestionExecutionDTO> latest = executionRepository.findFirstByTaskIdOrderByCreatedAtDesc(taskId).map(executionMapper::toDto);
+        if (latest.isPresent()) {
+            return latest;
+        }
+        backfillExecutionsFromAirflow(taskId, 20);
+        return executionRepository.findFirstByTaskIdOrderByCreatedAtDesc(taskId).map(executionMapper::toDto);
     }
 
     @Transactional(readOnly = true)

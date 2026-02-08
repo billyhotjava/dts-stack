@@ -5,76 +5,10 @@ sources:
     schema: "ods"
     tables:
       -
-        name: "CUSTOMER"
-        description: "erptest1: ERPDEMO.CUSTOMER -> ods.CUSTOMER"
+        name: "col_1000"
+        description: "patent_testxls1: col_1000 -> ods.col_1000"
         meta:
           system: "unknown"
           biz: "unknown"
-          entity: "CUSTOMER"
-          stream: "CUSTOMER"
-          stream_namespace: "ERPDEMO"
-      -
-        name: "DEPARTMENT"
-        description: "erptest1: ERPDEMO.DEPARTMENT -> ods.DEPARTMENT"
-        meta:
-          system: "unknown"
-          biz: "unknown"
-          entity: "DEPARTMENT"
-          stream: "DEPARTMENT"
-          stream_namespace: "ERPDEMO"
-      -
-        name: "EMPLOYEE"
-        description: "erptest1: ERPDEMO.EMPLOYEE -> ods.EMPLOYEE"
-        meta:
-          system: "unknown"
-          biz: "unknown"
-          entity: "EMPLOYEE"
-          stream: "EMPLOYEE"
-          stream_namespace: "ERPDEMO"
-      -
-        name: "ORDER_DETAIL"
-        description: "erptest1: ERPDEMO.ORDER_DETAIL -> ods.ORDER_DETAIL"
-        meta:
-          system: "unknown"
-          biz: "unknown"
-          entity: "ORDER_DETAIL"
-          stream: "ORDER_DETAIL"
-          stream_namespace: "ERPDEMO"
-      -
-        name: "ORDERS"
-        description: "erptest1: ERPDEMO.ORDERS -> ods.ORDERS"
-        meta:
-          system: "unknown"
-          biz: "unknown"
-          entity: "ORDERS"
-          stream: "ORDERS"
-          stream_namespace: "ERPDEMO"
-      -
-        name: "PRODUCT"
-        description: "erptest1: ERPDEMO.PRODUCT -> ods.PRODUCT"
-        meta:
-          system: "unknown"
-          biz: "unknown"
-          entity: "PRODUCT"
-          stream: "PRODUCT"
-          stream_namespace: "ERPDEMO"
-  -
-    name: "public"
-    schema: "public"
-    tables:
-      -
-        name: "customer_202602020332"
-        description: "filedemo1: customer_202602020332 -> public.customer_202602020332"
-        meta:
-          system: "unknown"
-          biz: "unknown"
-          entity: "customer_202602020332"
-          stream: "customer_202602020332"
-      -
-        name: "newcust"
-        description: "exceldemo1: newcust -> public.newcust"
-        meta:
-          system: "unknown"
-          biz: "unknown"
-          entity: "newcust"
-          stream: "newcust"
+          entity: "col_1000"
+          stream: "col_1000"

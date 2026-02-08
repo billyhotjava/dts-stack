@@ -25,6 +25,11 @@ public interface IngestionExecutionRepository extends JpaRepository<IngestionExe
     Optional<IngestionExecution> findByExecutionId(String executionId);
 
     /**
+     * 根据任务和执行ID查找
+     */
+    Optional<IngestionExecution> findFirstByTaskIdAndExecutionId(Long taskId, String executionId);
+
+    /**
      * 根据状态查询执行历史
      */
     Page<IngestionExecution> findByStatus(String status, Pageable pageable);

@@ -1,7 +1,7 @@
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import menuService from "@/api/services/menuService";
 import useUserStore, { useUserInfo, useUserToken } from "@/store/userStore";
-import { LOGIN_ROUTE } from "../constants";
+import { LOGIN_ROUTE, resolveLoginHref } from "../constants";
 import { useRouter } from "../hooks";
 import { GLOBAL_CONFIG } from "@/global-config";
 
@@ -31,6 +31,24 @@ function isTokenExpired(token?: string): boolean {
 	return Date.now() > exp - 10_000;
 }
 
+/** Check whether the session has been idle beyond the configured timeout. */
+function isSessionIdle(): boolean {
+	try {
+		const stored = localStorage.getItem("dts.session.lastActivity");
+		if (!stored) return false; // No record yet (first login); don't block.
+		const lastActivity = Number(stored);
+		if (!(lastActivity > 0)) return false;
+		const timeoutMinutes = Math.max(
+			1,
+			Number(import.meta.env.VITE_SESSION_TIMEOUT_MINUTES ?? import.meta.env.VITE_PORTAL_SESSION_TIMEOUT ?? "10"),
+		);
+		const timeoutMs = timeoutMinutes * 60 * 1000;
+		return Date.now() - lastActivity > timeoutMs;
+	} catch {
+		return false;
+	}
+}
+
 type Props = {
 	children: React.ReactNode;
 };
@@ -42,7 +60,7 @@ export default function LoginAuthGuard({ children }: Props) {
 	const isLocalDevToken = (token?: string) => Boolean(token?.startsWith("dev-access-"));
 
     const check = useCallback(() => {
-        if (!accessToken || isTokenExpired(accessToken)) {
+        if (!accessToken || isTokenExpired(accessToken) || isSessionIdle()) {
             // Clear stale token so the user doesn't flash the dashboard on next visit.
             if (accessToken) {
                 useUserStore.getState().actions.clearUserInfoAndToken();
@@ -79,6 +97,21 @@ export default function LoginAuthGuard({ children }: Props) {
         check();
     }, [check]);
 
+    // Periodic token expiry check — catches tokens that expire while the page is idle.
+    // React won't re-render just because time passes, so we poll every 30s.
+    const checkRef = useRef(check);
+    checkRef.current = check;
+    useEffect(() => {
+        if (!accessToken) return;
+        const timer = window.setInterval(() => {
+            if (isTokenExpired(accessToken) || isSessionIdle()) {
+                useUserStore.getState().actions.clearUserInfoAndToken();
+                window.location.replace(resolveLoginHref());
+            }
+        }, 30_000);
+        return () => window.clearInterval(timer);
+    }, [accessToken]);
+
     // Ensure menus reflect the current identity. Reload on token change even if a previous menu exists.
     // This fixes a stale-menu issue when switching accounts without a full page reload.
     useEffect(() => {
@@ -92,8 +125,8 @@ export default function LoginAuthGuard({ children }: Props) {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [accessToken]);
 
-	// Block rendering if the token is missing or expired — prevents dashboard flash before redirect.
-	if (!accessToken || isTokenExpired(accessToken)) {
+	// Block rendering if the token is missing, expired, or session is idle — prevents dashboard flash before redirect.
+	if (!accessToken || isTokenExpired(accessToken) || isSessionIdle()) {
 		return null;
 	}
 

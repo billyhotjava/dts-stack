@@ -115,6 +115,22 @@ compose_arch_candidates(){
   esac
 }
 
+detect_runtime_arch(){
+  local arch
+  arch="$(uname -m 2>/dev/null || true)"
+  case "${arch}" in
+    x86_64|amd64) printf '%s' "amd64" ;;
+    aarch64|arm64) printf '%s' "arm64" ;;
+    *) printf '%s' "${arch:-amd64}" ;;
+  esac
+}
+
+detect_runtime_platform(){
+  local arch
+  arch="$(detect_runtime_arch)"
+  printf 'linux/%s' "${arch}"
+}
+
 detect_docker_gid(){
   if [[ -S /var/run/docker.sock ]]; then
     local gid
@@ -708,6 +724,8 @@ generate_env_base(){
   : "${DTS_AIRFLOW_USERNAME:=${AIRFLOW_ADMIN_USERNAME}}"
   : "${DTS_AIRFLOW_PASSWORD:=${AIRFLOW_ADMIN_PASSWORD}}"
   : "${DOCKER_GID:=$(detect_docker_gid)}"
+  : "${DTS_RUNTIME_ARCH:=$(detect_runtime_arch)}"
+  : "${DTS_RUNTIME_PLATFORM:=$(detect_runtime_platform)}"
 
   # ---------- Addax ----------
   : "${IMAGE_ADDAX:=dts-addax:6.0.8}"
@@ -895,6 +913,8 @@ TRAEFIK_ENABLE_PING=${TRAEFIK_ENABLE_PING}
 IMAGE_MAVEN=${IMAGE_MAVEN}
 KEYTOOL_IMAGE=${KEYTOOL_IMAGE}
 KEYTOOL_IMAGE_STRICT=${KEYTOOL_IMAGE_STRICT}
+DTS_RUNTIME_ARCH=${DTS_RUNTIME_ARCH}
+DTS_RUNTIME_PLATFORM=${DTS_RUNTIME_PLATFORM}
 
 # ====== Hosts ======
 HOST_SSO=${HOST_SSO}
