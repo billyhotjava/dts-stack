@@ -3,6 +3,7 @@ package com.yuzhi.dts.ingestion.service.etl;
 import com.yuzhi.dts.ingestion.config.AddaxProperties;
 import com.yuzhi.dts.ingestion.config.AirflowProperties;
 import com.yuzhi.dts.ingestion.service.infra.IngestionSettingsService;
+import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.springframework.stereotype.Component;
@@ -90,7 +91,7 @@ public class AirflowAdapter {
                     java.time.Duration.ofSeconds(Math.max(1, pollSeconds))
                 );
             }
-            AirflowClient.TriggerResult response = triggerWithRetry(dagId, payload);
+            AirflowClient.TriggerResult response = triggerWithRetry(dagId, payload, waitSeconds, pollSeconds);
             if (response.success()) {
                 result.put("status", "triggered");
                 result.put("dagId", dagId);
@@ -104,7 +105,7 @@ public class AirflowAdapter {
         }
         result.put("status", "failed");
         if (lastFailure != null && lastFailure.statusCode() == 404 && StringUtils.hasText(requestedDagId)) {
-            result.put("message", "DAG 未就绪: " + requestedDagId);
+            result.put("message", buildDagNotReadyMessage(requestedDagId));
         } else if (lastFailure != null && StringUtils.hasText(lastFailure.message())) {
             result.put("message", lastFailure.message());
         } else {
@@ -113,14 +114,17 @@ public class AirflowAdapter {
         return result;
     }
 
-    private AirflowClient.TriggerResult triggerWithRetry(String dagId, Map<String, Object> payload) {
+    private AirflowClient.TriggerResult triggerWithRetry(String dagId, Map<String, Object> payload, int waitSeconds, int pollSeconds) {
         AirflowClient.TriggerResult response = client.triggerDag(dagId, payload);
         if (response.success() || response.statusCode() != 404) {
             return response;
         }
-        for (int attempt = 0; attempt < 5; attempt++) {
+        int safePollSeconds = Math.max(1, pollSeconds);
+        int baseWindow = Math.max(30, waitSeconds);
+        int maxAttempts = Math.max(8, Math.min(60, (baseWindow / safePollSeconds) + 8));
+        for (int attempt = 0; attempt < maxAttempts; attempt++) {
             try {
-                Thread.sleep(2000L);
+                Thread.sleep(safePollSeconds * 1000L);
             } catch (InterruptedException ignored) {
                 Thread.currentThread().interrupt();
                 break;
@@ -131,6 +135,69 @@ public class AirflowAdapter {
             }
         }
         return response;
+    }
+
+    private String buildDagNotReadyMessage(String dagId) {
+        String importError = findDagImportError(dagId);
+        if (StringUtils.hasText(importError)) {
+            return "DAG 导入失败: " + importError;
+        }
+        return "DAG 未就绪: " + dagId;
+    }
+
+    private String findDagImportError(String dagId) {
+        if (!StringUtils.hasText(dagId)) {
+            return null;
+        }
+        List<Map<String, Object>> importErrors = client.listImportErrors(100).orElse(List.of());
+        String fileNameNeedle = dagId + ".py";
+        for (Map<String, Object> row : importErrors) {
+            String fileName = asText(row.get("filename"));
+            String stackTrace = asText(row.get("stack_trace"));
+            boolean matched = containsIgnoreCase(fileName, fileNameNeedle)
+                || containsIgnoreCase(stackTrace, fileNameNeedle)
+                || containsIgnoreCase(stackTrace, dagId);
+            if (!matched) {
+                continue;
+            }
+            if (StringUtils.hasText(fileName) && StringUtils.hasText(stackTrace)) {
+                return fileName + " | " + summarize(stackTrace);
+            }
+            if (StringUtils.hasText(fileName)) {
+                return fileName;
+            }
+            if (StringUtils.hasText(stackTrace)) {
+                return summarize(stackTrace);
+            }
+            return "DAG 文件导入失败";
+        }
+        return null;
+    }
+
+    private String asText(Object value) {
+        if (value == null) {
+            return null;
+        }
+        String text = value.toString().trim();
+        return StringUtils.hasText(text) ? text : null;
+    }
+
+    private boolean containsIgnoreCase(String text, String needle) {
+        if (!StringUtils.hasText(text) || !StringUtils.hasText(needle)) {
+            return false;
+        }
+        return text.toLowerCase(java.util.Locale.ROOT).contains(needle.toLowerCase(java.util.Locale.ROOT));
+    }
+
+    private String summarize(String input) {
+        if (!StringUtils.hasText(input)) {
+            return "";
+        }
+        String compact = input.replace('\n', ' ').replace('\r', ' ').replaceAll("\\s+", " ").trim();
+        if (compact.length() <= 200) {
+            return compact;
+        }
+        return compact.substring(0, 200) + "...";
     }
 
     private String normalize(String value) {

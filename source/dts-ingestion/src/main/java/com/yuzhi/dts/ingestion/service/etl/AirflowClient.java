@@ -185,26 +185,32 @@ public class AirflowClient {
             HttpEntity<Void> entity = new HttpEntity<>(headers);
             ResponseEntity<Map> response = restTemplate.exchange(uri, HttpMethod.GET, entity, Map.class);
             Map body = response.getBody();
-            if (body == null || !(body.get("task_instances") instanceof List<?> list)) {
-                return Optional.of(List.of());
-            }
-            List<Map<String, Object>> instances = new ArrayList<>();
-            for (Object item : list) {
-                if (item instanceof Map<?, ?> map) {
-                    Map<String, Object> converted = new LinkedHashMap<>();
-                    map.forEach((k, v) -> {
-                        if (k != null) {
-                            converted.put(k.toString(), v);
-                        }
-                    });
-                    instances.add(converted);
-                }
-            }
-            return Optional.of(instances);
+            return Optional.of(extractMapList(body, "task_instances"));
         } catch (HttpStatusCodeException ex) {
             LOG.warn("Airflow task instance list failed status={} body={}", ex.getStatusCode().value(), ex.getResponseBodyAsString());
         } catch (Exception ex) {
             LOG.warn("Airflow task instance list error: {}", ex.getMessage());
+        }
+        return Optional.empty();
+    }
+
+    public Optional<List<Map<String, Object>>> listImportErrors(int limit) {
+        AirflowSettings settings = resolveSettings();
+        if (!settings.enabled() || !StringUtils.hasText(settings.baseUrl())) {
+            return Optional.empty();
+        }
+        int safeLimit = Math.max(1, Math.min(limit, 200));
+        URI uri = buildUri(settings, "/importErrors", Map.of("limit", safeLimit));
+        try {
+            HttpHeaders headers = defaultHeaders(settings);
+            HttpEntity<Void> entity = new HttpEntity<>(headers);
+            ResponseEntity<Map> response = restTemplate.exchange(uri, HttpMethod.GET, entity, Map.class);
+            Map body = response.getBody();
+            return Optional.of(extractMapList(body, "import_errors"));
+        } catch (HttpStatusCodeException ex) {
+            LOG.warn("Airflow import errors fetch failed status={} body={}", ex.getStatusCode().value(), ex.getResponseBodyAsString());
+        } catch (Exception ex) {
+            LOG.warn("Airflow import errors fetch error: {}", ex.getMessage());
         }
         return Optional.empty();
     }
@@ -304,6 +310,25 @@ public class AirflowClient {
             password = fallbackPass;
         }
         return new AirflowSettings(enabled, baseUrl, apiPath, username, password);
+    }
+
+    private List<Map<String, Object>> extractMapList(Map body, String key) {
+        if (body == null || !(body.get(key) instanceof List<?> list)) {
+            return List.of();
+        }
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (Object item : list) {
+            if (item instanceof Map<?, ?> map) {
+                Map<String, Object> converted = new LinkedHashMap<>();
+                map.forEach((k, v) -> {
+                    if (k != null) {
+                        converted.put(k.toString(), v);
+                    }
+                });
+                result.add(converted);
+            }
+        }
+        return result;
     }
 
     public record TriggerResult(boolean success, int statusCode, String message, Map<String, Object> payload) {}

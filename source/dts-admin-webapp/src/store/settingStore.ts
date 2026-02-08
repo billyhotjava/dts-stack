@@ -54,11 +54,16 @@ const useSettingStore = create<SettingStore>()(
 			name: StorageEnum.Settings, // name of the item in the storage (must be unique)
 			storage: createJSONStorage(() => localStorage), // (optional) by default, 'localStorage' is used
 			partialize: (state) => ({ [StorageEnum.Settings]: state.settings }),
-			version: 5,
+			version: 6,
 			migrate: (persistedState: any, version) => {
 				try {
 					const key = (StorageEnum as any).Settings || "settings";
 					const settings = (persistedState && (persistedState[key] || persistedState.settings)) || {};
+					// v6: keep light mode with dark sidebar for legacy persisted settings
+					if (typeof version === "number" && version < 6) {
+						settings.themeMode = ThemeMode.Light;
+						settings.darkSidebar = true;
+					}
 					const raw = settings.fontSize;
 					let next = typeof raw === "string" ? parseFloat(raw) : raw;
 					if (!Number.isFinite(next)) {
@@ -69,10 +74,6 @@ const useSettingStore = create<SettingStore>()(
 					settings.fontSize = Math.round(next);
 					if (!settings.fontFamily || typeof settings.fontFamily !== "string") {
 						settings.fontFamily = FontFamilyPreset.openSans;
-					}
-					// v5: ensure dark sidebar enabled
-					if (typeof version === "number" && version < 5) {
-						settings.darkSidebar = true;
 					}
 					persistedState[key] = { ...settings };
 				} catch {

@@ -320,6 +320,7 @@ prepare_data_dirs(){
     "services/dts-ranger"
     "services/dts-analytics/data"
     "services/dts-analytics/plugins"
+    "services/dts-airflow/plugins"
     "services/dts-openmetadata/ingestion"
     "services/dts-airflow/extra"
     "services/dts-airflow/dags"
@@ -385,6 +386,19 @@ prepare_data_dirs(){
       if [[ "$(getenforce 2>/dev/null || true)" != "Disabled" ]]; then
         if command -v chcon >/dev/null 2>&1; then
           chcon -Rt svirt_sandbox_file_t services/dts-airflow/dags 2>/dev/null || true
+        fi
+      fi
+    fi
+  fi
+  # Ensure Airflow plugins are always readable in legacy/non-legacy containers.
+  if [[ -d "services/dts-airflow/plugins" ]]; then
+    chmod 755 services/dts-airflow/plugins 2>/dev/null || true
+    chmod -R a+rX services/dts-airflow/plugins 2>/dev/null || true
+    find services/dts-airflow/plugins -type f -name "*.py" -exec chmod 644 {} + 2>/dev/null || true
+    if command -v getenforce >/dev/null 2>&1; then
+      if [[ "$(getenforce 2>/dev/null || true)" != "Disabled" ]]; then
+        if command -v chcon >/dev/null 2>&1; then
+          chcon -Rt svirt_sandbox_file_t services/dts-airflow/plugins 2>/dev/null || true
         fi
       fi
     fi
