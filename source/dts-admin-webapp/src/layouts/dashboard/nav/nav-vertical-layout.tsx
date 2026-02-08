@@ -27,16 +27,19 @@ export function NavVerticalLayout({ data, className }: Props) {
 			themeLayout: themeLayout === ThemeLayout.Mini ? ThemeLayout.Vertical : ThemeLayout.Mini,
 		});
 	};
+	const isDark = themeMode === ThemeMode.Dark;
+	const sidebarBg = isDark ? "#161616" : isDarkSidebar ? "hsla(205, 19%, 23%, 1)" : "#F5F5F5";
 	return (
 		<nav
 			data-slot="slash-layout-nav"
 			data-dark-sidebar={isDarkSidebar ? "true" : undefined}
 			className={cn(
-				"fixed inset-y-0 left-0 flex-col h-full bg-background border-r border-dashed z-nav transition-[width] duration-300 ease-in-out",
+				"fixed inset-y-0 left-0 flex-col h-full bg-sidebar border-r border-dashed z-nav transition-[width] duration-300 ease-in-out",
 				className,
 			)}
 			style={{
 				width: navWidth,
+				backgroundColor: sidebarBg,
 			}}
 		>
 			<div
@@ -64,7 +67,7 @@ export function NavVerticalLayout({ data, className }: Props) {
 
 			<hr className="border-t border-border/40 mx-3" />
 
-			<ScrollArea className={cn("h-[calc(100vh-var(--layout-header-height))] px-2 bg-background")}>
+			<ScrollArea className={cn("h-[calc(100vh-var(--layout-header-height))] px-2")}>
 				<div className="pb-16">
 					{themeLayout === ThemeLayout.Mini ? <NavMini data={data} /> : <NavVertical data={data} />}
 				</div>
