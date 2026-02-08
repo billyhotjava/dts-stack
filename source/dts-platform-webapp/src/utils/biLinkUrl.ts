@@ -45,6 +45,45 @@ const toAbsolute = (path: string) => {
 	return `${origin}${path}`;
 };
 
+const extractPathLike = (raw: string) => {
+	const trimmed = raw.trim();
+	if (!trimmed) return "";
+	if (trimmed.startsWith("/")) return trimmed;
+	try {
+		const url = new URL(trimmed);
+		return `${url.pathname || ""}${url.search || ""}${url.hash || ""}` || "/";
+	} catch {
+		return trimmed;
+	}
+};
+
+const isHetuLegacyPath = (rawPath: string) => {
+	const path = rawPath.toLowerCase();
+	return (
+		path === "/screen" ||
+		path.startsWith("/screen/") ||
+		path.startsWith("/screen-") ||
+		path === "/dashboards" ||
+		path.startsWith("/dashboards/") ||
+		path === "/dashboard/hetu" ||
+		path.startsWith("/dashboard/hetu/") ||
+		path === "/system" ||
+		path.startsWith("/system/") ||
+		path === "/tdv" ||
+		path.startsWith("/tdv/") ||
+		path === "/account" ||
+		path.startsWith("/account/") ||
+		path === "/hetu" ||
+		path.startsWith("/hetu/") ||
+		path === "/static" ||
+		path.startsWith("/static/") ||
+		path.startsWith("/core") ||
+		path.startsWith("/default~") ||
+		path.startsWith("/vendors~") ||
+		path.startsWith("/runtime~")
+	);
+};
+
 const normalizeHetuUrl = (raw: string, preferAbsolute: boolean) => {
 	const trimmed = raw.trim();
 	if (!trimmed) return trimmed;
@@ -68,7 +107,11 @@ export const normalizeBiLinkForSave = (raw?: string | null, engine?: string | nu
 	if (!text) return "";
 	const normalizedEngine = String(engine || "").trim().toUpperCase();
 	if (normalizedEngine !== "HETU") return text;
-	return normalizeHetuUrl(text, true);
+	const resolved = normalizeHetuUrl(text, true);
+	if (isHetuLegacyPath(extractPathLike(resolved))) {
+		return toAbsolute("/analytics");
+	}
+	return resolved;
 };
 
 export const resolveBiLinkForOpen = (raw?: string | null, engine?: string | null) => {
@@ -79,5 +122,8 @@ export const resolveBiLinkForOpen = (raw?: string | null, engine?: string | null
 		return text.startsWith("/") ? toAbsolute(text) : text;
 	}
 	const resolved = normalizeHetuUrl(text, true);
+	if (isHetuLegacyPath(extractPathLike(resolved))) {
+		return toAbsolute("/analytics");
+	}
 	return resolved.startsWith("/") ? toAbsolute(resolved) : resolved;
 };

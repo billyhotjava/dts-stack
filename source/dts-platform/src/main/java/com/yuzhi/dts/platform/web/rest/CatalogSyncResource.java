@@ -15,6 +15,7 @@ import com.yuzhi.dts.platform.service.infra.InceptorIntegrationCoordinator;
 import com.yuzhi.dts.platform.service.infra.JdbcCatalogSyncService;
 import com.yuzhi.dts.platform.service.infra.JdbcCatalogSyncService.JdbcSyncResult;
 import com.yuzhi.dts.platform.service.infra.JdbcIntegrationCoordinator;
+import com.yuzhi.dts.platform.service.infra.AdminInfraClient;
 import com.yuzhi.dts.platform.service.infra.InceptorIntegrationCoordinator.IntegrationStatus;
 import com.yuzhi.dts.platform.service.infra.JdbcIntegrationCoordinator.JdbcIntegrationStatus;
 import jakarta.validation.Valid;
@@ -24,6 +25,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -54,6 +56,7 @@ public class CatalogSyncResource {
     private final CatalogDatasetRepository datasetRepository;
     private final CatalogFeatureProperties catalogFeatures;
     private final ObjectMapper objectMapper;
+    private final AdminInfraClient adminInfraClient;
 
     public CatalogSyncResource(
         InceptorIntegrationCoordinator inceptorCoordinator,
@@ -65,7 +68,8 @@ public class CatalogSyncResource {
         InfraDataSourceRepository dataSourceRepository,
         CatalogDatasetRepository datasetRepository,
         CatalogFeatureProperties catalogFeatures,
-        ObjectMapper objectMapper
+        ObjectMapper objectMapper,
+        AdminInfraClient adminInfraClient
     ) {
         this.inceptorCoordinator = inceptorCoordinator;
         this.jdbcCoordinator = jdbcCoordinator;
@@ -77,6 +81,7 @@ public class CatalogSyncResource {
         this.datasetRepository = datasetRepository;
         this.catalogFeatures = catalogFeatures;
         this.objectMapper = objectMapper;
+        this.adminInfraClient = adminInfraClient;
     }
 
     public record SyncRequest(Boolean includePrimary, Boolean includeJdbc, String reason) {}
@@ -165,8 +170,7 @@ public class CatalogSyncResource {
         @PathVariable UUID sourceId,
         @RequestBody(required = false) SingleSyncRequest body
     ) {
-        InfraDataSource source = dataSourceRepository
-            .findById(sourceId)
+        InfraDataSource source = resolveJdbcSource(sourceId)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "数据源不存在"));
         if (!isJdbcCandidate(source)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "该数据源不支持元数据采集");
@@ -183,7 +187,13 @@ public class CatalogSyncResource {
             syncRunRepository.save(run);
         } catch (Exception ignored) {}
 
-        JdbcSyncResult result = jdbcSyncService.synchronize(source, run.getId());
+        JdbcSyncResult result;
+        try {
+            // Manual single-source sync should reconcile stale metadata by default.
+            result = jdbcSyncService.synchronize(source, run.getId(), Boolean.TRUE);
+        } catch (RuntimeException ex) {
+            result = JdbcSyncResult.failed(source.getId(), ex.getMessage());
+        }
         run.setFinishedAt(Instant.now());
         run.setCatalogDatasetCountAfter(safeDatasetCount());
         run.setDatasetsCreated(result != null ? result.datasetsCreated() : null);
@@ -340,13 +350,14 @@ public class CatalogSyncResource {
     private List<Map<String, Object>> buildJdbcPipelines() {
         List<Map<String, Object>> pipelines = new ArrayList<>();
         List<InfraDataSource> sources = dataSourceRepository.findByStatusIgnoreCase("ACTIVE");
-        if (sources == null || sources.isEmpty()) {
-            return pipelines;
+        if (sources == null) {
+            sources = List.of();
         }
         InfraCatalogSyncRun lastRun = latestRun("JDBC");
         JdbcIntegrationStatus status = jdbcCoordinator.currentStatus();
         Map<UUID, JdbcSyncResult> resultMap = resolveJdbcResults(status, lastRun);
         boolean inProgress = jdbcCoordinator.isSyncInProgress();
+        AdminInfraClient.AdminDataLakeConfig adminLake = adminInfraClient.fetchDefaultDataLake().orElse(null);
         String schedule = catalogFeatures != null && catalogFeatures.isAutoSyncEnabled()
             ? "Cron: " + catalogFeatures.getAutoSyncCron()
             : "手动触发";
@@ -360,7 +371,11 @@ public class CatalogSyncResource {
             pipeline.put("id", sourceId != null ? sourceId.toString() : null);
             pipeline.put("sourceId", sourceId != null ? sourceId.toString() : null);
             pipeline.put("integration", "JDBC");
-            pipeline.put("name", source.getName());
+            String sourceName = source.getName();
+            if (isSameAsAdminDefaultLake(source, adminLake) && StringUtils.hasText(sourceName)) {
+                sourceName = sourceName + "（默认数据湖）";
+            }
+            pipeline.put("name", sourceName);
             pipeline.put("source", buildJdbcSourceLabel(source));
             pipeline.put("schedule", schedule);
             pipeline.put("lastRun", resolveTimestamp(status != null ? status.timestamp() : null, lastRun));
@@ -371,7 +386,105 @@ public class CatalogSyncResource {
             pipeline.put("error", result != null ? result.error() : (lastRun != null ? lastRun.getError() : null));
             pipelines.add(pipeline);
         }
+
+        // If local infra_data_source does not include admin default data lake, expose it as a virtual JDBC pipeline.
+        InfraDataSource virtualAdminSource = toVirtualAdminLakeSource(adminLake);
+        if (virtualAdminSource != null && isJdbcCandidate(virtualAdminSource)) {
+            UUID adminId = virtualAdminSource.getId();
+            String adminJdbc = normalizeJdbcUrl(virtualAdminSource.getJdbcUrl());
+            boolean duplicated = sources
+                .stream()
+                .filter(s -> s != null)
+                .anyMatch(s ->
+                    (adminId != null && adminId.equals(s.getId())) ||
+                    (StringUtils.hasText(adminJdbc) && adminJdbc.equalsIgnoreCase(normalizeJdbcUrl(s.getJdbcUrl())))
+                );
+            if (!duplicated) {
+                Map<String, Object> pipeline = new LinkedHashMap<>();
+                JdbcSyncResult result = adminId != null ? resultMap.get(adminId) : null;
+                pipeline.put("id", adminId != null ? adminId.toString() : null);
+                pipeline.put("sourceId", adminId != null ? adminId.toString() : null);
+                pipeline.put("integration", "JDBC");
+                pipeline.put("name", virtualAdminSource.getName());
+                pipeline.put("source", buildJdbcSourceLabel(virtualAdminSource));
+                pipeline.put("schedule", schedule);
+                pipeline.put("lastRun", resolveTimestamp(status != null ? status.timestamp() : null, lastRun));
+                pipeline.put("status", resolveJdbcStatus(inProgress, result, lastRun));
+                pipeline.put("tablesFound", resolveJdbcTablesFound(result));
+                pipeline.put("autoEnabled", catalogFeatures != null && catalogFeatures.isAutoSyncEnabled());
+                pipeline.put("logLines", buildJdbcLogs(virtualAdminSource, result));
+                pipeline.put("error", result != null ? result.error() : (lastRun != null ? lastRun.getError() : null));
+                pipelines.add(pipeline);
+            }
+        }
+
         return pipelines;
+    }
+
+    private boolean isSameAsAdminDefaultLake(InfraDataSource source, AdminInfraClient.AdminDataLakeConfig adminLake) {
+        if (source == null || adminLake == null) {
+            return false;
+        }
+        UUID adminId = adminLake.getId();
+        if (adminId != null && adminId.equals(source.getId())) {
+            return true;
+        }
+        String adminJdbc = normalizeJdbcUrl(adminLake.getJdbcUrl());
+        String sourceJdbc = normalizeJdbcUrl(source.getJdbcUrl());
+        return StringUtils.hasText(adminJdbc) && adminJdbc.equalsIgnoreCase(sourceJdbc);
+    }
+
+    private Optional<InfraDataSource> resolveJdbcSource(UUID sourceId) {
+        if (sourceId == null) {
+            return Optional.empty();
+        }
+        Optional<InfraDataSource> local = dataSourceRepository.findById(sourceId);
+        if (local.isPresent()) {
+            return local;
+        }
+        AdminInfraClient.AdminDataLakeConfig adminLake = adminInfraClient.fetchDefaultDataLake().orElse(null);
+        InfraDataSource virtual = toVirtualAdminLakeSource(adminLake);
+        if (virtual != null && sourceId.equals(virtual.getId())) {
+            return Optional.of(virtual);
+        }
+        return Optional.empty();
+    }
+
+    private InfraDataSource toVirtualAdminLakeSource(AdminInfraClient.AdminDataLakeConfig adminLake) {
+        if (adminLake == null || adminLake.getId() == null || !StringUtils.hasText(adminLake.getJdbcUrl())) {
+            return null;
+        }
+        InfraDataSource source = new InfraDataSource();
+        source.setId(adminLake.getId());
+        source.setName(StringUtils.hasText(adminLake.getName()) ? adminLake.getName().trim() : "默认数据湖");
+        source.setType(adminLake.getType());
+        source.setJdbcUrl(adminLake.getJdbcUrl());
+        source.setUsername(adminLake.getUsername());
+        source.setStatus("ACTIVE");
+
+        Map<String, Object> props = new LinkedHashMap<>();
+        if (adminLake.getJdbcProperties() != null && !adminLake.getJdbcProperties().isEmpty()) {
+            props.put("jdbcProperties", adminLake.getJdbcProperties());
+        }
+        if (StringUtils.hasText(adminLake.getPassword())) {
+            // Virtual source fallback: JdbcCatalogSyncService can read plain password from props when secrets are unavailable.
+            props.put("password", adminLake.getPassword());
+        }
+        if (StringUtils.hasText(adminLake.getDestinationDefinitionId())) {
+            props.put("destinationDefinitionId", adminLake.getDestinationDefinitionId());
+        }
+        if (adminLake.getDestinationConfig() != null && !adminLake.getDestinationConfig().isEmpty()) {
+            props.put("destinationConfig", adminLake.getDestinationConfig());
+        }
+        source.setProps(writeJson(props));
+        return source;
+    }
+
+    private String normalizeJdbcUrl(String jdbcUrl) {
+        if (!StringUtils.hasText(jdbcUrl)) {
+            return null;
+        }
+        return jdbcUrl.trim();
     }
 
     private Map<UUID, JdbcSyncResult> resolveJdbcResults(JdbcIntegrationStatus status, InfraCatalogSyncRun lastRun) {

@@ -1,4 +1,4 @@
-name: "dts_demo"
+name: "dts"
 version: "1.0.0"
 config-version: 2
 
@@ -7,5 +7,5 @@ profile: "dts"
 model-paths: ["models"]
 
 models:
-  dts_demo:
+  dts:
     +materialized: table

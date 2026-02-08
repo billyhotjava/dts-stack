@@ -202,6 +202,8 @@ type DbtSourceItem = {
 	systemCode?: string;
 	bizCode?: string;
 	entityCode?: string;
+	sourceDataSourceId?: string;
+	sourceDataSourceName?: string;
 	sourceSnippet?: string;
 };
 
@@ -283,12 +285,12 @@ export default function SqlModelingPage() {
 	const [snippetDrawerOpen, setSnippetDrawerOpen] = useState(false);
 	const [snippetTab, setSnippetTab] = useState<"source" | "ref">("source");
 	const [snippetKeyword, setSnippetKeyword] = useState("");
-	const [guideCollapsed, setGuideCollapsed] = useState(false);
 	const [form] = Form.useForm();
 	const [runForm] = Form.useForm();
 	const [modelForm] = Form.useForm();
 	const [importForm] = Form.useForm();
 	const [odsGenerateForm] = Form.useForm();
+	const selectedOdsSourceDataSourceId = Form.useWatch("sourceDataSourceId", odsGenerateForm);
 
 	const loadConfig = useCallback(async () => {
 		setConfigLoading(true);
@@ -562,6 +564,7 @@ export default function SqlModelingPage() {
 			createAds: true,
 			overwriteExisting: true,
 		});
+		void loadDbtSources();
 		setOdsGenerateOpen(true);
 	};
 
@@ -815,16 +818,71 @@ export default function SqlModelingPage() {
 		);
 	}, [dbtRefs, snippetKeyword]);
 
-	const odsSourceOptions = useMemo(
-		() =>
-			dbtSources
-				.filter((item) => !!item.id)
-				.map((item) => ({
-					label: `${item.schema}.${item.table}${item.systemCode ? ` · ${item.systemCode}` : ""}`,
+	const odsSourceOptions = useMemo(() => {
+		const selectedSourceId = normalizeText(selectedOdsSourceDataSourceId);
+		return dbtSources
+			.filter((item) => !!item.id)
+			.filter((item) => {
+				if (!selectedSourceId) return true;
+				return normalizeText(item.sourceDataSourceId) === selectedSourceId;
+			})
+			.map((item) => {
+				const schema = normalizeText(item.schema) || "public";
+				const rawTable = normalizeText(item.table);
+				const prefix = `${schema}.`;
+				const table = rawTable.toLowerCase().startsWith(prefix.toLowerCase()) ? rawTable.slice(prefix.length) : rawTable;
+				return {
+					label: table ? `${schema}.${table}` : schema,
 					value: item.id as string,
-				})),
-		[dbtSources],
-	);
+				};
+			});
+	}, [dbtSources, selectedOdsSourceDataSourceId]);
+
+	const odsSourceFilterOptions = useMemo(() => {
+		const idToLabel = new Map<string, string>();
+		for (const item of dbtSources) {
+			const sourceId = normalizeText(item.sourceDataSourceId);
+			if (!sourceId || idToLabel.has(sourceId)) continue;
+			const sourceName = normalizeText(item.sourceDataSourceName);
+			const matched = dataSources.find((ds) => String(ds.id) === sourceId);
+			idToLabel.set(sourceId, matched?.name || sourceName || "默认数据源");
+		}
+		const options = Array.from(idToLabel.entries()).map(([value, label]) => ({ value, label }));
+		if (options.length > 0) {
+			return options;
+		}
+		// Fallback: keep source selector usable even when ODS mapping list is temporarily empty.
+		return dataSources.map((ds) => ({
+			label: ds?.name || ds?.id,
+			value: ds?.id,
+		}));
+	}, [dataSources, dbtSources]);
+
+	useEffect(() => {
+		if (!odsGenerateOpen) return;
+		void loadDbtSources();
+	}, [loadDbtSources, odsGenerateOpen]);
+
+	useEffect(() => {
+		if (!odsGenerateOpen) return;
+		const selectedSourceId = normalizeText(selectedOdsSourceDataSourceId);
+		if (!selectedSourceId) return;
+		const exists = odsSourceFilterOptions.some((item) => normalizeText(item.value) === selectedSourceId);
+		if (!exists) {
+			odsGenerateForm.setFieldValue("sourceDataSourceId", undefined);
+		}
+	}, [odsGenerateForm, odsGenerateOpen, odsSourceFilterOptions, selectedOdsSourceDataSourceId]);
+
+	useEffect(() => {
+		if (!odsGenerateOpen) return;
+		const current = odsGenerateForm.getFieldValue("mappingIds");
+		if (!Array.isArray(current) || current.length === 0) return;
+		const allowed = new Set(odsSourceOptions.map((item) => String(item.value)));
+		const next = current.map((item: any) => String(item)).filter((item: string) => allowed.has(item));
+		if (next.length !== current.length) {
+			odsGenerateForm.setFieldValue("mappingIds", next);
+		}
+	}, [odsGenerateOpen, odsGenerateForm, odsSourceOptions]);
 
 	const models = sqlModels || [];
 	const configEnabled = dbtConfig?.enabled !== false;
@@ -1125,34 +1183,7 @@ export default function SqlModelingPage() {
 					</span>
 				</div>
 			)}
-			<div className="border-b border-border bg-muted/20 px-4 py-2">
-				<div className="flex items-center justify-between gap-2">
-						<div className="text-sm font-medium text-foreground">
-							{"主流程：ODS 接入 -> 选择映射 -> 一键生成 DWD/DWS/ADS -> 校验并上线"}
-						</div>
-					<Space size={8}>
-						<Button size="small" onClick={() => router.push("/foundation/data-sources")}>
-							去 ODS 接入
-						</Button>
-						<Button size="small" type="primary" ghost onClick={openOdsGenerateModel} disabled={!workspaceOk}>
-							打开一键生成
-						</Button>
-						<Button size="small" type="link" onClick={() => setGuideCollapsed((prev) => !prev)}>
-							{guideCollapsed ? "展开" : "收起"}
-						</Button>
-					</Space>
-				</div>
-				{!guideCollapsed && (
-					<ol className="mt-2 list-decimal pl-5 text-xs text-muted-foreground">
-						<li>先在数据集成完成 ODS 表接入或源库映射。</li>
-						<li>在本页选择项目空间和 ODS 映射后执行一键生成。</li>
-						<li>系统自动产出 dwd_ / dws_ / ads_ 模型模板。</li>
-						<li>在 dbt 文件浏览器微调并运行，最后提交上线。</li>
-					</ol>
-				)}
-			</div>
-
-			<div className="flex flex-1 overflow-hidden">
+			<div className="flex flex-1 min-h-0 overflow-hidden">
 				<div className="w-64 border-r border-border bg-muted p-4">
 					<div className="mb-3 text-xs font-bold uppercase text-muted-foreground">项目目录</div>
 					<Input
@@ -1222,8 +1253,8 @@ export default function SqlModelingPage() {
 						</Space>
 					</div>
 
-					<div className="flex-1 overflow-auto bg-slate-950 px-6 py-4">
-						{activeModel ? (
+						<div className="flex-1 overflow-auto bg-slate-950 px-6 py-4">
+							{activeModel ? (
 							<Suspense
 								fallback={
 									<div className="flex h-full items-center justify-center text-center text-xs text-muted-foreground">
@@ -1250,56 +1281,10 @@ export default function SqlModelingPage() {
 						) : (
 							<div className="flex h-full items-center justify-center text-center text-xs text-muted-foreground">
 								请选择模型查看 SQL。
-							</div>
-						)}
+								</div>
+							)}
+						</div>
 					</div>
-
-					<div className="h-64 border-t border-border bg-card">
-						<Tabs
-							activeKey={bottomTab}
-							onChange={setBottomTab}
-							size="small"
-							className="px-4"
-							items={[
-								{
-									key: "preview",
-									label: "数据预览 (Top 100)",
-									children: (
-										<div className="p-4">
-											<EmptyState title="暂无预览数据" description="运行预览接口接入后展示结果。" compact />
-										</div>
-									),
-								},
-								{
-									key: "compile",
-									label: "编译日志",
-									children: (
-										<div className="p-4">
-											<EmptyState title="暂无编译日志" description="语法校验接口接入后展示日志。" compact />
-										</div>
-									),
-								},
-								{
-									key: "runs",
-									label: "运行记录",
-									children: runs.length === 0 && !runsLoading ? (
-										<div className="p-4 text-sm text-muted-foreground">暂无运行记录。</div>
-									) : (
-										<Table
-											rowKey={(row) => row.dag_run_id || Math.random().toString(36)}
-											size="small"
-											pagination={false}
-											columns={runColumns}
-											dataSource={runs}
-											loading={runsLoading}
-											scroll={{ y: 140 }}
-										/>
-									),
-								},
-							]}
-						/>
-					</div>
-				</div>
 
 				<div className="w-64 border-l border-border bg-card overflow-y-auto">
 					<Tabs
@@ -1415,31 +1400,100 @@ export default function SqlModelingPage() {
 								),
 							},
 						]}
+						/>
+					</div>
+				</div>
+
+				<div className="h-72 border-t border-border bg-card">
+					<Tabs
+						activeKey={bottomTab}
+						onChange={setBottomTab}
+						size="small"
+						className="px-4"
+						items={[
+							{
+								key: "preview",
+								label: "数据预览 (Top 100)",
+								children: (
+									<div className="p-4">
+										<EmptyState title="暂无预览数据" description="运行预览接口接入后展示结果。" compact />
+									</div>
+								),
+							},
+							{
+								key: "compile",
+								label: "编译日志",
+								children: (
+									<div className="p-4">
+										<EmptyState title="暂无编译日志" description="语法校验接口接入后展示日志。" compact />
+									</div>
+								),
+							},
+							{
+								key: "runs",
+								label: "运行记录",
+								children: runs.length === 0 && !runsLoading ? (
+									<div className="p-4 text-sm text-muted-foreground">暂无运行记录。</div>
+								) : (
+									<Table
+										rowKey={(row) => row.dag_run_id || Math.random().toString(36)}
+										size="small"
+										pagination={false}
+										columns={runColumns}
+										dataSource={runs}
+										loading={runsLoading}
+										scroll={{ y: 170 }}
+									/>
+								),
+							},
+							{
+								key: "brief",
+								label: "简要说明",
+								children: (
+									<div className="p-4 text-sm text-foreground">
+										<div className="mb-3 font-medium">主流程：ODS 接入 -&gt; 选择映射 -&gt; 一键生成 DWD/DWS/ADS -&gt; 校验并上线</div>
+										<ol className="list-decimal pl-5 text-xs text-muted-foreground">
+											<li>先在数据集成完成 ODS 表接入或源库映射。</li>
+											<li>在本页选择项目空间和 ODS 映射后执行一键生成。</li>
+											<li>系统自动产出 dwd_ / dws_ / ads_ 模型模板。</li>
+											<li>在 dbt 文件浏览器微调并运行，最后提交上线。</li>
+										</ol>
+										<Space className="mt-4" size={8}>
+											<Button size="small" onClick={() => router.push("/foundation/data-sources")}>
+												去 ODS 接入
+											</Button>
+											<Button size="small" type="primary" ghost onClick={openOdsGenerateModel} disabled={!workspaceOk}>
+												打开一键生成
+											</Button>
+										</Space>
+									</div>
+								),
+							},
+						]}
 					/>
 				</div>
-			</div>
 
-			<Drawer
-				open={configOpen}
-				title="dbt 工作区配置"
-				width={520}
-				onClose={() => setConfigOpen(false)}
-				footer={
-					<Space>
-						<Button onClick={() => setConfigOpen(false)}>取消</Button>
-						<Button type="primary" onClick={saveConfig} loading={configSaving} disabled={!configEnabled}>
-							保存配置
-						</Button>
-					</Space>
-				}
-			>
-				<Form layout="vertical" form={form} disabled={!configEnabled || configLoading}>
-					<Form.Item name="projectDir" label="项目目录" rules={[{ required: true, message: "请输入项目目录" }]}>
-						<Input placeholder="/opt/dts/dbt-project" />
-					</Form.Item>
-					<Form.Item name="profilesDir" label="profiles 目录" rules={[{ required: true, message: "请输入 profiles 目录" }]}>
-						<Input placeholder="/opt/dts/dbt-profiles" />
-					</Form.Item>
+				<Drawer
+					open={configOpen}
+					title="dbt 工作区配置"
+					width={520}
+					onClose={() => setConfigOpen(false)}
+					footer={
+						<Space>
+							<Button onClick={() => setConfigOpen(false)}>取消</Button>
+							<Button type="primary" onClick={saveConfig} loading={configSaving} disabled={!configEnabled}>
+								保存配置
+							</Button>
+						</Space>
+					}
+				>
+					<Form layout="vertical" form={form} disabled={!configEnabled || configLoading}>
+						<Form.Item name="projectDir" label="项目目录" rules={[{ required: true, message: "请输入项目目录" }]}>
+							<Input placeholder="/opt/dts/dbt-project" />
+						</Form.Item>
+						<Form.Item name="profilesDir" label="profiles 目录" rules={[{ required: true, message: "请输入 profiles 目录" }]}>
+							<Input placeholder="/opt/dts/dbt-profiles" />
+						</Form.Item>
 					<div className="grid gap-4 md:grid-cols-2">
 						<Form.Item name="profileName" label="Profile 名称">
 							<Input placeholder="dts" />
@@ -1802,11 +1856,8 @@ WHERE status = 'active'`}
 						<Form.Item name="sourceDataSourceId" label="来源数据源（可选）">
 							<Select
 								allowClear
-								placeholder="用于补充来源标签和调度选择器"
-								options={dataSources.map((ds) => ({
-									label: ds?.name || ds?.id,
-									value: ds?.id,
-								}))}
+								placeholder={sourcesLoading ? "加载可用来源..." : "按 ODS 映射自动识别"}
+								options={odsSourceFilterOptions}
 							/>
 						</Form.Item>
 					</div>

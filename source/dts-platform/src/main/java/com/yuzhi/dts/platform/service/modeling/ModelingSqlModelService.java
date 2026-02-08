@@ -53,6 +53,8 @@ public class ModelingSqlModelService {
     private static final Logger LOG = LoggerFactory.getLogger(ModelingSqlModelService.class);
     private static final Pattern MODEL_NAME_PATTERN = Pattern.compile("^[A-Za-z][A-Za-z0-9_]*$");
     private static final Pattern NON_SAFE = Pattern.compile("[^a-z0-9_]+");
+    private static final String STATUS_ACTIVE = "ACTIVE";
+    private static final String BIADMIN_NAME = "数仓 (biadmin)";
 
     private final ModelingSqlModelRepository repo;
     private final ModelingPlanRepository planRepo;
@@ -235,9 +237,9 @@ public class ModelingSqlModelService {
         boolean instituteScope = security.hasInstituteScope();
         ensureWorkspaceWritable();
         resolvePlan(request.planId(), activeDeptHeader);
-        if (request.sourceDataSourceId() != null) {
-            resolveSource(request.sourceDataSourceId(), activeDeptHeader);
-        }
+        UUID preferredSourceId = resolveUsableSourceId(request.sourceDataSourceId(), activeDeptHeader, "request");
+
+        UUID fallbackSourceId = resolveFallbackSourceId(activeDeptHeader);
 
         Set<UUID> selectedIds = new LinkedHashSet<>(request.mappingIds());
         List<InfraOdsTableMapping> mappings = odsTableMappingRepository.findAllById(selectedIds)
@@ -267,6 +269,20 @@ public class ModelingSqlModelService {
                 skipped.add("mapping:" + mapping.getId() + " (ODS 表名为空)");
                 continue;
             }
+            UUID modelSourceId = preferredSourceId;
+            if (modelSourceId == null) {
+                modelSourceId = resolveUsableSourceId(mapping.getConnectionId(), activeDeptHeader, "mapping");
+            }
+            if (modelSourceId == null) {
+                modelSourceId = resolveOdsDatasetSourceId(odsSchema, odsTable, activeDeptHeader);
+            }
+            if (modelSourceId == null) {
+                modelSourceId = fallbackSourceId;
+            }
+            if (modelSourceId == null) {
+                skipped.add(odsSchema + "." + odsTable + " (未找到可用来源数据源)");
+                continue;
+            }
 
             String entityToken = resolveEntityToken(mapping, odsTable);
             if (!StringUtils.hasText(entityToken)) {
@@ -281,7 +297,7 @@ public class ModelingSqlModelService {
             if (createDwd) {
                 dwdResult = upsertGeneratedModel(
                     request.planId(),
-                    request.sourceDataSourceId(),
+                    modelSourceId,
                     "dwd_" + entityToken,
                     "DWD",
                     request.schemaName(),
@@ -311,7 +327,7 @@ public class ModelingSqlModelService {
                 String dwdRef = dwdResult != null ? dwdResult.modelName() : "dwd_" + entityToken;
                 dwsResult = upsertGeneratedModel(
                     request.planId(),
-                    request.sourceDataSourceId(),
+                    modelSourceId,
                     "dws_" + entityToken,
                     "DWS",
                     request.schemaName(),
@@ -340,7 +356,7 @@ public class ModelingSqlModelService {
                 String dwsRef = dwsResult != null ? dwsResult.modelName() : "dws_" + entityToken;
                 GenerateLayerResult adsResult = upsertGeneratedModel(
                     request.planId(),
-                    request.sourceDataSourceId(),
+                    modelSourceId,
                     "ads_" + entityToken,
                     "ADS",
                     request.schemaName(),
@@ -605,6 +621,95 @@ public class ModelingSqlModelService {
             throw new IllegalArgumentException("当前账号无权访问该数据源");
         }
         return source;
+    }
+
+    private UUID resolveUsableSourceId(UUID sourceId, String activeDeptHeader, String origin) {
+        if (sourceId == null) {
+            return null;
+        }
+        try {
+            resolveSource(sourceId, activeDeptHeader);
+            return sourceId;
+        } catch (RuntimeException ex) {
+            LOG.warn("[generate-from-ods] {} sourceDataSourceId {} not usable: {}", origin, sourceId, ex.getMessage());
+            return null;
+        }
+    }
+
+    private UUID resolveOdsDatasetSourceId(String schema, String table, String activeDeptHeader) {
+        if (!StringUtils.hasText(schema) || !StringUtils.hasText(table)) {
+            return null;
+        }
+        List<CatalogDataset> datasets = datasetRepository.findByHiveDatabaseIgnoreCaseAndHiveTableIgnoreCase(schema.trim(), table.trim());
+        if (datasets == null || datasets.isEmpty()) {
+            return null;
+        }
+        for (CatalogDataset dataset : datasets) {
+            if (dataset == null || dataset.getSourceId() == null) {
+                continue;
+            }
+            UUID usable = resolveUsableSourceId(dataset.getSourceId(), activeDeptHeader, "dataset");
+            if (usable != null) {
+                return usable;
+            }
+        }
+        return null;
+    }
+
+    private UUID resolveFallbackSourceId(String activeDeptHeader) {
+        List<InfraDataSource> candidates = dataSourceRepository.findByStatusIgnoreCase(STATUS_ACTIVE);
+        if (candidates == null || candidates.isEmpty()) {
+            candidates = dataSourceRepository.findAll();
+        }
+        UUID bestId = null;
+        int bestScore = Integer.MIN_VALUE;
+        for (InfraDataSource source : candidates) {
+            if (source == null || source.getId() == null) {
+                continue;
+            }
+            UUID usable = resolveUsableSourceId(source.getId(), activeDeptHeader, "fallback");
+            if (usable == null) {
+                continue;
+            }
+            int score = scoreSource(source);
+            if (score > bestScore) {
+                bestScore = score;
+                bestId = usable;
+            }
+        }
+        return bestId;
+    }
+
+    private int scoreSource(InfraDataSource source) {
+        if (source == null) {
+            return Integer.MIN_VALUE;
+        }
+        int score = 0;
+        String name = trimToEmpty(source.getName()).toLowerCase(Locale.ROOT);
+        String type = trimToEmpty(source.getType()).toLowerCase(Locale.ROOT);
+        String jdbcUrl = trimToEmpty(source.getJdbcUrl()).toLowerCase(Locale.ROOT);
+        String status = trimToEmpty(source.getStatus()).toLowerCase(Locale.ROOT);
+        if (BIADMIN_NAME.equalsIgnoreCase(source.getName())) {
+            score += 100;
+        }
+        if (name.contains("biadmin")) {
+            score += 80;
+        }
+        if (jdbcUrl.contains("/biadmin")) {
+            score += 70;
+        }
+        if ("postgres".equals(type) || "postgresql".equals(type)) {
+            score += 50;
+        } else if (StringUtils.hasText(type)) {
+            score += 20;
+        }
+        if ("active".equals(status)) {
+            score += 5;
+        }
+        if (StringUtils.hasText(jdbcUrl)) {
+            score += 5;
+        }
+        return score;
     }
 
     private SqlModelDto toDto(ModelingSqlModel model) {

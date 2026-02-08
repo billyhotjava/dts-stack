@@ -108,6 +108,10 @@ public class JdbcCatalogSyncService {
     }
 
     public JdbcSyncResult synchronize(InfraDataSource source, UUID runId) {
+        return synchronize(source, runId, null);
+    }
+
+    public JdbcSyncResult synchronize(InfraDataSource source, UUID runId, Boolean cleanupStaleOverride) {
         if (source == null || source.getId() == null) {
             return JdbcSyncResult.failed(null, "invalid-source");
         }
@@ -122,13 +126,19 @@ public class JdbcCatalogSyncService {
 
         Map<String, Object> secrets = secretService.readSecrets(source);
         String password = stringProp(secrets, "password");
+        if (!StringUtils.hasText(password)) {
+            // Fallback for virtual/admin-provided sources where secure props are not persisted locally.
+            password = stringProp(props, "password");
+        }
         if (!StringUtils.hasText(source.getJdbcUrl())) {
             return JdbcSyncResult.failed(source.getId(), "missing-jdbc-url");
         }
 
         List<String> schemas = resolveSchemas(props, source);
 
-        boolean cleanupStale = boolProp(props, "catalogCleanupStale", false);
+        boolean cleanupStale = cleanupStaleOverride != null
+            ? cleanupStaleOverride.booleanValue()
+            : boolProp(props, "catalogCleanupStale", false);
         String tablePattern = Optional.ofNullable(stringProp(props, "tablePattern")).filter(StringUtils::hasText).orElse("%");
 
         int datasetsCreated = 0;

@@ -130,7 +130,6 @@ export default function MetadataPage() {
 
 	useEffect(() => {
 		void loadPipelines();
-		void loadTables("");
 	}, []);
 
 	useEffect(() => {
@@ -148,6 +147,18 @@ export default function MetadataPage() {
 	}, [selectedPipeline?.integration, selectedPipeline?.sourceId]);
 
 	useEffect(() => {
+		if (!selectedPipeline) {
+			setTables([]);
+			setSelectedFqn(undefined);
+			return;
+		}
+		void loadTables(keyword);
+		// Only reload table candidates when selected source changes.
+		// Keyword search remains manual via the "搜索" button.
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [selectedPipeline?.id, selectedPipeline?.sourceId, selectedPipeline?.integration]);
+
+	useEffect(() => {
 		if (!selectedFqn) {
 			setTableDetail(null);
 			return;
@@ -161,8 +172,15 @@ export default function MetadataPage() {
 			const resp: any = await listCatalogSyncPipelines();
 			const list = Array.isArray(resp) ? resp : [];
 			setPipelines(list as SyncPipeline[]);
-			if (list.length && !selectedPipelineId) {
-				setSelectedPipelineId(list[0]?.id);
+			if (!list.length) {
+				setSelectedPipelineId(undefined);
+			} else {
+				const exists = selectedPipelineId
+					? list.some((item: SyncPipeline) => String(item.id) === String(selectedPipelineId))
+					: false;
+				if (!exists) {
+					setSelectedPipelineId(list[0]?.id);
+				}
 			}
 		} catch (error: any) {
 			toast.error(error?.message || "采集任务加载失败");
@@ -191,14 +209,20 @@ export default function MetadataPage() {
 	const loadTables = async (nextKeyword: string) => {
 		setLoadingTables(true);
 		try {
-			const resp: any = await getTechMetadataTables({ keyword: nextKeyword || undefined, size: 50 });
+			const sourceId =
+				selectedPipeline?.integration === "JDBC" ? selectedPipeline?.sourceId || selectedPipeline?.id : undefined;
+			const resp: any = await getTechMetadataTables({
+				keyword: nextKeyword || undefined,
+				size: 50,
+				sourceId: sourceId || undefined,
+			});
 			const items = Array.isArray(resp?.items) ? resp.items : [];
 			setTables(items as TableSummary[]);
-			if (items.length) {
-				setSelectedFqn((prev) => prev || items[0]?.fqn);
-			} else {
-				setSelectedFqn(undefined);
-			}
+			setSelectedFqn((prev) => {
+				if (!items.length) return undefined;
+				if (prev && items.some((item: TableSummary) => item.fqn === prev)) return prev;
+				return items[0]?.fqn;
+			});
 		} catch (error: any) {
 			toast.error(error?.message || "元数据资产加载失败");
 			setTables([]);
@@ -237,6 +261,8 @@ export default function MetadataPage() {
 				await triggerCatalogSync({ includePrimary: true, includeJdbc: false, reason });
 			}
 			toast.success("已触发采集任务");
+			await loadPipelines();
+			void loadTables(keyword);
 			if (selectedPipeline.integration) {
 				void loadRuns(selectedPipeline.integration);
 			}

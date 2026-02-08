@@ -1,8 +1,11 @@
 package com.yuzhi.dts.platform.web.rest;
 
+import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
 import com.yuzhi.dts.platform.domain.infra.InfraOdsTableMapping;
+import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
 import com.yuzhi.dts.platform.repository.infra.InfraOdsTableMappingRepository;
 import com.yuzhi.dts.platform.repository.modeling.ModelingSqlModelRepository;
+import com.yuzhi.dts.platform.repository.service.InfraDataSourceRepository;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.modeling.DataStandardSecurity;
 import com.yuzhi.dts.platform.service.modeling.ModelingSqlModelService;
@@ -35,6 +38,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @RestController
 @RequestMapping("/api/modeling/sql-models")
@@ -43,10 +48,15 @@ public class ModelingSqlModelResource {
 
     private static final String MODELING_MAINTAINER_EXPRESSION =
         "hasAnyAuthority(T(com.yuzhi.dts.platform.security.AuthoritiesConstants).CATALOG_MAINTAINERS)";
+    private static final String STATUS_ACTIVE = "ACTIVE";
+    private static final String BIADMIN_NAME = "数仓 (biadmin)";
+    private static final Logger LOG = LoggerFactory.getLogger(ModelingSqlModelResource.class);
 
     private final ModelingSqlModelService sqlModelService;
     private final ModelingSqlModelRepository sqlModelRepository;
     private final InfraOdsTableMappingRepository odsTableMappingRepository;
+    private final CatalogDatasetRepository datasetRepository;
+    private final InfraDataSourceRepository dataSourceRepository;
     private final AuditService auditService;
     private final DataStandardSecurity security;
 
@@ -54,12 +64,16 @@ public class ModelingSqlModelResource {
         ModelingSqlModelService sqlModelService,
         ModelingSqlModelRepository sqlModelRepository,
         InfraOdsTableMappingRepository odsTableMappingRepository,
+        CatalogDatasetRepository datasetRepository,
+        InfraDataSourceRepository dataSourceRepository,
         AuditService auditService,
         DataStandardSecurity security
     ) {
         this.sqlModelService = sqlModelService;
         this.sqlModelRepository = sqlModelRepository;
         this.odsTableMappingRepository = odsTableMappingRepository;
+        this.datasetRepository = datasetRepository;
+        this.dataSourceRepository = dataSourceRepository;
         this.auditService = auditService;
         this.security = security;
     }
@@ -189,10 +203,12 @@ public class ModelingSqlModelResource {
     @GetMapping("/dbt/sources")
     public ApiResponse<List<Map<String, Object>>> listDbtSources(
         @RequestParam(required = false) String keyword,
+        @RequestParam(required = false) UUID sourceDataSourceId,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
         List<InfraOdsTableMapping> mappings = odsTableMappingRepository.findByEnabledTrueOrderByOdsSchemaAscOdsTableAsc();
         String kw = StringUtils.hasText(keyword) ? keyword.trim().toLowerCase(Locale.ROOT) : null;
+        UUID fallbackSourceId = resolveFallbackSourceId();
 
         List<Map<String, Object>> result = new ArrayList<>();
         for (InfraOdsTableMapping mapping : mappings) {
@@ -200,6 +216,12 @@ public class ModelingSqlModelResource {
             String schema = StringUtils.hasText(mapping.getOdsSchema()) ? mapping.getOdsSchema().trim() : "public";
             String table = StringUtils.hasText(mapping.getOdsTable()) ? mapping.getOdsTable().trim() : null;
             if (!StringUtils.hasText(table)) continue;
+            UUID resolvedSourceId = resolveExistingSourceId(resolveDatasetSourceId(schema, table));
+            UUID mappingSourceId = resolveExistingSourceId(mapping.getConnectionId());
+            UUID effectiveSourceId = resolvedSourceId != null ? resolvedSourceId : (mappingSourceId != null ? mappingSourceId : fallbackSourceId);
+            if (sourceDataSourceId != null && (effectiveSourceId == null || !sourceDataSourceId.equals(effectiveSourceId))) {
+                continue;
+            }
 
             // 关键词过滤
             if (kw != null) {
@@ -218,11 +240,115 @@ public class ModelingSqlModelResource {
             row.put("systemCode", mapping.getSystemCode());
             row.put("bizCode", mapping.getBizCode());
             row.put("entityCode", mapping.getEntityCode());
+            row.put("sourceDataSourceId", effectiveSourceId);
+            row.put("sourceDataSourceName", resolveSourceName(effectiveSourceId));
             row.put("sourceSnippet", "{{ source('" + schema + "', '" + table + "') }}");
             result.add(row);
         }
+        List<String> preview = result
+            .stream()
+            .limit(5)
+            .map(item -> String.valueOf(item.get("schema")) + "." + String.valueOf(item.get("table")))
+            .toList();
+        LOG.info(
+            "[dbt-sources] sourceDataSourceId={} keyword='{}' returned={} totalMappings={} preview={}",
+            sourceDataSourceId,
+            StringUtils.hasText(keyword) ? keyword.trim() : "",
+            result.size(),
+            mappings.size(),
+            preview
+        );
+        if (sourceDataSourceId != null && result.isEmpty()) {
+            LOG.warn(
+                "[dbt-sources] no ODS mappings matched sourceDataSourceId={} keyword='{}'; check metadata sync/catalog_dataset source binding",
+                sourceDataSourceId,
+                StringUtils.hasText(keyword) ? keyword.trim() : ""
+            );
+        }
         auditService.audit("READ", "modeling.sql-model.dbt-sources", "list");
         return ApiResponses.ok(result);
+    }
+
+    private UUID resolveDatasetSourceId(String schema, String table) {
+        if (!StringUtils.hasText(schema) || !StringUtils.hasText(table)) {
+            return null;
+        }
+        List<CatalogDataset> datasets = datasetRepository.findByHiveDatabaseIgnoreCaseAndHiveTableIgnoreCase(schema.trim(), table.trim());
+        if (datasets == null || datasets.isEmpty()) {
+            return null;
+        }
+        for (CatalogDataset dataset : datasets) {
+            if (dataset == null) continue;
+            if (dataset.getEnabled() != null && !dataset.getEnabled().booleanValue()) continue;
+            if (dataset.getSourceId() != null) {
+                return dataset.getSourceId();
+            }
+        }
+        return null;
+    }
+
+    private String resolveSourceName(UUID sourceId) {
+        if (sourceId == null) {
+            return null;
+        }
+        return dataSourceRepository.findById(sourceId).map(ds -> StringUtils.hasText(ds.getName()) ? ds.getName().trim() : null).orElse(null);
+    }
+
+    private UUID resolveExistingSourceId(UUID sourceId) {
+        if (sourceId == null) {
+            return null;
+        }
+        return dataSourceRepository.existsById(sourceId) ? sourceId : null;
+    }
+
+    private UUID resolveFallbackSourceId() {
+        List<com.yuzhi.dts.platform.domain.service.InfraDataSource> candidates = dataSourceRepository.findByStatusIgnoreCase(STATUS_ACTIVE);
+        if (candidates == null || candidates.isEmpty()) {
+            candidates = dataSourceRepository.findAll();
+        }
+        UUID bestId = null;
+        int bestScore = Integer.MIN_VALUE;
+        for (com.yuzhi.dts.platform.domain.service.InfraDataSource source : candidates) {
+            if (source == null || source.getId() == null) continue;
+            int score = scoreSource(source);
+            if (score > bestScore) {
+                bestScore = score;
+                bestId = source.getId();
+            }
+        }
+        return bestId;
+    }
+
+    private int scoreSource(com.yuzhi.dts.platform.domain.service.InfraDataSource source) {
+        if (source == null) {
+            return Integer.MIN_VALUE;
+        }
+        int score = 0;
+        String name = source.getName() == null ? "" : source.getName().trim().toLowerCase(Locale.ROOT);
+        String type = source.getType() == null ? "" : source.getType().trim().toLowerCase(Locale.ROOT);
+        String jdbcUrl = source.getJdbcUrl() == null ? "" : source.getJdbcUrl().trim().toLowerCase(Locale.ROOT);
+        String status = source.getStatus() == null ? "" : source.getStatus().trim().toLowerCase(Locale.ROOT);
+        if (BIADMIN_NAME.equalsIgnoreCase(source.getName())) {
+            score += 100;
+        }
+        if (name.contains("biadmin")) {
+            score += 80;
+        }
+        if (jdbcUrl.contains("/biadmin")) {
+            score += 70;
+        }
+        if ("postgres".equals(type) || "postgresql".equals(type)) {
+            score += 50;
+        } else if (StringUtils.hasText(type)) {
+            score += 20;
+        }
+        if ("active".equals(status)) {
+            score += 5;
+        }
+        if (StringUtils.hasText(jdbcUrl)) {
+            score += 5;
+        }
+        return score;
     }
 
     /**

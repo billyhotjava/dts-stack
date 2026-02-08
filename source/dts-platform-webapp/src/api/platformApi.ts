@@ -18,7 +18,7 @@ export const getDatasetLineage = (id: string) => api.get({ url: `/catalog/datase
 export const getDatasetQuality = (id: string) => api.get({ url: `/catalog/datasets/${id}/quality` });
 export const batchDatasetQuality = (ids: string[]) =>
 	api.post({ url: "/catalog/quality/batch", data: { ids } });
-export const getTechMetadataTables = (params?: { keyword?: string; size?: number }) =>
+export const getTechMetadataTables = (params?: { keyword?: string; size?: number; sourceId?: string }) =>
 	api.get({ url: "/catalog/metadata/tables", params });
 export const getTechMetadataTableDetail = (fqn: string) =>
 	api.get({ url: "/catalog/metadata/tables/detail", params: { fqn } });
@@ -52,7 +52,7 @@ export const updateSqlModel = (id: string, data: any) => api.put({ url: `/modeli
 export const deleteSqlModel = (id: string) => api.delete({ url: `/modeling/sql-models/${id}` });
 export const importSqlModel = (data: FormData) => api.post({ url: "/modeling/sql-models/import", data });
 export const generateSqlModelsFromOds = (data: any) => api.post({ url: "/modeling/sql-models/generate-from-ods", data });
-export const listDbtSources = (params?: { keyword?: string }) =>
+export const listDbtSources = (params?: { keyword?: string; sourceDataSourceId?: string }) =>
 	api.get({ url: "/modeling/sql-models/dbt/sources", params });
 export const listDbtRefs = (params?: { keyword?: string; layer?: string }) =>
 	api.get({ url: "/modeling/sql-models/dbt/refs", params });

@@ -17,10 +17,12 @@ import com.yuzhi.dts.platform.service.catalog.CatalogColumnSyncService.ColumnSpe
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -70,16 +72,16 @@ public class OdsTableMappingSyncService {
         if (task == null || task.isEmpty()) {
             return SyncResult.empty("未发现任务数据");
         }
-        List<Map<String, String>> mappings = readTableMappings(task.get("tableMapping"));
-        if (mappings.isEmpty()) {
-            return SyncResult.empty("未发现表映射");
-        }
         UUID connectionId = resolveConnectionId(task);
         if (connectionId == null) {
             return SyncResult.empty("未解析到数据源连接 ID");
         }
+        List<Map<String, String>> mappings = readTableMappings(task.get("tableMapping"));
         Map<String, Object> destinationConfig = readMap(task.get("destinationConfig"));
         String taskName = normalize(task.get("name"));
+        String taskId = normalize(task.get("id"));
+        Set<String> incomingSourceKeys = collectSourceKeys(mappings);
+        int removed = pruneStaleTaskMappings(connectionId, incomingSourceKeys, taskName, taskId);
         int updated = 0;
         List<ColumnSpec> columnSpecs = resolveColumnSpecs(connectionId);
         for (Map<String, String> mapping : mappings) {
@@ -108,8 +110,9 @@ public class OdsTableMappingSyncService {
             entity.setOdsSchema(targetRef.schema());
             entity.setOdsTable(targetRef.table());
             entity.setEnabled(Boolean.TRUE);
-            if (!StringUtils.hasText(entity.getDescription())) {
-                entity.setDescription(buildDescription(taskName, sourceRef, targetRef));
+            String nextDescription = buildDescription(taskName, sourceRef, targetRef, taskId);
+            if (!StringUtils.hasText(entity.getDescription()) || isManagedByTask(entity, taskName, taskId)) {
+                entity.setDescription(nextDescription);
             }
             mappingRepository.save(entity);
             updated++;
@@ -117,7 +120,7 @@ public class OdsTableMappingSyncService {
                 syncColumns(entity, targetRef, columnSpecs, connectionId);
             }
         }
-        if (updated == 0) {
+        if (updated == 0 && removed == 0) {
             return SyncResult.empty("无可同步的表映射");
         }
         DbtSourceService.DbtSourceRefreshResult refresh = dbtSourceService.refreshOdsSources();
@@ -125,9 +128,9 @@ public class OdsTableMappingSyncService {
             "INGESTION_MAPPING_SYNC",
             AuditStage.SUCCESS,
             taskName,
-            Map.of("summary", "同步 ODS 映射", "task", taskName, "tables", updated, "dbt", refresh.message())
+            Map.of("summary", "同步 ODS 映射", "task", taskName, "tables", updated, "removed", removed, "dbt", refresh.message())
         );
-        return SyncResult.success(updated, refresh.message());
+        return SyncResult.success(updated + removed, refresh.message());
     }
 
     @Transactional
@@ -323,8 +326,11 @@ public class OdsTableMappingSyncService {
         return StringUtils.hasText(value) ? value : DEFAULT_CODE;
     }
 
-    private String buildDescription(String taskName, TableRef source, TableRef target) {
+    private String buildDescription(String taskName, TableRef source, TableRef target, String taskId) {
         StringBuilder sb = new StringBuilder();
+        if (StringUtils.hasText(taskId)) {
+            sb.append("[task:").append(taskId).append("] ");
+        }
         if (StringUtils.hasText(taskName)) {
             sb.append(taskName).append(": ");
         }
@@ -337,6 +343,63 @@ public class OdsTableMappingSyncService {
         }
         sb.append(target.table());
         return sb.toString();
+    }
+
+    private Set<String> collectSourceKeys(List<Map<String, String>> mappings) {
+        Set<String> keys = new LinkedHashSet<>();
+        if (mappings == null || mappings.isEmpty()) {
+            return keys;
+        }
+        for (Map<String, String> mapping : mappings) {
+            if (mapping == null) continue;
+            String source = normalize(mapping.get("source"));
+            if (!StringUtils.hasText(source)) continue;
+            TableRef ref = splitTable(source);
+            String key = buildSourceKey(normalizeNamespace(ref.namespace()), ref.name());
+            if (StringUtils.hasText(key)) {
+                keys.add(key);
+            }
+        }
+        return keys;
+    }
+
+    private int pruneStaleTaskMappings(UUID connectionId, Set<String> incomingSourceKeys, String taskName, String taskId) {
+        if (connectionId == null) {
+            return 0;
+        }
+        int removed = 0;
+        List<InfraOdsTableMapping> existing = mappingRepository.findByConnectionIdOrderByCreatedDateDesc(connectionId);
+        for (InfraOdsTableMapping mapping : existing) {
+            if (mapping == null || !isManagedByTask(mapping, taskName, taskId)) {
+                continue;
+            }
+            String key = buildSourceKey(normalizeNamespace(mapping.getStreamNamespace()), mapping.getStreamName());
+            if (!incomingSourceKeys.contains(key)) {
+                mappingRepository.delete(mapping);
+                removed++;
+            }
+        }
+        return removed;
+    }
+
+    private boolean isManagedByTask(InfraOdsTableMapping mapping, String taskName, String taskId) {
+        if (mapping == null || !StringUtils.hasText(mapping.getDescription())) {
+            return false;
+        }
+        String description = mapping.getDescription().trim();
+        if (StringUtils.hasText(taskId) && description.startsWith("[task:" + taskId + "]")) {
+            return true;
+        }
+        return StringUtils.hasText(taskName) && description.startsWith(taskName + ":");
+    }
+
+    private String buildSourceKey(String namespace, String name) {
+        if (!StringUtils.hasText(name)) {
+            return null;
+        }
+        String normalizedName = name.trim().toLowerCase(Locale.ROOT);
+        String normalizedNamespace = StringUtils.hasText(namespace) ? namespace.trim().toLowerCase(Locale.ROOT) : "";
+        return normalizedNamespace + "|" + normalizedName;
     }
 
     private Map<String, Object> castMap(Map<?, ?> map) {

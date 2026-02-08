@@ -45,7 +45,7 @@ public class CatalogMetadataService {
         this.accessChecker = accessChecker;
     }
 
-    public OpenMetadataService.OpenMetadataTablePage listLocalTables(String keyword, int size, String activeDept) {
+    public OpenMetadataService.OpenMetadataTablePage listLocalTables(String keyword, int size, String activeDept, UUID sourceId) {
         int limit = Math.max(1, Math.min(size, 200));
         String needle = normalize(keyword);
         boolean searched = StringUtils.hasText(needle);
@@ -60,6 +60,9 @@ public class CatalogMetadataService {
                 continue;
             }
             if (!accessChecker.departmentAllowed(dataset, activeDept)) {
+                continue;
+            }
+            if (sourceId != null && !Objects.equals(sourceId, dataset.getSourceId())) {
                 continue;
             }
             visible.add(dataset);

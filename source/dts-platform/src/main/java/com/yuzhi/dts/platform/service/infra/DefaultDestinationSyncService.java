@@ -1,7 +1,13 @@
 package com.yuzhi.dts.platform.service.infra;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.yuzhi.dts.platform.domain.service.InfraDataSource;
+import com.yuzhi.dts.platform.repository.service.InfraDataSourceRepository;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -11,15 +17,30 @@ import org.springframework.util.StringUtils;
 public class DefaultDestinationSyncService {
 
     private static final Logger LOG = LoggerFactory.getLogger(DefaultDestinationSyncService.class);
+    private static final String STATUS_ACTIVE = "ACTIVE";
+    private static final String TYPE_INCEPTOR = "INCEPTOR";
+    private static final String BIADMIN_NAME = "数仓 (biadmin)";
+    private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
 
     private final AdminInfraClient adminInfraClient;
+    private final InfraDataSourceRepository dataSourceRepository;
+    private final InfraSecretService secretService;
+    private final ObjectMapper objectMapper;
 
-    public DefaultDestinationSyncService(AdminInfraClient adminInfraClient) {
+    public DefaultDestinationSyncService(
+        AdminInfraClient adminInfraClient,
+        InfraDataSourceRepository dataSourceRepository,
+        InfraSecretService secretService,
+        ObjectMapper objectMapper
+    ) {
         this.adminInfraClient = adminInfraClient;
+        this.dataSourceRepository = dataSourceRepository;
+        this.secretService = secretService;
+        this.objectMapper = objectMapper;
     }
 
     public DefaultDestinationSnapshot ensureDefaultDestination() {
-        AdminInfraClient.AdminDataLakeConfig lake = adminInfraClient.fetchDefaultDataLake().orElse(null);
+        LakeSnapshot lake = resolveDefaultLake().orElse(null);
         if (lake == null) {
             return null;
         }
@@ -34,7 +55,7 @@ public class DefaultDestinationSyncService {
     }
 
     public DefaultDestinationStatus checkDefaultDestinationStatus() {
-        AdminInfraClient.AdminDataLakeConfig lake = adminInfraClient.fetchDefaultDataLake().orElse(null);
+        LakeSnapshot lake = resolveDefaultLake().orElse(null);
         if (lake == null) {
             return DefaultDestinationStatus.missing("未配置默认数据湖");
         }
@@ -52,7 +73,135 @@ public class DefaultDestinationSyncService {
         return new DefaultDestinationStatus(true, hasWriterType, hasConfig, destinationName, writerType, message);
     }
 
-    private Map<String, Object> resolveDestinationConfig(AdminInfraClient.AdminDataLakeConfig lake) {
+    private Optional<LakeSnapshot> resolveDefaultLake() {
+        AdminInfraClient.AdminDataLakeConfig adminLake = adminInfraClient.fetchDefaultDataLake().orElse(null);
+        if (adminLake != null) {
+            return Optional.of(LakeSnapshot.fromAdmin(adminLake));
+        }
+        return resolveLocalFallbackLake();
+    }
+
+    private Optional<LakeSnapshot> resolveLocalFallbackLake() {
+        try {
+            List<InfraDataSource> localSources = dataSourceRepository.findByStatusIgnoreCase(STATUS_ACTIVE);
+            if (localSources.isEmpty()) {
+                localSources = dataSourceRepository.findAll();
+            }
+            return localSources
+                .stream()
+                .filter(this::isLocalLakeCandidate)
+                .max((a, b) -> Integer.compare(scoreLocalLake(a), scoreLocalLake(b)))
+                .map(this::toLocalLakeSnapshot);
+        } catch (RuntimeException ex) {
+            LOG.debug("Failed to load local default data lake fallback: {}", ex.getMessage());
+            return Optional.empty();
+        }
+    }
+
+    private boolean isLocalLakeCandidate(InfraDataSource source) {
+        if (source == null) {
+            return false;
+        }
+        String type = normalize(source.getType());
+        if (TYPE_INCEPTOR.equalsIgnoreCase(type)) {
+            return false;
+        }
+        if (StringUtils.hasText(normalize(source.getJdbcUrl()))) {
+            return true;
+        }
+        Map<String, Object> props = parseMap(source.getProps());
+        if (props.isEmpty()) {
+            return false;
+        }
+        return props.containsKey("destinationConfig")
+            || StringUtils.hasText(normalize(props.get("destinationDefinitionId")))
+            || StringUtils.hasText(normalize(props.get("writerType")))
+            || StringUtils.hasText(normalize(props.get("type")));
+    }
+
+    private int scoreLocalLake(InfraDataSource source) {
+        if (source == null) {
+            return Integer.MIN_VALUE;
+        }
+        int score = 0;
+        String name = normalize(source.getName());
+        String type = normalize(source.getType());
+        String jdbcUrl = normalize(source.getJdbcUrl());
+        String status = normalize(source.getStatus());
+
+        if (BIADMIN_NAME.equalsIgnoreCase(name)) {
+            score += 100;
+        }
+        if (StringUtils.hasText(name) && name.toLowerCase().contains("biadmin")) {
+            score += 80;
+        }
+        if (StringUtils.hasText(jdbcUrl) && jdbcUrl.toLowerCase().contains("/biadmin")) {
+            score += 70;
+        }
+        if ("postgres".equalsIgnoreCase(type) || "postgresql".equalsIgnoreCase(type)) {
+            score += 50;
+        } else if (StringUtils.hasText(type)) {
+            score += 20;
+        }
+        if (STATUS_ACTIVE.equalsIgnoreCase(status)) {
+            score += 5;
+        }
+        if (StringUtils.hasText(jdbcUrl)) {
+            score += 5;
+        }
+        return score;
+    }
+
+    private LakeSnapshot toLocalLakeSnapshot(InfraDataSource source) {
+        Map<String, Object> props = parseMap(source.getProps());
+        Map<String, Object> secrets = secretService.readSecrets(source);
+
+        Map<String, Object> destinationConfig = new LinkedHashMap<>();
+        mergeMap(destinationConfig, props.get("destinationConfig"));
+        mergeMap(destinationConfig, secrets.get("destinationConfig"));
+
+        String writerType = firstNonEmpty(
+            normalize(props.get("destinationDefinitionId")),
+            normalize(props.get("writerType")),
+            normalize(props.get("writer")),
+            normalize(props.get("type")),
+            normalize(destinationConfig.get("writerType")),
+            normalize(destinationConfig.get("writer")),
+            normalize(destinationConfig.get("type"))
+        );
+        if (StringUtils.hasText(writerType)) {
+            destinationConfig.putIfAbsent("writerType", writerType);
+        }
+
+        String jdbcUrl = firstNonEmpty(normalize(source.getJdbcUrl()), normalize(destinationConfig.get("jdbcUrl")));
+        String username = firstNonEmpty(normalize(source.getUsername()), normalize(destinationConfig.get("username")));
+        String password = firstNonEmpty(normalize(secrets.get("password")), normalize(destinationConfig.get("password")));
+        if (StringUtils.hasText(jdbcUrl)) {
+            destinationConfig.putIfAbsent("jdbcUrl", jdbcUrl);
+        }
+        if (StringUtils.hasText(username)) {
+            destinationConfig.putIfAbsent("username", username);
+        }
+        if (StringUtils.hasText(password)) {
+            destinationConfig.putIfAbsent("password", password);
+        }
+
+        String destinationName = firstNonEmpty(normalize(props.get("destinationName")), normalize(source.getName()));
+        String destinationDefinitionId = firstNonEmpty(normalize(props.get("destinationDefinitionId")), writerType);
+
+        return new LakeSnapshot(
+            normalize(source.getName()),
+            normalize(source.getType()),
+            jdbcUrl,
+            username,
+            password,
+            destinationName,
+            destinationDefinitionId,
+            destinationConfig
+        );
+    }
+
+    private Map<String, Object> resolveDestinationConfig(LakeSnapshot lake) {
         if (lake == null || lake.getDestinationConfig() == null) {
             return new LinkedHashMap<>();
         }
@@ -94,7 +243,7 @@ public class DefaultDestinationSyncService {
         return config;
     }
 
-    private String resolveWriterType(AdminInfraClient.AdminDataLakeConfig lake, Map<String, Object> config) {
+    private String resolveWriterType(LakeSnapshot lake, Map<String, Object> config) {
         String writerType = normalize(lake == null ? null : lake.getDestinationDefinitionId());
         if (!StringUtils.hasText(writerType) && config != null) {
             writerType = normalize(config.get("writerType"));
@@ -105,7 +254,6 @@ public class DefaultDestinationSyncService {
                 writerType = normalize(config.get("type"));
             }
         }
-        // Fallback: infer writer type from the data lake's type or jdbcUrl
         if (!StringUtils.hasText(writerType) && lake != null) {
             writerType = inferWriterTypeFromLake(lake);
         }
@@ -115,37 +263,94 @@ public class DefaultDestinationSyncService {
         return writerType;
     }
 
-    private String inferWriterTypeFromLake(AdminInfraClient.AdminDataLakeConfig lake) {
-        // Try from lake type field
+    private String inferWriterTypeFromLake(LakeSnapshot lake) {
         String type = normalize(lake.getType());
         if (StringUtils.hasText(type)) {
             String inferred = inferWriterFromTypeString(type.toLowerCase());
-            if (inferred != null) return inferred;
+            if (inferred != null) {
+                return inferred;
+            }
         }
-        // Try from JDBC URL
         String jdbcUrl = normalize(lake.getJdbcUrl());
         if (StringUtils.hasText(jdbcUrl)) {
             String lower = jdbcUrl.toLowerCase();
-            if (lower.startsWith("jdbc:postgresql:")) return "postgresqlwriter";
-            if (lower.startsWith("jdbc:mysql:") || lower.startsWith("jdbc:mariadb:")) return "mysqlwriter";
-            if (lower.startsWith("jdbc:oracle:")) return "oraclewriter";
-            if (lower.startsWith("jdbc:sqlserver:")) return "sqlserverwriter";
-            if (lower.startsWith("jdbc:dm:")) return "rdbmswriter";
-            if (lower.startsWith("jdbc:clickhouse:")) return "clickhousewriter";
-            if (lower.startsWith("jdbc:hive2:")) return "hivewriter";
+            if (lower.startsWith("jdbc:postgresql:")) {
+                return "postgresqlwriter";
+            }
+            if (lower.startsWith("jdbc:mysql:") || lower.startsWith("jdbc:mariadb:")) {
+                return "mysqlwriter";
+            }
+            if (lower.startsWith("jdbc:oracle:")) {
+                return "oraclewriter";
+            }
+            if (lower.startsWith("jdbc:sqlserver:")) {
+                return "sqlserverwriter";
+            }
+            if (lower.startsWith("jdbc:dm:")) {
+                return "rdbmswriter";
+            }
+            if (lower.startsWith("jdbc:clickhouse:")) {
+                return "clickhousewriter";
+            }
+            if (lower.startsWith("jdbc:hive2:")) {
+                return "hivewriter";
+            }
         }
         return null;
     }
 
     private String inferWriterFromTypeString(String type) {
-        if (type.contains("postgres") || type.contains("pg")) return "postgresqlwriter";
-        if (type.contains("mysql") || type.contains("mariadb")) return "mysqlwriter";
-        if (type.contains("oracle")) return "oraclewriter";
-        if (type.contains("sqlserver") || type.contains("mssql")) return "sqlserverwriter";
-        if (type.contains("dm") || type.contains("dameng")) return "rdbmswriter";
-        if (type.contains("clickhouse")) return "clickhousewriter";
-        if (type.contains("hive")) return "hivewriter";
+        if (type.contains("postgres") || type.contains("pg")) {
+            return "postgresqlwriter";
+        }
+        if (type.contains("mysql") || type.contains("mariadb")) {
+            return "mysqlwriter";
+        }
+        if (type.contains("oracle")) {
+            return "oraclewriter";
+        }
+        if (type.contains("sqlserver") || type.contains("mssql")) {
+            return "sqlserverwriter";
+        }
+        if (type.contains("dm") || type.contains("dameng")) {
+            return "rdbmswriter";
+        }
+        if (type.contains("clickhouse")) {
+            return "clickhousewriter";
+        }
+        if (type.contains("hive")) {
+            return "hivewriter";
+        }
         return null;
+    }
+
+    private void mergeMap(Map<String, Object> target, Object raw) {
+        if (raw == null || target == null) {
+            return;
+        }
+        if (raw instanceof Map<?, ?> map) {
+            for (Map.Entry<?, ?> entry : map.entrySet()) {
+                if (entry.getKey() != null) {
+                    target.put(String.valueOf(entry.getKey()), entry.getValue());
+                }
+            }
+            return;
+        }
+        if (raw instanceof String text && StringUtils.hasText(text)) {
+            target.putAll(parseMap(text));
+        }
+    }
+
+    private Map<String, Object> parseMap(String raw) {
+        if (!StringUtils.hasText(raw)) {
+            return new LinkedHashMap<>();
+        }
+        try {
+            return objectMapper.readValue(raw, MAP_TYPE);
+        } catch (Exception ex) {
+            LOG.debug("Failed to parse json map: {}", ex.getMessage());
+            return new LinkedHashMap<>();
+        }
     }
 
     private String normalize(Object value) {
@@ -210,6 +415,83 @@ public class DefaultDestinationSyncService {
             return "jdbc:postgresql://" + host + (resolvedPort == null ? "" : ":" + resolvedPort) + "/" + database;
         }
         return null;
+    }
+
+    private static final class LakeSnapshot {
+
+        private final String name;
+        private final String type;
+        private final String jdbcUrl;
+        private final String username;
+        private final String password;
+        private final String destinationName;
+        private final String destinationDefinitionId;
+        private final Map<String, Object> destinationConfig;
+
+        private LakeSnapshot(
+            String name,
+            String type,
+            String jdbcUrl,
+            String username,
+            String password,
+            String destinationName,
+            String destinationDefinitionId,
+            Map<String, Object> destinationConfig
+        ) {
+            this.name = name;
+            this.type = type;
+            this.jdbcUrl = jdbcUrl;
+            this.username = username;
+            this.password = password;
+            this.destinationName = destinationName;
+            this.destinationDefinitionId = destinationDefinitionId;
+            this.destinationConfig = destinationConfig == null ? Map.of() : new LinkedHashMap<>(destinationConfig);
+        }
+
+        private static LakeSnapshot fromAdmin(AdminInfraClient.AdminDataLakeConfig lake) {
+            return new LakeSnapshot(
+                lake.getName(),
+                lake.getType(),
+                lake.getJdbcUrl(),
+                lake.getUsername(),
+                lake.getPassword(),
+                lake.getDestinationName(),
+                lake.getDestinationDefinitionId(),
+                lake.getDestinationConfig()
+            );
+        }
+
+        private String getName() {
+            return name;
+        }
+
+        private String getType() {
+            return type;
+        }
+
+        private String getJdbcUrl() {
+            return jdbcUrl;
+        }
+
+        private String getUsername() {
+            return username;
+        }
+
+        private String getPassword() {
+            return password;
+        }
+
+        private String getDestinationName() {
+            return destinationName;
+        }
+
+        private String getDestinationDefinitionId() {
+            return destinationDefinitionId;
+        }
+
+        private Map<String, Object> getDestinationConfig() {
+            return destinationConfig;
+        }
     }
 
     public record DefaultDestinationSnapshot(

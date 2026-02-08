@@ -394,15 +394,17 @@ public class CatalogResource {
     public ApiResponse<OpenMetadataService.OpenMetadataTablePage> listTechMetadataTables(
         @RequestParam(value = "keyword", required = false) String keyword,
         @RequestParam(value = "size", required = false, defaultValue = "50") int size,
+        @RequestParam(value = "sourceId", required = false) UUID sourceId,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
         String effDept = activeDept != null ? activeDept : claim("dept_code");
-        OpenMetadataService.OpenMetadataTablePage localPage = catalogMetadataService.listLocalTables(keyword, size, effDept);
-        boolean useLocal = localPage != null && localPage.items() != null && !localPage.items().isEmpty();
+        OpenMetadataService.OpenMetadataTablePage localPage = catalogMetadataService.listLocalTables(keyword, size, effDept, sourceId);
+        boolean sourceScoped = sourceId != null;
+        boolean useLocal = sourceScoped || (localPage != null && localPage.items() != null && !localPage.items().isEmpty());
         OpenMetadataService.OpenMetadataTablePage page = useLocal ? localPage : openMetadataService.searchTables(keyword, size);
         boolean disabled = page == null || !page.enabled();
-        if (!useLocal && (disabled || page.items() == null || page.items().isEmpty())) {
-            OpenMetadataService.OpenMetadataTablePage fallback = catalogMetadataService.listLocalTables(keyword, size, effDept);
+        if (!sourceScoped && !useLocal && (disabled || page.items() == null || page.items().isEmpty())) {
+            OpenMetadataService.OpenMetadataTablePage fallback = catalogMetadataService.listLocalTables(keyword, size, effDept, null);
             if (fallback != null && fallback.items() != null && !fallback.items().isEmpty()) {
                 page = fallback;
                 useLocal = true;
@@ -415,6 +417,9 @@ public class CatalogResource {
             auditPayload.put("keyword", keyword);
         }
         auditPayload.put("size", size);
+        if (sourceId != null) {
+            auditPayload.put("sourceId", sourceId.toString());
+        }
         auditPayload.put("source", useLocal ? "catalog" : (disabled ? "disabled" : "openmetadata"));
         audit.auditAction("CATALOG_ASSET_VIEW", AuditStage.SUCCESS, "tech-metadata", auditPayload);
         return ApiResponses.ok(page);

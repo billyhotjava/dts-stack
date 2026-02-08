@@ -450,6 +450,24 @@ const hasConnectionOverride = (config: any): boolean => {
 const buildTableKey = (table: TableInfo) =>
 	normalizeText(table.schema) ? `${table.schema}.${table.name}` : table.name;
 
+const normalizeDiscoveredTable = (table: TableInfo): TableInfo => {
+	const schema = normalizeText(table.schema);
+	const name = normalizeText(table.name);
+	if (!schema || !name) return table;
+	const prefix = `${schema}.`;
+	if (!name.toLowerCase().startsWith(prefix.toLowerCase())) {
+		return table;
+	}
+	const trimmedName = name.slice(prefix.length).trim();
+	if (!trimmedName) {
+		return table;
+	}
+	return {
+		...table,
+		name: trimmedName,
+	};
+};
+
 const inferPrefixFromMapping = (mapping?: { source?: string; target?: string } | null) => {
 	if (!mapping?.source || !mapping?.target) return "";
 	const source = normalizeText(mapping.source).split(".").pop() || "";
@@ -1506,7 +1524,7 @@ export default function TransformCreatePage() {
 					limit: 0,
 				},
 			});
-			const tables = Array.isArray(rawTables) ? rawTables : [];
+			const tables = Array.isArray(rawTables) ? rawTables.map((item) => normalizeDiscoveredTable(item)) : [];
 			setDiscoveredTables(tables);
 			setSelectedTableKeys([]);
 			form.setFieldValue("selectedTables", "");

@@ -3,10 +3,10 @@ dts:
   outputs:
     dev:
       type: postgres
-      host: dts-pg
-      port: 5432
-      user: dts_platform
-      password: "Devops123@"
-      dbname: dts_platform
+      host: "{{ env_var('DBT_PG_HOST', 'dts-pg') }}"
+      port: "{{ env_var('DBT_PG_PORT', '5432') | int }}"
+      user: "{{ env_var('DBT_PG_USER', 'dts_platform') }}"
+      password: "{{ env_var('DBT_PG_PASSWORD', '') }}"
+      dbname: "{{ env_var('DBT_PG_DBNAME', 'dts_platform') }}"
       schema: public
       threads: 4

@@ -252,10 +252,11 @@ dts:
     dag-id: ${DTS_AIRFLOW_DAG_ID:dbt_load}
     dags-dir: ${DTS_AIRFLOW_DAGS_DIR:/opt/airflow/dags}
   admin:
-    enabled: true
-    base-url: http://dts-admin:8081
-    api-path: /api
-    admin-api-path: /api/admin
+    enabled: ${DTS_ADMIN_ENABLED:true}
+    base-url: ${DTS_ADMIN_BASE_URL:http://dts-admin:8081}
+    api-path: ${DTS_ADMIN_API_PATH:/api}
+    admin-api-path: ${DTS_ADMIN_ADMIN_API_PATH:/api/admin}
+    service-token: ${DTS_ADMIN_SERVICE_TOKEN:}
     service-name: ${DTS_ADMIN_SERVICE_NAME:dts-admin,dts-ingestion,dts-airflow,dts-analytics}
   platform:
     features:
