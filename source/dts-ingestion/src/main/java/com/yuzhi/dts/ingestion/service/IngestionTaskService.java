@@ -317,7 +317,8 @@ public class IngestionTaskService {
             task = taskRepository.save(task);
         }
         if (airflowEnabled) {
-            task = ensureAirflowDag(task);
+            boolean forceDagRefresh = task.getLastExecutedAt() == null;
+            task = ensureAirflowDag(task, forceDagRefresh);
         }
 
         // 创建执行记录
@@ -730,6 +731,10 @@ public class IngestionTaskService {
     }
 
     private IngestionTask ensureAirflowDag(IngestionTask task) {
+        return ensureAirflowDag(task, false);
+    }
+
+    private IngestionTask ensureAirflowDag(IngestionTask task, boolean forceRebuild) {
         if (task == null || !isAirflowEnabled(task)) {
             return task;
         }
@@ -737,7 +742,9 @@ public class IngestionTaskService {
         // runs Addax with a single content block (Addax only processes the first one).
         java.util.List<AddaxJobService.PerTableJob> perTableJobs =
             addaxJobService.splitJobIntoPerTableFiles(task.getAddaxJobPath());
-        String dagId = airflowDagService.ensureDagForTask(task, perTableJobs);
+        String dagId = forceRebuild
+            ? airflowDagService.rebuildDagForTask(task, perTableJobs)
+            : airflowDagService.ensureDagForTask(task, perTableJobs);
         if (!StringUtils.hasText(dagId)) {
             throw new IllegalStateException("DAG 生成失败，请检查 Airflow DAG 目录配置");
         }

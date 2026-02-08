@@ -54,6 +54,10 @@ public class AirflowDagService {
         return ensureDagForTask(task, null, true);
     }
 
+    public String rebuildDagForTask(IngestionTask task, List<AddaxJobService.PerTableJob> perTableJobs) {
+        return ensureDagForTask(task, perTableJobs, true);
+    }
+
     public boolean deleteDagForTask(IngestionTask task) {
         if (task == null) {
             return false;
