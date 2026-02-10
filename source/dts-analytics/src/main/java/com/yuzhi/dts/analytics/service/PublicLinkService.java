@@ -13,6 +13,7 @@ public class PublicLinkService {
 
     public static final String MODEL_CARD = "card";
     public static final String MODEL_DASHBOARD = "dashboard";
+    public static final String MODEL_SCREEN = "screen";
 
     private final AnalyticsPublicLinkRepository publicLinkRepository;
 

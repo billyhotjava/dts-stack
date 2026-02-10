@@ -55,16 +55,27 @@ ods_patent_info (已有，数据入湖完成)
 
 ```sql
 CREATE OR REPLACE FUNCTION parse_date_safe(p_text text)
-RETURNS date LANGUAGE plpgsql AS $$
-DECLARE v text;
+RETURNS date LANGUAGE plpgsql IMMUTABLE AS $$
+DECLARE
+  v text; parts text[]; p1 int; p2 int; p3 int;
 BEGIN
   IF p_text IS NULL THEN RETURN NULL; END IF;
   v := btrim(p_text);
   IF v = '' THEN RETURN NULL; END IF;
   v := replace(replace(v, '.', '-'), '/', '-');
   v := split_part(v, ' ', 1);
+  -- YYYY-MM-DD
   IF v ~ '^\d{4}-\d{1,2}-\d{1,2}$' THEN RETURN to_date(v, 'YYYY-MM-DD'); END IF;
+  -- YYYYMMDD
   IF v ~ '^\d{8}$' THEN RETURN to_date(v, 'YYYYMMDD'); END IF;
+  -- M/D/YYYY or D/M/YYYY (8/29/2025, 29/8/2025)
+  IF v ~ '^\d{1,2}-\d{1,2}-\d{4}$' THEN
+    parts := string_to_array(v, '-');
+    p1 := parts[1]::int; p2 := parts[2]::int; p3 := parts[3]::int;
+    IF p2 > 12 THEN RETURN make_date(p3, p1, p2); END IF;
+    IF p1 > 12 THEN RETURN make_date(p3, p2, p1); END IF;
+    RETURN make_date(p3, p1, p2);  -- default M/D/YYYY
+  END IF;
   RETURN NULL;
 END; $$;
 ```

@@ -6,9 +6,11 @@ import com.yuzhi.dts.analytics.domain.AnalyticsCard;
 import com.yuzhi.dts.analytics.domain.AnalyticsDashboard;
 import com.yuzhi.dts.analytics.domain.AnalyticsDashboardCard;
 import com.yuzhi.dts.analytics.domain.AnalyticsPublicLink;
+import com.yuzhi.dts.analytics.domain.AnalyticsScreen;
 import com.yuzhi.dts.analytics.repository.AnalyticsCardRepository;
 import com.yuzhi.dts.analytics.repository.AnalyticsDashboardCardRepository;
 import com.yuzhi.dts.analytics.repository.AnalyticsDashboardRepository;
+import com.yuzhi.dts.analytics.repository.AnalyticsScreenRepository;
 import com.yuzhi.dts.analytics.service.AnalyticsSessionService;
 import com.yuzhi.dts.analytics.service.DatasetQueryService;
 import com.yuzhi.dts.analytics.service.MbqlToSqlService;
@@ -39,6 +41,7 @@ public class PublicResource {
     private final AnalyticsCardRepository cardRepository;
     private final AnalyticsDashboardRepository dashboardRepository;
     private final AnalyticsDashboardCardRepository dashboardCardRepository;
+    private final AnalyticsScreenRepository screenRepository;
     private final DatasetQueryService datasetQueryService;
     private final MbqlToSqlService mbqlToSqlService;
     private final ObjectMapper objectMapper;
@@ -49,6 +52,7 @@ public class PublicResource {
             AnalyticsCardRepository cardRepository,
             AnalyticsDashboardRepository dashboardRepository,
             AnalyticsDashboardCardRepository dashboardCardRepository,
+            AnalyticsScreenRepository screenRepository,
             DatasetQueryService datasetQueryService,
             MbqlToSqlService mbqlToSqlService,
             ObjectMapper objectMapper) {
@@ -57,6 +61,7 @@ public class PublicResource {
         this.cardRepository = cardRepository;
         this.dashboardRepository = dashboardRepository;
         this.dashboardCardRepository = dashboardCardRepository;
+        this.screenRepository = screenRepository;
         this.datasetQueryService = datasetQueryService;
         this.mbqlToSqlService = mbqlToSqlService;
         this.objectMapper = objectMapper;
@@ -140,6 +145,27 @@ public class PublicResource {
         }
         List<AnalyticsDashboardCard> dashcards = dashboardCardRepository.findAllByDashboardIdOrderByIdAsc(dashboard.getId());
         return ResponseEntity.ok(toPublicDashboard(dashboard, dashcards, link.getPublicUuid()));
+    }
+
+    @GetMapping(path = "/screen/{uuid}", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> screen(@PathVariable("uuid") String uuid, HttpServletRequest request) {
+        Optional<ResponseEntity<String>> auth = MetabaseAuth.requireUser(sessionService, request);
+        if (auth.isPresent()) {
+            return auth.get();
+        }
+        AnalyticsPublicLink link = publicLinkService.findByPublicUuid(uuid).orElse(null);
+        if (link == null || !PublicLinkService.MODEL_SCREEN.equals(link.getModel())) {
+            return ResponseEntity.notFound().build();
+        }
+        PlatformContext ctx = PlatformContext.from(request);
+        if (!publicLinkService.canAccess(link, ctx.dept(), ctx.classification())) {
+            return ResponseEntity.status(403).contentType(MediaType.TEXT_PLAIN).body("Forbidden");
+        }
+        AnalyticsScreen screen = screenRepository.findById(link.getModelId()).orElse(null);
+        if (screen == null || screen.isArchived()) {
+            return ResponseEntity.notFound().build();
+        }
+        return ResponseEntity.ok(toPublicScreen(screen, link.getPublicUuid()));
     }
 
     @PostMapping(
@@ -343,6 +369,19 @@ public class PublicResource {
         } catch (Exception e) {
             return null;
         }
+    }
+
+    private Map<String, Object> toPublicScreen(AnalyticsScreen screen, String publicUuid) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("id", screen.getId());
+        map.put("name", screen.getName());
+        map.put("width", screen.getWidth());
+        map.put("height", screen.getHeight());
+        map.put("backgroundColor", screen.getBackgroundColor());
+        map.put("backgroundImage", screen.getBackgroundImage());
+        map.put("components", parseJsonArray(screen.getComponentsJson()));
+        map.put("public_uuid", publicUuid);
+        return map;
     }
 
     private Object parseJsonArray(String json) {

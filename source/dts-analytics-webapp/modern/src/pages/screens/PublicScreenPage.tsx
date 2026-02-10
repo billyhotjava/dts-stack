@@ -1,34 +1,34 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'react-router';
-import { analyticsApi, ScreenDetail } from '../../api/analyticsApi';
+import { analyticsApi, PublicScreenDetail } from '../../api/analyticsApi';
 import { ComponentRenderer } from './components/ComponentRenderer';
 import type { ScreenComponent, ComponentType } from './types';
 
-export default function ScreenPreviewPage() {
-    const { id } = useParams<{ id: string }>();
-    const [screen, setScreen] = useState<ScreenDetail | null>(null);
+export default function PublicScreenPage() {
+    const { uuid } = useParams<{ uuid: string }>();
+    const [screen, setScreen] = useState<PublicScreenDetail | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [scale, setScale] = useState(1);
 
     useEffect(() => {
-        if (!id) {
-            setError('未找到大屏ID');
+        if (!uuid) {
+            setError('未找到大屏链接');
             setLoading(false);
             return;
         }
 
-        analyticsApi.getScreen(id)
+        analyticsApi.getPublicScreen(uuid)
             .then((data) => {
                 setScreen(data);
                 setLoading(false);
             })
             .catch((err) => {
-                console.error('Failed to load screen:', err);
+                console.error('Failed to load public screen:', err);
                 setError('加载大屏失败');
                 setLoading(false);
             });
-    }, [id]);
+    }, [uuid]);
 
     const computeScale = useCallback(() => {
         if (!screen) return;

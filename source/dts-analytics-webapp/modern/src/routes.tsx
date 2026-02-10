@@ -26,6 +26,7 @@ import PublicCardPage from "./pages/PublicCardPage";
 import PublicDashboardPage from "./pages/PublicDashboardPage";
 import ScreenDesignerPage from "./pages/screens/ScreenDesignerPage";
 import ScreenPreviewPage from "./pages/screens/ScreenPreviewPage";
+import PublicScreenPage from "./pages/screens/PublicScreenPage";
 import ScreensPage from "./pages/screens/ScreensPage";
 
 
@@ -44,6 +45,7 @@ export function createRoutes() {
 			{ path: "/screens/new", Component: ScreenDesignerPage },
 			{ path: "/screens/:id/edit", Component: ScreenDesignerPage },
 			{ path: "/screens/:id/preview", Component: ScreenPreviewPage },
+			{ path: "/public/screen/:uuid", Component: PublicScreenPage },
 			{
 				Component: AppLayout,
 				children: [

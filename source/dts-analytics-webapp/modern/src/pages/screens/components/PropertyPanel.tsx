@@ -1,5 +1,5 @@
 import { useScreen } from '../ScreenContext';
-import type { ScreenComponent } from '../types';
+import type { ScreenComponent, DataSourceConfig } from '../types';
 
 export function PropertyPanel() {
     const { state, updateComponent } = useScreen();
@@ -92,6 +92,12 @@ export function PropertyPanel() {
                     <div className="property-section-title">组件配置</div>
 
                     {renderComponentConfig(selectedComponent, handleConfigChange)}
+                </div>
+
+                {/* Data Source */}
+                <div className="property-section">
+                    <div className="property-section-title">数据源</div>
+                    {renderDataSourceConfig(selectedComponent, updateComponent)}
                 </div>
 
                 {/* Visibility & Lock */}
@@ -572,4 +578,89 @@ function renderComponentConfig(
                 </div>
             );
     }
+}
+
+function renderDataSourceConfig(
+    component: ScreenComponent,
+    updateComponent: (id: string, updates: Partial<ScreenComponent>) => void,
+) {
+    const ds = component.dataSource as DataSourceConfig | undefined;
+    const dsType = ds?.type ?? 'static';
+
+    const setDataSource = (newDs: DataSourceConfig | undefined) => {
+        updateComponent(component.id, { dataSource: newDs });
+    };
+
+    return (
+        <>
+            <div className="property-row">
+                <label className="property-label">类型</label>
+                <select
+                    className="property-input"
+                    value={dsType}
+                    onChange={(e) => {
+                        const val = e.target.value;
+                        if (val === 'static') {
+                            setDataSource(undefined);
+                        } else if (val === 'card') {
+                            setDataSource({
+                                type: 'card',
+                                cardConfig: { cardId: 0 },
+                            });
+                        }
+                    }}
+                >
+                    <option value="static">静态数据</option>
+                    <option value="card">Card 查询</option>
+                </select>
+            </div>
+
+            {dsType === 'card' && (
+                <>
+                    <div className="property-row">
+                        <label className="property-label">Card ID</label>
+                        <input
+                            type="number"
+                            className="property-input"
+                            min={1}
+                            value={ds?.cardConfig?.cardId ?? 0}
+                            onChange={(e) => {
+                                setDataSource({
+                                    ...ds!,
+                                    type: 'card',
+                                    cardConfig: {
+                                        ...ds!.cardConfig!,
+                                        cardId: Number(e.target.value),
+                                    },
+                                });
+                            }}
+                            placeholder="输入 Card ID"
+                        />
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">刷新(秒)</label>
+                        <input
+                            type="number"
+                            className="property-input"
+                            min={0}
+                            step={10}
+                            value={ds?.cardConfig?.refreshInterval ?? 0}
+                            onChange={(e) => {
+                                const val = Number(e.target.value);
+                                setDataSource({
+                                    ...ds!,
+                                    type: 'card',
+                                    cardConfig: {
+                                        ...ds!.cardConfig!,
+                                        refreshInterval: val > 0 ? val : undefined,
+                                    },
+                                });
+                            }}
+                            placeholder="0=不刷新"
+                        />
+                    </div>
+                </>
+            )}
+        </>
+    );
 }

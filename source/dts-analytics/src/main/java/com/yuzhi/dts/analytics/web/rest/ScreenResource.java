@@ -7,8 +7,11 @@ import com.yuzhi.dts.analytics.domain.AnalyticsScreen;
 import com.yuzhi.dts.analytics.domain.AnalyticsUser;
 import com.yuzhi.dts.analytics.repository.AnalyticsScreenRepository;
 import com.yuzhi.dts.analytics.service.AnalyticsSessionService;
+import com.yuzhi.dts.analytics.service.PublicLinkService;
 import com.yuzhi.dts.analytics.web.support.MetabaseAuth;
+import com.yuzhi.dts.analytics.web.support.PlatformContext;
 import jakarta.servlet.http.HttpServletRequest;
+import java.util.Map;
 import java.util.Optional;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -32,12 +35,14 @@ public class ScreenResource {
 
     private final AnalyticsSessionService sessionService;
     private final AnalyticsScreenRepository screenRepository;
+    private final PublicLinkService publicLinkService;
     private final ObjectMapper objectMapper;
 
     public ScreenResource(AnalyticsSessionService sessionService, AnalyticsScreenRepository screenRepository,
-            ObjectMapper objectMapper) {
+            PublicLinkService publicLinkService, ObjectMapper objectMapper) {
         this.sessionService = sessionService;
         this.screenRepository = screenRepository;
+        this.publicLinkService = publicLinkService;
         this.objectMapper = objectMapper;
     }
 
@@ -165,6 +170,40 @@ public class ScreenResource {
         }
         screen.setArchived(true);
         screenRepository.save(screen);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping(path = "/{id}/public_link", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> createPublicLink(@PathVariable("id") long id, HttpServletRequest request) {
+        Optional<AnalyticsUser> user = MetabaseAuth.currentUser(sessionService, request);
+        if (user.isEmpty()) {
+            return ResponseEntity.status(401).contentType(MediaType.TEXT_PLAIN).body("Unauthenticated");
+        }
+        AnalyticsScreen screen = screenRepository.findById(id).orElse(null);
+        if (screen == null || screen.isArchived()) {
+            return ResponseEntity.notFound().build();
+        }
+        PlatformContext ctx = PlatformContext.from(request);
+        String uuid;
+        try {
+            uuid = publicLinkService.getOrCreateScoped(
+                    PublicLinkService.MODEL_SCREEN, id, user.get().getId(), ctx.dept(), ctx.classification());
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(403).contentType(MediaType.TEXT_PLAIN).body("Forbidden");
+        }
+        return ResponseEntity.ok(Map.of("uuid", uuid));
+    }
+
+    @DeleteMapping(path = "/{id}/public_link", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> deletePublicLink(@PathVariable("id") long id, HttpServletRequest request) {
+        Optional<AnalyticsUser> user = MetabaseAuth.currentUser(sessionService, request);
+        if (user.isEmpty()) {
+            return ResponseEntity.status(401).contentType(MediaType.TEXT_PLAIN).body("Unauthenticated");
+        }
+        if (!screenRepository.existsById(id)) {
+            return ResponseEntity.notFound().build();
+        }
+        publicLinkService.delete(PublicLinkService.MODEL_SCREEN, id);
         return ResponseEntity.noContent().build();
     }
 

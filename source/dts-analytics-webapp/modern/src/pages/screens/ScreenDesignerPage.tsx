@@ -44,6 +44,7 @@ function ScreenDesignerContent() {
                         components: (screen.components || []).map(c => ({
                             ...c,
                             type: c.type as import('./types').ComponentType,
+                            dataSource: c.dataSource as import('./types').DataSourceConfig | undefined,
                         })),
                     });
                 })

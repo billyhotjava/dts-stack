@@ -371,11 +371,191 @@ const blankTemplate: ScreenTemplate = {
 };
 
 /**
+ * 内置模板：专利数据中心
+ * 深蓝背景，展示专利申请/受理/授权核心指标、类型分布、月度趋势、部门排行和最新授权
+ */
+const patentDataCenterTemplate: ScreenTemplate = {
+    id: 'patent-data-center',
+    name: '专利数据中心',
+    description: '专利数据可视化大屏，展示申请/受理/授权KPI、类型分布、月度趋势、部门排行和最新授权',
+    thumbnail: '📋',
+    category: 'business',
+    config: {
+        name: '专利数据中心',
+        description: '专利数据可视化大屏',
+        width: 1920,
+        height: 1080,
+        backgroundColor: '#0a0e27',
+        components: [
+            // ===== 顶部标题区域 y:0-80 =====
+            createComponent('patent-title', 'title', '主标题', 660, 15, 600, 60, 100, {
+                text: '专利数据中心',
+                fontSize: 42,
+                fontWeight: 'bold',
+                color: '#00d4ff',
+                textAlign: 'center',
+            }),
+            createComponent('patent-deco-left', 'decoration', '标题装饰左', 200, 35, 400, 40, 99, {
+                decorationType: 3,
+                color: ['#00d4ff', '#0066ff'],
+            }),
+            createComponent('patent-deco-right', 'decoration', '标题装饰右', 1320, 35, 400, 40, 99, {
+                decorationType: 3,
+                color: ['#00d4ff', '#0066ff'],
+            }),
+            createComponent('patent-datetime', 'datetime', '日期时间', 1650, 25, 230, 40, 98, {
+                format: 'YYYY-MM-DD HH:mm:ss',
+                fontSize: 18,
+                color: '#66ccff',
+            }),
+
+            // ===== 4个KPI卡片 y:90-190 =====
+            createComponent('patent-kpi-1', 'number-card', '申请总量', 60, 90, 420, 100, 50, {
+                title: '申请总量',
+                value: 12586,
+                prefix: '',
+                suffix: '件',
+            }),
+            createComponent('patent-kpi-2', 'number-card', '受理数量', 510, 90, 420, 100, 50, {
+                title: '受理数量',
+                value: 10234,
+                prefix: '',
+                suffix: '件',
+            }),
+            createComponent('patent-kpi-3', 'number-card', '授权数量', 960, 90, 420, 100, 50, {
+                title: '授权数量',
+                value: 6892,
+                prefix: '',
+                suffix: '件',
+            }),
+            createComponent('patent-kpi-4', 'number-card', '授权率', 1410, 90, 450, 100, 50, {
+                title: '授权率',
+                value: 67.3,
+                prefix: '',
+                suffix: '%',
+            }),
+
+            // ===== 左侧: 饼图 - 专利类型分布 y:210-530 =====
+            createComponent('patent-border-pie', 'border-box', '左边框', 30, 210, 620, 340, 10, {
+                boxType: 7,
+                color: ['#00d4ff', '#0066ff'],
+            }),
+            createComponent('patent-pie-title', 'title', '类型分布标题', 50, 220, 200, 30, 30, {
+                text: '专利类型分布',
+                fontSize: 16,
+                fontWeight: 'bold',
+                color: '#00d4ff',
+                textAlign: 'left',
+            }),
+            createComponent('patent-pie', 'pie-chart', '专利类型分布', 40, 255, 600, 285, 20, {
+                title: '',
+                data: [
+                    { name: '发明专利', value: 5230 },
+                    { name: '实用新型', value: 4826 },
+                    { name: '外观设计', value: 2530 },
+                ],
+            }),
+
+            // ===== 右侧: 折线图 - 月度趋势 y:210-530 =====
+            createComponent('patent-border-line', 'border-box', '右边框', 670, 210, 1220, 340, 10, {
+                boxType: 7,
+                color: ['#00d4ff', '#0066ff'],
+            }),
+            createComponent('patent-line-title', 'title', '月度趋势标题', 690, 220, 200, 30, 30, {
+                text: '月度受理/授权趋势',
+                fontSize: 16,
+                fontWeight: 'bold',
+                color: '#00d4ff',
+                textAlign: 'left',
+            }),
+            createComponent('patent-line', 'line-chart', '月度趋势', 680, 255, 1200, 285, 20, {
+                title: '',
+                xAxisData: ['2024-01', '2024-02', '2024-03', '2024-04', '2024-05', '2024-06',
+                    '2024-07', '2024-08', '2024-09', '2024-10', '2024-11', '2024-12'],
+                series: [
+                    { name: '受理数', data: [820, 932, 901, 934, 1290, 1330, 1320, 1100, 1250, 1380, 1420, 1500] },
+                    { name: '授权数', data: [520, 632, 601, 634, 890, 930, 920, 800, 850, 980, 1020, 1100] },
+                ],
+            }),
+
+            // ===== 左下: 柱状图 - 部门TOP10 y:570-1050 =====
+            createComponent('patent-border-bar', 'border-box', '左下边框', 30, 570, 620, 490, 10, {
+                boxType: 8,
+                color: ['#00d4ff', '#0066ff'],
+            }),
+            createComponent('patent-bar-title', 'title', '部门排行标题', 50, 580, 200, 30, 30, {
+                text: '部门申请TOP10',
+                fontSize: 16,
+                fontWeight: 'bold',
+                color: '#00d4ff',
+                textAlign: 'left',
+            }),
+            createComponent('patent-bar', 'bar-chart', '部门排行', 40, 615, 600, 435, 20, {
+                title: '',
+                xAxisData: ['研发一部', '研发二部', '研发三部', '产品部', '设计部',
+                    '测试部', '工程部', '市场部', '质量部', '制造部'],
+                series: [
+                    { name: '申请数', data: [2350, 1980, 1650, 1420, 1180, 980, 860, 720, 650, 580] },
+                ],
+            }),
+
+            // ===== 右下: 滚动表格 - 最新授权 y:570-1050 =====
+            createComponent('patent-border-board', 'border-box', '右下边框', 670, 570, 1220, 490, 10, {
+                boxType: 8,
+                color: ['#00d4ff', '#0066ff'],
+            }),
+            createComponent('patent-board-title', 'title', '最新授权标题', 690, 580, 200, 30, 30, {
+                text: '最新授权专利',
+                fontSize: 16,
+                fontWeight: 'bold',
+                color: '#00d4ff',
+                textAlign: 'left',
+            }),
+            createComponent('patent-board', 'scroll-board', '最新授权', 690, 615, 1180, 435, 20, {
+                header: ['授权日期', '专利号', '专利名称', '所属部门'],
+                data: [
+                    ['2024-12-28', 'ZL202410001234.5', '一种智能数据处理方法', '研发一部'],
+                    ['2024-12-27', 'ZL202410001235.X', '分布式存储系统及装置', '研发二部'],
+                    ['2024-12-26', 'ZL202410001236.4', '基于AI的图像识别系统', '研发三部'],
+                    ['2024-12-25', 'ZL202410001237.9', '多模态交互界面设计', '设计部'],
+                    ['2024-12-24', 'ZL202410001238.3', '高性能缓存优化方法', '研发一部'],
+                    ['2024-12-23', 'ZL202410001239.8', '自动化测试框架系统', '测试部'],
+                    ['2024-12-22', 'ZL202410001240.0', '数据安全加密传输协议', '研发二部'],
+                    ['2024-12-21', 'ZL202410001241.5', '智能推荐算法引擎', '产品部'],
+                    ['2024-12-20', 'ZL202410001242.X', '低功耗芯片散热结构', '工程部'],
+                    ['2024-12-19', 'ZL202410001243.4', '新型柔性显示面板', '制造部'],
+                ],
+                rowNum: 8,
+                headerBGC: '#003366',
+                oddRowBGC: 'rgba(0, 100, 200, 0.1)',
+                evenRowBGC: 'rgba(0, 50, 100, 0.1)',
+                waitTime: 3000,
+            }),
+
+            // ===== 底部装饰 =====
+            createComponent('patent-deco-bottom-1', 'decoration', '底部装饰1', 100, 1050, 300, 20, 5, {
+                decorationType: 5,
+                color: ['#00d4ff', '#0066ff'],
+            }),
+            createComponent('patent-deco-bottom-2', 'decoration', '底部装饰2', 810, 1050, 300, 20, 5, {
+                decorationType: 5,
+                color: ['#00d4ff', '#0066ff'],
+            }),
+            createComponent('patent-deco-bottom-3', 'decoration', '底部装饰3', 1520, 1050, 300, 20, 5, {
+                decorationType: 5,
+                color: ['#00d4ff', '#0066ff'],
+            }),
+        ],
+    },
+};
+
+/**
  * 所有可用模板
  */
 export const screenTemplates: ScreenTemplate[] = [
     blankTemplate,
     techDataCenterTemplate,
+    patentDataCenterTemplate,
 ];
 
 /**

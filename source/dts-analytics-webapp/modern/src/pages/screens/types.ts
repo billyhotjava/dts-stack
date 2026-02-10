@@ -43,7 +43,7 @@ export type ComponentType =
     | 'iframe'
     | 'table';
 
-export type DataSourceType = 'static' | 'api' | 'database';
+export type DataSourceType = 'static' | 'api' | 'database' | 'card';
 
 export interface DataSourceConfig {
     type: DataSourceType;
@@ -60,6 +60,15 @@ export interface DataSourceConfig {
         connectionId: string;
         query: string;
     };
+    cardConfig?: {
+        cardId: number;
+        refreshInterval?: number; // Card 专属刷新间隔(秒)
+    };
+}
+
+export interface CardData {
+    rows: unknown[][];
+    cols: Array<{ name: string; display_name: string; base_type: string }>;
 }
 
 export interface ScreenConfig {

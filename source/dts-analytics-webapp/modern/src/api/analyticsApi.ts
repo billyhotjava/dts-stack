@@ -224,6 +224,10 @@ export type VisibleTable = {
 	name?: string | null;
 };
 
+export type PublicScreenDetail = ScreenDetail & {
+	public_uuid?: string | null;
+};
+
 // Screen Designer Types
 export type ScreenListItem = {
 	id: number | string;
@@ -253,6 +257,7 @@ export type ScreenComponentData = {
 	locked: boolean;
 	visible: boolean;
 	config: Record<string, unknown>;
+	dataSource?: Record<string, unknown>;
 };
 
 import { getPlatformTokens, refreshPlatformAccessToken } from "./platformSession";
@@ -433,4 +438,10 @@ export const analyticsApi = {
 		requestJson<ScreenDetail>(`/analytics/api/screens/${encodeURIComponent(String(id))}`, "PUT", body),
 	deleteScreen: (id: string | number) =>
 		requestJson<void>(`/analytics/api/screens/${encodeURIComponent(String(id))}`, "DELETE"),
+	createScreenPublicLink: (id: string | number) =>
+		sendJson<{ uuid: string }>(`/analytics/api/screens/${encodeURIComponent(String(id))}/public_link`, {}),
+	deleteScreenPublicLink: (id: string | number) =>
+		requestJson<void>(`/analytics/api/screens/${encodeURIComponent(String(id))}/public_link`, "DELETE"),
+	getPublicScreen: (uuid: string) =>
+		fetchJson<PublicScreenDetail>(`/analytics/api/public/screen/${encodeURIComponent(uuid)}`),
 };

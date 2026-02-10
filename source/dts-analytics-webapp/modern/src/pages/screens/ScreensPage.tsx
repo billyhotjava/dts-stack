@@ -11,6 +11,7 @@ export default function ScreensPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [showTemplateGallery, setShowTemplateGallery] = useState(false);
+    const [sharingId, setSharingId] = useState<string | number | null>(null);
 
     const loadScreens = useCallback(() => {
         setLoading(true);
@@ -66,6 +67,22 @@ export default function ScreensPage() {
 
     const handlePreview = (id: string | number) => {
         window.open(`/analytics/screens/${id}/preview`, '_blank');
+    };
+
+    const handleShare = async (id: string | number) => {
+        if (sharingId !== null) return;
+        setSharingId(id);
+        try {
+            const { uuid } = await analyticsApi.createScreenPublicLink(id);
+            const url = `${window.location.origin}/analytics/public/screen/${uuid}`;
+            await navigator.clipboard.writeText(url);
+            alert('分享链接已复制到剪贴板');
+        } catch (err) {
+            console.error('Failed to create public link:', err);
+            alert('创建分享链接失败');
+        } finally {
+            setSharingId(null);
+        }
     };
 
     const handleDelete = async (id: string | number) => {
@@ -159,6 +176,14 @@ export default function ScreensPage() {
                                         title="预览"
                                     >
                                         👁️
+                                    </button>
+                                    <button
+                                        className="action-btn share"
+                                        onClick={() => handleShare(screen.id)}
+                                        disabled={sharingId === screen.id}
+                                        title="分享"
+                                    >
+                                        🔗
                                     </button>
                                     <button
                                         className="action-btn delete"

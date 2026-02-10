@@ -10,6 +10,7 @@ export function ScreenHeader() {
     const { config } = state;
     const [isEditingName, setIsEditingName] = useState(false);
     const [nameValue, setNameValue] = useState(config.name);
+    const [isSharing, setIsSharing] = useState(false);
 
     const handleNameClick = () => {
         setNameValue(config.name);
@@ -76,6 +77,22 @@ export function ScreenHeader() {
         }
     };
 
+    const handleShare = async () => {
+        if (!id || isSharing) return;
+        setIsSharing(true);
+        try {
+            const { uuid } = await analyticsApi.createScreenPublicLink(id);
+            const url = `${window.location.origin}/analytics/public/screen/${uuid}`;
+            await navigator.clipboard.writeText(url);
+            alert('分享链接已复制到剪贴板');
+        } catch (err) {
+            console.error('Failed to create public link:', err);
+            alert('创建分享链接失败');
+        } finally {
+            setIsSharing(false);
+        }
+    };
+
     const handleBack = () => {
         navigate('/screens');
     };
@@ -106,6 +123,16 @@ export function ScreenHeader() {
             </div>
 
             <div className="screen-header-right">
+                {id && (
+                    <button
+                        className="header-btn share-btn"
+                        onClick={handleShare}
+                        disabled={isSharing}
+                        title="分享大屏"
+                    >
+                        {isSharing ? '分享中...' : '🔗 分享'}
+                    </button>
+                )}
                 <button
                     className="header-btn preview-btn"
                     onClick={handlePreview}

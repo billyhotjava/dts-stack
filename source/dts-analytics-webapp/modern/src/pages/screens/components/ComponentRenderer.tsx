@@ -32,6 +32,8 @@ import {
     DigitalFlop,
 } from '@jiaminghi/data-view-react';
 import type { ScreenComponent } from '../types';
+import { useCardDataSource } from '../hooks/useCardDataSource';
+import { mapCardDataToConfig } from '../hooks/cardDataMapper';
 
 interface ComponentRendererProps {
     component: ScreenComponent;
@@ -83,7 +85,17 @@ const DecorationComponents: Record<number, React.ComponentType<{ color?: string[
 };
 
 export const ComponentRenderer = memo(function ComponentRenderer({ component }: ComponentRendererProps) {
-    const { type, config, width, height } = component;
+    const { type, config, width, height, dataSource } = component;
+
+    // Card data source hook
+    const { data: cardData, loading: cardLoading, error: cardError } = useCardDataSource(dataSource);
+
+    // Merge card data into config: card data overrides data fields only, not display fields
+    const effectiveConfig = useMemo(() => {
+        if (!cardData) return config;
+        const mapped = mapCardDataToConfig(type, cardData);
+        return { ...config, ...mapped };
+    }, [config, cardData, type]);
 
     // For datetime component, update every second
     const [currentTime, setCurrentTime] = useState(new Date());
@@ -95,6 +107,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component }: 
     }, [type]);
 
     const content = useMemo(() => {
+        const c = effectiveConfig;
         switch (type) {
             // ==================== ECharts 图表 ====================
             case 'line-chart':
@@ -103,10 +116,10 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component }: 
                         style={{ width: '100%', height: '100%' }}
                         option={{
                             ...darkThemeOptions,
-                            title: { text: config.title as string, textStyle: { color: '#fff', fontSize: 14 } },
+                            title: { text: c.title as string, textStyle: { color: '#fff', fontSize: 14 } },
                             xAxis: {
                                 type: 'category',
-                                data: config.xAxisData as string[],
+                                data: c.xAxisData as string[],
                                 axisLine: { lineStyle: { color: '#444' } },
                                 axisLabel: { color: '#aaa' },
                             },
@@ -116,7 +129,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component }: 
                                 axisLabel: { color: '#aaa' },
                                 splitLine: { lineStyle: { color: '#333' } },
                             },
-                            series: (config.series as Array<{ name: string; data: number[] }>).map((s) => ({
+                            series: (c.series as Array<{ name: string; data: number[] }>).map((s) => ({
                                 name: s.name,
                                 type: 'line',
                                 data: s.data,
@@ -134,10 +147,10 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component }: 
                         style={{ width: '100%', height: '100%' }}
                         option={{
                             ...darkThemeOptions,
-                            title: { text: config.title as string, textStyle: { color: '#fff', fontSize: 14 } },
+                            title: { text: c.title as string, textStyle: { color: '#fff', fontSize: 14 } },
                             xAxis: {
                                 type: 'category',
-                                data: config.xAxisData as string[],
+                                data: c.xAxisData as string[],
                                 axisLine: { lineStyle: { color: '#444' } },
                                 axisLabel: { color: '#aaa' },
                             },
@@ -147,7 +160,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component }: 
                                 axisLabel: { color: '#aaa' },
                                 splitLine: { lineStyle: { color: '#333' } },
                             },
-                            series: (config.series as Array<{ name: string; data: number[] }>).map((s) => ({
+                            series: (c.series as Array<{ name: string; data: number[] }>).map((s) => ({
                                 name: s.name,
                                 type: 'bar',
                                 data: s.data,
@@ -174,14 +187,14 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component }: 
                         style={{ width: '100%', height: '100%' }}
                         option={{
                             ...darkThemeOptions,
-                            title: { text: config.title as string, textStyle: { color: '#fff', fontSize: 14 }, left: 'center' },
+                            title: { text: c.title as string, textStyle: { color: '#fff', fontSize: 14 }, left: 'center' },
                             tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
                             series: [{
                                 type: 'pie',
                                 radius: ['40%', '70%'],
                                 avoidLabelOverlap: false,
                                 label: { show: true, color: '#fff', fontSize: 12 },
-                                data: config.data as Array<{ name: string; value: number }>,
+                                data: c.data as Array<{ name: string; value: number }>,
                             }],
                         }}
                     />
@@ -195,8 +208,8 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component }: 
                             ...darkThemeOptions,
                             series: [{
                                 type: 'gauge',
-                                min: config.min as number,
-                                max: config.max as number,
+                                min: c.min as number,
+                                max: c.max as number,
                                 progress: { show: true, width: 18 },
                                 axisLine: { lineStyle: { width: 18, color: [[1, '#334155']] } },
                                 axisTick: { show: false },
@@ -206,7 +219,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component }: 
                                 anchor: { show: true, showAbove: true, size: 18, itemStyle: { borderWidth: 6 } },
                                 title: { show: true, offsetCenter: [0, '70%'], fontSize: 14, color: '#fff' },
                                 detail: { valueAnimation: true, fontSize: 28, offsetCenter: [0, '45%'], color: '#fff', formatter: '{value}%' },
-                                data: [{ value: config.value as number, name: config.title as string }],
+                                data: [{ value: c.value as number, name: c.title as string }],
                             }],
                         }}
                     />
@@ -218,16 +231,16 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component }: 
                         style={{ width: '100%', height: '100%' }}
                         option={{
                             ...darkThemeOptions,
-                            title: { text: config.title as string, textStyle: { color: '#fff', fontSize: 14 }, left: 'center' },
+                            title: { text: c.title as string, textStyle: { color: '#fff', fontSize: 14 }, left: 'center' },
                             radar: {
-                                indicator: config.indicator as Array<{ name: string; max: number }>,
+                                indicator: c.indicator as Array<{ name: string; max: number }>,
                                 axisName: { color: '#aaa' },
                                 splitLine: { lineStyle: { color: '#444' } },
                                 splitArea: { areaStyle: { color: ['transparent'] } },
                             },
                             series: [{
                                 type: 'radar',
-                                data: [{ value: config.data as number[], areaStyle: { opacity: 0.3 } }],
+                                data: [{ value: c.data as number[], areaStyle: { opacity: 0.3 } }],
                             }],
                         }}
                     />
@@ -239,7 +252,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component }: 
                         style={{ width: '100%', height: '100%' }}
                         option={{
                             ...darkThemeOptions,
-                            title: { text: config.title as string, textStyle: { color: '#fff', fontSize: 14 }, left: 'center' },
+                            title: { text: c.title as string, textStyle: { color: '#fff', fontSize: 14 }, left: 'center' },
                             series: [{
                                 type: 'funnel',
                                 left: '10%',
@@ -251,7 +264,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component }: 
                                 sort: 'descending',
                                 gap: 2,
                                 label: { show: true, position: 'inside', color: '#fff' },
-                                data: config.data as Array<{ name: string; value: number }>,
+                                data: c.data as Array<{ name: string; value: number }>,
                             }],
                         }}
                     />
@@ -263,7 +276,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component }: 
                         style={{ width: '100%', height: '100%' }}
                         option={{
                             ...darkThemeOptions,
-                            title: { text: config.title as string, textStyle: { color: '#fff', fontSize: 14 } },
+                            title: { text: c.title as string, textStyle: { color: '#fff', fontSize: 14 } },
                             xAxis: {
                                 axisLine: { lineStyle: { color: '#444' } },
                                 axisLabel: { color: '#aaa' },
@@ -276,7 +289,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component }: 
                             },
                             series: [{
                                 type: 'scatter',
-                                data: config.data as number[][],
+                                data: c.data as number[][],
                                 symbolSize: 10,
                                 itemStyle: { color: '#6366f1' },
                             }],
@@ -300,12 +313,12 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component }: 
                         border: '1px solid rgba(99, 102, 241, 0.3)',
                     }}>
                         <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 8 }}>
-                            {config.title as string}
+                            {c.title as string}
                         </div>
                         <div style={{ fontSize: 32, fontWeight: 'bold', color: '#fff' }}>
-                            {config.prefix as string}
-                            {(config.value as number).toLocaleString()}
-                            {config.suffix as string}
+                            {c.prefix as string}
+                            {(c.value as number).toLocaleString()}
+                            {c.suffix as string}
                         </div>
                     </div>
                 );
@@ -317,17 +330,17 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component }: 
                         height: '100%',
                         display: 'flex',
                         alignItems: 'center',
-                        justifyContent: config.textAlign as string,
-                        fontSize: config.fontSize as number,
-                        fontWeight: config.fontWeight as string,
-                        color: config.color as string,
+                        justifyContent: c.textAlign as string,
+                        fontSize: c.fontSize as number,
+                        fontWeight: c.fontWeight as string,
+                        color: c.color as string,
                     }}>
-                        {config.text as string}
+                        {c.text as string}
                     </div>
                 );
 
             case 'datetime': {
-                const formatted = (config.format as string)
+                const formatted = (c.format as string)
                     .replace('YYYY', String(currentTime.getFullYear()))
                     .replace('MM', String(currentTime.getMonth() + 1).padStart(2, '0'))
                     .replace('DD', String(currentTime.getDate()).padStart(2, '0'))
@@ -341,8 +354,8 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component }: 
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        fontSize: config.fontSize as number,
-                        color: config.color as string,
+                        fontSize: c.fontSize as number,
+                        color: c.color as string,
                         fontFamily: 'monospace',
                     }}>
                         {formatted}
@@ -351,7 +364,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component }: 
             }
 
             case 'progress-bar': {
-                const value = config.value as number;
+                const value = c.value as number;
                 return (
                     <div style={{
                         width: '100%',
@@ -375,7 +388,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component }: 
                                 transition: 'width 0.3s ease',
                             }} />
                         </div>
-                        {Boolean(config.showLabel) && (
+                        {Boolean(c.showLabel) && (
                             <span style={{ color: '#fff', fontSize: 12, minWidth: 40 }}>{value}%</span>
                         )}
                     </div>
@@ -383,14 +396,14 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component }: 
             }
 
             case 'image':
-                return config.src ? (
+                return c.src ? (
                     <img
-                        src={config.src as string}
+                        src={c.src as string}
                         alt=""
                         style={{
                             width: '100%',
                             height: '100%',
-                            objectFit: config.fit as 'cover' | 'contain' | 'fill',
+                            objectFit: c.fit as 'cover' | 'contain' | 'fill',
                         }}
                     />
                 ) : (
@@ -411,12 +424,12 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component }: 
                 );
 
             case 'video':
-                return config.src ? (
+                return c.src ? (
                     <video
-                        src={config.src as string}
-                        autoPlay={config.autoplay as boolean}
-                        loop={config.loop as boolean}
-                        muted={config.muted as boolean}
+                        src={c.src as string}
+                        autoPlay={c.autoplay as boolean}
+                        loop={c.loop as boolean}
+                        muted={c.muted as boolean}
                         style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                     />
                 ) : (
@@ -437,9 +450,9 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component }: 
                 );
 
             case 'iframe':
-                return config.src ? (
+                return c.src ? (
                     <iframe
-                        src={config.src as string}
+                        src={c.src as string}
                         style={{ width: '100%', height: '100%', border: 'none' }}
                         title="Embedded content"
                     />
@@ -462,13 +475,13 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component }: 
 
             // ==================== DataV 边框组件 ====================
             case 'border-box': {
-                const boxType = (config.boxType as number) || 1;
+                const boxType = (c.boxType as number) || 1;
                 const BorderBoxComponent = BorderBoxComponents[boxType] || BorderBox1;
-                const colors = config.color as string[] | undefined;
+                const colors = c.color as string[] | undefined;
                 return (
                     <BorderBoxComponent color={colors}>
                         <div style={{ width: '100%', height: '100%', padding: 16 }}>
-                            {config.children as React.ReactNode}
+                            {c.children as React.ReactNode}
                         </div>
                     </BorderBoxComponent>
                 );
@@ -476,9 +489,9 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component }: 
 
             // ==================== DataV 装饰组件 ====================
             case 'decoration': {
-                const decorationType = (config.decorationType as number) || 1;
+                const decorationType = (c.decorationType as number) || 1;
                 const DecorationComponent = DecorationComponents[decorationType] || Decoration1;
-                const colors = config.color as string[] | undefined;
+                const colors = c.color as string[] | undefined;
                 return (
                     <DecorationComponent color={colors} style={{ width: '100%', height: '100%' }} />
                 );
@@ -489,13 +502,13 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component }: 
                 return (
                     <ScrollBoard
                         config={{
-                            header: config.header as string[],
-                            data: config.data as string[][],
-                            rowNum: config.rowNum as number,
-                            headerBGC: config.headerBGC as string,
-                            oddRowBGC: config.oddRowBGC as string,
-                            evenRowBGC: config.evenRowBGC as string,
-                            waitTime: config.waitTime as number || 2000,
+                            header: c.header as string[],
+                            data: c.data as string[][],
+                            rowNum: c.rowNum as number,
+                            headerBGC: c.headerBGC as string,
+                            oddRowBGC: c.oddRowBGC as string,
+                            evenRowBGC: c.evenRowBGC as string,
+                            waitTime: c.waitTime as number || 2000,
                             headerHeight: 35,
                             align: ['center', 'center', 'center'],
                         }}
@@ -507,9 +520,9 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component }: 
                 return (
                     <ScrollRankingBoard
                         config={{
-                            data: config.data as Array<{ name: string; value: number }>,
-                            rowNum: config.rowNum as number || 5,
-                            waitTime: config.waitTime as number || 2000,
+                            data: c.data as Array<{ name: string; value: number }>,
+                            rowNum: c.rowNum as number || 5,
+                            waitTime: c.waitTime as number || 2000,
                             carousel: 'single',
                         }}
                         style={{ width: '100%', height: '100%' }}
@@ -520,8 +533,8 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component }: 
                 return (
                     <WaterLevelPond
                         config={{
-                            data: [config.value as number],
-                            shape: config.shape as 'rect' | 'round' | 'roundRect' || 'round',
+                            data: [c.value as number],
+                            shape: c.shape as 'rect' | 'round' | 'roundRect' || 'round',
                         }}
                         style={{ width: '100%', height: '100%' }}
                     />
@@ -531,17 +544,17 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component }: 
                 return (
                     <DigitalFlop
                         config={{
-                            number: config.number as number[],
-                            content: config.content as string,
-                            style: config.style as { fontSize?: number; fill?: string },
+                            number: c.number as number[],
+                            content: c.content as string,
+                            style: c.style as { fontSize?: number; fill?: string },
                         }}
                         style={{ width: '100%', height: '100%' }}
                     />
                 );
 
             case 'percent-pond': {
-                const percentValue = config.value as number;
-                const colors = config.colors as string[] || ['#3de7c9', '#00baff'];
+                const percentValue = c.value as number;
+                const colors = c.colors as string[] || ['#3de7c9', '#00baff'];
                 return (
                     <div style={{
                         width: '100%',
@@ -555,8 +568,8 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component }: 
                             width: '100%',
                             height: 20,
                             background: 'rgba(255,255,255,0.1)',
-                            borderRadius: config.borderRadius as number || 5,
-                            border: `${config.borderWidth as number || 2}px solid ${colors[0]}`,
+                            borderRadius: c.borderRadius as number || 5,
+                            border: `${c.borderWidth as number || 2}px solid ${colors[0]}`,
                             overflow: 'hidden',
                             position: 'relative',
                         }}>
@@ -598,11 +611,33 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component }: 
                     </div>
                 );
         }
-    }, [type, config, width, height, currentTime]);
+    }, [type, effectiveConfig, width, height, currentTime]);
 
     return (
-        <div style={{ width: '100%', height: '100%', overflow: 'hidden' }}>
+        <div style={{ width: '100%', height: '100%', overflow: 'hidden', position: 'relative' }}>
             {content}
+            {/* Card data source loading indicator */}
+            {cardLoading && (
+                <div style={{
+                    position: 'absolute', top: 4, right: 4,
+                    width: 8, height: 8, borderRadius: '50%',
+                    background: '#3b82f6',
+                    animation: 'pulse 1.5s ease-in-out infinite',
+                }} />
+            )}
+            {/* Card data source error indicator */}
+            {cardError && (
+                <div style={{
+                    position: 'absolute', bottom: 4, left: 4,
+                    fontSize: 10, color: '#ef4444',
+                    background: 'rgba(0,0,0,0.7)',
+                    padding: '2px 6px', borderRadius: 3,
+                    maxWidth: '80%', overflow: 'hidden',
+                    textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                }} title={cardError}>
+                    {cardError}
+                </div>
+            )}
         </div>
     );
 });
