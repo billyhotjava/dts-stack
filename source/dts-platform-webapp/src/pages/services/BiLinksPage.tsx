@@ -28,6 +28,7 @@ import {
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
 import reportsService, { type ReportLink, type ReportLinkUpsertRequest } from "@/api/services/reportsService";
+import { useUserRoles } from "@/store/userStore";
 import { normalizeBiLinkForSave, resolveBiLinkForOpen } from "@/utils/biLinkUrl";
 
 const { Text } = Typography;
@@ -132,6 +133,11 @@ const renderCodeTags = (values?: string[]) => {
 type Props = { embedded?: boolean };
 
 export default function Page({ embedded }: Props) {
+	const roles = useUserRoles();
+	const hasPurgePermission = useMemo(() => {
+		const normalized = new Set((roles || []).map((role) => String(role || "").trim().toUpperCase()));
+		return normalized.has("ROLE_OP_ADMIN") || normalized.has("OPADMIN");
+	}, [roles]);
 	const [loading, setLoading] = useState(false);
 	const [saving, setSaving] = useState(false);
 	const [keyword, setKeyword] = useState("");
@@ -241,6 +247,27 @@ export default function Page({ embedded }: Props) {
 		});
 	};
 
+	const handlePurge = (record: ReportLink) => {
+		if (!record?.id) return;
+		Modal.confirm({
+			title: "确认物理删除该 BI 链接？",
+			icon: <ExclamationCircleOutlined />,
+			content: "此操作不可恢复，仅 OP_ADMIN 可执行。",
+			okText: "确认删除",
+			okButtonProps: { danger: true },
+			cancelText: "取消",
+			onOk: async () => {
+				try {
+					await reportsService.purge(record.id);
+					setRecords((prev) => prev.filter((item) => item.id !== record.id));
+					toast.success("已物理删除");
+				} catch (error: any) {
+					toast.error(error?.message || "物理删除失败");
+				}
+			},
+		});
+	};
+
 	const handleOpen = async (record: ReportLink) => {
 		const url = resolveBiLinkForOpen(record?.url, record?.engine);
 		if (!url) {
@@ -339,11 +366,18 @@ export default function Page({ embedded }: Props) {
 						<Tooltip title="停用">
 							<Button type="link" danger icon={<DeleteOutlined />} onClick={() => handleDisable(record)} />
 						</Tooltip>
+						{hasPurgePermission ? (
+							<Tooltip title="物理删除">
+								<Button type="link" danger onClick={() => handlePurge(record)}>
+									物理删除
+								</Button>
+							</Tooltip>
+						) : null}
 					</Space>
 				),
 			},
 		],
-		[],
+		[hasPurgePermission],
 	);
 
 	return (

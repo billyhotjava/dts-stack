@@ -28,7 +28,7 @@ import org.springframework.util.StringUtils;
 public class ReportsResource {
 
     private static final String REPORT_MAINTAINER_EXPRESSION =
-        "hasAnyAuthority(T(com.yuzhi.dts.platform.security.AuthoritiesConstants).INSTITUTE_PRIVILEGED_ROLES)";
+        "hasAnyAuthority(T(com.yuzhi.dts.platform.security.AuthoritiesConstants).DATA_MAINTAINER_ROLES)";
 
     private final BiReportLinkService reports;
     private final AuditService audit;
@@ -108,7 +108,7 @@ public class ReportsResource {
     }
 
     @org.springframework.web.bind.annotation.DeleteMapping("/{id}/purge")
-    @PreAuthorize(REPORT_MAINTAINER_EXPRESSION)
+    @PreAuthorize("hasAuthority('" + AuthoritiesConstants.OP_ADMIN + "')")
     public ApiResponse<Map<String, Object>> purge(@PathVariable UUID id) {
         reports.purge(id);
         audit.audit("PURGE", "vis.reports.manage.purge", id.toString());
