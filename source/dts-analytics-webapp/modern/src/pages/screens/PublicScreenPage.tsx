@@ -3,6 +3,7 @@ import { useParams } from 'react-router';
 import { analyticsApi, PublicScreenDetail } from '../../api/analyticsApi';
 import { ComponentRenderer } from './components/ComponentRenderer';
 import type { ScreenComponent, ComponentType, ScreenTheme } from './types';
+import { resolveScreenTheme } from './screenThemes';
 
 export default function PublicScreenPage() {
     const { uuid } = useParams<{ uuid: string }>();
@@ -69,7 +70,8 @@ export default function PublicScreenPage() {
         );
     }
 
-    const screenTheme = (screen as { theme?: string }).theme as ScreenTheme | undefined;
+    const rawTheme = (screen as { theme?: string }).theme as ScreenTheme | undefined;
+    const screenTheme = resolveScreenTheme(rawTheme, screen.backgroundColor);
 
     const components: ScreenComponent[] = (screen.components || []).map(c => ({
         ...c,

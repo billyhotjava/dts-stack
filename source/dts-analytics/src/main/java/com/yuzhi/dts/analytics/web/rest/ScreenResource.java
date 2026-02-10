@@ -102,6 +102,9 @@ public class ScreenResource {
         screen.setBackgroundImage(body != null && body.has("backgroundImage") && !body.path("backgroundImage").isNull()
                 ? body.path("backgroundImage").asText(null)
                 : null);
+        screen.setTheme(body != null && body.has("theme") && !body.path("theme").isNull()
+                ? body.path("theme").asText(null)
+                : null);
         screen.setComponentsJson(body != null && body.has("components") ? body.path("components").toString() : "[]");
         screen.setCreatorId(user.get().getId());
         screen.setArchived(false);
@@ -146,6 +149,9 @@ public class ScreenResource {
         if (body != null && body.has("backgroundImage")) {
             screen.setBackgroundImage(
                     body.path("backgroundImage").isNull() ? null : body.path("backgroundImage").asText(null));
+        }
+        if (body != null && body.has("theme")) {
+            screen.setTheme(body.path("theme").isNull() ? null : body.path("theme").asText(null));
         }
         if (body != null && body.has("components")) {
             screen.setComponentsJson(body.path("components").toString());
@@ -214,6 +220,7 @@ public class ScreenResource {
         node.put("description", screen.getDescription());
         node.put("width", screen.getWidth());
         node.put("height", screen.getHeight());
+        node.put("theme", screen.getTheme());
         node.putPOJO("createdAt", screen.getCreatedAt());
         node.putPOJO("updatedAt", screen.getUpdatedAt());
         return node;

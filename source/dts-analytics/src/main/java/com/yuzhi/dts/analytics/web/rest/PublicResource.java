@@ -379,6 +379,7 @@ public class PublicResource {
         map.put("height", screen.getHeight());
         map.put("backgroundColor", screen.getBackgroundColor());
         map.put("backgroundImage", screen.getBackgroundImage());
+        map.put("theme", screen.getTheme());
         map.put("components", parseJsonArray(screen.getComponentsJson()));
         map.put("public_uuid", publicUuid);
         return map;

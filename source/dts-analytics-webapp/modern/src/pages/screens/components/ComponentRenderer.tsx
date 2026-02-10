@@ -36,7 +36,87 @@ import { DRILLABLE_TYPES } from '../types';
 import { useCardDataSource } from '../hooks/useCardDataSource';
 import { useDrillDown } from '../hooks/useDrillDown';
 import { mapCardDataToConfig } from '../hooks/cardDataMapper';
-import { getThemeTokens } from '../screenThemes';
+import { getThemeTokens, ScreenThemeTokens } from '../screenThemes';
+
+/**
+ * 自定义滚动表格，替代 DataV ScrollBoard（DataV 硬编码 color:#fff 无法覆盖）
+ */
+function ThemedScrollTable({ config, tokens }: {
+    config: Record<string, unknown>;
+    tokens: ScreenThemeTokens;
+}) {
+    const headers = config.header as string[] || [];
+    const allData = config.data as string[][] || [];
+    const rowNum = config.rowNum as number || 8;
+    const headerBGC = config.headerBGC as string || tokens.scrollBoard.headerBg;
+    const oddRowBGC = config.oddRowBGC as string || tokens.scrollBoard.oddRowBg;
+    const evenRowBGC = config.evenRowBGC as string || tokens.scrollBoard.evenRowBg;
+    const textColor = tokens.scrollBoard.textColor;
+    const headerHeight = 35;
+
+    // Auto-scroll animation
+    const [offset, setOffset] = useState(0);
+    const rowHeight = 38;
+    const visibleHeight = rowNum * rowHeight;
+    const needScroll = allData.length > rowNum;
+
+    useEffect(() => {
+        if (!needScroll) return;
+        const waitTime = config.waitTime as number || 2000;
+        const timer = setInterval(() => {
+            setOffset(prev => {
+                const next = prev + 1;
+                return next >= allData.length ? 0 : next;
+            });
+        }, waitTime);
+        return () => clearInterval(timer);
+    }, [needScroll, allData.length, config.waitTime]);
+
+    // Build visible rows (wrap around for seamless scrolling)
+    const visibleRows: { cells: string[]; originalIndex: number }[] = [];
+    for (let i = 0; i < Math.min(rowNum + 1, allData.length); i++) {
+        const idx = (offset + i) % allData.length;
+        visibleRows.push({ cells: allData[idx], originalIndex: idx });
+    }
+
+    return (
+        <div style={{ width: '100%', height: '100%', overflow: 'hidden', color: textColor, fontSize: 14 }}>
+            {headers.length > 0 && (
+                <div style={{
+                    display: 'flex', background: headerBGC, height: headerHeight,
+                    lineHeight: `${headerHeight}px`, fontWeight: 600, fontSize: 15, flexShrink: 0,
+                }}>
+                    {headers.map((h, i) => (
+                        <div key={i} style={{
+                            flex: 1, padding: '0 10px', textAlign: 'center',
+                            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                        }}>{h}</div>
+                    ))}
+                </div>
+            )}
+            <div style={{ height: visibleHeight, overflow: 'hidden', position: 'relative' }}>
+                <div style={{
+                    transition: needScroll ? 'transform 0.5s ease' : 'none',
+                    transform: needScroll ? `translateY(-${0}px)` : 'none',
+                }}>
+                    {visibleRows.map((row, ri) => (
+                        <div key={`${offset}-${ri}`} style={{
+                            display: 'flex', height: rowHeight, lineHeight: `${rowHeight}px`,
+                            background: row.originalIndex % 2 === 0 ? evenRowBGC : oddRowBGC,
+                        }}>
+                            {row.cells.map((cell, ci) => (
+                                <div key={ci} style={{
+                                    flex: 1, padding: '0 10px', textAlign: 'center',
+                                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                                }}>{cell}</div>
+                            ))}
+                        </div>
+                    ))}
+                </div>
+            </div>
+        </div>
+    );
+}
 
 interface ComponentRendererProps {
     component: ScreenComponent;
@@ -85,6 +165,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
     // Build ECharts base options from theme tokens
     const themeOptions = useMemo(() => ({
         backgroundColor: 'transparent',
+        color: t.echarts.colorPalette,
         textStyle: { color: t.textPrimary },
         legend: { textStyle: { color: t.textPrimary } },
         tooltip: {
@@ -541,6 +622,11 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
 
             // ==================== DataV 数据展示组件 ====================
             case 'scroll-board':
+                // DataV ScrollBoard 硬编码 color:#fff 且无法通过 CSS/style 覆盖
+                // 非 legacy-dark 主题使用自定义表格组件
+                if (theme && theme !== 'legacy-dark') {
+                    return <ThemedScrollTable config={c} tokens={t} />;
+                }
                 return (
                     <ScrollBoard
                         config={{

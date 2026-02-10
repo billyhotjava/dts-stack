@@ -4,6 +4,7 @@ import { HTML5Backend } from 'react-dnd-html5-backend';
 import { useParams } from 'react-router';
 import { ScreenProvider, useScreen } from './ScreenContext';
 import { analyticsApi } from '../../api/analyticsApi';
+import { resolveScreenTheme } from './screenThemes';
 import {
     ComponentLibraryPanel,
     CanvasToolbar,
@@ -33,15 +34,20 @@ function ScreenDesignerContent() {
         if (id) {
             analyticsApi.getScreen(id)
                 .then((screen) => {
+                    const backgroundColor = screen.backgroundColor || '#0d1b2a';
+                    const resolvedTheme = resolveScreenTheme(
+                        screen.theme as import('./types').ScreenTheme | undefined,
+                        backgroundColor,
+                    );
                     loadConfig({
                         id: String(screen.id),
                         name: screen.name || '未命名大屏',
                         description: screen.description || '',
                         width: screen.width || 1920,
                         height: screen.height || 1080,
-                        backgroundColor: screen.backgroundColor || '#0d1b2a',
+                        backgroundColor,
                         backgroundImage: screen.backgroundImage || undefined,
-                        theme: screen.theme as import('./types').ScreenTheme | undefined,
+                        theme: resolvedTheme,
                         components: (screen.components || []).map(c => ({
                             ...c,
                             type: c.type as import('./types').ComponentType,

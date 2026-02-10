@@ -41,6 +41,9 @@ public class AnalyticsScreen implements Serializable {
     @Column(name = "background_image", columnDefinition = "text")
     private String backgroundImage;
 
+    @Column(name = "theme", length = 32)
+    private String theme;
+
     @Column(name = "components_json", columnDefinition = "text")
     private String componentsJson;
 
@@ -110,6 +113,14 @@ public class AnalyticsScreen implements Serializable {
 
     public void setBackgroundImage(String backgroundImage) {
         this.backgroundImage = backgroundImage;
+    }
+
+    public String getTheme() {
+        return theme;
+    }
+
+    public void setTheme(String theme) {
+        this.theme = theme;
     }
 
     public String getComponentsJson() {

@@ -35,7 +35,7 @@ const messages: Record<Locale, Record<string, string>> = {
 		loading: "加载中…",
 		error: "请求失败",
 		"home.note": "当前界面为自研替换版（参考 Metabase 交互），登录与权限统一使用平台会话。",
-		"home.welcome": "欢迎来到AI智能分析中心",
+		"home.welcome": "欢迎来到智能分析中心",
 		"home.quickActions": "快速开始",
 		"home.newQuestionDesc": "创建新的查询或图表",
 		"home.newDashboardDesc": "创建仪表盘以展示数据",

@@ -205,64 +205,64 @@ const titaniumTheme: ScreenThemeTokens = {
 };
 
 const glacierTheme: ScreenThemeTokens = {
-    canvasBackground: '#ffffff',
+    canvasBackground: '#f6f7f9',
     cardBackground: '#ffffff',
-    cardBorder: '1px solid #e0e0e0',
-    cardShadow: 'none',
-    cardBorderRadius: 4,
-    textPrimary: '#333333',
-    textSecondary: '#666666',
-    textMuted: '#999999',
-    accentColor: '#2f5496',
+    cardBorder: '1px solid #e5e7eb',
+    cardShadow: '0 1px 2px rgba(0,0,0,0.06)',
+    cardBorderRadius: 10,
+    textPrimary: '#1f2328',
+    textSecondary: '#6b7280',
+    textMuted: '#9ca3af',
+    accentColor: '#1f6feb',
     echarts: {
-        axisLineColor: '#cccccc',
-        axisLabelColor: '#666666',
-        splitLineColor: '#eeeeee',
+        axisLineColor: '#d1d5db',
+        axisLabelColor: '#6b7280',
+        splitLineColor: '#e5e7eb',
         tooltipBg: '#ffffff',
-        tooltipBorder: '#cccccc',
-        colorPalette: ['#c4a846', '#2f5496', '#c0504d', '#4bacc6', '#8064a2', '#f79646'],
+        tooltipBorder: '#e5e7eb',
+        colorPalette: ['#5470c6', '#91cc75', '#fac858', '#ee6666', '#73c0de', '#3ba272'],
     },
-    barGradient: ['#c4a846', '#b89a30'],
-    scatterColor: '#2f5496',
+    barGradient: ['#5470c6', '#3b82f6'],
+    scatterColor: '#5470c6',
     numberCard: {
         background: '#ffffff',
-        border: '1px solid #e0e0e0',
-        titleColor: '#666666',
-        valueColor: '#333333',
+        border: '1px solid #e5e7eb',
+        titleColor: '#6b7280',
+        valueColor: '#1f2328',
     },
     scrollBoard: {
-        headerBg: '#f5f5f5',
+        headerBg: '#f9fafb',
         oddRowBg: '#ffffff',
-        evenRowBg: '#fafafa',
-        textColor: '#333333',
+        evenRowBg: '#f9fafb',
+        textColor: '#1f2328',
     },
     progressBar: {
-        trackBg: '#e8e8e8',
-        fillGradient: ['#2f5496', '#4a7bc7'],
-        labelColor: '#333333',
+        trackBg: '#e5e7eb',
+        fillGradient: ['#1f6feb', '#3b82f6'],
+        labelColor: '#1f2328',
     },
     breadcrumb: {
         background: 'rgba(255,255,255,0.95)',
-        textColor: '#666666',
-        linkColor: '#2f5496',
+        textColor: '#6b7280',
+        linkColor: '#1f6feb',
     },
     gauge: {
-        axisLineColor: '#e0e0e0',
-        splitLineColor: '#999999',
-        axisLabelColor: '#666666',
-        titleColor: '#333333',
-        detailColor: '#333333',
+        axisLineColor: '#e5e7eb',
+        splitLineColor: '#9ca3af',
+        axisLabelColor: '#6b7280',
+        titleColor: '#1f2328',
+        detailColor: '#1f2328',
     },
     radar: {
-        axisNameColor: '#666666',
-        splitLineColor: '#d9d9d9',
+        axisNameColor: '#6b7280',
+        splitLineColor: '#e5e7eb',
     },
     placeholder: {
-        background: '#fafafa',
-        border: '2px dashed #d9d9d9',
-        color: '#999999',
+        background: '#f9fafb',
+        border: '2px dashed #d1d5db',
+        color: '#9ca3af',
     },
-    pieLabelColor: '#333333',
+    pieLabelColor: '#1f2328',
     funnelLabelColor: '#ffffff',
     errorBg: 'rgba(255,255,255,0.95)',
 };
@@ -273,7 +273,58 @@ const themeMap: Record<ScreenTheme, ScreenThemeTokens> = {
     'glacier': glacierTheme,
 };
 
+function parseHexColorToRgb(color: string): [number, number, number] | null {
+    const value = color.trim().toLowerCase();
+    if (!value.startsWith('#')) {
+        return null;
+    }
+
+    if (value.length === 4) {
+        const r = Number.parseInt(value[1] + value[1], 16);
+        const g = Number.parseInt(value[2] + value[2], 16);
+        const b = Number.parseInt(value[3] + value[3], 16);
+        if (Number.isNaN(r) || Number.isNaN(g) || Number.isNaN(b)) {
+            return null;
+        }
+        return [r, g, b];
+    }
+
+    if (value.length === 7) {
+        const r = Number.parseInt(value.slice(1, 3), 16);
+        const g = Number.parseInt(value.slice(3, 5), 16);
+        const b = Number.parseInt(value.slice(5, 7), 16);
+        if (Number.isNaN(r) || Number.isNaN(g) || Number.isNaN(b)) {
+            return null;
+        }
+        return [r, g, b];
+    }
+
+    return null;
+}
+
+function isLightBackgroundColor(color?: string): boolean {
+    if (!color) {
+        return false;
+    }
+
+    const rgb = parseHexColorToRgb(color);
+    if (!rgb) {
+        return false;
+    }
+
+    const [r, g, b] = rgb;
+    const luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+    return luminance >= 0.75;
+}
+
+export function resolveScreenTheme(theme?: ScreenTheme, backgroundColor?: string): ScreenTheme {
+    if (theme && themeMap[theme]) {
+        return theme;
+    }
+    return isLightBackgroundColor(backgroundColor) ? 'glacier' : 'legacy-dark';
+}
+
 export function getThemeTokens(theme?: ScreenTheme): ScreenThemeTokens {
-    if (!theme) return legacyDarkTheme;
-    return themeMap[theme] ?? legacyDarkTheme;
+    const resolved = resolveScreenTheme(theme);
+    return themeMap[resolved] ?? legacyDarkTheme;
 }
