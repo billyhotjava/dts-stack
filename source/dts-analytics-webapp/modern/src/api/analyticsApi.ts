@@ -242,6 +242,7 @@ export type ScreenListItem = {
 export type ScreenDetail = ScreenListItem & {
 	backgroundColor?: string;
 	backgroundImage?: string | null;
+	theme?: string;
 	components?: ScreenComponentData[];
 };
 

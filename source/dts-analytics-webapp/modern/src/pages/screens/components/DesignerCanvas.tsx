@@ -93,6 +93,7 @@ export function DesignerCanvas() {
                                 key={component.id}
                                 component={component}
                                 isSelected={selectedIds.includes(component.id)}
+                                theme={config.theme}
                             />
                         ))}
 

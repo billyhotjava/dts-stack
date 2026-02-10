@@ -39,7 +39,11 @@ export function TemplateGallery({ onSelect, onClose }: TemplateGalleryProps) {
                                 className={`template-card ${selectedId === template.id ? 'selected' : ''}`}
                                 onClick={() => setSelectedId(template.id)}
                             >
-                                <div className="template-card-preview">
+                                <div className="template-card-preview" style={{
+                                    background: template.config.backgroundColor
+                                        ? `linear-gradient(135deg, ${template.config.backgroundColor} 0%, ${template.config.backgroundColor} 100%)`
+                                        : undefined,
+                                }}>
                                     <span className="template-card-icon">{template.thumbnail}</span>
                                     {template.id !== 'blank' && (
                                         <div className="template-card-badge">

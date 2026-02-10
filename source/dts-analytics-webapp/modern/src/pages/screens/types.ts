@@ -1,5 +1,7 @@
 // Screen Designer Component Types
 
+export type ScreenTheme = 'legacy-dark' | 'titanium' | 'glacier';
+
 export interface DrillLevel {
     cardId: number;
     paramName: string;
@@ -96,6 +98,7 @@ export interface ScreenConfig {
     height: number;
     backgroundColor: string;
     backgroundImage?: string;
+    theme?: ScreenTheme;
     components: ScreenComponent[];
 }
 

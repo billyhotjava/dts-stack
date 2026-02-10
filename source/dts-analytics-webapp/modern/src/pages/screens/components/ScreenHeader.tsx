@@ -45,6 +45,7 @@ export function ScreenHeader() {
                 height: config.height,
                 backgroundColor: config.backgroundColor,
                 backgroundImage: config.backgroundImage,
+                theme: config.theme,
                 components: config.components,
             };
 

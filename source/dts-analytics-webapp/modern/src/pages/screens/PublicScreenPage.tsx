@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'react-router';
 import { analyticsApi, PublicScreenDetail } from '../../api/analyticsApi';
 import { ComponentRenderer } from './components/ComponentRenderer';
-import type { ScreenComponent, ComponentType } from './types';
+import type { ScreenComponent, ComponentType, ScreenTheme } from './types';
 
 export default function PublicScreenPage() {
     const { uuid } = useParams<{ uuid: string }>();
@@ -69,18 +69,22 @@ export default function PublicScreenPage() {
         );
     }
 
+    const screenTheme = (screen as { theme?: string }).theme as ScreenTheme | undefined;
+
     const components: ScreenComponent[] = (screen.components || []).map(c => ({
         ...c,
         type: c.type as ComponentType,
         dataSource: c.dataSource as import('./types').DataSourceConfig | undefined,
     }));
 
+    const outerBg = screenTheme === 'glacier' ? '#e5e7eb' : '#000';
+
     return (
         <div
             style={{
                 position: 'fixed',
                 inset: 0,
-                background: '#000',
+                background: outerBg,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -116,7 +120,7 @@ export default function PublicScreenPage() {
                                 zIndex: component.zIndex,
                             }}
                         >
-                            <ComponentRenderer component={component} mode="preview" />
+                            <ComponentRenderer component={component} mode="preview" theme={screenTheme} />
                         </div>
                     ))}
             </div>

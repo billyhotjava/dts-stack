@@ -1,13 +1,28 @@
 import { useScreen } from '../ScreenContext';
+import type { ScreenTheme } from '../types';
+import { getThemeTokens } from '../screenThemes';
 
 const ZOOM_OPTIONS = [50, 75, 100, 125, 150, 200];
 
+const THEME_OPTIONS: { value: ScreenTheme | ''; label: string }[] = [
+    { value: '', label: '经典深蓝' },
+    { value: 'titanium', label: '钛合金灰' },
+    { value: 'glacier', label: '冰川白' },
+];
+
 export function CanvasToolbar() {
-    const { state, dispatch, undo, redo, canUndo, canRedo, deleteComponents } = useScreen();
+    const { state, dispatch, undo, redo, canUndo, canRedo, deleteComponents, updateConfig } = useScreen();
     const { selectedIds, zoom, showGrid } = state;
 
     const handleZoomChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
         dispatch({ type: 'SET_ZOOM', payload: Number(e.target.value) });
+    };
+
+    const handleThemeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        const value = e.target.value as ScreenTheme | '';
+        const theme = value || undefined;
+        const tokens = getThemeTokens(theme);
+        updateConfig({ theme, backgroundColor: tokens.canvasBackground });
     };
 
     const handleDelete = () => {
@@ -72,6 +87,22 @@ export function CanvasToolbar() {
                     {ZOOM_OPTIONS.map((z) => (
                         <option key={z} value={z}>
                             {z}%
+                        </option>
+                    ))}
+                </select>
+            </div>
+
+            {/* Theme */}
+            <div className="toolbar-group">
+                <span className="toolbar-label">主题:</span>
+                <select
+                    className="zoom-select"
+                    value={state.config.theme || ''}
+                    onChange={handleThemeChange}
+                >
+                    {THEME_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                            {opt.label}
                         </option>
                     ))}
                 </select>

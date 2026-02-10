@@ -643,12 +643,287 @@ const patentDataCenterTemplate: ScreenTemplate = {
 };
 
 /**
+ * 专利数据中心 · 钛合金灰
+ * 深灰色调，无 DataV 边框/装饰，纯卡片布局
+ */
+const patentTitaniumTemplate: ScreenTemplate = {
+    id: 'patent-titanium',
+    name: '专利数据中心 · 钛合金灰',
+    description: '克制专业的深灰色调，无霓虹边框，适合涉密科技企业',
+    thumbnail: '🔩',
+    category: 'business',
+    config: {
+        name: '专利数据中心 · 钛合金灰',
+        description: '专利数据可视化大屏（钛合金灰）',
+        width: 1920,
+        height: 1080,
+        backgroundColor: '#1a1d23',
+        theme: 'titanium',
+        components: [
+            createComponent('ti-title', 'title', '主标题', 660, 15, 600, 50, 100, {
+                text: '专利数据中心', fontSize: 34, fontWeight: '600', color: '#e8eaed', textAlign: 'center',
+            }),
+            createComponent('ti-datetime', 'datetime', '日期时间', 1660, 22, 220, 35, 98, {
+                format: 'YYYY-MM-DD HH:mm:ss', fontSize: 16, color: '#6b7280',
+            }),
+            createComponent('ti-kpi-1', 'number-card', '申请总量', 40, 78, 280, 90, 50, {
+                title: '申请总量', value: 12586, prefix: '', suffix: '件',
+            }),
+            createComponent('ti-kpi-2', 'number-card', '受理数量', 340, 78, 280, 90, 50, {
+                title: '受理数量', value: 10234, prefix: '', suffix: '件',
+            }),
+            createComponent('ti-kpi-3', 'number-card', '授权数量', 640, 78, 280, 90, 50, {
+                title: '授权数量', value: 6892, prefix: '', suffix: '件',
+            }),
+            createComponent('ti-kpi-4', 'number-card', '授权率', 940, 78, 280, 90, 50, {
+                title: '授权率', value: 67.3, prefix: '', suffix: '%',
+            }),
+            createComponent('ti-kpi-5', 'number-card', '同比增长', 1240, 78, 280, 90, 50, {
+                title: '同比增长', value: 12.5, prefix: '+', suffix: '%',
+            }),
+            createComponent('ti-kpi-6', 'number-card', '当年授权', 1540, 78, 340, 90, 50, {
+                title: '当年授权', value: 1856, prefix: '', suffix: '件',
+            }),
+            createComponent('ti-pie-title', 'title', '类型占比标题', 50, 185, 200, 28, 30, {
+                text: '专利类型占比', fontSize: 15, fontWeight: '600', color: '#e8eaed', textAlign: 'left',
+            }),
+            createComponent('ti-pie', 'pie-chart', '专利类型占比', 30, 215, 590, 310, 20, {
+                title: '', data: [
+                    { name: '发明专利', value: 5230 }, { name: '实用新型', value: 4826 }, { name: '外观设计', value: 2530 },
+                ],
+            }),
+            createComponent('ti-line-title', 'title', '月度趋势标题', 650, 185, 220, 28, 30, {
+                text: '月度专利趋势', fontSize: 15, fontWeight: '600', color: '#e8eaed', textAlign: 'left',
+            }),
+            createComponent('ti-line', 'line-chart', '月度趋势', 640, 215, 640, 310, 20, {
+                title: '',
+                xAxisData: ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月'],
+                series: [
+                    { name: '受理', data: [820, 932, 901, 934, 1290, 1330, 1320, 1100, 1250, 1380, 1420, 1500] },
+                    { name: '授权', data: [520, 632, 601, 634, 890, 930, 920, 800, 850, 980, 1020, 1100] },
+                ],
+            }),
+            createComponent('ti-bar-title', 'title', '部门排行标题', 1320, 185, 200, 28, 30, {
+                text: '部门专利排行', fontSize: 15, fontWeight: '600', color: '#e8eaed', textAlign: 'left',
+            }),
+            createComponent('ti-bar', 'bar-chart', '部门排行', 1300, 215, 590, 310, 20, {
+                title: '',
+                xAxisData: ['研发一部', '研发二部', '研发三部', '产品部', '设计部', '测试部', '工程部', '市场部', '质量部', '制造部'],
+                series: [{ name: '申请数', data: [2350, 1980, 1650, 1420, 1180, 980, 860, 720, 650, 580] }],
+            }),
+            createComponent('ti-grant-title', 'title', '近期授权标题', 50, 545, 250, 28, 30, {
+                text: '近期专利授权（近半年）', fontSize: 15, fontWeight: '600', color: '#e8eaed', textAlign: 'left',
+            }),
+            createComponent('ti-grant-board', 'scroll-board', '近期授权列表', 30, 580, 590, 470, 20, {
+                header: ['授权日期', '专利号', '专利名称', '部门'],
+                data: [
+                    ['2025-01-28', 'ZL2024100012.5', '一种智能数据处理方法', '研发一部'],
+                    ['2025-01-25', 'ZL2024100013.X', '分布式存储系统及装置', '研发二部'],
+                    ['2025-01-22', 'ZL2024100014.4', '基于AI的图像识别系统', '研发三部'],
+                    ['2025-01-18', 'ZL2024100015.9', '多模态交互界面设计', '设计部'],
+                    ['2025-01-15', 'ZL2024100016.3', '高性能缓存优化方法', '研发一部'],
+                    ['2024-12-28', 'ZL2024100017.8', '自动化测试框架系统', '测试部'],
+                    ['2024-12-20', 'ZL2024100018.0', '数据安全加密传输协议', '研发二部'],
+                    ['2024-12-15', 'ZL2024100019.5', '智能推荐算法引擎', '产品部'],
+                    ['2024-11-28', 'ZL2024100020.X', '低功耗芯片散热结构', '工程部'],
+                    ['2024-11-15', 'ZL2024100021.4', '新型柔性显示面板', '制造部'],
+                ],
+                rowNum: 8, headerBGC: '#282c35',
+                oddRowBGC: 'rgba(255,255,255,0.02)', evenRowBGC: 'rgba(255,255,255,0.04)', waitTime: 3000,
+            }),
+            createComponent('ti-detail-title', 'title', '申请详情标题', 650, 545, 200, 28, 30, {
+                text: '当年申请详情', fontSize: 15, fontWeight: '600', color: '#e8eaed', textAlign: 'left',
+            }),
+            createComponent('ti-detail-board', 'scroll-board', '申请详情列表', 640, 580, 640, 470, 20, {
+                header: ['申请日期', '专利号', '专利名称', '类型', '状态'],
+                data: [
+                    ['2025-02-05', 'CN2025100001.2', '一种新型机器学习框架', '发明', '已受理'],
+                    ['2025-02-03', 'CN2025100002.7', '物联网设备管理平台', '发明', '审查中'],
+                    ['2025-01-28', 'CN2025100003.1', '便携式检测装置', '实用新型', '已受理'],
+                    ['2025-01-25', 'CN2025100004.6', '智能温控系统', '发明', '已受理'],
+                    ['2025-01-20', 'CN2025100005.0', '电子设备外壳结构', '外观设计', '已授权'],
+                    ['2025-01-18', 'CN2025100006.5', '自适应负载均衡方法', '发明', '审查中'],
+                    ['2025-01-15', 'CN2025100007.X', '新型散热器结构', '实用新型', '已受理'],
+                    ['2025-01-10', 'CN2025100008.4', '语音交互处理方法', '发明', '已授权'],
+                    ['2025-01-08', 'CN2025100009.9', '数据压缩编码方法', '发明', '审查中'],
+                    ['2025-01-05', 'CN2025100010.0', '柔性电路板结构设计', '实用新型', '已受理'],
+                ],
+                rowNum: 8, headerBGC: '#282c35',
+                oddRowBGC: 'rgba(255,255,255,0.02)', evenRowBGC: 'rgba(255,255,255,0.04)', waitTime: 3500,
+            }),
+            createComponent('ti-overdue-title', 'title', '超期预警标题', 1320, 545, 250, 28, 30, {
+                text: '受理超期预警', fontSize: 15, fontWeight: '600', color: '#ef4444', textAlign: 'left',
+            }),
+            createComponent('ti-overdue-board', 'scroll-board', '超期预警列表', 1300, 580, 590, 470, 20, {
+                header: ['申请日期', '专利号', '专利名称', '超期天数'],
+                data: [
+                    ['2023-05-10', 'CN2023100001.5', '高并发消息队列系统', '1006'],
+                    ['2023-06-15', 'CN2023100002.X', '智能仓储管理方法', '970'],
+                    ['2023-07-20', 'CN2023100003.4', '分布式计算调度引擎', '935'],
+                    ['2023-08-08', 'CN2023100004.9', '生物特征识别装置', '916'],
+                    ['2023-09-12', 'CN2023100005.3', '自动驾驶决策系统', '881'],
+                    ['2023-10-05', 'CN2023100006.8', '量子加密通信协议', '858'],
+                    ['2023-11-18', 'CN2023100007.2', '柔性传感器阵列', '814'],
+                    ['2023-12-01', 'CN2023100008.7', '智能电网调度方法', '801'],
+                    ['2024-01-10', 'CN2024100009.1', '新型催化剂制备方法', '761'],
+                    ['2024-02-20', 'CN2024100010.3', '多模态融合检测方法', '720'],
+                ],
+                rowNum: 8, headerBGC: '#3a2020',
+                oddRowBGC: 'rgba(239,68,68,0.05)', evenRowBGC: 'rgba(239,68,68,0.08)', waitTime: 3000,
+            }),
+        ],
+    },
+};
+
+/**
+ * 专利数据中心 · 冰川白
+ * 浅色模式，白色卡片 + 微阴影，适合办公/会议/打印场景
+ */
+const patentGlacierTemplate: ScreenTemplate = {
+    id: 'patent-glacier',
+    name: '专利数据中心 · 冰川白',
+    description: '纯白办公 BI 风格，细线边框分区，适合会议投屏和打印',
+    thumbnail: '🏔️',
+    category: 'business',
+    config: {
+        name: '专利数据中心 · 冰川白',
+        description: '专利数据可视化大屏（冰川白）',
+        width: 1920,
+        height: 1080,
+        backgroundColor: '#ffffff',
+        theme: 'glacier',
+        components: [
+            // 顶部标题
+            createComponent('gl-title', 'title', '主标题', 660, 15, 600, 50, 100, {
+                text: '专利数据中心', fontSize: 32, fontWeight: '600', color: '#333333', textAlign: 'center',
+            }),
+            createComponent('gl-datetime', 'datetime', '日期时间', 1660, 22, 220, 35, 98, {
+                format: 'YYYY-MM-DD HH:mm:ss', fontSize: 14, color: '#999999',
+            }),
+
+            // KPI 指标卡
+            createComponent('gl-kpi-1', 'number-card', '申请总量', 40, 78, 280, 90, 50, {
+                title: '申请总量', value: 12586, prefix: '', suffix: '件',
+            }),
+            createComponent('gl-kpi-2', 'number-card', '受理数量', 340, 78, 280, 90, 50, {
+                title: '受理数量', value: 10234, prefix: '', suffix: '件',
+            }),
+            createComponent('gl-kpi-3', 'number-card', '授权数量', 640, 78, 280, 90, 50, {
+                title: '授权数量', value: 6892, prefix: '', suffix: '件',
+            }),
+            createComponent('gl-kpi-4', 'number-card', '授权率', 940, 78, 280, 90, 50, {
+                title: '授权率', value: 67.3, prefix: '', suffix: '%',
+            }),
+            createComponent('gl-kpi-5', 'number-card', '同比增长', 1240, 78, 280, 90, 50, {
+                title: '同比增长', value: 12.5, prefix: '+', suffix: '%',
+            }),
+            createComponent('gl-kpi-6', 'number-card', '当年授权', 1540, 78, 340, 90, 50, {
+                title: '当年授权', value: 1856, prefix: '', suffix: '件',
+            }),
+
+            // 第二行: 图表区
+            createComponent('gl-pie-title', 'title', '类型占比标题', 50, 185, 200, 28, 30, {
+                text: '专利类型占比', fontSize: 14, fontWeight: '600', color: '#333333', textAlign: 'left',
+            }),
+            createComponent('gl-pie', 'pie-chart', '专利类型占比', 30, 215, 590, 310, 20, {
+                title: '', data: [
+                    { name: '发明专利', value: 5230 }, { name: '实用新型', value: 4826 }, { name: '外观设计', value: 2530 },
+                ],
+            }),
+            createComponent('gl-line-title', 'title', '月度趋势标题', 650, 185, 220, 28, 30, {
+                text: '月度专利趋势', fontSize: 14, fontWeight: '600', color: '#333333', textAlign: 'left',
+            }),
+            createComponent('gl-line', 'line-chart', '月度趋势', 640, 215, 640, 310, 20, {
+                title: '',
+                xAxisData: ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月'],
+                series: [
+                    { name: '受理', data: [820, 932, 901, 934, 1290, 1330, 1320, 1100, 1250, 1380, 1420, 1500] },
+                    { name: '授权', data: [520, 632, 601, 634, 890, 930, 920, 800, 850, 980, 1020, 1100] },
+                ],
+            }),
+            createComponent('gl-bar-title', 'title', '部门排行标题', 1320, 185, 200, 28, 30, {
+                text: '部门专利排行', fontSize: 14, fontWeight: '600', color: '#333333', textAlign: 'left',
+            }),
+            createComponent('gl-bar', 'bar-chart', '部门排行', 1300, 215, 590, 310, 20, {
+                title: '',
+                xAxisData: ['研发一部', '研发二部', '研发三部', '产品部', '设计部', '测试部', '工程部', '市场部', '质量部', '制造部'],
+                series: [{ name: '申请数', data: [2350, 1980, 1650, 1420, 1180, 980, 860, 720, 650, 580] }],
+            }),
+
+            // 第三行: 表格区
+            createComponent('gl-grant-title', 'title', '近期授权标题', 50, 545, 250, 28, 30, {
+                text: '近期专利授权（近半年）', fontSize: 14, fontWeight: '600', color: '#333333', textAlign: 'left',
+            }),
+            createComponent('gl-grant-board', 'scroll-board', '近期授权列表', 30, 580, 590, 470, 20, {
+                header: ['授权日期', '专利号', '专利名称', '部门'],
+                data: [
+                    ['2025-01-28', 'ZL2024100012.5', '一种智能数据处理方法', '研发一部'],
+                    ['2025-01-25', 'ZL2024100013.X', '分布式存储系统及装置', '研发二部'],
+                    ['2025-01-22', 'ZL2024100014.4', '基于AI的图像识别系统', '研发三部'],
+                    ['2025-01-18', 'ZL2024100015.9', '多模态交互界面设计', '设计部'],
+                    ['2025-01-15', 'ZL2024100016.3', '高性能缓存优化方法', '研发一部'],
+                    ['2024-12-28', 'ZL2024100017.8', '自动化测试框架系统', '测试部'],
+                    ['2024-12-20', 'ZL2024100018.0', '数据安全加密传输协议', '研发二部'],
+                    ['2024-12-15', 'ZL2024100019.5', '智能推荐算法引擎', '产品部'],
+                    ['2024-11-28', 'ZL2024100020.X', '低功耗芯片散热结构', '工程部'],
+                    ['2024-11-15', 'ZL2024100021.4', '新型柔性显示面板', '制造部'],
+                ],
+                rowNum: 8, headerBGC: '#f5f5f5',
+                oddRowBGC: '#ffffff', evenRowBGC: '#fafafa', waitTime: 3000,
+            }),
+            createComponent('gl-detail-title', 'title', '申请详情标题', 650, 545, 200, 28, 30, {
+                text: '当年申请详情', fontSize: 14, fontWeight: '600', color: '#333333', textAlign: 'left',
+            }),
+            createComponent('gl-detail-board', 'scroll-board', '申请详情列表', 640, 580, 640, 470, 20, {
+                header: ['申请日期', '专利号', '专利名称', '类型', '状态'],
+                data: [
+                    ['2025-02-05', 'CN2025100001.2', '一种新型机器学习框架', '发明', '已受理'],
+                    ['2025-02-03', 'CN2025100002.7', '物联网设备管理平台', '发明', '审查中'],
+                    ['2025-01-28', 'CN2025100003.1', '便携式检测装置', '实用新型', '已受理'],
+                    ['2025-01-25', 'CN2025100004.6', '智能温控系统', '发明', '已受理'],
+                    ['2025-01-20', 'CN2025100005.0', '电子设备外壳结构', '外观设计', '已授权'],
+                    ['2025-01-18', 'CN2025100006.5', '自适应负载均衡方法', '发明', '审查中'],
+                    ['2025-01-15', 'CN2025100007.X', '新型散热器结构', '实用新型', '已受理'],
+                    ['2025-01-10', 'CN2025100008.4', '语音交互处理方法', '发明', '已授权'],
+                    ['2025-01-08', 'CN2025100009.9', '数据压缩编码方法', '发明', '审查中'],
+                    ['2025-01-05', 'CN2025100010.0', '柔性电路板结构设计', '实用新型', '已受理'],
+                ],
+                rowNum: 8, headerBGC: '#f5f5f5',
+                oddRowBGC: '#ffffff', evenRowBGC: '#fafafa', waitTime: 3500,
+            }),
+            createComponent('gl-overdue-title', 'title', '超期预警标题', 1320, 545, 250, 28, 30, {
+                text: '受理超期预警', fontSize: 14, fontWeight: '600', color: '#c0504d', textAlign: 'left',
+            }),
+            createComponent('gl-overdue-board', 'scroll-board', '超期预警列表', 1300, 580, 590, 470, 20, {
+                header: ['申请日期', '专利号', '专利名称', '超期天数'],
+                data: [
+                    ['2023-05-10', 'CN2023100001.5', '高并发消息队列系统', '1006'],
+                    ['2023-06-15', 'CN2023100002.X', '智能仓储管理方法', '970'],
+                    ['2023-07-20', 'CN2023100003.4', '分布式计算调度引擎', '935'],
+                    ['2023-08-08', 'CN2023100004.9', '生物特征识别装置', '916'],
+                    ['2023-09-12', 'CN2023100005.3', '自动驾驶决策系统', '881'],
+                    ['2023-10-05', 'CN2023100006.8', '量子加密通信协议', '858'],
+                    ['2023-11-18', 'CN2023100007.2', '柔性传感器阵列', '814'],
+                    ['2023-12-01', 'CN2023100008.7', '智能电网调度方法', '801'],
+                    ['2024-01-10', 'CN2024100009.1', '新型催化剂制备方法', '761'],
+                    ['2024-02-20', 'CN2024100010.3', '多模态融合检测方法', '720'],
+                ],
+                rowNum: 8, headerBGC: '#fdf0ef',
+                oddRowBGC: '#ffffff', evenRowBGC: '#fdf0ef', waitTime: 3000,
+            }),
+        ],
+    },
+};
+
+/**
  * 所有可用模板
  */
 export const screenTemplates: ScreenTemplate[] = [
     blankTemplate,
     techDataCenterTemplate,
     patentDataCenterTemplate,
+    patentTitaniumTemplate,
+    patentGlacierTemplate,
 ];
 
 /**

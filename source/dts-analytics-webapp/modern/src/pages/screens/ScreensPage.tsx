@@ -50,6 +50,7 @@ export default function ScreensPage() {
                 height: config.height,
                 backgroundColor: config.backgroundColor,
                 backgroundImage: config.backgroundImage,
+                theme: (config as { theme?: string }).theme,
                 components: config.components,
             });
             // Navigate to edit the new screen

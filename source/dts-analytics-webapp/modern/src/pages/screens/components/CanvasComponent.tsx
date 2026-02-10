@@ -1,16 +1,17 @@
 import { useCallback, useState, useRef } from 'react';
 import { useScreen } from '../ScreenContext';
 import { ComponentRenderer } from './ComponentRenderer';
-import type { ScreenComponent } from '../types';
+import type { ScreenComponent, ScreenTheme } from '../types';
 
 interface CanvasComponentProps {
     component: ScreenComponent;
     isSelected: boolean;
+    theme?: ScreenTheme;
 }
 
 type ResizeDirection = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w';
 
-export function CanvasComponent({ component, isSelected }: CanvasComponentProps) {
+export function CanvasComponent({ component, isSelected, theme }: CanvasComponentProps) {
     const { dispatch, selectComponents } = useScreen();
     const [isDragging, setIsDragging] = useState(false);
     const [isResizing, setIsResizing] = useState(false);
@@ -128,7 +129,7 @@ export function CanvasComponent({ component, isSelected }: CanvasComponentProps)
             }}
             onMouseDown={handleMouseDown}
         >
-            <ComponentRenderer component={component} mode="designer" />
+            <ComponentRenderer component={component} mode="designer" theme={theme} />
 
             {isSelected && !component.locked && (
                 <>

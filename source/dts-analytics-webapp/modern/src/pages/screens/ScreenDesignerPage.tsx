@@ -41,6 +41,7 @@ function ScreenDesignerContent() {
                         height: screen.height || 1080,
                         backgroundColor: screen.backgroundColor || '#0d1b2a',
                         backgroundImage: screen.backgroundImage || undefined,
+                        theme: screen.theme as import('./types').ScreenTheme | undefined,
                         components: (screen.components || []).map(c => ({
                             ...c,
                             type: c.type as import('./types').ComponentType,
