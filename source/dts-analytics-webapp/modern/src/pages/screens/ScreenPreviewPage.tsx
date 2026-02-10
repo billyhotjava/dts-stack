@@ -116,7 +116,7 @@ export default function ScreenPreviewPage() {
                                 zIndex: component.zIndex,
                             }}
                         >
-                            <ComponentRenderer component={component} />
+                            <ComponentRenderer component={component} mode="preview" />
                         </div>
                     ))}
             </div>

@@ -117,9 +117,13 @@ function ScreenDesignerContent() {
                 </div>
 
                 {/* Right: Property Panel + Layer Panel */}
-                <div style={{ display: 'flex', flexDirection: 'column', width: 300 }}>
-                    <PropertyPanel />
-                    <LayerPanel />
+                <div style={{ display: 'flex', flexDirection: 'column', width: 300, overflow: 'hidden' }}>
+                    <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
+                        <PropertyPanel />
+                    </div>
+                    <div style={{ maxHeight: '40%', overflow: 'auto' }}>
+                        <LayerPanel />
+                    </div>
                 </div>
             </div>
         </div>

@@ -128,7 +128,7 @@ export function CanvasComponent({ component, isSelected }: CanvasComponentProps)
             }}
             onMouseDown={handleMouseDown}
         >
-            <ComponentRenderer component={component} />
+            <ComponentRenderer component={component} mode="designer" />
 
             {isSelected && !component.locked && (
                 <>

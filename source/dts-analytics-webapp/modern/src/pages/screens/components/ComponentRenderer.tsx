@@ -32,11 +32,14 @@ import {
     DigitalFlop,
 } from '@jiaminghi/data-view-react';
 import type { ScreenComponent } from '../types';
+import { DRILLABLE_TYPES } from '../types';
 import { useCardDataSource } from '../hooks/useCardDataSource';
+import { useDrillDown } from '../hooks/useDrillDown';
 import { mapCardDataToConfig } from '../hooks/cardDataMapper';
 
 interface ComponentRendererProps {
     component: ScreenComponent;
+    mode?: 'designer' | 'preview';
 }
 
 // ECharts common options for dark theme
@@ -84,11 +87,23 @@ const DecorationComponents: Record<number, React.ComponentType<{ color?: string[
     12: Decoration12,
 };
 
-export const ComponentRenderer = memo(function ComponentRenderer({ component }: ComponentRendererProps) {
-    const { type, config, width, height, dataSource } = component;
+export const ComponentRenderer = memo(function ComponentRenderer({ component, mode = 'preview' }: ComponentRendererProps) {
+    const { type, config, width, height, dataSource, drillDown } = component;
 
-    // Card data source hook
-    const { data: cardData, loading: cardLoading, error: cardError } = useCardDataSource(dataSource);
+    // Drill-down state (only active in preview mode for drillable chart types)
+    const drillActive = mode === 'preview' && DRILLABLE_TYPES.has(type) && drillDown?.enabled === true;
+    const rootCardId = dataSource?.type === 'card' ? dataSource.cardConfig?.cardId : undefined;
+    const drillState = useDrillDown(
+        drillActive ? rootCardId : undefined,
+        drillActive ? drillDown : undefined,
+    );
+
+    // Card data source hook — pass drill overrides when active
+    const { data: cardData, loading: cardLoading, error: cardError } = useCardDataSource(
+        dataSource,
+        drillActive ? drillState.effectiveCardId : undefined,
+        drillActive ? drillState.queryParameters : undefined,
+    );
 
     // Merge card data into config: card data overrides data fields only, not display fields
     const effectiveConfig = useMemo(() => {
@@ -105,6 +120,17 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component }: 
             return () => clearInterval(timer);
         }
     }, [type]);
+
+    // ECharts click handler for drill-down
+    const echartsClickHandler = useMemo(() => {
+        if (!drillActive || !drillState.canDrillDown) return undefined;
+        return {
+            click: (params: { name?: string; data?: { name?: string } }) => {
+                const value = params.name ?? params.data?.name;
+                if (value) drillState.handleDrill(String(value));
+            },
+        };
+    }, [drillActive, drillState.canDrillDown, drillState.handleDrill]);
 
     const content = useMemo(() => {
         const c = effectiveConfig;
@@ -138,6 +164,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component }: 
                             })),
                             grid: { left: '10%', right: '10%', bottom: '15%', top: '20%' },
                         }}
+                        onEvents={echartsClickHandler}
                     />
                 );
 
@@ -178,6 +205,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component }: 
                             })),
                             grid: { left: '10%', right: '10%', bottom: '15%', top: '20%' },
                         }}
+                        onEvents={echartsClickHandler}
                     />
                 );
 
@@ -193,10 +221,16 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component }: 
                                 type: 'pie',
                                 radius: ['40%', '70%'],
                                 avoidLabelOverlap: false,
-                                label: { show: true, color: '#fff', fontSize: 12 },
+                                label: {
+                                    show: true,
+                                    color: '#fff',
+                                    fontSize: 12,
+                                    formatter: '{b}: {d}%',
+                                },
                                 data: c.data as Array<{ name: string; value: number }>,
                             }],
                         }}
+                        onEvents={echartsClickHandler}
                     />
                 );
 
@@ -243,6 +277,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component }: 
                                 data: [{ value: c.data as number[], areaStyle: { opacity: 0.3 } }],
                             }],
                         }}
+                        onEvents={echartsClickHandler}
                     />
                 );
 
@@ -267,6 +302,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component }: 
                                 data: c.data as Array<{ name: string; value: number }>,
                             }],
                         }}
+                        onEvents={echartsClickHandler}
                     />
                 );
 
@@ -295,6 +331,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component }: 
                             }],
                             grid: { left: '10%', right: '10%', bottom: '15%', top: '20%' },
                         }}
+                        onEvents={echartsClickHandler}
                     />
                 );
 
@@ -611,11 +648,40 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component }: 
                     </div>
                 );
         }
-    }, [type, effectiveConfig, width, height, currentTime]);
+    }, [type, effectiveConfig, width, height, currentTime, echartsClickHandler]);
 
     return (
         <div style={{ width: '100%', height: '100%', overflow: 'hidden', position: 'relative' }}>
             {content}
+            {/* Drill-down breadcrumb overlay */}
+            {drillActive && drillState.breadcrumbs.length > 1 && (
+                <div style={{
+                    position: 'absolute', top: 4, left: 4,
+                    display: 'flex', alignItems: 'center', gap: 2,
+                    background: 'rgba(0,0,0,0.6)',
+                    padding: '2px 8px', borderRadius: 4,
+                    fontSize: 11, color: '#ccc', zIndex: 10,
+                }}>
+                    {drillState.breadcrumbs.map((crumb, i) => {
+                        const isLast = i === drillState.breadcrumbs.length - 1;
+                        return (
+                            <span key={crumb.depth} style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                                {i > 0 && <span style={{ color: '#666', margin: '0 2px' }}>/</span>}
+                                {isLast ? (
+                                    <span style={{ color: '#fff' }}>{crumb.label}</span>
+                                ) : (
+                                    <span
+                                        style={{ color: '#6366f1', cursor: 'pointer' }}
+                                        onClick={() => drillState.handleRollUp(crumb.depth)}
+                                    >
+                                        {crumb.label}
+                                    </span>
+                                )}
+                            </span>
+                        );
+                    })}
+                </div>
+            )}
             {/* Card data source loading indicator */}
             {cardLoading && (
                 <div style={{

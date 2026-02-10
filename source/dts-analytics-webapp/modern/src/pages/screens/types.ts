@@ -1,4 +1,20 @@
 // Screen Designer Component Types
+
+export interface DrillLevel {
+    cardId: number;
+    paramName: string;
+    label: string;
+}
+
+export interface DrillDownConfig {
+    enabled: boolean;
+    levels: DrillLevel[];
+}
+
+export const DRILLABLE_TYPES: Set<ComponentType> = new Set([
+    'line-chart', 'bar-chart', 'pie-chart', 'funnel-chart', 'scatter-chart', 'radar-chart',
+]);
+
 export interface ScreenComponent {
     id: string;
     type: ComponentType;
@@ -12,6 +28,7 @@ export interface ScreenComponent {
     visible: boolean;
     config: Record<string, unknown>;
     dataSource?: DataSourceConfig;
+    drillDown?: DrillDownConfig;
 }
 
 export type ComponentType =

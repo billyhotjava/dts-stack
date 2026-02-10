@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { analyticsApi } from '../../../api/analyticsApi';
 import type { DataSourceConfig, CardData } from '../types';
 
@@ -8,22 +8,31 @@ interface CardDataSourceResult {
     error: string | null;
 }
 
-export function useCardDataSource(dataSource?: DataSourceConfig): CardDataSourceResult {
+export function useCardDataSource(
+    dataSource?: DataSourceConfig,
+    overrideCardId?: number,
+    queryParameters?: Array<{ name: string; value: string }>,
+): CardDataSourceResult {
     const [data, setData] = useState<CardData | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-    const cardId = dataSource?.type === 'card' ? dataSource.cardConfig?.cardId : undefined;
+    const baseCardId = dataSource?.type === 'card' ? dataSource.cardConfig?.cardId : undefined;
+    const cardId = overrideCardId ?? baseCardId;
     const refreshInterval = dataSource?.type === 'card'
         ? (dataSource.cardConfig?.refreshInterval ?? dataSource.refreshInterval)
         : undefined;
 
-    const fetchData = useCallback(async (id: number) => {
+    // Stable serialization to avoid infinite re-renders
+    const paramsKey = useMemo(() => JSON.stringify(queryParameters ?? null), [queryParameters]);
+
+    const fetchData = useCallback(async (id: number, params?: Array<{ name: string; value: string }>) => {
         setLoading(true);
         setError(null);
         try {
-            const result = await analyticsApi.queryCard(id);
+            const body = params?.length ? { parameters: params } : {};
+            const result = await analyticsApi.queryCard(id, body);
             if (result.data?.rows && result.data?.cols) {
                 setData({
                     rows: result.data.rows as unknown[][],
@@ -51,10 +60,13 @@ export function useCardDataSource(dataSource?: DataSourceConfig): CardDataSource
             return;
         }
 
-        fetchData(cardId);
+        const params: Array<{ name: string; value: string }> | undefined =
+            paramsKey !== 'null' ? JSON.parse(paramsKey) : undefined;
+
+        fetchData(cardId, params);
 
         if (refreshInterval && refreshInterval > 0) {
-            intervalRef.current = setInterval(() => fetchData(cardId), refreshInterval * 1000);
+            intervalRef.current = setInterval(() => fetchData(cardId, params), refreshInterval * 1000);
         }
 
         return () => {
@@ -63,7 +75,7 @@ export function useCardDataSource(dataSource?: DataSourceConfig): CardDataSource
                 intervalRef.current = null;
             }
         };
-    }, [cardId, refreshInterval, fetchData]);
+    }, [cardId, refreshInterval, fetchData, paramsKey]);
 
     return { data, loading, error };
 }
