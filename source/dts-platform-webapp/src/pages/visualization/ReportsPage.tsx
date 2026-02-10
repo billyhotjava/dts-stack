@@ -10,6 +10,32 @@ import BiLinksPage from "@/pages/services/BiLinksPage";
 
 const { Text } = Typography;
 
+const REPORT_TYPE_LABELS: Record<string, string> = {
+	COCKPIT: "驾驶舱",
+	DASHBOARD: "主题看板",
+	REPORT: "分析报表",
+	APP: "业务应用",
+};
+
+const CLASSIFICATION_LABELS: Record<string, string> = {
+	PUBLIC: "公开",
+	INTERNAL: "内部",
+	SECRET: "秘密",
+	CONFIDENTIAL: "机密",
+};
+
+const normalizeCode = (value?: string | null) => String(value || "").trim().toUpperCase();
+
+const resolveReportTypeLabel = (value?: string | null) => {
+	const code = normalizeCode(value);
+	return REPORT_TYPE_LABELS[code] || value || "-";
+};
+
+const resolveClassificationLabel = (value?: string | null) => {
+	const code = normalizeCode(value);
+	return CLASSIFICATION_LABELS[code] || value || "-";
+};
+
 export default function Page() {
 	const [reports, setReports] = useState<ReportLink[]>([]);
 	const [loading, setLoading] = useState(false);
@@ -42,9 +68,9 @@ export default function Page() {
 
 	const columns: ColumnsType<ReportLink> = [
 		{ title: "标题", dataIndex: "title", render: (v) => v || "-" },
-		{ title: "类型", dataIndex: "reportType", width: 120, render: (v) => <Tag>{v || "-"}</Tag> },
+		{ title: "类型", dataIndex: "reportType", width: 120, render: (v) => <Tag>{resolveReportTypeLabel(v)}</Tag> },
 		{ title: "引擎", dataIndex: "engine", width: 120, render: (v) => <Tag>{v || "-"}</Tag> },
-		{ title: "密级", dataIndex: "classification", width: 120, render: (v) => <Tag>{v || "-"}</Tag> },
+		{ title: "密级", dataIndex: "classification", width: 120, render: (v) => <Tag>{resolveClassificationLabel(v)}</Tag> },
 		{ title: "URL", dataIndex: "url", render: (v) => v || "-" },
 		{
 			title: "操作",
