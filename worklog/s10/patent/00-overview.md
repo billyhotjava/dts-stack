@@ -2,12 +2,12 @@
 
 ## 1. 业务背景
 
-基于 `ods_pateng_info` 原始专利数据，构建从 ODS 到 ADS 的完整数仓链路，
+基于 `ods_patent_info` 原始专利数据，构建从 ODS 到 ADS 的完整数仓链路，
 最终为"专利分析仪表盘"提供可直接查询的宽表。
 
 ## 2. 数据源
 
-来源表：`public.ods_pateng_info`（PostgreSQL），由数据入湖任务从外部系统导入。
+来源表：`public.ods_patent_info`（PostgreSQL），由数据入湖任务从外部系统导入。
 
 | 字段 | 类型 | 含义 |
 |---|---|---|
@@ -67,7 +67,7 @@
 ## 4. 模型依赖图
 
 ```
-ods_pateng_info (source)
+ods_patent_info (source)
        |
        v
   dim_patent_status ------+
@@ -118,8 +118,8 @@ ods_pateng_info (source)
 
 ## 7. dbt source 注册
 
-需要在 `ods_sources.yml` 中添加 `ods_pateng_info` 表的 source 定义，
-dbt 才能通过 `{{ source('public', 'ods_pateng_info') }}` 引用。
+需要在 `ods_sources.yml` 中添加 `ods_patent_info` 表的 source 定义，
+dbt 才能通过 `{{ source('public', 'ods_patent_info') }}` 引用。
 
 ## 8. 在平台上的操作方式
 
@@ -140,7 +140,7 @@ dbt 才能通过 `{{ source('public', 'ods_pateng_info') }}` 引用。
 `SET dts.report_years='5';`
 
 可选：指定 ODS 表名（无需手工建 view）：
-`SET dts.ods_table='ods_pateng_info';`
+`SET dts.ods_table='ods_patent_info';`
 
 ## 8.1 一键执行命令（推荐）
 
@@ -154,7 +154,7 @@ PG_PASSWORD='Devops123@' ./worklog/s10/patent/run-build-all.sh
 PG_PASSWORD='Devops123@' ./worklog/s10/patent/run-build-all.sh --force-docker
 
 # 指定 ODS 表名 + 指定年份
-PG_PASSWORD='Devops123@' ODS_TABLE=ods_pateng_info_202602 REPORT_YEAR=2024 \
+PG_PASSWORD='Devops123@' ODS_TABLE=ods_patent_info_202602 REPORT_YEAR=2024 \
   ./worklog/s10/patent/run-build-all.sh --force-docker
 
 # 生成最近 N 年 ADS 缓存
@@ -170,20 +170,21 @@ PG_HOST=127.0.0.1 PG_PORT=5432 PG_DB=biadmin PG_USER=biadmin PG_PASSWORD='Devops
 
 ## 9. 自定义 ODS 表名 / 中文表头适配
 
-如果 Excel/CSV 导入后的 ODS 表名不是 `ods_pateng_info`，建议用参数指定（你的表名是 `ods_pateng_info`）：
+如果 Excel/CSV 导入后的 ODS 表名不是 `ods_patent_info`，建议用参数指定（你的表名是 `ods_patent_info`）：
 
 ```sql
-SET dts.ods_table='ods_pateng_info';
+SET dts.ods_table='ods_patent_info';
 ```
 
 也可以创建一个同名视图做别名：
 
 ```sql
+-- 将你的实际 ODS 表映射为标准名 ods_patent_info
 CREATE OR REPLACE VIEW public.ods_patent_info AS
-SELECT * FROM public.ods_pateng_info;
+SELECT * FROM public.<你的实际ods表名>;
 ```
 
-如果 Excel header 为中文，可创建 `ods_patent_info_std` 视图进行字段映射（示例表头如下，来源表为 `ods_pateng_info`）：
+如果 Excel header 为中文，可创建 `ods_patent_info_std` 视图进行字段映射（示例表头如下，来源表为 `ods_patent_info`）：
 
 ```sql
 -- 表头示例：
@@ -204,7 +205,7 @@ SELECT
   "代理公司"        AS agent_org_name,
   "状态"            AS state,
   dept_code         AS dept_code
-FROM public.ods_pateng_info;
+FROM public.ods_patent_info;
 ```
 
 > `99-build-all.sql` 会优先使用 `ods_patent_info_std` 作为数据来源。

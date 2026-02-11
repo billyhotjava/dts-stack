@@ -7,7 +7,7 @@ SELECT
   COUNT(*)  AS "数量"
 FROM ads_patent_detail_year
 WHERE patent_type = {{patent_type}}
-  AND stat_year = EXTRACT(YEAR FROM current_date)
+  AND application_year = EXTRACT(YEAR FROM current_date)
 GROUP BY dept_name
 ORDER BY COUNT(*) DESC
 LIMIT 10

@@ -8,6 +8,6 @@ SELECT
   patent_type                              AS "类型",
   patent_status_std                        AS "状态"
 FROM ads_patent_detail_year
-WHERE stat_year = EXTRACT(YEAR FROM current_date)
+WHERE application_year = EXTRACT(YEAR FROM current_date)
 ORDER BY application_date DESC
 LIMIT 200

@@ -46,7 +46,8 @@ public class TargetTableProvisioner {
         Map<String, Object> writerConfig = task.getDestinationConfig() != null
             ? jsonNodeToMap(task.getDestinationConfig())
             : Map.of();
-        if (!shouldAutoCreate(writerConfig, task.getAddaxConfig())) {
+        boolean fullRefresh = isFullRefreshMode(task.getSyncMode());
+        if (!fullRefresh && !shouldAutoCreate(writerConfig, task.getAddaxConfig())) {
             return;
         }
         List<TableMapping> mappings = resolveMappings(task.getTableMapping(), readerConfig, writerConfig);
@@ -67,7 +68,10 @@ public class TargetTableProvisioner {
                 TableId target = resolveTargetTable(mapping.target(), resolveSchema(writerConfig));
                 target = lowercaseForPostgres(target, targetInfo.jdbcUrl());
                 if (tableExists(connection, target)) {
-                    if (isPostgres(targetInfo.jdbcUrl()) && hasUppercaseColumns(connection, target)) {
+                    if (fullRefresh) {
+                        LOG.info("Dropping table {} for full_refresh task {}", target.qualifiedName(), task.getId());
+                        dropTable(connection, target);
+                    } else if (isPostgres(targetInfo.jdbcUrl()) && hasUppercaseColumns(connection, target)) {
                         LOG.info("Dropping table {} with uppercase columns to recreate with lowercase", target.qualifiedName());
                         dropTable(connection, target);
                     } else {
@@ -95,6 +99,10 @@ public class TargetTableProvisioner {
         } catch (Exception ex) {
             throw new IllegalStateException("自动建表失败: " + ex.getMessage(), ex);
         }
+    }
+
+    private boolean isFullRefreshMode(String syncMode) {
+        return "full_refresh".equalsIgnoreCase(normalizeText(syncMode));
     }
 
     private Map<String, Object> mergeReaderConfig(Map<String, Object> baseConfig, JsonNode overrideNode) {

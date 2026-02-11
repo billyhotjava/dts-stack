@@ -1271,17 +1271,19 @@ public class AddaxJobService {
         }
         ddl.append(")");
 
-        // Prepend CREATE TABLE to preSql, then TRUNCATE
+        // In full rebuild semantics for file sources:
+        // drop target table first, then create it again from file metadata.
         List<String> preSql = new java.util.ArrayList<>();
+        preSql.add("DROP TABLE IF EXISTS " + qualifiedTable);
         preSql.add(ddl.toString());
-        preSql.add("TRUNCATE TABLE " + qualifiedTable);
 
-        // Preserve existing preSql entries (skip duplicate TRUNCATE)
+        // Preserve existing preSql entries (skip duplicate DROP/TRUNCATE).
         Object existing = writerConfig.get("preSql");
         if (existing instanceof List<?> list) {
             for (Object item : list) {
                 String s = normalizeText(item);
-                if (StringUtils.hasText(s) && !s.toUpperCase(Locale.ROOT).contains("TRUNCATE")) {
+                String upper = s == null ? "" : s.toUpperCase(Locale.ROOT);
+                if (StringUtils.hasText(s) && !upper.contains("TRUNCATE") && !upper.contains("DROP TABLE")) {
                     preSql.add(s);
                 }
             }

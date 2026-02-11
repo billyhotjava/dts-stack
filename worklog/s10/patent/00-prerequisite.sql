@@ -8,6 +8,7 @@
 -- 支持格式：
 --   YYYY-MM-DD, YYYY/MM/DD, YYYY.MM.DD   (含时间部分自动截断)
 --   YYYYMMDD
+--   M/D/YYYY, D/M/YYYY
 --   宽松模式：YYYY-M-D (月日不补零)
 --
 -- 无法解析时返回 NULL，不抛异常
@@ -19,6 +20,8 @@ IMMUTABLE
 AS $$
 DECLARE
   v text;
+  parts text[];
+  p1 int; p2 int; p3 int;
 BEGIN
   IF p_text IS NULL THEN
     RETURN NULL;
@@ -35,7 +38,7 @@ BEGIN
   -- 去掉时间部分 (取空格前)
   v := split_part(v, ' ', 1);
 
-  -- YYYY-M-D / YYYY-MM-DD
+  -- YYYY-MM-DD  (2025-08-29, 2025-8-29)
   IF v ~ '^\d{4}-\d{1,2}-\d{1,2}$' THEN
     RETURN to_date(v, 'YYYY-MM-DD');
   END IF;
@@ -43,6 +46,26 @@ BEGIN
   -- YYYYMMDD
   IF v ~ '^\d{8}$' THEN
     RETURN to_date(v, 'YYYYMMDD');
+  END IF;
+
+  -- M/D/YYYY or D/M/YYYY (8/29/2025, 29/8/2025)
+  -- After normalization: 8-29-2025 or 29-8-2025
+  IF v ~ '^\d{1,2}-\d{1,2}-\d{4}$' THEN
+    parts := string_to_array(v, '-');
+    p1 := parts[1]::int;
+    p2 := parts[2]::int;
+    p3 := parts[3]::int;
+
+    -- If second segment > 12, it must be day -> M/D/YYYY
+    IF p2 > 12 THEN
+      RETURN make_date(p3, p1, p2);
+    END IF;
+    -- If first segment > 12, it must be day -> D/M/YYYY
+    IF p1 > 12 THEN
+      RETURN make_date(p3, p2, p1);
+    END IF;
+    -- Ambiguous case defaults to M/D/YYYY
+    RETURN make_date(p3, p1, p2);
   END IF;
 
   RETURN NULL;
