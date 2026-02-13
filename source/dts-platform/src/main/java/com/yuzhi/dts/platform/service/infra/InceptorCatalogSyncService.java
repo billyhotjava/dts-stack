@@ -20,6 +20,7 @@ import jakarta.transaction.Transactional;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
@@ -124,6 +125,7 @@ public class InceptorCatalogSyncService {
         InceptorDataSourceState state = stateOpt.orElseThrow();
         UUID sourceId = state.id();
         String database = sanitizeDatabase(state.database());
+        Instant snapshotTime = Instant.now();
 
         Map<String, TableMeta> metadata;
         try {
@@ -183,6 +185,7 @@ public class InceptorCatalogSyncService {
             dataset.setSourceId(sourceId);
             dataset.setHiveDatabase(database);
             dataset.setHiveTable(tableName);
+            dataset.setSnapshotTime(snapshotTime);
             dataset.setType(DATASET_TYPE);
             dataset.setName(defaultIfBlank(dataset.getName(), tableName));
             dataset.setClassification(defaultIfBlank(dataset.getClassification(), DEFAULT_CLASSIFICATION));

@@ -5,12 +5,16 @@ import com.yuzhi.dts.ingestion.domain.IngestionTask;
 import com.yuzhi.dts.ingestion.repository.IngestionExecutionRepository;
 import com.yuzhi.dts.ingestion.repository.IngestionTaskRepository;
 import com.yuzhi.dts.ingestion.service.audit.AuditService;
+import com.yuzhi.dts.ingestion.service.dto.IngestionIncrementalAuditDTO;
+import com.yuzhi.dts.ingestion.service.dto.IngestionIncrementalAuditSummaryDTO;
 import com.yuzhi.dts.ingestion.service.dto.IngestionExecutionDTO;
+import com.yuzhi.dts.ingestion.service.dto.IngestionIncrementalStateDTO;
 import com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO;
 import com.yuzhi.dts.ingestion.service.etl.AddaxJobService;
 import com.yuzhi.dts.ingestion.service.etl.AirflowAdapter;
 import com.yuzhi.dts.ingestion.service.etl.AirflowClient;
 import com.yuzhi.dts.ingestion.service.etl.AirflowDagService;
+import com.yuzhi.dts.ingestion.service.etl.IncrementalSyncService;
 import com.yuzhi.dts.ingestion.service.mapper.IngestionExecutionMapper;
 import com.yuzhi.dts.ingestion.service.mapper.IngestionTaskMapper;
 import com.yuzhi.dts.common.audit.AuditStage;
@@ -18,6 +22,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -26,6 +31,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Instant;
+import java.util.concurrent.CompletableFuture;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -51,6 +58,7 @@ public class IngestionTaskService {
     private final AirflowDagService airflowDagService;
     private final com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver sourceResolver;
     private final com.yuzhi.dts.ingestion.service.etl.TargetTableProvisioner targetTableProvisioner;
+    private final IncrementalSyncService incrementalSyncService;
     private final AuditService auditService;
     private final IngestionTaskChangeLogService changeLogService;
 
@@ -65,6 +73,7 @@ public class IngestionTaskService {
         AirflowDagService airflowDagService,
         com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver sourceResolver,
         com.yuzhi.dts.ingestion.service.etl.TargetTableProvisioner targetTableProvisioner,
+        IncrementalSyncService incrementalSyncService,
         AuditService auditService,
         IngestionTaskChangeLogService changeLogService
     ) {
@@ -78,6 +87,7 @@ public class IngestionTaskService {
         this.airflowDagService = airflowDagService;
         this.sourceResolver = sourceResolver;
         this.targetTableProvisioner = targetTableProvisioner;
+        this.incrementalSyncService = incrementalSyncService;
         this.auditService = auditService;
         this.changeLogService = changeLogService;
     }
@@ -173,11 +183,15 @@ public class IngestionTaskService {
             .map(existingTask -> {
                 IngestionTask before = snapshot(existingTask);
                 taskMapper.partialUpdate(existingTask, dto);
+                if (dto.getSyncConfig() != null || !"incremental".equalsIgnoreCase(dto.getSyncMode())) {
+                    existingTask.setSyncConfig(dto.getSyncConfig());
+                }
                 // 如果配置改变，重新生成Addax Job JSON
                 boolean sourceChanged = !java.util.Objects.equals(before.getSourceDataSourceId(), existingTask.getSourceDataSourceId());
                 boolean configChanged = sourceChanged
                     || !java.util.Objects.equals(before.getSourceConfig(), existingTask.getSourceConfig())
                     || !java.util.Objects.equals(before.getSyncMode(), existingTask.getSyncMode())
+                    || !java.util.Objects.equals(before.getSyncConfig(), existingTask.getSyncConfig())
                     || !java.util.Objects.equals(before.getDestinationType(), existingTask.getDestinationType())
                     || !java.util.Objects.equals(before.getDestinationConfig(), existingTask.getDestinationConfig())
                     || !java.util.Objects.equals(before.getTableMapping(), existingTask.getTableMapping())
@@ -222,6 +236,55 @@ public class IngestionTaskService {
         log.debug("Request to get IngestionTask : {}", id);
         return taskRepository.findById(id)
             .map(taskMapper::toDto);
+    }
+
+    @Transactional(readOnly = true)
+    public List<IngestionIncrementalStateDTO> getIncrementalStates(Long taskId) {
+        if (taskId == null || !taskRepository.existsById(taskId)) {
+            throw new IllegalArgumentException("Task not found: " + taskId);
+        }
+        return incrementalSyncService.listCheckpointStates(taskId);
+    }
+
+    @Transactional(readOnly = true)
+    public List<IngestionIncrementalAuditDTO> getIncrementalAudits(Long taskId, Long executionId) {
+        if (taskId == null || !taskRepository.existsById(taskId)) {
+            throw new IllegalArgumentException("Task not found: " + taskId);
+        }
+        return incrementalSyncService.listCheckpointAudits(taskId, executionId);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<IngestionIncrementalAuditDTO> getIncrementalAuditsPage(
+        Long taskId,
+        Long executionId,
+        Collection<Long> executionIds,
+        Instant from,
+        Instant to,
+        Pageable pageable,
+        String tableName,
+        String status
+    ) {
+        if (taskId == null || !taskRepository.existsById(taskId)) {
+            throw new IllegalArgumentException("Task not found: " + taskId);
+        }
+        return incrementalSyncService.listCheckpointAuditsPage(taskId, executionId, executionIds, from, to, pageable, tableName, status);
+    }
+
+    @Transactional(readOnly = true)
+    public IngestionIncrementalAuditSummaryDTO getIncrementalAuditsSummary(
+        Long taskId,
+        Long executionId,
+        Collection<Long> executionIds,
+        Instant from,
+        Instant to,
+        String tableName,
+        String status
+    ) {
+        if (taskId == null || !taskRepository.existsById(taskId)) {
+            throw new IllegalArgumentException("Task not found: " + taskId);
+        }
+        return incrementalSyncService.summarizeCheckpointAudits(taskId, executionId, executionIds, from, to, tableName, status);
     }
 
     /**
@@ -269,6 +332,11 @@ public class IngestionTaskService {
             log.warn("Failed to delete executions for task {}: {}", id, ex.getMessage());
         }
         try {
+            incrementalSyncService.clearCheckpointByTaskId(id);
+        } catch (Exception ex) {
+            log.warn("Failed to delete incremental checkpoints for task {}: {}", id, ex.getMessage());
+        }
+        try {
             changeLogService.deleteByTaskId(id);
         } catch (Exception ex) {
             log.warn("Failed to delete change logs for task {}: {}", id, ex.getMessage());
@@ -301,33 +369,41 @@ public class IngestionTaskService {
         if (!"active".equals(task.getStatus()) && !"draft".equals(task.getStatus())) {
             throw new IllegalStateException("Task is not in executable status: " + task.getStatus());
         }
-        boolean airflowEnabled = isAirflowEnabled(task);
-        com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver.ResolvedSource source = resolveSource(task, null);
-        task = ensureAddaxJobExists(task, source);
-        // File sources cannot use ensureTargetTables because dts-ingestion cannot reach the
-        // target database directly.  CREATE TABLE DDL is injected into the Addax writer preSql
-        // instead (see AddaxJobService.injectFileSourceCreateTablePreSql).
-        if (!isFileSourceType(task.getSourceType())) {
-            targetTableProvisioner.ensureTargetTables(task, source == null ? null : source.readerConfig());
+        Optional<IngestionExecution> latestExecution = executionRepository.findFirstByTaskIdOrderByCreatedAtDesc(taskId);
+        if (latestExecution.isPresent() && "running".equalsIgnoreCase(latestExecution.get().getStatus())) {
+            throw new IllegalStateException("任务仍在运行中，请稍后重试");
         }
-        // Resolve actual column names for PostgreSQL writers to work around Addax 6.0.8 quoteColumn bug
-        addaxJobService.resolveWriterColumnsIfNeeded(task.getAddaxJobPath());
-        if (airflowEnabled && task.getAirflowEnabled() == null) {
-            task.setAirflowEnabled(true);
-            task = taskRepository.save(task);
-        }
-        if (airflowEnabled) {
-            boolean forceDagRefresh = task.getLastExecutedAt() == null;
-            task = ensureAirflowDag(task, forceDagRefresh);
-        }
-
-        // 创建执行记录
+        // 创建执行记录（先落库，便于前端异步轮询执行进度）
         IngestionExecution execution = new IngestionExecution();
         execution.setTask(task);
-        execution.setStatus("running");
+        execution.setStatus("preparing");
         execution.setStartTime(Instant.now());
+        execution.setReplaceMode(resolveReplaceMode(task));
+        execution = executionRepository.save(execution);
 
         try {
+            boolean airflowEnabled = isAirflowEnabled(task);
+            com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver.ResolvedSource source = resolveSource(task, null);
+            Map<String, Object> runtimeReaderOverrides = incrementalSyncService.buildReaderRuntimeOverrides(task, source);
+            task = ensureAddaxJobExists(task, source, runtimeReaderOverrides);
+            execution.setDroppedTables(resolveDroppedTables(task));
+            // File sources cannot use ensureTargetTables because dts-ingestion cannot reach the
+            // target database directly. CREATE TABLE DDL is injected into the Addax writer preSql
+            // instead (see AddaxJobService.injectFileSourceCreateTablePreSql).
+            if (!isFileSourceType(task.getSourceType())) {
+                targetTableProvisioner.ensureTargetTables(task, source == null ? null : source.readerConfig());
+            }
+            // Resolve actual column names for PostgreSQL writers to work around Addax 6.0.8 quoteColumn bug
+            addaxJobService.resolveWriterColumnsIfNeeded(task.getAddaxJobPath());
+            if (airflowEnabled && task.getAirflowEnabled() == null) {
+                task.setAirflowEnabled(true);
+                task = taskRepository.save(task);
+            }
+            if (airflowEnabled) {
+                boolean forceDagRefresh = task.getLastExecutedAt() == null;
+                task = ensureAirflowDag(task, forceDagRefresh);
+            }
+
             // 触发Airflow DAG
             if (airflowEnabled) {
                 String airflowJobPath = addaxJobService.toContainerJobPath(task.getAddaxJobPath());
@@ -352,8 +428,17 @@ public class IngestionTaskService {
                 String status = airflowResult == null ? null : String.valueOf(airflowResult.get("status"));
                 if (!"triggered".equalsIgnoreCase(status)) {
                     String message = airflowResult == null ? null : String.valueOf(airflowResult.get("message"));
+                    String code = airflowResult == null ? null : String.valueOf(airflowResult.get("code"));
+                    String normalizedCode = (code == null || "null".equalsIgnoreCase(code) || code.isBlank()) ? null : code.trim();
+                    String normalizedMessage = (message == null || "null".equalsIgnoreCase(message) || message.isBlank())
+                        ? null
+                        : message.trim();
+                    String detail = normalizedMessage;
+                    if (normalizedCode != null) {
+                        detail = normalizedMessage == null ? "[" + normalizedCode + "]" : "[" + normalizedCode + "] " + normalizedMessage;
+                    }
                     throw new IllegalStateException(
-                        "Airflow 触发失败" + (message == null || "null".equals(message) ? "" : (": " + message))
+                        "Airflow 触发失败" + (detail == null ? "" : (": " + detail))
                     );
                 }
                 String dagRunId = extractDagRunId(airflowResult);
@@ -367,6 +452,7 @@ public class IngestionTaskService {
                 execution.setExecutionId("manual-" + java.util.UUID.randomUUID().toString().substring(0, 8));
             }
 
+            execution.setStatus("running");
             execution = executionRepository.save(execution);
 
             // 更新任务的最后执行信息
@@ -413,24 +499,102 @@ public class IngestionTaskService {
         }
     }
 
+    @Async("ingestionTaskExecutor")
+    public CompletableFuture<Void> executeAsync(Long taskId) {
+        try {
+            execute(taskId);
+        } catch (Exception ex) {
+            log.error("Async execution failed for task {}", taskId, ex);
+        }
+        return CompletableFuture.completedFuture(null);
+    }
+
+    public IngestionExecutionDTO retryExecution(Long taskId, Long executionId, String retryMode) {
+        if (taskId == null || executionId == null) {
+            throw new IllegalArgumentException("taskId and executionId are required");
+        }
+        IngestionTask task = taskRepository.findById(taskId)
+            .orElseThrow(() -> new IllegalArgumentException("Task not found: " + taskId));
+        IngestionExecution execution = executionRepository.findById(executionId)
+            .orElseThrow(() -> new IllegalArgumentException("Execution not found: " + executionId));
+        if (execution.getTask() == null || !taskId.equals(execution.getTask().getId())) {
+            throw new IllegalArgumentException("Execution does not belong to task: " + taskId);
+        }
+        String mode = StringUtils.hasText(retryMode) ? retryMode.trim().toUpperCase(java.util.Locale.ROOT) : "FAILED_ONLY";
+        if (!"FAILED_ONLY".equals(mode) && !"FULL_RERUN".equals(mode)) {
+            throw new IllegalArgumentException("Unsupported retry mode: " + retryMode);
+        }
+        String previousStatus = toText(execution.getStatus());
+        if ("FAILED_ONLY".equals(mode)) {
+            boolean canRetry = "failed".equalsIgnoreCase(previousStatus) || "error".equalsIgnoreCase(previousStatus);
+            if (!canRetry) {
+                throw new IllegalStateException("仅失败执行可使用 FAILED_ONLY 重试模式");
+            }
+        }
+        auditService.auditAction(
+            "INGESTION_TASK_RETRY",
+            AuditStage.SUCCESS,
+            task.getName(),
+            Map.of(
+                "taskId", taskId,
+                "executionId", executionId,
+                "retryMode", mode,
+                "previousStatus", previousStatus == null ? "unknown" : previousStatus
+            )
+        );
+        return execute(taskId);
+    }
+
+
+    private String resolveReplaceMode(IngestionTask task) {
+        if (task == null) {
+            return null;
+        }
+        return "full_refresh".equalsIgnoreCase(task.getSyncMode()) ? "FULL_REPLACE" : "INCREMENTAL_OR_APPEND";
+    }
+
+    private String resolveDroppedTables(IngestionTask task) {
+        if (task == null) {
+            return null;
+        }
+        if (!"full_refresh".equalsIgnoreCase(task.getSyncMode())) {
+            return null;
+        }
+        if (!StringUtils.hasText(task.getAddaxJobPath())) {
+            return null;
+        }
+        List<String> tables = addaxJobService.listWriterTablesFromJob(task.getAddaxJobPath());
+        if (tables == null || tables.isEmpty()) {
+            return null;
+        }
+        return String.join(",", tables);
+    }
     private IngestionTask ensureAddaxJobExists(IngestionTask task) {
-        return ensureAddaxJobExists(task, null);
+        return ensureAddaxJobExists(task, null, null);
     }
 
     private IngestionTask ensureAddaxJobExists(
         IngestionTask task,
         com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver.ResolvedSource resolvedSource
     ) {
+        return ensureAddaxJobExists(task, resolvedSource, null);
+    }
+
+    private IngestionTask ensureAddaxJobExists(
+        IngestionTask task,
+        com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver.ResolvedSource resolvedSource,
+        Map<String, Object> runtimeReaderOverrides
+    ) {
         if (task == null) {
             return task;
         }
         if (resolvedSource != null || task.getSourceDataSourceId() != null) {
-            return rebuildAddaxJob(task, resolvedSource);
+            return rebuildAddaxJob(task, resolvedSource, runtimeReaderOverrides);
         }
         // File source tasks always rebuild to ensure preSql CREATE TABLE and
         // explicit writer columns are up-to-date with current file metadata.
         if (isFileSourceType(task.getSourceType())) {
-            return rebuildAddaxJob(task, null);
+            return rebuildAddaxJob(task, null, runtimeReaderOverrides);
         }
         String jobPath = task.getAddaxJobPath();
         if (StringUtils.hasText(jobPath)) {
@@ -441,20 +605,28 @@ public class IngestionTaskService {
                 return task;
             }
         }
-        return rebuildAddaxJob(task, null);
+        return rebuildAddaxJob(task, null, runtimeReaderOverrides);
     }
 
     private IngestionTask rebuildAddaxJob(
         IngestionTask task,
         com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver.ResolvedSource resolvedSource
     ) {
+        return rebuildAddaxJob(task, resolvedSource, null);
+    }
+
+    private IngestionTask rebuildAddaxJob(
+        IngestionTask task,
+        com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver.ResolvedSource resolvedSource,
+        Map<String, Object> runtimeReaderOverrides
+    ) {
         String operator = resolveOperator(task);
         try {
             com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver.ResolvedSource source =
                 resolveSource(task, resolvedSource);
             AddaxJobService.AddaxJobResult jobResult = source == null
-                ? addaxJobService.createJobFromTask(task)
-                : addaxJobService.createJobFromTask(task, source.readerType(), source.readerConfig());
+                ? addaxJobService.createJobFromTask(task, null, null, runtimeReaderOverrides)
+                : addaxJobService.createJobFromTask(task, source.readerType(), source.readerConfig(), runtimeReaderOverrides);
             if (source != null && StringUtils.hasText(source.readerType())) {
                 task.setSourceType(source.readerType());
             }
@@ -654,7 +826,7 @@ public class IngestionTaskService {
     }
 
     @Transactional(readOnly = true)
-    public Map<String, Object> fetchExecutionLog(Long taskId, Long executionId, Integer tryNumber) {
+    public Map<String, Object> fetchExecutionLog(Long taskId, Long executionId, Integer tryNumber, String keyword, String scope) {
         IngestionTask task = taskRepository.findById(taskId)
             .orElseThrow(() -> new IllegalArgumentException("Task not found: " + taskId));
         IngestionExecution execution = executionRepository.findById(executionId)
@@ -685,18 +857,70 @@ public class IngestionTaskService {
             );
         }
         List<String> candidates = resolveTaskLogCandidates(dagId, dagRunId, preferredTaskId);
+        Map<String, Integer> tryHints = resolveTaskTryHints(dagId, dagRunId);
+        Map<String, String> taskStates = resolveTaskStates(dagId, dagRunId);
+        boolean aggregateAll = "all".equalsIgnoreCase(toText(scope));
         String selectedTaskId = StringUtils.hasText(preferredTaskId) ? preferredTaskId : null;
+        int selectedTry = resolvedTry;
         String log = "";
-        for (String candidate : candidates) {
-            if (!StringUtils.hasText(candidate)) {
-                continue;
+        if (aggregateAll) {
+            StringBuilder merged = new StringBuilder();
+            for (String candidate : candidates) {
+                if (!StringUtils.hasText(candidate)) {
+                    continue;
+                }
+                List<Integer> tryCandidates = resolveTryCandidates(tryNumber, tryHints.get(candidate));
+                for (Integer candidateTry : tryCandidates) {
+                    int safeTry = candidateTry == null ? resolvedTry : Math.max(1, candidateTry);
+                    String fetched = airflowClient.getTaskLog(dagId, dagRunId, candidate, safeTry).orElse("");
+                    if (!StringUtils.hasText(fetched)) {
+                        continue;
+                    }
+                    if (!StringUtils.hasText(selectedTaskId)) {
+                        selectedTaskId = candidate;
+                        selectedTry = safeTry;
+                    }
+                    merged
+                        .append("===== TASK ")
+                        .append(candidate)
+                        .append(" (try ")
+                        .append(safeTry)
+                        .append(")")
+                        .append(taskStates.containsKey(candidate) ? " state=" + taskStates.get(candidate) : "")
+                        .append(" =====\n")
+                        .append(fetched)
+                        .append("\n\n");
+                    break;
+                }
             }
-            String fetched = airflowClient.getTaskLog(dagId, dagRunId, candidate, resolvedTry).orElse("");
-            if (StringUtils.hasText(fetched)) {
-                selectedTaskId = candidate;
-                log = fetched;
-                break;
+            log = merged.toString();
+        } else {
+            outer:
+            for (String candidate : candidates) {
+                if (!StringUtils.hasText(candidate)) {
+                    continue;
+                }
+                List<Integer> tryCandidates = resolveTryCandidates(tryNumber, tryHints.get(candidate));
+                for (Integer candidateTry : tryCandidates) {
+                    int safeTry = candidateTry == null ? resolvedTry : Math.max(1, candidateTry);
+                    String fetched = airflowClient.getTaskLog(dagId, dagRunId, candidate, safeTry).orElse("");
+                    if (StringUtils.hasText(fetched)) {
+                        selectedTaskId = candidate;
+                        selectedTry = safeTry;
+                        log = fetched;
+                        break outer;
+                    }
+                }
             }
+        }
+
+        String filteredLog = filterLogByKeyword(log, keyword);
+        String errorMessage = execution.getErrorMessage();
+        String failureCategory = null;
+        String failureAdvice = null;
+        if (StringUtils.hasText(errorMessage)) {
+            failureCategory = com.yuzhi.dts.ingestion.service.etl.ExecutionFailureClassifier.classify(errorMessage);
+            failureAdvice = com.yuzhi.dts.ingestion.service.etl.ExecutionFailureClassifier.advice(failureCategory);
         }
         Map<String, Object> result = new java.util.LinkedHashMap<>();
         result.put("taskId", taskId);
@@ -704,11 +928,22 @@ public class IngestionTaskService {
         result.put("dagId", dagId);
         result.put("dagRunId", dagRunId);
         result.put("taskInstanceId", selectedTaskId);
-        result.put("tryNumber", resolvedTry);
+        result.put("tryNumber", selectedTry);
+        result.put("taskTryHints", tryHints);
+        result.put("taskStates", taskStates);
         result.put("taskInstanceCandidates", candidates);
-        result.put("log", log);
-        if (!StringUtils.hasText(log)) {
-            result.put("message", "日志为空或未就绪");
+        result.put("scope", aggregateAll ? "all" : "single");
+        result.put("keyword", toText(keyword));
+        result.put("log", filteredLog);
+        if (StringUtils.hasText(errorMessage)) {
+            result.put("errorMessage", errorMessage);
+        }
+        if (StringUtils.hasText(failureCategory)) {
+            result.put("failureCategory", failureCategory);
+            result.put("failureAdvice", failureAdvice);
+        }
+        if (!StringUtils.hasText(filteredLog)) {
+            result.put("message", StringUtils.hasText(log) ? "关键字过滤后无匹配日志" : "日志为空或未就绪");
         }
         return result;
     }
@@ -782,6 +1017,7 @@ public class IngestionTaskService {
         snap.setSyncMode(task.getSyncMode());
         snap.setSyncSchedule(task.getSyncSchedule());
         snap.setTableMapping(task.getTableMapping());
+        snap.setSyncConfig(task.getSyncConfig());
         snap.setAddaxConfig(task.getAddaxConfig());
         snap.setAirflowEnabled(task.getAirflowEnabled());
         snap.setAirflowDagId(task.getAirflowDagId());
@@ -811,6 +1047,76 @@ public class IngestionTaskService {
         if (!org.springframework.util.StringUtils.hasText(sourceType)) return false;
         String lower = sourceType.toLowerCase(java.util.Locale.ROOT);
         return "excel".equals(lower) || "csv".equals(lower) || "excelreader".equals(lower) || "txtfilereader".equals(lower);
+    }
+
+    private Map<String, Integer> resolveTaskTryHints(String dagId, String dagRunId) {
+        Map<String, Integer> hints = new java.util.LinkedHashMap<>();
+        List<Map<String, Object>> instances = airflowClient.listTaskInstances(dagId, dagRunId).orElse(List.of());
+        for (Map<String, Object> instance : instances) {
+            if (instance == null || instance.isEmpty()) {
+                continue;
+            }
+            String taskId = toText(instance.get("task_id"));
+            if (!StringUtils.hasText(taskId)) {
+                taskId = toText(instance.get("taskId"));
+            }
+            if (!StringUtils.hasText(taskId)) {
+                continue;
+            }
+            Integer tryNumber = resolveInteger(instance.get("try_number"));
+            if (tryNumber == null) {
+                tryNumber = resolveInteger(instance.get("tryNumber"));
+            }
+            if (tryNumber == null) {
+                tryNumber = resolveInteger(instance.get("try"));
+            }
+            if (tryNumber == null || tryNumber <= 0) {
+                continue;
+            }
+            String normalizedTaskId = taskId.trim();
+            hints.merge(normalizedTaskId, tryNumber, Integer::max);
+        }
+        return hints;
+    }
+
+    private List<Integer> resolveTryCandidates(Integer requestedTry, Integer hintTry) {
+        java.util.LinkedHashSet<Integer> ordered = new java.util.LinkedHashSet<>();
+        Integer safeHintTry = hintTry == null ? null : Math.max(1, hintTry);
+        if (requestedTry != null) {
+            ordered.add(Math.max(1, requestedTry));
+            if (safeHintTry != null) {
+                ordered.add(safeHintTry);
+            }
+        } else {
+            if (safeHintTry != null) {
+                ordered.add(safeHintTry);
+                int fallbackCount = 0;
+                for (int cursor = safeHintTry - 1; cursor >= 1 && fallbackCount < 2; cursor--) {
+                    ordered.add(cursor);
+                    fallbackCount++;
+                }
+            }
+            ordered.add(1);
+        }
+        return new java.util.ArrayList<>(ordered);
+    }
+
+    private Integer resolveInteger(Object value) {
+        if (value == null) {
+            return null;
+        }
+        try {
+            if (value instanceof Number number) {
+                return number.intValue();
+            }
+            String text = value.toString().trim();
+            if (!StringUtils.hasText(text)) {
+                return null;
+            }
+            return Integer.parseInt(text);
+        } catch (Exception ex) {
+            return null;
+        }
     }
 
     private List<String> resolveTaskLogCandidates(String dagId, String dagRunId, String preferredTaskId) {
@@ -848,4 +1154,47 @@ public class IngestionTaskService {
         ordered.addAll(otherTasks);
         return new java.util.ArrayList<>(ordered);
     }
+
+    private Map<String, String> resolveTaskStates(String dagId, String dagRunId) {
+        Map<String, String> states = new java.util.LinkedHashMap<>();
+        List<Map<String, Object>> instances = airflowClient.listTaskInstances(dagId, dagRunId).orElse(List.of());
+        for (Map<String, Object> instance : instances) {
+            if (instance == null || instance.isEmpty()) {
+                continue;
+            }
+            String taskId = toText(instance.get("task_id"));
+            if (!StringUtils.hasText(taskId)) {
+                taskId = toText(instance.get("taskId"));
+            }
+            if (!StringUtils.hasText(taskId)) {
+                continue;
+            }
+            String state = toText(instance.get("state"));
+            states.put(taskId.trim(), state);
+        }
+        return states;
+    }
+
+    private String filterLogByKeyword(String log, String keyword) {
+        if (!StringUtils.hasText(log)) {
+            return "";
+        }
+        String normalizedKeyword = toText(keyword);
+        if (!StringUtils.hasText(normalizedKeyword)) {
+            return log;
+        }
+        String needle = normalizedKeyword.toLowerCase(java.util.Locale.ROOT);
+        String[] lines = log.split("\r?\n");
+        StringBuilder filtered = new StringBuilder();
+        for (String line : lines) {
+            if (line == null) {
+                continue;
+            }
+            if (line.toLowerCase(java.util.Locale.ROOT).contains(needle)) {
+                filtered.append(line).append("\n");
+            }
+        }
+        return filtered.toString();
+    }
+
 }

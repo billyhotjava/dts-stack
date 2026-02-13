@@ -30,6 +30,18 @@ public class CatalogDatasetLineage extends AbstractAuditingEntity<UUID> implemen
     @Column(name = "notes")
     private String notes;
 
+    @Column(name = "upstream_asset_type", length = 32)
+    private String upstreamAssetType;
+
+    @Column(name = "downstream_asset_type", length = 32)
+    private String downstreamAssetType;
+
+    @Column(name = "direction", length = 16)
+    private String direction;
+
+    @Column(name = "project_name", length = 128)
+    private String projectName;
+
     @Override
     public UUID getId() {
         return id;
@@ -69,6 +81,38 @@ public class CatalogDatasetLineage extends AbstractAuditingEntity<UUID> implemen
 
     public void setNotes(String notes) {
         this.notes = notes;
+    }
+
+    public String getUpstreamAssetType() {
+        return upstreamAssetType;
+    }
+
+    public void setUpstreamAssetType(String upstreamAssetType) {
+        this.upstreamAssetType = upstreamAssetType;
+    }
+
+    public String getDownstreamAssetType() {
+        return downstreamAssetType;
+    }
+
+    public void setDownstreamAssetType(String downstreamAssetType) {
+        this.downstreamAssetType = downstreamAssetType;
+    }
+
+    public String getDirection() {
+        return direction;
+    }
+
+    public void setDirection(String direction) {
+        this.direction = direction;
+    }
+
+    public String getProjectName() {
+        return projectName;
+    }
+
+    public void setProjectName(String projectName) {
+        this.projectName = projectName;
     }
 }
 

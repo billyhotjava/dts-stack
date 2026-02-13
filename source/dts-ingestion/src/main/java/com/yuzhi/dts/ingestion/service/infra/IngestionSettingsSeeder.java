@@ -74,6 +74,7 @@ public class IngestionSettingsSeeder implements ApplicationRunner {
         putIfText(settings, "dagsDir", airflowProperties.getDagsDir());
         putIfNumber(settings, "dagReadyWaitSeconds", airflowProperties.getDagReadyWaitSeconds());
         putIfNumber(settings, "dagReadyPollSeconds", airflowProperties.getDagReadyPollSeconds());
+        putIfNumber(settings, "dagTriggerRetrySeconds", airflowProperties.getDagTriggerRetrySeconds());
         settings.put("executionPollEnabled", airflowProperties.isExecutionPollEnabled());
         putIfNumber(settings, "executionPollIntervalMs", airflowProperties.getExecutionPollIntervalMs() == null ? null : airflowProperties.getExecutionPollIntervalMs().intValue());
         putIfNumber(settings, "executionPollBatchSize", airflowProperties.getExecutionPollBatchSize());

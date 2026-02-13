@@ -1,10 +1,30 @@
-import { useEffect, useState } from "react";
-import { Button, Card, Space, Table, Tag, message, Modal } from "antd";
-import { PlayCircleOutlined, EditOutlined, DeleteOutlined, HistoryOutlined, ReloadOutlined, SyncOutlined } from "@ant-design/icons";
+import { useEffect, useRef, useState } from "react";
+import { Button, Card, Space, Table, Tag, message, Modal, Alert, Progress } from "antd";
+import {
+	PlayCircleOutlined,
+	EditOutlined,
+	DeleteOutlined,
+	HistoryOutlined,
+	ReloadOutlined,
+	SyncOutlined,
+} from "@ant-design/icons";
 import { PageHeader } from "@/components/page-header";
 import { useRouter } from "@/routes/hooks";
-import { ingestionTaskAPI, type IngestionTaskDTO } from "@/api/ingestion";
+import {
+	ingestionTaskAPI,
+	type IngestionTaskDTO,
+	type IngestionExecutionDTO,
+	resolveExecutionPollIntervalMs,
+} from "@/api/ingestion";
 import { formatTimestamp } from "@/utils/format";
+
+type ExecutionProgressView = {
+	percent: number;
+	status: "active" | "success" | "exception";
+	stage: string;
+	detail: string;
+	terminal: boolean;
+};
 
 export default function TransformPage() {
 	const router = useRouter();
@@ -12,10 +32,35 @@ export default function TransformPage() {
 	const [loading, setLoading] = useState(false);
 	const [pagination, setPagination] = useState({ current: 1, pageSize: 20, total: 0 });
 	const [statusFilter, setStatusFilter] = useState<string | undefined>(undefined);
+	const [executeProgressOpen, setExecuteProgressOpen] = useState(false);
+	const [executeProgress, setExecuteProgress] = useState<ExecutionProgressView>({
+		percent: 0,
+		status: "active",
+		stage: "等待提交",
+		detail: "",
+		terminal: false,
+	});
+	const [executingTaskName, setExecutingTaskName] = useState<string>("");
+	const [executingTaskId, setExecutingTaskId] = useState<number | null>(null);
+	const executePollTimerRef = useRef<number | null>(null);
+	const executeStartedAtRef = useRef<number>(0);
 
 	useEffect(() => {
-		loadTasks();
+		void loadTasks();
 	}, [pagination.current, statusFilter]);
+
+	useEffect(() => {
+		return () => {
+			stopExecutePolling();
+		};
+	}, []);
+
+	const stopExecutePolling = () => {
+		if (executePollTimerRef.current !== null) {
+			window.clearInterval(executePollTimerRef.current);
+			executePollTimerRef.current = null;
+		}
+	};
 
 	const loadTasks = async () => {
 		setLoading(true);
@@ -40,15 +85,116 @@ export default function TransformPage() {
 		}
 	};
 
+	const normalizeText = (value?: string) => String(value || "").trim();
+
+	const mapExecutionProgress = (execution: IngestionExecutionDTO | null, elapsedMs: number): ExecutionProgressView => {
+		if (!execution) {
+			const percent = Math.min(45, 15 + Math.floor(elapsedMs / 5000) * 5);
+			return {
+				percent,
+				status: "active",
+				stage: "等待执行记录",
+				detail: "任务已提交，系统正在准备 DAG 和作业参数。",
+				terminal: false,
+			};
+		}
+		const normalized = normalizeText(execution.status).toLowerCase();
+		if (normalized === "success") {
+			return {
+				percent: 100,
+				status: "success",
+				stage: "执行成功",
+				detail: "任务已执行完成。",
+				terminal: true,
+			};
+		}
+		if (normalized === "failed" || normalized === "error") {
+			return {
+				percent: 100,
+				status: "exception",
+				stage: "执行失败",
+				detail: normalizeText(execution.errorMessage) || "执行失败，请查看日志。",
+				terminal: true,
+			};
+		}
+		if (normalized === "preparing") {
+			return {
+				percent: 60,
+				status: "active",
+				stage: "准备执行",
+				detail: "正在生成/校验 Addax 作业并等待 DAG 就绪。",
+				terminal: false,
+			};
+		}
+		return {
+			percent: 85,
+			status: "active",
+			stage: "执行中",
+			detail: "已触发执行，正在同步运行状态。",
+			terminal: false,
+		};
+	};
+
+	const startExecuteProgressPolling = (
+		taskId: number,
+		taskName: string,
+		pollIntervalMs?: number
+	) => {
+		stopExecutePolling();
+		executeStartedAtRef.current = Date.now();
+		setExecutingTaskId(taskId);
+		setExecutingTaskName(taskName);
+		setExecuteProgressOpen(true);
+		setExecuteProgress({
+			percent: 10,
+			status: "active",
+			stage: "任务已提交",
+			detail: "正在后台触发执行。",
+			terminal: false,
+		});
+
+		const poll = async () => {
+			const elapsed = Date.now() - executeStartedAtRef.current;
+			if (elapsed > 5 * 60 * 1000) {
+				stopExecutePolling();
+				setExecuteProgress({
+					percent: 100,
+					status: "exception",
+					stage: "状态同步超时",
+					detail: "等待超时，请刷新列表或进入执行历史查看状态。",
+					terminal: true,
+				});
+				return;
+			}
+			try {
+				const execution = await ingestionTaskAPI.getLatestExecution(taskId);
+				const next = mapExecutionProgress(execution, elapsed);
+				setExecuteProgress(next);
+				if (next.terminal) {
+					stopExecutePolling();
+					void loadTasks();
+				}
+			} catch {
+				setExecuteProgress((prev) => ({ ...prev, detail: "状态同步中，稍后自动重试。" }));
+			}
+		};
+
+		void poll();
+		executePollTimerRef.current = window.setInterval(() => {
+			void poll();
+		}, resolveExecutionPollIntervalMs(pollIntervalMs));
+	};
+
 	const handleExecute = async (id: number, name: string) => {
 		Modal.confirm({
 			title: "确认执行",
 			content: `确定要执行任务 "${name}" 吗？`,
 			onOk: async () => {
 				try {
-					await ingestionTaskAPI.executeTask(id);
-					message.success("任务已触发执行");
-					loadTasks();
+					const submit = await ingestionTaskAPI.executeTaskAsync(id);
+					message.success("任务已提交，后台正在触发执行");
+					startExecuteProgressPolling(id, name, submit?.pollIntervalMs);
+					void loadTasks();
 				} catch (error: any) {
 					message.error("执行失败: " + (error.message || "未知错误"));
 				}
@@ -64,7 +210,7 @@ export default function TransformPage() {
 				try {
 					await ingestionTaskAPI.rebuildDag(id);
 					message.success("DAG 已重建");
-					loadTasks();
+					void loadTasks();
 				} catch (error: any) {
 					message.error("重建失败: " + (error.message || "未知错误"));
 				}
@@ -82,7 +228,7 @@ export default function TransformPage() {
 				try {
 					await ingestionTaskAPI.deleteTask(id);
 					message.success("任务已删除");
-					loadTasks();
+					void loadTasks();
 				} catch (error: any) {
 					message.error("删除失败: " + (error.message || "未知错误"));
 				}
@@ -232,7 +378,7 @@ export default function TransformPage() {
 				description="使用 Addax 生成作业配置，Airflow 编排执行"
 				actions={
 					<Space>
-						<Button icon={<ReloadOutlined />} onClick={loadTasks} loading={loading}>
+						<Button icon={<ReloadOutlined />} onClick={() => void loadTasks()} loading={loading}>
 							刷新
 						</Button>
 						<Button type="primary" onClick={() => router.push("/explore/etl/transform/new")}>
@@ -282,6 +428,55 @@ export default function TransformPage() {
 					}}
 				/>
 			</Card>
+
+			<Modal
+				open={executeProgressOpen}
+				title={`执行进度${executingTaskName ? `：${executingTaskName}` : ""}`}
+				mask={false}
+				width={560}
+				onCancel={() => {
+					if (executeProgress.terminal) {
+						stopExecutePolling();
+					}
+					setExecuteProgressOpen(false);
+				}}
+				footer={
+					<Space>
+						{executingTaskId ? (
+							<Button onClick={() => router.push(`/explore/etl/transform/${executingTaskId}/executions`)}>
+								查看历史
+							</Button>
+						) : null}
+						<Button
+							type="primary"
+							onClick={() => {
+								if (executeProgress.terminal) {
+									stopExecutePolling();
+								}
+								setExecuteProgressOpen(false);
+							}}
+						>
+							{executeProgress.terminal ? "关闭" : "最小化"}
+						</Button>
+					</Space>
+				}
+			>
+				<Space direction="vertical" style={{ width: "100%" }} size={12}>
+					<Progress percent={executeProgress.percent} status={executeProgress.status} />
+					<Alert
+						type={
+							executeProgress.status === "success"
+								? "success"
+								: executeProgress.status === "exception"
+									? "error"
+									: "info"
+						}
+						message={executeProgress.stage}
+						description={executeProgress.detail}
+						showIcon
+					/>
+				</Space>
+			</Modal>
 		</div>
 	);
 }

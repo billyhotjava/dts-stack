@@ -11,6 +11,7 @@ import jakarta.validation.Valid;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -59,12 +60,17 @@ public class CatalogLineageResource {
         UUID upstreamDatasetId,
         UUID downstreamDatasetId,
         String relationType,
-        String notes
+        String notes,
+        String upstreamAssetType,
+        String downstreamAssetType,
+        String direction,
+        String projectName
     ) {}
 
     @GetMapping
     public ApiResponse<Map<String, Object>> getLineage(
         @RequestParam UUID datasetId,
+        @RequestParam(name = "projectName", required = false) String projectName,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
         CatalogDataset dataset = datasetRepo.findById(datasetId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "dataset not found"));
@@ -73,11 +79,22 @@ public class CatalogLineageResource {
             return ApiResponses.error(com.yuzhi.dts.platform.security.policy.PolicyErrorCodes.RESOURCE_NOT_VISIBLE, "Access denied for dataset");
         }
 
-        List<CatalogDatasetLineage> links = lineageRepo.findByEitherSide(datasetId);
+        List<CatalogDatasetLineage> links = lineageRepo
+            .findByEitherSide(datasetId)
+            .stream()
+            .filter(link -> matchProject(link, projectName))
+            .toList();
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("datasetId", datasetId.toString());
-        payload.put("upstreams", links.stream().filter(l -> datasetId.equals(l.getDownstreamDatasetId())).map(l -> toEdgeDto(l, effDept)).filter(Objects::nonNull).toList());
-        payload.put("downstreams", links.stream().filter(l -> datasetId.equals(l.getUpstreamDatasetId())).map(l -> toEdgeDto(l, effDept)).filter(Objects::nonNull).toList());
+        payload.put("projectName", trimToNull(projectName));
+        payload.put(
+            "upstreams",
+            links.stream().filter(l -> datasetId.equals(l.getDownstreamDatasetId())).map(l -> toEdgeDto(l, effDept)).filter(Objects::nonNull).toList()
+        );
+        payload.put(
+            "downstreams",
+            links.stream().filter(l -> datasetId.equals(l.getUpstreamDatasetId())).map(l -> toEdgeDto(l, effDept)).filter(Objects::nonNull).toList()
+        );
 
         audit.auditAction("CATALOG_LINEAGE_VIEW", AuditStage.SUCCESS, datasetId.toString(), Map.of("summary", "查看血缘关系"));
         return ApiResponses.ok(payload);
@@ -92,6 +109,7 @@ public class CatalogLineageResource {
         @RequestParam UUID datasetId,
         @RequestParam(name = "direction", required = false, defaultValue = "BOTH") String direction,
         @RequestParam(name = "depth", required = false, defaultValue = "3") int depth,
+        @RequestParam(name = "projectName", required = false) String projectName,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
         CatalogDataset root = datasetRepo.findById(datasetId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "dataset not found"));
@@ -101,7 +119,7 @@ public class CatalogLineageResource {
         }
 
         int safeDepth = Math.max(1, Math.min(depth, 10));
-        String dir = org.springframework.util.StringUtils.hasText(direction) ? direction.trim().toUpperCase(java.util.Locale.ROOT) : "BOTH";
+        String dir = StringUtils.hasText(direction) ? direction.trim().toUpperCase(Locale.ROOT) : "BOTH";
         boolean upstreamEnabled = "UPSTREAM".equals(dir) || "BOTH".equals(dir);
         boolean downstreamEnabled = "DOWNSTREAM".equals(dir) || "BOTH".equals(dir);
 
@@ -119,7 +137,7 @@ public class CatalogLineageResource {
             for (UUID current : frontier) {
                 List<CatalogDatasetLineage> direct = lineageRepo.findByEitherSide(current);
                 for (CatalogDatasetLineage edge : direct) {
-                    if (edge == null) {
+                    if (edge == null || !matchProject(edge, projectName)) {
                         continue;
                     }
                     UUID up = edge.getUpstreamDatasetId();
@@ -162,15 +180,22 @@ public class CatalogLineageResource {
         payload.put("datasetId", datasetId.toString());
         payload.put("direction", dir);
         payload.put("depth", safeDepth);
+        payload.put("projectName", trimToNull(projectName));
         payload.put("nodeCount", nodes.size());
         payload.put("edgeCount", edgeDtos.size());
         payload.put(
             "nodes",
-            nodes
-                .values()
-                .stream()
-                .map(ds -> Map.of("id", ds.getId().toString(), "name", ds.getName(), "db", ds.getHiveDatabase(), "table", ds.getHiveTable(), "type", ds.getType()))
-                .toList()
+            nodes.values().stream().map(ds -> {
+                Map<String, Object> dto = new LinkedHashMap<>();
+                dto.put("id", ds.getId() != null ? ds.getId().toString() : null);
+                dto.put("name", ds.getName());
+                dto.put("db", ds.getHiveDatabase());
+                dto.put("table", ds.getHiveTable());
+                dto.put("type", ds.getType());
+                dto.put("layer", ds.getWarehouseLayer());
+                dto.put("ownerDept", ds.getOwnerDept());
+                return dto;
+            }).toList()
         );
         payload.put("edges", edgeDtos);
         audit.auditAction(
@@ -205,6 +230,16 @@ public class CatalogLineageResource {
             if (StringUtils.hasText(body.notes)) {
                 existingLink.setNotes(body.notes.trim());
             }
+            if (StringUtils.hasText(body.upstreamAssetType)) {
+                existingLink.setUpstreamAssetType(body.upstreamAssetType.trim());
+            }
+            if (StringUtils.hasText(body.downstreamAssetType)) {
+                existingLink.setDownstreamAssetType(body.downstreamAssetType.trim());
+            }
+            existingLink.setDirection(normalizeDirection(body.direction));
+            if (StringUtils.hasText(body.projectName)) {
+                existingLink.setProjectName(body.projectName.trim());
+            }
             CatalogDatasetLineage saved = lineageRepo.save(existingLink);
             audit.auditAction("CATALOG_LINEAGE_EDIT", AuditStage.SUCCESS, saved.getId().toString(), Map.of("summary", "更新血缘关系"));
             return ApiResponses.ok(Map.of("id", saved.getId().toString(), "updated", true));
@@ -216,6 +251,10 @@ public class CatalogLineageResource {
         String relationType = trimToNull(body.relationType);
         createdLink.setRelationType(relationType != null ? relationType : "MANUAL");
         createdLink.setNotes(trimToNull(body.notes));
+        createdLink.setUpstreamAssetType(trimToNull(body.upstreamAssetType));
+        createdLink.setDownstreamAssetType(trimToNull(body.downstreamAssetType));
+        createdLink.setDirection(normalizeDirection(body.direction));
+        createdLink.setProjectName(trimToNull(body.projectName));
         CatalogDatasetLineage saved = lineageRepo.save(createdLink);
         audit.auditAction("CATALOG_LINEAGE_EDIT", AuditStage.SUCCESS, saved.getId().toString(), Map.of("summary", "新增血缘关系"));
         return ApiResponses.ok(Map.of("id", saved.getId().toString(), "created", true));
@@ -259,6 +298,10 @@ public class CatalogLineageResource {
         dto.put("downstreamDatasetId", downstreamId != null ? downstreamId.toString() : null);
         dto.put("upstreamName", upstream != null ? upstream.getName() : null);
         dto.put("downstreamName", downstream != null ? downstream.getName() : null);
+        dto.put("upstreamAssetType", link.getUpstreamAssetType());
+        dto.put("downstreamAssetType", link.getDownstreamAssetType());
+        dto.put("direction", link.getDirection());
+        dto.put("projectName", link.getProjectName());
         return dto;
     }
 
@@ -272,7 +315,27 @@ public class CatalogLineageResource {
         if (!StringUtils.hasText(relationType)) {
             return false;
         }
-        return relationType.trim().toUpperCase(java.util.Locale.ROOT).startsWith("AUTO_");
+        return relationType.trim().toUpperCase(Locale.ROOT).startsWith("AUTO_");
+    }
+
+    private String normalizeDirection(String direction) {
+        String text = trimToNull(direction);
+        if (text == null) {
+            return "UPSTREAM_TO_DOWNSTREAM";
+        }
+        return text.toUpperCase(Locale.ROOT);
+    }
+
+    private boolean matchProject(CatalogDatasetLineage link, String projectName) {
+        String filter = trimToNull(projectName);
+        if (filter == null) {
+            return true;
+        }
+        String edgeProject = trimToNull(link != null ? link.getProjectName() : null);
+        if (edgeProject == null) {
+            return false;
+        }
+        return edgeProject.equalsIgnoreCase(filter);
     }
 
     private String claim(String name) {

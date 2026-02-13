@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260212_04_catalog_dataset_lineage_project_scope" author="platform">
+        <preConditions onFail="MARK_RAN">
+            <and>
+                <tableExists tableName="catalog_dataset_lineage"/>
+                <not>
+                    <columnExists tableName="catalog_dataset_lineage" columnName="upstream_asset_type"/>
+                </not>
+            </and>
+        </preConditions>
+
+        <addColumn tableName="catalog_dataset_lineage">
+            <column name="upstream_asset_type" type="varchar(32)" defaultValue="DATASET"/>
+            <column name="downstream_asset_type" type="varchar(32)" defaultValue="DATASET"/>
+            <column name="direction" type="varchar(16)" defaultValue="FORWARD"/>
+            <column name="project_name" type="varchar(128)"/>
+        </addColumn>
+
+        <createIndex tableName="catalog_dataset_lineage" indexName="idx_catalog_dataset_lineage_project">
+            <column name="project_name"/>
+            <column name="downstream_dataset_id"/>
+        </createIndex>
+
+        <createIndex tableName="catalog_dataset_lineage" indexName="idx_catalog_dataset_lineage_asset_type">
+            <column name="upstream_asset_type"/>
+            <column name="downstream_asset_type"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

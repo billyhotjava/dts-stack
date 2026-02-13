@@ -1,14 +1,30 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "@/routes/hooks";
-import { Button, Card, Descriptions, Space, Tag, message, Spin, Modal, Form, Input, Select, Typography, Drawer } from "antd";
+import { Button, Card, Descriptions, Space, Tag, message, Spin, Modal, Form, Input, Select, Typography, Drawer, Progress, Alert, Table } from "antd";
 import { PlayCircleOutlined, EditOutlined, HistoryOutlined, ArrowLeftOutlined, SyncOutlined, FileTextOutlined, ReloadOutlined } from "@ant-design/icons";
 import { PageHeader } from "@/components/page-header";
 import { useRouter } from "@/routes/hooks";
-import { ingestionTaskAPI, type IngestionTaskDTO, type IngestionExecutionDTO, type IngestionExecutionLog } from "@/api/ingestion";
+import {
+	ingestionTaskAPI,
+	type IngestionTaskDTO,
+	type IngestionExecutionDTO,
+	type IngestionExecutionLog,
+	type IngestionIncrementalStateDTO,
+	type IngestionRealtimeStatusDTO,
+	resolveExecutionPollIntervalMs,
+} from "@/api/ingestion";
 import dataSourcesService, { type InfraDataSource } from "@/api/services/dataSourcesService";
 import { listSqlModels } from "@/api/platformApi";
 
 const { Text } = Typography;
+
+type ExecutionProgressView = {
+	percent: number;
+	status: "active" | "success" | "exception";
+	stage: string;
+	detail: string;
+	terminal: boolean;
+};
 
 export default function TransformDetailPage() {
 	const { id } = useParams();
@@ -28,12 +44,56 @@ export default function TransformDetailPage() {
 	const [logLoading, setLogLoading] = useState(false);
 	const [logContent, setLogContent] = useState("");
 	const [logMeta, setLogMeta] = useState<IngestionExecutionLog | null>(null);
+	const [executeSubmitting, setExecuteSubmitting] = useState(false);
+	const [incrementalStates, setIncrementalStates] = useState<IngestionIncrementalStateDTO[]>([]);
+	const [incrementalStatesLoading, setIncrementalStatesLoading] = useState(false);
+	const [realtimeStatus, setRealtimeStatus] = useState<IngestionRealtimeStatusDTO | null>(null);
+	const [realtimeStatusLoading, setRealtimeStatusLoading] = useState(false);
+	const [executeProgressOpen, setExecuteProgressOpen] = useState(false);
+	const [executeProgress, setExecuteProgress] = useState<ExecutionProgressView>({
+		percent: 0,
+		status: "active",
+		stage: "等待提交",
+		detail: "",
+		terminal: false,
+	});
+	const executePollTimerRef = useRef<number | null>(null);
+	const executeStartedAtRef = useRef<number>(0);
 
 	useEffect(() => {
 		if (id) {
 			loadTask();
 		}
 	}, [id]);
+
+	useEffect(() => {
+		if (!task?.id) {
+			setIncrementalStates([]);
+			return;
+		}
+		if (normalizeText(task.syncMode).toLowerCase() !== "incremental") {
+			setIncrementalStates([]);
+			return;
+		}
+		void loadIncrementalStates(Number(task.id));
+	}, [task?.id, task?.syncMode]);
+
+	useEffect(() => {
+		if (!task?.id) {
+			setRealtimeStatus(null);
+			return;
+		}
+		void loadRealtimeStatus(Number(task.id), true);
+	}, [task?.id]);
+
+	useEffect(() => {
+		return () => {
+			if (executePollTimerRef.current !== null) {
+				window.clearInterval(executePollTimerRef.current);
+				executePollTimerRef.current = null;
+			}
+		};
+	}, []);
 
 	useEffect(() => {
 		if (!task?.sourceDataSourceId) {
@@ -77,6 +137,42 @@ export default function TransformDetailPage() {
 		} finally {
 			if (!silent) {
 				setLatestExecutionLoading(false);
+			}
+		}
+	};
+
+	const loadIncrementalStates = async (taskId: number, silent?: boolean) => {
+		try {
+			if (!silent) {
+				setIncrementalStatesLoading(true);
+			}
+			const states = await ingestionTaskAPI.getIncrementalStates(taskId);
+			setIncrementalStates(Array.isArray(states) ? states : []);
+		} catch (error: any) {
+			setIncrementalStates([]);
+			message.error("获取增量检查点失败: " + (error.message || "未知错误"));
+		} finally {
+			if (!silent) {
+				setIncrementalStatesLoading(false);
+			}
+		}
+	};
+
+	const loadRealtimeStatus = async (taskId: number, silent?: boolean) => {
+		try {
+			if (!silent) {
+				setRealtimeStatusLoading(true);
+			}
+			const status = await ingestionTaskAPI.getRealtimeStatus(taskId);
+			setRealtimeStatus(status);
+		} catch (error: any) {
+			setRealtimeStatus(null);
+			if (!silent) {
+				message.error("获取实时状态失败: " + (error.message || "未知错误"));
+			}
+		} finally {
+			if (!silent) {
+				setRealtimeStatusLoading(false);
 			}
 		}
 	};
@@ -192,14 +288,118 @@ export default function TransformDetailPage() {
 	);
 
 	const handleExecute = async () => {
+		if (!task?.id) return;
+		setExecuteSubmitting(true);
 		try {
-			await ingestionTaskAPI.executeTask(Number(id));
-			message.success("任务已触发执行");
-			loadTask();
-			loadLatestExecution(true);
+			const submit = await ingestionTaskAPI.executeTaskAsync(Number(task.id));
+			message.success("任务已提交，后台正在触发执行");
+			startExecuteProgressPolling(Number(task.id), submit?.pollIntervalMs);
 		} catch (error: any) {
 			message.error("执行失败: " + (error.message || "未知错误"));
+		} finally {
+			setExecuteSubmitting(false);
 		}
+	};
+
+	const stopExecutePolling = () => {
+		if (executePollTimerRef.current !== null) {
+			window.clearInterval(executePollTimerRef.current);
+			executePollTimerRef.current = null;
+		}
+	};
+
+	const mapExecutionProgress = (execution: IngestionExecutionDTO | null, elapsedMs: number): ExecutionProgressView => {
+		if (!execution) {
+			const percent = Math.min(45, 15 + Math.floor(elapsedMs / 5000) * 5);
+			return {
+				percent,
+				status: "active",
+				stage: "等待执行记录",
+				detail: "任务已提交，系统正在准备 DAG 和作业参数。",
+				terminal: false,
+			};
+		}
+		const normalized = normalizeText(execution.status).toLowerCase();
+		if (normalized === "success") {
+			return {
+				percent: 100,
+				status: "success",
+				stage: "执行成功",
+				detail: "任务已执行完成。",
+				terminal: true,
+			};
+		}
+		if (normalized === "failed" || normalized === "error") {
+			return {
+				percent: 100,
+				status: "exception",
+				stage: "执行失败",
+				detail: normalizeText(execution.errorMessage) || "执行失败，请查看任务日志。",
+				terminal: true,
+			};
+		}
+		if (normalized === "preparing") {
+			return {
+				percent: 60,
+				status: "active",
+				stage: "准备执行",
+				detail: "正在生成/校验 Addax 作业并等待 DAG 就绪。",
+				terminal: false,
+			};
+		}
+		return {
+			percent: 85,
+			status: "active",
+			stage: "执行中",
+			detail: "已触发执行，正在同步运行状态。",
+			terminal: false,
+		};
+	};
+
+	const startExecuteProgressPolling = (taskId: number, pollIntervalMs?: number) => {
+		stopExecutePolling();
+		executeStartedAtRef.current = Date.now();
+		setExecuteProgressOpen(true);
+		setExecuteProgress({
+			percent: 10,
+			status: "active",
+			stage: "任务已提交",
+			detail: "正在后台触发执行。",
+			terminal: false,
+		});
+
+		const poll = async () => {
+			const elapsed = Date.now() - executeStartedAtRef.current;
+			if (elapsed > 5 * 60 * 1000) {
+				stopExecutePolling();
+				setExecuteProgress({
+					percent: 100,
+					status: "exception",
+					stage: "状态同步超时",
+					detail: "等待超时，请进入执行历史继续查看状态。",
+					terminal: true,
+				});
+				return;
+			}
+			try {
+				const execution = await ingestionTaskAPI.getLatestExecution(taskId);
+				setLatestExecution(execution);
+				const next = mapExecutionProgress(execution, elapsed);
+				setExecuteProgress(next);
+				if (next.terminal) {
+					stopExecutePolling();
+					void loadTask();
+					void loadLatestExecution(true);
+				}
+			} catch {
+				setExecuteProgress((prev) => ({ ...prev, detail: "状态同步中，稍后自动重试。" }));
+			}
+		};
+
+		void poll();
+		executePollTimerRef.current = window.setInterval(() => {
+			void poll();
+		}, resolveExecutionPollIntervalMs(pollIntervalMs));
 	};
 
 	const handleRebuildDag = async () => {
@@ -267,7 +467,13 @@ export default function TransformDetailPage() {
 						>
 							重建 DAG
 						</Button>
-						<Button type="primary" icon={<PlayCircleOutlined />} onClick={handleExecute} disabled={task.status === "deleted"}>
+						<Button
+							type="primary"
+							icon={<PlayCircleOutlined />}
+							onClick={handleExecute}
+							loading={executeSubmitting}
+							disabled={task.status === "deleted"}
+						>
 							执行任务
 						</Button>
 					</Space>
@@ -373,6 +579,86 @@ export default function TransformDetailPage() {
 				</div>
 			</Card>
 
+			<Card
+				title="实时状态（预留）"
+				extra={
+					<Button
+						icon={<ReloadOutlined />}
+						onClick={() => task?.id && loadRealtimeStatus(Number(task.id))}
+						loading={realtimeStatusLoading}
+					>
+						刷新实时状态
+					</Button>
+				}
+			>
+				<Descriptions column={2} bordered>
+					<Descriptions.Item label="连接器">{realtimeStatus?.connectorType || "-"}</Descriptions.Item>
+					<Descriptions.Item label="链路状态">
+						{realtimeStatus?.status ? <Tag color={realtimeStatus.status === "RUNNING" ? "processing" : realtimeStatus.status === "ERROR" ? "error" : "default"}>{realtimeStatus.status}</Tag> : "-"}
+					</Descriptions.Item>
+					<Descriptions.Item label="Topic">{realtimeStatus?.topicName || "-"}</Descriptions.Item>
+					<Descriptions.Item label="Consumer Group">{realtimeStatus?.consumerGroup || "-"}</Descriptions.Item>
+					<Descriptions.Item label="Checkpoint">{realtimeStatus?.checkpointToken || "-"}</Descriptions.Item>
+					<Descriptions.Item label="最新心跳">{realtimeStatus?.lastHeartbeat ? new Date(realtimeStatus.lastHeartbeat).toLocaleString("zh-CN") : "-"}</Descriptions.Item>
+					<Descriptions.Item label="延迟(ms)">{realtimeStatus?.lagMs ?? "-"}</Descriptions.Item>
+					<Descriptions.Item label="吞吐(rps)">{realtimeStatus?.throughputRps ?? "-"}</Descriptions.Item>
+					<Descriptions.Item label="堆积量" span={2}>{realtimeStatus?.backlogCount ?? "-"}</Descriptions.Item>
+				</Descriptions>
+				<div className="mt-2 text-xs text-muted-foreground">
+					该区域用于后续实时链路（Kafka/CDC）监控；当前批处理任务展示为预留状态。
+				</div>
+			</Card>
+
+			{normalizeText(task.syncMode).toLowerCase() === "incremental" ? (
+				<Card
+					title="增量检查点"
+					extra={
+						<Button
+							icon={<ReloadOutlined />}
+							onClick={() => task?.id && loadIncrementalStates(Number(task.id))}
+							loading={incrementalStatesLoading}
+						>
+							刷新检查点
+						</Button>
+					}
+				>
+					<Table<IngestionIncrementalStateDTO>
+						rowKey={(record) => `${record.taskId}-${record.sourceTable}`}
+						size="small"
+						loading={incrementalStatesLoading}
+						pagination={false}
+						dataSource={incrementalStates}
+						locale={{ emptyText: "暂无检查点（首次成功执行后会写入）" }}
+						columns={[
+							{
+								title: "源表",
+								dataIndex: "sourceTable",
+								key: "sourceTable",
+								render: (value: string) => <Text code>{value || "-"}</Text>,
+							},
+							{
+								title: "最新水位",
+								dataIndex: "lastSuccessWatermark",
+								key: "lastSuccessWatermark",
+								render: (value?: string) => value || "-",
+							},
+							{
+								title: "最近运行ID",
+								dataIndex: "lastRunId",
+								key: "lastRunId",
+								render: (value?: string) => value || "-",
+							},
+							{
+								title: "更新时间",
+								dataIndex: "updatedAt",
+								key: "updatedAt",
+								render: (value?: string) => (value ? new Date(value).toLocaleString("zh-CN") : "-"),
+							},
+						]}
+					/>
+				</Card>
+			) : null}
+
 			<Modal
 				open={dbtModalOpen}
 				title="绑定 DBT 模型与 DAG 族"
@@ -407,6 +693,61 @@ export default function TransformDetailPage() {
 						不填写 DAG 族选择器将使用默认 DAG。模型选择器为空则不会触发 dbt。
 					</div>
 				</Form>
+			</Modal>
+
+			<Modal
+				title="执行进度"
+				open={executeProgressOpen}
+				maskClosable={false}
+				onCancel={() => {
+					stopExecutePolling();
+					setExecuteProgressOpen(false);
+				}}
+				footer={
+					<Space>
+						<Button
+							onClick={() => {
+								stopExecutePolling();
+								setExecuteProgressOpen(false);
+								router.push(`/explore/etl/transform/${id}/executions`);
+							}}
+						>
+							查看执行历史
+						</Button>
+						<Button
+							type="primary"
+							onClick={() => {
+								stopExecutePolling();
+								setExecuteProgressOpen(false);
+							}}
+						>
+							{executeProgress.terminal ? "关闭" : "最小化"}
+						</Button>
+					</Space>
+				}
+				width={620}
+			>
+				<Space direction="vertical" size={16} className="w-full">
+					<Text>任务：{task?.name || "-"}</Text>
+					<Progress percent={executeProgress.percent} status={executeProgress.status} />
+					<Alert
+						showIcon
+						type={
+							executeProgress.status === "success"
+								? "success"
+								: executeProgress.status === "exception"
+									? "error"
+									: "info"
+						}
+						message={executeProgress.stage}
+						description={executeProgress.detail}
+					/>
+					{latestExecution ? (
+						<Text type="secondary">
+							执行ID：{latestExecution.executionId || latestExecution.id}，状态：{latestExecution.status}
+						</Text>
+					) : null}
+				</Space>
 			</Modal>
 
 			<Drawer

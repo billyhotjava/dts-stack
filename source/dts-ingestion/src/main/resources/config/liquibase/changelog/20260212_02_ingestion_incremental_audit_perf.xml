@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+    http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="20260212-02-ingestion-incremental-audit-perf" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="ingestion_incremental_audit"/>
+        </preConditions>
+
+        <createIndex indexName="idx_ing_inc_audit_task_exec_created" tableName="ingestion_incremental_audit">
+            <column name="task_id"/>
+            <column name="execution_id"/>
+            <column name="created_at"/>
+        </createIndex>
+
+        <createIndex indexName="idx_ing_inc_audit_task_table_created" tableName="ingestion_incremental_audit">
+            <column name="task_id"/>
+            <column name="source_table"/>
+            <column name="created_at"/>
+        </createIndex>
+
+        <createIndex indexName="idx_ing_inc_audit_task_adv_created" tableName="ingestion_incremental_audit">
+            <column name="task_id"/>
+            <column name="advanced"/>
+            <column name="created_at"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

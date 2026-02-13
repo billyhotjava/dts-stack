@@ -1,67 +1,87 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Alert, Card, Select, Space, Table, Tag } from "antd";
+import { Alert, Card, Input, Select, Space, Statistic, Table, Tag } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
-import { getDatasetLineage, listDatasets } from "@/api/platformApi";
+import { getCatalogLineageImpact, listDatasets } from "@/api/platformApi";
 
 type DatasetOption = {
 	id: string;
 	name: string;
 };
 
-type LineageNode = {
+type ImpactNode = {
 	id?: string;
-	fqn?: string;
 	name?: string;
-	service?: string;
-	database?: string;
-	schema?: string;
+	db?: string;
+	table?: string;
 	type?: string;
-	description?: string;
+	layer?: string;
+	ownerDept?: string;
 };
 
-type LineageResult = {
-	enabled?: boolean;
-	found?: boolean;
-	message?: string;
-	fqn?: string;
-	graph?: {
-		root?: LineageNode;
-		upstream?: LineageNode[];
-		downstream?: LineageNode[];
-		upstreamDepth?: number;
-		downstreamDepth?: number;
-	};
+type ImpactEdge = {
+	id?: string;
+	relationType?: string;
+	upstreamDatasetId?: string;
+	downstreamDatasetId?: string;
+	upstreamName?: string;
+	downstreamName?: string;
+	upstreamAssetType?: string;
+	downstreamAssetType?: string;
+	direction?: string;
+	projectName?: string;
+	notes?: string;
+};
+
+type ImpactResult = {
+	datasetId?: string;
+	direction?: string;
+	depth?: number;
+	projectName?: string;
+	nodeCount?: number;
+	edgeCount?: number;
+	nodes?: ImpactNode[];
+	edges?: ImpactEdge[];
+};
+
+const layerColor = (layer?: string) => {
+	const key = String(layer || "").toUpperCase();
+	if (key === "ODS") return "default";
+	if (key === "DWD") return "blue";
+	if (key === "DWS") return "cyan";
+	if (key === "ADS") return "green";
+	if (key === "DIM") return "purple";
+	return "processing";
 };
 
 export default function LineagePage() {
 	const [datasets, setDatasets] = useState<DatasetOption[]>([]);
 	const [selectedId, setSelectedId] = useState<string | undefined>();
 	const [loading, setLoading] = useState(false);
-	const [lineage, setLineage] = useState<LineageResult | null>(null);
+	const [impact, setImpact] = useState<ImpactResult | null>(null);
+	const [direction, setDirection] = useState<"UPSTREAM" | "DOWNSTREAM" | "BOTH">("BOTH");
+	const [depth, setDepth] = useState<number>(3);
+	const [projectName, setProjectName] = useState<string>("");
 
 	useEffect(() => {
 		void loadDatasets();
 	}, []);
 
 	useEffect(() => {
-		if (selectedId) {
-			void loadLineage(selectedId);
-		} else {
-			setLineage(null);
+		if (!selectedId) {
+			setImpact(null);
+			return;
 		}
-	}, [selectedId]);
+		void loadImpact(selectedId, direction, depth, projectName);
+	}, [selectedId, direction, depth, projectName]);
 
-	const datasetOptions = useMemo(
-		() => datasets.map((item) => ({ label: item.name, value: item.id })),
-		[datasets],
-	);
+	const datasetOptions = useMemo(() => datasets.map((item) => ({ label: item.name, value: item.id })), [datasets]);
 
 	const loadDatasets = async () => {
 		try {
-			const resp: any = await listDatasets({ page: 0, size: 200, enabledOnly: true });
+			const resp: any = await listDatasets({ page: 0, size: 300, enabledOnly: true });
 			const content = Array.isArray(resp?.content) ? resp.content : [];
 			const options = content
 				.map((item: any) => ({ id: String(item.id || ""), name: String(item.name || "").trim() }))
@@ -75,64 +95,110 @@ export default function LineagePage() {
 		}
 	};
 
-	const loadLineage = async (id: string) => {
+	const loadImpact = async (
+		datasetId: string,
+		dir: "UPSTREAM" | "DOWNSTREAM" | "BOTH",
+		depthValue: number,
+		project: string,
+	) => {
 		setLoading(true);
 		try {
-			const resp: any = await getDatasetLineage(id);
-			setLineage(resp || null);
+			const resp: any = await getCatalogLineageImpact(datasetId, {
+				direction: dir,
+				depth: depthValue,
+				projectName: project.trim() || undefined,
+			});
+			setImpact(resp || null);
 		} catch (error: any) {
-			toast.error(error?.message || "血缘加载失败");
-			setLineage(null);
+			toast.error(error?.message || "血缘影响分析加载失败");
+			setImpact(null);
 		} finally {
 			setLoading(false);
 		}
 	};
 
-	const columns: ColumnsType<LineageNode> = [
+	const nodeColumns: ColumnsType<ImpactNode> = [
 		{
 			title: "节点",
 			dataIndex: "name",
-			render: (value, row) => value || row.fqn || "-",
+			render: (value, row) => value || `${row.db || "-"}.${row.table || "-"}`,
+		},
+		{
+			title: "分层",
+			dataIndex: "layer",
+			width: 120,
+			render: (value) => {
+				if (!value) return "-";
+				return <Tag color={layerColor(value)}>{String(value).toUpperCase()}</Tag>;
+			},
 		},
 		{
 			title: "类型",
 			dataIndex: "type",
-			width: 120,
-			render: (value) => (value ? <Tag>{value}</Tag> : "-"),
+			width: 130,
+			render: (value) => (value ? <Tag>{String(value).toUpperCase()}</Tag> : "-"),
 		},
 		{
-			title: "服务",
-			dataIndex: "service",
-			render: (value) => value || "-",
+			title: "Schema.Table",
+			key: "table",
+			render: (_, row) => `${row.db || "-"}.${row.table || "-"}`,
 		},
 		{
-			title: "数据库",
-			dataIndex: "database",
-			render: (value) => value || "-",
-		},
-		{
-			title: "Schema",
-			dataIndex: "schema",
-			render: (value) => value || "-",
-		},
-		{
-			title: "说明",
-			dataIndex: "description",
+			title: "项目/部门",
+			dataIndex: "ownerDept",
 			render: (value) => value || "-",
 		},
 	];
 
-	const upstream = Array.isArray(lineage?.graph?.upstream) ? lineage?.graph?.upstream ?? [] : [];
-	const downstream = Array.isArray(lineage?.graph?.downstream) ? lineage?.graph?.downstream ?? [] : [];
+	const edgeColumns: ColumnsType<ImpactEdge> = [
+		{
+			title: "上游",
+			key: "upstream",
+			render: (_, row) => row.upstreamName || row.upstreamDatasetId || "-",
+		},
+		{
+			title: "下游",
+			key: "downstream",
+			render: (_, row) => row.downstreamName || row.downstreamDatasetId || "-",
+		},
+		{
+			title: "关系",
+			dataIndex: "relationType",
+			width: 140,
+			render: (value) => (value ? <Tag color="blue">{value}</Tag> : "-"),
+		},
+		{
+			title: "资产类型",
+			key: "assetType",
+			width: 220,
+			render: (_, row) => {
+				const up = row.upstreamAssetType || "-";
+				const down = row.downstreamAssetType || "-";
+				return `${up} -> ${down}`;
+			},
+		},
+		{
+			title: "方向",
+			dataIndex: "direction",
+			width: 190,
+			render: (value) => (value ? <Tag>{value}</Tag> : "-"),
+		},
+		{
+			title: "项目",
+			dataIndex: "projectName",
+			width: 150,
+			render: (value) => value || "-",
+		},
+	];
+
+	const nodes = Array.isArray(impact?.nodes) ? impact?.nodes ?? [] : [];
+	const edges = Array.isArray(impact?.edges) ? impact?.edges ?? [] : [];
 
 	return (
 		<div className="space-y-4">
-			<PageHeader
-				title="数据资产门户 · 血缘视图"
-				description="查看数据集上下游依赖关系与血缘拓扑。"
-			/>
+			<PageHeader title="数据资产门户 · 血缘影响分析" description="查看跨模块数据链路（ODS/DWD/DWS/ADS）并按项目过滤。" />
 
-			<Card title="选择数据集">
+			<Card title="分析条件">
 				<Space size={12} wrap>
 					<Select
 						placeholder="选择数据集"
@@ -143,40 +209,73 @@ export default function LineagePage() {
 						showSearch
 						optionFilterProp="label"
 					/>
+					<Select
+						style={{ width: 150 }}
+						value={direction}
+						options={[
+							{ label: "双向", value: "BOTH" },
+							{ label: "仅上游", value: "UPSTREAM" },
+							{ label: "仅下游", value: "DOWNSTREAM" },
+						]}
+						onChange={(value) => setDirection(value)}
+					/>
+					<Select
+						style={{ width: 140 }}
+						value={depth}
+						options={[
+							{ label: "深度 1", value: 1 },
+							{ label: "深度 2", value: 2 },
+							{ label: "深度 3", value: 3 },
+							{ label: "深度 5", value: 5 },
+						]}
+						onChange={(value) => setDepth(value)}
+					/>
+					<Input
+						style={{ width: 220 }}
+						placeholder="按项目名过滤（可选）"
+						value={projectName}
+						onChange={(e) => setProjectName(e.target.value)}
+						allowClear
+					/>
 				</Space>
 			</Card>
 
-			{lineage?.enabled === false ? (
-				<Alert type="warning" message="元数据服务未启用，暂无法获取血缘。" showIcon />
-			) : lineage?.found === false ? (
-				<Alert type="info" message={lineage?.message || "未找到血缘"} showIcon />
-			) : null}
+			{!selectedId ? <Alert type="info" message="请选择一个数据集开始分析。" showIcon /> : null}
 
-			<Card title="上游血缘">
-				{upstream.length ? (
+			<Card title="影响概览" loading={loading}>
+				<Space size={24} wrap>
+					<Statistic title="节点数" value={Number(impact?.nodeCount || 0)} />
+					<Statistic title="边数" value={Number(impact?.edgeCount || 0)} />
+					<Statistic title="方向" value={impact?.direction || direction} />
+					<Statistic title="深度" value={Number(impact?.depth || depth)} />
+				</Space>
+			</Card>
+
+			<Card title="节点列表">
+				{nodes.length ? (
 					<Table
-						rowKey={(row, idx) => row.id || row.fqn || row.name || String(idx)}
-						columns={columns}
-						dataSource={upstream}
+						rowKey={(row, idx) => row.id || `${row.db || "db"}.${row.table || "tb"}-${idx}`}
+						columns={nodeColumns}
+						dataSource={nodes}
 						loading={loading}
-						pagination={false}
+						pagination={{ pageSize: 10 }}
 					/>
 				) : (
-					<EmptyState title="暂无上游血缘" description="当前数据集暂无上游依赖。" />
+					<EmptyState title="暂无节点" description="当前条件下未检索到血缘节点。" />
 				)}
 			</Card>
 
-			<Card title="下游血缘">
-				{downstream.length ? (
+			<Card title="关系边列表">
+				{edges.length ? (
 					<Table
-						rowKey={(row, idx) => row.id || row.fqn || row.name || String(idx)}
-						columns={columns}
-						dataSource={downstream}
+						rowKey={(row, idx) => row.id || `${row.upstreamDatasetId || "up"}-${row.downstreamDatasetId || "down"}-${idx}`}
+						columns={edgeColumns}
+						dataSource={edges}
 						loading={loading}
-						pagination={false}
+						pagination={{ pageSize: 10 }}
 					/>
 				) : (
-					<EmptyState title="暂无下游血缘" description="当前数据集暂无下游依赖。" />
+					<EmptyState title="暂无关系边" description="当前条件下未检索到血缘关系。" />
 				)}
 			</Card>
 		</div>

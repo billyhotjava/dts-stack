@@ -19,13 +19,18 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.Set;
 import javax.sql.DataSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -108,6 +113,7 @@ public class PostgresCatalogSyncService {
             .orElse(null);
 
         String schema = resolveSchema();
+        Instant snapshotTime = Instant.now();
         Map<String, TableMeta> metadata;
         try {
             metadata = fetchMetadata(schema);
@@ -117,14 +123,16 @@ public class PostgresCatalogSyncService {
         }
 
         if (metadata.isEmpty()) {
-            LOG.info("PostgreSQL catalog sync completed: schema={} has no tables", schema);
-            return new CatalogSyncResult(schema, 0, 0, 0, 0, 0, 0, List.of(), null);
+            int datasetsRemoved = cleanupStaleDatasets(sourceId, schema, Collections.emptySet());
+            LOG.info("PostgreSQL catalog sync completed: schema={} has no tables (removed {} stale dataset(s))", schema, datasetsRemoved);
+            return new CatalogSyncResult(schema, 0, 0, 0, datasetsRemoved, 0, 0, List.of(), null);
         }
 
         int datasetsCreated = 0;
         int datasetsUpdated = 0;
         int tablesCreated = 0;
         int columnsImported = 0;
+        int datasetsRemoved = 0;
         List<String> processedTables = new ArrayList<>(metadata.size());
 
         for (Map.Entry<String, TableMeta> entry : metadata.entrySet()) {
@@ -141,6 +149,7 @@ public class PostgresCatalogSyncService {
             dataset.setSourceId(sourceId);
             dataset.setHiveDatabase(schema);
             dataset.setHiveTable(tableName);
+            dataset.setSnapshotTime(snapshotTime);
             dataset.setType(TYPE_POSTGRES);
             dataset.setName(defaultIfBlank(dataset.getName(), tableName));
             dataset.setClassification(defaultIfBlank(dataset.getClassification(), DEFAULT_CLASSIFICATION));
@@ -254,21 +263,29 @@ public class PostgresCatalogSyncService {
             }
         }
 
+        Set<String> processedLower = processedTables
+            .stream()
+            .filter(Objects::nonNull)
+            .map(name -> name.trim().toLowerCase(Locale.ROOT))
+            .collect(java.util.stream.Collectors.toCollection(HashSet::new));
+        datasetsRemoved = cleanupStaleDatasets(sourceId, schema, processedLower);
+
         LOG.info(
-            "PostgreSQL catalog sync completed: schema={}, tables={}, newDatasets={}, updatedDatasets={}, tablesCreated={}, columnsImported={}",
+            "PostgreSQL catalog sync completed: schema={}, tables={}, newDatasets={}, updatedDatasets={}, tablesCreated={}, columnsImported={}, removed={}",
             schema,
             metadata.size(),
             datasetsCreated,
             datasetsUpdated,
             tablesCreated,
-            columnsImported
+            columnsImported,
+            datasetsRemoved
         );
         return new CatalogSyncResult(
             schema,
             metadata.size(),
             datasetsCreated,
             datasetsUpdated,
-            0,
+            datasetsRemoved,
             tablesCreated,
             columnsImported,
             processedTables,
@@ -301,6 +318,50 @@ public class PostgresCatalogSyncService {
         event.setChangedCount(drift.changed());
         event.setDetailsJson(drift.detailsJson());
         schemaDriftEventRepository.save(event);
+    }
+
+    private int cleanupStaleDatasets(UUID sourceId, String schema, Set<String> processedTablesLower) {
+        if (sourceId == null || !StringUtils.hasText(schema) || processedTablesLower == null) {
+            return 0;
+        }
+        List<CatalogDataset> existing = datasetRepository.findBySourceIdAndHiveDatabaseIgnoreCase(sourceId, schema);
+        if (existing.isEmpty()) {
+            return 0;
+        }
+        int removed = 0;
+        for (CatalogDataset dataset : existing) {
+            if (dataset == null || dataset.getId() == null) {
+                continue;
+            }
+            String tableName = dataset.getHiveTable();
+            if (!StringUtils.hasText(tableName)) {
+                continue;
+            }
+            if (processedTablesLower.contains(tableName.trim().toLowerCase(Locale.ROOT))) {
+                continue;
+            }
+            purgeDataset(dataset);
+            removed++;
+        }
+        return removed;
+    }
+
+    private void purgeDataset(CatalogDataset dataset) {
+        if (dataset == null) {
+            return;
+        }
+        try {
+            List<CatalogTableSchema> tables = tableRepository.findByDataset(dataset);
+            for (CatalogTableSchema tableSchema : tables) {
+                columnRepository.deleteByTable(tableSchema);
+            }
+            if (!tables.isEmpty()) {
+                tableRepository.deleteAll(tables);
+            }
+            datasetRepository.delete(dataset);
+        } catch (Exception ex) {
+            LOG.warn("Failed to purge stale PostgreSQL dataset {}({}): {}", dataset.getName(), dataset.getId(), ex.getMessage());
+        }
     }
 
     private String resolveSchema() {

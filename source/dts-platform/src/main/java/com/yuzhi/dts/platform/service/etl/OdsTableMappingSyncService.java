@@ -15,6 +15,7 @@ import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.catalog.CatalogColumnSyncService;
 import com.yuzhi.dts.platform.service.catalog.CatalogColumnSyncService.ColumnSpec;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -82,6 +83,7 @@ public class OdsTableMappingSyncService {
         String taskId = normalize(task.get("id"));
         Set<String> incomingSourceKeys = collectSourceKeys(mappings);
         int removed = pruneStaleTaskMappings(connectionId, incomingSourceKeys, taskName, taskId);
+        Instant snapshotTime = Instant.now();
         int updated = 0;
         List<ColumnSpec> columnSpecs = resolveColumnSpecs(connectionId);
         for (Map<String, String> mapping : mappings) {
@@ -117,7 +119,7 @@ public class OdsTableMappingSyncService {
             mappingRepository.save(entity);
             updated++;
             if (!columnSpecs.isEmpty()) {
-                syncColumns(entity, targetRef, columnSpecs, connectionId);
+                syncColumns(entity, targetRef, columnSpecs, connectionId, snapshotTime);
             }
         }
         if (updated == 0 && removed == 0) {
@@ -495,11 +497,11 @@ public class OdsTableMappingSyncService {
         return null;
     }
 
-    private void syncColumns(InfraOdsTableMapping mapping, TableRef targetRef, List<ColumnSpec> specs, UUID connectionId) {
+    private void syncColumns(InfraOdsTableMapping mapping, TableRef targetRef, List<ColumnSpec> specs, UUID connectionId, Instant snapshotTime) {
         if (mapping == null || targetRef == null || specs == null || specs.isEmpty()) {
             return;
         }
-        CatalogDataset dataset = ensureDataset(connectionId, targetRef);
+        CatalogDataset dataset = ensureDataset(connectionId, targetRef, snapshotTime);
         if (dataset == null) {
             return;
         }
@@ -510,7 +512,7 @@ public class OdsTableMappingSyncService {
         columnSyncService.upsertColumns(table, specs, CatalogColumnSyncService.STATUS_DRAFT);
     }
 
-    private CatalogDataset ensureDataset(UUID connectionId, TableRef targetRef) {
+    private CatalogDataset ensureDataset(UUID connectionId, TableRef targetRef, Instant snapshotTime) {
         if (connectionId == null || targetRef == null) {
             return null;
         }
@@ -540,6 +542,7 @@ public class OdsTableMappingSyncService {
         if (dataset.getSourceId() == null) {
             dataset.setSourceId(connectionId);
         }
+        dataset.setSnapshotTime(snapshotTime);
         if (!StringUtils.hasText(dataset.getWarehouseLayer())) {
             dataset.setWarehouseLayer("ODS");
         }

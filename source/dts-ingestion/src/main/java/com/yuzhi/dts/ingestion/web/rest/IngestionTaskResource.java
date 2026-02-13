@@ -7,16 +7,24 @@ import com.yuzhi.dts.ingestion.security.SecurityUtils;
 import com.yuzhi.dts.ingestion.service.audit.AuditService;
 import com.yuzhi.dts.ingestion.service.etl.AddaxJobService;
 import com.yuzhi.dts.ingestion.service.etl.AirflowAdapter;
+import com.yuzhi.dts.ingestion.service.etl.ConnectorCapabilityService;
+import com.yuzhi.dts.ingestion.service.etl.RealtimeTaskStatusService;
 import com.yuzhi.dts.ingestion.service.etl.JdbcMetadataService;
+import com.yuzhi.dts.ingestion.config.AirflowProperties;
 import com.yuzhi.dts.ingestion.service.openmetadata.OpenMetadataAdapter;
 import com.yuzhi.dts.ingestion.service.IngestionTaskChangeLogService;
+import com.yuzhi.dts.ingestion.service.dto.IngestionConnectorCapabilityDTO;
+import com.yuzhi.dts.ingestion.service.dto.IngestionRealtimeStatusDTO;
 import com.yuzhi.dts.ingestion.service.dto.IngestionTaskChangeLogDTO;
 import jakarta.validation.Valid;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.util.StringUtils;
@@ -61,7 +69,10 @@ public class IngestionTaskResource {
     private final JdbcMetadataService jdbcMetadataService;
     private final com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver sourceResolver;
     private final IngestionTaskChangeLogService changeLogService;
+    private final ConnectorCapabilityService connectorCapabilityService;
+    private final RealtimeTaskStatusService realtimeTaskStatusService;
     private final ObjectMapper objectMapper;
+    private final AirflowProperties airflowProperties;
 
     public IngestionTaskResource(
         AddaxJobService addaxJobService,
@@ -72,7 +83,10 @@ public class IngestionTaskResource {
         JdbcMetadataService jdbcMetadataService,
         com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver sourceResolver,
         IngestionTaskChangeLogService changeLogService,
-        ObjectMapper objectMapper
+        ConnectorCapabilityService connectorCapabilityService,
+        RealtimeTaskStatusService realtimeTaskStatusService,
+        ObjectMapper objectMapper,
+        AirflowProperties airflowProperties
     ) {
         this.addaxJobService = addaxJobService;
         this.auditService = auditService;
@@ -82,7 +96,10 @@ public class IngestionTaskResource {
         this.jdbcMetadataService = jdbcMetadataService;
         this.sourceResolver = sourceResolver;
         this.changeLogService = changeLogService;
+        this.connectorCapabilityService = connectorCapabilityService;
+        this.realtimeTaskStatusService = realtimeTaskStatusService;
         this.objectMapper = objectMapper;
+        this.airflowProperties = airflowProperties;
     }
 
     public record IngestionTaskRequest(
@@ -119,7 +136,16 @@ public class IngestionTaskResource {
         Map<String, Object> config
     ) {}
 
-    public record SyncSpec(String mode, String destinationMode, ScheduleSpec schedule, NamespaceSpec namespace, String prefix) {}
+    public record SyncSpec(
+        String mode,
+        String destinationMode,
+        ScheduleSpec schedule,
+        NamespaceSpec namespace,
+        String prefix,
+        String incrementalColumn,
+        String incrementalType,
+        String initialWatermark
+    ) {}
 
     public record ScheduleSpec(String type, String cron, Integer intervalMinutes) {}
 
@@ -181,6 +207,9 @@ public class IngestionTaskResource {
             boolean isFileSource = isFileSourceType(normalize(request.source().type()));
             if (!isFileSource && request.source().dataSourceId() == null) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请选择数据源连接");
+            }
+            if (isFileSource && "incremental".equalsIgnoreCase(resolveSyncMode(request.sync()))) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "文件源不支持增量同步");
             }
             if (!isFileSource && hasConnectionOverride(request.source().config())) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "入湖任务必须使用已配置的数据源连接");
@@ -256,6 +285,7 @@ public class IngestionTaskResource {
                 taskDTO.setSyncMode(resolveSyncMode(request.sync()));
                 taskDTO.setSyncSchedule(resolveSyncSchedule(request.sync()));
                 taskDTO.setSyncPrefix(syncPrefix);
+                taskDTO.setSyncConfig(toJsonNode(buildSyncConfig(request.sync())));
                 taskDTO.setAddaxConfig(toJsonNode(request.jobConfig()));
                 taskDTO.setAirflowEnabled(airflowRequest == null ? null : airflowRequest.enabled());
                 taskDTO.setAirflowDagId(airflowRequest == null ? null : normalize(airflowRequest.dagId()));
@@ -353,6 +383,7 @@ public class IngestionTaskResource {
             taskDTO.setSyncMode(resolveSyncMode(request.sync()));
             taskDTO.setSyncSchedule(resolveSyncSchedule(request.sync()));
             taskDTO.setSyncPrefix(syncPrefix);
+            taskDTO.setSyncConfig(toJsonNode(buildSyncConfig(request.sync())));
             taskDTO.setAddaxConfig(toJsonNode(request.jobConfig()));
             taskDTO.setAirflowEnabled(airflowRequest == null ? null : airflowRequest.enabled());
             taskDTO.setAirflowDagId(airflowRequest == null ? null : normalize(airflowRequest.dagId()));
@@ -421,10 +452,14 @@ public class IngestionTaskResource {
             }
 
             if (runNow) {
-                com.yuzhi.dts.ingestion.service.dto.IngestionExecutionDTO execution = ingestionTaskService.execute(createdTask.getId());
-                if (execution != null) {
-                    result.put("execution", execution);
-                }
+                ingestionTaskService.executeAsync(createdTask.getId());
+                Map<String, Object> submitted = new LinkedHashMap<>();
+                submitted.put("taskId", createdTask.getId());
+                submitted.put("status", "submitted");
+                submitted.put("async", true);
+                submitted.put("pollIntervalMs", resolveExecutionPollIntervalMs());
+                submitted.put("message", "任务已提交，正在后台触发执行");
+                result.put("execution", submitted);
             } else {
                 String airflowJobPath = addaxJobService.toContainerJobPath(jobPath);
                 Map<String, Object> airflowConf = new LinkedHashMap<>();
@@ -1255,6 +1290,32 @@ public class IngestionTaskResource {
         return type;
     }
 
+    private Map<String, Object> buildSyncConfig(SyncSpec sync) {
+        if (sync == null) {
+            return null;
+        }
+        if (!"incremental".equalsIgnoreCase(resolveSyncMode(sync))) {
+            return null;
+        }
+        Map<String, Object> config = new LinkedHashMap<>();
+        String incrementalColumn = normalize(sync.incrementalColumn());
+        String incrementalType = normalize(sync.incrementalType());
+        String initialWatermark = normalize(sync.initialWatermark());
+        if (!StringUtils.hasText(incrementalColumn)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "增量同步缺少增量列配置");
+        }
+        if (StringUtils.hasText(incrementalColumn)) {
+            config.put("incrementalColumn", incrementalColumn);
+        }
+        if (StringUtils.hasText(incrementalType)) {
+            config.put("incrementalType", incrementalType);
+        }
+        if (StringUtils.hasText(initialWatermark)) {
+            config.put("initialWatermark", initialWatermark);
+        }
+        return config.isEmpty() ? null : config;
+    }
+
     private String trimMessage(String message) {
         if (!StringUtils.hasText(message)) {
             return null;
@@ -1330,6 +1391,18 @@ public class IngestionTaskResource {
         if (!isFileSourceUpdate && taskDTO.getSourceDataSourceId() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请选择数据源连接");
         }
+        if ("incremental".equalsIgnoreCase(normalize(taskDTO.getSyncMode())) && isFileSourceUpdate) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "文件源不支持增量同步");
+        }
+        if ("incremental".equalsIgnoreCase(normalize(taskDTO.getSyncMode()))) {
+            Map<String, Object> syncConfig = safeMap(jsonNodeToMap(taskDTO.getSyncConfig()));
+            if (!StringUtils.hasText(normalize(syncConfig.get("incrementalColumn")))) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "增量同步缺少增量列配置");
+            }
+        }
+        if (!"incremental".equalsIgnoreCase(normalize(taskDTO.getSyncMode()))) {
+            taskDTO.setSyncConfig(null);
+        }
         Map<String, Object> sourceOverrides = isFileSourceUpdate
             ? safeMap(jsonNodeToMap(taskDTO.getSourceConfig()))
             : sanitizeSourceOverrides(jsonNodeToMap(taskDTO.getSourceConfig()));
@@ -1404,7 +1477,9 @@ public class IngestionTaskResource {
                     applyTables(writerConfig, writerTables);
                 }
             }
-            SyncSpec syncSpec = StringUtils.hasText(syncPrefix) ? new SyncSpec(null, null, null, null, syncPrefix) : null;
+            SyncSpec syncSpec = StringUtils.hasText(syncPrefix)
+                ? new SyncSpec(null, null, null, null, syncPrefix, null, null, null)
+                : null;
             List<Map<String, String>> tableMapping = deriveTableMapping(readerConfig, writerConfig, syncSpec);
             if (!tableMapping.isEmpty()) {
                 taskDTO.setTableMapping(toJsonNode(tableMapping));
@@ -1561,6 +1636,50 @@ public class IngestionTaskResource {
     }
 
     /**
+     * POST /api/ingestion/tasks/{id}/execute/async : 异步触发任务执行
+     */
+    @PostMapping("/tasks/{id}/execute/async")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ResponseEntity<Map<String, Object>> executeTaskAsync(
+        @PathVariable Long id
+    ) {
+        com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO task = ingestionTaskService.findOne(id)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "任务不存在"));
+        String status = task.getStatus();
+        if (!"active".equals(status) && !"draft".equals(status)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Task is not in executable status: " + status);
+        }
+        ingestionTaskService.executeAsync(id);
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("taskId", id);
+        payload.put("taskName", task.getName());
+        payload.put("status", "submitted");
+        payload.put("async", true);
+        payload.put("pollIntervalMs", resolveExecutionPollIntervalMs());
+        payload.put("message", "任务已提交，正在后台触发执行");
+        return ResponseEntity.accepted().body(payload);
+    }
+
+    /**
+     * POST /api/ingestion/tasks/{id}/executions/{executionId}/retry : 重试执行
+     */
+    @PostMapping("/tasks/{id}/executions/{executionId}/retry")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ResponseEntity<com.yuzhi.dts.ingestion.service.dto.IngestionExecutionDTO> retryExecution(
+        @PathVariable Long id,
+        @PathVariable Long executionId,
+        @RequestParam(value = "mode", required = false, defaultValue = "FAILED_ONLY") String mode
+    ) {
+        try {
+            return ResponseEntity.ok(ingestionTaskService.retryExecution(id, executionId, mode));
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage());
+        } catch (IllegalStateException e) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, e.getMessage());
+        }
+    }
+
+    /**
      * POST /api/ingestion/tasks/{id}/dag/rebuild : 强制重建 DAG 文件
      */
     @PostMapping("/tasks/{id}/dag/rebuild")
@@ -1625,6 +1744,114 @@ public class IngestionTaskResource {
     }
 
     /**
+     * GET /api/ingestion/connectors/capabilities : 获取连接器能力清单
+     */
+    @GetMapping("/connectors/capabilities")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ResponseEntity<List<IngestionConnectorCapabilityDTO>> listConnectorCapabilities() {
+        return ResponseEntity.ok(connectorCapabilityService.listEnabled());
+    }
+
+    /**
+     * GET /api/ingestion/connectors/capabilities/{connectorType} : 获取单个连接器能力
+     */
+    @GetMapping("/connectors/capabilities/{connectorType}")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ResponseEntity<IngestionConnectorCapabilityDTO> getConnectorCapability(@PathVariable String connectorType) {
+        return connectorCapabilityService
+            .getByConnectorType(connectorType)
+            .map(ResponseEntity::ok)
+            .orElse(ResponseEntity.notFound().build());
+    }
+
+    /**
+     * GET /api/ingestion/tasks/{id}/realtime-status : 获取任务实时状态（预留）
+     */
+    @GetMapping("/tasks/{id}/realtime-status")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ResponseEntity<IngestionRealtimeStatusDTO> getRealtimeStatus(@PathVariable Long id) {
+        return ResponseEntity.ok(realtimeTaskStatusService.getTaskStatus(id));
+    }
+
+    /**
+     * GET /api/ingestion/tasks/{id}/incremental-states : 获取增量检查点
+     */
+    @GetMapping("/tasks/{id}/incremental-states")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ResponseEntity<List<com.yuzhi.dts.ingestion.service.dto.IngestionIncrementalStateDTO>> getIncrementalStates(
+        @PathVariable Long id
+    ) {
+        try {
+            return ResponseEntity.ok(ingestionTaskService.getIncrementalStates(id));
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "任务不存在");
+        }
+    }
+
+    /**
+     * GET /api/ingestion/tasks/{id}/incremental-audits : 获取增量水位审计
+     */
+    @GetMapping("/tasks/{id}/incremental-audits")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ResponseEntity<List<com.yuzhi.dts.ingestion.service.dto.IngestionIncrementalAuditDTO>> getIncrementalAudits(
+        @PathVariable Long id,
+        @RequestParam(value = "executionId", required = false) Long executionId
+    ) {
+        try {
+            return ResponseEntity.ok(ingestionTaskService.getIncrementalAudits(id, executionId));
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "任务不存在");
+        }
+    }
+
+    /**
+     * GET /api/ingestion/tasks/{id}/incremental-audits/page : 分页获取增量水位审计
+     */
+    @GetMapping("/tasks/{id}/incremental-audits/page")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ResponseEntity<Page<com.yuzhi.dts.ingestion.service.dto.IngestionIncrementalAuditDTO>> getIncrementalAuditsPage(
+        @PathVariable Long id,
+        @RequestParam(value = "executionId", required = false) Long executionId,
+        @RequestParam(value = "executionIds", required = false) List<Long> executionIds,
+        @RequestParam(value = "from", required = false) Instant from,
+        @RequestParam(value = "to", required = false) Instant to,
+        @RequestParam(value = "tableName", required = false) String tableName,
+        @RequestParam(value = "status", required = false) String status,
+        Pageable pageable
+    ) {
+        try {
+            Page<com.yuzhi.dts.ingestion.service.dto.IngestionIncrementalAuditDTO> page =
+                ingestionTaskService.getIncrementalAuditsPage(id, executionId, executionIds, from, to, pageable, tableName, status);
+            return ResponseEntity.ok(page);
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "任务不存在");
+        }
+    }
+
+    /**
+     * GET /api/ingestion/tasks/{id}/incremental-audits/summary : 获取增量水位审计汇总
+     */
+    @GetMapping("/tasks/{id}/incremental-audits/summary")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ResponseEntity<com.yuzhi.dts.ingestion.service.dto.IngestionIncrementalAuditSummaryDTO> getIncrementalAuditsSummary(
+        @PathVariable Long id,
+        @RequestParam(value = "executionId", required = false) Long executionId,
+        @RequestParam(value = "executionIds", required = false) List<Long> executionIds,
+        @RequestParam(value = "from", required = false) Instant from,
+        @RequestParam(value = "to", required = false) Instant to,
+        @RequestParam(value = "tableName", required = false) String tableName,
+        @RequestParam(value = "status", required = false) String status
+    ) {
+        try {
+            return ResponseEntity.ok(
+                ingestionTaskService.getIncrementalAuditsSummary(id, executionId, executionIds, from, to, tableName, status)
+            );
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "任务不存在");
+        }
+    }
+
+    /**
      * GET /api/ingestion/tasks/{id}/executions/{executionId}/logs : 获取执行日志
      */
     @GetMapping("/tasks/{id}/executions/{executionId}/logs")
@@ -1632,15 +1859,29 @@ public class IngestionTaskResource {
     public ResponseEntity<Map<String, Object>> getExecutionLog(
         @PathVariable Long id,
         @PathVariable Long executionId,
-        @RequestParam(value = "tryNumber", required = false) Integer tryNumber
+        @RequestParam(value = "tryNumber", required = false) Integer tryNumber,
+        @RequestParam(value = "keyword", required = false) String keyword,
+        @RequestParam(value = "scope", required = false) String scope
     ) {
         try {
-            Map<String, Object> result = ingestionTaskService.fetchExecutionLog(id, executionId, tryNumber);
+            Map<String, Object> result = ingestionTaskService.fetchExecutionLog(id, executionId, tryNumber, keyword, scope);
             return ResponseEntity.ok(result);
         } catch (IllegalArgumentException e) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage());
         } catch (IllegalStateException e) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, e.getMessage());
         }
+    }
+
+    private long resolveExecutionPollIntervalMs() {
+        Long configured = airflowProperties == null ? null : airflowProperties.getExecutionPollIntervalMs();
+        long value = configured == null ? 3000L : configured.longValue();
+        if (value < 1000L) {
+            return 1000L;
+        }
+        if (value > 30000L) {
+            return 30000L;
+        }
+        return value;
     }
 }

@@ -1,4 +1,4 @@
-import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Editor from "@monaco-editor/react";
 import { toast } from "sonner";
 import {
@@ -226,6 +226,36 @@ type SqlModelOdsGenerateResult = {
 	skipped?: string[];
 };
 
+type OdsSkippedSeverity = "error" | "warn" | "info";
+
+type OdsSkippedEntry = {
+	raw: string;
+	reason: string;
+	severity: OdsSkippedSeverity;
+};
+
+const parseOdsSkippedEntry = (item?: string): OdsSkippedEntry => {
+	const raw = normalizeText(item);
+	const match = raw.match(/\(([^()]*)\)\s*$/);
+	const reason = normalizeText(match?.[1]) || "其他";
+	const combined = `${raw} ${reason}`;
+	if (combined.includes("已存在，未覆盖")) {
+		return { raw, reason, severity: "info" };
+	}
+	const errorTokens = ["失败", "不可用", "不存在", "过期", "无法", "异常", "错误", "未找到", "为空", "无权"];
+	const hasError = errorTokens.some((token) => combined.includes(token));
+	if (hasError) {
+		return { raw, reason, severity: "error" };
+	}
+	return { raw, reason, severity: "warn" };
+};
+
+const skippedSeverityTag = (severity: OdsSkippedSeverity) => {
+	if (severity === "error") return <Tag color="red">失败</Tag>;
+	if (severity === "info") return <Tag>提示</Tag>;
+	return <Tag color="gold">告警</Tag>;
+};
+
 const inferLayer = (name?: string) => {
 	const normalized = (name || "").toLowerCase();
 	if (normalized.startsWith("ods_")) return "ODS";
@@ -291,6 +321,7 @@ export default function SqlModelingPage() {
 	const [importForm] = Form.useForm();
 	const [odsGenerateForm] = Form.useForm();
 	const selectedOdsSourceDataSourceId = Form.useWatch("sourceDataSourceId", odsGenerateForm);
+	const dbtSourcesReqSeqRef = useRef(0);
 
 	const loadConfig = useCallback(async () => {
 		setConfigLoading(true);
@@ -401,16 +432,23 @@ export default function SqlModelingPage() {
 		}
 	}, []);
 
-	const loadDbtSources = useCallback(async () => {
+	const loadDbtSources = useCallback(async (sourceDataSourceId?: string) => {
+		const requestSeq = ++dbtSourcesReqSeqRef.current;
 		setSourcesLoading(true);
 		try {
-			const resp = (await listDbtSources()) as DbtSourceItem[];
+			const normalizedSourceId = normalizeText(sourceDataSourceId);
+			const params = normalizedSourceId ? { sourceDataSourceId: normalizedSourceId } : undefined;
+			const resp = (await listDbtSources(params)) as DbtSourceItem[];
+			if (requestSeq !== dbtSourcesReqSeqRef.current) return;
 			setDbtSources(Array.isArray(resp) ? resp : []);
 		} catch (err: any) {
+			if (requestSeq !== dbtSourcesReqSeqRef.current) return;
 			toast.error(err?.message || "加载源表列表失败");
 			setDbtSources([]);
 		} finally {
-			setSourcesLoading(false);
+			if (requestSeq === dbtSourcesReqSeqRef.current) {
+				setSourcesLoading(false);
+			}
 		}
 	}, []);
 
@@ -564,7 +602,6 @@ export default function SqlModelingPage() {
 			createAds: true,
 			overwriteExisting: true,
 		});
-		void loadDbtSources();
 		setOdsGenerateOpen(true);
 	};
 
@@ -689,24 +726,80 @@ export default function SqlModelingPage() {
 			};
 			const result = (await generateSqlModelsFromOds(payload)) as SqlModelOdsGenerateResult;
 			const summary = `已处理 ${result?.mappingsTotal || 0} 个 ODS 表，新增 ${result?.modelsCreated || 0}，更新 ${result?.modelsUpdated || 0}`;
-			const skipped = result?.skipped || [];
+			const skippedEntries = (result?.skipped || []).map((item) => parseOdsSkippedEntry(item));
+			const failedEntries = skippedEntries.filter((item) => item.severity === "error");
+			const reasonCount = new Map<string, number>();
+			for (const entry of skippedEntries) {
+				reasonCount.set(entry.reason, (reasonCount.get(entry.reason) || 0) + 1);
+			}
+			const reasonSummary = Array.from(reasonCount.entries())
+				.map(([reason, count]) => ({ reason, count }))
+				.sort((a, b) => b.count - a.count || a.reason.localeCompare(b.reason, "zh-CN"));
+
 			Modal.info({
 				title: "一键生成结果",
-				width: 720,
+				width: 760,
 				content: (
 					<div>
 						<p>{summary}</p>
 						<p style={{ marginTop: 8, color: "rgba(0,0,0,0.65)" }}>
 							系统已按所选映射生成或更新 DWD / DWS / ADS 模型模板。
 						</p>
-						{skipped.length > 0 && (
+						{skippedEntries.length > 0 && (
 							<>
-								<p style={{ marginTop: 8, fontWeight: 600 }}>跳过项：</p>
-								<ul style={{ maxHeight: 220, overflow: "auto", fontSize: 12, paddingLeft: 20 }}>
-									{skipped.map((item, idx) => (
-										<li key={`${item}-${idx}`}>{item}</li>
-									))}
-								</ul>
+								<div
+									style={{
+										marginTop: 10,
+										padding: "8px 10px",
+										border: "1px solid #f0f0f0",
+										borderRadius: 6,
+										background: "#fafafa",
+									}}
+								>
+									<p style={{ marginBottom: 6, fontWeight: 600 }}>跳过原因统计</p>
+									<div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+										{reasonSummary.map((item) => (
+											<Tag key={item.reason}>{`${item.reason}: ${item.count}`}</Tag>
+										))}
+									</div>
+								</div>
+								<Tabs
+									size="small"
+									style={{ marginTop: 10 }}
+									items={[
+										{
+											key: "all",
+											label: `全部跳过 (${skippedEntries.length})`,
+											children: (
+												<ul style={{ maxHeight: 220, overflow: "auto", fontSize: 12, paddingLeft: 20 }}>
+													{skippedEntries.map((entry, idx) => (
+														<li key={`${entry.raw}-${idx}`}>
+															{skippedSeverityTag(entry.severity)}
+															<span>{entry.raw}</span>
+														</li>
+													))}
+												</ul>
+											),
+										},
+										{
+											key: "failed",
+											label: `仅失败项 (${failedEntries.length})`,
+											children:
+												failedEntries.length > 0 ? (
+													<ul style={{ maxHeight: 220, overflow: "auto", fontSize: 12, paddingLeft: 20 }}>
+														{failedEntries.map((entry, idx) => (
+															<li key={`${entry.raw}-${idx}`}>
+															{skippedSeverityTag(entry.severity)}
+															<span>{entry.raw}</span>
+														</li>
+														))}
+													</ul>
+												) : (
+													<div style={{ fontSize: 12, color: "rgba(0,0,0,0.45)" }}>无失败项</div>
+												),
+										},
+									]}
+								/>
 							</>
 						)}
 						<div
@@ -819,49 +912,53 @@ export default function SqlModelingPage() {
 	}, [dbtRefs, snippetKeyword]);
 
 	const odsSourceOptions = useMemo(() => {
-		const selectedSourceId = normalizeText(selectedOdsSourceDataSourceId);
 		return dbtSources
 			.filter((item) => !!item.id)
-			.filter((item) => {
-				if (!selectedSourceId) return true;
-				return normalizeText(item.sourceDataSourceId) === selectedSourceId;
-			})
 			.map((item) => {
 				const schema = normalizeText(item.schema) || "public";
 				const rawTable = normalizeText(item.table);
-				const prefix = `${schema}.`;
+				const prefix = schema + ".";
 				const table = rawTable.toLowerCase().startsWith(prefix.toLowerCase()) ? rawTable.slice(prefix.length) : rawTable;
 				return {
-					label: table ? `${schema}.${table}` : schema,
+					label: table ? schema + "." + table : schema,
 					value: item.id as string,
 				};
 			});
-	}, [dbtSources, selectedOdsSourceDataSourceId]);
+	}, [dbtSources]);
 
 	const odsSourceFilterOptions = useMemo(() => {
-		const idToLabel = new Map<string, string>();
+		const dataSourceNameById = new Map<string, string>();
+		for (const ds of dataSources) {
+			const id = normalizeText(String(ds?.id || ""));
+			if (!id) continue;
+			const name = normalizeText(ds.name);
+			if (name) {
+				dataSourceNameById.set(id, name);
+			}
+		}
+
+		const optionsById = new Map<string, string>();
 		for (const item of dbtSources) {
 			const sourceId = normalizeText(item.sourceDataSourceId);
-			if (!sourceId || idToLabel.has(sourceId)) continue;
-			const sourceName = normalizeText(item.sourceDataSourceName);
-			const matched = dataSources.find((ds) => String(ds.id) === sourceId);
-			idToLabel.set(sourceId, matched?.name || sourceName || "默认数据源");
+			if (!sourceId || optionsById.has(sourceId)) continue;
+			const label =
+				dataSourceNameById.get(sourceId) ||
+				normalizeText(item.sourceDataSourceName) ||
+				normalizeText(item.systemCode) ||
+				"未知来源";
+			optionsById.set(sourceId, label);
 		}
-		const options = Array.from(idToLabel.entries()).map(([value, label]) => ({ value, label }));
-		if (options.length > 0) {
-			return options;
-		}
-		// Fallback: keep source selector usable even when ODS mapping list is temporarily empty.
-		return dataSources.map((ds) => ({
-			label: ds?.name || ds?.id,
-			value: ds?.id,
-		}));
+
+		return Array.from(optionsById.entries())
+			.map(([value, label]) => ({ value, label }))
+			.sort((a, b) => a.label.localeCompare(b.label, "zh-CN"));
 	}, [dataSources, dbtSources]);
 
 	useEffect(() => {
 		if (!odsGenerateOpen) return;
-		void loadDbtSources();
-	}, [loadDbtSources, odsGenerateOpen]);
+		const selectedSourceId = normalizeText(selectedOdsSourceDataSourceId) || undefined;
+		void loadDbtSources(selectedSourceId);
+	}, [loadDbtSources, odsGenerateOpen, selectedOdsSourceDataSourceId]);
 
 	useEffect(() => {
 		if (!odsGenerateOpen) return;
@@ -870,8 +967,9 @@ export default function SqlModelingPage() {
 		const exists = odsSourceFilterOptions.some((item) => normalizeText(item.value) === selectedSourceId);
 		if (!exists) {
 			odsGenerateForm.setFieldValue("sourceDataSourceId", undefined);
+			void loadDbtSources(undefined);
 		}
-	}, [odsGenerateForm, odsGenerateOpen, odsSourceFilterOptions, selectedOdsSourceDataSourceId]);
+	}, [loadDbtSources, odsGenerateForm, odsGenerateOpen, odsSourceFilterOptions, selectedOdsSourceDataSourceId]);
 
 	useEffect(() => {
 		if (!odsGenerateOpen) return;

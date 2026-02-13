@@ -35,7 +35,7 @@ public class DashboardResource {
 
     @GetMapping("/dashboards")
     public ApiResponse<List<Map<String, Object>>> list() {
-        List<BiReportLinkDto> list = reports.listPublished(null, null, null);
+        List<BiReportLinkDto> list = reports.listPublished(null, null, null, null, null);
         List<Map<String, Object>> dashboards = list
             .stream()
             .filter(r -> r != null && "HETU".equalsIgnoreCase(String.valueOf(r.engine())))

@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
+import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -75,7 +76,7 @@ public class AddaxJobService {
         Map<String, Object> writerConfig,
         Map<String, Object> jobConfig
     ) {
-        return createJob(taskName, readerType, readerConfig, writerType, writerConfig, jobConfig, null);
+        return createJob(taskName, readerType, readerConfig, writerType, writerConfig, jobConfig, null, null);
     }
 
     public AddaxJobResult createJob(
@@ -87,10 +88,24 @@ public class AddaxJobService {
         Map<String, Object> jobConfig,
         String syncMode
     ) {
+        return createJob(taskName, readerType, readerConfig, writerType, writerConfig, jobConfig, syncMode, null);
+    }
+
+    public AddaxJobResult createJob(
+        String taskName,
+        String readerType,
+        Map<String, Object> readerConfig,
+        String writerType,
+        Map<String, Object> writerConfig,
+        Map<String, Object> jobConfig,
+        String syncMode,
+        Map<String, Object> runtimeReaderOverrides
+    ) {
         Map<String, Object> resolvedJob = resolveJobConfig(readerType, readerConfig, writerType, writerConfig, jobConfig);
         if ("full_refresh".equalsIgnoreCase(syncMode)) {
             applyFullRefreshPreSql(resolvedJob);
         }
+        applyReaderRuntimeOverridesToJob(resolvedJob, runtimeReaderOverrides);
         String jobDir = resolveJobDir();
         String jobName = buildJobName(taskName);
         Path dir = Paths.get(jobDir);
@@ -109,6 +124,95 @@ public class AddaxJobService {
             LOG.warn("Failed to write Addax job {}: {}", jobName, ex.getMessage());
             throw new IllegalStateException("生成 Addax 作业失败: " + ex.getMessage(), ex);
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void applyReaderRuntimeOverridesToJob(Map<String, Object> jobConfig, Map<String, Object> runtimeReaderOverrides) {
+        if (jobConfig == null || jobConfig.isEmpty() || runtimeReaderOverrides == null || runtimeReaderOverrides.isEmpty()) {
+            return;
+        }
+        String globalWhere = normalizeText(runtimeReaderOverrides.get("where"));
+        Map<String, String> perTableWhere = new java.util.LinkedHashMap<>();
+        Object perTableObj = runtimeReaderOverrides.get("_perTableWhere");
+        if (perTableObj instanceof Map<?, ?> tableMap) {
+            for (Map.Entry<?, ?> entry : tableMap.entrySet()) {
+                if (entry.getKey() == null) {
+                    continue;
+                }
+                String key = normalizeText(entry.getKey().toString());
+                String value = normalizeText(entry.getValue());
+                if (StringUtils.hasText(key) && StringUtils.hasText(value)) {
+                    perTableWhere.put(key, value);
+                }
+            }
+        }
+        if (!StringUtils.hasText(globalWhere) && perTableWhere.isEmpty()) {
+            return;
+        }
+        Object jobObj = jobConfig.get("job");
+        if (!(jobObj instanceof Map<?, ?> jobMap)) {
+            return;
+        }
+        Object contentObj = jobMap.get("content");
+        if (!(contentObj instanceof List<?> contentList)) {
+            return;
+        }
+        int applied = 0;
+        for (Object item : contentList) {
+            if (!(item instanceof Map<?, ?> contentMap)) {
+                continue;
+            }
+            Object readerObj = contentMap.get("reader");
+            if (!(readerObj instanceof Map<?, ?> readerMap)) {
+                continue;
+            }
+            Object parameterObj = readerMap.get("parameter");
+            if (!(parameterObj instanceof Map<?, ?> parameterMap)) {
+                continue;
+            }
+            Map<String, Object> params = new java.util.LinkedHashMap<>();
+            parameterMap.forEach((k, v) -> {
+                if (k != null) {
+                    params.put(k.toString(), v);
+                }
+            });
+            String table = extractTables(params).stream().findFirst().orElse(null);
+            String where = resolvePerTableWhere(perTableWhere, table);
+            if (!StringUtils.hasText(where)) {
+                where = globalWhere;
+            }
+            if (!StringUtils.hasText(where)) {
+                continue;
+            }
+            ((Map<Object, Object>) parameterMap).put("where", where);
+            applied++;
+        }
+        if (applied > 0) {
+            LOG.info("Applied runtime reader where override to {} content block(s)", applied);
+        }
+    }
+
+    private String resolvePerTableWhere(Map<String, String> perTableWhere, String table) {
+        if (perTableWhere == null || perTableWhere.isEmpty() || !StringUtils.hasText(table)) {
+            return null;
+        }
+        String normalized = table.trim();
+        String lower = normalized.toLowerCase(Locale.ROOT);
+        String stripped = stripSchema(normalized);
+        String strippedLower = stripped == null ? null : stripped.toLowerCase(Locale.ROOT);
+        if (perTableWhere.containsKey(normalized)) {
+            return perTableWhere.get(normalized);
+        }
+        if (perTableWhere.containsKey(lower)) {
+            return perTableWhere.get(lower);
+        }
+        if (StringUtils.hasText(stripped) && perTableWhere.containsKey(stripped)) {
+            return perTableWhere.get(stripped);
+        }
+        if (StringUtils.hasText(strippedLower) && perTableWhere.containsKey(strippedLower)) {
+            return perTableWhere.get(strippedLower);
+        }
+        return null;
     }
 
     private static final List<String> FILE_METADATA_KEYS = List.of(
@@ -206,6 +310,7 @@ public class AddaxJobService {
 
             Map<String, Object> perWriter = deepCopyConfig(writerConfig);
             setTables(perWriter, List.of(writerTables.get(i)));
+            filterPerTableSql(perWriter, writerTables.get(i), writerTables);
 
             Map<String, Object> content = new LinkedHashMap<>();
             content.put("reader", Map.of("name", readerType, "parameter", perReader));
@@ -214,6 +319,103 @@ public class AddaxJobService {
         }
         LOG.info("Split multi-table job into {} per-table content blocks", contentList.size());
         return contentList;
+    }
+
+    private void filterPerTableSql(Map<String, Object> writerConfig, String currentTable, List<String> allTables) {
+        if (writerConfig == null || writerConfig.isEmpty()) {
+            return;
+        }
+        List<String> filteredPreSql = filterSqlListForTable(writerConfig.get("preSql"), currentTable, allTables);
+        if (filteredPreSql.isEmpty()) {
+            writerConfig.remove("preSql");
+        } else {
+            writerConfig.put("preSql", filteredPreSql);
+        }
+        List<String> filteredPostSql = filterSqlListForTable(writerConfig.get("postSql"), currentTable, allTables);
+        if (filteredPostSql.isEmpty()) {
+            writerConfig.remove("postSql");
+        } else {
+            writerConfig.put("postSql", filteredPostSql);
+        }
+    }
+
+    private List<String> filterSqlListForTable(Object sqlObj, String currentTable, List<String> allTables) {
+        if (!(sqlObj instanceof List<?> sqlList) || sqlList.isEmpty()) {
+            return List.of();
+        }
+        List<String> filtered = new java.util.ArrayList<>();
+        for (Object item : sqlList) {
+            String sql = normalizeText(item);
+            if (!StringUtils.hasText(sql)) {
+                continue;
+            }
+            if (!sqlReferencesAnyTrackedTable(sql, allTables)) {
+                filtered.add(sql);
+                continue;
+            }
+            if (sqlReferencesTable(sql, currentTable)) {
+                filtered.add(sql);
+            }
+        }
+        return filtered;
+    }
+
+    private boolean sqlReferencesAnyTrackedTable(String sql, List<String> tables) {
+        if (!StringUtils.hasText(sql) || tables == null || tables.isEmpty()) {
+            return false;
+        }
+        for (String table : tables) {
+            if (sqlReferencesTable(sql, table)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean sqlReferencesTable(String sql, String table) {
+        if (!StringUtils.hasText(sql) || !StringUtils.hasText(table)) {
+            return false;
+        }
+        String normalizedSql = normalizeSqlForTableMatch(sql);
+        List<String> tokens = buildTableMatchTokens(table);
+        for (String token : tokens) {
+            if (hasTokenBoundaryMatch(normalizedSql, token)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private String normalizeSqlForTableMatch(String sql) {
+        if (!StringUtils.hasText(sql)) {
+            return "";
+        }
+        return sql.toLowerCase(Locale.ROOT).replace("\"", "").replace("`", "");
+    }
+
+    private List<String> buildTableMatchTokens(String table) {
+        String normalized = normalizeText(table);
+        if (!StringUtils.hasText(normalized)) {
+            return List.of();
+        }
+        String compact = normalized.toLowerCase(Locale.ROOT).replace("\"", "").replace("`", "");
+        java.util.LinkedHashSet<String> tokens = new java.util.LinkedHashSet<>();
+        if (StringUtils.hasText(compact)) {
+            tokens.add(compact);
+        }
+        String stripped = stripSchema(compact);
+        if (StringUtils.hasText(stripped)) {
+            tokens.add(stripped);
+        }
+        return List.copyOf(tokens);
+    }
+
+    private boolean hasTokenBoundaryMatch(String text, String token) {
+        if (!StringUtils.hasText(text) || !StringUtils.hasText(token)) {
+            return false;
+        }
+        Pattern pattern = Pattern.compile("(?<![a-z0-9_])" + Pattern.quote(token) + "(?![a-z0-9_])");
+        return pattern.matcher(text).find();
     }
 
     private void applyJobDefaults(
@@ -340,6 +542,55 @@ public class AddaxJobService {
             return normalized;
         }
         return ADDAX_CONTAINER_DIR + "/" + filename;
+    }
+
+    public List<String> listWriterTablesFromJob(String jobPath) {
+        if (!StringUtils.hasText(jobPath)) {
+            return List.of();
+        }
+        Path path = Paths.get(jobPath.trim());
+        if (!Files.exists(path)) {
+            return List.of();
+        }
+        try {
+            Map<String, Object> jobConfig = objectMapper.readValue(
+                path.toFile(),
+                new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {}
+            );
+            Object jobObj = jobConfig.get("job");
+            if (!(jobObj instanceof Map<?, ?> jobMap)) {
+                return List.of();
+            }
+            Object contentObj = jobMap.get("content");
+            if (!(contentObj instanceof List<?> contentList)) {
+                return List.of();
+            }
+            java.util.LinkedHashSet<String> tables = new java.util.LinkedHashSet<>();
+            for (Object contentItem : contentList) {
+                if (!(contentItem instanceof Map<?, ?> contentMap)) {
+                    continue;
+                }
+                Object writerObj = contentMap.get("writer");
+                if (!(writerObj instanceof Map<?, ?> writerMap)) {
+                    continue;
+                }
+                Object parameterObj = writerMap.get("parameter");
+                if (!(parameterObj instanceof Map<?, ?> parameterMap)) {
+                    continue;
+                }
+                Map<String, Object> params = new LinkedHashMap<>();
+                parameterMap.forEach((k, v) -> {
+                    if (k != null) {
+                        params.put(k.toString(), v);
+                    }
+                });
+                tables.addAll(extractTables(params));
+            }
+            return new java.util.ArrayList<>(tables);
+        } catch (Exception ex) {
+            LOG.warn("Failed to read writer tables from Addax job {}: {}", jobPath, ex.getMessage());
+            return List.of();
+        }
     }
 
     private Map<String, Object> safeMap(Map<String, Object> value) {
@@ -630,6 +881,7 @@ public class AddaxJobService {
         if (config == null || config.isEmpty()) {
             return;
         }
+        ensureMutableConnection(config);
         fillJdbcUrlIfMissing(pluginType, config);
         boolean preferList = !isWriter(pluginType);
         normalizeJdbcUrlField(config, "jdbcUrl", preferList);
@@ -645,6 +897,45 @@ public class AddaxJobService {
                 }
             }
         }
+    }
+
+    private void ensureMutableConnection(Map<String, Object> config) {
+        if (config == null || config.isEmpty()) {
+            return;
+        }
+        Object connection = config.get("connection");
+        if (connection instanceof Map<?, ?> map) {
+            config.put("connection", new LinkedHashMap<>(toStringKeyMap(map)));
+            return;
+        }
+        if (connection instanceof List<?> list) {
+            List<Object> normalized = new java.util.ArrayList<>(list.size());
+            boolean changed = false;
+            for (Object item : list) {
+                if (item instanceof Map<?, ?> mapItem) {
+                    normalized.add(new LinkedHashMap<>(toStringKeyMap(mapItem)));
+                    changed = true;
+                } else {
+                    normalized.add(item);
+                }
+            }
+            if (changed) {
+                config.put("connection", normalized);
+            }
+        }
+    }
+
+    private Map<String, Object> toStringKeyMap(Map<?, ?> source) {
+        Map<String, Object> copy = new LinkedHashMap<>();
+        if (source == null || source.isEmpty()) {
+            return copy;
+        }
+        source.forEach((k, v) -> {
+            if (k != null) {
+                copy.put(k.toString(), v);
+            }
+        });
+        return copy;
     }
 
     private void fillJdbcUrlIfMissing(String pluginType, Map<?, ?> map) {
@@ -1091,6 +1382,15 @@ public class AddaxJobService {
         String readerTypeOverride,
         Map<String, Object> readerConfigOverride
     ) {
+        return createJobFromTask(task, readerTypeOverride, readerConfigOverride, null);
+    }
+
+    public AddaxJobResult createJobFromTask(
+        com.yuzhi.dts.ingestion.domain.IngestionTask task,
+        String readerTypeOverride,
+        Map<String, Object> readerConfigOverride,
+        Map<String, Object> runtimeReaderOverrides
+    ) {
         if (task == null) {
             throw new IllegalArgumentException("IngestionTask cannot be null");
         }
@@ -1122,8 +1422,27 @@ public class AddaxJobService {
             writerType,
             writerConfig,
             jobConfig,
-            task.getSyncMode()
+            task.getSyncMode(),
+            runtimeReaderOverrides
         );
+    }
+
+    private void applyReaderRuntimeOverrides(Map<String, Object> readerConfig, Map<String, Object> runtimeReaderOverrides) {
+        if (readerConfig == null || runtimeReaderOverrides == null || runtimeReaderOverrides.isEmpty()) {
+            return;
+        }
+        Map<String, Object> sanitized = sanitizeReaderOverrides(runtimeReaderOverrides);
+        if (sanitized.isEmpty()) {
+            return;
+        }
+        List<String> tables = extractTables(sanitized);
+        sanitized.remove("table");
+        sanitized.remove("tables");
+        sanitized.remove("connection");
+        readerConfig.putAll(sanitized);
+        if (!tables.isEmpty()) {
+            applyTables(readerConfig, tables);
+        }
     }
 
     private boolean isFileReaderType(String readerType) {
@@ -1485,22 +1804,25 @@ public class AddaxJobService {
 
     private String resolveFileSourceSystem(Map<String, Object> readerConfig) {
         if (readerConfig == null || readerConfig.isEmpty()) {
-            return "unknown";
+            return "uploaded_file";
         }
-        String source = extractFileName(normalizeText(readerConfig.get("_originalName")));
+        String source = extractFileNameFromAny(readerConfig.get("_originalName"));
         if (!StringUtils.hasText(source)) {
-            source = extractFileName(firstStringValue(readerConfig.get("_filePath")));
-        }
-        if (!StringUtils.hasText(source)) {
-            source = extractFileName(firstStringValue(readerConfig.get("_containerPath")));
+            source = extractFileNameFromAny(readerConfig.get("_filePath"));
         }
         if (!StringUtils.hasText(source)) {
-            source = extractFileName(firstStringValue(readerConfig.get("path")));
+            source = extractFileNameFromAny(readerConfig.get("_containerPath"));
         }
         if (!StringUtils.hasText(source)) {
-            source = normalizeText(readerConfig.get("sourceSystem"));
+            source = extractFileNameFromAny(readerConfig.get("path"));
         }
-        return StringUtils.hasText(source) ? source : "unknown";
+        if (!StringUtils.hasText(source)) {
+            source = extractFileNameFromAny(readerConfig.get("sourceSystem"));
+        }
+        if (!StringUtils.hasText(source)) {
+            source = normalizeText(readerConfig.get("sourceApp"));
+        }
+        return StringUtils.hasText(source) ? source : "uploaded_file";
     }
 
     private String extractFileName(String value) {
@@ -1513,6 +1835,43 @@ public class AddaxJobService {
             ? normalized.substring(slash + 1)
             : normalized;
         return normalizeText(filename);
+    }
+
+    private String extractFileNameFromAny(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof String str) {
+            return extractFileName(str);
+        }
+        if (value instanceof Iterable<?> iterable) {
+            for (Object item : iterable) {
+                String candidate = extractFileNameFromAny(item);
+                if (StringUtils.hasText(candidate)) {
+                    return candidate;
+                }
+            }
+            return null;
+        }
+        if (value instanceof Map<?, ?> map) {
+            for (String key : List.of("_originalName", "originalName", "filename", "fileName", "name", "path", "value", "_filePath", "_containerPath")) {
+                if (!map.containsKey(key)) {
+                    continue;
+                }
+                String candidate = extractFileNameFromAny(map.get(key));
+                if (StringUtils.hasText(candidate)) {
+                    return candidate;
+                }
+            }
+            for (Object entryValue : map.values()) {
+                String candidate = extractFileNameFromAny(entryValue);
+                if (StringUtils.hasText(candidate)) {
+                    return candidate;
+                }
+            }
+            return null;
+        }
+        return extractFileName(value.toString());
     }
 
     private String resolveImportTimeDefault(String writerType) {

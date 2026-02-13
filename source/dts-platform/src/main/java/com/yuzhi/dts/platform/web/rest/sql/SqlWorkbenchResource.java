@@ -1,11 +1,17 @@
 package com.yuzhi.dts.platform.web.rest.sql;
 
 import com.yuzhi.dts.platform.service.audit.AuditService;
+import com.yuzhi.dts.platform.service.sql.QueryDatasetService;
 import com.yuzhi.dts.platform.service.sql.SavedQueryService;
 import com.yuzhi.dts.platform.service.sql.SqlCatalogService;
 import com.yuzhi.dts.platform.service.sql.SqlExecutionService;
 import com.yuzhi.dts.platform.service.sql.SqlMetadataService;
 import com.yuzhi.dts.platform.service.sql.SqlValidationService;
+import com.yuzhi.dts.platform.service.sql.dto.CreateQueryDatasetFromExecutionRequest;
+import com.yuzhi.dts.platform.service.sql.dto.CreateQueryDatasetVersionRequest;
+import com.yuzhi.dts.platform.service.sql.dto.PublishQueryDatasetRequest;
+import com.yuzhi.dts.platform.service.sql.dto.QueryDatasetResponse;
+import com.yuzhi.dts.platform.service.sql.dto.QueryDatasetVersionResponse;
 import com.yuzhi.dts.platform.service.sql.dto.SavedQueryRequest;
 import com.yuzhi.dts.platform.service.sql.dto.SavedQueryResponse;
 import com.yuzhi.dts.platform.service.sql.dto.SqlCatalogNode;
@@ -29,6 +35,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -42,6 +49,7 @@ public class SqlWorkbenchResource {
     private final SqlExecutionService executionService;
     private final SqlMetadataService metadataService;
     private final SavedQueryService savedQueryService;
+    private final QueryDatasetService queryDatasetService;
     private final AuditService auditService;
 
     public SqlWorkbenchResource(
@@ -50,6 +58,7 @@ public class SqlWorkbenchResource {
         SqlExecutionService executionService,
         SqlMetadataService metadataService,
         SavedQueryService savedQueryService,
+        QueryDatasetService queryDatasetService,
         AuditService auditService
     ) {
         this.catalogService = catalogService;
@@ -57,6 +66,7 @@ public class SqlWorkbenchResource {
         this.executionService = executionService;
         this.metadataService = metadataService;
         this.savedQueryService = savedQueryService;
+        this.queryDatasetService = queryDatasetService;
         this.auditService = auditService;
     }
 
@@ -95,9 +105,6 @@ public class SqlWorkbenchResource {
         return ApiResponses.ok(Boolean.TRUE);
     }
 
-    /**
-     * 列出数据源中的所有表
-     */
     @GetMapping("/tables/{datasourceId}")
     public ApiResponse<List<TableInfo>> listTables(@PathVariable UUID datasourceId, Principal principal) {
         List<TableInfo> tables = metadataService.listTables(datasourceId);
@@ -105,9 +112,6 @@ public class SqlWorkbenchResource {
         return ApiResponses.ok(tables);
     }
 
-    /**
-     * 列出表的列信息
-     */
     @GetMapping("/columns/{datasourceId}")
     public ApiResponse<List<Map<String, String>>> listColumns(
         @PathVariable UUID datasourceId,
@@ -120,11 +124,6 @@ public class SqlWorkbenchResource {
         return ApiResponses.ok(columns);
     }
 
-    // ==================== 保存的查询 ====================
-
-    /**
-     * 保存查询
-     */
     @PostMapping("/saved-queries")
     public ApiResponse<SavedQueryResponse> saveQuery(@RequestBody SavedQueryRequest request, Principal principal) {
         SavedQueryResponse response = savedQueryService.save(request, principal);
@@ -132,9 +131,6 @@ public class SqlWorkbenchResource {
         return ApiResponses.ok(response);
     }
 
-    /**
-     * 更新保存的查询
-     */
     @PutMapping("/saved-queries/{id}")
     public ApiResponse<SavedQueryResponse> updateQuery(
         @PathVariable UUID id,
@@ -146,27 +142,18 @@ public class SqlWorkbenchResource {
         return ApiResponses.ok(response);
     }
 
-    /**
-     * 获取所有保存的查询
-     */
     @GetMapping("/saved-queries")
     public ApiResponse<List<SavedQueryResponse>> listSavedQueries(Principal principal) {
         List<SavedQueryResponse> queries = savedQueryService.list(principal);
         return ApiResponses.ok(queries);
     }
 
-    /**
-     * 获取单个保存的查询
-     */
     @GetMapping("/saved-queries/{id}")
     public ApiResponse<SavedQueryResponse> getSavedQuery(@PathVariable UUID id) {
         SavedQueryResponse response = savedQueryService.get(id);
         return ApiResponses.ok(response);
     }
 
-    /**
-     * 删除保存的查询
-     */
     @DeleteMapping("/saved-queries/{id}")
     public ApiResponse<Boolean> deleteSavedQuery(@PathVariable UUID id, Principal principal) {
         savedQueryService.delete(id, principal);
@@ -174,11 +161,64 @@ public class SqlWorkbenchResource {
         return ApiResponses.ok(Boolean.TRUE);
     }
 
-    // ==================== 审计日志 ====================
+    @GetMapping("/query-datasets")
+    public ApiResponse<List<QueryDatasetResponse>> listQueryDatasets(
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        return ApiResponses.ok(queryDatasetService.list(activeDept));
+    }
 
-    /**
-     * 记录复制操作的审计日志
-     */
+    @GetMapping("/query-datasets/{id}/versions")
+    public ApiResponse<List<QueryDatasetVersionResponse>> listQueryDatasetVersions(
+        @PathVariable UUID id,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        return ApiResponses.ok(queryDatasetService.listVersions(id, activeDept));
+    }
+
+    @PostMapping("/query-datasets/from-execution/{executionId}")
+    public ApiResponse<QueryDatasetResponse> createQueryDatasetFromExecution(
+        @PathVariable UUID executionId,
+        @RequestBody(required = false) CreateQueryDatasetFromExecutionRequest request,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        QueryDatasetResponse response = queryDatasetService.createFromExecution(executionId, request, activeDept);
+        auditService.audit("CREATE", "sql.workbench.query-dataset", response.id().toString());
+        return ApiResponses.ok(response);
+    }
+
+    @PostMapping("/query-datasets/{id}/versions")
+    public ApiResponse<QueryDatasetVersionResponse> createQueryDatasetVersion(
+        @PathVariable UUID id,
+        @RequestBody CreateQueryDatasetVersionRequest request,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        QueryDatasetVersionResponse response = queryDatasetService.createVersion(id, request, activeDept);
+        auditService.audit("UPDATE", "sql.workbench.query-dataset.version", response.id().toString());
+        return ApiResponses.ok(response);
+    }
+
+    @PostMapping("/query-datasets/{id}/publish")
+    public ApiResponse<QueryDatasetVersionResponse> publishQueryDatasetVersion(
+        @PathVariable UUID id,
+        @RequestBody(required = false) PublishQueryDatasetRequest request,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        QueryDatasetVersionResponse response = queryDatasetService.publish(id, request, activeDept);
+        auditService.audit("PUBLISH", "sql.workbench.query-dataset", response.id().toString());
+        return ApiResponses.ok(response);
+    }
+
+    @PostMapping("/query-datasets/{id}/archive")
+    public ApiResponse<QueryDatasetResponse> archiveQueryDataset(
+        @PathVariable UUID id,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        QueryDatasetResponse response = queryDatasetService.archive(id, activeDept);
+        auditService.audit("ARCHIVE", "sql.workbench.query-dataset", response.id().toString());
+        return ApiResponses.ok(response);
+    }
+
     @PostMapping("/audit/copy")
     public ApiResponse<Boolean> auditCopy(@RequestBody Map<String, Object> payload, Principal principal) {
         String username = principal != null ? principal.getName() : "anonymous";

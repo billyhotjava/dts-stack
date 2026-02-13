@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Alert, Button, Card, Collapse, Divider, Form, Input, InputNumber, Modal, Radio, Select, Space, Steps, Switch, Table, Tag, Typography, Upload } from "antd";
+import { Alert, Button, Card, Collapse, Divider, Form, Input, InputNumber, Modal, Progress, Radio, Select, Space, Steps, Switch, Table, Tag, Typography, Upload } from "antd";
 import { SaveOutlined, InboxOutlined, PlusOutlined, DeleteOutlined } from "@ant-design/icons";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
@@ -10,8 +10,11 @@ import {
 	ingestionTaskAPI,
 	type DefaultDestinationStatus,
 	type FileUploadResult,
+	type IngestionConnectorCapabilityDTO,
+	type IngestionExecutionDTO,
 	type IngestionTaskDTO,
 	type TableInfo,
+	resolveExecutionPollIntervalMs,
 } from "@/api/ingestion";
 import dataSourcesService, { type ExcelImportErrorRow, type InfraDataSource } from "@/api/services/dataSourcesService";
 
@@ -76,6 +79,73 @@ const JDBC_READER_BY_URL: Record<string, string> = {
 const TABLE_PLACEHOLDER = "${table}";
 
 const normalizeText = (value?: string) => String(value || "").trim();
+
+type AsyncRunProgressStatus = "active" | "success" | "exception";
+
+type AsyncRunProgressView = {
+	progress: number;
+	status: AsyncRunProgressStatus;
+	stage: string;
+	detail: string;
+	terminal: boolean;
+};
+
+const resolveCreatedTaskId = (payload: any): number | undefined => {
+	const candidate = payload?.task?.id ?? payload?.taskId ?? payload?.id ?? payload?.task?.taskId;
+	const value = Number(candidate);
+	return Number.isFinite(value) && value > 0 ? value : undefined;
+};
+
+const mapExecutionToProgressView = (
+	execution: IngestionExecutionDTO | null,
+	elapsedMs: number
+): AsyncRunProgressView => {
+	if (!execution) {
+		const dynamicProgress = Math.min(45, 15 + Math.floor(elapsedMs / 5000) * 5);
+		return {
+			progress: dynamicProgress,
+			status: "active",
+			stage: "等待执行记录",
+			detail: "任务已提交，系统正在准备 DAG 和作业参数。",
+			terminal: false,
+		};
+	}
+	const rawStatus = normalizeText(execution.status).toLowerCase();
+	if (rawStatus === "success") {
+		return {
+			progress: 100,
+			status: "success",
+			stage: "执行成功",
+			detail: "入湖任务已执行完成。",
+			terminal: true,
+		};
+	}
+	if (rawStatus === "failed" || rawStatus === "error") {
+		return {
+			progress: 100,
+			status: "exception",
+			stage: "执行失败",
+			detail: normalizeText(execution.errorMessage) || "任务执行失败，请查看日志定位原因。",
+			terminal: true,
+		};
+	}
+	if (rawStatus === "preparing") {
+		return {
+			progress: 55,
+			status: "active",
+			stage: "准备执行",
+			detail: "正在生成/校验 Addax 作业并等待 DAG 就绪。",
+			terminal: false,
+		};
+	}
+	return {
+		progress: 80,
+		status: "active",
+		stage: "执行中",
+		detail: "已触发执行，正在同步运行状态。",
+		terminal: false,
+	};
+};
 
 const normalizeIdentifier = (value?: string) => {
 	const text = normalizeText(value).toLowerCase();
@@ -589,6 +659,33 @@ const buildWriterConfig = (values: Record<string, any>) => {
 	return mergeConfig(config, extra);
 };
 
+const buildSyncConfigFromValues = (
+	values: Record<string, any>,
+	isFileSource: boolean,
+): Record<string, any> | undefined => {
+	if (isFileSource) {
+		return undefined;
+	}
+	const syncMode = normalizeText(values.syncMode) || "full_refresh";
+	if (syncMode !== "incremental") {
+		return undefined;
+	}
+	const incrementalColumn = normalizeText(values.incrementalColumn);
+	if (!incrementalColumn) {
+		throw new Error("增量同步请填写增量列");
+	}
+	const incrementalType = normalizeText(values.incrementalType) || "datetime";
+	const initialWatermark = normalizeText(values.initialWatermark);
+	const config: Record<string, any> = {
+		incrementalColumn,
+		incrementalType,
+	};
+	if (initialWatermark) {
+		config.initialWatermark = initialWatermark;
+	}
+	return config;
+};
+
 const buildJobPreview = (values: Record<string, any>, editorMode?: string, readerFallback?: string) => {
 	const jobConfig = parseJson(values.jobConfig, "作业参数") as Record<string, any> | undefined;
 	if (jobConfig) return jobConfig;
@@ -725,6 +822,7 @@ const clearDraft = () => {
 
 const mapTaskToForm = (task: IngestionTaskDTO) => {
 	const sourceConfig = tryParseJson(task.sourceConfig) || {};
+	const syncConfig = tryParseJson(task.syncConfig) || {};
 	const rawDestinationConfig = tryParseJson(task.destinationConfig);
 	const destinationConfig = rawDestinationConfig || {};
 	const addaxConfig = tryParseJson(task.addaxConfig) as Record<string, any> | undefined;
@@ -781,6 +879,9 @@ const mapTaskToForm = (task: IngestionTaskDTO) => {
 		editorMode: isFileReader ? "visual" : "json",
 		sourceCategory: isFileReader ? "file" : "database",
 		syncMode: task.syncMode || "full_refresh",
+		incrementalColumn: normalizeText(syncConfig.incrementalColumn) || undefined,
+		incrementalType: normalizeText(syncConfig.incrementalType) || "datetime",
+		initialWatermark: normalizeText(syncConfig.initialWatermark) || undefined,
 		tableSelectionMode: hasMapping ? "manual" : "all",
 		airflowEnabled: task.airflowEnabled ?? true,
 		runNow: false,
@@ -870,6 +971,7 @@ export default function TransformCreatePage() {
 	const [currentStep, setCurrentStep] = useState(0);
 	const [dataSources, setDataSources] = useState<InfraDataSource[]>([]);
 	const [loadingDataSources, setLoadingDataSources] = useState(false);
+	const [connectorCapabilities, setConnectorCapabilities] = useState<IngestionConnectorCapabilityDTO[]>([]);
 	const [sqlModels, setSqlModels] = useState<Array<{ id?: string; name?: string; alias?: string }>>([]);
 	const [loadingSqlModels, setLoadingSqlModels] = useState(false);
 	const [fileUploadResult, setFileUploadResult] = useState<FileUploadResult | null>(null);
@@ -882,6 +984,19 @@ export default function TransformCreatePage() {
 	const [errorPreviewLoading, setErrorPreviewLoading] = useState(false);
 	const [errorPreviewRows, setErrorPreviewRows] = useState<ExcelImportErrorRow[]>([]);
 	const [errorPreviewLimit, setErrorPreviewLimit] = useState(50);
+	const [asyncRunModalOpen, setAsyncRunModalOpen] = useState(false);
+	const [asyncRunTaskId, setAsyncRunTaskId] = useState<number | null>(null);
+	const [asyncRunTaskName, setAsyncRunTaskName] = useState("");
+	const [asyncRunExecution, setAsyncRunExecution] = useState<IngestionExecutionDTO | null>(null);
+	const [asyncRunProgress, setAsyncRunProgress] = useState<AsyncRunProgressView>({
+		progress: 0,
+		status: "active",
+		stage: "等待提交",
+		detail: "",
+		terminal: false,
+	});
+	const asyncRunPollTimerRef = useRef<number | null>(null);
+	const asyncRunStartedAtRef = useRef<number>(0);
 	const [form] = Form.useForm();
 	const lastAutoDiscoveryKeyRef = useRef("");
 	const router = useRouter();
@@ -891,6 +1006,7 @@ export default function TransformCreatePage() {
 	const userInfo = useUserInfo() as any;
 	const editorMode = Form.useWatch("editorMode", form);
 	const [sourceCategory, setSourceCategory] = useState<string>("database");
+	const syncMode = Form.useWatch("syncMode", form);
 	const tableSelectionMode = Form.useWatch("tableSelectionMode", form);
 	const formValues = Form.useWatch([], form);
 	const selectedTablesValue = Form.useWatch("selectedTables", form);
@@ -930,11 +1046,97 @@ export default function TransformCreatePage() {
 			runNow: true,
 			readerColumns: "*",
 			writerColumns: "*",
+			incrementalType: "datetime",
 			syncPrefix: "",
 			fileAutoId: true,
 		}),
 		[]
 	);
+
+	const stopAsyncRunPolling = () => {
+		if (asyncRunPollTimerRef.current !== null) {
+			window.clearInterval(asyncRunPollTimerRef.current);
+			asyncRunPollTimerRef.current = null;
+		}
+	};
+
+	useEffect(() => {
+		return () => {
+			if (asyncRunPollTimerRef.current !== null) {
+				window.clearInterval(asyncRunPollTimerRef.current);
+				asyncRunPollTimerRef.current = null;
+			}
+		};
+	}, []);
+
+	const closeAsyncRunModal = () => {
+		stopAsyncRunPolling();
+		setAsyncRunModalOpen(false);
+	};
+
+	const startAsyncRunProgress = (taskId: number, taskName: string, pollIntervalMs?: number) => {
+		stopAsyncRunPolling();
+		asyncRunStartedAtRef.current = Date.now();
+		setAsyncRunTaskId(taskId);
+		setAsyncRunTaskName(taskName);
+		setAsyncRunExecution(null);
+		setAsyncRunModalOpen(true);
+		setAsyncRunProgress({
+			progress: 10,
+			status: "active",
+			stage: "任务已提交",
+			detail: "正在后台触发执行。",
+			terminal: false,
+		});
+
+		const pollExecution = async () => {
+			const elapsedMs = Date.now() - asyncRunStartedAtRef.current;
+			if (elapsedMs > 5 * 60 * 1000) {
+				stopAsyncRunPolling();
+				setAsyncRunProgress({
+					progress: 100,
+					status: "exception",
+					stage: "状态同步超时",
+					detail: "超出等待时间，请进入任务详情页继续查看执行状态。",
+					terminal: true,
+				});
+				return;
+			}
+			try {
+				const latest = await ingestionTaskAPI.getLatestExecution(taskId);
+				setAsyncRunExecution(latest);
+				const nextProgress = mapExecutionToProgressView(latest, elapsedMs);
+				setAsyncRunProgress(nextProgress);
+				if (nextProgress.terminal) {
+					stopAsyncRunPolling();
+				}
+			} catch {
+				setAsyncRunProgress((prev) => ({
+					...prev,
+					detail: "状态同步中，稍后自动重试。",
+				}));
+			}
+		};
+
+		void pollExecution();
+		asyncRunPollTimerRef.current = window.setInterval(() => {
+			void pollExecution();
+		}, resolveExecutionPollIntervalMs(pollIntervalMs));
+	};
+
+	const handleCreateTaskResult = (result: any, runNow: boolean, taskName: string) => {
+		const createdTaskId = resolveCreatedTaskId(result);
+		const pollHint = Number(result?.execution?.pollIntervalMs ?? result?.pollIntervalMs);
+		clearDraft();
+		setHasDraft(false);
+		if (runNow && createdTaskId) {
+			toast.success("任务已提交，正在后台执行");
+			startAsyncRunProgress(createdTaskId, taskName, Number.isFinite(pollHint) ? pollHint : undefined);
+			return;
+		}
+		toast.success("入湖任务已提交");
+		router.push("/explore/etl/transform");
+	};
 
 	const syncSelectedTablesToForm = (tables: string[], opts?: { silent?: boolean }) => {
 		const nextTables = mergeTableSelections(tables);
@@ -1001,6 +1203,18 @@ export default function TransformCreatePage() {
 			}
 		};
 		loadSources();
+	}, []);
+
+	useEffect(() => {
+		const loadCapabilities = async () => {
+			try {
+				const rows = await ingestionTaskAPI.getConnectorCapabilities();
+				setConnectorCapabilities(Array.isArray(rows) ? rows : []);
+			} catch {
+				setConnectorCapabilities([]);
+			}
+		};
+		void loadCapabilities();
 	}, []);
 
 	useEffect(() => {
@@ -1141,6 +1355,33 @@ export default function TransformCreatePage() {
 	}, [currentStep, selectedTableKeys, form]);
 
 	const isFileFlow = sourceCategory === "file";
+	const resolvedConnectorType = useMemo(() => {
+		if (isFileFlow) return "file";
+		const sourceType = normalizeType(selectedDataSource?.type);
+		if (sourceType === "airbyte") return "airbyte";
+		return "addax";
+	}, [isFileFlow, selectedDataSource?.type]);
+	const activeConnectorCapability = useMemo(
+		() =>
+			connectorCapabilities.find(
+				(item) => normalizeType(item.connectorType) === normalizeType(resolvedConnectorType)
+			) || null,
+		[connectorCapabilities, resolvedConnectorType]
+	);
+	const activeCapabilitySet = useMemo(() => {
+		const set = new Set<string>();
+		(activeConnectorCapability?.capabilities || []).forEach((item) => {
+			const text = normalizeText(item);
+			if (text) set.add(text.toUpperCase());
+		});
+		return set;
+	}, [activeConnectorCapability]);
+	const supportsIncremental = useMemo(() => {
+		if (isFileFlow) return false;
+		if (!activeCapabilitySet.size) return true;
+		return activeCapabilitySet.has("INCREMENTAL");
+	}, [activeCapabilitySet, isFileFlow]);
+	const supportsCdc = useMemo(() => activeCapabilitySet.has("CDC"), [activeCapabilitySet]);
 	const dbStepItems = useMemo(
 		() => [
 			{ key: "basic", title: "基础信息" },
@@ -1163,6 +1404,21 @@ export default function TransformCreatePage() {
 	useEffect(() => {
 		setCurrentStep(0);
 	}, [sourceCategory]);
+
+	useEffect(() => {
+		if (!isFileFlow) return;
+		if ((normalizeText(syncMode) || "full_refresh") === "incremental") {
+			form.setFieldValue("syncMode", "full_refresh");
+		}
+	}, [isFileFlow, syncMode, form]);
+
+	useEffect(() => {
+		const currentMode = normalizeText(syncMode) || "full_refresh";
+		if (currentMode === "incremental" && !supportsIncremental) {
+			form.setFieldValue("syncMode", "full_refresh");
+			toast.warning("当前连接器不支持增量同步，已切换为全量同步");
+		}
+	}, [form, supportsIncremental, syncMode]);
 
 	// Load draft on mount
 	useEffect(() => {
@@ -1325,7 +1581,11 @@ export default function TransformCreatePage() {
 					config: readerConfig || {},
 				},
 				sync: {
+					mode: normalizeText(values.syncMode) || "full_refresh",
 					prefix: normalizeText(values.syncPrefix) || undefined,
+					incrementalColumn: normalizeText(values.incrementalColumn) || undefined,
+					incrementalType: normalizeText(values.incrementalType) || undefined,
+					initialWatermark: normalizeText(values.initialWatermark) || undefined,
 				},
 				streams: {
 					selection: selectionMode,
@@ -1721,6 +1981,7 @@ export default function TransformCreatePage() {
 			if (isFileSource && !fileUploadResult) {
 				throw new Error("请先上传文件");
 			}
+			const syncConfig = buildSyncConfigFromValues(mergedValues, Boolean(isFileSource));
 			let resolvedReaderType = normalizeReaderType(mergedValues.readerType);
 			if (isFileSource) {
 				resolvedReaderType = "txtfilereader";
@@ -1822,7 +2083,8 @@ export default function TransformCreatePage() {
 						sourceConfig: readerConfig,
 						destinationType: defaultWriterType,
 						destinationConfig: writerConfig,
-						syncMode: mergedValues.syncMode || "full_refresh",
+						syncMode: "full_refresh",
+						syncConfig: null as any,
 						syncPrefix: normalizeText(mergedValues.syncPrefix) || undefined,
 						addaxConfig: (jobConfig as Record<string, any>) || editingTask?.addaxConfig,
 						airflowEnabled: Boolean(airflowEnabled),
@@ -1849,7 +2111,7 @@ export default function TransformCreatePage() {
 							config: writerConfig,
 						},
 						sync: {
-							mode: mergedValues.syncMode || "full_refresh",
+							mode: "full_refresh",
 							prefix: normalizeText(mergedValues.syncPrefix) || undefined,
 						},
 						streams: {
@@ -1864,11 +2126,8 @@ export default function TransformCreatePage() {
 						runNow: Boolean(mergedValues.runNow),
 						jobConfig: jobConfig || undefined,
 					};
-					await createIngestionTask(payload);
-					clearDraft();
-					setHasDraft(false);
-					toast.success("入湖任务已提交");
-					router.push("/explore/etl/transform");
+					const createResult = await createIngestionTask(payload);
+					handleCreateTaskResult(createResult, Boolean(payload.runNow), taskName);
 				}
 				return;
 			}
@@ -1969,6 +2228,7 @@ export default function TransformCreatePage() {
 					destinationType: defaultWriterType,
 					destinationConfig: writerConfig as Record<string, any> | undefined,
 					syncMode: mergedValues.syncMode || editingTask?.syncMode || "full_refresh",
+					syncConfig: (syncConfig ?? null) as any,
 					syncPrefix: normalizeText(mergedValues.syncPrefix) || undefined,
 					addaxConfig: (jobConfig as Record<string, any>) || editingTask?.addaxConfig,
 					airflowEnabled: Boolean(mergedValues.airflowEnabled),
@@ -1998,6 +2258,9 @@ export default function TransformCreatePage() {
 					sync: {
 						mode: mergedValues.syncMode || "full_refresh",
 						prefix: normalizeText(mergedValues.syncPrefix) || undefined,
+						incrementalColumn: syncConfig?.incrementalColumn,
+						incrementalType: syncConfig?.incrementalType,
+						initialWatermark: syncConfig?.initialWatermark,
 					},
 					streams: {
 						selection: selectionMode,
@@ -2016,11 +2279,8 @@ export default function TransformCreatePage() {
 					runNow: Boolean(mergedValues.runNow),
 					jobConfig: jobConfig || undefined,
 				};
-				await createIngestionTask(payload);
-				clearDraft();
-				setHasDraft(false);
-				toast.success("入湖任务已提交");
-				router.push("/explore/etl/transform");
+				const createResult = await createIngestionTask(payload);
+				handleCreateTaskResult(createResult, Boolean(payload.runNow), taskName);
 			}
 		} catch (err: any) {
 			toast.error(err?.message || (isEdit ? "更新入湖任务失败" : "创建入湖任务失败"));
@@ -2165,6 +2425,14 @@ export default function TransformCreatePage() {
 											<Radio.Button value="incremental" disabled>增量同步</Radio.Button>
 										</Radio.Group>
 									</Form.Item>
+							<Space size={[8, 8]} wrap className="mb-3">
+								<Text type="secondary">当前连接器能力：</Text>
+								{["FULL", "INCREMENTAL", "CDC", "BACKFILL"].map((cap) => (
+									<Tag key={cap} color={activeCapabilitySet.has(cap) ? "green" : "default"}>
+										{cap}
+									</Tag>
+								))}
+							</Space>
 									<Form.Item name="sourceCategory" label="数据来源">
 										<Radio.Group onChange={(e) => setSourceCategory(e.target.value)}>
 											<Radio.Button value="database">数据库</Radio.Button>
@@ -2753,12 +3021,46 @@ export default function TransformCreatePage() {
 									<Form.Item name="sourceSystem" label="源系统标识">
 										<Input placeholder="可选，例如：erp、crm（用于绑定 DAG）" />
 									</Form.Item>
-									<Form.Item name="syncMode" label="同步模式" tooltip="全量同步：每次执行前清空目标表后重新写入；增量同步：仅追加新数据（暂未实现）">
-										<Radio.Group>
-											<Radio.Button value="full_refresh">全量同步</Radio.Button>
-											<Radio.Button value="incremental" disabled>增量同步</Radio.Button>
-										</Radio.Group>
-									</Form.Item>
+									<Form.Item name="syncMode" label="同步模式" tooltip="全量同步：每次执行前清空目标表后重新写入；增量同步：按水位列拉取新增数据（当前仅支持单表）">
+								<Radio.Group>
+									<Radio.Button value="full_refresh">全量同步</Radio.Button>
+									<Radio.Button value="incremental" disabled={!supportsIncremental}>增量同步</Radio.Button>
+									<Radio.Button value="cdc" disabled>实时同步(CDC)</Radio.Button>
+								</Radio.Group>
+							</Form.Item>
+							<Space size={[8, 8]} wrap className="mb-3">
+								<Text type="secondary">当前连接器能力：</Text>
+								{["FULL", "INCREMENTAL", "CDC", "BACKFILL"].map((cap) => (
+									<Tag key={cap} color={activeCapabilitySet.has(cap) ? "green" : "default"}>
+										{cap}
+									</Tag>
+								))}
+								{!supportsIncremental ? <Text type="warning">当前连接器不支持增量</Text> : null}
+								{supportsCdc ? <Text type="secondary">可预留 CDC 能力</Text> : null}
+							</Space>
+									{(normalizeText(syncMode) || "full_refresh") === "incremental" ? (
+										<div className="grid gap-4 md:grid-cols-3">
+											<Form.Item
+												name="incrementalColumn"
+												label="增量列"
+												rules={[{ required: true, message: "请输入增量列名" }]}
+											>
+												<Input placeholder="例如 updated_at 或 id" />
+											</Form.Item>
+											<Form.Item name="incrementalType" label="增量类型">
+												<Select
+													options={[
+														{ label: "datetime", value: "datetime" },
+														{ label: "number", value: "number" },
+														{ label: "string", value: "string" },
+													]}
+												/>
+											</Form.Item>
+											<Form.Item name="initialWatermark" label="初始水位（可选）">
+												<Input placeholder="首次运行起点，如 2025-01-01 00:00:00" />
+											</Form.Item>
+										</div>
+									) : null}
 									<Form.Item name="sourceCategory" label="数据来源">
 										<Radio.Group onChange={(e) => setSourceCategory(e.target.value)}>
 											<Radio.Button value="database">数据库</Radio.Button>
@@ -3328,6 +3630,78 @@ export default function TransformCreatePage() {
 						{ title: "错误信息", dataIndex: "message", ellipsis: true },
 					]}
 				/>
+			</Modal>
+			<Modal
+				title="任务启动进度"
+				open={asyncRunModalOpen}
+				onCancel={closeAsyncRunModal}
+				maskClosable={false}
+				footer={
+					<Space>
+						{asyncRunTaskId ? (
+							<Button
+								onClick={() => {
+									closeAsyncRunModal();
+									router.push(`/explore/etl/transform/${asyncRunTaskId}`);
+								}}
+							>
+								查看任务详情
+							</Button>
+						) : null}
+						{!asyncRunProgress.terminal ? (
+							<Button
+								onClick={() => {
+									closeAsyncRunModal();
+									router.push("/explore/etl/transform");
+								}}
+							>
+								后台查看列表
+							</Button>
+						) : null}
+						<Button type="primary" onClick={closeAsyncRunModal}>
+							{asyncRunProgress.terminal ? "关闭" : "最小化"}
+						</Button>
+					</Space>
+				}
+				width={640}
+			>
+				<Space direction="vertical" size={16} className="w-full">
+					<div className="flex items-center justify-between">
+						<Text>任务：{asyncRunTaskName || "-"}</Text>
+						{asyncRunExecution?.executionId ? (
+							<Tag color="blue">执行ID: {asyncRunExecution.executionId}</Tag>
+						) : null}
+					</div>
+					<Progress percent={asyncRunProgress.progress} status={asyncRunProgress.status} />
+					<Alert
+						type={
+							asyncRunProgress.status === "success"
+								? "success"
+								: asyncRunProgress.status === "exception"
+									? "error"
+									: "info"
+						}
+						showIcon
+						message={asyncRunProgress.stage}
+						description={asyncRunProgress.detail}
+					/>
+					{asyncRunExecution ? (
+						<Space size={8}>
+							<Text type="secondary">最新状态：</Text>
+							<Tag
+								color={
+									normalizeText(asyncRunExecution.status).toLowerCase() === "success"
+										? "success"
+										: normalizeText(asyncRunExecution.status).toLowerCase() === "failed"
+											? "error"
+											: "processing"
+								}
+							>
+								{normalizeText(asyncRunExecution.status) || "running"}
+							</Tag>
+						</Space>
+					) : null}
+				</Space>
 			</Modal>
 		</div>
 	);

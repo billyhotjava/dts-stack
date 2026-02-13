@@ -32,6 +32,7 @@ public class AirflowExecutionSyncService {
     private final AirflowProperties properties;
     private final IngestionSettingsService settingsService;
     private final PlatformInfraClient platformInfraClient;
+    private final IncrementalSyncService incrementalSyncService;
     private final AuditService auditService;
 
     public AirflowExecutionSyncService(
@@ -41,6 +42,7 @@ public class AirflowExecutionSyncService {
         AirflowProperties properties,
         IngestionSettingsService settingsService,
         PlatformInfraClient platformInfraClient,
+        IncrementalSyncService incrementalSyncService,
         AuditService auditService
     ) {
         this.executionRepository = executionRepository;
@@ -49,6 +51,7 @@ public class AirflowExecutionSyncService {
         this.properties = properties;
         this.settingsService = settingsService;
         this.platformInfraClient = platformInfraClient;
+        this.incrementalSyncService = incrementalSyncService;
         this.auditService = auditService;
     }
 
@@ -110,6 +113,7 @@ public class AirflowExecutionSyncService {
         taskRepository.save(task);
         LOG.info("[airflow] synced execution {} status={}", execution.getId(), status);
         if ("success".equalsIgnoreCase(status)) {
+            incrementalSyncService.updateCheckpointOnSuccess(task, execution);
             triggerDbtIfConfigured(task, execution);
         }
     }

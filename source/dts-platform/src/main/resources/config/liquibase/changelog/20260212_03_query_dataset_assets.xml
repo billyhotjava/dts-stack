@@ -1,0 +1,180 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260212_03_query_dataset_asset_table" author="platform">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="query_dataset_asset"/>
+            </not>
+        </preConditions>
+        <createTable tableName="query_dataset_asset">
+            <column name="id" type="uuid">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="name" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="description" type="text"/>
+            <column name="source_datasource_id" type="uuid"/>
+            <column name="source_datasource_name" type="varchar(256)"/>
+            <column name="owner_dept" type="varchar(64)"/>
+            <column name="status" type="varchar(32)" defaultValue="DRAFT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="refresh_strategy" type="varchar(32)" defaultValue="MANUAL">
+                <constraints nullable="false"/>
+            </column>
+            <column name="sql_text" type="text">
+                <constraints nullable="false"/>
+            </column>
+            <column name="parameters_json" type="text"/>
+            <column name="latest_execution_id" type="uuid"/>
+            <column name="latest_result_set_id" type="uuid"/>
+            <column name="published_version" type="int"/>
+            <column name="enabled" type="boolean" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_by" type="varchar(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+
+        <createIndex tableName="query_dataset_asset" indexName="idx_query_dataset_asset_status_enabled">
+            <column name="status"/>
+            <column name="enabled"/>
+            <column name="last_modified_date"/>
+        </createIndex>
+        <createIndex tableName="query_dataset_asset" indexName="idx_query_dataset_asset_owner_dept">
+            <column name="owner_dept"/>
+        </createIndex>
+        <createIndex tableName="query_dataset_asset" indexName="idx_query_dataset_asset_created_by">
+            <column name="created_by"/>
+            <column name="last_modified_date"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="20260212_03_query_dataset_version_table" author="platform">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="query_dataset_version"/>
+            </not>
+        </preConditions>
+        <createTable tableName="query_dataset_version">
+            <column name="id" type="uuid">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="dataset_id" type="uuid">
+                <constraints nullable="false"/>
+            </column>
+            <column name="version_no" type="int">
+                <constraints nullable="false"/>
+            </column>
+            <column name="status" type="varchar(32)" defaultValue="DRAFT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="sql_text" type="text">
+                <constraints nullable="false"/>
+            </column>
+            <column name="change_summary" type="varchar(1024)"/>
+            <column name="result_set_id" type="uuid"/>
+            <column name="execution_id" type="uuid"/>
+            <column name="published_at" type="timestamp"/>
+            <column name="created_by" type="varchar(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+
+        <addUniqueConstraint
+            tableName="query_dataset_version"
+            columnNames="dataset_id,version_no"
+            constraintName="uk_query_dataset_version_dataset_version"/>
+
+        <addForeignKeyConstraint
+            baseTableName="query_dataset_version"
+            baseColumnNames="dataset_id"
+            referencedTableName="query_dataset_asset"
+            referencedColumnNames="id"
+            constraintName="fk_query_dataset_version_dataset"
+            onDelete="CASCADE"/>
+
+        <createIndex tableName="query_dataset_version" indexName="idx_query_dataset_version_dataset_status">
+            <column name="dataset_id"/>
+            <column name="status"/>
+            <column name="version_no"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="20260212_03_bi_report_link_dataset_binding" author="platform">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <columnExists tableName="bi_report_link" columnName="query_dataset_id"/>
+            </not>
+        </preConditions>
+        <addColumn tableName="bi_report_link">
+            <column name="query_dataset_id" type="uuid"/>
+            <column name="query_dataset_version" type="int"/>
+            <column name="expires_at" type="timestamp"/>
+            <column name="last_visited_at" type="timestamp"/>
+        </addColumn>
+        <createIndex tableName="bi_report_link" indexName="idx_bi_report_link_query_dataset">
+            <column name="query_dataset_id"/>
+            <column name="query_dataset_version"/>
+        </createIndex>
+        <createIndex tableName="bi_report_link" indexName="idx_bi_report_link_expires_at">
+            <column name="expires_at"/>
+            <column name="enabled"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="20260212_03_model_package_import_audit" author="platform">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="model_package_import_audit"/>
+            </not>
+        </preConditions>
+        <createTable tableName="model_package_import_audit">
+            <column name="id" type="uuid">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="project_name" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="package_name" type="varchar(256)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="checksum" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="import_mode" type="varchar(32)"/>
+            <column name="status" type="varchar(32)" defaultValue="SUCCESS">
+                <constraints nullable="false"/>
+            </column>
+            <column name="conflict_summary" type="text"/>
+            <column name="result_summary" type="text"/>
+            <column name="created_by" type="varchar(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+
+        <createIndex tableName="model_package_import_audit" indexName="idx_model_pkg_import_project_created">
+            <column name="project_name"/>
+            <column name="created_date"/>
+        </createIndex>
+        <createIndex tableName="model_package_import_audit" indexName="idx_model_pkg_import_checksum">
+            <column name="checksum"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

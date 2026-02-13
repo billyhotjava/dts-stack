@@ -115,6 +115,18 @@ public class IngestionServiceClient {
         return exchangeObject("/api/ingestion/metadata/tables", HttpMethod.POST, payload, null, longRestTemplate);
     }
 
+    public ApiResponse<Object> listConnectorCapabilities() {
+        return exchangeObject("/api/ingestion/connectors/capabilities", HttpMethod.GET, null, null, restTemplate);
+    }
+
+    public ApiResponse<Object> getConnectorCapability(String connectorType) {
+        return exchangeObject("/api/ingestion/connectors/capabilities/" + connectorType, HttpMethod.GET, null, null, restTemplate);
+    }
+
+    public ApiResponse<Object> getRealtimeStatus(Long taskId) {
+        return exchangeObject("/api/ingestion/tasks/" + taskId + "/realtime-status", HttpMethod.GET, null, null, restTemplate);
+    }
+
     public ApiResponse<Map<String, Object>> listChangeLogs(Map<String, ?> params) {
         return exchangeTask("/api/ingestion/tasks/changes", HttpMethod.GET, null, params);
     }

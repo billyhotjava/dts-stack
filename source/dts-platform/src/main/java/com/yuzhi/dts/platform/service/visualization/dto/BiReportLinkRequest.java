@@ -29,6 +29,12 @@ public class BiReportLinkRequest {
 
     private Integer sortOrder;
 
+    private String queryDatasetId;
+
+    private Integer queryDatasetVersion;
+
+    private String expiresAt;
+
     public String getCode() {
         return code;
     }
@@ -108,5 +114,28 @@ public class BiReportLinkRequest {
     public void setSortOrder(Integer sortOrder) {
         this.sortOrder = sortOrder;
     }
-}
 
+    public String getQueryDatasetId() {
+        return queryDatasetId;
+    }
+
+    public void setQueryDatasetId(String queryDatasetId) {
+        this.queryDatasetId = queryDatasetId;
+    }
+
+    public Integer getQueryDatasetVersion() {
+        return queryDatasetVersion;
+    }
+
+    public void setQueryDatasetVersion(Integer queryDatasetVersion) {
+        this.queryDatasetVersion = queryDatasetVersion;
+    }
+
+    public String getExpiresAt() {
+        return expiresAt;
+    }
+
+    public void setExpiresAt(String expiresAt) {
+        this.expiresAt = expiresAt;
+    }
+}

@@ -158,28 +158,32 @@ public class AdminUserService {
     @Transactional(propagation = Propagation.REQUIRED)
     public Page<AdminKeycloakUser> listSnapshots(int page, int size, String keyword, Integer mdmStatus) {
         int safePage = Math.max(page, 0);
-        int safeSize = Math.max(size, 1);
+        int safeSize = Math.min(Math.max(size, 1), 100);
+        String normalizedKeyword = StringUtils.trimToEmpty(keyword);
+        if (normalizedKeyword.length() > 0 && normalizedKeyword.length() < 2) {
+            normalizedKeyword = "";
+        }
         Pageable pageable = PageRequest.of(safePage, safeSize, Sort.by(Sort.Direction.ASC, "username"));
         Page<AdminKeycloakUser> result;
         LOG.debug(
             "listSnapshots start page={} size={} keyword='{}' mdmStatus={}",
             safePage,
             safeSize,
-            StringUtils.trimToEmpty(keyword),
+            normalizedKeyword,
             mdmStatus
         );
-        boolean hasKeyword = StringUtils.isNotBlank(keyword);
+        boolean hasKeyword = StringUtils.isNotBlank(normalizedKeyword);
         boolean hasStatus = mdmStatus != null;
         if (hasKeyword && hasStatus) {
             result =
                 userRepository.findByUsernameContainingIgnoreCaseAndMdmEnabledExcludingUsernames(
-                    keyword.trim(),
+                    normalizedKeyword,
                     mdmStatus.intValue(),
                     HIDDEN_USERNAMES_IN_USERLIST,
                     pageable
                 );
         } else if (hasKeyword) {
-            result = userRepository.findByUsernameContainingIgnoreCaseExcludingUsernames(keyword.trim(), HIDDEN_USERNAMES_IN_USERLIST, pageable);
+            result = userRepository.findByUsernameContainingIgnoreCaseExcludingUsernames(normalizedKeyword, HIDDEN_USERNAMES_IN_USERLIST, pageable);
         } else if (hasStatus) {
             result = userRepository.findByMdmEnabledExcludingUsernames(mdmStatus.intValue(), HIDDEN_USERNAMES_IN_USERLIST, pageable);
         } else {
@@ -194,14 +198,14 @@ public class AdminUserService {
             if (hasKeyword && hasStatus) {
                 result =
                     userRepository.findByUsernameContainingIgnoreCaseAndMdmEnabledExcludingUsernames(
-                        keyword.trim(),
+                        normalizedKeyword,
                         mdmStatus.intValue(),
                         HIDDEN_USERNAMES_IN_USERLIST,
                         pageable
                     );
             } else if (hasKeyword) {
                 result =
-                    userRepository.findByUsernameContainingIgnoreCaseExcludingUsernames(keyword.trim(), HIDDEN_USERNAMES_IN_USERLIST, pageable);
+                    userRepository.findByUsernameContainingIgnoreCaseExcludingUsernames(normalizedKeyword, HIDDEN_USERNAMES_IN_USERLIST, pageable);
             } else if (hasStatus) {
                 result =
                     userRepository.findByMdmEnabledExcludingUsernames(mdmStatus.intValue(), HIDDEN_USERNAMES_IN_USERLIST, pageable);
@@ -209,22 +213,22 @@ public class AdminUserService {
                 result = userRepository.findAllExcludingUsernames(HIDDEN_USERNAMES_IN_USERLIST, pageable);
             }
             LOG.info("user snapshots after refresh total={}", result.getTotalElements());
-        } else if (page == 0 && result.getNumberOfElements() < safeSize) {
-            // 数据量明显偏少时尝试补齐（兼容同步后快照缺失的场景）
+        } else if (!hasKeyword && !hasStatus && page == 0 && result.getNumberOfElements() < safeSize) {
+            // 仅在无过滤条件时做补齐，避免搜索场景触发全量同步导致卡顿
             LOG.info("user snapshots count={} (<pageSize={}), refreshing profiles+keycloak", result.getNumberOfElements(), safeSize);
             refreshSnapshotsFromProfiles();
             refreshSnapshotsFromKeycloak();
             if (hasKeyword && hasStatus) {
                 result =
                     userRepository.findByUsernameContainingIgnoreCaseAndMdmEnabledExcludingUsernames(
-                        keyword.trim(),
+                        normalizedKeyword,
                         mdmStatus.intValue(),
                         HIDDEN_USERNAMES_IN_USERLIST,
                         pageable
                     );
             } else if (hasKeyword) {
                 result =
-                    userRepository.findByUsernameContainingIgnoreCaseExcludingUsernames(keyword.trim(), HIDDEN_USERNAMES_IN_USERLIST, pageable);
+                    userRepository.findByUsernameContainingIgnoreCaseExcludingUsernames(normalizedKeyword, HIDDEN_USERNAMES_IN_USERLIST, pageable);
             } else if (hasStatus) {
                 result =
                     userRepository.findByMdmEnabledExcludingUsernames(mdmStatus.intValue(), HIDDEN_USERNAMES_IN_USERLIST, pageable);

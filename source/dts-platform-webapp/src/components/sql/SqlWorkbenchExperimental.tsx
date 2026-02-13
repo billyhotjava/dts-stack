@@ -5,6 +5,7 @@ import type { TableInfo, SqlResultPreview, SavedQueryResponse } from "@/api/sql-
 import {
 	auditCopy,
 	cancelSql,
+	createQueryDatasetFromExecution,
 	deleteSavedQuery,
 	getSqlStatus,
 	listSavedQueries,
@@ -121,6 +122,7 @@ const formatTime = (isoString: string) => {
 export const SqlWorkbenchExperimental = () => {
 	const [sqlText, setSqlText] = useState(DEFAULT_SQL);
 	const [isSubmitting, setIsSubmitting] = useState(false);
+	const [savingDataset, setSavingDataset] = useState(false);
 	const [executionId, setExecutionId] = useState<string | null>(null);
 
 	// 数据源
@@ -289,6 +291,29 @@ export const SqlWorkbenchExperimental = () => {
 			loadSavedQueries();
 		} catch {
 			toast.error("保存失败");
+		}
+	};
+
+	const handleSaveAsDataset = async () => {
+		if (!executionId) {
+			toast.error("请先执行查询并生成结果");
+			return;
+		}
+		const defaultName = "query_dataset_" + executionId.substring(0, 8);
+		const name = window.prompt("请输入数据集名称", defaultName);
+		if (!name || !name.trim()) return;
+		setSavingDataset(true);
+		try {
+			const created = await createQueryDatasetFromExecution(executionId, {
+				name: name.trim(),
+				refreshStrategy: "MANUAL",
+			});
+			toast.success("已沉淀数据集: " + created.name);
+		} catch (error: unknown) {
+			const err = error as { response?: { data?: { message?: string } }; message?: string };
+			toast.error(err?.response?.data?.message || err?.message || "沉淀数据集失败");
+		} finally {
+			setSavingDataset(false);
 		}
 	};
 
@@ -573,6 +598,15 @@ export const SqlWorkbenchExperimental = () => {
 							</Button>
 							<Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setShowSaveDialog(true)}>
 								保存
+							</Button>
+							<Button
+								variant="outline"
+								size="sm"
+								className="h-7 text-xs"
+								onClick={handleSaveAsDataset}
+								disabled={!executionId || savingDataset}
+							>
+								{savingDataset ? "沉淀中" : "沉淀为数据集"}
 							</Button>
 						</div>
 						<div className="flex items-center gap-3 text-xs text-muted-foreground">

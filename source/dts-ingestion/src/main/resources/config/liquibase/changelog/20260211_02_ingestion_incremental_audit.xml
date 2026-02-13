@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+    http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="20260211-3-create-incremental-audit" author="system">
+        <createTable tableName="ingestion_incremental_audit">
+            <column name="id" type="bigserial">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="task_id" type="bigint">
+                <constraints nullable="false"
+                    foreignKeyName="fk_ingestion_incremental_audit_task"
+                    references="ingestion_task(id)"/>
+            </column>
+            <column name="execution_id" type="bigint"/>
+            <column name="execution_run_id" type="varchar(255)"/>
+            <column name="source_table" type="varchar(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="incremental_column" type="varchar(255)"/>
+            <column name="before_watermark" type="varchar(512)"/>
+            <column name="after_watermark" type="varchar(512)"/>
+            <column name="advanced" type="boolean" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="timestamp" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <createIndex indexName="idx_ingestion_incremental_audit_task" tableName="ingestion_incremental_audit">
+            <column name="task_id"/>
+        </createIndex>
+
+        <createIndex indexName="idx_ingestion_incremental_audit_exec" tableName="ingestion_incremental_audit">
+            <column name="execution_id"/>
+        </createIndex>
+
+        <createIndex indexName="idx_ingestion_incremental_audit_created" tableName="ingestion_incremental_audit">
+            <column name="created_at"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

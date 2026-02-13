@@ -27,6 +27,7 @@ public class IngestionTaskMapper {
         dto.setSyncMode(entity.getSyncMode());
         dto.setSyncSchedule(entity.getSyncSchedule());
         dto.setTableMapping(entity.getTableMapping());
+        dto.setSyncConfig(entity.getSyncConfig());
         dto.setAddaxJobPath(entity.getAddaxJobPath());
         dto.setAddaxConfig(entity.getAddaxConfig());
         dto.setAirflowEnabled(entity.getAirflowEnabled());
@@ -63,6 +64,7 @@ public class IngestionTaskMapper {
         entity.setSyncMode(dto.getSyncMode());
         entity.setSyncSchedule(dto.getSyncSchedule());
         entity.setTableMapping(dto.getTableMapping());
+        entity.setSyncConfig(dto.getSyncConfig());
         entity.setAddaxJobPath(dto.getAddaxJobPath());
         entity.setAddaxConfig(dto.getAddaxConfig());
         entity.setAirflowEnabled(dto.getAirflowEnabled());
@@ -106,6 +108,9 @@ public class IngestionTaskMapper {
         }
         if (dto.getTableMapping() != null) {
             entity.setTableMapping(dto.getTableMapping());
+        }
+        if (dto.getSyncConfig() != null) {
+            entity.setSyncConfig(dto.getSyncConfig());
         }
         if (dto.getAddaxConfig() != null) {
             entity.setAddaxConfig(dto.getAddaxConfig());

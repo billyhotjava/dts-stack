@@ -295,6 +295,24 @@ public class IngestionTaskProxyResource {
         return ResponseEntity.ok(ingestionClient.discoverTables(payload));
     }
 
+    @GetMapping("/connectors/capabilities")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ResponseEntity<ApiResponse<Object>> listConnectorCapabilities() {
+        return ResponseEntity.ok(ingestionClient.listConnectorCapabilities());
+    }
+
+    @GetMapping("/connectors/capabilities/{connectorType}")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ResponseEntity<ApiResponse<Object>> getConnectorCapability(@PathVariable("connectorType") String connectorType) {
+        return ResponseEntity.ok(ingestionClient.getConnectorCapability(connectorType));
+    }
+
+    @GetMapping("/tasks/{id}/realtime-status")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ResponseEntity<ApiResponse<Object>> getRealtimeStatus(@PathVariable("id") Long id) {
+        return ResponseEntity.ok(ingestionClient.getRealtimeStatus(id));
+    }
+
     @PostMapping(value = "/files/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ResponseEntity<ApiResponse<Object>> uploadFile(@RequestPart("file") MultipartFile file) {

@@ -27,11 +27,17 @@ public class IngestionExecutionDTO {
 
     private String errorMessage;
 
+    private String failureCategory;
+
+    private String failureAdvice;
+
     private String logPath;
 
-    private Instant createdAt;
+    private String replaceMode;
 
-    // Getters and Setters
+    private String droppedTables;
+
+    private Instant createdAt;
 
     public Long getId() {
         return id;
@@ -113,12 +119,44 @@ public class IngestionExecutionDTO {
         this.errorMessage = errorMessage;
     }
 
+    public String getFailureCategory() {
+        return failureCategory;
+    }
+
+    public void setFailureCategory(String failureCategory) {
+        this.failureCategory = failureCategory;
+    }
+
+    public String getFailureAdvice() {
+        return failureAdvice;
+    }
+
+    public void setFailureAdvice(String failureAdvice) {
+        this.failureAdvice = failureAdvice;
+    }
+
     public String getLogPath() {
         return logPath;
     }
 
     public void setLogPath(String logPath) {
         this.logPath = logPath;
+    }
+
+    public String getReplaceMode() {
+        return replaceMode;
+    }
+
+    public void setReplaceMode(String replaceMode) {
+        this.replaceMode = replaceMode;
+    }
+
+    public String getDroppedTables() {
+        return droppedTables;
+    }
+
+    public void setDroppedTables(String droppedTables) {
+        this.droppedTables = droppedTables;
     }
 
     public Instant getCreatedAt() {

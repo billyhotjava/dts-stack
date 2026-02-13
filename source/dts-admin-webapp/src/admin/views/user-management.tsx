@@ -430,7 +430,12 @@ export default function UserManagementView() {
               onChange={(e) => setKeywordInput(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
-                  setKeyword(keywordInput);
+                  const nextKeyword = keywordInput.trim();
+                  if (nextKeyword.length === 1) {
+                    toast.warning("关键字至少输入 2 个字符");
+                    return;
+                  }
+                  setKeyword(nextKeyword.length >= 2 ? nextKeyword : "");
                   setPagination((prev) => ({ ...prev, current: 1 }));
                 }
               }}
@@ -439,7 +444,12 @@ export default function UserManagementView() {
             <Button
               variant="outline"
               onClick={() => {
-                setKeyword(keywordInput);
+                const nextKeyword = keywordInput.trim();
+                if (nextKeyword.length === 1) {
+                  toast.warning("关键字至少输入 2 个字符");
+                  return;
+                }
+                setKeyword(nextKeyword.length >= 2 ? nextKeyword : "");
                 setPagination((prev) => ({ ...prev, current: 1 }));
               }}
             >

@@ -11,16 +11,17 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.StringUtils;
 
 @RestController
 @RequestMapping("/api/reports")
@@ -42,9 +43,11 @@ public class ReportsResource {
     public ApiResponse<List<BiReportLinkDto>> published(
         @RequestParam(required = false) String deptCode,
         @RequestParam(required = false, name = "type") String reportType,
-        @RequestParam(required = false) String keyword
+        @RequestParam(required = false) String keyword,
+        @RequestParam(required = false) UUID queryDatasetId,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
-        List<BiReportLinkDto> list = reports.listPublished(deptCode, reportType, keyword);
+        List<BiReportLinkDto> list = reports.listPublished(deptCode, reportType, keyword, activeDept, queryDatasetId);
         audit.audit("READ", "vis.reports.published", "size=" + list.size());
         return ApiResponses.ok(list);
     }
@@ -66,6 +69,9 @@ public class ReportsResource {
         put(payload, "engine", engine);
         put(payload, "classification", classification);
         payload.put("ts", Instant.now().toString());
+        try {
+            reports.touchVisit(id != null ? UUID.fromString(id) : null, code);
+        } catch (Exception ignored) {}
         audit.recordAuxiliary("OPEN", "vis", "report", code != null ? code : (id != null ? id : "unknown"), payload);
         return ApiResponses.ok(Map.of("ok", true));
     }
@@ -76,25 +82,34 @@ public class ReportsResource {
         @RequestParam(required = false) String deptCode,
         @RequestParam(required = false, name = "type") String reportType,
         @RequestParam(required = false) String keyword,
-        @RequestParam(required = false, defaultValue = "false") boolean enabledOnly
+        @RequestParam(required = false, defaultValue = "false") boolean enabledOnly,
+        @RequestParam(required = false) UUID queryDatasetId,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
-        List<BiReportLinkDto> list = reports.listAll(deptCode, reportType, keyword, enabledOnly);
+        List<BiReportLinkDto> list = reports.listAll(deptCode, reportType, keyword, enabledOnly, activeDept, queryDatasetId);
         audit.audit("READ", "vis.reports.manage.list", "size=" + list.size());
         return ApiResponses.ok(list);
     }
 
     @PostMapping
     @PreAuthorize(REPORT_MAINTAINER_EXPRESSION)
-    public ApiResponse<BiReportLinkDto> create(@Valid @RequestBody BiReportLinkRequest req) {
-        BiReportLinkDto dto = reports.create(req);
+    public ApiResponse<BiReportLinkDto> create(
+        @Valid @RequestBody BiReportLinkRequest req,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        BiReportLinkDto dto = reports.create(req, activeDept);
         audit.audit("CREATE", "vis.reports.manage.create", dto.code());
         return ApiResponses.ok(dto);
     }
 
     @PutMapping("/{id}")
     @PreAuthorize(REPORT_MAINTAINER_EXPRESSION)
-    public ApiResponse<BiReportLinkDto> update(@PathVariable UUID id, @Valid @RequestBody BiReportLinkRequest req) {
-        BiReportLinkDto dto = reports.update(id, req);
+    public ApiResponse<BiReportLinkDto> update(
+        @PathVariable UUID id,
+        @Valid @RequestBody BiReportLinkRequest req,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        BiReportLinkDto dto = reports.update(id, req, activeDept);
         audit.audit("UPDATE", "vis.reports.manage.update", dto.code());
         return ApiResponses.ok(dto);
     }

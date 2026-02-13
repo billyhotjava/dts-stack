@@ -65,6 +65,10 @@ public class IngestionTask extends AbstractAuditingEntity {
     @Column(name = "table_mapping", columnDefinition = "jsonb")
     private JsonNode tableMapping; // 源表到目标表的映射 [{source: "tb1", target: "ods_tb1"}]
 
+    @Type(JsonType.class)
+    @Column(name = "sync_config", columnDefinition = "jsonb")
+    private JsonNode syncConfig; // 增量等同步扩展配置
+
     // Addax配置
     @Size(max = 500)
     @Column(name = "addax_job_path", length = 500)
@@ -192,6 +196,14 @@ public class IngestionTask extends AbstractAuditingEntity {
         this.tableMapping = tableMapping;
     }
 
+    public JsonNode getSyncConfig() {
+        return syncConfig;
+    }
+
+    public void setSyncConfig(JsonNode syncConfig) {
+        this.syncConfig = syncConfig;
+    }
+
     public String getAddaxJobPath() {
         return addaxJobPath;
     }
@@ -284,6 +296,7 @@ public class IngestionTask extends AbstractAuditingEntity {
             ", name='" + name + '\'' +
             ", sourceType='" + sourceType + '\'' +
             ", syncMode='" + syncMode + '\'' +
+            ", syncConfig=" + syncConfig +
             ", status='" + status + '\'' +
             '}';
     }

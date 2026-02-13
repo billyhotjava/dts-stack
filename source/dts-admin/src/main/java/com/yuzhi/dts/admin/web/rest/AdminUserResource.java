@@ -68,20 +68,7 @@ public class AdminUserResource {
             snapshots.stream().map(AdminKeycloakUser::getUsername).filter(StringUtils::isNotBlank).toList()
         );
         List<AdminUserVM> content = new ArrayList<>(snapshots.size());
-        for (AdminKeycloakUser snapshot : snapshots) {
-            AdminKeycloakUser current = snapshot;
-            if (
-                current != null &&
-                StringUtils.isNotBlank(current.getUsername()) &&
-                (current.getRealmRoles() == null || current.getRealmRoles().isEmpty())
-            ) {
-                AdminKeycloakUser refreshed = adminUserService
-                    .refreshSnapshotFromKeycloakForUser(current.getUsername())
-                    .orElse(null);
-                if (refreshed != null) {
-                    current = refreshed;
-                }
-            }
+        for (AdminKeycloakUser current : snapshots) {
             AdminUserVM vm = toVm(current);
             if (current != null && StringUtils.isNotBlank(current.getUsername())) {
                 AdminUserService.DepartmentInfo dept = deptMap.get(current.getUsername());

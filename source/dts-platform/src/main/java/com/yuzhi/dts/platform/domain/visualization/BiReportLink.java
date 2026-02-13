@@ -7,6 +7,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.io.Serializable;
+import java.time.Instant;
 import java.util.UUID;
 
 @Entity
@@ -30,11 +31,9 @@ public class BiReportLink extends AbstractAuditingEntity<UUID> implements Serial
     @Column(name = "report_type", length = 64)
     private String reportType;
 
-    // Comma-separated dept codes; empty => visible to all depts
     @Column(name = "dept_codes", columnDefinition = "text")
     private String deptCodes;
 
-    // Comma-separated role codes; empty => visible to all roles
     @Column(name = "role_codes", columnDefinition = "text")
     private String roleCodes;
 
@@ -49,6 +48,18 @@ public class BiReportLink extends AbstractAuditingEntity<UUID> implements Serial
 
     @Column(name = "sort_order")
     private Integer sortOrder = 0;
+
+    @Column(name = "query_dataset_id", columnDefinition = "uuid")
+    private UUID queryDatasetId;
+
+    @Column(name = "query_dataset_version")
+    private Integer queryDatasetVersion;
+
+    @Column(name = "expires_at")
+    private Instant expiresAt;
+
+    @Column(name = "last_visited_at")
+    private Instant lastVisitedAt;
 
     @Override
     public UUID getId() {
@@ -138,5 +149,36 @@ public class BiReportLink extends AbstractAuditingEntity<UUID> implements Serial
     public void setSortOrder(Integer sortOrder) {
         this.sortOrder = sortOrder;
     }
-}
 
+    public UUID getQueryDatasetId() {
+        return queryDatasetId;
+    }
+
+    public void setQueryDatasetId(UUID queryDatasetId) {
+        this.queryDatasetId = queryDatasetId;
+    }
+
+    public Integer getQueryDatasetVersion() {
+        return queryDatasetVersion;
+    }
+
+    public void setQueryDatasetVersion(Integer queryDatasetVersion) {
+        this.queryDatasetVersion = queryDatasetVersion;
+    }
+
+    public Instant getExpiresAt() {
+        return expiresAt;
+    }
+
+    public void setExpiresAt(Instant expiresAt) {
+        this.expiresAt = expiresAt;
+    }
+
+    public Instant getLastVisitedAt() {
+        return lastVisitedAt;
+    }
+
+    public void setLastVisitedAt(Instant lastVisitedAt) {
+        this.lastVisitedAt = lastVisitedAt;
+    }
+}

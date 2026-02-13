@@ -18,6 +18,8 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.nullable;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 /**
@@ -51,8 +53,8 @@ class AddaxJobServiceTest {
         addaxJobService = new AddaxJobService(addaxProperties, settingsService, objectMapper, jdbcMetadataService);
 
         // Mock settings service
-        when(settingsService.getSettings(anyString())).thenReturn(settingsSnapshot);
-        when(settingsSnapshot.getString(anyString(), anyString())).thenReturn(tempDir.toString());
+        lenient().when(settingsService.getSettings(anyString())).thenReturn(settingsSnapshot);
+        lenient().when(settingsSnapshot.getString(anyString(), nullable(String.class))).thenReturn(tempDir.toString());
     }
 
     @Test
@@ -202,12 +204,18 @@ class AddaxJobServiceTest {
 
         // Then
         Map<String, Object> job = (Map<String, Object>) result.jobConfig().get("job");
-        Map<String, Object> content = (Map<String, Object>) ((java.util.List<?>) job.get("content")).get(0);
-        Map<String, Object> writer = (Map<String, Object>) content.get("writer");
-        Map<String, Object> writerParams = (Map<String, Object>) writer.get("parameter");
-        Map<String, Object> writerConn = (Map<String, Object>) ((java.util.List<?>) writerParams.get("connection")).get(0);
+        java.util.List<Map<String, Object>> contentList = (java.util.List<Map<String, Object>>) job.get("content");
+        assertThat(contentList).hasSize(2);
 
-        assertThat(writerConn.get("table")).isEqualTo(java.util.List.of("city", "department"));
+        Map<String, Object> firstWriter = (Map<String, Object>) contentList.get(0).get("writer");
+        Map<String, Object> firstParams = (Map<String, Object>) firstWriter.get("parameter");
+        Map<String, Object> firstConn = (Map<String, Object>) ((java.util.List<?>) firstParams.get("connection")).get(0);
+        assertThat(firstConn.get("table")).isEqualTo(java.util.List.of("city"));
+
+        Map<String, Object> secondWriter = (Map<String, Object>) contentList.get(1).get("writer");
+        Map<String, Object> secondParams = (Map<String, Object>) secondWriter.get("parameter");
+        Map<String, Object> secondConn = (Map<String, Object>) ((java.util.List<?>) secondParams.get("connection")).get(0);
+        assertThat(secondConn.get("table")).isEqualTo(java.util.List.of("department"));
     }
 
     @Test
@@ -295,6 +303,108 @@ class AddaxJobServiceTest {
 
         // Then
         assertThat(malformed).isTrue();
+    }
+
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void shouldKeepOnlyPerTableSqlAfterSplit() throws Exception {
+        // Given
+        Map<String, Object> readerConfig = Map.of(
+            "connection", Map.of(
+                "jdbcUrl", "jdbc:dm://10.0.0.1:5236/ERPDEMO",
+                "table", java.util.List.of("ERPDEMO.CUSTOMER", "ERPDEMO.EMPLOYEE")
+            ),
+            "sourceSystem", "ERP"
+        );
+        Map<String, Object> writerConfig = Map.of(
+            "username", "biadmin",
+            "password", "Devops123@",
+            "connection", Map.of(
+                "jdbcUrl", "jdbc:postgresql://127.0.0.1:5432/biadmin",
+                "table", java.util.List.of("ods_customer", "ods_employee")
+            ),
+            "preSql", java.util.List.of(
+                "TRUNCATE TABLE ods_customer",
+                "TRUNCATE TABLE ods_employee"
+            ),
+            "postSql", java.util.List.of(
+                "UPDATE ods_customer SET source_system = 'ERP' WHERE TRUE",
+                "UPDATE ods_employee SET source_system = 'ERP' WHERE TRUE"
+            )
+        );
+
+        // When
+        AddaxJobService.AddaxJobResult result = addaxJobService.createJob(
+            "split-sql-test",
+            "rdbmsreader",
+            readerConfig,
+            "postgresqlwriter",
+            writerConfig,
+            null
+        );
+
+        // Then
+        Map<String, Object> job = (Map<String, Object>) result.jobConfig().get("job");
+        java.util.List<Map<String, Object>> contentList = (java.util.List<Map<String, Object>>) job.get("content");
+        assertThat(contentList).hasSize(2);
+
+        Map<String, Object> firstWriter = (Map<String, Object>) contentList.get(0).get("writer");
+        Map<String, Object> firstParams = (Map<String, Object>) firstWriter.get("parameter");
+        java.util.List<String> firstPreSql = (java.util.List<String>) firstParams.get("preSql");
+        java.util.List<String> firstPostSql = (java.util.List<String>) firstParams.get("postSql");
+        assertThat(firstPreSql).contains("TRUNCATE TABLE ods_customer");
+        assertThat(firstPreSql).noneMatch(sql -> sql.toLowerCase(java.util.Locale.ROOT).contains("ods_employee"));
+        assertThat(firstPostSql).allMatch(sql -> sql.toLowerCase(java.util.Locale.ROOT).contains("ods_customer"));
+        assertThat(firstPostSql).noneMatch(sql -> sql.toLowerCase(java.util.Locale.ROOT).contains("ods_employee"));
+
+        Map<String, Object> secondWriter = (Map<String, Object>) contentList.get(1).get("writer");
+        Map<String, Object> secondParams = (Map<String, Object>) secondWriter.get("parameter");
+        java.util.List<String> secondPreSql = (java.util.List<String>) secondParams.get("preSql");
+        java.util.List<String> secondPostSql = (java.util.List<String>) secondParams.get("postSql");
+        assertThat(secondPreSql).contains("TRUNCATE TABLE ods_employee");
+        assertThat(secondPreSql).noneMatch(sql -> sql.toLowerCase(java.util.Locale.ROOT).contains("ods_customer"));
+        assertThat(secondPostSql).allMatch(sql -> sql.toLowerCase(java.util.Locale.ROOT).contains("ods_employee"));
+        assertThat(secondPostSql).noneMatch(sql -> sql.toLowerCase(java.util.Locale.ROOT).contains("ods_customer"));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void shouldResolveFileSourceSystemFromObjectMetadata() throws Exception {
+        // Given
+        Map<String, Object> readerConfig = Map.of(
+            "_originalName", Map.of("name", "专利测试数据_三年1000条.xlsx"),
+            "_containerPath", "/opt/airflow/dags/exchange/excel/demo/source.xlsx",
+            "path", java.util.List.of("/opt/airflow/dags/exchange/excel/demo/source.xlsx")
+        );
+        Map<String, Object> writerConfig = Map.of(
+            "jdbcUrl", "jdbc:postgresql://127.0.0.1:5432/biadmin",
+            "username", "biadmin",
+            "password", "Devops123@",
+            "table", "ods_patent_info"
+        );
+
+        // When
+        AddaxJobService.AddaxJobResult result = addaxJobService.createJob(
+            "file-source-system-test",
+            "excelreader",
+            readerConfig,
+            "postgresqlwriter",
+            writerConfig,
+            null
+        );
+
+        // Then
+        Map<String, Object> job = (Map<String, Object>) result.jobConfig().get("job");
+        Map<String, Object> content = (Map<String, Object>) ((java.util.List<?>) job.get("content")).get(0);
+        Map<String, Object> writer = (Map<String, Object>) content.get("writer");
+        Map<String, Object> writerParams = (Map<String, Object>) writer.get("parameter");
+        java.util.List<String> postSql = (java.util.List<String>) writerParams.get("postSql");
+
+        assertThat(postSql)
+            .anyMatch(sql -> sql.contains("source_system") && sql.contains("'专利测试数据_三年1000条.xlsx'"));
+        assertThat(postSql)
+            .noneMatch(sql -> sql.contains("'unknown'"));
     }
 
     @Test

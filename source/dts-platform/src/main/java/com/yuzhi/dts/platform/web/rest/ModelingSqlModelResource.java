@@ -18,9 +18,11 @@ import com.yuzhi.dts.platform.web.rest.ApiResponse;
 import jakarta.validation.Valid;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Locale;
+
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.springframework.http.MediaType;
@@ -209,6 +211,9 @@ public class ModelingSqlModelResource {
         List<InfraOdsTableMapping> mappings = odsTableMappingRepository.findByEnabledTrueOrderByOdsSchemaAscOdsTableAsc();
         String kw = StringUtils.hasText(keyword) ? keyword.trim().toLowerCase(Locale.ROOT) : null;
         UUID fallbackSourceId = resolveFallbackSourceId();
+        Map<UUID, String> sourceNameCache = new HashMap<>();
+        Map<String, Boolean> activeOdsCache = new HashMap<>();
+        int staleSkipped = 0;
 
         List<Map<String, Object>> result = new ArrayList<>();
         for (InfraOdsTableMapping mapping : mappings) {
@@ -218,8 +223,22 @@ public class ModelingSqlModelResource {
             if (!StringUtils.hasText(table)) continue;
             UUID resolvedSourceId = resolveExistingSourceId(resolveDatasetSourceId(schema, table));
             UUID mappingSourceId = resolveExistingSourceId(mapping.getConnectionId());
-            UUID effectiveSourceId = resolvedSourceId != null ? resolvedSourceId : (mappingSourceId != null ? mappingSourceId : fallbackSourceId);
-            if (sourceDataSourceId != null && (effectiveSourceId == null || !sourceDataSourceId.equals(effectiveSourceId))) {
+            List<UUID> sourceCandidates = new ArrayList<>(3);
+            if (resolvedSourceId != null) {
+                sourceCandidates.add(resolvedSourceId);
+            }
+            if (mappingSourceId != null && !mappingSourceId.equals(resolvedSourceId)) {
+                sourceCandidates.add(mappingSourceId);
+            }
+            if (sourceCandidates.isEmpty() && fallbackSourceId != null) {
+                sourceCandidates.add(fallbackSourceId);
+            }
+            UUID effectiveSourceId = pickEffectiveSourceId(sourceCandidates, sourceDataSourceId);
+            if (sourceDataSourceId != null && effectiveSourceId == null) {
+                continue;
+            }
+            if (!hasActiveOdsDataset(schema, table, effectiveSourceId, activeOdsCache)) {
+                staleSkipped++;
                 continue;
             }
 
@@ -241,7 +260,11 @@ public class ModelingSqlModelResource {
             row.put("bizCode", mapping.getBizCode());
             row.put("entityCode", mapping.getEntityCode());
             row.put("sourceDataSourceId", effectiveSourceId);
-            row.put("sourceDataSourceName", resolveSourceName(effectiveSourceId));
+            String sourceDataSourceName = resolveSourceName(effectiveSourceId, sourceNameCache);
+            if (!StringUtils.hasText(sourceDataSourceName)) {
+                sourceDataSourceName = StringUtils.hasText(mapping.getSystemCode()) ? mapping.getSystemCode().trim() : "未知来源";
+            }
+            row.put("sourceDataSourceName", sourceDataSourceName);
             row.put("sourceSnippet", "{{ source('" + schema + "', '" + table + "') }}");
             result.add(row);
         }
@@ -251,11 +274,12 @@ public class ModelingSqlModelResource {
             .map(item -> String.valueOf(item.get("schema")) + "." + String.valueOf(item.get("table")))
             .toList();
         LOG.info(
-            "[dbt-sources] sourceDataSourceId={} keyword='{}' returned={} totalMappings={} preview={}",
+            "[dbt-sources] sourceDataSourceId={} keyword='{}' returned={} totalMappings={} staleSkipped={} preview={}",
             sourceDataSourceId,
             StringUtils.hasText(keyword) ? keyword.trim() : "",
             result.size(),
             mappings.size(),
+            staleSkipped,
             preview
         );
         if (sourceDataSourceId != null && result.isEmpty()) {
@@ -267,6 +291,63 @@ public class ModelingSqlModelResource {
         }
         auditService.audit("READ", "modeling.sql-model.dbt-sources", "list");
         return ApiResponses.ok(result);
+    }
+
+    private UUID pickEffectiveSourceId(List<UUID> sourceCandidates, UUID requestedSourceId) {
+        if (sourceCandidates == null || sourceCandidates.isEmpty()) {
+            return null;
+        }
+        if (requestedSourceId != null) {
+            for (UUID candidate : sourceCandidates) {
+                if (requestedSourceId.equals(candidate)) {
+                    return candidate;
+                }
+            }
+            return null;
+        }
+        return sourceCandidates.get(0);
+    }
+
+    private boolean hasActiveOdsDataset(String schema, String table, UUID sourceId, Map<String, Boolean> cache) {
+        if (!StringUtils.hasText(schema) || !StringUtils.hasText(table)) {
+            return false;
+        }
+        String normalizedSchema = schema.trim();
+        String normalizedTable = table.trim();
+        String sourceKey = sourceId != null ? sourceId.toString() : "*";
+        String key = sourceKey + "|" + normalizedSchema.toLowerCase(Locale.ROOT) + "." + normalizedTable.toLowerCase(Locale.ROOT);
+        if (cache != null && cache.containsKey(key)) {
+            return Boolean.TRUE.equals(cache.get(key));
+        }
+        boolean exists;
+        if (sourceId != null) {
+            exists = datasetRepository.existsBySourceIdAndHiveDatabaseIgnoreCaseAndHiveTableIgnoreCaseAndWarehouseLayerIgnoreCaseAndEnabledTrue(
+                sourceId,
+                normalizedSchema,
+                normalizedTable,
+                "ODS"
+            );
+            if (!exists) {
+                exists = datasetRepository.existsBySourceIdAndHiveDatabaseIgnoreCaseAndHiveTableIgnoreCaseAndEnabledTrue(
+                    sourceId,
+                    normalizedSchema,
+                    normalizedTable
+                );
+            }
+        } else {
+            exists = datasetRepository.existsByHiveDatabaseIgnoreCaseAndHiveTableIgnoreCaseAndWarehouseLayerIgnoreCaseAndEnabledTrue(
+                normalizedSchema,
+                normalizedTable,
+                "ODS"
+            );
+            if (!exists) {
+                exists = datasetRepository.existsByHiveDatabaseIgnoreCaseAndHiveTableIgnoreCaseAndEnabledTrue(normalizedSchema, normalizedTable);
+            }
+        }
+        if (cache != null) {
+            cache.put(key, exists);
+        }
+        return exists;
     }
 
     private UUID resolveDatasetSourceId(String schema, String table) {
@@ -292,6 +373,20 @@ public class ModelingSqlModelResource {
             return null;
         }
         return dataSourceRepository.findById(sourceId).map(ds -> StringUtils.hasText(ds.getName()) ? ds.getName().trim() : null).orElse(null);
+    }
+
+    private String resolveSourceName(UUID sourceId, Map<UUID, String> cache) {
+        if (sourceId == null) {
+            return null;
+        }
+        if (cache != null && cache.containsKey(sourceId)) {
+            return cache.get(sourceId);
+        }
+        String resolved = resolveSourceName(sourceId);
+        if (cache != null) {
+            cache.put(sourceId, resolved);
+        }
+        return resolved;
     }
 
     private UUID resolveExistingSourceId(UUID sourceId) {

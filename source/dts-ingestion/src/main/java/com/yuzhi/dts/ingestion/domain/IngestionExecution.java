@@ -50,6 +50,13 @@ public class IngestionExecution {
     @Column(name = "log_path", length = 500)
     private String logPath;
 
+    @Size(max = 50)
+    @Column(name = "replace_mode", length = 50)
+    private String replaceMode;
+
+    @Column(name = "dropped_tables", columnDefinition = "TEXT")
+    private String droppedTables;
+
     @Column(name = "created_at")
     private Instant createdAt = Instant.now();
 
@@ -133,6 +140,22 @@ public class IngestionExecution {
 
     public void setLogPath(String logPath) {
         this.logPath = logPath;
+    }
+
+    public String getReplaceMode() {
+        return replaceMode;
+    }
+
+    public void setReplaceMode(String replaceMode) {
+        this.replaceMode = replaceMode;
+    }
+
+    public String getDroppedTables() {
+        return droppedTables;
+    }
+
+    public void setDroppedTables(String droppedTables) {
+        this.droppedTables = droppedTables;
     }
 
     public Instant getCreatedAt() {

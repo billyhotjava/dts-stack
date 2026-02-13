@@ -85,6 +85,9 @@ public class CatalogAutoLineageService {
             link.setUpstreamDatasetId(upstreamId);
             link.setDownstreamDatasetId(downstream.getId());
             link.setRelationType(RELATION_AUTO_VIEW);
+            link.setUpstreamAssetType("DATASET");
+            link.setDownstreamAssetType("VIEW");
+            link.setDirection("UPSTREAM_TO_DOWNSTREAM");
             link.setNotes("auto:view");
             lineageRepository.save(link);
             created++;

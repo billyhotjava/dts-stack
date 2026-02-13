@@ -2,7 +2,9 @@ package com.yuzhi.dts.ingestion.service.mapper;
 
 import com.yuzhi.dts.ingestion.domain.IngestionExecution;
 import com.yuzhi.dts.ingestion.service.dto.IngestionExecutionDTO;
+import com.yuzhi.dts.ingestion.service.etl.ExecutionFailureClassifier;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 
 /**
  * Mapper for the entity {@link IngestionExecution} and its DTO {@link IngestionExecutionDTO}.
@@ -26,7 +28,14 @@ public class IngestionExecutionMapper {
         dto.setRowsRead(entity.getRowsRead());
         dto.setRowsWritten(entity.getRowsWritten());
         dto.setErrorMessage(entity.getErrorMessage());
+        if (StringUtils.hasText(entity.getErrorMessage())) {
+            String category = ExecutionFailureClassifier.classify(entity.getErrorMessage());
+            dto.setFailureCategory(category);
+            dto.setFailureAdvice(ExecutionFailureClassifier.advice(category));
+        }
         dto.setLogPath(entity.getLogPath());
+        dto.setReplaceMode(entity.getReplaceMode());
+        dto.setDroppedTables(entity.getDroppedTables());
         dto.setCreatedAt(entity.getCreatedAt());
 
         return dto;
@@ -47,6 +56,8 @@ public class IngestionExecutionMapper {
         entity.setRowsWritten(dto.getRowsWritten());
         entity.setErrorMessage(dto.getErrorMessage());
         entity.setLogPath(dto.getLogPath());
+        entity.setReplaceMode(dto.getReplaceMode());
+        entity.setDroppedTables(dto.getDroppedTables());
         entity.setCreatedAt(dto.getCreatedAt());
 
         return entity;

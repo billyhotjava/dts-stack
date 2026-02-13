@@ -12,6 +12,11 @@ export type ReportLink = {
 	url: string;
 	enabled?: boolean;
 	sortOrder?: number | null;
+	queryDatasetId?: string | null;
+	queryDatasetVersion?: number | null;
+	queryDatasetName?: string | null;
+	expiresAt?: string | null;
+	lastVisitedAt?: string | null;
 	owner?: string | null;
 	updatedAt?: string | null;
 };
@@ -25,7 +30,7 @@ export type ReportVisitPayload = {
 	classification?: string;
 };
 
-function getPublishedReports(params?: { keyword?: string; deptCode?: string; type?: string }) {
+function getPublishedReports(params?: { keyword?: string; deptCode?: string; type?: string; queryDatasetId?: string }) {
 	return apiClient.get<ReportLink[]>({ url: "/reports/published", params });
 }
 
@@ -40,12 +45,15 @@ export type ReportLinkUpsertRequest = {
 	classification: string;
 	enabled?: boolean;
 	sortOrder?: number;
+	queryDatasetId?: string;
+	queryDatasetVersion?: number;
+	expiresAt?: string;
 };
 
 export default {
 	getPublishedReports,
 	visit: (payload: ReportVisitPayload) => apiClient.post<{ ok: boolean }>({ url: "/reports/visit", data: payload }),
-	listAll: (params?: { keyword?: string; deptCode?: string; type?: string; enabledOnly?: boolean }) =>
+	listAll: (params?: { keyword?: string; deptCode?: string; type?: string; enabledOnly?: boolean; queryDatasetId?: string }) =>
 		apiClient.get<ReportLink[]>({ url: "/reports", params }),
 	create: (payload: ReportLinkUpsertRequest) =>
 		apiClient.post<ReportLink>({ url: "/reports", data: payload }),

@@ -16,6 +16,11 @@ public record BiReportLinkDto(
     String url,
     boolean enabled,
     Integer sortOrder,
+    UUID queryDatasetId,
+    Integer queryDatasetVersion,
+    String queryDatasetName,
+    Instant expiresAt,
+    Instant lastVisitedAt,
     String owner,
     Instant updatedAt
 ) {}

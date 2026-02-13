@@ -351,7 +351,12 @@ export const applyAutoMapTableStandardMapping = (
 ) => api.post({ url: `/catalog/tables/${tableId}/standard-mapping/auto-map/apply`, data });
 
 // Catalog lineage
-export const getCatalogLineage = (datasetId: string) => api.get({ url: "/catalog/lineage", params: { datasetId } });
+export const getCatalogLineage = (datasetId: string, projectName?: string) =>
+  api.get({ url: "/catalog/lineage", params: { datasetId, projectName } });
+export const getCatalogLineageImpact = (
+  datasetId: string,
+  params: { direction?: "UPSTREAM" | "DOWNSTREAM" | "BOTH"; depth?: number; projectName?: string } = {},
+) => api.get({ url: "/catalog/lineage/impact", params: { datasetId, ...params } });
 export const createCatalogLineage = (data: any) => api.post({ url: "/catalog/lineage", data });
 export const deleteCatalogLineage = (id: string) => api.delete({ url: `/catalog/lineage/${id}` });
 

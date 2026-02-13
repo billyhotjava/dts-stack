@@ -185,3 +185,72 @@ export const getSqlStatus = (executionId: string) =>
 
 export const cancelSql = (executionId: string) =>
 	api.post<boolean>({ url: `/sql/cancel/${executionId}` });
+
+export type QueryDatasetAsset = {
+	id: string;
+	name: string;
+	description?: string | null;
+	sourceDatasourceId?: string | null;
+	sourceDatasourceName?: string | null;
+	ownerDept?: string | null;
+	status: string;
+	refreshStrategy: string;
+	publishedVersion?: number | null;
+	latestExecutionId?: string | null;
+	latestResultSetId?: string | null;
+	enabled?: boolean;
+	createdBy?: string | null;
+	createdDate?: string | null;
+	lastModifiedDate?: string | null;
+};
+
+export type QueryDatasetVersion = {
+	id: string;
+	datasetId: string;
+	versionNo: number;
+	status: string;
+	sqlText: string;
+	changeSummary?: string | null;
+	resultSetId?: string | null;
+	executionId?: string | null;
+	publishedAt?: string | null;
+	createdBy?: string | null;
+	createdDate?: string | null;
+};
+
+export type CreateQueryDatasetFromExecutionRequest = {
+	name?: string;
+	description?: string;
+	refreshStrategy?: string;
+	changeSummary?: string;
+};
+
+export type CreateQueryDatasetVersionRequest = {
+	sqlText: string;
+	changeSummary?: string;
+	status?: string;
+};
+
+export type PublishQueryDatasetRequest = {
+	versionNo?: number;
+	changeSummary?: string;
+};
+
+export const listQueryDatasets = () => api.get<QueryDatasetAsset[]>({ url: "/sql/query-datasets" });
+
+export const listQueryDatasetVersions = (datasetId: string) =>
+	api.get<QueryDatasetVersion[]>({ url: `/sql/query-datasets/${datasetId}/versions` });
+
+export const createQueryDatasetFromExecution = (
+	executionId: string,
+	payload?: CreateQueryDatasetFromExecutionRequest,
+) => api.post<QueryDatasetAsset>({ url: `/sql/query-datasets/from-execution/${executionId}`, data: payload ?? {} });
+
+export const createQueryDatasetVersion = (datasetId: string, payload: CreateQueryDatasetVersionRequest) =>
+	api.post<QueryDatasetVersion>({ url: `/sql/query-datasets/${datasetId}/versions`, data: payload });
+
+export const publishQueryDataset = (datasetId: string, payload?: PublishQueryDatasetRequest) =>
+	api.post<QueryDatasetVersion>({ url: `/sql/query-datasets/${datasetId}/publish`, data: payload ?? {} });
+
+export const archiveQueryDataset = (datasetId: string) =>
+	api.post<QueryDatasetAsset>({ url: `/sql/query-datasets/${datasetId}/archive`, data: {} });

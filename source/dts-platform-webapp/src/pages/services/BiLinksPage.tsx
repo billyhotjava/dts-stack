@@ -28,6 +28,7 @@ import {
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
 import reportsService, { type ReportLink, type ReportLinkUpsertRequest } from "@/api/services/reportsService";
+import { listQueryDatasets, type QueryDatasetAsset } from "@/api/sql-workbench";
 import { useUserRoles } from "@/store/userStore";
 import { normalizeBiLinkForSave, resolveBiLinkForOpen } from "@/utils/biLinkUrl";
 
@@ -44,6 +45,30 @@ type FormValues = {
 	classification: string;
 	enabled?: boolean;
 	sortOrder?: number;
+	queryDatasetId?: string;
+	queryDatasetVersion?: number;
+	expiresAt?: string;
+};
+
+const toIsoInstant = (value?: string | null) => {
+	const text = normalizeText(value);
+	if (!text) return undefined;
+	const parsed = new Date(text);
+	if (Number.isNaN(parsed.getTime())) return undefined;
+	return parsed.toISOString();
+};
+
+const toLocalDateTimeInput = (value?: string | null) => {
+	const text = normalizeText(value);
+	if (!text) return undefined;
+	const parsed = new Date(text);
+	if (Number.isNaN(parsed.getTime())) return undefined;
+	const yyyy = parsed.getFullYear();
+	const mm = String(parsed.getMonth() + 1).padStart(2, "0");
+	const dd = String(parsed.getDate()).padStart(2, "0");
+	const hh = String(parsed.getHours()).padStart(2, "0");
+	const mi = String(parsed.getMinutes()).padStart(2, "0");
+	return `${yyyy}-${mm}-${dd}T${hh}:${mi}`;
 };
 
 const CLASSIFICATION_OPTIONS = [
@@ -93,6 +118,9 @@ const toRequestPayload = (values: FormValues): ReportLinkUpsertRequest => ({
 	classification: normalizeText(values.classification)?.toUpperCase() || "INTERNAL",
 	enabled: values.enabled !== false,
 	sortOrder: typeof values.sortOrder === "number" ? values.sortOrder : undefined,
+	queryDatasetId: normalizeText(values.queryDatasetId),
+	queryDatasetVersion: typeof values.queryDatasetVersion === "number" ? values.queryDatasetVersion : undefined,
+	expiresAt: toIsoInstant(values.expiresAt),
 });
 
 const toEditDefaults = (record: ReportLink): FormValues => ({
@@ -106,6 +134,9 @@ const toEditDefaults = (record: ReportLink): FormValues => ({
 	classification: record.classification || "INTERNAL",
 	enabled: record.enabled !== false,
 	sortOrder: typeof record.sortOrder === "number" ? record.sortOrder : undefined,
+	queryDatasetId: record.queryDatasetId || undefined,
+	queryDatasetVersion: typeof record.queryDatasetVersion === "number" ? record.queryDatasetVersion : undefined,
+	expiresAt: toLocalDateTimeInput(record.expiresAt),
 });
 
 const renderClassificationTag = (value?: string | null) => {
@@ -144,6 +175,7 @@ export default function Page({ embedded }: Props) {
 	const [typeFilter, setTypeFilter] = useState<string | undefined>();
 	const [enabledOnly, setEnabledOnly] = useState(false);
 	const [records, setRecords] = useState<ReportLink[]>([]);
+	const [queryDatasets, setQueryDatasets] = useState<QueryDatasetAsset[]>([]);
 	const [editing, setEditing] = useState<ReportLink | null>(null);
 	const [modalOpen, setModalOpen] = useState(false);
 	const [form] = Form.useForm<FormValues>();
@@ -167,6 +199,12 @@ export default function Page({ embedded }: Props) {
 	useEffect(() => {
 		void fetchList();
 	}, [fetchList]);
+
+	useEffect(() => {
+		listQueryDatasets()
+			.then((rows) => setQueryDatasets(Array.isArray(rows) ? (rows as QueryDatasetAsset[]) : []))
+			.catch(() => setQueryDatasets([]));
+	}, []);
 
 	const openCreate = () => {
 		setEditing(null);
@@ -338,12 +376,35 @@ export default function Page({ embedded }: Props) {
 				),
 			},
 			{
+				title: "数据集",
+				dataIndex: "queryDatasetName",
+				width: 240,
+				render: (_value, record) => {
+					if (!record?.queryDatasetId) return <Text type="secondary">-</Text>;
+					const display = record.queryDatasetName || record.queryDatasetId;
+					return (
+						<Space direction="vertical" size={0}>
+							<Text>{display}</Text>
+							<Text type="secondary" style={{ fontSize: 12 }}>
+								版本 {record.queryDatasetVersion || "latest"}
+							</Text>
+						</Space>
+					);
+				},
+			},
+			{
 				title: "状态",
 				dataIndex: "enabled",
 				width: 120,
 				render: (value: boolean, record) => (
 					<Switch checked={value !== false} onChange={(checked) => handleToggle(record, checked)} />
 				),
+			},
+			{
+				title: "有效期",
+				dataIndex: "expiresAt",
+				width: 180,
+				render: (value: string) => (value ? new Date(value).toLocaleString() : "长期"),
 			},
 			{
 				title: "更新时间",
@@ -529,6 +590,30 @@ export default function Page({ embedded }: Props) {
 							placeholder="输入角色编码，回车确认"
 							tokenSeparators={[",", "，", " "]}
 						/>
+					</Form.Item>
+					<Space size="large" className="w-full">
+						<Form.Item name="queryDatasetId" label="绑定数据集">
+							<Select
+								allowClear
+								placeholder="可选，绑定 SQL 查询沉淀数据集"
+								options={queryDatasets.map((item) => ({
+									label: item.name,
+									value: item.id,
+								}))}
+								showSearch
+								optionFilterProp="label"
+							/>
+						</Form.Item>
+						<Form.Item name="queryDatasetVersion" label="数据集版本">
+							<InputNumber min={1} placeholder="留空表示 latest" className="w-full" />
+						</Form.Item>
+					</Space>
+					<Form.Item
+						name="expiresAt"
+						label="链接有效期"
+						extra="留空表示永久有效；填写时间按浏览器当前时区转换为 UTC 保存。"
+					>
+						<Input type="datetime-local" />
 					</Form.Item>
 					<Form.Item name="enabled" label="启用状态" valuePropName="checked">
 						<Switch checkedChildren="启用" unCheckedChildren="停用" />

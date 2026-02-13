@@ -21,6 +21,7 @@ import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -138,7 +139,7 @@ public class JdbcCatalogSyncService {
 
         boolean cleanupStale = cleanupStaleOverride != null
             ? cleanupStaleOverride.booleanValue()
-            : boolProp(props, "catalogCleanupStale", false);
+            : boolProp(props, "catalogCleanupStale", true);
         String tablePattern = Optional.ofNullable(stringProp(props, "tablePattern")).filter(StringUtils::hasText).orElse("%");
 
         int datasetsCreated = 0;
@@ -147,6 +148,7 @@ public class JdbcCatalogSyncService {
         int tablesDiscovered = 0;
         int columnsImported = 0;
         int datasetsRemoved = 0;
+        Instant snapshotTime = Instant.now();
 
         long startedAt = System.nanoTime();
         try (Connection connection = openConnection(source, password, props)) {
@@ -181,6 +183,7 @@ public class JdbcCatalogSyncService {
                     dataset.setSourceId(source.getId());
                     dataset.setHiveDatabase(normalizedSchema);
                     dataset.setHiveTable(tableName);
+                    dataset.setSnapshotTime(snapshotTime);
                     dataset.setType(StringUtils.hasText(source.getType()) ? source.getType().trim().toUpperCase(Locale.ROOT) : "JDBC");
                     dataset.setName(defaultIfBlank(dataset.getName(), tableName));
                     dataset.setClassification(defaultIfBlank(dataset.getClassification(), DEFAULT_CLASSIFICATION));

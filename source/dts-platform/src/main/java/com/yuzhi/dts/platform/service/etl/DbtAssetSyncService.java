@@ -233,6 +233,10 @@ public class DbtAssetSyncService {
                 link.setUpstreamDatasetId(upstream);
                 link.setDownstreamDatasetId(downstream);
                 link.setRelationType("DBT");
+                link.setUpstreamAssetType("DATASET");
+                link.setDownstreamAssetType("MODEL");
+                link.setDirection("UPSTREAM_TO_DOWNSTREAM");
+                link.setProjectName(resolveDbtProjectName(model.uniqueId));
                 lineageRepository.save(link);
                 created++;
             }
@@ -362,6 +366,18 @@ public class DbtAssetSyncService {
         return datasetRepository
             .findFirstByHiveDatabaseIgnoreCaseAndHiveTableIgnoreCase(meta.schema, meta.table)
             .orElse(null);
+    }
+
+    private String resolveDbtProjectName(String uniqueId) {
+        if (!StringUtils.hasText(uniqueId)) {
+            return null;
+        }
+        String[] parts = uniqueId.split("\\.");
+        if (parts.length < 3) {
+            return null;
+        }
+        String project = text(parts[1]);
+        return StringUtils.hasText(project) ? project : null;
     }
 
     private String resolveDatasetType(DbtConfigService.DbtConfigView view) {

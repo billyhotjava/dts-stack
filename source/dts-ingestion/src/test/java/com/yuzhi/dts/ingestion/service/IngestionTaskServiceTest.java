@@ -14,6 +14,7 @@ import com.yuzhi.dts.ingestion.service.etl.AddaxJobService;
 import com.yuzhi.dts.ingestion.service.etl.AirflowAdapter;
 import com.yuzhi.dts.ingestion.service.etl.AirflowDagService;
 import com.yuzhi.dts.ingestion.service.etl.TargetTableProvisioner;
+import com.yuzhi.dts.ingestion.service.etl.IncrementalSyncService;
 import com.yuzhi.dts.ingestion.service.mapper.IngestionExecutionMapper;
 import com.yuzhi.dts.ingestion.service.mapper.IngestionTaskMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -75,6 +76,9 @@ class IngestionTaskServiceTest {
     private TargetTableProvisioner targetTableProvisioner;
 
     @Mock
+    private IncrementalSyncService incrementalSyncService;
+
+    @Mock
     private AuditService auditService;
 
     @Mock
@@ -97,6 +101,7 @@ class IngestionTaskServiceTest {
             airflowDagService,
             sourceResolver,
             targetTableProvisioner,
+            incrementalSyncService,
             auditService,
             changeLogService
         );
@@ -125,7 +130,7 @@ class IngestionTaskServiceTest {
         assertThat(result).isNotNull();
         verify(addaxJobService).createJobFromTask(entity);
         verify(taskRepository).save(entity);
-        
+
         // Verify audit
         verify(auditService).auditAction(
             eq("INGESTION_TASK_CREATE"),
@@ -184,7 +189,7 @@ class IngestionTaskServiceTest {
         Pageable pageable = PageRequest.of(0, 20);
         List<IngestionTask> tasks = List.of(createTestTaskEntity());
         Page<IngestionTask> page = new PageImpl<>(tasks, pageable, 1);
-        
+
         when(taskRepository.findByStatus(status, pageable)).thenReturn(page);
         when(taskMapper.toDto(any(IngestionTask.class))).thenReturn(createTestTaskDTO());
 
@@ -350,11 +355,11 @@ class IngestionTaskServiceTest {
         dto.setSourceType("mysqlreader");
         dto.setDestinationType("postgresqlwriter");
         dto.setSyncMode("full_refresh");
-        
+
         ObjectNode sourceConfig = objectMapper.createObjectNode();
         sourceConfig.put("host", "localhost");
         dto.setSourceConfig(sourceConfig);
-        
+
         return dto;
     }
 
@@ -365,11 +370,11 @@ class IngestionTaskServiceTest {
         task.setDestinationType("postgresqlwriter");
         task.setSyncMode("full_refresh");
         task.setStatus("draft");
-        
+
         ObjectNode sourceConfig = objectMapper.createObjectNode();
         sourceConfig.put("host", "localhost");
         task.setSourceConfig(sourceConfig);
-        
+
         return task;
     }
 }

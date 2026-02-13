@@ -41,6 +41,8 @@ public class IngestionTaskDTO {
 
     private JsonNode tableMapping;
 
+    private JsonNode syncConfig;
+
     private String addaxJobPath;
 
     private JsonNode addaxConfig;
@@ -165,6 +167,14 @@ public class IngestionTaskDTO {
         this.tableMapping = tableMapping;
     }
 
+    public JsonNode getSyncConfig() {
+        return syncConfig;
+    }
+
+    public void setSyncConfig(JsonNode syncConfig) {
+        this.syncConfig = syncConfig;
+    }
+
     public String getAddaxJobPath() {
         return addaxJobPath;
     }
@@ -276,6 +286,7 @@ public class IngestionTaskDTO {
             ", name='" + name + '\'' +
             ", sourceType='" + sourceType + '\'' +
             ", syncMode='" + syncMode + '\'' +
+            ", syncConfig=" + syncConfig +
             ", status='" + status + '\'' +
             '}';
     }

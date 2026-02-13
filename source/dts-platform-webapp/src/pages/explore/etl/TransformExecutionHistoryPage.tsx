@@ -1,11 +1,27 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "@/routes/hooks";
-import { Button, Card, Space, Table, Tag, message, Spin, Drawer, Typography } from "antd";
-import { ArrowLeftOutlined, ReloadOutlined } from "@ant-design/icons";
+import { Alert, Button, Card, DatePicker, Drawer, Input, Modal, Progress, Segmented, Space, Spin, Table, Tag, Tooltip, Typography, message } from "antd";
+import { ArrowLeftOutlined, PlayCircleOutlined, ReloadOutlined } from "@ant-design/icons";
 import { PageHeader } from "@/components/page-header";
 import { useRouter } from "@/routes/hooks";
-import { ingestionTaskAPI, type IngestionExecutionDTO, type IngestionTaskDTO, type IngestionExecutionLog } from "@/api/ingestion";
+import {
+    ingestionTaskAPI,
+    type IngestionExecutionDTO,
+    type IngestionTaskDTO,
+    type IngestionExecutionLog,
+    type IngestionIncrementalAuditDTO,
+    type IngestionIncrementalStateDTO,
+    resolveExecutionPollIntervalMs,
+} from "@/api/ingestion";
 import { formatTimestamp, formatNumber } from "@/utils/format";
+
+type ExecutionProgressView = {
+    percent: number;
+    status: "active" | "success" | "exception";
+    stage: string;
+    detail: string;
+    terminal: boolean;
+};
 
 export default function TransformExecutionHistoryPage() {
     const { id } = useParams();
@@ -19,6 +35,30 @@ export default function TransformExecutionHistoryPage() {
     const [logContent, setLogContent] = useState("");
     const [logMeta, setLogMeta] = useState<IngestionExecutionLog | null>(null);
     const [activeExecution, setActiveExecution] = useState<IngestionExecutionDTO | null>(null);
+    const [logKeyword, setLogKeyword] = useState("");
+    const [logScope, setLogScope] = useState<"single" | "all">("single");
+    const [executeSubmitting, setExecuteSubmitting] = useState(false);
+    const [executeProgressOpen, setExecuteProgressOpen] = useState(false);
+    const [executeProgress, setExecuteProgress] = useState<ExecutionProgressView>({
+        percent: 0,
+        status: "active",
+        stage: "等待提交",
+        detail: "",
+        terminal: false,
+    });
+    const [latestExecution, setLatestExecution] = useState<IngestionExecutionDTO | null>(null);
+    const [incrementalStates, setIncrementalStates] = useState<IngestionIncrementalStateDTO[]>([]);
+    const [incrementalStatesLoading, setIncrementalStatesLoading] = useState(false);
+    const [incrementalAudits, setIncrementalAudits] = useState<IngestionIncrementalAuditDTO[]>([]);
+    const [incrementalAuditsLoading, setIncrementalAuditsLoading] = useState(false);
+    const [auditDetailVisible, setAuditDetailVisible] = useState(false);
+    const [auditDetailLoading, setAuditDetailLoading] = useState(false);
+    const [auditDetailRows, setAuditDetailRows] = useState<IngestionIncrementalAuditDTO[]>([]);
+    const [auditDetailExecution, setAuditDetailExecution] = useState<IngestionExecutionDTO | null>(null);
+    const [auditFrom, setAuditFrom] = useState<string | undefined>();
+    const [auditTo, setAuditTo] = useState<string | undefined>();
+    const executePollTimerRef = useRef<number | null>(null);
+    const executeStartedAtRef = useRef<number>(0);
 
     useEffect(() => {
         if (id) {
@@ -26,6 +66,33 @@ export default function TransformExecutionHistoryPage() {
             loadExecutions();
         }
     }, [id, pagination.current]);
+
+    useEffect(() => {
+        if (!task?.id) {
+            setIncrementalStates([]);
+            setIncrementalAudits([]);
+            return;
+        }
+        if (normalizeText(task.syncMode).toLowerCase() !== "incremental") {
+            setIncrementalStates([]);
+            setIncrementalAudits([]);
+            return;
+        }
+        void loadIncrementalStates(Number(task.id));
+        const executionIds = executions.map((it) => it.id).filter((it): it is number => typeof it === "number");
+        void loadIncrementalAudits(Number(task.id), undefined, true, executionIds);
+    }, [task?.id, task?.syncMode, executions, auditFrom, auditTo]);
+
+    useEffect(() => {
+        return () => {
+            if (executePollTimerRef.current !== null) {
+                window.clearInterval(executePollTimerRef.current);
+                executePollTimerRef.current = null;
+            }
+        };
+    }, []);
+
+    const normalizeText = (value?: string) => String(value || "").trim();
 
     const loadTask = async () => {
         try {
@@ -56,6 +123,179 @@ export default function TransformExecutionHistoryPage() {
         }
     };
 
+    const loadIncrementalStates = async (taskId: number, silent?: boolean) => {
+        try {
+            if (!silent) {
+                setIncrementalStatesLoading(true);
+            }
+            const states = await ingestionTaskAPI.getIncrementalStates(taskId);
+            setIncrementalStates(Array.isArray(states) ? states : []);
+        } catch (error: any) {
+            setIncrementalStates([]);
+            message.error("加载增量检查点失败: " + (error.message || "未知错误"));
+        } finally {
+            if (!silent) {
+                setIncrementalStatesLoading(false);
+            }
+        }
+    };
+
+    const loadIncrementalAudits = async (
+        taskId: number,
+        executionId?: number,
+        silent?: boolean,
+        executionIds?: number[]
+    ) => {
+        try {
+            if (!silent) {
+                setIncrementalAuditsLoading(true);
+            }
+            if (!executionId && (!executionIds || !executionIds.length)) {
+                setIncrementalAudits([]);
+                return;
+            }
+            const result = await ingestionTaskAPI.getIncrementalAuditsPage(taskId, {
+                executionId,
+                executionIds,
+                from: auditFrom,
+                to: auditTo,
+                page: 0,
+                size: 2000,
+                sort: "createdAt,desc",
+            });
+            const content = Array.isArray(result?.content) ? result.content : [];
+            setIncrementalAudits(content);
+        } catch (error: any) {
+            setIncrementalAudits([]);
+            message.error("加载增量审计失败: " + (error.message || "未知错误"));
+        } finally {
+            if (!silent) {
+                setIncrementalAuditsLoading(false);
+            }
+        }
+    };
+
+    const stopExecutePolling = () => {
+        if (executePollTimerRef.current !== null) {
+            window.clearInterval(executePollTimerRef.current);
+            executePollTimerRef.current = null;
+        }
+    };
+
+    const mapExecutionProgress = (execution: IngestionExecutionDTO | null, elapsedMs: number): ExecutionProgressView => {
+        if (!execution) {
+            const percent = Math.min(45, 15 + Math.floor(elapsedMs / 5000) * 5);
+            return {
+                percent,
+                status: "active",
+                stage: "等待执行记录",
+                detail: "任务已提交，系统正在准备 DAG 和作业参数。",
+                terminal: false,
+            };
+        }
+        const normalized = normalizeText(execution.status).toLowerCase();
+        if (normalized === "success") {
+            return {
+                percent: 100,
+                status: "success",
+                stage: "执行成功",
+                detail: "任务已执行完成。",
+                terminal: true,
+            };
+        }
+        if (normalized === "failed" || normalized === "error") {
+            return {
+                percent: 100,
+                status: "exception",
+                stage: "执行失败",
+                detail: normalizeText(execution.errorMessage) || "执行失败，请查看日志。",
+                terminal: true,
+            };
+        }
+        if (normalized === "preparing") {
+            return {
+                percent: 60,
+                status: "active",
+                stage: "准备执行",
+                detail: "正在生成/校验 Addax 作业并等待 DAG 就绪。",
+                terminal: false,
+            };
+        }
+        return {
+            percent: 85,
+            status: "active",
+            stage: "执行中",
+            detail: "已触发执行，正在同步运行状态。",
+            terminal: false,
+        };
+    };
+
+    const startExecuteProgressPolling = (taskId: number, pollIntervalMs?: number) => {
+        stopExecutePolling();
+        executeStartedAtRef.current = Date.now();
+        setExecuteProgressOpen(true);
+        setLatestExecution(null);
+        setExecuteProgress({
+            percent: 10,
+            status: "active",
+            stage: "任务已提交",
+            detail: "正在后台触发执行。",
+            terminal: false,
+        });
+
+        const poll = async () => {
+            const elapsed = Date.now() - executeStartedAtRef.current;
+            if (elapsed > 5 * 60 * 1000) {
+                stopExecutePolling();
+                setExecuteProgress({
+                    percent: 100,
+                    status: "exception",
+                    stage: "状态同步超时",
+                    detail: "等待超时，请刷新列表查看执行状态。",
+                    terminal: true,
+                });
+                return;
+            }
+            try {
+                const execution = await ingestionTaskAPI.getLatestExecution(taskId);
+                setLatestExecution(execution);
+                const next = mapExecutionProgress(execution, elapsed);
+                setExecuteProgress(next);
+                if (next.terminal) {
+                    stopExecutePolling();
+                    void loadTask();
+                    void loadExecutions();
+                    if (task?.id && normalizeText(task.syncMode).toLowerCase() === "incremental") {
+                        void loadIncrementalStates(Number(task.id), true);
+                        const executionIds = executions.map((it) => it.id).filter((it): it is number => typeof it === "number");
+                        void loadIncrementalAudits(Number(task.id), undefined, true, executionIds);
+                    }
+                }
+            } catch {
+                setExecuteProgress((prev) => ({ ...prev, detail: "状态同步中，稍后自动重试。" }));
+            }
+        };
+
+        void poll();
+        executePollTimerRef.current = window.setInterval(() => {
+            void poll();
+        }, resolveExecutionPollIntervalMs(pollIntervalMs));
+    };
+
+    const handleExecute = async () => {
+        if (!task?.id) return;
+        setExecuteSubmitting(true);
+        try {
+            const submit = await ingestionTaskAPI.executeTaskAsync(Number(task.id));
+            message.success("任务已提交，后台正在触发执行");
+            startExecuteProgressPolling(Number(task.id), submit?.pollIntervalMs);
+        } catch (error: any) {
+            message.error("执行失败: " + (error.message || "未知错误"));
+        } finally {
+            setExecuteSubmitting(false);
+        }
+    };
+
     const loadLog = async (record: IngestionExecutionDTO, opts?: { silent?: boolean }) => {
         if (!id) return;
         try {
@@ -64,7 +304,11 @@ export default function TransformExecutionHistoryPage() {
             }
             setActiveExecution(record);
             setLogLoading(true);
-            const result = await ingestionTaskAPI.getExecutionLog(Number(id), record.id, { tryNumber: 1 });
+            const result = await ingestionTaskAPI.getExecutionLog(Number(id), record.id, {
+                tryNumber: 1,
+                keyword: normalizeText(logKeyword) || undefined,
+                scope: logScope,
+            });
             setLogMeta(result);
             const content = String(result?.log || result?.message || "");
             setLogContent(content);
@@ -106,6 +350,75 @@ export default function TransformExecutionHistoryPage() {
         }
         return `${seconds}秒`;
     };
+
+    const auditSummaryByExecution = useMemo(() => {
+        const summary = new Map<number, { total: number; advanced: number; unchanged: number }>();
+        for (const audit of incrementalAudits) {
+            const executionId = Number(audit.executionId || 0);
+            if (!executionId) {
+                continue;
+            }
+            const item = summary.get(executionId) || { total: 0, advanced: 0, unchanged: 0 };
+            item.total += 1;
+            if (Boolean(audit.advanced)) {
+                item.advanced += 1;
+            } else {
+                item.unchanged += 1;
+            }
+            summary.set(executionId, item);
+        }
+        return summary;
+    }, [incrementalAudits]);
+
+    const auditTablesByExecution = useMemo(() => {
+        const map = new Map<number, { advanced: string[]; unchanged: string[] }>();
+        for (const audit of incrementalAudits) {
+            const executionId = Number(audit.executionId || 0);
+            if (!executionId) {
+                continue;
+            }
+            const sourceTable = normalizeText(audit.sourceTable) || "-";
+            const item = map.get(executionId) || { advanced: [], unchanged: [] };
+            const list = Boolean(audit.advanced) ? item.advanced : item.unchanged;
+            if (!list.includes(sourceTable)) {
+                list.push(sourceTable);
+            }
+            map.set(executionId, item);
+        }
+        return map;
+    }, [incrementalAudits]);
+
+    const openAuditDetail = async (record: IngestionExecutionDTO) => {
+        if (!task?.id) {
+            return;
+        }
+        setAuditDetailExecution(record);
+        setAuditDetailVisible(true);
+        setAuditDetailLoading(true);
+        try {
+            const result = await ingestionTaskAPI.getIncrementalAuditsPage(Number(task.id), {
+                executionId: record.id,
+                page: 0,
+                size: 1000,
+                sort: "createdAt,desc",
+            });
+            const rows = Array.isArray(result?.content) ? result.content : [];
+            setAuditDetailRows(rows);
+        } catch (error: any) {
+            setAuditDetailRows([]);
+            message.error("加载执行水位详情失败: " + (error.message || "未知错误"));
+        } finally {
+            setAuditDetailLoading(false);
+        }
+    };
+
+    const auditDetailSummary = useMemo(() => {
+        const total = auditDetailRows.length;
+        const advanced = auditDetailRows.filter((it) => Boolean(it.advanced)).length;
+        const unchanged = Math.max(0, total - advanced);
+        const rate = total > 0 ? Math.round((advanced * 100) / total) : 0;
+        return { total, advanced, unchanged, rate };
+    }, [auditDetailRows]);
 
     const columns = [
         {
@@ -156,6 +469,56 @@ export default function TransformExecutionHistoryPage() {
             render: formatNumber,
         },
         {
+            title: "水位推进",
+            key: "checkpointUpdated",
+            width: 180,
+            render: (_: any, record: IngestionExecutionDTO) => {
+                const summary = auditSummaryByExecution.get(record.id);
+                const tables = auditTablesByExecution.get(record.id);
+                if (!summary) {
+                    return "-";
+                }
+                const tooltipTitle = (
+                    <div style={{ maxWidth: 420 }}>
+                        <div>推进表：{tables?.advanced?.length ? tables.advanced.join(", ") : "无"}</div>
+                        <div>未推进表：{tables?.unchanged?.length ? tables.unchanged.join(", ") : "无"}</div>
+                    </div>
+                );
+                return (
+                    <Space size={4}>
+                        <Tooltip title={tooltipTitle}>
+                            {summary.advanced > 0 ? (
+                                <Tag color="success">
+                                    推进 {summary.advanced}/{summary.total} ({Math.round((summary.advanced * 100) / summary.total)}%)
+                                </Tag>
+                            ) : (
+                                <Tag color="warning">未推进</Tag>
+                            )}
+                        </Tooltip>
+                        <Button type="link" size="small" onClick={() => openAuditDetail(record)}>
+                            详情
+                        </Button>
+                    </Space>
+                );
+            },
+        },
+        {
+            title: "失败分类",
+            dataIndex: "failureCategory",
+            key: "failureCategory",
+            width: 150,
+            render: (_: string, record: IngestionExecutionDTO) => {
+                if (!normalizeText(record.failureCategory)) {
+                    return "-";
+                }
+                return (
+                    <Tooltip title={normalizeText(record.failureAdvice) || undefined}>
+                        <Tag color="error">{record.failureCategory}</Tag>
+                    </Tooltip>
+                );
+            },
+        },
+        {
             title: "错误信息",
             dataIndex: "errorMessage",
             key: "errorMessage",
@@ -167,9 +530,27 @@ export default function TransformExecutionHistoryPage() {
             key: "log",
             width: 120,
             render: (_: any, record: IngestionExecutionDTO) => (
-                <Button size="small" onClick={() => loadLog(record)}>
-                    查看日志
-                </Button>
+                <Space size={4}>
+                    <Button size="small" onClick={() => loadLog(record)}>
+                        查看日志
+                    </Button>
+                    {normalizeText(record.status).toLowerCase() === "failed" ? (
+                        <Button
+                            size="small"
+                            onClick={async () => {
+                                try {
+                                    await ingestionTaskAPI.retryExecution(Number(id), record.id, { mode: "FAILED_ONLY" });
+                                    message.success("已提交失败重试任务");
+                                    startExecuteProgressPolling(Number(id));
+                                } catch (error: any) {
+                                    message.error("重试失败: " + (error.message || "未知错误"));
+                                }
+                            }}
+                        >
+                            失败重试
+                        </Button>
+                    ) : null}
+                </Space>
             ),
         },
     ];
@@ -192,9 +573,44 @@ export default function TransformExecutionHistoryPage() {
                         <Button icon={<ArrowLeftOutlined />} onClick={() => router.push(`/explore/etl/transform/${id}`)}>
                             返回
                         </Button>
+                        <Button
+                            type="primary"
+                            icon={<PlayCircleOutlined />}
+                            onClick={handleExecute}
+                            loading={executeSubmitting}
+                            disabled={task?.status === "deleted"}
+                        >
+                            执行任务
+                        </Button>
                         <Button icon={<ReloadOutlined />} onClick={loadExecutions} loading={loading}>
                             刷新
                         </Button>
+                        {normalizeText(task.syncMode).toLowerCase() === "incremental" ? (
+                            <DatePicker.RangePicker
+                                showTime
+                                allowClear
+                                placeholder={["审计开始时间", "审计结束时间"]}
+                                onChange={(values: any) => {
+                                    const from = values?.[0]?.toISOString?.();
+                                    const to = values?.[1]?.toISOString?.();
+                                    setAuditFrom(from || undefined);
+                                    setAuditTo(to || undefined);
+                                }}
+                            />
+                        ) : null}
+                        {normalizeText(task.syncMode).toLowerCase() === "incremental" ? (
+                            <Button
+                                icon={<ReloadOutlined />}
+                                onClick={() => {
+                                    if (!task?.id) return;
+                                    const executionIds = executions.map((it) => it.id).filter((it): it is number => typeof it === "number");
+                                    void loadIncrementalAudits(Number(task.id), undefined, false, executionIds);
+                                }}
+                                loading={incrementalAuditsLoading}
+                            >
+                                刷新审计
+                            </Button>
+                        ) : null}
                     </Space>
                 }
             />
@@ -218,6 +634,120 @@ export default function TransformExecutionHistoryPage() {
                     }}
                 />
             </Card>
+
+            {normalizeText(task.syncMode).toLowerCase() === "incremental" ? (
+                <Card
+                    title="增量检查点（当前）"
+                    extra={
+                        <Space>
+                            {auditFrom || auditTo ? (
+                                <Tag color="processing">审计范围已生效</Tag>
+                            ) : (
+                                <Tag>审计范围：全部</Tag>
+                            )}
+                            <Button
+                                icon={<ReloadOutlined />}
+                                loading={incrementalStatesLoading}
+                                onClick={() => task?.id && loadIncrementalStates(Number(task.id))}
+                            >
+                                刷新检查点
+                            </Button>
+                        </Space>
+                    }
+                >
+                    <Table<IngestionIncrementalStateDTO>
+                        rowKey={(record) => `${record.taskId}-${record.sourceTable}`}
+                        size="small"
+                        loading={incrementalStatesLoading}
+                        pagination={false}
+                        dataSource={incrementalStates}
+                        locale={{ emptyText: "暂无检查点（首次增量成功后写入）" }}
+                        columns={[
+                            {
+                                title: "源表",
+                                dataIndex: "sourceTable",
+                                key: "sourceTable",
+                                render: (value: string) => <Typography.Text code>{value || "-"}</Typography.Text>,
+                            },
+                            {
+                                title: "最新水位",
+                                dataIndex: "lastSuccessWatermark",
+                                key: "lastSuccessWatermark",
+                                render: (value?: string) => value || "-",
+                            },
+                            {
+                                title: "最近运行ID",
+                                dataIndex: "lastRunId",
+                                key: "lastRunId",
+                                render: (value?: string) => value || "-",
+                            },
+                            {
+                                title: "更新时间",
+                                dataIndex: "updatedAt",
+                                key: "updatedAt",
+                                render: (value?: string) => (value ? formatTimestamp(value) : "-"),
+                            },
+                        ]}
+                    />
+                    <div className="mt-3 text-xs text-muted-foreground">
+                        {"该区域是当前最新检查点快照；单次执行的前后水位请看“执行历史 > 水位推进 > 详情”。"}
+                    </div>
+                </Card>
+            ) : null}
+            <Modal
+                title="执行进度"
+                open={executeProgressOpen}
+                maskClosable={false}
+                onCancel={() => {
+                    stopExecutePolling();
+                    setExecuteProgressOpen(false);
+                }}
+                footer={
+                    <Space>
+                        <Button
+                            onClick={() => {
+                                stopExecutePolling();
+                                setExecuteProgressOpen(false);
+                                void loadExecutions();
+                            }}
+                        >
+                            刷新列表
+                        </Button>
+                        <Button
+                            type="primary"
+                            onClick={() => {
+                                stopExecutePolling();
+                                setExecuteProgressOpen(false);
+                            }}
+                        >
+                            {executeProgress.terminal ? "关闭" : "最小化"}
+                        </Button>
+                    </Space>
+                }
+                width={620}
+            >
+                <Space direction="vertical" size="middle" className="w-full">
+                    <Typography.Text>任务：{task?.name || "-"}</Typography.Text>
+                    <Progress percent={executeProgress.percent} status={executeProgress.status} />
+                    <Alert
+                        showIcon
+                        type={
+                            executeProgress.status === "success"
+                                ? "success"
+                                : executeProgress.status === "exception"
+                                    ? "error"
+                                    : "info"
+                        }
+                        message={executeProgress.stage}
+                        description={executeProgress.detail}
+                    />
+                    {latestExecution ? (
+                        <Typography.Text type="secondary">
+                            执行ID：{latestExecution.executionId || latestExecution.id}，状态：{latestExecution.status}
+                        </Typography.Text>
+                    ) : null}
+                </Space>
+            </Modal>
             <Drawer
                 title="执行日志"
                 width={720}
@@ -225,6 +755,22 @@ export default function TransformExecutionHistoryPage() {
                 onClose={() => setLogVisible(false)}
                 extra={
                     <Space>
+                        <Segmented
+                            size="small"
+                            value={logScope}
+                            options={[
+                                { label: "单节点", value: "single" },
+                                { label: "全节点", value: "all" },
+                            ]}
+                            onChange={(value) => setLogScope((value as "single" | "all") || "single")}
+                        />
+                        <Input
+                            size="small"
+                            placeholder="关键字过滤"
+                            value={logKeyword}
+                            onChange={(event) => setLogKeyword(event.target.value)}
+                            style={{ width: 180 }}
+                        />
                         <Button
                             icon={<ReloadOutlined />}
                             loading={logLoading}
@@ -240,7 +786,11 @@ export default function TransformExecutionHistoryPage() {
                         <Typography.Text type="secondary">
                             执行ID：{activeExecution.executionId || activeExecution.id}
                             {logMeta?.dagId ? ` · DAG: ${logMeta.dagId}` : ""}
+                            {logMeta?.failureCategory ? ` · ${logMeta.failureCategory}` : ""}
                         </Typography.Text>
+                        {logMeta?.failureAdvice ? (
+                            <Typography.Text type="warning">建议：{logMeta.failureAdvice}</Typography.Text>
+                        ) : null}
                         <div className="rounded-md bg-muted p-3 text-xs whitespace-pre-wrap overflow-auto max-h-[60vh]">
                             {logLoading ? "日志加载中..." : logContent || "暂无日志"}
                         </div>
@@ -248,6 +798,81 @@ export default function TransformExecutionHistoryPage() {
                 ) : (
                     <Typography.Text type="secondary">请选择执行记录查看日志。</Typography.Text>
                 )}
+            </Drawer>
+            <Drawer
+                title="执行水位详情"
+                width={780}
+                open={auditDetailVisible}
+                onClose={() => setAuditDetailVisible(false)}
+                extra={
+                    <Space>
+                        <Button
+                            icon={<ReloadOutlined />}
+                            loading={auditDetailLoading}
+                            onClick={() => auditDetailExecution && openAuditDetail(auditDetailExecution)}
+                        >
+                            刷新
+                        </Button>
+                    </Space>
+                }
+            >
+                <Space direction="vertical" size="small" className="w-full">
+                    <Typography.Text type="secondary">
+                        执行ID：{auditDetailExecution?.executionId || auditDetailExecution?.id || "-"}
+                    </Typography.Text>
+                    <Typography.Text type="secondary">
+                        推进率：{auditDetailSummary.advanced}/{auditDetailSummary.total} ({auditDetailSummary.rate}%)，
+                        未推进：{auditDetailSummary.unchanged}
+                    </Typography.Text>
+                    <Table<IngestionIncrementalAuditDTO>
+                        rowKey={(record) => String(record.id)}
+                        size="small"
+                        loading={auditDetailLoading}
+                        pagination={false}
+                        locale={{ emptyText: "该次执行没有生成增量水位审计" }}
+                        dataSource={auditDetailRows}
+                        columns={[
+                            {
+                                title: "源表",
+                                dataIndex: "sourceTable",
+                                key: "sourceTable",
+                                render: (value: string) => <Typography.Text code>{value || "-"}</Typography.Text>,
+                            },
+                            {
+                                title: "增量列",
+                                dataIndex: "incrementalColumn",
+                                key: "incrementalColumn",
+                                render: (value?: string) => value || "-",
+                            },
+                            {
+                                title: "执行前水位",
+                                dataIndex: "beforeWatermark",
+                                key: "beforeWatermark",
+                                render: (value?: string) => value || "-",
+                            },
+                            {
+                                title: "执行后水位",
+                                dataIndex: "afterWatermark",
+                                key: "afterWatermark",
+                                render: (value?: string) => value || "-",
+                            },
+                            {
+                                title: "是否推进",
+                                dataIndex: "advanced",
+                                key: "advanced",
+                                width: 110,
+                                render: (value?: boolean) =>
+                                    value ? <Tag color="success">是</Tag> : <Tag color="warning">否</Tag>,
+                            },
+                            {
+                                title: "记录时间",
+                                dataIndex: "createdAt",
+                                key: "createdAt",
+                                render: (value?: string) => (value ? formatTimestamp(value) : "-"),
+                            },
+                        ]}
+                    />
+                </Space>
             </Drawer>
         </div>
     );

@@ -12,6 +12,7 @@ export interface IngestionTaskDTO {
   syncMode: string;
   syncSchedule?: string;
   syncPrefix?: string;
+  syncConfig?: Record<string, any>;
   tableMapping?: Array<{ source: string; target: string }>;
   addaxJobPath?: string;
   addaxConfig?: Record<string, any>;
@@ -39,7 +40,11 @@ export interface IngestionExecutionDTO {
   rowsRead?: number;
   rowsWritten?: number;
   errorMessage?: string;
+  failureCategory?: string;
+  failureAdvice?: string;
   logPath?: string;
+  replaceMode?: string;
+  droppedTables?: string;
   createdAt?: string;
 }
 
@@ -50,8 +55,52 @@ export interface IngestionExecutionLog {
   dagRunId?: string;
   taskInstanceId?: string;
   tryNumber?: number;
+  scope?: "single" | "all" | string;
+  keyword?: string;
+  taskStates?: Record<string, string>;
+  failureCategory?: string;
+  failureAdvice?: string;
   log?: string;
   message?: string;
+}
+
+export interface IngestionIncrementalStateDTO {
+  id: number;
+  taskId: number;
+  sourceTable: string;
+  lastSuccessWatermark?: string;
+  lastRunId?: string;
+  updatedAt?: string;
+  createdAt?: string;
+}
+
+export interface IngestionIncrementalAuditSummaryDTO {
+  total: number;
+  advanced: number;
+  unchanged: number;
+  advancedRate: number;
+}
+
+export interface IngestionIncrementalAuditDTO {
+  id: number;
+  taskId: number;
+  executionId?: number;
+  executionRunId?: string;
+  sourceTable: string;
+  incrementalColumn?: string;
+  beforeWatermark?: string;
+  afterWatermark?: string;
+  advanced?: boolean;
+  createdAt?: string;
+}
+
+export interface AsyncExecutionSubmitResult {
+  taskId: number;
+  taskName?: string;
+  status: string;
+  async?: boolean;
+  message?: string;
+  pollIntervalMs?: number;
 }
 
 export interface ColumnInfo {
@@ -136,6 +185,43 @@ export interface DefaultDestinationStatus {
   message?: string;
 }
 
+export interface IngestionConnectorCapabilityDTO {
+  connectorType: string;
+  capabilities: string[];
+  connectorVersion?: string;
+  constraints?: Record<string, any>;
+  enabled?: boolean;
+  updatedAt?: string;
+}
+
+export interface IngestionRealtimeStatusDTO {
+  taskId: number;
+  connectorType: string;
+  status: string;
+  topicName?: string;
+  consumerGroup?: string;
+  checkpointToken?: string;
+  lagMs?: number;
+  throughputRps?: number;
+  backlogCount?: number;
+  lastHeartbeat?: string;
+  updatedAt?: string;
+}
+
+const DEFAULT_EXECUTION_POLL_INTERVAL_MS = (() => {
+  const raw = Number((import.meta as any)?.env?.VITE_INGESTION_EXECUTION_POLL_MS ?? 3000);
+  if (!Number.isFinite(raw)) return 3000;
+  return Math.min(30000, Math.max(1000, Math.floor(raw)));
+})();
+
+export const resolveExecutionPollIntervalMs = (hint?: number): number => {
+  const picked = Number(hint);
+  if (!Number.isFinite(picked)) {
+    return DEFAULT_EXECUTION_POLL_INTERVAL_MS;
+  }
+  return Math.min(30000, Math.max(1000, Math.floor(picked)));
+};
+
 /**
  * 数据入湖任务API
  */
@@ -198,6 +284,10 @@ class IngestionTaskAPI {
     return api.post({ url: `/ingestion/tasks/${id}/execute` });
   }
 
+  async executeTaskAsync(id: number): Promise<AsyncExecutionSubmitResult> {
+    return api.post({ url: `/ingestion/tasks/${id}/execute/async` });
+  }
+
   /**
    * 强制重建 DAG
    */
@@ -239,9 +329,59 @@ class IngestionTaskAPI {
   async getExecutionLog(
     taskId: number,
     executionId: number,
-    params?: { tryNumber?: number }
+    params?: { tryNumber?: number; keyword?: string; scope?: "single" | "all" }
   ): Promise<IngestionExecutionLog> {
     return api.get({ url: `/ingestion/tasks/${taskId}/executions/${executionId}/logs`, params });
+  }
+
+  async retryExecution(
+    taskId: number,
+    executionId: number,
+    params?: { mode?: "FAILED_ONLY" | "FULL_RERUN" }
+  ): Promise<IngestionExecutionDTO> {
+    return api.post({ url: `/ingestion/tasks/${taskId}/executions/${executionId}/retry`, params });
+  }
+
+  async getIncrementalStates(taskId: number): Promise<IngestionIncrementalStateDTO[]> {
+    return api.get({ url: `/ingestion/tasks/${taskId}/incremental-states` });
+  }
+
+  async getIncrementalAudits(
+    taskId: number,
+    params?: { executionId?: number }
+  ): Promise<IngestionIncrementalAuditDTO[]> {
+    return api.get({ url: `/ingestion/tasks/${taskId}/incremental-audits`, params });
+  }
+
+  async getIncrementalAuditsPage(
+    taskId: number,
+    params?: {
+      executionId?: number;
+      executionIds?: number[];
+      from?: string;
+      to?: string;
+      tableName?: string;
+      status?: "advanced" | "unchanged";
+      page?: number;
+      size?: number;
+      sort?: string;
+    }
+  ): Promise<PageResult<IngestionIncrementalAuditDTO>> {
+    return api.get({ url: `/ingestion/tasks/${taskId}/incremental-audits/page`, params });
+  }
+
+  async getIncrementalAuditsSummary(
+    taskId: number,
+    params?: {
+      executionId?: number;
+      executionIds?: number[];
+      from?: string;
+      to?: string;
+      tableName?: string;
+      status?: "advanced" | "unchanged";
+    }
+  ): Promise<IngestionIncrementalAuditSummaryDTO> {
+    return api.get({ url: `/ingestion/tasks/${taskId}/incremental-audits/summary`, params });
   }
 
   /**
@@ -255,6 +395,49 @@ class IngestionTaskAPI {
       data: formData,
       headers: { "Content-Type": "multipart/form-data" },
     });
+  }
+
+  async getConnectorCapabilities(): Promise<IngestionConnectorCapabilityDTO[]> {
+    const payload: any = await api.get({ url: "/ingestion/connectors/capabilities" });
+    if (Array.isArray(payload)) return payload as IngestionConnectorCapabilityDTO[];
+    if (payload && typeof payload === "object" && Array.isArray((payload as any).data)) {
+      return (payload as any).data as IngestionConnectorCapabilityDTO[];
+    }
+    return [];
+  }
+
+  async getConnectorCapability(connectorType: string): Promise<IngestionConnectorCapabilityDTO | null> {
+    try {
+      const payload: any = await api.get({ url: `/ingestion/connectors/capabilities/${connectorType}` });
+      if (!payload) return null;
+      if (payload && typeof payload === "object" && "connectorType" in payload) {
+        return payload as IngestionConnectorCapabilityDTO;
+      }
+      if (payload && typeof payload === "object" && (payload as any).data) {
+        return (payload as any).data as IngestionConnectorCapabilityDTO;
+      }
+      return null;
+    } catch (error: any) {
+      if (error?.response?.status === 404) return null;
+      throw error;
+    }
+  }
+
+  async getRealtimeStatus(taskId: number): Promise<IngestionRealtimeStatusDTO | null> {
+    try {
+      const payload: any = await api.get({ url: `/ingestion/tasks/${taskId}/realtime-status` });
+      if (!payload) return null;
+      if (payload && typeof payload === "object" && "taskId" in payload) {
+        return payload as IngestionRealtimeStatusDTO;
+      }
+      if (payload && typeof payload === "object" && (payload as any).data) {
+        return (payload as any).data as IngestionRealtimeStatusDTO;
+      }
+      return null;
+    } catch (error: any) {
+      if (error?.response?.status === 404) return null;
+      throw error;
+    }
   }
 
   /**

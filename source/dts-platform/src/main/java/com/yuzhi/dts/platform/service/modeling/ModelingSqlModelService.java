@@ -269,6 +269,10 @@ public class ModelingSqlModelService {
                 skipped.add("mapping:" + mapping.getId() + " (ODS 表名为空)");
                 continue;
             }
+            if (!hasActiveOdsDataset(odsSchema, odsTable)) {
+                skipped.add(odsSchema + "." + odsTable + " (ODS 映射已过期，请先重新采集)");
+                continue;
+            }
             UUID modelSourceId = preferredSourceId;
             if (modelSourceId == null) {
                 modelSourceId = resolveUsableSourceId(mapping.getConnectionId(), activeDeptHeader, "mapping");
@@ -552,10 +556,15 @@ public class ModelingSqlModelService {
             throw new IllegalArgumentException("SQL 内容不能为空");
         }
         UUID sourceId = request.sourceDataSourceId();
-        // sourceDataSourceId 可选，支持 Excel 等无数据库连接的场景
+        if (sourceId == null) {
+            sourceId = resolveFallbackSourceId(activeDeptHeader);
+        }
+        if (sourceId == null) {
+            throw new IllegalArgumentException("来源数据源不存在，请先配置可用数据源");
+        }
 
         ModelingPlan plan = resolvePlan(request.planId(), activeDeptHeader);
-        InfraDataSource source = sourceId != null ? resolveSource(sourceId, activeDeptHeader) : null;
+        InfraDataSource source = resolveSource(sourceId, activeDeptHeader);
 
         String activeDept = security.resolveActiveDept(activeDeptHeader);
         if (isCreate) {
@@ -1039,6 +1048,21 @@ public class ModelingSqlModelService {
         return StringUtils.hasText(value) ? value : fallback;
     }
 
+    private boolean hasActiveOdsDataset(String schema, String table) {
+        if (!StringUtils.hasText(schema) || !StringUtils.hasText(table)) {
+            return false;
+        }
+        boolean exists = datasetRepository.existsByHiveDatabaseIgnoreCaseAndHiveTableIgnoreCaseAndWarehouseLayerIgnoreCaseAndEnabledTrue(
+            schema.trim(),
+            table.trim(),
+            "ODS"
+        );
+        if (!exists) {
+            exists = datasetRepository.existsByHiveDatabaseIgnoreCaseAndHiveTableIgnoreCaseAndEnabledTrue(schema.trim(), table.trim());
+        }
+        return exists;
+    }
+
     private String resolveEntityToken(InfraOdsTableMapping mapping, String odsTable) {
         String candidate = trimToNull(mapping != null ? mapping.getEntityCode() : null);
         if (!StringUtils.hasText(candidate)) {
@@ -1080,6 +1104,9 @@ public class ModelingSqlModelService {
         String activeDeptHeader,
         boolean overwrite
     ) {
+        if (sourceDataSourceId == null) {
+            return new GenerateLayerResult(modelName, false, false, modelName + " (来源数据源不可用: 来源数据源不存在)");
+        }
         ModelingSqlModel existing = repo.findFirstByPlanIdAndNameIgnoreCase(planId, modelName).orElse(null);
         if (existing != null && !overwrite) {
             return new GenerateLayerResult(modelName, false, false, modelName + " (已存在，未覆盖)");

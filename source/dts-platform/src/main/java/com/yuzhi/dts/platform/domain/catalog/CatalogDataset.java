@@ -75,6 +75,9 @@ public class CatalogDataset extends AbstractAuditingEntity<UUID> implements Seri
     @Column(name = "expires_at")
     private Instant expiresAt;
 
+    @Column(name = "snapshot_time")
+    private Instant snapshotTime;
+
     @Override
     public UUID getId() {
         return id;
@@ -226,5 +229,13 @@ public class CatalogDataset extends AbstractAuditingEntity<UUID> implements Seri
 
     public void setExpiresAt(Instant expiresAt) {
         this.expiresAt = expiresAt;
+    }
+
+    public Instant getSnapshotTime() {
+        return snapshotTime;
+    }
+
+    public void setSnapshotTime(Instant snapshotTime) {
+        this.snapshotTime = snapshotTime;
     }
 }

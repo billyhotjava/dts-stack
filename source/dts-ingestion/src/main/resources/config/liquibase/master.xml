@@ -9,5 +9,10 @@
     <include file="config/liquibase/changelog/20260126_01_ingestion_task_change_log.xml"/>
     <include file="config/liquibase/changelog/20260127_01_ingestion_task_datasource.xml"/>
     <include file="config/liquibase/changelog/20260128_01_ingestion_task_dbt_link.xml"/>
+    <include file="config/liquibase/changelog/20260211_01_ingestion_incremental_support.xml"/>
+    <include file="config/liquibase/changelog/20260211_02_ingestion_incremental_audit.xml"/>
+    <include file="config/liquibase/changelog/20260212_01_ingestion_execution_replace_audit.xml"/>
+    <include file="config/liquibase/changelog/20260212_02_ingestion_incremental_audit_perf.xml"/>
+    <include file="config/liquibase/changelog/20260212_03_ingestion_connector_realtime.xml"/>
 
 </databaseChangeLog>

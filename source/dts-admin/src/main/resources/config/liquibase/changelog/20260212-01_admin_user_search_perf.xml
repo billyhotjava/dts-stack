@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260212-01-admin-user-search-perf" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="admin_keycloak_user"/>
+            <columnExists tableName="admin_keycloak_user" columnName="mdm_enabled"/>
+        </preConditions>
+
+        <createIndex indexName="idx_admin_keycloak_user_mdm_username" tableName="admin_keycloak_user">
+            <column name="mdm_enabled"/>
+            <column name="username"/>
+        </createIndex>
+
+        <createIndex indexName="idx_admin_keycloak_user_sync_time" tableName="admin_keycloak_user">
+            <column name="last_sync_at"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

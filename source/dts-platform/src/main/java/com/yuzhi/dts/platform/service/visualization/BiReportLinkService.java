@@ -1,21 +1,31 @@
 package com.yuzhi.dts.platform.service.visualization;
 
+import com.yuzhi.dts.platform.domain.explore.QueryDatasetAsset;
 import com.yuzhi.dts.platform.domain.visualization.BiReportLink;
+import com.yuzhi.dts.platform.repository.explore.QueryDatasetAssetRepository;
 import com.yuzhi.dts.platform.repository.visualization.BiReportLinkRepository;
 import com.yuzhi.dts.platform.security.AuthoritiesConstants;
 import com.yuzhi.dts.platform.security.ClassificationUtils;
+import com.yuzhi.dts.platform.security.DepartmentUtils;
 import com.yuzhi.dts.platform.security.SecurityUtils;
 import com.yuzhi.dts.platform.service.visualization.dto.BiReportLinkDto;
 import com.yuzhi.dts.platform.service.visualization.dto.BiReportLinkRequest;
+import java.lang.reflect.Array;
 import java.time.Instant;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -25,29 +35,42 @@ import org.springframework.util.StringUtils;
 public class BiReportLinkService {
 
     private final BiReportLinkRepository repo;
+    private final QueryDatasetAssetRepository queryDatasetAssetRepository;
     private final ClassificationUtils classificationUtils;
 
-    public BiReportLinkService(BiReportLinkRepository repo, ClassificationUtils classificationUtils) {
+    public BiReportLinkService(
+        BiReportLinkRepository repo,
+        QueryDatasetAssetRepository queryDatasetAssetRepository,
+        ClassificationUtils classificationUtils
+    ) {
         this.repo = repo;
+        this.queryDatasetAssetRepository = queryDatasetAssetRepository;
         this.classificationUtils = classificationUtils;
     }
 
     @Transactional(readOnly = true)
-    public List<BiReportLinkDto> listPublished(String deptCode, String reportType, String keyword) {
+    public List<BiReportLinkDto> listPublished(String deptCode, String reportType, String keyword, String activeDeptHeader, UUID queryDatasetId) {
         List<BiReportLink> all = repo.findByEnabledTrueOrderBySortOrderAscLastModifiedDateDesc();
+        Map<UUID, QueryDatasetAsset> datasetCache = loadDatasetCache(all);
 
         String dept = trimToNull(deptCode);
         String type = trimToNull(reportType);
         String kw = trimToNull(keyword);
+        String queryDept = resolveActiveDept(activeDeptHeader);
         String userDept = currentClaim("dept_code");
+        String effectiveDept = StringUtils.hasText(queryDept) ? queryDept : userDept;
         Set<String> userRoles = currentAuthorities();
 
         boolean institutePrivileged = SecurityUtils.hasCurrentUserAnyOfAuthorities(AuthoritiesConstants.INSTITUTE_PRIVILEGED_ROLES);
+        boolean superAdmin = isSuperAdmin();
+        Instant now = Instant.now();
 
         List<BiReportLinkDto> out = new ArrayList<>();
         for (BiReportLink r : all) {
             if (r == null) continue;
             if (!classificationUtils.canAccess(r.getClassification())) continue;
+            if (r.getExpiresAt() != null && r.getExpiresAt().isBefore(now)) continue;
+            if (queryDatasetId != null && !queryDatasetId.equals(r.getQueryDatasetId())) continue;
 
             if (!matchRole(userRoles, r.getRoleCodes())) continue;
             if (!matchDept(userDept, r.getDeptCodes(), institutePrivileged)) continue;
@@ -55,26 +78,46 @@ public class BiReportLinkService {
             if (!matchType(type, r.getReportType())) continue;
             if (!matchKeyword(kw, r.getTitle(), r.getCode())) continue;
 
-            out.add(toDto(r));
+            QueryDatasetAsset dataset = r.getQueryDatasetId() == null ? null : datasetCache.get(r.getQueryDatasetId());
+            if (!datasetVisibleInScope(dataset, effectiveDept, superAdmin)) continue;
+            out.add(toDto(r, dataset != null ? trimToNull(dataset.getName()) : null));
         }
         return out;
     }
 
     @Transactional(readOnly = true)
-    public List<BiReportLinkDto> listAll(String deptCode, String reportType, String keyword, Boolean enabledOnly) {
+    public List<BiReportLinkDto> listAll(
+        String deptCode,
+        String reportType,
+        String keyword,
+        Boolean enabledOnly,
+        String activeDeptHeader,
+        UUID queryDatasetId
+    ) {
         String dept = trimToNull(deptCode);
         String type = trimToNull(reportType);
         String kw = trimToNull(keyword);
         boolean onlyEnabled = Boolean.TRUE.equals(enabledOnly);
+        String activeDept = resolveActiveDept(activeDeptHeader);
+        boolean superAdmin = isSuperAdmin();
+
+        List<BiReportLink> rows = repo.findAll();
+        Map<UUID, QueryDatasetAsset> datasetCache = loadDatasetCache(rows);
+        Instant now = Instant.now();
 
         List<BiReportLinkDto> out = new ArrayList<>();
-        for (BiReportLink r : repo.findAll()) {
+        for (BiReportLink r : rows) {
             if (r == null) continue;
             if (onlyEnabled && !r.isEnabled()) continue;
+            if (r.getExpiresAt() != null && r.getExpiresAt().isBefore(now)) continue;
+            if (queryDatasetId != null && !queryDatasetId.equals(r.getQueryDatasetId())) continue;
             if (!matchDeptFilter(dept, r.getDeptCodes())) continue;
             if (!matchType(type, r.getReportType())) continue;
             if (!matchKeyword(kw, r.getTitle(), r.getCode())) continue;
-            out.add(toDto(r));
+
+            QueryDatasetAsset dataset = r.getQueryDatasetId() == null ? null : datasetCache.get(r.getQueryDatasetId());
+            if (!datasetVisibleInScope(dataset, activeDept, superAdmin)) continue;
+            out.add(toDto(r, dataset != null ? trimToNull(dataset.getName()) : null));
         }
         out.sort(
             java.util.Comparator
@@ -84,25 +127,24 @@ public class BiReportLinkService {
         return out;
     }
 
-    public BiReportLinkDto create(BiReportLinkRequest req) {
+    public BiReportLinkDto create(BiReportLinkRequest req, String activeDeptHeader) {
         BiReportLink link = new BiReportLink();
-        apply(link, req, true);
-        // Best-effort unique enforcement before DB constraint
+        apply(link, req, true, activeDeptHeader);
         repo.findFirstByCodeIgnoreCase(link.getCode()).ifPresent(existing -> {
             throw new IllegalArgumentException("code already exists");
         });
-        return toDto(repo.save(link));
+        return toDto(repo.save(link), resolveDatasetName(link.getQueryDatasetId()));
     }
 
-    public BiReportLinkDto update(UUID id, BiReportLinkRequest req) {
+    public BiReportLinkDto update(UUID id, BiReportLinkRequest req, String activeDeptHeader) {
         BiReportLink link = repo.findById(id).orElseThrow(() -> new IllegalArgumentException("not_found"));
-        apply(link, req, false);
+        apply(link, req, false, activeDeptHeader);
         repo.findFirstByCodeIgnoreCase(link.getCode()).ifPresent(existing -> {
             if (existing.getId() != null && !existing.getId().equals(id)) {
                 throw new IllegalArgumentException("code already exists");
             }
         });
-        return toDto(repo.save(link));
+        return toDto(repo.save(link), resolveDatasetName(link.getQueryDatasetId()));
     }
 
     public void delete(UUID id) {
@@ -116,7 +158,22 @@ public class BiReportLinkService {
         repo.delete(link);
     }
 
-    private void apply(BiReportLink target, BiReportLinkRequest req, boolean creating) {
+    public void touchVisit(UUID id, String code) {
+        BiReportLink link = null;
+        if (id != null) {
+            link = repo.findById(id).orElse(null);
+        }
+        if (link == null && StringUtils.hasText(code)) {
+            link = repo.findFirstByCodeIgnoreCase(code.trim()).orElse(null);
+        }
+        if (link == null) {
+            return;
+        }
+        link.setLastVisitedAt(Instant.now());
+        repo.save(link);
+    }
+
+    private void apply(BiReportLink target, BiReportLinkRequest req, boolean creating, String activeDeptHeader) {
         String code = normalizeCode(req.getCode());
         String title = trimToNull(req.getTitle());
         String url = trimToNull(req.getUrl());
@@ -133,6 +190,9 @@ public class BiReportLinkService {
         target.setReportType(normalizeType(req.getReportType()));
         target.setDeptCodes(joinCodes(req.getDeptCodes()));
         target.setRoleCodes(joinRoles(req.getRoleCodes()));
+        target.setQueryDatasetId(resolveDatasetId(req.getQueryDatasetId(), activeDeptHeader));
+        target.setQueryDatasetVersion(req.getQueryDatasetVersion());
+        target.setExpiresAt(parseInstant(req.getExpiresAt()));
         if (req.getEnabled() != null) {
             target.setEnabled(Boolean.TRUE.equals(req.getEnabled()));
         } else if (creating) {
@@ -143,7 +203,7 @@ public class BiReportLinkService {
         }
     }
 
-    private BiReportLinkDto toDto(BiReportLink r) {
+    private BiReportLinkDto toDto(BiReportLink r, String datasetName) {
         return new BiReportLinkDto(
             r.getId(),
             r.getCode(),
@@ -156,9 +216,70 @@ public class BiReportLinkService {
             r.getUrl(),
             r.isEnabled(),
             r.getSortOrder(),
+            r.getQueryDatasetId(),
+            r.getQueryDatasetVersion(),
+            datasetName,
+            r.getExpiresAt(),
+            r.getLastVisitedAt(),
             r.getCreatedBy(),
             r.getLastModifiedDate()
         );
+    }
+
+    private String resolveDatasetName(UUID datasetId) {
+        if (datasetId == null) {
+            return null;
+        }
+        return queryDatasetAssetRepository.findById(datasetId).map(it -> trimToNull(it.getName())).orElse(null);
+    }
+
+    private Map<UUID, QueryDatasetAsset> loadDatasetCache(List<BiReportLink> rows) {
+        Set<UUID> datasetIds = new LinkedHashSet<>();
+        for (BiReportLink row : rows) {
+            if (row != null && row.getQueryDatasetId() != null) {
+                datasetIds.add(row.getQueryDatasetId());
+            }
+        }
+        if (datasetIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, QueryDatasetAsset> cache = new LinkedHashMap<>();
+        queryDatasetAssetRepository.findAllById(datasetIds).forEach(it -> {
+            if (it != null && it.getId() != null) {
+                cache.put(it.getId(), it);
+            }
+        });
+        return cache;
+    }
+
+    private UUID resolveDatasetId(String raw, String activeDeptHeader) {
+        String value = trimToNull(raw);
+        if (value == null) {
+            return null;
+        }
+        UUID id;
+        try {
+            id = UUID.fromString(value);
+        } catch (Exception ex) {
+            throw new IllegalArgumentException("queryDatasetId invalid");
+        }
+        QueryDatasetAsset dataset = queryDatasetAssetRepository.findById(id).orElseThrow(() -> new IllegalArgumentException("queryDatasetId not found"));
+        if (!datasetVisibleInScope(dataset, resolveActiveDept(activeDeptHeader), isSuperAdmin())) {
+            throw new IllegalArgumentException("queryDatasetId not in active scope");
+        }
+        return id;
+    }
+
+    private Instant parseInstant(String raw) {
+        String value = trimToNull(raw);
+        if (value == null) {
+            return null;
+        }
+        try {
+            return Instant.parse(value);
+        } catch (DateTimeParseException ex) {
+            throw new IllegalArgumentException("expiresAt invalid");
+        }
     }
 
     private boolean matchKeyword(String kw, String title, String code) {
@@ -178,7 +299,6 @@ public class BiReportLinkService {
 
     private boolean matchDeptFilter(String deptFilter, String deptCodesCsv) {
         if (!StringUtils.hasText(deptFilter)) return true;
-        // When filtering by dept, include global reports (no dept codes) as well.
         List<String> depts = splitCodes(deptCodesCsv);
         if (depts.isEmpty()) return true;
         String needle = deptFilter.trim();
@@ -207,11 +327,30 @@ public class BiReportLinkService {
         return false;
     }
 
+    private boolean isSuperAdmin() {
+        return SecurityUtils.hasCurrentUserAnyOfAuthorities(AuthoritiesConstants.OP_ADMIN, AuthoritiesConstants.ADMIN) || SecurityUtils.isOpAdminAccount();
+    }
+
+    private boolean datasetVisibleInScope(QueryDatasetAsset dataset, String activeDept, boolean superAdmin) {
+        if (dataset == null) {
+            return true;
+        }
+        if (superAdmin) {
+            return true;
+        }
+        String ownerDept = trimToNull(dataset.getOwnerDept());
+        if (ownerDept == null) {
+            return true;
+        }
+        if (!StringUtils.hasText(activeDept)) {
+            return false;
+        }
+        return DepartmentUtils.matches(ownerDept, activeDept);
+    }
+
     private Set<String> currentAuthorities() {
         try {
-            org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder
-                .getContext()
-                .getAuthentication();
+            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
             if (auth == null || auth.getAuthorities() == null) return Set.of();
             Set<String> set = new LinkedHashSet<>();
             for (var a : auth.getAuthorities()) {
@@ -229,20 +368,26 @@ public class BiReportLinkService {
 
     private String currentClaim(String name) {
         try {
-            org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
-            if (auth instanceof org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken token) {
-                Object v = token.getToken().getClaims().get(name);
-                return firstTextValue(v);
+            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+            if (auth instanceof JwtAuthenticationToken token) {
+                return toClaimText(token.getToken().getClaims().get(name));
             }
             if (auth != null && auth.getPrincipal() instanceof org.springframework.security.oauth2.core.OAuth2AuthenticatedPrincipal principal) {
-                Object v = principal.getAttribute(name);
-                return firstTextValue(v);
+                return toClaimText(principal.getAttribute(name));
             }
         } catch (Exception ignored) {}
         return null;
     }
 
-    private String firstTextValue(Object raw) {
+    private String resolveActiveDept(String activeDeptHeader) {
+        String header = trimToNull(activeDeptHeader);
+        if (header != null) {
+            return header;
+        }
+        return currentClaim("dept_code");
+    }
+
+    private String toClaimText(Object raw) {
         Object flattened = flatten(raw);
         if (flattened == null) return null;
         String text = flattened.toString();
@@ -255,9 +400,9 @@ public class BiReportLinkService {
             return collection.stream().filter(Objects::nonNull).findFirst().orElse(null);
         }
         if (raw.getClass().isArray()) {
-            int len = java.lang.reflect.Array.getLength(raw);
+            int len = Array.getLength(raw);
             for (int i = 0; i < len; i++) {
-                Object element = java.lang.reflect.Array.get(raw, i);
+                Object element = Array.get(raw, i);
                 if (element != null) return element;
             }
             return null;

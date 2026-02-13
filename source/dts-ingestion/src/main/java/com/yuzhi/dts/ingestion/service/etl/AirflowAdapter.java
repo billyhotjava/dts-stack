@@ -3,8 +3,8 @@ package com.yuzhi.dts.ingestion.service.etl;
 import com.yuzhi.dts.ingestion.config.AddaxProperties;
 import com.yuzhi.dts.ingestion.config.AirflowProperties;
 import com.yuzhi.dts.ingestion.service.infra.IngestionSettingsService;
-import java.util.List;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
@@ -57,15 +57,14 @@ public class AirflowAdapter {
             result.put("message", consistencyError);
             return result;
         }
+
         String requestedDagId = normalize(request.dagId());
         String fallbackDagId = normalize(settings.getString("dagId", properties.getDagId()));
         java.util.List<String> candidates = new java.util.ArrayList<>();
         if (StringUtils.hasText(requestedDagId)) {
             candidates.add(requestedDagId);
-        } else {
-            if (StringUtils.hasText(fallbackDagId) && !candidates.contains(fallbackDagId)) {
-                candidates.add(fallbackDagId);
-            }
+        } else if (StringUtils.hasText(fallbackDagId) && !candidates.contains(fallbackDagId)) {
+            candidates.add(fallbackDagId);
         }
         if (candidates.isEmpty()) {
             result.put("enabled", true);
@@ -73,25 +72,35 @@ public class AirflowAdapter {
             result.put("message", "缺少 DAG 标识");
             return result;
         }
+
         result.put("enabled", true);
         result.put("dagId", candidates.get(0));
         if (!runNow) {
             result.put("status", "ready");
             return result;
         }
+
         Map<String, Object> payload = Map.of("conf", conf == null ? Map.of() : conf);
         int waitSeconds = settings.getInteger("dagReadyWaitSeconds", properties.getDagReadyWaitSeconds());
         int pollSeconds = settings.getInteger("dagReadyPollSeconds", properties.getDagReadyPollSeconds());
+        int triggerRetrySeconds = settings.getInteger("dagTriggerRetrySeconds", properties.getDagTriggerRetrySeconds());
         AirflowClient.TriggerResult lastFailure = null;
+
         for (String dagId : candidates) {
+            boolean dagReady = true;
             if (waitSeconds > 0) {
-                client.waitForDag(
+                dagReady = client.waitForDag(
                     dagId,
                     java.time.Duration.ofSeconds(waitSeconds),
                     java.time.Duration.ofSeconds(Math.max(1, pollSeconds))
                 );
             }
-            AirflowClient.TriggerResult response = triggerWithRetry(dagId, payload, waitSeconds, pollSeconds);
+            if (!dagReady) {
+                lastFailure = new AirflowClient.TriggerResult(false, 404, buildDagNotReadyMessage(dagId), null);
+                continue;
+            }
+
+            AirflowClient.TriggerResult response = triggerWithRetry(dagId, payload, triggerRetrySeconds, pollSeconds);
             if (response.success()) {
                 result.put("status", "triggered");
                 result.put("dagId", dagId);
@@ -103,25 +112,39 @@ public class AirflowAdapter {
                 break;
             }
         }
+
         result.put("status", "failed");
-        if (lastFailure != null && lastFailure.statusCode() == 404 && StringUtils.hasText(requestedDagId)) {
-            result.put("message", buildDagNotReadyMessage(requestedDagId));
-        } else if (lastFailure != null && StringUtils.hasText(lastFailure.message())) {
+        if (lastFailure != null && lastFailure.statusCode() == 404) {
+            result.put("code", "AIRFLOW_DAG_NOT_READY_TIMEOUT");
+        }
+        if (lastFailure != null && StringUtils.hasText(lastFailure.message())) {
             result.put("message", lastFailure.message());
+        } else if (StringUtils.hasText(requestedDagId)) {
+            result.put("message", buildDagNotReadyMessage(requestedDagId));
         } else {
             result.put("message", "DAG 触发失败");
         }
         return result;
     }
 
-    private AirflowClient.TriggerResult triggerWithRetry(String dagId, Map<String, Object> payload, int waitSeconds, int pollSeconds) {
+    private AirflowClient.TriggerResult triggerWithRetry(
+        String dagId,
+        Map<String, Object> payload,
+        int retryWindowSeconds,
+        int pollSeconds
+    ) {
         AirflowClient.TriggerResult response = client.triggerDag(dagId, payload);
         if (response.success() || response.statusCode() != 404) {
             return response;
         }
+
+        int safeRetryWindowSeconds = Math.max(0, retryWindowSeconds);
+        if (safeRetryWindowSeconds == 0) {
+            return response;
+        }
+
         int safePollSeconds = Math.max(1, pollSeconds);
-        int baseWindow = Math.max(30, waitSeconds);
-        int maxAttempts = Math.max(8, Math.min(60, (baseWindow / safePollSeconds) + 8));
+        int maxAttempts = Math.max(1, safeRetryWindowSeconds / safePollSeconds);
         for (int attempt = 0; attempt < maxAttempts; attempt++) {
             try {
                 Thread.sleep(safePollSeconds * 1000L);
