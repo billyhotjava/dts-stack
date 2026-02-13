@@ -11,7 +11,6 @@ import java.io.IOException;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class ExternalDatabaseDataSourceRegistry {
@@ -29,7 +28,6 @@ public class ExternalDatabaseDataSourceRegistry {
         this.jdbcDetailsResolver = jdbcDetailsResolver;
     }
 
-    @Transactional(readOnly = true)
     public HikariDataSource get(long databaseId) {
         AnalyticsDatabase database = databaseRepository
                 .findById(databaseId)
@@ -57,6 +55,9 @@ public class ExternalDatabaseDataSourceRegistry {
         config.setValidationTimeout(5_000);
         config.setIdleTimeout(60_000);
         config.setMaxLifetime(5 * 60_000L);
+        // Avoid fail-fast startup exceptions when external DB is temporarily unavailable.
+        // Connection failures should surface on query execution as SQL exceptions.
+        config.setInitializationFailTimeout(-1);
 
         HikariDataSource created = new HikariDataSource(config);
         DataSourceEntry entry = new DataSourceEntry(fingerprint, created);

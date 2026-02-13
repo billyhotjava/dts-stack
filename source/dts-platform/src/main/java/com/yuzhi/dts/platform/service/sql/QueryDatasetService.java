@@ -58,14 +58,19 @@ public class QueryDatasetService {
     @Transactional(readOnly = true)
     public List<QueryDatasetResponse> list(String activeDeptHeader) {
         String activeDept = resolveActiveDept(activeDeptHeader);
-        if (isSuperAdmin()) {
+        if (hasGlobalManageScope()) {
             return assetRepository.findByEnabledTrueOrderByLastModifiedDateDesc().stream().map(this::toDto).toList();
         }
 
         Map<UUID, QueryDatasetAsset> scoped = new LinkedHashMap<>();
         if (StringUtils.hasText(activeDept)) {
-            for (QueryDatasetAsset asset : assetRepository.findByOwnerDeptIgnoreCaseAndEnabledTrueOrderByLastModifiedDateDesc(activeDept)) {
-                if (asset != null && asset.getId() != null) {
+            // Avoid exact owner_dept matching. Dept codes may have format variants.
+            for (QueryDatasetAsset asset : assetRepository.findByEnabledTrueOrderByLastModifiedDateDesc()) {
+                if (asset == null || asset.getId() == null) {
+                    continue;
+                }
+                String ownerDept = trimToNull(asset.getOwnerDept());
+                if (ownerDept != null && DepartmentUtils.matches(ownerDept, activeDept)) {
                     scoped.put(asset.getId(), asset);
                 }
             }
@@ -223,7 +228,7 @@ public class QueryDatasetService {
     }
 
     private void assertReadable(QueryDatasetAsset asset, String activeDept) {
-        if (isSuperAdmin()) {
+        if (hasGlobalManageScope()) {
             return;
         }
         String ownerDept = trimToNull(asset != null ? asset.getOwnerDept() : null);
@@ -243,8 +248,8 @@ public class QueryDatasetService {
         assertReadable(asset, activeDept);
     }
 
-    private boolean isSuperAdmin() {
-        return SecurityUtils.hasCurrentUserAnyOfAuthorities(AuthoritiesConstants.OP_ADMIN, AuthoritiesConstants.ADMIN) || SecurityUtils.isOpAdminAccount();
+    private boolean hasGlobalManageScope() {
+        return SecurityUtils.hasCurrentUserAnyOfAuthorities(AuthoritiesConstants.CATALOG_MAINTAINERS) || SecurityUtils.isOpAdminAccount();
     }
 
     private String currentLogin() {

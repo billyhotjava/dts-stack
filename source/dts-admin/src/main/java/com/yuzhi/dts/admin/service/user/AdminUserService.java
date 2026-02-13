@@ -164,7 +164,6 @@ public class AdminUserService {
             normalizedKeyword = "";
         }
         Pageable pageable = PageRequest.of(safePage, safeSize, Sort.by(Sort.Direction.ASC, "username"));
-        Page<AdminKeycloakUser> result;
         LOG.debug(
             "listSnapshots start page={} size={} keyword='{}' mdmStatus={}",
             safePage,
@@ -174,75 +173,67 @@ public class AdminUserService {
         );
         boolean hasKeyword = StringUtils.isNotBlank(normalizedKeyword);
         boolean hasStatus = mdmStatus != null;
-        if (hasKeyword && hasStatus) {
-            result =
-                userRepository.findByUsernameContainingIgnoreCaseAndMdmEnabledExcludingUsernames(
-                    normalizedKeyword,
-                    mdmStatus.intValue(),
-                    HIDDEN_USERNAMES_IN_USERLIST,
-                    pageable
-                );
-        } else if (hasKeyword) {
-            result = userRepository.findByUsernameContainingIgnoreCaseExcludingUsernames(normalizedKeyword, HIDDEN_USERNAMES_IN_USERLIST, pageable);
-        } else if (hasStatus) {
-            result = userRepository.findByMdmEnabledExcludingUsernames(mdmStatus.intValue(), HIDDEN_USERNAMES_IN_USERLIST, pageable);
-        } else {
-            result = userRepository.findAllExcludingUsernames(HIDDEN_USERNAMES_IN_USERLIST, pageable);
-        }
+
+        Page<AdminKeycloakUser> result = querySnapshots(pageable, normalizedKeyword, mdmStatus);
         if (result.getTotalElements() == 0) {
-            LOG.info("user snapshots empty, refreshing from keycloak then profiles");
-            refreshSnapshotsFromKeycloak();
-            if (result.getTotalElements() == 0) {
+            if (hasKeyword && isLikelyUsernameKeyword(normalizedKeyword)) {
+                refreshSnapshotFromKeycloakForUser(normalizedKeyword);
+                result = querySnapshots(pageable, normalizedKeyword, mdmStatus);
+            }
+
+            if (result.getTotalElements() == 0 && !hasKeyword && !hasStatus && safePage == 0) {
+                LOG.info("user snapshots empty on first page, refreshing from keycloak then profiles");
+                refreshSnapshotsFromKeycloak();
                 refreshSnapshotsFromProfiles();
+                result = querySnapshots(pageable, normalizedKeyword, mdmStatus);
+                LOG.info("user snapshots after full refresh total={}", result.getTotalElements());
             }
-            if (hasKeyword && hasStatus) {
-                result =
-                    userRepository.findByUsernameContainingIgnoreCaseAndMdmEnabledExcludingUsernames(
-                        normalizedKeyword,
-                        mdmStatus.intValue(),
-                        HIDDEN_USERNAMES_IN_USERLIST,
-                        pageable
-                    );
-            } else if (hasKeyword) {
-                result =
-                    userRepository.findByUsernameContainingIgnoreCaseExcludingUsernames(normalizedKeyword, HIDDEN_USERNAMES_IN_USERLIST, pageable);
-            } else if (hasStatus) {
-                result =
-                    userRepository.findByMdmEnabledExcludingUsernames(mdmStatus.intValue(), HIDDEN_USERNAMES_IN_USERLIST, pageable);
-            } else {
-                result = userRepository.findAllExcludingUsernames(HIDDEN_USERNAMES_IN_USERLIST, pageable);
-            }
-            LOG.info("user snapshots after refresh total={}", result.getTotalElements());
-        } else if (!hasKeyword && !hasStatus && page == 0 && result.getNumberOfElements() < safeSize) {
+        } else if (!hasKeyword && !hasStatus && safePage == 0 && result.getNumberOfElements() < safeSize) {
             // 仅在无过滤条件时做补齐，避免搜索场景触发全量同步导致卡顿
             LOG.info("user snapshots count={} (<pageSize={}), refreshing profiles+keycloak", result.getNumberOfElements(), safeSize);
             refreshSnapshotsFromProfiles();
             refreshSnapshotsFromKeycloak();
-            if (hasKeyword && hasStatus) {
-                result =
-                    userRepository.findByUsernameContainingIgnoreCaseAndMdmEnabledExcludingUsernames(
-                        normalizedKeyword,
-                        mdmStatus.intValue(),
-                        HIDDEN_USERNAMES_IN_USERLIST,
-                        pageable
-                    );
-            } else if (hasKeyword) {
-                result =
-                    userRepository.findByUsernameContainingIgnoreCaseExcludingUsernames(normalizedKeyword, HIDDEN_USERNAMES_IN_USERLIST, pageable);
-            } else if (hasStatus) {
-                result =
-                    userRepository.findByMdmEnabledExcludingUsernames(mdmStatus.intValue(), HIDDEN_USERNAMES_IN_USERLIST, pageable);
-            } else {
-                result = userRepository.findAllExcludingUsernames(HIDDEN_USERNAMES_IN_USERLIST, pageable);
-            }
+            result = querySnapshots(pageable, normalizedKeyword, mdmStatus);
             LOG.info("user snapshots after top-up total={}", result.getTotalElements());
         }
         LOG.debug("listSnapshots end totalElements={} pageElements={}", result.getTotalElements(), result.getNumberOfElements());
         return result;
     }
 
+    private Page<AdminKeycloakUser> querySnapshots(Pageable pageable, String normalizedKeyword, Integer mdmStatus) {
+        boolean hasKeyword = StringUtils.isNotBlank(normalizedKeyword);
+        boolean hasStatus = mdmStatus != null;
+        if (hasKeyword && hasStatus) {
+            return userRepository.findByUsernameContainingIgnoreCaseAndMdmEnabledExcludingUsernames(
+                normalizedKeyword,
+                mdmStatus.intValue(),
+                HIDDEN_USERNAMES_IN_USERLIST,
+                pageable
+            );
+        }
+        if (hasKeyword) {
+            return userRepository.findByUsernameContainingIgnoreCaseExcludingUsernames(normalizedKeyword, HIDDEN_USERNAMES_IN_USERLIST, pageable);
+        }
+        if (hasStatus) {
+            return userRepository.findByMdmEnabledExcludingUsernames(mdmStatus.intValue(), HIDDEN_USERNAMES_IN_USERLIST, pageable);
+        }
+        return userRepository.findAllExcludingUsernames(HIDDEN_USERNAMES_IN_USERLIST, pageable);
+    }
+
+    private boolean isLikelyUsernameKeyword(String keyword) {
+        if (!StringUtils.isNotBlank(keyword)) {
+            return false;
+        }
+        String trimmed = keyword.trim();
+        if (trimmed.length() < 2 || trimmed.length() > 128) {
+            return false;
+        }
+        return trimmed.matches("^[A-Za-z0-9@._-]+$");
+    }
+
     @Transactional(readOnly = true)
     public Optional<AdminKeycloakUser> findSnapshotByUsername(String username) {
+
         return userRepository.findByUsernameIgnoreCase(username);
     }
 
@@ -4389,6 +4380,48 @@ public class AdminUserService {
             .filter(v -> v != null && !v.trim().isEmpty())
             .map(String::trim)
             .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, List<String>> aggregateRealmRolesByUser(Collection<AdminKeycloakUser> snapshots) {
+        LinkedHashMap<String, List<String>> result = new LinkedHashMap<>();
+        if (snapshots == null || snapshots.isEmpty()) {
+            return result;
+        }
+
+        LinkedHashMap<String, List<String>> directRolesByUser = new LinkedHashMap<>();
+        LinkedHashSet<String> usernamesLower = new LinkedHashSet<>();
+        for (AdminKeycloakUser snapshot : snapshots) {
+            if (snapshot == null || !StringUtils.isNotBlank(snapshot.getUsername())) {
+                continue;
+            }
+            String normalized = snapshot.getUsername().trim().toLowerCase(Locale.ROOT);
+            usernamesLower.add(normalized);
+            directRolesByUser.put(normalized, snapshot.getRealmRoles());
+        }
+        if (usernamesLower.isEmpty()) {
+            return result;
+        }
+
+        Map<String, List<String>> localRolesByUser = new HashMap<>();
+        roleMemberRepo
+            .findByUsernameInIgnoreCase(usernamesLower)
+            .forEach(member -> {
+                if (member == null || !StringUtils.isNotBlank(member.getUsername()) || !StringUtils.isNotBlank(member.getRole())) {
+                    return;
+                }
+                String normalized = member.getUsername().trim().toLowerCase(Locale.ROOT);
+                localRolesByUser.computeIfAbsent(normalized, key -> new ArrayList<>()).add(member.getRole());
+            });
+
+        for (String username : usernamesLower) {
+            LinkedHashMap<String, String> resolved = new LinkedHashMap<>();
+            collectRoles(resolved, directRolesByUser.get(username), false);
+            collectRoles(resolved, localRolesByUser.get(username), true);
+            result.put(username, new ArrayList<>(resolved.values()));
+        }
+
+        return result;
     }
 
     private void collectRoles(Map<String, String> target, Collection<String> roles, boolean canonicalize) {

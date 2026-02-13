@@ -54,6 +54,8 @@ dts:
     dags-dir: ${DTS_AIRFLOW_DAGS_DIR:/opt/airflow/dags}
     dag-ready-wait-seconds: ${DTS_AIRFLOW_DAG_READY_WAIT_SECONDS:45}
     dag-ready-poll-seconds: ${DTS_AIRFLOW_DAG_READY_POLL_SECONDS:3}
+    dag-trigger-retry-seconds: ${DTS_AIRFLOW_DAG_TRIGGER_RETRY_SECONDS:12}
+    dag-not-found-retry-wait-seconds: ${DTS_AIRFLOW_DAG_NOT_FOUND_RETRY_WAIT_SECONDS:120}
     execution-poll-enabled: ${DTS_AIRFLOW_EXECUTION_POLL_ENABLED:true}
     execution-poll-interval-ms: ${DTS_AIRFLOW_EXECUTION_POLL_INTERVAL_MS:15000}
     execution-poll-batch-size: ${DTS_AIRFLOW_EXECUTION_POLL_BATCH_SIZE:50}

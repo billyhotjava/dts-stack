@@ -379,7 +379,10 @@ public class IngestionTaskService {
         execution.setStatus("preparing");
         execution.setStartTime(Instant.now());
         execution.setReplaceMode(resolveReplaceMode(task));
-        execution = executionRepository.save(execution);
+        IngestionExecution savedPreparingExecution = executionRepository.save(execution);
+        if (savedPreparingExecution != null) {
+            execution = savedPreparingExecution;
+        }
 
         try {
             boolean airflowEnabled = isAirflowEnabled(task);
@@ -407,12 +410,14 @@ public class IngestionTaskService {
             // 触发Airflow DAG
             if (airflowEnabled) {
                 String airflowJobPath = addaxJobService.toContainerJobPath(task.getAddaxJobPath());
-                Map<String, Object> conf = Map.of(
-                    "job_path", airflowJobPath,
-                    "task_id", taskId,
-                    "task_name", task.getName()
-                );
-                
+                if (!StringUtils.hasText(airflowJobPath)) {
+                    throw new IllegalStateException("Addax 作业路径无效，请先重建作业");
+                }
+                Map<String, Object> conf = new java.util.LinkedHashMap<>();
+                conf.put("job_path", airflowJobPath);
+                conf.put("task_id", taskId);
+                conf.put("task_name", StringUtils.hasText(task.getName()) ? task.getName() : ("task-" + taskId));
+
                 Map<String, Object> airflowResult = airflowAdapter.triggerIfRequested(
                     new AirflowAdapter.AirflowRequest(
                         true, 
@@ -453,7 +458,10 @@ public class IngestionTaskService {
             }
 
             execution.setStatus("running");
-            execution = executionRepository.save(execution);
+            IngestionExecution savedRunningExecution = executionRepository.save(execution);
+            if (savedRunningExecution != null) {
+                execution = savedRunningExecution;
+            }
 
             // 更新任务的最后执行信息
             task.setLastExecutedAt(Instant.now());
@@ -464,38 +472,70 @@ public class IngestionTaskService {
             log.info("Started execution {} for task ID: {}", execution.getExecutionId(), taskId);
 
             // 记录审计
+            Map<String, Object> successMeta = new java.util.LinkedHashMap<>();
+            successMeta.put("taskId", taskId);
+            successMeta.put("executionId", execution.getId());
+            String operator = null;
+            if (execution.getTask() != null) {
+                operator = execution.getTask().getLastModifiedBy();
+                if (!StringUtils.hasText(operator)) {
+                    operator = execution.getTask().getCreatedBy();
+                }
+            }
+            if (!StringUtils.hasText(operator)) {
+                operator = "system";
+            }
+            successMeta.put("operator", operator);
             auditService.auditAction(
                 "INGESTION_TASK_EXECUTE",
                 AuditStage.SUCCESS,
                 task.getName(),
-                Map.of(
-                    "taskId", taskId, 
-                    "executionId", execution.getId(),
-                    "operator", execution.getTask().getLastModifiedBy()
-                )
+                successMeta
             );
 
             return executionMapper.toDto(execution);
         } catch (Exception e) {
             log.error("Failed to execute task ID: {}", taskId, e);
 
+            String failureMessage = extractFailureMessage(e);
+            String failureCategory = com.yuzhi.dts.ingestion.service.etl.ExecutionFailureClassifier.classify(failureMessage);
+            String failureAdvice = com.yuzhi.dts.ingestion.service.etl.ExecutionFailureClassifier.advice(failureCategory);
+
+            if (execution == null) {
+                execution = new IngestionExecution();
+                execution.setTask(task);
+                execution.setStartTime(Instant.now());
+                execution.setExecutionId("failed-" + java.util.UUID.randomUUID().toString().substring(0, 8));
+            }
             execution.setStatus("failed");
             execution.setEndTime(Instant.now());
-            execution.setErrorMessage(e.getMessage());
+            execution.setErrorMessage(failureMessage);
+            execution.setFailureCategory(failureCategory);
+            execution.setFailureAdvice(failureAdvice);
             executionRepository.save(execution);
 
             task.setLastExecutionStatus("failed");
             taskRepository.save(task);
 
             // 记录审计失败
+            Map<String, Object> meta = new java.util.LinkedHashMap<>();
+            meta.put("taskId", taskId);
+            meta.put("failureCategory", failureCategory);
+            meta.put("failureAdvice", failureAdvice);
+            if (StringUtils.hasText(failureMessage)) {
+                meta.put("error", failureMessage);
+            }
             auditService.auditAction(
                 "INGESTION_TASK_EXECUTE",
                 AuditStage.FAIL,
                 task.getName(),
-                Map.of("taskId", taskId, "error", e.getMessage())
+                meta
             );
 
-            throw new RuntimeException("Failed to execute task", e);
+            throw new RuntimeException(
+                StringUtils.hasText(failureMessage) ? "Failed to execute task: " + failureMessage : "Failed to execute task",
+                e
+            );
         }
     }
 
@@ -531,16 +571,31 @@ public class IngestionTaskService {
                 throw new IllegalStateException("仅失败执行可使用 FAILED_ONLY 重试模式");
             }
         }
+        String previousError = toText(execution.getErrorMessage());
+        String previousCategory = StringUtils.hasText(execution.getFailureCategory())
+            ? execution.getFailureCategory()
+            : (StringUtils.hasText(previousError)
+                ? com.yuzhi.dts.ingestion.service.etl.ExecutionFailureClassifier.classify(previousError)
+                : null);
+        String previousAdvice = StringUtils.hasText(execution.getFailureAdvice())
+            ? execution.getFailureAdvice()
+            : (StringUtils.hasText(previousCategory)
+                ? com.yuzhi.dts.ingestion.service.etl.ExecutionFailureClassifier.advice(previousCategory)
+                : null);
+        Map<String, Object> retryMeta = new java.util.LinkedHashMap<>();
+        retryMeta.put("taskId", taskId);
+        retryMeta.put("executionId", executionId);
+        retryMeta.put("retryMode", mode);
+        retryMeta.put("previousStatus", previousStatus == null ? "unknown" : previousStatus);
+        if (StringUtils.hasText(previousCategory)) {
+            retryMeta.put("previousFailureCategory", previousCategory);
+            retryMeta.put("previousFailureAdvice", previousAdvice);
+        }
         auditService.auditAction(
             "INGESTION_TASK_RETRY",
             AuditStage.SUCCESS,
             task.getName(),
-            Map.of(
-                "taskId", taskId,
-                "executionId", executionId,
-                "retryMode", mode,
-                "previousStatus", previousStatus == null ? "unknown" : previousStatus
-            )
+            retryMeta
         );
         return execute(taskId);
     }
@@ -722,6 +777,9 @@ public class IngestionTaskService {
                 String note = toText(firstNonBlank(run.get("note"), run.get("message")));
                 if (StringUtils.hasText(note)) {
                     execution.setErrorMessage(note);
+                    String failureCategory = com.yuzhi.dts.ingestion.service.etl.ExecutionFailureClassifier.classify(note);
+                    execution.setFailureCategory(failureCategory);
+                    execution.setFailureAdvice(com.yuzhi.dts.ingestion.service.etl.ExecutionFailureClassifier.advice(failureCategory));
                 }
             }
             executionRepository.save(execution);
@@ -752,6 +810,46 @@ public class IngestionTaskService {
         }
         String text = value.toString().trim();
         return StringUtils.hasText(text) ? text : null;
+    }
+
+    private String extractFailureMessage(Throwable throwable) {
+        if (throwable == null) {
+            return "Unknown error";
+        }
+        java.util.LinkedHashSet<String> parts = new java.util.LinkedHashSet<>();
+        Throwable cursor = throwable;
+        int hops = 0;
+        while (cursor != null && hops < 8) {
+            String message = sanitizeErrorText(cursor.getMessage());
+            if (StringUtils.hasText(message)) {
+                parts.add(message);
+            }
+            cursor = cursor.getCause();
+            hops++;
+        }
+        if (parts.isEmpty()) {
+            return throwable.getClass().getSimpleName();
+        }
+        return truncateText(String.join(" | ", parts), 3000);
+    }
+
+    private String sanitizeErrorText(String value) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        String normalized = value
+            .replace('\r', ' ')
+            .replace('\n', ' ')
+            .replaceAll("\\s+", " ")
+            .trim();
+        return StringUtils.hasText(normalized) ? normalized : null;
+    }
+
+    private String truncateText(String value, int maxLen) {
+        if (!StringUtils.hasText(value) || maxLen <= 0 || value.length() <= maxLen) {
+            return value;
+        }
+        return value.substring(0, maxLen - 3) + "...";
     }
 
     private Instant parseAirflowInstant(Object value) {
@@ -803,13 +901,38 @@ public class IngestionTaskService {
      */
     @Transactional
     public Page<IngestionExecutionDTO> getExecutions(Long taskId, Pageable pageable) {
-        log.debug("Request to get executions for task: {}", taskId);
-        Page<IngestionExecutionDTO> page = executionRepository.findByTaskId(taskId, pageable).map(executionMapper::toDto);
+        return getExecutions(taskId, pageable, null, null);
+    }
+
+    @Transactional
+    public Page<IngestionExecutionDTO> getExecutions(Long taskId, Pageable pageable, String status, String failureCategory) {
+        log.debug("Request to get executions for task: {} status={} failureCategory={}", taskId, status, failureCategory);
+        Page<IngestionExecutionDTO> page = queryExecutions(taskId, pageable, status, failureCategory).map(executionMapper::toDto);
         if (page.hasContent()) {
             return page;
         }
         backfillExecutionsFromAirflow(taskId, pageable == null ? 20 : pageable.getPageSize());
-        return executionRepository.findByTaskId(taskId, pageable).map(executionMapper::toDto);
+        return queryExecutions(taskId, pageable, status, failureCategory).map(executionMapper::toDto);
+    }
+
+    private Page<IngestionExecution> queryExecutions(Long taskId, Pageable pageable, String status, String failureCategory) {
+        String normalizedStatus = toText(status);
+        String normalizedFailureCategory = toText(failureCategory);
+        if (StringUtils.hasText(normalizedStatus) && StringUtils.hasText(normalizedFailureCategory)) {
+            return executionRepository.findByTaskIdAndStatusIgnoreCaseAndFailureCategoryIgnoreCase(
+                taskId,
+                normalizedStatus,
+                normalizedFailureCategory,
+                pageable
+            );
+        }
+        if (StringUtils.hasText(normalizedStatus)) {
+            return executionRepository.findByTaskIdAndStatusIgnoreCase(taskId, normalizedStatus, pageable);
+        }
+        if (StringUtils.hasText(normalizedFailureCategory)) {
+            return executionRepository.findByTaskIdAndFailureCategoryIgnoreCase(taskId, normalizedFailureCategory, pageable);
+        }
+        return executionRepository.findByTaskId(taskId, pageable);
     }
 
     /**
@@ -916,10 +1039,12 @@ public class IngestionTaskService {
 
         String filteredLog = filterLogByKeyword(log, keyword);
         String errorMessage = execution.getErrorMessage();
-        String failureCategory = null;
-        String failureAdvice = null;
-        if (StringUtils.hasText(errorMessage)) {
+        String failureCategory = StringUtils.hasText(execution.getFailureCategory()) ? execution.getFailureCategory() : null;
+        String failureAdvice = StringUtils.hasText(execution.getFailureAdvice()) ? execution.getFailureAdvice() : null;
+        if (!StringUtils.hasText(failureCategory) && StringUtils.hasText(errorMessage)) {
             failureCategory = com.yuzhi.dts.ingestion.service.etl.ExecutionFailureClassifier.classify(errorMessage);
+        }
+        if (!StringUtils.hasText(failureAdvice) && StringUtils.hasText(failureCategory)) {
             failureAdvice = com.yuzhi.dts.ingestion.service.etl.ExecutionFailureClassifier.advice(failureCategory);
         }
         Map<String, Object> result = new java.util.LinkedHashMap<>();

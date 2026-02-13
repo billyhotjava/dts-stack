@@ -46,6 +46,14 @@ public class IngestionExecution {
     @Column(name = "error_message", columnDefinition = "TEXT")
     private String errorMessage;
 
+    @Size(max = 64)
+    @Column(name = "failure_category", length = 64)
+    private String failureCategory;
+
+    @Size(max = 500)
+    @Column(name = "failure_advice", length = 500)
+    private String failureAdvice;
+
     @Size(max = 500)
     @Column(name = "log_path", length = 500)
     private String logPath;
@@ -132,6 +140,22 @@ public class IngestionExecution {
 
     public void setErrorMessage(String errorMessage) {
         this.errorMessage = errorMessage;
+    }
+
+    public String getFailureCategory() {
+        return failureCategory;
+    }
+
+    public void setFailureCategory(String failureCategory) {
+        this.failureCategory = failureCategory;
+    }
+
+    public String getFailureAdvice() {
+        return failureAdvice;
+    }
+
+    public void setFailureAdvice(String failureAdvice) {
+        this.failureAdvice = failureAdvice;
     }
 
     public String getLogPath() {

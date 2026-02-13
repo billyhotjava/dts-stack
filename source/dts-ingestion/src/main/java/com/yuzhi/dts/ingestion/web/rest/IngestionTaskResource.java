@@ -1723,10 +1723,12 @@ public class IngestionTaskResource {
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ResponseEntity<org.springframework.data.domain.Page<com.yuzhi.dts.ingestion.service.dto.IngestionExecutionDTO>> getExecutions(
         @PathVariable Long id,
+        @RequestParam(value = "status", required = false) String status,
+        @RequestParam(value = "failureCategory", required = false) String failureCategory,
         org.springframework.data.domain.Pageable pageable
     ) {
-        org.springframework.data.domain.Page<com.yuzhi.dts.ingestion.service.dto.IngestionExecutionDTO> page = 
-            ingestionTaskService.getExecutions(id, pageable);
+        org.springframework.data.domain.Page<com.yuzhi.dts.ingestion.service.dto.IngestionExecutionDTO> page =
+            ingestionTaskService.getExecutions(id, pageable, status, failureCategory);
         return ResponseEntity.ok(page);
     }
 

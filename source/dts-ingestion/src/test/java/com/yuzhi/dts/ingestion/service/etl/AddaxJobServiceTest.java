@@ -408,6 +408,86 @@ class AddaxJobServiceTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
+    void shouldKeepDropAndCreatePreSqlForFileSourceFullRefresh() throws Exception {
+        // Given
+        Map<String, Object> readerConfig = Map.of(
+            "_fileColumns", java.util.List.of(
+                Map.of("safeName", "patent_no", "type", "string"),
+                Map.of("safeName", "application_date", "type", "date")
+            ),
+            "path", java.util.List.of("/opt/airflow/dags/exchange/excel/demo/source.xlsx")
+        );
+        Map<String, Object> writerConfig = Map.of(
+            "jdbcUrl", "jdbc:postgresql://127.0.0.1:5432/biadmin",
+            "username", "biadmin",
+            "password", "Devops123@",
+            "table", "ods_patent_info"
+        );
+
+        // When
+        AddaxJobService.AddaxJobResult result = addaxJobService.createJob(
+            "file-full-refresh-test",
+            "excelreader",
+            readerConfig,
+            "postgresqlwriter",
+            writerConfig,
+            null,
+            "full_refresh"
+        );
+
+        // Then
+        Map<String, Object> job = (Map<String, Object>) result.jobConfig().get("job");
+        Map<String, Object> content = (Map<String, Object>) ((java.util.List<?>) job.get("content")).get(0);
+        Map<String, Object> writer = (Map<String, Object>) content.get("writer");
+        Map<String, Object> writerParams = (Map<String, Object>) writer.get("parameter");
+        java.util.List<String> preSql = (java.util.List<String>) writerParams.get("preSql");
+
+        assertThat(preSql).isNotNull();
+        assertThat(preSql).anyMatch(sql -> sql.startsWith("DROP TABLE IF EXISTS"));
+        assertThat(preSql).anyMatch(sql -> sql.startsWith("CREATE TABLE IF NOT EXISTS"));
+        assertThat(preSql).noneMatch(sql -> sql.startsWith("TRUNCATE TABLE"));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void shouldAddTruncatePreSqlForRdbmsFullRefresh() throws Exception {
+        // Given
+        Map<String, Object> readerConfig = Map.of(
+            "connection", Map.of(
+                "jdbcUrl", "jdbc:dm://10.0.0.1:5236/ERPDEMO",
+                "table", java.util.List.of("ERPDEMO.CUSTOMER")
+            )
+        );
+        Map<String, Object> writerConfig = Map.of(
+            "connection", Map.of(
+                "jdbcUrl", "jdbc:postgresql://10.0.0.2:5432/biadmin",
+                "table", java.util.List.of("ods_customer")
+            )
+        );
+
+        // When
+        AddaxJobService.AddaxJobResult result = addaxJobService.createJob(
+            "rdbms-full-refresh-test",
+            "rdbmsreader",
+            readerConfig,
+            "rdbmswriter",
+            writerConfig,
+            null,
+            "full_refresh"
+        );
+
+        // Then
+        Map<String, Object> job = (Map<String, Object>) result.jobConfig().get("job");
+        Map<String, Object> content = (Map<String, Object>) ((java.util.List<?>) job.get("content")).get(0);
+        Map<String, Object> writer = (Map<String, Object>) content.get("writer");
+        Map<String, Object> writerParams = (Map<String, Object>) writer.get("parameter");
+        java.util.List<String> preSql = (java.util.List<String>) writerParams.get("preSql");
+
+        assertThat(preSql).contains("TRUNCATE TABLE ods_customer");
+    }
+
+    @Test
     void shouldThrowExceptionWhenTaskIsNull() {
         // When & Then
         assertThatThrownBy(() -> addaxJobService.createJobFromTask(null))

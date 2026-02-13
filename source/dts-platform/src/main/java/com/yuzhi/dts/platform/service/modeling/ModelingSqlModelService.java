@@ -296,93 +296,101 @@ public class ModelingSqlModelService {
 
             String extraTags = mergeTags(trimToNull(request.tags()), trimToNull(mapping.getSystemCode()));
             String descriptionBase = trimToNull(mapping.getDescription());
+            try {
+                GenerateLayerResult dwdResult = null;
+                if (createDwd) {
+                    dwdResult = upsertGeneratedModel(
+                        request.planId(),
+                        modelSourceId,
+                        "dwd_" + entityToken,
+                        "DWD",
+                        request.schemaName(),
+                        request.materialized(),
+                        extraTags,
+                        buildLayerDescription("DWD", odsSchema, odsTable, descriptionBase),
+                        request.enabled(),
+                        request.status(),
+                        request.ownerDept(),
+                        """
+                        select
+                          *
+                        from {{ source('%s', '%s') }}
+                        """.formatted(odsSchema, odsTable),
+                        activeDeptHeader,
+                        overwrite
+                    );
+                    created += dwdResult.created() ? 1 : 0;
+                    updated += dwdResult.updated() ? 1 : 0;
+                    if (dwdResult.created()) createdModels.add(dwdResult.modelName());
+                    if (dwdResult.updated()) updatedModels.add(dwdResult.modelName());
+                    if (dwdResult.skippedReason() != null) skipped.add(dwdResult.skippedReason());
+                }
 
-            GenerateLayerResult dwdResult = null;
-            if (createDwd) {
-                dwdResult = upsertGeneratedModel(
-                    request.planId(),
-                    modelSourceId,
-                    "dwd_" + entityToken,
-                    "DWD",
-                    request.schemaName(),
-                    request.materialized(),
-                    extraTags,
-                    buildLayerDescription("DWD", odsSchema, odsTable, descriptionBase),
-                    request.enabled(),
-                    request.status(),
-                    request.ownerDept(),
-                    """
-                    select
-                      *
-                    from {{ source('%s', '%s') }}
-                    """.formatted(odsSchema, odsTable),
-                    activeDeptHeader,
-                    overwrite
-                );
-                created += dwdResult.created() ? 1 : 0;
-                updated += dwdResult.updated() ? 1 : 0;
-                if (dwdResult.created()) createdModels.add(dwdResult.modelName());
-                if (dwdResult.updated()) updatedModels.add(dwdResult.modelName());
-                if (dwdResult.skippedReason() != null) skipped.add(dwdResult.skippedReason());
-            }
+                GenerateLayerResult dwsResult = null;
+                if (createDws) {
+                    String dwdRef = dwdResult != null ? dwdResult.modelName() : "dwd_" + entityToken;
+                    dwsResult = upsertGeneratedModel(
+                        request.planId(),
+                        modelSourceId,
+                        "dws_" + entityToken,
+                        "DWS",
+                        request.schemaName(),
+                        request.materialized(),
+                        extraTags,
+                        buildLayerDescription("DWS", odsSchema, odsTable, descriptionBase),
+                        request.enabled(),
+                        request.status(),
+                        request.ownerDept(),
+                        """
+                        select
+                          *
+                        from {{ ref('%s') }}
+                        """.formatted(dwdRef),
+                        activeDeptHeader,
+                        overwrite
+                    );
+                    created += dwsResult.created() ? 1 : 0;
+                    updated += dwsResult.updated() ? 1 : 0;
+                    if (dwsResult.created()) createdModels.add(dwsResult.modelName());
+                    if (dwsResult.updated()) updatedModels.add(dwsResult.modelName());
+                    if (dwsResult.skippedReason() != null) skipped.add(dwsResult.skippedReason());
+                }
 
-            GenerateLayerResult dwsResult = null;
-            if (createDws) {
-                String dwdRef = dwdResult != null ? dwdResult.modelName() : "dwd_" + entityToken;
-                dwsResult = upsertGeneratedModel(
-                    request.planId(),
-                    modelSourceId,
-                    "dws_" + entityToken,
-                    "DWS",
-                    request.schemaName(),
-                    request.materialized(),
-                    extraTags,
-                    buildLayerDescription("DWS", odsSchema, odsTable, descriptionBase),
-                    request.enabled(),
-                    request.status(),
-                    request.ownerDept(),
-                    """
-                    select
-                      *
-                    from {{ ref('%s') }}
-                    """.formatted(dwdRef),
-                    activeDeptHeader,
-                    overwrite
-                );
-                created += dwsResult.created() ? 1 : 0;
-                updated += dwsResult.updated() ? 1 : 0;
-                if (dwsResult.created()) createdModels.add(dwsResult.modelName());
-                if (dwsResult.updated()) updatedModels.add(dwsResult.modelName());
-                if (dwsResult.skippedReason() != null) skipped.add(dwsResult.skippedReason());
-            }
-
-            if (createAds) {
-                String dwsRef = dwsResult != null ? dwsResult.modelName() : "dws_" + entityToken;
-                GenerateLayerResult adsResult = upsertGeneratedModel(
-                    request.planId(),
-                    modelSourceId,
-                    "ads_" + entityToken,
-                    "ADS",
-                    request.schemaName(),
-                    request.materialized(),
-                    extraTags,
-                    buildLayerDescription("ADS", odsSchema, odsTable, descriptionBase),
-                    request.enabled(),
-                    request.status(),
-                    request.ownerDept(),
-                    """
-                    select
-                      *
-                    from {{ ref('%s') }}
-                    """.formatted(dwsRef),
-                    activeDeptHeader,
-                    overwrite
-                );
-                created += adsResult.created() ? 1 : 0;
-                updated += adsResult.updated() ? 1 : 0;
-                if (adsResult.created()) createdModels.add(adsResult.modelName());
-                if (adsResult.updated()) updatedModels.add(adsResult.modelName());
-                if (adsResult.skippedReason() != null) skipped.add(adsResult.skippedReason());
+                if (createAds) {
+                    String dwsRef = dwsResult != null ? dwsResult.modelName() : "dws_" + entityToken;
+                    GenerateLayerResult adsResult = upsertGeneratedModel(
+                        request.planId(),
+                        modelSourceId,
+                        "ads_" + entityToken,
+                        "ADS",
+                        request.schemaName(),
+                        request.materialized(),
+                        extraTags,
+                        buildLayerDescription("ADS", odsSchema, odsTable, descriptionBase),
+                        request.enabled(),
+                        request.status(),
+                        request.ownerDept(),
+                        """
+                        select
+                          *
+                        from {{ ref('%s') }}
+                        """.formatted(dwsRef),
+                        activeDeptHeader,
+                        overwrite
+                    );
+                    created += adsResult.created() ? 1 : 0;
+                    updated += adsResult.updated() ? 1 : 0;
+                    if (adsResult.created()) createdModels.add(adsResult.modelName());
+                    if (adsResult.updated()) updatedModels.add(adsResult.modelName());
+                    if (adsResult.skippedReason() != null) skipped.add(adsResult.skippedReason());
+                }
+            } catch (RuntimeException ex) {
+                String reason = trimToNull(ex.getMessage());
+                if (reason == null) {
+                    reason = ex.getClass().getSimpleName();
+                }
+                skipped.add(odsSchema + "." + odsTable + " (生成失败: " + reason + ")");
+                LOG.warn("[generate-from-ods] failed for {}.{}: {}", odsSchema, odsTable, reason);
             }
         }
 

@@ -60,6 +60,10 @@ export function useCardDataSource(
             return;
         }
 
+        // Clear stale data from previous card before fetching new one
+        setData(null);
+        setError(null);
+
         const params: Array<{ name: string; value: string }> | undefined =
             paramsKey !== 'null' ? JSON.parse(paramsKey) : undefined;
 

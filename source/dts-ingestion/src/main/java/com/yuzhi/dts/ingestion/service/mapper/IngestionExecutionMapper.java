@@ -28,11 +28,18 @@ public class IngestionExecutionMapper {
         dto.setRowsRead(entity.getRowsRead());
         dto.setRowsWritten(entity.getRowsWritten());
         dto.setErrorMessage(entity.getErrorMessage());
-        if (StringUtils.hasText(entity.getErrorMessage())) {
-            String category = ExecutionFailureClassifier.classify(entity.getErrorMessage());
-            dto.setFailureCategory(category);
-            dto.setFailureAdvice(ExecutionFailureClassifier.advice(category));
+
+        String failureCategory = entity.getFailureCategory();
+        String failureAdvice = entity.getFailureAdvice();
+        if (!StringUtils.hasText(failureCategory) && StringUtils.hasText(entity.getErrorMessage())) {
+            failureCategory = ExecutionFailureClassifier.classify(entity.getErrorMessage());
         }
+        if (!StringUtils.hasText(failureAdvice) && StringUtils.hasText(failureCategory)) {
+            failureAdvice = ExecutionFailureClassifier.advice(failureCategory);
+        }
+        dto.setFailureCategory(failureCategory);
+        dto.setFailureAdvice(failureAdvice);
+
         dto.setLogPath(entity.getLogPath());
         dto.setReplaceMode(entity.getReplaceMode());
         dto.setDroppedTables(entity.getDroppedTables());
@@ -55,6 +62,8 @@ public class IngestionExecutionMapper {
         entity.setRowsRead(dto.getRowsRead());
         entity.setRowsWritten(dto.getRowsWritten());
         entity.setErrorMessage(dto.getErrorMessage());
+        entity.setFailureCategory(dto.getFailureCategory());
+        entity.setFailureAdvice(dto.getFailureAdvice());
         entity.setLogPath(dto.getLogPath());
         entity.setReplaceMode(dto.getReplaceMode());
         entity.setDroppedTables(dto.getDroppedTables());

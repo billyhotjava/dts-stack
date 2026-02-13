@@ -12,7 +12,7 @@ interface CanvasComponentProps {
 type ResizeDirection = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w';
 
 export function CanvasComponent({ component, isSelected, theme }: CanvasComponentProps) {
-    const { dispatch, selectComponents } = useScreen();
+    const { dispatch, selectComponents, updateComponent } = useScreen();
     const [isDragging, setIsDragging] = useState(false);
     const [isResizing, setIsResizing] = useState(false);
     const startPos = useRef({ x: 0, y: 0 });
@@ -114,6 +114,16 @@ export function CanvasComponent({ component, isSelected, theme }: CanvasComponen
         document.addEventListener('mouseup', handleMouseUp);
     }, [component.id, component.locked, component.width, component.height, component.x, component.y, dispatch]);
 
+    // Stable ref for config to avoid recreating callback on every config change
+    const configRef = useRef(component.config);
+    configRef.current = component.config;
+
+    const handleConfigMeta = useCallback((meta: Record<string, unknown>) => {
+        updateComponent(component.id, {
+            config: { ...configRef.current, ...meta },
+        });
+    }, [component.id, updateComponent]);
+
     const resizeHandles: ResizeDirection[] = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'];
 
     return (
@@ -129,7 +139,7 @@ export function CanvasComponent({ component, isSelected, theme }: CanvasComponen
             }}
             onMouseDown={handleMouseDown}
         >
-            <ComponentRenderer component={component} mode="designer" theme={theme} />
+            <ComponentRenderer component={component} mode="designer" theme={theme} onConfigMeta={handleConfigMeta} />
 
             {isSelected && !component.locked && (
                 <>

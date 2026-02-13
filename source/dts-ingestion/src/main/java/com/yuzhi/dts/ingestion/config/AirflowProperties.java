@@ -15,6 +15,7 @@ public class AirflowProperties {
     private Integer dagReadyWaitSeconds = 60;
     private Integer dagReadyPollSeconds = 2;
     private Integer dagTriggerRetrySeconds = 12;
+    private Integer dagNotFoundRetryWaitSeconds = 120;
     private boolean executionPollEnabled = true;
     private Long executionPollIntervalMs = 15000L;
     private Integer executionPollBatchSize = 50;
@@ -97,6 +98,14 @@ public class AirflowProperties {
 
     public void setDagTriggerRetrySeconds(Integer dagTriggerRetrySeconds) {
         this.dagTriggerRetrySeconds = dagTriggerRetrySeconds;
+    }
+
+    public Integer getDagNotFoundRetryWaitSeconds() {
+        return dagNotFoundRetryWaitSeconds;
+    }
+
+    public void setDagNotFoundRetryWaitSeconds(Integer dagNotFoundRetryWaitSeconds) {
+        this.dagNotFoundRetryWaitSeconds = dagNotFoundRetryWaitSeconds;
     }
 
     public boolean isExecutionPollEnabled() {

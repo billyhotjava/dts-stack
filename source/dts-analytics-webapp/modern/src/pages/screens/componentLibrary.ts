@@ -343,6 +343,27 @@ export const componentLibrary: ComponentCategory[] = [
                 },
             },
             {
+                type: 'table',
+                name: '数据表',
+                icon: '🗂️',
+                defaultWidth: 480,
+                defaultHeight: 280,
+                defaultConfig: {
+                    header: ['列1', '列2', '列3'],
+                    data: [
+                        ['行1-1', '行1-2', '行1-3'],
+                        ['行2-1', '行2-2', '行2-3'],
+                        ['行3-1', '行3-2', '行3-3'],
+                    ],
+                    headerColor: '#e5e7eb',
+                    headerBackground: '#64748b',
+                    bodyColor: '#d1d5db',
+                    bodyBackground: 'transparent',
+                    borderColor: '#94a3b8',
+                    fontSize: 13,
+                },
+            },
+            {
                 type: 'scroll-ranking',
                 name: '排行榜',
                 icon: '🏆',

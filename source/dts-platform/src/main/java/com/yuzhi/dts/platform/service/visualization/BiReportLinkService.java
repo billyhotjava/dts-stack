@@ -62,7 +62,7 @@ public class BiReportLinkService {
         Set<String> userRoles = currentAuthorities();
 
         boolean institutePrivileged = SecurityUtils.hasCurrentUserAnyOfAuthorities(AuthoritiesConstants.INSTITUTE_PRIVILEGED_ROLES);
-        boolean superAdmin = isSuperAdmin();
+        boolean superAdmin = hasGlobalManageScope();
         Instant now = Instant.now();
 
         List<BiReportLinkDto> out = new ArrayList<>();
@@ -99,7 +99,7 @@ public class BiReportLinkService {
         String kw = trimToNull(keyword);
         boolean onlyEnabled = Boolean.TRUE.equals(enabledOnly);
         String activeDept = resolveActiveDept(activeDeptHeader);
-        boolean superAdmin = isSuperAdmin();
+        boolean superAdmin = hasGlobalManageScope();
 
         List<BiReportLink> rows = repo.findAll();
         Map<UUID, QueryDatasetAsset> datasetCache = loadDatasetCache(rows);
@@ -264,7 +264,7 @@ public class BiReportLinkService {
             throw new IllegalArgumentException("queryDatasetId invalid");
         }
         QueryDatasetAsset dataset = queryDatasetAssetRepository.findById(id).orElseThrow(() -> new IllegalArgumentException("queryDatasetId not found"));
-        if (!datasetVisibleInScope(dataset, resolveActiveDept(activeDeptHeader), isSuperAdmin())) {
+        if (!datasetVisibleInScope(dataset, resolveActiveDept(activeDeptHeader), hasGlobalManageScope())) {
             throw new IllegalArgumentException("queryDatasetId not in active scope");
         }
         return id;
@@ -327,8 +327,8 @@ public class BiReportLinkService {
         return false;
     }
 
-    private boolean isSuperAdmin() {
-        return SecurityUtils.hasCurrentUserAnyOfAuthorities(AuthoritiesConstants.OP_ADMIN, AuthoritiesConstants.ADMIN) || SecurityUtils.isOpAdminAccount();
+    private boolean hasGlobalManageScope() {
+        return SecurityUtils.hasCurrentUserAnyOfAuthorities(AuthoritiesConstants.CATALOG_MAINTAINERS) || SecurityUtils.isOpAdminAccount();
     }
 
     private boolean datasetVisibleInScope(QueryDatasetAsset dataset, String activeDept, boolean superAdmin) {

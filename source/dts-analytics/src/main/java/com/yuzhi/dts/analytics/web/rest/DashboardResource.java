@@ -458,6 +458,7 @@ public class DashboardResource {
         return ResponseEntity.ok(toDashcardResponse(dashcard, true));
     }
 
+    @Transactional(readOnly = true, noRollbackFor = Exception.class)
     @PostMapping(
             path = "/{dashboardId}/dashcard/{dashcardId}/card/{cardId}/query",
             consumes = MediaType.APPLICATION_JSON_VALUE,
@@ -471,6 +472,7 @@ public class DashboardResource {
         return runDashcardQuery(dashboardId, dashcardId, cardId, body, request);
     }
 
+    @Transactional(readOnly = true, noRollbackFor = Exception.class)
     @PostMapping(
             path = "/pivot/{dashboardId}/dashcard/{dashcardId}/card/{cardId}/query",
             consumes = MediaType.APPLICATION_JSON_VALUE,

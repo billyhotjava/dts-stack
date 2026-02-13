@@ -47,6 +47,7 @@ export function LayerPanel() {
             'image': '🖼️',
             'video': '🎬',
             'iframe': '🌐',
+            'table': '🗂️',
             'border-box': '🔲',
             'decoration': '💠',
             'scroll-board': '📜',

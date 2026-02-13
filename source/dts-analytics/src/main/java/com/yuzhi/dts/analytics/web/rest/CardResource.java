@@ -231,6 +231,7 @@ public class CardResource {
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
+    @Transactional(readOnly = true, noRollbackFor = Exception.class)
     @PostMapping(path = "/{cardId}/query", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> query(@PathVariable("cardId") long cardId, @RequestBody(required = false) JsonNode body, HttpServletRequest request) {
         Optional<ResponseEntity<String>> auth = MetabaseAuth.requireUser(sessionService, request);
@@ -326,6 +327,7 @@ public class CardResource {
         }
     }
 
+    @Transactional(readOnly = true, noRollbackFor = Exception.class)
     @PostMapping(path = "/pivot/{cardId}/query", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> pivotQuery(@PathVariable("cardId") long cardId, @RequestBody(required = false) JsonNode body, HttpServletRequest request) {
         return query(cardId, body, request);
@@ -334,6 +336,7 @@ public class CardResource {
     /**
      * Export card query results to CSV format.
      */
+    @Transactional(readOnly = true, noRollbackFor = Exception.class)
     @PostMapping(path = "/{cardId}/query/csv")
     public void exportCsv(
             @PathVariable("cardId") long cardId,
@@ -346,6 +349,7 @@ public class CardResource {
     /**
      * Export card query results to Excel format.
      */
+    @Transactional(readOnly = true, noRollbackFor = Exception.class)
     @PostMapping(path = "/{cardId}/query/xlsx")
     public void exportExcel(
             @PathVariable("cardId") long cardId,
@@ -358,6 +362,7 @@ public class CardResource {
     /**
      * Export card query results to JSON format.
      */
+    @Transactional(readOnly = true, noRollbackFor = Exception.class)
     @PostMapping(path = "/{cardId}/query/json")
     public void exportJson(
             @PathVariable("cardId") long cardId,

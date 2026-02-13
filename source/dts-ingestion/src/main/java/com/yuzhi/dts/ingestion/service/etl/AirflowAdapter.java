@@ -6,11 +6,15 @@ import com.yuzhi.dts.ingestion.service.infra.IngestionSettingsService;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
 @Component
 public class AirflowAdapter {
+
+    private static final Logger LOG = LoggerFactory.getLogger(AirflowAdapter.class);
 
     private final AirflowClient client;
     private final AirflowProperties properties;
@@ -84,6 +88,10 @@ public class AirflowAdapter {
         int waitSeconds = settings.getInteger("dagReadyWaitSeconds", properties.getDagReadyWaitSeconds());
         int pollSeconds = settings.getInteger("dagReadyPollSeconds", properties.getDagReadyPollSeconds());
         int triggerRetrySeconds = settings.getInteger("dagTriggerRetrySeconds", properties.getDagTriggerRetrySeconds());
+        int notFoundRetryWaitSeconds = settings.getInteger(
+            "dagNotFoundRetryWaitSeconds",
+            properties.getDagNotFoundRetryWaitSeconds()
+        );
         AirflowClient.TriggerResult lastFailure = null;
 
         for (String dagId : candidates) {
@@ -96,7 +104,7 @@ public class AirflowAdapter {
                 );
             }
             if (!dagReady) {
-                lastFailure = new AirflowClient.TriggerResult(false, 404, buildDagNotReadyMessage(dagId), null);
+                lastFailure = buildDagNotReadyResult(dagId);
                 continue;
             }
 
@@ -107,6 +115,31 @@ public class AirflowAdapter {
                 result.put("payload", response.payload());
                 return result;
             }
+
+            if (response.statusCode() == 404 && notFoundRetryWaitSeconds > 0) {
+                LOG.info(
+                    "[airflow] dag {} trigger returned 404, waiting up to {}s for scheduler refresh",
+                    dagId,
+                    notFoundRetryWaitSeconds
+                );
+                boolean readyAfterRetry = client.waitForDag(
+                    dagId,
+                    java.time.Duration.ofSeconds(notFoundRetryWaitSeconds),
+                    java.time.Duration.ofSeconds(Math.max(1, pollSeconds))
+                );
+                if (!readyAfterRetry) {
+                    lastFailure = buildDagNotReadyResult(dagId);
+                    continue;
+                }
+                response = triggerWithRetry(dagId, payload, triggerRetrySeconds, pollSeconds);
+                if (response.success()) {
+                    result.put("status", "triggered");
+                    result.put("dagId", dagId);
+                    result.put("payload", response.payload());
+                    return result;
+                }
+            }
+
             lastFailure = response;
             if (response.statusCode() != 404) {
                 break;
@@ -158,6 +191,10 @@ public class AirflowAdapter {
             }
         }
         return response;
+    }
+
+    private AirflowClient.TriggerResult buildDagNotReadyResult(String dagId) {
+        return new AirflowClient.TriggerResult(false, 404, buildDagNotReadyMessage(dagId), null);
     }
 
     private String buildDagNotReadyMessage(String dagId) {

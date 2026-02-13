@@ -162,6 +162,30 @@ function renderComponentConfig(
                             onChange={(e) => onChange('title', e.target.value)}
                         />
                     </div>
+                    <div className="property-row">
+                        <label className="property-label">标题字号</label>
+                        <input
+                            type="number"
+                            className="property-input"
+                            min={10}
+                            max={36}
+                            value={(config.titleFontSize as number) || 14}
+                            onChange={(e) => onChange('titleFontSize', Number(e.target.value))}
+                        />
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">图例位置</label>
+                        <select
+                            className="property-input"
+                            value={(config.legendPosition as string) || 'top'}
+                            onChange={(e) => onChange('legendPosition', e.target.value)}
+                        >
+                            <option value="top">顶部</option>
+                            <option value="bottom">底部</option>
+                            <option value="left">左侧</option>
+                            <option value="right">右侧</option>
+                        </select>
+                    </div>
                 </>
             );
 
@@ -180,6 +204,32 @@ function renderComponentConfig(
                             onChange={(e) => onChange('title', e.target.value)}
                         />
                     </div>
+                    <div className="property-row">
+                        <label className="property-label">标题字号</label>
+                        <input
+                            type="number"
+                            className="property-input"
+                            min={10}
+                            max={36}
+                            value={(config.titleFontSize as number) || 14}
+                            onChange={(e) => onChange('titleFontSize', Number(e.target.value))}
+                        />
+                    </div>
+                    {type !== 'gauge-chart' && (
+                        <div className="property-row">
+                            <label className="property-label">图例位置</label>
+                            <select
+                                className="property-input"
+                                value={(config.legendPosition as string) || 'top'}
+                                onChange={(e) => onChange('legendPosition', e.target.value)}
+                            >
+                                <option value="top">顶部</option>
+                                <option value="bottom">底部</option>
+                                <option value="left">左侧</option>
+                                <option value="right">右侧</option>
+                            </select>
+                        </div>
+                    )}
                     {type === 'gauge-chart' && (
                         <div className="property-row">
                             <label className="property-label">值</label>
@@ -222,6 +272,55 @@ function renderComponentConfig(
                             className="property-input"
                             value={config.prefix as string}
                             onChange={(e) => onChange('prefix', e.target.value)}
+                        />
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">标题字号</label>
+                        <input
+                            type="number"
+                            className="property-input"
+                            min={10}
+                            max={36}
+                            value={(config.titleFontSize as number) || 12}
+                            onChange={(e) => onChange('titleFontSize', Number(e.target.value))}
+                        />
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">数值字号</label>
+                        <input
+                            type="number"
+                            className="property-input"
+                            min={16}
+                            max={72}
+                            value={(config.valueFontSize as number) || 32}
+                            onChange={(e) => onChange('valueFontSize', Number(e.target.value))}
+                        />
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">标题颜色</label>
+                        <input
+                            type="color"
+                            className="property-color-input"
+                            value={(config.titleColor as string) || '#ffffff'}
+                            onChange={(e) => onChange('titleColor', e.target.value)}
+                        />
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">数值颜色</label>
+                        <input
+                            type="color"
+                            className="property-color-input"
+                            value={(config.valueColor as string) || '#ffffff'}
+                            onChange={(e) => onChange('valueColor', e.target.value)}
+                        />
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">背景色</label>
+                        <input
+                            type="color"
+                            className="property-color-input"
+                            value={(config.backgroundColor as string) || '#1a1a2e'}
+                            onChange={(e) => onChange('backgroundColor', e.target.value)}
                         />
                     </div>
                 </>
@@ -515,37 +614,38 @@ function renderComponentConfig(
                             onChange={(e) => onChange('title', e.target.value)}
                         />
                     </div>
+                    <div className="property-row">
+                        <label className="property-label">标题字号</label>
+                        <input
+                            type="number"
+                            className="property-input"
+                            min={10}
+                            max={36}
+                            value={(config.titleFontSize as number) || 14}
+                            onChange={(e) => onChange('titleFontSize', Number(e.target.value))}
+                        />
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">图例位置</label>
+                        <select
+                            className="property-input"
+                            value={(config.legendPosition as string) || 'top'}
+                            onChange={(e) => onChange('legendPosition', e.target.value)}
+                        >
+                            <option value="top">顶部</option>
+                            <option value="bottom">底部</option>
+                            <option value="left">左侧</option>
+                            <option value="right">右侧</option>
+                        </select>
+                    </div>
                 </>
             );
 
         case 'scroll-board':
-            return (
-                <>
-                    <div className="property-row">
-                        <label className="property-label">行数</label>
-                        <input
-                            type="number"
-                            className="property-input"
-                            min={1}
-                            max={20}
-                            value={config.rowNum as number}
-                            onChange={(e) => onChange('rowNum', Number(e.target.value))}
-                        />
-                    </div>
-                    <div className="property-row">
-                        <label className="property-label">等待时间(ms)</label>
-                        <input
-                            type="number"
-                            className="property-input"
-                            min={500}
-                            max={10000}
-                            step={500}
-                            value={config.waitTime as number || 2000}
-                            onChange={(e) => onChange('waitTime', Number(e.target.value))}
-                        />
-                    </div>
-                </>
-            );
+            return <ScrollBoardConfig component={component} onChange={onChange} />;
+
+        case 'table':
+            return <TableConfig component={component} onChange={onChange} />;
 
         case 'scroll-ranking':
             return (
@@ -787,5 +887,362 @@ function renderDrillDownConfig(
                 </>
             )}
         </div>
+    );
+}
+
+/** Column config entry for scroll-board */
+interface ColumnEntry { source: string; alias?: string }
+
+/** scroll-board 专用属性面板，支持动态列选择 */
+function ScrollBoardConfig({ component, onChange }: {
+    component: ScreenComponent;
+    onChange: (key: string, value: unknown) => void;
+}) {
+    const { config, dataSource } = component;
+
+    // Read _sourceColumns persisted by ComponentRenderer (no separate API call)
+    const sourceCols = config._sourceColumns as Array<{ name: string; displayName: string }> ?? [];
+    const columns = config.columns as ColumnEntry[] | undefined;
+    const hasCardSource = dataSource?.type === 'card' && !!dataSource.cardConfig?.cardId;
+
+    // Static fallback: use config.header when no card data source
+    const staticHeaders = config.header as string[] || [];
+    const columnAlias = config.columnAlias as Record<string, string> || {};
+
+    // Helper: initialize columns config from source columns (all selected)
+    const initColumns = (): ColumnEntry[] =>
+        sourceCols.map(c => ({ source: c.name }));
+
+    const handleToggleColumn = (colName: string, selected: boolean) => {
+        const current = columns ?? initColumns();
+        if (selected) {
+            // Add column back at its original source position
+            const originalIdx = sourceCols.findIndex(c => c.name === colName);
+            const newCols = [...current];
+            let insertIdx = newCols.length;
+            for (let i = 0; i < newCols.length; i++) {
+                const idx = sourceCols.findIndex(c => c.name === newCols[i].source);
+                if (idx > originalIdx) { insertIdx = i; break; }
+            }
+            newCols.splice(insertIdx, 0, { source: colName });
+            onChange('columns', newCols);
+        } else {
+            onChange('columns', current.filter(c => c.source !== colName));
+        }
+    };
+
+    const handleAliasChange = (colName: string, alias: string) => {
+        const current = columns ?? initColumns();
+        onChange('columns', current.map(c => {
+            if (c.source !== colName) return c;
+            if (alias) return { ...c, alias };
+            const { alias: _a, ...rest } = c;
+            return rest;
+        }));
+    };
+
+    return (
+        <>
+            <div className="property-row">
+                <label className="property-label">行数</label>
+                <input
+                    type="number"
+                    className="property-input"
+                    min={1}
+                    max={20}
+                    value={config.rowNum as number}
+                    onChange={(e) => onChange('rowNum', Number(e.target.value))}
+                />
+            </div>
+            <div className="property-row">
+                <label className="property-label">等待时间(ms)</label>
+                <input
+                    type="number"
+                    className="property-input"
+                    min={500}
+                    max={10000}
+                    step={500}
+                    value={config.waitTime as number || 2000}
+                    onChange={(e) => onChange('waitTime', Number(e.target.value))}
+                />
+            </div>
+            <div className="property-row">
+                <label className="property-label">表头颜色</label>
+                <input
+                    type="color"
+                    className="property-color-input"
+                    value={(config.headerColor as string) || '#ffffff'}
+                    onChange={(e) => onChange('headerColor', e.target.value)}
+                />
+            </div>
+            <div className="property-row">
+                <label className="property-label">表头背景</label>
+                <input
+                    type="color"
+                    className="property-color-input"
+                    value={(config.headerBGC as string) || '#003366'}
+                    onChange={(e) => onChange('headerBGC', e.target.value)}
+                />
+            </div>
+
+            {/* Card 数据源: 等待列加载 */}
+            {hasCardSource && sourceCols.length === 0 && (
+                <div style={{ fontSize: 11, color: '#888', marginTop: 8, padding: '4px 0' }}>
+                    等待数据源加载列信息…
+                </div>
+            )}
+
+            {/* Card 数据源: 动态列选择 */}
+            {hasCardSource && sourceCols.length > 0 && (
+                <>
+                    <div style={{ fontSize: 11, color: '#888', marginTop: 8, marginBottom: 4 }}>
+                        显示列 (来自数据源)
+                    </div>
+                    {sourceCols.map(col => {
+                        const colConfig = columns?.find(c => c.source === col.name);
+                        const isSelected = columns ? !!colConfig : true;
+                        const displayName = col.displayName || col.name;
+                        return (
+                            <div key={col.name} style={{
+                                border: '1px solid rgba(255,255,255,0.06)',
+                                borderRadius: 4,
+                                padding: '4px 6px',
+                                marginBottom: 4,
+                            }}>
+                                <div className="property-row" style={{ marginBottom: isSelected ? 4 : 0 }}>
+                                    <label className="property-label" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                        <input
+                                            type="checkbox"
+                                            checked={isSelected}
+                                            onChange={(e) => handleToggleColumn(col.name, e.target.checked)}
+                                        />
+                                        <span title={col.name}>{displayName}</span>
+                                    </label>
+                                </div>
+                                {isSelected && (
+                                    <div className="property-row">
+                                        <label className="property-label">别名</label>
+                                        <input
+                                            type="text"
+                                            className="property-input"
+                                            placeholder={displayName}
+                                            value={colConfig?.alias || ''}
+                                            onChange={(e) => handleAliasChange(col.name, e.target.value)}
+                                        />
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })}
+                </>
+            )}
+
+            {/* 静态数据源: 按索引的表头别名 (保持向后兼容) */}
+            {!hasCardSource && staticHeaders.length > 0 && (
+                <>
+                    <div style={{ fontSize: 11, color: '#888', marginTop: 8, marginBottom: 4 }}>
+                        表头别名
+                    </div>
+                    {staticHeaders.map((h, i) => (
+                        <div className="property-row" key={i}>
+                            <label className="property-label" title={h}>列{i + 1}</label>
+                            <input
+                                type="text"
+                                className="property-input"
+                                placeholder={h}
+                                value={columnAlias[String(i)] || ''}
+                                onChange={(e) => {
+                                    const newAlias = { ...columnAlias };
+                                    if (e.target.value) {
+                                        newAlias[String(i)] = e.target.value;
+                                    } else {
+                                        delete newAlias[String(i)];
+                                    }
+                                    onChange('columnAlias', newAlias);
+                                }}
+                            />
+                        </div>
+                    ))}
+                </>
+            )}
+        </>
+    );
+}
+
+/** table 专用属性面板，支持动态列选择和样式配置 */
+function TableConfig({ component, onChange }: {
+    component: ScreenComponent;
+    onChange: (key: string, value: unknown) => void;
+}) {
+    const { config, dataSource } = component;
+
+    const sourceCols = config._sourceColumns as Array<{ name: string; displayName: string }> ?? [];
+    const columns = config.columns as ColumnEntry[] | undefined;
+    const hasCardSource = dataSource?.type === 'card' && !!dataSource.cardConfig?.cardId;
+
+    const staticHeaders = config.header as string[] || [];
+    const columnAlias = config.columnAlias as Record<string, string> || {};
+
+    const initColumns = (): ColumnEntry[] =>
+        sourceCols.map(c => ({ source: c.name }));
+
+    const handleToggleColumn = (colName: string, selected: boolean) => {
+        const current = columns ?? initColumns();
+        if (selected) {
+            const originalIdx = sourceCols.findIndex(c => c.name === colName);
+            const newCols = [...current];
+            let insertIdx = newCols.length;
+            for (let i = 0; i < newCols.length; i++) {
+                const idx = sourceCols.findIndex(c => c.name === newCols[i].source);
+                if (idx > originalIdx) {
+                    insertIdx = i;
+                    break;
+                }
+            }
+            newCols.splice(insertIdx, 0, { source: colName });
+            onChange('columns', newCols);
+        } else {
+            onChange('columns', current.filter(c => c.source !== colName));
+        }
+    };
+
+    const handleAliasChange = (colName: string, alias: string) => {
+        const current = columns ?? initColumns();
+        onChange('columns', current.map(c => {
+            if (c.source !== colName) return c;
+            if (alias) return { ...c, alias };
+            const { alias: _a, ...rest } = c;
+            return rest;
+        }));
+    };
+
+    return (
+        <>
+            <div className="property-row">
+                <label className="property-label">字号</label>
+                <input
+                    type="number"
+                    className="property-input"
+                    min={10}
+                    max={24}
+                    value={(config.fontSize as number) || 13}
+                    onChange={(e) => onChange('fontSize', Number(e.target.value))}
+                />
+            </div>
+            <div className="property-row">
+                <label className="property-label">表头颜色</label>
+                <input
+                    type="color"
+                    className="property-color-input"
+                    value={(config.headerColor as string) || '#e5e7eb'}
+                    onChange={(e) => onChange('headerColor', e.target.value)}
+                />
+            </div>
+            <div className="property-row">
+                <label className="property-label">表头背景</label>
+                <input
+                    type="color"
+                    className="property-color-input"
+                    value={(config.headerBackground as string) || '#64748b'}
+                    onChange={(e) => onChange('headerBackground', e.target.value)}
+                />
+            </div>
+            <div className="property-row">
+                <label className="property-label">正文颜色</label>
+                <input
+                    type="color"
+                    className="property-color-input"
+                    value={(config.bodyColor as string) || '#d1d5db'}
+                    onChange={(e) => onChange('bodyColor', e.target.value)}
+                />
+            </div>
+            <div className="property-row">
+                <label className="property-label">边框颜色</label>
+                <input
+                    type="color"
+                    className="property-color-input"
+                    value={(config.borderColor as string) || '#94a3b8'}
+                    onChange={(e) => onChange('borderColor', e.target.value)}
+                />
+            </div>
+
+            {hasCardSource && sourceCols.length === 0 && (
+                <div style={{ fontSize: 11, color: '#888', marginTop: 8, padding: '4px 0' }}>
+                    等待数据源加载列信息…
+                </div>
+            )}
+
+            {hasCardSource && sourceCols.length > 0 && (
+                <>
+                    <div style={{ fontSize: 11, color: '#888', marginTop: 8, marginBottom: 4 }}>
+                        字段绑定 (来自数据源)
+                    </div>
+                    {sourceCols.map(col => {
+                        const colConfig = columns?.find(c => c.source === col.name);
+                        const isSelected = columns ? !!colConfig : true;
+                        const displayName = col.displayName || col.name;
+                        return (
+                            <div key={col.name} style={{
+                                border: '1px solid rgba(255,255,255,0.06)',
+                                borderRadius: 4,
+                                padding: '4px 6px',
+                                marginBottom: 4,
+                            }}>
+                                <div className="property-row" style={{ marginBottom: isSelected ? 4 : 0 }}>
+                                    <label className="property-label" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                        <input
+                                            type="checkbox"
+                                            checked={isSelected}
+                                            onChange={(e) => handleToggleColumn(col.name, e.target.checked)}
+                                        />
+                                        <span title={col.name}>{displayName}</span>
+                                    </label>
+                                </div>
+                                {isSelected && (
+                                    <div className="property-row">
+                                        <label className="property-label">表头标题</label>
+                                        <input
+                                            type="text"
+                                            className="property-input"
+                                            placeholder={displayName}
+                                            value={colConfig?.alias || ''}
+                                            onChange={(e) => handleAliasChange(col.name, e.target.value)}
+                                        />
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })}
+                </>
+            )}
+
+            {!hasCardSource && staticHeaders.length > 0 && (
+                <>
+                    <div style={{ fontSize: 11, color: '#888', marginTop: 8, marginBottom: 4 }}>
+                        表头别名
+                    </div>
+                    {staticHeaders.map((h, i) => (
+                        <div className="property-row" key={i}>
+                            <label className="property-label" title={h}>列{i + 1}</label>
+                            <input
+                                type="text"
+                                className="property-input"
+                                placeholder={h}
+                                value={columnAlias[String(i)] || ''}
+                                onChange={(e) => {
+                                    const newAlias = { ...columnAlias };
+                                    if (e.target.value) {
+                                        newAlias[String(i)] = e.target.value;
+                                    } else {
+                                        delete newAlias[String(i)];
+                                    }
+                                    onChange('columnAlias', newAlias);
+                                }}
+                            />
+                        </div>
+                    ))}
+                </>
+            )}
+        </>
     );
 }

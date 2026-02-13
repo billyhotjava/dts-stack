@@ -41,7 +41,7 @@ export function ComponentLibraryPanel() {
                         </div>
                         <div className="component-grid">
                             {category.items.map((item: ComponentItem) => (
-                                <DraggableComponentItem key={item.type} item={item} />
+                                <DraggableComponentItem key={item.name} item={item} />
                             ))}
                         </div>
                     </div>

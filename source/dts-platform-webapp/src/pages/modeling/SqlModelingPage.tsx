@@ -50,6 +50,7 @@ import {
 	updateSqlModel,
 	deleteSqlModel,
 	importSqlModel,
+	importSqlProjectZip,
 	generateSqlModelsFromOds,
 	listModelingPlans,
 	syncDbtModels,
@@ -226,6 +227,18 @@ type SqlModelOdsGenerateResult = {
 	skipped?: string[];
 };
 
+type SqlModelProjectImportResult = {
+	total?: number;
+	created?: number;
+	updated?: number;
+	skipped?: number;
+	failed?: number;
+	warnings?: string[];
+	details?: string[];
+	dryRun?: boolean;
+	packageFingerprint?: string;
+};
+
 type OdsSkippedSeverity = "error" | "warn" | "info";
 
 type OdsSkippedEntry = {
@@ -296,6 +309,9 @@ export default function SqlModelingPage() {
 	const [importSubmitting, setImportSubmitting] = useState(false);
 	const [sqlFileList, setSqlFileList] = useState<UploadFile[]>([]);
 	const [csvFileList, setCsvFileList] = useState<UploadFile[]>([]);
+	const [projectImportOpen, setProjectImportOpen] = useState(false);
+	const [projectImportSubmitting, setProjectImportSubmitting] = useState(false);
+	const [projectZipFileList, setProjectZipFileList] = useState<UploadFile[]>([]);
 	const [odsGenerateOpen, setOdsGenerateOpen] = useState(false);
 	const [odsGenerateSubmitting, setOdsGenerateSubmitting] = useState(false);
 	const [syncingModels, setSyncingModels] = useState(false);
@@ -319,6 +335,7 @@ export default function SqlModelingPage() {
 	const [runForm] = Form.useForm();
 	const [modelForm] = Form.useForm();
 	const [importForm] = Form.useForm();
+	const [projectImportForm] = Form.useForm();
 	const [odsGenerateForm] = Form.useForm();
 	const selectedOdsSourceDataSourceId = Form.useWatch("sourceDataSourceId", odsGenerateForm);
 	const dbtSourcesReqSeqRef = useRef(0);
@@ -588,6 +605,85 @@ export default function SqlModelingPage() {
 			enabled: true,
 		});
 		setImportOpen(true);
+	};
+
+	const openProjectImport = () => {
+		projectImportForm.resetFields();
+		setProjectZipFileList([]);
+		projectImportForm.setFieldsValue({
+			planId: activeSpace?.id || undefined,
+			onConflict: "skip",
+			materialized: "table",
+			enabled: true,
+			dryRun: false,
+		});
+		setProjectImportOpen(true);
+	};
+
+	const submitProjectImport = async () => {
+		setProjectImportSubmitting(true);
+		try {
+			const values = await projectImportForm.validateFields(["planId", "onConflict"]);
+			if (projectZipFileList.length === 0 || !projectZipFileList[0]?.originFileObj) {
+				throw new Error("请选择 ZIP 文件");
+			}
+			const formData = new FormData();
+			formData.append("planId", values.planId);
+			formData.append("onConflict", normalizeText(values.onConflict) || "skip");
+			if (values.sourceDataSourceId) formData.append("sourceDataSourceId", values.sourceDataSourceId);
+			if (values.materialized) formData.append("materialized", normalizeText(values.materialized));
+			if (values.tags) formData.append("tags", normalizeText(values.tags));
+			if (values.status) formData.append("status", normalizeText(values.status));
+			if (values.ownerDept) formData.append("ownerDept", normalizeText(values.ownerDept));
+			formData.append("enabled", String(values.enabled ?? true));
+			formData.append("dryRun", String(values.dryRun ?? false));
+			formData.append("zip", projectZipFileList[0].originFileObj as File);
+
+			const result = (await importSqlProjectZip(formData)) as SqlModelProjectImportResult;
+			Modal.info({
+				title: result?.dryRun ? "项目包预检结果 (dry-run)" : "项目包导入结果",
+				width: 760,
+				content: (
+					<div>
+						<p>
+							共识别 {result?.total || 0} 个模型：新增 {result?.created || 0}，更新 {result?.updated || 0}，
+							跳过 {result?.skipped || 0}，失败 {result?.failed || 0}
+						</p>
+						{result?.packageFingerprint && (
+							<p style={{ marginTop: 6, fontSize: 12, color: "#666" }}>
+								包指纹: <code>{result.packageFingerprint}</code>
+							</p>
+						)}
+						{(result?.warnings || []).length > 0 && (
+							<div style={{ marginTop: 10 }}>
+								<p style={{ marginBottom: 6, fontWeight: 600 }}>告警提示</p>
+								<ul style={{ maxHeight: 120, overflow: "auto", fontSize: 12, paddingLeft: 20 }}>
+									{(result?.warnings || []).map((item, idx) => (
+										<li key={`${item}-${idx}`}>{item}</li>
+									))}
+								</ul>
+							</div>
+						)}
+						{(result?.details || []).length > 0 && (
+							<div style={{ marginTop: 10 }}>
+								<p style={{ marginBottom: 6, fontWeight: 600 }}>明细</p>
+								<ul style={{ maxHeight: 220, overflow: "auto", fontSize: 12, paddingLeft: 20 }}>
+									{(result?.details || []).map((item, idx) => (
+										<li key={`${item}-${idx}`}>{item}</li>
+									))}
+								</ul>
+							</div>
+						)}
+					</div>
+				),
+			});
+			setProjectImportOpen(false);
+			await loadModels();
+		} catch (err: any) {
+			toast.error(err?.message || "导入项目包失败");
+		} finally {
+			setProjectImportSubmitting(false);
+		}
 	};
 
 	const openOdsGenerateModel = () => {
@@ -1148,6 +1244,13 @@ export default function SqlModelingPage() {
 			label: "导入模型",
 			disabled: !workspaceOk,
 			onClick: openImportModel,
+		},
+		{
+			key: "import-project",
+			icon: <ImportOutlined />,
+			label: "导入项目包 (ZIP)",
+			disabled: !workspaceOk,
+			onClick: openProjectImport,
 		},
 		{
 			key: "generate-ods",
@@ -1931,6 +2034,107 @@ WHERE status = 'active'`}
 			</Modal>
 
 			<Modal
+				open={projectImportOpen}
+				title="导入项目包 (ZIP)"
+				onCancel={() => setProjectImportOpen(false)}
+				footer={
+					<Space>
+						<Button onClick={() => setProjectImportOpen(false)}>取消</Button>
+						<Button type="primary" onClick={submitProjectImport} loading={projectImportSubmitting}>
+							导入
+						</Button>
+					</Space>
+				}
+			>
+				<Form layout="vertical" form={projectImportForm} disabled={projectImportSubmitting}>
+					<Alert
+						type="warning"
+						showIcon
+						className="mb-4"
+						message="一个 ZIP 对应一个项目空间"
+						description="若 ZIP 内是 SQL 项目目录（01-dim/02-dwd/03-dws/04-ads）且无 manifest，系统会自动识别并导入；导入前请确认冲突策略。"
+					/>
+					<div className="grid gap-4 md:grid-cols-2">
+						<Form.Item name="planId" label="项目空间" rules={[{ required: true, message: "请选择项目空间" }]}>
+							<Select
+								placeholder="选择项目空间"
+								options={spaces.map((space) => ({ label: space.name || "未命名", value: space.id }))}
+							/>
+						</Form.Item>
+						<Form.Item name="sourceDataSourceId" label="默认来源数据源 (可选)">
+							<Select
+								allowClear
+								placeholder="留空按系统回退策略选择"
+								options={dataSources.map((ds) => ({ label: ds?.name || ds?.id, value: ds?.id }))}
+							/>
+						</Form.Item>
+					</div>
+					<div className="grid gap-4 md:grid-cols-2">
+						<Form.Item
+							name="onConflict"
+							label="冲突策略"
+							rules={[{ required: true, message: "请选择冲突策略" }]}
+						>
+							<Select
+								options={[
+									{ label: "skip（推荐）- 已存在则跳过", value: "skip" },
+									{ label: "overwrite - 已存在则覆盖", value: "overwrite" },
+									{ label: "fail - 已存在则计为失败", value: "fail" },
+								]}
+							/>
+						</Form.Item>
+						<Form.Item name="materialized" label="默认物化方式">
+							<Select
+								allowClear
+								options={[
+									{ label: "table", value: "table" },
+									{ label: "view", value: "view" },
+									{ label: "incremental", value: "incremental" },
+								]}
+							/>
+						</Form.Item>
+					</div>
+					<div className="grid gap-4 md:grid-cols-2">
+						<Form.Item name="status" label="默认状态">
+							<Select
+								allowClear
+								options={[
+									{ label: "草稿", value: "DRAFT" },
+									{ label: "就绪", value: "READY" },
+									{ label: "已发布", value: "PUBLISHED" },
+								]}
+							/>
+						</Form.Item>
+						<Form.Item name="enabled" label="启用" valuePropName="checked">
+							<Switch />
+						</Form.Item>
+					</div>
+					<Form.Item name="dryRun" valuePropName="checked">
+						<Checkbox>仅预检，不落库（dry-run）</Checkbox>
+					</Form.Item>
+					<div className="grid gap-4 md:grid-cols-2">
+						<Form.Item name="tags" label="默认标签 (逗号分隔)">
+							<Input placeholder="可选，如 patent,external" />
+						</Form.Item>
+						<Form.Item name="ownerDept" label="归属部门">
+							<Input placeholder="可选" />
+						</Form.Item>
+					</div>
+					<Form.Item label="ZIP 文件" required>
+						<Upload
+							accept=".zip"
+							beforeUpload={() => false}
+							maxCount={1}
+							fileList={projectZipFileList}
+							onChange={({ fileList }) => setProjectZipFileList(fileList.slice(-1))}
+						>
+							<Button>选择 ZIP</Button>
+						</Upload>
+					</Form.Item>
+				</Form>
+			</Modal>
+
+			<Modal
 				open={odsGenerateOpen}
 				title="从 ODS 一键生成 DWD / DWS / ADS"
 				onCancel={() => setOdsGenerateOpen(false)}
@@ -2052,7 +2256,7 @@ WHERE status = 'active'`}
 							<li>建议先勾选 DWD，再按需勾选 DWS、ADS。</li>
 						</ol>
 						<div className="mt-2 text-amber-700">
-							已移除 ZIP 导入。请使用 ODS 映射作为唯一建模入口。
+							支持“项目包 ZIP 导入”用于外部模型回填；常规建模仍建议优先使用 ODS 映射一键生成。
 						</div>
 					</div>
 				</Form>

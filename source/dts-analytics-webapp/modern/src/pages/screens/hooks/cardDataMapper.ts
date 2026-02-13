@@ -30,9 +30,11 @@ export function mapCardDataToConfig(
             };
 
         case 'scroll-board':
+        case 'table':
             return {
                 header: cols.map((c) => c.display_name || c.name),
                 data: rows.map((row) => row.map((cell) => String(cell ?? ''))),
+                _sourceColumns: cols.map((c) => ({ name: c.name, displayName: c.display_name || c.name })),
             };
 
         case 'scroll-ranking':

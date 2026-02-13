@@ -16,6 +16,7 @@ import jakarta.validation.Valid;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import org.apache.commons.lang3.StringUtils;
@@ -67,9 +68,14 @@ public class AdminUserResource {
         Map<String, AdminUserService.DepartmentInfo> deptMap = adminUserService.resolveDepartments(
             snapshots.stream().map(AdminKeycloakUser::getUsername).filter(StringUtils::isNotBlank).toList()
         );
+        Map<String, List<String>> roleMap = adminUserService.aggregateRealmRolesByUser(snapshots);
         List<AdminUserVM> content = new ArrayList<>(snapshots.size());
         for (AdminKeycloakUser current : snapshots) {
-            AdminUserVM vm = toVm(current);
+            String username = current == null ? null : StringUtils.trimToNull(current.getUsername());
+            List<String> aggregatedRoles = username == null
+                ? List.of()
+                : roleMap.getOrDefault(username.toLowerCase(Locale.ROOT), List.of());
+            AdminUserVM vm = toVm(current, aggregatedRoles);
             if (current != null && StringUtils.isNotBlank(current.getUsername())) {
                 AdminUserService.DepartmentInfo dept = deptMap.get(current.getUsername());
                 if (dept != null) {
@@ -219,7 +225,7 @@ public class AdminUserResource {
         return command;
     }
 
-    private AdminUserVM toVm(AdminKeycloakUser entity) {
+    private AdminUserVM toVm(AdminKeycloakUser entity, List<String> aggregatedRoles) {
         AdminUserVM vm = new AdminUserVM();
         vm.setId(entity.getId());
         vm.setKeycloakId(entity.getKeycloakId());
@@ -228,7 +234,7 @@ public class AdminUserResource {
         vm.setEmail(entity.getEmail());
         vm.setPhone(entity.getPhone());
         vm.setPersonSecurityLevel(entity.getPersonSecurityLevel());
-        vm.setRealmRoles(adminUserService.aggregateRealmRoles(entity.getUsername(), entity.getRealmRoles()));
+        vm.setRealmRoles(aggregatedRoles == null ? List.of() : aggregatedRoles);
         vm.setGroupPaths(entity.getGroupPaths());
         vm.setEnabled(entity.isEnabled());
         vm.setMdmEnabled(entity.getMdmEnabled());

@@ -1,4 +1,4 @@
-import { memo, useMemo, useEffect, useState } from 'react';
+import { memo, useMemo, useEffect, useRef, useState } from 'react';
 import ReactECharts from 'echarts-for-react';
 import {
     BorderBox1,
@@ -52,6 +52,7 @@ function ThemedScrollTable({ config, tokens }: {
     const oddRowBGC = config.oddRowBGC as string || tokens.scrollBoard.oddRowBg;
     const evenRowBGC = config.evenRowBGC as string || tokens.scrollBoard.evenRowBg;
     const textColor = tokens.scrollBoard.textColor;
+    const headerColor = config.headerColor as string || textColor;
     const headerHeight = 35;
 
     // Auto-scroll animation
@@ -85,6 +86,7 @@ function ThemedScrollTable({ config, tokens }: {
                 <div style={{
                     display: 'flex', background: headerBGC, height: headerHeight,
                     lineHeight: `${headerHeight}px`, fontWeight: 600, fontSize: 15, flexShrink: 0,
+                    color: headerColor,
                 }}>
                     {headers.map((h, i) => (
                         <div key={i} style={{
@@ -118,10 +120,46 @@ function ThemedScrollTable({ config, tokens }: {
     );
 }
 
+interface ColumnEntry {
+    source: string;
+    alias?: string;
+}
+
+function resolveBoundTableData(config: Record<string, unknown>): { header: string[]; data: string[][] } {
+    const sourceCols = config._sourceColumns as Array<{ name: string; displayName: string }> | undefined;
+    const columnsConfig = config.columns as ColumnEntry[] | undefined;
+    const allData = (config.data as Array<Array<unknown>> | undefined) || [];
+
+    if (columnsConfig && sourceCols?.length) {
+        const header = columnsConfig.map((col) => {
+            const sc = sourceCols.find((s) => s.name === col.source);
+            return col.alias || sc?.displayName || col.source;
+        });
+        const data = allData.map((row) =>
+            columnsConfig.map((col) => {
+                const idx = sourceCols.findIndex((s) => s.name === col.source);
+                return idx >= 0 ? String(row[idx] ?? '') : '';
+            }),
+        );
+        return { header, data };
+    }
+
+    const rawHeader = (config.header as string[] | undefined) || [];
+    const alias = config.columnAlias as Record<string, string> | undefined;
+    const header = alias
+        ? rawHeader.map((h, i) => alias[String(i)] || h)
+        : rawHeader;
+    const data = allData.map((row) => row.map((cell) => String(cell ?? '')));
+
+    return { header, data };
+}
+
 interface ComponentRendererProps {
     component: ScreenComponent;
     mode?: 'designer' | 'preview';
     theme?: ScreenTheme;
+    /** Callback to persist card-derived metadata (e.g. _sourceColumns) back to saved config */
+    onConfigMeta?: (meta: Record<string, unknown>) => void;
 }
 
 // Border box components map
@@ -157,7 +195,7 @@ const DecorationComponents: Record<number, React.ComponentType<{ color?: string[
     12: Decoration12,
 };
 
-export const ComponentRenderer = memo(function ComponentRenderer({ component, mode = 'preview', theme }: ComponentRendererProps) {
+export const ComponentRenderer = memo(function ComponentRenderer({ component, mode = 'preview', theme, onConfigMeta }: ComponentRendererProps) {
     const { type, config, width, height, dataSource, drillDown } = component;
 
     const t = useMemo(() => getThemeTokens(theme), [theme]);
@@ -197,6 +235,23 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
         return { ...config, ...mapped };
     }, [config, cardData, type]);
 
+    // Persist _sourceColumns to saved config so PropertyPanel can read them
+    const onConfigMetaRef = useRef(onConfigMeta);
+    onConfigMetaRef.current = onConfigMeta;
+
+    const sourceColsKey = (config._sourceColumns as Array<{ name: string }> | undefined)
+        ?.map(c => c.name).join(',');
+
+    useEffect(() => {
+        if (!onConfigMetaRef.current || !cardData?.cols?.length) return;
+        const newCols = cardData.cols.map(c => ({ name: c.name, displayName: c.display_name || c.name }));
+        const newKey = newCols.map(c => c.name).join(',');
+        // Only update if columns actually changed (avoid infinite loop)
+        if (sourceColsKey !== newKey) {
+            onConfigMetaRef.current({ _sourceColumns: newCols });
+        }
+    }, [cardData, sourceColsKey]);
+
     // For datetime component, update every second
     const [currentTime, setCurrentTime] = useState(new Date());
     useEffect(() => {
@@ -219,6 +274,17 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
 
     const content = useMemo(() => {
         const c = effectiveConfig;
+
+        // Build legend config from legendPosition
+        const legendPos = c.legendPosition as string;
+        const legendConfig: Record<string, unknown> = {
+            textStyle: { color: t.textPrimary },
+            ...(legendPos === 'bottom' ? { top: 'auto', bottom: 0, left: 'center' } :
+                legendPos === 'left' ? { left: 0, top: 'middle', orient: 'vertical' } :
+                legendPos === 'right' ? { right: 0, top: 'middle', orient: 'vertical' } :
+                {}),
+        };
+
         switch (type) {
             // ==================== ECharts 图表 ====================
             case 'line-chart':
@@ -227,7 +293,8 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                         style={{ width: '100%', height: '100%' }}
                         option={{
                             ...themeOptions,
-                            title: { text: c.title as string, textStyle: { color: t.textPrimary, fontSize: 14 } },
+                            title: { text: c.title as string, textStyle: { color: t.textPrimary, fontSize: (c.titleFontSize as number) || 14 } },
+                            legend: legendConfig,
                             xAxis: {
                                 type: 'category',
                                 data: c.xAxisData as string[],
@@ -259,7 +326,8 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                         style={{ width: '100%', height: '100%' }}
                         option={{
                             ...themeOptions,
-                            title: { text: c.title as string, textStyle: { color: t.textPrimary, fontSize: 14 } },
+                            title: { text: c.title as string, textStyle: { color: t.textPrimary, fontSize: (c.titleFontSize as number) || 14 } },
+                            legend: legendConfig,
                             xAxis: {
                                 type: 'category',
                                 data: c.xAxisData as string[],
@@ -300,7 +368,8 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                         style={{ width: '100%', height: '100%' }}
                         option={{
                             ...themeOptions,
-                            title: { text: c.title as string, textStyle: { color: t.textPrimary, fontSize: 14 }, left: 'center' },
+                            title: { text: c.title as string, textStyle: { color: t.textPrimary, fontSize: (c.titleFontSize as number) || 14 }, left: 'center' },
+                            legend: legendConfig,
                             tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
                             series: [{
                                 type: 'pie',
@@ -336,7 +405,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                                 axisLabel: { distance: 25, color: t.gauge.axisLabelColor, fontSize: 12 },
                                 pointer: { icon: 'path://M12.8,0.7l12,40.1H0.7L12.8,0.7z', length: '12%', width: 10, itemStyle: { color: 'auto' } },
                                 anchor: { show: true, showAbove: true, size: 18, itemStyle: { borderWidth: 6 } },
-                                title: { show: true, offsetCenter: [0, '70%'], fontSize: 14, color: t.gauge.titleColor },
+                                title: { show: true, offsetCenter: [0, '70%'], fontSize: (c.titleFontSize as number) || 14, color: t.gauge.titleColor },
                                 detail: { valueAnimation: true, fontSize: 28, offsetCenter: [0, '45%'], color: t.gauge.detailColor, formatter: '{value}%' },
                                 data: [{ value: c.value as number, name: c.title as string }],
                             }],
@@ -350,7 +419,8 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                         style={{ width: '100%', height: '100%' }}
                         option={{
                             ...themeOptions,
-                            title: { text: c.title as string, textStyle: { color: t.textPrimary, fontSize: 14 }, left: 'center' },
+                            title: { text: c.title as string, textStyle: { color: t.textPrimary, fontSize: (c.titleFontSize as number) || 14 }, left: 'center' },
+                            legend: legendConfig,
                             radar: {
                                 indicator: c.indicator as Array<{ name: string; max: number }>,
                                 axisName: { color: t.radar.axisNameColor },
@@ -372,7 +442,8 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                         style={{ width: '100%', height: '100%' }}
                         option={{
                             ...themeOptions,
-                            title: { text: c.title as string, textStyle: { color: t.textPrimary, fontSize: 14 }, left: 'center' },
+                            title: { text: c.title as string, textStyle: { color: t.textPrimary, fontSize: (c.titleFontSize as number) || 14 }, left: 'center' },
+                            legend: legendConfig,
                             series: [{
                                 type: 'funnel',
                                 left: '10%',
@@ -397,7 +468,8 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                         style={{ width: '100%', height: '100%' }}
                         option={{
                             ...themeOptions,
-                            title: { text: c.title as string, textStyle: { color: t.textPrimary, fontSize: 14 } },
+                            title: { text: c.title as string, textStyle: { color: t.textPrimary, fontSize: (c.titleFontSize as number) || 14 } },
+                            legend: legendConfig,
                             xAxis: {
                                 axisLine: { lineStyle: { color: t.echarts.axisLineColor } },
                                 axisLabel: { color: t.echarts.axisLabelColor },
@@ -430,15 +502,15 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                         flexDirection: 'column',
                         justifyContent: 'center',
                         alignItems: 'center',
-                        background: t.numberCard.background,
+                        background: (c.backgroundColor as string) || t.numberCard.background,
                         borderRadius: t.cardBorderRadius,
                         border: t.numberCard.border,
                         boxShadow: t.cardShadow,
                     }}>
-                        <div style={{ fontSize: 12, color: t.numberCard.titleColor, marginBottom: 8 }}>
+                        <div style={{ fontSize: (c.titleFontSize as number) || 12, color: (c.titleColor as string) || t.numberCard.titleColor, marginBottom: 8 }}>
                             {c.title as string}
                         </div>
-                        <div style={{ fontSize: 32, fontWeight: 'bold', color: t.numberCard.valueColor }}>
+                        <div style={{ fontSize: (c.valueFontSize as number) || 32, fontWeight: 'bold', color: (c.valueColor as string) || t.numberCard.valueColor }}>
                             {c.prefix as string}
                             {(c.value as number).toLocaleString()}
                             {c.suffix as string}
@@ -621,29 +693,91 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
             }
 
             // ==================== DataV 数据展示组件 ====================
-            case 'scroll-board':
+            case 'scroll-board': {
+                const { header: displayHeader, data: displayData } = resolveBoundTableData(c);
+                const filteredConfig = { ...c, header: displayHeader, data: displayData };
+
                 // DataV ScrollBoard 硬编码 color:#fff 且无法通过 CSS/style 覆盖
                 // 非 legacy-dark 主题使用自定义表格组件
                 if (theme && theme !== 'legacy-dark') {
-                    return <ThemedScrollTable config={c} tokens={t} />;
+                    return <ThemedScrollTable config={filteredConfig} tokens={t} />;
                 }
                 return (
                     <ScrollBoard
                         config={{
-                            header: c.header as string[],
-                            data: c.data as string[][],
+                            header: displayHeader,
+                            data: displayData,
                             rowNum: c.rowNum as number,
                             headerBGC: c.headerBGC as string,
                             oddRowBGC: c.oddRowBGC as string,
                             evenRowBGC: c.evenRowBGC as string,
                             waitTime: c.waitTime as number || 2000,
                             headerHeight: 35,
-                            align: ['center', 'center', 'center'],
+                            align: displayHeader.map(() => 'center'),
                         }}
                         style={{ width: '100%', height: '100%' }}
                     />
                 );
+            }
 
+            case 'table': {
+                const { header: displayHeader, data: displayData } = resolveBoundTableData(c);
+                const fontSize = (c.fontSize as number) || 13;
+                const headerColor = (c.headerColor as string) || t.textPrimary;
+                const headerBackground = (c.headerBackground as string) || 'rgba(148, 163, 184, 0.16)';
+                const bodyColor = (c.bodyColor as string) || t.textSecondary;
+                const bodyBackground = (c.bodyBackground as string) || 'transparent';
+                const borderColor = (c.borderColor as string) || 'rgba(148, 163, 184, 0.24)';
+                const oddRowBackground = (c.oddRowBackground as string) || bodyBackground;
+                const evenRowBackground = (c.evenRowBackground as string) || 'rgba(148, 163, 184, 0.06)';
+
+                return (
+                    <div style={{ width: '100%', height: '100%', overflow: 'auto' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', fontSize }}>
+                            {displayHeader.length > 0 && (
+                                <thead>
+                                    <tr style={{ background: headerBackground }}>
+                                        {displayHeader.map((title, i) => (
+                                            <th key={i} style={{
+                                                color: headerColor,
+                                                borderBottom: '1px solid ' + borderColor,
+                                                borderRight: i < displayHeader.length - 1 ? '1px solid ' + borderColor : 'none',
+                                                padding: '8px 10px',
+                                                textAlign: 'left',
+                                                fontWeight: 600,
+                                                whiteSpace: 'nowrap',
+                                                overflow: 'hidden',
+                                                textOverflow: 'ellipsis',
+                                            }}>
+                                                {title}
+                                            </th>
+                                        ))}
+                                    </tr>
+                                </thead>
+                            )}
+                            <tbody>
+                                {displayData.map((row, rowIndex) => (
+                                    <tr key={rowIndex} style={{ background: rowIndex % 2 === 0 ? oddRowBackground : evenRowBackground }}>
+                                        {row.map((cell, colIndex) => (
+                                            <td key={colIndex} style={{
+                                                color: bodyColor,
+                                                borderBottom: '1px solid ' + borderColor,
+                                                borderRight: colIndex < row.length - 1 ? '1px solid ' + borderColor : 'none',
+                                                padding: '8px 10px',
+                                                whiteSpace: 'nowrap',
+                                                overflow: 'hidden',
+                                                textOverflow: 'ellipsis',
+                                            }}>
+                                                {cell}
+                                            </td>
+                                        ))}
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                );
+            }
             case 'scroll-ranking':
                 return (
                     <ScrollRankingBoard
@@ -739,7 +873,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                     </div>
                 );
         }
-    }, [type, effectiveConfig, width, height, currentTime, echartsClickHandler, t, themeOptions]);
+    }, [type, effectiveConfig, width, height, currentTime, echartsClickHandler, t, theme, themeOptions]);
 
     return (
         <div style={{ width: '100%', height: '100%', overflow: 'hidden', position: 'relative' }}>

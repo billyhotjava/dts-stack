@@ -160,7 +160,11 @@ public class AirflowClient {
             ResponseEntity<String> response = restTemplate.exchange(uri, HttpMethod.GET, entity, String.class);
             return Optional.ofNullable(response.getBody());
         } catch (HttpStatusCodeException ex) {
-            LOG.warn("Airflow task log fetch failed status={} body={}", ex.getStatusCode().value(), ex.getResponseBodyAsString());
+            if (ex.getStatusCode().value() == 404) {
+                LOG.debug("Airflow task log not ready dag={} run={} task={} try={} body={}", dagId, dagRunId, taskId, resolvedTry, ex.getResponseBodyAsString());
+            } else {
+                LOG.warn("Airflow task log fetch failed status={} body={}", ex.getStatusCode().value(), ex.getResponseBodyAsString());
+            }
         } catch (Exception ex) {
             LOG.warn("Airflow task log fetch error: {}", ex.getMessage());
         }
@@ -187,7 +191,11 @@ public class AirflowClient {
             Map body = response.getBody();
             return Optional.of(extractMapList(body, "task_instances"));
         } catch (HttpStatusCodeException ex) {
-            LOG.warn("Airflow task instance list failed status={} body={}", ex.getStatusCode().value(), ex.getResponseBodyAsString());
+            if (ex.getStatusCode().value() == 404) {
+                LOG.debug("Airflow task instances not ready dag={} run={} body={}", dagId, dagRunId, ex.getResponseBodyAsString());
+            } else {
+                LOG.warn("Airflow task instance list failed status={} body={}", ex.getStatusCode().value(), ex.getResponseBodyAsString());
+            }
         } catch (Exception ex) {
             LOG.warn("Airflow task instance list error: {}", ex.getMessage());
         }

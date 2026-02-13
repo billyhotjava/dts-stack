@@ -1,0 +1,270 @@
+package com.yuzhi.dts.platform.service.modeling;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
+import com.yuzhi.dts.platform.domain.infra.InfraOdsTableMapping;
+import com.yuzhi.dts.platform.domain.modeling.ModelingPlan;
+import com.yuzhi.dts.platform.domain.modeling.ModelingSqlModel;
+import com.yuzhi.dts.platform.domain.service.InfraDataSource;
+import com.yuzhi.dts.platform.repository.catalog.CatalogColumnSchemaRepository;
+import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
+import com.yuzhi.dts.platform.repository.catalog.CatalogTableSchemaRepository;
+import com.yuzhi.dts.platform.repository.infra.InfraOdsTableMappingRepository;
+import com.yuzhi.dts.platform.repository.modeling.ModelingPlanRepository;
+import com.yuzhi.dts.platform.repository.modeling.ModelingSqlModelRepository;
+import com.yuzhi.dts.platform.repository.service.InfraDataSourceRepository;
+import com.yuzhi.dts.platform.service.audit.AuditService;
+import com.yuzhi.dts.platform.service.catalog.CatalogColumnSyncService;
+import com.yuzhi.dts.platform.service.etl.DbtConfigService;
+import com.yuzhi.dts.platform.service.security.OrganizationVisibilityService;
+import java.nio.file.Path;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.io.TempDir;
+import org.mockito.ArgumentCaptor;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+@ExtendWith(MockitoExtension.class)
+class ModelingSqlModelServiceTest {
+
+    @Mock
+    private ModelingSqlModelRepository repo;
+
+    @Mock
+    private ModelingPlanRepository planRepo;
+
+    @Mock
+    private InfraOdsTableMappingRepository odsTableMappingRepository;
+
+    @Mock
+    private InfraDataSourceRepository dataSourceRepository;
+
+    @Mock
+    private OrganizationVisibilityService organizationVisibilityService;
+
+    @Mock
+    private DataStandardSecurity security;
+
+    @Mock
+    private DbtConfigService dbtConfigService;
+
+    @Mock
+    private CatalogDatasetRepository datasetRepository;
+
+    @Mock
+    private CatalogTableSchemaRepository tableRepository;
+
+    @Mock
+    private CatalogColumnSchemaRepository columnRepository;
+
+    @Mock
+    private CatalogColumnSyncService columnSyncService;
+
+    @Mock
+    private AuditService auditService;
+
+    @InjectMocks
+    private ModelingSqlModelService service;
+
+    @TempDir
+    Path tempDir;
+
+    private UUID planId;
+    private ModelingPlan plan;
+
+    @BeforeEach
+    void setUp() {
+        planId = UUID.randomUUID();
+        plan = new ModelingPlan();
+        plan.setId(planId);
+        plan.setName("Patent Plan");
+        plan.setOwnerDept("D1");
+
+        when(security.resolveActiveDept(anyString())).thenReturn("D1");
+        when(security.hasInstituteScope()).thenReturn(false);
+        when(organizationVisibilityService.isRoot(anyString())).thenReturn(false);
+        when(planRepo.findById(planId)).thenReturn(Optional.of(plan));
+        when(columnSyncService.parseCsv(any(Path.class))).thenReturn(List.of());
+        when(repo.findFirstByPlanIdAndNameIgnoreCase(any(UUID.class), anyString())).thenReturn(Optional.empty());
+        when(repo.save(any(ModelingSqlModel.class))).thenAnswer(invocation -> {
+            ModelingSqlModel model = invocation.getArgument(0);
+            if (model.getId() == null) {
+                model.setId(UUID.randomUUID());
+            }
+            return model;
+        });
+        when(
+            datasetRepository.existsByHiveDatabaseIgnoreCaseAndHiveTableIgnoreCaseAndWarehouseLayerIgnoreCaseAndEnabledTrue(
+                anyString(),
+                anyString(),
+                eq("ODS")
+            )
+        ).thenReturn(true);
+
+        DbtConfigService.DbtWorkspaceConfig cfg = new DbtConfigService.DbtWorkspaceConfig(
+            true,
+            tempDir.toString(),
+            tempDir.toString(),
+            "dts",
+            "dev",
+            null,
+            null,
+            "public",
+            Map.of()
+        );
+        DbtConfigService.DbtConfigView view = new DbtConfigService.DbtConfigView(
+            true,
+            cfg,
+            DbtConfigService.DbtProfileStatus.skipped("test"),
+            null,
+            new DbtConfigService.DbtWorkspaceStatus(true, "ok", Map.of())
+        );
+        when(dbtConfigService.loadConfig()).thenReturn(view);
+    }
+
+    @Test
+    void generateFromOds_shouldUseDatasetSource_whenRequestAndMappingSourceUnavailable() {
+        UUID mappingId = UUID.randomUUID();
+        UUID badRequestSourceId = UUID.randomUUID();
+        UUID badMappingSourceId = UUID.randomUUID();
+        UUID datasetSourceId = UUID.randomUUID();
+
+        InfraOdsTableMapping mapping = mapping(mappingId, badMappingSourceId, "ods", "ods_patent_info", "patent_info");
+        when(odsTableMappingRepository.findAllById(anyCollection())).thenReturn(List.of(mapping));
+
+        CatalogDataset dataset = new CatalogDataset();
+        dataset.setSourceId(datasetSourceId);
+        when(datasetRepository.findByHiveDatabaseIgnoreCaseAndHiveTableIgnoreCase("ods", "ods_patent_info")).thenReturn(List.of(dataset));
+
+        InfraDataSource datasetSource = source(datasetSourceId, "ODS-Lake", "postgres");
+        Map<UUID, InfraDataSource> sourceMap = new LinkedHashMap<>();
+        sourceMap.put(datasetSourceId, datasetSource);
+        when(dataSourceRepository.findById(any(UUID.class))).thenAnswer(invocation -> {
+            UUID id = invocation.getArgument(0);
+            return Optional.ofNullable(sourceMap.get(id));
+        });
+        when(dataSourceRepository.findByStatusIgnoreCase(anyString())).thenReturn(List.of());
+        when(dataSourceRepository.findAll()).thenReturn(List.of());
+
+        ModelingSqlModelService.SqlModelOdsGenerateRequest request = new ModelingSqlModelService.SqlModelOdsGenerateRequest(
+            planId,
+            badRequestSourceId,
+            List.of(mappingId),
+            "public",
+            "table",
+            "tag1",
+            "D1",
+            true,
+            "DRAFT",
+            true,
+            false,
+            false,
+            true
+        );
+
+        ModelingSqlModelService.SqlModelOdsGenerateResult result = service.generateFromOds(request, "D1");
+
+        assertThat(result.modelsCreated()).isEqualTo(1);
+        assertThat(result.skipped()).isEmpty();
+
+        ArgumentCaptor<ModelingSqlModel> captor = ArgumentCaptor.forClass(ModelingSqlModel.class);
+        verify(repo).save(captor.capture());
+        assertThat(captor.getValue().getSourceDataSourceId()).isEqualTo(datasetSourceId);
+    }
+
+    @Test
+    void generateFromOds_shouldSkipBrokenMappingAndContinueOtherMappings() {
+        UUID mappingSkipId = UUID.randomUUID();
+        UUID mappingOkId = UUID.randomUUID();
+        UUID datasetSourceId = UUID.randomUUID();
+
+        InfraOdsTableMapping skip = mapping(mappingSkipId, null, "ods", "ods_old", "old");
+        InfraOdsTableMapping ok = mapping(mappingOkId, null, "ods", "ods_new", "new");
+        when(odsTableMappingRepository.findAllById(anyCollection())).thenReturn(List.of(skip, ok));
+
+        when(datasetRepository.findByHiveDatabaseIgnoreCaseAndHiveTableIgnoreCase("ods", "ods_old")).thenReturn(List.of());
+        CatalogDataset okDataset = new CatalogDataset();
+        okDataset.setSourceId(datasetSourceId);
+        when(datasetRepository.findByHiveDatabaseIgnoreCaseAndHiveTableIgnoreCase("ods", "ods_new")).thenReturn(List.of(okDataset));
+
+        InfraDataSource datasetSource = source(datasetSourceId, "ODS-Lake", "postgres");
+        when(dataSourceRepository.findByStatusIgnoreCase(anyString())).thenReturn(List.of());
+        when(dataSourceRepository.findAll()).thenReturn(List.of());
+        when(dataSourceRepository.findById(any(UUID.class))).thenAnswer(invocation -> {
+            UUID id = invocation.getArgument(0);
+            if (datasetSourceId.equals(id)) {
+                return Optional.of(datasetSource);
+            }
+            return Optional.empty();
+        });
+
+        ModelingSqlModelService.SqlModelOdsGenerateRequest request = new ModelingSqlModelService.SqlModelOdsGenerateRequest(
+            planId,
+            null,
+            List.of(mappingSkipId, mappingOkId),
+            "public",
+            "table",
+            "tag1",
+            "D1",
+            true,
+            "DRAFT",
+            true,
+            false,
+            false,
+            true
+        );
+
+        ModelingSqlModelService.SqlModelOdsGenerateResult result = service.generateFromOds(request, "D1");
+
+        assertThat(result.mappingsTotal()).isEqualTo(2);
+        assertThat(result.modelsCreated()).isEqualTo(1);
+        assertThat(result.skipped()).anyMatch(msg -> msg.contains("ods.ods_old") && msg.contains("未找到可用来源数据源"));
+
+        ArgumentCaptor<ModelingSqlModel> captor = ArgumentCaptor.forClass(ModelingSqlModel.class);
+        verify(repo).save(captor.capture());
+        assertThat(captor.getValue().getSourceDataSourceId()).isEqualTo(datasetSourceId);
+    }
+
+    private InfraOdsTableMapping mapping(UUID id, UUID connectionId, String schema, String table, String entityCode) {
+        InfraOdsTableMapping mapping = new InfraOdsTableMapping();
+        mapping.setId(id);
+        mapping.setConnectionId(connectionId);
+        mapping.setOdsSchema(schema);
+        mapping.setOdsTable(table);
+        mapping.setEntityCode(entityCode);
+        mapping.setEnabled(true);
+        mapping.setOwnerDept("D1");
+        mapping.setSystemCode("ERP");
+        mapping.setBizCode("ERP");
+        mapping.setStreamName(table);
+        mapping.setStreamNamespace(schema);
+        return mapping;
+    }
+
+    private InfraDataSource source(UUID id, String name, String type) {
+        InfraDataSource source = new InfraDataSource();
+        source.setId(id);
+        source.setName(name);
+        source.setType(type);
+        source.setOwnerDept("D1");
+        source.setStatus("ACTIVE");
+        source.setProps(new ObjectMapper().createObjectNode().put("sourceSystem", "ERP").toString());
+        return source;
+    }
+}

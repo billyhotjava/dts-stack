@@ -1,15 +1,19 @@
 package com.yuzhi.dts.ingestion.service.etl;
 
+import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.ingestion.config.AirflowProperties;
 import com.yuzhi.dts.ingestion.domain.IngestionExecution;
 import com.yuzhi.dts.ingestion.domain.IngestionTask;
 import com.yuzhi.dts.ingestion.repository.IngestionExecutionRepository;
 import com.yuzhi.dts.ingestion.repository.IngestionTaskRepository;
-import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.ingestion.service.audit.AuditService;
 import com.yuzhi.dts.ingestion.service.infra.IngestionSettingsService;
 import com.yuzhi.dts.ingestion.service.infra.PlatformInfraClient;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import org.slf4j.Logger;
@@ -25,6 +29,7 @@ import org.springframework.util.StringUtils;
 public class AirflowExecutionSyncService {
 
     private static final Logger LOG = LoggerFactory.getLogger(AirflowExecutionSyncService.class);
+    private static final int MAX_FAILURE_MSG_LEN = 4000;
 
     private final IngestionExecutionRepository executionRepository;
     private final IngestionTaskRepository taskRepository;
@@ -88,21 +93,37 @@ public class AirflowExecutionSyncService {
             }
             String normalized = state.trim().toLowerCase(Locale.ROOT);
             if ("success".equals(normalized)) {
-                markExecution(execution, task, "success", null);
+                markExecution(execution, task, "success", null, dagId, dagRunId);
             } else if ("failed".equals(normalized) || "error".equals(normalized)) {
-                markExecution(execution, task, "failed", "Airflow state: " + state);
+                String failureMessage = resolveAirflowFailureMessage(dagId, dagRunId, state);
+                markExecution(execution, task, "failed", failureMessage, dagId, dagRunId);
             }
         }
     }
 
-    private void markExecution(IngestionExecution execution, IngestionTask task, String status, String errorMessage) {
+    private void markExecution(
+        IngestionExecution execution,
+        IngestionTask task,
+        String status,
+        String errorMessage,
+        String dagId,
+        String dagRunId
+    ) {
         if (status.equalsIgnoreCase(execution.getStatus())) {
             return;
         }
         execution.setStatus(status);
         execution.setEndTime(Instant.now());
         if (StringUtils.hasText(errorMessage)) {
-            execution.setErrorMessage(errorMessage);
+            String normalizedMessage = truncate(errorMessage, MAX_FAILURE_MSG_LEN);
+            execution.setErrorMessage(normalizedMessage);
+            String category = ExecutionFailureClassifier.classify(normalizedMessage);
+            execution.setFailureCategory(category);
+            execution.setFailureAdvice(ExecutionFailureClassifier.advice(category));
+        } else {
+            execution.setErrorMessage(null);
+            execution.setFailureCategory(null);
+            execution.setFailureAdvice(null);
         }
         executionRepository.save(execution);
 
@@ -115,7 +136,203 @@ public class AirflowExecutionSyncService {
         if ("success".equalsIgnoreCase(status)) {
             incrementalSyncService.updateCheckpointOnSuccess(task, execution);
             triggerDbtIfConfigured(task, execution);
+            return;
         }
+
+        // 补齐失败审计（启动阶段成功后，最终失败需要单独审计记录）
+        if ("failed".equalsIgnoreCase(status)) {
+            String message = toText(execution.getErrorMessage());
+            String category = ExecutionFailureClassifier.classify(message);
+            String advice = ExecutionFailureClassifier.advice(category);
+            Map<String, Object> meta = new LinkedHashMap<>();
+            meta.put("taskId", task.getId());
+            meta.put("executionId", execution.getId());
+            meta.put("dagId", dagId);
+            meta.put("dagRunId", dagRunId);
+            meta.put("failureCategory", category);
+            meta.put("failureAdvice", advice);
+            if (StringUtils.hasText(message)) {
+                meta.put("error", message);
+            }
+            auditService.auditAction("INGESTION_TASK_EXECUTE", AuditStage.FAIL, task.getName(), meta);
+        }
+    }
+
+    private String resolveAirflowFailureMessage(String dagId, String dagRunId, String dagState) {
+        String state = StringUtils.hasText(dagState) ? dagState.trim() : "failed";
+        List<Map<String, Object>> instances = airflowClient.listTaskInstances(dagId, dagRunId).orElse(List.of());
+        if (instances.isEmpty()) {
+            return "Airflow state: " + state;
+        }
+
+        List<Map<String, Object>> failed = new ArrayList<>();
+        for (Map<String, Object> instance : instances) {
+            String taskState = normalize(toText(instance.get("state")));
+            if ("failed".equals(taskState) || "error".equals(taskState) || "upstream_failed".equals(taskState)) {
+                failed.add(instance);
+            }
+        }
+        List<Map<String, Object>> candidates = failed.isEmpty() ? instances : failed;
+        List<String> details = new ArrayList<>();
+        int maxTasks = Math.min(3, candidates.size());
+        for (int i = 0; i < maxTasks; i++) {
+            Map<String, Object> instance = candidates.get(i);
+            String taskId = toText(firstNonNull(instance.get("task_id"), instance.get("taskId")));
+            if (!StringUtils.hasText(taskId)) {
+                continue;
+            }
+            String taskState = toText(instance.get("state"));
+            Integer hintTry = resolveTryNumber(instance);
+            String excerpt = null;
+            for (Integer candidateTry : resolveTryCandidates(hintTry)) {
+                String logText = airflowClient.getTaskLog(dagId, dagRunId, taskId, candidateTry).orElse(null);
+                excerpt = extractFailureExcerpt(logText);
+                if (StringUtils.hasText(excerpt)) {
+                    break;
+                }
+            }
+            if (StringUtils.hasText(excerpt)) {
+                details.add("task=" + taskId + " state=" + taskState + " msg=" + excerpt);
+            } else {
+                details.add("task=" + taskId + " state=" + taskState);
+            }
+        }
+        if (details.isEmpty()) {
+            return "Airflow state: " + state;
+        }
+        return truncate("Airflow state: " + state + "; " + String.join(" | ", details), MAX_FAILURE_MSG_LEN);
+    }
+
+    private List<Integer> resolveTryCandidates(Integer hintTry) {
+        LinkedHashSet<Integer> ordered = new LinkedHashSet<>();
+        if (hintTry != null && hintTry > 0) {
+            ordered.add(hintTry);
+            if (hintTry > 1) {
+                ordered.add(hintTry - 1);
+            }
+        }
+        ordered.add(1);
+        return new ArrayList<>(ordered);
+    }
+
+    private Integer resolveTryNumber(Map<String, Object> instance) {
+        return firstInteger(instance.get("try_number"), instance.get("tryNumber"), instance.get("try"));
+    }
+
+    private Integer firstInteger(Object... values) {
+        if (values == null) {
+            return null;
+        }
+        for (Object value : values) {
+            Integer parsed = toInteger(value);
+            if (parsed != null && parsed > 0) {
+                return parsed;
+            }
+        }
+        return null;
+    }
+
+    private Integer toInteger(Object value) {
+        if (value == null) {
+            return null;
+        }
+        try {
+            if (value instanceof Number number) {
+                return number.intValue();
+            }
+            String text = value.toString().trim();
+            if (!StringUtils.hasText(text)) {
+                return null;
+            }
+            return Integer.parseInt(text);
+        } catch (Exception ex) {
+            return null;
+        }
+    }
+
+    private Object firstNonNull(Object... values) {
+        if (values == null) {
+            return null;
+        }
+        for (Object value : values) {
+            if (value != null) {
+                return value;
+            }
+        }
+        return null;
+    }
+
+    private String extractFailureExcerpt(String logText) {
+        if (!StringUtils.hasText(logText)) {
+            return null;
+        }
+        String normalized = logText.replaceAll("\\u001B\\[[;\\d]*[ -/]*[@-~]", "").replace("\r", "");
+        String[] lines = normalized.split("\\n");
+        if (lines.length == 0) {
+            return null;
+        }
+
+        int focusIndex = -1;
+        for (int i = lines.length - 1; i >= 0; i--) {
+            String lower = normalize(lines[i]);
+            if (containsAny(lower, "error", "exception", "traceback", "failed", "denied", "not found", "cannot", "sqlstate")) {
+                focusIndex = i;
+                break;
+            }
+        }
+
+        int from;
+        int to;
+        if (focusIndex >= 0) {
+            from = Math.max(0, focusIndex - 3);
+            to = Math.min(lines.length, focusIndex + 9);
+        } else {
+            from = Math.max(0, lines.length - 20);
+            to = lines.length;
+        }
+
+        StringBuilder sb = new StringBuilder();
+        for (int i = from; i < to; i++) {
+            String line = lines[i] == null ? "" : lines[i].trim();
+            if (!StringUtils.hasText(line)) {
+                continue;
+            }
+            if (!sb.isEmpty()) {
+                sb.append(" ");
+            }
+            sb.append(line);
+        }
+        String excerpt = sb.toString().trim();
+        return StringUtils.hasText(excerpt) ? truncate(excerpt, 1200) : null;
+    }
+
+    private boolean containsAny(String text, String... markers) {
+        if (!StringUtils.hasText(text) || markers == null) {
+            return false;
+        }
+        for (String marker : markers) {
+            if (StringUtils.hasText(marker) && text.contains(marker.toLowerCase(Locale.ROOT))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private String normalize(String value) {
+        if (!StringUtils.hasText(value)) {
+            return "";
+        }
+        return value.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private String truncate(String value, int maxLen) {
+        if (!StringUtils.hasText(value) || maxLen <= 0) {
+            return value;
+        }
+        if (value.length() <= maxLen) {
+            return value;
+        }
+        return value.substring(0, maxLen - 3) + "...";
     }
 
     private String toText(Object value) {

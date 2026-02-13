@@ -1,12 +1,11 @@
 package com.yuzhi.dts.ingestion.repository;
 
 import com.yuzhi.dts.ingestion.domain.IngestionExecution;
+import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
-
-import java.util.Optional;
 
 /**
  * Spring Data JPA repository for the IngestionExecution entity.
@@ -18,6 +17,26 @@ public interface IngestionExecutionRepository extends JpaRepository<IngestionExe
      * 根据任务ID查询执行历史
      */
     Page<IngestionExecution> findByTaskId(Long taskId, Pageable pageable);
+
+    /**
+     * 根据任务ID + 状态查询执行历史
+     */
+    Page<IngestionExecution> findByTaskIdAndStatusIgnoreCase(Long taskId, String status, Pageable pageable);
+
+    /**
+     * 根据任务ID + 失败分类查询执行历史
+     */
+    Page<IngestionExecution> findByTaskIdAndFailureCategoryIgnoreCase(Long taskId, String failureCategory, Pageable pageable);
+
+    /**
+     * 根据任务ID + 状态 + 失败分类查询执行历史
+     */
+    Page<IngestionExecution> findByTaskIdAndStatusIgnoreCaseAndFailureCategoryIgnoreCase(
+        Long taskId,
+        String status,
+        String failureCategory,
+        Pageable pageable
+    );
 
     /**
      * 根据执行ID查找
