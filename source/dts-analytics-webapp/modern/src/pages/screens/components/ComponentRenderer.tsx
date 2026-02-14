@@ -38,6 +38,52 @@ import { useDrillDown } from '../hooks/useDrillDown';
 import { mapCardDataToConfig } from '../hooks/cardDataMapper';
 import { getThemeTokens, ScreenThemeTokens } from '../screenThemes';
 
+const LEGACY_LIGHT_TEXT_COLORS = new Set(["#fff", "#ffffff", "#e5e7eb", "#d1d5db", "#cbd5e1", "#94a3b8"]);
+
+function resolveTextColor(candidate: string | undefined, fallback: string): string {
+    if (!candidate || candidate.trim().length === 0) {
+        return fallback;
+    }
+    const normalized = candidate.trim().toLowerCase();
+    const fallbackNormalized = (fallback || "").trim().toLowerCase();
+    if (LEGACY_LIGHT_TEXT_COLORS.has(normalized) && !LEGACY_LIGHT_TEXT_COLORS.has(fallbackNormalized)) {
+        return fallback;
+    }
+    return candidate;
+}
+
+function normalizeParameterBindings(bindings: CardParameterBinding[] | undefined): CardParameterBinding[] {
+    if (!Array.isArray(bindings)) return [];
+    return bindings
+        .map((item) => ({
+            name: (item?.name ?? "").trim(),
+            variableKey: (item?.variableKey ?? "").trim() || undefined,
+            value: item?.value == null ? undefined : String(item.value),
+        }))
+        .filter((item) => item.name.length > 0);
+}
+
+function resolveInteractionValue(params: Record<string, unknown>, sourcePath: string): string | undefined {
+    const path = (sourcePath || "").trim();
+    if (!path) return undefined;
+
+    const read = (obj: unknown, key: string): unknown => {
+        if (!obj || typeof obj !== "object") return undefined;
+        return (obj as Record<string, unknown>)[key];
+    };
+
+    const segments = path.split(".").filter((s) => s.length > 0);
+    let current: unknown = params;
+    for (const seg of segments) {
+        current = read(current, seg);
+    }
+
+    if (current == null) return undefined;
+    if (typeof current === "string") return current;
+    if (typeof current === "number" || typeof current === "boolean") return String(current);
+    return undefined;
+}
+
 /**
  * 自定义滚动表格，替代 DataV ScrollBoard（DataV 硬编码 color:#fff 无法覆盖）
  */
@@ -52,7 +98,7 @@ function ThemedScrollTable({ config, tokens }: {
     const oddRowBGC = config.oddRowBGC as string || tokens.scrollBoard.oddRowBg;
     const evenRowBGC = config.evenRowBGC as string || tokens.scrollBoard.evenRowBg;
     const textColor = tokens.scrollBoard.textColor;
-    const headerColor = config.headerColor as string || textColor;
+    const headerColor = resolveTextColor(config.headerColor as string | undefined, textColor);
     const headerHeight = 35;
 
     // Auto-scroll animation
@@ -198,11 +244,12 @@ const DecorationComponents: Record<number, React.ComponentType<{ color?: string[
 export const ComponentRenderer = memo(function ComponentRenderer({ component, mode = 'preview', theme, onConfigMeta }: ComponentRendererProps) {
     const { type, config, width, height, dataSource, drillDown } = component;
 
+    const runtime = useScreenRuntime();
     const t = useMemo(() => getThemeTokens(theme), [theme]);
 
     // Build ECharts base options from theme tokens
     const themeOptions = useMemo(() => ({
-        backgroundColor: 'transparent',
+        backgroundColor: "transparent",
         color: t.echarts.colorPalette,
         textStyle: { color: t.textPrimary },
         legend: { textStyle: { color: t.textPrimary } },
@@ -213,19 +260,63 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
         },
     }), [t]);
 
+    const cardBindings = useMemo(() => (
+        dataSource?.type === "card"
+            ? normalizeParameterBindings(dataSource.cardConfig?.parameterBindings)
+            : []
+    ), [dataSource]);
+
+    const bindingParameters = useMemo(() => {
+        if (!cardBindings.length) return [] as Array<{ name: string; value: string }>;
+        const out: Array<{ name: string; value: string }> = [];
+        for (const item of cardBindings) {
+            let value = item.value ?? "";
+            if (item.variableKey) {
+                value = runtime.values[item.variableKey] ?? "";
+            }
+            if ((item.name || "").trim().length === 0) continue;
+            out.push({ name: item.name, value: String(value ?? "") });
+        }
+        return out;
+    }, [cardBindings, runtime.values]);
+
     // Drill-down state (only active in preview mode for drillable chart types)
-    const drillActive = mode === 'preview' && DRILLABLE_TYPES.has(type) && drillDown?.enabled === true;
-    const rootCardId = dataSource?.type === 'card' ? dataSource.cardConfig?.cardId : undefined;
+    const drillActive = mode === "preview" && DRILLABLE_TYPES.has(type) && drillDown?.enabled === true;
+    const rootCardId = dataSource?.type === "card" ? dataSource.cardConfig?.cardId : undefined;
     const drillState = useDrillDown(
         drillActive ? rootCardId : undefined,
         drillActive ? drillDown : undefined,
     );
 
+    const mergedQueryParameters = useMemo(() => {
+        const merged = new Map<string, string>();
+        for (const item of bindingParameters) {
+            const name = (item.name || "").trim();
+            if (!name) continue;
+            merged.set(name, String(item.value ?? ""));
+        }
+        for (const item of (drillActive ? (drillState.queryParameters ?? []) : [])) {
+            const name = (item.name || "").trim();
+            if (!name) continue;
+            merged.set(name, String(item.value ?? ""));
+        }
+        return Array.from(merged.entries()).map(([name, value]) => ({ name, value }));
+    }, [bindingParameters, drillActive, drillState.queryParameters]);
+
+    const queryContext = useMemo(() => ({
+        source: "screen-component",
+        componentId: component.id,
+        componentType: type,
+        mode,
+        globalVariables: runtime.values,
+    }), [component.id, mode, runtime.values, type]);
+
     // Card data source hook — pass drill overrides when active
     const { data: cardData, loading: cardLoading, error: cardError } = useCardDataSource(
         dataSource,
         drillActive ? drillState.effectiveCardId : undefined,
-        drillActive ? drillState.queryParameters : undefined,
+        mergedQueryParameters.length > 0 ? mergedQueryParameters : undefined,
+        queryContext,
     );
 
     // Merge card data into config: card data overrides data fields only, not display fields
@@ -261,16 +352,37 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
         }
     }, [type]);
 
-    // ECharts click handler for drill-down
+    const interactionMappings = useMemo(() => (
+        mode === "preview" && component.interaction?.enabled
+            ? (component.interaction.mappings ?? []).filter((m): m is ComponentInteractionMapping => !!m && !!m.variableKey && !!m.sourcePath)
+            : []
+    ), [component.interaction, mode]);
+
+    // ECharts click handler for drill-down + variable interaction
     const echartsClickHandler = useMemo(() => {
-        if (!drillActive || !drillState.canDrillDown) return undefined;
+        const canDrill = drillActive && drillState.canDrillDown;
+        const canInteract = interactionMappings.length > 0;
+        if (!canDrill && !canInteract) return undefined;
+
         return {
-            click: (params: { name?: string; data?: { name?: string } }) => {
-                const value = params.name ?? params.data?.name;
-                if (value) drillState.handleDrill(String(value));
+            click: (params: Record<string, unknown>) => {
+                if (canDrill) {
+                    const value = (params.name as string | undefined)
+                        ?? ((params.data as Record<string, unknown> | undefined)?.name as string | undefined);
+                    if (value) drillState.handleDrill(String(value));
+                }
+
+                if (canInteract) {
+                    for (const mapping of interactionMappings) {
+                        const nextValue = resolveInteractionValue(params, mapping.sourcePath);
+                        if (nextValue != null) {
+                            runtime.setVariable(mapping.variableKey, nextValue);
+                        }
+                    }
+                }
             },
         };
-    }, [drillActive, drillState.canDrillDown, drillState.handleDrill]);
+    }, [drillActive, drillState.canDrillDown, drillState.handleDrill, interactionMappings, runtime]);
 
     const content = useMemo(() => {
         const c = effectiveConfig;
@@ -723,9 +835,9 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
             case 'table': {
                 const { header: displayHeader, data: displayData } = resolveBoundTableData(c);
                 const fontSize = (c.fontSize as number) || 13;
-                const headerColor = (c.headerColor as string) || t.textPrimary;
+                const headerColor = resolveTextColor(c.headerColor as string | undefined, t.textPrimary);
                 const headerBackground = (c.headerBackground as string) || 'rgba(148, 163, 184, 0.16)';
-                const bodyColor = (c.bodyColor as string) || t.textSecondary;
+                const bodyColor = resolveTextColor(c.bodyColor as string | undefined, t.textSecondary);
                 const bodyBackground = (c.bodyBackground as string) || 'transparent';
                 const borderColor = (c.borderColor as string) || 'rgba(148, 163, 184, 0.24)';
                 const oddRowBackground = (c.oddRowBackground as string) || bodyBackground;

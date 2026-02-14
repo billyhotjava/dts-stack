@@ -46,6 +46,8 @@ public class AnalyticsScreen implements Serializable {
 
     @Column(name = "components_json", columnDefinition = "text")
     private String componentsJson;
+    @Column(name = "variables_json", columnDefinition = "text")
+    private String variablesJson;
 
     @Column(name = "archived", nullable = false)
     private boolean archived = false;
@@ -129,6 +131,14 @@ public class AnalyticsScreen implements Serializable {
 
     public void setComponentsJson(String componentsJson) {
         this.componentsJson = componentsJson;
+    }
+
+    public String getVariablesJson() {
+        return variablesJson;
+    }
+
+    public void setVariablesJson(String variablesJson) {
+        this.variablesJson = variablesJson;
     }
 
     public boolean isArchived() {

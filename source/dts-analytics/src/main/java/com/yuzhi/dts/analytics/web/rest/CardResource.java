@@ -16,9 +16,12 @@ import com.yuzhi.dts.analytics.service.MbqlToSqlService;
 import com.yuzhi.dts.analytics.service.NativeQueryTemplateService;
 import com.yuzhi.dts.analytics.service.PublicLinkService;
 import com.yuzhi.dts.analytics.service.QueryExportService;
+import com.yuzhi.dts.analytics.service.QueryMetricsService;
+import com.yuzhi.dts.analytics.service.QueryTraceService;
 import com.yuzhi.dts.analytics.service.RevisionService;
 import com.yuzhi.dts.analytics.web.support.MetabaseAuth;
 import com.yuzhi.dts.analytics.web.support.PlatformContext;
+import com.yuzhi.dts.analytics.web.support.RequestContextUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.sql.SQLException;
@@ -58,6 +61,8 @@ public class CardResource {
     private final PublicLinkService publicLinkService;
     private final RevisionService revisionService;
     private final QueryExportService queryExportService;
+    private final QueryMetricsService queryMetricsService;
+    private final QueryTraceService queryTraceService;
     private final ObjectMapper objectMapper;
 
     public CardResource(
@@ -73,6 +78,8 @@ public class CardResource {
             PublicLinkService publicLinkService,
             RevisionService revisionService,
             QueryExportService queryExportService,
+            QueryMetricsService queryMetricsService,
+            QueryTraceService queryTraceService,
             ObjectMapper objectMapper) {
         this.sessionService = sessionService;
         this.cardRepository = cardRepository;
@@ -86,6 +93,8 @@ public class CardResource {
         this.publicLinkService = publicLinkService;
         this.revisionService = revisionService;
         this.queryExportService = queryExportService;
+        this.queryMetricsService = queryMetricsService;
+        this.queryTraceService = queryTraceService;
         this.objectMapper = objectMapper;
     }
 
@@ -230,100 +239,188 @@ public class CardResource {
                 })
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
-
     @Transactional(readOnly = true, noRollbackFor = Exception.class)
     @PostMapping(path = "/{cardId}/query", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> query(@PathVariable("cardId") long cardId, @RequestBody(required = false) JsonNode body, HttpServletRequest request) {
-        Optional<ResponseEntity<String>> auth = MetabaseAuth.requireUser(sessionService, request);
-        if (auth.isPresent()) {
-            return auth.get();
-        }
+        long startedNanos = System.nanoTime();
+        String metricResult = "error";
+        String metricCode = "UNKNOWN";
 
-        AnalyticsCard card = cardRepository.findById(cardId).orElse(null);
-        if (card == null) {
-            return ResponseEntity.notFound().build();
-        }
-
-        JsonNode datasetQuery;
-        try {
-            datasetQuery = objectMapper.readTree(card.getDatasetQueryJson());
-        } catch (Exception e) {
-            return ResponseEntity.status(500).body(Map.of("error", "Invalid saved dataset_query"));
-        }
-
-        String type = datasetQuery.path("type").asText(null);
-        long databaseId = datasetQuery.path("database").asLong(0);
-        if (databaseId <= 0) {
-            return ResponseEntity.status(400).body(Map.of("error", "dataset_query.database is required"));
-        }
-
-        OffsetDateTime startedAt = OffsetDateTime.now();
-        long startedMillis = System.currentTimeMillis();
+        Long traceDatabaseId = null;
+        String traceSql = null;
+        Long traceMetricId = parseMetricId(body);
+        String traceMetricVersion = parseMetricVersion(body);
+        Object traceContext = parseTraceContext(body);
+        Long actorUserId = null;
+        PlatformContext ctx = PlatformContext.from(request);
 
         try {
-            String sql;
-            List<Object> bindings = List.of();
-            Map<String, Object> jsonQuery = new LinkedHashMap<>();
-            jsonQuery.put("constraints", Map.of("max-results", 10000, "max-results-bare-rows", 2000));
-            jsonQuery.put("middleware", Map.of("js-int-to-string?", true, "ignore-cached-results?", false, "process-viz-settings?", false));
-            jsonQuery.put("database", databaseId);
-            jsonQuery.put("async?", true);
-            jsonQuery.put("cache-ttl", null);
+            Optional<ResponseEntity<String>> auth = MetabaseAuth.requireUser(sessionService, request);
+            if (auth.isPresent()) {
+                metricCode = "UNAUTHENTICATED";
+                metricResult = "rejected";
+                return auth.get();
+            }
+            actorUserId = MetabaseAuth.currentUser(sessionService, request).map(AnalyticsUser::getId).orElse(null);
 
-            if ("native".equalsIgnoreCase(type)) {
-                sql = datasetQuery.path("native").path("query").asText(null);
-                if (sql == null || sql.isBlank()) {
-                    return ResponseEntity.status(400).body(Map.of("error", "dataset_query.native.query is required"));
-                }
-                JsonNode parametersNode = body == null ? null : body.get("parameters");
-                if (parametersNode != null && !parametersNode.isNull() && !parametersNode.isMissingNode() && sql.contains("{{")) {
-                    NativeQueryTemplateService.RenderedQuery rendered = nativeQueryTemplateService.render(sql, parametersNode);
-                    sql = rendered.sql();
-                    bindings = rendered.bindings();
-                }
-                jsonQuery.put("type", "native");
-                jsonQuery.put("native", Map.of("query", sql));
-            } else if ("query".equalsIgnoreCase(type)) {
-                JsonNode mbql = datasetQuery.get("query");
-                MbqlToSqlService.TranslationResult translated =
-                        mbqlToSqlService.translateSelect(databaseId, mbql, DatasetQueryService.DatasetConstraints.defaults());
-                sql = translated.sql();
-                bindings = translated.bindings();
-                jsonQuery.put("type", "query");
-                jsonQuery.put("query", mbql);
-            } else {
-                return ResponseEntity.status(400).body(Map.of("error", "Only native and query (MBQL) queries are supported"));
+            AnalyticsCard card = cardRepository.findById(cardId).orElse(null);
+            if (card == null) {
+                metricCode = "CARD_NOT_FOUND";
+                metricResult = "rejected";
+                return ResponseEntity.notFound().build();
             }
 
-            DatasetQueryService.DatasetResult result =
-                    datasetQueryService.runNative(databaseId, sql, DatasetQueryService.DatasetConstraints.defaults(), bindings);
-            long runningTimeMs = System.currentTimeMillis() - startedMillis;
+            JsonNode datasetQuery;
+            try {
+                datasetQuery = objectMapper.readTree(card.getDatasetQueryJson());
+            } catch (Exception e) {
+                metricCode = "INVALID_DATASET_QUERY";
+                metricResult = "failed";
+                return ResponseEntity.status(500).body(Map.of(
+                        "error", "Invalid saved dataset_query",
+                        "code", metricCode,
+                        "requestId", resolveRequestId()));
+            }
 
-            Map<String, Object> data = new LinkedHashMap<>();
-            data.put("rows", result.rows());
-            data.put("cols", result.cols());
-            data.put("native_form", Map.of("query", sql));
-            data.put("results_timezone", result.resultsTimezone());
-            data.put("results_metadata", Map.of("columns", result.resultsMetadataColumns()));
-            data.put("insights", null);
+            String type = datasetQuery.path("type").asText(null);
+            long databaseId = datasetQuery.path("database").asLong(0);
+            if (databaseId <= 0) {
+                metricCode = "DATABASE_ID_REQUIRED";
+                metricResult = "rejected";
+                return ResponseEntity.status(400).body(Map.of(
+                        "error", "dataset_query.database is required",
+                        "code", metricCode,
+                        "requestId", resolveRequestId()));
+            }
+            traceDatabaseId = databaseId;
 
-            Map<String, Object> response = new LinkedHashMap<>();
-            response.put("data", data);
-            response.put("database_id", databaseId);
-            response.put("started_at", startedAt);
-            response.put("json_query", jsonQuery);
-            response.put("average_execution_time", null);
-            response.put("status", "completed");
-            response.put("context", "question");
-            response.put("row_count", result.rows().size());
-            response.put("running_time", runningTimeMs);
+            OffsetDateTime startedAt = OffsetDateTime.now();
+            long startedMillis = System.currentTimeMillis();
 
-            return ResponseEntity.accepted().body(response);
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.status(400).body(Map.of("error", e.getMessage()));
-        } catch (SQLException e) {
-            return ResponseEntity.accepted()
-                    .body(Map.of("database_id", databaseId, "started_at", startedAt, "error", e.getMessage(), "data", Map.of("rows", List.of(), "cols", List.of())));
+            try {
+                String sql;
+                List<Object> bindings = List.of();
+                Map<String, Object> jsonQuery = new LinkedHashMap<>();
+                jsonQuery.put("constraints", Map.of("max-results", 10000, "max-results-bare-rows", 2000));
+                jsonQuery.put("middleware", Map.of("js-int-to-string?", true, "ignore-cached-results?", false, "process-viz-settings?", false));
+                jsonQuery.put("database", databaseId);
+                jsonQuery.put("async?", true);
+                jsonQuery.put("cache-ttl", null);
+
+                if ("native".equalsIgnoreCase(type)) {
+                    sql = datasetQuery.path("native").path("query").asText(null);
+                    if (sql == null || sql.isBlank()) {
+                        metricCode = "NATIVE_SQL_REQUIRED";
+                        metricResult = "rejected";
+                        return ResponseEntity.status(400).body(Map.of(
+                                "error", "dataset_query.native.query is required",
+                                "code", metricCode,
+                                "requestId", resolveRequestId()));
+                    }
+                    JsonNode parametersNode = body == null ? null : body.get("parameters");
+                    if (parametersNode != null && !parametersNode.isNull() && !parametersNode.isMissingNode()) {
+                        nativeQueryTemplateService.validateParameterWhitelist(sql, parametersNode);
+                        if (sql.contains("{{")) {
+                            NativeQueryTemplateService.RenderedQuery rendered = nativeQueryTemplateService.render(sql, parametersNode);
+                            sql = rendered.sql();
+                            bindings = rendered.bindings();
+                        }
+                    }
+                    jsonQuery.put("type", "native");
+                    jsonQuery.put("native", Map.of("query", sql));
+                } else if ("query".equalsIgnoreCase(type)) {
+                    JsonNode mbql = datasetQuery.get("query");
+                    MbqlToSqlService.TranslationResult translated =
+                            mbqlToSqlService.translateSelect(databaseId, mbql, DatasetQueryService.DatasetConstraints.defaults());
+                    sql = translated.sql();
+                    bindings = translated.bindings();
+                    jsonQuery.put("type", "query");
+                    jsonQuery.put("query", mbql);
+                } else {
+                    metricCode = "QUERY_TYPE_UNSUPPORTED";
+                    metricResult = "rejected";
+                    return ResponseEntity.status(400).body(Map.of(
+                            "error", "Only native and query (MBQL) queries are supported",
+                            "code", metricCode,
+                            "requestId", resolveRequestId()));
+                }
+                traceSql = sql;
+
+                DatasetQueryService.DatasetResult result =
+                        datasetQueryService.runNative(databaseId, sql, DatasetQueryService.DatasetConstraints.defaults(), bindings);
+                long runningTimeMs = System.currentTimeMillis() - startedMillis;
+
+                Map<String, Object> data = new LinkedHashMap<>();
+                data.put("rows", result.rows());
+                data.put("cols", result.cols());
+                data.put("native_form", Map.of("query", sql));
+                data.put("results_timezone", result.resultsTimezone());
+                data.put("results_metadata", Map.of("columns", result.resultsMetadataColumns()));
+                data.put("insights", null);
+
+                Map<String, Object> response = new LinkedHashMap<>();
+                response.put("data", data);
+                response.put("database_id", databaseId);
+                response.put("started_at", startedAt);
+                response.put("json_query", jsonQuery);
+                response.put("average_execution_time", null);
+                response.put("status", "completed");
+                response.put("context", "question");
+                response.put("row_count", result.rows().size());
+                response.put("running_time", runningTimeMs);
+                response.put("requestId", resolveRequestId());
+
+                metricResult = "success";
+                metricCode = "NONE";
+                return ResponseEntity.accepted().body(response);
+            } catch (IllegalArgumentException e) {
+                metricCode = "INVALID_ARGUMENT";
+                metricResult = "rejected";
+                return ResponseEntity.status(400).body(Map.of(
+                        "error", e.getMessage(),
+                        "code", metricCode,
+                        "requestId", resolveRequestId()));
+            } catch (SQLException e) {
+                metricCode = classifySqlErrorCode(e);
+                metricResult = "failed";
+                return ResponseEntity.accepted().body(Map.of(
+                        "database_id", databaseId,
+                        "started_at", startedAt,
+                        "status", "failed",
+                        "error", rootCauseMessage(e),
+                        "code", metricCode,
+                        "requestId", resolveRequestId(),
+                        "data", Map.of("rows", List.of(), "cols", List.of())));
+            } catch (RuntimeException e) {
+                metricCode = classifyRuntimeErrorCode(e);
+                metricResult = "failed";
+                return ResponseEntity.accepted().body(Map.of(
+                        "database_id", databaseId,
+                        "started_at", startedAt,
+                        "status", "failed",
+                        "error", rootCauseMessage(e),
+                        "code", metricCode,
+                        "requestId", resolveRequestId(),
+                        "data", Map.of("rows", List.of(), "cols", List.of())));
+            }
+        } finally {
+            long durationNanos = System.nanoTime() - startedNanos;
+            queryMetricsService.record("card_query", metricResult, metricCode, durationNanos);
+            queryTraceService.log(
+                    "card_query",
+                    cardId,
+                    traceDatabaseId,
+                    traceMetricId,
+                    traceMetricVersion,
+                    traceSql,
+                    metricResult,
+                    metricCode,
+                    resolveRequestId(),
+                    actorUserId,
+                    ctx.dept(),
+                    ctx.classification(),
+                    durationNanos / 1_000_000,
+                    traceContext);
         }
     }
 
@@ -420,11 +517,14 @@ public class CardResource {
                     return;
                 }
                 JsonNode parametersNode = body == null ? null : body.get("parameters");
-                if (parametersNode != null && !parametersNode.isNull() && !parametersNode.isMissingNode() && sql.contains("{{")) {
-                    NativeQueryTemplateService.RenderedQuery rendered = nativeQueryTemplateService.render(sql, parametersNode);
-                    sql = rendered.sql();
-                    bindings = rendered.bindings();
-                }
+                if (parametersNode != null && !parametersNode.isNull() && !parametersNode.isMissingNode()) {
+                        nativeQueryTemplateService.validateParameterWhitelist(sql, parametersNode);
+                        if (sql.contains("{{")) {
+                            NativeQueryTemplateService.RenderedQuery rendered = nativeQueryTemplateService.render(sql, parametersNode);
+                            sql = rendered.sql();
+                            bindings = rendered.bindings();
+                        }
+                    }
             } else if ("query".equalsIgnoreCase(type)) {
                 JsonNode mbql = datasetQuery.get("query");
                 // Use higher limits for exports
@@ -682,6 +782,146 @@ public class CardResource {
         } catch (Exception e) {
             return "native";
         }
+    }
+
+    private String classifySqlErrorCode(SQLException e) {
+        if (e == null) {
+            return "DB_QUERY_FAILED";
+        }
+        String message = rootCauseMessage(e).toLowerCase();
+        if (message.contains("connection refused")) {
+            return "EXT_DB_CONNECTION_REFUSED";
+        }
+        if (message.contains("timeout") || message.contains("timed out")) {
+            return "EXT_DB_TIMEOUT";
+        }
+        return "DB_QUERY_FAILED";
+    }
+
+    private String classifyRuntimeErrorCode(RuntimeException e) {
+        if (e == null) {
+            return "QUERY_RUNTIME_ERROR";
+        }
+        if (hasCause(e, "java.net.ConnectException")) {
+            return "EXT_DB_CONNECTION_REFUSED";
+        }
+        if (hasCause(e, "com.zaxxer.hikari.pool.HikariPool")) {
+            return "EXT_DB_CONNECT_FAILED";
+        }
+        String message = rootCauseMessage(e).toLowerCase();
+        if (message.contains("connection refused")) {
+            return "EXT_DB_CONNECTION_REFUSED";
+        }
+        if (message.contains("timeout") || message.contains("timed out")) {
+            return "EXT_DB_TIMEOUT";
+        }
+        return "QUERY_RUNTIME_ERROR";
+    }
+
+    private String rootCauseMessage(Throwable error) {
+        if (error == null) {
+            return "Unknown error";
+        }
+        Throwable current = error;
+        while (current.getCause() != null && current.getCause() != current) {
+            current = current.getCause();
+        }
+        String message = current.getMessage();
+        if (message == null || message.isBlank()) {
+            message = error.getMessage();
+        }
+        return (message == null || message.isBlank()) ? current.getClass().getSimpleName() : message;
+    }
+
+    private boolean hasCause(Throwable error, String className) {
+        Throwable current = error;
+        while (current != null) {
+            if (current.getClass().getName().contains(className)) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
+    }
+    private Long parseMetricId(JsonNode body) {
+        if (body == null || !body.isObject()) {
+            return null;
+        }
+
+        JsonNode direct = body.get("metricId");
+        if (direct != null && direct.canConvertToLong()) {
+            long id = direct.asLong();
+            return id > 0 ? id : null;
+        }
+
+        JsonNode snake = body.get("metric_id");
+        if (snake != null && snake.canConvertToLong()) {
+            long id = snake.asLong();
+            return id > 0 ? id : null;
+        }
+
+        JsonNode semantic = body.get("semantic");
+        if (semantic != null && semantic.isObject()) {
+            JsonNode nested = semantic.get("metricId");
+            if (nested != null && nested.canConvertToLong()) {
+                long id = nested.asLong();
+                return id > 0 ? id : null;
+            }
+            JsonNode nestedSnake = semantic.get("metric_id");
+            if (nestedSnake != null && nestedSnake.canConvertToLong()) {
+                long id = nestedSnake.asLong();
+                return id > 0 ? id : null;
+            }
+        }
+
+        return null;
+    }
+
+    private String parseMetricVersion(JsonNode body) {
+        if (body == null || !body.isObject()) {
+            return null;
+        }
+
+        String direct = trimToNull(body.path("metricVersion").asText(null));
+        if (direct != null) {
+            return direct;
+        }
+
+        String snake = trimToNull(body.path("metric_version").asText(null));
+        if (snake != null) {
+            return snake;
+        }
+
+        JsonNode semantic = body.get("semantic");
+        if (semantic != null && semantic.isObject()) {
+            String nested = trimToNull(semantic.path("metricVersion").asText(null));
+            if (nested != null) {
+                return nested;
+            }
+            return trimToNull(semantic.path("metric_version").asText(null));
+        }
+
+        return null;
+    }
+
+    private Object parseTraceContext(JsonNode body) {
+        if (body == null || !body.isObject()) {
+            return null;
+        }
+
+        JsonNode context = body.get("queryContext");
+        if (context == null || context.isNull() || context.isMissingNode()) {
+            return null;
+        }
+        return context;
+    }
+
+    private String resolveRequestId() {
+        String requestId = RequestContextUtils.resolveRequestId();
+        if (requestId == null || requestId.isBlank()) {
+            return "unknown";
+        }
+        return requestId;
     }
 
     private static String trimToNull(String value) {

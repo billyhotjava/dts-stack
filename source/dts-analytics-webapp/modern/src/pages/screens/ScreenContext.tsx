@@ -8,6 +8,7 @@ const defaultConfig: ScreenConfig = {
     height: 1080,
     backgroundColor: '#0d1b2a',
     components: [],
+    globalVariables: [],
 };
 
 const initialState: ScreenState = {

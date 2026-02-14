@@ -38,3 +38,12 @@
 - 初步根因：
 - 修复建议：
 - 是否阻塞上线：
+
+
+## 5. 自动汇总（来自 platform/raw/env-matrix.csv）
+- 生成时间(UTC)：20260213T150447Z
+- 说明：P0-C01/P0-C02/P0-C05 仍需现场业务回归，自动汇总仅根据执行指标回填 P0-C03/P0-C04 与基础结论。
+
+| 环境 | P0-C01 | P0-C02 | P0-C03 | P0-C04 | P0-C05 | 结论 | 备注 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| normal-x86 | `MANUAL` | `MANUAL` | `PASS` | `PASS` | `MANUAL` | `OBSERVED` | run=20260213T094326Z, total=3, success=2, failed=1, rate=66.67%, note=format-fix |

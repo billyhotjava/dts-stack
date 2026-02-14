@@ -2,6 +2,9 @@ package com.yuzhi.dts.analytics.service;
 
 import com.yuzhi.dts.analytics.domain.AnalyticsPublicLink;
 import com.yuzhi.dts.analytics.repository.AnalyticsPublicLinkRepository;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -50,6 +53,7 @@ public class PublicLinkService {
         link.setCreatorId(creatorId);
         link.setDept(normalizedDept);
         link.setClassification(normalizedClassification);
+        link.setDisabled(false);
         link.setPublicUuid(UUID.randomUUID().toString());
         return publicLinkRepository.save(link).getPublicUuid();
     }
@@ -62,15 +66,101 @@ public class PublicLinkService {
         return publicLinkRepository.findByPublicUuid(publicUuid);
     }
 
+    public Optional<AnalyticsPublicLink> findByModelAndModelId(String model, long modelId) {
+        return publicLinkRepository.findByModelAndModelId(model, modelId);
+    }
+
+    public AnalyticsPublicLink save(AnalyticsPublicLink link) {
+        return publicLinkRepository.save(link);
+    }
+
     public boolean canAccess(AnalyticsPublicLink link, String dept, String classification) {
+        return canAccess(link, dept, classification, null, null);
+    }
+
+    public boolean canAccess(
+            AnalyticsPublicLink link,
+            String dept,
+            String classification,
+            String clientIp,
+            String plainPassword) {
         if (link == null) {
             return false;
         }
+        if (link.isDisabled()) {
+            return false;
+        }
+        if (link.getExpireAt() != null && Instant.now().isAfter(link.getExpireAt())) {
+            return false;
+        }
+
         String linkDept = normalizeScopeValue(link.getDept());
         String linkClassification = normalizeScopeValue(link.getClassification());
         String normalizedDept = normalizeScopeValue(dept);
         String normalizedClassification = normalizeScopeValue(classification);
-        return scopeMatches(linkDept, normalizedDept) && scopeMatches(linkClassification, normalizedClassification);
+
+        if (!scopeMatches(linkDept, normalizedDept) || !scopeMatches(linkClassification, normalizedClassification)) {
+            return false;
+        }
+
+        if (!passwordMatches(link.getPasswordHash(), plainPassword)) {
+            return false;
+        }
+
+        return ipAllowed(link.getIpAllowlist(), clientIp);
+    }
+
+    public static String hashPassword(String plainPassword) {
+        if (plainPassword == null) {
+            return null;
+        }
+        String trimmed = plainPassword.trim();
+        if (trimmed.isBlank()) {
+            return null;
+        }
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            byte[] digest = md.digest(trimmed.getBytes(StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder(digest.length * 2);
+            for (byte b : digest) {
+                sb.append(String.format("%02x", b));
+            }
+            return sb.toString();
+        } catch (Exception e) {
+            throw new IllegalStateException("Unable to hash password", e);
+        }
+    }
+
+    private static boolean passwordMatches(String passwordHash, String plainPassword) {
+        if (passwordHash == null || passwordHash.isBlank()) {
+            return true;
+        }
+        String hashed = hashPassword(plainPassword);
+        if (hashed == null) {
+            return false;
+        }
+        return passwordHash.equals(hashed);
+    }
+
+    private static boolean ipAllowed(String allowlist, String clientIp) {
+        if (allowlist == null || allowlist.isBlank()) {
+            return true;
+        }
+        if (clientIp == null || clientIp.isBlank()) {
+            return false;
+        }
+        String normalizedClientIp = clientIp.trim();
+        String[] tokens = allowlist.split("[,\\n\\r\\t ]+");
+        for (String token : tokens) {
+            if (token == null) {
+                continue;
+            }
+            String ip = token.trim();
+            if (!ip.isBlank() && ip.equals(normalizedClientIp)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static String normalizeScopeValue(String v) {

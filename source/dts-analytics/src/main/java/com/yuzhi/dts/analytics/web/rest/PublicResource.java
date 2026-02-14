@@ -7,17 +7,24 @@ import com.yuzhi.dts.analytics.domain.AnalyticsDashboard;
 import com.yuzhi.dts.analytics.domain.AnalyticsDashboardCard;
 import com.yuzhi.dts.analytics.domain.AnalyticsPublicLink;
 import com.yuzhi.dts.analytics.domain.AnalyticsScreen;
+import com.yuzhi.dts.analytics.domain.AnalyticsScreenVersion;
 import com.yuzhi.dts.analytics.repository.AnalyticsCardRepository;
 import com.yuzhi.dts.analytics.repository.AnalyticsDashboardCardRepository;
 import com.yuzhi.dts.analytics.repository.AnalyticsDashboardRepository;
 import com.yuzhi.dts.analytics.repository.AnalyticsScreenRepository;
+import com.yuzhi.dts.analytics.repository.AnalyticsScreenVersionRepository;
 import com.yuzhi.dts.analytics.service.AnalyticsSessionService;
 import com.yuzhi.dts.analytics.service.DatasetQueryService;
 import com.yuzhi.dts.analytics.service.MbqlToSqlService;
+import com.yuzhi.dts.analytics.service.NativeQueryTemplateService;
 import com.yuzhi.dts.analytics.service.PublicLinkService;
+import com.yuzhi.dts.analytics.service.QueryMetricsService;
+import com.yuzhi.dts.analytics.service.QueryTraceService;
 import com.yuzhi.dts.analytics.web.support.MetabaseAuth;
 import com.yuzhi.dts.analytics.web.support.PlatformContext;
+import com.yuzhi.dts.analytics.web.support.RequestContextUtils;
 import jakarta.servlet.http.HttpServletRequest;
+import java.sql.SQLException;
 import java.time.OffsetDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -42,8 +49,12 @@ public class PublicResource {
     private final AnalyticsDashboardRepository dashboardRepository;
     private final AnalyticsDashboardCardRepository dashboardCardRepository;
     private final AnalyticsScreenRepository screenRepository;
+    private final AnalyticsScreenVersionRepository screenVersionRepository;
     private final DatasetQueryService datasetQueryService;
     private final MbqlToSqlService mbqlToSqlService;
+    private final NativeQueryTemplateService nativeQueryTemplateService;
+    private final QueryMetricsService queryMetricsService;
+    private final QueryTraceService queryTraceService;
     private final ObjectMapper objectMapper;
 
     public PublicResource(
@@ -53,8 +64,12 @@ public class PublicResource {
             AnalyticsDashboardRepository dashboardRepository,
             AnalyticsDashboardCardRepository dashboardCardRepository,
             AnalyticsScreenRepository screenRepository,
+            AnalyticsScreenVersionRepository screenVersionRepository,
             DatasetQueryService datasetQueryService,
             MbqlToSqlService mbqlToSqlService,
+            NativeQueryTemplateService nativeQueryTemplateService,
+            QueryMetricsService queryMetricsService,
+            QueryTraceService queryTraceService,
             ObjectMapper objectMapper) {
         this.sessionService = sessionService;
         this.publicLinkService = publicLinkService;
@@ -62,8 +77,12 @@ public class PublicResource {
         this.dashboardRepository = dashboardRepository;
         this.dashboardCardRepository = dashboardCardRepository;
         this.screenRepository = screenRepository;
+        this.screenVersionRepository = screenVersionRepository;
         this.datasetQueryService = datasetQueryService;
         this.mbqlToSqlService = mbqlToSqlService;
+        this.nativeQueryTemplateService = nativeQueryTemplateService;
+        this.queryMetricsService = queryMetricsService;
+        this.queryTraceService = queryTraceService;
         this.objectMapper = objectMapper;
     }
 
@@ -87,7 +106,12 @@ public class PublicResource {
             return ResponseEntity.notFound().build();
         }
         PlatformContext ctx = PlatformContext.from(request);
-        if (!publicLinkService.canAccess(link, ctx.dept(), ctx.classification())) {
+        if (!publicLinkService.canAccess(
+                link,
+                ctx.dept(),
+                ctx.classification(),
+                resolveClientIp(request),
+                resolveSharePassword(request))) {
             return ResponseEntity.status(403).contentType(MediaType.TEXT_PLAIN).body("Forbidden");
         }
         AnalyticsCard card = cardRepository.findById(link.getModelId()).orElse(null);
@@ -109,14 +133,19 @@ public class PublicResource {
             return ResponseEntity.notFound().build();
         }
         PlatformContext ctx = PlatformContext.from(request);
-        if (!publicLinkService.canAccess(link, ctx.dept(), ctx.classification())) {
+        if (!publicLinkService.canAccess(
+                link,
+                ctx.dept(),
+                ctx.classification(),
+                resolveClientIp(request),
+                resolveSharePassword(request))) {
             return ResponseEntity.status(403).contentType(MediaType.TEXT_PLAIN).body("Forbidden");
         }
         AnalyticsCard card = cardRepository.findById(link.getModelId()).orElse(null);
         if (card == null || card.isArchived()) {
             return ResponseEntity.notFound().build();
         }
-        return runCardDatasetQuery(card, body);
+        return runCardDatasetQuery(card, body, request);
     }
 
     @PostMapping(path = "/pivot/card/{uuid}/query", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
@@ -136,7 +165,12 @@ public class PublicResource {
             return ResponseEntity.notFound().build();
         }
         PlatformContext ctx = PlatformContext.from(request);
-        if (!publicLinkService.canAccess(link, ctx.dept(), ctx.classification())) {
+        if (!publicLinkService.canAccess(
+                link,
+                ctx.dept(),
+                ctx.classification(),
+                resolveClientIp(request),
+                resolveSharePassword(request))) {
             return ResponseEntity.status(403).contentType(MediaType.TEXT_PLAIN).body("Forbidden");
         }
         AnalyticsDashboard dashboard = dashboardRepository.findById(link.getModelId()).orElse(null);
@@ -158,14 +192,24 @@ public class PublicResource {
             return ResponseEntity.notFound().build();
         }
         PlatformContext ctx = PlatformContext.from(request);
-        if (!publicLinkService.canAccess(link, ctx.dept(), ctx.classification())) {
+        if (!publicLinkService.canAccess(
+                link,
+                ctx.dept(),
+                ctx.classification(),
+                resolveClientIp(request),
+                resolveSharePassword(request))) {
             return ResponseEntity.status(403).contentType(MediaType.TEXT_PLAIN).body("Forbidden");
         }
         AnalyticsScreen screen = screenRepository.findById(link.getModelId()).orElse(null);
         if (screen == null || screen.isArchived()) {
             return ResponseEntity.notFound().build();
         }
-        return ResponseEntity.ok(toPublicScreen(screen, link.getPublicUuid()));
+        AnalyticsScreenVersion publishedVersion =
+                screenVersionRepository.findFirstByScreenIdAndCurrentPublishedTrue(screen.getId()).orElse(null);
+        if (publishedVersion == null) {
+            return ResponseEntity.status(409).contentType(MediaType.TEXT_PLAIN).body("No published version");
+        }
+        return ResponseEntity.ok(toPublicScreen(screen, publishedVersion, link.getPublicUuid()));
     }
 
     @PostMapping(
@@ -187,7 +231,12 @@ public class PublicResource {
             return ResponseEntity.notFound().build();
         }
         PlatformContext ctx = PlatformContext.from(request);
-        if (!publicLinkService.canAccess(link, ctx.dept(), ctx.classification())) {
+        if (!publicLinkService.canAccess(
+                link,
+                ctx.dept(),
+                ctx.classification(),
+                resolveClientIp(request),
+                resolveSharePassword(request))) {
             return ResponseEntity.status(403).contentType(MediaType.TEXT_PLAIN).body("Forbidden");
         }
         AnalyticsDashboard dashboard = dashboardRepository.findById(link.getModelId()).orElse(null);
@@ -202,7 +251,7 @@ public class PublicResource {
         if (card == null || card.isArchived()) {
             return ResponseEntity.notFound().build();
         }
-        return runCardDatasetQuery(card, body);
+        return runCardDatasetQuery(card, body, request);
     }
 
     @PostMapping(
@@ -218,82 +267,169 @@ public class PublicResource {
         return dashboardDashcardQuery(uuid, dashcardId, cardId, body, request);
     }
 
-    private ResponseEntity<?> runCardDatasetQuery(AnalyticsCard card, JsonNode body) {
-        JsonNode datasetQuery;
-        try {
-            datasetQuery = objectMapper.readTree(card.getDatasetQueryJson());
-        } catch (Exception e) {
-            return ResponseEntity.status(500).body(Map.of("error", "Invalid saved dataset_query"));
-        }
+    private ResponseEntity<?> runCardDatasetQuery(AnalyticsCard card, JsonNode body, HttpServletRequest request) {
+        long startedNanos = System.nanoTime();
+        String metricResult = "error";
+        String metricCode = "UNKNOWN";
 
-        String type = datasetQuery.path("type").asText(null);
-        long databaseId = datasetQuery.path("database").asLong(0);
-        if (databaseId <= 0) {
-            return ResponseEntity.status(400).body(Map.of("error", "dataset_query.database is required"));
-        }
-
-        OffsetDateTime startedAt = OffsetDateTime.now();
-        long startedMillis = System.currentTimeMillis();
+        Long traceDatabaseId = null;
+        String traceSql = null;
+        Long traceMetricId = parseMetricId(body);
+        String traceMetricVersion = parseMetricVersion(body);
+        Object traceContext = parseTraceContext(body);
+        PlatformContext ctx = PlatformContext.from(request);
+        Long actorUserId = MetabaseAuth.currentUser(sessionService, request).map(u -> u.getId()).orElse(null);
 
         try {
-            String sql;
-            List<Object> bindings = List.of();
-            Map<String, Object> jsonQuery = new LinkedHashMap<>();
-            jsonQuery.put("constraints", Map.of("max-results", 10000, "max-results-bare-rows", 2000));
-            jsonQuery.put("middleware", Map.of("js-int-to-string?", true, "ignore-cached-results?", false, "process-viz-settings?", false));
-            jsonQuery.put("database", databaseId);
-            jsonQuery.put("async?", true);
-            jsonQuery.put("cache-ttl", null);
-
-            if ("native".equalsIgnoreCase(type)) {
-                sql = datasetQuery.path("native").path("query").asText(null);
-                if (sql == null || sql.isBlank()) {
-                    return ResponseEntity.status(400).body(Map.of("error", "dataset_query.native.query is required"));
-                }
-                jsonQuery.put("type", "native");
-                jsonQuery.put("native", Map.of("query", sql));
-            } else if ("query".equalsIgnoreCase(type)) {
-                JsonNode mbql = datasetQuery.get("query");
-                MbqlToSqlService.TranslationResult translated =
-                        mbqlToSqlService.translateSelect(databaseId, mbql, DatasetQueryService.DatasetConstraints.defaults());
-                sql = translated.sql();
-                bindings = translated.bindings();
-                jsonQuery.put("type", "query");
-                jsonQuery.put("query", mbql);
-            } else {
-                return ResponseEntity.status(400).body(Map.of("error", "Only native and query (MBQL) queries are supported"));
+            JsonNode datasetQuery;
+            try {
+                datasetQuery = objectMapper.readTree(card.getDatasetQueryJson());
+            } catch (Exception e) {
+                metricCode = "INVALID_DATASET_QUERY";
+                metricResult = "failed";
+                return ResponseEntity.status(500).body(Map.of(
+                        "error", "Invalid saved dataset_query",
+                        "code", metricCode,
+                        "requestId", resolveRequestId()));
             }
 
-            DatasetQueryService.DatasetResult result =
-                    datasetQueryService.runNative(databaseId, sql, DatasetQueryService.DatasetConstraints.defaults(), bindings);
-            long runningTimeMs = System.currentTimeMillis() - startedMillis;
+            String type = datasetQuery.path("type").asText(null);
+            long databaseId = datasetQuery.path("database").asLong(0);
+            if (databaseId <= 0) {
+                metricCode = "DATABASE_ID_REQUIRED";
+                metricResult = "rejected";
+                return ResponseEntity.status(400).body(Map.of(
+                        "error", "dataset_query.database is required",
+                        "code", metricCode,
+                        "requestId", resolveRequestId()));
+            }
+            traceDatabaseId = databaseId;
 
-            Map<String, Object> data = new LinkedHashMap<>();
-            data.put("rows", result.rows());
-            data.put("cols", result.cols());
-            data.put("native_form", Map.of("query", sql));
-            data.put("results_metadata", Map.of("columns", result.resultsMetadataColumns()));
-            data.put("rows_truncated", false);
+            OffsetDateTime startedAt = OffsetDateTime.now();
+            long startedMillis = System.currentTimeMillis();
 
-            Map<String, Object> response = new LinkedHashMap<>();
-            response.put("status", "completed");
-            response.put("json_query", jsonQuery);
-            response.put("data", data);
-            response.put("row_count", result.rows().size());
-            response.put("running_time", runningTimeMs);
-            response.put("started_at", startedAt.toString());
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            Map<String, Object> error = new LinkedHashMap<>();
-            error.put("class", e.getClass().getName());
-            error.put("message", e.getMessage());
-            error.put("stacktrace", null);
+            try {
+                String sql;
+                List<Object> bindings = List.of();
+                Map<String, Object> jsonQuery = new LinkedHashMap<>();
+                jsonQuery.put("constraints", Map.of("max-results", 10000, "max-results-bare-rows", 2000));
+                jsonQuery.put(
+                        "middleware",
+                        Map.of("js-int-to-string?", true, "ignore-cached-results?", false, "process-viz-settings?", false));
+                jsonQuery.put("database", databaseId);
+                jsonQuery.put("async?", true);
+                jsonQuery.put("cache-ttl", null);
 
-            Map<String, Object> response = new LinkedHashMap<>();
-            response.put("status", "failed");
-            response.put("error", error);
-            response.put("via", List.of());
-            return ResponseEntity.accepted().body(response);
+                if ("native".equalsIgnoreCase(type)) {
+                    sql = datasetQuery.path("native").path("query").asText(null);
+                    if (sql == null || sql.isBlank()) {
+                        metricCode = "NATIVE_SQL_REQUIRED";
+                        metricResult = "rejected";
+                        return ResponseEntity.status(400).body(Map.of(
+                                "error", "dataset_query.native.query is required",
+                                "code", metricCode,
+                                "requestId", resolveRequestId()));
+                    }
+                    JsonNode parametersNode = body == null ? null : body.get("parameters");
+                    if (parametersNode != null && !parametersNode.isNull() && !parametersNode.isMissingNode()) {
+                        nativeQueryTemplateService.validateParameterWhitelist(sql, parametersNode);
+                        if (sql.contains("{{")) {
+                            NativeQueryTemplateService.RenderedQuery rendered = nativeQueryTemplateService.render(sql, parametersNode);
+                            sql = rendered.sql();
+                            bindings = rendered.bindings();
+                        }
+                    }
+                    jsonQuery.put("type", "native");
+                    jsonQuery.put("native", Map.of("query", sql));
+                } else if ("query".equalsIgnoreCase(type)) {
+                    JsonNode mbql = datasetQuery.get("query");
+                    MbqlToSqlService.TranslationResult translated =
+                            mbqlToSqlService.translateSelect(databaseId, mbql, DatasetQueryService.DatasetConstraints.defaults());
+                    sql = translated.sql();
+                    bindings = translated.bindings();
+                    jsonQuery.put("type", "query");
+                    jsonQuery.put("query", mbql);
+                } else {
+                    metricCode = "QUERY_TYPE_UNSUPPORTED";
+                    metricResult = "rejected";
+                    return ResponseEntity.status(400).body(Map.of(
+                            "error", "Only native and query (MBQL) queries are supported",
+                            "code", metricCode,
+                            "requestId", resolveRequestId()));
+                }
+                traceSql = sql;
+
+                DatasetQueryService.DatasetResult result =
+                        datasetQueryService.runNative(databaseId, sql, DatasetQueryService.DatasetConstraints.defaults(), bindings);
+                long runningTimeMs = System.currentTimeMillis() - startedMillis;
+
+                Map<String, Object> data = new LinkedHashMap<>();
+                data.put("rows", result.rows());
+                data.put("cols", result.cols());
+                data.put("native_form", Map.of("query", sql));
+                data.put("results_metadata", Map.of("columns", result.resultsMetadataColumns()));
+                data.put("rows_truncated", false);
+
+                Map<String, Object> response = new LinkedHashMap<>();
+                response.put("status", "completed");
+                response.put("json_query", jsonQuery);
+                response.put("data", data);
+                response.put("row_count", result.rows().size());
+                response.put("running_time", runningTimeMs);
+                response.put("started_at", startedAt.toString());
+                response.put("requestId", resolveRequestId());
+
+                metricResult = "success";
+                metricCode = "NONE";
+                return ResponseEntity.ok(response);
+            } catch (IllegalArgumentException e) {
+                metricCode = "INVALID_ARGUMENT";
+                metricResult = "rejected";
+                return ResponseEntity.status(400).body(Map.of(
+                        "error", rootCauseMessage(e),
+                        "code", metricCode,
+                        "requestId", resolveRequestId()));
+            } catch (SQLException e) {
+                metricCode = classifySqlErrorCode(e);
+                metricResult = "failed";
+                return ResponseEntity.accepted().body(Map.of(
+                        "database_id", databaseId,
+                        "started_at", startedAt,
+                        "status", "failed",
+                        "error", rootCauseMessage(e),
+                        "code", metricCode,
+                        "requestId", resolveRequestId(),
+                        "data", Map.of("rows", List.of(), "cols", List.of())));
+            } catch (RuntimeException e) {
+                metricCode = classifyRuntimeErrorCode(e);
+                metricResult = "failed";
+                return ResponseEntity.accepted().body(Map.of(
+                        "database_id", databaseId,
+                        "started_at", startedAt,
+                        "status", "failed",
+                        "error", rootCauseMessage(e),
+                        "code", metricCode,
+                        "requestId", resolveRequestId(),
+                        "data", Map.of("rows", List.of(), "cols", List.of())));
+            }
+        } finally {
+            long durationNanos = System.nanoTime() - startedNanos;
+            queryMetricsService.record("public_card_query", metricResult, metricCode, durationNanos);
+            queryTraceService.log(
+                    "public_card_query",
+                    card.getId(),
+                    traceDatabaseId,
+                    traceMetricId,
+                    traceMetricVersion,
+                    traceSql,
+                    metricResult,
+                    metricCode,
+                    resolveRequestId(),
+                    actorUserId,
+                    ctx.dept(),
+                    ctx.classification(),
+                    durationNanos / 1_000_000,
+                    traceContext);
         }
     }
 
@@ -355,6 +491,185 @@ public class PublicResource {
         }
         return map;
     }
+    private String classifySqlErrorCode(SQLException e) {
+        if (e == null) {
+            return "DB_QUERY_FAILED";
+        }
+        String message = rootCauseMessage(e).toLowerCase();
+        if (message.contains("connection refused")) {
+            return "EXT_DB_CONNECTION_REFUSED";
+        }
+        if (message.contains("timeout") || message.contains("timed out")) {
+            return "EXT_DB_TIMEOUT";
+        }
+        return "DB_QUERY_FAILED";
+    }
+
+    private String classifyRuntimeErrorCode(RuntimeException e) {
+        if (e == null) {
+            return "QUERY_RUNTIME_ERROR";
+        }
+        if (hasCause(e, "java.net.ConnectException")) {
+            return "EXT_DB_CONNECTION_REFUSED";
+        }
+        if (hasCause(e, "com.zaxxer.hikari.pool.HikariPool")) {
+            return "EXT_DB_CONNECT_FAILED";
+        }
+        String message = rootCauseMessage(e).toLowerCase();
+        if (message.contains("connection refused")) {
+            return "EXT_DB_CONNECTION_REFUSED";
+        }
+        if (message.contains("timeout") || message.contains("timed out")) {
+            return "EXT_DB_TIMEOUT";
+        }
+        return "QUERY_RUNTIME_ERROR";
+    }
+
+    private String rootCauseMessage(Throwable error) {
+        if (error == null) {
+            return "Unknown error";
+        }
+        Throwable current = error;
+        while (current.getCause() != null && current.getCause() != current) {
+            current = current.getCause();
+        }
+        String message = current.getMessage();
+        if (message == null || message.isBlank()) {
+            message = error.getMessage();
+        }
+        return (message == null || message.isBlank()) ? current.getClass().getSimpleName() : message;
+    }
+
+    private boolean hasCause(Throwable error, String className) {
+        Throwable current = error;
+        while (current != null) {
+            if (current.getClass().getName().contains(className)) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
+    }
+    private Long parseMetricId(JsonNode body) {
+        if (body == null || !body.isObject()) {
+            return null;
+        }
+
+        JsonNode direct = body.get("metricId");
+        if (direct != null && direct.canConvertToLong()) {
+            long id = direct.asLong();
+            return id > 0 ? id : null;
+        }
+
+        JsonNode snake = body.get("metric_id");
+        if (snake != null && snake.canConvertToLong()) {
+            long id = snake.asLong();
+            return id > 0 ? id : null;
+        }
+
+        JsonNode semantic = body.get("semantic");
+        if (semantic != null && semantic.isObject()) {
+            JsonNode nested = semantic.get("metricId");
+            if (nested != null && nested.canConvertToLong()) {
+                long id = nested.asLong();
+                return id > 0 ? id : null;
+            }
+            JsonNode nestedSnake = semantic.get("metric_id");
+            if (nestedSnake != null && nestedSnake.canConvertToLong()) {
+                long id = nestedSnake.asLong();
+                return id > 0 ? id : null;
+            }
+        }
+
+        return null;
+    }
+
+    private String parseMetricVersion(JsonNode body) {
+        if (body == null || !body.isObject()) {
+            return null;
+        }
+
+        String direct = trimToNull(body.path("metricVersion").asText(null));
+        if (direct != null) {
+            return direct;
+        }
+
+        String snake = trimToNull(body.path("metric_version").asText(null));
+        if (snake != null) {
+            return snake;
+        }
+
+        JsonNode semantic = body.get("semantic");
+        if (semantic != null && semantic.isObject()) {
+            String nested = trimToNull(semantic.path("metricVersion").asText(null));
+            if (nested != null) {
+                return nested;
+            }
+            return trimToNull(semantic.path("metric_version").asText(null));
+        }
+
+        return null;
+    }
+
+    private Object parseTraceContext(JsonNode body) {
+        if (body == null || !body.isObject()) {
+            return null;
+        }
+
+        JsonNode context = body.get("queryContext");
+        if (context == null || context.isNull() || context.isMissingNode()) {
+            return null;
+        }
+        return context;
+    }
+
+    private String resolveRequestId() {
+        String requestId = RequestContextUtils.resolveRequestId();
+        if (requestId == null || requestId.isBlank()) {
+            return "unknown";
+        }
+        return requestId;
+    }
+    private String trimToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isBlank() ? null : trimmed;
+    }
+
+    private String resolveSharePassword(HttpServletRequest request) {
+        if (request == null) {
+            return null;
+        }
+        String header = request.getHeader("X-DTS-Link-Password");
+        if (header != null && !header.isBlank()) {
+            return header.trim();
+        }
+        String query = request.getParameter("password");
+        if (query != null && !query.isBlank()) {
+            return query.trim();
+        }
+        return null;
+    }
+
+    private String resolveClientIp(HttpServletRequest request) {
+        if (request == null) {
+            return null;
+        }
+        String forwardedFor = request.getHeader("X-Forwarded-For");
+        if (forwardedFor != null && !forwardedFor.isBlank()) {
+            String[] parts = forwardedFor.split(",");
+            if (parts.length > 0 && parts[0] != null && !parts[0].isBlank()) {
+                return parts[0].trim();
+            }
+        }
+        String remote = request.getRemoteAddr();
+        if (remote == null || remote.isBlank()) {
+            return null;
+        }
+        return remote.trim();
+    }
 
     private Object parseJsonObject(String json) {
         if (json == null || json.isBlank()) {
@@ -371,16 +686,19 @@ public class PublicResource {
         }
     }
 
-    private Map<String, Object> toPublicScreen(AnalyticsScreen screen, String publicUuid) {
+    private Map<String, Object> toPublicScreen(
+            AnalyticsScreen screen, AnalyticsScreenVersion publishedVersion, String publicUuid) {
         Map<String, Object> map = new LinkedHashMap<>();
         map.put("id", screen.getId());
-        map.put("name", screen.getName());
-        map.put("width", screen.getWidth());
-        map.put("height", screen.getHeight());
-        map.put("backgroundColor", screen.getBackgroundColor());
-        map.put("backgroundImage", screen.getBackgroundImage());
-        map.put("theme", screen.getTheme());
-        map.put("components", parseJsonArray(screen.getComponentsJson()));
+        map.put("name", publishedVersion.getName());
+        map.put("width", publishedVersion.getWidth());
+        map.put("height", publishedVersion.getHeight());
+        map.put("backgroundColor", publishedVersion.getBackgroundColor());
+        map.put("backgroundImage", publishedVersion.getBackgroundImage());
+        map.put("theme", publishedVersion.getTheme());
+        map.put("components", parseJsonArray(publishedVersion.getComponentsJson()));
+        map.put("globalVariables", parseJsonArray(publishedVersion.getVariablesJson()));
+        map.put("publishedVersionNo", publishedVersion.getVersionNo());
         map.put("public_uuid", publicUuid);
         return map;
     }

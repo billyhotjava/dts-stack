@@ -2,6 +2,8 @@ import { useScreen } from '../ScreenContext';
 import type { ScreenComponent, DataSourceConfig, DrillLevel } from '../types';
 import { DRILLABLE_TYPES } from '../types';
 import { CardIdPicker } from './CardIdPicker';
+import { MetricBindingEditor } from './MetricBindingEditor';
+import { DatabaseIdPicker } from './DatabaseIdPicker';
 
 export function PropertyPanel() {
     const { state, updateComponent } = useScreen();
@@ -99,11 +101,13 @@ export function PropertyPanel() {
                 {/* Data Source */}
                 <div className="property-section">
                     <div className="property-section-title">数据源</div>
-                    {renderDataSourceConfig(selectedComponent, updateComponent)}
+                    {renderDataSourceConfig(selectedComponent, updateComponent, config.globalVariables ?? [])}
                 </div>
 
                 {/* Drill-down config */}
                 {renderDrillDownConfig(selectedComponent, updateComponent)}
+
+                {renderInteractionConfig(selectedComponent, config.globalVariables ?? [], updateComponent)}
 
                 {/* Visibility & Lock */}
                 <div className="property-section">
@@ -688,12 +692,69 @@ function renderComponentConfig(
 function renderDataSourceConfig(
     component: ScreenComponent,
     updateComponent: (id: string, updates: Partial<ScreenComponent>) => void,
+    globalVariables: ScreenGlobalVariable[],
 ) {
     const ds = component.dataSource as DataSourceConfig | undefined;
     const dsType = ds?.type ?? 'static';
 
+    const cardBindings: CardParameterBinding[] = ds?.type === 'card' ? (ds.cardConfig?.parameterBindings ?? []) : [];
+    const variableOptions = (globalVariables ?? []).map((item) => ({ key: item.key, label: item.label || item.key }));
+
+    const updateCardBindings = (bindings: CardParameterBinding[]) => {
+        setDataSource({
+            type: 'card',
+            cardConfig: {
+                ...(ds?.type === 'card' ? ds.cardConfig : {}),
+                cardId: ds?.type === 'card' ? (ds.cardConfig?.cardId ?? 0) : 0,
+                parameterBindings: bindings,
+            },
+        });
+    };
+
     const setDataSource = (newDs: DataSourceConfig | undefined) => {
         updateComponent(component.id, { dataSource: newDs });
+    };
+
+    const setType = (nextType: string) => {
+        if (nextType === 'static') {
+            setDataSource(undefined);
+            return;
+        }
+        if (nextType === 'card') {
+            setDataSource({
+                type: 'card',
+                cardConfig: {
+                    cardId: ds?.type === 'card' ? (ds.cardConfig?.cardId ?? 0) : 0,
+                    refreshInterval: ds?.type === 'card' ? ds.cardConfig?.refreshInterval : undefined,
+                    metricId: ds?.type === 'card' ? ds.cardConfig?.metricId : undefined,
+                    metricVersion: ds?.type === 'card' ? ds.cardConfig?.metricVersion : undefined,
+                    parameterBindings: ds?.type === 'card' ? (ds.cardConfig?.parameterBindings ?? []) : [],
+                },
+            });
+            return;
+        }
+        if (nextType === 'api') {
+            setDataSource({
+                type: 'api',
+                refreshInterval: ds?.type === 'api' ? ds.refreshInterval : undefined,
+                apiConfig: {
+                    url: ds?.type === 'api' ? (ds.apiConfig?.url ?? '') : '',
+                    method: ds?.type === 'api' ? (ds.apiConfig?.method ?? 'GET') : 'GET',
+                    body: ds?.type === 'api' ? ds.apiConfig?.body : undefined,
+                },
+            });
+            return;
+        }
+        if (nextType === 'database') {
+            setDataSource({
+                type: 'database',
+                refreshInterval: ds?.type === 'database' ? ds.refreshInterval : undefined,
+                databaseConfig: {
+                    databaseId: ds?.type === 'database' ? ds.databaseConfig?.databaseId : undefined,
+                    query: ds?.type === 'database' ? (ds.databaseConfig?.query ?? 'select 1') : 'select 1',
+                },
+            });
+        }
     };
 
     return (
@@ -703,20 +764,12 @@ function renderDataSourceConfig(
                 <select
                     className="property-input"
                     value={dsType}
-                    onChange={(e) => {
-                        const val = e.target.value;
-                        if (val === 'static') {
-                            setDataSource(undefined);
-                        } else if (val === 'card') {
-                            setDataSource({
-                                type: 'card',
-                                cardConfig: { cardId: 0 },
-                            });
-                        }
-                    }}
+                    onChange={(e) => setType(e.target.value)}
                 >
                     <option value="static">静态数据</option>
                     <option value="card">Card 查询</option>
+                    <option value="api">HTTP API</option>
+                    <option value="database">数据库 SQL</option>
                 </select>
             </div>
 
@@ -725,13 +778,12 @@ function renderDataSourceConfig(
                     <div className="property-row">
                         <label className="property-label">Card</label>
                         <CardIdPicker
-                            value={ds?.cardConfig?.cardId ?? 0}
+                            value={ds?.type === 'card' ? (ds.cardConfig?.cardId ?? 0) : 0}
                             onChange={(cardId) => {
                                 setDataSource({
-                                    ...ds!,
                                     type: 'card',
                                     cardConfig: {
-                                        ...ds!.cardConfig!,
+                                        ...(ds?.type === 'card' ? ds.cardConfig : {}),
                                         cardId,
                                     },
                                 });
@@ -745,16 +797,230 @@ function renderDataSourceConfig(
                             className="property-input"
                             min={0}
                             step={10}
-                            value={ds?.cardConfig?.refreshInterval ?? 0}
+                            value={ds?.type === 'card' ? (ds.cardConfig?.refreshInterval ?? 0) : 0}
                             onChange={(e) => {
                                 const val = Number(e.target.value);
                                 setDataSource({
-                                    ...ds!,
                                     type: 'card',
                                     cardConfig: {
-                                        ...ds!.cardConfig!,
+                                        ...(ds?.type === 'card' ? ds.cardConfig : {}),
+                                        cardId: ds?.type === 'card' ? (ds.cardConfig?.cardId ?? 0) : 0,
                                         refreshInterval: val > 0 ? val : undefined,
                                     },
+                                });
+                            }}
+                            placeholder="0=不刷新"
+                        />
+                    </div>
+                    <MetricBindingEditor
+                        metricId={ds?.type === 'card' ? ds.cardConfig?.metricId : undefined}
+                        metricVersion={ds?.type === 'card' ? ds.cardConfig?.metricVersion : undefined}
+                        onMetricIdChange={(metricId) => {
+                            setDataSource({
+                                type: 'card',
+                                cardConfig: {
+                                    ...(ds?.type === 'card' ? ds.cardConfig : {}),
+                                    cardId: ds?.type === 'card' ? (ds.cardConfig?.cardId ?? 0) : 0,
+                                    refreshInterval: ds?.type === 'card' ? ds.cardConfig?.refreshInterval : undefined,
+                                    metricId,
+                                    metricVersion: metricId ? (ds?.type === 'card' ? ds.cardConfig?.metricVersion : undefined) : undefined,
+                                },
+                            });
+                        }}
+                        onMetricVersionChange={(metricVersion) => {
+                            setDataSource({
+                                type: 'card',
+                                cardConfig: {
+                                    ...(ds?.type === 'card' ? ds.cardConfig : {}),
+                                    cardId: ds?.type === 'card' ? (ds.cardConfig?.cardId ?? 0) : 0,
+                                    refreshInterval: ds?.type === 'card' ? ds.cardConfig?.refreshInterval : undefined,
+                                    metricId: ds?.type === 'card' ? ds.cardConfig?.metricId : undefined,
+                                    metricVersion,
+                                },
+                            });
+                        }}
+                    />
+                    <CardParamBindingsEditor
+                        bindings={cardBindings}
+                        globalVariables={globalVariables}
+                        onChange={updateCardBindings}
+                    />
+                </>
+            )}
+
+            {dsType === 'api' && (
+                <>
+                    <div className="property-row">
+                        <label className="property-label">URL</label>
+                        <input
+                            type="text"
+                            className="property-input"
+                            value={ds?.type === 'api' ? (ds.apiConfig?.url ?? '') : ''}
+                            onChange={(e) => {
+                                setDataSource({
+                                    type: 'api',
+                                    refreshInterval: ds?.type === 'api' ? ds.refreshInterval : undefined,
+                                    apiConfig: {
+                                        ...(ds?.type === 'api' ? ds.apiConfig : { method: 'GET' as const }),
+                                        url: e.target.value,
+                                        method: ds?.type === 'api' ? (ds.apiConfig?.method ?? 'GET') : 'GET',
+                                    },
+                                });
+                            }}
+                            placeholder="/analytics/api/card/1/query 或 https://..."
+                        />
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">方法</label>
+                        <select
+                            className="property-input"
+                            value={ds?.type === 'api' ? (ds.apiConfig?.method ?? 'GET') : 'GET'}
+                            onChange={(e) => {
+                                const method = (e.target.value as 'GET' | 'POST') || 'GET';
+                                setDataSource({
+                                    type: 'api',
+                                    refreshInterval: ds?.type === 'api' ? ds.refreshInterval : undefined,
+                                    apiConfig: {
+                                        ...(ds?.type === 'api' ? ds.apiConfig : {}),
+                                        url: ds?.type === 'api' ? (ds.apiConfig?.url ?? '') : '',
+                                        method,
+                                    },
+                                });
+                            }}
+                        >
+                            <option value="GET">GET</option>
+                            <option value="POST">POST</option>
+                        </select>
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">Body</label>
+                        <textarea
+                            className="property-input"
+                            rows={4}
+                            value={ds?.type === 'api' ? (ds.apiConfig?.body ?? '') : ''}
+                            onChange={(e) => {
+                                setDataSource({
+                                    type: 'api',
+                                    refreshInterval: ds?.type === 'api' ? ds.refreshInterval : undefined,
+                                    apiConfig: {
+                                        ...(ds?.type === 'api' ? ds.apiConfig : {}),
+                                        url: ds?.type === 'api' ? (ds.apiConfig?.url ?? '') : '',
+                                        method: ds?.type === 'api' ? (ds.apiConfig?.method ?? 'GET') : 'GET',
+                                        body: e.target.value,
+                                    },
+                                });
+                            }}
+                            placeholder='{"parameters":[]}'
+                        />
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">刷新(秒)</label>
+                        <input
+                            type="number"
+                            className="property-input"
+                            min={0}
+                            step={10}
+                            value={ds?.type === 'api' ? (ds.refreshInterval ?? 0) : 0}
+                            onChange={(e) => {
+                                const val = Number(e.target.value);
+                                setDataSource({
+                                    type: 'api',
+                                    refreshInterval: val > 0 ? val : undefined,
+                                    apiConfig: ds?.type === 'api'
+                                        ? {
+                                            ...(ds.apiConfig ?? { method: 'GET' as const, url: '' }),
+                                            method: ds.apiConfig?.method ?? 'GET',
+                                            url: ds.apiConfig?.url ?? '',
+                                        }
+                                        : { method: 'GET', url: '' },
+                                });
+                            }}
+                            placeholder="0=不刷新"
+                        />
+                    </div>
+                </>
+            )}
+
+            {dsType === 'database' && (
+                <>
+                    <div className="property-row">
+                        <label className="property-label">数据库</label>
+                        <DatabaseIdPicker
+                            value={ds?.type === 'database' ? (ds.databaseConfig?.databaseId ?? 0) : 0}
+                            onChange={(databaseId) => {
+                                setDataSource({
+                                    type: 'database',
+                                    refreshInterval: ds?.type === 'database' ? ds.refreshInterval : undefined,
+                                    databaseConfig: {
+                                        ...(ds?.type === 'database' ? ds.databaseConfig : {}),
+                                        databaseId: databaseId > 0 ? databaseId : undefined,
+                                        query: ds?.type === 'database' ? (ds.databaseConfig?.query ?? '') : '',
+                                    },
+                                });
+                            }}
+                        />
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">数据库ID(手工)</label>
+                        <input
+                            type="number"
+                            className="property-input"
+                            min={1}
+                            value={ds?.type === 'database' ? (ds.databaseConfig?.databaseId ?? 0) : 0}
+                            onChange={(e) => {
+                                const n = Number(e.target.value);
+                                setDataSource({
+                                    type: 'database',
+                                    refreshInterval: ds?.type === 'database' ? ds.refreshInterval : undefined,
+                                    databaseConfig: {
+                                        ...(ds?.type === 'database' ? ds.databaseConfig : {}),
+                                        databaseId: Number.isFinite(n) && n > 0 ? n : undefined,
+                                        query: ds?.type === 'database' ? (ds.databaseConfig?.query ?? '') : '',
+                                    },
+                                });
+                            }}
+                            placeholder="用于离线环境或未同步数据库列表"
+                        />
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">SQL</label>
+                        <textarea
+                            className="property-input"
+                            rows={6}
+                            value={ds?.type === 'database' ? (ds.databaseConfig?.query ?? '') : ''}
+                            onChange={(e) => {
+                                setDataSource({
+                                    type: 'database',
+                                    refreshInterval: ds?.type === 'database' ? ds.refreshInterval : undefined,
+                                    databaseConfig: {
+                                        ...(ds?.type === 'database' ? ds.databaseConfig : {}),
+                                        databaseId: ds?.type === 'database' ? ds.databaseConfig?.databaseId : undefined,
+                                        query: e.target.value,
+                                    },
+                                });
+                            }}
+                            placeholder="select * from public.table limit 100"
+                        />
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">刷新(秒)</label>
+                        <input
+                            type="number"
+                            className="property-input"
+                            min={0}
+                            step={10}
+                            value={ds?.type === 'database' ? (ds.refreshInterval ?? 0) : 0}
+                            onChange={(e) => {
+                                const val = Number(e.target.value);
+                                setDataSource({
+                                    type: 'database',
+                                    refreshInterval: val > 0 ? val : undefined,
+                                    databaseConfig: ds?.type === 'database'
+                                        ? {
+                                            ...(ds.databaseConfig ?? { query: '' }),
+                                            query: ds.databaseConfig?.query ?? '',
+                                        }
+                                        : { query: '' },
                                 });
                             }}
                             placeholder="0=不刷新"
@@ -766,6 +1032,124 @@ function renderDataSourceConfig(
     );
 }
 
+
+const INTERACTION_COMPONENT_TYPES = new Set<ComponentType>([
+    'line-chart',
+    'bar-chart',
+    'pie-chart',
+    'scatter-chart',
+    'radar-chart',
+    'funnel-chart',
+]);
+
+function renderInteractionConfig(
+    component: ScreenComponent,
+    globalVariables: ScreenGlobalVariable[],
+    updateComponent: (id: string, updates: Partial<ScreenComponent>) => void,
+) {
+    if (!INTERACTION_COMPONENT_TYPES.has(component.type)) {
+        return null;
+    }
+
+    const interaction = component.interaction ?? { enabled: false, mappings: [] as ComponentInteractionMapping[] };
+    const mappings = interaction.mappings ?? [];
+
+    const setInteraction = (next: typeof interaction) => {
+        updateComponent(component.id, { interaction: next });
+    };
+
+    const updateMapping = (index: number, patch: Partial<ComponentInteractionMapping>) => {
+        const next = [...mappings];
+        next[index] = { ...next[index], ...patch };
+        setInteraction({ ...interaction, mappings: next });
+    };
+
+    return (
+        <div className="property-section">
+            <div className="property-section-title">联动配置</div>
+
+            <div className="property-row">
+                <label className="property-label">启用点击联动</label>
+                <input
+                    type="checkbox"
+                    checked={interaction.enabled ?? false}
+                    onChange={(e) => setInteraction({ ...interaction, enabled: e.target.checked })}
+                />
+            </div>
+
+            {interaction.enabled && (
+                <>
+                    {globalVariables.length === 0 && (
+                        <div style={{ fontSize: 11, color: '#888', marginBottom: 8 }}>
+                            请先在顶部“变量”里创建全局变量。
+                        </div>
+                    )}
+
+                    {mappings.map((mapping, index) => (
+                        <div
+                            key={`interaction-${index}`}
+                            style={{
+                                border: '1px solid rgba(255,255,255,0.06)',
+                                borderRadius: 4,
+                                padding: 8,
+                                marginBottom: 8,
+                            }}
+                        >
+                            <div className="property-row">
+                                <label className="property-label">目标变量</label>
+                                <select
+                                    className="property-input"
+                                    value={mapping.variableKey || ''}
+                                    onChange={(e) => updateMapping(index, { variableKey: e.target.value })}
+                                >
+                                    <option value="">-- 请选择 --</option>
+                                    {globalVariables.map((item) => (
+                                        <option key={item.key} value={item.key}>
+                                            {item.label || item.key} ({item.key})
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div className="property-row">
+                                <label className="property-label">取值路径</label>
+                                <select
+                                    className="property-input"
+                                    value={mapping.sourcePath || 'name'}
+                                    onChange={(e) => updateMapping(index, { sourcePath: e.target.value })}
+                                >
+                                    <option value="name">name</option>
+                                    <option value="seriesName">seriesName</option>
+                                    <option value="value">value</option>
+                                    <option value="data.name">data.name</option>
+                                </select>
+                            </div>
+
+                            <button
+                                className="property-input"
+                                onClick={() => setInteraction({ ...interaction, mappings: mappings.filter((_, i) => i !== index) })}
+                                style={{ width: '100%', cursor: 'pointer', textAlign: 'center', color: '#ef4444' }}
+                            >
+                                删除联动规则
+                            </button>
+                        </div>
+                    ))}
+
+                    <button
+                        className="property-input"
+                        onClick={() => setInteraction({
+                            ...interaction,
+                            mappings: [...mappings, { variableKey: globalVariables[0]?.key ?? '', sourcePath: 'name' }],
+                        })}
+                        style={{ width: '100%', cursor: 'pointer', textAlign: 'center', color: '#6366f1' }}
+                    >
+                        + 添加联动规则
+                    </button>
+                </>
+            )}
+        </div>
+    );
+}
 function renderDrillDownConfig(
     component: ScreenComponent,
     updateComponent: (id: string, updates: Partial<ScreenComponent>) => void,

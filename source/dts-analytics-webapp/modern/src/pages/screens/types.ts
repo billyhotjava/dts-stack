@@ -2,6 +2,30 @@
 
 export type ScreenTheme = 'legacy-dark' | 'titanium' | 'glacier';
 
+export interface ScreenGlobalVariable {
+    key: string;
+    label: string;
+    type: 'string' | 'number' | 'date';
+    defaultValue?: string;
+    description?: string;
+}
+
+export interface CardParameterBinding {
+    name: string;
+    variableKey?: string;
+    value?: string;
+}
+
+export interface ComponentInteractionMapping {
+    variableKey: string;
+    sourcePath: string; // e.g. name, seriesName, value, data.name
+}
+
+export interface ComponentInteractionConfig {
+    enabled: boolean;
+    mappings: ComponentInteractionMapping[];
+}
+
 export interface DrillLevel {
     cardId: number;
     paramName: string;
@@ -31,6 +55,7 @@ export interface ScreenComponent {
     config: Record<string, unknown>;
     dataSource?: DataSourceConfig;
     drillDown?: DrillDownConfig;
+    interaction?: ComponentInteractionConfig;
 }
 
 export type ComponentType =
@@ -76,12 +101,17 @@ export interface DataSourceConfig {
         body?: string;
     };
     databaseConfig?: {
-        connectionId: string;
+        // Prefer analytics database id; keep connectionId for backward compatibility.
+        databaseId?: number;
+        connectionId?: string;
         query: string;
     };
     cardConfig?: {
         cardId: number;
         refreshInterval?: number; // Card 专属刷新间隔(秒)
+        metricId?: number; // 语义指标绑定
+        metricVersion?: string; // 指标版本/口径版本
+        parameterBindings?: CardParameterBinding[]; // 参数绑定（变量/静态值）
     };
 }
 
@@ -100,6 +130,7 @@ export interface ScreenConfig {
     backgroundImage?: string;
     theme?: ScreenTheme;
     components: ScreenComponent[];
+    globalVariables?: ScreenGlobalVariable[];
 }
 
 export interface ScreenState {

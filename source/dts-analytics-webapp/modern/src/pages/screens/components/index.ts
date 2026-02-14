@@ -7,3 +7,6 @@ export { PropertyPanel } from './PropertyPanel';
 export { LayerPanel } from './LayerPanel';
 export { ScreenHeader } from './ScreenHeader';
 export { TemplateGallery } from './TemplateGallery';
+
+export { GlobalVariableManager } from './GlobalVariableManager';
+export { GlobalVariablePanel } from './GlobalVariablePanel';

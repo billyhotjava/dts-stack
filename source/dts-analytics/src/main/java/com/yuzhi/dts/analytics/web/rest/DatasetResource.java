@@ -13,6 +13,7 @@ import java.sql.SQLException;
 import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -22,6 +23,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -252,6 +254,131 @@ public class DatasetResource {
 
         queryCacheService.clearAll();
         return ResponseEntity.ok(Map.of("status", "ok", "message", "Cache cleared"));
+    }
+    @GetMapping(path = "/cache/policy/{databaseId}", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> getCachePolicy(@PathVariable("databaseId") long databaseId, HttpServletRequest request) {
+        Optional<ResponseEntity<String>> auth = MetabaseAuth.requireSuperuser(sessionService, request);
+        if (auth.isPresent()) {
+            return auth.get();
+        }
+
+        if (databaseId <= 0) {
+            return ResponseEntity.badRequest().body(Map.of("errors", Map.of("databaseId", "databaseId must be positive")));
+        }
+
+        QueryCacheService.CacheStrategy strategy = queryCacheService.getCacheStrategy(databaseId);
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("databaseId", databaseId);
+        response.put("enabled", strategy.enabled());
+        response.put("ttlSeconds", strategy.ttl().toSeconds());
+        response.put("cacheNativeQueries", strategy.cacheNativeQueries());
+        return ResponseEntity.ok(response);
+    }
+    @PostMapping(path = "/cache/policy/{databaseId}", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> setCachePolicy(
+            @PathVariable("databaseId") long databaseId,
+            @RequestBody(required = false) JsonNode body,
+            HttpServletRequest request) {
+        Optional<ResponseEntity<String>> auth = MetabaseAuth.requireSuperuser(sessionService, request);
+        if (auth.isPresent()) {
+            return auth.get();
+        }
+
+        if (databaseId <= 0) {
+            return ResponseEntity.badRequest().body(Map.of("errors", Map.of("databaseId", "databaseId must be positive")));
+        }
+
+        boolean enabled = body == null || !body.has("enabled") || body.path("enabled").asBoolean(true);
+        long ttlSeconds = body != null && body.has("ttlSeconds") ? body.path("ttlSeconds").asLong(300) : 300;
+        boolean cacheNativeQueries = body == null || !body.has("cacheNativeQueries") || body.path("cacheNativeQueries").asBoolean(true);
+
+        if (ttlSeconds < 1) {
+            ttlSeconds = 1;
+        }
+        if (ttlSeconds > 86400) {
+            ttlSeconds = 86400;
+        }
+
+        QueryCacheService.CacheStrategy strategy = enabled
+                ? new QueryCacheService.CacheStrategy(true, Duration.ofSeconds(ttlSeconds), cacheNativeQueries)
+                : QueryCacheService.CacheStrategy.DISABLED;
+
+        queryCacheService.setCacheStrategy(databaseId, strategy);
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("databaseId", databaseId);
+        response.put("enabled", strategy.enabled());
+        response.put("ttlSeconds", strategy.ttl().toSeconds());
+        response.put("cacheNativeQueries", strategy.cacheNativeQueries());
+        return ResponseEntity.ok(response);
+    }
+    @PostMapping(path = "/cache/warmup", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> warmupCache(@RequestBody(required = false) JsonNode body, HttpServletRequest request) {
+        Optional<ResponseEntity<String>> auth = MetabaseAuth.requireSuperuser(sessionService, request);
+        if (auth.isPresent()) {
+            return auth.get();
+        }
+
+        if (body == null || body.isNull()) {
+            return ResponseEntity.badRequest().body(Map.of("errors", Map.of("body", "request body is required")));
+        }
+
+        JsonNode queriesNode = body.has("queries") ? body.path("queries") : body;
+        List<JsonNode> queries = new ArrayList<>();
+        if (queriesNode.isArray()) {
+            for (JsonNode query : queriesNode) {
+                if (query != null && query.isObject()) {
+                    queries.add(query);
+                }
+            }
+        } else if (queriesNode.isObject()) {
+            queries.add(queriesNode);
+        }
+
+        if (queries.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("errors", Map.of("queries", "at least one dataset query is required")));
+        }
+
+        List<Map<String, Object>> items = new ArrayList<>();
+        int success = 0;
+
+        for (int i = 0; i < queries.size(); i++) {
+            JsonNode query = queries.get(i);
+            ResponseEntity<?> result = run(query, request);
+
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("index", i);
+            item.put("databaseId", query.path("database").asLong(0));
+            item.put("httpStatus", result.getStatusCode().value());
+
+            Object responseBody = result.getBody();
+            if (result.getStatusCode().is2xxSuccessful() && responseBody instanceof Map<?, ?> map) {
+                Object status = map.get("status");
+                if ("completed".equals(status)) {
+                    success++;
+                    item.put("status", "ok");
+                    item.put("rowCount", map.get("row_count"));
+                    item.put("runningTime", map.get("running_time"));
+                    item.put("cached", map.get("cached"));
+                } else {
+                    item.put("status", "failed");
+                    Object err = map.containsKey("error") ? map.get("error") : "warmup failed";
+                    item.put("error", err);
+                }
+            } else {
+                item.put("status", "failed");
+                item.put("error", responseBody == null ? "warmup failed" : responseBody.toString());
+            }
+
+            items.add(item);
+        }
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("total", queries.size());
+        response.put("success", success);
+        response.put("failed", queries.size() - success);
+        response.put("items", items);
+        return ResponseEntity.ok(response);
     }
 
     private static DatasetQueryService.DatasetConstraints parseConstraints(JsonNode body) {

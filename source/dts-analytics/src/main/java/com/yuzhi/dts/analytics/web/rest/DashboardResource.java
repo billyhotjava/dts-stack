@@ -768,11 +768,14 @@ public class DashboardResource {
                     return ResponseEntity.status(400).body(Map.of("error", "dataset_query.native.query is required"));
                 }
                 JsonNode parametersNode = body == null ? null : body.get("parameters");
-                if (parametersNode != null && !parametersNode.isNull() && !parametersNode.isMissingNode() && sql.contains("{{")) {
-                    NativeQueryTemplateService.RenderedQuery rendered = nativeQueryTemplateService.render(sql, parametersNode);
-                    sql = rendered.sql();
-                    bindings = rendered.bindings();
-                }
+                if (parametersNode != null && !parametersNode.isNull() && !parametersNode.isMissingNode()) {
+                        nativeQueryTemplateService.validateParameterWhitelist(sql, parametersNode);
+                        if (sql.contains("{{")) {
+                            NativeQueryTemplateService.RenderedQuery rendered = nativeQueryTemplateService.render(sql, parametersNode);
+                            sql = rendered.sql();
+                            bindings = rendered.bindings();
+                        }
+                    }
                 jsonQuery.put("type", "native");
                 jsonQuery.put("native", Map.of("query", sql));
             } else if ("query".equalsIgnoreCase(type)) {

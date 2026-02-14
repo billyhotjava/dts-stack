@@ -17,36 +17,45 @@ import org.springframework.security.web.access.AccessDeniedHandler;
 
 public class SecurityProblemSupport implements AuthenticationEntryPoint, AccessDeniedHandler {
 
+    private static final String ERROR_CODE_HEADER = "X-Error-Code";
+
     private final ObjectMapper mapper = new ObjectMapper();
 
     @Override
     public void commence(
             HttpServletRequest request, HttpServletResponse response, AuthenticationException authException)
             throws IOException, ServletException {
-        writeError(response, request, HttpStatus.UNAUTHORIZED, authException.getMessage());
+        writeError(response, request, HttpStatus.UNAUTHORIZED, "SEC_UNAUTHORIZED", authException.getMessage());
     }
 
     @Override
     public void handle(
             HttpServletRequest request, HttpServletResponse response, AccessDeniedException accessDeniedException)
             throws IOException, ServletException {
-        writeError(response, request, HttpStatus.FORBIDDEN, accessDeniedException.getMessage());
+        writeError(response, request, HttpStatus.FORBIDDEN, "SEC_FORBIDDEN", accessDeniedException.getMessage());
     }
 
     private void writeError(
-            HttpServletResponse response, HttpServletRequest request, HttpStatus status, String message)
+            HttpServletResponse response,
+            HttpServletRequest request,
+            HttpStatus status,
+            String code,
+            String message)
             throws IOException {
         String path = request.getRequestURI();
         String requestId = RequestContextUtils.resolveRequestId();
+        String resolvedCode = (code == null || code.isBlank()) ? "SECURITY_ERROR" : code;
         ApiError payload = new ApiError(
                 OffsetDateTime.now(),
                 status.value(),
                 status.getReasonPhrase(),
+                resolvedCode,
                 (message == null || message.isBlank()) ? status.getReasonPhrase() : message,
                 path,
                 requestId);
         response.setStatus(status.value());
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        response.setHeader(ERROR_CODE_HEADER, resolvedCode);
         mapper.writeValue(response.getOutputStream(), payload);
     }
 }

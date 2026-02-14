@@ -237,6 +237,8 @@ export type ScreenListItem = {
 	height?: number;
 	createdAt?: string;
 	updatedAt?: string;
+	publishedVersionNo?: number | null;
+	publishedAt?: string | null;
 };
 
 export type ScreenDetail = ScreenListItem & {
@@ -244,6 +246,21 @@ export type ScreenDetail = ScreenListItem & {
 	backgroundImage?: string | null;
 	theme?: string;
 	components?: ScreenComponentData[];
+	globalVariables?: Array<{ key: string; label?: string; type?: string; defaultValue?: string; description?: string }>;
+	sourceMode?: "draft" | "published" | string;
+};
+
+export type ScreenVersion = {
+	id: number | string;
+	screenId?: number | string;
+	versionNo?: number;
+	status?: string;
+	name?: string;
+	description?: string | null;
+	currentPublished?: boolean;
+	publishedAt?: string | null;
+	createdAt?: string;
+	creatorId?: number | string;
 };
 
 export type ScreenComponentData = {
@@ -259,6 +276,7 @@ export type ScreenComponentData = {
 	visible: boolean;
 	config: Record<string, unknown>;
 	dataSource?: Record<string, unknown>;
+	interaction?: Record<string, unknown>;
 };
 
 import { getPlatformTokens, refreshPlatformAccessToken } from "./platformSession";
@@ -266,10 +284,14 @@ import { getPlatformTokens, refreshPlatformAccessToken } from "./platformSession
 export class HttpError extends Error {
 	status: number;
 	bodyText: string;
-	constructor(status: number, message: string, bodyText: string) {
+	requestId?: string;
+	code?: string;
+	constructor(status: number, message: string, bodyText: string, requestId?: string, code?: string) {
 		super(message);
 		this.status = status;
 		this.bodyText = bodyText;
+		this.requestId = requestId;
+		this.code = code;
 	}
 }
 
@@ -307,15 +329,60 @@ async function readErrorText(response: Response): Promise<string> {
 	return await response.text().catch(() => "");
 }
 
+function extractRequestId(response: Response): string | undefined {
+	const headers = ["x-request-id", "x-requestid", "x-correlation-id"];
+	for (const header of headers) {
+		const value = response.headers.get(header);
+		if (value && value.trim().length > 0) {
+			return value.trim();
+		}
+	}
+	return undefined;
+}
+
+function extractErrorCode(response: Response, bodyText: string): string | undefined {
+	const headerCode = response.headers.get("x-error-code");
+	if (headerCode && headerCode.trim().length > 0) {
+		return headerCode.trim();
+	}
+	if (!bodyText) {
+		return undefined;
+	}
+	try {
+		const payload = JSON.parse(bodyText) as { code?: unknown };
+		if (typeof payload.code === "string" && payload.code.trim().length > 0) {
+			return payload.code.trim();
+		}
+	} catch {
+		// ignore non-JSON error bodies
+	}
+	return undefined;
+}
+
+function buildHttpError(response: Response, bodyText: string): HttpError {
+	const requestId = extractRequestId(response);
+	const errorCode = extractErrorCode(response, bodyText);
+	const baseMsg = "HTTP " + response.status + " " + response.statusText + ": " + bodyText;
+	const taggedMsg = errorCode ? baseMsg + " [code=" + errorCode + "]" : baseMsg;
+	const msg = requestId ? taggedMsg + " [requestId=" + requestId + "]" : taggedMsg;
+	if (response.status === 401 || response.status === 403) {
+		return new AuthError(response.status, msg, bodyText, requestId, errorCode);
+	}
+	return new HttpError(response.status, msg, bodyText, requestId, errorCode);
+}
+
+export function isRetryableHttpError(error: unknown): boolean {
+	if (!(error instanceof HttpError)) {
+		return false;
+	}
+	return [408, 429, 502, 503, 504].includes(error.status);
+}
+
 async function fetchJson<T>(url: string): Promise<T> {
 	const response = await apiFetch(url, { method: "GET" }, true);
 	if (!response.ok) {
 		const text = await readErrorText(response);
-		const msg = `HTTP ${response.status} ${response.statusText}: ${text}`;
-		if (response.status === 401 || response.status === 403) {
-			throw new AuthError(response.status, msg, text);
-		}
-		throw new HttpError(response.status, msg, text);
+		throw buildHttpError(response, text);
 	}
 	return (await response.json()) as T;
 }
@@ -338,11 +405,7 @@ async function requestJson<T>(url: string, method: "POST" | "PUT" | "DELETE", bo
 	const response = await apiFetch(url, init, true);
 	if (!response.ok) {
 		const text = await readErrorText(response);
-		const msg = `HTTP ${response.status} ${response.statusText}: ${text}`;
-		if (response.status === 401 || response.status === 403) {
-			throw new AuthError(response.status, msg, text);
-		}
-		throw new HttpError(response.status, msg, text);
+		throw buildHttpError(response, text);
 	}
 	if (response.status === 204) {
 		return undefined as T;
@@ -408,6 +471,8 @@ export const analyticsApi = {
 	search: (q: string) =>
 		fetchJson<SearchResponse>(`/analytics/api/search?q=${encodeURIComponent(String(q ?? ""))}&limit=25&offset=0`),
 	listMetrics: () => fetchJson<Metric[]>("/analytics/api/metric"),
+	listMetricVersions: (metricId: string | number) =>
+		fetchJson<string[]>("/analytics/api/query-trace/metric/" + encodeURIComponent(String(metricId)) + "/versions"),
 	listPlatformMetrics: () => fetchJson<PlatformMetric[]>("/analytics/api/platform/metrics"),
 	listVisibleTables: () => fetchJson<Array<number | VisibleTable>>("/analytics/api/platform/visible-tables"),
 	getTrash: () => fetchJson<TrashResponse>("/analytics/api/trash"),
@@ -432,9 +497,30 @@ export const analyticsApi = {
 
 	// Screen Designer API
 	listScreens: () => fetchJson<ScreenListItem[]>("/analytics/api/screens"),
-	getScreen: (id: string | number) =>
-		fetchJson<ScreenDetail>(`/analytics/api/screens/${encodeURIComponent(String(id))}`),
+	getScreen: (
+		id: string | number,
+		options?: { mode?: "draft" | "published" | "preview" | string; fallbackDraft?: boolean },
+	) => {
+		const params = new URLSearchParams();
+		if (options?.mode) params.set("mode", String(options.mode));
+		if (options?.fallbackDraft !== undefined) params.set("fallbackDraft", String(options.fallbackDraft));
+		const qs = params.toString();
+		const base = `/analytics/api/screens/${encodeURIComponent(String(id))}`;
+		return fetchJson<ScreenDetail>(qs ? `${base}?${qs}` : base);
+	},
 	createScreen: (body: unknown) => sendJson<ScreenDetail>("/analytics/api/screens", body),
+	listScreenVersions: (id: string | number) =>
+		fetchJson<ScreenVersion[]>(`/analytics/api/screens/${encodeURIComponent(String(id))}/versions`),
+	publishScreen: (id: string | number) =>
+		sendJson<{ screen: ScreenDetail; version: ScreenVersion }>(
+			`/analytics/api/screens/${encodeURIComponent(String(id))}/publish`,
+			{},
+		),
+	rollbackScreenVersion: (id: string | number, versionId: string | number) =>
+		sendJson<{ screen: ScreenDetail; version: ScreenVersion }>(
+			`/analytics/api/screens/${encodeURIComponent(String(id))}/rollback/${encodeURIComponent(String(versionId))}`,
+			{},
+		),
 	updateScreen: (id: string | number, body: unknown) =>
 		requestJson<ScreenDetail>(`/analytics/api/screens/${encodeURIComponent(String(id))}`, "PUT", body),
 	deleteScreen: (id: string | number) =>

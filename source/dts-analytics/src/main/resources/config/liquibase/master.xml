@@ -23,4 +23,10 @@
     <include file="config/liquibase/changelog/0016_public_links_scope.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/0017_screens.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/0018_screens_theme.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0019_screen_versions.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0020_screen_acl.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0021_public_link_security.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0022_screen_audit_log.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0023_query_trace.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0024_screen_global_variables.xml" relativeToChangelogFile="false"/>
 </databaseChangeLog>

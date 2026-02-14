@@ -38,6 +38,18 @@ public class AnalyticsPublicLink implements Serializable {
     @Column(name = "classification", length = 100)
     private String classification;
 
+    @Column(name = "expire_at")
+    private Instant expireAt;
+
+    @Column(name = "password_hash", length = 128)
+    private String passwordHash;
+
+    @Column(name = "ip_allowlist", columnDefinition = "text")
+    private String ipAllowlist;
+
+    @Column(name = "disabled", nullable = false)
+    private boolean disabled;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -98,6 +110,38 @@ public class AnalyticsPublicLink implements Serializable {
 
     public void setClassification(String classification) {
         this.classification = classification;
+    }
+
+    public Instant getExpireAt() {
+        return expireAt;
+    }
+
+    public void setExpireAt(Instant expireAt) {
+        this.expireAt = expireAt;
+    }
+
+    public String getPasswordHash() {
+        return passwordHash;
+    }
+
+    public void setPasswordHash(String passwordHash) {
+        this.passwordHash = passwordHash;
+    }
+
+    public String getIpAllowlist() {
+        return ipAllowlist;
+    }
+
+    public void setIpAllowlist(String ipAllowlist) {
+        this.ipAllowlist = ipAllowlist;
+    }
+
+    public boolean isDisabled() {
+        return disabled;
+    }
+
+    public void setDisabled(boolean disabled) {
+        this.disabled = disabled;
     }
 
     public Instant getCreatedAt() {

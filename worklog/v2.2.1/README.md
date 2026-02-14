@@ -5,7 +5,8 @@
 - 未完成任务总清单：`worklog/v2.2.1/platform-analytics-v2.2.1-task-list.md`
 - P0 回归清单：`worklog/v2.2.1/p0-regression-checklist.md`
 - P0 回归矩阵：`worklog/v2.2.1/p0-regression-matrix.md`
-- RV-003 证据索引：`worklog/v2.2.1/rv-003/README.md`
+- Platform 证据索引：`worklog/v2.2.1/platform/README.md`
+- Platform 任务清单：`worklog/v2.2.1/platform/tasks/README.md`
 - BI 商用化分解（P0/P1/P2）：`worklog/v2.2.1/BI/screen-designer-commercialization-p0-p2-breakdown.md`
 
 ## 说明
@@ -47,5 +48,21 @@
 - Verified: `pnpm -C source/dts-platform-webapp build` passed.
 - Completed: `V221-P2-003` first implementation (`QueryWorkbenchPage` added dataset-management tab; new `QueryDatasetManager` supports list/filter, version create/publish/archive, BI-link dependency view, and SQL preview).
 - Verified: `pnpm -C source/dts-platform-webapp build` passed (includes `QueryDatasetManager` and `QueryWorkbenchPage` tab integration).
-- Completed: `V221-RV-003` first-pass evidence landing (`rv-003` added 24h stability, Addax/Airbyte semantic compare, and isolation/lineage regression templates).
+- Completed: `V221-RV-003` first-pass evidence landing (`platform` added 24h stability, Addax/Airbyte semantic compare, and isolation/lineage regression templates).
 - Pending: fill现场实测数据并形成最终审计结论（x86/ARM + legacy/normal/dev）。
+- Refactor: `rv-003` renamed to `platform`; task cards added under `worklog/v2.2.1/platform/tasks` following `P0-01` style naming.
+- Completed: `platform/scripts/collect-evidence.sh` + `platform/scripts/backfill-first-run.sh` landed and executed (sample window 168h), generating `platform/first-run-report.md` and raw evidence under `platform/raw/`.
+- Completed: `platform/scripts/update-env-matrix.sh` first-pass landed; environment matrix section is now auto-generated in `platform/stability-24h.md` and raw snapshot is persisted at `platform/raw/env-matrix.csv`.
+- Completed: `V221-RV-003` follow-up (`platform/scripts/isolation-lineage-check.sh` + `platform/scripts/package-report.sh` landed; task cards `P1-01..P2-02` switched to `done-first-pass`).
+- Completed: `V221-RV-003` docs enrichment (`platform/k8s-airbyte-readiness.md` + `platform/arm-kylin-hardening.md` added).
+- Completed: `V221-RV-003` p0-doc automation (`platform/scripts/update-p0-regression.sh` added; `p0-regression-matrix.md` and `p0-regression-checklist.md` now support auto backfill section).
+- Completed: `V221-SD-PLAN-001` first-pass landing (BI commercialization breakdown + execution board + `BI/tasks` status matrix completed).
+- Completed: BI P0-05 observability hardening first-pass (`source/dts-analytics-webapp/modern/src/api/analyticsApi.ts` now attaches requestId from response headers into client-side HttpError message).
+- Verified: `pnpm -C source/dts-analytics-webapp/modern build` passed.
+- Completed: BI P1-04 datasource unification first-pass (database data source upgraded to name-based selector + manual ID fallback via `DatabaseIdPicker`; protocol document added at `worklog/v2.2.1/BI/datasource-execution-protocol.md`).
+- Verified: `pnpm -C source/dts-analytics-webapp/modern build` passed after P1-04 updates.
+- In progress: BI P1-05 performance first-pass (`useCardDataSource` now has inflight dedupe + 5s TTL cache for `card/api/database` sources).
+- Completed: BI P1-05 backend cache governance first-pass (native query cache toggle effective in `QueryCacheService`; dataset cache policy/warmup endpoints added in `DatasetResource`).
+- Completed: BI P1-05 preview rendering optimization first-pass (`ScreenPreviewPage` switched to batched component mount).
+- Verified: `mvn -f source/dts-analytics/pom.xml -DskipTests compile` passed.
+- Verified: `pnpm -C source/dts-analytics-webapp/modern build` passed after P1-05 updates.

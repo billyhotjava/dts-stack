@@ -1,9 +1,11 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams } from 'react-router';
 import { analyticsApi, ScreenDetail } from '../../api/analyticsApi';
 import { ComponentRenderer } from './components/ComponentRenderer';
 import type { ScreenComponent, ComponentType, ScreenTheme } from './types';
 import { resolveScreenTheme } from './screenThemes';
+
+const PREVIEW_BATCH_SIZE = 20;
 
 export default function ScreenPreviewPage() {
     const { id } = useParams<{ id: string }>();
@@ -11,6 +13,7 @@ export default function ScreenPreviewPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [scale, setScale] = useState(1);
+    const [visibleCount, setVisibleCount] = useState(PREVIEW_BATCH_SIZE);
 
     useEffect(() => {
         if (!id) {
@@ -19,7 +22,7 @@ export default function ScreenPreviewPage() {
             return;
         }
 
-        analyticsApi.getScreen(id)
+        analyticsApi.getScreen(id, { mode: 'published', fallbackDraft: true })
             .then((data) => {
                 setScreen(data);
                 setLoading(false);
@@ -45,6 +48,60 @@ export default function ScreenPreviewPage() {
         window.addEventListener('resize', computeScale);
         return () => window.removeEventListener('resize', computeScale);
     }, [computeScale]);
+
+    const components: ScreenComponent[] = useMemo(() => {
+        if (!screen) return [];
+        return (screen.components || []).map(c => ({
+            ...c,
+            type: c.type as ComponentType,
+            dataSource: c.dataSource as import('./types').DataSourceConfig | undefined,
+        }));
+    }, [screen]);
+
+    const visibleSortedComponents = useMemo(
+        () => components.filter(c => c.visible).sort((a, b) => a.zIndex - b.zIndex),
+        [components],
+    );
+
+    useEffect(() => {
+        if (!visibleSortedComponents.length) {
+            setVisibleCount(PREVIEW_BATCH_SIZE);
+            return;
+        }
+
+        setVisibleCount(Math.min(PREVIEW_BATCH_SIZE, visibleSortedComponents.length));
+
+        if (visibleSortedComponents.length <= PREVIEW_BATCH_SIZE) {
+            return;
+        }
+
+        let cancelled = false;
+        const loadNextBatch = () => {
+            if (cancelled) return;
+            setVisibleCount((prev) => {
+                const next = Math.min(prev + PREVIEW_BATCH_SIZE, visibleSortedComponents.length);
+                return next;
+            });
+        };
+
+        const timer = window.setInterval(() => {
+            if (cancelled) return;
+            setVisibleCount((prev) => {
+                if (prev >= visibleSortedComponents.length) {
+                    window.clearInterval(timer);
+                    return prev;
+                }
+                return Math.min(prev + PREVIEW_BATCH_SIZE, visibleSortedComponents.length);
+            });
+        }, 30);
+
+        requestAnimationFrame(loadNextBatch);
+
+        return () => {
+            cancelled = true;
+            window.clearInterval(timer);
+        };
+    }, [visibleSortedComponents]);
 
     if (loading) {
         return (
@@ -72,13 +129,6 @@ export default function ScreenPreviewPage() {
 
     const rawTheme = (screen as { theme?: string }).theme as ScreenTheme | undefined;
     const screenTheme = resolveScreenTheme(rawTheme, screen.backgroundColor);
-
-    const components: ScreenComponent[] = (screen.components || []).map(c => ({
-        ...c,
-        type: c.type as ComponentType,
-        dataSource: c.dataSource as import('./types').DataSourceConfig | undefined,
-    }));
-
     const outerBg = screenTheme === 'glacier' ? '#e5e7eb' : '#000';
 
     return (
@@ -107,9 +157,8 @@ export default function ScreenPreviewPage() {
                     transformOrigin: 'center center',
                 }}
             >
-                {components
-                    .filter(c => c.visible)
-                    .sort((a, b) => a.zIndex - b.zIndex)
+                {visibleSortedComponents
+                    .slice(0, visibleCount)
                     .map((component) => (
                         <div
                             key={component.id}
@@ -125,6 +174,24 @@ export default function ScreenPreviewPage() {
                             <ComponentRenderer component={component} mode="preview" theme={screenTheme} />
                         </div>
                     ))}
+
+                {visibleCount < visibleSortedComponents.length && (
+                    <div
+                        style={{
+                            position: 'absolute',
+                            right: 12,
+                            bottom: 12,
+                            background: 'rgba(0,0,0,0.55)',
+                            color: '#fff',
+                            fontSize: 12,
+                            padding: '4px 8px',
+                            borderRadius: 6,
+                            zIndex: 9999,
+                        }}
+                    >
+                        组件加载中 {visibleCount}/{visibleSortedComponents.length}
+                    </div>
+                )}
             </div>
         </div>
     );

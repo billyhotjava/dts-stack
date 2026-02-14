@@ -67,6 +67,10 @@ public class QueryCacheService {
         }
 
         CacheStrategy strategy = getCacheStrategy(databaseId);
+        if (isNativeQuery(query) && !strategy.cacheNativeQueries()) {
+            log.debug("Cache bypass for native query on database {} (native caching disabled)", databaseId);
+            return Optional.empty();
+        }
         if (cached.isExpired(strategy.ttl())) {
             log.debug("Cache entry expired for query on database {}", databaseId);
             cache.invalidate(cacheKey);
@@ -89,6 +93,11 @@ public class QueryCacheService {
         CacheStrategy strategy = getCacheStrategy(databaseId);
         if (!strategy.enabled()) {
             log.debug("Caching disabled for database {}", databaseId);
+            return;
+        }
+
+        if (isNativeQuery(query) && !strategy.cacheNativeQueries()) {
+            log.debug("Skip caching native query for database {} (native caching disabled)", databaseId);
             return;
         }
 
@@ -175,8 +184,19 @@ public class QueryCacheService {
                 stats.evictionCount());
     }
 
-    private CacheStrategy getCacheStrategy(long databaseId) {
+    public CacheStrategy getCacheStrategy(long databaseId) {
         return databaseCacheStrategies.getOrDefault(databaseId, CacheStrategy.DEFAULT);
+    }
+
+    private boolean isNativeQuery(JsonNode query) {
+        if (query == null || query.isNull()) {
+            return false;
+        }
+        String type = query.path("type").asText("");
+        if ("native".equalsIgnoreCase(type)) {
+            return true;
+        }
+        return query.has("native");
     }
 
     private String generateCacheKey(long databaseId, JsonNode query, Long userId) {

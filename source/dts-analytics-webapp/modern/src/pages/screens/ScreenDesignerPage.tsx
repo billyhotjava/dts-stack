@@ -3,6 +3,7 @@ import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import { useParams } from 'react-router';
 import { ScreenProvider, useScreen } from './ScreenContext';
+import { ScreenRuntimeProvider } from './ScreenRuntimeContext';
 import { analyticsApi } from '../../api/analyticsApi';
 import { resolveScreenTheme } from './screenThemes';
 import {
@@ -25,14 +26,14 @@ function ScreenDesignerContent() {
         pasteComponents,
         loadConfig,
         clipboard,
-        state
+        state,
     } = useScreen();
     const { selectedIds } = state;
 
     // Load existing screen if editing
     useEffect(() => {
         if (id) {
-            analyticsApi.getScreen(id)
+            analyticsApi.getScreen(id, { mode: 'draft' })
                 .then((screen) => {
                     const backgroundColor = screen.backgroundColor || '#0d1b2a';
                     const resolvedTheme = resolveScreenTheme(
@@ -52,7 +53,11 @@ function ScreenDesignerContent() {
                             ...c,
                             type: c.type as import('./types').ComponentType,
                             dataSource: c.dataSource as import('./types').DataSourceConfig | undefined,
+                            interaction: c.interaction as import('./types').ComponentInteractionConfig | undefined,
                         })),
+                        globalVariables: Array.isArray((screen as Record<string, unknown>).globalVariables)
+                            ? ((screen as Record<string, unknown>).globalVariables as import('./types').ScreenGlobalVariable[])
+                            : [],
                     });
                 })
                 .catch((error) => {
@@ -109,31 +114,33 @@ function ScreenDesignerContent() {
     }, [undo, redo, deleteComponents, copyComponents, pasteComponents, selectedIds, clipboard]);
 
     return (
-        <div className="screen-designer">
-            {/* Top: Header */}
-            <ScreenHeader />
+        <ScreenRuntimeProvider definitions={state.config.globalVariables}>
+            <div className="screen-designer">
+                {/* Top: Header */}
+                <ScreenHeader />
 
-            <div className="screen-designer-body">
-                {/* Left: Component Library */}
-                <ComponentLibraryPanel />
+                <div className="screen-designer-body">
+                    {/* Left: Component Library */}
+                    <ComponentLibraryPanel />
 
-                {/* Center: Canvas */}
-                <div className="canvas-area">
-                    <CanvasToolbar />
-                    <DesignerCanvas />
-                </div>
-
-                {/* Right: Property Panel + Layer Panel */}
-                <div style={{ display: 'flex', flexDirection: 'column', width: 300, overflow: 'hidden' }}>
-                    <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
-                        <PropertyPanel />
+                    {/* Center: Canvas */}
+                    <div className="canvas-area">
+                        <CanvasToolbar />
+                        <DesignerCanvas />
                     </div>
-                    <div style={{ maxHeight: '40%', overflow: 'auto' }}>
-                        <LayerPanel />
+
+                    {/* Right: Property Panel + Layer Panel */}
+                    <div style={{ display: 'flex', flexDirection: 'column', width: 300, overflow: 'hidden' }}>
+                        <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
+                            <PropertyPanel />
+                        </div>
+                        <div style={{ maxHeight: '40%', overflow: 'auto' }}>
+                            <LayerPanel />
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
+        </ScreenRuntimeProvider>
     );
 }
 

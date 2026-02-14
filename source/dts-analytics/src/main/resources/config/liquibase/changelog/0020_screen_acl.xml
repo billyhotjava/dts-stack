@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="0020-create-analytics_screen_acl" author="dts">
+        <createTable tableName="analytics_screen_acl">
+            <column name="id" type="bigint" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="screen_id" type="bigint">
+                <constraints nullable="false"/>
+            </column>
+            <column name="subject_type" type="varchar(16)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="subject_id" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="perm" type="varchar(16)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="creator_id" type="bigint"/>
+            <column name="created_at" type="timestamp with time zone" defaultValueComputed="${now}">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="timestamp with time zone" defaultValueComputed="${now}">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addUniqueConstraint tableName="analytics_screen_acl"
+                             columnNames="screen_id, subject_type, subject_id, perm"
+                             constraintName="uk_screen_acl_item"/>
+
+        <createIndex tableName="analytics_screen_acl" indexName="idx_screen_acl_screen_id">
+            <column name="screen_id"/>
+        </createIndex>
+
+        <createIndex tableName="analytics_screen_acl" indexName="idx_screen_acl_subject_lookup">
+            <column name="screen_id"/>
+            <column name="subject_type"/>
+            <column name="subject_id"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

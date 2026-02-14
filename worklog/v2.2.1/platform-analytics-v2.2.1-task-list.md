@@ -86,7 +86,7 @@
 ### V221-RV-003 P3 验证证据落盘（done-first-pass）
 - 来源：`RV-003`
 - 目标：将“已完成的 P3 能力”转化为可审计的测试证据。
-- 进展：已新增 `worklog/v2.2.1/rv-003` 模板包（24h 稳定性记录、Addax/Airbyte 语义对照、跨项目隔离与血缘回归），支持现场统一回填。
+- 进展：已完成 `rv-003 -> platform` 重构，`platform/tasks` 已按 `P0-01...P2-02` 细分并更新为 `done-first-pass`；自动脚本已覆盖 `collect-evidence.sh`、`backfill-first-run.sh`、`update-env-matrix.sh`、`update-p0-regression.sh`、`semantic-compare.sh`、`isolation-lineage-check.sh`、`package-report.sh`，并新增迁移与兼容文档（`k8s-airbyte-readiness.md`、`arm-kylin-hardening.md`）。
 - 交付：
   - 24h 稳定性执行记录
   - Addax/Airbyte 语义对照报告
@@ -99,8 +99,12 @@
 
 ## 6. 大屏设计器商用化专项（新增）
 
-### V221-SD-PLAN-001 商用化任务分解（P0/P1/P2）（todo）
+### V221-SD-PLAN-001 商用化任务分解（P0/P1/P2）（done-first-pass）
+- 进展：`P1-04` 首轮完成（数据源统一执行链路 + DB 名称选择器 + 执行协议文档）。
+- 进展：`P1-05` 首轮进入后端治理（缓存策略 API + warmup API）与预览性能优化（分批挂载组件）。
 - 来源：大屏设计器商用化分析（对标 DataEase 等产品能力）
 - 目标：形成可执行的任务分解、验收标准、里程碑、风险依赖，作为 2.2.1+ 迭代输入。
 - 文档：`worklog/v2.2.1/BI/screen-designer-commercialization-p0-p2-breakdown.md`
+- 进展：已完成商用化任务分解与执行板落盘，形成 `BI` 专项文档与分阶段任务卡（P0/P1/P2）。
+- 任务卡目录：`worklog/v2.2.1/BI/tasks/`
 - 说明：本项为规划落盘，不代表功能已交付；具体开发任务按 P0->P1->P2 拆分进入迭代。

@@ -2,8 +2,10 @@ package com.yuzhi.dts.analytics.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -16,14 +18,72 @@ public class NativeQueryTemplateService {
 
     private static final Pattern OPTIONAL_BLOCK = Pattern.compile("\\[\\[([\\s\\S]*?)\\]\\]");
     private static final Pattern TEMPLATE_TAG = Pattern.compile("\\{\\{\\s*([A-Za-z0-9_\\-]+)\\s*\\}\\}");
+    private static final Pattern PARAM_NAME = Pattern.compile("^[A-Za-z][A-Za-z0-9_\\-]{0,63}$");
+    private static final int MAX_PARAMETER_COUNT = 100;
 
     public RenderedQuery render(String sqlTemplate, JsonNode parametersNode) {
         if (sqlTemplate == null || sqlTemplate.isBlank()) {
             return new RenderedQuery("", List.of());
         }
+        validateParameterWhitelist(sqlTemplate, parametersNode);
         Map<String, Object> values = parseParameters(parametersNode);
         String withoutOptionalBlocks = applyOptionalBlocks(sqlTemplate, values);
         return applyTemplateTags(withoutOptionalBlocks, values);
+    }
+
+    public void validateParameterWhitelist(String sqlTemplate, JsonNode parametersNode) {
+        Set<String> templateTags = extractTags(sqlTemplate == null ? "" : sqlTemplate);
+        Set<String> provided = collectProvidedParameterNames(parametersNode);
+
+        if (provided.size() > MAX_PARAMETER_COUNT) {
+            throw new IllegalArgumentException("Too many parameters, max allowed is " + MAX_PARAMETER_COUNT);
+        }
+
+        for (String name : provided) {
+            if (name == null || !PARAM_NAME.matcher(name).matches()) {
+                throw new IllegalArgumentException("Invalid parameter name: " + name);
+            }
+        }
+
+        if (templateTags.isEmpty()) {
+            if (!provided.isEmpty()) {
+                throw new IllegalArgumentException("This query does not accept parameters");
+            }
+            return;
+        }
+
+        List<String> unsupported = new ArrayList<>();
+        for (String name : provided) {
+            if (!templateTags.contains(name)) {
+                unsupported.add(name);
+            }
+        }
+
+        if (!unsupported.isEmpty()) {
+            Collections.sort(unsupported);
+            throw new IllegalArgumentException("Unsupported parameter(s): " + String.join(", ", unsupported));
+        }
+    }
+
+    private static Set<String> collectProvidedParameterNames(JsonNode node) {
+        Set<String> out = new LinkedHashSet<>();
+        if (node == null || node.isMissingNode() || node.isNull()) {
+            return out;
+        }
+        if (node.isArray()) {
+            for (JsonNode param : node) {
+                String name = resolveParamName(param);
+                if (name != null) {
+                    out.add(name);
+                }
+            }
+            return out;
+        }
+        if (node.isObject()) {
+            node.fields().forEachRemaining(e -> out.add(e.getKey()));
+            return out;
+        }
+        return out;
     }
 
     private static String applyOptionalBlocks(String template, Map<String, Object> values) {
@@ -176,4 +236,3 @@ public class NativeQueryTemplateService {
 
     public record RenderedQuery(String sql, List<Object> bindings) {}
 }
-

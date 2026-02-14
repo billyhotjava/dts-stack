@@ -33,3 +33,13 @@
 - 新增配置：
   - `dts.airflow.dag-trigger-retry-seconds`
   - `dts.airflow.dag-not-found-retry-wait-seconds`
+
+
+## 自动回填（来自 platform/raw/env-matrix.csv）
+- 生成时间(UTC)：20260213T150447Z
+- 样本总任务（按 mode+arch 最新样本聚合）：3（成功 2 / 失败 1）
+- DAG 404 总数：0
+- TaskLog 404 总数：0
+- [x] DAG ready：自动样本中未出现 DAG 404
+- [x] 日志可读：自动样本中未出现 TaskLog 404
+- 说明：Excel/源库全量语义（C01/C02）与 ODS 一键生成（C05）仍需现场业务回归。

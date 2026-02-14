@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="0021-public-link-security-policy" author="dts">
+        <addColumn tableName="analytics_public_link">
+            <column name="expire_at" type="timestamp with time zone"/>
+            <column name="password_hash" type="varchar(128)"/>
+            <column name="ip_allowlist" type="text"/>
+            <column name="disabled" type="boolean" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+
+        <createIndex tableName="analytics_public_link" indexName="idx_public_link_expire_at">
+            <column name="expire_at"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>
