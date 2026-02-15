@@ -1186,6 +1186,7 @@ export default function TransformCreatePage() {
 	const [taskTemplates, setTaskTemplates] = useState<IngestionTaskTemplateDTO[]>([]);
 	const [loadingTaskTemplates, setLoadingTaskTemplates] = useState(false);
 	const [selectedTemplateId, setSelectedTemplateId] = useState<string | undefined>(undefined);
+	const [applyingTemplate, setApplyingTemplate] = useState(false);
 	const [sqlModels, setSqlModels] = useState<Array<{ id?: string; name?: string; alias?: string }>>([]);
 	const [loadingSqlModels, setLoadingSqlModels] = useState(false);
 	const [fileUploadResult, setFileUploadResult] = useState<FileUploadResult | null>(null);
@@ -1738,23 +1739,49 @@ export default function TransformCreatePage() {
 		loadTask();
 	}, [editId, form, isEdit]);
 
-	const applyTemplate = () => {
+	const applyTemplate = async () => {
 		const template = taskTemplates.find((item) => String(item.id) === String(selectedTemplateId));
 		if (!template) {
 			toast.warning("请选择模板");
 			return;
 		}
-		const defaults = (template.defaults || {}) as Record<string, any>;
-		form.setFieldsValue(defaults);
+		setApplyingTemplate(true);
+		try {
+			const snapshot = (form.getFieldsValue(true) || {}) as Record<string, any>;
+			const renderResult = await ingestionTaskAPI.renderTaskTemplate(template.id, {
+				params: {
+					...snapshot,
+					sourceDataSourceId: snapshot.sourceDataSourceId || selectedDataSource?.id,
+					fileName: fileUploadResult?.originalName,
+				},
+				strictRequired: false,
+			});
+			const defaults = ((renderResult?.renderedDefaults || template.defaults || {}) as Record<string, any>) || {};
+			form.setFieldsValue(defaults);
+			const templateWarnings = Array.isArray(renderResult?.warnings) ? renderResult.warnings : template.warnings || [];
+			const templateErrors = Array.isArray(renderResult?.errors) ? renderResult.errors : [];
+			if (templateWarnings.length) {
+				toast.info(templateWarnings[0]);
+			}
+			if (templateErrors.length) {
+				toast.warning(`模板参数待补：${templateErrors.slice(0, 2).join("；")}`);
+			}
+		} catch (error: any) {
+			const defaults = (template.defaults || {}) as Record<string, any>;
+			form.setFieldsValue(defaults);
+			toast.error(error?.message || "模板预检失败，已按默认值应用");
+		}
 		const sourceCategoryFromTemplate =
-			normalizeText(defaults.sourceCategory || template.sourceCategory).toLowerCase() || "database";
+			normalizeText(
+				(form.getFieldValue("sourceCategory") as string) ||
+					((template.defaults || {}) as Record<string, any>).sourceCategory ||
+					template.sourceCategory
+			).toLowerCase() || "database";
 		if (sourceCategoryFromTemplate === "file" || sourceCategoryFromTemplate === "database") {
 			setSourceCategory(sourceCategoryFromTemplate);
 		}
-		if (Array.isArray(template.warnings) && template.warnings.length) {
-			toast.info(template.warnings[0]);
-		}
 		toast.success(`已应用模板：${template.name}`);
+		setApplyingTemplate(false);
 	};
 
 	const handleSaveDraft = async () => {
@@ -2709,7 +2736,7 @@ export default function TransformCreatePage() {
 									}))}
 									onChange={(value) => setSelectedTemplateId(value)}
 								/>
-								<Button onClick={applyTemplate} disabled={!selectedTemplateId}>
+								<Button onClick={() => void applyTemplate()} disabled={!selectedTemplateId} loading={applyingTemplate}>
 									应用模板
 								</Button>
 								{selectedTemplateId ? (

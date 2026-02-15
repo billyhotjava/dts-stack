@@ -1,6 +1,6 @@
 # P1-02 Schema Drift 策略与工单化
 
-`status`: `in-progress`
+`status`: `done`
 `priority`: `P1`
 
 ## 目标

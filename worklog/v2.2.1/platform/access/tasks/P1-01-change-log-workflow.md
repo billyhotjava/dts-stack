@@ -1,6 +1,6 @@
 # P1-01 接入变更流程化（审批闭环）
 
-`status`: `in-progress`
+`status`: `done`
 `priority`: `P1`
 
 ## 目标

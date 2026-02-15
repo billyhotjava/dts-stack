@@ -1,6 +1,6 @@
 # P0-04 P0 回归门禁自动化
 
-`status`: `in-progress`
+`status`: `done`
 `priority`: `P0`
 
 ## 目标
@@ -38,6 +38,7 @@
   - `collect-p0-metrics.sh`：从 ingestion 日志提取触发总数、失败数、DAG404、TaskLog404，并输出 CSV/TXT。
   - `render-p0-summary.sh`：将最新指标渲染为 `report/p0-regression-summary.md`。
   - `run-p0-regression.sh`：一键执行采集+渲染，支持 `--strict` 门禁模式。
+  - `run-p0-matrix.sh`：按 `mode:arch` 矩阵批量执行采样并输出矩阵摘要，支持 `--strict`。
 - 新增输出目录：`worklog/v2.2.1/platform/access/raw`
 - 已完成一次本地演练：
   - 命令：`bash worklog/v2.2.1/platform/access/scripts/run-p0-regression.sh --hours 24 --mode normal --arch x86_64 --note init-pass`
@@ -45,3 +46,8 @@
     - `worklog/v2.2.1/platform/access/raw/p0-access-metrics-*.csv`
     - `worklog/v2.2.1/platform/access/raw/p0-access-summary-*.txt`
     - `worklog/v2.2.1/platform/access/report/p0-regression-summary.md`
+- 已完成矩阵脚本演练：
+  - 命令：`bash worklog/v2.2.1/platform/access/scripts/run-p0-matrix.sh --hours 1 --matrix normal:x86_64`
+  - 产物：
+    - `worklog/v2.2.1/platform/access/raw/p0-access-matrix-*.csv`
+    - `worklog/v2.2.1/platform/access/report/p0-regression-matrix-summary.md`

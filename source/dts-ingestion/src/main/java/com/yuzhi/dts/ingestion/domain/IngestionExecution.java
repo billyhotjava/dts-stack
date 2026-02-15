@@ -62,6 +62,10 @@ public class IngestionExecution {
     @Column(name = "replace_mode", length = 50)
     private String replaceMode;
 
+    @Size(max = 32)
+    @Column(name = "trigger_mode", length = 32)
+    private String triggerMode;
+
     @Column(name = "dropped_tables", columnDefinition = "TEXT")
     private String droppedTables;
 
@@ -180,6 +184,14 @@ public class IngestionExecution {
 
     public void setDroppedTables(String droppedTables) {
         this.droppedTables = droppedTables;
+    }
+
+    public String getTriggerMode() {
+        return triggerMode;
+    }
+
+    public void setTriggerMode(String triggerMode) {
+        this.triggerMode = triggerMode;
     }
 
     public Instant getCreatedAt() {

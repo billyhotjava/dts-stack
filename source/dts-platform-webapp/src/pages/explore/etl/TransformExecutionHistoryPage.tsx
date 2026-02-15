@@ -363,6 +363,17 @@ export default function TransformExecutionHistoryPage() {
         return <Tag color={config.color}>{config.text}</Tag>;
     };
 
+    const renderTriggerMode = (mode?: string) => {
+        const normalized = normalizeText(mode).toUpperCase();
+        if (normalized === "FAILED_ONLY") {
+            return <Tag color="gold">失败重试</Tag>;
+        }
+        if (normalized === "FULL_RERUN") {
+            return <Tag color="purple">整批重跑</Tag>;
+        }
+        return <Tag>手动执行</Tag>;
+    };
+
     const calculateDuration = (start?: string, end?: string) => {
         if (!start) return "-";
         if (!end) return "进行中";
@@ -469,6 +480,13 @@ export default function TransformExecutionHistoryPage() {
             dataIndex: "executionId",
             key: "executionId",
             width: 200,
+        },
+        {
+            title: "触发方式",
+            dataIndex: "triggerMode",
+            key: "triggerMode",
+            width: 120,
+            render: (value: string) => renderTriggerMode(value),
         },
         {
             title: "状态",

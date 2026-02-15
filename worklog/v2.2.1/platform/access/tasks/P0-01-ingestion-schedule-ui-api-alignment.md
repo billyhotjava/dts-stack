@@ -1,6 +1,6 @@
 # P0-01 入湖任务调度配置 UI/API 对齐
 
-`status`: `in-progress`
+`status`: `done`
 `priority`: `P0`
 
 ## 目标
@@ -37,3 +37,10 @@
 - 已打通创建、草稿、编辑三条链路的 `sync.schedule` 与 `syncSchedule` 回写。
 - 已完成历史 `syncSchedule` 到表单字段的回显解析（`cron:*`、`interval:*`）。
 - 前端构建通过：`pnpm -C source/dts-platform-webapp build`。
+- 已补齐后端调度校验：
+  - 文件：`source/dts-ingestion/src/main/java/com/yuzhi/dts/ingestion/web/rest/IngestionTaskResource.java`
+  - `create/update` 均校验 `syncSchedule`：
+    - `cron:*` 使用 `CronExpression.parse` 严格校验；
+    - `interval:*` 要求正整数；
+    - 兼容历史纯 cron 文本格式。
+- 后端编译通过：`cd source/dts-ingestion && mvn -DskipTests compile`。

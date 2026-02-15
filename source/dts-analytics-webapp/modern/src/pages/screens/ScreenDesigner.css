@@ -113,6 +113,22 @@
   background: var(--color-primary-dark);
 }
 
+.header-device-select {
+  padding: 8px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  font-size: 13px;
+  font-weight: 500;
+  min-width: 74px;
+}
+
+.header-device-select:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
+
 /* Left Panel - Component Library */
 .component-library {
   width: 280px;

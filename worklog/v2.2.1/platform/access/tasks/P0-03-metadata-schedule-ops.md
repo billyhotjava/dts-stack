@@ -1,6 +1,6 @@
 # P0-03 元数据采集调度运维能力
 
-`status`: `in-progress`
+`status`: `done`
 `priority`: `P0`
 
 ## 目标
@@ -39,4 +39,11 @@
 - 已接入开关操作的前端调用与成功/失败提示。
 - 已增加 Cron 在线编辑入口（前端输入 + 保存按钮）。
 - 已增加前后端 Cron 基础校验（5-7 段），非法格式直接阻断。
-- 当前限制：Cron 在线修改仅更新展示值，完整生效仍需重启服务（由后端接口 message 明确提示）。
+- 已改为运行时生效：
+  - `source/dts-platform/src/main/java/com/yuzhi/dts/platform/service/infra/CatalogAutoSyncJob.java`
+  - 由固定 cron 注解切换为固定间隔轮询 + 动态 `CronExpression` 计算，`autoSyncEnabled/autoSyncCron` 在线修改即时生效。
+- 接口语义同步更新：
+  - `source/dts-platform/src/main/java/com/yuzhi/dts/platform/web/rest/CatalogSyncResource.java`
+  - `cronRuntimeEditable` 改为 `true`，并将提示文案更新为“运行时生效”。
+- 已执行验证：
+  - `cd source/dts-platform && mvn -DskipTests compile`

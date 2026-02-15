@@ -2,7 +2,14 @@ import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { useScreen } from '../ScreenContext';
 import { detectInteractionCycles } from '../interactionGraph';
-import { analyticsApi, HttpError, type ScreenDetail, type ScreenEditLock, type ScreenVersionDiff } from '../../../api/analyticsApi';
+import {
+    analyticsApi,
+    HttpError,
+    type ScreenDetail,
+    type ScreenEditLock,
+    type ScreenVersion,
+    type ScreenVersionDiff,
+} from '../../../api/analyticsApi';
 import { GlobalVariableManager } from './GlobalVariableManager';
 import { CacheObservabilityPanel } from './CacheObservabilityPanel';
 import { ScreenCompliancePanel } from './ScreenCompliancePanel';
@@ -15,6 +22,8 @@ import { ScreenCollaborationPanel } from './ScreenCollaborationPanel';
 import { ScreenEditLockPanel } from './ScreenEditLockPanel';
 import { ScreenConflictPanel, type ScreenUpdateConflict } from './ScreenConflictPanel';
 import { ScreenVersionComparePanel } from './ScreenVersionComparePanel';
+import { ScreenVersionComparePickerPanel } from './ScreenVersionComparePickerPanel';
+import { ScreenVersionRollbackPanel } from './ScreenVersionRollbackPanel';
 import { buildScreenPayload, normalizeScreenConfig, validateScreenPayload } from '../specV2';
 import { resolveScreenTheme } from '../screenThemes';
 import type { ScreenConfig } from '../types';
@@ -64,10 +73,14 @@ export function ScreenHeader() {
     const [showEditLockPanel, setShowEditLockPanel] = useState(false);
     const [showConflictPanel, setShowConflictPanel] = useState(false);
     const [showVersionComparePanel, setShowVersionComparePanel] = useState(false);
+    const [showVersionComparePicker, setShowVersionComparePicker] = useState(false);
+    const [showVersionRollbackPanel, setShowVersionRollbackPanel] = useState(false);
+    const [previewDeviceMode, setPreviewDeviceMode] = useState<'auto' | 'pc' | 'tablet' | 'mobile'>('auto');
     const [isSavingTemplate, setIsSavingTemplate] = useState(false);
     const [conflictLoading, setConflictLoading] = useState(false);
     const [lastConflict, setLastConflict] = useState<ScreenUpdateConflict | null>(null);
     const [versionDiff, setVersionDiff] = useState<ScreenVersionDiff | null>(null);
+    const [versionCandidates, setVersionCandidates] = useState<ScreenVersion[]>([]);
     const [editLock, setEditLock] = useState<ScreenEditLock | null>(null);
     const [lockErrorText, setLockErrorText] = useState<string | null>(null);
     const importInputRef = useRef<HTMLInputElement | null>(null);
@@ -453,34 +466,29 @@ export function ScreenHeader() {
                 alert('当前没有已发布版本');
                 return;
             }
+            setVersionCandidates(versions);
+            setShowVersionRollbackPanel(true);
+        } catch (error) {
+            console.error('Failed to rollback version:', error);
+            const message = handleLockHttpError(error, '回滚失败');
+            alert(message);
+        } finally {
+            setIsLoadingVersions(false);
+        }
+    }, [handleLockHttpError, id, isLoadingVersions]);
 
-            const versionLines = versions
-                .map(v => {
-                    const tag = v.currentPublished ? ' [当前发布]' : '';
-                    const ts = v.publishedAt || v.createdAt || '-';
-                    return `ID=${v.id} | v${v.versionNo ?? '-'} | ${ts}${tag}`;
-                })
-                .join('\n');
-
-            const input = window.prompt(
-                `版本列表：\n${versionLines}\n\n输入要回滚的版本ID（留空仅查看）:`,
-            );
-            const targetId = (input || '').trim();
-            if (!targetId) return;
-
-            if (!/^\d+$/.test(targetId)) {
-                alert('版本ID格式不正确');
-                return;
-            }
-
-            if (!window.confirm(`确认回滚到版本 ID=${targetId} 吗？`)) {
-                return;
-            }
-
-            const result = await analyticsApi.rollbackScreenVersion(id, targetId);
+    const handleConfirmVersionRollback = useCallback(async (versionId: string) => {
+        if (!id) return;
+        if (!window.confirm(`确认回滚到版本 ID=${versionId} 吗？`)) {
+            return;
+        }
+        setIsLoadingVersions(true);
+        try {
+            const result = await analyticsApi.rollbackScreenVersion(id, versionId);
             if (result?.screen) {
                 applyScreenDetail(result.screen);
             }
+            setShowVersionRollbackPanel(false);
             alert('回滚成功，已切换草稿与发布版本');
         } catch (error) {
             console.error('Failed to rollback version:', error);
@@ -489,7 +497,7 @@ export function ScreenHeader() {
         } finally {
             setIsLoadingVersions(false);
         }
-    }, [applyScreenDetail, handleLockHttpError, id, isLoadingVersions]);
+    }, [applyScreenDetail, handleLockHttpError, id]);
 
     const handleVersionCompare = useCallback(async () => {
         if (!id || isLoadingVersions) return;
@@ -500,22 +508,8 @@ export function ScreenHeader() {
                 alert('至少需要两个版本才能对比');
                 return;
             }
-            const lines = versions
-                .map(v => `ID=${v.id} | v${v.versionNo ?? '-'} | ${v.publishedAt || v.createdAt || '-'}`)
-                .join('\n');
-            const input = (window.prompt(
-                `版本列表：\n${lines}\n\n输入对比版本ID（格式：from,to）`,
-                `${versions[1]?.id || ''},${versions[0]?.id || ''}`,
-            ) || '').trim();
-            if (!input) return;
-            const pair = input.split(',').map(item => item.trim()).filter(Boolean);
-            if (pair.length !== 2) {
-                alert('请输入 from,to 两个版本ID');
-                return;
-            }
-            const diff = await analyticsApi.compareScreenVersions(id, pair[0], pair[1]);
-            setVersionDiff(diff);
-            setShowVersionComparePanel(true);
+            setVersionCandidates(versions);
+            setShowVersionComparePicker(true);
         } catch (error) {
             console.error('Failed to compare versions:', error);
             alert('版本对比失败');
@@ -524,99 +518,150 @@ export function ScreenHeader() {
         }
     }, [id, isLoadingVersions]);
 
+    const handleConfirmVersionCompare = useCallback(async (fromVersionId: string, toVersionId: string) => {
+        if (!id) return;
+        setIsLoadingVersions(true);
+        try {
+            const diff = await analyticsApi.compareScreenVersions(id, fromVersionId, toVersionId);
+            setVersionDiff(diff);
+            setShowVersionComparePicker(false);
+            setShowVersionComparePanel(true);
+        } catch (error) {
+            console.error('Failed to compare versions:', error);
+            alert('版本对比失败');
+        } finally {
+            setIsLoadingVersions(false);
+        }
+    }, [id]);
+
     const handlePreview = () => {
         if (id) {
-            window.open(`/analytics/screens/${id}/preview`, '_blank');
+            const suffix = previewDeviceMode === 'auto'
+                ? ''
+                : `?device=${encodeURIComponent(previewDeviceMode)}`;
+            window.open(`/analytics/screens/${id}/preview${suffix}`, '_blank');
         } else {
             alert('请先保存大屏后再预览');
         }
     };
 
-    const handleExportJson = () => {
-        const payload = {
-            schema: 'dts.screen.spec',
-            exportedAt: new Date().toISOString(),
-            screenSpec: buildScreenPayload(config),
-        };
-        const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `${config.name || 'screen'}-spec.json`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-    };
-
-    const captureCanvasAsPngDataUrl = useCallback(async (): Promise<string> => {
-        const canvasEl = document.querySelector('.canvas') as HTMLElement | null;
-        if (!canvasEl) {
-            throw new Error('canvas not found');
+    const ensureExportAllowed = useCallback(async (format: 'json' | 'png' | 'pdf') => {
+        if (!id) {
+            return null;
         }
-        const width = Math.max(1, Math.round(config.width || 1920));
-        const height = Math.max(1, Math.round(config.height || 1080));
-        const serialized = new XMLSerializer().serializeToString(canvasEl);
-        const svg = [
-            `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">`,
-            `<foreignObject width="100%" height="100%">`,
-            serialized,
-            `</foreignObject>`,
-            `</svg>`,
-        ].join('');
-        const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
-        const url = URL.createObjectURL(blob);
         try {
-            const image = await new Promise<HTMLImageElement>((resolve, reject) => {
-                const img = new Image();
-                img.onload = () => resolve(img);
-                img.onerror = reject;
-                img.src = url;
+            return await analyticsApi.prepareScreenExport(id, {
+                format,
+                mode: 'draft',
+                ...(previewDeviceMode === 'auto' ? {} : { device: previewDeviceMode }),
             });
-            const out = document.createElement('canvas');
-            out.width = width;
-            out.height = height;
-            const ctx = out.getContext('2d');
-            if (!ctx) {
-                throw new Error('context unavailable');
+        } catch (error) {
+            if (error instanceof HttpError) {
+                let detail: string | null = null;
+                try {
+                    const payload = JSON.parse(error.bodyText) as { message?: string };
+                    if (payload?.message) {
+                        detail = payload.message;
+                    }
+                } catch {
+                    // no-op
+                }
+                throw new Error(detail || error.message || '导出失败');
             }
-            ctx.drawImage(image, 0, 0, width, height);
-            return out.toDataURL('image/png');
-        } finally {
-            URL.revokeObjectURL(url);
+            throw new Error(error instanceof Error ? error.message : '导出失败');
         }
-    }, [config.height, config.width]);
+    }, [id, previewDeviceMode]);
 
-    const handleExportPng = async () => {
+    const handleExportJson = async () => {
+        let preparedRequestId: string | undefined;
         try {
-            const dataUrl = await captureCanvasAsPngDataUrl();
+            const prepared = await ensureExportAllowed('json');
+            preparedRequestId = prepared?.requestId || undefined;
+        } catch (error) {
+            alert(error instanceof Error ? error.message : '导出失败');
+            if (id) {
+                void analyticsApi.reportScreenExport(id, {
+                    status: 'failed',
+                    format: 'json',
+                    mode: 'draft',
+                    ...(previewDeviceMode === 'auto' ? {} : { device: previewDeviceMode }),
+                    requestId: preparedRequestId,
+                    message: error instanceof Error ? error.message : 'prepare_failed',
+                });
+            }
+            return;
+        }
+        try {
+            const payload = {
+                schema: 'dts.screen.spec',
+                exportedAt: new Date().toISOString(),
+                screenSpec: buildScreenPayload(config),
+            };
+            const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
             const link = document.createElement('a');
-            link.href = dataUrl;
-            link.download = `${config.name || 'screen'}.png`;
+            link.href = url;
+            link.download = `${config.name || 'screen'}-spec.json`;
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+            if (id) {
+                void analyticsApi.reportScreenExport(id, {
+                    status: 'success',
+                    format: 'json',
+                    mode: 'draft',
+                    ...(previewDeviceMode === 'auto' ? {} : { device: previewDeviceMode }),
+                    requestId: preparedRequestId,
+                });
+            }
+        } catch (error) {
+            if (id) {
+                void analyticsApi.reportScreenExport(id, {
+                    status: 'failed',
+                    format: 'json',
+                    mode: 'draft',
+                    ...(previewDeviceMode === 'auto' ? {} : { device: previewDeviceMode }),
+                    requestId: preparedRequestId,
+                    message: error instanceof Error ? error.message : 'export_failed',
+                });
+            }
+            alert(error instanceof Error ? error.message : 'JSON 导出失败');
+        }
+    };
+
+    const openExportWindow = useCallback((format: 'png' | 'pdf') => {
+        if (!id) {
+            throw new Error('请先保存大屏后再导出');
+        }
+        const params = new URLSearchParams();
+        params.set('format', format);
+        params.set('mode', 'draft');
+        if (previewDeviceMode !== 'auto') {
+            params.set('device', previewDeviceMode);
+        }
+        const url = `/analytics/screens/${id}/export?${params.toString()}`;
+        const popup = window.open(url, '_blank');
+        if (!popup) {
+            throw new Error('请允许弹窗后重试导出');
+        }
+    }, [id, previewDeviceMode]);
+
+    const handleExportPng = async () => {
+        try {
+            openExportWindow('png');
         } catch (error) {
             console.error('Failed to export png:', error);
-            alert('PNG 导出失败，请先预览后截图');
+            alert(error instanceof Error ? error.message : 'PNG 导出失败');
         }
     };
 
     const handleExportPdf = async () => {
         try {
-            const dataUrl = await captureCanvasAsPngDataUrl();
-            const popup = window.open('', '_blank');
-            if (!popup) {
-                alert('请允许弹窗后重试 PDF 导出');
-                return;
-            }
-            popup.document.write(`<html><head><title>${config.name || 'screen'}</title></head><body style="margin:0"><img src="${dataUrl}" style="width:100%;height:auto;display:block"/></body></html>`);
-            popup.document.close();
-            popup.focus();
-            popup.print();
+            openExportWindow('pdf');
         } catch (error) {
             console.error('Failed to export pdf:', error);
-            alert('PDF 导出失败，请使用预览页面浏览器打印');
+            alert(error instanceof Error ? error.message : 'PDF 导出失败');
         }
     };
 
@@ -853,14 +898,34 @@ export function ScreenHeader() {
                         type="button"
                         className="header-btn preview-btn"
                         onClick={handlePreview}
-                        title="预览大屏"
+                        title={`预览大屏（${previewDeviceMode === 'auto' ? '自动' : previewDeviceMode}）`}
                     >
                         👁️ 预览
                     </button>
+                    <select
+                        className="header-device-select"
+                        value={previewDeviceMode}
+                        onChange={(e) => {
+                            const next = e.target.value;
+                            if (next === 'pc' || next === 'tablet' || next === 'mobile') {
+                                setPreviewDeviceMode(next);
+                                return;
+                            }
+                            setPreviewDeviceMode('auto');
+                        }}
+                        title="预览设备模式"
+                    >
+                        <option value="auto">自动</option>
+                        <option value="pc">PC</option>
+                        <option value="tablet">平板</option>
+                        <option value="mobile">手机</option>
+                    </select>
                     <button
                         type="button"
                         className="header-btn"
-                        onClick={handleExportJson}
+                        onClick={() => {
+                            void handleExportJson();
+                        }}
                         title="导出 JSON"
                     >
                         JSON
@@ -1001,6 +1066,22 @@ export function ScreenHeader() {
                 open={showVersionComparePanel}
                 diff={versionDiff}
                 onClose={() => setShowVersionComparePanel(false)}
+            />
+
+            <ScreenVersionComparePickerPanel
+                open={showVersionComparePicker}
+                versions={versionCandidates}
+                loading={isLoadingVersions}
+                onClose={() => setShowVersionComparePicker(false)}
+                onCompare={handleConfirmVersionCompare}
+            />
+
+            <ScreenVersionRollbackPanel
+                open={showVersionRollbackPanel}
+                versions={versionCandidates}
+                loading={isLoadingVersions}
+                onClose={() => setShowVersionRollbackPanel(false)}
+                onRollback={handleConfirmVersionRollback}
             />
 
             <ScreenSharePolicyPanel

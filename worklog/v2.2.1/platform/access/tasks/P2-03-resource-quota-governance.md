@@ -1,6 +1,6 @@
 # P2-03 运行资源与配额治理
 
-`status`: `in-progress`
+`status`: `done`
 `priority`: `P2`
 
 ## 目标
@@ -37,6 +37,8 @@
   - 任务执行前新增治理校验：任务并发上限、来源并发上限、执行窗口；
   - 新增项目级并发治理：`projectKey + projectConcurrencyLimit`；
   - `rejectPolicy=QUEUE` 时支持限时排队等待（30s）后再触发，超时给出明确原因；
+  - 排队策略新增优先级生效：`priority` 支持高优先级先出队，同优先级按创建时间 FIFO；
+  - 任务进入执行前会先落库 `preparing`，确保排队可见且优先级判定有统一依据；
   - 触发失败时返回可读错误并写入失败分类/审计元数据。
 - 治理配置入参与持久化补齐：
   - `source/dts-ingestion/src/main/java/com/yuzhi/dts/ingestion/web/rest/IngestionTaskResource.java`

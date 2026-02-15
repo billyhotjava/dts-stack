@@ -44,6 +44,7 @@ export interface IngestionExecutionDTO {
   failureAdvice?: string;
   logPath?: string;
   replaceMode?: string;
+  triggerMode?: "MANUAL" | "FAILED_ONLY" | "FULL_RERUN" | string;
   droppedTables?: string;
   queueWaitSeconds?: number;
   createdAt?: string;
@@ -244,6 +245,17 @@ export interface IngestionTaskTemplateDTO {
   requiredParams?: string[];
   warnings?: string[];
   version?: string;
+}
+
+export interface IngestionTemplateRenderDTO {
+  id: string;
+  name: string;
+  version?: string;
+  renderedDefaults?: Record<string, any>;
+  requiredParams?: string[];
+  warnings?: string[];
+  errors?: string[];
+  canApply?: boolean;
 }
 
 export interface IngestionGovernanceSourceLoadItem {
@@ -509,6 +521,25 @@ class IngestionTaskAPI {
       return (payload as any).data as IngestionTaskTemplateDTO[];
     }
     return [];
+  }
+
+  async renderTaskTemplate(
+    templateId: string,
+    data?: { params?: Record<string, any>; strictRequired?: boolean }
+  ): Promise<IngestionTemplateRenderDTO | null> {
+    if (!templateId) return null;
+    const payload: any = await api.post({
+      url: `/ingestion/templates/${encodeURIComponent(templateId)}/render`,
+      data,
+    });
+    if (!payload) return null;
+    if (payload && typeof payload === "object" && "renderedDefaults" in payload) {
+      return payload as IngestionTemplateRenderDTO;
+    }
+    if (payload && typeof payload === "object" && (payload as any).data) {
+      return (payload as any).data as IngestionTemplateRenderDTO;
+    }
+    return null;
   }
 
   async getConnectorCapability(connectorType: string): Promise<IngestionConnectorCapabilityDTO | null> {

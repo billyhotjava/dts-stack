@@ -2,21 +2,19 @@ import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'react-router';
 import { analyticsApi } from '../../api/analyticsApi';
 import { ComponentRenderer } from './components/ComponentRenderer';
+import { DeviceModeSwitcher } from './components/DeviceModeSwitcher';
 import { GlobalVariablePanel } from './components/GlobalVariablePanel';
 import { ScreenRuntimeProvider } from './ScreenRuntimeContext';
 import type { ScreenConfig, ScreenTheme } from './types';
 import { resolveScreenTheme } from './screenThemes';
 import { normalizeScreenConfig } from './specV2';
-
-type DeviceMode = 'pc' | 'tablet' | 'mobile';
-
-function isVisibleForDevice(component: { config?: Record<string, unknown> }, device: DeviceMode): boolean {
-    const raw = component?.config?.visibleOn;
-    if (!Array.isArray(raw) || raw.length === 0) {
-        return true;
-    }
-    return raw.includes(device);
-}
+import {
+    isVisibleForDevice,
+    parseForcedDeviceModeFromWindow,
+    resolveDeviceModeByViewport,
+    syncDeviceModeToWindowUrl,
+    type DeviceMode,
+} from './deviceMode';
 
 export default function PublicScreenPage() {
     const { uuid } = useParams<{ uuid: string }>();
@@ -25,6 +23,11 @@ export default function PublicScreenPage() {
     const [error, setError] = useState<string | null>(null);
     const [scale, setScale] = useState(1);
     const [deviceMode, setDeviceMode] = useState<DeviceMode>('pc');
+    const [forcedDeviceMode, setForcedDeviceMode] = useState<DeviceMode | null>(null);
+
+    useEffect(() => {
+        setForcedDeviceMode(parseForcedDeviceModeFromWindow());
+    }, []);
 
     useEffect(() => {
         if (!uuid) {
@@ -53,12 +56,12 @@ export default function PublicScreenPage() {
         if (!screen) return;
         const vw = window.innerWidth;
         const vh = window.innerHeight;
-        const nextMode: DeviceMode = vw <= 768 ? 'mobile' : (vw <= 1200 ? 'tablet' : 'pc');
+        const nextMode: DeviceMode = forcedDeviceMode || resolveDeviceModeByViewport(vw);
         setDeviceMode(nextMode);
         const sx = vw / (screen.width || 1920);
         const sy = vh / (screen.height || 1080);
         setScale(Math.min(sx, sy));
-    }, [screen]);
+    }, [forcedDeviceMode, screen]);
 
     useEffect(() => {
         computeScale();
@@ -96,6 +99,11 @@ export default function PublicScreenPage() {
     const components = screen.components || [];
 
     const outerBg = screenTheme === 'glacier' ? '#e5e7eb' : '#000';
+
+    const setForcedMode = (mode: DeviceMode | null) => {
+        setForcedDeviceMode(mode);
+        syncDeviceModeToWindowUrl(mode);
+    };
 
     return (
         <ScreenRuntimeProvider definitions={globalVariables}>
@@ -144,6 +152,12 @@ export default function PublicScreenPage() {
                         ))}
                 </div>
                 <GlobalVariablePanel />
+                <DeviceModeSwitcher
+                    position="fixed"
+                    deviceMode={deviceMode}
+                    forcedDeviceMode={forcedDeviceMode}
+                    onSetForcedMode={setForcedMode}
+                />
             </div>
         </ScreenRuntimeProvider>
     );

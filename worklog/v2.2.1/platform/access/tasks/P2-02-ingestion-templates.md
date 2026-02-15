@@ -1,6 +1,6 @@
 # P2-02 模板化接入能力
 
-`status`: `in-progress`
+`status`: `done`
 `priority`: `P2`
 
 ## 目标
@@ -40,6 +40,14 @@
   - 文件：`source/dts-platform-webapp/src/pages/explore/etl/TransformCreatePage.tsx`
   - 第一步新增模板选择与一键应用；
   - 应用后自动填充 `syncMode/syncPrefix/sourceSystem/schedule` 等默认参数。
+- 新增模板渲染与预检接口：
+  - `POST /api/ingestion/templates/{templateId}/render`
+  - 文件：`source/dts-ingestion/src/main/java/com/yuzhi/dts/ingestion/web/rest/IngestionTaskResource.java`
+  - 支持按表单上下文参数渲染模板默认值、返回风险提示与必填缺失项（例如增量列、调度参数）。
+- 前端模板应用改为“先渲染后落表单”：
+  - 文件：`source/dts-platform-webapp/src/pages/explore/etl/TransformCreatePage.tsx`
+  - 应用模板时会传入当前表单参数（含 `sourceDataSourceId`、`fileName`）做预检；
+  - 对缺失必填项给出即时提示，但仍允许进入手工补齐流程，满足“先生成后编辑”。
 - API 封装补齐：
   - 文件：`source/dts-platform-webapp/src/api/ingestion.ts`
-  - 新增 `IngestionTaskTemplateDTO` 与 `getTaskTemplates()`。
+  - 新增 `IngestionTaskTemplateDTO`、`IngestionTemplateRenderDTO`、`getTaskTemplates()`、`renderTaskTemplate()`。

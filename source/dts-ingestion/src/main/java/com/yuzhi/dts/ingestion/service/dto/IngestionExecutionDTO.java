@@ -35,6 +35,8 @@ public class IngestionExecutionDTO {
 
     private String replaceMode;
 
+    private String triggerMode;
+
     private String droppedTables;
 
     private Long queueWaitSeconds;
@@ -159,6 +161,14 @@ public class IngestionExecutionDTO {
 
     public void setDroppedTables(String droppedTables) {
         this.droppedTables = droppedTables;
+    }
+
+    public String getTriggerMode() {
+        return triggerMode;
+    }
+
+    public void setTriggerMode(String triggerMode) {
+        this.triggerMode = triggerMode;
     }
 
     public Long getQueueWaitSeconds() {

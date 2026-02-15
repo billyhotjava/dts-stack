@@ -78,6 +78,38 @@ export function ScreenEditLockPanel({ open, screenId, lock, onClose, onChange }:
         }
     };
 
+    const handleForceTakeover = async () => {
+        if (!screenId || working) return;
+        if (!window.confirm('确认强制接管该编辑锁吗？仅建议在对方离线或误占锁时使用。')) {
+            return;
+        }
+        setWorking(true);
+        setError(null);
+        try {
+            const next = await analyticsApi.acquireScreenEditLock(screenId, {
+                ttlSeconds: 120,
+                forceTakeover: true,
+            });
+            publishLock(next);
+        } catch (e) {
+            if (e instanceof HttpError) {
+                try {
+                    const payload = JSON.parse(e.bodyText) as { lock?: ScreenEditLock; message?: string };
+                    if (payload?.lock) {
+                        publishLock(payload.lock);
+                    }
+                    setError(payload?.message || e.message);
+                } catch {
+                    setError(e.message);
+                }
+            } else {
+                setError(e instanceof Error ? e.message : '强制接管失败');
+            }
+        } finally {
+            setWorking(false);
+        }
+    };
+
     const handleRelease = async () => {
         if (!screenId || working) return;
         setWorking(true);
@@ -132,6 +164,15 @@ export function ScreenEditLockPanel({ open, screenId, lock, onClose, onChange }:
                 </button>
                 <button type="button" className="header-btn" disabled={working || !!localLock?.mine} onClick={handleAcquire}>
                     {working ? '处理中...' : '申请编辑锁'}
+                </button>
+                <button
+                    type="button"
+                    className="header-btn"
+                    disabled={working || !localLock?.active || !!localLock?.mine}
+                    onClick={handleForceTakeover}
+                    title="需要 MANAGE 权限"
+                >
+                    强制接管
                 </button>
                 <button type="button" className="header-btn" disabled={working || !localLock?.mine} onClick={handleRelease}>
                     释放编辑锁

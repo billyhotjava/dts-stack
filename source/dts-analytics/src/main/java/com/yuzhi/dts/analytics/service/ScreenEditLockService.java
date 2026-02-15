@@ -28,7 +28,7 @@ public class ScreenEditLockService {
         return toSnapshot(lock, viewerId);
     }
 
-    public LockAcquireResult acquire(Long screenId, AnalyticsUser user, String requestId, Integer ttlSeconds) {
+    public LockAcquireResult acquire(Long screenId, AnalyticsUser user, String requestId, Integer ttlSeconds, boolean forceTakeover) {
         if (screenId == null || user == null || user.getId() == null) {
             return LockAcquireResult.invalid();
         }
@@ -41,7 +41,9 @@ public class ScreenEditLockService {
             if (isExpired(lock, now)) {
                 lockRepository.delete(lock);
             } else if (!user.getId().equals(lock.getOwnerId())) {
-                return LockAcquireResult.conflict(toSnapshot(lock, user.getId()));
+                if (!forceTakeover) {
+                    return LockAcquireResult.conflict(toSnapshot(lock, user.getId()));
+                }
             }
         }
 
@@ -50,7 +52,7 @@ public class ScreenEditLockService {
         lock.setOwnerId(user.getId());
         lock.setOwnerName(resolveUserName(user));
         lock.setRequestId(trimToNull(requestId));
-        if (lock.getAcquiredAt() == null) {
+        if (lock.getAcquiredAt() == null || forceTakeover) {
             lock.setAcquiredAt(now);
         }
         lock.setHeartbeatAt(now);

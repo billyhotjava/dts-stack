@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { analyticsApi } from '../../../api/analyticsApi';
 import type { CardParameterBinding, DataSourceConfig, CardData } from '../types';
+import { runWithRetry, scheduleQueryTask } from './queryScheduler';
 
 interface CardDataSourceResult {
     data: CardData | null;
@@ -9,6 +10,9 @@ interface CardDataSourceResult {
 }
 
 const CACHE_TTL_MS = 5000;
+const DEFAULT_CARD_TIMEOUT_MS = 30000;
+const DEFAULT_DATASET_TIMEOUT_MS = 30000;
+const DEFAULT_API_TIMEOUT_MS = 20000;
 const cacheStore = new Map<string, { expiresAt: number; data: CardData }>();
 const inflightStore = new Map<string, Promise<CardData>>();
 
@@ -178,6 +182,28 @@ function getCacheKey(
     return null;
 }
 
+function resolveQueryTimeoutMs(
+    sourceType: 'static' | 'card' | 'api' | 'sql' | 'dataset' | 'metric',
+    dataSource?: DataSourceConfig,
+): number {
+    if (sourceType === 'sql') {
+        const sqlConfig = resolveSqlConfig(dataSource);
+        const timeoutSeconds = Number(sqlConfig?.queryTimeoutSeconds ?? 0);
+        if (Number.isFinite(timeoutSeconds) && timeoutSeconds > 0) {
+            // SQL 已有后端 query_timeout，这里只加前端保护超时。
+            return Math.min(Math.max(Math.round(timeoutSeconds * 1000 + 2000), 5000), 180000);
+        }
+        return DEFAULT_CARD_TIMEOUT_MS;
+    }
+    if (sourceType === 'dataset') {
+        return DEFAULT_DATASET_TIMEOUT_MS;
+    }
+    if (sourceType === 'api') {
+        return DEFAULT_API_TIMEOUT_MS;
+    }
+    return DEFAULT_CARD_TIMEOUT_MS;
+}
+
 function getCached(key: string | null): CardData | null {
     if (!key) return null;
     const hit = cacheStore.get(key);
@@ -217,6 +243,7 @@ export function useCardDataSource(
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const requestSeqRef = useRef(0);
 
     const sourceType = resolveSourceType(dataSource);
     const baseCardId = sourceType === 'card' ? dataSource?.cardConfig?.cardId : undefined;
@@ -232,18 +259,31 @@ export function useCardDataSource(
         () => getCacheKey(sourceType, dataSource, cardId, databaseId, paramsKey, contextKey),
         [sourceType, dataSource, cardId, databaseId, paramsKey, contextKey],
     );
+    const queryTimeoutMs = useMemo(
+        () => resolveQueryTimeoutMs(sourceType, dataSource),
+        [sourceType, dataSource],
+    );
 
     const fetchData = useCallback(async () => {
+        const requestSeq = requestSeqRef.current + 1;
+        requestSeqRef.current = requestSeq;
+
         if (!dataSource || sourceType === 'static') {
-            setData(null);
-            setError(null);
+            if (requestSeqRef.current === requestSeq) {
+                setData(null);
+                setError(null);
+                setLoading(false);
+            }
             return;
         }
 
         const cached = getCached(cacheKey);
         if (cached) {
-            setData(cached);
-            setError(null);
+            if (requestSeqRef.current === requestSeq) {
+                setData(cached);
+                setError(null);
+                setLoading(false);
+            }
             return;
         }
 
@@ -251,121 +291,136 @@ export function useCardDataSource(
         setError(null);
 
         try {
-            const next = await dedupe(cacheKey, async () => {
-                if (sourceType === 'card') {
-                    if (!cardId || cardId <= 0) {
-                        throw new Error('Card 数据源未选择有效 Card');
-                    }
-                    const requestBody: Record<string, unknown> = {};
-                    const params: Array<{ name: string; value: string }> | undefined =
-                        paramsKey !== 'null' ? JSON.parse(paramsKey) : undefined;
-                    const context: Record<string, unknown> | undefined =
-                        contextKey !== 'null' ? JSON.parse(contextKey) : undefined;
+            const next = await dedupe(cacheKey, async () => (
+                await scheduleQueryTask(
+                    async () => await runWithRetry(async () => {
+                        if (sourceType === 'card') {
+                            if (!cardId || cardId <= 0) {
+                                throw new Error('Card 数据源未选择有效 Card');
+                            }
+                            const requestBody: Record<string, unknown> = {};
+                            const params: Array<{ name: string; value: string }> | undefined =
+                                paramsKey !== 'null' ? JSON.parse(paramsKey) : undefined;
+                            const context: Record<string, unknown> | undefined =
+                                contextKey !== 'null' ? JSON.parse(contextKey) : undefined;
 
-                    if (params?.length) {
-                        requestBody.parameters = params;
-                    }
-                    const metricId = dataSource.cardConfig?.metricId;
-                    const metricVersion = dataSource.cardConfig?.metricVersion?.trim();
-                    if ((metricId ?? 0) > 0 || (metricVersion && metricVersion.length > 0)) {
-                        requestBody.semantic = {
-                            metricId: (metricId ?? 0) > 0 ? metricId : undefined,
-                            metricVersion: metricVersion && metricVersion.length > 0 ? metricVersion : undefined,
-                        };
-                    }
-                    if (context && Object.keys(context).length > 0) {
-                        requestBody.queryContext = context;
-                    }
+                            if (params?.length) {
+                                requestBody.parameters = params;
+                            }
+                            const metricId = dataSource.cardConfig?.metricId;
+                            const metricVersion = dataSource.cardConfig?.metricVersion?.trim();
+                            if ((metricId ?? 0) > 0 || (metricVersion && metricVersion.length > 0)) {
+                                requestBody.semantic = {
+                                    metricId: (metricId ?? 0) > 0 ? metricId : undefined,
+                                    metricVersion: metricVersion && metricVersion.length > 0 ? metricVersion : undefined,
+                                };
+                            }
+                            if (context && Object.keys(context).length > 0) {
+                                requestBody.queryContext = context;
+                            }
 
-                    const result = await analyticsApi.queryCard(cardId, requestBody);
-                    if (result.error) {
-                        throw new Error(String(result.error));
-                    }
-                    return toCardData(result.data ?? result);
-                }
+                            const result = await analyticsApi.queryCard(cardId, requestBody);
+                            if (result.error) {
+                                throw new Error(String(result.error));
+                            }
+                            return toCardData(result.data ?? result);
+                        }
 
-                if (sourceType === 'api') {
-                    const cfg = dataSource.apiConfig;
-                    if (!cfg?.url?.trim()) {
-                        throw new Error('API 数据源未配置 URL');
-                    }
-                    const method = cfg.method || 'GET';
-                    const headers = new Headers(cfg.headers ?? {});
-                    if (method === 'POST' && !headers.has('content-type')) {
-                        headers.set('content-type', 'application/json');
-                    }
-                    const response = await fetch(buildApiUrl(cfg.url, cfg.params), {
-                        method,
-                        headers,
-                        credentials: 'include',
-                        body: method === 'POST' ? (cfg.body ?? '') : undefined,
-                    });
-                    if (!response.ok) {
-                        const text = await response.text().catch(() => '');
-                        throw new Error(`API 请求失败: HTTP ${response.status} ${response.statusText} ${text}`.trim());
-                    }
-                    const ct = response.headers.get('content-type') || '';
-                    const payload = ct.includes('application/json')
-                        ? await response.json()
-                        : await response.text();
-                    return toCardData(payload);
-                }
+                        if (sourceType === 'api') {
+                            const cfg = dataSource.apiConfig;
+                            if (!cfg?.url?.trim()) {
+                                throw new Error('API 数据源未配置 URL');
+                            }
+                            const method = cfg.method || 'GET';
+                            const headers = new Headers(cfg.headers ?? {});
+                            if (method === 'POST' && !headers.has('content-type')) {
+                                headers.set('content-type', 'application/json');
+                            }
+                            const response = await fetch(buildApiUrl(cfg.url, cfg.params), {
+                                method,
+                                headers,
+                                credentials: 'include',
+                                body: method === 'POST' ? (cfg.body ?? '') : undefined,
+                            });
+                            if (!response.ok) {
+                                const text = await response.text().catch(() => '');
+                                throw new Error(`API 请求失败: HTTP ${response.status} ${response.statusText} ${text}`.trim());
+                            }
+                            const ct = response.headers.get('content-type') || '';
+                            const payload = ct.includes('application/json')
+                                ? await response.json()
+                                : await response.text();
+                            return toCardData(payload);
+                        }
 
-                if (sourceType === 'sql') {
-                    if (!databaseId || databaseId <= 0) {
-                        throw new Error('数据库数据源未配置有效 databaseId');
-                    }
-                    const sqlConfig = resolveSqlConfig(dataSource);
-                    const query = sqlConfig?.query ?? '';
-                    if (!query.trim()) {
-                        throw new Error('数据库数据源未配置 SQL');
-                    }
-                    const mergedParams = mergeBindingsWithRuntime(sqlConfig?.parameterBindings, paramsKey !== 'null' ? JSON.parse(paramsKey) : undefined);
-                    const timeout = Number(sqlConfig?.queryTimeoutSeconds ?? 0);
-                    const maxRows = Number(sqlConfig?.maxRows ?? 0);
-                    const result = await analyticsApi.runDatasetQuery({
-                        database: databaseId,
-                        type: 'native',
-                        native: { query },
-                        parameters: mergedParams,
-                        ...(Number.isFinite(timeout) && timeout > 0 ? { query_timeout: timeout } : {}),
-                        ...(Number.isFinite(maxRows) && maxRows > 0 ? { constraints: { 'max-results': maxRows } } : {}),
-                        ...(contextKey !== 'null' ? { queryContext: JSON.parse(contextKey) } : {}),
-                    });
-                    if (result.error) {
-                        throw new Error(String(result.error));
-                    }
-                    return toCardData(result.data ?? result);
-                }
+                        if (sourceType === 'sql') {
+                            if (!databaseId || databaseId <= 0) {
+                                throw new Error('数据库数据源未配置有效 databaseId');
+                            }
+                            const sqlConfig = resolveSqlConfig(dataSource);
+                            const query = sqlConfig?.query ?? '';
+                            if (!query.trim()) {
+                                throw new Error('数据库数据源未配置 SQL');
+                            }
+                            const mergedParams = mergeBindingsWithRuntime(sqlConfig?.parameterBindings, paramsKey !== 'null' ? JSON.parse(paramsKey) : undefined);
+                            const timeout = Number(sqlConfig?.queryTimeoutSeconds ?? 0);
+                            const maxRows = Number(sqlConfig?.maxRows ?? 0);
+                            const result = await analyticsApi.runDatasetQuery({
+                                database: databaseId,
+                                type: 'native',
+                                native: { query },
+                                parameters: mergedParams,
+                                ...(Number.isFinite(timeout) && timeout > 0 ? { query_timeout: timeout } : {}),
+                                ...(Number.isFinite(maxRows) && maxRows > 0 ? { constraints: { 'max-results': maxRows } } : {}),
+                                ...(contextKey !== 'null' ? { queryContext: JSON.parse(contextKey) } : {}),
+                            });
+                            if (result.error) {
+                                throw new Error(String(result.error));
+                            }
+                            return toCardData(result.data ?? result);
+                        }
 
-                if (sourceType === 'dataset') {
-                    const queryBody = dataSource.datasetConfig?.queryBody;
-                    if (!queryBody || typeof queryBody !== 'object') {
-                        throw new Error('Dataset 数据源未配置 queryBody');
-                    }
-                    const body = { ...(queryBody as Record<string, unknown>) };
-                    if (contextKey !== 'null') {
-                        body.queryContext = JSON.parse(contextKey);
-                    }
-                    const result = await analyticsApi.runDatasetQuery(body);
-                    if (result.error) {
-                        throw new Error(String(result.error));
-                    }
-                    return toCardData(result.data ?? result);
-                }
+                        if (sourceType === 'dataset') {
+                            const queryBody = dataSource.datasetConfig?.queryBody;
+                            if (!queryBody || typeof queryBody !== 'object') {
+                                throw new Error('Dataset 数据源未配置 queryBody');
+                            }
+                            const body = { ...(queryBody as Record<string, unknown>) };
+                            if (contextKey !== 'null') {
+                                body.queryContext = JSON.parse(contextKey);
+                            }
+                            const result = await analyticsApi.runDatasetQuery(body);
+                            if (result.error) {
+                                throw new Error(String(result.error));
+                            }
+                            return toCardData(result.data ?? result);
+                        }
 
-                throw new Error(`暂不支持的数据源类型: ${String(sourceType)}`);
-            });
+                        throw new Error(`暂不支持的数据源类型: ${String(sourceType)}`);
+                    }, {
+                        maxRetries: sourceType === 'api' ? 2 : 1,
+                    }),
+                    {
+                        timeoutMs: queryTimeoutMs,
+                    },
+                )
+            ));
 
             setCached(cacheKey, next);
-            setData(next);
+            if (requestSeqRef.current === requestSeq) {
+                setData(next);
+            }
         } catch (e) {
-            setData(null);
-            setError(e instanceof Error ? e.message : '数据源查询失败');
+            if (requestSeqRef.current === requestSeq) {
+                setData(null);
+                setError(e instanceof Error ? e.message : '数据源查询失败');
+            }
         } finally {
-            setLoading(false);
+            if (requestSeqRef.current === requestSeq) {
+                setLoading(false);
+            }
         }
-    }, [cacheKey, cardId, contextKey, dataSource, databaseId, paramsKey, sourceType]);
+    }, [cacheKey, cardId, contextKey, dataSource, databaseId, paramsKey, queryTimeoutMs, sourceType]);
 
     useEffect(() => {
         if (intervalRef.current) {
@@ -375,7 +430,7 @@ export function useCardDataSource(
 
         fetchData();
 
-        if (refreshInterval && refreshInterval > 0 && dataSource?.type && dataSource.type !== 'static') {
+        if (refreshInterval && refreshInterval > 0 && sourceType !== 'static') {
             intervalRef.current = setInterval(() => {
                 fetchData();
             }, refreshInterval * 1000);
@@ -387,7 +442,7 @@ export function useCardDataSource(
                 intervalRef.current = null;
             }
         };
-    }, [dataSource, fetchData, refreshInterval]);
+    }, [dataSource, fetchData, refreshInterval, sourceType]);
 
     return { data, loading, error };
 }

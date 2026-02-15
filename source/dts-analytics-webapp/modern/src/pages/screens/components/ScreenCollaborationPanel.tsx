@@ -28,6 +28,8 @@ export function ScreenCollaborationPanel({
     const [baselineUpdatedAt, setBaselineUpdatedAt] = useState<string>('');
     const [latestUpdatedAt, setLatestUpdatedAt] = useState<string>('');
     const [driftWarning, setDriftWarning] = useState(false);
+    const [autoRefresh, setAutoRefresh] = useState(true);
+    const [refreshSeconds, setRefreshSeconds] = useState(15);
     const baselineUpdatedAtRef = useRef<string>('');
 
     const componentOptions = useMemo(() => {
@@ -89,6 +91,17 @@ export function ScreenCollaborationPanel({
         await refreshDriftHint(false);
     };
 
+    const loadRowsSilently = async (targetLimit: number) => {
+        if (!screenId) return;
+        try {
+            const data = await analyticsApi.listScreenComments(screenId, targetLimit);
+            setRows(Array.isArray(data) ? data : []);
+            await refreshDriftHint(false);
+        } catch {
+            // Silent polling should not interrupt current interaction.
+        }
+    };
+
     useEffect(() => {
         if (!open || !screenId) return;
         baselineUpdatedAtRef.current = '';
@@ -101,6 +114,17 @@ export function ScreenCollaborationPanel({
         setComponentId(selectedId || '');
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [open, screenId]);
+
+    useEffect(() => {
+        if (!open || !screenId || !autoRefresh || saving || loading) {
+            return;
+        }
+        const seconds = Number.isFinite(refreshSeconds) ? Math.max(5, Math.min(120, Math.floor(refreshSeconds))) : 15;
+        const timer = window.setInterval(() => {
+            void loadRowsSilently(limit);
+        }, seconds * 1000);
+        return () => window.clearInterval(timer);
+    }, [autoRefresh, limit, loading, open, refreshSeconds, saving, screenId]);
 
     return (
         <Modal isOpen={open} onClose={onClose} title="协作批注中心" size="xl">
@@ -200,6 +224,28 @@ export function ScreenCollaborationPanel({
                 <button type="button" className="header-btn" disabled={!screenId || loading} onClick={() => loadRows(limit)}>
                     {loading ? '刷新中...' : '刷新'}
                 </button>
+                <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, opacity: 0.9 }}>
+                    <input
+                        type="checkbox"
+                        checked={autoRefresh}
+                        onChange={(e) => setAutoRefresh(e.target.checked)}
+                    />
+                    自动刷新
+                </label>
+                <input
+                    type="number"
+                    min={5}
+                    max={120}
+                    className="property-input"
+                    value={refreshSeconds}
+                    onChange={(e) => {
+                        const n = Number(e.target.value);
+                        setRefreshSeconds(Number.isFinite(n) ? Math.max(5, Math.min(120, n)) : 15);
+                    }}
+                    style={{ width: 100 }}
+                    title="自动刷新间隔(秒)"
+                    disabled={!autoRefresh}
+                />
             </div>
 
             {error && (

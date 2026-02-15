@@ -1,0 +1,494 @@
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useParams } from 'react-router';
+import { analyticsApi, HttpError } from '../../api/analyticsApi';
+import { ComponentRenderer } from './components/ComponentRenderer';
+import { ScreenRuntimeProvider } from './ScreenRuntimeContext';
+import type { DeviceMode } from './deviceMode';
+import { isVisibleForDevice } from './deviceMode';
+import { normalizeScreenConfig, buildScreenPayload } from './specV2';
+import { resolveScreenTheme } from './screenThemes';
+import type { ScreenConfig, ScreenTheme } from './types';
+
+function parseFormat(raw: string | null): 'png' | 'pdf' | 'json' {
+    const text = String(raw || '').trim().toLowerCase();
+    if (text === 'pdf' || text === 'json') return text;
+    return 'png';
+}
+
+function parseMode(raw: string | null): 'draft' | 'published' | 'preview' {
+    const text = String(raw || '').trim().toLowerCase();
+    if (text === 'published' || text === 'preview') return text;
+    return 'draft';
+}
+
+function parseDevice(raw: string | null): DeviceMode | null {
+    const text = String(raw || '').trim().toLowerCase();
+    if (text === 'pc' || text === 'tablet' || text === 'mobile') return text;
+    return null;
+}
+
+function parseDelayMs(raw: string | null): number {
+    const n = Number(raw ?? 0);
+    if (!Number.isFinite(n) || n < 0) return 1200;
+    return Math.min(12000, Math.max(200, Math.floor(n)));
+}
+
+function toErrorMessage(error: unknown, fallback: string): string {
+    if (error instanceof HttpError) {
+        try {
+            const payload = JSON.parse(error.bodyText) as { message?: string };
+            if (payload?.message) {
+                return payload.message;
+            }
+        } catch {
+            // ignore
+        }
+        return error.message || fallback;
+    }
+    if (error instanceof Error && error.message) {
+        return error.message;
+    }
+    return fallback;
+}
+
+function isCrossOriginLikeError(error: unknown): boolean {
+    if (!(error instanceof Error)) {
+        return false;
+    }
+    const msg = String(error.message || '').toLowerCase();
+    return msg.includes('tainted')
+        || msg.includes('cross-origin')
+        || msg.includes('cross origin')
+        || msg.includes('securityerror')
+        || msg.includes('toDataURL'.toLowerCase());
+}
+
+export default function ScreenExportPage() {
+    const { id } = useParams<{ id: string }>();
+    const [screen, setScreen] = useState<ScreenConfig | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [statusText, setStatusText] = useState('正在准备导出...');
+    const [error, setError] = useState<string | null>(null);
+    const [requestId, setRequestId] = useState<string | null>(null);
+    const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+    const [effectiveDevice, setEffectiveDevice] = useState<DeviceMode>('pc');
+    const [watermark, setWatermark] = useState<{ enabled: boolean; text: string }>({
+        enabled: false,
+        text: '',
+    });
+    const canvasRef = useRef<HTMLDivElement | null>(null);
+    const doneRef = useRef(false);
+    const [retryNonce, setRetryNonce] = useState(0);
+
+    const query = useMemo(() => new URLSearchParams(window.location.search), []);
+    const format = useMemo(() => parseFormat(query.get('format')), [query]);
+    const mode = useMemo(() => parseMode(query.get('mode')), [query]);
+    const forcedDevice = useMemo(() => parseDevice(query.get('device')), [query]);
+    const delayMs = useMemo(() => parseDelayMs(query.get('delayMs')), [query]);
+
+    useEffect(() => {
+        if (!id) {
+            setError('未找到大屏 ID');
+            setLoading(false);
+            return;
+        }
+
+        let cancelled = false;
+        const load = async () => {
+            doneRef.current = false;
+            setLoading(true);
+            setError(null);
+            setStatusText('正在校验导出策略...');
+            try {
+                const prepared = await analyticsApi.prepareScreenExport(id, {
+                    format,
+                    mode,
+                    ...(forcedDevice ? { device: forcedDevice } : {}),
+                });
+                if (cancelled) return;
+                setRequestId(prepared.requestId ?? null);
+                const rawPreview = String(prepared.previewUrl || '').trim();
+                if (rawPreview.length > 0) {
+                    const normalizedPreview = rawPreview.startsWith('/analytics')
+                        ? rawPreview
+                        : (rawPreview.startsWith('/') ? `/analytics${rawPreview}` : `/analytics/${rawPreview}`);
+                    setPreviewUrl(normalizedPreview);
+                } else {
+                    setPreviewUrl(null);
+                }
+                setWatermark({
+                    enabled: prepared.policy?.watermarkEnabled === true,
+                    text: String(prepared.policy?.watermarkText || '').trim(),
+                });
+                setStatusText('正在加载运行态画布...');
+
+                const detail = await analyticsApi.getScreen(id, {
+                    mode,
+                    fallbackDraft: true,
+                });
+                if (cancelled) return;
+                const normalized = normalizeScreenConfig(detail, { id: detail.id });
+                if (normalized.warnings.length > 0) {
+                    console.warn('[screen-export] normalized warnings:', normalized.warnings);
+                }
+                setScreen(normalized.config);
+                setEffectiveDevice(forcedDevice || 'pc');
+                setStatusText('正在渲染导出内容...');
+            } catch (e) {
+                if (cancelled) return;
+                setError(toErrorMessage(e, '导出准备失败'));
+            } finally {
+                if (!cancelled) {
+                    setLoading(false);
+                }
+            }
+        };
+
+        load();
+        return () => {
+            cancelled = true;
+        };
+    }, [forcedDevice, format, id, mode]);
+
+    const buildPreviewFallbackUrl = (): string => {
+        if (previewUrl && previewUrl.trim().length > 0) {
+            return previewUrl;
+        }
+        const fallbackParams = new URLSearchParams();
+        if (mode !== 'draft') {
+            fallbackParams.set('mode', mode);
+        }
+        if (forcedDevice) {
+            fallbackParams.set('device', forcedDevice);
+        }
+        const suffix = fallbackParams.toString();
+        return `/analytics/screens/${id}/preview${suffix ? `?${suffix}` : ''}`;
+    };
+
+    const openPreviewFallback = () => {
+        const target = buildPreviewFallbackUrl();
+        const popup = window.open(target, '_blank');
+        if (!popup) {
+            throw new Error('请允许弹窗后打开预览页');
+        }
+    };
+
+    const printCanvasDomFallback = () => {
+        const canvasEl = canvasRef.current;
+        if (!canvasEl || !screen) {
+            throw new Error('导出画布未就绪');
+        }
+        const width = Math.max(1, Math.round(screen.width || 1920));
+        const height = Math.max(1, Math.round(screen.height || 1080));
+        const popup = window.open('', '_blank');
+        if (!popup) {
+            throw new Error('请允许弹窗后重试 PDF 导出');
+        }
+        const serialized = new XMLSerializer().serializeToString(canvasEl);
+        popup.document.write(
+            `<html><head><title>${screen.name || 'screen'}</title>`
+            + '<style>'
+            + 'html,body{margin:0;padding:0;background:#fff;}'
+            + `.print-root{width:${width}px;height:${height}px;position:relative;overflow:hidden;}`
+            + '@page{size:auto;margin:0;}'
+            + '</style></head>'
+            + `<body><div class="print-root">${serialized}</div></body></html>`,
+        );
+        popup.document.close();
+        window.setTimeout(() => {
+            popup.focus();
+            popup.print();
+        }, 200);
+    };
+
+    const reportExport = async (
+        status: 'success' | 'failed' | 'fallback',
+        message?: string,
+    ) => {
+        if (!id) {
+            return;
+        }
+        try {
+            await analyticsApi.reportScreenExport(id, {
+                status,
+                format,
+                mode,
+                device: effectiveDevice,
+                requestId: requestId || undefined,
+                message,
+            });
+        } catch {
+            // Export report must not block user workflow.
+        }
+    };
+
+    const captureCanvasAsPngDataUrl = async (): Promise<string> => {
+        const canvasEl = canvasRef.current;
+        if (!canvasEl || !screen) {
+            throw new Error('导出画布未就绪');
+        }
+        const width = Math.max(1, Math.round(screen.width || 1920));
+        const height = Math.max(1, Math.round(screen.height || 1080));
+        const serialized = new XMLSerializer().serializeToString(canvasEl);
+        const svg = [
+            `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">`,
+            '<foreignObject width="100%" height="100%">',
+            serialized,
+            '</foreignObject>',
+            '</svg>',
+        ].join('');
+        const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        try {
+            const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+                const img = new Image();
+                img.onload = () => resolve(img);
+                img.onerror = reject;
+                img.src = url;
+            });
+            const out = document.createElement('canvas');
+            out.width = width;
+            out.height = height;
+            const ctx = out.getContext('2d');
+            if (!ctx) {
+                throw new Error('导出上下文初始化失败');
+            }
+            ctx.drawImage(image, 0, 0, width, height);
+            return out.toDataURL('image/png');
+        } finally {
+            URL.revokeObjectURL(url);
+        }
+    };
+
+    useEffect(() => {
+        if (loading || !screen || error || doneRef.current) {
+            return;
+        }
+        doneRef.current = true;
+        let cancelled = false;
+
+        const run = async () => {
+            await new Promise((resolve) => window.setTimeout(resolve, delayMs));
+            if (cancelled) return;
+
+            try {
+                if (format === 'json') {
+                    const payload = {
+                        schema: 'dts.screen.spec',
+                        exportedAt: new Date().toISOString(),
+                        screenSpec: buildScreenPayload(screen),
+                    };
+                    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' });
+                    const url = URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = `${screen.name || 'screen'}-spec.json`;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    URL.revokeObjectURL(url);
+                    void reportExport('success');
+                    setStatusText('JSON 导出完成，可关闭窗口');
+                    return;
+                }
+
+                setStatusText('正在生成导出文件...');
+                const dataUrl = await captureCanvasAsPngDataUrl();
+                if (cancelled) return;
+
+                if (format === 'png') {
+                    const link = document.createElement('a');
+                    link.href = dataUrl;
+                    link.download = `${screen.name || 'screen'}.png`;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    void reportExport('success');
+                    setStatusText('PNG 导出完成，可关闭窗口');
+                    return;
+                }
+
+                const popup = window.open('', '_blank');
+                if (!popup) {
+                    throw new Error('请允许弹窗后重试 PDF 导出');
+                }
+                popup.document.write(
+                    `<html><head><title>${screen.name || 'screen'}</title></head>`
+                    + '<body style="margin:0"><img src="'
+                    + dataUrl
+                    + '" style="width:100%;height:auto;display:block"/></body></html>',
+                );
+                popup.document.close();
+                popup.focus();
+                popup.print();
+                void reportExport('success');
+                setStatusText('PDF 导出窗口已打开');
+            } catch (e) {
+                if (format === 'pdf') {
+                    try {
+                        printCanvasDomFallback();
+                        void reportExport('fallback', 'capture_failed_print_fallback');
+                        setStatusText('截图导出失败，已切换打印回退模式');
+                        return;
+                    } catch {
+                        // continue to unified error handling
+                    }
+                }
+                if (format === 'png' && isCrossOriginLikeError(e)) {
+                    try {
+                        openPreviewFallback();
+                        void reportExport('fallback', 'capture_failed_preview_fallback');
+                        setStatusText('PNG 自动导出失败，已打开预览页回退模式');
+                    } catch {
+                        // fallback open failed, keep original error
+                    }
+                    setError('PNG 自动导出失败（跨域资源限制）。已尝试打开预览页，请使用系统截图导出。');
+                    return;
+                }
+                const msg = toErrorMessage(e, '导出失败');
+                void reportExport('failed', msg);
+                setError(msg);
+            }
+        };
+
+        run();
+        return () => {
+            cancelled = true;
+        };
+    }, [delayMs, error, format, loading, retryNonce, screen]);
+
+    const rawTheme = screen?.theme as ScreenTheme | undefined;
+    const screenTheme = resolveScreenTheme(rawTheme, screen?.backgroundColor);
+    const components = (screen?.components ?? [])
+        .filter((item) => item.visible && isVisibleForDevice(item, effectiveDevice))
+        .sort((a, b) => a.zIndex - b.zIndex);
+
+    return (
+        <ScreenRuntimeProvider definitions={screen?.globalVariables ?? []}>
+            <div
+                style={{
+                    minHeight: '100vh',
+                    background: '#0b1220',
+                    color: '#fff',
+                    padding: 16,
+                    boxSizing: 'border-box',
+                }}
+            >
+                <div style={{ marginBottom: 10, fontSize: 12, opacity: 0.92 }}>
+                    导出任务：`{format.toUpperCase()}` | 模式：`{mode}` | 设备：`{effectiveDevice}`
+                    {requestId ? ` | requestId: ${requestId}` : ''}
+                </div>
+                <div style={{ marginBottom: 12, fontSize: 13 }}>{error ? `错误：${error}` : statusText}</div>
+                {error && !loading && (
+                    <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                        <button
+                            type="button"
+                            className="header-btn"
+                            onClick={() => {
+                                setError(null);
+                                setStatusText('正在重试导出...');
+                                doneRef.current = false;
+                                setRetryNonce((prev) => prev + 1);
+                            }}
+                        >
+                            重试导出
+                        </button>
+                        <button
+                            type="button"
+                            className="header-btn"
+                            onClick={() => {
+                                try {
+                                    openPreviewFallback();
+                                } catch (openError) {
+                                    alert(toErrorMessage(openError, '打开预览页失败'));
+                                }
+                            }}
+                        >
+                            打开预览页
+                        </button>
+                        {format === 'pdf' && (
+                            <button
+                                type="button"
+                                className="header-btn"
+                                onClick={() => {
+                                    try {
+                                        printCanvasDomFallback();
+                                    } catch (printError) {
+                                        alert(toErrorMessage(printError, 'PDF 打印回退失败'));
+                                    }
+                                }}
+                            >
+                                PDF 打印回退
+                            </button>
+                        )}
+                    </div>
+                )}
+                <div style={{ overflow: 'auto', border: '1px solid rgba(148,163,184,0.3)' }}>
+                    {loading || !screen ? (
+                        <div style={{ padding: 24, fontSize: 13 }}>加载中...</div>
+                    ) : (
+                        <div
+                            ref={canvasRef}
+                            style={{
+                                width: screen.width || 1920,
+                                height: screen.height || 1080,
+                                backgroundColor: screen.backgroundColor || '#0d1b2a',
+                                backgroundImage: screen.backgroundImage ? `url(${screen.backgroundImage})` : undefined,
+                                backgroundSize: 'cover',
+                                backgroundPosition: 'center',
+                                position: 'relative',
+                                overflow: 'hidden',
+                            }}
+                        >
+                            {components.map((component) => (
+                                <div
+                                    key={component.id}
+                                    style={{
+                                        position: 'absolute',
+                                        left: component.x,
+                                        top: component.y,
+                                        width: component.width,
+                                        height: component.height,
+                                        zIndex: component.zIndex,
+                                    }}
+                                >
+                                    <ComponentRenderer component={component} mode="preview" theme={screenTheme} />
+                                </div>
+                            ))}
+                            {watermark.enabled && watermark.text && (
+                                <div
+                                    style={{
+                                        position: 'absolute',
+                                        inset: 0,
+                                        pointerEvents: 'none',
+                                        opacity: 0.16,
+                                        zIndex: 99999,
+                                        overflow: 'hidden',
+                                    }}
+                                >
+                                    {Array.from({ length: 20 }).map((_, idx) => (
+                                        <div
+                                            key={`wm-${idx}`}
+                                            style={{
+                                                position: 'absolute',
+                                                left: `${(idx % 5) * 22}%`,
+                                                top: `${Math.floor(idx / 5) * 24}%`,
+                                                transform: 'rotate(-18deg)',
+                                                color: screenTheme === 'glacier' ? '#111827' : '#f8fafc',
+                                                fontSize: 20,
+                                                fontWeight: 600,
+                                                whiteSpace: 'nowrap',
+                                            }}
+                                        >
+                                            {watermark.text}
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+            </div>
+        </ScreenRuntimeProvider>
+    );
+}

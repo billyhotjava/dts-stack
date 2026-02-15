@@ -573,6 +573,50 @@ export type ScreenHealthReport = {
 	publishedAt?: string | null;
 };
 
+export type ScreenExportPrepareRequest = {
+	format?: "png" | "pdf" | "json" | string;
+	mode?: "draft" | "published" | "preview" | string;
+	device?: "pc" | "tablet" | "mobile" | string;
+};
+
+export type ScreenExportPrepareResult = {
+	allowed?: boolean;
+	screenId?: number | string;
+	format?: string;
+	mode?: string;
+	device?: string | null;
+	requestId?: string;
+	previewUrl?: string;
+	policy?: {
+		policyVersion?: number;
+		exportApprovalRequired?: boolean;
+		watermarkEnabled?: boolean;
+		watermarkText?: string;
+	};
+};
+
+export type ScreenExportReportRequest = {
+	status: "success" | "failed" | "fallback" | string;
+	format?: "png" | "pdf" | "json" | string;
+	mode?: "draft" | "published" | "preview" | string;
+	device?: "pc" | "tablet" | "mobile" | string;
+	requestId?: string;
+	message?: string;
+};
+
+export type ScreenExportReportResult = {
+	accepted?: boolean;
+	status?: string;
+	screenId?: number | string;
+	format?: string;
+	mode?: string;
+	device?: string | null;
+	clientRequestId?: string | null;
+	message?: string | null;
+	requestId?: string;
+	reportedAt?: string;
+};
+
 export type ScreenComponentData = {
 	id: string;
 	type: string;
@@ -945,6 +989,10 @@ export const analyticsApi = {
 	},
 	getScreenHealth: (id: string | number) =>
 		fetchJson<ScreenHealthReport>(`/analytics/api/screens/${encodeURIComponent(String(id))}/health`),
+	prepareScreenExport: (id: string | number, body?: ScreenExportPrepareRequest) =>
+		sendJson<ScreenExportPrepareResult>(`/analytics/api/screens/${encodeURIComponent(String(id))}/export-prepare`, body ?? {}),
+	reportScreenExport: (id: string | number, body: ScreenExportReportRequest) =>
+		sendJson<ScreenExportReportResult>(`/analytics/api/screens/${encodeURIComponent(String(id))}/export-report`, body),
 	validateScreenSpec: (body: unknown) =>
 		sendJson<ScreenSpecValidationResponse>("/analytics/api/screens/validate-spec", body),
 	createScreen: (body: unknown) => sendJson<ScreenDetail>("/analytics/api/screens", body),
@@ -976,7 +1024,7 @@ export const analyticsApi = {
 		requestJson<ScreenAclEntry[]>(`/analytics/api/screens/${encodeURIComponent(String(id))}/acl`, "PUT", body),
 	getScreenEditLock: (id: string | number) =>
 		fetchJson<ScreenEditLock>(`/analytics/api/screens/${encodeURIComponent(String(id))}/edit-lock`),
-	acquireScreenEditLock: (id: string | number, body?: { ttlSeconds?: number }) =>
+	acquireScreenEditLock: (id: string | number, body?: { ttlSeconds?: number; forceTakeover?: boolean }) =>
 		sendJson<ScreenEditLock>(`/analytics/api/screens/${encodeURIComponent(String(id))}/edit-lock/acquire`, body ?? {}),
 	heartbeatScreenEditLock: (id: string | number, body?: { ttlSeconds?: number }) =>
 		sendJson<ScreenEditLock>(`/analytics/api/screens/${encodeURIComponent(String(id))}/edit-lock/heartbeat`, body ?? {}),

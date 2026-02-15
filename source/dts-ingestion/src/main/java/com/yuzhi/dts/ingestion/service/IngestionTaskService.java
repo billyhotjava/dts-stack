@@ -381,6 +381,10 @@ public class IngestionTaskService {
      * 创建执行记录并触发Addax任务
      */
     public IngestionExecutionDTO execute(Long taskId) {
+        return execute(taskId, "MANUAL");
+    }
+
+    private IngestionExecutionDTO execute(Long taskId, String triggerMode) {
         log.info("Executing ingestion task ID: {}", taskId);
 
         IngestionTask task = taskRepository.findById(taskId)
@@ -406,12 +410,24 @@ public class IngestionTaskService {
         execution.setStatus("preparing");
         execution.setCreatedAt(Instant.now());
         execution.setReplaceMode(resolveReplaceMode(task));
+        execution.setTriggerMode(normalizeTriggerMode(triggerMode));
 
         try {
-            String governanceBlockedReason = evaluateGovernanceBlock(task, policy);
+            IngestionExecution savedPreparingExecution = executionRepository.save(execution);
+            if (savedPreparingExecution != null) {
+                execution = savedPreparingExecution;
+            }
+
+            String governanceBlockedReason = evaluateGovernanceBlock(task, policy, execution.getId());
             if (StringUtils.hasText(governanceBlockedReason)) {
                 if ("QUEUE".equalsIgnoreCase(policy.rejectPolicy())) {
-                    boolean ready = waitForGovernanceSlot(task, policy, GOVERNANCE_QUEUE_MAX_WAIT, GOVERNANCE_QUEUE_POLL_INTERVAL);
+                    boolean ready = waitForGovernanceSlot(
+                        task,
+                        policy,
+                        execution.getId(),
+                        GOVERNANCE_QUEUE_MAX_WAIT,
+                        GOVERNANCE_QUEUE_POLL_INTERVAL
+                    );
                     if (!ready) {
                         throw new IllegalStateException(
                             "触发治理队列等待超时(" + GOVERNANCE_QUEUE_MAX_WAIT.toSeconds() + "s)："
@@ -421,10 +437,6 @@ public class IngestionTaskService {
                 } else {
                     throw new IllegalStateException(governanceBlockedReason);
                 }
-            }
-            IngestionExecution savedPreparingExecution = executionRepository.save(execution);
-            if (savedPreparingExecution != null) {
-                execution = savedPreparingExecution;
             }
 
             boolean airflowEnabled = isAirflowEnabled(task);
@@ -656,7 +668,19 @@ public class IngestionTaskService {
             task.getName(),
             retryMeta
         );
-        return execute(taskId);
+        return execute(taskId, mode);
+    }
+
+    private String normalizeTriggerMode(String triggerMode) {
+        String mode = toText(triggerMode);
+        if (!StringUtils.hasText(mode)) {
+            return "MANUAL";
+        }
+        String upper = mode.toUpperCase(java.util.Locale.ROOT);
+        if ("FAILED_ONLY".equals(upper) || "FULL_RERUN".equals(upper) || "MANUAL".equals(upper)) {
+            return upper;
+        }
+        return "MANUAL";
     }
 
 
@@ -1415,13 +1439,14 @@ public class IngestionTaskService {
         return "default";
     }
 
-    private String evaluateGovernanceBlock(IngestionTask task, GovernancePolicy policy) {
-        long taskInProgress = countInProgressByTask(task.getId());
+    private String evaluateGovernanceBlock(IngestionTask task, GovernancePolicy policy, Long excludeExecutionId) {
+        List<IngestionExecution> inProgressExecutions = listInProgressExecutions();
+        long taskInProgress = countInProgressByTask(task.getId(), excludeExecutionId, inProgressExecutions);
         if (policy.maxConcurrentRuns() > 0 && taskInProgress >= policy.maxConcurrentRuns()) {
             return "任务并发已达上限(" + policy.maxConcurrentRuns() + ")，当前运行中/排队中执行: " + taskInProgress;
         }
         if (task.getSourceDataSourceId() != null && policy.sourceConcurrencyLimit() > 0) {
-            long sourceInProgress = countInProgressBySource(task.getSourceDataSourceId());
+            long sourceInProgress = countInProgressBySource(task.getSourceDataSourceId(), excludeExecutionId, inProgressExecutions);
             if (sourceInProgress >= policy.sourceConcurrencyLimit()) {
                 return "来源并发已达上限(" + policy.sourceConcurrencyLimit() + ")，source="
                     + task.getSourceDataSourceId()
@@ -1430,7 +1455,7 @@ public class IngestionTaskService {
             }
         }
         if (StringUtils.hasText(policy.projectKey()) && policy.projectConcurrencyLimit() > 0) {
-            long projectInProgress = countInProgressByProject(policy.projectKey());
+            long projectInProgress = countInProgressByProject(policy.projectKey(), excludeExecutionId, inProgressExecutions);
             if (projectInProgress >= policy.projectConcurrencyLimit()) {
                 return "项目并发已达上限(" + policy.projectConcurrencyLimit() + ")，project="
                     + policy.projectKey()
@@ -1441,26 +1466,39 @@ public class IngestionTaskService {
         return null;
     }
 
-    private boolean waitForGovernanceSlot(IngestionTask task, GovernancePolicy policy, Duration maxWait, Duration pollInterval) {
+    private boolean waitForGovernanceSlot(
+        IngestionTask task,
+        GovernancePolicy policy,
+        Long currentExecutionId,
+        Duration maxWait,
+        Duration pollInterval
+    ) {
         if (maxWait == null || maxWait.isNegative() || maxWait.isZero()) {
-            return !StringUtils.hasText(evaluateGovernanceBlock(task, policy));
+            return !StringUtils.hasText(evaluateGovernanceBlock(task, policy, currentExecutionId))
+                && isQueueTurn(task, policy, currentExecutionId);
         }
         Duration interval = (pollInterval == null || pollInterval.isNegative() || pollInterval.isZero())
             ? Duration.ofSeconds(1)
             : pollInterval;
         Instant deadline = Instant.now().plus(maxWait);
-        String lastReason = evaluateGovernanceBlock(task, policy);
-        while (StringUtils.hasText(lastReason) && Instant.now().isBefore(deadline)) {
+        String lastReason = evaluateGovernanceBlock(task, policy, currentExecutionId);
+        boolean queueTurn = isQueueTurn(task, policy, currentExecutionId);
+        while ((StringUtils.hasText(lastReason) || !queueTurn) && Instant.now().isBefore(deadline)) {
             try {
                 Thread.sleep(interval.toMillis());
             } catch (InterruptedException ex) {
                 Thread.currentThread().interrupt();
                 return false;
             }
-            lastReason = evaluateGovernanceBlock(task, policy);
+            lastReason = evaluateGovernanceBlock(task, policy, currentExecutionId);
+            queueTurn = isQueueTurn(task, policy, currentExecutionId);
         }
         if (StringUtils.hasText(lastReason)) {
             log.warn("Governance queue wait timeout for task {}: {}", task.getId(), lastReason);
+            return false;
+        }
+        if (!queueTurn) {
+            log.warn("Governance queue wait timeout for task {}: waiting for higher-priority queue turn", task.getId());
             return false;
         }
         return true;
@@ -1483,21 +1521,151 @@ public class IngestionTaskService {
     }
 
     private long countInProgressByTask(Long taskId) {
-        return executionRepository.countByTaskIdAndStatusesIgnoreCase(taskId, IN_PROGRESS_STATUSES);
+        return countInProgressByTask(taskId, null, null);
+    }
+
+    private long countInProgressByTask(Long taskId, Long excludeExecutionId, List<IngestionExecution> inProgressExecutions) {
+        if (taskId == null) {
+            return 0L;
+        }
+        List<IngestionExecution> rows = inProgressExecutions == null ? listInProgressExecutions() : inProgressExecutions;
+        return rows.stream()
+            .filter(execution -> execution != null && execution.getTask() != null)
+            .filter(execution -> taskId.equals(execution.getTask().getId()))
+            .filter(execution -> excludeExecutionId == null || !excludeExecutionId.equals(execution.getId()))
+            .count();
     }
 
     private long countInProgressBySource(UUID sourceDataSourceId) {
-        return executionRepository.countBySourceDataSourceIdAndStatusesIgnoreCase(sourceDataSourceId, IN_PROGRESS_STATUSES);
+        return countInProgressBySource(sourceDataSourceId, null, null);
+    }
+
+    private long countInProgressBySource(
+        UUID sourceDataSourceId,
+        Long excludeExecutionId,
+        List<IngestionExecution> inProgressExecutions
+    ) {
+        if (sourceDataSourceId == null) {
+            return 0L;
+        }
+        List<IngestionExecution> rows = inProgressExecutions == null ? listInProgressExecutions() : inProgressExecutions;
+        return rows.stream()
+            .filter(execution -> execution != null && execution.getTask() != null)
+            .filter(execution -> sourceDataSourceId.equals(execution.getTask().getSourceDataSourceId()))
+            .filter(execution -> excludeExecutionId == null || !excludeExecutionId.equals(execution.getId()))
+            .count();
     }
 
     private long countInProgressByProject(String projectKey) {
+        return countInProgressByProject(projectKey, null, null);
+    }
+
+    private long countInProgressByProject(
+        String projectKey,
+        Long excludeExecutionId,
+        List<IngestionExecution> inProgressExecutions
+    ) {
         if (!StringUtils.hasText(projectKey)) {
             return 0L;
         }
-        return executionRepository.findByStatusesIgnoreCase(IN_PROGRESS_STATUSES).stream()
+        List<IngestionExecution> rows = inProgressExecutions == null ? listInProgressExecutions() : inProgressExecutions;
+        return rows.stream()
             .filter(execution -> execution != null && execution.getTask() != null)
             .filter(execution -> projectKey.equalsIgnoreCase(resolveProjectKey(execution.getTask())))
+            .filter(execution -> excludeExecutionId == null || !excludeExecutionId.equals(execution.getId()))
             .count();
+    }
+
+    private List<IngestionExecution> listInProgressExecutions() {
+        return executionRepository.findByStatusesIgnoreCase(IN_PROGRESS_STATUSES);
+    }
+
+    private boolean isQueueTurn(IngestionTask task, GovernancePolicy policy, Long currentExecutionId) {
+        if (task == null || currentExecutionId == null) {
+            return true;
+        }
+        List<IngestionExecution> inProgressExecutions = listInProgressExecutions();
+        IngestionExecution current = inProgressExecutions.stream()
+            .filter(execution -> execution != null && currentExecutionId.equals(execution.getId()))
+            .findFirst()
+            .orElse(null);
+        if (current == null) {
+            return true;
+        }
+        int selfPriority = priorityWeight(policy == null ? null : policy.priority());
+        Instant selfCreatedAt = current.getCreatedAt();
+        Long selfId = current.getId();
+        for (IngestionExecution candidate : inProgressExecutions) {
+            if (candidate == null || candidate.getTask() == null || candidate.getId() == null) {
+                continue;
+            }
+            if (candidate.getId().equals(currentExecutionId)) {
+                continue;
+            }
+            if (!"preparing".equalsIgnoreCase(toText(candidate.getStatus()))) {
+                continue;
+            }
+            GovernancePolicy candidatePolicy = resolveGovernancePolicy(candidate.getTask());
+            if (!isGovernanceConflict(task, policy, candidate.getTask(), candidatePolicy)) {
+                continue;
+            }
+            int candidatePriority = priorityWeight(candidatePolicy.priority());
+            if (candidatePriority > selfPriority) {
+                return false;
+            }
+            if (candidatePriority == selfPriority) {
+                Instant candidateCreatedAt = candidate.getCreatedAt();
+                if (candidateCreatedAt != null && selfCreatedAt != null && candidateCreatedAt.isBefore(selfCreatedAt)) {
+                    return false;
+                }
+                if (candidateCreatedAt != null
+                    && selfCreatedAt != null
+                    && candidateCreatedAt.equals(selfCreatedAt)
+                    && candidate.getId() < selfId) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    private boolean isGovernanceConflict(
+        IngestionTask currentTask,
+        GovernancePolicy currentPolicy,
+        IngestionTask queuedTask,
+        GovernancePolicy queuedPolicy
+    ) {
+        if (currentTask == null || queuedTask == null || currentPolicy == null || queuedPolicy == null) {
+            return false;
+        }
+        if (currentPolicy.maxConcurrentRuns() > 0
+            && currentTask.getId() != null
+            && currentTask.getId().equals(queuedTask.getId())) {
+            return true;
+        }
+        if (currentPolicy.sourceConcurrencyLimit() > 0
+            && currentTask.getSourceDataSourceId() != null
+            && currentTask.getSourceDataSourceId().equals(queuedTask.getSourceDataSourceId())) {
+            return true;
+        }
+        if (currentPolicy.projectConcurrencyLimit() > 0
+            && StringUtils.hasText(currentPolicy.projectKey())
+            && currentPolicy.projectKey().equalsIgnoreCase(queuedPolicy.projectKey())) {
+            return true;
+        }
+        return false;
+    }
+
+    private int priorityWeight(String priority) {
+        String normalized = toText(priority);
+        if (!StringUtils.hasText(normalized)) {
+            return 2;
+        }
+        return switch (normalized.toUpperCase(java.util.Locale.ROOT)) {
+            case "P0", "HIGH", "CRITICAL", "URGENT" -> 3;
+            case "P2", "LOW" -> 1;
+            default -> 2;
+        };
     }
 
     private int positiveOrDefault(JsonNode node, int defaultValue) {

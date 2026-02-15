@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { analyticsApi } from '../../../api/analyticsApi';
 import { installBuiltinPluginAdapters } from './builtinPluginAdapters';
+import { loadScreenPluginManifests } from './manifestLoader';
 
 let loaded = false;
 let loadingPromise: Promise<void> | null = null;
@@ -12,9 +12,9 @@ function ensureLoaded(): Promise<void> {
     if (loadingPromise) {
         return loadingPromise;
     }
-    loadingPromise = analyticsApi.listScreenPlugins()
+    loadingPromise = loadScreenPluginManifests()
         .then((manifests) => {
-            installBuiltinPluginAdapters(Array.isArray(manifests) ? manifests : []);
+            installBuiltinPluginAdapters(manifests);
             loaded = true;
         })
         .catch((error) => {
@@ -42,4 +42,3 @@ export function useScreenPluginRuntime(): number {
     }, []);
     return version;
 }
-

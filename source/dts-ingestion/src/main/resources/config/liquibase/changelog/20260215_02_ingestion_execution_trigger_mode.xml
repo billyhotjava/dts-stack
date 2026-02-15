@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+    http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="20260215-02-ingestion-execution-trigger-mode" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <columnExists tableName="ingestion_execution" columnName="trigger_mode"/>
+            </not>
+        </preConditions>
+        <addColumn tableName="ingestion_execution">
+            <column name="trigger_mode" type="varchar(32)" remarks="触发方式：MANUAL/FAILED_ONLY/FULL_RERUN"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="20260215-02-ingestion-execution-trigger-mode-index" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <columnExists tableName="ingestion_execution" columnName="trigger_mode"/>
+            <not>
+                <indexExists tableName="ingestion_execution" indexName="idx_ingestion_execution_trigger_mode"/>
+            </not>
+        </preConditions>
+        <createIndex tableName="ingestion_execution" indexName="idx_ingestion_execution_trigger_mode">
+            <column name="trigger_mode"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

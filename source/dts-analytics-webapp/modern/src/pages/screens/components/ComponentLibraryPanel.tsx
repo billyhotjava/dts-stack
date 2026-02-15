@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useDrag } from 'react-dnd';
-import { analyticsApi, type ScreenPluginManifest } from '../../../api/analyticsApi';
+import type { ScreenPluginManifest } from '../../../api/analyticsApi';
 import { componentLibrary } from '../componentLibrary';
 import type { ComponentCategory, ComponentItem, ComponentType } from '../types';
+import { loadScreenPluginManifests } from '../plugins/manifestLoader';
 
 interface DraggableComponentItemProps {
     item: ComponentItem;
@@ -117,9 +118,9 @@ export function ComponentLibraryPanel() {
     const [recent, setRecent] = useState<string[]>([]);
 
     useEffect(() => {
-        analyticsApi.listScreenPlugins()
+        loadScreenPluginManifests()
             .then((data) => {
-                setPlugins(Array.isArray(data) ? data : []);
+                setPlugins(data);
                 setPluginError(null);
             })
             .catch((error) => {

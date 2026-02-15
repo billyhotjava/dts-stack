@@ -1,6 +1,7 @@
 import { Modal } from '../../../ui/Modal/Modal';
 import type { ScreenVersionDiff } from '../../../api/analyticsApi';
 import type { ReactNode } from 'react';
+import { writeTextToClipboard } from '../../../hooks/clipboard';
 
 interface ScreenVersionComparePanelProps {
     open: boolean;
@@ -40,6 +41,48 @@ export function ScreenVersionComparePanel({ open, diff, onClose }: ScreenVersion
 
     return (
         <Modal isOpen={open} onClose={onClose} title="版本差异详情" size="xl">
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 10 }}>
+                <button
+                    type="button"
+                    className="header-btn"
+                    disabled={!diff}
+                    onClick={async () => {
+                        if (!diff) return;
+                        const summaryText = [
+                            `版本差异摘要`,
+                            `组件数: ${s.componentCountFrom ?? '-'} -> ${s.componentCountTo ?? '-'}`,
+                            `新增/移除组件: ${s.addedComponents ?? 0} / ${s.removedComponents ?? 0}`,
+                            `新增/移除变量: ${s.addedVariables ?? 0} / ${s.removedVariables ?? 0}`,
+                            `类型变化组件: ${s.changedTypeComponents ?? 0}`,
+                        ].join('\n');
+                        const copied = await writeTextToClipboard(summaryText);
+                        if (!copied) {
+                            alert(summaryText);
+                        }
+                    }}
+                >
+                    复制摘要
+                </button>
+                <button
+                    type="button"
+                    className="header-btn"
+                    disabled={!diff}
+                    onClick={() => {
+                        if (!diff) return;
+                        const blob = new Blob([JSON.stringify(diff, null, 2)], { type: 'application/json;charset=utf-8' });
+                        const url = URL.createObjectURL(blob);
+                        const link = document.createElement('a');
+                        link.href = url;
+                        link.download = `screen-version-diff-${Date.now()}.json`;
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                        URL.revokeObjectURL(url);
+                    }}
+                >
+                    导出JSON
+                </button>
+            </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(120px, 1fr))', gap: 8, marginBottom: 12 }}>
                 <Metric title="组件数" value={`${s.componentCountFrom ?? '-'} -> ${s.componentCountTo ?? '-'}`} />
                 <Metric title="新增/移除组件" value={`${s.addedComponents ?? 0} / ${s.removedComponents ?? 0}`} />

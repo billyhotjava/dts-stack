@@ -7,9 +7,9 @@
 
 | 阶段 | 目标 | 状态 |
 |---|---|---|
-| P0 | 可用性与一致性补齐（调度、重试、门禁） | in-progress |
-| P1 | 治理与可观测升级（流程化、漂移闭环、SLA） | in-progress |
-| P2 | 商业化能力增强（能力契约、模板化、资源治理） | in-progress |
+| P0 | 可用性与一致性补齐（调度、重试、门禁） | done |
+| P1 | 治理与可观测升级（流程化、漂移闭环、SLA） | done |
+| P2 | 商业化能力增强（能力契约、模板化、资源治理） | done |
 
 ## 强制顺序
 
@@ -36,6 +36,7 @@
 - `P2-01-connector-capability-contract.md`
 - `P2-02-ingestion-templates.md`
 - `P2-03-resource-quota-governance.md`
+- 完成摘要：`worklog/v2.2.1/platform/access/report/completion-summary.md`
 
 ## 管理规则
 

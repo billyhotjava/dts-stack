@@ -28,6 +28,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.scheduling.support.CronExpression;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -122,8 +123,8 @@ public class CatalogSyncResource {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("autoSyncEnabled", catalogFeatures != null && catalogFeatures.isAutoSyncEnabled());
         payload.put("autoSyncCron", catalogFeatures != null ? catalogFeatures.getAutoSyncCron() : null);
-        payload.put("cronRuntimeEditable", false);
-        payload.put("message", "当前版本仅支持在线启停自动采集；Cron 修改需更新配置并重启服务。");
+        payload.put("cronRuntimeEditable", true);
+        payload.put("message", "自动采集开关与 Cron 修改均为运行时生效。");
         auditService.auditAction("CATALOG_SYNC_CONFIG_VIEW", AuditStage.SUCCESS, "config", Map.of("summary", "查看采集配置"));
         return ApiResponses.ok(payload);
     }
@@ -139,7 +140,7 @@ public class CatalogSyncResource {
         }
         String cron = body.autoSyncCron();
         if (StringUtils.hasText(cron) && catalogFeatures != null) {
-            if (!isLikelyCron(cron)) {
+            if (!isValidCron(cron)) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cron 表达式格式不正确（需 5-7 段）");
             }
             catalogFeatures.setAutoSyncCron(cron.trim());
@@ -147,8 +148,8 @@ public class CatalogSyncResource {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("autoSyncEnabled", catalogFeatures != null && catalogFeatures.isAutoSyncEnabled());
         payload.put("autoSyncCron", catalogFeatures != null ? catalogFeatures.getAutoSyncCron() : null);
-        payload.put("cronRuntimeEditable", false);
-        payload.put("message", "自动采集启停已生效；Cron 运行时修改仅更新展示值，完整生效需重启服务。");
+        payload.put("cronRuntimeEditable", true);
+        payload.put("message", "自动采集启停与 Cron 更新已生效。");
         auditService.auditAction(
             "CATALOG_SYNC_CONFIG_UPDATE",
             AuditStage.SUCCESS,
@@ -165,12 +166,16 @@ public class CatalogSyncResource {
         return ApiResponses.ok(payload);
     }
 
-    private boolean isLikelyCron(String cron) {
+    private boolean isValidCron(String cron) {
         if (!StringUtils.hasText(cron)) {
             return false;
         }
-        String[] parts = cron.trim().split("\\s+");
-        return parts.length >= 5 && parts.length <= 7;
+        try {
+            CronExpression.parse(cron.trim());
+            return true;
+        } catch (IllegalArgumentException ex) {
+            return false;
+        }
     }
 
     @GetMapping("/runs")

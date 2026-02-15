@@ -22,6 +22,7 @@ import jakarta.validation.Valid;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -29,6 +30,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.scheduling.support.CronExpression;
 import org.springframework.util.StringUtils;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -215,6 +217,22 @@ public class IngestionTaskResource {
         List<String> requiredParams,
         List<String> warnings,
         String version
+    ) {}
+
+    public record IngestionTemplateRenderRequest(
+        Map<String, Object> params,
+        Boolean strictRequired
+    ) {}
+
+    public record IngestionTemplateRenderDTO(
+        String id,
+        String name,
+        String version,
+        Map<String, Object> renderedDefaults,
+        List<String> requiredParams,
+        List<String> warnings,
+        List<String> errors,
+        Boolean canApply
     ) {}
 
     @PostMapping("/tasks")
@@ -1313,15 +1331,77 @@ public class IngestionTaskResource {
         String cron = normalize(sync.schedule().cron());
         Integer interval = sync.schedule().intervalMinutes();
         if (!StringUtils.hasText(type)) {
-            return cron;
+            if (StringUtils.hasText(cron)) {
+                validateCronOrThrow(cron);
+                return "cron:" + cron;
+            }
+            if (interval != null) {
+                if (interval <= 0) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "调度间隔必须为正整数分钟");
+                }
+                return "interval:" + interval;
+            }
+            return null;
         }
-        if ("cron".equalsIgnoreCase(type) && StringUtils.hasText(cron)) {
+        if ("manual".equalsIgnoreCase(type)) {
+            return "manual";
+        }
+        if ("cron".equalsIgnoreCase(type)) {
+            if (!StringUtils.hasText(cron)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "调度策略为 cron 时必须填写 Cron 表达式");
+            }
+            validateCronOrThrow(cron);
             return "cron:" + cron;
         }
-        if ("interval".equalsIgnoreCase(type) && interval != null) {
+        if ("interval".equalsIgnoreCase(type)) {
+            if (interval == null || interval <= 0) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "调度策略为 interval 时必须填写正整数间隔");
+            }
             return "interval:" + interval;
         }
-        return type;
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "不支持的调度策略: " + type);
+    }
+
+    private void validateCronOrThrow(String cronText) {
+        String cron = normalize(cronText);
+        if (!StringUtils.hasText(cron)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cron 表达式不能为空");
+        }
+        try {
+            CronExpression.parse(cron);
+        } catch (IllegalArgumentException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cron 表达式不合法: " + cron);
+        }
+    }
+
+    private void validateSyncScheduleText(String syncSchedule) {
+        String schedule = normalize(syncSchedule);
+        if (!StringUtils.hasText(schedule)) {
+            return;
+        }
+        String lower = schedule.toLowerCase(java.util.Locale.ROOT);
+        if ("manual".equals(lower)) {
+            return;
+        }
+        if (lower.startsWith("interval:")) {
+            String intervalText = normalize(schedule.substring("interval:".length()));
+            Integer interval = parsePositiveInt(intervalText);
+            if (interval == null) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "interval 调度格式不正确，应为 interval:<正整数分钟>");
+            }
+            return;
+        }
+        if (lower.startsWith("cron:")) {
+            String cron = normalize(schedule.substring("cron:".length()));
+            validateCronOrThrow(cron);
+            return;
+        }
+        // 兼容历史格式：直接写 cron 表达式
+        if (schedule.contains(" ")) {
+            validateCronOrThrow(schedule);
+            return;
+        }
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "调度配置格式不正确，仅支持 manual / interval:* / cron:*");
     }
 
     private Map<String, Object> buildSyncConfig(SyncSpec sync) {
@@ -1411,6 +1491,214 @@ public class IngestionTaskResource {
         }
     }
 
+    private List<IngestionTaskTemplateDTO> buildTemplateCatalog() {
+        return List.of(
+            new IngestionTaskTemplateDTO(
+                "erp_jdbc_full",
+                "ERP 全量入湖模板",
+                "适用于 ERP 多表全量同步，自动推荐 ods_erp_ 前缀。",
+                "database",
+                "addax",
+                Map.of(
+                    "sourceCategory",
+                    "database",
+                    "syncMode",
+                    "full_refresh",
+                    "tableSelectionMode",
+                    "all",
+                    "syncPrefix",
+                    "ods_erp_",
+                    "sourceSystem",
+                    "ERP",
+                    "scheduleType",
+                    "manual"
+                ),
+                List.of("sourceDataSourceId"),
+                List.of("全量任务会先清空目标表，建议安排在低峰时段执行。"),
+                "1.1.0"
+            ),
+            new IngestionTaskTemplateDTO(
+                "crm_jdbc_incremental",
+                "CRM 增量入湖模板",
+                "适用于按更新时间字段增量同步，默认 incrementalColumn=updated_at。",
+                "database",
+                "addax",
+                Map.of(
+                    "sourceCategory",
+                    "database",
+                    "syncMode",
+                    "incremental",
+                    "incrementalColumn",
+                    "updated_at",
+                    "incrementalType",
+                    "datetime",
+                    "syncPrefix",
+                    "ods_crm_",
+                    "sourceSystem",
+                    "CRM",
+                    "scheduleType",
+                    "interval",
+                    "scheduleIntervalMinutes",
+                    30
+                ),
+                List.of("sourceDataSourceId", "incrementalColumn"),
+                List.of("增量模式建议优先使用单表验证水位推进，再批量扩展。"),
+                "1.1.0"
+            ),
+            new IngestionTaskTemplateDTO(
+                "excel_batch_full",
+                "Excel 批量入湖模板",
+                "适用于文件批量导入场景，默认全量模式与 ods_file_ 前缀。",
+                "file",
+                "file",
+                Map.of(
+                    "sourceCategory",
+                    "file",
+                    "syncMode",
+                    "full_refresh",
+                    "syncPrefix",
+                    "ods_file_",
+                    "scheduleType",
+                    "manual"
+                ),
+                List.of("file"),
+                List.of("请先上传文件并确认字段映射后再执行。"),
+                "1.1.0"
+            )
+        );
+    }
+
+    private java.util.Optional<IngestionTaskTemplateDTO> findTemplate(String templateId) {
+        String id = normalize(templateId);
+        if (!StringUtils.hasText(id)) {
+            return java.util.Optional.empty();
+        }
+        return buildTemplateCatalog().stream()
+            .filter(item -> id.equalsIgnoreCase(item.id()))
+            .findFirst();
+    }
+
+    private IngestionTemplateRenderDTO renderTemplate(
+        IngestionTaskTemplateDTO template,
+        Map<String, Object> params,
+        boolean strictRequired
+    ) {
+        Map<String, Object> renderedDefaults = safeMap(template.defaults());
+        Map<String, Object> requestParams = safeMap(params);
+        for (Map.Entry<String, Object> entry : requestParams.entrySet()) {
+            String key = normalize(entry.getKey());
+            if (!StringUtils.hasText(key)) {
+                continue;
+            }
+            Object value = entry.getValue();
+            if (!hasTemplateValue(value)) {
+                continue;
+            }
+            renderedDefaults.put(key, value);
+        }
+        List<String> warnings = new ArrayList<>();
+        if (template.warnings() != null) {
+            warnings.addAll(template.warnings());
+        }
+        List<String> errors = new ArrayList<>();
+        List<String> requiredParams = template.requiredParams() == null ? List.of() : template.requiredParams();
+
+        // File template: sourceSystem 默认跟随文件名，避免写死 unknown/file。
+        if ("file".equalsIgnoreCase(normalize(template.sourceCategory()))) {
+            String fileName = normalize(requestParams.get("fileName"));
+            if (StringUtils.hasText(fileName) && !hasTemplateValue(renderedDefaults.get("sourceSystem"))) {
+                renderedDefaults.put("sourceSystem", fileName);
+            }
+        }
+
+        for (String requiredKey : requiredParams) {
+            if (!hasTemplateValue(renderedDefaults.get(requiredKey))) {
+                String fallback = "file".equalsIgnoreCase(requiredKey) ? normalize(requestParams.get("fileName")) : null;
+                if (!StringUtils.hasText(fallback)) {
+                    errors.add("缺少必填参数: " + requiredKey);
+                }
+            }
+        }
+
+        String syncMode = normalize(renderedDefaults.get("syncMode"));
+        String scheduleType = normalize(renderedDefaults.get("scheduleType"));
+
+        if ("incremental".equalsIgnoreCase(syncMode) && !hasTemplateValue(renderedDefaults.get("incrementalColumn"))) {
+            errors.add("增量模板必须提供 incrementalColumn");
+        }
+        if ("full_refresh".equalsIgnoreCase(syncMode) && warnings.stream().noneMatch(it -> it.contains("全量"))) {
+            warnings.add("全量模式会先 DROP/清空目标表，请确认低峰执行窗口。");
+        }
+        if ("interval".equalsIgnoreCase(scheduleType)) {
+            Integer minutes = parsePositiveInt(renderedDefaults.get("scheduleIntervalMinutes"));
+            if (minutes == null) {
+                errors.add("scheduleType=interval 时必须提供正整数 scheduleIntervalMinutes");
+            }
+        }
+        if ("cron".equalsIgnoreCase(scheduleType)) {
+            String cron = normalize(renderedDefaults.get("scheduleCron"));
+            if (!isLikelyCronExpression(cron)) {
+                errors.add("scheduleType=cron 时必须提供合法的 scheduleCron（5-7 段）");
+            }
+        }
+
+        boolean canApply = errors.isEmpty() || !strictRequired;
+        return new IngestionTemplateRenderDTO(
+            template.id(),
+            template.name(),
+            template.version(),
+            renderedDefaults,
+            requiredParams,
+            warnings,
+            errors,
+            canApply
+        );
+    }
+
+    private boolean hasTemplateValue(Object value) {
+        if (value == null) {
+            return false;
+        }
+        if (value instanceof String text) {
+            return StringUtils.hasText(text);
+        }
+        if (value instanceof java.util.Collection<?> collection) {
+            return !collection.isEmpty();
+        }
+        if (value instanceof Map<?, ?> map) {
+            return !map.isEmpty();
+        }
+        return true;
+    }
+
+    private Integer parsePositiveInt(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Number number) {
+            int parsed = number.intValue();
+            return parsed > 0 ? parsed : null;
+        }
+        String text = normalize(value);
+        if (!StringUtils.hasText(text)) {
+            return null;
+        }
+        try {
+            int parsed = Integer.parseInt(text);
+            return parsed > 0 ? parsed : null;
+        } catch (NumberFormatException ex) {
+            return null;
+        }
+    }
+
+    private boolean isLikelyCronExpression(String cron) {
+        if (!StringUtils.hasText(cron)) {
+            return false;
+        }
+        String[] parts = cron.trim().split("\\s+");
+        return parts.length >= 5 && parts.length <= 7;
+    }
+
     // ==================== 新增CRUD端点 ====================
 
     /**
@@ -1474,6 +1762,7 @@ public class IngestionTaskResource {
         if (!id.equals(taskDTO.getId())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "ID不匹配");
         }
+        validateSyncScheduleText(taskDTO.getSyncSchedule());
         String syncMode = connectorCapabilityService.normalizeSyncMode(taskDTO.getSyncMode());
         taskDTO.setSyncMode(syncMode);
         boolean isFileSourceUpdate = isFileSourceType(normalize(taskDTO.getSourceType()));
@@ -1931,81 +2220,23 @@ public class IngestionTaskResource {
     @GetMapping("/templates")
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ResponseEntity<List<IngestionTaskTemplateDTO>> listIngestionTemplates() {
-        List<IngestionTaskTemplateDTO> templates = List.of(
-            new IngestionTaskTemplateDTO(
-                "erp_jdbc_full",
-                "ERP 全量入湖模板",
-                "适用于 ERP 多表全量同步，自动推荐 ods_erp_ 前缀。",
-                "database",
-                "addax",
-                Map.of(
-                    "sourceCategory",
-                    "database",
-                    "syncMode",
-                    "full_refresh",
-                    "tableSelectionMode",
-                    "all",
-                    "syncPrefix",
-                    "ods_erp_",
-                    "sourceSystem",
-                    "ERP",
-                    "scheduleType",
-                    "manual"
-                ),
-                List.of("sourceDataSourceId"),
-                List.of("全量任务会先清空目标表，建议安排在低峰时段执行。"),
-                "1.0.0"
-            ),
-            new IngestionTaskTemplateDTO(
-                "crm_jdbc_incremental",
-                "CRM 增量入湖模板",
-                "适用于按更新时间字段增量同步，默认 incrementalColumn=updated_at。",
-                "database",
-                "addax",
-                Map.of(
-                    "sourceCategory",
-                    "database",
-                    "syncMode",
-                    "incremental",
-                    "incrementalColumn",
-                    "updated_at",
-                    "incrementalType",
-                    "datetime",
-                    "syncPrefix",
-                    "ods_crm_",
-                    "sourceSystem",
-                    "CRM",
-                    "scheduleType",
-                    "interval",
-                    "scheduleIntervalMinutes",
-                    30
-                ),
-                List.of("sourceDataSourceId", "incrementalColumn"),
-                List.of("增量模式建议优先使用单表验证水位推进，再批量扩展。"),
-                "1.0.0"
-            ),
-            new IngestionTaskTemplateDTO(
-                "excel_batch_full",
-                "Excel 批量入湖模板",
-                "适用于文件批量导入场景，默认全量模式与 ods_file_ 前缀。",
-                "file",
-                "file",
-                Map.of(
-                    "sourceCategory",
-                    "file",
-                    "syncMode",
-                    "full_refresh",
-                    "syncPrefix",
-                    "ods_file_",
-                    "scheduleType",
-                    "manual"
-                ),
-                List.of("file"),
-                List.of("请先上传文件并确认字段映射后再执行。"),
-                "1.0.0"
-            )
-        );
-        return ResponseEntity.ok(templates);
+        return ResponseEntity.ok(buildTemplateCatalog());
+    }
+
+    /**
+     * POST /api/ingestion/templates/{templateId}/render : 渲染模板默认值并返回预检结果
+     */
+    @PostMapping("/templates/{templateId}/render")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ResponseEntity<IngestionTemplateRenderDTO> renderIngestionTemplate(
+        @PathVariable String templateId,
+        @RequestBody(required = false) IngestionTemplateRenderRequest request
+    ) {
+        IngestionTaskTemplateDTO template = findTemplate(templateId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "模板不存在"));
+        Map<String, Object> params = safeMap(request == null ? null : request.params());
+        IngestionTemplateRenderDTO rendered = renderTemplate(template, params, request != null && Boolean.TRUE.equals(request.strictRequired()));
+        return ResponseEntity.ok(rendered);
     }
 
     /**

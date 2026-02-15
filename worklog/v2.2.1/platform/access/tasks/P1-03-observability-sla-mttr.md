@@ -1,6 +1,6 @@
 # P1-03 可观测性增强（SLA/失败趋势/MTTR）
 
-`status`: `in-progress`
+`status`: `done`
 `priority`: `P1`
 
 ## 目标

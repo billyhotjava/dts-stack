@@ -1,6 +1,6 @@
 # P2-01 连接器能力契约统一
 
-`status`: `in-progress`
+`status`: `done`
 `priority`: `P2`
 
 ## 目标

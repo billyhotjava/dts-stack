@@ -22,6 +22,7 @@ export function createRoutes() {
 			{ path: "/screens/new", lazy: lazyComponent(() => import("./pages/screens/ScreenDesignerPage")) },
 			{ path: "/screens/:id/edit", lazy: lazyComponent(() => import("./pages/screens/ScreenDesignerPage")) },
 			{ path: "/screens/:id/preview", lazy: lazyComponent(() => import("./pages/screens/ScreenPreviewPage")) },
+			{ path: "/screens/:id/export", lazy: lazyComponent(() => import("./pages/screens/ScreenExportPage")) },
 			{ path: "/public/screen/:uuid", lazy: lazyComponent(() => import("./pages/screens/PublicScreenPage")) },
 			{
 				Component: AppLayout,

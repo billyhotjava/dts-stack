@@ -1,0 +1,5 @@
+# Keep historical baseline samples tracked, but ignore newly generated raw outputs.
+p0-access-metrics-*.csv
+p0-access-summary-*.txt
+p0-access-matrix-*.csv
+!.gitignore

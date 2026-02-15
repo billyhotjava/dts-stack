@@ -42,3 +42,7 @@
 - 后端安全加固：`QueryExecutionFacade` 对 native SQL 增加只读校验（仅 `SELECT/WITH`）、危险关键字拦截、多语句拦截、SQL 长度上限。
 - 健康体检与预热链路兼容 `sql`：`ScreenResource` 与 `ScreenWarmupService` 支持 `sourceType/sqlConfig` 和 legacy `databaseConfig` 双路径。
 - 测试覆盖：新增 `QueryExecutionFacadeTest`，验证 SQL 模板渲染、非只读语句拦截、多语句拦截。
+- 运行时查询调度补强（2026-02-15）：
+  - 新增前端查询调度器（并发上限、超时保护、可重试错误退避重试）；
+  - `useCardDataSource` 统一接入调度器，覆盖 `card/sql/dataset/api`；
+  - 增加请求序列保护，避免慢请求回写覆盖新请求结果（stale response 覆盖问题）。

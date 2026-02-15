@@ -74,11 +74,19 @@ public class ScreenEditLockResource {
             return screenResponse(id, user.get(), request, ScreenAclService.Permission.EDIT);
         }
         Integer ttlSeconds = body != null && body.has("ttlSeconds") ? body.path("ttlSeconds").asInt(120) : null;
+        boolean forceTakeover = body != null && body.has("forceTakeover") && body.path("forceTakeover").asBoolean(false);
+        if (forceTakeover) {
+            PlatformContext context = PlatformContext.from(request);
+            if (!screenAclService.hasPermission(screen, user.get(), context, ScreenAclService.Permission.MANAGE)) {
+                return forbidden();
+            }
+        }
         ScreenEditLockService.LockAcquireResult result = screenEditLockService.acquire(
                 screen.getId(),
                 user.get(),
                 requestIdFrom(request),
-                ttlSeconds);
+                ttlSeconds,
+                forceTakeover);
         return switch (result.status()) {
             case SUCCESS -> ResponseEntity.ok(toResponse(result.snapshot()));
             case CONFLICT -> ResponseEntity.status(409).contentType(MediaType.APPLICATION_JSON).body(toResponse(result.snapshot()));

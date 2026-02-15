@@ -2,20 +2,19 @@ import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams } from 'react-router';
 import { analyticsApi } from '../../api/analyticsApi';
 import { ComponentRenderer } from './components/ComponentRenderer';
+import { DeviceModeSwitcher } from './components/DeviceModeSwitcher';
 import type { ScreenConfig, ScreenTheme } from './types';
 import { resolveScreenTheme } from './screenThemes';
 import { normalizeScreenConfig } from './specV2';
+import {
+    isVisibleForDevice,
+    parseForcedDeviceModeFromWindow,
+    resolveDeviceModeByViewport,
+    syncDeviceModeToWindowUrl,
+    type DeviceMode,
+} from './deviceMode';
 
 const PREVIEW_BATCH_SIZE = 20;
-type DeviceMode = 'pc' | 'tablet' | 'mobile';
-
-function isVisibleForDevice(component: { config?: Record<string, unknown> }, device: DeviceMode): boolean {
-    const raw = component?.config?.visibleOn;
-    if (!Array.isArray(raw) || raw.length === 0) {
-        return true;
-    }
-    return raw.includes(device);
-}
 
 export default function ScreenPreviewPage() {
     const { id } = useParams<{ id: string }>();
@@ -24,7 +23,12 @@ export default function ScreenPreviewPage() {
     const [error, setError] = useState<string | null>(null);
     const [scale, setScale] = useState(1);
     const [deviceMode, setDeviceMode] = useState<DeviceMode>('pc');
+    const [forcedDeviceMode, setForcedDeviceMode] = useState<DeviceMode | null>(null);
     const [visibleCount, setVisibleCount] = useState(PREVIEW_BATCH_SIZE);
+
+    useEffect(() => {
+        setForcedDeviceMode(parseForcedDeviceModeFromWindow());
+    }, []);
 
     useEffect(() => {
         if (!id) {
@@ -53,12 +57,12 @@ export default function ScreenPreviewPage() {
         if (!screen) return;
         const vw = window.innerWidth;
         const vh = window.innerHeight;
-        const nextMode: DeviceMode = vw <= 768 ? 'mobile' : (vw <= 1200 ? 'tablet' : 'pc');
+        const nextMode: DeviceMode = forcedDeviceMode || resolveDeviceModeByViewport(vw);
         setDeviceMode(nextMode);
         const sx = vw / (screen.width || 1920);
         const sy = vh / (screen.height || 1080);
         setScale(Math.min(sx, sy));
-    }, [screen]);
+    }, [forcedDeviceMode, screen]);
 
     useEffect(() => {
         computeScale();
@@ -143,6 +147,11 @@ export default function ScreenPreviewPage() {
     const screenTheme = resolveScreenTheme(rawTheme, screen.backgroundColor);
     const outerBg = screenTheme === 'glacier' ? '#e5e7eb' : '#000';
 
+    const setForcedMode = (mode: DeviceMode | null) => {
+        setForcedDeviceMode(mode);
+        syncDeviceModeToWindowUrl(mode);
+    };
+
     return (
         <div
             style={{
@@ -204,6 +213,12 @@ export default function ScreenPreviewPage() {
                         组件加载中 {visibleCount}/{visibleSortedComponents.length}
                     </div>
                 )}
+                <DeviceModeSwitcher
+                    position="absolute"
+                    deviceMode={deviceMode}
+                    forcedDeviceMode={forcedDeviceMode}
+                    onSetForcedMode={setForcedMode}
+                />
             </div>
         </div>
     );

@@ -17,6 +17,7 @@ import com.yuzhi.dts.analytics.service.ScreenAuditService;
 import com.yuzhi.dts.analytics.service.ScreenEditLockService;
 import com.yuzhi.dts.analytics.service.ScreenWarmupService;
 import com.yuzhi.dts.analytics.service.ScreenAiGenerationService;
+import com.yuzhi.dts.analytics.service.ScreenComplianceService;
 import com.yuzhi.dts.analytics.service.ScreenSpecValidator;
 import com.yuzhi.dts.analytics.web.support.MetabaseAuth;
 import com.yuzhi.dts.analytics.web.support.PlatformContext;
@@ -62,6 +63,7 @@ public class ScreenResource {
     private final ScreenEditLockService screenEditLockService;
     private final ScreenWarmupService screenWarmupService;
     private final ScreenAiGenerationService screenAiGenerationService;
+    private final ScreenComplianceService screenComplianceService;
     private final ScreenSpecValidator screenSpecValidator;
     private final PublicLinkService publicLinkService;
     private final ObjectMapper objectMapper;
@@ -75,6 +77,7 @@ public class ScreenResource {
             ScreenEditLockService screenEditLockService,
             ScreenWarmupService screenWarmupService,
             ScreenAiGenerationService screenAiGenerationService,
+            ScreenComplianceService screenComplianceService,
             ScreenSpecValidator screenSpecValidator,
             PublicLinkService publicLinkService,
             ObjectMapper objectMapper) {
@@ -86,6 +89,7 @@ public class ScreenResource {
         this.screenEditLockService = screenEditLockService;
         this.screenWarmupService = screenWarmupService;
         this.screenAiGenerationService = screenAiGenerationService;
+        this.screenComplianceService = screenComplianceService;
         this.screenSpecValidator = screenSpecValidator;
         this.publicLinkService = publicLinkService;
         this.objectMapper = objectMapper;
@@ -315,6 +319,189 @@ public class ScreenResource {
             result.putNull("publishedAt");
         }
         return ResponseEntity.ok(result);
+    }
+
+    @PostMapping(path = "/{id}/export-prepare", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> prepareExport(
+            @PathVariable("id") long id,
+            @RequestBody(required = false) JsonNode body,
+            HttpServletRequest request) {
+        Optional<AnalyticsUser> user = MetabaseAuth.currentUser(sessionService, request);
+        if (user.isEmpty()) {
+            return unauthorized();
+        }
+
+        AnalyticsScreen screen = screenRepository.findById(id).orElse(null);
+        if (screen == null || screen.isArchived()) {
+            return ResponseEntity.notFound().build();
+        }
+
+        PlatformContext context = PlatformContext.from(request);
+        ScreenAclService.PermissionSnapshot permissions = screenAclService.snapshot(screen, user.get(), context);
+        if (!permissions.canRead()) {
+            return forbidden();
+        }
+
+        String requestId = requestIdFrom(request);
+        String format = trimToNull(body == null ? null : body.path("format").asText(null));
+        if (format == null) {
+            format = "png";
+        }
+        format = format.toLowerCase();
+        if (!("png".equals(format) || "pdf".equals(format) || "json".equals(format))) {
+            format = "png";
+        }
+        String mode = trimToNull(body == null ? null : body.path("mode").asText(null));
+        if (mode == null) {
+            mode = "draft";
+        }
+        mode = mode.toLowerCase();
+        if (!("draft".equals(mode) || "published".equals(mode) || "preview".equals(mode))) {
+            mode = "draft";
+        }
+        String device = trimToNull(body == null ? null : body.path("device").asText(null));
+        if (device != null) {
+            device = device.toLowerCase();
+            if (!("pc".equals(device) || "tablet".equals(device) || "mobile".equals(device))) {
+                device = null;
+            }
+        }
+
+        ObjectNode policy = screenComplianceService.currentPolicy();
+        boolean exportApprovalRequired = policy.path("exportApprovalRequired").asBoolean(false);
+        if (exportApprovalRequired && !permissions.canManage()) {
+            ObjectNode denied = objectMapper.createObjectNode();
+            denied.put("code", "SCREEN_EXPORT_APPROVAL_REQUIRED");
+            denied.put("retryable", false);
+            denied.put("requestId", requestId);
+            denied.put("message", "当前大屏导出受合规策略限制，需要管理员审批后再导出");
+            denied.put("screenId", screen.getId());
+            denied.put("format", format);
+            denied.put("mode", mode);
+            screenAuditService.log(screen.getId(), user.get().getId(), "screen.export.denied", null, denied, requestId);
+            return ResponseEntity.status(403)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .header("X-Error-Code", "SCREEN_EXPORT_APPROVAL_REQUIRED")
+                    .header("X-Error-Retryable", "false")
+                    .body(denied);
+        }
+
+        ObjectNode payload = objectMapper.createObjectNode();
+        payload.put("allowed", true);
+        payload.put("screenId", screen.getId());
+        payload.put("format", format);
+        payload.put("mode", mode);
+        if (device == null) {
+            payload.putNull("device");
+        } else {
+            payload.put("device", device);
+        }
+        payload.put("requestId", requestId);
+        ObjectNode policySnapshot = objectMapper.createObjectNode();
+        policySnapshot.put("policyVersion", policy.path("policyVersion").asInt(1));
+        policySnapshot.put("exportApprovalRequired", exportApprovalRequired);
+        policySnapshot.put("watermarkEnabled", policy.path("watermarkEnabled").asBoolean(false));
+        policySnapshot.put("watermarkText", policy.path("watermarkText").asText(""));
+        payload.set("policy", policySnapshot);
+
+        StringBuilder previewUrl = new StringBuilder("/analytics/screens/");
+        previewUrl.append(screen.getId()).append("/preview");
+        List<String> queryParts = new ArrayList<>();
+        if (!"draft".equals(mode)) {
+            queryParts.add("mode=" + mode);
+        }
+        if (device != null) {
+            queryParts.add("device=" + device);
+        }
+        if (!queryParts.isEmpty()) {
+            previewUrl.append("?").append(String.join("&", queryParts));
+        }
+        payload.put("previewUrl", previewUrl.toString());
+
+        screenAuditService.log(screen.getId(), user.get().getId(), "screen.export.prepare", null, payload, requestId);
+        return ResponseEntity.ok(payload);
+    }
+
+    @PostMapping(path = "/{id}/export-report", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> reportExport(
+            @PathVariable("id") long id,
+            @RequestBody(required = false) JsonNode body,
+            HttpServletRequest request) {
+        Optional<AnalyticsUser> user = MetabaseAuth.currentUser(sessionService, request);
+        if (user.isEmpty()) {
+            return unauthorized();
+        }
+
+        AnalyticsScreen screen = screenRepository.findById(id).orElse(null);
+        if (screen == null || screen.isArchived()) {
+            return ResponseEntity.notFound().build();
+        }
+
+        PlatformContext context = PlatformContext.from(request);
+        ScreenAclService.PermissionSnapshot permissions = screenAclService.snapshot(screen, user.get(), context);
+        if (!permissions.canRead()) {
+            return forbidden();
+        }
+
+        String requestId = requestIdFrom(request);
+        String status = trimToNull(body == null ? null : body.path("status").asText(null));
+        if (status == null) {
+            status = "unknown";
+        }
+        status = status.toLowerCase();
+        if (!("success".equals(status) || "failed".equals(status) || "fallback".equals(status))) {
+            status = "unknown";
+        }
+
+        String format = trimToNull(body == null ? null : body.path("format").asText(null));
+        if (format == null) {
+            format = "png";
+        }
+        format = format.toLowerCase();
+        String mode = trimToNull(body == null ? null : body.path("mode").asText(null));
+        if (mode == null) {
+            mode = "draft";
+        }
+        mode = mode.toLowerCase();
+        String device = trimToNull(body == null ? null : body.path("device").asText(null));
+        if (device != null) {
+            device = device.toLowerCase();
+        }
+        String clientRequestId = trimToNull(body == null ? null : body.path("requestId").asText(null));
+        String message = trimToNull(body == null ? null : body.path("message").asText(null));
+
+        ObjectNode payload = objectMapper.createObjectNode();
+        payload.put("accepted", true);
+        payload.put("status", status);
+        payload.put("screenId", screen.getId());
+        payload.put("format", format);
+        payload.put("mode", mode);
+        if (device == null) {
+            payload.putNull("device");
+        } else {
+            payload.put("device", device);
+        }
+        if (clientRequestId == null) {
+            payload.putNull("clientRequestId");
+        } else {
+            payload.put("clientRequestId", clientRequestId);
+        }
+        if (message == null) {
+            payload.putNull("message");
+        } else {
+            payload.put("message", message);
+        }
+        payload.put("requestId", requestId);
+        payload.putPOJO("reportedAt", Instant.now());
+
+        String action = switch (status) {
+            case "success" -> "screen.export.success";
+            case "fallback" -> "screen.export.fallback";
+            case "failed" -> "screen.export.failed";
+            default -> "screen.export.report";
+        };
+        screenAuditService.log(screen.getId(), user.get().getId(), action, null, payload, requestId);
+        return ResponseEntity.ok(payload);
     }
 
     @GetMapping(path = "/{id}/acl", produces = MediaType.APPLICATION_JSON_VALUE)

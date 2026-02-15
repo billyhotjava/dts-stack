@@ -44,6 +44,7 @@ public class IngestionExecutionMapper {
 
         dto.setLogPath(entity.getLogPath());
         dto.setReplaceMode(entity.getReplaceMode());
+        dto.setTriggerMode(entity.getTriggerMode());
         dto.setDroppedTables(entity.getDroppedTables());
         dto.setQueueWaitSeconds(resolveQueueWaitSeconds(entity));
         dto.setCreatedAt(entity.getCreatedAt());
@@ -69,6 +70,7 @@ public class IngestionExecutionMapper {
         entity.setFailureAdvice(dto.getFailureAdvice());
         entity.setLogPath(dto.getLogPath());
         entity.setReplaceMode(dto.getReplaceMode());
+        entity.setTriggerMode(dto.getTriggerMode());
         entity.setDroppedTables(dto.getDroppedTables());
         entity.setCreatedAt(dto.getCreatedAt());
 
