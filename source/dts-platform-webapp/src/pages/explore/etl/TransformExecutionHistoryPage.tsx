@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "@/routes/hooks";
-import { Alert, Button, Card, DatePicker, Drawer, Input, Modal, Progress, Segmented, Space, Spin, Table, Tag, Tooltip, Typography, message } from "antd";
+import { Alert, Button, Card, DatePicker, Drawer, Input, Modal, Progress, Segmented, Select, Space, Spin, Table, Tag, Tooltip, Typography, message } from "antd";
 import { ArrowLeftOutlined, PlayCircleOutlined, ReloadOutlined } from "@ant-design/icons";
 import { PageHeader } from "@/components/page-header";
 import { useRouter } from "@/routes/hooks";
@@ -30,6 +30,8 @@ export default function TransformExecutionHistoryPage() {
     const [executions, setExecutions] = useState<IngestionExecutionDTO[]>([]);
     const [loading, setLoading] = useState(false);
     const [pagination, setPagination] = useState({ current: 1, pageSize: 20, total: 0 });
+    const [statusFilter, setStatusFilter] = useState<string | undefined>(undefined);
+    const [failureCategoryFilter, setFailureCategoryFilter] = useState<string | undefined>(undefined);
     const [logVisible, setLogVisible] = useState(false);
     const [logLoading, setLogLoading] = useState(false);
     const [logContent, setLogContent] = useState("");
@@ -65,7 +67,7 @@ export default function TransformExecutionHistoryPage() {
             loadTask();
             loadExecutions();
         }
-    }, [id, pagination.current]);
+    }, [id, pagination.current, statusFilter, failureCategoryFilter]);
 
     useEffect(() => {
         if (!task?.id) {
@@ -110,6 +112,8 @@ export default function TransformExecutionHistoryPage() {
                 page: pagination.current - 1,
                 size: pagination.pageSize,
                 sort: "createdAt,desc",
+                status: statusFilter,
+                failureCategory: failureCategoryFilter,
             });
             const content = Array.isArray(result?.content) ? result.content : [];
             setExecutions(content);
@@ -294,6 +298,29 @@ export default function TransformExecutionHistoryPage() {
         } finally {
             setExecuteSubmitting(false);
         }
+    };
+
+    const submitRetry = async (
+        record: IngestionExecutionDTO,
+        mode: "FAILED_ONLY" | "FULL_RERUN",
+    ) => {
+        if (!id) return;
+        try {
+            await ingestionTaskAPI.retryExecution(Number(id), record.id, { mode });
+            message.success(mode === "FULL_RERUN" ? "已提交整批重跑任务" : "已提交失败重试任务");
+            startExecuteProgressPolling(Number(id));
+        } catch (error: any) {
+            message.error("重试失败: " + (error.message || "未知错误"));
+        }
+    };
+
+    const handleFullRerun = (record: IngestionExecutionDTO) => {
+        Modal.confirm({
+            title: "确认整批重跑",
+            content: "将按当前任务配置重新执行整批作业（FULL_RERUN），确认继续？",
+            okText: "确认重跑",
+            onOk: () => submitRetry(record, "FULL_RERUN"),
+        });
     };
 
     const loadLog = async (record: IngestionExecutionDTO, opts?: { silent?: boolean }) => {
@@ -528,7 +555,7 @@ export default function TransformExecutionHistoryPage() {
         {
             title: "日志",
             key: "log",
-            width: 120,
+            width: 220,
             render: (_: any, record: IngestionExecutionDTO) => (
                 <Space size={4}>
                     <Button size="small" onClick={() => loadLog(record)}>
@@ -537,22 +564,28 @@ export default function TransformExecutionHistoryPage() {
                     {normalizeText(record.status).toLowerCase() === "failed" ? (
                         <Button
                             size="small"
-                            onClick={async () => {
-                                try {
-                                    await ingestionTaskAPI.retryExecution(Number(id), record.id, { mode: "FAILED_ONLY" });
-                                    message.success("已提交失败重试任务");
-                                    startExecuteProgressPolling(Number(id));
-                                } catch (error: any) {
-                                    message.error("重试失败: " + (error.message || "未知错误"));
-                                }
-                            }}
+                            onClick={() => submitRetry(record, "FAILED_ONLY")}
                         >
                             失败重试
+                        </Button>
+                    ) : null}
+                    {normalizeText(record.status).toLowerCase() !== "running" ? (
+                        <Button size="small" onClick={() => handleFullRerun(record)}>
+                            整批重跑
                         </Button>
                     ) : null}
                 </Space>
             ),
         },
+    ];
+
+    const failureCategoryOptions = [
+        { label: "连接错误", value: "CONNECTION_ERROR" },
+        { label: "权限错误", value: "PERMISSION_ERROR" },
+        { label: "DDL 错误", value: "DDL_ERROR" },
+        { label: "DML 错误", value: "DML_ERROR" },
+        { label: "数据质量", value: "DATA_QUALITY_ERROR" },
+        { label: "运行时错误", value: "RUNTIME_ERROR" },
     ];
 
     if (!task) {
@@ -585,6 +618,33 @@ export default function TransformExecutionHistoryPage() {
                         <Button icon={<ReloadOutlined />} onClick={loadExecutions} loading={loading}>
                             刷新
                         </Button>
+                        <Select
+                            allowClear
+                            placeholder="执行状态"
+                            style={{ width: 140 }}
+                            value={statusFilter}
+                            options={[
+                                { label: "运行中", value: "running" },
+                                { label: "成功", value: "success" },
+                                { label: "失败", value: "failed" },
+                                { label: "错误", value: "error" },
+                            ]}
+                            onChange={(value) => {
+                                setStatusFilter(value);
+                                setPagination((prev) => ({ ...prev, current: 1 }));
+                            }}
+                        />
+                        <Select
+                            allowClear
+                            placeholder="失败分类"
+                            style={{ width: 180 }}
+                            value={failureCategoryFilter}
+                            options={failureCategoryOptions}
+                            onChange={(value) => {
+                                setFailureCategoryFilter(value);
+                                setPagination((prev) => ({ ...prev, current: 1 }));
+                            }}
+                        />
                         {normalizeText(task.syncMode).toLowerCase() === "incremental" ? (
                             <DatePicker.RangePicker
                                 showTime

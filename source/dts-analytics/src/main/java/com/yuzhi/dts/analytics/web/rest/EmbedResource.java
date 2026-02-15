@@ -13,6 +13,8 @@ import com.yuzhi.dts.analytics.service.AnalyticsSessionService;
 import com.yuzhi.dts.analytics.service.DatasetQueryService;
 import com.yuzhi.dts.analytics.service.EmbedTokenService;
 import com.yuzhi.dts.analytics.service.MbqlToSqlService;
+import com.yuzhi.dts.analytics.service.ScreenComplianceService;
+import com.yuzhi.dts.analytics.service.QueryExecutionFacade;
 import com.yuzhi.dts.analytics.web.support.MetabaseAuth;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.OffsetDateTime;
@@ -43,6 +45,8 @@ public class EmbedResource {
     private final AnalyticsDashboardCardRepository dashboardCardRepository;
     private final DatasetQueryService datasetQueryService;
     private final MbqlToSqlService mbqlToSqlService;
+    private final ScreenComplianceService screenComplianceService;
+    private final QueryExecutionFacade queryExecutionFacade;
     private final ObjectMapper objectMapper;
 
     public EmbedResource(
@@ -53,6 +57,8 @@ public class EmbedResource {
             AnalyticsDashboardCardRepository dashboardCardRepository,
             DatasetQueryService datasetQueryService,
             MbqlToSqlService mbqlToSqlService,
+            ScreenComplianceService screenComplianceService,
+            QueryExecutionFacade queryExecutionFacade,
             ObjectMapper objectMapper) {
         this.sessionService = sessionService;
         this.embedTokenService = embedTokenService;
@@ -61,6 +67,8 @@ public class EmbedResource {
         this.dashboardCardRepository = dashboardCardRepository;
         this.datasetQueryService = datasetQueryService;
         this.mbqlToSqlService = mbqlToSqlService;
+        this.screenComplianceService = screenComplianceService;
+        this.queryExecutionFacade = queryExecutionFacade;
         this.objectMapper = objectMapper;
     }
 
@@ -358,42 +366,32 @@ public class EmbedResource {
         long startedMillis = System.currentTimeMillis();
 
         try {
-            String sql;
-            List<Object> bindings = List.of();
+            QueryExecutionFacade.PreparedQuery prepared = queryExecutionFacade.prepare(
+                    datasetQuery,
+                    body,
+                    null,
+                    DatasetQueryService.DatasetConstraints.defaults());
+
             Map<String, Object> jsonQuery = new LinkedHashMap<>();
             jsonQuery.put("constraints", Map.of("max-results", 10000, "max-results-bare-rows", 2000));
             jsonQuery.put("middleware", Map.of("js-int-to-string?", true, "ignore-cached-results?", false, "process-viz-settings?", false));
             jsonQuery.put("database", databaseId);
             jsonQuery.put("async?", true);
             jsonQuery.put("cache-ttl", null);
-
-            if ("native".equalsIgnoreCase(type)) {
-                sql = datasetQuery.path("native").path("query").asText(null);
-                if (sql == null || sql.isBlank()) {
-                    return ResponseEntity.status(400).body(Map.of("error", "dataset_query.native.query is required"));
-                }
-                jsonQuery.put("type", "native");
-                jsonQuery.put("native", Map.of("query", sql));
-            } else if ("query".equalsIgnoreCase(type)) {
-                JsonNode mbql = datasetQuery.get("query");
-                MbqlToSqlService.TranslationResult translated =
-                        mbqlToSqlService.translateSelect(databaseId, mbql, DatasetQueryService.DatasetConstraints.defaults());
-                sql = translated.sql();
-                bindings = translated.bindings();
-                jsonQuery.put("type", "query");
-                jsonQuery.put("query", mbql);
+            jsonQuery.put("type", prepared.type());
+            if ("native".equalsIgnoreCase(prepared.type())) {
+                jsonQuery.put("native", Map.of("query", prepared.sql()));
             } else {
-                return ResponseEntity.status(400).body(Map.of("error", "Only native and query (MBQL) queries are supported"));
+                jsonQuery.put("query", prepared.mbql());
             }
 
-            DatasetQueryService.DatasetResult result =
-                    datasetQueryService.runNative(databaseId, sql, DatasetQueryService.DatasetConstraints.defaults(), bindings);
+            DatasetQueryService.DatasetResult result = queryExecutionFacade.executeWithCompliance(prepared);
             long runningTimeMs = System.currentTimeMillis() - startedMillis;
 
             Map<String, Object> data = new LinkedHashMap<>();
             data.put("rows", result.rows());
             data.put("cols", result.cols());
-            data.put("native_form", Map.of("query", sql));
+            data.put("native_form", Map.of("query", prepared.sql()));
             data.put("results_metadata", Map.of("columns", result.resultsMetadataColumns()));
             data.put("rows_truncated", false);
 

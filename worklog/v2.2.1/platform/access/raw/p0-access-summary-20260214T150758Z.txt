@@ -1,0 +1,12 @@
+run_at=20260214T150758Z
+mode=normal
+arch=x86_64
+hours=24
+ingestion_log=/opt/prod/s10/dts-stack/logs/dts-ingestion/app.log
+total_trigger=0
+triggered=0
+failed=0
+dag404=0
+tasklog404=0
+result=OBSERVED
+note=init-pass

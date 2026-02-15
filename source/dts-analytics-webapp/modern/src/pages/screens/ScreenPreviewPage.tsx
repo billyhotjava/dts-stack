@@ -1,18 +1,29 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams } from 'react-router';
-import { analyticsApi, ScreenDetail } from '../../api/analyticsApi';
+import { analyticsApi } from '../../api/analyticsApi';
 import { ComponentRenderer } from './components/ComponentRenderer';
-import type { ScreenComponent, ComponentType, ScreenTheme } from './types';
+import type { ScreenConfig, ScreenTheme } from './types';
 import { resolveScreenTheme } from './screenThemes';
+import { normalizeScreenConfig } from './specV2';
 
 const PREVIEW_BATCH_SIZE = 20;
+type DeviceMode = 'pc' | 'tablet' | 'mobile';
+
+function isVisibleForDevice(component: { config?: Record<string, unknown> }, device: DeviceMode): boolean {
+    const raw = component?.config?.visibleOn;
+    if (!Array.isArray(raw) || raw.length === 0) {
+        return true;
+    }
+    return raw.includes(device);
+}
 
 export default function ScreenPreviewPage() {
     const { id } = useParams<{ id: string }>();
-    const [screen, setScreen] = useState<ScreenDetail | null>(null);
+    const [screen, setScreen] = useState<ScreenConfig | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [scale, setScale] = useState(1);
+    const [deviceMode, setDeviceMode] = useState<DeviceMode>('pc');
     const [visibleCount, setVisibleCount] = useState(PREVIEW_BATCH_SIZE);
 
     useEffect(() => {
@@ -24,7 +35,11 @@ export default function ScreenPreviewPage() {
 
         analyticsApi.getScreen(id, { mode: 'published', fallbackDraft: true })
             .then((data) => {
-                setScreen(data);
+                const normalized = normalizeScreenConfig(data, { id: data.id });
+                if (normalized.warnings.length > 0) {
+                    console.warn('[screen-spec-v2] normalized with warnings:', normalized.warnings);
+                }
+                setScreen(normalized.config);
                 setLoading(false);
             })
             .catch((err) => {
@@ -38,8 +53,10 @@ export default function ScreenPreviewPage() {
         if (!screen) return;
         const vw = window.innerWidth;
         const vh = window.innerHeight;
-        const sx = vw / screen.width;
-        const sy = vh / screen.height;
+        const nextMode: DeviceMode = vw <= 768 ? 'mobile' : (vw <= 1200 ? 'tablet' : 'pc');
+        setDeviceMode(nextMode);
+        const sx = vw / (screen.width || 1920);
+        const sy = vh / (screen.height || 1080);
         setScale(Math.min(sx, sy));
     }, [screen]);
 
@@ -49,18 +66,13 @@ export default function ScreenPreviewPage() {
         return () => window.removeEventListener('resize', computeScale);
     }, [computeScale]);
 
-    const components: ScreenComponent[] = useMemo(() => {
-        if (!screen) return [];
-        return (screen.components || []).map(c => ({
-            ...c,
-            type: c.type as ComponentType,
-            dataSource: c.dataSource as import('./types').DataSourceConfig | undefined,
-        }));
-    }, [screen]);
+    const components = useMemo(() => screen?.components || [], [screen]);
 
     const visibleSortedComponents = useMemo(
-        () => components.filter(c => c.visible).sort((a, b) => a.zIndex - b.zIndex),
-        [components],
+        () => components
+            .filter(c => c.visible && isVisibleForDevice(c, deviceMode))
+            .sort((a, b) => a.zIndex - b.zIndex),
+        [components, deviceMode],
     );
 
     useEffect(() => {
@@ -145,8 +157,8 @@ export default function ScreenPreviewPage() {
         >
             <div
                 style={{
-                    width: screen.width,
-                    height: screen.height,
+                    width: screen.width || 1920,
+                    height: screen.height || 1080,
                     backgroundColor: screen.backgroundColor || '#0d1b2a',
                     backgroundImage: screen.backgroundImage ? `url(${screen.backgroundImage})` : undefined,
                     backgroundSize: 'cover',

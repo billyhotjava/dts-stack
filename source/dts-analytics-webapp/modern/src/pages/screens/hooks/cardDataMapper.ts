@@ -29,12 +29,24 @@ export function mapCardDataToConfig(
                 })),
             };
 
+        case 'map-chart':
+            return {
+                regions: rows.map((row) => ({
+                    name: String(row[0] ?? ''),
+                    value: toNumber(row[1]),
+                })),
+            };
+
         case 'scroll-board':
         case 'table':
             return {
                 header: cols.map((c) => c.display_name || c.name),
                 data: rows.map((row) => row.map((cell) => String(cell ?? ''))),
-                _sourceColumns: cols.map((c) => ({ name: c.name, displayName: c.display_name || c.name })),
+                _sourceColumns: cols.map((c) => ({
+                    name: c.name,
+                    displayName: c.display_name || c.name,
+                    baseType: c.base_type,
+                })),
             };
 
         case 'scroll-ranking':

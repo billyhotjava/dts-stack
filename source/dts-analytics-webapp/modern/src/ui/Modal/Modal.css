@@ -3,7 +3,7 @@
 .mb-modal__overlay {
   position: fixed;
   inset: 0;
-  z-index: var(--z-modal-backdrop);
+  z-index: var(--z-modal-backdrop, 20000);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -23,7 +23,7 @@
 
 .mb-modal {
   position: relative;
-  z-index: var(--z-modal);
+  z-index: var(--z-modal, 20001);
   display: flex;
   flex-direction: column;
   max-height: calc(100vh - var(--spacing-2xl) * 2);

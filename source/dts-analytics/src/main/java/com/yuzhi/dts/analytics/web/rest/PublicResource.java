@@ -15,9 +15,8 @@ import com.yuzhi.dts.analytics.repository.AnalyticsScreenRepository;
 import com.yuzhi.dts.analytics.repository.AnalyticsScreenVersionRepository;
 import com.yuzhi.dts.analytics.service.AnalyticsSessionService;
 import com.yuzhi.dts.analytics.service.DatasetQueryService;
-import com.yuzhi.dts.analytics.service.MbqlToSqlService;
-import com.yuzhi.dts.analytics.service.NativeQueryTemplateService;
 import com.yuzhi.dts.analytics.service.PublicLinkService;
+import com.yuzhi.dts.analytics.service.QueryExecutionFacade;
 import com.yuzhi.dts.analytics.service.QueryMetricsService;
 import com.yuzhi.dts.analytics.service.QueryTraceService;
 import com.yuzhi.dts.analytics.web.support.MetabaseAuth;
@@ -50,9 +49,7 @@ public class PublicResource {
     private final AnalyticsDashboardCardRepository dashboardCardRepository;
     private final AnalyticsScreenRepository screenRepository;
     private final AnalyticsScreenVersionRepository screenVersionRepository;
-    private final DatasetQueryService datasetQueryService;
-    private final MbqlToSqlService mbqlToSqlService;
-    private final NativeQueryTemplateService nativeQueryTemplateService;
+    private final QueryExecutionFacade queryExecutionFacade;
     private final QueryMetricsService queryMetricsService;
     private final QueryTraceService queryTraceService;
     private final ObjectMapper objectMapper;
@@ -65,9 +62,7 @@ public class PublicResource {
             AnalyticsDashboardCardRepository dashboardCardRepository,
             AnalyticsScreenRepository screenRepository,
             AnalyticsScreenVersionRepository screenVersionRepository,
-            DatasetQueryService datasetQueryService,
-            MbqlToSqlService mbqlToSqlService,
-            NativeQueryTemplateService nativeQueryTemplateService,
+            QueryExecutionFacade queryExecutionFacade,
             QueryMetricsService queryMetricsService,
             QueryTraceService queryTraceService,
             ObjectMapper objectMapper) {
@@ -78,9 +73,7 @@ public class PublicResource {
         this.dashboardCardRepository = dashboardCardRepository;
         this.screenRepository = screenRepository;
         this.screenVersionRepository = screenVersionRepository;
-        this.datasetQueryService = datasetQueryService;
-        this.mbqlToSqlService = mbqlToSqlService;
-        this.nativeQueryTemplateService = nativeQueryTemplateService;
+        this.queryExecutionFacade = queryExecutionFacade;
         this.queryMetricsService = queryMetricsService;
         this.queryTraceService = queryTraceService;
         this.objectMapper = objectMapper;
@@ -293,24 +286,20 @@ public class PublicResource {
                         "requestId", resolveRequestId()));
             }
 
-            String type = datasetQuery.path("type").asText(null);
-            long databaseId = datasetQuery.path("database").asLong(0);
-            if (databaseId <= 0) {
-                metricCode = "DATABASE_ID_REQUIRED";
-                metricResult = "rejected";
-                return ResponseEntity.status(400).body(Map.of(
-                        "error", "dataset_query.database is required",
-                        "code", metricCode,
-                        "requestId", resolveRequestId()));
-            }
-            traceDatabaseId = databaseId;
-
             OffsetDateTime startedAt = OffsetDateTime.now();
             long startedMillis = System.currentTimeMillis();
+            long databaseId = 0;
 
             try {
-                String sql;
-                List<Object> bindings = List.of();
+                QueryExecutionFacade.PreparedQuery prepared = queryExecutionFacade.prepare(
+                        datasetQuery,
+                        body,
+                        null,
+                        DatasetQueryService.DatasetConstraints.defaults());
+                databaseId = prepared.databaseId();
+                traceDatabaseId = databaseId;
+                traceSql = prepared.sql();
+
                 Map<String, Object> jsonQuery = new LinkedHashMap<>();
                 jsonQuery.put("constraints", Map.of("max-results", 10000, "max-results-bare-rows", 2000));
                 jsonQuery.put(
@@ -319,54 +308,20 @@ public class PublicResource {
                 jsonQuery.put("database", databaseId);
                 jsonQuery.put("async?", true);
                 jsonQuery.put("cache-ttl", null);
-
-                if ("native".equalsIgnoreCase(type)) {
-                    sql = datasetQuery.path("native").path("query").asText(null);
-                    if (sql == null || sql.isBlank()) {
-                        metricCode = "NATIVE_SQL_REQUIRED";
-                        metricResult = "rejected";
-                        return ResponseEntity.status(400).body(Map.of(
-                                "error", "dataset_query.native.query is required",
-                                "code", metricCode,
-                                "requestId", resolveRequestId()));
-                    }
-                    JsonNode parametersNode = body == null ? null : body.get("parameters");
-                    if (parametersNode != null && !parametersNode.isNull() && !parametersNode.isMissingNode()) {
-                        nativeQueryTemplateService.validateParameterWhitelist(sql, parametersNode);
-                        if (sql.contains("{{")) {
-                            NativeQueryTemplateService.RenderedQuery rendered = nativeQueryTemplateService.render(sql, parametersNode);
-                            sql = rendered.sql();
-                            bindings = rendered.bindings();
-                        }
-                    }
-                    jsonQuery.put("type", "native");
-                    jsonQuery.put("native", Map.of("query", sql));
-                } else if ("query".equalsIgnoreCase(type)) {
-                    JsonNode mbql = datasetQuery.get("query");
-                    MbqlToSqlService.TranslationResult translated =
-                            mbqlToSqlService.translateSelect(databaseId, mbql, DatasetQueryService.DatasetConstraints.defaults());
-                    sql = translated.sql();
-                    bindings = translated.bindings();
-                    jsonQuery.put("type", "query");
-                    jsonQuery.put("query", mbql);
+                jsonQuery.put("type", prepared.type());
+                if ("native".equalsIgnoreCase(prepared.type())) {
+                    jsonQuery.put("native", Map.of("query", prepared.sql()));
                 } else {
-                    metricCode = "QUERY_TYPE_UNSUPPORTED";
-                    metricResult = "rejected";
-                    return ResponseEntity.status(400).body(Map.of(
-                            "error", "Only native and query (MBQL) queries are supported",
-                            "code", metricCode,
-                            "requestId", resolveRequestId()));
+                    jsonQuery.put("query", prepared.mbql());
                 }
-                traceSql = sql;
 
-                DatasetQueryService.DatasetResult result =
-                        datasetQueryService.runNative(databaseId, sql, DatasetQueryService.DatasetConstraints.defaults(), bindings);
+                DatasetQueryService.DatasetResult result = queryExecutionFacade.executeWithCompliance(prepared);
                 long runningTimeMs = System.currentTimeMillis() - startedMillis;
 
                 Map<String, Object> data = new LinkedHashMap<>();
                 data.put("rows", result.rows());
                 data.put("cols", result.cols());
-                data.put("native_form", Map.of("query", sql));
+                data.put("native_form", Map.of("query", prepared.sql()));
                 data.put("results_metadata", Map.of("columns", result.resultsMetadataColumns()));
                 data.put("rows_truncated", false);
 

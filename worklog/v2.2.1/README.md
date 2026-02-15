@@ -66,3 +66,50 @@
 - Completed: BI P1-05 preview rendering optimization first-pass (`ScreenPreviewPage` switched to batched component mount).
 - Verified: `mvn -f source/dts-analytics/pom.xml -DskipTests compile` passed.
 - Verified: `pnpm -C source/dts-analytics-webapp/modern build` passed after P1-05 updates.
+- Completed: BI P1-05 first-pass closed (`ScreenWarmupService` auto warmup on publish + dataset cache policy/warmup APIs + cache observability panel in designer header).
+- Verified: `mvn -f source/dts-analytics/pom.xml -DskipTests clean compile` passed.
+- Verified: `pnpm -C source/dts-analytics-webapp/modern build` passed after cache observability updates.
+- Completed: BI P1-03 asset center first-pass (`analytics_screen_template` + `ScreenTemplateResource` landed; supports template CRUD, save-from-screen, create-screen-from-template).
+- Completed: BI P1-03 template market first-pass (`TemplateGallery` supports builtin/asset scopes, search, category filter, and refresh).
+- Completed: BI P1-03 designer entry (`ScreensPage` adds `保存为模板`; `TemplateGallery` adds template-package import/export).
+- Verified: `mvn -f source/dts-analytics/pom.xml -DskipTests compile` passed after P1-03 updates.
+- Verified: `pnpm -C source/dts-analytics-webapp/modern build` passed after P1-03 updates.
+- Completed: BI P2-01 first-pass (`ScreenAiGenerationService` + `/api/screens/ai/generate` landed; offline rule-based draft generation without external LLM dependency).
+- Completed: BI P2-01 UI entry (`ScreensPage` adds `🤖 AI生成`; prompt -> screenSpec -> create editable screen flow).
+- Verified: `mvn -f source/dts-analytics/pom.xml -DskipTests compile` passed after P2-01 updates.
+- Verified: `pnpm -C source/dts-analytics-webapp/modern build` passed after P2-01 updates.
+- Completed: BI P2-02 first-pass (`/api/screen-plugins` + `/api/screen-plugins/validate` landed; plugin manifest contract with demo pack).
+- Completed: BI P2-02 UI entry (`ComponentLibraryPanel` now loads plugin categories and maps plugin components via `baseType` into kernel component palette).
+- Verified: `mvn -f source/dts-analytics/pom.xml -DskipTests clean compile` passed after P2-02 updates.
+- Verified: `pnpm -C source/dts-analytics-webapp/modern build` passed after P2-02 updates.
+- Completed: BI P2-03 first-pass (`/api/screen-packs/export` + `/api/screen-packs/import` landed; industry pack uses template-centric offline bundle format).
+- Completed: BI P2-03 UI entry (`TemplateGallery` adds `导入行业包` / `导出行业包` one-click flow).
+- Verified: `mvn -f source/dts-analytics/pom.xml -DskipTests clean compile` passed after P2-03 updates.
+- Verified: `pnpm -C source/dts-analytics-webapp/modern build` passed after P2-03 updates.
+- Completed: BI P2-04 first-pass (`/api/screen-compliance/policy` + `/api/screen-compliance/report` landed; strategy center + audit report model for enterprise compliance baseline).
+- Completed: BI P2-04 UI entry (`ScreenHeader` adds `合规` panel; supports policy management, report query by scope/days/limit, and JSON export).
+- Verified: `mvn -f source/dts-analytics/pom.xml -DskipTests clean compile` passed after P2-04 updates.
+- Verified: `pnpm -C source/dts-analytics-webapp/modern build` passed after P2-04 updates.
+- Completed: BI P2-04 hardening (`ScreenComplianceService` now enforces column masking on card query/export results; default sensitive key rules + custom `maskRules` supported).
+- Completed: Analytics query stability hardening (`CardResource` query/pivot/export endpoints moved to `Propagation.NOT_SUPPORTED` to avoid rollback-only commit failures on external DB connection errors).
+- Verified: `mvn -f source/dts-analytics/pom.xml -DskipTests clean compile` passed after compliance hardening.
+- Verified: `pnpm -C source/dts-analytics-webapp/modern build` passed after compliance hardening.
+- Added tests: `ScreenComplianceServiceTest` (3 cases: disabled pass-through, default rule masking, custom rule masking).
+- Verified: `mvn -f source/dts-analytics/pom.xml -Dtest=ScreenComplianceServiceTest test` passed.
+- Confirmed: BI task ownership locked to current session via `worklog/v2.2.1/BI/.session-lock.md`.
+- Completed: BI P2-04 second-pass hardening (masking applied to `PublicResource`/`DashboardResource`/`EmbedResource`/`DatasetResource` in addition to `CardResource`).
+- Verified: `mvn -f source/dts-analytics/pom.xml -DskipTests clean compile` passed after cross-resource masking refactor.
+- Added: BI R1 refactor wave plan at `worklog/v2.2.1/BI/tasks/R1-refactor-wave.md`.
+- In progress: BI R1-01 query-kernel unification (`QueryExecutionFacade` landed; `EmbedResource` switched to facade execution path).
+- In progress: BI R1-02 AI entry convergence (`/api/screens/ai/draft` is now compatibility adapter over `ScreenAiGenerationService`, with deprecate hints to `/api/screens/ai/generate`).
+- Verified: `mvn -f source/dts-analytics/pom.xml -DskipTests clean compile` passed after R1 updates.
+- Completed: BI R1-01 second-pass (`QueryExecutionFacade` unified execution path in `CardResource`/`PublicResource`/`DashboardResource`/`DatasetResource`/`EmbedResource`, including card export + metadata probing path).
+- Verified: `mvn -f source/dts-analytics/pom.xml -DskipTests clean compile` passed after full R1-01 rollout.
+- Verified: `mvn -f source/dts-analytics/pom.xml -Dtest=ScreenComplianceServiceTest test` passed after full R1-01 rollout.
+- Completed: BI R1-03 first-pass (template/industry-pack ACL+audit hardening: new `analytics_screen_asset_audit_log` + `ScreenAssetAuditService`, audit endpoints for templates/packs, role boundary on pack export and protected categories).
+- Verified: `mvn -f source/dts-analytics/pom.xml -DskipTests clean compile` passed after R1-03 first-pass.
+- Completed: BI R1-04 first-pass (screen compliance policy persistence/versioning: new `analytics_screen_compliance_policy`, `ScreenComplianceService` now supports history/rollback, and policy write APIs require superuser).
+- Verified: `mvn -f source/dts-analytics/pom.xml -DskipTests clean compile` passed after R1-04 first-pass.
+- Verified: `mvn -f source/dts-analytics/pom.xml -Dtest=ScreenComplianceServiceTest test` passed after R1-04 first-pass.
+- Completed: BI R1-05 first-pass (route-level lazy loading + `ComponentRenderer` dependency lazy loading + `echarts/core` runtime extraction + Vite chunk warning governance).
+- Verified: `pnpm -C source/dts-analytics-webapp/modern build` passed after R1-05 first-pass (chunk warning removed; max chunk `EChartsRuntime` 615.26 kB under configured threshold 700).

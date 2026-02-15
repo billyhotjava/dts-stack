@@ -1,3 +1,0 @@
-run_at_utc,mode,arch,total,success,failed,success_rate,dag_404,tasklog_404,result,note
-20260213T094326Z,normal,x86_64,3,2,1,66.67,0,0,OBSERVED,sample-168h
-20260213T094326Z,normal,x86_64,3,2,1,66.67,0,0,OBSERVED,format-fix

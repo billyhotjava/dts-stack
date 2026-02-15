@@ -8,6 +8,7 @@ import com.yuzhi.dts.ingestion.service.audit.AuditService;
 import com.yuzhi.dts.ingestion.service.dto.IngestionIncrementalAuditDTO;
 import com.yuzhi.dts.ingestion.service.dto.IngestionIncrementalAuditSummaryDTO;
 import com.yuzhi.dts.ingestion.service.dto.IngestionExecutionDTO;
+import com.yuzhi.dts.ingestion.service.dto.IngestionExecutionObservabilityDTO;
 import com.yuzhi.dts.ingestion.service.dto.IngestionIncrementalStateDTO;
 import com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO;
 import com.yuzhi.dts.ingestion.service.etl.AddaxJobService;
@@ -15,6 +16,7 @@ import com.yuzhi.dts.ingestion.service.etl.AirflowAdapter;
 import com.yuzhi.dts.ingestion.service.etl.AirflowClient;
 import com.yuzhi.dts.ingestion.service.etl.AirflowDagService;
 import com.yuzhi.dts.ingestion.service.etl.IncrementalSyncService;
+import com.yuzhi.dts.ingestion.service.etl.ExecutionFailureClassifier;
 import com.yuzhi.dts.ingestion.service.mapper.IngestionExecutionMapper;
 import com.yuzhi.dts.ingestion.service.mapper.IngestionTaskMapper;
 import com.yuzhi.dts.common.audit.AuditStage;
@@ -30,12 +32,21 @@ import org.springframework.util.StringUtils;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.concurrent.CompletableFuture;
 import java.util.Collection;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 
 /**
  * 数据入湖任务服务
@@ -47,6 +58,8 @@ import java.util.Optional;
 public class IngestionTaskService {
 
     private static final Logger log = LoggerFactory.getLogger(IngestionTaskService.class);
+    private static final ZoneId OBSERVABILITY_ZONE = ZoneId.of("Asia/Shanghai");
+    private static final DateTimeFormatter OBSERVABILITY_DAY_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE;
 
     private final IngestionTaskRepository taskRepository;
     private final IngestionExecutionRepository executionRepository;
@@ -933,6 +946,227 @@ public class IngestionTaskService {
             return executionRepository.findByTaskIdAndFailureCategoryIgnoreCase(taskId, normalizedFailureCategory, pageable);
         }
         return executionRepository.findByTaskId(taskId, pageable);
+    }
+
+    @Transactional(readOnly = true)
+    public IngestionExecutionObservabilityDTO getExecutionObservability(
+        Long taskId,
+        String sourceType,
+        UUID sourceDataSourceId,
+        Instant from,
+        Instant to,
+        Integer days,
+        Integer timeoutMinutes
+    ) {
+        int safeDays = days == null ? 7 : Math.max(1, Math.min(days, 90));
+        int safeTimeoutMinutes = timeoutMinutes == null ? 10 : Math.max(1, Math.min(timeoutMinutes, 24 * 60));
+        Instant windowEnd = to == null ? Instant.now() : to;
+        Instant windowStart = from == null ? windowEnd.minus(Duration.ofDays(safeDays)) : from;
+        if (windowStart.isAfter(windowEnd)) {
+            throw new IllegalArgumentException("windowStart cannot be after windowEnd");
+        }
+
+        String normalizedSourceType = toText(sourceType);
+        List<IngestionExecution> executions = taskId == null
+            ? executionRepository.findByCreatedAtBetweenOrderByCreatedAtAsc(windowStart, windowEnd)
+            : executionRepository.findByTaskIdAndCreatedAtBetweenOrderByCreatedAtAsc(taskId, windowStart, windowEnd);
+
+        if (StringUtils.hasText(normalizedSourceType) || sourceDataSourceId != null) {
+            List<IngestionExecution> filtered = new ArrayList<>();
+            for (IngestionExecution execution : executions) {
+                IngestionTask task = execution == null ? null : execution.getTask();
+                if (task == null) {
+                    continue;
+                }
+                if (StringUtils.hasText(normalizedSourceType)) {
+                    String current = toText(task.getSourceType());
+                    if (!normalizedSourceType.equalsIgnoreCase(current)) {
+                        continue;
+                    }
+                }
+                if (sourceDataSourceId != null && !sourceDataSourceId.equals(task.getSourceDataSourceId())) {
+                    continue;
+                }
+                filtered.add(execution);
+            }
+            executions = filtered;
+        }
+
+        IngestionExecutionObservabilityDTO dto = new IngestionExecutionObservabilityDTO();
+        dto.setTaskId(taskId);
+        dto.setSourceType(normalizedSourceType);
+        dto.setSourceDataSourceId(sourceDataSourceId);
+        dto.setWindowStart(windowStart);
+        dto.setWindowEnd(windowEnd);
+        dto.setWindowDays(safeDays);
+        dto.setTimeoutMinutes(safeTimeoutMinutes);
+
+        Map<String, TrendAccumulator> trendMap = new LinkedHashMap<>();
+        Map<String, Long> failureMap = new HashMap<>();
+        Map<Long, Instant> pendingFailureMap = new HashMap<>();
+        long total = 0L;
+        long success = 0L;
+        long failed = 0L;
+        long running = 0L;
+        long terminal = 0L;
+        long timeout = 0L;
+        long durationCount = 0L;
+        long durationSecondsSum = 0L;
+        long mttrCount = 0L;
+        long mttrSecondsSum = 0L;
+        long timeoutThresholdSeconds = safeTimeoutMinutes * 60L;
+
+        for (IngestionExecution execution : executions) {
+            if (execution == null) {
+                continue;
+            }
+            total += 1;
+            String status = normalizeStatus(execution.getStatus());
+            boolean isSuccess = "success".equals(status);
+            boolean isFailed = "failed".equals(status) || "error".equals(status);
+            boolean isTerminal = isSuccess || isFailed;
+
+            if (isSuccess) {
+                success += 1;
+            } else if (isFailed) {
+                failed += 1;
+            } else {
+                running += 1;
+            }
+            if (isTerminal) {
+                terminal += 1;
+            }
+
+            Long durationSeconds = durationSeconds(execution.getStartTime(), execution.getEndTime());
+            if (isTerminal && durationSeconds != null) {
+                durationCount += 1;
+                durationSecondsSum += durationSeconds;
+                if (durationSeconds > timeoutThresholdSeconds) {
+                    timeout += 1;
+                }
+            }
+
+            Instant point = executionPoint(execution);
+            TrendAccumulator trend = trendMap.computeIfAbsent(toDay(point), key -> new TrendAccumulator());
+            trend.total += 1;
+            if (isSuccess) {
+                trend.success += 1;
+            } else if (isFailed) {
+                trend.failed += 1;
+            }
+            if (isTerminal && durationSeconds != null && durationSeconds > timeoutThresholdSeconds) {
+                trend.timeout += 1;
+            }
+
+            Long key = execution.getTask() != null ? execution.getTask().getId() : null;
+            if (key == null) {
+                key = -1L;
+            }
+            if (isFailed) {
+                pendingFailureMap.putIfAbsent(key, point);
+                String category = toText(execution.getFailureCategory());
+                if (!StringUtils.hasText(category)) {
+                    category = ExecutionFailureClassifier.classify(execution.getErrorMessage());
+                }
+                String normalizedCategory = StringUtils.hasText(category) ? category.toUpperCase() : ExecutionFailureClassifier.CATEGORY_RUNTIME;
+                failureMap.put(normalizedCategory, failureMap.getOrDefault(normalizedCategory, 0L) + 1L);
+            } else if (isSuccess) {
+                Instant failureAt = pendingFailureMap.get(key);
+                if (failureAt != null) {
+                    long recover = Duration.between(failureAt, point).getSeconds();
+                    if (recover >= 0) {
+                        mttrCount += 1;
+                        mttrSecondsSum += recover;
+                    }
+                    pendingFailureMap.remove(key);
+                }
+            }
+        }
+
+        dto.setTotal(total);
+        dto.setSuccess(success);
+        dto.setFailed(failed);
+        dto.setRunning(running);
+        dto.setTerminal(terminal);
+        dto.setTimeout(timeout);
+        dto.setSuccessRate(rate(success, terminal));
+        dto.setTimeoutRate(rate(timeout, terminal));
+        dto.setAvgDurationSeconds(durationCount == 0 ? null : round2((double) durationSecondsSum / durationCount));
+        dto.setMttrSeconds(mttrCount == 0 ? null : round2((double) mttrSecondsSum / mttrCount));
+
+        List<IngestionExecutionObservabilityDTO.FailureTopItem> topItems = failureMap.entrySet().stream()
+            .sorted((a, b) -> Long.compare(b.getValue(), a.getValue()))
+            .limit(5)
+            .map(entry -> new IngestionExecutionObservabilityDTO.FailureTopItem(entry.getKey(), entry.getValue()))
+            .toList();
+        dto.setFailureTop(topItems);
+
+        List<IngestionExecutionObservabilityDTO.TrendItem> trendItems = trendMap.entrySet().stream()
+            .sorted(Map.Entry.comparingByKey())
+            .map(entry -> new IngestionExecutionObservabilityDTO.TrendItem(
+                entry.getKey(),
+                entry.getValue().total,
+                entry.getValue().success,
+                entry.getValue().failed,
+                entry.getValue().timeout
+            ))
+            .toList();
+        dto.setTrend(trendItems);
+
+        return dto;
+    }
+
+    private String normalizeStatus(String value) {
+        String normalized = toText(value);
+        return StringUtils.hasText(normalized) ? normalized.toLowerCase() : "";
+    }
+
+    private Long durationSeconds(Instant start, Instant end) {
+        if (start == null || end == null) {
+            return null;
+        }
+        long seconds = Duration.between(start, end).getSeconds();
+        return seconds < 0 ? null : seconds;
+    }
+
+    private Instant executionPoint(IngestionExecution execution) {
+        if (execution == null) {
+            return Instant.now();
+        }
+        if (execution.getEndTime() != null) {
+            return execution.getEndTime();
+        }
+        if (execution.getStartTime() != null) {
+            return execution.getStartTime();
+        }
+        if (execution.getCreatedAt() != null) {
+            return execution.getCreatedAt();
+        }
+        return Instant.now();
+    }
+
+    private String toDay(Instant point) {
+        Instant safePoint = point == null ? Instant.now() : point;
+        LocalDate day = safePoint.atZone(OBSERVABILITY_ZONE).toLocalDate();
+        return OBSERVABILITY_DAY_FORMATTER.format(day);
+    }
+
+    private Double rate(long numerator, long denominator) {
+        if (denominator <= 0) {
+            return 0D;
+        }
+        return round2((numerator * 100.0D) / denominator);
+    }
+
+    private Double round2(double value) {
+        return Math.round(value * 100.0D) / 100.0D;
+    }
+
+    private static final class TrendAccumulator {
+        private long total;
+        private long success;
+        private long failed;
+        private long timeout;
     }
 
     /**

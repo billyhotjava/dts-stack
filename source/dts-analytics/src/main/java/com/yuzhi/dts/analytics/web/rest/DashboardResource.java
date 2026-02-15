@@ -20,9 +20,8 @@ import com.yuzhi.dts.analytics.service.AnalyticsSessionService;
 import com.yuzhi.dts.analytics.service.DatasetQueryService;
 import com.yuzhi.dts.analytics.service.EntityIdGenerator;
 import com.yuzhi.dts.analytics.service.FieldValuesService;
-import com.yuzhi.dts.analytics.service.MbqlToSqlService;
-import com.yuzhi.dts.analytics.service.NativeQueryTemplateService;
 import com.yuzhi.dts.analytics.service.PublicLinkService;
+import com.yuzhi.dts.analytics.service.QueryExecutionFacade;
 import com.yuzhi.dts.analytics.service.RevisionService;
 import com.yuzhi.dts.analytics.web.support.MetabaseAuth;
 import com.yuzhi.dts.analytics.web.support.PlatformContext;
@@ -61,15 +60,13 @@ public class DashboardResource {
     private final AnalyticsBookmarkRepository bookmarkRepository;
     private final AnalyticsCardRepository cardRepository;
     private final ActivityService activityService;
-    private final DatasetQueryService datasetQueryService;
-    private final MbqlToSqlService mbqlToSqlService;
     private final EntityIdGenerator entityIdGenerator;
     private final PublicLinkService publicLinkService;
     private final RevisionService revisionService;
     private final AnalyticsFieldRepository fieldRepository;
     private final AnalyticsTableRepository tableRepository;
     private final FieldValuesService fieldValuesService;
-    private final NativeQueryTemplateService nativeQueryTemplateService;
+    private final QueryExecutionFacade queryExecutionFacade;
     private final ObjectMapper objectMapper;
 
     public DashboardResource(
@@ -79,15 +76,13 @@ public class DashboardResource {
             AnalyticsBookmarkRepository bookmarkRepository,
             AnalyticsCardRepository cardRepository,
             ActivityService activityService,
-            DatasetQueryService datasetQueryService,
-            MbqlToSqlService mbqlToSqlService,
             EntityIdGenerator entityIdGenerator,
             PublicLinkService publicLinkService,
             RevisionService revisionService,
             AnalyticsFieldRepository fieldRepository,
             AnalyticsTableRepository tableRepository,
             FieldValuesService fieldValuesService,
-            NativeQueryTemplateService nativeQueryTemplateService,
+            QueryExecutionFacade queryExecutionFacade,
             ObjectMapper objectMapper) {
         this.sessionService = sessionService;
         this.dashboardRepository = dashboardRepository;
@@ -95,15 +90,13 @@ public class DashboardResource {
         this.bookmarkRepository = bookmarkRepository;
         this.cardRepository = cardRepository;
         this.activityService = activityService;
-        this.datasetQueryService = datasetQueryService;
-        this.mbqlToSqlService = mbqlToSqlService;
         this.entityIdGenerator = entityIdGenerator;
         this.publicLinkService = publicLinkService;
         this.revisionService = revisionService;
         this.fieldRepository = fieldRepository;
         this.tableRepository = tableRepository;
         this.fieldValuesService = fieldValuesService;
-        this.nativeQueryTemplateService = nativeQueryTemplateService;
+        this.queryExecutionFacade = queryExecutionFacade;
         this.objectMapper = objectMapper;
     }
 
@@ -749,55 +742,35 @@ public class DashboardResource {
             return ResponseEntity.status(500).body(Map.of("error", "Invalid saved dataset_query"));
         }
 
-        String type = datasetQuery.path("type").asText(null);
-        long databaseId = datasetQuery.path("database").asLong(0);
-        if (databaseId <= 0) {
-            return ResponseEntity.status(400).body(Map.of("error", "dataset_query.database is required"));
-        }
-
         long startedMillis = System.currentTimeMillis();
         try {
-            String sql;
-            List<Object> bindings = List.of();
+            JsonNode mbqlOverride = null;
+            if ("query".equalsIgnoreCase(datasetQuery.path("type").asText(null))) {
+                mbqlOverride = applyDashcardParametersToMbql(datasetQuery.get("query"), dashcard, body);
+            }
+            QueryExecutionFacade.PreparedQuery prepared = queryExecutionFacade.prepare(
+                    datasetQuery,
+                    body,
+                    mbqlOverride,
+                    DatasetQueryService.DatasetConstraints.defaults());
+            long databaseId = prepared.databaseId();
+
             Map<String, Object> jsonQuery = new LinkedHashMap<>();
             jsonQuery.put("database", databaseId);
-
-            if ("native".equalsIgnoreCase(type)) {
-                sql = datasetQuery.path("native").path("query").asText(null);
-                if (sql == null || sql.isBlank()) {
-                    return ResponseEntity.status(400).body(Map.of("error", "dataset_query.native.query is required"));
-                }
-                JsonNode parametersNode = body == null ? null : body.get("parameters");
-                if (parametersNode != null && !parametersNode.isNull() && !parametersNode.isMissingNode()) {
-                        nativeQueryTemplateService.validateParameterWhitelist(sql, parametersNode);
-                        if (sql.contains("{{")) {
-                            NativeQueryTemplateService.RenderedQuery rendered = nativeQueryTemplateService.render(sql, parametersNode);
-                            sql = rendered.sql();
-                            bindings = rendered.bindings();
-                        }
-                    }
-                jsonQuery.put("type", "native");
-                jsonQuery.put("native", Map.of("query", sql));
-            } else if ("query".equalsIgnoreCase(type)) {
-                JsonNode mbql = applyDashcardParametersToMbql(datasetQuery.get("query"), dashcard, body);
-                MbqlToSqlService.TranslationResult translated =
-                        mbqlToSqlService.translateSelect(databaseId, mbql, DatasetQueryService.DatasetConstraints.defaults());
-                sql = translated.sql();
-                bindings = translated.bindings();
-                jsonQuery.put("type", "query");
-                jsonQuery.put("query", mbql);
+            jsonQuery.put("type", prepared.type());
+            if ("native".equalsIgnoreCase(prepared.type())) {
+                jsonQuery.put("native", Map.of("query", prepared.sql()));
             } else {
-                return ResponseEntity.status(400).body(Map.of("error", "Only native and query (MBQL) queries are supported"));
+                jsonQuery.put("query", prepared.mbql());
             }
 
-            DatasetQueryService.DatasetResult result =
-                    datasetQueryService.runNative(databaseId, sql, DatasetQueryService.DatasetConstraints.defaults(), bindings);
+            DatasetQueryService.DatasetResult result = queryExecutionFacade.executeWithCompliance(prepared);
             long runningTimeMs = System.currentTimeMillis() - startedMillis;
 
             Map<String, Object> data = new LinkedHashMap<>();
             data.put("rows", result.rows());
             data.put("cols", result.cols());
-            data.put("native_form", Map.of("query", sql));
+            data.put("native_form", Map.of("query", prepared.sql()));
             data.put("results_timezone", result.resultsTimezone());
             data.put("results_metadata", Map.of("columns", result.resultsMetadataColumns()));
             data.put("insights", null);

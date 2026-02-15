@@ -43,6 +43,7 @@ export const DRILLABLE_TYPES: Set<ComponentType> = new Set([
 
 export interface ScreenComponent {
     id: string;
+    groupId?: string;
     type: ComponentType;
     name: string;
     x: number;
@@ -79,17 +80,31 @@ export type ComponentType =
     | 'percent-pond'
     // 基础组件
     | 'title'
+    | 'markdown-text'
     | 'number-card'
     | 'progress-bar'
+    | 'countdown'
+    | 'marquee'
+    | 'shape'
+    | 'container'
     | 'datetime'
     | 'image'
     | 'video'
     | 'iframe'
-    | 'table';
+    | 'table'
+    | 'filter-input'
+    | 'filter-select'
+    | 'filter-date-range';
 
-export type DataSourceType = 'static' | 'api' | 'database' | 'card';
+export type DataSourceType = 'static' | 'api' | 'card' | 'sql' | 'dataset' | 'metric' | 'database';
+export type QuerySourceType = 'metric' | 'dataset' | 'sql' | 'card' | 'api';
 
 export interface DataSourceConfig {
+    /**
+     * Canonical source type for Spec v2.
+     * Legacy payloads may still carry `type: "database"`.
+     */
+    sourceType?: QuerySourceType;
     type: DataSourceType;
     refreshInterval?: number; // 刷新间隔(秒)
     staticData?: unknown;
@@ -105,6 +120,26 @@ export interface DataSourceConfig {
         databaseId?: number;
         connectionId?: string;
         query: string;
+        queryTimeoutSeconds?: number;
+        maxRows?: number;
+        parameterBindings?: CardParameterBinding[];
+    };
+    sqlConfig?: {
+        // Prefer analytics database id; keep connectionId for backward compatibility.
+        databaseId?: number;
+        connectionId?: string;
+        query: string;
+        queryTimeoutSeconds?: number;
+        maxRows?: number;
+        parameterBindings?: CardParameterBinding[];
+    };
+    datasetConfig?: {
+        queryBody?: Record<string, unknown>;
+    };
+    metricConfig?: {
+        metricId?: number;
+        metricVersion?: string;
+        cardId?: number;
     };
     cardConfig?: {
         cardId: number;
@@ -121,6 +156,7 @@ export interface CardData {
 }
 
 export interface ScreenConfig {
+    schemaVersion?: number;
     id: string;
     name: string;
     description?: string;
@@ -152,8 +188,11 @@ export type ScreenAction =
     | { type: 'PASTE_COMPONENTS'; payload: { components: ScreenComponent[]; offsetX?: number; offsetY?: number } }
     | { type: 'SELECT_COMPONENTS'; payload: string[] }
     | { type: 'MOVE_COMPONENT'; payload: { id: string; x: number; y: number } }
+    | { type: 'MOVE_COMPONENTS'; payload: Array<{ id: string; x: number; y: number }> }
+    | { type: 'TRANSFORM_COMPONENTS'; payload: Array<{ id: string; x: number; y: number; width: number; height: number }> }
     | { type: 'RESIZE_COMPONENT'; payload: { id: string; width: number; height: number } }
     | { type: 'REORDER_LAYER'; payload: { id: string; direction: 'up' | 'down' | 'top' | 'bottom' } }
+    | { type: 'SNAPSHOT' }
     | { type: 'SET_ZOOM'; payload: number }
     | { type: 'TOGGLE_GRID' }
     | { type: 'UNDO' }

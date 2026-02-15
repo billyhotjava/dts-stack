@@ -1,11 +1,12 @@
 import { useEffect } from 'react';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
-import { useParams } from 'react-router';
+import { useNavigate, useParams } from 'react-router';
 import { ScreenProvider, useScreen } from './ScreenContext';
 import { ScreenRuntimeProvider } from './ScreenRuntimeContext';
 import { analyticsApi } from '../../api/analyticsApi';
 import { resolveScreenTheme } from './screenThemes';
+import { normalizeScreenConfig } from './specV2';
 import {
     ComponentLibraryPanel,
     CanvasToolbar,
@@ -18,6 +19,7 @@ import './ScreenDesigner.css';
 
 function ScreenDesignerContent() {
     const { id } = useParams<{ id: string }>();
+    const navigate = useNavigate();
     const {
         undo,
         redo,
@@ -35,36 +37,27 @@ function ScreenDesignerContent() {
         if (id) {
             analyticsApi.getScreen(id, { mode: 'draft' })
                 .then((screen) => {
-                    const backgroundColor = screen.backgroundColor || '#0d1b2a';
+                    if (screen.canEdit === false) {
+                        alert('当前账号没有该大屏的编辑权限');
+                        navigate('/screens', { replace: true });
+                        return;
+                    }
+                    const normalized = normalizeScreenConfig(screen, { id: screen.id });
+                    if (normalized.warnings.length > 0) {
+                        console.warn('[screen-spec-v2] normalized with warnings:', normalized.warnings);
+                    }
+                    const backgroundColor = normalized.config.backgroundColor || '#0d1b2a';
                     const resolvedTheme = resolveScreenTheme(
-                        screen.theme as import('./types').ScreenTheme | undefined,
+                        normalized.config.theme,
                         backgroundColor,
                     );
-                    loadConfig({
-                        id: String(screen.id),
-                        name: screen.name || '未命名大屏',
-                        description: screen.description || '',
-                        width: screen.width || 1920,
-                        height: screen.height || 1080,
-                        backgroundColor,
-                        backgroundImage: screen.backgroundImage || undefined,
-                        theme: resolvedTheme,
-                        components: (screen.components || []).map(c => ({
-                            ...c,
-                            type: c.type as import('./types').ComponentType,
-                            dataSource: c.dataSource as import('./types').DataSourceConfig | undefined,
-                            interaction: c.interaction as import('./types').ComponentInteractionConfig | undefined,
-                        })),
-                        globalVariables: Array.isArray((screen as Record<string, unknown>).globalVariables)
-                            ? ((screen as Record<string, unknown>).globalVariables as import('./types').ScreenGlobalVariable[])
-                            : [],
-                    });
+                    loadConfig({ ...normalized.config, theme: resolvedTheme });
                 })
                 .catch((error) => {
                     console.error('Failed to load screen:', error);
                 });
         }
-    }, [id, loadConfig]);
+    }, [id, loadConfig, navigate]);
 
     // Keyboard shortcuts
     useEffect(() => {

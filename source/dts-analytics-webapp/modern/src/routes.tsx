@@ -1,34 +1,6 @@
 import { useEffect } from "react";
 import { createBrowserRouter, useNavigate } from "react-router";
 import { AppLayout } from "./layouts/AppLayout";
-import AnalyzePage from "./pages/AnalyzePage";
-import CollectionsPage from "./pages/CollectionsPage";
-import CollectionItemsPage from "./pages/CollectionItemsPage";
-import DashboardDetailPage from "./pages/DashboardDetailPage";
-import DashboardsPage from "./pages/DashboardsPage";
-import DashboardEditorPage from "./pages/DashboardEditorPage";
-import HomePage from "./pages/HomePage";
-import CardsPage from "./pages/CardsPage";
-import CardDetailPage from "./pages/CardDetailPage";
-import CardEditorPage from "./pages/CardEditorPage";
-import SearchPage from "./pages/SearchPage";
-import NotFoundPage from "./pages/NotFoundPage";
-import DataPage from "./pages/DataPage";
-import DatabaseDetailPage from "./pages/DatabaseDetailPage";
-import TableDetailPage from "./pages/TableDetailPage";
-import FieldDetailPage from "./pages/FieldDetailPage";
-import ModelsPage from "./pages/ModelsPage";
-import MetricsPage from "./pages/MetricsPage";
-import TrashPage from "./pages/TrashPage";
-import DatabaseNewPage from "./pages/DatabaseNewPage";
-import DatabaseEditPage from "./pages/DatabaseEditPage";
-import PublicCardPage from "./pages/PublicCardPage";
-import PublicDashboardPage from "./pages/PublicDashboardPage";
-import ScreenDesignerPage from "./pages/screens/ScreenDesignerPage";
-import ScreenPreviewPage from "./pages/screens/ScreenPreviewPage";
-import PublicScreenPage from "./pages/screens/PublicScreenPage";
-import ScreensPage from "./pages/screens/ScreensPage";
-
 
 function ModernAliasRedirect() {
 	const navigate = useNavigate();
@@ -38,44 +10,52 @@ function ModernAliasRedirect() {
 	return null;
 }
 
+const lazyComponent = (importer: () => Promise<{ default: unknown }>) => async () => {
+	const mod = await importer();
+	return { Component: mod.default as never };
+};
+
 export function createRoutes() {
 	return createBrowserRouter(
 		[
 			// Fullscreen routes — no sidebar/layout wrapper
-			{ path: "/screens/new", Component: ScreenDesignerPage },
-			{ path: "/screens/:id/edit", Component: ScreenDesignerPage },
-			{ path: "/screens/:id/preview", Component: ScreenPreviewPage },
-			{ path: "/public/screen/:uuid", Component: PublicScreenPage },
+			{ path: "/screens/new", lazy: lazyComponent(() => import("./pages/screens/ScreenDesignerPage")) },
+			{ path: "/screens/:id/edit", lazy: lazyComponent(() => import("./pages/screens/ScreenDesignerPage")) },
+			{ path: "/screens/:id/preview", lazy: lazyComponent(() => import("./pages/screens/ScreenPreviewPage")) },
+			{ path: "/public/screen/:uuid", lazy: lazyComponent(() => import("./pages/screens/PublicScreenPage")) },
 			{
 				Component: AppLayout,
 				children: [
-					{ path: "/", Component: HomePage },
+					{ path: "/", lazy: lazyComponent(() => import("./pages/HomePage")) },
 					{ path: "/modern", Component: ModernAliasRedirect },
-					{ path: "/analyze", Component: AnalyzePage },
-					{ path: "/collections", Component: CollectionsPage },
-					{ path: "/collections/:id", Component: CollectionItemsPage },
-					{ path: "/dashboards", Component: DashboardsPage },
-					{ path: "/dashboards/new", Component: DashboardEditorPage },
-					{ path: "/dashboards/:id", Component: DashboardDetailPage },
-					{ path: "/dashboards/:id/edit", Component: DashboardEditorPage },
-					{ path: "/questions", Component: CardsPage },
-					{ path: "/questions/new", Component: CardEditorPage },
-					{ path: "/questions/:id", Component: CardDetailPage },
-					{ path: "/questions/:id/edit", Component: CardEditorPage },
-					{ path: "/data", Component: DataPage },
-					{ path: "/data/new", Component: DatabaseNewPage },
-					{ path: "/data/:dbId/edit", Component: DatabaseEditPage },
-					{ path: "/data/:dbId", Component: DatabaseDetailPage },
-					{ path: "/data/:dbId/tables/:tableId", Component: TableDetailPage },
-					{ path: "/data/:dbId/tables/:tableId/fields/:fieldId", Component: FieldDetailPage },
-					{ path: "/models", Component: ModelsPage },
-					{ path: "/metrics", Component: MetricsPage },
-					{ path: "/trash", Component: TrashPage },
-					{ path: "/public/card/:uuid", Component: PublicCardPage },
-					{ path: "/public/dashboard/:uuid", Component: PublicDashboardPage },
-					{ path: "/screens", Component: ScreensPage },
-					{ path: "/search", Component: SearchPage },
-					{ path: "*", Component: NotFoundPage },
+					{ path: "/analyze", lazy: lazyComponent(() => import("./pages/AnalyzePage")) },
+					{ path: "/collections", lazy: lazyComponent(() => import("./pages/CollectionsPage")) },
+					{ path: "/collections/:id", lazy: lazyComponent(() => import("./pages/CollectionItemsPage")) },
+					{ path: "/dashboards", lazy: lazyComponent(() => import("./pages/DashboardsPage")) },
+					{ path: "/dashboards/new", lazy: lazyComponent(() => import("./pages/DashboardEditorPage")) },
+					{ path: "/dashboards/:id", lazy: lazyComponent(() => import("./pages/DashboardDetailPage")) },
+					{ path: "/dashboards/:id/edit", lazy: lazyComponent(() => import("./pages/DashboardEditorPage")) },
+					{ path: "/questions", lazy: lazyComponent(() => import("./pages/CardsPage")) },
+					{ path: "/questions/new", lazy: lazyComponent(() => import("./pages/CardEditorPage")) },
+					{ path: "/questions/:id", lazy: lazyComponent(() => import("./pages/CardDetailPage")) },
+					{ path: "/questions/:id/edit", lazy: lazyComponent(() => import("./pages/CardEditorPage")) },
+					{ path: "/data", lazy: lazyComponent(() => import("./pages/DataPage")) },
+					{ path: "/data/new", lazy: lazyComponent(() => import("./pages/DatabaseNewPage")) },
+					{ path: "/data/:dbId/edit", lazy: lazyComponent(() => import("./pages/DatabaseEditPage")) },
+					{ path: "/data/:dbId", lazy: lazyComponent(() => import("./pages/DatabaseDetailPage")) },
+					{ path: "/data/:dbId/tables/:tableId", lazy: lazyComponent(() => import("./pages/TableDetailPage")) },
+					{
+						path: "/data/:dbId/tables/:tableId/fields/:fieldId",
+						lazy: lazyComponent(() => import("./pages/FieldDetailPage")),
+					},
+					{ path: "/models", lazy: lazyComponent(() => import("./pages/ModelsPage")) },
+					{ path: "/metrics", lazy: lazyComponent(() => import("./pages/MetricsPage")) },
+					{ path: "/trash", lazy: lazyComponent(() => import("./pages/TrashPage")) },
+					{ path: "/public/card/:uuid", lazy: lazyComponent(() => import("./pages/PublicCardPage")) },
+					{ path: "/public/dashboard/:uuid", lazy: lazyComponent(() => import("./pages/PublicDashboardPage")) },
+					{ path: "/screens", lazy: lazyComponent(() => import("./pages/screens/ScreensPage")) },
+					{ path: "/search", lazy: lazyComponent(() => import("./pages/SearchPage")) },
+					{ path: "*", lazy: lazyComponent(() => import("./pages/NotFoundPage")) },
 				],
 			},
 		],

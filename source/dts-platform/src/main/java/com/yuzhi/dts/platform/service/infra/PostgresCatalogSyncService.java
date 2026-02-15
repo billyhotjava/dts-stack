@@ -317,6 +317,8 @@ public class PostgresCatalogSyncService {
         event.setRemovedCount(drift.removed());
         event.setChangedCount(drift.changed());
         event.setDetailsJson(drift.detailsJson());
+        event.setPolicyMode(CatalogSchemaDriftEvent.POLICY_REVIEW);
+        event.setTicketStatus(CatalogSchemaDriftEvent.TICKET_OPEN);
         schemaDriftEventRepository.save(event);
     }
 

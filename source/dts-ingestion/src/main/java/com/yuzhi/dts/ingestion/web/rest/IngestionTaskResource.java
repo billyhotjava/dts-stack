@@ -14,6 +14,7 @@ import com.yuzhi.dts.ingestion.config.AirflowProperties;
 import com.yuzhi.dts.ingestion.service.openmetadata.OpenMetadataAdapter;
 import com.yuzhi.dts.ingestion.service.IngestionTaskChangeLogService;
 import com.yuzhi.dts.ingestion.service.dto.IngestionConnectorCapabilityDTO;
+import com.yuzhi.dts.ingestion.service.dto.IngestionExecutionObservabilityDTO;
 import com.yuzhi.dts.ingestion.service.dto.IngestionRealtimeStatusDTO;
 import com.yuzhi.dts.ingestion.service.dto.IngestionTaskChangeLogDTO;
 import jakarta.validation.Valid;
@@ -183,7 +184,15 @@ public class IngestionTaskResource {
         String summary,
         String detail,
         String riskLevel,
-        String status
+        String status,
+        String assignee,
+        String approvalComment
+    ) {}
+
+    public record ChangeLogTransitionRequest(
+        String action,
+        String assignee,
+        String approvalComment
     ) {}
 
     @PostMapping("/tasks")
@@ -204,16 +213,19 @@ public class IngestionTaskResource {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "缺少目标端配置");
             }
 
+            String syncMode = resolveSyncMode(request.sync());
             boolean isFileSource = isFileSourceType(normalize(request.source().type()));
             if (!isFileSource && request.source().dataSourceId() == null) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请选择数据源连接");
             }
-            if (isFileSource && "incremental".equalsIgnoreCase(resolveSyncMode(request.sync()))) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "文件源不支持增量同步");
-            }
             if (!isFileSource && hasConnectionOverride(request.source().config())) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "入湖任务必须使用已配置的数据源连接");
             }
+            String connectorType = resolveConnectorType(
+                isFileSource,
+                request.source() == null ? null : request.source().type()
+            );
+            validateSyncModeCapability(connectorType, syncMode);
             List<String> streamTables = resolveStreamTables(request.streams());
             com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver.ResolvedSource resolvedSource =
                 isFileSource ? null : sourceResolver.resolve(request.source().dataSourceId(), streamTables);
@@ -282,7 +294,7 @@ public class IngestionTaskResource {
                     }
                     taskDTO.setDestinationConfig(toJsonNode(writerConfig));
                 }
-                taskDTO.setSyncMode(resolveSyncMode(request.sync()));
+                taskDTO.setSyncMode(syncMode);
                 taskDTO.setSyncSchedule(resolveSyncSchedule(request.sync()));
                 taskDTO.setSyncPrefix(syncPrefix);
                 taskDTO.setSyncConfig(toJsonNode(buildSyncConfig(request.sync())));
@@ -380,7 +392,7 @@ public class IngestionTaskResource {
             }
             taskDTO.setDestinationType(writerType);
             taskDTO.setDestinationConfig(toJsonNode(safeMap(writerConfig)));
-            taskDTO.setSyncMode(resolveSyncMode(request.sync()));
+            taskDTO.setSyncMode(syncMode);
             taskDTO.setSyncSchedule(resolveSyncSchedule(request.sync()));
             taskDTO.setSyncPrefix(syncPrefix);
             taskDTO.setSyncConfig(toJsonNode(buildSyncConfig(request.sync())));
@@ -1268,7 +1280,7 @@ public class IngestionTaskResource {
 
     private String resolveSyncMode(SyncSpec sync) {
         String mode = sync == null ? null : normalize(sync.mode());
-        return StringUtils.hasText(mode) ? mode : "full_refresh";
+        return connectorCapabilityService.normalizeSyncMode(mode);
     }
 
     private String resolveSyncSchedule(SyncSpec sync) {
@@ -1322,6 +1334,25 @@ public class IngestionTaskResource {
         }
         String trimmed = message.trim();
         return trimmed.length() > 200 ? trimmed.substring(0, 200) : trimmed;
+    }
+
+    private String resolveConnectorType(boolean isFileSource, String sourceType) {
+        if (isFileSource || isFileSourceType(normalize(sourceType))) {
+            return "file";
+        }
+        String normalized = normalize(sourceType);
+        if ("airbyte".equalsIgnoreCase(normalized)) {
+            return "airbyte";
+        }
+        return "addax";
+    }
+
+    private void validateSyncModeCapability(String connectorType, String syncMode) {
+        try {
+            connectorCapabilityService.validateSyncModeOrThrow(connectorType, syncMode);
+        } catch (IllegalArgumentException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ex.getMessage());
+        }
     }
 
     // ==================== 新增CRUD端点 ====================
@@ -1387,20 +1418,21 @@ public class IngestionTaskResource {
         if (!id.equals(taskDTO.getId())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "ID不匹配");
         }
+        String syncMode = connectorCapabilityService.normalizeSyncMode(taskDTO.getSyncMode());
+        taskDTO.setSyncMode(syncMode);
         boolean isFileSourceUpdate = isFileSourceType(normalize(taskDTO.getSourceType()));
         if (!isFileSourceUpdate && taskDTO.getSourceDataSourceId() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请选择数据源连接");
         }
-        if ("incremental".equalsIgnoreCase(normalize(taskDTO.getSyncMode())) && isFileSourceUpdate) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "文件源不支持增量同步");
-        }
-        if ("incremental".equalsIgnoreCase(normalize(taskDTO.getSyncMode()))) {
+        String connectorType = resolveConnectorType(isFileSourceUpdate, taskDTO.getSourceType());
+        validateSyncModeCapability(connectorType, syncMode);
+        if ("incremental".equalsIgnoreCase(syncMode)) {
             Map<String, Object> syncConfig = safeMap(jsonNodeToMap(taskDTO.getSyncConfig()));
             if (!StringUtils.hasText(normalize(syncConfig.get("incrementalColumn")))) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "增量同步缺少增量列配置");
             }
         }
-        if (!"incremental".equalsIgnoreCase(normalize(taskDTO.getSyncMode()))) {
+        if (!"incremental".equalsIgnoreCase(syncMode)) {
             taskDTO.setSyncConfig(null);
         }
         Map<String, Object> sourceOverrides = isFileSourceUpdate
@@ -1561,16 +1593,17 @@ public class IngestionTaskResource {
         @RequestParam(required = false) String objType,
         @RequestParam(required = false) String changeType,
         @RequestParam(required = false) String status,
+        @RequestParam(required = false) String assignee,
         @RequestParam(required = false) String keyword,
         org.springframework.data.domain.Pageable pageable
     ) {
         org.springframework.data.domain.Page<IngestionTaskChangeLogDTO> page =
-            changeLogService.search(taskId, objType, changeType, status, keyword, pageable);
+            changeLogService.search(taskId, objType, changeType, status, assignee, keyword, pageable);
         auditService.auditAction(
             "INGESTION_CHANGELOG_LIST",
             AuditStage.SUCCESS,
             String.valueOf(taskId == null ? "all" : taskId),
-            Map.of("summary", "查看接入变更记录", "taskId", taskId == null ? "all" : taskId)
+            Map.of("summary", "查看接入变更记录", "taskId", taskId == null ? "all" : taskId, "assignee", assignee == null ? "all" : assignee)
         );
         return ResponseEntity.ok(page);
     }
@@ -1607,6 +1640,8 @@ public class IngestionTaskResource {
         dto.setDetail(request.detail());
         dto.setRiskLevel(request.riskLevel());
         dto.setStatus(request.status());
+        dto.setAssignee(request.assignee());
+        dto.setApprovalComment(request.approvalComment());
         IngestionTaskChangeLogDTO saved = changeLogService.createManualLog(dto);
         auditService.auditAction(
             "INGESTION_CHANGELOG_CREATE",
@@ -1615,6 +1650,58 @@ public class IngestionTaskResource {
             Map.of("summary", "登记接入变更", "taskId", saved.getTaskId())
         );
         return ResponseEntity.status(HttpStatus.CREATED).body(saved);
+    }
+
+    /**
+     * POST /api/ingestion/tasks/changes/{id}/transition : 执行变更流转动作
+     */
+    @PostMapping("/tasks/changes/{id}/transition")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ResponseEntity<IngestionTaskChangeLogDTO> transitionChangeLog(
+        @PathVariable Long id,
+        @RequestBody(required = false) ChangeLogTransitionRequest request
+    ) {
+        String action = request != null ? request.action() : null;
+        String assignee = request != null ? request.assignee() : null;
+        String approvalComment = request != null ? request.approvalComment() : null;
+        String operator = SecurityUtils.getCurrentUserLogin().orElse("system");
+        try {
+            IngestionTaskChangeLogDTO updated = changeLogService.transition(id, action, assignee, approvalComment, operator);
+            auditService.auditAction(
+                "INGESTION_CHANGELOG_TRANSITION",
+                AuditStage.SUCCESS,
+                String.valueOf(updated.getTaskId()),
+                Map.of(
+                    "summary",
+                    "变更流转",
+                    "changeLogId",
+                    id,
+                    "action",
+                    action == null ? "" : action,
+                    "status",
+                    updated.getStatus(),
+                    "operator",
+                    operator
+                )
+            );
+            return ResponseEntity.ok(updated);
+        } catch (IllegalArgumentException ex) {
+            auditService.auditAction(
+                "INGESTION_CHANGELOG_TRANSITION",
+                AuditStage.FAIL,
+                String.valueOf(id),
+                Map.of("summary", "变更流转失败", "changeLogId", id, "action", action == null ? "" : action, "operator", operator)
+            );
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ex.getMessage());
+        } catch (IllegalStateException ex) {
+            auditService.auditAction(
+                "INGESTION_CHANGELOG_TRANSITION",
+                AuditStage.FAIL,
+                String.valueOf(id),
+                Map.of("summary", "变更流转失败", "changeLogId", id, "action", action == null ? "" : action, "operator", operator)
+            );
+            throw new ResponseStatusException(HttpStatus.CONFLICT, ex.getMessage());
+        }
     }
 
     /**
@@ -1730,6 +1817,29 @@ public class IngestionTaskResource {
         org.springframework.data.domain.Page<com.yuzhi.dts.ingestion.service.dto.IngestionExecutionDTO> page =
             ingestionTaskService.getExecutions(id, pageable, status, failureCategory);
         return ResponseEntity.ok(page);
+    }
+
+    /**
+     * GET /api/ingestion/tasks/executions/observability : 获取执行可观测指标
+     */
+    @GetMapping("/tasks/executions/observability")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ResponseEntity<IngestionExecutionObservabilityDTO> getExecutionObservability(
+        @RequestParam(value = "taskId", required = false) Long taskId,
+        @RequestParam(value = "sourceType", required = false) String sourceType,
+        @RequestParam(value = "sourceDataSourceId", required = false) java.util.UUID sourceDataSourceId,
+        @RequestParam(value = "from", required = false) Instant from,
+        @RequestParam(value = "to", required = false) Instant to,
+        @RequestParam(value = "days", required = false) Integer days,
+        @RequestParam(value = "timeoutMinutes", required = false) Integer timeoutMinutes
+    ) {
+        try {
+            return ResponseEntity.ok(
+                ingestionTaskService.getExecutionObservability(taskId, sourceType, sourceDataSourceId, from, to, days, timeoutMinutes)
+            );
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
+        }
     }
 
     /**

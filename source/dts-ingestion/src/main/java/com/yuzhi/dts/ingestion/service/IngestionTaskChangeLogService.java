@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.time.Instant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
@@ -34,7 +35,13 @@ public class IngestionTaskChangeLogService {
     public static final String CHANGE_TASK_UPDATE = "TASK_UPDATE";
 
     public static final String STATUS_PENDING = "PENDING";
+    public static final String STATUS_APPROVAL = "APPROVAL";
     public static final String STATUS_DONE = "DONE";
+    public static final String STATUS_REJECTED = "REJECTED";
+
+    public static final String ACTION_SUBMIT = "SUBMIT";
+    public static final String ACTION_APPROVE = "APPROVE";
+    public static final String ACTION_REJECT = "REJECT";
 
     private final IngestionTaskChangeLogRepository repository;
     private final IngestionTaskChangeLogMapper mapper;
@@ -55,12 +62,14 @@ public class IngestionTaskChangeLogService {
         String objType,
         String changeType,
         String status,
+        String assignee,
         String keyword,
         Pageable pageable
     ) {
         String cleanObjType = normalize(objType);
         String cleanChangeType = normalize(changeType);
         String cleanStatus = normalize(status);
+        String cleanAssignee = normalize(assignee);
         String cleanKeyword = normalize(keyword);
         Pageable safePageable = pageable == null
             ? Pageable.unpaged()
@@ -71,6 +80,7 @@ public class IngestionTaskChangeLogService {
                 cleanObjType,
                 cleanChangeType,
                 cleanStatus,
+                cleanAssignee,
                 cleanKeyword,
                 safePageable
             )
@@ -87,6 +97,57 @@ public class IngestionTaskChangeLogService {
         entity.setDetail(dto.getDetail());
         entity.setRiskLevel(dto.getRiskLevel());
         entity.setStatus(StringUtils.hasText(dto.getStatus()) ? dto.getStatus() : STATUS_PENDING);
+        entity.setAssignee(dto.getAssignee());
+        entity.setApprovalComment(dto.getApprovalComment());
+        entity.setHandledAt(dto.getHandledAt());
+        entity.setHandledBy(dto.getHandledBy());
+        return mapper.toDto(repository.save(entity));
+    }
+
+    public Optional<IngestionTaskChangeLogDTO> findOne(Long id) {
+        if (id == null) {
+            return Optional.empty();
+        }
+        return repository.findById(id).map(mapper::toDto);
+    }
+
+    public IngestionTaskChangeLogDTO transition(Long id, String action, String assignee, String comment, String operator) {
+        if (id == null) {
+            throw new IllegalArgumentException("变更记录ID不能为空");
+        }
+        String normalizedAction = normalize(action);
+        if (!StringUtils.hasText(normalizedAction)) {
+            throw new IllegalArgumentException("处理动作不能为空");
+        }
+        normalizedAction = normalizedAction.toUpperCase();
+        IngestionTaskChangeLog entity = repository
+            .findById(id)
+            .orElseThrow(() -> new IllegalArgumentException("变更记录不存在"));
+        String current = normalizeStatus(entity.getStatus());
+        String next = resolveNextStatus(current, normalizedAction);
+        if (next == null) {
+            throw new IllegalStateException("当前状态不允许执行该动作");
+        }
+        if (ACTION_SUBMIT.equals(normalizedAction) && !StringUtils.hasText(assignee)) {
+            throw new IllegalArgumentException("提交审批时必须指定责任人");
+        }
+        if (ACTION_REJECT.equals(normalizedAction) && !StringUtils.hasText(comment)) {
+            throw new IllegalArgumentException("驳回时必须填写审批意见");
+        }
+
+        entity.setStatus(next);
+        if (StringUtils.hasText(assignee)) {
+            entity.setAssignee(assignee.trim());
+        }
+        if (StringUtils.hasText(comment)) {
+            entity.setApprovalComment(comment.trim());
+        }
+
+        if (ACTION_APPROVE.equals(normalizedAction) || ACTION_REJECT.equals(normalizedAction)) {
+            entity.setHandledAt(Instant.now());
+            entity.setHandledBy(StringUtils.hasText(operator) ? operator.trim() : "system");
+        }
+
         return mapper.toDto(repository.save(entity));
     }
 
@@ -205,6 +266,31 @@ public class IngestionTaskChangeLogService {
             return null;
         }
         return value.trim();
+    }
+
+    private String normalizeStatus(String value) {
+        String normalized = normalize(value);
+        if (!StringUtils.hasText(normalized)) {
+            return STATUS_PENDING;
+        }
+        return normalized.toUpperCase();
+    }
+
+    private String resolveNextStatus(String current, String action) {
+        String normalizedAction = action == null ? null : action.trim().toUpperCase();
+        if (!StringUtils.hasText(normalizedAction)) {
+            return null;
+        }
+        if (ACTION_SUBMIT.equals(normalizedAction) && STATUS_PENDING.equals(current)) {
+            return STATUS_APPROVAL;
+        }
+        if (ACTION_APPROVE.equals(normalizedAction) && STATUS_APPROVAL.equals(current)) {
+            return STATUS_DONE;
+        }
+        if (ACTION_REJECT.equals(normalizedAction) && STATUS_APPROVAL.equals(current)) {
+            return STATUS_REJECTED;
+        }
+        return null;
     }
 
     public void deleteByTaskId(Long taskId) {

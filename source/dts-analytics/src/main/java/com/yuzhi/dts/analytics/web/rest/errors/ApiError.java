@@ -7,6 +7,7 @@ public record ApiError(
         int status,
         String error,
         String code,
+        boolean retryable,
         String message,
         String path,
         String requestId) {}

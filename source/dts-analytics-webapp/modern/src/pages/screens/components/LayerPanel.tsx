@@ -40,14 +40,23 @@ export function LayerPanel() {
             'gauge-chart': '🎯',
             'radar-chart': '🕸️',
             'funnel-chart': '🔽',
+            'map-chart': '🗺️',
             'number-card': '🔢',
             'title': '🔤',
+            'markdown-text': '📄',
+            'countdown': '⏳',
+            'marquee': '📢',
+            'shape': '🔷',
+            'container': '🗂️',
             'datetime': '🕐',
             'progress-bar': '📏',
             'image': '🖼️',
             'video': '🎬',
             'iframe': '🌐',
             'table': '🗂️',
+            'filter-input': '⌨️',
+            'filter-select': '🔽',
+            'filter-date-range': '📅',
             'border-box': '🔲',
             'decoration': '💠',
             'scroll-board': '📜',
@@ -87,6 +96,7 @@ export function LayerPanel() {
                             </span>
                             <span className="layer-item-name">
                                 {component.name}
+                                {component.groupId ? ' [组]' : ''}
                             </span>
                             <div className="layer-item-actions">
                                 <button

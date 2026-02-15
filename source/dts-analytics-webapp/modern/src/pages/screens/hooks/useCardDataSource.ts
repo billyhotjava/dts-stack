@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { analyticsApi } from '../../../api/analyticsApi';
-import type { DataSourceConfig, CardData } from '../types';
+import type { CardParameterBinding, DataSourceConfig, CardData } from '../types';
 
 interface CardDataSourceResult {
     data: CardData | null;
@@ -76,15 +76,64 @@ function buildApiUrl(baseUrl: string, params?: Record<string, string>): string {
 }
 
 function parseDatabaseId(dataSource?: DataSourceConfig): number | null {
-    if (!dataSource || dataSource.type !== 'database') return null;
-    const raw = dataSource.databaseConfig?.databaseId ?? dataSource.databaseConfig?.connectionId;
+    if (!dataSource) return null;
+    const sourceType = resolveSourceType(dataSource);
+    if (sourceType !== 'sql') return null;
+    const sqlConfig = resolveSqlConfig(dataSource);
+    const raw = sqlConfig?.databaseId ?? sqlConfig?.connectionId;
     const n = Number(raw);
     if (!Number.isFinite(n) || n <= 0) return null;
     return n;
 }
 
+function resolveSourceType(dataSource?: DataSourceConfig): 'static' | 'card' | 'api' | 'sql' | 'dataset' | 'metric' {
+    if (!dataSource) return 'static';
+    const sourceType = ((dataSource.sourceType ?? dataSource.type) || '').toLowerCase();
+    if (!sourceType || sourceType === 'static') return 'static';
+    if (sourceType === 'database' || sourceType === 'sql') return 'sql';
+    if (sourceType === 'card' || sourceType === 'api' || sourceType === 'dataset' || sourceType === 'metric') {
+        return sourceType;
+    }
+    return 'static';
+}
+
+function resolveSqlConfig(dataSource?: DataSourceConfig): DataSourceConfig['sqlConfig'] | DataSourceConfig['databaseConfig'] | undefined {
+    if (!dataSource) return undefined;
+    return dataSource.sqlConfig ?? dataSource.databaseConfig;
+}
+
+function normalizeParameterBindings(bindings?: CardParameterBinding[]): CardParameterBinding[] {
+    if (!Array.isArray(bindings)) return [];
+    return bindings
+        .map((item) => ({
+            name: String(item?.name ?? '').trim(),
+            variableKey: item?.variableKey ? String(item.variableKey).trim() : undefined,
+            value: item?.value == null ? undefined : String(item.value),
+        }))
+        .filter((item) => item.name.length > 0);
+}
+
+function mergeBindingsWithRuntime(
+    bindings: CardParameterBinding[] | undefined,
+    runtimeParams: Array<{ name: string; value: string }> | undefined,
+): Array<{ name: string; value: string }> {
+    const merged = new Map<string, string>();
+    for (const item of runtimeParams ?? []) {
+        const key = String(item?.name ?? '').trim();
+        if (!key) continue;
+        merged.set(key, String(item?.value ?? ''));
+    }
+    for (const item of normalizeParameterBindings(bindings)) {
+        const key = item.name;
+        if (merged.has(key)) continue;
+        const value = item.value ?? '';
+        merged.set(key, String(value));
+    }
+    return Array.from(merged.entries()).map(([name, value]) => ({ name, value }));
+}
+
 function getCacheKey(
-    sourceType: DataSourceConfig['type'] | undefined,
+    sourceType: 'static' | 'card' | 'api' | 'sql' | 'dataset' | 'metric',
     dataSource: DataSourceConfig | undefined,
     cardId: number | undefined,
     databaseId: number | null,
@@ -98,11 +147,19 @@ function getCacheKey(
         return `card:${cardId}:params:${paramsKey}:ctx:${contextKey}`;
     }
 
-    if (sourceType === 'database') {
+    if (sourceType === 'sql') {
         if (!databaseId || databaseId <= 0) return null;
-        const query = (dataSource.databaseConfig?.query ?? '').trim();
+        const query = (resolveSqlConfig(dataSource)?.query ?? '').trim();
         if (!query) return null;
-        return `db:${databaseId}:sql:${query}`;
+        const timeout = resolveSqlConfig(dataSource)?.queryTimeoutSeconds ?? '';
+        const maxRows = resolveSqlConfig(dataSource)?.maxRows ?? '';
+        return `db:${databaseId}:sql:${query}:params:${paramsKey}:ctx:${contextKey}:timeout:${timeout}:max:${maxRows}`;
+    }
+
+    if (sourceType === 'dataset') {
+        const queryBody = dataSource.datasetConfig?.queryBody;
+        if (!queryBody || typeof queryBody !== 'object') return null;
+        return `dataset:${JSON.stringify(queryBody)}:params:${paramsKey}:ctx:${contextKey}`;
     }
 
     if (sourceType === 'api') {
@@ -161,8 +218,8 @@ export function useCardDataSource(
     const [error, setError] = useState<string | null>(null);
     const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-    const sourceType = dataSource?.type;
-    const baseCardId = sourceType === 'card' ? dataSource.cardConfig?.cardId : undefined;
+    const sourceType = resolveSourceType(dataSource);
+    const baseCardId = sourceType === 'card' ? dataSource?.cardConfig?.cardId : undefined;
     const cardId = overrideCardId ?? baseCardId;
     const databaseId = parseDatabaseId(dataSource);
     const refreshInterval = sourceType === 'card'
@@ -254,19 +311,43 @@ export function useCardDataSource(
                     return toCardData(payload);
                 }
 
-                if (sourceType === 'database') {
+                if (sourceType === 'sql') {
                     if (!databaseId || databaseId <= 0) {
                         throw new Error('数据库数据源未配置有效 databaseId');
                     }
-                    const query = dataSource.databaseConfig?.query ?? '';
+                    const sqlConfig = resolveSqlConfig(dataSource);
+                    const query = sqlConfig?.query ?? '';
                     if (!query.trim()) {
                         throw new Error('数据库数据源未配置 SQL');
                     }
+                    const mergedParams = mergeBindingsWithRuntime(sqlConfig?.parameterBindings, paramsKey !== 'null' ? JSON.parse(paramsKey) : undefined);
+                    const timeout = Number(sqlConfig?.queryTimeoutSeconds ?? 0);
+                    const maxRows = Number(sqlConfig?.maxRows ?? 0);
                     const result = await analyticsApi.runDatasetQuery({
                         database: databaseId,
                         type: 'native',
                         native: { query },
+                        parameters: mergedParams,
+                        ...(Number.isFinite(timeout) && timeout > 0 ? { query_timeout: timeout } : {}),
+                        ...(Number.isFinite(maxRows) && maxRows > 0 ? { constraints: { 'max-results': maxRows } } : {}),
+                        ...(contextKey !== 'null' ? { queryContext: JSON.parse(contextKey) } : {}),
                     });
+                    if (result.error) {
+                        throw new Error(String(result.error));
+                    }
+                    return toCardData(result.data ?? result);
+                }
+
+                if (sourceType === 'dataset') {
+                    const queryBody = dataSource.datasetConfig?.queryBody;
+                    if (!queryBody || typeof queryBody !== 'object') {
+                        throw new Error('Dataset 数据源未配置 queryBody');
+                    }
+                    const body = { ...(queryBody as Record<string, unknown>) };
+                    if (contextKey !== 'null') {
+                        body.queryContext = JSON.parse(contextKey);
+                    }
+                    const result = await analyticsApi.runDatasetQuery(body);
                     if (result.error) {
                         throw new Error(String(result.error));
                     }

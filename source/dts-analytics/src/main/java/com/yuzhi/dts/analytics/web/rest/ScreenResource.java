@@ -14,14 +14,20 @@ import com.yuzhi.dts.analytics.service.AnalyticsSessionService;
 import com.yuzhi.dts.analytics.service.PublicLinkService;
 import com.yuzhi.dts.analytics.service.ScreenAclService;
 import com.yuzhi.dts.analytics.service.ScreenAuditService;
+import com.yuzhi.dts.analytics.service.ScreenWarmupService;
+import com.yuzhi.dts.analytics.service.ScreenAiGenerationService;
+import com.yuzhi.dts.analytics.service.ScreenSpecValidator;
 import com.yuzhi.dts.analytics.web.support.MetabaseAuth;
 import com.yuzhi.dts.analytics.web.support.PlatformContext;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
@@ -50,6 +56,9 @@ public class ScreenResource {
     private final AnalyticsScreenVersionRepository screenVersionRepository;
     private final ScreenAclService screenAclService;
     private final ScreenAuditService screenAuditService;
+    private final ScreenWarmupService screenWarmupService;
+    private final ScreenAiGenerationService screenAiGenerationService;
+    private final ScreenSpecValidator screenSpecValidator;
     private final PublicLinkService publicLinkService;
     private final ObjectMapper objectMapper;
 
@@ -59,6 +68,9 @@ public class ScreenResource {
             AnalyticsScreenVersionRepository screenVersionRepository,
             ScreenAclService screenAclService,
             ScreenAuditService screenAuditService,
+            ScreenWarmupService screenWarmupService,
+            ScreenAiGenerationService screenAiGenerationService,
+            ScreenSpecValidator screenSpecValidator,
             PublicLinkService publicLinkService,
             ObjectMapper objectMapper) {
         this.sessionService = sessionService;
@@ -66,6 +78,9 @@ public class ScreenResource {
         this.screenVersionRepository = screenVersionRepository;
         this.screenAclService = screenAclService;
         this.screenAuditService = screenAuditService;
+        this.screenWarmupService = screenWarmupService;
+        this.screenAiGenerationService = screenAiGenerationService;
+        this.screenSpecValidator = screenSpecValidator;
         this.publicLinkService = publicLinkService;
         this.objectMapper = objectMapper;
     }
@@ -91,6 +106,50 @@ public class ScreenResource {
                 .filter(node -> node != null)
                 .toList();
 
+        return ResponseEntity.ok(result);
+    }
+
+    @PostMapping(path = "/ai/generate", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> generateAiDraft(@RequestBody(required = false) JsonNode body, HttpServletRequest request) {
+        Optional<AnalyticsUser> user = MetabaseAuth.currentUser(sessionService, request);
+        if (user.isEmpty()) {
+            return unauthorized();
+        }
+
+        String prompt = body == null ? null : trimToNull(body.path("prompt").asText(null));
+        Integer width = body != null && body.has("width") ? body.path("width").asInt(1920) : 1920;
+        Integer height = body != null && body.has("height") ? body.path("height").asInt(1080) : 1080;
+
+        ObjectNode result = screenAiGenerationService.generate(prompt, width, height);
+        result.putPOJO("generatedBy", user.get().getId());
+        result.putPOJO("generatedAt", Instant.now());
+        return ResponseEntity.ok(result);
+    }
+
+    @PostMapping(path = "/ai/revise", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> reviseAiDraft(@RequestBody(required = false) JsonNode body, HttpServletRequest request) {
+        Optional<AnalyticsUser> user = MetabaseAuth.currentUser(sessionService, request);
+        if (user.isEmpty()) {
+            return unauthorized();
+        }
+        String prompt = body == null ? null : trimToNull(body.path("prompt").asText(null));
+        JsonNode screenSpec = body == null ? null : body.path("screenSpec");
+        ObjectNode result = screenAiGenerationService.revise(prompt, screenSpec);
+        result.putPOJO("generatedBy", user.get().getId());
+        result.putPOJO("generatedAt", Instant.now());
+        return ResponseEntity.ok(result);
+    }
+
+    @PostMapping(path = "/validate-spec", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> validateSpec(@RequestBody(required = false) JsonNode body, HttpServletRequest request) {
+        Optional<AnalyticsUser> user = MetabaseAuth.currentUser(sessionService, request);
+        if (user.isEmpty()) {
+            return unauthorized();
+        }
+        ScreenSpecValidator.ValidationResult validation = screenSpecValidator.validateForWrite(body);
+        ObjectNode result = objectMapper.createObjectNode();
+        result.put("valid", true);
+        result.putPOJO("warnings", validation.warnings());
         return ResponseEntity.ok(result);
     }
 
@@ -151,6 +210,105 @@ public class ScreenResource {
         return ResponseEntity.ok(
                 screenVersionRepository.findAllByScreenIdOrderByVersionNoDesc(screen.getId()).stream().map(this::toVersionResponse)
                         .toList());
+    }
+
+    @GetMapping(path = "/{id}/versions/compare", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> compareVersions(
+            @PathVariable("id") long id,
+            @RequestParam("fromVersionId") long fromVersionId,
+            @RequestParam("toVersionId") long toVersionId,
+            HttpServletRequest request) {
+        Optional<AnalyticsUser> user = MetabaseAuth.currentUser(sessionService, request);
+        if (user.isEmpty()) {
+            return unauthorized();
+        }
+        AnalyticsScreen screen = screenRepository.findById(id).orElse(null);
+        if (screen == null || screen.isArchived()) {
+            return ResponseEntity.notFound().build();
+        }
+        PlatformContext context = PlatformContext.from(request);
+        if (!screenAclService.hasPermission(screen, user.get(), context, ScreenAclService.Permission.READ)) {
+            return forbidden();
+        }
+        AnalyticsScreenVersion fromVersion = screenVersionRepository.findByIdAndScreenId(fromVersionId, screen.getId()).orElse(null);
+        AnalyticsScreenVersion toVersion = screenVersionRepository.findByIdAndScreenId(toVersionId, screen.getId()).orElse(null);
+        if (fromVersion == null || toVersion == null) {
+            return ResponseEntity.notFound().build();
+        }
+        return ResponseEntity.ok(buildVersionDiffSummary(fromVersion, toVersion));
+    }
+
+    @GetMapping(path = "/{id}/audit", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> audit(
+            @PathVariable("id") long id,
+            @RequestParam(value = "limit", required = false, defaultValue = "200") int limit,
+            HttpServletRequest request) {
+        Optional<AnalyticsUser> user = MetabaseAuth.currentUser(sessionService, request);
+        if (user.isEmpty()) {
+            return unauthorized();
+        }
+
+        AnalyticsScreen screen = screenRepository.findById(id).orElse(null);
+        if (screen == null || screen.isArchived()) {
+            return ResponseEntity.notFound().build();
+        }
+
+        PlatformContext context = PlatformContext.from(request);
+        if (!screenAclService.hasPermission(screen, user.get(), context, ScreenAclService.Permission.MANAGE)) {
+            return forbidden();
+        }
+
+        return ResponseEntity.ok(screenAuditService.listByScreenId(screen.getId(), limit).stream()
+                .map(log -> {
+                    ObjectNode node = objectMapper.createObjectNode();
+                    node.put("id", log.getId());
+                    node.put("screenId", log.getScreenId());
+                    node.putPOJO("actorId", log.getActorId());
+                    node.put("action", log.getAction());
+                    node.put("requestId", log.getRequestId());
+                    node.putPOJO("createdAt", log.getCreatedAt());
+                    node.set("before", parseObject(log.getBeforeJson()));
+                    node.set("after", parseObject(log.getAfterJson()));
+                    return node;
+                })
+                .toList());
+    }
+
+    @GetMapping(path = "/{id}/health", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> health(@PathVariable("id") long id, HttpServletRequest request) {
+        Optional<AnalyticsUser> user = MetabaseAuth.currentUser(sessionService, request);
+        if (user.isEmpty()) {
+            return unauthorized();
+        }
+
+        AnalyticsScreen screen = screenRepository.findById(id).orElse(null);
+        if (screen == null || screen.isArchived()) {
+            return ResponseEntity.notFound().build();
+        }
+
+        PlatformContext context = PlatformContext.from(request);
+        if (!screenAclService.hasPermission(screen, user.get(), context, ScreenAclService.Permission.READ)) {
+            return forbidden();
+        }
+
+        AnalyticsScreenVersion publishedVersion =
+                screenVersionRepository.findFirstByScreenIdAndCurrentPublishedTrue(screen.getId()).orElse(null);
+
+        ObjectNode result = objectMapper.createObjectNode();
+        result.put("screenId", screen.getId());
+        result.putPOJO("generatedAt", Instant.now());
+        result.put("requestId", requestIdFrom(request));
+        result.put("baselineTargetComponents", 100);
+        result.set("draft", buildHealthStats(screen.getComponentsJson()));
+        if (publishedVersion != null) {
+            result.set("published", buildHealthStats(publishedVersion.getComponentsJson()));
+            result.put("publishedVersionNo", publishedVersion.getVersionNo());
+            result.putPOJO("publishedAt", publishedVersion.getPublishedAt());
+        } else {
+            result.putNull("publishedVersionNo");
+            result.putNull("publishedAt");
+        }
+        return ResponseEntity.ok(result);
     }
 
     @GetMapping(path = "/{id}/acl", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -215,6 +373,7 @@ public class ScreenResource {
         if (user.isEmpty()) {
             return unauthorized();
         }
+        ScreenSpecValidator.ValidationResult specValidation = screenSpecValidator.validateForWrite(body);
 
         String name = body == null ? null : trimToNull(body.path("name").asText(null));
         if (name == null) {
@@ -246,6 +405,7 @@ public class ScreenResource {
 
         ScreenAclService.PermissionSnapshot permissions = new ScreenAclService.PermissionSnapshot(true, true, true, true);
         ObjectNode detail = toDetailResponse(screen, null, null, "draft", permissions);
+        applySpecWarnings(detail, specValidation.warnings());
 
         screenAuditService.log(screen.getId(), user.get().getId(), "screen.create", null, detail, requestIdFrom(request));
 
@@ -272,6 +432,7 @@ public class ScreenResource {
         if (!permissions.canEdit()) {
             return forbidden();
         }
+        ScreenSpecValidator.ValidationResult specValidation = screenSpecValidator.validateForWrite(body);
 
         AnalyticsScreenVersion beforePublished =
                 screenVersionRepository.findFirstByScreenIdAndCurrentPublishedTrue(screen.getId()).orElse(null);
@@ -312,6 +473,7 @@ public class ScreenResource {
         AnalyticsScreenVersion currentPublished =
                 screenVersionRepository.findFirstByScreenIdAndCurrentPublishedTrue(screen.getId()).orElse(null);
         ObjectNode detail = toDetailResponse(screen, null, currentPublished, "draft", permissions);
+        applySpecWarnings(detail, specValidation.warnings());
 
         screenAuditService.log(screen.getId(), user.get().getId(), "screen.update", before, detail, requestIdFrom(request));
 
@@ -357,6 +519,9 @@ public class ScreenResource {
         ObjectNode detail = toDetailResponse(screen, version, version, "published", permissions);
         response.set("screen", detail);
         response.set("version", toVersionResponse(version));
+
+        ScreenWarmupService.WarmupSummary warmupSummary = screenWarmupService.warmupForPublishedScreen(screen, user.get().getId());
+        response.putPOJO("warmup", warmupSummary);
 
         screenAuditService.log(screen.getId(), user.get().getId(), "screen.publish", before, response, requestIdFrom(request));
 
@@ -627,6 +792,91 @@ public class ScreenResource {
         return node;
     }
 
+    private ObjectNode buildVersionDiffSummary(AnalyticsScreenVersion fromVersion, AnalyticsScreenVersion toVersion) {
+        JsonNode fromComponents = parseComponents(fromVersion.getComponentsJson());
+        JsonNode toComponents = parseComponents(toVersion.getComponentsJson());
+        JsonNode fromVariables = parseGlobalVariables(fromVersion.getVariablesJson());
+        JsonNode toVariables = parseGlobalVariables(toVersion.getVariablesJson());
+
+        Set<String> fromComponentIds = new HashSet<>();
+        Set<String> toComponentIds = new HashSet<>();
+        Set<String> fromTypes = new HashSet<>();
+        Set<String> toTypes = new HashSet<>();
+        fillComponentStats(fromComponents, fromComponentIds, fromTypes);
+        fillComponentStats(toComponents, toComponentIds, toTypes);
+
+        int addedComponents = countDiff(toComponentIds, fromComponentIds);
+        int removedComponents = countDiff(fromComponentIds, toComponentIds);
+        int addedTypes = countDiff(toTypes, fromTypes);
+        int removedTypes = countDiff(fromTypes, toTypes);
+
+        Set<String> fromVarKeys = collectVariableKeys(fromVariables);
+        Set<String> toVarKeys = collectVariableKeys(toVariables);
+        int addedVariables = countDiff(toVarKeys, fromVarKeys);
+        int removedVariables = countDiff(fromVarKeys, toVarKeys);
+
+        ObjectNode node = objectMapper.createObjectNode();
+        node.set("from", toVersionResponse(fromVersion));
+        node.set("to", toVersionResponse(toVersion));
+        ObjectNode summary = objectMapper.createObjectNode();
+        summary.put("componentCountFrom", fromComponentIds.size());
+        summary.put("componentCountTo", toComponentIds.size());
+        summary.put("addedComponents", addedComponents);
+        summary.put("removedComponents", removedComponents);
+        summary.put("addedComponentTypes", addedTypes);
+        summary.put("removedComponentTypes", removedTypes);
+        summary.put("addedVariables", addedVariables);
+        summary.put("removedVariables", removedVariables);
+        node.set("summary", summary);
+        return node;
+    }
+
+    private void fillComponentStats(JsonNode components, Set<String> ids, Set<String> types) {
+        if (components == null || !components.isArray()) {
+            return;
+        }
+        for (JsonNode item : components) {
+            if (item == null || !item.isObject()) {
+                continue;
+            }
+            String id = trimToNull(item.path("id").asText(null));
+            if (id != null) {
+                ids.add(id);
+            }
+            String type = trimToNull(item.path("type").asText(null));
+            if (type != null) {
+                types.add(type);
+            }
+        }
+    }
+
+    private Set<String> collectVariableKeys(JsonNode variables) {
+        Set<String> keys = new HashSet<>();
+        if (variables == null || !variables.isArray()) {
+            return keys;
+        }
+        for (JsonNode item : variables) {
+            if (item == null || !item.isObject()) {
+                continue;
+            }
+            String key = trimToNull(item.path("key").asText(null));
+            if (key != null) {
+                keys.add(key);
+            }
+        }
+        return keys;
+    }
+
+    private int countDiff(Set<String> left, Set<String> right) {
+        int count = 0;
+        for (String value : left) {
+            if (!right.contains(value)) {
+                count++;
+            }
+        }
+        return count;
+    }
+
     private ObjectNode toAclResponse(AnalyticsScreenAcl acl) {
         ObjectNode node = objectMapper.createObjectNode();
         node.put("id", acl.getId());
@@ -713,6 +963,13 @@ public class ScreenResource {
         return node;
     }
 
+    private static void applySpecWarnings(ObjectNode node, List<String> warnings) {
+        if (node == null || warnings == null || warnings.isEmpty()) {
+            return;
+        }
+        node.putPOJO("specWarnings", warnings);
+    }
+
     private void applyPublicLinkPolicyFromBody(AnalyticsPublicLink link, JsonNode body) {
         if (link == null || body == null || body.isNull()) {
             return;
@@ -772,6 +1029,193 @@ public class ScreenResource {
             }
         }
         return objectMapper.createArrayNode();
+    }
+
+    private ObjectNode buildHealthStats(String componentsJson) {
+        JsonNode components = parseComponents(componentsJson);
+        int componentCount = components.isArray() ? components.size() : 0;
+        int dataBound = 0;
+        int refreshable = 0;
+        int interactive = 0;
+        int heavy = 0;
+        int warmupEligible = 0;
+        Set<String> types = new HashSet<>();
+        List<String> recommendations = new ArrayList<>();
+
+        if (components.isArray()) {
+            for (JsonNode component : components) {
+                if (component == null || !component.isObject()) {
+                    continue;
+                }
+                String type = trimToNull(component.path("type").asText(null));
+                if (type != null) {
+                    types.add(type);
+                }
+                if (isHeavyType(type)) {
+                    heavy++;
+                }
+
+                JsonNode dataSource = component.path("dataSource");
+                if (dataSource != null && dataSource.isObject()) {
+                    String dsType = resolveSourceType(dataSource);
+                    if (dsType != null && !"static".equalsIgnoreCase(dsType)) {
+                        dataBound++;
+                    }
+                    if ("sql".equalsIgnoreCase(dsType)) {
+                        JsonNode sqlConfig = resolveSqlConfig(dataSource);
+                        long dbId = parseDatabaseId(sqlConfig);
+                        String query = trimToNull(sqlConfig == null ? null : sqlConfig.path("query").asText(null));
+                        if (dbId > 0 && query != null && !query.contains("{{")) {
+                            warmupEligible++;
+                        }
+                    }
+                    int refreshInterval = parsePositiveInt(dataSource.path("refreshInterval"));
+                    if (refreshInterval <= 0) {
+                        refreshInterval = parsePositiveInt(dataSource.path("cardConfig").path("refreshInterval"));
+                    }
+                    if (refreshInterval > 0) {
+                        refreshable++;
+                    }
+                }
+
+                JsonNode interaction = component.path("interaction");
+                if (interaction != null && interaction.isObject()) {
+                    boolean enabled = interaction.path("enabled").asBoolean(false);
+                    int mappings = interaction.path("mappings").isArray() ? interaction.path("mappings").size() : 0;
+                    if (enabled && mappings > 0) {
+                        interactive++;
+                    }
+                }
+            }
+        }
+
+        int complexity = componentCount + dataBound * 3 + refreshable * 2 + interactive * 2 + heavy * 2;
+        boolean pass = componentCount <= 100 && complexity <= 260;
+
+        if (componentCount > 100) {
+            recommendations.add("组件数超过100，建议拆分子屏或按场景分页。");
+        }
+        if (dataBound > 50) {
+            recommendations.add("数据绑定组件较多，建议统一刷新频率并开启缓存预热。");
+        }
+        if (refreshable > 30) {
+            recommendations.add("高频刷新组件较多，建议提升刷新间隔或分层刷新。");
+        }
+        if (heavy > 20) {
+            recommendations.add("重组件占比较高，建议减少iframe/video/map并使用静态快照。");
+        }
+        if (recommendations.isEmpty()) {
+            recommendations.add("当前大屏达到P0性能与稳定性基线。");
+        }
+
+        ObjectNode node = objectMapper.createObjectNode();
+        node.put("componentCount", componentCount);
+        node.put("dataBoundComponentCount", dataBound);
+        node.put("refreshableComponentCount", refreshable);
+        node.put("interactiveComponentCount", interactive);
+        node.put("heavyComponentCount", heavy);
+        node.put("warmupEligibleDatabaseSources", warmupEligible);
+        node.put("uniqueComponentTypes", types.size());
+        node.put("estimatedComplexity", complexity);
+        node.put("pass", pass);
+        node.putPOJO("recommendations", recommendations);
+        return node;
+    }
+
+    private static boolean isHeavyType(String type) {
+        if (type == null) {
+            return false;
+        }
+        return "table".equals(type)
+                || "iframe".equals(type)
+                || "video".equals(type)
+                || "map-chart".equals(type)
+                || "flyline-chart".equals(type);
+    }
+
+    private static int parsePositiveInt(JsonNode node) {
+        if (node == null || node.isMissingNode() || node.isNull()) {
+            return 0;
+        }
+        if (node.isInt() || node.isLong()) {
+            return Math.max(0, node.asInt(0));
+        }
+        if (node.isTextual()) {
+            String text = trimToNull(node.asText(null));
+            if (text == null) {
+                return 0;
+            }
+            try {
+                return Math.max(0, Integer.parseInt(text));
+            } catch (NumberFormatException ignore) {
+                return 0;
+            }
+        }
+        return 0;
+    }
+
+    private static String resolveSourceType(JsonNode dataSource) {
+        if (dataSource == null || !dataSource.isObject()) {
+            return null;
+        }
+        String sourceType = trimToNull(dataSource.path("sourceType").asText(null));
+        if (sourceType != null) {
+            return sourceType;
+        }
+        String type = trimToNull(dataSource.path("type").asText(null));
+        if ("database".equalsIgnoreCase(type)) {
+            return "sql";
+        }
+        return type;
+    }
+
+    private static JsonNode resolveSqlConfig(JsonNode dataSource) {
+        if (dataSource == null || !dataSource.isObject()) {
+            return null;
+        }
+        JsonNode sqlConfig = dataSource.path("sqlConfig");
+        if (sqlConfig != null && sqlConfig.isObject()) {
+            return sqlConfig;
+        }
+        JsonNode legacy = dataSource.path("databaseConfig");
+        if (legacy != null && legacy.isObject()) {
+            return legacy;
+        }
+        return null;
+    }
+
+    private static long parseDatabaseId(JsonNode dbConfig) {
+        if (dbConfig == null || dbConfig.isMissingNode()) {
+            return 0L;
+        }
+        long dbId = dbConfig.path("databaseId").asLong(0L);
+        if (dbId > 0) {
+            return dbId;
+        }
+        String connectionId = trimToNull(dbConfig.path("connectionId").asText(null));
+        if (connectionId == null) {
+            return 0L;
+        }
+        try {
+            long parsed = Long.parseLong(connectionId);
+            return Math.max(parsed, 0L);
+        } catch (NumberFormatException ignore) {
+            return 0L;
+        }
+    }
+
+    private JsonNode parseObject(String json) {
+        if (json != null && !json.isBlank()) {
+            try {
+                JsonNode node = objectMapper.readTree(json);
+                if (node != null && !node.isNull()) {
+                    return node;
+                }
+            } catch (Exception ignore) {
+                return objectMapper.createObjectNode();
+            }
+        }
+        return objectMapper.createObjectNode();
     }
 
     private String requestIdFrom(HttpServletRequest request) {

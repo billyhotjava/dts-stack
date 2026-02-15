@@ -21,6 +21,10 @@ public class IngestionTaskChangeLogMapper {
         dto.setDetail(entity.getDetail());
         dto.setRiskLevel(entity.getRiskLevel());
         dto.setStatus(entity.getStatus());
+        dto.setAssignee(entity.getAssignee());
+        dto.setApprovalComment(entity.getApprovalComment());
+        dto.setHandledAt(entity.getHandledAt());
+        dto.setHandledBy(entity.getHandledBy());
         dto.setCreatedBy(entity.getCreatedBy());
         dto.setCreatedDate(entity.getCreatedDate());
         return dto;

@@ -1,42 +1,43 @@
-import { memo, useMemo, useEffect, useRef, useState } from 'react';
-import ReactECharts from 'echarts-for-react';
-import {
-    BorderBox1,
-    BorderBox2,
-    BorderBox3,
-    BorderBox4,
-    BorderBox5,
-    BorderBox6,
-    BorderBox7,
-    BorderBox8,
-    BorderBox9,
-    BorderBox10,
-    BorderBox11,
-    BorderBox12,
-    BorderBox13,
-    Decoration1,
-    Decoration2,
-    Decoration3,
-    Decoration4,
-    Decoration5,
-    Decoration6,
-    Decoration7,
-    Decoration8,
-    Decoration9,
-    Decoration10,
-    Decoration11,
-    Decoration12,
-    ScrollBoard,
-    ScrollRankingBoard,
-    WaterLevelPond,
-    DigitalFlop,
-} from '@jiaminghi/data-view-react';
-import type { ScreenComponent, ScreenTheme } from '../types';
+import { memo, useMemo, useEffect, useRef, useState, type ComponentType } from 'react';
+import type { CardParameterBinding, ComponentInteractionMapping, ScreenComponent, ScreenTheme } from '../types';
 import { DRILLABLE_TYPES } from '../types';
 import { useCardDataSource } from '../hooks/useCardDataSource';
 import { useDrillDown } from '../hooks/useDrillDown';
+import { useScreenRuntime } from '../ScreenRuntimeContext';
 import { mapCardDataToConfig } from '../hooks/cardDataMapper';
 import { getThemeTokens, ScreenThemeTokens } from '../screenThemes';
+import { PluginRenderBoundary } from '../plugins/PluginRenderBoundary';
+import { getRendererPlugin } from '../plugins/registry';
+import { readComponentPluginMeta, resolveRuntimePluginId } from '../plugins/runtime';
+import { useScreenPluginRuntime } from '../plugins/useScreenPluginRuntime';
+import type { RendererPlugin } from '../plugins/types';
+
+type ReactEChartsComponent = ComponentType<{
+    style?: React.CSSProperties;
+    option?: unknown;
+    onEvents?: Record<string, (params: Record<string, unknown>) => void>;
+}>;
+type DataViewModule = typeof import('@jiaminghi/data-view-react');
+
+const ECHART_COMPONENT_TYPES = new Set([
+    'line-chart',
+    'bar-chart',
+    'pie-chart',
+    'gauge-chart',
+    'radar-chart',
+    'funnel-chart',
+    'scatter-chart',
+    'map-chart',
+]);
+
+const DATAV_COMPONENT_TYPES = new Set([
+    'border-box',
+    'decoration',
+    'scroll-board',
+    'scroll-ranking',
+    'water-level',
+    'digital-flop',
+]);
 
 const LEGACY_LIGHT_TEXT_COLORS = new Set(["#fff", "#ffffff", "#e5e7eb", "#d1d5db", "#cbd5e1", "#94a3b8"]);
 
@@ -63,6 +64,14 @@ function normalizeParameterBindings(bindings: CardParameterBinding[] | undefined
         .filter((item) => item.name.length > 0);
 }
 
+function resolveDataSourceType(dataSource: ScreenComponent["dataSource"]): string {
+    const sourceType = (dataSource as { sourceType?: string } | undefined)?.sourceType;
+    const type = (dataSource as { type?: string } | undefined)?.type;
+    const normalized = (sourceType || type || "").toLowerCase();
+    if (normalized === "database") return "sql";
+    return normalized;
+}
+
 function resolveInteractionValue(params: Record<string, unknown>, sourcePath: string): string | undefined {
     const path = (sourcePath || "").trim();
     if (!path) return undefined;
@@ -84,6 +93,225 @@ function resolveInteractionValue(params: Record<string, unknown>, sourcePath: st
     return undefined;
 }
 
+function resolveFilterOptions(raw: unknown): Array<{ label: string; value: string }> {
+    if (!Array.isArray(raw)) return [];
+    const out: Array<{ label: string; value: string }> = [];
+    for (const item of raw) {
+        if (typeof item === 'string') {
+            const text = item.trim();
+            if (text) out.push({ label: text, value: text });
+            continue;
+        }
+        if (item && typeof item === 'object') {
+            const row = item as Record<string, unknown>;
+            const value = String(row.value ?? '').trim();
+            if (!value) continue;
+            const label = String(row.label ?? value).trim() || value;
+            out.push({ label, value });
+        }
+    }
+    return out;
+}
+
+function escapeHtml(input: string): string {
+    return input
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#39;');
+}
+
+function renderMarkdownToHtml(input: string): string {
+    const lines = input.replace(/\r\n/g, '\n').split('\n');
+    const out: string[] = [];
+    let inList = false;
+    const closeList = () => {
+        if (inList) {
+            out.push('</ul>');
+            inList = false;
+        }
+    };
+
+    for (const line of lines) {
+        const raw = line.trim();
+        if (!raw) {
+            closeList();
+            out.push('<br/>');
+            continue;
+        }
+        if (raw.startsWith('### ')) {
+            closeList();
+            out.push(`<h3>${escapeHtml(raw.slice(4))}</h3>`);
+            continue;
+        }
+        if (raw.startsWith('## ')) {
+            closeList();
+            out.push(`<h2>${escapeHtml(raw.slice(3))}</h2>`);
+            continue;
+        }
+        if (raw.startsWith('# ')) {
+            closeList();
+            out.push(`<h1>${escapeHtml(raw.slice(2))}</h1>`);
+            continue;
+        }
+        if (raw.startsWith('- ') || raw.startsWith('* ')) {
+            if (!inList) {
+                out.push('<ul>');
+                inList = true;
+            }
+            out.push(`<li>${escapeHtml(raw.slice(2))}</li>`);
+            continue;
+        }
+        closeList();
+        const safe = escapeHtml(raw)
+            .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+            .replace(/\*(.+?)\*/g, '<em>$1</em>')
+            .replace(/\[(.+?)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noreferrer">$1</a>');
+        out.push(`<p>${safe}</p>`);
+    }
+    closeList();
+    return out.join('');
+}
+
+function compareTableValues(a: unknown, b: unknown): number {
+    const na = Number(a);
+    const nb = Number(b);
+    if (Number.isFinite(na) && Number.isFinite(nb)) {
+        return na - nb;
+    }
+    return String(a ?? '').localeCompare(String(b ?? ''), 'zh-CN');
+}
+
+function resolveTableConditionalStyle(
+    rules: unknown,
+    columnIndex: number,
+    raw: unknown,
+): { color?: string; background?: string } {
+    if (!Array.isArray(rules)) {
+        return {};
+    }
+    for (const item of rules) {
+        if (!item || typeof item !== 'object') continue;
+        const rule = item as Record<string, unknown>;
+        const ruleCol = Number(rule.columnIndex);
+        if (!Number.isFinite(ruleCol) || ruleCol !== columnIndex) continue;
+        const operator = String(rule.operator || '').trim();
+        const target = rule.value;
+        const text = String(raw ?? '');
+        const nRaw = Number(raw);
+        const nTarget = Number(target);
+        let matched = false;
+        if (operator === 'contains') {
+            matched = text.includes(String(target ?? ''));
+        } else if (Number.isFinite(nRaw) && Number.isFinite(nTarget)) {
+            if (operator === '>') matched = nRaw > nTarget;
+            if (operator === '>=') matched = nRaw >= nTarget;
+            if (operator === '<') matched = nRaw < nTarget;
+            if (operator === '<=') matched = nRaw <= nTarget;
+            if (operator === '=' || operator === '==') matched = nRaw === nTarget;
+            if (operator === '!=' || operator === '<>') matched = nRaw !== nTarget;
+        } else {
+            if (operator === '=' || operator === '==') matched = text === String(target ?? '');
+            if (operator === '!=' || operator === '<>') matched = text !== String(target ?? '');
+        }
+        if (!matched) continue;
+        return {
+            color: typeof rule.color === 'string' ? rule.color : undefined,
+            background: typeof rule.background === 'string' ? rule.background : undefined,
+        };
+    }
+    return {};
+}
+
+/**
+ * 自定义滚动表格，替代 DataV ScrollBoard（DataV 硬编码 color:#fff 无法覆盖）
+ */
+type ColumnAlign = 'left' | 'center' | 'right';
+type ColumnFormatter = 'auto' | 'string' | 'number' | 'percent' | 'date';
+
+interface ColumnEntry {
+    source: string;
+    alias?: string;
+    align?: ColumnAlign;
+    width?: number;
+    formatter?: ColumnFormatter;
+}
+
+interface SourceColumnMeta {
+    name: string;
+    displayName: string;
+    baseType?: string;
+}
+
+interface ResolvedColumnMeta {
+    key: string;
+    title: string;
+    align: ColumnAlign;
+    width?: number;
+    formatter: ColumnFormatter;
+    baseType?: string;
+}
+
+interface ResolvedTableData {
+    header: string[];
+    data: string[][];
+    columnMeta: ResolvedColumnMeta[];
+}
+
+function normalizeColumnAlign(value: unknown, fallback: ColumnAlign): ColumnAlign {
+    if (value === 'left' || value === 'center' || value === 'right') return value;
+    return fallback;
+}
+
+function normalizeColumnFormatter(value: unknown): ColumnFormatter {
+    if (value === 'string' || value === 'number' || value === 'percent' || value === 'date') return value;
+    return 'auto';
+}
+
+function clampColumnWidth(value: unknown): number | undefined {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return undefined;
+    if (n <= 0) return undefined;
+    return Math.max(5, Math.min(100, n));
+}
+
+function formatTableCell(value: unknown, formatter: ColumnFormatter, baseType?: string): string {
+    if (value == null) return '';
+
+    const toNumber = () => {
+        if (typeof value === 'number') return value;
+        const n = Number(value);
+        return Number.isFinite(n) ? n : undefined;
+    };
+
+    if (formatter === 'string') return String(value);
+    if (formatter === 'number') {
+        const n = toNumber();
+        return n == null ? String(value) : n.toLocaleString('zh-CN');
+    }
+    if (formatter === 'percent') {
+        const n = toNumber();
+        if (n == null) return String(value);
+        const pct = Math.abs(n) <= 1 ? n * 100 : n;
+        return `${pct.toFixed(2)}%`;
+    }
+    if (formatter === 'date') {
+        const d = value instanceof Date ? value : new Date(String(value));
+        if (Number.isNaN(d.getTime())) return String(value);
+        return d.toLocaleString('zh-CN', { hour12: false });
+    }
+
+    // auto: keep plain text to preserve historical behavior
+    if (baseType && baseType.toLowerCase().includes('date')) {
+        const d = new Date(String(value));
+        if (!Number.isNaN(d.getTime())) {
+            return d.toLocaleString('zh-CN', { hour12: false });
+        }
+    }
+    return String(value);
+}
+
 /**
  * 自定义滚动表格，替代 DataV ScrollBoard（DataV 硬编码 color:#fff 无法覆盖）
  */
@@ -93,6 +321,7 @@ function ThemedScrollTable({ config, tokens }: {
 }) {
     const headers = config.header as string[] || [];
     const allData = config.data as string[][] || [];
+    const columnMeta = config._columnMeta as ResolvedColumnMeta[] | undefined;
     const rowNum = config.rowNum as number || 8;
     const headerBGC = config.headerBGC as string || tokens.scrollBoard.headerBg;
     const oddRowBGC = config.oddRowBGC as string || tokens.scrollBoard.oddRowBg;
@@ -126,6 +355,16 @@ function ThemedScrollTable({ config, tokens }: {
         visibleRows.push({ cells: allData[idx], originalIndex: idx });
     }
 
+    const getColumnLayout = (index: number): React.CSSProperties => {
+        const meta = columnMeta?.[index];
+        const widthPercent = clampColumnWidth(meta?.width);
+        return {
+            flex: widthPercent ? `0 0 ${widthPercent}%` : '1 1 0',
+            width: widthPercent ? `${widthPercent}%` : undefined,
+            textAlign: normalizeColumnAlign(meta?.align, 'center'),
+        };
+    };
+
     return (
         <div style={{ width: '100%', height: '100%', overflow: 'hidden', color: textColor, fontSize: 14 }}>
             {headers.length > 0 && (
@@ -136,7 +375,8 @@ function ThemedScrollTable({ config, tokens }: {
                 }}>
                     {headers.map((h, i) => (
                         <div key={i} style={{
-                            flex: 1, padding: '0 10px', textAlign: 'center',
+                            ...getColumnLayout(i),
+                            padding: '0 10px',
                             whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                         }}>{h}</div>
                     ))}
@@ -152,11 +392,12 @@ function ThemedScrollTable({ config, tokens }: {
                             display: 'flex', height: rowHeight, lineHeight: `${rowHeight}px`,
                             background: row.originalIndex % 2 === 0 ? evenRowBGC : oddRowBGC,
                         }}>
-                            {row.cells.map((cell, ci) => (
+                            {headers.map((_, ci) => (
                                 <div key={ci} style={{
-                                    flex: 1, padding: '0 10px', textAlign: 'center',
+                                    ...getColumnLayout(ci),
+                                    padding: '0 10px',
                                     whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                                }}>{cell}</div>
+                                }}>{row.cells[ci] ?? ''}</div>
                             ))}
                         </div>
                     ))}
@@ -166,38 +407,66 @@ function ThemedScrollTable({ config, tokens }: {
     );
 }
 
-interface ColumnEntry {
-    source: string;
-    alias?: string;
-}
-
-function resolveBoundTableData(config: Record<string, unknown>): { header: string[]; data: string[][] } {
-    const sourceCols = config._sourceColumns as Array<{ name: string; displayName: string }> | undefined;
+function resolveBoundTableData(
+    config: Record<string, unknown>,
+    options?: { defaultAlign?: ColumnAlign },
+): ResolvedTableData {
+    const defaultAlign = options?.defaultAlign ?? 'left';
+    const sourceCols = config._sourceColumns as SourceColumnMeta[] | undefined;
     const columnsConfig = config.columns as ColumnEntry[] | undefined;
     const allData = (config.data as Array<Array<unknown>> | undefined) || [];
 
-    if (columnsConfig && sourceCols?.length) {
-        const header = columnsConfig.map((col) => {
+    if (sourceCols?.length) {
+        const effectiveColumns = columnsConfig && columnsConfig.length > 0
+            ? columnsConfig
+            : sourceCols.map((col) => ({ source: col.name } as ColumnEntry));
+
+        const columnMeta = effectiveColumns.map((col): ResolvedColumnMeta => {
             const sc = sourceCols.find((s) => s.name === col.source);
-            return col.alias || sc?.displayName || col.source;
+            return {
+                key: col.source,
+                title: col.alias || sc?.displayName || col.source,
+                align: normalizeColumnAlign(col.align, defaultAlign),
+                width: clampColumnWidth(col.width),
+                formatter: normalizeColumnFormatter(col.formatter),
+                baseType: sc?.baseType,
+            };
         });
         const data = allData.map((row) =>
-            columnsConfig.map((col) => {
-                const idx = sourceCols.findIndex((s) => s.name === col.source);
-                return idx >= 0 ? String(row[idx] ?? '') : '';
+            columnMeta.map((col) => {
+                const idx = sourceCols.findIndex((s) => s.name === col.key);
+                return idx >= 0 ? formatTableCell(row[idx], col.formatter, col.baseType) : '';
             }),
         );
-        return { header, data };
+        return {
+            header: columnMeta.map((col) => col.title),
+            data,
+            columnMeta,
+        };
     }
 
     const rawHeader = (config.header as string[] | undefined) || [];
     const alias = config.columnAlias as Record<string, string> | undefined;
-    const header = alias
+    const mappedHeader = alias
         ? rawHeader.map((h, i) => alias[String(i)] || h)
         : rawHeader;
-    const data = allData.map((row) => row.map((cell) => String(cell ?? '')));
+    const inferredCount = mappedHeader.length > 0
+        ? mappedHeader.length
+        : allData.reduce((max, row) => Math.max(max, row.length), 0);
+    const header = mappedHeader.length > 0
+        ? mappedHeader
+        : Array.from({ length: inferredCount }, (_, i) => `列${i + 1}`);
+    const columnMeta: ResolvedColumnMeta[] = header.map((title, idx) => ({
+        key: String(idx),
+        title,
+        align: defaultAlign,
+        formatter: 'auto',
+    }));
+    const data = allData.map((row) =>
+        columnMeta.map((col, idx) => formatTableCell(row[idx], col.formatter)),
+    );
 
-    return { header, data };
+    return { header, data, columnMeta };
 }
 
 interface ComponentRendererProps {
@@ -208,44 +477,18 @@ interface ComponentRendererProps {
     onConfigMeta?: (meta: Record<string, unknown>) => void;
 }
 
-// Border box components map
-const BorderBoxComponents: Record<number, React.ComponentType<{ children?: React.ReactNode; color?: string[] }>> = {
-    1: BorderBox1,
-    2: BorderBox2,
-    3: BorderBox3,
-    4: BorderBox4,
-    5: BorderBox5,
-    6: BorderBox6,
-    7: BorderBox7,
-    8: BorderBox8,
-    9: BorderBox9,
-    10: BorderBox10,
-    11: BorderBox11,
-    12: BorderBox12,
-    13: BorderBox13,
-};
-
-// Decoration components map
-const DecorationComponents: Record<number, React.ComponentType<{ color?: string[]; style?: React.CSSProperties }>> = {
-    1: Decoration1,
-    2: Decoration2,
-    3: Decoration3,
-    4: Decoration4,
-    5: Decoration5,
-    6: Decoration6,
-    7: Decoration7,
-    8: Decoration8,
-    9: Decoration9,
-    10: Decoration10,
-    11: Decoration11,
-    12: Decoration12,
-};
-
 export const ComponentRenderer = memo(function ComponentRenderer({ component, mode = 'preview', theme, onConfigMeta }: ComponentRendererProps) {
     const { type, config, width, height, dataSource, drillDown } = component;
 
     const runtime = useScreenRuntime();
+    const pluginRuntimeVersion = useScreenPluginRuntime();
     const t = useMemo(() => getThemeTokens(theme), [theme]);
+    const pluginMeta = useMemo(() => readComponentPluginMeta(config), [config]);
+    const runtimePlugin = useMemo<RendererPlugin | null>(() => {
+        const runtimeId = resolveRuntimePluginId(pluginMeta);
+        if (!runtimeId) return null;
+        return getRendererPlugin(runtimeId) ?? null;
+    }, [pluginMeta, pluginRuntimeVersion]);
 
     // Build ECharts base options from theme tokens
     const themeOptions = useMemo(() => ({
@@ -260,16 +503,113 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
         },
     }), [t]);
 
-    const cardBindings = useMemo(() => (
-        dataSource?.type === "card"
-            ? normalizeParameterBindings(dataSource.cardConfig?.parameterBindings)
-            : []
-    ), [dataSource]);
+    const needsECharts = ECHART_COMPONENT_TYPES.has(type);
+    const needsDataV = DATAV_COMPONENT_TYPES.has(type);
+    const [EChartsComponent, setEChartsComponent] = useState<ReactEChartsComponent | null>(null);
+    const [registerMapFn, setRegisterMapFn] = useState<((mapName: string, geoJson: unknown) => boolean) | null>(null);
+    const [dataViewModule, setDataViewModule] = useState<DataViewModule | null>(null);
+    const [mapDrillRegion, setMapDrillRegion] = useState<string | null>(null);
+    const [tableSort, setTableSort] = useState<{ colIndex: number; order: 'asc' | 'desc' } | null>(null);
+    const [tablePage, setTablePage] = useState(1);
+
+    useEffect(() => {
+        if (!needsECharts || EChartsComponent) return;
+        let cancelled = false;
+        import('../../../components/charts/EChartsRuntime').then((mod) => {
+            if (!cancelled) {
+                setEChartsComponent(() => mod.default as ReactEChartsComponent);
+                if (typeof mod.registerEChartsMap === 'function') {
+                    setRegisterMapFn(() => mod.registerEChartsMap);
+                }
+            }
+        });
+        return () => {
+            cancelled = true;
+        };
+    }, [needsECharts, EChartsComponent]);
+
+    useEffect(() => {
+        if (type !== 'map-chart' || !registerMapFn) return;
+        const cfg = config as Record<string, unknown>;
+        const mapName = String(cfg.mapName || cfg.mapScope || 'dts-map').trim();
+        const geoJson = cfg.geoJson;
+        if (geoJson && typeof geoJson === 'object') {
+            registerMapFn(mapName, geoJson);
+        }
+    }, [config, registerMapFn, type]);
+
+    useEffect(() => {
+        if (!needsDataV || dataViewModule) return;
+        let cancelled = false;
+        import('@jiaminghi/data-view-react').then((mod) => {
+            if (!cancelled) {
+                setDataViewModule(mod);
+            }
+        });
+        return () => {
+            cancelled = true;
+        };
+    }, [needsDataV, dataViewModule]);
+
+    useEffect(() => {
+        setMapDrillRegion(null);
+        setTableSort(null);
+        setTablePage(1);
+    }, [component.id]);
+
+    const borderBoxComponents = useMemo(() => {
+        if (!dataViewModule) return null;
+        return {
+            1: dataViewModule.BorderBox1,
+            2: dataViewModule.BorderBox2,
+            3: dataViewModule.BorderBox3,
+            4: dataViewModule.BorderBox4,
+            5: dataViewModule.BorderBox5,
+            6: dataViewModule.BorderBox6,
+            7: dataViewModule.BorderBox7,
+            8: dataViewModule.BorderBox8,
+            9: dataViewModule.BorderBox9,
+            10: dataViewModule.BorderBox10,
+            11: dataViewModule.BorderBox11,
+            12: dataViewModule.BorderBox12,
+            13: dataViewModule.BorderBox13,
+        } as Record<number, ComponentType<{ children?: React.ReactNode; color?: string[] }>>;
+    }, [dataViewModule]);
+
+    const decorationComponents = useMemo(() => {
+        if (!dataViewModule) return null;
+        return {
+            1: dataViewModule.Decoration1,
+            2: dataViewModule.Decoration2,
+            3: dataViewModule.Decoration3,
+            4: dataViewModule.Decoration4,
+            5: dataViewModule.Decoration5,
+            6: dataViewModule.Decoration6,
+            7: dataViewModule.Decoration7,
+            8: dataViewModule.Decoration8,
+            9: dataViewModule.Decoration9,
+            10: dataViewModule.Decoration10,
+            11: dataViewModule.Decoration11,
+            12: dataViewModule.Decoration12,
+        } as Record<number, ComponentType<{ color?: string[]; style?: React.CSSProperties }>>;
+    }, [dataViewModule]);
+
+    const dataSourceType = useMemo(() => resolveDataSourceType(dataSource), [dataSource]);
+    const sourceBindings = useMemo(() => {
+        if (dataSourceType === "card") {
+            return normalizeParameterBindings(dataSource?.cardConfig?.parameterBindings);
+        }
+        if (dataSourceType === "sql") {
+            const sqlConfig = dataSource?.sqlConfig ?? dataSource?.databaseConfig;
+            return normalizeParameterBindings(sqlConfig?.parameterBindings);
+        }
+        return [];
+    }, [dataSource, dataSourceType]);
 
     const bindingParameters = useMemo(() => {
-        if (!cardBindings.length) return [] as Array<{ name: string; value: string }>;
+        if (!sourceBindings.length) return [] as Array<{ name: string; value: string }>;
         const out: Array<{ name: string; value: string }> = [];
-        for (const item of cardBindings) {
+        for (const item of sourceBindings) {
             let value = item.value ?? "";
             if (item.variableKey) {
                 value = runtime.values[item.variableKey] ?? "";
@@ -278,11 +618,11 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
             out.push({ name: item.name, value: String(value ?? "") });
         }
         return out;
-    }, [cardBindings, runtime.values]);
+    }, [sourceBindings, runtime.values]);
 
     // Drill-down state (only active in preview mode for drillable chart types)
     const drillActive = mode === "preview" && DRILLABLE_TYPES.has(type) && drillDown?.enabled === true;
-    const rootCardId = dataSource?.type === "card" ? dataSource.cardConfig?.cardId : undefined;
+    const rootCardId = dataSourceType === "card" ? dataSource?.cardConfig?.cardId : undefined;
     const drillState = useDrillDown(
         drillActive ? rootCardId : undefined,
         drillActive ? drillDown : undefined,
@@ -335,7 +675,11 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
 
     useEffect(() => {
         if (!onConfigMetaRef.current || !cardData?.cols?.length) return;
-        const newCols = cardData.cols.map(c => ({ name: c.name, displayName: c.display_name || c.name }));
+        const newCols = cardData.cols.map((c) => ({
+            name: c.name,
+            displayName: c.display_name || c.name,
+            baseType: c.base_type,
+        }));
         const newKey = newCols.map(c => c.name).join(',');
         // Only update if columns actually changed (avoid infinite loop)
         if (sourceColsKey !== newKey) {
@@ -346,7 +690,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
     // For datetime component, update every second
     const [currentTime, setCurrentTime] = useState(new Date());
     useEffect(() => {
-        if (type === 'datetime') {
+        if (type === 'datetime' || type === 'countdown') {
             const timer = setInterval(() => setCurrentTime(new Date()), 1000);
             return () => clearInterval(timer);
         }
@@ -376,21 +720,72 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                     for (const mapping of interactionMappings) {
                         const nextValue = resolveInteractionValue(params, mapping.sourcePath);
                         if (nextValue != null) {
-                            runtime.setVariable(mapping.variableKey, nextValue);
+                            runtime.setVariable(mapping.variableKey, nextValue, `interaction:${component.id}`);
                         }
                     }
                 }
             },
         };
-    }, [drillActive, drillState.canDrillDown, drillState.handleDrill, interactionMappings, runtime]);
+    }, [component.id, drillActive, drillState.canDrillDown, drillState.handleDrill, interactionMappings, runtime]);
 
     const content = useMemo(() => {
         const c = effectiveConfig;
+        if (runtimePlugin) {
+            return (
+                <PluginRenderBoundary title={`插件渲染失败: ${runtimePlugin.name}`}>
+                    {runtimePlugin.render({
+                        component,
+                        mode,
+                        theme,
+                        width,
+                        height,
+                        config: c,
+                        data: cardData,
+                        runtimeValues: runtime.values,
+                        setVariable: (key, value) => runtime.setVariable(key, value, `plugin:${runtimePlugin.id}`),
+                    })}
+                </PluginRenderBoundary>
+            );
+        }
+        const axisFontSize = (c.axisFontSize as number) || 12;
+        const legendFontSize = (c.legendFontSize as number) || 12;
+        const seriesColors = Array.isArray(c.seriesColors)
+            ? (c.seriesColors as string[]).filter((color) => typeof color === 'string' && color.trim().length > 0)
+            : [];
+        const dependencyPlaceholder = (label: string) => (
+            <div style={{
+                width: '100%',
+                height: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: t.placeholder.background,
+                border: t.placeholder.border,
+                borderRadius: 4,
+                color: t.placeholder.color,
+                fontSize: 12,
+            }}>
+                {label}加载中...
+            </div>
+        );
+
+        if (ECHART_COMPONENT_TYPES.has(type) && !EChartsComponent) {
+            return dependencyPlaceholder('图表引擎');
+        }
+        if (DATAV_COMPONENT_TYPES.has(type) && !dataViewModule) {
+            return dependencyPlaceholder('DataV');
+        }
+
+        const EChart = EChartsComponent as ReactEChartsComponent;
+        const ScrollBoard = dataViewModule?.ScrollBoard;
+        const ScrollRankingBoard = dataViewModule?.ScrollRankingBoard;
+        const WaterLevelPond = dataViewModule?.WaterLevelPond;
+        const DigitalFlop = dataViewModule?.DigitalFlop;
 
         // Build legend config from legendPosition
         const legendPos = c.legendPosition as string;
         const legendConfig: Record<string, unknown> = {
-            textStyle: { color: t.textPrimary },
+            textStyle: { color: t.textPrimary, fontSize: legendFontSize },
             ...(legendPos === 'bottom' ? { top: 'auto', bottom: 0, left: 'center' } :
                 legendPos === 'left' ? { left: 0, top: 'middle', orient: 'vertical' } :
                 legendPos === 'right' ? { right: 0, top: 'middle', orient: 'vertical' } :
@@ -401,7 +796,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
             // ==================== ECharts 图表 ====================
             case 'line-chart':
                 return (
-                    <ReactECharts
+                    <EChart
                         style={{ width: '100%', height: '100%' }}
                         option={{
                             ...themeOptions,
@@ -411,20 +806,26 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                                 type: 'category',
                                 data: c.xAxisData as string[],
                                 axisLine: { lineStyle: { color: t.echarts.axisLineColor } },
-                                axisLabel: { color: t.echarts.axisLabelColor },
+                                axisLabel: { color: t.echarts.axisLabelColor, fontSize: axisFontSize },
                             },
                             yAxis: {
                                 type: 'value',
                                 axisLine: { lineStyle: { color: t.echarts.axisLineColor } },
-                                axisLabel: { color: t.echarts.axisLabelColor },
+                                axisLabel: { color: t.echarts.axisLabelColor, fontSize: axisFontSize },
                                 splitLine: { lineStyle: { color: t.echarts.splitLineColor } },
                             },
-                            series: (c.series as Array<{ name: string; data: number[] }>).map((s) => ({
+                            series: (c.series as Array<{ name: string; data: number[] }>).map((s, idx) => ({
                                 name: s.name,
                                 type: 'line',
                                 data: s.data,
                                 smooth: true,
-                                areaStyle: { opacity: 0.3 },
+                                areaStyle: {
+                                    opacity: 0.3,
+                                    ...(seriesColors[idx] ? { color: seriesColors[idx] } : {}),
+                                },
+                                ...(seriesColors[idx]
+                                    ? { lineStyle: { color: seriesColors[idx] }, itemStyle: { color: seriesColors[idx] } }
+                                    : {}),
                             })),
                             grid: { left: '10%', right: '10%', bottom: '15%', top: '20%' },
                         }}
@@ -434,7 +835,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
 
             case 'bar-chart':
                 return (
-                    <ReactECharts
+                    <EChart
                         style={{ width: '100%', height: '100%' }}
                         option={{
                             ...themeOptions,
@@ -444,28 +845,30 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                                 type: 'category',
                                 data: c.xAxisData as string[],
                                 axisLine: { lineStyle: { color: t.echarts.axisLineColor } },
-                                axisLabel: { color: t.echarts.axisLabelColor },
+                                axisLabel: { color: t.echarts.axisLabelColor, fontSize: axisFontSize },
                             },
                             yAxis: {
                                 type: 'value',
                                 axisLine: { lineStyle: { color: t.echarts.axisLineColor } },
-                                axisLabel: { color: t.echarts.axisLabelColor },
+                                axisLabel: { color: t.echarts.axisLabelColor, fontSize: axisFontSize },
                                 splitLine: { lineStyle: { color: t.echarts.splitLineColor } },
                             },
-                            series: (c.series as Array<{ name: string; data: number[] }>).map((s) => ({
+                            series: (c.series as Array<{ name: string; data: number[] }>).map((s, idx) => ({
                                 name: s.name,
                                 type: 'bar',
                                 data: s.data,
                                 itemStyle: {
                                     borderRadius: [4, 4, 0, 0],
-                                    color: {
-                                        type: 'linear',
-                                        x: 0, y: 0, x2: 0, y2: 1,
-                                        colorStops: [
-                                            { offset: 0, color: t.barGradient[0] },
-                                            { offset: 1, color: t.barGradient[1] },
-                                        ],
-                                    },
+                                    color: seriesColors[idx]
+                                        ? seriesColors[idx]
+                                        : {
+                                            type: 'linear',
+                                            x: 0, y: 0, x2: 0, y2: 1,
+                                            colorStops: [
+                                                { offset: 0, color: t.barGradient[0] },
+                                                { offset: 1, color: t.barGradient[1] },
+                                            ],
+                                        },
                                 },
                             })),
                             grid: { left: '10%', right: '10%', bottom: '15%', top: '20%' },
@@ -476,10 +879,11 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
 
             case 'pie-chart':
                 return (
-                    <ReactECharts
+                    <EChart
                         style={{ width: '100%', height: '100%' }}
                         option={{
                             ...themeOptions,
+                            ...(seriesColors.length > 0 ? { color: seriesColors } : {}),
                             title: { text: c.title as string, textStyle: { color: t.textPrimary, fontSize: (c.titleFontSize as number) || 14 }, left: 'center' },
                             legend: legendConfig,
                             tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
@@ -502,7 +906,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
 
             case 'gauge-chart':
                 return (
-                    <ReactECharts
+                    <EChart
                         style={{ width: '100%', height: '100%' }}
                         option={{
                             ...themeOptions,
@@ -527,10 +931,11 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
 
             case 'radar-chart':
                 return (
-                    <ReactECharts
+                    <EChart
                         style={{ width: '100%', height: '100%' }}
                         option={{
                             ...themeOptions,
+                            ...(seriesColors.length > 0 ? { color: seriesColors } : {}),
                             title: { text: c.title as string, textStyle: { color: t.textPrimary, fontSize: (c.titleFontSize as number) || 14 }, left: 'center' },
                             legend: legendConfig,
                             radar: {
@@ -550,10 +955,11 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
 
             case 'funnel-chart':
                 return (
-                    <ReactECharts
+                    <EChart
                         style={{ width: '100%', height: '100%' }}
                         option={{
                             ...themeOptions,
+                            ...(seriesColors.length > 0 ? { color: seriesColors } : {}),
                             title: { text: c.title as string, textStyle: { color: t.textPrimary, fontSize: (c.titleFontSize as number) || 14 }, left: 'center' },
                             legend: legendConfig,
                             series: [{
@@ -576,7 +982,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
 
             case 'scatter-chart':
                 return (
-                    <ReactECharts
+                    <EChart
                         style={{ width: '100%', height: '100%' }}
                         option={{
                             ...themeOptions,
@@ -584,25 +990,177 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                             legend: legendConfig,
                             xAxis: {
                                 axisLine: { lineStyle: { color: t.echarts.axisLineColor } },
-                                axisLabel: { color: t.echarts.axisLabelColor },
+                                axisLabel: { color: t.echarts.axisLabelColor, fontSize: axisFontSize },
                                 splitLine: { lineStyle: { color: t.echarts.splitLineColor } },
                             },
                             yAxis: {
                                 axisLine: { lineStyle: { color: t.echarts.axisLineColor } },
-                                axisLabel: { color: t.echarts.axisLabelColor },
+                                axisLabel: { color: t.echarts.axisLabelColor, fontSize: axisFontSize },
                                 splitLine: { lineStyle: { color: t.echarts.splitLineColor } },
                             },
                             series: [{
                                 type: 'scatter',
                                 data: c.data as number[][],
                                 symbolSize: 10,
-                                itemStyle: { color: t.scatterColor },
+                                itemStyle: { color: seriesColors[0] || t.scatterColor },
                             }],
                             grid: { left: '10%', right: '10%', bottom: '15%', top: '20%' },
                         }}
                         onEvents={echartsClickHandler}
                     />
                 );
+
+            case 'map-chart': {
+                const title = String(c.title ?? '区域地图');
+                const mapScope = String(c.mapScope ?? 'china');
+                const defaultRegions = mapScope === 'world'
+                    ? [
+                        { name: 'Asia', value: 260 },
+                        { name: 'Europe', value: 180 },
+                        { name: 'North America', value: 150 },
+                        { name: 'South America', value: 110 },
+                        { name: 'Africa', value: 90 },
+                        { name: 'Oceania', value: 45 },
+                    ]
+                    : [
+                        { name: '华北', value: 120 },
+                        { name: '华东', value: 180 },
+                        { name: '华南', value: 140 },
+                        { name: '西南', value: 95 },
+                        { name: '西北', value: 72 },
+                        { name: '东北', value: 88 },
+                    ];
+                const regions = Array.isArray(c.regions) && c.regions.length > 0 ? c.regions as Array<Record<string, unknown>> : defaultRegions;
+                const getChildren = (item: unknown): Array<Record<string, unknown>> => {
+                    if (!item || typeof item !== 'object') return [];
+                    const raw = (item as Record<string, unknown>).children;
+                    if (!Array.isArray(raw)) return [];
+                    return raw.filter((node): node is Record<string, unknown> => !!node && typeof node === 'object');
+                };
+                const activeRegion = mapDrillRegion
+                    ? regions.find((item) => String(item.name ?? '') === mapDrillRegion)
+                    : undefined;
+                const canRegionDrill = c.enableRegionDrill !== false;
+                const drillRows = getChildren(activeRegion);
+                const listRows = drillRows.length > 0 ? drillRows : regions;
+
+                const maxValue = Math.max(1, ...listRows.map((item) => Number(item.value ?? 0)));
+                const minValue = Math.min(...listRows.map((item) => Number(item.value ?? 0)));
+                const mapName = String(c.mapName || `dts-${mapScope}`).trim();
+                const hasGeoJson = c.geoJson && typeof c.geoJson === 'object';
+                const usingGeoMap = !mapDrillRegion && Boolean(hasGeoJson) && Boolean(EChart);
+
+                if (usingGeoMap) {
+                    return (
+                        <div style={{ width: '100%', height: '100%', position: 'relative' }}>
+                            <EChart
+                                style={{ width: '100%', height: '100%' }}
+                                option={{
+                                    ...themeOptions,
+                                    title: { text: title, textStyle: { color: t.textPrimary, fontSize: (c.titleFontSize as number) || 14 } },
+                                    visualMap: {
+                                        min: Number.isFinite(minValue) ? minValue : 0,
+                                        max: Number.isFinite(maxValue) ? maxValue : 100,
+                                        text: ['高', '低'],
+                                        left: 6,
+                                        bottom: 8,
+                                        itemWidth: 10,
+                                        itemHeight: 60,
+                                        textStyle: { color: t.textSecondary, fontSize: 10 },
+                                        inRange: { color: ['#93c5fd', '#3b82f6', '#1d4ed8'] },
+                                    },
+                                    tooltip: { trigger: 'item', formatter: '{b}: {c}' },
+                                    series: [{
+                                        type: 'map',
+                                        map: mapName,
+                                        roam: true,
+                                        label: { show: true, color: t.textPrimary, fontSize: 10 },
+                                        emphasis: { label: { color: t.textPrimary } },
+                                        data: regions.map((item) => ({ name: String(item.name ?? ''), value: Number(item.value ?? 0) })),
+                                    }],
+                                }}
+                                onEvents={{
+                                    click: (params) => {
+                                        const regionName = String(params.name ?? '');
+                                        const target = regions.find((item) => String(item.name ?? '') === regionName);
+                                        if (canRegionDrill && target && getChildren(target).length > 0) {
+                                            setMapDrillRegion(regionName);
+                                        }
+                                        const variableKey = String(c.regionVariableKey ?? '').trim();
+                                        if (variableKey && regionName) {
+                                            runtime.setVariable(variableKey, regionName, `map-chart:${component.id}`);
+                                        }
+                                    },
+                                }}
+                            />
+                        </div>
+                    );
+                }
+
+                return (
+                    <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <div style={{ color: t.textPrimary, fontSize: 14, fontWeight: 600 }}>{title}</div>
+                            {mapDrillRegion ? (
+                                <button
+                                    type="button"
+                                    onClick={() => setMapDrillRegion(null)}
+                                    style={{
+                                        border: '1px solid rgba(148,163,184,0.4)',
+                                        background: 'rgba(15,23,42,0.45)',
+                                        color: t.textPrimary,
+                                        borderRadius: 4,
+                                        fontSize: 11,
+                                        cursor: 'pointer',
+                                        padding: '2px 8px',
+                                    }}
+                                >
+                                    返回上级
+                                </button>
+                            ) : null}
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 8 }}>
+                            {listRows.map((item, index) => {
+                                const value = Number(item.value ?? 0);
+                                const ratio = maxValue <= 0 ? 0 : Math.max(0, Math.min(1, value / maxValue));
+                                const colorAlpha = 0.18 + ratio * 0.46;
+                                const name = String(item.name ?? `区域${index + 1}`);
+                                const hasChild = getChildren(item).length > 0;
+                                return (
+                                    <button
+                                        key={`${name}_${index}`}
+                                        type="button"
+                                        onClick={() => {
+                                            if (canRegionDrill && hasChild) {
+                                                setMapDrillRegion(name);
+                                            }
+                                            const variableKey = String(c.regionVariableKey ?? '').trim();
+                                            if (variableKey) {
+                                                runtime.setVariable(variableKey, name, `map-grid:${component.id}`);
+                                            }
+                                        }}
+                                        style={{
+                                            border: '1px solid rgba(148,163,184,0.25)',
+                                            borderRadius: 8,
+                                            background: `rgba(59,130,246,${colorAlpha.toFixed(3)})`,
+                                            color: t.textPrimary,
+                                            textAlign: 'left',
+                                            padding: '8px 10px',
+                                            minHeight: 56,
+                                            cursor: 'pointer',
+                                        }}
+                                    >
+                                        <div style={{ fontSize: 12, fontWeight: 600 }}>{name}</div>
+                                        <div style={{ marginTop: 4, fontSize: 12, color: t.textSecondary }}>
+                                            {Number.isFinite(value) ? value.toLocaleString('zh-CN') : '-'}
+                                        </div>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+                );
+            }
 
             // ==================== 基础组件 ====================
             case 'number-card':
@@ -646,6 +1204,25 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                     </div>
                 );
 
+            case 'markdown-text': {
+                const markdown = String(c.markdown ?? '');
+                const html = renderMarkdownToHtml(markdown);
+                return (
+                    <div
+                        style={{
+                            width: '100%',
+                            height: '100%',
+                            overflow: 'auto',
+                            color: (c.color as string) || t.textPrimary,
+                            fontSize: (c.fontSize as number) || 14,
+                            lineHeight: Number(c.lineHeight || 1.6),
+                            padding: 8,
+                        }}
+                        dangerouslySetInnerHTML={{ __html: html }}
+                    />
+                );
+            }
+
             case 'datetime': {
                 const formatted = (c.format as string)
                     .replace('YYYY', String(currentTime.getFullYear()))
@@ -666,6 +1243,60 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                         fontFamily: 'monospace',
                     }}>
                         {formatted}
+                    </div>
+                );
+            }
+
+            case 'countdown': {
+                const target = new Date(String(c.targetTime || ''));
+                const remaining = Math.max(0, target.getTime() - currentTime.getTime());
+                const dayMs = 24 * 3600 * 1000;
+                const hourMs = 3600 * 1000;
+                const minuteMs = 60 * 1000;
+                const days = Math.floor(remaining / dayMs);
+                const hours = Math.floor((remaining % dayMs) / hourMs);
+                const minutes = Math.floor((remaining % hourMs) / minuteMs);
+                const seconds = Math.floor((remaining % minuteMs) / 1000);
+                const showDays = c.showDays !== false;
+                const accentColor = (c.accentColor as string) || t.accentColor;
+                return (
+                    <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 8 }}>
+                        <div style={{ fontSize: 12, color: (c.color as string) || t.textSecondary }}>
+                            {String(c.title || '倒计时')}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: accentColor, fontWeight: 700 }}>
+                            {showDays ? <span style={{ fontSize: 26 }}>{String(days).padStart(2, '0')}天</span> : null}
+                            <span style={{ fontSize: 26 }}>{String(hours).padStart(2, '0')}:</span>
+                            <span style={{ fontSize: 26 }}>{String(minutes).padStart(2, '0')}:</span>
+                            <span style={{ fontSize: 26 }}>{String(seconds).padStart(2, '0')}</span>
+                        </div>
+                    </div>
+                );
+            }
+
+            case 'marquee': {
+                const text = String(c.text || '');
+                const speed = Math.max(10, Number(c.speed || 40));
+                const keyframesName = `dts_marquee_${component.id.replace(/[^a-zA-Z0-9_]/g, '_')}`;
+                return (
+                    <div
+                        style={{
+                            width: '100%',
+                            height: '100%',
+                            overflow: 'hidden',
+                            display: 'flex',
+                            alignItems: 'center',
+                            background: (c.backgroundColor as string) || 'transparent',
+                            color: (c.color as string) || t.textPrimary,
+                            fontSize: (c.fontSize as number) || 14,
+                            whiteSpace: 'nowrap',
+                            position: 'relative',
+                        }}
+                    >
+                        <style>{`@keyframes ${keyframesName} { from { transform: translateX(100%); } to { transform: translateX(-100%); } }`}</style>
+                        <div style={{ display: 'inline-block', paddingLeft: '100%', animation: `${keyframesName} ${speed}s linear infinite` }}>
+                            {text}
+                        </div>
                     </div>
                 );
             }
@@ -701,6 +1332,171 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                     </div>
                 );
             }
+
+            case 'filter-input': {
+                const label = String(c.label ?? '筛选');
+                const variableKey = String(c.variableKey ?? '').trim();
+                const placeholder = String(c.placeholder ?? '请输入');
+                const value = variableKey ? (runtime.values[variableKey] ?? '') : '';
+                return (
+                    <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <div style={{ fontSize: 12, color: t.textSecondary }}>{label}</div>
+                        <input
+                            type="text"
+                            value={value}
+                            onChange={(e) => variableKey && runtime.setVariable(variableKey, e.target.value, `filter-input:${component.id}`)}
+                            placeholder={placeholder}
+                            style={{
+                                width: '100%',
+                                height: 34,
+                                borderRadius: 6,
+                                border: '1px solid rgba(148,163,184,0.4)',
+                                background: 'rgba(15,23,42,0.65)',
+                                color: t.textPrimary,
+                                padding: '0 10px',
+                                outline: 'none',
+                            }}
+                        />
+                    </div>
+                );
+            }
+
+            case 'filter-select': {
+                const label = String(c.label ?? '筛选');
+                const variableKey = String(c.variableKey ?? '').trim();
+                const placeholder = String(c.placeholder ?? '请选择');
+                const options = resolveFilterOptions(c.options);
+                const value = variableKey ? (runtime.values[variableKey] ?? '') : '';
+                return (
+                    <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <div style={{ fontSize: 12, color: t.textSecondary }}>{label}</div>
+                        <select
+                            value={value}
+                            onChange={(e) => variableKey && runtime.setVariable(variableKey, e.target.value, `filter-select:${component.id}`)}
+                            style={{
+                                width: '100%',
+                                height: 34,
+                                borderRadius: 6,
+                                border: '1px solid rgba(148,163,184,0.4)',
+                                background: 'rgba(15,23,42,0.65)',
+                                color: t.textPrimary,
+                                padding: '0 10px',
+                                outline: 'none',
+                            }}
+                        >
+                            <option value="">{placeholder}</option>
+                            {options.map((option) => (
+                                <option key={option.value} value={option.value}>{option.label}</option>
+                            ))}
+                        </select>
+                    </div>
+                );
+            }
+
+            case 'filter-date-range': {
+                const label = String(c.label ?? '日期区间');
+                const startKey = String(c.startKey ?? '').trim();
+                const endKey = String(c.endKey ?? '').trim();
+                const startValue = startKey ? (runtime.values[startKey] ?? '') : '';
+                const endValue = endKey ? (runtime.values[endKey] ?? '') : '';
+                return (
+                    <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <div style={{ fontSize: 12, color: t.textSecondary }}>{label}</div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 16px 1fr', alignItems: 'center', gap: 4 }}>
+                            <input
+                                type="date"
+                                value={startValue}
+                                onChange={(e) => startKey && runtime.setVariable(startKey, e.target.value, `filter-date-range:start:${component.id}`)}
+                                style={{
+                                    width: '100%',
+                                    height: 34,
+                                    borderRadius: 6,
+                                    border: '1px solid rgba(148,163,184,0.4)',
+                                    background: 'rgba(15,23,42,0.65)',
+                                    color: t.textPrimary,
+                                    padding: '0 8px',
+                                    outline: 'none',
+                                }}
+                            />
+                            <span style={{ textAlign: 'center', color: t.textSecondary }}>~</span>
+                            <input
+                                type="date"
+                                value={endValue}
+                                onChange={(e) => endKey && runtime.setVariable(endKey, e.target.value, `filter-date-range:end:${component.id}`)}
+                                style={{
+                                    width: '100%',
+                                    height: 34,
+                                    borderRadius: 6,
+                                    border: '1px solid rgba(148,163,184,0.4)',
+                                    background: 'rgba(15,23,42,0.65)',
+                                    color: t.textPrimary,
+                                    padding: '0 8px',
+                                    outline: 'none',
+                                }}
+                            />
+                        </div>
+                    </div>
+                );
+            }
+
+            case 'shape': {
+                const shapeType = String(c.shapeType || 'rect');
+                const fillColor = String(c.fillColor || 'rgba(59,130,246,0.2)');
+                const borderColor = String(c.borderColor || '#60a5fa');
+                const borderWidth = Math.max(0, Number(c.borderWidth || 2));
+                const radius = Math.max(0, Number(c.radius || 8));
+                if (shapeType === 'line' || shapeType === 'arrow') {
+                    return (
+                        <svg width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="none">
+                            {shapeType === 'arrow' ? (
+                                <defs>
+                                    <marker id={`arrow_${component.id}`} markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+                                        <path d="M0,0 L0,6 L6,3 z" fill={borderColor} />
+                                    </marker>
+                                </defs>
+                            ) : null}
+                            <line
+                                x1="8"
+                                y1="50"
+                                x2="92"
+                                y2="50"
+                                stroke={borderColor}
+                                strokeWidth={borderWidth || 2}
+                                markerEnd={shapeType === 'arrow' ? `url(#arrow_${component.id})` : undefined}
+                            />
+                        </svg>
+                    );
+                }
+                if (shapeType === 'circle') {
+                    return (
+                        <div style={{ width: '100%', height: '100%', borderRadius: '50%', background: fillColor, border: `${borderWidth}px solid ${borderColor}` }} />
+                    );
+                }
+                return (
+                    <div style={{ width: '100%', height: '100%', borderRadius: radius, background: fillColor, border: `${borderWidth}px solid ${borderColor}` }} />
+                );
+            }
+
+            case 'container':
+                return (
+                    <div style={{
+                        width: '100%',
+                        height: '100%',
+                        border: `${Math.max(0, Number(c.borderWidth || 1))}px solid ${String(c.borderColor || 'rgba(148,163,184,0.35)')}`,
+                        borderRadius: Math.max(0, Number(c.radius || 10)),
+                        background: String(c.backgroundColor || 'rgba(15,23,42,0.25)'),
+                        padding: Math.max(0, Number(c.padding || 12)),
+                        boxSizing: 'border-box',
+                        color: String(c.titleColor || t.textPrimary),
+                    }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>
+                            {String(c.title || '容器')}
+                        </div>
+                        <div style={{ fontSize: 12, color: t.textSecondary }}>
+                            容器组件：可用于分组布局与内容分区
+                        </div>
+                    </div>
+                );
 
             case 'image':
                 return c.src ? (
@@ -783,7 +1579,8 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
             // ==================== DataV 边框组件 ====================
             case 'border-box': {
                 const boxType = (c.boxType as number) || 1;
-                const BorderBoxComponent = BorderBoxComponents[boxType] || BorderBox1;
+                const BorderBoxComponent = borderBoxComponents?.[boxType] || borderBoxComponents?.[1];
+                if (!BorderBoxComponent) return dependencyPlaceholder('DataV');
                 const colors = c.color as string[] | undefined;
                 return (
                     <BorderBoxComponent color={colors}>
@@ -797,7 +1594,8 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
             // ==================== DataV 装饰组件 ====================
             case 'decoration': {
                 const decorationType = (c.decorationType as number) || 1;
-                const DecorationComponent = DecorationComponents[decorationType] || Decoration1;
+                const DecorationComponent = decorationComponents?.[decorationType] || decorationComponents?.[1];
+                if (!DecorationComponent) return dependencyPlaceholder('DataV');
                 const colors = c.color as string[] | undefined;
                 return (
                     <DecorationComponent color={colors} style={{ width: '100%', height: '100%' }} />
@@ -806,14 +1604,19 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
 
             // ==================== DataV 数据展示组件 ====================
             case 'scroll-board': {
-                const { header: displayHeader, data: displayData } = resolveBoundTableData(c);
-                const filteredConfig = { ...c, header: displayHeader, data: displayData };
+                const { header: displayHeader, data: displayData, columnMeta } = resolveBoundTableData(c, { defaultAlign: 'center' });
+                const filteredConfig = { ...c, header: displayHeader, data: displayData, _columnMeta: columnMeta };
 
                 // DataV ScrollBoard 硬编码 color:#fff 且无法通过 CSS/style 覆盖
                 // 非 legacy-dark 主题使用自定义表格组件
                 if (theme && theme !== 'legacy-dark') {
                     return <ThemedScrollTable config={filteredConfig} tokens={t} />;
                 }
+                if (!ScrollBoard) return dependencyPlaceholder('DataV');
+                const allHaveWidth = columnMeta.length > 0 && columnMeta.every((col) => typeof col.width === 'number');
+                const columnWidth = allHaveWidth
+                    ? columnMeta.map((col) => Math.max(40, Math.round((width * Number(col.width)) / 100)))
+                    : undefined;
                 return (
                     <ScrollBoard
                         config={{
@@ -825,7 +1628,8 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                             evenRowBGC: c.evenRowBGC as string,
                             waitTime: c.waitTime as number || 2000,
                             headerHeight: 35,
-                            align: displayHeader.map(() => 'center'),
+                            align: columnMeta.map((col) => col.align || 'center'),
+                            ...(columnWidth ? { columnWidth } : {}),
                         }}
                         style={{ width: '100%', height: '100%' }}
                     />
@@ -833,7 +1637,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
             }
 
             case 'table': {
-                const { header: displayHeader, data: displayData } = resolveBoundTableData(c);
+                const { header: displayHeader, data: displayData, columnMeta } = resolveBoundTableData(c, { defaultAlign: 'left' });
                 const fontSize = (c.fontSize as number) || 13;
                 const headerColor = resolveTextColor(c.headerColor as string | undefined, t.textPrimary);
                 const headerBackground = (c.headerBackground as string) || 'rgba(148, 163, 184, 0.16)';
@@ -842,9 +1646,27 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                 const borderColor = (c.borderColor as string) || 'rgba(148, 163, 184, 0.24)';
                 const oddRowBackground = (c.oddRowBackground as string) || bodyBackground;
                 const evenRowBackground = (c.evenRowBackground as string) || 'rgba(148, 163, 184, 0.06)';
+                const enableSort = c.enableSort !== false;
+                const enablePagination = c.enablePagination === true;
+                const freezeHeader = c.freezeHeader !== false;
+                const pageSize = Math.max(1, Number(c.pageSize || 10));
+                const conditionalRules = c.conditionalRules;
+
+                const sortedRows = tableSort && enableSort
+                    ? [...displayData].sort((a, b) => {
+                        const v = compareTableValues(a[tableSort.colIndex], b[tableSort.colIndex]);
+                        return tableSort.order === 'asc' ? v : -v;
+                    })
+                    : displayData;
+                const totalPages = enablePagination ? Math.max(1, Math.ceil(sortedRows.length / pageSize)) : 1;
+                const safePage = Math.max(1, Math.min(tablePage, totalPages));
+                const pageRows = enablePagination
+                    ? sortedRows.slice((safePage - 1) * pageSize, safePage * pageSize)
+                    : sortedRows;
 
                 return (
-                    <div style={{ width: '100%', height: '100%', overflow: 'auto' }}>
+                    <div style={{ width: '100%', height: '100%', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+                        <div style={{ flex: 1, overflow: 'auto' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', fontSize }}>
                             {displayHeader.length > 0 && (
                                 <thead>
@@ -852,45 +1674,112 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                                         {displayHeader.map((title, i) => (
                                             <th key={i} style={{
                                                 color: headerColor,
+                                                width: columnMeta[i]?.width ? `${columnMeta[i].width}%` : undefined,
                                                 borderBottom: '1px solid ' + borderColor,
                                                 borderRight: i < displayHeader.length - 1 ? '1px solid ' + borderColor : 'none',
                                                 padding: '8px 10px',
-                                                textAlign: 'left',
+                                                textAlign: columnMeta[i]?.align || 'left',
                                                 fontWeight: 600,
                                                 whiteSpace: 'nowrap',
                                                 overflow: 'hidden',
                                                 textOverflow: 'ellipsis',
+                                                ...(freezeHeader ? { position: 'sticky', top: 0, zIndex: 2 } : {}),
                                             }}>
-                                                {title}
+                                                <button
+                                                    type="button"
+                                                    disabled={!enableSort}
+                                                    onClick={() => {
+                                                        if (!enableSort) return;
+                                                        setTablePage(1);
+                                                        setTableSort((prev) => {
+                                                            if (!prev || prev.colIndex !== i) {
+                                                                return { colIndex: i, order: 'asc' };
+                                                            }
+                                                            if (prev.order === 'asc') {
+                                                                return { colIndex: i, order: 'desc' };
+                                                            }
+                                                            return null;
+                                                        });
+                                                    }}
+                                                    style={{
+                                                        border: 'none',
+                                                        background: 'transparent',
+                                                        color: headerColor,
+                                                        fontWeight: 600,
+                                                        cursor: enableSort ? 'pointer' : 'default',
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: 4,
+                                                        padding: 0,
+                                                    }}
+                                                >
+                                                    <span>{title}</span>
+                                                    {tableSort?.colIndex === i ? (
+                                                        <span style={{ fontSize: 10 }}>{tableSort.order === 'asc' ? '▲' : '▼'}</span>
+                                                    ) : null}
+                                                </button>
                                             </th>
                                         ))}
                                     </tr>
                                 </thead>
                             )}
                             <tbody>
-                                {displayData.map((row, rowIndex) => (
+                                {pageRows.map((row, rowIndex) => (
                                     <tr key={rowIndex} style={{ background: rowIndex % 2 === 0 ? oddRowBackground : evenRowBackground }}>
-                                        {row.map((cell, colIndex) => (
+                                        {displayHeader.map((_, colIndex) => (
                                             <td key={colIndex} style={{
-                                                color: bodyColor,
+                                                color: resolveTableConditionalStyle(conditionalRules, colIndex, row[colIndex]).color || bodyColor,
+                                                background: resolveTableConditionalStyle(conditionalRules, colIndex, row[colIndex]).background,
                                                 borderBottom: '1px solid ' + borderColor,
-                                                borderRight: colIndex < row.length - 1 ? '1px solid ' + borderColor : 'none',
+                                                borderRight: colIndex < displayHeader.length - 1 ? '1px solid ' + borderColor : 'none',
                                                 padding: '8px 10px',
+                                                textAlign: columnMeta[colIndex]?.align || 'left',
                                                 whiteSpace: 'nowrap',
                                                 overflow: 'hidden',
                                                 textOverflow: 'ellipsis',
                                             }}>
-                                                {cell}
+                                                {row[colIndex] ?? ''}
                                             </td>
                                         ))}
                                     </tr>
                                 ))}
                             </tbody>
                         </table>
+                        </div>
+                        {enablePagination && totalPages > 1 ? (
+                            <div style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'flex-end',
+                                gap: 6,
+                                paddingTop: 8,
+                                color: t.textSecondary,
+                                fontSize: 12,
+                            }}>
+                                <button
+                                    type="button"
+                                    disabled={safePage <= 1}
+                                    onClick={() => setTablePage((p) => Math.max(1, p - 1))}
+                                    style={{ border: '1px solid rgba(148,163,184,0.35)', background: 'transparent', color: t.textPrimary, borderRadius: 4, padding: '2px 8px', cursor: 'pointer' }}
+                                >
+                                    上一页
+                                </button>
+                                <span>{safePage}/{totalPages}</span>
+                                <button
+                                    type="button"
+                                    disabled={safePage >= totalPages}
+                                    onClick={() => setTablePage((p) => Math.min(totalPages, p + 1))}
+                                    style={{ border: '1px solid rgba(148,163,184,0.35)', background: 'transparent', color: t.textPrimary, borderRadius: 4, padding: '2px 8px', cursor: 'pointer' }}
+                                >
+                                    下一页
+                                </button>
+                            </div>
+                        ) : null}
                     </div>
                 );
             }
             case 'scroll-ranking':
+                if (!ScrollRankingBoard) return dependencyPlaceholder('DataV');
                 return (
                     <ScrollRankingBoard
                         config={{
@@ -904,6 +1793,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                 );
 
             case 'water-level':
+                if (!WaterLevelPond) return dependencyPlaceholder('DataV');
                 return (
                     <WaterLevelPond
                         config={{
@@ -915,6 +1805,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                 );
 
             case 'digital-flop':
+                if (!DigitalFlop) return dependencyPlaceholder('DataV');
                 return (
                     <DigitalFlop
                         config={{
@@ -985,7 +1876,30 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                     </div>
                 );
         }
-    }, [type, effectiveConfig, width, height, currentTime, echartsClickHandler, t, theme, themeOptions]);
+    }, [
+        type,
+        effectiveConfig,
+        width,
+        height,
+        currentTime,
+        echartsClickHandler,
+        t,
+        theme,
+        themeOptions,
+        EChartsComponent,
+        dataViewModule,
+        borderBoxComponents,
+        decorationComponents,
+        cardData,
+        component,
+        mode,
+        mapDrillRegion,
+        tableSort,
+        tablePage,
+        runtime.values,
+        runtime,
+        runtimePlugin,
+    ]);
 
     return (
         <div style={{ width: '100%', height: '100%', overflow: 'hidden', position: 'relative' }}>
@@ -1039,6 +1953,24 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                     textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                 }} title={cardError}>
                     {cardError}
+                </div>
+            )}
+            {pluginMeta && !runtimePlugin && (
+                <div style={{
+                    position: 'absolute',
+                    bottom: 4,
+                    right: 4,
+                    fontSize: 10,
+                    color: '#fbbf24',
+                    background: 'rgba(30,41,59,0.85)',
+                    padding: '2px 6px',
+                    borderRadius: 3,
+                    maxWidth: '60%',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                }} title="插件未加载，已使用基础组件渲染">
+                    插件未加载，已降级
                 </div>
             )}
         </div>

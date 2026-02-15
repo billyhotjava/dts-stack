@@ -17,12 +17,19 @@ public interface IngestionTaskChangeLogRepository extends JpaRepository<Ingestio
           and (:changeType is null or c.change_type = :changeType)
           and (:status is null or c.status = :status)
           and (
+            :assignee is null
+            or :assignee = ''
+            or lower(cast(c.assignee as text)) like lower(concat('%', :assignee, '%'))
+          )
+          and (
             :keyword is null
             or :keyword = ''
             or (
                 lower(cast(c.task_name as text)) like lower(concat('%', :keyword, '%'))
                 or lower(cast(c.summary as text)) like lower(concat('%', :keyword, '%'))
                 or lower(cast(c.detail as text)) like lower(concat('%', :keyword, '%'))
+                or lower(cast(c.assignee as text)) like lower(concat('%', :keyword, '%'))
+                or lower(cast(c.approval_comment as text)) like lower(concat('%', :keyword, '%'))
             )
           )
         order by c.created_date desc
@@ -34,12 +41,19 @@ public interface IngestionTaskChangeLogRepository extends JpaRepository<Ingestio
           and (:changeType is null or c.change_type = :changeType)
           and (:status is null or c.status = :status)
           and (
+            :assignee is null
+            or :assignee = ''
+            or lower(cast(c.assignee as text)) like lower(concat('%', :assignee, '%'))
+          )
+          and (
             :keyword is null
             or :keyword = ''
             or (
                 lower(cast(c.task_name as text)) like lower(concat('%', :keyword, '%'))
                 or lower(cast(c.summary as text)) like lower(concat('%', :keyword, '%'))
                 or lower(cast(c.detail as text)) like lower(concat('%', :keyword, '%'))
+                or lower(cast(c.assignee as text)) like lower(concat('%', :keyword, '%'))
+                or lower(cast(c.approval_comment as text)) like lower(concat('%', :keyword, '%'))
             )
           )
         """,
@@ -50,6 +64,7 @@ public interface IngestionTaskChangeLogRepository extends JpaRepository<Ingestio
         @Param("objType") String objType,
         @Param("changeType") String changeType,
         @Param("status") String status,
+        @Param("assignee") String assignee,
         @Param("keyword") String keyword,
         Pageable pageable
     );

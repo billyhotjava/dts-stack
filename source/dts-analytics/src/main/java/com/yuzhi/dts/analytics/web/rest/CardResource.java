@@ -12,10 +12,9 @@ import com.yuzhi.dts.analytics.service.ActivityService;
 import com.yuzhi.dts.analytics.service.AnalyticsSessionService;
 import com.yuzhi.dts.analytics.service.DatasetQueryService;
 import com.yuzhi.dts.analytics.service.EntityIdGenerator;
-import com.yuzhi.dts.analytics.service.MbqlToSqlService;
-import com.yuzhi.dts.analytics.service.NativeQueryTemplateService;
 import com.yuzhi.dts.analytics.service.PublicLinkService;
 import com.yuzhi.dts.analytics.service.QueryExportService;
+import com.yuzhi.dts.analytics.service.QueryExecutionFacade;
 import com.yuzhi.dts.analytics.service.QueryMetricsService;
 import com.yuzhi.dts.analytics.service.QueryTraceService;
 import com.yuzhi.dts.analytics.service.RevisionService;
@@ -34,6 +33,7 @@ import java.util.Optional;
 import java.util.Set;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -54,9 +54,7 @@ public class CardResource {
     private final AnalyticsBookmarkRepository bookmarkRepository;
     private final AnalyticsUserRepository userRepository;
     private final ActivityService activityService;
-    private final DatasetQueryService datasetQueryService;
-    private final MbqlToSqlService mbqlToSqlService;
-    private final NativeQueryTemplateService nativeQueryTemplateService;
+    private final QueryExecutionFacade queryExecutionFacade;
     private final EntityIdGenerator entityIdGenerator;
     private final PublicLinkService publicLinkService;
     private final RevisionService revisionService;
@@ -71,9 +69,7 @@ public class CardResource {
             AnalyticsBookmarkRepository bookmarkRepository,
             AnalyticsUserRepository userRepository,
             ActivityService activityService,
-            DatasetQueryService datasetQueryService,
-            MbqlToSqlService mbqlToSqlService,
-            NativeQueryTemplateService nativeQueryTemplateService,
+            QueryExecutionFacade queryExecutionFacade,
             EntityIdGenerator entityIdGenerator,
             PublicLinkService publicLinkService,
             RevisionService revisionService,
@@ -86,9 +82,7 @@ public class CardResource {
         this.bookmarkRepository = bookmarkRepository;
         this.userRepository = userRepository;
         this.activityService = activityService;
-        this.datasetQueryService = datasetQueryService;
-        this.mbqlToSqlService = mbqlToSqlService;
-        this.nativeQueryTemplateService = nativeQueryTemplateService;
+        this.queryExecutionFacade = queryExecutionFacade;
         this.entityIdGenerator = entityIdGenerator;
         this.publicLinkService = publicLinkService;
         this.revisionService = revisionService;
@@ -239,7 +233,7 @@ public class CardResource {
                 })
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
-    @Transactional(readOnly = true, noRollbackFor = Exception.class)
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     @PostMapping(path = "/{cardId}/query", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> query(@PathVariable("cardId") long cardId, @RequestBody(required = false) JsonNode body, HttpServletRequest request) {
         long startedNanos = System.nanoTime();
@@ -282,78 +276,40 @@ public class CardResource {
                         "requestId", resolveRequestId()));
             }
 
-            String type = datasetQuery.path("type").asText(null);
-            long databaseId = datasetQuery.path("database").asLong(0);
-            if (databaseId <= 0) {
-                metricCode = "DATABASE_ID_REQUIRED";
-                metricResult = "rejected";
-                return ResponseEntity.status(400).body(Map.of(
-                        "error", "dataset_query.database is required",
-                        "code", metricCode,
-                        "requestId", resolveRequestId()));
-            }
-            traceDatabaseId = databaseId;
-
             OffsetDateTime startedAt = OffsetDateTime.now();
             long startedMillis = System.currentTimeMillis();
+            long databaseId = 0;
 
             try {
-                String sql;
-                List<Object> bindings = List.of();
+                QueryExecutionFacade.PreparedQuery prepared = queryExecutionFacade.prepare(
+                        datasetQuery,
+                        body,
+                        null,
+                        DatasetQueryService.DatasetConstraints.defaults());
+                databaseId = prepared.databaseId();
+                traceDatabaseId = databaseId;
+                traceSql = prepared.sql();
+
                 Map<String, Object> jsonQuery = new LinkedHashMap<>();
                 jsonQuery.put("constraints", Map.of("max-results", 10000, "max-results-bare-rows", 2000));
                 jsonQuery.put("middleware", Map.of("js-int-to-string?", true, "ignore-cached-results?", false, "process-viz-settings?", false));
                 jsonQuery.put("database", databaseId);
                 jsonQuery.put("async?", true);
                 jsonQuery.put("cache-ttl", null);
-
-                if ("native".equalsIgnoreCase(type)) {
-                    sql = datasetQuery.path("native").path("query").asText(null);
-                    if (sql == null || sql.isBlank()) {
-                        metricCode = "NATIVE_SQL_REQUIRED";
-                        metricResult = "rejected";
-                        return ResponseEntity.status(400).body(Map.of(
-                                "error", "dataset_query.native.query is required",
-                                "code", metricCode,
-                                "requestId", resolveRequestId()));
-                    }
-                    JsonNode parametersNode = body == null ? null : body.get("parameters");
-                    if (parametersNode != null && !parametersNode.isNull() && !parametersNode.isMissingNode()) {
-                        nativeQueryTemplateService.validateParameterWhitelist(sql, parametersNode);
-                        if (sql.contains("{{")) {
-                            NativeQueryTemplateService.RenderedQuery rendered = nativeQueryTemplateService.render(sql, parametersNode);
-                            sql = rendered.sql();
-                            bindings = rendered.bindings();
-                        }
-                    }
-                    jsonQuery.put("type", "native");
-                    jsonQuery.put("native", Map.of("query", sql));
-                } else if ("query".equalsIgnoreCase(type)) {
-                    JsonNode mbql = datasetQuery.get("query");
-                    MbqlToSqlService.TranslationResult translated =
-                            mbqlToSqlService.translateSelect(databaseId, mbql, DatasetQueryService.DatasetConstraints.defaults());
-                    sql = translated.sql();
-                    bindings = translated.bindings();
-                    jsonQuery.put("type", "query");
-                    jsonQuery.put("query", mbql);
+                jsonQuery.put("type", prepared.type());
+                if ("native".equalsIgnoreCase(prepared.type())) {
+                    jsonQuery.put("native", Map.of("query", prepared.sql()));
                 } else {
-                    metricCode = "QUERY_TYPE_UNSUPPORTED";
-                    metricResult = "rejected";
-                    return ResponseEntity.status(400).body(Map.of(
-                            "error", "Only native and query (MBQL) queries are supported",
-                            "code", metricCode,
-                            "requestId", resolveRequestId()));
+                    jsonQuery.put("query", prepared.mbql());
                 }
-                traceSql = sql;
 
-                DatasetQueryService.DatasetResult result =
-                        datasetQueryService.runNative(databaseId, sql, DatasetQueryService.DatasetConstraints.defaults(), bindings);
+                DatasetQueryService.DatasetResult result = queryExecutionFacade.executeWithCompliance(prepared);
                 long runningTimeMs = System.currentTimeMillis() - startedMillis;
 
                 Map<String, Object> data = new LinkedHashMap<>();
                 data.put("rows", result.rows());
                 data.put("cols", result.cols());
-                data.put("native_form", Map.of("query", sql));
+                data.put("native_form", Map.of("query", prepared.sql()));
                 data.put("results_timezone", result.resultsTimezone());
                 data.put("results_metadata", Map.of("columns", result.resultsMetadataColumns()));
                 data.put("insights", null);
@@ -424,7 +380,7 @@ public class CardResource {
         }
     }
 
-    @Transactional(readOnly = true, noRollbackFor = Exception.class)
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     @PostMapping(path = "/pivot/{cardId}/query", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> pivotQuery(@PathVariable("cardId") long cardId, @RequestBody(required = false) JsonNode body, HttpServletRequest request) {
         return query(cardId, body, request);
@@ -433,7 +389,7 @@ public class CardResource {
     /**
      * Export card query results to CSV format.
      */
-    @Transactional(readOnly = true, noRollbackFor = Exception.class)
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     @PostMapping(path = "/{cardId}/query/csv")
     public void exportCsv(
             @PathVariable("cardId") long cardId,
@@ -446,7 +402,7 @@ public class CardResource {
     /**
      * Export card query results to Excel format.
      */
-    @Transactional(readOnly = true, noRollbackFor = Exception.class)
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     @PostMapping(path = "/{cardId}/query/xlsx")
     public void exportExcel(
             @PathVariable("cardId") long cardId,
@@ -459,7 +415,7 @@ public class CardResource {
     /**
      * Export card query results to JSON format.
      */
-    @Transactional(readOnly = true, noRollbackFor = Exception.class)
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     @PostMapping(path = "/{cardId}/query/json")
     public void exportJson(
             @PathVariable("cardId") long cardId,
@@ -497,52 +453,15 @@ public class CardResource {
             return;
         }
 
-        String type = datasetQuery.path("type").asText(null);
-        long databaseId = datasetQuery.path("database").asLong(0);
-        if (databaseId <= 0) {
-            response.setStatus(400);
-            response.getWriter().write("dataset_query.database is required");
-            return;
-        }
-
         try {
-            String sql;
-            List<Object> bindings = List.of();
-
-            if ("native".equalsIgnoreCase(type)) {
-                sql = datasetQuery.path("native").path("query").asText(null);
-                if (sql == null || sql.isBlank()) {
-                    response.setStatus(400);
-                    response.getWriter().write("dataset_query.native.query is required");
-                    return;
-                }
-                JsonNode parametersNode = body == null ? null : body.get("parameters");
-                if (parametersNode != null && !parametersNode.isNull() && !parametersNode.isMissingNode()) {
-                        nativeQueryTemplateService.validateParameterWhitelist(sql, parametersNode);
-                        if (sql.contains("{{")) {
-                            NativeQueryTemplateService.RenderedQuery rendered = nativeQueryTemplateService.render(sql, parametersNode);
-                            sql = rendered.sql();
-                            bindings = rendered.bindings();
-                        }
-                    }
-            } else if ("query".equalsIgnoreCase(type)) {
-                JsonNode mbql = datasetQuery.get("query");
-                // Use higher limits for exports
-                DatasetQueryService.DatasetConstraints exportConstraints =
-                        new DatasetQueryService.DatasetConstraints(100000, 300, "UTC");
-                MbqlToSqlService.TranslationResult translated = mbqlToSqlService.translateSelect(databaseId, mbql, exportConstraints);
-                sql = translated.sql();
-                bindings = translated.bindings();
-            } else {
-                response.setStatus(400);
-                response.getWriter().write("Only native and query (MBQL) queries are supported");
-                return;
-            }
-
-            // Use higher limits for exports
             DatasetQueryService.DatasetConstraints exportConstraints =
                     new DatasetQueryService.DatasetConstraints(100000, 300, "UTC");
-            DatasetQueryService.DatasetResult result = datasetQueryService.runNative(databaseId, sql, exportConstraints, bindings);
+            QueryExecutionFacade.PreparedQuery prepared = queryExecutionFacade.prepare(
+                    datasetQuery,
+                    body,
+                    null,
+                    exportConstraints);
+            DatasetQueryService.DatasetResult result = queryExecutionFacade.executeWithCompliance(prepared);
 
             // Set response headers
             String filename = sanitizeFilename(card.getName()) + queryExportService.getFileExtension(format);
@@ -561,6 +480,9 @@ public class CardResource {
                 case EXCEL -> queryExportService.exportToExcel(result, response.getOutputStream(), options);
                 case JSON -> queryExportService.exportToJson(result, response.getOutputStream(), options);
             }
+        } catch (IllegalArgumentException e) {
+            response.setStatus(400);
+            response.getWriter().write(e.getMessage());
         } catch (SQLException e) {
             response.setStatus(500);
             response.getWriter().write("Query execution failed: " + e.getMessage());
@@ -728,32 +650,13 @@ public class CardResource {
 
     private List<Map<String, Object>> computeResultMetadata(AnalyticsCard card) {
         try {
-            JsonNode query = objectMapper.readTree(card.getDatasetQueryJson());
-            long databaseId = query.path("database").asLong(0);
-            if (databaseId <= 0) {
-                return List.of();
-            }
-
-            String sql;
-            String type = query.path("type").asText("native");
-            if ("native".equalsIgnoreCase(type)) {
-                sql = query.path("native").path("query").asText(null);
-                if (sql == null || sql.isBlank()) {
-                    return List.of();
-                }
-            } else if ("query".equalsIgnoreCase(type)) {
-                MbqlToSqlService.TranslationResult translated =
-                        mbqlToSqlService.translateSelect(databaseId, query.get("query"), DatasetQueryService.DatasetConstraints.defaults());
-                sql = translated.sql();
-                DatasetQueryService.DatasetResult result = datasetQueryService.runNative(
-                        databaseId, sql, DatasetQueryService.DatasetConstraints.defaults(), translated.bindings());
-                return result.resultsMetadataColumns();
-            } else {
-                return List.of();
-            }
-
-            DatasetQueryService.DatasetResult result =
-                    datasetQueryService.runNative(databaseId, sql, DatasetQueryService.DatasetConstraints.defaults(), List.of());
+            JsonNode datasetQuery = objectMapper.readTree(card.getDatasetQueryJson());
+            QueryExecutionFacade.PreparedQuery prepared = queryExecutionFacade.prepare(
+                    datasetQuery,
+                    null,
+                    null,
+                    DatasetQueryService.DatasetConstraints.defaults());
+            DatasetQueryService.DatasetResult result = queryExecutionFacade.executeRaw(prepared);
             return result.resultsMetadataColumns();
         } catch (Exception e) {
             return List.of();

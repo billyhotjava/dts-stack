@@ -15,6 +15,22 @@ interface AreaChartProps {
   colors?: string[];
 }
 
+interface AreaSeries {
+  key: string;
+  name: string;
+  values: number[];
+  stackedValues: number[];
+  color: string;
+}
+
+interface AreaChartComputed {
+  series: AreaSeries[];
+  maxValue: number;
+  minValue: number;
+  labels: string[];
+  isStacked: boolean;
+}
+
 // Cubic bezier smooth path
 function smoothPath(points: { x: number; y: number }[]): string {
   if (points.length < 2) return '';
@@ -56,20 +72,20 @@ export function AreaChart({
   const [hoveredPoint, setHoveredPoint] = useState<number | null>(null);
   const tooltip = useChartTooltip();
 
-  const chartData = useMemo(() => {
+  const chartData = useMemo<AreaChartComputed>(() => {
     if (!data?.rows?.length || !data?.cols?.length) {
-      return { series: [], maxValue: 0, minValue: 0, labels: [] };
+      return { series: [], maxValue: 0, minValue: 0, labels: [], isStacked: false };
     }
 
     const labels = data.rows.map(row => String(row[xAxisIndex] ?? ''));
 
     if (stacked) {
-      const baseSeries = yAxisIndices.map((yIdx, seriesIdx) => ({
+      const baseSeries: AreaSeries[] = yAxisIndices.map((yIdx, seriesIdx) => ({
         key: `series-${seriesIdx}`,
         name: data.cols[yIdx]?.display_name || data.cols[yIdx]?.name || `Series ${seriesIdx + 1}`,
         values: data.rows.map(row => Number(row[yIdx]) || 0),
         color: colors?.[seriesIdx % (colors?.length || 1)] || getChartColor(seriesIdx),
-        stackedValues: [] as number[],
+        stackedValues: [],
       }));
 
       // Compute stacked values (cumulative), excluding hidden
@@ -97,7 +113,7 @@ export function AreaChart({
       return { series: baseSeries, maxValue: max, minValue: 0, labels, isStacked: true };
     }
 
-    const series = yAxisIndices.map((yIdx, seriesIdx) => ({
+    const series: AreaSeries[] = yAxisIndices.map((yIdx, seriesIdx) => ({
       key: `series-${seriesIdx}`,
       name: data.cols[yIdx]?.display_name || data.cols[yIdx]?.name || `Series ${seriesIdx + 1}`,
       values: data.rows.map(row => Number(row[yIdx]) || 0),

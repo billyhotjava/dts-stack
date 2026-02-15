@@ -13,6 +13,10 @@ public class IngestionTaskChangeLogDTO {
     private String detail;
     private String riskLevel;
     private String status;
+    private String assignee;
+    private String approvalComment;
+    private Instant handledAt;
+    private String handledBy;
     private String createdBy;
     private Instant createdDate;
 
@@ -86,6 +90,38 @@ public class IngestionTaskChangeLogDTO {
 
     public void setStatus(String status) {
         this.status = status;
+    }
+
+    public String getAssignee() {
+        return assignee;
+    }
+
+    public void setAssignee(String assignee) {
+        this.assignee = assignee;
+    }
+
+    public String getApprovalComment() {
+        return approvalComment;
+    }
+
+    public void setApprovalComment(String approvalComment) {
+        this.approvalComment = approvalComment;
+    }
+
+    public Instant getHandledAt() {
+        return handledAt;
+    }
+
+    public void setHandledAt(Instant handledAt) {
+        this.handledAt = handledAt;
+    }
+
+    public String getHandledBy() {
+        return handledBy;
+    }
+
+    public void setHandledBy(String handledBy) {
+        this.handledBy = handledBy;
     }
 
     public String getCreatedBy() {

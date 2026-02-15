@@ -30,6 +30,7 @@ export default defineConfig(({ mode }) => {
 		},
 		build: {
 			target: buildTarget,
+			chunkSizeWarningLimit: 700,
 		},
 		esbuild: {
 			target: buildTarget,

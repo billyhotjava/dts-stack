@@ -1,4 +1,5 @@
 import type { ScreenConfig, ScreenComponent } from './types';
+import { SCREEN_SCHEMA_VERSION } from './specV2';
 
 /**
  * Screen Template definition
@@ -901,6 +902,7 @@ export function getTemplateById(id: string): ScreenTemplate | undefined {
 export function createConfigFromTemplate(template: ScreenTemplate): Omit<ScreenConfig, 'id'> {
     const timestamp = Date.now();
     return {
+        schemaVersion: SCREEN_SCHEMA_VERSION,
         ...template.config,
         components: template.config.components.map((comp, idx) => ({
             ...comp,

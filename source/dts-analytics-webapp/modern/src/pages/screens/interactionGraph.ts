@@ -5,8 +5,16 @@ function trim(value: unknown): string {
 }
 
 function consumeVariables(component: ScreenComponent): string[] {
-    if (component.dataSource?.type !== 'card') return [];
-    const bindings = component.dataSource.cardConfig?.parameterBindings ?? [];
+    const dataSource = component.dataSource;
+    if (!dataSource) return [];
+    const sourceType = trim((dataSource as { sourceType?: string }).sourceType || dataSource.type);
+    const normalized = sourceType.toLowerCase() === 'database' ? 'sql' : sourceType.toLowerCase();
+    const bindings =
+        normalized === 'card'
+            ? (dataSource.cardConfig?.parameterBindings ?? [])
+            : normalized === 'sql'
+                ? ((dataSource.sqlConfig?.parameterBindings ?? dataSource.databaseConfig?.parameterBindings) ?? [])
+                : [];
     const values: string[] = [];
     for (const item of bindings) {
         const key = trim(item.variableKey);
@@ -16,14 +24,25 @@ function consumeVariables(component: ScreenComponent): string[] {
 }
 
 function emitVariables(component: ScreenComponent): string[] {
-    if (!component.interaction?.enabled) return [];
+    const directFilterEmit: string[] = [];
+    if (component.type === 'filter-input' || component.type === 'filter-select') {
+        const key = trim(component.config?.variableKey);
+        if (key) directFilterEmit.push(key);
+    } else if (component.type === 'filter-date-range') {
+        const startKey = trim(component.config?.startKey);
+        const endKey = trim(component.config?.endKey);
+        if (startKey) directFilterEmit.push(startKey);
+        if (endKey) directFilterEmit.push(endKey);
+    }
+
+    if (!component.interaction?.enabled) return Array.from(new Set(directFilterEmit));
     const mappings = component.interaction.mappings ?? [];
     const values: string[] = [];
     for (const mapping of mappings) {
         const key = trim(mapping.variableKey);
         if (key) values.push(key);
     }
-    return Array.from(new Set(values));
+    return Array.from(new Set([...directFilterEmit, ...values]));
 }
 
 function nodeLabel(node: string, componentNames: Map<string, string>): string {

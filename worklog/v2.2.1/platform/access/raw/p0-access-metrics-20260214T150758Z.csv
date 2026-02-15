@@ -1,0 +1,2 @@
+run_at,mode,arch,hours,total_trigger,triggered,failed,dag404,tasklog404,result,note,ingestion_log
+20260214T150758Z,normal,x86_64,24,0,0,0,0,0,OBSERVED,init-pass,/opt/prod/s10/dts-stack/logs/dts-ingestion/app.log

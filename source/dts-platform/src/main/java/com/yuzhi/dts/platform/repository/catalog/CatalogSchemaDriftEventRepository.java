@@ -9,5 +9,6 @@ public interface CatalogSchemaDriftEventRepository extends JpaRepository<Catalog
     List<CatalogSchemaDriftEvent> findTop200ByDatasetIdOrderByCreatedDateDesc(UUID datasetId);
 
     List<CatalogSchemaDriftEvent> findTop200ByRunIdOrderByCreatedDateDesc(UUID runId);
-}
 
+    List<CatalogSchemaDriftEvent> findTop500ByOrderByCreatedDateDesc();
+}

@@ -3,6 +3,7 @@ package com.yuzhi.dts.ingestion.domain;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
+import java.time.Instant;
 
 /**
  * 数据入湖任务变更记录
@@ -48,6 +49,20 @@ public class IngestionTaskChangeLog extends AbstractAuditingEntity<Long> {
     @Size(max = 50)
     @Column(name = "status", length = 50)
     private String status;
+
+    @Size(max = 100)
+    @Column(name = "assignee", length = 100)
+    private String assignee;
+
+    @Column(name = "approval_comment", columnDefinition = "TEXT")
+    private String approvalComment;
+
+    @Column(name = "handled_at")
+    private Instant handledAt;
+
+    @Size(max = 50)
+    @Column(name = "handled_by", length = 50)
+    private String handledBy;
 
     @Override
     public Long getId() {
@@ -120,6 +135,38 @@ public class IngestionTaskChangeLog extends AbstractAuditingEntity<Long> {
 
     public void setStatus(String status) {
         this.status = status;
+    }
+
+    public String getAssignee() {
+        return assignee;
+    }
+
+    public void setAssignee(String assignee) {
+        this.assignee = assignee;
+    }
+
+    public String getApprovalComment() {
+        return approvalComment;
+    }
+
+    public void setApprovalComment(String approvalComment) {
+        this.approvalComment = approvalComment;
+    }
+
+    public Instant getHandledAt() {
+        return handledAt;
+    }
+
+    public void setHandledAt(Instant handledAt) {
+        this.handledAt = handledAt;
+    }
+
+    public String getHandledBy() {
+        return handledBy;
+    }
+
+    public void setHandledBy(String handledBy) {
+        this.handledBy = handledBy;
     }
 
     @Override

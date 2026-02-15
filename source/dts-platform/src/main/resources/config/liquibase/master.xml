@@ -105,6 +105,6 @@
     <include file="config/liquibase/changelog/20260212_01_catalog_dataset_snapshot.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260212_02_bi_report_security_index.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260212_03_query_dataset_assets.xml" relativeToChangelogFile="false"/>
-</databaseChangeLog>
-
     <include file="config/liquibase/changelog/20260212_04_catalog_lineage_project_scope.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260215_01_catalog_schema_drift_workflow.xml" relativeToChangelogFile="false"/>
+</databaseChangeLog>

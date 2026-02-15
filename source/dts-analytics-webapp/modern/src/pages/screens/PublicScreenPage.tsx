@@ -1,37 +1,30 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'react-router';
-import { analyticsApi, PublicScreenDetail } from '../../api/analyticsApi';
+import { analyticsApi } from '../../api/analyticsApi';
 import { ComponentRenderer } from './components/ComponentRenderer';
 import { GlobalVariablePanel } from './components/GlobalVariablePanel';
 import { ScreenRuntimeProvider } from './ScreenRuntimeContext';
-import type { ScreenComponent, ComponentType, ScreenTheme, ScreenGlobalVariable } from './types';
+import type { ScreenConfig, ScreenTheme } from './types';
 import { resolveScreenTheme } from './screenThemes';
+import { normalizeScreenConfig } from './specV2';
 
-function toGlobalVariables(input: unknown): ScreenGlobalVariable[] {
-    if (!Array.isArray(input)) return [];
-    return input
-        .map((item) => {
-            if (!item || typeof item !== 'object') return null;
-            const row = item as Record<string, unknown>;
-            const key = typeof row.key === 'string' ? row.key.trim() : '';
-            if (!key) return null;
-            return {
-                key,
-                label: typeof row.label === 'string' ? row.label : key,
-                type: row.type === 'number' || row.type === 'date' ? row.type : 'string',
-                defaultValue: typeof row.defaultValue === 'string' ? row.defaultValue : '',
-                description: typeof row.description === 'string' ? row.description : undefined,
-            } as ScreenGlobalVariable;
-        })
-        .filter((x): x is ScreenGlobalVariable => x !== null);
+type DeviceMode = 'pc' | 'tablet' | 'mobile';
+
+function isVisibleForDevice(component: { config?: Record<string, unknown> }, device: DeviceMode): boolean {
+    const raw = component?.config?.visibleOn;
+    if (!Array.isArray(raw) || raw.length === 0) {
+        return true;
+    }
+    return raw.includes(device);
 }
 
 export default function PublicScreenPage() {
     const { uuid } = useParams<{ uuid: string }>();
-    const [screen, setScreen] = useState<PublicScreenDetail | null>(null);
+    const [screen, setScreen] = useState<ScreenConfig | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [scale, setScale] = useState(1);
+    const [deviceMode, setDeviceMode] = useState<DeviceMode>('pc');
 
     useEffect(() => {
         if (!uuid) {
@@ -42,7 +35,11 @@ export default function PublicScreenPage() {
 
         analyticsApi.getPublicScreen(uuid)
             .then((data) => {
-                setScreen(data);
+                const normalized = normalizeScreenConfig(data, { id: data.id });
+                if (normalized.warnings.length > 0) {
+                    console.warn('[screen-spec-v2] normalized with warnings:', normalized.warnings);
+                }
+                setScreen(normalized.config);
                 setLoading(false);
             })
             .catch((err) => {
@@ -56,8 +53,10 @@ export default function PublicScreenPage() {
         if (!screen) return;
         const vw = window.innerWidth;
         const vh = window.innerHeight;
-        const sx = vw / screen.width;
-        const sy = vh / screen.height;
+        const nextMode: DeviceMode = vw <= 768 ? 'mobile' : (vw <= 1200 ? 'tablet' : 'pc');
+        setDeviceMode(nextMode);
+        const sx = vw / (screen.width || 1920);
+        const sy = vh / (screen.height || 1080);
         setScale(Math.min(sx, sy));
     }, [screen]);
 
@@ -91,16 +90,10 @@ export default function PublicScreenPage() {
         );
     }
 
-    const rawTheme = (screen as { theme?: string }).theme as ScreenTheme | undefined;
+    const rawTheme = screen.theme as ScreenTheme | undefined;
     const screenTheme = resolveScreenTheme(rawTheme, screen.backgroundColor);
-    const globalVariables = toGlobalVariables((screen as Record<string, unknown>).globalVariables);
-
-    const components: ScreenComponent[] = (screen.components || []).map(c => ({
-        ...c,
-        type: c.type as ComponentType,
-        dataSource: c.dataSource as import('./types').DataSourceConfig | undefined,
-        interaction: c.interaction as import('./types').ComponentInteractionConfig | undefined,
-    }));
+    const globalVariables = screen.globalVariables ?? [];
+    const components = screen.components || [];
 
     const outerBg = screenTheme === 'glacier' ? '#e5e7eb' : '#000';
 
@@ -119,8 +112,8 @@ export default function PublicScreenPage() {
             >
                 <div
                     style={{
-                        width: screen.width,
-                        height: screen.height,
+                        width: screen.width || 1920,
+                        height: screen.height || 1080,
                         backgroundColor: screen.backgroundColor || '#0d1b2a',
                         backgroundImage: screen.backgroundImage ? `url(${screen.backgroundImage})` : undefined,
                         backgroundSize: 'cover',
@@ -132,7 +125,7 @@ export default function PublicScreenPage() {
                     }}
                 >
                     {components
-                        .filter(c => c.visible)
+                        .filter(c => c.visible && isVisibleForDevice(c, deviceMode))
                         .sort((a, b) => a.zIndex - b.zIndex)
                         .map((component) => (
                             <div

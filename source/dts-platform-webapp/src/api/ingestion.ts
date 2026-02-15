@@ -64,6 +64,41 @@ export interface IngestionExecutionLog {
   message?: string;
 }
 
+export interface IngestionExecutionObservabilityFailureTopItem {
+  category: string;
+  count: number;
+}
+
+export interface IngestionExecutionObservabilityTrendItem {
+  day: string;
+  total: number;
+  success: number;
+  failed: number;
+  timeout: number;
+}
+
+export interface IngestionExecutionObservabilityDTO {
+  taskId?: number;
+  sourceType?: string;
+  sourceDataSourceId?: string;
+  windowStart?: string;
+  windowEnd?: string;
+  windowDays?: number;
+  timeoutMinutes?: number;
+  total: number;
+  success: number;
+  failed: number;
+  running: number;
+  terminal: number;
+  timeout: number;
+  successRate?: number;
+  timeoutRate?: number;
+  avgDurationSeconds?: number;
+  mttrSeconds?: number;
+  failureTop: IngestionExecutionObservabilityFailureTopItem[];
+  trend: IngestionExecutionObservabilityTrendItem[];
+}
+
 export interface IngestionIncrementalStateDTO {
   id: number;
   taskId: number;
@@ -150,6 +185,10 @@ export interface IngestionChangeLogDTO {
   detail?: string;
   riskLevel?: string;
   status?: string;
+  assignee?: string;
+  approvalComment?: string;
+  handledAt?: string;
+  handledBy?: string;
   createdBy?: string;
   createdDate?: string;
 }
@@ -304,6 +343,8 @@ class IngestionTaskAPI {
       page?: number;
       size?: number;
       sort?: string;
+      status?: string;
+      failureCategory?: string;
     }
   ): Promise<PageResult<IngestionExecutionDTO>> {
     return api.get({ url: `/ingestion/tasks/${taskId}/executions`, params });
@@ -332,6 +373,18 @@ class IngestionTaskAPI {
     params?: { tryNumber?: number; keyword?: string; scope?: "single" | "all" }
   ): Promise<IngestionExecutionLog> {
     return api.get({ url: `/ingestion/tasks/${taskId}/executions/${executionId}/logs`, params });
+  }
+
+  async getExecutionsObservability(params?: {
+    taskId?: number;
+    sourceType?: string;
+    sourceDataSourceId?: string;
+    from?: string;
+    to?: string;
+    days?: number;
+    timeoutMinutes?: number;
+  }): Promise<IngestionExecutionObservabilityDTO> {
+    return api.get({ url: "/ingestion/tasks/executions/observability", params });
   }
 
   async retryExecution(
@@ -470,6 +523,7 @@ class IngestionTaskAPI {
     objType?: string;
     changeType?: string;
     status?: string;
+    assignee?: string;
     keyword?: string;
     page?: number;
     size?: number;
@@ -483,6 +537,13 @@ class IngestionTaskAPI {
    */
   async createChangeLog(data: IngestionChangeLogDTO): Promise<IngestionChangeLogDTO> {
     return api.post({ url: "/ingestion/tasks/changes", data });
+  }
+
+  async transitionChangeLog(
+    id: number,
+    data: { action: "SUBMIT" | "APPROVE" | "REJECT"; assignee?: string; approvalComment?: string }
+  ): Promise<IngestionChangeLogDTO> {
+    return api.post({ url: `/ingestion/tasks/changes/${id}/transition`, data });
   }
 }
 

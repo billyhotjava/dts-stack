@@ -1,6 +1,7 @@
 package com.yuzhi.dts.analytics.web.filter;
 
 import com.yuzhi.dts.analytics.config.Constants;
+import com.yuzhi.dts.analytics.web.support.RequestContextUtils;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -25,12 +26,14 @@ public class RequestLoggingFilter extends OncePerRequestFilter {
             filterChain.doFilter(request, response);
         } finally {
             long duration = System.currentTimeMillis() - start;
+            String requestId = RequestContextUtils.resolveRequestId();
             log.info(
-                    "{} {} -> {} ({} ms)",
+                    "{} {} -> {} ({} ms) [requestId={}]",
                     request.getMethod(),
                     request.getRequestURI(),
                     response.getStatus(),
-                    duration);
+                    duration,
+                    requestId == null ? "unknown" : requestId);
         }
     }
 }

@@ -3,9 +3,8 @@ package com.yuzhi.dts.analytics.web.rest;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.yuzhi.dts.analytics.service.AnalyticsSessionService;
 import com.yuzhi.dts.analytics.service.DatasetQueryService;
-import com.yuzhi.dts.analytics.service.MbqlToSqlService;
-import com.yuzhi.dts.analytics.service.NativeQueryTemplateService;
 import com.yuzhi.dts.analytics.service.QueryCacheService;
+import com.yuzhi.dts.analytics.service.QueryExecutionFacade;
 import com.yuzhi.dts.analytics.service.QueryPermissionService;
 import com.yuzhi.dts.analytics.web.support.MetabaseAuth;
 import jakarta.servlet.http.HttpServletRequest;
@@ -18,8 +17,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -34,28 +31,20 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/dataset")
 public class DatasetResource {
 
-    private static final Logger log = LoggerFactory.getLogger(DatasetResource.class);
-
     private final AnalyticsSessionService sessionService;
-    private final DatasetQueryService datasetQueryService;
-    private final MbqlToSqlService mbqlToSqlService;
-    private final NativeQueryTemplateService nativeQueryTemplateService;
     private final QueryCacheService queryCacheService;
     private final QueryPermissionService queryPermissionService;
+    private final QueryExecutionFacade queryExecutionFacade;
 
     public DatasetResource(
             AnalyticsSessionService sessionService,
-            DatasetQueryService datasetQueryService,
-            MbqlToSqlService mbqlToSqlService,
-            NativeQueryTemplateService nativeQueryTemplateService,
             QueryCacheService queryCacheService,
-            QueryPermissionService queryPermissionService) {
+            QueryPermissionService queryPermissionService,
+            QueryExecutionFacade queryExecutionFacade) {
         this.sessionService = sessionService;
-        this.datasetQueryService = datasetQueryService;
-        this.mbqlToSqlService = mbqlToSqlService;
-        this.nativeQueryTemplateService = nativeQueryTemplateService;
         this.queryCacheService = queryCacheService;
         this.queryPermissionService = queryPermissionService;
+        this.queryExecutionFacade = queryExecutionFacade;
     }
 
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
@@ -99,8 +88,10 @@ public class DatasetResource {
         boolean skipCache = body.path("cache").path("skip").asBoolean(false);
 
         try {
-            String sql;
-            List<Object> bindings = List.of();
+            QueryExecutionFacade.PreparedQuery prepared =
+                    queryExecutionFacade.prepare(body, body, null, constraints);
+            databaseId = prepared.databaseId();
+
             Map<String, Object> jsonQuery = new LinkedHashMap<>();
             jsonQuery.put("database", databaseId);
             jsonQuery.put(
@@ -108,36 +99,11 @@ public class DatasetResource {
                     Map.of(
                             "js-int-to-string?", true,
                             "add-default-userland-constraints?", true));
-
-            if ("native".equalsIgnoreCase(type)) {
-                JsonNode nativeQuery = body.path("native");
-                sql = nativeQuery.path("query").asText(null);
-                if (sql == null || sql.isBlank()) {
-                    return ResponseEntity.badRequest()
-                            .body(Map.of("errors", Map.of("query", "native.query is required")));
-                }
-                JsonNode parametersNode = body.get("parameters");
-                if (parametersNode != null && !parametersNode.isNull() && !parametersNode.isMissingNode()
-                        && sql.contains("{{")) {
-                    NativeQueryTemplateService.RenderedQuery rendered = nativeQueryTemplateService.render(sql,
-                            parametersNode);
-                    sql = rendered.sql();
-                    bindings = rendered.bindings();
-                }
-                jsonQuery.put("type", "native");
-                jsonQuery.put("native", Map.of("query", sql));
-            } else if ("query".equalsIgnoreCase(type)) {
-                JsonNode mbql = body.get("query");
-                MbqlToSqlService.TranslationResult translated = mbqlToSqlService.translateSelect(databaseId, mbql,
-                        constraints);
-                sql = translated.sql();
-                bindings = translated.bindings();
-                jsonQuery.put("type", "query");
-                jsonQuery.put("query", mbql);
+            jsonQuery.put("type", prepared.type());
+            if ("native".equalsIgnoreCase(prepared.type())) {
+                jsonQuery.put("native", Map.of("query", prepared.sql()));
             } else {
-                return ResponseEntity.badRequest()
-                        .body(Map.of("errors",
-                                Map.of("type", "Only native and query (MBQL) dataset types are supported")));
+                jsonQuery.put("query", prepared.mbql());
             }
 
             // Try to get from cache first (unless skipping cache)
@@ -149,21 +115,22 @@ public class DatasetResource {
                 if (cachedResult.isPresent()) {
                     result = cachedResult.get();
                     cached = true;
-                    log.debug("Returning cached result for database {}", databaseId);
                 } else {
-                    result = datasetQueryService.runNative(databaseId, sql, constraints, bindings);
+                    result = queryExecutionFacade.executeRaw(prepared);
                     queryCacheService.put(databaseId, body, userId, result);
                 }
             } else {
-                result = datasetQueryService.runNative(databaseId, sql, constraints, bindings);
+                result = queryExecutionFacade.executeRaw(prepared);
             }
+
+            result = queryExecutionFacade.applyCompliance(result);
 
             long runningTimeMs = System.currentTimeMillis() - startedMillis;
 
             Map<String, Object> data = new LinkedHashMap<>();
             data.put("rows", result.rows());
             data.put("cols", result.cols());
-            data.put("native_form", Map.of("query", sql));
+            data.put("native_form", Map.of("query", prepared.sql()));
             data.put("results_timezone", result.resultsTimezone());
             data.put("results_metadata", Map.of("columns", result.resultsMetadataColumns()));
             data.put("insights", null);
@@ -407,8 +374,14 @@ public class DatasetResource {
         if (maxResults <= 0) {
             maxResults = 2000;
         }
+        if (maxResults > 100_000) {
+            maxResults = 100_000;
+        }
         if (timeoutSeconds <= 0) {
             timeoutSeconds = (int) Duration.ofSeconds(60).toSeconds();
+        }
+        if (timeoutSeconds > 600) {
+            timeoutSeconds = 600;
         }
 
         return new DatasetQueryService.DatasetConstraints(maxResults, timeoutSeconds, timezone);

@@ -1,6 +1,8 @@
 package com.yuzhi.dts.ingestion.repository;
 
 import com.yuzhi.dts.ingestion.domain.IngestionExecution;
+import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -62,4 +64,8 @@ public interface IngestionExecutionRepository extends JpaRepository<IngestionExe
      * 删除任务的全部执行记录
      */
     void deleteByTaskId(Long taskId);
+
+    List<IngestionExecution> findByCreatedAtBetweenOrderByCreatedAtAsc(Instant from, Instant to);
+
+    List<IngestionExecution> findByTaskIdAndCreatedAtBetweenOrderByCreatedAtAsc(Long taskId, Instant from, Instant to);
 }

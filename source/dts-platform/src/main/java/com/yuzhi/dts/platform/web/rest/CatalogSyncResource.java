@@ -85,6 +85,7 @@ public class CatalogSyncResource {
     }
 
     public record SyncRequest(Boolean includePrimary, Boolean includeJdbc, String reason) {}
+    public record SyncConfigRequest(Boolean autoSyncEnabled, String autoSyncCron) {}
 
     @PostMapping
     @PreAuthorize(CATALOG_MAINTAINER_EXPRESSION)
@@ -113,6 +114,63 @@ public class CatalogSyncResource {
     public ApiResponse<Map<String, Object>> status() {
         auditService.auditAction("CATALOG_SYNC_STATUS_VIEW", AuditStage.SUCCESS, "status", Map.of("summary", "查看采集状态"));
         return ApiResponses.ok(statusPayload());
+    }
+
+    @GetMapping("/config")
+    @PreAuthorize(CATALOG_MAINTAINER_EXPRESSION)
+    public ApiResponse<Map<String, Object>> getSyncConfig() {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("autoSyncEnabled", catalogFeatures != null && catalogFeatures.isAutoSyncEnabled());
+        payload.put("autoSyncCron", catalogFeatures != null ? catalogFeatures.getAutoSyncCron() : null);
+        payload.put("cronRuntimeEditable", false);
+        payload.put("message", "当前版本仅支持在线启停自动采集；Cron 修改需更新配置并重启服务。");
+        auditService.auditAction("CATALOG_SYNC_CONFIG_VIEW", AuditStage.SUCCESS, "config", Map.of("summary", "查看采集配置"));
+        return ApiResponses.ok(payload);
+    }
+
+    @PostMapping("/config")
+    @PreAuthorize(CATALOG_MAINTAINER_EXPRESSION)
+    public ApiResponse<Map<String, Object>> updateSyncConfig(@RequestBody(required = false) SyncConfigRequest body) {
+        if (body == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "配置不能为空");
+        }
+        if (body.autoSyncEnabled() != null && catalogFeatures != null) {
+            catalogFeatures.setAutoSyncEnabled(body.autoSyncEnabled());
+        }
+        String cron = body.autoSyncCron();
+        if (StringUtils.hasText(cron) && catalogFeatures != null) {
+            if (!isLikelyCron(cron)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cron 表达式格式不正确（需 5-7 段）");
+            }
+            catalogFeatures.setAutoSyncCron(cron.trim());
+        }
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("autoSyncEnabled", catalogFeatures != null && catalogFeatures.isAutoSyncEnabled());
+        payload.put("autoSyncCron", catalogFeatures != null ? catalogFeatures.getAutoSyncCron() : null);
+        payload.put("cronRuntimeEditable", false);
+        payload.put("message", "自动采集启停已生效；Cron 运行时修改仅更新展示值，完整生效需重启服务。");
+        auditService.auditAction(
+            "CATALOG_SYNC_CONFIG_UPDATE",
+            AuditStage.SUCCESS,
+            "config",
+            Map.of(
+                "summary",
+                "更新采集配置",
+                "autoSyncEnabled",
+                payload.get("autoSyncEnabled"),
+                "autoSyncCron",
+                payload.get("autoSyncCron")
+            )
+        );
+        return ApiResponses.ok(payload);
+    }
+
+    private boolean isLikelyCron(String cron) {
+        if (!StringUtils.hasText(cron)) {
+            return false;
+        }
+        String[] parts = cron.trim().split("\\s+");
+        return parts.length >= 5 && parts.length <= 7;
     }
 
     @GetMapping("/runs")

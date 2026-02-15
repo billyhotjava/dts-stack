@@ -3,6 +3,8 @@ package com.yuzhi.dts.analytics.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.analytics.domain.AnalyticsScreenAuditLog;
 import com.yuzhi.dts.analytics.repository.AnalyticsScreenAuditLogRepository;
+import java.util.ArrayList;
+import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,6 +33,19 @@ public class ScreenAuditService {
         log.setAfterJson(toJson(after));
         log.setRequestId(trimToNull(requestId));
         screenAuditLogRepository.save(log);
+    }
+
+    @Transactional(readOnly = true)
+    public List<AnalyticsScreenAuditLog> listByScreenId(Long screenId, int limit) {
+        if (screenId == null) {
+            return List.of();
+        }
+        int safeLimit = Math.max(1, Math.min(limit, 1000));
+        List<AnalyticsScreenAuditLog> all = screenAuditLogRepository.findAllByScreenIdOrderByCreatedAtDesc(screenId);
+        if (all.size() <= safeLimit) {
+            return all;
+        }
+        return new ArrayList<>(all.subList(0, safeLimit));
     }
 
     private String toJson(Object value) {

@@ -24,6 +24,7 @@ public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
     private static final String ERROR_CODE_HEADER = "X-Error-Code";
+    private static final String ERROR_RETRYABLE_HEADER = "X-Error-Retryable";
 
     @ExceptionHandler(MissingServletRequestParameterException.class)
     public ResponseEntity<ApiError> handleMissingParam(
@@ -42,6 +43,22 @@ public class GlobalExceptionHandler {
         return buildError(HttpStatus.BAD_REQUEST, "REQ_INVALID_PARAM", message, request, response);
     }
 
+    @ExceptionHandler(ScreenSpecValidationException.class)
+    public ResponseEntity<ApiError> handleScreenSpecValidation(
+            ScreenSpecValidationException ex,
+            HttpServletRequest request,
+            HttpServletResponse response) {
+        return buildError(HttpStatus.BAD_REQUEST, ex.getCode(), ex.getMessage(), request, response, false);
+    }
+
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ApiError> handleIllegalArgument(
+            IllegalArgumentException ex,
+            HttpServletRequest request,
+            HttpServletResponse response) {
+        return buildError(HttpStatus.BAD_REQUEST, "REQ_INVALID_ARGUMENT", ex.getMessage(), request, response, false);
+    }
+
     @ExceptionHandler(DataAccessException.class)
     public ResponseEntity<ApiError> handleDataAccess(
             DataAccessException ex,
@@ -53,7 +70,8 @@ public class GlobalExceptionHandler {
                 "DB_UNAVAILABLE",
                 "Analytics database unavailable or not initialized",
                 request,
-                response);
+                response,
+                true);
     }
 
     @ExceptionHandler(UnexpectedRollbackException.class)
@@ -67,7 +85,8 @@ public class GlobalExceptionHandler {
                 "TX_ROLLBACK",
                 "Transaction rolled back unexpectedly",
                 request,
-                response);
+                response,
+                true);
     }
 
     @ExceptionHandler(HikariPool.PoolInitializationException.class)
@@ -80,7 +99,7 @@ public class GlobalExceptionHandler {
         if (hasCause(ex, ConnectException.class)) {
             message = "External database connection refused";
         }
-        return buildError(HttpStatus.SERVICE_UNAVAILABLE, "EXT_DB_CONNECT_FAILED", message, request, response);
+        return buildError(HttpStatus.SERVICE_UNAVAILABLE, "EXT_DB_CONNECT_FAILED", message, request, response, true);
     }
 
     @ExceptionHandler(Exception.class)
@@ -98,17 +117,34 @@ public class GlobalExceptionHandler {
             String message,
             HttpServletRequest request,
             HttpServletResponse response) {
+        boolean retryable = status.value() == 408
+                || status.value() == 429
+                || status.value() == 502
+                || status.value() == 503
+                || status.value() == 504;
+        return buildError(status, code, message, request, response, retryable);
+    }
+
+    private ResponseEntity<ApiError> buildError(
+            HttpStatus status,
+            String code,
+            String message,
+            HttpServletRequest request,
+            HttpServletResponse response,
+            boolean retryable) {
         String resolvedMessage = (message == null || message.isBlank()) ? status.getReasonPhrase() : message;
         String resolvedCode = (code == null || code.isBlank()) ? "UNKNOWN" : code;
         String requestId = resolveRequestId();
         if (response != null) {
             response.setHeader(ERROR_CODE_HEADER, resolvedCode);
+            response.setHeader(ERROR_RETRYABLE_HEADER, String.valueOf(retryable));
         }
         ApiError payload = new ApiError(
                 OffsetDateTime.now(),
                 status.value(),
                 status.getReasonPhrase(),
                 resolvedCode,
+                retryable,
                 resolvedMessage,
                 request.getRequestURI(),
                 requestId);

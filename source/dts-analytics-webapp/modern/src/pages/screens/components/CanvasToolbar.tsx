@@ -1,8 +1,11 @@
+import { useRef } from 'react';
 import { useScreen } from '../ScreenContext';
 import type { ScreenTheme } from '../types';
 import { getThemeTokens } from '../screenThemes';
 
 const ZOOM_OPTIONS = [50, 75, 100, 125, 150, 200];
+const THEME_PACK_SCHEMA = 'dts.screen-theme-pack';
+const THEME_PACK_VERSION = 1;
 
 const THEME_OPTIONS: { value: ScreenTheme | ''; label: string }[] = [
     { value: '', label: '经典深蓝' },
@@ -10,9 +13,44 @@ const THEME_OPTIONS: { value: ScreenTheme | ''; label: string }[] = [
     { value: 'glacier', label: '冰川白' },
 ];
 
+type ThemePackPayload = {
+    schema?: string;
+    version?: number;
+    name?: string;
+    theme?: string;
+    backgroundColor?: string;
+    backgroundImage?: string | null;
+    exportedAt?: string;
+};
+
+function normalizeTheme(theme?: string): ScreenTheme | undefined {
+    if (theme === 'legacy-dark' || theme === 'titanium' || theme === 'glacier') {
+        return theme;
+    }
+    return undefined;
+}
+
 export function CanvasToolbar() {
-    const { state, dispatch, undo, redo, canUndo, canRedo, deleteComponents, updateConfig } = useScreen();
+    const {
+        state,
+        dispatch,
+        undo,
+        redo,
+        canUndo,
+        canRedo,
+        deleteComponents,
+        updateConfig,
+        alignSelected,
+        distributeSelected,
+        groupSelected,
+        ungroupSelected,
+    } = useScreen();
     const { selectedIds, zoom, showGrid } = state;
+    const themeInputRef = useRef<HTMLInputElement | null>(null);
+    const canAlign = selectedIds.length >= 2;
+    const canDistribute = selectedIds.length >= 3;
+    const canGroup = selectedIds.length >= 2;
+    const canUngroup = selectedIds.length >= 1;
 
     const handleZoomChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
         dispatch({ type: 'SET_ZOOM', payload: Number(e.target.value) });
@@ -28,6 +66,73 @@ export function CanvasToolbar() {
     const handleDelete = () => {
         if (selectedIds.length > 0) {
             deleteComponents(selectedIds);
+        }
+    };
+
+    const handleExportThemePack = () => {
+        const payload: ThemePackPayload = {
+            schema: THEME_PACK_SCHEMA,
+            version: THEME_PACK_VERSION,
+            name: state.config.name,
+            theme: state.config.theme || 'legacy-dark',
+            backgroundColor: state.config.backgroundColor,
+            backgroundImage: state.config.backgroundImage || null,
+            exportedAt: new Date().toISOString(),
+        };
+
+        const json = JSON.stringify(payload, null, 2);
+        const blob = new Blob([json], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        const dateTag = new Date().toISOString().slice(0, 10);
+        a.href = url;
+        a.download = `theme-pack-${dateTag}.json`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+    };
+
+    const handleImportThemePackClick = () => {
+        themeInputRef.current?.click();
+    };
+
+    const handleThemePackFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        event.target.value = '';
+        if (!file) {
+            return;
+        }
+
+        try {
+            const content = await file.text();
+            const raw = JSON.parse(content) as ThemePackPayload;
+            if (!raw || typeof raw !== 'object') {
+                alert('主题包格式不正确');
+                return;
+            }
+            if (raw.schema && raw.schema !== THEME_PACK_SCHEMA) {
+                alert('主题包 schema 不匹配');
+                return;
+            }
+
+            const nextTheme = normalizeTheme(raw.theme) || state.config.theme;
+            const fallbackBackground = getThemeTokens(nextTheme).canvasBackground;
+            const nextBackground = typeof raw.backgroundColor === 'string' && raw.backgroundColor.trim().length > 0
+                ? raw.backgroundColor.trim()
+                : fallbackBackground;
+
+            updateConfig({
+                theme: nextTheme,
+                backgroundColor: nextBackground,
+                backgroundImage: typeof raw.backgroundImage === 'string' && raw.backgroundImage.trim().length > 0
+                    ? raw.backgroundImage.trim()
+                    : undefined,
+            });
+            alert('主题包导入成功');
+        } catch (error) {
+            console.error('Failed to import theme pack:', error);
+            alert('主题包导入失败，请检查 JSON 内容');
         }
     };
 
@@ -63,6 +168,20 @@ export function CanvasToolbar() {
                 >
                     🗑️
                 </button>
+            </div>
+
+            {/* Align / distribute */}
+            <div className="toolbar-group">
+                <button className="toolbar-btn" onClick={groupSelected} disabled={!canGroup} title="组合">🧩</button>
+                <button className="toolbar-btn" onClick={ungroupSelected} disabled={!canUngroup} title="取消组合">🧱</button>
+                <button className="toolbar-btn" onClick={() => alignSelected('left')} disabled={!canAlign} title="左对齐">⟸</button>
+                <button className="toolbar-btn" onClick={() => alignSelected('h-center')} disabled={!canAlign} title="水平居中">↔︎</button>
+                <button className="toolbar-btn" onClick={() => alignSelected('right')} disabled={!canAlign} title="右对齐">⟹</button>
+                <button className="toolbar-btn" onClick={() => alignSelected('top')} disabled={!canAlign} title="顶对齐">⟰</button>
+                <button className="toolbar-btn" onClick={() => alignSelected('v-center')} disabled={!canAlign} title="垂直居中">↕︎</button>
+                <button className="toolbar-btn" onClick={() => alignSelected('bottom')} disabled={!canAlign} title="底对齐">⟱</button>
+                <button className="toolbar-btn" onClick={() => distributeSelected('horizontal')} disabled={!canDistribute} title="水平分布">⇆</button>
+                <button className="toolbar-btn" onClick={() => distributeSelected('vertical')} disabled={!canDistribute} title="垂直分布">⇅</button>
             </div>
 
             {/* View options */}
@@ -106,6 +225,31 @@ export function CanvasToolbar() {
                         </option>
                     ))}
                 </select>
+            </div>
+
+            {/* Theme pack */}
+            <div className="toolbar-group">
+                <button
+                    className="toolbar-btn"
+                    onClick={handleExportThemePack}
+                    title="导出主题包"
+                >
+                    ⬇️主题包
+                </button>
+                <button
+                    className="toolbar-btn"
+                    onClick={handleImportThemePackClick}
+                    title="导入主题包"
+                >
+                    ⬆️主题包
+                </button>
+                <input
+                    ref={themeInputRef}
+                    type="file"
+                    accept="application/json,.json"
+                    style={{ display: 'none' }}
+                    onChange={handleThemePackFileChange}
+                />
             </div>
 
             {/* Screen info */}

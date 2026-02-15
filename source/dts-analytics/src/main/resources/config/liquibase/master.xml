@@ -29,4 +29,8 @@
     <include file="config/liquibase/changelog/0022_screen_audit_log.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/0023_query_trace.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/0024_screen_global_variables.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0025_screen_templates.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0026_screen_asset_audit_log.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0027_screen_compliance_policy.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0028_screen_template_asset_center.xml" relativeToChangelogFile="false"/>
 </databaseChangeLog>

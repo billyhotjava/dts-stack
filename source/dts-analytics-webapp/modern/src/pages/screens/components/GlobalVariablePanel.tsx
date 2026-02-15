@@ -35,7 +35,7 @@ export function GlobalVariablePanel() {
                             <input
                                 type={item.type === 'number' ? 'number' : item.type === 'date' ? 'date' : 'text'}
                                 value={value}
-                                onChange={(e) => setVariable(key, e.target.value)}
+                                onChange={(e) => setVariable(key, e.target.value, 'global-variable-panel')}
                                 style={{
                                     height: 30,
                                     borderRadius: 6,

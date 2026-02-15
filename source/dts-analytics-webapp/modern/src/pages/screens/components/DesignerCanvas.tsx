@@ -9,7 +9,7 @@ function generateId(): string {
 }
 
 export function DesignerCanvas() {
-    const { state, addComponent, selectComponents } = useScreen();
+    const { state, addComponent, selectComponents, snapGuides } = useScreen();
     const { config, selectedIds, zoom, showGrid } = state;
     const canvasRef = useRef<HTMLDivElement>(null);
 
@@ -96,6 +96,39 @@ export function DesignerCanvas() {
                                 theme={config.theme}
                             />
                         ))}
+
+                    {snapGuides.x.map((x, idx) => (
+                        <div
+                            key={`snap-x-${idx}`}
+                            style={{
+                                position: 'absolute',
+                                left: x,
+                                top: 0,
+                                width: 1,
+                                height: config.height,
+                                background: 'rgba(14, 165, 233, 0.9)',
+                                boxShadow: '0 0 0 1px rgba(14,165,233,0.2)',
+                                pointerEvents: 'none',
+                                zIndex: 9999,
+                            }}
+                        />
+                    ))}
+                    {snapGuides.y.map((y, idx) => (
+                        <div
+                            key={`snap-y-${idx}`}
+                            style={{
+                                position: 'absolute',
+                                left: 0,
+                                top: y,
+                                width: config.width,
+                                height: 1,
+                                background: 'rgba(14, 165, 233, 0.9)',
+                                boxShadow: '0 0 0 1px rgba(14,165,233,0.2)',
+                                pointerEvents: 'none',
+                                zIndex: 9999,
+                            }}
+                        />
+                    ))}
 
                     {isOver && (
                         <div

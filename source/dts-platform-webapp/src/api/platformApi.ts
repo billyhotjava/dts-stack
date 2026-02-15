@@ -22,6 +22,36 @@ export const getTechMetadataTables = (params?: { keyword?: string; size?: number
 	api.get({ url: "/catalog/metadata/tables", params });
 export const getTechMetadataTableDetail = (fqn: string) =>
 	api.get({ url: "/catalog/metadata/tables/detail", params: { fqn } });
+export type SchemaDriftEvent = {
+	id: string;
+	runId?: string;
+	integration?: string;
+	datasetId?: string;
+	datasetName?: string;
+	hiveDatabase?: string;
+	hiveTable?: string;
+	addedCount?: number;
+	removedCount?: number;
+	changedCount?: number;
+	policyMode?: "REVIEW" | "AUTO_APPLY" | "BLOCK" | string;
+	ticketStatus?: "OPEN" | "IN_REVIEW" | "RESOLVED" | "IGNORED" | "REJECTED" | string;
+	ticketAssignee?: string;
+	workflowNote?: string;
+	handledBy?: string;
+	handledAt?: string;
+	createdDate?: string;
+	detailsJson?: string;
+};
+export const listSchemaDriftEvents = (params?: {
+	policyMode?: string;
+	ticketStatus?: string;
+	limit?: number;
+	includeDetails?: boolean;
+}) => api.get<SchemaDriftEvent[]>({ url: "/catalog/schema-drift", params });
+export const updateSchemaDriftPolicy = (id: string, data: { policyMode: string; note?: string }) =>
+	api.post<SchemaDriftEvent>({ url: `/catalog/schema-drift/${id}/policy`, data });
+export const updateSchemaDriftTicket = (id: string, data: { ticketStatus: string; assignee?: string; note?: string }) =>
+	api.post<SchemaDriftEvent>({ url: `/catalog/schema-drift/${id}/ticket`, data });
 export const searchCatalog = (params: { keyword: string; types?: string; limit?: number }) =>
 	api.get({ url: "/catalog/search", params });
 export const getDbtConfig = () => api.get({ url: "/etl/dbt/config" });
@@ -363,8 +393,17 @@ export const deleteCatalogLineage = (id: string) => api.delete({ url: `/catalog/
 
 // Catalog sync (full scan)
 export type CatalogSyncRequest = { includePrimary?: boolean; includeJdbc?: boolean; reason?: string };
+export type CatalogSyncConfig = {
+	autoSyncEnabled?: boolean;
+	autoSyncCron?: string;
+	cronRuntimeEditable?: boolean;
+	message?: string;
+};
 export const triggerCatalogSync = (data: CatalogSyncRequest = {}) => api.post({ url: "/catalog/sync", data });
 export const getCatalogSyncStatus = () => api.get({ url: "/catalog/sync/status" });
+export const getCatalogSyncConfig = () => api.get({ url: "/catalog/sync/config" });
+export const updateCatalogSyncConfig = (data: { autoSyncEnabled?: boolean; autoSyncCron?: string }) =>
+	api.post({ url: "/catalog/sync/config", data });
 export const listCatalogSyncPipelines = () => api.get({ url: "/catalog/sync/pipelines" });
 export const listCatalogSyncRuns = (
 	params: { integration?: string; limit?: number; includeDetails?: boolean; sourceId?: string } = {},

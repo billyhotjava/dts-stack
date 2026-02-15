@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Button, Card, Space, Table, Tag, message, Modal, Alert, Progress } from "antd";
+import { Alert, Button, Card, Col, Empty, InputNumber, Modal, Progress, Row, Select, Space, Statistic, Table, Tag, message } from "antd";
 import {
 	PlayCircleOutlined,
 	EditOutlined,
@@ -14,6 +14,7 @@ import {
 	ingestionTaskAPI,
 	type IngestionTaskDTO,
 	type IngestionExecutionDTO,
+	type IngestionExecutionObservabilityDTO,
 	resolveExecutionPollIntervalMs,
 } from "@/api/ingestion";
 import { formatTimestamp } from "@/utils/format";
@@ -42,6 +43,12 @@ export default function TransformPage() {
 	});
 	const [executingTaskName, setExecutingTaskName] = useState<string>("");
 	const [executingTaskId, setExecutingTaskId] = useState<number | null>(null);
+	const [observability, setObservability] = useState<IngestionExecutionObservabilityDTO | null>(null);
+	const [observabilityLoading, setObservabilityLoading] = useState(false);
+	const [obsTaskId, setObsTaskId] = useState<number | undefined>(undefined);
+	const [obsSourceType, setObsSourceType] = useState<string | undefined>(undefined);
+	const [obsDays, setObsDays] = useState<number>(7);
+	const [obsTimeoutMinutes, setObsTimeoutMinutes] = useState<number>(10);
 	const executePollTimerRef = useRef<number | null>(null);
 	const executeStartedAtRef = useRef<number>(0);
 
@@ -54,6 +61,10 @@ export default function TransformPage() {
 			stopExecutePolling();
 		};
 	}, []);
+
+	useEffect(() => {
+		void loadObservability();
+	}, [obsTaskId, obsSourceType, obsDays, obsTimeoutMinutes]);
 
 	const stopExecutePolling = () => {
 		if (executePollTimerRef.current !== null) {
@@ -82,6 +93,24 @@ export default function TransformPage() {
 			setTasks([]);
 		} finally {
 			setLoading(false);
+		}
+	};
+
+	const loadObservability = async () => {
+		setObservabilityLoading(true);
+		try {
+			const result = await ingestionTaskAPI.getExecutionsObservability({
+				taskId: obsTaskId,
+				sourceType: obsSourceType || undefined,
+				days: obsDays,
+				timeoutMinutes: obsTimeoutMinutes,
+			});
+			setObservability(result);
+		} catch (error: any) {
+			message.error("加载运行指标失败: " + (error.message || "未知错误"));
+			setObservability(null);
+		} finally {
+			setObservabilityLoading(false);
 		}
 	};
 
@@ -371,6 +400,26 @@ export default function TransformPage() {
 		},
 	];
 
+	const sourceTypeOptions = Array.from(
+		new Set(
+			tasks
+				.map((item) => normalizeText(item.sourceType))
+				.filter((item) => Boolean(item))
+		)
+	).map((item) => ({ label: item, value: item }));
+
+	const taskOptions = tasks
+		.filter((item) => typeof item.id === "number")
+		.map((item) => ({ label: item.name, value: Number(item.id) }));
+
+	const trendColumns = [
+		{ title: "日期", dataIndex: "day", key: "day", width: 120 },
+		{ title: "总执行", dataIndex: "total", key: "total", width: 90 },
+		{ title: "成功", dataIndex: "success", key: "success", width: 90 },
+		{ title: "失败", dataIndex: "failed", key: "failed", width: 90 },
+		{ title: "超时", dataIndex: "timeout", key: "timeout", width: 90 },
+	];
+
 	return (
 		<div className="flex flex-col gap-6">
 			<PageHeader
@@ -387,6 +436,114 @@ export default function TransformPage() {
 					</Space>
 				}
 			/>
+
+			<Card title="运行可观测性（SLA / 失败趋势 / MTTR）" loading={observabilityLoading}>
+				<Space wrap size={12} style={{ marginBottom: 16 }}>
+					<Select
+						allowClear
+						placeholder="按任务过滤"
+						style={{ width: 220 }}
+						value={obsTaskId}
+						options={taskOptions}
+						onChange={(value) => setObsTaskId(value)}
+					/>
+					<Select
+						allowClear
+						placeholder="按来源类型过滤"
+						style={{ width: 200 }}
+						value={obsSourceType}
+						options={sourceTypeOptions}
+						onChange={(value) => setObsSourceType(value)}
+					/>
+					<Select
+						style={{ width: 150 }}
+						value={obsDays}
+						options={[
+							{ label: "最近 1 天", value: 1 },
+							{ label: "最近 7 天", value: 7 },
+							{ label: "最近 30 天", value: 30 },
+							{ label: "最近 90 天", value: 90 },
+						]}
+						onChange={(value) => setObsDays(value)}
+					/>
+					<Space size={4}>
+						<span>超时阈值(分钟)</span>
+						<InputNumber
+							min={1}
+							max={1440}
+							value={obsTimeoutMinutes}
+							onChange={(value) => setObsTimeoutMinutes(Number(value || 10))}
+						/>
+					</Space>
+					<Button icon={<ReloadOutlined />} onClick={() => void loadObservability()} loading={observabilityLoading}>
+						刷新指标
+					</Button>
+				</Space>
+				{observability ? (
+					<Space direction="vertical" size={16} style={{ width: "100%" }}>
+						<Row gutter={[16, 16]}>
+							<Col xs={12} md={6}>
+								<Statistic title="总执行数" value={observability.total || 0} />
+							</Col>
+							<Col xs={12} md={6}>
+								<Statistic title="成功率" value={observability.successRate || 0} suffix="%" precision={2} />
+							</Col>
+							<Col xs={12} md={6}>
+								<Statistic title="超时率" value={observability.timeoutRate || 0} suffix="%" precision={2} />
+							</Col>
+							<Col xs={12} md={6}>
+								<Statistic title="平均耗时(秒)" value={observability.avgDurationSeconds || 0} precision={2} />
+							</Col>
+							<Col xs={12} md={6}>
+								<Statistic title="MTTR(秒)" value={observability.mttrSeconds || 0} precision={2} />
+							</Col>
+							<Col xs={12} md={6}>
+								<Statistic title="运行中" value={observability.running || 0} />
+							</Col>
+							<Col xs={12} md={6}>
+								<Statistic title="失败数" value={observability.failed || 0} />
+							</Col>
+							<Col xs={12} md={6}>
+								<Statistic title="超时数" value={observability.timeout || 0} />
+							</Col>
+						</Row>
+						<Row gutter={[16, 16]}>
+							<Col xs={24} lg={10}>
+								<Card size="small" title="失败分类 Top5">
+									<Space wrap>
+										{(observability.failureTop || []).length ? (
+											observability.failureTop.map((item) => (
+												<Tag color="error" key={item.category}>
+													{item.category}: {item.count}
+												</Tag>
+											))
+										) : (
+											<Tag>暂无失败数据</Tag>
+										)}
+									</Space>
+								</Card>
+							</Col>
+							<Col xs={24} lg={14}>
+								<Card size="small" title="日趋势">
+									{(observability.trend || []).length ? (
+										<Table
+											size="small"
+											rowKey="day"
+											pagination={false}
+											columns={trendColumns}
+											dataSource={observability.trend}
+										/>
+									) : (
+										<Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前时间窗没有执行数据" />
+									)}
+								</Card>
+							</Col>
+						</Row>
+					</Space>
+				) : (
+					<Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无运行指标" />
+				)}
+			</Card>
 
 			<Card>
 				<Space style={{ marginBottom: 16 }}>

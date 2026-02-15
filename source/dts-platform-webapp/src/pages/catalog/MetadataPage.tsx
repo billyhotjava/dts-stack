@@ -12,6 +12,7 @@ import {
 	Row,
 	Select,
 	Space,
+	Switch,
 	Table,
 	Tag,
 	Typography,
@@ -20,12 +21,19 @@ import type { ColumnsType } from "antd/es/table";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
 import {
+	type CatalogSyncConfig,
+	getCatalogSyncConfig,
 	getTechMetadataTableDetail,
 	getTechMetadataTables,
+	type SchemaDriftEvent,
 	listCatalogSyncPipelines,
 	listCatalogSyncRuns,
+	listSchemaDriftEvents,
 	triggerCatalogSync,
 	triggerJdbcCatalogSync,
+	updateSchemaDriftPolicy,
+	updateSchemaDriftTicket,
+	updateCatalogSyncConfig,
 } from "@/api/platformApi";
 
 const { Text } = Typography;
@@ -97,6 +105,24 @@ const statusTag = (status?: string) => {
 	return <Tag>{status}</Tag>;
 };
 
+const driftPolicyTag = (value?: string) => {
+	const normalized = String(value || "").toUpperCase();
+	if (normalized === "AUTO_APPLY") return <Tag color="green">自动迁移</Tag>;
+	if (normalized === "BLOCK") return <Tag color="red">阻断</Tag>;
+	if (normalized === "REVIEW") return <Tag color="gold">待审批</Tag>;
+	return <Tag>{value || "待审批"}</Tag>;
+};
+
+const driftTicketTag = (value?: string) => {
+	const normalized = String(value || "").toUpperCase();
+	if (normalized === "OPEN") return <Tag color="blue">待处理</Tag>;
+	if (normalized === "IN_REVIEW") return <Tag color="gold">处理中</Tag>;
+	if (normalized === "RESOLVED") return <Tag color="green">已处理</Tag>;
+	if (normalized === "IGNORED") return <Tag>已忽略</Tag>;
+	if (normalized === "REJECTED") return <Tag color="red">已驳回</Tag>;
+	return <Tag>{value || "待处理"}</Tag>;
+};
+
 const buildColumnRows = (detail?: TableDetail | null): ColumnRow[] => {
 	if (!detail?.entity) return [];
 	const columns = Array.isArray(detail.entity.columns) ? detail.entity.columns : [];
@@ -107,6 +133,15 @@ const buildColumnRows = (detail?: TableDetail | null): ColumnRow[] => {
 		comment: String(item?.description || item?.comment || "").trim(),
 		status: String(item?.status || "").trim(),
 	}));
+};
+
+const validateCronExpression = (value?: string) => {
+	const text = String(value || "").trim();
+	if (!text) {
+		return false;
+	}
+	const parts = text.split(/\s+/).filter(Boolean);
+	return parts.length >= 5 && parts.length <= 7;
 };
 
 export default function MetadataPage() {
@@ -122,6 +157,18 @@ export default function MetadataPage() {
 	const [loadingRuns, setLoadingRuns] = useState(false);
 	const [loadingTables, setLoadingTables] = useState(false);
 	const [keyword, setKeyword] = useState("");
+	const [syncConfig, setSyncConfig] = useState<CatalogSyncConfig | null>(null);
+	const [syncConfigUpdating, setSyncConfigUpdating] = useState(false);
+	const [cronDraft, setCronDraft] = useState("");
+	const [driftEvents, setDriftEvents] = useState<SchemaDriftEvent[]>([]);
+	const [loadingDrift, setLoadingDrift] = useState(false);
+	const [driftPolicyFilter, setDriftPolicyFilter] = useState("ALL");
+	const [driftTicketFilter, setDriftTicketFilter] = useState("ALL");
+	const [driftActionOpen, setDriftActionOpen] = useState(false);
+	const [driftActionType, setDriftActionType] = useState<"policy" | "ticket" | null>(null);
+	const [driftActionTarget, setDriftActionTarget] = useState<SchemaDriftEvent | null>(null);
+	const [driftActionSubmitting, setDriftActionSubmitting] = useState(false);
+	const [driftForm] = Form.useForm();
 
 	const selectedPipeline = useMemo(() => {
 		if (!pipelines.length) return null;
@@ -130,7 +177,12 @@ export default function MetadataPage() {
 
 	useEffect(() => {
 		void loadPipelines();
+		void loadSyncConfig();
 	}, []);
+
+	useEffect(() => {
+		void loadDriftEvents();
+	}, [driftPolicyFilter, driftTicketFilter]);
 
 	useEffect(() => {
 		if (!selectedPipeline && pipelines.length) {
@@ -186,6 +238,36 @@ export default function MetadataPage() {
 			toast.error(error?.message || "采集任务加载失败");
 		} finally {
 			setLoadingPipelines(false);
+		}
+	};
+
+	const loadSyncConfig = async () => {
+		try {
+			const resp: any = await getCatalogSyncConfig();
+			setSyncConfig(resp || null);
+			setCronDraft(String(resp?.autoSyncCron || ""));
+		} catch (error: any) {
+			toast.error(error?.message || "采集配置加载失败");
+			setSyncConfig(null);
+			setCronDraft("");
+		}
+	};
+
+	const loadDriftEvents = async () => {
+		setLoadingDrift(true);
+		try {
+			const resp: any = await listSchemaDriftEvents({
+				policyMode: driftPolicyFilter === "ALL" ? undefined : driftPolicyFilter,
+				ticketStatus: driftTicketFilter === "ALL" ? undefined : driftTicketFilter,
+				limit: 50,
+				includeDetails: false,
+			});
+			setDriftEvents(Array.isArray(resp) ? (resp as SchemaDriftEvent[]) : []);
+		} catch (error: any) {
+			toast.error(error?.message || "Schema 漂移工单加载失败");
+			setDriftEvents([]);
+		} finally {
+			setLoadingDrift(false);
 		}
 	};
 
@@ -271,6 +353,97 @@ export default function MetadataPage() {
 		}
 	};
 
+	const handleAutoSyncToggle = async (checked: boolean) => {
+		setSyncConfigUpdating(true);
+		try {
+			const resp: any = await updateCatalogSyncConfig({ autoSyncEnabled: checked });
+			setSyncConfig(resp || null);
+			toast.success(checked ? "已开启自动采集" : "已关闭自动采集");
+			await loadPipelines();
+		} catch (error: any) {
+			toast.error(error?.message || "更新自动采集开关失败");
+		} finally {
+			setSyncConfigUpdating(false);
+		}
+	};
+
+	const handleSyncCronSave = async () => {
+		const cron = cronDraft.trim();
+		if (!validateCronExpression(cron)) {
+			toast.error("Cron 表达式格式不正确（需 5-7 段）");
+			return;
+		}
+		setSyncConfigUpdating(true);
+		try {
+			const resp: any = await updateCatalogSyncConfig({ autoSyncCron: cron });
+			setSyncConfig(resp || null);
+			setCronDraft(String(resp?.autoSyncCron || cron));
+			toast.success("Cron 配置已更新");
+		} catch (error: any) {
+			toast.error(error?.message || "更新 Cron 失败");
+		} finally {
+			setSyncConfigUpdating(false);
+		}
+	};
+
+	const openDriftPolicyModal = (event: SchemaDriftEvent) => {
+		setDriftActionTarget(event);
+		setDriftActionType("policy");
+		driftForm.setFieldsValue({
+			policyMode: event.policyMode || "REVIEW",
+			ticketStatus: event.ticketStatus || "OPEN",
+			assignee: event.ticketAssignee || "",
+			note: event.workflowNote || "",
+		});
+		setDriftActionOpen(true);
+	};
+
+	const openDriftTicketModal = (event: SchemaDriftEvent) => {
+		setDriftActionTarget(event);
+		setDriftActionType("ticket");
+		driftForm.setFieldsValue({
+			policyMode: event.policyMode || "REVIEW",
+			ticketStatus: event.ticketStatus || "OPEN",
+			assignee: event.ticketAssignee || "",
+			note: event.workflowNote || "",
+		});
+		setDriftActionOpen(true);
+	};
+
+	const submitDriftAction = async () => {
+		if (!driftActionTarget?.id || !driftActionType) return;
+		try {
+			const values = await driftForm.validateFields();
+			setDriftActionSubmitting(true);
+			if (driftActionType === "policy") {
+				await updateSchemaDriftPolicy(driftActionTarget.id, {
+					policyMode: values.policyMode,
+					note: values.note,
+				});
+				toast.success("策略已更新");
+			} else {
+				await updateSchemaDriftTicket(driftActionTarget.id, {
+					ticketStatus: values.ticketStatus,
+					assignee: values.assignee,
+					note: values.note,
+				});
+				toast.success("工单状态已更新");
+			}
+			setDriftActionOpen(false);
+			setDriftActionTarget(null);
+			setDriftActionType(null);
+			driftForm.resetFields();
+			await loadDriftEvents();
+		} catch (error: any) {
+			if (error?.errorFields) {
+				return;
+			}
+			toast.error(error?.message || "Schema 漂移工单更新失败");
+		} finally {
+			setDriftActionSubmitting(false);
+		}
+	};
+
 	const runColumns: ColumnsType<SyncRun> = [
 		{ title: "开始时间", dataIndex: "startedAt" },
 		{ title: "结束时间", dataIndex: "finishedAt" },
@@ -298,6 +471,37 @@ export default function MetadataPage() {
 			},
 		},
 		{ title: "备注", dataIndex: "comment" },
+	];
+
+	const driftColumns: ColumnsType<SchemaDriftEvent> = [
+		{ title: "时间", dataIndex: "createdDate", render: (value) => value || "-" },
+		{
+			title: "对象",
+			render: (_, row) => {
+				const table = [row.hiveDatabase, row.hiveTable].filter(Boolean).join(".");
+				return row.datasetName ? `${row.datasetName}${table ? ` · ${table}` : ""}` : table || "-";
+			},
+		},
+		{
+			title: "变更量",
+			render: (_, row) => `+${row.addedCount || 0} / -${row.removedCount || 0} / ~${row.changedCount || 0}`,
+		},
+		{ title: "策略", dataIndex: "policyMode", render: (value) => driftPolicyTag(value) },
+		{ title: "工单", dataIndex: "ticketStatus", render: (value) => driftTicketTag(value) },
+		{ title: "责任人", dataIndex: "ticketAssignee", render: (value) => value || "-" },
+		{
+			title: "操作",
+			render: (_, row) => (
+				<Space size={4}>
+					<Button type="link" onClick={() => openDriftPolicyModal(row)}>
+						策略
+					</Button>
+					<Button type="link" onClick={() => openDriftTicketModal(row)}>
+						工单
+					</Button>
+				</Space>
+			),
+		},
 	];
 
 	const selectedSummary = useMemo(
@@ -338,10 +542,42 @@ export default function MetadataPage() {
 			/>
 
 			<Row gutter={[16, 16]} align="top">
-				<Col xs={24} xl={12}>
-					<Card title="采集任务与触发" loading={loadingPipelines}>
-						{pipelines.length ? (
-							<Form form={form} layout="vertical">
+					<Col xs={24} xl={12}>
+						<Card title="采集任务与触发" loading={loadingPipelines}>
+							<Space className="mb-3" align="center">
+								<Text type="secondary">自动采集</Text>
+								<Switch
+									checked={Boolean(syncConfig?.autoSyncEnabled)}
+									loading={syncConfigUpdating}
+									onChange={handleAutoSyncToggle}
+									checkedChildren="开启"
+									unCheckedChildren="关闭"
+								/>
+								<Tag>{syncConfig?.autoSyncCron ? `Cron: ${syncConfig.autoSyncCron}` : "Cron 未配置"}</Tag>
+							</Space>
+							<Space className="mb-3 w-full" direction="vertical" size={8}>
+								<Text type="secondary">自动采集 Cron</Text>
+								<Space.Compact className="w-full">
+									<Input
+										value={cronDraft}
+										onChange={(e) => setCronDraft(e.target.value)}
+										placeholder="例如：0 0 3 * * *"
+										disabled={syncConfigUpdating}
+									/>
+									<Button
+										onClick={handleSyncCronSave}
+										loading={syncConfigUpdating}
+										disabled={!cronDraft.trim() || cronDraft.trim() === String(syncConfig?.autoSyncCron || "").trim()}
+									>
+										保存 Cron
+									</Button>
+								</Space.Compact>
+							</Space>
+							{syncConfig?.message ? (
+								<div className="mb-3 text-xs text-slate-500">{syncConfig.message}</div>
+							) : null}
+							{pipelines.length ? (
+								<Form form={form} layout="vertical">
 								<Form.Item label="选择采集任务">
 									<Select
 										value={selectedPipeline?.id}
@@ -461,6 +697,47 @@ export default function MetadataPage() {
 				/>
 			</Card>
 
+			<Card
+				title="Schema 漂移工单"
+				extra={
+					<Space>
+						<Select
+							value={driftPolicyFilter}
+							onChange={setDriftPolicyFilter}
+							style={{ width: 140 }}
+							options={[
+								{ label: "全部策略", value: "ALL" },
+								{ label: "待审批", value: "REVIEW" },
+								{ label: "自动迁移", value: "AUTO_APPLY" },
+								{ label: "阻断", value: "BLOCK" },
+							]}
+						/>
+						<Select
+							value={driftTicketFilter}
+							onChange={setDriftTicketFilter}
+							style={{ width: 140 }}
+							options={[
+								{ label: "全部工单", value: "ALL" },
+								{ label: "待处理", value: "OPEN" },
+								{ label: "处理中", value: "IN_REVIEW" },
+								{ label: "已处理", value: "RESOLVED" },
+								{ label: "已忽略", value: "IGNORED" },
+								{ label: "已驳回", value: "REJECTED" },
+							]}
+						/>
+						<Button onClick={() => void loadDriftEvents()}>刷新</Button>
+					</Space>
+				}
+			>
+				<Table
+					rowKey={(row) => row.id || `${row.datasetId}-${row.hiveDatabase}-${row.hiveTable}-${row.createdDate}`}
+					columns={driftColumns}
+					dataSource={driftEvents}
+					loading={loadingDrift}
+					pagination={{ pageSize: 8 }}
+				/>
+			</Card>
+
 			<Modal
 				open={helpOpen}
 				title="使用说明"
@@ -477,6 +754,58 @@ export default function MetadataPage() {
 						<div>3. 元数据结果预览来自平台采集或 OpenMetadata 服务。</div>
 					</div>
 				</Modal>
+
+			<Modal
+				open={driftActionOpen}
+				title={driftActionType === "policy" ? "更新策略" : "更新工单状态"}
+				onCancel={() => setDriftActionOpen(false)}
+				onOk={submitDriftAction}
+				okText="提交"
+				cancelText="取消"
+				confirmLoading={driftActionSubmitting}
+			>
+				<Form form={driftForm} layout="vertical">
+					{driftActionType === "policy" ? (
+						<Form.Item
+							name="policyMode"
+							label="漂移策略"
+							rules={[{ required: true, message: "请选择策略" }]}
+						>
+							<Select
+								options={[
+									{ label: "待审批", value: "REVIEW" },
+									{ label: "自动迁移", value: "AUTO_APPLY" },
+									{ label: "阻断", value: "BLOCK" },
+								]}
+							/>
+						</Form.Item>
+					) : (
+						<>
+							<Form.Item
+								name="ticketStatus"
+								label="工单状态"
+								rules={[{ required: true, message: "请选择工单状态" }]}
+							>
+								<Select
+									options={[
+										{ label: "待处理", value: "OPEN" },
+										{ label: "处理中", value: "IN_REVIEW" },
+										{ label: "已处理", value: "RESOLVED" },
+										{ label: "已忽略", value: "IGNORED" },
+										{ label: "已驳回", value: "REJECTED" },
+									]}
+								/>
+							</Form.Item>
+							<Form.Item name="assignee" label="责任人">
+								<Input placeholder="例如：opadmin" />
+							</Form.Item>
+						</>
+					)}
+					<Form.Item name="note" label="备注">
+						<Input.TextArea rows={4} placeholder="填写策略说明或处理备注" />
+					</Form.Item>
+				</Form>
+			</Modal>
 		</div>
 	);
 }

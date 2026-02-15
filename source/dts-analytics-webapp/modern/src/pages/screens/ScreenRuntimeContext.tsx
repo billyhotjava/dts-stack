@@ -1,15 +1,25 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { ScreenGlobalVariable } from './types';
 
+export interface RuntimeVariableEvent {
+    id: number;
+    at: string;
+    key: string;
+    value: string;
+    source?: string;
+}
+
 interface ScreenRuntimeContextValue {
     definitions: ScreenGlobalVariable[];
     values: Record<string, string>;
-    setVariable: (key: string, value: string) => void;
+    events: RuntimeVariableEvent[];
+    setVariable: (key: string, value: string, source?: string) => void;
 }
 
 const emptyValue: ScreenRuntimeContextValue = {
     definitions: [],
     values: {},
+    events: [],
     setVariable: () => {
         // no-op for unwrapped usage
     },
@@ -43,6 +53,7 @@ export function ScreenRuntimeProvider({
 }) {
     const normalizedDefinitions = useMemo(() => normalizeDefinitions(definitions), [definitions]);
     const [values, setValues] = useState<Record<string, string>>({});
+    const [events, setEvents] = useState<RuntimeVariableEvent[]>([]);
 
     useEffect(() => {
         setValues((prev) => {
@@ -58,12 +69,23 @@ export function ScreenRuntimeProvider({
     const contextValue = useMemo<ScreenRuntimeContextValue>(() => ({
         definitions: normalizedDefinitions,
         values,
-        setVariable: (key: string, value: string) => {
+        events,
+        setVariable: (key: string, value: string, source?: string) => {
             const safeKey = (key || '').trim();
             if (!safeKey) return;
             setValues((prev) => ({ ...prev, [safeKey]: value }));
+            setEvents((prev) => {
+                const next: RuntimeVariableEvent = {
+                    id: prev.length > 0 ? prev[0].id + 1 : 1,
+                    at: new Date().toISOString(),
+                    key: safeKey,
+                    value: String(value ?? ''),
+                    source: source?.trim() || undefined,
+                };
+                return [next, ...prev].slice(0, 100);
+            });
         },
-    }), [normalizedDefinitions, values]);
+    }), [events, normalizedDefinitions, values]);
 
     return <ScreenRuntimeContext.Provider value={contextValue}>{children}</ScreenRuntimeContext.Provider>;
 }

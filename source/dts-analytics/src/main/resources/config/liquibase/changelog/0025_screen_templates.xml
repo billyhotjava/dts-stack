@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="0025-create-analytics-screen-template" author="dts">
+        <createTable tableName="analytics_screen_template">
+            <column name="id" type="bigint" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="name" type="varchar(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="description" type="text"/>
+            <column name="category" type="varchar(64)" defaultValue="custom">
+                <constraints nullable="false"/>
+            </column>
+            <column name="thumbnail" type="varchar(64)"/>
+            <column name="tags_json" type="text"/>
+            <column name="width" type="integer" defaultValue="1920">
+                <constraints nullable="false"/>
+            </column>
+            <column name="height" type="integer" defaultValue="1080">
+                <constraints nullable="false"/>
+            </column>
+            <column name="background_color" type="varchar(32)"/>
+            <column name="background_image" type="text"/>
+            <column name="theme" type="varchar(32)"/>
+            <column name="components_json" type="text"/>
+            <column name="variables_json" type="text"/>
+            <column name="source_screen_id" type="bigint"/>
+            <column name="template_version" type="integer" defaultValue="1">
+                <constraints nullable="false"/>
+            </column>
+            <column name="archived" type="boolean" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+            <column name="creator_id" type="bigint"/>
+            <column name="created_at" type="timestamp with time zone" defaultValueComputed="${now}">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="timestamp with time zone" defaultValueComputed="${now}">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <createIndex tableName="analytics_screen_template" indexName="idx_screen_template_archived_updated">
+            <column name="archived"/>
+            <column name="updated_at"/>
+        </createIndex>
+
+        <createIndex tableName="analytics_screen_template" indexName="idx_screen_template_creator_id">
+            <column name="creator_id"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

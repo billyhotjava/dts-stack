@@ -18,6 +18,7 @@ import org.springframework.security.web.access.AccessDeniedHandler;
 public class SecurityProblemSupport implements AuthenticationEntryPoint, AccessDeniedHandler {
 
     private static final String ERROR_CODE_HEADER = "X-Error-Code";
+    private static final String ERROR_RETRYABLE_HEADER = "X-Error-Retryable";
 
     private final ObjectMapper mapper = new ObjectMapper();
 
@@ -50,12 +51,14 @@ public class SecurityProblemSupport implements AuthenticationEntryPoint, AccessD
                 status.value(),
                 status.getReasonPhrase(),
                 resolvedCode,
+                false,
                 (message == null || message.isBlank()) ? status.getReasonPhrase() : message,
                 path,
                 requestId);
         response.setStatus(status.value());
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.setHeader(ERROR_CODE_HEADER, resolvedCode);
+        response.setHeader(ERROR_RETRYABLE_HEADER, "false");
         mapper.writeValue(response.getOutputStream(), payload);
     }
 }

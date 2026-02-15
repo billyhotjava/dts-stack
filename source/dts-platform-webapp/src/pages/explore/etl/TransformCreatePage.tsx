@@ -191,6 +191,156 @@ const normalizeType = (value?: string) => normalizeText(value).toLowerCase();
 
 const normalizeTag = (value?: string) => normalizeText(value).toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "");
 
+type SyncModeValue = "full_refresh" | "incremental" | "cdc" | "backfill";
+type SyncModeOption = { value: SyncModeValue; label: string; disabled?: boolean };
+
+const SYNC_MODE_LABELS: Record<SyncModeValue, string> = {
+	full_refresh: "全量同步",
+	incremental: "增量同步",
+	cdc: "实时同步(CDC)",
+	backfill: "历史回灌",
+};
+
+const CAPABILITY_TO_SYNC_MODE: Record<string, SyncModeValue> = {
+	FULL: "full_refresh",
+	INCREMENTAL: "incremental",
+	CDC: "cdc",
+	BACKFILL: "backfill",
+};
+
+const normalizeSyncModeValue = (value?: string): SyncModeValue | null => {
+	const text = normalizeText(value).toLowerCase();
+	if (!text) return null;
+	if (text === "full" || text === "full_refresh" || text === "fullrefresh") return "full_refresh";
+	if (text === "incremental" || text === "incr" || text === "delta") return "incremental";
+	if (text === "cdc" || text === "realtime" || text === "real_time") return "cdc";
+	if (text === "backfill" || text === "history_backfill" || text === "historical_backfill") return "backfill";
+	return null;
+};
+
+const asBoolean = (value: any): boolean | null => {
+	if (typeof value === "boolean") return value;
+	if (typeof value === "string") {
+		const text = value.trim().toLowerCase();
+		if (text === "true") return true;
+		if (text === "false") return false;
+	}
+	return null;
+};
+
+const deriveSyncModeOptions = (
+	connectorType: string,
+	capability: IngestionConnectorCapabilityDTO | null,
+	isFileFlow: boolean
+): SyncModeOption[] => {
+	const allowed = new Set<SyncModeValue>();
+	const syncModes = capability?.constraints && typeof capability.constraints === "object"
+		? (capability.constraints as any).syncModes
+		: null;
+	if (syncModes && typeof syncModes === "object" && !Array.isArray(syncModes)) {
+		Object.entries(syncModes).forEach(([rawMode, cfg]) => {
+			const mode = normalizeSyncModeValue(rawMode);
+			if (!mode) return;
+			const enabled = asBoolean((cfg as any)?.enabled);
+			if (enabled === false) return;
+			allowed.add(mode);
+		});
+	}
+	if (!allowed.size) {
+		(capability?.capabilities || []).forEach((cap) => {
+			const mapped = CAPABILITY_TO_SYNC_MODE[normalizeText(cap).toUpperCase()];
+			if (mapped) allowed.add(mapped);
+		});
+	}
+	if (!allowed.size) {
+		if (isFileFlow || normalizeType(connectorType) === "file") {
+			allowed.add("full_refresh");
+		} else if (normalizeType(connectorType) === "airbyte") {
+			allowed.add("full_refresh");
+			allowed.add("incremental");
+			allowed.add("cdc");
+			allowed.add("backfill");
+		} else {
+			allowed.add("full_refresh");
+			allowed.add("incremental");
+		}
+	}
+	return (["full_refresh", "incremental", "cdc", "backfill"] as SyncModeValue[])
+		.filter((mode) => allowed.has(mode))
+		.map((mode) => ({ value: mode, label: SYNC_MODE_LABELS[mode] }));
+};
+
+type SyncScheduleFormState = {
+	scheduleType: "manual" | "interval" | "cron";
+	scheduleCron?: string;
+	scheduleIntervalMinutes?: number;
+};
+
+const parseSyncSchedule = (value?: string): SyncScheduleFormState => {
+	const raw = normalizeText(value);
+	const lower = raw.toLowerCase();
+	if (!raw) {
+		return { scheduleType: "manual", scheduleIntervalMinutes: 60 };
+	}
+	if (lower.startsWith("cron:")) {
+		return {
+			scheduleType: "cron",
+			scheduleCron: normalizeText(raw.slice(5)),
+			scheduleIntervalMinutes: 60,
+		};
+	}
+	if (lower.startsWith("interval:")) {
+		const parsed = Number.parseInt(lower.slice(9), 10);
+		return {
+			scheduleType: "interval",
+			scheduleIntervalMinutes: Number.isFinite(parsed) && parsed > 0 ? parsed : 60,
+		};
+	}
+	if (raw.split(/\s+/).length >= 5) {
+		return {
+			scheduleType: "cron",
+			scheduleCron: raw,
+			scheduleIntervalMinutes: 60,
+		};
+	}
+	return { scheduleType: "manual", scheduleIntervalMinutes: 60 };
+};
+
+const buildSyncScheduleSpec = (values: Record<string, any>) => {
+	const scheduleType = normalizeText(values?.scheduleType).toLowerCase();
+	if (scheduleType === "cron") {
+		const cron = normalizeText(values?.scheduleCron);
+		return cron ? { type: "cron", cron } : undefined;
+	}
+	if (scheduleType === "interval") {
+		const interval = Number(values?.scheduleIntervalMinutes);
+		if (Number.isFinite(interval) && interval > 0) {
+			return { type: "interval", intervalMinutes: Math.floor(interval) };
+		}
+	}
+	return undefined;
+};
+
+const buildSyncScheduleText = (values: Record<string, any>) => {
+	const spec = buildSyncScheduleSpec(values);
+	if (!spec) return undefined;
+	if (spec.type === "cron") return `cron:${spec.cron}`;
+	if (spec.type === "interval") return `interval:${spec.intervalMinutes}`;
+	return undefined;
+};
+
+const validateCronExpression = (_: unknown, value: string) => {
+	const cron = normalizeText(value);
+	if (!cron) {
+		return Promise.reject(new Error("请输入 Cron 表达式"));
+	}
+	const parts = cron.split(/\s+/);
+	if (parts.length < 5 || parts.length > 7) {
+		return Promise.reject(new Error("Cron 表达式格式不正确（需 5~7 段）"));
+	}
+	return Promise.resolve();
+};
+
 const resolveFileTypeFromName = (name?: string) => {
 	const normalized = normalizeText(name).toLowerCase();
 	if (!normalized) return "csv";
@@ -875,6 +1025,7 @@ const mapTaskToForm = (task: IngestionTaskDTO) => {
 	const fileAutoId = typeof sourceConfig._autoId === "boolean" ? sourceConfig._autoId : true;
 	const columnPrefix = normalizeText(destinationConfig._columnPrefix);
 	const columnSuffix = normalizeText(destinationConfig._columnSuffix);
+	const scheduleState = parseSyncSchedule(task.syncSchedule);
 	return {
 		editorMode: isFileReader ? "visual" : "json",
 		sourceCategory: isFileReader ? "file" : "database",
@@ -922,6 +1073,9 @@ const mapTaskToForm = (task: IngestionTaskDTO) => {
 		dbtDagSelector: task.dbtDagSelector,
 		columnPrefix: columnPrefix || undefined,
 		columnSuffix: columnSuffix || undefined,
+		scheduleType: scheduleState.scheduleType,
+		scheduleCron: scheduleState.scheduleCron,
+		scheduleIntervalMinutes: scheduleState.scheduleIntervalMinutes,
 	};
 };
 
@@ -972,6 +1126,7 @@ export default function TransformCreatePage() {
 	const [dataSources, setDataSources] = useState<InfraDataSource[]>([]);
 	const [loadingDataSources, setLoadingDataSources] = useState(false);
 	const [connectorCapabilities, setConnectorCapabilities] = useState<IngestionConnectorCapabilityDTO[]>([]);
+	const [capabilityLoadFailed, setCapabilityLoadFailed] = useState(false);
 	const [sqlModels, setSqlModels] = useState<Array<{ id?: string; name?: string; alias?: string }>>([]);
 	const [loadingSqlModels, setLoadingSqlModels] = useState(false);
 	const [fileUploadResult, setFileUploadResult] = useState<FileUploadResult | null>(null);
@@ -1007,6 +1162,7 @@ export default function TransformCreatePage() {
 	const editorMode = Form.useWatch("editorMode", form);
 	const [sourceCategory, setSourceCategory] = useState<string>("database");
 	const syncMode = Form.useWatch("syncMode", form);
+	const scheduleType = Form.useWatch("scheduleType", form);
 	const tableSelectionMode = Form.useWatch("tableSelectionMode", form);
 	const formValues = Form.useWatch([], form);
 	const selectedTablesValue = Form.useWatch("selectedTables", form);
@@ -1041,6 +1197,8 @@ export default function TransformCreatePage() {
 			editorMode: "visual",
 			sourceCategory: "database",
 			syncMode: "full_refresh",
+			scheduleType: "manual",
+			scheduleIntervalMinutes: 60,
 			tableSelectionMode: "all",
 			airflowEnabled: true,
 			runNow: true,
@@ -1210,8 +1368,10 @@ export default function TransformCreatePage() {
 			try {
 				const rows = await ingestionTaskAPI.getConnectorCapabilities();
 				setConnectorCapabilities(Array.isArray(rows) ? rows : []);
+				setCapabilityLoadFailed(false);
 			} catch {
 				setConnectorCapabilities([]);
+				setCapabilityLoadFailed(true);
 			}
 		};
 		void loadCapabilities();
@@ -1376,12 +1536,34 @@ export default function TransformCreatePage() {
 		});
 		return set;
 	}, [activeConnectorCapability]);
+	const syncModeOptions = useMemo(
+		() => deriveSyncModeOptions(resolvedConnectorType, activeConnectorCapability, isFileFlow),
+		[resolvedConnectorType, activeConnectorCapability, isFileFlow]
+	);
+	const supportedSyncModes = useMemo(
+		() => new Set(syncModeOptions.map((item) => item.value)),
+		[syncModeOptions]
+	);
+	const fallbackSyncMode = useMemo<SyncModeValue>(() => {
+		const fromContract = normalizeSyncModeValue(
+			activeConnectorCapability?.constraints
+				? String((activeConnectorCapability.constraints as any).fallbackSyncMode || "")
+				: ""
+		);
+		if (fromContract && supportedSyncModes.has(fromContract)) {
+			return fromContract;
+		}
+		if (supportedSyncModes.has("full_refresh")) {
+			return "full_refresh";
+		}
+		return syncModeOptions[0]?.value || "full_refresh";
+	}, [activeConnectorCapability, supportedSyncModes, syncModeOptions]);
 	const supportsIncremental = useMemo(() => {
 		if (isFileFlow) return false;
-		if (!activeCapabilitySet.size) return true;
-		return activeCapabilitySet.has("INCREMENTAL");
-	}, [activeCapabilitySet, isFileFlow]);
-	const supportsCdc = useMemo(() => activeCapabilitySet.has("CDC"), [activeCapabilitySet]);
+		return supportedSyncModes.has("incremental");
+	}, [supportedSyncModes, isFileFlow]);
+	const supportsCdc = useMemo(() => supportedSyncModes.has("cdc"), [supportedSyncModes]);
+	const supportsBackfill = useMemo(() => supportedSyncModes.has("backfill"), [supportedSyncModes]);
 	const dbStepItems = useMemo(
 		() => [
 			{ key: "basic", title: "基础信息" },
@@ -1407,18 +1589,19 @@ export default function TransformCreatePage() {
 
 	useEffect(() => {
 		if (!isFileFlow) return;
-		if ((normalizeText(syncMode) || "full_refresh") === "incremental") {
-			form.setFieldValue("syncMode", "full_refresh");
+		const currentMode = normalizeSyncModeValue(syncMode) || "full_refresh";
+		if (!supportedSyncModes.has(currentMode)) {
+			form.setFieldValue("syncMode", fallbackSyncMode);
 		}
-	}, [isFileFlow, syncMode, form]);
+	}, [isFileFlow, syncMode, form, supportedSyncModes, fallbackSyncMode]);
 
 	useEffect(() => {
-		const currentMode = normalizeText(syncMode) || "full_refresh";
-		if (currentMode === "incremental" && !supportsIncremental) {
-			form.setFieldValue("syncMode", "full_refresh");
-			toast.warning("当前连接器不支持增量同步，已切换为全量同步");
+		const currentMode = normalizeSyncModeValue(syncMode) || "full_refresh";
+		if (!supportedSyncModes.has(currentMode)) {
+			form.setFieldValue("syncMode", fallbackSyncMode);
+			toast.warning(`当前连接器不支持 ${currentMode}，已切换为 ${SYNC_MODE_LABELS[fallbackSyncMode]}`);
 		}
-	}, [form, supportsIncremental, syncMode]);
+	}, [form, supportedSyncModes, syncMode, fallbackSyncMode]);
 
 	// Load draft on mount
 	useEffect(() => {
@@ -1570,7 +1753,7 @@ export default function TransformCreatePage() {
 					writerConfig = applyTablesToConfig(writerConfig, includeTables);
 				}
 			}
-			const draftPayload: Record<string, any> = {
+				const draftPayload: Record<string, any> = {
 				draft: true,
 				name,
 				description: normalizeText(values.description) || undefined,
@@ -1580,11 +1763,12 @@ export default function TransformCreatePage() {
 					type: resolvedReaderType || undefined,
 					config: readerConfig || {},
 				},
-				sync: {
-					mode: normalizeText(values.syncMode) || "full_refresh",
-					prefix: normalizeText(values.syncPrefix) || undefined,
-					incrementalColumn: normalizeText(values.incrementalColumn) || undefined,
-					incrementalType: normalizeText(values.incrementalType) || undefined,
+					sync: {
+						mode: normalizeText(values.syncMode) || "full_refresh",
+						schedule: buildSyncScheduleSpec(values),
+						prefix: normalizeText(values.syncPrefix) || undefined,
+						incrementalColumn: normalizeText(values.incrementalColumn) || undefined,
+						incrementalType: normalizeText(values.incrementalType) || undefined,
 					initialWatermark: normalizeText(values.initialWatermark) || undefined,
 				},
 				streams: {
@@ -2084,6 +2268,7 @@ export default function TransformCreatePage() {
 						destinationType: defaultWriterType,
 						destinationConfig: writerConfig,
 						syncMode: "full_refresh",
+						syncSchedule: buildSyncScheduleText(mergedValues),
 						syncConfig: null as any,
 						syncPrefix: normalizeText(mergedValues.syncPrefix) || undefined,
 						addaxConfig: (jobConfig as Record<string, any>) || editingTask?.addaxConfig,
@@ -2110,10 +2295,11 @@ export default function TransformCreatePage() {
 							type: defaultWriterType,
 							config: writerConfig,
 						},
-						sync: {
-							mode: "full_refresh",
-							prefix: normalizeText(mergedValues.syncPrefix) || undefined,
-						},
+							sync: {
+								mode: "full_refresh",
+								schedule: buildSyncScheduleSpec(mergedValues),
+								prefix: normalizeText(mergedValues.syncPrefix) || undefined,
+							},
 						streams: {
 							selection: "manual",
 							include: fileIncludeTables,
@@ -2225,11 +2411,12 @@ export default function TransformCreatePage() {
 					sourceType: normalizeText(resolvedReaderType) || "",
 					sourceDataSourceId: sourceDataSourceId,
 					sourceConfig: (readerConfig as Record<string, any>) || {},
-					destinationType: defaultWriterType,
-					destinationConfig: writerConfig as Record<string, any> | undefined,
-					syncMode: mergedValues.syncMode || editingTask?.syncMode || "full_refresh",
-					syncConfig: (syncConfig ?? null) as any,
-					syncPrefix: normalizeText(mergedValues.syncPrefix) || undefined,
+						destinationType: defaultWriterType,
+						destinationConfig: writerConfig as Record<string, any> | undefined,
+						syncMode: mergedValues.syncMode || editingTask?.syncMode || "full_refresh",
+						syncSchedule: buildSyncScheduleText(mergedValues),
+						syncConfig: (syncConfig ?? null) as any,
+						syncPrefix: normalizeText(mergedValues.syncPrefix) || undefined,
 					addaxConfig: (jobConfig as Record<string, any>) || editingTask?.addaxConfig,
 					airflowEnabled: Boolean(mergedValues.airflowEnabled),
 					dbtModelSelector: modelSelector || undefined,
@@ -2255,10 +2442,11 @@ export default function TransformCreatePage() {
 						type: defaultWriterType,
 						config: writerConfig || undefined,
 					},
-					sync: {
-						mode: mergedValues.syncMode || "full_refresh",
-						prefix: normalizeText(mergedValues.syncPrefix) || undefined,
-						incrementalColumn: syncConfig?.incrementalColumn,
+						sync: {
+							mode: mergedValues.syncMode || "full_refresh",
+							schedule: buildSyncScheduleSpec(mergedValues),
+							prefix: normalizeText(mergedValues.syncPrefix) || undefined,
+							incrementalColumn: syncConfig?.incrementalColumn,
 						incrementalType: syncConfig?.incrementalType,
 						initialWatermark: syncConfig?.initialWatermark,
 					},
@@ -2419,20 +2607,53 @@ export default function TransformCreatePage() {
 									<Form.Item name="description" label="任务描述">
 										<Input.TextArea rows={2} placeholder="可选，说明任务用途" />
 									</Form.Item>
-									<Form.Item name="syncMode" label="同步模式" tooltip="全量同步：每次执行前清空目标表后重新写入">
-										<Radio.Group>
-											<Radio.Button value="full_refresh">全量同步</Radio.Button>
-											<Radio.Button value="incremental" disabled>增量同步</Radio.Button>
-										</Radio.Group>
-									</Form.Item>
-							<Space size={[8, 8]} wrap className="mb-3">
-								<Text type="secondary">当前连接器能力：</Text>
-								{["FULL", "INCREMENTAL", "CDC", "BACKFILL"].map((cap) => (
-									<Tag key={cap} color={activeCapabilitySet.has(cap) ? "green" : "default"}>
-										{cap}
-									</Tag>
-								))}
-							</Space>
+										<Form.Item name="syncMode" label="同步模式" tooltip="同步模式由连接器能力契约驱动">
+											<Radio.Group>
+												{syncModeOptions.map((item) => (
+													<Radio.Button key={item.value} value={item.value} disabled={item.disabled}>
+														{item.label}
+													</Radio.Button>
+												))}
+											</Radio.Group>
+										</Form.Item>
+										<div className="grid gap-4 md:grid-cols-3">
+											<Form.Item name="scheduleType" label="调度策略">
+												<Select
+													options={[
+														{ label: "手动触发", value: "manual" },
+														{ label: "按间隔执行", value: "interval" },
+														{ label: "按 Cron 执行", value: "cron" },
+													]}
+												/>
+											</Form.Item>
+											{(normalizeText(scheduleType) || "manual") === "interval" ? (
+												<Form.Item
+													name="scheduleIntervalMinutes"
+													label="执行间隔(分钟)"
+													rules={[{ required: true, message: "请输入执行间隔" }]}
+												>
+													<InputNumber min={1} precision={0} className="w-full" />
+												</Form.Item>
+											) : null}
+											{(normalizeText(scheduleType) || "manual") === "cron" ? (
+												<Form.Item
+													name="scheduleCron"
+													label="Cron 表达式"
+													rules={[{ validator: validateCronExpression }]}
+												>
+													<Input placeholder="例如：0 */30 * * * *" />
+												</Form.Item>
+											) : null}
+										</div>
+								<Space size={[8, 8]} wrap className="mb-3">
+									<Text type="secondary">当前连接器能力：</Text>
+									{["FULL", "INCREMENTAL", "CDC", "BACKFILL"].map((cap) => (
+										<Tag key={cap} color={activeCapabilitySet.has(cap) ? "green" : "default"}>
+											{cap}
+										</Tag>
+									))}
+									{capabilityLoadFailed ? <Text type="warning">能力探测失败，已使用保守降级策略</Text> : null}
+								</Space>
 									<Form.Item name="sourceCategory" label="数据来源">
 										<Radio.Group onChange={(e) => setSourceCategory(e.target.value)}>
 											<Radio.Button value="database">数据库</Radio.Button>
@@ -3021,24 +3242,57 @@ export default function TransformCreatePage() {
 									<Form.Item name="sourceSystem" label="源系统标识">
 										<Input placeholder="可选，例如：erp、crm（用于绑定 DAG）" />
 									</Form.Item>
-									<Form.Item name="syncMode" label="同步模式" tooltip="全量同步：每次执行前清空目标表后重新写入；增量同步：按水位列拉取新增数据（当前仅支持单表）">
-								<Radio.Group>
-									<Radio.Button value="full_refresh">全量同步</Radio.Button>
-									<Radio.Button value="incremental" disabled={!supportsIncremental}>增量同步</Radio.Button>
-									<Radio.Button value="cdc" disabled>实时同步(CDC)</Radio.Button>
-								</Radio.Group>
-							</Form.Item>
-							<Space size={[8, 8]} wrap className="mb-3">
-								<Text type="secondary">当前连接器能力：</Text>
-								{["FULL", "INCREMENTAL", "CDC", "BACKFILL"].map((cap) => (
-									<Tag key={cap} color={activeCapabilitySet.has(cap) ? "green" : "default"}>
-										{cap}
-									</Tag>
-								))}
-								{!supportsIncremental ? <Text type="warning">当前连接器不支持增量</Text> : null}
-								{supportsCdc ? <Text type="secondary">可预留 CDC 能力</Text> : null}
-							</Space>
-									{(normalizeText(syncMode) || "full_refresh") === "incremental" ? (
+										<Form.Item name="syncMode" label="同步模式" tooltip="同步模式由连接器能力契约驱动">
+											<Radio.Group>
+												{syncModeOptions.map((item) => (
+													<Radio.Button key={item.value} value={item.value} disabled={item.disabled}>
+														{item.label}
+													</Radio.Button>
+												))}
+											</Radio.Group>
+										</Form.Item>
+								<div className="grid gap-4 md:grid-cols-3">
+									<Form.Item name="scheduleType" label="调度策略">
+										<Select
+											options={[
+												{ label: "手动触发", value: "manual" },
+												{ label: "按间隔执行", value: "interval" },
+												{ label: "按 Cron 执行", value: "cron" },
+											]}
+										/>
+									</Form.Item>
+									{(normalizeText(scheduleType) || "manual") === "interval" ? (
+										<Form.Item
+											name="scheduleIntervalMinutes"
+											label="执行间隔(分钟)"
+											rules={[{ required: true, message: "请输入执行间隔" }]}
+										>
+											<InputNumber min={1} precision={0} className="w-full" />
+										</Form.Item>
+									) : null}
+									{(normalizeText(scheduleType) || "manual") === "cron" ? (
+										<Form.Item
+											name="scheduleCron"
+											label="Cron 表达式"
+											rules={[{ validator: validateCronExpression }]}
+										>
+											<Input placeholder="例如：0 */30 * * * *" />
+										</Form.Item>
+									) : null}
+								</div>
+								<Space size={[8, 8]} wrap className="mb-3">
+									<Text type="secondary">当前连接器能力：</Text>
+									{["FULL", "INCREMENTAL", "CDC", "BACKFILL"].map((cap) => (
+										<Tag key={cap} color={activeCapabilitySet.has(cap) ? "green" : "default"}>
+											{cap}
+										</Tag>
+									))}
+									{!supportsIncremental ? <Text type="warning">当前连接器不支持增量</Text> : null}
+									{supportsCdc ? <Text type="secondary">已支持 CDC 模式</Text> : null}
+									{supportsBackfill ? <Text type="secondary">已支持历史回灌模式</Text> : null}
+									{capabilityLoadFailed ? <Text type="warning">能力探测失败，已使用保守降级策略</Text> : null}
+								</Space>
+									{(normalizeSyncModeValue(syncMode) || "full_refresh") === "incremental" ? (
 										<div className="grid gap-4 md:grid-cols-3">
 											<Form.Item
 												name="incrementalColumn"

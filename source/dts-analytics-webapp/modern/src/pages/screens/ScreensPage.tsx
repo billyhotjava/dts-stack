@@ -1,8 +1,10 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router';
-import { analyticsApi, ScreenListItem } from '../../api/analyticsApi';
-import { TemplateGallery } from './components';
-import { createConfigFromTemplate, ScreenTemplate } from './screenTemplates';
+import { analyticsApi, ScreenListItem, type ScreenAiGenerationResponse } from '../../api/analyticsApi';
+import { writeTextToClipboard } from '../../hooks/clipboard';
+import { TemplateGallery, type TemplateSelection } from './components';
+import { createConfigFromTemplate } from './screenTemplates';
+import { buildScreenPayload, normalizeScreenConfig } from './specV2';
 import '../page.css';
 
 export default function ScreensPage() {
@@ -12,6 +14,15 @@ export default function ScreensPage() {
     const [error, setError] = useState<string | null>(null);
     const [showTemplateGallery, setShowTemplateGallery] = useState(false);
     const [sharingId, setSharingId] = useState<string | number | null>(null);
+    const [savingTemplateId, setSavingTemplateId] = useState<string | number | null>(null);
+
+    const [showAiGenerator, setShowAiGenerator] = useState(false);
+    const [aiPrompt, setAiPrompt] = useState('');
+    const [aiLoading, setAiLoading] = useState(false);
+    const [aiRefining, setAiRefining] = useState(false);
+    const [aiCreating, setAiCreating] = useState(false);
+    const [aiRefinePrompt, setAiRefinePrompt] = useState('');
+    const [aiResult, setAiResult] = useState<ScreenAiGenerationResponse | null>(null);
 
     const loadScreens = useCallback(() => {
         setLoading(true);
@@ -35,30 +46,114 @@ export default function ScreensPage() {
         setShowTemplateGallery(true);
     };
 
-    const handleTemplateSelect = async (template: ScreenTemplate) => {
+    const handleOpenAiGenerator = () => {
+        setAiPrompt('生成一个面向运营的周报大屏，包含趋势、结构占比、区域排名和明细表');
+        setAiRefinePrompt('改成三列布局，增加区域筛选，切换为浅色商务风格');
+        setAiResult(null);
+        setShowAiGenerator(true);
+    };
+
+    const handleTemplateSelect = async (selection: TemplateSelection) => {
         setShowTemplateGallery(false);
 
-        // Create config from template
-        const config = createConfigFromTemplate(template);
-
         try {
-            // Create new screen with template config
-            const response = await analyticsApi.createScreen({
-                name: config.name,
-                description: config.description,
-                width: config.width,
-                height: config.height,
-                backgroundColor: config.backgroundColor,
-                backgroundImage: config.backgroundImage,
-                theme: (config as { theme?: string }).theme,
-                components: config.components,
-            });
-            // Navigate to edit the new screen
+            if (selection.kind === 'asset') {
+                const remoteTemplate = selection.template;
+                const response = await analyticsApi.createScreenFromTemplate(remoteTemplate.id as string | number, {
+                    name: (remoteTemplate.name || '未命名模板') + ' 副本',
+                });
+                navigate(`/screens/${response.id}/edit`);
+                return;
+            }
+
+            const config = createConfigFromTemplate(selection.template);
+            const response = await analyticsApi.createScreen(
+                buildScreenPayload({
+                    id: '',
+                    ...config,
+                }),
+            );
             navigate(`/screens/${response.id}/edit`);
         } catch (err) {
             console.error('Failed to create screen from template:', err);
-            // Fallback: just navigate to new screen page
             navigate('/screens/new');
+        }
+    };
+
+    const handleGenerateAi = async () => {
+        if (aiLoading) return;
+        const prompt = aiPrompt.trim();
+        if (!prompt) {
+            alert('请输入业务需求描述');
+            return;
+        }
+
+        setAiLoading(true);
+        try {
+            const result = await analyticsApi.generateScreenSpec({
+                prompt,
+                width: 1920,
+                height: 1080,
+            });
+            setAiResult(result);
+        } catch (err) {
+            console.error('Failed to generate ai screen spec:', err);
+            alert('AI 生成失败');
+        } finally {
+            setAiLoading(false);
+        }
+    };
+
+    const handleCreateFromAi = async () => {
+        if (aiCreating) return;
+        const spec = aiResult?.screenSpec;
+        if (!spec) {
+            alert('请先生成方案');
+            return;
+        }
+
+        setAiCreating(true);
+        try {
+            const normalized = normalizeScreenConfig(spec, { id: '' });
+            const created = await analyticsApi.createScreen(buildScreenPayload({
+                ...normalized.config,
+                name: spec.name || normalized.config.name || 'AI生成大屏草稿',
+                description: spec.description || normalized.config.description || 'AI自动生成',
+            }));
+            setShowAiGenerator(false);
+            navigate(`/screens/${created.id}/edit`);
+        } catch (err) {
+            console.error('Failed to create screen from ai spec:', err);
+            alert('创建 AI 草稿失败');
+        } finally {
+            setAiCreating(false);
+        }
+    };
+
+    const handleRefineAi = async () => {
+        if (aiRefining) return;
+        const prompt = aiRefinePrompt.trim();
+        const screenSpec = aiResult?.screenSpec;
+        if (!prompt) {
+            alert('请输入优化指令');
+            return;
+        }
+        if (!screenSpec) {
+            alert('请先生成初始方案');
+            return;
+        }
+        setAiRefining(true);
+        try {
+            const result = await analyticsApi.reviseScreenSpec({
+                prompt,
+                screenSpec: screenSpec as Record<string, unknown>,
+            });
+            setAiResult(result);
+        } catch (err) {
+            console.error('Failed to refine ai screen spec:', err);
+            alert('AI 优化失败');
+        } finally {
+            setAiRefining(false);
         }
     };
 
@@ -76,13 +171,41 @@ export default function ScreensPage() {
         try {
             const { uuid } = await analyticsApi.createScreenPublicLink(id);
             const url = `${window.location.origin}/analytics/public/screen/${uuid}`;
-            await navigator.clipboard.writeText(url);
-            alert('分享链接已复制到剪贴板');
+            const copied = await writeTextToClipboard(url);
+            alert(copied ? '分享链接已复制到剪贴板' : `复制失败，请手工复制：\n${url}`);
         } catch (err) {
             console.error('Failed to create public link:', err);
             alert('创建分享链接失败');
         } finally {
             setSharingId(null);
+        }
+    };
+
+    const handleSaveAsTemplate = async (id: string | number, screenName?: string) => {
+        if (savingTemplateId !== null) return;
+
+        const suggestedName = `${(screenName || '未命名大屏').trim() || '未命名大屏'} 模板`;
+        const name = (window.prompt('请输入模板名称', suggestedName) || '').trim();
+        if (!name) {
+            return;
+        }
+
+        const categoryInput = (window.prompt('模板分类（business/tech/dashboard/monitor/custom）', 'custom') || 'custom').trim();
+        const category = categoryInput || 'custom';
+
+        setSavingTemplateId(id);
+        try {
+            await analyticsApi.createScreenTemplateFromScreen(id, {
+                name,
+                category,
+                tags: ['saved-from-screen'],
+            });
+            alert('已保存到模板资产中心');
+        } catch (err) {
+            console.error('Failed to create template from screen:', err);
+            alert('保存模板失败');
+        } finally {
+            setSavingTemplateId(null);
         }
     };
 
@@ -114,9 +237,14 @@ export default function ScreensPage() {
         <div className="page-container">
             <div className="page-header">
                 <h1 className="page-title">🖥️ 大屏管理</h1>
-                <button className="primary-btn" onClick={handleCreate}>
-                    ➕ 新建大屏
-                </button>
+                <div style={{ display: 'flex', gap: 10 }}>
+                    <button className="primary-btn" onClick={handleOpenAiGenerator}>
+                        🤖 AI生成
+                    </button>
+                    <button className="primary-btn" onClick={handleCreate}>
+                        ➕ 新建大屏
+                    </button>
+                </div>
             </div>
 
             <div className="page-content">
@@ -185,6 +313,14 @@ export default function ScreensPage() {
                                         title="分享"
                                     >
                                         🔗
+                                    </button>
+                                    <button
+                                        className="action-btn"
+                                        onClick={() => handleSaveAsTemplate(screen.id, screen.name)}
+                                        disabled={savingTemplateId === screen.id}
+                                        title="保存为模板"
+                                    >
+                                        {savingTemplateId === screen.id ? '…' : '📦'}
                                     </button>
                                     <button
                                         className="action-btn delete"
@@ -317,6 +453,84 @@ export default function ScreensPage() {
                     border-radius: 50%;
                     animation: spin 1s linear infinite;
                 }
+
+                .ai-modal-overlay {
+                    position: fixed;
+                    inset: 0;
+                    background: rgba(10, 18, 32, 0.6);
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    z-index: 1400;
+                }
+
+                .ai-modal {
+                    width: min(920px, 92vw);
+                    max-height: 86vh;
+                    overflow: auto;
+                    background: #0f172a;
+                    border: 1px solid rgba(148, 163, 184, 0.25);
+                    border-radius: 12px;
+                    box-shadow: 0 24px 80px rgba(2, 6, 23, 0.45);
+                    color: #e2e8f0;
+                }
+
+                .ai-modal-header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    padding: 16px 20px;
+                    border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+                }
+
+                .ai-modal-body {
+                    padding: 18px 20px;
+                    display: grid;
+                    gap: 12px;
+                }
+
+                .ai-textarea {
+                    width: 100%;
+                    min-height: 120px;
+                    border: 1px solid rgba(148, 163, 184, 0.25);
+                    border-radius: 8px;
+                    padding: 10px 12px;
+                    font-size: 14px;
+                    line-height: 1.5;
+                    resize: vertical;
+                    background: #0b1222;
+                    color: #e2e8f0;
+                }
+
+                .ai-result-card {
+                    border: 1px solid rgba(148, 163, 184, 0.2);
+                    border-radius: 8px;
+                    padding: 12px;
+                    background: rgba(15, 23, 42, 0.7);
+                }
+
+                .ai-result-grid {
+                    display: grid;
+                    grid-template-columns: repeat(4, minmax(0, 1fr));
+                    gap: 8px;
+                    margin-top: 8px;
+                }
+
+                .ai-result-item {
+                    border: 1px solid rgba(148, 163, 184, 0.18);
+                    border-radius: 6px;
+                    padding: 8px;
+                    font-size: 12px;
+                    color: #cbd5e1;
+                }
+
+                .ai-modal-footer {
+                    display: flex;
+                    justify-content: flex-end;
+                    gap: 10px;
+                    padding: 14px 20px;
+                    border-top: 1px solid rgba(148, 163, 184, 0.2);
+                }
                 
                 @keyframes spin {
                     to { transform: rotate(360deg); }
@@ -328,6 +542,68 @@ export default function ScreensPage() {
                     onSelect={handleTemplateSelect}
                     onClose={() => setShowTemplateGallery(false)}
                 />
+            )}
+
+            {showAiGenerator && (
+                <div className="ai-modal-overlay" onClick={() => setShowAiGenerator(false)}>
+                    <div className="ai-modal" onClick={(e) => e.stopPropagation()}>
+                        <div className="ai-modal-header">
+                            <h3 style={{ margin: 0 }}>🤖 AI 生成大屏草稿</h3>
+                            <button className="action-btn" style={{ maxWidth: 80 }} onClick={() => setShowAiGenerator(false)}>关闭</button>
+                        </div>
+                        <div className="ai-modal-body">
+                            <div style={{ fontSize: 13, color: '#94a3b8' }}>
+                                描述业务场景、核心指标、时间粒度，系统将生成可编辑大屏草稿（可再绑定真实数据源）。
+                            </div>
+                            <textarea
+                                className="ai-textarea"
+                                value={aiPrompt}
+                                onChange={(e) => setAiPrompt(e.target.value)}
+                                placeholder="示例：生成一个制造车间运营大屏，包含产量趋势、良率、设备告警、班组排名和明细表"
+                            />
+                            <textarea
+                                className="ai-textarea"
+                                style={{ minHeight: 78 }}
+                                value={aiRefinePrompt}
+                                onChange={(e) => setAiRefinePrompt(e.target.value)}
+                                placeholder="优化指令示例：改成三列布局，首图改成柱状图，切换为浅色主题，并增加筛选器"
+                            />
+                            {aiResult?.screenSpec && (
+                                <div className="ai-result-card">
+                                    <div style={{ fontWeight: 600 }}>生成预览</div>
+                                    <div className="ai-result-grid">
+                                        <div className="ai-result-item">名称: {aiResult.screenSpec.name || '-'}</div>
+                                        <div className="ai-result-item">主题: {aiResult.screenSpec.theme || '-'}</div>
+                                        <div className="ai-result-item">组件数: {(aiResult.screenSpec.components || []).length}</div>
+                                        <div className="ai-result-item">质量分: {aiResult.quality?.score ?? '-'}</div>
+                                    </div>
+                                    {Array.isArray(aiResult.quality?.warnings) && aiResult.quality?.warnings.length > 0 && (
+                                        <div style={{ marginTop: 10, fontSize: 12, color: '#fbbf24' }}>
+                                            {aiResult.quality?.warnings.join('；')}
+                                        </div>
+                                    )}
+                                    {Array.isArray(aiResult.actions) && aiResult.actions.length > 0 && (
+                                        <div style={{ marginTop: 10, fontSize: 12, color: '#38bdf8' }}>
+                                            已执行：{aiResult.actions.join('；')}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                        <div className="ai-modal-footer">
+                            <button className="action-btn" style={{ maxWidth: 100 }} onClick={() => setShowAiGenerator(false)}>取消</button>
+                            <button className="action-btn" style={{ maxWidth: 120 }} onClick={handleGenerateAi} disabled={aiLoading}>
+                                {aiLoading ? '生成中...' : '生成方案'}
+                            </button>
+                            <button className="action-btn" style={{ maxWidth: 130 }} onClick={handleRefineAi} disabled={aiRefining || !aiResult?.screenSpec}>
+                                {aiRefining ? '优化中...' : '按指令优化'}
+                            </button>
+                            <button className="primary-btn" onClick={handleCreateFromAi} disabled={aiCreating || !aiResult?.screenSpec}>
+                                {aiCreating ? '创建中...' : '创建草稿'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );

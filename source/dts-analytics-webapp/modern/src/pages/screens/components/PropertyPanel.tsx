@@ -1,19 +1,30 @@
 import { useScreen } from '../ScreenContext';
-import type { ScreenComponent, DataSourceConfig, DrillLevel } from '../types';
+import type { CardParameterBinding, ComponentInteractionMapping, ComponentType, DataSourceConfig, DrillLevel, QuerySourceType, ScreenComponent, ScreenGlobalVariable } from '../types';
 import { DRILLABLE_TYPES } from '../types';
 import { CardIdPicker } from './CardIdPicker';
 import { MetricBindingEditor } from './MetricBindingEditor';
+import { CardParamBindingsEditor } from './CardParamBindingsEditor';
 import { DatabaseIdPicker } from './DatabaseIdPicker';
 
+const DEFAULT_SERIES_COLORS = [
+    '#3b82f6',
+    '#22c55e',
+    '#f59e0b',
+    '#ef4444',
+    '#a855f7',
+    '#06b6d4',
+];
+
 export function PropertyPanel() {
-    const { state, updateComponent } = useScreen();
+    const { state, updateComponent, updateSelectedComponents } = useScreen();
     const { config, selectedIds } = state;
 
+    const selectedComponents = config.components.filter((c) => selectedIds.includes(c.id));
     const selectedComponent = selectedIds.length === 1
         ? config.components.find((c) => c.id === selectedIds[0])
         : null;
 
-    if (!selectedComponent) {
+    if (selectedComponents.length === 0) {
         return (
             <div className="property-panel">
                 <div className="property-panel-header">
@@ -24,6 +35,75 @@ export function PropertyPanel() {
                         <div className="empty-state-icon">🎨</div>
                         <div className="empty-state-text">选择组件以编辑属性</div>
                         <div className="empty-state-hint">点击画布中的组件进行选择</div>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    if (!selectedComponent) {
+        const total = selectedComponents.length;
+        const allLocked = selectedComponents.every((item) => item.locked);
+        const allVisible = selectedComponents.every((item) => item.visible);
+        const grouped = selectedComponents.filter((item) => Boolean(item.groupId)).length;
+        return (
+            <div className="property-panel">
+                <div className="property-panel-header">
+                    <h3>批量属性 ({total})</h3>
+                </div>
+                <div className="property-panel-content">
+                    <div className="property-section">
+                        <div className="property-section-title">批量设置</div>
+                        <div className="property-row">
+                            <label className="property-label">宽度</label>
+                            <input
+                                type="number"
+                                className="property-input"
+                                min={50}
+                                onChange={(e) => updateSelectedComponents({ width: Math.max(50, Number(e.target.value) || 50) })}
+                                placeholder="统一宽度"
+                            />
+                        </div>
+                        <div className="property-row">
+                            <label className="property-label">高度</label>
+                            <input
+                                type="number"
+                                className="property-input"
+                                min={50}
+                                onChange={(e) => updateSelectedComponents({ height: Math.max(50, Number(e.target.value) || 50) })}
+                                placeholder="统一高度"
+                            />
+                        </div>
+                        <div className="property-row">
+                            <label className="property-label">锁定</label>
+                            <select
+                                className="property-input"
+                                value={allLocked ? 'locked' : 'unlocked'}
+                                onChange={(e) => updateSelectedComponents({ locked: e.target.value === 'locked' })}
+                            >
+                                <option value="locked">全部锁定</option>
+                                <option value="unlocked">全部解锁</option>
+                            </select>
+                        </div>
+                        <div className="property-row">
+                            <label className="property-label">可见</label>
+                            <select
+                                className="property-input"
+                                value={allVisible ? 'visible' : 'hidden'}
+                                onChange={(e) => updateSelectedComponents({ visible: e.target.value === 'visible' })}
+                            >
+                                <option value="visible">全部可见</option>
+                                <option value="hidden">全部隐藏</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div className="property-section">
+                        <div className="property-section-title">选择概览</div>
+                        <div style={{ fontSize: 12, opacity: 0.8, lineHeight: 1.7 }}>
+                            已选组件: {total}<br />
+                            已分组组件: {grouped}<br />
+                            类型数: {new Set(selectedComponents.map((item) => item.type)).size}
+                        </div>
                     </div>
                 </div>
             </div>
@@ -140,6 +220,36 @@ export function PropertyPanel() {
                             onChange={(e) => handleChange('visible', e.target.checked)}
                         />
                     </div>
+                    <div className="property-row">
+                        <label className="property-label">多端可见</label>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                            {(['pc', 'tablet', 'mobile'] as const).map((device) => {
+                                const current = Array.isArray(selectedComponent.config.visibleOn)
+                                    ? selectedComponent.config.visibleOn as string[]
+                                    : ['pc', 'tablet', 'mobile'];
+                                const checked = current.includes(device);
+                                const label = device === 'pc' ? 'PC' : device === 'tablet' ? '平板' : '手机';
+                                return (
+                                    <label key={device} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12 }}>
+                                        <input
+                                            type="checkbox"
+                                            checked={checked}
+                                            onChange={(e) => {
+                                                const base = Array.isArray(selectedComponent.config.visibleOn)
+                                                    ? selectedComponent.config.visibleOn as string[]
+                                                    : ['pc', 'tablet', 'mobile'];
+                                                const next = e.target.checked
+                                                    ? Array.from(new Set([...base, device]))
+                                                    : base.filter((item) => item !== device);
+                                                handleConfigChange('visibleOn', next);
+                                            }}
+                                        />
+                                        {label}
+                                    </label>
+                                );
+                            })}
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -151,6 +261,37 @@ function renderComponentConfig(
     onChange: (key: string, value: unknown) => void
 ) {
     const { type, config } = component;
+    const configuredSeriesColors = Array.isArray(config.seriesColors)
+        ? (config.seriesColors as string[]).map((item) => String(item))
+        : [];
+
+    const setSeriesColor = (index: number, color: string) => {
+        const next = [...configuredSeriesColors];
+        next[index] = color;
+        onChange('seriesColors', next);
+    };
+
+    const renderSeriesColorRows = (labels: string[]) => {
+        if (labels.length === 0) return null;
+        return (
+            <>
+                <div style={{ fontSize: 11, color: '#888', marginTop: 8, marginBottom: 4 }}>
+                    系列配色
+                </div>
+                {labels.map((label, idx) => (
+                    <div className="property-row" key={`${label}-${idx}`}>
+                        <label className="property-label">{label || `系列${idx + 1}`}</label>
+                        <input
+                            type="color"
+                            className="property-color-input"
+                            value={configuredSeriesColors[idx] || DEFAULT_SERIES_COLORS[idx % DEFAULT_SERIES_COLORS.length]}
+                            onChange={(e) => setSeriesColor(idx, e.target.value)}
+                        />
+                    </div>
+                ))}
+            </>
+        );
+    };
 
     switch (type) {
         case 'line-chart':
@@ -178,6 +319,28 @@ function renderComponentConfig(
                         />
                     </div>
                     <div className="property-row">
+                        <label className="property-label">坐标轴字号</label>
+                        <input
+                            type="number"
+                            className="property-input"
+                            min={10}
+                            max={28}
+                            value={(config.axisFontSize as number) || 12}
+                            onChange={(e) => onChange('axisFontSize', Number(e.target.value))}
+                        />
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">图例字号</label>
+                        <input
+                            type="number"
+                            className="property-input"
+                            min={10}
+                            max={28}
+                            value={(config.legendFontSize as number) || 12}
+                            onChange={(e) => onChange('legendFontSize', Number(e.target.value))}
+                        />
+                    </div>
+                    <div className="property-row">
                         <label className="property-label">图例位置</label>
                         <select
                             className="property-input"
@@ -190,6 +353,10 @@ function renderComponentConfig(
                             <option value="right">右侧</option>
                         </select>
                     </div>
+                    {renderSeriesColorRows(
+                        ((config.series as Array<{ name?: string }> | undefined) || [])
+                            .map((item, idx) => (item?.name || '').trim() || `系列${idx + 1}`),
+                    )}
                 </>
             );
 
@@ -220,19 +387,36 @@ function renderComponentConfig(
                         />
                     </div>
                     {type !== 'gauge-chart' && (
-                        <div className="property-row">
-                            <label className="property-label">图例位置</label>
-                            <select
-                                className="property-input"
-                                value={(config.legendPosition as string) || 'top'}
-                                onChange={(e) => onChange('legendPosition', e.target.value)}
-                            >
-                                <option value="top">顶部</option>
-                                <option value="bottom">底部</option>
-                                <option value="left">左侧</option>
-                                <option value="right">右侧</option>
-                            </select>
-                        </div>
+                        <>
+                            <div className="property-row">
+                                <label className="property-label">图例字号</label>
+                                <input
+                                    type="number"
+                                    className="property-input"
+                                    min={10}
+                                    max={28}
+                                    value={(config.legendFontSize as number) || 12}
+                                    onChange={(e) => onChange('legendFontSize', Number(e.target.value))}
+                                />
+                            </div>
+                            <div className="property-row">
+                                <label className="property-label">图例位置</label>
+                                <select
+                                    className="property-input"
+                                    value={(config.legendPosition as string) || 'top'}
+                                    onChange={(e) => onChange('legendPosition', e.target.value)}
+                                >
+                                    <option value="top">顶部</option>
+                                    <option value="bottom">底部</option>
+                                    <option value="left">左侧</option>
+                                    <option value="right">右侧</option>
+                                </select>
+                            </div>
+                            {renderSeriesColorRows(
+                                ((config.data as Array<{ name?: string }> | undefined) || [])
+                                    .map((item, idx) => (item?.name || '').trim() || `系列${idx + 1}`),
+                            )}
+                        </>
                     )}
                     {type === 'gauge-chart' && (
                         <div className="property-row">
@@ -363,6 +547,32 @@ function renderComponentConfig(
                 </>
             );
 
+        case 'markdown-text':
+            return (
+                <>
+                    <div className="property-row">
+                        <label className="property-label">Markdown</label>
+                        <textarea
+                            className="property-input"
+                            rows={8}
+                            value={(config.markdown as string) || ''}
+                            onChange={(e) => onChange('markdown', e.target.value)}
+                        />
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">字号</label>
+                        <input
+                            type="number"
+                            className="property-input"
+                            min={10}
+                            max={36}
+                            value={(config.fontSize as number) || 14}
+                            onChange={(e) => onChange('fontSize', Number(e.target.value))}
+                        />
+                    </div>
+                </>
+            );
+
         case 'datetime':
             return (
                 <>
@@ -382,6 +592,64 @@ function renderComponentConfig(
                             className="property-input"
                             value={config.fontSize as number}
                             onChange={(e) => onChange('fontSize', Number(e.target.value))}
+                        />
+                    </div>
+                </>
+            );
+
+        case 'countdown':
+            return (
+                <>
+                    <div className="property-row">
+                        <label className="property-label">标题</label>
+                        <input
+                            type="text"
+                            className="property-input"
+                            value={(config.title as string) || '倒计时'}
+                            onChange={(e) => onChange('title', e.target.value)}
+                        />
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">目标时间</label>
+                        <input
+                            type="datetime-local"
+                            className="property-input"
+                            value={String(config.targetTime || '').replace('Z', '').slice(0, 16)}
+                            onChange={(e) => onChange('targetTime', new Date(e.target.value).toISOString())}
+                        />
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">显示天数</label>
+                        <input
+                            type="checkbox"
+                            checked={config.showDays !== false}
+                            onChange={(e) => onChange('showDays', e.target.checked)}
+                        />
+                    </div>
+                </>
+            );
+
+        case 'marquee':
+            return (
+                <>
+                    <div className="property-row">
+                        <label className="property-label">文本</label>
+                        <textarea
+                            className="property-input"
+                            rows={4}
+                            value={(config.text as string) || ''}
+                            onChange={(e) => onChange('text', e.target.value)}
+                        />
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">速度(秒)</label>
+                        <input
+                            type="number"
+                            className="property-input"
+                            min={10}
+                            max={120}
+                            value={(config.speed as number) || 40}
+                            onChange={(e) => onChange('speed', Number(e.target.value))}
                         />
                     </div>
                 </>
@@ -407,6 +675,134 @@ function renderComponentConfig(
                             type="checkbox"
                             checked={config.showLabel as boolean}
                             onChange={(e) => onChange('showLabel', e.target.checked)}
+                        />
+                    </div>
+                </>
+            );
+
+        case 'filter-input':
+            return (
+                <>
+                    <div className="property-row">
+                        <label className="property-label">标题</label>
+                        <input
+                            type="text"
+                            className="property-input"
+                            value={(config.label as string) || '筛选'}
+                            onChange={(e) => onChange('label', e.target.value)}
+                        />
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">变量Key</label>
+                        <input
+                            type="text"
+                            className="property-input"
+                            value={(config.variableKey as string) || ''}
+                            onChange={(e) => onChange('variableKey', e.target.value)}
+                            placeholder="keyword"
+                        />
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">占位</label>
+                        <input
+                            type="text"
+                            className="property-input"
+                            value={(config.placeholder as string) || ''}
+                            onChange={(e) => onChange('placeholder', e.target.value)}
+                            placeholder="请输入关键词"
+                        />
+                    </div>
+                </>
+            );
+
+        case 'filter-select': {
+            const options = Array.isArray(config.options)
+                ? (config.options as Array<string | { label?: string; value?: string }>)
+                : [];
+            const optionText = options
+                .map((item) => (typeof item === 'string' ? item : `${item.value || ''}|${item.label || ''}`))
+                .join('\n');
+            return (
+                <>
+                    <div className="property-row">
+                        <label className="property-label">标题</label>
+                        <input
+                            type="text"
+                            className="property-input"
+                            value={(config.label as string) || '筛选'}
+                            onChange={(e) => onChange('label', e.target.value)}
+                        />
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">变量Key</label>
+                        <input
+                            type="text"
+                            className="property-input"
+                            value={(config.variableKey as string) || ''}
+                            onChange={(e) => onChange('variableKey', e.target.value)}
+                            placeholder="region"
+                        />
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">选项(每行1个)</label>
+                        <textarea
+                            className="property-input"
+                            rows={5}
+                            value={optionText}
+                            onChange={(e) => {
+                                const lines = e.target.value
+                                    .split('\n')
+                                    .map((line) => line.trim())
+                                    .filter((line) => line.length > 0);
+                                onChange('options', lines);
+                            }}
+                            placeholder={'华北\n华东\n华南'}
+                        />
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">占位</label>
+                        <input
+                            type="text"
+                            className="property-input"
+                            value={(config.placeholder as string) || ''}
+                            onChange={(e) => onChange('placeholder', e.target.value)}
+                            placeholder="请选择"
+                        />
+                    </div>
+                </>
+            );
+        }
+
+        case 'filter-date-range':
+            return (
+                <>
+                    <div className="property-row">
+                        <label className="property-label">标题</label>
+                        <input
+                            type="text"
+                            className="property-input"
+                            value={(config.label as string) || '日期区间'}
+                            onChange={(e) => onChange('label', e.target.value)}
+                        />
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">开始变量</label>
+                        <input
+                            type="text"
+                            className="property-input"
+                            value={(config.startKey as string) || ''}
+                            onChange={(e) => onChange('startKey', e.target.value)}
+                            placeholder="startDate"
+                        />
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">结束变量</label>
+                        <input
+                            type="text"
+                            className="property-input"
+                            value={(config.endKey as string) || ''}
+                            onChange={(e) => onChange('endKey', e.target.value)}
+                            placeholder="endDate"
                         />
                     </div>
                 </>
@@ -630,6 +1026,28 @@ function renderComponentConfig(
                         />
                     </div>
                     <div className="property-row">
+                        <label className="property-label">坐标轴字号</label>
+                        <input
+                            type="number"
+                            className="property-input"
+                            min={10}
+                            max={28}
+                            value={(config.axisFontSize as number) || 12}
+                            onChange={(e) => onChange('axisFontSize', Number(e.target.value))}
+                        />
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">图例字号</label>
+                        <input
+                            type="number"
+                            className="property-input"
+                            min={10}
+                            max={28}
+                            value={(config.legendFontSize as number) || 12}
+                            onChange={(e) => onChange('legendFontSize', Number(e.target.value))}
+                        />
+                    </div>
+                    <div className="property-row">
                         <label className="property-label">图例位置</label>
                         <select
                             className="property-input"
@@ -641,6 +1059,51 @@ function renderComponentConfig(
                             <option value="left">左侧</option>
                             <option value="right">右侧</option>
                         </select>
+                    </div>
+                    {renderSeriesColorRows(['散点系列'])}
+                </>
+            );
+
+        case 'map-chart':
+            return (
+                <>
+                    <div className="property-row">
+                        <label className="property-label">标题</label>
+                        <input
+                            type="text"
+                            className="property-input"
+                            value={(config.title as string) || '区域地图'}
+                            onChange={(e) => onChange('title', e.target.value)}
+                        />
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">地图范围</label>
+                        <select
+                            className="property-input"
+                            value={(config.mapScope as string) || 'china'}
+                            onChange={(e) => onChange('mapScope', e.target.value)}
+                        >
+                            <option value="china">中国</option>
+                            <option value="world">世界</option>
+                        </select>
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">区域变量Key</label>
+                        <input
+                            type="text"
+                            className="property-input"
+                            value={(config.regionVariableKey as string) || ''}
+                            onChange={(e) => onChange('regionVariableKey', e.target.value)}
+                            placeholder="region"
+                        />
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">启用下钻</label>
+                        <input
+                            type="checkbox"
+                            checked={config.enableRegionDrill !== false}
+                            onChange={(e) => onChange('enableRegionDrill', e.target.checked)}
+                        />
                     </div>
                 </>
             );
@@ -680,6 +1143,69 @@ function renderComponentConfig(
                 </>
             );
 
+        case 'shape':
+            return (
+                <>
+                    <div className="property-row">
+                        <label className="property-label">形状</label>
+                        <select
+                            className="property-input"
+                            value={(config.shapeType as string) || 'rect'}
+                            onChange={(e) => onChange('shapeType', e.target.value)}
+                        >
+                            <option value="rect">矩形</option>
+                            <option value="circle">圆形</option>
+                            <option value="line">线条</option>
+                            <option value="arrow">箭头</option>
+                        </select>
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">填充色</label>
+                        <input
+                            type="color"
+                            className="property-color-input"
+                            value={(config.fillColor as string) || '#3b82f6'}
+                            onChange={(e) => onChange('fillColor', e.target.value)}
+                        />
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">边框色</label>
+                        <input
+                            type="color"
+                            className="property-color-input"
+                            value={(config.borderColor as string) || '#60a5fa'}
+                            onChange={(e) => onChange('borderColor', e.target.value)}
+                        />
+                    </div>
+                </>
+            );
+
+        case 'container':
+            return (
+                <>
+                    <div className="property-row">
+                        <label className="property-label">标题</label>
+                        <input
+                            type="text"
+                            className="property-input"
+                            value={(config.title as string) || '容器'}
+                            onChange={(e) => onChange('title', e.target.value)}
+                        />
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">内边距</label>
+                        <input
+                            type="number"
+                            className="property-input"
+                            min={0}
+                            max={80}
+                            value={(config.padding as number) || 12}
+                            onChange={(e) => onChange('padding', Number(e.target.value))}
+                        />
+                    </div>
+                </>
+            );
+
         default:
             return (
                 <div className="empty-state-hint">
@@ -695,17 +1221,38 @@ function renderDataSourceConfig(
     globalVariables: ScreenGlobalVariable[],
 ) {
     const ds = component.dataSource as DataSourceConfig | undefined;
-    const dsType = ds?.type ?? 'static';
+    const dsType = resolveDataSourceType(ds);
+    const sqlConfig = resolveSqlConfig(ds);
 
     const cardBindings: CardParameterBinding[] = ds?.type === 'card' ? (ds.cardConfig?.parameterBindings ?? []) : [];
+    const sqlBindings: CardParameterBinding[] = dsType === 'sql' ? (sqlConfig?.parameterBindings ?? []) : [];
     const variableOptions = (globalVariables ?? []).map((item) => ({ key: item.key, label: item.label || item.key }));
 
     const updateCardBindings = (bindings: CardParameterBinding[]) => {
         setDataSource({
             type: 'card',
+            sourceType: 'card',
             cardConfig: {
                 ...(ds?.type === 'card' ? ds.cardConfig : {}),
                 cardId: ds?.type === 'card' ? (ds.cardConfig?.cardId ?? 0) : 0,
+                parameterBindings: bindings,
+            },
+        });
+    };
+
+    const updateSqlBindings = (bindings: CardParameterBinding[]) => {
+        const base = resolveSqlConfig(ds);
+        setDataSource({
+            type: 'sql',
+            sourceType: 'sql',
+            refreshInterval: dsType === 'sql' ? ds?.refreshInterval : undefined,
+            sqlConfig: {
+                ...(base ?? { query: '' }),
+                query: base?.query ?? '',
+                databaseId: base?.databaseId,
+                connectionId: base?.connectionId,
+                queryTimeoutSeconds: base?.queryTimeoutSeconds,
+                maxRows: base?.maxRows,
                 parameterBindings: bindings,
             },
         });
@@ -723,6 +1270,7 @@ function renderDataSourceConfig(
         if (nextType === 'card') {
             setDataSource({
                 type: 'card',
+                sourceType: 'card',
                 cardConfig: {
                     cardId: ds?.type === 'card' ? (ds.cardConfig?.cardId ?? 0) : 0,
                     refreshInterval: ds?.type === 'card' ? ds.cardConfig?.refreshInterval : undefined,
@@ -736,6 +1284,7 @@ function renderDataSourceConfig(
         if (nextType === 'api') {
             setDataSource({
                 type: 'api',
+                sourceType: 'api',
                 refreshInterval: ds?.type === 'api' ? ds.refreshInterval : undefined,
                 apiConfig: {
                     url: ds?.type === 'api' ? (ds.apiConfig?.url ?? '') : '',
@@ -745,14 +1294,31 @@ function renderDataSourceConfig(
             });
             return;
         }
-        if (nextType === 'database') {
+        if (nextType === 'sql') {
+            const base = resolveSqlConfig(ds);
             setDataSource({
-                type: 'database',
-                refreshInterval: ds?.type === 'database' ? ds.refreshInterval : undefined,
-                databaseConfig: {
-                    databaseId: ds?.type === 'database' ? ds.databaseConfig?.databaseId : undefined,
-                    query: ds?.type === 'database' ? (ds.databaseConfig?.query ?? 'select 1') : 'select 1',
+                type: 'sql',
+                sourceType: 'sql',
+                refreshInterval: dsType === 'sql' ? ds?.refreshInterval : undefined,
+                sqlConfig: {
+                    databaseId: base?.databaseId,
+                    connectionId: base?.connectionId,
+                    query: base?.query ?? 'select 1',
+                    queryTimeoutSeconds: base?.queryTimeoutSeconds,
+                    maxRows: base?.maxRows,
+                    parameterBindings: base?.parameterBindings ?? [],
                 },
+            });
+            return;
+        }
+        if (nextType === 'dataset') {
+            setDataSource({
+                type: 'dataset',
+                sourceType: 'dataset',
+                refreshInterval: dsType === 'dataset' ? ds?.refreshInterval : undefined,
+                datasetConfig: dsType === 'dataset'
+                    ? ds?.datasetConfig
+                    : { queryBody: { database: 0, type: 'query', query: {} } },
             });
         }
     };
@@ -769,7 +1335,8 @@ function renderDataSourceConfig(
                     <option value="static">静态数据</option>
                     <option value="card">Card 查询</option>
                     <option value="api">HTTP API</option>
-                    <option value="database">数据库 SQL</option>
+                    <option value="sql">SQL 模式</option>
+                    <option value="dataset">Dataset 模式</option>
                 </select>
             </div>
 
@@ -782,6 +1349,7 @@ function renderDataSourceConfig(
                             onChange={(cardId) => {
                                 setDataSource({
                                     type: 'card',
+                                    sourceType: 'card',
                                     cardConfig: {
                                         ...(ds?.type === 'card' ? ds.cardConfig : {}),
                                         cardId,
@@ -802,6 +1370,7 @@ function renderDataSourceConfig(
                                 const val = Number(e.target.value);
                                 setDataSource({
                                     type: 'card',
+                                    sourceType: 'card',
                                     cardConfig: {
                                         ...(ds?.type === 'card' ? ds.cardConfig : {}),
                                         cardId: ds?.type === 'card' ? (ds.cardConfig?.cardId ?? 0) : 0,
@@ -818,6 +1387,7 @@ function renderDataSourceConfig(
                         onMetricIdChange={(metricId) => {
                             setDataSource({
                                 type: 'card',
+                                sourceType: 'card',
                                 cardConfig: {
                                     ...(ds?.type === 'card' ? ds.cardConfig : {}),
                                     cardId: ds?.type === 'card' ? (ds.cardConfig?.cardId ?? 0) : 0,
@@ -830,6 +1400,7 @@ function renderDataSourceConfig(
                         onMetricVersionChange={(metricVersion) => {
                             setDataSource({
                                 type: 'card',
+                                sourceType: 'card',
                                 cardConfig: {
                                     ...(ds?.type === 'card' ? ds.cardConfig : {}),
                                     cardId: ds?.type === 'card' ? (ds.cardConfig?.cardId ?? 0) : 0,
@@ -859,6 +1430,7 @@ function renderDataSourceConfig(
                             onChange={(e) => {
                                 setDataSource({
                                     type: 'api',
+                                    sourceType: 'api',
                                     refreshInterval: ds?.type === 'api' ? ds.refreshInterval : undefined,
                                     apiConfig: {
                                         ...(ds?.type === 'api' ? ds.apiConfig : { method: 'GET' as const }),
@@ -879,6 +1451,7 @@ function renderDataSourceConfig(
                                 const method = (e.target.value as 'GET' | 'POST') || 'GET';
                                 setDataSource({
                                     type: 'api',
+                                    sourceType: 'api',
                                     refreshInterval: ds?.type === 'api' ? ds.refreshInterval : undefined,
                                     apiConfig: {
                                         ...(ds?.type === 'api' ? ds.apiConfig : {}),
@@ -901,6 +1474,7 @@ function renderDataSourceConfig(
                             onChange={(e) => {
                                 setDataSource({
                                     type: 'api',
+                                    sourceType: 'api',
                                     refreshInterval: ds?.type === 'api' ? ds.refreshInterval : undefined,
                                     apiConfig: {
                                         ...(ds?.type === 'api' ? ds.apiConfig : {}),
@@ -925,6 +1499,7 @@ function renderDataSourceConfig(
                                 const val = Number(e.target.value);
                                 setDataSource({
                                     type: 'api',
+                                    sourceType: 'api',
                                     refreshInterval: val > 0 ? val : undefined,
                                     apiConfig: ds?.type === 'api'
                                         ? {
@@ -941,20 +1516,22 @@ function renderDataSourceConfig(
                 </>
             )}
 
-            {dsType === 'database' && (
+            {dsType === 'sql' && (
                 <>
                     <div className="property-row">
                         <label className="property-label">数据库</label>
                         <DatabaseIdPicker
-                            value={ds?.type === 'database' ? (ds.databaseConfig?.databaseId ?? 0) : 0}
+                            value={sqlConfig?.databaseId ?? 0}
                             onChange={(databaseId) => {
+                                const base = resolveSqlConfig(ds);
                                 setDataSource({
-                                    type: 'database',
-                                    refreshInterval: ds?.type === 'database' ? ds.refreshInterval : undefined,
-                                    databaseConfig: {
-                                        ...(ds?.type === 'database' ? ds.databaseConfig : {}),
+                                    type: 'sql',
+                                    sourceType: 'sql',
+                                    refreshInterval: dsType === 'sql' ? ds?.refreshInterval : undefined,
+                                    sqlConfig: {
+                                        ...(base ?? { query: '' }),
                                         databaseId: databaseId > 0 ? databaseId : undefined,
-                                        query: ds?.type === 'database' ? (ds.databaseConfig?.query ?? '') : '',
+                                        query: base?.query ?? '',
                                     },
                                 });
                             }}
@@ -966,16 +1543,18 @@ function renderDataSourceConfig(
                             type="number"
                             className="property-input"
                             min={1}
-                            value={ds?.type === 'database' ? (ds.databaseConfig?.databaseId ?? 0) : 0}
+                            value={sqlConfig?.databaseId ?? 0}
                             onChange={(e) => {
                                 const n = Number(e.target.value);
+                                const base = resolveSqlConfig(ds);
                                 setDataSource({
-                                    type: 'database',
-                                    refreshInterval: ds?.type === 'database' ? ds.refreshInterval : undefined,
-                                    databaseConfig: {
-                                        ...(ds?.type === 'database' ? ds.databaseConfig : {}),
+                                    type: 'sql',
+                                    sourceType: 'sql',
+                                    refreshInterval: dsType === 'sql' ? ds?.refreshInterval : undefined,
+                                    sqlConfig: {
+                                        ...(base ?? { query: '' }),
                                         databaseId: Number.isFinite(n) && n > 0 ? n : undefined,
-                                        query: ds?.type === 'database' ? (ds.databaseConfig?.query ?? '') : '',
+                                        query: base?.query ?? '',
                                     },
                                 });
                             }}
@@ -987,21 +1566,78 @@ function renderDataSourceConfig(
                         <textarea
                             className="property-input"
                             rows={6}
-                            value={ds?.type === 'database' ? (ds.databaseConfig?.query ?? '') : ''}
+                            value={sqlConfig?.query ?? ''}
                             onChange={(e) => {
+                                const base = resolveSqlConfig(ds);
                                 setDataSource({
-                                    type: 'database',
-                                    refreshInterval: ds?.type === 'database' ? ds.refreshInterval : undefined,
-                                    databaseConfig: {
-                                        ...(ds?.type === 'database' ? ds.databaseConfig : {}),
-                                        databaseId: ds?.type === 'database' ? ds.databaseConfig?.databaseId : undefined,
+                                    type: 'sql',
+                                    sourceType: 'sql',
+                                    refreshInterval: dsType === 'sql' ? ds?.refreshInterval : undefined,
+                                    sqlConfig: {
+                                        ...(base ?? { query: '' }),
+                                        databaseId: base?.databaseId,
                                         query: e.target.value,
                                     },
                                 });
                             }}
-                            placeholder="select * from public.table limit 100"
+                            placeholder="select * from public.table where day = {{day}} limit 200"
                         />
                     </div>
+                    <div className="property-row">
+                        <label className="property-label">最大行数</label>
+                        <input
+                            type="number"
+                            className="property-input"
+                            min={1}
+                            step={100}
+                            value={sqlConfig?.maxRows ?? 2000}
+                            onChange={(e) => {
+                                const n = Number(e.target.value);
+                                const base = resolveSqlConfig(ds);
+                                setDataSource({
+                                    type: 'sql',
+                                    sourceType: 'sql',
+                                    refreshInterval: dsType === 'sql' ? ds?.refreshInterval : undefined,
+                                    sqlConfig: {
+                                        ...(base ?? { query: '' }),
+                                        query: base?.query ?? '',
+                                        maxRows: Number.isFinite(n) && n > 0 ? n : undefined,
+                                    },
+                                });
+                            }}
+                            placeholder="默认2000"
+                        />
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">超时(秒)</label>
+                        <input
+                            type="number"
+                            className="property-input"
+                            min={1}
+                            step={5}
+                            value={sqlConfig?.queryTimeoutSeconds ?? 60}
+                            onChange={(e) => {
+                                const n = Number(e.target.value);
+                                const base = resolveSqlConfig(ds);
+                                setDataSource({
+                                    type: 'sql',
+                                    sourceType: 'sql',
+                                    refreshInterval: dsType === 'sql' ? ds?.refreshInterval : undefined,
+                                    sqlConfig: {
+                                        ...(base ?? { query: '' }),
+                                        query: base?.query ?? '',
+                                        queryTimeoutSeconds: Number.isFinite(n) && n > 0 ? n : undefined,
+                                    },
+                                });
+                            }}
+                            placeholder="默认60"
+                        />
+                    </div>
+                    <CardParamBindingsEditor
+                        bindings={sqlBindings}
+                        globalVariables={globalVariables}
+                        onChange={updateSqlBindings}
+                    />
                     <div className="property-row">
                         <label className="property-label">刷新(秒)</label>
                         <input
@@ -1009,16 +1645,18 @@ function renderDataSourceConfig(
                             className="property-input"
                             min={0}
                             step={10}
-                            value={ds?.type === 'database' ? (ds.refreshInterval ?? 0) : 0}
+                            value={dsType === 'sql' ? (ds?.refreshInterval ?? 0) : 0}
                             onChange={(e) => {
                                 const val = Number(e.target.value);
+                                const base = resolveSqlConfig(ds);
                                 setDataSource({
-                                    type: 'database',
+                                    type: 'sql',
+                                    sourceType: 'sql',
                                     refreshInterval: val > 0 ? val : undefined,
-                                    databaseConfig: ds?.type === 'database'
+                                    sqlConfig: base
                                         ? {
-                                            ...(ds.databaseConfig ?? { query: '' }),
-                                            query: ds.databaseConfig?.query ?? '',
+                                            ...base,
+                                            query: base.query ?? '',
                                         }
                                         : { query: '' },
                                 });
@@ -1028,8 +1666,87 @@ function renderDataSourceConfig(
                     </div>
                 </>
             )}
+
+            {dsType === 'dataset' && (
+                <>
+                    <div className="property-row">
+                        <label className="property-label">QueryBody(JSON)</label>
+                        <textarea
+                            className="property-input"
+                            rows={8}
+                            value={safeJsonStringify(ds?.datasetConfig?.queryBody)}
+                            onChange={(e) => {
+                                const parsed = safeJsonParse(e.target.value);
+                                setDataSource({
+                                    type: 'dataset',
+                                    sourceType: 'dataset',
+                                    refreshInterval: dsType === 'dataset' ? ds?.refreshInterval : undefined,
+                                    datasetConfig: { queryBody: parsed ?? {} },
+                                });
+                            }}
+                            placeholder='{"database":1,"type":"native","native":{"query":"select 1"}}'
+                        />
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">刷新(秒)</label>
+                        <input
+                            type="number"
+                            className="property-input"
+                            min={0}
+                            step={10}
+                            value={dsType === 'dataset' ? (ds?.refreshInterval ?? 0) : 0}
+                            onChange={(e) => {
+                                const val = Number(e.target.value);
+                                setDataSource({
+                                    type: 'dataset',
+                                    sourceType: 'dataset',
+                                    refreshInterval: val > 0 ? val : undefined,
+                                    datasetConfig: ds?.datasetConfig ?? { queryBody: {} },
+                                });
+                            }}
+                            placeholder="0=不刷新"
+                        />
+                    </div>
+                </>
+            )}
         </>
     );
+}
+
+function resolveDataSourceType(ds?: DataSourceConfig): 'static' | QuerySourceType {
+    const type = ((ds?.sourceType ?? ds?.type) || 'static').toLowerCase();
+    if (type === 'database' || type === 'sql') return 'sql';
+    if (type === 'card' || type === 'api' || type === 'dataset' || type === 'metric') {
+        return type;
+    }
+    return 'static';
+}
+
+function resolveSqlConfig(ds?: DataSourceConfig): DataSourceConfig['sqlConfig'] | DataSourceConfig['databaseConfig'] | undefined {
+    if (!ds) return undefined;
+    return ds.sqlConfig ?? ds.databaseConfig;
+}
+
+function safeJsonParse(text: string): Record<string, unknown> | null {
+    const raw = (text || '').trim();
+    if (!raw) return {};
+    try {
+        const parsed = JSON.parse(raw);
+        return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+            ? (parsed as Record<string, unknown>)
+            : null;
+    } catch {
+        return null;
+    }
+}
+
+function safeJsonStringify(value: unknown): string {
+    if (!value || typeof value !== 'object') return '{}';
+    try {
+        return JSON.stringify(value, null, 2);
+    } catch {
+        return '{}';
+    }
 }
 
 
@@ -1275,7 +1992,13 @@ function renderDrillDownConfig(
 }
 
 /** Column config entry for scroll-board */
-interface ColumnEntry { source: string; alias?: string }
+interface ColumnEntry {
+    source: string;
+    alias?: string;
+    align?: 'left' | 'center' | 'right';
+    width?: number;
+    formatter?: 'auto' | 'string' | 'number' | 'percent' | 'date';
+}
 
 /** scroll-board 专用属性面板，支持动态列选择 */
 function ScrollBoardConfig({ component, onChange }: {
@@ -1322,6 +2045,17 @@ function ScrollBoardConfig({ component, onChange }: {
             if (alias) return { ...c, alias };
             const { alias: _a, ...rest } = c;
             return rest;
+        }));
+    };
+
+    const handleColumnPatch = (
+        colName: string,
+        patch: Partial<Pick<ColumnEntry, 'align' | 'width' | 'formatter'>>,
+    ) => {
+        const current = columns ?? initColumns();
+        onChange('columns', current.map((c) => {
+            if (c.source !== colName) return c;
+            return { ...c, ...patch };
         }));
     };
 
@@ -1404,16 +2138,66 @@ function ScrollBoardConfig({ component, onChange }: {
                                     </label>
                                 </div>
                                 {isSelected && (
-                                    <div className="property-row">
-                                        <label className="property-label">别名</label>
-                                        <input
-                                            type="text"
-                                            className="property-input"
-                                            placeholder={displayName}
-                                            value={colConfig?.alias || ''}
-                                            onChange={(e) => handleAliasChange(col.name, e.target.value)}
-                                        />
-                                    </div>
+                                    <>
+                                        <div className="property-row">
+                                            <label className="property-label">表头标题</label>
+                                            <input
+                                                type="text"
+                                                className="property-input"
+                                                placeholder={displayName}
+                                                value={colConfig?.alias || ''}
+                                                onChange={(e) => handleAliasChange(col.name, e.target.value)}
+                                            />
+                                        </div>
+                                        <div className="property-row">
+                                            <label className="property-label">对齐</label>
+                                            <select
+                                                className="property-input"
+                                                value={(colConfig?.align as string) || 'center'}
+                                                onChange={(e) => handleColumnPatch(col.name, { align: e.target.value as ColumnEntry['align'] })}
+                                            >
+                                                <option value="left">左</option>
+                                                <option value="center">中</option>
+                                                <option value="right">右</option>
+                                            </select>
+                                        </div>
+                                        <div className="property-row">
+                                            <label className="property-label">列宽(%)</label>
+                                            <input
+                                                type="number"
+                                                className="property-input"
+                                                min={5}
+                                                max={100}
+                                                value={typeof colConfig?.width === 'number' ? colConfig.width : ''}
+                                                placeholder="自动"
+                                                onChange={(e) => {
+                                                    const raw = e.target.value.trim();
+                                                    if (!raw) {
+                                                        handleColumnPatch(col.name, { width: undefined });
+                                                        return;
+                                                    }
+                                                    const width = Number(raw);
+                                                    handleColumnPatch(col.name, {
+                                                        width: Number.isFinite(width) ? Math.max(5, Math.min(100, width)) : undefined,
+                                                    });
+                                                }}
+                                            />
+                                        </div>
+                                        <div className="property-row">
+                                            <label className="property-label">格式化</label>
+                                            <select
+                                                className="property-input"
+                                                value={(colConfig?.formatter as string) || 'auto'}
+                                                onChange={(e) => handleColumnPatch(col.name, { formatter: e.target.value as ColumnEntry['formatter'] })}
+                                            >
+                                                <option value="auto">自动</option>
+                                                <option value="string">文本</option>
+                                                <option value="number">数字</option>
+                                                <option value="percent">百分比</option>
+                                                <option value="date">日期时间</option>
+                                            </select>
+                                        </div>
+                                    </>
                                 )}
                             </div>
                         );
@@ -1500,6 +2284,17 @@ function TableConfig({ component, onChange }: {
         }));
     };
 
+    const handleColumnPatch = (
+        colName: string,
+        patch: Partial<Pick<ColumnEntry, 'align' | 'width' | 'formatter'>>,
+    ) => {
+        const current = columns ?? initColumns();
+        onChange('columns', current.map((c) => {
+            if (c.source !== colName) return c;
+            return { ...c, ...patch };
+        }));
+    };
+
     return (
         <>
             <div className="property-row">
@@ -1549,6 +2344,65 @@ function TableConfig({ component, onChange }: {
                     onChange={(e) => onChange('borderColor', e.target.value)}
                 />
             </div>
+            <div className="property-row">
+                <label className="property-label">启用排序</label>
+                <input
+                    type="checkbox"
+                    checked={config.enableSort !== false}
+                    onChange={(e) => onChange('enableSort', e.target.checked)}
+                />
+            </div>
+            <div className="property-row">
+                <label className="property-label">分页</label>
+                <input
+                    type="checkbox"
+                    checked={config.enablePagination === true}
+                    onChange={(e) => onChange('enablePagination', e.target.checked)}
+                />
+            </div>
+            {config.enablePagination === true && (
+                <div className="property-row">
+                    <label className="property-label">每页条数</label>
+                    <input
+                        type="number"
+                        className="property-input"
+                        min={1}
+                        max={200}
+                        value={(config.pageSize as number) || 10}
+                        onChange={(e) => onChange('pageSize', Number(e.target.value))}
+                    />
+                </div>
+            )}
+            <div className="property-row">
+                <label className="property-label">冻结表头</label>
+                <input
+                    type="checkbox"
+                    checked={config.freezeHeader !== false}
+                    onChange={(e) => onChange('freezeHeader', e.target.checked)}
+                />
+            </div>
+            <div className="property-row">
+                <label className="property-label">条件格式(JSON)</label>
+                <textarea
+                    className="property-input"
+                    rows={4}
+                    defaultValue={JSON.stringify((config.conditionalRules as unknown[]) || [], null, 2)}
+                    onBlur={(e) => {
+                        const raw = e.target.value.trim();
+                        if (!raw) {
+                            onChange('conditionalRules', []);
+                            return;
+                        }
+                        try {
+                            const parsed = JSON.parse(raw);
+                            onChange('conditionalRules', Array.isArray(parsed) ? parsed : []);
+                        } catch {
+                            alert('条件格式 JSON 解析失败');
+                        }
+                    }}
+                    placeholder='[{"columnIndex":0,"operator":">","value":100,"color":"#ef4444"}]'
+                />
+            </div>
 
             {hasCardSource && sourceCols.length === 0 && (
                 <div style={{ fontSize: 11, color: '#888', marginTop: 8, padding: '4px 0' }}>
@@ -1583,16 +2437,66 @@ function TableConfig({ component, onChange }: {
                                     </label>
                                 </div>
                                 {isSelected && (
-                                    <div className="property-row">
-                                        <label className="property-label">表头标题</label>
-                                        <input
-                                            type="text"
-                                            className="property-input"
-                                            placeholder={displayName}
-                                            value={colConfig?.alias || ''}
-                                            onChange={(e) => handleAliasChange(col.name, e.target.value)}
-                                        />
-                                    </div>
+                                    <>
+                                        <div className="property-row">
+                                            <label className="property-label">表头标题</label>
+                                            <input
+                                                type="text"
+                                                className="property-input"
+                                                placeholder={displayName}
+                                                value={colConfig?.alias || ''}
+                                                onChange={(e) => handleAliasChange(col.name, e.target.value)}
+                                            />
+                                        </div>
+                                        <div className="property-row">
+                                            <label className="property-label">对齐</label>
+                                            <select
+                                                className="property-input"
+                                                value={(colConfig?.align as string) || 'left'}
+                                                onChange={(e) => handleColumnPatch(col.name, { align: e.target.value as ColumnEntry['align'] })}
+                                            >
+                                                <option value="left">左</option>
+                                                <option value="center">中</option>
+                                                <option value="right">右</option>
+                                            </select>
+                                        </div>
+                                        <div className="property-row">
+                                            <label className="property-label">列宽(%)</label>
+                                            <input
+                                                type="number"
+                                                className="property-input"
+                                                min={5}
+                                                max={100}
+                                                value={typeof colConfig?.width === 'number' ? colConfig.width : ''}
+                                                placeholder="自动"
+                                                onChange={(e) => {
+                                                    const raw = e.target.value.trim();
+                                                    if (!raw) {
+                                                        handleColumnPatch(col.name, { width: undefined });
+                                                        return;
+                                                    }
+                                                    const width = Number(raw);
+                                                    handleColumnPatch(col.name, {
+                                                        width: Number.isFinite(width) ? Math.max(5, Math.min(100, width)) : undefined,
+                                                    });
+                                                }}
+                                            />
+                                        </div>
+                                        <div className="property-row">
+                                            <label className="property-label">格式化</label>
+                                            <select
+                                                className="property-input"
+                                                value={(colConfig?.formatter as string) || 'auto'}
+                                                onChange={(e) => handleColumnPatch(col.name, { formatter: e.target.value as ColumnEntry['formatter'] })}
+                                            >
+                                                <option value="auto">自动</option>
+                                                <option value="string">文本</option>
+                                                <option value="number">数字</option>
+                                                <option value="percent">百分比</option>
+                                                <option value="date">日期时间</option>
+                                            </select>
+                                        </div>
+                                    </>
                                 )}
                             </div>
                         );

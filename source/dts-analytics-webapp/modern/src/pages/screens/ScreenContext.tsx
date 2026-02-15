@@ -1,7 +1,9 @@
 import { createContext, useContext, useReducer, ReactNode, useCallback, useState } from 'react';
 import type { ScreenState, ScreenAction, ScreenConfig, ScreenComponent } from './types';
+import { SCREEN_SCHEMA_VERSION } from './specV2';
 
 const defaultConfig: ScreenConfig = {
+    schemaVersion: SCREEN_SCHEMA_VERSION,
     id: '',
     name: '未命名大屏',
     width: 1920,
@@ -134,6 +136,34 @@ function screenReducer(state: ScreenState, action: ScreenAction): ScreenState {
             return { ...state, config: newConfig };
         }
 
+        case 'MOVE_COMPONENTS': {
+            const posMap = new Map(action.payload.map((item) => [item.id, item]));
+            const newComponents = state.config.components.map((comp) => {
+                const next = posMap.get(comp.id);
+                if (!next) return comp;
+                return { ...comp, x: next.x, y: next.y };
+            });
+            const newConfig = { ...state.config, components: newComponents };
+            return { ...state, config: newConfig };
+        }
+
+        case 'TRANSFORM_COMPONENTS': {
+            const transformMap = new Map(action.payload.map((item) => [item.id, item]));
+            const newComponents = state.config.components.map((comp) => {
+                const next = transformMap.get(comp.id);
+                if (!next) return comp;
+                return {
+                    ...comp,
+                    x: next.x,
+                    y: next.y,
+                    width: next.width,
+                    height: next.height,
+                };
+            });
+            const newConfig = { ...state.config, components: newComponents };
+            return { ...state, config: newConfig };
+        }
+
         case 'RESIZE_COMPONENT': {
             const newComponents = state.config.components.map((comp) =>
                 comp.id === action.payload.id
@@ -206,6 +236,19 @@ function screenReducer(state: ScreenState, action: ScreenAction): ScreenState {
             };
         }
 
+        case 'SNAPSHOT': {
+            if (state.history[state.historyIndex] === state.config) {
+                return state;
+            }
+            const newHistory = state.history.slice(0, state.historyIndex + 1);
+            newHistory.push(state.config);
+            return {
+                ...state,
+                history: newHistory,
+                historyIndex: newHistory.length - 1,
+            };
+        }
+
         default:
             return state;
     }
@@ -229,6 +272,15 @@ interface ScreenContextValue {
     // Save/Load
     loadConfig: (config: ScreenConfig) => void;
     updateConfig: (updates: Partial<ScreenConfig>) => void;
+    updateSelectedComponents: (updates: Partial<ScreenComponent>) => void;
+    groupSelected: () => void;
+    ungroupSelected: () => void;
+    alignSelected: (mode: 'left' | 'right' | 'top' | 'bottom' | 'h-center' | 'v-center') => void;
+    distributeSelected: (mode: 'horizontal' | 'vertical') => void;
+    snapshotTransform: () => void;
+    snapGuides: { x: number[]; y: number[] };
+    setSnapGuides: (guides: { x?: number[]; y?: number[] }) => void;
+    clearSnapGuides: () => void;
     isSaving: boolean;
     setIsSaving: (saving: boolean) => void;
 }
@@ -239,6 +291,7 @@ export function ScreenProvider({ children }: { children: ReactNode }) {
     const [state, dispatch] = useReducer(screenReducer, initialState);
     const [clipboard, setClipboard] = useState<ScreenComponent[]>([]);
     const [isSaving, setIsSaving] = useState(false);
+    const [snapGuides, setSnapGuidesState] = useState<{ x: number[]; y: number[] }>({ x: [], y: [] });
 
     const addComponent = useCallback((component: ScreenComponent) => {
         dispatch({ type: 'ADD_COMPONENT', payload: component });
@@ -285,6 +338,121 @@ export function ScreenProvider({ children }: { children: ReactNode }) {
         dispatch({ type: 'SET_CONFIG', payload: { ...state.config, ...updates } });
     }, [state.config]);
 
+    const updateSelectedComponents = useCallback((updates: Partial<ScreenComponent>) => {
+        if (state.selectedIds.length === 0) return;
+        const idSet = new Set(state.selectedIds);
+        const newComponents = state.config.components.map((comp) =>
+            idSet.has(comp.id) ? { ...comp, ...updates } : comp,
+        );
+        dispatch({ type: 'SET_CONFIG', payload: { ...state.config, components: newComponents } });
+    }, [state.config, state.selectedIds]);
+
+    const groupSelected = useCallback(() => {
+        if (state.selectedIds.length < 2) return;
+        const idSet = new Set(state.selectedIds);
+        const groupId = `grp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        const newComponents = state.config.components.map((comp) =>
+            idSet.has(comp.id) ? { ...comp, groupId } : comp,
+        );
+        dispatch({ type: 'SET_CONFIG', payload: { ...state.config, components: newComponents } });
+    }, [state.config, state.selectedIds]);
+
+    const ungroupSelected = useCallback(() => {
+        if (state.selectedIds.length === 0) return;
+        const idSet = new Set(state.selectedIds);
+        const newComponents = state.config.components.map((comp) => {
+            if (!idSet.has(comp.id) || !comp.groupId) {
+                return comp;
+            }
+            const { groupId: _groupId, ...rest } = comp;
+            return rest;
+        });
+        dispatch({ type: 'SET_CONFIG', payload: { ...state.config, components: newComponents } });
+    }, [state.config, state.selectedIds]);
+
+    const alignSelected = useCallback((mode: 'left' | 'right' | 'top' | 'bottom' | 'h-center' | 'v-center') => {
+        const selected = state.config.components.filter((comp) => state.selectedIds.includes(comp.id));
+        if (selected.length < 2) return;
+
+        const target = {
+            left: Math.min(...selected.map((comp) => comp.x)),
+            right: Math.max(...selected.map((comp) => comp.x + comp.width)),
+            top: Math.min(...selected.map((comp) => comp.y)),
+            bottom: Math.max(...selected.map((comp) => comp.y + comp.height)),
+        };
+        const center = {
+            x: selected.reduce((sum, comp) => sum + comp.x + comp.width / 2, 0) / selected.length,
+            y: selected.reduce((sum, comp) => sum + comp.y + comp.height / 2, 0) / selected.length,
+        };
+
+        const idSet = new Set(state.selectedIds);
+        const newComponents = state.config.components.map((comp) => {
+            if (!idSet.has(comp.id)) return comp;
+            if (mode === 'left') return { ...comp, x: target.left };
+            if (mode === 'right') return { ...comp, x: target.right - comp.width };
+            if (mode === 'top') return { ...comp, y: target.top };
+            if (mode === 'bottom') return { ...comp, y: target.bottom - comp.height };
+            if (mode === 'h-center') return { ...comp, x: Math.round(center.x - comp.width / 2) };
+            return { ...comp, y: Math.round(center.y - comp.height / 2) };
+        });
+
+        dispatch({ type: 'SET_CONFIG', payload: { ...state.config, components: newComponents } });
+    }, [state.config, state.selectedIds]);
+
+    const distributeSelected = useCallback((mode: 'horizontal' | 'vertical') => {
+        const selected = state.config.components.filter((comp) => state.selectedIds.includes(comp.id));
+        if (selected.length < 3) return;
+
+        const sorted = [...selected].sort((a, b) => (mode === 'horizontal' ? a.x - b.x : a.y - b.y));
+        if (mode === 'horizontal') {
+            const start = sorted[0].x;
+            const end = sorted[sorted.length - 1].x + sorted[sorted.length - 1].width;
+            const totalWidth = sorted.reduce((sum, comp) => sum + comp.width, 0);
+            const gap = (end - start - totalWidth) / (sorted.length - 1);
+            let cursor = start;
+            const nextPos = new Map<string, number>();
+            for (const comp of sorted) {
+                nextPos.set(comp.id, Math.round(cursor));
+                cursor += comp.width + gap;
+            }
+            const newComponents = state.config.components.map((comp) =>
+                nextPos.has(comp.id) ? { ...comp, x: nextPos.get(comp.id) as number } : comp,
+            );
+            dispatch({ type: 'SET_CONFIG', payload: { ...state.config, components: newComponents } });
+            return;
+        }
+
+        const start = sorted[0].y;
+        const end = sorted[sorted.length - 1].y + sorted[sorted.length - 1].height;
+        const totalHeight = sorted.reduce((sum, comp) => sum + comp.height, 0);
+        const gap = (end - start - totalHeight) / (sorted.length - 1);
+        let cursor = start;
+        const nextPos = new Map<string, number>();
+        for (const comp of sorted) {
+            nextPos.set(comp.id, Math.round(cursor));
+            cursor += comp.height + gap;
+        }
+        const newComponents = state.config.components.map((comp) =>
+            nextPos.has(comp.id) ? { ...comp, y: nextPos.get(comp.id) as number } : comp,
+        );
+        dispatch({ type: 'SET_CONFIG', payload: { ...state.config, components: newComponents } });
+    }, [state.config, state.selectedIds]);
+
+    const snapshotTransform = useCallback(() => {
+        dispatch({ type: 'SNAPSHOT' });
+    }, []);
+
+    const setSnapGuides = useCallback((guides: { x?: number[]; y?: number[] }) => {
+        setSnapGuidesState({
+            x: guides.x ?? [],
+            y: guides.y ?? [],
+        });
+    }, []);
+
+    const clearSnapGuides = useCallback(() => {
+        setSnapGuidesState({ x: [], y: [] });
+    }, []);
+
     const canUndo = state.historyIndex > 0;
     const canRedo = state.historyIndex < state.history.length - 1;
 
@@ -306,6 +474,15 @@ export function ScreenProvider({ children }: { children: ReactNode }) {
                 pasteComponents,
                 loadConfig,
                 updateConfig,
+                updateSelectedComponents,
+                groupSelected,
+                ungroupSelected,
+                alignSelected,
+                distributeSelected,
+                snapshotTransform,
+                snapGuides,
+                setSnapGuides,
+                clearSnapGuides,
                 isSaving,
                 setIsSaving,
             }}

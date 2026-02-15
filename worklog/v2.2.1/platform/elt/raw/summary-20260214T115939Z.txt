@@ -1,0 +1,12 @@
+run_at_utc=20260214T115939Z
+hours=168
+timezone=Asia/Shanghai
+mode=normal
+arch=x86_64
+pg_container=dts-stack-dts-pg-1
+ingestion_container=dts-stack-dts-ingestion-1
+has_failure_category=0
+dag_404_count=0
+tasklog_404_count=0
+hourly_csv=hourly-metrics-20260214T115939Z.csv
+failure_csv=failure-top-20260214T115939Z.csv
