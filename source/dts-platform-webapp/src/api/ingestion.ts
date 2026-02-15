@@ -45,6 +45,7 @@ export interface IngestionExecutionDTO {
   logPath?: string;
   replaceMode?: string;
   droppedTables?: string;
+  queueWaitSeconds?: number;
   createdAt?: string;
 }
 
@@ -252,6 +253,12 @@ export interface IngestionGovernanceSourceLoadItem {
   preparing: number;
 }
 
+export interface IngestionGovernanceProjectLoadItem {
+  projectKey: string;
+  running: number;
+  preparing: number;
+}
+
 export interface IngestionGovernanceOverviewDTO {
   generatedAt?: string;
   running: number;
@@ -259,7 +266,10 @@ export interface IngestionGovernanceOverviewDTO {
   queueLength: number;
   blockedByPolicy: number;
   avgExecutionSeconds?: number;
+  avgQueueWaitSeconds?: number;
+  maxQueueWaitSeconds?: number;
   sourceLoads: IngestionGovernanceSourceLoadItem[];
+  projectLoads: IngestionGovernanceProjectLoadItem[];
 }
 
 export interface IngestionRealtimeStatusDTO {

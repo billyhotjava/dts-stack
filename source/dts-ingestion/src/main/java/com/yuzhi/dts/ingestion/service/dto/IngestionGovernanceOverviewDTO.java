@@ -13,7 +13,10 @@ public class IngestionGovernanceOverviewDTO {
     private long queueLength;
     private long blockedByPolicy;
     private Double avgExecutionSeconds;
+    private Double avgQueueWaitSeconds;
+    private Double maxQueueWaitSeconds;
     private List<SourceLoadItem> sourceLoads = new ArrayList<>();
+    private List<ProjectLoadItem> projectLoads = new ArrayList<>();
 
     public Instant getGeneratedAt() {
         return generatedAt;
@@ -63,12 +66,36 @@ public class IngestionGovernanceOverviewDTO {
         this.avgExecutionSeconds = avgExecutionSeconds;
     }
 
+    public Double getAvgQueueWaitSeconds() {
+        return avgQueueWaitSeconds;
+    }
+
+    public void setAvgQueueWaitSeconds(Double avgQueueWaitSeconds) {
+        this.avgQueueWaitSeconds = avgQueueWaitSeconds;
+    }
+
+    public Double getMaxQueueWaitSeconds() {
+        return maxQueueWaitSeconds;
+    }
+
+    public void setMaxQueueWaitSeconds(Double maxQueueWaitSeconds) {
+        this.maxQueueWaitSeconds = maxQueueWaitSeconds;
+    }
+
     public List<SourceLoadItem> getSourceLoads() {
         return sourceLoads;
     }
 
     public void setSourceLoads(List<SourceLoadItem> sourceLoads) {
         this.sourceLoads = sourceLoads;
+    }
+
+    public List<ProjectLoadItem> getProjectLoads() {
+        return projectLoads;
+    }
+
+    public void setProjectLoads(List<ProjectLoadItem> projectLoads) {
+        this.projectLoads = projectLoads;
     }
 
     public static class SourceLoadItem {
@@ -100,6 +127,44 @@ public class IngestionGovernanceOverviewDTO {
 
         public void setSourceType(String sourceType) {
             this.sourceType = sourceType;
+        }
+
+        public long getRunning() {
+            return running;
+        }
+
+        public void setRunning(long running) {
+            this.running = running;
+        }
+
+        public long getPreparing() {
+            return preparing;
+        }
+
+        public void setPreparing(long preparing) {
+            this.preparing = preparing;
+        }
+    }
+
+    public static class ProjectLoadItem {
+        private String projectKey;
+        private long running;
+        private long preparing;
+
+        public ProjectLoadItem() {}
+
+        public ProjectLoadItem(String projectKey, long running, long preparing) {
+            this.projectKey = projectKey;
+            this.running = running;
+            this.preparing = preparing;
+        }
+
+        public String getProjectKey() {
+            return projectKey;
+        }
+
+        public void setProjectKey(String projectKey) {
+            this.projectKey = projectKey;
         }
 
         public long getRunning() {

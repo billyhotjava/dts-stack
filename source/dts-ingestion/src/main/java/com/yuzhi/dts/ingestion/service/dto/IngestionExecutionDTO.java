@@ -37,6 +37,8 @@ public class IngestionExecutionDTO {
 
     private String droppedTables;
 
+    private Long queueWaitSeconds;
+
     private Instant createdAt;
 
     public Long getId() {
@@ -157,6 +159,14 @@ public class IngestionExecutionDTO {
 
     public void setDroppedTables(String droppedTables) {
         this.droppedTables = droppedTables;
+    }
+
+    public Long getQueueWaitSeconds() {
+        return queueWaitSeconds;
+    }
+
+    public void setQueueWaitSeconds(Long queueWaitSeconds) {
+        this.queueWaitSeconds = queueWaitSeconds;
     }
 
     public Instant getCreatedAt() {

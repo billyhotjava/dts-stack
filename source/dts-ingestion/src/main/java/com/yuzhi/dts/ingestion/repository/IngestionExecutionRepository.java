@@ -43,6 +43,23 @@ public interface IngestionExecutionRepository extends JpaRepository<IngestionExe
         Pageable pageable
     );
 
+    @Query(
+        "select e from IngestionExecution e where e.task.id = :taskId and lower(e.status) = lower(:status) and lower(e.failureCategory) in :failureCategories"
+    )
+    Page<IngestionExecution> findByTaskIdAndStatusIgnoreCaseAndFailureCategoriesIgnoreCase(
+        @Param("taskId") Long taskId,
+        @Param("status") String status,
+        @Param("failureCategories") Collection<String> failureCategories,
+        Pageable pageable
+    );
+
+    @Query("select e from IngestionExecution e where e.task.id = :taskId and lower(e.failureCategory) in :failureCategories")
+    Page<IngestionExecution> findByTaskIdAndFailureCategoriesIgnoreCase(
+        @Param("taskId") Long taskId,
+        @Param("failureCategories") Collection<String> failureCategories,
+        Pageable pageable
+    );
+
     /**
      * 根据执行ID查找
      */

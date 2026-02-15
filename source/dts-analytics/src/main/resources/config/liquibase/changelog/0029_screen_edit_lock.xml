@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="0029-create-analytics-screen-edit-lock" author="dts">
+        <createTable tableName="analytics_screen_edit_lock">
+            <column name="id" type="bigint" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="screen_id" type="bigint">
+                <constraints nullable="false"/>
+            </column>
+            <column name="owner_id" type="bigint">
+                <constraints nullable="false"/>
+            </column>
+            <column name="owner_name" type="varchar(255)"/>
+            <column name="request_id" type="varchar(128)"/>
+            <column name="acquired_at" type="timestamp with time zone" defaultValueComputed="${now}">
+                <constraints nullable="false"/>
+            </column>
+            <column name="heartbeat_at" type="timestamp with time zone" defaultValueComputed="${now}">
+                <constraints nullable="false"/>
+            </column>
+            <column name="expire_at" type="timestamp with time zone" defaultValueComputed="${now}">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <createIndex tableName="analytics_screen_edit_lock" indexName="idx_screen_edit_lock_screen_id" unique="true">
+            <column name="screen_id"/>
+        </createIndex>
+
+        <createIndex tableName="analytics_screen_edit_lock" indexName="idx_screen_edit_lock_expire_at">
+            <column name="expire_at"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

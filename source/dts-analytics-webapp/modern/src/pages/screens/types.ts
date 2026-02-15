@@ -44,6 +44,7 @@ export const DRILLABLE_TYPES: Set<ComponentType> = new Set([
 export interface ScreenComponent {
     id: string;
     groupId?: string;
+    parentContainerId?: string;
     type: ComponentType;
     name: string;
     x: number;
@@ -160,6 +161,7 @@ export interface ScreenConfig {
     id: string;
     name: string;
     description?: string;
+    updatedAt?: string;
     width: number;
     height: number;
     backgroundColor: string;
@@ -171,6 +173,7 @@ export interface ScreenConfig {
 
 export interface ScreenState {
     config: ScreenConfig;
+    baselineConfig: ScreenConfig;
     selectedIds: string[];
     zoom: number;
     showGrid: boolean;
@@ -181,6 +184,7 @@ export interface ScreenState {
 export type ScreenAction =
     | { type: 'SET_CONFIG'; payload: ScreenConfig }
     | { type: 'LOAD_CONFIG'; payload: ScreenConfig }  // Load without adding to history
+    | { type: 'MARK_BASELINE'; payload: ScreenConfig }
     | { type: 'ADD_COMPONENT'; payload: ScreenComponent }
     | { type: 'UPDATE_COMPONENT'; payload: { id: string; updates: Partial<ScreenComponent> } }
     | { type: 'DELETE_COMPONENTS'; payload: string[] }

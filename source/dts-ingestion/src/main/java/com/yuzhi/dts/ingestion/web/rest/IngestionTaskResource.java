@@ -149,6 +149,8 @@ public class IngestionTaskResource {
         String initialWatermark,
         Integer taskConcurrency,
         Integer sourceConcurrency,
+        Integer projectConcurrency,
+        String projectKey,
         String priority,
         String rejectPolicy,
         String windowStart,
@@ -1353,6 +1355,13 @@ public class IngestionTaskResource {
         if (sync.sourceConcurrency() != null && sync.sourceConcurrency() >= 0) {
             governance.put("sourceConcurrencyLimit", sync.sourceConcurrency());
         }
+        if (sync.projectConcurrency() != null && sync.projectConcurrency() >= 0) {
+            governance.put("projectConcurrencyLimit", sync.projectConcurrency());
+        }
+        String projectKey = normalize(sync.projectKey());
+        if (StringUtils.hasText(projectKey)) {
+            governance.put("projectKey", projectKey);
+        }
         String priority = normalize(sync.priority());
         if (StringUtils.hasText(priority)) {
             governance.put("priority", priority.toUpperCase(java.util.Locale.ROOT));
@@ -1560,7 +1569,7 @@ public class IngestionTaskResource {
                 }
             }
             SyncSpec syncSpec = StringUtils.hasText(syncPrefix)
-                ? new SyncSpec(null, null, null, null, syncPrefix, null, null, null, null, null, null, null, null, null, null)
+                ? new SyncSpec(null, null, null, null, syncPrefix, null, null, null, null, null, null, null, null, null, null, null, null)
                 : null;
             List<Map<String, String>> tableMapping = deriveTableMapping(readerConfig, writerConfig, syncSpec);
             if (!tableMapping.isEmpty()) {

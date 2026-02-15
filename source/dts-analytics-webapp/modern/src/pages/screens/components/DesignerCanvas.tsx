@@ -24,19 +24,47 @@ export function DesignerCanvas() {
                 const scale = zoom / 100;
                 const x = Math.round((offset.x - canvasRect.left) / scale);
                 const y = Math.round((offset.y - canvasRect.top) / scale);
+                const dropX = x - item.defaultWidth / 2;
+                const dropY = y - item.defaultHeight / 2;
+
+                const targetContainer = item.type === 'container'
+                    ? null
+                    : [...config.components]
+                        .filter((comp) => comp.visible && comp.type === 'container')
+                        .sort((a, b) => b.zIndex - a.zIndex)
+                        .find((container) => (
+                            x >= container.x
+                            && x <= container.x + container.width
+                            && y >= container.y
+                            && y <= container.y + container.height
+                        ));
+
+                const boundedX = targetContainer
+                    ? Math.max(
+                        targetContainer.x,
+                        Math.min(dropX, targetContainer.x + Math.max(0, targetContainer.width - item.defaultWidth)),
+                    )
+                    : Math.max(0, dropX);
+                const boundedY = targetContainer
+                    ? Math.max(
+                        targetContainer.y,
+                        Math.min(dropY, targetContainer.y + Math.max(0, targetContainer.height - item.defaultHeight)),
+                    )
+                    : Math.max(0, dropY);
 
                 const newComponent: ScreenComponent = {
                     id: generateId(),
                     type: item.type,
                     name: item.name,
-                    x: Math.max(0, x - item.defaultWidth / 2),
-                    y: Math.max(0, y - item.defaultHeight / 2),
+                    x: Math.round(boundedX),
+                    y: Math.round(boundedY),
                     width: item.defaultWidth,
                     height: item.defaultHeight,
                     zIndex: config.components.length + 1,
                     locked: false,
                     visible: true,
                     config: { ...item.defaultConfig },
+                    parentContainerId: targetContainer?.id,
                 };
 
                 addComponent(newComponent);

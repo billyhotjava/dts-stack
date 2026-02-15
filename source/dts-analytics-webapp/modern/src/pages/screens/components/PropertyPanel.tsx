@@ -5,6 +5,10 @@ import { CardIdPicker } from './CardIdPicker';
 import { MetricBindingEditor } from './MetricBindingEditor';
 import { CardParamBindingsEditor } from './CardParamBindingsEditor';
 import { DatabaseIdPicker } from './DatabaseIdPicker';
+import { getRendererPlugin } from '../plugins/registry';
+import { readComponentPluginMeta, resolveRuntimePluginId } from '../plugins/runtime';
+import { useScreenPluginRuntime } from '../plugins/useScreenPluginRuntime';
+import type { PropertySchemaField } from '../plugins/types';
 
 const DEFAULT_SERIES_COLORS = [
     '#3b82f6',
@@ -18,6 +22,7 @@ const DEFAULT_SERIES_COLORS = [
 export function PropertyPanel() {
     const { state, updateComponent, updateSelectedComponents } = useScreen();
     const { config, selectedIds } = state;
+    useScreenPluginRuntime();
 
     const selectedComponents = config.components.filter((c) => selectedIds.includes(c.id));
     const selectedComponent = selectedIds.length === 1
@@ -120,6 +125,9 @@ export function PropertyPanel() {
         });
     };
 
+    const pluginMeta = readComponentPluginMeta(selectedComponent.config);
+    const runtimePlugin = pluginMeta ? getRendererPlugin(resolveRuntimePluginId(pluginMeta)) : undefined;
+
     return (
         <div className="property-panel">
             <div className="property-panel-header">
@@ -172,6 +180,13 @@ export function PropertyPanel() {
                 </div>
 
                 {/* Component-specific config */}
+                {runtimePlugin?.propertySchema?.fields?.length ? (
+                    <div className="property-section">
+                        <div className="property-section-title">插件配置 ({runtimePlugin.name})</div>
+                        {renderPluginSchemaFields(selectedComponent, runtimePlugin.propertySchema.fields, handleConfigChange)}
+                    </div>
+                ) : null}
+
                 <div className="property-section">
                     <div className="property-section-title">组件配置</div>
 
@@ -202,6 +217,55 @@ export function PropertyPanel() {
                             onChange={(e) => handleChange('name', e.target.value)}
                         />
                     </div>
+
+                    {selectedComponent.type !== 'container' && (
+                        <div className="property-row">
+                            <label className="property-label">所属容器</label>
+                            <select
+                                className="property-input"
+                                value={selectedComponent.parentContainerId || ''}
+                                onChange={(e) => {
+                                    const parentId = e.target.value || undefined;
+                                    if (!parentId) {
+                                        updateComponent(selectedComponent.id, { parentContainerId: undefined });
+                                        return;
+                                    }
+                                    const parent = config.components.find((item) => item.id === parentId && item.type === 'container');
+                                    if (!parent) {
+                                        updateComponent(selectedComponent.id, { parentContainerId: undefined });
+                                        return;
+                                    }
+                                    const maxX = parent.x + Math.max(0, parent.width - selectedComponent.width);
+                                    const maxY = parent.y + Math.max(0, parent.height - selectedComponent.height);
+                                    const nextX = Math.max(parent.x, Math.min(selectedComponent.x, maxX));
+                                    const nextY = Math.max(parent.y, Math.min(selectedComponent.y, maxY));
+                                    updateComponent(selectedComponent.id, {
+                                        parentContainerId: parentId,
+                                        x: nextX,
+                                        y: nextY,
+                                    });
+                                }}
+                            >
+                                <option value="">-- 无 --</option>
+                                {config.components
+                                    .filter((item) => item.type === 'container' && item.id !== selectedComponent.id)
+                                    .map((item) => (
+                                        <option key={item.id} value={item.id}>
+                                            {item.name} ({item.id})
+                                        </option>
+                                    ))}
+                            </select>
+                        </div>
+                    )}
+
+                    {selectedComponent.type === 'container' && (
+                        <div className="property-row">
+                            <label className="property-label">子组件数</label>
+                            <div className="property-input" style={{ display: 'flex', alignItems: 'center' }}>
+                                {config.components.filter((item) => item.parentContainerId === selectedComponent.id).length}
+                            </div>
+                        </div>
+                    )}
 
                     <div className="property-row">
                         <label className="property-label">锁定</label>
@@ -253,6 +317,127 @@ export function PropertyPanel() {
                 </div>
             </div>
         </div>
+    );
+}
+
+function renderPluginSchemaFields(
+    component: ScreenComponent,
+    fields: PropertySchemaField[],
+    onChange: (key: string, value: unknown) => void,
+) {
+    if (!Array.isArray(fields) || fields.length === 0) {
+        return null;
+    }
+    return (
+        <>
+            {fields.map((field) => {
+                const key = String(field?.key || '').trim();
+                if (!key) return null;
+                const label = field?.label || key;
+                const value = component.config[key] ?? field?.defaultValue;
+                if (field.type === 'boolean') {
+                    return (
+                        <div className="property-row" key={key}>
+                            <label className="property-label">{label}</label>
+                            <input
+                                type="checkbox"
+                                checked={Boolean(value)}
+                                onChange={(e) => onChange(key, e.target.checked)}
+                            />
+                        </div>
+                    );
+                }
+                if (field.type === 'number') {
+                    return (
+                        <div className="property-row" key={key}>
+                            <label className="property-label">{label}</label>
+                            <input
+                                type="number"
+                                className="property-input"
+                                value={Number(value ?? 0)}
+                                onChange={(e) => onChange(key, Number(e.target.value))}
+                            />
+                        </div>
+                    );
+                }
+                if (field.type === 'color') {
+                    const fallback = typeof value === 'string' && value ? value : '#3b82f6';
+                    return (
+                        <div className="property-row" key={key}>
+                            <label className="property-label">{label}</label>
+                            <input
+                                type="color"
+                                className="property-color-input"
+                                value={fallback}
+                                onChange={(e) => onChange(key, e.target.value)}
+                            />
+                        </div>
+                    );
+                }
+                if (field.type === 'array' || field.type === 'json') {
+                    const isArray = field.type === 'array';
+                    const snapshot = JSON.stringify(
+                        value ?? (isArray ? [] : {}),
+                        null,
+                        2,
+                    );
+                    return (
+                        <div className="property-row" key={key}>
+                            <label className="property-label">{label}</label>
+                            <div style={{ flex: 1 }}>
+                                <button
+                                    type="button"
+                                    className="header-btn"
+                                    onClick={() => {
+                                        const input = window.prompt(`${label} (${isArray ? 'JSON数组' : 'JSON对象'})`, snapshot);
+                                        if (input == null) return;
+                                        try {
+                                            const parsed = JSON.parse(input);
+                                            if (isArray && !Array.isArray(parsed)) {
+                                                alert(`${label} 需要是 JSON 数组`);
+                                                return;
+                                            }
+                                            if (!isArray && (parsed == null || typeof parsed !== 'object' || Array.isArray(parsed))) {
+                                                alert(`${label} 需要是 JSON 对象`);
+                                                return;
+                                            }
+                                            onChange(key, parsed);
+                                        } catch {
+                                            alert(`${label} JSON 格式错误`);
+                                        }
+                                    }}
+                                >
+                                    编辑JSON
+                                </button>
+                                <pre style={{
+                                    margin: '6px 0 0',
+                                    maxHeight: 120,
+                                    overflow: 'auto',
+                                    fontSize: 11,
+                                    opacity: 0.8,
+                                    whiteSpace: 'pre-wrap',
+                                    wordBreak: 'break-all',
+                                }}
+                                >
+                                    {snapshot}
+                                </pre>
+                            </div>
+                        </div>
+                    );
+                }
+                return (
+                    <div className="property-row" key={key}>
+                        <label className="property-label">{label}</label>
+                        <input
+                            type="text"
+                            className="property-input"
+                            value={String(value ?? '')}
+                            onChange={(e) => onChange(key, e.target.value)}
+                        />
+                    </div>
+                );
+            })}
+        </>
     );
 }
 

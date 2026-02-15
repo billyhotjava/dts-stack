@@ -29,6 +29,16 @@ function findSnapOffset(points: number[], candidates: number[]): { offset: numbe
     return best;
 }
 
+function clampToBounds(value: number, min: number, max: number): number {
+    if (!Number.isFinite(min) || !Number.isFinite(max)) {
+        return value;
+    }
+    if (max < min) {
+        return min;
+    }
+    return Math.max(min, Math.min(max, value));
+}
+
 export function CanvasComponent({ component, isSelected, theme }: CanvasComponentProps) {
     const { state, dispatch, selectComponents, updateComponent, snapshotTransform, setSnapGuides, clearSnapGuides } = useScreen();
     const { config, selectedIds } = state;
@@ -47,9 +57,20 @@ export function CanvasComponent({ component, isSelected, theme }: CanvasComponen
             ? config.components.filter((item) => item.groupId === component.groupId).map((item) => item.id)
             : [];
 
-        const moveIds = groupedIds.length > 0
+        const seedIds = groupedIds.length > 0
             ? groupedIds
             : (selectedIds.includes(component.id) ? selectedIds : [component.id]);
+        const moveIdSet = new Set(seedIds);
+        for (const seedId of seedIds) {
+            const seedComp = config.components.find((item) => item.id === seedId);
+            if (seedComp?.type !== 'container') continue;
+            for (const child of config.components) {
+                if (child.parentContainerId === seedComp.id) {
+                    moveIdSet.add(child.id);
+                }
+            }
+        }
+        const moveIds = Array.from(moveIdSet);
 
         selectComponents(moveIds);
         setIsDragging(true);
@@ -105,8 +126,17 @@ export function CanvasComponent({ component, isSelected, theme }: CanvasComponen
                 [tentativeY, tentativeY + component.height / 2, tentativeY + component.height],
                 yCandidates,
             );
-            const nextX = Math.max(0, tentativeX + (xSnap?.offset ?? 0));
-            const nextY = Math.max(0, tentativeY + (ySnap?.offset ?? 0));
+            let nextX = Math.max(0, tentativeX + (xSnap?.offset ?? 0));
+            let nextY = Math.max(0, tentativeY + (ySnap?.offset ?? 0));
+            if (component.parentContainerId) {
+                const parent = config.components.find((item) => item.id === component.parentContainerId);
+                if (parent) {
+                    const maxX = parent.x + Math.max(0, parent.width - component.width);
+                    const maxY = parent.y + Math.max(0, parent.height - component.height);
+                    nextX = clampToBounds(nextX, parent.x, maxX);
+                    nextY = clampToBounds(nextY, parent.y, maxY);
+                }
+            }
             setSnapGuides({
                 x: xSnap ? [xSnap.guide] : [],
                 y: ySnap ? [ySnap.guide] : [],
@@ -141,7 +171,15 @@ export function CanvasComponent({ component, isSelected, theme }: CanvasComponen
         const groupedIds = component.groupId
             ? config.components.filter((item) => item.groupId === component.groupId).map((item) => item.id)
             : [];
-        const resizeIds = groupedIds.length > 1 ? groupedIds : [component.id];
+        const resizeIdSet = new Set(groupedIds.length > 1 ? groupedIds : [component.id]);
+        if (component.type === 'container') {
+            for (const child of config.components) {
+                if (child.parentContainerId === component.id) {
+                    resizeIdSet.add(child.id);
+                }
+            }
+        }
+        const resizeIds = Array.from(resizeIdSet);
         if (resizeIds.length > 1) {
             selectComponents(resizeIds);
         }
@@ -227,6 +265,22 @@ export function CanvasComponent({ component, isSelected, theme }: CanvasComponen
                 const heightDelta = Math.min(deltaY, startSize.current.height - 50);
                 newHeight = startSize.current.height - heightDelta;
                 newY = startCompPos.current.y + heightDelta;
+            }
+
+            if (component.parentContainerId) {
+                const parent = config.components.find((item) => item.id === component.parentContainerId);
+                if (parent) {
+                    const minX = parent.x;
+                    const minY = parent.y;
+                    const maxX = parent.x + parent.width;
+                    const maxY = parent.y + parent.height;
+                    newX = clampToBounds(newX, minX, maxX - 20);
+                    newY = clampToBounds(newY, minY, maxY - 20);
+                    const maxWidth = Math.max(20, maxX - newX);
+                    const maxHeight = Math.max(20, maxY - newY);
+                    newWidth = clampToBounds(newWidth, 20, maxWidth);
+                    newHeight = clampToBounds(newHeight, 20, maxHeight);
+                }
             }
 
             dispatch({

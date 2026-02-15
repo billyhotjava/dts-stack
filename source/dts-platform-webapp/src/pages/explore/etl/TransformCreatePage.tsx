@@ -346,6 +346,14 @@ const buildGovernanceSyncFields = (values: Record<string, any>): Record<string, 
 	if (sourceConcurrency !== undefined && sourceConcurrency >= 0) {
 		result.sourceConcurrency = Math.floor(sourceConcurrency);
 	}
+	const projectConcurrency = toOptionalNumber(values.projectConcurrency);
+	if (projectConcurrency !== undefined && projectConcurrency >= 0) {
+		result.projectConcurrency = Math.floor(projectConcurrency);
+	}
+	const projectKey = normalizeText(values.projectKey);
+	if (projectKey) {
+		result.projectKey = projectKey;
+	}
 	const priority = normalizeText(values.priority);
 	if (priority) {
 		result.priority = priority.toUpperCase();
@@ -1117,6 +1125,8 @@ const mapTaskToForm = (task: IngestionTaskDTO) => {
 		scheduleIntervalMinutes: scheduleState.scheduleIntervalMinutes,
 		taskConcurrency: toOptionalNumber(governanceConfig.maxConcurrentRuns),
 		sourceConcurrency: toOptionalNumber(governanceConfig.sourceConcurrencyLimit),
+		projectConcurrency: toOptionalNumber(governanceConfig.projectConcurrencyLimit),
+		projectKey: normalizeText(governanceConfig.projectKey) || undefined,
 		priority: normalizeText(governanceConfig.priority) || undefined,
 		rejectPolicy: normalizeText(governanceConfig.rejectPolicy) || undefined,
 		windowStart: normalizeText(governanceConfig.windowStart) || undefined,
@@ -2778,6 +2788,12 @@ export default function TransformCreatePage() {
 															<Form.Item name="sourceConcurrency" label="来源并发上限">
 																<InputNumber min={0} precision={0} className="w-full" placeholder="0 表示不限" />
 															</Form.Item>
+															<Form.Item name="projectConcurrency" label="项目并发上限">
+																<InputNumber min={0} precision={0} className="w-full" placeholder="0 表示不限" />
+															</Form.Item>
+															<Form.Item name="projectKey" label="项目标识">
+																<Input placeholder="例如 project:patent" />
+															</Form.Item>
 															<Form.Item name="priority" label="队列优先级">
 																<Select
 																	allowClear
@@ -3501,6 +3517,12 @@ export default function TransformCreatePage() {
 														</Form.Item>
 														<Form.Item name="sourceConcurrency" label="来源并发上限">
 															<InputNumber min={0} precision={0} className="w-full" placeholder="0 表示不限" />
+														</Form.Item>
+														<Form.Item name="projectConcurrency" label="项目并发上限">
+															<InputNumber min={0} precision={0} className="w-full" placeholder="0 表示不限" />
+														</Form.Item>
+														<Form.Item name="projectKey" label="项目标识">
+															<Input placeholder="例如 project:patent" />
 														</Form.Item>
 														<Form.Item name="priority" label="队列优先级">
 															<Select

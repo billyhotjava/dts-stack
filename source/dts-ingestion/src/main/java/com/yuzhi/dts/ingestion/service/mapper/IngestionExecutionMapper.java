@@ -3,6 +3,8 @@ package com.yuzhi.dts.ingestion.service.mapper;
 import com.yuzhi.dts.ingestion.domain.IngestionExecution;
 import com.yuzhi.dts.ingestion.service.dto.IngestionExecutionDTO;
 import com.yuzhi.dts.ingestion.service.etl.ExecutionFailureClassifier;
+import java.time.Duration;
+import java.time.Instant;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
@@ -43,6 +45,7 @@ public class IngestionExecutionMapper {
         dto.setLogPath(entity.getLogPath());
         dto.setReplaceMode(entity.getReplaceMode());
         dto.setDroppedTables(entity.getDroppedTables());
+        dto.setQueueWaitSeconds(resolveQueueWaitSeconds(entity));
         dto.setCreatedAt(entity.getCreatedAt());
 
         return dto;
@@ -70,5 +73,21 @@ public class IngestionExecutionMapper {
         entity.setCreatedAt(dto.getCreatedAt());
 
         return entity;
+    }
+
+    private Long resolveQueueWaitSeconds(IngestionExecution entity) {
+        if (entity == null || entity.getCreatedAt() == null) {
+            return null;
+        }
+        Instant start = entity.getStartTime();
+        if (start != null) {
+            long seconds = Duration.between(entity.getCreatedAt(), start).getSeconds();
+            return Math.max(0L, seconds);
+        }
+        if ("preparing".equalsIgnoreCase(entity.getStatus())) {
+            long seconds = Duration.between(entity.getCreatedAt(), Instant.now()).getSeconds();
+            return Math.max(0L, seconds);
+        }
+        return null;
     }
 }

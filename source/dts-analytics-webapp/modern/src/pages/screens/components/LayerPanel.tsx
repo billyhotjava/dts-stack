@@ -4,8 +4,34 @@ export function LayerPanel() {
     const { state, dispatch, selectComponents } = useScreen();
     const { config, selectedIds } = state;
 
-    // Sort components by zIndex descending (top layers first)
-    const sortedComponents = [...config.components].sort((a, b) => b.zIndex - a.zIndex);
+    const componentMap = new Map(config.components.map((item) => [item.id, item]));
+    const visited = new Set<string>();
+
+    const topLevelComponents = config.components
+        .filter((item) => !item.parentContainerId || !componentMap.has(item.parentContainerId))
+        .sort((a, b) => b.zIndex - a.zIndex);
+
+    const layered: Array<{ component: typeof config.components[number]; depth: number }> = [];
+    const walk = (component: typeof config.components[number], depth: number) => {
+        if (visited.has(component.id)) return;
+        visited.add(component.id);
+        layered.push({ component, depth });
+        if (component.type !== 'container') {
+            return;
+        }
+        const children = config.components
+            .filter((item) => item.parentContainerId === component.id)
+            .sort((a, b) => b.zIndex - a.zIndex);
+        for (const child of children) {
+            walk(child, depth + 1);
+        }
+    };
+    for (const component of topLevelComponents) {
+        walk(component, 0);
+    }
+    for (const component of config.components.sort((a, b) => b.zIndex - a.zIndex)) {
+        walk(component, 0);
+    }
 
     const handleLayerClick = (id: string, e: React.MouseEvent) => {
         if (e.ctrlKey || e.metaKey) {
@@ -76,7 +102,7 @@ export function LayerPanel() {
                 </span>
             </div>
 
-            {sortedComponents.length === 0 ? (
+            {layered.length === 0 ? (
                 <div className="empty-state" style={{ padding: '20px 10px' }}>
                     <div className="empty-state-text" style={{ fontSize: 12 }}>
                         暂无组件
@@ -84,19 +110,24 @@ export function LayerPanel() {
                 </div>
             ) : (
                 <div className="layer-list">
-                    {sortedComponents.map((component) => (
+                    {layered.map(({ component, depth }) => (
                         <div
                             key={component.id}
                             className={`layer-item ${selectedIds.includes(component.id) ? 'selected' : ''}`}
                             onClick={(e) => handleLayerClick(component.id, e)}
-                            style={{ opacity: component.visible ? 1 : 0.5 }}
+                            style={{
+                                opacity: component.visible ? 1 : 0.5,
+                                paddingLeft: 8 + depth * 14,
+                            }}
                         >
                             <span className="layer-item-icon">
                                 {getComponentIcon(component.type)}
                             </span>
                             <span className="layer-item-name">
+                                {component.parentContainerId ? '↳ ' : ''}
                                 {component.name}
                                 {component.groupId ? ' [组]' : ''}
+                                {component.parentContainerId ? ' [容器]' : ''}
                             </span>
                             <div className="layer-item-actions">
                                 <button

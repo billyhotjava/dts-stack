@@ -471,8 +471,22 @@ export type ScreenVersionDiff = {
 		removedComponents?: number;
 		addedComponentTypes?: number;
 		removedComponentTypes?: number;
+		changedTypeComponents?: number;
 		addedVariables?: number;
 		removedVariables?: number;
+	};
+	details?: {
+		addedComponentIds?: string[];
+		removedComponentIds?: string[];
+		addedComponentTypes?: string[];
+		removedComponentTypes?: string[];
+		changedTypeComponents?: Array<{
+			id?: string;
+			fromType?: string;
+			toType?: string;
+		}>;
+		addedVariableKeys?: string[];
+		removedVariableKeys?: string[];
 	};
 };
 
@@ -512,6 +526,19 @@ export type ScreenComment = {
 	resolvedAt?: string | null;
 	resolutionNote?: string | null;
 	requestId?: string | null;
+};
+
+export type ScreenEditLock = {
+	active?: boolean;
+	screenId?: number | string | null;
+	ownerId?: number | string | null;
+	ownerName?: string | null;
+	mine?: boolean;
+	requestId?: string | null;
+	acquiredAt?: string | null;
+	heartbeatAt?: string | null;
+	expireAt?: string | null;
+	ttlSeconds?: number;
 };
 
 export type ScreenPublicLinkPolicy = {
@@ -947,6 +974,14 @@ export const analyticsApi = {
 		fetchJson<ScreenAclEntry[]>(`/analytics/api/screens/${encodeURIComponent(String(id))}/acl`),
 	updateScreenAcl: (id: string | number, body: { entries: ScreenAclEntry[] }) =>
 		requestJson<ScreenAclEntry[]>(`/analytics/api/screens/${encodeURIComponent(String(id))}/acl`, "PUT", body),
+	getScreenEditLock: (id: string | number) =>
+		fetchJson<ScreenEditLock>(`/analytics/api/screens/${encodeURIComponent(String(id))}/edit-lock`),
+	acquireScreenEditLock: (id: string | number, body?: { ttlSeconds?: number }) =>
+		sendJson<ScreenEditLock>(`/analytics/api/screens/${encodeURIComponent(String(id))}/edit-lock/acquire`, body ?? {}),
+	heartbeatScreenEditLock: (id: string | number, body?: { ttlSeconds?: number }) =>
+		sendJson<ScreenEditLock>(`/analytics/api/screens/${encodeURIComponent(String(id))}/edit-lock/heartbeat`, body ?? {}),
+	releaseScreenEditLock: (id: string | number) =>
+		sendJson<ScreenEditLock>(`/analytics/api/screens/${encodeURIComponent(String(id))}/edit-lock/release`, {}),
 	getScreenAuditLogs: (id: string | number, limit = 200) =>
 		fetchJson<ScreenAuditEntry[]>(
 			`/analytics/api/screens/${encodeURIComponent(String(id))}/audit?limit=${encodeURIComponent(String(limit))}`,

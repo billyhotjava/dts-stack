@@ -14,6 +14,7 @@ import com.yuzhi.dts.analytics.service.AnalyticsSessionService;
 import com.yuzhi.dts.analytics.service.PublicLinkService;
 import com.yuzhi.dts.analytics.service.ScreenAclService;
 import com.yuzhi.dts.analytics.service.ScreenAuditService;
+import com.yuzhi.dts.analytics.service.ScreenEditLockService;
 import com.yuzhi.dts.analytics.service.ScreenWarmupService;
 import com.yuzhi.dts.analytics.service.ScreenAiGenerationService;
 import com.yuzhi.dts.analytics.service.ScreenSpecValidator;
@@ -24,6 +25,8 @@ import java.time.Instant;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -56,6 +59,7 @@ public class ScreenResource {
     private final AnalyticsScreenVersionRepository screenVersionRepository;
     private final ScreenAclService screenAclService;
     private final ScreenAuditService screenAuditService;
+    private final ScreenEditLockService screenEditLockService;
     private final ScreenWarmupService screenWarmupService;
     private final ScreenAiGenerationService screenAiGenerationService;
     private final ScreenSpecValidator screenSpecValidator;
@@ -68,6 +72,7 @@ public class ScreenResource {
             AnalyticsScreenVersionRepository screenVersionRepository,
             ScreenAclService screenAclService,
             ScreenAuditService screenAuditService,
+            ScreenEditLockService screenEditLockService,
             ScreenWarmupService screenWarmupService,
             ScreenAiGenerationService screenAiGenerationService,
             ScreenSpecValidator screenSpecValidator,
@@ -78,6 +83,7 @@ public class ScreenResource {
         this.screenVersionRepository = screenVersionRepository;
         this.screenAclService = screenAclService;
         this.screenAuditService = screenAuditService;
+        this.screenEditLockService = screenEditLockService;
         this.screenWarmupService = screenWarmupService;
         this.screenAiGenerationService = screenAiGenerationService;
         this.screenSpecValidator = screenSpecValidator;
@@ -432,41 +438,52 @@ public class ScreenResource {
         if (!permissions.canEdit()) {
             return forbidden();
         }
-        ScreenSpecValidator.ValidationResult specValidation = screenSpecValidator.validateForWrite(body);
+        ScreenEditLockService.LockSnapshot blockingLock =
+                screenEditLockService.currentBlockingLock(screen.getId(), user.get().getId());
+        if (blockingLock != null) {
+            return lockConflict(blockingLock);
+        }
+
+        ConflictResolution resolution = resolveUpdateConflict(screen, body);
+        if (resolution.conflictPayload != null) {
+            return ResponseEntity.status(409).contentType(MediaType.APPLICATION_JSON).body(resolution.conflictPayload);
+        }
+        JsonNode effectiveBody = resolution.mergedBody == null ? body : resolution.mergedBody;
+        ScreenSpecValidator.ValidationResult specValidation = screenSpecValidator.validateForWrite(effectiveBody);
 
         AnalyticsScreenVersion beforePublished =
                 screenVersionRepository.findFirstByScreenIdAndCurrentPublishedTrue(screen.getId()).orElse(null);
         ObjectNode before = toAuditScreenSnapshot(screen, beforePublished);
 
-        if (body != null && body.has("name")) {
-            String name = trimToNull(body.path("name").asText(null));
+        if (effectiveBody != null && effectiveBody.has("name")) {
+            String name = trimToNull(effectiveBody.path("name").asText(null));
             if (name != null) {
                 screen.setName(name);
             }
         }
-        if (body != null && body.has("description")) {
-            screen.setDescription(body.path("description").isNull() ? null : body.path("description").asText(null));
+        if (effectiveBody != null && effectiveBody.has("description")) {
+            screen.setDescription(effectiveBody.path("description").isNull() ? null : effectiveBody.path("description").asText(null));
         }
-        if (body != null && body.has("width")) {
-            screen.setWidth(body.path("width").asInt(1920));
+        if (effectiveBody != null && effectiveBody.has("width")) {
+            screen.setWidth(effectiveBody.path("width").asInt(1920));
         }
-        if (body != null && body.has("height")) {
-            screen.setHeight(body.path("height").asInt(1080));
+        if (effectiveBody != null && effectiveBody.has("height")) {
+            screen.setHeight(effectiveBody.path("height").asInt(1080));
         }
-        if (body != null && body.has("backgroundColor")) {
-            screen.setBackgroundColor(body.path("backgroundColor").asText(null));
+        if (effectiveBody != null && effectiveBody.has("backgroundColor")) {
+            screen.setBackgroundColor(effectiveBody.path("backgroundColor").asText(null));
         }
-        if (body != null && body.has("backgroundImage")) {
-            screen.setBackgroundImage(body.path("backgroundImage").isNull() ? null : body.path("backgroundImage").asText(null));
+        if (effectiveBody != null && effectiveBody.has("backgroundImage")) {
+            screen.setBackgroundImage(effectiveBody.path("backgroundImage").isNull() ? null : effectiveBody.path("backgroundImage").asText(null));
         }
-        if (body != null && body.has("theme")) {
-            screen.setTheme(body.path("theme").isNull() ? null : body.path("theme").asText(null));
+        if (effectiveBody != null && effectiveBody.has("theme")) {
+            screen.setTheme(effectiveBody.path("theme").isNull() ? null : effectiveBody.path("theme").asText(null));
         }
-        if (body != null && body.has("components")) {
-            screen.setComponentsJson(body.path("components").toString());
+        if (effectiveBody != null && effectiveBody.has("components")) {
+            screen.setComponentsJson(effectiveBody.path("components").toString());
         }
-        if (body != null && body.has("globalVariables")) {
-            screen.setVariablesJson(body.path("globalVariables").toString());
+        if (effectiveBody != null && effectiveBody.has("globalVariables")) {
+            screen.setVariablesJson(effectiveBody.path("globalVariables").toString());
         }
 
         screenRepository.save(screen);
@@ -496,6 +513,11 @@ public class ScreenResource {
         ScreenAclService.PermissionSnapshot permissions = screenAclService.snapshot(screen, user.get(), context);
         if (!permissions.canPublish()) {
             return forbidden();
+        }
+        ScreenEditLockService.LockSnapshot blockingLock =
+                screenEditLockService.currentBlockingLock(screen.getId(), user.get().getId());
+        if (blockingLock != null) {
+            return lockConflict(blockingLock);
         }
 
         AnalyticsScreenVersion beforePublished =
@@ -548,6 +570,11 @@ public class ScreenResource {
         if (!permissions.canPublish()) {
             return forbidden();
         }
+        ScreenEditLockService.LockSnapshot blockingLock =
+                screenEditLockService.currentBlockingLock(screen.getId(), user.get().getId());
+        if (blockingLock != null) {
+            return lockConflict(blockingLock);
+        }
 
         AnalyticsScreenVersion targetVersion = screenVersionRepository.findByIdAndScreenId(versionId, screen.getId()).orElse(null);
         if (targetVersion == null) {
@@ -592,6 +619,11 @@ public class ScreenResource {
         if (!screenAclService.hasPermission(screen, user.get(), context, ScreenAclService.Permission.MANAGE)) {
             return forbidden();
         }
+        ScreenEditLockService.LockSnapshot blockingLock =
+                screenEditLockService.currentBlockingLock(screen.getId(), user.get().getId());
+        if (blockingLock != null) {
+            return lockConflict(blockingLock);
+        }
 
         ObjectNode before = toAuditScreenSnapshot(
                 screen,
@@ -599,6 +631,7 @@ public class ScreenResource {
 
         screen.setArchived(true);
         screenRepository.save(screen);
+        screenEditLockService.release(screen.getId(), user.get().getId());
 
         screenAuditService.log(screen.getId(), user.get().getId(), "screen.delete", before, null, requestIdFrom(request));
 
@@ -798,22 +831,23 @@ public class ScreenResource {
         JsonNode fromVariables = parseGlobalVariables(fromVersion.getVariablesJson());
         JsonNode toVariables = parseGlobalVariables(toVersion.getVariablesJson());
 
-        Set<String> fromComponentIds = new HashSet<>();
-        Set<String> toComponentIds = new HashSet<>();
-        Set<String> fromTypes = new HashSet<>();
-        Set<String> toTypes = new HashSet<>();
-        fillComponentStats(fromComponents, fromComponentIds, fromTypes);
-        fillComponentStats(toComponents, toComponentIds, toTypes);
+        Map<String, String> fromComponentTypeMap = collectComponentTypeMap(fromComponents);
+        Map<String, String> toComponentTypeMap = collectComponentTypeMap(toComponents);
+        Set<String> fromComponentIds = fromComponentTypeMap.keySet();
+        Set<String> toComponentIds = toComponentTypeMap.keySet();
+        Set<String> fromTypes = new HashSet<>(fromComponentTypeMap.values());
+        Set<String> toTypes = new HashSet<>(toComponentTypeMap.values());
 
-        int addedComponents = countDiff(toComponentIds, fromComponentIds);
-        int removedComponents = countDiff(fromComponentIds, toComponentIds);
-        int addedTypes = countDiff(toTypes, fromTypes);
-        int removedTypes = countDiff(fromTypes, toTypes);
+        List<String> addedComponentIds = collectDiffItems(toComponentIds, fromComponentIds);
+        List<String> removedComponentIds = collectDiffItems(fromComponentIds, toComponentIds);
+        List<String> addedTypeNames = collectDiffItems(toTypes, fromTypes);
+        List<String> removedTypeNames = collectDiffItems(fromTypes, toTypes);
+        List<ObjectNode> changedTypeComponents = collectChangedTypeComponents(fromComponentTypeMap, toComponentTypeMap);
 
         Set<String> fromVarKeys = collectVariableKeys(fromVariables);
         Set<String> toVarKeys = collectVariableKeys(toVariables);
-        int addedVariables = countDiff(toVarKeys, fromVarKeys);
-        int removedVariables = countDiff(fromVarKeys, toVarKeys);
+        List<String> addedVariableKeys = collectDiffItems(toVarKeys, fromVarKeys);
+        List<String> removedVariableKeys = collectDiffItems(fromVarKeys, toVarKeys);
 
         ObjectNode node = objectMapper.createObjectNode();
         node.set("from", toVersionResponse(fromVersion));
@@ -821,33 +855,43 @@ public class ScreenResource {
         ObjectNode summary = objectMapper.createObjectNode();
         summary.put("componentCountFrom", fromComponentIds.size());
         summary.put("componentCountTo", toComponentIds.size());
-        summary.put("addedComponents", addedComponents);
-        summary.put("removedComponents", removedComponents);
-        summary.put("addedComponentTypes", addedTypes);
-        summary.put("removedComponentTypes", removedTypes);
-        summary.put("addedVariables", addedVariables);
-        summary.put("removedVariables", removedVariables);
+        summary.put("addedComponents", addedComponentIds.size());
+        summary.put("removedComponents", removedComponentIds.size());
+        summary.put("addedComponentTypes", addedTypeNames.size());
+        summary.put("removedComponentTypes", removedTypeNames.size());
+        summary.put("changedTypeComponents", changedTypeComponents.size());
+        summary.put("addedVariables", addedVariableKeys.size());
+        summary.put("removedVariables", removedVariableKeys.size());
         node.set("summary", summary);
+
+        ObjectNode details = objectMapper.createObjectNode();
+        details.putPOJO("addedComponentIds", addedComponentIds);
+        details.putPOJO("removedComponentIds", removedComponentIds);
+        details.putPOJO("addedComponentTypes", addedTypeNames);
+        details.putPOJO("removedComponentTypes", removedTypeNames);
+        details.putPOJO("addedVariableKeys", addedVariableKeys);
+        details.putPOJO("removedVariableKeys", removedVariableKeys);
+        details.putPOJO("changedTypeComponents", changedTypeComponents);
+        node.set("details", details);
         return node;
     }
 
-    private void fillComponentStats(JsonNode components, Set<String> ids, Set<String> types) {
+    private Map<String, String> collectComponentTypeMap(JsonNode components) {
+        Map<String, String> map = new LinkedHashMap<>();
         if (components == null || !components.isArray()) {
-            return;
+            return map;
         }
         for (JsonNode item : components) {
             if (item == null || !item.isObject()) {
                 continue;
             }
             String id = trimToNull(item.path("id").asText(null));
-            if (id != null) {
-                ids.add(id);
-            }
             String type = trimToNull(item.path("type").asText(null));
-            if (type != null) {
-                types.add(type);
+            if (id != null) {
+                map.put(id, type == null ? "" : type);
             }
         }
+        return map;
     }
 
     private Set<String> collectVariableKeys(JsonNode variables) {
@@ -867,14 +911,36 @@ public class ScreenResource {
         return keys;
     }
 
-    private int countDiff(Set<String> left, Set<String> right) {
-        int count = 0;
+    private List<String> collectDiffItems(Set<String> left, Set<String> right) {
+        List<String> out = new ArrayList<>();
         for (String value : left) {
-            if (!right.contains(value)) {
-                count++;
+            if (value != null && !right.contains(value)) {
+                out.add(value);
             }
         }
-        return count;
+        out.sort(String::compareTo);
+        return out;
+    }
+
+    private List<ObjectNode> collectChangedTypeComponents(Map<String, String> fromMap, Map<String, String> toMap) {
+        List<String> ids = new ArrayList<>(fromMap.keySet());
+        ids.retainAll(toMap.keySet());
+        ids.sort(String::compareTo);
+
+        List<ObjectNode> out = new ArrayList<>();
+        for (String id : ids) {
+            String fromType = fromMap.get(id);
+            String toType = toMap.get(id);
+            if (valueEquals(fromType, toType)) {
+                continue;
+            }
+            ObjectNode item = objectMapper.createObjectNode();
+            item.put("id", id);
+            item.put("fromType", fromType == null ? "" : fromType);
+            item.put("toType", toType == null ? "" : toType);
+            out.add(item);
+        }
+        return out;
     }
 
     private ObjectNode toAclResponse(AnalyticsScreenAcl acl) {
@@ -999,6 +1065,341 @@ public class ScreenResource {
 
         if (body.has("disabled")) {
             link.setDisabled(body.path("disabled").asBoolean(false));
+        }
+    }
+
+    private ConflictResolution resolveUpdateConflict(AnalyticsScreen screen, JsonNode body) {
+        if (screen == null || body == null || !body.isObject()) {
+            return ConflictResolution.pass(body);
+        }
+        JsonNode conflict = body.path("_conflict");
+        if (conflict == null || !conflict.isObject()) {
+            return ConflictResolution.pass(body);
+        }
+
+        Instant baseUpdatedAt = parseInstantSafe(trimToNull(conflict.path("baseUpdatedAt").asText(null)));
+        if (baseUpdatedAt == null || screen.getUpdatedAt() == null || !screen.getUpdatedAt().isAfter(baseUpdatedAt)) {
+            return ConflictResolution.pass(body);
+        }
+
+        String mode = trimToNull(conflict.path("mode").asText(null));
+        if (!"component".equalsIgnoreCase(mode)) {
+            return ConflictResolution.blocked(buildConflictPayload(
+                    "SCREEN_UPDATE_CONFLICT",
+                    "Screen has been updated by another user",
+                    List.of(),
+                    List.of("screen")));
+        }
+
+        JsonNode incomingComponentsNode = body.path("components");
+        if (!incomingComponentsNode.isArray()) {
+            return ConflictResolution.blocked(buildConflictPayload(
+                    "SCREEN_UPDATE_CONFLICT",
+                    "Payload missing components for component merge mode",
+                    List.of(),
+                    List.of("components")));
+        }
+
+        Map<String, JsonNode> baseComponents = parseBaseComponentMap(conflict.path("baseComponents"));
+        Map<String, JsonNode> currentComponents = parseComponentMap(parseComponents(screen.getComponentsJson()));
+        Map<String, JsonNode> incomingComponents = parseComponentMap(incomingComponentsNode);
+
+        ComponentMergeResult componentMerge = mergeComponentsByBase(baseComponents, currentComponents, incomingComponents);
+
+        JsonNode currentVars = parseGlobalVariables(screen.getVariablesJson());
+        JsonNode incomingVars = body.path("globalVariables").isArray() ? body.path("globalVariables") : objectMapper.createArrayNode();
+        JsonNode baseVars = conflict.path("baseVariables").isArray() ? conflict.path("baseVariables") : objectMapper.createArrayNode();
+        boolean varsRemoteChanged = !jsonEquals(currentVars, baseVars);
+        boolean varsLocalChanged = !jsonEquals(incomingVars, baseVars);
+        boolean varsConflict = varsRemoteChanged && varsLocalChanged && !jsonEquals(currentVars, incomingVars);
+
+        JsonNode baseScreen = conflict.path("baseScreen");
+        List<String> scalarConflicts = new ArrayList<>();
+        ScalarMergeResult nameMerged = mergeTextScalar("name", trimToNull(screen.getName()), body.path("name"), baseScreen, scalarConflicts);
+        ScalarMergeResult descriptionMerged = mergeNullableTextScalar(
+                "description",
+                trimToNull(screen.getDescription()),
+                body.path("description"),
+                baseScreen,
+                scalarConflicts);
+        ScalarMergeResult widthMerged = mergeIntScalar("width", screen.getWidth(), body.path("width"), baseScreen, scalarConflicts);
+        ScalarMergeResult heightMerged = mergeIntScalar("height", screen.getHeight(), body.path("height"), baseScreen, scalarConflicts);
+        ScalarMergeResult backgroundColorMerged = mergeNullableTextScalar(
+                "backgroundColor",
+                trimToNull(screen.getBackgroundColor()),
+                body.path("backgroundColor"),
+                baseScreen,
+                scalarConflicts);
+        ScalarMergeResult backgroundImageMerged = mergeNullableTextScalar(
+                "backgroundImage",
+                trimToNull(screen.getBackgroundImage()),
+                body.path("backgroundImage"),
+                baseScreen,
+                scalarConflicts);
+        ScalarMergeResult themeMerged = mergeNullableTextScalar(
+                "theme",
+                trimToNull(screen.getTheme()),
+                body.path("theme"),
+                baseScreen,
+                scalarConflicts);
+
+        List<String> allConflicts = new ArrayList<>();
+        allConflicts.addAll(componentMerge.conflictComponentIds);
+        if (varsConflict) {
+            allConflicts.add("globalVariables");
+        }
+        allConflicts.addAll(scalarConflicts);
+        if (!allConflicts.isEmpty()) {
+            return ConflictResolution.blocked(buildConflictPayload(
+                    "SCREEN_UPDATE_CONFLICT",
+                    "Concurrent edits conflict on overlapping fields/components",
+                    componentMerge.conflictComponentIds,
+                    mergeConflictFields(scalarConflicts, varsConflict)));
+        }
+
+        ObjectNode mergedBody = body.deepCopy();
+        mergedBody.remove("_conflict");
+        mergedBody.set("components", componentMerge.mergedComponents);
+        mergedBody.set("globalVariables", varsLocalChanged ? incomingVars.deepCopy() : currentVars.deepCopy());
+        mergedBody.put("name", nameMerged.textValue == null ? "" : nameMerged.textValue);
+        if (descriptionMerged.textValue == null) {
+            mergedBody.putNull("description");
+        } else {
+            mergedBody.put("description", descriptionMerged.textValue);
+        }
+        mergedBody.put("width", widthMerged.intValue);
+        mergedBody.put("height", heightMerged.intValue);
+        if (backgroundColorMerged.textValue == null) {
+            mergedBody.putNull("backgroundColor");
+        } else {
+            mergedBody.put("backgroundColor", backgroundColorMerged.textValue);
+        }
+        if (backgroundImageMerged.textValue == null) {
+            mergedBody.putNull("backgroundImage");
+        } else {
+            mergedBody.put("backgroundImage", backgroundImageMerged.textValue);
+        }
+        if (themeMerged.textValue == null) {
+            mergedBody.putNull("theme");
+        } else {
+            mergedBody.put("theme", themeMerged.textValue);
+        }
+        return ConflictResolution.pass(mergedBody);
+    }
+
+    private static List<String> mergeConflictFields(List<String> scalarConflicts, boolean varsConflict) {
+        List<String> out = new ArrayList<>(scalarConflicts);
+        if (varsConflict) {
+            out.add("globalVariables");
+        }
+        return out;
+    }
+
+    private ObjectNode buildConflictPayload(String code, String message, List<String> componentIds, List<String> fields) {
+        ObjectNode payload = objectMapper.createObjectNode();
+        payload.put("code", code);
+        payload.put("message", message);
+        payload.putPOJO("componentIds", componentIds == null ? List.of() : componentIds);
+        payload.putPOJO("fields", fields == null ? List.of() : fields);
+        return payload;
+    }
+
+    private Map<String, JsonNode> parseBaseComponentMap(JsonNode baseComponents) {
+        Map<String, JsonNode> out = new LinkedHashMap<>();
+        if (baseComponents == null || !baseComponents.isArray()) {
+            return out;
+        }
+        for (JsonNode item : baseComponents) {
+            if (item == null || !item.isObject()) {
+                continue;
+            }
+            String id = trimToNull(item.path("id").asText(null));
+            JsonNode component = item.path("component");
+            if (id == null || component == null || !component.isObject()) {
+                continue;
+            }
+            out.put(id, component.deepCopy());
+        }
+        return out;
+    }
+
+    private Map<String, JsonNode> parseComponentMap(JsonNode components) {
+        Map<String, JsonNode> out = new LinkedHashMap<>();
+        if (components == null || !components.isArray()) {
+            return out;
+        }
+        for (JsonNode item : components) {
+            if (item == null || !item.isObject()) {
+                continue;
+            }
+            String id = trimToNull(item.path("id").asText(null));
+            if (id == null) {
+                continue;
+            }
+            out.put(id, item.deepCopy());
+        }
+        return out;
+    }
+
+    private ComponentMergeResult mergeComponentsByBase(
+            Map<String, JsonNode> baseComponents,
+            Map<String, JsonNode> currentComponents,
+            Map<String, JsonNode> incomingComponents) {
+        Set<String> orderedIds = new LinkedHashSet<>();
+        orderedIds.addAll(incomingComponents.keySet());
+        orderedIds.addAll(currentComponents.keySet());
+        orderedIds.addAll(baseComponents.keySet());
+
+        List<String> conflicts = new ArrayList<>();
+        Map<String, JsonNode> mergedById = new LinkedHashMap<>();
+        for (String id : orderedIds) {
+            JsonNode base = baseComponents.get(id);
+            JsonNode current = currentComponents.get(id);
+            JsonNode incoming = incomingComponents.get(id);
+            boolean remoteChanged = !jsonEquals(current, base);
+            boolean localChanged = !jsonEquals(incoming, base);
+            if (remoteChanged && localChanged && !jsonEquals(current, incoming)) {
+                conflicts.add(id);
+                continue;
+            }
+            JsonNode selected = localChanged ? incoming : current;
+            if (selected != null && !selected.isNull()) {
+                mergedById.put(id, selected.deepCopy());
+            }
+        }
+
+        com.fasterxml.jackson.databind.node.ArrayNode mergedArray = objectMapper.createArrayNode();
+        for (String id : orderedIds) {
+            JsonNode node = mergedById.get(id);
+            if (node != null) {
+                mergedArray.add(node);
+            }
+        }
+        return new ComponentMergeResult(mergedArray, conflicts);
+    }
+
+    private ScalarMergeResult mergeTextScalar(
+            String field,
+            String currentValue,
+            JsonNode incomingNode,
+            JsonNode baseScreen,
+            List<String> conflicts) {
+        String incoming = trimToNull(incomingNode.isMissingNode() || incomingNode.isNull() ? null : incomingNode.asText(null));
+        String base = trimToNull(baseScreen.path(field).asText(null));
+        return mergeScalar(field, currentValue, incoming, base, conflicts);
+    }
+
+    private ScalarMergeResult mergeNullableTextScalar(
+            String field,
+            String currentValue,
+            JsonNode incomingNode,
+            JsonNode baseScreen,
+            List<String> conflicts) {
+        String incoming = incomingNode.isMissingNode() || incomingNode.isNull() ? null : trimToNull(incomingNode.asText(null));
+        String base = baseScreen.path(field).isNull() ? null : trimToNull(baseScreen.path(field).asText(null));
+        return mergeScalar(field, currentValue, incoming, base, conflicts);
+    }
+
+    private ScalarMergeResult mergeIntScalar(
+            String field,
+            Integer currentValue,
+            JsonNode incomingNode,
+            JsonNode baseScreen,
+            List<String> conflicts) {
+        Integer incoming = incomingNode.isInt() || incomingNode.isLong() ? incomingNode.asInt() : null;
+        Integer base = baseScreen.path(field).isInt() || baseScreen.path(field).isLong() ? baseScreen.path(field).asInt() : null;
+        boolean remoteChanged = !valueEquals(currentValue, base);
+        boolean localChanged = !valueEquals(incoming, base);
+        if (remoteChanged && localChanged && !valueEquals(currentValue, incoming)) {
+            conflicts.add(field);
+            return new ScalarMergeResult(currentValue, null);
+        }
+        Integer merged = localChanged ? incoming : currentValue;
+        return new ScalarMergeResult(merged == null ? 0 : merged, null);
+    }
+
+    private ScalarMergeResult mergeScalar(
+            String field,
+            String currentValue,
+            String incomingValue,
+            String baseValue,
+            List<String> conflicts) {
+        boolean remoteChanged = !valueEquals(currentValue, baseValue);
+        boolean localChanged = !valueEquals(incomingValue, baseValue);
+        if (remoteChanged && localChanged && !valueEquals(currentValue, incomingValue)) {
+            conflicts.add(field);
+            return new ScalarMergeResult(null, currentValue);
+        }
+        String merged = localChanged ? incomingValue : currentValue;
+        return new ScalarMergeResult(null, merged);
+    }
+
+    private static boolean jsonEquals(JsonNode left, JsonNode right) {
+        if (left == null || left.isMissingNode() || left.isNull()) {
+            return right == null || right.isMissingNode() || right.isNull();
+        }
+        if (right == null || right.isMissingNode() || right.isNull()) {
+            return false;
+        }
+        return left.equals(right);
+    }
+
+    private static boolean valueEquals(Object left, Object right) {
+        if (left == null && right == null) {
+            return true;
+        }
+        if (left == null || right == null) {
+            return false;
+        }
+        return left.equals(right);
+    }
+
+    private Instant parseInstantSafe(String value) {
+        if (value == null) {
+            return null;
+        }
+        try {
+            return Instant.parse(value);
+        } catch (Exception ignore) {
+            return null;
+        }
+    }
+
+    private static class ConflictResolution {
+        private final JsonNode mergedBody;
+        private final ObjectNode conflictPayload;
+
+        private ConflictResolution(JsonNode mergedBody, ObjectNode conflictPayload) {
+            this.mergedBody = mergedBody;
+            this.conflictPayload = conflictPayload;
+        }
+
+        static ConflictResolution pass(JsonNode mergedBody) {
+            return new ConflictResolution(mergedBody, null);
+        }
+
+        static ConflictResolution blocked(ObjectNode payload) {
+            return new ConflictResolution(null, payload);
+        }
+    }
+
+    private static class ComponentMergeResult {
+        private final JsonNode mergedComponents;
+        private final List<String> conflictComponentIds;
+
+        private ComponentMergeResult(JsonNode mergedComponents, List<String> conflictComponentIds) {
+            this.mergedComponents = mergedComponents;
+            this.conflictComponentIds = conflictComponentIds == null ? List.of() : conflictComponentIds;
+        }
+    }
+
+    private static class ScalarMergeResult {
+        private final Integer intValue;
+        private final String textValue;
+
+        private ScalarMergeResult(Integer intValue, String textValue) {
+            this.intValue = intValue;
+            this.textValue = textValue;
         }
     }
 
@@ -1241,6 +1642,36 @@ public class ScreenResource {
 
     private ResponseEntity<String> forbidden() {
         return ResponseEntity.status(403).contentType(MediaType.TEXT_PLAIN).body("Forbidden");
+    }
+
+    private ResponseEntity<ObjectNode> lockConflict(ScreenEditLockService.LockSnapshot lock) {
+        ObjectNode body = objectMapper.createObjectNode();
+        body.put("code", "SCREEN_EDIT_LOCKED");
+        body.put("message", "Screen is currently locked by another editor");
+        body.set("lock", toLockSnapshot(lock));
+        return ResponseEntity.status(409).contentType(MediaType.APPLICATION_JSON).body(body);
+    }
+
+    private ObjectNode toLockSnapshot(ScreenEditLockService.LockSnapshot lock) {
+        ObjectNode node = objectMapper.createObjectNode();
+        if (lock == null) {
+            node.put("active", false);
+            return node;
+        }
+        node.put("active", lock.active());
+        node.putPOJO("screenId", lock.screenId());
+        node.putPOJO("ownerId", lock.ownerId());
+        if (lock.ownerName() != null) {
+            node.put("ownerName", lock.ownerName());
+        } else {
+            node.putNull("ownerName");
+        }
+        node.put("mine", lock.mine());
+        node.putPOJO("acquiredAt", lock.acquiredAt());
+        node.putPOJO("heartbeatAt", lock.heartbeatAt());
+        node.putPOJO("expireAt", lock.expireAt());
+        node.put("ttlSeconds", lock.ttlSeconds());
+        return node;
     }
 
     private static String trimToNull(String value) {

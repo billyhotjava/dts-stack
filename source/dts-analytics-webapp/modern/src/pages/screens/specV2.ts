@@ -106,6 +106,7 @@ function normalizeComponent(
     return {
         id,
         groupId: asTrimmedString(row.groupId),
+        parentContainerId: asTrimmedString(row.parentContainerId),
         type,
         name: asString(row.name) || `${type}-${index + 1}`,
         x: asNumber(row.x, 0),
@@ -177,6 +178,7 @@ export function normalizeScreenConfig(
         id: String(id),
         name: asString(row.name) || '未命名大屏',
         description: asString(row.description) || '',
+        updatedAt: asString(row.updatedAt),
         width,
         height,
         backgroundColor,

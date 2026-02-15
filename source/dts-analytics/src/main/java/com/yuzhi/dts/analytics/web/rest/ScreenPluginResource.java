@@ -11,6 +11,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
+import java.util.regex.Pattern;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,11 +26,7 @@ import org.springframework.web.bind.annotation.RestController;
 @Transactional(readOnly = true)
 public class ScreenPluginResource {
 
-    private static final Set<String> ALLOWED_BASE_TYPES = Set.of(
-            "line-chart", "bar-chart", "pie-chart", "gauge-chart", "scatter-chart", "radar-chart", "funnel-chart", "map-chart",
-            "border-box", "decoration", "scroll-board", "scroll-ranking", "water-level", "digital-flop", "flyline-chart", "percent-pond",
-            "title", "number-card", "progress-bar", "datetime", "image", "video", "iframe", "table",
-            "filter-input", "filter-select", "filter-date-range");
+    private static final Pattern COMPONENT_TYPE_PATTERN = Pattern.compile("^[a-z][a-z0-9-]{1,63}$");
 
     private final AnalyticsSessionService sessionService;
     private final ObjectMapper objectMapper;
@@ -89,8 +86,8 @@ public class ScreenPluginResource {
                     }
                     if (baseType == null) {
                         errors.add("component.baseType is required");
-                    } else if (!ALLOWED_BASE_TYPES.contains(baseType)) {
-                        errors.add("unsupported component.baseType: " + baseType);
+                    } else if (!COMPONENT_TYPE_PATTERN.matcher(baseType).matches()) {
+                        errors.add("invalid component.baseType: " + baseType);
                     }
                     JsonNode propertySchema = item.path("propertySchema");
                     if (!propertySchema.isMissingNode() && !propertySchema.isNull() && !propertySchema.isObject()) {

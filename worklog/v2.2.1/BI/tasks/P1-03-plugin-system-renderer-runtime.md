@@ -54,3 +54,11 @@
   - `screen-plugins` 清单增加 `propertySchema/dataContract`；
   - Demo 插件新增 `table-matrix` 组件。
   - 路径：`source/dts-analytics/src/main/java/com/yuzhi/dts/analytics/web/rest/ScreenPluginResource.java`
+- 设计器属性面板接入插件 schema：
+  - `PropertyPanel` 新增插件配置区，按 `propertySchema.fields` 动态渲染表单；
+  - 支持 `string/number/boolean/color/array/json` 字段编辑；
+  - 插件组件新增属性无需改核心属性面板 `switch-case`。
+- 插件组件接入弹性增强：
+  - 组件库不再对插件 `baseType` 做前端硬编码白名单过滤，支持后续扩展类型平滑接入；
+  - 后端插件校验由“固定类型白名单”调整为“合法命名规范校验”（`^[a-z][a-z0-9-]{1,63}$`）；
+  - 组件库“常用/最近”键改为插件唯一键（`pluginId:componentId@version`），避免同名组件冲突。

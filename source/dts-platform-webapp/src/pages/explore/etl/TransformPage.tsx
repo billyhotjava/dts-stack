@@ -457,6 +457,15 @@ export default function TransformPage() {
 		{ title: "运行中", dataIndex: "running", key: "running", width: 100 },
 		{ title: "排队中", dataIndex: "preparing", key: "preparing", width: 100 },
 	];
+	const projectLoadColumns = [
+		{
+			title: "项目标识",
+			dataIndex: "projectKey",
+			key: "projectKey",
+		},
+		{ title: "运行中", dataIndex: "running", key: "running", width: 100 },
+		{ title: "排队中", dataIndex: "preparing", key: "preparing", width: 100 },
+	];
 
 	return (
 		<div className="flex flex-col gap-6">
@@ -534,6 +543,20 @@ export default function TransformPage() {
 										precision={2}
 									/>
 								</Col>
+								<Col xs={12} md={6}>
+									<Statistic
+										title="平均排队(秒)"
+										value={governanceOverview.avgQueueWaitSeconds || 0}
+										precision={2}
+									/>
+								</Col>
+								<Col xs={12} md={6}>
+									<Statistic
+										title="最长排队(秒)"
+										value={governanceOverview.maxQueueWaitSeconds || 0}
+										precision={2}
+									/>
+								</Col>
 							</Row>
 							<Table
 								size="small"
@@ -544,6 +567,14 @@ export default function TransformPage() {
 								columns={sourceLoadColumns}
 								dataSource={governanceOverview.sourceLoads || []}
 								locale={{ emptyText: "暂无来源负载数据" }}
+							/>
+							<Table
+								size="small"
+								rowKey={(record) => record.projectKey || "default"}
+								pagination={false}
+								columns={projectLoadColumns}
+								dataSource={governanceOverview.projectLoads || []}
+								locale={{ emptyText: "暂无项目负载数据" }}
 							/>
 						</Space>
 					) : (

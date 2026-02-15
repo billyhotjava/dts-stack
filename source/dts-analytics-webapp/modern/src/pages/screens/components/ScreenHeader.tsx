@@ -2,7 +2,7 @@ import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { useScreen } from '../ScreenContext';
 import { detectInteractionCycles } from '../interactionGraph';
-import { analyticsApi, type ScreenDetail } from '../../../api/analyticsApi';
+import { analyticsApi, HttpError, type ScreenDetail, type ScreenEditLock, type ScreenVersionDiff } from '../../../api/analyticsApi';
 import { GlobalVariableManager } from './GlobalVariableManager';
 import { CacheObservabilityPanel } from './CacheObservabilityPanel';
 import { ScreenCompliancePanel } from './ScreenCompliancePanel';
@@ -12,14 +12,40 @@ import { ScreenSharePolicyPanel } from './ScreenSharePolicyPanel';
 import { ScreenHealthPanel } from './ScreenHealthPanel';
 import { InteractionDebugPanel } from './InteractionDebugPanel';
 import { ScreenCollaborationPanel } from './ScreenCollaborationPanel';
+import { ScreenEditLockPanel } from './ScreenEditLockPanel';
+import { ScreenConflictPanel, type ScreenUpdateConflict } from './ScreenConflictPanel';
+import { ScreenVersionComparePanel } from './ScreenVersionComparePanel';
 import { buildScreenPayload, normalizeScreenConfig, validateScreenPayload } from '../specV2';
 import { resolveScreenTheme } from '../screenThemes';
+import type { ScreenConfig } from '../types';
 import { writeTextToClipboard } from '../../../hooks/clipboard';
+
+function buildComponentConflictMeta(baseline: ScreenConfig): Record<string, unknown> {
+    const baseComponents = (baseline.components ?? []).map((item) => ({
+        id: item.id,
+        component: item,
+    }));
+    return {
+        mode: 'component',
+        baseUpdatedAt: baseline.updatedAt || null,
+        baseScreen: {
+            name: baseline.name ?? null,
+            description: baseline.description ?? null,
+            width: baseline.width,
+            height: baseline.height,
+            backgroundColor: baseline.backgroundColor ?? null,
+            backgroundImage: baseline.backgroundImage ?? null,
+            theme: baseline.theme ?? null,
+        },
+        baseComponents,
+        baseVariables: baseline.globalVariables ?? [],
+    };
+}
 
 export function ScreenHeader() {
     const navigate = useNavigate();
     const { id } = useParams<{ id: string }>();
-    const { state, updateConfig, loadConfig, isSaving, setIsSaving } = useScreen();
+    const { state, updateConfig, loadConfig, markBaseline, selectComponents, isSaving, setIsSaving } = useScreen();
     const { config } = state;
     const [isEditingName, setIsEditingName] = useState(false);
     const [nameValue, setNameValue] = useState(config.name);
@@ -35,7 +61,15 @@ export function ScreenHeader() {
     const [showSharePolicyPanel, setShowSharePolicyPanel] = useState(false);
     const [showInteractionDebugPanel, setShowInteractionDebugPanel] = useState(false);
     const [showCollaborationPanel, setShowCollaborationPanel] = useState(false);
+    const [showEditLockPanel, setShowEditLockPanel] = useState(false);
+    const [showConflictPanel, setShowConflictPanel] = useState(false);
+    const [showVersionComparePanel, setShowVersionComparePanel] = useState(false);
     const [isSavingTemplate, setIsSavingTemplate] = useState(false);
+    const [conflictLoading, setConflictLoading] = useState(false);
+    const [lastConflict, setLastConflict] = useState<ScreenUpdateConflict | null>(null);
+    const [versionDiff, setVersionDiff] = useState<ScreenVersionDiff | null>(null);
+    const [editLock, setEditLock] = useState<ScreenEditLock | null>(null);
+    const [lockErrorText, setLockErrorText] = useState<string | null>(null);
     const importInputRef = useRef<HTMLInputElement | null>(null);
     const [permissions, setPermissions] = useState({
         canRead: true,
@@ -45,6 +79,8 @@ export function ScreenHeader() {
     });
 
     const cycleWarnings = useMemo(() => detectInteractionCycles(config), [config]);
+    const lockedByOther = !!(editLock?.active && !editLock?.mine);
+    const lockOwnerText = String(editLock?.ownerName || editLock?.ownerId || '其他用户');
 
     useEffect(() => {
         if (!id) {
@@ -71,6 +107,108 @@ export function ScreenHeader() {
             cancelled = true;
         };
     }, [id]);
+
+    const refreshLockState = useCallback(async () => {
+        if (!id || !permissions.canRead) {
+            setEditLock(null);
+            return;
+        }
+        try {
+            const lock = await analyticsApi.getScreenEditLock(id);
+            setEditLock(lock);
+            if (!lock?.active || lock.mine) {
+                setLockErrorText(null);
+            }
+        } catch {
+            // keep lock workflow non-blocking
+        }
+    }, [id, permissions.canRead]);
+
+    useEffect(() => {
+        if (!id || !permissions.canRead) {
+            setEditLock(null);
+            return;
+        }
+        void refreshLockState();
+    }, [id, permissions.canRead, refreshLockState]);
+
+    useEffect(() => {
+        if (!id || !permissions.canEdit) {
+            return;
+        }
+        let cancelled = false;
+        const bootstrap = async () => {
+            try {
+                const lock = await analyticsApi.acquireScreenEditLock(id, { ttlSeconds: 120 });
+                if (!cancelled) {
+                    setEditLock(lock);
+                    setLockErrorText(null);
+                }
+            } catch (error) {
+                if (cancelled) return;
+                if (error instanceof HttpError) {
+                    try {
+                        const payload = JSON.parse(error.bodyText) as { lock?: ScreenEditLock; message?: string };
+                        if (payload?.lock) {
+                            setEditLock(payload.lock);
+                        } else {
+                            void refreshLockState();
+                        }
+                        setLockErrorText(payload?.message || error.message);
+                    } catch {
+                        setLockErrorText(error.message);
+                        void refreshLockState();
+                    }
+                } else {
+                    setLockErrorText(error instanceof Error ? error.message : '编辑锁申请失败');
+                    void refreshLockState();
+                }
+            }
+        };
+        bootstrap();
+        return () => {
+            cancelled = true;
+        };
+    }, [id, permissions.canEdit, refreshLockState]);
+
+    useEffect(() => {
+        if (!id || !permissions.canEdit || !editLock?.mine) {
+            return;
+        }
+        const timer = window.setInterval(async () => {
+            try {
+                const lock = await analyticsApi.heartbeatScreenEditLock(id, { ttlSeconds: 120 });
+                setEditLock(lock);
+            } catch {
+                await refreshLockState();
+            }
+        }, 45000);
+        return () => window.clearInterval(timer);
+    }, [id, permissions.canEdit, editLock?.mine, refreshLockState]);
+
+    useEffect(() => {
+        if (!id || !permissions.canRead || editLock?.mine) {
+            return;
+        }
+        const timer = window.setInterval(() => {
+            void refreshLockState();
+        }, 30000);
+        return () => window.clearInterval(timer);
+    }, [id, permissions.canRead, editLock?.mine, refreshLockState]);
+
+    useEffect(() => {
+        if (!id) return;
+        const release = () => {
+            if (editLock?.mine) {
+                void analyticsApi.releaseScreenEditLock(id).catch(() => undefined);
+            }
+        };
+        window.addEventListener('beforeunload', release);
+        return () => {
+            window.removeEventListener('beforeunload', release);
+            release();
+        };
+    }, [id, editLock?.mine]);
 
     const applyScreenDetail = useCallback((screen: ScreenDetail) => {
         const normalized = normalizeScreenConfig(screen, { id: screen.id });
@@ -107,7 +245,11 @@ export function ScreenHeader() {
 
         setIsSaving(true);
         try {
-            const payload = buildScreenPayload(config);
+            const payload = buildScreenPayload(config) as Record<string, unknown>;
+            const baseline = state.baselineConfig;
+            if (id && baseline?.updatedAt) {
+                payload._conflict = buildComponentConflictMeta(baseline);
+            }
             const validation = validateScreenPayload(payload);
             if (validation.errors.length > 0) {
                 throw new Error(`配置校验失败：${validation.errors.join('；')}`);
@@ -117,7 +259,12 @@ export function ScreenHeader() {
             }
 
             if (id) {
-                await analyticsApi.updateScreen(id, payload);
+                const updated = await analyticsApi.updateScreen(id, payload);
+                const normalized = normalizeScreenConfig(updated, { id: updated.id });
+                const resolvedTheme = resolveScreenTheme(normalized.config.theme, normalized.config.backgroundColor);
+                const synced = { ...normalized.config, theme: resolvedTheme };
+                updateConfig(synced);
+                markBaseline(synced);
                 return id;
             }
 
@@ -129,17 +276,102 @@ export function ScreenHeader() {
         } finally {
             setIsSaving(false);
         }
-    }, [config, id, isSaving, navigate, setIsSaving]);
+    }, [config, id, isSaving, markBaseline, navigate, setIsSaving, state.baselineConfig, updateConfig]);
+
+    const handleLockHttpError = useCallback((error: unknown, fallbackMessage: string): string => {
+        if (error instanceof HttpError && error.code === 'SCREEN_EDIT_LOCKED') {
+            let detail = fallbackMessage;
+            try {
+                const payload = JSON.parse(error.bodyText) as { message?: string; lock?: ScreenEditLock };
+                if (payload?.lock) {
+                    setEditLock(payload.lock);
+                    const owner = String(payload.lock.ownerName || payload.lock.ownerId || '其他用户');
+                    detail = `当前由 ${owner} 持有编辑锁，请稍后重试`;
+                } else {
+                    void refreshLockState();
+                }
+                setLockErrorText(payload?.message || detail);
+            } catch {
+                setLockErrorText(error.message);
+                void refreshLockState();
+                detail = error.message || fallbackMessage;
+            }
+            setShowEditLockPanel(true);
+            return detail;
+        }
+        if (error instanceof Error && error.message) {
+            return error.message;
+        }
+        return fallbackMessage;
+    }, [refreshLockState]);
+
+    const handleUpdateConflictError = useCallback((error: unknown, fallbackMessage: string): string => {
+        if (!(error instanceof HttpError) || error.code !== 'SCREEN_UPDATE_CONFLICT') {
+            return fallbackMessage;
+        }
+        let detail = fallbackMessage;
+        try {
+            const payload = JSON.parse(error.bodyText) as {
+                code?: string;
+                message?: string;
+                componentIds?: unknown;
+                fields?: unknown;
+            };
+            const next: ScreenUpdateConflict = {
+                code: String(payload?.code || 'SCREEN_UPDATE_CONFLICT'),
+                message: String(payload?.message || '检测到并发编辑冲突'),
+                componentIds: Array.isArray(payload?.componentIds)
+                    ? payload.componentIds.map((item) => String(item || '').trim()).filter(Boolean)
+                    : [],
+                fields: Array.isArray(payload?.fields)
+                    ? payload.fields.map((item) => String(item || '').trim()).filter(Boolean)
+                    : [],
+            };
+            setLastConflict(next);
+            if (next.componentIds.length > 0) {
+                selectComponents(next.componentIds);
+            }
+            setShowConflictPanel(true);
+            detail = next.message || fallbackMessage;
+        } catch {
+            setLastConflict({
+                code: 'SCREEN_UPDATE_CONFLICT',
+                message: error.message || fallbackMessage,
+                componentIds: [],
+                fields: [],
+            });
+            setShowConflictPanel(true);
+            detail = error.message || fallbackMessage;
+        }
+        return detail;
+    }, [selectComponents]);
+
+    const handleReloadLatestDraft = useCallback(async () => {
+        if (!id) return;
+        setConflictLoading(true);
+        try {
+            const latest = await analyticsApi.getScreen(id, { mode: 'draft', fallbackDraft: true });
+            applyScreenDetail(latest);
+            setShowConflictPanel(false);
+        } catch (error) {
+            const message = error instanceof Error ? error.message : '重载最新草稿失败';
+            alert(message);
+        } finally {
+            setConflictLoading(false);
+        }
+    }, [applyScreenDetail, id]);
 
     const handleSave = useCallback(async () => {
         try {
             await saveScreen();
         } catch (error) {
             console.error('Failed to save screen:', error);
-            const message = error instanceof Error && error.message ? error.message : '保存失败';
+            const message = error instanceof HttpError && error.code === 'SCREEN_UPDATE_CONFLICT'
+                ? handleUpdateConflictError(error, '保存失败，存在并发冲突')
+                : handleLockHttpError(error, '保存失败');
             alert(message);
         }
-    }, [saveScreen]);
+    }, [handleLockHttpError, handleUpdateConflictError, saveScreen]);
 
     const handleSaveAsTemplate = useCallback(async () => {
         if (isSavingTemplate) return;
@@ -170,11 +402,14 @@ export function ScreenHeader() {
             alert(`已保存到${scopeText}模板`);
         } catch (error) {
             console.error('Failed to save screen as template:', error);
-            alert('存模板失败');
+            const message = error instanceof HttpError && error.code === 'SCREEN_UPDATE_CONFLICT'
+                ? handleUpdateConflictError(error, '存模板失败，存在并发冲突')
+                : handleLockHttpError(error, '存模板失败');
+            alert(message);
         } finally {
             setIsSavingTemplate(false);
         }
-    }, [config.description, config.name, isSavingTemplate, saveScreen]);
+    }, [config.description, config.name, handleLockHttpError, handleUpdateConflictError, isSavingTemplate, saveScreen]);
 
     const handlePublish = useCallback(async () => {
         if (isPublishing) return;
@@ -199,11 +434,14 @@ export function ScreenHeader() {
             alert('发布成功，版本 v' + versionNo + warmupText);
         } catch (error) {
             console.error('Failed to publish screen:', error);
-            alert('发布失败');
+            const message = error instanceof HttpError && error.code === 'SCREEN_UPDATE_CONFLICT'
+                ? handleUpdateConflictError(error, '发布失败，存在并发冲突')
+                : handleLockHttpError(error, '发布失败');
+            alert(message);
         } finally {
             setIsPublishing(false);
         }
-    }, [isPublishing, saveScreen]);
+    }, [handleLockHttpError, handleUpdateConflictError, isPublishing, saveScreen]);
 
     const handleVersionHistory = useCallback(async () => {
         if (!id || isLoadingVersions) return;
@@ -246,11 +484,12 @@ export function ScreenHeader() {
             alert('回滚成功，已切换草稿与发布版本');
         } catch (error) {
             console.error('Failed to rollback version:', error);
-            alert('回滚失败');
+            const message = handleLockHttpError(error, '回滚失败');
+            alert(message);
         } finally {
             setIsLoadingVersions(false);
         }
-    }, [applyScreenDetail, id, isLoadingVersions]);
+    }, [applyScreenDetail, handleLockHttpError, id, isLoadingVersions]);
 
     const handleVersionCompare = useCallback(async () => {
         if (!id || isLoadingVersions) return;
@@ -275,14 +514,8 @@ export function ScreenHeader() {
                 return;
             }
             const diff = await analyticsApi.compareScreenVersions(id, pair[0], pair[1]);
-            const s = diff.summary || {};
-            const summary = [
-                `组件数: ${s.componentCountFrom ?? '-'} -> ${s.componentCountTo ?? '-'}`,
-                `新增组件: ${s.addedComponents ?? 0}，移除组件: ${s.removedComponents ?? 0}`,
-                `新增类型: ${s.addedComponentTypes ?? 0}，移除类型: ${s.removedComponentTypes ?? 0}`,
-                `新增变量: ${s.addedVariables ?? 0}，移除变量: ${s.removedVariables ?? 0}`,
-            ].join('\n');
-            alert(`版本差异摘要：\n${summary}`);
+            setVersionDiff(diff);
+            setShowVersionComparePanel(true);
         } catch (error) {
             console.error('Failed to compare versions:', error);
             alert('版本对比失败');
@@ -476,7 +709,6 @@ export function ScreenHeader() {
                         type="button"
                         className="header-btn"
                         onClick={() => setShowVariableManager(true)}
-                        disabled={!permissions.canRead}
                         title="全局变量与联动"
                     >
                         变量
@@ -486,16 +718,25 @@ export function ScreenHeader() {
                         type="button"
                         className="header-btn"
                         onClick={() => setShowInteractionDebugPanel(true)}
-                        disabled={!permissions.canRead}
                         title="联动与变量事件调试"
                     >
                         联动调试
                     </button>
+                    {id && permissions.canRead && (
+                        <button
+                            type="button"
+                            className="header-btn"
+                            onClick={() => setShowEditLockPanel(true)}
+                            title="编辑锁状态与手工接管"
+                        >
+                            锁
+                            {lockedByOther ? '(占用)' : (editLock?.mine ? '(我)' : '')}
+                        </button>
+                    )}
                     <button
                         type="button"
                         className="header-btn"
                         onClick={() => setShowCachePanel(true)}
-                        disabled={!permissions.canRead}
                         title="缓存命中率观测"
                     >
                         缓存观测
@@ -504,7 +745,6 @@ export function ScreenHeader() {
                         type="button"
                         className="header-btn"
                         onClick={() => setShowCompliancePanel(true)}
-                        disabled={!permissions.canRead}
                         title="企业级合规策略与审计报表"
                     >
                         合规
@@ -513,7 +753,6 @@ export function ScreenHeader() {
                         type="button"
                         className="header-btn"
                         onClick={() => setShowHealthPanel(true)}
-                        disabled={!permissions.canRead}
                         title="兼容性与性能基线体检"
                     >
                         体检
@@ -581,8 +820,8 @@ export function ScreenHeader() {
                                 type="button"
                                 className="header-btn"
                                 onClick={handlePublish}
-                                disabled={isPublishing || !permissions.canPublish}
-                                title="发布当前草稿"
+                                disabled={isPublishing || !permissions.canPublish || lockedByOther}
+                                title={lockedByOther ? `当前由 ${lockOwnerText} 持有编辑锁` : '发布当前草稿'}
                             >
                                 {isPublishing ? '发布中...' : '🚀 发布'}
                             </button>
@@ -654,8 +893,8 @@ export function ScreenHeader() {
                         type="button"
                         className="header-btn save-btn"
                         onClick={handleSave}
-                        disabled={isSaving || !permissions.canEdit}
-                        title="保存草稿"
+                        disabled={isSaving || !permissions.canEdit || lockedByOther}
+                        title={lockedByOther ? `当前由 ${lockOwnerText} 持有编辑锁` : '保存草稿'}
                     >
                         {isSaving ? '保存中...' : '💾 保存'}
                     </button>
@@ -668,6 +907,18 @@ export function ScreenHeader() {
                     />
                 </div>
             </div>
+            {lockedByOther && (
+                <div style={{
+                    padding: '6px 12px',
+                    fontSize: 12,
+                    color: '#f59e0b',
+                    borderTop: '1px solid rgba(245,158,11,0.3)',
+                    background: 'rgba(245,158,11,0.08)',
+                }}>
+                    编辑锁提示：当前由 {lockOwnerText} 编辑中，保存/发布已被保护性禁用。
+                    {lockErrorText ? ` (${lockErrorText})` : ''}
+                </div>
+            )}
 
             <GlobalVariableManager
                 open={showVariableManager}
@@ -718,6 +969,38 @@ export function ScreenHeader() {
                 components={config.components ?? []}
                 selectedIds={state.selectedIds ?? []}
                 onClose={() => setShowCollaborationPanel(false)}
+            />
+
+            <ScreenEditLockPanel
+                open={showEditLockPanel}
+                screenId={id}
+                lock={editLock}
+                onChange={(next) => {
+                    setEditLock(next);
+                    if (!next?.active || next.mine) {
+                        setLockErrorText(null);
+                    }
+                }}
+                onClose={() => setShowEditLockPanel(false)}
+            />
+
+            <ScreenConflictPanel
+                open={showConflictPanel}
+                conflict={lastConflict}
+                loading={conflictLoading}
+                onClose={() => setShowConflictPanel(false)}
+                onReloadLatest={handleReloadLatestDraft}
+                onSelectConflictComponents={(ids) => {
+                    const idSet = new Set((config.components ?? []).map((item) => item.id));
+                    const filtered = ids.filter((item) => idSet.has(item));
+                    selectComponents(filtered);
+                }}
+            />
+
+            <ScreenVersionComparePanel
+                open={showVersionComparePanel}
+                diff={versionDiff}
+                onClose={() => setShowVersionComparePanel(false)}
             />
 
             <ScreenSharePolicyPanel

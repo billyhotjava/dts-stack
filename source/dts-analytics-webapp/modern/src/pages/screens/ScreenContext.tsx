@@ -15,12 +15,51 @@ const defaultConfig: ScreenConfig = {
 
 const initialState: ScreenState = {
     config: defaultConfig,
+    baselineConfig: defaultConfig,
     selectedIds: [],
     zoom: 100,
     showGrid: true,
     history: [defaultConfig],
     historyIndex: 0,
 };
+
+function applyAutoContainerBinding(components: ScreenComponent[], movedIds: string[]): ScreenComponent[] {
+    if (!Array.isArray(components) || components.length === 0 || !Array.isArray(movedIds) || movedIds.length === 0) {
+        return components;
+    }
+    const movedIdSet = new Set(movedIds);
+    const containers = components
+        .filter((item) => item.type === 'container' && item.visible)
+        .sort((a, b) => b.zIndex - a.zIndex);
+
+    return components.map((item) => {
+        if (!movedIdSet.has(item.id) || item.type === 'container') {
+            return item;
+        }
+
+        const centerX = item.x + item.width / 2;
+        const centerY = item.y + item.height / 2;
+        const target = containers.find((container) => (
+            container.id !== item.id
+            && centerX >= container.x
+            && centerX <= container.x + container.width
+            && centerY >= container.y
+            && centerY <= container.y + container.height
+        ));
+        const nextParentId = target?.id;
+        if (nextParentId) {
+            if (item.parentContainerId === nextParentId) {
+                return item;
+            }
+            return { ...item, parentContainerId: nextParentId };
+        }
+        if (!item.parentContainerId) {
+            return item;
+        }
+        const { parentContainerId: _parentContainerId, ...rest } = item;
+        return rest;
+    });
+}
 
 function screenReducer(state: ScreenState, action: ScreenAction): ScreenState {
     switch (action.type) {
@@ -40,9 +79,17 @@ function screenReducer(state: ScreenState, action: ScreenAction): ScreenState {
             return {
                 ...state,
                 config: action.payload,
+                baselineConfig: action.payload,
                 selectedIds: [],
                 history: [action.payload],
                 historyIndex: 0,
+            };
+        }
+
+        case 'MARK_BASELINE': {
+            return {
+                ...state,
+                baselineConfig: action.payload,
             };
         }
 
@@ -78,9 +125,16 @@ function screenReducer(state: ScreenState, action: ScreenAction): ScreenState {
         }
 
         case 'DELETE_COMPONENTS': {
-            const newComponents = state.config.components.filter(
-                (comp) => !action.payload.includes(comp.id)
-            );
+            const deletedIds = new Set(action.payload);
+            const newComponents = state.config.components
+                .filter((comp) => !deletedIds.has(comp.id))
+                .map((comp) => {
+                    if (!comp.parentContainerId || !deletedIds.has(comp.parentContainerId)) {
+                        return comp;
+                    }
+                    const { parentContainerId: _parentContainerId, ...rest } = comp;
+                    return rest;
+                });
             const newConfig = { ...state.config, components: newComponents };
             const newHistory = state.history.slice(0, state.historyIndex + 1);
             newHistory.push(newConfig);
@@ -126,11 +180,12 @@ function screenReducer(state: ScreenState, action: ScreenAction): ScreenState {
         }
 
         case 'MOVE_COMPONENT': {
-            const newComponents = state.config.components.map((comp) =>
+            const movedComponents = state.config.components.map((comp) =>
                 comp.id === action.payload.id
                     ? { ...comp, x: action.payload.x, y: action.payload.y }
                     : comp
             );
+            const newComponents = applyAutoContainerBinding(movedComponents, [action.payload.id]);
             const newConfig = { ...state.config, components: newComponents };
             // Don't add to history on every move (too many entries)
             return { ...state, config: newConfig };
@@ -138,11 +193,15 @@ function screenReducer(state: ScreenState, action: ScreenAction): ScreenState {
 
         case 'MOVE_COMPONENTS': {
             const posMap = new Map(action.payload.map((item) => [item.id, item]));
-            const newComponents = state.config.components.map((comp) => {
+            const movedComponents = state.config.components.map((comp) => {
                 const next = posMap.get(comp.id);
                 if (!next) return comp;
                 return { ...comp, x: next.x, y: next.y };
             });
+            const newComponents = applyAutoContainerBinding(
+                movedComponents,
+                action.payload.map((item) => item.id),
+            );
             const newConfig = { ...state.config, components: newComponents };
             return { ...state, config: newConfig };
         }
@@ -271,6 +330,7 @@ interface ScreenContextValue {
     pasteComponents: () => void;
     // Save/Load
     loadConfig: (config: ScreenConfig) => void;
+    markBaseline: (config: ScreenConfig) => void;
     updateConfig: (updates: Partial<ScreenConfig>) => void;
     updateSelectedComponents: (updates: Partial<ScreenComponent>) => void;
     groupSelected: () => void;
@@ -337,6 +397,10 @@ export function ScreenProvider({ children }: { children: ReactNode }) {
     const updateConfig = useCallback((updates: Partial<ScreenConfig>) => {
         dispatch({ type: 'SET_CONFIG', payload: { ...state.config, ...updates } });
     }, [state.config]);
+
+    const markBaseline = useCallback((config: ScreenConfig) => {
+        dispatch({ type: 'MARK_BASELINE', payload: config });
+    }, []);
 
     const updateSelectedComponents = useCallback((updates: Partial<ScreenComponent>) => {
         if (state.selectedIds.length === 0) return;
@@ -473,6 +537,7 @@ export function ScreenProvider({ children }: { children: ReactNode }) {
                 copyComponents,
                 pasteComponents,
                 loadConfig,
+                markBaseline,
                 updateConfig,
                 updateSelectedComponents,
                 groupSelected,

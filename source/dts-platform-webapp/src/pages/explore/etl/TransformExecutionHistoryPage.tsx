@@ -23,6 +23,8 @@ type ExecutionProgressView = {
     terminal: boolean;
 };
 
+const GOVERNANCE_FAILURE_FILTER = "GOVERNANCE_LIMIT,GOVERNANCE_QUEUE_TIMEOUT";
+
 export default function TransformExecutionHistoryPage() {
     const { id } = useParams();
     const router = useRouter();
@@ -32,6 +34,7 @@ export default function TransformExecutionHistoryPage() {
     const [pagination, setPagination] = useState({ current: 1, pageSize: 20, total: 0 });
     const [statusFilter, setStatusFilter] = useState<string | undefined>(undefined);
     const [failureCategoryFilter, setFailureCategoryFilter] = useState<string | undefined>(undefined);
+    const [failureQuickFilter, setFailureQuickFilter] = useState<"all" | "governance">("all");
     const [logVisible, setLogVisible] = useState(false);
     const [logLoading, setLogLoading] = useState(false);
     const [logContent, setLogContent] = useState("");
@@ -378,6 +381,19 @@ export default function TransformExecutionHistoryPage() {
         return `${seconds}秒`;
     };
 
+    const formatQueueWait = (seconds?: number) => {
+        if (seconds === undefined || seconds === null) {
+            return "-";
+        }
+        const safe = Math.max(0, Math.floor(seconds));
+        if (safe < 60) {
+            return `${safe}秒`;
+        }
+        const minutes = Math.floor(safe / 60);
+        const remain = safe % 60;
+        return `${minutes}分${remain}秒`;
+    };
+
     const auditSummaryByExecution = useMemo(() => {
         const summary = new Map<number, { total: number; advanced: number; unchanged: number }>();
         for (const audit of incrementalAudits) {
@@ -482,6 +498,13 @@ export default function TransformExecutionHistoryPage() {
             render: (_: any, record: IngestionExecutionDTO) => calculateDuration(record.startTime, record.endTime),
         },
         {
+            title: "排队等待",
+            dataIndex: "queueWaitSeconds",
+            key: "queueWaitSeconds",
+            width: 130,
+            render: (value: number) => formatQueueWait(value),
+        },
+        {
             title: "读取行数",
             dataIndex: "rowsRead",
             key: "rowsRead",
@@ -538,9 +561,11 @@ export default function TransformExecutionHistoryPage() {
                 if (!normalizeText(record.failureCategory)) {
                     return "-";
                 }
+                const normalized = normalizeText(record.failureCategory).toUpperCase();
+                const color = normalized.startsWith("GOVERNANCE") ? "warning" : "error";
                 return (
                     <Tooltip title={normalizeText(record.failureAdvice) || undefined}>
-                        <Tag color="error">{record.failureCategory}</Tag>
+                        <Tag color={color}>{record.failureCategory}</Tag>
                     </Tooltip>
                 );
             },
@@ -585,6 +610,8 @@ export default function TransformExecutionHistoryPage() {
         { label: "DDL 错误", value: "DDL_ERROR" },
         { label: "DML 错误", value: "DML_ERROR" },
         { label: "数据质量", value: "DATA_QUALITY_ERROR" },
+        { label: "治理拒绝", value: "GOVERNANCE_LIMIT" },
+        { label: "治理队列超时", value: "GOVERNANCE_QUEUE_TIMEOUT" },
         { label: "运行时错误", value: "RUNTIME_ERROR" },
     ];
 
@@ -638,10 +665,24 @@ export default function TransformExecutionHistoryPage() {
                             allowClear
                             placeholder="失败分类"
                             style={{ width: 180 }}
-                            value={failureCategoryFilter}
+                            value={failureQuickFilter === "governance" ? undefined : failureCategoryFilter}
                             options={failureCategoryOptions}
                             onChange={(value) => {
                                 setFailureCategoryFilter(value);
+                                setFailureQuickFilter("all");
+                                setPagination((prev) => ({ ...prev, current: 1 }));
+                            }}
+                        />
+                        <Segmented
+                            options={[
+                                { label: "全部失败", value: "all" },
+                                { label: "仅治理失败", value: "governance" },
+                            ]}
+                            value={failureQuickFilter}
+                            onChange={(value) => {
+                                const next = String(value) === "governance" ? "governance" : "all";
+                                setFailureQuickFilter(next);
+                                setFailureCategoryFilter(next === "governance" ? GOVERNANCE_FAILURE_FILTER : undefined);
                                 setPagination((prev) => ({ ...prev, current: 1 }));
                             }}
                         />
