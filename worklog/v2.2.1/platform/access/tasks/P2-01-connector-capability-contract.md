@@ -1,6 +1,6 @@
 # P2-01 连接器能力契约统一
 
-`status`: `planned`
+`status`: `in-progress`
 `priority`: `P2`
 
 ## 目标
@@ -29,3 +29,18 @@
 
 - 风险：历史连接器能力声明不完整。
 - 回滚：提供默认能力映射与兼容层。
+
+## 实现进展（2026-02-15）
+
+- 后端能力契约增强：
+  - `source/dts-ingestion/src/main/java/com/yuzhi/dts/ingestion/service/etl/ConnectorCapabilityService.java`
+  - 新增能力契约字段（`contractVersion`、`syncModes`、`fallbackSyncMode`）默认种子；
+  - 新增模式归一化、支持模式解析、降级兜底与服务端校验（`validateSyncModeOrThrow`）。
+- 入湖任务创建/更新增加双重校验：
+  - `source/dts-ingestion/src/main/java/com/yuzhi/dts/ingestion/web/rest/IngestionTaskResource.java`
+  - 基于连接器类型（file/addax/airbyte）校验 `syncMode` 是否受支持，不合法直接 `400`。
+- 前端按契约驱动同步模式：
+  - `source/dts-platform-webapp/src/pages/explore/etl/TransformCreatePage.tsx`
+  - `syncMode` 选项由能力契约动态生成；
+  - 当能力探测失败时启用保守降级（file=full、addax=full+incremental、airbyte=full+incremental+cdc+backfill）；
+  - 当前模式不受支持时自动切换到 `fallbackSyncMode` 并提示。

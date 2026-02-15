@@ -62,6 +62,21 @@ export function registerEChartsMap(mapName: string, geoJson: unknown): boolean {
 	}
 }
 
+export function hasEChartsMap(mapName: string): boolean {
+	const name = String(mapName || "").trim();
+	if (!name) {
+		return false;
+	}
+	const api = echarts as unknown as {
+		getMap?: (id: string) => unknown;
+	};
+	try {
+		return Boolean(api.getMap?.(name));
+	} catch {
+		return false;
+	}
+}
+
 export interface EChartsRuntimeProps {
 	style?: CSSProperties;
 	option: unknown;

@@ -13,6 +13,7 @@ import {
 	type IngestionConnectorCapabilityDTO,
 	type IngestionExecutionDTO,
 	type IngestionTaskDTO,
+	type IngestionTaskTemplateDTO,
 	type TableInfo,
 	resolveExecutionPollIntervalMs,
 } from "@/api/ingestion";
@@ -327,6 +328,44 @@ const buildSyncScheduleText = (values: Record<string, any>) => {
 	if (spec.type === "cron") return `cron:${spec.cron}`;
 	if (spec.type === "interval") return `interval:${spec.intervalMinutes}`;
 	return undefined;
+};
+
+const toOptionalNumber = (value: any) => {
+	if (value === undefined || value === null || value === "") return undefined;
+	const parsed = Number(value);
+	return Number.isFinite(parsed) ? parsed : undefined;
+};
+
+const buildGovernanceSyncFields = (values: Record<string, any>): Record<string, any> => {
+	const result: Record<string, any> = {};
+	const taskConcurrency = toOptionalNumber(values.taskConcurrency);
+	if (taskConcurrency !== undefined && taskConcurrency > 0) {
+		result.taskConcurrency = Math.floor(taskConcurrency);
+	}
+	const sourceConcurrency = toOptionalNumber(values.sourceConcurrency);
+	if (sourceConcurrency !== undefined && sourceConcurrency >= 0) {
+		result.sourceConcurrency = Math.floor(sourceConcurrency);
+	}
+	const priority = normalizeText(values.priority);
+	if (priority) {
+		result.priority = priority.toUpperCase();
+	}
+	const rejectPolicy = normalizeText(values.rejectPolicy);
+	if (rejectPolicy) {
+		result.rejectPolicy = rejectPolicy.toUpperCase();
+	}
+	const windowStart = normalizeText(values.windowStart);
+	const windowEnd = normalizeText(values.windowEnd);
+	if ((windowStart && !windowEnd) || (!windowStart && windowEnd)) {
+		throw new Error("执行窗口需同时填写开始和结束时间（HH:mm）");
+	}
+	if (windowStart && windowEnd) {
+		result.windowStart = windowStart;
+		result.windowEnd = windowEnd;
+		const windowTimezone = normalizeText(values.windowTimezone) || "Asia/Shanghai";
+		result.windowTimezone = windowTimezone;
+	}
+	return result;
 };
 
 const validateCronExpression = (_: unknown, value: string) => {
@@ -813,27 +852,26 @@ const buildSyncConfigFromValues = (
 	values: Record<string, any>,
 	isFileSource: boolean,
 ): Record<string, any> | undefined => {
-	if (isFileSource) {
-		return undefined;
-	}
+	const config: Record<string, any> = {};
 	const syncMode = normalizeText(values.syncMode) || "full_refresh";
-	if (syncMode !== "incremental") {
-		return undefined;
+	if (!isFileSource && syncMode === "incremental") {
+		const incrementalColumn = normalizeText(values.incrementalColumn);
+		if (!incrementalColumn) {
+			throw new Error("增量同步请填写增量列");
+		}
+		const incrementalType = normalizeText(values.incrementalType) || "datetime";
+		const initialWatermark = normalizeText(values.initialWatermark);
+		config.incrementalColumn = incrementalColumn;
+		config.incrementalType = incrementalType;
+		if (initialWatermark) {
+			config.initialWatermark = initialWatermark;
+		}
 	}
-	const incrementalColumn = normalizeText(values.incrementalColumn);
-	if (!incrementalColumn) {
-		throw new Error("增量同步请填写增量列");
+	const governance = buildGovernanceSyncFields(values);
+	if (Object.keys(governance).length) {
+		config.governance = governance;
 	}
-	const incrementalType = normalizeText(values.incrementalType) || "datetime";
-	const initialWatermark = normalizeText(values.initialWatermark);
-	const config: Record<string, any> = {
-		incrementalColumn,
-		incrementalType,
-	};
-	if (initialWatermark) {
-		config.initialWatermark = initialWatermark;
-	}
-	return config;
+	return Object.keys(config).length ? config : undefined;
 };
 
 const buildJobPreview = (values: Record<string, any>, editorMode?: string, readerFallback?: string) => {
@@ -973,6 +1011,7 @@ const clearDraft = () => {
 const mapTaskToForm = (task: IngestionTaskDTO) => {
 	const sourceConfig = tryParseJson(task.sourceConfig) || {};
 	const syncConfig = tryParseJson(task.syncConfig) || {};
+	const governanceConfig = (syncConfig.governance || {}) as Record<string, any>;
 	const rawDestinationConfig = tryParseJson(task.destinationConfig);
 	const destinationConfig = rawDestinationConfig || {};
 	const addaxConfig = tryParseJson(task.addaxConfig) as Record<string, any> | undefined;
@@ -1076,6 +1115,13 @@ const mapTaskToForm = (task: IngestionTaskDTO) => {
 		scheduleType: scheduleState.scheduleType,
 		scheduleCron: scheduleState.scheduleCron,
 		scheduleIntervalMinutes: scheduleState.scheduleIntervalMinutes,
+		taskConcurrency: toOptionalNumber(governanceConfig.maxConcurrentRuns),
+		sourceConcurrency: toOptionalNumber(governanceConfig.sourceConcurrencyLimit),
+		priority: normalizeText(governanceConfig.priority) || undefined,
+		rejectPolicy: normalizeText(governanceConfig.rejectPolicy) || undefined,
+		windowStart: normalizeText(governanceConfig.windowStart) || undefined,
+		windowEnd: normalizeText(governanceConfig.windowEnd) || undefined,
+		windowTimezone: normalizeText(governanceConfig.windowTimezone) || undefined,
 	};
 };
 
@@ -1127,6 +1173,9 @@ export default function TransformCreatePage() {
 	const [loadingDataSources, setLoadingDataSources] = useState(false);
 	const [connectorCapabilities, setConnectorCapabilities] = useState<IngestionConnectorCapabilityDTO[]>([]);
 	const [capabilityLoadFailed, setCapabilityLoadFailed] = useState(false);
+	const [taskTemplates, setTaskTemplates] = useState<IngestionTaskTemplateDTO[]>([]);
+	const [loadingTaskTemplates, setLoadingTaskTemplates] = useState(false);
+	const [selectedTemplateId, setSelectedTemplateId] = useState<string | undefined>(undefined);
 	const [sqlModels, setSqlModels] = useState<Array<{ id?: string; name?: string; alias?: string }>>([]);
 	const [loadingSqlModels, setLoadingSqlModels] = useState(false);
 	const [fileUploadResult, setFileUploadResult] = useState<FileUploadResult | null>(null);
@@ -1207,6 +1256,9 @@ export default function TransformCreatePage() {
 			incrementalType: "datetime",
 			syncPrefix: "",
 			fileAutoId: true,
+			priority: "MEDIUM",
+			rejectPolicy: "REJECT",
+			windowTimezone: "Asia/Shanghai",
 		}),
 		[]
 	);
@@ -1375,6 +1427,25 @@ export default function TransformCreatePage() {
 			}
 		};
 		void loadCapabilities();
+	}, []);
+
+	useEffect(() => {
+		const loadTemplates = async () => {
+			try {
+				setLoadingTaskTemplates(true);
+				const rows = await ingestionTaskAPI.getTaskTemplates();
+				const list = Array.isArray(rows) ? rows : [];
+				setTaskTemplates(list);
+				if (!selectedTemplateId && list.length) {
+					setSelectedTemplateId(String(list[0].id));
+				}
+			} catch {
+				setTaskTemplates([]);
+			} finally {
+				setLoadingTaskTemplates(false);
+			}
+		};
+		void loadTemplates();
 	}, []);
 
 	useEffect(() => {
@@ -1657,6 +1728,25 @@ export default function TransformCreatePage() {
 		loadTask();
 	}, [editId, form, isEdit]);
 
+	const applyTemplate = () => {
+		const template = taskTemplates.find((item) => String(item.id) === String(selectedTemplateId));
+		if (!template) {
+			toast.warning("请选择模板");
+			return;
+		}
+		const defaults = (template.defaults || {}) as Record<string, any>;
+		form.setFieldsValue(defaults);
+		const sourceCategoryFromTemplate =
+			normalizeText(defaults.sourceCategory || template.sourceCategory).toLowerCase() || "database";
+		if (sourceCategoryFromTemplate === "file" || sourceCategoryFromTemplate === "database") {
+			setSourceCategory(sourceCategoryFromTemplate);
+		}
+		if (Array.isArray(template.warnings) && template.warnings.length) {
+			toast.info(template.warnings[0]);
+		}
+		toast.success(`已应用模板：${template.name}`);
+	};
+
 	const handleSaveDraft = async () => {
 		if (isEdit) {
 			toast.info("编辑模式不支持保存草稿");
@@ -1769,8 +1859,9 @@ export default function TransformCreatePage() {
 						prefix: normalizeText(values.syncPrefix) || undefined,
 						incrementalColumn: normalizeText(values.incrementalColumn) || undefined,
 						incrementalType: normalizeText(values.incrementalType) || undefined,
-					initialWatermark: normalizeText(values.initialWatermark) || undefined,
-				},
+						initialWatermark: normalizeText(values.initialWatermark) || undefined,
+						...buildGovernanceSyncFields(values),
+					},
 				streams: {
 					selection: selectionMode,
 					include: selectionMode === "manual" && includeTables.length ? includeTables : undefined,
@@ -2269,7 +2360,7 @@ export default function TransformCreatePage() {
 						destinationConfig: writerConfig,
 						syncMode: "full_refresh",
 						syncSchedule: buildSyncScheduleText(mergedValues),
-						syncConfig: null as any,
+						syncConfig: (syncConfig ?? null) as any,
 						syncPrefix: normalizeText(mergedValues.syncPrefix) || undefined,
 						addaxConfig: (jobConfig as Record<string, any>) || editingTask?.addaxConfig,
 						airflowEnabled: Boolean(airflowEnabled),
@@ -2299,6 +2390,7 @@ export default function TransformCreatePage() {
 								mode: "full_refresh",
 								schedule: buildSyncScheduleSpec(mergedValues),
 								prefix: normalizeText(mergedValues.syncPrefix) || undefined,
+								...buildGovernanceSyncFields(mergedValues),
 							},
 						streams: {
 							selection: "manual",
@@ -2447,9 +2539,10 @@ export default function TransformCreatePage() {
 							schedule: buildSyncScheduleSpec(mergedValues),
 							prefix: normalizeText(mergedValues.syncPrefix) || undefined,
 							incrementalColumn: syncConfig?.incrementalColumn,
-						incrementalType: syncConfig?.incrementalType,
-						initialWatermark: syncConfig?.initialWatermark,
-					},
+							incrementalType: syncConfig?.incrementalType,
+							initialWatermark: syncConfig?.initialWatermark,
+							...buildGovernanceSyncFields(mergedValues),
+						},
 					streams: {
 						selection: selectionMode,
 						include: selectionMode === "manual" ? includeTables : undefined,
@@ -2592,6 +2685,31 @@ export default function TransformCreatePage() {
 					<Form.Item name="writerType" hidden rules={[{ required: true, message: "请选择 Writer 类型" }]}>
 						<Input type="hidden" />
 					</Form.Item>
+					{currentStep === 0 ? (
+						<Card size="small" className="mb-4" title="快速模板">
+							<Space wrap>
+								<Select
+									style={{ minWidth: 280 }}
+									placeholder="选择模板"
+									loading={loadingTaskTemplates}
+									value={selectedTemplateId}
+									options={taskTemplates.map((item) => ({
+										label: `${item.name}${item.version ? ` (v${item.version})` : ""}`,
+										value: item.id,
+									}))}
+									onChange={(value) => setSelectedTemplateId(value)}
+								/>
+								<Button onClick={applyTemplate} disabled={!selectedTemplateId}>
+									应用模板
+								</Button>
+								{selectedTemplateId ? (
+									<Text type="secondary">
+										{taskTemplates.find((item) => String(item.id) === String(selectedTemplateId))?.description || ""}
+									</Text>
+								) : null}
+							</Space>
+						</Card>
+					) : null}
 					{isFileFlow ? (
 						<>
 							{/* ===== 文件上传模式 ===== */}
@@ -2645,6 +2763,60 @@ export default function TransformCreatePage() {
 												</Form.Item>
 											) : null}
 										</div>
+										<Collapse
+											size="small"
+											className="mb-4"
+											items={[
+												{
+													key: "governance-file",
+													label: "运行治理策略（可选）",
+													children: (
+														<div className="grid gap-4 md:grid-cols-3">
+															<Form.Item name="taskConcurrency" label="任务并发上限">
+																<InputNumber min={1} precision={0} className="w-full" placeholder="默认 1" />
+															</Form.Item>
+															<Form.Item name="sourceConcurrency" label="来源并发上限">
+																<InputNumber min={0} precision={0} className="w-full" placeholder="0 表示不限" />
+															</Form.Item>
+															<Form.Item name="priority" label="队列优先级">
+																<Select
+																	allowClear
+																	options={[
+																		{ label: "HIGH", value: "HIGH" },
+																		{ label: "MEDIUM", value: "MEDIUM" },
+																		{ label: "LOW", value: "LOW" },
+																	]}
+																/>
+															</Form.Item>
+															<Form.Item name="rejectPolicy" label="限流策略">
+																<Select
+																	allowClear
+																	options={[
+																		{ label: "REJECT", value: "REJECT" },
+																		{ label: "QUEUE", value: "QUEUE" },
+																	]}
+																/>
+															</Form.Item>
+															<Form.Item name="windowStart" label="执行窗口开始">
+																<Input placeholder="HH:mm，例如 01:00" />
+															</Form.Item>
+															<Form.Item name="windowEnd" label="执行窗口结束">
+																<Input placeholder="HH:mm，例如 06:00" />
+															</Form.Item>
+															<Form.Item name="windowTimezone" label="执行窗口时区">
+																<Select
+																	allowClear
+																	options={[
+																		{ label: "Asia/Shanghai", value: "Asia/Shanghai" },
+																		{ label: "UTC", value: "UTC" },
+																	]}
+																/>
+															</Form.Item>
+														</div>
+													),
+												},
+											]}
+										/>
 								<Space size={[8, 8]} wrap className="mb-3">
 									<Text type="secondary">当前连接器能力：</Text>
 									{["FULL", "INCREMENTAL", "CDC", "BACKFILL"].map((cap) => (
@@ -3315,6 +3487,60 @@ export default function TransformCreatePage() {
 											</Form.Item>
 										</div>
 									) : null}
+									<Collapse
+										size="small"
+										className="mb-4"
+										items={[
+											{
+												key: "governance-db",
+												label: "运行治理策略（可选）",
+												children: (
+													<div className="grid gap-4 md:grid-cols-3">
+														<Form.Item name="taskConcurrency" label="任务并发上限">
+															<InputNumber min={1} precision={0} className="w-full" placeholder="默认 1" />
+														</Form.Item>
+														<Form.Item name="sourceConcurrency" label="来源并发上限">
+															<InputNumber min={0} precision={0} className="w-full" placeholder="0 表示不限" />
+														</Form.Item>
+														<Form.Item name="priority" label="队列优先级">
+															<Select
+																allowClear
+																options={[
+																	{ label: "HIGH", value: "HIGH" },
+																	{ label: "MEDIUM", value: "MEDIUM" },
+																	{ label: "LOW", value: "LOW" },
+																]}
+															/>
+														</Form.Item>
+														<Form.Item name="rejectPolicy" label="限流策略">
+															<Select
+																allowClear
+																options={[
+																	{ label: "REJECT", value: "REJECT" },
+																	{ label: "QUEUE", value: "QUEUE" },
+																]}
+															/>
+														</Form.Item>
+														<Form.Item name="windowStart" label="执行窗口开始">
+															<Input placeholder="HH:mm，例如 01:00" />
+														</Form.Item>
+														<Form.Item name="windowEnd" label="执行窗口结束">
+															<Input placeholder="HH:mm，例如 06:00" />
+														</Form.Item>
+														<Form.Item name="windowTimezone" label="执行窗口时区">
+															<Select
+																allowClear
+																options={[
+																	{ label: "Asia/Shanghai", value: "Asia/Shanghai" },
+																	{ label: "UTC", value: "UTC" },
+																]}
+															/>
+														</Form.Item>
+													</div>
+												),
+											},
+										]}
+									/>
 									<Form.Item name="sourceCategory" label="数据来源">
 										<Radio.Group onChange={(e) => setSourceCategory(e.target.value)}>
 											<Radio.Button value="database">数据库</Radio.Button>

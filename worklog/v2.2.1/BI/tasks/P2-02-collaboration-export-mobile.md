@@ -51,6 +51,16 @@
 - 已验证：
   - `mvn -f source/dts-analytics/pom.xml -DskipTests clean compile` 通过。
   - `pnpm -C source/dts-analytics-webapp/modern typecheck` 与 `build` 通过。
+- 轻协作评论/批注（2026-02-15）：
+  - 后端新增评论接口（基于现有审计流，不新增表）：  
+    - `GET /api/screens/{id}/comments`  
+    - `POST /api/screens/{id}/comments`  
+    - `POST /api/screens/{id}/comments/{commentId}/resolve`  
+    - `POST /api/screens/{id}/comments/{commentId}/reopen`
+  - 前端新增“协作批注中心”面板：
+    - `ScreenHeader` 增加“协作”入口；
+    - 支持按组件添加评论、查看状态、标记已解决/重新打开；
+    - 新增轻量冲突提示（草稿更新时间漂移检测）。
 - 待继续：
-  - 评论/批注与冲突提示当前仍未落地（下一步可基于审计流扩展轻协作）。
+  - 冲突提示当前仍是轻模式（后续可补多人实时锁提示）。
   - PNG/PDF 仍是浏览器侧轻实现，后续可升级为服务端一致性渲染导出。

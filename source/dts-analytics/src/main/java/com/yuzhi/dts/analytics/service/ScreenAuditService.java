@@ -21,8 +21,18 @@ public class ScreenAuditService {
     }
 
     public void log(Long screenId, Long actorId, String action, Object before, Object after, String requestId) {
+        logAndReturn(screenId, actorId, action, before, after, requestId);
+    }
+
+    public AnalyticsScreenAuditLog logAndReturn(
+            Long screenId,
+            Long actorId,
+            String action,
+            Object before,
+            Object after,
+            String requestId) {
         if (screenId == null || action == null || action.isBlank()) {
-            return;
+            return null;
         }
 
         AnalyticsScreenAuditLog log = new AnalyticsScreenAuditLog();
@@ -32,7 +42,7 @@ public class ScreenAuditService {
         log.setBeforeJson(toJson(before));
         log.setAfterJson(toJson(after));
         log.setRequestId(trimToNull(requestId));
-        screenAuditLogRepository.save(log);
+        return screenAuditLogRepository.save(log);
     }
 
     @Transactional(readOnly = true)

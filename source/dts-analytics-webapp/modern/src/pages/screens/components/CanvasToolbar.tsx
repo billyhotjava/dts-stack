@@ -1,7 +1,7 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { useScreen } from '../ScreenContext';
 import type { ScreenTheme } from '../types';
-import { getThemeTokens } from '../screenThemes';
+import { applyThemeToComponents, getThemeTokens, type ThemeComponentApplyMode } from '../screenThemes';
 
 const ZOOM_OPTIONS = [50, 75, 100, 125, 150, 200];
 const THEME_PACK_SCHEMA = 'dts.screen-theme-pack';
@@ -20,6 +20,8 @@ type ThemePackPayload = {
     theme?: string;
     backgroundColor?: string;
     backgroundImage?: string | null;
+    applyToComponents?: boolean;
+    componentStyleMode?: ThemeComponentApplyMode;
     exportedAt?: string;
 };
 
@@ -47,6 +49,7 @@ export function CanvasToolbar() {
     } = useScreen();
     const { selectedIds, zoom, showGrid } = state;
     const themeInputRef = useRef<HTMLInputElement | null>(null);
+    const [themeApplyMode, setThemeApplyMode] = useState<ThemeComponentApplyMode>('force');
     const canAlign = selectedIds.length >= 2;
     const canDistribute = selectedIds.length >= 3;
     const canGroup = selectedIds.length >= 2;
@@ -63,6 +66,12 @@ export function CanvasToolbar() {
         updateConfig({ theme, backgroundColor: tokens.canvasBackground });
     };
 
+    const applyThemeToAllComponents = (mode: ThemeComponentApplyMode) => {
+        const nextTheme = state.config.theme;
+        const nextComponents = applyThemeToComponents(state.config.components, nextTheme, mode);
+        updateConfig({ components: nextComponents });
+    };
+
     const handleDelete = () => {
         if (selectedIds.length > 0) {
             deleteComponents(selectedIds);
@@ -77,6 +86,8 @@ export function CanvasToolbar() {
             theme: state.config.theme || 'legacy-dark',
             backgroundColor: state.config.backgroundColor,
             backgroundImage: state.config.backgroundImage || null,
+            applyToComponents: true,
+            componentStyleMode: themeApplyMode,
             exportedAt: new Date().toISOString(),
         };
 
@@ -129,6 +140,24 @@ export function CanvasToolbar() {
                     ? raw.backgroundImage.trim()
                     : undefined,
             });
+            const importMode = raw.componentStyleMode === 'safe' ? 'safe' : 'force';
+            const shouldApply = raw.applyToComponents !== false;
+            if (shouldApply) {
+                const confirmed = window.confirm(
+                    `主题包已导入，是否批量应用组件样式？\n策略：${importMode === 'force' ? '强制覆盖' : '仅补缺省'}`
+                );
+                if (confirmed) {
+                    const nextComponents = applyThemeToComponents(state.config.components, nextTheme, importMode);
+                    updateConfig({
+                        theme: nextTheme,
+                        backgroundColor: nextBackground,
+                        backgroundImage: typeof raw.backgroundImage === 'string' && raw.backgroundImage.trim().length > 0
+                            ? raw.backgroundImage.trim()
+                            : undefined,
+                        components: nextComponents,
+                    });
+                }
+            }
             alert('主题包导入成功');
         } catch (error) {
             console.error('Failed to import theme pack:', error);
@@ -229,6 +258,22 @@ export function CanvasToolbar() {
 
             {/* Theme pack */}
             <div className="toolbar-group">
+                <select
+                    className="zoom-select"
+                    value={themeApplyMode}
+                    onChange={(e) => setThemeApplyMode(e.target.value === 'safe' ? 'safe' : 'force')}
+                    title="组件样式应用策略"
+                >
+                    <option value="force">强制覆盖</option>
+                    <option value="safe">仅补缺省</option>
+                </select>
+                <button
+                    className="toolbar-btn"
+                    onClick={() => applyThemeToAllComponents(themeApplyMode)}
+                    title="按当前主题批量刷新组件样式"
+                >
+                    刷组件样式
+                </button>
                 <button
                     className="toolbar-btn"
                     onClick={handleExportThemePack}

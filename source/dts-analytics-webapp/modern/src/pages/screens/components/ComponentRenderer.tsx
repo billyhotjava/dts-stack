@@ -39,6 +39,39 @@ const DATAV_COMPONENT_TYPES = new Set([
     'digital-flop',
 ]);
 
+const MAP_PRESET_URLS: Record<string, string> = {
+    china: 'https://geo.datav.aliyun.com/areas_v3/bound/100000_full.json',
+    world: 'https://geo.datav.aliyun.com/areas_v3/bound/world.geo.json',
+};
+
+const mapGeoJsonFetchCache = new Map<string, Promise<unknown | null>>();
+
+function resolvePresetMapUrl(scope?: string): string | undefined {
+    const key = String(scope || '').trim().toLowerCase();
+    if (!key) return undefined;
+    return MAP_PRESET_URLS[key];
+}
+
+function fetchGeoJsonWithCache(url: string): Promise<unknown | null> {
+    const key = String(url || '').trim();
+    if (!key) return Promise.resolve(null);
+    const cached = mapGeoJsonFetchCache.get(key);
+    if (cached) return cached;
+    const task = fetch(key, { credentials: 'omit' })
+        .then((response) => {
+            if (!response.ok) {
+                throw new Error(`geojson fetch failed: ${response.status}`);
+            }
+            return response.json() as Promise<unknown>;
+        })
+        .catch((error) => {
+            console.warn('[map-chart] failed to load geojson:', key, error);
+            return null;
+        });
+    mapGeoJsonFetchCache.set(key, task);
+    return task;
+}
+
 const LEGACY_LIGHT_TEXT_COLORS = new Set(["#fff", "#ffffff", "#e5e7eb", "#d1d5db", "#cbd5e1", "#94a3b8"]);
 
 function resolveTextColor(candidate: string | undefined, fallback: string): string {
@@ -507,8 +540,10 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
     const needsDataV = DATAV_COMPONENT_TYPES.has(type);
     const [EChartsComponent, setEChartsComponent] = useState<ReactEChartsComponent | null>(null);
     const [registerMapFn, setRegisterMapFn] = useState<((mapName: string, geoJson: unknown) => boolean) | null>(null);
+    const [hasMapFn, setHasMapFn] = useState<((mapName: string) => boolean) | null>(null);
     const [dataViewModule, setDataViewModule] = useState<DataViewModule | null>(null);
     const [mapDrillRegion, setMapDrillRegion] = useState<string | null>(null);
+    const [mapReadyVersion, setMapReadyVersion] = useState(0);
     const [tableSort, setTableSort] = useState<{ colIndex: number; order: 'asc' | 'desc' } | null>(null);
     const [tablePage, setTablePage] = useState(1);
 
@@ -521,6 +556,9 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                 if (typeof mod.registerEChartsMap === 'function') {
                     setRegisterMapFn(() => mod.registerEChartsMap);
                 }
+                if (typeof mod.hasEChartsMap === 'function') {
+                    setHasMapFn(() => mod.hasEChartsMap);
+                }
             }
         });
         return () => {
@@ -532,10 +570,35 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
         if (type !== 'map-chart' || !registerMapFn) return;
         const cfg = config as Record<string, unknown>;
         const mapName = String(cfg.mapName || cfg.mapScope || 'dts-map').trim();
+        if (!mapName) return;
         const geoJson = cfg.geoJson;
+        const geoJsonUrlRaw = typeof cfg.geoJsonUrl === 'string' ? cfg.geoJsonUrl.trim() : '';
+        const presetAllowed = cfg.usePresetGeoJson !== false;
+        const presetUrl = presetAllowed ? resolvePresetMapUrl(String(cfg.mapScope || 'china')) : undefined;
+        const geoJsonUrl = geoJsonUrlRaw || presetUrl || '';
+        let cancelled = false;
+
         if (geoJson && typeof geoJson === 'object') {
-            registerMapFn(mapName, geoJson);
+            if (registerMapFn(mapName, geoJson)) {
+                setMapReadyVersion((v) => v + 1);
+            }
+            return;
         }
+
+        if (!geoJsonUrl) {
+            return;
+        }
+
+        fetchGeoJsonWithCache(geoJsonUrl).then((loaded) => {
+            if (cancelled || !loaded || typeof loaded !== 'object') return;
+            if (registerMapFn(mapName, loaded)) {
+                setMapReadyVersion((v) => v + 1);
+            }
+        });
+
+        return () => {
+            cancelled = true;
+        };
     }, [config, registerMapFn, type]);
 
     useEffect(() => {
@@ -1015,20 +1078,20 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                 const mapScope = String(c.mapScope ?? 'china');
                 const defaultRegions = mapScope === 'world'
                     ? [
-                        { name: 'Asia', value: 260 },
-                        { name: 'Europe', value: 180 },
-                        { name: 'North America', value: 150 },
-                        { name: 'South America', value: 110 },
-                        { name: 'Africa', value: 90 },
-                        { name: 'Oceania', value: 45 },
+                        { name: 'China', code: 'CN', value: 260 },
+                        { name: 'United States of America', code: 'US', value: 180 },
+                        { name: 'Russia', code: 'RU', value: 150 },
+                        { name: 'India', code: 'IN', value: 140 },
+                        { name: 'Brazil', code: 'BR', value: 110 },
+                        { name: 'Australia', code: 'AU', value: 90 },
                     ]
                     : [
-                        { name: '华北', value: 120 },
-                        { name: '华东', value: 180 },
-                        { name: '华南', value: 140 },
-                        { name: '西南', value: 95 },
-                        { name: '西北', value: 72 },
-                        { name: '东北', value: 88 },
+                        { name: '北京市', code: '110000', value: 120 },
+                        { name: '上海市', code: '310000', value: 180 },
+                        { name: '广东省', code: '440000', value: 140 },
+                        { name: '浙江省', code: '330000', value: 95 },
+                        { name: '四川省', code: '510000', value: 72 },
+                        { name: '湖北省', code: '420000', value: 88 },
                     ];
                 const regions = Array.isArray(c.regions) && c.regions.length > 0 ? c.regions as Array<Record<string, unknown>> : defaultRegions;
                 const getChildren = (item: unknown): Array<Record<string, unknown>> => {
@@ -1046,9 +1109,14 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
 
                 const maxValue = Math.max(1, ...listRows.map((item) => Number(item.value ?? 0)));
                 const minValue = Math.min(...listRows.map((item) => Number(item.value ?? 0)));
-                const mapName = String(c.mapName || `dts-${mapScope}`).trim();
-                const hasGeoJson = c.geoJson && typeof c.geoJson === 'object';
-                const usingGeoMap = !mapDrillRegion && Boolean(hasGeoJson) && Boolean(EChart);
+                const mapName = String(c.mapName || mapScope || `dts-${mapScope}`).trim();
+                const usingGeoMap = !mapDrillRegion && Boolean(EChart) && Boolean(hasMapFn?.(mapName)) && mapReadyVersion >= 0;
+                const regionCodeVariableKey = String(c.regionCodeVariableKey ?? '').trim();
+                const resolveRegionCode = (item: Record<string, unknown> | undefined): string => {
+                    if (!item) return '';
+                    const candidate = item.code ?? item.adcode ?? item.regionCode ?? item.id;
+                    return String(candidate ?? '').trim();
+                };
 
                 if (usingGeoMap) {
                     return (
@@ -1076,19 +1144,34 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                                         roam: true,
                                         label: { show: true, color: t.textPrimary, fontSize: 10 },
                                         emphasis: { label: { color: t.textPrimary } },
-                                        data: regions.map((item) => ({ name: String(item.name ?? ''), value: Number(item.value ?? 0) })),
+                                        data: regions.map((item) => ({
+                                            name: String(item.name ?? ''),
+                                            value: Number(item.value ?? 0),
+                                            code: resolveRegionCode(item),
+                                        })),
                                     }],
                                 }}
                                 onEvents={{
                                     click: (params) => {
                                         const regionName = String(params.name ?? '');
-                                        const target = regions.find((item) => String(item.name ?? '') === regionName);
+                                        const row = params.data && typeof params.data === 'object'
+                                            ? (params.data as Record<string, unknown>)
+                                            : undefined;
+                                        const clickedCode = String(row?.code ?? row?.adcode ?? '').trim();
+                                        const target = clickedCode
+                                            ? regions.find((item) => resolveRegionCode(item) === clickedCode)
+                                                || regions.find((item) => String(item.name ?? '') === regionName)
+                                            : regions.find((item) => String(item.name ?? '') === regionName);
                                         if (canRegionDrill && target && getChildren(target).length > 0) {
                                             setMapDrillRegion(regionName);
                                         }
                                         const variableKey = String(c.regionVariableKey ?? '').trim();
                                         if (variableKey && regionName) {
                                             runtime.setVariable(variableKey, regionName, `map-chart:${component.id}`);
+                                        }
+                                        const code = resolveRegionCode(target);
+                                        if (regionCodeVariableKey && code) {
+                                            runtime.setVariable(regionCodeVariableKey, code, `map-chart:${component.id}`);
                                         }
                                     },
                                 }}
@@ -1137,6 +1220,10 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                                             const variableKey = String(c.regionVariableKey ?? '').trim();
                                             if (variableKey) {
                                                 runtime.setVariable(variableKey, name, `map-grid:${component.id}`);
+                                            }
+                                            const code = resolveRegionCode(item);
+                                            if (regionCodeVariableKey && code) {
+                                                runtime.setVariable(regionCodeVariableKey, code, `map-grid:${component.id}`);
                                             }
                                         }}
                                         style={{
@@ -1338,9 +1425,13 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                 const variableKey = String(c.variableKey ?? '').trim();
                 const placeholder = String(c.placeholder ?? '请输入');
                 const value = variableKey ? (runtime.values[variableKey] ?? '') : '';
+                const labelColor = String(c.labelColor || t.textSecondary);
+                const inputTextColor = String(c.inputTextColor || t.textPrimary);
+                const inputBorderColor = String(c.inputBorderColor || 'rgba(148,163,184,0.4)');
+                const inputBackground = String(c.inputBackground || (theme === 'glacier' ? '#ffffff' : 'rgba(15,23,42,0.65)'));
                 return (
                     <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        <div style={{ fontSize: 12, color: t.textSecondary }}>{label}</div>
+                        <div style={{ fontSize: 12, color: labelColor }}>{label}</div>
                         <input
                             type="text"
                             value={value}
@@ -1350,9 +1441,9 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                                 width: '100%',
                                 height: 34,
                                 borderRadius: 6,
-                                border: '1px solid rgba(148,163,184,0.4)',
-                                background: 'rgba(15,23,42,0.65)',
-                                color: t.textPrimary,
+                                border: `1px solid ${inputBorderColor}`,
+                                background: inputBackground,
+                                color: inputTextColor,
                                 padding: '0 10px',
                                 outline: 'none',
                             }}
@@ -1367,9 +1458,13 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                 const placeholder = String(c.placeholder ?? '请选择');
                 const options = resolveFilterOptions(c.options);
                 const value = variableKey ? (runtime.values[variableKey] ?? '') : '';
+                const labelColor = String(c.labelColor || t.textSecondary);
+                const inputTextColor = String(c.inputTextColor || t.textPrimary);
+                const inputBorderColor = String(c.inputBorderColor || 'rgba(148,163,184,0.4)');
+                const inputBackground = String(c.inputBackground || (theme === 'glacier' ? '#ffffff' : 'rgba(15,23,42,0.65)'));
                 return (
                     <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        <div style={{ fontSize: 12, color: t.textSecondary }}>{label}</div>
+                        <div style={{ fontSize: 12, color: labelColor }}>{label}</div>
                         <select
                             value={value}
                             onChange={(e) => variableKey && runtime.setVariable(variableKey, e.target.value, `filter-select:${component.id}`)}
@@ -1377,9 +1472,9 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                                 width: '100%',
                                 height: 34,
                                 borderRadius: 6,
-                                border: '1px solid rgba(148,163,184,0.4)',
-                                background: 'rgba(15,23,42,0.65)',
-                                color: t.textPrimary,
+                                border: `1px solid ${inputBorderColor}`,
+                                background: inputBackground,
+                                color: inputTextColor,
                                 padding: '0 10px',
                                 outline: 'none',
                             }}
@@ -1399,9 +1494,13 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                 const endKey = String(c.endKey ?? '').trim();
                 const startValue = startKey ? (runtime.values[startKey] ?? '') : '';
                 const endValue = endKey ? (runtime.values[endKey] ?? '') : '';
+                const labelColor = String(c.labelColor || t.textSecondary);
+                const inputTextColor = String(c.inputTextColor || t.textPrimary);
+                const inputBorderColor = String(c.inputBorderColor || 'rgba(148,163,184,0.4)');
+                const inputBackground = String(c.inputBackground || (theme === 'glacier' ? '#ffffff' : 'rgba(15,23,42,0.65)'));
                 return (
                     <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        <div style={{ fontSize: 12, color: t.textSecondary }}>{label}</div>
+                        <div style={{ fontSize: 12, color: labelColor }}>{label}</div>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 16px 1fr', alignItems: 'center', gap: 4 }}>
                             <input
                                 type="date"
@@ -1411,9 +1510,9 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                                     width: '100%',
                                     height: 34,
                                     borderRadius: 6,
-                                    border: '1px solid rgba(148,163,184,0.4)',
-                                    background: 'rgba(15,23,42,0.65)',
-                                    color: t.textPrimary,
+                                    border: `1px solid ${inputBorderColor}`,
+                                    background: inputBackground,
+                                    color: inputTextColor,
                                     padding: '0 8px',
                                     outline: 'none',
                                 }}
@@ -1427,9 +1526,9 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                                     width: '100%',
                                     height: 34,
                                     borderRadius: 6,
-                                    border: '1px solid rgba(148,163,184,0.4)',
-                                    background: 'rgba(15,23,42,0.65)',
-                                    color: t.textPrimary,
+                                    border: `1px solid ${inputBorderColor}`,
+                                    background: inputBackground,
+                                    color: inputTextColor,
                                     padding: '0 8px',
                                     outline: 'none',
                                 }}
@@ -1893,6 +1992,8 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
         cardData,
         component,
         mode,
+        hasMapFn,
+        mapReadyVersion,
         mapDrillRegion,
         tableSort,
         tablePage,

@@ -1,6 +1,6 @@
 # P2-03 运行资源与配额治理
 
-`status`: `planned`
+`status`: `in-progress`
 `priority`: `P2`
 
 ## 目标
@@ -29,3 +29,29 @@
 
 - 风险：限流策略过严影响业务时效。
 - 回滚：支持策略灰度与按项目回退默认值。
+
+## 实现进展（2026-02-15）
+
+- 后端并发/窗口治理落地：
+  - `source/dts-ingestion/src/main/java/com/yuzhi/dts/ingestion/service/IngestionTaskService.java`
+  - 任务执行前新增治理校验：任务并发上限、来源并发上限、执行窗口；
+  - 触发失败时返回可读错误并写入失败分类/审计元数据。
+- 治理配置入参与持久化补齐：
+  - `source/dts-ingestion/src/main/java/com/yuzhi/dts/ingestion/web/rest/IngestionTaskResource.java`
+  - `sync.governance` 支持 `maxConcurrentRuns/sourceConcurrencyLimit/priority/rejectPolicy/windowStart/windowEnd/windowTimezone`；
+  - 修复任务更新时对 `syncConfig` 的清空问题，避免非增量任务丢失治理配置。
+- 治理概览 API：
+  - `GET /api/ingestion/tasks/executions/governance-overview?hours=24`
+  - 聚合输出运行中、排队中、队列长度、策略拒绝数、平均耗时和来源负载分布。
+- 前端配置与可视化：
+  - `source/dts-platform-webapp/src/pages/explore/etl/TransformCreatePage.tsx`
+  - 创建/编辑页面新增“运行治理策略”配置区；
+  - `source/dts-platform-webapp/src/pages/explore/etl/TransformPage.tsx`
+  - 入湖任务列表新增“资源与配额治理”概览卡片（含来源负载表）。
+  - `source/dts-platform-webapp/src/api/ingestion.ts`
+  - 新增治理概览 DTO 与 API 封装。
+
+## 已执行验证
+
+- `cd source/dts-ingestion && mvn -DskipTests compile`
+- `pnpm -C source/dts-platform-webapp build`

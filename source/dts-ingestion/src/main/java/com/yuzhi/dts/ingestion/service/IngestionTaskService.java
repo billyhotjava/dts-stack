@@ -1,5 +1,6 @@
 package com.yuzhi.dts.ingestion.service;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.yuzhi.dts.ingestion.domain.IngestionExecution;
 import com.yuzhi.dts.ingestion.domain.IngestionTask;
 import com.yuzhi.dts.ingestion.repository.IngestionExecutionRepository;
@@ -8,6 +9,7 @@ import com.yuzhi.dts.ingestion.service.audit.AuditService;
 import com.yuzhi.dts.ingestion.service.dto.IngestionIncrementalAuditDTO;
 import com.yuzhi.dts.ingestion.service.dto.IngestionIncrementalAuditSummaryDTO;
 import com.yuzhi.dts.ingestion.service.dto.IngestionExecutionDTO;
+import com.yuzhi.dts.ingestion.service.dto.IngestionGovernanceOverviewDTO;
 import com.yuzhi.dts.ingestion.service.dto.IngestionExecutionObservabilityDTO;
 import com.yuzhi.dts.ingestion.service.dto.IngestionIncrementalStateDTO;
 import com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO;
@@ -34,6 +36,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.LocalDate;
@@ -60,6 +63,7 @@ public class IngestionTaskService {
     private static final Logger log = LoggerFactory.getLogger(IngestionTaskService.class);
     private static final ZoneId OBSERVABILITY_ZONE = ZoneId.of("Asia/Shanghai");
     private static final DateTimeFormatter OBSERVABILITY_DAY_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE;
+    private static final ZoneId GOVERNANCE_DEFAULT_ZONE = ZoneId.of("Asia/Shanghai");
 
     private final IngestionTaskRepository taskRepository;
     private final IngestionExecutionRepository executionRepository;
@@ -196,7 +200,7 @@ public class IngestionTaskService {
             .map(existingTask -> {
                 IngestionTask before = snapshot(existingTask);
                 taskMapper.partialUpdate(existingTask, dto);
-                if (dto.getSyncConfig() != null || !"incremental".equalsIgnoreCase(dto.getSyncMode())) {
+                if (dto.getSyncConfig() != null) {
                     existingTask.setSyncConfig(dto.getSyncConfig());
                 }
                 // 如果配置改变，重新生成Addax Job JSON
@@ -382,8 +386,32 @@ public class IngestionTaskService {
         if (!"active".equals(task.getStatus()) && !"draft".equals(task.getStatus())) {
             throw new IllegalStateException("Task is not in executable status: " + task.getStatus());
         }
+        GovernancePolicy policy = resolveGovernancePolicy(task);
+        if (!isWithinExecutionWindow(policy)) {
+            throw new IllegalStateException("不在允许执行窗口内，当前策略窗口: " + policy.windowDisplay());
+        }
+        long taskInProgress = countInProgressByTask(taskId);
+        if (policy.maxConcurrentRuns() > 0 && taskInProgress >= policy.maxConcurrentRuns()) {
+            throw new IllegalStateException(
+                "任务并发已达上限(" + policy.maxConcurrentRuns() + ")，当前运行中/排队中执行: " + taskInProgress
+            );
+        }
+        if (task.getSourceDataSourceId() != null && policy.sourceConcurrencyLimit() > 0) {
+            long sourceInProgress = countInProgressBySource(task.getSourceDataSourceId());
+            if (sourceInProgress >= policy.sourceConcurrencyLimit()) {
+                throw new IllegalStateException(
+                    "来源并发已达上限(" + policy.sourceConcurrencyLimit() + ")，source="
+                        + task.getSourceDataSourceId()
+                        + " 当前运行中/排队中执行: "
+                        + sourceInProgress
+                );
+            }
+        }
         Optional<IngestionExecution> latestExecution = executionRepository.findFirstByTaskIdOrderByCreatedAtDesc(taskId);
-        if (latestExecution.isPresent() && "running".equalsIgnoreCase(latestExecution.get().getStatus())) {
+        if (latestExecution.isPresent()
+            && ("running".equalsIgnoreCase(latestExecution.get().getStatus())
+                || "preparing".equalsIgnoreCase(latestExecution.get().getStatus()))
+            && policy.maxConcurrentRuns() <= 1) {
             throw new IllegalStateException("任务仍在运行中，请稍后重试");
         }
         // 创建执行记录（先落库，便于前端异步轮询执行进度）
@@ -430,6 +458,12 @@ public class IngestionTaskService {
                 conf.put("job_path", airflowJobPath);
                 conf.put("task_id", taskId);
                 conf.put("task_name", StringUtils.hasText(task.getName()) ? task.getName() : ("task-" + taskId));
+                if (StringUtils.hasText(policy.priority())) {
+                    conf.put("priority", policy.priority());
+                }
+                if (StringUtils.hasText(policy.rejectPolicy())) {
+                    conf.put("reject_policy", policy.rejectPolicy());
+                }
 
                 Map<String, Object> airflowResult = airflowAdapter.triggerIfRequested(
                     new AirflowAdapter.AirflowRequest(
@@ -537,6 +571,9 @@ public class IngestionTaskService {
             meta.put("failureAdvice", failureAdvice);
             if (StringUtils.hasText(failureMessage)) {
                 meta.put("error", failureMessage);
+            }
+            if (StringUtils.hasText(failureMessage) && failureMessage.contains("并发已达上限")) {
+                meta.put("governanceRejected", true);
             }
             auditService.auditAction(
                 "INGESTION_TASK_EXECUTE",
@@ -1116,6 +1153,69 @@ public class IngestionTaskService {
         return dto;
     }
 
+    @Transactional(readOnly = true)
+    public IngestionGovernanceOverviewDTO getGovernanceOverview(Integer hours) {
+        int safeHours = hours == null ? 24 : Math.max(1, Math.min(hours, 7 * 24));
+        Instant now = Instant.now();
+        Instant from = now.minus(Duration.ofHours(safeHours));
+        List<IngestionExecution> inProgress = executionRepository.findByStatusesIgnoreCase(List.of("running", "preparing"));
+        List<IngestionExecution> recent = executionRepository.findByCreatedAtBetweenOrderByCreatedAtAsc(from, now);
+
+        IngestionGovernanceOverviewDTO dto = new IngestionGovernanceOverviewDTO();
+        dto.setGeneratedAt(now);
+        long running = inProgress.stream().filter(e -> "running".equalsIgnoreCase(toText(e.getStatus()))).count();
+        long preparing = inProgress.stream().filter(e -> "preparing".equalsIgnoreCase(toText(e.getStatus()))).count();
+        dto.setRunning(running);
+        dto.setPreparing(preparing);
+        dto.setQueueLength(preparing);
+
+        long blocked = 0L;
+        long durationCount = 0L;
+        long durationTotal = 0L;
+        Map<String, SourceLoadAccumulator> sourceLoads = new LinkedHashMap<>();
+        for (IngestionExecution execution : recent) {
+            if (execution == null) {
+                continue;
+            }
+            String error = toText(execution.getErrorMessage());
+            if (StringUtils.hasText(error) && (error.contains("并发已达上限") || error.contains("执行窗口"))) {
+                blocked += 1;
+            }
+            Long seconds = durationSeconds(execution.getStartTime(), execution.getEndTime());
+            if (seconds != null && ("success".equalsIgnoreCase(toText(execution.getStatus())) || "failed".equalsIgnoreCase(toText(execution.getStatus())))) {
+                durationCount += 1;
+                durationTotal += seconds;
+            }
+        }
+        dto.setBlockedByPolicy(blocked);
+        dto.setAvgExecutionSeconds(durationCount == 0 ? null : round2((double) durationTotal / durationCount));
+
+        for (IngestionExecution execution : inProgress) {
+            if (execution == null || execution.getTask() == null) {
+                continue;
+            }
+            IngestionTask task = execution.getTask();
+            String key = (task.getSourceDataSourceId() == null ? "none" : task.getSourceDataSourceId().toString())
+                + "|"
+                + toText(task.getSourceType());
+            SourceLoadAccumulator acc = sourceLoads.computeIfAbsent(
+                key,
+                k -> new SourceLoadAccumulator(task.getSourceDataSourceId(), toText(task.getSourceType()))
+            );
+            if ("running".equalsIgnoreCase(toText(execution.getStatus()))) {
+                acc.running += 1;
+            } else if ("preparing".equalsIgnoreCase(toText(execution.getStatus()))) {
+                acc.preparing += 1;
+            }
+        }
+        List<IngestionGovernanceOverviewDTO.SourceLoadItem> loads = sourceLoads.values().stream()
+            .sorted((a, b) -> Long.compare((b.running + b.preparing), (a.running + a.preparing)))
+            .map(acc -> new IngestionGovernanceOverviewDTO.SourceLoadItem(acc.sourceDataSourceId, acc.sourceType, acc.running, acc.preparing))
+            .toList();
+        dto.setSourceLoads(loads);
+        return dto;
+    }
+
     private String normalizeStatus(String value) {
         String normalized = toText(value);
         return StringUtils.hasText(normalized) ? normalized.toLowerCase() : "";
@@ -1167,6 +1267,123 @@ public class IngestionTaskService {
         private long success;
         private long failed;
         private long timeout;
+    }
+
+    private GovernancePolicy resolveGovernancePolicy(IngestionTask task) {
+        int maxConcurrentRuns = 1;
+        int sourceConcurrencyLimit = 0;
+        String priority = "MEDIUM";
+        String rejectPolicy = "REJECT";
+        LocalTime windowStart = null;
+        LocalTime windowEnd = null;
+        ZoneId zone = GOVERNANCE_DEFAULT_ZONE;
+
+        JsonNode syncConfig = task == null ? null : task.getSyncConfig();
+        JsonNode governance = syncConfig == null ? null : syncConfig.path("governance");
+        if (governance != null && !governance.isMissingNode() && !governance.isNull()) {
+            maxConcurrentRuns = positiveOrDefault(governance.path("maxConcurrentRuns"), 1);
+            sourceConcurrencyLimit = nonNegativeOrDefault(governance.path("sourceConcurrencyLimit"), 0);
+            String rawPriority = toText(governance.path("priority").asText(null));
+            if (StringUtils.hasText(rawPriority)) {
+                priority = rawPriority.toUpperCase();
+            }
+            String rawReject = toText(governance.path("rejectPolicy").asText(null));
+            if (StringUtils.hasText(rawReject)) {
+                rejectPolicy = rawReject.toUpperCase();
+            }
+            String rawWindowStart = toText(governance.path("windowStart").asText(null));
+            String rawWindowEnd = toText(governance.path("windowEnd").asText(null));
+            if (StringUtils.hasText(rawWindowStart) && StringUtils.hasText(rawWindowEnd)) {
+                windowStart = parseLocalTime(rawWindowStart);
+                windowEnd = parseLocalTime(rawWindowEnd);
+            }
+            String rawZone = toText(governance.path("windowTimezone").asText(null));
+            if (StringUtils.hasText(rawZone)) {
+                try {
+                    zone = ZoneId.of(rawZone);
+                } catch (Exception ex) {
+                    zone = GOVERNANCE_DEFAULT_ZONE;
+                }
+            }
+        }
+        return new GovernancePolicy(maxConcurrentRuns, sourceConcurrencyLimit, priority, rejectPolicy, windowStart, windowEnd, zone);
+    }
+
+    private boolean isWithinExecutionWindow(GovernancePolicy policy) {
+        if (policy == null || policy.windowStart() == null || policy.windowEnd() == null) {
+            return true;
+        }
+        LocalTime now = LocalTime.now(policy.zone());
+        LocalTime start = policy.windowStart();
+        LocalTime end = policy.windowEnd();
+        if (start.equals(end)) {
+            return true;
+        }
+        if (start.isBefore(end)) {
+            return !now.isBefore(start) && now.isBefore(end);
+        }
+        return !now.isBefore(start) || now.isBefore(end);
+    }
+
+    private long countInProgressByTask(Long taskId) {
+        return executionRepository.countByTaskIdAndStatusesIgnoreCase(taskId, List.of("running", "preparing"));
+    }
+
+    private long countInProgressBySource(UUID sourceDataSourceId) {
+        return executionRepository.countBySourceDataSourceIdAndStatusesIgnoreCase(sourceDataSourceId, List.of("running", "preparing"));
+    }
+
+    private int positiveOrDefault(JsonNode node, int defaultValue) {
+        if (node == null || node.isMissingNode() || node.isNull()) {
+            return defaultValue;
+        }
+        int value = node.asInt(defaultValue);
+        return value > 0 ? value : defaultValue;
+    }
+
+    private int nonNegativeOrDefault(JsonNode node, int defaultValue) {
+        if (node == null || node.isMissingNode() || node.isNull()) {
+            return defaultValue;
+        }
+        int value = node.asInt(defaultValue);
+        return value >= 0 ? value : defaultValue;
+    }
+
+    private LocalTime parseLocalTime(String value) {
+        try {
+            return LocalTime.parse(value);
+        } catch (Exception ex) {
+            return null;
+        }
+    }
+
+    private record GovernancePolicy(
+        int maxConcurrentRuns,
+        int sourceConcurrencyLimit,
+        String priority,
+        String rejectPolicy,
+        LocalTime windowStart,
+        LocalTime windowEnd,
+        ZoneId zone
+    ) {
+        String windowDisplay() {
+            if (windowStart == null || windowEnd == null) {
+                return "N/A";
+            }
+            return windowStart + " - " + windowEnd + " (" + zone + ")";
+        }
+    }
+
+    private static final class SourceLoadAccumulator {
+        private final UUID sourceDataSourceId;
+        private final String sourceType;
+        private long running;
+        private long preparing;
+
+        private SourceLoadAccumulator(UUID sourceDataSourceId, String sourceType) {
+            this.sourceDataSourceId = sourceDataSourceId;
+            this.sourceType = sourceType;
+        }
     }
 
     /**

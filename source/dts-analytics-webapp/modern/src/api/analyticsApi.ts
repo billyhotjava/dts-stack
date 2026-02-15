@@ -498,6 +498,22 @@ export type ScreenAuditEntry = {
 	after?: Record<string, unknown>;
 };
 
+export type ScreenComment = {
+	id: number | string;
+	screenId?: number | string;
+	componentId?: string | null;
+	message?: string;
+	anchor?: Record<string, unknown> | null;
+	mentions?: Array<Record<string, unknown>>;
+	createdBy?: number | string;
+	createdAt?: string;
+	status?: "open" | "resolved" | string;
+	resolvedBy?: number | string | null;
+	resolvedAt?: string | null;
+	resolutionNote?: string | null;
+	requestId?: string | null;
+};
+
 export type ScreenPublicLinkPolicy = {
 	uuid?: string | null;
 	expireAt?: string | null;
@@ -934,6 +950,27 @@ export const analyticsApi = {
 	getScreenAuditLogs: (id: string | number, limit = 200) =>
 		fetchJson<ScreenAuditEntry[]>(
 			`/analytics/api/screens/${encodeURIComponent(String(id))}/audit?limit=${encodeURIComponent(String(limit))}`,
+		),
+	listScreenComments: (id: string | number, limit = 200) =>
+		fetchJson<ScreenComment[]>(
+			`/analytics/api/screens/${encodeURIComponent(String(id))}/comments?limit=${encodeURIComponent(String(limit))}`,
+		),
+	createScreenComment: (id: string | number, body: {
+		message: string;
+		componentId?: string | null;
+		anchor?: Record<string, unknown>;
+		mentions?: Array<Record<string, unknown>>;
+	}) =>
+		sendJson<ScreenComment>(`/analytics/api/screens/${encodeURIComponent(String(id))}/comments`, body),
+	resolveScreenComment: (id: string | number, commentId: string | number, body?: { note?: string }) =>
+		sendJson<ScreenComment>(
+			`/analytics/api/screens/${encodeURIComponent(String(id))}/comments/${encodeURIComponent(String(commentId))}/resolve`,
+			body ?? {},
+		),
+	reopenScreenComment: (id: string | number, commentId: string | number, body?: { note?: string }) =>
+		sendJson<ScreenComment>(
+			`/analytics/api/screens/${encodeURIComponent(String(id))}/comments/${encodeURIComponent(String(commentId))}/reopen`,
+			body ?? {},
 		),
 	createScreenPublicLink: (id: string | number, body?: unknown) =>
 		sendJson<ScreenPublicLinkPolicy>(`/analytics/api/screens/${encodeURIComponent(String(id))}/public_link`, body ?? {}),

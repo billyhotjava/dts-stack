@@ -1098,6 +1098,34 @@ function renderComponentConfig(
                         />
                     </div>
                     <div className="property-row">
+                        <label className="property-label">区域编码变量Key</label>
+                        <input
+                            type="text"
+                            className="property-input"
+                            value={(config.regionCodeVariableKey as string) || ''}
+                            onChange={(e) => onChange('regionCodeVariableKey', e.target.value)}
+                            placeholder="region_code"
+                        />
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">优先使用内置底图</label>
+                        <input
+                            type="checkbox"
+                            checked={config.usePresetGeoJson !== false}
+                            onChange={(e) => onChange('usePresetGeoJson', e.target.checked)}
+                        />
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">GeoJSON URL(可选)</label>
+                        <input
+                            type="text"
+                            className="property-input"
+                            value={(config.geoJsonUrl as string) || ''}
+                            onChange={(e) => onChange('geoJsonUrl', e.target.value)}
+                            placeholder="https://.../map.geojson"
+                        />
+                    </div>
+                    <div className="property-row">
                         <label className="property-label">启用下钻</label>
                         <input
                             type="checkbox"

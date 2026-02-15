@@ -1,4 +1,4 @@
-import type { ScreenTheme } from './types';
+import type { ScreenComponent, ScreenTheme } from './types';
 
 export interface ScreenThemeTokens {
     canvasBackground: string;
@@ -327,4 +327,147 @@ export function resolveScreenTheme(theme?: ScreenTheme, backgroundColor?: string
 export function getThemeTokens(theme?: ScreenTheme): ScreenThemeTokens {
     const resolved = resolveScreenTheme(theme);
     return themeMap[resolved] ?? legacyDarkTheme;
+}
+
+export type ThemeComponentApplyMode = 'safe' | 'force';
+
+function withColorAlpha(hex: string, alpha: number): string {
+    const rgb = parseHexColorToRgb(hex);
+    if (!rgb) return hex;
+    const [r, g, b] = rgb;
+    const a = Math.max(0, Math.min(1, alpha));
+    return `rgba(${r}, ${g}, ${b}, ${a.toFixed(3)})`;
+}
+
+function shouldReplaceValue(
+    current: unknown,
+    mode: ThemeComponentApplyMode,
+): boolean {
+    if (mode === 'force') return true;
+    if (current === undefined || current === null) return true;
+    if (typeof current === 'string') return current.trim().length === 0;
+    if (Array.isArray(current)) return current.length === 0;
+    return false;
+}
+
+function patchConfigValue(
+    next: Record<string, unknown>,
+    key: string,
+    value: unknown,
+    mode: ThemeComponentApplyMode,
+): void {
+    if (shouldReplaceValue(next[key], mode)) {
+        next[key] = value;
+    }
+}
+
+function patchComponentConfig(
+    component: ScreenComponent,
+    tokens: ScreenThemeTokens,
+    mode: ThemeComponentApplyMode,
+): Record<string, unknown> {
+    const next = { ...(component.config || {}) } as Record<string, unknown>;
+    const accentSoftBg = withColorAlpha(tokens.accentColor, 0.15);
+    const accentLine = withColorAlpha(tokens.accentColor, 0.45);
+    const cardSoft = withColorAlpha(tokens.textPrimary, 0.04);
+
+    switch (component.type) {
+        case 'line-chart':
+        case 'bar-chart':
+        case 'pie-chart':
+        case 'gauge-chart':
+        case 'scatter-chart':
+        case 'radar-chart':
+        case 'funnel-chart':
+        case 'map-chart':
+            patchConfigValue(next, 'seriesColors', [...tokens.echarts.colorPalette], mode);
+            patchConfigValue(next, 'titleColor', tokens.textPrimary, mode);
+            break;
+        case 'title':
+            patchConfigValue(next, 'color', tokens.textPrimary, mode);
+            break;
+        case 'markdown-text':
+            patchConfigValue(next, 'color', tokens.textPrimary, mode);
+            break;
+        case 'number-card':
+            patchConfigValue(next, 'backgroundColor', tokens.numberCard.background, mode);
+            patchConfigValue(next, 'titleColor', tokens.numberCard.titleColor, mode);
+            patchConfigValue(next, 'valueColor', tokens.numberCard.valueColor, mode);
+            break;
+        case 'datetime':
+            patchConfigValue(next, 'color', tokens.textPrimary, mode);
+            break;
+        case 'countdown':
+            patchConfigValue(next, 'color', tokens.textSecondary, mode);
+            patchConfigValue(next, 'accentColor', tokens.accentColor, mode);
+            break;
+        case 'marquee':
+            patchConfigValue(next, 'color', tokens.textPrimary, mode);
+            patchConfigValue(next, 'backgroundColor', cardSoft, mode);
+            break;
+        case 'shape':
+            patchConfigValue(next, 'fillColor', accentSoftBg, mode);
+            patchConfigValue(next, 'borderColor', accentLine, mode);
+            break;
+        case 'container':
+            patchConfigValue(next, 'backgroundColor', cardSoft, mode);
+            patchConfigValue(next, 'borderColor', accentLine, mode);
+            patchConfigValue(next, 'titleColor', tokens.textPrimary, mode);
+            break;
+        case 'scroll-board':
+            patchConfigValue(next, 'headerBGC', tokens.scrollBoard.headerBg, mode);
+            patchConfigValue(next, 'oddRowBGC', tokens.scrollBoard.oddRowBg, mode);
+            patchConfigValue(next, 'evenRowBGC', tokens.scrollBoard.evenRowBg, mode);
+            patchConfigValue(next, 'headerColor', tokens.scrollBoard.textColor, mode);
+            break;
+        case 'table':
+            patchConfigValue(next, 'headerColor', tokens.textPrimary, mode);
+            patchConfigValue(next, 'bodyColor', tokens.textSecondary, mode);
+            patchConfigValue(next, 'headerBackground', withColorAlpha(tokens.accentColor, 0.14), mode);
+            patchConfigValue(next, 'bodyBackground', 'transparent', mode);
+            patchConfigValue(next, 'oddRowBackground', 'transparent', mode);
+            patchConfigValue(next, 'evenRowBackground', withColorAlpha(tokens.textPrimary, 0.04), mode);
+            patchConfigValue(next, 'borderColor', withColorAlpha(tokens.textSecondary, 0.25), mode);
+            break;
+        case 'filter-input':
+        case 'filter-select':
+        case 'filter-date-range':
+            patchConfigValue(next, 'labelColor', tokens.textSecondary, mode);
+            patchConfigValue(next, 'inputTextColor', tokens.textPrimary, mode);
+            patchConfigValue(next, 'inputBorderColor', withColorAlpha(tokens.textSecondary, 0.45), mode);
+            patchConfigValue(next, 'inputBackground', tokens.cardBackground, mode);
+            break;
+        case 'border-box':
+        case 'decoration':
+            patchConfigValue(next, 'color', [tokens.accentColor, withColorAlpha(tokens.accentColor, 0.35)], mode);
+            break;
+        case 'digital-flop': {
+            const style = next.style && typeof next.style === 'object'
+                ? { ...(next.style as Record<string, unknown>) }
+                : {};
+            if (shouldReplaceValue(style.fill, mode)) {
+                style.fill = tokens.textPrimary;
+            }
+            next.style = style;
+            break;
+        }
+        case 'percent-pond':
+            patchConfigValue(next, 'colors', [...tokens.progressBar.fillGradient], mode);
+            break;
+        default:
+            break;
+    }
+    return next;
+}
+
+export function applyThemeToComponents(
+    components: ScreenComponent[],
+    theme: ScreenTheme | undefined,
+    mode: ThemeComponentApplyMode = 'safe',
+): ScreenComponent[] {
+    const tokens = getThemeTokens(theme);
+    return components.map((component) => ({
+        ...component,
+        config: patchComponentConfig(component, tokens, mode),
+    }));
 }

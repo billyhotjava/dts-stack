@@ -11,6 +11,7 @@ import { ScreenAuditPanel } from './ScreenAuditPanel';
 import { ScreenSharePolicyPanel } from './ScreenSharePolicyPanel';
 import { ScreenHealthPanel } from './ScreenHealthPanel';
 import { InteractionDebugPanel } from './InteractionDebugPanel';
+import { ScreenCollaborationPanel } from './ScreenCollaborationPanel';
 import { buildScreenPayload, normalizeScreenConfig, validateScreenPayload } from '../specV2';
 import { resolveScreenTheme } from '../screenThemes';
 import { writeTextToClipboard } from '../../../hooks/clipboard';
@@ -33,6 +34,7 @@ export function ScreenHeader() {
     const [showAuditPanel, setShowAuditPanel] = useState(false);
     const [showSharePolicyPanel, setShowSharePolicyPanel] = useState(false);
     const [showInteractionDebugPanel, setShowInteractionDebugPanel] = useState(false);
+    const [showCollaborationPanel, setShowCollaborationPanel] = useState(false);
     const [isSavingTemplate, setIsSavingTemplate] = useState(false);
     const importInputRef = useRef<HTMLInputElement | null>(null);
     const [permissions, setPermissions] = useState({
@@ -536,6 +538,16 @@ export function ScreenHeader() {
                             </button>
                         </>
                     )}
+                    {id && permissions.canRead && (
+                        <button
+                            type="button"
+                            className="header-btn"
+                            onClick={() => setShowCollaborationPanel(true)}
+                            title="评论/批注轻协作"
+                        >
+                            协作
+                        </button>
+                    )}
                     <button
                         type="button"
                         className="header-btn"
@@ -698,6 +710,14 @@ export function ScreenHeader() {
                 open={showAuditPanel}
                 screenId={id}
                 onClose={() => setShowAuditPanel(false)}
+            />
+
+            <ScreenCollaborationPanel
+                open={showCollaborationPanel}
+                screenId={id}
+                components={config.components ?? []}
+                selectedIds={state.selectedIds ?? []}
+                onClose={() => setShowCollaborationPanel(false)}
             />
 
             <ScreenSharePolicyPanel

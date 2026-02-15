@@ -1,6 +1,6 @@
 # P1-04 模板/主题/资产中心
 
-`status`: `in-progress`  
+`status`: `done`  
 `priority`: `P1`  
 `inspiration`: `DataEase(模板资产化) + Metabase(分析资产复用)`
 
@@ -51,5 +51,8 @@
 - 已验证：
   - `mvn -f source/dts-analytics/pom.xml -DskipTests clean compile` 通过。
   - `pnpm -C source/dts-analytics-webapp/modern typecheck` 与 `build` 通过。
-- 待继续：
-  - 主题中心“字体与组件默认样式批量应用”还需补充一轮（当前已打通 `themePack` 存储/透传，但批量应用策略待完善）。
+- 主题中心补强（2026-02-15）：
+  - 新增主题批量应用引擎 `applyThemeToComponents(mode=safe|force)`，覆盖图表、数值卡、表格、筛选器、容器、DataV 组件常用样式字段。
+  - 工具栏新增“组件样式策略（强制覆盖/仅补缺省）”与“一键刷组件样式”入口。
+  - 主题包导入新增“是否应用到组件”确认链路；主题包导出附带 `componentStyleMode` 元数据。
+  - 筛选器组件渲染支持主题色字段（`labelColor/inputTextColor/inputBorderColor/inputBackground`），修复浅色主题可读性问题。

@@ -56,5 +56,9 @@
   - `pnpm -C source/dts-analytics-webapp/modern typecheck` 通过。
   - `pnpm -C source/dts-analytics-webapp/modern build` 通过。
 - 待继续：
-  - 地图组件“真实地理底图（中国/世界）与区域编码下钻”还需二阶段补强（当前已具备 GeoJSON 接口与一级下钻机制）。
+  - 地图组件二阶段补强（2026-02-15）：
+    - 已支持中国/世界内置 GeoJSON 底图自动加载（可关闭并改为自定义 URL/内联 GeoJSON）。
+    - 已支持区域编码透传（`regionCodeVariableKey`）和按编码优先匹配区域。
+    - 属性面板新增底图与编码配置项（内置底图开关、GeoJSON URL、区域编码变量Key）。
+  - 容器“嵌套子组件与拖拽编排”需要设计器层级模型改造。
   - 容器“嵌套子组件与拖拽编排”需要设计器层级模型改造。

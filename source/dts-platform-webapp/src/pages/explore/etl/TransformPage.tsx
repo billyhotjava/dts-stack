@@ -14,6 +14,7 @@ import {
 	ingestionTaskAPI,
 	type IngestionTaskDTO,
 	type IngestionExecutionDTO,
+	type IngestionGovernanceOverviewDTO,
 	type IngestionExecutionObservabilityDTO,
 	resolveExecutionPollIntervalMs,
 } from "@/api/ingestion";
@@ -45,6 +46,9 @@ export default function TransformPage() {
 	const [executingTaskId, setExecutingTaskId] = useState<number | null>(null);
 	const [observability, setObservability] = useState<IngestionExecutionObservabilityDTO | null>(null);
 	const [observabilityLoading, setObservabilityLoading] = useState(false);
+	const [governanceOverview, setGovernanceOverview] = useState<IngestionGovernanceOverviewDTO | null>(null);
+	const [governanceLoading, setGovernanceLoading] = useState(false);
+	const [governanceHours, setGovernanceHours] = useState<number>(24);
 	const [obsTaskId, setObsTaskId] = useState<number | undefined>(undefined);
 	const [obsSourceType, setObsSourceType] = useState<string | undefined>(undefined);
 	const [obsDays, setObsDays] = useState<number>(7);
@@ -65,6 +69,10 @@ export default function TransformPage() {
 	useEffect(() => {
 		void loadObservability();
 	}, [obsTaskId, obsSourceType, obsDays, obsTimeoutMinutes]);
+
+	useEffect(() => {
+		void loadGovernanceOverview();
+	}, [governanceHours]);
 
 	const stopExecutePolling = () => {
 		if (executePollTimerRef.current !== null) {
@@ -111,6 +119,19 @@ export default function TransformPage() {
 			setObservability(null);
 		} finally {
 			setObservabilityLoading(false);
+		}
+	};
+
+	const loadGovernanceOverview = async () => {
+		setGovernanceLoading(true);
+		try {
+			const result = await ingestionTaskAPI.getGovernanceOverview({ hours: governanceHours });
+			setGovernanceOverview(result);
+		} catch (error: any) {
+			message.error("加载资源治理指标失败: " + (error.message || "未知错误"));
+			setGovernanceOverview(null);
+		} finally {
+			setGovernanceLoading(false);
 		}
 	};
 
@@ -420,6 +441,23 @@ export default function TransformPage() {
 		{ title: "超时", dataIndex: "timeout", key: "timeout", width: 90 },
 	];
 
+	const sourceLoadColumns = [
+		{
+			title: "来源数据源",
+			dataIndex: "sourceDataSourceId",
+			key: "sourceDataSourceId",
+			render: (value: string | undefined) => value || "N/A",
+		},
+		{
+			title: "来源类型",
+			dataIndex: "sourceType",
+			key: "sourceType",
+			render: (value: string | undefined) => value || "unknown",
+		},
+		{ title: "运行中", dataIndex: "running", key: "running", width: 100 },
+		{ title: "排队中", dataIndex: "preparing", key: "preparing", width: 100 },
+	];
+
 	return (
 		<div className="flex flex-col gap-6">
 			<PageHeader
@@ -438,6 +476,80 @@ export default function TransformPage() {
 			/>
 
 			<Card title="运行可观测性（SLA / 失败趋势 / MTTR）" loading={observabilityLoading}>
+				<Card
+					size="small"
+					title="资源与配额治理（并发 / 队列 / 拒绝）"
+					loading={governanceLoading}
+					style={{ marginBottom: 16 }}
+					extra={
+						<Space>
+							<Select
+								style={{ width: 140 }}
+								value={governanceHours}
+								options={[
+									{ label: "最近 6 小时", value: 6 },
+									{ label: "最近 24 小时", value: 24 },
+									{ label: "最近 72 小时", value: 72 },
+									{ label: "最近 168 小时", value: 168 },
+								]}
+								onChange={(value) => setGovernanceHours(value)}
+							/>
+							<Button
+								icon={<ReloadOutlined />}
+								onClick={() => void loadGovernanceOverview()}
+								loading={governanceLoading}
+							>
+								刷新治理
+							</Button>
+						</Space>
+					}
+				>
+					{governanceOverview ? (
+						<Space direction="vertical" size={16} style={{ width: "100%" }}>
+							{governanceOverview.blockedByPolicy > 0 ? (
+								<Alert
+									type="warning"
+									showIcon
+									message={`最近窗口内发生 ${governanceOverview.blockedByPolicy} 次治理拒绝`}
+									description="建议检查任务并发上限、来源并发上限和执行窗口配置，必要时拆分批次或下调调度频率。"
+								/>
+							) : null}
+							<Row gutter={[16, 16]}>
+								<Col xs={12} md={6}>
+									<Statistic title="运行中" value={governanceOverview.running || 0} />
+								</Col>
+								<Col xs={12} md={6}>
+									<Statistic title="排队中" value={governanceOverview.preparing || 0} />
+								</Col>
+								<Col xs={12} md={6}>
+									<Statistic title="队列长度" value={governanceOverview.queueLength || 0} />
+								</Col>
+								<Col xs={12} md={6}>
+									<Statistic title="策略拒绝数" value={governanceOverview.blockedByPolicy || 0} />
+								</Col>
+								<Col xs={12} md={6}>
+									<Statistic
+										title="平均耗时(秒)"
+										value={governanceOverview.avgExecutionSeconds || 0}
+										precision={2}
+									/>
+								</Col>
+							</Row>
+							<Table
+								size="small"
+								rowKey={(record) =>
+									`${record.sourceDataSourceId || "none"}-${record.sourceType || "unknown"}`
+								}
+								pagination={false}
+								columns={sourceLoadColumns}
+								dataSource={governanceOverview.sourceLoads || []}
+								locale={{ emptyText: "暂无来源负载数据" }}
+							/>
+						</Space>
+					) : (
+						<Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无治理指标" />
+					)}
+				</Card>
 				<Space wrap size={12} style={{ marginBottom: 16 }}>
 					<Select
 						allowClear

@@ -233,6 +233,35 @@ export interface IngestionConnectorCapabilityDTO {
   updatedAt?: string;
 }
 
+export interface IngestionTaskTemplateDTO {
+  id: string;
+  name: string;
+  description?: string;
+  sourceCategory?: "database" | "file" | string;
+  connectorType?: string;
+  defaults?: Record<string, any>;
+  requiredParams?: string[];
+  warnings?: string[];
+  version?: string;
+}
+
+export interface IngestionGovernanceSourceLoadItem {
+  sourceDataSourceId?: string;
+  sourceType?: string;
+  running: number;
+  preparing: number;
+}
+
+export interface IngestionGovernanceOverviewDTO {
+  generatedAt?: string;
+  running: number;
+  preparing: number;
+  queueLength: number;
+  blockedByPolicy: number;
+  avgExecutionSeconds?: number;
+  sourceLoads: IngestionGovernanceSourceLoadItem[];
+}
+
 export interface IngestionRealtimeStatusDTO {
   taskId: number;
   connectorType: string;
@@ -387,6 +416,10 @@ class IngestionTaskAPI {
     return api.get({ url: "/ingestion/tasks/executions/observability", params });
   }
 
+  async getGovernanceOverview(params?: { hours?: number }): Promise<IngestionGovernanceOverviewDTO> {
+    return api.get({ url: "/ingestion/tasks/executions/governance-overview", params });
+  }
+
   async retryExecution(
     taskId: number,
     executionId: number,
@@ -455,6 +488,15 @@ class IngestionTaskAPI {
     if (Array.isArray(payload)) return payload as IngestionConnectorCapabilityDTO[];
     if (payload && typeof payload === "object" && Array.isArray((payload as any).data)) {
       return (payload as any).data as IngestionConnectorCapabilityDTO[];
+    }
+    return [];
+  }
+
+  async getTaskTemplates(): Promise<IngestionTaskTemplateDTO[]> {
+    const payload: any = await api.get({ url: "/ingestion/templates" });
+    if (Array.isArray(payload)) return payload as IngestionTaskTemplateDTO[];
+    if (payload && typeof payload === "object" && Array.isArray((payload as any).data)) {
+      return (payload as any).data as IngestionTaskTemplateDTO[];
     }
     return [];
   }

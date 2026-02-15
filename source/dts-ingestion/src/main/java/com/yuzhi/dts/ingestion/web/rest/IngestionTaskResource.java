@@ -15,6 +15,7 @@ import com.yuzhi.dts.ingestion.service.openmetadata.OpenMetadataAdapter;
 import com.yuzhi.dts.ingestion.service.IngestionTaskChangeLogService;
 import com.yuzhi.dts.ingestion.service.dto.IngestionConnectorCapabilityDTO;
 import com.yuzhi.dts.ingestion.service.dto.IngestionExecutionObservabilityDTO;
+import com.yuzhi.dts.ingestion.service.dto.IngestionGovernanceOverviewDTO;
 import com.yuzhi.dts.ingestion.service.dto.IngestionRealtimeStatusDTO;
 import com.yuzhi.dts.ingestion.service.dto.IngestionTaskChangeLogDTO;
 import jakarta.validation.Valid;
@@ -145,7 +146,14 @@ public class IngestionTaskResource {
         String prefix,
         String incrementalColumn,
         String incrementalType,
-        String initialWatermark
+        String initialWatermark,
+        Integer taskConcurrency,
+        Integer sourceConcurrency,
+        String priority,
+        String rejectPolicy,
+        String windowStart,
+        String windowEnd,
+        String windowTimezone
     ) {}
 
     public record ScheduleSpec(String type, String cron, Integer intervalMinutes) {}
@@ -193,6 +201,18 @@ public class IngestionTaskResource {
         String action,
         String assignee,
         String approvalComment
+    ) {}
+
+    public record IngestionTaskTemplateDTO(
+        String id,
+        String name,
+        String description,
+        String sourceCategory,
+        String connectorType,
+        Map<String, Object> defaults,
+        List<String> requiredParams,
+        List<String> warnings,
+        String version
     ) {}
 
     @PostMapping("/tasks")
@@ -1306,24 +1326,51 @@ public class IngestionTaskResource {
         if (sync == null) {
             return null;
         }
-        if (!"incremental".equalsIgnoreCase(resolveSyncMode(sync))) {
-            return null;
-        }
         Map<String, Object> config = new LinkedHashMap<>();
-        String incrementalColumn = normalize(sync.incrementalColumn());
-        String incrementalType = normalize(sync.incrementalType());
-        String initialWatermark = normalize(sync.initialWatermark());
-        if (!StringUtils.hasText(incrementalColumn)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "增量同步缺少增量列配置");
+        String syncMode = resolveSyncMode(sync);
+        if ("incremental".equalsIgnoreCase(syncMode)) {
+            String incrementalColumn = normalize(sync.incrementalColumn());
+            String incrementalType = normalize(sync.incrementalType());
+            String initialWatermark = normalize(sync.initialWatermark());
+            if (!StringUtils.hasText(incrementalColumn)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "增量同步缺少增量列配置");
+            }
+            if (StringUtils.hasText(incrementalColumn)) {
+                config.put("incrementalColumn", incrementalColumn);
+            }
+            if (StringUtils.hasText(incrementalType)) {
+                config.put("incrementalType", incrementalType);
+            }
+            if (StringUtils.hasText(initialWatermark)) {
+                config.put("initialWatermark", initialWatermark);
+            }
         }
-        if (StringUtils.hasText(incrementalColumn)) {
-            config.put("incrementalColumn", incrementalColumn);
+
+        Map<String, Object> governance = new LinkedHashMap<>();
+        if (sync.taskConcurrency() != null && sync.taskConcurrency() > 0) {
+            governance.put("maxConcurrentRuns", sync.taskConcurrency());
         }
-        if (StringUtils.hasText(incrementalType)) {
-            config.put("incrementalType", incrementalType);
+        if (sync.sourceConcurrency() != null && sync.sourceConcurrency() >= 0) {
+            governance.put("sourceConcurrencyLimit", sync.sourceConcurrency());
         }
-        if (StringUtils.hasText(initialWatermark)) {
-            config.put("initialWatermark", initialWatermark);
+        String priority = normalize(sync.priority());
+        if (StringUtils.hasText(priority)) {
+            governance.put("priority", priority.toUpperCase(java.util.Locale.ROOT));
+        }
+        String rejectPolicy = normalize(sync.rejectPolicy());
+        if (StringUtils.hasText(rejectPolicy)) {
+            governance.put("rejectPolicy", rejectPolicy.toUpperCase(java.util.Locale.ROOT));
+        }
+        String windowStart = normalize(sync.windowStart());
+        String windowEnd = normalize(sync.windowEnd());
+        if (StringUtils.hasText(windowStart) && StringUtils.hasText(windowEnd)) {
+            governance.put("windowStart", windowStart);
+            governance.put("windowEnd", windowEnd);
+            String timezone = normalize(sync.windowTimezone());
+            governance.put("windowTimezone", StringUtils.hasText(timezone) ? timezone : "Asia/Shanghai");
+        }
+        if (!governance.isEmpty()) {
+            config.put("governance", governance);
         }
         return config.isEmpty() ? null : config;
     }
@@ -1426,15 +1473,18 @@ public class IngestionTaskResource {
         }
         String connectorType = resolveConnectorType(isFileSourceUpdate, taskDTO.getSourceType());
         validateSyncModeCapability(connectorType, syncMode);
+        Map<String, Object> syncConfig = safeMap(jsonNodeToMap(taskDTO.getSyncConfig()));
         if ("incremental".equalsIgnoreCase(syncMode)) {
-            Map<String, Object> syncConfig = safeMap(jsonNodeToMap(taskDTO.getSyncConfig()));
             if (!StringUtils.hasText(normalize(syncConfig.get("incrementalColumn")))) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "增量同步缺少增量列配置");
             }
         }
         if (!"incremental".equalsIgnoreCase(syncMode)) {
-            taskDTO.setSyncConfig(null);
+            syncConfig.remove("incrementalColumn");
+            syncConfig.remove("incrementalType");
+            syncConfig.remove("initialWatermark");
         }
+        taskDTO.setSyncConfig(syncConfig.isEmpty() ? null : toJsonNode(syncConfig));
         Map<String, Object> sourceOverrides = isFileSourceUpdate
             ? safeMap(jsonNodeToMap(taskDTO.getSourceConfig()))
             : sanitizeSourceOverrides(jsonNodeToMap(taskDTO.getSourceConfig()));
@@ -1510,7 +1560,7 @@ public class IngestionTaskResource {
                 }
             }
             SyncSpec syncSpec = StringUtils.hasText(syncPrefix)
-                ? new SyncSpec(null, null, null, null, syncPrefix, null, null, null)
+                ? new SyncSpec(null, null, null, null, syncPrefix, null, null, null, null, null, null, null, null, null, null)
                 : null;
             List<Map<String, String>> tableMapping = deriveTableMapping(readerConfig, writerConfig, syncSpec);
             if (!tableMapping.isEmpty()) {
@@ -1843,6 +1893,17 @@ public class IngestionTaskResource {
     }
 
     /**
+     * GET /api/ingestion/tasks/executions/governance-overview : 获取运行资源治理概览
+     */
+    @GetMapping("/tasks/executions/governance-overview")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ResponseEntity<IngestionGovernanceOverviewDTO> getGovernanceOverview(
+        @RequestParam(value = "hours", required = false) Integer hours
+    ) {
+        return ResponseEntity.ok(ingestionTaskService.getGovernanceOverview(hours));
+    }
+
+    /**
      * GET /api/ingestion/tasks/{id}/executions/latest : 获取最新执行记录
      */
     @GetMapping("/tasks/{id}/executions/latest")
@@ -1853,6 +1914,89 @@ public class IngestionTaskResource {
         return ingestionTaskService.getLatestExecution(id)
             .map(ResponseEntity::ok)
             .orElse(ResponseEntity.<com.yuzhi.dts.ingestion.service.dto.IngestionExecutionDTO>notFound().build());
+    }
+
+    /**
+     * GET /api/ingestion/templates : 获取入湖模板清单
+     */
+    @GetMapping("/templates")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ResponseEntity<List<IngestionTaskTemplateDTO>> listIngestionTemplates() {
+        List<IngestionTaskTemplateDTO> templates = List.of(
+            new IngestionTaskTemplateDTO(
+                "erp_jdbc_full",
+                "ERP 全量入湖模板",
+                "适用于 ERP 多表全量同步，自动推荐 ods_erp_ 前缀。",
+                "database",
+                "addax",
+                Map.of(
+                    "sourceCategory",
+                    "database",
+                    "syncMode",
+                    "full_refresh",
+                    "tableSelectionMode",
+                    "all",
+                    "syncPrefix",
+                    "ods_erp_",
+                    "sourceSystem",
+                    "ERP",
+                    "scheduleType",
+                    "manual"
+                ),
+                List.of("sourceDataSourceId"),
+                List.of("全量任务会先清空目标表，建议安排在低峰时段执行。"),
+                "1.0.0"
+            ),
+            new IngestionTaskTemplateDTO(
+                "crm_jdbc_incremental",
+                "CRM 增量入湖模板",
+                "适用于按更新时间字段增量同步，默认 incrementalColumn=updated_at。",
+                "database",
+                "addax",
+                Map.of(
+                    "sourceCategory",
+                    "database",
+                    "syncMode",
+                    "incremental",
+                    "incrementalColumn",
+                    "updated_at",
+                    "incrementalType",
+                    "datetime",
+                    "syncPrefix",
+                    "ods_crm_",
+                    "sourceSystem",
+                    "CRM",
+                    "scheduleType",
+                    "interval",
+                    "scheduleIntervalMinutes",
+                    30
+                ),
+                List.of("sourceDataSourceId", "incrementalColumn"),
+                List.of("增量模式建议优先使用单表验证水位推进，再批量扩展。"),
+                "1.0.0"
+            ),
+            new IngestionTaskTemplateDTO(
+                "excel_batch_full",
+                "Excel 批量入湖模板",
+                "适用于文件批量导入场景，默认全量模式与 ods_file_ 前缀。",
+                "file",
+                "file",
+                Map.of(
+                    "sourceCategory",
+                    "file",
+                    "syncMode",
+                    "full_refresh",
+                    "syncPrefix",
+                    "ods_file_",
+                    "scheduleType",
+                    "manual"
+                ),
+                List.of("file"),
+                List.of("请先上传文件并确认字段映射后再执行。"),
+                "1.0.0"
+            )
+        );
+        return ResponseEntity.ok(templates);
     }
 
     /**
