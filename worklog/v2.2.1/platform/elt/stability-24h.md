@@ -72,6 +72,14 @@
 
 
 
+
+
+
+
+
+
+
+
 ## 7. 环境矩阵（自动汇总）
 | Run UTC | Mode | Arch | Total | Success | Failed | Success Rate | DAG 404 | TaskLog 404 | Result | Note |
 |---|---|---|---:|---:|---:|---:|---:|---:|---|---|
@@ -91,3 +99,11 @@
 | 20260214T133537Z-1731149 | normal | x86_64 | 3 | 2 | 1 | 66.67% | 0 | 0 | OBSERVED | guardok-normal-x86_64 |
 | 20260214T133554Z-1732226 | normal | x86_64 | 3 | 2 | 1 | 66.67% | 0 | 0 | OBSERVED | guardok-normal-x86_64 |
 | 20260214T133643Z-1734911 | normal | x86_64 | 3 | 2 | 1 | 66.67% | 0 | 0 | OBSERVED | finalcheck-normal-x86_64 |
+| 20260217T061842Z-3328693 | normal | x86_64 | 0 | 0 | 0 | 0.00% | 0 | 0 | OBSERVED | p3-02-devcenter-normal-x86_64 |
+| 20260217T061947Z-3330467 | legacy | x86_64 | 0 | 0 | 0 | 0.00% | 0 | 0 | OBSERVED | p3-02-devcenter-legacy-x86_64 |
+| 20260217T061948Z-3330731 | dev | x86_64 | 0 | 0 | 0 | 0.00% | 0 | 0 | OBSERVED | p3-02-devcenter-dev-x86_64 |
+| 20260217T062220Z-3333745 | legacy | x86_64 | 0 | 0 | 0 | 0.00% | 0 | 0 | OBSERVED | p3-02-devcenter-legacy-x86_64 |
+| 20260217T062220Z-3334028 | dev | x86_64 | 0 | 0 | 0 | 0.00% | 0 | 0 | OBSERVED | p3-02-devcenter-dev-x86_64 |
+| 20260217T062227Z-3334589 | normal | x86_64 | 0 | 0 | 0 | 0.00% | 0 | 0 | OBSERVED | p3-02-devcenter-normal-x86_64 |
+| 20260217T062227Z-3334853 | legacy | x86_64 | 0 | 0 | 0 | 0.00% | 0 | 0 | OBSERVED | p3-02-devcenter-legacy-x86_64 |
+| 20260217T062228Z-3335140 | dev | x86_64 | 0 | 0 | 0 | 0.00% | 0 | 0 | OBSERVED | p3-02-devcenter-dev-x86_64 |

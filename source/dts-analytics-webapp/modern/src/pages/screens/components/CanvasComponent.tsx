@@ -2,6 +2,7 @@ import { useCallback, useState, useRef } from 'react';
 import { useScreen } from '../ScreenContext';
 import { ComponentRenderer } from './ComponentRenderer';
 import type { ScreenComponent, ScreenTheme } from '../types';
+import { collectContainerSubtreeIds } from '../componentHierarchy';
 
 interface CanvasComponentProps {
     component: ScreenComponent;
@@ -39,6 +40,48 @@ function clampToBounds(value: number, min: number, max: number): number {
     return Math.max(min, Math.min(max, value));
 }
 
+function clampGroupDelta(
+    components: ScreenComponent[],
+    moveIds: string[],
+    startPositions: Map<string, { x: number; y: number }>,
+    deltaX: number,
+    deltaY: number,
+    canvasWidth: number,
+    canvasHeight: number,
+): { dx: number; dy: number } {
+    const moveSet = new Set(moveIds);
+    const compMap = new Map(components.map((item) => [item.id, item]));
+    let minDx = Number.NEGATIVE_INFINITY;
+    let maxDx = Number.POSITIVE_INFINITY;
+    let minDy = Number.NEGATIVE_INFINITY;
+    let maxDy = Number.POSITIVE_INFINITY;
+
+    for (const id of moveIds) {
+        const comp = compMap.get(id);
+        const start = startPositions.get(id);
+        if (!comp || !start) continue;
+
+        minDx = Math.max(minDx, -start.x);
+        minDy = Math.max(minDy, -start.y);
+        maxDx = Math.min(maxDx, canvasWidth - (start.x + comp.width));
+        maxDy = Math.min(maxDy, canvasHeight - (start.y + comp.height));
+
+        if (comp.parentContainerId && !moveSet.has(comp.parentContainerId)) {
+            const parent = compMap.get(comp.parentContainerId);
+            if (parent) {
+                minDx = Math.max(minDx, parent.x - start.x);
+                minDy = Math.max(minDy, parent.y - start.y);
+                maxDx = Math.min(maxDx, parent.x + parent.width - (start.x + comp.width));
+                maxDy = Math.min(maxDy, parent.y + parent.height - (start.y + comp.height));
+            }
+        }
+    }
+
+    const dx = clampToBounds(deltaX, minDx, maxDx);
+    const dy = clampToBounds(deltaY, minDy, maxDy);
+    return { dx, dy };
+}
+
 export function CanvasComponent({ component, isSelected, theme }: CanvasComponentProps) {
     const { state, dispatch, selectComponents, updateComponent, snapshotTransform, setSnapGuides, clearSnapGuides } = useScreen();
     const { config, selectedIds } = state;
@@ -60,17 +103,7 @@ export function CanvasComponent({ component, isSelected, theme }: CanvasComponen
         const seedIds = groupedIds.length > 0
             ? groupedIds
             : (selectedIds.includes(component.id) ? selectedIds : [component.id]);
-        const moveIdSet = new Set(seedIds);
-        for (const seedId of seedIds) {
-            const seedComp = config.components.find((item) => item.id === seedId);
-            if (seedComp?.type !== 'container') continue;
-            for (const child of config.components) {
-                if (child.parentContainerId === seedComp.id) {
-                    moveIdSet.add(child.id);
-                }
-            }
-        }
-        const moveIds = Array.from(moveIdSet);
+        const moveIds = collectContainerSubtreeIds(config.components, seedIds);
 
         selectComponents(moveIds);
         setIsDragging(true);
@@ -89,14 +122,23 @@ export function CanvasComponent({ component, isSelected, theme }: CanvasComponen
 
             if (moveIds.length > 1) {
                 clearSnapGuides();
+                const bounded = clampGroupDelta(
+                    config.components,
+                    moveIds,
+                    startPositions,
+                    deltaX,
+                    deltaY,
+                    config.width,
+                    config.height,
+                );
                 dispatch({
                     type: 'MOVE_COMPONENTS',
                     payload: moveIds.map((id) => {
                         const start = startPositions.get(id) ?? { x: 0, y: 0 };
                         return {
                             id,
-                            x: Math.max(0, start.x + deltaX),
-                            y: Math.max(0, start.y + deltaY),
+                            x: Math.max(0, start.x + bounded.dx),
+                            y: Math.max(0, start.y + bounded.dy),
                         };
                     }),
                 });
@@ -171,15 +213,8 @@ export function CanvasComponent({ component, isSelected, theme }: CanvasComponen
         const groupedIds = component.groupId
             ? config.components.filter((item) => item.groupId === component.groupId).map((item) => item.id)
             : [];
-        const resizeIdSet = new Set(groupedIds.length > 1 ? groupedIds : [component.id]);
-        if (component.type === 'container') {
-            for (const child of config.components) {
-                if (child.parentContainerId === component.id) {
-                    resizeIdSet.add(child.id);
-                }
-            }
-        }
-        const resizeIds = Array.from(resizeIdSet);
+        const seedIds = groupedIds.length > 1 ? groupedIds : [component.id];
+        const resizeIds = collectContainerSubtreeIds(config.components, seedIds);
         if (resizeIds.length > 1) {
             selectComponents(resizeIds);
         }

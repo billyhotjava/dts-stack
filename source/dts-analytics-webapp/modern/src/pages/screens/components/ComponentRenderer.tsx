@@ -1,5 +1,5 @@
 import { memo, useMemo, useEffect, useRef, useState, type ComponentType } from 'react';
-import type { CardParameterBinding, ComponentInteractionMapping, ScreenComponent, ScreenTheme } from '../types';
+import type { CardData, CardParameterBinding, ComponentInteractionMapping, ScreenComponent, ScreenTheme } from '../types';
 import { DRILLABLE_TYPES } from '../types';
 import { useCardDataSource } from '../hooks/useCardDataSource';
 import { useDrillDown } from '../hooks/useDrillDown';
@@ -126,6 +126,20 @@ function resolveInteractionValue(params: Record<string, unknown>, sourcePath: st
     return undefined;
 }
 
+function resolveInteractionUrlTemplate(template: string, params: Record<string, unknown>): string | undefined {
+    const raw = String(template || '').trim();
+    if (!raw) return undefined;
+    const withValues = raw.replace(/\{\{\s*([^}]+)\s*\}\}/g, (_, path: string) => {
+        const value = resolveInteractionValue(params, path);
+        return value == null ? '' : encodeURIComponent(value);
+    }).trim();
+    if (!withValues) return undefined;
+    if (/^https?:\/\//i.test(withValues) || withValues.startsWith('/')) {
+        return withValues;
+    }
+    return undefined;
+}
+
 function resolveFilterOptions(raw: unknown): Array<{ label: string; value: string }> {
     if (!Array.isArray(raw)) return [];
     const out: Array<{ label: string; value: string }> = [];
@@ -142,6 +156,136 @@ function resolveFilterOptions(raw: unknown): Array<{ label: string; value: strin
             const label = String(row.label ?? value).trim() || value;
             out.push({ label, value });
         }
+    }
+    return out;
+}
+
+function resolveTabOptions(raw: unknown): Array<{ label: string; value: string }> {
+    return resolveFilterOptions(raw);
+}
+
+function normalizeVisibilityMatchValues(raw: unknown): string[] {
+    if (Array.isArray(raw)) {
+        return raw
+            .map((item) => String(item ?? '').trim())
+            .filter((item) => item.length > 0);
+    }
+    const text = String(raw ?? '').trim();
+    if (!text) return [];
+    return text
+        .split(/[\n,，]/g)
+        .map((item) => item.trim())
+        .filter((item) => item.length > 0);
+}
+
+function resolveComponentVariableVisibility(config: Record<string, unknown>, values: Record<string, string>): boolean {
+    const enabled = config.visibilityRuleEnabled === true;
+    if (!enabled) return true;
+    const variableKey = String(config.visibilityVariableKey ?? '').trim();
+    if (!variableKey) return true;
+    const current = String(values?.[variableKey] ?? '').trim();
+    const mode = String(config.visibilityMatchMode ?? 'equals').trim().toLowerCase();
+    const expectedValues = normalizeVisibilityMatchValues(
+        config.visibilityMatchValues ?? config.visibilityMatchValue,
+    );
+    const matched = expectedValues.length > 0 && expectedValues.includes(current);
+    if (mode === 'not-equals' || mode === 'not-in') {
+        return expectedValues.length === 0 ? true : !matched;
+    }
+    if (mode === 'empty') {
+        return current.length === 0;
+    }
+    if (mode === 'not-empty') {
+        return current.length > 0;
+    }
+    return expectedValues.length === 0 ? true : matched;
+}
+
+function resolveColumnIndex(cols: CardData['cols'], rawField: unknown, fallback = 0): number {
+    if (!Array.isArray(cols) || cols.length === 0) {
+        return -1;
+    }
+    const field = String(rawField ?? '').trim();
+    if (!field) {
+        return Math.max(0, Math.min(cols.length - 1, fallback));
+    }
+    if (/^\d+$/.test(field)) {
+        const byNumber = Number(field) - 1;
+        if (Number.isFinite(byNumber) && byNumber >= 0 && byNumber < cols.length) {
+            return byNumber;
+        }
+    }
+    const normalized = field.toLowerCase();
+    const byName = cols.findIndex((col) => String(col.name || '').toLowerCase() === normalized);
+    if (byName >= 0) return byName;
+    const byDisplayName = cols.findIndex((col) => String(col.display_name || '').toLowerCase() === normalized);
+    if (byDisplayName >= 0) return byDisplayName;
+    return Math.max(0, Math.min(cols.length - 1, fallback));
+}
+
+function resolveFilterOptionsFromData(data: CardData | null, config: Record<string, unknown>): Array<{ label: string; value: string }> {
+    if (!data || !Array.isArray(data.rows) || !Array.isArray(data.cols) || data.cols.length === 0) {
+        return [];
+    }
+    const maxRaw = Number(config.dataOptionMax ?? 200);
+    const maxOptions = Number.isFinite(maxRaw) ? Math.max(1, Math.min(2000, Math.floor(maxRaw))) : 200;
+    const valueIndex = resolveColumnIndex(data.cols, config.dataOptionValueField, 0);
+    if (valueIndex < 0) {
+        return [];
+    }
+    const labelIndex = resolveColumnIndex(data.cols, config.dataOptionLabelField, valueIndex);
+    const dedupe = new Set<string>();
+    const out: Array<{ label: string; value: string }> = [];
+    for (const row of data.rows) {
+        if (!Array.isArray(row)) continue;
+        const valueRaw = row[valueIndex];
+        if (valueRaw == null) continue;
+        const value = String(valueRaw).trim();
+        if (!value || dedupe.has(value)) continue;
+        const labelRaw = row[labelIndex];
+        const label = String(labelRaw ?? value).trim() || value;
+        dedupe.add(value);
+        out.push({ label, value });
+        if (out.length >= maxOptions) break;
+    }
+    return out;
+}
+
+function normalizeFilterDebounceMs(raw: unknown): number {
+    const value = Number(raw ?? 0);
+    if (!Number.isFinite(value) || value <= 0) return 0;
+    return Math.max(50, Math.min(5000, Math.round(value)));
+}
+
+function normalizeCarouselItems(raw: unknown): string[] {
+    if (Array.isArray(raw)) {
+        return raw
+            .map((item) => String(item ?? '').trim())
+            .filter((item) => item.length > 0)
+            .slice(0, 200);
+    }
+    const text = String(raw ?? '').trim();
+    if (!text) return [];
+    return text
+        .split(/\r?\n/g)
+        .map((item) => item.trim())
+        .filter((item) => item.length > 0)
+        .slice(0, 200);
+}
+
+function resolveCarouselItemsFromData(data: CardData | null, maxRaw: unknown): string[] {
+    if (!data || !Array.isArray(data.rows) || data.rows.length === 0) {
+        return [];
+    }
+    const max = Number(maxRaw ?? 50);
+    const safeMax = Number.isFinite(max) ? Math.max(1, Math.min(500, Math.floor(max))) : 50;
+    const out: string[] = [];
+    for (const row of data.rows) {
+        if (!Array.isArray(row) || row.length === 0) continue;
+        const first = String(row[0] ?? '').trim();
+        if (!first) continue;
+        out.push(first);
+        if (out.length >= safeMax) break;
     }
     return out;
 }
@@ -450,12 +594,14 @@ function resolveBoundTableData(
     const allData = (config.data as Array<Array<unknown>> | undefined) || [];
 
     if (sourceCols?.length) {
-        const effectiveColumns = columnsConfig && columnsConfig.length > 0
+        const effectiveColumns = columnsConfig
             ? columnsConfig
             : sourceCols.map((col) => ({ source: col.name } as ColumnEntry));
+        const sourceMetaByName = new Map(sourceCols.map((item) => [item.name, item] as const));
+        const sourceIndexByName = new Map(sourceCols.map((item, index) => [item.name, index] as const));
 
         const columnMeta = effectiveColumns.map((col): ResolvedColumnMeta => {
-            const sc = sourceCols.find((s) => s.name === col.source);
+            const sc = sourceMetaByName.get(col.source);
             return {
                 key: col.source,
                 title: col.alias || sc?.displayName || col.source,
@@ -467,8 +613,8 @@ function resolveBoundTableData(
         });
         const data = allData.map((row) =>
             columnMeta.map((col) => {
-                const idx = sourceCols.findIndex((s) => s.name === col.key);
-                return idx >= 0 ? formatTableCell(row[idx], col.formatter, col.baseType) : '';
+                const idx = sourceIndexByName.get(col.key);
+                return typeof idx === 'number' ? formatTableCell(row[idx], col.formatter, col.baseType) : '';
             }),
         );
         return {
@@ -662,6 +808,9 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
         if (dataSourceType === "card") {
             return normalizeParameterBindings(dataSource?.cardConfig?.parameterBindings);
         }
+        if (dataSourceType === "metric") {
+            return normalizeParameterBindings(dataSource?.metricConfig?.parameterBindings);
+        }
         if (dataSourceType === "sql") {
             const sqlConfig = dataSource?.sqlConfig ?? dataSource?.databaseConfig;
             return normalizeParameterBindings(sqlConfig?.parameterBindings);
@@ -713,10 +862,12 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
         mode,
         globalVariables: runtime.values,
     }), [component.id, mode, runtime.values, type]);
+    const visibleByVariableRule = mode !== 'preview'
+        || resolveComponentVariableVisibility(config, runtime.values);
 
     // Card data source hook — pass drill overrides when active
     const { data: cardData, loading: cardLoading, error: cardError } = useCardDataSource(
-        dataSource,
+        visibleByVariableRule ? dataSource : undefined,
         drillActive ? drillState.effectiveCardId : undefined,
         mergedQueryParameters.length > 0 ? mergedQueryParameters : undefined,
         queryContext,
@@ -759,24 +910,151 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
         }
     }, [type]);
 
+    const [carouselIndex, setCarouselIndex] = useState(0);
+    const [carouselPaused, setCarouselPaused] = useState(false);
+    const carouselItems = useMemo(() => {
+        if (type !== 'carousel') return [];
+        const dataItems = resolveCarouselItemsFromData(cardData, effectiveConfig.dataItemMax);
+        if (dataItems.length > 0) {
+            return dataItems;
+        }
+        return normalizeCarouselItems(effectiveConfig.items);
+    }, [cardData, effectiveConfig.dataItemMax, effectiveConfig.items, type]);
+
+    useEffect(() => {
+        if (type !== 'carousel') return;
+        if (carouselItems.length <= 1) {
+            setCarouselIndex(0);
+            return;
+        }
+        const pauseOnHover = effectiveConfig.pauseOnHover !== false;
+        if (pauseOnHover && carouselPaused) {
+            return;
+        }
+        const rawSeconds = Number(effectiveConfig.intervalSeconds ?? 4);
+        const safeSeconds = Number.isFinite(rawSeconds)
+            ? Math.max(1, Math.min(120, Math.floor(rawSeconds)))
+            : 4;
+        const timer = setInterval(() => {
+            setCarouselIndex((prev) => (prev + 1) % carouselItems.length);
+        }, safeSeconds * 1000);
+        return () => clearInterval(timer);
+    }, [carouselItems.length, carouselPaused, effectiveConfig.intervalSeconds, effectiveConfig.pauseOnHover, type]);
+
+    const filterInputVariableKey = useMemo(() => {
+        if (type !== 'filter-input') return '';
+        return String((effectiveConfig.variableKey as string) ?? '').trim();
+    }, [effectiveConfig, type]);
+    const filterInputRuntimeValue = filterInputVariableKey ? (runtime.values[filterInputVariableKey] ?? '') : '';
+    const [filterInputDraft, setFilterInputDraft] = useState(filterInputRuntimeValue);
+    const filterVariableTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+
+    useEffect(() => {
+        setFilterInputDraft(filterInputRuntimeValue);
+    }, [filterInputRuntimeValue, filterInputVariableKey]);
+
+    useEffect(() => () => {
+        for (const timer of filterVariableTimersRef.current.values()) {
+            clearTimeout(timer);
+        }
+        filterVariableTimersRef.current.clear();
+    }, []);
+
+    const tabVariableKey = useMemo(() => {
+        if (type !== 'tab-switcher') return '';
+        return String((effectiveConfig.variableKey as string) ?? '').trim();
+    }, [effectiveConfig, type]);
+    const tabOptions = useMemo(() => {
+        if (type !== 'tab-switcher') return [];
+        const sourceMode = String(effectiveConfig.optionSourceMode ?? 'manual').trim().toLowerCase();
+        if (sourceMode === 'data') {
+            const dynamicOptions = resolveFilterOptionsFromData(cardData, effectiveConfig);
+            if (dynamicOptions.length > 0) {
+                return dynamicOptions;
+            }
+        }
+        return resolveTabOptions(effectiveConfig.options);
+    }, [cardData, effectiveConfig, type]);
+    const tabDefaultValue = String(effectiveConfig.defaultValue ?? '').trim();
+    const tabRuntimeValue = tabVariableKey ? String(runtime.values[tabVariableKey] ?? '') : '';
+
+    useEffect(() => {
+        if (type !== 'tab-switcher' || !tabVariableKey || tabOptions.length <= 0) return;
+        if (tabRuntimeValue) return;
+        const fallbackValue = tabDefaultValue && tabOptions.some((item) => item.value === tabDefaultValue)
+            ? tabDefaultValue
+            : tabOptions[0]?.value;
+        if (fallbackValue) {
+            runtime.setVariable(tabVariableKey, fallbackValue, `tab-switcher:init:${component.id}`);
+        }
+    }, [component.id, runtime, tabDefaultValue, tabOptions, tabRuntimeValue, tabVariableKey, type]);
+
+    const scheduleFilterVariableUpdate = (
+        key: string,
+        value: string,
+        source: string,
+        debounceMsRaw: unknown,
+        immediate = false,
+    ) => {
+        const safeKey = String(key || '').trim();
+        if (!safeKey) return;
+        const debounceMs = normalizeFilterDebounceMs(debounceMsRaw);
+        const currentTimer = filterVariableTimersRef.current.get(safeKey);
+        if (currentTimer) {
+            clearTimeout(currentTimer);
+            filterVariableTimersRef.current.delete(safeKey);
+        }
+        if (immediate || debounceMs <= 0) {
+            runtime.setVariable(safeKey, value, source);
+            return;
+        }
+        const timer = setTimeout(() => {
+            filterVariableTimersRef.current.delete(safeKey);
+            runtime.setVariable(safeKey, value, `${source}:debounced`);
+        }, debounceMs);
+        filterVariableTimersRef.current.set(safeKey, timer);
+    };
+
     const interactionMappings = useMemo(() => (
         mode === "preview" && component.interaction?.enabled
             ? (component.interaction.mappings ?? []).filter((m): m is ComponentInteractionMapping => !!m && !!m.variableKey && !!m.sourcePath)
             : []
     ), [component.interaction, mode]);
+    const interactionJump = useMemo(() => {
+        if (mode !== 'preview' || component.interaction?.enabled !== true || component.interaction?.jumpEnabled !== true) {
+            return null;
+        }
+        const template = String(component.interaction.jumpUrlTemplate || '').trim();
+        if (!template) return null;
+        return {
+            template,
+            openMode: component.interaction.jumpOpenMode === 'self' ? 'self' : 'new-tab',
+        };
+    }, [component.interaction, mode]);
 
     // ECharts click handler for drill-down + variable interaction
     const echartsClickHandler = useMemo(() => {
         const canDrill = drillActive && drillState.canDrillDown;
         const canInteract = interactionMappings.length > 0;
-        if (!canDrill && !canInteract) return undefined;
+        const canJump = !!interactionJump;
+        if (!canDrill && !canInteract && !canJump) return undefined;
 
         return {
             click: (params: Record<string, unknown>) => {
                 if (canDrill) {
                     const value = (params.name as string | undefined)
                         ?? ((params.data as Record<string, unknown> | undefined)?.name as string | undefined);
-                    if (value) drillState.handleDrill(String(value));
+                    if (value) {
+                        const clicked = String(value);
+                        runtime.trackEvent({
+                            kind: 'drill-down',
+                            key: 'drillValue',
+                            value: clicked,
+                            source: `drill:${component.id}`,
+                            meta: `depth=${drillState.breadcrumbs.length}`,
+                        });
+                        drillState.handleDrill(clicked);
+                    }
                 }
 
                 if (canInteract) {
@@ -787,9 +1065,35 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                         }
                     }
                 }
+
+                if (canJump && interactionJump) {
+                    const targetUrl = resolveInteractionUrlTemplate(interactionJump.template, params);
+                    if (!targetUrl) return;
+                    runtime.trackEvent({
+                        kind: 'jump',
+                        key: 'jumpUrl',
+                        value: targetUrl,
+                        source: `interaction:${component.id}`,
+                        meta: `openMode=${interactionJump.openMode}`,
+                    });
+                    if (interactionJump.openMode === 'self') {
+                        window.location.assign(targetUrl);
+                    } else {
+                        window.open(targetUrl, '_blank', 'noopener,noreferrer');
+                    }
+                }
             },
         };
-    }, [component.id, drillActive, drillState.canDrillDown, drillState.handleDrill, interactionMappings, runtime]);
+    }, [
+        component.id,
+        drillActive,
+        drillState.breadcrumbs.length,
+        drillState.canDrillDown,
+        drillState.handleDrill,
+        interactionJump,
+        interactionMappings,
+        runtime,
+    ]);
 
     const content = useMemo(() => {
         const c = effectiveConfig;
@@ -1388,6 +1692,83 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                 );
             }
 
+            case 'carousel': {
+                const items = carouselItems;
+                const hasItems = items.length > 0;
+                const index = hasItems ? (carouselIndex % items.length) : 0;
+                const currentItem = hasItems ? items[index] : '暂无轮播内容';
+                const cardTitle = String(c.title || '轮播卡片');
+                const cardColor = String(c.color || t.textPrimary);
+                const titleColor = String(c.titleColor || t.textSecondary);
+                const backgroundColor = String(c.backgroundColor || 'rgba(15,23,42,0.5)');
+                const fontSize = Math.max(12, Number(c.fontSize || 24));
+                const showDots = c.showDots !== false;
+                const pauseOnHover = c.pauseOnHover !== false;
+                return (
+                    <div
+                        style={{
+                            width: '100%',
+                            height: '100%',
+                            border: '1px solid rgba(148,163,184,0.3)',
+                            borderRadius: 10,
+                            background: backgroundColor,
+                            padding: 12,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            justifyContent: 'space-between',
+                            boxSizing: 'border-box',
+                            overflow: 'hidden',
+                        }}
+                        onMouseEnter={() => {
+                            if (pauseOnHover) {
+                                setCarouselPaused(true);
+                            }
+                        }}
+                        onMouseLeave={() => {
+                            if (pauseOnHover) {
+                                setCarouselPaused(false);
+                            }
+                        }}
+                    >
+                        <div style={{ fontSize: 12, color: titleColor, letterSpacing: 0.4 }}>
+                            {cardTitle}
+                        </div>
+                        <div
+                            style={{
+                                flex: 1,
+                                display: 'flex',
+                                alignItems: 'center',
+                                color: cardColor,
+                                fontSize,
+                                fontWeight: 600,
+                                lineHeight: 1.35,
+                                transition: 'opacity 0.2s ease',
+                                wordBreak: 'break-word',
+                                opacity: hasItems ? 1 : 0.7,
+                            }}
+                        >
+                            {currentItem}
+                        </div>
+                        {showDots && hasItems && (
+                            <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', alignItems: 'center' }}>
+                                {items.map((_, dotIdx) => (
+                                    <span
+                                        key={`dot-${dotIdx}`}
+                                        style={{
+                                            width: dotIdx === index ? 16 : 6,
+                                            height: 6,
+                                            borderRadius: 999,
+                                            background: dotIdx === index ? '#38bdf8' : 'rgba(148,163,184,0.45)',
+                                            transition: 'all 0.2s ease',
+                                        }}
+                                    />
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                );
+            }
+
             case 'progress-bar': {
                 const value = c.value as number;
                 return (
@@ -1420,22 +1801,79 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                 );
             }
 
+            case 'tab-switcher': {
+                const options = tabOptions;
+                const label = String(c.label ?? '切换');
+                const activeValue = tabRuntimeValue || tabDefaultValue || options[0]?.value || '';
+                const activeTextColor = String(c.activeTextColor || '#0f172a');
+                const activeBackgroundColor = String(c.activeBackgroundColor || '#38bdf8');
+                const inactiveTextColor = String(c.inactiveTextColor || t.textSecondary);
+                const inactiveBackgroundColor = String(c.inactiveBackgroundColor || 'rgba(15,23,42,0.45)');
+                const compact = c.compact === true;
+                return (
+                    <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <div style={{ fontSize: 12, color: t.textSecondary }}>{label}</div>
+                        <div style={{ display: 'flex', gap: compact ? 4 : 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                            {options.map((option) => {
+                                const active = option.value === activeValue;
+                                return (
+                                    <button
+                                        key={option.value}
+                                        type="button"
+                                        onClick={() => {
+                                            if (!tabVariableKey) return;
+                                            runtime.setVariable(tabVariableKey, option.value, `tab-switcher:${component.id}`);
+                                        }}
+                                        style={{
+                                            border: '1px solid rgba(148,163,184,0.3)',
+                                            background: active ? activeBackgroundColor : inactiveBackgroundColor,
+                                            color: active ? activeTextColor : inactiveTextColor,
+                                            borderRadius: 999,
+                                            padding: compact ? '3px 10px' : '6px 14px',
+                                            fontSize: compact ? 11 : 12,
+                                            cursor: tabVariableKey ? 'pointer' : 'default',
+                                            whiteSpace: 'nowrap',
+                                            transition: 'all 0.2s ease',
+                                        }}
+                                    >
+                                        {option.label}
+                                    </button>
+                                );
+                            })}
+                            {options.length === 0 && (
+                                <span style={{ fontSize: 12, color: t.textSecondary }}>请在属性中配置 Tab 选项</span>
+                            )}
+                        </div>
+                    </div>
+                );
+            }
+
             case 'filter-input': {
                 const label = String(c.label ?? '筛选');
                 const variableKey = String(c.variableKey ?? '').trim();
                 const placeholder = String(c.placeholder ?? '请输入');
-                const value = variableKey ? (runtime.values[variableKey] ?? '') : '';
+                const value = variableKey ? filterInputDraft : '';
                 const labelColor = String(c.labelColor || t.textSecondary);
                 const inputTextColor = String(c.inputTextColor || t.textPrimary);
                 const inputBorderColor = String(c.inputBorderColor || 'rgba(148,163,184,0.4)');
                 const inputBackground = String(c.inputBackground || (theme === 'glacier' ? '#ffffff' : 'rgba(15,23,42,0.65)'));
+                const debounceMs = normalizeFilterDebounceMs(c.debounceMs);
                 return (
                     <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', gap: 6 }}>
                         <div style={{ fontSize: 12, color: labelColor }}>{label}</div>
                         <input
                             type="text"
                             value={value}
-                            onChange={(e) => variableKey && runtime.setVariable(variableKey, e.target.value, `filter-input:${component.id}`)}
+                            onChange={(e) => {
+                                const nextValue = e.target.value;
+                                setFilterInputDraft(nextValue);
+                                if (!variableKey) return;
+                                scheduleFilterVariableUpdate(variableKey, nextValue, `filter-input:${component.id}`, debounceMs);
+                            }}
+                            onBlur={() => {
+                                if (!variableKey) return;
+                                scheduleFilterVariableUpdate(variableKey, filterInputDraft, `filter-input:${component.id}`, debounceMs, true);
+                            }}
                             placeholder={placeholder}
                             style={{
                                 width: '100%',
@@ -1456,7 +1894,12 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                 const label = String(c.label ?? '筛选');
                 const variableKey = String(c.variableKey ?? '').trim();
                 const placeholder = String(c.placeholder ?? '请选择');
-                const options = resolveFilterOptions(c.options);
+                const optionSourceMode = String(c.optionSourceMode ?? 'manual').trim().toLowerCase();
+                const staticOptions = resolveFilterOptions(c.options);
+                const dataOptions = optionSourceMode === 'data'
+                    ? resolveFilterOptionsFromData(cardData, c)
+                    : [];
+                const options = dataOptions.length > 0 ? dataOptions : staticOptions;
                 const value = variableKey ? (runtime.values[variableKey] ?? '') : '';
                 const labelColor = String(c.labelColor || t.textSecondary);
                 const inputTextColor = String(c.inputTextColor || t.textPrimary);
@@ -1748,6 +2191,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                 const enableSort = c.enableSort !== false;
                 const enablePagination = c.enablePagination === true;
                 const freezeHeader = c.freezeHeader !== false;
+                const freezeFirstColumn = c.freezeFirstColumn === true;
                 const pageSize = Math.max(1, Number(c.pageSize || 10));
                 const conditionalRules = c.conditionalRules;
 
@@ -1782,7 +2226,16 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                                                 whiteSpace: 'nowrap',
                                                 overflow: 'hidden',
                                                 textOverflow: 'ellipsis',
-                                                ...(freezeHeader ? { position: 'sticky', top: 0, zIndex: 2 } : {}),
+                                                ...(freezeHeader ? { position: 'sticky', top: 0, zIndex: 3 } : {}),
+                                                ...(freezeFirstColumn && i === 0
+                                                    ? {
+                                                        position: 'sticky',
+                                                        left: 0,
+                                                        zIndex: freezeHeader ? 5 : 2,
+                                                        background: headerBackground,
+                                                        boxShadow: `1px 0 0 ${borderColor}`,
+                                                    }
+                                                    : {}),
                                             }}>
                                                 <button
                                                     type="button"
@@ -1825,21 +2278,35 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                             <tbody>
                                 {pageRows.map((row, rowIndex) => (
                                     <tr key={rowIndex} style={{ background: rowIndex % 2 === 0 ? oddRowBackground : evenRowBackground }}>
-                                        {displayHeader.map((_, colIndex) => (
-                                            <td key={colIndex} style={{
-                                                color: resolveTableConditionalStyle(conditionalRules, colIndex, row[colIndex]).color || bodyColor,
-                                                background: resolveTableConditionalStyle(conditionalRules, colIndex, row[colIndex]).background,
-                                                borderBottom: '1px solid ' + borderColor,
-                                                borderRight: colIndex < displayHeader.length - 1 ? '1px solid ' + borderColor : 'none',
-                                                padding: '8px 10px',
-                                                textAlign: columnMeta[colIndex]?.align || 'left',
-                                                whiteSpace: 'nowrap',
-                                                overflow: 'hidden',
-                                                textOverflow: 'ellipsis',
-                                            }}>
-                                                {row[colIndex] ?? ''}
-                                            </td>
-                                        ))}
+                                        {displayHeader.map((_, colIndex) => {
+                                            const conditional = resolveTableConditionalStyle(conditionalRules, colIndex, row[colIndex]);
+                                            const rowBackground = rowIndex % 2 === 0 ? oddRowBackground : evenRowBackground;
+                                            const cellBackground = conditional.background || rowBackground;
+                                            return (
+                                                <td key={colIndex} style={{
+                                                    color: conditional.color || bodyColor,
+                                                    background: cellBackground,
+                                                    borderBottom: '1px solid ' + borderColor,
+                                                    borderRight: colIndex < displayHeader.length - 1 ? '1px solid ' + borderColor : 'none',
+                                                    padding: '8px 10px',
+                                                    textAlign: columnMeta[colIndex]?.align || 'left',
+                                                    whiteSpace: 'nowrap',
+                                                    overflow: 'hidden',
+                                                    textOverflow: 'ellipsis',
+                                                    ...(freezeFirstColumn && colIndex === 0
+                                                        ? {
+                                                            position: 'sticky',
+                                                            left: 0,
+                                                            zIndex: 1,
+                                                            boxShadow: `1px 0 0 ${borderColor}`,
+                                                            background: cellBackground,
+                                                        }
+                                                        : {}),
+                                                }}>
+                                                    {row[colIndex] ?? ''}
+                                                </td>
+                                            );
+                                        })}
                                     </tr>
                                 ))}
                             </tbody>
@@ -1997,12 +2464,14 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
         mapDrillRegion,
         tableSort,
         tablePage,
+        filterInputDraft,
         runtime.values,
         runtime,
         runtimePlugin,
     ]);
 
     return (
+        !visibleByVariableRule ? null : (
         <div style={{ width: '100%', height: '100%', overflow: 'hidden', position: 'relative' }}>
             {content}
             {/* Drill-down breadcrumb overlay */}
@@ -2024,7 +2493,15 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                                 ) : (
                                     <span
                                         style={{ color: t.breadcrumb.linkColor, cursor: 'pointer' }}
-                                        onClick={() => drillState.handleRollUp(crumb.depth)}
+                                        onClick={() => {
+                                            runtime.trackEvent({
+                                                kind: 'drill-up',
+                                                key: 'drillDepth',
+                                                value: String(crumb.depth),
+                                                source: `drill:${component.id}`,
+                                            });
+                                            drillState.handleRollUp(crumb.depth);
+                                        }}
                                     >
                                         {crumb.label}
                                     </span>
@@ -2073,7 +2550,8 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                 }} title="插件未加载，已使用基础组件渲染">
                     插件未加载，已降级
                 </div>
-            )}
-        </div>
+                )}
+            </div>
+        )
     );
 });

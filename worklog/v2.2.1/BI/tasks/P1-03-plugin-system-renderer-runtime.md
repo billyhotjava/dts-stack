@@ -50,6 +50,10 @@
   - 新增插件目录 README 与示例适配器（KPI/趋势/表格）。
   - 路径：`source/dts-analytics-webapp/modern/src/pages/screens/plugins/README.md`
   - 路径：`source/dts-analytics-webapp/modern/src/pages/screens/plugins/builtinPluginAdapters.tsx`
+  - 新增插件脚手架命令：
+    - `pnpm scaffold:screen-plugin -- --plugin-id <id> --component-id <id> --component-name <name>`
+    - 自动生成 `plugins/custom/*.tsx` 适配器模板与 `.manifest.json` 草稿。
+  - 路径：`source/dts-analytics-webapp/modern/scripts/scaffold-screen-plugin.mjs`
 - 清单协议增强：
   - `screen-plugins` 清单增加 `propertySchema/dataContract`；
   - Demo 插件新增 `table-matrix` 组件。
@@ -65,3 +69,22 @@
 - 插件清单加载统一化：
   - 新增 `manifestLoader` 作为共享加载器（缓存 + 并发复用）；
   - 组件库与运行时插件注册共用同一清单来源，减少重复请求与状态不一致。
+- 自定义插件自动发现（2026-02-15）：
+  - 新增 `plugins/custom/*.tsx` 自动扫描并按文件名 `{pluginId}__{componentId}.tsx` 注册；
+  - 运行时优先按后端清单匹配插件，再自动加载自定义适配器，无需手工改内置映射表；
+  - 脚手架生成模板已统一导出 `createPlugin(pluginId, componentId, version)`，可与清单版本自动对齐。
+- 清单加载容灾增强（2026-02-16）：
+  - `manifestLoader` 在远端 `screen-plugins` 接口失败时，自动降级到本地 `plugins/custom/*.manifest.json`；
+  - 支持本地清单单文件多插件格式（`{ plugins: [...] }`）；
+  - 本地清单中的同名组件定义可覆盖远端定义，便于快速联调；
+  - 现场后端不可达或联调阶段，组件库与运行时仍可使用本地插件清单继续开发与验收。
+- 插件清单校验脚本（2026-02-17）：
+  - 新增 `pnpm validate:screen-plugins`，校验 `plugins/custom/*.manifest.json`；
+  - 覆盖插件/组件 ID 规范、版本 semver、运行时组件 ID 重复、默认宽高缺失告警；
+  - 可直接接入 CI 做插件接入门禁，降低“脏清单”导致的运行时故障。
+- 清单加载器运行时校验增强（2026-02-17）：
+  - `manifestLoader` 增加远端/本地清单规范化：
+    - 非法插件 ID/组件 ID/数据源 ID 直接跳过；
+    - 插件组件与数据源重复 ID 自动去重并告警；
+    - 插件版本非 semver 给出警告但不阻断加载；
+  - 降低“远端返回脏清单”导致组件库与运行时崩溃风险。

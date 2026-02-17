@@ -46,3 +46,12 @@
   - 新增前端查询调度器（并发上限、超时保护、可重试错误退避重试）；
   - `useCardDataSource` 统一接入调度器，覆盖 `card/sql/dataset/api`；
   - 增加请求序列保护，避免慢请求回写覆盖新请求结果（stale response 覆盖问题）。
+- DataFrame 归一化补强（2026-02-16）：
+  - `useCardDataSource.toCardData` 新增统一列模型归一化（兼容 `cols`、`results_metadata.columns`、对象行推导）；
+  - 统一行模型归一化（兼容二维数组、对象数组、标量数组）；
+  - 各类数据源输出继续收敛到同一 `CardData(rows, cols)` 协议，减少渲染分支差异。
+- `metric` 数据源链路补齐（2026-02-16）：
+  - 属性面板新增 `Metric 语义模式` 类型入口（`cardId + metricId/version + 参数绑定 + 刷新频率`）；
+  - `useCardDataSource` 新增 `metric` 执行分支，统一调用 `queryCard + semantic`；
+  - 补齐 `metric` 缓存键策略（含 `cardId/metricId/metricVersion/params/context`），避免不同口径混用缓存。
+  - 修复运行时变量注入遗漏：`ComponentRenderer` 已将 `metricConfig.parameterBindings` 纳入参数解析链路，确保全局变量能正确传入语义查询。

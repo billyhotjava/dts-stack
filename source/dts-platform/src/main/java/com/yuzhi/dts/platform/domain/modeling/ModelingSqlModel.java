@@ -7,6 +7,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.io.Serializable;
+import java.time.Instant;
 import java.util.UUID;
 
 @Entity
@@ -62,6 +63,15 @@ public class ModelingSqlModel extends AbstractAuditingEntity<UUID> implements Se
 
     @Column(name = "owner_dept", length = 64)
     private String ownerDept;
+
+    @Column(name = "semantic_contract", columnDefinition = "text")
+    private String semanticContract;
+
+    @Column(name = "contract_version", length = 64)
+    private String contractVersion;
+
+    @Column(name = "contract_updated_at")
+    private Instant contractUpdatedAt;
 
     @Override
     public UUID getId() {
@@ -190,5 +200,29 @@ public class ModelingSqlModel extends AbstractAuditingEntity<UUID> implements Se
 
     public void setOwnerDept(String ownerDept) {
         this.ownerDept = ownerDept;
+    }
+
+    public String getSemanticContract() {
+        return semanticContract;
+    }
+
+    public void setSemanticContract(String semanticContract) {
+        this.semanticContract = semanticContract;
+    }
+
+    public String getContractVersion() {
+        return contractVersion;
+    }
+
+    public void setContractVersion(String contractVersion) {
+        this.contractVersion = contractVersion;
+    }
+
+    public Instant getContractUpdatedAt() {
+        return contractUpdatedAt;
+    }
+
+    public void setContractUpdatedAt(Instant contractUpdatedAt) {
+        this.contractUpdatedAt = contractUpdatedAt;
     }
 }

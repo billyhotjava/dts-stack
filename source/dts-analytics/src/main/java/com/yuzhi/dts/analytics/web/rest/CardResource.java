@@ -153,6 +153,7 @@ public class CardResource {
         return ResponseEntity.ok(toCardResponse(card, resultMetadata, false));
     }
 
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     @GetMapping(path = "/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> get(@PathVariable("id") long id, HttpServletRequest request) {
         Optional<AnalyticsUser> user = MetabaseAuth.currentUser(sessionService, request);

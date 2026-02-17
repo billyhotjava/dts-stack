@@ -9,13 +9,11 @@ import com.yuzhi.dts.platform.repository.service.InfraDataSourceRepository;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.modeling.DataStandardSecurity;
 import com.yuzhi.dts.platform.service.modeling.ModelingSqlModelService;
-import com.yuzhi.dts.platform.service.modeling.ModelingSqlProjectImportService;
 import com.yuzhi.dts.platform.service.modeling.ModelingSqlModelService.SqlModelDto;
+import com.yuzhi.dts.platform.service.modeling.ModelingSqlModelService.SqlModelContractImpact;
 import com.yuzhi.dts.platform.service.modeling.ModelingSqlModelService.SqlModelOdsGenerateRequest;
 import com.yuzhi.dts.platform.service.modeling.ModelingSqlModelService.SqlModelOdsGenerateResult;
 import com.yuzhi.dts.platform.service.modeling.ModelingSqlModelService.SqlModelRequest;
-import com.yuzhi.dts.platform.service.modeling.ModelingSqlProjectImportService.SqlModelProjectImportRequest;
-import com.yuzhi.dts.platform.service.modeling.ModelingSqlProjectImportService.SqlModelProjectImportResult;
 import com.yuzhi.dts.platform.web.rest.ApiResponses;
 import com.yuzhi.dts.platform.web.rest.ApiResponse;
 import jakarta.validation.Valid;
@@ -58,7 +56,6 @@ public class ModelingSqlModelResource {
     private static final Logger LOG = LoggerFactory.getLogger(ModelingSqlModelResource.class);
 
     private final ModelingSqlModelService sqlModelService;
-    private final ModelingSqlProjectImportService sqlProjectImportService;
     private final ModelingSqlModelRepository sqlModelRepository;
     private final InfraOdsTableMappingRepository odsTableMappingRepository;
     private final CatalogDatasetRepository datasetRepository;
@@ -68,7 +65,6 @@ public class ModelingSqlModelResource {
 
     public ModelingSqlModelResource(
         ModelingSqlModelService sqlModelService,
-        ModelingSqlProjectImportService sqlProjectImportService,
         ModelingSqlModelRepository sqlModelRepository,
         InfraOdsTableMappingRepository odsTableMappingRepository,
         CatalogDatasetRepository datasetRepository,
@@ -77,7 +73,6 @@ public class ModelingSqlModelResource {
         DataStandardSecurity security
     ) {
         this.sqlModelService = sqlModelService;
-        this.sqlProjectImportService = sqlProjectImportService;
         this.sqlModelRepository = sqlModelRepository;
         this.odsTableMappingRepository = odsTableMappingRepository;
         this.datasetRepository = datasetRepository;
@@ -115,6 +110,16 @@ public class ModelingSqlModelResource {
         List<Map<String, Object>> columns = sqlModelService.listColumns(id, activeDept);
         auditService.audit("READ", "modeling.sql-model.columns", id.toString());
         return ApiResponses.ok(columns);
+    }
+
+    @GetMapping("/{id}/contract-impact")
+    public ApiResponse<SqlModelContractImpact> contractImpact(
+        @PathVariable UUID id,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        SqlModelContractImpact impact = sqlModelService.getContractImpact(id, activeDept);
+        auditService.audit("READ", "modeling.sql-model.contract-impact", id.toString());
+        return ApiResponses.ok(impact);
     }
 
     @PostMapping
@@ -162,51 +167,12 @@ public class ModelingSqlModelResource {
             sqlText,
             enabled,
             status,
-            ownerDept
+            ownerDept,
+            null
         );
         SqlModelDto dto = sqlModelService.importFromFiles(request, sqlText, csvText, activeDept);
         auditService.audit("IMPORT", "modeling.sql-model", dto.id().toString());
         return ApiResponses.ok(dto);
-    }
-
-    @PostMapping(value = "/import-project", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
-    public ApiResponse<SqlModelProjectImportResult> importProject(
-        @RequestParam UUID planId,
-        @RequestParam(value = "sourceDataSourceId", required = false) UUID sourceDataSourceId,
-        @RequestParam(value = "onConflict", required = false, defaultValue = "skip") String onConflict,
-        @RequestParam(value = "materialized", required = false) String materialized,
-        @RequestParam(value = "tags", required = false) String tags,
-        @RequestParam(value = "status", required = false) String status,
-        @RequestParam(value = "enabled", required = false) Boolean enabled,
-        @RequestParam(value = "ownerDept", required = false) String ownerDept,
-        @RequestParam(value = "dryRun", required = false) Boolean dryRun,
-        @RequestParam("zip") MultipartFile zipFile,
-        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
-    ) {
-        if (zipFile == null || zipFile.isEmpty()) {
-            throw new IllegalArgumentException("ZIP 文件不能为空");
-        }
-        byte[] zipBytes;
-        try {
-            zipBytes = zipFile.getBytes();
-        } catch (Exception ex) {
-            throw new IllegalArgumentException("读取 ZIP 文件失败");
-        }
-        SqlModelProjectImportRequest request = new SqlModelProjectImportRequest(
-            planId,
-            sourceDataSourceId,
-            onConflict,
-            materialized,
-            tags,
-            status,
-            enabled,
-            ownerDept,
-            dryRun
-        );
-        SqlModelProjectImportResult result = sqlProjectImportService.importProjectZip(request, zipBytes, zipFile.getOriginalFilename(), activeDept);
-        auditService.audit("IMPORT", "modeling.sql-model.project", String.valueOf(planId));
-        return ApiResponses.ok(result);
     }
 
     @PostMapping("/generate-from-ods")

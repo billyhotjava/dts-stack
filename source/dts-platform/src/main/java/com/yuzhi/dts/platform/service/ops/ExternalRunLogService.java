@@ -160,8 +160,16 @@ public class ExternalRunLogService {
             if (startedAt == null) {
                 startedAt = parseInstant(run.get("logical_date"));
             }
+            Map<String, Object> existingMetrics = repository
+                .findFirstByEntryKeyIgnoreCaseAndExternalRunId(entryKey, externalRunId)
+                .map(log -> parseJsonMap(log.getMetricsJson()))
+                .orElse(Map.of());
             Map<String, Object> metrics = new LinkedHashMap<>();
             metrics.put("dagId", dagId);
+            Object existingConf = existingMetrics.get("conf");
+            if (existingConf != null) {
+                metrics.put("conf", existingConf);
+            }
             metrics.put("run", run);
             upsertExternalRun(
                 entryKey,
@@ -335,6 +343,22 @@ public class ExternalRunLogService {
         } catch (JsonProcessingException ex) {
             LOG.warn("Failed to serialize metrics json: {}", ex.getMessage());
             return null;
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> parseJsonMap(String raw) {
+        if (!StringUtils.hasText(raw)) {
+            return Map.of();
+        }
+        try {
+            Object parsed = objectMapper.readValue(raw, Object.class);
+            if (parsed instanceof Map<?, ?> map) {
+                return (Map<String, Object>) map;
+            }
+            return Map.of();
+        } catch (Exception ex) {
+            return Map.of();
         }
     }
 }

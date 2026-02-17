@@ -6,6 +6,7 @@ import { DeviceModeSwitcher } from './components/DeviceModeSwitcher';
 import type { ScreenConfig, ScreenTheme } from './types';
 import { resolveScreenTheme } from './screenThemes';
 import { normalizeScreenConfig } from './specV2';
+import { buildComponentMap, isComponentEffectivelyVisible } from './componentHierarchy';
 import {
     isVisibleForDevice,
     parseForcedDeviceModeFromWindow,
@@ -73,9 +74,12 @@ export default function ScreenPreviewPage() {
     const components = useMemo(() => screen?.components || [], [screen]);
 
     const visibleSortedComponents = useMemo(
-        () => components
-            .filter(c => c.visible && isVisibleForDevice(c, deviceMode))
-            .sort((a, b) => a.zIndex - b.zIndex),
+        () => {
+            const componentMap = buildComponentMap(components);
+            return components
+                .filter((c) => c.visible && isVisibleForDevice(c, deviceMode) && isComponentEffectivelyVisible(c, componentMap))
+                .sort((a, b) => a.zIndex - b.zIndex);
+        },
         [components, deviceMode],
     );
 

@@ -3,6 +3,7 @@ import { useDrop } from 'react-dnd';
 import { useScreen } from '../ScreenContext';
 import { CanvasComponent } from './CanvasComponent';
 import type { ComponentItem, ScreenComponent } from '../types';
+import { buildComponentMap, isComponentEffectivelyVisible } from '../componentHierarchy';
 
 function generateId(): string {
     return `comp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -27,17 +28,16 @@ export function DesignerCanvas() {
                 const dropX = x - item.defaultWidth / 2;
                 const dropY = y - item.defaultHeight / 2;
 
-                const targetContainer = item.type === 'container'
-                    ? null
-                    : [...config.components]
-                        .filter((comp) => comp.visible && comp.type === 'container')
-                        .sort((a, b) => b.zIndex - a.zIndex)
-                        .find((container) => (
-                            x >= container.x
-                            && x <= container.x + container.width
-                            && y >= container.y
-                            && y <= container.y + container.height
-                        ));
+                const visibilityMap = buildComponentMap(config.components);
+                const targetContainer = [...config.components]
+                    .filter((comp) => comp.visible && comp.type === 'container' && isComponentEffectivelyVisible(comp, visibilityMap))
+                    .sort((a, b) => b.zIndex - a.zIndex)
+                    .find((container) => (
+                        x >= container.x
+                        && x <= container.x + container.width
+                        && y >= container.y
+                        && y <= container.y + container.height
+                    ));
 
                 const boundedX = targetContainer
                     ? Math.max(
@@ -113,17 +113,20 @@ export function DesignerCanvas() {
                 >
                     {showGrid && <div className="canvas-grid" />}
 
-                    {config.components
-                        .filter((comp) => comp.visible)
-                        .sort((a, b) => a.zIndex - b.zIndex)
-                        .map((component) => (
-                            <CanvasComponent
-                                key={component.id}
-                                component={component}
-                                isSelected={selectedIds.includes(component.id)}
-                                theme={config.theme}
-                            />
-                        ))}
+                    {(() => {
+                        const componentMap = buildComponentMap(config.components);
+                        return config.components
+                            .filter((comp) => comp.visible && isComponentEffectivelyVisible(comp, componentMap))
+                            .sort((a, b) => a.zIndex - b.zIndex)
+                            .map((component) => (
+                                <CanvasComponent
+                                    key={component.id}
+                                    component={component}
+                                    isSelected={selectedIds.includes(component.id)}
+                                    theme={config.theme}
+                                />
+                            ));
+                    })()}
 
                     {snapGuides.x.map((x, idx) => (
                         <div

@@ -8,6 +8,7 @@ import { ScreenRuntimeProvider } from './ScreenRuntimeContext';
 import type { ScreenConfig, ScreenTheme } from './types';
 import { resolveScreenTheme } from './screenThemes';
 import { normalizeScreenConfig } from './specV2';
+import { buildComponentMap, isComponentEffectivelyVisible } from './componentHierarchy';
 import {
     isVisibleForDevice,
     parseForcedDeviceModeFromWindow,
@@ -97,6 +98,7 @@ export default function PublicScreenPage() {
     const screenTheme = resolveScreenTheme(rawTheme, screen.backgroundColor);
     const globalVariables = screen.globalVariables ?? [];
     const components = screen.components || [];
+    const componentMap = buildComponentMap(components);
 
     const outerBg = screenTheme === 'glacier' ? '#e5e7eb' : '#000';
 
@@ -133,7 +135,7 @@ export default function PublicScreenPage() {
                     }}
                 >
                     {components
-                        .filter(c => c.visible && isVisibleForDevice(c, deviceMode))
+                        .filter((c) => c.visible && isVisibleForDevice(c, deviceMode) && isComponentEffectivelyVisible(c, componentMap))
                         .sort((a, b) => a.zIndex - b.zIndex)
                         .map((component) => (
                             <div

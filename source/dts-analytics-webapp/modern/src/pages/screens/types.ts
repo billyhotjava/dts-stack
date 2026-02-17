@@ -24,6 +24,9 @@ export interface ComponentInteractionMapping {
 export interface ComponentInteractionConfig {
     enabled: boolean;
     mappings: ComponentInteractionMapping[];
+    jumpEnabled?: boolean;
+    jumpUrlTemplate?: string;
+    jumpOpenMode?: 'self' | 'new-tab';
 }
 
 export interface DrillLevel {
@@ -84,6 +87,8 @@ export type ComponentType =
     | 'markdown-text'
     | 'number-card'
     | 'progress-bar'
+    | 'tab-switcher'
+    | 'carousel'
     | 'countdown'
     | 'marquee'
     | 'shape'
@@ -141,6 +146,7 @@ export interface DataSourceConfig {
         metricId?: number;
         metricVersion?: string;
         cardId?: number;
+        parameterBindings?: CardParameterBinding[];
     };
     cardConfig?: {
         cardId: number;

@@ -74,14 +74,19 @@ export const syncDbtModels = () => api.post({ url: "/etl/dbt/models/sync" });
 export const getDbtSyncStatus = () => api.get({ url: "/etl/dbt/sync/status" });
 export const listDbtRuns = (limit = 20) => api.get({ url: "/etl/dbt/runs", params: { limit } });
 export const triggerDbtRun = (data: any) => api.post({ url: "/etl/dbt/run", data });
+export const triggerDbtCompile = (data?: any) => api.post({ url: "/etl/dbt/compile", data });
+export const triggerDbtTest = (data?: any) => api.post({ url: "/etl/dbt/test", data });
+export const triggerDbtDocs = (data?: any) => api.post({ url: "/etl/dbt/docs", data });
+export const checkDbtQualityGate = (data?: any) => api.post({ url: "/etl/dbt/quality-gate/check", data });
+export const checkDbtReleaseGate = (data?: any) => api.post({ url: "/etl/dbt/release-gate/check", data });
 export const listSqlModels = (params?: any) => api.get({ url: "/modeling/sql-models", params });
 export const getSqlModel = (id: string) => api.get({ url: `/modeling/sql-models/${id}` });
 export const listSqlModelColumns = (id: string) => api.get({ url: `/modeling/sql-models/${id}/columns` });
+export const getSqlModelContractImpact = (id: string) => api.get({ url: `/modeling/sql-models/${id}/contract-impact` });
 export const createSqlModel = (data: any) => api.post({ url: "/modeling/sql-models", data });
 export const updateSqlModel = (id: string, data: any) => api.put({ url: `/modeling/sql-models/${id}`, data });
 export const deleteSqlModel = (id: string) => api.delete({ url: `/modeling/sql-models/${id}` });
 export const importSqlModel = (data: FormData) => api.post({ url: "/modeling/sql-models/import", data });
-export const importSqlProjectZip = (data: FormData) => api.post({ url: "/modeling/sql-models/import-project", data });
 export const generateSqlModelsFromOds = (data: any) => api.post({ url: "/modeling/sql-models/generate-from-ods", data });
 export const listDbtSources = (params?: { keyword?: string; sourceDataSourceId?: string }) =>
 	api.get({ url: "/modeling/sql-models/dbt/sources", params });
@@ -356,8 +361,6 @@ export const deleteResultSet = (id: string) => api.delete({ url: `/explore/resul
 
 // Explore (CRUD for generated entities)
 export const listSqlConnections = () => api.get({ url: "/sql-connections" });
-export const listQueryWorkspaces = () => api.get({ url: "/query-workspaces" });
-export const listQueryExecutions = () => api.get({ url: "/explore/query-executions" });
 export const listResultSets = () => api.get({ url: "/explore/result-sets" });
 export const cleanupExpiredResultSets = () => api.post({ url: "/explore/result-sets/cleanup" });
 export const recordResultSetCopy = (id: string, data?: Record<string, unknown>) =>

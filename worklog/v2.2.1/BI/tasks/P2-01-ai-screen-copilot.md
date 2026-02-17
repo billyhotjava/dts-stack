@@ -55,6 +55,31 @@
 - 已验证：
   - `mvn -f source/dts-analytics/pom.xml -DskipTests clean compile` 通过。
   - `pnpm -C source/dts-analytics-webapp/modern typecheck` 与 `build` 通过。
+- 增强（2026-02-16）：
+  - `ScreenAiGenerationService.generate/revise` 新增 `intent/queryRecommendations/vizRecommendations` 输出：
+    - `intent`: 领域、时间范围、粒度、指标、维度、筛选器识别结果；
+    - `queryRecommendations`: 面向 `q-kpi/q-trend/q-compare/q-share/q-detail` 的建议查询规范；
+    - `vizRecommendations`: 查询到组件类型映射建议（NL2Viz 首版）。
+  - `revise` 新增自然语言执行能力：
+    - `改成4K/1080P`
+    - `放大字体/缩小字体`
+    - `增加指标卡`
+    - `删除明细表/表格`
+    - `刷新30秒/5分钟`（自动解析刷新间隔）
+  - 前端 `ScreensPage` AI 弹窗新增意图、查询建议、图表建议展示，便于人工确认和继续编辑。
+  - 前端 AI 弹窗新增“复制建议”按钮：
+    - 一键复制 `intent/queryRecommendations/vizRecommendations/quality/actions` JSON；
+    - 便于交给数据建模/接口同学快速落地绑定。
+- 增强（2026-02-17）：
+  - `revise` 新增“Tab 场景切换”指令能力（如：`加一个tab切换场景/分场景展示`）：
+    - 自动补齐 `tabKey` 全局变量；
+    - 自动新增或更新 `tab-switcher` 组件；
+    - 自动为图表/表格类组件生成 `visibilityRule*` 显隐规则，实现一键场景切换。
 - 待继续：
   - NL2SQL / 指标语义模型联动（当前仍为启发式屏稿调整）。
-  - 多轮会话上下文（当前为单轮 prompt + screenSpec 增量）。
+  - 多轮会话上下文（2026-02-15 已完成首版）：
+    - 后端 `POST /api/screens/ai/revise` 支持可选 `context[]`；
+    - `ScreenAiGenerationService.revise` 支持结合历史上下文 + 当前指令做启发式解析；
+    - 响应新增 `contextCount`，前端预览卡显示本次使用上下文条数；
+    - 前端 AI 弹窗新增上下文历史区（最近 12 条），支持清空；
+    - 每次优化调用自动携带最近 8 条上下文，降低“每轮从零提示”导致的结果漂移。

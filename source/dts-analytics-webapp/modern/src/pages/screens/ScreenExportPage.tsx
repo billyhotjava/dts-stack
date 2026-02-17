@@ -4,7 +4,7 @@ import { analyticsApi, HttpError } from '../../api/analyticsApi';
 import { ComponentRenderer } from './components/ComponentRenderer';
 import { ScreenRuntimeProvider } from './ScreenRuntimeContext';
 import type { DeviceMode } from './deviceMode';
-import { isVisibleForDevice } from './deviceMode';
+import { isVisibleForDevice, resolveDeviceModeByViewport } from './deviceMode';
 import { normalizeScreenConfig, buildScreenPayload } from './specV2';
 import { resolveScreenTheme } from './screenThemes';
 import type { ScreenConfig, ScreenTheme } from './types';
@@ -71,6 +71,8 @@ export default function ScreenExportPage() {
     const [error, setError] = useState<string | null>(null);
     const [requestId, setRequestId] = useState<string | null>(null);
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+    const [specDigest, setSpecDigest] = useState<string | null>(null);
+    const [effectiveMode, setEffectiveMode] = useState<string>('draft');
     const [effectiveDevice, setEffectiveDevice] = useState<DeviceMode>('pc');
     const [watermark, setWatermark] = useState<{ enabled: boolean; text: string }>({
         enabled: false,
@@ -85,6 +87,10 @@ export default function ScreenExportPage() {
     const mode = useMemo(() => parseMode(query.get('mode')), [query]);
     const forcedDevice = useMemo(() => parseDevice(query.get('device')), [query]);
     const delayMs = useMemo(() => parseDelayMs(query.get('delayMs')), [query]);
+
+    useEffect(() => {
+        setEffectiveMode(mode);
+    }, [mode]);
 
     useEffect(() => {
         if (!id) {
@@ -104,9 +110,13 @@ export default function ScreenExportPage() {
                     format,
                     mode,
                     ...(forcedDevice ? { device: forcedDevice } : {}),
+                    includeScreenSpec: true,
                 });
                 if (cancelled) return;
                 setRequestId(prepared.requestId ?? null);
+                setSpecDigest(String(prepared.specDigest || '').trim() || null);
+                const resolvedMode = String(prepared.resolvedMode || prepared.mode || mode || 'draft').trim().toLowerCase();
+                setEffectiveMode(resolvedMode || 'draft');
                 const rawPreview = String(prepared.previewUrl || '').trim();
                 if (rawPreview.length > 0) {
                     const normalizedPreview = rawPreview.startsWith('/analytics')
@@ -121,9 +131,21 @@ export default function ScreenExportPage() {
                     text: String(prepared.policy?.watermarkText || '').trim(),
                 });
                 setStatusText('正在加载运行态画布...');
+                if (prepared.screenSpec && typeof prepared.screenSpec === 'object') {
+                    const normalized = normalizeScreenConfig(prepared.screenSpec, { id });
+                    if (normalized.warnings.length > 0) {
+                        console.warn('[screen-export] prepared snapshot normalized warnings:', normalized.warnings);
+                    }
+                    if (!cancelled) {
+                        setScreen(normalized.config);
+                        setEffectiveDevice(forcedDevice || resolveDeviceModeByViewport(window.innerWidth));
+                        setStatusText('正在渲染导出内容...');
+                    }
+                    return;
+                }
 
                 const detail = await analyticsApi.getScreen(id, {
-                    mode,
+                    mode: resolvedMode === 'published' ? 'published' : mode,
                     fallbackDraft: true,
                 });
                 if (cancelled) return;
@@ -132,7 +154,7 @@ export default function ScreenExportPage() {
                     console.warn('[screen-export] normalized warnings:', normalized.warnings);
                 }
                 setScreen(normalized.config);
-                setEffectiveDevice(forcedDevice || 'pc');
+                setEffectiveDevice(forcedDevice || resolveDeviceModeByViewport(window.innerWidth));
                 setStatusText('正在渲染导出内容...');
             } catch (e) {
                 if (cancelled) return;
@@ -155,8 +177,8 @@ export default function ScreenExportPage() {
             return previewUrl;
         }
         const fallbackParams = new URLSearchParams();
-        if (mode !== 'draft') {
-            fallbackParams.set('mode', mode);
+        if (effectiveMode !== 'draft') {
+            fallbackParams.set('mode', effectiveMode);
         }
         if (forcedDevice) {
             fallbackParams.set('device', forcedDevice);
@@ -213,8 +235,10 @@ export default function ScreenExportPage() {
                 status,
                 format,
                 mode,
+                resolvedMode: effectiveMode,
                 device: effectiveDevice,
                 requestId: requestId || undefined,
+                specDigest: specDigest || undefined,
                 message,
             });
         } catch {
@@ -375,8 +399,9 @@ export default function ScreenExportPage() {
                 }}
             >
                 <div style={{ marginBottom: 10, fontSize: 12, opacity: 0.92 }}>
-                    导出任务：`{format.toUpperCase()}` | 模式：`{mode}` | 设备：`{effectiveDevice}`
+                    导出任务：`{format.toUpperCase()}` | 模式：`{effectiveMode}` | 设备：`{effectiveDevice}`
                     {requestId ? ` | requestId: ${requestId}` : ''}
+                    {specDigest ? ` | spec: ${specDigest.slice(0, 12)}` : ''}
                 </div>
                 <div style={{ marginBottom: 12, fontSize: 13 }}>{error ? `错误：${error}` : statusText}</div>
                 {error && !loading && (

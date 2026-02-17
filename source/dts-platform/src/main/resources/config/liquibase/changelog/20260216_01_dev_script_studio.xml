@@ -1,0 +1,161 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260216_01_dev_script_asset_table" author="platform">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="dev_script_asset"/>
+            </not>
+        </preConditions>
+        <createTable tableName="dev_script_asset">
+            <column name="id" type="uuid">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="name" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="description" type="text"/>
+            <column name="script_type" type="varchar(32)" defaultValue="PYTHON">
+                <constraints nullable="false"/>
+            </column>
+            <column name="status" type="varchar(32)" defaultValue="DRAFT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="latest_version_no" type="int" defaultValueNumeric="1">
+                <constraints nullable="false"/>
+            </column>
+            <column name="owner_dept" type="varchar(64)"/>
+            <column name="enabled" type="boolean" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_by" type="varchar(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+
+        <createIndex tableName="dev_script_asset" indexName="idx_dev_script_asset_status_modified">
+            <column name="status"/>
+            <column name="last_modified_date"/>
+        </createIndex>
+        <createIndex tableName="dev_script_asset" indexName="idx_dev_script_asset_owner_dept">
+            <column name="owner_dept"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="20260216_01_dev_script_version_table" author="platform">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="dev_script_version"/>
+            </not>
+        </preConditions>
+        <createTable tableName="dev_script_version">
+            <column name="id" type="uuid">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="asset_id" type="uuid">
+                <constraints nullable="false"/>
+            </column>
+            <column name="version_no" type="int">
+                <constraints nullable="false"/>
+            </column>
+            <column name="status" type="varchar(32)" defaultValue="DRAFT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="content" type="text">
+                <constraints nullable="false"/>
+            </column>
+            <column name="change_summary" type="varchar(1024)"/>
+            <column name="created_by" type="varchar(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+
+        <addUniqueConstraint
+            tableName="dev_script_version"
+            columnNames="asset_id,version_no"
+            constraintName="uk_dev_script_version_asset_version"/>
+
+        <addForeignKeyConstraint
+            baseTableName="dev_script_version"
+            baseColumnNames="asset_id"
+            referencedTableName="dev_script_asset"
+            referencedColumnNames="id"
+            constraintName="fk_dev_script_version_asset"
+            onDelete="CASCADE"/>
+
+        <createIndex tableName="dev_script_version" indexName="idx_dev_script_version_asset_created">
+            <column name="asset_id"/>
+            <column name="created_date"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="20260216_01_dev_script_run_table" author="platform">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="dev_script_run"/>
+            </not>
+        </preConditions>
+        <createTable tableName="dev_script_run">
+            <column name="id" type="uuid">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="asset_id" type="uuid">
+                <constraints nullable="false"/>
+            </column>
+            <column name="version_no" type="int">
+                <constraints nullable="false"/>
+            </column>
+            <column name="execution_id" type="varchar(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="status" type="varchar(32)" defaultValue="PENDING">
+                <constraints nullable="false"/>
+            </column>
+            <column name="failure_type" type="varchar(64)"/>
+            <column name="triggered_by" type="varchar(50)"/>
+            <column name="started_at" type="timestamp"/>
+            <column name="finished_at" type="timestamp"/>
+            <column name="duration_ms" type="bigint"/>
+            <column name="error_message" type="varchar(1024)"/>
+            <column name="log_text" type="text"/>
+            <column name="created_by" type="varchar(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+
+        <addForeignKeyConstraint
+            baseTableName="dev_script_run"
+            baseColumnNames="asset_id"
+            referencedTableName="dev_script_asset"
+            referencedColumnNames="id"
+            constraintName="fk_dev_script_run_asset"
+            onDelete="CASCADE"/>
+
+        <addUniqueConstraint
+            tableName="dev_script_run"
+            columnNames="execution_id"
+            constraintName="uk_dev_script_run_execution_id"/>
+
+        <createIndex tableName="dev_script_run" indexName="idx_dev_script_run_asset_created">
+            <column name="asset_id"/>
+            <column name="created_date"/>
+        </createIndex>
+        <createIndex tableName="dev_script_run" indexName="idx_dev_script_run_status_created">
+            <column name="status"/>
+            <column name="created_date"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

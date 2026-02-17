@@ -240,6 +240,12 @@ export function QueryDatasetManager() {
 			render: (value) => (typeof value === "number" ? `v${value}` : "-"),
 		},
 		{
+			title: "契约版本",
+			dataIndex: "semanticContractVersion",
+			width: 140,
+			render: (value) => value || "-",
+		},
+		{
 			title: "来源数据源",
 			dataIndex: "sourceDatasourceName",
 			width: 150,

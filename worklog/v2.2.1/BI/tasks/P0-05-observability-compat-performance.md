@@ -46,3 +46,7 @@
   - 构建目标已固定支持 `chrome95`（`vite build` 默认 `LEGACY_BROWSER_BUILD=1`）。
   - 分享链接复制统一切换到 `writeTextToClipboard`（`navigator.clipboard` + `execCommand` fallback），覆盖非安全上下文与旧浏览器策略限制。
   - Modal 层级上调到 `z-index 20000+`，避免设计器高层元素遮挡导致弹窗“点击无响应/不可见”。
+  - 修复实际 token 覆盖问题：`--z-modal-backdrop/--z-modal` 从 `300/400` 调整到 `20000/20001`，并补 `top/right/bottom/left` 定位兜底，解决“变量/缓存观测/合规点击后弹窗不显示”。
+- 查询稳定性补强（2026-02-15）：
+  - `CardResource.get` 明确改为 `@Transactional(propagation = NOT_SUPPORTED)`；
+  - 避免读取卡片元数据时外部数据源异常污染事务状态并触发 `UnexpectedRollbackException`。

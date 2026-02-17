@@ -7,6 +7,7 @@ import com.yuzhi.dts.platform.service.ops.OpsService;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
@@ -47,6 +48,19 @@ public class OpsResource {
         List<Map<String, Object>> list = opsService.listAlerts(limit);
         auditService.audit("READ", "ops.alerts", "count=" + list.size());
         return ApiResponses.ok(list);
+    }
+
+    @GetMapping("/metrics/dev-center")
+    public ApiResponse<Map<String, Object>> devCenterMetrics(
+        @RequestParam(defaultValue = "7") int days,
+        @RequestParam(required = false) String entryKey,
+        @RequestParam(required = false) String ownerDept,
+        @RequestParam(required = false) UUID artifactId,
+        @RequestParam(required = false) String artifactName
+    ) {
+        Map<String, Object> payload = opsService.devCenterMetrics(days, entryKey, ownerDept, artifactId, artifactName);
+        auditService.audit("READ", "ops.metrics.dev-center", "days=" + days);
+        return ApiResponses.ok(payload);
     }
 
     @GetMapping("/backfills")

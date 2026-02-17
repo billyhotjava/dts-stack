@@ -16,6 +16,7 @@ import com.yuzhi.dts.platform.service.sql.dto.SavedQueryRequest;
 import com.yuzhi.dts.platform.service.sql.dto.SavedQueryResponse;
 import com.yuzhi.dts.platform.service.sql.dto.SqlCatalogNode;
 import com.yuzhi.dts.platform.service.sql.dto.SqlCatalogRequest;
+import com.yuzhi.dts.platform.service.sql.dto.SqlResultPageResponse;
 import com.yuzhi.dts.platform.service.sql.dto.SqlStatusResponse;
 import com.yuzhi.dts.platform.service.sql.dto.SqlSubmitRequest;
 import com.yuzhi.dts.platform.service.sql.dto.SqlSubmitResponse;
@@ -95,6 +96,17 @@ public class SqlWorkbenchResource {
     public ApiResponse<SqlStatusResponse> status(@PathVariable UUID id) {
         ApiResponse<SqlStatusResponse> response = ApiResponses.ok(executionService.status(id));
         auditService.audit("READ", "sql.workbench.status", id.toString());
+        return response;
+    }
+
+    @GetMapping("/result-page/{id}")
+    public ApiResponse<SqlResultPageResponse> resultPage(
+        @PathVariable UUID id,
+        @RequestParam(name = "page", required = false) Integer page,
+        @RequestParam(name = "pageSize", required = false) Integer pageSize
+    ) {
+        ApiResponse<SqlResultPageResponse> response = ApiResponses.ok(executionService.resultPage(id, page, pageSize));
+        auditService.audit("READ", "sql.workbench.result-page", id.toString());
         return response;
     }
 

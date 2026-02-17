@@ -287,11 +287,38 @@ export type ScreenAiGenerationRequest = {
 export type ScreenAiRevisionRequest = {
 	prompt: string;
 	screenSpec: Record<string, unknown>;
+	context?: string[];
 };
 
 export type ScreenAiGenerationResponse = {
 	engine?: string;
 	prompt?: string;
+	contextCount?: number;
+	intent?: {
+		domain?: string;
+		timeRange?: string;
+		granularity?: string;
+		metrics?: string[];
+		dimensions?: string[];
+		filters?: string[];
+	};
+	queryRecommendations?: Array<{
+		id?: string;
+		purpose?: string;
+		mode?: string;
+		domain?: string;
+		timeRange?: string;
+		granularity?: string;
+		dimensions?: string[];
+		metrics?: string[];
+		filters?: string[];
+		sqlHint?: string;
+	}>;
+	vizRecommendations?: Array<{
+		queryId?: string;
+		componentType?: string;
+		title?: string;
+	}>;
 	generatedBy?: number | string;
 	generatedAt?: string;
 	actions?: string[];
@@ -421,6 +448,87 @@ export type ScreenIndustryPackValidationResult = {
 	recommendations?: string[];
 };
 
+export type ScreenIndustryPackAuditRow = {
+	id?: number | string;
+	assetType?: string;
+	assetId?: number | string | null;
+	action?: string;
+	actorId?: number | string | null;
+	source?: string;
+	result?: string;
+	requestId?: string;
+	createdAt?: string;
+	details?: Record<string, unknown> | string | null;
+};
+
+export type ScreenIndustryConnectorPlan = {
+	generatedAt?: string;
+	templateCount?: number;
+	jobCount?: number;
+	items?: Array<Record<string, unknown>>;
+};
+
+export type ScreenIndustryConnectorProbe = {
+	generatedAt?: string;
+	summary?: Record<string, unknown>;
+	rows?: Array<Record<string, unknown>>;
+};
+
+export type ScreenIndustryOpsHealth = {
+	generatedAt?: string;
+	summary?: ScreenIndustryOpsHealthSummary;
+	checks?: ScreenIndustryOpsHealthCheck[];
+};
+
+export type ScreenIndustryRuntimeProbe = {
+	generatedAt?: string;
+	summary?: ScreenIndustryRuntimeProbeSummary;
+	rows?: ScreenIndustryRuntimeProbeRow[];
+};
+
+export type ScreenIndustryOpsHealthSummary = {
+	score?: number;
+	deploymentMode?: string;
+	templateCount?: number;
+	listedCount?: number;
+	auditSamples?: number;
+	failedAudits?: number;
+};
+
+export type ScreenIndustryOpsHealthCheck = {
+	id?: string;
+	name?: string;
+	status?: "pass" | "warn" | "fail" | string;
+	message?: string;
+	details?: Record<string, unknown>;
+};
+
+export type ScreenIndustryRuntimeProbeSummary = {
+	total?: number;
+	pass?: number;
+	warn?: number;
+	fail?: number;
+	timeoutMs?: number;
+};
+
+export type ScreenIndustryRuntimeProbeRow = {
+	id?: string;
+	name?: string;
+	host?: string;
+	port?: number;
+	required?: boolean;
+	protocol?: "tcp" | "http" | "https" | "mqtt" | string;
+	path?: string | null;
+	expectedBodyContains?: string | null;
+	url?: string | null;
+	httpStatus?: number | null;
+	bodyMatched?: boolean | null;
+	bodyPreview?: string | null;
+	status?: "pass" | "warn" | "fail" | string;
+	message?: string;
+	latencyMs?: number;
+};
+
 export type ScreenCompliancePolicy = {
 	maskingEnabled?: boolean;
 	watermarkEnabled?: boolean;
@@ -528,6 +636,34 @@ export type ScreenComment = {
 	requestId?: string | null;
 };
 
+export type ScreenCommentChanges = {
+	cursor?: number;
+	sinceId?: number;
+	fullReload?: boolean;
+	waitMs?: number;
+	rows?: ScreenComment[];
+};
+
+export type ScreenCollaborationPresenceRow = {
+	sessionId?: string;
+	userId?: number | string | null;
+	displayName?: string;
+	componentId?: string | null;
+	typing?: boolean;
+	clientType?: string | null;
+	lastSeenAt?: string | null;
+	idleSeconds?: number;
+	mine?: boolean;
+};
+
+export type ScreenCollaborationPresence = {
+	generatedAt?: string;
+	ttlSeconds?: number;
+	meSessionId?: string | null;
+	activeCount?: number;
+	rows?: ScreenCollaborationPresenceRow[];
+};
+
 export type ScreenEditLock = {
 	active?: boolean;
 	screenId?: number | string | null;
@@ -577,6 +713,7 @@ export type ScreenExportPrepareRequest = {
 	format?: "png" | "pdf" | "json" | string;
 	mode?: "draft" | "published" | "preview" | string;
 	device?: "pc" | "tablet" | "mobile" | string;
+	includeScreenSpec?: boolean;
 };
 
 export type ScreenExportPrepareResult = {
@@ -584,9 +721,26 @@ export type ScreenExportPrepareResult = {
 	screenId?: number | string;
 	format?: string;
 	mode?: string;
+	requestedMode?: string;
+	resolvedMode?: string;
 	device?: string | null;
 	requestId?: string;
 	previewUrl?: string;
+	specDigest?: string | null;
+	publishedVersionNo?: number | null;
+	publishedAt?: string | null;
+	screenSpec?: {
+		schemaVersion?: number;
+		name?: string;
+		description?: string | null;
+		width?: number;
+		height?: number;
+		backgroundColor?: string;
+		backgroundImage?: string | null;
+		theme?: string;
+		components?: ScreenComponentData[];
+		globalVariables?: Array<{ key: string; label?: string; type?: string; defaultValue?: string; description?: string }>;
+	};
 	policy?: {
 		policyVersion?: number;
 		exportApprovalRequired?: boolean;
@@ -599,8 +753,10 @@ export type ScreenExportReportRequest = {
 	status: "success" | "failed" | "fallback" | string;
 	format?: "png" | "pdf" | "json" | string;
 	mode?: "draft" | "published" | "preview" | string;
+	resolvedMode?: "draft" | "published" | "preview" | string;
 	device?: "pc" | "tablet" | "mobile" | string;
 	requestId?: string;
+	specDigest?: string;
 	message?: string;
 };
 
@@ -613,6 +769,7 @@ export type ScreenExportReportResult = {
 	device?: string | null;
 	clientRequestId?: string | null;
 	message?: string | null;
+	specDigest?: string | null;
 	requestId?: string;
 	reportedAt?: string;
 };
@@ -903,6 +1060,28 @@ export const analyticsApi = {
 		fetchJson<ScreenIndustryPackPresets>("/analytics/api/screen-packs/presets"),
 	validateScreenIndustryPack: (body: unknown) =>
 		sendJson<ScreenIndustryPackValidationResult>("/analytics/api/screen-packs/validate", body),
+	listScreenIndustryPackAudit: (limit = 100) =>
+		fetchJson<ScreenIndustryPackAuditRow[]>(
+			"/analytics/api/screen-packs/audit?limit=" + encodeURIComponent(String(limit)),
+		),
+	generateScreenIndustryConnectorPlan: (body?: unknown) =>
+		sendJson<ScreenIndustryConnectorPlan>("/analytics/api/screen-packs/connectors/plan", body ?? {}),
+	probeScreenIndustryConnectors: (body?: unknown) =>
+		sendJson<ScreenIndustryConnectorProbe>("/analytics/api/screen-packs/connectors/probe", body ?? {}),
+	getScreenIndustryOpsHealth: (deploymentMode?: string, includeRuntime = false) => {
+		const qs = new URLSearchParams();
+		if (deploymentMode && String(deploymentMode).trim().length > 0) {
+			qs.set("deploymentMode", String(deploymentMode));
+		}
+		if (includeRuntime) {
+			qs.set("includeRuntime", "true");
+		}
+		const query = qs.toString();
+		const suffix = query.length > 0 ? `?${query}` : "";
+		return fetchJson<ScreenIndustryOpsHealth>("/analytics/api/screen-packs/ops/health" + suffix);
+	},
+	probeScreenIndustryRuntime: (body?: unknown) =>
+		sendJson<ScreenIndustryRuntimeProbe>("/analytics/api/screen-packs/ops/runtime-probe", body ?? {}),
 	getScreenCompliancePolicy: () =>
 		fetchJson<ScreenCompliancePolicy>("/analytics/api/screen-compliance/policy"),
 	updateScreenCompliancePolicy: (body: unknown) =>
@@ -1037,6 +1216,52 @@ export const analyticsApi = {
 	listScreenComments: (id: string | number, limit = 200) =>
 		fetchJson<ScreenComment[]>(
 			`/analytics/api/screens/${encodeURIComponent(String(id))}/comments?limit=${encodeURIComponent(String(limit))}`,
+		),
+	listScreenCommentChanges: (id: string | number, sinceId = 0, limit = 200) =>
+		fetchJson<ScreenCommentChanges>(
+			`/analytics/api/screens/${encodeURIComponent(String(id))}/comments/changes`
+			+ `?sinceId=${encodeURIComponent(String(sinceId))}`
+			+ `&limit=${encodeURIComponent(String(limit))}`,
+		),
+	listScreenCommentChangesLive: (id: string | number, sinceId = 0, limit = 200, waitMs = 12000) =>
+		fetchJson<ScreenCommentChanges>(
+			`/analytics/api/screens/${encodeURIComponent(String(id))}/comments/live`
+			+ `?sinceId=${encodeURIComponent(String(sinceId))}`
+			+ `&limit=${encodeURIComponent(String(limit))}`
+			+ `&waitMs=${encodeURIComponent(String(waitMs))}`,
+		),
+	getScreenCollaborationPresence: (id: string | number, ttlSeconds = 45, sessionId?: string) =>
+		fetchJson<ScreenCollaborationPresence>(
+			`/analytics/api/screens/${encodeURIComponent(String(id))}/collaboration/presence`
+			+ `?ttlSeconds=${encodeURIComponent(String(ttlSeconds))}`
+			+ `${sessionId ? `&sessionId=${encodeURIComponent(sessionId)}` : ''}`,
+		),
+	heartbeatScreenCollaborationPresence: (
+		id: string | number,
+		body: {
+			sessionId?: string;
+			componentId?: string | null;
+			typing?: boolean;
+			clientType?: string;
+		},
+		ttlSeconds = 45,
+	) =>
+		sendJson<ScreenCollaborationPresence>(
+			`/analytics/api/screens/${encodeURIComponent(String(id))}/collaboration/presence/heartbeat`
+			+ `?ttlSeconds=${encodeURIComponent(String(ttlSeconds))}`,
+			body ?? {},
+		),
+	leaveScreenCollaborationPresence: (
+		id: string | number,
+		body?: {
+			sessionId?: string;
+		},
+		ttlSeconds = 45,
+	) =>
+		sendJson<ScreenCollaborationPresence>(
+			`/analytics/api/screens/${encodeURIComponent(String(id))}/collaboration/presence/leave`
+			+ `?ttlSeconds=${encodeURIComponent(String(ttlSeconds))}`,
+			body ?? {},
 		),
 	createScreenComment: (id: string | number, body: {
 		message: string;

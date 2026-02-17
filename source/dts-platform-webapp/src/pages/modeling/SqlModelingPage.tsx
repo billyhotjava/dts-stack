@@ -46,16 +46,21 @@ import {
 	listDbtRuns,
 	listSqlModels,
 	listSqlModelColumns,
+	getSqlModelContractImpact,
 	createSqlModel,
 	updateSqlModel,
 	deleteSqlModel,
 	importSqlModel,
-	importSqlProjectZip,
 	generateSqlModelsFromOds,
 	listModelingPlans,
 	syncDbtModels,
 	getDbtSyncStatus,
 	triggerDbtRun,
+	triggerDbtCompile,
+	triggerDbtTest,
+	triggerDbtDocs,
+	checkDbtQualityGate,
+	checkDbtReleaseGate,
 	updateDbtConfig,
 	listDbtSources,
 	listDbtRefs,
@@ -98,6 +103,16 @@ const tryParseJsonObject = (raw: string | undefined) => {
 	return undefined;
 };
 
+const prettyJson = (raw?: string) => {
+	const text = normalizeText(raw);
+	if (!text) return "";
+	try {
+		return JSON.stringify(JSON.parse(text), null, 2);
+	} catch {
+		return text;
+	}
+};
+
 type DbtConfigView = {
 	enabled?: boolean;
 	config?: {
@@ -134,10 +149,37 @@ type DbtSyncStats = {
 	message?: string;
 };
 
+type DbtRunFailure = {
+	uniqueId?: string;
+	name?: string;
+	resourceType?: string;
+	path?: string;
+	status?: string;
+	message?: string;
+	executionTime?: number;
+};
+
+type DbtRunSummary = {
+	present?: boolean;
+	projectDir?: string;
+	runResultsPath?: string;
+	manifestPath?: string;
+	invocationId?: string;
+	generatedAt?: string;
+	command?: string;
+	status?: string;
+	total?: number;
+	success?: number;
+	failed?: number;
+	skipped?: number;
+	failures?: DbtRunFailure[];
+};
+
 type DbtSyncStatus = {
 	manifest?: DbtSyncArtifactStatus | null;
 	runResults?: DbtSyncArtifactStatus | null;
 	stats?: DbtSyncStats | null;
+	latestRun?: DbtRunSummary | null;
 };
 
 type SqlModel = {
@@ -160,6 +202,11 @@ type SqlModel = {
 	modelPath?: string;
 	ownerDept?: string;
 	status?: string;
+	semanticContract?: string;
+	contractVersion?: string;
+	contractUpdatedAt?: string;
+	metricCount?: number;
+	dimensionCount?: number;
 	createdDate?: string;
 	lastModifiedDate?: string;
 };
@@ -186,6 +233,12 @@ type DagRun = {
 	execution_date?: string;
 	start_date?: string;
 	end_date?: string;
+	conf?: {
+		models?: string;
+		target?: string;
+		operation?: string;
+		[key: string]: any;
+	};
 };
 
 type ModelColumn = {
@@ -225,18 +278,65 @@ type SqlModelOdsGenerateResult = {
 	createdModels?: string[];
 	updatedModels?: string[];
 	skipped?: string[];
+	qualityTemplatesGenerated?: number;
+	qualitySkipped?: string[];
 };
 
-type SqlModelProjectImportResult = {
-	total?: number;
-	created?: number;
-	updated?: number;
-	skipped?: number;
-	failed?: number;
+type DbtQualityGateResult = {
+	selector?: string;
+	selectedModels?: string[];
+	blocking?: boolean;
+	warning?: boolean;
+	latestStatus?: string;
+	latestCommand?: string;
+	latestGeneratedAt?: string;
+	latestFailedCount?: number;
+	blockers?: string[];
 	warnings?: string[];
-	details?: string[];
-	dryRun?: boolean;
-	packageFingerprint?: string;
+};
+
+type DbtReleaseGateResult = {
+	selector?: string;
+	strictMode?: boolean;
+	gitRef?: string;
+	commitSha?: string;
+	decision?: string;
+	blocking?: boolean;
+	warning?: boolean;
+	blockers?: string[];
+	warnings?: string[];
+	buildEvidence?: {
+		invocationId?: string;
+		command?: string;
+		status?: string;
+		generatedAt?: string;
+		runResultsPath?: string;
+	};
+};
+
+type SqlModelContractImpact = {
+	modelId?: string;
+	modelName?: string;
+	contractVersion?: string;
+	contractUpdatedAt?: string;
+	metricCount?: number;
+	dimensionCount?: number;
+	fieldCount?: number;
+	impactedDatasetCount?: number;
+	impactedReportCount?: number;
+	impactedDatasets?: Array<{
+		id?: string;
+		name?: string;
+		status?: string;
+		publishedVersion?: number;
+	}>;
+	impactedReports?: Array<{
+		id?: string;
+		title?: string;
+		code?: string;
+		queryDatasetId?: string;
+		enabled?: boolean;
+	}>;
 };
 
 type OdsSkippedSeverity = "error" | "warn" | "info";
@@ -309,9 +409,6 @@ export default function SqlModelingPage() {
 	const [importSubmitting, setImportSubmitting] = useState(false);
 	const [sqlFileList, setSqlFileList] = useState<UploadFile[]>([]);
 	const [csvFileList, setCsvFileList] = useState<UploadFile[]>([]);
-	const [projectImportOpen, setProjectImportOpen] = useState(false);
-	const [projectImportSubmitting, setProjectImportSubmitting] = useState(false);
-	const [projectZipFileList, setProjectZipFileList] = useState<UploadFile[]>([]);
 	const [odsGenerateOpen, setOdsGenerateOpen] = useState(false);
 	const [odsGenerateSubmitting, setOdsGenerateSubmitting] = useState(false);
 	const [syncingModels, setSyncingModels] = useState(false);
@@ -319,8 +416,11 @@ export default function SqlModelingPage() {
 	const [runs, setRuns] = useState<DagRun[]>([]);
 	const [runOpen, setRunOpen] = useState(false);
 	const [runSubmitting, setRunSubmitting] = useState(false);
+	const [buildTriggering, setBuildTriggering] = useState<"compile" | "test" | "docs" | null>(null);
 	const [columnsLoading, setColumnsLoading] = useState(false);
 	const [modelColumns, setModelColumns] = useState<ModelColumn[]>([]);
+	const [contractImpactLoading, setContractImpactLoading] = useState(false);
+	const [contractImpact, setContractImpact] = useState<SqlModelContractImpact | null>(null);
 	const [bottomTab, setBottomTab] = useState("preview");
 	const [keyword, setKeyword] = useState("");
 	const [activeModelKey, setActiveModelKey] = useState<string | null>(null);
@@ -335,7 +435,6 @@ export default function SqlModelingPage() {
 	const [runForm] = Form.useForm();
 	const [modelForm] = Form.useForm();
 	const [importForm] = Form.useForm();
-	const [projectImportForm] = Form.useForm();
 	const [odsGenerateForm] = Form.useForm();
 	const selectedOdsSourceDataSourceId = Form.useWatch("sourceDataSourceId", odsGenerateForm);
 	const dbtSourcesReqSeqRef = useRef(0);
@@ -449,6 +548,23 @@ export default function SqlModelingPage() {
 		}
 	}, []);
 
+	const loadContractImpact = useCallback(async (modelId?: string) => {
+		if (!modelId) {
+			setContractImpact(null);
+			return;
+		}
+		setContractImpactLoading(true);
+		try {
+			const resp = (await getSqlModelContractImpact(modelId)) as SqlModelContractImpact;
+			setContractImpact(resp || null);
+		} catch (err: any) {
+			toast.error(err?.message || "加载语义契约影响面失败");
+			setContractImpact(null);
+		} finally {
+			setContractImpactLoading(false);
+		}
+	}, []);
+
 	const loadDbtSources = useCallback(async (sourceDataSourceId?: string) => {
 		const requestSeq = ++dbtSourcesReqSeqRef.current;
 		setSourcesLoading(true);
@@ -533,11 +649,17 @@ export default function SqlModelingPage() {
 
 	const openRun = () => {
 		runForm.resetFields();
-		const selector = activeModel?.dagSelector || (activeModel?.name ? `model:${activeModel.name}` : "");
+		const dagSelector = normalizeText(activeModel?.dagSelector);
+		const selector = dagSelector.startsWith("tab:")
+			? `tag:${dagSelector.slice(4)}`
+			: dagSelector || (activeModel?.name ? `model:${activeModel.name}` : "");
 		runForm.setFieldsValue({
 			models: selector,
 			target: dbtConfig?.config?.targetName || "",
 			vars: "",
+			gitRef: "",
+			commitSha: "",
+			strictMode: true,
 		});
 		setRunOpen(true);
 	};
@@ -546,10 +668,103 @@ export default function SqlModelingPage() {
 		setRunSubmitting(true);
 		try {
 			const values = await runForm.validateFields(["models"]);
+			const modelsSelector = normalizeText(values.models).startsWith("tab:")
+				? `tag:${normalizeText(values.models).slice(4)}`
+				: normalizeText(values.models);
+			const gate = (await checkDbtQualityGate({ models: modelsSelector })) as DbtQualityGateResult;
+			if (gate?.blocking) {
+				Modal.error({
+					title: "质量门禁阻断",
+					content: (
+						<div style={{ fontSize: 12 }}>
+							<p>当前不满足发布条件，请先修复后重试。</p>
+							<ul style={{ paddingLeft: 18, margin: 0 }}>
+								{(gate.blockers || []).map((item, idx) => (
+									<li key={`${item}-${idx}`}>{item}</li>
+								))}
+							</ul>
+						</div>
+					),
+				});
+				return;
+			}
+			if (gate?.warning) {
+				const confirmed = await new Promise<boolean>((resolve) =>
+					Modal.confirm({
+						title: "质量门禁告警",
+						content: (
+							<div style={{ fontSize: 12 }}>
+								<p>检测到以下告警，是否继续提交上线？</p>
+								<ul style={{ paddingLeft: 18, margin: 0 }}>
+									{(gate.warnings || []).map((item, idx) => (
+										<li key={`${item}-${idx}`}>{item}</li>
+									))}
+								</ul>
+							</div>
+						),
+						okText: "继续上线",
+						cancelText: "取消",
+						onOk: () => resolve(true),
+						onCancel: () => resolve(false),
+					}),
+				);
+				if (!confirmed) {
+					return;
+				}
+			}
+			const releaseGate = (await checkDbtReleaseGate({
+				models: modelsSelector,
+				gitRef: normalizeText(values.gitRef) || undefined,
+				commitSha: normalizeText(values.commitSha) || undefined,
+				strictMode: values.strictMode !== false,
+			})) as DbtReleaseGateResult;
+			if (releaseGate?.blocking) {
+				Modal.error({
+					title: "GitOps 门禁阻断",
+					content: (
+						<div style={{ fontSize: 12 }}>
+							<p>当前不满足发布门禁，请先修复后重试。</p>
+							<ul style={{ paddingLeft: 18, margin: 0 }}>
+								{(releaseGate.blockers || []).map((item, idx) => (
+									<li key={`${item}-${idx}`}>{item}</li>
+								))}
+							</ul>
+						</div>
+					),
+				});
+				return;
+			}
+			if (releaseGate?.warning) {
+				const confirmed = await new Promise<boolean>((resolve) =>
+					Modal.confirm({
+						title: "GitOps 门禁告警",
+						content: (
+							<div style={{ fontSize: 12 }}>
+								<p>检测到以下告警，是否继续提交上线？</p>
+								<ul style={{ paddingLeft: 18, margin: 0 }}>
+									{(releaseGate.warnings || []).map((item, idx) => (
+										<li key={`${item}-${idx}`}>{item}</li>
+									))}
+								</ul>
+							</div>
+						),
+						okText: "继续上线",
+						cancelText: "取消",
+						onOk: () => resolve(true),
+						onCancel: () => resolve(false),
+					}),
+				);
+				if (!confirmed) {
+					return;
+				}
+			}
 			await triggerDbtRun({
-				models: normalizeText(values.models),
+				models: modelsSelector,
 				target: normalizeText(values.target) || undefined,
 				vars: tryParseJsonObject(values.vars),
+				gitRef: normalizeText(values.gitRef) || undefined,
+				commitSha: normalizeText(values.commitSha) || undefined,
+				buildInvocationId: normalizeText(releaseGate?.buildEvidence?.invocationId) || undefined,
 			});
 			toast.success("运行任务已提交");
 			setRunOpen(false);
@@ -558,6 +773,30 @@ export default function SqlModelingPage() {
 			toast.error(err?.message || "触发失败");
 		} finally {
 			setRunSubmitting(false);
+		}
+	};
+
+	const triggerBuildOperation = async (operation: "compile" | "test" | "docs") => {
+		setBuildTriggering(operation);
+		try {
+			const selector = normalizeText(activeModel?.dagSelector) || (activeModel?.name ? `model:${activeModel.name}` : "all");
+			const payload = {
+				models: selector,
+				target: normalizeText(dbtConfig?.config?.targetName) || "dev",
+			};
+			if (operation === "compile") {
+				await triggerDbtCompile(payload);
+			} else if (operation === "test") {
+				await triggerDbtTest(payload);
+			} else {
+				await triggerDbtDocs(payload);
+			}
+			toast.success(`dbt ${operation} 已提交`);
+			await Promise.all([loadRuns(), loadSyncStatus()]);
+		} catch (err: any) {
+			toast.error(err?.message || `dbt ${operation} 触发失败`);
+		} finally {
+			setBuildTriggering(null);
 		}
 	};
 
@@ -589,6 +828,7 @@ export default function SqlModelingPage() {
 			layer: "DWD",
 			materialized: "table",
 			enabled: true,
+			semanticContract: "",
 			sql: "select\n  *\nfrom {{ source('ods', 'your_table') }}\n",
 		});
 		setModelDrawerOpen(true);
@@ -605,85 +845,6 @@ export default function SqlModelingPage() {
 			enabled: true,
 		});
 		setImportOpen(true);
-	};
-
-	const openProjectImport = () => {
-		projectImportForm.resetFields();
-		setProjectZipFileList([]);
-		projectImportForm.setFieldsValue({
-			planId: activeSpace?.id || undefined,
-			onConflict: "skip",
-			materialized: "table",
-			enabled: true,
-			dryRun: false,
-		});
-		setProjectImportOpen(true);
-	};
-
-	const submitProjectImport = async () => {
-		setProjectImportSubmitting(true);
-		try {
-			const values = await projectImportForm.validateFields(["planId", "onConflict"]);
-			if (projectZipFileList.length === 0 || !projectZipFileList[0]?.originFileObj) {
-				throw new Error("请选择 ZIP 文件");
-			}
-			const formData = new FormData();
-			formData.append("planId", values.planId);
-			formData.append("onConflict", normalizeText(values.onConflict) || "skip");
-			if (values.sourceDataSourceId) formData.append("sourceDataSourceId", values.sourceDataSourceId);
-			if (values.materialized) formData.append("materialized", normalizeText(values.materialized));
-			if (values.tags) formData.append("tags", normalizeText(values.tags));
-			if (values.status) formData.append("status", normalizeText(values.status));
-			if (values.ownerDept) formData.append("ownerDept", normalizeText(values.ownerDept));
-			formData.append("enabled", String(values.enabled ?? true));
-			formData.append("dryRun", String(values.dryRun ?? false));
-			formData.append("zip", projectZipFileList[0].originFileObj as File);
-
-			const result = (await importSqlProjectZip(formData)) as SqlModelProjectImportResult;
-			Modal.info({
-				title: result?.dryRun ? "项目包预检结果 (dry-run)" : "项目包导入结果",
-				width: 760,
-				content: (
-					<div>
-						<p>
-							共识别 {result?.total || 0} 个模型：新增 {result?.created || 0}，更新 {result?.updated || 0}，
-							跳过 {result?.skipped || 0}，失败 {result?.failed || 0}
-						</p>
-						{result?.packageFingerprint && (
-							<p style={{ marginTop: 6, fontSize: 12, color: "#666" }}>
-								包指纹: <code>{result.packageFingerprint}</code>
-							</p>
-						)}
-						{(result?.warnings || []).length > 0 && (
-							<div style={{ marginTop: 10 }}>
-								<p style={{ marginBottom: 6, fontWeight: 600 }}>告警提示</p>
-								<ul style={{ maxHeight: 120, overflow: "auto", fontSize: 12, paddingLeft: 20 }}>
-									{(result?.warnings || []).map((item, idx) => (
-										<li key={`${item}-${idx}`}>{item}</li>
-									))}
-								</ul>
-							</div>
-						)}
-						{(result?.details || []).length > 0 && (
-							<div style={{ marginTop: 10 }}>
-								<p style={{ marginBottom: 6, fontWeight: 600 }}>明细</p>
-								<ul style={{ maxHeight: 220, overflow: "auto", fontSize: 12, paddingLeft: 20 }}>
-									{(result?.details || []).map((item, idx) => (
-										<li key={`${item}-${idx}`}>{item}</li>
-									))}
-								</ul>
-							</div>
-						)}
-					</div>
-				),
-			});
-			setProjectImportOpen(false);
-			await loadModels();
-		} catch (err: any) {
-			toast.error(err?.message || "导入项目包失败");
-		} finally {
-			setProjectImportSubmitting(false);
-		}
 	};
 
 	const openOdsGenerateModel = () => {
@@ -717,6 +878,7 @@ export default function SqlModelingPage() {
 			sql: activeModel.sql,
 			enabled: activeModel.enabled,
 			status: activeModel.status,
+			semanticContract: prettyJson(activeModel.semanticContract),
 		});
 		setModelDrawerOpen(true);
 	};
@@ -744,6 +906,7 @@ export default function SqlModelingPage() {
 				sql: values.sql,
 				enabled: values.enabled ?? true,
 				status: normalizeText(values.status) || undefined,
+				semanticContract: values.semanticContract !== undefined ? String(values.semanticContract) : "",
 			};
 			if (editingModel?.id) {
 				await updateSqlModel(editingModel.id, payload);
@@ -841,6 +1004,28 @@ export default function SqlModelingPage() {
 						<p style={{ marginTop: 8, color: "rgba(0,0,0,0.65)" }}>
 							系统已按所选映射生成或更新 DWD / DWS / ADS 模型模板。
 						</p>
+						<p style={{ marginTop: 8, color: "rgba(0,0,0,0.65)" }}>
+							质量模板：已生成 {result?.qualityTemplatesGenerated || 0}
+							{(result?.qualitySkipped || []).length > 0 ? `，跳过 ${(result?.qualitySkipped || []).length}` : ""}
+						</p>
+						{(result?.qualitySkipped || []).length > 0 && (
+							<div
+								style={{
+									marginTop: 10,
+									padding: "8px 10px",
+									border: "1px solid #f0f0f0",
+									borderRadius: 6,
+									background: "#fafafa",
+								}}
+							>
+								<p style={{ marginBottom: 6, fontWeight: 600 }}>质量模板跳过项</p>
+								<ul style={{ maxHeight: 120, overflow: "auto", fontSize: 12, paddingLeft: 20 }}>
+									{(result?.qualitySkipped || []).map((item, idx) => (
+										<li key={`${item}-${idx}`}>{item}</li>
+									))}
+								</ul>
+							</div>
+						)}
 						{skippedEntries.length > 0 && (
 							<>
 								<div
@@ -1120,6 +1305,10 @@ export default function SqlModelingPage() {
 		void loadModelColumns(activeModel?.id);
 	}, [activeModel?.id, loadModelColumns]);
 
+	useEffect(() => {
+		void loadContractImpact(activeModel?.id);
+	}, [activeModel?.id, loadContractImpact]);
+
 	const sqlDirty = !!activeModel && sqlDraft !== (activeModel?.sql || "");
 
 	const filteredModels = useMemo(() => {
@@ -1167,6 +1356,25 @@ export default function SqlModelingPage() {
 					const color = label === "SUCCESS" ? "green" : label === "FAILED" ? "red" : "gold";
 					return <Tag color={color}>{label}</Tag>;
 				},
+			},
+			{
+				title: "操作",
+				key: "operation",
+				width: 100,
+				render: (_value, row) => normalizeUpper(row?.conf?.operation) || "RUN",
+			},
+			{
+				title: "Selector",
+				key: "selector",
+				width: 220,
+				ellipsis: true,
+				render: (_value, row) => normalizeText(row?.conf?.models) || "all",
+			},
+			{
+				title: "Target",
+				key: "target",
+				width: 120,
+				render: (_value, row) => normalizeText(row?.conf?.target) || "dev",
 			},
 			{ title: "计划时间", dataIndex: "execution_date", key: "execution_date", width: 180, render: (v) => formatDateTime(v) },
 			{ title: "开始时间", dataIndex: "start_date", key: "start_date", width: 180, render: (v) => formatDateTime(v) },
@@ -1246,13 +1454,6 @@ export default function SqlModelingPage() {
 			onClick: openImportModel,
 		},
 		{
-			key: "import-project",
-			icon: <ImportOutlined />,
-			label: "导入项目包 (ZIP)",
-			disabled: !workspaceOk,
-			onClick: openProjectImport,
-		},
-		{
 			key: "generate-ods",
 			icon: <ImportOutlined />,
 			label: "从 ODS 一键生成",
@@ -1294,6 +1495,11 @@ export default function SqlModelingPage() {
 			onClick: () => openSnippetDrawer("ref"),
 		},
 	];
+
+	const latestRun = dbtSyncStatus?.latestRun || null;
+	const latestFailures = Array.isArray(latestRun?.failures) ? latestRun?.failures : [];
+	const latestBuildStatus = normalizeUpper(latestRun?.status) || "UNKNOWN";
+	const latestBuildColor = latestBuildStatus === "SUCCESS" ? "green" : latestBuildStatus === "FAILED" ? "red" : "gold";
 
 	return (
 		<div className="flex min-h-[calc(100vh-120px)] flex-col overflow-hidden rounded-xl border border-border bg-card shadow-sm">
@@ -1345,6 +1551,29 @@ export default function SqlModelingPage() {
 							同步
 						</Button>
 					</Tooltip>
+					<Button
+						onClick={() => triggerBuildOperation("compile")}
+						loading={buildTriggering === "compile"}
+						disabled={!configEnabled || !workspaceOk}
+					>
+						编译
+					</Button>
+					<Button
+						onClick={() => triggerBuildOperation("test")}
+						loading={buildTriggering === "test"}
+						disabled={!configEnabled || !workspaceOk}
+					>
+						测试
+					</Button>
+					<Tooltip title="生成 dbt docs 产物">
+						<Button
+							onClick={() => triggerBuildOperation("docs")}
+							loading={buildTriggering === "docs"}
+							disabled={!configEnabled || !workspaceOk}
+						>
+							文档
+						</Button>
+					</Tooltip>
 					{/* 提交上线 */}
 					<Button
 						type="primary"
@@ -1371,6 +1600,11 @@ export default function SqlModelingPage() {
 						<span className="flex items-center gap-1">
 							run_results {syncTag(dbtSyncStatus.runResults?.synced)}
 						</span>
+						{latestRun?.present && (
+							<span className="flex items-center gap-1">
+								最近构建 <Tag color={latestBuildColor}>{latestBuildStatus}</Tag>
+							</span>
+						)}
 						{dbtSyncStatus.stats && (
 							<span className="text-muted-foreground">
 								| 模型 +{dbtSyncStatus.stats.datasetsCreated ?? 0}/~{dbtSyncStatus.stats.datasetsUpdated ?? 0}
@@ -1522,6 +1756,31 @@ export default function SqlModelingPage() {
 															<span className="font-medium">{activeModel.tags}</span>
 														</div>
 													)}
+													<div className="flex justify-between">
+														<span className="text-muted-foreground">契约版本</span>
+														<span className="font-medium">
+															{activeModel.contractVersion || contractImpact?.contractVersion || "-"}
+														</span>
+													</div>
+													<div className="flex justify-between">
+														<span className="text-muted-foreground">指标/维度</span>
+														<span className="font-medium">
+															{activeModel.metricCount ?? contractImpact?.metricCount ?? 0} /{" "}
+															{activeModel.dimensionCount ?? contractImpact?.dimensionCount ?? 0}
+														</span>
+													</div>
+													<div className="flex justify-between">
+														<span className="text-muted-foreground">影响报表</span>
+														<span className="font-medium">
+															{contractImpactLoading ? "计算中..." : (contractImpact?.impactedReportCount ?? 0)}
+														</span>
+													</div>
+													<div className="flex justify-between">
+														<span className="text-muted-foreground">影响字段</span>
+														<span className="font-medium">
+															{contractImpactLoading ? "计算中..." : (contractImpact?.fieldCount ?? modelColumns.length)}
+														</span>
+													</div>
 												</div>
 												<Divider className="my-2" />
 												<div className="text-xs font-medium text-muted-foreground mb-2">字段列表</div>
@@ -1538,6 +1797,19 @@ export default function SqlModelingPage() {
 												) : (
 													<div className="text-xs text-muted-foreground">暂无字段配置</div>
 												)}
+												{contractImpact?.impactedReports?.length ? (
+													<>
+														<Divider className="my-2" />
+														<div className="text-xs font-medium text-muted-foreground mb-1">受影响报表</div>
+														<div className="max-h-24 overflow-auto text-xs text-muted-foreground space-y-1">
+															{contractImpact.impactedReports.slice(0, 6).map((item) => (
+																<div key={item.id || `${item.code}-${item.title}`}>
+																	{item.title || item.code || item.id}
+																</div>
+															))}
+														</div>
+													</>
+												) : null}
 											</div>
 										) : (
 											<div className="text-xs text-muted-foreground py-4 text-center">请选择模型</div>
@@ -1625,8 +1897,36 @@ export default function SqlModelingPage() {
 								key: "compile",
 								label: "编译日志",
 								children: (
-									<div className="p-4">
-										<EmptyState title="暂无编译日志" description="语法校验接口接入后展示日志。" compact />
+									<div className="p-4 space-y-3 text-xs">
+										<div className="flex items-center gap-2">
+											<Tag color={latestBuildColor}>{latestBuildStatus}</Tag>
+											<span className="text-muted-foreground">
+												命令：{latestRun?.command || "N/A"} | 时间：{formatDateTime(latestRun?.generatedAt)}
+											</span>
+										</div>
+										<div className="text-muted-foreground">
+											总计 {latestRun?.total ?? 0}，成功 {latestRun?.success ?? 0}，失败 {latestRun?.failed ?? 0}，跳过{" "}
+											{latestRun?.skipped ?? 0}
+										</div>
+										{latestFailures.length > 0 ? (
+											<div className="max-h-[145px] overflow-auto rounded border border-border bg-muted/20 p-2">
+												{latestFailures.map((item, idx) => (
+													<div key={`${item.uniqueId || item.name || "f"}-${idx}`} className="mb-2 last:mb-0">
+														<div className="font-medium">
+															{item.uniqueId || item.name || "UNKNOWN_NODE"}
+															{item.resourceType ? ` (${item.resourceType})` : ""}
+														</div>
+														<div className="text-muted-foreground">{item.message || "执行失败"}</div>
+													</div>
+												))}
+											</div>
+										) : (
+											<Alert
+												type={latestRun?.present ? "success" : "info"}
+												showIcon
+												message={latestRun?.present ? "最近一次构建未发现失败节点" : "暂无构建记录"}
+											/>
+										)}
 									</div>
 								),
 							},
@@ -1745,10 +2045,29 @@ export default function SqlModelingPage() {
 			>
 				<Form layout="vertical" form={runForm}>
 					<Form.Item name="models" label="模型选择器" rules={[{ required: true, message: "请输入模型选择器" }]}>
-						<Input placeholder="例如：tab:crm 或 model:xxx" />
+						<Input placeholder="例如：tag:crm 或 model:xxx" />
 					</Form.Item>
 					<Form.Item name="target" label="Target">
 						<Input placeholder="dev" />
+					</Form.Item>
+					<div className="grid gap-3 md:grid-cols-2">
+						<Form.Item
+							name="gitRef"
+							label="Git 分支"
+							tooltip="发布策略默认允许 main/master/release/*/hotfix/*"
+						>
+							<Input placeholder="例如：release/2.2.1" />
+						</Form.Item>
+						<Form.Item
+							name="commitSha"
+							label="Commit SHA"
+							tooltip="用于将本次发布与具体代码版本绑定"
+						>
+							<Input placeholder="例如：a1b2c3d4" />
+						</Form.Item>
+					</div>
+					<Form.Item name="strictMode" valuePropName="checked">
+						<Checkbox>启用严格 GitOps 门禁（缺少分支/Commit 会阻断发布）</Checkbox>
 					</Form.Item>
 					<Form.Item name="vars" label="运行变量">
 						<Input.TextArea rows={3} placeholder='JSON 结构，例如 {"run_date":"2026-01-19"}' />
@@ -1870,6 +2189,17 @@ export default function SqlModelingPage() {
 						tooltip="用于调度选择器和分组管理，系统会自动添加来源系统和分层标签"
 					>
 						<Input placeholder="多个标签用逗号分隔，如: daily,core" />
+					</Form.Item>
+					<Form.Item
+						name="semanticContract"
+						label="语义契约 (JSON)"
+						tooltip="可选：定义 metrics/dimensions 元信息，发布与看板绑定会展示契约版本"
+					>
+						<Input.TextArea
+							rows={4}
+							className="font-mono text-sm"
+							placeholder='{"metrics":[{"code":"order_cnt","name":"订单数"}],"dimensions":[{"code":"dept","name":"部门"}]}'
+						/>
 					</Form.Item>
 
 					{/* SQL 编辑 */}
@@ -2034,107 +2364,6 @@ WHERE status = 'active'`}
 			</Modal>
 
 			<Modal
-				open={projectImportOpen}
-				title="导入项目包 (ZIP)"
-				onCancel={() => setProjectImportOpen(false)}
-				footer={
-					<Space>
-						<Button onClick={() => setProjectImportOpen(false)}>取消</Button>
-						<Button type="primary" onClick={submitProjectImport} loading={projectImportSubmitting}>
-							导入
-						</Button>
-					</Space>
-				}
-			>
-				<Form layout="vertical" form={projectImportForm} disabled={projectImportSubmitting}>
-					<Alert
-						type="warning"
-						showIcon
-						className="mb-4"
-						message="一个 ZIP 对应一个项目空间"
-						description="若 ZIP 内是 SQL 项目目录（01-dim/02-dwd/03-dws/04-ads）且无 manifest，系统会自动识别并导入；导入前请确认冲突策略。"
-					/>
-					<div className="grid gap-4 md:grid-cols-2">
-						<Form.Item name="planId" label="项目空间" rules={[{ required: true, message: "请选择项目空间" }]}>
-							<Select
-								placeholder="选择项目空间"
-								options={spaces.map((space) => ({ label: space.name || "未命名", value: space.id }))}
-							/>
-						</Form.Item>
-						<Form.Item name="sourceDataSourceId" label="默认来源数据源 (可选)">
-							<Select
-								allowClear
-								placeholder="留空按系统回退策略选择"
-								options={dataSources.map((ds) => ({ label: ds?.name || ds?.id, value: ds?.id }))}
-							/>
-						</Form.Item>
-					</div>
-					<div className="grid gap-4 md:grid-cols-2">
-						<Form.Item
-							name="onConflict"
-							label="冲突策略"
-							rules={[{ required: true, message: "请选择冲突策略" }]}
-						>
-							<Select
-								options={[
-									{ label: "skip（推荐）- 已存在则跳过", value: "skip" },
-									{ label: "overwrite - 已存在则覆盖", value: "overwrite" },
-									{ label: "fail - 已存在则计为失败", value: "fail" },
-								]}
-							/>
-						</Form.Item>
-						<Form.Item name="materialized" label="默认物化方式">
-							<Select
-								allowClear
-								options={[
-									{ label: "table", value: "table" },
-									{ label: "view", value: "view" },
-									{ label: "incremental", value: "incremental" },
-								]}
-							/>
-						</Form.Item>
-					</div>
-					<div className="grid gap-4 md:grid-cols-2">
-						<Form.Item name="status" label="默认状态">
-							<Select
-								allowClear
-								options={[
-									{ label: "草稿", value: "DRAFT" },
-									{ label: "就绪", value: "READY" },
-									{ label: "已发布", value: "PUBLISHED" },
-								]}
-							/>
-						</Form.Item>
-						<Form.Item name="enabled" label="启用" valuePropName="checked">
-							<Switch />
-						</Form.Item>
-					</div>
-					<Form.Item name="dryRun" valuePropName="checked">
-						<Checkbox>仅预检，不落库（dry-run）</Checkbox>
-					</Form.Item>
-					<div className="grid gap-4 md:grid-cols-2">
-						<Form.Item name="tags" label="默认标签 (逗号分隔)">
-							<Input placeholder="可选，如 patent,external" />
-						</Form.Item>
-						<Form.Item name="ownerDept" label="归属部门">
-							<Input placeholder="可选" />
-						</Form.Item>
-					</div>
-					<Form.Item label="ZIP 文件" required>
-						<Upload
-							accept=".zip"
-							beforeUpload={() => false}
-							maxCount={1}
-							fileList={projectZipFileList}
-							onChange={({ fileList }) => setProjectZipFileList(fileList.slice(-1))}
-						>
-							<Button>选择 ZIP</Button>
-						</Upload>
-					</Form.Item>
-				</Form>
-			</Modal>
-
-			<Modal
 				open={odsGenerateOpen}
 				title="从 ODS 一键生成 DWD / DWS / ADS"
 				onCancel={() => setOdsGenerateOpen(false)}
@@ -2255,9 +2484,6 @@ WHERE status = 'active'`}
 							<li>默认按映射自动生成 DWD / DWS / ADS 三层模型。</li>
 							<li>建议先勾选 DWD，再按需勾选 DWS、ADS。</li>
 						</ol>
-						<div className="mt-2 text-amber-700">
-							支持“项目包 ZIP 导入”用于外部模型回填；常规建模仍建议优先使用 ODS 映射一键生成。
-						</div>
 					</div>
 				</Form>
 			</Modal>

@@ -92,6 +92,9 @@ public class DbtArtifactSyncScheduler {
         }
         DbtRunResultService.DbtRunSyncResult result = dbtRunResultService.syncFromRunResults();
         syncState.recordRunResults(modified, result != null && result.synced(), result != null ? result.message() : null);
+        if (result != null && result.summary() != null) {
+            syncState.recordLatestRun(result.summary());
+        }
         if (result != null && result.synced()) {
             lastRunResultsModified.set(modified);
         }

@@ -1,12 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
 import { toast } from "sonner";
-import type { TableInfo, SqlResultPreview, SavedQueryResponse } from "@/api/sql-workbench";
+import type {
+	TableInfo,
+	SqlResultPreview,
+	SavedQueryResponse,
+	SqlResultPageResponse,
+} from "@/api/sql-workbench";
 import {
 	auditCopy,
 	cancelSql,
 	createQueryDatasetFromExecution,
 	deleteSavedQuery,
+	getSqlResultPage,
 	getSqlStatus,
 	listSavedQueries,
 	listTables,
@@ -122,6 +128,7 @@ const formatTime = (isoString: string) => {
 export const SqlWorkbenchExperimental = () => {
 	const [sqlText, setSqlText] = useState(DEFAULT_SQL);
 	const [isSubmitting, setIsSubmitting] = useState(false);
+	const [isPolling, setIsPolling] = useState(false);
 	const [savingDataset, setSavingDataset] = useState(false);
 	const [executionId, setExecutionId] = useState<string | null>(null);
 
@@ -151,14 +158,19 @@ export const SqlWorkbenchExperimental = () => {
 		preview: SqlResultPreview | null;
 		elapsedMs: number | null;
 		rowCount: number | null;
+		resultSetId: string | null;
 		status: string;
 		errorMessage: string | null;
 	} | null>(null);
+	const [resultPage, setResultPage] = useState<SqlResultPageResponse | null>(null);
+	const [resultPageNo, setResultPageNo] = useState(1);
+	const [resultPageSize, setResultPageSize] = useState(200);
 
 	// 行数限制
 	const [rowLimit, setRowLimit] = useState(1000);
 
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
+	const pollTimerRef = useRef<number | null>(null);
 
 	// 加载数据源
 	useEffect(() => {
@@ -340,6 +352,90 @@ export const SqlWorkbenchExperimental = () => {
 		}
 	};
 
+	const stopPolling = useCallback(() => {
+		if (pollTimerRef.current != null) {
+			window.clearInterval(pollTimerRef.current);
+			pollTimerRef.current = null;
+		}
+		setIsPolling(false);
+	}, []);
+
+	useEffect(() => () => stopPolling(), [stopPolling]);
+
+	const loadResultPage = useCallback(
+		async (id: string, page: number, pageSize: number) => {
+			try {
+				const pageResp = await getSqlResultPage(id, page, pageSize);
+				setResultPage(pageResp);
+				setResultPageNo(pageResp.page || page);
+				setResult((prev) =>
+					prev
+						? {
+								...prev,
+								preview: {
+									headers: pageResp.headers ?? [],
+									rows: pageResp.rows ?? [],
+									rowCount: pageResp.totalRows,
+									truncated: (pageResp.totalRows ?? 0) > ((pageResp.rows ?? []).length || 0),
+								},
+						  }
+						: prev
+				);
+			} catch {
+				toast.error("加载分页结果失败");
+			}
+		},
+		[]
+	);
+
+	const refreshStatus = useCallback(
+		async (id: string) => {
+			try {
+				const status = await getSqlStatus(id);
+				setResult((prev) => ({
+					preview: prev?.preview ?? status.preview ?? null,
+					elapsedMs: status.elapsedMs ?? null,
+					rowCount: status.rows ?? null,
+					resultSetId: status.resultSetId ?? null,
+					status: status.status,
+					errorMessage: status.errorMessage ?? null,
+				}));
+
+				if (status.status === "SUCCESS") {
+					stopPolling();
+					await loadResultPage(id, resultPageNo, resultPageSize);
+					toast.success(`查询成功，返回 ${status.rows ?? 0} 行`);
+					return true;
+				}
+				if (status.status === "FAILED" || status.status === "CANCELED") {
+					stopPolling();
+					setActiveTab("logs");
+					toast.error(status.status === "FAILED" ? "查询失败" : "查询已取消");
+					return true;
+				}
+				return false;
+			} catch {
+				stopPolling();
+				setActiveTab("logs");
+				setResult((prev) =>
+					prev
+						? { ...prev, status: "FAILED", errorMessage: "获取执行状态失败" }
+						: {
+								preview: null,
+								elapsedMs: null,
+								rowCount: null,
+								resultSetId: null,
+								status: "FAILED",
+								errorMessage: "获取执行状态失败",
+						  }
+				);
+				toast.error("获取执行状态失败");
+				return true;
+			}
+		},
+		[loadResultPage, resultPageNo, resultPageSize, stopPolling]
+	);
+
 	// 执行查询
 	const handleSubmit = async () => {
 		if (!selectedDatasourceId) {
@@ -352,7 +448,10 @@ export const SqlWorkbenchExperimental = () => {
 		}
 
 		setIsSubmitting(true);
+		stopPolling();
 		setResult(null);
+		setResultPage(null);
+		setResultPageNo(1);
 		setActiveTab("results");
 
 		try {
@@ -362,29 +461,30 @@ export const SqlWorkbenchExperimental = () => {
 				fetchSize: rowLimit,
 			});
 			setExecutionId(response.executionId);
-
-			const status = await getSqlStatus(response.executionId);
 			setResult({
-				preview: status.preview ?? null,
-				elapsedMs: status.elapsedMs ?? null,
-				rowCount: status.rows ?? null,
-				status: status.status,
-				errorMessage: status.errorMessage ?? null,
+				preview: null,
+				elapsedMs: null,
+				rowCount: null,
+				resultSetId: null,
+				status: "PENDING",
+				errorMessage: null,
 			});
-
-			if (status.status === "SUCCESS") {
-				toast.success(`查询成功，返回 ${status.rows ?? 0} 行`);
-			} else if (status.status === "FAILED") {
-				toast.error("查询失败");
-				setActiveTab("logs");
+			setIsPolling(true);
+			const finished = await refreshStatus(response.executionId);
+			if (!finished && pollTimerRef.current == null) {
+				pollTimerRef.current = window.setInterval(() => {
+					void refreshStatus(response.executionId);
+				}, 1500);
 			}
 		} catch (error: unknown) {
+			stopPolling();
 			const err = error as { response?: { data?: { detail?: string } }; message?: string };
 			const errorMsg = err?.response?.data?.detail || err?.message || "执行失败";
 			setResult({
 				preview: null,
 				elapsedMs: null,
 				rowCount: null,
+				resultSetId: null,
 				status: "FAILED",
 				errorMessage: errorMsg,
 			});
@@ -400,13 +500,36 @@ export const SqlWorkbenchExperimental = () => {
 		if (!executionId) return;
 		try {
 			await cancelSql(executionId);
+			stopPolling();
+			setResult((prev) => (prev ? { ...prev, status: "CANCELED", errorMessage: "查询已取消" } : prev));
 			toast.success("已取消查询");
 		} catch {
 			toast.error("取消失败");
 		}
 	};
 
+	const handlePrevPage = async () => {
+		if (!executionId || !resultPage || resultPage.page <= 1) return;
+		await loadResultPage(executionId, resultPage.page - 1, resultPageSize);
+	};
+
+	const handleNextPage = async () => {
+		if (!executionId || !resultPage || !resultPage.hasNext) return;
+		await loadResultPage(executionId, resultPage.page + 1, resultPageSize);
+	};
+
+	const handlePageSizeChange = async (value: string) => {
+		const parsed = Number(value);
+		const nextSize = Number.isFinite(parsed) && parsed > 0 ? parsed : 200;
+		setResultPageSize(nextSize);
+		if (executionId && result?.status === "SUCCESS") {
+			await loadResultPage(executionId, 1, nextSize);
+		}
+	};
+
 	const preview = result?.preview;
+	const pageOffset = resultPage ? (resultPage.page - 1) * resultPage.pageSize : 0;
+	const showRunning = isSubmitting || isPolling || result?.status === "RUNNING" || result?.status === "PENDING";
 	const lineNumbers = sqlText.split("\n").map((_, i) => i + 1);
 
 	return (
@@ -567,11 +690,11 @@ export const SqlWorkbenchExperimental = () => {
 						<div className="flex items-center gap-1.5">
 							<Button
 								onClick={handleSubmit}
-								disabled={isSubmitting || !selectedDatasourceId}
+								disabled={showRunning || !selectedDatasourceId}
 								size="sm"
 								className="h-7 gap-1.5 text-xs"
 							>
-								{isSubmitting ? (
+								{showRunning ? (
 									<>
 										<svg className="animate-spin h-3 w-3" viewBox="0 0 24 24">
 											<circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
@@ -588,7 +711,7 @@ export const SqlWorkbenchExperimental = () => {
 									</>
 								)}
 							</Button>
-							{isSubmitting && (
+							{showRunning && (
 								<Button variant="outline" size="sm" className="h-7 text-xs" onClick={handleCancel}>
 									取消
 								</Button>
@@ -703,6 +826,33 @@ export const SqlWorkbenchExperimental = () => {
 							</div>
 						)}
 
+						{result?.status === "SUCCESS" && resultPage && activeTab === "results" && resultPage.totalPages > 0 && (
+							<div className="px-3 py-1 border-b flex items-center justify-between text-xs text-muted-foreground">
+								<div>
+									第 {resultPage.page}/{resultPage.totalPages} 页 · 共 {resultPage.totalRows} 行
+								</div>
+								<div className="flex items-center gap-2">
+									<span>每页</span>
+									<Select value={String(resultPageSize)} onValueChange={(v) => void handlePageSizeChange(v)}>
+										<SelectTrigger className="h-7 w-20 text-xs">
+											<SelectValue />
+										</SelectTrigger>
+										<SelectContent>
+											<SelectItem value="100">100</SelectItem>
+											<SelectItem value="200">200</SelectItem>
+											<SelectItem value="500">500</SelectItem>
+										</SelectContent>
+									</Select>
+									<Button variant="outline" size="sm" className="h-7 text-xs" onClick={handlePrevPage} disabled={resultPage.page <= 1}>
+										上一页
+									</Button>
+									<Button variant="outline" size="sm" className="h-7 text-xs" onClick={handleNextPage} disabled={!resultPage.hasNext}>
+										下一页
+									</Button>
+								</div>
+							</div>
+						)}
+
 						{/* 内容 */}
 						<ScrollArea className="flex-1">
 							{activeTab === "results" ? (
@@ -723,7 +873,9 @@ export const SqlWorkbenchExperimental = () => {
 										<tbody className="divide-y font-mono">
 											{preview.rows.map((row, idx) => (
 												<tr key={idx} className="hover:bg-muted/30">
-													<td className="px-2 py-1 text-muted-foreground bg-muted/30 border-r text-center">{idx + 1}</td>
+													<td className="px-2 py-1 text-muted-foreground bg-muted/30 border-r text-center">
+														{pageOffset + idx + 1}
+													</td>
 													{preview.headers.map((header) => (
 														<td key={header} className="px-2 py-1 border-r">
 															{row[header] == null ? (

@@ -73,6 +73,7 @@
 - 轻协作评论/批注（2026-02-15）：
   - 后端新增评论接口（基于现有审计流，不新增表）：  
     - `GET /api/screens/{id}/comments`  
+    - `GET /api/screens/{id}/comments/changes?sinceId=&limit=`（增量同步）  
     - `POST /api/screens/{id}/comments`  
     - `POST /api/screens/{id}/comments/{commentId}/resolve`  
     - `POST /api/screens/{id}/comments/{commentId}/reopen`
@@ -80,10 +81,29 @@
     - `ScreenHeader` 增加“协作”入口；
     - 支持按组件添加评论、查看状态、标记已解决/重新打开；
     - 新增轻量冲突提示（草稿更新时间漂移检测）。
-  - 协作面板可用性增强（2026-02-15）：
+- 协作面板可用性增强（2026-02-15）：
     - 新增自动轮询刷新（可开关，默认 15 秒）；
     - 支持配置轮询间隔（5-120 秒）；
     - 轮询刷新走静默模式，不打断当前编辑与评论输入。
+    - 轮询升级为增量同步（基于 `sinceId/cursor`）：
+      - 常规轮询优先拉取变更评论并合并本地列表；
+      - 发生窗口丢失时后端返回 `fullReload=true`，前端自动全量回补；
+    - 兼容降级：增量接口不可用时自动回退到全量拉取。
+- 准实时协作补强（2026-02-16）：
+  - 后端新增长轮询接口：`GET /api/screens/{id}/comments/live?sinceId=&limit=&waitMs=`
+    - 在 `waitMs` 窗口内等待评论变更（新增/解决/重开），无变化则超时返回；
+    - 输出协议与 `comments/changes` 保持一致（`cursor/fullReload/rows`）。
+  - 前端协作面板新增“实时长轮询”开关（默认开启）：
+    - 开启后优先走长轮询链路，评论变更可在秒级同步；
+    - 失败时自动降级到现有增量轮询，保证现场稳定性。
+- 流式协作补强（2026-02-16）：
+  - 后端新增 SSE 流接口：`GET /api/screens/{id}/comments/stream?sinceId=&limit=&durationSec=&waitMs=`
+    - 输出 `ready/comment-change/heartbeat/stream-end` 事件；
+    - 以固定窗口保持长连接，结束后前端可按最新 cursor 自动续连。
+  - 前端协作面板新增 “SSE实时流” 开关：
+    - 浏览器支持时优先走 SSE；
+    - SSE 出错自动回退到增量轮询链路，确保不丢评论更新；
+    - 浏览器不支持 SSE 时自动提示并降级轮询。
 - 编辑锁冲突防护（2026-02-15）：
   - 后端新增编辑锁表与接口：
     - 表：`analytics_screen_edit_lock`
@@ -118,6 +138,14 @@
     - 支持 `format/mode/device/delayMs` 参数；
     - 导出页会再次执行 `export-prepare`，保证直连导出链路也受策略约束。
     - 导出页按合规策略渲染水印（`watermarkEnabled/watermarkText`）。
+    - 未显式指定 `device` 时按当前视口自动判定导出设备模式（PC/平板/手机）。
+    - 导出一致性增强（2026-02-16）：
+      - `export-prepare` 返回本次导出的冻结 `screenSpec` 快照（可选 `includeScreenSpec`）；
+      - 返回 `requestedMode/resolvedMode/specDigest`，支持导出回放与一致性审计；
+      - 导出页优先使用该快照渲染，避免“prepare 到导出执行窗口”内的草稿漂移。
+    - 导出审计补强：
+      - `export-report` 记录 `resolvedMode`，可区分请求模式与实际导出模式（例如 published 回退 draft）。
+      - `export-report` 记录 `specDigest`，实现“导出准备快照 -> 导出结果”链路追踪。
     - 新增导出失败回退链路：
       - PNG：跨域资源导致截图失败时自动打开预览页回退；
       - PDF：自动切换到 DOM 打印回退模式；
@@ -136,5 +164,24 @@
     - 支持一键选中冲突组件定位；
     - 支持一键重载最新草稿继续编辑。
 - 待继续：
-  - 目前仍不是实时协作（后续可补 WebSocket 协作态同步与评论实时推送）。
+  - 目前已支持长轮询 + SSE 准实时协作，后续可补 WebSocket 双向协作态（输入中/光标态/presence）。
   - PNG/PDF 仍是浏览器侧轻实现，后续可升级为服务端一致性渲染导出。
+- 协作态 presence/typing 补齐（2026-02-17）：
+  - 后端新增轻量在线协作接口（内存态 + TTL 清理）：
+    - `GET /api/screens/{id}/collaboration/presence`
+    - `POST /api/screens/{id}/collaboration/presence/heartbeat`
+    - `POST /api/screens/{id}/collaboration/presence/leave`
+  - 接口输出会话级在线成员信息：`displayName/componentId/typing/idleSeconds/mine`，用于前端展示“谁在线、谁在输入、正在看哪个组件”。
+  - 前端协作面板新增“在线协作态”区块：
+    - 实时展示在线人数、输入中成员、会话标签；
+    - 面板打开后自动心跳，输入评论时自动上报 typing 状态；
+    - 面板关闭或离开时主动 `leave`，降低在线状态残留。
+- 在线协作态 SSE 增强（2026-02-17）：
+  - 后端新增 `GET /api/screens/{id}/collaboration/presence/stream`（SSE）：
+    - 事件：`ready/presence-change/heartbeat/stream-end`；
+    - 支持 `sessionId/ttlSeconds/durationSec/waitMs` 参数；
+    - 在线状态变更时推送 `presence-change`，无变化时发送心跳。
+  - `GET /collaboration/presence` 增加 `sessionId` 参数，确保“mine”会话标识稳定。
+  - 前端协作面板新增“在线态SSE”开关：
+    - 开启后在线成员优先走 SSE 秒级同步；
+    - 失败自动回退一次快照拉取并重连，不中断批注流程。

@@ -179,6 +179,15 @@ export default function Page({ embedded }: Props) {
 	const [editing, setEditing] = useState<ReportLink | null>(null);
 	const [modalOpen, setModalOpen] = useState(false);
 	const [form] = Form.useForm<FormValues>();
+	const queryDatasetMeta = useMemo(() => {
+		const map = new Map<string, QueryDatasetAsset>();
+		for (const item of queryDatasets) {
+			if (item?.id) {
+				map.set(item.id, item);
+			}
+		}
+		return map;
+	}, [queryDatasets]);
 
 	const fetchList = useCallback(async () => {
 		setLoading(true);
@@ -382,12 +391,18 @@ export default function Page({ embedded }: Props) {
 				render: (_value, record) => {
 					if (!record?.queryDatasetId) return <Text type="secondary">-</Text>;
 					const display = record.queryDatasetName || record.queryDatasetId;
+					const contract = normalizeText(queryDatasetMeta.get(record.queryDatasetId)?.semanticContractVersion);
 					return (
 						<Space direction="vertical" size={0}>
 							<Text>{display}</Text>
 							<Text type="secondary" style={{ fontSize: 12 }}>
 								版本 {record.queryDatasetVersion || "latest"}
 							</Text>
+							{contract ? (
+								<Tag color="geekblue" style={{ marginInlineEnd: 0 }}>
+									契约 {contract}
+								</Tag>
+							) : null}
 						</Space>
 					);
 				},
@@ -438,7 +453,7 @@ export default function Page({ embedded }: Props) {
 				),
 			},
 		],
-		[hasPurgePermission],
+		[hasPurgePermission, queryDatasetMeta],
 	);
 
 	return (
@@ -597,7 +612,9 @@ export default function Page({ embedded }: Props) {
 								allowClear
 								placeholder="可选，绑定 SQL 查询沉淀数据集"
 								options={queryDatasets.map((item) => ({
-									label: item.name,
+									label: item.semanticContractVersion
+										? `${item.name} · 契约 ${item.semanticContractVersion}`
+										: item.name,
 									value: item.id,
 								}))}
 								showSearch

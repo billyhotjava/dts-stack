@@ -64,12 +64,19 @@ public class DbtDagService {
         if (!StringUtils.hasText(selector)) {
             return null;
         }
-        String trimmed = selector.trim();
-        String normalized = trimmed.toLowerCase(Locale.ROOT);
-        if (normalized.startsWith("tag:")) {
-            return trimmed.substring(4).trim();
+        String[] parts = selector.trim().split("[,\\s]+");
+        for (String part : parts) {
+            if (!StringUtils.hasText(part)) {
+                continue;
+            }
+            String lower = part.toLowerCase(Locale.ROOT);
+            if (lower.startsWith("tag:")) {
+                String value = part.substring(4).trim();
+                if (StringUtils.hasText(value)) {
+                    return value;
+                }
+            }
         }
-        // 不再支持 tab: 这个 typo，只支持标准的 tag:
         return null;
     }
 
@@ -245,9 +252,20 @@ public class DbtDagService {
 
 
             def build_command():
+                operation = "{{ dag_run.conf.get('operation', 'run') }}"
                 selector = "{{ dag_run.conf.get('models', '%s') }}"
                 target = "{{ dag_run.conf.get('target', '%s') }}"
-                return ["run", "--project-dir", DBT_PROJECT_MOUNT, "--profiles-dir", DBT_PROFILES_MOUNT, "--select", selector, "--target", target]
+                operation = (operation or "run").lower()
+                common_args = ["--project-dir", DBT_PROJECT_MOUNT, "--profiles-dir", DBT_PROFILES_MOUNT, "--target", target]
+                if operation == "docs":
+                    return ["docs", "generate"] + common_args
+                if operation == "compile":
+                    return ["compile"] + common_args + ["--select", selector]
+                if operation == "test":
+                    return ["test"] + common_args + ["--select", selector]
+                if operation == "build":
+                    return ["build"] + common_args + ["--select", selector]
+                return ["run"] + common_args + ["--select", selector]
 
 
             with DAG(

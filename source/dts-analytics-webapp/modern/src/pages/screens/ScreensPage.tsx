@@ -23,6 +23,7 @@ export default function ScreensPage() {
     const [aiCreating, setAiCreating] = useState(false);
     const [aiRefinePrompt, setAiRefinePrompt] = useState('');
     const [aiResult, setAiResult] = useState<ScreenAiGenerationResponse | null>(null);
+    const [aiContextHistory, setAiContextHistory] = useState<string[]>([]);
 
     const loadScreens = useCallback(() => {
         setLoading(true);
@@ -48,8 +49,9 @@ export default function ScreensPage() {
 
     const handleOpenAiGenerator = () => {
         setAiPrompt('生成一个面向运营的周报大屏，包含趋势、结构占比、区域排名和明细表');
-        setAiRefinePrompt('改成三列布局，增加区域筛选，切换为浅色商务风格');
+        setAiRefinePrompt('改成三列布局，增加区域筛选，切换为浅色商务风格，刷新30秒并放大字体');
         setAiResult(null);
+        setAiContextHistory([]);
         setShowAiGenerator(true);
     };
 
@@ -96,6 +98,7 @@ export default function ScreensPage() {
                 height: 1080,
             });
             setAiResult(result);
+            setAiContextHistory((prev) => ([...prev, `初始需求: ${prompt}`]).slice(-12));
         } catch (err) {
             console.error('Failed to generate ai screen spec:', err);
             alert('AI 生成失败');
@@ -147,14 +150,43 @@ export default function ScreensPage() {
             const result = await analyticsApi.reviseScreenSpec({
                 prompt,
                 screenSpec: screenSpec as Record<string, unknown>,
+                context: aiContextHistory.slice(-8),
             });
             setAiResult(result);
+            setAiContextHistory((prev) => {
+                const next = [...prev, `优化指令: ${prompt}`];
+                if (Array.isArray(result.actions) && result.actions.length > 0) {
+                    next.push(`执行结果: ${result.actions.join('；')}`);
+                }
+                return next.slice(-12);
+            });
         } catch (err) {
             console.error('Failed to refine ai screen spec:', err);
             alert('AI 优化失败');
         } finally {
             setAiRefining(false);
         }
+    };
+
+    const handleCopyAiRecommendations = async () => {
+        if (!aiResult) {
+            alert('请先生成 AI 方案');
+            return;
+        }
+        const payload = {
+            prompt: aiResult.prompt || aiPrompt.trim(),
+            intent: aiResult.intent || {},
+            queryRecommendations: aiResult.queryRecommendations || [],
+            vizRecommendations: aiResult.vizRecommendations || [],
+            quality: aiResult.quality || {},
+            actions: aiResult.actions || [],
+        };
+        const copied = await writeTextToClipboard(JSON.stringify(payload, null, 2));
+        if (!copied) {
+            alert('复制失败，请稍后重试');
+            return;
+        }
+        alert('AI建议已复制到剪贴板');
     };
 
     const handleEdit = (id: string | number) => {
@@ -509,6 +541,24 @@ export default function ScreensPage() {
                     background: rgba(15, 23, 42, 0.7);
                 }
 
+                .ai-context-card {
+                    border: 1px solid rgba(148, 163, 184, 0.2);
+                    border-radius: 8px;
+                    padding: 10px 12px;
+                    background: rgba(15, 23, 42, 0.45);
+                }
+
+                .ai-context-list {
+                    margin: 8px 0 0;
+                    padding-left: 18px;
+                    display: grid;
+                    gap: 4px;
+                    max-height: 140px;
+                    overflow: auto;
+                    font-size: 12px;
+                    color: #cbd5e1;
+                }
+
                 .ai-result-grid {
                     display: grid;
                     grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -566,8 +616,27 @@ export default function ScreensPage() {
                                 style={{ minHeight: 78 }}
                                 value={aiRefinePrompt}
                                 onChange={(e) => setAiRefinePrompt(e.target.value)}
-                                placeholder="优化指令示例：改成三列布局，首图改成柱状图，切换为浅色主题，并增加筛选器"
+                                placeholder="优化指令示例：改成三列布局，首图改成柱状图，切换为浅色主题，增加筛选器，刷新30秒，放大字体"
                             />
+                            {aiContextHistory.length > 0 && (
+                                <div className="ai-context-card">
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <div style={{ fontWeight: 600, fontSize: 12 }}>多轮上下文（最近 12 条）</div>
+                                        <button
+                                            className="action-btn"
+                                            style={{ maxWidth: 100 }}
+                                            onClick={() => setAiContextHistory([])}
+                                        >
+                                            清空上下文
+                                        </button>
+                                    </div>
+                                    <ol className="ai-context-list">
+                                        {aiContextHistory.map((item, index) => (
+                                            <li key={`${item}-${index}`}>{item}</li>
+                                        ))}
+                                    </ol>
+                                </div>
+                            )}
                             {aiResult?.screenSpec && (
                                 <div className="ai-result-card">
                                     <div style={{ fontWeight: 600 }}>生成预览</div>
@@ -576,7 +645,16 @@ export default function ScreensPage() {
                                         <div className="ai-result-item">主题: {aiResult.screenSpec.theme || '-'}</div>
                                         <div className="ai-result-item">组件数: {(aiResult.screenSpec.components || []).length}</div>
                                         <div className="ai-result-item">质量分: {aiResult.quality?.score ?? '-'}</div>
+                                        <div className="ai-result-item">上下文条数: {aiResult.contextCount ?? 0}</div>
+                                        <div className="ai-result-item">领域: {aiResult.intent?.domain || '-'}</div>
+                                        <div className="ai-result-item">时间范围: {aiResult.intent?.timeRange || '-'}</div>
+                                        <div className="ai-result-item">粒度: {aiResult.intent?.granularity || '-'}</div>
                                     </div>
+                                    {aiResult.intent && (
+                                        <div style={{ marginTop: 10, fontSize: 12, color: '#cbd5e1' }}>
+                                            识别指标：{(aiResult.intent.metrics || []).join('、') || '-'}；维度：{(aiResult.intent.dimensions || []).join('、') || '-'}；筛选：{(aiResult.intent.filters || []).join('、') || '-'}
+                                        </div>
+                                    )}
                                     {Array.isArray(aiResult.quality?.warnings) && aiResult.quality?.warnings.length > 0 && (
                                         <div style={{ marginTop: 10, fontSize: 12, color: '#fbbf24' }}>
                                             {aiResult.quality?.warnings.join('；')}
@@ -585,6 +663,16 @@ export default function ScreensPage() {
                                     {Array.isArray(aiResult.actions) && aiResult.actions.length > 0 && (
                                         <div style={{ marginTop: 10, fontSize: 12, color: '#38bdf8' }}>
                                             已执行：{aiResult.actions.join('；')}
+                                        </div>
+                                    )}
+                                    {Array.isArray(aiResult.queryRecommendations) && aiResult.queryRecommendations.length > 0 && (
+                                        <div style={{ marginTop: 10, fontSize: 12, color: '#93c5fd' }}>
+                                            查询建议：{aiResult.queryRecommendations.map((q) => `${q.id || '-'}(${q.purpose || '-'})`).join('；')}
+                                        </div>
+                                    )}
+                                    {Array.isArray(aiResult.vizRecommendations) && aiResult.vizRecommendations.length > 0 && (
+                                        <div style={{ marginTop: 10, fontSize: 12, color: '#a7f3d0' }}>
+                                            图表建议：{aiResult.vizRecommendations.map((v) => `${v.componentType || '-'}←${v.queryId || '-'}`).join('；')}
                                         </div>
                                     )}
                                 </div>
@@ -597,6 +685,14 @@ export default function ScreensPage() {
                             </button>
                             <button className="action-btn" style={{ maxWidth: 130 }} onClick={handleRefineAi} disabled={aiRefining || !aiResult?.screenSpec}>
                                 {aiRefining ? '优化中...' : '按指令优化'}
+                            </button>
+                            <button
+                                className="action-btn"
+                                style={{ maxWidth: 130 }}
+                                onClick={handleCopyAiRecommendations}
+                                disabled={!aiResult}
+                            >
+                                复制建议
                             </button>
                             <button className="primary-btn" onClick={handleCreateFromAi} disabled={aiCreating || !aiResult?.screenSpec}>
                                 {aiCreating ? '创建中...' : '创建草稿'}

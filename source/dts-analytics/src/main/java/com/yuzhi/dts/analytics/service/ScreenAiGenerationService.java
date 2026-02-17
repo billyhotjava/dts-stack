@@ -4,11 +4,21 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Locale;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.springframework.stereotype.Service;
 
 @Service
 public class ScreenAiGenerationService {
+
+    private static final Pattern REFRESH_SECONDS_PATTERN = Pattern.compile("(\\d{1,4})\\s*(秒|s|sec|second)");
+    private static final Pattern REFRESH_MINUTES_PATTERN = Pattern.compile("(\\d{1,3})\\s*(分|分钟|min|minute)");
+    private static final Pattern TAB_WORD_PATTERN = Pattern.compile("\\btab\\b");
 
     private final ObjectMapper objectMapper;
 
@@ -22,6 +32,7 @@ public class ScreenAiGenerationService {
         int canvasHeight = height == null || height <= 0 ? 1080 : height;
 
         String keyword = normalizedPrompt.toLowerCase(Locale.ROOT);
+        IntentProfile intent = parseIntent(normalizedPrompt, keyword);
         String theme = resolveTheme(keyword);
         String backgroundColor = resolveBackground(theme);
 
@@ -32,8 +43,9 @@ public class ScreenAiGenerationService {
         screenSpec.put("height", canvasHeight);
         screenSpec.put("backgroundColor", backgroundColor);
         screenSpec.put("theme", theme);
-        screenSpec.set("components", buildComponents(keyword, canvasWidth, canvasHeight, theme));
-        screenSpec.set("globalVariables", buildGlobalVariables(keyword));
+        screenSpec.set("components", buildComponents(keyword, canvasWidth, canvasHeight, theme, intent));
+        screenSpec.set("globalVariables", buildGlobalVariables(keyword, intent));
+        screenSpec.put("refreshIntervalSeconds", recommendedRefreshSeconds(intent));
 
         ObjectNode quality = objectMapper.createObjectNode();
         quality.put("score", estimateScore(normalizedPrompt, keyword));
@@ -47,19 +59,28 @@ public class ScreenAiGenerationService {
         ArrayNode suggestions = objectMapper.createArrayNode();
         suggestions.add("在编辑器中为核心组件绑定 Card/数据库数据源。" );
         suggestions.add("通过全局变量配置时间范围、区域、组织联动。" );
+        suggestions.add("可继续输入优化指令：改成4K、放大字体、增加指标卡、删除表格、刷新30秒。");
         quality.set("suggestions", suggestions);
 
         ObjectNode result = objectMapper.createObjectNode();
         result.put("engine", "heuristic-v1");
         result.put("prompt", normalizedPrompt);
+        result.set("intent", toIntentNode(intent));
+        result.set("queryRecommendations", buildQueryRecommendations(intent));
+        result.set("vizRecommendations", buildVizRecommendations(intent));
         result.set("screenSpec", screenSpec);
         result.set("quality", quality);
         return result;
     }
 
     public ObjectNode revise(String instruction, JsonNode screenSpecNode) {
+        return revise(instruction, screenSpecNode, List.of());
+    }
+
+    public ObjectNode revise(String instruction, JsonNode screenSpecNode, List<String> context) {
         String normalized = instruction == null ? "" : instruction.trim();
-        String keyword = normalized.toLowerCase(Locale.ROOT);
+        String keyword = buildKeyword(normalized, context);
+        IntentProfile intent = parseIntent(normalized, keyword);
 
         ObjectNode screenSpec = screenSpecNode != null && screenSpecNode.isObject()
                 ? ((ObjectNode) screenSpecNode).deepCopy()
@@ -121,6 +142,52 @@ public class ScreenAiGenerationService {
             actions.add("已补充筛选器组件");
         }
 
+        if (hasTabSwitchIntent(keyword)) {
+            int affected = addTabScenarioSwitcher(screenSpec, keyword);
+            if (affected >= 0) {
+                actions.add("已生成 Tab 场景切换并配置 " + affected + " 个组件显隐规则");
+            }
+        }
+
+        if (containsAny(keyword, "4k", "3840", "2160", "超清")) {
+            resizeCanvas(screenSpec, 3840, 2160);
+            actions.add("已切换为 4K 画布");
+        } else if (containsAny(keyword, "1080p", "全高清", "fhd")) {
+            resizeCanvas(screenSpec, 1920, 1080);
+            actions.add("已切换为 1080P 画布");
+        }
+
+        if (containsAny(keyword, "放大字体", "字体大", "字号大", "font larger")) {
+            int changed = scaleTypography(screenSpec, 1.18);
+            if (changed > 0) {
+                actions.add("已放大 " + changed + " 项字体");
+            }
+        } else if (containsAny(keyword, "缩小字体", "字体小", "字号小", "font smaller")) {
+            int changed = scaleTypography(screenSpec, 0.88);
+            if (changed > 0) {
+                actions.add("已缩小 " + changed + " 项字体");
+            }
+        }
+
+        if (containsAny(keyword, "增加指标卡", "新增指标卡", "增加kpi", "新增kpi")) {
+            if (addNumberCard(screenSpec)) {
+                actions.add("已新增指标卡");
+            }
+        }
+
+        if (containsAny(keyword, "删除明细表", "删除表格", "移除表格", "去掉表格")) {
+            int removed = removeComponentsByType(screenSpec, "table");
+            if (removed > 0) {
+                actions.add("已移除 " + removed + " 个表格组件");
+            }
+        }
+
+        Integer refreshSeconds = parseRefreshIntervalSeconds(keyword);
+        if (refreshSeconds != null) {
+            screenSpec.put("refreshIntervalSeconds", refreshSeconds);
+            actions.add("已设置刷新间隔为 " + refreshSeconds + " 秒");
+        }
+
         ObjectNode quality = objectMapper.createObjectNode();
         quality.put("score", Math.min(97, 78 + actions.size() * 4));
         ArrayNode warnings = objectMapper.createArrayNode();
@@ -131,22 +198,44 @@ public class ScreenAiGenerationService {
         }
         quality.set("warnings", warnings);
         ArrayNode suggestions = objectMapper.createArrayNode();
-        suggestions.add("可继续输入：改成三列布局 / 换成饼图 / 加地区筛选。");
+        suggestions.add("可继续输入：改成三列布局 / 换成饼图 / 加地区筛选 / 放大字体 / 刷新30秒。");
         quality.set("suggestions", suggestions);
 
         ObjectNode result = objectMapper.createObjectNode();
         result.put("engine", "heuristic-v1-revise");
         result.put("prompt", normalized);
+        result.put("contextCount", context == null ? 0 : context.size());
+        result.set("intent", toIntentNode(intent));
+        result.set("queryRecommendations", buildQueryRecommendations(intent));
+        result.set("vizRecommendations", buildVizRecommendations(intent));
         result.set("screenSpec", screenSpec);
         result.set("quality", quality);
         result.set("actions", actions);
         return result;
     }
 
-    private ArrayNode buildComponents(String keyword, int width, int height, String theme) {
+    private String buildKeyword(String instruction, List<String> context) {
+        List<String> lines = new ArrayList<>();
+        if (context != null) {
+            for (String item : context) {
+                String text = item == null ? "" : item.trim();
+                if (!text.isEmpty()) {
+                    lines.add(text);
+                }
+            }
+        }
+        String normalizedInstruction = instruction == null ? "" : instruction.trim();
+        if (!normalizedInstruction.isEmpty()) {
+            lines.add(normalizedInstruction);
+        }
+        return String.join(" ", lines).toLowerCase(Locale.ROOT);
+    }
+
+    private ArrayNode buildComponents(String keyword, int width, int height, String theme, IntentProfile intent) {
         ArrayNode components = objectMapper.createArrayNode();
         String titleColor = "glacier".equals(theme) ? "#1f2937" : "#e2f4ff";
         String subColor = "glacier".equals(theme) ? "#4b5563" : "#9cc9ff";
+        List<String> metricSlots = metricSlots(intent);
 
         int top = 20;
         int cardTop = 100;
@@ -186,20 +275,29 @@ public class ScreenAiGenerationService {
         int cardWidth = 280;
         int gap = 30;
         int firstCardX = (width - cardWidth * 4 - gap * 3) / 2;
-        components.add(numberCard("ai-card-1", "核心指标A", firstCardX, cardTop, cardWidth, 100, 80, 128560));
-        components.add(numberCard("ai-card-2", "核心指标B", firstCardX + (cardWidth + gap), cardTop, cardWidth, 100, 80, 32490));
-        components.add(numberCard("ai-card-3", "核心指标C", firstCardX + (cardWidth + gap) * 2, cardTop, cardWidth, 100, 80, 98.7));
-        components.add(numberCard("ai-card-4", "核心指标D", firstCardX + (cardWidth + gap) * 3, cardTop, cardWidth, 100, 80, 8743));
+        components.add(numberCard("ai-card-1", metricSlots.get(0), firstCardX, cardTop, cardWidth, 100, 80, 128560, "q-kpi"));
+        components.add(numberCard("ai-card-2", metricSlots.get(1), firstCardX + (cardWidth + gap), cardTop, cardWidth, 100, 80, 32490, "q-kpi"));
+        components.add(numberCard("ai-card-3", metricSlots.get(2), firstCardX + (cardWidth + gap) * 2, cardTop, cardWidth, 100, 80, 98.7, "q-kpi"));
+        components.add(numberCard("ai-card-4", metricSlots.get(3), firstCardX + (cardWidth + gap) * 3, cardTop, cardWidth, 100, 80, 8743, "q-kpi"));
 
-        components.add(lineChart("ai-line", chartTitle(keyword, "趋势分析"), 40, chartTop, 920, 410, 60));
-        components.add(barChart("ai-bar", chartTitle(keyword, "结构对比"), 990, chartTop, 470, 410, 60));
-        components.add(pieChart("ai-pie", chartTitle(keyword, "占比分析"), 1480, chartTop, 400, 410, 60));
-        components.add(tableComp("ai-table", chartTitle(keyword, "明细列表"), 40, bottomTop, width - 80, height - bottomTop - 40, 40));
+        components.add(lineChart("ai-line", chartTitle(keyword, "趋势分析"), 40, chartTop, 920, 410, 60, "q-trend"));
+        components.add(barChart("ai-bar", chartTitle(keyword, "结构对比"), 990, chartTop, 470, 410, 60, "q-compare"));
+        components.add(pieChart("ai-pie", chartTitle(keyword, "占比分析"), 1480, chartTop, 400, 410, 60, "q-share"));
+        components.add(tableComp("ai-table", chartTitle(keyword, "明细列表"), 40, bottomTop, width - 80, height - bottomTop - 40, 40, "q-detail"));
 
         return components;
     }
 
-    private ObjectNode numberCard(String id, String title, int x, int y, int width, int height, int zIndex, double value) {
+    private ObjectNode numberCard(
+            String id,
+            String title,
+            int x,
+            int y,
+            int width,
+            int height,
+            int zIndex,
+            double value,
+            String queryRef) {
         ObjectNode config = objectMapper.createObjectNode();
         config.put("title", title);
         config.put("value", value);
@@ -208,16 +306,19 @@ public class ScreenAiGenerationService {
         config.put("suffix", "");
         config.put("titleColor", "#9cc9ff");
         config.put("valueColor", "#f8fbff");
+        config.put("queryRef", queryRef);
+        config.put("bindMode", "suggested");
         return component(id, "number-card", title, x, y, width, height, zIndex, config);
     }
 
-    private ObjectNode lineChart(String id, String title, int x, int y, int width, int height, int zIndex) {
+    private ObjectNode lineChart(String id, String title, int x, int y, int width, int height, int zIndex, String queryRef) {
         ObjectNode config = objectMapper.createObjectNode();
         config.put("title", title);
         config.put("titleFontSize", 14);
         config.put("legendPosition", "top");
         config.put("lineSmooth", true);
         config.put("areaStyle", true);
+        config.put("queryRef", queryRef);
 
         ArrayNode xAxis = objectMapper.createArrayNode();
         xAxis.add("周一").add("周二").add("周三").add("周四").add("周五").add("周六").add("周日");
@@ -231,11 +332,12 @@ public class ScreenAiGenerationService {
         return component(id, "line-chart", title, x, y, width, height, zIndex, config);
     }
 
-    private ObjectNode barChart(String id, String title, int x, int y, int width, int height, int zIndex) {
+    private ObjectNode barChart(String id, String title, int x, int y, int width, int height, int zIndex, String queryRef) {
         ObjectNode config = objectMapper.createObjectNode();
         config.put("title", title);
         config.put("titleFontSize", 14);
         config.put("legendPosition", "top");
+        config.put("queryRef", queryRef);
 
         ArrayNode xAxis = objectMapper.createArrayNode();
         xAxis.add("A类").add("B类").add("C类").add("D类").add("E类");
@@ -249,11 +351,12 @@ public class ScreenAiGenerationService {
         return component(id, "bar-chart", title, x, y, width, height, zIndex, config);
     }
 
-    private ObjectNode pieChart(String id, String title, int x, int y, int width, int height, int zIndex) {
+    private ObjectNode pieChart(String id, String title, int x, int y, int width, int height, int zIndex, String queryRef) {
         ObjectNode config = objectMapper.createObjectNode();
         config.put("title", title);
         config.put("titleFontSize", 14);
         config.put("legendPosition", "bottom");
+        config.put("queryRef", queryRef);
 
         ArrayNode data = objectMapper.createArrayNode();
         data.add(objectMapper.createObjectNode().put("name", "渠道A").put("value", 335));
@@ -265,9 +368,10 @@ public class ScreenAiGenerationService {
         return component(id, "pie-chart", title, x, y, width, height, zIndex, config);
     }
 
-    private ObjectNode tableComp(String id, String title, int x, int y, int width, int height, int zIndex) {
+    private ObjectNode tableComp(String id, String title, int x, int y, int width, int height, int zIndex, String queryRef) {
         ObjectNode config = objectMapper.createObjectNode();
         config.put("title", title);
+        config.put("queryRef", queryRef);
 
         ArrayNode header = objectMapper.createArrayNode();
         header.add("维度").add("本期").add("上期").add("变化");
@@ -288,17 +392,19 @@ public class ScreenAiGenerationService {
         return component(id, "table", title, x, y, width, height, zIndex, config);
     }
 
-    private ArrayNode buildGlobalVariables(String keyword) {
+    private ArrayNode buildGlobalVariables(String keyword, IntentProfile intent) {
         ArrayNode variables = objectMapper.createArrayNode();
-        if (containsAny(keyword, "时间", "日期", "趋势", "同比", "环比", "day", "week", "month")) {
+        if (containsAny(keyword, "时间", "日期", "趋势", "同比", "环比", "day", "week", "month")
+                || intent.timeRange() != null) {
             variables.add(objectMapper.createObjectNode()
                     .put("key", "date_range")
                     .put("label", "时间范围")
                     .put("type", "string")
-                    .put("defaultValue", "最近7天")
+                    .put("defaultValue", intent.timeRange() == null ? "最近7天" : intent.timeRange())
                     .put("description", "用于驱动卡片参数中的时间范围"));
         }
-        if (containsAny(keyword, "地区", "区域", "省份", "城市", "region", "area")) {
+        if (containsAny(keyword, "地区", "区域", "省份", "城市", "region", "area")
+                || intent.dimensions().stream().anyMatch(dim -> containsAny(dim.toLowerCase(Locale.ROOT), "区域", "地区", "省", "市"))) {
             variables.add(objectMapper.createObjectNode()
                     .put("key", "region")
                     .put("label", "区域")
@@ -457,17 +563,519 @@ public class ScreenAiGenerationService {
         JsonNode varsNode = screenSpec.path("globalVariables");
         if (varsNode.isArray()) {
             ArrayNode vars = (ArrayNode) varsNode;
-            vars.add(objectMapper.createObjectNode()
-                    .put("key", "startDate")
-                    .put("label", "开始日期")
-                    .put("type", "date")
-                    .put("defaultValue", ""));
-            vars.add(objectMapper.createObjectNode()
-                    .put("key", "endDate")
-                    .put("label", "结束日期")
-                    .put("type", "date")
-                    .put("defaultValue", ""));
+            if (!hasVariableKey(vars, "startDate")) {
+                vars.add(objectMapper.createObjectNode()
+                        .put("key", "startDate")
+                        .put("label", "开始日期")
+                        .put("type", "date")
+                        .put("defaultValue", ""));
+            }
+            if (!hasVariableKey(vars, "endDate")) {
+                vars.add(objectMapper.createObjectNode()
+                        .put("key", "endDate")
+                        .put("label", "结束日期")
+                        .put("type", "date")
+                        .put("defaultValue", ""));
+            }
         }
+    }
+
+    private int addTabScenarioSwitcher(ObjectNode screenSpec, String keyword) {
+        JsonNode compsNode = screenSpec.path("components");
+        JsonNode varsNode = screenSpec.path("globalVariables");
+        if (!compsNode.isArray() || !varsNode.isArray()) {
+            return -1;
+        }
+        ArrayNode components = (ArrayNode) compsNode;
+        ArrayNode vars = (ArrayNode) varsNode;
+        ArrayNode options = resolveTabOptions(keyword);
+        List<String> tabValues = extractTabValues(options);
+        if (tabValues.isEmpty()) {
+            tabValues = List.of("overview");
+            options = objectMapper.createArrayNode().add(objectMapper.createObjectNode()
+                    .put("label", "总览")
+                    .put("value", "overview"));
+        }
+
+        String defaultValue = tabValues.get(0);
+        if (!hasVariableKey(vars, "tabKey")) {
+            vars.add(objectMapper.createObjectNode()
+                    .put("key", "tabKey")
+                    .put("label", "场景切换")
+                    .put("type", "string")
+                    .put("defaultValue", defaultValue)
+                    .put("description", "用于 Tab 场景显隐联动"));
+        }
+
+        ObjectNode existingSwitcher = null;
+        int maxZ = 0;
+        for (JsonNode item : components) {
+            if (item == null || !item.isObject()) continue;
+            ObjectNode comp = (ObjectNode) item;
+            maxZ = Math.max(maxZ, comp.path("zIndex").asInt(0));
+            if ("tab-switcher".equals(comp.path("type").asText(""))) {
+                existingSwitcher = comp;
+            }
+        }
+
+        if (existingSwitcher == null) {
+            ObjectNode config = objectMapper.createObjectNode()
+                    .put("label", "场景切换")
+                    .put("variableKey", "tabKey")
+                    .put("optionSourceMode", "manual")
+                    .put("defaultValue", defaultValue)
+                    .put("compact", false)
+                    .put("activeTextColor", "#0f172a")
+                    .put("activeBackgroundColor", "#38bdf8")
+                    .put("inactiveTextColor", "#94a3b8")
+                    .put("inactiveBackgroundColor", "#0f172a");
+            config.set("options", options);
+            components.add(component(
+                    "ai-tab-switcher",
+                    "tab-switcher",
+                    "场景切换",
+                    660,
+                    72,
+                    460,
+                    56,
+                    maxZ + 2,
+                    config));
+        } else {
+            ObjectNode config = existingSwitcher.path("config").isObject()
+                    ? (ObjectNode) existingSwitcher.path("config")
+                    : objectMapper.createObjectNode();
+            config.put("label", "场景切换");
+            config.put("variableKey", "tabKey");
+            config.put("optionSourceMode", "manual");
+            config.put("defaultValue", defaultValue);
+            config.set("options", options);
+            existingSwitcher.set("config", config);
+        }
+
+        Set<String> targetTypes = Set.of(
+                "line-chart", "bar-chart", "pie-chart", "map-chart", "table",
+                "scroll-board", "scroll-ranking", "funnel-chart", "scatter-chart", "radar-chart", "gauge-chart");
+        int assigned = 0;
+        int index = 0;
+        for (JsonNode item : components) {
+            if (item == null || !item.isObject()) continue;
+            ObjectNode comp = (ObjectNode) item;
+            String type = comp.path("type").asText("");
+            if (!targetTypes.contains(type)) continue;
+            ObjectNode config = comp.path("config").isObject()
+                    ? (ObjectNode) comp.path("config")
+                    : objectMapper.createObjectNode();
+            ArrayNode matchValues = objectMapper.createArrayNode();
+            String matchValue = tabValues.get(index % tabValues.size());
+            matchValues.add(matchValue);
+            config.put("visibilityRuleEnabled", true);
+            config.put("visibilityVariableKey", "tabKey");
+            config.put("visibilityMatchMode", "equals");
+            config.set("visibilityMatchValues", matchValues);
+            comp.set("config", config);
+            assigned++;
+            index++;
+        }
+        return assigned;
+    }
+
+    private ArrayNode resolveTabOptions(String keyword) {
+        ArrayNode options = objectMapper.createArrayNode();
+        if (containsAny(keyword, "设备", "告警", "监控")) {
+            options.add(objectMapper.createObjectNode().put("label", "总览").put("value", "overview"));
+            options.add(objectMapper.createObjectNode().put("label", "设备").put("value", "device"));
+            options.add(objectMapper.createObjectNode().put("label", "告警").put("value", "alert"));
+            return options;
+        }
+        if (containsAny(keyword, "区域", "地区", "省", "市")) {
+            options.add(objectMapper.createObjectNode().put("label", "总览").put("value", "overview"));
+            options.add(objectMapper.createObjectNode().put("label", "区域").put("value", "region"));
+            options.add(objectMapper.createObjectNode().put("label", "明细").put("value", "detail"));
+            return options;
+        }
+        options.add(objectMapper.createObjectNode().put("label", "总览").put("value", "overview"));
+        options.add(objectMapper.createObjectNode().put("label", "趋势").put("value", "trend"));
+        options.add(objectMapper.createObjectNode().put("label", "明细").put("value", "detail"));
+        return options;
+    }
+
+    private List<String> extractTabValues(ArrayNode options) {
+        List<String> out = new ArrayList<>();
+        for (JsonNode item : options) {
+            if (item == null || !item.isObject()) continue;
+            String value = item.path("value").asText("").trim();
+            if (!value.isEmpty()) {
+                out.add(value);
+            }
+        }
+        return out;
+    }
+
+    private boolean hasTabSwitchIntent(String keyword) {
+        if (containsAny(keyword, "tab切换", "tab组件", "标签页", "分场景", "场景切换", "切换场景", "分视图", "视图切换")) {
+            return true;
+        }
+        return TAB_WORD_PATTERN.matcher(keyword).find();
+    }
+
+    private boolean hasVariableKey(ArrayNode vars, String key) {
+        for (JsonNode item : vars) {
+            if (item != null && item.isObject() && key.equals(item.path("key").asText())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private Integer parseRefreshIntervalSeconds(String keyword) {
+        Matcher secondsMatcher = REFRESH_SECONDS_PATTERN.matcher(keyword);
+        if (secondsMatcher.find()) {
+            int seconds = safeParseInt(secondsMatcher.group(1));
+            return clamp(seconds, 5, 3600);
+        }
+        Matcher minutesMatcher = REFRESH_MINUTES_PATTERN.matcher(keyword);
+        if (minutesMatcher.find()) {
+            int minutes = safeParseInt(minutesMatcher.group(1));
+            return clamp(minutes * 60, 5, 3600);
+        }
+        if (containsAny(keyword, "实时刷新", "高频刷新")) {
+            return 5;
+        }
+        return null;
+    }
+
+    private int safeParseInt(String value) {
+        if (value == null || value.isBlank()) {
+            return 0;
+        }
+        try {
+            return Integer.parseInt(value.trim());
+        } catch (NumberFormatException e) {
+            return 0;
+        }
+    }
+
+    private int clamp(int value, int min, int max) {
+        return Math.max(min, Math.min(max, value));
+    }
+
+    private int scaleTypography(ObjectNode screenSpec, double factor) {
+        JsonNode node = screenSpec.path("components");
+        if (!node.isArray()) {
+            return 0;
+        }
+        int changed = 0;
+        for (JsonNode item : node) {
+            if (item == null || !item.isObject()) {
+                continue;
+            }
+            ObjectNode config = item.path("config").isObject() ? (ObjectNode) item.path("config") : null;
+            if (config == null) {
+                continue;
+            }
+            changed += scaleTypographyFields(config, factor);
+        }
+        return changed;
+    }
+
+    private int scaleTypographyFields(ObjectNode config, double factor) {
+        int changed = 0;
+        List<String> keys = List.of("fontSize", "titleFontSize", "labelFontSize", "valueFontSize");
+        for (String key : keys) {
+            JsonNode valueNode = config.get(key);
+            if (valueNode != null && valueNode.isNumber()) {
+                int current = valueNode.asInt();
+                int scaled = Math.max(10, Math.min(72, (int) Math.round(current * factor)));
+                if (scaled != current) {
+                    config.put(key, scaled);
+                    changed++;
+                }
+            }
+        }
+        return changed;
+    }
+
+    private boolean addNumberCard(ObjectNode screenSpec) {
+        JsonNode node = screenSpec.path("components");
+        if (!node.isArray()) {
+            return false;
+        }
+        ArrayNode components = (ArrayNode) node;
+        int maxZ = 0;
+        int maxY = 0;
+        int count = 0;
+        for (JsonNode item : components) {
+            if (item == null || !item.isObject()) {
+                continue;
+            }
+            String type = item.path("type").asText("");
+            maxZ = Math.max(maxZ, item.path("zIndex").asInt(0));
+            maxY = Math.max(maxY, item.path("y").asInt(0));
+            if ("number-card".equals(type)) {
+                count++;
+            }
+        }
+        String id = "ai-card-extra-" + (count + 1);
+        components.add(numberCard(
+                id,
+                "新增指标" + (count + 1),
+                40 + (count % 4) * 300,
+                Math.max(100, maxY + 30),
+                280,
+                100,
+                maxZ + 1,
+                0,
+                "q-kpi"));
+        return true;
+    }
+
+    private int removeComponentsByType(ObjectNode screenSpec, String type) {
+        JsonNode node = screenSpec.path("components");
+        if (!node.isArray()) {
+            return 0;
+        }
+        ArrayNode source = (ArrayNode) node;
+        ArrayNode filtered = objectMapper.createArrayNode();
+        int removed = 0;
+        for (JsonNode item : source) {
+            if (item != null && item.isObject() && type.equals(item.path("type").asText(""))) {
+                removed++;
+                continue;
+            }
+            filtered.add(item);
+        }
+        if (removed > 0) {
+            screenSpec.set("components", filtered);
+        }
+        return removed;
+    }
+
+    private void resizeCanvas(ObjectNode screenSpec, int width, int height) {
+        int oldWidth = Math.max(1, screenSpec.path("width").asInt(width));
+        int oldHeight = Math.max(1, screenSpec.path("height").asInt(height));
+        double ratioX = width / (double) oldWidth;
+        double ratioY = height / (double) oldHeight;
+        screenSpec.put("width", width);
+        screenSpec.put("height", height);
+        JsonNode node = screenSpec.path("components");
+        if (!node.isArray()) {
+            return;
+        }
+        for (JsonNode item : node) {
+            if (item == null || !item.isObject()) {
+                continue;
+            }
+            ObjectNode comp = (ObjectNode) item;
+            comp.put("x", (int) Math.round(comp.path("x").asInt(0) * ratioX));
+            comp.put("y", (int) Math.round(comp.path("y").asInt(0) * ratioY));
+            comp.put("width", Math.max(120, (int) Math.round(comp.path("width").asInt(100) * ratioX)));
+            comp.put("height", Math.max(60, (int) Math.round(comp.path("height").asInt(60) * ratioY)));
+        }
+    }
+
+    private IntentProfile parseIntent(String prompt, String keyword) {
+        Set<String> metrics = new LinkedHashSet<>();
+        if (containsAny(keyword, "销售", "收入", "gmv")) {
+            metrics.add("销售额");
+            metrics.add("订单量");
+            metrics.add("客单价");
+            metrics.add("转化率");
+        }
+        if (containsAny(keyword, "制造", "产线", "设备", "良率", "quality")) {
+            metrics.add("产量");
+            metrics.add("良率");
+            metrics.add("停机时长");
+            metrics.add("告警数");
+        }
+        if (containsAny(keyword, "能耗", "电耗", "碳排", "环保")) {
+            metrics.add("总能耗");
+            metrics.add("单位能耗");
+            metrics.add("碳排放量");
+        }
+        if (metrics.isEmpty()) {
+            metrics.add("核心指标A");
+            metrics.add("核心指标B");
+            metrics.add("核心指标C");
+            metrics.add("核心指标D");
+        }
+
+        Set<String> dimensions = new LinkedHashSet<>();
+        if (containsAny(keyword, "区域", "地区", "省", "市")) {
+            dimensions.add("区域");
+        }
+        if (containsAny(keyword, "产品", "品类", "型号")) {
+            dimensions.add("产品");
+        }
+        if (containsAny(keyword, "班组", "人员", "团队", "组织", "部门")) {
+            dimensions.add("组织");
+        }
+        if (dimensions.isEmpty()) {
+            dimensions.add("日期");
+            dimensions.add("区域");
+        }
+
+        Set<String> filters = new LinkedHashSet<>();
+        if (containsAny(keyword, "筛选", "过滤")) {
+            filters.add("region");
+            filters.add("date_range");
+        }
+        if (containsAny(keyword, "top", "排名", "前")) {
+            filters.add("top_n");
+        }
+
+        String timeRange = resolveTimeRange(keyword);
+        String granularity = resolveGranularity(keyword);
+        String domain = resolveDomain(keyword);
+        if (prompt != null && prompt.length() > 120 && !filters.contains("keyword")) {
+            filters.add("keyword");
+        }
+
+        return new IntentProfile(
+                domain,
+                List.copyOf(metrics),
+                List.copyOf(dimensions),
+                timeRange,
+                List.copyOf(filters),
+                granularity);
+    }
+
+    private String resolveDomain(String keyword) {
+        if (containsAny(keyword, "制造", "产线", "设备", "质检")) {
+            return "manufacturing";
+        }
+        if (containsAny(keyword, "销售", "客户", "订单", "营收")) {
+            return "sales";
+        }
+        if (containsAny(keyword, "能耗", "环保", "碳")) {
+            return "energy";
+        }
+        return "operations";
+    }
+
+    private String resolveTimeRange(String keyword) {
+        if (containsAny(keyword, "近24小时", "24h")) {
+            return "近24小时";
+        }
+        if (containsAny(keyword, "近7天", "最近7天", "周报")) {
+            return "最近7天";
+        }
+        if (containsAny(keyword, "近30天", "最近30天", "月报")) {
+            return "最近30天";
+        }
+        if (containsAny(keyword, "近12个月", "最近一年", "年报")) {
+            return "最近12个月";
+        }
+        return "最近7天";
+    }
+
+    private String resolveGranularity(String keyword) {
+        if (containsAny(keyword, "按小时", "小时")) {
+            return "hour";
+        }
+        if (containsAny(keyword, "按周", "每周", "周")) {
+            return "week";
+        }
+        if (containsAny(keyword, "按月", "每月", "月")) {
+            return "month";
+        }
+        return "day";
+    }
+
+    private List<String> metricSlots(IntentProfile intent) {
+        List<String> source = intent.metrics();
+        List<String> slots = new ArrayList<>();
+        for (int i = 0; i < 4; i++) {
+            if (i < source.size()) {
+                slots.add(source.get(i));
+            } else {
+                slots.add("核心指标" + (char) ('A' + i));
+            }
+        }
+        return slots;
+    }
+
+    private int recommendedRefreshSeconds(IntentProfile intent) {
+        if ("hour".equals(intent.granularity())) {
+            return 300;
+        }
+        if ("day".equals(intent.granularity())) {
+            return 900;
+        }
+        return 1800;
+    }
+
+    private ObjectNode toIntentNode(IntentProfile intent) {
+        ObjectNode node = objectMapper.createObjectNode();
+        node.put("domain", intent.domain());
+        node.put("timeRange", intent.timeRange());
+        node.put("granularity", intent.granularity());
+        node.putPOJO("metrics", intent.metrics());
+        node.putPOJO("dimensions", intent.dimensions());
+        node.putPOJO("filters", intent.filters());
+        return node;
+    }
+
+    private ArrayNode buildQueryRecommendations(IntentProfile intent) {
+        ArrayNode queries = objectMapper.createArrayNode();
+        queries.add(queryRec(
+                "q-kpi",
+                "kpi-summary",
+                intent,
+                List.of("sum(" + intent.metrics().get(0) + ")", "sum(" + intent.metrics().get(1) + ")")));
+        queries.add(queryRec(
+                "q-trend",
+                "trend",
+                intent,
+                List.of(intent.metrics().get(0), intent.metrics().get(1))));
+        queries.add(queryRec(
+                "q-compare",
+                "compare",
+                intent,
+                List.of(intent.metrics().get(0))));
+        queries.add(queryRec(
+                "q-share",
+                "share",
+                intent,
+                List.of(intent.metrics().get(0))));
+        queries.add(queryRec(
+                "q-detail",
+                "detail",
+                intent,
+                intent.metrics().subList(0, Math.min(3, intent.metrics().size()))));
+        return queries;
+    }
+
+    private ObjectNode queryRec(String id, String purpose, IntentProfile intent, List<String> metricExpr) {
+        ObjectNode node = objectMapper.createObjectNode();
+        node.put("id", id);
+        node.put("purpose", purpose);
+        node.put("mode", "semantic-suggested");
+        node.put("domain", intent.domain());
+        node.put("timeRange", intent.timeRange());
+        node.put("granularity", intent.granularity());
+        node.putPOJO("dimensions", intent.dimensions());
+        node.putPOJO("metrics", metricExpr);
+        node.putPOJO("filters", intent.filters());
+        node.put("sqlHint", "SELECT ... FROM fact_table WHERE ${date_range} GROUP BY ...");
+        return node;
+    }
+
+    private ArrayNode buildVizRecommendations(IntentProfile intent) {
+        ArrayNode viz = objectMapper.createArrayNode();
+        viz.add(vizRec("q-kpi", "number-card", "指标总览"));
+        viz.add(vizRec("q-trend", "line-chart", "趋势分析"));
+        viz.add(vizRec("q-compare", "bar-chart", "结构对比"));
+        viz.add(vizRec("q-share", "pie-chart", "占比分析"));
+        viz.add(vizRec("q-detail", "table", "明细列表"));
+        return viz;
+    }
+
+    private ObjectNode vizRec(String queryId, String componentType, String title) {
+        ObjectNode node = objectMapper.createObjectNode();
+        node.put("queryId", queryId);
+        node.put("componentType", componentType);
+        node.put("title", title);
+        return node;
     }
 
     private String resolveTheme(String keyword) {
@@ -547,4 +1155,12 @@ public class ScreenAiGenerationService {
         }
         return false;
     }
+
+    private record IntentProfile(
+            String domain,
+            List<String> metrics,
+            List<String> dimensions,
+            String timeRange,
+            List<String> filters,
+            String granularity) {}
 }

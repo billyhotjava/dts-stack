@@ -11,6 +11,8 @@ import com.yuzhi.dts.platform.service.etl.DbtAssetSyncService;
 import com.yuzhi.dts.platform.service.etl.DbtDagService;
 import com.yuzhi.dts.platform.service.etl.DbtArtifactSyncState;
 import com.yuzhi.dts.platform.service.etl.DbtRunResultService;
+import com.yuzhi.dts.platform.service.etl.DbtQualityGateService;
+import com.yuzhi.dts.platform.service.etl.DbtReleaseGateService;
 import com.yuzhi.dts.platform.service.etl.DbtSourceService;
 import com.yuzhi.dts.platform.service.ops.ExternalRunLogService;
 import java.time.Instant;
@@ -33,6 +35,8 @@ public class EtlResource {
     private final DbtAssetSyncService dbtAssetSyncService;
     private final DbtDagService dbtDagService;
     private final DbtRunResultService dbtRunResultService;
+    private final DbtQualityGateService dbtQualityGateService;
+    private final DbtReleaseGateService dbtReleaseGateService;
     private final DbtArtifactSyncState dbtArtifactSyncState;
     private final AirflowClient airflowClient;
     private final AirflowProperties airflowProperties;
@@ -47,6 +51,8 @@ public class EtlResource {
         DbtAssetSyncService dbtAssetSyncService,
         DbtDagService dbtDagService,
         DbtRunResultService dbtRunResultService,
+        DbtQualityGateService dbtQualityGateService,
+        DbtReleaseGateService dbtReleaseGateService,
         DbtArtifactSyncState dbtArtifactSyncState,
         AirflowClient airflowClient,
         AirflowProperties airflowProperties,
@@ -60,6 +66,8 @@ public class EtlResource {
         this.dbtAssetSyncService = dbtAssetSyncService;
         this.dbtDagService = dbtDagService;
         this.dbtRunResultService = dbtRunResultService;
+        this.dbtQualityGateService = dbtQualityGateService;
+        this.dbtReleaseGateService = dbtReleaseGateService;
         this.dbtArtifactSyncState = dbtArtifactSyncState;
         this.airflowClient = airflowClient;
         this.airflowProperties = airflowProperties;
@@ -117,6 +125,10 @@ public class EtlResource {
 
     @GetMapping("/dbt/sync/status")
     public ApiResponse<DbtArtifactSyncState.DbtArtifactSyncStatus> getDbtSyncStatus() {
+        DbtRunResultService.DbtRunSummary latestRun = dbtRunResultService.loadLatestSummary(20);
+        if (latestRun != null) {
+            dbtArtifactSyncState.recordLatestRun(latestRun);
+        }
         return ApiResponses.ok(dbtArtifactSyncState.snapshot());
     }
 
@@ -141,34 +153,66 @@ public class EtlResource {
         @RequestBody DbtRunRequest request,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
-        if (request == null || (request.models() == null || request.models().isBlank())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请提供模型选择器");
-        }
-        String selector = request.models().trim();
-        String dagSelector = StringUtils.hasText(request.dagSelector()) ? request.dagSelector().trim() : selector;
-        String dagId = dbtDagService.ensureDagForSelector(dagSelector);
-        if (!StringUtils.hasText(dagId)) {
-            dagId = airflowProperties.getDagId();
-        }
-        Map<String, Object> conf = new LinkedHashMap<>();
-        conf.put("models", selector);
-        if (StringUtils.hasText(request.dagSelector())) {
-            conf.put("dagSelector", dagSelector);
-        }
-        if (request.target() != null && !request.target().isBlank()) {
-            conf.put("target", request.target());
-        }
-        if (request.vars() != null && !request.vars().isEmpty()) {
-            conf.put("vars", toJsonString(request.vars()));
-        }
-        Map<String, Object> payload = Map.of("conf", conf, "logical_date", Instant.now().toString());
-        Map<String, Object> result = airflowClient.triggerDag(dagId, payload).orElse(Map.of("status", "queued"));
-        try {
-            externalRunLogService.recordAirflowRun(ExternalRunLogService.ENTRY_DBT, dagId, result, conf, activeDept);
-        } catch (RuntimeException ex) {
-            // best-effort sync
-        }
-        auditService.audit("EXECUTE", "etl.dbt.run", selector);
+        String operation = normalizeDbtOperation(request == null ? null : request.operation());
+        boolean requireSelector = !"docs".equals(operation);
+        String selector = resolveSelector(request, requireSelector);
+        ApiResponse<Map<String, Object>> response = triggerDbtOperation(operation, request, activeDept, requireSelector);
+        auditService.audit("EXECUTE", "etl.dbt." + operation, selector);
+        return response;
+    }
+
+    @PostMapping("/dbt/compile")
+    public ApiResponse<Map<String, Object>> triggerDbtCompile(
+        @RequestBody(required = false) DbtRunRequest request,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        ApiResponse<Map<String, Object>> response = triggerDbtOperation("compile", request, activeDept, false);
+        auditService.audit("EXECUTE", "etl.dbt.compile", resolveSelector(request, false));
+        return response;
+    }
+
+    @PostMapping("/dbt/test")
+    public ApiResponse<Map<String, Object>> triggerDbtTest(
+        @RequestBody(required = false) DbtRunRequest request,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        ApiResponse<Map<String, Object>> response = triggerDbtOperation("test", request, activeDept, false);
+        auditService.audit("EXECUTE", "etl.dbt.test", resolveSelector(request, false));
+        return response;
+    }
+
+    @PostMapping("/dbt/docs")
+    public ApiResponse<Map<String, Object>> triggerDbtDocs(
+        @RequestBody(required = false) DbtRunRequest request,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        ApiResponse<Map<String, Object>> response = triggerDbtOperation("docs", request, activeDept, false);
+        auditService.audit("EXECUTE", "etl.dbt.docs", resolveSelector(request, false));
+        return response;
+    }
+
+    @PostMapping("/dbt/quality-gate/check")
+    public ApiResponse<DbtQualityGateService.DbtQualityGateResult> checkDbtQualityGate(
+        @RequestBody(required = false) DbtQualityGateRequest request
+    ) {
+        String selector = request == null ? null : request.models();
+        DbtQualityGateService.DbtQualityGateResult result = dbtQualityGateService.evaluate(selector);
+        auditService.audit("READ", "etl.dbt.quality-gate", StringUtils.hasText(selector) ? selector : "all");
+        return ApiResponses.ok(result);
+    }
+
+    @PostMapping("/dbt/release-gate/check")
+    public ApiResponse<DbtReleaseGateService.DbtReleaseGateResult> checkDbtReleaseGate(
+        @RequestBody(required = false) DbtReleaseGateRequest request
+    ) {
+        String selector = request == null ? null : request.models();
+        DbtReleaseGateService.DbtReleaseGateResult result = dbtReleaseGateService.evaluate(
+            selector,
+            request == null ? null : request.gitRef(),
+            request == null ? null : request.commitSha(),
+            request == null ? null : request.strictMode()
+        );
+        auditService.audit("READ", "etl.dbt.release-gate", StringUtils.hasText(selector) ? selector : "all");
         return ApiResponses.ok(result);
     }
 
@@ -186,6 +230,9 @@ public class EtlResource {
         if (runResult != null) {
             Long modified = fileModified(runResult.runResultsPath());
             dbtArtifactSyncState.recordRunResults(modified, runResult.synced(), runResult.message());
+            if (runResult.summary() != null) {
+                dbtArtifactSyncState.recordLatestRun(runResult.summary());
+            }
         }
     }
 
@@ -269,7 +316,96 @@ public class EtlResource {
         return ApiResponses.ok(result);
     }
 
-    public record DbtRunRequest(String models, String dagSelector, String target, Map<String, Object> vars) {}
+    public record DbtRunRequest(
+        String models,
+        String dagSelector,
+        String target,
+        String operation,
+        Map<String, Object> vars,
+        String gitRef,
+        String commitSha,
+        String buildInvocationId
+    ) {}
+    public record DbtQualityGateRequest(String models) {}
+    public record DbtReleaseGateRequest(String models, String gitRef, String commitSha, Boolean strictMode) {}
+
+    private String normalizeDbtOperation(String raw) {
+        if (!StringUtils.hasText(raw)) {
+            return "run";
+        }
+        String op = raw.trim().toLowerCase();
+        if ("run".equals(op) || "test".equals(op) || "compile".equals(op) || "docs".equals(op) || "build".equals(op)) {
+            return op;
+        }
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "operation 仅支持 run/test/compile/docs/build");
+    }
+
+    private ApiResponse<Map<String, Object>> triggerDbtOperation(
+        String operation,
+        DbtRunRequest request,
+        String activeDept,
+        boolean selectorRequired
+    ) {
+        String selector = resolveSelector(request, selectorRequired);
+        String dagSelector = resolveDagSelector(request, selector);
+        String dagId = dbtDagService.ensureDagForSelector(dagSelector);
+        if (!StringUtils.hasText(dagId)) {
+            dagId = airflowProperties.getDagId();
+        }
+        Map<String, Object> conf = new LinkedHashMap<>();
+        conf.put("operation", operation);
+        if (StringUtils.hasText(selector)) {
+            conf.put("models", selector);
+        }
+        if (StringUtils.hasText(request == null ? null : request.dagSelector())) {
+            conf.put("dagSelector", dagSelector);
+        }
+        if (StringUtils.hasText(request == null ? null : request.target())) {
+            conf.put("target", request.target().trim());
+        }
+        if (request != null && request.vars() != null && !request.vars().isEmpty()) {
+            conf.put("vars", toJsonString(request.vars()));
+        }
+        if (StringUtils.hasText(request == null ? null : request.gitRef())) {
+            conf.put("gitRef", request.gitRef().trim());
+        }
+        if (StringUtils.hasText(request == null ? null : request.commitSha())) {
+            conf.put("commitSha", request.commitSha().trim());
+        }
+        if (StringUtils.hasText(request == null ? null : request.buildInvocationId())) {
+            conf.put("buildInvocationId", request.buildInvocationId().trim());
+        }
+        Map<String, Object> payload = Map.of("conf", conf, "logical_date", Instant.now().toString());
+        Map<String, Object> result = airflowClient.triggerDag(dagId, payload).orElse(Map.of("status", "queued"));
+        try {
+            externalRunLogService.recordAirflowRun(ExternalRunLogService.ENTRY_DBT, dagId, result, conf, activeDept);
+        } catch (RuntimeException ex) {
+            // best-effort sync
+        }
+        return ApiResponses.ok(result);
+    }
+
+    private String resolveSelector(DbtRunRequest request, boolean required) {
+        String selector = request == null ? null : stringVal(request.models());
+        if (required && !StringUtils.hasText(selector)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请提供模型选择器");
+        }
+        return StringUtils.hasText(selector) ? selector : "all";
+    }
+
+    private String resolveDagSelector(DbtRunRequest request, String selector) {
+        String dagSelector = request == null ? null : stringVal(request.dagSelector());
+        if (StringUtils.hasText(dagSelector)) {
+            return dagSelector;
+        }
+        if (StringUtils.hasText(selector) && selector.trim().toLowerCase().contains("tag:")) {
+            return selector;
+        }
+        if (StringUtils.hasText(selector)) {
+            return "tag:dbt " + selector;
+        }
+        return "tag:dbt";
+    }
 
     private String toJsonString(Map<String, Object> vars) {
         try {

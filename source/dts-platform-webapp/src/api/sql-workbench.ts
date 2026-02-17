@@ -105,6 +105,18 @@ export type SqlStatusResponse = {
 	preview?: SqlResultPreview | null;
 };
 
+export type SqlResultPageResponse = {
+	executionId: string;
+	resultSetId?: string;
+	page: number;
+	pageSize: number;
+	totalRows: number;
+	totalPages: number;
+	hasNext: boolean;
+	headers: string[];
+	rows: Array<Record<string, any>>;
+};
+
 export type SqlResultPreview = {
 	headers: string[];
 	rows: Array<Record<string, any>>;
@@ -183,6 +195,9 @@ export const submitSql = (payload: SqlSubmitRequest) =>
 export const getSqlStatus = (executionId: string) =>
 	api.get<SqlStatusResponse>({ url: `/sql/status/${executionId}` });
 
+export const getSqlResultPage = (executionId: string, page = 1, pageSize = 200) =>
+	api.get<SqlResultPageResponse>({ url: `/sql/result-page/${executionId}`, params: { page, pageSize } });
+
 export const cancelSql = (executionId: string) =>
 	api.post<boolean>({ url: `/sql/cancel/${executionId}` });
 
@@ -202,6 +217,9 @@ export type QueryDatasetAsset = {
 	createdBy?: string | null;
 	createdDate?: string | null;
 	lastModifiedDate?: string | null;
+	semanticContractVersion?: string | null;
+	semanticModelCount?: number | null;
+	semanticModelNames?: string[] | null;
 };
 
 export type QueryDatasetVersion = {

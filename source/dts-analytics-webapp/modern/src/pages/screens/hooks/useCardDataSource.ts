@@ -16,19 +16,84 @@ const DEFAULT_API_TIMEOUT_MS = 20000;
 const cacheStore = new Map<string, { expiresAt: number; data: CardData }>();
 const inflightStore = new Map<string, Promise<CardData>>();
 
+type CardDataColumn = CardData['cols'][number];
+
+function normalizeColumn(raw: unknown, index: number): CardDataColumn {
+    const col = raw && typeof raw === 'object' ? raw as Record<string, unknown> : {};
+    const name = String(col.name ?? col.field_ref ?? `col_${index + 1}`);
+    return {
+        name,
+        display_name: String(col.display_name ?? col.displayName ?? col.label ?? name),
+        base_type: String(col.base_type ?? col.baseType ?? col.semantic_type ?? col.semanticType ?? 'type/Text'),
+    };
+}
+
+function normalizeColumns(
+    rawCols: unknown,
+    rawMetaCols: unknown,
+    fallbackRows?: unknown[],
+): CardDataColumn[] {
+    if (Array.isArray(rawCols) && rawCols.length > 0) {
+        return rawCols.map((item, index) => normalizeColumn(item, index));
+    }
+    if (Array.isArray(rawMetaCols) && rawMetaCols.length > 0) {
+        return rawMetaCols.map((item, index) => normalizeColumn(item, index));
+    }
+    if (Array.isArray(fallbackRows) && fallbackRows.length > 0 && typeof fallbackRows[0] === 'object' && !Array.isArray(fallbackRows[0])) {
+        const keySet = new Set<string>();
+        for (const item of fallbackRows as Array<Record<string, unknown>>) {
+            Object.keys(item || {}).forEach((k) => keySet.add(k));
+        }
+        return Array.from(keySet).map((key, index) => ({
+            name: key,
+            display_name: key,
+            base_type: 'type/Text',
+        }));
+    }
+    return [];
+}
+
+function normalizeRows(rawRows: unknown, cols: CardDataColumn[]): unknown[][] {
+    if (!Array.isArray(rawRows)) {
+        return [];
+    }
+    if (rawRows.length === 0) {
+        return [];
+    }
+    if (Array.isArray(rawRows[0])) {
+        return rawRows as unknown[][];
+    }
+    if (typeof rawRows[0] === 'object') {
+        const objects = rawRows as Array<Record<string, unknown>>;
+        const effectiveCols = cols.length > 0
+            ? cols
+            : normalizeColumns([], [], rawRows);
+        return objects.map((row) => effectiveCols.map((col) => row?.[col.name] ?? null));
+    }
+    return rawRows.map((item) => [item]);
+}
+
 function toCardData(payload: unknown): CardData {
     if (payload && typeof payload === 'object' && !Array.isArray(payload)) {
         const obj = payload as Record<string, unknown>;
         const rows = obj.rows;
         const cols = obj.cols;
-        if (Array.isArray(rows) && Array.isArray(cols)) {
+        const resultsMetadata = obj.results_metadata && typeof obj.results_metadata === 'object'
+            ? obj.results_metadata as Record<string, unknown>
+            : {};
+        const metaCols = resultsMetadata.columns;
+        if (Array.isArray(rows)) {
+            const normalizedCols = normalizeColumns(cols, metaCols, rows);
+            const normalizedRows = normalizeRows(rows, normalizedCols);
             return {
-                rows: rows as unknown[][],
-                cols: (cols as Array<Record<string, unknown>>).map((c, idx) => ({
-                    name: String(c.name ?? `col_${idx + 1}`),
-                    display_name: String(c.display_name ?? c.name ?? `列${idx + 1}`),
-                    base_type: String(c.base_type ?? 'type/Text'),
-                })),
+                rows: normalizedRows,
+                cols: normalizedCols.length > 0
+                    ? normalizedCols
+                    : (normalizedRows[0] ? normalizedRows[0].map((_, idx) => ({
+                        name: `col_${idx + 1}`,
+                        display_name: `列${idx + 1}`,
+                        base_type: 'type/Text',
+                    })) : []),
             };
         }
         if (obj.data && typeof obj.data === 'object') {
@@ -106,6 +171,11 @@ function resolveSqlConfig(dataSource?: DataSourceConfig): DataSourceConfig['sqlC
     return dataSource.sqlConfig ?? dataSource.databaseConfig;
 }
 
+function resolveMetricConfig(dataSource?: DataSourceConfig): DataSourceConfig['metricConfig'] | undefined {
+    if (!dataSource) return undefined;
+    return dataSource.metricConfig;
+}
+
 function normalizeParameterBindings(bindings?: CardParameterBinding[]): CardParameterBinding[] {
     if (!Array.isArray(bindings)) return [];
     return bindings
@@ -149,6 +219,14 @@ function getCacheKey(
     if (sourceType === 'card') {
         if (!cardId || cardId <= 0) return null;
         return `card:${cardId}:params:${paramsKey}:ctx:${contextKey}`;
+    }
+
+    if (sourceType === 'metric') {
+        if (!cardId || cardId <= 0) return null;
+        const metricConfig = resolveMetricConfig(dataSource);
+        const metricId = Number(metricConfig?.metricId ?? 0);
+        const metricVersion = String(metricConfig?.metricVersion ?? '').trim();
+        return `metric:card:${cardId}:metric:${metricId > 0 ? metricId : ''}:version:${metricVersion}:params:${paramsKey}:ctx:${contextKey}`;
     }
 
     if (sourceType === 'sql') {
@@ -246,7 +324,11 @@ export function useCardDataSource(
     const requestSeqRef = useRef(0);
 
     const sourceType = resolveSourceType(dataSource);
-    const baseCardId = sourceType === 'card' ? dataSource?.cardConfig?.cardId : undefined;
+    const baseCardId = sourceType === 'card'
+        ? dataSource?.cardConfig?.cardId
+        : sourceType === 'metric'
+            ? dataSource?.metricConfig?.cardId
+            : undefined;
     const cardId = overrideCardId ?? baseCardId;
     const databaseId = parseDatabaseId(dataSource);
     const refreshInterval = sourceType === 'card'
@@ -319,6 +401,38 @@ export function useCardDataSource(
                                 requestBody.queryContext = context;
                             }
 
+                            const result = await analyticsApi.queryCard(cardId, requestBody);
+                            if (result.error) {
+                                throw new Error(String(result.error));
+                            }
+                            return toCardData(result.data ?? result);
+                        }
+
+                        if (sourceType === 'metric') {
+                            if (!cardId || cardId <= 0) {
+                                throw new Error('Metric 数据源未选择有效 Card');
+                            }
+                            const requestBody: Record<string, unknown> = {};
+                            const params: Array<{ name: string; value: string }> | undefined =
+                                paramsKey !== 'null' ? JSON.parse(paramsKey) : undefined;
+                            const context: Record<string, unknown> | undefined =
+                                contextKey !== 'null' ? JSON.parse(contextKey) : undefined;
+                            const metricConfig = resolveMetricConfig(dataSource);
+                            const mergedParams = mergeBindingsWithRuntime(metricConfig?.parameterBindings, params);
+                            if (mergedParams.length > 0) {
+                                requestBody.parameters = mergedParams;
+                            }
+                            const metricId = metricConfig?.metricId;
+                            const metricVersion = metricConfig?.metricVersion?.trim();
+                            if ((metricId ?? 0) > 0 || (metricVersion && metricVersion.length > 0)) {
+                                requestBody.semantic = {
+                                    metricId: (metricId ?? 0) > 0 ? metricId : undefined,
+                                    metricVersion: metricVersion && metricVersion.length > 0 ? metricVersion : undefined,
+                                };
+                            }
+                            if (context && Object.keys(context).length > 0) {
+                                requestBody.queryContext = context;
+                            }
                             const result = await analyticsApi.queryCard(cardId, requestBody);
                             if (result.error) {
                                 throw new Error(String(result.error));

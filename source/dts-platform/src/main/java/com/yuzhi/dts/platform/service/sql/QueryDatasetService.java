@@ -2,12 +2,14 @@ package com.yuzhi.dts.platform.service.sql;
 
 import com.yuzhi.dts.platform.domain.explore.QueryDatasetAsset;
 import com.yuzhi.dts.platform.domain.explore.QueryDatasetVersion;
+import com.yuzhi.dts.platform.domain.modeling.ModelingSqlModel;
 import com.yuzhi.dts.platform.domain.explore.QueryExecution;
 import com.yuzhi.dts.platform.domain.explore.ResultSet;
 import com.yuzhi.dts.platform.repository.explore.QueryDatasetAssetRepository;
 import com.yuzhi.dts.platform.repository.explore.QueryDatasetVersionRepository;
 import com.yuzhi.dts.platform.repository.explore.QueryExecutionRepository;
 import com.yuzhi.dts.platform.repository.explore.ResultSetRepository;
+import com.yuzhi.dts.platform.repository.modeling.ModelingSqlModelRepository;
 import com.yuzhi.dts.platform.security.AuthoritiesConstants;
 import com.yuzhi.dts.platform.security.DepartmentUtils;
 import com.yuzhi.dts.platform.security.SecurityUtils;
@@ -25,6 +27,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.LinkedHashSet;
+import java.util.Set;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -42,24 +46,28 @@ public class QueryDatasetService {
     private final QueryDatasetVersionRepository versionRepository;
     private final QueryExecutionRepository executionRepository;
     private final ResultSetRepository resultSetRepository;
+    private final ModelingSqlModelRepository modelingSqlModelRepository;
 
     public QueryDatasetService(
         QueryDatasetAssetRepository assetRepository,
         QueryDatasetVersionRepository versionRepository,
         QueryExecutionRepository executionRepository,
-        ResultSetRepository resultSetRepository
+        ResultSetRepository resultSetRepository,
+        ModelingSqlModelRepository modelingSqlModelRepository
     ) {
         this.assetRepository = assetRepository;
         this.versionRepository = versionRepository;
         this.executionRepository = executionRepository;
         this.resultSetRepository = resultSetRepository;
+        this.modelingSqlModelRepository = modelingSqlModelRepository;
     }
 
     @Transactional(readOnly = true)
     public List<QueryDatasetResponse> list(String activeDeptHeader) {
         String activeDept = resolveActiveDept(activeDeptHeader);
+        Map<String, ModelingSqlModel> modelsByName = loadModelIndex();
         if (hasGlobalManageScope()) {
-            return assetRepository.findByEnabledTrueOrderByLastModifiedDateDesc().stream().map(this::toDto).toList();
+            return assetRepository.findByEnabledTrueOrderByLastModifiedDateDesc().stream().map(asset -> toDto(asset, modelsByName)).toList();
         }
 
         Map<UUID, QueryDatasetAsset> scoped = new LinkedHashMap<>();
@@ -90,7 +98,7 @@ public class QueryDatasetService {
             }
         }
 
-        return new ArrayList<>(scoped.values()).stream().map(this::toDto).toList();
+        return new ArrayList<>(scoped.values()).stream().map(asset -> toDto(asset, modelsByName)).toList();
     }
 
     @Transactional(readOnly = true)
@@ -257,6 +265,11 @@ public class QueryDatasetService {
     }
 
     private QueryDatasetResponse toDto(QueryDatasetAsset asset) {
+        return toDto(asset, loadModelIndex());
+    }
+
+    private QueryDatasetResponse toDto(QueryDatasetAsset asset, Map<String, ModelingSqlModel> modelsByName) {
+        DatasetContractInfo contractInfo = resolveDatasetContractInfo(asset, modelsByName);
         return new QueryDatasetResponse(
             asset.getId(),
             asset.getName(),
@@ -272,8 +285,98 @@ public class QueryDatasetService {
             asset.getEnabled(),
             asset.getCreatedBy(),
             asset.getCreatedDate(),
-            asset.getLastModifiedDate()
+            asset.getLastModifiedDate(),
+            contractInfo.version(),
+            contractInfo.modelCount(),
+            contractInfo.modelNames()
         );
+    }
+
+    private Map<String, ModelingSqlModel> loadModelIndex() {
+        Map<String, ModelingSqlModel> index = new LinkedHashMap<>();
+        for (ModelingSqlModel model : modelingSqlModelRepository.findAll()) {
+            if (model == null || !StringUtils.hasText(model.getName())) {
+                continue;
+            }
+            index.putIfAbsent(model.getName().trim().toLowerCase(Locale.ROOT), model);
+        }
+        return index;
+    }
+
+    private DatasetContractInfo resolveDatasetContractInfo(QueryDatasetAsset asset, Map<String, ModelingSqlModel> modelsByName) {
+        if (asset == null || modelsByName == null || modelsByName.isEmpty()) {
+            return new DatasetContractInfo(null, 0, List.of());
+        }
+        Set<String> modelNames = extractReferencedModels(asset.getSqlText());
+        if (modelNames.isEmpty()) {
+            return new DatasetContractInfo(null, 0, List.of());
+        }
+        Set<String> contractVersions = new LinkedHashSet<>();
+        List<String> resolvedNames = new ArrayList<>();
+        for (String name : modelNames) {
+            ModelingSqlModel model = modelsByName.get(name);
+            if (model == null) {
+                continue;
+            }
+            resolvedNames.add(model.getName());
+            if (StringUtils.hasText(model.getContractVersion())) {
+                contractVersions.add(model.getContractVersion().trim());
+            }
+        }
+        resolvedNames.sort(String.CASE_INSENSITIVE_ORDER);
+        if (contractVersions.isEmpty()) {
+            return new DatasetContractInfo(null, resolvedNames.size(), resolvedNames);
+        }
+        if (contractVersions.size() == 1) {
+            return new DatasetContractInfo(contractVersions.iterator().next(), resolvedNames.size(), resolvedNames);
+        }
+        return new DatasetContractInfo("mixed(" + contractVersions.size() + ")", resolvedNames.size(), resolvedNames);
+    }
+
+    private Set<String> extractReferencedModels(String sqlText) {
+        Set<String> names = new LinkedHashSet<>();
+        String sql = trimToNull(sqlText);
+        if (!StringUtils.hasText(sql)) {
+            return names;
+        }
+        String lower = sql.toLowerCase(Locale.ROOT);
+        int from = 0;
+        while (from >= 0 && from < lower.length()) {
+            int refStart = lower.indexOf("ref(", from);
+            if (refStart < 0) {
+                break;
+            }
+            int quoteStart = findQuoteStart(lower, refStart + 4);
+            if (quoteStart < 0) {
+                from = refStart + 4;
+                continue;
+            }
+            char quote = lower.charAt(quoteStart);
+            int quoteEnd = lower.indexOf(quote, quoteStart + 1);
+            if (quoteEnd < 0) {
+                from = quoteStart + 1;
+                continue;
+            }
+            String name = lower.substring(quoteStart + 1, quoteEnd).trim();
+            if (StringUtils.hasText(name)) {
+                names.add(name);
+            }
+            from = quoteEnd + 1;
+        }
+        return names;
+    }
+
+    private int findQuoteStart(String sql, int start) {
+        for (int i = Math.max(0, start); i < sql.length(); i++) {
+            char c = sql.charAt(i);
+            if (c == '\'' || c == '"') {
+                return i;
+            }
+            if (!Character.isWhitespace(c)) {
+                return -1;
+            }
+        }
+        return -1;
     }
 
     private QueryDatasetVersionResponse toVersionDto(QueryDatasetVersion version) {
@@ -415,4 +518,6 @@ public class QueryDatasetService {
         }
         return raw;
     }
+
+    private record DatasetContractInfo(String version, int modelCount, List<String> modelNames) {}
 }

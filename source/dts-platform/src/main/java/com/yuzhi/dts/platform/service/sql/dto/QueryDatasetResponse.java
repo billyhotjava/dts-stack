@@ -1,6 +1,7 @@
 package com.yuzhi.dts.platform.service.sql.dto;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 public record QueryDatasetResponse(
@@ -18,5 +19,8 @@ public record QueryDatasetResponse(
     Boolean enabled,
     String createdBy,
     Instant createdDate,
-    Instant lastModifiedDate
+    Instant lastModifiedDate,
+    String semanticContractVersion,
+    Integer semanticModelCount,
+    List<String> semanticModelNames
 ) {}

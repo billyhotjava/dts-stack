@@ -22,6 +22,8 @@ import com.yuzhi.dts.analytics.service.ScreenSpecValidator;
 import com.yuzhi.dts.analytics.web.support.MetabaseAuth;
 import com.yuzhi.dts.analytics.web.support.PlatformContext;
 import jakarta.servlet.http.HttpServletRequest;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
@@ -144,7 +146,8 @@ public class ScreenResource {
         }
         String prompt = body == null ? null : trimToNull(body.path("prompt").asText(null));
         JsonNode screenSpec = body == null ? null : body.path("screenSpec");
-        ObjectNode result = screenAiGenerationService.revise(prompt, screenSpec);
+        List<String> context = parseAiContext(body == null ? null : body.path("context"));
+        ObjectNode result = screenAiGenerationService.revise(prompt, screenSpec, context);
         result.putPOJO("generatedBy", user.get().getId());
         result.putPOJO("generatedAt", Instant.now());
         return ResponseEntity.ok(result);
@@ -366,6 +369,22 @@ public class ScreenResource {
                 device = null;
             }
         }
+        boolean includeScreenSpec = body == null
+                || !body.has("includeScreenSpec")
+                || body.path("includeScreenSpec").asBoolean(true);
+
+        AnalyticsScreenVersion publishedVersion =
+                screenVersionRepository.findFirstByScreenIdAndCurrentPublishedTrue(screen.getId()).orElse(null);
+        AnalyticsScreenVersion effectiveVersion = null;
+        String resolvedMode = mode;
+        if ("published".equals(mode) || "preview".equals(mode)) {
+            if (publishedVersion != null) {
+                effectiveVersion = publishedVersion;
+                resolvedMode = "published";
+            } else {
+                resolvedMode = "draft";
+            }
+        }
 
         ObjectNode policy = screenComplianceService.currentPolicy();
         boolean exportApprovalRequired = policy.path("exportApprovalRequired").asBoolean(false);
@@ -397,12 +416,27 @@ public class ScreenResource {
             payload.put("device", device);
         }
         payload.put("requestId", requestId);
+        payload.put("requestedMode", mode);
+        payload.put("resolvedMode", resolvedMode);
         ObjectNode policySnapshot = objectMapper.createObjectNode();
         policySnapshot.put("policyVersion", policy.path("policyVersion").asInt(1));
         policySnapshot.put("exportApprovalRequired", exportApprovalRequired);
         policySnapshot.put("watermarkEnabled", policy.path("watermarkEnabled").asBoolean(false));
         policySnapshot.put("watermarkText", policy.path("watermarkText").asText(""));
         payload.set("policy", policySnapshot);
+        if (effectiveVersion != null) {
+            payload.putPOJO("publishedVersionNo", effectiveVersion.getVersionNo());
+            payload.putPOJO("publishedAt", effectiveVersion.getPublishedAt());
+        } else {
+            payload.putNull("publishedVersionNo");
+            payload.putNull("publishedAt");
+        }
+
+        if (includeScreenSpec) {
+            ObjectNode screenSpec = buildExportScreenSpec(screen, effectiveVersion);
+            payload.set("screenSpec", screenSpec);
+            payload.put("specDigest", computeSpecDigest(screenSpec));
+        }
 
         StringBuilder previewUrl = new StringBuilder("/analytics/screens/");
         previewUrl.append(screen.getId()).append("/preview");
@@ -418,7 +452,14 @@ public class ScreenResource {
         }
         payload.put("previewUrl", previewUrl.toString());
 
-        screenAuditService.log(screen.getId(), user.get().getId(), "screen.export.prepare", null, payload, requestId);
+        ObjectNode auditPayload = payload.deepCopy();
+        if (auditPayload.has("screenSpec")) {
+            JsonNode screenSpec = auditPayload.path("screenSpec");
+            int componentCount = screenSpec.path("components").isArray() ? screenSpec.path("components").size() : 0;
+            auditPayload.put("screenComponentCount", componentCount);
+            auditPayload.remove("screenSpec");
+        }
+        screenAuditService.log(screen.getId(), user.get().getId(), "screen.export.prepare", null, auditPayload, requestId);
         return ResponseEntity.ok(payload);
     }
 
@@ -463,12 +504,18 @@ public class ScreenResource {
             mode = "draft";
         }
         mode = mode.toLowerCase();
+        String resolvedMode = trimToNull(body == null ? null : body.path("resolvedMode").asText(null));
+        if (resolvedMode == null) {
+            resolvedMode = mode;
+        }
+        resolvedMode = resolvedMode.toLowerCase();
         String device = trimToNull(body == null ? null : body.path("device").asText(null));
         if (device != null) {
             device = device.toLowerCase();
         }
         String clientRequestId = trimToNull(body == null ? null : body.path("requestId").asText(null));
         String message = trimToNull(body == null ? null : body.path("message").asText(null));
+        String specDigest = trimToNull(body == null ? null : body.path("specDigest").asText(null));
 
         ObjectNode payload = objectMapper.createObjectNode();
         payload.put("accepted", true);
@@ -476,6 +523,7 @@ public class ScreenResource {
         payload.put("screenId", screen.getId());
         payload.put("format", format);
         payload.put("mode", mode);
+        payload.put("resolvedMode", resolvedMode);
         if (device == null) {
             payload.putNull("device");
         } else {
@@ -490,6 +538,11 @@ public class ScreenResource {
             payload.putNull("message");
         } else {
             payload.put("message", message);
+        }
+        if (specDigest == null) {
+            payload.putNull("specDigest");
+        } else {
+            payload.put("specDigest", specDigest);
         }
         payload.put("requestId", requestId);
         payload.putPOJO("reportedAt", Instant.now());
@@ -1806,6 +1859,51 @@ public class ScreenResource {
         return objectMapper.createObjectNode();
     }
 
+    private ObjectNode buildExportScreenSpec(AnalyticsScreen screen, AnalyticsScreenVersion effectiveVersion) {
+        ObjectNode node = objectMapper.createObjectNode();
+        node.put("schemaVersion", 2);
+        if (effectiveVersion != null) {
+            node.put("name", effectiveVersion.getName());
+            node.put("description", effectiveVersion.getDescription());
+            node.put("width", effectiveVersion.getWidth());
+            node.put("height", effectiveVersion.getHeight());
+            node.put("theme", effectiveVersion.getTheme());
+            node.put("backgroundColor", effectiveVersion.getBackgroundColor());
+            node.put("backgroundImage", effectiveVersion.getBackgroundImage());
+            node.set("components", parseComponents(effectiveVersion.getComponentsJson()));
+            node.set("globalVariables", parseGlobalVariables(effectiveVersion.getVariablesJson()));
+            return node;
+        }
+        node.put("name", screen.getName());
+        node.put("description", screen.getDescription());
+        node.put("width", screen.getWidth());
+        node.put("height", screen.getHeight());
+        node.put("theme", screen.getTheme());
+        node.put("backgroundColor", screen.getBackgroundColor());
+        node.put("backgroundImage", screen.getBackgroundImage());
+        node.set("components", parseComponents(screen.getComponentsJson()));
+        node.set("globalVariables", parseGlobalVariables(screen.getVariablesJson()));
+        return node;
+    }
+
+    private String computeSpecDigest(JsonNode node) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] bytes = digest.digest(objectMapper.writeValueAsString(node).getBytes(StandardCharsets.UTF_8));
+            StringBuilder hex = new StringBuilder(bytes.length * 2);
+            for (byte b : bytes) {
+                int v = b & 0xff;
+                if (v < 0x10) {
+                    hex.append('0');
+                }
+                hex.append(Integer.toHexString(v));
+            }
+            return hex.toString();
+        } catch (Exception ex) {
+            return null;
+        }
+    }
+
     private String requestIdFrom(HttpServletRequest request) {
         if (request == null) {
             return null;
@@ -1867,5 +1965,19 @@ public class ScreenResource {
         }
         String trimmed = value.trim();
         return trimmed.isBlank() ? null : trimmed;
+    }
+
+    private static List<String> parseAiContext(JsonNode contextNode) {
+        if (contextNode == null || !contextNode.isArray()) {
+            return List.of();
+        }
+        List<String> out = new ArrayList<>();
+        for (JsonNode item : contextNode) {
+            String text = trimToNull(item == null ? null : item.asText(null));
+            if (text != null) {
+                out.add(text);
+            }
+        }
+        return out;
     }
 }

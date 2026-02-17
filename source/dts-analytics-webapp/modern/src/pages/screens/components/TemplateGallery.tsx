@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { analyticsApi, type ScreenTemplateItem } from '../../../api/analyticsApi';
+import { analyticsApi, type ScreenIndustryPackAuditRow, type ScreenTemplateItem } from '../../../api/analyticsApi';
 import { screenTemplates, type ScreenTemplate } from '../screenTemplates';
 import { SCREEN_SCHEMA_VERSION } from '../specV2';
 import '../ScreenDesigner.css';
@@ -27,6 +27,13 @@ const VISIBILITY_LABELS: Record<string, string> = {
     personal: '个人',
     team: '团队',
     global: '全局',
+};
+
+const INDUSTRY_AUDIT_RESULT_LABELS: Record<string, string> = {
+    success: '成功',
+    partial: '部分成功',
+    failed: '失败',
+    rejected: '拒绝',
 };
 
 function templateText(template: {
@@ -83,6 +90,72 @@ function asTemplatePackage(selection: TemplateSelection): Record<string, unknown
     };
 }
 
+function formatAuditTime(value?: string): string {
+    if (!value) return '-';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+    return date.toLocaleString('zh-CN', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+    });
+}
+
+function summarizeAuditDetails(details: unknown): string {
+    if (details == null) return '-';
+    if (typeof details === 'string') return details;
+    try {
+        const text = JSON.stringify(details);
+        if (!text) return '-';
+        return text.length > 120 ? `${text.slice(0, 120)}...` : text;
+    } catch {
+        return '-';
+    }
+}
+
+function parseRuntimeTargetsInput(input: string): Array<Record<string, unknown>> {
+    const text = String(input || '').trim();
+    if (!text) return [];
+    const rows = text
+        .split('\n')
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0 && !line.startsWith('#'));
+    const targets: Array<Record<string, unknown>> = [];
+    for (const row of rows) {
+        const rawParts = row.split(',');
+        const head = rawParts.slice(0, 7).map((item) => item.trim());
+        const tail = rawParts.slice(7).join(',').trim();
+        const [id, protocol, host, portText, pathOrEmpty, requiredText, expectedStatus] = head;
+        const expectedBodyContains = tail || undefined;
+        const port = Number(portText || '');
+        if (!host || !Number.isFinite(port) || port <= 0) {
+            continue;
+        }
+        const required = requiredText ? !['false', '0', 'no', 'n'].includes(requiredText.toLowerCase()) : true;
+        const item: Record<string, unknown> = {
+            id: id || undefined,
+            protocol: protocol || 'tcp',
+            host,
+            port,
+            required,
+        };
+        if (pathOrEmpty) {
+            item.path = pathOrEmpty;
+        }
+        if (expectedStatus) {
+            item.expectedStatus = expectedStatus;
+        }
+        if (expectedBodyContains) {
+            item.expectedBodyContains = expectedBodyContains;
+        }
+        targets.push(item);
+    }
+    return targets;
+}
+
 export function TemplateGallery({ onSelect, onClose }: TemplateGalleryProps) {
     const [selectedKey, setSelectedKey] = useState<string>('builtin:blank');
     const [keyword, setKeyword] = useState('');
@@ -95,6 +168,12 @@ export function TemplateGallery({ onSelect, onClose }: TemplateGalleryProps) {
     const [isUpdatingAsset, setIsUpdatingAsset] = useState(false);
     const [importMode, setImportMode] = useState<'template' | 'industry'>('template');
     const fileInputRef = useRef<HTMLInputElement | null>(null);
+    const [showIndustryAudit, setShowIndustryAudit] = useState(false);
+    const [industryAuditRows, setIndustryAuditRows] = useState<ScreenIndustryPackAuditRow[]>([]);
+    const [industryAuditLoading, setIndustryAuditLoading] = useState(false);
+    const [industryAuditError, setIndustryAuditError] = useState<string | null>(null);
+    const [industryAuditAction, setIndustryAuditAction] = useState<'all' | 'pack.export' | 'pack.import'>('all');
+    const [industryAuditResult, setIndustryAuditResult] = useState<'all' | 'success' | 'partial' | 'failed' | 'rejected'>('all');
 
     const loadAssetTemplates = () => {
         setLoading(true);
@@ -113,6 +192,25 @@ export function TemplateGallery({ onSelect, onClose }: TemplateGalleryProps) {
     useEffect(() => {
         loadAssetTemplates();
     }, []);
+
+    const loadIndustryAudit = async () => {
+        setIndustryAuditLoading(true);
+        setIndustryAuditError(null);
+        try {
+            const rows = await analyticsApi.listScreenIndustryPackAudit(120);
+            setIndustryAuditRows(Array.isArray(rows) ? rows : []);
+        } catch (err) {
+            console.error('Failed to load industry pack audit:', err);
+            const message = err instanceof Error ? err.message : '行业包审计加载失败';
+            if (message.toLowerCase().includes('403') || message.toLowerCase().includes('forbidden')) {
+                setIndustryAuditError('仅超级管理员可查看行业包审计');
+            } else {
+                setIndustryAuditError('行业包审计加载失败');
+            }
+        } finally {
+            setIndustryAuditLoading(false);
+        }
+    };
 
     const normalizedKeyword = keyword.trim().toLowerCase();
 
@@ -160,6 +258,18 @@ export function TemplateGallery({ onSelect, onClose }: TemplateGalleryProps) {
             }).includes(normalizedKeyword);
         });
     }, [assetTemplates, category, listing, normalizedKeyword, visibility]);
+
+    const filteredIndustryAuditRows = useMemo(() => {
+        return industryAuditRows.filter((item) => {
+            if (industryAuditAction !== 'all' && item.action !== industryAuditAction) {
+                return false;
+            }
+            if (industryAuditResult !== 'all' && item.result !== industryAuditResult) {
+                return false;
+            }
+            return true;
+        });
+    }, [industryAuditAction, industryAuditResult, industryAuditRows]);
 
     const allCategories = useMemo(() => {
         const values = new Set<string>(['all']);
@@ -307,6 +417,169 @@ export function TemplateGallery({ onSelect, onClose }: TemplateGalleryProps) {
         }
     };
 
+    const handleOpenIndustryAudit = async () => {
+        setShowIndustryAudit(true);
+        if (industryAuditRows.length > 0 || industryAuditLoading) {
+            return;
+        }
+        await loadIndustryAudit();
+    };
+
+    const handleExportConnectorPlan = async () => {
+        try {
+            const presets = await analyticsApi.getScreenIndustryPackPresets().catch(() => null);
+            const allTemplates = Array.isArray(presets?.connectorTemplates)
+                ? (presets?.connectorTemplates as Array<Record<string, unknown>>)
+                : [];
+            const defaultIds = allTemplates
+                .map((item) => String(item.id || '').trim())
+                .filter((id) => id.length > 0)
+                .join(',');
+            const idsInput = (window.prompt('连接器ID（逗号分隔）', defaultIds || 'plc,mqtt,opcua,postgresql') || '').trim();
+            const requestedIds = idsInput
+                .split(',')
+                .map((item) => item.trim().toLowerCase())
+                .filter((item) => item.length > 0);
+            const selectedTemplates = requestedIds.length > 0
+                ? allTemplates.filter((item) => requestedIds.includes(String(item.id || '').trim().toLowerCase()))
+                : allTemplates;
+            const plan = await analyticsApi.generateScreenIndustryConnectorPlan({
+                source: 'template-gallery',
+                connectorTemplates: selectedTemplates,
+            });
+            const blob = new Blob([JSON.stringify(plan, null, 2)], { type: 'application/json;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = 'dts-connector-plan.json';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+            alert(`采集任务草案已生成，任务数：${plan.jobCount ?? 0}`);
+        } catch (err) {
+            console.error('Failed to generate connector plan:', err);
+            alert('采集任务草案生成失败');
+        }
+    };
+
+    const handleRunOpsHealth = async () => {
+        try {
+            const deploymentMode = (window.prompt('部署模式（online/offline/isolated）', 'online') || 'online').trim() || 'online';
+            const report = await analyticsApi.getScreenIndustryOpsHealth(deploymentMode, true);
+            const summary = report.summary || {};
+            const checks = Array.isArray(report.checks) ? report.checks : [];
+            const lines = checks.map((item) => {
+                const status = String(item.status || '-');
+                const name = String(item.name || '-');
+                const message = String(item.message || '');
+                return `[${status}] ${name}${message ? `: ${message}` : ''}`;
+            });
+            alert(
+                `运维巡检评分: ${String(summary.score ?? '-')} (${deploymentMode})\n`
+                + `模板数: ${String(summary.templateCount ?? '-')}\n`
+                + `失败审计: ${String(summary.failedAudits ?? '-')}\n\n`
+                + lines.join('\n'),
+            );
+        } catch (err) {
+            console.error('Failed to run industry ops health check:', err);
+            alert('运维巡检失败');
+        }
+    };
+
+    const handleProbeRuntime = async () => {
+        try {
+            const timeoutInput = (window.prompt('运行时探测超时毫秒（300-5000）', '1500') || '1500').trim();
+            const timeoutMs = Number(timeoutInput);
+            const customTargetsInput = (window.prompt(
+                '可选：自定义目标（每行一个，格式：id,protocol,host,port,path,required,expectedStatus,expectedBodyContains）\n'
+                + '示例：analytics,http,127.0.0.1,3000,/analytics,true,200-499,metabase\n'
+                + '示例：edge-mqtt,mqtt,127.0.0.1,1883,,false,,\n'
+                + '留空使用默认目标',
+                '',
+            ) || '').trim();
+            const customTargets = parseRuntimeTargetsInput(customTargetsInput);
+            const report = await analyticsApi.probeScreenIndustryRuntime({
+                source: 'template-gallery',
+                timeoutMs: Number.isFinite(timeoutMs) ? timeoutMs : 1500,
+                targets: customTargets.length > 0 ? customTargets : undefined,
+            });
+            const summary = report.summary || {};
+            const rows = Array.isArray(report.rows) ? report.rows : [];
+            const lines = rows.map((item) => {
+                const status = String(item.status || '-');
+                const name = String(item.name || item.id || '-');
+                const protocol = String(item.protocol || 'tcp');
+                const host = String(item.host || '-');
+                const port = String(item.port || '-');
+                const httpStatus = item.httpStatus == null ? '' : ` status=${String(item.httpStatus)}`;
+                const bodyCheck = item.bodyMatched == null
+                    ? ''
+                    : (item.bodyMatched ? ' body=ok' : ' body=miss');
+                const url = item.url == null ? '' : ` ${String(item.url)}`;
+                const bodyPreview = item.bodyPreview == null
+                    ? ''
+                    : ` preview=${String(item.bodyPreview).slice(0, 80)}`;
+                const message = String(item.message || '');
+                return `[${status}] ${name} [${protocol}] (${host}:${port})${httpStatus}${bodyCheck}${url}${bodyPreview}${message ? `: ${message}` : ''}`;
+            });
+            alert(
+                `运行时探测: 总计 ${String(summary.total ?? '-')}, 通过 ${String(summary.pass ?? '-')}, `
+                + `告警 ${String(summary.warn ?? '-')}, 失败 ${String(summary.fail ?? '-')}\n`
+                + `超时: ${String(summary.timeoutMs ?? '-')} ms\n\n`
+                + lines.join('\n'),
+            );
+        } catch (err) {
+            console.error('Failed to probe runtime dependencies:', err);
+            alert('运行时探测失败');
+        }
+    };
+
+    const handleProbeConnectors = async () => {
+        try {
+            const presets = await analyticsApi.getScreenIndustryPackPresets().catch(() => null);
+            const allTemplates = Array.isArray(presets?.connectorTemplates)
+                ? (presets?.connectorTemplates as Array<Record<string, unknown>>)
+                : [];
+            const defaultIds = allTemplates
+                .map((item) => String(item.id || '').trim())
+                .filter((id) => id.length > 0)
+                .join(',');
+            const idsInput = (window.prompt('探测连接器ID（逗号分隔）', defaultIds || 'plc,mqtt,opcua,postgresql') || '').trim();
+            const requestedIds = idsInput
+                .split(',')
+                .map((item) => item.trim().toLowerCase())
+                .filter((item) => item.length > 0);
+            const selectedTemplates = requestedIds.length > 0
+                ? allTemplates.filter((item) => requestedIds.includes(String(item.id || '').trim().toLowerCase()))
+                : allTemplates;
+            const timeoutInput = (window.prompt('探测超时毫秒（300-5000）', '1500') || '1500').trim();
+            const timeoutMs = Number(timeoutInput);
+            const report = await analyticsApi.probeScreenIndustryConnectors({
+                source: 'template-gallery',
+                timeoutMs: Number.isFinite(timeoutMs) ? timeoutMs : 1500,
+                connectorTemplates: selectedTemplates,
+            });
+            const summary = report.summary || {};
+            const rows = Array.isArray(report.rows) ? report.rows : [];
+            const lines = rows.map((item) => {
+                const connectorId = String(item.connectorId || '-');
+                const status = String(item.status || '-');
+                const message = String(item.message || '');
+                return `[${status}] ${connectorId}${message ? `: ${message}` : ''}`;
+            });
+            alert(
+                `连接器探测: 总计 ${String(summary.total ?? '-')}, 通过 ${String(summary.pass ?? '-')}, `
+                + `告警 ${String(summary.warn ?? '-')}, 失败 ${String(summary.fail ?? '-')}\n`
+                + `超时: ${String(summary.timeoutMs ?? '-')} ms\n\n`
+                + lines.join('\n'),
+            );
+        } catch (err) {
+            console.error('Failed to probe connectors:', err);
+            alert('连接器探测失败');
+        }
+    };
+
     const handleToggleListing = async () => {
         if (!selectedAsset || isUpdatingAsset) {
             return;
@@ -412,6 +685,11 @@ export function TemplateGallery({ onSelect, onClose }: TemplateGalleryProps) {
                     <button className="template-btn secondary" onClick={handleExportTemplate}>导出模板包</button>
                     <button className="template-btn secondary" onClick={() => handleImportClick('industry')}>导入行业包</button>
                     <button className="template-btn secondary" onClick={handleExportIndustryPack}>导出行业包</button>
+                    <button className="template-btn secondary" onClick={handleOpenIndustryAudit}>行业包审计</button>
+                    <button className="template-btn secondary" onClick={handleExportConnectorPlan}>采集任务草案</button>
+                    <button className="template-btn secondary" onClick={handleProbeConnectors}>连接器探测</button>
+                    <button className="template-btn secondary" onClick={handleRunOpsHealth}>运维巡检</button>
+                    <button className="template-btn secondary" onClick={handleProbeRuntime}>运行时探测</button>
                     <input
                         ref={fileInputRef}
                         type="file"
@@ -525,6 +803,89 @@ export function TemplateGallery({ onSelect, onClose }: TemplateGalleryProps) {
                 </div>
             </div>
 
+            {showIndustryAudit && (
+                <div className="industry-audit-overlay" onClick={(e) => e.stopPropagation()}>
+                    <div className="industry-audit-modal">
+                        <div className="industry-audit-header">
+                            <h3 style={{ margin: 0 }}>行业包审计</h3>
+                            <div style={{ display: 'flex', gap: 8 }}>
+                                <button
+                                    className="template-btn secondary"
+                                    onClick={() => {
+                                        void loadIndustryAudit();
+                                    }}
+                                    disabled={industryAuditLoading}
+                                >
+                                    {industryAuditLoading ? '刷新中...' : '刷新'}
+                                </button>
+                                <button className="template-btn secondary" onClick={() => setShowIndustryAudit(false)}>关闭</button>
+                            </div>
+                        </div>
+                        <div className="industry-audit-filters">
+                            <select
+                                className="template-category-select"
+                                value={industryAuditAction}
+                                onChange={(e) => setIndustryAuditAction(e.target.value as typeof industryAuditAction)}
+                            >
+                                <option value="all">全部动作</option>
+                                <option value="pack.export">导出</option>
+                                <option value="pack.import">导入</option>
+                            </select>
+                            <select
+                                className="template-category-select"
+                                value={industryAuditResult}
+                                onChange={(e) => setIndustryAuditResult(e.target.value as typeof industryAuditResult)}
+                            >
+                                <option value="all">全部结果</option>
+                                <option value="success">成功</option>
+                                <option value="partial">部分成功</option>
+                                <option value="failed">失败</option>
+                                <option value="rejected">拒绝</option>
+                            </select>
+                            <div style={{ fontSize: 12, color: '#94a3b8' }}>
+                                共 {filteredIndustryAuditRows.length} 条
+                            </div>
+                        </div>
+                        <div className="industry-audit-body">
+                            {industryAuditError ? (
+                                <div className="template-empty-hint">{industryAuditError}</div>
+                            ) : industryAuditLoading && industryAuditRows.length === 0 ? (
+                                <div className="template-empty-hint">加载中...</div>
+                            ) : filteredIndustryAuditRows.length === 0 ? (
+                                <div className="template-empty-hint">暂无审计记录</div>
+                            ) : (
+                                <table className="industry-audit-table">
+                                    <thead>
+                                        <tr>
+                                            <th>时间</th>
+                                            <th>动作</th>
+                                            <th>结果</th>
+                                            <th>操作者</th>
+                                            <th>来源</th>
+                                            <th>requestId</th>
+                                            <th>详情</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {filteredIndustryAuditRows.map((row) => (
+                                            <tr key={String(row.id ?? `${row.requestId}-${row.createdAt}`)}>
+                                                <td>{formatAuditTime(row.createdAt)}</td>
+                                                <td>{row.action || '-'}</td>
+                                                <td>{INDUSTRY_AUDIT_RESULT_LABELS[String(row.result || '')] || row.result || '-'}</td>
+                                                <td>{row.actorId == null ? '-' : String(row.actorId)}</td>
+                                                <td>{row.source || '-'}</td>
+                                                <td>{row.requestId || '-'}</td>
+                                                <td>{summarizeAuditDetails(row.details)}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
             <style>{`
                 .template-gallery-overlay {
                     position: fixed;
@@ -584,7 +945,7 @@ export function TemplateGallery({ onSelect, onClose }: TemplateGalleryProps) {
 
                 .template-gallery-filters {
                     display: grid;
-                    grid-template-columns: 1fr repeat(8, auto);
+                    grid-template-columns: 1fr repeat(11, auto);
                     gap: 8px;
                     padding: 12px 24px;
                     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
@@ -738,6 +1099,75 @@ export function TemplateGallery({ onSelect, onClose }: TemplateGalleryProps) {
                 .template-btn.primary:hover {
                     transform: translateY(-1px);
                     box-shadow: 0 4px 12px rgba(0, 212, 255, 0.4);
+                }
+
+                .industry-audit-overlay {
+                    position: fixed;
+                    inset: 0;
+                    z-index: 1600;
+                    background: rgba(2, 6, 23, 0.65);
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    padding: 20px;
+                }
+
+                .industry-audit-modal {
+                    width: min(1100px, 94vw);
+                    max-height: 82vh;
+                    display: flex;
+                    flex-direction: column;
+                    background: #0f172a;
+                    border: 1px solid rgba(148, 163, 184, 0.28);
+                    border-radius: 10px;
+                    box-shadow: 0 18px 48px rgba(2, 6, 23, 0.5);
+                }
+
+                .industry-audit-header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    padding: 14px 16px;
+                    border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+                    color: #e2e8f0;
+                }
+
+                .industry-audit-filters {
+                    display: flex;
+                    gap: 8px;
+                    align-items: center;
+                    padding: 10px 16px;
+                    border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+                }
+
+                .industry-audit-body {
+                    flex: 1;
+                    overflow: auto;
+                    padding: 8px 12px 12px;
+                }
+
+                .industry-audit-table {
+                    width: 100%;
+                    border-collapse: collapse;
+                    font-size: 12px;
+                    color: #cbd5e1;
+                }
+
+                .industry-audit-table th {
+                    position: sticky;
+                    top: 0;
+                    z-index: 1;
+                    text-align: left;
+                    padding: 8px;
+                    border-bottom: 1px solid rgba(148, 163, 184, 0.3);
+                    background: rgba(15, 23, 42, 0.95);
+                }
+
+                .industry-audit-table td {
+                    padding: 8px;
+                    border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+                    vertical-align: top;
+                    word-break: break-all;
                 }
             `}</style>
         </div>

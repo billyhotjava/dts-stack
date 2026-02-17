@@ -107,4 +107,6 @@
     <include file="config/liquibase/changelog/20260212_03_query_dataset_assets.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260212_04_catalog_lineage_project_scope.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260215_01_catalog_schema_drift_workflow.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260216_01_dev_script_studio.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260217_01_modeling_semantic_contract.xml" relativeToChangelogFile="false"/>
 </databaseChangeLog>

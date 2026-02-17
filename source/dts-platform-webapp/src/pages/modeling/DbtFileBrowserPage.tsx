@@ -4,8 +4,10 @@ import { toast } from "sonner";
 import {
 	Button,
 	Dropdown,
+	Form,
 	Input,
 	Modal,
+	Select,
 	Spin,
 	Tooltip,
 	Tree,
@@ -32,6 +34,10 @@ import {
 	deleteDbtFile,
 	renameDbtFile,
 	triggerDbtRun,
+	getDbtSyncStatus,
+	triggerDbtCompile,
+	triggerDbtTest,
+	triggerDbtDocs,
 } from "@/api/platformApi";
 import { useRouter } from "@/routes/hooks";
 
@@ -55,6 +61,25 @@ interface FileContent {
 	language: string;
 	size: number;
 	readOnly: boolean;
+}
+
+interface DbtRunFailure {
+	uniqueId?: string;
+	name?: string;
+	message?: string;
+}
+
+interface DbtRunSummary {
+	present?: boolean;
+	status?: string;
+	command?: string;
+	generatedAt?: string;
+	failed?: number;
+	failures?: DbtRunFailure[];
+}
+
+interface DbtSyncStatus {
+	latestRun?: DbtRunSummary | null;
 }
 
 // ── Helpers ───────────────────────────────────────────────────
@@ -109,6 +134,11 @@ export default function DbtFileBrowserPage() {
 
 	// Right click context
 	const [contextNode, setContextNode] = useState<FileNode | null>(null);
+	const [runConfigOpen, setRunConfigOpen] = useState(false);
+	const [runSubmitting, setRunSubmitting] = useState(false);
+	const [buildSubmitting, setBuildSubmitting] = useState<"compile" | "test" | "docs" | null>(null);
+	const [syncStatus, setSyncStatus] = useState<DbtSyncStatus | null>(null);
+	const [runForm] = Form.useForm();
 
 	const editorRef = useRef<any>(null);
 
@@ -137,9 +167,19 @@ export default function DbtFileBrowserPage() {
 		}
 	}, []);
 
+	const loadSyncStatus = useCallback(async () => {
+		try {
+			const data = (await getDbtSyncStatus()) as DbtSyncStatus;
+			setSyncStatus(data || null);
+		} catch {
+			setSyncStatus(null);
+		}
+	}, []);
+
 	useEffect(() => {
 		loadTree();
-	}, [loadTree]);
+		loadSyncStatus();
+	}, [loadTree, loadSyncStatus]);
 
 	// ── Load File Content ─────────────────────────────────────
 
@@ -329,16 +369,64 @@ export default function DbtFileBrowserPage() {
 
 	// ── Trigger dbt run ───────────────────────────────────────
 
+	const openDbtRunConfig = useCallback(() => {
+		runForm.setFieldsValue({
+			models: "all",
+			target: "dev",
+			operation: "run",
+		});
+		setRunConfigOpen(true);
+	}, [runForm]);
+
 	const handleDbtRun = useCallback(async () => {
+		setRunSubmitting(true);
 		try {
-			await triggerDbtRun({ models: "all", target: "dev" });
-			toast.success("dbt 运行已触发");
+			const values = await runForm.validateFields();
+			await triggerDbtRun({
+				models: String(values.models || "all").trim(),
+				target: String(values.target || "dev").trim(),
+				operation: String(values.operation || "run").trim(),
+			});
+			toast.success(`dbt ${values.operation || "run"} 已触发`);
+			setRunConfigOpen(false);
+			await loadSyncStatus();
 		} catch (err: any) {
-			toast.error("触发失败: " + (err?.message || "未知错误"));
+			if (!err?.errorFields) {
+				toast.error("触发失败: " + (err?.message || "未知错误"));
+			}
+		} finally {
+			setRunSubmitting(false);
 		}
-	}, []);
+	}, [runForm, loadSyncStatus]);
+
+	const handleQuickBuild = useCallback(
+		async (operation: "compile" | "test" | "docs") => {
+			setBuildSubmitting(operation);
+			try {
+				const payload = { models: "all", target: "dev" };
+				if (operation === "compile") {
+					await triggerDbtCompile(payload);
+				} else if (operation === "test") {
+					await triggerDbtTest(payload);
+				} else {
+					await triggerDbtDocs(payload);
+				}
+				toast.success(`dbt ${operation} 已触发`);
+				await loadSyncStatus();
+			} catch (err: any) {
+				toast.error("触发失败: " + (err?.message || "未知错误"));
+			} finally {
+				setBuildSubmitting(null);
+			}
+		},
+		[loadSyncStatus],
+	);
 
 	// ── Render ────────────────────────────────────────────────
+
+	const latestRun = syncStatus?.latestRun || null;
+	const latestStatus = String(latestRun?.status || "UNKNOWN").toUpperCase();
+	const latestStatusColor = latestStatus === "SUCCESS" ? "green" : latestStatus === "FAILED" ? "red" : "gold";
 
 	return (
 		<div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
@@ -391,10 +479,31 @@ export default function DbtFileBrowserPage() {
 					</Button>
 				)}
 				<Tooltip title="触发 dbt run">
-					<Button icon={<RocketOutlined />} onClick={handleDbtRun}>
+					<Button icon={<RocketOutlined />} onClick={openDbtRunConfig}>
 						运行 dbt
 					</Button>
 				</Tooltip>
+				<Button
+					size="small"
+					onClick={() => handleQuickBuild("compile")}
+					loading={buildSubmitting === "compile"}
+				>
+					编译
+				</Button>
+				<Button
+					size="small"
+					onClick={() => handleQuickBuild("test")}
+					loading={buildSubmitting === "test"}
+				>
+					测试
+				</Button>
+				<Button
+					size="small"
+					onClick={() => handleQuickBuild("docs")}
+					loading={buildSubmitting === "docs"}
+				>
+					文档
+				</Button>
 				</div>
 
 				<div
@@ -412,6 +521,11 @@ export default function DbtFileBrowserPage() {
 				>
 					<div>
 						<strong>下一步建议:</strong> 在逻辑建模页完成 ODS 一键生成后，这里用于模型微调与运行验证，不再提供 ZIP 导入。
+						<span style={{ marginLeft: 12 }}>
+							最近构建: <Text style={{ color: latestStatusColor }}>{latestStatus}</Text>
+							{latestRun?.command ? ` (${latestRun.command})` : ""}
+							{latestRun?.generatedAt ? ` @ ${new Date(latestRun.generatedAt).toLocaleString()}` : ""}
+						</span>
 					</div>
 					<div style={{ display: "flex", alignItems: "center", gap: 6 }}>
 						<Button size="small" onClick={() => router.push("/modeling/sql")}>
@@ -590,6 +704,40 @@ export default function DbtFileBrowserPage() {
 					placeholder="新名称"
 					onPressEnter={handleRename}
 				/>
+			</Modal>
+
+			<Modal
+				title="触发 dbt 任务"
+				open={runConfigOpen}
+				onOk={handleDbtRun}
+				onCancel={() => setRunConfigOpen(false)}
+				okText="触发"
+				cancelText="取消"
+				confirmLoading={runSubmitting}
+			>
+				<Form form={runForm} layout="vertical" disabled={runSubmitting}>
+					<Form.Item name="operation" label="操作" rules={[{ required: true, message: "请选择操作" }]}>
+						<Select
+							options={[
+								{ label: "run", value: "run" },
+								{ label: "test", value: "test" },
+								{ label: "compile", value: "compile" },
+								{ label: "docs", value: "docs" },
+							]}
+						/>
+					</Form.Item>
+					<Form.Item
+						name="models"
+						label="Selector"
+						rules={[{ required: true, message: "请输入模型选择器" }]}
+						extra="例如：all、tag:erp、model:dwd_order"
+					>
+						<Input placeholder="all" />
+					</Form.Item>
+					<Form.Item name="target" label="Target" rules={[{ required: true, message: "请输入 target" }]}>
+						<Input placeholder="dev" />
+					</Form.Item>
+				</Form>
 			</Modal>
 		</div>
 	);

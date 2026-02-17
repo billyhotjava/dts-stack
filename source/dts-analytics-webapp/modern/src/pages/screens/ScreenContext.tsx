@@ -1,6 +1,7 @@
 import { createContext, useContext, useReducer, ReactNode, useCallback, useState } from 'react';
 import type { ScreenState, ScreenAction, ScreenConfig, ScreenComponent } from './types';
 import { SCREEN_SCHEMA_VERSION } from './specV2';
+import { sanitizeParentContainerIds, wouldCreateParentCycle } from './componentHierarchy';
 
 const defaultConfig: ScreenConfig = {
     schemaVersion: SCREEN_SCHEMA_VERSION,
@@ -48,6 +49,9 @@ function applyAutoContainerBinding(components: ScreenComponent[], movedIds: stri
         ));
         const nextParentId = target?.id;
         if (nextParentId) {
+            if (wouldCreateParentCycle(components, item.id, nextParentId)) {
+                return item;
+            }
             if (item.parentContainerId === nextParentId) {
                 return item;
             }
@@ -61,27 +65,39 @@ function applyAutoContainerBinding(components: ScreenComponent[], movedIds: stri
     });
 }
 
+function sanitizeComponents(components: ScreenComponent[]): ScreenComponent[] {
+    return sanitizeParentContainerIds(components);
+}
+
 function screenReducer(state: ScreenState, action: ScreenAction): ScreenState {
     switch (action.type) {
         case 'SET_CONFIG': {
+            const sanitizedConfig = {
+                ...action.payload,
+                components: sanitizeComponents(action.payload.components || []),
+            };
             const newHistory = state.history.slice(0, state.historyIndex + 1);
-            newHistory.push(action.payload);
+            newHistory.push(sanitizedConfig);
             return {
                 ...state,
-                config: action.payload,
+                config: sanitizedConfig,
                 history: newHistory,
                 historyIndex: newHistory.length - 1,
             };
         }
 
         case 'LOAD_CONFIG': {
+            const sanitizedConfig = {
+                ...action.payload,
+                components: sanitizeComponents(action.payload.components || []),
+            };
             // Load config without adding to history (used when loading from API)
             return {
                 ...state,
-                config: action.payload,
-                baselineConfig: action.payload,
+                config: sanitizedConfig,
+                baselineConfig: sanitizedConfig,
                 selectedIds: [],
-                history: [action.payload],
+                history: [sanitizedConfig],
                 historyIndex: 0,
             };
         }
@@ -96,7 +112,7 @@ function screenReducer(state: ScreenState, action: ScreenAction): ScreenState {
         case 'ADD_COMPONENT': {
             const newConfig = {
                 ...state.config,
-                components: [...state.config.components, action.payload],
+                components: sanitizeComponents([...state.config.components, action.payload]),
             };
             const newHistory = state.history.slice(0, state.historyIndex + 1);
             newHistory.push(newConfig);
@@ -110,9 +126,10 @@ function screenReducer(state: ScreenState, action: ScreenAction): ScreenState {
         }
 
         case 'UPDATE_COMPONENT': {
-            const newComponents = state.config.components.map((comp) =>
+            const nextComponents = state.config.components.map((comp) =>
                 comp.id === action.payload.id ? { ...comp, ...action.payload.updates } : comp
             );
+            const newComponents = sanitizeComponents(nextComponents);
             const newConfig = { ...state.config, components: newComponents };
             const newHistory = state.history.slice(0, state.historyIndex + 1);
             newHistory.push(newConfig);
@@ -135,7 +152,8 @@ function screenReducer(state: ScreenState, action: ScreenAction): ScreenState {
                     const { parentContainerId: _parentContainerId, ...rest } = comp;
                     return rest;
                 });
-            const newConfig = { ...state.config, components: newComponents };
+            const sanitizedComponents = sanitizeComponents(newComponents);
+            const newConfig = { ...state.config, components: sanitizedComponents };
             const newHistory = state.history.slice(0, state.historyIndex + 1);
             newHistory.push(newConfig);
             return {
@@ -166,7 +184,7 @@ function screenReducer(state: ScreenState, action: ScreenAction): ScreenState {
 
             const newConfig = {
                 ...state.config,
-                components: [...state.config.components, ...newComponents],
+                components: sanitizeComponents([...state.config.components, ...newComponents]),
             };
             const newHistory = state.history.slice(0, state.historyIndex + 1);
             newHistory.push(newConfig);
@@ -185,7 +203,9 @@ function screenReducer(state: ScreenState, action: ScreenAction): ScreenState {
                     ? { ...comp, x: action.payload.x, y: action.payload.y }
                     : comp
             );
-            const newComponents = applyAutoContainerBinding(movedComponents, [action.payload.id]);
+            const newComponents = sanitizeComponents(
+                applyAutoContainerBinding(movedComponents, [action.payload.id]),
+            );
             const newConfig = { ...state.config, components: newComponents };
             // Don't add to history on every move (too many entries)
             return { ...state, config: newConfig };
@@ -198,9 +218,11 @@ function screenReducer(state: ScreenState, action: ScreenAction): ScreenState {
                 if (!next) return comp;
                 return { ...comp, x: next.x, y: next.y };
             });
-            const newComponents = applyAutoContainerBinding(
-                movedComponents,
-                action.payload.map((item) => item.id),
+            const newComponents = sanitizeComponents(
+                applyAutoContainerBinding(
+                    movedComponents,
+                    action.payload.map((item) => item.id),
+                ),
             );
             const newConfig = { ...state.config, components: newComponents };
             return { ...state, config: newConfig };
@@ -208,7 +230,7 @@ function screenReducer(state: ScreenState, action: ScreenAction): ScreenState {
 
         case 'TRANSFORM_COMPONENTS': {
             const transformMap = new Map(action.payload.map((item) => [item.id, item]));
-            const newComponents = state.config.components.map((comp) => {
+            const newComponents = sanitizeComponents(state.config.components.map((comp) => {
                 const next = transformMap.get(comp.id);
                 if (!next) return comp;
                 return {
@@ -218,17 +240,17 @@ function screenReducer(state: ScreenState, action: ScreenAction): ScreenState {
                     width: next.width,
                     height: next.height,
                 };
-            });
+            }));
             const newConfig = { ...state.config, components: newComponents };
             return { ...state, config: newConfig };
         }
 
         case 'RESIZE_COMPONENT': {
-            const newComponents = state.config.components.map((comp) =>
+            const newComponents = sanitizeComponents(state.config.components.map((comp) =>
                 comp.id === action.payload.id
                     ? { ...comp, width: action.payload.width, height: action.payload.height }
                     : comp
-            );
+            ));
             const newConfig = { ...state.config, components: newComponents };
             return { ...state, config: newConfig };
         }

@@ -1,12 +1,16 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { ScreenGlobalVariable } from './types';
 
+export type RuntimeEventKind = 'variable' | 'filter' | 'interaction' | 'drill-down' | 'drill-up' | 'jump';
+
 export interface RuntimeVariableEvent {
     id: number;
     at: string;
+    kind: RuntimeEventKind;
     key: string;
     value: string;
     source?: string;
+    meta?: string;
 }
 
 interface ScreenRuntimeContextValue {
@@ -14,6 +18,7 @@ interface ScreenRuntimeContextValue {
     values: Record<string, string>;
     events: RuntimeVariableEvent[];
     setVariable: (key: string, value: string, source?: string) => void;
+    trackEvent: (event: Omit<RuntimeVariableEvent, 'id' | 'at'>) => void;
 }
 
 const emptyValue: ScreenRuntimeContextValue = {
@@ -21,6 +26,9 @@ const emptyValue: ScreenRuntimeContextValue = {
     values: {},
     events: [],
     setVariable: () => {
+        // no-op for unwrapped usage
+    },
+    trackEvent: () => {
         // no-op for unwrapped usage
     },
 };
@@ -42,6 +50,15 @@ function normalizeDefinitions(definitions: ScreenGlobalVariable[] | undefined): 
         });
     }
     return Array.from(dedup.values());
+}
+
+function inferEventKindBySource(source?: string): RuntimeEventKind {
+    const normalized = String(source || '').trim().toLowerCase();
+    if (!normalized) return 'variable';
+    if (normalized.startsWith('filter-') || normalized.startsWith('map-')) return 'filter';
+    if (normalized.startsWith('interaction:')) return 'interaction';
+    if (normalized.startsWith('drill:')) return 'drill-down';
+    return 'variable';
 }
 
 export function ScreenRuntimeProvider({
@@ -70,6 +87,21 @@ export function ScreenRuntimeProvider({
         definitions: normalizedDefinitions,
         values,
         events,
+        trackEvent: (event) => {
+            const safeKey = (event.key || '').trim() || '__event__';
+            setEvents((prev) => {
+                const next: RuntimeVariableEvent = {
+                    id: prev.length > 0 ? prev[0].id + 1 : 1,
+                    at: new Date().toISOString(),
+                    kind: event.kind,
+                    key: safeKey,
+                    value: String(event.value ?? ''),
+                    source: event.source?.trim() || undefined,
+                    meta: event.meta?.trim() || undefined,
+                };
+                return [next, ...prev].slice(0, 100);
+            });
+        },
         setVariable: (key: string, value: string, source?: string) => {
             const safeKey = (key || '').trim();
             if (!safeKey) return;
@@ -78,6 +110,7 @@ export function ScreenRuntimeProvider({
                 const next: RuntimeVariableEvent = {
                     id: prev.length > 0 ? prev[0].id + 1 : 1,
                     at: new Date().toISOString(),
+                    kind: inferEventKindBySource(source),
                     key: safeKey,
                     value: String(value ?? ''),
                     source: source?.trim() || undefined,

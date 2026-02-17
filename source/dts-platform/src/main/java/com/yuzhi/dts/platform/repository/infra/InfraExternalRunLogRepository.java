@@ -34,6 +34,28 @@ public interface InfraExternalRunLogRepository extends JpaRepository<InfraExtern
     @Query(
         """
         select r from InfraExternalRunLog r
+        where r.startedAt is not null
+          and r.startedAt >= :fromInclusive
+          and r.startedAt < :toExclusive
+          and (:entryKey is null or lower(r.entryKey) = lower(:entryKey))
+          and (:ownerDept is null or lower(r.ownerDept) = lower(:ownerDept))
+          and (:artifactId is null or r.artifactId = :artifactId)
+          and (:artifactName is null or lower(r.artifactName) like lower(concat('%', :artifactName, '%')))
+        order by r.startedAt asc
+        """
+    )
+    List<InfraExternalRunLog> findForMetrics(
+        @Param("fromInclusive") Instant fromInclusive,
+        @Param("toExclusive") Instant toExclusive,
+        @Param("entryKey") String entryKey,
+        @Param("ownerDept") String ownerDept,
+        @Param("artifactId") UUID artifactId,
+        @Param("artifactName") String artifactName
+    );
+
+    @Query(
+        """
+        select r from InfraExternalRunLog r
         where (:entryKey is null or lower(r.entryKey) = lower(:entryKey))
           and (:artifactId is null or r.artifactId = :artifactId)
           and (:status is null or lower(r.status) = lower(:status))

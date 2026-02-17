@@ -52,3 +52,23 @@
 - 联动图检测增强：
   - 循环检测补充 `sql` 参数绑定消费边；
   - 筛选器组件视作变量发射源参与拓扑检测。
+- 事件总线标准化增量（2026-02-15）：
+  - `ScreenRuntimeContext` 事件流升级为统一事件类型：`variable/filter/interaction/drill-down/drill-up/jump`。
+  - `InteractionDebugPanel` 新增事件类型筛选与类型列，并补充 `meta` 详情列，支持按链路快速定位问题。
+  - 图表联动新增“点击跳转”能力：
+    - 属性面板支持配置 `jumpUrlTemplate/jumpOpenMode`；
+    - 支持模板占位符：`{{name}}/{{seriesName}}/{{value}}/{{data.name}}`。
+  - 钻取链路补充事件埋点：
+    - 下钻与回退均写入统一事件流，便于排障与行为回放。
+- 筛选器数据源绑定增强（2026-02-16）：
+  - `filter-select` 新增选项来源模式：`manual`（手工配置）/`data`（从组件数据源自动提取）；
+  - 支持配置值字段、标签字段、最大选项数；
+  - 运行时自动基于当前组件 `CardData` 生成去重选项列表，便于做“维度即筛选项”的联动配置。
+- 联动稳定性增强（2026-02-16）：
+  - `filter-input` 新增 `debounceMs` 配置（0-5000ms，默认 300ms）；
+  - 渲染器引入输入防抖写变量机制（包含 blur 强制 flush），降低高频输入导致的查询抖动；
+  - 防抖提交事件标记 `:debounced`，便于在联动调试台区分实时写入与延迟写入。
+- 变量驱动显隐增强（2026-02-17）：
+  - 组件新增“变量可见条件”配置（`visibilityRuleEnabled/visibilityVariableKey/visibilityMatchMode/visibilityMatchValues`）；
+  - 支持 `等于/不等于/为空/非空` 四种显隐规则；
+  - 规则在预览/公开/导出模式生效，可与 `tab-switcher` 组合实现“Tab 切场景”。

@@ -10,6 +10,7 @@ public class DbtArtifactSyncState {
     private final AtomicReference<ArtifactStatus> manifest = new AtomicReference<>();
     private final AtomicReference<ArtifactStatus> runResults = new AtomicReference<>();
     private final AtomicReference<SyncStatsSnapshot> stats = new AtomicReference<>();
+    private final AtomicReference<DbtRunResultService.DbtRunSummary> latestRun = new AtomicReference<>();
 
     public void recordManifest(Long modifiedAt, boolean synced, String message) {
         manifest.set(new ArtifactStatus(Instant.now(), modifiedAt, synced, message));
@@ -37,8 +38,15 @@ public class DbtArtifactSyncState {
         );
     }
 
+    public void recordLatestRun(DbtRunResultService.DbtRunSummary runSummary) {
+        if (runSummary == null) {
+            return;
+        }
+        latestRun.set(runSummary);
+    }
+
     public DbtArtifactSyncStatus snapshot() {
-        return new DbtArtifactSyncStatus(manifest.get(), runResults.get(), stats.get());
+        return new DbtArtifactSyncStatus(manifest.get(), runResults.get(), stats.get(), latestRun.get());
     }
 
     public record ArtifactStatus(Instant lastSyncAt, Long lastModifiedAt, boolean synced, String message) {}
@@ -57,6 +65,7 @@ public class DbtArtifactSyncState {
     public record DbtArtifactSyncStatus(
         ArtifactStatus manifest,
         ArtifactStatus runResults,
-        SyncStatsSnapshot stats
+        SyncStatsSnapshot stats,
+        DbtRunResultService.DbtRunSummary latestRun
     ) {}
 }

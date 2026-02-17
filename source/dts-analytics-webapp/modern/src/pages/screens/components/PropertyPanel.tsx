@@ -9,6 +9,7 @@ import { getRendererPlugin } from '../plugins/registry';
 import { readComponentPluginMeta, resolveRuntimePluginId } from '../plugins/runtime';
 import { useScreenPluginRuntime } from '../plugins/useScreenPluginRuntime';
 import type { PropertySchemaField } from '../plugins/types';
+import { wouldCreateParentCycle } from '../componentHierarchy';
 
 const DEFAULT_SERIES_COLORS = [
     '#3b82f6',
@@ -18,6 +19,27 @@ const DEFAULT_SERIES_COLORS = [
     '#a855f7',
     '#06b6d4',
 ];
+
+function serializeVisibilityMatchValues(raw: unknown): string {
+    if (Array.isArray(raw)) {
+        return raw.map((item) => String(item ?? '').trim()).filter((item) => item.length > 0).join('\n');
+    }
+    const text = String(raw ?? '').trim();
+    if (!text) return '';
+    return text
+        .split(/[\n,，]/g)
+        .map((item) => item.trim())
+        .filter((item) => item.length > 0)
+        .join('\n');
+}
+
+function parseVisibilityMatchValues(text: string): string[] {
+    return text
+        .split(/[\n,，]/g)
+        .map((item) => item.trim())
+        .filter((item) => item.length > 0)
+        .slice(0, 200);
+}
 
 export function PropertyPanel() {
     const { state, updateComponent, updateSelectedComponents } = useScreen();
@@ -218,45 +240,51 @@ export function PropertyPanel() {
                         />
                     </div>
 
-                    {selectedComponent.type !== 'container' && (
-                        <div className="property-row">
-                            <label className="property-label">所属容器</label>
-                            <select
-                                className="property-input"
-                                value={selectedComponent.parentContainerId || ''}
-                                onChange={(e) => {
-                                    const parentId = e.target.value || undefined;
-                                    if (!parentId) {
-                                        updateComponent(selectedComponent.id, { parentContainerId: undefined });
-                                        return;
-                                    }
-                                    const parent = config.components.find((item) => item.id === parentId && item.type === 'container');
-                                    if (!parent) {
-                                        updateComponent(selectedComponent.id, { parentContainerId: undefined });
-                                        return;
-                                    }
-                                    const maxX = parent.x + Math.max(0, parent.width - selectedComponent.width);
-                                    const maxY = parent.y + Math.max(0, parent.height - selectedComponent.height);
-                                    const nextX = Math.max(parent.x, Math.min(selectedComponent.x, maxX));
-                                    const nextY = Math.max(parent.y, Math.min(selectedComponent.y, maxY));
-                                    updateComponent(selectedComponent.id, {
-                                        parentContainerId: parentId,
-                                        x: nextX,
-                                        y: nextY,
-                                    });
-                                }}
-                            >
-                                <option value="">-- 无 --</option>
-                                {config.components
-                                    .filter((item) => item.type === 'container' && item.id !== selectedComponent.id)
-                                    .map((item) => (
-                                        <option key={item.id} value={item.id}>
-                                            {item.name} ({item.id})
-                                        </option>
-                                    ))}
-                            </select>
-                        </div>
-                    )}
+                    <div className="property-row">
+                        <label className="property-label">所属容器</label>
+                        <select
+                            className="property-input"
+                            value={selectedComponent.parentContainerId || ''}
+                            onChange={(e) => {
+                                const parentId = e.target.value || undefined;
+                                if (!parentId) {
+                                    updateComponent(selectedComponent.id, { parentContainerId: undefined });
+                                    return;
+                                }
+                                const parent = config.components.find((item) => item.id === parentId && item.type === 'container');
+                                if (!parent) {
+                                    updateComponent(selectedComponent.id, { parentContainerId: undefined });
+                                    return;
+                                }
+                                if (wouldCreateParentCycle(config.components, selectedComponent.id, parentId)) {
+                                    alert('该容器绑定会形成循环引用，请选择其他容器');
+                                    return;
+                                }
+                                const maxX = parent.x + Math.max(0, parent.width - selectedComponent.width);
+                                const maxY = parent.y + Math.max(0, parent.height - selectedComponent.height);
+                                const nextX = Math.max(parent.x, Math.min(selectedComponent.x, maxX));
+                                const nextY = Math.max(parent.y, Math.min(selectedComponent.y, maxY));
+                                updateComponent(selectedComponent.id, {
+                                    parentContainerId: parentId,
+                                    x: nextX,
+                                    y: nextY,
+                                });
+                            }}
+                        >
+                            <option value="">-- 无 --</option>
+                            {config.components
+                                .filter((item) => (
+                                    item.type === 'container'
+                                    && item.id !== selectedComponent.id
+                                    && !wouldCreateParentCycle(config.components, selectedComponent.id, item.id)
+                                ))
+                                .map((item) => (
+                                    <option key={item.id} value={item.id}>
+                                        {item.name} ({item.id})
+                                    </option>
+                                ))}
+                        </select>
+                    </div>
 
                     {selectedComponent.type === 'container' && (
                         <div className="property-row">
@@ -314,6 +342,62 @@ export function PropertyPanel() {
                             })}
                         </div>
                     </div>
+                    <div className="property-row">
+                        <label className="property-label">变量可见条件</label>
+                        <input
+                            type="checkbox"
+                            checked={selectedComponent.config.visibilityRuleEnabled === true}
+                            onChange={(e) => handleConfigChange('visibilityRuleEnabled', e.target.checked)}
+                        />
+                    </div>
+                    {selectedComponent.config.visibilityRuleEnabled === true && (
+                        <>
+                            <div className="property-row">
+                                <label className="property-label">变量Key</label>
+                                <input
+                                    type="text"
+                                    className="property-input"
+                                    value={String(selectedComponent.config.visibilityVariableKey ?? '')}
+                                    onChange={(e) => handleConfigChange('visibilityVariableKey', e.target.value)}
+                                    placeholder="tabKey"
+                                />
+                            </div>
+                            <div className="property-row">
+                                <label className="property-label">匹配模式</label>
+                                <select
+                                    className="property-input"
+                                    value={String(selectedComponent.config.visibilityMatchMode ?? 'equals')}
+                                    onChange={(e) => handleConfigChange('visibilityMatchMode', e.target.value)}
+                                >
+                                    <option value="equals">等于任一值</option>
+                                    <option value="not-equals">不等于任一值</option>
+                                    <option value="empty">为空</option>
+                                    <option value="not-empty">非空</option>
+                                </select>
+                            </div>
+                            {(() => {
+                                const mode = String(selectedComponent.config.visibilityMatchMode ?? 'equals');
+                                if (mode === 'empty' || mode === 'not-empty') {
+                                    return null;
+                                }
+                                return (
+                                    <div className="property-row">
+                                        <label className="property-label">匹配值</label>
+                                        <textarea
+                                            className="property-input"
+                                            rows={4}
+                                            value={serializeVisibilityMatchValues(selectedComponent.config.visibilityMatchValues)}
+                                            onChange={(e) => handleConfigChange('visibilityMatchValues', parseVisibilityMatchValues(e.target.value))}
+                                            placeholder={'每行一个值，例如：\noverview\nline'}
+                                        />
+                                    </div>
+                                );
+                            })()}
+                            <div style={{ fontSize: 11, color: '#94a3b8', marginTop: -2 }}>
+                                仅在预览/公开/导出模式生效，设计器中始终可见便于编辑。
+                            </div>
+                        </>
+                    )}
                 </div>
             </div>
         </div>
@@ -840,6 +924,241 @@ function renderComponentConfig(
                 </>
             );
 
+        case 'carousel':
+            return (
+                <>
+                    <div className="property-row">
+                        <label className="property-label">标题</label>
+                        <input
+                            type="text"
+                            className="property-input"
+                            value={(config.title as string) || '轮播卡片'}
+                            onChange={(e) => onChange('title', e.target.value)}
+                        />
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">轮播内容</label>
+                        <textarea
+                            className="property-input"
+                            rows={6}
+                            value={Array.isArray(config.items) ? config.items.map((item) => String(item ?? '')).join('\n') : String(config.items ?? '')}
+                            onChange={(e) => {
+                                const items = e.target.value
+                                    .split(/\r?\n/g)
+                                    .map((item) => item.trim())
+                                    .filter((item) => item.length > 0)
+                                    .slice(0, 200);
+                                onChange('items', items);
+                            }}
+                            placeholder="每行一条，例如：\n设备在线率 99.2%\n昨日告警 6 条"
+                        />
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">轮播间隔(秒)</label>
+                        <input
+                            type="number"
+                            className="property-input"
+                            min={1}
+                            max={120}
+                            value={(config.intervalSeconds as number) || 4}
+                            onChange={(e) => onChange('intervalSeconds', Number(e.target.value))}
+                        />
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">数据行上限</label>
+                        <input
+                            type="number"
+                            className="property-input"
+                            min={1}
+                            max={500}
+                            value={(config.dataItemMax as number) || 50}
+                            onChange={(e) => onChange('dataItemMax', Number(e.target.value))}
+                            placeholder="数据源接入时生效"
+                        />
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">悬停暂停</label>
+                        <input
+                            type="checkbox"
+                            checked={config.pauseOnHover !== false}
+                            onChange={(e) => onChange('pauseOnHover', e.target.checked)}
+                        />
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">显示指示点</label>
+                        <input
+                            type="checkbox"
+                            checked={config.showDots !== false}
+                            onChange={(e) => onChange('showDots', e.target.checked)}
+                        />
+                    </div>
+                </>
+            );
+
+        case 'tab-switcher':
+            return (
+                <>
+                    <div className="property-row">
+                        <label className="property-label">标题</label>
+                        <input
+                            type="text"
+                            className="property-input"
+                            value={(config.label as string) || '维度切换'}
+                            onChange={(e) => onChange('label', e.target.value)}
+                        />
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">变量Key</label>
+                        <input
+                            type="text"
+                            className="property-input"
+                            value={(config.variableKey as string) || ''}
+                            onChange={(e) => onChange('variableKey', e.target.value)}
+                            placeholder="tabKey"
+                        />
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">选项来源</label>
+                        <select
+                            className="property-input"
+                            value={(config.optionSourceMode as string) || 'manual'}
+                            onChange={(e) => onChange('optionSourceMode', e.target.value === 'data' ? 'data' : 'manual')}
+                        >
+                            <option value="manual">手工配置</option>
+                            <option value="data">数据源首列</option>
+                        </select>
+                    </div>
+                    {(String(config.optionSourceMode || 'manual') !== 'data') ? (
+                        <div className="property-row">
+                            <label className="property-label">选项</label>
+                            <textarea
+                                className="property-input"
+                                rows={6}
+                                value={Array.isArray(config.options)
+                                    ? config.options.map((item) => {
+                                        if (item && typeof item === 'object') {
+                                            const row = item as Record<string, unknown>;
+                                            const label = String(row.label ?? '').trim();
+                                            const value = String(row.value ?? '').trim();
+                                            return label && value ? `${label}:${value}` : (label || value);
+                                        }
+                                        return String(item ?? '');
+                                    }).join('\n')
+                                    : String(config.options ?? '')
+                                }
+                                onChange={(e) => {
+                                    const lines = e.target.value
+                                        .split(/\r?\n/g)
+                                        .map((line) => line.trim())
+                                        .filter((line) => line.length > 0)
+                                        .slice(0, 300);
+                                    const next = lines.map((line) => {
+                                        const idx = line.indexOf(':');
+                                        if (idx < 0) {
+                                            return { label: line, value: line };
+                                        }
+                                        const label = line.slice(0, idx).trim();
+                                        const value = line.slice(idx + 1).trim();
+                                        const safeValue = value || label;
+                                        return { label: label || safeValue, value: safeValue };
+                                    });
+                                    onChange('options', next);
+                                }}
+                                placeholder={'每行一个选项，可写 label:value\n例如：\n总览:overview\n产线:line'}
+                            />
+                        </div>
+                    ) : (
+                        <>
+                            <div className="property-row">
+                                <label className="property-label">标签列</label>
+                                <input
+                                    type="text"
+                                    className="property-input"
+                                    value={(config.dataOptionLabelField as string) || ''}
+                                    onChange={(e) => onChange('dataOptionLabelField', e.target.value)}
+                                    placeholder="列名/显示名/序号(1开始)"
+                                />
+                            </div>
+                            <div className="property-row">
+                                <label className="property-label">值列</label>
+                                <input
+                                    type="text"
+                                    className="property-input"
+                                    value={(config.dataOptionValueField as string) || ''}
+                                    onChange={(e) => onChange('dataOptionValueField', e.target.value)}
+                                    placeholder="列名/显示名/序号(1开始)"
+                                />
+                            </div>
+                            <div className="property-row">
+                                <label className="property-label">最大选项数</label>
+                                <input
+                                    type="number"
+                                    className="property-input"
+                                    min={1}
+                                    max={500}
+                                    value={(config.dataOptionMax as number) || 100}
+                                    onChange={(e) => onChange('dataOptionMax', Number(e.target.value))}
+                                />
+                            </div>
+                        </>
+                    )}
+                    <div className="property-row">
+                        <label className="property-label">默认值</label>
+                        <input
+                            type="text"
+                            className="property-input"
+                            value={(config.defaultValue as string) || ''}
+                            onChange={(e) => onChange('defaultValue', e.target.value)}
+                            placeholder="首次加载时写入变量"
+                        />
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">紧凑模式</label>
+                        <input
+                            type="checkbox"
+                            checked={config.compact === true}
+                            onChange={(e) => onChange('compact', e.target.checked)}
+                        />
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">激活背景</label>
+                        <input
+                            type="color"
+                            className="property-color-input"
+                            value={(config.activeBackgroundColor as string) || '#38bdf8'}
+                            onChange={(e) => onChange('activeBackgroundColor', e.target.value)}
+                        />
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">激活文字</label>
+                        <input
+                            type="color"
+                            className="property-color-input"
+                            value={(config.activeTextColor as string) || '#0f172a'}
+                            onChange={(e) => onChange('activeTextColor', e.target.value)}
+                        />
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">未激活背景</label>
+                        <input
+                            type="color"
+                            className="property-color-input"
+                            value={(config.inactiveBackgroundColor as string) || '#1e293b'}
+                            onChange={(e) => onChange('inactiveBackgroundColor', e.target.value)}
+                        />
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">未激活文字</label>
+                        <input
+                            type="color"
+                            className="property-color-input"
+                            value={(config.inactiveTextColor as string) || '#94a3b8'}
+                            onChange={(e) => onChange('inactiveTextColor', e.target.value)}
+                        />
+                    </div>
+                </>
+            );
+
         case 'progress-bar':
             return (
                 <>
@@ -897,6 +1216,22 @@ function renderComponentConfig(
                             placeholder="请输入关键词"
                         />
                     </div>
+                    <div className="property-row">
+                        <label className="property-label">防抖(ms)</label>
+                        <input
+                            type="number"
+                            className="property-input"
+                            min={0}
+                            max={5000}
+                            step={50}
+                            value={Number(config.debounceMs as number) > 0 ? Number(config.debounceMs as number) : 0}
+                            onChange={(e) => {
+                                const n = Number(e.target.value);
+                                onChange('debounceMs', Number.isFinite(n) && n > 0 ? Math.max(50, Math.min(5000, Math.round(n))) : 0);
+                            }}
+                            placeholder="0=不防抖"
+                        />
+                    </div>
                 </>
             );
 
@@ -904,6 +1239,7 @@ function renderComponentConfig(
             const options = Array.isArray(config.options)
                 ? (config.options as Array<string | { label?: string; value?: string }>)
                 : [];
+            const optionSourceMode = String(config.optionSourceMode || 'manual') === 'data' ? 'data' : 'manual';
             const optionText = options
                 .map((item) => (typeof item === 'string' ? item : `${item.value || ''}|${item.label || ''}`))
                 .join('\n');
@@ -929,21 +1265,71 @@ function renderComponentConfig(
                         />
                     </div>
                     <div className="property-row">
-                        <label className="property-label">选项(每行1个)</label>
-                        <textarea
+                        <label className="property-label">选项来源</label>
+                        <select
                             className="property-input"
-                            rows={5}
-                            value={optionText}
-                            onChange={(e) => {
-                                const lines = e.target.value
-                                    .split('\n')
-                                    .map((line) => line.trim())
-                                    .filter((line) => line.length > 0);
-                                onChange('options', lines);
-                            }}
-                            placeholder={'华北\n华东\n华南'}
-                        />
+                            value={optionSourceMode}
+                            onChange={(e) => onChange('optionSourceMode', e.target.value === 'data' ? 'data' : 'manual')}
+                        >
+                            <option value="manual">手工配置</option>
+                            <option value="data">来自数据源</option>
+                        </select>
                     </div>
+                    {optionSourceMode === 'manual' ? (
+                        <div className="property-row">
+                            <label className="property-label">选项(每行1个)</label>
+                            <textarea
+                                className="property-input"
+                                rows={5}
+                                value={optionText}
+                                onChange={(e) => {
+                                    const lines = e.target.value
+                                        .split('\n')
+                                        .map((line) => line.trim())
+                                        .filter((line) => line.length > 0);
+                                    onChange('options', lines);
+                                }}
+                                placeholder={'华北\n华东\n华南'}
+                            />
+                        </div>
+                    ) : (
+                        <>
+                            <div className="property-row">
+                                <label className="property-label">值字段</label>
+                                <input
+                                    type="text"
+                                    className="property-input"
+                                    value={(config.dataOptionValueField as string) || ''}
+                                    onChange={(e) => onChange('dataOptionValueField', e.target.value)}
+                                    placeholder="默认第1列"
+                                />
+                            </div>
+                            <div className="property-row">
+                                <label className="property-label">标签字段</label>
+                                <input
+                                    type="text"
+                                    className="property-input"
+                                    value={(config.dataOptionLabelField as string) || ''}
+                                    onChange={(e) => onChange('dataOptionLabelField', e.target.value)}
+                                    placeholder="默认与值字段相同"
+                                />
+                            </div>
+                            <div className="property-row">
+                                <label className="property-label">最大选项数</label>
+                                <input
+                                    type="number"
+                                    className="property-input"
+                                    min={1}
+                                    max={2000}
+                                    value={Number(config.dataOptionMax as number) > 0 ? Number(config.dataOptionMax as number) : 200}
+                                    onChange={(e) => {
+                                        const n = Number(e.target.value);
+                                        onChange('dataOptionMax', Number.isFinite(n) ? Math.max(1, Math.min(2000, n)) : 200);
+                                    }}
+                                />
+                            </div>
+                        </>
+                    )}
                     <div className="property-row">
                         <label className="property-label">占位</label>
                         <input
@@ -1438,6 +1824,7 @@ function renderDataSourceConfig(
     const sqlConfig = resolveSqlConfig(ds);
 
     const cardBindings: CardParameterBinding[] = ds?.type === 'card' ? (ds.cardConfig?.parameterBindings ?? []) : [];
+    const metricBindings: CardParameterBinding[] = dsType === 'metric' ? (ds?.metricConfig?.parameterBindings ?? []) : [];
     const sqlBindings: CardParameterBinding[] = dsType === 'sql' ? (sqlConfig?.parameterBindings ?? []) : [];
     const variableOptions = (globalVariables ?? []).map((item) => ({ key: item.key, label: item.label || item.key }));
 
@@ -1466,6 +1853,20 @@ function renderDataSourceConfig(
                 connectionId: base?.connectionId,
                 queryTimeoutSeconds: base?.queryTimeoutSeconds,
                 maxRows: base?.maxRows,
+                parameterBindings: bindings,
+            },
+        });
+    };
+
+    const updateMetricBindings = (bindings: CardParameterBinding[]) => {
+        const currentMetricConfig = dsType === 'metric' ? ds?.metricConfig : undefined;
+        setDataSource({
+            type: 'metric',
+            sourceType: 'metric',
+            refreshInterval: dsType === 'metric' ? ds?.refreshInterval : undefined,
+            metricConfig: {
+                ...(currentMetricConfig ?? {}),
+                cardId: currentMetricConfig?.cardId ?? 0,
                 parameterBindings: bindings,
             },
         });
@@ -1533,6 +1934,20 @@ function renderDataSourceConfig(
                     ? ds?.datasetConfig
                     : { queryBody: { database: 0, type: 'query', query: {} } },
             });
+            return;
+        }
+        if (nextType === 'metric') {
+            setDataSource({
+                type: 'metric',
+                sourceType: 'metric',
+                refreshInterval: dsType === 'metric' ? ds?.refreshInterval : undefined,
+                metricConfig: {
+                    cardId: dsType === 'metric' ? (ds?.metricConfig?.cardId ?? 0) : 0,
+                    metricId: dsType === 'metric' ? ds?.metricConfig?.metricId : undefined,
+                    metricVersion: dsType === 'metric' ? ds?.metricConfig?.metricVersion : undefined,
+                    parameterBindings: dsType === 'metric' ? (ds?.metricConfig?.parameterBindings ?? []) : [],
+                },
+            });
         }
     };
 
@@ -1550,6 +1965,7 @@ function renderDataSourceConfig(
                     <option value="api">HTTP API</option>
                     <option value="sql">SQL 模式</option>
                     <option value="dataset">Dataset 模式</option>
+                    <option value="metric">Metric 语义模式</option>
                 </select>
             </div>
 
@@ -1922,6 +2338,90 @@ function renderDataSourceConfig(
                     </div>
                 </>
             )}
+
+            {dsType === 'metric' && (
+                <>
+                    <div className="property-row">
+                        <label className="property-label">Card</label>
+                        <CardIdPicker
+                            value={dsType === 'metric' ? (ds?.metricConfig?.cardId ?? 0) : 0}
+                            onChange={(cardId) => {
+                                const currentMetricConfig = dsType === 'metric' ? ds?.metricConfig : undefined;
+                                setDataSource({
+                                    type: 'metric',
+                                    sourceType: 'metric',
+                                    refreshInterval: dsType === 'metric' ? ds?.refreshInterval : undefined,
+                                    metricConfig: {
+                                        ...(currentMetricConfig ?? {}),
+                                        cardId,
+                                    },
+                                });
+                            }}
+                        />
+                    </div>
+                    <MetricBindingEditor
+                        metricId={dsType === 'metric' ? ds?.metricConfig?.metricId : undefined}
+                        metricVersion={dsType === 'metric' ? ds?.metricConfig?.metricVersion : undefined}
+                        onMetricIdChange={(metricId) => {
+                            const currentMetricConfig = dsType === 'metric' ? ds?.metricConfig : undefined;
+                            setDataSource({
+                                type: 'metric',
+                                sourceType: 'metric',
+                                refreshInterval: dsType === 'metric' ? ds?.refreshInterval : undefined,
+                                metricConfig: {
+                                    ...(currentMetricConfig ?? {}),
+                                    cardId: currentMetricConfig?.cardId ?? 0,
+                                    metricId,
+                                    metricVersion: metricId ? currentMetricConfig?.metricVersion : undefined,
+                                },
+                            });
+                        }}
+                        onMetricVersionChange={(metricVersion) => {
+                            const currentMetricConfig = dsType === 'metric' ? ds?.metricConfig : undefined;
+                            setDataSource({
+                                type: 'metric',
+                                sourceType: 'metric',
+                                refreshInterval: dsType === 'metric' ? ds?.refreshInterval : undefined,
+                                metricConfig: {
+                                    ...(currentMetricConfig ?? {}),
+                                    cardId: currentMetricConfig?.cardId ?? 0,
+                                    metricId: currentMetricConfig?.metricId,
+                                    metricVersion,
+                                },
+                            });
+                        }}
+                    />
+                    <CardParamBindingsEditor
+                        bindings={metricBindings}
+                        globalVariables={globalVariables}
+                        onChange={updateMetricBindings}
+                    />
+                    <div className="property-row">
+                        <label className="property-label">刷新(秒)</label>
+                        <input
+                            type="number"
+                            className="property-input"
+                            min={0}
+                            step={10}
+                            value={dsType === 'metric' ? (ds?.refreshInterval ?? 0) : 0}
+                            onChange={(e) => {
+                                const val = Number(e.target.value);
+                                const currentMetricConfig = dsType === 'metric' ? ds?.metricConfig : undefined;
+                                setDataSource({
+                                    type: 'metric',
+                                    sourceType: 'metric',
+                                    refreshInterval: val > 0 ? val : undefined,
+                                    metricConfig: {
+                                        ...(currentMetricConfig ?? {}),
+                                        cardId: currentMetricConfig?.cardId ?? 0,
+                                    },
+                                });
+                            }}
+                            placeholder="0=不刷新"
+                        />
+                    </div>
+                </>
+            )}
         </>
     );
 }
@@ -1981,7 +2481,13 @@ function renderInteractionConfig(
         return null;
     }
 
-    const interaction = component.interaction ?? { enabled: false, mappings: [] as ComponentInteractionMapping[] };
+    const interaction = component.interaction ?? {
+        enabled: false,
+        mappings: [] as ComponentInteractionMapping[],
+        jumpEnabled: false,
+        jumpUrlTemplate: '',
+        jumpOpenMode: 'new-tab' as const,
+    };
     const mappings = interaction.mappings ?? [];
 
     const setInteraction = (next: typeof interaction) => {
@@ -2075,6 +2581,46 @@ function renderInteractionConfig(
                     >
                         + 添加联动规则
                     </button>
+
+                    <div className="property-row" style={{ marginTop: 10 }}>
+                        <label className="property-label">启用点击跳转</label>
+                        <input
+                            type="checkbox"
+                            checked={interaction.jumpEnabled === true}
+                            onChange={(e) => setInteraction({ ...interaction, jumpEnabled: e.target.checked })}
+                        />
+                    </div>
+
+                    {interaction.jumpEnabled === true && (
+                        <>
+                            <div className="property-row">
+                                <label className="property-label">跳转链接模板</label>
+                                <input
+                                    className="property-input"
+                                    value={interaction.jumpUrlTemplate || ''}
+                                    onChange={(e) => setInteraction({ ...interaction, jumpUrlTemplate: e.target.value })}
+                                    placeholder="https://host/path?name={{name}}&value={{value}}"
+                                />
+                            </div>
+                            <div className="property-row">
+                                <label className="property-label">打开方式</label>
+                                <select
+                                    className="property-input"
+                                    value={interaction.jumpOpenMode || 'new-tab'}
+                                    onChange={(e) => setInteraction({
+                                        ...interaction,
+                                        jumpOpenMode: e.target.value === 'self' ? 'self' : 'new-tab',
+                                    })}
+                                >
+                                    <option value="new-tab">新窗口</option>
+                                    <option value="self">当前窗口</option>
+                                </select>
+                            </div>
+                            <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>
+                                支持占位符: {'{{name}} / {{seriesName}} / {{value}} / {{data.name}}'}
+                            </div>
+                        </>
+                    )}
                 </>
             )}
         </div>
@@ -2213,6 +2759,233 @@ interface ColumnEntry {
     formatter?: 'auto' | 'string' | 'number' | 'percent' | 'date';
 }
 
+interface SourceColumnOption {
+    name: string;
+    displayName: string;
+}
+
+function CardSourceColumnBindingsEditor({
+    title,
+    sourceCols,
+    columns,
+    defaultAlign,
+    onColumnsChange,
+}: {
+    title: string;
+    sourceCols: SourceColumnOption[];
+    columns: ColumnEntry[] | undefined;
+    defaultAlign: NonNullable<ColumnEntry['align']>;
+    onColumnsChange: (value: ColumnEntry[] | undefined) => void;
+}) {
+    const fallbackColumns = sourceCols.map((item) => ({ source: item.name } as ColumnEntry));
+    const effectiveColumns = columns ?? fallbackColumns;
+    const usedSourceSet = new Set(effectiveColumns.map((item) => item.source));
+    const unboundSources = sourceCols.filter((item) => !usedSourceSet.has(item.name));
+
+    const updateColumn = (index: number, patch: Partial<ColumnEntry>) => {
+        const next = effectiveColumns.map((item, i) => (i === index ? { ...item, ...patch } : item));
+        onColumnsChange(next);
+    };
+
+    const handleSourceChange = (index: number, nextSource: string) => {
+        const duplicate = effectiveColumns.some((item, i) => i !== index && item.source === nextSource);
+        if (duplicate) {
+            alert('该字段已被绑定，请选择其他字段');
+            return;
+        }
+        updateColumn(index, { source: nextSource });
+    };
+
+    const handleMove = (index: number, direction: -1 | 1) => {
+        const target = index + direction;
+        if (target < 0 || target >= effectiveColumns.length) return;
+        const next = [...effectiveColumns];
+        const [current] = next.splice(index, 1);
+        next.splice(target, 0, current);
+        onColumnsChange(next);
+    };
+
+    const handleRemove = (index: number) => {
+        onColumnsChange(effectiveColumns.filter((_, i) => i !== index));
+    };
+
+    return (
+        <>
+            <div style={{ fontSize: 11, color: '#888', marginTop: 8, marginBottom: 4 }}>
+                {title}
+            </div>
+            <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+                <button
+                    type="button"
+                    className="header-btn"
+                    onClick={() => {
+                        if (!unboundSources[0]) return;
+                        onColumnsChange([...effectiveColumns, { source: unboundSources[0].name, align: defaultAlign }]);
+                    }}
+                    disabled={unboundSources.length === 0}
+                    title="追加一个未绑定字段"
+                >
+                    + 添加列
+                </button>
+                <button
+                    type="button"
+                    className="header-btn"
+                    onClick={() => onColumnsChange(undefined)}
+                    title="恢复默认映射（按数据源原始字段）"
+                >
+                    恢复默认
+                </button>
+                <button
+                    type="button"
+                    className="header-btn"
+                    onClick={() => onColumnsChange([])}
+                    disabled={effectiveColumns.length === 0}
+                    title="清空当前映射"
+                >
+                    清空
+                </button>
+            </div>
+            {effectiveColumns.length === 0 && (
+                <div style={{ fontSize: 11, color: '#888', marginTop: 4, marginBottom: 8 }}>
+                    当前无字段绑定，请点击“添加列”。
+                </div>
+            )}
+            {effectiveColumns.map((entry, index) => {
+                const sourceMeta = sourceCols.find((item) => item.name === entry.source);
+                return (
+                    <div key={`${entry.source}-${index}`} style={{
+                        border: '1px solid rgba(255,255,255,0.06)',
+                        borderRadius: 4,
+                        padding: '6px',
+                        marginBottom: 6,
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                            <span style={{ fontSize: 11, color: '#94a3b8' }}>
+                                列 {index + 1}{sourceMeta ? '' : ' (失效字段)'}
+                            </span>
+                            <div style={{ display: 'flex', gap: 4 }}>
+                                <button
+                                    type="button"
+                                    className="header-btn"
+                                    onClick={() => handleMove(index, -1)}
+                                    disabled={index === 0}
+                                    title="上移"
+                                >
+                                    ↑
+                                </button>
+                                <button
+                                    type="button"
+                                    className="header-btn"
+                                    onClick={() => handleMove(index, 1)}
+                                    disabled={index >= effectiveColumns.length - 1}
+                                    title="下移"
+                                >
+                                    ↓
+                                </button>
+                                <button
+                                    type="button"
+                                    className="header-btn"
+                                    onClick={() => handleRemove(index)}
+                                    title="删除该列"
+                                >
+                                    删除
+                                </button>
+                            </div>
+                        </div>
+                        <div className="property-row">
+                            <label className="property-label">绑定字段</label>
+                            <select
+                                className="property-input"
+                                value={entry.source}
+                                onChange={(e) => handleSourceChange(index, e.target.value)}
+                            >
+                                {!sourceMeta && (
+                                    <option value={entry.source}>{entry.source} (失效字段)</option>
+                                )}
+                                {sourceCols.map((item) => (
+                                    <option key={item.name} value={item.name}>
+                                        {(item.displayName || item.name)} ({item.name})
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                        <div className="property-row">
+                            <label className="property-label">表头标题</label>
+                            <input
+                                type="text"
+                                className="property-input"
+                                placeholder={sourceMeta?.displayName || entry.source}
+                                value={entry.alias || ''}
+                                onChange={(e) => {
+                                    const nextAlias = e.target.value;
+                                    if (nextAlias) {
+                                        updateColumn(index, { alias: nextAlias });
+                                        return;
+                                    }
+                                    const next = effectiveColumns.map((item, i) => {
+                                        if (i !== index) return item;
+                                        const { alias: _alias, ...rest } = item;
+                                        return rest;
+                                    });
+                                    onColumnsChange(next);
+                                }}
+                            />
+                        </div>
+                        <div className="property-row">
+                            <label className="property-label">对齐</label>
+                            <select
+                                className="property-input"
+                                value={(entry.align as string) || defaultAlign}
+                                onChange={(e) => updateColumn(index, { align: e.target.value as ColumnEntry['align'] })}
+                            >
+                                <option value="left">左</option>
+                                <option value="center">中</option>
+                                <option value="right">右</option>
+                            </select>
+                        </div>
+                        <div className="property-row">
+                            <label className="property-label">列宽(%)</label>
+                            <input
+                                type="number"
+                                className="property-input"
+                                min={5}
+                                max={100}
+                                value={typeof entry.width === 'number' ? entry.width : ''}
+                                placeholder="自动"
+                                onChange={(e) => {
+                                    const raw = e.target.value.trim();
+                                    if (!raw) {
+                                        updateColumn(index, { width: undefined });
+                                        return;
+                                    }
+                                    const parsed = Number(raw);
+                                    updateColumn(index, {
+                                        width: Number.isFinite(parsed) ? Math.max(5, Math.min(100, parsed)) : undefined,
+                                    });
+                                }}
+                            />
+                        </div>
+                        <div className="property-row">
+                            <label className="property-label">格式化</label>
+                            <select
+                                className="property-input"
+                                value={(entry.formatter as string) || 'auto'}
+                                onChange={(e) => updateColumn(index, { formatter: e.target.value as ColumnEntry['formatter'] })}
+                            >
+                                <option value="auto">自动</option>
+                                <option value="string">文本</option>
+                                <option value="number">数字</option>
+                                <option value="percent">百分比</option>
+                                <option value="date">日期时间</option>
+                            </select>
+                        </div>
+                    </div>
+                );
+            })}
+        </>
+    );
+}
+
 /** scroll-board 专用属性面板，支持动态列选择 */
 function ScrollBoardConfig({ component, onChange }: {
     component: ScreenComponent;
@@ -2228,49 +3001,6 @@ function ScrollBoardConfig({ component, onChange }: {
     // Static fallback: use config.header when no card data source
     const staticHeaders = config.header as string[] || [];
     const columnAlias = config.columnAlias as Record<string, string> || {};
-
-    // Helper: initialize columns config from source columns (all selected)
-    const initColumns = (): ColumnEntry[] =>
-        sourceCols.map(c => ({ source: c.name }));
-
-    const handleToggleColumn = (colName: string, selected: boolean) => {
-        const current = columns ?? initColumns();
-        if (selected) {
-            // Add column back at its original source position
-            const originalIdx = sourceCols.findIndex(c => c.name === colName);
-            const newCols = [...current];
-            let insertIdx = newCols.length;
-            for (let i = 0; i < newCols.length; i++) {
-                const idx = sourceCols.findIndex(c => c.name === newCols[i].source);
-                if (idx > originalIdx) { insertIdx = i; break; }
-            }
-            newCols.splice(insertIdx, 0, { source: colName });
-            onChange('columns', newCols);
-        } else {
-            onChange('columns', current.filter(c => c.source !== colName));
-        }
-    };
-
-    const handleAliasChange = (colName: string, alias: string) => {
-        const current = columns ?? initColumns();
-        onChange('columns', current.map(c => {
-            if (c.source !== colName) return c;
-            if (alias) return { ...c, alias };
-            const { alias: _a, ...rest } = c;
-            return rest;
-        }));
-    };
-
-    const handleColumnPatch = (
-        colName: string,
-        patch: Partial<Pick<ColumnEntry, 'align' | 'width' | 'formatter'>>,
-    ) => {
-        const current = columns ?? initColumns();
-        onChange('columns', current.map((c) => {
-            if (c.source !== colName) return c;
-            return { ...c, ...patch };
-        }));
-    };
 
     return (
         <>
@@ -2325,97 +3055,13 @@ function ScrollBoardConfig({ component, onChange }: {
 
             {/* Card 数据源: 动态列选择 */}
             {hasCardSource && sourceCols.length > 0 && (
-                <>
-                    <div style={{ fontSize: 11, color: '#888', marginTop: 8, marginBottom: 4 }}>
-                        显示列 (来自数据源)
-                    </div>
-                    {sourceCols.map(col => {
-                        const colConfig = columns?.find(c => c.source === col.name);
-                        const isSelected = columns ? !!colConfig : true;
-                        const displayName = col.displayName || col.name;
-                        return (
-                            <div key={col.name} style={{
-                                border: '1px solid rgba(255,255,255,0.06)',
-                                borderRadius: 4,
-                                padding: '4px 6px',
-                                marginBottom: 4,
-                            }}>
-                                <div className="property-row" style={{ marginBottom: isSelected ? 4 : 0 }}>
-                                    <label className="property-label" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                                        <input
-                                            type="checkbox"
-                                            checked={isSelected}
-                                            onChange={(e) => handleToggleColumn(col.name, e.target.checked)}
-                                        />
-                                        <span title={col.name}>{displayName}</span>
-                                    </label>
-                                </div>
-                                {isSelected && (
-                                    <>
-                                        <div className="property-row">
-                                            <label className="property-label">表头标题</label>
-                                            <input
-                                                type="text"
-                                                className="property-input"
-                                                placeholder={displayName}
-                                                value={colConfig?.alias || ''}
-                                                onChange={(e) => handleAliasChange(col.name, e.target.value)}
-                                            />
-                                        </div>
-                                        <div className="property-row">
-                                            <label className="property-label">对齐</label>
-                                            <select
-                                                className="property-input"
-                                                value={(colConfig?.align as string) || 'center'}
-                                                onChange={(e) => handleColumnPatch(col.name, { align: e.target.value as ColumnEntry['align'] })}
-                                            >
-                                                <option value="left">左</option>
-                                                <option value="center">中</option>
-                                                <option value="right">右</option>
-                                            </select>
-                                        </div>
-                                        <div className="property-row">
-                                            <label className="property-label">列宽(%)</label>
-                                            <input
-                                                type="number"
-                                                className="property-input"
-                                                min={5}
-                                                max={100}
-                                                value={typeof colConfig?.width === 'number' ? colConfig.width : ''}
-                                                placeholder="自动"
-                                                onChange={(e) => {
-                                                    const raw = e.target.value.trim();
-                                                    if (!raw) {
-                                                        handleColumnPatch(col.name, { width: undefined });
-                                                        return;
-                                                    }
-                                                    const width = Number(raw);
-                                                    handleColumnPatch(col.name, {
-                                                        width: Number.isFinite(width) ? Math.max(5, Math.min(100, width)) : undefined,
-                                                    });
-                                                }}
-                                            />
-                                        </div>
-                                        <div className="property-row">
-                                            <label className="property-label">格式化</label>
-                                            <select
-                                                className="property-input"
-                                                value={(colConfig?.formatter as string) || 'auto'}
-                                                onChange={(e) => handleColumnPatch(col.name, { formatter: e.target.value as ColumnEntry['formatter'] })}
-                                            >
-                                                <option value="auto">自动</option>
-                                                <option value="string">文本</option>
-                                                <option value="number">数字</option>
-                                                <option value="percent">百分比</option>
-                                                <option value="date">日期时间</option>
-                                            </select>
-                                        </div>
-                                    </>
-                                )}
-                            </div>
-                        );
-                    })}
-                </>
+                <CardSourceColumnBindingsEditor
+                    title="显示列 (来自数据源)"
+                    sourceCols={sourceCols}
+                    columns={columns}
+                    defaultAlign="center"
+                    onColumnsChange={(value) => onChange('columns', value)}
+                />
             )}
 
             {/* 静态数据源: 按索引的表头别名 (保持向后兼容) */}
@@ -2463,50 +3109,6 @@ function TableConfig({ component, onChange }: {
 
     const staticHeaders = config.header as string[] || [];
     const columnAlias = config.columnAlias as Record<string, string> || {};
-
-    const initColumns = (): ColumnEntry[] =>
-        sourceCols.map(c => ({ source: c.name }));
-
-    const handleToggleColumn = (colName: string, selected: boolean) => {
-        const current = columns ?? initColumns();
-        if (selected) {
-            const originalIdx = sourceCols.findIndex(c => c.name === colName);
-            const newCols = [...current];
-            let insertIdx = newCols.length;
-            for (let i = 0; i < newCols.length; i++) {
-                const idx = sourceCols.findIndex(c => c.name === newCols[i].source);
-                if (idx > originalIdx) {
-                    insertIdx = i;
-                    break;
-                }
-            }
-            newCols.splice(insertIdx, 0, { source: colName });
-            onChange('columns', newCols);
-        } else {
-            onChange('columns', current.filter(c => c.source !== colName));
-        }
-    };
-
-    const handleAliasChange = (colName: string, alias: string) => {
-        const current = columns ?? initColumns();
-        onChange('columns', current.map(c => {
-            if (c.source !== colName) return c;
-            if (alias) return { ...c, alias };
-            const { alias: _a, ...rest } = c;
-            return rest;
-        }));
-    };
-
-    const handleColumnPatch = (
-        colName: string,
-        patch: Partial<Pick<ColumnEntry, 'align' | 'width' | 'formatter'>>,
-    ) => {
-        const current = columns ?? initColumns();
-        onChange('columns', current.map((c) => {
-            if (c.source !== colName) return c;
-            return { ...c, ...patch };
-        }));
-    };
 
     return (
         <>
@@ -2595,6 +3197,14 @@ function TableConfig({ component, onChange }: {
                 />
             </div>
             <div className="property-row">
+                <label className="property-label">冻结首列</label>
+                <input
+                    type="checkbox"
+                    checked={config.freezeFirstColumn === true}
+                    onChange={(e) => onChange('freezeFirstColumn', e.target.checked)}
+                />
+            </div>
+            <div className="property-row">
                 <label className="property-label">条件格式(JSON)</label>
                 <textarea
                     className="property-input"
@@ -2624,97 +3234,13 @@ function TableConfig({ component, onChange }: {
             )}
 
             {hasCardSource && sourceCols.length > 0 && (
-                <>
-                    <div style={{ fontSize: 11, color: '#888', marginTop: 8, marginBottom: 4 }}>
-                        字段绑定 (来自数据源)
-                    </div>
-                    {sourceCols.map(col => {
-                        const colConfig = columns?.find(c => c.source === col.name);
-                        const isSelected = columns ? !!colConfig : true;
-                        const displayName = col.displayName || col.name;
-                        return (
-                            <div key={col.name} style={{
-                                border: '1px solid rgba(255,255,255,0.06)',
-                                borderRadius: 4,
-                                padding: '4px 6px',
-                                marginBottom: 4,
-                            }}>
-                                <div className="property-row" style={{ marginBottom: isSelected ? 4 : 0 }}>
-                                    <label className="property-label" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                                        <input
-                                            type="checkbox"
-                                            checked={isSelected}
-                                            onChange={(e) => handleToggleColumn(col.name, e.target.checked)}
-                                        />
-                                        <span title={col.name}>{displayName}</span>
-                                    </label>
-                                </div>
-                                {isSelected && (
-                                    <>
-                                        <div className="property-row">
-                                            <label className="property-label">表头标题</label>
-                                            <input
-                                                type="text"
-                                                className="property-input"
-                                                placeholder={displayName}
-                                                value={colConfig?.alias || ''}
-                                                onChange={(e) => handleAliasChange(col.name, e.target.value)}
-                                            />
-                                        </div>
-                                        <div className="property-row">
-                                            <label className="property-label">对齐</label>
-                                            <select
-                                                className="property-input"
-                                                value={(colConfig?.align as string) || 'left'}
-                                                onChange={(e) => handleColumnPatch(col.name, { align: e.target.value as ColumnEntry['align'] })}
-                                            >
-                                                <option value="left">左</option>
-                                                <option value="center">中</option>
-                                                <option value="right">右</option>
-                                            </select>
-                                        </div>
-                                        <div className="property-row">
-                                            <label className="property-label">列宽(%)</label>
-                                            <input
-                                                type="number"
-                                                className="property-input"
-                                                min={5}
-                                                max={100}
-                                                value={typeof colConfig?.width === 'number' ? colConfig.width : ''}
-                                                placeholder="自动"
-                                                onChange={(e) => {
-                                                    const raw = e.target.value.trim();
-                                                    if (!raw) {
-                                                        handleColumnPatch(col.name, { width: undefined });
-                                                        return;
-                                                    }
-                                                    const width = Number(raw);
-                                                    handleColumnPatch(col.name, {
-                                                        width: Number.isFinite(width) ? Math.max(5, Math.min(100, width)) : undefined,
-                                                    });
-                                                }}
-                                            />
-                                        </div>
-                                        <div className="property-row">
-                                            <label className="property-label">格式化</label>
-                                            <select
-                                                className="property-input"
-                                                value={(colConfig?.formatter as string) || 'auto'}
-                                                onChange={(e) => handleColumnPatch(col.name, { formatter: e.target.value as ColumnEntry['formatter'] })}
-                                            >
-                                                <option value="auto">自动</option>
-                                                <option value="string">文本</option>
-                                                <option value="number">数字</option>
-                                                <option value="percent">百分比</option>
-                                                <option value="date">日期时间</option>
-                                            </select>
-                                        </div>
-                                    </>
-                                )}
-                            </div>
-                        );
-                    })}
-                </>
+                <CardSourceColumnBindingsEditor
+                    title="字段绑定 (来自数据源)"
+                    sourceCols={sourceCols}
+                    columns={columns}
+                    defaultAlign="left"
+                    onColumnsChange={(value) => onChange('columns', value)}
+                />
             )}
 
             {!hasCardSource && staticHeaders.length > 0 && (
