@@ -616,7 +616,7 @@ export default function ScreensPage() {
                                 style={{ minHeight: 78 }}
                                 value={aiRefinePrompt}
                                 onChange={(e) => setAiRefinePrompt(e.target.value)}
-                                placeholder="优化指令示例：改成三列布局，首图改成柱状图，切换为浅色主题，增加筛选器，刷新30秒，放大字体"
+                                placeholder="优化指令示例：改成三列布局，首图改成柱状图，切换为浅色主题，增加筛选器，加tab切换场景，移除tab切换，刷新30秒，放大字体"
                             />
                             {aiContextHistory.length > 0 && (
                                 <div className="ai-context-card">

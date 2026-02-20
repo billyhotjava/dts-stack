@@ -1,4 +1,4 @@
-import { useMemo, useState, type CSSProperties } from 'react';
+import { Fragment, useMemo, useState, type CSSProperties } from 'react';
 import { Modal } from '../../../ui/Modal/Modal';
 import { useScreenRuntime } from '../ScreenRuntimeContext';
 
@@ -23,10 +23,10 @@ export function InteractionDebugPanel({ open, cycleWarnings, onClose }: Interact
                     <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr', gap: 8, fontSize: 12 }}>
                         {definitions.length === 0 && <div style={{ gridColumn: '1 / -1', opacity: 0.7 }}>暂无变量定义</div>}
                         {definitions.map((item) => (
-                            <>
-                                <div key={`${item.key}-key`} style={{ opacity: 0.9 }}>{item.label || item.key}</div>
-                                <code key={`${item.key}-value`} style={{ fontSize: 12 }}>{values[item.key] || '(空)'}</code>
-                            </>
+                            <Fragment key={item.key}>
+                                <div style={{ opacity: 0.9 }}>{item.label || item.key}</div>
+                                <code style={{ fontSize: 12 }}>{values[item.key] ?? '(空)'}</code>
+                            </Fragment>
                         ))}
                     </div>
                 </section>

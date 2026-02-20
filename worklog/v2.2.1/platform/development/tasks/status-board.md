@@ -1,4 +1,4 @@
-# 任务看板（v2.2.1 / developmnet）
+# 任务看板（v2.2.1 / development）
 
 | 任务 | 状态 | 负责人 | 备注 |
 |---|---|---|---|
@@ -12,12 +12,12 @@
 | P2-02 模型质量基线 | done | codex | 自动质量模板 + 发布前质量门禁提示已接入 |
 | P2-03 语义契约对齐 | done | codex | 契约字段/版本/影响面 + 看板绑定展示已接入 |
 | P3-01 GitOps/CI Gate | done | codex | 发布前 Git/Commit/构建证据门禁 + 审计追踪已接入 |
-| P3-02 回归矩阵 | in-progress | codex | 已完成 x86 三模式首轮（normal/legacy/dev），待补 ARM 首轮 |
-| P3-03 运营指标体系 | in-progress | codex | 指标接口+趋势页已接入，待补项目空间枚举与回滚结构化口径 |
+| P3-02 回归矩阵 | in-progress | codex | 已完成 x86 三模式首轮，且已加跨架构标签保护；待真实 ARM 首轮 |
+| P3-03 运营指标体系 | done | codex | 指标接口+趋势页+项目空间枚举+结构化回滚口径已接入 |
 
 ## 本轮执行项
 
-- 当前执行：`P3-03-dev-center-ops-metrics.md`
+- 当前执行：`P3-02-multi-env-multi-arch-regression.md`
 - 本轮输出要求：
   - 影响文件清单
   - 回归命令清单

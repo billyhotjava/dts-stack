@@ -7,10 +7,12 @@
 
 | 阶段 | 目标 | 状态 |
 |---|---|---|
-| P0 | 主流程收敛与安全面治理 | planned |
+| P0 | 主流程收敛与安全面治理 | in-progress |
 | P1 | 生产可用能力补齐（异步、脚本、编排） | planned |
 | P2 | 治理与工程化增强（质量、产物、语义） | planned |
 | P3 | 商业化体验对齐（GitOps/多环境/运营指标） | planned |
+
+当前执行看板：`worklog/v2.2.1/platform/development/tasks/status-board.md`
 
 ## 强制顺序
 

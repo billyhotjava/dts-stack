@@ -6,7 +6,7 @@
 
 ## 执行边界（本 session）
 
-- 工作根目录：`worklog/v2.2.1/platform/developmnet`
+- 工作根目录：`worklog/v2.2.1/platform/development`
 - 本轮先完成：任务细化、实施顺序、验收口径与风险前置。
 - 代码改动将按任务卡逐一进行，并在每个任务卡中记录影响文件与回归命令。
 

@@ -84,9 +84,19 @@ export type OpsDevCenterTopFailure = {
 	entryKey?: string;
 	artifactName?: string;
 	artifactId?: string;
+	planId?: string;
+	planName?: string;
 	totalRuns?: number;
 	failedRuns?: number;
 	failureRate?: number | null;
+};
+
+export type OpsDevCenterPlanOption = {
+	id: string;
+	name?: string;
+	ownerDept?: string;
+	status?: string;
+	runCount?: number;
 };
 
 export type OpsDevCenterMetrics = {
@@ -95,11 +105,13 @@ export type OpsDevCenterMetrics = {
 	trend?: OpsDevCenterTrend[];
 	topFailures?: OpsDevCenterTopFailure[];
 	availableOwnerDepts?: string[];
+	availablePlans?: OpsDevCenterPlanOption[];
 	filters?: {
 		entryKey?: string | null;
 		ownerDept?: string | null;
 		artifactId?: string | null;
 		artifactName?: string | null;
+		planId?: string | null;
 		windowDays?: number;
 	};
 };
@@ -109,7 +121,7 @@ export default {
 	instances: (params?: { entryKey?: string; status?: string; keyword?: string; limit?: number }) =>
 		apiClient.get<OpsInstance[]>({ url: "/ops/instances", params }),
 	alerts: (params?: { limit?: number }) => apiClient.get<OpsAlert[]>({ url: "/ops/alerts", params }),
-	devCenterMetrics: (params?: { days?: number; entryKey?: string; ownerDept?: string; artifactId?: string; artifactName?: string }) =>
+	devCenterMetrics: (params?: { days?: number; entryKey?: string; ownerDept?: string; artifactId?: string; artifactName?: string; planId?: string }) =>
 		apiClient.get<OpsDevCenterMetrics>({ url: "/ops/metrics/dev-center", params }),
 	backfills: () => apiClient.get<OpsBackfill[]>({ url: "/ops/backfills" }),
 	createBackfill: (payload: OpsBackfillRequest) =>

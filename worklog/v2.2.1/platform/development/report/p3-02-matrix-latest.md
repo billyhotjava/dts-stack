@@ -34,7 +34,7 @@
 
 ## 产物索引
 
-- summary: `/opt/prod/s10/dts-stack/worklog/v2.2.1/platform/developmnet/raw/p3-02-summary-20260217T062228Z-3335140.txt`
-- failure top: `/opt/prod/s10/dts-stack/worklog/v2.2.1/platform/developmnet/raw/p3-02-failure-topn-20260217T062228Z-3335140.tsv`
-- trend: `/opt/prod/s10/dts-stack/worklog/v2.2.1/platform/developmnet/raw/p3-02-trend-20260217T062228Z.tsv`
-- hourly: `/opt/prod/s10/dts-stack/worklog/v2.2.1/platform/developmnet/raw/p3-02-hourly-20260217T062228Z-3335140.csv`
+- summary: `/opt/prod/s10/dts-stack/worklog/v2.2.1/platform/development/raw/p3-02-summary-20260217T062228Z-3335140.txt`
+- failure top: `/opt/prod/s10/dts-stack/worklog/v2.2.1/platform/development/raw/p3-02-failure-topn-20260217T062228Z-3335140.tsv`
+- trend: `/opt/prod/s10/dts-stack/worklog/v2.2.1/platform/development/raw/p3-02-trend-20260217T062228Z.tsv`
+- hourly: `/opt/prod/s10/dts-stack/worklog/v2.2.1/platform/development/raw/p3-02-hourly-20260217T062228Z-3335140.csv`

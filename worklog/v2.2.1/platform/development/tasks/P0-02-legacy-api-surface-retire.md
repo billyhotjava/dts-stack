@@ -1,7 +1,7 @@
 # P0-02 历史 API 面清理（Explore CRUD）
 
 - 优先级：P0
-- 状态：planned
+- 状态：done
 
 ## 范围
 
@@ -26,3 +26,17 @@
 
 - 风险：第三方脚本仍调用旧接口。
 - 回滚：旧接口保留兼容期但默认 403，并输出迁移提示。
+
+## 已完成进展（2026-02-16）
+
+- 已下线旧 Explore CRUD 控制器：
+  - 删除 `source/dts-platform/src/main/java/com/yuzhi/dts/platform/web/rest/explore/SavedQueryResource.java`
+  - 删除 `source/dts-platform/src/main/java/com/yuzhi/dts/platform/web/rest/explore/QueryExecutionResource.java`
+  - 删除 `source/dts-platform/src/main/java/com/yuzhi/dts/platform/web/rest/explore/QueryWorkspaceResource.java`
+- 已移除前端遗留调用（未使用但保留会造成误导）：
+  - 删除 `source/dts-platform-webapp/src/api/platformApi.ts` 中 `listQueryWorkspaces`、`listQueryExecutions`
+
+## 回归结果（2026-02-16）
+
+- `pnpm -C source/dts-platform-webapp build`：通过
+- `mvn -f source/dts-platform/pom.xml -DskipTests compile`：通过

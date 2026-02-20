@@ -72,3 +72,6 @@
   - 组件新增“变量可见条件”配置（`visibilityRuleEnabled/visibilityVariableKey/visibilityMatchMode/visibilityMatchValues`）；
   - 支持 `等于/不等于/为空/非空` 四种显隐规则；
   - 规则在预览/公开/导出模式生效，可与 `tab-switcher` 组合实现“Tab 切场景”。
+  - `tab-switcher` 新增联动提效工具：
+    - 一键将 Tab 选项分配到图表/表格组件显隐规则（批量写入 `visibilityRule*`）；
+    - 一键清理该 Tab 变量下的显隐规则，便于快速回退。

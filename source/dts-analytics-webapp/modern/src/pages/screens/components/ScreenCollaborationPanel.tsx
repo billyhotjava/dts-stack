@@ -43,7 +43,7 @@ export function ScreenCollaborationPanel({
     const [presenceError, setPresenceError] = useState<string | null>(null);
     const baselineUpdatedAtRef = useRef<string>('');
     const commentCursorRef = useRef(0);
-    const presenceSessionIdRef = useRef<string>(createPresenceSessionId());
+    const presenceSessionIdRef = useRef<string>(getOrCreatePresenceSessionId());
     const typingRef = useRef(false);
     const componentIdRef = useRef('');
 
@@ -804,6 +804,29 @@ function parseCommentId(value: unknown): number {
     if (!text) return 0;
     const num = Number(text);
     return Number.isFinite(num) && num > 0 ? num : 0;
+}
+
+const PRESENCE_SESSION_STORAGE_KEY = 'dts.analytics.collaboration.presence.sessionId';
+
+function getOrCreatePresenceSessionId(): string {
+    if (typeof window === 'undefined') {
+        return createPresenceSessionId();
+    }
+    try {
+        const cached = window.sessionStorage.getItem(PRESENCE_SESSION_STORAGE_KEY);
+        if (cached && cached.trim()) {
+            return cached.trim();
+        }
+    } catch {
+        // ignore read failures and fall back to fresh session id
+    }
+    const next = createPresenceSessionId();
+    try {
+        window.sessionStorage.setItem(PRESENCE_SESSION_STORAGE_KEY, next);
+    } catch {
+        // ignore write failures and keep in-memory session id only
+    }
+    return next;
 }
 
 function createPresenceSessionId(): string {

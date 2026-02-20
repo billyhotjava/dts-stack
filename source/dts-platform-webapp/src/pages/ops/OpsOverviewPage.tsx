@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import type { ApexOptions } from "apexcharts";
-import { Card, Col, Input, Row, Select, Space, Statistic, Table, Typography } from "antd";
+import { Card, Col, Row, Select, Space, Statistic, Table, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { Chart } from "@/components/chart/chart";
 import { EmptyState } from "@/components/empty-state";
@@ -23,6 +23,7 @@ const alertColumns: ColumnsType<OpsAlert> = [
 
 const topFailureColumns: ColumnsType<OpsDevCenterTopFailure> = [
 	{ title: "入口", dataIndex: "entryKey", width: 160, render: (value) => value || "-" },
+	{ title: "项目空间", dataIndex: "planName", width: 180, render: (value) => value || "-" },
 	{ title: "作业", dataIndex: "artifactName", render: (value) => value || "-" },
 	{ title: "总运行", dataIndex: "totalRuns", width: 110, align: "right" },
 	{ title: "失败数", dataIndex: "failedRuns", width: 110, align: "right" },
@@ -36,7 +37,7 @@ export default function OpsOverviewPage() {
 	const [days, setDays] = useState<number>(7);
 	const [entryKey, setEntryKey] = useState<string | undefined>(undefined);
 	const [ownerDept, setOwnerDept] = useState<string | undefined>(undefined);
-	const [artifactName, setArtifactName] = useState<string | undefined>(undefined);
+	const [planId, setPlanId] = useState<string | undefined>(undefined);
 	const [loading, setLoading] = useState(false);
 
 	const loadData = async () => {
@@ -49,7 +50,7 @@ export default function OpsOverviewPage() {
 					days,
 					entryKey,
 					ownerDept,
-					artifactName,
+					planId,
 				}),
 			]);
 			setOverview(summary as OpsOverview);
@@ -64,13 +65,17 @@ export default function OpsOverviewPage() {
 
 	useEffect(() => {
 		void loadData();
-	}, [days, entryKey, ownerDept, artifactName]);
+	}, [days, entryKey, ownerDept, planId]);
 
 	const trend = metrics?.trend ?? [];
 	const topFailures = metrics?.topFailures ?? [];
 	const ownerDeptOptions = (metrics?.availableOwnerDepts ?? []).map((dept) => ({
 		label: dept,
 		value: dept,
+	}));
+	const planOptions = (metrics?.availablePlans ?? []).map((plan) => ({
+		label: plan.name ? `${plan.name} (${plan.id.slice(0, 8)})` : plan.id,
+		value: plan.id,
 	}));
 
 	const trendSeries = useMemo(
@@ -189,19 +194,22 @@ export default function OpsOverviewPage() {
 							]}
 						/>
 						<Select
-							style={{ width: 180 }}
+							style={{ width: 200 }}
 							allowClear
 							placeholder="所属部门"
 							value={ownerDept}
 							onChange={(value) => setOwnerDept(value || undefined)}
 							options={ownerDeptOptions}
 						/>
-						<Input
-							style={{ width: 220 }}
+						<Select
+							style={{ width: 260 }}
 							allowClear
-							placeholder="项目空间/作业关键词"
-							value={artifactName}
-							onChange={(event) => setArtifactName(event.target.value || undefined)}
+							showSearch
+							placeholder="项目空间"
+							value={planId}
+							onChange={(value) => setPlanId(value || undefined)}
+							options={planOptions}
+							optionFilterProp="label"
 						/>
 					</Space>
 				}
@@ -224,7 +232,7 @@ export default function OpsOverviewPage() {
 					locale={{ emptyText: <EmptyState title="暂无失败作业" description="当前时间窗口内无失败记录。" /> }}
 				/>
 				<Typography.Text type="secondary">
-					口径：失败率 = 失败数 / 总运行；重试率与 MTTR 基于同入口同作业的连续运行记录估算。
+					口径：失败率 = 失败数 / 总运行；重试率与 MTTR 基于同入口同作业（含项目空间）的连续运行记录估算。
 				</Typography.Text>
 			</Card>
 

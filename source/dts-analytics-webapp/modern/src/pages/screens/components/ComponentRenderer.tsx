@@ -273,18 +273,22 @@ function normalizeCarouselItems(raw: unknown): string[] {
         .slice(0, 200);
 }
 
-function resolveCarouselItemsFromData(data: CardData | null, maxRaw: unknown): string[] {
-    if (!data || !Array.isArray(data.rows) || data.rows.length === 0) {
+function resolveCarouselItemsFromData(data: CardData | null, config: Record<string, unknown>): string[] {
+    if (!data || !Array.isArray(data.rows) || data.rows.length === 0 || !Array.isArray(data.cols) || data.cols.length === 0) {
         return [];
     }
-    const max = Number(maxRaw ?? 50);
+    const max = Number(config.dataItemMax ?? 50);
     const safeMax = Number.isFinite(max) ? Math.max(1, Math.min(500, Math.floor(max))) : 50;
+    const contentIndex = resolveColumnIndex(data.cols, config.dataItemField, 0);
+    if (contentIndex < 0) {
+        return [];
+    }
     const out: string[] = [];
     for (const row of data.rows) {
-        if (!Array.isArray(row) || row.length === 0) continue;
-        const first = String(row[0] ?? '').trim();
-        if (!first) continue;
-        out.push(first);
+        if (!Array.isArray(row) || row.length <= contentIndex) continue;
+        const text = String(row[contentIndex] ?? '').trim();
+        if (!text) continue;
+        out.push(text);
         if (out.length >= safeMax) break;
     }
     return out;
@@ -364,15 +368,30 @@ function resolveTableConditionalStyle(
     rules: unknown,
     columnIndex: number,
     raw: unknown,
+    columnMeta?: { key?: string; title?: string },
 ): { color?: string; background?: string } {
     if (!Array.isArray(rules)) {
         return {};
     }
+    const normalizedCurrentKey = String(columnMeta?.key ?? '').trim().toLowerCase();
+    const normalizedCurrentTitle = String(columnMeta?.title ?? '').trim().toLowerCase();
     for (const item of rules) {
         if (!item || typeof item !== 'object') continue;
         const rule = item as Record<string, unknown>;
-        const ruleCol = Number(rule.columnIndex);
-        if (!Number.isFinite(ruleCol) || ruleCol !== columnIndex) continue;
+        const ruleColumnKey = String(rule.columnKey ?? '').trim().toLowerCase();
+        const ruleColumnTitle = String(rule.columnTitle ?? '').trim().toLowerCase();
+        let columnMatched = false;
+        if (ruleColumnKey && normalizedCurrentKey) {
+            columnMatched = ruleColumnKey === normalizedCurrentKey;
+        }
+        if (!columnMatched && ruleColumnTitle && normalizedCurrentTitle) {
+            columnMatched = ruleColumnTitle === normalizedCurrentTitle;
+        }
+        if (!columnMatched) {
+            const ruleCol = Number(rule.columnIndex);
+            columnMatched = Number.isFinite(ruleCol) && ruleCol === columnIndex;
+        }
+        if (!columnMatched) continue;
         const operator = String(rule.operator || '').trim();
         const target = rule.value;
         const text = String(raw ?? '');
@@ -914,17 +933,29 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
     const [carouselPaused, setCarouselPaused] = useState(false);
     const carouselItems = useMemo(() => {
         if (type !== 'carousel') return [];
-        const dataItems = resolveCarouselItemsFromData(cardData, effectiveConfig.dataItemMax);
+        const sourceMode = String(effectiveConfig.itemSourceMode ?? 'auto').trim().toLowerCase();
+        const dataItems = resolveCarouselItemsFromData(cardData, effectiveConfig);
+        const manualItems = normalizeCarouselItems(effectiveConfig.items);
+        if (sourceMode === 'data') {
+            return dataItems;
+        }
+        if (sourceMode === 'manual') {
+            return manualItems;
+        }
         if (dataItems.length > 0) {
             return dataItems;
         }
-        return normalizeCarouselItems(effectiveConfig.items);
-    }, [cardData, effectiveConfig.dataItemMax, effectiveConfig.items, type]);
+        return manualItems;
+    }, [cardData, effectiveConfig.dataItemField, effectiveConfig.dataItemMax, effectiveConfig.itemSourceMode, effectiveConfig.items, type]);
 
     useEffect(() => {
         if (type !== 'carousel') return;
         if (carouselItems.length <= 1) {
             setCarouselIndex(0);
+            return;
+        }
+        const autoPlay = effectiveConfig.autoPlay !== false;
+        if (!autoPlay) {
             return;
         }
         const pauseOnHover = effectiveConfig.pauseOnHover !== false;
@@ -939,7 +970,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
             setCarouselIndex((prev) => (prev + 1) % carouselItems.length);
         }, safeSeconds * 1000);
         return () => clearInterval(timer);
-    }, [carouselItems.length, carouselPaused, effectiveConfig.intervalSeconds, effectiveConfig.pauseOnHover, type]);
+    }, [carouselItems.length, carouselPaused, effectiveConfig.autoPlay, effectiveConfig.intervalSeconds, effectiveConfig.pauseOnHover, type]);
 
     const filterInputVariableKey = useMemo(() => {
         if (type !== 'filter-input') return '';
@@ -1639,8 +1670,13 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
             }
 
             case 'countdown': {
-                const target = new Date(String(c.targetTime || ''));
-                const remaining = Math.max(0, target.getTime() - currentTime.getTime());
+                const targetVariableKey = String(c.targetVariableKey || '').trim();
+                const runtimeTarget = targetVariableKey ? String(runtime.values[targetVariableKey] || '').trim() : '';
+                const configuredTarget = String(c.targetTime || '').trim();
+                const targetRaw = runtimeTarget || configuredTarget;
+                const targetMillis = Date.parse(targetRaw);
+                const hasTarget = Number.isFinite(targetMillis);
+                const remaining = hasTarget ? Math.max(0, targetMillis - currentTime.getTime()) : 0;
                 const dayMs = 24 * 3600 * 1000;
                 const hourMs = 3600 * 1000;
                 const minuteMs = 60 * 1000;
@@ -1655,6 +1691,11 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                         <div style={{ fontSize: 12, color: (c.color as string) || t.textSecondary }}>
                             {String(c.title || '倒计时')}
                         </div>
+                        {!hasTarget ? (
+                            <div style={{ fontSize: 13, color: (c.color as string) || t.textSecondary, opacity: 0.8 }}>
+                                请配置目标时间或绑定目标时间变量
+                            </div>
+                        ) : null}
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: accentColor, fontWeight: 700 }}>
                             {showDays ? <span style={{ fontSize: 26 }}>{String(days).padStart(2, '0')}天</span> : null}
                             <span style={{ fontSize: 26 }}>{String(hours).padStart(2, '0')}:</span>
@@ -1703,7 +1744,9 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                 const backgroundColor = String(c.backgroundColor || 'rgba(15,23,42,0.5)');
                 const fontSize = Math.max(12, Number(c.fontSize || 24));
                 const showDots = c.showDots !== false;
+                const showControls = c.showControls !== false;
                 const pauseOnHover = c.pauseOnHover !== false;
+                const canFlip = hasItems && items.length > 1;
                 return (
                     <div
                         style={{
@@ -1733,21 +1776,66 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                         <div style={{ fontSize: 12, color: titleColor, letterSpacing: 0.4 }}>
                             {cardTitle}
                         </div>
-                        <div
-                            style={{
-                                flex: 1,
-                                display: 'flex',
-                                alignItems: 'center',
-                                color: cardColor,
-                                fontSize,
-                                fontWeight: 600,
-                                lineHeight: 1.35,
-                                transition: 'opacity 0.2s ease',
-                                wordBreak: 'break-word',
-                                opacity: hasItems ? 1 : 0.7,
-                            }}
-                        >
-                            {currentItem}
+                        <div style={{ flex: 1, display: 'grid', gridTemplateColumns: showControls ? '28px 1fr 28px' : '1fr', alignItems: 'center', gap: 8 }}>
+                            {showControls && (
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        if (!canFlip) return;
+                                        setCarouselIndex((prev) => (prev - 1 + items.length) % items.length);
+                                    }}
+                                    style={{
+                                        width: 28,
+                                        height: 28,
+                                        borderRadius: '50%',
+                                        border: '1px solid rgba(148,163,184,0.4)',
+                                        background: 'rgba(15,23,42,0.45)',
+                                        color: cardColor,
+                                        cursor: canFlip ? 'pointer' : 'default',
+                                        opacity: canFlip ? 1 : 0.45,
+                                    }}
+                                    title="上一条"
+                                >
+                                    {'<'}
+                                </button>
+                            )}
+                            <div
+                                style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    color: cardColor,
+                                    fontSize,
+                                    fontWeight: 600,
+                                    lineHeight: 1.35,
+                                    transition: 'opacity 0.2s ease',
+                                    wordBreak: 'break-word',
+                                    opacity: hasItems ? 1 : 0.7,
+                                }}
+                            >
+                                {currentItem}
+                            </div>
+                            {showControls && (
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        if (!canFlip) return;
+                                        setCarouselIndex((prev) => (prev + 1) % items.length);
+                                    }}
+                                    style={{
+                                        width: 28,
+                                        height: 28,
+                                        borderRadius: '50%',
+                                        border: '1px solid rgba(148,163,184,0.4)',
+                                        background: 'rgba(15,23,42,0.45)',
+                                        color: cardColor,
+                                        cursor: canFlip ? 'pointer' : 'default',
+                                        opacity: canFlip ? 1 : 0.45,
+                                    }}
+                                    title="下一条"
+                                >
+                                    {'>'}
+                                </button>
+                            )}
                         </div>
                         {showDots && hasItems && (
                             <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', alignItems: 'center' }}>
@@ -2279,7 +2367,12 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                                 {pageRows.map((row, rowIndex) => (
                                     <tr key={rowIndex} style={{ background: rowIndex % 2 === 0 ? oddRowBackground : evenRowBackground }}>
                                         {displayHeader.map((_, colIndex) => {
-                                            const conditional = resolveTableConditionalStyle(conditionalRules, colIndex, row[colIndex]);
+                                            const conditional = resolveTableConditionalStyle(
+                                                conditionalRules,
+                                                colIndex,
+                                                row[colIndex],
+                                                columnMeta[colIndex],
+                                            );
                                             const rowBackground = rowIndex % 2 === 0 ? oddRowBackground : evenRowBackground;
                                             const cellBackground = conditional.background || rowBackground;
                                             return (

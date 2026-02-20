@@ -75,6 +75,20 @@
     - 自动补齐 `tabKey` 全局变量；
     - 自动新增或更新 `tab-switcher` 组件；
     - 自动为图表/表格类组件生成 `visibilityRule*` 显隐规则，实现一键场景切换。
+  - AI 反馈文案补强：
+    - 当指令未命中时，提示中增加 `加tab切换场景` 示例；
+    - 优化建议列表同步加入 `Tab 场景切换` 指令，引导前端快速试用。
+  - 新增“移除 Tab 场景”反向指令（如：`移除tab切换/取消场景切换`）：
+    - 自动删除 `tab-switcher` 组件；
+    - 自动清理 `tabKey` 全局变量；
+    - 自动清理组件中的 `visibilityRule*` 关联配置。
+  - 单元测试补齐：
+    - 新增 `ScreenAiGenerationServiceTest`，覆盖“generate首版Tab场景 + 新增Tab场景 + 更新已有Tab + 移除Tab场景”四条核心链路；
+    - 验证命令：`mvn -f source/dts-analytics/pom.xml -Dtest=ScreenAiGenerationServiceTest test`。
+  - 移除 Tab 场景清理鲁棒性增强（2026-02-19）：
+    - `removeTabScenarioSwitcher` 默认纳入历史 `tabKey` 清理集合，避免“自定义变量Key + 历史tabKey残留”导致部分组件规则未被回收；
+    - 新增回归用例：`revise_removeTabScenarioInstruction_cleansCustomTabVariableAndLegacyTabKey`；
+    - `ScreenAiGenerationServiceTest` 用例数已扩展为 5 条并通过。
 - 待继续：
   - NL2SQL / 指标语义模型联动（当前仍为启发式屏稿调整）。
   - 多轮会话上下文（2026-02-15 已完成首版）：

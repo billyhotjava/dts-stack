@@ -1,7 +1,7 @@
 # P0-03 dbt 运行最小参数化
 
 - 优先级：P0
-- 状态：planned
+- 状态：done
 
 ## 范围
 
@@ -24,3 +24,23 @@
 
 - 风险：参数放开导致误跑全量。
 - 回滚：默认值仍为安全配置，且新增确认提示。
+
+## 已完成进展（2026-02-16）
+
+- 前端已改为参数化触发：
+  - `source/dts-platform-webapp/src/pages/modeling/DbtFileBrowserPage.tsx`
+  - 新增弹窗输入 `operation(run/test)`、`models(selector)`、`target`
+- 后端已增加 operation 校验并写入 conf：
+  - `source/dts-platform/src/main/java/com/yuzhi/dts/platform/web/rest/EtlResource.java`
+  - operation 非 `run/test` 返回 400
+- DAG 模板已支持按 conf 选择 run/test：
+  - `source/dts-platform/src/main/java/com/yuzhi/dts/platform/service/etl/DbtDagService.java`
+
+## 待完成
+
+- 无
+
+## 回归结果（2026-02-16）
+
+- `pnpm -C source/dts-platform-webapp build`：通过
+- `mvn -f source/dts-platform/pom.xml -DskipTests compile`：通过

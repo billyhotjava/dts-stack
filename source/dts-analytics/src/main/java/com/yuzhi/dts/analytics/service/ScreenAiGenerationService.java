@@ -5,8 +5,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Locale;
 import java.util.Set;
 import java.util.regex.Matcher;
@@ -46,6 +48,9 @@ public class ScreenAiGenerationService {
         screenSpec.set("components", buildComponents(keyword, canvasWidth, canvasHeight, theme, intent));
         screenSpec.set("globalVariables", buildGlobalVariables(keyword, intent));
         screenSpec.put("refreshIntervalSeconds", recommendedRefreshSeconds(intent));
+        if (hasTabSwitchIntent(keyword)) {
+            addTabScenarioSwitcher(screenSpec, keyword);
+        }
 
         ObjectNode quality = objectMapper.createObjectNode();
         quality.put("score", estimateScore(normalizedPrompt, keyword));
@@ -142,7 +147,12 @@ public class ScreenAiGenerationService {
             actions.add("已补充筛选器组件");
         }
 
-        if (hasTabSwitchIntent(keyword)) {
+        if (hasRemoveTabSwitchIntent(keyword)) {
+            int changed = removeTabScenarioSwitcher(screenSpec);
+            if (changed > 0) {
+                actions.add("已移除 Tab 场景切换并清理 " + changed + " 处关联配置");
+            }
+        } else if (hasTabSwitchIntent(keyword)) {
             int affected = addTabScenarioSwitcher(screenSpec, keyword);
             if (affected >= 0) {
                 actions.add("已生成 Tab 场景切换并配置 " + affected + " 个组件显隐规则");
@@ -192,13 +202,13 @@ public class ScreenAiGenerationService {
         quality.put("score", Math.min(97, 78 + actions.size() * 4));
         ArrayNode warnings = objectMapper.createArrayNode();
         if (actions.isEmpty()) {
-            warnings.add("未识别到可执行的优化指令，请尝试“重排布局/改成柱状图/改成浅色主题”。");
+            warnings.add("未识别到可执行的优化指令，请尝试“重排布局/改成柱状图/改成浅色主题/加tab切换场景”。");
         } else {
             warnings.add("优化结果为启发式调整，请进入设计器确认细节。");
         }
         quality.set("warnings", warnings);
         ArrayNode suggestions = objectMapper.createArrayNode();
-        suggestions.add("可继续输入：改成三列布局 / 换成饼图 / 加地区筛选 / 放大字体 / 刷新30秒。");
+        suggestions.add("可继续输入：改成三列布局 / 换成饼图 / 加地区筛选 / 加tab切换场景 / 放大字体 / 刷新30秒。");
         quality.set("suggestions", suggestions);
 
         ObjectNode result = objectMapper.createObjectNode();
@@ -679,6 +689,86 @@ public class ScreenAiGenerationService {
         return assigned;
     }
 
+    private int removeTabScenarioSwitcher(ObjectNode screenSpec) {
+        JsonNode compsNode = screenSpec.path("components");
+        int changed = 0;
+        Set<String> tabVariableKeys = new LinkedHashSet<>();
+        // Backward compatibility: always clean historical tabKey linkage if present.
+        tabVariableKeys.add("tabKey");
+        if (compsNode.isArray()) {
+            ArrayNode source = (ArrayNode) compsNode;
+            ArrayNode filtered = objectMapper.createArrayNode();
+            for (JsonNode item : source) {
+                if (item == null || !item.isObject()) {
+                    filtered.add(item);
+                    continue;
+                }
+                ObjectNode comp = (ObjectNode) item;
+                if ("tab-switcher".equals(comp.path("type").asText(""))) {
+                    String varKey = extractTabVariableKey(comp);
+                    if (varKey != null && !varKey.isBlank()) {
+                        tabVariableKeys.add(varKey);
+                    }
+                    changed++;
+                    continue;
+                }
+                filtered.add(comp);
+            }
+            for (JsonNode item : filtered) {
+                if (item == null || !item.isObject()) {
+                    continue;
+                }
+                ObjectNode comp = (ObjectNode) item;
+                ObjectNode config = comp.path("config").isObject()
+                        ? (ObjectNode) comp.path("config")
+                        : null;
+                if (config != null) {
+                    String visibilityVarKey = config.path("visibilityVariableKey").asText("");
+                    if (tabVariableKeys.contains(visibilityVarKey)) {
+                        config.remove("visibilityRuleEnabled");
+                        config.remove("visibilityVariableKey");
+                        config.remove("visibilityMatchMode");
+                        config.remove("visibilityMatchValues");
+                        config.remove("visibilityMatchValue");
+                        changed++;
+                    }
+                }
+            }
+            screenSpec.set("components", filtered);
+        }
+
+        JsonNode varsNode = screenSpec.path("globalVariables");
+        if (varsNode.isArray()) {
+            ArrayNode vars = (ArrayNode) varsNode;
+            ArrayNode filteredVars = objectMapper.createArrayNode();
+            int removed = 0;
+            for (JsonNode item : vars) {
+                if (item != null && item.isObject() && tabVariableKeys.contains(item.path("key").asText())) {
+                    removed++;
+                    continue;
+                }
+                filteredVars.add(item);
+            }
+            if (removed > 0) {
+                changed += removed;
+                screenSpec.set("globalVariables", filteredVars);
+            }
+        }
+        return changed;
+    }
+
+    private String extractTabVariableKey(ObjectNode component) {
+        if (component == null) {
+            return "tabKey";
+        }
+        JsonNode config = component.path("config");
+        String key = config == null ? null : config.path("variableKey").asText(null);
+        if (key == null || key.isBlank()) {
+            return "tabKey";
+        }
+        return key.trim();
+    }
+
     private ArrayNode resolveTabOptions(String keyword) {
         ArrayNode options = objectMapper.createArrayNode();
         if (containsAny(keyword, "设备", "告警", "监控")) {
@@ -716,6 +806,10 @@ public class ScreenAiGenerationService {
             return true;
         }
         return TAB_WORD_PATTERN.matcher(keyword).find();
+    }
+
+    private boolean hasRemoveTabSwitchIntent(String keyword) {
+        return containsAny(keyword, "删除tab", "移除tab", "取消tab", "去掉tab", "移除标签页", "取消场景切换", "关闭场景切换");
     }
 
     private boolean hasVariableKey(ArrayNode vars, String key) {

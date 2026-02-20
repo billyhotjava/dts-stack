@@ -82,6 +82,9 @@
   - 新增 `pnpm validate:screen-plugins`，校验 `plugins/custom/*.manifest.json`；
   - 覆盖插件/组件 ID 规范、版本 semver、运行时组件 ID 重复、默认宽高缺失告警；
   - 可直接接入 CI 做插件接入门禁，降低“脏清单”导致的运行时故障。
+- 构建门禁接入（2026-02-19）：
+  - 前端构建脚本新增 `prebuild`，自动执行 `validate:screen-plugins`；
+  - 本地构建与 CI 默认具备插件清单校验，减少漏检概率。
 - 清单加载器运行时校验增强（2026-02-17）：
   - `manifestLoader` 增加远端/本地清单规范化：
     - 非法插件 ID/组件 ID/数据源 ID 直接跳过；

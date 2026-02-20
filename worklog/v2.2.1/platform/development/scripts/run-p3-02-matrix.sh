@@ -15,6 +15,7 @@ ARCH="$(uname -m 2>/dev/null || echo unknown)"
 TZ_NAME="Asia/Shanghai"
 RESULT="OBSERVED"
 DRY_RUN=0
+ALLOW_CROSS_ARCH_LABEL=0
 
 usage() {
   cat <<'USAGE'
@@ -27,6 +28,8 @@ Options:
   --tz <zone>         Timezone label, default: Asia/Shanghai
   --result <value>    PASS/FAIL/OBSERVED, default: OBSERVED
   --dry-run           Print command only, do not execute
+  --allow-cross-arch-label
+                      Allow using --arch different from current host arch.
   -h, --help
 
 Environment:
@@ -61,6 +64,10 @@ while [[ $# -gt 0 ]]; do
       DRY_RUN=1
       shift
       ;;
+    --allow-cross-arch-label)
+      ALLOW_CROSS_ARCH_LABEL=1
+      shift
+      ;;
     -h|--help)
       usage
       exit 0
@@ -75,6 +82,13 @@ done
 
 if [[ ! -x "${ELT_MATRIX_SCRIPT}" ]]; then
   echo "Matrix runner not found or not executable: ${ELT_MATRIX_SCRIPT}" >&2
+  exit 1
+fi
+
+HOST_ARCH="$(uname -m 2>/dev/null || echo unknown)"
+if [[ "${DRY_RUN}" -ne 1 && "${ARCH}" != "${HOST_ARCH}" && "${ALLOW_CROSS_ARCH_LABEL}" -ne 1 ]]; then
+  echo "Refuse cross-arch label: requested --arch=${ARCH}, host=${HOST_ARCH}." >&2
+  echo "Run on real ${ARCH} host, or pass --allow-cross-arch-label if you intentionally only relabel evidence." >&2
   exit 1
 fi
 
@@ -94,8 +108,11 @@ cmd=(
   --result "${RESULT}"
   --note-prefix "p3-02-devcenter"
   --tag-prefix "p3-02-devcenter"
-  --allow-arch-override
 )
+
+if [[ "${ALLOW_CROSS_ARCH_LABEL}" -eq 1 ]]; then
+  cmd+=(--allow-arch-override)
+fi
 
 echo "Running P3-02 matrix with command:"
 printf '  %q' "${cmd[@]}"

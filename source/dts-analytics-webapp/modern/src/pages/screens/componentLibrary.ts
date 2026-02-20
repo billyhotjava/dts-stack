@@ -552,6 +552,7 @@ export const componentLibrary: ComponentCategory[] = [
                 defaultConfig: {
                     title: '发布倒计时',
                     targetTime: new Date(Date.now() + 24 * 3600 * 1000).toISOString(),
+                    targetVariableKey: '',
                     showDays: true,
                     color: '#e2e8f0',
                     accentColor: '#22d3ee',
@@ -565,13 +566,17 @@ export const componentLibrary: ComponentCategory[] = [
                 defaultHeight: 160,
                 defaultConfig: {
                     title: '业务轮播',
+                    itemSourceMode: 'auto',
                     items: [
                         '设备在线率 99.2%',
                         '昨日新增告警 6 条',
                         '当日产线节拍达成 98.7%',
                     ],
                     intervalSeconds: 4,
+                    autoPlay: true,
+                    dataItemField: '',
                     showDots: true,
+                    showControls: true,
                     pauseOnHover: true,
                     color: '#e2e8f0',
                     titleColor: '#94a3b8',

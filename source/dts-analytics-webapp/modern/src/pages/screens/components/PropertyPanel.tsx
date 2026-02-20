@@ -41,8 +41,31 @@ function parseVisibilityMatchValues(text: string): string[] {
         .slice(0, 200);
 }
 
+function resolveTabSwitcherOptionValues(raw: unknown): string[] {
+    if (!Array.isArray(raw)) {
+        return [];
+    }
+    const out: string[] = [];
+    for (const item of raw) {
+        if (typeof item === 'string') {
+            const text = item.trim();
+            if (text) out.push(text);
+            continue;
+        }
+        if (!item || typeof item !== 'object') {
+            continue;
+        }
+        const row = item as Record<string, unknown>;
+        const value = String(row.value ?? '').trim();
+        if (value) {
+            out.push(value);
+        }
+    }
+    return out;
+}
+
 export function PropertyPanel() {
-    const { state, updateComponent, updateSelectedComponents } = useScreen();
+    const { state, updateComponent, updateConfig, updateSelectedComponents } = useScreen();
     const { config, selectedIds } = state;
     useScreenPluginRuntime();
 
@@ -145,6 +168,87 @@ export function PropertyPanel() {
         updateComponent(selectedComponent.id, {
             config: { ...selectedComponent.config, [key]: value },
         });
+    };
+
+    const applyTabVisibilityRules = () => {
+        if (selectedComponent.type !== 'tab-switcher') return;
+        const variableKey = String(selectedComponent.config.variableKey || 'tabKey').trim() || 'tabKey';
+        const optionValues = resolveTabSwitcherOptionValues(selectedComponent.config.options);
+        if (optionValues.length === 0) {
+            alert('请先在 Tab 组件中配置可用选项');
+            return;
+        }
+        const targetTypes = new Set<ComponentType>([
+            'line-chart',
+            'bar-chart',
+            'pie-chart',
+            'map-chart',
+            'table',
+            'scroll-board',
+            'scroll-ranking',
+            'funnel-chart',
+            'scatter-chart',
+            'radar-chart',
+            'gauge-chart',
+        ]);
+        let assigned = 0;
+        let index = 0;
+        const nextComponents = config.components.map((item) => {
+            if (item.id === selectedComponent.id || !targetTypes.has(item.type)) {
+                return item;
+            }
+            const match = optionValues[index % optionValues.length];
+            index += 1;
+            assigned += 1;
+            return {
+                ...item,
+                config: {
+                    ...item.config,
+                    visibilityRuleEnabled: true,
+                    visibilityVariableKey: variableKey,
+                    visibilityMatchMode: 'equals',
+                    visibilityMatchValues: [match],
+                },
+            };
+        });
+        if (assigned <= 0) {
+            alert('当前画布没有可绑定 Tab 显隐规则的图表/表格组件');
+            return;
+        }
+        updateConfig({ components: nextComponents });
+        alert(`已应用 Tab 显隐规则到 ${assigned} 个组件`);
+    };
+
+    const clearTabVisibilityRules = () => {
+        if (selectedComponent.type !== 'tab-switcher') return;
+        const variableKey = String(selectedComponent.config.variableKey || 'tabKey').trim() || 'tabKey';
+        let cleared = 0;
+        const nextComponents = config.components.map((item) => {
+            if (item.id === selectedComponent.id) {
+                return item;
+            }
+            const currentVarKey = String((item.config as Record<string, unknown>).visibilityVariableKey ?? '').trim();
+            if (currentVarKey !== variableKey) {
+                return item;
+            }
+            const raw = item.config as Record<string, unknown>;
+            const {
+                visibilityRuleEnabled: _visibilityRuleEnabled,
+                visibilityVariableKey: _visibilityVariableKey,
+                visibilityMatchMode: _visibilityMatchMode,
+                visibilityMatchValues: _visibilityMatchValues,
+                visibilityMatchValue: _visibilityMatchValue,
+                ...rest
+            } = raw;
+            cleared += 1;
+            return { ...item, config: rest };
+        });
+        if (cleared <= 0) {
+            alert('未找到可清理的 Tab 显隐规则');
+            return;
+        }
+        updateConfig({ components: nextComponents });
+        alert(`已清理 ${cleared} 个组件的 Tab 显隐规则`);
     };
 
     const pluginMeta = readComponentPluginMeta(selectedComponent.config);
@@ -291,6 +395,22 @@ export function PropertyPanel() {
                             <label className="property-label">子组件数</label>
                             <div className="property-input" style={{ display: 'flex', alignItems: 'center' }}>
                                 {config.components.filter((item) => item.parentContainerId === selectedComponent.id).length}
+                            </div>
+                        </div>
+                    )}
+                    {selectedComponent.type === 'tab-switcher' && (
+                        <div className="property-row" style={{ alignItems: 'flex-start' }}>
+                            <label className="property-label">Tab联动</label>
+                            <div style={{ display: 'grid', gap: 6, width: '100%' }}>
+                                <button type="button" className="property-btn-small" onClick={applyTabVisibilityRules}>
+                                    一键应用显隐规则
+                                </button>
+                                <button type="button" className="property-btn-small" onClick={clearTabVisibilityRules}>
+                                    清理显隐规则
+                                </button>
+                                <div style={{ fontSize: 11, color: '#94a3b8', lineHeight: 1.5 }}>
+                                    规则会按 Tab 选项顺序分配到图表/表格组件。
+                                </div>
                             </div>
                         </div>
                     )}
@@ -884,7 +1004,27 @@ function renderComponentConfig(
                             type="datetime-local"
                             className="property-input"
                             value={String(config.targetTime || '').replace('Z', '').slice(0, 16)}
-                            onChange={(e) => onChange('targetTime', new Date(e.target.value).toISOString())}
+                            onChange={(e) => {
+                                const raw = String(e.target.value || '').trim();
+                                if (!raw) {
+                                    onChange('targetTime', '');
+                                    return;
+                                }
+                                const parsed = Date.parse(raw);
+                                if (Number.isFinite(parsed)) {
+                                    onChange('targetTime', new Date(parsed).toISOString());
+                                }
+                            }}
+                        />
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">目标时间变量</label>
+                        <input
+                            type="text"
+                            className="property-input"
+                            value={(config.targetVariableKey as string) || ''}
+                            onChange={(e) => onChange('targetVariableKey', e.target.value)}
+                            placeholder="releaseDeadline"
                         />
                     </div>
                     <div className="property-row">
@@ -937,6 +1077,18 @@ function renderComponentConfig(
                         />
                     </div>
                     <div className="property-row">
+                        <label className="property-label">内容来源</label>
+                        <select
+                            className="property-input"
+                            value={(config.itemSourceMode as string) || 'auto'}
+                            onChange={(e) => onChange('itemSourceMode', e.target.value)}
+                        >
+                            <option value="auto">自动（优先数据）</option>
+                            <option value="manual">手工内容</option>
+                            <option value="data">数据内容</option>
+                        </select>
+                    </div>
+                    <div className="property-row">
                         <label className="property-label">轮播内容</label>
                         <textarea
                             className="property-input"
@@ -965,6 +1117,24 @@ function renderComponentConfig(
                         />
                     </div>
                     <div className="property-row">
+                        <label className="property-label">自动轮播</label>
+                        <input
+                            type="checkbox"
+                            checked={config.autoPlay !== false}
+                            onChange={(e) => onChange('autoPlay', e.target.checked)}
+                        />
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">数据内容列</label>
+                        <input
+                            type="text"
+                            className="property-input"
+                            value={(config.dataItemField as string) || ''}
+                            onChange={(e) => onChange('dataItemField', e.target.value)}
+                            placeholder="列名/显示名/序号(1开始)"
+                        />
+                    </div>
+                    <div className="property-row">
                         <label className="property-label">数据行上限</label>
                         <input
                             type="number"
@@ -974,6 +1144,14 @@ function renderComponentConfig(
                             value={(config.dataItemMax as number) || 50}
                             onChange={(e) => onChange('dataItemMax', Number(e.target.value))}
                             placeholder="数据源接入时生效"
+                        />
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">显示切换按钮</label>
+                        <input
+                            type="checkbox"
+                            checked={config.showControls !== false}
+                            onChange={(e) => onChange('showControls', e.target.checked)}
                         />
                     </div>
                     <div className="property-row">
@@ -3223,8 +3401,11 @@ function TableConfig({ component, onChange }: {
                             alert('条件格式 JSON 解析失败');
                         }
                     }}
-                    placeholder='[{"columnIndex":0,"operator":">","value":100,"color":"#ef4444"}]'
+                    placeholder='[{"columnKey":"amount","operator":">","value":100,"color":"#ef4444"}]'
                 />
+            </div>
+            <div style={{ fontSize: 11, opacity: 0.75, marginTop: -2, marginBottom: 8, lineHeight: 1.5 }}>
+                支持按 `columnIndex`、`columnKey` 或 `columnTitle` 匹配列；建议优先使用 `columnKey` 以避免字段重排错位。
             </div>
 
             {hasCardSource && sourceCols.length === 0 && (

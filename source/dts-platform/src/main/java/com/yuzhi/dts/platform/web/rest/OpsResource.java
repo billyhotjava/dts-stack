@@ -56,9 +56,10 @@ public class OpsResource {
         @RequestParam(required = false) String entryKey,
         @RequestParam(required = false) String ownerDept,
         @RequestParam(required = false) UUID artifactId,
-        @RequestParam(required = false) String artifactName
+        @RequestParam(required = false) String artifactName,
+        @RequestParam(required = false) UUID planId
     ) {
-        Map<String, Object> payload = opsService.devCenterMetrics(days, entryKey, ownerDept, artifactId, artifactName);
+        Map<String, Object> payload = opsService.devCenterMetrics(days, entryKey, ownerDept, artifactId, artifactName, planId);
         auditService.audit("READ", "ops.metrics.dev-center", "days=" + days);
         return ApiResponses.ok(payload);
     }

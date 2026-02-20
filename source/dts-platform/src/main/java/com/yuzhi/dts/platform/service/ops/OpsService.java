@@ -3,9 +3,11 @@ package com.yuzhi.dts.platform.service.ops;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.platform.domain.governance.GovQualityRun;
 import com.yuzhi.dts.platform.domain.infra.InfraExternalRunLog;
+import com.yuzhi.dts.platform.domain.modeling.ModelingPlan;
 import com.yuzhi.dts.platform.domain.ops.OpsBackfillRequest;
 import com.yuzhi.dts.platform.repository.governance.GovQualityRunRepository;
 import com.yuzhi.dts.platform.repository.infra.InfraExternalRunLogRepository;
+import com.yuzhi.dts.platform.repository.modeling.ModelingPlanRepository;
 import com.yuzhi.dts.platform.repository.ops.OpsBackfillRequestRepository;
 import com.yuzhi.dts.platform.service.etl.AirflowClient;
 import java.time.Instant;
@@ -42,6 +44,7 @@ public class OpsService {
 
     private final InfraExternalRunLogRepository runLogRepository;
     private final GovQualityRunRepository qualityRunRepository;
+    private final ModelingPlanRepository modelingPlanRepository;
     private final OpsBackfillRequestRepository backfillRepository;
     private final AirflowClient airflowClient;
     private final ObjectMapper objectMapper;
@@ -49,12 +52,14 @@ public class OpsService {
     public OpsService(
         InfraExternalRunLogRepository runLogRepository,
         GovQualityRunRepository qualityRunRepository,
+        ModelingPlanRepository modelingPlanRepository,
         OpsBackfillRequestRepository backfillRepository,
         AirflowClient airflowClient,
         ObjectMapper objectMapper
     ) {
         this.runLogRepository = runLogRepository;
         this.qualityRunRepository = qualityRunRepository;
+        this.modelingPlanRepository = modelingPlanRepository;
         this.backfillRepository = backfillRepository;
         this.airflowClient = airflowClient;
         this.objectMapper = objectMapper;
@@ -83,7 +88,8 @@ public class OpsService {
         String entryKey,
         String ownerDept,
         UUID artifactId,
-        String artifactName
+        String artifactName,
+        UUID planId
     ) {
         int windowDays = days == null ? 7 : Math.max(1, Math.min(days, 30));
         Instant now = Instant.now();
@@ -91,6 +97,7 @@ public class OpsService {
         String normalizedEntry = normalize(entryKey);
         String normalizedOwnerDept = normalize(ownerDept);
         String normalizedArtifactName = normalize(artifactName);
+        UUID normalizedPlanId = planId;
         List<InfraExternalRunLog> runs = runLogRepository.findForMetrics(
             since,
             now,
@@ -100,9 +107,18 @@ public class OpsService {
             normalizedArtifactName
         );
 
+        List<ModelingPlan> plans = modelingPlanRepository.findAll();
+        Map<UUID, ModelingPlan> planById = new HashMap<>();
+        for (ModelingPlan plan : plans) {
+            if (plan != null && plan.getId() != null) {
+                planById.put(plan.getId(), plan);
+            }
+        }
+
         Map<LocalDate, DailyMetric> dailyMetrics = new LinkedHashMap<>();
         Map<String, FailureAggregate> failureAggregates = new HashMap<>();
         Set<String> ownerDeptOptions = new HashSet<>();
+        Map<UUID, Long> planRunCounter = new HashMap<>();
         long totalRuns = 0L;
         long successRuns = 0L;
         long failedRuns = 0L;
@@ -110,12 +126,23 @@ public class OpsService {
         long releaseRuns = 0L;
         long releaseSuccessRuns = 0L;
         long rollbackRuns = 0L;
+        long rollbackStructuredRuns = 0L;
+        long rollbackKeywordRuns = 0L;
 
         for (InfraExternalRunLog run : runs) {
             Instant eventAt = safeInstant(run.getStartedAt(), run.getFinishedAt());
             if (eventAt == null) {
                 continue;
             }
+            Map<String, Object> metrics = parseMetrics(run.getMetricsJson());
+            UUID resolvedPlanId = resolvePlanId(run, metrics, planById);
+            if (resolvedPlanId != null) {
+                planRunCounter.merge(resolvedPlanId, 1L, Long::sum);
+            }
+            if (normalizedPlanId != null && !normalizedPlanId.equals(resolvedPlanId)) {
+                continue;
+            }
+
             LocalDate date = LocalDate.ofInstant(eventAt, METRICS_ZONE);
             DailyMetric daily = dailyMetrics.computeIfAbsent(date, ignored -> new DailyMetric());
             daily.totalRuns++;
@@ -141,26 +168,38 @@ public class OpsService {
                 daily.durationMsTotal += run.getDurationMs();
             }
 
-            String aggregateKey = normalize(run.getEntryKey()) + "|" + safeText(run.getArtifactName());
-            FailureAggregate aggregate = failureAggregates.computeIfAbsent(aggregateKey, ignored -> new FailureAggregate(run));
+            ModelingPlan resolvedPlan = resolvedPlanId == null ? null : planById.get(resolvedPlanId);
+            String aggregateKey =
+                normalize(run.getEntryKey()) + "|" + safeText(run.getArtifactName()) + "|" + safeText(resolvedPlanId);
+            FailureAggregate aggregate = failureAggregates.computeIfAbsent(
+                aggregateKey,
+                ignored -> new FailureAggregate(run, resolvedPlanId, resolvedPlan == null ? null : resolvedPlan.getName())
+            );
             aggregate.totalRuns++;
             if (isFailed(status)) {
                 aggregate.failedRuns++;
             }
 
-            if (isReleaseRun(run)) {
+            if (isReleaseRun(run, metrics)) {
                 releaseRuns++;
                 if (isSuccess(status)) {
                     releaseSuccessRuns++;
                 }
-                if (isRollbackRun(run)) {
+                RollbackMark rollbackMark = detectRollback(run, metrics);
+                if (rollbackMark.rollback()) {
                     rollbackRuns++;
+                    if (rollbackMark.isStructured()) {
+                        rollbackStructuredRuns++;
+                    } else {
+                        rollbackKeywordRuns++;
+                    }
                 }
             }
         }
 
-        double mttrMinutes = computeMttrMinutes(runs);
-        long retryRuns = computeRetryRuns(runs);
+        List<InfraExternalRunLog> effectiveRuns = filterRunsByPlan(runs, normalizedPlanId, planById);
+        double mttrMinutes = computeMttrMinutes(effectiveRuns);
+        long retryRuns = computeRetryRuns(effectiveRuns);
         List<Map<String, Object>> trend = buildTrend(dailyMetrics);
         List<Map<String, Object>> topFailures = buildTopFailures(failureAggregates);
 
@@ -177,12 +216,15 @@ public class OpsService {
         summary.put("releaseRuns", releaseRuns);
         summary.put("releaseSuccessRate", releaseRuns > 0 ? roundRate(releaseSuccessRuns * 1.0 / releaseRuns) : null);
         summary.put("rollbackRate", releaseRuns > 0 ? roundRate(rollbackRuns * 1.0 / releaseRuns) : null);
+        summary.put("rollbackStructuredRuns", rollbackStructuredRuns);
+        summary.put("rollbackKeywordRuns", rollbackKeywordRuns);
 
         Map<String, Object> filters = new LinkedHashMap<>();
         filters.put("entryKey", normalizedEntry);
         filters.put("ownerDept", normalizedOwnerDept);
         filters.put("artifactId", artifactId);
         filters.put("artifactName", normalizedArtifactName);
+        filters.put("planId", normalizedPlanId);
         filters.put("windowDays", windowDays);
 
         Map<String, Object> data = new LinkedHashMap<>();
@@ -191,6 +233,7 @@ public class OpsService {
         data.put("trend", trend);
         data.put("topFailures", topFailures);
         data.put("availableOwnerDepts", ownerDeptOptions.stream().sorted(String::compareToIgnoreCase).toList());
+        data.put("availablePlans", buildPlanOptions(plans, planRunCounter, normalizedPlanId));
         data.put("filters", filters);
         return data;
     }
@@ -296,6 +339,103 @@ public class OpsService {
         return backfillRepository.save(request);
     }
 
+    private List<Map<String, Object>> buildPlanOptions(List<ModelingPlan> plans, Map<UUID, Long> planRunCounter, UUID selectedPlanId) {
+        if (plans == null || plans.isEmpty()) {
+            return List.of();
+        }
+        return plans
+            .stream()
+            .filter(plan -> plan != null && plan.getId() != null)
+            .sorted(Comparator.comparing(plan -> safeText(plan.getName()), String.CASE_INSENSITIVE_ORDER))
+            .filter(
+                plan ->
+                    planRunCounter.getOrDefault(plan.getId(), 0L) > 0 ||
+                    (selectedPlanId != null && selectedPlanId.equals(plan.getId()))
+            )
+            .map(plan -> {
+                Map<String, Object> row = new LinkedHashMap<>();
+                row.put("id", plan.getId());
+                row.put("name", plan.getName());
+                row.put("ownerDept", plan.getOwnerDept());
+                row.put("status", plan.getStatus());
+                row.put("runCount", planRunCounter.getOrDefault(plan.getId(), 0L));
+                return row;
+            })
+            .toList();
+    }
+
+    private List<InfraExternalRunLog> filterRunsByPlan(
+        List<InfraExternalRunLog> runs,
+        UUID planId,
+        Map<UUID, ModelingPlan> planById
+    ) {
+        if (planId == null) {
+            return runs;
+        }
+        List<InfraExternalRunLog> filtered = new ArrayList<>();
+        for (InfraExternalRunLog run : runs) {
+            UUID resolvedPlanId = resolvePlanId(run, parseMetrics(run.getMetricsJson()), planById);
+            if (planId.equals(resolvedPlanId)) {
+                filtered.add(run);
+            }
+        }
+        return filtered;
+    }
+
+    private UUID resolvePlanId(
+        InfraExternalRunLog run,
+        Map<String, Object> metrics,
+        Map<UUID, ModelingPlan> planById
+    ) {
+        if (run != null && run.getArtifactId() != null && planById.containsKey(run.getArtifactId())) {
+            return run.getArtifactId();
+        }
+        Map<String, Object> conf = toMap(metrics == null ? null : metrics.get("conf"));
+        UUID fromConf = toUuid(conf.get("planId"));
+        if (fromConf == null) {
+            fromConf = toUuid(conf.get("projectId"));
+        }
+        if (fromConf != null && planById.containsKey(fromConf)) {
+            return fromConf;
+        }
+        Map<String, Object> runInfo = toMap(metrics == null ? null : metrics.get("run"));
+        UUID fromRun = toUuid(runInfo.get("planId"));
+        if (fromRun == null) {
+            fromRun = toUuid(runInfo.get("projectId"));
+        }
+        if (fromRun != null && planById.containsKey(fromRun)) {
+            return fromRun;
+        }
+        return null;
+    }
+
+    private RollbackMark detectRollback(InfraExternalRunLog run, Map<String, Object> metrics) {
+        Map<String, Object> conf = toMap(metrics == null ? null : metrics.get("conf"));
+        if (!conf.isEmpty()) {
+            if (toBoolean(conf.get("rollback")) || toBoolean(conf.get("isRollback"))) {
+                return RollbackMark.structured();
+            }
+            String operation = safeText(conf.get("operation"));
+            if ("rollback".equalsIgnoreCase(operation) || "revert".equalsIgnoreCase(operation) || "restore".equalsIgnoreCase(operation)) {
+                return RollbackMark.structured();
+            }
+            String command = safeText(conf.get("command"));
+            if (contains(command, "rollback") || contains(command, "revert")) {
+                return RollbackMark.structured();
+            }
+        }
+        Map<String, Object> result = toMap(metrics == null ? null : metrics.get("result"));
+        if (!result.isEmpty()) {
+            if (toBoolean(result.get("rollback")) || toBoolean(result.get("isRollback"))) {
+                return RollbackMark.structured();
+            }
+        }
+        if (run != null && (contains(run.getMessage(), "rollback") || contains(run.getMetricsJson(), "rollback"))) {
+            return RollbackMark.keyword();
+        }
+        return RollbackMark.none();
+    }
+
     private List<Map<String, Object>> buildTrend(Map<LocalDate, DailyMetric> dailyMetrics) {
         List<Map<String, Object>> rows = new ArrayList<>();
         dailyMetrics
@@ -334,6 +474,8 @@ public class OpsService {
                 row.put("entryKey", item.entryKey);
                 row.put("artifactName", item.artifactName);
                 row.put("artifactId", item.artifactId);
+                row.put("planId", item.planId);
+                row.put("planName", item.planName);
                 row.put("totalRuns", item.totalRuns);
                 row.put("failedRuns", item.failedRuns);
                 row.put("failureRate", item.totalRuns > 0 ? roundRate(item.failedRuns * 1.0 / item.totalRuns) : null);
@@ -428,19 +570,17 @@ public class OpsService {
         return RUNNING_STATUSES.contains(status);
     }
 
-    private boolean isReleaseRun(InfraExternalRunLog run) {
-        return run != null && ExternalRunLogService.ENTRY_DBT.equalsIgnoreCase(safeText(run.getEntryKey()));
-    }
-
-    private boolean isRollbackRun(InfraExternalRunLog run) {
-        if (run == null) {
-            return false;
+    private boolean isReleaseRun(InfraExternalRunLog run, Map<String, Object> metrics) {
+        if (run != null && ExternalRunLogService.ENTRY_DBT.equalsIgnoreCase(safeText(run.getEntryKey()))) {
+            return true;
         }
-        return contains(run.getMessage(), "rollback") || contains(run.getMetricsJson(), "rollback");
+        Map<String, Object> conf = toMap(metrics == null ? null : metrics.get("conf"));
+        String operation = safeText(conf.get("operation"));
+        return "run".equalsIgnoreCase(operation) || "build".equalsIgnoreCase(operation);
     }
 
     private String safeText(Object value) {
-        return value == null ? "-" : String.valueOf(value).trim();
+        return value == null ? "" : String.valueOf(value).trim();
     }
 
     private String normalize(String value) {
@@ -458,8 +598,47 @@ public class OpsService {
     }
 
     private boolean contains(String value, String keyword) {
-        if (value == null) return false;
+        if (value == null || keyword == null) return false;
         return value.toLowerCase(Locale.ROOT).contains(keyword);
+    }
+
+    private Map<String, Object> toMap(Object value) {
+        if (value instanceof Map<?, ?> raw) {
+            Map<String, Object> map = new LinkedHashMap<>();
+            for (Map.Entry<?, ?> entry : raw.entrySet()) {
+                if (entry.getKey() != null) {
+                    map.put(String.valueOf(entry.getKey()), entry.getValue());
+                }
+            }
+            return map;
+        }
+        return Map.of();
+    }
+
+    private UUID toUuid(Object value) {
+        if (value == null) {
+            return null;
+        }
+        try {
+            String text = String.valueOf(value).trim();
+            if (!StringUtils.hasText(text)) {
+                return null;
+            }
+            return UUID.fromString(text);
+        } catch (Exception ex) {
+            return null;
+        }
+    }
+
+    private boolean toBoolean(Object value) {
+        if (value instanceof Boolean bool) {
+            return bool;
+        }
+        if (value == null) {
+            return false;
+        }
+        String text = String.valueOf(value).trim();
+        return "true".equalsIgnoreCase(text) || "1".equals(text) || "yes".equalsIgnoreCase(text);
     }
 
     private Map<String, Object> parseMetrics(String metricsJson) {
@@ -496,13 +675,17 @@ public class OpsService {
         private final String entryKey;
         private final String artifactName;
         private final UUID artifactId;
+        private final UUID planId;
+        private final String planName;
         private long totalRuns;
         private long failedRuns;
 
-        private FailureAggregate(InfraExternalRunLog run) {
+        private FailureAggregate(InfraExternalRunLog run, UUID planId, String planName) {
             this.entryKey = run == null ? null : run.getEntryKey();
             this.artifactName = run == null ? null : run.getArtifactName();
             this.artifactId = run == null ? null : run.getArtifactId();
+            this.planId = planId;
+            this.planName = planName;
         }
 
         private long totalRuns() {
@@ -511,6 +694,37 @@ public class OpsService {
 
         private long failedRuns() {
             return failedRuns;
+        }
+    }
+
+    private static final class RollbackMark {
+
+        private final boolean rollback;
+        private final boolean structured;
+
+        private RollbackMark(boolean rollback, boolean structured) {
+            this.rollback = rollback;
+            this.structured = structured;
+        }
+
+        private static RollbackMark structured() {
+            return new RollbackMark(true, true);
+        }
+
+        private static RollbackMark keyword() {
+            return new RollbackMark(true, false);
+        }
+
+        private static RollbackMark none() {
+            return new RollbackMark(false, false);
+        }
+
+        private boolean rollback() {
+            return rollback;
+        }
+
+        private boolean isStructured() {
+            return structured;
         }
     }
 }

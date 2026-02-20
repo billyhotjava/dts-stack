@@ -37,6 +37,7 @@ export const Modal = forwardRef<HTMLDivElement, ModalProps>(
   ) => {
     const modalRef = useRef<HTMLDivElement>(null);
     const previousActiveElement = useRef<Element | null>(null);
+    const focusTimerRef = useRef<number | null>(null);
 
     // Handle escape key
     const handleKeyDown = useCallback(
@@ -81,7 +82,7 @@ export const Modal = forwardRef<HTMLDivElement, ModalProps>(
         document.body.style.overflow = 'hidden';
 
         // Focus the modal
-        setTimeout(() => {
+        focusTimerRef.current = window.setTimeout(() => {
           const focusableElement = modalRef.current?.querySelector(
             'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
           ) as HTMLElement;
@@ -89,6 +90,10 @@ export const Modal = forwardRef<HTMLDivElement, ModalProps>(
         }, 0);
 
         return () => {
+          if (focusTimerRef.current != null) {
+            window.clearTimeout(focusTimerRef.current);
+            focusTimerRef.current = null;
+          }
           document.removeEventListener('keydown', handleKeyDown);
           document.body.style.overflow = '';
 
