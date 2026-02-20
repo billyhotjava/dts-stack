@@ -48,6 +48,9 @@
 - 已补采集源兜底：
   - 首选 `ingestion_execution`
   - 若不存在则自动回退到 `infra_external_run_log` 进行小时统计与失败分类
+- 已补采集源自适应：
+  - 若 `ingestion_execution` 在窗口内无数据，会优先切换到有数据的 `infra_external_run_log`
+  - 报告新增 `ingestion_window_rows` / `infra_window_rows` 便于定位“空报表”根因
 
 ## 待完成
 

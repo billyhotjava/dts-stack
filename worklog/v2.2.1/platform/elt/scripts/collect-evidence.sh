@@ -156,15 +156,24 @@ FAILURE_CSV="${RAW_DIR}/failure-top-${RUN_AT}.csv"
 
 HAS_INGESTION_EXECUTION=0
 HAS_INFRA_RUN_LOG=0
+INGESTION_WINDOW_ROWS=0
+INFRA_WINDOW_ROWS=0
 if table_exists "ingestion_execution"; then
   HAS_INGESTION_EXECUTION=1
+  INGESTION_WINDOW_ROWS="$(query_scalar_via_docker "SELECT COUNT(*) FROM ingestion_execution WHERE created_at >= TIMESTAMPTZ '${START_UTC}'" || echo 0)"
 fi
 if table_exists "infra_external_run_log"; then
   HAS_INFRA_RUN_LOG=1
+  INFRA_WINDOW_ROWS="$(query_scalar_via_docker "SELECT COUNT(*) FROM infra_external_run_log WHERE COALESCE(started_at, finished_at) >= TIMESTAMPTZ '${START_UTC}' AND upper(coalesce(entry_key,'')) IN ('INGESTION_TASK','AIRFLOW_DAG','DBT_RUN')" || echo 0)"
 fi
 
 METRIC_SOURCE_TABLE="unavailable"
-if [[ "${HAS_INGESTION_EXECUTION}" == "1" ]]; then
+if [[ "${HAS_INGESTION_EXECUTION}" == "1" && "${INGESTION_WINDOW_ROWS}" != "0" ]]; then
+  METRIC_SOURCE_TABLE="ingestion_execution"
+elif [[ "${HAS_INFRA_RUN_LOG}" == "1" && "${INFRA_WINDOW_ROWS}" != "0" ]]; then
+  METRIC_SOURCE_TABLE="infra_external_run_log"
+elif [[ "${HAS_INGESTION_EXECUTION}" == "1" ]]; then
+  # Fallback for cold-start environments where ingestion_execution exists but has no rows in current window.
   METRIC_SOURCE_TABLE="ingestion_execution"
 elif [[ "${HAS_INFRA_RUN_LOG}" == "1" ]]; then
   METRIC_SOURCE_TABLE="infra_external_run_log"
@@ -292,6 +301,8 @@ SUMMARY_TXT="${RAW_DIR}/summary-${RUN_AT}.txt"
   echo "pg_container=${PG_CONTAINER:-N/A}"
   echo "ingestion_container=${INGESTION_CONTAINER:-N/A}"
   echo "metric_source_table=${METRIC_SOURCE_TABLE}"
+  echo "ingestion_window_rows=${INGESTION_WINDOW_ROWS}"
+  echo "infra_window_rows=${INFRA_WINDOW_ROWS}"
   echo "has_failure_category=${HAS_FAILURE_CATEGORY}"
   echo "dag_404_count=${DAG_404_COUNT}"
   echo "tasklog_404_count=${TASKLOG_404_COUNT}"

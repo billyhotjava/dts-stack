@@ -35,6 +35,8 @@ latest_mode="$(awk -F= '$1=="mode"{print $2}' "${latest_summary}" | tail -n 1)"
 latest_arch="$(awk -F= '$1=="arch"{print $2}' "${latest_summary}" | tail -n 1)"
 latest_hours="$(awk -F= '$1=="hours"{print $2}' "${latest_summary}" | tail -n 1)"
 latest_metric_source="$(awk -F= '$1=="metric_source_table"{print $2}' "${latest_summary}" | tail -n 1)"
+latest_ingestion_rows="$(awk -F= '$1=="ingestion_window_rows"{print $2}' "${latest_summary}" | tail -n 1)"
+latest_infra_rows="$(awk -F= '$1=="infra_window_rows"{print $2}' "${latest_summary}" | tail -n 1)"
 latest_has_failure="$(awk -F= '$1=="has_failure_category"{print $2}' "${latest_summary}" | tail -n 1)"
 latest_failure_rows=0
 failure_collect_failed=0
@@ -76,6 +78,8 @@ fi
   echo "- arch: ${latest_arch}"
   echo "- hours: ${latest_hours}"
   [[ -n "${latest_metric_source}" ]] && echo "- metric_source_table: ${latest_metric_source}"
+  [[ -n "${latest_ingestion_rows}" ]] && echo "- ingestion_window_rows: ${latest_ingestion_rows}"
+  [[ -n "${latest_infra_rows}" ]] && echo "- infra_window_rows: ${latest_infra_rows}"
   echo "- has_failure_category(flag): ${latest_has_failure}"
   echo "- failure_rows: ${latest_failure_rows}"
   echo "- failure_collect_failed: ${failure_collect_failed}"
