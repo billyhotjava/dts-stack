@@ -36,16 +36,31 @@ latest_arch="$(awk -F= '$1=="arch"{print $2}' "${latest_summary}" | tail -n 1)"
 latest_hours="$(awk -F= '$1=="hours"{print $2}' "${latest_summary}" | tail -n 1)"
 latest_has_failure="$(awk -F= '$1=="has_failure_category"{print $2}' "${latest_summary}" | tail -n 1)"
 latest_failure_rows=0
+failure_collect_failed=0
+hourly_collect_failed=0
 
 latest_failure_csv="${RAW_DIR}/p3-02-failure-top-${latest_run_at}.csv"
 latest_hourly_csv="${RAW_DIR}/p3-02-hourly-${latest_run_at}.csv"
 failure_top_tsv="${RAW_DIR}/p3-02-failure-topn-${latest_run_at}.tsv"
 
 if [[ -f "${latest_failure_csv}" ]]; then
-  awk -F, 'NR==1{print "failure_category\tfailed_count"; next} {print $1 "\t" $2}' "${latest_failure_csv}" > "${failure_top_tsv}"
-  latest_failure_rows="$(awk -F, 'NR>1 && NF>=2 {count++} END {print count+0}' "${latest_failure_csv}")"
+  if awk -F, 'NR>1 && $1=="collect_failed"{found=1} END{exit found?0:1}' "${latest_failure_csv}"; then
+    failure_collect_failed=1
+  fi
+  awk -F, '
+    NR==1 {print "failure_category\tfailed_count"; next}
+    $1=="message" || $1=="collect_failed" {next}
+    NF>=2 && $1!="" && $2!="" {print $1 "\t" $2}
+  ' "${latest_failure_csv}" > "${failure_top_tsv}"
+  latest_failure_rows="$(awk -F, 'NR>1 && $1!="message" && $1!="collect_failed" && NF>=2 && $1!="" && $2!="" {count++} END {print count+0}' "${latest_failure_csv}")"
 else
   echo -e "failure_category\tfailed_count" > "${failure_top_tsv}"
+fi
+
+if [[ -f "${latest_hourly_csv}" ]]; then
+  if awk -F, 'NR>1 && $1=="collect_failed"{found=1} END{exit found?0:1}' "${latest_hourly_csv}"; then
+    hourly_collect_failed=1
+  fi
 fi
 
 {
@@ -61,10 +76,14 @@ fi
   echo "- hours: ${latest_hours}"
   echo "- has_failure_category(flag): ${latest_has_failure}"
   echo "- failure_rows: ${latest_failure_rows}"
+  echo "- failure_collect_failed: ${failure_collect_failed}"
+  echo "- hourly_collect_failed: ${hourly_collect_failed}"
   echo
   echo "## 失败 TopN（最新）"
   echo
-  if [[ -s "${failure_top_tsv}" ]] && [[ "$(wc -l < "${failure_top_tsv}")" -gt 1 ]]; then
+  if [[ "${failure_collect_failed}" -eq 1 ]]; then
+    echo "失败分类采集失败（collect_failed），请检查 Postgres 查询权限或 SQL 兼容性。"
+  elif [[ -s "${failure_top_tsv}" ]] && [[ "$(wc -l < "${failure_top_tsv}")" -gt 1 ]]; then
     echo "| failure_category | failed_count |"
     echo "|---|---:|"
     awk -F'\t' 'NR>1{printf("| %s | %s |\n",$1,$2)}' "${failure_top_tsv}"
@@ -81,9 +100,13 @@ fi
   echo "## 小时明细（最新）"
   echo
   if [[ -f "${latest_hourly_csv}" ]]; then
-    echo "| hour_slot | total | success | failed | avg_seconds | p95_seconds |"
-    echo "|---|---:|---:|---:|---:|---:|"
-    awk -F, 'NR>1{printf("| %s | %s | %s | %s | %s | %s |\n",$1,$2,$3,$4,$5,$6)}' "${latest_hourly_csv}"
+    if [[ "${hourly_collect_failed}" -eq 1 ]]; then
+      echo "小时明细采集失败（collect_failed），请检查 Postgres 查询权限或 SQL 兼容性。"
+    else
+      echo "| hour_slot | total | success | failed | avg_seconds | p95_seconds |"
+      echo "|---|---:|---:|---:|---:|---:|"
+      awk -F, 'NR>1 && $1!="message" && $1!="collect_failed"{printf("| %s | %s | %s | %s | %s | %s |\n",$1,$2,$3,$4,$5,$6)}' "${latest_hourly_csv}"
+    fi
   else
     echo "未找到 hourly 明细文件。"
   fi

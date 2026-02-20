@@ -42,6 +42,9 @@
 - 已加“跨架构标签保护”：
   - 默认禁止在 x86 直接标记 `--arch aarch64`
   - 仅在显式 `--allow-cross-arch-label` 时允许（仅调试用途）
+- 已补 `collect_failed` 诊断增强：
+  - 报告渲染会显式标记 `failure_collect_failed` / `hourly_collect_failed`
+  - 采集失败时保留 `*.err` 文件，便于定位 SQL/权限问题
 
 ## 待完成
 

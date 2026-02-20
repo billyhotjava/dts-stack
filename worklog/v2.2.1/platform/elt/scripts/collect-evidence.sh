@@ -133,9 +133,14 @@ query_scalar_via_docker() {
 safe_query_csv() {
   local sql="$1"
   local outfile="$2"
-  if ! query_csv_via_docker "${sql}" "${outfile}"; then
-    echo "warning: failed to collect ${outfile} (postgres unavailable or query failed)" >&2
+  local errfile="${outfile}.err"
+  if ! query_csv_via_docker "${sql}" "${outfile}" 2>"${errfile}"; then
+    local errline
+    errline="$(tail -n 1 "${errfile}" 2>/dev/null || true)"
+    echo "warning: failed to collect ${outfile} (postgres unavailable or query failed) ${errline}" >&2
     printf "message\ncollect_failed\n" > "${outfile}"
+  else
+    rm -f "${errfile}"
   fi
 }
 
@@ -189,6 +194,11 @@ fi
 safe_query_csv "${HOURLY_SQL}" "${HOURLY_CSV}"
 safe_query_csv "${FAILURE_SQL}" "${FAILURE_CSV}"
 
+HOURLY_COLLECT_FAILED=0
+FAILURE_COLLECT_FAILED=0
+[[ -f "${HOURLY_CSV}" ]] && awk -F, 'NR>1 && $1=="collect_failed"{found=1} END{exit found?0:1}' "${HOURLY_CSV}" && HOURLY_COLLECT_FAILED=1 || true
+[[ -f "${FAILURE_CSV}" ]] && awk -F, 'NR>1 && $1=="collect_failed"{found=1} END{exit found?0:1}' "${FAILURE_CSV}" && FAILURE_COLLECT_FAILED=1 || true
+
 count_log_pattern() {
   local pattern="$1"
   if [[ -z "${INGESTION_CONTAINER}" ]]; then
@@ -217,6 +227,10 @@ SUMMARY_TXT="${RAW_DIR}/summary-${RUN_AT}.txt"
   echo "tasklog_404_count=${TASKLOG_404_COUNT}"
   echo "hourly_csv=$(basename "${HOURLY_CSV}")"
   echo "failure_csv=$(basename "${FAILURE_CSV}")"
+  echo "hourly_collect_failed=${HOURLY_COLLECT_FAILED}"
+  echo "failure_collect_failed=${FAILURE_COLLECT_FAILED}"
+  [[ -f "${HOURLY_CSV}.err" ]] && echo "hourly_collect_error=$(basename "${HOURLY_CSV}.err")"
+  [[ -f "${FAILURE_CSV}.err" ]] && echo "failure_collect_error=$(basename "${FAILURE_CSV}.err")"
 } > "${SUMMARY_TXT}"
 
 if [[ "${WRITE_MD}" -eq 1 ]]; then
