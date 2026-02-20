@@ -21,6 +21,9 @@ public class ScreenAiGenerationService {
     private static final Pattern REFRESH_SECONDS_PATTERN = Pattern.compile("(\\d{1,4})\\s*(秒|s|sec|second)");
     private static final Pattern REFRESH_MINUTES_PATTERN = Pattern.compile("(\\d{1,3})\\s*(分|分钟|min|minute)");
     private static final Pattern TAB_WORD_PATTERN = Pattern.compile("\\btab\\b");
+    private static final int MAX_CONTEXT_ITEMS = 16;
+    private static final int MAX_CONTEXT_ITEM_LENGTH = 240;
+    private static final int MAX_KEYWORD_LENGTH = 6000;
 
     private final ObjectMapper objectMapper;
 
@@ -79,10 +82,14 @@ public class ScreenAiGenerationService {
     }
 
     public ObjectNode revise(String instruction, JsonNode screenSpecNode) {
-        return revise(instruction, screenSpecNode, List.of());
+        return revise(instruction, screenSpecNode, List.of(), true);
     }
 
     public ObjectNode revise(String instruction, JsonNode screenSpecNode, List<String> context) {
+        return revise(instruction, screenSpecNode, context, true);
+    }
+
+    public ObjectNode revise(String instruction, JsonNode screenSpecNode, List<String> context, boolean applyChanges) {
         String normalized = instruction == null ? "" : instruction.trim();
         String keyword = buildKeyword(normalized, context);
         IntentProfile intent = parseIntent(normalized, keyword);
@@ -205,6 +212,9 @@ public class ScreenAiGenerationService {
             warnings.add("未识别到可执行的优化指令，请尝试“重排布局/改成柱状图/改成浅色主题/加tab切换场景”。");
         } else {
             warnings.add("优化结果为启发式调整，请进入设计器确认细节。");
+            if (!applyChanges) {
+                warnings.add("当前为建议模式，结果仅供预览，不会自动覆盖已发布内容。");
+            }
         }
         quality.set("warnings", warnings);
         ArrayNode suggestions = objectMapper.createArrayNode();
@@ -215,6 +225,9 @@ public class ScreenAiGenerationService {
         result.put("engine", "heuristic-v1-revise");
         result.put("prompt", normalized);
         result.put("contextCount", context == null ? 0 : context.size());
+        result.put("usedContextCount", countUsableContext(context));
+        result.put("applyMode", applyChanges ? "apply" : "suggest");
+        result.put("applied", applyChanges);
         result.set("intent", toIntentNode(intent));
         result.set("queryRecommendations", buildQueryRecommendations(intent));
         result.set("vizRecommendations", buildVizRecommendations(intent));
@@ -225,20 +238,54 @@ public class ScreenAiGenerationService {
     }
 
     private String buildKeyword(String instruction, List<String> context) {
-        List<String> lines = new ArrayList<>();
-        if (context != null) {
-            for (String item : context) {
-                String text = item == null ? "" : item.trim();
-                if (!text.isEmpty()) {
-                    lines.add(text);
-                }
-            }
-        }
+        List<String> lines = normalizeContextLines(context);
         String normalizedInstruction = instruction == null ? "" : instruction.trim();
         if (!normalizedInstruction.isEmpty()) {
-            lines.add(normalizedInstruction);
+            lines.add(clipText(normalizedInstruction, MAX_CONTEXT_ITEM_LENGTH * 2));
         }
-        return String.join(" ", lines).toLowerCase(Locale.ROOT);
+        String merged = String.join(" ", lines);
+        if (merged.length() > MAX_KEYWORD_LENGTH) {
+            merged = merged.substring(merged.length() - MAX_KEYWORD_LENGTH);
+        }
+        return merged.toLowerCase(Locale.ROOT);
+    }
+
+    private int countUsableContext(List<String> context) {
+        return normalizeContextLines(context).size();
+    }
+
+    private List<String> normalizeContextLines(List<String> context) {
+        List<String> lines = new ArrayList<>();
+        if (context == null || context.isEmpty()) {
+            return lines;
+        }
+        Set<String> dedupe = new LinkedHashSet<>();
+        for (String item : context) {
+            String text = item == null ? "" : item.trim();
+            if (text.isEmpty()) {
+                continue;
+            }
+            String clipped = clipText(text, MAX_CONTEXT_ITEM_LENGTH);
+            String key = clipped.toLowerCase(Locale.ROOT);
+            if (!dedupe.add(key)) {
+                continue;
+            }
+            lines.add(clipped);
+            if (lines.size() >= MAX_CONTEXT_ITEMS) {
+                break;
+            }
+        }
+        return lines;
+    }
+
+    private String clipText(String text, int maxLen) {
+        if (text == null) {
+            return "";
+        }
+        if (text.length() <= maxLen) {
+            return text;
+        }
+        return text.substring(0, Math.max(0, maxLen));
     }
 
     private ArrayNode buildComponents(String keyword, int width, int height, String theme, IntentProfile intent) {

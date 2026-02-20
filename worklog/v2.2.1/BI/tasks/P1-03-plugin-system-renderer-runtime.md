@@ -85,6 +85,14 @@
 - 构建门禁接入（2026-02-19）：
   - 前端构建脚本新增 `prebuild`，自动执行 `validate:screen-plugins`；
   - 本地构建与 CI 默认具备插件清单校验，减少漏检概率。
+- 插件边界门禁补强（2026-02-20）：
+  - 新增 `validate:screen-plugin-boundary` 脚本，扫描 `plugins/custom/*.ts(x)` 导入边界；
+  - 校验相对导入不得逃逸 `src/pages/screens/plugins`，禁止直接引用 `pages/screens/components/*` 内核实现；
+  - `prebuild` 升级为“清单校验 + 边界校验”双门禁，降低插件反向耦合风险。
+- 清单与适配器一致性门禁（2026-02-20）：
+  - `validate-screen-plugin-manifests` 增加“manifest 组件是否存在本地适配器文件”告警；
+  - 约定映射：`pluginId:componentId` ↔ `plugins/custom/{pluginId}__{componentId}.tsx/.ts`；
+  - 降低“清单可见但运行时无渲染器”导致的现场空白组件风险。
 - 清单加载器运行时校验增强（2026-02-17）：
   - `manifestLoader` 增加远端/本地清单规范化：
     - 非法插件 ID/组件 ID/数据源 ID 直接跳过；

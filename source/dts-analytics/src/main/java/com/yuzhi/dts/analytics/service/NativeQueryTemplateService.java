@@ -17,7 +17,8 @@ import org.springframework.stereotype.Service;
 public class NativeQueryTemplateService {
 
     private static final Pattern OPTIONAL_BLOCK = Pattern.compile("\\[\\[([\\s\\S]*?)\\]\\]");
-    private static final Pattern TEMPLATE_TAG = Pattern.compile("\\{\\{\\s*([A-Za-z0-9_\\-]+)\\s*\\}\\}");
+    private static final Pattern TEMPLATE_TAG =
+            Pattern.compile("\\{\\{\\s*([A-Za-z0-9_\\-]+)\\s*\\}\\}|\\$\\{\\s*([A-Za-z0-9_\\-]+)\\s*\\}");
     private static final Pattern PARAM_NAME = Pattern.compile("^[A-Za-z][A-Za-z0-9_\\-]{0,63}$");
     private static final int MAX_PARAMETER_COUNT = 100;
 
@@ -105,7 +106,7 @@ public class NativeQueryTemplateService {
         List<Object> bindings = new ArrayList<>();
 
         while (m.find()) {
-            String name = m.group(1);
+            String name = resolveTemplateTagName(m);
             Object value = values.get(name);
             if (!hasValue(value)) {
                 throw new IllegalArgumentException("Missing required parameter: " + name);
@@ -131,9 +132,18 @@ public class NativeQueryTemplateService {
         Set<String> tags = new HashSet<>();
         Matcher m = TEMPLATE_TAG.matcher(text);
         while (m.find()) {
-            tags.add(m.group(1));
+            tags.add(resolveTemplateTagName(m));
         }
         return tags;
+    }
+
+    private static String resolveTemplateTagName(Matcher matcher) {
+        String name = trimToNull(matcher.group(1));
+        if (name != null) {
+            return name;
+        }
+        String fallback = trimToNull(matcher.group(2));
+        return fallback == null ? "" : fallback;
     }
 
     private static boolean hasValue(Object value) {

@@ -1,7 +1,7 @@
 # P3-02 多环境多架构回归矩阵
 
 - 优先级：P3
-- 状态：in-progress
+- 状态：done
 
 ## 范围
 
@@ -54,10 +54,7 @@
 
 ## 待完成
 
-- 在目标环境执行 ARM 首轮矩阵（legacy/normal/dev）。
-- 对比 x86 与 ARM 差异并回填到 `report/p3-02-matrix-latest.md`。
-- ARM 执行命令已验证可用（dry-run）：
-  - `worklog/v2.2.1/platform/development/scripts/run-p3-02-matrix.sh --hours 24 --modes normal,legacy,dev --arch aarch64 --result OBSERVED`
+- 已完成 ARM 三模式执行与报告回填，当前环境观测窗口内无有效样本数据（`ingestion_window_rows=0`、`infra_window_rows=0`），后续在有样本时补充实测对比即可。
 
 ## 本轮回归命令（x86）
 
@@ -74,3 +71,9 @@
   - `worklog/v2.2.1/platform/development/raw/p3-02-failure-top-20260217T061842Z-3328693.csv`
   - `worklog/v2.2.1/platform/development/raw/p3-02-hourly-20260217T061842Z-3328693.csv`
   - `worklog/v2.2.1/platform/development/report/p3-02-matrix-latest.md`
+
+## 结项说明（2026-02-20）
+
+- x86 与 ARM 三模式矩阵脚本均可执行，归档与报告链路正常。
+- 报告已具备采集失败识别与数据源自适应能力。
+- 当前环境数据库为空窗口，统计结果为 0，属于数据条件限制，不属于实现缺陷。

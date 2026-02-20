@@ -41,6 +41,32 @@ function parseVisibilityMatchValues(text: string): string[] {
         .slice(0, 200);
 }
 
+function extractSqlTemplateParameterNames(sql: string): string[] {
+    const text = String(sql ?? '');
+    if (!text.trim()) {
+        return [];
+    }
+    const names: string[] = [];
+    const seen = new Set<string>();
+    const patterns = [
+        /\{\{\s*([a-zA-Z][a-zA-Z0-9_-]{0,63})\s*\}\}/g,
+        /\$\{\s*([a-zA-Z][a-zA-Z0-9_-]{0,63})\s*\}/g,
+    ];
+    for (const pattern of patterns) {
+        let match: RegExpExecArray | null = null;
+        // eslint-disable-next-line no-cond-assign
+        while ((match = pattern.exec(text)) !== null) {
+            const name = String(match[1] ?? '').trim();
+            if (!name || seen.has(name)) {
+                continue;
+            }
+            seen.add(name);
+            names.push(name);
+        }
+    }
+    return names.slice(0, 200);
+}
+
 function resolveTabSwitcherOptionValues(raw: unknown): string[] {
     if (!Array.isArray(raw)) {
         return [];
@@ -491,6 +517,10 @@ export function PropertyPanel() {
                                 >
                                     <option value="equals">等于任一值</option>
                                     <option value="not-equals">不等于任一值</option>
+                                    <option value="contains">包含任一值</option>
+                                    <option value="not-contains">不包含任一值</option>
+                                    <option value="starts-with">前缀匹配任一值</option>
+                                    <option value="ends-with">后缀匹配任一值</option>
                                     <option value="empty">为空</option>
                                     <option value="not-empty">非空</option>
                                 </select>
@@ -2391,6 +2421,44 @@ function renderDataSourceConfig(
                         />
                     </div>
                     <div className="property-row">
+                        <label className="property-label">参数提取</label>
+                        <button
+                            type="button"
+                            className="header-btn"
+                            onClick={() => {
+                                const names = extractSqlTemplateParameterNames(sqlConfig?.query ?? '');
+                                if (names.length === 0) {
+                                    alert('未识别到 SQL 参数，占位符示例：{{day}} 或 ${day}');
+                                    return;
+                                }
+                                const previous = new Map(
+                                    (sqlBindings ?? []).map((item) => [String(item.name ?? '').trim(), item]),
+                                );
+                                const nextBindings: CardParameterBinding[] = names.map((name) => {
+                                    const exists = previous.get(name);
+                                    if (!exists) {
+                                        return {
+                                            name,
+                                            variableKey: '',
+                                            value: '',
+                                        };
+                                    }
+                                    return {
+                                        name,
+                                        variableKey: exists.variableKey ?? '',
+                                        value: exists.value ?? '',
+                                    };
+                                });
+                                updateSqlBindings(nextBindings);
+                            }}
+                        >
+                            从 SQL 提取参数
+                        </button>
+                    </div>
+                    <div style={{ fontSize: 11, color: '#94a3b8', marginTop: -2 }}>
+                        自动识别 &#123;&#123;param&#125;&#125; / $&#123;param&#125; 占位符并生成参数绑定。
+                    </div>
+                    <div className="property-row">
                         <label className="property-label">最大行数</label>
                         <input
                             type="number"
@@ -2934,6 +3002,7 @@ interface ColumnEntry {
     alias?: string;
     align?: 'left' | 'center' | 'right';
     width?: number;
+    wrap?: boolean;
     formatter?: 'auto' | 'string' | 'number' | 'percent' | 'date';
 }
 
@@ -3122,6 +3191,14 @@ function CardSourceColumnBindingsEditor({
                             </select>
                         </div>
                         <div className="property-row">
+                            <label className="property-label">自动换行</label>
+                            <input
+                                type="checkbox"
+                                checked={entry.wrap === true}
+                                onChange={(e) => updateColumn(index, { wrap: e.target.checked })}
+                            />
+                        </div>
+                        <div className="property-row">
                             <label className="property-label">列宽(%)</label>
                             <input
                                 type="number"
@@ -3174,7 +3251,7 @@ function ScrollBoardConfig({ component, onChange }: {
     // Read _sourceColumns persisted by ComponentRenderer (no separate API call)
     const sourceCols = config._sourceColumns as Array<{ name: string; displayName: string }> ?? [];
     const columns = config.columns as ColumnEntry[] | undefined;
-    const hasCardSource = dataSource?.type === 'card' && !!dataSource.cardConfig?.cardId;
+    const hasDynamicSource = resolveDataSourceType(dataSource as DataSourceConfig | undefined) !== 'static';
 
     // Static fallback: use config.header when no card data source
     const staticHeaders = config.header as string[] || [];
@@ -3225,14 +3302,14 @@ function ScrollBoardConfig({ component, onChange }: {
             </div>
 
             {/* Card 数据源: 等待列加载 */}
-            {hasCardSource && sourceCols.length === 0 && (
+            {hasDynamicSource && sourceCols.length === 0 && (
                 <div style={{ fontSize: 11, color: '#888', marginTop: 8, padding: '4px 0' }}>
                     等待数据源加载列信息…
                 </div>
             )}
 
             {/* Card 数据源: 动态列选择 */}
-            {hasCardSource && sourceCols.length > 0 && (
+            {hasDynamicSource && sourceCols.length > 0 && (
                 <CardSourceColumnBindingsEditor
                     title="显示列 (来自数据源)"
                     sourceCols={sourceCols}
@@ -3243,7 +3320,7 @@ function ScrollBoardConfig({ component, onChange }: {
             )}
 
             {/* 静态数据源: 按索引的表头别名 (保持向后兼容) */}
-            {!hasCardSource && staticHeaders.length > 0 && (
+            {!hasDynamicSource && staticHeaders.length > 0 && (
                 <>
                     <div style={{ fontSize: 11, color: '#888', marginTop: 8, marginBottom: 4 }}>
                         表头别名
@@ -3283,7 +3360,7 @@ function TableConfig({ component, onChange }: {
 
     const sourceCols = config._sourceColumns as Array<{ name: string; displayName: string }> ?? [];
     const columns = config.columns as ColumnEntry[] | undefined;
-    const hasCardSource = dataSource?.type === 'card' && !!dataSource.cardConfig?.cardId;
+    const hasDynamicSource = resolveDataSourceType(dataSource as DataSourceConfig | undefined) !== 'static';
 
     const staticHeaders = config.header as string[] || [];
     const columnAlias = config.columnAlias as Record<string, string> || {};
@@ -3408,13 +3485,13 @@ function TableConfig({ component, onChange }: {
                 支持按 `columnIndex`、`columnKey` 或 `columnTitle` 匹配列；建议优先使用 `columnKey` 以避免字段重排错位。
             </div>
 
-            {hasCardSource && sourceCols.length === 0 && (
+            {hasDynamicSource && sourceCols.length === 0 && (
                 <div style={{ fontSize: 11, color: '#888', marginTop: 8, padding: '4px 0' }}>
                     等待数据源加载列信息…
                 </div>
             )}
 
-            {hasCardSource && sourceCols.length > 0 && (
+            {hasDynamicSource && sourceCols.length > 0 && (
                 <CardSourceColumnBindingsEditor
                     title="字段绑定 (来自数据源)"
                     sourceCols={sourceCols}
@@ -3424,7 +3501,7 @@ function TableConfig({ component, onChange }: {
                 />
             )}
 
-            {!hasCardSource && staticHeaders.length > 0 && (
+            {!hasDynamicSource && staticHeaders.length > 0 && (
                 <>
                     <div style={{ fontSize: 11, color: '#888', marginTop: 8, marginBottom: 4 }}>
                         表头别名

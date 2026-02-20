@@ -75,3 +75,11 @@
   - `tab-switcher` 新增联动提效工具：
     - 一键将 Tab 选项分配到图表/表格组件显隐规则（批量写入 `visibilityRule*`）；
     - 一键清理该 Tab 变量下的显隐规则，便于快速回退。
+- 显隐规则匹配模式扩展（2026-02-20）：
+  - 新增 `contains/not-contains/starts-with/ends-with` 四种匹配模式；
+  - 属性面板与运行时规则解析同步升级，支持文本变量按包含/前后缀快速联动；
+  - 兼容既有 `equals/not-equals/empty/not-empty` 规则，不破坏旧屏稿行为。
+- 显隐规则前后端一致性校验（2026-02-20）：
+  - 前端 `specV2.validateScreenPayload` 增加 `visibilityMatchMode` 白名单校验与 `visibilityVariableKey` 必填校验；
+  - 后端 `ScreenSpecValidator` 增加同口径校验，防止绕过前端提交非法模式；
+  - 新增 `ScreenSpecValidatorTest` 覆盖“非法模式拒绝/合法 contains 模式通过”。

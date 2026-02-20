@@ -68,6 +68,63 @@ class QueryExecutionFacadeTest {
                 .hasMessageContaining("Multiple SQL statements are not allowed");
     }
 
+    @Test
+    void prepare_nativeDangerousKeywordInStringLiteral_allowed() throws Exception {
+        QueryExecutionFacade service = service();
+        JsonNode datasetQuery = objectMapper.readTree("""
+                {
+                  "database": 1,
+                  "type": "native",
+                  "native": { "query": "select 'drop table demo' as msg" }
+                }
+                """);
+
+        QueryExecutionFacade.PreparedQuery prepared =
+                service.prepare(datasetQuery, objectMapper.createObjectNode(), null, null);
+
+        assertThat(prepared.sql()).isEqualTo("select 'drop table demo' as msg");
+    }
+
+    @Test
+    void prepare_nativeTrailingSemicolonWithComment_allowed() throws Exception {
+        QueryExecutionFacade service = service();
+        JsonNode datasetQuery = objectMapper.readTree("""
+                {
+                  "database": 1,
+                  "type": "native",
+                  "native": { "query": "select 1; -- trailing terminator in comment context" }
+                }
+                """);
+
+        QueryExecutionFacade.PreparedQuery prepared =
+                service.prepare(datasetQuery, objectMapper.createObjectNode(), null, null);
+
+        assertThat(prepared.sql()).contains("select 1;");
+    }
+
+    @Test
+    void prepare_nativeDollarTemplateTag_renderedWithBindings() throws Exception {
+        QueryExecutionFacade service = service();
+        JsonNode datasetQuery = objectMapper.readTree("""
+                {
+                  "database": 1,
+                  "type": "native",
+                  "native": { "query": "select * from test_table where day = ${day}" }
+                }
+                """);
+        JsonNode requestBody = objectMapper.readTree("""
+                {
+                  "parameters": { "day": "2026-02-20" }
+                }
+                """);
+
+        QueryExecutionFacade.PreparedQuery prepared =
+                service.prepare(datasetQuery, requestBody, null, DatasetQueryService.DatasetConstraints.defaults());
+
+        assertThat(prepared.sql()).isEqualTo("select * from test_table where day = ?");
+        assertThat(prepared.bindings()).containsExactly("2026-02-20");
+    }
+
     private QueryExecutionFacade service() {
         NativeQueryTemplateService nativeQueryTemplateService = new NativeQueryTemplateService();
         return new QueryExecutionFacade(

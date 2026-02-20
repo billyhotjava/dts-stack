@@ -113,6 +113,23 @@ async function listManifestFiles(dir) {
         .sort();
 }
 
+async function listAdapterRuntimeKeys(dir) {
+    const entries = await readdir(dir, { withFileTypes: true });
+    const keys = new Set();
+    for (const entry of entries) {
+        if (!entry.isFile()) continue;
+        if (!(entry.name.endsWith('.tsx') || entry.name.endsWith('.ts'))) continue;
+        const stem = entry.name.replace(/\.(tsx|ts)$/i, '');
+        const parts = stem.split('__');
+        if (parts.length !== 2) continue;
+        const pluginId = parts[0]?.trim();
+        const componentId = parts[1]?.trim();
+        if (!pluginId || !componentId) continue;
+        keys.add(`${pluginId}:${componentId}`);
+    }
+    return keys;
+}
+
 async function loadJson(file) {
     const content = await readFile(file, 'utf8');
     return JSON.parse(content);
@@ -122,6 +139,7 @@ async function main() {
     const issues = [];
     const globalPluginIds = new Set();
     const globalComponentKeys = new Set();
+    const localAdapterKeys = await listAdapterRuntimeKeys(customManifestDir).catch(() => new Set());
     const files = await listManifestFiles(customManifestDir).catch(() => []);
     if (files.length === 0) {
         console.log('[screen-plugin:validate] no local manifest found under src/pages/screens/plugins/custom');
@@ -138,6 +156,24 @@ async function main() {
             }
             for (const manifest of manifests) {
                 validatePlugin(manifest, file, issues, globalPluginIds, globalComponentKeys);
+                const pluginId = String(manifest?.id ?? '').trim();
+                const components = asArray(manifest?.components);
+                if (!pluginId || components.length === 0) {
+                    continue;
+                }
+                for (const component of components) {
+                    const componentId = String(component?.id ?? '').trim();
+                    if (!componentId) continue;
+                    const runtimeKey = `${pluginId}:${componentId}`;
+                    if (!localAdapterKeys.has(runtimeKey)) {
+                        pushIssue(
+                            issues,
+                            'warning',
+                            file,
+                            `component "${runtimeKey}" has no local adapter file "${pluginId}__${componentId}.tsx/.ts"`,
+                        );
+                    }
+                }
             }
         } catch (error) {
             pushIssue(issues, 'error', file, `invalid json: ${error instanceof Error ? error.message : String(error)}`);

@@ -340,6 +340,7 @@ public class ScreenCollaborationResource {
         String componentId = trimToNull(body == null ? null : body.path("componentId").asText(null));
         boolean typing = body != null && body.path("typing").asBoolean(false);
         String clientType = trimToNull(body == null ? null : body.path("clientType").asText(null));
+        List<String> selectedIds = parseSelectedIds(body == null ? null : body.path("selectedIds"));
 
         PresenceState state = new PresenceState();
         state.sessionId = sessionId;
@@ -348,6 +349,10 @@ public class ScreenCollaborationResource {
         state.componentId = componentId;
         state.typing = typing;
         state.clientType = clientType;
+        state.selectedCount = selectedIds.size();
+        state.selectionPreview = selectedIds.isEmpty()
+                ? null
+                : String.join(",", selectedIds.subList(0, Math.min(selectedIds.size(), 3)));
         state.lastSeenAt = Instant.now();
         upsertPresence(screen.getId(), state);
         return ResponseEntity.ok(buildPresenceResponse(screen.getId(), safeTtlSeconds, sessionId));
@@ -718,6 +723,16 @@ public class ScreenCollaborationResource {
         } else {
             node.putNull("clientType");
         }
+        if (state.selectedCount != null) {
+            node.put("selectedCount", state.selectedCount);
+        } else {
+            node.putNull("selectedCount");
+        }
+        if (state.selectionPreview != null) {
+            node.put("selectionPreview", state.selectionPreview);
+        } else {
+            node.putNull("selectionPreview");
+        }
         node.putPOJO("lastSeenAt", state.lastSeenAt);
         long idleSeconds = 0L;
         if (state.lastSeenAt != null) {
@@ -735,7 +750,10 @@ public class ScreenCollaborationResource {
         }
         ConcurrentHashMap<String, PresenceState> screenMap =
                 SCREEN_PRESENCE.computeIfAbsent(screenId, key -> new ConcurrentHashMap<>());
+        Instant now = state.lastSeenAt == null ? Instant.now() : state.lastSeenAt;
+        prunePresence(screenMap, now, DEFAULT_PRESENCE_TTL_SECONDS);
         screenMap.put(state.sessionId, state);
+        trimPresenceSize(screenMap, PRESENCE_LIMIT_MAX * 2);
     }
 
     private void removePresence(Long screenId, String sessionId) {
@@ -768,6 +786,24 @@ public class ScreenCollaborationResource {
             if (idleSeconds > ttl) {
                 screenMap.remove(entry.getKey());
             }
+        }
+    }
+
+    private void trimPresenceSize(ConcurrentHashMap<String, PresenceState> screenMap, int maxSize) {
+        if (screenMap == null || screenMap.size() <= maxSize || maxSize <= 0) {
+            return;
+        }
+        List<Map.Entry<String, PresenceState>> entries = new ArrayList<>(screenMap.entrySet());
+        entries.sort(Comparator.comparing(
+                entry -> entry.getValue() == null ? null : entry.getValue().lastSeenAt,
+                Comparator.nullsFirst(Comparator.naturalOrder())));
+        int removeCount = Math.max(0, entries.size() - maxSize);
+        for (int i = 0; i < removeCount; i++) {
+            Map.Entry<String, PresenceState> entry = entries.get(i);
+            if (entry == null || entry.getKey() == null) {
+                continue;
+            }
+            screenMap.remove(entry.getKey());
         }
     }
 
@@ -928,6 +964,24 @@ public class ScreenCollaborationResource {
         return null;
     }
 
+    private List<String> parseSelectedIds(JsonNode selectedIdsNode) {
+        if (selectedIdsNode == null || !selectedIdsNode.isArray()) {
+            return List.of();
+        }
+        List<String> result = new ArrayList<>();
+        for (JsonNode item : selectedIdsNode) {
+            String value = trimToNull(item == null ? null : item.asText(null));
+            if (value == null) {
+                continue;
+            }
+            result.add(value);
+            if (result.size() >= 20) {
+                break;
+            }
+        }
+        return result;
+    }
+
     private ResponseEntity<String> unauthorized() {
         return ResponseEntity.status(401).contentType(MediaType.TEXT_PLAIN).body("Unauthenticated");
     }
@@ -967,6 +1021,8 @@ public class ScreenCollaborationResource {
         String componentId;
         boolean typing;
         String clientType;
+        Integer selectedCount;
+        String selectionPreview;
         Instant lastSeenAt;
     }
 }

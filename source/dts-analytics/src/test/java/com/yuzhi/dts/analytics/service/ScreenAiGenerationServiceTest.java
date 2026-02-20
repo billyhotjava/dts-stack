@@ -213,6 +213,37 @@ class ScreenAiGenerationServiceTest {
         assertThat(result.path("actions").toString()).contains("已移除 Tab 场景切换");
     }
 
+    @Test
+    void revise_suggestMode_marksAsNotApplied() {
+        ScreenAiGenerationService service = new ScreenAiGenerationService(objectMapper);
+        ObjectNode screenSpec = baseScreenSpec();
+        ((ArrayNode) screenSpec.path("components")).add(component("c-line", "line-chart"));
+
+        ObjectNode result = service.revise("改成柱状图并放大字体", screenSpec, List.of("上下文"), false);
+
+        assertThat(result.path("applyMode").asText("")).isEqualTo("suggest");
+        assertThat(result.path("applied").asBoolean(true)).isFalse();
+        assertThat(result.path("contextCount").asInt(0)).isEqualTo(1);
+        assertThat(result.path("usedContextCount").asInt(0)).isEqualTo(1);
+        assertThat(result.path("quality").path("warnings").toString()).contains("建议模式");
+    }
+
+    @Test
+    void revise_contextNormalization_reportsUsedContextCount() {
+        ScreenAiGenerationService service = new ScreenAiGenerationService(objectMapper);
+        ObjectNode screenSpec = baseScreenSpec();
+        List<String> context = List.of(
+                "   产线A 昨日总产量   ",
+                "产线A 昨日总产量",
+                "",
+                "设备告警按等级分布");
+
+        ObjectNode result = service.revise("放大字体", screenSpec, context, true);
+
+        assertThat(result.path("contextCount").asInt(0)).isEqualTo(4);
+        assertThat(result.path("usedContextCount").asInt(0)).isEqualTo(2);
+    }
+
     private ObjectNode baseScreenSpec() {
         ObjectNode screenSpec = objectMapper.createObjectNode();
         screenSpec.put("name", "AI 草稿");

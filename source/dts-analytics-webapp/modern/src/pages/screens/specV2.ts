@@ -23,6 +23,8 @@ const COMPONENT_TYPES = new Set<ScreenComponent['type']>([
     'markdown-text',
     'number-card',
     'progress-bar',
+    'tab-switcher',
+    'carousel',
     'countdown',
     'marquee',
     'shape',
@@ -41,6 +43,17 @@ const THEMES = new Set<ScreenTheme>(['legacy-dark', 'titanium', 'glacier']);
 const DATA_SOURCE_TYPES = new Set(['static', 'api', 'card', 'sql', 'dataset', 'metric', 'database']);
 const VARIABLE_TYPES = new Set(['string', 'number', 'date']);
 const VARIABLE_KEY_PATTERN = /^[A-Za-z_][A-Za-z0-9_:\.-]{0,63}$/;
+const VISIBILITY_MATCH_MODES = new Set([
+    'equals',
+    'not-equals',
+    'not-in',
+    'contains',
+    'not-contains',
+    'starts-with',
+    'ends-with',
+    'empty',
+    'not-empty',
+]);
 
 function asNumber(value: unknown, fallback: number, min?: number): number {
     const n = Number(value);
@@ -57,6 +70,38 @@ function asTrimmedString(value: unknown): string | undefined {
     if (typeof value !== 'string') return undefined;
     const out = value.trim();
     return out.length > 0 ? out : undefined;
+}
+
+function validateVisibilityRuleConfig(
+    config: Record<string, unknown> | undefined,
+    path: string,
+    errors: string[],
+) {
+    if (!config || typeof config !== 'object') {
+        return;
+    }
+    if (config.visibilityRuleEnabled !== true) {
+        return;
+    }
+    const variableKey = asTrimmedString(config.visibilityVariableKey);
+    if (!variableKey) {
+        errors.push(`${path}.config.visibilityVariableKey 不能为空`);
+    }
+    const mode = String(config.visibilityMatchMode ?? 'equals').trim().toLowerCase();
+    if (!VISIBILITY_MATCH_MODES.has(mode)) {
+        errors.push(`${path}.config.visibilityMatchMode 非法: ${mode}`);
+        return;
+    }
+    if (mode === 'empty' || mode === 'not-empty') {
+        return;
+    }
+    const values = config.visibilityMatchValues;
+    if (values === undefined || values === null) {
+        return;
+    }
+    if (Array.isArray(values) && values.length > 200) {
+        errors.push(`${path}.config.visibilityMatchValues 数量不能超过 200`);
+    }
 }
 
 function normalizeGlobalVariables(input: unknown): ScreenGlobalVariable[] {
@@ -281,6 +326,10 @@ export function validateScreenPayload(input: unknown): { errors: string[]; warni
                     errors.push(`${path}.dataSource.sourceType 非法: ${sourceType}`);
                 }
             }
+            const config = component.config && typeof component.config === 'object'
+                ? component.config as Record<string, unknown>
+                : undefined;
+            validateVisibilityRuleConfig(config, path, errors);
         });
     }
 

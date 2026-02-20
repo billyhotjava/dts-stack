@@ -22,6 +22,7 @@ export default function ScreensPage() {
     const [aiRefining, setAiRefining] = useState(false);
     const [aiCreating, setAiCreating] = useState(false);
     const [aiRefinePrompt, setAiRefinePrompt] = useState('');
+    const [aiRefineMode, setAiRefineMode] = useState<'apply' | 'suggest'>('apply');
     const [aiResult, setAiResult] = useState<ScreenAiGenerationResponse | null>(null);
     const [aiContextHistory, setAiContextHistory] = useState<string[]>([]);
 
@@ -50,6 +51,7 @@ export default function ScreensPage() {
     const handleOpenAiGenerator = () => {
         setAiPrompt('生成一个面向运营的周报大屏，包含趋势、结构占比、区域排名和明细表');
         setAiRefinePrompt('改成三列布局，增加区域筛选，切换为浅色商务风格，刷新30秒并放大字体');
+        setAiRefineMode('apply');
         setAiResult(null);
         setAiContextHistory([]);
         setShowAiGenerator(true);
@@ -151,10 +153,12 @@ export default function ScreensPage() {
                 prompt,
                 screenSpec: screenSpec as Record<string, unknown>,
                 context: aiContextHistory.slice(-8),
+                mode: aiRefineMode,
             });
             setAiResult(result);
             setAiContextHistory((prev) => {
-                const next = [...prev, `优化指令: ${prompt}`];
+                const modeLabel = aiRefineMode === 'suggest' ? '建议模式' : '应用模式';
+                const next = [...prev, `优化指令(${modeLabel}): ${prompt}`];
                 if (Array.isArray(result.actions) && result.actions.length > 0) {
                     next.push(`执行结果: ${result.actions.join('；')}`);
                 }
@@ -618,6 +622,18 @@ export default function ScreensPage() {
                                 onChange={(e) => setAiRefinePrompt(e.target.value)}
                                 placeholder="优化指令示例：改成三列布局，首图改成柱状图，切换为浅色主题，增加筛选器，加tab切换场景，移除tab切换，刷新30秒，放大字体"
                             />
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <label style={{ fontSize: 12, color: '#94a3b8', minWidth: 88 }}>优化模式</label>
+                                <select
+                                    className="property-input"
+                                    value={aiRefineMode}
+                                    onChange={(e) => setAiRefineMode(e.target.value === 'suggest' ? 'suggest' : 'apply')}
+                                    style={{ maxWidth: 180 }}
+                                >
+                                    <option value="apply">应用模式（默认）</option>
+                                    <option value="suggest">建议模式（不自动发布）</option>
+                                </select>
+                            </div>
                             {aiContextHistory.length > 0 && (
                                 <div className="ai-context-card">
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -646,6 +662,8 @@ export default function ScreensPage() {
                                         <div className="ai-result-item">组件数: {(aiResult.screenSpec.components || []).length}</div>
                                         <div className="ai-result-item">质量分: {aiResult.quality?.score ?? '-'}</div>
                                         <div className="ai-result-item">上下文条数: {aiResult.contextCount ?? 0}</div>
+                                        <div className="ai-result-item">有效上下文: {aiResult.usedContextCount ?? aiResult.contextCount ?? 0}</div>
+                                        <div className="ai-result-item">优化模式: {aiResult.applyMode || 'apply'}</div>
                                         <div className="ai-result-item">领域: {aiResult.intent?.domain || '-'}</div>
                                         <div className="ai-result-item">时间范围: {aiResult.intent?.timeRange || '-'}</div>
                                         <div className="ai-result-item">粒度: {aiResult.intent?.granularity || '-'}</div>
@@ -662,7 +680,7 @@ export default function ScreensPage() {
                                     )}
                                     {Array.isArray(aiResult.actions) && aiResult.actions.length > 0 && (
                                         <div style={{ marginTop: 10, fontSize: 12, color: '#38bdf8' }}>
-                                            已执行：{aiResult.actions.join('；')}
+                                            {aiResult.applyMode === 'suggest' ? '建议动作：' : '已执行：'}{aiResult.actions.join('；')}
                                         </div>
                                     )}
                                     {Array.isArray(aiResult.queryRecommendations) && aiResult.queryRecommendations.length > 0 && (

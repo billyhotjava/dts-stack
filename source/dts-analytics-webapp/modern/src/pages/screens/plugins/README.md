@@ -51,6 +51,7 @@ pnpm scaffold:screen-plugin -- --plugin-id demo-stat-pack --component-id line-pr
 
 ```bash
 pnpm validate:screen-plugins
+pnpm validate:screen-plugin-boundary
 ```
 
 该命令会校验 `plugins/custom/*.manifest.json`：
@@ -59,3 +60,9 @@ pnpm validate:screen-plugins
 - 插件版本 semver 格式
 - 运行时组件 ID 重复（`pluginId:componentId`）
 - 默认宽高缺失告警（`defaultWidth/defaultHeight`）
+- 本地 manifest 组件缺少对应适配器文件告警（`{pluginId}__{componentId}.tsx/.ts`）
+
+边界门禁会校验 `plugins/custom/*.ts(x)`：
+
+- 相对导入不得越过 `src/pages/screens/plugins` 目录边界；
+- 禁止直接引用 `pages/screens/components/*` 等编辑器/渲染器内部实现。

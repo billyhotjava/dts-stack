@@ -35,6 +35,8 @@ public class ScreenSpecValidator {
             "markdown-text",
             "number-card",
             "progress-bar",
+            "tab-switcher",
+            "carousel",
             "countdown",
             "marquee",
             "shape",
@@ -50,6 +52,16 @@ public class ScreenSpecValidator {
 
     private static final Set<String> DATA_SOURCE_TYPES = Set.of("static", "api", "card", "sql", "dataset", "metric", "database");
     private static final Set<String> VARIABLE_TYPES = Set.of("string", "number", "date");
+    private static final Set<String> VISIBILITY_MATCH_MODES = Set.of(
+            "equals",
+            "not-equals",
+            "not-in",
+            "contains",
+            "not-contains",
+            "starts-with",
+            "ends-with",
+            "empty",
+            "not-empty");
     private static final Pattern VARIABLE_KEY_PATTERN = Pattern.compile("^[A-Za-z_][A-Za-z0-9_:\\.-]{0,63}$");
 
     public ValidationResult validateForWrite(JsonNode payload) {
@@ -145,6 +157,7 @@ public class ScreenSpecValidator {
         validateNumberField(item.path("width"), path + ".width", true, errors);
         validateNumberField(item.path("height"), path + ".height", true, errors);
         validateDataSource(item.path("dataSource"), path + ".dataSource", errors);
+        validateVisibilityRule(item.path("config"), path + ".config", errors);
     }
 
     private void validateNumberField(JsonNode node, String path, boolean positiveOnly, List<String> errors) {
@@ -207,6 +220,32 @@ public class ScreenSpecValidator {
             if (!metricValid) {
                 errors.add(path + ".metricConfig.metricId/cardId is required for metric source");
             }
+        }
+    }
+
+    private void validateVisibilityRule(JsonNode configNode, String path, List<String> errors) {
+        if (configNode == null || !configNode.isObject()) {
+            return;
+        }
+        if (!configNode.path("visibilityRuleEnabled").asBoolean(false)) {
+            return;
+        }
+        String variableKey = trimToNull(configNode.path("visibilityVariableKey").asText(null));
+        if (variableKey == null) {
+            errors.add(path + ".visibilityVariableKey is required when visibilityRuleEnabled=true");
+        }
+        String mode = trimToNull(configNode.path("visibilityMatchMode").asText(null));
+        String normalizedMode = mode == null ? "equals" : mode.toLowerCase();
+        if (!VISIBILITY_MATCH_MODES.contains(normalizedMode)) {
+            errors.add(path + ".visibilityMatchMode is invalid: " + normalizedMode);
+            return;
+        }
+        if ("empty".equals(normalizedMode) || "not-empty".equals(normalizedMode)) {
+            return;
+        }
+        JsonNode matchValues = configNode.path("visibilityMatchValues");
+        if (matchValues.isArray() && matchValues.size() > 200) {
+            errors.add(path + ".visibilityMatchValues too many items (max 200)");
         }
     }
 

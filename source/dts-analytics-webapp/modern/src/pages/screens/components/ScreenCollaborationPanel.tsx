@@ -46,6 +46,7 @@ export function ScreenCollaborationPanel({
     const presenceSessionIdRef = useRef<string>(getOrCreatePresenceSessionId());
     const typingRef = useRef(false);
     const componentIdRef = useRef('');
+    const selectedIdsRef = useRef<string[]>([]);
 
     const presenceTtlSeconds = useMemo(
         () => Math.max(30, Math.min(Math.floor(refreshSeconds * 3), 180)),
@@ -178,6 +179,7 @@ export function ScreenCollaborationPanel({
                 componentId: componentIdRef.current || null,
                 typing: typingFlag,
                 clientType: 'web',
+                selectedIds: selectedIdsRef.current,
             }, presenceTtlSeconds);
             const safeRows = Array.isArray(data?.rows) ? data.rows : [];
             setPresenceRows(safeRows);
@@ -202,6 +204,17 @@ export function ScreenCollaborationPanel({
     useEffect(() => {
         componentIdRef.current = componentId;
     }, [componentId]);
+
+    useEffect(() => {
+        if (!Array.isArray(selectedIds)) {
+            selectedIdsRef.current = [];
+            return;
+        }
+        selectedIdsRef.current = selectedIds
+            .map((item) => String(item || '').trim())
+            .filter((item) => item.length > 0)
+            .slice(0, 20);
+    }, [selectedIds]);
 
     useEffect(() => {
         if (!open || !screenId) return;
@@ -534,9 +547,15 @@ export function ScreenCollaborationPanel({
                         const mine = !!item.mine;
                         const name = String(item.displayName || item.userId || '匿名');
                         const idle = Number.isFinite(item.idleSeconds as number) ? Number(item.idleSeconds) : 0;
+                        const selectedCount = Number.isFinite(item.selectedCount as number)
+                            ? Math.max(0, Number(item.selectedCount))
+                            : 0;
                         const target = item.componentId
                             ? (componentLabelMap.get(String(item.componentId)) || String(item.componentId))
                             : '全屏';
+                        const selectionText = selectedCount > 0
+                            ? `选中${selectedCount}`
+                            : (item.selectionPreview ? `选中:${String(item.selectionPreview)}` : '无选中');
                         return (
                             <span
                                 key={String(item.sessionId || `${name}-${target}`)}
@@ -552,7 +571,7 @@ export function ScreenCollaborationPanel({
                                     color: mine ? '#60a5fa' : 'inherit',
                                 }}
                             >
-                                {name}{mine ? '(我)' : ''}{item.typing ? ' 输入中' : ''} · {target} · {idle}s
+                                {name}{mine ? '(我)' : ''}{item.typing ? ' 输入中' : ''} · {target} · {selectionText} · {idle}s
                             </span>
                         );
                     })}

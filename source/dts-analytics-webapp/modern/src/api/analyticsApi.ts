@@ -288,12 +288,16 @@ export type ScreenAiRevisionRequest = {
 	prompt: string;
 	screenSpec: Record<string, unknown>;
 	context?: string[];
+	mode?: "apply" | "suggest";
 };
 
 export type ScreenAiGenerationResponse = {
 	engine?: string;
 	prompt?: string;
 	contextCount?: number;
+	usedContextCount?: number;
+	applyMode?: "apply" | "suggest" | string;
+	applied?: boolean;
 	intent?: {
 		domain?: string;
 		timeRange?: string;
@@ -651,6 +655,8 @@ export type ScreenCollaborationPresenceRow = {
 	componentId?: string | null;
 	typing?: boolean;
 	clientType?: string | null;
+	selectedCount?: number | null;
+	selectionPreview?: string | null;
 	lastSeenAt?: string | null;
 	idleSeconds?: number;
 	mine?: boolean;
@@ -1243,6 +1249,7 @@ export const analyticsApi = {
 			componentId?: string | null;
 			typing?: boolean;
 			clientType?: string;
+			selectedIds?: string[];
 		},
 		ttlSeconds = 45,
 	) =>

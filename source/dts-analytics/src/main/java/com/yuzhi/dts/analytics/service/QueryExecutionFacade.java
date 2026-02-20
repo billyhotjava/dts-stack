@@ -74,7 +74,7 @@ public class QueryExecutionFacade {
             JsonNode parametersNode = requestBody == null ? null : requestBody.get("parameters");
             if (parametersNode != null && !parametersNode.isNull() && !parametersNode.isMissingNode()) {
                 nativeQueryTemplateService.validateParameterWhitelist(sql, parametersNode);
-                if (sql.contains("{{")) {
+                if (sql.contains("{{") || sql.contains("${")) {
                     NativeQueryTemplateService.RenderedQuery rendered =
                             nativeQueryTemplateService.render(sql, parametersNode);
                     sql = rendered.sql();
@@ -123,10 +123,91 @@ public class QueryExecutionFacade {
     }
 
     private static String normalizeSql(String sql) {
-        String normalized = sql == null ? "" : sql.trim().toLowerCase(Locale.ROOT);
+        String normalized = stripSqlLiteralsAndComments(sql).trim().toLowerCase(Locale.ROOT);
         // Normalize whitespace and keep boundary spaces for safer keyword contains checks.
         normalized = normalized.replaceAll("\\s+", " ");
         return " " + normalized + " ";
+    }
+
+    /**
+     * Remove SQL comments and string/identifier literals before security keyword checks.
+     * This avoids false positives such as "drop" inside a text literal.
+     */
+    private static String stripSqlLiteralsAndComments(String sql) {
+        String text = sql == null ? "" : sql;
+        StringBuilder out = new StringBuilder(text.length());
+        boolean inSingleQuote = false;
+        boolean inDoubleQuote = false;
+        boolean inLineComment = false;
+        boolean inBlockComment = false;
+
+        for (int i = 0; i < text.length(); i++) {
+            char ch = text.charAt(i);
+            char next = i + 1 < text.length() ? text.charAt(i + 1) : '\0';
+
+            if (inLineComment) {
+                if (ch == '\n' || ch == '\r') {
+                    inLineComment = false;
+                    out.append(' ');
+                }
+                continue;
+            }
+            if (inBlockComment) {
+                if (ch == '*' && next == '/') {
+                    inBlockComment = false;
+                    i += 1;
+                    out.append(' ');
+                }
+                continue;
+            }
+            if (inSingleQuote) {
+                if (ch == '\'' && next == '\'') {
+                    i += 1;
+                    continue;
+                }
+                if (ch == '\'') {
+                    inSingleQuote = false;
+                    out.append(' ');
+                }
+                continue;
+            }
+            if (inDoubleQuote) {
+                if (ch == '"' && next == '"') {
+                    i += 1;
+                    continue;
+                }
+                if (ch == '"') {
+                    inDoubleQuote = false;
+                    out.append(' ');
+                }
+                continue;
+            }
+
+            if (ch == '-' && next == '-') {
+                inLineComment = true;
+                i += 1;
+                out.append(' ');
+                continue;
+            }
+            if (ch == '/' && next == '*') {
+                inBlockComment = true;
+                i += 1;
+                out.append(' ');
+                continue;
+            }
+            if (ch == '\'') {
+                inSingleQuote = true;
+                out.append(' ');
+                continue;
+            }
+            if (ch == '"') {
+                inDoubleQuote = true;
+                out.append(' ');
+                continue;
+            }
+            out.append(ch);
+        }
+        return out.toString();
     }
 
     private static boolean isReadOnlySql(String normalized) {

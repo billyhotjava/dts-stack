@@ -147,7 +147,9 @@ public class ScreenResource {
         String prompt = body == null ? null : trimToNull(body.path("prompt").asText(null));
         JsonNode screenSpec = body == null ? null : body.path("screenSpec");
         List<String> context = parseAiContext(body == null ? null : body.path("context"));
-        ObjectNode result = screenAiGenerationService.revise(prompt, screenSpec, context);
+        String mode = body == null ? null : trimToNull(body.path("mode").asText(null));
+        boolean applyChanges = mode == null || !"suggest".equalsIgnoreCase(mode);
+        ObjectNode result = screenAiGenerationService.revise(prompt, screenSpec, context, applyChanges);
         result.putPOJO("generatedBy", user.get().getId());
         result.putPOJO("generatedAt", Instant.now());
         return ResponseEntity.ok(result);
@@ -1975,7 +1977,10 @@ public class ScreenResource {
         for (JsonNode item : contextNode) {
             String text = trimToNull(item == null ? null : item.asText(null));
             if (text != null) {
-                out.add(text);
+                out.add(text.length() > 400 ? text.substring(0, 400) : text);
+                if (out.size() >= 24) {
+                    break;
+                }
             }
         }
         return out;

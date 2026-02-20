@@ -6,12 +6,13 @@
 	"scripts": {
 		"dev": "VITE_CACHE_DIR=.vite-cache vite --host 0.0.0.0 --port 3002 --strictPort --open=false",
 		"typecheck": "VITE_CACHE_DIR=.vite-cache tsc --noEmit",
-		"prebuild": "pnpm validate:screen-plugins",
+		"prebuild": "pnpm validate:screen-plugins && pnpm validate:screen-plugin-boundary",
 		"build": "LEGACY_BROWSER_BUILD=1 VITE_CACHE_DIR=.vite-cache vite build",
 		"build:modern": "LEGACY_BROWSER_BUILD=0 VITE_CACHE_DIR=.vite-cache vite build",
 		"preview": "vite preview --host 0.0.0.0 --port 3002 --strictPort",
 		"scaffold:screen-plugin": "node scripts/scaffold-screen-plugin.mjs",
-		"validate:screen-plugins": "node scripts/validate-screen-plugin-manifests.mjs"
+		"validate:screen-plugins": "node scripts/validate-screen-plugin-manifests.mjs",
+		"validate:screen-plugin-boundary": "node scripts/validate-screen-plugin-boundary.mjs"
 	},
 	"dependencies": {
 		"@jiaminghi/data-view-react": "^1.2.5",

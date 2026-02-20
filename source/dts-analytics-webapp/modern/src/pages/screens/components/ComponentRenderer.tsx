@@ -184,13 +184,31 @@ function resolveComponentVariableVisibility(config: Record<string, unknown>, val
     const variableKey = String(config.visibilityVariableKey ?? '').trim();
     if (!variableKey) return true;
     const current = String(values?.[variableKey] ?? '').trim();
+    const currentLower = current.toLowerCase();
     const mode = String(config.visibilityMatchMode ?? 'equals').trim().toLowerCase();
     const expectedValues = normalizeVisibilityMatchValues(
         config.visibilityMatchValues ?? config.visibilityMatchValue,
     );
+    const expectedLower = expectedValues.map((item) => item.toLowerCase());
     const matched = expectedValues.length > 0 && expectedValues.includes(current);
     if (mode === 'not-equals' || mode === 'not-in') {
         return expectedValues.length === 0 ? true : !matched;
+    }
+    if (mode === 'contains') {
+        if (expectedLower.length === 0) return true;
+        return expectedLower.some((item) => item.length > 0 && currentLower.includes(item));
+    }
+    if (mode === 'not-contains') {
+        if (expectedLower.length === 0) return true;
+        return expectedLower.every((item) => item.length === 0 || !currentLower.includes(item));
+    }
+    if (mode === 'starts-with') {
+        if (expectedLower.length === 0) return true;
+        return expectedLower.some((item) => item.length > 0 && currentLower.startsWith(item));
+    }
+    if (mode === 'ends-with') {
+        if (expectedLower.length === 0) return true;
+        return expectedLower.some((item) => item.length > 0 && currentLower.endsWith(item));
     }
     if (mode === 'empty') {
         return current.length === 0;
@@ -306,19 +324,61 @@ function escapeHtml(input: string): string {
 function renderMarkdownToHtml(input: string): string {
     const lines = input.replace(/\r\n/g, '\n').split('\n');
     const out: string[] = [];
-    let inList = false;
+    let listType: 'ul' | 'ol' | null = null;
+    let inCodeBlock = false;
+    let codeLines: string[] = [];
+
+    const renderInlineMarkdown = (text: string) => {
+        return escapeHtml(text)
+            .replace(/\[(.+?)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noreferrer">$1</a>')
+            .replace(/`([^`]+)`/g, '<code style="padding:1px 4px;border-radius:4px;background:rgba(148,163,184,0.18);">$1</code>')
+            .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+            .replace(/\*(.+?)\*/g, '<em>$1</em>');
+    };
+
     const closeList = () => {
-        if (inList) {
-            out.push('</ul>');
-            inList = false;
+        if (listType) {
+            out.push(listType === 'ul' ? '</ul>' : '</ol>');
+            listType = null;
         }
+    };
+
+    const flushCodeBlock = () => {
+        if (!inCodeBlock) return;
+        const code = escapeHtml(codeLines.join('\n'));
+        out.push(
+            '<pre style="margin:8px 0;padding:10px 12px;border-radius:6px;background:rgba(15,23,42,0.85);border:1px solid rgba(148,163,184,0.25);overflow:auto;">'
+            + `<code style="font-family:Consolas,Monaco,monospace;font-size:12px;line-height:1.5;">${code}</code>`
+            + '</pre>',
+        );
+        inCodeBlock = false;
+        codeLines = [];
     };
 
     for (const line of lines) {
         const raw = line.trim();
+        if (raw.startsWith('```')) {
+            closeList();
+            if (inCodeBlock) {
+                flushCodeBlock();
+            } else {
+                inCodeBlock = true;
+                codeLines = [];
+            }
+            continue;
+        }
+        if (inCodeBlock) {
+            codeLines.push(line);
+            continue;
+        }
         if (!raw) {
             closeList();
             out.push('<br/>');
+            continue;
+        }
+        if (raw === '---' || raw === '***') {
+            closeList();
+            out.push('<hr style="border:none;border-top:1px solid rgba(148,163,184,0.3);margin:10px 0;"/>');
             continue;
         }
         if (raw.startsWith('### ')) {
@@ -336,22 +396,40 @@ function renderMarkdownToHtml(input: string): string {
             out.push(`<h1>${escapeHtml(raw.slice(2))}</h1>`);
             continue;
         }
+        if (raw.startsWith('> ')) {
+            closeList();
+            out.push(
+                '<blockquote style="margin:8px 0;padding:6px 10px;border-left:3px solid rgba(59,130,246,0.65);background:rgba(59,130,246,0.08);">'
+                + `${renderInlineMarkdown(raw.slice(2))}`
+                + '</blockquote>',
+            );
+            continue;
+        }
         if (raw.startsWith('- ') || raw.startsWith('* ')) {
-            if (!inList) {
+            if (listType !== 'ul') {
+                closeList();
                 out.push('<ul>');
-                inList = true;
+                listType = 'ul';
             }
-            out.push(`<li>${escapeHtml(raw.slice(2))}</li>`);
+            out.push(`<li>${renderInlineMarkdown(raw.slice(2))}</li>`);
+            continue;
+        }
+        const orderedMatch = raw.match(/^(\d+)\.\s+(.+)$/);
+        if (orderedMatch) {
+            if (listType !== 'ol') {
+                closeList();
+                out.push('<ol>');
+                listType = 'ol';
+            }
+            out.push(`<li>${renderInlineMarkdown(orderedMatch[2])}</li>`);
             continue;
         }
         closeList();
-        const safe = escapeHtml(raw)
-            .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-            .replace(/\*(.+?)\*/g, '<em>$1</em>')
-            .replace(/\[(.+?)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noreferrer">$1</a>');
+        const safe = renderInlineMarkdown(raw);
         out.push(`<p>${safe}</p>`);
     }
     closeList();
+    flushCodeBlock();
     return out.join('');
 }
 
@@ -395,11 +473,24 @@ function resolveTableConditionalStyle(
         const operator = String(rule.operator || '').trim();
         const target = rule.value;
         const text = String(raw ?? '');
+        const textLower = text.toLowerCase();
+        const targetText = String(target ?? '');
+        const targetLower = targetText.toLowerCase();
         const nRaw = Number(raw);
         const nTarget = Number(target);
         let matched = false;
         if (operator === 'contains') {
-            matched = text.includes(String(target ?? ''));
+            matched = targetText.length > 0 && textLower.includes(targetLower);
+        } else if (operator === 'not-contains') {
+            matched = targetText.length === 0 || !textLower.includes(targetLower);
+        } else if (operator === 'starts-with') {
+            matched = targetText.length > 0 && textLower.startsWith(targetLower);
+        } else if (operator === 'ends-with') {
+            matched = targetText.length > 0 && textLower.endsWith(targetLower);
+        } else if (operator === 'empty') {
+            matched = text.trim().length === 0;
+        } else if (operator === 'not-empty') {
+            matched = text.trim().length > 0;
         } else if (Number.isFinite(nRaw) && Number.isFinite(nTarget)) {
             if (operator === '>') matched = nRaw > nTarget;
             if (operator === '>=') matched = nRaw >= nTarget;
@@ -431,6 +522,7 @@ interface ColumnEntry {
     alias?: string;
     align?: ColumnAlign;
     width?: number;
+    wrap?: boolean;
     formatter?: ColumnFormatter;
 }
 
@@ -445,6 +537,7 @@ interface ResolvedColumnMeta {
     title: string;
     align: ColumnAlign;
     width?: number;
+    wrap: boolean;
     formatter: ColumnFormatter;
     baseType?: string;
 }
@@ -626,6 +719,7 @@ function resolveBoundTableData(
                 title: col.alias || sc?.displayName || col.source,
                 align: normalizeColumnAlign(col.align, defaultAlign),
                 width: clampColumnWidth(col.width),
+                wrap: col.wrap === true,
                 formatter: normalizeColumnFormatter(col.formatter),
                 baseType: sc?.baseType,
             };
@@ -658,6 +752,7 @@ function resolveBoundTableData(
         key: String(idx),
         title,
         align: defaultAlign,
+        wrap: false,
         formatter: 'auto',
     }));
     const data = allData.map((row) =>
@@ -2311,9 +2406,12 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                                                 padding: '8px 10px',
                                                 textAlign: columnMeta[i]?.align || 'left',
                                                 fontWeight: 600,
-                                                whiteSpace: 'nowrap',
+                                                whiteSpace: columnMeta[i]?.wrap ? 'normal' : 'nowrap',
                                                 overflow: 'hidden',
-                                                textOverflow: 'ellipsis',
+                                                textOverflow: columnMeta[i]?.wrap ? undefined : 'ellipsis',
+                                                overflowWrap: columnMeta[i]?.wrap ? 'anywhere' : undefined,
+                                                wordBreak: columnMeta[i]?.wrap ? 'break-word' : undefined,
+                                                lineHeight: columnMeta[i]?.wrap ? 1.35 : undefined,
                                                 ...(freezeHeader ? { position: 'sticky', top: 0, zIndex: 3 } : {}),
                                                 ...(freezeFirstColumn && i === 0
                                                     ? {
@@ -2383,9 +2481,12 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                                                     borderRight: colIndex < displayHeader.length - 1 ? '1px solid ' + borderColor : 'none',
                                                     padding: '8px 10px',
                                                     textAlign: columnMeta[colIndex]?.align || 'left',
-                                                    whiteSpace: 'nowrap',
+                                                    whiteSpace: columnMeta[colIndex]?.wrap ? 'normal' : 'nowrap',
                                                     overflow: 'hidden',
-                                                    textOverflow: 'ellipsis',
+                                                    textOverflow: columnMeta[colIndex]?.wrap ? undefined : 'ellipsis',
+                                                    overflowWrap: columnMeta[colIndex]?.wrap ? 'anywhere' : undefined,
+                                                    wordBreak: columnMeta[colIndex]?.wrap ? 'break-word' : undefined,
+                                                    lineHeight: columnMeta[colIndex]?.wrap ? 1.35 : undefined,
                                                     ...(freezeFirstColumn && colIndex === 0
                                                         ? {
                                                             position: 'sticky',

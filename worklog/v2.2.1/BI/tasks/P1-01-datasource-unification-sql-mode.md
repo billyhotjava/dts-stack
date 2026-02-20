@@ -55,3 +55,16 @@
   - `useCardDataSource` 新增 `metric` 执行分支，统一调用 `queryCard + semantic`；
   - 补齐 `metric` 缓存键策略（含 `cardId/metricId/metricVersion/params/context`），避免不同口径混用缓存。
   - 修复运行时变量注入遗漏：`ComponentRenderer` 已将 `metricConfig.parameterBindings` 纳入参数解析链路，确保全局变量能正确传入语义查询。
+- SQL 参数编排提效（2026-02-20）：
+  - 属性面板 SQL 模式新增“从 SQL 提取参数”按钮；
+  - 自动识别 `{{param}}` / `${param}` 占位符并生成 `parameterBindings`，保留已配置变量绑定关系；
+  - 降低 SQL 模式手工维护参数名成本，减少参数漏配导致的查询失败。
+- SQL 安全校验精细化（2026-02-20）：
+  - `QueryExecutionFacade` 在危险关键字与多语句检测前，先剥离 SQL 字符串字面量与注释内容；
+  - 避免 `'drop table'` 等文本常量触发误拦截，同时保留对真实写操作/多语句注入的拦截；
+  - 新增回归测试覆盖“危险词在字符串内允许”“分号+注释尾允许”场景。
+- SQL 模板占位符一致性补齐（2026-02-20）：
+  - `NativeQueryTemplateService` 支持 `{{param}}` 与 `${param}` 双占位符；
+  - `QueryExecutionFacade` 渲染触发条件从仅 `{{` 扩展到 `${`，避免参数未渲染直接下发；
+  - 新增回归测试覆盖 `${day}` 渲染与绑定值传递。
+  - 前端 SQL 参数提取规则收敛为后端白名单命名规范（字母开头、`[A-Za-z0-9_-]`），减少“前端可提取但后端拒绝”的错配。
