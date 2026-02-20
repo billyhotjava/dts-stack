@@ -45,6 +45,9 @@
 - 已补 `collect_failed` 诊断增强：
   - 报告渲染会显式标记 `failure_collect_failed` / `hourly_collect_failed`
   - 采集失败时保留 `*.err` 文件，便于定位 SQL/权限问题
+- 已补采集源兜底：
+  - 首选 `ingestion_execution`
+  - 若不存在则自动回退到 `infra_external_run_log` 进行小时统计与失败分类
 
 ## 待完成
 

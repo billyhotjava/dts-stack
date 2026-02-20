@@ -130,6 +130,13 @@ query_scalar_via_docker() {
     psql -U "${PG_USER}" -d "${PG_DB}" -v ON_ERROR_STOP=1 -At -c "${sql}"
 }
 
+table_exists() {
+  local table_name="$1"
+  local exists
+  exists="$(query_scalar_via_docker "SELECT CASE WHEN EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='${table_name}') THEN 1 ELSE 0 END" || echo 0)"
+  [[ "${exists}" == "1" ]]
+}
+
 safe_query_csv() {
   local sql="$1"
   local outfile="$2"
@@ -147,6 +154,23 @@ safe_query_csv() {
 HOURLY_CSV="${RAW_DIR}/hourly-metrics-${RUN_AT}.csv"
 FAILURE_CSV="${RAW_DIR}/failure-top-${RUN_AT}.csv"
 
+HAS_INGESTION_EXECUTION=0
+HAS_INFRA_RUN_LOG=0
+if table_exists "ingestion_execution"; then
+  HAS_INGESTION_EXECUTION=1
+fi
+if table_exists "infra_external_run_log"; then
+  HAS_INFRA_RUN_LOG=1
+fi
+
+METRIC_SOURCE_TABLE="unavailable"
+if [[ "${HAS_INGESTION_EXECUTION}" == "1" ]]; then
+  METRIC_SOURCE_TABLE="ingestion_execution"
+elif [[ "${HAS_INFRA_RUN_LOG}" == "1" ]]; then
+  METRIC_SOURCE_TABLE="infra_external_run_log"
+fi
+
+if [[ "${METRIC_SOURCE_TABLE}" == "ingestion_execution" ]]; then
 HOURLY_SQL="
 SELECT
   to_char(date_trunc('hour', created_at AT TIME ZONE '${TZ_NAME}'), 'YYYY-MM-DD HH24:00') AS hour_slot,
@@ -190,9 +214,54 @@ WHERE created_at >= TIMESTAMPTZ '${START_UTC}'
 GROUP BY 1
 "
 fi
+elif [[ "${METRIC_SOURCE_TABLE}" == "infra_external_run_log" ]]; then
+HOURLY_SQL="
+SELECT
+  to_char(date_trunc('hour', COALESCE(started_at, finished_at) AT TIME ZONE '${TZ_NAME}'), 'YYYY-MM-DD HH24:00') AS hour_slot,
+  COUNT(*) AS total,
+  SUM(CASE WHEN lower(coalesce(status,'')) IN ('success','succeeded','finished') THEN 1 ELSE 0 END) AS success,
+  SUM(CASE WHEN lower(coalesce(status,'')) IN ('failed','fail','error','timeout','killed','cancelled') THEN 1 ELSE 0 END) AS failed,
+  ROUND(AVG((COALESCE(duration_ms, 0)::numeric) / 1000), 2) AS avg_seconds,
+  ROUND(PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY (COALESCE(duration_ms, 0)::numeric) / 1000), 2) AS p95_seconds
+FROM infra_external_run_log
+WHERE COALESCE(started_at, finished_at) >= TIMESTAMPTZ '${START_UTC}'
+  AND upper(coalesce(entry_key,'')) IN ('INGESTION_TASK','AIRFLOW_DAG','DBT_RUN')
+GROUP BY 1
+ORDER BY 1
+"
 
-safe_query_csv "${HOURLY_SQL}" "${HOURLY_CSV}"
-safe_query_csv "${FAILURE_SQL}" "${FAILURE_CSV}"
+HAS_FAILURE_CATEGORY=0
+FAILURE_SQL="
+SELECT
+  COALESCE(NULLIF(TRIM(upper(status)), ''), 'UNCLASSIFIED') AS failure_category,
+  COUNT(*) AS failed_count
+FROM infra_external_run_log
+WHERE COALESCE(started_at, finished_at) >= TIMESTAMPTZ '${START_UTC}'
+  AND lower(coalesce(status,'')) IN ('failed','fail','error','timeout','killed','cancelled')
+  AND upper(coalesce(entry_key,'')) IN ('INGESTION_TASK','AIRFLOW_DAG','DBT_RUN')
+GROUP BY 1
+ORDER BY failed_count DESC, failure_category ASC
+LIMIT 20
+"
+else
+HAS_FAILURE_CATEGORY=0
+HOURLY_SQL=""
+FAILURE_SQL=""
+fi
+
+if [[ -n "${HOURLY_SQL}" ]]; then
+  safe_query_csv "${HOURLY_SQL}" "${HOURLY_CSV}"
+else
+  printf "message\ncollect_failed\n" > "${HOURLY_CSV}"
+  echo "missing_source_table=ingestion_execution|infra_external_run_log" > "${HOURLY_CSV}.err"
+fi
+
+if [[ -n "${FAILURE_SQL}" ]]; then
+  safe_query_csv "${FAILURE_SQL}" "${FAILURE_CSV}"
+else
+  printf "message\ncollect_failed\n" > "${FAILURE_CSV}"
+  echo "missing_source_table=ingestion_execution|infra_external_run_log" > "${FAILURE_CSV}.err"
+fi
 
 HOURLY_COLLECT_FAILED=0
 FAILURE_COLLECT_FAILED=0
@@ -222,6 +291,7 @@ SUMMARY_TXT="${RAW_DIR}/summary-${RUN_AT}.txt"
   echo "arch_override_allowed=${ALLOW_ARCH_OVERRIDE}"
   echo "pg_container=${PG_CONTAINER:-N/A}"
   echo "ingestion_container=${INGESTION_CONTAINER:-N/A}"
+  echo "metric_source_table=${METRIC_SOURCE_TABLE}"
   echo "has_failure_category=${HAS_FAILURE_CATEGORY}"
   echo "dag_404_count=${DAG_404_COUNT}"
   echo "tasklog_404_count=${TASKLOG_404_COUNT}"
