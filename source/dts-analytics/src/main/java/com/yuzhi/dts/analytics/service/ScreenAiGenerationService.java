@@ -74,7 +74,9 @@ public class ScreenAiGenerationService {
         result.put("engine", "heuristic-v1");
         result.put("prompt", normalizedPrompt);
         result.set("intent", toIntentNode(intent));
+        result.set("semanticModelHints", buildSemanticModelHints(intent));
         result.set("queryRecommendations", buildQueryRecommendations(intent));
+        result.set("sqlBlueprints", buildSqlBlueprints(intent));
         result.set("vizRecommendations", buildVizRecommendations(intent));
         result.set("screenSpec", screenSpec);
         result.set("quality", quality);
@@ -229,7 +231,9 @@ public class ScreenAiGenerationService {
         result.put("applyMode", applyChanges ? "apply" : "suggest");
         result.put("applied", applyChanges);
         result.set("intent", toIntentNode(intent));
+        result.set("semanticModelHints", buildSemanticModelHints(intent));
         result.set("queryRecommendations", buildQueryRecommendations(intent));
+        result.set("sqlBlueprints", buildSqlBlueprints(intent));
         result.set("vizRecommendations", buildVizRecommendations(intent));
         result.set("screenSpec", screenSpec);
         result.set("quality", quality);
@@ -1158,47 +1162,189 @@ public class ScreenAiGenerationService {
 
     private ArrayNode buildQueryRecommendations(IntentProfile intent) {
         ArrayNode queries = objectMapper.createArrayNode();
+        String factTable = resolveFactTable(intent);
+        String timeField = resolveTimeField(intent);
         queries.add(queryRec(
                 "q-kpi",
                 "kpi-summary",
                 intent,
-                List.of("sum(" + intent.metrics().get(0) + ")", "sum(" + intent.metrics().get(1) + ")")));
+                List.of("sum(" + intent.metrics().get(0) + ")", "sum(" + intent.metrics().get(1) + ")"),
+                factTable,
+                timeField));
         queries.add(queryRec(
                 "q-trend",
                 "trend",
                 intent,
-                List.of(intent.metrics().get(0), intent.metrics().get(1))));
+                List.of(intent.metrics().get(0), intent.metrics().get(1)),
+                factTable,
+                timeField));
         queries.add(queryRec(
                 "q-compare",
                 "compare",
                 intent,
-                List.of(intent.metrics().get(0))));
+                List.of(intent.metrics().get(0)),
+                factTable,
+                timeField));
         queries.add(queryRec(
                 "q-share",
                 "share",
                 intent,
-                List.of(intent.metrics().get(0))));
+                List.of(intent.metrics().get(0)),
+                factTable,
+                timeField));
         queries.add(queryRec(
                 "q-detail",
                 "detail",
                 intent,
-                intent.metrics().subList(0, Math.min(3, intent.metrics().size()))));
+                intent.metrics().subList(0, Math.min(3, intent.metrics().size())),
+                factTable,
+                timeField));
         return queries;
     }
 
-    private ObjectNode queryRec(String id, String purpose, IntentProfile intent, List<String> metricExpr) {
+    private ObjectNode queryRec(
+            String id,
+            String purpose,
+            IntentProfile intent,
+            List<String> metricExpr,
+            String factTable,
+            String timeField) {
         ObjectNode node = objectMapper.createObjectNode();
         node.put("id", id);
         node.put("purpose", purpose);
         node.put("mode", "semantic-suggested");
+        node.put("semanticLayer", "heuristic");
         node.put("domain", intent.domain());
         node.put("timeRange", intent.timeRange());
         node.put("granularity", intent.granularity());
+        node.put("factTable", factTable);
+        node.put("timeField", timeField);
         node.putPOJO("dimensions", intent.dimensions());
         node.putPOJO("metrics", metricExpr);
         node.putPOJO("filters", intent.filters());
-        node.put("sqlHint", "SELECT ... FROM fact_table WHERE ${date_range} GROUP BY ...");
+        node.put("sqlHint", buildSqlTemplate(purpose, metricExpr, intent, factTable, timeField));
         return node;
+    }
+
+    private ObjectNode buildSemanticModelHints(IntentProfile intent) {
+        ObjectNode hints = objectMapper.createObjectNode();
+        String factTable = resolveFactTable(intent);
+        String timeField = resolveTimeField(intent);
+        hints.put("domain", intent.domain());
+        hints.put("factTable", factTable);
+        hints.put("timeField", timeField);
+        hints.putPOJO("dimensions", intent.dimensions());
+
+        ArrayNode metricMappings = objectMapper.createArrayNode();
+        for (String metric : intent.metrics()) {
+            ObjectNode metricNode = objectMapper.createObjectNode();
+            metricNode.put("name", metric);
+            metricNode.put("expression", inferMetricExpression(metric));
+            metricMappings.add(metricNode);
+        }
+        hints.set("metricMappings", metricMappings);
+        return hints;
+    }
+
+    private ArrayNode buildSqlBlueprints(IntentProfile intent) {
+        ArrayNode blueprints = objectMapper.createArrayNode();
+        ArrayNode queryRecommendations = buildQueryRecommendations(intent);
+        for (JsonNode item : queryRecommendations) {
+            if (item == null || !item.isObject()) {
+                continue;
+            }
+            ObjectNode node = objectMapper.createObjectNode();
+            node.put("queryId", item.path("id").asText(""));
+            node.put("purpose", item.path("purpose").asText(""));
+            node.put("sql", item.path("sqlHint").asText(""));
+            node.put("factTable", item.path("factTable").asText(""));
+            node.put("timeField", item.path("timeField").asText(""));
+            blueprints.add(node);
+        }
+        return blueprints;
+    }
+
+    private String resolveFactTable(IntentProfile intent) {
+        return switch (intent.domain()) {
+            case "manufacturing" -> "fact_manufacturing_event";
+            case "sales" -> "fact_sales_order";
+            case "energy" -> "fact_energy_consumption";
+            default -> "fact_operation_event";
+        };
+    }
+
+    private String resolveTimeField(IntentProfile intent) {
+        return switch (intent.granularity()) {
+            case "hour" -> "event_hour";
+            case "week" -> "event_week";
+            case "month" -> "event_month";
+            default -> "event_date";
+        };
+    }
+
+    private String inferMetricExpression(String metric) {
+        String value = metric == null ? "" : metric.toLowerCase(Locale.ROOT);
+        if (containsAny(value, "率", "占比", "比率", "转化")) {
+            return "avg(" + metric + ")";
+        }
+        if (containsAny(value, "时长", "耗时", "分钟", "小时")) {
+            return "sum(" + metric + ")";
+        }
+        if (containsAny(value, "量", "数", "次数", "订单", "告警", "产量", "能耗")) {
+            return "sum(" + metric + ")";
+        }
+        return "sum(" + metric + ")";
+    }
+
+    private String buildSqlTemplate(
+            String purpose,
+            List<String> metricExpr,
+            IntentProfile intent,
+            String factTable,
+            String timeField) {
+        List<String> dimensions = intent.dimensions().isEmpty() ? List.of(timeField) : intent.dimensions();
+        String dimension = dimensions.get(0);
+        String metricPart = metricExpr == null || metricExpr.isEmpty()
+                ? "count(*) as value"
+                : metricExpr.stream()
+                        .map(expr -> expr + " as " + sanitizeAlias(expr))
+                        .collect(java.util.stream.Collectors.joining(", "));
+        String where = "WHERE ${date_range} AND ${filters}";
+        if ("detail".equals(purpose)) {
+            return "SELECT " + String.join(", ", dimensions) + ", " + metricPart + " FROM " + factTable + " "
+                    + where + " ORDER BY " + timeField + " DESC LIMIT 500";
+        }
+        if ("share".equals(purpose)) {
+            return "SELECT " + dimension + ", " + metricPart + " FROM " + factTable + " " + where
+                    + " GROUP BY " + dimension + " ORDER BY 2 DESC";
+        }
+        if ("compare".equals(purpose)) {
+            return "SELECT " + dimension + ", " + metricPart + " FROM " + factTable + " " + where
+                    + " GROUP BY " + dimension + " ORDER BY 2 DESC LIMIT 20";
+        }
+        if ("trend".equals(purpose)) {
+            return "SELECT " + timeField + ", " + metricPart + " FROM " + factTable + " " + where
+                    + " GROUP BY " + timeField + " ORDER BY " + timeField;
+        }
+        return "SELECT " + metricPart + " FROM " + factTable + " " + where;
+    }
+
+    private String sanitizeAlias(String expr) {
+        String text = expr == null ? "metric" : expr.toLowerCase(Locale.ROOT);
+        StringBuilder out = new StringBuilder();
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if ((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9')) {
+                out.append(c);
+            } else if (out.length() > 0 && out.charAt(out.length() - 1) != '_') {
+                out.append('_');
+            }
+            if (out.length() >= 32) {
+                break;
+            }
+        }
+        String alias = out.toString().replaceAll("^_+|_+$", "");
+        return alias.isBlank() ? "metric" : alias;
     }
 
     private ArrayNode buildVizRecommendations(IntentProfile intent) {

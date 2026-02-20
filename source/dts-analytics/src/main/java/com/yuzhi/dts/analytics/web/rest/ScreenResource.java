@@ -18,6 +18,7 @@ import com.yuzhi.dts.analytics.service.ScreenEditLockService;
 import com.yuzhi.dts.analytics.service.ScreenWarmupService;
 import com.yuzhi.dts.analytics.service.ScreenAiGenerationService;
 import com.yuzhi.dts.analytics.service.ScreenComplianceService;
+import com.yuzhi.dts.analytics.service.ScreenServerRenderExportService;
 import com.yuzhi.dts.analytics.service.ScreenSpecValidator;
 import com.yuzhi.dts.analytics.web.support.MetabaseAuth;
 import com.yuzhi.dts.analytics.web.support.PlatformContext;
@@ -36,6 +37,7 @@ import java.util.Optional;
 import java.util.Set;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpHeaders;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -66,6 +68,7 @@ public class ScreenResource {
     private final ScreenWarmupService screenWarmupService;
     private final ScreenAiGenerationService screenAiGenerationService;
     private final ScreenComplianceService screenComplianceService;
+    private final ScreenServerRenderExportService screenServerRenderExportService;
     private final ScreenSpecValidator screenSpecValidator;
     private final PublicLinkService publicLinkService;
     private final ObjectMapper objectMapper;
@@ -80,6 +83,7 @@ public class ScreenResource {
             ScreenWarmupService screenWarmupService,
             ScreenAiGenerationService screenAiGenerationService,
             ScreenComplianceService screenComplianceService,
+            ScreenServerRenderExportService screenServerRenderExportService,
             ScreenSpecValidator screenSpecValidator,
             PublicLinkService publicLinkService,
             ObjectMapper objectMapper) {
@@ -92,6 +96,7 @@ public class ScreenResource {
         this.screenWarmupService = screenWarmupService;
         this.screenAiGenerationService = screenAiGenerationService;
         this.screenComplianceService = screenComplianceService;
+        this.screenServerRenderExportService = screenServerRenderExportService;
         this.screenSpecValidator = screenSpecValidator;
         this.publicLinkService = publicLinkService;
         this.objectMapper = objectMapper;
@@ -557,6 +562,128 @@ public class ScreenResource {
         };
         screenAuditService.log(screen.getId(), user.get().getId(), action, null, payload, requestId);
         return ResponseEntity.ok(payload);
+    }
+
+    @PostMapping(path = "/{id}/export-render", consumes = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> renderExport(
+            @PathVariable("id") long id,
+            @RequestBody(required = false) JsonNode body,
+            HttpServletRequest request) {
+        Optional<AnalyticsUser> user = MetabaseAuth.currentUser(sessionService, request);
+        if (user.isEmpty()) {
+            return unauthorized();
+        }
+
+        AnalyticsScreen screen = screenRepository.findById(id).orElse(null);
+        if (screen == null || screen.isArchived()) {
+            return ResponseEntity.notFound().build();
+        }
+
+        PlatformContext context = PlatformContext.from(request);
+        ScreenAclService.PermissionSnapshot permissions = screenAclService.snapshot(screen, user.get(), context);
+        if (!permissions.canRead()) {
+            return forbidden();
+        }
+
+        String requestId = requestIdFrom(request);
+        String format = trimToNull(body == null ? null : body.path("format").asText(null));
+        if (format == null) {
+            format = "png";
+        }
+        format = format.toLowerCase();
+        if (!("png".equals(format) || "pdf".equals(format))) {
+            format = "png";
+        }
+        String mode = trimToNull(body == null ? null : body.path("mode").asText(null));
+        if (mode == null) {
+            mode = "draft";
+        }
+        mode = mode.toLowerCase();
+        if (!("draft".equals(mode) || "published".equals(mode) || "preview".equals(mode))) {
+            mode = "draft";
+        }
+        String resolvedMode = mode;
+        AnalyticsScreenVersion publishedVersion =
+                screenVersionRepository.findFirstByScreenIdAndCurrentPublishedTrue(screen.getId()).orElse(null);
+        AnalyticsScreenVersion effectiveVersion = null;
+        if ("published".equals(mode) || "preview".equals(mode)) {
+            if (publishedVersion != null) {
+                effectiveVersion = publishedVersion;
+                resolvedMode = "published";
+            } else {
+                resolvedMode = "draft";
+            }
+        }
+
+        ObjectNode policy = screenComplianceService.currentPolicy();
+        boolean exportApprovalRequired = policy.path("exportApprovalRequired").asBoolean(false);
+        if (exportApprovalRequired && !permissions.canManage()) {
+            ObjectNode denied = objectMapper.createObjectNode();
+            denied.put("code", "SCREEN_EXPORT_APPROVAL_REQUIRED");
+            denied.put("retryable", false);
+            denied.put("requestId", requestId);
+            denied.put("message", "当前大屏导出受合规策略限制，需要管理员审批后再导出");
+            denied.put("screenId", screen.getId());
+            denied.put("format", format);
+            denied.put("mode", mode);
+            screenAuditService.log(screen.getId(), user.get().getId(), "screen.export.denied", null, denied, requestId);
+            return ResponseEntity.status(403)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .header("X-Error-Code", "SCREEN_EXPORT_APPROVAL_REQUIRED")
+                    .header("X-Error-Retryable", "false")
+                    .body(denied);
+        }
+
+        JsonNode incomingSpec = body == null ? null : body.path("screenSpec");
+        ObjectNode screenSpec;
+        if (incomingSpec != null && incomingSpec.isObject()) {
+            screenSpec = ((ObjectNode) incomingSpec).deepCopy();
+        } else {
+            screenSpec = buildExportScreenSpec(screen, effectiveVersion);
+        }
+        String specDigest = computeSpecDigest(screenSpec);
+        boolean watermarkEnabled = policy.path("watermarkEnabled").asBoolean(false);
+        String watermarkText = policy.path("watermarkText").asText("");
+
+        try {
+            byte[] bytes = "pdf".equals(format)
+                    ? screenServerRenderExportService.renderPdf(screenSpec, watermarkEnabled, watermarkText)
+                    : screenServerRenderExportService.renderPng(screenSpec, watermarkEnabled, watermarkText);
+            String ext = "pdf".equals(format) ? "pdf" : "png";
+            String fileName = "screen-" + screen.getId() + "-" + resolvedMode + "." + ext;
+            MediaType contentType = "pdf".equals(format) ? MediaType.APPLICATION_PDF : MediaType.IMAGE_PNG;
+
+            ObjectNode auditPayload = objectMapper.createObjectNode();
+            auditPayload.put("screenId", screen.getId());
+            auditPayload.put("requestId", requestId);
+            auditPayload.put("format", format);
+            auditPayload.put("mode", mode);
+            auditPayload.put("resolvedMode", resolvedMode);
+            auditPayload.put("byteSize", bytes.length);
+            auditPayload.put("specDigest", specDigest);
+            auditPayload.put("watermarkEnabled", watermarkEnabled);
+            screenAuditService.log(screen.getId(), user.get().getId(), "screen.export.server.render", null, auditPayload, requestId);
+
+            return ResponseEntity.ok()
+                    .contentType(contentType)
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + fileName + "\"")
+                    .header("X-Request-Id", requestId == null ? "" : requestId)
+                    .header("X-Screen-Spec-Digest", specDigest == null ? "" : specDigest)
+                    .header("X-Screen-Resolved-Mode", resolvedMode)
+                    .header("X-Screen-Render-Engine", "server-heuristic-v1")
+                    .body(bytes);
+        } catch (Exception ex) {
+            ObjectNode failure = objectMapper.createObjectNode();
+            failure.put("code", "SCREEN_EXPORT_SERVER_RENDER_FAILED");
+            failure.put("requestId", requestId);
+            failure.put("message", ex.getMessage() == null ? "服务端渲染导出失败" : ex.getMessage());
+            failure.put("format", format);
+            failure.put("mode", mode);
+            failure.put("resolvedMode", resolvedMode);
+            failure.put("specDigest", specDigest);
+            screenAuditService.log(screen.getId(), user.get().getId(), "screen.export.server.render.failed", null, failure, requestId);
+            return ResponseEntity.internalServerError().contentType(MediaType.APPLICATION_JSON).body(failure);
+        }
     }
 
     @GetMapping(path = "/{id}/acl", produces = MediaType.APPLICATION_JSON_VALUE)

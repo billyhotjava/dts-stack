@@ -244,6 +244,25 @@ class ScreenAiGenerationServiceTest {
         assertThat(result.path("usedContextCount").asInt(0)).isEqualTo(2);
     }
 
+    @Test
+    void generate_salesPrompt_outputsSemanticHintsAndSqlBlueprints() {
+        ScreenAiGenerationService service = new ScreenAiGenerationService(objectMapper);
+        ObjectNode result = service.generate("生成销售分析大屏，关注订单量和转化率，按月趋势分析", 1920, 1080);
+
+        JsonNode semanticHints = result.path("semanticModelHints");
+        assertThat(semanticHints.path("domain").asText("")).isEqualTo("sales");
+        assertThat(semanticHints.path("factTable").asText("")).isEqualTo("fact_sales_order");
+        assertThat(semanticHints.path("timeField").asText("")).isEqualTo("event_month");
+        assertThat(semanticHints.path("metricMappings").isArray()).isTrue();
+        assertThat(semanticHints.path("metricMappings").size()).isGreaterThan(0);
+
+        JsonNode blueprints = result.path("sqlBlueprints");
+        assertThat(blueprints.isArray()).isTrue();
+        assertThat(blueprints.size()).isGreaterThanOrEqualTo(5);
+        assertThat(blueprints.toString()).contains("fact_sales_order");
+        assertThat(blueprints.toString()).contains("${date_range}");
+    }
+
     private ObjectNode baseScreenSpec() {
         ObjectNode screenSpec = objectMapper.createObjectNode();
         screenSpec.put("name", "AI 草稿");
