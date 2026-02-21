@@ -7,6 +7,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.net.ConnectException;
 import java.time.OffsetDateTime;
+import java.util.Locale;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -56,7 +57,8 @@ public class GlobalExceptionHandler {
             IllegalArgumentException ex,
             HttpServletRequest request,
             HttpServletResponse response) {
-        return buildError(HttpStatus.BAD_REQUEST, "REQ_INVALID_ARGUMENT", ex.getMessage(), request, response, false);
+        IllegalArgumentMapping mapping = mapIllegalArgument(ex);
+        return buildError(HttpStatus.BAD_REQUEST, mapping.code(), mapping.message(), request, response, mapping.retryable());
     }
 
     @ExceptionHandler(DataAccessException.class)
@@ -169,4 +171,37 @@ public class GlobalExceptionHandler {
         }
         return false;
     }
+
+    private IllegalArgumentMapping mapIllegalArgument(IllegalArgumentException ex) {
+        String message = ex == null ? null : ex.getMessage();
+        String normalized = message == null ? "" : message.toLowerCase(Locale.ROOT);
+        if (normalized.contains("missing required sql template parameters")
+                || normalized.contains("missing required parameter:")) {
+            return new IllegalArgumentMapping("SQL_TEMPLATE_PARAM_MISSING", false, message);
+        }
+        if (normalized.contains("unsupported parameter(s):")) {
+            return new IllegalArgumentMapping("SQL_TEMPLATE_PARAM_UNSUPPORTED", false, message);
+        }
+        if (normalized.contains("invalid parameter name:")) {
+            return new IllegalArgumentMapping("SQL_TEMPLATE_PARAM_INVALID", false, message);
+        }
+        if (normalized.contains("only select/with read-only sql is allowed")) {
+            return new IllegalArgumentMapping("SQL_READ_ONLY_REQUIRED", false, message);
+        }
+        if (normalized.contains("multiple sql statements are not allowed")) {
+            return new IllegalArgumentMapping("SQL_MULTI_STATEMENT_BLOCKED", false, message);
+        }
+        if (normalized.contains("dangerous sql statement is blocked")) {
+            return new IllegalArgumentMapping("SQL_DANGEROUS_STATEMENT_BLOCKED", false, message);
+        }
+        if (normalized.contains("sql is too long")) {
+            return new IllegalArgumentMapping("SQL_TOO_LONG", false, message);
+        }
+        if (normalized.contains("sql is empty after normalization")) {
+            return new IllegalArgumentMapping("SQL_EMPTY", false, message);
+        }
+        return new IllegalArgumentMapping("REQ_INVALID_ARGUMENT", false, message);
+    }
+
+    private record IllegalArgumentMapping(String code, boolean retryable, String message) {}
 }

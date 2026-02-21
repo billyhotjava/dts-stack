@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="0030-create-analytics-nl2sql-eval-case" author="dts">
+        <createTable tableName="analytics_nl2sql_eval_case">
+            <column name="id" type="bigint" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="name" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="domain" type="varchar(64)"/>
+            <column name="prompt_text" type="text">
+                <constraints nullable="false"/>
+            </column>
+            <column name="expected_json" type="text"/>
+            <column name="notes" type="text"/>
+            <column name="enabled" type="boolean" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="timestamp with time zone" defaultValueComputed="${now}">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="timestamp with time zone" defaultValueComputed="${now}">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <createIndex tableName="analytics_nl2sql_eval_case" indexName="idx_nl2sql_eval_case_enabled">
+            <column name="enabled"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

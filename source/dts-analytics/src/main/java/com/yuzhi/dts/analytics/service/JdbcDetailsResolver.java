@@ -4,16 +4,23 @@ import com.fasterxml.jackson.databind.JsonNode;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 @Service
 public class JdbcDetailsResolver {
 
-    private final PlatformInfraClient platformInfraClient;
+    private static final Logger LOG = LoggerFactory.getLogger(JdbcDetailsResolver.class);
 
-    public JdbcDetailsResolver(PlatformInfraClient platformInfraClient) {
+    private final PlatformInfraClient platformInfraClient;
+    private final String pgHost;
+
+    public JdbcDetailsResolver(PlatformInfraClient platformInfraClient, @Value("${PG_HOST:dts-pg}") String pgHost) {
         this.platformInfraClient = platformInfraClient;
+        this.pgHost = pgHost;
     }
 
     public JdbcDetails resolve(String engine, JsonNode details) {
@@ -25,7 +32,7 @@ public class JdbcDetailsResolver {
         if (platformId != null) {
             UUID id = parsePlatformUuid(platformId);
             PlatformInfraClient.DataSourceDetail detail = platformInfraClient.fetchDataSourceDetail(id);
-            String jdbcUrl = detail.jdbcUrl();
+            String jdbcUrl = normalizePlatformJdbcUrl(detail.jdbcUrl());
             if (!StringUtils.hasText(jdbcUrl)) {
                 throw new IllegalArgumentException("平台数据源未配置 JDBC URL");
             }
@@ -167,6 +174,65 @@ public class JdbcDetailsResolver {
         }
         String text = pwd.toString().trim();
         return text.isEmpty() ? null : text;
+    }
+
+    /**
+     * The admin default biadmin data-lake may expose an ephemeral docker bridge IP.
+     * Convert it to PG_HOST so analytics remains stable across container IP changes.
+     */
+    private String normalizePlatformJdbcUrl(String rawJdbcUrl) {
+        if (!StringUtils.hasText(rawJdbcUrl)) {
+            return rawJdbcUrl;
+        }
+        String jdbcUrl = rawJdbcUrl.trim();
+        String lower = jdbcUrl.toLowerCase();
+        if (!lower.startsWith("jdbc:postgresql://") || !lower.contains("/biadmin")) {
+            return jdbcUrl;
+        }
+
+        int hostStart = "jdbc:postgresql://".length();
+        int slash = jdbcUrl.indexOf('/', hostStart);
+        if (slash <= hostStart) {
+            return jdbcUrl;
+        }
+        String hostPort = jdbcUrl.substring(hostStart, slash);
+        if (!StringUtils.hasText(hostPort)) {
+            return jdbcUrl;
+        }
+
+        String host = hostPort;
+        String portPart = "";
+        int colon = hostPort.lastIndexOf(':');
+        if (colon > 0) {
+            host = hostPort.substring(0, colon);
+            portPart = hostPort.substring(colon);
+        }
+
+        if (!isDockerBridgeIpv4(host) || !StringUtils.hasText(pgHost)) {
+            return jdbcUrl;
+        }
+
+        LOG.debug("Normalize platform JDBC host from {} to {} for biadmin", host, pgHost);
+        return "jdbc:postgresql://" + pgHost.trim() + portPart + jdbcUrl.substring(slash);
+    }
+
+    private boolean isDockerBridgeIpv4(String host) {
+        if (!StringUtils.hasText(host)) {
+            return false;
+        }
+        String[] parts = host.split("\\.");
+        if (parts.length != 4) {
+            return false;
+        }
+        int first;
+        int second;
+        try {
+            first = Integer.parseInt(parts[0]);
+            second = Integer.parseInt(parts[1]);
+        } catch (NumberFormatException ex) {
+            return false;
+        }
+        return first == 172 && second >= 16 && second <= 31;
     }
 
     public record JdbcDetails(String jdbcUrl, String username, String password) {

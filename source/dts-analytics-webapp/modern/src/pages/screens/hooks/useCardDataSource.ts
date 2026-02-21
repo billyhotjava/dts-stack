@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { analyticsApi, HttpError } from '../../../api/analyticsApi';
+import { resolveAnalyticsErrorCodeMessage } from '../../../api/errorCodeMessages';
 import type { CardParameterBinding, DataSourceConfig, CardData } from '../types';
 import { runWithRetry, scheduleQueryTask } from './queryScheduler';
 
@@ -295,12 +296,16 @@ function resolveDataSourceErrorMessage(error: unknown): string {
                 const code = typeof payload.code === 'string' && payload.code.trim()
                     ? payload.code.trim()
                     : undefined;
+                const codeHint = resolveAnalyticsErrorCodeMessage(code);
                 const message = typeof payload.message === 'string' && payload.message.trim()
                     ? payload.message.trim()
                     : typeof payload.error === 'string' && payload.error.trim()
                         ? payload.error.trim()
                         : undefined;
                 if (message) {
+                    if (codeHint) {
+                        return code ? `${codeHint} (${code})：${message}` : `${codeHint}：${message}`;
+                    }
                     return code ? `${message} (${code})` : message;
                 }
                 if (payload.errors && typeof payload.errors === 'object') {
@@ -308,12 +313,25 @@ function resolveDataSourceErrorMessage(error: unknown): string {
                         .map((item) => String(item ?? '').trim())
                         .filter(Boolean);
                     if (values.length > 0) {
+                        if (codeHint) {
+                            const detail = values.join('; ');
+                            return code ? `${codeHint} (${code})：${detail}` : `${codeHint}：${detail}`;
+                        }
                         return code ? `${values.join('; ')} (${code})` : values.join('; ');
                     }
+                }
+                if (codeHint) {
+                    return code ? `${codeHint} (${code})` : codeHint;
                 }
             } catch {
                 // Keep default error message below
             }
+        }
+        const codeHint = resolveAnalyticsErrorCodeMessage(error.code);
+        if (codeHint) {
+            const codeTag = error.code ? ` (${error.code})` : '';
+            const requestTag = error.requestId ? ` [requestId=${error.requestId}]` : '';
+            return `${codeHint}${codeTag}${requestTag}`;
         }
         return error.message || `HTTP ${error.status}`;
     }

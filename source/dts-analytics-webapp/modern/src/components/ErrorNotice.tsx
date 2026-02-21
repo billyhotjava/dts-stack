@@ -1,4 +1,5 @@
-import { AuthError } from "../api/analyticsApi";
+import { AuthError, HttpError } from "../api/analyticsApi";
+import { resolveAnalyticsErrorCodeMessage } from "../api/errorCodeMessages";
 import type { Locale } from "../i18n";
 import { t } from "../i18n";
 
@@ -9,6 +10,14 @@ type Props = {
 
 function messageFromError(error: unknown): string {
 	if (!error) return "Unknown error";
+	if (error instanceof HttpError) {
+		const hint = resolveAnalyticsErrorCodeMessage(error.code);
+		if (hint) {
+			const codeTag = error.code ? ` (${error.code})` : "";
+			const requestTag = error.requestId ? ` [requestId=${error.requestId}]` : "";
+			return `${hint}${codeTag}${requestTag}`;
+		}
+	}
 	if (error instanceof Error) return error.message || String(error);
 	return String(error);
 }

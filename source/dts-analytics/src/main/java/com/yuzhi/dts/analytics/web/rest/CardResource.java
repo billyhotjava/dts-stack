@@ -25,6 +25,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.sql.SQLException;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -248,6 +249,7 @@ public class CardResource {
         Long traceMetricId = parseMetricId(body);
         String traceMetricVersion = parseMetricVersion(body);
         Object traceContext = parseTraceContext(body);
+        List<QueryExecutionFacade.ExecutionAttempt> traceAttempts = new ArrayList<>();
         Long actorUserId = null;
         PlatformContext ctx = PlatformContext.from(request);
 
@@ -306,7 +308,8 @@ public class CardResource {
                     jsonQuery.put("query", prepared.mbql());
                 }
 
-                DatasetQueryService.DatasetResult result = queryExecutionFacade.executeWithCompliance(prepared);
+                DatasetQueryService.DatasetResult result =
+                        queryExecutionFacade.executeWithCompliance(prepared, traceAttempts::add);
                 long runningTimeMs = System.currentTimeMillis() - startedMillis;
 
                 Map<String, Object> data = new LinkedHashMap<>();
@@ -364,6 +367,7 @@ public class CardResource {
             }
         } finally {
             long durationNanos = System.nanoTime() - startedNanos;
+            Object tracePayload = enrichTraceContext(traceContext, traceAttempts, metricResult, metricCode);
             queryMetricsService.record("card_query", metricResult, metricCode, durationNanos);
             queryTraceService.log(
                     "card_query",
@@ -379,7 +383,7 @@ public class CardResource {
                     ctx.dept(),
                     ctx.classification(),
                     durationNanos / 1_000_000,
-                    traceContext);
+                    tracePayload);
         }
     }
 
@@ -820,6 +824,70 @@ public class CardResource {
             return null;
         }
         return context;
+    }
+
+    private Object enrichTraceContext(
+            Object originalContext,
+            List<QueryExecutionFacade.ExecutionAttempt> attempts,
+            String finalStatus,
+            String finalCode) {
+        if ((originalContext == null || originalContext instanceof JsonNode node && (node.isNull() || node.isMissingNode()))
+                && (attempts == null || attempts.isEmpty())) {
+            return null;
+        }
+
+        Map<String, Object> merged = new LinkedHashMap<>();
+        Object normalizedContext = normalizeTraceContext(originalContext);
+        if (normalizedContext instanceof Map<?, ?> map) {
+            for (Map.Entry<?, ?> entry : map.entrySet()) {
+                if (entry.getKey() != null) {
+                    merged.put(entry.getKey().toString(), entry.getValue());
+                }
+            }
+        } else if (normalizedContext != null) {
+            merged.put("queryContext", normalizedContext);
+        }
+
+        Map<String, Object> executionTrace = new LinkedHashMap<>();
+        executionTrace.put("status", finalStatus);
+        executionTrace.put("code", finalCode);
+        executionTrace.put(
+                "attempts",
+                attempts == null ? List.of() : attempts.stream().map(this::toAttemptTrace).toList());
+        executionTrace.put("attemptCount", attempts == null ? 0 : attempts.size());
+        merged.put("executionTrace", executionTrace);
+        return merged;
+    }
+
+    private Object normalizeTraceContext(Object context) {
+        if (context == null) {
+            return null;
+        }
+        if (context instanceof JsonNode node) {
+            return objectMapper.convertValue(node, Object.class);
+        }
+        return context;
+    }
+
+    private Map<String, Object> toAttemptTrace(QueryExecutionFacade.ExecutionAttempt attempt) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("attemptNo", attempt.attemptNo());
+        map.put("success", attempt.success());
+        map.put("fromAutoFix", attempt.fromAutoFix());
+        map.put("durationMs", attempt.durationMs());
+        map.put("retryPlanned", attempt.retryPlanned());
+        map.put("errorCategory", trimToNull(attempt.errorCategory()));
+        map.put("errorMessage", trimToNull(attempt.errorMessage()));
+        map.put("sql", truncate(attempt.sql(), 2000));
+        map.put("rewrittenSql", truncate(attempt.rewrittenSql(), 2000));
+        return map;
+    }
+
+    private String truncate(String value, int maxLength) {
+        if (value == null || value.length() <= maxLength) {
+            return value;
+        }
+        return value.substring(0, maxLength);
     }
 
     private String resolveRequestId() {

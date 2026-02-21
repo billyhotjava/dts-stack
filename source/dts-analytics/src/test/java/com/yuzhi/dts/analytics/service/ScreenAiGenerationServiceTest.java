@@ -261,6 +261,15 @@ class ScreenAiGenerationServiceTest {
         assertThat(blueprints.size()).isGreaterThanOrEqualTo(5);
         assertThat(blueprints.toString()).contains("fact_sales_order");
         assertThat(blueprints.toString()).contains("${date_range}");
+        assertThat(blueprints.path(0).path("safetyStatus").asText("")).isEqualTo("needs-params");
+        assertThat(blueprints.path(0).path("safetyReasons").isArray()).isTrue();
+
+        JsonNode diagnostics = result.path("nl2sqlDiagnostics");
+        assertThat(diagnostics.path("status").asText("")).isEqualTo("needs-params");
+        assertThat(diagnostics.path("blockedCount").asInt(-1)).isEqualTo(0);
+        assertThat(diagnostics.path("needsParamsCount").asInt(0)).isGreaterThan(0);
+        assertThat(diagnostics.path("blueprintChecks").isArray()).isTrue();
+        assertThat(diagnostics.path("blueprintChecks").size()).isEqualTo(blueprints.size());
     }
 
     @Test
@@ -280,6 +289,13 @@ class ScreenAiGenerationServiceTest {
         assertThat(blueprints.size()).isGreaterThanOrEqualTo(5);
         assertThat(blueprints.toString()).contains("SELECT");
         assertThat(blueprints.toString()).contains("fact_sales_order");
+        assertThat(blueprints.path(0).path("safetyStatus").asText("")).isEqualTo("needs-params");
+
+        JsonNode diagnostics = result.path("nl2sqlDiagnostics");
+        assertThat(diagnostics.path("status").asText("")).isEqualTo("needs-params");
+        assertThat(diagnostics.path("safeCount").asInt(-1)).isEqualTo(0);
+        assertThat(diagnostics.path("needsParamsCount").asInt(0)).isGreaterThan(0);
+        assertThat(diagnostics.path("blockedCount").asInt(-1)).isEqualTo(0);
     }
 
     private ObjectNode baseScreenSpec() {

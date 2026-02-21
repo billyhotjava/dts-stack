@@ -60,6 +60,19 @@ public class QueryTraceResource {
         return ResponseEntity.ok(queryTraceService.listMetricVersions(metricId));
     }
 
+    @GetMapping(path = "/failure-summary", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> failureSummary(
+            @RequestParam(name = "days", required = false, defaultValue = "7") int days,
+            @RequestParam(name = "topN", required = false, defaultValue = "10") int topN,
+            @RequestParam(name = "chain", required = false) String chain,
+            HttpServletRequest request) {
+        Optional<ResponseEntity<String>> auth = MetabaseAuth.requireSuperuser(sessionService, request);
+        if (auth.isPresent()) {
+            return auth.get();
+        }
+        return ResponseEntity.ok(queryTraceService.summarizeFailures(days, topN, chain));
+    }
+
     private Map<String, Object> toResponse(AnalyticsQueryTrace trace) {
         Map<String, Object> map = new LinkedHashMap<>();
         map.put("id", trace.getId());

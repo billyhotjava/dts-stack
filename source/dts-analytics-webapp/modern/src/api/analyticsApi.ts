@@ -89,6 +89,8 @@ export type CardQueryResponse = {
 	row_count?: number;
 	running_time?: number;
 	error?: unknown;
+	code?: string;
+	requestId?: string;
 	data?: {
 		rows?: unknown[];
 		cols?: Array<Record<string, unknown>>;
@@ -99,6 +101,54 @@ export type CardQueryResponse = {
 };
 
 export type DashboardQueryResponse = CardQueryResponse;
+
+export type Nl2SqlEvalCaseItem = {
+	id?: number | string;
+	name?: string;
+	domain?: string | null;
+	promptText?: string;
+	expected?: Record<string, unknown>;
+	notes?: string | null;
+	enabled?: boolean;
+	createdAt?: string;
+	updatedAt?: string;
+};
+
+export type Nl2SqlEvalRunRow = {
+	id?: number | string;
+	name?: string;
+	passed?: boolean;
+	score?: number;
+	totalChecks?: number;
+	passedChecks?: number;
+	checks?: Array<Record<string, unknown>>;
+	generated?: Record<string, unknown>;
+};
+
+export type Nl2SqlEvalRunSummary = {
+	executedAt?: string;
+	total?: number;
+	passed?: number;
+	failed?: number;
+	passRate?: number;
+	averageScore?: number;
+	rows?: Nl2SqlEvalRunRow[];
+};
+
+export type QueryTraceFailureSummary = {
+	since?: string;
+	windowDays?: number;
+	chain?: string | null;
+	total?: number;
+	success?: number;
+	failed?: number;
+	failureRate?: number;
+	topErrorCodes?: Array<{
+		code?: string;
+		count?: number;
+		retryableHint?: boolean;
+	}>;
+};
 
 export type SearchItem = {
 	model: "dashboard" | "card" | "collection" | string;
@@ -1115,6 +1165,30 @@ export const analyticsApi = {
 	listMetrics: () => fetchJson<Metric[]>("/analytics/api/metric"),
 	listMetricVersions: (metricId: string | number) =>
 		fetchJson<string[]>("/analytics/api/query-trace/metric/" + encodeURIComponent(String(metricId)) + "/versions"),
+	getQueryTraceFailureSummary: (days = 7, topN = 10, chain?: string) => {
+		const qs = new URLSearchParams();
+		qs.set("days", String(days));
+		qs.set("topN", String(topN));
+		if (chain && chain.trim().length > 0) {
+			qs.set("chain", chain.trim());
+		}
+		return fetchJson<QueryTraceFailureSummary>("/analytics/api/query-trace/failure-summary?" + qs.toString());
+	},
+	listNl2SqlEvalCases: (enabledOnly = false, limit = 200) =>
+		fetchJson<Nl2SqlEvalCaseItem[]>(
+			"/analytics/api/nl2sql-eval/cases?enabledOnly="
+			+ encodeURIComponent(String(enabledOnly))
+			+ "&limit="
+			+ encodeURIComponent(String(limit)),
+		),
+	createNl2SqlEvalCase: (body: unknown) =>
+		sendJson<Nl2SqlEvalCaseItem>("/analytics/api/nl2sql-eval/cases", body ?? {}),
+	updateNl2SqlEvalCase: (id: string | number, body: unknown) =>
+		requestJson<Nl2SqlEvalCaseItem>("/analytics/api/nl2sql-eval/cases/" + encodeURIComponent(String(id)), "PUT", body),
+	deleteNl2SqlEvalCase: (id: string | number) =>
+		requestJson<void>("/analytics/api/nl2sql-eval/cases/" + encodeURIComponent(String(id)), "DELETE"),
+	runNl2SqlEvaluation: (body?: unknown) =>
+		sendJson<Nl2SqlEvalRunSummary>("/analytics/api/nl2sql-eval/run", body ?? {}),
 	listPlatformMetrics: () => fetchJson<PlatformMetric[]>("/analytics/api/platform/metrics"),
 	listVisibleTables: () => fetchJson<Array<number | VisibleTable>>("/analytics/api/platform/visible-tables"),
 	getTrash: () => fetchJson<TrashResponse>("/analytics/api/trash"),

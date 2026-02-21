@@ -29,9 +29,24 @@ public class ScreenAiGenerationService {
     private static final int MAX_CONTEXT_ITEMS = 16;
     private static final int MAX_CONTEXT_ITEM_LENGTH = 240;
     private static final int MAX_KEYWORD_LENGTH = 6000;
+    private static final int MAX_SQL_BLUEPRINT_LENGTH = 100_000;
+    private static final Pattern TEMPLATE_VARIABLE_PATTERN = Pattern.compile("\\$\\{[^}]+}|\\{\\{[^}]+}}");
     private static final String SEMANTIC_BRIDGE_URL_PROP = "dts.ai.semantic.bridge.url";
     private static final String SEMANTIC_BRIDGE_URL_ENV = "DTS_AI_SEMANTIC_BRIDGE_URL";
     private static final String SEMANTIC_BRIDGE_TIMEOUT_MS_PROP = "dts.ai.semantic.bridge.timeout-ms";
+    private static final List<String> DANGEROUS_SQL_KEYWORDS = List.of(
+            " insert ",
+            " update ",
+            " delete ",
+            " drop ",
+            " truncate ",
+            " alter ",
+            " create ",
+            " merge ",
+            " grant ",
+            " revoke ",
+            " call ",
+            " execute ");
 
     private final ObjectMapper objectMapper;
 
@@ -78,17 +93,23 @@ public class ScreenAiGenerationService {
         suggestions.add("可继续输入优化指令：改成4K、放大字体、增加指标卡、删除表格、刷新30秒。");
         quality.set("suggestions", suggestions);
 
+        ObjectNode semanticModelHints = buildSemanticModelHints(intent);
+        ArrayNode queryRecommendations = buildQueryRecommendations(intent);
+        ArrayNode sqlBlueprints = buildSqlBlueprints(intent, queryRecommendations);
+        ArrayNode vizRecommendations = buildVizRecommendations(intent);
+
         ObjectNode result = objectMapper.createObjectNode();
         result.put("engine", "heuristic-v1");
         result.put("prompt", normalizedPrompt);
         result.set("intent", toIntentNode(intent));
-        result.set("semanticModelHints", buildSemanticModelHints(intent));
-        result.set("queryRecommendations", buildQueryRecommendations(intent));
-        result.set("sqlBlueprints", buildSqlBlueprints(intent));
-        result.set("vizRecommendations", buildVizRecommendations(intent));
+        result.set("semanticModelHints", semanticModelHints);
+        result.set("queryRecommendations", queryRecommendations);
+        result.set("sqlBlueprints", sqlBlueprints);
+        result.set("vizRecommendations", vizRecommendations);
         result.set("screenSpec", screenSpec);
         result.set("quality", quality);
         applySemanticBridgeIfEnabled(result, normalizedPrompt);
+        enrichNl2SqlResult(result, intent);
         return result;
     }
 
@@ -232,6 +253,11 @@ public class ScreenAiGenerationService {
         suggestions.add("可继续输入：改成三列布局 / 换成饼图 / 加地区筛选 / 加tab切换场景 / 放大字体 / 刷新30秒。");
         quality.set("suggestions", suggestions);
 
+        ObjectNode semanticModelHints = buildSemanticModelHints(intent);
+        ArrayNode queryRecommendations = buildQueryRecommendations(intent);
+        ArrayNode sqlBlueprints = buildSqlBlueprints(intent, queryRecommendations);
+        ArrayNode vizRecommendations = buildVizRecommendations(intent);
+
         ObjectNode result = objectMapper.createObjectNode();
         result.put("engine", "heuristic-v1-revise");
         result.put("prompt", normalized);
@@ -240,14 +266,15 @@ public class ScreenAiGenerationService {
         result.put("applyMode", applyChanges ? "apply" : "suggest");
         result.put("applied", applyChanges);
         result.set("intent", toIntentNode(intent));
-        result.set("semanticModelHints", buildSemanticModelHints(intent));
-        result.set("queryRecommendations", buildQueryRecommendations(intent));
-        result.set("sqlBlueprints", buildSqlBlueprints(intent));
-        result.set("vizRecommendations", buildVizRecommendations(intent));
+        result.set("semanticModelHints", semanticModelHints);
+        result.set("queryRecommendations", queryRecommendations);
+        result.set("sqlBlueprints", sqlBlueprints);
+        result.set("vizRecommendations", vizRecommendations);
         result.set("screenSpec", screenSpec);
         result.set("quality", quality);
         result.set("actions", actions);
         applySemanticBridgeIfEnabled(result, normalized);
+        enrichNl2SqlResult(result, intent);
         return result;
     }
 
@@ -1363,9 +1390,8 @@ public class ScreenAiGenerationService {
         return hints;
     }
 
-    private ArrayNode buildSqlBlueprints(IntentProfile intent) {
+    private ArrayNode buildSqlBlueprints(IntentProfile intent, ArrayNode queryRecommendations) {
         ArrayNode blueprints = objectMapper.createArrayNode();
-        ArrayNode queryRecommendations = buildQueryRecommendations(intent);
         for (JsonNode item : queryRecommendations) {
             if (item == null || !item.isObject()) {
                 continue;
@@ -1379,6 +1405,220 @@ public class ScreenAiGenerationService {
             blueprints.add(node);
         }
         return blueprints;
+    }
+
+    private void enrichNl2SqlResult(ObjectNode result, IntentProfile intent) {
+        JsonNode queryRecommendationsNode = result.path("queryRecommendations");
+        JsonNode sqlBlueprintsNode = result.path("sqlBlueprints");
+        ArrayNode queryRecommendations = queryRecommendationsNode.isArray()
+                ? (ArrayNode) queryRecommendationsNode
+                : objectMapper.createArrayNode();
+        ArrayNode sqlBlueprints = sqlBlueprintsNode.isArray() ? (ArrayNode) sqlBlueprintsNode : objectMapper.createArrayNode();
+
+        ObjectNode diagnostics = buildNl2SqlDiagnostics(intent, queryRecommendations, sqlBlueprints);
+        result.set("nl2sqlDiagnostics", diagnostics);
+
+        if (!queryRecommendationsNode.isArray()) {
+            result.set("queryRecommendations", queryRecommendations);
+        }
+        if (!sqlBlueprintsNode.isArray()) {
+            result.set("sqlBlueprints", sqlBlueprints);
+        }
+        if (diagnostics.path("blockedCount").asInt(0) > 0) {
+            appendQualityWarning(result, "检测到潜在风险 SQL 蓝图，建议先修正后再执行。");
+        }
+    }
+
+    private ObjectNode buildNl2SqlDiagnostics(IntentProfile intent, ArrayNode queryRecommendations, ArrayNode sqlBlueprints) {
+        ObjectNode diagnostics = objectMapper.createObjectNode();
+        diagnostics.put("stage", "heuristic-precheck");
+        diagnostics.put("domain", intent.domain());
+        diagnostics.put("factTable", resolveFactTable(intent));
+        diagnostics.put("timeField", resolveTimeField(intent));
+        diagnostics.put("queryRecommendationCount", queryRecommendations == null ? 0 : queryRecommendations.size());
+        diagnostics.put("sqlBlueprintCount", sqlBlueprints == null ? 0 : sqlBlueprints.size());
+
+        ArrayNode blueprintChecks = objectMapper.createArrayNode();
+        int safeCount = 0;
+        int needsParamsCount = 0;
+        int blockedCount = 0;
+
+        for (JsonNode item : sqlBlueprints) {
+            if (item == null || !item.isObject()) {
+                continue;
+            }
+            ObjectNode blueprint = (ObjectNode) item;
+            String sql = blueprint.path("sql").asText("");
+            SqlSafetyAudit audit = inspectSqlBlueprintSafety(sql);
+
+            blueprint.put("safetyStatus", audit.status());
+            blueprint.put("hasTemplateVariables", audit.hasTemplateVariables());
+            blueprint.set("safetyReasons", audit.reasons().deepCopy());
+
+            ObjectNode check = objectMapper.createObjectNode();
+            check.put("queryId", blueprint.path("queryId").asText(""));
+            check.put("purpose", blueprint.path("purpose").asText(""));
+            check.put("status", audit.status());
+            check.put("hasTemplateVariables", audit.hasTemplateVariables());
+            check.set("reasons", audit.reasons().deepCopy());
+            blueprintChecks.add(check);
+
+            if ("blocked".equals(audit.status())) {
+                blockedCount += 1;
+            } else if ("needs-params".equals(audit.status())) {
+                needsParamsCount += 1;
+            } else {
+                safeCount += 1;
+            }
+        }
+
+        diagnostics.put("safeCount", safeCount);
+        diagnostics.put("needsParamsCount", needsParamsCount);
+        diagnostics.put("blockedCount", blockedCount);
+        diagnostics.put(
+                "status",
+                blockedCount > 0 ? "blocked" : (needsParamsCount > 0 ? "needs-params" : "safe"));
+        diagnostics.set("blueprintChecks", blueprintChecks);
+        return diagnostics;
+    }
+
+    private SqlSafetyAudit inspectSqlBlueprintSafety(String sql) {
+        String rawSql = sql == null ? "" : sql;
+        String normalized = normalizeSqlForSafety(rawSql);
+        boolean hasTemplateVariables = TEMPLATE_VARIABLE_PATTERN.matcher(rawSql).find();
+        ArrayNode reasons = objectMapper.createArrayNode();
+        boolean blocked = false;
+
+        if (normalized.isBlank()) {
+            reasons.add("SQL_EMPTY");
+            blocked = true;
+        } else if (normalized.length() > MAX_SQL_BLUEPRINT_LENGTH) {
+            reasons.add("SQL_TOO_LONG");
+            blocked = true;
+        } else {
+            if (!isReadOnlySqlForSafety(normalized)) {
+                reasons.add("READ_ONLY_REQUIRED");
+                blocked = true;
+            }
+            if (hasMultipleStatementsForSafety(normalized)) {
+                reasons.add("MULTI_STATEMENT_BLOCKED");
+                blocked = true;
+            }
+            for (String keyword : DANGEROUS_SQL_KEYWORDS) {
+                if (normalized.contains(keyword)) {
+                    reasons.add("DANGEROUS_KEYWORD_BLOCKED");
+                    blocked = true;
+                    break;
+                }
+            }
+        }
+
+        if (!blocked && hasTemplateVariables) {
+            reasons.add("TEMPLATE_VARIABLES_PENDING");
+        }
+
+        String status = blocked ? "blocked" : (hasTemplateVariables ? "needs-params" : "safe");
+        return new SqlSafetyAudit(status, hasTemplateVariables, reasons);
+    }
+
+    private String normalizeSqlForSafety(String sql) {
+        String normalized = stripSqlLiteralsAndCommentsForSafety(sql).trim().toLowerCase(Locale.ROOT);
+        normalized = normalized.replaceAll("\\s+", " ");
+        return " " + normalized + " ";
+    }
+
+    private String stripSqlLiteralsAndCommentsForSafety(String sql) {
+        String text = sql == null ? "" : sql;
+        StringBuilder out = new StringBuilder(text.length());
+        boolean inSingleQuote = false;
+        boolean inDoubleQuote = false;
+        boolean inLineComment = false;
+        boolean inBlockComment = false;
+
+        for (int i = 0; i < text.length(); i++) {
+            char ch = text.charAt(i);
+            char next = i + 1 < text.length() ? text.charAt(i + 1) : '\0';
+
+            if (inLineComment) {
+                if (ch == '\n' || ch == '\r') {
+                    inLineComment = false;
+                    out.append(' ');
+                }
+                continue;
+            }
+            if (inBlockComment) {
+                if (ch == '*' && next == '/') {
+                    inBlockComment = false;
+                    i += 1;
+                    out.append(' ');
+                }
+                continue;
+            }
+            if (inSingleQuote) {
+                if (ch == '\'' && next == '\'') {
+                    i += 1;
+                    continue;
+                }
+                if (ch == '\'') {
+                    inSingleQuote = false;
+                    out.append(' ');
+                }
+                continue;
+            }
+            if (inDoubleQuote) {
+                if (ch == '"' && next == '"') {
+                    i += 1;
+                    continue;
+                }
+                if (ch == '"') {
+                    inDoubleQuote = false;
+                    out.append(' ');
+                }
+                continue;
+            }
+
+            if (ch == '-' && next == '-') {
+                inLineComment = true;
+                i += 1;
+                out.append(' ');
+                continue;
+            }
+            if (ch == '/' && next == '*') {
+                inBlockComment = true;
+                i += 1;
+                out.append(' ');
+                continue;
+            }
+            if (ch == '\'') {
+                inSingleQuote = true;
+                out.append(' ');
+                continue;
+            }
+            if (ch == '"') {
+                inDoubleQuote = true;
+                out.append(' ');
+                continue;
+            }
+            out.append(ch);
+        }
+        return out.toString();
+    }
+
+    private boolean isReadOnlySqlForSafety(String normalized) {
+        return normalized.startsWith(" select ") || normalized.startsWith(" with ");
+    }
+
+    private boolean hasMultipleStatementsForSafety(String normalized) {
+        int first = normalized.indexOf(';');
+        if (first < 0) {
+            return false;
+        }
+        int last = normalized.lastIndexOf(';');
+        if (first != last) {
+            return true;
+        }
+        String tail = normalized.substring(first + 1).trim();
+        return !tail.isEmpty();
     }
 
     private String resolveFactTable(IntentProfile intent) {
@@ -1567,4 +1807,6 @@ public class ScreenAiGenerationService {
             String timeRange,
             List<String> filters,
             String granularity) {}
+
+    private record SqlSafetyAudit(String status, boolean hasTemplateVariables, ArrayNode reasons) {}
 }

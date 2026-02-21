@@ -7,6 +7,7 @@ import {
 	type CollectionListItem,
 	type DatabaseListItem,
 } from "../api/analyticsApi";
+import { resolveAnalyticsErrorCodeMessage } from "../api/errorCodeMessages";
 import { ChartRenderer, type VisualizationType } from "../components/charts";
 import { EmptyState } from "../components/EmptyState";
 import { ErrorNotice } from "../components/ErrorNotice";
@@ -52,6 +53,29 @@ function extractNativeSql(card: CardDetail): string {
 function extractDatabaseIdFromDatasetQuery(datasetQuery: Record<string, unknown> | null): number | null {
 	const v: any = datasetQuery?.database;
 	return typeof v === "number" && v > 0 ? v : null;
+}
+
+function resolveCardQueryErrorMessage(result: CardQueryResponse): string {
+	const code = typeof result.code === "string" && result.code.trim() ? result.code.trim() : undefined;
+	const codeHint = resolveAnalyticsErrorCodeMessage(code);
+	const requestId = typeof result.requestId === "string" && result.requestId.trim() ? result.requestId.trim() : undefined;
+	const rawError = result.error;
+	const rawMessage =
+		typeof rawError === "string"
+			? rawError.trim()
+			: rawError && typeof rawError === "object" && "message" in (rawError as Record<string, unknown>)
+				? String((rawError as Record<string, unknown>).message ?? "").trim()
+				: rawError == null
+					? ""
+					: JSON.stringify(rawError);
+	const base = codeHint
+		? rawMessage && rawMessage !== codeHint
+			? `${codeHint}：${rawMessage}`
+			: codeHint
+		: rawMessage || "查询失败";
+	const codeTag = code ? ` (${code})` : "";
+	const requestTag = requestId ? ` [requestId=${requestId}]` : "";
+	return `${base}${codeTag}${requestTag}`;
 }
 
 export default function CardEditorPage() {
@@ -495,9 +519,7 @@ export default function CardEditorPage() {
 									color: "var(--color-error, #ED6E6E)",
 									fontSize: "var(--font-size-sm)",
 								}}>
-									{typeof runState.value.error === "string"
-										? runState.value.error
-										: JSON.stringify(runState.value.error)}
+									{resolveCardQueryErrorMessage(runState.value)}
 								</div>
 							)}
 
