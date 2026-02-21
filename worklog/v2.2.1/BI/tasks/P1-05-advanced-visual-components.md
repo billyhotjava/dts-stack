@@ -1,6 +1,6 @@
 # P1-05 高级可视化组件集
 
-`status`: `in-progress`  
+`status`: `done`  
 `priority`: `P1`  
 `inspiration`: `DataEase(业务组件覆盖) + 商业大屏产品组件能力`
 
@@ -119,6 +119,10 @@
   - 字段绑定编辑器新增列级“自动换行”开关（与标题/对齐/列宽并列配置）；
   - `table` 渲染按列应用换行策略：开启时允许多行换行并自动断词，关闭时保持单行省略；
   - 适用于白底商务模板中的长文本字段，减少“标题和内容被截断看不清”问题。
+- 白底商务模板可读性补强（2026-02-20）：
+  - 文本类组件统一接入 `resolveTextColor`（`title/markdown/datetime/countdown/marquee/number-card/carousel/container`）；
+  - 对旧屏稿中遗留浅色文字（如 `#d1d5db/#e5e7eb`）在浅色主题下自动回退到主题深色字体；
+  - `container/carousel` 默认背景改为主题卡片底色，降低“暗色默认背景 + 浅色文字”在商务白底模板中的可读性风险。
 - 组件白名单一致性修复（2026-02-20）：
   - 前后端 `ScreenSpec` 校验白名单补齐 `tab-switcher/carousel`；
   - 修复这两类组件在保存/校验流程中被误判“不支持类型”的问题；

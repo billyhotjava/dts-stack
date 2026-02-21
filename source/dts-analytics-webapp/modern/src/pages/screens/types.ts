@@ -19,6 +19,8 @@ export interface CardParameterBinding {
 export interface ComponentInteractionMapping {
     variableKey: string;
     sourcePath: string; // e.g. name, seriesName, value, data.name
+    transform?: 'raw' | 'string' | 'number' | 'lowercase' | 'uppercase';
+    fallbackValue?: string;
 }
 
 export interface ComponentInteractionConfig {

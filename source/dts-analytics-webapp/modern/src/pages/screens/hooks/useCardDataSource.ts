@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { analyticsApi } from '../../../api/analyticsApi';
+import { analyticsApi, HttpError } from '../../../api/analyticsApi';
 import type { CardParameterBinding, DataSourceConfig, CardData } from '../types';
 import { runWithRetry, scheduleQueryTask } from './queryScheduler';
 
@@ -282,6 +282,47 @@ function resolveQueryTimeoutMs(
     return DEFAULT_CARD_TIMEOUT_MS;
 }
 
+function resolveDataSourceErrorMessage(error: unknown): string {
+    if (error instanceof HttpError) {
+        if (error.bodyText) {
+            try {
+                const payload = JSON.parse(error.bodyText) as {
+                    message?: unknown;
+                    error?: unknown;
+                    code?: unknown;
+                    errors?: Record<string, unknown>;
+                };
+                const code = typeof payload.code === 'string' && payload.code.trim()
+                    ? payload.code.trim()
+                    : undefined;
+                const message = typeof payload.message === 'string' && payload.message.trim()
+                    ? payload.message.trim()
+                    : typeof payload.error === 'string' && payload.error.trim()
+                        ? payload.error.trim()
+                        : undefined;
+                if (message) {
+                    return code ? `${message} (${code})` : message;
+                }
+                if (payload.errors && typeof payload.errors === 'object') {
+                    const values = Object.values(payload.errors)
+                        .map((item) => String(item ?? '').trim())
+                        .filter(Boolean);
+                    if (values.length > 0) {
+                        return code ? `${values.join('; ')} (${code})` : values.join('; ');
+                    }
+                }
+            } catch {
+                // Keep default error message below
+            }
+        }
+        return error.message || `HTTP ${error.status}`;
+    }
+    if (error instanceof Error && error.message) {
+        return error.message;
+    }
+    return '数据源查询失败';
+}
+
 function getCached(key: string | null): CardData | null {
     if (!key) return null;
     const hit = cacheStore.get(key);
@@ -527,7 +568,7 @@ export function useCardDataSource(
         } catch (e) {
             if (requestSeqRef.current === requestSeq) {
                 setData(null);
-                setError(e instanceof Error ? e.message : '数据源查询失败');
+                setError(resolveDataSourceErrorMessage(e));
             }
         } finally {
             if (requestSeqRef.current === requestSeq) {

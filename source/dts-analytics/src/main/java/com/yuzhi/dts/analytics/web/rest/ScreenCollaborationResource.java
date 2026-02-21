@@ -10,6 +10,7 @@ import com.yuzhi.dts.analytics.repository.AnalyticsScreenRepository;
 import com.yuzhi.dts.analytics.service.AnalyticsSessionService;
 import com.yuzhi.dts.analytics.service.ScreenAclService;
 import com.yuzhi.dts.analytics.service.ScreenAuditService;
+import com.yuzhi.dts.analytics.service.ScreenCollaborationRealtimeService;
 import com.yuzhi.dts.analytics.web.support.MetabaseAuth;
 import com.yuzhi.dts.analytics.web.support.PlatformContext;
 import jakarta.servlet.http.HttpServletRequest;
@@ -57,6 +58,7 @@ public class ScreenCollaborationResource {
     private final AnalyticsScreenRepository screenRepository;
     private final ScreenAclService screenAclService;
     private final ScreenAuditService screenAuditService;
+    private final ScreenCollaborationRealtimeService realtimeService;
     private final ObjectMapper objectMapper;
 
     public ScreenCollaborationResource(
@@ -64,11 +66,13 @@ public class ScreenCollaborationResource {
             AnalyticsScreenRepository screenRepository,
             ScreenAclService screenAclService,
             ScreenAuditService screenAuditService,
+            ScreenCollaborationRealtimeService realtimeService,
             ObjectMapper objectMapper) {
         this.sessionService = sessionService;
         this.screenRepository = screenRepository;
         this.screenAclService = screenAclService;
         this.screenAuditService = screenAuditService;
+        this.realtimeService = realtimeService;
         this.objectMapper = objectMapper;
     }
 
@@ -448,8 +452,9 @@ public class ScreenCollaborationResource {
         state.createdAt = log.getCreatedAt();
         state.requestId = log.getRequestId();
         state.status = "open";
-
-        return ResponseEntity.ok(toCommentResponse(state));
+        ObjectNode response = toCommentResponse(state);
+        realtimeService.broadcastCommentChange(screen.getId(), response);
+        return ResponseEntity.ok(response);
     }
 
     @PostMapping(path = "/{id}/comments/{commentId}/resolve", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
@@ -528,7 +533,9 @@ public class ScreenCollaborationResource {
             target.resolvedBy = null;
             target.resolutionNote = null;
         }
-        return ResponseEntity.ok(toCommentResponse(target));
+        ObjectNode response = toCommentResponse(target);
+        realtimeService.broadcastCommentChange(screen.getId(), response);
+        return ResponseEntity.ok(response);
     }
 
     private List<CommentState> rebuildCommentStates(Long screenId, int limit) {

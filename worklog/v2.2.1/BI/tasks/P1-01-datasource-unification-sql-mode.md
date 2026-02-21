@@ -1,6 +1,6 @@
 # P1-01 数据源统一与 SQL 模式
 
-`status`: `in-progress`  
+`status`: `done`  
 `priority`: `P1`  
 `inspiration`: `Metabase(Card资产) + Superset(SQL Lab + Explore 双模式)`
 
@@ -68,3 +68,7 @@
   - `QueryExecutionFacade` 渲染触发条件从仅 `{{` 扩展到 `${`，避免参数未渲染直接下发；
   - 新增回归测试覆盖 `${day}` 渲染与绑定值传递。
   - 前端 SQL 参数提取规则收敛为后端白名单命名规范（字母开头、`[A-Za-z0-9_-]`），减少“前端可提取但后端拒绝”的错配。
+- 执行错误结构统一（2026-02-21）：
+  - `DatasetResource` 查询链路错误响应统一为 `ApiError`（含 `code/retryable/message/path/requestId`）；
+  - 保持 `cache/warmup` 聚合接口可读错误摘要，支持同时识别 `ApiError` 与旧结构；
+  - 前端 `useCardDataSource` 增强 `HttpError` 解析，优先展示后端标准错误消息与错误码，减少 SQL/语义模式下的“长串原始异常”。

@@ -46,7 +46,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/card")
-@Transactional
 public class CardResource {
 
     private final AnalyticsSessionService sessionService;
@@ -113,6 +112,7 @@ public class CardResource {
     }
 
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+    @Transactional
     public ResponseEntity<?> create(@RequestBody JsonNode body, HttpServletRequest request) {
         Optional<AnalyticsUser> user = MetabaseAuth.currentUser(sessionService, request);
         if (user.isEmpty()) {
@@ -169,6 +169,7 @@ public class CardResource {
     }
 
     @PutMapping(path = "/{id}", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+    @Transactional
     public ResponseEntity<?> update(@PathVariable("id") long id, @RequestBody JsonNode body, HttpServletRequest request) {
         Optional<AnalyticsUser> user = MetabaseAuth.currentUser(sessionService, request);
         if (user.isEmpty()) {
@@ -221,6 +222,7 @@ public class CardResource {
     }
 
     @DeleteMapping(path = "/{id}")
+    @Transactional
     public ResponseEntity<?> delete(@PathVariable("id") long id, HttpServletRequest request) {
         Optional<ResponseEntity<String>> auth = MetabaseAuth.requireUser(sessionService, request);
         if (auth.isPresent()) {

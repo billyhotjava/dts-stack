@@ -11,6 +11,7 @@ const localManifestModules = import.meta.glob('./custom/*.manifest.json', { eage
 
 const ID_PATTERN = /^[a-z][a-z0-9-]{1,63}$/;
 const SEMVER_PATTERN = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
+const PROPERTY_FIELD_TYPE_SET = new Set(['string', 'number', 'boolean', 'color', 'json', 'array', 'select']);
 
 function normalizeManifests(input: unknown, sourceLabel: string): ScreenPluginManifest[] {
     if (!Array.isArray(input)) {
@@ -79,12 +80,96 @@ function normalizePluginComponents(
             continue;
         }
         dedupe.add(componentId);
+        const runtimeKey = `${pluginId}:${componentId}`;
         out.push({
             ...item,
             id: componentId,
+            propertySchema: normalizePropertySchema(runtimeKey, item.propertySchema, sourceLabel),
         });
     }
     return out;
+}
+
+function normalizePropertySchema(
+    runtimeKey: string,
+    schema: unknown,
+    sourceLabel: string,
+): Record<string, unknown> | undefined {
+    if (!schema || typeof schema !== 'object') {
+        return undefined;
+    }
+    const row = schema as Record<string, unknown>;
+    const inputFields = Array.isArray(row.fields) ? row.fields : [];
+    if (inputFields.length === 0) {
+        return {
+            ...row,
+            fields: [],
+        };
+    }
+    const dedupe = new Set<string>();
+    const fields: Record<string, unknown>[] = [];
+    for (const field of inputFields) {
+        if (!field || typeof field !== 'object') {
+            continue;
+        }
+        const fieldRow = field as Record<string, unknown>;
+        const key = String(fieldRow.key ?? '').trim();
+        const type = String(fieldRow.type ?? '').trim();
+        if (!key) {
+            console.warn('[screen-plugin] skip property field without key:', runtimeKey, sourceLabel);
+            continue;
+        }
+        if (dedupe.has(key)) {
+            console.warn('[screen-plugin] duplicated property field key, keep first:', runtimeKey, key, sourceLabel);
+            continue;
+        }
+        if (!PROPERTY_FIELD_TYPE_SET.has(type)) {
+            console.warn('[screen-plugin] skip property field with invalid type:', runtimeKey, key, type, sourceLabel);
+            continue;
+        }
+        dedupe.add(key);
+        if (type !== 'select') {
+            fields.push({
+                ...fieldRow,
+                key,
+                type,
+            });
+            continue;
+        }
+        const options = Array.isArray(fieldRow.options)
+            ? fieldRow.options
+                .map((item) => {
+                    if (!item || typeof item !== 'object') return null;
+                    const option = item as Record<string, unknown>;
+                    const label = String(option.label ?? '').trim();
+                    const value = option.value;
+                    if (!label) return null;
+                    if (
+                        typeof value !== 'string'
+                        && typeof value !== 'number'
+                        && typeof value !== 'boolean'
+                    ) {
+                        return null;
+                    }
+                    return { label, value };
+                })
+                .filter((item): item is { label: string; value: string | number | boolean } => !!item)
+            : [];
+        if (options.length === 0) {
+            console.warn('[screen-plugin] skip select field without valid options:', runtimeKey, key, sourceLabel);
+            continue;
+        }
+        fields.push({
+            ...fieldRow,
+            key,
+            type,
+            options,
+        });
+    }
+    return {
+        ...row,
+        fields,
+    };
 }
 
 function normalizePluginDataSources(

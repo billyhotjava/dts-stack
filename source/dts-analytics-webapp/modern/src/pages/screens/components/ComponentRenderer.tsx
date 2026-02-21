@@ -126,6 +126,41 @@ function resolveInteractionValue(params: Record<string, unknown>, sourcePath: st
     return undefined;
 }
 
+function normalizeInteractionTransform(raw: unknown): 'raw' | 'string' | 'number' | 'lowercase' | 'uppercase' {
+    const value = String(raw ?? '').trim().toLowerCase();
+    if (value === 'string' || value === 'number' || value === 'lowercase' || value === 'uppercase') {
+        return value;
+    }
+    return 'raw';
+}
+
+function resolveInteractionMappedValue(
+    rawValue: string | undefined,
+    mapping: ComponentInteractionMapping,
+): string | undefined {
+    const fallback = String(mapping.fallbackValue ?? '').trim();
+    const transform = normalizeInteractionTransform(mapping.transform);
+    const source = rawValue == null ? '' : String(rawValue);
+    let next = source;
+    if (transform === 'lowercase') {
+        next = source.toLowerCase();
+    } else if (transform === 'uppercase') {
+        next = source.toUpperCase();
+    } else if (transform === 'number') {
+        const parsed = Number(source);
+        if (!Number.isFinite(parsed)) {
+            return fallback || undefined;
+        }
+        next = String(parsed);
+    } else if (transform === 'string') {
+        next = String(source);
+    }
+    if (next.trim().length === 0) {
+        return fallback || undefined;
+    }
+    return next;
+}
+
 function resolveInteractionUrlTemplate(template: string, params: Record<string, unknown>): string | undefined {
     const raw = String(template || '').trim();
     if (!raw) return undefined;
@@ -1185,7 +1220,8 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
 
                 if (canInteract) {
                     for (const mapping of interactionMappings) {
-                        const nextValue = resolveInteractionValue(params, mapping.sourcePath);
+                        const rawNextValue = resolveInteractionValue(params, mapping.sourcePath);
+                        const nextValue = resolveInteractionMappedValue(rawNextValue, mapping);
                         if (nextValue != null) {
                             runtime.setVariable(mapping.variableKey, nextValue, `interaction:${component.id}`);
                         }
@@ -1694,10 +1730,18 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                         border: t.numberCard.border,
                         boxShadow: t.cardShadow,
                     }}>
-                        <div style={{ fontSize: (c.titleFontSize as number) || 12, color: (c.titleColor as string) || t.numberCard.titleColor, marginBottom: 8 }}>
+                        <div style={{
+                            fontSize: (c.titleFontSize as number) || 12,
+                            color: resolveTextColor(c.titleColor as string | undefined, t.numberCard.titleColor),
+                            marginBottom: 8,
+                        }}>
                             {c.title as string}
                         </div>
-                        <div style={{ fontSize: (c.valueFontSize as number) || 32, fontWeight: 'bold', color: (c.valueColor as string) || t.numberCard.valueColor }}>
+                        <div style={{
+                            fontSize: (c.valueFontSize as number) || 32,
+                            fontWeight: 'bold',
+                            color: resolveTextColor(c.valueColor as string | undefined, t.numberCard.valueColor),
+                        }}>
                             {c.prefix as string}
                             {(c.value as number).toLocaleString()}
                             {c.suffix as string}
@@ -1715,7 +1759,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                         justifyContent: c.textAlign as string,
                         fontSize: c.fontSize as number,
                         fontWeight: c.fontWeight as string,
-                        color: c.color as string,
+                        color: resolveTextColor(c.color as string | undefined, t.textPrimary),
                     }}>
                         {c.text as string}
                     </div>
@@ -1730,7 +1774,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                             width: '100%',
                             height: '100%',
                             overflow: 'auto',
-                            color: (c.color as string) || t.textPrimary,
+                            color: resolveTextColor(c.color as string | undefined, t.textPrimary),
                             fontSize: (c.fontSize as number) || 14,
                             lineHeight: Number(c.lineHeight || 1.6),
                             padding: 8,
@@ -1756,7 +1800,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                         alignItems: 'center',
                         justifyContent: 'center',
                         fontSize: c.fontSize as number,
-                        color: c.color as string,
+                        color: resolveTextColor(c.color as string | undefined, t.textPrimary),
                         fontFamily: 'monospace',
                     }}>
                         {formatted}
@@ -1781,13 +1825,14 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                 const seconds = Math.floor((remaining % minuteMs) / 1000);
                 const showDays = c.showDays !== false;
                 const accentColor = (c.accentColor as string) || t.accentColor;
+                const labelColor = resolveTextColor(c.color as string | undefined, t.textSecondary);
                 return (
                     <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 8 }}>
-                        <div style={{ fontSize: 12, color: (c.color as string) || t.textSecondary }}>
+                        <div style={{ fontSize: 12, color: labelColor }}>
                             {String(c.title || '倒计时')}
                         </div>
                         {!hasTarget ? (
-                            <div style={{ fontSize: 13, color: (c.color as string) || t.textSecondary, opacity: 0.8 }}>
+                            <div style={{ fontSize: 13, color: labelColor, opacity: 0.8 }}>
                                 请配置目标时间或绑定目标时间变量
                             </div>
                         ) : null}
@@ -1814,7 +1859,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                             display: 'flex',
                             alignItems: 'center',
                             background: (c.backgroundColor as string) || 'transparent',
-                            color: (c.color as string) || t.textPrimary,
+                            color: resolveTextColor(c.color as string | undefined, t.textPrimary),
                             fontSize: (c.fontSize as number) || 14,
                             whiteSpace: 'nowrap',
                             position: 'relative',
@@ -1834,9 +1879,9 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                 const index = hasItems ? (carouselIndex % items.length) : 0;
                 const currentItem = hasItems ? items[index] : '暂无轮播内容';
                 const cardTitle = String(c.title || '轮播卡片');
-                const cardColor = String(c.color || t.textPrimary);
-                const titleColor = String(c.titleColor || t.textSecondary);
-                const backgroundColor = String(c.backgroundColor || 'rgba(15,23,42,0.5)');
+                const cardColor = resolveTextColor(c.color as string | undefined, t.textPrimary);
+                const titleColor = resolveTextColor(c.titleColor as string | undefined, t.textSecondary);
+                const backgroundColor = String(c.backgroundColor || t.cardBackground);
                 const fontSize = Math.max(12, Number(c.fontSize || 24));
                 const showDots = c.showDots !== false;
                 const showControls = c.showControls !== false;
@@ -2209,10 +2254,10 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                         height: '100%',
                         border: `${Math.max(0, Number(c.borderWidth || 1))}px solid ${String(c.borderColor || 'rgba(148,163,184,0.35)')}`,
                         borderRadius: Math.max(0, Number(c.radius || 10)),
-                        background: String(c.backgroundColor || 'rgba(15,23,42,0.25)'),
+                        background: String(c.backgroundColor || t.cardBackground),
                         padding: Math.max(0, Number(c.padding || 12)),
                         boxSizing: 'border-box',
-                        color: String(c.titleColor || t.textPrimary),
+                        color: resolveTextColor(c.titleColor as string | undefined, t.textPrimary),
                     }}>
                         <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>
                             {String(c.title || '容器')}

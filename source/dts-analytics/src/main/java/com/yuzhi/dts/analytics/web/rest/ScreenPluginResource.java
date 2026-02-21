@@ -155,6 +155,7 @@ public class ScreenPluginResource {
         compactTrendConfig.put("title", "趋势-插件版");
         compactTrendConfig.put("lineSmooth", true);
         compactTrendConfig.put("areaStyle", true);
+        compactTrendConfig.put("displayMode", "area");
         compactTrendConfig.set("xAxisData", objectMapper.createArrayNode().add("Mon").add("Tue").add("Wed").add("Thu").add("Fri"));
         compactTrendConfig.set("series", objectMapper.createArrayNode().add(
                 objectMapper.createObjectNode()
@@ -165,6 +166,13 @@ public class ScreenPluginResource {
                 .put("version", "1.0")
                 .set("fields", objectMapper.createArrayNode()
                         .add(objectMapper.createObjectNode().put("key", "title").put("label", "标题").put("type", "string"))
+                        .add(objectMapper.createObjectNode()
+                                .put("key", "displayMode")
+                                .put("label", "展示模式")
+                                .put("type", "select")
+                                .set("options", objectMapper.createArrayNode()
+                                        .add(objectMapper.createObjectNode().put("label", "面积").put("value", "area"))
+                                        .add(objectMapper.createObjectNode().put("label", "折线").put("value", "line"))))
                         .add(objectMapper.createObjectNode().put("key", "series").put("label", "序列").put("type", "array"))));
         compactTrend.set("dataContract", objectMapper.createObjectNode()
                 .put("version", "1.0")

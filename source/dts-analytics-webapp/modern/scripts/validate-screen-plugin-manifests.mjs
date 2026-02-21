@@ -11,6 +11,7 @@ const customManifestDir = path.join(projectRoot, 'src/pages/screens/plugins/cust
 
 const ID_PATTERN = /^[a-z][a-z0-9-]{1,63}$/;
 const SEMVER_PATTERN = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
+const PROPERTY_FIELD_TYPE_SET = new Set(["string", "number", "boolean", "color", "json", "array", "select"]);
 
 function asArray(input) {
     return Array.isArray(input) ? input : [];
@@ -28,6 +29,93 @@ function normalizeManifests(json) {
 
 function pushIssue(list, level, file, message) {
     list.push({ level, file, message });
+}
+
+function validatePropertySchema(pluginId, componentId, schema, file, issues) {
+    if (!schema || typeof schema !== "object") {
+        return;
+    }
+    const fields = Array.isArray(schema.fields) ? schema.fields : [];
+    if (fields.length === 0) {
+        return;
+    }
+    for (let i = 0; i < fields.length; i += 1) {
+        const field = fields[i];
+        if (!field || typeof field !== "object") {
+            pushIssue(
+                issues,
+                "error",
+                file,
+                `component "${pluginId}:${componentId}" propertySchema.fields[${i}] is not an object`,
+            );
+            continue;
+        }
+        const fieldKey = String(field.key ?? "").trim();
+        const fieldType = String(field.type ?? "").trim();
+        if (!fieldKey) {
+            pushIssue(
+                issues,
+                "error",
+                file,
+                `component "${pluginId}:${componentId}" has property field without key`,
+            );
+        }
+        if (!PROPERTY_FIELD_TYPE_SET.has(fieldType)) {
+            pushIssue(
+                issues,
+                "error",
+                file,
+                `component "${pluginId}:${componentId}" field "${fieldKey || `#${i}`}" has invalid type "${fieldType}"`,
+            );
+            continue;
+        }
+        if (fieldType === "select") {
+            const options = Array.isArray(field.options) ? field.options : [];
+            if (options.length === 0) {
+                pushIssue(
+                    issues,
+                    "warning",
+                    file,
+                    `component "${pluginId}:${componentId}" field "${fieldKey || `#${i}`}" type=select has no options`,
+                );
+                continue;
+            }
+            for (let j = 0; j < options.length; j += 1) {
+                const option = options[j];
+                if (!option || typeof option !== "object") {
+                    pushIssue(
+                        issues,
+                        "error",
+                        file,
+                        `component "${pluginId}:${componentId}" field "${fieldKey || `#${i}`}" option[${j}] is not an object`,
+                    );
+                    continue;
+                }
+                const optionLabel = String(option.label ?? "").trim();
+                const optionValue = option.value;
+                if (!optionLabel) {
+                    pushIssue(
+                        issues,
+                        "error",
+                        file,
+                        `component "${pluginId}:${componentId}" field "${fieldKey || `#${i}`}" option[${j}] missing label`,
+                    );
+                }
+                if (
+                    typeof optionValue !== "string"
+                    && typeof optionValue !== "number"
+                    && typeof optionValue !== "boolean"
+                ) {
+                    pushIssue(
+                        issues,
+                        "error",
+                        file,
+                        `component "${pluginId}:${componentId}" field "${fieldKey || `#${i}`}" option[${j}] has non-primitive value`,
+                    );
+                }
+            }
+        }
+    }
 }
 
 function validateComponent(pluginId, component, file, issues, globalComponentKeys, localComponentKeys) {
@@ -62,6 +150,7 @@ function validateComponent(pluginId, component, file, issues, globalComponentKey
     }
     const w = Number(component.defaultWidth ?? 0);
     const h = Number(component.defaultHeight ?? 0);
+    validatePropertySchema(pluginId, id, component.propertySchema, file, issues);
     if (Number.isFinite(w) && w > 0 && Number.isFinite(h) && h > 0) {
         return;
     }

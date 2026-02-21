@@ -1,6 +1,6 @@
 # P1-02 全局筛选器与联动引擎
 
-`status`: `in-progress`  
+`status`: `done`  
 `priority`: `P1`  
 `inspiration`: `Superset(Native Filter) + DataEase(低门槛联动配置)`
 
@@ -83,3 +83,19 @@
   - 前端 `specV2.validateScreenPayload` 增加 `visibilityMatchMode` 白名单校验与 `visibilityVariableKey` 必填校验；
   - 后端 `ScreenSpecValidator` 增加同口径校验，防止绕过前端提交非法模式；
   - 新增 `ScreenSpecValidatorTest` 覆盖“非法模式拒绝/合法 contains 模式通过”。
+- 联动映射协议增强（2026-02-20）：
+  - `ComponentInteractionMapping` 新增 `transform/fallbackValue`：
+    - 支持 `raw/string/number/lowercase/uppercase` 值转换；
+    - 支持空值回退默认值，降低点击参数缺失导致的联动失效。
+  - 联动配置面板升级：
+    - `sourcePath` 改为可输入（含候选路径），支持 `data.code` 等自定义路径；
+    - 新增“值转换”“默认值”配置项。
+  - 运行时执行升级：
+    - 图表点击联动写变量前先执行转换和回退策略，保持运行态行为可预期。
+- 联动校验与循环检测补强（2026-02-20）：
+  - 前端 `specV2` 增加 `interaction.mappings` 基础校验（`variableKey/sourcePath/transform`）；
+  - `interactionGraph.consumeVariables` 补齐 `metric` 数据源参数绑定消费边，循环检测结果更贴近真实运行链路。
+- 联动协议前后端一致性补齐（2026-02-21）：
+  - 后端 `ScreenSpecValidator` 新增 `interaction` 对象校验（`mappings` 数组、`variableKey/sourcePath` 必填）；
+  - 后端新增 `transform` 白名单校验（`raw/string/number/lowercase/uppercase`），与前端 `specV2` 口径一致；
+  - 新增 `ScreenSpecValidatorTest` 用例覆盖“非法 transform 拒绝 / 合法映射通过”。

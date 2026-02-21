@@ -110,4 +110,83 @@ class ScreenSpecValidatorTest {
         ScreenSpecValidator.ValidationResult result = validator.validateForWrite(payload);
         assertThat(result.errors()).isEmpty();
     }
+
+    @Test
+    void validateForWrite_interactionInvalidTransform_rejected() throws Exception {
+        ScreenSpecValidator validator = new ScreenSpecValidator();
+        var payload = objectMapper.readTree("""
+                {
+                  "schemaVersion": 2,
+                  "width": 1920,
+                  "height": 1080,
+                  "components": [
+                    {
+                      "id": "c1",
+                      "type": "line-chart",
+                      "x": 0,
+                      "y": 0,
+                      "width": 300,
+                      "height": 200,
+                      "interaction": {
+                        "enabled": true,
+                        "event": "click",
+                        "mappings": [
+                          {
+                            "variableKey": "projectCode",
+                            "sourcePath": "seriesName",
+                            "transform": "trim"
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                }
+                """);
+
+        assertThatThrownBy(() -> validator.validateForWrite(payload))
+                .isInstanceOf(ScreenSpecValidationException.class)
+                .hasMessageContaining("transform");
+    }
+
+    @Test
+    void validateForWrite_interactionMappingsWithTransformAndFallback_accepted() throws Exception {
+        ScreenSpecValidator validator = new ScreenSpecValidator();
+        var payload = objectMapper.readTree("""
+                {
+                  "schemaVersion": 2,
+                  "width": 1920,
+                  "height": 1080,
+                  "components": [
+                    {
+                      "id": "c1",
+                      "type": "line-chart",
+                      "x": 0,
+                      "y": 0,
+                      "width": 300,
+                      "height": 200,
+                      "interaction": {
+                        "enabled": true,
+                        "event": "click",
+                        "mappings": [
+                          {
+                            "variableKey": "projectCode",
+                            "sourcePath": "seriesName",
+                            "transform": "uppercase",
+                            "fallbackValue": "UNKNOWN"
+                          },
+                          {
+                            "variableKey": "ownerName",
+                            "sourcePath": "value",
+                            "fallbackValue": "N/A"
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                }
+                """);
+
+        ScreenSpecValidator.ValidationResult result = validator.validateForWrite(payload);
+        assertThat(result.errors()).isEmpty();
+    }
 }

@@ -30,6 +30,13 @@
 3. 组件拖入画布时写入 `__plugin` 元数据（由组件库映射负责）。
 4. `ComponentRenderer` 自动按 `__plugin` 元数据匹配并渲染。
 
+## PropertySchema 字段类型
+
+- 支持：`string` / `number` / `boolean` / `color` / `json` / `array` / `select`
+- `select` 需提供 `options`：
+  - `[{ label: "自动", value: "auto" }, { label: "手工", value: "manual" }]`
+- `number` 可选 `min/max/step`，`string` 可选 `placeholder`，所有字段可选 `description`。
+
 ## 脚手架命令
 
 可使用脚手架快速生成插件适配器模板与 manifest 草稿：

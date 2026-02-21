@@ -1,7 +1,12 @@
 import type { ReactNode } from 'react';
 import type { CardData, ComponentType, ScreenComponent, ScreenTheme } from '../types';
 
-export type PluginPropertyType = 'string' | 'number' | 'boolean' | 'color' | 'json' | 'array';
+export type PluginPropertyType = 'string' | 'number' | 'boolean' | 'color' | 'json' | 'array' | 'select';
+
+export interface PropertySchemaOption {
+    label: string;
+    value: string | number | boolean;
+}
 
 export interface PropertySchemaField {
     key: string;
@@ -10,6 +15,11 @@ export interface PropertySchemaField {
     required?: boolean;
     defaultValue?: unknown;
     description?: string;
+    placeholder?: string;
+    min?: number;
+    max?: number;
+    step?: number;
+    options?: PropertySchemaOption[];
 }
 
 export interface PropertySchema {
@@ -46,4 +56,3 @@ export interface RendererPlugin {
     dataContract?: DataContract;
     render: (context: RendererPluginRenderContext) => ReactNode;
 }
-

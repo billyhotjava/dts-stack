@@ -34,12 +34,13 @@ public class ScreenCollaborationWebSocketHandler extends TextWebSocketHandler {
             presenceSessionId = "ws-" + UUID.randomUUID();
         }
         String clientType = trimToNull(query.get("clientType"));
+        String roles = trimToNull((String) session.getAttributes().get("roles"));
         Long userId = readLong(session.getAttributes().get("userId"));
         String displayName = trimToNull((String) session.getAttributes().get("displayName"));
         if (displayName == null) {
             displayName = userId == null ? "匿名协作者" : "用户#" + userId;
         }
-        realtimeService.register(session, screenId, presenceSessionId, userId, displayName, clientType);
+        realtimeService.register(session, screenId, presenceSessionId, userId, displayName, clientType, roles);
     }
 
     @Override

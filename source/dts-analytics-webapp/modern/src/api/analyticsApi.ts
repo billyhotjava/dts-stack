@@ -306,17 +306,37 @@ export type ScreenAiGenerationResponse = {
 		dimensions?: string[];
 		filters?: string[];
 	};
+	semanticModelHints?: {
+		domain?: string;
+		factTable?: string;
+		timeField?: string;
+		dimensions?: string[];
+		metricMappings?: Array<{
+			name?: string;
+			expression?: string;
+		}>;
+	};
 	queryRecommendations?: Array<{
 		id?: string;
 		purpose?: string;
 		mode?: string;
+		semanticLayer?: string;
 		domain?: string;
+		factTable?: string;
+		timeField?: string;
 		timeRange?: string;
 		granularity?: string;
 		dimensions?: string[];
 		metrics?: string[];
 		filters?: string[];
 		sqlHint?: string;
+	}>;
+	sqlBlueprints?: Array<{
+		queryId?: string;
+		purpose?: string;
+		sql?: string;
+		factTable?: string;
+		timeField?: string;
 	}>;
 	vizRecommendations?: Array<{
 		queryId?: string;
@@ -780,6 +800,23 @@ export type ScreenExportReportResult = {
 	reportedAt?: string;
 };
 
+export type ScreenExportRenderRequest = {
+	format?: "png" | "pdf" | string;
+	mode?: "draft" | "published" | "preview" | string;
+	device?: "pc" | "tablet" | "mobile" | string;
+	screenSpec?: Record<string, unknown>;
+};
+
+export type ScreenExportRenderResult = {
+	blob: Blob;
+	contentType?: string;
+	fileName?: string;
+	requestId?: string;
+	specDigest?: string;
+	resolvedMode?: string;
+	renderEngine?: string;
+};
+
 export type ScreenComponentData = {
 	id: string;
 	type: string;
@@ -968,6 +1005,52 @@ async function requestJson<T>(url: string, method: "POST" | "PUT" | "DELETE", bo
 		return (await response.text()) as unknown as T;
 	}
 	return (await response.json()) as T;
+}
+
+function parseContentDispositionFilename(headerValue: string | null): string | undefined {
+	if (!headerValue) return undefined;
+	const utf8Match = /filename\*=UTF-8''([^;]+)/i.exec(headerValue);
+	if (utf8Match && utf8Match[1]) {
+		try {
+			return decodeURIComponent(utf8Match[1].trim());
+		} catch {
+			return utf8Match[1].trim();
+		}
+	}
+	const plainMatch = /filename="?([^\";]+)"?/i.exec(headerValue);
+	if (plainMatch && plainMatch[1]) {
+		return plainMatch[1].trim();
+	}
+	return undefined;
+}
+
+async function requestBinary(
+	url: string,
+	method: "POST" | "PUT",
+	body?: unknown,
+): Promise<ScreenExportRenderResult> {
+	const response = await apiFetch(url, {
+		method,
+		headers: {
+			accept: "application/octet-stream",
+			"content-type": "application/json",
+		},
+		body: JSON.stringify(body ?? {}),
+	}, true);
+	if (!response.ok) {
+		const text = await readErrorText(response);
+		throw buildHttpError(response, text);
+	}
+	const blob = await response.blob();
+	return {
+		blob,
+		contentType: response.headers.get("content-type") ?? undefined,
+		fileName: parseContentDispositionFilename(response.headers.get("content-disposition")),
+		requestId: response.headers.get("x-request-id") ?? undefined,
+		specDigest: response.headers.get("x-screen-spec-digest") ?? undefined,
+		resolvedMode: response.headers.get("x-screen-resolved-mode") ?? undefined,
+		renderEngine: response.headers.get("x-screen-render-engine") ?? undefined,
+	};
 }
 
 export const analyticsApi = {
@@ -1178,6 +1261,8 @@ export const analyticsApi = {
 		sendJson<ScreenExportPrepareResult>(`/analytics/api/screens/${encodeURIComponent(String(id))}/export-prepare`, body ?? {}),
 	reportScreenExport: (id: string | number, body: ScreenExportReportRequest) =>
 		sendJson<ScreenExportReportResult>(`/analytics/api/screens/${encodeURIComponent(String(id))}/export-report`, body),
+	renderScreenExport: (id: string | number, body?: ScreenExportRenderRequest) =>
+		requestBinary(`/analytics/api/screens/${encodeURIComponent(String(id))}/export-render`, "POST", body ?? {}),
 	validateScreenSpec: (body: unknown) =>
 		sendJson<ScreenSpecValidationResponse>("/analytics/api/screens/validate-spec", body),
 	createScreen: (body: unknown) => sendJson<ScreenDetail>("/analytics/api/screens", body),

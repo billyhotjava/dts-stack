@@ -569,28 +569,98 @@ function renderPluginSchemaFields(
                 if (!key) return null;
                 const label = field?.label || key;
                 const value = component.config[key] ?? field?.defaultValue;
+                const description = String(field?.description || '').trim();
+                const descriptionNode = description ? (
+                    <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4, lineHeight: 1.45 }}>
+                        {description}
+                    </div>
+                ) : null;
                 if (field.type === 'boolean') {
                     return (
                         <div className="property-row" key={key}>
                             <label className="property-label">{label}</label>
-                            <input
-                                type="checkbox"
-                                checked={Boolean(value)}
-                                onChange={(e) => onChange(key, e.target.checked)}
-                            />
+                            <div style={{ flex: 1 }}>
+                                <input
+                                    type="checkbox"
+                                    checked={Boolean(value)}
+                                    onChange={(e) => onChange(key, e.target.checked)}
+                                />
+                                {descriptionNode}
+                            </div>
                         </div>
                     );
                 }
                 if (field.type === 'number') {
+                    const min = Number.isFinite(field.min) ? Number(field.min) : undefined;
+                    const max = Number.isFinite(field.max) ? Number(field.max) : undefined;
+                    const step = Number.isFinite(field.step) ? Number(field.step) : undefined;
                     return (
                         <div className="property-row" key={key}>
                             <label className="property-label">{label}</label>
-                            <input
-                                type="number"
-                                className="property-input"
-                                value={Number(value ?? 0)}
-                                onChange={(e) => onChange(key, Number(e.target.value))}
-                            />
+                            <div style={{ flex: 1 }}>
+                                <input
+                                    type="number"
+                                    className="property-input"
+                                    min={min}
+                                    max={max}
+                                    step={step}
+                                    value={Number(value ?? 0)}
+                                    onChange={(e) => onChange(key, Number(e.target.value))}
+                                />
+                                {descriptionNode}
+                            </div>
+                        </div>
+                    );
+                }
+                if (field.type === 'select') {
+                    const options = Array.isArray(field.options)
+                        ? field.options
+                            .map((item) => {
+                                if (!item || typeof item !== 'object') return null;
+                                const labelText = String(item.label ?? '').trim();
+                                const rawValue = (item as { value?: unknown }).value;
+                                if (!labelText) return null;
+                                if (
+                                    typeof rawValue !== 'string'
+                                    && typeof rawValue !== 'number'
+                                    && typeof rawValue !== 'boolean'
+                                ) {
+                                    return null;
+                                }
+                                return {
+                                    label: labelText,
+                                    value: rawValue,
+                                };
+                            })
+                            .filter((item): item is { label: string; value: string | number | boolean } => !!item)
+                        : [];
+                    const selectedIndex = options.findIndex((item) => String(item.value) === String(value));
+                    return (
+                        <div className="property-row" key={key}>
+                            <label className="property-label">{label}</label>
+                            <div style={{ flex: 1 }}>
+                                <select
+                                    className="property-input"
+                                    value={selectedIndex >= 0 ? String(selectedIndex) : ''}
+                                    onChange={(e) => {
+                                        const nextIdx = Number(e.target.value);
+                                        if (!Number.isFinite(nextIdx) || nextIdx < 0 || nextIdx >= options.length) {
+                                            return;
+                                        }
+                                        onChange(key, options[nextIdx].value);
+                                    }}
+                                >
+                                    {selectedIndex < 0 && (
+                                        <option value="">-- 请选择 --</option>
+                                    )}
+                                    {options.map((item, idx) => (
+                                        <option key={`${item.label}-${idx}`} value={String(idx)}>
+                                            {item.label}
+                                        </option>
+                                    ))}
+                                </select>
+                                {descriptionNode}
+                            </div>
                         </div>
                     );
                 }
@@ -599,12 +669,15 @@ function renderPluginSchemaFields(
                     return (
                         <div className="property-row" key={key}>
                             <label className="property-label">{label}</label>
-                            <input
-                                type="color"
-                                className="property-color-input"
-                                value={fallback}
-                                onChange={(e) => onChange(key, e.target.value)}
-                            />
+                            <div style={{ flex: 1 }}>
+                                <input
+                                    type="color"
+                                    className="property-color-input"
+                                    value={fallback}
+                                    onChange={(e) => onChange(key, e.target.value)}
+                                />
+                                {descriptionNode}
+                            </div>
                         </div>
                     );
                 }
@@ -655,6 +728,7 @@ function renderPluginSchemaFields(
                                 >
                                     {snapshot}
                                 </pre>
+                                {descriptionNode}
                             </div>
                         </div>
                     );
@@ -662,12 +736,16 @@ function renderPluginSchemaFields(
                 return (
                     <div className="property-row" key={key}>
                         <label className="property-label">{label}</label>
-                        <input
-                            type="text"
-                            className="property-input"
-                            value={String(value ?? '')}
-                            onChange={(e) => onChange(key, e.target.value)}
-                        />
+                        <div style={{ flex: 1 }}>
+                            <input
+                                type="text"
+                                className="property-input"
+                                value={String(value ?? '')}
+                                placeholder={String(field?.placeholder || '')}
+                                onChange={(e) => onChange(key, e.target.value)}
+                            />
+                            {descriptionNode}
+                        </div>
                     </div>
                 );
             })}
@@ -2735,6 +2813,7 @@ function renderInteractionConfig(
         jumpOpenMode: 'new-tab' as const,
     };
     const mappings = interaction.mappings ?? [];
+    const sourcePathCandidates = ['name', 'seriesName', 'value', 'data.name', 'data.value', 'data.code'];
 
     const setInteraction = (next: typeof interaction) => {
         updateComponent(component.id, { interaction: next });
@@ -2795,16 +2874,43 @@ function renderInteractionConfig(
 
                             <div className="property-row">
                                 <label className="property-label">取值路径</label>
-                                <select
+                                <input
+                                    list={`interaction-source-path-${index}`}
                                     className="property-input"
                                     value={mapping.sourcePath || 'name'}
                                     onChange={(e) => updateMapping(index, { sourcePath: e.target.value })}
+                                    placeholder="name / data.name / value"
+                                />
+                                <datalist id={`interaction-source-path-${index}`}>
+                                    {sourcePathCandidates.map((item) => (
+                                        <option key={item} value={item} />
+                                    ))}
+                                </datalist>
+                            </div>
+
+                            <div className="property-row">
+                                <label className="property-label">值转换</label>
+                                <select
+                                    className="property-input"
+                                    value={String(mapping.transform || 'raw')}
+                                    onChange={(e) => updateMapping(index, { transform: e.target.value as ComponentInteractionMapping['transform'] })}
                                 >
-                                    <option value="name">name</option>
-                                    <option value="seriesName">seriesName</option>
-                                    <option value="value">value</option>
-                                    <option value="data.name">data.name</option>
+                                    <option value="raw">原值</option>
+                                    <option value="string">字符串</option>
+                                    <option value="number">数值</option>
+                                    <option value="lowercase">转小写</option>
+                                    <option value="uppercase">转大写</option>
                                 </select>
+                            </div>
+
+                            <div className="property-row">
+                                <label className="property-label">默认值</label>
+                                <input
+                                    className="property-input"
+                                    value={mapping.fallbackValue || ''}
+                                    onChange={(e) => updateMapping(index, { fallbackValue: e.target.value })}
+                                    placeholder="取值为空时写入该值"
+                                />
                             </div>
 
                             <button
@@ -2821,12 +2927,20 @@ function renderInteractionConfig(
                         className="property-input"
                         onClick={() => setInteraction({
                             ...interaction,
-                            mappings: [...mappings, { variableKey: globalVariables[0]?.key ?? '', sourcePath: 'name' }],
+                            mappings: [...mappings, {
+                                variableKey: globalVariables[0]?.key ?? '',
+                                sourcePath: 'name',
+                                transform: 'raw',
+                                fallbackValue: '',
+                            }],
                         })}
                         style={{ width: '100%', cursor: 'pointer', textAlign: 'center', color: '#6366f1' }}
                     >
                         + 添加联动规则
                     </button>
+                    <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 6, lineHeight: 1.5 }}>
+                        支持自定义路径，例如 <code>data.code</code>；可对值做数值/大小写转换，并设置空值回退。
+                    </div>
 
                     <div className="property-row" style={{ marginTop: 10 }}>
                         <label className="property-label">启用点击跳转</label>

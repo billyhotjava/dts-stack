@@ -1,6 +1,6 @@
 # P1-03 插件化渲染体系与运行时解耦
 
-`status`: `in-progress`  
+`status`: `done`  
 `priority`: `P1`  
 `inspiration`: `Superset(可插拔 Viz 插件) + Metabase(稳定核心)`
 
@@ -93,9 +93,25 @@
   - `validate-screen-plugin-manifests` 增加“manifest 组件是否存在本地适配器文件”告警；
   - 约定映射：`pluginId:componentId` ↔ `plugins/custom/{pluginId}__{componentId}.tsx/.ts`；
   - 降低“清单可见但运行时无渲染器”导致的现场空白组件风险。
+- 插件属性 schema 能力增强（2026-02-20）：
+  - `PropertySchemaField` 新增 `select` 类型，支持 `options` 下拉配置；
+  - 新增字段约束扩展：`description/placeholder/min/max/step/options`；
+  - 属性面板按 schema 渲染下拉框并保留原始值类型（string/number/boolean）。
+  - 插件脚手架模板升级：
+    - 默认生成 `mode(select)` 示例字段，开箱即可验证“schema 驱动下拉配置”。
+  - 后端 demo 插件清单补齐 `select` 示例字段（`compact-trend.displayMode`），用于联调验证前后端一致性。
+- 插件清单门禁补强（2026-02-20）：
+  - `validate-screen-plugin-manifests` 增加 `propertySchema.fields` 结构校验；
+  - 校验字段类型白名单（含 `select`）与 `select.options` 合法性，提前拦截脏清单。
 - 清单加载器运行时校验增强（2026-02-17）：
   - `manifestLoader` 增加远端/本地清单规范化：
     - 非法插件 ID/组件 ID/数据源 ID 直接跳过；
     - 插件组件与数据源重复 ID 自动去重并告警；
     - 插件版本非 semver 给出警告但不阻断加载；
   - 降低“远端返回脏清单”导致组件库与运行时崩溃风险。
+- 清单加载器 schema 容灾增强（2026-02-20）：
+  - `manifestLoader` 新增 `propertySchema.fields` 运行时规范化：
+    - 非法字段类型/缺失 key 的字段自动跳过并告警；
+    - `select` 字段无有效 `options` 自动跳过；
+    - 字段 key 重复时保留首个，避免属性面板冲突。
+  - 远端清单异常时仍可保证属性面板稳定渲染，不拖垮编辑器主流程。

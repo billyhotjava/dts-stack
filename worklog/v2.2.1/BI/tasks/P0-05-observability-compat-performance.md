@@ -50,3 +50,7 @@
 - 查询稳定性补强（2026-02-15）：
   - `CardResource.get` 明确改为 `@Transactional(propagation = NOT_SUPPORTED)`；
   - 避免读取卡片元数据时外部数据源异常污染事务状态并触发 `UnexpectedRollbackException`。
+- 查询事务边界补强（2026-02-20）：
+  - `CardResource` 移除类级 `@Transactional`，仅在 `create/update/delete` 写接口保留事务；
+  - 读/查询接口不再被外层控制器事务包裹，降低外部数据源连接失败时触发 `rollback-only -> UnexpectedRollbackException` 的概率；
+  - 与现有 `EXT_DB_*` 错误码链路配合，查询失败优先返回可诊断错误而非通用事务回滚 500。

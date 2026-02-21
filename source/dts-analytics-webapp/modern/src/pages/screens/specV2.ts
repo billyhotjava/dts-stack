@@ -54,6 +54,7 @@ const VISIBILITY_MATCH_MODES = new Set([
     'empty',
     'not-empty',
 ]);
+const INTERACTION_TRANSFORMS = new Set(['raw', 'string', 'number', 'lowercase', 'uppercase']);
 
 function asNumber(value: unknown, fallback: number, min?: number): number {
     const n = Number(value);
@@ -330,6 +331,42 @@ export function validateScreenPayload(input: unknown): { errors: string[]; warni
                 ? component.config as Record<string, unknown>
                 : undefined;
             validateVisibilityRuleConfig(config, path, errors);
+
+            const interaction = component.interaction;
+            if (interaction !== undefined && interaction !== null) {
+                if (typeof interaction !== 'object') {
+                    errors.push(`${path}.interaction 必须是对象`);
+                } else {
+                    const interactionRow = interaction as Record<string, unknown>;
+                    const mappings = interactionRow.mappings;
+                    if (mappings !== undefined && mappings !== null) {
+                        if (!Array.isArray(mappings)) {
+                            errors.push(`${path}.interaction.mappings 必须是数组`);
+                        } else {
+                            mappings.forEach((mapping, mappingIdx) => {
+                                const mappingPath = `${path}.interaction.mappings[${mappingIdx}]`;
+                                if (!mapping || typeof mapping !== 'object') {
+                                    errors.push(`${mappingPath} 必须是对象`);
+                                    return;
+                                }
+                                const mappingRow = mapping as Record<string, unknown>;
+                                const variableKey = asTrimmedString(mappingRow.variableKey);
+                                const sourcePath = asTrimmedString(mappingRow.sourcePath);
+                                if (!variableKey) {
+                                    errors.push(`${mappingPath}.variableKey 不能为空`);
+                                }
+                                if (!sourcePath) {
+                                    errors.push(`${mappingPath}.sourcePath 不能为空`);
+                                }
+                                const transform = String(mappingRow.transform ?? 'raw').trim().toLowerCase();
+                                if (!INTERACTION_TRANSFORMS.has(transform)) {
+                                    errors.push(`${mappingPath}.transform 非法: ${transform}`);
+                                }
+                            });
+                        }
+                    }
+                }
+            }
         });
     }
 

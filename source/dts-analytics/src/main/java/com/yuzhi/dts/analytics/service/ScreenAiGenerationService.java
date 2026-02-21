@@ -4,6 +4,11 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -24,6 +29,9 @@ public class ScreenAiGenerationService {
     private static final int MAX_CONTEXT_ITEMS = 16;
     private static final int MAX_CONTEXT_ITEM_LENGTH = 240;
     private static final int MAX_KEYWORD_LENGTH = 6000;
+    private static final String SEMANTIC_BRIDGE_URL_PROP = "dts.ai.semantic.bridge.url";
+    private static final String SEMANTIC_BRIDGE_URL_ENV = "DTS_AI_SEMANTIC_BRIDGE_URL";
+    private static final String SEMANTIC_BRIDGE_TIMEOUT_MS_PROP = "dts.ai.semantic.bridge.timeout-ms";
 
     private final ObjectMapper objectMapper;
 
@@ -80,6 +88,7 @@ public class ScreenAiGenerationService {
         result.set("vizRecommendations", buildVizRecommendations(intent));
         result.set("screenSpec", screenSpec);
         result.set("quality", quality);
+        applySemanticBridgeIfEnabled(result, normalizedPrompt);
         return result;
     }
 
@@ -238,6 +247,7 @@ public class ScreenAiGenerationService {
         result.set("screenSpec", screenSpec);
         result.set("quality", quality);
         result.set("actions", actions);
+        applySemanticBridgeIfEnabled(result, normalized);
         return result;
     }
 
@@ -290,6 +300,113 @@ public class ScreenAiGenerationService {
             return text;
         }
         return text.substring(0, Math.max(0, maxLen));
+    }
+
+    private void applySemanticBridgeIfEnabled(ObjectNode result, String prompt) {
+        String bridgeUrl = resolveSemanticBridgeUrl();
+        if (bridgeUrl == null) {
+            return;
+        }
+        int timeoutMs = resolveSemanticBridgeTimeoutMs();
+        try {
+            ObjectNode requestPayload = objectMapper.createObjectNode();
+            requestPayload.put("prompt", prompt == null ? "" : prompt);
+            requestPayload.set("intent", result.path("intent").deepCopy());
+            requestPayload.set("queryRecommendations", result.path("queryRecommendations").deepCopy());
+            requestPayload.set("sqlBlueprints", result.path("sqlBlueprints").deepCopy());
+            requestPayload.set("vizRecommendations", result.path("vizRecommendations").deepCopy());
+
+            HttpRequest request = HttpRequest.newBuilder(URI.create(bridgeUrl))
+                    .timeout(Duration.ofMillis(timeoutMs))
+                    .header("Accept", "application/json")
+                    .header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(requestPayload)))
+                    .build();
+            HttpClient client = HttpClient.newBuilder()
+                    .connectTimeout(Duration.ofMillis(timeoutMs))
+                    .build();
+            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                appendQualityWarning(result, "语义桥接服务返回 HTTP " + response.statusCode() + "，已回退启发式建议。");
+                return;
+            }
+            JsonNode payload = objectMapper.readTree(response.body() == null ? "{}" : response.body());
+            if (payload == null || !payload.isObject()) {
+                appendQualityWarning(result, "语义桥接服务返回体无效，已回退启发式建议。");
+                return;
+            }
+            mergeBridgeArray(payload, "queryRecommendations", result);
+            mergeBridgeArray(payload, "sqlBlueprints", result);
+            mergeBridgeArray(payload, "vizRecommendations", result);
+            String externalEngine = payload.path("engine").asText("");
+            if (externalEngine != null && !externalEngine.trim().isEmpty()) {
+                String engine = result.path("engine").asText("heuristic-v1");
+                result.put("engine", engine + "+" + externalEngine.trim());
+            }
+        } catch (Exception ex) {
+            appendQualityWarning(result, "语义桥接服务不可用，已回退启发式建议。");
+        }
+    }
+
+    private void mergeBridgeArray(JsonNode payload, String field, ObjectNode target) {
+        JsonNode node = payload.path(field);
+        if (node == null || !node.isArray() || node.size() == 0) {
+            return;
+        }
+        target.set(field, node.deepCopy());
+    }
+
+    private void appendQualityWarning(ObjectNode result, String warning) {
+        ObjectNode qualityNode = result.path("quality").isObject()
+                ? (ObjectNode) result.path("quality")
+                : objectMapper.createObjectNode();
+        ArrayNode warningsNode = qualityNode.path("warnings").isArray()
+                ? (ArrayNode) qualityNode.path("warnings")
+                : objectMapper.createArrayNode();
+        boolean duplicated = false;
+        for (JsonNode item : warningsNode) {
+            if (warning.equals(item == null ? null : item.asText(null))) {
+                duplicated = true;
+                break;
+            }
+        }
+        if (!duplicated) {
+            warningsNode.add(warning);
+        }
+        qualityNode.set("warnings", warningsNode);
+        result.set("quality", qualityNode);
+    }
+
+    private String resolveSemanticBridgeUrl() {
+        String fromProp = sanitizeBridgeText(System.getProperty(SEMANTIC_BRIDGE_URL_PROP));
+        if (fromProp != null) {
+            return fromProp;
+        }
+        return sanitizeBridgeText(System.getenv(SEMANTIC_BRIDGE_URL_ENV));
+    }
+
+    private int resolveSemanticBridgeTimeoutMs() {
+        String raw = sanitizeBridgeText(System.getProperty(SEMANTIC_BRIDGE_TIMEOUT_MS_PROP));
+        if (raw == null) {
+            return 2500;
+        }
+        try {
+            int value = Integer.parseInt(raw);
+            if (value < 500) {
+                return 500;
+            }
+            return Math.min(value, 15000);
+        } catch (NumberFormatException ignore) {
+            return 2500;
+        }
+    }
+
+    private String sanitizeBridgeText(String text) {
+        if (text == null) {
+            return null;
+        }
+        String out = text.trim();
+        return out.isEmpty() ? null : out;
     }
 
     private ArrayNode buildComponents(String keyword, int width, int height, String theme, IntentProfile intent) {

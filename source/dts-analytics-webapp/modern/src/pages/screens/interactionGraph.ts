@@ -14,6 +14,8 @@ function consumeVariables(component: ScreenComponent): string[] {
             ? (dataSource.cardConfig?.parameterBindings ?? [])
             : normalized === 'sql'
                 ? ((dataSource.sqlConfig?.parameterBindings ?? dataSource.databaseConfig?.parameterBindings) ?? [])
+                : normalized === 'metric'
+                    ? (dataSource.metricConfig?.parameterBindings ?? [])
                 : [];
     const values: string[] = [];
     for (const item of bindings) {

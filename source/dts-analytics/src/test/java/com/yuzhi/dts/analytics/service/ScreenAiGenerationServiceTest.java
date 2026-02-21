@@ -263,6 +263,25 @@ class ScreenAiGenerationServiceTest {
         assertThat(blueprints.toString()).contains("${date_range}");
     }
 
+    @Test
+    void revise_outputsSemanticHintsAndSqlBlueprints() {
+        ScreenAiGenerationService service = new ScreenAiGenerationService(objectMapper);
+        ObjectNode screenSpec = baseScreenSpec();
+        ((ArrayNode) screenSpec.path("components")).add(component("c-line", "line-chart"));
+        ObjectNode result = service.revise("改成销售分析，按月趋势并增加对比", screenSpec, List.of("销售周报"), true);
+
+        JsonNode semanticHints = result.path("semanticModelHints");
+        assertThat(semanticHints.path("factTable").asText("")).isEqualTo("fact_sales_order");
+        assertThat(semanticHints.path("timeField").asText("")).isEqualTo("event_week");
+        assertThat(semanticHints.path("metricMappings").isArray()).isTrue();
+
+        JsonNode blueprints = result.path("sqlBlueprints");
+        assertThat(blueprints.isArray()).isTrue();
+        assertThat(blueprints.size()).isGreaterThanOrEqualTo(5);
+        assertThat(blueprints.toString()).contains("SELECT");
+        assertThat(blueprints.toString()).contains("fact_sales_order");
+    }
+
     private ObjectNode baseScreenSpec() {
         ObjectNode screenSpec = objectMapper.createObjectNode();
         screenSpec.put("name", "AI 草稿");

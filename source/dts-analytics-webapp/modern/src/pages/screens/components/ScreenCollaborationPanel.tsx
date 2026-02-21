@@ -12,6 +12,7 @@ interface ScreenCollaborationPanelProps {
     screenId?: string | number;
     components: ScreenComponent[];
     selectedIds?: string[];
+    onLocateComponent?: (componentId: string) => void;
     onClose: () => void;
 }
 
@@ -20,9 +21,11 @@ export function ScreenCollaborationPanel({
     screenId,
     components,
     selectedIds,
+    onLocateComponent,
     onClose,
 }: ScreenCollaborationPanelProps) {
     const eventSourceSupported = typeof window !== 'undefined' && typeof window.EventSource !== 'undefined';
+    const webSocketSupported = typeof window !== 'undefined' && typeof window.WebSocket !== 'undefined';
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -35,6 +38,8 @@ export function ScreenCollaborationPanel({
     const [driftWarning, setDriftWarning] = useState(false);
     const [autoRefresh, setAutoRefresh] = useState(true);
     const [refreshSeconds, setRefreshSeconds] = useState(15);
+    const [wsRefresh, setWsRefresh] = useState(webSocketSupported);
+    const [wsConnected, setWsConnected] = useState(false);
     const [streamRefresh, setStreamRefresh] = useState(eventSourceSupported);
     const [presenceStreamRefresh, setPresenceStreamRefresh] = useState(eventSourceSupported);
     const [liveRefresh, setLiveRefresh] = useState(true);
@@ -47,6 +52,12 @@ export function ScreenCollaborationPanel({
     const typingRef = useRef(false);
     const componentIdRef = useRef('');
     const selectedIdsRef = useRef<string[]>([]);
+    const wsRef = useRef<WebSocket | null>(null);
+    const wsPendingCommentRef = useRef<Map<string, {
+        resolve: (row: ScreenComment) => void;
+        reject: (error: Error) => void;
+        timer: number;
+    }>>(new Map());
 
     const presenceTtlSeconds = useMemo(
         () => Math.max(30, Math.min(Math.floor(refreshSeconds * 3), 180)),
@@ -82,6 +93,43 @@ export function ScreenCollaborationPanel({
         () => activeCollaborators.filter((item) => item.typing),
         [activeCollaborators],
     );
+
+    const conflictHotspots = useMemo(() => {
+        const map = new Map<string, { componentId: string; users: string[]; typingCount: number; mineSelected: boolean }>();
+        const mineSelected = new Set(
+            (Array.isArray(selectedIds) ? selectedIds : [])
+                .map((item) => String(item || '').trim())
+                .filter((item) => item.length > 0),
+        );
+        for (const row of activeCollaborators) {
+            const componentKey = String(row.componentId || '').trim();
+            if (!componentKey) continue;
+            const name = String(row.displayName || row.userId || '匿名');
+            const current = map.get(componentKey);
+            if (!current) {
+                map.set(componentKey, {
+                    componentId: componentKey,
+                    users: [name],
+                    typingCount: row.typing ? 1 : 0,
+                    mineSelected: mineSelected.has(componentKey),
+                });
+                continue;
+            }
+            if (!current.users.includes(name)) {
+                current.users.push(name);
+            }
+            if (row.typing) {
+                current.typingCount += 1;
+            }
+            current.mineSelected = current.mineSelected || mineSelected.has(componentKey);
+        }
+        return Array.from(map.values())
+            .filter((item) => item.users.length >= 2 || item.mineSelected)
+            .sort((a, b) => {
+                if (b.users.length !== a.users.length) return b.users.length - a.users.length;
+                return a.componentId.localeCompare(b.componentId);
+            });
+    }, [activeCollaborators, selectedIds]);
 
     const refreshDriftHint = async (resetBaseline = false) => {
         if (!screenId) return;
@@ -193,6 +241,69 @@ export function ScreenCollaborationPanel({
         }
     };
 
+    const sendWsPresence = (typing?: boolean) => {
+        const socket = wsRef.current;
+        if (!socket || socket.readyState !== WebSocket.OPEN) {
+            return;
+        }
+        const typingFlag = typing !== undefined ? typing : typingRef.current;
+        try {
+            socket.send(JSON.stringify({
+                type: 'presence.heartbeat',
+                componentId: componentIdRef.current || null,
+                cursorId: componentIdRef.current || null,
+                typing: typingFlag,
+                clientType: 'web',
+                selectedIds: selectedIdsRef.current,
+            }));
+        } catch {
+            // keep collaboration path non-blocking
+        }
+    };
+
+    const locateComponent = (componentId: string) => {
+        const target = String(componentId || '').trim();
+        if (!target) return;
+        setComponentId(target);
+        if (typeof onLocateComponent === 'function') {
+            onLocateComponent(target);
+        }
+    };
+
+    const submitCommentViaWebSocket = async (
+        text: string,
+        targetComponentId: string | null,
+    ): Promise<ScreenComment> => {
+        const socket = wsRef.current;
+        if (!socket || socket.readyState !== WebSocket.OPEN || !screenId) {
+            throw new Error('WebSocket unavailable');
+        }
+        const requestId = `ws-comment-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+        return await new Promise<ScreenComment>((resolve, reject) => {
+            const timer = window.setTimeout(() => {
+                const pending = wsPendingCommentRef.current.get(requestId);
+                if (!pending) return;
+                wsPendingCommentRef.current.delete(requestId);
+                reject(new Error('WS提交超时'));
+            }, 3500);
+            wsPendingCommentRef.current.set(requestId, { resolve, reject, timer });
+            try {
+                socket.send(JSON.stringify({
+                    type: 'comment.create',
+                    payload: {
+                        requestId,
+                        message: text,
+                        componentId: targetComponentId,
+                    },
+                }));
+            } catch (error) {
+                window.clearTimeout(timer);
+                wsPendingCommentRef.current.delete(requestId);
+                reject(error instanceof Error ? error : new Error('WS发送失败'));
+            }
+        });
+    };
+
     useEffect(() => {
         commentCursorRef.current = commentCursor;
     }, [commentCursor]);
@@ -225,17 +336,165 @@ export function ScreenCollaborationPanel({
         setCommentCursor(0);
         setPresenceRows([]);
         setPresenceError(null);
+        setWsConnected(false);
         refreshDriftHint(true);
         loadRows(limit);
         loadPresence(true);
-        heartbeatPresence(true, false);
+        if (!wsRefresh) {
+            heartbeatPresence(true, false);
+        }
         const selectedId = Array.isArray(selectedIds) && selectedIds.length > 0 ? selectedIds[0] : '';
         setComponentId(selectedId || '');
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [open, screenId]);
+    }, [open, screenId, wsRefresh]);
 
     useEffect(() => {
-        if (!open || !screenId || !autoRefresh || !streamRefresh || saving || loading || !eventSourceSupported) {
+        if (!open || !screenId || !autoRefresh || !wsRefresh || !webSocketSupported) {
+            setWsConnected(false);
+            if (wsRef.current) {
+                try {
+                    wsRef.current.close();
+                } catch {
+                    // no-op
+                }
+                wsRef.current = null;
+            }
+            return;
+        }
+        let cancelled = false;
+        let reconnectTimer = 0;
+        let heartbeatTimer = 0;
+        const reconnectDelayMs = 1200;
+
+        const clearTimers = () => {
+            if (reconnectTimer) {
+                window.clearTimeout(reconnectTimer);
+                reconnectTimer = 0;
+            }
+            if (heartbeatTimer) {
+                window.clearInterval(heartbeatTimer);
+                heartbeatTimer = 0;
+            }
+        };
+
+        const rejectPendingCommentRequests = (reason: string) => {
+            const pending = Array.from(wsPendingCommentRef.current.entries());
+            wsPendingCommentRef.current.clear();
+            for (const [, item] of pending) {
+                window.clearTimeout(item.timer);
+                item.reject(new Error(reason));
+            }
+        };
+
+        const clearSocket = () => {
+            const existing = wsRef.current;
+            if (existing) {
+                try {
+                    existing.close();
+                } catch {
+                    // ignore close failure
+                }
+                wsRef.current = null;
+            }
+            rejectPendingCommentRequests('WebSocket disconnected');
+        };
+
+        const scheduleReconnect = () => {
+            if (cancelled || reconnectTimer) return;
+            reconnectTimer = window.setTimeout(() => {
+                reconnectTimer = 0;
+                connectWebSocket();
+            }, reconnectDelayMs);
+        };
+
+        const connectWebSocket = () => {
+            if (cancelled) return;
+            clearSocket();
+            const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+            const params = new URLSearchParams();
+            params.set('sessionId', presenceSessionIdRef.current);
+            params.set('clientType', 'web');
+            const url = `${protocol}://${window.location.host}/analytics/api/screens/${encodeURIComponent(String(screenId))}/collaboration/ws?${params.toString()}`;
+            const socket = new WebSocket(url);
+            wsRef.current = socket;
+            socket.onopen = () => {
+                if (cancelled) return;
+                setWsConnected(true);
+                sendWsPresence(false);
+                const intervalMs = Math.max(3000, Math.min(refreshSeconds * 1000, 12000));
+                if (heartbeatTimer) {
+                    window.clearInterval(heartbeatTimer);
+                }
+                heartbeatTimer = window.setInterval(() => {
+                    sendWsPresence();
+                }, intervalMs);
+            };
+            socket.onmessage = (event) => {
+                const parsed = parseWsEvent(event);
+                if (!parsed) return;
+                if (parsed.event === 'presence-change') {
+                    const nextRows = Array.isArray(parsed.payload?.rows)
+                        ? (parsed.payload.rows as ScreenCollaborationPresenceRow[])
+                        : [];
+                    setPresenceRows(nextRows);
+                    setPresenceError(null);
+                    return;
+                }
+                if (parsed.event === 'comment-change') {
+                    const next = parsed.payload as ScreenComment | undefined;
+                    if (next && next.id !== undefined && next.id !== null) {
+                        setRows((prev) => mergeCommentRows(prev, [next]));
+                        setCommentCursor((prev) => computeNextCursor(prev, [next], 0));
+                    }
+                    return;
+                }
+                if (parsed.event === 'comment-created') {
+                    const requestId = String(parsed.payload?.requestId || '').trim();
+                    const pending = requestId ? wsPendingCommentRef.current.get(requestId) : undefined;
+                    const row = parsed.payload as ScreenComment | undefined;
+                    if (pending && row) {
+                        window.clearTimeout(pending.timer);
+                        wsPendingCommentRef.current.delete(requestId);
+                        pending.resolve(row);
+                    }
+                    return;
+                }
+                if (parsed.event === 'error') {
+                    const code = String(parsed.payload?.code || 'ws_error');
+                    const requestId = String(parsed.payload?.requestId || '').trim();
+                    const pending = requestId ? wsPendingCommentRef.current.get(requestId) : undefined;
+                    if (pending) {
+                        window.clearTimeout(pending.timer);
+                        wsPendingCommentRef.current.delete(requestId);
+                        pending.reject(new Error(`WS提交失败: ${code}`));
+                    } else {
+                        setPresenceError(`在线协作态 WS 异常：${code}`);
+                    }
+                }
+            };
+            socket.onerror = () => {
+                if (cancelled) return;
+                setWsConnected(false);
+                scheduleReconnect();
+            };
+            socket.onclose = () => {
+                if (cancelled) return;
+                setWsConnected(false);
+                scheduleReconnect();
+            };
+        };
+
+        connectWebSocket();
+        return () => {
+            cancelled = true;
+            setWsConnected(false);
+            clearTimers();
+            clearSocket();
+        };
+    }, [autoRefresh, open, refreshSeconds, screenId, webSocketSupported, wsRefresh]);
+
+    useEffect(() => {
+        if (!open || !screenId || !autoRefresh || !streamRefresh || saving || loading || !eventSourceSupported || (wsRefresh && wsConnected)) {
             return;
         }
         let cancelled = false;
@@ -308,7 +567,7 @@ export function ScreenCollaborationPanel({
             }
             clearSource();
         };
-    }, [autoRefresh, eventSourceSupported, limit, loading, open, refreshSeconds, saving, screenId, streamRefresh]);
+    }, [autoRefresh, eventSourceSupported, limit, loading, open, refreshSeconds, saving, screenId, streamRefresh, wsConnected, wsRefresh]);
 
     useEffect(() => {
         if (!eventSourceSupported && streamRefresh) {
@@ -317,10 +576,13 @@ export function ScreenCollaborationPanel({
         if (!eventSourceSupported && presenceStreamRefresh) {
             setPresenceStreamRefresh(false);
         }
-    }, [eventSourceSupported, presenceStreamRefresh, streamRefresh]);
+        if (!webSocketSupported && wsRefresh) {
+            setWsRefresh(false);
+        }
+    }, [eventSourceSupported, presenceStreamRefresh, streamRefresh, webSocketSupported, wsRefresh]);
 
     useEffect(() => {
-        if (!open || !screenId || !autoRefresh || streamRefresh || !liveRefresh || saving || loading) {
+        if (!open || !screenId || !autoRefresh || streamRefresh || !liveRefresh || saving || loading || (wsRefresh && wsConnected)) {
             return;
         }
         const seconds = Number.isFinite(refreshSeconds) ? Math.max(5, Math.min(120, Math.floor(refreshSeconds))) : 15;
@@ -328,10 +590,10 @@ export function ScreenCollaborationPanel({
             void loadRowsSilently(limit);
         }, seconds * 1000);
         return () => window.clearInterval(timer);
-    }, [autoRefresh, limit, liveRefresh, loading, open, refreshSeconds, saving, screenId, streamRefresh]);
+    }, [autoRefresh, limit, liveRefresh, loading, open, refreshSeconds, saving, screenId, streamRefresh, wsConnected, wsRefresh]);
 
     useEffect(() => {
-        if (!open || !screenId || !autoRefresh || streamRefresh || !liveRefresh || saving || loading) {
+        if (!open || !screenId || !autoRefresh || streamRefresh || !liveRefresh || saving || loading || (wsRefresh && wsConnected)) {
             return;
         }
         let cancelled = false;
@@ -360,10 +622,10 @@ export function ScreenCollaborationPanel({
         return () => {
             cancelled = true;
         };
-    }, [autoRefresh, limit, liveRefresh, loading, open, refreshSeconds, saving, screenId, streamRefresh]);
+    }, [autoRefresh, limit, liveRefresh, loading, open, refreshSeconds, saving, screenId, streamRefresh, wsConnected, wsRefresh]);
 
     useEffect(() => {
-        if (!open || !screenId) {
+        if (!open || !screenId || wsRefresh) {
             return;
         }
         const intervalMs = Math.max(5000, Math.min(refreshSeconds * 1000, 15000));
@@ -372,10 +634,10 @@ export function ScreenCollaborationPanel({
             void heartbeatPresence(true);
         }, intervalMs);
         return () => window.clearInterval(timer);
-    }, [open, refreshSeconds, screenId, presenceTtlSeconds]);
+    }, [open, refreshSeconds, screenId, presenceTtlSeconds, wsRefresh]);
 
     useEffect(() => {
-        if (!open || !screenId || !autoRefresh || !presenceStreamRefresh || !eventSourceSupported) {
+        if (!open || !screenId || !autoRefresh || !presenceStreamRefresh || !eventSourceSupported || wsRefresh) {
             return;
         }
         let cancelled = false;
@@ -456,6 +718,7 @@ export function ScreenCollaborationPanel({
         presenceTtlSeconds,
         refreshSeconds,
         screenId,
+        wsRefresh,
     ]);
 
     useEffect(() => {
@@ -463,10 +726,14 @@ export function ScreenCollaborationPanel({
             return;
         }
         const timer = window.setTimeout(() => {
+            if (wsRefresh) {
+                sendWsPresence();
+                return;
+            }
             void heartbeatPresence(true);
         }, 450);
         return () => window.clearTimeout(timer);
-    }, [componentId, message, open, screenId, presenceTtlSeconds]);
+    }, [componentId, message, open, screenId, presenceTtlSeconds, wsRefresh]);
 
     useEffect(() => {
         if (open || !screenId) {
@@ -556,6 +823,7 @@ export function ScreenCollaborationPanel({
                         const selectionText = selectedCount > 0
                             ? `选中${selectedCount}`
                             : (item.selectionPreview ? `选中:${String(item.selectionPreview)}` : '无选中');
+                        const clickable = !mine && !!item.componentId;
                         return (
                             <span
                                 key={String(item.sessionId || `${name}-${target}`)}
@@ -572,6 +840,17 @@ export function ScreenCollaborationPanel({
                                 }}
                             >
                                 {name}{mine ? '(我)' : ''}{item.typing ? ' 输入中' : ''} · {target} · {selectionText} · {idle}s
+                                {clickable && (
+                                    <button
+                                        type="button"
+                                        className="header-btn"
+                                        style={{ padding: '2px 6px', fontSize: 10 }}
+                                        onClick={() => locateComponent(String(item.componentId))}
+                                        title="定位到该协作者当前组件"
+                                    >
+                                        定位
+                                    </button>
+                                )}
                             </span>
                         );
                     })}
@@ -579,6 +858,30 @@ export function ScreenCollaborationPanel({
                         <span style={{ fontSize: 12, opacity: 0.7 }}>暂无在线协作者</span>
                     )}
                 </div>
+                {conflictHotspots.length > 0 && (
+                    <div style={{ marginTop: 10, borderTop: '1px dashed var(--color-border)', paddingTop: 8 }}>
+                        <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>冲突热点</div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                            {conflictHotspots.map((item) => {
+                                const label = componentLabelMap.get(item.componentId) || item.componentId;
+                                const typingTag = item.typingCount > 0 ? `，${item.typingCount}人输入中` : '';
+                                const mineTag = item.mineSelected ? '（含我当前选中）' : '';
+                                return (
+                                    <button
+                                        key={item.componentId}
+                                        type="button"
+                                        className="header-btn"
+                                        style={{ padding: '4px 8px', fontSize: 11 }}
+                                        title={`${label}: ${item.users.join('、')}${typingTag}${mineTag}`}
+                                        onClick={() => locateComponent(item.componentId)}
+                                    >
+                                        {label} · {item.users.length}人{mineTag ? ' · 含我' : ''}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(120px, 1fr))', gap: 8, marginBottom: 12 }}>
@@ -606,7 +909,11 @@ export function ScreenCollaborationPanel({
                         value={message}
                         onChange={(e) => setMessage(e.target.value)}
                         onBlur={() => {
-                            void heartbeatPresence(true, false);
+                            if (wsRefresh) {
+                                sendWsPresence(false);
+                            } else {
+                                void heartbeatPresence(true, false);
+                            }
                         }}
                         placeholder="输入批注内容，例如：该组件口径需与生产日报一致，建议补充单位和更新时间。"
                         rows={3}
@@ -621,13 +928,26 @@ export function ScreenCollaborationPanel({
                             if (!screenId) return;
                             const text = message.trim();
                             if (!text) return;
+                            const targetComponentId = componentId || null;
                             setSaving(true);
                             setError(null);
                             try {
-                                const created = await analyticsApi.createScreenComment(screenId, {
-                                    message: text,
-                                    componentId: componentId || null,
-                                });
+                                let created: ScreenComment;
+                                if (wsRefresh && wsConnected) {
+                                    try {
+                                        created = await submitCommentViaWebSocket(text, targetComponentId);
+                                    } catch {
+                                        created = await analyticsApi.createScreenComment(screenId, {
+                                            message: text,
+                                            componentId: targetComponentId,
+                                        });
+                                    }
+                                } else {
+                                    created = await analyticsApi.createScreenComment(screenId, {
+                                        message: text,
+                                        componentId: targetComponentId,
+                                    });
+                                }
                                 setRows((prev) => [created, ...prev]);
                                 setCommentCursor((prev) => computeNextCursor(prev, [created], 0));
                                 setMessage('');
@@ -672,9 +992,19 @@ export function ScreenCollaborationPanel({
                 <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, opacity: 0.9 }}>
                     <input
                         type="checkbox"
+                        checked={wsRefresh}
+                        onChange={(e) => setWsRefresh(e.target.checked)}
+                        disabled={!autoRefresh || !webSocketSupported}
+                    />
+                    WebSocket协作态
+                    {wsRefresh ? (wsConnected ? '(已连接)' : '(重连中)') : ''}
+                </label>
+                <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, opacity: 0.9 }}>
+                    <input
+                        type="checkbox"
                         checked={streamRefresh}
                         onChange={(e) => setStreamRefresh(e.target.checked)}
-                        disabled={!autoRefresh || !eventSourceSupported}
+                        disabled={!autoRefresh || !eventSourceSupported || wsRefresh}
                     />
                     SSE实时流
                 </label>
@@ -683,7 +1013,7 @@ export function ScreenCollaborationPanel({
                         type="checkbox"
                         checked={presenceStreamRefresh}
                         onChange={(e) => setPresenceStreamRefresh(e.target.checked)}
-                        disabled={!autoRefresh || !eventSourceSupported}
+                        disabled={!autoRefresh || !eventSourceSupported || wsRefresh}
                     />
                     在线态SSE
                 </label>
@@ -692,7 +1022,7 @@ export function ScreenCollaborationPanel({
                         type="checkbox"
                         checked={liveRefresh}
                         onChange={(e) => setLiveRefresh(e.target.checked)}
-                        disabled={!autoRefresh || streamRefresh}
+                        disabled={!autoRefresh || streamRefresh || wsRefresh}
                     />
                     实时长轮询
                 </label>
@@ -712,6 +1042,9 @@ export function ScreenCollaborationPanel({
                 />
                 {!eventSourceSupported && (
                     <span style={{ fontSize: 12, opacity: 0.7 }}>当前浏览器不支持 SSE，已降级为轮询。</span>
+                )}
+                {!webSocketSupported && (
+                    <span style={{ fontSize: 12, opacity: 0.7 }}>当前浏览器不支持 WebSocket 协作态。</span>
                 )}
             </div>
 
@@ -887,6 +1220,17 @@ function parsePresenceStream(event: Event): { rows?: ScreenCollaborationPresence
     if (!raw) return null;
     try {
         const parsed = JSON.parse(raw) as { rows?: ScreenCollaborationPresenceRow[] };
+        return parsed;
+    } catch {
+        return null;
+    }
+}
+
+function parseWsEvent(event: MessageEvent<string>): { event?: string; payload?: Record<string, unknown> } | null {
+    const raw = typeof event.data === 'string' ? event.data.trim() : '';
+    if (!raw) return null;
+    try {
+        const parsed = JSON.parse(raw) as { event?: string; payload?: Record<string, unknown> };
         return parsed;
     } catch {
         return null;

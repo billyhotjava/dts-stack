@@ -6,7 +6,9 @@ import com.yuzhi.dts.analytics.service.DatasetQueryService;
 import com.yuzhi.dts.analytics.service.QueryCacheService;
 import com.yuzhi.dts.analytics.service.QueryExecutionFacade;
 import com.yuzhi.dts.analytics.service.QueryPermissionService;
+import com.yuzhi.dts.analytics.web.rest.errors.ApiError;
 import com.yuzhi.dts.analytics.web.support.MetabaseAuth;
+import com.yuzhi.dts.analytics.web.support.RequestContextUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import java.sql.SQLException;
 import java.time.Duration;
@@ -17,6 +19,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import org.slf4j.MDC;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -30,6 +34,8 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/dataset")
 public class DatasetResource {
+    private static final String ERROR_CODE_HEADER = "X-Error-Code";
+    private static final String ERROR_RETRYABLE_HEADER = "X-Error-Retryable";
 
     private final AnalyticsSessionService sessionService;
     private final QueryCacheService queryCacheService;
@@ -51,11 +57,21 @@ public class DatasetResource {
     public ResponseEntity<?> run(@RequestBody JsonNode body, HttpServletRequest request) {
         Optional<ResponseEntity<String>> auth = MetabaseAuth.requireUser(sessionService, request);
         if (auth.isPresent()) {
-            return auth.get();
+            return buildApiError(
+                    HttpStatus.UNAUTHORIZED,
+                    "SEC_UNAUTHORIZED",
+                    "Authentication required",
+                    false,
+                    request);
         }
 
         if (body == null || !body.isObject()) {
-            return ResponseEntity.badRequest().body(Map.of("errors", Map.of("query", "Invalid dataset query")));
+            return buildApiError(
+                    HttpStatus.BAD_REQUEST,
+                    "REQ_INVALID_ARGUMENT",
+                    "Invalid dataset query",
+                    false,
+                    request);
         }
 
         long databaseId = body.path("database").asLong(0);
@@ -69,7 +85,12 @@ public class DatasetResource {
         }
 
         if (databaseId <= 0) {
-            return ResponseEntity.badRequest().body(Map.of("errors", Map.of("database", "database is required")));
+            return buildApiError(
+                    HttpStatus.BAD_REQUEST,
+                    "REQ_INVALID_ARGUMENT",
+                    "database is required",
+                    false,
+                    request);
         }
 
         // Check query permissions
@@ -77,7 +98,12 @@ public class DatasetResource {
         QueryPermissionService.QueryPermissionCheck permissionCheck = queryPermissionService
                 .checkQueryPermission(userId, databaseId, body);
         if (!permissionCheck.allowed()) {
-            return ResponseEntity.status(403).body(Map.of("error", permissionCheck.denialReason()));
+            return buildApiError(
+                    HttpStatus.FORBIDDEN,
+                    "SEC_FORBIDDEN",
+                    permissionCheck.denialReason(),
+                    false,
+                    request);
         }
 
         DatasetQueryService.DatasetConstraints constraints = parseConstraints(body);
@@ -149,28 +175,19 @@ public class DatasetResource {
 
             return ResponseEntity.ok(response);
         } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(Map.of("errors", Map.of("query", e.getMessage())));
+            return buildApiError(
+                    HttpStatus.BAD_REQUEST,
+                    "REQ_INVALID_ARGUMENT",
+                    e.getMessage(),
+                    false,
+                    request);
         } catch (SQLException e) {
-            Map<String, Object> via = new LinkedHashMap<>();
-            via.put("status", "failed");
-            via.put("class", e.getClass().toString());
-            via.put("error", "Error executing query: " + e.getMessage());
-            via.put("stacktrace", List.of());
-            via.put("card_id", null);
-            via.put("context", body.path("context").asText("ad-hoc"));
-
-            Map<String, Object> response = new LinkedHashMap<>();
-            response.put("database_id", databaseId);
-            response.put("started_at", startedAt);
-            response.put("via", List.of(via));
-            response.put("card_id", null);
-            response.put("context", body.path("context").asText("ad-hoc"));
-            response.put("error", e.getMessage());
-            response.put("row_count", 0);
-            response.put("running_time", 0);
-            response.put("data", Map.of("rows", List.of(), "cols", List.of()));
-
-            return ResponseEntity.accepted().body(response);
+            return buildApiError(
+                    HttpStatus.INTERNAL_SERVER_ERROR,
+                    "QUERY_EXEC_FAILED",
+                    "Error executing query: " + e.getMessage(),
+                    false,
+                    request);
         }
     }
 
@@ -230,7 +247,12 @@ public class DatasetResource {
         }
 
         if (databaseId <= 0) {
-            return ResponseEntity.badRequest().body(Map.of("errors", Map.of("databaseId", "databaseId must be positive")));
+            return buildApiError(
+                    HttpStatus.BAD_REQUEST,
+                    "REQ_INVALID_ARGUMENT",
+                    "databaseId must be positive",
+                    false,
+                    request);
         }
 
         QueryCacheService.CacheStrategy strategy = queryCacheService.getCacheStrategy(databaseId);
@@ -252,7 +274,12 @@ public class DatasetResource {
         }
 
         if (databaseId <= 0) {
-            return ResponseEntity.badRequest().body(Map.of("errors", Map.of("databaseId", "databaseId must be positive")));
+            return buildApiError(
+                    HttpStatus.BAD_REQUEST,
+                    "REQ_INVALID_ARGUMENT",
+                    "databaseId must be positive",
+                    false,
+                    request);
         }
 
         boolean enabled = body == null || !body.has("enabled") || body.path("enabled").asBoolean(true);
@@ -287,7 +314,12 @@ public class DatasetResource {
         }
 
         if (body == null || body.isNull()) {
-            return ResponseEntity.badRequest().body(Map.of("errors", Map.of("body", "request body is required")));
+            return buildApiError(
+                    HttpStatus.BAD_REQUEST,
+                    "REQ_INVALID_ARGUMENT",
+                    "request body is required",
+                    false,
+                    request);
         }
 
         JsonNode queriesNode = body.has("queries") ? body.path("queries") : body;
@@ -303,7 +335,12 @@ public class DatasetResource {
         }
 
         if (queries.isEmpty()) {
-            return ResponseEntity.badRequest().body(Map.of("errors", Map.of("queries", "at least one dataset query is required")));
+            return buildApiError(
+                    HttpStatus.BAD_REQUEST,
+                    "REQ_INVALID_ARGUMENT",
+                    "at least one dataset query is required",
+                    false,
+                    request);
         }
 
         List<Map<String, Object>> items = new ArrayList<>();
@@ -329,12 +366,12 @@ public class DatasetResource {
                     item.put("cached", map.get("cached"));
                 } else {
                     item.put("status", "failed");
-                    Object err = map.containsKey("error") ? map.get("error") : "warmup failed";
+                    Object err = map.containsKey("error") ? map.get("error") : extractErrorMessage(responseBody);
                     item.put("error", err);
                 }
             } else {
                 item.put("status", "failed");
-                item.put("error", responseBody == null ? "warmup failed" : responseBody.toString());
+                item.put("error", extractErrorMessage(responseBody));
             }
 
             items.add(item);
@@ -346,6 +383,49 @@ public class DatasetResource {
         response.put("failed", queries.size() - success);
         response.put("items", items);
         return ResponseEntity.ok(response);
+    }
+
+    private ResponseEntity<ApiError> buildApiError(
+            HttpStatus status,
+            String code,
+            String message,
+            boolean retryable,
+            HttpServletRequest request) {
+        String resolvedMessage = (message == null || message.isBlank()) ? status.getReasonPhrase() : message;
+        String requestId = RequestContextUtils.resolveRequestId();
+        if (requestId == null || requestId.isBlank()) {
+            requestId = MDC.get("requestId");
+        }
+        ApiError payload = new ApiError(
+                OffsetDateTime.now(),
+                status.value(),
+                status.getReasonPhrase(),
+                code,
+                retryable,
+                resolvedMessage,
+                request.getRequestURI(),
+                requestId);
+        return ResponseEntity.status(status)
+                .header(ERROR_CODE_HEADER, code)
+                .header(ERROR_RETRYABLE_HEADER, String.valueOf(retryable))
+                .body(payload);
+    }
+
+    private static String extractErrorMessage(Object responseBody) {
+        if (responseBody instanceof ApiError apiError) {
+            return apiError.message();
+        }
+        if (responseBody instanceof Map<?, ?> map) {
+            Object message = map.get("message");
+            if (message != null && !String.valueOf(message).isBlank()) {
+                return String.valueOf(message);
+            }
+            Object error = map.get("error");
+            if (error != null && !String.valueOf(error).isBlank()) {
+                return String.valueOf(error);
+            }
+        }
+        return responseBody == null ? "warmup failed" : String.valueOf(responseBody);
     }
 
     private static DatasetQueryService.DatasetConstraints parseConstraints(JsonNode body) {

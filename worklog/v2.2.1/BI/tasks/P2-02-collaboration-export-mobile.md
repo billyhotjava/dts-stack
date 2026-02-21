@@ -1,6 +1,6 @@
 # P2-02 企业协作、导出与多端适配
 
-`status`: `in-progress`  
+`status`: `done`  
 `priority`: `P2`  
 `inspiration`: `企业 BI 协作实践 + DataEase 交付便利性`
 
@@ -163,9 +163,50 @@
     - 显示冲突字段与冲突组件；
     - 支持一键选中冲突组件定位；
     - 支持一键重载最新草稿继续编辑。
+- WebSocket 双向协作态补强（2026-02-20）：
+  - 后端新增 WebSocket 协作通道：`/api/screens/{id}/collaboration/ws`；
+  - 新增 `ScreenCollaborationRealtimeService`：
+    - 处理 `presence.heartbeat/presence.update/presence.leave` 双向消息；
+    - 广播 `presence-change` 事件，包含 `typing/componentId/cursorId/selectedCount`；
+    - 新增 `comment-change` 广播，评论新增/解决/重开可秒级推送到在线协作者；
+    - 内置 TTL 清理与会话上限修剪，防止僵尸会话累积。
+  - 前端协作面板新增“WebSocket协作态”开关：
+    - 在线态优先走 WS，失败自动重连并回退至现有 SSE/轮询；
+    - 实时同步输入中、选中组件数量、定位组件态；
+    - WS连接成功时，评论链路自动停用 SSE/长轮询，断开后自动回退，避免重复拉取。
+  - 协作冲突可视化增强：
+    - 在线成员标签新增“定位”按钮，可一键选中对应组件；
+    - 新增“冲突热点”区（多人聚焦同一组件/与我选中重叠）并支持一键定位，降低并行编辑冲突成本。
+- 服务端一致性导出补强（2026-02-20）：
+  - 后端新增 `POST /api/screens/{id}/export-render`：
+    - 服务端统一渲染 PNG/PDF（含水印策略）；
+    - 返回 `X-Screen-Spec-Digest/X-Screen-Resolved-Mode/X-Screen-Render-Engine`。
+  - 前端导出页改为“服务端优先，浏览器回退”：
+    - 优先调用 `renderScreenExport` 下载一致性导出文件；
+    - 服务端失败时自动切回原浏览器导出链路，不影响现场交付。
+  - 编辑器头部导出链路补齐一致性审计：
+    - `PNG/PDF` 先走 `export-prepare`，再走 `export-render`；
+    - 服务端失败自动回退导出页，并回传 `success/fallback/failed` 审计结果；
+    - 透传 `requestId/specDigest/resolvedMode`，便于导出链路追踪与现场排障。
+- 编辑头部菜单兼容性修复（2026-02-20）：
+  - 将 `ScreenHeader` 的分组菜单从 `details/summary` 改为受控弹层（button + panel）；
+  - 增加菜单外点击关闭、`ESC` 关闭，避免旧浏览器下菜单状态异常残留；
+  - 修复 Chrome 95 下“变量/缓存观测/合规”等菜单点击后无面板弹出的兼容性问题。
+- 编辑页头部收口与交互稳态（2026-02-21）：
+  - 下拉菜单点击从捕获阶段关闭改为“执行动作后关闭菜单”，规避旧浏览器事件时序导致的面板未打开问题；
+  - “分享链接”并入治理菜单，保留 `预览/发布/保存` 作为主按钮，减少头部按钮密度；
+  - 主按钮文案去除表情符号，提升商务场景下界面整洁度与一致性。
+- WS 评论写入补齐（2026-02-21）：
+  - 后端 `ScreenCollaborationRealtimeService` 新增 `comment.create` 指令：
+    - 支持基于当前会话用户的权限校验（`EDIT`）后直接落库评论审计并广播 `comment-change`；
+    - 新增 `comment-created` 回执事件与带 `requestId` 的错误事件，便于前端请求级匹配。
+  - 前端 `ScreenCollaborationPanel` 新增“WS优先提交评论”：
+    - WS 可用时优先发 `comment.create`，收到 `comment-created` 回执后落地；
+    - WS 失败/超时自动回退 HTTP 创建接口，保证现场可用性。
+  - 握手链路补齐 `X-DTS-Roles` 透传，确保 WS 写入权限判断与 HTTP 口径一致。
 - 待继续：
-  - 目前已支持长轮询 + SSE 准实时协作，后续可补 WebSocket 双向协作态（输入中/光标态/presence）。
-  - PNG/PDF 仍是浏览器侧轻实现，后续可升级为服务端一致性渲染导出。
+  - WebSocket 已支持评论增量推送；评论写入动作仍通过 HTTP 接口提交，后续可评估全 WS 命令通道。
+  - 服务端导出当前采用轻量渲染器，后续可升级为更高保真（图表像素级一致）渲染内核。
 - 协作态 presence/typing 补齐（2026-02-17）：
   - 后端新增轻量在线协作接口（内存态 + TTL 清理）：
     - `GET /api/screens/{id}/collaboration/presence`

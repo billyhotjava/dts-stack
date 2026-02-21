@@ -246,6 +246,17 @@ export default function ScreenExportPage() {
         }
     };
 
+    const downloadBlob = (blob: Blob, fileName: string) => {
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    };
+
     const captureCanvasAsPngDataUrl = async (): Promise<string> => {
         const canvasEl = canvasRef.current;
         if (!canvasEl || !screen) {
@@ -314,6 +325,31 @@ export default function ScreenExportPage() {
                     void reportExport('success');
                     setStatusText('JSON 导出完成，可关闭窗口');
                     return;
+                }
+
+                if (format === 'png' || format === 'pdf') {
+                    if (!id) {
+                        throw new Error('未找到大屏 ID');
+                    }
+                    setStatusText('正在执行服务端一致性导出...');
+                    try {
+                        const rendered = await analyticsApi.renderScreenExport(id, {
+                            format,
+                            mode: effectiveMode || mode,
+                            device: effectiveDevice,
+                            screenSpec: buildScreenPayload(screen),
+                        });
+                        if (cancelled) return;
+                        const ext = format === 'pdf' ? 'pdf' : 'png';
+                        const fallbackName = `${screen.name || 'screen'}.${ext}`;
+                        downloadBlob(rendered.blob, rendered.fileName || fallbackName);
+                        void reportExport('success', `server_render:${rendered.renderEngine || 'unknown'}`);
+                        setStatusText(`${format.toUpperCase()} 服务端导出完成，可关闭窗口`);
+                        return;
+                    } catch (serverError) {
+                        console.warn('[screen-export] server render failed, fallback to browser path:', serverError);
+                        setStatusText('服务端导出失败，切换浏览器回退导出...');
+                    }
                 }
 
                 setStatusText('正在生成导出文件...');

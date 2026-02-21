@@ -62,6 +62,7 @@ public class ScreenSpecValidator {
             "ends-with",
             "empty",
             "not-empty");
+    private static final Set<String> INTERACTION_TRANSFORMS = Set.of("raw", "string", "number", "lowercase", "uppercase");
     private static final Pattern VARIABLE_KEY_PATTERN = Pattern.compile("^[A-Za-z_][A-Za-z0-9_:\\.-]{0,63}$");
 
     public ValidationResult validateForWrite(JsonNode payload) {
@@ -158,6 +159,7 @@ public class ScreenSpecValidator {
         validateNumberField(item.path("height"), path + ".height", true, errors);
         validateDataSource(item.path("dataSource"), path + ".dataSource", errors);
         validateVisibilityRule(item.path("config"), path + ".config", errors);
+        validateInteraction(item.path("interaction"), path + ".interaction", errors);
     }
 
     private void validateNumberField(JsonNode node, String path, boolean positiveOnly, List<String> errors) {
@@ -246,6 +248,45 @@ public class ScreenSpecValidator {
         JsonNode matchValues = configNode.path("visibilityMatchValues");
         if (matchValues.isArray() && matchValues.size() > 200) {
             errors.add(path + ".visibilityMatchValues too many items (max 200)");
+        }
+    }
+
+    private void validateInteraction(JsonNode interactionNode, String path, List<String> errors) {
+        if (interactionNode == null || interactionNode.isMissingNode() || interactionNode.isNull()) {
+            return;
+        }
+        if (!interactionNode.isObject()) {
+            errors.add(path + " must be object");
+            return;
+        }
+        JsonNode mappingsNode = interactionNode.path("mappings");
+        if (mappingsNode == null || mappingsNode.isMissingNode() || mappingsNode.isNull()) {
+            return;
+        }
+        if (!mappingsNode.isArray()) {
+            errors.add(path + ".mappings must be array");
+            return;
+        }
+        for (int i = 0; i < mappingsNode.size(); i++) {
+            JsonNode mapping = mappingsNode.get(i);
+            String mappingPath = path + ".mappings[" + i + "]";
+            if (mapping == null || !mapping.isObject()) {
+                errors.add(mappingPath + " must be object");
+                continue;
+            }
+            String variableKey = trimToNull(mapping.path("variableKey").asText(null));
+            if (variableKey == null) {
+                errors.add(mappingPath + ".variableKey is required");
+            }
+            String sourcePath = trimToNull(mapping.path("sourcePath").asText(null));
+            if (sourcePath == null) {
+                errors.add(mappingPath + ".sourcePath is required");
+            }
+            String transform = trimToNull(mapping.path("transform").asText(null));
+            String normalizedTransform = transform == null ? "raw" : transform.toLowerCase();
+            if (!INTERACTION_TRANSFORMS.contains(normalizedTransform)) {
+                errors.add(mappingPath + ".transform is invalid: " + normalizedTransform);
+            }
         }
     }
 

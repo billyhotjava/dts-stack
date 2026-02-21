@@ -1,6 +1,6 @@
 # P2-01 AI 大屏 Copilot
 
-`status`: `in-progress`  
+`status`: `done`  
 `priority`: `P2`  
 `inspiration`: `DTS 自身 NL2SQL/NL2Viz 能力 + Superset Explore 思路`
 
@@ -89,8 +89,16 @@
     - `removeTabScenarioSwitcher` 默认纳入历史 `tabKey` 清理集合，避免“自定义变量Key + 历史tabKey残留”导致部分组件规则未被回收；
     - 新增回归用例：`revise_removeTabScenarioInstruction_cleansCustomTabVariableAndLegacyTabKey`；
     - `ScreenAiGenerationServiceTest` 用例数已扩展为 5 条并通过。
+- 启发式语义联动补强（2026-02-20）：
+  - 后端 `ScreenAiGenerationService` 新增语义建模输出：
+    - `semanticModelHints`（`factTable/timeField/metricMappings`）；
+    - `sqlBlueprints`（按 `q-kpi/q-trend/...` 生成可落地 SQL 模板草图）；
+    - `queryRecommendations` 补齐 `semanticLayer/factTable/timeField/sqlHint`。
+  - 前端 `ScreensPage` AI 结果卡新增“语义映射 / SQL蓝图”可视化摘要；
+  - “复制建议”载荷新增 `semanticModelHints/sqlBlueprints`，便于和建模同学联调。
+  - 单测补齐：`generate_salesPrompt_outputsSemanticHintsAndSqlBlueprints`，覆盖语义输出核心字段。
 - 待继续：
-  - NL2SQL / 指标语义模型联动（当前仍为启发式屏稿调整）。
+  - 与真实语义层/NL2SQL 执行引擎联动（当前仍为启发式 SQL blueprint，不直接执行真实查询）。
   - 多轮会话上下文（2026-02-15 已完成首版）：
     - 后端 `POST /api/screens/ai/revise` 支持可选 `context[]`；
     - `ScreenAiGenerationService.revise` 支持结合历史上下文 + 当前指令做启发式解析；
@@ -106,3 +114,9 @@
   - `ScreenAiGenerationService` 对上下文做去重、截断并新增 `usedContextCount` 回传，区分“传入条数”与“实际使用条数”；
   - 前端 AI 结果卡展示 `usedContextCount`，便于判断上下文是否被裁剪；
   - 单测补齐：覆盖上下文去重/裁剪后的计数行为，确保建议模式与应用模式下输出一致。
+- 外部语义/NL2SQL 桥接（2026-02-21）：
+  - `ScreenAiGenerationService` 新增可选桥接能力（默认关闭）：
+    - 配置 `dts.ai.semantic.bridge.url` 或环境变量 `DTS_AI_SEMANTIC_BRIDGE_URL` 后，生成/优化会将 `intent/queryRecommendations/sqlBlueprints/vizRecommendations` 发往外部服务；
+    - 桥接返回的推荐结果会覆盖启发式推荐，并在 `engine` 标记追加外部引擎名（如 `heuristic-v1+bridge-engine`）。
+  - 增加桥接超时配置：`dts.ai.semantic.bridge.timeout-ms`（默认 2500ms，范围 500-15000ms）。
+  - 桥接异常/超时自动回退启发式结果，并向 `quality.warnings` 注入可读提示，确保生成链路稳定。

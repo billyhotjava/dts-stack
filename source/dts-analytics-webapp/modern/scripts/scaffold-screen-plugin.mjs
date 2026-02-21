@@ -90,7 +90,17 @@ export function createPlugin(
     },
     propertySchema: {
       fields: [
-        { key: "title", label: "标题", type: "string" },
+        { key: "title", label: "标题", type: "string", placeholder: "请输入标题" },
+        {
+          key: "mode",
+          label: "展示模式",
+          type: "select",
+          defaultValue: "card",
+          options: [
+            { label: "卡片", value: "card" },
+            { label: "紧凑", value: "compact" },
+          ],
+        },
       ],
     },
     dataContract: {
@@ -110,7 +120,7 @@ export function createPlugin(
           fontSize: 12,
         }}
       >
-        {String(config.title || "${escapeTemplateText(componentName)}")}
+        {String(config.title || "${escapeTemplateText(componentName)}")} · {String(config.mode || "card")}
       </div>
     ),
   };
@@ -136,7 +146,19 @@ function buildManifestTemplate(pluginId, componentId, componentName) {
           defaultHeight: 320,
           defaultConfig: { title: componentName },
           propertySchema: {
-            fields: [{ key: "title", label: "标题", type: "string" }],
+            fields: [
+              { key: "title", label: "标题", type: "string", placeholder: "请输入标题" },
+              {
+                key: "mode",
+                label: "展示模式",
+                type: "select",
+                defaultValue: "card",
+                options: [
+                  { label: "卡片", value: "card" },
+                  { label: "紧凑", value: "compact" },
+                ],
+              },
+            ],
           },
           dataContract: { kind: "table", description: "rows/cols dataframe" },
         },

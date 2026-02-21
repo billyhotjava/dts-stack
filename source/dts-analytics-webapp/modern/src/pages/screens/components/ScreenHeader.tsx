@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { useScreen } from '../ScreenContext';
 import { detectInteractionCycles } from '../interactionGraph';
@@ -51,6 +51,36 @@ function buildComponentConflictMeta(baseline: ScreenConfig): Record<string, unkn
     };
 }
 
+function HeaderMenu({
+    label,
+    open,
+    onToggle,
+    children,
+}: {
+    label: string;
+    open: boolean;
+    onToggle: () => void;
+    children: ReactNode;
+}) {
+    return (
+        <div className={`header-menu ${open ? 'is-open' : ''}`}>
+            <button
+                type="button"
+                className="header-btn header-menu-trigger"
+                aria-expanded={open}
+                onClick={onToggle}
+            >
+                {label}
+            </button>
+            {open ? (
+                <div className="header-menu-panel">
+                    {children}
+                </div>
+            ) : null}
+        </div>
+    );
+}
+
 export function ScreenHeader() {
     const navigate = useNavigate();
     const { id } = useParams<{ id: string }>();
@@ -84,6 +114,8 @@ export function ScreenHeader() {
     const [editLock, setEditLock] = useState<ScreenEditLock | null>(null);
     const [lockErrorText, setLockErrorText] = useState<string | null>(null);
     const importInputRef = useRef<HTMLInputElement | null>(null);
+    const menuContainerRef = useRef<HTMLDivElement | null>(null);
+    const [activeMenu, setActiveMenu] = useState<'design' | 'governance' | 'version' | null>(null);
     const [permissions, setPermissions] = useState({
         canRead: true,
         canEdit: true,
@@ -94,6 +126,32 @@ export function ScreenHeader() {
     const cycleWarnings = useMemo(() => detectInteractionCycles(config), [config]);
     const lockedByOther = !!(editLock?.active && !editLock?.mine);
     const lockOwnerText = String(editLock?.ownerName || editLock?.ownerId || '其他用户');
+
+    useEffect(() => {
+        if (!activeMenu) {
+            return;
+        }
+        const handlePointerDown = (event: MouseEvent) => {
+            const node = menuContainerRef.current;
+            if (!node) {
+                return;
+            }
+            if (!node.contains(event.target as Node)) {
+                setActiveMenu(null);
+            }
+        };
+        const handleEscape = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') {
+                setActiveMenu(null);
+            }
+        };
+        window.addEventListener('mousedown', handlePointerDown);
+        window.addEventListener('keydown', handleEscape);
+        return () => {
+            window.removeEventListener('mousedown', handlePointerDown);
+            window.removeEventListener('keydown', handleEscape);
+        };
+    }, [activeMenu]);
 
     useEffect(() => {
         if (!id) {
@@ -647,21 +705,171 @@ export function ScreenHeader() {
         }
     }, [id, previewDeviceMode]);
 
+    const downloadBlob = useCallback((blob: Blob, fileName: string) => {
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    }, []);
+
+    const renderExportByServer = useCallback(async (format: 'png' | 'pdf') => {
+        if (!id) {
+            throw new Error('请先保存大屏后再导出');
+        }
+        const rendered = await analyticsApi.renderScreenExport(id, {
+            format,
+            mode: 'draft',
+            ...(previewDeviceMode === 'auto' ? {} : { device: previewDeviceMode }),
+            screenSpec: buildScreenPayload(config),
+        });
+        const fallbackName = `${config.name || 'screen'}.${format}`;
+        downloadBlob(rendered.blob, rendered.fileName || fallbackName);
+        return rendered;
+    }, [config, downloadBlob, id, previewDeviceMode]);
+
     const handleExportPng = async () => {
+        let preparedRequestId: string | undefined;
+        let preparedSpecDigest: string | undefined;
         try {
-            openExportWindow('png');
+            const prepared = await ensureExportAllowed('png');
+            preparedRequestId = prepared?.requestId || undefined;
+            preparedSpecDigest = prepared?.specDigest || undefined;
         } catch (error) {
-            console.error('Failed to export png:', error);
+            if (id) {
+                void analyticsApi.reportScreenExport(id, {
+                    status: 'failed',
+                    format: 'png',
+                    mode: 'draft',
+                    resolvedMode: 'draft',
+                    ...(previewDeviceMode === 'auto' ? {} : { device: previewDeviceMode }),
+                    requestId: preparedRequestId,
+                    specDigest: preparedSpecDigest,
+                    message: error instanceof Error ? error.message : 'prepare_failed',
+                });
+            }
             alert(error instanceof Error ? error.message : 'PNG 导出失败');
+            return;
+        }
+        try {
+            const rendered = await renderExportByServer('png');
+            if (id) {
+                void analyticsApi.reportScreenExport(id, {
+                    status: 'success',
+                    format: 'png',
+                    mode: 'draft',
+                    resolvedMode: rendered.resolvedMode || 'draft',
+                    ...(previewDeviceMode === 'auto' ? {} : { device: previewDeviceMode }),
+                    requestId: rendered.requestId || preparedRequestId,
+                    specDigest: rendered.specDigest || preparedSpecDigest,
+                });
+            }
+        } catch (error) {
+            console.warn('Failed to export png by server render, fallback to export page:', error);
+            try {
+                openExportWindow('png');
+                if (id) {
+                    void analyticsApi.reportScreenExport(id, {
+                        status: 'fallback',
+                        format: 'png',
+                        mode: 'draft',
+                        resolvedMode: 'draft',
+                        ...(previewDeviceMode === 'auto' ? {} : { device: previewDeviceMode }),
+                        requestId: preparedRequestId,
+                        specDigest: preparedSpecDigest,
+                        message: error instanceof Error ? error.message : 'server_render_failed',
+                    });
+                }
+            } catch (fallbackError) {
+                console.error('Failed to export png:', fallbackError);
+                if (id) {
+                    void analyticsApi.reportScreenExport(id, {
+                        status: 'failed',
+                        format: 'png',
+                        mode: 'draft',
+                        resolvedMode: 'draft',
+                        ...(previewDeviceMode === 'auto' ? {} : { device: previewDeviceMode }),
+                        requestId: preparedRequestId,
+                        specDigest: preparedSpecDigest,
+                        message: fallbackError instanceof Error ? fallbackError.message : 'export_failed',
+                    });
+                }
+                alert(fallbackError instanceof Error ? fallbackError.message : 'PNG 导出失败');
+            }
         }
     };
 
     const handleExportPdf = async () => {
+        let preparedRequestId: string | undefined;
+        let preparedSpecDigest: string | undefined;
         try {
-            openExportWindow('pdf');
+            const prepared = await ensureExportAllowed('pdf');
+            preparedRequestId = prepared?.requestId || undefined;
+            preparedSpecDigest = prepared?.specDigest || undefined;
         } catch (error) {
-            console.error('Failed to export pdf:', error);
+            if (id) {
+                void analyticsApi.reportScreenExport(id, {
+                    status: 'failed',
+                    format: 'pdf',
+                    mode: 'draft',
+                    resolvedMode: 'draft',
+                    ...(previewDeviceMode === 'auto' ? {} : { device: previewDeviceMode }),
+                    requestId: preparedRequestId,
+                    specDigest: preparedSpecDigest,
+                    message: error instanceof Error ? error.message : 'prepare_failed',
+                });
+            }
             alert(error instanceof Error ? error.message : 'PDF 导出失败');
+            return;
+        }
+        try {
+            const rendered = await renderExportByServer('pdf');
+            if (id) {
+                void analyticsApi.reportScreenExport(id, {
+                    status: 'success',
+                    format: 'pdf',
+                    mode: 'draft',
+                    resolvedMode: rendered.resolvedMode || 'draft',
+                    ...(previewDeviceMode === 'auto' ? {} : { device: previewDeviceMode }),
+                    requestId: rendered.requestId || preparedRequestId,
+                    specDigest: rendered.specDigest || preparedSpecDigest,
+                });
+            }
+        } catch (error) {
+            console.warn('Failed to export pdf by server render, fallback to export page:', error);
+            try {
+                openExportWindow('pdf');
+                if (id) {
+                    void analyticsApi.reportScreenExport(id, {
+                        status: 'fallback',
+                        format: 'pdf',
+                        mode: 'draft',
+                        resolvedMode: 'draft',
+                        ...(previewDeviceMode === 'auto' ? {} : { device: previewDeviceMode }),
+                        requestId: preparedRequestId,
+                        specDigest: preparedSpecDigest,
+                        message: error instanceof Error ? error.message : 'server_render_failed',
+                    });
+                }
+            } catch (fallbackError) {
+                console.error('Failed to export pdf:', fallbackError);
+                if (id) {
+                    void analyticsApi.reportScreenExport(id, {
+                        status: 'failed',
+                        format: 'pdf',
+                        mode: 'draft',
+                        resolvedMode: 'draft',
+                        ...(previewDeviceMode === 'auto' ? {} : { device: previewDeviceMode }),
+                        requestId: preparedRequestId,
+                        specDigest: preparedSpecDigest,
+                        message: fallbackError instanceof Error ? fallbackError.message : 'export_failed',
+                    });
+                }
+                alert(fallbackError instanceof Error ? fallbackError.message : 'PDF 导出失败');
+            }
         }
     };
 
@@ -723,6 +931,13 @@ export function ScreenHeader() {
         navigate('/screens');
     };
 
+    const executeMenuAction = useCallback((action: () => void | Promise<void>) => {
+        setActiveMenu(null);
+        void Promise.resolve(action()).catch((error) => {
+            console.error('Failed to execute header menu action:', error);
+        });
+    }, []);
+
     return (
         <>
             <div className="screen-header">
@@ -750,157 +965,198 @@ export function ScreenHeader() {
                 </div>
 
                 <div className="screen-header-right">
-                    <button
-                        type="button"
-                        className="header-btn"
-                        onClick={() => setShowVariableManager(true)}
-                        title="全局变量与联动"
-                    >
-                        变量
-                        {cycleWarnings.length > 0 ? `(${cycleWarnings.length})` : ''}
-                    </button>
-                    <button
-                        type="button"
-                        className="header-btn"
-                        onClick={() => setShowInteractionDebugPanel(true)}
-                        title="联动与变量事件调试"
-                    >
-                        联动调试
-                    </button>
-                    {id && permissions.canRead && (
-                        <button
-                            type="button"
-                            className="header-btn"
-                            onClick={() => setShowEditLockPanel(true)}
-                            title="编辑锁状态与手工接管"
+                    <div className="header-menu-group" ref={menuContainerRef}>
+                        <HeaderMenu
+                            label={`设计${cycleWarnings.length > 0 ? `(${cycleWarnings.length})` : ''}`}
+                            open={activeMenu === 'design'}
+                            onToggle={() => setActiveMenu((prev) => (prev === 'design' ? null : 'design'))}
                         >
-                            锁
-                            {lockedByOther ? '(占用)' : (editLock?.mine ? '(我)' : '')}
-                        </button>
-                    )}
-                    <button
-                        type="button"
-                        className="header-btn"
-                        onClick={() => setShowCachePanel(true)}
-                        title="缓存命中率观测"
-                    >
-                        缓存观测
-                    </button>
-                    <button
-                        type="button"
-                        className="header-btn"
-                        onClick={() => setShowCompliancePanel(true)}
-                        title="企业级合规策略与审计报表"
-                    >
-                        合规
-                    </button>
-                    <button
-                        type="button"
-                        className="header-btn"
-                        onClick={() => setShowHealthPanel(true)}
-                        title="兼容性与性能基线体检"
-                    >
-                        体检
-                    </button>
-                    {id && permissions.canManage && (
-                        <>
                             <button
                                 type="button"
                                 className="header-btn"
-                                onClick={() => setShowAclPanel(true)}
-                                title="大屏 ACL 权限"
+                                onClick={() => executeMenuAction(() => setShowVariableManager(true))}
+                                title="全局变量与联动"
                             >
-                                权限
+                                变量
                             </button>
                             <button
                                 type="button"
                                 className="header-btn"
-                                onClick={() => setShowAuditPanel(true)}
-                                title="审计日志链路"
+                                onClick={() => executeMenuAction(() => setShowInteractionDebugPanel(true))}
+                                title="联动与变量事件调试"
                             >
-                                审计
+                                联动调试
                             </button>
-                        </>
-                    )}
-                    {id && permissions.canRead && (
-                        <button
-                            type="button"
-                            className="header-btn"
-                            onClick={() => setShowCollaborationPanel(true)}
-                            title="评论/批注轻协作"
+                            {id && permissions.canRead && (
+                                <button
+                                    type="button"
+                                    className="header-btn"
+                                    onClick={() => executeMenuAction(() => setShowCollaborationPanel(true))}
+                                    title="评论/批注轻协作"
+                                >
+                                    协作
+                                </button>
+                            )}
+                                <button
+                                    type="button"
+                                    className="header-btn"
+                                    onClick={() => executeMenuAction(handleSaveAsTemplate)}
+                                    disabled={isSavingTemplate || !permissions.canEdit}
+                                    title="保存为团队模板"
+                                >
+                                {isSavingTemplate ? '存模板中...' : '存模板'}
+                            </button>
+                                <button
+                                    type="button"
+                                    className="header-btn"
+                                    onClick={() => executeMenuAction(handleOpenImport)}
+                                    title="导入 JSON"
+                                >
+                                    导入JSON
+                            </button>
+                        </HeaderMenu>
+                        <HeaderMenu
+                            label="治理"
+                            open={activeMenu === 'governance'}
+                            onToggle={() => setActiveMenu((prev) => (prev === 'governance' ? null : 'governance'))}
                         >
-                            协作
-                        </button>
-                    )}
-                    <button
-                        type="button"
-                        className="header-btn"
-                        onClick={handleSaveAsTemplate}
-                        disabled={isSavingTemplate || !permissions.canEdit}
-                        title="保存为团队模板"
-                    >
-                        {isSavingTemplate ? '存模板中...' : '存模板'}
-                    </button>
-                    {id && (
-                        <>
+                            {id && permissions.canRead && (
+                                <button
+                                    type="button"
+                                    className="header-btn"
+                                    onClick={() => executeMenuAction(() => setShowEditLockPanel(true))}
+                                    title="编辑锁状态与手工接管"
+                                >
+                                    锁{lockedByOther ? '(占用)' : (editLock?.mine ? '(我)' : '')}
+                                </button>
+                            )}
                             <button
                                 type="button"
                                 className="header-btn"
-                                onClick={handleVersionHistory}
-                                disabled={isLoadingVersions || !permissions.canPublish}
-                                title="版本历史"
+                                onClick={() => executeMenuAction(() => setShowCachePanel(true))}
+                                title="缓存命中率观测"
                             >
-                                {isLoadingVersions ? '加载中...' : '📝 版本'}
+                                缓存观测
                             </button>
                             <button
                                 type="button"
                                 className="header-btn"
-                                onClick={handleVersionCompare}
-                                disabled={isLoadingVersions || !permissions.canRead}
-                                title="版本差异摘要"
+                                onClick={() => executeMenuAction(() => setShowCompliancePanel(true))}
+                                title="企业级合规策略与审计报表"
                             >
-                                对比
+                                合规
                             </button>
                             <button
                                 type="button"
                                 className="header-btn"
-                                onClick={handlePublish}
-                                disabled={isPublishing || !permissions.canPublish || lockedByOther}
-                                title={lockedByOther ? `当前由 ${lockOwnerText} 持有编辑锁` : '发布当前草稿'}
+                                onClick={() => executeMenuAction(() => setShowHealthPanel(true))}
+                                title="兼容性与性能基线体检"
                             >
-                                {isPublishing ? '发布中...' : '🚀 发布'}
+                                体检
                             </button>
-                        </>
-                    )}
-                    {id && (
-                        <>
+                            {id && permissions.canManage && (
+                                <>
+                                    <button
+                                        type="button"
+                                        className="header-btn"
+                                        onClick={() => executeMenuAction(() => setShowAclPanel(true))}
+                                        title="大屏 ACL 权限"
+                                    >
+                                        权限
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="header-btn"
+                                        onClick={() => executeMenuAction(() => setShowAuditPanel(true))}
+                                        title="审计日志链路"
+                                    >
+                                        审计
+                                    </button>
+                                </>
+                            )}
+                            {id && (
+                                <button
+                                    type="button"
+                                    className="header-btn"
+                                    onClick={() => executeMenuAction(() => setShowSharePolicyPanel(true))}
+                                    disabled={!permissions.canPublish}
+                                    title="配置过期/口令/IP白名单"
+                                >
+                                    分享策略
+                                </button>
+                            )}
+                            {id && (
+                                <button
+                                    type="button"
+                                    className="header-btn"
+                                    onClick={() => executeMenuAction(handleShare)}
+                                    disabled={isSharing || !permissions.canPublish}
+                                    title="生成公开链接并复制"
+                                >
+                                    {isSharing ? '分享中...' : '分享链接'}
+                                </button>
+                            )}
+                        </HeaderMenu>
+                        <HeaderMenu
+                            label="版本/导出"
+                            open={activeMenu === 'version'}
+                            onToggle={() => setActiveMenu((prev) => (prev === 'version' ? null : 'version'))}
+                        >
+                            {id && (
+                                <>
+                                    <button
+                                        type="button"
+                                        className="header-btn"
+                                        onClick={() => executeMenuAction(handleVersionHistory)}
+                                        disabled={isLoadingVersions || !permissions.canPublish}
+                                        title="版本历史"
+                                    >
+                                        {isLoadingVersions ? '加载中...' : '版本'}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="header-btn"
+                                        onClick={() => executeMenuAction(handleVersionCompare)}
+                                        disabled={isLoadingVersions || !permissions.canRead}
+                                        title="版本差异摘要"
+                                    >
+                                        对比
+                                    </button>
+                                </>
+                            )}
                             <button
                                 type="button"
                                 className="header-btn"
-                                onClick={() => setShowSharePolicyPanel(true)}
-                                disabled={!permissions.canPublish}
-                                title="配置过期/口令/IP白名单"
+                                onClick={() => executeMenuAction(handleExportJson)}
+                                title="导出 JSON"
                             >
-                                分享策略
+                                JSON
                             </button>
                             <button
                                 type="button"
-                                className="header-btn share-btn"
-                                onClick={handleShare}
-                                disabled={isSharing || !permissions.canPublish}
-                                title="分享大屏"
+                                className="header-btn"
+                                onClick={() => executeMenuAction(handleExportPng)}
+                                title="导出 PNG"
                             >
-                                {isSharing ? '分享中...' : '🔗 分享'}
+                                PNG
                             </button>
-                        </>
-                    )}
+                            <button
+                                type="button"
+                                className="header-btn"
+                                onClick={() => executeMenuAction(handleExportPdf)}
+                                title="导出 PDF"
+                            >
+                                PDF
+                            </button>
+                        </HeaderMenu>
+                    </div>
                     <button
                         type="button"
                         className="header-btn preview-btn"
                         onClick={handlePreview}
                         title={`预览大屏（${previewDeviceMode === 'auto' ? '自动' : previewDeviceMode}）`}
                     >
-                        👁️ 预览
+                        预览
                     </button>
                     <select
                         className="header-device-select"
@@ -920,40 +1176,17 @@ export function ScreenHeader() {
                         <option value="tablet">平板</option>
                         <option value="mobile">手机</option>
                     </select>
-                    <button
-                        type="button"
-                        className="header-btn"
-                        onClick={() => {
-                            void handleExportJson();
-                        }}
-                        title="导出 JSON"
-                    >
-                        JSON
-                    </button>
-                    <button
-                        type="button"
-                        className="header-btn"
-                        onClick={handleExportPng}
-                        title="导出 PNG"
-                    >
-                        PNG
-                    </button>
-                    <button
-                        type="button"
-                        className="header-btn"
-                        onClick={handleExportPdf}
-                        title="导出 PDF"
-                    >
-                        PDF
-                    </button>
-                    <button
-                        type="button"
-                        className="header-btn"
-                        onClick={handleOpenImport}
-                        title="导入 JSON"
-                    >
-                        导入
-                    </button>
+                    {id && (
+                        <button
+                            type="button"
+                            className="header-btn"
+                            onClick={handlePublish}
+                            disabled={isPublishing || !permissions.canPublish || lockedByOther}
+                            title={lockedByOther ? `当前由 ${lockOwnerText} 持有编辑锁` : '发布当前草稿'}
+                        >
+                            {isPublishing ? '发布中...' : '发布'}
+                        </button>
+                    )}
                     <button
                         type="button"
                         className="header-btn save-btn"
@@ -961,7 +1194,7 @@ export function ScreenHeader() {
                         disabled={isSaving || !permissions.canEdit || lockedByOther}
                         title={lockedByOther ? `当前由 ${lockOwnerText} 持有编辑锁` : '保存草稿'}
                     >
-                        {isSaving ? '保存中...' : '💾 保存'}
+                        {isSaving ? '保存中...' : '保存'}
                     </button>
                     <input
                         ref={importInputRef}
@@ -1033,6 +1266,14 @@ export function ScreenHeader() {
                 screenId={id}
                 components={config.components ?? []}
                 selectedIds={state.selectedIds ?? []}
+                onLocateComponent={(componentId) => {
+                    const target = String(componentId || '').trim();
+                    if (!target) return;
+                    const exists = (config.components ?? []).some((item) => item.id === target);
+                    if (exists) {
+                        selectComponents([target]);
+                    }
+                }}
                 onClose={() => setShowCollaborationPanel(false)}
             />
 

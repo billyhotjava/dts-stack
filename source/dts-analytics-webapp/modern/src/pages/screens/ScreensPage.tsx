@@ -180,7 +180,9 @@ export default function ScreensPage() {
         const payload = {
             prompt: aiResult.prompt || aiPrompt.trim(),
             intent: aiResult.intent || {},
+            semanticModelHints: aiResult.semanticModelHints || {},
             queryRecommendations: aiResult.queryRecommendations || [],
+            sqlBlueprints: aiResult.sqlBlueprints || [],
             vizRecommendations: aiResult.vizRecommendations || [],
             quality: aiResult.quality || {},
             actions: aiResult.actions || [],
@@ -686,6 +688,16 @@ export default function ScreensPage() {
                                     {Array.isArray(aiResult.queryRecommendations) && aiResult.queryRecommendations.length > 0 && (
                                         <div style={{ marginTop: 10, fontSize: 12, color: '#93c5fd' }}>
                                             查询建议：{aiResult.queryRecommendations.map((q) => `${q.id || '-'}(${q.purpose || '-'})`).join('；')}
+                                        </div>
+                                    )}
+                                    {aiResult.semanticModelHints && (
+                                        <div style={{ marginTop: 10, fontSize: 12, color: '#60a5fa' }}>
+                                            语义映射：事实表 {aiResult.semanticModelHints.factTable || '-'}，时间字段 {aiResult.semanticModelHints.timeField || '-'}
+                                        </div>
+                                    )}
+                                    {Array.isArray(aiResult.sqlBlueprints) && aiResult.sqlBlueprints.length > 0 && (
+                                        <div style={{ marginTop: 10, fontSize: 12, color: '#bfdbfe' }}>
+                                            SQL蓝图：{aiResult.sqlBlueprints.map((row) => `${row.queryId || '-'}(${row.purpose || '-'})`).join('；')}
                                         </div>
                                     )}
                                     {Array.isArray(aiResult.vizRecommendations) && aiResult.vizRecommendations.length > 0 && (
