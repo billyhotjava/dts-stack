@@ -35,4 +35,7 @@
     <include file="config/liquibase/changelog/0028_screen_template_asset_center.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/0029_screen_edit_lock.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/0030_nl2sql_eval_cases.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0031_nl2sql_eval_runs.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0032_explore_sessions.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0033_report_factory.xml" relativeToChangelogFile="false"/>
 </databaseChangeLog>

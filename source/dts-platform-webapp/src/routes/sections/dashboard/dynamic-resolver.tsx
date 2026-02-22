@@ -38,7 +38,7 @@ const PATH_COMPONENT_OVERRIDES: Record<string, string> = {
 	"/governance/templates": "/pages/governance/TemplatesPage",
 	"/governance/indicators/dictionary": "/pages/governance/IndicatorsPage",
 	"/governance/rules": "/pages/governance/QualityRulesPage",
-	"/governance/quality": "/pages/catalog/QualityPage",
+	"/governance/quality": "/pages/governance/QualityReportPage",
 	"/security/data-security": "/pages/security/data-security",
 	"/security/dataset-access-approval": "/pages/security/DatasetAccessApprovalPage",
 	"/services/apis": "/pages/services/ApiServicesPage",

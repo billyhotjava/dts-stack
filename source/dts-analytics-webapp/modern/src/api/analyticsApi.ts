@@ -135,6 +135,151 @@ export type Nl2SqlEvalRunSummary = {
 	rows?: Nl2SqlEvalRunRow[];
 };
 
+export type Nl2SqlEvalRunRecord = {
+	id?: number | string;
+	label?: string | null;
+	modelVersion?: string | null;
+	promptVersion?: string | null;
+	dictionaryVersion?: string | null;
+	caseCount?: number;
+	passCount?: number;
+	failCount?: number;
+	passRate?: number;
+	averageScore?: number;
+	blockedRate?: number;
+	gatePassed?: boolean | null;
+	gate?: Record<string, unknown>;
+	createdAt?: string;
+};
+
+export type Nl2SqlEvalGateRunResponse = {
+	runId?: number | string;
+	executedAt?: string;
+	version?: {
+		label?: string | null;
+		modelVersion?: string | null;
+		promptVersion?: string | null;
+		dictionaryVersion?: string | null;
+	};
+	summary?: Nl2SqlEvalRunSummary;
+	gate?: {
+		passed?: boolean;
+		checks?: Array<Record<string, unknown>>;
+		reasons?: string[];
+		baseline?: Record<string, unknown> | null;
+		config?: Record<string, unknown>;
+	};
+};
+
+export type Nl2SqlEvalCompareResponse = {
+	baseline?: Nl2SqlEvalRunRecord;
+	candidate?: Nl2SqlEvalRunRecord;
+	metrics?: {
+		passRateDelta?: number;
+		averageScoreDelta?: number;
+		failedDelta?: number;
+		blockedRateDelta?: number;
+	};
+	changes?: {
+		regressionCount?: number;
+		improvementCount?: number;
+		unchangedCount?: number;
+		totalCompared?: number;
+		rows?: Array<Record<string, unknown>>;
+	};
+};
+
+export type ExplainabilityResponse = {
+	cardId?: number | string;
+	cardName?: string;
+	componentId?: string | null;
+	generatedAt?: string;
+	explainCard?: {
+		metricDefinition?: Record<string, unknown>;
+		filterContext?: Record<string, unknown>;
+		dataLineage?: Record<string, unknown>;
+		querySummary?: Record<string, unknown>;
+		nextActions?: string[];
+		trace?: Record<string, unknown>;
+	};
+	copyJson?: string | null;
+};
+
+export type ExploreSessionItem = {
+	id?: number | string;
+	title?: string;
+	question?: string | null;
+	steps?: Array<Record<string, unknown>>;
+	stepCount?: number;
+	conclusion?: string | null;
+	tags?: string[];
+	projectKey?: string | null;
+	dept?: string | null;
+	creatorId?: number | string;
+	archived?: boolean;
+	publicUuid?: string | null;
+	createdAt?: string;
+	updatedAt?: string;
+};
+
+export type ReportTemplateItem = {
+	id?: number | string;
+	name?: string;
+	description?: string | null;
+	spec?: Record<string, unknown>;
+	versionNo?: number;
+	published?: boolean;
+	archived?: boolean;
+	creatorId?: number | string;
+	createdAt?: string;
+	updatedAt?: string;
+};
+
+export type ReportRunItem = {
+	id?: number | string;
+	templateId?: number | string | null;
+	sourceType?: string | null;
+	sourceId?: number | string | null;
+	status?: string;
+	outputFormat?: string;
+	summary?: Record<string, unknown>;
+	distribution?: Record<string, unknown>;
+	creatorId?: number | string;
+	createdAt?: string;
+	updatedAt?: string;
+};
+
+export type MetricLensSummary = {
+	metricId?: number | string;
+	name?: string;
+	owner?: number | string;
+	aggregation?: string | null;
+	timeGrain?: string | null;
+	aclScope?: string | null;
+	latestVersion?: string | null;
+};
+
+export type MetricLensDetail = {
+	metricId?: number | string;
+	name?: string;
+	definition?: Record<string, unknown>;
+	aggregation?: string | null;
+	timeGrain?: string | null;
+	owner?: number | string;
+	version?: string | null;
+	versions?: string[];
+	aclScope?: string | null;
+	lineage?: Record<string, unknown>;
+	conflicts?: Array<Record<string, unknown>>;
+};
+
+export type MetricLensCompare = {
+	metricId?: number | string;
+	leftVersion?: Record<string, unknown>;
+	rightVersion?: Record<string, unknown>;
+	delta?: Record<string, unknown>;
+};
+
 export type QueryTraceFailureSummary = {
 	since?: string;
 	windowDays?: number;
@@ -147,6 +292,11 @@ export type QueryTraceFailureSummary = {
 		code?: string;
 		count?: number;
 		retryableHint?: boolean;
+		category?: string;
+	}>;
+	topErrorCategories?: Array<{
+		category?: string;
+		count?: number;
 	}>;
 };
 
@@ -393,6 +543,47 @@ export type ScreenAiGenerationResponse = {
 		componentType?: string;
 		title?: string;
 	}>;
+	metricLensReferences?: Array<Record<string, unknown>>;
+	semanticRecall?: {
+		schemaCandidates?: Array<Record<string, unknown>>;
+		synonymHits?: Array<Record<string, unknown>>;
+		fewShotExamples?: Array<Record<string, unknown>>;
+		promptHints?: Array<string>;
+		trace?: Record<string, unknown>;
+	};
+	nl2sqlDiagnostics?: {
+		stage?: string;
+		domain?: string;
+		factTable?: string;
+		timeField?: string;
+		queryRecommendationCount?: number;
+		sqlBlueprintCount?: number;
+		safeCount?: number;
+		executableBlueprintCount?: number;
+		needsParamsCount?: number;
+		blockedCount?: number;
+		status?: string;
+		executionReadiness?: "ready" | "needs-params" | "blocked" | string;
+		requiredVariableCount?: number;
+		pendingVariableCount?: number;
+		requiredVariables?: string[];
+		pendingVariables?: string[];
+		autoInjectedVariableCount?: number;
+		autoInjectedVariables?: string[];
+		blockedQueryIds?: string[];
+		needsParamsQueryIds?: string[];
+		safeQueryIds?: string[];
+		semanticRecallEnabled?: boolean;
+		blueprintChecks?: Array<{
+			queryId?: string;
+			purpose?: string;
+			status?: string;
+			hasTemplateVariables?: boolean;
+			templateVariables?: string[];
+			reasons?: string[];
+			[key: string]: unknown;
+		}>;
+	};
 	generatedBy?: number | string;
 	generatedAt?: string;
 	actions?: string[];
@@ -854,6 +1045,7 @@ export type ScreenExportRenderRequest = {
 	format?: "png" | "pdf" | string;
 	mode?: "draft" | "published" | "preview" | string;
 	device?: "pc" | "tablet" | "mobile" | string;
+	pixelRatio?: number;
 	screenSpec?: Record<string, unknown>;
 };
 
@@ -865,6 +1057,9 @@ export type ScreenExportRenderResult = {
 	specDigest?: string;
 	resolvedMode?: string;
 	renderEngine?: string;
+	pixelRatio?: number;
+	deviceMode?: string;
+	hiddenByDevice?: number;
 };
 
 export type ScreenComponentData = {
@@ -1100,6 +1295,19 @@ async function requestBinary(
 		specDigest: response.headers.get("x-screen-spec-digest") ?? undefined,
 		resolvedMode: response.headers.get("x-screen-resolved-mode") ?? undefined,
 		renderEngine: response.headers.get("x-screen-render-engine") ?? undefined,
+		pixelRatio: (() => {
+			const raw = response.headers.get("x-screen-render-pixel-ratio");
+			if (!raw) return undefined;
+			const value = Number.parseFloat(raw);
+			return Number.isFinite(value) ? value : undefined;
+		})(),
+		deviceMode: response.headers.get("x-screen-device-mode") ?? undefined,
+		hiddenByDevice: (() => {
+			const raw = response.headers.get("x-screen-hidden-by-device");
+			if (!raw) return undefined;
+			const value = Number.parseInt(raw, 10);
+			return Number.isFinite(value) ? value : undefined;
+		})(),
 	};
 }
 
@@ -1174,6 +1382,82 @@ export const analyticsApi = {
 		}
 		return fetchJson<QueryTraceFailureSummary>("/analytics/api/query-trace/failure-summary?" + qs.toString());
 	},
+	explainCard: (cardId: string | number, body?: unknown) =>
+		sendJson<ExplainabilityResponse>("/analytics/api/explain/card/" + encodeURIComponent(String(cardId)), body ?? {}),
+	listExploreSessions: (params?: {
+		includeArchived?: boolean;
+		dept?: string;
+		projectKey?: string;
+		limit?: number;
+	}) => {
+		const qs = new URLSearchParams();
+		qs.set("includeArchived", String(Boolean(params?.includeArchived)));
+		if (params?.dept && params.dept.trim()) {
+			qs.set("dept", params.dept.trim());
+		}
+		if (params?.projectKey && params.projectKey.trim()) {
+			qs.set("projectKey", params.projectKey.trim());
+		}
+		qs.set("limit", String(params?.limit ?? 100));
+		return fetchJson<ExploreSessionItem[]>("/analytics/api/explore-session?" + qs.toString());
+	},
+	getExploreSession: (id: string | number) =>
+		fetchJson<ExploreSessionItem>("/analytics/api/explore-session/" + encodeURIComponent(String(id))),
+	createExploreSession: (body: unknown) =>
+		sendJson<ExploreSessionItem>("/analytics/api/explore-session", body ?? {}),
+	updateExploreSession: (id: string | number, body: unknown) =>
+		requestJson<ExploreSessionItem>("/analytics/api/explore-session/" + encodeURIComponent(String(id)), "PUT", body),
+	appendExploreSessionStep: (id: string | number, body: unknown) =>
+		sendJson<ExploreSessionItem>("/analytics/api/explore-session/" + encodeURIComponent(String(id)) + "/steps", body ?? {}),
+	replayExploreSessionStep: (id: string | number, stepIndex: number) =>
+		sendJson<Record<string, unknown>>(
+			"/analytics/api/explore-session/" + encodeURIComponent(String(id)) + "/replay",
+			{ stepIndex },
+		),
+	archiveExploreSession: (id: string | number) =>
+		sendJson<ExploreSessionItem>("/analytics/api/explore-session/" + encodeURIComponent(String(id)) + "/archive", {}),
+	cloneExploreSession: (id: string | number) =>
+		sendJson<ExploreSessionItem>("/analytics/api/explore-session/" + encodeURIComponent(String(id)) + "/clone", {}),
+	createExploreSessionPublicLink: (id: string | number) =>
+		sendJson<{ uuid: string }>("/analytics/api/explore-session/" + encodeURIComponent(String(id)) + "/public_link", {}),
+	deleteExploreSessionPublicLink: (id: string | number) =>
+		requestJson<void>("/analytics/api/explore-session/" + encodeURIComponent(String(id)) + "/public_link", "DELETE"),
+	getPublicExploreSession: (uuid: string) =>
+		fetchJson<ExploreSessionItem>("/analytics/api/explore-session/public/" + encodeURIComponent(String(uuid))),
+	listReportTemplates: (limit = 100) =>
+		fetchJson<ReportTemplateItem[]>("/analytics/api/report-factory/templates?limit=" + encodeURIComponent(String(limit))),
+	createReportTemplate: (body: unknown) =>
+		sendJson<ReportTemplateItem>("/analytics/api/report-factory/templates", body ?? {}),
+	updateReportTemplate: (id: string | number, body: unknown) =>
+		requestJson<ReportTemplateItem>("/analytics/api/report-factory/templates/" + encodeURIComponent(String(id)), "PUT", body),
+	deleteReportTemplate: (id: string | number) =>
+		requestJson<void>("/analytics/api/report-factory/templates/" + encodeURIComponent(String(id)), "DELETE"),
+	generateReportRun: (body: unknown) =>
+		sendJson<ReportRunItem>("/analytics/api/report-factory/generate", body ?? {}),
+	listReportRuns: (limit = 100) =>
+		fetchJson<ReportRunItem[]>("/analytics/api/report-factory/runs?limit=" + encodeURIComponent(String(limit))),
+	getReportRun: (id: string | number) =>
+		fetchJson<ReportRunItem>("/analytics/api/report-factory/runs/" + encodeURIComponent(String(id))),
+	getReportRunExportUrl: (id: string | number, format: "html" | "markdown" = "html") =>
+		"/analytics/api/report-factory/runs/"
+		+ encodeURIComponent(String(id))
+		+ "/export?format="
+		+ encodeURIComponent(String(format)),
+	listMetricLens: () =>
+		fetchJson<MetricLensSummary[]>("/analytics/api/metric-lens"),
+	getMetricLens: (metricId: string | number) =>
+		fetchJson<MetricLensDetail>("/analytics/api/metric-lens/" + encodeURIComponent(String(metricId))),
+	compareMetricLensVersions: (metricId: string | number, leftVersion: string, rightVersion: string) =>
+		fetchJson<MetricLensCompare>(
+			"/analytics/api/metric-lens/"
+			+ encodeURIComponent(String(metricId))
+			+ "/compare?leftVersion="
+			+ encodeURIComponent(String(leftVersion))
+			+ "&rightVersion="
+			+ encodeURIComponent(String(rightVersion)),
+		),
+	getMetricLensConflicts: () =>
+		fetchJson<Array<Record<string, unknown>>>("/analytics/api/metric-lens/conflicts"),
 	listNl2SqlEvalCases: (enabledOnly = false, limit = 200) =>
 		fetchJson<Nl2SqlEvalCaseItem[]>(
 			"/analytics/api/nl2sql-eval/cases?enabledOnly="
@@ -1189,6 +1473,19 @@ export const analyticsApi = {
 		requestJson<void>("/analytics/api/nl2sql-eval/cases/" + encodeURIComponent(String(id)), "DELETE"),
 	runNl2SqlEvaluation: (body?: unknown) =>
 		sendJson<Nl2SqlEvalRunSummary>("/analytics/api/nl2sql-eval/run", body ?? {}),
+	runNl2SqlEvaluationWithGate: (body?: unknown) =>
+		sendJson<Nl2SqlEvalGateRunResponse>("/analytics/api/nl2sql-eval/run-gated", body ?? {}),
+	listNl2SqlEvalRuns: (limit = 20) =>
+		fetchJson<Nl2SqlEvalRunRecord[]>(
+			"/analytics/api/nl2sql-eval/runs?limit=" + encodeURIComponent(String(limit)),
+		),
+	compareNl2SqlEvalRuns: (baselineRunId: string | number, candidateRunId: string | number) =>
+		fetchJson<Nl2SqlEvalCompareResponse>(
+			"/analytics/api/nl2sql-eval/compare?baselineRunId="
+			+ encodeURIComponent(String(baselineRunId))
+			+ "&candidateRunId="
+			+ encodeURIComponent(String(candidateRunId)),
+		),
 	listPlatformMetrics: () => fetchJson<PlatformMetric[]>("/analytics/api/platform/metrics"),
 	listVisibleTables: () => fetchJson<Array<number | VisibleTable>>("/analytics/api/platform/visible-tables"),
 	getTrash: () => fetchJson<TrashResponse>("/analytics/api/trash"),

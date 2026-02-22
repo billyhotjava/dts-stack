@@ -29,6 +29,52 @@ import { resolveScreenTheme } from '../screenThemes';
 import type { ScreenConfig } from '../types';
 import { writeTextToClipboard } from '../../../hooks/clipboard';
 
+type PublishNotice = {
+    screenId: string | number;
+    versionNo: number | string;
+    previewUrl: string;
+    publicUrl: string | null;
+    warmupText?: string;
+};
+
+function buildExploreSessionSteps(config: ScreenConfig): Array<Record<string, unknown>> {
+    const now = new Date().toISOString();
+    const componentOutline = [...(config.components ?? [])]
+        .sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0))
+        .slice(0, 20)
+        .map((item) => ({
+            id: item.id,
+            type: item.type,
+            name: item.name,
+            visible: item.visible !== false,
+            dataSourceType: item.dataSource?.sourceType ?? item.dataSource?.type ?? 'static',
+        }));
+    return [
+        {
+            at: now,
+            title: '大屏快照',
+            type: 'screen_snapshot',
+            params: {
+                screenId: config.id || null,
+                screenName: config.name || null,
+                width: config.width,
+                height: config.height,
+                theme: config.theme || null,
+                componentCount: config.components?.length ?? 0,
+                globalVariableCount: config.globalVariables?.length ?? 0,
+            },
+        },
+        {
+            at: now,
+            title: '关键组件概览',
+            type: 'component_outline',
+            params: {
+                components: componentOutline,
+            },
+        },
+    ];
+}
+
 function buildComponentConflictMeta(baseline: ScreenConfig): Record<string, unknown> {
     const baseComponents = (baseline.components ?? []).map((item) => ({
         id: item.id,
@@ -113,9 +159,10 @@ export function ScreenHeader() {
     const [versionCandidates, setVersionCandidates] = useState<ScreenVersion[]>([]);
     const [editLock, setEditLock] = useState<ScreenEditLock | null>(null);
     const [lockErrorText, setLockErrorText] = useState<string | null>(null);
+    const [publishNotice, setPublishNotice] = useState<PublishNotice | null>(null);
     const importInputRef = useRef<HTMLInputElement | null>(null);
     const menuContainerRef = useRef<HTMLDivElement | null>(null);
-    const [activeMenu, setActiveMenu] = useState<'design' | 'governance' | 'version' | null>(null);
+    const [activeMenu, setActiveMenu] = useState<'more' | null>(null);
     const [permissions, setPermissions] = useState({
         canRead: true,
         canEdit: true,
@@ -502,6 +549,23 @@ export function ScreenHeader() {
                     + '，跳过 ' + (warmup.skipped || 0)
                     + '，失败 ' + (warmup.failed || 0);
             }
+            const previewUrl = `${window.location.origin}/analytics/screens/${encodeURIComponent(String(screenId))}/preview`;
+            let publicUrl: string | null = null;
+            try {
+                const policy = await analyticsApi.createScreenPublicLink(screenId, {});
+                if (policy?.uuid) {
+                    publicUrl = `${window.location.origin}/analytics/public/screen/${policy.uuid}`;
+                }
+            } catch (linkError) {
+                console.warn('Publish succeeded but creating public link failed:', linkError);
+            }
+            setPublishNotice({
+                screenId,
+                versionNo,
+                previewUrl,
+                publicUrl,
+                warmupText,
+            });
             alert('发布成功，版本 v' + versionNo + warmupText);
         } catch (error) {
             console.error('Failed to publish screen:', error);
@@ -692,9 +756,19 @@ export function ScreenHeader() {
         if (!id) {
             throw new Error('请先保存大屏后再导出');
         }
+        const browserRatio = Number.isFinite(window.devicePixelRatio)
+            ? Math.max(1, Math.min(window.devicePixelRatio, 3))
+            : 1;
+        const baseRatio = format === 'pdf'
+            ? Math.max(1.5, Math.min(browserRatio, 2))
+            : Math.max(2, Math.min(browserRatio, 3));
+        const pixelRatio = previewDeviceMode === 'mobile'
+            ? Math.min(3, baseRatio + 0.5)
+            : (previewDeviceMode === 'tablet' ? Math.min(3, baseRatio + 0.25) : baseRatio);
         const params = new URLSearchParams();
         params.set('format', format);
         params.set('mode', 'draft');
+        params.set('pixelRatio', String(Number(pixelRatio.toFixed(2))));
         if (previewDeviceMode !== 'auto') {
             params.set('device', previewDeviceMode);
         }
@@ -716,20 +790,38 @@ export function ScreenHeader() {
         URL.revokeObjectURL(url);
     }, []);
 
+    const resolveServerRenderPixelRatio = useCallback((format: 'png' | 'pdf') => {
+        const browserRatio = typeof window !== 'undefined' && Number.isFinite(window.devicePixelRatio)
+            ? Math.max(1, Math.min(window.devicePixelRatio, 3))
+            : 1;
+        const baseRatio = format === 'pdf'
+            ? Math.max(1.5, Math.min(browserRatio, 2))
+            : Math.max(2, Math.min(browserRatio, 3));
+        let tunedRatio = baseRatio;
+        if (previewDeviceMode === 'mobile') {
+            tunedRatio = Math.min(3, baseRatio + 0.5);
+        } else if (previewDeviceMode === 'tablet') {
+            tunedRatio = Math.min(3, baseRatio + 0.25);
+        }
+        return Number(tunedRatio.toFixed(2));
+    }, [previewDeviceMode]);
+
     const renderExportByServer = useCallback(async (format: 'png' | 'pdf') => {
         if (!id) {
             throw new Error('请先保存大屏后再导出');
         }
+        const pixelRatio = resolveServerRenderPixelRatio(format);
         const rendered = await analyticsApi.renderScreenExport(id, {
             format,
             mode: 'draft',
             ...(previewDeviceMode === 'auto' ? {} : { device: previewDeviceMode }),
+            pixelRatio,
             screenSpec: buildScreenPayload(config),
         });
         const fallbackName = `${config.name || 'screen'}.${format}`;
         downloadBlob(rendered.blob, rendered.fileName || fallbackName);
         return rendered;
-    }, [config, downloadBlob, id, previewDeviceMode]);
+    }, [config, downloadBlob, id, previewDeviceMode, resolveServerRenderPixelRatio]);
 
     const handleExportPng = async () => {
         let preparedRequestId: string | undefined;
@@ -927,9 +1019,47 @@ export function ScreenHeader() {
         }
     };
 
+    const handleCreateExploreSession = useCallback(async () => {
+        if (!permissions.canRead) {
+            alert('当前无读权限，无法沉淀分析会话');
+            return;
+        }
+        const defaultTitle = `${config.name || '未命名大屏'} 分析会话`;
+        const titleInput = window.prompt('会话标题', defaultTitle);
+        if (titleInput === null) {
+            return;
+        }
+        const questionInput = window.prompt('问题描述（可选）', `围绕大屏「${config.name || '未命名大屏'}」展开分析`) ?? '';
+        const conclusionInput = window.prompt('阶段结论（可选）', '') ?? '';
+        const tagsInput = window.prompt('标签（逗号分隔，可选）', '大屏,复盘') ?? '';
+        const tags = tagsInput
+            .split(',')
+            .map((item) => item.trim())
+            .filter((item) => item.length > 0)
+            .slice(0, 20);
+        const created = await analyticsApi.createExploreSession({
+            title: titleInput.trim() || defaultTitle,
+            question: questionInput.trim() || null,
+            conclusion: conclusionInput.trim() || null,
+            tags,
+            steps: buildExploreSessionSteps(config),
+        });
+        const createdId = created?.id != null ? `#${created.id}` : '';
+        if (createdId && window.confirm(`已创建分析会话 ${createdId}，是否打开会话中心？`)) {
+            navigate('/explore-sessions');
+            return;
+        }
+        alert(`已创建分析会话 ${createdId}`.trim());
+    }, [config, navigate, permissions.canRead]);
+
     const handleBack = () => {
         navigate('/screens');
     };
+
+    const handleCopyUrl = useCallback(async (url: string) => {
+        const copied = await writeTextToClipboard(url);
+        alert(copied ? '链接已复制到剪贴板' : `复制失败，请手工复制：\n${url}`);
+    }, []);
 
     const executeMenuAction = useCallback((action: () => void | Promise<void>) => {
         setActiveMenu(null);
@@ -967,36 +1097,47 @@ export function ScreenHeader() {
                 <div className="screen-header-right">
                     <div className="header-menu-group" ref={menuContainerRef}>
                         <HeaderMenu
-                            label={`设计${cycleWarnings.length > 0 ? `(${cycleWarnings.length})` : ''}`}
-                            open={activeMenu === 'design'}
-                            onToggle={() => setActiveMenu((prev) => (prev === 'design' ? null : 'design'))}
+                            label={`更多${cycleWarnings.length > 0 ? `(${cycleWarnings.length})` : ''}`}
+                            open={activeMenu === 'more'}
+                            onToggle={() => setActiveMenu((prev) => (prev === 'more' ? null : 'more'))}
                         >
-                            <button
-                                type="button"
-                                className="header-btn"
-                                onClick={() => executeMenuAction(() => setShowVariableManager(true))}
-                                title="全局变量与联动"
-                            >
-                                变量
-                            </button>
-                            <button
-                                type="button"
-                                className="header-btn"
-                                onClick={() => executeMenuAction(() => setShowInteractionDebugPanel(true))}
-                                title="联动与变量事件调试"
-                            >
-                                联动调试
-                            </button>
-                            {id && permissions.canRead && (
+                            <div className="header-menu-section">
+                                <div className="header-menu-section-title">设计</div>
                                 <button
                                     type="button"
                                     className="header-btn"
-                                    onClick={() => executeMenuAction(() => setShowCollaborationPanel(true))}
-                                    title="评论/批注轻协作"
+                                    onClick={() => executeMenuAction(handleCreateExploreSession)}
+                                    disabled={!permissions.canRead}
+                                    title="将当前大屏沉淀为可复盘分析会话"
                                 >
-                                    协作
+                                    沉淀会话
                                 </button>
-                            )}
+                                <button
+                                    type="button"
+                                    className="header-btn"
+                                    onClick={() => executeMenuAction(() => setShowVariableManager(true))}
+                                    title="全局变量与联动"
+                                >
+                                    变量管理
+                                </button>
+                                <button
+                                    type="button"
+                                    className="header-btn"
+                                    onClick={() => executeMenuAction(() => setShowInteractionDebugPanel(true))}
+                                    title="联动与变量事件调试"
+                                >
+                                    联动调试
+                                </button>
+                                {id && permissions.canRead && (
+                                    <button
+                                        type="button"
+                                        className="header-btn"
+                                        onClick={() => executeMenuAction(() => setShowCollaborationPanel(true))}
+                                        title="评论/批注轻协作"
+                                    >
+                                        协作
+                                    </button>
+                                )}
                                 <button
                                     type="button"
                                     className="header-btn"
@@ -1004,8 +1145,8 @@ export function ScreenHeader() {
                                     disabled={isSavingTemplate || !permissions.canEdit}
                                     title="保存为团队模板"
                                 >
-                                {isSavingTemplate ? '存模板中...' : '存模板'}
-                            </button>
+                                    {isSavingTemplate ? '存模板中...' : '保存模板'}
+                                </button>
                                 <button
                                     type="button"
                                     className="header-btn"
@@ -1013,189 +1154,190 @@ export function ScreenHeader() {
                                     title="导入 JSON"
                                 >
                                     导入JSON
-                            </button>
-                        </HeaderMenu>
-                        <HeaderMenu
-                            label="治理"
-                            open={activeMenu === 'governance'}
-                            onToggle={() => setActiveMenu((prev) => (prev === 'governance' ? null : 'governance'))}
-                        >
-                            {id && permissions.canRead && (
+                                </button>
+                            </div>
+
+                            <div className="header-menu-section">
+                                <div className="header-menu-section-title">治理</div>
+                                {id && permissions.canRead && (
+                                    <button
+                                        type="button"
+                                        className="header-btn"
+                                        onClick={() => executeMenuAction(() => setShowEditLockPanel(true))}
+                                        title="编辑锁状态与手工接管"
+                                    >
+                                        编辑锁{lockedByOther ? '(占用)' : (editLock?.mine ? '(我)' : '')}
+                                    </button>
+                                )}
                                 <button
                                     type="button"
                                     className="header-btn"
-                                    onClick={() => executeMenuAction(() => setShowEditLockPanel(true))}
-                                    title="编辑锁状态与手工接管"
+                                    onClick={() => executeMenuAction(() => setShowCachePanel(true))}
+                                    title="缓存命中率观测"
                                 >
-                                    锁{lockedByOther ? '(占用)' : (editLock?.mine ? '(我)' : '')}
+                                    缓存观测
                                 </button>
-                            )}
-                            <button
-                                type="button"
-                                className="header-btn"
-                                onClick={() => executeMenuAction(() => setShowCachePanel(true))}
-                                title="缓存命中率观测"
-                            >
-                                缓存观测
-                            </button>
-                            <button
-                                type="button"
-                                className="header-btn"
-                                onClick={() => executeMenuAction(() => setShowCompliancePanel(true))}
-                                title="企业级合规策略与审计报表"
-                            >
-                                合规
-                            </button>
-                            <button
-                                type="button"
-                                className="header-btn"
-                                onClick={() => executeMenuAction(() => setShowHealthPanel(true))}
-                                title="兼容性与性能基线体检"
-                            >
-                                体检
-                            </button>
-                            {id && permissions.canManage && (
-                                <>
-                                    <button
-                                        type="button"
-                                        className="header-btn"
-                                        onClick={() => executeMenuAction(() => setShowAclPanel(true))}
-                                        title="大屏 ACL 权限"
-                                    >
-                                        权限
-                                    </button>
-                                    <button
-                                        type="button"
-                                        className="header-btn"
-                                        onClick={() => executeMenuAction(() => setShowAuditPanel(true))}
-                                        title="审计日志链路"
-                                    >
-                                        审计
-                                    </button>
-                                </>
-                            )}
-                            {id && (
                                 <button
                                     type="button"
                                     className="header-btn"
-                                    onClick={() => executeMenuAction(() => setShowSharePolicyPanel(true))}
-                                    disabled={!permissions.canPublish}
-                                    title="配置过期/口令/IP白名单"
+                                    onClick={() => executeMenuAction(() => setShowCompliancePanel(true))}
+                                    title="企业级合规策略与审计报表"
                                 >
-                                    分享策略
+                                    合规
                                 </button>
-                            )}
-                            {id && (
                                 <button
                                     type="button"
                                     className="header-btn"
-                                    onClick={() => executeMenuAction(handleShare)}
-                                    disabled={isSharing || !permissions.canPublish}
-                                    title="生成公开链接并复制"
+                                    onClick={() => executeMenuAction(() => setShowHealthPanel(true))}
+                                    title="兼容性与性能基线体检"
                                 >
-                                    {isSharing ? '分享中...' : '分享链接'}
+                                    体检
                                 </button>
-                            )}
-                        </HeaderMenu>
-                        <HeaderMenu
-                            label="版本/导出"
-                            open={activeMenu === 'version'}
-                            onToggle={() => setActiveMenu((prev) => (prev === 'version' ? null : 'version'))}
-                        >
-                            {id && (
-                                <>
+                                {id && permissions.canManage && (
+                                    <>
+                                        <button
+                                            type="button"
+                                            className="header-btn"
+                                            onClick={() => executeMenuAction(() => setShowAclPanel(true))}
+                                            title="大屏 ACL 权限"
+                                        >
+                                            权限
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className="header-btn"
+                                            onClick={() => executeMenuAction(() => setShowAuditPanel(true))}
+                                            title="审计日志链路"
+                                        >
+                                            审计
+                                        </button>
+                                    </>
+                                )}
+                                {id && (
                                     <button
                                         type="button"
                                         className="header-btn"
-                                        onClick={() => executeMenuAction(handleVersionHistory)}
-                                        disabled={isLoadingVersions || !permissions.canPublish}
-                                        title="版本历史"
+                                        onClick={() => executeMenuAction(() => setShowSharePolicyPanel(true))}
+                                        disabled={!permissions.canPublish}
+                                        title="配置过期/口令/IP白名单"
                                     >
-                                        {isLoadingVersions ? '加载中...' : '版本'}
+                                        分享策略
                                     </button>
+                                )}
+                                {id && (
                                     <button
                                         type="button"
                                         className="header-btn"
-                                        onClick={() => executeMenuAction(handleVersionCompare)}
-                                        disabled={isLoadingVersions || !permissions.canRead}
-                                        title="版本差异摘要"
+                                        onClick={() => executeMenuAction(handleShare)}
+                                        disabled={isSharing || !permissions.canPublish}
+                                        title="生成公开链接并复制"
                                     >
-                                        对比
+                                        {isSharing ? '分享中...' : '分享链接'}
                                     </button>
-                                </>
-                            )}
-                            <button
-                                type="button"
-                                className="header-btn"
-                                onClick={() => executeMenuAction(handleExportJson)}
-                                title="导出 JSON"
-                            >
-                                JSON
-                            </button>
-                            <button
-                                type="button"
-                                className="header-btn"
-                                onClick={() => executeMenuAction(handleExportPng)}
-                                title="导出 PNG"
-                            >
-                                PNG
-                            </button>
-                            <button
-                                type="button"
-                                className="header-btn"
-                                onClick={() => executeMenuAction(handleExportPdf)}
-                                title="导出 PDF"
-                            >
-                                PDF
-                            </button>
+                                )}
+                            </div>
+
+                            <div className="header-menu-section">
+                                <div className="header-menu-section-title">版本与导出</div>
+                                <label className="header-menu-inline-label" htmlFor="screen-preview-device-mode">预览设备</label>
+                                <select
+                                    id="screen-preview-device-mode"
+                                    className="header-device-select"
+                                    value={previewDeviceMode}
+                                    onChange={(e) => {
+                                        const next = e.target.value;
+                                        if (next === 'pc' || next === 'tablet' || next === 'mobile') {
+                                            setPreviewDeviceMode(next);
+                                            return;
+                                        }
+                                        setPreviewDeviceMode('auto');
+                                    }}
+                                    title="预览设备模式"
+                                >
+                                    <option value="auto">自动</option>
+                                    <option value="pc">PC</option>
+                                    <option value="tablet">平板</option>
+                                    <option value="mobile">手机</option>
+                                </select>
+                                {id && (
+                                    <>
+                                        <button
+                                            type="button"
+                                            className="header-btn"
+                                            onClick={() => executeMenuAction(handleVersionHistory)}
+                                            disabled={isLoadingVersions || !permissions.canPublish}
+                                            title="版本历史"
+                                        >
+                                            {isLoadingVersions ? '加载中...' : '版本历史'}
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className="header-btn"
+                                            onClick={() => executeMenuAction(handleVersionCompare)}
+                                            disabled={isLoadingVersions || !permissions.canRead}
+                                            title="版本差异摘要"
+                                        >
+                                            版本对比
+                                        </button>
+                                    </>
+                                )}
+                                <button
+                                    type="button"
+                                    className="header-btn"
+                                    onClick={() => executeMenuAction(handleExportJson)}
+                                    title="导出 JSON"
+                                >
+                                    导出JSON
+                                </button>
+                                <button
+                                    type="button"
+                                    className="header-btn"
+                                    onClick={() => executeMenuAction(handleExportPng)}
+                                    title="导出 PNG"
+                                >
+                                    导出PNG
+                                </button>
+                                <button
+                                    type="button"
+                                    className="header-btn"
+                                    onClick={() => executeMenuAction(handleExportPdf)}
+                                    title="导出 PDF"
+                                >
+                                    导出PDF
+                                </button>
+                            </div>
                         </HeaderMenu>
                     </div>
-                    <button
-                        type="button"
-                        className="header-btn preview-btn"
-                        onClick={handlePreview}
-                        title={`预览大屏（${previewDeviceMode === 'auto' ? '自动' : previewDeviceMode}）`}
-                    >
-                        预览
-                    </button>
-                    <select
-                        className="header-device-select"
-                        value={previewDeviceMode}
-                        onChange={(e) => {
-                            const next = e.target.value;
-                            if (next === 'pc' || next === 'tablet' || next === 'mobile') {
-                                setPreviewDeviceMode(next);
-                                return;
-                            }
-                            setPreviewDeviceMode('auto');
-                        }}
-                        title="预览设备模式"
-                    >
-                        <option value="auto">自动</option>
-                        <option value="pc">PC</option>
-                        <option value="tablet">平板</option>
-                        <option value="mobile">手机</option>
-                    </select>
-                    {id && (
+                    <div className="screen-header-primary-actions">
                         <button
                             type="button"
-                            className="header-btn"
-                            onClick={handlePublish}
-                            disabled={isPublishing || !permissions.canPublish || lockedByOther}
-                            title={lockedByOther ? `当前由 ${lockOwnerText} 持有编辑锁` : '发布当前草稿'}
+                            className="header-btn preview-btn"
+                            onClick={handlePreview}
+                            title={`预览大屏（${previewDeviceMode === 'auto' ? '自动' : previewDeviceMode}）`}
                         >
-                            {isPublishing ? '发布中...' : '发布'}
+                            预览
                         </button>
-                    )}
-                    <button
-                        type="button"
-                        className="header-btn save-btn"
-                        onClick={handleSave}
-                        disabled={isSaving || !permissions.canEdit || lockedByOther}
-                        title={lockedByOther ? `当前由 ${lockOwnerText} 持有编辑锁` : '保存草稿'}
-                    >
-                        {isSaving ? '保存中...' : '保存'}
-                    </button>
+                        {id && (
+                            <button
+                                type="button"
+                                className="header-btn"
+                                onClick={handlePublish}
+                                disabled={isPublishing || !permissions.canPublish || lockedByOther}
+                                title={lockedByOther ? `当前由 ${lockOwnerText} 持有编辑锁` : '发布当前草稿'}
+                            >
+                                {isPublishing ? '发布中...' : '发布'}
+                            </button>
+                        )}
+                        <button
+                            type="button"
+                            className="header-btn save-btn"
+                            onClick={handleSave}
+                            disabled={isSaving || !permissions.canEdit || lockedByOther}
+                            title={lockedByOther ? `当前由 ${lockOwnerText} 持有编辑锁` : '保存草稿'}
+                        >
+                            {isSaving ? '保存中...' : '保存'}
+                        </button>
+                    </div>
                     <input
                         ref={importInputRef}
                         type="file"
@@ -1215,6 +1357,72 @@ export function ScreenHeader() {
                 }}>
                     编辑锁提示：当前由 {lockOwnerText} 编辑中，保存/发布已被保护性禁用。
                     {lockErrorText ? ` (${lockErrorText})` : ''}
+                </div>
+            )}
+            {publishNotice && (
+                <div className="screen-publish-notice">
+                    <div className="screen-publish-notice-main">
+                        <div className="screen-publish-notice-title">
+                            已发布 v{publishNotice.versionNo}（大屏 #{publishNotice.screenId}）
+                        </div>
+                        <div className="screen-publish-notice-link-row">
+                            <span className="screen-publish-notice-label">预览链接</span>
+                            <a href={publishNotice.previewUrl} target="_blank" rel="noreferrer">{publishNotice.previewUrl}</a>
+                            <button
+                                type="button"
+                                className="header-btn"
+                                onClick={() => void handleCopyUrl(publishNotice.previewUrl)}
+                            >
+                                复制
+                            </button>
+                        </div>
+                        <div className="screen-publish-notice-link-row">
+                            <span className="screen-publish-notice-label">公开链接</span>
+                            {publishNotice.publicUrl ? (
+                                <>
+                                    <a href={publishNotice.publicUrl} target="_blank" rel="noreferrer">{publishNotice.publicUrl}</a>
+                                    <button
+                                        type="button"
+                                        className="header-btn"
+                                        onClick={() => void handleCopyUrl(publishNotice.publicUrl!)}
+                                    >
+                                        复制
+                                    </button>
+                                </>
+                            ) : (
+                                <span className="screen-publish-notice-muted">未生成（可在“更多/治理/分享链接”中重试）</span>
+                            )}
+                        </div>
+                        {publishNotice.warmupText ? (
+                            <div className="screen-publish-notice-muted">{publishNotice.warmupText.trim()}</div>
+                        ) : null}
+                    </div>
+                    <div className="screen-publish-notice-actions">
+                        <button
+                            type="button"
+                            className="header-btn"
+                            onClick={() => navigate('/')}
+                            title="返回 Analytics 首页"
+                        >
+                            Analytics首页
+                        </button>
+                        <button
+                            type="button"
+                            className="header-btn"
+                            onClick={() => navigate('/screens')}
+                            title="进入大屏管理列表"
+                        >
+                            大屏中心
+                        </button>
+                        <button
+                            type="button"
+                            className="header-btn"
+                            onClick={() => setPublishNotice(null)}
+                            title="收起发布信息"
+                        >
+                            收起
+                        </button>
+                    </div>
                 </div>
             )}
 

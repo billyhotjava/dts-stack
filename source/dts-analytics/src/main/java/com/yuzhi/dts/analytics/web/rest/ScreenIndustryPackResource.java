@@ -1174,6 +1174,17 @@ public class ScreenIndustryPackResource {
                 499,
                 trimToNull(envOrDefault("DTS_INGESTION_HTTP_BODY_CONTAINS", null))));
         targets.add(new RuntimeTarget(
+                "connector-task-status",
+                "Connector Task Status API",
+                envOrDefault("DTS_CONNECTOR_STATUS_HOST", envOrDefault("DTS_INGESTION_HOST", "dts-ingestion")),
+                envOrDefaultPort("DTS_CONNECTOR_STATUS_PORT", envOrDefaultPort("DTS_INGESTION_PORT", 8080)),
+                false,
+                "http",
+                envOrDefault("DTS_CONNECTOR_STATUS_HTTP_PATH", "/api/connector/tasks/status"),
+                200,
+                499,
+                trimToNull(envOrDefault("DTS_CONNECTOR_STATUS_HTTP_BODY_CONTAINS", null))));
+        targets.add(new RuntimeTarget(
                 "analytics-db",
                 "Analytics DB",
                 envOrDefault("DTS_ANALYTICS_DB_HOST", "dts-postgresql"),
@@ -1279,7 +1290,13 @@ public class ScreenIndustryPackResource {
             if (returnCode != 0) {
                 throw new IllegalStateException("mqtt connack returnCode=" + returnCode);
             }
-            return "mqtt connack ok";
+            out.write(new byte[] {(byte) 0xC0, 0x00});
+            out.flush();
+            byte[] pingResp = in.readNBytes(2);
+            if (pingResp.length < 2 || (pingResp[0] & 0xFF) != 0xD0 || (pingResp[1] & 0xFF) != 0x00) {
+                throw new IllegalStateException("mqtt heartbeat (pingresp) timeout");
+            }
+            return "mqtt connack + heartbeat ok";
         }
     }
 

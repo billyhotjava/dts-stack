@@ -1,6 +1,6 @@
 # P2-05 指标语义透视台（Metric Lens）
 
-`status`: `planned`  
+`status`: `done`  
 `priority`: `P2`  
 `inspiration`: `Hetu(指标分析可信化) + Superset/Metabase 语义建模思想`
 
@@ -55,3 +55,18 @@
 - `P1-06-analysis-explainability-layer.md`
 - `P2-01-ai-screen-copilot.md`
 
+## 实现记录（2026-02-22）
+
+- 新增 Metric Lens 后端服务与 API：
+  - 列表/详情：`GET /api/metric-lens`、`GET /api/metric-lens/{metricId}`；
+  - 版本对比：`GET /api/metric-lens/{metricId}/compare`；
+  - 冲突检测：`GET /api/metric-lens/conflicts`。
+  - 代码：`source/dts-analytics/src/main/java/com/yuzhi/dts/analytics/service/MetricLensService.java`、`source/dts-analytics/src/main/java/com/yuzhi/dts/analytics/web/rest/MetricLensResource.java`。
+- 透视维度覆盖：定义、聚合、时间口径、版本、owner、lineage、aclScope。
+- 冲突检测支持识别聚合/过滤/时间口径差异，并返回冲突等级与修复建议。
+- Explainability 与 AI 结果已接入 Metric Lens 快捷引用（`metricLensUrl`/`metricLensReferences`）。
+- 前端透视台已落地（2026-02-22）：
+  - 新增页面：`source/dts-analytics-webapp/modern/src/pages/MetricLensPage.tsx`；
+  - 新增路由：`/analytics/metric-lens`；
+  - 新增导航入口：侧边栏“指标透视”；
+  - 能力覆盖：指标列表、详情透视、版本对比、冲突列表可视化。

@@ -138,6 +138,13 @@ export interface OpsConfigItem {
 	editable: boolean;
 	sortOrder: number;
 	displayName?: string;
+	scope?: "RUNTIME" | "RUNTIME_RESTART" | "BOOTSTRAP";
+	restartRequired?: boolean;
+	validationRule?: string;
+	owner?: string;
+	groupKey?: string;
+	groupLabel?: string;
+	groupOrder?: number;
 	lastModified?: string;
 	lastModifiedBy?: string;
 }

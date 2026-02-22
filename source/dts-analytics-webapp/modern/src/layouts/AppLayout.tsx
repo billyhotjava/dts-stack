@@ -97,6 +97,42 @@ const ScreenIcon = () => (
 	</svg>
 );
 
+const ExploreSessionIcon = () => (
+	<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+		<path d="M3 4h18v14H3z" />
+		<path d="M7 8h10" />
+		<path d="M7 12h7" />
+		<path d="M7 16h5" />
+	</svg>
+);
+
+const ReportFactoryIcon = () => (
+	<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+		<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+		<path d="M14 2v6h6" />
+		<path d="M8 13h8" />
+		<path d="M8 17h6" />
+	</svg>
+);
+
+const MetricLensIcon = () => (
+	<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+		<circle cx="11" cy="11" r="7" />
+		<path d="m21 21-4.35-4.35" />
+		<path d="M8 11h6" />
+		<path d="M11 8v6" />
+	</svg>
+);
+
+const Nl2SqlEvalIcon = () => (
+	<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+		<rect x="3" y="4" width="18" height="16" rx="2" />
+		<path d="M7 8h10" />
+		<path d="M7 12h10" />
+		<path d="M7 16h6" />
+	</svg>
+);
+
 const UserIcon = () => (
 	<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
 		<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
@@ -149,6 +185,10 @@ const ROUTE_NAV_MAP: { path: string; section: string; nav?: string }[] = [
 	{ path: "/metrics", section: "nav.section.data", nav: "nav.metrics" },
 	{ path: "/trash", section: "nav.section.data", nav: "nav.trash" },
 	{ path: "/screens", section: "nav.section.tools", nav: "nav.screens" },
+	{ path: "/explore-sessions", section: "nav.section.tools", nav: "nav.exploreSessions" },
+	{ path: "/report-factory", section: "nav.section.tools", nav: "nav.reportFactory" },
+	{ path: "/metric-lens", section: "nav.section.tools", nav: "nav.metricLens" },
+	{ path: "/nl2sql-eval", section: "nav.section.tools", nav: "nav.nl2sqlEval" },
 	{ path: "/search", section: "nav.section.tools", nav: "nav.search" },
 ];
 
@@ -324,6 +364,10 @@ export function AppLayout() {
 
 					<SidebarSection title={t(locale, "nav.section.tools")}>
 						<SidebarItem to="/screens" icon={<ScreenIcon />} label={t(locale, "nav.screens")} />
+						<SidebarItem to="/explore-sessions" icon={<ExploreSessionIcon />} label={t(locale, "nav.exploreSessions")} />
+						<SidebarItem to="/report-factory" icon={<ReportFactoryIcon />} label={t(locale, "nav.reportFactory")} />
+						<SidebarItem to="/metric-lens" icon={<MetricLensIcon />} label={t(locale, "nav.metricLens")} />
+						<SidebarItem to="/nl2sql-eval" icon={<Nl2SqlEvalIcon />} label={t(locale, "nav.nl2sqlEval")} />
 						<SidebarItem to="/search" icon={<SearchIcon />} label={t(locale, "nav.search")} />
 					</SidebarSection>
 				</SidebarNav>

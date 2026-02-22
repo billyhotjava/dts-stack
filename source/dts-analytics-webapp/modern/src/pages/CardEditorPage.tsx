@@ -6,6 +6,7 @@ import {
 	type CardQueryResponse,
 	type CollectionListItem,
 	type DatabaseListItem,
+	type ExplainabilityResponse,
 } from "../api/analyticsApi";
 import { resolveAnalyticsErrorCodeMessage } from "../api/errorCodeMessages";
 import { ChartRenderer, type VisualizationType } from "../components/charts";
@@ -96,6 +97,7 @@ export default function CardEditorPage() {
 	const [builderInitialDatasetQuery, setBuilderInitialDatasetQuery] = useState<Record<string, unknown> | null>(null);
 	const [builderDatasetQuery, setBuilderDatasetQuery] = useState<Record<string, unknown> | null>(null);
 	const [runState, setRunState] = useState<LoadState<CardQueryResponse> | null>(null);
+	const [explainState, setExplainState] = useState<LoadState<ExplainabilityResponse> | null>(null);
 	const [saveState, setSaveState] = useState<LoadState<CardDetail> | null>(null);
 	const [displayType, setDisplayType] = useState<VisualizationType>("table");
 	const [showSql, setShowSql] = useState(false);
@@ -270,6 +272,17 @@ export default function CardEditorPage() {
 		}
 	};
 
+	const explain = async () => {
+		if (!cardId) return;
+		setExplainState({ state: "loading" });
+		try {
+			const value = await analyticsApi.explainCard(cardId, {});
+			setExplainState({ state: "loaded", value });
+		} catch (e) {
+			setExplainState({ state: "error", error: e });
+		}
+	};
+
 	// Icons
 	const PlayIcon = () => (
 		<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -422,6 +435,14 @@ export default function CardEditorPage() {
 						>
 							{t(locale, "questions.save")}
 						</Button>
+						<Button
+							variant="tertiary"
+							onClick={explain}
+							disabled={!cardId || explainState?.state === "loading"}
+							loading={explainState?.state === "loading"}
+						>
+							Explain
+						</Button>
 					</div>
 					<div />
 				</CardFooter>
@@ -463,6 +484,43 @@ export default function CardEditorPage() {
 						</div>
 					)}
 					{runState?.state === "error" && <ErrorNotice locale={locale} error={runState.error} />}
+					{explainState?.state === "error" && <ErrorNotice locale={locale} error={explainState.error} />}
+					{explainState?.state === "loaded" && (
+						<div style={{ marginBottom: "var(--spacing-md)" }}>
+							<div style={{
+								display: "flex",
+								alignItems: "center",
+								justifyContent: "space-between",
+								marginBottom: "var(--spacing-xs)",
+							}}>
+								<strong>Explainability</strong>
+								<Button
+									variant="tertiary"
+									size="sm"
+									onClick={() => {
+										const text = explainState.value.copyJson ?? JSON.stringify(explainState.value.explainCard ?? {}, null, 2);
+										if (navigator.clipboard?.writeText) {
+											void navigator.clipboard.writeText(text);
+										}
+									}}
+								>
+									Copy JSON
+								</Button>
+							</div>
+							<pre
+								style={{
+									whiteSpace: "pre-wrap",
+									margin: 0,
+									padding: "var(--spacing-sm)",
+									background: "var(--color-bg-tertiary)",
+									borderRadius: "var(--radius-sm)",
+									fontSize: "var(--font-size-sm)",
+								}}
+							>
+								{JSON.stringify(explainState.value.explainCard ?? {}, null, 2)}
+							</pre>
+						</div>
+					)}
 					{runState?.state === "loaded" && (
 						<>
 							{/* Result summary bar */}

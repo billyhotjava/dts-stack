@@ -1,6 +1,6 @@
 # P0-06 NL2SQL 评测集与失败回流闭环
 
-`status`: `planned`  
+`status`: `done`  
 `priority`: `P0`  
 `inspiration`: `生产级 LLM 应用的离线评测 + 在线回流闭环`
 
@@ -33,7 +33,12 @@
 - [x] 已新增评测样本管理 API：`/analytics/api/nl2sql-eval/cases`（增删改查）。
 - [x] 已新增批量评测 API：`POST /analytics/api/nl2sql-eval/run`（输出通过率、平均分、逐条检查结果）。
 - [x] 在线失败样本回流已补齐：`card/public query` 会将候选 SQL、自动纠错重试过程、错误类别写入 `query_trace.context_json.executionTrace`。
-- [ ] 回归门禁与版本对比看板尚未实现。
+- [x] 已实现回归门禁与版本对比接口：`POST /analytics/api/nl2sql-eval/run-gated`、`GET /analytics/api/nl2sql-eval/runs`、`GET /analytics/api/nl2sql-eval/compare`。
+- [x] 前端评测控制台已落地（2026-02-22）：
+  - 页面：`source/dts-analytics-webapp/modern/src/pages/Nl2SqlEvalPage.tsx`；
+  - 路由：`/analytics/nl2sql-eval`；
+  - 导航入口：侧边栏“NL2SQL评测”；
+  - 功能：样例创建、批量评测、gated 评测、历史 run 查看与 run 对比。
 
 ## 验收标准
 

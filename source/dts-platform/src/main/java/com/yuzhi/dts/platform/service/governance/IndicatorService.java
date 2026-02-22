@@ -41,6 +41,11 @@ import org.springframework.util.StringUtils;
 @Transactional
 public class IndicatorService {
 
+    private static final String STATUS_DRAFT = "DRAFT";
+    private static final String STATUS_PUBLISHED = "PUBLISHED";
+    private static final String STATUS_ARCHIVED = "ARCHIVED";
+    private static final String STATUS_DEPRECATED = "DEPRECATED";
+
     private final GovIndicatorDefinitionRepository repository;
     private final GovIndicatorVersionRepository versionRepository;
     private final CatalogDatasetRepository datasetRepository;
@@ -135,10 +140,10 @@ public class IndicatorService {
             throw new org.springframework.security.access.AccessDeniedException("Invalid department context");
         }
         ensurePublishReady(entity, activeDept);
-        entity.setStatus("PUBLISHED");
+        entity.setStatus(STATUS_PUBLISHED);
         applyDefaults(entity, activeDept);
         GovIndicatorDefinition saved = repository.save(entity);
-        snapshot(saved, saved.getVersion(), "PUBLISHED", saved.getVersionNotes(), Instant.now());
+        snapshot(saved, saved.getVersion(), STATUS_PUBLISHED, saved.getVersionNotes(), Instant.now());
         return IndicatorMapper.toDto(saved);
     }
 
@@ -288,10 +293,10 @@ public class IndicatorService {
         if (!deptAllowed(entity, activeDept)) {
             throw new org.springframework.security.access.AccessDeniedException("Invalid department context");
         }
-        entity.setStatus("DEPRECATED");
+        entity.setStatus(STATUS_ARCHIVED);
         applyDefaults(entity, activeDept);
         GovIndicatorDefinition saved = repository.save(entity);
-        snapshot(saved, saved.getVersion(), "DEPRECATED", saved.getVersionNotes(), null);
+        snapshot(saved, saved.getVersion(), STATUS_ARCHIVED, saved.getVersionNotes(), null);
         return IndicatorMapper.toDto(saved);
     }
 
@@ -339,7 +344,7 @@ public class IndicatorService {
                 .orElseGet(GovIndicatorVersion::new);
             snapshot.setIndicator(indicator);
             snapshot.setVersion(normalizedVersion);
-            snapshot.setStatus(StringUtils.hasText(status) ? status.trim() : "DRAFT");
+            snapshot.setStatus(normalizeStatus(status, STATUS_DRAFT));
             snapshot.setChangeSummary(StringUtils.hasText(changeSummary) ? changeSummary.trim() : null);
             snapshot.setReleasedAt(releasedAt);
             snapshot.setSnapshotJson(serializeSnapshot(indicator));
@@ -528,9 +533,7 @@ public class IndicatorService {
         if (!StringUtils.hasText(entity.getOwnerDept()) && StringUtils.hasText(activeDept)) {
             entity.setOwnerDept(activeDept.trim());
         }
-        if (!StringUtils.hasText(entity.getStatus())) {
-            entity.setStatus("DRAFT");
-        }
+        entity.setStatus(normalizeStatus(entity.getStatus(), STATUS_DRAFT));
         if (!StringUtils.hasText(entity.getVersion())) {
             entity.setVersion("v1");
         }
@@ -566,9 +569,20 @@ public class IndicatorService {
 
     private boolean statusMatches(GovIndicatorDefinition entity, String status) {
         if (!StringUtils.hasText(status)) return true;
-        String expected = status.trim().toUpperCase(Locale.ROOT);
-        String actual = entity.getStatus() == null ? "" : entity.getStatus().trim().toUpperCase(Locale.ROOT);
+        String expected = normalizeStatus(status, "");
+        String actual = normalizeStatus(entity.getStatus(), "");
         return expected.equals(actual);
+    }
+
+    private String normalizeStatus(String status, String defaultValue) {
+        String normalized = StringUtils.hasText(status) ? status.trim().toUpperCase(Locale.ROOT) : defaultValue;
+        if (!StringUtils.hasText(normalized)) {
+            return defaultValue;
+        }
+        if (STATUS_DEPRECATED.equals(normalized)) {
+            return STATUS_ARCHIVED;
+        }
+        return normalized;
     }
 
     private boolean contains(String value, String keywordLower) {

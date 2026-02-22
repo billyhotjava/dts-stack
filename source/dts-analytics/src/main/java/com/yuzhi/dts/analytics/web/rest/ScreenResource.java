@@ -2,6 +2,7 @@ package com.yuzhi.dts.analytics.web.rest;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.yuzhi.dts.analytics.domain.AnalyticsPublicLink;
 import com.yuzhi.dts.analytics.domain.AnalyticsScreen;
@@ -602,6 +603,13 @@ public class ScreenResource {
         if (!("draft".equals(mode) || "published".equals(mode) || "preview".equals(mode))) {
             mode = "draft";
         }
+        String device = trimToNull(body == null ? null : body.path("device").asText(null));
+        if (device != null) {
+            device = device.toLowerCase();
+            if (!("pc".equals(device) || "tablet".equals(device) || "mobile".equals(device))) {
+                device = null;
+            }
+        }
         String resolvedMode = mode;
         AnalyticsScreenVersion publishedVersion =
                 screenVersionRepository.findFirstByScreenIdAndCurrentPublishedTrue(screen.getId()).orElse(null);
@@ -641,14 +649,18 @@ public class ScreenResource {
         } else {
             screenSpec = buildExportScreenSpec(screen, effectiveVersion);
         }
+        int hiddenByDevice = filterExportComponentsByDevice(screenSpec, device);
         String specDigest = computeSpecDigest(screenSpec);
         boolean watermarkEnabled = policy.path("watermarkEnabled").asBoolean(false);
         String watermarkText = policy.path("watermarkText").asText("");
+        double pixelRatio = normalizeExportPixelRatio(
+                body == null ? Double.NaN : body.path("pixelRatio").asDouble(Double.NaN),
+                format);
 
         try {
             byte[] bytes = "pdf".equals(format)
-                    ? screenServerRenderExportService.renderPdf(screenSpec, watermarkEnabled, watermarkText)
-                    : screenServerRenderExportService.renderPng(screenSpec, watermarkEnabled, watermarkText);
+                    ? screenServerRenderExportService.renderPdf(screenSpec, watermarkEnabled, watermarkText, pixelRatio)
+                    : screenServerRenderExportService.renderPng(screenSpec, watermarkEnabled, watermarkText, pixelRatio);
             String ext = "pdf".equals(format) ? "pdf" : "png";
             String fileName = "screen-" + screen.getId() + "-" + resolvedMode + "." + ext;
             MediaType contentType = "pdf".equals(format) ? MediaType.APPLICATION_PDF : MediaType.IMAGE_PNG;
@@ -662,6 +674,9 @@ public class ScreenResource {
             auditPayload.put("byteSize", bytes.length);
             auditPayload.put("specDigest", specDigest);
             auditPayload.put("watermarkEnabled", watermarkEnabled);
+            auditPayload.put("pixelRatio", pixelRatio);
+            auditPayload.put("hiddenByDevice", hiddenByDevice);
+            auditPayload.put("renderEngine", "server-heuristic-v2");
             screenAuditService.log(screen.getId(), user.get().getId(), "screen.export.server.render", null, auditPayload, requestId);
 
             return ResponseEntity.ok()
@@ -670,7 +685,10 @@ public class ScreenResource {
                     .header("X-Request-Id", requestId == null ? "" : requestId)
                     .header("X-Screen-Spec-Digest", specDigest == null ? "" : specDigest)
                     .header("X-Screen-Resolved-Mode", resolvedMode)
-                    .header("X-Screen-Render-Engine", "server-heuristic-v1")
+                    .header("X-Screen-Render-Engine", "server-heuristic-v2")
+                    .header("X-Screen-Render-Pixel-Ratio", Double.toString(pixelRatio))
+                    .header("X-Screen-Device-Mode", device == null ? "" : device)
+                    .header("X-Screen-Hidden-By-Device", Integer.toString(Math.max(0, hiddenByDevice)))
                     .body(bytes);
         } catch (Exception ex) {
             ObjectNode failure = objectMapper.createObjectNode();
@@ -681,6 +699,7 @@ public class ScreenResource {
             failure.put("mode", mode);
             failure.put("resolvedMode", resolvedMode);
             failure.put("specDigest", specDigest);
+            failure.put("renderEngine", "server-heuristic-v2");
             screenAuditService.log(screen.getId(), user.get().getId(), "screen.export.server.render.failed", null, failure, requestId);
             return ResponseEntity.internalServerError().contentType(MediaType.APPLICATION_JSON).body(failure);
         }
@@ -2094,6 +2113,55 @@ public class ScreenResource {
         }
         String trimmed = value.trim();
         return trimmed.isBlank() ? null : trimmed;
+    }
+
+    private static double normalizeExportPixelRatio(double raw, String format) {
+        double fallback = "pdf".equals(format) ? 1.5d : 2.0d;
+        if (Double.isNaN(raw) || Double.isInfinite(raw) || raw <= 0d) {
+            return fallback;
+        }
+        if (raw < 1.0d) {
+            return 1.0d;
+        }
+        return Math.min(raw, 3.0d);
+    }
+
+    private static int filterExportComponentsByDevice(ObjectNode screenSpec, String device) {
+        if (screenSpec == null || device == null || device.isBlank()) {
+            return 0;
+        }
+        JsonNode componentsNode = screenSpec.path("components");
+        if (!(componentsNode instanceof ArrayNode components)) {
+            return 0;
+        }
+        ArrayNode filtered = components.arrayNode();
+        int hidden = 0;
+        for (JsonNode item : components) {
+            if (!isVisibleForDevice(item, device)) {
+                hidden += 1;
+                continue;
+            }
+            filtered.add(item.deepCopy());
+        }
+        screenSpec.set("components", filtered);
+        return hidden;
+    }
+
+    private static boolean isVisibleForDevice(JsonNode component, String device) {
+        if (component == null || !component.isObject()) {
+            return true;
+        }
+        JsonNode visibleOn = component.path("config").path("visibleOn");
+        if (!visibleOn.isArray() || visibleOn.isEmpty()) {
+            return true;
+        }
+        for (JsonNode node : visibleOn) {
+            String value = trimToNull(node == null ? null : node.asText(null));
+            if (value != null && value.equalsIgnoreCase(device)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static List<String> parseAiContext(JsonNode contextNode) {

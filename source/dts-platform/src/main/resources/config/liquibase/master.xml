@@ -109,4 +109,5 @@
     <include file="config/liquibase/changelog/20260215_01_catalog_schema_drift_workflow.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260216_01_dev_script_studio.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260217_01_modeling_semantic_contract.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260222_01_governance_status_archived_unification.xml" relativeToChangelogFile="false"/>
 </databaseChangeLog>

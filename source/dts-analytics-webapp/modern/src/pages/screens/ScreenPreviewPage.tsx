@@ -56,13 +56,16 @@ export default function ScreenPreviewPage() {
 
     const computeScale = useCallback(() => {
         if (!screen) return;
-        const vw = window.innerWidth;
-        const vh = window.innerHeight;
+        const viewport = window.visualViewport;
+        const vw = viewport?.width ?? window.innerWidth;
+        const vh = viewport?.height ?? window.innerHeight;
         const nextMode: DeviceMode = forcedDeviceMode || resolveDeviceModeByViewport(vw);
         setDeviceMode(nextMode);
-        const sx = vw / (screen.width || 1920);
-        const sy = vh / (screen.height || 1080);
-        setScale(Math.min(sx, sy));
+        const safeWidth = Math.max(vw - 24, 320);
+        const safeHeight = Math.max(vh - 64, 240);
+        const sx = safeWidth / (screen.width || 1920);
+        const sy = safeHeight / (screen.height || 1080);
+        setScale(Math.max(0.1, Math.min(sx, sy, 1)));
     }, [forcedDeviceMode, screen]);
 
     useEffect(() => {
@@ -150,6 +153,10 @@ export default function ScreenPreviewPage() {
     const rawTheme = (screen as { theme?: string }).theme as ScreenTheme | undefined;
     const screenTheme = resolveScreenTheme(rawTheme, screen.backgroundColor);
     const outerBg = screenTheme === 'glacier' ? '#e5e7eb' : '#000';
+    const screenWidth = screen.width || 1920;
+    const screenHeight = screen.height || 1080;
+    const stageWidth = Math.max(1, screenWidth * scale);
+    const stageHeight = Math.max(1, screenHeight * scale);
 
     const setForcedMode = (mode: DeviceMode | null) => {
         setForcedDeviceMode(mode);
@@ -162,63 +169,84 @@ export default function ScreenPreviewPage() {
                 position: 'fixed',
                 inset: 0,
                 background: outerBg,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                overflow: 'hidden',
+                padding: 12,
+                boxSizing: 'border-box',
             }}
         >
-            <div
-                style={{
-                    width: screen.width || 1920,
-                    height: screen.height || 1080,
-                    backgroundColor: screen.backgroundColor || '#0d1b2a',
-                    backgroundImage: screen.backgroundImage ? `url(${screen.backgroundImage})` : undefined,
-                    backgroundSize: 'cover',
-                    backgroundPosition: 'center',
-                    position: 'relative',
-                    overflow: 'hidden',
-                    transform: `scale(${scale})`,
-                    transformOrigin: 'center center',
-                }}
-            >
-                {visibleSortedComponents
-                    .slice(0, visibleCount)
-                    .map((component) => (
-                        <div
-                            key={component.id}
-                            style={{
-                                position: 'absolute',
-                                left: component.x,
-                                top: component.y,
-                                width: component.width,
-                                height: component.height,
-                                zIndex: component.zIndex,
-                            }}
-                        >
-                            <ComponentRenderer component={component} mode="preview" theme={screenTheme} />
-                        </div>
-                    ))}
-
-                {visibleCount < visibleSortedComponents.length && (
+            <div style={{ width: '100%', height: '100%', overflow: 'auto' }}>
+                <div
+                    style={{
+                        minWidth: '100%',
+                        minHeight: '100%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: 8,
+                        boxSizing: 'border-box',
+                    }}
+                >
                     <div
                         style={{
-                            position: 'absolute',
-                            right: 12,
-                            bottom: 12,
-                            background: 'rgba(0,0,0,0.55)',
-                            color: '#fff',
-                            fontSize: 12,
-                            padding: '4px 8px',
-                            borderRadius: 6,
-                            zIndex: 9999,
+                            position: 'relative',
+                            width: stageWidth,
+                            height: stageHeight,
+                            flex: '0 0 auto',
                         }}
                     >
-                        组件加载中 {visibleCount}/{visibleSortedComponents.length}
+                        <div
+                            style={{
+                                width: screenWidth,
+                                height: screenHeight,
+                                backgroundColor: screen.backgroundColor || '#0d1b2a',
+                                backgroundImage: screen.backgroundImage ? `url(${screen.backgroundImage})` : undefined,
+                                backgroundSize: 'cover',
+                                backgroundPosition: 'center',
+                                position: 'relative',
+                                overflow: 'hidden',
+                                transform: `scale(${scale})`,
+                                transformOrigin: 'top left',
+                            }}
+                        >
+                            {visibleSortedComponents
+                                .slice(0, visibleCount)
+                                .map((component) => (
+                                    <div
+                                        key={component.id}
+                                        style={{
+                                            position: 'absolute',
+                                            left: component.x,
+                                            top: component.y,
+                                            width: component.width,
+                                            height: component.height,
+                                            zIndex: component.zIndex,
+                                        }}
+                                    >
+                                        <ComponentRenderer component={component} mode="preview" theme={screenTheme} />
+                                    </div>
+                                ))}
+
+                            {visibleCount < visibleSortedComponents.length && (
+                                <div
+                                    style={{
+                                        position: 'absolute',
+                                        right: 12,
+                                        bottom: 12,
+                                        background: 'rgba(0,0,0,0.55)',
+                                        color: '#fff',
+                                        fontSize: 12,
+                                        padding: '4px 8px',
+                                        borderRadius: 6,
+                                        zIndex: 9999,
+                                    }}
+                                >
+                                    组件加载中 {visibleCount}/{visibleSortedComponents.length}
+                                </div>
+                            )}
+                        </div>
                     </div>
-                )}
+                </div>
                 <DeviceModeSwitcher
-                    position="absolute"
+                    position="fixed"
                     deviceMode={deviceMode}
                     forcedDeviceMode={forcedDeviceMode}
                     onSetForcedMode={setForcedMode}

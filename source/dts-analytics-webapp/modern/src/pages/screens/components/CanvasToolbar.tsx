@@ -175,7 +175,7 @@ export function CanvasToolbar() {
                     disabled={!canUndo}
                     title="撤销 (Ctrl+Z)"
                 >
-                    ↩️
+                    撤销
                 </button>
                 <button
                     className="toolbar-btn"
@@ -183,7 +183,7 @@ export function CanvasToolbar() {
                     disabled={!canRedo}
                     title="重做 (Ctrl+Y)"
                 >
-                    ↪️
+                    重做
                 </button>
             </div>
 
@@ -195,22 +195,22 @@ export function CanvasToolbar() {
                     disabled={selectedIds.length === 0}
                     title="删除选中组件"
                 >
-                    🗑️
+                    删除
                 </button>
             </div>
 
             {/* Align / distribute */}
             <div className="toolbar-group">
-                <button className="toolbar-btn" onClick={groupSelected} disabled={!canGroup} title="组合">🧩</button>
-                <button className="toolbar-btn" onClick={ungroupSelected} disabled={!canUngroup} title="取消组合">🧱</button>
-                <button className="toolbar-btn" onClick={() => alignSelected('left')} disabled={!canAlign} title="左对齐">⟸</button>
-                <button className="toolbar-btn" onClick={() => alignSelected('h-center')} disabled={!canAlign} title="水平居中">↔︎</button>
-                <button className="toolbar-btn" onClick={() => alignSelected('right')} disabled={!canAlign} title="右对齐">⟹</button>
-                <button className="toolbar-btn" onClick={() => alignSelected('top')} disabled={!canAlign} title="顶对齐">⟰</button>
-                <button className="toolbar-btn" onClick={() => alignSelected('v-center')} disabled={!canAlign} title="垂直居中">↕︎</button>
-                <button className="toolbar-btn" onClick={() => alignSelected('bottom')} disabled={!canAlign} title="底对齐">⟱</button>
-                <button className="toolbar-btn" onClick={() => distributeSelected('horizontal')} disabled={!canDistribute} title="水平分布">⇆</button>
-                <button className="toolbar-btn" onClick={() => distributeSelected('vertical')} disabled={!canDistribute} title="垂直分布">⇅</button>
+                <button className="toolbar-btn" onClick={groupSelected} disabled={!canGroup} title="组合">组合</button>
+                <button className="toolbar-btn" onClick={ungroupSelected} disabled={!canUngroup} title="取消组合">解组</button>
+                <button className="toolbar-btn" onClick={() => alignSelected('left')} disabled={!canAlign} title="左对齐">左</button>
+                <button className="toolbar-btn" onClick={() => alignSelected('h-center')} disabled={!canAlign} title="水平居中">中</button>
+                <button className="toolbar-btn" onClick={() => alignSelected('right')} disabled={!canAlign} title="右对齐">右</button>
+                <button className="toolbar-btn" onClick={() => alignSelected('top')} disabled={!canAlign} title="顶对齐">上</button>
+                <button className="toolbar-btn" onClick={() => alignSelected('v-center')} disabled={!canAlign} title="垂直居中">中线</button>
+                <button className="toolbar-btn" onClick={() => alignSelected('bottom')} disabled={!canAlign} title="底对齐">下</button>
+                <button className="toolbar-btn" onClick={() => distributeSelected('horizontal')} disabled={!canDistribute} title="水平分布">横分</button>
+                <button className="toolbar-btn" onClick={() => distributeSelected('vertical')} disabled={!canDistribute} title="垂直分布">纵分</button>
             </div>
 
             {/* View options */}
@@ -220,7 +220,7 @@ export function CanvasToolbar() {
                     onClick={() => dispatch({ type: 'TOGGLE_GRID' })}
                     title="显示/隐藏网格"
                 >
-                    #
+                    网格
                 </button>
             </div>
 
@@ -272,21 +272,21 @@ export function CanvasToolbar() {
                     onClick={() => applyThemeToAllComponents(themeApplyMode)}
                     title="按当前主题批量刷新组件样式"
                 >
-                    刷组件样式
+                    应用样式
                 </button>
                 <button
                     className="toolbar-btn"
                     onClick={handleExportThemePack}
                     title="导出主题包"
                 >
-                    ⬇️主题包
+                    导出主题
                 </button>
                 <button
                     className="toolbar-btn"
                     onClick={handleImportThemePackClick}
                     title="导入主题包"
                 >
-                    ⬆️主题包
+                    导入主题
                 </button>
                 <input
                     ref={themeInputRef}

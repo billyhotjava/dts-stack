@@ -1,6 +1,6 @@
 # P2-04 智能报告工厂（Report Factory）
 
-`status`: `planned`  
+`status`: `done`  
 `priority`: `P2`  
 `inspiration`: `Hetu(数据报告自动化) + 企业 BI 报告编排能力`
 
@@ -55,3 +55,20 @@
 - `P2-02-collaboration-export-mobile.md`
 - `P0-04-release-acl-audit-sharing.md`
 
+## 实现记录（2026-02-22）
+
+- 新增报告模板与报告运行数据模型：
+  - 数据表：`analytics_report_template`、`analytics_report_run`；
+  - 代码：`source/dts-analytics/src/main/resources/config/liquibase/changelog/0033_report_factory.xml`。
+- 新增报告工厂 API：
+  - 模板管理：`/api/report-factory/templates`（增改删查）；
+  - 生成与运行记录：`POST /api/report-factory/generate`、`GET /api/report-factory/runs`、`GET /api/report-factory/runs/{id}`；
+  - 导出：`GET /api/report-factory/runs/{id}/export?format=html|markdown`。
+  - 代码：`source/dts-analytics/src/main/java/com/yuzhi/dts/analytics/service/ReportFactoryService.java`、`source/dts-analytics/src/main/java/com/yuzhi/dts/analytics/web/rest/ReportFactoryResource.java`。
+- 支持以会话/大屏为输入生成结构化报告草稿，并记录分发配置与审计摘要。
+- 前端 SDK 已接入报告中心接口。
+- 前端报告中心已落地（2026-02-22）：
+  - 新增页面：`source/dts-analytics-webapp/modern/src/pages/ReportFactoryPage.tsx`；
+  - 新增路由：`/analytics/report-factory`；
+  - 新增导航入口：侧边栏“报告工厂”；
+  - 能力覆盖：模板创建、运行任务生成、任务详情查看、HTML/Markdown 导出入口。

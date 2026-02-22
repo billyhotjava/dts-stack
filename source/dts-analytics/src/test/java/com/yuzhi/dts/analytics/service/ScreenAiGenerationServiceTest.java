@@ -263,11 +263,20 @@ class ScreenAiGenerationServiceTest {
         assertThat(blueprints.toString()).contains("${date_range}");
         assertThat(blueprints.path(0).path("safetyStatus").asText("")).isEqualTo("needs-params");
         assertThat(blueprints.path(0).path("safetyReasons").isArray()).isTrue();
+        assertThat(blueprints.path(0).path("templateVariables").isArray()).isTrue();
+        assertThat(blueprints.path(0).path("templateVariables").toString()).contains("date_range");
 
         JsonNode diagnostics = result.path("nl2sqlDiagnostics");
         assertThat(diagnostics.path("status").asText("")).isEqualTo("needs-params");
+        assertThat(diagnostics.path("executionReadiness").asText("")).isEqualTo("needs-params");
         assertThat(diagnostics.path("blockedCount").asInt(-1)).isEqualTo(0);
         assertThat(diagnostics.path("needsParamsCount").asInt(0)).isGreaterThan(0);
+        assertThat(diagnostics.path("requiredVariableCount").asInt(0)).isGreaterThan(0);
+        assertThat(diagnostics.path("requiredVariables").toString()).contains("date_range");
+        assertThat(diagnostics.path("autoInjectedVariableCount").asInt(0)).isGreaterThanOrEqualTo(1);
+        assertThat(diagnostics.path("autoInjectedVariables").toString()).contains("filters");
+        assertThat(diagnostics.path("pendingVariables").toString()).contains("filters");
+        assertThat(result.path("screenSpec").path("globalVariables").toString()).contains("filters");
         assertThat(diagnostics.path("blueprintChecks").isArray()).isTrue();
         assertThat(diagnostics.path("blueprintChecks").size()).isEqualTo(blueprints.size());
     }
@@ -293,9 +302,40 @@ class ScreenAiGenerationServiceTest {
 
         JsonNode diagnostics = result.path("nl2sqlDiagnostics");
         assertThat(diagnostics.path("status").asText("")).isEqualTo("needs-params");
+        assertThat(diagnostics.path("executionReadiness").asText("")).isEqualTo("needs-params");
         assertThat(diagnostics.path("safeCount").asInt(-1)).isEqualTo(0);
         assertThat(diagnostics.path("needsParamsCount").asInt(0)).isGreaterThan(0);
         assertThat(diagnostics.path("blockedCount").asInt(-1)).isEqualTo(0);
+        assertThat(diagnostics.path("pendingVariableCount").asInt(0)).isGreaterThan(0);
+    }
+
+    @Test
+    void revise_existingCanonicalVariables_marksReadinessReadyWithoutDuplicateKeys() {
+        ScreenAiGenerationService service = new ScreenAiGenerationService(objectMapper);
+        ObjectNode screenSpec = baseScreenSpec();
+        ArrayNode variables = (ArrayNode) screenSpec.path("globalVariables");
+        variables.add(objectMapper.createObjectNode()
+                .put("key", "dateRange")
+                .put("label", "时间范围")
+                .put("type", "string")
+                .put("defaultValue", "最近30天"));
+        variables.add(objectMapper.createObjectNode()
+                .put("key", "filters")
+                .put("label", "过滤条件")
+                .put("type", "string")
+                .put("defaultValue", "1=1"));
+
+        ObjectNode result = service.revise("销售趋势分析", screenSpec, List.of("按月"), true);
+        JsonNode diagnostics = result.path("nl2sqlDiagnostics");
+        assertThat(diagnostics.path("executionReadiness").asText("")).isEqualTo("ready");
+        assertThat(diagnostics.path("pendingVariableCount").asInt(-1)).isEqualTo(0);
+
+        ArrayNode revisedVars = (ArrayNode) result.path("screenSpec").path("globalVariables");
+        long dateRangeLikeCount = objectNodes(revisedVars).stream()
+                .map(item -> item.path("key").asText(""))
+                .filter(key -> key.equals("dateRange") || key.equals("date_range"))
+                .count();
+        assertThat(dateRangeLikeCount).isEqualTo(1L);
     }
 
     private ObjectNode baseScreenSpec() {

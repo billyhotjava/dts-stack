@@ -17,6 +17,13 @@ public record OpsConfigView(
     boolean editable,
     int sortOrder,
     String displayName,
+    String scope,
+    boolean restartRequired,
+    String validationRule,
+    String owner,
+    String groupKey,
+    String groupLabel,
+    int groupOrder,
     Instant lastModified,
     String lastModifiedBy
 ) implements Serializable {}

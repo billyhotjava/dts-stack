@@ -8,9 +8,9 @@
 
 | 阶段 | 目标 | 预计周期 | 状态 |
 |---|---|---:|---|
-| P0 | 补齐商用最小闭环（含 NL2SQL 可评估、可执行基线） | 3-5 周 | in-progress |
-| P1 | 形成成熟产品能力（可复用、可扩展、可交付） | 4-6 周 | in-progress |
-| P2 | 形成差异化竞争力（AI + 行业化 + 企业级） | 6-10 周 | in-progress |
+| P0 | 补齐商用最小闭环（含 NL2SQL 可评估、可执行基线） | 3-5 周 | done |
+| P1 | 形成成熟产品能力（可复用、可扩展、可交付） | 4-6 周 | done |
+| P2 | 形成差异化竞争力（AI + 行业化 + 企业级） | 6-10 周 | done |
 
 ## 2. 任务顺序（强制）
 
@@ -37,6 +37,7 @@
 
 ## 3. 文件索引
 
+- `dataease-benchmark-implementation-checklist-2026-02-22.md`
 - `P0-01-visual-property-table-binding.md`
 - `P0-02-spec-v2-kernel-freeze.md`
 - `P0-03-designer-productivity-tools.md`

@@ -188,6 +188,21 @@
     - `PNG/PDF` 先走 `export-prepare`，再走 `export-render`；
     - 服务端失败自动回退导出页，并回传 `success/fallback/failed` 审计结果；
     - 透传 `requestId/specDigest/resolvedMode`，便于导出链路追踪与现场排障。
+- 导出清晰度链路收口（2026-02-22）：
+  - 后端 `ScreenResource` 补齐 `pixelRatio` 请求参数解析与透传，修复 `export-render` 仍按旧签名调用导致的全量编译失败；
+  - 后端响应新增 `X-Screen-Render-Pixel-Ratio`，审计日志同步记录 `pixelRatio`；
+  - 前端 `analyticsApi.renderScreenExport` 扩展 `pixelRatio` 入参与响应解析；
+  - 编辑器头部导出与导出专页统一倍率策略（PNG 默认高倍率，PDF 默认中倍率，并按设备模式微调），服务端失败回退链路保持不变。
+  - `export-render` 追加设备模式过滤：按组件 `config.visibleOn` 过滤非当前设备组件，保证导出与预览设备视图一致；
+  - 响应补充 `X-Screen-Device-Mode/X-Screen-Hidden-By-Device`，前端导出页可提示“按设备模式隐藏组件数量”。
+- 服务端导出渲染保真升级（2026-02-22）：
+  - `ScreenServerRenderExportService` 新增组件级绘制逻辑，不再仅输出“标题+类型占位框”；
+  - 已支持 `line/bar/scatter/pie/funnel` 图表轮廓、`table/scroll-board` 表格、`number-card` 指标卡、`title/markdown/datetime/marquee/countdown/carousel/tab-switcher` 文本类组件、`map-chart` 区域条带摘要；
+  - 渲染顺序改为按 `zIndex` 统一排序，并尊重组件 `visible=false`（导出不再误绘隐藏组件）；
+  - 服务端渲染默认启用 `java.awt.headless=true`，修复无桌面环境下 `Graphics2D` 连接 X11 失败的问题；
+  - 在无有效配置时自动降级到类型提示，保证导出稳定性；
+  - 当前保真级别为“启发式高保真”，后续可继续升级到图表像素级一致渲染内核。
+  - 新增 `ScreenServerRenderExportServiceTest`，覆盖 PNG/PDF 产物与倍率基础校验。
 - 编辑头部菜单兼容性修复（2026-02-20）：
   - 将 `ScreenHeader` 的分组菜单从 `details/summary` 改为受控弹层（button + panel）；
   - 增加菜单外点击关闭、`ESC` 关闭，避免旧浏览器下菜单状态异常残留；
@@ -204,9 +219,14 @@
     - WS 可用时优先发 `comment.create`，收到 `comment-created` 回执后落地；
     - WS 失败/超时自动回退 HTTP 创建接口，保证现场可用性。
   - 握手链路补齐 `X-DTS-Roles` 透传，确保 WS 写入权限判断与 HTTP 口径一致。
-- 待继续：
-  - WebSocket 已支持评论增量推送；评论写入动作仍通过 HTTP 接口提交，后续可评估全 WS 命令通道。
-  - 服务端导出当前采用轻量渲染器，后续可升级为更高保真（图表像素级一致）渲染内核。
+- WS 评论状态写入补齐（2026-02-22）：
+  - 后端协作实时服务新增 `comment.resolve/comment.reopen` 指令，支持在线状态变更与广播；
+  - 新增 `comment-updated` 回执事件（含 `requestId`），前端可按请求级匹配完成态；
+  - 前端“标记已解决/重新打开”改为 WS 优先，失败自动回退 HTTP，形成统一写入通道。
+- 服务端导出引擎收口（2026-02-22）：
+  - 服务端渲染引擎版本升级为 `server-heuristic-v2`；
+  - 补齐高级组件绘制覆盖：`gauge-chart/radar-chart/scroll-ranking/progress-bar/percent-pond/water-level/digital-flop/flyline-chart/filter-*/image/video/iframe/border-box/decoration/container/shape`；
+  - 新增导出单测 `renderPng_supportsAdvancedComponentTypes`，确保高级组件组合场景可稳定出图。
 - 协作态 presence/typing 补齐（2026-02-17）：
   - 后端新增轻量在线协作接口（内存态 + TTL 清理）：
     - `GET /api/screens/{id}/collaboration/presence`

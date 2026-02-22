@@ -302,7 +302,8 @@ export const getComplianceBatch = (id: string) => api.get({ url: `/governance/co
 export const updateComplianceItem = (id: string, data: any) => api.put({ url: `/governance/compliance/items/${id}`, data });
 export const deleteComplianceBatch = (id: string) => api.delete({ url: `/governance/compliance/batches/${id}` });
 
-export const listIssues = () => api.get<any[]>({ url: "/governance/issues" });
+export const listIssues = (params: any = {}) => api.get<any[]>({ url: "/governance/issues", params });
+export const getIssue = (id: string) => api.get({ url: `/governance/issues/${id}` });
 export const createIssue = (data: any) => api.post({ url: "/governance/issues", data });
 export const updateIssue = (id: string, data: any) => api.put({ url: `/governance/issues/${id}`, data });
 export const closeIssue = (id: string, resolution?: string) =>

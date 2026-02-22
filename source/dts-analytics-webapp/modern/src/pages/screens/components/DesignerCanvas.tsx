@@ -1,4 +1,4 @@
-import { useCallback, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useDrop } from 'react-dnd';
 import { useScreen } from '../ScreenContext';
 import { CanvasComponent } from './CanvasComponent';
@@ -12,7 +12,28 @@ function generateId(): string {
 export function DesignerCanvas() {
     const { state, addComponent, selectComponents, snapGuides } = useScreen();
     const { config, selectedIds, zoom, showGrid } = state;
+    const containerRef = useRef<HTMLDivElement>(null);
     const canvasRef = useRef<HTMLDivElement>(null);
+    const [fitScale, setFitScale] = useState(1);
+
+    useEffect(() => {
+        const updateFitScale = () => {
+            const node = containerRef.current;
+            if (!node) {
+                return;
+            }
+            const availableWidth = Math.max(node.clientWidth - 24, 320);
+            const availableHeight = Math.max(node.clientHeight - 24, 240);
+            const baseWidth = Math.max(config.width || 1920, 1);
+            const baseHeight = Math.max(config.height || 1080, 1);
+            const next = Math.max(0.1, Math.min(1, availableWidth / baseWidth, availableHeight / baseHeight));
+            setFitScale(next);
+        };
+
+        updateFitScale();
+        window.addEventListener('resize', updateFitScale);
+        return () => window.removeEventListener('resize', updateFitScale);
+    }, [config.width, config.height]);
 
     const [{ isOver }, drop] = useDrop(() => ({
         accept: 'COMPONENT',
@@ -22,7 +43,7 @@ export function DesignerCanvas() {
 
             if (offset && canvasRect) {
                 // Calculate position relative to canvas, accounting for zoom
-                const scale = zoom / 100;
+                const scale = Math.max(0.1, (zoom / 100) * fitScale);
                 const x = Math.round((offset.x - canvasRect.left) / scale);
                 const y = Math.round((offset.y - canvasRect.top) / scale);
                 const dropX = x - item.defaultWidth / 2;
@@ -73,7 +94,7 @@ export function DesignerCanvas() {
         collect: (monitor) => ({
             isOver: monitor.isOver(),
         }),
-    }), [zoom, config.components.length, addComponent]);
+    }), [zoom, fitScale, config.components, addComponent]);
 
     const handleCanvasClick = useCallback((e: React.MouseEvent) => {
         // Deselect all when clicking on empty canvas area
@@ -82,10 +103,10 @@ export function DesignerCanvas() {
         }
     }, [selectComponents]);
 
-    const scale = zoom / 100;
+    const scale = Math.max(0.1, (zoom / 100) * fitScale);
 
     return (
-        <div className="canvas-container">
+        <div className="canvas-container" ref={containerRef}>
             <div
                 className="canvas-wrapper"
                 style={{

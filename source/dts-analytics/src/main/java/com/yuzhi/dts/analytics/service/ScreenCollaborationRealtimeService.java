@@ -30,6 +30,8 @@ public class ScreenCollaborationRealtimeService {
 
     private static final int PRESENCE_TTL_SECONDS = 90;
     private static final String ACTION_COMMENT_ADD = "screen.comment.add";
+    private static final String ACTION_COMMENT_RESOLVE = "screen.comment.resolve";
+    private static final String ACTION_COMMENT_REOPEN = "screen.comment.reopen";
 
     private final ObjectMapper objectMapper;
     private final AnalyticsScreenRepository screenRepository;
@@ -134,6 +136,11 @@ public class ScreenCollaborationRealtimeService {
         if ("comment.create".equals(type)) {
             JsonNode command = payload.path("payload").isObject() ? payload.path("payload") : payload;
             handleCommentCreate(socket, binding, command);
+            return;
+        }
+        if ("comment.resolve".equals(type) || "comment.reopen".equals(type)) {
+            JsonNode command = payload.path("payload").isObject() ? payload.path("payload") : payload;
+            handleCommentStatusChange(socket, binding, command, "comment.resolve".equals(type));
             return;
         }
         sendError(socket, "unsupported_type");
@@ -242,6 +249,84 @@ public class ScreenCollaborationRealtimeService {
         response.put("requestId", requestId == null ? auditRequestId : requestId);
 
         sendEvent(socket, "comment-created", response);
+        broadcastCommentChange(binding.screenId, response);
+    }
+
+    private void handleCommentStatusChange(
+            WebSocketSession socket,
+            SocketBinding binding,
+            JsonNode payload,
+            boolean resolveAction) {
+        String requestId = normalize(payload.path("requestId").asText(null));
+        if (binding.userId == null || binding.userId <= 0) {
+            sendError(socket, "unauthorized", requestId);
+            return;
+        }
+
+        AnalyticsScreen screen = screenRepository.findById(binding.screenId).orElse(null);
+        if (screen == null || screen.isArchived()) {
+            sendError(socket, "screen_not_found", requestId);
+            return;
+        }
+        AnalyticsUser user = userRepository.findById(binding.userId).orElse(null);
+        if (user == null) {
+            sendError(socket, "unauthorized", requestId);
+            return;
+        }
+        PlatformContext context = new PlatformContext(null, null, binding.roles);
+        if (!screenAclService.hasPermission(screen, user, context, ScreenAclService.Permission.EDIT)) {
+            sendError(socket, "forbidden", requestId);
+            return;
+        }
+
+        long commentId = resolveCommentId(payload);
+        if (commentId <= 0L) {
+            sendError(socket, "comment_id_required", requestId);
+            return;
+        }
+        String note = normalizeComment(payload.path("note").asText(null));
+
+        Map<Long, CommentState> commentMap = rebuildCommentStateMap(screen.getId(), 1000);
+        CommentState target = commentMap.get(commentId);
+        if (target == null) {
+            sendError(socket, "comment_not_found", requestId);
+            return;
+        }
+
+        boolean alreadyResolved = "resolved".equals(target.status);
+        if ((resolveAction && !alreadyResolved) || (!resolveAction && alreadyResolved)) {
+            ObjectNode changePayload = objectMapper.createObjectNode();
+            changePayload.put("commentId", commentId);
+            if (note != null) {
+                changePayload.put("note", note);
+            }
+            String auditRequestId = requestId == null ? ("ws:" + binding.presenceSessionId) : requestId;
+            AnalyticsScreenAuditLog actionLog = screenAuditService.logAndReturn(
+                    screen.getId(),
+                    user.getId(),
+                    resolveAction ? ACTION_COMMENT_RESOLVE : ACTION_COMMENT_REOPEN,
+                    null,
+                    changePayload,
+                    auditRequestId);
+            if (resolveAction) {
+                target.status = "resolved";
+                target.resolvedBy = user.getId();
+                target.resolvedAt = actionLog == null ? Instant.now() : actionLog.getCreatedAt();
+                target.resolutionNote = note;
+            } else {
+                target.status = "open";
+                target.resolvedBy = null;
+                target.resolvedAt = null;
+                target.resolutionNote = null;
+            }
+            target.requestId = requestId == null ? auditRequestId : requestId;
+        } else {
+            target.requestId = requestId;
+        }
+
+        ObjectNode response = toCommentResponse(target);
+        response.put("requestId", requestId == null ? response.path("requestId").asText("") : requestId);
+        sendEvent(socket, "comment-updated", response);
         broadcastCommentChange(binding.screenId, response);
     }
 
@@ -421,6 +506,147 @@ public class ScreenCollaborationRealtimeService {
         return out;
     }
 
+    private Map<Long, CommentState> rebuildCommentStateMap(Long screenId, int scanLimit) {
+        List<AnalyticsScreenAuditLog> timeline = screenAuditService.listByScreenId(screenId, scanLimit);
+        timeline.sort(
+                Comparator.comparing(
+                                AnalyticsScreenAuditLog::getCreatedAt,
+                                Comparator.nullsFirst(Comparator.naturalOrder()))
+                        .thenComparing(log -> log.getId() == null ? 0L : log.getId()));
+
+        Map<Long, CommentState> comments = new ConcurrentHashMap<>();
+        for (AnalyticsScreenAuditLog log : timeline) {
+            if (log == null || log.getId() == null) {
+                continue;
+            }
+            String action = normalize(log.getAction());
+            if (action == null) {
+                continue;
+            }
+            JsonNode after = parseObject(log.getAfterJson());
+            if (ACTION_COMMENT_ADD.equals(action)) {
+                CommentState created = parseCommentCreate(log, after);
+                if (created != null) {
+                    comments.put(created.id, created);
+                }
+                continue;
+            }
+            if (ACTION_COMMENT_RESOLVE.equals(action) || ACTION_COMMENT_REOPEN.equals(action)) {
+                long targetId = resolveCommentId(after);
+                if (targetId <= 0L) {
+                    continue;
+                }
+                CommentState target = comments.get(targetId);
+                if (target == null) {
+                    continue;
+                }
+                if (ACTION_COMMENT_RESOLVE.equals(action)) {
+                    target.status = "resolved";
+                    target.resolvedAt = log.getCreatedAt();
+                    target.resolvedBy = log.getActorId();
+                    target.resolutionNote = normalize(after.path("note").asText(null));
+                } else {
+                    target.status = "open";
+                    target.resolvedAt = null;
+                    target.resolvedBy = null;
+                    target.resolutionNote = null;
+                }
+                target.requestId = normalize(log.getRequestId());
+            }
+        }
+        return comments;
+    }
+
+    private CommentState parseCommentCreate(AnalyticsScreenAuditLog log, JsonNode payload) {
+        String message = normalizeComment(payload.path("message").asText(null));
+        if (message == null) {
+            return null;
+        }
+        CommentState state = new CommentState();
+        state.id = log.getId();
+        state.screenId = log.getScreenId();
+        state.componentId = normalize(payload.path("componentId").asText(null));
+        state.message = message;
+        state.anchor = payload.path("anchor").isObject() ? payload.path("anchor").deepCopy() : null;
+        state.mentions = payload.path("mentions").isArray() ? payload.path("mentions").deepCopy() : null;
+        state.createdBy = log.getActorId();
+        state.createdAt = log.getCreatedAt();
+        state.status = "open";
+        state.requestId = normalize(log.getRequestId());
+        return state;
+    }
+
+    private ObjectNode toCommentResponse(CommentState state) {
+        ObjectNode node = objectMapper.createObjectNode();
+        node.put("id", state.id);
+        node.putPOJO("screenId", state.screenId);
+        if (state.componentId == null) {
+            node.putNull("componentId");
+        } else {
+            node.put("componentId", state.componentId);
+        }
+        node.put("message", state.message == null ? "" : state.message);
+        if (state.anchor != null) {
+            node.set("anchor", state.anchor.deepCopy());
+        } else {
+            node.putNull("anchor");
+        }
+        if (state.mentions != null) {
+            node.set("mentions", state.mentions.deepCopy());
+        } else {
+            node.set("mentions", objectMapper.createArrayNode());
+        }
+        node.putPOJO("createdBy", state.createdBy);
+        node.putPOJO("createdAt", state.createdAt);
+        node.put("status", state.status == null ? "open" : state.status);
+        node.putPOJO("resolvedBy", state.resolvedBy);
+        node.putPOJO("resolvedAt", state.resolvedAt);
+        if (state.resolutionNote == null) {
+            node.putNull("resolutionNote");
+        } else {
+            node.put("resolutionNote", state.resolutionNote);
+        }
+        if (state.requestId == null) {
+            node.putNull("requestId");
+        } else {
+            node.put("requestId", state.requestId);
+        }
+        return node;
+    }
+
+    private JsonNode parseObject(String json) {
+        if (json != null && !json.isBlank()) {
+            try {
+                JsonNode node = objectMapper.readTree(json);
+                if (node != null && !node.isNull()) {
+                    return node;
+                }
+            } catch (Exception ignore) {
+                return objectMapper.createObjectNode();
+            }
+        }
+        return objectMapper.createObjectNode();
+    }
+
+    private long resolveCommentId(JsonNode payload) {
+        if (payload == null || payload.isNull()) {
+            return 0L;
+        }
+        JsonNode commentIdNode = payload.path("commentId");
+        if (commentIdNode.isNumber()) {
+            return commentIdNode.asLong(0L);
+        }
+        String value = normalize(commentIdNode.asText(null));
+        if (value == null) {
+            return 0L;
+        }
+        try {
+            return Long.parseLong(value);
+        } catch (NumberFormatException ignore) {
+            return 0L;
+        }
+    }
+
     private String normalize(String text) {
         if (text == null) {
             return null;
@@ -506,5 +732,21 @@ public class ScreenCollaborationRealtimeService {
         private Integer selectedCount;
         private String selectionPreview;
         private Instant lastSeenAt;
+    }
+
+    private static final class CommentState {
+        private long id;
+        private Long screenId;
+        private String componentId;
+        private String message;
+        private JsonNode anchor;
+        private JsonNode mentions;
+        private Long createdBy;
+        private Instant createdAt;
+        private String status;
+        private Long resolvedBy;
+        private Instant resolvedAt;
+        private String resolutionNote;
+        private String requestId;
     }
 }

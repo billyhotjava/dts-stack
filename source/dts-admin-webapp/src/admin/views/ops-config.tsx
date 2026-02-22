@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { adminApi } from "@/admin/api/adminApi";
+import type { OpsConfigItem } from "@/admin/types";
 import { Card, CardContent } from "@/ui/card";
 import { Button } from "@/ui/button";
 import { Input } from "@/ui/input";
@@ -9,26 +10,18 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/ui/tabs";
 import { Badge } from "@/ui/badge";
 import { Label } from "@/ui/label";
 import { toast } from "sonner";
-import { Settings, ToggleLeft, Shield, Database, Plug, RefreshCw, Lock, Pencil, Check, X } from "lucide-react";
-
-interface OpsConfigItem {
-	id: number;
-	key: string;
-	value: string;
-	description?: string;
-	category: string;
-	sensitive: boolean;
-	dataType: "STRING" | "BOOLEAN" | "INTEGER" | "JSON";
-	editable: boolean;
-	sortOrder: number;
-	displayName?: string;
-	lastModified?: string;
-	lastModifiedBy?: string;
-}
+import { Settings, ToggleLeft, Shield, Database, Plug, RefreshCw, Lock, Pencil, Check, X, RotateCcw } from "lucide-react";
 
 interface OpsConfigCategory {
 	key: string;
 	label: string;
+	items: OpsConfigItem[];
+}
+
+interface OpsConfigGroup {
+	groupKey: string;
+	groupLabel: string;
+	groupOrder: number;
 	items: OpsConfigItem[];
 }
 
@@ -39,6 +32,36 @@ const CATEGORY_ICONS: Record<string, React.ReactNode> = {
 	INTEGRATION: <Plug className="h-4 w-4" />,
 	SYSTEM: <Settings className="h-4 w-4" />,
 };
+
+const SCOPE_LABELS: Record<string, string> = {
+	RUNTIME: "运行期",
+	RUNTIME_RESTART: "重启生效",
+	BOOTSTRAP: "启动期",
+};
+
+function extractErrorMessage(error: unknown, fallback: string): string {
+	const anyError = error as any;
+	return anyError?.response?.data?.message || anyError?.message || fallback;
+}
+
+function buildGroups(items: OpsConfigItem[]): OpsConfigGroup[] {
+	const groups = new Map<string, OpsConfigGroup>();
+	for (const item of items) {
+		const groupKey = item.groupKey || "ungrouped";
+		const groupLabel = item.groupLabel || "未分组";
+		const groupOrder = item.groupOrder ?? 999;
+		if (!groups.has(groupKey)) {
+			groups.set(groupKey, { groupKey, groupLabel, groupOrder, items: [] });
+		}
+		groups.get(groupKey)?.items.push(item);
+	}
+	return Array.from(groups.values())
+		.map((group) => ({
+			...group,
+			items: group.items.sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)),
+		}))
+		.sort((a, b) => a.groupOrder - b.groupOrder);
+}
 
 export default function OpsConfigView() {
 	const queryClient = useQueryClient();
@@ -59,20 +82,24 @@ export default function OpsConfigView() {
 			toast.success(variables.enabled ? "功能已启用" : "功能已禁用");
 			queryClient.invalidateQueries({ queryKey: ["admin", "ops-configs"] });
 		},
-		onError: () => {
-			toast.error("操作失败，请稍后再试");
+		onError: (error) => {
+			toast.error(extractErrorMessage(error, "操作失败，请稍后再试"));
 		},
 	});
 
 	const updateMutation = useMutation({
-		mutationFn: ({ key, value }: { key: string; value: string }) =>
+		mutationFn: ({ key, value }: { key: string; value: string; restartRequired?: boolean }) =>
 			adminApi.updateOpsConfig(key, value),
-		onSuccess: () => {
-			toast.success("配置已保存");
+		onSuccess: (_, variables) => {
+			if (variables?.restartRequired) {
+				toast.success("配置已保存，需重启相关服务后生效");
+			} else {
+				toast.success("配置已保存");
+			}
 			queryClient.invalidateQueries({ queryKey: ["admin", "ops-configs"] });
 		},
-		onError: () => {
-			toast.error("保存失败，请稍后再试");
+		onError: (error) => {
+			toast.error(extractErrorMessage(error, "保存失败，请稍后再试"));
 		},
 	});
 
@@ -80,6 +107,14 @@ export default function OpsConfigView() {
 		if (!item.editable) {
 			toast.error("该配置项不可编辑");
 			return;
+		}
+		if (item.scope === "BOOTSTRAP") {
+			toast.error("该配置项属于启动期参数，请在 .env/compose 中维护");
+			return;
+		}
+		if (item.restartRequired) {
+			const ok = window.confirm("该配置切换后需重启相关服务才能生效，确认继续？");
+			if (!ok) return;
 		}
 		const currentValue = item.value === "true";
 		toggleMutation.mutate({ key: item.key, enabled: !currentValue });
@@ -90,7 +125,15 @@ export default function OpsConfigView() {
 			toast.error("该配置项不可编辑");
 			return;
 		}
-		updateMutation.mutate({ key: item.key, value: newValue });
+		if (item.scope === "BOOTSTRAP") {
+			toast.error("该配置项属于启动期参数，请在 .env/compose 中维护");
+			return;
+		}
+		if (item.restartRequired) {
+			const ok = window.confirm("该配置修改后需重启相关服务才能生效，确认继续？");
+			if (!ok) return;
+		}
+		updateMutation.mutate({ key: item.key, value: newValue, restartRequired: item.restartRequired === true });
 	};
 
 	const formatValue = (item: OpsConfigItem): string => {
@@ -151,16 +194,38 @@ export default function OpsConfigView() {
 				{categories.map((cat) => (
 					<TabsContent key={cat.key} value={cat.key} className="mt-6">
 						<div className="grid gap-4">
-							{cat.items.map((item) => (
-								<ConfigItemCard
-									key={item.id}
-									item={item}
-									onToggle={handleToggle}
-									onUpdate={handleUpdate}
-									formatValue={formatValue}
-									isSaving={updateMutation.isPending || toggleMutation.isPending}
-								/>
-							))}
+							{buildGroups(cat.items).map((group) => {
+								const restartCount = group.items.filter((item) => item.restartRequired).length;
+								const sensitiveCount = group.items.filter((item) => item.sensitive).length;
+								return (
+									<Card key={group.groupKey}>
+										<CardContent className="py-4">
+											<div className="flex items-center justify-between mb-3">
+												<div className="flex items-center gap-2">
+													<h3 className="font-semibold">{group.groupLabel}</h3>
+													<Badge variant="secondary">{group.items.length}</Badge>
+												</div>
+												<div className="flex items-center gap-2">
+													{restartCount > 0 && <Badge variant="outline">需重启 {restartCount}</Badge>}
+													{sensitiveCount > 0 && <Badge variant="outline">敏感 {sensitiveCount}</Badge>}
+												</div>
+											</div>
+											<div className="grid gap-3">
+												{group.items.map((item) => (
+													<ConfigItemCard
+														key={item.id}
+														item={item}
+														onToggle={handleToggle}
+														onUpdate={handleUpdate}
+														formatValue={formatValue}
+														isSaving={updateMutation.isPending || toggleMutation.isPending}
+													/>
+												))}
+											</div>
+										</CardContent>
+									</Card>
+								);
+							})}
 							{cat.items.length === 0 && (
 								<Card>
 									<CardContent className="py-8 text-center text-muted-foreground">
@@ -191,7 +256,7 @@ function ConfigItemCard({
 }) {
 	const isBoolean = item.dataType === "BOOLEAN";
 	const isInteger = item.dataType === "INTEGER";
-	const isEditable = item.editable && !item.sensitive;
+	const isEditable = item.editable && item.scope !== "BOOTSTRAP";
 	const boolValue = item.value === "true";
 
 	const [isEditing, setIsEditing] = useState(false);
@@ -199,7 +264,7 @@ function ConfigItemCard({
 
 	const handleStartEdit = () => {
 		if (!isEditable) return;
-		setEditValue(item.value);
+		setEditValue(item.sensitive ? "******" : item.value);
 		setIsEditing(true);
 	};
 
@@ -217,7 +282,7 @@ function ConfigItemCard({
 	};
 
 	const handleCancel = () => {
-		setEditValue(item.value);
+		setEditValue(item.sensitive ? "******" : item.value);
 		setIsEditing(false);
 	};
 
@@ -237,6 +302,17 @@ function ConfigItemCard({
 									敏感
 								</Badge>
 							)}
+							{item.scope && (
+								<Badge variant={item.scope === "BOOTSTRAP" ? "destructive" : "secondary"}>
+									{SCOPE_LABELS[item.scope] ?? item.scope}
+								</Badge>
+							)}
+							{item.restartRequired && (
+								<Badge variant="outline" className="text-amber-700 border-amber-300">
+									<RotateCcw className="h-3 w-3 mr-1" />
+									需重启
+								</Badge>
+							)}
 							{!item.editable && (
 								<Badge variant="secondary">只读</Badge>
 							)}
@@ -246,6 +322,11 @@ function ConfigItemCard({
 						{item.description && (
 							<p className="text-sm text-muted-foreground mb-3">
 								{item.description}
+							</p>
+						)}
+						{item.validationRule && (
+							<p className="text-xs text-muted-foreground mb-3">
+								校验规则: <code className="font-mono">{item.validationRule}</code>
 							</p>
 						)}
 
@@ -282,11 +363,12 @@ function ConfigItemCard({
 								<div className="flex items-center gap-2">
 									<Label className="text-xs text-muted-foreground">新值:</Label>
 									<Input
-										type={isInteger ? "number" : "text"}
+										type={item.sensitive ? "password" : isInteger ? "number" : "text"}
 										value={editValue}
 										onChange={(e) => setEditValue(e.target.value)}
 										className="h-7 w-32 text-sm"
 										min={isInteger ? 0 : undefined}
+										placeholder={item.sensitive ? "******" : undefined}
 										autoFocus
 									/>
 									<Button
@@ -329,7 +411,7 @@ function ConfigItemCard({
 							<Switch
 								checked={boolValue}
 								onCheckedChange={() => onToggle(item)}
-								disabled={!item.editable || isSaving}
+								disabled={!isEditable || isSaving}
 							/>
 						</div>
 					)}

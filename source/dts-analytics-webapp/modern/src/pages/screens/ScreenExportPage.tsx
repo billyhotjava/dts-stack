@@ -33,6 +33,17 @@ function parseDelayMs(raw: string | null): number {
     return Math.min(12000, Math.max(200, Math.floor(n)));
 }
 
+function parsePixelRatio(raw: string | null): number | null {
+    if (raw == null || String(raw).trim().length === 0) {
+        return null;
+    }
+    const n = Number(raw);
+    if (!Number.isFinite(n) || n <= 0) {
+        return null;
+    }
+    return Math.max(1, Math.min(3, n));
+}
+
 function toErrorMessage(error: unknown, fallback: string): string {
     if (error instanceof HttpError) {
         try {
@@ -87,6 +98,25 @@ export default function ScreenExportPage() {
     const mode = useMemo(() => parseMode(query.get('mode')), [query]);
     const forcedDevice = useMemo(() => parseDevice(query.get('device')), [query]);
     const delayMs = useMemo(() => parseDelayMs(query.get('delayMs')), [query]);
+    const requestedPixelRatio = useMemo(() => parsePixelRatio(query.get('pixelRatio')), [query]);
+    const exportPixelRatio = useMemo(() => {
+        if (requestedPixelRatio != null) {
+            return requestedPixelRatio;
+        }
+        const browserRatio = Number.isFinite(window.devicePixelRatio)
+            ? Math.max(1, Math.min(window.devicePixelRatio, 3))
+            : 1;
+        const baseRatio = format === 'pdf'
+            ? Math.max(1.5, Math.min(browserRatio, 2))
+            : Math.max(2, Math.min(browserRatio, 3));
+        if (effectiveDevice === 'mobile') {
+            return Number(Math.min(3, baseRatio + 0.5).toFixed(2));
+        }
+        if (effectiveDevice === 'tablet') {
+            return Number(Math.min(3, baseRatio + 0.25).toFixed(2));
+        }
+        return Number(baseRatio.toFixed(2));
+    }, [effectiveDevice, format, requestedPixelRatio]);
 
     useEffect(() => {
         setEffectiveMode(mode);
@@ -337,14 +367,23 @@ export default function ScreenExportPage() {
                             format,
                             mode: effectiveMode || mode,
                             device: effectiveDevice,
+                            pixelRatio: exportPixelRatio,
                             screenSpec: buildScreenPayload(screen),
                         });
                         if (cancelled) return;
                         const ext = format === 'pdf' ? 'pdf' : 'png';
                         const fallbackName = `${screen.name || 'screen'}.${ext}`;
                         downloadBlob(rendered.blob, rendered.fileName || fallbackName);
-                        void reportExport('success', `server_render:${rendered.renderEngine || 'unknown'}`);
-                        setStatusText(`${format.toUpperCase()} 服务端导出完成，可关闭窗口`);
+                        const resolvedRatio = rendered.pixelRatio ?? exportPixelRatio;
+                        const hiddenByDevice = rendered.hiddenByDevice ?? 0;
+                        void reportExport(
+                            'success',
+                            `server_render:${rendered.renderEngine || 'unknown'};ratio:${resolvedRatio};hiddenByDevice:${hiddenByDevice}`,
+                        );
+                        setStatusText(
+                            `${format.toUpperCase()} 服务端导出完成，可关闭窗口`
+                            + (hiddenByDevice > 0 ? `（按设备模式隐藏 ${hiddenByDevice} 个组件）` : ''),
+                        );
                         return;
                     } catch (serverError) {
                         console.warn('[screen-export] server render failed, fallback to browser path:', serverError);
@@ -415,7 +454,7 @@ export default function ScreenExportPage() {
         return () => {
             cancelled = true;
         };
-    }, [delayMs, error, format, loading, retryNonce, screen]);
+    }, [delayMs, effectiveDevice, effectiveMode, error, exportPixelRatio, format, id, loading, mode, retryNonce, screen]);
 
     const rawTheme = screen?.theme as ScreenTheme | undefined;
     const screenTheme = resolveScreenTheme(rawTheme, screen?.backgroundColor);
@@ -436,6 +475,7 @@ export default function ScreenExportPage() {
             >
                 <div style={{ marginBottom: 10, fontSize: 12, opacity: 0.92 }}>
                     导出任务：`{format.toUpperCase()}` | 模式：`{effectiveMode}` | 设备：`{effectiveDevice}`
+                    {` | 像素比：${exportPixelRatio}`}
                     {requestId ? ` | requestId: ${requestId}` : ''}
                     {specDigest ? ` | spec: ${specDigest.slice(0, 12)}` : ''}
                 </div>

@@ -37,6 +37,7 @@ public class GovernanceProperties {
         private int retryCount = 1;
         private Duration timeout = Duration.ofMinutes(10);
         private boolean autoGenerateTicket = true;
+        private long taskSchedulerDelayMs = 60000L;
 
         public boolean isEnabled() {
             return enabled;
@@ -84,6 +85,14 @@ public class GovernanceProperties {
 
         public void setAutoGenerateTicket(boolean autoGenerateTicket) {
             this.autoGenerateTicket = autoGenerateTicket;
+        }
+
+        public long getTaskSchedulerDelayMs() {
+            return taskSchedulerDelayMs;
+        }
+
+        public void setTaskSchedulerDelayMs(long taskSchedulerDelayMs) {
+            this.taskSchedulerDelayMs = taskSchedulerDelayMs;
         }
     }
 

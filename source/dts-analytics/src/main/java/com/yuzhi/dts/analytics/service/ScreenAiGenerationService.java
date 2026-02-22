@@ -18,6 +18,7 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -30,7 +31,8 @@ public class ScreenAiGenerationService {
     private static final int MAX_CONTEXT_ITEM_LENGTH = 240;
     private static final int MAX_KEYWORD_LENGTH = 6000;
     private static final int MAX_SQL_BLUEPRINT_LENGTH = 100_000;
-    private static final Pattern TEMPLATE_VARIABLE_PATTERN = Pattern.compile("\\$\\{[^}]+}|\\{\\{[^}]+}}");
+    private static final Pattern TEMPLATE_VARIABLE_CAPTURE_PATTERN =
+            Pattern.compile("\\$\\{\\s*([^}]+?)\\s*}|\\{\\{\\s*([^}]+?)\\s*}}");
     private static final String SEMANTIC_BRIDGE_URL_PROP = "dts.ai.semantic.bridge.url";
     private static final String SEMANTIC_BRIDGE_URL_ENV = "DTS_AI_SEMANTIC_BRIDGE_URL";
     private static final String SEMANTIC_BRIDGE_TIMEOUT_MS_PROP = "dts.ai.semantic.bridge.timeout-ms";
@@ -49,9 +51,18 @@ public class ScreenAiGenerationService {
             " execute ");
 
     private final ObjectMapper objectMapper;
+    private final Nl2SqlSemanticRecallService semanticRecallService;
 
-    public ScreenAiGenerationService(ObjectMapper objectMapper) {
+    @Autowired
+    public ScreenAiGenerationService(
+            ObjectMapper objectMapper,
+            Nl2SqlSemanticRecallService semanticRecallService) {
         this.objectMapper = objectMapper;
+        this.semanticRecallService = semanticRecallService;
+    }
+
+    ScreenAiGenerationService(ObjectMapper objectMapper) {
+        this(objectMapper, null);
     }
 
     public ObjectNode generate(String prompt, Integer width, Integer height) {
@@ -108,6 +119,7 @@ public class ScreenAiGenerationService {
         result.set("vizRecommendations", vizRecommendations);
         result.set("screenSpec", screenSpec);
         result.set("quality", quality);
+        applySemanticRecall(result, normalizedPrompt, intent);
         applySemanticBridgeIfEnabled(result, normalizedPrompt);
         enrichNl2SqlResult(result, intent);
         return result;
@@ -273,6 +285,7 @@ public class ScreenAiGenerationService {
         result.set("screenSpec", screenSpec);
         result.set("quality", quality);
         result.set("actions", actions);
+        applySemanticRecall(result, normalized, intent);
         applySemanticBridgeIfEnabled(result, normalized);
         enrichNl2SqlResult(result, intent);
         return result;
@@ -327,6 +340,60 @@ public class ScreenAiGenerationService {
             return text;
         }
         return text.substring(0, Math.max(0, maxLen));
+    }
+
+    private void applySemanticRecall(ObjectNode result, String prompt, IntentProfile intent) {
+        if (semanticRecallService == null || result == null) {
+            return;
+        }
+        try {
+            Long databaseId = resolveDatabaseIdFromResult(result);
+            Nl2SqlSemanticRecallService.SemanticRecallResult recall = semanticRecallService.recall(
+                    prompt,
+                    intent == null ? null : intent.domain(),
+                    databaseId,
+                    intent == null ? List.of() : intent.dimensions(),
+                    intent == null ? List.of() : intent.metrics(),
+                    8,
+                    5);
+
+            ObjectNode recallNode = objectMapper.createObjectNode();
+            recallNode.putPOJO("schemaCandidates", recall.schemaCandidates());
+            recallNode.putPOJO("synonymHits", recall.synonymHits());
+            recallNode.putPOJO("fewShotExamples", recall.fewShotExamples());
+            recallNode.putPOJO("promptHints", recall.promptHints());
+            recallNode.putPOJO("trace", recall.trace());
+            result.set("semanticRecall", recallNode);
+            ArrayNode metricLensRefs = objectMapper.createArrayNode();
+            for (String metric : intent == null ? List.<String>of() : intent.metrics()) {
+                ObjectNode ref = objectMapper.createObjectNode();
+                ref.put("metricName", metric);
+                ref.put("metricLensHint", "/analytics/api/metric-lens?name=" + metric);
+                metricLensRefs.add(ref);
+            }
+            result.set("metricLensReferences", metricLensRefs);
+
+            JsonNode hintsNode = result.path("semanticModelHints");
+            ObjectNode hints = hintsNode.isObject() ? (ObjectNode) hintsNode : objectMapper.createObjectNode();
+            hints.putPOJO("synonymHits", recall.synonymHits());
+            hints.putPOJO("schemaCandidates", recall.schemaCandidates());
+            hints.putPOJO("fewShotExamples", recall.fewShotExamples());
+            result.set("semanticModelHints", hints);
+        } catch (Exception e) {
+            appendQualityWarning(result, "语义召回链路执行失败，已回退启发式模式。");
+        }
+    }
+
+    private Long resolveDatabaseIdFromResult(ObjectNode result) {
+        if (result == null) {
+            return null;
+        }
+        JsonNode semanticHints = result.path("semanticModelHints");
+        if (semanticHints.isObject() && semanticHints.path("databaseId").canConvertToLong()) {
+            long id = semanticHints.path("databaseId").asLong();
+            return id > 0 ? id : null;
+        }
+        return null;
     }
 
     private void applySemanticBridgeIfEnabled(ObjectNode result, String prompt) {
@@ -1410,12 +1477,22 @@ public class ScreenAiGenerationService {
     private void enrichNl2SqlResult(ObjectNode result, IntentProfile intent) {
         JsonNode queryRecommendationsNode = result.path("queryRecommendations");
         JsonNode sqlBlueprintsNode = result.path("sqlBlueprints");
+        JsonNode semanticRecallNode = result.path("semanticRecall");
         ArrayNode queryRecommendations = queryRecommendationsNode.isArray()
                 ? (ArrayNode) queryRecommendationsNode
                 : objectMapper.createArrayNode();
         ArrayNode sqlBlueprints = sqlBlueprintsNode.isArray() ? (ArrayNode) sqlBlueprintsNode : objectMapper.createArrayNode();
 
         ObjectNode diagnostics = buildNl2SqlDiagnostics(intent, queryRecommendations, sqlBlueprints);
+        if (semanticRecallNode != null && semanticRecallNode.isObject()) {
+            diagnostics.set("semanticRecallTrace", semanticRecallNode.path("trace").isObject()
+                    ? semanticRecallNode.path("trace")
+                    : objectMapper.createObjectNode());
+            diagnostics.put("semanticRecallEnabled", true);
+        } else {
+            diagnostics.put("semanticRecallEnabled", false);
+        }
+        syncScreenSpecGlobalVariables(result, diagnostics);
         result.set("nl2sqlDiagnostics", diagnostics);
 
         if (!queryRecommendationsNode.isArray()) {
@@ -1429,6 +1506,67 @@ public class ScreenAiGenerationService {
         }
     }
 
+    private void syncScreenSpecGlobalVariables(ObjectNode result, ObjectNode diagnostics) {
+        if (result == null || diagnostics == null) {
+            return;
+        }
+        JsonNode screenSpecNode = result.path("screenSpec");
+        if (screenSpecNode == null || !screenSpecNode.isObject()) {
+            return;
+        }
+        ObjectNode screenSpec = (ObjectNode) screenSpecNode;
+        JsonNode requiredNode = diagnostics.path("requiredVariables");
+        if (!requiredNode.isArray() || requiredNode.isEmpty()) {
+            diagnostics.put("autoInjectedVariableCount", 0);
+            diagnostics.set("autoInjectedVariables", objectMapper.createArrayNode());
+            return;
+        }
+
+        ArrayNode globalVariables = screenSpec.path("globalVariables").isArray()
+                ? (ArrayNode) screenSpec.path("globalVariables")
+                : objectMapper.createArrayNode();
+        if (!screenSpec.path("globalVariables").isArray()) {
+            screenSpec.set("globalVariables", globalVariables);
+        }
+
+        Map<String, ObjectNode> variableByCanonicalKey = indexVariablesByCanonicalKey(globalVariables);
+        ArrayNode autoInjectedVariables = objectMapper.createArrayNode();
+        ArrayNode pendingVariables = objectMapper.createArrayNode();
+        int pendingCount = 0;
+
+        for (JsonNode item : requiredNode) {
+            String key = item == null ? "" : item.asText("");
+            String normalizedKey = normalizeTemplateVariable(key);
+            if (normalizedKey == null) {
+                continue;
+            }
+            String canonicalKey = canonicalizeVariableKey(normalizedKey);
+            ObjectNode variable = variableByCanonicalKey.get(canonicalKey);
+            if (variable == null) {
+                variable = objectMapper.createObjectNode();
+                variable.put("key", normalizedKey);
+                variable.put("label", guessVariableLabel(normalizedKey));
+                variable.put("type", guessVariableType(normalizedKey));
+                variable.put("defaultValue", "");
+                variable.put("description", "AI 自动补齐：来自 NL2SQL 模板变量");
+                globalVariables.add(variable);
+                variableByCanonicalKey.put(canonicalKey, variable);
+                autoInjectedVariables.add(normalizedKey);
+            }
+            String defaultValue = variable.path("defaultValue").asText("");
+            if (defaultValue == null || defaultValue.trim().isEmpty()) {
+                pendingVariables.add(normalizedKey);
+                pendingCount += 1;
+            }
+        }
+
+        diagnostics.put("pendingVariableCount", pendingCount);
+        diagnostics.set("pendingVariables", pendingVariables);
+        diagnostics.put("executionReadiness", pendingCount > 0 ? "needs-params" : "ready");
+        diagnostics.put("autoInjectedVariableCount", autoInjectedVariables.size());
+        diagnostics.set("autoInjectedVariables", autoInjectedVariables);
+    }
+
     private ObjectNode buildNl2SqlDiagnostics(IntentProfile intent, ArrayNode queryRecommendations, ArrayNode sqlBlueprints) {
         ObjectNode diagnostics = objectMapper.createObjectNode();
         diagnostics.put("stage", "heuristic-precheck");
@@ -1439,6 +1577,10 @@ public class ScreenAiGenerationService {
         diagnostics.put("sqlBlueprintCount", sqlBlueprints == null ? 0 : sqlBlueprints.size());
 
         ArrayNode blueprintChecks = objectMapper.createArrayNode();
+        ArrayNode blockedQueryIds = objectMapper.createArrayNode();
+        ArrayNode needsParamsQueryIds = objectMapper.createArrayNode();
+        ArrayNode safeQueryIds = objectMapper.createArrayNode();
+        LinkedHashSet<String> requiredVariableSet = new LinkedHashSet<>();
         int safeCount = 0;
         int needsParamsCount = 0;
         int blockedCount = 0;
@@ -1454,6 +1596,7 @@ public class ScreenAiGenerationService {
             blueprint.put("safetyStatus", audit.status());
             blueprint.put("hasTemplateVariables", audit.hasTemplateVariables());
             blueprint.set("safetyReasons", audit.reasons().deepCopy());
+            blueprint.set("templateVariables", audit.templateVariables().deepCopy());
 
             ObjectNode check = objectMapper.createObjectNode();
             check.put("queryId", blueprint.path("queryId").asText(""));
@@ -1461,31 +1604,60 @@ public class ScreenAiGenerationService {
             check.put("status", audit.status());
             check.put("hasTemplateVariables", audit.hasTemplateVariables());
             check.set("reasons", audit.reasons().deepCopy());
+            check.set("templateVariables", audit.templateVariables().deepCopy());
             blueprintChecks.add(check);
 
+            for (JsonNode variable : audit.templateVariables()) {
+                String key = variable == null ? "" : variable.asText("");
+                if (key.isBlank()) {
+                    continue;
+                }
+                requiredVariableSet.add(key);
+            }
+
+            String queryId = blueprint.path("queryId").asText("");
             if ("blocked".equals(audit.status())) {
                 blockedCount += 1;
+                blockedQueryIds.add(queryId);
             } else if ("needs-params".equals(audit.status())) {
                 needsParamsCount += 1;
+                needsParamsQueryIds.add(queryId);
             } else {
                 safeCount += 1;
+                safeQueryIds.add(queryId);
             }
         }
 
+        ArrayNode requiredVariables = objectMapper.createArrayNode();
+        for (String key : requiredVariableSet) {
+            requiredVariables.add(key);
+        }
         diagnostics.put("safeCount", safeCount);
+        diagnostics.put("executableBlueprintCount", safeCount);
         diagnostics.put("needsParamsCount", needsParamsCount);
         diagnostics.put("blockedCount", blockedCount);
+        diagnostics.put("requiredVariableCount", requiredVariables.size());
+        diagnostics.put("pendingVariableCount", requiredVariables.size());
         diagnostics.put(
                 "status",
                 blockedCount > 0 ? "blocked" : (needsParamsCount > 0 ? "needs-params" : "safe"));
+        diagnostics.put(
+                "executionReadiness",
+                blockedCount > 0 ? "blocked" : (needsParamsCount > 0 ? "needs-params" : "ready"));
+        diagnostics.set("requiredVariables", requiredVariables);
+        diagnostics.set("pendingVariables", requiredVariables.deepCopy());
         diagnostics.set("blueprintChecks", blueprintChecks);
+        diagnostics.set("blockedQueryIds", blockedQueryIds);
+        diagnostics.set("needsParamsQueryIds", needsParamsQueryIds);
+        diagnostics.set("safeQueryIds", safeQueryIds);
         return diagnostics;
     }
 
     private SqlSafetyAudit inspectSqlBlueprintSafety(String sql) {
         String rawSql = sql == null ? "" : sql;
         String normalized = normalizeSqlForSafety(rawSql);
-        boolean hasTemplateVariables = TEMPLATE_VARIABLE_PATTERN.matcher(rawSql).find();
+        ArrayNode templateVariables = extractTemplateVariables(rawSql);
+        boolean hasTemplateVariables = templateVariables.size() > 0;
         ArrayNode reasons = objectMapper.createArrayNode();
         boolean blocked = false;
 
@@ -1518,7 +1690,121 @@ public class ScreenAiGenerationService {
         }
 
         String status = blocked ? "blocked" : (hasTemplateVariables ? "needs-params" : "safe");
-        return new SqlSafetyAudit(status, hasTemplateVariables, reasons);
+        return new SqlSafetyAudit(status, hasTemplateVariables, reasons, templateVariables);
+    }
+
+    private ArrayNode extractTemplateVariables(String sql) {
+        ArrayNode out = objectMapper.createArrayNode();
+        if (sql == null || sql.isBlank()) {
+            return out;
+        }
+        LinkedHashSet<String> dedupe = new LinkedHashSet<>();
+        Matcher matcher = TEMPLATE_VARIABLE_CAPTURE_PATTERN.matcher(sql);
+        while (matcher.find()) {
+            String raw = matcher.group(1);
+            if (raw == null) {
+                raw = matcher.group(2);
+            }
+            String normalized = normalizeTemplateVariable(raw);
+            if (normalized == null || !dedupe.add(normalized)) {
+                continue;
+            }
+            out.add(normalized);
+        }
+        return out;
+    }
+
+    private Map<String, ObjectNode> indexVariablesByCanonicalKey(ArrayNode variables) {
+        Map<String, ObjectNode> out = new LinkedHashMap<>();
+        if (variables == null) {
+            return out;
+        }
+        for (JsonNode item : variables) {
+            if (item == null || !item.isObject()) {
+                continue;
+            }
+            ObjectNode variable = (ObjectNode) item;
+            String key = normalizeTemplateVariable(variable.path("key").asText(""));
+            if (key == null) {
+                continue;
+            }
+            out.putIfAbsent(canonicalizeVariableKey(key), variable);
+        }
+        return out;
+    }
+
+    private String canonicalizeVariableKey(String key) {
+        if (key == null || key.isBlank()) {
+            return "";
+        }
+        String lower = key.toLowerCase(Locale.ROOT);
+        return lower.replaceAll("[^a-z0-9]", "");
+    }
+
+    private String guessVariableType(String key) {
+        String value = key == null ? "" : key.toLowerCase(Locale.ROOT);
+        if (containsAny(value, "date", "day", "week", "month", "year", "time", "start", "end")) {
+            return "date";
+        }
+        if (containsAny(value, "limit", "top", "offset", "size", "count", "num", "id")) {
+            return "number";
+        }
+        return "string";
+    }
+
+    private String guessVariableLabel(String key) {
+        if (key == null || key.isBlank()) {
+            return "参数";
+        }
+        String normalized = key.replace('-', '_').replace('.', '_').replace(':', '_');
+        String[] tokens = normalized.split("_+");
+        List<String> parts = new ArrayList<>();
+        for (String token : tokens) {
+            if (token == null || token.isBlank()) {
+                continue;
+            }
+            parts.add(token.toUpperCase(Locale.ROOT));
+        }
+        String display = parts.isEmpty() ? key : String.join(" ", parts);
+        return display + " 参数";
+    }
+
+    private String normalizeTemplateVariable(String raw) {
+        if (raw == null) {
+            return null;
+        }
+        String text = raw.trim();
+        if (text.isBlank()) {
+            return null;
+        }
+        int cut = text.length();
+        int pipe = text.indexOf('|');
+        int comma = text.indexOf(',');
+        int space = text.indexOf(' ');
+        if (pipe >= 0 && pipe < cut) {
+            cut = pipe;
+        }
+        if (comma >= 0 && comma < cut) {
+            cut = comma;
+        }
+        if (space >= 0 && space < cut) {
+            cut = space;
+        }
+        text = text.substring(0, cut).trim();
+        if (text.startsWith(".")) {
+            text = text.substring(1);
+        }
+        if (text.endsWith(".")) {
+            text = text.substring(0, text.length() - 1);
+        }
+        text = text.replaceAll("[^a-zA-Z0-9_.-]", "");
+        if (text.isBlank()) {
+            return null;
+        }
+        if (text.length() > 80) {
+            return text.substring(0, 80);
+        }
+        return text;
     }
 
     private String normalizeSqlForSafety(String sql) {
@@ -1808,5 +2094,5 @@ public class ScreenAiGenerationService {
             List<String> filters,
             String granularity) {}
 
-    private record SqlSafetyAudit(String status, boolean hasTemplateVariables, ArrayNode reasons) {}
+    private record SqlSafetyAudit(String status, boolean hasTemplateVariables, ArrayNode reasons, ArrayNode templateVariables) {}
 }

@@ -26,6 +26,11 @@ import org.springframework.util.StringUtils;
 @Transactional
 public class DimensionService {
 
+    private static final String STATUS_DRAFT = "DRAFT";
+    private static final String STATUS_PUBLISHED = "PUBLISHED";
+    private static final String STATUS_ARCHIVED = "ARCHIVED";
+    private static final String STATUS_DEPRECATED = "DEPRECATED";
+
     private final GovDimensionDictionaryRepository repository;
     private final AccessChecker accessChecker;
     private final OrganizationVisibilityService organizationVisibilityService;
@@ -97,7 +102,7 @@ public class DimensionService {
         if (!deptAllowed(entity, activeDept)) {
             throw new org.springframework.security.access.AccessDeniedException("Invalid department context");
         }
-        entity.setStatus("PUBLISHED");
+        entity.setStatus(STATUS_PUBLISHED);
         applyDefaults(entity, activeDept);
         return IndicatorMapper.toDto(repository.save(entity));
     }
@@ -107,7 +112,7 @@ public class DimensionService {
         if (!deptAllowed(entity, activeDept)) {
             throw new org.springframework.security.access.AccessDeniedException("Invalid department context");
         }
-        entity.setStatus("DEPRECATED");
+        entity.setStatus(STATUS_ARCHIVED);
         applyDefaults(entity, activeDept);
         return IndicatorMapper.toDto(repository.save(entity));
     }
@@ -128,9 +133,7 @@ public class DimensionService {
         if (!StringUtils.hasText(entity.getOwnerDept()) && StringUtils.hasText(activeDept)) {
             entity.setOwnerDept(activeDept.trim());
         }
-        if (!StringUtils.hasText(entity.getStatus())) {
-            entity.setStatus("DRAFT");
-        }
+        entity.setStatus(normalizeStatus(entity.getStatus(), STATUS_DRAFT));
         entity.setDataLevel(normalizeDataLevel(entity.getDataLevel()));
     }
 
@@ -153,9 +156,20 @@ public class DimensionService {
 
     private boolean statusMatches(GovDimensionDictionary entity, String status) {
         if (!StringUtils.hasText(status)) return true;
-        String expected = status.trim().toUpperCase(Locale.ROOT);
-        String actual = entity.getStatus() == null ? "" : entity.getStatus().trim().toUpperCase(Locale.ROOT);
+        String expected = normalizeStatus(status, "");
+        String actual = normalizeStatus(entity.getStatus(), "");
         return expected.equals(actual);
+    }
+
+    private String normalizeStatus(String status, String defaultValue) {
+        String normalized = StringUtils.hasText(status) ? status.trim().toUpperCase(Locale.ROOT) : defaultValue;
+        if (!StringUtils.hasText(normalized)) {
+            return defaultValue;
+        }
+        if (STATUS_DEPRECATED.equals(normalized)) {
+            return STATUS_ARCHIVED;
+        }
+        return normalized;
     }
 
     private boolean contains(String value, String keywordLower) {

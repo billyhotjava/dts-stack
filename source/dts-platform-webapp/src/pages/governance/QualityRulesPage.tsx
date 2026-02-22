@@ -14,6 +14,9 @@ import {
 import type { ColumnsType } from "antd/es/table";
 import { PlusOutlined, PlayCircleOutlined, DeleteOutlined, EditOutlined } from "@ant-design/icons";
 import { PageHeader } from "@/components/page-header";
+import ComplianceCenterPanel from "@/pages/governance/components/ComplianceCenterPanel";
+import IssueWorkflowPanel from "@/pages/governance/components/IssueWorkflowPanel";
+import QualityTasksPanel from "@/pages/governance/components/QualityTasksPanel";
 import {
 	listQualityRules,
 	createQualityRule,
@@ -228,6 +231,9 @@ export default function Page() {
 					loading={loading}
 				/>
 			</Card>
+			<QualityTasksPanel />
+			<ComplianceCenterPanel />
+			<IssueWorkflowPanel />
 
 			<Modal
 				open={modalOpen}

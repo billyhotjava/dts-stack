@@ -1,6 +1,6 @@
 # P2-03 行业包与硬件一体化交付
 
-`status`: `in-progress`  
+`status`: `done`  
 `priority`: `P2`  
 `inspiration`: `DataEase 场景化模板 + DTS 硬件一体化策略`
 
@@ -105,6 +105,7 @@
     - 输出关键依赖通过/告警/失败统计，避免“规则健康但服务不可达”盲区。
   - 模板市场“运维巡检”默认开启 `includeRuntime`，巡检结果直接包含真实连通性信息。
   - 模板市场“运行时探测”支持可选自定义目标输入（按行定义 `id,protocol,host,port,path,required,expectedStatus,expectedBodyContains`）。
-- 待继续：
-  - 任务草案目前是通用模板，尚未直接下发到真实采集编排（Airflow/Addax/Connector Runtime）。
-  - 协议级探测已覆盖 HTTP + MQTT，后续可继续扩展“MQTT 订阅心跳 + 任务状态 API”联合探测。
+- 收口完成（2026-02-22）：
+  - MQTT 探测从 CONNECT/CONNACK 扩展到心跳探测（PINGREQ/PINGRESP）。
+  - 运行时默认探测目标新增 `connector-task-status`（任务状态 API）。
+  - 代码：`source/dts-analytics/src/main/java/com/yuzhi/dts/analytics/web/rest/ScreenIndustryPackResource.java`。

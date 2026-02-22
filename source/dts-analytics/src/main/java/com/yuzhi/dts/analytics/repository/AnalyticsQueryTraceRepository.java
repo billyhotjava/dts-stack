@@ -34,4 +34,15 @@ public interface AnalyticsQueryTraceRepository extends JpaRepository<AnalyticsQu
 
     @Query("select distinct q.metricVersion from AnalyticsQueryTrace q where q.metricId = :metricId and q.metricVersion is not null and q.metricVersion <> '' order by q.metricVersion desc")
     List<String> findDistinctMetricVersions(@Param("metricId") Long metricId);
+
+    @Query("select distinct q.cardId from AnalyticsQueryTrace q where q.metricId = :metricId and q.cardId is not null")
+    List<Long> findDistinctCardIdsByMetricId(@Param("metricId") Long metricId);
+
+    @Query(
+            "select q from AnalyticsQueryTrace q where q.metricId = :metricId and q.metricVersion = :metricVersion "
+                    + "order by q.createdAt desc")
+    Page<AnalyticsQueryTrace> findAllByMetricIdAndMetricVersion(
+            @Param("metricId") Long metricId,
+            @Param("metricVersion") String metricVersion,
+            Pageable pageable);
 }

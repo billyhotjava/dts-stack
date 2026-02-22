@@ -116,6 +116,16 @@ export default function ScreensPage() {
             alert('请先生成方案');
             return;
         }
+        const pendingVariables = aiResult?.nl2sqlDiagnostics?.pendingVariables ?? [];
+        if (pendingVariables.length > 0) {
+            const preview = pendingVariables.slice(0, 6).join('、');
+            const confirmed = window.confirm(
+                `当前仍有 ${pendingVariables.length} 个待补参数（${preview}${pendingVariables.length > 6 ? '...' : ''}），继续创建草稿吗？`,
+            );
+            if (!confirmed) {
+                return;
+            }
+        }
 
         setAiCreating(true);
         try {
@@ -178,12 +188,16 @@ export default function ScreensPage() {
             return;
         }
         const payload = {
+            engine: aiResult.engine || 'heuristic-v1',
             prompt: aiResult.prompt || aiPrompt.trim(),
             intent: aiResult.intent || {},
             semanticModelHints: aiResult.semanticModelHints || {},
             queryRecommendations: aiResult.queryRecommendations || [],
             sqlBlueprints: aiResult.sqlBlueprints || [],
             vizRecommendations: aiResult.vizRecommendations || [],
+            semanticRecall: aiResult.semanticRecall || {},
+            metricLensReferences: aiResult.metricLensReferences || [],
+            nl2sqlDiagnostics: aiResult.nl2sqlDiagnostics || {},
             quality: aiResult.quality || {},
             actions: aiResult.actions || [],
         };
@@ -698,6 +712,36 @@ export default function ScreensPage() {
                                     {Array.isArray(aiResult.sqlBlueprints) && aiResult.sqlBlueprints.length > 0 && (
                                         <div style={{ marginTop: 10, fontSize: 12, color: '#bfdbfe' }}>
                                             SQL蓝图：{aiResult.sqlBlueprints.map((row) => `${row.queryId || '-'}(${row.purpose || '-'})`).join('；')}
+                                        </div>
+                                    )}
+                                    {aiResult.nl2sqlDiagnostics && (
+                                        <div style={{ marginTop: 10, fontSize: 12, color: '#fca5a5' }}>
+                                            NL2SQL诊断：状态 {aiResult.nl2sqlDiagnostics.status || '-'}，就绪度 {aiResult.nl2sqlDiagnostics.executionReadiness || '-'}，可执行 {aiResult.nl2sqlDiagnostics.executableBlueprintCount ?? aiResult.nl2sqlDiagnostics.safeCount ?? 0}，需补参 {aiResult.nl2sqlDiagnostics.needsParamsCount ?? 0}，阻断 {aiResult.nl2sqlDiagnostics.blockedCount ?? 0}
+                                        </div>
+                                    )}
+                                    {Array.isArray(aiResult.nl2sqlDiagnostics?.requiredVariables) && aiResult.nl2sqlDiagnostics.requiredVariables.length > 0 && (
+                                        <div style={{ marginTop: 8, fontSize: 12, color: '#fda4af' }}>
+                                            识别参数：{aiResult.nl2sqlDiagnostics.requiredVariables.slice(0, 8).join('、')}
+                                        </div>
+                                    )}
+                                    {Array.isArray(aiResult.nl2sqlDiagnostics?.pendingVariables) && aiResult.nl2sqlDiagnostics.pendingVariables.length > 0 && (
+                                        <div style={{ marginTop: 8, fontSize: 12, color: '#fecdd3' }}>
+                                            待补参数：{aiResult.nl2sqlDiagnostics.pendingVariables.slice(0, 8).join('、')}
+                                        </div>
+                                    )}
+                                    {Array.isArray(aiResult.nl2sqlDiagnostics?.autoInjectedVariables) && aiResult.nl2sqlDiagnostics.autoInjectedVariables.length > 0 && (
+                                        <div style={{ marginTop: 8, fontSize: 12, color: '#fdba74' }}>
+                                            自动补齐变量：{aiResult.nl2sqlDiagnostics.autoInjectedVariables.slice(0, 8).join('、')}
+                                        </div>
+                                    )}
+                                    {Array.isArray(aiResult.nl2sqlDiagnostics?.blueprintChecks) && aiResult.nl2sqlDiagnostics!.blueprintChecks!.length > 0 && (
+                                        <div style={{ marginTop: 8, fontSize: 12, color: '#fecaca' }}>
+                                            蓝图检查：{aiResult.nl2sqlDiagnostics!.blueprintChecks!.slice(0, 6).map((row) => `${String(row.queryId || '-')}:${String(row.status || '-')}`).join('；')}
+                                        </div>
+                                    )}
+                                    {aiResult.semanticRecall && (
+                                        <div style={{ marginTop: 10, fontSize: 12, color: '#86efac' }}>
+                                            语义召回：候选表/字段 {aiResult.semanticRecall.schemaCandidates?.length ?? 0}，同义词命中 {aiResult.semanticRecall.synonymHits?.length ?? 0}，few-shot {aiResult.semanticRecall.fewShotExamples?.length ?? 0}
                                         </div>
                                     )}
                                     {Array.isArray(aiResult.vizRecommendations) && aiResult.vizRecommendations.length > 0 && (

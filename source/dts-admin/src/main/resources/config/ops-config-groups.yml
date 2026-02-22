@@ -1,0 +1,109 @@
+version: 1
+rules:
+  - groupKey: feature-core
+    groupLabel: 核心能力开关
+    category: FEATURE_TOGGLE
+    groupOrder: 10
+    keys:
+      - feature.openmetadata.enabled
+      - feature.airflow.enabled
+      - feature.hetu_bi.enabled
+      - VITE_ENABLE_SQL_WORKBENCH
+
+  - groupKey: feature-integration
+    groupLabel: 集成能力开关
+    category: FEATURE_TOGGLE
+    groupOrder: 20
+    prefixes:
+      - DTS_MDM_GATEWAY_
+    keys:
+      - feature.mdm_gateway.enabled
+
+  - groupKey: security-auth
+    groupLabel: 认证与登录
+    category: SECURITY
+    groupOrder: 10
+    prefixes:
+      - OAUTH2_
+      - ANALYTICS_OIDC_
+    keys:
+      - OIDC_ISSUER_URI
+      - security.password_login.enabled
+      - security.triad_mode.enabled
+
+  - groupKey: security-pki
+    groupLabel: PKI 配置
+    category: SECURITY
+    groupOrder: 20
+    prefixes:
+      - DTS_PKI_
+    keys:
+      - security.pki.enabled
+
+  - groupKey: security-access
+    groupLabel: 访问控制
+    category: SECURITY
+    groupOrder: 30
+    prefixes:
+      - DTS_SECURITY_IP_ALLOWLIST_
+    keys:
+      - ADMIN_ALLOWED_IPS
+      - ADMIN_BACKUP_IPS
+      - ADMIN_WHITELIST_CIDRS
+      - security.ip_allowlist.enabled
+
+  - groupKey: security-session
+    groupLabel: 会话策略
+    category: SECURITY
+    groupOrder: 40
+    keys:
+      - security.session.timeout_minutes
+
+  - groupKey: integration-airflow
+    groupLabel: Airflow 调度
+    category: INTEGRATION
+    groupOrder: 10
+    prefixes:
+      - DTS_AIRFLOW_
+
+  - groupKey: integration-openmetadata
+    groupLabel: OpenMetadata 元数据
+    category: INTEGRATION
+    groupOrder: 20
+    prefixes:
+      - DTS_OPENMETADATA_
+      - DTS_PLATFORM_OPENMETADATA_
+
+  - groupKey: integration-mdm
+    groupLabel: MDM 网关
+    category: INTEGRATION
+    groupOrder: 30
+    prefixes:
+      - DTS_MDM_GATEWAY_
+
+  - groupKey: integration-analytics
+    groupLabel: Analytics OIDC
+    category: INTEGRATION
+    groupOrder: 40
+    prefixes:
+      - ANALYTICS_OIDC_
+    keys:
+      - ANALYTICS_ENCRYPTION_SECRET
+
+  - groupKey: system-audit
+    groupLabel: 审计与日志
+    category: SYSTEM
+    groupOrder: 10
+    keys:
+      - system.audit_log.retention_days
+
+  - groupKey: system-runtime
+    groupLabel: 运行时参数
+    category: SYSTEM
+    groupOrder: 20
+    keys:
+      - cluster.mode
+      - minio.endpoint
+      - airflow.deployment
+      - portal.menu.seed.hash
+      - user.data-level.options

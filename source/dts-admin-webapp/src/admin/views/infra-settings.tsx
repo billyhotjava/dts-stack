@@ -1,9 +1,9 @@
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Alert, Button as AntButton, Divider, Form, Input, Space, Switch, Tabs } from "antd";
 import type { FormInstance } from "antd";
 import { adminApi } from "@/admin/api/adminApi";
-import type { InfraServiceSettingsPayload } from "@/types/infra";
+import type { InfraServiceSettingsPayload, InfraServiceTestResult } from "@/types/infra";
 import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
 import { Text } from "@/ui/typography";
 import { toast } from "sonner";
@@ -14,6 +14,7 @@ interface ServicePanelProps {
 	service: ServiceKey;
 	title: string;
 	description?: string;
+	restartHint?: string;
 	formContent: (form: FormInstance<Record<string, any>>) => ReactNode;
 }
 
@@ -28,9 +29,10 @@ const buildSettingsPayload = (
 	return { ...values };
 };
 
-function ServicePanel({ service, title, description, formContent }: ServicePanelProps) {
+function ServicePanel({ service, title, description, restartHint, formContent }: ServicePanelProps) {
 	const queryClient = useQueryClient();
 	const [form] = Form.useForm<Record<string, any>>();
+	const [testResult, setTestResult] = useState<InfraServiceTestResult | null>(null);
 
 	const { data, isFetching } = useQuery({
 		queryKey: ["admin", "infra-settings", service],
@@ -47,6 +49,9 @@ function ServicePanel({ service, title, description, formContent }: ServicePanel
 			const payload = buildSettingsPayload(values);
 			await adminApi.updateIntegrationSettings(service, payload);
 			toast.success("配置已保存");
+			if (restartHint) {
+				toast.info(restartHint);
+			}
 			queryClient.invalidateQueries({ queryKey: ["admin", "infra-settings", service] });
 		} catch (error: any) {
 			if (error?.errorFields) return;
@@ -59,6 +64,7 @@ function ServicePanel({ service, title, description, formContent }: ServicePanel
 			const values = await form.validateFields();
 			const payload = buildSettingsPayload(values);
 			const result = await adminApi.testIntegrationSettings(service, payload);
+			setTestResult(result || null);
 			if (result?.success) {
 				toast.success(result?.message || "连接成功");
 			} else {
@@ -66,6 +72,7 @@ function ServicePanel({ service, title, description, formContent }: ServicePanel
 			}
 		} catch (error: any) {
 			if (error?.errorFields) return;
+			setTestResult({ success: false, message: error?.message || "测试失败" });
 			toast.error(error?.message || "测试失败");
 		}
 	};
@@ -78,6 +85,9 @@ function ServicePanel({ service, title, description, formContent }: ServicePanel
 			</CardHeader>
 			<CardContent>
 				<Form form={form} layout="vertical" requiredMark disabled={isFetching} className="max-w-3xl">
+					{restartHint ? (
+						<Alert className="mb-4" type="warning" showIcon message={restartHint} />
+					) : null}
 					{formContent(form)}
 					<Space wrap>
 						<AntButton type="primary" onClick={handleSave}>
@@ -85,6 +95,22 @@ function ServicePanel({ service, title, description, formContent }: ServicePanel
 						</AntButton>
 						<AntButton onClick={handleTest}>测试连接</AntButton>
 					</Space>
+					{testResult ? (
+						<Alert
+							className="mt-4"
+							type={testResult.success ? "success" : "error"}
+							showIcon
+							message={testResult.message || (testResult.success ? "测试成功" : "测试失败")}
+							description={
+								(testResult.status || testResult.body) ? (
+									<div className="space-y-1">
+										{testResult.status ? <div>状态码: {testResult.status}</div> : null}
+										{testResult.body ? <pre className="text-xs whitespace-pre-wrap">{testResult.body}</pre> : null}
+									</div>
+								) : undefined
+							}
+						/>
+					) : null}
 				</Form>
 			</CardContent>
 		</Card>
@@ -101,6 +127,7 @@ export default function InfraSettingsView() {
 					service="platform"
 					title="平台侧联动"
 					description="控制数据源创建时是否同步字段到元数据目录。"
+					restartHint="该配置通常可热生效；如无效请重启 dts-platform。"
 					formContent={() => (
 						<>
 							<Form.Item
@@ -126,6 +153,7 @@ export default function InfraSettingsView() {
 					service="addax"
 					title="Addax 作业"
 					description="用于生成 Addax 作业文件并配合 Airflow 执行。"
+					restartHint="保存后建议重建入湖任务；镜像变更需重启调度相关服务。"
 					formContent={(_form) => (
 						<>
 							<Form.Item label="启用" name="enabled" valuePropName="checked">
@@ -164,6 +192,7 @@ export default function InfraSettingsView() {
 					service="airflow"
 					title="Airflow 调度"
 					description="用于触发 DAG 或对接调度任务。"
+					restartHint="保存后建议重启 dts-ingestion / dts-platform 使连接参数一致。"
 					formContent={() => (
 						<>
 							<Form.Item label="启用" name="enabled" valuePropName="checked">
@@ -216,6 +245,7 @@ export default function InfraSettingsView() {
 					service="openmetadata"
 					title="OpenMetadata 元数据"
 					description="用于血缘与元数据采集。"
+					restartHint="保存后建议重启 dts-ingestion，确保采集器读取最新配置。"
 					formContent={() => (
 						<>
 							<Form.Item label="启用" name="enabled" valuePropName="checked">
@@ -321,6 +351,7 @@ export default function InfraSettingsView() {
 					service="dbt"
 					title="DBT 任务"
 					description="预留接入配置，当前未启用。"
+					restartHint="DBT 接入启用后建议重启 dts-ingestion 与 dts-platform。"
 					formContent={() => (
 						<>
 							<Alert type="info" message="DBT 接入能力预留中，当前仅保存配置。" showIcon />

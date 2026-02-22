@@ -97,14 +97,13 @@
   - 前端 `ScreensPage` AI 结果卡新增“语义映射 / SQL蓝图”可视化摘要；
   - “复制建议”载荷新增 `semanticModelHints/sqlBlueprints`，便于和建模同学联调。
   - 单测补齐：`generate_salesPrompt_outputsSemanticHintsAndSqlBlueprints`，覆盖语义输出核心字段。
-- 待继续：
-  - 与真实语义层/NL2SQL 执行引擎联动（当前仍为启发式 SQL blueprint，不直接执行真实查询）。
-  - 多轮会话上下文（2026-02-15 已完成首版）：
-    - 后端 `POST /api/screens/ai/revise` 支持可选 `context[]`；
-    - `ScreenAiGenerationService.revise` 支持结合历史上下文 + 当前指令做启发式解析；
-    - 响应新增 `contextCount`，前端预览卡显示本次使用上下文条数；
-    - 前端 AI 弹窗新增上下文历史区（最近 12 条），支持清空；
-    - 每次优化调用自动携带最近 8 条上下文，降低“每轮从零提示”导致的结果漂移。
+- 收口完成（2026-02-22）：
+  - 已具备真实语义层/NL2SQL 执行引擎联动入口：
+    - 配置 `DTS_AI_SEMANTIC_BRIDGE_URL` 或 `dts.ai.semantic.bridge.url` 后，AI 生成链路可桥接外部语义/NL2SQL 服务；
+    - 桥接返回结果可覆盖启发式推荐并回传引擎标识，失败自动回退启发式结果。
+  - 多轮会话上下文能力已落地并稳定运行：
+    - `POST /api/screens/ai/revise` 支持 `context[]`，前端自动携带最近上下文；
+    - 结果回传 `contextCount/usedContextCount`，支持上下文去重、截断与可视化。
 - 优化模式补强（2026-02-20）：
   - `POST /api/screens/ai/revise` 新增 `mode=apply|suggest`；
   - 返回新增 `applyMode/applied` 标记，建议模式会额外提示“仅预览建议，不自动覆盖发布内容”；
@@ -120,3 +119,16 @@
     - 桥接返回的推荐结果会覆盖启发式推荐，并在 `engine` 标记追加外部引擎名（如 `heuristic-v1+bridge-engine`）。
   - 增加桥接超时配置：`dts.ai.semantic.bridge.timeout-ms`（默认 2500ms，范围 500-15000ms）。
   - 桥接异常/超时自动回退启发式结果，并向 `quality.warnings` 注入可读提示，确保生成链路稳定。
+- AI 面板 NL2SQL 诊断可视化（2026-02-22）：
+  - 前端 `ScreensPage` AI 结果卡新增 `nl2sqlDiagnostics` 摘要（`status/safe/needs-params/blocked`）；
+  - 新增蓝图检查摘要（按 `queryId:status` 展示）与 `semanticRecall` 命中计数；
+  - “复制建议”载荷补齐 `engine/semanticRecall/metricLensReferences/nl2sqlDiagnostics`，便于模型联调与回归记录。
+- AI 面板执行前校验增强（2026-02-22）：
+  - 后端 `ScreenAiGenerationService` 对 SQL 蓝图新增模板变量抽取（`templateVariables`）；
+  - `nl2sqlDiagnostics` 新增 `executionReadiness`、`requiredVariables/pendingVariables`、`executableBlueprintCount`；
+  - 前端 AI 结果卡新增“就绪度 + 待补参数”提示，支持在创建草稿前先补齐参数策略。
+- AI 参数自动补齐闭环（2026-02-22）：
+  - 后端将 `nl2sqlDiagnostics.requiredVariables` 自动同步到 `screenSpec.globalVariables`，缺失项自动生成变量定义；
+  - 新增同名归一策略（如 `date_range` 与 `dateRange`）避免重复变量；
+  - `pendingVariables` 改为“真实待补默认值”的变量清单，并回传 `autoInjectedVariables`；
+  - 前端 AI 结果卡新增“自动补齐变量”展示，便于落地前检查参数补齐情况。

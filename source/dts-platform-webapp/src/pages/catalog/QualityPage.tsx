@@ -4,7 +4,7 @@ import { Alert, Card, Select, Space, Table, Tag } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
-import { getDatasetQuality, listDatasets } from "@/api/platformApi";
+import { getDatasetQuality, listDatasets, listQualityRuns } from "@/api/platformApi";
 
 type DatasetOption = {
 	id: string;
@@ -34,6 +34,7 @@ type QualityCase = {
 };
 
 type QualityResult = {
+	source?: "governance" | "openmetadata";
 	enabled?: boolean;
 	found?: boolean;
 	message?: string;
@@ -41,6 +42,98 @@ type QualityResult = {
 	snapshot?: {
 		summary?: QualitySummary;
 		cases?: QualityCase[];
+	};
+};
+
+type GovernanceQualityRun = {
+	id?: string;
+	ruleId?: string;
+	triggerType?: string;
+	triggerRef?: string;
+	status?: string;
+	message?: string;
+	metrics?: Array<{
+		metricKey?: string;
+		metricValue?: number | string;
+		thresholdValue?: number | string;
+		status?: string;
+		detail?: string;
+	}>;
+	startedAt?: string;
+	finishedAt?: string;
+	createdDate?: string;
+};
+
+const PASS_STATUSES = new Set(["COMPLETED", "SUCCESS", "PASSED"]);
+const FAIL_STATUSES = new Set(["FAILED", "ERROR"]);
+const ABORTED_STATUSES = new Set(["SKIPPED", "ABORTED", "CANCELED"]);
+
+const normalizeStatus = (value?: string) => String(value || "").trim().toUpperCase();
+
+const latestTime = (run: GovernanceQualityRun) => run.finishedAt || run.startedAt || run.createdDate;
+
+const toNumber = (value: unknown): number => {
+	const n = Number(value);
+	return Number.isFinite(n) ? n : 0;
+};
+
+const estimateFailedRows = (run: GovernanceQualityRun): number => {
+	const metrics = Array.isArray(run.metrics) ? run.metrics : [];
+	let failed = 0;
+	for (const metric of metrics) {
+		const key = normalizeStatus(metric?.metricKey);
+		const status = normalizeStatus(metric?.status);
+		const value = toNumber(metric?.metricValue);
+		if (status === "FAILED" || key.includes("FAILED") || key.includes("VIOLATION")) {
+			failed += value;
+		}
+	}
+	return failed;
+};
+
+const toGovernanceQuality = (runs: GovernanceQualityRun[]): QualityResult => {
+	const sorted = [...runs].sort((a, b) => {
+		const ta = Date.parse(latestTime(a) || "");
+		const tb = Date.parse(latestTime(b) || "");
+		if (Number.isNaN(ta) && Number.isNaN(tb)) return 0;
+		if (Number.isNaN(ta)) return 1;
+		if (Number.isNaN(tb)) return -1;
+		return tb - ta;
+	});
+	let passed = 0;
+	let failed = 0;
+	let aborted = 0;
+	for (const run of sorted) {
+		const status = normalizeStatus(run.status);
+		if (PASS_STATUSES.has(status)) passed += 1;
+		else if (FAIL_STATUSES.has(status)) failed += 1;
+		else if (ABORTED_STATUSES.has(status)) aborted += 1;
+	}
+	const cases: QualityCase[] = sorted.map((run) => ({
+		id: run.id,
+		name: run.ruleId ? `规则 ${run.ruleId}` : "未命名规则",
+		status: normalizeStatus(run.status) || "UNKNOWN",
+		owner: run.triggerRef || "-",
+		testSuite: run.triggerType || "-",
+		lastRunAt: latestTime(run),
+		resultValue: run.message || "-",
+		failedRows: estimateFailedRows(run),
+	}));
+	return {
+		source: "governance",
+		enabled: true,
+		found: true,
+		message: "已使用治理质量运行结果",
+		snapshot: {
+			summary: {
+				total: sorted.length,
+				passed,
+				failed,
+				aborted,
+				lastRunAt: latestTime(sorted[0]),
+			},
+			cases,
+		},
 	};
 };
 
@@ -86,11 +179,22 @@ export default function QualityPage() {
 	const loadQuality = async (id: string) => {
 		setLoading(true);
 		try {
+			const governanceRuns: any = await listQualityRuns({ datasetId: id, limit: 100 });
+			const runList = Array.isArray(governanceRuns) ? (governanceRuns as GovernanceQualityRun[]) : [];
+			if (runList.length > 0) {
+				setQuality(toGovernanceQuality(runList));
+				return;
+			}
 			const resp: any = await getDatasetQuality(id);
-			setQuality(resp || null);
+			setQuality(resp ? ({ ...resp, source: "openmetadata" } as QualityResult) : null);
 		} catch (error: any) {
-			toast.error(error?.message || "质量结果加载失败");
-			setQuality(null);
+			try {
+				const resp: any = await getDatasetQuality(id);
+				setQuality(resp ? ({ ...resp, source: "openmetadata" } as QualityResult) : null);
+			} catch (fallbackError: any) {
+				toast.error(fallbackError?.message || error?.message || "质量结果加载失败");
+				setQuality(null);
+			}
 		} finally {
 			setLoading(false);
 		}
@@ -111,7 +215,7 @@ export default function QualityPage() {
 			width: 120,
 			render: (value) => {
 				const label = String(value || "UNKNOWN").toUpperCase();
-				const color = label === "PASSED" ? "green" : label === "FAILED" ? "red" : "default";
+				const color = PASS_STATUSES.has(label) ? "green" : FAIL_STATUSES.has(label) ? "red" : "default";
 				return <Tag color={color}>{label}</Tag>;
 			},
 		},
@@ -167,6 +271,13 @@ export default function QualityPage() {
 				<Alert type="warning" message="元数据服务未启用，暂无法获取质量结果。" showIcon />
 			) : quality?.found === false ? (
 				<Alert type="info" message={quality?.message || "未找到质量结果"} showIcon />
+			) : null}
+			{quality?.found !== false ? (
+				<Alert
+					type="info"
+					showIcon
+					message={`当前数据来源：${quality?.source === "governance" ? "治理运行结果" : "OpenMetadata 快照"}`}
+				/>
 			) : null}
 
 			<Card title="质量概览">

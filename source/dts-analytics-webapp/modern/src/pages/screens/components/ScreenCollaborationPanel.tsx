@@ -304,6 +304,44 @@ export function ScreenCollaborationPanel({
         });
     };
 
+    const submitCommentStatusViaWebSocket = async (
+        commentId: string | number,
+        action: 'resolve' | 'reopen',
+        note?: string,
+    ): Promise<ScreenComment> => {
+        const socket = wsRef.current;
+        if (!socket || socket.readyState !== WebSocket.OPEN || !screenId) {
+            throw new Error('WebSocket unavailable');
+        }
+        const requestId = `ws-comment-${action}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+        const payload: Record<string, unknown> = {
+            requestId,
+            commentId,
+        };
+        if (action === 'resolve' && typeof note === 'string' && note.trim().length > 0) {
+            payload.note = note.trim();
+        }
+        return await new Promise<ScreenComment>((resolve, reject) => {
+            const timer = window.setTimeout(() => {
+                const pending = wsPendingCommentRef.current.get(requestId);
+                if (!pending) return;
+                wsPendingCommentRef.current.delete(requestId);
+                reject(new Error('WS提交超时'));
+            }, 3500);
+            wsPendingCommentRef.current.set(requestId, { resolve, reject, timer });
+            try {
+                socket.send(JSON.stringify({
+                    type: action === 'resolve' ? 'comment.resolve' : 'comment.reopen',
+                    payload,
+                }));
+            } catch (error) {
+                window.clearTimeout(timer);
+                wsPendingCommentRef.current.delete(requestId);
+                reject(error instanceof Error ? error : new Error('WS发送失败'));
+            }
+        });
+    };
+
     useEffect(() => {
         commentCursorRef.current = commentCursor;
     }, [commentCursor]);
@@ -456,6 +494,21 @@ export function ScreenCollaborationPanel({
                         window.clearTimeout(pending.timer);
                         wsPendingCommentRef.current.delete(requestId);
                         pending.resolve(row);
+                    }
+                    return;
+                }
+                if (parsed.event === 'comment-updated') {
+                    const requestId = String(parsed.payload?.requestId || '').trim();
+                    const pending = requestId ? wsPendingCommentRef.current.get(requestId) : undefined;
+                    const row = parsed.payload as ScreenComment | undefined;
+                    if (pending && row) {
+                        window.clearTimeout(pending.timer);
+                        wsPendingCommentRef.current.delete(requestId);
+                        pending.resolve(row);
+                    }
+                    if (row && row.id !== undefined && row.id !== null) {
+                        setRows((prev) => mergeCommentRows(prev, [row]));
+                        setCommentCursor((prev) => computeNextCursor(prev, [row], 0));
                     }
                     return;
                 }
@@ -1103,7 +1156,16 @@ export function ScreenCollaborationPanel({
                                                     if (!screenId) return;
                                                     setError(null);
                                                     try {
-                                                        const updated = await analyticsApi.reopenScreenComment(screenId, row.id);
+                                                        let updated: ScreenComment;
+                                                        if (wsRefresh && wsConnected) {
+                                                            try {
+                                                                updated = await submitCommentStatusViaWebSocket(row.id, 'reopen');
+                                                            } catch {
+                                                                updated = await analyticsApi.reopenScreenComment(screenId, row.id);
+                                                            }
+                                                        } else {
+                                                            updated = await analyticsApi.reopenScreenComment(screenId, row.id);
+                                                        }
                                                         setRows((prev) => prev.map((item) => item.id === row.id ? updated : item));
                                                         setCommentCursor((prev) => computeNextCursor(prev, [updated], 0));
                                                         await refreshDriftHint(false);
@@ -1123,7 +1185,16 @@ export function ScreenCollaborationPanel({
                                                     const note = (window.prompt('处理备注（可选）', '') || '').trim();
                                                     setError(null);
                                                     try {
-                                                        const updated = await analyticsApi.resolveScreenComment(screenId, row.id, { note });
+                                                        let updated: ScreenComment;
+                                                        if (wsRefresh && wsConnected) {
+                                                            try {
+                                                                updated = await submitCommentStatusViaWebSocket(row.id, 'resolve', note);
+                                                            } catch {
+                                                                updated = await analyticsApi.resolveScreenComment(screenId, row.id, { note });
+                                                            }
+                                                        } else {
+                                                            updated = await analyticsApi.resolveScreenComment(screenId, row.id, { note });
+                                                        }
                                                         setRows((prev) => prev.map((item) => item.id === row.id ? updated : item));
                                                         setCommentCursor((prev) => computeNextCursor(prev, [updated], 0));
                                                         await refreshDriftHint(false);

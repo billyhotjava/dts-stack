@@ -1,6 +1,6 @@
 # P0-07 NL2SQL 安全校验与自修复重试链路
 
-`status`: `in-progress`  
+`status`: `done`  
 `priority`: `P0`  
 `inspiration`: `只读 SQL 护栏 + 自动纠错重试`
 
@@ -35,6 +35,14 @@
 - [x] 执行链路接入 native SQL 自动纠错重试（默认 1 次，语法型错误触发）。
 - [x] 自动纠错策略已扩展（覆盖全角标点、重复逗号、括号前多余逗号、更多子句前逗号场景）。
 - [x] 前端已接入 `SQL_*` / `DB_*` 错误码的人话提示（ErrorNotice/数据源/查询页）。
+- [x] AI 侧 `nl2sqlDiagnostics` 新增执行就绪度字段：
+  - 输出 `executionReadiness(ready/needs-params/blocked)`；
+  - 输出 `requiredVariables/pendingVariables` 与计数；
+  - 蓝图检查新增 `templateVariables`，可直接提示“待补参数名”。
+- [x] AI 生成结果自动补齐模板变量到大屏配置：
+  - `requiredVariables` 自动并入 `screenSpec.globalVariables`（缺失时自动创建）；
+  - `pendingVariables` 按变量默认值实时计算，避免“全量必填”误报；
+  - 新增 `autoInjectedVariables/autoInjectedVariableCount` 便于联调与审计。
 
 ## 验收标准
 

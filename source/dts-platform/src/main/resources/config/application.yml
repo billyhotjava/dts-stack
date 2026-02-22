@@ -371,6 +371,7 @@ dts:
         retry-count: ${DTS_GOVERNANCE_QUALITY_RETRY:1}
         timeout: ${DTS_GOVERNANCE_QUALITY_TIMEOUT:PT10M}
         auto-generate-ticket: ${DTS_GOVERNANCE_QUALITY_AUTOTICKET:true}
+        task-scheduler-delay-ms: ${DTS_GOVERNANCE_QUALITY_TASK_SCHEDULER_DELAY_MS:60000}
       compliance:
         enabled: ${DTS_GOVERNANCE_COMPLIANCE_ENABLED:true}
         evidence-required-default: ${DTS_GOVERNANCE_COMPLIANCE_EVIDENCE:true}

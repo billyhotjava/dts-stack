@@ -1,6 +1,6 @@
 import { Link, useParams } from "react-router";
 import { useEffect, useMemo, useState } from "react";
-import { analyticsApi, type CardDetail, type CardQueryResponse } from "../api/analyticsApi";
+import { analyticsApi, type CardDetail, type CardQueryResponse, type ExplainabilityResponse } from "../api/analyticsApi";
 import { ChartRenderer, type VisualizationType, type VisualizationSettings } from "../components/charts";
 import { PageContainer, PageHeader } from "../components/PageContainer/PageContainer";
 import { ErrorNotice } from "../components/ErrorNotice";
@@ -23,6 +23,7 @@ export default function CardDetailPage() {
 	const locale: Locale = useMemo(() => getEffectiveLocale(), []);
 	const [state, setState] = useState<LoadState<CardDetail>>({ state: "loading" });
 	const [queryState, setQueryState] = useState<LoadState<CardQueryResponse> | null>(null);
+	const [explainState, setExplainState] = useState<LoadState<ExplainabilityResponse> | null>(null);
 	const [showRaw, setShowRaw] = useState(false);
 	const [shareUuid, setShareUuid] = useState<string>("");
 	const [shareBusy, setShareBusy] = useState(false);
@@ -95,6 +96,17 @@ export default function CardDetailPage() {
 		</svg>
 	);
 
+	const explain = async () => {
+		if (!id) return;
+		setExplainState({ state: "loading" });
+		try {
+			const value = await analyticsApi.explainCard(id, {});
+			setExplainState({ state: "loaded", value });
+		} catch (e) {
+			setExplainState({ state: "error", error: e });
+		}
+	};
+
 	return (
 		<PageContainer>
 			{state.state === "loading" && (
@@ -133,6 +145,9 @@ export default function CardDetailPage() {
 										{t(locale, "questions.edit")}
 									</Button>
 								</Link>
+								<Button variant="tertiary" onClick={explain} loading={explainState?.state === "loading"}>
+									Explain
+								</Button>
 							</>
 						}
 					/>
@@ -183,6 +198,39 @@ export default function CardDetailPage() {
 							{JSON.stringify(state.value, null, 2)}
 						</pre>
 					</CollapsibleCard>
+
+					{explainState?.state === "error" && (
+						<Card style={{ marginBottom: "var(--spacing-lg)" }}>
+							<CardBody>
+								<ErrorNotice locale={locale} error={explainState.error} />
+							</CardBody>
+						</Card>
+					)}
+
+					{explainState?.state === "loaded" && (
+						<Card style={{ marginBottom: "var(--spacing-lg)" }}>
+							<CardHeader
+								title="Explainability"
+								action={
+									<Button
+										variant="tertiary"
+										size="sm"
+										onClick={() => {
+											const text = explainState.value.copyJson ?? JSON.stringify(explainState.value.explainCard ?? {}, null, 2);
+											void writeTextToClipboard(text);
+										}}
+									>
+										Copy JSON
+									</Button>
+								}
+							/>
+							<CardBody>
+								<pre style={{ whiteSpace: "pre-wrap", margin: 0, padding: "var(--spacing-sm)", background: "var(--color-bg-tertiary)", borderRadius: "var(--radius-sm)", fontSize: 12 }}>
+									{JSON.stringify(explainState.value.explainCard ?? {}, null, 2)}
+								</pre>
+							</CardBody>
+						</Card>
+					)}
 
 					<Card>
 						<CardHeader

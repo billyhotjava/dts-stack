@@ -22,6 +22,12 @@ public class SystemConfig extends AbstractAuditingEntity<Long> implements Serial
         JSON
     }
 
+    public enum ConfigScope {
+        RUNTIME,
+        RUNTIME_RESTART,
+        BOOTSTRAP
+    }
+
     @Id
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "sequenceGenerator")
     @SequenceGenerator(name = "sequenceGenerator")
@@ -56,6 +62,19 @@ public class SystemConfig extends AbstractAuditingEntity<Long> implements Serial
     @Column(name = "display_name")
     private String displayName;
 
+    @Column(name = "config_scope", nullable = false)
+    @Enumerated(EnumType.STRING)
+    private ConfigScope configScope = ConfigScope.RUNTIME;
+
+    @Column(name = "restart_required", nullable = false)
+    private boolean restartRequired = false;
+
+    @Column(name = "validation_rule")
+    private String validationRule;
+
+    @Column(name = "owner")
+    private String owner;
+
     @Override
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
@@ -77,5 +96,12 @@ public class SystemConfig extends AbstractAuditingEntity<Long> implements Serial
     public void setSortOrder(int sortOrder) { this.sortOrder = sortOrder; }
     public String getDisplayName() { return displayName; }
     public void setDisplayName(String displayName) { this.displayName = displayName; }
+    public ConfigScope getConfigScope() { return configScope; }
+    public void setConfigScope(ConfigScope configScope) { this.configScope = configScope; }
+    public boolean isRestartRequired() { return restartRequired; }
+    public void setRestartRequired(boolean restartRequired) { this.restartRequired = restartRequired; }
+    public String getValidationRule() { return validationRule; }
+    public void setValidationRule(String validationRule) { this.validationRule = validationRule; }
+    public String getOwner() { return owner; }
+    public void setOwner(String owner) { this.owner = owner; }
 }
-

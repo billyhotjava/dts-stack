@@ -1,6 +1,6 @@
 # P1-07 自助分析会话（Explore Session）
 
-`status`: `planned`  
+`status`: `done`  
 `priority`: `P1`  
 `inspiration`: `Hetu(分析闭环) + Superset Explore(探索路径) + Metabase(提问历史)`
 
@@ -55,3 +55,24 @@
 - `P1-02-global-filter-interaction-engine.md`
 - `P1-06-analysis-explainability-layer.md`
 
+## 实现记录（2026-02-22）
+
+- 新增 `ExploreSession` 数据模型（问题、步骤、结论、标签、归档、项目/部门维度）：
+  - 数据表：`analytics_explore_session`
+  - 代码：`source/dts-analytics/src/main/resources/config/liquibase/changelog/0032_explore_sessions.xml`、`source/dts-analytics/src/main/java/com/yuzhi/dts/analytics/domain/AnalyticsExploreSession.java`。
+- 新增会话 API：
+  - CRUD、步骤追加、步骤重放、归档、复制、公共链接创建/删除/访问。
+  - 代码：`source/dts-analytics/src/main/java/com/yuzhi/dts/analytics/service/ExploreSessionService.java`、`source/dts-analytics/src/main/java/com/yuzhi/dts/analytics/web/rest/ExploreSessionResource.java`。
+- 前端 SDK 已接入：
+  - `list/create/update/append/replay/archive/clone/public-link` 全量方法。
+  - 代码：`source/dts-analytics-webapp/modern/src/api/analyticsApi.ts`。
+- 前端会话中心已落地（2026-02-22）：
+  - 新增页面：`source/dts-analytics-webapp/modern/src/pages/ExploreSessionsPage.tsx`；
+  - 新增路由：`/analytics/explore-sessions`；
+  - 新增导航入口：侧边栏“分析会话”；
+  - 能力覆盖：会话创建、列表筛选（含归档）、步骤追加、步骤重放、结论更新、复制、归档、公共分享链接复制。
+- 大屏设计器一键沉淀会话（2026-02-22）：
+  - `ScreenHeader` 设计菜单新增“沉淀会话”动作；
+  - 按当前大屏快照自动生成会话步骤（屏幕元信息 + 关键组件概览）；
+  - 可选跳转到会话中心继续复盘；
+  - 代码：`source/dts-analytics-webapp/modern/src/pages/screens/components/ScreenHeader.tsx`。

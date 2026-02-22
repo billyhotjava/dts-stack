@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { useScreen } from '../ScreenContext';
 import type { CardParameterBinding, ComponentInteractionMapping, ComponentType, DataSourceConfig, DrillLevel, QuerySourceType, ScreenComponent, ScreenGlobalVariable } from '../types';
 import { DRILLABLE_TYPES } from '../types';
@@ -10,6 +11,13 @@ import { readComponentPluginMeta, resolveRuntimePluginId } from '../plugins/runt
 import { useScreenPluginRuntime } from '../plugins/useScreenPluginRuntime';
 import type { PropertySchemaField } from '../plugins/types';
 import { wouldCreateParentCycle } from '../componentHierarchy';
+import { analyticsApi, type ExplainabilityResponse } from '../../../api/analyticsApi';
+import { writeTextToClipboard } from '../../../hooks/clipboard';
+
+type ExplainState =
+    | { state: 'loading' }
+    | { state: 'loaded'; value: ExplainabilityResponse }
+    | { state: 'error'; error: unknown };
 
 const DEFAULT_SERIES_COLORS = [
     '#3b82f6',
@@ -94,11 +102,16 @@ export function PropertyPanel() {
     const { state, updateComponent, updateConfig, updateSelectedComponents } = useScreen();
     const { config, selectedIds } = state;
     useScreenPluginRuntime();
+    const [explainState, setExplainState] = useState<ExplainState | null>(null);
 
     const selectedComponents = config.components.filter((c) => selectedIds.includes(c.id));
     const selectedComponent = selectedIds.length === 1
         ? config.components.find((c) => c.id === selectedIds[0])
         : null;
+
+    useEffect(() => {
+        setExplainState(null);
+    }, [selectedComponent?.id]);
 
     if (selectedComponents.length === 0) {
         return (
@@ -279,6 +292,21 @@ export function PropertyPanel() {
 
     const pluginMeta = readComponentPluginMeta(selectedComponent.config);
     const runtimePlugin = pluginMeta ? getRendererPlugin(resolveRuntimePluginId(pluginMeta)) : undefined;
+    const explainCardId = resolveExplainCardId(selectedComponent);
+    const canExplain = Number.isFinite(explainCardId) && (explainCardId ?? 0) > 0;
+
+    const handleExplain = async () => {
+        if (!canExplain || !explainCardId) {
+            return;
+        }
+        setExplainState({ state: 'loading' });
+        try {
+            const value = await analyticsApi.explainCard(explainCardId, { componentId: selectedComponent.id });
+            setExplainState({ state: 'loaded', value });
+        } catch (error) {
+            setExplainState({ state: 'error', error });
+        }
+    };
 
     return (
         <div className="property-panel">
@@ -349,6 +377,65 @@ export function PropertyPanel() {
                 <div className="property-section">
                     <div className="property-section-title">数据源</div>
                     {renderDataSourceConfig(selectedComponent, updateComponent, config.globalVariables ?? [])}
+                </div>
+
+                <div className="property-section">
+                    <div className="property-section-title">解释</div>
+                    {canExplain ? (
+                        <div style={{ display: 'grid', gap: 8 }}>
+                            <button
+                                type="button"
+                                className="property-btn-small"
+                                onClick={() => { void handleExplain(); }}
+                            >
+                                解释当前组件
+                            </button>
+                            <div style={{ fontSize: 11, color: '#94a3b8', lineHeight: 1.45 }}>
+                                解释来源 CardId: {explainCardId}
+                            </div>
+                            {explainState?.state === 'loading' ? (
+                                <div style={{ fontSize: 12, color: '#94a3b8' }}>解释生成中...</div>
+                            ) : null}
+                            {explainState?.state === 'error' ? (
+                                <div style={{ fontSize: 12, color: '#ef4444' }}>
+                                    解释失败：{explainState.error instanceof Error ? explainState.error.message : 'unknown error'}
+                                </div>
+                            ) : null}
+                            {explainState?.state === 'loaded' ? (
+                                <>
+                                    <button
+                                        type="button"
+                                        className="property-btn-small"
+                                        onClick={() => {
+                                            const text = explainState.value.copyJson ?? JSON.stringify(explainState.value.explainCard ?? {}, null, 2);
+                                            void writeTextToClipboard(text);
+                                        }}
+                                    >
+                                        复制解释JSON
+                                    </button>
+                                    <pre
+                                        style={{
+                                            margin: 0,
+                                            padding: 8,
+                                            borderRadius: 8,
+                                            background: 'rgba(15,23,42,0.6)',
+                                            whiteSpace: 'pre-wrap',
+                                            wordBreak: 'break-word',
+                                            fontSize: 11,
+                                            maxHeight: 240,
+                                            overflow: 'auto',
+                                        }}
+                                    >
+                                        {JSON.stringify(explainState.value.explainCard ?? {}, null, 2)}
+                                    </pre>
+                                </>
+                            ) : null}
+                        </div>
+                    ) : (
+                        <div style={{ fontSize: 11, color: '#94a3b8', lineHeight: 1.45 }}>
+                            当前组件未绑定可解释的 Card 数据源。
+                        </div>
+                    )}
                 </div>
 
                 {/* Drill-down config */}
@@ -790,6 +877,131 @@ function renderComponentConfig(
         );
     };
 
+    const renderLegendLayoutRows = () => (
+        <>
+            <div className="property-row">
+                <label className="property-label">图例方向</label>
+                <select
+                    className="property-input"
+                    value={(config.legendOrient as string) || 'auto'}
+                    onChange={(e) => onChange('legendOrient', e.target.value)}
+                >
+                    <option value="auto">自动</option>
+                    <option value="horizontal">横向</option>
+                    <option value="vertical">纵向</option>
+                </select>
+            </div>
+            <div className="property-row">
+                <label className="property-label">图例间距</label>
+                <input
+                    type="number"
+                    className="property-input"
+                    min={0}
+                    max={60}
+                    value={(config.legendItemGap as number) || 12}
+                    onChange={(e) => onChange('legendItemGap', Number(e.target.value))}
+                />
+            </div>
+        </>
+    );
+
+    const renderChartPaddingRows = () => (
+        <>
+            <div style={{ fontSize: 11, color: '#888', marginTop: 8, marginBottom: 4 }}>
+                图形留白(像素)
+            </div>
+            <div className="property-row">
+                <label className="property-label">上留白</label>
+                <input
+                    type="number"
+                    className="property-input"
+                    min={0}
+                    max={300}
+                    value={(config.chartPaddingTop as number) || 0}
+                    onChange={(e) => onChange('chartPaddingTop', Number(e.target.value))}
+                    placeholder="0=自动"
+                />
+            </div>
+            <div className="property-row">
+                <label className="property-label">右留白</label>
+                <input
+                    type="number"
+                    className="property-input"
+                    min={0}
+                    max={300}
+                    value={(config.chartPaddingRight as number) || 0}
+                    onChange={(e) => onChange('chartPaddingRight', Number(e.target.value))}
+                    placeholder="0=自动"
+                />
+            </div>
+            <div className="property-row">
+                <label className="property-label">下留白</label>
+                <input
+                    type="number"
+                    className="property-input"
+                    min={0}
+                    max={300}
+                    value={(config.chartPaddingBottom as number) || 0}
+                    onChange={(e) => onChange('chartPaddingBottom', Number(e.target.value))}
+                    placeholder="0=自动"
+                />
+            </div>
+            <div className="property-row">
+                <label className="property-label">左留白</label>
+                <input
+                    type="number"
+                    className="property-input"
+                    min={0}
+                    max={300}
+                    value={(config.chartPaddingLeft as number) || 0}
+                    onChange={(e) => onChange('chartPaddingLeft', Number(e.target.value))}
+                    placeholder="0=自动"
+                />
+            </div>
+        </>
+    );
+
+    const renderChartOffsetRows = () => (
+        <>
+            <div style={{ fontSize: 11, color: '#888', marginTop: 8, marginBottom: 4 }}>
+                图形位置微调
+            </div>
+            <div className="property-row">
+                <label className="property-label">水平偏移</label>
+                <input
+                    type="number"
+                    className="property-input"
+                    min={-400}
+                    max={400}
+                    value={(config.chartOffsetX as number) || 0}
+                    onChange={(e) => onChange('chartOffsetX', Number(e.target.value))}
+                />
+            </div>
+            <div className="property-row">
+                <label className="property-label">垂直偏移</label>
+                <input
+                    type="number"
+                    className="property-input"
+                    min={-400}
+                    max={400}
+                    value={(config.chartOffsetY as number) || 0}
+                    onChange={(e) => onChange('chartOffsetY', Number(e.target.value))}
+                />
+            </div>
+            <div className="property-row">
+                <label className="property-label">图形缩放(%)</label>
+                <input
+                    type="number"
+                    className="property-input"
+                    min={40}
+                    max={180}
+                    value={(config.chartScalePercent as number) || 100}
+                    onChange={(e) => onChange('chartScalePercent', Number(e.target.value))}
+                />
+            </div>
+        </>
+    );
+
     switch (type) {
         case 'line-chart':
         case 'bar-chart':
@@ -850,6 +1062,8 @@ function renderComponentConfig(
                             <option value="right">右侧</option>
                         </select>
                     </div>
+                    {renderLegendLayoutRows()}
+                    {renderChartPaddingRows()}
                     {renderSeriesColorRows(
                         ((config.series as Array<{ name?: string }> | undefined) || [])
                             .map((item, idx) => (item?.name || '').trim() || `系列${idx + 1}`),
@@ -909,6 +1123,9 @@ function renderComponentConfig(
                                     <option value="right">右侧</option>
                                 </select>
                             </div>
+                            {renderLegendLayoutRows()}
+                            {renderChartPaddingRows()}
+                            {renderChartOffsetRows()}
                             {renderSeriesColorRows(
                                 ((config.data as Array<{ name?: string }> | undefined) || [])
                                     .map((item, idx) => (item?.name || '').trim() || `系列${idx + 1}`),
@@ -1917,6 +2134,8 @@ function renderComponentConfig(
                             <option value="right">右侧</option>
                         </select>
                     </div>
+                    {renderLegendLayoutRows()}
+                    {renderChartPaddingRows()}
                     {renderSeriesColorRows(['散点系列'])}
                 </>
             );
@@ -2757,6 +2976,20 @@ function resolveDataSourceType(ds?: DataSourceConfig): 'static' | QuerySourceTyp
         return type;
     }
     return 'static';
+}
+
+function resolveExplainCardId(component: ScreenComponent): number | undefined {
+    const ds = component.dataSource as DataSourceConfig | undefined;
+    const dsType = resolveDataSourceType(ds);
+    if (dsType === 'card') {
+        const id = Number(ds?.cardConfig?.cardId ?? 0);
+        return Number.isFinite(id) && id > 0 ? id : undefined;
+    }
+    if (dsType === 'metric') {
+        const id = Number(ds?.metricConfig?.cardId ?? 0);
+        return Number.isFinite(id) && id > 0 ? id : undefined;
+    }
+    return undefined;
 }
 
 function resolveSqlConfig(ds?: DataSourceConfig): DataSourceConfig['sqlConfig'] | DataSourceConfig['databaseConfig'] | undefined {

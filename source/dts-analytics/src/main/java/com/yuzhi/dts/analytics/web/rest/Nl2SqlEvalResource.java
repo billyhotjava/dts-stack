@@ -3,6 +3,7 @@ package com.yuzhi.dts.analytics.web.rest;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.yuzhi.dts.analytics.service.AnalyticsSessionService;
 import com.yuzhi.dts.analytics.service.Nl2SqlEvalService;
+import com.yuzhi.dts.analytics.service.Nl2SqlEvalRunService;
 import com.yuzhi.dts.analytics.web.support.MetabaseAuth;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.ArrayList;
@@ -26,12 +27,15 @@ public class Nl2SqlEvalResource {
 
     private final AnalyticsSessionService sessionService;
     private final Nl2SqlEvalService nl2SqlEvalService;
+    private final Nl2SqlEvalRunService nl2SqlEvalRunService;
 
     public Nl2SqlEvalResource(
             AnalyticsSessionService sessionService,
-            Nl2SqlEvalService nl2SqlEvalService) {
+            Nl2SqlEvalService nl2SqlEvalService,
+            Nl2SqlEvalRunService nl2SqlEvalRunService) {
         this.sessionService = sessionService;
         this.nl2SqlEvalService = nl2SqlEvalService;
+        this.nl2SqlEvalRunService = nl2SqlEvalRunService;
     }
 
     @GetMapping(path = "/cases", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -88,6 +92,45 @@ public class Nl2SqlEvalResource {
         int limit = body == null ? 200 : body.path("limit").asInt(200);
         List<Long> caseIds = extractCaseIds(body == null ? null : body.path("caseIds"));
         return ResponseEntity.ok(nl2SqlEvalService.runEvaluation(caseIds, enabledOnly, limit));
+    }
+
+    @PostMapping(path = "/run-gated", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> runEvaluationWithGate(
+            @RequestBody(required = false) JsonNode body, HttpServletRequest request) {
+        Optional<ResponseEntity<String>> auth = MetabaseAuth.requireSuperuser(sessionService, request);
+        if (auth.isPresent()) {
+            return auth.get();
+        }
+
+        boolean enabledOnly = body == null || body.path("enabledOnly").asBoolean(true);
+        int limit = body == null ? 200 : body.path("limit").asInt(200);
+        List<Long> caseIds = extractCaseIds(body == null ? null : body.path("caseIds"));
+        JsonNode version = body == null ? null : body.path("version");
+        JsonNode gate = body == null ? null : body.path("gate");
+        return ResponseEntity.ok(nl2SqlEvalRunService.runWithGate(caseIds, enabledOnly, limit, version, gate));
+    }
+
+    @GetMapping(path = "/runs", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> listRuns(
+            @RequestParam(name = "limit", required = false, defaultValue = "20") int limit,
+            HttpServletRequest request) {
+        Optional<ResponseEntity<String>> auth = MetabaseAuth.requireSuperuser(sessionService, request);
+        if (auth.isPresent()) {
+            return auth.get();
+        }
+        return ResponseEntity.ok(nl2SqlEvalRunService.listRuns(limit));
+    }
+
+    @GetMapping(path = "/compare", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> compareRuns(
+            @RequestParam(name = "baselineRunId") long baselineRunId,
+            @RequestParam(name = "candidateRunId") long candidateRunId,
+            HttpServletRequest request) {
+        Optional<ResponseEntity<String>> auth = MetabaseAuth.requireSuperuser(sessionService, request);
+        if (auth.isPresent()) {
+            return auth.get();
+        }
+        return ResponseEntity.ok(nl2SqlEvalRunService.compareRuns(baselineRunId, candidateRunId));
     }
 
     private List<Long> extractCaseIds(JsonNode node) {

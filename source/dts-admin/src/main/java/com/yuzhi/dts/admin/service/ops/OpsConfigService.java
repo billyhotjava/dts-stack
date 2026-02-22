@@ -1,5 +1,6 @@
 package com.yuzhi.dts.admin.service.ops;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.admin.domain.SystemConfig;
 import com.yuzhi.dts.admin.repository.SystemConfigRepository;
 import com.yuzhi.dts.admin.security.SecurityUtils;
@@ -12,7 +13,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -33,25 +33,27 @@ public class OpsConfigService {
 
     private static final Logger log = LoggerFactory.getLogger(OpsConfigService.class);
 
-    /** 敏感配置键名模式（包含这些关键字的视为敏感） */
-    private static final Set<String> SENSITIVE_KEY_PATTERNS = Set.of(
-        "password", "secret", "token", "key", "credential", "auth"
-    );
-
     private static final Pattern SENSITIVE_PATTERN = Pattern.compile(
         ".*(password|secret|token|key|credential|auth).*",
         Pattern.CASE_INSENSITIVE
     );
+    private static final String MASKED_SECRET = "******";
 
     private final SystemConfigRepository configRepository;
     private final AuditV2Service auditV2Service;
+    private final ObjectMapper objectMapper;
+    private final OpsConfigGroupingService groupingService;
 
     public OpsConfigService(
         SystemConfigRepository configRepository,
-        AuditV2Service auditV2Service
+        AuditV2Service auditV2Service,
+        ObjectMapper objectMapper,
+        OpsConfigGroupingService groupingService
     ) {
         this.configRepository = configRepository;
         this.auditV2Service = auditV2Service;
+        this.objectMapper = objectMapper;
+        this.groupingService = groupingService;
     }
 
     /**
@@ -61,21 +63,12 @@ public class OpsConfigService {
         List<SystemConfig> configs = configRepository.findAll();
         Map<String, List<OpsConfigView>> result = new LinkedHashMap<>();
 
-        // 定义分类顺序和中文名
-        Map<String, String> categoryNames = Map.of(
-            "FEATURE_TOGGLE", "功能开关",
-            "SECURITY", "安全配置",
-            "DATABASE", "数据库配置",
-            "INTEGRATION", "集成配置",
-            "SYSTEM", "系统配置"
-        );
-
         // 按分类分组
         for (String category : List.of("FEATURE_TOGGLE", "SECURITY", "DATABASE", "INTEGRATION", "SYSTEM")) {
             List<OpsConfigView> items = configs.stream()
                 .filter(c -> category.equals(c.getCategory() != null ? c.getCategory().name() : "SYSTEM"))
-                .sorted(Comparator.comparingInt(SystemConfig::getSortOrder))
                 .map(this::toView)
+                .sorted(Comparator.comparingInt(OpsConfigView::groupOrder).thenComparingInt(OpsConfigView::sortOrder).thenComparing(OpsConfigView::key))
                 .toList();
             if (!items.isEmpty()) {
                 result.put(category, items);
@@ -91,8 +84,8 @@ public class OpsConfigService {
     public List<OpsConfigView> getFeatureToggles() {
         return configRepository.findAll().stream()
             .filter(c -> c.getCategory() == SystemConfig.Category.FEATURE_TOGGLE)
-            .sorted(Comparator.comparingInt(SystemConfig::getSortOrder))
             .map(this::toView)
+            .sorted(Comparator.comparingInt(OpsConfigView::groupOrder).thenComparingInt(OpsConfigView::sortOrder).thenComparing(OpsConfigView::key))
             .toList();
     }
 
@@ -115,8 +108,13 @@ public class OpsConfigService {
         if (!config.isEditable()) {
             throw new IllegalStateException("该配置项不可编辑: " + key);
         }
+        ensureMutable(config, key);
+        validateValue(config, newValue);
 
         String oldValue = config.getValue();
+        if ((config.isSensitive() || isSensitiveKey(config.getKey())) && MASKED_SECRET.equals(newValue)) {
+            return toView(config);
+        }
         config.setValue(newValue);
         configRepository.save(config);
 
@@ -139,6 +137,7 @@ public class OpsConfigService {
         if (!config.isEditable()) {
             throw new IllegalStateException("该配置项不可编辑: " + key);
         }
+        ensureMutable(config, key);
 
         String oldValue = config.getValue();
         String newValue = String.valueOf(enabled);
@@ -161,6 +160,7 @@ public class OpsConfigService {
         String maskedValue = config.isSensitive() || isSensitiveKey(config.getKey())
             ? maskValue(config.getValue())
             : config.getValue();
+        OpsConfigGroupingService.GroupMeta groupMeta = groupingService.resolve(config);
 
         return new OpsConfigView(
             config.getId(),
@@ -173,9 +173,92 @@ public class OpsConfigService {
             config.isEditable(),
             config.getSortOrder(),
             config.getDisplayName(),
+            config.getConfigScope() != null ? config.getConfigScope().name() : SystemConfig.ConfigScope.RUNTIME.name(),
+            config.isRestartRequired(),
+            config.getValidationRule(),
+            config.getOwner(),
+            groupMeta.groupKey(),
+            groupMeta.groupLabel(),
+            groupMeta.groupOrder(),
             config.getLastModifiedDate(),
             config.getLastModifiedBy()
         );
+    }
+
+    private void ensureMutable(SystemConfig config, String key) {
+        if (config.getConfigScope() == SystemConfig.ConfigScope.BOOTSTRAP) {
+            throw new IllegalStateException("该配置项属于启动期参数，请在 .env/compose 中维护: " + key);
+        }
+    }
+
+    private void validateValue(SystemConfig config, String newValue) {
+        if (!StringUtils.hasText(newValue)) {
+            return;
+        }
+        switch (config.getDataType() != null ? config.getDataType() : SystemConfig.DataType.STRING) {
+            case BOOLEAN -> {
+                String normalized = newValue.trim().toLowerCase();
+                if (!("true".equals(normalized) || "false".equals(normalized) || "1".equals(normalized) || "0".equals(normalized))) {
+                    throw new IllegalArgumentException("布尔配置仅支持 true/false/1/0");
+                }
+            }
+            case INTEGER -> {
+                try {
+                    Integer.parseInt(newValue.trim());
+                } catch (NumberFormatException ex) {
+                    throw new IllegalArgumentException("整数配置仅支持有效数字");
+                }
+            }
+            case JSON -> {
+                try {
+                    objectMapper.readTree(newValue);
+                } catch (Exception ex) {
+                    throw new IllegalArgumentException("JSON 配置格式不合法");
+                }
+            }
+            case STRING -> {
+                // no-op
+            }
+        }
+        validateByRule(config.getValidationRule(), newValue);
+    }
+
+    private void validateByRule(String rule, String value) {
+        if (!StringUtils.hasText(rule) || value == null) {
+            return;
+        }
+        String normalizedRule = rule.trim();
+        if (normalizedRule.startsWith("regex:")) {
+            String regex = normalizedRule.substring("regex:".length()).trim();
+            if (StringUtils.hasText(regex) && !Pattern.compile(regex).matcher(value).matches()) {
+                throw new IllegalArgumentException("配置值不满足校验规则");
+            }
+            return;
+        }
+        if (normalizedRule.startsWith("enum:")) {
+            String body = normalizedRule.substring("enum:".length());
+            List<String> allowed = java.util.Arrays.stream(body.split(",")).map(String::trim).filter(StringUtils::hasText).toList();
+            if (!allowed.isEmpty() && !allowed.contains(value)) {
+                throw new IllegalArgumentException("配置值不在允许范围: " + String.join(", ", allowed));
+            }
+            return;
+        }
+        if (normalizedRule.startsWith("range:")) {
+            String body = normalizedRule.substring("range:".length());
+            String[] parts = body.split(",");
+            if (parts.length == 2) {
+                try {
+                    double min = Double.parseDouble(parts[0].trim());
+                    double max = Double.parseDouble(parts[1].trim());
+                    double current = Double.parseDouble(value.trim());
+                    if (current < min || current > max) {
+                        throw new IllegalArgumentException("配置值超出范围 [" + min + ", " + max + "]");
+                    }
+                } catch (NumberFormatException ex) {
+                    throw new IllegalArgumentException("范围校验规则配置无效");
+                }
+            }
+        }
     }
 
     /**
@@ -222,6 +305,10 @@ public class OpsConfigService {
         map.put("description", config.getDescription());
         map.put("category", config.getCategory() != null ? config.getCategory().name() : null);
         map.put("displayName", config.getDisplayName());
+        map.put("scope", config.getConfigScope() != null ? config.getConfigScope().name() : SystemConfig.ConfigScope.RUNTIME.name());
+        map.put("restartRequired", config.isRestartRequired());
+        map.put("validationRule", config.getValidationRule());
+        map.put("owner", config.getOwner());
         return map;
     }
 
@@ -238,8 +325,9 @@ public class OpsConfigService {
     ) {
         try {
             String displayName = getDisplayName(config);
-            String maskedOldValue = config.isSensitive() ? maskValue(oldValue) : oldValue;
-            String maskedNewValue = config.isSensitive() ? maskValue(newValue) : newValue;
+            boolean sensitive = config.isSensitive() || isSensitiveKey(config.getKey());
+            String maskedOldValue = sensitive ? maskValue(oldValue) : oldValue;
+            String maskedNewValue = sensitive ? maskValue(newValue) : newValue;
 
             auditV2Service.record(
                 AuditActionRequest.builder(actor, "OPS_CONFIG_UPDATE")

@@ -1,6 +1,6 @@
 # P1-08 NL2SQL 语义召回（Schema RAG + 词典）
 
-`status`: `planned`  
+`status`: `done`  
 `priority`: `P1`  
 `inspiration`: `语义层 + Schema RAG + few-shot 示例召回`
 
@@ -47,3 +47,15 @@
 - `P0-06-nl2sql-eval-feedback-loop.md`
 - `P0-07-nl2sql-safety-retry-pipeline.md`
 
+## 实现记录（2026-02-22）
+
+- 新增语义召回服务（Schema + 词典 + few-shot）：
+  - Schema 候选：基于 `analytics_table/analytics_field` 匹配评分；
+  - 词典：内置业务同义词映射；
+  - few-shot：基于 `analytics_nl2sql_eval_case` 语料相似度召回。
+  - 代码：`source/dts-analytics/src/main/java/com/yuzhi/dts/analytics/service/Nl2SqlSemanticRecallService.java`。
+- NL2SQL 生成链路已接入召回输出：
+  - 结果新增 `semanticRecall`、`metricLensReferences`；
+  - `semanticModelHints` 注入 `schemaCandidates/synonymHits/fewShotExamples`；
+  - `nl2sqlDiagnostics` 增加 `semanticRecallTrace`。
+  - 代码：`source/dts-analytics/src/main/java/com/yuzhi/dts/analytics/service/ScreenAiGenerationService.java`。

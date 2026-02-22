@@ -1281,6 +1281,80 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
         const seriesColors = Array.isArray(c.seriesColors)
             ? (c.seriesColors as string[]).filter((color) => typeof color === 'string' && color.trim().length > 0)
             : [];
+        const toNumber = (raw: unknown, fallback: number, min: number, max: number) => {
+            const parsed = Number(raw);
+            if (!Number.isFinite(parsed)) return fallback;
+            return Math.min(max, Math.max(min, parsed));
+        };
+        const readPaddingOverride = (key: 'chartPaddingTop' | 'chartPaddingRight' | 'chartPaddingBottom' | 'chartPaddingLeft') => {
+            const parsed = Number(c[key]);
+            if (!Number.isFinite(parsed) || parsed <= 0) return undefined;
+            return Math.round(Math.max(0, parsed));
+        };
+        const titleText = String(c.title ?? '').trim();
+        const hasTitle = titleText.length > 0;
+        const legendPos = String(c.legendPosition ?? 'top').trim().toLowerCase();
+        const legendPosition = legendPos === 'bottom' || legendPos === 'left' || legendPos === 'right' ? legendPos : 'top';
+        const legendOrientRaw = String(c.legendOrient ?? 'auto').trim().toLowerCase();
+        const legendOrient = legendOrientRaw === 'horizontal' || legendOrientRaw === 'vertical'
+            ? legendOrientRaw
+            : ((legendPosition === 'left' || legendPosition === 'right') ? 'vertical' : 'horizontal');
+        const legendItemGap = toNumber(c.legendItemGap, 12, 0, 80);
+        const legendConfig: Record<string, unknown> = {
+            type: c.legendScrollable === false ? 'plain' : 'scroll',
+            orient: legendOrient,
+            itemGap: legendItemGap,
+            textStyle: { color: t.textPrimary, fontSize: legendFontSize },
+            pageTextStyle: { color: t.textSecondary, fontSize: Math.max(10, legendFontSize - 1) },
+            pageIconColor: t.textSecondary,
+            pageIconInactiveColor: t.textMuted,
+            ...(legendPosition === 'bottom'
+                ? { top: 'auto', bottom: 4, left: 'center' }
+                : legendPosition === 'left'
+                    ? { left: 4, top: 'middle' }
+                    : legendPosition === 'right'
+                        ? { right: 4, top: 'middle' }
+                        : { top: 4, left: 'center' }),
+        };
+        const axisAutoPadding = {
+            left: 56 + (legendPosition === 'left' ? (legendOrient === 'vertical' ? 110 : 70) : 0),
+            right: 30 + (legendPosition === 'right' ? (legendOrient === 'vertical' ? 110 : 70) : 0),
+            top: 18 + (hasTitle ? 28 : 0) + (legendPosition === 'top' ? (legendOrient === 'vertical' ? 58 : 36) : 0),
+            bottom: 42 + (legendPosition === 'bottom' ? (legendOrient === 'vertical' ? 58 : 36) : 0),
+        };
+        const axisGrid = {
+            left: readPaddingOverride('chartPaddingLeft') ?? axisAutoPadding.left,
+            right: readPaddingOverride('chartPaddingRight') ?? axisAutoPadding.right,
+            top: readPaddingOverride('chartPaddingTop') ?? axisAutoPadding.top,
+            bottom: readPaddingOverride('chartPaddingBottom') ?? axisAutoPadding.bottom,
+            containLabel: true,
+        };
+        const visualAutoPadding = {
+            left: 12 + (legendPosition === 'left' ? (legendOrient === 'vertical' ? 90 : 50) : 0),
+            right: 12 + (legendPosition === 'right' ? (legendOrient === 'vertical' ? 90 : 50) : 0),
+            top: 12 + (hasTitle ? 28 : 0) + (legendPosition === 'top' ? (legendOrient === 'vertical' ? 52 : 32) : 0),
+            bottom: 12 + (legendPosition === 'bottom' ? (legendOrient === 'vertical' ? 52 : 32) : 0),
+        };
+        const visualPadding = {
+            left: readPaddingOverride('chartPaddingLeft') ?? visualAutoPadding.left,
+            right: readPaddingOverride('chartPaddingRight') ?? visualAutoPadding.right,
+            top: readPaddingOverride('chartPaddingTop') ?? visualAutoPadding.top,
+            bottom: readPaddingOverride('chartPaddingBottom') ?? visualAutoPadding.bottom,
+        };
+        const chartOffsetX = toNumber(c.chartOffsetX, 0, -Math.max(40, Math.round(width * 0.45)), Math.max(40, Math.round(width * 0.45)));
+        const chartOffsetY = toNumber(c.chartOffsetY, 0, -Math.max(40, Math.round(height * 0.45)), Math.max(40, Math.round(height * 0.45)));
+        const chartScale = toNumber(c.chartScalePercent, 100, 40, 180) / 100;
+        const plotWidth = Math.max(40, width - visualPadding.left - visualPadding.right);
+        const plotHeight = Math.max(40, height - visualPadding.top - visualPadding.bottom);
+        const plotCenterX = visualPadding.left + (plotWidth / 2) + chartOffsetX;
+        const plotCenterY = visualPadding.top + (plotHeight / 2) + chartOffsetY;
+        const pieOuterRadius = Math.max(20, Math.min(plotWidth, plotHeight) * 0.36 * chartScale);
+        const pieInnerRadius = Math.max(10, pieOuterRadius * 0.58);
+        const radarRadius = Math.max(20, Math.min(plotWidth, plotHeight) * 0.42 * chartScale);
+        const funnelLeft = Math.max(0, visualPadding.left + chartOffsetX);
+        const funnelRight = Math.max(0, visualPadding.right - chartOffsetX);
+        const funnelTop = Math.max(0, visualPadding.top + chartOffsetY);
+        const funnelBottom = Math.max(0, visualPadding.bottom - chartOffsetY);
         const dependencyPlaceholder = (label: string) => (
             <div style={{
                 width: '100%',
@@ -1310,16 +1384,6 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
         const ScrollRankingBoard = dataViewModule?.ScrollRankingBoard;
         const WaterLevelPond = dataViewModule?.WaterLevelPond;
         const DigitalFlop = dataViewModule?.DigitalFlop;
-
-        // Build legend config from legendPosition
-        const legendPos = c.legendPosition as string;
-        const legendConfig: Record<string, unknown> = {
-            textStyle: { color: t.textPrimary, fontSize: legendFontSize },
-            ...(legendPos === 'bottom' ? { top: 'auto', bottom: 0, left: 'center' } :
-                legendPos === 'left' ? { left: 0, top: 'middle', orient: 'vertical' } :
-                legendPos === 'right' ? { right: 0, top: 'middle', orient: 'vertical' } :
-                {}),
-        };
 
         switch (type) {
             // ==================== ECharts 图表 ====================
@@ -1356,7 +1420,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                                     ? { lineStyle: { color: seriesColors[idx] }, itemStyle: { color: seriesColors[idx] } }
                                     : {}),
                             })),
-                            grid: { left: '10%', right: '10%', bottom: '15%', top: '20%' },
+                            grid: axisGrid,
                         }}
                         onEvents={echartsClickHandler}
                     />
@@ -1400,7 +1464,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                                         },
                                 },
                             })),
-                            grid: { left: '10%', right: '10%', bottom: '15%', top: '20%' },
+                            grid: axisGrid,
                         }}
                         onEvents={echartsClickHandler}
                     />
@@ -1418,8 +1482,9 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                             tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
                             series: [{
                                 type: 'pie',
-                                radius: ['40%', '70%'],
-                                avoidLabelOverlap: false,
+                                center: [plotCenterX, plotCenterY],
+                                radius: [pieInnerRadius, pieOuterRadius],
+                                avoidLabelOverlap: true,
                                 label: {
                                     show: true,
                                     color: t.pieLabelColor,
@@ -1469,6 +1534,8 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                             legend: legendConfig,
                             radar: {
                                 indicator: c.indicator as Array<{ name: string; max: number }>,
+                                center: [plotCenterX, plotCenterY],
+                                radius: radarRadius,
                                 axisName: { color: t.radar.axisNameColor },
                                 splitLine: { lineStyle: { color: t.radar.splitLineColor } },
                                 splitArea: { areaStyle: { color: ['transparent'] } },
@@ -1493,10 +1560,10 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                             legend: legendConfig,
                             series: [{
                                 type: 'funnel',
-                                left: '10%',
-                                top: 60,
-                                bottom: 20,
-                                width: '80%',
+                                left: funnelLeft,
+                                right: funnelRight,
+                                top: funnelTop,
+                                bottom: funnelBottom,
                                 min: 0,
                                 max: 100,
                                 sort: 'descending',
@@ -1533,7 +1600,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                                 symbolSize: 10,
                                 itemStyle: { color: seriesColors[0] || t.scatterColor },
                             }],
-                            grid: { left: '10%', right: '10%', bottom: '15%', top: '20%' },
+                            grid: axisGrid,
                         }}
                         onEvents={echartsClickHandler}
                     />

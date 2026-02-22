@@ -56,7 +56,7 @@ public class GovernanceIndicatorDependencyResource {
             payload.put("users", List.of());
         }
 
-        payload.put("statusOptions", List.of("DRAFT", "PUBLISHED", "DEPRECATED"));
+        payload.put("statusOptions", List.of("DRAFT", "PUBLISHED", "ARCHIVED"));
         payload.put(
             "dataLevelOptions",
             java.util.Arrays.stream(DataLevel.values()).map(Enum::name).toList()
@@ -93,4 +93,3 @@ public class GovernanceIndicatorDependencyResource {
         return roots;
     }
 }
-

@@ -1,6 +1,6 @@
 # P1-06 分析解释层（Explainability Layer）
 
-`status`: `planned`  
+`status`: `done`  
 `priority`: `P1`  
 `inspiration`: `Hetu(问答即洞察可解释化) + Superset(查询可追踪) + DataEase(低门槛展示)`
 
@@ -55,3 +55,17 @@
 - `P1-02-global-filter-interaction-engine.md`
 - `P0-05-observability-compat-performance.md`
 
+## 实现记录（2026-02-22）
+
+- 后端新增解释服务与接口：
+  - `POST /api/explain/card/{cardId}`，输出 `metricDefinition/filterContext/dataLineage/querySummary/nextActions/trace`。
+  - 代码：`source/dts-analytics/src/main/java/com/yuzhi/dts/analytics/service/ExplainabilityService.java`、`source/dts-analytics/src/main/java/com/yuzhi/dts/analytics/web/rest/ExplainabilityResource.java`。
+- 解释卡支持复制 JSON：
+  - `copyJson` 字段在后端返回；Card 编辑页新增 `Explain` + `Copy JSON`。
+  - 代码：`source/dts-analytics-webapp/modern/src/pages/CardEditorPage.tsx`。
+- 解释入口扩展到运行与设计链路（2026-02-22）：
+  - Card 详情页新增 `Explain` 入口与结果面板；
+  - 大屏设计器属性面板新增“解释当前组件”（Card/Metric 来源）与 JSON 复制；
+  - 代码：`source/dts-analytics-webapp/modern/src/pages/CardDetailPage.tsx`、`source/dts-analytics-webapp/modern/src/pages/screens/components/PropertyPanel.tsx`。
+- 指标口径透出与 Metric Lens 快捷入口：
+  - `metricDefinition.metricLensUrl` 已输出；异常不阻断主图渲染。
