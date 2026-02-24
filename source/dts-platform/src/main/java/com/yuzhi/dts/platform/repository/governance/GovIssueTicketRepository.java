@@ -12,9 +12,12 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface GovIssueTicketRepository extends JpaRepository<GovIssueTicket, UUID>, JpaSpecificationExecutor<GovIssueTicket> {
     List<GovIssueTicket> findByStatusInOrderByCreatedDateDesc(List<String> statuses);
+    List<GovIssueTicket> findTop100ByDatasetIdOrderByCreatedDateDesc(UUID datasetId);
     List<GovIssueTicket> findByCreatedDateAfterOrderByCreatedDateAsc(Instant since);
     List<GovIssueTicket> findByAssignedTo(String assignedTo);
     long countByStatus(String status);
+    long countByDatasetId(UUID datasetId);
+    long countByDatasetIdAndStatusIn(UUID datasetId, List<String> statuses);
     long countByResolvedAtBetween(Instant from, Instant to);
     Optional<GovIssueTicket> findFirstBySourceTypeAndComplianceBatch_IdOrderByCreatedDateDesc(
         String sourceType,

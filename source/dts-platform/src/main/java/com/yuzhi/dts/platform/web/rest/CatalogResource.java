@@ -3,8 +3,12 @@ package com.yuzhi.dts.platform.web.rest;
 import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.config.CatalogFeatureProperties;
 import com.yuzhi.dts.platform.domain.catalog.*;
+import com.yuzhi.dts.platform.domain.governance.GovIssueTicket;
+import com.yuzhi.dts.platform.domain.governance.GovQualityRun;
 import com.yuzhi.dts.platform.domain.modeling.DataStandard;
 import com.yuzhi.dts.platform.repository.catalog.*;
+import com.yuzhi.dts.platform.repository.governance.GovIssueTicketRepository;
+import com.yuzhi.dts.platform.repository.governance.GovQualityRunRepository;
 import com.yuzhi.dts.platform.repository.modeling.DataStandardRepository;
 import com.yuzhi.dts.platform.repository.service.InfraDataSourceRepository;
 import com.yuzhi.dts.platform.security.AuthoritiesConstants;
@@ -19,6 +23,7 @@ import com.yuzhi.dts.platform.service.openmetadata.OpenMetadataService;
 import jakarta.validation.Valid;
 import jakarta.persistence.criteria.Predicate;
 import java.lang.reflect.Array;
+import java.time.Instant;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -43,6 +48,13 @@ public class CatalogResource {
     private static final String CATALOG_MAINTAINER_EXPRESSION =
         "hasAnyAuthority(T(com.yuzhi.dts.platform.security.AuthoritiesConstants).CATALOG_MAINTAINERS)";
     private static final Pattern STD_CODE_PATTERN = Pattern.compile("(?i)(?:\\bSTD\\b|标准)\\s*[:：]\\s*([A-Za-z0-9_\\-\\.]+)");
+    private static final List<String> CLASSIFICATION_LEVEL_ORDER = List.of("PUBLIC", "INTERNAL", "SECRET", "CONFIDENTIAL");
+    private static final Set<String> SUPPORTED_CLASSIFICATION_LEVELS = Set.copyOf(CLASSIFICATION_LEVEL_ORDER);
+    private static final List<String> ISSUE_OPEN_STATUSES = List.of("OPEN", "NEW", "IN_PROGRESS", "PROCESSING", "REOPENED");
+    private static final List<String> ISSUE_CLOSED_STATUSES = List.of("CLOSED", "RESOLVED");
+    private static final List<String> QUALITY_PASS_STATUSES = List.of("SUCCESS", "PASSED", "COMPLETED");
+    private static final List<String> QUALITY_FAIL_STATUSES = List.of("FAILED", "ERROR");
+    private static final int GOVERNANCE_TREND_DAYS = 7;
 
     private final CatalogDomainRepository domainRepo;
     private final CatalogDatasetRepository datasetRepo;
@@ -57,6 +69,8 @@ public class CatalogResource {
     private final CatalogMetadataChangeLogRepository metadataChangeLogRepo;
     private final CatalogDatasetSecurityMappingRepository datasetSecurityMappingRepo;
     private final CatalogDatasetGrantRepository grantRepo;
+    private final GovQualityRunRepository qualityRunRepo;
+    private final GovIssueTicketRepository issueTicketRepo;
     private final InfraDataSourceRepository infraDataSourceRepository;
     private final CatalogFeatureProperties catalogFeatures;
     private final OrganizationVisibilityService organizationVisibilityService;
@@ -78,6 +92,8 @@ public class CatalogResource {
         CatalogMetadataChangeLogRepository metadataChangeLogRepo,
         CatalogDatasetSecurityMappingRepository datasetSecurityMappingRepo,
         CatalogDatasetGrantRepository grantRepo,
+        GovQualityRunRepository qualityRunRepo,
+        GovIssueTicketRepository issueTicketRepo,
         InfraDataSourceRepository infraDataSourceRepository,
         CatalogFeatureProperties catalogFeatures,
         OrganizationVisibilityService organizationVisibilityService,
@@ -98,6 +114,8 @@ public class CatalogResource {
         this.metadataChangeLogRepo = metadataChangeLogRepo;
         this.datasetSecurityMappingRepo = datasetSecurityMappingRepo;
         this.grantRepo = grantRepo;
+        this.qualityRunRepo = qualityRunRepo;
+        this.issueTicketRepo = issueTicketRepo;
         this.infraDataSourceRepository = infraDataSourceRepository;
         this.catalogFeatures = catalogFeatures;
         this.organizationVisibilityService = organizationVisibilityService;
@@ -541,6 +559,44 @@ public class CatalogResource {
         auditPayload.put("count", payload.size());
         putIfHasText(auditPayload, "activeDept", effDept);
         audit.auditAction("CATALOG_ASSET_VIEW", AuditStage.SUCCESS, "batch-quality", auditPayload);
+        return ApiResponses.ok(payload);
+    }
+
+    @GetMapping("/datasets/{id}/governance-health")
+    public ApiResponse<Map<String, Object>> getDatasetGovernanceHealth(
+        @PathVariable UUID id,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        CatalogDataset dataset = datasetRepo
+            .findById(id)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "数据集不存在或无权访问"));
+        String effDept = activeDept != null ? activeDept : claim("dept_code");
+        if (!accessChecker.canRead(dataset) || !accessChecker.departmentAllowed(dataset, effDept)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "数据集不存在或无权访问");
+        }
+        Map<String, Object> payload = buildDatasetGovernanceHealth(dataset);
+        Map<String, Object> auditPayload = new LinkedHashMap<>();
+        auditPayload.put("summary", "查看资产治理健康");
+        auditPayload.put("datasetId", id.toString());
+        audit.auditAction("CATALOG_ASSET_VIEW", AuditStage.SUCCESS, id.toString(), auditPayload);
+        return ApiResponses.ok(payload);
+    }
+
+    @GetMapping("/ops/reconciliation")
+    @PreAuthorize(CATALOG_MAINTAINER_EXPRESSION)
+    public ApiResponse<Map<String, Object>> catalogReconciliation(
+        @RequestParam(name = "sampleLimit", defaultValue = "20") int sampleLimit
+    ) {
+        int safeSampleLimit = Math.max(5, Math.min(sampleLimit, 100));
+        Map<String, Object> payload = buildCatalogReconciliation(safeSampleLimit);
+        Map<String, Object> auditPayload = new LinkedHashMap<>();
+        auditPayload.put("summary", "执行资产中心一致性核对");
+        auditPayload.put("sampleLimit", safeSampleLimit);
+        Object assertionCount = payload.get("assertionCount");
+        if (assertionCount != null) {
+            auditPayload.put("assertionCount", assertionCount);
+        }
+        audit.auditAction("CATALOG_RECONCILIATION_CHECK", AuditStage.SUCCESS, "catalog", auditPayload);
         return ApiResponses.ok(payload);
     }
 
@@ -1377,9 +1433,24 @@ public class CatalogResource {
     public ApiResponse<List<CatalogClassificationMapping>> replaceMapping(
         @RequestBody List<CatalogClassificationMapping> items
     ) {
+        MappingValidationResult validation = validateClassificationMappingInternal(items);
+        if (!validation.conflicts().isEmpty()) {
+            String msg = validation
+                .conflicts()
+                .stream()
+                .map(it -> Objects.toString(it.get("message"), "映射冲突"))
+                .findFirst()
+                .orElse("分类映射存在冲突");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, msg + "（可先执行分类映射冲突预检）");
+        }
         mappingRepo.deleteAll();
-        List<CatalogClassificationMapping> saved = mappingRepo.saveAll(items);
-        audit.audit("UPDATE", "catalog.classificationMapping", "replace:" + saved.size());
+        List<CatalogClassificationMapping> saved = mappingRepo.saveAll(validation.normalizedItems());
+        Map<String, Object> auditPayload = new LinkedHashMap<>();
+        auditPayload.put("summary", "更新分类映射");
+        auditPayload.put("savedCount", saved.size());
+        auditPayload.put("warningCount", validation.warnings().size());
+        auditPayload.put("warnings", validation.warnings());
+        audit.auditAction("CATALOG_CLASSIFICATION_MAPPING_REPLACE", AuditStage.SUCCESS, "replace:" + saved.size(), auditPayload);
         return ApiResponses.ok(saved);
     }
 
@@ -1397,6 +1468,614 @@ public class CatalogResource {
         audit.audit("READ", "catalog.classificationMapping", "export");
         return ApiResponses.ok(list);
     }
+
+    @PostMapping("/classification-mapping/validate")
+    @PreAuthorize(CATALOG_MAINTAINER_EXPRESSION)
+    public ApiResponse<Map<String, Object>> validateClassificationMapping(
+        @RequestBody(required = false) List<CatalogClassificationMapping> items
+    ) {
+        MappingValidationResult validation = validateClassificationMappingInternal(items);
+        Map<String, Object> payload = toMappingValidationPayload(validation);
+        Map<String, Object> auditPayload = new LinkedHashMap<>();
+        auditPayload.put("summary", "分类映射冲突预检");
+        auditPayload.put("conflictCount", validation.conflicts().size());
+        auditPayload.put("warningCount", validation.warnings().size());
+        audit.auditAction("CATALOG_CLASSIFICATION_MAPPING_VALIDATE", AuditStage.SUCCESS, "classification-mapping", auditPayload);
+        return ApiResponses.ok(payload);
+    }
+
+    @GetMapping("/classification-masking/linkage")
+    public ApiResponse<Map<String, Object>> classificationMaskingLinkage(
+        @RequestParam(name = "datasetId", required = false) UUID datasetId,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        if (datasetId == null && !SecurityUtils.hasCurrentUserAnyOfAuthorities(AuthoritiesConstants.CATALOG_MAINTAINERS)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "仅维护角色可查看联动总览");
+        }
+        Map<String, Object> payload = datasetId != null ? buildDatasetLinkage(datasetId, activeDept) : buildLinkageSummary();
+        Map<String, Object> auditPayload = new LinkedHashMap<>();
+        auditPayload.put("summary", datasetId != null ? "查看资产密级与脱敏策略联动" : "查看密级与脱敏联动总览");
+        if (datasetId != null) {
+            auditPayload.put("datasetId", datasetId.toString());
+        }
+        audit.auditAction("CATALOG_CLASSIFICATION_MASKING_LINKAGE_VIEW", AuditStage.SUCCESS, datasetId != null ? datasetId.toString() : "summary", auditPayload);
+        return ApiResponses.ok(payload);
+    }
+
+    private MappingValidationResult validateClassificationMappingInternal(List<CatalogClassificationMapping> items) {
+        List<CatalogClassificationMapping> normalized = new ArrayList<>();
+        List<Map<String, Object>> conflicts = new ArrayList<>();
+        List<Map<String, Object>> warnings = new ArrayList<>();
+        Map<String, String> seenKeys = new LinkedHashMap<>();
+        List<CatalogClassificationMapping> safeItems = items != null ? items : List.of();
+        for (int i = 0; i < safeItems.size(); i++) {
+            CatalogClassificationMapping item = safeItems.get(i);
+            String source = trimToNull(item != null ? item.getSource() : null);
+            String sourceLevel = trimToNull(item != null ? item.getSourceLevel() : null);
+            String platformLevel = normalizeClassification(item != null ? item.getPlatformLevel() : null);
+            int rowNo = i + 1;
+
+            if (source == null || sourceLevel == null || platformLevel == null) {
+                Map<String, Object> conflict = new LinkedHashMap<>();
+                conflict.put("row", rowNo);
+                conflict.put("code", "INVALID_ROW");
+                conflict.put("message", "来源系统、来源级别、平台级别不能为空，且平台级别必须合法。");
+                conflict.put("suggestion", "请补全字段并将平台级别修正为 PUBLIC/INTERNAL/SECRET/CONFIDENTIAL。");
+                conflicts.add(conflict);
+                continue;
+            }
+            if (!SUPPORTED_CLASSIFICATION_LEVELS.contains(platformLevel)) {
+                Map<String, Object> conflict = new LinkedHashMap<>();
+                conflict.put("row", rowNo);
+                conflict.put("code", "INVALID_PLATFORM_LEVEL");
+                conflict.put("message", "平台级别不合法：" + platformLevel);
+                conflict.put("suggestion", "平台级别仅支持 PUBLIC/INTERNAL/SECRET/CONFIDENTIAL。");
+                conflicts.add(conflict);
+                continue;
+            }
+
+            String key = source.toUpperCase(Locale.ROOT) + "::" + sourceLevel.toUpperCase(Locale.ROOT);
+            if (seenKeys.containsKey(key)) {
+                Map<String, Object> conflict = new LinkedHashMap<>();
+                conflict.put("row", rowNo);
+                conflict.put("code", "DUPLICATE_MAPPING");
+                conflict.put("message", "存在重复映射键：" + source + " / " + sourceLevel);
+                conflict.put("suggestion", "请保留唯一映射并删除重复项。");
+                conflicts.add(conflict);
+                continue;
+            }
+            seenKeys.put(key, platformLevel);
+
+            CatalogClassificationMapping normalizedItem = new CatalogClassificationMapping();
+            normalizedItem.setSource(source);
+            normalizedItem.setSourceLevel(sourceLevel);
+            normalizedItem.setPlatformLevel(platformLevel);
+            normalized.add(normalizedItem);
+        }
+
+        Map<UUID, Integer> datasetRuleCount = new HashMap<>();
+        for (CatalogMaskingRule rule : maskingRepo.findAll()) {
+            UUID datasetId = rule != null && rule.getDataset() != null ? rule.getDataset().getId() : null;
+            if (datasetId != null) {
+                datasetRuleCount.merge(datasetId, 1, Integer::sum);
+            }
+        }
+        Map<String, Integer> classificationDatasetCount = new HashMap<>();
+        List<CatalogDataset> datasets = datasetRepo.findAll();
+        for (CatalogDataset dataset : datasets) {
+            String level = normalizeClassification(dataset.getClassification());
+            if (level != null) {
+                classificationDatasetCount.merge(level, 1, Integer::sum);
+            }
+            if (!requiresMasking(level) || datasetRuleCount.getOrDefault(dataset.getId(), 0) > 0) {
+                continue;
+            }
+            Map<String, Object> warning = new LinkedHashMap<>();
+            warning.put("code", "MASKING_GAP");
+            warning.put("datasetId", dataset.getId() != null ? dataset.getId().toString() : null);
+            warning.put("datasetName", dataset.getName());
+            warning.put("classification", level);
+            warning.put("message", "高密级数据集缺少脱敏规则：" + dataset.getName());
+            warning.put("suggestion", "请在“脱敏规则”中为该数据集至少配置 1 条规则。");
+            warnings.add(warning);
+        }
+
+        Set<String> mappedLevels = normalized.stream().map(CatalogClassificationMapping::getPlatformLevel).filter(Objects::nonNull).collect(java.util.stream.Collectors.toSet());
+        for (String level : mappedLevels) {
+            if (classificationDatasetCount.getOrDefault(level, 0) > 0) {
+                continue;
+            }
+            Map<String, Object> warning = new LinkedHashMap<>();
+            warning.put("code", "UNUSED_PLATFORM_LEVEL");
+            warning.put("classification", level);
+            warning.put("message", "平台级别 " + level + " 当前没有对应数据集。");
+            warning.put("suggestion", "可保留为预留映射，或移除以减少维护成本。");
+            warnings.add(warning);
+        }
+        return new MappingValidationResult(normalized, conflicts, warnings);
+    }
+
+    private Map<String, Object> toMappingValidationPayload(MappingValidationResult validation) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("valid", validation.conflicts().isEmpty());
+        payload.put("normalizedCount", validation.normalizedItems().size());
+        payload.put("conflicts", validation.conflicts());
+        payload.put("warnings", validation.warnings());
+        return payload;
+    }
+
+    private Map<String, Object> buildDatasetLinkage(UUID datasetId, String activeDept) {
+        CatalogDataset dataset = datasetRepo
+            .findById(datasetId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "数据集不存在"));
+        String effDept = activeDept != null ? activeDept : claim("dept_code");
+        if (!accessChecker.canRead(dataset) || !accessChecker.departmentAllowed(dataset, effDept)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "无权查看该数据集");
+        }
+        String classification = normalizeClassification(dataset.getClassification());
+        List<CatalogMaskingRule> rules = maskingRepo.findByDataset(dataset);
+        List<Map<String, Object>> effectiveRules = rules.stream().map(this::toMaskingRuleDto).toList();
+        List<Map<String, Object>> mappingMatches = mappingRepo
+            .findAll()
+            .stream()
+            .filter(item -> Objects.equals(normalizeClassification(item.getPlatformLevel()), classification))
+            .map(item -> {
+                Map<String, Object> row = new LinkedHashMap<>();
+                row.put("id", item.getId() != null ? item.getId().toString() : null);
+                row.put("source", trimToNull(item.getSource()));
+                row.put("sourceLevel", trimToNull(item.getSourceLevel()));
+                row.put("platformLevel", normalizeClassification(item.getPlatformLevel()));
+                return row;
+            })
+            .toList();
+        boolean requiresMasking = requiresMasking(classification);
+        boolean conflict = requiresMasking && rules.isEmpty();
+        List<String> suggestions = new ArrayList<>();
+        if (conflict) {
+            suggestions.add("当前密级要求至少 1 条脱敏规则，请在“数据治理中心 / 分级分类 -> 脱敏规则”中补齐。");
+        }
+        if (mappingMatches.isEmpty()) {
+            suggestions.add("当前密级在分类映射中无对应关系，请在“分类映射”中新增来源级别映射。");
+        }
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("datasetId", datasetId.toString());
+        payload.put("datasetName", dataset.getName());
+        payload.put("classification", classification);
+        payload.put("requiresMasking", requiresMasking);
+        payload.put("maskingRuleCount", rules.size());
+        payload.put("effectiveRules", effectiveRules);
+        payload.put("mappingMatches", mappingMatches);
+        payload.put("conflict", conflict);
+        payload.put("suggestions", suggestions);
+        return payload;
+    }
+
+    private Map<String, Object> buildLinkageSummary() {
+        List<CatalogDataset> datasets = datasetRepo.findAll();
+        List<CatalogMaskingRule> rules = maskingRepo.findAll();
+        List<CatalogClassificationMapping> mappings = mappingRepo.findAll();
+        Map<UUID, Integer> datasetRuleCount = new HashMap<>();
+        for (CatalogMaskingRule rule : rules) {
+            UUID datasetId = rule != null && rule.getDataset() != null ? rule.getDataset().getId() : null;
+            if (datasetId != null) {
+                datasetRuleCount.merge(datasetId, 1, Integer::sum);
+            }
+        }
+        Map<String, Integer> mappingCountByLevel = new HashMap<>();
+        for (CatalogClassificationMapping mapping : mappings) {
+            String level = normalizeClassification(mapping.getPlatformLevel());
+            if (level != null) {
+                mappingCountByLevel.merge(level, 1, Integer::sum);
+            }
+        }
+
+        List<Map<String, Object>> rows = new ArrayList<>();
+        List<Map<String, Object>> conflicts = new ArrayList<>();
+        for (String level : CLASSIFICATION_LEVEL_ORDER) {
+            int datasetCount = 0;
+            int datasetWithRules = 0;
+            int maskingRuleCount = 0;
+            List<String> noRuleDatasets = new ArrayList<>();
+            for (CatalogDataset dataset : datasets) {
+                if (!Objects.equals(normalizeClassification(dataset.getClassification()), level)) {
+                    continue;
+                }
+                datasetCount += 1;
+                int ruleCount = datasetRuleCount.getOrDefault(dataset.getId(), 0);
+                maskingRuleCount += ruleCount;
+                if (ruleCount > 0) {
+                    datasetWithRules += 1;
+                } else if (requiresMasking(level)) {
+                    noRuleDatasets.add(dataset.getName());
+                }
+            }
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("classification", level);
+            row.put("requiresMasking", requiresMasking(level));
+            row.put("datasetCount", datasetCount);
+            row.put("datasetWithRules", datasetWithRules);
+            row.put("maskingRuleCount", maskingRuleCount);
+            row.put("mappingCount", mappingCountByLevel.getOrDefault(level, 0));
+            rows.add(row);
+
+            if (!noRuleDatasets.isEmpty()) {
+                Map<String, Object> conflict = new LinkedHashMap<>();
+                conflict.put("type", "MASKING_GAP");
+                conflict.put("classification", level);
+                conflict.put("count", noRuleDatasets.size());
+                conflict.put("datasets", noRuleDatasets.stream().limit(10).toList());
+                conflict.put("suggestion", "为该密级数据集补充脱敏规则，至少覆盖核心敏感字段。");
+                conflicts.add(conflict);
+            }
+        }
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("rows", rows);
+        payload.put("conflicts", conflicts);
+        payload.put("datasetTotal", datasets.size());
+        payload.put("maskingRuleTotal", rules.size());
+        payload.put("mappingTotal", mappings.size());
+        return payload;
+    }
+
+    private boolean requiresMasking(String classification) {
+        return Objects.equals(classification, "SECRET") || Objects.equals(classification, "CONFIDENTIAL");
+    }
+
+    private String normalizeClassification(String text) {
+        String value = trimToNull(text);
+        if (value == null) {
+            return null;
+        }
+        DataLevel normalized = DataLevel.normalize(value);
+        return normalized != null ? normalized.classification() : value.toUpperCase(Locale.ROOT);
+    }
+
+    private Map<String, Object> toMaskingRuleDto(CatalogMaskingRule rule) {
+        Map<String, Object> row = new LinkedHashMap<>();
+        if (rule == null) {
+            return row;
+        }
+        if (rule.getId() != null) {
+            row.put("id", rule.getId().toString());
+        }
+        row.put("column", trimToNull(rule.getColumn()));
+        row.put("function", trimToNull(rule.getFunction()));
+        row.put("args", trimToNull(rule.getArgs()));
+        return row;
+    }
+
+    private Map<String, Object> buildDatasetGovernanceHealth(CatalogDataset dataset) {
+        UUID datasetId = dataset != null ? dataset.getId() : null;
+        if (datasetId == null) {
+            return Map.of();
+        }
+        Instant now = Instant.now();
+        Instant trendStart = now.minusSeconds(86400L * GOVERNANCE_TREND_DAYS);
+        List<GovQualityRun> recentRuns = qualityRunRepo.findByDatasetId(datasetId, PageRequest.of(0, 200, Sort.by("createdDate").descending()));
+        long totalRuns = qualityRunRepo.countByDatasetId(datasetId);
+        long passRuns = 0;
+        long failRuns = 0;
+        long runningRuns = 0;
+        Map<String, Integer> failureCategoryCount = new LinkedHashMap<>();
+        Map<String, Map<String, Object>> trend = new LinkedHashMap<>();
+        for (int i = GOVERNANCE_TREND_DAYS - 1; i >= 0; i--) {
+            Instant day = now.minusSeconds(86400L * i);
+            String key = day.toString().substring(0, 10);
+            Map<String, Object> slot = new LinkedHashMap<>();
+            slot.put("date", key);
+            slot.put("total", 0);
+            slot.put("passed", 0);
+            slot.put("failed", 0);
+            trend.put(key, slot);
+        }
+        for (GovQualityRun run : recentRuns) {
+            String status = normalizeUpper(run != null ? run.getStatus() : null);
+            if (QUALITY_PASS_STATUSES.contains(status)) {
+                passRuns += 1;
+            } else if (QUALITY_FAIL_STATUSES.contains(status)) {
+                failRuns += 1;
+                String category = trimToNull(run != null ? run.getErrorCategory() : null);
+                failureCategoryCount.merge(category != null ? category : "UNKNOWN", 1, Integer::sum);
+            } else if ("RUNNING".equals(status) || "PENDING".equals(status) || "QUEUED".equals(status)) {
+                runningRuns += 1;
+            }
+            Instant createdAt = run != null ? run.getCreatedDate() : null;
+            if (createdAt == null || createdAt.isBefore(trendStart)) {
+                continue;
+            }
+            String dayKey = createdAt.toString().substring(0, 10);
+            Map<String, Object> slot = trend.get(dayKey);
+            if (slot == null) {
+                continue;
+            }
+            slot.put("total", ((Number) slot.get("total")).intValue() + 1);
+            if (QUALITY_PASS_STATUSES.contains(status)) {
+                slot.put("passed", ((Number) slot.get("passed")).intValue() + 1);
+            }
+            if (QUALITY_FAIL_STATUSES.contains(status)) {
+                slot.put("failed", ((Number) slot.get("failed")).intValue() + 1);
+            }
+        }
+        List<Map<String, Object>> failureTop = failureCategoryCount
+            .entrySet()
+            .stream()
+            .sorted((a, b) -> Integer.compare(b.getValue(), a.getValue()))
+            .limit(5)
+            .map(entry -> {
+                Map<String, Object> row = new LinkedHashMap<>();
+                row.put("category", entry.getKey());
+                row.put("count", entry.getValue());
+                return row;
+            })
+            .toList();
+        GovQualityRun latestRun = qualityRunRepo.findFirstByDatasetIdOrderByCreatedDateDesc(datasetId).orElse(null);
+
+        List<GovIssueTicket> recentIssues = issueTicketRepo.findTop100ByDatasetIdOrderByCreatedDateDesc(datasetId);
+        long issueTotal = issueTicketRepo.countByDatasetId(datasetId);
+        long issueOpen = issueTicketRepo.countByDatasetIdAndStatusIn(datasetId, ISSUE_OPEN_STATUSES);
+        long issueClosed = issueTicketRepo.countByDatasetIdAndStatusIn(datasetId, ISSUE_CLOSED_STATUSES);
+        long overdueIssue = recentIssues
+            .stream()
+            .filter(issue -> {
+                String status = normalizeUpper(issue != null ? issue.getStatus() : null);
+                if (!ISSUE_OPEN_STATUSES.contains(status)) {
+                    return false;
+                }
+                Instant dueAt = issue != null ? issue.getDueAt() : null;
+                return dueAt != null && dueAt.isBefore(now) && issue.getResolvedAt() == null;
+            })
+            .count();
+        List<Map<String, Object>> issueTop = recentIssues
+            .stream()
+            .filter(Objects::nonNull)
+            .limit(5)
+            .map(issue -> {
+                Map<String, Object> row = new LinkedHashMap<>();
+                row.put("id", issue.getId() != null ? issue.getId().toString() : null);
+                row.put("title", trimToNull(issue.getTitle()));
+                row.put("status", normalizeUpper(issue.getStatus()));
+                row.put("priority", normalizeUpper(issue.getPriority()));
+                row.put("severity", normalizeUpper(issue.getSeverity()));
+                row.put("dueAt", issue.getDueAt());
+                row.put("updatedAt", issue.getLastModifiedDate());
+                return row;
+            })
+            .toList();
+
+        int healthScore = 100;
+        healthScore -= Math.min(40, (int) failRuns * 8);
+        healthScore -= Math.min(30, (int) issueOpen * 2);
+        healthScore -= Math.min(20, (int) overdueIssue * 5);
+        if (failRuns == 0 && passRuns > 0) {
+            healthScore = Math.min(100, healthScore + 5);
+        }
+        String healthLevel = healthScore >= 80 ? "HEALTHY" : healthScore >= 60 ? "WARN" : "RISK";
+
+        Map<String, Object> quality = new LinkedHashMap<>();
+        quality.put("totalRuns", totalRuns);
+        quality.put("passRuns", passRuns);
+        quality.put("failRuns", failRuns);
+        quality.put("runningRuns", runningRuns);
+        quality.put("latestRunAt", latestRun != null ? latestRun.getCreatedDate() : null);
+        quality.put("latestStatus", latestRun != null ? normalizeUpper(latestRun.getStatus()) : null);
+        quality.put("failureTop", failureTop);
+        quality.put("trend", new ArrayList<>(trend.values()));
+
+        Map<String, Object> issues = new LinkedHashMap<>();
+        issues.put("total", issueTotal);
+        issues.put("open", issueOpen);
+        issues.put("closed", issueClosed);
+        issues.put("overdue", overdueIssue);
+        issues.put("top", issueTop);
+
+        Map<String, Object> links = new LinkedHashMap<>();
+        links.put("qualityRulesPath", "/governance/rules?runDatasetId=" + datasetId + "&runStatus=FAILED");
+        links.put("qualityReportPath", "/governance/quality?datasetId=" + datasetId);
+        links.put("issuesPath", "/governance/rules?issueDatasetId=" + datasetId + "&issueStatus=OPEN");
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("datasetId", datasetId.toString());
+        payload.put("datasetName", dataset.getName());
+        payload.put("healthScore", healthScore);
+        payload.put("healthLevel", healthLevel);
+        payload.put("quality", quality);
+        payload.put("issues", issues);
+        payload.put("links", links);
+        return payload;
+    }
+
+    private Map<String, Object> buildCatalogReconciliation(int sampleLimit) {
+        List<CatalogDataset> datasets = datasetRepo.findAll();
+        Set<UUID> datasetIds = datasets
+            .stream()
+            .map(CatalogDataset::getId)
+            .filter(Objects::nonNull)
+            .collect(java.util.stream.Collectors.toSet());
+        List<GovQualityRun> allRuns = qualityRunRepo.findAll();
+        List<GovIssueTicket> allIssues = issueTicketRepo.findAll();
+
+        long enabledDatasets = datasets.stream().filter(ds -> ds.getEnabled() == null || ds.getEnabled().booleanValue()).count();
+        long staleDatasets = datasets.stream().filter(ds -> "STALE".equals(normalizeUpper(ds.getLifecycleStatus()))).count();
+        long enabledNoSnapshot = datasets
+            .stream()
+            .filter(ds -> ds.getEnabled() == null || ds.getEnabled().booleanValue())
+            .filter(ds -> ds.getSnapshotTime() == null)
+            .count();
+        long noOwnerDept = datasets.stream().filter(ds -> trimToNull(ds.getOwnerDept()) == null).count();
+
+        List<GovQualityRun> orphanRuns = allRuns
+            .stream()
+            .filter(run -> run.getDatasetId() != null && !datasetIds.contains(run.getDatasetId()))
+            .limit(sampleLimit)
+            .toList();
+        List<GovIssueTicket> orphanIssues = allIssues
+            .stream()
+            .filter(issue -> issue.getDatasetId() != null && !datasetIds.contains(issue.getDatasetId()))
+            .limit(sampleLimit)
+            .toList();
+
+        List<Map<String, Object>> assertions = new ArrayList<>();
+        assertions.add(assertion("A01", "资产目录非空", !datasets.isEmpty(), "ERROR", "datasetCount=" + datasets.size(), "至少完成一批元数据采集后再发布。"));
+        assertions.add(
+            assertion(
+                "A02",
+                "质量运行无孤儿记录",
+                orphanRuns.isEmpty(),
+                "ERROR",
+                "orphanQualityRuns=" + orphanRuns.size(),
+                "检查治理运行数据中的 dataset_id 是否仍在资产目录中。"
+            )
+        );
+        assertions.add(
+            assertion(
+                "A03",
+                "问题工单无孤儿记录",
+                orphanIssues.isEmpty(),
+                "ERROR",
+                "orphanIssueTickets=" + orphanIssues.size(),
+                "检查问题单中的 dataset_id 与资产目录同步状态。"
+            )
+        );
+        assertions.add(
+            assertion(
+                "A04",
+                "启用资产存在快照时间",
+                enabledNoSnapshot == 0,
+                "WARN",
+                "enabledWithoutSnapshot=" + enabledNoSnapshot,
+                "建议先执行元数据采集，补齐 snapshot_time。"
+            )
+        );
+        assertions.add(
+            assertion(
+                "A05",
+                "资产负责人部门已维护",
+                noOwnerDept == 0,
+                "WARN",
+                "noOwnerDept=" + noOwnerDept,
+                "建议补充 owner_dept，避免权限策略和工单路由失效。"
+            )
+        );
+        assertions.add(
+            assertion(
+                "A06",
+                "失效资产占比可控",
+                datasets.isEmpty() || ((double) staleDatasets / (double) datasets.size()) < 0.3d,
+                "WARN",
+                "staleRatio=" + (datasets.isEmpty() ? 0 : String.format(Locale.ROOT, "%.4f", ((double) staleDatasets / (double) datasets.size()))),
+                "建议清理失效资产或重新采集，避免模型映射到历史表。"
+            )
+        );
+
+        long failedCount = assertions.stream().filter(item -> !Boolean.TRUE.equals(item.get("passed"))).count();
+        long errorCount = assertions
+            .stream()
+            .filter(item -> !Boolean.TRUE.equals(item.get("passed")))
+            .filter(item -> Objects.equals(item.get("severity"), "ERROR"))
+            .count();
+        long warningCount = assertions
+            .stream()
+            .filter(item -> !Boolean.TRUE.equals(item.get("passed")))
+            .filter(item -> Objects.equals(item.get("severity"), "WARN"))
+            .count();
+
+        Map<String, Object> counts = new LinkedHashMap<>();
+        counts.put("datasetTotal", datasets.size());
+        counts.put("datasetEnabled", enabledDatasets);
+        counts.put("datasetStale", staleDatasets);
+        counts.put("tableTotal", tableRepo.count());
+        counts.put("grantTotal", grantRepo.count());
+        counts.put("qualityRunTotal", allRuns.size());
+        counts.put("issueTicketTotal", allIssues.size());
+
+        Map<String, Object> details = new LinkedHashMap<>();
+        details.put(
+            "orphanQualityRuns",
+            orphanRuns
+                .stream()
+                .map(run -> {
+                    Map<String, Object> item = new LinkedHashMap<>();
+                    item.put("id", run.getId() != null ? run.getId().toString() : null);
+                    item.put("datasetId", run.getDatasetId() != null ? run.getDatasetId().toString() : null);
+                    item.put("status", normalizeUpper(run.getStatus()));
+                    return item;
+                })
+                .toList()
+        );
+        details.put(
+            "orphanIssueTickets",
+            orphanIssues
+                .stream()
+                .map(issue -> {
+                    Map<String, Object> item = new LinkedHashMap<>();
+                    item.put("id", issue.getId() != null ? issue.getId().toString() : null);
+                    item.put("datasetId", issue.getDatasetId() != null ? issue.getDatasetId().toString() : null);
+                    item.put("status", normalizeUpper(issue.getStatus()));
+                    return item;
+                })
+                .toList()
+        );
+
+        List<Map<String, Object>> regressionChecklist = List.of(
+            checklistItem("UI-01", "资产列表筛选与分页", "/catalog/datasets", "验证关键字/主题域/密级/分层过滤与分页一致性。"),
+            checklistItem("UI-02", "资产详情信息完整性", "/catalog/datasets", "验证基础信息、结构信息、治理状态三页签数据完整。"),
+            checklistItem("UI-03", "搜索页命中一致性", "/catalog/search", "同一关键字在搜索页与资产列表返回主数据一致。"),
+            checklistItem("UI-04", "血缘影响查询", "/catalog/lineage", "资产详情跳转血缘后节点/边数量可复核。"),
+            checklistItem("UI-05", "权限审批闭环", "/security/dataset-access-approval", "申请-审批-授权记录可闭环追踪。")
+        );
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("generatedAt", Instant.now());
+        payload.put("assertionCount", assertions.size());
+        payload.put("failedCount", failedCount);
+        payload.put("errorCount", errorCount);
+        payload.put("warningCount", warningCount);
+        payload.put("counts", counts);
+        payload.put("assertions", assertions);
+        payload.put("details", details);
+        payload.put("regressionChecklist", regressionChecklist);
+        return payload;
+    }
+
+    private Map<String, Object> assertion(
+        String code,
+        String name,
+        boolean passed,
+        String severity,
+        String detail,
+        String suggestion
+    ) {
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("code", code);
+        row.put("name", name);
+        row.put("passed", passed);
+        row.put("severity", severity);
+        row.put("detail", detail);
+        row.put("suggestion", suggestion);
+        return row;
+    }
+
+    private Map<String, Object> checklistItem(String code, String name, String route, String description) {
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("code", code);
+        row.put("name", name);
+        row.put("route", route);
+        row.put("description", description);
+        return row;
+    }
+
+    private String normalizeUpper(String text) {
+        String value = trimToNull(text);
+        return value != null ? value.toUpperCase(Locale.ROOT) : "";
+    }
+
+    private record MappingValidationResult(
+        List<CatalogClassificationMapping> normalizedItems,
+        List<Map<String, Object>> conflicts,
+        List<Map<String, Object>> warnings
+    ) {}
 
     // Table schema CRUD, filter and bulk import
     @GetMapping("/tables")

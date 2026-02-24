@@ -17,8 +17,10 @@ import com.yuzhi.dts.platform.service.workflow.AdminWorkflowConfigClient;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -45,10 +47,12 @@ public class DatasetDataAccessApprovalService {
     public static final String REQUEST_PENDING = "PENDING";
     public static final String REQUEST_APPROVED = "APPROVED";
     public static final String REQUEST_REJECTED = "REJECTED";
+    public static final String REQUEST_CANCELLED = "CANCELLED";
 
     public static final String TASK_PENDING = "PENDING";
     public static final String TASK_APPROVED = "APPROVED";
     public static final String TASK_REJECTED = "REJECTED";
+    public static final String TASK_SKIPPED = "SKIPPED";
 
     private static final List<String> EMPLOYEE_FORBIDDEN_LAYERS = List.of("ODS", "DWD", "DWS");
 
@@ -99,6 +103,14 @@ public class DatasetDataAccessApprovalService {
     ) {}
 
     public record WorkflowStepPreview(Integer stepOrder, String approverRole, Boolean deptBinding, String deptCode) {}
+
+    public record AccessRequestDetail(
+        CatalogDatasetAccessRequest request,
+        List<CatalogDatasetAccessTask> steps,
+        CatalogDatasetAccessTask currentTask,
+        String effectiveStatus,
+        Map<String, Object> grant
+    ) {}
 
     @Transactional(readOnly = true)
     public Decision checkDataAccess(CatalogDataset dataset, DataAction action, String activeDeptHeader) {
@@ -209,12 +221,38 @@ public class DatasetDataAccessApprovalService {
     }
 
     @Transactional(readOnly = true)
-    public List<CatalogDatasetAccessRequest> listMyRequests() {
+    public List<CatalogDatasetAccessRequest> listMyRequests(String status, String keyword, UUID datasetId) {
         String username = SecurityUtils.getCurrentUserLogin().orElse(null);
         if (!StringUtils.hasText(username)) {
             return List.of();
         }
-        return requestRepository.findByRequesterUsernameIgnoreCaseOrTargetUsernameIgnoreCaseOrderByCreatedDateDesc(username, username);
+        String normalizedStatus = trimToNull(status);
+        String normalizedKeyword = trimToNull(keyword);
+        return requestRepository
+            .findByRequesterUsernameIgnoreCaseOrTargetUsernameIgnoreCaseOrderByCreatedDateDesc(username, username)
+            .stream()
+            .filter(req -> normalizedStatus == null || normalizedStatus.equalsIgnoreCase(trimToNull(req.getStatus())))
+            .filter(req -> datasetId == null || datasetId.equals(req.getDatasetId()))
+            .filter(req -> {
+                if (normalizedKeyword == null) {
+                    return true;
+                }
+                String text =
+                    (
+                        String.valueOf(req.getDatasetName()) +
+                        " " +
+                        String.valueOf(req.getRequesterName()) +
+                        " " +
+                        String.valueOf(req.getRequesterUsername()) +
+                        " " +
+                        String.valueOf(req.getTargetName()) +
+                        " " +
+                        String.valueOf(req.getTargetUsername())
+                    )
+                        .toLowerCase(Locale.ROOT);
+                return text.contains(normalizedKeyword.toLowerCase(Locale.ROOT));
+            })
+            .toList();
     }
 
     @Transactional(readOnly = true)
@@ -257,48 +295,153 @@ public class DatasetDataAccessApprovalService {
     }
 
     public CatalogDatasetAccessTask approveTask(UUID taskId, String notes, String activeDeptHeader) {
+        return decideTask(taskId, true, notes, activeDeptHeader);
+    }
+
+    public CatalogDatasetAccessTask rejectTask(UUID taskId, String notes, String activeDeptHeader) {
+        return decideTask(taskId, false, notes, activeDeptHeader);
+    }
+
+    public CatalogDatasetAccessTask decideTask(UUID taskId, boolean approved, String notes, String activeDeptHeader) {
         CatalogDatasetAccessTask task = taskRepository.findById(taskId).orElseThrow();
         assertCanDecide(task, activeDeptHeader);
-
         if (!TASK_PENDING.equalsIgnoreCase(task.getStatus())) {
             return task;
         }
-        task.setStatus(TASK_APPROVED);
+        String actor = SecurityUtils.getCurrentUserLogin().orElse(null);
+        task.setStatus(approved ? TASK_APPROVED : TASK_REJECTED);
         task.setDecidedAt(Instant.now());
-        task.setDecidedBy(SecurityUtils.getCurrentUserLogin().orElse(null));
+        task.setDecidedBy(actor);
         task.setDecisionNotes(trimToNull(notes));
         task = taskRepository.save(task);
 
         CatalogDatasetAccessRequest req = requestRepository.findById(task.getRequestId()).orElseThrow();
-        Optional<CatalogDatasetAccessTask> next = taskRepository.findFirstPendingTask(req.getId());
-        if (next.isEmpty()) {
-            finalizeApprovedRequest(req, notes);
+        if (approved) {
+            Optional<CatalogDatasetAccessTask> next = taskRepository.findFirstPendingTask(req.getId());
+            if (next.isEmpty()) {
+                finalizeApprovedRequest(req, notes);
+            }
+        } else if (!REQUEST_REJECTED.equalsIgnoreCase(req.getStatus()) && !REQUEST_APPROVED.equalsIgnoreCase(req.getStatus())) {
+            req.setStatus(REQUEST_REJECTED);
+            req.setDecidedAt(Instant.now());
+            req.setDecidedBy(actor);
+            req.setDecisionNotes(trimToNull(notes));
+            requestRepository.save(req);
+            markRemainingTasksSkipped(req.getId(), actor, notes);
         }
         return task;
     }
 
-    public CatalogDatasetAccessTask rejectTask(UUID taskId, String notes, String activeDeptHeader) {
-        CatalogDatasetAccessTask task = taskRepository.findById(taskId).orElseThrow();
-        assertCanDecide(task, activeDeptHeader);
-
-        if (!TASK_PENDING.equalsIgnoreCase(task.getStatus())) {
-            return task;
+    public CatalogDatasetAccessRequest cancelRequest(UUID requestId, String notes, String activeDeptHeader) {
+        CatalogDatasetAccessRequest req = requestRepository.findById(requestId).orElseThrow();
+        if (!REQUEST_PENDING.equalsIgnoreCase(trimToNull(req.getStatus()))) {
+            throw new IllegalStateException("仅待审批申请可撤回");
         }
-        task.setStatus(TASK_REJECTED);
-        task.setDecidedAt(Instant.now());
-        task.setDecidedBy(SecurityUtils.getCurrentUserLogin().orElse(null));
-        task.setDecisionNotes(trimToNull(notes));
-        task = taskRepository.save(task);
-
-        CatalogDatasetAccessRequest req = requestRepository.findById(task.getRequestId()).orElseThrow();
-        if (!REQUEST_REJECTED.equalsIgnoreCase(req.getStatus()) && !REQUEST_APPROVED.equalsIgnoreCase(req.getStatus())) {
-            req.setStatus(REQUEST_REJECTED);
-            req.setDecidedAt(Instant.now());
-            req.setDecidedBy(SecurityUtils.getCurrentUserLogin().orElse(null));
-            req.setDecisionNotes(trimToNull(notes));
-            requestRepository.save(req);
+        String actor = trimToNull(SecurityUtils.getCurrentUserLogin().orElse(null));
+        if (
+            actor == null ||
+            (!actor.equalsIgnoreCase(trimToNull(req.getRequesterUsername())) &&
+                !SecurityUtils.hasCurrentUserAnyOfAuthorities(AuthoritiesConstants.CATALOG_MAINTAINERS))
+        ) {
+            throw new IllegalStateException("无权撤回该申请");
         }
-        return task;
+        if (!canReadRequest(req, activeDeptHeader)) {
+            throw new IllegalStateException("无权限操作该申请");
+        }
+        req.setStatus(REQUEST_CANCELLED);
+        req.setDecidedAt(Instant.now());
+        req.setDecidedBy(actor);
+        req.setDecisionNotes(trimToNull(notes));
+        req = requestRepository.save(req);
+        markRemainingTasksSkipped(req.getId(), actor, notes);
+        return req;
+    }
+
+    @Transactional(readOnly = true)
+    public AccessRequestDetail getRequestDetail(UUID requestId, String activeDeptHeader) {
+        CatalogDatasetAccessRequest req = requestRepository.findById(requestId).orElseThrow();
+        if (!canReadRequest(req, activeDeptHeader)) {
+            throw new IllegalStateException("无权限查看该申请");
+        }
+        List<CatalogDatasetAccessTask> steps = listTasksForRequest(requestId);
+        CatalogDatasetAccessTask currentTask = steps.stream().filter(task -> TASK_PENDING.equalsIgnoreCase(task.getStatus())).findFirst().orElse(null);
+        CatalogDatasetGrant grant = grantRepository.findFirstBySourceRequestIdOrderByCreatedDateDesc(requestId).orElse(null);
+        String effectiveStatus = calculateEffectiveStatus(req, grant);
+        Map<String, Object> grantView = grantToMap(grant);
+        return new AccessRequestDetail(req, steps, currentTask, effectiveStatus, grantView);
+    }
+
+    private boolean canReadRequest(CatalogDatasetAccessRequest req, String activeDeptHeader) {
+        if (req == null) {
+            return false;
+        }
+        if (SecurityUtils.hasCurrentUserAnyOfAuthorities(AuthoritiesConstants.CATALOG_MAINTAINERS)) {
+            return true;
+        }
+        String login = trimToNull(SecurityUtils.getCurrentUserLogin().orElse(null));
+        if (login != null && (login.equalsIgnoreCase(trimToNull(req.getRequesterUsername())) || login.equalsIgnoreCase(trimToNull(req.getTargetUsername())))) {
+            return true;
+        }
+        List<CatalogDatasetAccessTask> tasks = listTasksForRequest(req.getId());
+        return tasks.stream().anyMatch(task -> canDecide(task, activeDeptHeader));
+    }
+
+    private String calculateEffectiveStatus(CatalogDatasetAccessRequest req, CatalogDatasetGrant grant) {
+        String status = trimToNull(req != null ? req.getStatus() : null);
+        if (status == null) {
+            return "UNKNOWN";
+        }
+        String normalized = status.toUpperCase(Locale.ROOT);
+        if (!REQUEST_APPROVED.equals(normalized)) {
+            return normalized;
+        }
+        if (grant == null) {
+            return "GRANT_MISSING";
+        }
+        Instant now = Instant.now();
+        if (grant.getValidFrom() != null && now.isBefore(grant.getValidFrom())) {
+            return "WAITING_EFFECTIVE";
+        }
+        if (grant.getValidTo() != null && now.isAfter(grant.getValidTo())) {
+            return "EXPIRED";
+        }
+        return "EFFECTIVE";
+    }
+
+    private Map<String, Object> grantToMap(CatalogDatasetGrant grant) {
+        if (grant == null) {
+            return Map.of();
+        }
+        Map<String, Object> map = new LinkedHashMap<>();
+        if (grant.getId() != null) {
+            map.put("id", grant.getId().toString());
+        }
+        map.put("grantType", grant.getGrantType());
+        map.put("granteeUsername", grant.getGranteeUsername());
+        map.put("granteeName", grant.getGranteeName());
+        map.put("granteeDept", grant.getGranteeDept());
+        map.put("canQuery", grant.getCanQuery());
+        map.put("canPreview", grant.getCanPreview());
+        map.put("validFrom", grant.getValidFrom());
+        map.put("validTo", grant.getValidTo());
+        map.put("sourceRequestId", grant.getSourceRequestId() != null ? grant.getSourceRequestId().toString() : null);
+        return map;
+    }
+
+    private void markRemainingTasksSkipped(UUID requestId, String actor, String notes) {
+        List<CatalogDatasetAccessTask> pending = taskRepository.findPendingTasks(requestId);
+        if (pending.isEmpty()) {
+            return;
+        }
+        Instant now = Instant.now();
+        String skipNotes = trimToNull(notes) != null ? "SKIPPED: " + trimToNull(notes) : "SKIPPED: 已终止";
+        for (CatalogDatasetAccessTask task : pending) {
+            task.setStatus(TASK_SKIPPED);
+            task.setDecidedBy(actor);
+            task.setDecidedAt(now);
+            task.setDecisionNotes(skipNotes);
+        }
+        taskRepository.saveAll(pending);
     }
 
     private void finalizeApprovedRequest(CatalogDatasetAccessRequest req, String notes) {
@@ -529,34 +672,34 @@ public class DatasetDataAccessApprovalService {
     }
 
     private void assertCanDecide(CatalogDatasetAccessTask task, String activeDeptHeader) {
+        if (!canDecide(task, activeDeptHeader)) {
+            throw new IllegalStateException("当前账号无审批权限");
+        }
+    }
+
+    private boolean canDecide(CatalogDatasetAccessTask task, String activeDeptHeader) {
         if (task == null) {
-            throw new IllegalArgumentException("task is required");
+            return false;
         }
         if (isSuperAdmin()) {
-            return;
+            return true;
         }
-        String role = task.getApproverRole();
+        String role = trimToNull(task.getApproverRole());
         if (AuthoritiesConstants.INST_LEADER.equals(role)) {
-            if (!SecurityUtils.hasCurrentUserAnyOfAuthorities(AuthoritiesConstants.INST_LEADER)) {
-                throw new IllegalStateException("当前账号无所级审批权限");
-            }
-            return;
+            return SecurityUtils.hasCurrentUserAnyOfAuthorities(AuthoritiesConstants.INST_LEADER);
         }
         if (AuthoritiesConstants.DEPT_LEADER.equals(role)) {
             if (SecurityUtils.hasCurrentUserAnyOfAuthorities(AuthoritiesConstants.INST_LEADER)) {
-                return;
+                return true;
             }
             if (!SecurityUtils.hasCurrentUserAnyOfAuthorities(AuthoritiesConstants.DEPT_LEADER)) {
-                throw new IllegalStateException("当前账号无部门审批权限");
+                return false;
             }
             String dept = DepartmentUtils.normalize(resolveActiveDept(activeDeptHeader));
             String requiredDept = DepartmentUtils.normalize(task.getDeptCode());
-            if (StringUtils.hasText(requiredDept) && !requiredDept.equalsIgnoreCase(dept)) {
-                throw new IllegalStateException("当前账号无该部门审批权限");
-            }
-            return;
+            return !StringUtils.hasText(requiredDept) || requiredDept.equalsIgnoreCase(dept);
         }
-        throw new IllegalStateException("未知审批角色配置");
+        return false;
     }
 
     private void assertCanCreateProxyRequest(String activeDept, String targetDept) {

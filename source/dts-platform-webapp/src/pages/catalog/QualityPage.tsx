@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Alert, Card, Select, Space, Table, Tag } from "antd";
 import type { ColumnsType } from "antd/es/table";
+import { useSearchParams } from "react-router";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
 import { getDatasetQuality, listDatasets, listQualityRuns } from "@/api/platformApi";
@@ -138,8 +139,9 @@ const toGovernanceQuality = (runs: GovernanceQualityRun[]): QualityResult => {
 };
 
 export default function QualityPage() {
+	const [searchParams, setSearchParams] = useSearchParams();
 	const [datasets, setDatasets] = useState<DatasetOption[]>([]);
-	const [selectedId, setSelectedId] = useState<string | undefined>();
+	const [selectedId, setSelectedId] = useState<string | undefined>(() => searchParams.get("datasetId") || undefined);
 	const [loading, setLoading] = useState(false);
 	const [quality, setQuality] = useState<QualityResult | null>(null);
 
@@ -155,6 +157,16 @@ export default function QualityPage() {
 		}
 	}, [selectedId]);
 
+	useEffect(() => {
+		const params = new URLSearchParams(searchParams);
+		if (selectedId) {
+			params.set("datasetId", selectedId);
+		} else {
+			params.delete("datasetId");
+		}
+		setSearchParams(params, { replace: true });
+	}, [selectedId]);
+
 	const datasetOptions = useMemo(
 		() => datasets.map((item) => ({ label: item.name, value: item.id })),
 		[datasets],
@@ -168,7 +180,15 @@ export default function QualityPage() {
 				.map((item: any) => ({ id: String(item.id || ""), name: String(item.name || "").trim() }))
 				.filter((item: DatasetOption) => item.id && item.name);
 			setDatasets(options);
-			if (!selectedId && options.length) {
+			if (options.length === 0) {
+				setSelectedId(undefined);
+				return;
+			}
+			const requestedId = searchParams.get("datasetId") || selectedId;
+			const matched = requestedId ? options.find((item: DatasetOption) => item.id === requestedId) : undefined;
+			if (matched) {
+				setSelectedId(matched.id);
+			} else if (!selectedId) {
 				setSelectedId(options[0].id);
 			}
 		} catch (error: any) {

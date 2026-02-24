@@ -164,42 +164,6 @@ export default function ScreenPreviewPage() {
         };
     }, [visibleSortedComponents]);
 
-    if (loading) {
-        return (
-            <div style={{
-                position: 'fixed', inset: 0, display: 'flex',
-                alignItems: 'center', justifyContent: 'center',
-                background: '#000', color: '#fff', fontSize: 16,
-            }}>
-                <span>加载中...</span>
-            </div>
-        );
-    }
-
-    if (error || !screen) {
-        return (
-            <div style={{
-                position: 'fixed', inset: 0, display: 'flex',
-                alignItems: 'center', justifyContent: 'center',
-                background: '#000', color: '#fff', fontSize: 16,
-            }}>
-                <span>{error || '未找到大屏'}</span>
-            </div>
-        );
-    }
-
-    const rawTheme = (screen as { theme?: string }).theme as ScreenTheme | undefined;
-    const screenTheme = resolveScreenTheme(rawTheme, screen.backgroundColor);
-    const outerBg = screenTheme === 'glacier' ? '#e5e7eb' : '#000';
-    const screenWidth = contentBounds.width;
-    const screenHeight = contentBounds.height;
-    const stageWidth = Math.max(1, screenWidth * scale);
-    const stageHeight = Math.max(1, screenHeight * scale);
-
-    const setForcedMode = (mode: DeviceMode | null) => {
-        setForcedDeviceMode(mode);
-        syncDeviceModeToWindowUrl(mode);
-    };
     const clampScale = (value: number) => Math.max(0.2, Math.min(2, value));
     const setFitScale = useCallback(() => {
         setManualScale(null);
@@ -214,7 +178,6 @@ export default function ScreenPreviewPage() {
         const base = manualScale === null ? autoScale : manualScale;
         setAbsoluteScale(base + delta);
     }, [autoScale, manualScale, setAbsoluteScale]);
-    const scalePercent = Math.round(scale * 100);
 
     useEffect(() => {
         const node = scrollContainerRef.current;
@@ -268,6 +231,45 @@ export default function ScreenPreviewPage() {
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [adjustScale, setAbsoluteScale, setFitScale]);
+
+    // ── Early returns MUST be after all hooks ──
+    if (loading) {
+        return (
+            <div style={{
+                position: 'fixed', inset: 0, display: 'flex',
+                alignItems: 'center', justifyContent: 'center',
+                background: '#000', color: '#fff', fontSize: 16,
+            }}>
+                <span>加载中...</span>
+            </div>
+        );
+    }
+
+    if (error || !screen) {
+        return (
+            <div style={{
+                position: 'fixed', inset: 0, display: 'flex',
+                alignItems: 'center', justifyContent: 'center',
+                background: '#000', color: '#fff', fontSize: 16,
+            }}>
+                <span>{error || '未找到大屏'}</span>
+            </div>
+        );
+    }
+
+    const rawTheme = (screen as { theme?: string }).theme as ScreenTheme | undefined;
+    const screenTheme = resolveScreenTheme(rawTheme, screen.backgroundColor);
+    const outerBg = screenTheme === 'glacier' ? '#e5e7eb' : '#000';
+    const screenWidth = contentBounds.width;
+    const screenHeight = contentBounds.height;
+    const stageWidth = Math.max(1, screenWidth * scale);
+    const stageHeight = Math.max(1, screenHeight * scale);
+    const scalePercent = Math.round(scale * 100);
+
+    const setForcedMode = (mode: DeviceMode | null) => {
+        setForcedDeviceMode(mode);
+        syncDeviceModeToWindowUrl(mode);
+    };
 
     return (
         <ScreenRuntimeProvider definitions={screen.globalVariables ?? []}>

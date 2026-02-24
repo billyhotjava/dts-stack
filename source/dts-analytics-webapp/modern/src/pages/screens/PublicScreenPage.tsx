@@ -99,39 +99,9 @@ export default function PublicScreenPage() {
         return () => window.removeEventListener('resize', computeScale);
     }, [computeScale]);
 
-    if (loading) {
-        return (
-            <div style={{
-                position: 'fixed', inset: 0, display: 'flex',
-                alignItems: 'center', justifyContent: 'center',
-                background: '#000', color: '#fff', fontSize: 16,
-            }}>
-                <span>加载中...</span>
-            </div>
-        );
-    }
-
-    if (error || !screen) {
-        return (
-            <div style={{
-                position: 'fixed', inset: 0, display: 'flex',
-                alignItems: 'center', justifyContent: 'center',
-                background: '#000', color: '#fff', fontSize: 16,
-            }}>
-                <span>{error || '未找到大屏'}</span>
-            </div>
-        );
-    }
-
-    const rawTheme = screen.theme as ScreenTheme | undefined;
-    const screenTheme = resolveScreenTheme(rawTheme, screen.backgroundColor);
-    const globalVariables = screen.globalVariables ?? [];
-
-    // Multi-page carousel support
-    const carousel = useScreenCarousel(screen.pages, screen.components || [], screen.carouselConfig);
+    // Multi-page carousel support — must be called before early returns
+    const carousel = useScreenCarousel(screen?.pages, screen?.components || [], screen?.carouselConfig);
     const components = carousel.currentPageComponents;
-    const carouselTransition = screen.carouselConfig?.transition ?? 'fade';
-    const carouselDuration = screen.carouselConfig?.transitionDuration ?? 800;
 
     const visibleSortedComponents = useMemo(
         () => {
@@ -143,10 +113,9 @@ export default function PublicScreenPage() {
         [components, deviceMode],
     );
 
-    const outerBg = screenTheme === 'glacier' ? '#e5e7eb' : '#000';
     const contentBounds = useMemo(() => {
-        const baseWidth = Math.max(1, screen.width || 1920);
-        const baseHeight = Math.max(1, screen.height || 1080);
+        const baseWidth = Math.max(1, screen?.width || 1920);
+        const baseHeight = Math.max(1, screen?.height || 1080);
         let minLeft = 0;
         let minTop = 0;
         let maxRight = baseWidth;
@@ -167,16 +136,8 @@ export default function PublicScreenPage() {
             width: Math.max(1, maxRight - minLeft),
             height: Math.max(1, maxBottom - minTop),
         };
-    }, [screen.height, screen.width, visibleSortedComponents]);
-    const screenWidth = contentBounds.width;
-    const screenHeight = contentBounds.height;
-    const stageWidth = Math.max(1, screenWidth * scale);
-    const stageHeight = Math.max(1, screenHeight * scale);
+    }, [screen?.height, screen?.width, visibleSortedComponents]);
 
-    const setForcedMode = (mode: DeviceMode | null) => {
-        setForcedDeviceMode(mode);
-        syncDeviceModeToWindowUrl(mode);
-    };
     const clampScale = (value: number) => Math.max(0.2, Math.min(2, value));
     const setFitScale = useCallback(() => {
         setManualScale(null);
@@ -191,7 +152,6 @@ export default function PublicScreenPage() {
         const base = manualScale === null ? autoScale : manualScale;
         setAbsoluteScale(base + delta);
     }, [autoScale, manualScale, setAbsoluteScale]);
-    const scalePercent = Math.round(scale * 100);
 
     useEffect(() => {
         const node = scrollContainerRef.current;
@@ -246,6 +206,7 @@ export default function PublicScreenPage() {
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [adjustScale, setAbsoluteScale, setFitScale]);
 
+    const globalVariables = screen?.globalVariables ?? [];
     // Apply URL variable overrides to global variable definitions
     const effectiveGlobalVars = useMemo(() => {
         if (Object.keys(urlVariableOverrides).length === 0) return globalVariables;
@@ -254,6 +215,47 @@ export default function PublicScreenPage() {
             return override !== undefined ? { ...gv, defaultValue: override } : gv;
         });
     }, [globalVariables, urlVariableOverrides]);
+
+    // ── Early returns MUST be after all hooks ──
+    if (loading) {
+        return (
+            <div style={{
+                position: 'fixed', inset: 0, display: 'flex',
+                alignItems: 'center', justifyContent: 'center',
+                background: '#000', color: '#fff', fontSize: 16,
+            }}>
+                <span>加载中...</span>
+            </div>
+        );
+    }
+
+    if (error || !screen) {
+        return (
+            <div style={{
+                position: 'fixed', inset: 0, display: 'flex',
+                alignItems: 'center', justifyContent: 'center',
+                background: '#000', color: '#fff', fontSize: 16,
+            }}>
+                <span>{error || '未找到大屏'}</span>
+            </div>
+        );
+    }
+
+    const rawTheme = screen.theme as ScreenTheme | undefined;
+    const screenTheme = resolveScreenTheme(rawTheme, screen.backgroundColor);
+    const carouselTransition = screen.carouselConfig?.transition ?? 'fade';
+    const carouselDuration = screen.carouselConfig?.transitionDuration ?? 800;
+    const outerBg = screenTheme === 'glacier' ? '#e5e7eb' : '#000';
+    const screenWidth = contentBounds.width;
+    const screenHeight = contentBounds.height;
+    const stageWidth = Math.max(1, screenWidth * scale);
+    const stageHeight = Math.max(1, screenHeight * scale);
+    const scalePercent = Math.round(scale * 100);
+
+    const setForcedMode = (mode: DeviceMode | null) => {
+        setForcedDeviceMode(mode);
+        syncDeviceModeToWindowUrl(mode);
+    };
 
     return (
         <ScreenRuntimeProvider definitions={effectiveGlobalVars}>

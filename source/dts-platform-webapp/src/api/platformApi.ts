@@ -16,8 +16,11 @@ export const batchDatasetOpenMetadata = (ids: string[]) =>
 	api.post({ url: "/catalog/datasets/openmetadata/batch", data: { ids } });
 export const getDatasetLineage = (id: string) => api.get({ url: `/catalog/datasets/${id}/lineage` });
 export const getDatasetQuality = (id: string) => api.get({ url: `/catalog/datasets/${id}/quality` });
+export const getDatasetGovernanceHealth = (id: string) => api.get({ url: `/catalog/datasets/${id}/governance-health` });
 export const batchDatasetQuality = (ids: string[]) =>
 	api.post({ url: "/catalog/quality/batch", data: { ids } });
+export const getCatalogReconciliation = (sampleLimit = 20) =>
+	api.get({ url: "/catalog/ops/reconciliation", params: { sampleLimit } });
 export const getTechMetadataTables = (params?: { keyword?: string; size?: number; sourceId?: string }) =>
 	api.get({ url: "/catalog/metadata/tables", params });
 export const getTechMetadataTableDetail = (fqn: string) =>
@@ -146,11 +149,21 @@ export type DatasetAccessRequestCreatePayload = {
 export const createDatasetAccessRequest = (data: DatasetAccessRequestCreatePayload) =>
 	api.post({ url: "/catalog/access/requests", data });
 
-export const listMyDatasetAccessRequests = () => api.get({ url: "/catalog/access/requests/mine" });
+export const listMyDatasetAccessRequests = (
+	params: { status?: string; keyword?: string; datasetId?: string; page?: number; size?: number } = {},
+) => api.get({ url: "/catalog/access/requests/mine", params });
+export const getDatasetAccessRequestDetail = (requestId: string) =>
+	api.get({ url: `/catalog/access/requests/${requestId}` });
+export const cancelDatasetAccessRequest = (requestId: string, notes?: string) =>
+	api.post({ url: `/catalog/access/requests/${requestId}/cancel`, data: notes ? { notes } : {} });
 
-export const listPendingDatasetAccessTasks = () => api.get({ url: "/catalog/access/tasks/pending" });
+export const listPendingDatasetAccessTasks = (
+	params: { keyword?: string; datasetId?: string; page?: number; size?: number } = {},
+) => api.get({ url: "/catalog/access/tasks/pending", params });
 
-export const listDoneDatasetAccessTasks = () => api.get({ url: "/catalog/access/tasks/done" });
+export const listDoneDatasetAccessTasks = (
+	params: { keyword?: string; datasetId?: string; status?: string; page?: number; size?: number } = {},
+) => api.get({ url: "/catalog/access/tasks/done", params });
 
 export const getDatasetAccessWorkflowPreview = (datasetId: string) =>
 	api.get({ url: "/catalog/access/workflow/preview", params: { datasetId } });
@@ -162,6 +175,10 @@ export const approveDatasetAccessTask = (taskId: string, notes?: string) =>
 
 export const rejectDatasetAccessTask = (taskId: string, notes?: string) =>
 	api.post({ url: `/catalog/access/tasks/${taskId}/reject`, data: notes ? { notes } : {} });
+export const decideDatasetAccessTask = (taskId: string, approved: boolean, notes?: string) =>
+	api.post({ url: `/catalog/access/tasks/${taskId}/decide`, data: { approved, ...(notes ? { notes } : {}) } });
+export const decideDatasetAccessTaskBatch = (taskIds: string[], approved: boolean, notes?: string) =>
+	api.post({ url: "/catalog/access/tasks/decide/batch", data: { taskIds, approved, ...(notes ? { notes } : {}) } });
 
 export const listMaskingRules = () => api.get<any[]>({ url: "/catalog/masking-rules" });
 export const createMaskingRule = (data: any) => api.post({ url: "/catalog/masking-rules", data });
@@ -171,9 +188,13 @@ export const previewMasking = (data: any) => api.post({ url: "/catalog/masking-r
 
 export const getClassificationMapping = () => api.get({ url: "/catalog/classification-mapping" });
 export const replaceClassificationMapping = (data: any[]) => api.put({ url: "/catalog/classification-mapping", data });
+export const validateClassificationMapping = (data: any[]) =>
+	api.post({ url: "/catalog/classification-mapping/validate", data });
 export const importClassificationMapping = (data: any[]) =>
 	api.post({ url: "/catalog/classification-mapping/import", data });
 export const exportClassificationMapping = () => api.get({ url: "/catalog/classification-mapping/export" });
+export const getClassificationMaskingLinkage = (datasetId?: string) =>
+	api.get({ url: "/catalog/classification-masking/linkage", params: datasetId ? { datasetId } : undefined });
 
 export const getDatasetSecurityMapping = (datasetId: string) =>
     api.get({ url: `/catalog/datasets/${datasetId}/security-mapping` });

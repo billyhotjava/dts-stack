@@ -225,8 +225,9 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
             imports.push(import('echarts-wordcloud'));
         }
         if (ECHART_3D_TYPES.has(type)) {
-            // echarts-gl is an optional dependency — import dynamically and swallow if not installed
-            imports.push(import(/* webpackIgnore: true */ 'echarts-gl' as string).catch(() => null));
+            // echarts-gl is an optional peer dep — use variable to bypass Vite static analysis
+            const glPkg = 'echarts-gl';
+            imports.push(import(/* @vite-ignore */ glPkg).catch(() => null));
         }
         Promise.all(imports).then(([echartsModule]) => {
             const mod = echartsModule as typeof import('../../../components/charts/EChartsRuntime');

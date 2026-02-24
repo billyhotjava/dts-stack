@@ -5,14 +5,18 @@ import type { ColumnsType } from "antd/es/table";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
 import {
+	getCatalogReconciliation,
 	getCatalogLineageImpact,
+	getClassificationMaskingLinkage,
 	getDataset,
+	getDatasetGovernanceHealth,
 	getTechMetadataTableDetail,
 	listDatasetGrants,
 	listDatasets,
 	listDomains,
 	updateDataset,
 } from "@/api/platformApi";
+import { useRouter } from "@/routes/hooks";
 
 const { Text } = Typography;
 
@@ -59,6 +63,61 @@ type GovernanceImpact = {
 	lineageEdgeCount: number;
 };
 
+type DatasetSecurityLinkage = {
+	classification?: string;
+	requiresMasking?: boolean;
+	maskingRuleCount?: number;
+	conflict?: boolean;
+	effectiveRules?: Array<{ id?: string; column?: string; function?: string; args?: string }>;
+	suggestions?: string[];
+};
+
+type GovernanceHealth = {
+	healthScore?: number;
+	healthLevel?: string;
+	quality?: {
+		totalRuns?: number;
+		passRuns?: number;
+		failRuns?: number;
+		runningRuns?: number;
+		latestRunAt?: string;
+		latestStatus?: string;
+		failureTop?: Array<{ category?: string; count?: number }>;
+		trend?: Array<{ date?: string; total?: number; passed?: number; failed?: number }>;
+	};
+	issues?: {
+		total?: number;
+		open?: number;
+		closed?: number;
+		overdue?: number;
+		top?: Array<{ id?: string; title?: string; status?: string; priority?: string; severity?: string; dueAt?: string }>;
+	};
+	links?: {
+		qualityRulesPath?: string;
+		qualityReportPath?: string;
+		issuesPath?: string;
+	};
+};
+
+type ReconciliationAssertion = {
+	code?: string;
+	name?: string;
+	passed?: boolean;
+	severity?: string;
+	detail?: string;
+	suggestion?: string;
+};
+
+type ReconciliationResult = {
+	generatedAt?: string;
+	assertionCount?: number;
+	failedCount?: number;
+	errorCount?: number;
+	warningCount?: number;
+	assertions?: ReconciliationAssertion[];
+	regressionChecklist?: Array<{ code?: string; name?: string; route?: string; description?: string }>;
+};
+
 const TYPE_OPTIONS = [
 	{ label: "全部类型", value: "ALL" },
 	{ label: "Hive", value: "HIVE" },
@@ -83,6 +142,8 @@ const LAYER_OPTIONS = [
 ];
 
 const DATASET_FILTER_STORAGE_KEY = "catalog.asset.filter.v1";
+const SECURITY_LINKAGE_VERSION_KEY = "catalog.security.linkage.version";
+const SECURITY_LINKAGE_EVENT = "catalog-security-linkage-updated";
 
 const CLASSIFICATION_LABEL: Record<string, string> = {
 	PUBLIC: "公开",
@@ -114,6 +175,7 @@ const buildColumnRows = (detail?: TableDetail | null): ColumnRow[] => {
 };
 
 export default function Page() {
+	const router = useRouter();
 	const [profileForm] = Form.useForm();
 	const watchOwner = Form.useWatch("owner", profileForm);
 	const watchTags = Form.useWatch("tags", profileForm);
@@ -133,6 +195,10 @@ export default function Page() {
 	const [detailDataset, setDetailDataset] = useState<Record<string, any> | null>(null);
 	const [tableDetail, setTableDetail] = useState<TableDetail | null>(null);
 	const [impact, setImpact] = useState<GovernanceImpact>({ grantsCount: 0, lineageNodeCount: 0, lineageEdgeCount: 0 });
+	const [securityLinkage, setSecurityLinkage] = useState<DatasetSecurityLinkage | null>(null);
+	const [governanceHealth, setGovernanceHealth] = useState<GovernanceHealth | null>(null);
+	const [reconciliation, setReconciliation] = useState<ReconciliationResult | null>(null);
+	const [reconciliationLoading, setReconciliationLoading] = useState(false);
 	const [savingProfile, setSavingProfile] = useState(false);
 	const requestSeqRef = useRef(0);
 
@@ -153,6 +219,10 @@ export default function Page() {
 
 	useEffect(() => {
 		void loadDomains();
+	}, []);
+
+	useEffect(() => {
+		void loadReconciliation();
 	}, []);
 
 	useEffect(() => {
@@ -195,6 +265,22 @@ export default function Page() {
 			);
 		} catch (error: any) {
 			toast.error(error?.message || "主题域加载失败");
+		}
+	};
+
+	const loadReconciliation = async () => {
+		setReconciliationLoading(true);
+		try {
+			const result: any = await getCatalogReconciliation(20);
+			setReconciliation((result || null) as ReconciliationResult | null);
+		} catch (error: any) {
+			const message = String(error?.message || "");
+			if (!message.toLowerCase().includes("403") && !message.toLowerCase().includes("forbidden")) {
+				toast.error(message || "回归核对加载失败");
+			}
+			setReconciliation(null);
+		} finally {
+			setReconciliationLoading(false);
 		}
 	};
 
@@ -258,20 +344,78 @@ export default function Page() {
 		}
 	};
 
+	const loadSecurityLinkage = async (datasetId?: string, silent = false) => {
+		if (!datasetId) {
+			setSecurityLinkage(null);
+			return;
+		}
+		try {
+			const linkage: any = await getClassificationMaskingLinkage(datasetId);
+			setSecurityLinkage((linkage || null) as DatasetSecurityLinkage | null);
+		} catch (error: any) {
+			if (!silent) {
+				toast.error(error?.message || "密级与脱敏策略加载失败");
+			}
+			setSecurityLinkage(null);
+		}
+	};
+
+	const loadGovernanceHealth = async (datasetId?: string, silent = false) => {
+		if (!datasetId) {
+			setGovernanceHealth(null);
+			return;
+		}
+		try {
+			const payload: any = await getDatasetGovernanceHealth(datasetId);
+			setGovernanceHealth((payload || null) as GovernanceHealth | null);
+		} catch (error: any) {
+			if (!silent) {
+				toast.error(error?.message || "治理健康信息加载失败");
+			}
+			setGovernanceHealth(null);
+		}
+	};
+
+	useEffect(() => {
+		const refresh = () => {
+			if (detailRow?.id) {
+				void loadSecurityLinkage(detailRow.id, true);
+				void loadGovernanceHealth(detailRow.id, true);
+			}
+			void loadDatasets(pageState.page, pageState.size);
+		};
+		const onStorage = (event: StorageEvent) => {
+			if (event.key === SECURITY_LINKAGE_VERSION_KEY) {
+				refresh();
+			}
+		};
+		const onLocalEvent = () => refresh();
+		window.addEventListener("storage", onStorage);
+		window.addEventListener(SECURITY_LINKAGE_EVENT, onLocalEvent as EventListener);
+		return () => {
+			window.removeEventListener("storage", onStorage);
+			window.removeEventListener(SECURITY_LINKAGE_EVENT, onLocalEvent as EventListener);
+		};
+	}, [detailRow?.id, pageState.page, pageState.size, keyword, domain, assetType, classification, warehouseLayer]);
+
 	const openDetail = async (row: AssetRow) => {
 		if (!row?.id) return;
 		setDetailRow(row);
 		setDetailDataset(null);
 		setTableDetail(null);
+		setSecurityLinkage(null);
+		setGovernanceHealth(null);
 		setImpact({ grantsCount: 0, lineageNodeCount: 0, lineageEdgeCount: 0 });
 		setDetailOpen(true);
 		setDetailLoading(true);
 		try {
-			const [datasetResp, tableResp, grantsResp, lineageResp] = await Promise.allSettled([
+			const [datasetResp, tableResp, grantsResp, lineageResp, linkageResp, governanceResp] = await Promise.allSettled([
 				getDataset(row.id),
 				getTechMetadataTableDetail(`catalog:${row.id}`),
 				listDatasetGrants(row.id),
 				getCatalogLineageImpact(row.id, { direction: "BOTH", depth: 2 }),
+				getClassificationMaskingLinkage(row.id),
+				getDatasetGovernanceHealth(row.id),
 				]);
 				if (datasetResp.status === "fulfilled") {
 					const ds: any = datasetResp.value || null;
@@ -294,10 +438,18 @@ export default function Page() {
 					lineageEdgeCount: Number(lineage?.edgeCount || 0),
 				});
 			}
+			if (linkageResp.status === "fulfilled") {
+				setSecurityLinkage((linkageResp.value || null) as DatasetSecurityLinkage | null);
+			}
+			if (governanceResp.status === "fulfilled") {
+				setGovernanceHealth((governanceResp.value || null) as GovernanceHealth | null);
+			}
 		} catch (error: any) {
 			toast.error(error?.message || "加载资产字段失败");
 			setTableDetail(null);
 			setDetailDataset(null);
+			setSecurityLinkage(null);
+			setGovernanceHealth(null);
 		} finally {
 			setDetailLoading(false);
 		}
@@ -539,8 +691,8 @@ export default function Page() {
 				)}
 			</Card>
 
-			<Card title="资产列表">
-				{records.length ? (
+				<Card title="资产列表">
+					{records.length ? (
 					<Table
 						rowKey="id"
 						columns={columns}
@@ -560,10 +712,78 @@ export default function Page() {
 					/>
 				) : (
 					<EmptyState title="暂无资产" description="当前筛选条件下未找到资产。" />
-				)}
-			</Card>
-			<Modal
-				title="资产字段详情"
+					)}
+				</Card>
+				<Card
+					title="发布前回归与一致性核对"
+					extra={
+						<Button loading={reconciliationLoading} onClick={() => void loadReconciliation()}>
+							重新核对
+						</Button>
+					}
+				>
+					{reconciliation ? (
+						<Space direction="vertical" size={12} className="w-full">
+							<div className="grid gap-3 md:grid-cols-4">
+								<Card size="small" title="断言总数">
+									<div className="text-lg font-semibold">{Number(reconciliation.assertionCount || 0)}</div>
+								</Card>
+								<Card size="small" title="失败项">
+									<div className="text-lg font-semibold text-red-600">{Number(reconciliation.failedCount || 0)}</div>
+								</Card>
+								<Card size="small" title="错误级">
+									<div className="text-lg font-semibold text-red-600">{Number(reconciliation.errorCount || 0)}</div>
+								</Card>
+								<Card size="small" title="告警级">
+									<div className="text-lg font-semibold text-amber-600">{Number(reconciliation.warningCount || 0)}</div>
+								</Card>
+							</div>
+							{Array.isArray(reconciliation.assertions) && reconciliation.assertions.some((item) => item.passed === false) ? (
+								<div className="rounded border border-amber-200 bg-amber-50 p-3 text-xs text-amber-700">
+									{reconciliation.assertions
+										.filter((item) => item.passed === false)
+										.slice(0, 6)
+										.map((item) => (
+											<div key={item.code || item.name}>
+												[{item.code || "-"}] {item.name || "未命名检查"}：{item.detail || "-"}；建议：{item.suggestion || "-"}
+											</div>
+										))}
+								</div>
+							) : (
+								<Alert type="success" showIcon message="一致性断言通过，未发现阻断项。" />
+							)}
+							<div className="rounded border border-slate-200 bg-slate-50 p-3">
+								<div className="mb-2 text-sm font-medium text-slate-700">核心页面回归清单</div>
+								<Space direction="vertical" size={6} className="w-full">
+									{Array.isArray(reconciliation.regressionChecklist) && reconciliation.regressionChecklist.length > 0 ? (
+										reconciliation.regressionChecklist.map((item) => (
+											<div key={item.code || item.name} className="flex items-center justify-between gap-3 text-xs text-slate-700">
+												<div>
+													<span className="font-medium">[{item.code || "-"}] {item.name || "-"}</span>
+													<div className="text-slate-500">{item.description || "-"}</div>
+												</div>
+												<Button
+													size="small"
+													onClick={() => {
+														if (item.route) router.push(item.route);
+													}}
+												>
+													打开页面
+												</Button>
+											</div>
+										))
+									) : (
+										<div className="text-xs text-slate-500">暂无回归清单</div>
+									)}
+								</Space>
+							</div>
+						</Space>
+					) : (
+						<EmptyState title="暂无核对结果" description="当前账号无权限或尚未执行核对。" />
+					)}
+				</Card>
+				<Modal
+					title="资产字段详情"
 				open={detailOpen}
 				onCancel={() => setDetailOpen(false)}
 				footer={<Button onClick={() => setDetailOpen(false)}>关闭</Button>}
@@ -651,21 +871,104 @@ export default function Page() {
 							key: "governance",
 							label: "治理状态",
 							children: (
-								<Space direction="vertical" size={12} className="w-full">
-									<div className="grid gap-3 md:grid-cols-3">
+									<Space direction="vertical" size={12} className="w-full">
+										<div className="grid gap-3 md:grid-cols-3">
 										<Card size="small" title="权限授权">
 											<div className="text-lg font-semibold">{impact.grantsCount}</div>
 										</Card>
 										<Card size="small" title="血缘节点">
 											<div className="text-lg font-semibold">{impact.lineageNodeCount}</div>
 										</Card>
-										<Card size="small" title="血缘关系">
-											<div className="text-lg font-semibold">{impact.lineageEdgeCount}</div>
+											<Card size="small" title="血缘关系">
+												<div className="text-lg font-semibold">{impact.lineageEdgeCount}</div>
+											</Card>
+											</div>
+											<Card size="small" title="治理健康">
+												<div className="mb-2 flex items-center gap-2 text-xs text-slate-600">
+													<Tag color={governanceHealth?.healthLevel === "HEALTHY" ? "green" : governanceHealth?.healthLevel === "WARN" ? "gold" : "red"}>
+														{governanceHealth?.healthLevel || "UNKNOWN"}
+													</Tag>
+													<span>健康分 {Number(governanceHealth?.healthScore ?? 0)}</span>
+												</div>
+												<div className="mb-2 text-xs text-slate-600">
+													质量运行：总 {Number(governanceHealth?.quality?.totalRuns ?? 0)} / 成功 {Number(governanceHealth?.quality?.passRuns ?? 0)} / 失败 {Number(governanceHealth?.quality?.failRuns ?? 0)}
+												</div>
+												<div className="mb-2 text-xs text-slate-600">
+													问题工单：总 {Number(governanceHealth?.issues?.total ?? 0)} / 打开 {Number(governanceHealth?.issues?.open ?? 0)} / 逾期 {Number(governanceHealth?.issues?.overdue ?? 0)}
+												</div>
+												<div className="mb-2 flex flex-wrap gap-2">
+													{Array.isArray(governanceHealth?.quality?.failureTop) && governanceHealth?.quality?.failureTop.length > 0 ? (
+														governanceHealth?.quality?.failureTop.map((item, idx) => (
+															<Tag key={`fail-cat-${idx}`}>
+																{item.category || "UNKNOWN"}: {Number(item.count || 0)}
+															</Tag>
+														))
+													) : (
+														<Tag color="green">近期开窗内无失败分类</Tag>
+													)}
+												</div>
+												<Space size={8} wrap>
+													<Button
+														size="small"
+														onClick={() => {
+															if (governanceHealth?.links?.qualityReportPath) {
+																router.push(governanceHealth.links.qualityReportPath);
+															}
+														}}
+													>
+														查看质量报告
+													</Button>
+													<Button
+														size="small"
+														onClick={() => {
+															if (governanceHealth?.links?.qualityRulesPath) {
+																router.push(governanceHealth.links.qualityRulesPath);
+															}
+														}}
+													>
+														查看质量运行
+													</Button>
+													<Button
+														size="small"
+														onClick={() => {
+															if (governanceHealth?.links?.issuesPath) {
+																router.push(governanceHealth.links.issuesPath);
+															}
+														}}
+													>
+														查看问题工单
+													</Button>
+												</Space>
+											</Card>
+												<Card size="small" title="密级与脱敏联动">
+													<div className="mb-2 text-xs text-slate-600">
+														当前密级：{securityLinkage?.classification || detailDataset?.classification || detailRow?.classification || "-"}
+													{" -> "}生效脱敏策略：
+													{Number(securityLinkage?.maskingRuleCount || 0)} 条
+												</div>
+											<div className="flex flex-wrap gap-2">
+												{Array.isArray(securityLinkage?.effectiveRules) && securityLinkage?.effectiveRules.length > 0 ? (
+													securityLinkage?.effectiveRules.slice(0, 8).map((rule, idx) => (
+														<Tag key={rule.id || `${rule.column || "col"}-${idx}`}>
+															{rule.column || "-"} / {rule.function || "-"}
+														</Tag>
+													))
+												) : (
+													<Tag>未配置</Tag>
+												)}
+											</div>
 										</Card>
-									</div>
-									<Alert
-										type="info"
-										showIcon
+										{securityLinkage?.conflict ? (
+											<Alert
+												type="warning"
+												showIcon
+												message="当前密级与脱敏策略不一致"
+												description={(securityLinkage?.suggestions || []).join("；") || "请补齐脱敏规则。"}
+											/>
+										) : null}
+										<Alert
+											type="info"
+											showIcon
 										message="治理状态用于评估修改影响面：包括授权范围、血缘传播范围、以及后续质量校验范围。"
 									/>
 								</Space>

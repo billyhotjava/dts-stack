@@ -107,4 +107,6 @@ public interface CatalogDatasetGrantRepository extends JpaRepository<CatalogData
         @Param("granteeId") String granteeId,
         @Param("username") String username
     );
+
+    Optional<CatalogDatasetGrant> findFirstBySourceRequestIdOrderByCreatedDateDesc(UUID sourceRequestId);
 }

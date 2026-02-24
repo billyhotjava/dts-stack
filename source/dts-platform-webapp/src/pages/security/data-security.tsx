@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
+	Alert,
 	Button,
 	Card,
+	Descriptions,
 	Form,
 	Input,
 	Modal,
@@ -18,7 +20,9 @@ import { DeleteOutlined, EditOutlined, PlusOutlined, SaveOutlined } from "@ant-d
 import { PageHeader } from "@/components/page-header";
 import {
 	getClassificationMapping,
+	getClassificationMaskingLinkage,
 	replaceClassificationMapping,
+	validateClassificationMapping,
 	listMaskingRules,
 	createMaskingRule,
 	updateMaskingRule,
@@ -29,6 +33,8 @@ import {
 } from "@/api/platformApi";
 
 const { Text } = Typography;
+const SECURITY_LINKAGE_VERSION_KEY = "catalog.security.linkage.version";
+const SECURITY_LINKAGE_EVENT = "catalog-security-linkage-updated";
 
 const MASKING_FUNCTIONS = [
 	{ label: "HASH", value: "HASH" },
@@ -47,6 +53,33 @@ type MaskingRule = {
 	args?: string;
 };
 
+type MappingValidationIssue = {
+	row?: number;
+	code?: string;
+	message?: string;
+	suggestion?: string;
+	datasetName?: string;
+	classification?: string;
+};
+
+type MappingValidationResult = {
+	valid?: boolean;
+	normalizedCount?: number;
+	conflicts?: MappingValidationIssue[];
+	warnings?: MappingValidationIssue[];
+};
+
+type DatasetLinkage = {
+	datasetId?: string;
+	datasetName?: string;
+	classification?: string;
+	requiresMasking?: boolean;
+	maskingRuleCount?: number;
+	conflict?: boolean;
+	effectiveRules?: Array<{ id?: string; column?: string; function?: string; args?: string }>;
+	suggestions?: string[];
+};
+
 export default function Page() {
 	const [classificationRows, setClassificationRows] = useState<ClassificationRow[]>([]);
 	const [classificationDirty, setClassificationDirty] = useState(false);
@@ -62,17 +95,27 @@ export default function Page() {
 	const [selectedDataset, setSelectedDataset] = useState<string | undefined>();
 	const [, setSecurityMapping] = useState<any>(null);
 	const [securityForm] = Form.useForm();
+	const [mappingValidation, setMappingValidation] = useState<MappingValidationResult | null>(null);
+	const [validatingMapping, setValidatingMapping] = useState(false);
+	const [datasetLinkage, setDatasetLinkage] = useState<DatasetLinkage | null>(null);
 
 	const datasetOptions = useMemo(
 		() => datasets.map((item) => ({ label: item.name, value: item.id })),
 		[datasets],
 	);
 
+	const notifySecurityLinkageChanged = () => {
+		const version = String(Date.now());
+		localStorage.setItem(SECURITY_LINKAGE_VERSION_KEY, version);
+		window.dispatchEvent(new CustomEvent(SECURITY_LINKAGE_EVENT, { detail: { version } }));
+	};
+
 	const loadMappings = async () => {
 		try {
 			const list = await getClassificationMapping();
 			setClassificationRows(Array.isArray(list) ? (list as ClassificationRow[]) : []);
 			setClassificationDirty(false);
+			setMappingValidation(null);
 		} catch (error: any) {
 			toast.error(error?.message || "分类映射加载失败");
 		}
@@ -101,6 +144,7 @@ export default function Page() {
 		if (!datasetId) {
 			setSecurityMapping(null);
 			securityForm.resetFields();
+			setDatasetLinkage(null);
 			return;
 		}
 		try {
@@ -115,6 +159,44 @@ export default function Page() {
 		}
 	};
 
+	const loadDatasetLinkage = async (datasetId?: string) => {
+		if (!datasetId) {
+			setDatasetLinkage(null);
+			return;
+		}
+		try {
+			const linkage = await getClassificationMaskingLinkage(datasetId);
+			setDatasetLinkage((linkage || null) as DatasetLinkage | null);
+		} catch (error: any) {
+			toast.error(error?.message || "密级与脱敏联动信息加载失败");
+			setDatasetLinkage(null);
+		}
+	};
+
+	const runMappingValidation = async (silent = false) => {
+		setValidatingMapping(true);
+		try {
+			const result = (await validateClassificationMapping(classificationRows)) as MappingValidationResult;
+			setMappingValidation(result || null);
+			const conflicts = Array.isArray(result?.conflicts) ? result.conflicts : [];
+			if (!silent) {
+				if (conflicts.length) {
+					toast.error(`发现 ${conflicts.length} 个冲突，请先修复`);
+				} else {
+					toast.success("未发现阻断冲突");
+				}
+			}
+			return result || null;
+		} catch (error: any) {
+			if (!silent) {
+				toast.error(error?.message || "冲突预检失败");
+			}
+			return null;
+		} finally {
+			setValidatingMapping(false);
+		}
+	};
+
 	useEffect(() => {
 		setLoading(true);
 		Promise.all([loadMappings(), loadMaskingRules(), loadDatasets()])
@@ -124,6 +206,7 @@ export default function Page() {
 
 	useEffect(() => {
 		void loadSecurityMapping(selectedDataset);
+		void loadDatasetLinkage(selectedDataset);
 	}, [selectedDataset]);
 
 	const openMappingModal = (row?: ClassificationRow) => {
@@ -147,6 +230,7 @@ export default function Page() {
 				setClassificationRows((prev) => [...prev, { ...values }]);
 			}
 			setClassificationDirty(true);
+			setMappingValidation(null);
 			setMappingModalOpen(false);
 		} catch (error: any) {
 			if (error?.errorFields) return;
@@ -157,14 +241,23 @@ export default function Page() {
 	const deleteMappingRow = (row: ClassificationRow) => {
 		setClassificationRows((prev) => prev.filter((item) => item !== row));
 		setClassificationDirty(true);
+		setMappingValidation(null);
 	};
 
 	const saveMappingAll = async () => {
 		try {
+			const validation = await runMappingValidation(true);
+			const conflicts = Array.isArray(validation?.conflicts) ? validation?.conflicts : [];
+			if (conflicts.length > 0) {
+				toast.error("分类映射存在冲突，请先修复后再保存");
+				return;
+			}
 			await replaceClassificationMapping(classificationRows);
 			toast.success("分类映射已保存");
 			setClassificationDirty(false);
 			await loadMappings();
+			notifySecurityLinkageChanged();
+			await loadDatasetLinkage(selectedDataset);
 		} catch (error: any) {
 			toast.error(error?.message || "保存失败");
 		}
@@ -199,6 +292,8 @@ export default function Page() {
 			}
 			setMaskingModalOpen(false);
 			await loadMaskingRules();
+			notifySecurityLinkageChanged();
+			await loadDatasetLinkage(selectedDataset);
 		} catch (error: any) {
 			if (error?.errorFields) return;
 			toast.error(error?.message || "保存失败");
@@ -211,6 +306,8 @@ export default function Page() {
 			await deleteMaskingRule(id);
 			toast.success("已删除脱敏规则");
 			await loadMaskingRules();
+			notifySecurityLinkageChanged();
+			await loadDatasetLinkage(selectedDataset);
 		} catch (error: any) {
 			toast.error(error?.message || "删除失败");
 		}
@@ -226,6 +323,8 @@ export default function Page() {
 			await upsertDatasetSecurityMapping(selectedDataset, values);
 			toast.success("安全字段已保存");
 			await loadSecurityMapping(selectedDataset);
+			notifySecurityLinkageChanged();
+			await loadDatasetLinkage(selectedDataset);
 		} catch (error: any) {
 			if (error?.errorFields) return;
 			toast.error(error?.message || "保存失败");
@@ -280,25 +379,60 @@ export default function Page() {
 						{
 							key: "classification",
 							label: "分类映射",
-							children: (
-								<>
-									<Space className="mb-3">
-										<Button icon={<PlusOutlined />} type="primary" onClick={() => openMappingModal()}>
-											新增映射
-										</Button>
-										<Button
-											type="default"
-											disabled={!classificationDirty}
-											icon={<SaveOutlined />}
-											onClick={saveMappingAll}
+								children: (
+									<>
+										<Space className="mb-3">
+											<Button icon={<PlusOutlined />} type="primary" onClick={() => openMappingModal()}>
+												新增映射
+											</Button>
+											<Button loading={validatingMapping} onClick={() => void runMappingValidation()}>
+												冲突预检
+											</Button>
+											<Button
+												type="default"
+												disabled={!classificationDirty}
+												icon={<SaveOutlined />}
+												onClick={saveMappingAll}
 										>
 											保存映射
-										</Button>
-									</Space>
-									<Table
-										rowKey={(record, idx) => record.id || `new-${idx}`}
-										columns={classificationColumns}
-										dataSource={classificationRows}
+											</Button>
+										</Space>
+										{mappingValidation ? (
+											<Space direction="vertical" className="mb-3 w-full">
+												<Alert
+													type={Array.isArray(mappingValidation.conflicts) && mappingValidation.conflicts.length > 0 ? "error" : "success"}
+													showIcon
+													message={
+														Array.isArray(mappingValidation.conflicts) && mappingValidation.conflicts.length > 0
+															? `发现 ${mappingValidation.conflicts.length} 个冲突`
+															: "映射校验通过"
+													}
+													description={`标准化后映射条数：${Number(mappingValidation.normalizedCount || 0)}`}
+												/>
+												{Array.isArray(mappingValidation.conflicts) && mappingValidation.conflicts.length > 0 ? (
+													<div className="rounded border border-red-200 bg-red-50 p-3 text-xs text-red-700">
+														{mappingValidation.conflicts.slice(0, 6).map((item, idx) => (
+															<div key={`conflict-${idx}`}>
+																{item.message || "映射冲突"}{item.suggestion ? `；建议：${item.suggestion}` : ""}
+															</div>
+														))}
+													</div>
+												) : null}
+												{Array.isArray(mappingValidation.warnings) && mappingValidation.warnings.length > 0 ? (
+													<div className="rounded border border-amber-200 bg-amber-50 p-3 text-xs text-amber-700">
+														{mappingValidation.warnings.slice(0, 6).map((item, idx) => (
+															<div key={`warning-${idx}`}>
+																{item.message || "校验提示"}{item.suggestion ? `；建议：${item.suggestion}` : ""}
+															</div>
+														))}
+													</div>
+												) : null}
+											</Space>
+										) : null}
+										<Table
+											rowKey={(record, idx) => record.id || `new-${idx}`}
+											columns={classificationColumns}
+											dataSource={classificationRows}
 										loading={loading}
 									/>
 								</>
@@ -341,17 +475,43 @@ export default function Page() {
 											保存
 										</Button>
 									</Space>
-									<Form form={securityForm} layout="vertical">
-										<Form.Item label="密级字段" name="dataLevelField">
-											<Input placeholder="例如 data_level" />
-										</Form.Item>
-										<Form.Item label="部门字段" name="deptField">
-											<Input placeholder="例如 owner_dept" />
-										</Form.Item>
-									</Form>
-								</>
-							),
-						},
+										<Form form={securityForm} layout="vertical">
+											<Form.Item label="密级字段" name="dataLevelField">
+												<Input placeholder="例如 data_level" />
+											</Form.Item>
+											<Form.Item label="部门字段" name="deptField">
+												<Input placeholder="例如 owner_dept" />
+											</Form.Item>
+										</Form>
+										{selectedDataset && datasetLinkage ? (
+											<Space direction="vertical" className="w-full">
+												<Descriptions bordered size="small" column={1} title="密级与脱敏联动">
+													<Descriptions.Item label="当前密级">{datasetLinkage.classification || "-"}</Descriptions.Item>
+													<Descriptions.Item label="生效脱敏策略">
+														{Number(datasetLinkage.maskingRuleCount || 0)} 条
+													</Descriptions.Item>
+													<Descriptions.Item label="规则明细">
+														{Array.isArray(datasetLinkage.effectiveRules) && datasetLinkage.effectiveRules.length > 0
+															? datasetLinkage.effectiveRules
+																	.slice(0, 5)
+																	.map((rule) => `${rule.column || "-"} -> ${rule.function || "-"}`)
+																	.join("；")
+															: "未配置"}
+													</Descriptions.Item>
+												</Descriptions>
+												{datasetLinkage.conflict ? (
+													<Alert
+														type="warning"
+														showIcon
+														message="当前密级与脱敏策略不一致"
+														description={(datasetLinkage.suggestions || []).join("；") || "请补齐脱敏规则后重试。"}
+													/>
+												) : null}
+											</Space>
+										) : null}
+									</>
+								),
+							},
 					]}
 				/>
 			</Card>

@@ -161,6 +161,8 @@ export default function Page() {
 	const [runsLoading, setRunsLoading] = useState(false);
 	const [runStatus, setRunStatus] = useState<string>(searchParams.get("runStatus") || "");
 	const [runDatasetId, setRunDatasetId] = useState<string>(searchParams.get("runDatasetId") || "");
+	const issueStatus = searchParams.get("issueStatus") || undefined;
+	const issueDatasetId = searchParams.get("issueDatasetId") || undefined;
 	const [runRange, setRunRange] = useState<RunRange>(() => {
 		const startedFrom = searchParams.get("startedFrom");
 		const startedTo = searchParams.get("startedTo");
@@ -715,7 +717,7 @@ export default function Page() {
 			</Card>
 			<QualityTasksPanel />
 			<ComplianceCenterPanel />
-			<IssueWorkflowPanel />
+			<IssueWorkflowPanel initialDatasetId={issueDatasetId} initialStatus={issueStatus} />
 
 			<Modal
 				open={modalOpen}

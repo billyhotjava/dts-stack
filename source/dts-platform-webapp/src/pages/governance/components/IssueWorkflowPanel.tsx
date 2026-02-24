@@ -115,12 +115,18 @@ const statusColor = (status?: string) => {
 	return "default";
 };
 
-export default function IssueWorkflowPanel() {
+type IssueWorkflowPanelProps = {
+	initialDatasetId?: string;
+	initialStatus?: string;
+};
+
+export default function IssueWorkflowPanel({ initialDatasetId, initialStatus }: IssueWorkflowPanelProps = {}) {
 	const [issues, setIssues] = useState<IssueTicket[]>([]);
 	const [loading, setLoading] = useState(false);
-	const [statusFilter, setStatusFilter] = useState<string>("ALL");
+	const [statusFilter, setStatusFilter] = useState<string>(initialStatus || "ALL");
 	const [priorityFilter, setPriorityFilter] = useState<string>("ALL");
 	const [overdueFilter, setOverdueFilter] = useState<string>("ALL");
+	const [datasetFilter, setDatasetFilter] = useState<string>(initialDatasetId || "ALL");
 	const [keyword, setKeyword] = useState("");
 	const [editing, setEditing] = useState<IssueTicket | null>(null);
 	const [modalOpen, setModalOpen] = useState(false);
@@ -176,6 +182,9 @@ export default function IssueWorkflowPanel() {
 			if (overdueFilter === "ON_TIME") {
 				params.overdue = false;
 			}
+			if (datasetFilter && datasetFilter !== "ALL") {
+				params.datasetId = datasetFilter;
+			}
 			if (keyword.trim()) {
 				params.keyword = keyword.trim();
 			}
@@ -196,7 +205,16 @@ export default function IssueWorkflowPanel() {
 
 	useEffect(() => {
 		void loadIssues();
-	}, [statusFilter, priorityFilter, overdueFilter]);
+	}, [statusFilter, priorityFilter, overdueFilter, datasetFilter]);
+
+	useEffect(() => {
+		if (initialDatasetId) {
+			setDatasetFilter(initialDatasetId);
+		}
+		if (initialStatus) {
+			setStatusFilter(initialStatus);
+		}
+	}, [initialDatasetId, initialStatus]);
 
 	const openCreate = () => {
 		setEditing(null);
@@ -452,6 +470,13 @@ export default function IssueWorkflowPanel() {
 							{ label: "未逾期", value: "ON_TIME" },
 						]}
 						style={{ width: 130 }}
+					/>
+					<Input
+						allowClear
+						placeholder="数据集ID"
+						value={datasetFilter === "ALL" ? "" : datasetFilter}
+						onChange={(event) => setDatasetFilter(event.target.value?.trim() || "ALL")}
+						style={{ width: 190 }}
 					/>
 					<Button icon={<ReloadOutlined />} onClick={() => void loadIssues()}>
 						刷新

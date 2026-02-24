@@ -1,6 +1,6 @@
 # P2-01 资产权限申请流程闭环
 
-`status`: `todo`
+`status`: `done`
 `priority`: `P2`
 
 ## 目标
@@ -23,3 +23,21 @@
 
 - 申请到授权的状态可追踪。
 - 审批动作可审计、可回溯。
+
+## 本轮进展（2026-02-24）
+
+1. 后端闭环增强（已完成）
+- 新增统一审批入口：`POST /api/catalog/access/tasks/{id}/decide`（approve/reject 兼容接口保留）。
+- 新增申请详情：`GET /api/catalog/access/requests/{id}`（request + steps + currentTask + grant + effectiveStatus）。
+- 新增申请撤回：`POST /api/catalog/access/requests/{id}/cancel`（仅 `PENDING`，申请人或维护角色）。
+- 状态机扩展：任务新增 `SKIPPED`（拒绝/撤回后后续节点自动跳过）。
+
+2. 前端闭环增强（已完成）
+- 权限申请页新增“审批详情 Drawer”，展示审批链路、当前节点、授权结果、生效状态。
+- 新增“撤回申请”操作（我的申请中 `PENDING` 可撤回）。
+- 新增审批意见模板，并统一走 `decide` 接口。
+
+3. 闭环补齐（已完成）
+- 待办审批批量处理：新增批量决策接口与前端批量同意/驳回。
+- 我的申请/待办/已办统一分页筛选：三类列表统一支持 `keyword/page/size`，并在 done 支持结果状态筛选。
+- 审批结果回写：审批详情展示授权生效状态与授权对象；资产侧“治理状态”可反映授权条目数量变化。

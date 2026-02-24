@@ -12,10 +12,13 @@ import jakarta.validation.Valid;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import com.yuzhi.dts.platform.security.AuthoritiesConstants;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.Locale;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -49,10 +52,50 @@ public class CatalogDatasetAccessApprovalResource {
     }
 
     @GetMapping("/requests/mine")
-    public ApiResponse<List<CatalogDatasetAccessRequest>> listMyRequests() {
-        List<CatalogDatasetAccessRequest> list = approvalService.listMyRequests();
-        auditService.record("READ", "catalog.dataset.access.request", "catalog.dataset.access.request", "mine", "SUCCESS", Map.of("count", list.size()));
-        return ApiResponses.ok(list);
+    public ApiResponse<Map<String, Object>> listMyRequests(
+        @RequestParam(name = "status", required = false) String status,
+        @RequestParam(name = "keyword", required = false) String keyword,
+        @RequestParam(name = "datasetId", required = false) UUID datasetId,
+        @RequestParam(name = "page", required = false, defaultValue = "1") int page,
+        @RequestParam(name = "size", required = false, defaultValue = "20") int size
+    ) {
+        List<CatalogDatasetAccessRequest> list = approvalService.listMyRequests(status, keyword, datasetId);
+        Map<String, Object> paged = toPage(list, page, size);
+        Map<String, Object> meta = new LinkedHashMap<>();
+        meta.put("count", ((List<?>) paged.getOrDefault("content", List.of())).size());
+        meta.put("total", paged.getOrDefault("total", 0));
+        if (status != null) {
+            meta.put("status", status);
+        }
+        if (keyword != null) {
+            meta.put("keyword", keyword);
+        }
+        meta.put("page", page);
+        meta.put("size", size);
+        auditService.record("READ", "catalog.dataset.access.request", "catalog.dataset.access.request", "mine", "SUCCESS", meta);
+        return ApiResponses.ok(paged);
+    }
+
+    @GetMapping("/requests/{id}")
+    public ApiResponse<DatasetDataAccessApprovalService.AccessRequestDetail> getRequestDetail(
+        @PathVariable UUID id,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        try {
+            DatasetDataAccessApprovalService.AccessRequestDetail detail = approvalService.getRequestDetail(id, activeDept);
+            auditService.record("READ", "catalog.dataset.access.request", "catalog.dataset.access.request", id.toString(), "SUCCESS", Map.of());
+            return ApiResponses.ok(detail);
+        } catch (RuntimeException ex) {
+            auditService.record(
+                "READ",
+                "catalog.dataset.access.request",
+                "catalog.dataset.access.request",
+                id.toString(),
+                "FAILED",
+                Map.of("error", ex.getMessage())
+            );
+            return ApiResponses.error(ex.getMessage());
+        }
     }
 
     @GetMapping("/workflow/preview")
@@ -124,8 +167,12 @@ public class CatalogDatasetAccessApprovalResource {
     }
 
     @GetMapping("/tasks/pending")
-    public ApiResponse<List<Map<String, Object>>> listPendingTasks(
-        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    public ApiResponse<Map<String, Object>> listPendingTasks(
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept,
+        @RequestParam(name = "keyword", required = false) String keyword,
+        @RequestParam(name = "datasetId", required = false) UUID datasetId,
+        @RequestParam(name = "page", required = false, defaultValue = "1") int page,
+        @RequestParam(name = "size", required = false, defaultValue = "20") int size
     ) {
         List<CatalogDatasetAccessTask> tasks = approvalService.listPendingTasksForCurrentUser(activeDept);
         List<Map<String, Object>> views = tasks
@@ -137,13 +184,29 @@ public class CatalogDatasetAccessApprovalResource {
                 dto.put("request", req);
                 return dto;
             })
+            .filter(view -> matchTaskView(view, keyword, datasetId, null))
             .toList();
-        auditService.record("READ", "catalog.dataset.access.task", "catalog.dataset.access.task", "pending", "SUCCESS", Map.of("count", views.size()));
-        return ApiResponses.ok(views);
+        Map<String, Object> paged = toPage(views, page, size);
+        Map<String, Object> meta = new LinkedHashMap<>();
+        meta.put("count", ((List<?>) paged.getOrDefault("content", List.of())).size());
+        meta.put("total", paged.getOrDefault("total", 0));
+        meta.put("page", page);
+        meta.put("size", size);
+        if (keyword != null) {
+            meta.put("keyword", keyword);
+        }
+        auditService.record("READ", "catalog.dataset.access.task", "catalog.dataset.access.task", "pending", "SUCCESS", meta);
+        return ApiResponses.ok(paged);
     }
 
     @GetMapping("/tasks/done")
-    public ApiResponse<List<Map<String, Object>>> listDoneTasks() {
+    public ApiResponse<Map<String, Object>> listDoneTasks(
+        @RequestParam(name = "keyword", required = false) String keyword,
+        @RequestParam(name = "datasetId", required = false) UUID datasetId,
+        @RequestParam(name = "status", required = false) String status,
+        @RequestParam(name = "page", required = false, defaultValue = "1") int page,
+        @RequestParam(name = "size", required = false, defaultValue = "20") int size
+    ) {
         String currentLogin = SecurityUtils.getCurrentUserLogin().orElse(null);
         List<CatalogDatasetAccessTask> tasks = approvalService.listDoneTasksForCurrentUser();
         List<Map<String, Object>> views = tasks
@@ -159,9 +222,45 @@ public class CatalogDatasetAccessApprovalResource {
                 return dto;
             })
             .filter(item -> item != null)
+            .filter(view -> matchTaskView(view, keyword, datasetId, status))
             .toList();
-        auditService.record("READ", "catalog.dataset.access.task", "catalog.dataset.access.task", "done", "SUCCESS", Map.of("count", views.size()));
-        return ApiResponses.ok(views);
+        Map<String, Object> paged = toPage(views, page, size);
+        Map<String, Object> meta = new LinkedHashMap<>();
+        meta.put("count", ((List<?>) paged.getOrDefault("content", List.of())).size());
+        meta.put("total", paged.getOrDefault("total", 0));
+        meta.put("page", page);
+        meta.put("size", size);
+        if (keyword != null) {
+            meta.put("keyword", keyword);
+        }
+        if (status != null) {
+            meta.put("status", status);
+        }
+        auditService.record("READ", "catalog.dataset.access.task", "catalog.dataset.access.task", "done", "SUCCESS", meta);
+        return ApiResponses.ok(paged);
+    }
+
+    @PostMapping("/requests/{id}/cancel")
+    public ApiResponse<CatalogDatasetAccessRequest> cancelRequest(
+        @PathVariable UUID id,
+        @RequestBody(required = false) DecisionNotes body,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        try {
+            CatalogDatasetAccessRequest request = approvalService.cancelRequest(id, body != null ? body.notes() : null, activeDept);
+            auditService.record("UPDATE", "catalog.dataset.access.request.cancel", "catalog.dataset.access.request", id.toString(), "SUCCESS", Map.of());
+            return ApiResponses.ok(request);
+        } catch (RuntimeException ex) {
+            auditService.record(
+                "UPDATE",
+                "catalog.dataset.access.request.cancel",
+                "catalog.dataset.access.request",
+                id.toString(),
+                "FAILED",
+                Map.of("error", ex.getMessage())
+            );
+            return ApiResponses.error(ex.getMessage());
+        }
     }
 
     @GetMapping("/requests/{id}/steps")
@@ -189,7 +288,7 @@ public class CatalogDatasetAccessApprovalResource {
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
         try {
-            CatalogDatasetAccessTask task = approvalService.approveTask(id, body != null ? body.notes() : null, activeDept);
+            CatalogDatasetAccessTask task = approvalService.decideTask(id, true, body != null ? body.notes() : null, activeDept);
             auditService.record("UPDATE", "catalog.dataset.access.task.approve", "catalog.dataset.access.task", id.toString(), "SUCCESS", Map.of());
             return ApiResponses.ok(task);
         } catch (RuntimeException ex) {
@@ -205,13 +304,94 @@ public class CatalogDatasetAccessApprovalResource {
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
         try {
-            CatalogDatasetAccessTask task = approvalService.rejectTask(id, body != null ? body.notes() : null, activeDept);
+            CatalogDatasetAccessTask task = approvalService.decideTask(id, false, body != null ? body.notes() : null, activeDept);
             auditService.record("UPDATE", "catalog.dataset.access.task.reject", "catalog.dataset.access.task", id.toString(), "SUCCESS", Map.of());
             return ApiResponses.ok(task);
         } catch (RuntimeException ex) {
             auditService.record("UPDATE", "catalog.dataset.access.task.reject", "catalog.dataset.access.task", id.toString(), "FAILED", Map.of("error", ex.getMessage()));
             return ApiResponses.error(ex.getMessage());
         }
+    }
+
+    @PostMapping("/tasks/{id}/decide")
+    public ApiResponse<CatalogDatasetAccessTask> decideTask(
+        @PathVariable UUID id,
+        @RequestBody DecisionRequest body,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        if (body == null || body.approved() == null) {
+            return ApiResponses.error("approved 参数不能为空");
+        }
+        try {
+            CatalogDatasetAccessTask task = approvalService.decideTask(id, body.approved().booleanValue(), body.notes(), activeDept);
+            auditService.record(
+                "UPDATE",
+                "catalog.dataset.access.task.decide",
+                "catalog.dataset.access.task",
+                id.toString(),
+                "SUCCESS",
+                Map.of("approved", body.approved())
+            );
+            return ApiResponses.ok(task);
+        } catch (RuntimeException ex) {
+            auditService.record(
+                "UPDATE",
+                "catalog.dataset.access.task.decide",
+                "catalog.dataset.access.task",
+                id.toString(),
+                "FAILED",
+                Map.of("error", ex.getMessage())
+            );
+            return ApiResponses.error(ex.getMessage());
+        }
+    }
+
+    @PostMapping("/tasks/decide/batch")
+    public ApiResponse<Map<String, Object>> decideBatch(
+        @RequestBody DecisionBatchRequest body,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        if (body == null || body.approved() == null || body.taskIds() == null || body.taskIds().isEmpty()) {
+            return ApiResponses.error("taskIds 与 approved 不能为空");
+        }
+        List<Map<String, Object>> results = new ArrayList<>();
+        int success = 0;
+        int failed = 0;
+        for (UUID taskId : body.taskIds()) {
+            if (taskId == null) {
+                continue;
+            }
+            try {
+                CatalogDatasetAccessTask task = approvalService.decideTask(taskId, body.approved().booleanValue(), body.notes(), activeDept);
+                Map<String, Object> row = new LinkedHashMap<>();
+                row.put("taskId", taskId.toString());
+                row.put("status", "SUCCESS");
+                row.put("taskStatus", task.getStatus());
+                results.add(row);
+                success++;
+            } catch (RuntimeException ex) {
+                Map<String, Object> row = new LinkedHashMap<>();
+                row.put("taskId", taskId.toString());
+                row.put("status", "FAILED");
+                row.put("error", ex.getMessage());
+                results.add(row);
+                failed++;
+            }
+        }
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("approved", body.approved());
+        payload.put("success", success);
+        payload.put("failed", failed);
+        payload.put("results", results);
+        auditService.record(
+            "UPDATE",
+            "catalog.dataset.access.task.batch.decide",
+            "catalog.dataset.access.task",
+            "batch",
+            failed == 0 ? "SUCCESS" : "PARTIAL",
+            Map.of("approved", body.approved(), "success", success, "failed", failed)
+        );
+        return ApiResponses.ok(payload);
     }
 
     public record CreateDatasetAccessRequest(
@@ -228,6 +408,10 @@ public class CatalogDatasetAccessApprovalResource {
     ) {}
 
     public record DecisionNotes(String notes) {}
+
+    public record DecisionRequest(Boolean approved, String notes) {}
+
+    public record DecisionBatchRequest(List<UUID> taskIds, Boolean approved, String notes) {}
 
     public record AccessStepDto(
         Integer stepOrder,
@@ -259,5 +443,59 @@ public class CatalogDatasetAccessApprovalResource {
             }
         }
         return SecurityUtils.hasCurrentUserAnyOfAuthorities(AuthoritiesConstants.DATA_MAINTAINER_ROLES);
+    }
+
+    private Map<String, Object> toPage(List<?> list, int page, int size) {
+        int safeSize = Math.max(1, Math.min(size, 200));
+        int safePage = Math.max(1, page);
+        List<?> source = list == null ? List.of() : list;
+        int total = source.size();
+        int from = Math.min((safePage - 1) * safeSize, total);
+        int to = Math.min(from + safeSize, total);
+        List<?> content = from < to ? source.subList(from, to) : Collections.emptyList();
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("content", content);
+        result.put("total", total);
+        result.put("page", safePage);
+        result.put("size", safeSize);
+        return result;
+    }
+
+    private boolean matchTaskView(Map<String, Object> view, String keyword, UUID datasetId, String status) {
+        if (view == null) {
+            return false;
+        }
+        CatalogDatasetAccessRequest req = view.get("request") instanceof CatalogDatasetAccessRequest r ? r : null;
+        CatalogDatasetAccessTask task = view.get("task") instanceof CatalogDatasetAccessTask t ? t : null;
+        if (datasetId != null && (req == null || !datasetId.equals(req.getDatasetId()))) {
+            return false;
+        }
+        if (status != null) {
+            String normalizedStatus = status.trim().toUpperCase(Locale.ROOT);
+            String taskStatus = task != null && task.getStatus() != null ? task.getStatus().trim().toUpperCase(Locale.ROOT) : "";
+            if (!normalizedStatus.equals(taskStatus)) {
+                return false;
+            }
+        }
+        if (keyword == null || keyword.isBlank()) {
+            return true;
+        }
+        String kw = keyword.trim().toLowerCase(Locale.ROOT);
+        String text =
+            (
+                String.valueOf(req != null ? req.getDatasetName() : "") +
+                " " +
+                String.valueOf(req != null ? req.getRequesterName() : "") +
+                " " +
+                String.valueOf(req != null ? req.getRequesterUsername() : "") +
+                " " +
+                String.valueOf(req != null ? req.getTargetName() : "") +
+                " " +
+                String.valueOf(req != null ? req.getTargetUsername() : "") +
+                " " +
+                String.valueOf(task != null ? task.getApproverRole() : "")
+            )
+                .toLowerCase(Locale.ROOT);
+        return text.contains(kw);
     }
 }

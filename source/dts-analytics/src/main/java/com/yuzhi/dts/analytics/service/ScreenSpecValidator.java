@@ -15,6 +15,7 @@ public class ScreenSpecValidator {
     public static final int CURRENT_SCHEMA_VERSION = 2;
 
     private static final Set<String> COMPONENT_TYPES = Set.of(
+            // ECharts 图表
             "line-chart",
             "bar-chart",
             "pie-chart",
@@ -23,6 +24,12 @@ public class ScreenSpecValidator {
             "radar-chart",
             "funnel-chart",
             "map-chart",
+            "combo-chart",
+            "wordcloud-chart",
+            "treemap-chart",
+            "sunburst-chart",
+            "waterfall-chart",
+            // DataV 装饰
             "border-box",
             "decoration",
             "scroll-board",
@@ -31,6 +38,7 @@ public class ScreenSpecValidator {
             "digital-flop",
             "flyline-chart",
             "percent-pond",
+            // 基础组件
             "title",
             "markdown-text",
             "number-card",
@@ -48,7 +56,12 @@ public class ScreenSpecValidator {
             "table",
             "filter-input",
             "filter-select",
-            "filter-date-range");
+            "filter-date-range",
+            "richtext",
+            // 3D 可视化 (echarts-gl)
+            "globe-chart",
+            "bar3d-chart",
+            "scatter3d-chart");
 
     private static final Set<String> DATA_SOURCE_TYPES = Set.of("static", "api", "card", "sql", "dataset", "metric", "database");
     private static final Set<String> VARIABLE_TYPES = Set.of("string", "number", "date");
