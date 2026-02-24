@@ -6,6 +6,7 @@ import com.yuzhi.dts.platform.service.governance.DimensionService;
 import com.yuzhi.dts.platform.service.governance.IndicatorService;
 import com.yuzhi.dts.platform.service.governance.IndicatorPublishPreviewService;
 import com.yuzhi.dts.platform.service.governance.IndicatorReferenceService;
+import com.yuzhi.dts.platform.service.governance.IndicatorObservabilityService;
 import com.yuzhi.dts.platform.service.governance.dto.DimensionDto;
 import com.yuzhi.dts.platform.service.governance.dto.IndicatorDto;
 import com.yuzhi.dts.platform.service.governance.dto.IndicatorValidationResultDto;
@@ -16,6 +17,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.springframework.http.HttpStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -33,6 +35,7 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 @RestController
 @RequestMapping("/api/governance")
@@ -46,6 +49,7 @@ public class GovernanceIndicatorResource {
     private final DimensionService dimensions;
     private final IndicatorReferenceService indicatorReferences;
     private final IndicatorPublishPreviewService indicatorPublishPreviewService;
+    private final IndicatorObservabilityService indicatorObservabilityService;
     private final AuditService audit;
 
     public GovernanceIndicatorResource(
@@ -53,12 +57,14 @@ public class GovernanceIndicatorResource {
         DimensionService dimensions,
         IndicatorReferenceService indicatorReferences,
         IndicatorPublishPreviewService indicatorPublishPreviewService,
+        IndicatorObservabilityService indicatorObservabilityService,
         AuditService audit
     ) {
         this.indicators = indicators;
         this.dimensions = dimensions;
         this.indicatorReferences = indicatorReferences;
         this.indicatorPublishPreviewService = indicatorPublishPreviewService;
+        this.indicatorObservabilityService = indicatorObservabilityService;
         this.audit = audit;
     }
 
@@ -72,18 +78,29 @@ public class GovernanceIndicatorResource {
         @RequestParam(required = false) String keyword,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
+        long startedAt = System.nanoTime();
         Pageable pageable = PageRequest.of(page, size, Sort.by("lastModifiedDate").descending());
         Page<IndicatorDto> result = indicators.list(keyword, status, pageable, activeDept);
-        Map<String, Object> payload = Map.of(
-            "content",
-            result.getContent(),
-            "total",
-            result.getTotalElements(),
-            "page",
-            result.getNumber(),
-            "size",
-            result.getSize()
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("content", result.getContent());
+        payload.put("total", result.getTotalElements());
+        payload.put("page", result.getNumber());
+        payload.put("size", result.getSize());
+        payload.put("totalPages", result.getTotalPages());
+        payload.put(
+            "pageStats",
+            Map.of(
+                "page",
+                result.getNumber(),
+                "size",
+                result.getSize(),
+                "total",
+                result.getTotalElements(),
+                "totalPages",
+                result.getTotalPages()
+            )
         );
+        payload.put("queryCostMs", (System.nanoTime() - startedAt) / 1_000_000L);
         Map<String, Object> auditPayload = new LinkedHashMap<>();
         auditPayload.put("summary", "查看指标字典列表");
         auditPayload.put("page", page);
@@ -109,6 +126,41 @@ public class GovernanceIndicatorResource {
         }
         audit.auditAction("GOV_INDICATOR_VIEW", AuditStage.SUCCESS, id.toString(), detail);
         return ApiResponses.ok(dto);
+    }
+
+    @GetMapping("/indicators/ops/overview")
+    public ApiResponse<Map<String, Object>> indicatorOpsOverview(
+        @RequestParam(defaultValue = "168") int hours,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        Map<String, Object> payload = indicatorObservabilityService.overview(hours, activeDept);
+        Map<String, Object> auditPayload = new LinkedHashMap<>();
+        auditPayload.put("summary", "查看指标运维概览");
+        auditPayload.put("hours", hours);
+        if (StringUtils.hasText(activeDept)) {
+            auditPayload.put("activeDept", activeDept.trim());
+        }
+        audit.auditAction("GOV_INDICATOR_OPS_OVERVIEW", AuditStage.SUCCESS, "OVERVIEW", auditPayload);
+        return ApiResponses.ok(payload);
+    }
+
+    @GetMapping("/indicators/ops/trend")
+    public ApiResponse<List<Map<String, Object>>> indicatorOpsTrend(
+        @RequestParam(defaultValue = "168") int hours,
+        @RequestParam(defaultValue = "24") int bucketHours,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        List<Map<String, Object>> rows = indicatorObservabilityService.trend(hours, bucketHours, activeDept);
+        Map<String, Object> auditPayload = new LinkedHashMap<>();
+        auditPayload.put("summary", "查看指标校验趋势");
+        auditPayload.put("hours", hours);
+        auditPayload.put("bucketHours", bucketHours);
+        auditPayload.put("rows", rows.size());
+        if (StringUtils.hasText(activeDept)) {
+            auditPayload.put("activeDept", activeDept.trim());
+        }
+        audit.auditAction("GOV_INDICATOR_OPS_TREND", AuditStage.SUCCESS, "TREND", auditPayload);
+        return ApiResponses.ok(rows);
     }
 
     @GetMapping("/indicators/{id}/versions")
@@ -140,6 +192,24 @@ public class GovernanceIndicatorResource {
             Map.of("summary", "查看指标版本快照", "version", version)
         );
         return ApiResponses.ok(snapshot);
+    }
+
+    @GetMapping("/indicators/{id}/versions/diff")
+    public ApiResponse<Map<String, Object>> diffIndicatorVersions(
+        @PathVariable UUID id,
+        @RequestParam(value = "left", required = false, defaultValue = "CURRENT") String left,
+        @RequestParam(value = "right", required = false) String right,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        Map<String, Object> payload = indicators.compareVersions(id, left, right, activeDept);
+        int diffCount = payload.get("diffCount") instanceof Number number ? number.intValue() : 0;
+        audit.auditAction(
+            "GOV_INDICATOR_VERSION_DIFF",
+            AuditStage.SUCCESS,
+            id.toString(),
+            Map.of("summary", "查看指标版本差异", "left", left, "right", right, "diffCount", diffCount)
+        );
+        return ApiResponses.ok(payload);
     }
 
     @GetMapping("/indicators/{id}/references")
@@ -267,6 +337,20 @@ public class GovernanceIndicatorResource {
         @PathVariable UUID id,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
+        Map<String, Object> preview = indicatorPublishPreviewService.preview(id, activeDept);
+        boolean ready = Boolean.TRUE.equals(preview.get("readyToPublish"));
+        if (!ready) {
+            String reasonCode = preview.get("failureReasonCode") != null ? String.valueOf(preview.get("failureReasonCode")) : "IND_PUBLISH_BLOCKED";
+            String message = "发布前预检未通过";
+            Object blocking = preview.get("blockingIssues");
+            if (blocking instanceof List<?> list && !list.isEmpty() && list.get(0) instanceof Map<?, ?> issue) {
+                Object text = issue.get("message");
+                if (text != null) {
+                    message = String.valueOf(text);
+                }
+            }
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "[" + reasonCode + "] " + message);
+        }
         IndicatorDto saved = indicators.publish(id, activeDept);
         Map<String, Object> detail = new LinkedHashMap<>();
         detail.put("targetId", id.toString());
@@ -274,6 +358,37 @@ public class GovernanceIndicatorResource {
         detail.put("summary", "发布指标：" + saved.getName());
         audit.auditAction("GOV_INDICATOR_PUBLISH", AuditStage.SUCCESS, id.toString(), detail);
         return ApiResponses.ok(saved);
+    }
+
+    public record IndicatorRollbackRequest(String reason, Boolean publishAfterRollback) {}
+
+    @PostMapping("/indicators/{id}/versions/{version}/rollback")
+    @PreAuthorize(GOVERNANCE_MAINTAINER_EXPRESSION)
+    public ApiResponse<Map<String, Object>> rollbackIndicatorVersion(
+        @PathVariable UUID id,
+        @PathVariable String version,
+        @RequestBody(required = false) IndicatorRollbackRequest request,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        boolean publishAfterRollback = request != null && Boolean.TRUE.equals(request.publishAfterRollback());
+        String reason = request != null ? request.reason() : null;
+        Map<String, Object> payload = indicators.rollbackToVersion(id, version, activeDept, reason, publishAfterRollback);
+        audit.auditAction(
+            "GOV_INDICATOR_VERSION_ROLLBACK",
+            AuditStage.SUCCESS,
+            id.toString(),
+            Map.of(
+                "summary",
+                "回滚指标历史版本",
+                "sourceVersion",
+                version,
+                "targetVersion",
+                String.valueOf(payload.get("rollbackToVersion")),
+                "publishAfterRollback",
+                publishAfterRollback
+            )
+        );
+        return ApiResponses.ok(payload);
     }
 
     @PostMapping("/indicators/{id}/archive")
@@ -356,18 +471,29 @@ public class GovernanceIndicatorResource {
         @RequestParam(required = false) String keyword,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
+        long startedAt = System.nanoTime();
         Pageable pageable = PageRequest.of(page, size, Sort.by("lastModifiedDate").descending());
         Page<DimensionDto> result = dimensions.list(keyword, status, pageable, activeDept);
-        Map<String, Object> payload = Map.of(
-            "content",
-            result.getContent(),
-            "total",
-            result.getTotalElements(),
-            "page",
-            result.getNumber(),
-            "size",
-            result.getSize()
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("content", result.getContent());
+        payload.put("total", result.getTotalElements());
+        payload.put("page", result.getNumber());
+        payload.put("size", result.getSize());
+        payload.put("totalPages", result.getTotalPages());
+        payload.put(
+            "pageStats",
+            Map.of(
+                "page",
+                result.getNumber(),
+                "size",
+                result.getSize(),
+                "total",
+                result.getTotalElements(),
+                "totalPages",
+                result.getTotalPages()
+            )
         );
+        payload.put("queryCostMs", (System.nanoTime() - startedAt) / 1_000_000L);
         Map<String, Object> auditPayload = new LinkedHashMap<>();
         auditPayload.put("summary", "查看维度字典列表");
         auditPayload.put("page", page);

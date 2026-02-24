@@ -1,0 +1,10 @@
+step,required,method,path,status,ok,duration_ms,message
+list_indicators,1,GET,/api/governance/indicators?page=0&size=5,200,1,37,OK
+create_indicator,1,POST,/api/governance/indicators,403,0,9,HTTP_403
+update_indicator,1,PUT,/api/governance/indicators/<id>,0,0,0,skipped_due_to_create_failure
+list_versions,1,GET,/api/governance/indicators/<id>/versions,0,0,0,skipped_due_to_create_failure
+list_references,1,GET,/api/governance/indicators/<id>/references,0,0,0,skipped_due_to_create_failure
+validate_indicator,0,POST,/api/governance/indicators/<id>/validate,0,0,0,skipped_due_to_create_failure
+preview_indicator,0,POST,/api/governance/indicators/<id>/preview,0,0,0,skipped_due_to_create_failure
+publish_preview,0,POST,/api/governance/indicators/<id>/publish-preview,0,0,0,skipped_due_to_create_failure
+delete_indicator,1,DELETE,/api/governance/indicators/<id>,0,0,0,skipped_due_to_create_failure

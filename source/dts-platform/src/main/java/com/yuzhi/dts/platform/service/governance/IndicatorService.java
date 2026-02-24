@@ -1,12 +1,14 @@
 package com.yuzhi.dts.platform.service.governance;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.platform.domain.governance.GovIndicatorDefinition;
 import com.yuzhi.dts.platform.domain.governance.GovIndicatorVersion;
 import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
 import com.yuzhi.dts.platform.repository.governance.GovIndicatorDefinitionRepository;
+import com.yuzhi.dts.platform.repository.governance.GovIndicatorReferenceRepository;
 import com.yuzhi.dts.platform.repository.governance.GovIndicatorVersionRepository;
 import com.yuzhi.dts.platform.security.AuthoritiesConstants;
 import com.yuzhi.dts.platform.security.DepartmentUtils;
@@ -24,11 +26,14 @@ import com.yuzhi.dts.platform.service.security.SecurityGuardException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.apache.commons.codec.digest.DigestUtils;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -45,9 +50,11 @@ public class IndicatorService {
     private static final String STATUS_PUBLISHED = "PUBLISHED";
     private static final String STATUS_ARCHIVED = "ARCHIVED";
     private static final String STATUS_DEPRECATED = "DEPRECATED";
+    private static final Pattern VERSION_PATTERN = Pattern.compile("(?i)^v(\\d+)$");
 
     private final GovIndicatorDefinitionRepository repository;
     private final GovIndicatorVersionRepository versionRepository;
+    private final GovIndicatorReferenceRepository referenceRepository;
     private final CatalogDatasetRepository datasetRepository;
     private final AccessChecker accessChecker;
     private final OrganizationVisibilityService organizationVisibilityService;
@@ -58,6 +65,7 @@ public class IndicatorService {
     public IndicatorService(
         GovIndicatorDefinitionRepository repository,
         GovIndicatorVersionRepository versionRepository,
+        GovIndicatorReferenceRepository referenceRepository,
         CatalogDatasetRepository datasetRepository,
         AccessChecker accessChecker,
         OrganizationVisibilityService organizationVisibilityService,
@@ -67,6 +75,7 @@ public class IndicatorService {
     ) {
         this.repository = repository;
         this.versionRepository = versionRepository;
+        this.referenceRepository = referenceRepository;
         this.datasetRepository = datasetRepository;
         this.accessChecker = accessChecker;
         this.organizationVisibilityService = organizationVisibilityService;
@@ -305,6 +314,9 @@ public class IndicatorService {
         if (!deptAllowed(entity, activeDept)) {
             throw new org.springframework.security.access.AccessDeniedException("Invalid department context");
         }
+        referenceRepository.deleteByIndicator(entity);
+        versionRepository.deleteByIndicator(entity);
+        repository.flush();
         repository.delete(entity);
     }
 
@@ -331,6 +343,78 @@ public class IndicatorService {
             .findByIndicatorAndVersion(entity, version)
             .orElseThrow(() -> new IllegalArgumentException("指标版本不存在"));
         return IndicatorMapper.toDto(snap);
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, Object> compareVersions(UUID indicatorId, String leftVersion, String rightVersion, String activeDept) {
+        GovIndicatorDefinition entity = repository.findById(indicatorId).orElseThrow();
+        if (!deptAllowed(entity, activeDept) || !levelAllowed(entity)) {
+            throw new org.springframework.security.access.AccessDeniedException("Access denied for indicator");
+        }
+
+        IndicatorDto current = IndicatorMapper.toDto(entity);
+        SnapshotRef left = resolveSnapshot(entity, current, leftVersion, true);
+        SnapshotRef right = resolveSnapshot(entity, current, rightVersion, false);
+        List<Map<String, Object>> diffs = diffSnapshots(left.payload(), right.payload());
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("indicatorId", indicatorId.toString());
+        result.put("leftVersion", left.version());
+        result.put("rightVersion", right.version());
+        result.put("leftSnapshot", left.payload());
+        result.put("rightSnapshot", right.payload());
+        result.put("diffCount", diffs.size());
+        result.put("diffs", diffs);
+        return result;
+    }
+
+    public Map<String, Object> rollbackToVersion(
+        UUID indicatorId,
+        String sourceVersion,
+        String activeDept,
+        String reason,
+        boolean publishAfterRollback
+    ) {
+        GovIndicatorDefinition entity = repository.findById(indicatorId).orElseThrow();
+        if (!deptAllowed(entity, activeDept)) {
+            throw new org.springframework.security.access.AccessDeniedException("Invalid department context");
+        }
+        if (!StringUtils.hasText(sourceVersion)) {
+            throw new IllegalArgumentException("回滚版本不能为空");
+        }
+        GovIndicatorVersion source = versionRepository
+            .findByIndicatorAndVersion(entity, sourceVersion.trim())
+            .orElseThrow(() -> new IllegalArgumentException("目标回滚版本不存在"));
+
+        IndicatorDto snapshotDto = parseSnapshot(source.getSnapshotJson());
+        if (snapshotDto == null) {
+            throw new IllegalArgumentException("目标版本快照不可读，无法回滚");
+        }
+
+        applySnapshotToEntity(entity, snapshotDto);
+        String rollbackVersion = nextVersion(entity);
+        entity.setVersion(rollbackVersion);
+        String reasonText = StringUtils.hasText(reason) ? reason.trim() : "版本回滚";
+        entity.setVersionNotes(reasonText + "（来源版本: " + sourceVersion.trim() + "）");
+        entity.setStatus(STATUS_DRAFT);
+        clearValidation(entity);
+        repository.save(entity);
+
+        Instant releasedAt = null;
+        if (publishAfterRollback) {
+            ensurePublishReady(entity, activeDept);
+            entity.setStatus(STATUS_PUBLISHED);
+            releasedAt = Instant.now();
+            repository.save(entity);
+        }
+        snapshot(entity, rollbackVersion, entity.getStatus(), entity.getVersionNotes(), releasedAt);
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("indicator", IndicatorMapper.toDto(entity));
+        result.put("rollbackFromVersion", sourceVersion.trim());
+        result.put("rollbackToVersion", rollbackVersion);
+        result.put("published", publishAfterRollback);
+        return result;
     }
 
     private void snapshot(GovIndicatorDefinition indicator, String version, String status, String changeSummary, Instant releasedAt) {
@@ -360,6 +444,154 @@ public class IndicatorService {
             throw new IllegalStateException("Failed to serialize indicator snapshot", e);
         }
     }
+
+    private SnapshotRef resolveSnapshot(
+        GovIndicatorDefinition entity,
+        IndicatorDto current,
+        String version,
+        boolean defaultLeft
+    ) {
+        String normalized = StringUtils.hasText(version) ? version.trim() : null;
+        if (!StringUtils.hasText(normalized)) {
+            normalized = defaultLeft ? "CURRENT" : String.valueOf(entity.getVersion());
+        }
+        if ("CURRENT".equalsIgnoreCase(normalized)) {
+            return new SnapshotRef("CURRENT", toMap(current));
+        }
+        final String lookupVersion = normalized;
+        GovIndicatorVersion snap = versionRepository
+            .findByIndicatorAndVersion(entity, lookupVersion)
+            .orElseThrow(() -> new IllegalArgumentException("版本不存在: " + lookupVersion));
+        IndicatorDto snapshotDto = parseSnapshot(snap.getSnapshotJson());
+        if (snapshotDto == null) {
+            throw new IllegalArgumentException("版本快照不可读: " + lookupVersion);
+        }
+        return new SnapshotRef(lookupVersion, toMap(snapshotDto));
+    }
+
+    private List<Map<String, Object>> diffSnapshots(Map<String, Object> left, Map<String, Object> right) {
+        List<Map<String, Object>> diffs = new ArrayList<>();
+        diffField(diffs, "name", "指标名称", left, right, false);
+        diffField(diffs, "code", "指标编码", left, right, false);
+        diffField(diffs, "category", "分类", left, right, false);
+        diffField(diffs, "definition", "定义", left, right, false);
+        diffField(diffs, "datasetId", "数据集", left, right, true);
+        diffField(diffs, "expressionSql", "计算SQL", left, right, true);
+        diffField(diffs, "dataLevel", "数据密级", left, right, true);
+        diffField(diffs, "tags", "标签", left, right, false);
+        diffField(diffs, "owner", "负责人", left, right, false);
+        diffField(diffs, "ownerDept", "所属部门", left, right, false);
+        diffField(diffs, "status", "状态", left, right, false);
+        return diffs;
+    }
+
+    private void diffField(
+        List<Map<String, Object>> diffs,
+        String field,
+        String label,
+        Map<String, Object> left,
+        Map<String, Object> right,
+        boolean blocker
+    ) {
+        String before = normalizeDiffValue(left != null ? left.get(field) : null);
+        String after = normalizeDiffValue(right != null ? right.get(field) : null);
+        if (Objects.equals(before, after)) {
+            return;
+        }
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("field", field);
+        row.put("label", label);
+        row.put("before", before);
+        row.put("after", after);
+        row.put("severity", blocker ? "BLOCKER" : "INFO");
+        diffs.add(row);
+    }
+
+    private String normalizeDiffValue(Object value) {
+        if (value == null) {
+            return null;
+        }
+        String text = String.valueOf(value).trim();
+        return text.isEmpty() ? null : text;
+    }
+
+    private IndicatorDto parseSnapshot(String json) {
+        if (!StringUtils.hasText(json)) {
+            return null;
+        }
+        try {
+            return objectMapper.readValue(json, IndicatorDto.class);
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private Map<String, Object> toMap(IndicatorDto dto) {
+        if (dto == null) {
+            return Map.of();
+        }
+        try {
+            return objectMapper.convertValue(dto, new TypeReference<Map<String, Object>>() {});
+        } catch (Exception ex) {
+            return Map.of();
+        }
+    }
+
+    private void applySnapshotToEntity(GovIndicatorDefinition entity, IndicatorDto snapshot) {
+        if (entity == null || snapshot == null) {
+            return;
+        }
+        entity.setCode(snapshot.getCode());
+        entity.setName(snapshot.getName());
+        entity.setCategory(snapshot.getCategory());
+        entity.setDefinition(snapshot.getDefinition());
+        entity.setExpressionSql(snapshot.getExpressionSql());
+        entity.setDatasetId(snapshot.getDatasetId());
+        entity.setOwner(snapshot.getOwner());
+        entity.setOwnerDept(snapshot.getOwnerDept());
+        entity.setDataLevel(snapshot.getDataLevel());
+        entity.setTags(snapshot.getTags());
+    }
+
+    private void clearValidation(GovIndicatorDefinition entity) {
+        if (entity == null) {
+            return;
+        }
+        entity.setLastValidationStatus(null);
+        entity.setLastValidationMessage(null);
+        entity.setLastValidatedAt(null);
+        entity.setLastValidationSignature(null);
+    }
+
+    private String nextVersion(GovIndicatorDefinition entity) {
+        int max = 0;
+        List<GovIndicatorVersion> all = versionRepository.findByIndicatorOrderByCreatedDateDesc(entity);
+        for (GovIndicatorVersion item : all) {
+            if (item == null || !StringUtils.hasText(item.getVersion())) {
+                continue;
+            }
+            Matcher matcher = VERSION_PATTERN.matcher(item.getVersion().trim());
+            if (matcher.matches()) {
+                try {
+                    int n = Integer.parseInt(matcher.group(1));
+                    if (n > max) {
+                        max = n;
+                    }
+                } catch (Exception ignored) {}
+            }
+        }
+        if (max == 0 && StringUtils.hasText(entity.getVersion())) {
+            Matcher matcher = VERSION_PATTERN.matcher(entity.getVersion().trim());
+            if (matcher.matches()) {
+                try {
+                    max = Integer.parseInt(matcher.group(1));
+                } catch (Exception ignored) {}
+            }
+        }
+        return "v" + (max + 1);
+    }
+
+    private record SnapshotRef(String version, Map<String, Object> payload) {}
 
     private void ensurePublishReady(GovIndicatorDefinition entity, String activeDept) {
         if (entity == null) {

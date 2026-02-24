@@ -49,6 +49,10 @@ public class JdbcCatalogSyncService {
     private static final String DEFAULT_CLASSIFICATION = "INTERNAL";
     private static final String DEFAULT_OWNER = "system";
     private static final String DEFAULT_EXPOSED_BY = "VIEW";
+    private static final String LIFECYCLE_SYNCED = "SYNCED";
+    private static final String LIFECYCLE_STALE = "STALE";
+    private static final String STALE_MODE_MARK = "MARK";
+    private static final String STALE_MODE_PURGE = "PURGE";
 
     private final InfraDataSourceRepository infraDataSourceRepository;
     private final InfraSecretService secretService;
@@ -148,6 +152,8 @@ public class JdbcCatalogSyncService {
         int tablesDiscovered = 0;
         int columnsImported = 0;
         int datasetsRemoved = 0;
+        int datasetsMarkedStale = 0;
+        int datasetsPurged = 0;
         Instant snapshotTime = Instant.now();
 
         long startedAt = System.nanoTime();
@@ -189,6 +195,8 @@ public class JdbcCatalogSyncService {
                     dataset.setClassification(defaultIfBlank(dataset.getClassification(), DEFAULT_CLASSIFICATION));
                     dataset.setOwner(defaultIfBlank(dataset.getOwner(), defaultOwner(source)));
                     dataset.setExposedBy(defaultIfBlank(dataset.getExposedBy(), DEFAULT_EXPOSED_BY));
+                    dataset.setEnabled(Boolean.TRUE);
+                    dataset.setLifecycleStatus(LIFECYCLE_SYNCED);
 
                     CatalogDataset savedDataset = datasetRepository.save(dataset);
                     if (isNewDataset) {
@@ -301,7 +309,16 @@ public class JdbcCatalogSyncService {
                 }
 
                 if (cleanupStale) {
-                    datasetsRemoved += cleanupStaleDatasets(source.getId(), normalizedSchema, processedTablesLower);
+                    StaleCleanupStats cleanupStats = cleanupStaleDatasets(
+                        source.getId(),
+                        normalizedSchema,
+                        processedTablesLower,
+                        resolveStaleCleanupMode(props),
+                        snapshotTime
+                    );
+                    datasetsMarkedStale += cleanupStats.marked();
+                    datasetsPurged += cleanupStats.purged();
+                    datasetsRemoved += cleanupStats.totalRemoved();
                 }
             }
 
@@ -319,10 +336,12 @@ public class JdbcCatalogSyncService {
                 datasetsUpdated,
                 tablesCreated,
                 columnsImported,
-                datasetsRemoved
+                datasetsRemoved,
+                datasetsMarkedStale,
+                datasetsPurged
             );
             LOG.info(
-                "JDBC catalog sync completed: source={}, schemas={}, created={}, updated={}, tablesCreated={}, columnsImported={}, removed={}, elapsedMs={}",
+                "JDBC catalog sync completed: source={}, schemas={}, created={}, updated={}, tablesCreated={}, columnsImported={}, removed={}, markedStale={}, purged={}, elapsedMs={}",
                 source.getName(),
                 schemas.size(),
                 datasetsCreated,
@@ -330,6 +349,8 @@ public class JdbcCatalogSyncService {
                 tablesCreated,
                 columnsImported,
                 datasetsRemoved,
+                datasetsMarkedStale,
+                datasetsPurged,
                 elapsedMs
             );
             return result;
@@ -349,7 +370,9 @@ public class JdbcCatalogSyncService {
                 datasetsUpdated,
                 tablesCreated,
                 columnsImported,
-                datasetsRemoved
+                datasetsRemoved,
+                datasetsMarkedStale,
+                datasetsPurged
             );
         }
     }
@@ -494,15 +517,22 @@ public class JdbcCatalogSyncService {
         return columns;
     }
 
-    private int cleanupStaleDatasets(UUID sourceId, String schema, Set<String> processedTablesLower) {
+    private StaleCleanupStats cleanupStaleDatasets(
+        UUID sourceId,
+        String schema,
+        Set<String> processedTablesLower,
+        String staleMode,
+        Instant snapshotTime
+    ) {
         if (sourceId == null || !StringUtils.hasText(schema) || processedTablesLower == null) {
-            return 0;
+            return StaleCleanupStats.empty();
         }
         List<CatalogDataset> existing = datasetRepository.findBySourceIdAndHiveDatabaseIgnoreCase(sourceId, schema);
         if (existing.isEmpty()) {
-            return 0;
+            return StaleCleanupStats.empty();
         }
-        int removed = 0;
+        int marked = 0;
+        int purged = 0;
         for (CatalogDataset dataset : existing) {
             if (dataset.getId() == null) {
                 continue;
@@ -517,10 +547,44 @@ public class JdbcCatalogSyncService {
             if (processedTablesLower.contains(tableName.trim().toLowerCase(Locale.ROOT))) {
                 continue;
             }
-            purgeDataset(dataset);
-            removed++;
+            if (STALE_MODE_PURGE.equalsIgnoreCase(staleMode)) {
+                purgeDataset(dataset);
+                purged++;
+            } else {
+                markDatasetStale(dataset, snapshotTime);
+                marked++;
+            }
         }
-        return removed;
+        return new StaleCleanupStats(marked, purged, marked + purged);
+    }
+
+    private String resolveStaleCleanupMode(Map<String, Object> props) {
+        if (boolProp(props, "catalogPurgeStale", false)) {
+            return STALE_MODE_PURGE;
+        }
+        String configured = stringProp(props, "catalogCleanupMode");
+        if (!StringUtils.hasText(configured)) {
+            return STALE_MODE_MARK;
+        }
+        String normalized = configured.trim().toUpperCase(Locale.ROOT);
+        if (STALE_MODE_PURGE.equals(normalized) || STALE_MODE_MARK.equals(normalized)) {
+            return normalized;
+        }
+        return STALE_MODE_MARK;
+    }
+
+    private void markDatasetStale(CatalogDataset dataset, Instant snapshotTime) {
+        if (dataset == null || dataset.getId() == null) {
+            return;
+        }
+        try {
+            dataset.setEnabled(Boolean.FALSE);
+            dataset.setLifecycleStatus(LIFECYCLE_STALE);
+            dataset.setSnapshotTime(snapshotTime != null ? snapshotTime : Instant.now());
+            datasetRepository.save(dataset);
+        } catch (Exception ex) {
+            LOG.warn("Failed to mark stale dataset {}({}): {}", dataset.getName(), dataset.getId(), ex.getMessage());
+        }
     }
 
     private void purgeDataset(CatalogDataset dataset) {
@@ -1021,6 +1085,12 @@ public class JdbcCatalogSyncService {
 
     private record ColumnMeta(String name, String dataType, boolean nullable, String comment) {}
 
+    private record StaleCleanupStats(int marked, int purged, int totalRemoved) {
+        private static StaleCleanupStats empty() {
+            return new StaleCleanupStats(0, 0, 0);
+        }
+    }
+
     public record JdbcSyncResult(
         UUID sourceId,
         String status,
@@ -1034,14 +1104,16 @@ public class JdbcCatalogSyncService {
         int datasetsUpdated,
         int tablesCreated,
         int columnsImported,
-        int datasetsRemoved
+        int datasetsRemoved,
+        int datasetsMarkedStale,
+        int datasetsPurged
     ) {
         public static JdbcSyncResult skipped(UUID sourceId, String reason) {
-            return new JdbcSyncResult(sourceId, "SKIPPED", reason, 0L, null, null, List.of(), 0, 0, 0, 0, 0, 0);
+            return new JdbcSyncResult(sourceId, "SKIPPED", reason, 0L, null, null, List.of(), 0, 0, 0, 0, 0, 0, 0, 0);
         }
 
         public static JdbcSyncResult failed(UUID sourceId, String error) {
-            return new JdbcSyncResult(sourceId, "FAILED", error, 0L, null, null, List.of(), 0, 0, 0, 0, 0, 0);
+            return new JdbcSyncResult(sourceId, "FAILED", error, 0L, null, null, List.of(), 0, 0, 0, 0, 0, 0, 0, 0);
         }
     }
 }

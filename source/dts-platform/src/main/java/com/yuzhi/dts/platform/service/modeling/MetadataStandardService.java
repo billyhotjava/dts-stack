@@ -6,23 +6,28 @@ import com.yuzhi.dts.platform.repository.modeling.MetadataStandardRepository;
 import com.yuzhi.dts.platform.service.modeling.dto.MetadataStandardDto;
 import jakarta.persistence.EntityNotFoundException;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
+import org.springframework.web.server.ResponseStatusException;
 
 @Service
 @Transactional
 public class MetadataStandardService {
 
     private final MetadataStandardRepository repository;
+    private final ModelingAssetReferenceService referenceService;
 
-    public MetadataStandardService(MetadataStandardRepository repository) {
+    public MetadataStandardService(MetadataStandardRepository repository, ModelingAssetReferenceService referenceService) {
         this.repository = repository;
+        this.referenceService = referenceService;
     }
 
     @Transactional(readOnly = true)
@@ -36,6 +41,12 @@ public class MetadataStandardService {
     public MetadataStandardDto get(UUID id) {
         MetadataStandard entity = repository.findById(id).orElseThrow(() -> new EntityNotFoundException("元数据标准不存在"));
         return MetadataStandardMapper.toDto(entity);
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, Object> references(UUID id) {
+        MetadataStandard entity = repository.findById(id).orElseThrow(() -> new EntityNotFoundException("元数据标准不存在"));
+        return referenceService.metadataStandardReferences(entity);
     }
 
     public MetadataStandardDto create(MetadataStandardUpsertRequest request) {
@@ -53,10 +64,17 @@ public class MetadataStandardService {
     }
 
     public void delete(UUID id) {
-        if (!repository.existsById(id)) {
-            throw new EntityNotFoundException("元数据标准不存在");
+        MetadataStandard entity = repository.findById(id).orElseThrow(() -> new EntityNotFoundException("元数据标准不存在"));
+        Map<String, Object> references = referenceService.metadataStandardReferences(entity);
+        int impact = referenceService.countReferences(references);
+        if (impact > 0) {
+            String summary = referenceService.summarizeReferences(references, 5);
+            throw new ResponseStatusException(
+                HttpStatus.CONFLICT,
+                "存在引用依赖，无法删除（影响对象 " + impact + " 个）" + (summary.isBlank() ? "" : "：" + summary)
+            );
         }
-        repository.deleteById(id);
+        repository.delete(entity);
     }
 
     private Specification<MetadataStandard> buildSpecification(MetadataStandardFilter filter) {
@@ -114,4 +132,3 @@ public class MetadataStandardService {
         return trimmed.isEmpty() ? null : trimmed;
     }
 }
-

@@ -32,6 +32,7 @@ import com.yuzhi.dts.platform.security.AuthoritiesConstants;
 import com.yuzhi.dts.platform.security.DepartmentUtils;
 import com.yuzhi.dts.platform.security.SecurityUtils;
 import com.yuzhi.dts.platform.service.audit.AuditService;
+import com.yuzhi.dts.platform.service.modeling.ModelingAssetReferenceService;
 import com.yuzhi.dts.platform.service.modeling.DataStandardSecurity;
 import com.yuzhi.dts.platform.service.security.AccessChecker;
 import com.yuzhi.dts.platform.service.security.OrganizationVisibilityService;
@@ -92,6 +93,7 @@ public class ModelingAuxResource {
     private final CatalogTableSchemaRepository catalogTableRepo;
     private final CatalogColumnSchemaRepository catalogColumnRepo;
     private final AccessChecker catalogAccessChecker;
+    private final ModelingAssetReferenceService referenceService;
 
     public ModelingAuxResource(
         ModelingPlanRepository planRepo,
@@ -110,7 +112,8 @@ public class ModelingAuxResource {
         GovIndicatorDefinitionRepository indicatorRepository,
         CatalogTableSchemaRepository catalogTableRepo,
         CatalogColumnSchemaRepository catalogColumnRepo,
-        AccessChecker catalogAccessChecker
+        AccessChecker catalogAccessChecker,
+        ModelingAssetReferenceService referenceService
     ) {
         this.planRepo = planRepo;
         this.planVersionRepo = planVersionRepo;
@@ -129,6 +132,7 @@ public class ModelingAuxResource {
         this.catalogTableRepo = catalogTableRepo;
         this.catalogColumnRepo = catalogColumnRepo;
         this.catalogAccessChecker = catalogAccessChecker;
+        this.referenceService = referenceService;
     }
 
     @GetMapping("/plans")
@@ -659,61 +663,37 @@ public class ModelingAuxResource {
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDeptHeader
     ) {
         ModelingGlossaryTerm term = getReadableTerm(id, activeDeptHeader);
-        String needle = StringUtils.trimToNull(term.getCode());
-        if (needle == null) {
-            needle = StringUtils.trimToNull(term.getName());
-        }
-        if (needle == null) {
-            needle = id.toString();
-        }
-        String kw = needle.toLowerCase(Locale.ROOT);
-
-        List<Map<String, Object>> standards = dataStandardRepository
-            .findAll()
-            .stream()
-            .filter(s -> matchTermRef(s, kw))
-            .limit(50)
-            .map(s -> {
-                Map<String, Object> row = new LinkedHashMap<>();
-                row.put("type", "DATA_STANDARD");
-                row.put("id", s.getId() != null ? s.getId().toString() : null);
-                row.put("code", s.getCode());
-                row.put("name", s.getName());
-                return row;
-            })
-            .toList();
-
-        List<Map<String, Object>> indicators = indicatorRepository
-            .findAll()
-            .stream()
-            .filter(i -> matchTermRef(i, kw))
-            .limit(50)
-            .map(i -> {
-                Map<String, Object> row = new LinkedHashMap<>();
-                row.put("type", "INDICATOR");
-                row.put("id", i.getId() != null ? i.getId().toString() : null);
-                row.put("code", i.getCode());
-                row.put("name", i.getName());
-                return row;
-            })
-            .toList();
-
-        Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("termId", id.toString());
-        payload.put("needle", needle);
-        payload.put("standardCount", standards.size());
-        payload.put("indicatorCount", indicators.size());
-        payload.put("standards", standards);
-        payload.put("indicators", indicators);
-        auditService.auditAction("MODELING_GLOSSARY_REFERENCE_VIEW", AuditStage.SUCCESS, id.toString(), Map.of("summary", "查看术语引用关系"));
+        Map<String, Object> payload = referenceService.glossaryReferences(term);
+        int impactCount = referenceService.countReferences(payload);
+        auditService.auditAction(
+            "MODELING_GLOSSARY_REFERENCE_VIEW",
+            AuditStage.SUCCESS,
+            id.toString(),
+            Map.of("summary", "查看术语引用关系", "impactCount", impactCount)
+        );
         return ApiResponses.ok(payload);
     }
 
     @DeleteMapping("/glossary/terms/{id}")
     @PreAuthorize("hasAuthority('" + AuthoritiesConstants.OP_ADMIN + "')")
     public ApiResponse<Boolean> deleteGlossaryTerm(@PathVariable UUID id) {
+        ModelingGlossaryTerm term = glossaryRepo.findById(id).orElseThrow(() -> new EntityNotFoundException("术语不存在"));
+        Map<String, Object> payload = referenceService.glossaryReferences(term);
+        int impactCount = referenceService.countReferences(payload);
+        if (impactCount > 0) {
+            String summary = referenceService.summarizeReferences(payload, 5);
+            throw new org.springframework.web.server.ResponseStatusException(
+                HttpStatus.CONFLICT,
+                "存在引用依赖，无法删除（影响对象 " + impactCount + " 个）" + (summary.isBlank() ? "" : "：" + summary)
+            );
+        }
         glossaryRepo.deleteById(id);
-        auditService.audit("DELETE", "modeling.glossary", id.toString());
+        auditService.auditAction(
+            "MODELING_GLOSSARY_DELETE",
+            AuditStage.SUCCESS,
+            id.toString(),
+            Map.of("summary", "删除术语", "impactCount", impactCount)
+        );
         return ApiResponses.ok(Boolean.TRUE);
     }
 
@@ -847,9 +827,38 @@ public class ModelingAuxResource {
     @DeleteMapping("/templates/{id}")
     @PreAuthorize("hasAuthority('" + AuthoritiesConstants.OP_ADMIN + "')")
     public ApiResponse<Boolean> deleteTemplate(@PathVariable UUID id) {
-        templateRepo.deleteById(id);
-        auditService.audit("DELETE", "modeling.template", id.toString());
+        ModelingTemplate template = templateRepo.findById(id).orElseThrow(() -> new EntityNotFoundException("模型模板不存在"));
+        Map<String, Object> payload = referenceService.templateReferences(template);
+        int impactCount = referenceService.countReferences(payload);
+        if (impactCount > 0) {
+            String summary = referenceService.summarizeReferences(payload, 5);
+            throw new org.springframework.web.server.ResponseStatusException(
+                HttpStatus.CONFLICT,
+                "存在引用依赖，无法删除（影响对象 " + impactCount + " 个）" + (summary.isBlank() ? "" : "：" + summary)
+            );
+        }
+        templateRepo.delete(template);
+        auditService.auditAction(
+            "MODELING_TEMPLATE_DELETE",
+            AuditStage.SUCCESS,
+            id.toString(),
+            Map.of("summary", "删除模型模板", "impactCount", impactCount)
+        );
         return ApiResponses.ok(Boolean.TRUE);
+    }
+
+    @GetMapping("/templates/{id}/references")
+    public ApiResponse<Map<String, Object>> getTemplateReferences(@PathVariable UUID id) {
+        ModelingTemplate template = templateRepo.findById(id).orElseThrow(() -> new EntityNotFoundException("模型模板不存在"));
+        Map<String, Object> payload = referenceService.templateReferences(template);
+        int impactCount = referenceService.countReferences(payload);
+        auditService.auditAction(
+            "MODELING_TEMPLATE_REFERENCE_VIEW",
+            AuditStage.SUCCESS,
+            id.toString(),
+            Map.of("summary", "查看模型模板引用关系", "impactCount", impactCount)
+        );
+        return ApiResponses.ok(payload);
     }
 
     public record TemplateFieldSpec(String name, String dataType, Boolean nullable, String standardCode, String comment) {}

@@ -1,22 +1,23 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useDrop } from 'react-dnd';
 import { useScreen } from '../ScreenContext';
+import { generateId } from '../ScreenContext';
 import { CanvasComponent } from './CanvasComponent';
 import type { ComponentItem, ScreenComponent } from '../types';
 import { buildComponentMap, isComponentEffectivelyVisible } from '../componentHierarchy';
-
-function generateId(): string {
-    return `comp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-}
+import { applyChartPresetDefaults, isChartComponentType } from '../chartPresets';
+import { safeCssBackgroundUrl } from '../sanitize';
 
 export function DesignerCanvas() {
-    const { state, addComponent, selectComponents, snapGuides } = useScreen();
+    const { state, addComponent, selectComponents, snapGuides, dispatch } = useScreen();
     const { config, selectedIds, zoom, showGrid } = state;
     const containerRef = useRef<HTMLDivElement>(null);
     const canvasRef = useRef<HTMLDivElement>(null);
     const [fitScale, setFitScale] = useState(1);
 
+    // Phase 4.4: resize debounce with requestAnimationFrame
     useEffect(() => {
+        let rafId = 0;
         const updateFitScale = () => {
             const node = containerRef.current;
             if (!node) {
@@ -29,11 +30,39 @@ export function DesignerCanvas() {
             const next = Math.max(0.1, Math.min(1, availableWidth / baseWidth, availableHeight / baseHeight));
             setFitScale(next);
         };
+        const onResize = () => {
+            cancelAnimationFrame(rafId);
+            rafId = requestAnimationFrame(updateFitScale);
+        };
 
         updateFitScale();
-        window.addEventListener('resize', updateFitScale);
-        return () => window.removeEventListener('resize', updateFitScale);
+        window.addEventListener('resize', onResize);
+        return () => {
+            window.removeEventListener('resize', onResize);
+            cancelAnimationFrame(rafId);
+        };
     }, [config.width, config.height]);
+
+    useEffect(() => {
+        const node = containerRef.current;
+        if (!node) return;
+        const clampZoom = (value: number) => Math.min(300, Math.max(25, Math.round(value)));
+        const handleWheel = (event: WheelEvent) => {
+            if (!event.ctrlKey && !event.metaKey) {
+                return;
+            }
+            event.preventDefault();
+            const step = event.deltaY > 0 ? -5 : 5;
+            const next = clampZoom((Number(state.zoom) || 100) + step);
+            dispatch({ type: 'SET_ZOOM', payload: next });
+        };
+        node.addEventListener('wheel', handleWheel, { passive: false });
+        return () => node.removeEventListener('wheel', handleWheel);
+    }, [dispatch, state.zoom]);
+
+    // Phase 4.1: use ref to hold components, so useDrop doesn't re-register on every state change
+    const componentsRef = useRef(config.components);
+    componentsRef.current = config.components;
 
     const [{ isOver }, drop] = useDrop(() => ({
         accept: 'COMPONENT',
@@ -49,8 +78,9 @@ export function DesignerCanvas() {
                 const dropX = x - item.defaultWidth / 2;
                 const dropY = y - item.defaultHeight / 2;
 
-                const visibilityMap = buildComponentMap(config.components);
-                const targetContainer = [...config.components]
+                const currentComponents = componentsRef.current;
+                const visibilityMap = buildComponentMap(currentComponents);
+                const targetContainer = [...currentComponents]
                     .filter((comp) => comp.visible && comp.type === 'container' && isComponentEffectivelyVisible(comp, visibilityMap))
                     .sort((a, b) => b.zIndex - a.zIndex)
                     .find((container) => (
@@ -81,10 +111,15 @@ export function DesignerCanvas() {
                     y: Math.round(boundedY),
                     width: item.defaultWidth,
                     height: item.defaultHeight,
-                    zIndex: config.components.length + 1,
+                    zIndex: currentComponents.length + 1,
                     locked: false,
                     visible: true,
-                    config: { ...item.defaultConfig },
+                    config: isChartComponentType(item.type)
+                        ? applyChartPresetDefaults(
+                            { ...item.defaultConfig },
+                            item.defaultWidth <= 360 || item.defaultHeight <= 260 ? 'compact' : 'business',
+                        )
+                        : { ...item.defaultConfig },
                     parentContainerId: targetContainer?.id,
                 };
 
@@ -94,7 +129,7 @@ export function DesignerCanvas() {
         collect: (monitor) => ({
             isOver: monitor.isOver(),
         }),
-    }), [zoom, fitScale, config.components, addComponent]);
+    }), [zoom, fitScale, addComponent]);
 
     const handleCanvasClick = useCallback((e: React.MouseEvent) => {
         // Deselect all when clicking on empty canvas area
@@ -102,6 +137,14 @@ export function DesignerCanvas() {
             selectComponents([]);
         }
     }, [selectComponents]);
+
+    // Phase 1.4: useMemo for visible sorted components
+    const visibleSortedComponents = useMemo(() => {
+        const componentMap = buildComponentMap(config.components);
+        return config.components
+            .filter((comp) => comp.visible && isComponentEffectivelyVisible(comp, componentMap))
+            .sort((a, b) => a.zIndex - b.zIndex);
+    }, [config.components]);
 
     const scale = Math.max(0.1, (zoom / 100) * fitScale);
 
@@ -124,7 +167,7 @@ export function DesignerCanvas() {
                         width: config.width,
                         height: config.height,
                         backgroundColor: config.backgroundColor,
-                        backgroundImage: config.backgroundImage ? `url(${config.backgroundImage})` : undefined,
+                        backgroundImage: safeCssBackgroundUrl(config.backgroundImage),
                         backgroundSize: 'cover',
                         backgroundPosition: 'center',
                         transform: `scale(${scale})`,
@@ -134,20 +177,14 @@ export function DesignerCanvas() {
                 >
                     {showGrid && <div className="canvas-grid" />}
 
-                    {(() => {
-                        const componentMap = buildComponentMap(config.components);
-                        return config.components
-                            .filter((comp) => comp.visible && isComponentEffectivelyVisible(comp, componentMap))
-                            .sort((a, b) => a.zIndex - b.zIndex)
-                            .map((component) => (
-                                <CanvasComponent
-                                    key={component.id}
-                                    component={component}
-                                    isSelected={selectedIds.includes(component.id)}
-                                    theme={config.theme}
-                                />
-                            ));
-                    })()}
+                    {visibleSortedComponents.map((component) => (
+                        <CanvasComponent
+                            key={component.id}
+                            component={component}
+                            isSelected={selectedIds.includes(component.id)}
+                            theme={config.theme}
+                        />
+                    ))}
 
                     {snapGuides.x.map((x, idx) => (
                         <div

@@ -77,6 +77,13 @@ public class GovQualityRun extends AbstractAuditingEntity<UUID> implements Seria
     private String message;
 
     @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "input_params_json", columnDefinition = "jsonb")
+    private String inputParamsJson;
+
+    @Column(name = "error_category", length = 64)
+    private String errorCategory;
+
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "metrics_json", columnDefinition = "jsonb")
     private String metricsJson;
 
@@ -207,6 +214,22 @@ public class GovQualityRun extends AbstractAuditingEntity<UUID> implements Seria
 
     public void setMessage(String message) {
         this.message = message;
+    }
+
+    public String getInputParamsJson() {
+        return inputParamsJson;
+    }
+
+    public void setInputParamsJson(String inputParamsJson) {
+        this.inputParamsJson = inputParamsJson;
+    }
+
+    public String getErrorCategory() {
+        return errorCategory;
+    }
+
+    public void setErrorCategory(String errorCategory) {
+        this.errorCategory = errorCategory;
     }
 
     public String getMetricsJson() {

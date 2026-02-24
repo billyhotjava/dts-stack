@@ -11,7 +11,7 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface GovComplianceBatchRepository extends JpaRepository<GovComplianceBatch, UUID> {
     List<GovComplianceBatch> findByStatusInOrderByCreatedDateDesc(List<String> statuses);
+    List<GovComplianceBatch> findByCreatedDateAfterOrderByCreatedDateAsc(Instant since);
     Optional<GovComplianceBatch> findFirstByTemplateCodeOrderByCreatedDateDesc(String templateCode);
     long countByCreatedDateAfter(Instant since);
 }
-

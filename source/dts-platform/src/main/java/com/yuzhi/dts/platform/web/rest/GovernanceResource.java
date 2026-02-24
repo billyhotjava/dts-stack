@@ -3,22 +3,28 @@ package com.yuzhi.dts.platform.web.rest;
 import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.governance.ComplianceService;
+import com.yuzhi.dts.platform.service.governance.GovernanceOpsMetricsService;
 import com.yuzhi.dts.platform.service.governance.IssueTicketService;
 import com.yuzhi.dts.platform.service.governance.QualityRuleService;
 import com.yuzhi.dts.platform.service.governance.QualityRunService;
+import com.yuzhi.dts.platform.service.governance.ReferenceCodeService;
 import com.yuzhi.dts.platform.service.governance.dto.ComplianceBatchDto;
 import com.yuzhi.dts.platform.service.governance.dto.ComplianceBatchItemDto;
 import com.yuzhi.dts.platform.service.governance.dto.IssueActionDto;
 import com.yuzhi.dts.platform.service.governance.dto.IssueTicketDto;
 import com.yuzhi.dts.platform.service.governance.dto.QualityRuleDto;
+import com.yuzhi.dts.platform.service.governance.dto.QualityRuleVersionDto;
 import com.yuzhi.dts.platform.service.governance.dto.QualityRunDto;
 import com.yuzhi.dts.platform.service.governance.request.ComplianceBatchRequest;
 import com.yuzhi.dts.platform.service.governance.request.ComplianceItemUpdateRequest;
 import com.yuzhi.dts.platform.service.governance.request.IssueActionRequest;
 import com.yuzhi.dts.platform.service.governance.request.IssueTicketUpsertRequest;
 import com.yuzhi.dts.platform.service.governance.request.QualityRuleUpsertRequest;
+import com.yuzhi.dts.platform.service.governance.request.QualityRuleVersionStatusRequest;
 import com.yuzhi.dts.platform.service.governance.request.QualityRunTriggerRequest;
 import com.yuzhi.dts.platform.security.SecurityUtils;
+import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -52,6 +58,8 @@ public class GovernanceResource {
     private final QualityRunService qualityRunService;
     private final ComplianceService complianceService;
     private final IssueTicketService issueTicketService;
+    private final GovernanceOpsMetricsService governanceOpsMetricsService;
+    private final ReferenceCodeService referenceCodeService;
     private final AuditService auditService;
 
     public GovernanceResource(
@@ -59,12 +67,16 @@ public class GovernanceResource {
         QualityRunService qualityRunService,
         ComplianceService complianceService,
         IssueTicketService issueTicketService,
+        GovernanceOpsMetricsService governanceOpsMetricsService,
+        ReferenceCodeService referenceCodeService,
         AuditService auditService
     ) {
         this.qualityRuleService = qualityRuleService;
         this.qualityRunService = qualityRunService;
         this.complianceService = complianceService;
         this.issueTicketService = issueTicketService;
+        this.governanceOpsMetricsService = governanceOpsMetricsService;
+        this.referenceCodeService = referenceCodeService;
         this.auditService = auditService;
     }
 
@@ -168,7 +180,57 @@ public class GovernanceResource {
         return ApiResponses.ok(dto);
     }
 
+    @GetMapping("/quality/rules/{id}/versions")
+    public ApiResponse<List<QualityRuleVersionDto>> listRuleVersions(
+        @PathVariable UUID id,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        List<QualityRuleVersionDto> versions = qualityRuleService.listRuleVersions(id, activeDept);
+        Map<String, Object> detail = new LinkedHashMap<>();
+        detail.put("summary", "查看质量规则版本列表");
+        detail.put("targetId", id.toString());
+        detail.put("count", versions.size());
+        auditService.auditAction("GOV_RULE_VERSION_LIST", AuditStage.SUCCESS, id.toString(), detail);
+        return ApiResponses.ok(versions);
+    }
+
+    @GetMapping("/quality/rules/{id}/versions/{version}")
+    public ApiResponse<QualityRuleVersionDto> getRuleVersion(
+        @PathVariable UUID id,
+        @PathVariable Integer version,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        QualityRuleVersionDto dto = qualityRuleService.getRuleVersion(id, version, activeDept);
+        Map<String, Object> detail = new LinkedHashMap<>();
+        detail.put("summary", "查看质量规则版本详情");
+        detail.put("targetId", id.toString());
+        detail.put("version", version);
+        auditService.auditAction("GOV_RULE_VERSION_VIEW", AuditStage.SUCCESS, id.toString(), detail);
+        return ApiResponses.ok(dto);
+    }
+
+    @PostMapping("/quality/rules/{id}/versions/{version}/status")
+    @PreAuthorize(GOVERNANCE_MAINTAINER_EXPRESSION)
+    public ApiResponse<QualityRuleVersionDto> changeRuleVersionStatus(
+        @PathVariable UUID id,
+        @PathVariable Integer version,
+        @RequestBody QualityRuleVersionStatusRequest request,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        return ApiResponses.ok(
+            qualityRuleService.changeRuleVersionStatus(
+                id,
+                version,
+                request != null ? request.getStatus() : null,
+                request != null ? request.getNotes() : null,
+                currentUser(),
+                activeDept
+            )
+        );
+    }
+
     @PostMapping("/quality/runs")
+    @PreAuthorize(GOVERNANCE_MAINTAINER_EXPRESSION)
     public ApiResponse<List<QualityRunDto>> triggerQualityRun(@RequestBody QualityRunTriggerRequest request) {
         List<QualityRunDto> runs = qualityRunService.trigger(request, currentUser());
         Map<String, Object> payload = new LinkedHashMap<>();
@@ -187,6 +249,33 @@ public class GovernanceResource {
         }
         String resourceId = request != null && request.getRuleId() != null ? request.getRuleId().toString() : "trigger";
         auditService.auditAction("GOV_RULE_EXECUTE", AuditStage.SUCCESS, resourceId, payload);
+        return ApiResponses.ok(runs);
+    }
+
+    @PostMapping("/quality/runs/dry-run")
+    @PreAuthorize(GOVERNANCE_MAINTAINER_EXPRESSION)
+    public ApiResponse<List<QualityRunDto>> dryRunQualityRule(@RequestBody QualityRunTriggerRequest request) {
+        QualityRunTriggerRequest effectiveRequest = request != null ? request : new QualityRunTriggerRequest();
+        effectiveRequest.setDryRun(Boolean.TRUE);
+        if (!StringUtils.hasText(effectiveRequest.getTriggerType())) {
+            effectiveRequest.setTriggerType("DRY_RUN");
+        }
+        List<QualityRunDto> runs = qualityRunService.trigger(effectiveRequest, currentUser());
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("summary", "试跑质量规则");
+        payload.put("runCount", runs.size());
+        if (effectiveRequest.getRuleId() != null) {
+            payload.put("ruleId", effectiveRequest.getRuleId().toString());
+        }
+        if (effectiveRequest.getDatasetId() != null) {
+            payload.put("datasetId", effectiveRequest.getDatasetId().toString());
+        }
+        auditService.auditAction(
+            "GOV_RULE_DRY_RUN",
+            AuditStage.SUCCESS,
+            effectiveRequest.getRuleId() != null ? effectiveRequest.getRuleId().toString() : "dry-run",
+            payload
+        );
         return ApiResponses.ok(runs);
     }
 
@@ -218,34 +307,37 @@ public class GovernanceResource {
     public ApiResponse<List<QualityRunDto>> listQualityRuns(
         @RequestParam(value = "ruleId", required = false) UUID ruleId,
         @RequestParam(value = "datasetId", required = false) UUID datasetId,
+        @RequestParam(value = "status", required = false) String status,
+        @RequestParam(value = "startedFrom", required = false) Instant startedFrom,
+        @RequestParam(value = "startedTo", required = false) Instant startedTo,
         @RequestParam(value = "limit", defaultValue = "10") int limit
     ) {
-        if (ruleId != null) {
-            List<QualityRunDto> runs = qualityRunService.recentByRule(ruleId, limit);
-            Map<String, Object> payload = new LinkedHashMap<>();
-            payload.put("summary", "查看质量运行记录");
-            payload.put("ruleId", ruleId.toString());
-            payload.put("limit", limit);
-            payload.put("count", runs.size());
-            auditService.auditAction("GOV_QUALITY_RUN_LIST", AuditStage.SUCCESS, ruleId.toString(), payload);
-            return ApiResponses.ok(runs);
-        }
-        if (datasetId != null) {
-            List<QualityRunDto> runs = qualityRunService.recentByDataset(datasetId, limit);
-            Map<String, Object> payload = new LinkedHashMap<>();
-            payload.put("summary", "查看质量运行记录");
-            payload.put("datasetId", datasetId.toString());
-            payload.put("limit", limit);
-            payload.put("count", runs.size());
-            auditService.auditAction("GOV_QUALITY_RUN_LIST", AuditStage.SUCCESS, datasetId.toString(), payload);
-            return ApiResponses.ok(runs);
-        }
-        List<QualityRunDto> runs = qualityRunService.recent(limit);
+        List<QualityRunDto> runs = qualityRunService.listRuns(ruleId, datasetId, status, startedFrom, startedTo, limit);
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("summary", "查看质量运行记录");
         payload.put("limit", limit);
         payload.put("count", runs.size());
-        auditService.auditAction("GOV_QUALITY_RUN_LIST", AuditStage.SUCCESS, "recent", payload);
+        if (ruleId != null) {
+            payload.put("ruleId", ruleId.toString());
+        }
+        if (datasetId != null) {
+            payload.put("datasetId", datasetId.toString());
+        }
+        if (StringUtils.hasText(status)) {
+            payload.put("status", status.trim().toUpperCase(Locale.ROOT));
+        }
+        if (startedFrom != null) {
+            payload.put("startedFrom", startedFrom.toString());
+        }
+        if (startedTo != null) {
+            payload.put("startedTo", startedTo.toString());
+        }
+        String resourceId = ruleId != null
+            ? ruleId.toString()
+            : datasetId != null
+                ? datasetId.toString()
+                : "recent";
+        auditService.auditAction("GOV_QUALITY_RUN_LIST", AuditStage.SUCCESS, resourceId, payload);
         return ApiResponses.ok(runs);
     }
 
@@ -349,6 +441,8 @@ public class GovernanceResource {
         @RequestParam(value = "datasetId", required = false) UUID datasetId,
         @RequestParam(value = "assignedTo", required = false) String assignedTo,
         @RequestParam(value = "owner", required = false) String owner,
+        @RequestParam(value = "priority", required = false) String priority,
+        @RequestParam(value = "overdue", required = false) Boolean overdue,
         @RequestParam(value = "keyword", required = false) String keyword,
         @RequestParam(value = "limit", defaultValue = "50") int limit,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
@@ -359,6 +453,8 @@ public class GovernanceResource {
             datasetId,
             assignedTo,
             owner,
+            priority,
+            overdue,
             keyword,
             limit,
             currentUser(),
@@ -383,6 +479,12 @@ public class GovernanceResource {
         }
         if (StringUtils.hasText(owner)) {
             payload.put("owner", owner.trim());
+        }
+        if (StringUtils.hasText(priority)) {
+            payload.put("priority", priority.trim().toUpperCase(Locale.ROOT));
+        }
+        if (overdue != null) {
+            payload.put("overdue", overdue);
         }
         if (StringUtils.hasText(keyword)) {
             payload.put("keyword", keyword.trim());
@@ -412,6 +514,7 @@ public class GovernanceResource {
     }
 
     @PostMapping("/issues")
+    @PreAuthorize(GOVERNANCE_MAINTAINER_EXPRESSION)
     public ApiResponse<IssueTicketDto> createIssue(
         @RequestBody IssueTicketUpsertRequest request,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
@@ -420,6 +523,7 @@ public class GovernanceResource {
     }
 
     @PutMapping("/issues/{id}")
+    @PreAuthorize(GOVERNANCE_MAINTAINER_EXPRESSION)
     public ApiResponse<IssueTicketDto> updateIssue(
         @PathVariable UUID id,
         @RequestBody IssueTicketUpsertRequest request,
@@ -429,6 +533,7 @@ public class GovernanceResource {
     }
 
     @PostMapping("/issues/{id}/close")
+    @PreAuthorize(GOVERNANCE_MAINTAINER_EXPRESSION)
     public ApiResponse<IssueTicketDto> closeIssue(
         @PathVariable UUID id,
         @RequestBody Map<String, String> body,
@@ -439,6 +544,7 @@ public class GovernanceResource {
     }
 
     @PostMapping("/issues/{id}/actions")
+    @PreAuthorize(GOVERNANCE_MAINTAINER_EXPRESSION)
     public ApiResponse<IssueActionDto> appendIssueAction(
         @PathVariable UUID id,
         @RequestBody IssueActionRequest request,
@@ -447,8 +553,164 @@ public class GovernanceResource {
         return ApiResponses.ok(issueTicketService.appendAction(id, request, currentUser(), activeDept));
     }
 
+    @GetMapping("/issues/metrics")
+    public ApiResponse<Map<String, Object>> issueSlaMetrics(
+        @RequestParam(value = "days", defaultValue = "30") int days,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        Map<String, Object> metrics = issueTicketService.issueSlaMetrics(days, currentUser(), activeDept);
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("summary", "查看问题单 SLA 指标");
+        payload.put("days", days);
+        payload.put("open", metrics.get("open"));
+        payload.put("overdue", metrics.get("overdue"));
+        payload.put("overdueRate", metrics.get("overdueRate"));
+        payload.put("avgHandlingHours", metrics.get("avgHandlingHours"));
+        auditService.auditAction("GOV_ISSUE_METRICS", AuditStage.SUCCESS, "metrics", payload);
+        return ApiResponses.ok(metrics);
+    }
+
+    // Governance ops metrics ------------------------------------------------
+
+    @GetMapping("/ops/overview")
+    @PreAuthorize(GOVERNANCE_MAINTAINER_EXPRESSION)
+    public ApiResponse<Map<String, Object>> governanceOpsOverview(@RequestParam(value = "days", defaultValue = "7") int days) {
+        Map<String, Object> metrics = governanceOpsMetricsService.overview(days);
+        Map<String, Object> detail = new LinkedHashMap<>();
+        detail.put("summary", "查看治理运营概览");
+        detail.put("days", days);
+        detail.put("qualitySuccessRate", ((Map<?, ?>) metrics.getOrDefault("kpi", Map.of())).get("qualitySuccessRate"));
+        detail.put("issueOverdueRate", ((Map<?, ?>) metrics.getOrDefault("kpi", Map.of())).get("issueOverdueRate"));
+        auditService.auditAction("GOV_OPS_OVERVIEW_VIEW", AuditStage.SUCCESS, "overview", detail);
+        return ApiResponses.ok(metrics);
+    }
+
+    @GetMapping("/ops/trend")
+    @PreAuthorize(GOVERNANCE_MAINTAINER_EXPRESSION)
+    public ApiResponse<List<Map<String, Object>>> governanceOpsTrend(@RequestParam(value = "days", defaultValue = "14") int days) {
+        List<Map<String, Object>> trend = governanceOpsMetricsService.trend(days);
+        Map<String, Object> detail = new LinkedHashMap<>();
+        detail.put("summary", "查看治理运营趋势");
+        detail.put("days", days);
+        detail.put("points", trend.size());
+        auditService.auditAction("GOV_OPS_TREND_VIEW", AuditStage.SUCCESS, "trend", detail);
+        return ApiResponses.ok(trend);
+    }
+
+    @GetMapping("/ops/release-gate")
+    @PreAuthorize(GOVERNANCE_MAINTAINER_EXPRESSION)
+    public ApiResponse<Map<String, Object>> governanceReleaseGate(
+        @RequestParam(value = "days", defaultValue = "7") int days,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        Map<String, Object> governance = governanceOpsMetricsService.overview(days);
+        Map<String, Object> importOps = referenceCodeService.importOpsOverview(Math.max(24, days * 24), activeDept);
+        BigDecimal qualitySuccessRate = decimal(readNested(governance, "kpi", "qualitySuccessRate"));
+        BigDecimal issueOverdueRate = decimal(readNested(governance, "kpi", "issueOverdueRate"));
+        long importErrorTotal = longValue(importOps.get("errorTotal"));
+
+        List<Map<String, Object>> checks = List.of(
+            gateCheck(
+                "QUALITY_SUCCESS_RATE",
+                "质量成功率",
+                qualitySuccessRate.compareTo(BigDecimal.valueOf(95)) >= 0,
+                qualitySuccessRate,
+                ">=95%",
+                "BLOCKER"
+            ),
+            gateCheck(
+                "ISSUE_OVERDUE_RATE",
+                "问题单逾期率",
+                issueOverdueRate.compareTo(BigDecimal.valueOf(10)) <= 0,
+                issueOverdueRate,
+                "<=10%",
+                "BLOCKER"
+            ),
+            gateCheck(
+                "REFERENCE_IMPORT_ERROR",
+                "码表导入错误数",
+                importErrorTotal <= 0,
+                importErrorTotal,
+                "=0",
+                "BLOCKER"
+            )
+        );
+        long blockerFailed = checks
+            .stream()
+            .filter(row -> "BLOCKER".equals(String.valueOf(row.get("severity"))))
+            .filter(row -> !Boolean.TRUE.equals(row.get("passed")))
+            .count();
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("windowDays", days);
+        payload.put("readyForRelease", blockerFailed == 0);
+        payload.put("blockerFailed", blockerFailed);
+        payload.put("checks", checks);
+        payload.put("governanceOverview", governance);
+        payload.put("referenceImportOverview", importOps);
+        payload.put("checkedAt", Instant.now());
+
+        Map<String, Object> detail = new LinkedHashMap<>();
+        detail.put("summary", "查看治理发布门禁");
+        detail.put("days", days);
+        detail.put("readyForRelease", payload.get("readyForRelease"));
+        detail.put("blockerFailed", blockerFailed);
+        auditService.auditAction("GOV_OPS_RELEASE_GATE_VIEW", AuditStage.SUCCESS, "release-gate", detail);
+        return ApiResponses.ok(payload);
+    }
+
     private String currentUser() {
         return SecurityUtils.getCurrentUserLogin().orElse("system");
+    }
+
+    private Object readNested(Map<String, Object> source, String parent, String key) {
+        Object nested = source.get(parent);
+        if (nested instanceof Map<?, ?> map) {
+            return map.get(key);
+        }
+        return null;
+    }
+
+    private BigDecimal decimal(Object value) {
+        if (value instanceof BigDecimal decimal) {
+            return decimal;
+        }
+        if (value instanceof Number number) {
+            return BigDecimal.valueOf(number.doubleValue());
+        }
+        try {
+            return new BigDecimal(String.valueOf(value));
+        } catch (Exception ex) {
+            return BigDecimal.ZERO;
+        }
+    }
+
+    private long longValue(Object value) {
+        if (value instanceof Number number) {
+            return number.longValue();
+        }
+        try {
+            return Long.parseLong(String.valueOf(value));
+        } catch (Exception ex) {
+            return 0L;
+        }
+    }
+
+    private Map<String, Object> gateCheck(
+        String code,
+        String name,
+        boolean passed,
+        Object actual,
+        String threshold,
+        String severity
+    ) {
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("code", code);
+        row.put("name", name);
+        row.put("passed", passed);
+        row.put("actual", actual);
+        row.put("threshold", threshold);
+        row.put("severity", severity);
+        return row;
     }
 
     private List<String> parseStatuses(String raw) {

@@ -1,6 +1,6 @@
 # P3-01 治理专项回归矩阵与发布门禁
 
-`status`: `planned`
+`status`: `done`
 `priority`: `P3`
 
 ## 目标
@@ -22,6 +22,15 @@
 - 每次发版可自动出治理回归报告。
 - 出现关键失败时 gate 可阻断发布。
 - 矩阵结果可长期追踪。
+
+## 完成说明
+
+- 已交付矩阵脚本：
+  - `worklog/v2.2.1/platform/governance/scripts/collect-governance-metrics.sh`
+  - `worklog/v2.2.1/platform/governance/scripts/run-governance-matrix.sh`
+  - `worklog/v2.2.1/platform/governance/scripts/render-governance-matrix-report.sh`
+- 支持 `--strict` 门禁；失败条件：指标采集失败或权限回归失败。
+- 报告产物：`worklog/v2.2.1/platform/governance/report/p3-01-governance-matrix-latest.md`。
 
 ## 风险与回滚
 

@@ -148,24 +148,24 @@ dbt 才能通过 `{{ source('public', 'ods_patent_info') }}` 引用。
 
 ```bash
 # 本机已有 psql
-PG_PASSWORD='Devops123@' ./worklog/s10/patent/run-build-all.sh
+PG_PASSWORD='Devops123@' ./bin/patent/run-build-all.sh
 
 # 强制使用 docker + postgres:17.6
-PG_PASSWORD='Devops123@' ./worklog/s10/patent/run-build-all.sh --force-docker
+PG_PASSWORD='Devops123@' ./bin/patent/run-build-all.sh --force-docker
 
 # 指定 ODS 表名 + 指定年份
 PG_PASSWORD='Devops123@' ODS_TABLE=ods_patent_info_202602 REPORT_YEAR=2024 \
-  ./worklog/s10/patent/run-build-all.sh --force-docker
+  ./bin/patent/run-build-all.sh --force-docker
 
 # 生成最近 N 年 ADS 缓存
-PG_PASSWORD='Devops123@' REPORT_YEARS=5 ./worklog/s10/patent/run-build-all.sh
+PG_PASSWORD='Devops123@' REPORT_YEARS=5 ./bin/patent/run-build-all.sh
 ```
 
 如需指定数据库连接：
 
 ```bash
 PG_HOST=127.0.0.1 PG_PORT=5432 PG_DB=biadmin PG_USER=biadmin PG_PASSWORD='Devops123@' \
-  ./worklog/s10/patent/run-build-all.sh --force-docker
+  ./bin/patent/run-build-all.sh --force-docker
 ```
 
 ## 9. 自定义 ODS 表名 / 中文表头适配

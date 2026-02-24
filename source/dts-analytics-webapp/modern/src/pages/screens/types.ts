@@ -42,8 +42,45 @@ export interface DrillDownConfig {
     levels: DrillLevel[];
 }
 
+export type FieldMappingAggregation = 'sum' | 'count' | 'avg' | 'min' | 'max';
+
+export interface FieldMapping {
+    dimension?: string;       // 维度列名 (X 轴 / 名称)
+    measures?: string[];      // 度量列名 (Y 轴, 多系列)
+    groupBy?: string;         // 分组列名
+    sizeField?: string;       // 大小映射列名 (scatter)
+    aggregation?: FieldMappingAggregation;
+    sortField?: string;
+    sortOrder?: 'asc' | 'desc';
+}
+
+export interface ChartMarkLine {
+    type: 'value' | 'average' | 'min' | 'max';
+    value?: number;
+    name?: string;
+    color?: string;
+    lineStyle?: 'solid' | 'dashed' | 'dotted';
+    axis?: 'x' | 'y';
+}
+
+export interface ChartMarkArea {
+    name?: string;
+    from: number;
+    to: number;
+    axis?: 'x' | 'y';
+    color?: string;
+}
+
+export interface SeriesConditionalColor {
+    operator: '>' | '>=' | '<' | '<=' | '==' | 'between';
+    value: number;
+    valueTo?: number;
+    color: string;
+}
+
 export const DRILLABLE_TYPES: Set<ComponentType> = new Set([
     'line-chart', 'bar-chart', 'pie-chart', 'funnel-chart', 'scatter-chart', 'radar-chart',
+    'combo-chart', 'treemap-chart', 'sunburst-chart',
 ]);
 
 export interface ScreenComponent {
@@ -75,6 +112,11 @@ export type ComponentType =
     | 'radar-chart'
     | 'funnel-chart'
     | 'map-chart'
+    | 'combo-chart'
+    | 'wordcloud-chart'
+    | 'treemap-chart'
+    | 'sunburst-chart'
+    | 'waterfall-chart'
     // DataV 装饰
     | 'border-box'
     | 'decoration'
@@ -102,7 +144,12 @@ export type ComponentType =
     | 'table'
     | 'filter-input'
     | 'filter-select'
-    | 'filter-date-range';
+    | 'filter-date-range'
+    | 'richtext'
+    // 3D 可视化 (echarts-gl)
+    | 'globe-chart'
+    | 'bar3d-chart'
+    | 'scatter3d-chart';
 
 export type DataSourceType = 'static' | 'api' | 'card' | 'sql' | 'dataset' | 'metric' | 'database';
 export type QuerySourceType = 'metric' | 'dataset' | 'sql' | 'card' | 'api';
@@ -164,6 +211,22 @@ export interface CardData {
     cols: Array<{ name: string; display_name: string; base_type: string }>;
 }
 
+export interface CarouselConfig {
+    enabled: boolean;
+    intervalSeconds: number;       // default 30
+    transition: 'fade' | 'slide-left' | 'slide-up' | 'none';
+    transitionDuration: number;    // ms, default 800
+    loop: boolean;                 // default true
+}
+
+export interface ScreenPage {
+    id: string;
+    name: string;
+    components: ScreenComponent[];
+    backgroundColor?: string;
+    backgroundImage?: string;
+}
+
 export interface ScreenConfig {
     schemaVersion?: number;
     id: string;
@@ -177,6 +240,9 @@ export interface ScreenConfig {
     theme?: ScreenTheme;
     components: ScreenComponent[];
     globalVariables?: ScreenGlobalVariable[];
+    /** Multi-page support. When empty/undefined, uses top-level components (single-page mode). */
+    pages?: ScreenPage[];
+    carouselConfig?: CarouselConfig;
 }
 
 export interface ScreenState {
@@ -193,9 +259,11 @@ export type ScreenAction =
     | { type: 'SET_CONFIG'; payload: ScreenConfig }
     | { type: 'LOAD_CONFIG'; payload: ScreenConfig }  // Load without adding to history
     | { type: 'MARK_BASELINE'; payload: ScreenConfig }
+    | { type: 'MERGE_CONFIG'; payload: Partial<ScreenConfig> }
     | { type: 'ADD_COMPONENT'; payload: ScreenComponent }
     | { type: 'UPDATE_COMPONENT'; payload: { id: string; updates: Partial<ScreenComponent> } }
     | { type: 'DELETE_COMPONENTS'; payload: string[] }
+    | { type: 'DUPLICATE_COMPONENTS'; payload: { sourceIds: string[] } }
     | { type: 'COPY_COMPONENTS'; payload: string[] }  // Copy to clipboard
     | { type: 'PASTE_COMPONENTS'; payload: { components: ScreenComponent[]; offsetX?: number; offsetY?: number } }
     | { type: 'SELECT_COMPONENTS'; payload: string[] }

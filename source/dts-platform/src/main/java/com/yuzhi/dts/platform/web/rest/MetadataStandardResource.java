@@ -85,6 +85,19 @@ public class MetadataStandardResource {
         return ApiResponses.ok(dto);
     }
 
+    @GetMapping("/{id}/references")
+    public ApiResponse<Map<String, Object>> references(@PathVariable UUID id) {
+        Map<String, Object> payload = service.references(id);
+        int impactCount = payload.get("totalReferences") instanceof Number number ? number.intValue() : 0;
+        audit.auditAction(
+            "MODELING_METADATA_STANDARD_REFERENCE_VIEW",
+            AuditStage.SUCCESS,
+            id.toString(),
+            Map.of("summary", "查看元数据标准引用关系", "impactCount", impactCount)
+        );
+        return ApiResponses.ok(payload);
+    }
+
     @PostMapping
     @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
     public ApiResponse<MetadataStandardDto> create(@Valid @RequestBody MetadataStandardUpsertRequest request) {
@@ -107,8 +120,15 @@ public class MetadataStandardResource {
     @DeleteMapping("/{id}")
     @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
     public ApiResponse<Void> delete(@PathVariable UUID id) {
+        Map<String, Object> references = service.references(id);
+        int impactCount = references.get("totalReferences") instanceof Number number ? number.intValue() : 0;
         service.delete(id);
-        audit.auditAction("MODELING_METADATA_STANDARD_DELETE", AuditStage.SUCCESS, id.toString(), Map.of("summary", "删除元数据标准"));
+        audit.auditAction(
+            "MODELING_METADATA_STANDARD_DELETE",
+            AuditStage.SUCCESS,
+            id.toString(),
+            Map.of("summary", "删除元数据标准", "impactCount", impactCount)
+        );
         return ApiResponses.ok(null);
     }
 

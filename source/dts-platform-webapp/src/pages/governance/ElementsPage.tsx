@@ -1,12 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Button, Card, Form, Input, Modal, Select, Space, Table, Tag, Typography } from "antd";
+import { Breadcrumb, Button, Card, Descriptions, Divider, Drawer, Form, Input, List, Modal, Select, Space, Spin, Table, Tag, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
+import { EyeOutlined } from "@ant-design/icons";
+import { useNavigate, useSearchParams } from "react-router";
 import { EmptyState } from "@/components/empty-state";
+import { useGovernanceManageAccess } from "@/hooks/useModuleManageAccess";
 import { PageHeader } from "@/components/page-header";
 import {
 	createMetadataStandard,
 	deleteMetadataStandard,
+	getMetadataStandardReferences,
 	listMetadataStandards,
 	listReferenceCodes,
 	updateMetadataStandard,
@@ -37,20 +41,64 @@ type MetadataStandard = {
 
 type PagedPayload<T> = { content?: T[]; total?: number; page?: number; size?: number };
 type ReferenceCodeDirectory = { codeTypeCode?: string; codeTypeName?: string };
+type AssetReferenceItem = {
+	type?: string;
+	label?: string;
+	id?: string;
+	code?: string;
+	name?: string;
+	path?: string;
+	reason?: string;
+};
+type AssetReferencePayload = { totalReferences?: number; items?: AssetReferenceItem[] };
 
 const SECURITY_LEVELS = ["PUBLIC", "INTERNAL", "SECRET", "CONFIDENTIAL"];
+const parseIntOr = (value: string | null, fallback: number) => {
+	const parsed = Number.parseInt(String(value || ""), 10);
+	return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+};
 
 export default function ElementsPage() {
-	const [keyword, setKeyword] = useState("");
-	const [pageNum, setPageNum] = useState(0);
-	const [pageSize, setPageSize] = useState(10);
+	const navigate = useNavigate();
+	const [searchParams, setSearchParams] = useSearchParams();
+	const [keyword, setKeyword] = useState(searchParams.get("keyword") || "");
+	const [pageNum, setPageNum] = useState(parseIntOr(searchParams.get("page"), 0));
+	const [pageSize, setPageSize] = useState(parseIntOr(searchParams.get("size"), 10) || 10);
 	const [data, setData] = useState<PagedPayload<MetadataStandard> | null>(null);
 	const [loading, setLoading] = useState(false);
 	const [modalOpen, setModalOpen] = useState(false);
 	const [saving, setSaving] = useState(false);
 	const [editing, setEditing] = useState<MetadataStandard | null>(null);
+	const [detailOpen, setDetailOpen] = useState(false);
+	const [detailElement, setDetailElement] = useState<MetadataStandard | null>(null);
+	const [referenceLoading, setReferenceLoading] = useState(false);
+	const [references, setReferences] = useState<AssetReferencePayload | null>(null);
 	const [codeOptions, setCodeOptions] = useState<ReferenceCodeDirectory[]>([]);
 	const [form] = Form.useForm();
+	const canManage = useGovernanceManageAccess();
+
+	const syncQuery = (patch?: { keyword?: string; page?: number; size?: number }) => {
+		const params = new URLSearchParams(searchParams);
+		const nextKeyword = patch?.keyword ?? keyword;
+		const nextPage = patch?.page ?? pageNum;
+		const nextSize = patch?.size ?? pageSize;
+		if (nextKeyword?.trim()) {
+			params.set("keyword", nextKeyword.trim());
+		} else {
+			params.delete("keyword");
+		}
+		if (nextPage > 0) {
+			params.set("page", String(nextPage));
+		} else {
+			params.delete("page");
+		}
+		if (nextSize !== 10) {
+			params.set("size", String(nextSize));
+		} else {
+			params.delete("size");
+		}
+		setSearchParams(params, { replace: true });
+	};
 
 	const loadElements = useCallback(async () => {
 		setLoading(true);
@@ -73,6 +121,10 @@ export default function ElementsPage() {
 	}, [loadElements]);
 
 	useEffect(() => {
+		syncQuery();
+	}, [keyword, pageNum, pageSize]);
+
+	useEffect(() => {
 		const loadCodeOptions = async () => {
 			try {
 				const resp = (await listReferenceCodes({ page: 0, size: 200 })) as PagedPayload<ReferenceCodeDirectory>;
@@ -82,6 +134,23 @@ export default function ElementsPage() {
 			}
 		};
 		void loadCodeOptions();
+	}, []);
+
+	const loadReferences = useCallback(async (id?: string) => {
+		if (!id) {
+			setReferences(null);
+			return;
+		}
+		setReferenceLoading(true);
+		try {
+			const resp = (await getMetadataStandardReferences(id)) as AssetReferencePayload;
+			setReferences(resp || null);
+		} catch (err: any) {
+			setReferences(null);
+			toast.error(err?.message || "加载引用关系失败");
+		} finally {
+			setReferenceLoading(false);
+		}
 	}, []);
 
 	const openModal = (row?: MetadataStandard) => {
@@ -107,6 +176,10 @@ export default function ElementsPage() {
 	};
 
 	const submit = async () => {
+		if (!canManage) {
+			toast.error("当前账号无治理维护权限");
+			return;
+		}
 		setSaving(true);
 		try {
 			const values = await form.validateFields([
@@ -151,22 +224,53 @@ export default function ElementsPage() {
 	};
 
 	const removeElement = (row: MetadataStandard) => {
+		if (!canManage) {
+			toast.error("当前账号无治理维护权限");
+			return;
+		}
 		if (!row?.id) return;
-		Modal.confirm({
-			title: "删除数据元？",
-			content: "删除后无法恢复。",
-			okText: "删除",
-			cancelText: "取消",
-			onOk: async () => {
-				try {
-					await deleteMetadataStandard(row.id as string);
-					toast.success("数据元已删除");
-					await loadElements();
-				} catch (err: any) {
-					toast.error(err?.message || "删除失败");
+		void (async () => {
+			try {
+				const refs = (await getMetadataStandardReferences(row.id as string)) as AssetReferencePayload;
+				const impactCount = Number(refs?.totalReferences || 0);
+				if (impactCount > 0) {
+					Modal.warning({
+						title: `删除被拦截：存在 ${impactCount} 个引用对象`,
+						content: (
+							<List
+								size="small"
+								dataSource={(refs?.items || []).slice(0, 8)}
+								renderItem={(item) => (
+									<List.Item>
+										<Text>
+											{item.label || item.type}：{item.name || item.code || item.id}
+										</Text>
+									</List.Item>
+								)}
+							/>
+						),
+					});
+					return;
 				}
-			},
-		});
+				Modal.confirm({
+					title: "删除数据元？",
+					content: "删除后无法恢复。",
+					okText: "删除",
+					cancelText: "取消",
+					onOk: async () => {
+						try {
+							await deleteMetadataStandard(row.id as string);
+							toast.success("数据元已删除");
+							await loadElements();
+						} catch (err: any) {
+							toast.error(err?.message || "删除失败");
+						}
+					},
+				});
+			} catch (err: any) {
+				toast.error(err?.message || "删除前检查失败");
+			}
+		})();
 	};
 
 	const columns: ColumnsType<MetadataStandard> = [
@@ -184,10 +288,22 @@ export default function ElementsPage() {
 			title: "操作",
 			render: (_, row) => (
 				<Space>
-					<Button type="link" size="small" onClick={() => openModal(row)}>
+					<Button
+						type="link"
+						size="small"
+						icon={<EyeOutlined />}
+						onClick={() => {
+							setDetailElement(row);
+							setDetailOpen(true);
+							void loadReferences(row.id);
+						}}
+					>
+						详情
+					</Button>
+					<Button type="link" size="small" onClick={() => openModal(row)} disabled={!canManage}>
 						编辑
 					</Button>
-					<Button type="link" size="small" danger onClick={() => removeElement(row)}>
+					<Button type="link" size="small" danger onClick={() => removeElement(row)} disabled={!canManage}>
 						删除
 					</Button>
 				</Space>
@@ -199,11 +315,12 @@ export default function ElementsPage() {
 
 	return (
 		<div className="space-y-4">
+			<Breadcrumb items={[{ title: "数据治理中心" }, { title: "标准管理" }, { title: "数据元" }]} />
 			<PageHeader
 				title="数据治理中心 · 标准管理 / 数据元"
 				description="定义数据元标准字段与技术规则，支撑字段级统一口径。"
 				actions={
-					<Button type="primary" onClick={() => openModal()}>
+					<Button type="primary" onClick={() => openModal()} disabled={!canManage}>
 						+ 新增数据元
 					</Button>
 				}
@@ -215,10 +332,24 @@ export default function ElementsPage() {
 						placeholder="搜索数据元..."
 						style={{ width: 300 }}
 						value={keyword}
-						onChange={(e) => setKeyword(e.target.value)}
-						onSearch={loadElements}
+						onChange={(e) => {
+							setKeyword(e.target.value);
+							setPageNum(0);
+						}}
+						onSearch={(value) => {
+							setKeyword(value || "");
+							setPageNum(0);
+						}}
 						allowClear
 					/>
+					<Button
+						onClick={() => {
+							setKeyword("");
+							setPageNum(0);
+						}}
+					>
+						重置
+					</Button>
 				</Space>
 				{content.length === 0 && !loading ? (
 					<EmptyState title="暂无数据元" description="请先新增数据元规范。" />
@@ -249,6 +380,7 @@ export default function ElementsPage() {
 				okText="保存"
 				cancelText="取消"
 				confirmLoading={saving}
+				okButtonProps={{ disabled: !canManage }}
 				width={720}
 			>
 				<Form layout="vertical" form={form}>
@@ -330,6 +462,80 @@ export default function ElementsPage() {
 					</Form.Item>
 				</Form>
 			</Modal>
+
+			<Drawer
+				open={detailOpen}
+				title="数据元详情"
+				width={720}
+				onClose={() => setDetailOpen(false)}
+				extra={
+					canManage ? (
+						<Button
+							onClick={() => {
+								if (!detailElement) return;
+								openModal(detailElement);
+							}}
+						>
+							编辑
+						</Button>
+					) : undefined
+				}
+			>
+				<Descriptions bordered size="small" column={1}>
+					<Descriptions.Item label="数据元名称">{detailElement?.fieldNameCn || "-"}</Descriptions.Item>
+					<Descriptions.Item label="标准字段名">{detailElement?.fieldNameEn || "-"}</Descriptions.Item>
+					<Descriptions.Item label="标准类型">{detailElement?.dataType || "-"}</Descriptions.Item>
+					<Descriptions.Item label="长度">{detailElement?.dataLength ?? "-"}</Descriptions.Item>
+					<Descriptions.Item label="精度">{detailElement?.dataPrecision ?? "-"}</Descriptions.Item>
+					<Descriptions.Item label="小数位">{detailElement?.dataScale ?? "-"}</Descriptions.Item>
+					<Descriptions.Item label="可空">{detailElement?.nullable == null ? "-" : detailElement?.nullable ? "是" : "否"}</Descriptions.Item>
+					<Descriptions.Item label="主题域">{detailElement?.domain || "-"}</Descriptions.Item>
+					<Descriptions.Item label="来源系统">{detailElement?.sourceSystem || "-"}</Descriptions.Item>
+					<Descriptions.Item label="格式规则">{detailElement?.description || "-"}</Descriptions.Item>
+					<Descriptions.Item label="码表编码">{detailElement?.codeSet || "-"}</Descriptions.Item>
+					<Descriptions.Item label="默认值">{detailElement?.defaultValue || "-"}</Descriptions.Item>
+					<Descriptions.Item label="主键字段">{detailElement?.isPk == null ? "-" : detailElement?.isPk ? "是" : "否"}</Descriptions.Item>
+					<Descriptions.Item label="脱敏等级">{detailElement?.securityLevel || "-"}</Descriptions.Item>
+				</Descriptions>
+				<Divider />
+				<Text strong>引用关系</Text>
+				<div className="mt-2">
+					{referenceLoading ? (
+						<Spin size="small" />
+					) : Number(references?.totalReferences || 0) === 0 ? (
+						<Text type="secondary">暂无引用对象</Text>
+					) : (
+						<List
+							size="small"
+							dataSource={references?.items || []}
+							renderItem={(item) => (
+								<List.Item
+									actions={[
+										item.path ? (
+											<Button
+												key="jump"
+												type="link"
+												size="small"
+												onClick={() => {
+													navigate(item.path as string);
+													setDetailOpen(false);
+												}}
+											>
+												跳转
+											</Button>
+										) : null,
+									]}
+								>
+									<List.Item.Meta
+										title={`${item.label || item.type || "引用"} · ${item.name || item.code || item.id || "-"}`}
+										description={item.reason || "-"}
+									/>
+								</List.Item>
+							)}
+						/>
+					)}
+				</div>
+			</Drawer>
 		</div>
 	);
 }

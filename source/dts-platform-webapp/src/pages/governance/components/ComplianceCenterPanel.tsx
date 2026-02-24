@@ -25,8 +25,8 @@ import {
 	listQualityRules,
 	updateComplianceItem,
 } from "@/api/platformApi";
+import { useGovernanceManageAccess } from "@/hooks/useModuleManageAccess";
 import { useActiveDept } from "@/store/contextStore";
-import { useUserRoles } from "@/store/userStore";
 
 type ComplianceBatch = {
 	id?: string;
@@ -74,21 +74,6 @@ type ItemForm = {
 	evidenceRef?: string;
 };
 
-const MAINTAINER_ROLES = new Set([
-	"ADMIN",
-	"OP_ADMIN",
-	"INST_DATA_OWNER",
-	"DEPT_DATA_OWNER",
-	"INST_LEADER",
-	"DEPT_LEADER",
-]);
-
-const normalizeRole = (raw: unknown) =>
-	String(raw || "")
-		.trim()
-		.toUpperCase()
-		.replace(/^ROLE_/, "");
-
 const normalizeStatus = (raw: unknown) => String(raw || "").trim().toUpperCase();
 
 const statusColor = (status?: string) => {
@@ -117,16 +102,11 @@ export default function ComplianceCenterPanel() {
 	const [itemForm] = Form.useForm<ItemForm>();
 
 	const activeDept = useActiveDept();
-	const userRoles = useUserRoles();
+	const hasManageAccess = useGovernanceManageAccess();
 
 	const canManage = useMemo(() => {
-		if (readOnly) return false;
-		const normalized = new Set((userRoles || []).map(normalizeRole));
-		for (const role of normalized) {
-			if (MAINTAINER_ROLES.has(role)) return true;
-		}
-		return false;
-	}, [readOnly, userRoles]);
+		return !readOnly && hasManageAccess;
+	}, [readOnly, hasManageAccess]);
 
 	const ruleOptions = useMemo(() => rules.map((item) => ({ label: item.name, value: item.id })), [rules]);
 

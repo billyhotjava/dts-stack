@@ -17,6 +17,7 @@ import com.yuzhi.dts.platform.service.catalog.CatalogMetadataService;
 import com.yuzhi.dts.platform.service.security.OrganizationVisibilityService;
 import com.yuzhi.dts.platform.service.openmetadata.OpenMetadataService;
 import jakarta.validation.Valid;
+import jakarta.persistence.criteria.Predicate;
 import java.lang.reflect.Array;
 import java.util.*;
 import java.util.regex.Matcher;
@@ -26,6 +27,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
@@ -263,47 +265,55 @@ public class CatalogResource {
         @RequestParam(required = false) String warehouseLayer,
         @RequestParam(required = false, defaultValue = "true") boolean enabledOnly,
         @RequestParam(required = false) String type,
+        @RequestParam(required = false) UUID sourceId,
         @RequestParam(required = false) String exposedBy,
         @RequestParam(required = false) String owner,
         @RequestParam(required = false) String tag,
+        @RequestParam(required = false) String sortBy,
+        @RequestParam(required = false, defaultValue = "desc") String sortDir,
         @RequestParam(defaultValue = "0") int page,
         @RequestParam(defaultValue = "10") int size,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept,
         @RequestParam(value = "auditPurpose", required = false) String auditPurpose
     ) {
         String effDept = activeDept != null ? activeDept : claim("dept_code");
-        // For small/medium deployments, prefer in-memory paging AFTER applying ABAC/RBAC gates so totals are accurate
-        // (i.e. total reflects datasets visible to current user).
-        List<CatalogDataset> all = datasetRepo.findAll(Sort.by("createdDate").descending());
-        List<CatalogDataset> filtered = all
-            .stream()
-            .filter(ds -> domainId == null || (ds.getDomain() != null && domainId.equals(ds.getDomain().getId())))
-            .filter(ds -> keyword == null || keyword.isBlank() ||
-                (ds.getName() != null && ds.getName().toLowerCase().contains(keyword.toLowerCase())) ||
-                (ds.getOwner() != null && ds.getOwner().toLowerCase().contains(keyword.toLowerCase())) ||
-                (ds.getTags() != null && ds.getTags().toLowerCase().contains(keyword.toLowerCase()))
-            )
-            .filter(ds -> classification == null || (ds.getClassification() != null && ds.getClassification().equalsIgnoreCase(classification)))
-            .filter(ds -> type == null || (ds.getType() != null && ds.getType().equalsIgnoreCase(type)))
-            .filter(ds -> ownerDept == null || (ds.getOwnerDept() != null && ds.getOwnerDept().equalsIgnoreCase(ownerDept)))
-            .filter(ds -> warehouseLayer == null || (ds.getWarehouseLayer() != null && ds.getWarehouseLayer().equalsIgnoreCase(warehouseLayer)))
-            .filter(ds -> exposedBy == null || (ds.getExposedBy() != null && ds.getExposedBy().equalsIgnoreCase(exposedBy)))
-            .filter(ds -> owner == null || (ds.getOwner() != null && ds.getOwner().toLowerCase().contains(owner.toLowerCase())))
-            .filter(ds -> tag == null || (ds.getTags() != null && ds.getTags().toLowerCase().contains(tag.toLowerCase())))
-            .filter(ds -> !enabledOnly || (ds.getEnabled() == null || ds.getEnabled().booleanValue()))
-            .toList();
-        long totalElements = filtered.size();
-        int offset = Math.max(0, page) * Math.max(1, size);
-        int end = Math.min(filtered.size(), offset + Math.max(1, size));
-        List<Map<String, Object>> content = offset >= filtered.size()
-            ? List.of()
-            : filtered.subList(offset, end).stream().map(this::toDatasetDto).toList();
+        int safePage = Math.max(0, page);
+        int safeSize = Math.max(1, Math.min(size, 200));
+        String safeSortBy = normalizeDatasetSortBy(sortBy);
+        boolean asc = "asc".equalsIgnoreCase(trimToNull(sortDir));
+        Sort sort = asc ? Sort.by(safeSortBy).ascending() : Sort.by(safeSortBy).descending();
+        if (!"createdDate".equals(safeSortBy)) {
+            sort = sort.and(Sort.by("createdDate").descending());
+        }
+        Pageable pageable = PageRequest.of(safePage, safeSize, sort);
+        long queryStartedAt = System.currentTimeMillis();
+        Page<CatalogDataset> pageData = datasetRepo.findAll(
+            buildDatasetListSpecification(
+                domainId,
+                sourceId,
+                keyword,
+                classification,
+                ownerDept,
+                warehouseLayer,
+                enabledOnly,
+                type,
+                exposedBy,
+                owner,
+                tag
+            ),
+            pageable
+        );
+        long queryCostMs = Math.max(0, System.currentTimeMillis() - queryStartedAt);
+        List<Map<String, Object>> content = pageData.getContent().stream().map(this::toDatasetDto).toList();
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("content", content);
-        data.put("total", totalElements);
-        data.put("page", page);
-        data.put("size", size);
+        data.put("total", pageData.getTotalElements());
+        data.put("page", safePage);
+        data.put("size", safeSize);
         data.put("returned", content.size());
+        data.put("sortBy", safeSortBy);
+        data.put("sortDir", asc ? "asc" : "desc");
+        data.put("queryCostMs", queryCostMs);
         Map<String, Object> auditPayload = new LinkedHashMap<>();
         String purpose = trimToNull(auditPurpose);
         String summary;
@@ -330,6 +340,9 @@ public class CatalogResource {
         if (domainId != null) {
             auditPayload.put("domainId", domainId.toString());
         }
+        if (sourceId != null) {
+            auditPayload.put("sourceId", sourceId.toString());
+        }
         putIfHasText(auditPayload, "keyword", keyword);
         putIfHasText(auditPayload, "classification", classification);
         putIfHasText(auditPayload, "ownerDept", ownerDept);
@@ -339,6 +352,9 @@ public class CatalogResource {
         putIfHasText(auditPayload, "exposedBy", exposedBy);
         putIfHasText(auditPayload, "owner", owner);
         putIfHasText(auditPayload, "tag", tag);
+        auditPayload.put("sortBy", safeSortBy);
+        auditPayload.put("sortDir", asc ? "asc" : "desc");
+        auditPayload.put("queryCostMs", queryCostMs);
         String resourceRef = "CATALOG_ASSET_LIST".equals(actionCode) ? "page=" + page : null;
         audit.auditAction(actionCode, AuditStage.SUCCESS, resourceRef, auditPayload);
         return ApiResponses.ok(data);
@@ -667,6 +683,7 @@ public class CatalogResource {
         m.put("id", d.getId());
         m.put("name", d.getName());
         m.put("domainId", domainId);
+        m.put("domainName", d.getDomain() != null ? d.getDomain().getName() : null);
         m.put("type", d.getType());
         m.put("sourceId", d.getSourceId());
         m.put("classification", d.getClassification());
@@ -684,6 +701,9 @@ public class CatalogResource {
         m.put("lifecycleStatus", d.getLifecycleStatus());
         m.put("retentionDays", d.getRetentionDays());
         m.put("expiresAt", d.getExpiresAt());
+        m.put("snapshotTime", d.getSnapshotTime());
+        m.put("createdDate", d.getCreatedDate());
+        m.put("lastModifiedDate", d.getLastModifiedDate());
         m.put("editable", canEditDataset(d));
         if (includeMetadata) {
             List<Map<String, Object>> tables = new ArrayList<>();
@@ -724,6 +744,90 @@ public class CatalogResource {
             m.put("tables", tables);
         }
         return m;
+    }
+
+    private Specification<CatalogDataset> buildDatasetListSpecification(
+        UUID domainId,
+        UUID sourceId,
+        String keyword,
+        String classification,
+        String ownerDept,
+        String warehouseLayer,
+        boolean enabledOnly,
+        String type,
+        String exposedBy,
+        String owner,
+        String tag
+    ) {
+        String keywordText = trimToNull(keyword);
+        String ownerText = trimToNull(owner);
+        String tagText = trimToNull(tag);
+        String classificationText = trimToNull(classification);
+        String ownerDeptText = trimToNull(ownerDept);
+        String layerText = trimToNull(warehouseLayer);
+        String typeText = trimToNull(type);
+        String exposedByText = trimToNull(exposedBy);
+        return (root, query, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+            if (domainId != null) {
+                predicates.add(cb.equal(root.get("domain").get("id"), domainId));
+            }
+            if (sourceId != null) {
+                predicates.add(cb.equal(root.get("sourceId"), sourceId));
+            }
+            if (classificationText != null) {
+                predicates.add(cb.equal(cb.lower(root.get("classification")), classificationText.toLowerCase(Locale.ROOT)));
+            }
+            if (ownerDeptText != null) {
+                predicates.add(cb.equal(cb.lower(root.get("ownerDept")), ownerDeptText.toLowerCase(Locale.ROOT)));
+            }
+            if (layerText != null) {
+                predicates.add(cb.equal(cb.lower(root.get("warehouseLayer")), layerText.toLowerCase(Locale.ROOT)));
+            }
+            if (typeText != null) {
+                predicates.add(cb.equal(cb.lower(root.get("type")), typeText.toLowerCase(Locale.ROOT)));
+            }
+            if (exposedByText != null) {
+                predicates.add(cb.equal(cb.lower(root.get("exposedBy")), exposedByText.toLowerCase(Locale.ROOT)));
+            }
+            if (ownerText != null) {
+                predicates.add(cb.like(cb.lower(root.get("owner")), "%" + ownerText.toLowerCase(Locale.ROOT) + "%"));
+            }
+            if (tagText != null) {
+                predicates.add(cb.like(cb.lower(root.get("tags")), "%" + tagText.toLowerCase(Locale.ROOT) + "%"));
+            }
+            if (enabledOnly) {
+                predicates.add(cb.or(cb.isNull(root.get("enabled")), cb.isTrue(root.get("enabled"))));
+            }
+            if (keywordText != null) {
+                String keywordLike = "%" + keywordText.toLowerCase(Locale.ROOT) + "%";
+                predicates.add(
+                    cb.or(
+                        cb.like(cb.lower(root.get("name")), keywordLike),
+                        cb.like(cb.lower(root.get("owner")), keywordLike),
+                        cb.like(cb.lower(root.get("ownerDept")), keywordLike),
+                        cb.like(cb.lower(root.get("tags")), keywordLike),
+                        cb.like(cb.lower(root.get("description")), keywordLike),
+                        cb.like(cb.lower(root.get("hiveDatabase")), keywordLike),
+                        cb.like(cb.lower(root.get("hiveTable")), keywordLike)
+                    )
+                );
+            }
+            return predicates.isEmpty() ? cb.conjunction() : cb.and(predicates.toArray(Predicate[]::new));
+        };
+    }
+
+    private String normalizeDatasetSortBy(String sortBy) {
+        String normalized = trimToNull(sortBy);
+        if (normalized == null) {
+            return "createdDate";
+        }
+        return switch (normalized.toLowerCase(Locale.ROOT)) {
+            case "name" -> "name";
+            case "lastmodifieddate", "updatedat", "updated_at" -> "lastModifiedDate";
+            case "createddate", "createdat", "created_at" -> "createdDate";
+            default -> "createdDate";
+        };
     }
 
     @PostMapping("/datasets")

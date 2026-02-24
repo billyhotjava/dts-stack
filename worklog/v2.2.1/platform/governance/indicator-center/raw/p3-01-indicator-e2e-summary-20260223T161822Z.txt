@@ -1,0 +1,5 @@
+run_at_utc=20260223T161822Z
+required_total=6
+required_failed=5
+optional_failed=3
+overall=FAIL

@@ -1,6 +1,7 @@
 package com.yuzhi.dts.platform.service.governance.request;
 
 import java.util.List;
+import java.time.Instant;
 import java.util.UUID;
 
 public class IssueTicketUpsertRequest {
@@ -16,6 +17,8 @@ public class IssueTicketUpsertRequest {
     private String dataLevel;
     private String owner;
     private String assignedTo;
+    private Instant dueAt;
+    private String resolution;
     private List<String> tags;
 
     public String getSourceType() {
@@ -104,6 +107,22 @@ public class IssueTicketUpsertRequest {
 
     public void setAssignedTo(String assignedTo) {
         this.assignedTo = assignedTo;
+    }
+
+    public Instant getDueAt() {
+        return dueAt;
+    }
+
+    public void setDueAt(Instant dueAt) {
+        this.dueAt = dueAt;
+    }
+
+    public String getResolution() {
+        return resolution;
+    }
+
+    public void setResolution(String resolution) {
+        this.resolution = resolution;
     }
 
     public List<String> getTags() {

@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { ScreenGlobalVariable } from './types';
 
 export type RuntimeEventKind = 'variable' | 'filter' | 'interaction' | 'drill-down' | 'drill-up' | 'jump';
@@ -16,7 +16,7 @@ export interface RuntimeVariableEvent {
 interface ScreenRuntimeContextValue {
     definitions: ScreenGlobalVariable[];
     values: Record<string, string>;
-    events: RuntimeVariableEvent[];
+    getEvents: () => RuntimeVariableEvent[];
     setVariable: (key: string, value: string, source?: string) => void;
     trackEvent: (event: Omit<RuntimeVariableEvent, 'id' | 'at'>) => void;
 }
@@ -24,7 +24,7 @@ interface ScreenRuntimeContextValue {
 const emptyValue: ScreenRuntimeContextValue = {
     definitions: [],
     values: {},
-    events: [],
+    getEvents: () => [],
     setVariable: () => {
         // no-op for unwrapped usage
     },
@@ -72,6 +72,10 @@ export function ScreenRuntimeProvider({
     const [values, setValues] = useState<Record<string, string>>({});
     const [events, setEvents] = useState<RuntimeVariableEvent[]>([]);
 
+    // Phase 1.5: use ref for events so context consumers don't re-render on every event
+    const eventsRef = useRef(events);
+    eventsRef.current = events;
+
     useEffect(() => {
         setValues((prev) => {
             const next: Record<string, string> = {};
@@ -86,7 +90,7 @@ export function ScreenRuntimeProvider({
     const contextValue = useMemo<ScreenRuntimeContextValue>(() => ({
         definitions: normalizedDefinitions,
         values,
-        events,
+        getEvents: () => eventsRef.current,
         trackEvent: (event) => {
             const safeKey = (event.key || '').trim() || '__event__';
             setEvents((prev) => {
@@ -118,7 +122,7 @@ export function ScreenRuntimeProvider({
                 return [next, ...prev].slice(0, 100);
             });
         },
-    }), [events, normalizedDefinitions, values]);
+    }), [normalizedDefinitions, values]); // events removed from deps
 
     return <ScreenRuntimeContext.Provider value={contextValue}>{children}</ScreenRuntimeContext.Provider>;
 }

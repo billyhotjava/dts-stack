@@ -13,6 +13,7 @@ import org.springframework.stereotype.Repository;
 public interface GovQualityRunRepository extends JpaRepository<GovQualityRun, UUID> {
     List<GovQualityRun> findByDatasetId(UUID datasetId, Pageable pageable);
     List<GovQualityRun> findByRuleId(UUID ruleId, Pageable pageable);
+    List<GovQualityRun> findByCreatedDateAfterOrderByCreatedDateAsc(Instant since);
     Optional<GovQualityRun> findFirstByDatasetIdOrderByCreatedDateDesc(UUID datasetId);
     long countByRuleIdAndCreatedDateAfter(UUID ruleId, Instant since);
 

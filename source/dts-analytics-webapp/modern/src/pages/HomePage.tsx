@@ -1,13 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
-import { analyticsApi, type CurrentUser, type DashboardListItem, type CardListItem } from "../api/analyticsApi";
+import { analyticsApi, type CurrentUser, type DashboardListItem, type CardListItem, type ScreenListItem } from "../api/analyticsApi";
 import { ErrorNotice } from "../components/ErrorNotice";
-import { PageContainer, PageHeader } from "../components/PageContainer/PageContainer";
-import { Card, CardHeader, CardBody, StatCard } from "../ui/Card/Card";
+import { PageContainer } from "../components/PageContainer/PageContainer";
+import { Card, CardHeader, CardBody } from "../ui/Card/Card";
 import { Button } from "../ui/Button/Button";
 import { Badge } from "../ui/Badge/Badge";
 import { Spinner } from "../ui/Loading/Spinner";
-import { CardSkeleton } from "../ui/Loading/Skeleton";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import "./page.css";
 
@@ -42,6 +41,14 @@ const DatabaseIcon = () => (
 	</svg>
 );
 
+const ScreenIcon = () => (
+	<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+		<rect x="3" y="4" width="18" height="12" rx="2" />
+		<path d="M8 20h8" />
+		<path d="M12 16v4" />
+	</svg>
+);
+
 const PlusIcon = () => (
 	<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
 		<path d="M5 12h14" />
@@ -62,6 +69,7 @@ export default function HomePage() {
 	const [health, setHealth] = useState<LoadState<string>>({ state: "loading" });
 	const [dashboards, setDashboards] = useState<LoadState<DashboardListItem[]>>({ state: "loading" });
 	const [questions, setQuestions] = useState<LoadState<CardListItem[]>>({ state: "loading" });
+	const [screens, setScreens] = useState<LoadState<ScreenListItem[]>>({ state: "loading" });
 
 	useEffect(() => {
 		let cancelled = false;
@@ -108,6 +116,25 @@ export default function HomePage() {
 			.catch((e) => {
 				if (cancelled) return;
 				setQuestions({ state: "error", error: e });
+			});
+
+		analyticsApi
+			.listScreens()
+			.then((value) => {
+				if (cancelled) return;
+				const published = value
+					.filter((item) => Number(item.publishedVersionNo || 0) > 0)
+					.sort((a, b) => {
+						const ta = new Date(a.publishedAt || a.updatedAt || 0).getTime();
+						const tb = new Date(b.publishedAt || b.updatedAt || 0).getTime();
+						return tb - ta;
+					})
+					.slice(0, 5);
+				setScreens({ state: "loaded", value: published });
+			})
+			.catch((e) => {
+				if (cancelled) return;
+				setScreens({ state: "error", error: e });
 			});
 
 		return () => {
@@ -178,7 +205,7 @@ export default function HomePage() {
 			</div>
 
 			{/* Recent Items */}
-			<div className="grid2" style={{ marginTop: "var(--spacing-xl)" }}>
+			<div className="grid3" style={{ marginTop: "var(--spacing-xl)" }}>
 				{/* Recent Dashboards */}
 				<Card>
 					<CardHeader
@@ -264,6 +291,60 @@ export default function HomePage() {
 											<QuestionIcon />
 											<span>{q.name || t(locale, "common.untitled")}</span>
 										</Link>
+									</li>
+								))}
+							</ul>
+						)}
+					</CardBody>
+				</Card>
+
+				{/* Published Screens */}
+				<Card>
+					<CardHeader
+						title={t(locale, "home.publishedScreens")}
+						action={
+							<Link to="/screens">
+								<Button variant="tertiary" size="sm" icon={<ArrowRightIcon />} iconPosition="right">
+									{t(locale, "common.viewAll")}
+								</Button>
+							</Link>
+						}
+					/>
+					<CardBody>
+						{screens.state === "loading" && (
+							<div className="loading-state">
+								<Spinner size="md" />
+							</div>
+						)}
+						{screens.state === "error" && (
+							<div className="error-state">{t(locale, "error")}</div>
+						)}
+						{screens.state === "loaded" && screens.value.length === 0 && (
+							<div className="empty-state-small">
+								<p>{t(locale, "home.noPublishedScreens")}</p>
+								<Link to="/screens">
+									<Button variant="primary" size="sm" icon={<PlusIcon />}>
+										{t(locale, "home.openScreenCenter")}
+									</Button>
+								</Link>
+							</div>
+						)}
+						{screens.state === "loaded" && screens.value.length > 0 && (
+							<ul className="item-list">
+								{screens.value.map((s) => (
+									<li key={s.id}>
+										<div className="item-list__row">
+											<a
+												href={`/analytics/screens/${encodeURIComponent(String(s.id))}/preview`}
+												className="item-list__link"
+												target="_blank"
+												rel="noreferrer"
+											>
+												<ScreenIcon />
+												<span>{s.name || t(locale, "common.untitled")}</span>
+											</a>
+											<div className="item-list__meta">v{s.publishedVersionNo || "-"}</div>
+										</div>
 									</li>
 								))}
 							</ul>
@@ -383,6 +464,8 @@ export default function HomePage() {
 					color: var(--color-text-primary);
 					text-decoration: none;
 					transition: background-color var(--transition-fast);
+					flex: 1 1 auto;
+					min-width: 0;
 				}
 
 				.item-list__link:hover {
@@ -393,6 +476,29 @@ export default function HomePage() {
 					width: 16px;
 					height: 16px;
 					color: var(--color-text-tertiary);
+					flex-shrink: 0;
+				}
+
+				.item-list__link span {
+					min-width: 0;
+					overflow: hidden;
+					text-overflow: ellipsis;
+					white-space: nowrap;
+				}
+
+				.item-list__row {
+					display: flex;
+					align-items: center;
+					justify-content: space-between;
+					gap: var(--spacing-sm);
+				}
+
+				.item-list__meta {
+					padding-right: var(--spacing-xs);
+					font-size: var(--font-size-xs);
+					color: var(--color-text-tertiary);
+					white-space: nowrap;
+					flex: 0 0 auto;
 				}
 			`}</style>
 		</PageContainer>

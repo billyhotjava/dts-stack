@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import dayjs from "dayjs";
 import {
 	Alert,
 	Button,
 	Card,
+	DatePicker,
+	Descriptions,
 	Drawer,
 	Form,
 	Input,
@@ -20,17 +23,19 @@ import {
 	closeIssue,
 	createIssue,
 	getIssue,
+	getIssueSlaMetrics,
+	getQualityRun,
 	listIssues,
 	updateIssue,
 } from "@/api/platformApi";
+import { useGovernanceManageAccess } from "@/hooks/useModuleManageAccess";
 import { useActiveDept } from "@/store/contextStore";
-import { useUserRoles } from "@/store/userStore";
 
 type IssueAction = {
 	id?: string;
 	actionType?: string;
 	notes?: string;
-	operator?: string;
+	actor?: string;
 	createdDate?: string;
 	attachments?: string[];
 };
@@ -51,6 +56,8 @@ type IssueTicket = {
 	dueAt?: string;
 	resolvedAt?: string;
 	resolution?: string;
+	overdue?: boolean;
+	handlingDurationMs?: number;
 	owner?: string;
 	tags?: string[];
 	lastModifiedDate?: string;
@@ -69,6 +76,8 @@ type IssueForm = {
 	dataLevel?: string;
 	owner?: string;
 	assignedTo?: string;
+	dueAt?: any;
+	resolution?: string;
 	tagsRaw?: string;
 };
 
@@ -78,21 +87,6 @@ type ActionForm = {
 	attachmentsRaw?: string;
 };
 
-const MAINTAINER_ROLES = new Set([
-	"ADMIN",
-	"OP_ADMIN",
-	"INST_DATA_OWNER",
-	"DEPT_DATA_OWNER",
-	"INST_LEADER",
-	"DEPT_LEADER",
-]);
-
-const normalizeRole = (raw: unknown) =>
-	String(raw || "")
-		.trim()
-		.toUpperCase()
-		.replace(/^ROLE_/, "");
-
 const normalizeStatus = (raw: unknown) => String(raw || "").trim().toUpperCase();
 
 const splitCsv = (raw?: string) =>
@@ -100,6 +94,17 @@ const splitCsv = (raw?: string) =>
 		.split(",")
 		.map((item) => item.trim())
 		.filter(Boolean);
+
+const formatDateTime = (value?: string) => {
+	if (!value) return "-";
+	const date = dayjs(value);
+	return date.isValid() ? date.format("YYYY-MM-DD HH:mm:ss") : value;
+};
+
+const formatDurationHours = (value?: number) => {
+	if (value == null) return "-";
+	return `${(value / (1000 * 60 * 60)).toFixed(2)}h`;
+};
 
 const statusColor = (status?: string) => {
 	const normalized = normalizeStatus(status);
@@ -114,11 +119,22 @@ export default function IssueWorkflowPanel() {
 	const [issues, setIssues] = useState<IssueTicket[]>([]);
 	const [loading, setLoading] = useState(false);
 	const [statusFilter, setStatusFilter] = useState<string>("ALL");
+	const [priorityFilter, setPriorityFilter] = useState<string>("ALL");
+	const [overdueFilter, setOverdueFilter] = useState<string>("ALL");
 	const [keyword, setKeyword] = useState("");
 	const [editing, setEditing] = useState<IssueTicket | null>(null);
 	const [modalOpen, setModalOpen] = useState(false);
 	const [detailOpen, setDetailOpen] = useState(false);
 	const [detailIssue, setDetailIssue] = useState<IssueTicket | null>(null);
+	const [linkedRun, setLinkedRun] = useState<any>(null);
+	const [slaMetrics, setSlaMetrics] = useState<{
+		windowDays?: number;
+		total?: number;
+		open?: number;
+		overdue?: number;
+		overdueRate?: number;
+		avgHandlingHours?: number;
+	} | null>(null);
 	const [closeModalOpen, setCloseModalOpen] = useState(false);
 	const [closeIssueId, setCloseIssueId] = useState<string>("");
 	const [resolution, setResolution] = useState("");
@@ -130,16 +146,11 @@ export default function IssueWorkflowPanel() {
 	const [actionForm] = Form.useForm<ActionForm>();
 
 	const activeDept = useActiveDept();
-	const userRoles = useUserRoles();
+	const hasManageAccess = useGovernanceManageAccess();
 
 	const canManage = useMemo(() => {
-		if (readOnly) return false;
-		const normalized = new Set((userRoles || []).map(normalizeRole));
-		for (const role of normalized) {
-			if (MAINTAINER_ROLES.has(role)) return true;
-		}
-		return false;
-	}, [readOnly, userRoles]);
+		return !readOnly && hasManageAccess;
+	}, [readOnly, hasManageAccess]);
 
 	const parseWriteError = (error: any, fallback: string) => {
 		const message = String(error?.message || fallback);
@@ -156,11 +167,26 @@ export default function IssueWorkflowPanel() {
 			if (statusFilter !== "ALL") {
 				params.status = statusFilter;
 			}
+			if (priorityFilter !== "ALL") {
+				params.priority = priorityFilter;
+			}
+			if (overdueFilter === "OVERDUE") {
+				params.overdue = true;
+			}
+			if (overdueFilter === "ON_TIME") {
+				params.overdue = false;
+			}
 			if (keyword.trim()) {
 				params.keyword = keyword.trim();
 			}
 			const list = await listIssues(params);
 			setIssues(Array.isArray(list) ? (list as IssueTicket[]) : []);
+			try {
+				const metrics = await getIssueSlaMetrics({ days: 30 });
+				setSlaMetrics(metrics || null);
+			} catch {
+				setSlaMetrics(null);
+			}
 		} catch (error: any) {
 			toast.error(error?.message || "问题单加载失败");
 		} finally {
@@ -170,7 +196,7 @@ export default function IssueWorkflowPanel() {
 
 	useEffect(() => {
 		void loadIssues();
-	}, [statusFilter]);
+	}, [statusFilter, priorityFilter, overdueFilter]);
 
 	const openCreate = () => {
 		setEditing(null);
@@ -184,6 +210,7 @@ export default function IssueWorkflowPanel() {
 			dataLevel: "DATA_INTERNAL",
 			owner: "",
 			assignedTo: "",
+			resolution: "",
 			tagsRaw: "",
 		});
 		setModalOpen(true);
@@ -203,6 +230,8 @@ export default function IssueWorkflowPanel() {
 			dataLevel: issue.dataLevel || "DATA_INTERNAL",
 			owner: issue.owner || "",
 			assignedTo: issue.assignedTo || "",
+			dueAt: issue.dueAt ? dayjs(issue.dueAt) : null,
+			resolution: issue.resolution || "",
 			tagsRaw: Array.isArray(issue.tags) ? issue.tags.join(",") : "",
 		});
 		setModalOpen(true);
@@ -224,6 +253,8 @@ export default function IssueWorkflowPanel() {
 				dataLevel: values.dataLevel || undefined,
 				owner: values.owner || undefined,
 				assignedTo: values.assignedTo || undefined,
+				dueAt: values.dueAt?.toISOString?.() || undefined,
+				resolution: values.resolution || undefined,
 				tags: splitCsv(values.tagsRaw),
 			};
 			if (editing?.id) {
@@ -248,6 +279,17 @@ export default function IssueWorkflowPanel() {
 		try {
 			const detail = (await getIssue(id)) as IssueTicket;
 			setDetailIssue(detail || null);
+			const sourceType = String(detail?.sourceType || "").toUpperCase();
+			if (sourceType === "QUALITY_RUN" && detail?.sourceId) {
+				try {
+					const run = await getQualityRun(String(detail.sourceId));
+					setLinkedRun(run);
+				} catch {
+					setLinkedRun(null);
+				}
+			} else {
+				setLinkedRun(null);
+			}
 			setDetailOpen(true);
 		} catch (error: any) {
 			toast.error(error?.message || "问题单详情加载失败");
@@ -263,9 +305,13 @@ export default function IssueWorkflowPanel() {
 
 	const submitClose = async () => {
 		if (!closeIssueId) return;
+		if (!resolution.trim()) {
+			toast.error("关闭问题单必须填写处理结论");
+			return;
+		}
 		try {
 			setSaving(true);
-			await closeIssue(closeIssueId, resolution || undefined);
+			await closeIssue(closeIssueId, resolution.trim());
 			toast.success("问题单已关闭");
 			setCloseModalOpen(false);
 			await loadIssues();
@@ -320,10 +366,20 @@ export default function IssueWorkflowPanel() {
 		},
 		{ title: "严重性", dataIndex: "severity", width: 100, render: (value) => value || "-" },
 		{ title: "优先级", dataIndex: "priority", width: 100, render: (value) => value || "-" },
+		{
+			title: "SLA",
+			width: 220,
+			render: (_, record) => (
+				<Space direction="vertical" size={0}>
+					<span>截止: {formatDateTime(record.dueAt)}</span>
+					<Tag color={record.overdue ? "red" : "green"}>{record.overdue ? "已逾期" : "未逾期"}</Tag>
+				</Space>
+			),
+		},
 		{ title: "责任人", dataIndex: "assignedTo", width: 120, render: (value) => value || "-" },
 		{ title: "归属部门", dataIndex: "ownerDept", width: 140, render: (value) => value || "-" },
 		{ title: "来源", dataIndex: "sourceType", width: 120, render: (value) => value || "-" },
-		{ title: "最后更新", dataIndex: "lastModifiedDate", width: 200, render: (value) => value || "-" },
+		{ title: "最后更新", dataIndex: "lastModifiedDate", width: 200, render: (value) => formatDateTime(value) },
 		{
 			title: "操作",
 			width: 260,
@@ -338,7 +394,11 @@ export default function IssueWorkflowPanel() {
 					<Button size="small" disabled={!canManage} onClick={() => openAction(record.id)}>
 						追加记录
 					</Button>
-					<Button size="small" disabled={!canManage} onClick={() => openClose(record.id)}>
+					<Button
+						size="small"
+						disabled={!canManage || normalizeStatus(record.status) !== "RESOLVED"}
+						onClick={() => openClose(record.id)}
+					>
 						关闭
 					</Button>
 				</Space>
@@ -366,9 +426,32 @@ export default function IssueWorkflowPanel() {
 							{ label: "全部状态", value: "ALL" },
 							{ label: "OPEN", value: "OPEN" },
 							{ label: "IN_PROGRESS", value: "IN_PROGRESS" },
+							{ label: "RESOLVED", value: "RESOLVED" },
 							{ label: "CLOSED", value: "CLOSED" },
 						]}
 						style={{ width: 140 }}
+					/>
+					<Select
+						value={priorityFilter}
+						onChange={(value) => setPriorityFilter(value)}
+						options={[
+							{ label: "全部优先级", value: "ALL" },
+							{ label: "URGENT", value: "URGENT" },
+							{ label: "HIGH", value: "HIGH" },
+							{ label: "MEDIUM", value: "MEDIUM" },
+							{ label: "LOW", value: "LOW" },
+						]}
+						style={{ width: 150 }}
+					/>
+					<Select
+						value={overdueFilter}
+						onChange={(value) => setOverdueFilter(value)}
+						options={[
+							{ label: "全部SLA", value: "ALL" },
+							{ label: "仅逾期", value: "OVERDUE" },
+							{ label: "未逾期", value: "ON_TIME" },
+						]}
+						style={{ width: 130 }}
 					/>
 					<Button icon={<ReloadOutlined />} onClick={() => void loadIssues()}>
 						刷新
@@ -389,6 +472,17 @@ export default function IssueWorkflowPanel() {
 							: "当前账号为只读模式，仅可查看问题单。"
 					}
 				/>
+				{slaMetrics ? (
+					<Alert
+						type="success"
+						showIcon
+						message={`SLA(${slaMetrics.windowDays || 30}天): 开单 ${slaMetrics.total || 0} / 未关闭 ${
+							slaMetrics.open || 0
+						} / 逾期 ${slaMetrics.overdue || 0} / 逾期率 ${Number(slaMetrics.overdueRate || 0).toFixed(
+							2,
+						)}% / 平均处理时长 ${Number(slaMetrics.avgHandlingHours || 0).toFixed(2)}h`}
+					/>
+				) : null}
 				<Table rowKey={(record) => record.id || record.title || "issue"} columns={columns} dataSource={issues} loading={loading} />
 			</Space>
 
@@ -429,6 +523,7 @@ export default function IssueWorkflowPanel() {
 							options={[
 								{ label: "OPEN", value: "OPEN" },
 								{ label: "IN_PROGRESS", value: "IN_PROGRESS" },
+								{ label: "RESOLVED", value: "RESOLVED" },
 								{ label: "CLOSED", value: "CLOSED" },
 							]}
 						/>
@@ -468,6 +563,12 @@ export default function IssueWorkflowPanel() {
 					</Form.Item>
 					<Form.Item label="责任人" name="assignedTo">
 						<Input placeholder="用户名" />
+					</Form.Item>
+					<Form.Item label="SLA 截止时间" name="dueAt">
+						<DatePicker showTime className="w-full" />
+					</Form.Item>
+					<Form.Item label="处理结论" name="resolution">
+						<Input.TextArea rows={3} placeholder="状态为 RESOLVED/CLOSED 时建议填写" />
 					</Form.Item>
 					<Form.Item label="标签(逗号分隔)" name="tagsRaw">
 						<Input placeholder="QUALITY,ODS,PATENT" />
@@ -516,7 +617,15 @@ export default function IssueWorkflowPanel() {
 				</Form>
 			</Modal>
 
-			<Drawer open={detailOpen} onClose={() => setDetailOpen(false)} title={`问题单详情：${detailIssue?.title || "-"}`} width={680}>
+			<Drawer
+				open={detailOpen}
+				onClose={() => {
+					setDetailOpen(false);
+					setLinkedRun(null);
+				}}
+				title={`问题单详情：${detailIssue?.title || "-"}`}
+				width={680}
+			>
 				<Space direction="vertical" className="w-full" size={12}>
 					<Alert
 						type="info"
@@ -525,10 +634,48 @@ export default function IssueWorkflowPanel() {
 							detailIssue?.assignedTo || "-"
 						}`}
 					/>
+					<Descriptions column={1} size="small" bordered>
+						<Descriptions.Item label="来源">{detailIssue?.sourceType || "-"}</Descriptions.Item>
+						<Descriptions.Item label="来源ID">{detailIssue?.sourceId || "-"}</Descriptions.Item>
+						<Descriptions.Item label="优先级">{detailIssue?.priority || "-"}</Descriptions.Item>
+						<Descriptions.Item label="SLA 截止">{formatDateTime(detailIssue?.dueAt)}</Descriptions.Item>
+						<Descriptions.Item label="逾期状态">
+							<Tag color={detailIssue?.overdue ? "red" : "green"}>{detailIssue?.overdue ? "已逾期" : "未逾期"}</Tag>
+						</Descriptions.Item>
+						<Descriptions.Item label="处理时长">{formatDurationHours(detailIssue?.handlingDurationMs)}</Descriptions.Item>
+						<Descriptions.Item label="处理结论">{detailIssue?.resolution || "-"}</Descriptions.Item>
+					</Descriptions>
 					<div>
 						<div className="font-medium">描述</div>
 						<div className="whitespace-pre-wrap">{detailIssue?.summary || "-"}</div>
 					</div>
+					{linkedRun ? (
+						<div>
+							<div className="font-medium">关联质量运行</div>
+							<Descriptions column={1} size="small" bordered>
+								<Descriptions.Item label="运行ID">{linkedRun?.id || "-"}</Descriptions.Item>
+								<Descriptions.Item label="规则ID">{linkedRun?.ruleId || "-"}</Descriptions.Item>
+								<Descriptions.Item label="状态">{linkedRun?.status || "-"}</Descriptions.Item>
+								<Descriptions.Item label="结果说明">{linkedRun?.message || "-"}</Descriptions.Item>
+								<Descriptions.Item label="开始时间">{formatDateTime(linkedRun?.startedAt)}</Descriptions.Item>
+								<Descriptions.Item label="结束时间">{formatDateTime(linkedRun?.finishedAt)}</Descriptions.Item>
+							</Descriptions>
+							{Array.isArray(linkedRun?.metrics) && linkedRun.metrics.length > 0 ? (
+								<Table
+									style={{ marginTop: 8 }}
+									size="small"
+									rowKey={(row: any, idx) => String(row?.id || row?.metricKey || idx)}
+									pagination={false}
+									dataSource={linkedRun.metrics}
+									columns={[
+										{ title: "检查项", dataIndex: "metricKey", width: 160 },
+										{ title: "状态", dataIndex: "status", width: 120 },
+										{ title: "明细", dataIndex: "detail", render: (value) => value || "-" },
+									]}
+								/>
+							) : null}
+						</div>
+					) : null}
 					<div>
 						<div className="font-medium">处理记录</div>
 						<Table
@@ -537,8 +684,8 @@ export default function IssueWorkflowPanel() {
 							columns={[
 								{ title: "动作", dataIndex: "actionType", width: 120 },
 								{ title: "备注", dataIndex: "notes", render: (value) => value || "-" },
-								{ title: "执行人", dataIndex: "operator", width: 140, render: (value) => value || "-" },
-								{ title: "时间", dataIndex: "createdDate", width: 200, render: (value) => value || "-" },
+								{ title: "执行人", dataIndex: "actor", width: 140, render: (value) => value || "-" },
+								{ title: "时间", dataIndex: "createdDate", width: 200, render: (value) => formatDateTime(value) },
 							]}
 							dataSource={Array.isArray(detailIssue?.actions) ? detailIssue?.actions : []}
 							pagination={false}

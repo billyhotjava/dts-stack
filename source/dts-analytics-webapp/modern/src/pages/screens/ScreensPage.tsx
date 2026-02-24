@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router';
 import { analyticsApi, ScreenListItem, type ScreenAiGenerationResponse } from '../../api/analyticsApi';
 import { writeTextToClipboard } from '../../hooks/clipboard';
@@ -6,6 +6,8 @@ import { TemplateGallery, type TemplateSelection } from './components';
 import { createConfigFromTemplate } from './screenTemplates';
 import { buildScreenPayload, normalizeScreenConfig } from './specV2';
 import '../page.css';
+
+const SCREEN_LIST_PREF_KEY = 'dts.analytics.screens.listPref.v1';
 
 export default function ScreensPage() {
     const navigate = useNavigate();
@@ -25,6 +27,105 @@ export default function ScreensPage() {
     const [aiRefineMode, setAiRefineMode] = useState<'apply' | 'suggest'>('apply');
     const [aiResult, setAiResult] = useState<ScreenAiGenerationResponse | null>(null);
     const [aiContextHistory, setAiContextHistory] = useState<string[]>([]);
+    const [activeCardMenuId, setActiveCardMenuId] = useState<string | number | null>(null);
+    const [searchKeyword, setSearchKeyword] = useState(() => {
+        if (typeof window === 'undefined') return '';
+        try {
+            const raw = window.localStorage.getItem(SCREEN_LIST_PREF_KEY);
+            if (!raw) return '';
+            const parsed = JSON.parse(raw) as { searchKeyword?: string };
+            return String(parsed.searchKeyword || '');
+        } catch {
+            return '';
+        }
+    });
+    const [publishFilter, setPublishFilter] = useState<'all' | 'published' | 'draft'>(() => {
+        if (typeof window === 'undefined') return 'all';
+        try {
+            const raw = window.localStorage.getItem(SCREEN_LIST_PREF_KEY);
+            if (!raw) return 'all';
+            const parsed = JSON.parse(raw) as { publishFilter?: string };
+            return parsed.publishFilter === 'published' || parsed.publishFilter === 'draft' ? parsed.publishFilter : 'all';
+        } catch {
+            return 'all';
+        }
+    });
+    const [sortMode, setSortMode] = useState<'updated-desc' | 'updated-asc' | 'name-asc' | 'name-desc'>(() => {
+        if (typeof window === 'undefined') return 'updated-desc';
+        try {
+            const raw = window.localStorage.getItem(SCREEN_LIST_PREF_KEY);
+            if (!raw) return 'updated-desc';
+            const parsed = JSON.parse(raw) as { sortMode?: string };
+            if (parsed.sortMode === 'updated-asc' || parsed.sortMode === 'name-asc' || parsed.sortMode === 'name-desc') {
+                return parsed.sortMode;
+            }
+            return 'updated-desc';
+        } catch {
+            return 'updated-desc';
+        }
+    });
+    const searchInputRef = useRef<HTMLInputElement | null>(null);
+
+    useEffect(() => {
+        if (activeCardMenuId === null) {
+            return;
+        }
+        const handlePointerDown = (event: MouseEvent) => {
+            const node = event.target as HTMLElement | null;
+            if (!node?.closest('.screen-card-menu')) {
+                setActiveCardMenuId(null);
+            }
+        };
+        const handleEscape = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') {
+                setActiveCardMenuId(null);
+            }
+        };
+        window.addEventListener('mousedown', handlePointerDown);
+        window.addEventListener('keydown', handleEscape);
+        return () => {
+            window.removeEventListener('mousedown', handlePointerDown);
+            window.removeEventListener('keydown', handleEscape);
+        };
+    }, [activeCardMenuId]);
+
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        window.localStorage.setItem(
+            SCREEN_LIST_PREF_KEY,
+            JSON.stringify({ searchKeyword, publishFilter, sortMode }),
+        );
+    }, [publishFilter, searchKeyword, sortMode]);
+    useEffect(() => {
+        const isTypingTarget = (target: EventTarget | null): boolean => {
+            const node = target as HTMLElement | null;
+            if (!node) return false;
+            const tag = node.tagName;
+            if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
+            return node.isContentEditable;
+        };
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (event.ctrlKey || event.metaKey || event.altKey) {
+                return;
+            }
+            if (event.key === '/') {
+                if (!isTypingTarget(event.target)) {
+                    event.preventDefault();
+                    searchInputRef.current?.focus();
+                    searchInputRef.current?.select();
+                }
+                return;
+            }
+            if (event.key === 'Escape' && searchKeyword) {
+                if (!isTypingTarget(event.target)) {
+                    event.preventDefault();
+                    setSearchKeyword('');
+                }
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [searchKeyword]);
 
     const loadScreens = useCallback(() => {
         setLoading(true);
@@ -43,6 +144,37 @@ export default function ScreensPage() {
     useEffect(() => {
         loadScreens();
     }, [loadScreens]);
+
+    const publishedCount = useMemo(
+        () => screens.filter((item) => Number(item.publishedVersionNo || 0) > 0).length,
+        [screens],
+    );
+    const draftCount = Math.max(0, screens.length - publishedCount);
+    const visibleScreens = useMemo(() => {
+        const keyword = searchKeyword.trim().toLowerCase();
+        const filtered = screens.filter((item) => {
+            const published = Number(item.publishedVersionNo || 0) > 0;
+            if (publishFilter === 'published' && !published) return false;
+            if (publishFilter === 'draft' && published) return false;
+            if (!keyword) return true;
+            const name = String(item.name || '').toLowerCase();
+            const desc = String(item.description || '').toLowerCase();
+            return name.includes(keyword) || desc.includes(keyword);
+        });
+        filtered.sort((a, b) => {
+            if (sortMode === 'updated-asc') {
+                return (new Date(a.updatedAt || 0).getTime()) - (new Date(b.updatedAt || 0).getTime());
+            }
+            if (sortMode === 'name-asc') {
+                return String(a.name || '').localeCompare(String(b.name || ''), 'zh-CN');
+            }
+            if (sortMode === 'name-desc') {
+                return String(b.name || '').localeCompare(String(a.name || ''), 'zh-CN');
+            }
+            return (new Date(b.updatedAt || 0).getTime()) - (new Date(a.updatedAt || 0).getTime());
+        });
+        return filtered;
+    }, [publishFilter, screens, searchKeyword, sortMode]);
 
     const handleCreate = () => {
         setShowTemplateGallery(true);
@@ -214,7 +346,18 @@ export default function ScreensPage() {
     };
 
     const handlePreview = (id: string | number) => {
-        window.open(`/analytics/screens/${id}/preview`, '_blank');
+        window.open(`/analytics/screens/${id}/preview`, '_blank', 'noopener,noreferrer');
+    };
+
+    const getPreviewUrl = useCallback(
+        (id: string | number) => `${window.location.origin}/analytics/screens/${encodeURIComponent(String(id))}/preview`,
+        [],
+    );
+
+    const handleCopyPreviewUrl = async (id: string | number) => {
+        const url = getPreviewUrl(id);
+        const copied = await writeTextToClipboard(url);
+        alert(copied ? '预览链接已复制到剪贴板' : `复制失败，请手工复制：\n${url}`);
     };
 
     const handleShare = async (id: string | number) => {
@@ -288,18 +431,77 @@ export default function ScreensPage() {
     return (
         <div className="page-container">
             <div className="page-header">
-                <h1 className="page-title">🖥️ 大屏管理</h1>
+                <h1 className="page-title">大屏管理</h1>
                 <div style={{ display: 'flex', gap: 10 }}>
                     <button className="primary-btn" onClick={handleOpenAiGenerator}>
-                        🤖 AI生成
+                        AI生成
                     </button>
                     <button className="primary-btn" onClick={handleCreate}>
-                        ➕ 新建大屏
+                        新建大屏
                     </button>
                 </div>
             </div>
 
             <div className="page-content">
+                <div className="screens-toolbar">
+                    <div className="screens-toolbar-left">
+                        <input
+                            ref={searchInputRef}
+                            className="screens-toolbar-input"
+                            value={searchKeyword}
+                            onChange={(e) => setSearchKeyword(e.target.value)}
+                            placeholder="搜索大屏名称或描述（/）"
+                        />
+                        <select
+                            className="screens-toolbar-select"
+                            value={publishFilter}
+                            onChange={(e) => {
+                                const next = e.target.value;
+                                if (next === 'published' || next === 'draft') {
+                                    setPublishFilter(next);
+                                    return;
+                                }
+                                setPublishFilter('all');
+                            }}
+                        >
+                            <option value="all">全部状态</option>
+                            <option value="published">仅已发布</option>
+                            <option value="draft">仅未发布</option>
+                        </select>
+                        <select
+                            className="screens-toolbar-select"
+                            value={sortMode}
+                            onChange={(e) => {
+                                const next = e.target.value;
+                                if (next === 'updated-asc' || next === 'name-asc' || next === 'name-desc') {
+                                    setSortMode(next);
+                                    return;
+                                }
+                                setSortMode('updated-desc');
+                            }}
+                        >
+                            <option value="updated-desc">按更新时间(新→旧)</option>
+                            <option value="updated-asc">按更新时间(旧→新)</option>
+                            <option value="name-asc">按名称(A→Z)</option>
+                            <option value="name-desc">按名称(Z→A)</option>
+                        </select>
+                        <button
+                            type="button"
+                            className="screens-toolbar-reset"
+                            onClick={() => {
+                                setSearchKeyword('');
+                                setPublishFilter('all');
+                                setSortMode('updated-desc');
+                            }}
+                            title="恢复默认筛选与排序"
+                        >
+                            重置
+                        </button>
+                    </div>
+                    <div className="screens-toolbar-stats">
+                        总计 {screens.length} · 已发布 {publishedCount} · 未发布 {draftCount} · 当前 {visibleScreens.length}
+                    </div>
+                </div>
                 {loading ? (
                     <div className="loading-state">
                         <div className="loading-spinner" />
@@ -307,28 +509,43 @@ export default function ScreensPage() {
                     </div>
                 ) : error ? (
                     <div className="error-state">
-                        <span>❌ {error}</span>
+                        <span>{error}</span>
                         <button onClick={loadScreens}>重试</button>
                     </div>
                 ) : screens.length === 0 ? (
                     <div className="empty-state">
-                        <div className="empty-state-icon">🖥️</div>
+                        <div className="empty-state-icon">屏</div>
                         <div className="empty-state-text">暂无大屏</div>
                         <div className="empty-state-hint">点击"新建大屏"创建您的第一个数据大屏</div>
                         <button className="primary-btn" onClick={handleCreate}>
-                            ➕ 新建大屏
+                            新建大屏
+                        </button>
+                    </div>
+                ) : visibleScreens.length === 0 ? (
+                    <div className="empty-state">
+                        <div className="empty-state-icon">筛</div>
+                        <div className="empty-state-text">没有匹配结果</div>
+                        <div className="empty-state-hint">尝试清空搜索词或调整状态筛选</div>
+                        <button
+                            className="primary-btn"
+                            onClick={() => {
+                                setSearchKeyword('');
+                                setPublishFilter('all');
+                            }}
+                        >
+                            重置筛选
                         </button>
                     </div>
                 ) : (
                     <div className="screens-grid">
-                        {screens.map((screen) => (
+                        {visibleScreens.map((screen) => (
                             <div key={screen.id} className="screen-card">
                                 <div
                                     className="screen-card-preview"
                                     onClick={() => handleEdit(screen.id)}
                                 >
                                     <div className="screen-card-placeholder">
-                                        🖥️
+                                        屏
                                     </div>
                                     <div className="screen-card-size">
                                         {screen.width || 1920} × {screen.height || 1080}
@@ -340,47 +557,110 @@ export default function ScreensPage() {
                                         {screen.description || '无描述'}
                                     </p>
                                     <div className="screen-card-meta">
+                                        <div className="screen-card-status-row">
+                                            <span className={`screen-status-tag ${screen.publishedVersionNo ? 'published' : 'draft'}`}>
+                                                {screen.publishedVersionNo ? `已发布 v${screen.publishedVersionNo}` : '未发布'}
+                                            </span>
+                                            {screen.publishedAt ? (
+                                                <span>发布: {formatDate(screen.publishedAt)}</span>
+                                            ) : null}
+                                        </div>
                                         <span>更新: {formatDate(screen.updatedAt)}</span>
+                                        {screen.publishedVersionNo ? (
+                                            <div className="screen-card-link-row">
+                                                <a
+                                                    href={getPreviewUrl(screen.id)}
+                                                    target="_blank"
+                                                    rel="noreferrer"
+                                                    className="screen-card-link"
+                                                    title="打开预览链接"
+                                                >
+                                                    预览链接
+                                                </a>
+                                                <button
+                                                    type="button"
+                                                    className="screen-card-link-copy"
+                                                    onClick={() => {
+                                                        void handleCopyPreviewUrl(screen.id);
+                                                    }}
+                                                    title="复制预览链接"
+                                                >
+                                                    复制
+                                                </button>
+                                            </div>
+                                        ) : null}
                                     </div>
                                 </div>
                                 <div className="screen-card-actions">
                                     <button
                                         className="action-btn edit"
                                         onClick={() => handleEdit(screen.id)}
-                                        title="编辑"
+                                        title="编辑大屏"
                                     >
-                                        ✏️
+                                        编辑
                                     </button>
                                     <button
                                         className="action-btn preview"
                                         onClick={() => handlePreview(screen.id)}
-                                        title="预览"
+                                        title="预览大屏"
                                     >
-                                        👁️
+                                        预览
                                     </button>
-                                    <button
-                                        className="action-btn share"
-                                        onClick={() => handleShare(screen.id)}
-                                        disabled={sharingId === screen.id}
-                                        title="分享"
-                                    >
-                                        🔗
-                                    </button>
-                                    <button
-                                        className="action-btn"
-                                        onClick={() => handleSaveAsTemplate(screen.id, screen.name)}
-                                        disabled={savingTemplateId === screen.id}
-                                        title="保存为模板"
-                                    >
-                                        {savingTemplateId === screen.id ? '…' : '📦'}
-                                    </button>
-                                    <button
-                                        className="action-btn delete"
-                                        onClick={() => handleDelete(screen.id)}
-                                        title="删除"
-                                    >
-                                        🗑️
-                                    </button>
+                                    <div className="screen-card-menu">
+                                        <button
+                                            className={`action-btn more ${activeCardMenuId === screen.id ? 'active' : ''}`}
+                                            onClick={() => setActiveCardMenuId((prev) => (prev === screen.id ? null : screen.id))}
+                                            title="更多操作"
+                                        >
+                                            更多
+                                        </button>
+                                        {activeCardMenuId === screen.id ? (
+                                            <div className="screen-card-menu-panel">
+                                                <button
+                                                    type="button"
+                                                    className="screen-card-menu-item"
+                                                    onClick={() => {
+                                                        setActiveCardMenuId(null);
+                                                        void handleShare(screen.id);
+                                                    }}
+                                                    disabled={sharingId === screen.id}
+                                                >
+                                                    {sharingId === screen.id ? '生成分享链接中...' : '生成分享链接'}
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    className="screen-card-menu-item"
+                                                    onClick={() => {
+                                                        setActiveCardMenuId(null);
+                                                        void handleCopyPreviewUrl(screen.id);
+                                                    }}
+                                                >
+                                                    复制预览链接
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    className="screen-card-menu-item"
+                                                    onClick={() => {
+                                                        setActiveCardMenuId(null);
+                                                        void handleSaveAsTemplate(screen.id, screen.name);
+                                                    }}
+                                                    disabled={savingTemplateId === screen.id}
+                                                >
+                                                    {savingTemplateId === screen.id ? '保存模板中...' : '保存为模板'}
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    className="screen-card-menu-item delete"
+                                                    onClick={() => {
+                                                        setActiveCardMenuId(null);
+                                                        void handleDelete(screen.id);
+                                                    }}
+                                                >
+                                                    删除大屏
+                                                </button>
+                                            </div>
+                                        ) : null}
+                                    </div>
                                 </div>
                             </div>
                         ))}
@@ -395,12 +675,70 @@ export default function ScreensPage() {
                     gap: 20px;
                     padding: 20px;
                 }
+
+                .screens-toolbar {
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    gap: 10px;
+                    padding: 12px 20px 0;
+                    flex-wrap: wrap;
+                }
+
+                .screens-toolbar-left {
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    flex-wrap: wrap;
+                }
+
+                .screens-toolbar-input {
+                    min-width: 240px;
+                    max-width: 340px;
+                    width: 34vw;
+                    border: 1px solid var(--color-border);
+                    border-radius: 8px;
+                    padding: 8px 10px;
+                    background: var(--color-surface);
+                    color: var(--color-text-primary);
+                    font-size: 13px;
+                }
+
+                .screens-toolbar-select {
+                    border: 1px solid var(--color-border);
+                    border-radius: 8px;
+                    padding: 8px 10px;
+                    background: var(--color-surface);
+                    color: var(--color-text-primary);
+                    font-size: 13px;
+                }
+
+                .screens-toolbar-stats {
+                    font-size: 12px;
+                    color: var(--color-text-secondary);
+                }
+
+                .screens-toolbar-reset {
+                    border: 1px solid var(--color-border);
+                    border-radius: 8px;
+                    padding: 8px 10px;
+                    background: var(--color-surface);
+                    color: var(--color-text-primary);
+                    font-size: 13px;
+                    cursor: pointer;
+                }
+
+                .screens-toolbar-reset:hover {
+                    border-color: var(--color-primary);
+                    background: var(--color-primary-light);
+                }
                 
                 .screen-card {
+                    position: relative;
                     background: var(--color-surface-secondary);
                     border: 1px solid var(--color-border);
                     border-radius: 8px;
-                    overflow: hidden;
+                    overflow: visible;
                     transition: all 0.2s ease;
                 }
                 
@@ -417,6 +755,9 @@ export default function ScreensPage() {
                     align-items: center;
                     justify-content: center;
                     cursor: pointer;
+                    border-top-left-radius: 8px;
+                    border-top-right-radius: 8px;
+                    overflow: hidden;
                 }
                 
                 .screen-card-placeholder {
@@ -458,6 +799,71 @@ export default function ScreensPage() {
                 .screen-card-meta {
                     font-size: 11px;
                     color: var(--color-text-tertiary);
+                    display: grid;
+                    gap: 4px;
+                }
+
+                .screen-card-link-row {
+                    display: flex;
+                    align-items: center;
+                    gap: 6px;
+                }
+
+                .screen-card-link {
+                    color: var(--color-primary);
+                    text-decoration: none;
+                    max-width: 170px;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
+                }
+
+                .screen-card-link:hover {
+                    text-decoration: underline;
+                }
+
+                .screen-card-link-copy {
+                    border: 1px solid var(--color-border);
+                    border-radius: 6px;
+                    background: var(--color-surface);
+                    color: var(--color-text-primary);
+                    font-size: 11px;
+                    padding: 2px 6px;
+                    cursor: pointer;
+                }
+
+                .screen-card-link-copy:hover {
+                    border-color: var(--color-primary);
+                    background: var(--color-primary-light);
+                }
+
+                .screen-card-status-row {
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    flex-wrap: wrap;
+                }
+
+                .screen-status-tag {
+                    display: inline-flex;
+                    align-items: center;
+                    border-radius: 999px;
+                    padding: 2px 8px;
+                    font-size: 11px;
+                    font-weight: 600;
+                    border: 1px solid transparent;
+                }
+
+                .screen-status-tag.published {
+                    color: #166534;
+                    background: rgba(34, 197, 94, 0.12);
+                    border-color: rgba(34, 197, 94, 0.35);
+                }
+
+                .screen-status-tag.draft {
+                    color: #9a3412;
+                    background: rgba(245, 158, 11, 0.12);
+                    border-color: rgba(245, 158, 11, 0.32);
                 }
                 
                 .screen-card-actions {
@@ -465,16 +871,18 @@ export default function ScreensPage() {
                     gap: 8px;
                     padding: 12px 16px;
                     border-top: 1px solid var(--color-border);
+                    align-items: center;
                 }
                 
                 .action-btn {
-                    flex: 1;
+                    flex: 1 1 0;
                     padding: 8px;
                     border: 1px solid var(--color-border);
                     border-radius: 6px;
                     background: var(--color-surface);
                     cursor: pointer;
-                    font-size: 14px;
+                    font-size: 12px;
+                    font-weight: 500;
                     transition: all 0.2s ease;
                 }
                 
@@ -482,8 +890,70 @@ export default function ScreensPage() {
                     border-color: var(--color-primary);
                     background: var(--color-primary-light);
                 }
+
+                .action-btn.more.active {
+                    border-color: var(--color-primary);
+                    background: var(--color-primary-light);
+                }
                 
                 .action-btn.delete:hover {
+                    border-color: #ef4444;
+                    background: rgba(239, 68, 68, 0.1);
+                }
+
+                .screen-card-menu {
+                    position: relative;
+                    flex: 1 1 0;
+                    z-index: 2;
+                }
+
+                .screen-card-menu .action-btn {
+                    width: 100%;
+                }
+
+                .screen-card-menu-panel {
+                    position: absolute;
+                    right: 0;
+                    top: calc(100% + 6px);
+                    min-width: 160px;
+                    z-index: 900;
+                    background: #ffffff;
+                    background: var(--color-surface, #ffffff);
+                    background-color: var(--color-surface, #ffffff);
+                    color: var(--color-text-primary);
+                    opacity: 1;
+                    border: 1px solid var(--color-border);
+                    border-radius: 8px;
+                    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.2);
+                    backdrop-filter: none;
+                    -webkit-backdrop-filter: none;
+                    padding: 6px;
+                    display: grid;
+                    gap: 4px;
+                }
+
+                .screen-card-menu-item {
+                    border: 1px solid transparent;
+                    border-radius: 6px;
+                    padding: 7px 9px;
+                    background: transparent;
+                    color: var(--color-text-primary);
+                    font-size: 12px;
+                    text-align: left;
+                    cursor: pointer;
+                }
+
+                .screen-card-menu-item:hover:not(:disabled) {
+                    border-color: var(--color-primary);
+                    background: var(--color-primary-light);
+                }
+
+                .screen-card-menu-item:disabled {
+                    opacity: 0.55;
+                    cursor: not-allowed;
+                }
+
+                .screen-card-menu-item.delete:hover {
                     border-color: #ef4444;
                     background: rgba(239, 68, 68, 0.1);
                 }
@@ -601,6 +1071,41 @@ export default function ScreensPage() {
                     padding: 14px 20px;
                     border-top: 1px solid rgba(148, 163, 184, 0.2);
                 }
+
+                @media (max-width: 960px) {
+                    .screens-toolbar {
+                        padding: 10px 12px 0;
+                        align-items: flex-start;
+                    }
+
+                    .screens-toolbar-left {
+                        width: 100%;
+                    }
+
+                    .screens-toolbar-input {
+                        min-width: 0;
+                        width: 100%;
+                        max-width: none;
+                    }
+
+                    .screens-toolbar-select {
+                        flex: 1 1 180px;
+                    }
+
+                    .screens-grid {
+                        gap: 12px;
+                        padding: 12px;
+                        grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+                    }
+
+                    .screen-card-actions {
+                        flex-wrap: wrap;
+                    }
+
+                    .screen-card-menu {
+                        flex: 1 1 100%;
+                    }
+                }
                 
                 @keyframes spin {
                     to { transform: rotate(360deg); }
@@ -618,7 +1123,7 @@ export default function ScreensPage() {
                 <div className="ai-modal-overlay" onClick={() => setShowAiGenerator(false)}>
                     <div className="ai-modal" onClick={(e) => e.stopPropagation()}>
                         <div className="ai-modal-header">
-                            <h3 style={{ margin: 0 }}>🤖 AI 生成大屏草稿</h3>
+                            <h3 style={{ margin: 0 }}>AI 生成大屏草稿</h3>
                             <button className="action-btn" style={{ maxWidth: 80 }} onClick={() => setShowAiGenerator(false)}>关闭</button>
                         </div>
                         <div className="ai-modal-body">

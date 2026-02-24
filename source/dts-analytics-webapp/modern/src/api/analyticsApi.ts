@@ -1751,4 +1751,38 @@ export const analyticsApi = {
 		requestJson<void>(`/analytics/api/screens/${encodeURIComponent(String(id))}/public_link`, "DELETE"),
 	getPublicScreen: (uuid: string) =>
 		fetchJson<PublicScreenDetail>(`/analytics/api/public/screen/${encodeURIComponent(uuid)}`),
+	// Snapshot API
+	createSnapshot: (id: string | number, body: unknown) =>
+		sendJson<unknown>(`/analytics/api/screens/${encodeURIComponent(String(id))}/snapshot`, body),
+	getSnapshotTask: (taskId: string) =>
+		fetchJson<unknown>(`/analytics/api/screens/snapshot-tasks/${encodeURIComponent(taskId)}`),
+	listSnapshotSchedules: (id: string | number) =>
+		fetchJson<unknown[]>(`/analytics/api/screens/${encodeURIComponent(String(id))}/snapshot-schedules`),
+	createSnapshotSchedule: (id: string | number, body: unknown) =>
+		sendJson<unknown>(`/analytics/api/screens/${encodeURIComponent(String(id))}/snapshot-schedules`, body),
+	updateSnapshotSchedule: (id: string | number, scheduleId: string, body: unknown) =>
+		requestJson<unknown>(`/analytics/api/screens/${encodeURIComponent(String(id))}/snapshot-schedules/${encodeURIComponent(scheduleId)}`, "PUT", body),
+	deleteSnapshotSchedule: (id: string | number, scheduleId: string) =>
+		requestJson<void>(`/analytics/api/screens/${encodeURIComponent(String(id))}/snapshot-schedules/${encodeURIComponent(scheduleId)}`, "DELETE"),
+	listSnapshotTasks: (id: string | number) =>
+		fetchJson<unknown[]>(`/analytics/api/screens/${encodeURIComponent(String(id))}/snapshot-tasks`),
+	// Marketplace API
+	listMarketplaceComponents: (params?: { search?: string; category?: string }) => {
+		const qs = new URLSearchParams();
+		if (params?.search) qs.set('search', params.search);
+		if (params?.category) qs.set('category', params.category);
+		const suffix = qs.toString() ? `?${qs.toString()}` : '';
+		return fetchJson<unknown[]>(`/analytics/api/marketplace/components${suffix}`);
+	},
+	listMarketplaceTemplates: (params?: { search?: string; category?: string }) => {
+		const qs = new URLSearchParams();
+		if (params?.search) qs.set('search', params.search);
+		if (params?.category) qs.set('category', params.category);
+		const suffix = qs.toString() ? `?${qs.toString()}` : '';
+		return fetchJson<unknown[]>(`/analytics/api/marketplace/templates${suffix}`);
+	},
+	installMarketplaceComponent: (id: string) =>
+		sendJson<unknown>(`/analytics/api/marketplace/components/${encodeURIComponent(id)}/install`, {}),
+	installMarketplaceTemplate: (id: string) =>
+		sendJson<unknown>(`/analytics/api/marketplace/templates/${encodeURIComponent(id)}/install`, {}),
 };

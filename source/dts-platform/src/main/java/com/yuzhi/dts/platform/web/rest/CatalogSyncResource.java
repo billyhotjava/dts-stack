@@ -214,6 +214,33 @@ public class CatalogSyncResource {
         return ApiResponses.ok(payload);
     }
 
+    @GetMapping("/runs/{runId}/diagnostics")
+    public ApiResponse<Map<String, Object>> getRunDiagnostics(
+        @PathVariable UUID runId,
+        @RequestParam(name = "sourceId", required = false) UUID sourceId
+    ) {
+        InfraCatalogSyncRun run = syncRunRepository
+            .findById(runId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "采集运行记录不存在"));
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("id", runId.toString());
+        payload.put("integration", run.getIntegration());
+        payload.put("status", run.getStatus());
+        payload.put("startedAt", run.getStartedAt());
+        payload.put("finishedAt", run.getFinishedAt());
+        payload.put("error", run.getError());
+        payload.put("errorCategory", classifyError(run.getError()));
+        payload.put("sourceId", sourceId != null ? sourceId.toString() : null);
+        payload.put("logLines", extractRunLogLines(run, sourceId));
+        auditService.auditAction(
+            "CATALOG_SYNC_RUN_DIAG",
+            AuditStage.SUCCESS,
+            runId.toString(),
+            Map.of("summary", "查看采集运行诊断日志", "runId", runId.toString(), "sourceId", sourceId != null ? sourceId.toString() : "")
+        );
+        return ApiResponses.ok(payload);
+    }
+
     @GetMapping("/pipelines")
     public ApiResponse<List<Map<String, Object>>> listPipelines() {
         List<Map<String, Object>> pipelines = new ArrayList<>();
@@ -321,6 +348,7 @@ public class CatalogSyncResource {
         dto.put("datasetsRemoved", run.getDatasetsRemoved());
         dto.put("tablesCreated", run.getTablesCreated());
         dto.put("columnsImported", run.getColumnsImported());
+        dto.put("errorCategory", classifyError(run.getError()));
         if (includeDetails) {
             dto.put("detailsJson", run.getDetailsJson());
         }
@@ -343,8 +371,11 @@ public class CatalogSyncResource {
         dto.put("datasetsCreated", result.datasetsCreated());
         dto.put("datasetsUpdated", result.datasetsUpdated());
         dto.put("datasetsRemoved", result.datasetsRemoved());
+        dto.put("datasetsMarkedStale", result.datasetsMarkedStale());
+        dto.put("datasetsPurged", result.datasetsPurged());
         dto.put("tablesCreated", result.tablesCreated());
         dto.put("columnsImported", result.columnsImported());
+        dto.put("errorCategory", classifyError(result.error()));
         return dto;
     }
 
@@ -696,9 +727,10 @@ public class CatalogSyncResource {
         String name = source != null && StringUtils.hasText(source.getName()) ? source.getName().trim() : "JDBC";
         lines.add(String.format("Source %s status: %s", name, normalizeText(result.status(), "UNKNOWN")));
         lines.add(String.format("Created %d, Updated %d, Removed %d", result.datasetsCreated(), result.datasetsUpdated(), result.datasetsRemoved()));
+        lines.add(String.format("Marked stale %d, Purged %d", result.datasetsMarkedStale(), result.datasetsPurged()));
         lines.add(String.format("Tables %d, Columns %d", result.tablesCreated(), result.columnsImported()));
         if (StringUtils.hasText(result.error())) {
-            lines.add("ERROR: " + result.error());
+            lines.add(String.format("ERROR[%s]: %s", classifyError(result.error()), result.error()));
         }
         return lines;
     }
@@ -706,6 +738,88 @@ public class CatalogSyncResource {
     private String normalizeText(String value, String fallback) {
         if (!StringUtils.hasText(value)) return fallback;
         return value.trim().toUpperCase(Locale.ROOT);
+    }
+
+    private List<String> extractRunLogLines(InfraCatalogSyncRun run, UUID sourceId) {
+        if (run == null) {
+            return List.of("暂无运行记录");
+        }
+        String integration = normalizeText(run.getIntegration(), "");
+        if ("INCEPTOR".equals(integration)) {
+            IntegrationStatus detail = readInceptorStatus(run.getDetailsJson());
+            if (detail != null && detail.actions() != null && !detail.actions().isEmpty()) {
+                return detail.actions();
+            }
+            return StringUtils.hasText(run.getError()) ? List.of("ERROR: " + run.getError()) : List.of("暂无运行记录");
+        }
+        if ("JDBC".equals(integration)) {
+            if (sourceId != null) {
+                JdbcSyncResult result = extractJdbcResult(run.getDetailsJson(), sourceId);
+                if (result != null) {
+                    InfraDataSource source = dataSourceRepository.findById(sourceId).orElse(null);
+                    return buildJdbcLogs(source, result);
+                }
+            }
+            try {
+                Map<String, Object> raw = objectMapper.readValue(
+                    Optional.ofNullable(run.getDetailsJson()).orElse("{}"),
+                    new TypeReference<>() {}
+                );
+                List<JdbcSyncResult> results = objectMapper.convertValue(raw.get("results"), new TypeReference<List<JdbcSyncResult>>() {});
+                if (results != null && !results.isEmpty()) {
+                    List<String> lines = new ArrayList<>();
+                    for (JdbcSyncResult r : results) {
+                        if (r == null) {
+                            continue;
+                        }
+                        String sid = r.sourceId() != null ? r.sourceId().toString() : "unknown";
+                        lines.add(String.format("[%s] %s", sid, normalizeText(r.status(), "UNKNOWN")));
+                        if (StringUtils.hasText(r.error())) {
+                            lines.add(String.format("[%s] ERROR[%s]: %s", sid, classifyError(r.error()), r.error()));
+                        }
+                    }
+                    if (!lines.isEmpty()) {
+                        return lines;
+                    }
+                }
+            } catch (Exception ignored) {}
+            return StringUtils.hasText(run.getError()) ? List.of("ERROR: " + run.getError()) : List.of("暂无运行记录");
+        }
+        return StringUtils.hasText(run.getError()) ? List.of("ERROR: " + run.getError()) : List.of("暂无运行记录");
+    }
+
+    private IntegrationStatus readInceptorStatus(String detailsJson) {
+        if (!StringUtils.hasText(detailsJson)) {
+            return null;
+        }
+        try {
+            return objectMapper.readValue(detailsJson, IntegrationStatus.class);
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private String classifyError(String error) {
+        if (!StringUtils.hasText(error)) {
+            return "NONE";
+        }
+        String raw = error.toLowerCase(Locale.ROOT);
+        if (raw.contains("permission denied") || raw.contains("access denied") || raw.contains("forbidden")) {
+            return "AUTH";
+        }
+        if (raw.contains("timeout") || raw.contains("timed out")) {
+            return "TIMEOUT";
+        }
+        if (raw.contains("connection refused") || raw.contains("connect") || raw.contains("network")) {
+            return "NETWORK";
+        }
+        if (raw.contains("syntax") || raw.contains("sqlstate") || raw.contains("relation") || raw.contains("does not exist")) {
+            return "SQL";
+        }
+        if (raw.contains("driver") || raw.contains("class not found") || raw.contains("plugin")) {
+            return "DRIVER";
+        }
+        return "UNKNOWN";
     }
 
     private boolean isJdbcCandidate(InfraDataSource source) {

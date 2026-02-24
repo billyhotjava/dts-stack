@@ -9,7 +9,7 @@
 
 ```bash
 PG_PASSWORD='Devops123@' ODS_TABLE=ods_patent_info_202602 REPORT_YEAR=2025 \
-  ./worklog/s10/patent/run-build-all.sh --force-docker
+  ./bin/patent/run-build-all.sh --force-docker
 ```
 
 注意：如果 Card SQL 固定写 `stat_year = 2025`，这里必须也用 `REPORT_YEAR=2025`。

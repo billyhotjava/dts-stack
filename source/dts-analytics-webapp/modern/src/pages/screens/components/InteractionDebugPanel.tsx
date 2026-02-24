@@ -9,8 +9,9 @@ interface InteractionDebugPanelProps {
 }
 
 export function InteractionDebugPanel({ open, cycleWarnings, onClose }: InteractionDebugPanelProps) {
-    const { definitions, values, events } = useScreenRuntime();
+    const { definitions, values, getEvents } = useScreenRuntime();
     const [kindFilter, setKindFilter] = useState<'all' | 'variable' | 'filter' | 'interaction' | 'drill-down' | 'drill-up' | 'jump'>('all');
+    const events = getEvents();
     const filteredEvents = useMemo(() => (
         kindFilter === 'all' ? events : events.filter((item) => item.kind === kindFilter)
     ), [events, kindFilter]);

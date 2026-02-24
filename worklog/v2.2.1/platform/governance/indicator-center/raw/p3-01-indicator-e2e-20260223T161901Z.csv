@@ -1,0 +1,10 @@
+step,required,method,path,status,ok,duration_ms,message
+list_indicators,1,GET,/api/governance/indicators?page=0&size=5,200,1,32,OK
+create_indicator,1,POST,/api/governance/indicators,200,1,47,OK
+update_indicator,1,PUT,/api/governance/indicators/b1766c23-834a-41ff-a1b0-20e0296707df,500,0,14,HTTP_500
+list_versions,1,GET,/api/governance/indicators/b1766c23-834a-41ff-a1b0-20e0296707df/versions,200,1,22,OK
+list_references,1,GET,/api/governance/indicators/b1766c23-834a-41ff-a1b0-20e0296707df/references,200,1,25,OK
+validate_indicator,0,POST,/api/governance/indicators/b1766c23-834a-41ff-a1b0-20e0296707df/validate,200,1,27,OK
+preview_indicator,0,POST,/api/governance/indicators/b1766c23-834a-41ff-a1b0-20e0296707df/preview?limit=20,200,1,19,OK
+publish_preview,0,POST,/api/governance/indicators/b1766c23-834a-41ff-a1b0-20e0296707df/publish-preview,200,1,26,OK
+delete_indicator,1,DELETE,/api/governance/indicators/b1766c23-834a-41ff-a1b0-20e0296707df,500,0,29,HTTP_500

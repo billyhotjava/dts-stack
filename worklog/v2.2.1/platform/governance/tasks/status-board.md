@@ -9,9 +9,9 @@
 | P1-01 质量巡检页面 | done | codex | 已在质量管控页落地巡检计划面板 |
 | P1-02 合规检查页面 | done | codex | 已交付批次/详情/检查项更新 |
 | P1-03 问题闭环页面 | done | codex | 已交付工单闭环与动作记录 |
-| P2-01 可观测与审计视图 | planned | codex | 运营指标化 |
-| P2-02 公共码表增强 | planned | codex | 批量导入治理 |
-| P2-03 权限矩阵硬化 | planned | codex | 角色/部门/密级 |
-| P3-01 回归矩阵与门禁 | planned | codex | 自动化发布门禁 |
-| P3-02 契约与 OpenAPI 固化 | planned | codex | 减少前后端漂移 |
-| P3-03 性能与容量基线 | planned | codex | 数据量压力验证 |
+| P2-01 可观测与审计视图 | done | codex | 运营指标接口+看板已落地 |
+| P2-02 公共码表增强 | done | codex | 结构化预检/执行/回滚已落地 |
+| P2-03 权限矩阵硬化 | done | codex | 写接口收敛+权限回归脚本 |
+| P3-01 回归矩阵与门禁 | done | codex | 矩阵脚本+报告+strict gate |
+| P3-02 契约与 OpenAPI 固化 | done | codex | 契约基线+drift guard+strict |
+| P3-03 性能与容量基线 | done | codex | HTTP 基线压测脚本与报告 |

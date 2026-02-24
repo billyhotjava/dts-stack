@@ -24,6 +24,8 @@ import { ScreenConflictPanel, type ScreenUpdateConflict } from './ScreenConflict
 import { ScreenVersionComparePanel } from './ScreenVersionComparePanel';
 import { ScreenVersionComparePickerPanel } from './ScreenVersionComparePickerPanel';
 import { ScreenVersionRollbackPanel } from './ScreenVersionRollbackPanel';
+import { VersionHistoryPanel } from './VersionHistoryPanel';
+import { ScreenSnapshotPanel } from './ScreenSnapshotPanel';
 import { buildScreenPayload, normalizeScreenConfig, validateScreenPayload } from '../specV2';
 import { resolveScreenTheme } from '../screenThemes';
 import type { ScreenConfig } from '../types';
@@ -36,6 +38,45 @@ type PublishNotice = {
     publicUrl: string | null;
     warmupText?: string;
 };
+
+type QuickActionItem = {
+    id: string;
+    label: string;
+    keywords: string;
+    disabled: boolean;
+    hotkey?: string;
+    run: () => void | Promise<void>;
+};
+
+const DESIGN_ACTION_STORAGE_KEY = 'dts.analytics.screen.header.designAction';
+const GOVERNANCE_ACTION_STORAGE_KEY = 'dts.analytics.screen.header.governanceAction';
+const VERSION_ACTION_STORAGE_KEY = 'dts.analytics.screen.header.versionAction';
+const EXPORT_ACTION_STORAGE_KEY = 'dts.analytics.screen.header.exportAction';
+const QUICK_ACTION_RECENT_STORAGE_KEY = 'dts.analytics.screen.header.quickRecentActions';
+const PRIMARY_ACTION_STORAGE_KEY = 'dts.analytics.screen.header.primaryAction';
+const TOOLS_SECTION_STORAGE_KEY = 'dts.analytics.screen.header.toolsSection';
+
+function findNextEnabledQuickActionIndex(
+    actions: QuickActionItem[],
+    startIndex: number,
+    direction: 1 | -1,
+): number {
+    if (actions.length === 0) {
+        return -1;
+    }
+    let cursor = startIndex;
+    for (let step = 0; step < actions.length; step += 1) {
+        cursor = (cursor + direction + actions.length) % actions.length;
+        if (!actions[cursor]?.disabled) {
+            return cursor;
+        }
+    }
+    return -1;
+}
+
+function buildPublishNoticeStorageKey(screenId: string | number): string {
+    return `dts.analytics.screen.publishNotice.${screenId}`;
+}
 
 function buildExploreSessionSteps(config: ScreenConfig): Array<Record<string, unknown>> {
     const now = new Date().toISOString();
@@ -151,7 +192,93 @@ export function ScreenHeader() {
     const [showVersionComparePanel, setShowVersionComparePanel] = useState(false);
     const [showVersionComparePicker, setShowVersionComparePicker] = useState(false);
     const [showVersionRollbackPanel, setShowVersionRollbackPanel] = useState(false);
+    const [showVersionHistoryPanel, setShowVersionHistoryPanel] = useState(false);
+    const [showSnapshotPanel, setShowSnapshotPanel] = useState(false);
+    const [showQuickActions, setShowQuickActions] = useState(false);
+    const [quickKeyword, setQuickKeyword] = useState('');
+    const [quickActiveIndex, setQuickActiveIndex] = useState(-1);
+    const [quickRecentIds, setQuickRecentIds] = useState<string[]>(() => {
+        if (typeof window === 'undefined') return [];
+        try {
+            const raw = window.localStorage.getItem(QUICK_ACTION_RECENT_STORAGE_KEY);
+            if (!raw) return [];
+            const parsed = JSON.parse(raw);
+            if (!Array.isArray(parsed)) return [];
+            return parsed
+                .map((item) => String(item || '').trim())
+                .filter((item) => item.length > 0)
+                .slice(0, 8);
+        } catch {
+            return [];
+        }
+    });
+    const [designAction, setDesignAction] = useState<
+        'session' | 'variables' | 'interaction' | 'collaboration' | 'template' | 'import' | 'command'
+    >(() => {
+        if (typeof window === 'undefined') return 'variables';
+        const raw = window.localStorage.getItem(DESIGN_ACTION_STORAGE_KEY);
+        if (
+            raw === 'session'
+            || raw === 'variables'
+            || raw === 'interaction'
+            || raw === 'collaboration'
+            || raw === 'template'
+            || raw === 'import'
+            || raw === 'command'
+        ) {
+            return raw;
+        }
+        return 'variables';
+    });
+    const [governanceAction, setGovernanceAction] = useState<
+        'edit-lock' | 'cache' | 'compliance' | 'health' | 'acl' | 'audit' | 'share-policy' | 'share-link'
+    >(() => {
+        if (typeof window === 'undefined') return 'cache';
+        const raw = window.localStorage.getItem(GOVERNANCE_ACTION_STORAGE_KEY);
+        if (
+            raw === 'edit-lock'
+            || raw === 'cache'
+            || raw === 'compliance'
+            || raw === 'health'
+            || raw === 'acl'
+            || raw === 'audit'
+            || raw === 'share-policy'
+            || raw === 'share-link'
+        ) {
+            return raw;
+        }
+        return 'cache';
+    });
     const [previewDeviceMode, setPreviewDeviceMode] = useState<'auto' | 'pc' | 'tablet' | 'mobile'>('auto');
+    const [versionAction, setVersionAction] = useState<'history' | 'compare'>(() => {
+        if (typeof window === 'undefined') return 'history';
+        const raw = window.localStorage.getItem(VERSION_ACTION_STORAGE_KEY);
+        return raw === 'compare' ? 'compare' : 'history';
+    });
+    const [exportAction, setExportAction] = useState<'json' | 'png' | 'pdf'>(() => {
+        if (typeof window === 'undefined') return 'png';
+        const raw = window.localStorage.getItem(EXPORT_ACTION_STORAGE_KEY);
+        if (raw === 'json' || raw === 'pdf' || raw === 'png') {
+            return raw;
+        }
+        return 'png';
+    });
+    const [primaryAction, setPrimaryAction] = useState<'preview' | 'publish' | 'save'>(() => {
+        if (typeof window === 'undefined') return 'save';
+        const raw = window.localStorage.getItem(PRIMARY_ACTION_STORAGE_KEY);
+        if (raw === 'preview' || raw === 'publish' || raw === 'save') {
+            return raw;
+        }
+        return 'save';
+    });
+    const [toolsSection, setToolsSection] = useState<'design' | 'release' | 'governance'>(() => {
+        if (typeof window === 'undefined') return 'design';
+        const raw = window.localStorage.getItem(TOOLS_SECTION_STORAGE_KEY);
+        if (raw === 'design' || raw === 'release' || raw === 'governance') {
+            return raw;
+        }
+        return 'design';
+    });
     const [isSavingTemplate, setIsSavingTemplate] = useState(false);
     const [conflictLoading, setConflictLoading] = useState(false);
     const [lastConflict, setLastConflict] = useState<ScreenUpdateConflict | null>(null);
@@ -161,8 +288,10 @@ export function ScreenHeader() {
     const [lockErrorText, setLockErrorText] = useState<string | null>(null);
     const [publishNotice, setPublishNotice] = useState<PublishNotice | null>(null);
     const importInputRef = useRef<HTMLInputElement | null>(null);
+    const quickInputRef = useRef<HTMLInputElement | null>(null);
+    const quickActionRefs = useRef<Array<HTMLButtonElement | null>>([]);
     const menuContainerRef = useRef<HTMLDivElement | null>(null);
-    const [activeMenu, setActiveMenu] = useState<'more' | null>(null);
+    const [activeMenu, setActiveMenu] = useState<'primary' | 'tools' | null>(null);
     const [permissions, setPermissions] = useState({
         canRead: true,
         canEdit: true,
@@ -173,6 +302,85 @@ export function ScreenHeader() {
     const cycleWarnings = useMemo(() => detectInteractionCycles(config), [config]);
     const lockedByOther = !!(editLock?.active && !editLock?.mine);
     const lockOwnerText = String(editLock?.ownerName || editLock?.ownerId || '其他用户');
+
+    useEffect(() => {
+        if (!id || typeof window === 'undefined') {
+            setPublishNotice(null);
+            return;
+        }
+        try {
+            const raw = window.localStorage.getItem(buildPublishNoticeStorageKey(id));
+            if (!raw) {
+                setPublishNotice(null);
+                return;
+            }
+            const parsed = JSON.parse(raw) as PublishNotice;
+            if (!parsed || String(parsed.screenId || '') !== String(id)) {
+                setPublishNotice(null);
+                return;
+            }
+            setPublishNotice(parsed);
+        } catch {
+            setPublishNotice(null);
+        }
+    }, [id]);
+
+    useEffect(() => {
+        if (!id || typeof window === 'undefined') {
+            return;
+        }
+        const key = buildPublishNoticeStorageKey(id);
+        if (!publishNotice || String(publishNotice.screenId || '') !== String(id)) {
+            window.localStorage.removeItem(key);
+            return;
+        }
+        window.localStorage.setItem(key, JSON.stringify(publishNotice));
+    }, [id, publishNotice]);
+
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        window.localStorage.setItem(DESIGN_ACTION_STORAGE_KEY, designAction);
+    }, [designAction]);
+
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        window.localStorage.setItem(GOVERNANCE_ACTION_STORAGE_KEY, governanceAction);
+    }, [governanceAction]);
+
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        window.localStorage.setItem(VERSION_ACTION_STORAGE_KEY, versionAction);
+    }, [versionAction]);
+
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        window.localStorage.setItem(EXPORT_ACTION_STORAGE_KEY, exportAction);
+    }, [exportAction]);
+
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        window.localStorage.setItem(PRIMARY_ACTION_STORAGE_KEY, primaryAction);
+    }, [primaryAction]);
+
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        window.localStorage.setItem(TOOLS_SECTION_STORAGE_KEY, toolsSection);
+    }, [toolsSection]);
+
+    useEffect(() => {
+        if (!id && primaryAction === 'publish') {
+            setPrimaryAction('save');
+        }
+    }, [id, primaryAction]);
+
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        if (!quickRecentIds.length) {
+            window.localStorage.removeItem(QUICK_ACTION_RECENT_STORAGE_KEY);
+            return;
+        }
+        window.localStorage.setItem(QUICK_ACTION_RECENT_STORAGE_KEY, JSON.stringify(quickRecentIds.slice(0, 8)));
+    }, [quickRecentIds]);
 
     useEffect(() => {
         if (!activeMenu) {
@@ -491,6 +699,32 @@ export function ScreenHeader() {
         }
     }, [handleLockHttpError, handleUpdateConflictError, saveScreen]);
 
+    useEffect(() => {
+        const isTypingTarget = (target: EventTarget | null): boolean => {
+            const node = target as HTMLElement | null;
+            if (!node) return false;
+            const tag = node.tagName;
+            if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
+            return node.isContentEditable;
+        };
+        const handleKeyDown = (event: KeyboardEvent) => {
+            const hotkey = event.ctrlKey || event.metaKey;
+            if (!hotkey || event.key.toLowerCase() !== 's') {
+                return;
+            }
+            if (isTypingTarget(event.target)) {
+                return;
+            }
+            event.preventDefault();
+            if (isSaving || !permissions.canEdit || lockedByOther) {
+                return;
+            }
+            void handleSave();
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [handleSave, isSaving, lockedByOther, permissions.canEdit]);
+
     const handleSaveAsTemplate = useCallback(async () => {
         if (isSavingTemplate) return;
         setIsSavingTemplate(true);
@@ -578,6 +812,41 @@ export function ScreenHeader() {
         }
     }, [handleLockHttpError, handleUpdateConflictError, isPublishing, saveScreen]);
 
+    useEffect(() => {
+        if (!id || !permissions.canRead) {
+            return;
+        }
+        if (publishNotice) {
+            return;
+        }
+        let cancelled = false;
+        const hydratePublishedNotice = async () => {
+            try {
+                const published = await analyticsApi.getScreen(id, { mode: 'published' });
+                if (cancelled) {
+                    return;
+                }
+                const versionNo = Number(published?.publishedVersionNo || 0);
+                if (versionNo <= 0) {
+                    return;
+                }
+                setPublishNotice({
+                    screenId: id,
+                    versionNo,
+                    previewUrl: `${window.location.origin}/analytics/screens/${encodeURIComponent(String(id))}/preview`,
+                    publicUrl: null,
+                    warmupText: '',
+                });
+            } catch {
+                // no published version or no permission, keep silent
+            }
+        };
+        void hydratePublishedNotice();
+        return () => {
+            cancelled = true;
+        };
+    }, [id, permissions.canRead, publishNotice]);
+
     const handleVersionHistory = useCallback(async () => {
         if (!id || isLoadingVersions) return;
 
@@ -589,10 +858,10 @@ export function ScreenHeader() {
                 return;
             }
             setVersionCandidates(versions);
-            setShowVersionRollbackPanel(true);
+            setShowVersionHistoryPanel(true);
         } catch (error) {
-            console.error('Failed to rollback version:', error);
-            const message = handleLockHttpError(error, '回滚失败');
+            console.error('Failed to load version history:', error);
+            const message = handleLockHttpError(error, '加载版本历史失败');
             alert(message);
         } finally {
             setIsLoadingVersions(false);
@@ -661,11 +930,73 @@ export function ScreenHeader() {
             const suffix = previewDeviceMode === 'auto'
                 ? ''
                 : `?device=${encodeURIComponent(previewDeviceMode)}`;
-            window.open(`/analytics/screens/${id}/preview${suffix}`, '_blank');
+            window.open(`/analytics/screens/${id}/preview${suffix}`, '_blank', 'noopener,noreferrer');
         } else {
             alert('请先保存大屏后再预览');
         }
     };
+
+    const canExecutePrimaryAction = useMemo(() => {
+        if (primaryAction === 'preview') {
+            return Boolean(id);
+        }
+        if (primaryAction === 'publish') {
+            return Boolean(id) && !isPublishing && permissions.canPublish && !lockedByOther;
+        }
+        return !isSaving && permissions.canEdit && !lockedByOther;
+    }, [id, isPublishing, isSaving, lockedByOther, permissions.canEdit, permissions.canPublish, primaryAction]);
+
+    const executePrimaryAction = useCallback(() => {
+        if (primaryAction === 'preview') {
+            handlePreview();
+            return;
+        }
+        if (primaryAction === 'publish') {
+            if (!id || isPublishing || !permissions.canPublish || lockedByOther) {
+                return;
+            }
+            void handlePublish();
+            return;
+        }
+        if (isSaving || !permissions.canEdit || lockedByOther) {
+            return;
+        }
+        void handleSave();
+    }, [
+        handlePreview,
+        handlePublish,
+        handleSave,
+        id,
+        isPublishing,
+        isSaving,
+        lockedByOther,
+        permissions.canEdit,
+        permissions.canPublish,
+        primaryAction,
+    ]);
+
+    useEffect(() => {
+        const isTypingTarget = (target: EventTarget | null): boolean => {
+            const node = target as HTMLElement | null;
+            if (!node) return false;
+            const tag = node.tagName;
+            if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
+            return node.isContentEditable;
+        };
+        const handleKeyDown = (event: KeyboardEvent) => {
+            const hotkey = event.ctrlKey || event.metaKey;
+            if (!hotkey || !event.shiftKey || event.key.toLowerCase() !== 'p') {
+                return;
+            }
+            if (isTypingTarget(event.target)) {
+                return;
+            }
+            event.preventDefault();
+            handlePreview();
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [handlePreview]);
 
     const ensureExportAllowed = useCallback(async (format: 'json' | 'png' | 'pdf') => {
         if (!id) {
@@ -773,7 +1104,7 @@ export function ScreenHeader() {
             params.set('device', previewDeviceMode);
         }
         const url = `/analytics/screens/${id}/export?${params.toString()}`;
-        const popup = window.open(url, '_blank');
+        const popup = window.open(url, '_blank', 'noopener,noreferrer');
         if (!popup) {
             throw new Error('请允许弹窗后重试导出');
         }
@@ -1008,9 +1339,16 @@ export function ScreenHeader() {
                 alert('未获取到分享链接，请先发布后重试');
                 return;
             }
-            const url = `${window.location.origin}/analytics/public/screen/${uuid}`;
-            const copied = await writeTextToClipboard(url);
-            alert(copied ? '分享链接已复制到剪贴板' : `复制失败，请手工复制：\n${url}`);
+            const baseUrl = `${window.location.origin}/analytics/public/screen/${uuid}`;
+            const embedUrl = `${baseUrl}?embed=1&hideControls=1`;
+            const iframeCode = `<iframe src="${embedUrl}" width="100%" height="600" frameborder="0" allowfullscreen style="border: none;"></iframe>`;
+            const globalVars = config.globalVariables ?? [];
+            const paramHint = globalVars.length > 0
+                ? `\n\n可透传参数：\n${globalVars.map(v => `  ?var_${v.key}=值`).join('\n')}`
+                : '';
+            const shareInfo = `链接分享：\n${baseUrl}\n\n嵌入代码（iframe）：\n${iframeCode}${paramHint}`;
+            const copied = await writeTextToClipboard(baseUrl);
+            alert(copied ? `分享链接已复制到剪贴板\n\n${shareInfo}` : shareInfo);
         } catch (err) {
             console.error('Failed to create public link:', err);
             alert('创建分享链接失败，请先发布版本');
@@ -1063,10 +1401,429 @@ export function ScreenHeader() {
 
     const executeMenuAction = useCallback((action: () => void | Promise<void>) => {
         setActiveMenu(null);
-        void Promise.resolve(action()).catch((error) => {
-            console.error('Failed to execute header menu action:', error);
-        });
+        window.setTimeout(() => {
+            void Promise.resolve(action()).catch((error) => {
+                console.error('Failed to execute header menu action:', error);
+            });
+        }, 0);
     }, []);
+
+    const executeVersionAction = useCallback(() => {
+        if (versionAction === 'history') {
+            if (!permissions.canPublish || isLoadingVersions) {
+                return;
+            }
+            void executeMenuAction(handleVersionHistory);
+            return;
+        }
+        if (!permissions.canRead || isLoadingVersions) {
+            return;
+        }
+        void executeMenuAction(handleVersionCompare);
+    }, [
+        executeMenuAction,
+        handleVersionCompare,
+        handleVersionHistory,
+        isLoadingVersions,
+        permissions.canPublish,
+        permissions.canRead,
+        versionAction,
+    ]);
+
+    const executeExportAction = useCallback(() => {
+        if (exportAction === 'json') {
+            void executeMenuAction(handleExportJson);
+            return;
+        }
+        if (exportAction === 'pdf') {
+            void executeMenuAction(handleExportPdf);
+            return;
+        }
+        void executeMenuAction(handleExportPng);
+    }, [executeMenuAction, exportAction, handleExportJson, handleExportPdf, handleExportPng]);
+
+    const canExecuteDesignAction = useMemo(() => {
+        if (designAction === 'session') return permissions.canRead;
+        if (designAction === 'collaboration') return !!id && permissions.canRead;
+        if (designAction === 'template') return permissions.canEdit && !isSavingTemplate;
+        return true;
+    }, [designAction, id, isSavingTemplate, permissions.canEdit, permissions.canRead]);
+
+    const executeDesignAction = useCallback(() => {
+        if (designAction === 'session') {
+            if (!permissions.canRead) return;
+            void executeMenuAction(handleCreateExploreSession);
+            return;
+        }
+        if (designAction === 'variables') {
+            void executeMenuAction(() => setShowVariableManager(true));
+            return;
+        }
+        if (designAction === 'interaction') {
+            void executeMenuAction(() => setShowInteractionDebugPanel(true));
+            return;
+        }
+        if (designAction === 'collaboration') {
+            if (!id || !permissions.canRead) return;
+            void executeMenuAction(() => setShowCollaborationPanel(true));
+            return;
+        }
+        if (designAction === 'template') {
+            if (!permissions.canEdit || isSavingTemplate) return;
+            void executeMenuAction(handleSaveAsTemplate);
+            return;
+        }
+        if (designAction === 'import') {
+            void executeMenuAction(handleOpenImport);
+            return;
+        }
+        void executeMenuAction(() => {
+            setQuickKeyword('');
+            setShowQuickActions(true);
+        });
+    }, [
+        designAction,
+        executeMenuAction,
+        handleCreateExploreSession,
+        handleOpenImport,
+        handleSaveAsTemplate,
+        id,
+        isSavingTemplate,
+        permissions.canEdit,
+        permissions.canRead,
+    ]);
+
+    const canExecuteGovernanceAction = useMemo(() => {
+        if (governanceAction === 'edit-lock') return !!id && permissions.canRead;
+        if (governanceAction === 'acl' || governanceAction === 'audit') return !!id && permissions.canManage;
+        if (governanceAction === 'share-policy' || governanceAction === 'share-link') return !!id && permissions.canPublish;
+        return true;
+    }, [governanceAction, id, permissions.canManage, permissions.canPublish, permissions.canRead]);
+
+    const executeGovernanceAction = useCallback(() => {
+        if (governanceAction === 'edit-lock') {
+            if (!id || !permissions.canRead) return;
+            void executeMenuAction(() => setShowEditLockPanel(true));
+            return;
+        }
+        if (governanceAction === 'cache') {
+            void executeMenuAction(() => setShowCachePanel(true));
+            return;
+        }
+        if (governanceAction === 'compliance') {
+            void executeMenuAction(() => setShowCompliancePanel(true));
+            return;
+        }
+        if (governanceAction === 'health') {
+            void executeMenuAction(() => setShowHealthPanel(true));
+            return;
+        }
+        if (governanceAction === 'acl') {
+            if (!id || !permissions.canManage) return;
+            void executeMenuAction(() => setShowAclPanel(true));
+            return;
+        }
+        if (governanceAction === 'audit') {
+            if (!id || !permissions.canManage) return;
+            void executeMenuAction(() => setShowAuditPanel(true));
+            return;
+        }
+        if (governanceAction === 'share-policy') {
+            if (!id || !permissions.canPublish) return;
+            void executeMenuAction(() => setShowSharePolicyPanel(true));
+            return;
+        }
+        if (!id || !permissions.canPublish || isSharing) return;
+        void executeMenuAction(handleShare);
+    }, [
+        executeMenuAction,
+        governanceAction,
+        handleShare,
+        id,
+        isSharing,
+        permissions.canManage,
+        permissions.canPublish,
+        permissions.canRead,
+    ]);
+
+    const quickActions: QuickActionItem[] = useMemo(() => {
+        return [
+            {
+                id: 'save',
+                label: isSaving ? '保存中...' : '保存草稿',
+                keywords: 'save 保存 草稿',
+                disabled: isSaving || !permissions.canEdit || lockedByOther,
+                hotkey: 'Ctrl/Cmd + S',
+                run: handleSave,
+            },
+            {
+                id: 'preview',
+                label: '预览大屏',
+                keywords: 'preview 预览',
+                disabled: !id,
+                hotkey: 'Ctrl/Cmd + Shift + P',
+                run: handlePreview,
+            },
+            {
+                id: 'publish',
+                label: isPublishing ? '发布中...' : '发布版本',
+                keywords: 'publish 发布 版本',
+                disabled: isPublishing || !permissions.canPublish || lockedByOther || !id,
+                run: handlePublish,
+            },
+            {
+                id: 'save-template',
+                label: isSavingTemplate ? '模板保存中...' : '保存为模板',
+                keywords: '模板 template 保存',
+                disabled: isSavingTemplate || !permissions.canEdit || lockedByOther,
+                run: handleSaveAsTemplate,
+            },
+            {
+                id: 'version-history',
+                label: isLoadingVersions ? '版本处理中...' : '版本历史/回滚',
+                keywords: '版本 回滚 history rollback',
+                disabled: isLoadingVersions || !permissions.canPublish || !id,
+                run: handleVersionHistory,
+            },
+            {
+                id: 'version-compare',
+                label: isLoadingVersions ? '版本处理中...' : '版本对比',
+                keywords: '版本 对比 compare diff',
+                disabled: isLoadingVersions || !permissions.canRead || !id,
+                run: handleVersionCompare,
+            },
+            {
+                id: 'snapshot',
+                label: '快照与报告',
+                keywords: '快照 截图 定时 报告 snapshot report',
+                disabled: !id,
+                run: () => setShowSnapshotPanel(true),
+            },
+            {
+                id: 'variables',
+                label: '变量管理',
+                keywords: '变量 variable',
+                disabled: false,
+                run: () => setShowVariableManager(true),
+            },
+            {
+                id: 'cache',
+                label: '缓存观测',
+                keywords: '缓存 cache',
+                disabled: false,
+                run: () => setShowCachePanel(true),
+            },
+            {
+                id: 'compliance',
+                label: '合规检查',
+                keywords: '合规 compliance',
+                disabled: false,
+                run: () => setShowCompliancePanel(true),
+            },
+            {
+                id: 'health',
+                label: '体检报告',
+                keywords: '体检 健康 health',
+                disabled: false,
+                run: () => setShowHealthPanel(true),
+            },
+            {
+                id: 'governance-lock',
+                label: '编辑锁状态',
+                keywords: '编辑锁 lock',
+                disabled: !id || !permissions.canRead,
+                run: () => setShowEditLockPanel(true),
+            },
+            {
+                id: 'governance-acl',
+                label: '权限矩阵',
+                keywords: '权限 acl',
+                disabled: !id || !permissions.canManage,
+                run: () => setShowAclPanel(true),
+            },
+            {
+                id: 'governance-audit',
+                label: '审计记录',
+                keywords: '审计 audit',
+                disabled: !id || !permissions.canManage,
+                run: () => setShowAuditPanel(true),
+            },
+            {
+                id: 'share',
+                label: isSharing ? '分享中...' : '分享链接',
+                keywords: '分享 share 链接',
+                disabled: isSharing || !permissions.canPublish || !id,
+                run: handleShare,
+            },
+            {
+                id: 'export-png',
+                label: '导出 PNG',
+                keywords: '导出 export png',
+                disabled: false,
+                run: handleExportPng,
+            },
+            {
+                id: 'export-pdf',
+                label: '导出 PDF',
+                keywords: '导出 export pdf',
+                disabled: false,
+                run: handleExportPdf,
+            },
+            {
+                id: 'export-json',
+                label: '导出 JSON',
+                keywords: '导出 export json',
+                disabled: false,
+                run: handleExportJson,
+            },
+            {
+                id: 'command-help',
+                label: '命令面板帮助',
+                keywords: '命令 面板 help 快捷键',
+                disabled: false,
+                hotkey: 'Ctrl/Cmd + K',
+                run: () => alert('可输入关键词，使用 ↑/↓ 选择，Enter 执行。'),
+            },
+        ];
+    }, [
+        handleExportJson,
+        handleExportPdf,
+        handleExportPng,
+        handlePreview,
+        handlePublish,
+        handleSave,
+        handleSaveAsTemplate,
+        handleShare,
+        handleVersionCompare,
+        handleVersionHistory,
+        id,
+        isPublishing,
+        isSaving,
+        isSavingTemplate,
+        isSharing,
+        isLoadingVersions,
+        lockedByOther,
+        permissions.canEdit,
+        permissions.canManage,
+        permissions.canPublish,
+        permissions.canRead,
+    ]);
+
+    const quickRecentOrder = useMemo(() => {
+        const mapping = new Map<string, number>();
+        quickRecentIds.forEach((id, index) => {
+            mapping.set(id, index);
+        });
+        return mapping;
+    }, [quickRecentIds]);
+
+    const filteredQuickActions = useMemo(() => {
+        const keyword = quickKeyword.trim().toLowerCase();
+        const matched = keyword
+            ? quickActions.filter((item) => {
+                const label = item.label.toLowerCase();
+                const extra = String(item.keywords || '').toLowerCase();
+                const hotkey = String(item.hotkey || '').toLowerCase();
+                return label.includes(keyword) || extra.includes(keyword) || hotkey.includes(keyword);
+            })
+            : quickActions.slice();
+        return matched.sort((a, b) => {
+            const aRecent = quickRecentOrder.has(a.id) ? quickRecentOrder.get(a.id)! : Number.MAX_SAFE_INTEGER;
+            const bRecent = quickRecentOrder.has(b.id) ? quickRecentOrder.get(b.id)! : Number.MAX_SAFE_INTEGER;
+            if (aRecent !== bRecent) {
+                return aRecent - bRecent;
+            }
+            const label = a.label.toLowerCase();
+            const labelB = b.label.toLowerCase();
+            return label.localeCompare(labelB, 'zh-CN');
+        });
+    }, [quickActions, quickKeyword, quickRecentOrder]);
+
+    const runQuickAction = useCallback((actionId: string, action: () => void | Promise<void>) => {
+        setShowQuickActions(false);
+        setQuickKeyword('');
+        setQuickActiveIndex(-1);
+        setActiveMenu(null);
+        setQuickRecentIds((prev) => [actionId, ...prev.filter((item) => item !== actionId)].slice(0, 8));
+        window.setTimeout(() => {
+            void Promise.resolve(action()).catch((error) => {
+                console.error('Failed to run quick action:', error);
+            });
+        }, 0);
+    }, []);
+
+    useEffect(() => {
+        if (!showQuickActions) {
+            return;
+        }
+        setQuickActiveIndex((prev) => {
+            const firstEnabled = filteredQuickActions.findIndex((item) => !item.disabled);
+            if (firstEnabled < 0) {
+                return -1;
+            }
+            if (
+                prev >= 0
+                && prev < filteredQuickActions.length
+                && !filteredQuickActions[prev]?.disabled
+            ) {
+                return prev;
+            }
+            return firstEnabled;
+        });
+    }, [filteredQuickActions, showQuickActions]);
+
+    useEffect(() => {
+        if (!showQuickActions || quickActiveIndex < 0) {
+            return;
+        }
+        quickActionRefs.current[quickActiveIndex]?.scrollIntoView({ block: 'nearest' });
+    }, [quickActiveIndex, showQuickActions]);
+
+    useEffect(() => {
+        if (!showQuickActions) {
+            return;
+        }
+        const timer = window.setTimeout(() => {
+            quickInputRef.current?.focus();
+            quickInputRef.current?.select();
+        }, 0);
+        return () => window.clearTimeout(timer);
+    }, [showQuickActions]);
+
+    useEffect(() => {
+        const isTypingTarget = (target: EventTarget | null): boolean => {
+            const node = target as HTMLElement | null;
+            if (!node) return false;
+            const tag = node.tagName;
+            if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
+            return node.isContentEditable;
+        };
+        const handleKeyDown = (event: KeyboardEvent) => {
+            const hotkey = event.ctrlKey || event.metaKey;
+            if (hotkey && event.key.toLowerCase() === 'k') {
+                if (isTypingTarget(event.target)) {
+                    return;
+                }
+                event.preventDefault();
+                setShowQuickActions((prev) => {
+                    const next = !prev;
+                    if (next) {
+                        setQuickKeyword('');
+                        setQuickActiveIndex(-1);
+                    }
+                    return next;
+                });
+                return;
+            }
+            if (event.key === 'Escape' && showQuickActions) {
+                event.preventDefault();
+                setShowQuickActions(false);
+                setQuickActiveIndex(-1);
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [showQuickActions]);
 
     return (
         <>
@@ -1096,246 +1853,285 @@ export function ScreenHeader() {
 
                 <div className="screen-header-right">
                     <div className="header-menu-group" ref={menuContainerRef}>
+                        <div className="header-mobile-primary-menu">
+                            <HeaderMenu
+                                label="操作"
+                                open={activeMenu === 'primary'}
+                                onToggle={() => setActiveMenu((prev) => (prev === 'primary' ? null : 'primary'))}
+                            >
+                                <div className="header-menu-section">
+                                    <div className="header-menu-section-title">快捷操作</div>
+                                    <button
+                                        type="button"
+                                        className="header-btn"
+                                        onClick={() => executeMenuAction(handlePreview)}
+                                        title={`预览大屏（${previewDeviceMode === 'auto' ? '自动' : previewDeviceMode}）`}
+                                    >
+                                        预览
+                                    </button>
+                                    {id && (
+                                        <button
+                                            type="button"
+                                            className="header-btn"
+                                            onClick={() => executeMenuAction(handlePublish)}
+                                            disabled={isPublishing || !permissions.canPublish || lockedByOther}
+                                            title={lockedByOther ? `当前由 ${lockOwnerText} 持有编辑锁` : '发布当前草稿'}
+                                        >
+                                            {isPublishing ? '发布中...' : '发布'}
+                                        </button>
+                                    )}
+                                    <button
+                                        type="button"
+                                        className="header-btn"
+                                        onClick={() => executeMenuAction(handleSave)}
+                                        disabled={isSaving || !permissions.canEdit || lockedByOther}
+                                        title={lockedByOther ? `当前由 ${lockOwnerText} 持有编辑锁` : '保存草稿'}
+                                    >
+                                        {isSaving ? '保存中...' : '保存'}
+                                    </button>
+                                </div>
+                            </HeaderMenu>
+                        </div>
                         <HeaderMenu
-                            label={`更多${cycleWarnings.length > 0 ? `(${cycleWarnings.length})` : ''}`}
-                            open={activeMenu === 'more'}
-                            onToggle={() => setActiveMenu((prev) => (prev === 'more' ? null : 'more'))}
+                            label={`工具${cycleWarnings.length > 0 ? `(${cycleWarnings.length})` : ''}`}
+                            open={activeMenu === 'tools'}
+                            onToggle={() => setActiveMenu((prev) => (prev === 'tools' ? null : 'tools'))}
                         >
-                            <div className="header-menu-section">
-                                <div className="header-menu-section-title">设计</div>
+                            <div className="header-menu-tabs" role="tablist" aria-label="工具菜单分区">
                                 <button
                                     type="button"
-                                    className="header-btn"
-                                    onClick={() => executeMenuAction(handleCreateExploreSession)}
-                                    disabled={!permissions.canRead}
-                                    title="将当前大屏沉淀为可复盘分析会话"
+                                    className={`header-menu-tab ${toolsSection === 'design' ? 'is-active' : ''}`}
+                                    onClick={() => setToolsSection('design')}
                                 >
-                                    沉淀会话
+                                    设计
                                 </button>
                                 <button
                                     type="button"
-                                    className="header-btn"
-                                    onClick={() => executeMenuAction(() => setShowVariableManager(true))}
-                                    title="全局变量与联动"
+                                    className={`header-menu-tab ${toolsSection === 'release' ? 'is-active' : ''}`}
+                                    onClick={() => setToolsSection('release')}
                                 >
-                                    变量管理
+                                    版本导出
                                 </button>
                                 <button
                                     type="button"
-                                    className="header-btn"
-                                    onClick={() => executeMenuAction(() => setShowInteractionDebugPanel(true))}
-                                    title="联动与变量事件调试"
+                                    className={`header-menu-tab ${toolsSection === 'governance' ? 'is-active' : ''}`}
+                                    onClick={() => setToolsSection('governance')}
                                 >
-                                    联动调试
-                                </button>
-                                {id && permissions.canRead && (
-                                    <button
-                                        type="button"
-                                        className="header-btn"
-                                        onClick={() => executeMenuAction(() => setShowCollaborationPanel(true))}
-                                        title="评论/批注轻协作"
-                                    >
-                                        协作
-                                    </button>
-                                )}
-                                <button
-                                    type="button"
-                                    className="header-btn"
-                                    onClick={() => executeMenuAction(handleSaveAsTemplate)}
-                                    disabled={isSavingTemplate || !permissions.canEdit}
-                                    title="保存为团队模板"
-                                >
-                                    {isSavingTemplate ? '存模板中...' : '保存模板'}
-                                </button>
-                                <button
-                                    type="button"
-                                    className="header-btn"
-                                    onClick={() => executeMenuAction(handleOpenImport)}
-                                    title="导入 JSON"
-                                >
-                                    导入JSON
+                                    治理
                                 </button>
                             </div>
-
-                            <div className="header-menu-section">
-                                <div className="header-menu-section-title">治理</div>
-                                {id && permissions.canRead && (
+                            {toolsSection === 'design' ? (
+                                <div className="header-menu-section">
+                                    <div className="header-menu-section-title">设计</div>
+                                    <label className="header-menu-inline-label" htmlFor="screen-design-action">设计动作</label>
+                                    <select
+                                        id="screen-design-action"
+                                        className="header-device-select"
+                                        value={designAction}
+                                        onChange={(e) => {
+                                            const next = e.target.value;
+                                            if (
+                                                next === 'session'
+                                                || next === 'variables'
+                                                || next === 'interaction'
+                                                || next === 'collaboration'
+                                                || next === 'template'
+                                                || next === 'import'
+                                                || next === 'command'
+                                            ) {
+                                                setDesignAction(next);
+                                                return;
+                                            }
+                                            setDesignAction('variables');
+                                        }}
+                                        title="选择设计动作"
+                                    >
+                                        <option value="variables">变量管理</option>
+                                        <option value="interaction">联动调试</option>
+                                        <option value="session">沉淀会话</option>
+                                        <option value="collaboration">协作批注</option>
+                                        <option value="template">保存模板</option>
+                                        <option value="import">导入JSON</option>
+                                        <option value="command">命令面板</option>
+                                    </select>
                                     <button
                                         type="button"
                                         className="header-btn"
-                                        onClick={() => executeMenuAction(() => setShowEditLockPanel(true))}
-                                        title="编辑锁状态与手工接管"
+                                        onClick={executeDesignAction}
+                                        disabled={!canExecuteDesignAction}
+                                        title="执行设计动作"
                                     >
-                                        编辑锁{lockedByOther ? '(占用)' : (editLock?.mine ? '(我)' : '')}
+                                        执行设计动作
                                     </button>
-                                )}
-                                <button
-                                    type="button"
-                                    className="header-btn"
-                                    onClick={() => executeMenuAction(() => setShowCachePanel(true))}
-                                    title="缓存命中率观测"
-                                >
-                                    缓存观测
-                                </button>
-                                <button
-                                    type="button"
-                                    className="header-btn"
-                                    onClick={() => executeMenuAction(() => setShowCompliancePanel(true))}
-                                    title="企业级合规策略与审计报表"
-                                >
-                                    合规
-                                </button>
-                                <button
-                                    type="button"
-                                    className="header-btn"
-                                    onClick={() => executeMenuAction(() => setShowHealthPanel(true))}
-                                    title="兼容性与性能基线体检"
-                                >
-                                    体检
-                                </button>
-                                {id && permissions.canManage && (
-                                    <>
-                                        <button
-                                            type="button"
-                                            className="header-btn"
-                                            onClick={() => executeMenuAction(() => setShowAclPanel(true))}
-                                            title="大屏 ACL 权限"
-                                        >
-                                            权限
-                                        </button>
-                                        <button
-                                            type="button"
-                                            className="header-btn"
-                                            onClick={() => executeMenuAction(() => setShowAuditPanel(true))}
-                                            title="审计日志链路"
-                                        >
-                                            审计
-                                        </button>
-                                    </>
-                                )}
-                                {id && (
+                                </div>
+                            ) : null}
+                            {toolsSection === 'release' ? (
+                                <div className="header-menu-section">
+                                    <div className="header-menu-section-title">版本与导出</div>
+                                    <label className="header-menu-inline-label" htmlFor="screen-preview-device-mode">预览设备</label>
+                                    <select
+                                        id="screen-preview-device-mode"
+                                        className="header-device-select"
+                                        value={previewDeviceMode}
+                                        onChange={(e) => {
+                                            const next = e.target.value;
+                                            if (next === 'pc' || next === 'tablet' || next === 'mobile') {
+                                                setPreviewDeviceMode(next);
+                                                return;
+                                            }
+                                            setPreviewDeviceMode('auto');
+                                        }}
+                                        title="预览设备模式"
+                                    >
+                                        <option value="auto">自动</option>
+                                        <option value="pc">PC</option>
+                                        <option value="tablet">平板</option>
+                                        <option value="mobile">手机</option>
+                                    </select>
+                                    {id ? (
+                                        <>
+                                            <label className="header-menu-inline-label" htmlFor="screen-version-action">版本动作</label>
+                                            <select
+                                                id="screen-version-action"
+                                                className="header-device-select"
+                                                value={versionAction}
+                                                onChange={(e) => {
+                                                    const next = e.target.value;
+                                                    setVersionAction(next === 'compare' ? 'compare' : 'history');
+                                                }}
+                                                title="选择版本动作"
+                                            >
+                                                <option value="history">版本历史/回滚</option>
+                                                <option value="compare">版本对比</option>
+                                            </select>
+                                            <button
+                                                type="button"
+                                                className="header-btn"
+                                                onClick={executeVersionAction}
+                                                disabled={
+                                                    isLoadingVersions
+                                                    || (versionAction === 'history' ? !permissions.canPublish : !permissions.canRead)
+                                                }
+                                                title={versionAction === 'history' ? '查看版本历史并回滚' : '查看版本差异摘要'}
+                                            >
+                                                {isLoadingVersions ? '加载中...' : '执行版本动作'}
+                                            </button>
+                                        </>
+                                    ) : null}
+                                    <label className="header-menu-inline-label" htmlFor="screen-export-action">导出动作</label>
+                                    <select
+                                        id="screen-export-action"
+                                        className="header-device-select"
+                                        value={exportAction}
+                                        onChange={(e) => {
+                                            const next = e.target.value;
+                                            if (next === 'json' || next === 'pdf' || next === 'png') {
+                                                setExportAction(next);
+                                                return;
+                                            }
+                                            setExportAction('png');
+                                        }}
+                                        title="选择导出格式"
+                                    >
+                                        <option value="png">导出PNG</option>
+                                        <option value="pdf">导出PDF</option>
+                                        <option value="json">导出JSON</option>
+                                    </select>
                                     <button
                                         type="button"
                                         className="header-btn"
-                                        onClick={() => executeMenuAction(() => setShowSharePolicyPanel(true))}
-                                        disabled={!permissions.canPublish}
-                                        title="配置过期/口令/IP白名单"
+                                        onClick={executeExportAction}
+                                        title="执行导出"
                                     >
-                                        分享策略
+                                        执行导出
                                     </button>
-                                )}
-                                {id && (
+                                </div>
+                            ) : null}
+                            {toolsSection === 'governance' ? (
+                                <div className="header-menu-section">
+                                    <div className="header-menu-section-title">治理与安全</div>
+                                    <label className="header-menu-inline-label" htmlFor="screen-governance-action">治理动作</label>
+                                    <select
+                                        id="screen-governance-action"
+                                        className="header-device-select"
+                                        value={governanceAction}
+                                        onChange={(e) => {
+                                            const next = e.target.value;
+                                            if (
+                                                next === 'edit-lock'
+                                                || next === 'cache'
+                                                || next === 'compliance'
+                                                || next === 'health'
+                                                || next === 'acl'
+                                                || next === 'audit'
+                                                || next === 'share-policy'
+                                                || next === 'share-link'
+                                            ) {
+                                                setGovernanceAction(next);
+                                                return;
+                                            }
+                                            setGovernanceAction('cache');
+                                        }}
+                                        title="选择治理动作"
+                                    >
+                                        <option value="edit-lock">编辑锁{lockedByOther ? '(占用)' : (editLock?.mine ? '(我)' : '')}</option>
+                                        <option value="cache">缓存观测</option>
+                                        <option value="compliance">合规</option>
+                                        <option value="health">体检</option>
+                                        <option value="acl">权限</option>
+                                        <option value="audit">审计</option>
+                                        <option value="share-policy">分享策略</option>
+                                        <option value="share-link">分享链接</option>
+                                    </select>
                                     <button
                                         type="button"
                                         className="header-btn"
-                                        onClick={() => executeMenuAction(handleShare)}
-                                        disabled={isSharing || !permissions.canPublish}
-                                        title="生成公开链接并复制"
+                                        onClick={executeGovernanceAction}
+                                        disabled={!canExecuteGovernanceAction || (governanceAction === 'share-link' && isSharing)}
+                                        title="执行治理动作"
                                     >
-                                        {isSharing ? '分享中...' : '分享链接'}
+                                        {governanceAction === 'share-link' && isSharing ? '分享中...' : '执行治理动作'}
                                     </button>
-                                )}
-                            </div>
-
-                            <div className="header-menu-section">
-                                <div className="header-menu-section-title">版本与导出</div>
-                                <label className="header-menu-inline-label" htmlFor="screen-preview-device-mode">预览设备</label>
-                                <select
-                                    id="screen-preview-device-mode"
-                                    className="header-device-select"
-                                    value={previewDeviceMode}
-                                    onChange={(e) => {
-                                        const next = e.target.value;
-                                        if (next === 'pc' || next === 'tablet' || next === 'mobile') {
-                                            setPreviewDeviceMode(next);
-                                            return;
-                                        }
-                                        setPreviewDeviceMode('auto');
-                                    }}
-                                    title="预览设备模式"
-                                >
-                                    <option value="auto">自动</option>
-                                    <option value="pc">PC</option>
-                                    <option value="tablet">平板</option>
-                                    <option value="mobile">手机</option>
-                                </select>
-                                {id && (
-                                    <>
-                                        <button
-                                            type="button"
-                                            className="header-btn"
-                                            onClick={() => executeMenuAction(handleVersionHistory)}
-                                            disabled={isLoadingVersions || !permissions.canPublish}
-                                            title="版本历史"
-                                        >
-                                            {isLoadingVersions ? '加载中...' : '版本历史'}
-                                        </button>
-                                        <button
-                                            type="button"
-                                            className="header-btn"
-                                            onClick={() => executeMenuAction(handleVersionCompare)}
-                                            disabled={isLoadingVersions || !permissions.canRead}
-                                            title="版本差异摘要"
-                                        >
-                                            版本对比
-                                        </button>
-                                    </>
-                                )}
-                                <button
-                                    type="button"
-                                    className="header-btn"
-                                    onClick={() => executeMenuAction(handleExportJson)}
-                                    title="导出 JSON"
-                                >
-                                    导出JSON
-                                </button>
-                                <button
-                                    type="button"
-                                    className="header-btn"
-                                    onClick={() => executeMenuAction(handleExportPng)}
-                                    title="导出 PNG"
-                                >
-                                    导出PNG
-                                </button>
-                                <button
-                                    type="button"
-                                    className="header-btn"
-                                    onClick={() => executeMenuAction(handleExportPdf)}
-                                    title="导出 PDF"
-                                >
-                                    导出PDF
-                                </button>
-                            </div>
+                                </div>
+                            ) : null}
                         </HeaderMenu>
                     </div>
                     <div className="screen-header-primary-actions">
+                        <select
+                            className="header-device-select header-primary-desktop"
+                            value={primaryAction}
+                            onChange={(event) => {
+                                const next = event.target.value;
+                                if (next === 'preview' || next === 'publish' || next === 'save') {
+                                    setPrimaryAction(next);
+                                    return;
+                                }
+                                setPrimaryAction('save');
+                            }}
+                            title="主操作"
+                        >
+                            <option value="save">保存草稿</option>
+                            <option value="preview">预览大屏</option>
+                            {id ? <option value="publish">发布版本</option> : null}
+                        </select>
                         <button
                             type="button"
-                            className="header-btn preview-btn"
-                            onClick={handlePreview}
-                            title={`预览大屏（${previewDeviceMode === 'auto' ? '自动' : previewDeviceMode}）`}
+                            className="header-btn save-btn header-primary-desktop"
+                            onClick={executePrimaryAction}
+                            disabled={!canExecutePrimaryAction}
+                            title={
+                                primaryAction === 'publish'
+                                    ? (lockedByOther ? `当前由 ${lockOwnerText} 持有编辑锁` : '发布当前草稿')
+                                    : (primaryAction === 'save'
+                                        ? (lockedByOther ? `当前由 ${lockOwnerText} 持有编辑锁` : '保存草稿')
+                                        : `预览大屏（${previewDeviceMode === 'auto' ? '自动' : previewDeviceMode}）`)
+                            }
                         >
-                            预览
-                        </button>
-                        {id && (
-                            <button
-                                type="button"
-                                className="header-btn"
-                                onClick={handlePublish}
-                                disabled={isPublishing || !permissions.canPublish || lockedByOther}
-                                title={lockedByOther ? `当前由 ${lockOwnerText} 持有编辑锁` : '发布当前草稿'}
-                            >
-                                {isPublishing ? '发布中...' : '发布'}
-                            </button>
-                        )}
-                        <button
-                            type="button"
-                            className="header-btn save-btn"
-                            onClick={handleSave}
-                            disabled={isSaving || !permissions.canEdit || lockedByOther}
-                            title={lockedByOther ? `当前由 ${lockOwnerText} 持有编辑锁` : '保存草稿'}
-                        >
-                            {isSaving ? '保存中...' : '保存'}
+                            {primaryAction === 'publish'
+                                ? (isPublishing ? '发布中...' : '执行发布')
+                                : (primaryAction === 'save'
+                                    ? (isSaving ? '保存中...' : '执行保存')
+                                    : '执行预览')}
                         </button>
                     </div>
                     <input
@@ -1425,6 +2221,138 @@ export function ScreenHeader() {
                     </div>
                 </div>
             )}
+
+            {showQuickActions ? (
+                <div
+                    style={{
+                        position: 'fixed',
+                        inset: 0,
+                        zIndex: 21000,
+                        background: 'rgba(10,18,32,0.55)',
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        justifyContent: 'center',
+                        paddingTop: 'min(12vh, 92px)',
+                        paddingLeft: 12,
+                        paddingRight: 12,
+                    }}
+                    onClick={() => {
+                        setShowQuickActions(false);
+                        setQuickActiveIndex(-1);
+                    }}
+                >
+                    <div
+                        style={{
+                            width: 'min(680px, 96vw)',
+                            maxHeight: '70vh',
+                            overflow: 'hidden',
+                            background: '#ffffff',
+                            border: '1px solid var(--color-border)',
+                            borderRadius: 10,
+                            boxShadow: '0 20px 70px rgba(2,6,23,0.35)',
+                            display: 'grid',
+                            gridTemplateRows: 'auto auto 1fr',
+                        }}
+                        onClick={(event) => event.stopPropagation()}
+                    >
+                        <div style={{ padding: '10px 12px 0', fontSize: 12, color: '#64748b' }}>
+                            命令面板（Ctrl/Cmd + K，↑/↓选择，Enter执行，Ctrl/Cmd + Shift + P 预览）
+                        </div>
+                        <div style={{ padding: '8px 12px 10px' }}>
+                            <input
+                                ref={quickInputRef}
+                                type="text"
+                                className="screen-name-input"
+                                style={{ width: '100%', minWidth: 0 }}
+                                value={quickKeyword}
+                                onChange={(event) => {
+                                    setQuickKeyword(event.target.value);
+                                    setQuickActiveIndex(-1);
+                                }}
+                                onKeyDown={(event) => {
+                                    if (event.key === 'ArrowDown') {
+                                        event.preventDefault();
+                                        setQuickActiveIndex((prev) => (
+                                            findNextEnabledQuickActionIndex(filteredQuickActions, prev, 1)
+                                        ));
+                                        return;
+                                    }
+                                    if (event.key === 'ArrowUp') {
+                                        event.preventDefault();
+                                        setQuickActiveIndex((prev) => {
+                                            const seed = prev < 0 ? 0 : prev;
+                                            return findNextEnabledQuickActionIndex(filteredQuickActions, seed, -1);
+                                        });
+                                        return;
+                                    }
+                                    if (event.key !== 'Enter') return;
+                                    const selected = quickActiveIndex >= 0
+                                        ? filteredQuickActions[quickActiveIndex]
+                                        : null;
+                                    const fallback = filteredQuickActions.find((item) => !item.disabled);
+                                    const target = selected && !selected.disabled ? selected : fallback;
+                                    if (!target) return;
+                                    event.preventDefault();
+                                    runQuickAction(target.id, target.run);
+                                }}
+                                placeholder="输入关键词：保存 / 预览 / 发布 / 变量 / 缓存 / 合规 / 导出 ..."
+                            />
+                        </div>
+                        <div style={{ overflowY: 'auto', padding: '0 12px 12px', display: 'grid', gap: 6 }}>
+                            {filteredQuickActions.length === 0 ? (
+                                <div style={{ padding: '20px 12px', fontSize: 13, color: '#64748b' }}>
+                                    未匹配到动作，请换个关键词。
+                                </div>
+                            ) : (
+                                filteredQuickActions.map((item, index) => {
+                                    const isRecent = quickRecentOrder.has(item.id);
+                                    return (
+                                    <button
+                                        key={item.id}
+                                        ref={(node) => {
+                                            quickActionRefs.current[index] = node;
+                                        }}
+                                        type="button"
+                                        className="header-btn"
+                                        style={{
+                                            width: '100%',
+                                            justifyContent: 'flex-start',
+                                            background: index === quickActiveIndex ? 'rgba(148,163,184,0.2)' : undefined,
+                                            borderColor: index === quickActiveIndex ? '#94a3b8' : undefined,
+                                        }}
+                                        disabled={item.disabled}
+                                        onMouseEnter={() => setQuickActiveIndex(index)}
+                                        onClick={() => runQuickAction(item.id, item.run)}
+                                        title={item.label}
+                                    >
+                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                                            <span>{item.label}</span>
+                                            {isRecent ? (
+                                                <span style={{
+                                                    fontSize: 11,
+                                                    padding: '1px 6px',
+                                                    borderRadius: 999,
+                                                    background: 'rgba(14,116,144,0.15)',
+                                                    color: '#0e7490',
+                                                }}
+                                                >
+                                                    最近
+                                                </span>
+                                            ) : null}
+                                        </span>
+                                        {item.hotkey ? (
+                                            <span style={{ marginLeft: 'auto', fontSize: 11, color: '#64748b' }}>
+                                                {item.hotkey}
+                                            </span>
+                                        ) : null}
+                                    </button>
+                                    );
+                                })
+                            )}
+                        </div>
+                    </div>
+                </div>
+            ) : null}
 
             <GlobalVariableManager
                 open={showVariableManager}
@@ -1531,6 +2459,22 @@ export function ScreenHeader() {
                 loading={isLoadingVersions}
                 onClose={() => setShowVersionRollbackPanel(false)}
                 onRollback={handleConfirmVersionRollback}
+            />
+
+            <VersionHistoryPanel
+                open={showVersionHistoryPanel}
+                versions={versionCandidates}
+                currentConfig={config}
+                loading={isLoadingVersions}
+                onClose={() => setShowVersionHistoryPanel(false)}
+                onRollback={handleConfirmVersionRollback}
+                onCompare={handleConfirmVersionCompare}
+            />
+
+            <ScreenSnapshotPanel
+                open={showSnapshotPanel}
+                screenId={id}
+                onClose={() => setShowSnapshotPanel(false)}
             />
 
             <ScreenSharePolicyPanel

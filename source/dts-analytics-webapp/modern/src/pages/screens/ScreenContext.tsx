@@ -1,8 +1,30 @@
-import { createContext, useContext, useReducer, ReactNode, useCallback, useState } from 'react';
+import { createContext, useContext, useReducer, ReactNode, useCallback, useState, useMemo } from 'react';
 import type { ScreenState, ScreenAction, ScreenConfig, ScreenComponent } from './types';
 import { SCREEN_SCHEMA_VERSION } from './specV2';
 import { sanitizeParentContainerIds, wouldCreateParentCycle } from './componentHierarchy';
 
+// ── ID generation (crypto.randomUUID for collision-resistance) ──────────────
+export function generateId(prefix = 'comp'): string {
+    return `${prefix}_${crypto.randomUUID().replace(/-/g, '').slice(0, 16)}`;
+}
+
+// ── Undo history cap ────────────────────────────────────────────────────────
+const MAX_HISTORY = 80;
+
+function pushHistory(
+    history: ScreenConfig[],
+    historyIndex: number,
+    newConfig: ScreenConfig,
+): { history: ScreenConfig[]; historyIndex: number } {
+    const trimmed = history.slice(
+        Math.max(0, historyIndex + 1 - MAX_HISTORY + 1),
+        historyIndex + 1,
+    );
+    trimmed.push(newConfig);
+    return { history: trimmed, historyIndex: trimmed.length - 1 };
+}
+
+// ── Defaults ────────────────────────────────────────────────────────────────
 const defaultConfig: ScreenConfig = {
     schemaVersion: SCREEN_SCHEMA_VERSION,
     id: '',
@@ -69,6 +91,7 @@ function sanitizeComponents(components: ScreenComponent[]): ScreenComponent[] {
     return sanitizeParentContainerIds(components);
 }
 
+// ── Reducer ─────────────────────────────────────────────────────────────────
 function screenReducer(state: ScreenState, action: ScreenAction): ScreenState {
     switch (action.type) {
         case 'SET_CONFIG': {
@@ -76,13 +99,10 @@ function screenReducer(state: ScreenState, action: ScreenAction): ScreenState {
                 ...action.payload,
                 components: sanitizeComponents(action.payload.components || []),
             };
-            const newHistory = state.history.slice(0, state.historyIndex + 1);
-            newHistory.push(sanitizedConfig);
             return {
                 ...state,
                 config: sanitizedConfig,
-                history: newHistory,
-                historyIndex: newHistory.length - 1,
+                ...pushHistory(state.history, state.historyIndex, sanitizedConfig),
             };
         }
 
@@ -109,19 +129,32 @@ function screenReducer(state: ScreenState, action: ScreenAction): ScreenState {
             };
         }
 
+        // Phase 1.3: MERGE_CONFIG – merge partial updates inside reducer (avoids stale closure)
+        case 'MERGE_CONFIG': {
+            const merged: ScreenConfig = {
+                ...state.config,
+                ...action.payload,
+                components: sanitizeComponents(
+                    action.payload.components ?? state.config.components,
+                ),
+            };
+            return {
+                ...state,
+                config: merged,
+                ...pushHistory(state.history, state.historyIndex, merged),
+            };
+        }
+
         case 'ADD_COMPONENT': {
             const newConfig = {
                 ...state.config,
                 components: sanitizeComponents([...state.config.components, action.payload]),
             };
-            const newHistory = state.history.slice(0, state.historyIndex + 1);
-            newHistory.push(newConfig);
             return {
                 ...state,
                 config: newConfig,
                 selectedIds: [action.payload.id],
-                history: newHistory,
-                historyIndex: newHistory.length - 1,
+                ...pushHistory(state.history, state.historyIndex, newConfig),
             };
         }
 
@@ -131,13 +164,10 @@ function screenReducer(state: ScreenState, action: ScreenAction): ScreenState {
             );
             const newComponents = sanitizeComponents(nextComponents);
             const newConfig = { ...state.config, components: newComponents };
-            const newHistory = state.history.slice(0, state.historyIndex + 1);
-            newHistory.push(newConfig);
             return {
                 ...state,
                 config: newConfig,
-                history: newHistory,
-                historyIndex: newHistory.length - 1,
+                ...pushHistory(state.history, state.historyIndex, newConfig),
             };
         }
 
@@ -154,14 +184,36 @@ function screenReducer(state: ScreenState, action: ScreenAction): ScreenState {
                 });
             const sanitizedComponents = sanitizeComponents(newComponents);
             const newConfig = { ...state.config, components: sanitizedComponents };
-            const newHistory = state.history.slice(0, state.historyIndex + 1);
-            newHistory.push(newConfig);
             return {
                 ...state,
                 config: newConfig,
                 selectedIds: [],
-                history: newHistory,
-                historyIndex: newHistory.length - 1,
+                ...pushHistory(state.history, state.historyIndex, newConfig),
+            };
+        }
+
+        // Phase 4.3: DUPLICATE_COMPONENTS – atomic copy+paste in reducer (no race condition)
+        case 'DUPLICATE_COMPONENTS': {
+            const { sourceIds } = action.payload;
+            const selected = state.config.components.filter((c) => sourceIds.includes(c.id));
+            if (selected.length === 0) return state;
+            const maxZ = Math.max(...state.config.components.map((c) => c.zIndex), 0);
+            const duplicated = selected.map((comp, idx) => ({
+                ...comp,
+                id: generateId(),
+                x: comp.x + 20,
+                y: comp.y + 20,
+                zIndex: maxZ + idx + 1,
+            }));
+            const newConfig = {
+                ...state.config,
+                components: sanitizeComponents([...state.config.components, ...duplicated]),
+            };
+            return {
+                ...state,
+                config: newConfig,
+                selectedIds: duplicated.map((c) => c.id),
+                ...pushHistory(state.history, state.historyIndex, newConfig),
             };
         }
 
@@ -176,7 +228,7 @@ function screenReducer(state: ScreenState, action: ScreenAction): ScreenState {
 
             const newComponents = components.map((comp, idx) => ({
                 ...comp,
-                id: `comp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                id: generateId(),
                 x: comp.x + offsetX,
                 y: comp.y + offsetY,
                 zIndex: maxZIndex + idx + 1,
@@ -186,14 +238,11 @@ function screenReducer(state: ScreenState, action: ScreenAction): ScreenState {
                 ...state.config,
                 components: sanitizeComponents([...state.config.components, ...newComponents]),
             };
-            const newHistory = state.history.slice(0, state.historyIndex + 1);
-            newHistory.push(newConfig);
             return {
                 ...state,
                 config: newConfig,
                 selectedIds: newComponents.map(c => c.id),
-                history: newHistory,
-                historyIndex: newHistory.length - 1,
+                ...pushHistory(state.history, state.historyIndex, newConfig),
             };
         }
 
@@ -281,13 +330,10 @@ function screenReducer(state: ScreenState, action: ScreenAction): ScreenState {
             });
 
             const newConfig = { ...state.config, components: newComponents };
-            const newHistory = state.history.slice(0, state.historyIndex + 1);
-            newHistory.push(newConfig);
             return {
                 ...state,
                 config: newConfig,
-                history: newHistory,
-                historyIndex: newHistory.length - 1,
+                ...pushHistory(state.history, state.historyIndex, newConfig),
             };
         }
 
@@ -321,12 +367,9 @@ function screenReducer(state: ScreenState, action: ScreenAction): ScreenState {
             if (state.history[state.historyIndex] === state.config) {
                 return state;
             }
-            const newHistory = state.history.slice(0, state.historyIndex + 1);
-            newHistory.push(state.config);
             return {
                 ...state,
-                history: newHistory,
-                historyIndex: newHistory.length - 1,
+                ...pushHistory(state.history, state.historyIndex, state.config),
             };
         }
 
@@ -359,6 +402,7 @@ interface ScreenContextValue {
     ungroupSelected: () => void;
     alignSelected: (mode: 'left' | 'right' | 'top' | 'bottom' | 'h-center' | 'v-center') => void;
     distributeSelected: (mode: 'horizontal' | 'vertical') => void;
+    duplicateSelected: () => void;
     snapshotTransform: () => void;
     snapGuides: { x: number[]; y: number[] };
     setSnapGuides: (guides: { x?: number[]; y?: number[] }) => void;
@@ -416,9 +460,10 @@ export function ScreenProvider({ children }: { children: ReactNode }) {
         dispatch({ type: 'LOAD_CONFIG', payload: config });
     }, []);
 
+    // Phase 1.3: updateConfig dispatches MERGE_CONFIG to avoid stale closure
     const updateConfig = useCallback((updates: Partial<ScreenConfig>) => {
-        dispatch({ type: 'SET_CONFIG', payload: { ...state.config, ...updates } });
-    }, [state.config]);
+        dispatch({ type: 'MERGE_CONFIG', payload: updates });
+    }, []);
 
     const markBaseline = useCallback((config: ScreenConfig) => {
         dispatch({ type: 'MARK_BASELINE', payload: config });
@@ -436,7 +481,7 @@ export function ScreenProvider({ children }: { children: ReactNode }) {
     const groupSelected = useCallback(() => {
         if (state.selectedIds.length < 2) return;
         const idSet = new Set(state.selectedIds);
-        const groupId = `grp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        const groupId = generateId('grp');
         const newComponents = state.config.components.map((comp) =>
             idSet.has(comp.id) ? { ...comp, groupId } : comp,
         );
@@ -524,6 +569,12 @@ export function ScreenProvider({ children }: { children: ReactNode }) {
         dispatch({ type: 'SET_CONFIG', payload: { ...state.config, components: newComponents } });
     }, [state.config, state.selectedIds]);
 
+    // Phase 4.3: atomic duplicate – no clipboard race condition
+    const duplicateSelected = useCallback(() => {
+        if (state.selectedIds.length === 0) return;
+        dispatch({ type: 'DUPLICATE_COMPONENTS', payload: { sourceIds: state.selectedIds } });
+    }, [state.selectedIds]);
+
     const snapshotTransform = useCallback(() => {
         dispatch({ type: 'SNAPSHOT' });
     }, []);
@@ -542,38 +593,48 @@ export function ScreenProvider({ children }: { children: ReactNode }) {
     const canUndo = state.historyIndex > 0;
     const canRedo = state.historyIndex < state.history.length - 1;
 
+    // Phase 1.1: useMemo around Provider value
+    const contextValue = useMemo<ScreenContextValue>(() => ({
+        state,
+        dispatch,
+        addComponent,
+        updateComponent,
+        deleteComponents,
+        selectComponents,
+        undo,
+        redo,
+        canUndo,
+        canRedo,
+        clipboard,
+        copyComponents,
+        pasteComponents,
+        loadConfig,
+        markBaseline,
+        updateConfig,
+        updateSelectedComponents,
+        groupSelected,
+        ungroupSelected,
+        alignSelected,
+        distributeSelected,
+        duplicateSelected,
+        snapshotTransform,
+        snapGuides,
+        setSnapGuides,
+        clearSnapGuides,
+        isSaving,
+        setIsSaving,
+    }), [
+        state, canUndo, canRedo, clipboard, snapGuides, isSaving,
+        // useCallback refs are stable and won't trigger extra renders
+        addComponent, updateComponent, deleteComponents, selectComponents,
+        undo, redo, copyComponents, pasteComponents, loadConfig,
+        markBaseline, updateConfig, updateSelectedComponents,
+        groupSelected, ungroupSelected, alignSelected, distributeSelected,
+        duplicateSelected, snapshotTransform, setSnapGuides, clearSnapGuides, setIsSaving, dispatch,
+    ]);
+
     return (
-        <ScreenContext.Provider
-            value={{
-                state,
-                dispatch,
-                addComponent,
-                updateComponent,
-                deleteComponents,
-                selectComponents,
-                undo,
-                redo,
-                canUndo,
-                canRedo,
-                clipboard,
-                copyComponents,
-                pasteComponents,
-                loadConfig,
-                markBaseline,
-                updateConfig,
-                updateSelectedComponents,
-                groupSelected,
-                ungroupSelected,
-                alignSelected,
-                distributeSelected,
-                snapshotTransform,
-                snapGuides,
-                setSnapGuides,
-                clearSnapGuides,
-                isSaving,
-                setIsSaving,
-            }}
-        >
+        <ScreenContext.Provider value={contextValue}>
             {children}
         </ScreenContext.Provider>
     );

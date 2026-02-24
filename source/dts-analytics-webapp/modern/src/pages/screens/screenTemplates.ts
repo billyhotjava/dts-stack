@@ -4,12 +4,15 @@ import { SCREEN_SCHEMA_VERSION } from './specV2';
 /**
  * Screen Template definition
  */
+export type TemplateCategory = 'general' | 'government' | 'manufacturing' | 'retail' | 'finance' | 'education' | 'blank';
+
 export interface ScreenTemplate {
     id: string;
     name: string;
     description: string;
     thumbnail: string; // emoji or icon
-    category: 'business' | 'tech' | 'dashboard' | 'monitor';
+    category: TemplateCategory;
+    tags: string[];
     config: Omit<ScreenConfig, 'id'>;
 }
 
@@ -49,7 +52,8 @@ const techDataCenterTemplate: ScreenTemplate = {
     name: '科技数据中心',
     description: '深蓝科技风格大屏，适合展示核心业务指标和实时数据监控',
     thumbnail: '🌐',
-    category: 'tech',
+    category: 'general',
+    tags: ['监控', '实时', '运维', 'KPI'],
     config: {
         name: '科技数据中心',
         description: '数据可视化大屏',
@@ -360,7 +364,8 @@ const blankTemplate: ScreenTemplate = {
     name: '空白模板',
     description: '从零开始创建你的数据大屏',
     thumbnail: '📄',
-    category: 'dashboard',
+    category: 'blank',
+    tags: ['空白', '自定义'],
     config: {
         name: '未命名大屏',
         description: '',
@@ -380,7 +385,8 @@ const patentDataCenterTemplate: ScreenTemplate = {
     name: '专利数据中心',
     description: '专利数据可视化大屏：KPI指标、类型占比、月度趋势、部门排行、近期授权、申请详情、超期预警',
     thumbnail: '📋',
-    category: 'business',
+    category: 'general',
+    tags: ['专利', '知识产权', 'KPI', '趋势'],
     config: {
         name: '专利数据中心',
         description: '专利数据可视化大屏',
@@ -652,7 +658,8 @@ const patentTitaniumTemplate: ScreenTemplate = {
     name: '专利数据中心 · 钛合金灰',
     description: '克制专业的深灰色调，无霓虹边框，适合涉密科技企业',
     thumbnail: '🔩',
-    category: 'business',
+    category: 'general',
+    tags: ['专利', '钛合金', '深灰'],
     config: {
         name: '专利数据中心 · 钛合金灰',
         description: '专利数据可视化大屏（钛合金灰）',
@@ -786,7 +793,8 @@ const businessLightTemplate: ScreenTemplate = {
     name: '商务数据看板 · 白色',
     description: '浅灰底白面板风格，2x2 图表布局，适合办公会议投屏',
     thumbnail: '📊',
-    category: 'business',
+    category: 'general',
+    tags: ['商务', '白色', '会议', 'ROI'],
     config: {
         name: '商务数据看板',
         description: '白色商务风格数据看板',
@@ -878,15 +886,315 @@ const businessLightTemplate: ScreenTemplate = {
     },
 };
 
+// ============================================================
+// 空白模板 - 不同尺寸
+// ============================================================
+const blank4kTemplate: ScreenTemplate = {
+    id: 'blank-4k', name: '空白模板 · 4K', description: '3840×2160 超高清空白大屏', thumbnail: '🖥️',
+    category: 'blank', tags: ['空白', '4K', '超高清'],
+    config: { name: '未命名大屏(4K)', description: '', width: 3840, height: 2160, backgroundColor: '#0d1b2a', components: [] },
+};
+const blankSmallTemplate: ScreenTemplate = {
+    id: 'blank-small', name: '空白模板 · 小屏', description: '1280×720 小屏幕空白模板', thumbnail: '📱',
+    category: 'blank', tags: ['空白', '小屏', '720p'],
+    config: { name: '未命名大屏(720p)', description: '', width: 1280, height: 720, backgroundColor: '#0d1b2a', components: [] },
+};
+
+// ============================================================
+// 政务/智慧城市模板
+// ============================================================
+const smartCityTemplate: ScreenTemplate = {
+    id: 'smart-city', name: '智慧城市总览', description: '中间地图+左右数据面板，适合城市管理/政务展示', thumbnail: '🏙️',
+    category: 'government', tags: ['智慧城市', '政务', '地图', '监控'],
+    config: {
+        name: '智慧城市总览', description: '智慧城市数据大屏', width: 1920, height: 1080, backgroundColor: '#0a0e27',
+        components: [
+            createComponent('sc-title', 'title', '主标题', 660, 12, 600, 55, 100, { text: '智慧城市运营中心', fontSize: 36, fontWeight: 'bold', color: '#00d4ff', textAlign: 'center' }),
+            createComponent('sc-deco-l', 'decoration', '装饰左', 200, 30, 400, 35, 99, { decorationType: 3, color: ['#00d4ff', '#0066ff'] }),
+            createComponent('sc-deco-r', 'decoration', '装饰右', 1320, 30, 400, 35, 99, { decorationType: 3, color: ['#00d4ff', '#0066ff'] }),
+            createComponent('sc-dt', 'datetime', '时间', 1660, 22, 220, 35, 98, { format: 'YYYY-MM-DD HH:mm:ss', fontSize: 16, color: '#66ccff' }),
+            createComponent('sc-kpi-1', 'number-card', '常住人口', 40, 80, 220, 85, 50, { title: '常住人口(万)', value: 1862, prefix: '', suffix: '' }),
+            createComponent('sc-kpi-2', 'number-card', '今日车流', 280, 80, 220, 85, 50, { title: '今日车流(万)', value: 342, prefix: '', suffix: '' }),
+            createComponent('sc-kpi-3', 'number-card', '空气质量', 1420, 80, 220, 85, 50, { title: '空气质量(AQI)', value: 45, prefix: '', suffix: '' }),
+            createComponent('sc-kpi-4', 'number-card', '城市安全指数', 1660, 80, 220, 85, 50, { title: '安全指数', value: 96.8, prefix: '', suffix: '' }),
+            createComponent('sc-border-l', 'border-box', '左边框', 30, 180, 470, 440, 10, { boxType: 7, color: ['#00d4ff', '#0066ff'] }),
+            createComponent('sc-bar', 'bar-chart', '各区人口', 45, 210, 440, 400, 20, { title: '各区常住人口', xAxisData: ['A区', 'B区', 'C区', 'D区', 'E区', 'F区'], series: [{ name: '人口(万)', data: [320, 285, 256, 198, 175, 168] }] }),
+            createComponent('sc-map', 'map-chart', '中心地图', 520, 180, 880, 520, 20, { title: '城市区域分布', mapScope: 'china', usePresetGeoJson: true, enableRegionDrill: true, regionVariableKey: 'region', regions: [{ name: '北京市', code: '110000', value: 120 }, { name: '上海市', code: '310000', value: 180 }, { name: '广东省', code: '440000', value: 140 }, { name: '浙江省', code: '330000', value: 95 }] }),
+            createComponent('sc-border-r', 'border-box', '右边框', 1420, 180, 470, 440, 10, { boxType: 7, color: ['#00d4ff', '#0066ff'] }),
+            createComponent('sc-pie', 'pie-chart', '服务分布', 1435, 210, 440, 400, 20, { title: '公共服务占比', data: [{ name: '交通', value: 35 }, { name: '教育', value: 25 }, { name: '医疗', value: 20 }, { name: '环保', value: 12 }, { name: '安防', value: 8 }] }),
+            createComponent('sc-border-bl', 'border-box', '左下边框', 30, 640, 620, 420, 10, { boxType: 8, color: ['#00d4ff', '#0066ff'] }),
+            createComponent('sc-line', 'line-chart', '月度趋势', 45, 670, 590, 380, 20, { title: '月度事件趋势', xAxisData: ['1月', '2月', '3月', '4月', '5月', '6月'], series: [{ name: '交通事件', data: [120, 132, 101, 134, 90, 80] }, { name: '治安事件', data: [60, 72, 51, 74, 50, 40] }] }),
+            createComponent('sc-border-br', 'border-box', '右下边框', 670, 640, 1220, 420, 10, { boxType: 8, color: ['#00d4ff', '#0066ff'] }),
+            createComponent('sc-board', 'scroll-board', '实时事件', 685, 670, 1190, 380, 20, { header: ['时间', '区域', '事件类型', '状态'], data: [['14:32', 'A区', '交通拥堵', '处理中'], ['14:28', 'C区', '消防报警', '已处置'], ['14:25', 'B区', '公共设施报修', '已派单'], ['14:20', 'E区', '噪音投诉', '已处置'], ['14:15', 'D区', '道路积水', '处理中']], rowNum: 6, headerBGC: '#003366', oddRowBGC: 'rgba(0,100,200,0.1)', evenRowBGC: 'rgba(0,50,100,0.1)', waitTime: 2500 }),
+        ],
+    },
+};
+
+const govServiceTemplate: ScreenTemplate = {
+    id: 'gov-service', name: '政务服务大屏', description: '政务服务数据展示，办件量/满意度/服务效率', thumbnail: '🏛️',
+    category: 'government', tags: ['政务', '服务', '办件', '满意度'],
+    config: {
+        name: '政务服务大屏', description: '政务服务运营数据', width: 1920, height: 1080, backgroundColor: '#0a0e27',
+        components: [
+            createComponent('gs-title', 'title', '主标题', 560, 12, 800, 55, 100, { text: '政务服务运营大屏', fontSize: 36, fontWeight: 'bold', color: '#00d4ff', textAlign: 'center' }),
+            createComponent('gs-kpi-1', 'number-card', '累计办件', 40, 85, 290, 85, 50, { title: '累计办件量', value: 1286534, prefix: '', suffix: '' }),
+            createComponent('gs-kpi-2', 'number-card', '今日办件', 350, 85, 290, 85, 50, { title: '今日办件', value: 3256, prefix: '', suffix: '' }),
+            createComponent('gs-kpi-3', 'number-card', '满意度', 660, 85, 290, 85, 50, { title: '群众满意度', value: 98.6, prefix: '', suffix: '%' }),
+            createComponent('gs-kpi-4', 'number-card', '在线率', 970, 85, 290, 85, 50, { title: '系统在线率', value: 99.97, prefix: '', suffix: '%' }),
+            createComponent('gs-kpi-5', 'number-card', '平均时长', 1280, 85, 290, 85, 50, { title: '平均办理(分)', value: 12.5, prefix: '', suffix: '' }),
+            createComponent('gs-kpi-6', 'number-card', '好评率', 1590, 85, 290, 85, 50, { title: '好评率', value: 96.3, prefix: '', suffix: '%' }),
+            createComponent('gs-bar', 'bar-chart', '部门办件量', 30, 190, 620, 400, 20, { title: '部门办件量TOP10', xAxisData: ['民政局', '人社局', '住建局', '公安局', '市监局', '教育局', '卫健委', '交通局'], series: [{ name: '办件量', data: [4560, 3890, 3420, 3100, 2860, 2540, 2100, 1850] }] }),
+            createComponent('gs-line', 'line-chart', '月度趋势', 670, 190, 620, 400, 20, { title: '月度办件趋势', xAxisData: ['1月', '2月', '3月', '4月', '5月', '6月'], series: [{ name: '办件量', data: [42000, 38000, 45000, 48000, 52000, 56000] }, { name: '在线办件', data: [28000, 26000, 32000, 36000, 40000, 45000] }] }),
+            createComponent('gs-pie', 'pie-chart', '办件类型', 1310, 190, 580, 400, 20, { title: '办件类型分布', data: [{ name: '即办件', value: 45 }, { name: '承诺件', value: 30 }, { name: '联办件', value: 15 }, { name: '上报件', value: 10 }] }),
+            createComponent('gs-board', 'scroll-board', '实时办件', 30, 610, 920, 440, 20, { header: ['时间', '事项', '部门', '状态'], data: [['14:30', '营业执照变更', '市监局', '已办结'], ['14:28', '社保转移', '人社局', '办理中'], ['14:25', '不动产登记', '住建局', '已办结'], ['14:22', '户口迁移', '公安局', '办理中'], ['14:20', '婚姻登记', '民政局', '已办结'], ['14:18', '食品经营许可', '市监局', '审核中']], rowNum: 7, headerBGC: '#003366', oddRowBGC: 'rgba(0,100,200,0.1)', evenRowBGC: 'rgba(0,50,100,0.1)', waitTime: 3000 }),
+            createComponent('gs-gauge', 'gauge-chart', '效率仪表', 970, 620, 300, 300, 20, { title: '办结效率', value: 95.2, min: 0, max: 100 }),
+            createComponent('gs-ranking', 'scroll-ranking', '窗口排名', 1290, 620, 590, 430, 20, { data: [{ name: '1号窗口', value: 156 }, { name: '2号窗口', value: 142 }, { name: '3号窗口', value: 128 }, { name: '4号窗口', value: 115 }, { name: '5号窗口', value: 98 }], rowNum: 5, waitTime: 2000 }),
+        ],
+    },
+};
+
+// ============================================================
+// 制造/能源模板
+// ============================================================
+const productionMonitorTemplate: ScreenTemplate = {
+    id: 'production-monitor', name: '生产监控大屏', description: '工厂生产线实时监控，OEE/产量/告警', thumbnail: '🏭',
+    category: 'manufacturing', tags: ['生产', '制造', 'OEE', '产线'],
+    config: {
+        name: '生产监控大屏', description: '生产线实时监控', width: 1920, height: 1080, backgroundColor: '#0a0e27',
+        components: [
+            createComponent('pm-title', 'title', '主标题', 560, 12, 800, 55, 100, { text: '智能制造监控中心', fontSize: 36, fontWeight: 'bold', color: '#00d4ff', textAlign: 'center' }),
+            createComponent('pm-dt', 'datetime', '时间', 1660, 22, 220, 35, 98, { format: 'YYYY-MM-DD HH:mm:ss', fontSize: 16, color: '#66ccff' }),
+            createComponent('pm-g1', 'gauge-chart', 'OEE', 40, 85, 220, 220, 50, { title: 'OEE', value: 87.5, min: 0, max: 100 }),
+            createComponent('pm-g2', 'gauge-chart', '可用率', 280, 85, 220, 220, 50, { title: '可用率', value: 95.2, min: 0, max: 100 }),
+            createComponent('pm-g3', 'gauge-chart', '性能率', 520, 85, 220, 220, 50, { title: '性能率', value: 92.1, min: 0, max: 100 }),
+            createComponent('pm-g4', 'gauge-chart', '良品率', 760, 85, 220, 220, 50, { title: '良品率', value: 99.6, min: 0, max: 100 }),
+            createComponent('pm-kpi-1', 'number-card', '今日产量', 1020, 85, 210, 85, 50, { title: '今日产量', value: 12560, prefix: '', suffix: '' }),
+            createComponent('pm-kpi-2', 'number-card', '计划达成', 1250, 85, 210, 85, 50, { title: '计划达成率', value: 98.7, prefix: '', suffix: '%' }),
+            createComponent('pm-kpi-3', 'number-card', '故障次数', 1480, 85, 200, 85, 50, { title: '今日故障', value: 3, prefix: '', suffix: '次' }),
+            createComponent('pm-kpi-4', 'number-card', '能耗', 1700, 85, 180, 85, 50, { title: '累计能耗(kWh)', value: 28560, prefix: '', suffix: '' }),
+            createComponent('pm-line', 'line-chart', '产量趋势', 30, 320, 620, 360, 20, { title: '24小时产量趋势', xAxisData: ['00:00', '02:00', '04:00', '06:00', '08:00', '10:00', '12:00', '14:00', '16:00', '18:00', '20:00', '22:00'], series: [{ name: '产量', data: [0, 0, 0, 120, 480, 520, 310, 540, 560, 480, 420, 280] }, { name: '计划', data: [0, 0, 0, 500, 500, 500, 300, 500, 500, 500, 500, 300] }] }),
+            createComponent('pm-bar', 'bar-chart', '产线对比', 670, 320, 620, 360, 20, { title: '产线产量对比', xAxisData: ['A线', 'B线', 'C线', 'D线', 'E线'], series: [{ name: '实际', data: [2560, 2340, 2180, 1980, 1560] }, { name: '计划', data: [2500, 2500, 2300, 2000, 1800] }] }),
+            createComponent('pm-pie', 'pie-chart', '停机原因', 1310, 320, 580, 360, 20, { title: '停机原因分布', data: [{ name: '设备故障', value: 35 }, { name: '物料短缺', value: 25 }, { name: '换型调试', value: 20 }, { name: '品质异常', value: 12 }, { name: '计划停机', value: 8 }] }),
+            createComponent('pm-progress1', 'progress-bar', '产线A进度', 40, 700, 420, 35, 20, { value: 95, showLabel: true }),
+            createComponent('pm-progress2', 'progress-bar', '产线B进度', 40, 745, 420, 35, 20, { value: 88, showLabel: true }),
+            createComponent('pm-progress3', 'progress-bar', '产线C进度', 40, 790, 420, 35, 20, { value: 92, showLabel: true }),
+            createComponent('pm-progress4', 'progress-bar', '产线D进度', 40, 835, 420, 35, 20, { value: 76, showLabel: true }),
+            createComponent('pm-board', 'scroll-board', '告警列表', 490, 700, 900, 350, 20, { header: ['时间', '产线', '设备', '告警内容', '级别'], data: [['14:32', 'A线', '注塑机#3', '温度超限 285°C', '警告'], ['14:28', 'C线', '输送带#1', '速度异常', '提示'], ['14:15', 'B线', 'CNC#5', '刀具寿命到期', '提示'], ['13:50', 'D线', '焊接机#2', '焊接质量异常', '警告'], ['13:30', 'A线', '冲压机#1', '液压压力低', '严重']], rowNum: 6, headerBGC: '#003366', oddRowBGC: 'rgba(0,100,200,0.1)', evenRowBGC: 'rgba(0,50,100,0.1)', waitTime: 3000 }),
+            createComponent('pm-ranking', 'scroll-ranking', '设备效率', 1410, 700, 480, 350, 20, { data: [{ name: 'CNC加工中心', value: 96 }, { name: '注塑机组', value: 92 }, { name: '冲压线', value: 89 }, { name: '焊接工站', value: 85 }, { name: '喷涂线', value: 82 }], rowNum: 5, waitTime: 2000 }),
+        ],
+    },
+};
+
+const energyManagementTemplate: ScreenTemplate = {
+    id: 'energy-management', name: '能源管理大屏', description: '能耗监测/碳排放/节能分析', thumbnail: '⚡',
+    category: 'manufacturing', tags: ['能源', '能耗', '碳排放', '节能'],
+    config: {
+        name: '能源管理大屏', description: '企业能源管理数据', width: 1920, height: 1080, backgroundColor: '#0a0e27',
+        components: [
+            createComponent('em-title', 'title', '主标题', 560, 12, 800, 55, 100, { text: '能源管理监控平台', fontSize: 36, fontWeight: 'bold', color: '#10b981', textAlign: 'center' }),
+            createComponent('em-kpi-1', 'number-card', '总能耗', 40, 85, 290, 85, 50, { title: '今日总能耗(kWh)', value: 128560, prefix: '', suffix: '' }),
+            createComponent('em-kpi-2', 'number-card', '碳排放', 350, 85, 290, 85, 50, { title: '碳排放(tCO2)', value: 86.2, prefix: '', suffix: '' }),
+            createComponent('em-kpi-3', 'number-card', '节能率', 660, 85, 290, 85, 50, { title: '节能达成率', value: 92.5, prefix: '', suffix: '%' }),
+            createComponent('em-kpi-4', 'number-card', '用电成本', 970, 85, 290, 85, 50, { title: '今日电费(元)', value: 89650, prefix: '¥', suffix: '' }),
+            createComponent('em-line', 'line-chart', '能耗趋势', 30, 190, 920, 400, 20, { title: '24小时能耗趋势', xAxisData: ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00'], series: [{ name: '电能(kWh)', data: [2800, 1500, 8200, 12500, 11800, 6200] }, { name: '天然气(m³)', data: [120, 80, 350, 480, 420, 200] }] }),
+            createComponent('em-pie', 'pie-chart', '能源结构', 970, 190, 460, 400, 20, { title: '能源消费结构', data: [{ name: '电力', value: 65 }, { name: '天然气', value: 20 }, { name: '蒸汽', value: 10 }, { name: '其他', value: 5 }] }),
+            createComponent('em-bar', 'bar-chart', '车间对比', 1450, 190, 440, 400, 20, { title: '车间能耗对比', xAxisData: ['一车间', '二车间', '三车间', '四车间'], series: [{ name: '能耗', data: [42000, 38000, 28000, 20000] }] }),
+            createComponent('em-combo', 'combo-chart', '月度能耗', 30, 610, 920, 440, 20, { title: '月度能耗与成本', xAxisData: ['1月', '2月', '3月', '4月', '5月', '6月'], series: [{ name: '能耗(万kWh)', type: 'bar', yAxisIndex: 0, data: [380, 350, 420, 460, 440, 400] }, { name: '成本(万元)', type: 'line', yAxisIndex: 1, data: [268, 245, 296, 325, 310, 282] }], yAxis: [{ name: '能耗(万kWh)' }, { name: '成本(万元)' }] }),
+            createComponent('em-ranking', 'scroll-ranking', '耗能排行', 970, 620, 450, 430, 20, { data: [{ name: '空调系统', value: 35200 }, { name: '生产设备', value: 28600 }, { name: '照明系统', value: 12400 }, { name: '压缩空气', value: 8900 }, { name: '其他', value: 5400 }], rowNum: 5, waitTime: 2000 }),
+            createComponent('em-gauge', 'gauge-chart', '节能指数', 1450, 620, 430, 300, 20, { title: '节能指数', value: 92.5, min: 0, max: 100 }),
+        ],
+    },
+};
+
+// ============================================================
+// 零售/电商模板
+// ============================================================
+const salesRealtimeTemplate: ScreenTemplate = {
+    id: 'sales-realtime', name: '销售实时大屏', description: 'GMV/订单量/区域销售实时监控', thumbnail: '💰',
+    category: 'retail', tags: ['销售', 'GMV', '电商', '实时'],
+    config: {
+        name: '销售实时大屏', description: '销售数据实时监控', width: 1920, height: 1080, backgroundColor: '#0a0e27',
+        components: [
+            createComponent('sr-title', 'title', '主标题', 560, 12, 800, 55, 100, { text: '全渠道销售实时监控', fontSize: 36, fontWeight: 'bold', color: '#f59e0b', textAlign: 'center' }),
+            createComponent('sr-dt', 'datetime', '时间', 1660, 22, 220, 35, 98, { format: 'YYYY-MM-DD HH:mm:ss', fontSize: 16, color: '#f59e0b' }),
+            createComponent('sr-kpi-gmv', 'number-card', 'GMV', 560, 80, 340, 100, 50, { title: '今日GMV', value: 8956234, prefix: '¥', suffix: '', valueFontSize: 42, valueColor: '#f59e0b' }),
+            createComponent('sr-kpi-1', 'number-card', '订单量', 40, 80, 240, 85, 50, { title: '今日订单', value: 42568, prefix: '', suffix: '' }),
+            createComponent('sr-kpi-2', 'number-card', '客单价', 300, 80, 240, 85, 50, { title: '客单价', value: 210, prefix: '¥', suffix: '' }),
+            createComponent('sr-kpi-3', 'number-card', '转化率', 960, 80, 240, 85, 50, { title: '转化率', value: 3.8, prefix: '', suffix: '%' }),
+            createComponent('sr-kpi-4', 'number-card', '退货率', 1220, 80, 240, 85, 50, { title: '退货率', value: 2.1, prefix: '', suffix: '%' }),
+            createComponent('sr-kpi-5', 'number-card', '新客占比', 1480, 80, 200, 85, 50, { title: '新客占比', value: 28.5, prefix: '', suffix: '%' }),
+            createComponent('sr-kpi-6', 'number-card', '复购率', 1700, 80, 180, 85, 50, { title: '复购率', value: 45.2, prefix: '', suffix: '%' }),
+            createComponent('sr-map', 'map-chart', '区域销售', 30, 190, 620, 440, 20, { title: '区域销售分布', mapScope: 'china', mapMode: 'bubble', usePresetGeoJson: true, scatterData: [{ name: '北京', value: [116.46, 39.92, 2600] }, { name: '上海', value: [121.48, 31.22, 3200] }, { name: '广州', value: [113.23, 23.16, 1800] }, { name: '深圳', value: [114.07, 22.62, 1500] }, { name: '杭州', value: [120.19, 30.26, 1200] }], bubbleSizeRange: [10, 40] }),
+            createComponent('sr-line', 'line-chart', '销售趋势', 670, 190, 620, 440, 20, { title: '24小时GMV趋势', xAxisData: ['00:00', '02:00', '04:00', '06:00', '08:00', '10:00', '12:00', '14:00', '16:00', '18:00', '20:00', '22:00'], series: [{ name: '今日', data: [120, 80, 50, 30, 180, 520, 680, 560, 450, 620, 890, 780] }, { name: '昨日', data: [100, 70, 45, 25, 160, 480, 620, 520, 410, 580, 820, 720] }] }),
+            createComponent('sr-funnel', 'funnel-chart', '转化漏斗', 1310, 190, 580, 440, 20, { title: '购买转化漏斗', data: [{ name: '浏览', value: 100 }, { name: '加购', value: 42 }, { name: '下单', value: 28 }, { name: '付款', value: 22 }, { name: '签收', value: 20 }] }),
+            createComponent('sr-ranking', 'scroll-ranking', '品类排行', 30, 650, 620, 400, 20, { data: [{ name: '数码电子', value: 2850000 }, { name: '服饰鞋包', value: 2120000 }, { name: '美妆护肤', value: 1560000 }, { name: '食品饮料', value: 980000 }, { name: '家居日用', value: 720000 }, { name: '母婴玩具', value: 560000 }], rowNum: 6, waitTime: 2000 }),
+            createComponent('sr-board', 'scroll-board', '实时订单', 670, 650, 1220, 400, 20, { header: ['时间', '订单号', '商品', '金额', '城市'], data: [['14:32:15', 'SO20260224001', 'iPhone 16 Pro', '¥8,999', '上海'], ['14:32:12', 'SO20260224002', 'AirPods Pro', '¥1,899', '北京'], ['14:32:08', 'SO20260224003', 'Nike AJ1', '¥1,299', '广州'], ['14:31:55', 'SO20260224004', '戴森吹风机', '¥3,290', '杭州'], ['14:31:48', 'SO20260224005', 'MacBook Air', '¥9,999', '深圳']], rowNum: 7, headerBGC: '#003366', oddRowBGC: 'rgba(0,100,200,0.1)', evenRowBGC: 'rgba(0,50,100,0.1)', waitTime: 2000 }),
+        ],
+    },
+};
+
+const storeOperationTemplate: ScreenTemplate = {
+    id: 'store-operation', name: '门店运营看板', description: '门店销售对比/日趋势/品类占比', thumbnail: '🏪',
+    category: 'retail', tags: ['门店', '零售', '运营', '对比'],
+    config: {
+        name: '门店运营看板', description: '门店运营数据看板', width: 1920, height: 1080, backgroundColor: '#0a0e27',
+        components: [
+            createComponent('so-title', 'title', '主标题', 560, 12, 800, 55, 100, { text: '门店运营分析看板', fontSize: 36, fontWeight: 'bold', color: '#00d4ff', textAlign: 'center' }),
+            createComponent('so-kpi-1', 'number-card', '总营收', 40, 85, 290, 85, 50, { title: '今日总营收', value: 856200, prefix: '¥', suffix: '' }),
+            createComponent('so-kpi-2', 'number-card', '客流量', 350, 85, 290, 85, 50, { title: '今日客流', value: 12860, prefix: '', suffix: '' }),
+            createComponent('so-kpi-3', 'number-card', '坪效', 660, 85, 290, 85, 50, { title: '坪效(元/㎡)', value: 285, prefix: '', suffix: '' }),
+            createComponent('so-kpi-4', 'number-card', '人效', 970, 85, 290, 85, 50, { title: '人效(元/人)', value: 4280, prefix: '', suffix: '' }),
+            createComponent('so-bar', 'bar-chart', '门店对比', 30, 190, 620, 400, 20, { title: '门店销售额对比', xAxisData: ['旗舰店', 'A商场店', 'B广场店', 'C购物中心', 'D社区店', 'E机场店'], series: [{ name: '销售额', data: [186000, 152000, 128000, 96000, 72000, 56000] }] }),
+            createComponent('so-line', 'line-chart', '日趋势', 670, 190, 620, 400, 20, { title: '近7日销售趋势', xAxisData: ['周一', '周二', '周三', '周四', '周五', '周六', '周日'], series: [{ name: '销售额', data: [120000, 115000, 125000, 118000, 135000, 186000, 168000] }, { name: '客流', data: [1800, 1720, 1850, 1760, 2100, 2860, 2540] }] }),
+            createComponent('so-pie', 'pie-chart', '品类占比', 1310, 190, 580, 400, 20, { title: '品类销售占比', data: [{ name: '服饰', value: 35 }, { name: '鞋品', value: 25 }, { name: '配饰', value: 20 }, { name: '箱包', value: 12 }, { name: '其他', value: 8 }] }),
+            createComponent('so-combo', 'combo-chart', '客单价趋势', 30, 610, 920, 440, 20, { title: '销售额与客单价', xAxisData: ['1月', '2月', '3月', '4月', '5月', '6月'], series: [{ name: '销售额(万)', type: 'bar', yAxisIndex: 0, data: [580, 520, 620, 680, 650, 720] }, { name: '客单价', type: 'line', yAxisIndex: 1, data: [210, 195, 225, 238, 230, 252] }], yAxis: [{ name: '销售额(万)' }, { name: '客单价(元)' }] }),
+            createComponent('so-ranking', 'scroll-ranking', 'TOP商品', 970, 620, 920, 430, 20, { data: [{ name: '经典款外套', value: 56800 }, { name: '限定版运动鞋', value: 48200 }, { name: '真丝连衣裙', value: 42500 }, { name: '设计师手袋', value: 38900 }, { name: '羊绒围巾', value: 32600 }], rowNum: 5, waitTime: 2000 }),
+        ],
+    },
+};
+
+// ============================================================
+// 金融/风控模板
+// ============================================================
+const financeMonitorTemplate: ScreenTemplate = {
+    id: 'finance-monitor', name: '资金监控大屏', description: '资金流动/结构分析/交易明细', thumbnail: '🏦',
+    category: 'finance', tags: ['金融', '资金', '交易', '监控'],
+    config: {
+        name: '资金监控大屏', description: '资金监控数据大屏', width: 1920, height: 1080, backgroundColor: '#0a0e27',
+        components: [
+            createComponent('fm-title', 'title', '主标题', 560, 12, 800, 55, 100, { text: '资金监控中心', fontSize: 36, fontWeight: 'bold', color: '#f59e0b', textAlign: 'center' }),
+            createComponent('fm-kpi-1', 'number-card', '总资产', 40, 85, 290, 85, 50, { title: '管理总资产(亿)', value: 1256.8, prefix: '¥', suffix: '' }),
+            createComponent('fm-kpi-2', 'number-card', '今日流入', 350, 85, 290, 85, 50, { title: '今日流入(万)', value: 86520, prefix: '¥', suffix: '' }),
+            createComponent('fm-kpi-3', 'number-card', '今日流出', 660, 85, 290, 85, 50, { title: '今日流出(万)', value: 72350, prefix: '¥', suffix: '' }),
+            createComponent('fm-kpi-4', 'number-card', '净流入', 970, 85, 290, 85, 50, { title: '净流入(万)', value: 14170, prefix: '¥', suffix: '' }),
+            createComponent('fm-line', 'line-chart', '资金流趋势', 30, 190, 920, 400, 20, { title: '近30日资金流趋势', xAxisData: ['1日', '5日', '10日', '15日', '20日', '25日', '30日'], series: [{ name: '流入', data: [8200, 9100, 7800, 8600, 9500, 10200, 8650] }, { name: '流出', data: [7100, 8200, 6900, 7800, 8600, 9100, 7235] }] }),
+            createComponent('fm-pie', 'pie-chart', '资产结构', 970, 190, 460, 400, 20, { title: '资产结构分布', data: [{ name: '固定收益', value: 45 }, { name: '权益投资', value: 25 }, { name: '货币基金', value: 15 }, { name: '另类投资', value: 10 }, { name: '现金', value: 5 }] }),
+            createComponent('fm-waterfall', 'waterfall-chart', '资金变动', 1450, 190, 440, 400, 20, { title: '月度资金变动', data: [{ name: '期初', value: 10000, isTotal: true }, { name: '利息收入', value: 800 }, { name: '投资收益', value: 1200 }, { name: '运营支出', value: -600 }, { name: '税费', value: -200 }, { name: '期末', value: 11200, isTotal: true }] }),
+            createComponent('fm-board', 'scroll-board', '交易明细', 30, 610, 1200, 440, 20, { header: ['时间', '交易类型', '对手方', '金额(万)', '状态'], data: [['14:32', '融资', '工商银行', '+5,000', '已完成'], ['14:28', '投资', '国债', '-3,200', '已完成'], ['14:22', '回款', '项目A', '+1,800', '已完成'], ['14:18', '付款', '供应商B', '-960', '处理中'], ['14:12', '收款', '客户C', '+2,400', '已完成']], rowNum: 7, headerBGC: '#003366', oddRowBGC: 'rgba(0,100,200,0.1)', evenRowBGC: 'rgba(0,50,100,0.1)', waitTime: 3000 }),
+            createComponent('fm-gauge', 'gauge-chart', '流动性', 1250, 620, 300, 300, 20, { title: '流动性指标', value: 85, min: 0, max: 100 }),
+            createComponent('fm-radar', 'radar-chart', '风险评估', 1570, 620, 320, 300, 20, { title: '风险评估', indicator: [{ name: '信用风险', max: 100 }, { name: '市场风险', max: 100 }, { name: '流动性', max: 100 }, { name: '操作风险', max: 100 }, { name: '合规风险', max: 100 }], data: [85, 72, 88, 92, 95] }),
+        ],
+    },
+};
+
+const riskAlertTemplate: ScreenTemplate = {
+    id: 'risk-alert', name: '风控预警大屏', description: '风险等级/告警滚动/风险分布', thumbnail: '🛡️',
+    category: 'finance', tags: ['风控', '预警', '风险', '合规'],
+    config: {
+        name: '风控预警大屏', description: '风控预警数据大屏', width: 1920, height: 1080, backgroundColor: '#0a0e27',
+        components: [
+            createComponent('ra-title', 'title', '主标题', 560, 12, 800, 55, 100, { text: '风控预警监控中心', fontSize: 36, fontWeight: 'bold', color: '#ef4444', textAlign: 'center' }),
+            createComponent('ra-kpi-1', 'number-card', '待处理告警', 40, 85, 290, 85, 50, { title: '待处理告警', value: 23, prefix: '', suffix: '条', valueColor: '#ef4444' }),
+            createComponent('ra-kpi-2', 'number-card', '今日新增', 350, 85, 290, 85, 50, { title: '今日新增', value: 8, prefix: '', suffix: '条' }),
+            createComponent('ra-kpi-3', 'number-card', '处置率', 660, 85, 290, 85, 50, { title: '处置率', value: 94.5, prefix: '', suffix: '%' }),
+            createComponent('ra-kpi-4', 'number-card', '误报率', 970, 85, 290, 85, 50, { title: '误报率', value: 3.2, prefix: '', suffix: '%' }),
+            createComponent('ra-g1', 'gauge-chart', '风险等级', 40, 190, 280, 280, 50, { title: '综合风险', value: 32, min: 0, max: 100 }),
+            createComponent('ra-g2', 'gauge-chart', '信用风险', 340, 190, 280, 280, 50, { title: '信用风险', value: 28, min: 0, max: 100 }),
+            createComponent('ra-g3', 'gauge-chart', '市场风险', 640, 190, 280, 280, 50, { title: '市场风险', value: 42, min: 0, max: 100 }),
+            createComponent('ra-g4', 'gauge-chart', '操作风险', 940, 190, 280, 280, 50, { title: '操作风险', value: 18, min: 0, max: 100 }),
+            createComponent('ra-map', 'map-chart', '风险分布', 1240, 190, 650, 380, 20, { title: '区域风险分布', mapScope: 'china', usePresetGeoJson: true, enableRegionDrill: false, regionVariableKey: 'region', regions: [{ name: '北京市', code: '110000', value: 45 }, { name: '上海市', code: '310000', value: 38 }, { name: '广东省', code: '440000', value: 52 }, { name: '浙江省', code: '330000', value: 28 }, { name: '江苏省', code: '320000', value: 32 }] }),
+            createComponent('ra-board', 'scroll-board', '告警列表', 30, 490, 1190, 560, 20, { header: ['时间', '告警ID', '风险类型', '客户/对象', '风险等级', '状态'], data: [['14:32', 'RA-20260224-001', '异常交易', '客户A', '高', '待处理'], ['14:28', 'RA-20260224-002', '信用违约', '企业B', '中', '处理中'], ['14:22', 'RA-20260224-003', '合规风险', '项目C', '低', '已处置'], ['14:18', 'RA-20260224-004', '欺诈嫌疑', '账户D', '高', '待处理'], ['14:12', 'RA-20260224-005', '大额转账', '客户E', '中', '已处置']], rowNum: 8, headerBGC: '#4a1a1a', oddRowBGC: 'rgba(200,50,50,0.1)', evenRowBGC: 'rgba(150,30,30,0.1)', waitTime: 3000 }),
+            createComponent('ra-line', 'line-chart', '告警趋势', 1240, 590, 650, 460, 20, { title: '近7日告警趋势', xAxisData: ['周一', '周二', '周三', '周四', '周五', '周六', '周日'], series: [{ name: '高风险', data: [3, 5, 2, 4, 6, 1, 2] }, { name: '中风险', data: [8, 12, 6, 10, 14, 4, 6] }, { name: '低风险', data: [15, 18, 12, 16, 20, 8, 10] }] }),
+        ],
+    },
+};
+
+// ============================================================
+// 教育/医疗模板
+// ============================================================
+const campusDataTemplate: ScreenTemplate = {
+    id: 'campus-data', name: '校园数据大屏', description: '在校生/教师/班级/成绩数据', thumbnail: '🎓',
+    category: 'education', tags: ['教育', '校园', '学生', '教学'],
+    config: {
+        name: '校园数据大屏', description: '校园数据可视化大屏', width: 1920, height: 1080, backgroundColor: '#0a0e27',
+        components: [
+            createComponent('cd-title', 'title', '主标题', 560, 12, 800, 55, 100, { text: '智慧校园数据中心', fontSize: 36, fontWeight: 'bold', color: '#8b5cf6', textAlign: 'center' }),
+            createComponent('cd-kpi-1', 'number-card', '在校生', 40, 85, 290, 85, 50, { title: '在校学生', value: 12860, prefix: '', suffix: '人' }),
+            createComponent('cd-kpi-2', 'number-card', '教师', 350, 85, 290, 85, 50, { title: '教职工', value: 856, prefix: '', suffix: '人' }),
+            createComponent('cd-kpi-3', 'number-card', '班级', 660, 85, 290, 85, 50, { title: '教学班级', value: 420, prefix: '', suffix: '个' }),
+            createComponent('cd-kpi-4', 'number-card', '就业率', 970, 85, 290, 85, 50, { title: '就业率', value: 96.8, prefix: '', suffix: '%' }),
+            createComponent('cd-bar', 'bar-chart', '学院人数', 30, 190, 620, 400, 20, { title: '学院在校生人数', xAxisData: ['计算机', '经管', '外语', '机械', '艺术', '医学', '法学', '理学'], series: [{ name: '在校生', data: [2860, 2120, 1650, 1420, 1080, 960, 850, 720] }] }),
+            createComponent('cd-pie', 'pie-chart', '学历分布', 670, 190, 580, 400, 20, { title: '学历层次分布', data: [{ name: '本科', value: 65 }, { name: '硕士', value: 25 }, { name: '博士', value: 8 }, { name: '其他', value: 2 }] }),
+            createComponent('cd-radar', 'radar-chart', '教学评估', 1270, 190, 620, 400, 20, { title: '教学质量评估', indicator: [{ name: '教学水平', max: 100 }, { name: '科研能力', max: 100 }, { name: '就业质量', max: 100 }, { name: '国际化', max: 100 }, { name: '基础设施', max: 100 }], data: [92, 85, 88, 72, 90] }),
+            createComponent('cd-line', 'line-chart', '招生趋势', 30, 610, 920, 440, 20, { title: '近5年招生趋势', xAxisData: ['2022', '2023', '2024', '2025', '2026'], series: [{ name: '招生人数', data: [3200, 3400, 3600, 3800, 4000] }, { name: '毕业人数', data: [2800, 3000, 3200, 3400, 3500] }] }),
+            createComponent('cd-ranking', 'scroll-ranking', '成绩排名', 970, 620, 920, 430, 20, { data: [{ name: '计算机学院', value: 88 }, { name: '经管学院', value: 85 }, { name: '理学院', value: 84 }, { name: '外语学院', value: 82 }, { name: '医学院', value: 81 }], rowNum: 5, waitTime: 2000 }),
+        ],
+    },
+};
+
+const hospitalOperationTemplate: ScreenTemplate = {
+    id: 'hospital-operation', name: '医院运营大屏', description: '门诊/住院/手术/科室数据', thumbnail: '🏥',
+    category: 'education', tags: ['医疗', '医院', '门诊', '运营'],
+    config: {
+        name: '医院运营大屏', description: '医院运营数据大屏', width: 1920, height: 1080, backgroundColor: '#0a0e27',
+        components: [
+            createComponent('ho-title', 'title', '主标题', 560, 12, 800, 55, 100, { text: '智慧医院运营大屏', fontSize: 36, fontWeight: 'bold', color: '#10b981', textAlign: 'center' }),
+            createComponent('ho-kpi-1', 'number-card', '门诊量', 40, 85, 290, 85, 50, { title: '今日门诊量', value: 3256, prefix: '', suffix: '人次' }),
+            createComponent('ho-kpi-2', 'number-card', '住院', 350, 85, 290, 85, 50, { title: '在院患者', value: 1286, prefix: '', suffix: '人' }),
+            createComponent('ho-kpi-3', 'number-card', '手术', 660, 85, 290, 85, 50, { title: '今日手术', value: 86, prefix: '', suffix: '台' }),
+            createComponent('ho-kpi-4', 'number-card', '床位率', 970, 85, 290, 85, 50, { title: '床位使用率', value: 92.5, prefix: '', suffix: '%' }),
+            createComponent('ho-kpi-5', 'number-card', '满意度', 1280, 85, 290, 85, 50, { title: '患者满意度', value: 97.2, prefix: '', suffix: '%' }),
+            createComponent('ho-bar', 'bar-chart', '科室门诊', 30, 190, 620, 400, 20, { title: '科室门诊量', xAxisData: ['内科', '外科', '儿科', '妇产', '骨科', '眼科', '口腔', '中医'], series: [{ name: '门诊量', data: [620, 480, 350, 320, 280, 240, 210, 180] }] }),
+            createComponent('ho-line', 'line-chart', '月度趋势', 670, 190, 620, 400, 20, { title: '月度门诊量趋势', xAxisData: ['1月', '2月', '3月', '4月', '5月', '6月'], series: [{ name: '门诊', data: [82000, 76000, 88000, 92000, 95000, 98000] }, { name: '住院', data: [1200, 1150, 1280, 1300, 1320, 1350] }] }),
+            createComponent('ho-gauge', 'gauge-chart', '急诊等待', 1310, 190, 280, 280, 20, { title: '急诊平均等待(分)', value: 28, min: 0, max: 60 }),
+            createComponent('ho-pie', 'pie-chart', '收入结构', 1610, 190, 280, 280, 20, { title: '收入结构', data: [{ name: '药品', value: 35 }, { name: '医疗服务', value: 40 }, { name: '检查检验', value: 18 }, { name: '其他', value: 7 }] }),
+            createComponent('ho-board', 'scroll-board', '手术排程', 30, 610, 920, 440, 20, { header: ['时间', '手术室', '科室', '手术类型', '状态'], data: [['14:30', '手术室1', '外科', '腹腔镜手术', '进行中'], ['14:00', '手术室2', '骨科', '关节置换', '进行中'], ['15:00', '手术室3', '妇产', '剖宫产', '等待中'], ['15:30', '手术室1', '外科', '甲状腺手术', '等待中'], ['16:00', '手术室4', '眼科', '白内障手术', '等待中']], rowNum: 7, headerBGC: '#003366', oddRowBGC: 'rgba(0,100,200,0.1)', evenRowBGC: 'rgba(0,50,100,0.1)', waitTime: 3000 }),
+            createComponent('ho-ranking', 'scroll-ranking', '医生排名', 970, 620, 920, 430, 20, { data: [{ name: '张主任(外科)', value: 156 }, { name: '李教授(内科)', value: 142 }, { name: '王主任(儿科)', value: 128 }, { name: '赵教授(妇产)', value: 115 }, { name: '刘主任(骨科)', value: 98 }], rowNum: 5, waitTime: 2000 }),
+        ],
+    },
+};
+
+// ============================================================
+// 通用模板补充
+// ============================================================
+const opsKpiTemplate: ScreenTemplate = {
+    id: 'ops-kpi-center', name: '运营指标中心', description: '九宫格KPI+趋势+进度条', thumbnail: '📋',
+    category: 'general', tags: ['运营', 'KPI', '指标', '九宫格'],
+    config: {
+        name: '运营指标中心', description: '核心运营指标看板', width: 1920, height: 1080, backgroundColor: '#0a0e27',
+        components: [
+            createComponent('ok-title', 'title', '主标题', 560, 12, 800, 55, 100, { text: '运营指标中心', fontSize: 36, fontWeight: 'bold', color: '#00d4ff', textAlign: 'center' }),
+            createComponent('ok-kpi-1', 'number-card', 'DAU', 40, 85, 280, 90, 50, { title: '日活用户(DAU)', value: 128560, prefix: '', suffix: '' }),
+            createComponent('ok-kpi-2', 'number-card', 'MAU', 340, 85, 280, 90, 50, { title: '月活用户(MAU)', value: 2856000, prefix: '', suffix: '' }),
+            createComponent('ok-kpi-3', 'number-card', '留存率', 640, 85, 280, 90, 50, { title: '次日留存率', value: 42.5, prefix: '', suffix: '%' }),
+            createComponent('ok-kpi-4', 'number-card', 'ARPU', 940, 85, 280, 90, 50, { title: 'ARPU(元)', value: 28.6, prefix: '¥', suffix: '' }),
+            createComponent('ok-kpi-5', 'number-card', '付费率', 1240, 85, 280, 90, 50, { title: '付费转化率', value: 5.2, prefix: '', suffix: '%' }),
+            createComponent('ok-kpi-6', 'number-card', 'NPS', 1540, 85, 340, 90, 50, { title: 'NPS得分', value: 72, prefix: '', suffix: '' }),
+            createComponent('ok-line1', 'line-chart', 'DAU趋势', 30, 195, 620, 380, 20, { title: 'DAU趋势(近30日)', xAxisData: ['1日', '5日', '10日', '15日', '20日', '25日', '30日'], series: [{ name: 'DAU', data: [118000, 125000, 128000, 132000, 126000, 130000, 128560] }] }),
+            createComponent('ok-line2', 'line-chart', '留存曲线', 670, 195, 620, 380, 20, { title: '留存率曲线', xAxisData: ['次日', '3日', '7日', '14日', '30日'], series: [{ name: '留存率', data: [42.5, 28.2, 18.6, 12.4, 8.2] }] }),
+            createComponent('ok-bar', 'bar-chart', '渠道分布', 1310, 195, 580, 380, 20, { title: '用户来源渠道', xAxisData: ['自然流量', 'SEM', '社交媒体', '应用商店', '推荐', '其他'], series: [{ name: '用户数', data: [45000, 28000, 22000, 18000, 12000, 3560] }] }),
+            createComponent('ok-p1', 'progress-bar', 'DAU目标', 40, 600, 420, 35, 20, { value: 86, showLabel: true }),
+            createComponent('ok-p2', 'progress-bar', '收入目标', 40, 645, 420, 35, 20, { value: 92, showLabel: true }),
+            createComponent('ok-p3', 'progress-bar', '留存目标', 40, 690, 420, 35, 20, { value: 78, showLabel: true }),
+            createComponent('ok-funnel', 'funnel-chart', '转化漏斗', 490, 600, 580, 450, 20, { title: '用户转化漏斗', data: [{ name: '访问', value: 100 }, { name: '注册', value: 45 }, { name: '激活', value: 32 }, { name: '付费', value: 8 }, { name: '续费', value: 5 }] }),
+            createComponent('ok-pie', 'pie-chart', '收入结构', 1090, 600, 400, 450, 20, { title: '收入结构', data: [{ name: '会员订阅', value: 45 }, { name: '广告收入', value: 30 }, { name: '增值服务', value: 18 }, { name: '其他', value: 7 }] }),
+            createComponent('ok-scatter', 'scatter-chart', '用户分布', 1510, 600, 380, 450, 20, { title: '活跃度-消费分布', data: [[10, 8], [8, 7], [13, 8], [9, 9], [11, 8], [14, 10], [6, 7], [4, 4], [12, 11], [7, 5]] }),
+        ],
+    },
+};
+
 /**
  * 所有可用模板
  */
 export const screenTemplates: ScreenTemplate[] = [
     blankTemplate,
+    blank4kTemplate,
+    blankSmallTemplate,
     techDataCenterTemplate,
     patentDataCenterTemplate,
     patentTitaniumTemplate,
     businessLightTemplate,
+    opsKpiTemplate,
+    smartCityTemplate,
+    govServiceTemplate,
+    productionMonitorTemplate,
+    energyManagementTemplate,
+    salesRealtimeTemplate,
+    storeOperationTemplate,
+    financeMonitorTemplate,
+    riskAlertTemplate,
+    campusDataTemplate,
+    hospitalOperationTemplate,
 ];
 
 /**

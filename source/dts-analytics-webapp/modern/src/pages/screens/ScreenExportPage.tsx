@@ -7,6 +7,7 @@ import type { DeviceMode } from './deviceMode';
 import { isVisibleForDevice, resolveDeviceModeByViewport } from './deviceMode';
 import { normalizeScreenConfig, buildScreenPayload } from './specV2';
 import { resolveScreenTheme } from './screenThemes';
+import { escapeHtml, safeCssBackgroundUrl } from './sanitize';
 import type { ScreenConfig, ScreenTheme } from './types';
 
 function parseFormat(raw: string | null): 'png' | 'pdf' | 'json' {
@@ -238,7 +239,7 @@ export default function ScreenExportPage() {
         }
         const serialized = new XMLSerializer().serializeToString(canvasEl);
         popup.document.write(
-            `<html><head><title>${screen.name || 'screen'}</title>`
+            `<html><head><title>${escapeHtml(screen.name || 'screen')}</title>`
             + '<style>'
             + 'html,body{margin:0;padding:0;background:#fff;}'
             + `.print-root{width:${width}px;height:${height}px;position:relative;overflow:hidden;}`
@@ -412,7 +413,7 @@ export default function ScreenExportPage() {
                     throw new Error('请允许弹窗后重试 PDF 导出');
                 }
                 popup.document.write(
-                    `<html><head><title>${screen.name || 'screen'}</title></head>`
+                    `<html><head><title>${escapeHtml(screen.name || 'screen')}</title></head>`
                     + '<body style="margin:0"><img src="'
                     + dataUrl
                     + '" style="width:100%;height:auto;display:block"/></body></html>',
@@ -534,7 +535,7 @@ export default function ScreenExportPage() {
                                 width: screen.width || 1920,
                                 height: screen.height || 1080,
                                 backgroundColor: screen.backgroundColor || '#0d1b2a',
-                                backgroundImage: screen.backgroundImage ? `url(${screen.backgroundImage})` : undefined,
+                                backgroundImage: safeCssBackgroundUrl(screen.backgroundImage),
                                 backgroundSize: 'cover',
                                 backgroundPosition: 'center',
                                 position: 'relative',

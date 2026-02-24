@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useScreen } from '../ScreenContext';
-import type { CardParameterBinding, ComponentInteractionMapping, ComponentType, DataSourceConfig, DrillLevel, QuerySourceType, ScreenComponent, ScreenGlobalVariable } from '../types';
+import type { CardParameterBinding, ChartMarkArea, ChartMarkLine, ComponentInteractionMapping, ComponentType, DataSourceConfig, DrillLevel, QuerySourceType, ScreenComponent, ScreenGlobalVariable, SeriesConditionalColor } from '../types';
 import { DRILLABLE_TYPES } from '../types';
 import { CardIdPicker } from './CardIdPicker';
 import { MetricBindingEditor } from './MetricBindingEditor';
@@ -13,11 +13,154 @@ import type { PropertySchemaField } from '../plugins/types';
 import { wouldCreateParentCycle } from '../componentHierarchy';
 import { analyticsApi, type ExplainabilityResponse } from '../../../api/analyticsApi';
 import { writeTextToClipboard } from '../../../hooks/clipboard';
+import {
+    CHART_COMPONENT_TYPES,
+    applyChartPresetConfig,
+    isChartComponentType,
+    type ChartPreset,
+} from '../chartPresets';
+import { PROVINCE_PRESETS } from '../renderers/shared/geoJsonCache';
+import { FieldMappingPanel, isMappable } from './FieldMappingPanel';
+import type { FieldMapping } from '../types';
+import { COLOR_SCHEMES, recommendColorSchemes, type ColorScheme } from '../colorSchemes';
 
 type ExplainState =
     | { state: 'loading' }
     | { state: 'loaded'; value: ExplainabilityResponse }
     | { state: 'error'; error: unknown };
+
+type StyleClipboardPayload = {
+    type: ComponentType;
+    width: number;
+    height: number;
+    config: Record<string, unknown>;
+    copiedAt: string;
+};
+type LayoutClipboardPayload = {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    copiedAt: string;
+};
+
+const STYLE_CLIPBOARD_KEY = 'dts.analytics.screen.styleClipboard.v1';
+const LAYOUT_CLIPBOARD_KEY = 'dts.analytics.screen.layoutClipboard.v1';
+const PROPERTY_SECTION_COLLAPSE_KEY = 'dts.analytics.screen.propertySectionCollapse.v1';
+const PROPERTY_COMPONENT_MODE_KEY = 'dts.analytics.screen.componentConfigMode.v1';
+const PROPERTY_PANEL_DENSITY_KEY = 'dts.analytics.screen.propertyPanelDensity.v1';
+const PROPERTY_SECTION_KEYS = [
+    'quick-filter',
+    'quick-actions',
+    'position-size',
+    'plugin-config',
+    'component-config',
+    'data-source',
+    'explain',
+    'drill-down',
+    'interaction',
+    'other',
+] as const;
+const PROPERTY_FOCUS_SECTION_KEYS = new Set<string>([
+    'quick-filter',
+    'quick-actions',
+    'position-size',
+    'plugin-config',
+    'component-config',
+    'data-source',
+]);
+const PROPERTY_SECTION_ESSENTIAL_COLLAPSED = [
+    'plugin-config',
+    'explain',
+    'drill-down',
+    'interaction',
+    'other',
+] as const;
+const STYLE_CONFIG_EXCLUDE_KEYS = new Set<string>([
+    '_sourceColumns',
+    '_fieldMapping',
+    '_useFieldMapping',
+    '_colorScheme',
+    'markLines',
+    'markAreas',
+    'conditionalColors',
+    'data',
+    'xAxisData',
+    'series',
+    'indicator',
+    'options',
+    'value',
+    'min',
+    'max',
+    'targetDate',
+    'items',
+    'content',
+    'html',
+    'text',
+    'imageUrl',
+    'videoUrl',
+    'src',
+    'url',
+    'cardId',
+    'metricId',
+    'metricVersion',
+    'query',
+    'queryBody',
+    'databaseId',
+    'connectionId',
+    'variableKey',
+    'globalVariables',
+    'interaction',
+    'drillDown',
+]);
+
+function isVisualConfigKey(key: string): boolean {
+    const normalized = String(key || '').trim();
+    if (!normalized) return false;
+    if (normalized.startsWith('_')) return false;
+    if (STYLE_CONFIG_EXCLUDE_KEYS.has(normalized)) return false;
+    const lowered = normalized.toLowerCase();
+    if (lowered.includes('data') || lowered.includes('dataset')) return false;
+    if (lowered.includes('query') || lowered.includes('metric') || lowered.includes('card')) return false;
+    if (lowered.includes('source')) return false;
+    return (
+        lowered.includes('color')
+        || lowered.includes('font')
+        || lowered.includes('size')
+        || lowered.includes('background')
+        || lowered.includes('border')
+        || lowered.includes('radius')
+        || lowered.includes('padding')
+        || lowered.includes('margin')
+        || lowered.includes('legend')
+        || lowered.includes('axis')
+        || lowered.includes('label')
+        || lowered.includes('title')
+        || lowered.includes('theme')
+        || lowered.includes('opacity')
+        || lowered.includes('align')
+        || lowered.includes('position')
+        || lowered.includes('offset')
+        || lowered.includes('scale')
+        || lowered.includes('rotate')
+        || lowered.includes('line')
+        || lowered.includes('wrap')
+        || lowered.includes('display')
+        || lowered.includes('show')
+    );
+}
+
+function buildStyleClipboardPayload(component: ScreenComponent): StyleClipboardPayload {
+    const pickedEntries = Object.entries(component.config || {}).filter(([key]) => isVisualConfigKey(key));
+    const visualConfig = Object.fromEntries(pickedEntries);
+    return {
+        type: component.type,
+        width: component.width,
+        height: component.height,
+        config: visualConfig,
+        copiedAt: new Date().toISOString(),
+    };
+}
 
 const DEFAULT_SERIES_COLORS = [
     '#3b82f6',
@@ -27,6 +170,464 @@ const DEFAULT_SERIES_COLORS = [
     '#a855f7',
     '#06b6d4',
 ];
+
+type LegendHeuristicLayout = {
+    position: 'top' | 'bottom' | 'left' | 'right';
+    orient: 'horizontal' | 'vertical';
+    align: 'start' | 'center' | 'end';
+    reserveSize: number;
+    nameMaxWidth: number;
+    hint: string;
+};
+
+function resolveLegendHeuristicLayout(component: ScreenComponent): LegendHeuristicLayout {
+    const width = Math.max(1, Number(component.width) || 1);
+    const height = Math.max(1, Number(component.height) || 1);
+    const ratio = width / height;
+
+    if (width < 440 || ratio <= 1.05) {
+        return {
+            position: 'bottom',
+            orient: 'horizontal',
+            align: 'start',
+            reserveSize: Math.max(48, Math.min(92, Math.round(height * 0.22))),
+            nameMaxWidth: 96,
+            hint: '当前组件偏窄，建议底部横向图例',
+        };
+    }
+    if (ratio >= 1.75 && width >= 520) {
+        return {
+            position: 'right',
+            orient: 'vertical',
+            align: 'center',
+            reserveSize: Math.max(96, Math.min(180, Math.round(width * 0.2))),
+            nameMaxWidth: 128,
+            hint: '当前组件偏宽，建议右侧纵向图例',
+        };
+    }
+    if (height <= 260) {
+        return {
+            position: 'bottom',
+            orient: 'horizontal',
+            align: 'center',
+            reserveSize: 56,
+            nameMaxWidth: 0,
+            hint: '当前组件高度有限，建议底部图例降低遮挡',
+        };
+    }
+    return {
+        position: 'top',
+        orient: 'horizontal',
+        align: 'center',
+        reserveSize: 52,
+        nameMaxWidth: 0,
+        hint: '建议顶部横向图例，保持图形区域均衡',
+    };
+}
+
+function applyLegendHeuristicLayout(
+    component: ScreenComponent,
+    onChange: (key: string, value: unknown) => void,
+) {
+    const next = resolveLegendHeuristicLayout(component);
+    onChange('autoLegendAvoid', true);
+    onChange('legendDisplay', 'auto');
+    onChange('legendPosition', next.position);
+    onChange('legendOrient', next.orient);
+    onChange('legendAlign', next.align);
+    onChange('legendReserveSize', next.reserveSize);
+    onChange('legendNameMaxWidth', next.nameMaxWidth);
+    onChange('legendOffsetX', 0);
+    onChange('legendOffsetY', 0);
+}
+
+function renderQuickChartConfig(
+    component: ScreenComponent,
+    onChange: (key: string, value: unknown) => void,
+    applyPreset: (preset: ChartPreset) => void,
+) {
+    const { type, config } = component;
+    const legendHeuristic = resolveLegendHeuristicLayout(component);
+    if (!CHART_COMPONENT_TYPES.has(type)) {
+        return null;
+    }
+    const isAxisChart = type === 'line-chart' || type === 'bar-chart' || type === 'scatter-chart' || type === 'combo-chart' || type === 'waterfall-chart';
+    const isLabelChart = type === 'pie-chart' || type === 'funnel-chart' || type === 'radar-chart';
+    const isHierarchyChart = type === 'treemap-chart' || type === 'sunburst-chart';
+    const showSeriesLabelControls = isLabelChart || isAxisChart || isHierarchyChart;
+    const applyLayoutPreset = (preset: 'balanced' | 'compact' | 'spacious') => {
+        if (preset === 'compact') {
+            onChange('autoLegendAvoid', true);
+            onChange('legendDisplay', 'auto');
+            onChange('legendPosition', 'bottom');
+            onChange('legendOrient', 'horizontal');
+            onChange('legendReserveSize', 52);
+            onChange('legendAlign', 'start');
+            onChange('chartScalePercent', 92);
+            onChange('chartOffsetX', 0);
+            onChange('chartOffsetY', 0);
+            onChange('xAxisLabelRotate', 36);
+            onChange('xAxisLabelMaxLength', 8);
+            onChange('xAxisLabelInterval', 0);
+            onChange('axisSeriesLabelStrategy', 'first');
+            onChange('axisSeriesLabelStep', 0);
+            onChange('axisTooltipMaxRows', 6);
+            return;
+        }
+        if (preset === 'spacious') {
+            onChange('autoLegendAvoid', false);
+            onChange('legendDisplay', 'show');
+            onChange('legendPosition', 'right');
+            onChange('legendOrient', 'vertical');
+            onChange('legendReserveSize', 120);
+            onChange('legendAlign', 'center');
+            onChange('chartScalePercent', 100);
+            onChange('chartOffsetX', 0);
+            onChange('chartOffsetY', 0);
+            onChange('xAxisLabelRotate', 0);
+            onChange('xAxisLabelMaxLength', 0);
+            onChange('xAxisLabelInterval', 0);
+            onChange('axisSeriesLabelStrategy', 'all');
+            onChange('axisSeriesLabelStep', 0);
+            onChange('axisTooltipMaxRows', 12);
+            return;
+        }
+        onChange('autoLegendAvoid', true);
+        onChange('legendDisplay', 'auto');
+        onChange('legendPosition', 'auto');
+        onChange('legendOrient', 'auto');
+        onChange('legendReserveSize', 0);
+        onChange('legendAlign', 'auto');
+        onChange('chartScalePercent', 100);
+        onChange('chartOffsetX', 0);
+        onChange('chartOffsetY', 0);
+        onChange('xAxisLabelRotate', 0);
+        onChange('xAxisLabelMaxLength', 0);
+        onChange('xAxisLabelInterval', 0);
+        onChange('axisSeriesLabelStrategy', 'auto');
+        onChange('axisSeriesLabelStep', 0);
+        onChange('axisTooltipMaxRows', 0);
+    };
+
+    return (
+        <>
+            <div className="property-row">
+                <label className="property-label">标题</label>
+                <input
+                    type="text"
+                    className="property-input"
+                    value={String(config.title ?? '')}
+                    onChange={(e) => onChange('title', e.target.value)}
+                />
+            </div>
+            <div className="property-row">
+                <label className="property-label">标题字号</label>
+                <input
+                    type="number"
+                    className="property-input"
+                    min={10}
+                    max={40}
+                    value={Number(config.titleFontSize) || 14}
+                    onChange={(e) => onChange('titleFontSize', Number(e.target.value))}
+                />
+            </div>
+            <div className="property-row">
+                <label className="property-label">图例显示</label>
+                <select
+                    className="property-input"
+                    value={(config.legendDisplay as string) || 'auto'}
+                    onChange={(e) => onChange('legendDisplay', e.target.value)}
+                >
+                    <option value="auto">自动</option>
+                    <option value="show">显示</option>
+                    <option value="hide">隐藏</option>
+                </select>
+            </div>
+            <div className="property-row">
+                <label className="property-label">自动避让</label>
+                <input
+                    type="checkbox"
+                    checked={config.autoLegendAvoid !== false}
+                    onChange={(e) => onChange('autoLegendAvoid', e.target.checked)}
+                />
+            </div>
+            <div className="property-row">
+                <label className="property-label">小屏预设</label>
+                <select
+                    className="property-input"
+                    value={(config.compactLayoutPreset as string) || 'auto'}
+                    onChange={(e) => onChange('compactLayoutPreset', e.target.value)}
+                >
+                    <option value="auto">自动</option>
+                    <option value="off">关闭</option>
+                </select>
+            </div>
+            <div className="property-row">
+                <label className="property-label">图形缩放(%)</label>
+                <input
+                    type="number"
+                    className="property-input"
+                    min={40}
+                    max={180}
+                    value={(config.chartScalePercent as number) || 100}
+                    onChange={(e) => onChange('chartScalePercent', Number(e.target.value))}
+                />
+            </div>
+            <div className="property-row">
+                <label className="property-label">布局预设</label>
+                <div style={{ display: 'flex', gap: 6, width: '100%' }}>
+                    <button
+                        type="button"
+                        className="property-action-btn"
+                        style={{ flex: 1 }}
+                        onClick={() => applyLayoutPreset('balanced')}
+                        title="自动避让 + 默认留白"
+                    >
+                        平衡
+                    </button>
+                    <button
+                        type="button"
+                        className="property-action-btn"
+                        style={{ flex: 1 }}
+                        onClick={() => applyLayoutPreset('compact')}
+                        title="紧凑布局，优先保证小容器可读"
+                    >
+                        紧凑
+                    </button>
+                    <button
+                        type="button"
+                        className="property-action-btn"
+                        style={{ flex: 1 }}
+                        onClick={() => applyLayoutPreset('spacious')}
+                        title="图例侧边 + 留白更充分"
+                    >
+                        留白
+                    </button>
+                </div>
+            </div>
+            <div className="property-row">
+                <label className="property-label">布局回正</label>
+                <button
+                    type="button"
+                    className="property-action-btn"
+                    style={{ width: '100%' }}
+                    onClick={() => {
+                        onChange('legendOffsetX', 0);
+                        onChange('legendOffsetY', 0);
+                        onChange('chartOffsetX', 0);
+                        onChange('chartOffsetY', 0);
+                        onChange('chartPaddingTop', 0);
+                        onChange('chartPaddingRight', 0);
+                        onChange('chartPaddingBottom', 0);
+                        onChange('chartPaddingLeft', 0);
+                    }}
+                    title="清空图例/图形偏移与留白，回到自动布局"
+                >
+                    一键回到自动布局
+                </button>
+            </div>
+            <div className="property-row">
+                <label className="property-label">图例避让</label>
+                <div style={{ width: '100%' }}>
+                    <button
+                        type="button"
+                        className="property-action-btn"
+                        style={{ width: '100%' }}
+                        onClick={() => applyLegendHeuristicLayout(component, onChange)}
+                        title={legendHeuristic.hint}
+                    >
+                        一键自动避让
+                    </button>
+                    <div style={{ fontSize: 11, color: '#888', marginTop: 4 }}>{legendHeuristic.hint}</div>
+                </div>
+            </div>
+            {(type === 'bar-chart') ? (
+                <div className="property-row">
+                    <label className="property-label">水平方向</label>
+                    <input
+                        type="checkbox"
+                        checked={Boolean(config.horizontal)}
+                        onChange={(e) => onChange('horizontal', e.target.checked)}
+                    />
+                </div>
+            ) : null}
+            {(type === 'bar-chart' || type === 'line-chart') ? (
+                <div className="property-row">
+                    <label className="property-label">堆叠模式</label>
+                    <select
+                        className="property-input"
+                        value={(config.stackMode as string) || 'off'}
+                        onChange={(e) => onChange('stackMode', e.target.value)}
+                    >
+                        <option value="off">关闭</option>
+                        <option value="stack">堆叠</option>
+                    </select>
+                </div>
+            ) : null}
+            {(type === 'wordcloud-chart') ? (
+                <>
+                    <div className="property-row">
+                        <label className="property-label">形状</label>
+                        <select
+                            className="property-input"
+                            value={(config.shape as string) || 'circle'}
+                            onChange={(e) => onChange('shape', e.target.value)}
+                        >
+                            <option value="circle">圆形</option>
+                            <option value="cardioid">心形</option>
+                            <option value="diamond">菱形</option>
+                            <option value="square">正方形</option>
+                            <option value="triangle-forward">三角形</option>
+                            <option value="star">星形</option>
+                        </select>
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">最小字号</label>
+                        <input
+                            type="number"
+                            className="property-input"
+                            min={8}
+                            max={40}
+                            value={Array.isArray(config.fontSizeRange) ? (config.fontSizeRange as number[])[0] : 14}
+                            onChange={(e) => {
+                                const range = Array.isArray(config.fontSizeRange) ? [...config.fontSizeRange] as number[] : [14, 60];
+                                range[0] = Number(e.target.value);
+                                onChange('fontSizeRange', range);
+                            }}
+                        />
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">最大字号</label>
+                        <input
+                            type="number"
+                            className="property-input"
+                            min={20}
+                            max={120}
+                            value={Array.isArray(config.fontSizeRange) ? (config.fontSizeRange as number[])[1] : 60}
+                            onChange={(e) => {
+                                const range = Array.isArray(config.fontSizeRange) ? [...config.fontSizeRange] as number[] : [14, 60];
+                                range[1] = Number(e.target.value);
+                                onChange('fontSizeRange', range);
+                            }}
+                        />
+                    </div>
+                </>
+            ) : null}
+            {isAxisChart ? (
+                <>
+                    <div className="property-row">
+                        <label className="property-label">X轴角度</label>
+                        <input
+                            type="number"
+                            className="property-input"
+                            min={-90}
+                            max={90}
+                            value={(config.xAxisLabelRotate as number) || 0}
+                            onChange={(e) => onChange('xAxisLabelRotate', Number(e.target.value))}
+                        />
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">X轴最大字数</label>
+                        <input
+                            type="number"
+                            className="property-input"
+                            min={0}
+                            max={40}
+                            value={(config.xAxisLabelMaxLength as number) || 0}
+                            onChange={(e) => onChange('xAxisLabelMaxLength', Number(e.target.value))}
+                            placeholder="0=不限"
+                        />
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">X轴抽样间隔</label>
+                        <input
+                            type="number"
+                            className="property-input"
+                            min={0}
+                            max={200}
+                            value={(config.xAxisLabelInterval as number) || 0}
+                            onChange={(e) => onChange('xAxisLabelInterval', Number(e.target.value))}
+                            placeholder="0=自动"
+                        />
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">标签系列策略</label>
+                        <select
+                            className="property-input"
+                            value={(config.axisSeriesLabelStrategy as string) || 'auto'}
+                            onChange={(e) => onChange('axisSeriesLabelStrategy', e.target.value)}
+                        >
+                            <option value="auto">自动</option>
+                            <option value="all">全部系列</option>
+                            <option value="first">仅首系列</option>
+                            <option value="none">隐藏标签</option>
+                        </select>
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">标签步长</label>
+                        <input
+                            type="number"
+                            className="property-input"
+                            min={0}
+                            max={200}
+                            value={(config.axisSeriesLabelStep as number) || 0}
+                            onChange={(e) => onChange('axisSeriesLabelStep', Number(e.target.value))}
+                            placeholder="0=自动"
+                        />
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">Tooltip行数</label>
+                        <input
+                            type="number"
+                            className="property-input"
+                            min={0}
+                            max={50}
+                            value={(config.axisTooltipMaxRows as number) || 0}
+                            onChange={(e) => onChange('axisTooltipMaxRows', Number(e.target.value))}
+                            placeholder="0=自动"
+                        />
+                    </div>
+                </>
+            ) : null}
+            {showSeriesLabelControls ? (
+                <>
+                    <div className="property-row">
+                        <label className="property-label">标签位置</label>
+                        <select
+                            className="property-input"
+                            value={(config.seriesLabelPosition as string) || 'auto'}
+                            onChange={(e) => onChange('seriesLabelPosition', e.target.value)}
+                        >
+                            <option value="auto">自动</option>
+                            <option value="inside">内部</option>
+                            <option value="outside">外部</option>
+                            <option value="none">隐藏</option>
+                        </select>
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">标签字号</label>
+                        <input
+                            type="number"
+                            className="property-input"
+                            min={10}
+                            max={28}
+                            value={(config.seriesLabelFontSize as number) || 12}
+                            onChange={(e) => onChange('seriesLabelFontSize', Number(e.target.value))}
+                        />
+                    </div>
+                </>
+            ) : null}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 6 }}>
+                <button type="button" className="property-btn-small" onClick={() => applyPreset('business')}>商务预设</button>
+                <button type="button" className="property-btn-small" onClick={() => applyPreset('compact')}>紧凑预设</button>
+                <button type="button" className="property-btn-small" onClick={() => applyPreset('clear')}>恢复预设</button>
+            </div>
+            <div style={{ fontSize: 11, color: '#94a3b8', lineHeight: 1.45 }}>
+                当前为简洁模式，仅显示高频参数。切换到“专业模式”可配置全部细节。
+            </div>
+        </>
+    );
+}
 
 function serializeVisibilityMatchValues(raw: unknown): string {
     if (Array.isArray(raw)) {
@@ -99,10 +700,47 @@ function resolveTabSwitcherOptionValues(raw: unknown): string[] {
 }
 
 export function PropertyPanel() {
-    const { state, updateComponent, updateConfig, updateSelectedComponents } = useScreen();
+    const {
+        state,
+        updateComponent,
+        updateConfig,
+        updateSelectedComponents,
+        deleteComponents,
+        alignSelected,
+        distributeSelected,
+        groupSelected,
+        ungroupSelected,
+    } = useScreen();
     const { config, selectedIds } = state;
     useScreenPluginRuntime();
     const [explainState, setExplainState] = useState<ExplainState | null>(null);
+    const [panelFilter, setPanelFilter] = useState('');
+    const [styleClipboard, setStyleClipboard] = useState<StyleClipboardPayload | null>(null);
+    const [layoutClipboard, setLayoutClipboard] = useState<LayoutClipboardPayload | null>(null);
+    const [componentConfigMode, setComponentConfigMode] = useState<'quick' | 'advanced'>(() => {
+        if (typeof window === 'undefined') {
+            return 'quick';
+        }
+        try {
+            const raw = window.localStorage.getItem(PROPERTY_COMPONENT_MODE_KEY);
+            return raw === 'advanced' ? 'advanced' : 'quick';
+        } catch {
+            return 'quick';
+        }
+    });
+    const [quickActionMode, setQuickActionMode] = useState<'core' | 'layout' | 'nudge' | 'clipboard' | 'all'>('core');
+    const [panelDensity, setPanelDensity] = useState<'focus' | 'full'>(() => {
+        if (typeof window === 'undefined') {
+            return 'focus';
+        }
+        try {
+            const raw = window.localStorage.getItem(PROPERTY_PANEL_DENSITY_KEY);
+            return raw === 'full' ? 'full' : 'focus';
+        } catch {
+            return 'focus';
+        }
+    });
+    const [collapsedSections, setCollapsedSections] = useState<string[]>([]);
 
     const selectedComponents = config.components.filter((c) => selectedIds.includes(c.id));
     const selectedComponent = selectedIds.length === 1
@@ -112,6 +750,105 @@ export function PropertyPanel() {
     useEffect(() => {
         setExplainState(null);
     }, [selectedComponent?.id]);
+    useEffect(() => {
+        if (!selectedComponent) return;
+        if (!CHART_COMPONENT_TYPES.has(selectedComponent.type)) {
+            if (componentConfigMode !== 'advanced') {
+                setComponentConfigMode('advanced');
+            }
+            return;
+        }
+    }, [componentConfigMode, selectedComponent?.id, selectedComponent?.type]);
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        try {
+            window.localStorage.setItem(PROPERTY_COMPONENT_MODE_KEY, componentConfigMode);
+        } catch {
+            // ignore storage failure
+        }
+    }, [componentConfigMode]);
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        try {
+            window.localStorage.setItem(PROPERTY_PANEL_DENSITY_KEY, panelDensity);
+        } catch {
+            // ignore storage failure
+        }
+    }, [panelDensity]);
+    useEffect(() => {
+        try {
+            const raw = localStorage.getItem(PROPERTY_SECTION_COLLAPSE_KEY);
+            if (!raw) {
+                setCollapsedSections([...PROPERTY_SECTION_ESSENTIAL_COLLAPSED]);
+                return;
+            }
+            const parsed = JSON.parse(raw) as unknown;
+            if (!Array.isArray(parsed)) {
+                setCollapsedSections([...PROPERTY_SECTION_ESSENTIAL_COLLAPSED]);
+                return;
+            }
+            setCollapsedSections(parsed.filter((item) => typeof item === 'string'));
+        } catch {
+            setCollapsedSections([...PROPERTY_SECTION_ESSENTIAL_COLLAPSED]);
+        }
+    }, []);
+    useEffect(() => {
+        try {
+            localStorage.setItem(PROPERTY_SECTION_COLLAPSE_KEY, JSON.stringify(collapsedSections));
+        } catch {
+            // ignore storage failure
+        }
+    }, [collapsedSections]);
+
+    useEffect(() => {
+        try {
+            const raw = sessionStorage.getItem(STYLE_CLIPBOARD_KEY);
+            if (!raw) return;
+            const parsed = JSON.parse(raw) as StyleClipboardPayload;
+            if (!parsed || typeof parsed !== 'object' || !parsed.type || !parsed.config) return;
+            setStyleClipboard(parsed);
+        } catch {
+            // ignore invalid cache
+        }
+    }, []);
+    useEffect(() => {
+        try {
+            const raw = sessionStorage.getItem(LAYOUT_CLIPBOARD_KEY);
+            if (!raw) return;
+            const parsed = JSON.parse(raw) as LayoutClipboardPayload;
+            if (!parsed || typeof parsed !== 'object') return;
+            if (!Number.isFinite(parsed.x) || !Number.isFinite(parsed.y)) return;
+            if (!Number.isFinite(parsed.width) || !Number.isFinite(parsed.height)) return;
+            setLayoutClipboard(parsed);
+        } catch {
+            // ignore invalid cache
+        }
+    }, []);
+
+    const persistStyleClipboard = (payload: StyleClipboardPayload | null) => {
+        setStyleClipboard(payload);
+        try {
+            if (!payload) {
+                sessionStorage.removeItem(STYLE_CLIPBOARD_KEY);
+                return;
+            }
+            sessionStorage.setItem(STYLE_CLIPBOARD_KEY, JSON.stringify(payload));
+        } catch {
+            // ignore storage failure
+        }
+    };
+    const persistLayoutClipboard = (payload: LayoutClipboardPayload | null) => {
+        setLayoutClipboard(payload);
+        try {
+            if (!payload) {
+                sessionStorage.removeItem(LAYOUT_CLIPBOARD_KEY);
+                return;
+            }
+            sessionStorage.setItem(LAYOUT_CLIPBOARD_KEY, JSON.stringify(payload));
+        } catch {
+            // ignore storage failure
+        }
+    };
 
     if (selectedComponents.length === 0) {
         return (
@@ -135,6 +872,7 @@ export function PropertyPanel() {
         const allLocked = selectedComponents.every((item) => item.locked);
         const allVisible = selectedComponents.every((item) => item.visible);
         const grouped = selectedComponents.filter((item) => Boolean(item.groupId)).length;
+        const primarySelected = selectedComponents[0];
         return (
             <div className="property-panel">
                 <div className="property-panel-header">
@@ -187,6 +925,45 @@ export function PropertyPanel() {
                         </div>
                     </div>
                     <div className="property-section">
+                        <div className="property-section-title">批量动作</div>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 6 }}>
+                            <button type="button" className="property-btn-small" onClick={() => alignSelected('left')} disabled={total < 2}>左对齐</button>
+                            <button type="button" className="property-btn-small" onClick={() => alignSelected('right')} disabled={total < 2}>右对齐</button>
+                            <button type="button" className="property-btn-small" onClick={() => alignSelected('top')} disabled={total < 2}>顶对齐</button>
+                            <button type="button" className="property-btn-small" onClick={() => alignSelected('bottom')} disabled={total < 2}>底对齐</button>
+                            <button type="button" className="property-btn-small" onClick={() => distributeSelected('horizontal')} disabled={total < 3}>水平分布</button>
+                            <button type="button" className="property-btn-small" onClick={() => distributeSelected('vertical')} disabled={total < 3}>垂直分布</button>
+                            <button type="button" className="property-btn-small" onClick={groupSelected} disabled={total < 2}>组合</button>
+                            <button type="button" className="property-btn-small" onClick={ungroupSelected} disabled={total < 1}>解组</button>
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 6, marginTop: 6 }}>
+                            <button
+                                type="button"
+                                className="property-btn-small"
+                                disabled={!primarySelected}
+                                onClick={() => {
+                                    if (!primarySelected) return;
+                                    updateSelectedComponents({ width: primarySelected.width });
+                                }}
+                                title="将选中组件宽度统一为首个选中组件宽度"
+                            >
+                                同步首项宽度
+                            </button>
+                            <button
+                                type="button"
+                                className="property-btn-small"
+                                disabled={!primarySelected}
+                                onClick={() => {
+                                    if (!primarySelected) return;
+                                    updateSelectedComponents({ height: primarySelected.height });
+                                }}
+                                title="将选中组件高度统一为首个选中组件高度"
+                            >
+                                同步首项高度
+                            </button>
+                        </div>
+                    </div>
+                    <div className="property-section">
                         <div className="property-section-title">选择概览</div>
                         <div style={{ fontSize: 12, opacity: 0.8, lineHeight: 1.7 }}>
                             已选组件: {total}<br />
@@ -207,6 +984,222 @@ export function PropertyPanel() {
         updateComponent(selectedComponent.id, {
             config: { ...selectedComponent.config, [key]: value },
         });
+    };
+
+    const canvasWidth = Number(config.width) || 1920;
+    const canvasHeight = Number(config.height) || 1080;
+    const normalizedPanelFilter = panelFilter.trim().toLowerCase();
+    const sectionVisible = (...aliases: string[]) => {
+        if (!normalizedPanelFilter) return true;
+        return aliases.some((item) => item.toLowerCase().includes(normalizedPanelFilter));
+    };
+    const isSectionCollapsedStored = (sectionKey: string) => collapsedSections.includes(sectionKey);
+    const isSectionCollapsed = (sectionKey: string) => (
+        normalizedPanelFilter ? false : isSectionCollapsedStored(sectionKey)
+    );
+    const toggleSection = (sectionKey: string) => {
+        setCollapsedSections((prev) => {
+            if (prev.includes(sectionKey)) {
+                return prev.filter((item) => item !== sectionKey);
+            }
+            return [...prev, sectionKey];
+        });
+    };
+    const collapseAllSections = () => {
+        setCollapsedSections([...PROPERTY_SECTION_KEYS]);
+    };
+    const expandAllSections = () => {
+        setCollapsedSections([]);
+    };
+    const collapseToEssential = () => {
+        setCollapsedSections([...PROPERTY_SECTION_ESSENTIAL_COLLAPSED]);
+    };
+    const applyPanelPreset = (
+        preset: '' | '位置' | '组件' | '数据' | '联动' | '下钻' | '解释' | '其他' | '常用',
+    ) => {
+        if (!preset) {
+            setPanelFilter('');
+            return;
+        }
+        if (preset === '常用') {
+            setPanelFilter('');
+            setPanelDensity('focus');
+            collapseToEssential();
+            return;
+        }
+        setPanelFilter(preset);
+        setPanelDensity('full');
+    };
+    const shouldRenderSection = (sectionKey: string, ...aliases: string[]) => {
+        if (!sectionVisible(...aliases)) {
+            return false;
+        }
+        if (panelDensity === 'full') {
+            return true;
+        }
+        if (normalizedPanelFilter) {
+            return true;
+        }
+        return PROPERTY_FOCUS_SECTION_KEYS.has(sectionKey);
+    };
+    const showQuickActionGroup = (group: 'core' | 'layout' | 'nudge' | 'clipboard') => (
+        quickActionMode === 'all' || quickActionMode === group
+    );
+    const getQuickActionFilterButtonStyle = (mode: 'core' | 'layout' | 'nudge' | 'clipboard' | 'all') => (
+        quickActionMode === mode
+            ? { borderColor: 'var(--color-primary)', background: 'var(--color-primary-light)' }
+            : undefined
+    );
+
+    const alignToCanvas = (mode: 'left' | 'right' | 'top' | 'bottom' | 'h-center' | 'v-center') => {
+        if (mode === 'left') {
+            handleChange('x', 0);
+            return;
+        }
+        if (mode === 'right') {
+            handleChange('x', Math.max(0, canvasWidth - selectedComponent.width));
+            return;
+        }
+        if (mode === 'top') {
+            handleChange('y', 0);
+            return;
+        }
+        if (mode === 'bottom') {
+            handleChange('y', Math.max(0, canvasHeight - selectedComponent.height));
+            return;
+        }
+        if (mode === 'h-center') {
+            handleChange('x', Math.max(0, Math.round((canvasWidth - selectedComponent.width) / 2)));
+            return;
+        }
+        handleChange('y', Math.max(0, Math.round((canvasHeight - selectedComponent.height) / 2)));
+    };
+
+    const duplicateCurrentComponent = () => {
+        const nextId = `comp_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+        const maxZ = config.components.length > 0
+            ? Math.max(...config.components.map((item) => item.zIndex))
+            : 0;
+        const maxX = Math.max(0, canvasWidth - selectedComponent.width);
+        const maxY = Math.max(0, canvasHeight - selectedComponent.height);
+        const clone: ScreenComponent = {
+            ...selectedComponent,
+            id: nextId,
+            x: Math.min(maxX, selectedComponent.x + 20),
+            y: Math.min(maxY, selectedComponent.y + 20),
+            zIndex: maxZ + 1,
+            name: `${selectedComponent.name}-副本`,
+        };
+        updateConfig({ components: [...config.components, clone] });
+    };
+
+    const copyCurrentStyle = () => {
+        const payload = buildStyleClipboardPayload(selectedComponent);
+        persistStyleClipboard(payload);
+        alert(`已复制样式（${Object.keys(payload.config).length} 个外观字段）`);
+    };
+
+    const applyCopiedStyle = () => {
+        if (!styleClipboard) {
+            alert('样式剪贴板为空，请先复制一个组件样式');
+            return;
+        }
+        if (styleClipboard.type !== selectedComponent.type) {
+            const confirmed = window.confirm(
+                `样式来源类型为「${styleClipboard.type}」，当前为「${selectedComponent.type}」。\n继续应用可能只部分生效，是否继续？`
+            );
+            if (!confirmed) return;
+        }
+        updateComponent(selectedComponent.id, {
+            width: Math.max(50, Number(styleClipboard.width) || selectedComponent.width),
+            height: Math.max(50, Number(styleClipboard.height) || selectedComponent.height),
+            config: {
+                ...selectedComponent.config,
+                ...styleClipboard.config,
+            },
+        });
+    };
+
+    const copyLayoutSnapshot = () => {
+        persistLayoutClipboard({
+            x: selectedComponent.x,
+            y: selectedComponent.y,
+            width: selectedComponent.width,
+            height: selectedComponent.height,
+            copiedAt: new Date().toISOString(),
+        });
+        alert('布局已复制（位置 + 尺寸）');
+    };
+
+    const pasteLayoutSnapshot = () => {
+        if (!layoutClipboard) {
+            alert('布局剪贴板为空，请先复制布局');
+            return;
+        }
+        const nextWidth = Math.max(50, Math.round(layoutClipboard.width));
+        const nextHeight = Math.max(50, Math.round(layoutClipboard.height));
+        const maxX = Math.max(0, canvasWidth - nextWidth);
+        const maxY = Math.max(0, canvasHeight - nextHeight);
+        updateComponent(selectedComponent.id, {
+            x: Math.min(maxX, Math.max(0, Math.round(layoutClipboard.x))),
+            y: Math.min(maxY, Math.max(0, Math.round(layoutClipboard.y))),
+            width: nextWidth,
+            height: nextHeight,
+        });
+    };
+
+    const nudgePosition = (dx: number, dy: number) => {
+        const maxX = Math.max(0, canvasWidth - selectedComponent.width);
+        const maxY = Math.max(0, canvasHeight - selectedComponent.height);
+        updateComponent(selectedComponent.id, {
+            x: Math.min(maxX, Math.max(0, selectedComponent.x + dx)),
+            y: Math.min(maxY, Math.max(0, selectedComponent.y + dy)),
+        });
+    };
+
+    const nudgeSize = (dw: number, dh: number) => {
+        const nextWidth = Math.min(canvasWidth, Math.max(50, selectedComponent.width + dw));
+        const nextHeight = Math.min(canvasHeight, Math.max(50, selectedComponent.height + dh));
+        const maxX = Math.max(0, canvasWidth - nextWidth);
+        const maxY = Math.max(0, canvasHeight - nextHeight);
+        updateComponent(selectedComponent.id, {
+            width: nextWidth,
+            height: nextHeight,
+            x: Math.min(maxX, Math.max(0, selectedComponent.x)),
+            y: Math.min(maxY, Math.max(0, selectedComponent.y)),
+        });
+    };
+    const applyChartPreset = (preset: ChartPreset) => {
+        if (!isChartComponentType(selectedComponent.type)) {
+            alert('当前组件不是图表类型，无法应用图表预设');
+            return;
+        }
+        updateComponent(selectedComponent.id, {
+            config: applyChartPresetConfig(selectedComponent.config, preset),
+        });
+    };
+
+    const copyConfigJson = async () => {
+        const text = JSON.stringify(selectedComponent.config || {}, null, 2);
+        const copied = await writeTextToClipboard(text);
+        alert(copied ? '组件配置JSON已复制' : '复制失败，请重试');
+    };
+
+    const pasteConfigJson = () => {
+        const current = JSON.stringify(selectedComponent.config || {}, null, 2);
+        const input = window.prompt('粘贴组件配置 JSON（将覆盖当前组件配置）', current);
+        if (input == null) return;
+        try {
+            const parsed = JSON.parse(input);
+            if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+                alert('配置必须是 JSON 对象');
+                return;
+            }
+            updateComponent(selectedComponent.id, { config: parsed as Record<string, unknown> });
+            alert('组件配置已更新');
+        } catch {
+            alert('JSON 格式错误，请检查后重试');
+        }
     };
 
     const applyTabVisibilityRules = () => {
@@ -307,6 +1300,12 @@ export function PropertyPanel() {
             setExplainState({ state: 'error', error });
         }
     };
+    const drillDownContent = shouldRenderSection('drill-down', '下钻', 'drill')
+        ? renderDrillDownConfig(selectedComponent, updateComponent, { embedded: true })
+        : null;
+    const interactionContent = shouldRenderSection('interaction', '联动', '交互', 'interaction', 'jump')
+        ? renderInteractionConfig(selectedComponent, config.globalVariables ?? [], updateComponent, { embedded: true })
+        : null;
 
     return (
         <div className="property-panel">
@@ -314,328 +1313,681 @@ export function PropertyPanel() {
                 <h3>属性 - {selectedComponent.name}</h3>
             </div>
             <div className="property-panel-content">
-                {/* Position & Size */}
                 <div className="property-section">
-                    <div className="property-section-title">位置与尺寸</div>
-
-                    <div className="property-row">
-                        <label className="property-label">X</label>
-                        <input
-                            type="number"
-                            className="property-input"
-                            value={selectedComponent.x}
-                            onChange={(e) => handleChange('x', Number(e.target.value))}
-                        />
-                    </div>
-
-                    <div className="property-row">
-                        <label className="property-label">Y</label>
-                        <input
-                            type="number"
-                            className="property-input"
-                            value={selectedComponent.y}
-                            onChange={(e) => handleChange('y', Number(e.target.value))}
-                        />
-                    </div>
-
-                    <div className="property-row">
-                        <label className="property-label">宽度</label>
-                        <input
-                            type="number"
-                            className="property-input"
-                            value={selectedComponent.width}
-                            onChange={(e) => handleChange('width', Number(e.target.value))}
-                        />
-                    </div>
-
-                    <div className="property-row">
-                        <label className="property-label">高度</label>
-                        <input
-                            type="number"
-                            className="property-input"
-                            value={selectedComponent.height}
-                            onChange={(e) => handleChange('height', Number(e.target.value))}
-                        />
-                    </div>
-                </div>
-
-                {/* Component-specific config */}
-                {runtimePlugin?.propertySchema?.fields?.length ? (
-                    <div className="property-section">
-                        <div className="property-section-title">插件配置 ({runtimePlugin.name})</div>
-                        {renderPluginSchemaFields(selectedComponent, runtimePlugin.propertySchema.fields, handleConfigChange)}
-                    </div>
-                ) : null}
-
-                <div className="property-section">
-                    <div className="property-section-title">组件配置</div>
-
-                    {renderComponentConfig(selectedComponent, handleConfigChange)}
-                </div>
-
-                {/* Data Source */}
-                <div className="property-section">
-                    <div className="property-section-title">数据源</div>
-                    {renderDataSourceConfig(selectedComponent, updateComponent, config.globalVariables ?? [])}
-                </div>
-
-                <div className="property-section">
-                    <div className="property-section-title">解释</div>
-                    {canExplain ? (
-                        <div style={{ display: 'grid', gap: 8 }}>
-                            <button
-                                type="button"
-                                className="property-btn-small"
-                                onClick={() => { void handleExplain(); }}
-                            >
-                                解释当前组件
-                            </button>
-                            <div style={{ fontSize: 11, color: '#94a3b8', lineHeight: 1.45 }}>
-                                解释来源 CardId: {explainCardId}
-                            </div>
-                            {explainState?.state === 'loading' ? (
-                                <div style={{ fontSize: 12, color: '#94a3b8' }}>解释生成中...</div>
-                            ) : null}
-                            {explainState?.state === 'error' ? (
-                                <div style={{ fontSize: 12, color: '#ef4444' }}>
-                                    解释失败：{explainState.error instanceof Error ? explainState.error.message : 'unknown error'}
-                                </div>
-                            ) : null}
-                            {explainState?.state === 'loaded' ? (
-                                <>
-                                    <button
-                                        type="button"
-                                        className="property-btn-small"
-                                        onClick={() => {
-                                            const text = explainState.value.copyJson ?? JSON.stringify(explainState.value.explainCard ?? {}, null, 2);
-                                            void writeTextToClipboard(text);
-                                        }}
-                                    >
-                                        复制解释JSON
-                                    </button>
-                                    <pre
-                                        style={{
-                                            margin: 0,
-                                            padding: 8,
-                                            borderRadius: 8,
-                                            background: 'rgba(15,23,42,0.6)',
-                                            whiteSpace: 'pre-wrap',
-                                            wordBreak: 'break-word',
-                                            fontSize: 11,
-                                            maxHeight: 240,
-                                            overflow: 'auto',
-                                        }}
-                                    >
-                                        {JSON.stringify(explainState.value.explainCard ?? {}, null, 2)}
-                                    </pre>
-                                </>
-                            ) : null}
-                        </div>
-                    ) : (
-                        <div style={{ fontSize: 11, color: '#94a3b8', lineHeight: 1.45 }}>
-                            当前组件未绑定可解释的 Card 数据源。
-                        </div>
-                    )}
-                </div>
-
-                {/* Drill-down config */}
-                {renderDrillDownConfig(selectedComponent, updateComponent)}
-
-                {renderInteractionConfig(selectedComponent, config.globalVariables ?? [], updateComponent)}
-
-                {/* Visibility & Lock */}
-                <div className="property-section">
-                    <div className="property-section-title">其他</div>
-
-                    <div className="property-row">
-                        <label className="property-label">名称</label>
-                        <input
-                            type="text"
-                            className="property-input"
-                            value={selectedComponent.name}
-                            onChange={(e) => handleChange('name', e.target.value)}
-                        />
-                    </div>
-
-                    <div className="property-row">
-                        <label className="property-label">所属容器</label>
-                        <select
-                            className="property-input"
-                            value={selectedComponent.parentContainerId || ''}
-                            onChange={(e) => {
-                                const parentId = e.target.value || undefined;
-                                if (!parentId) {
-                                    updateComponent(selectedComponent.id, { parentContainerId: undefined });
-                                    return;
-                                }
-                                const parent = config.components.find((item) => item.id === parentId && item.type === 'container');
-                                if (!parent) {
-                                    updateComponent(selectedComponent.id, { parentContainerId: undefined });
-                                    return;
-                                }
-                                if (wouldCreateParentCycle(config.components, selectedComponent.id, parentId)) {
-                                    alert('该容器绑定会形成循环引用，请选择其他容器');
-                                    return;
-                                }
-                                const maxX = parent.x + Math.max(0, parent.width - selectedComponent.width);
-                                const maxY = parent.y + Math.max(0, parent.height - selectedComponent.height);
-                                const nextX = Math.max(parent.x, Math.min(selectedComponent.x, maxX));
-                                const nextY = Math.max(parent.y, Math.min(selectedComponent.y, maxY));
-                                updateComponent(selectedComponent.id, {
-                                    parentContainerId: parentId,
-                                    x: nextX,
-                                    y: nextY,
-                                });
-                            }}
+                    <div className="property-section-title property-section-title-collapsible">
+                        <button
+                            type="button"
+                            className="property-section-toggle"
+                            onClick={() => toggleSection('quick-filter')}
                         >
-                            <option value="">-- 无 --</option>
-                            {config.components
-                                .filter((item) => (
-                                    item.type === 'container'
-                                    && item.id !== selectedComponent.id
-                                    && !wouldCreateParentCycle(config.components, selectedComponent.id, item.id)
-                                ))
-                                .map((item) => (
-                                    <option key={item.id} value={item.id}>
-                                        {item.name} ({item.id})
-                                    </option>
-                                ))}
-                        </select>
+                            {isSectionCollapsed('quick-filter') ? '▸' : '▾'} 快速定位
+                        </button>
                     </div>
-
-                    {selectedComponent.type === 'container' && (
-                        <div className="property-row">
-                            <label className="property-label">子组件数</label>
-                            <div className="property-input" style={{ display: 'flex', alignItems: 'center' }}>
-                                {config.components.filter((item) => item.parentContainerId === selectedComponent.id).length}
-                            </div>
-                        </div>
-                    )}
-                    {selectedComponent.type === 'tab-switcher' && (
-                        <div className="property-row" style={{ alignItems: 'flex-start' }}>
-                            <label className="property-label">Tab联动</label>
-                            <div style={{ display: 'grid', gap: 6, width: '100%' }}>
-                                <button type="button" className="property-btn-small" onClick={applyTabVisibilityRules}>
-                                    一键应用显隐规则
-                                </button>
-                                <button type="button" className="property-btn-small" onClick={clearTabVisibilityRules}>
-                                    清理显隐规则
-                                </button>
-                                <div style={{ fontSize: 11, color: '#94a3b8', lineHeight: 1.5 }}>
-                                    规则会按 Tab 选项顺序分配到图表/表格组件。
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    <div className="property-row">
-                        <label className="property-label">锁定</label>
-                        <input
-                            type="checkbox"
-                            checked={selectedComponent.locked}
-                            onChange={(e) => handleChange('locked', e.target.checked)}
-                        />
-                    </div>
-
-                    <div className="property-row">
-                        <label className="property-label">可见</label>
-                        <input
-                            type="checkbox"
-                            checked={selectedComponent.visible}
-                            onChange={(e) => handleChange('visible', e.target.checked)}
-                        />
-                    </div>
-                    <div className="property-row">
-                        <label className="property-label">多端可见</label>
-                        <div style={{ display: 'flex', gap: 8 }}>
-                            {(['pc', 'tablet', 'mobile'] as const).map((device) => {
-                                const current = Array.isArray(selectedComponent.config.visibleOn)
-                                    ? selectedComponent.config.visibleOn as string[]
-                                    : ['pc', 'tablet', 'mobile'];
-                                const checked = current.includes(device);
-                                const label = device === 'pc' ? 'PC' : device === 'tablet' ? '平板' : '手机';
-                                return (
-                                    <label key={device} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12 }}>
-                                        <input
-                                            type="checkbox"
-                                            checked={checked}
-                                            onChange={(e) => {
-                                                const base = Array.isArray(selectedComponent.config.visibleOn)
-                                                    ? selectedComponent.config.visibleOn as string[]
-                                                    : ['pc', 'tablet', 'mobile'];
-                                                const next = e.target.checked
-                                                    ? Array.from(new Set([...base, device]))
-                                                    : base.filter((item) => item !== device);
-                                                handleConfigChange('visibleOn', next);
-                                            }}
-                                        />
-                                        {label}
-                                    </label>
-                                );
-                            })}
-                        </div>
-                    </div>
-                    <div className="property-row">
-                        <label className="property-label">变量可见条件</label>
-                        <input
-                            type="checkbox"
-                            checked={selectedComponent.config.visibilityRuleEnabled === true}
-                            onChange={(e) => handleConfigChange('visibilityRuleEnabled', e.target.checked)}
-                        />
-                    </div>
-                    {selectedComponent.config.visibilityRuleEnabled === true && (
+                    {!isSectionCollapsed('quick-filter') ? (
                         <>
                             <div className="property-row">
-                                <label className="property-label">变量Key</label>
+                                <label className="property-label">筛选</label>
                                 <input
                                     type="text"
                                     className="property-input"
-                                    value={String(selectedComponent.config.visibilityVariableKey ?? '')}
-                                    onChange={(e) => handleConfigChange('visibilityVariableKey', e.target.value)}
-                                    placeholder="tabKey"
+                                    value={panelFilter}
+                                    onChange={(e) => setPanelFilter(e.target.value)}
+                                    placeholder="输入：位置/样式/数据/联动/可见..."
                                 />
                             </div>
-                            <div className="property-row">
-                                <label className="property-label">匹配模式</label>
+                            <div className="property-quick-filter-row">
+                                <button type="button" className="property-btn-small" onClick={() => applyPanelPreset('')}>清空</button>
                                 <select
                                     className="property-input"
-                                    value={String(selectedComponent.config.visibilityMatchMode ?? 'equals')}
-                                    onChange={(e) => handleConfigChange('visibilityMatchMode', e.target.value)}
+                                    style={{ maxWidth: 160, padding: '4px 8px' }}
+                                    defaultValue=""
+                                    onChange={(event) => {
+                                        const next = event.target.value as '' | '位置' | '组件' | '数据' | '联动' | '下钻' | '解释' | '其他' | '常用';
+                                        applyPanelPreset(next);
+                                        event.currentTarget.value = '';
+                                    }}
                                 >
-                                    <option value="equals">等于任一值</option>
-                                    <option value="not-equals">不等于任一值</option>
-                                    <option value="contains">包含任一值</option>
-                                    <option value="not-contains">不包含任一值</option>
-                                    <option value="starts-with">前缀匹配任一值</option>
-                                    <option value="ends-with">后缀匹配任一值</option>
-                                    <option value="empty">为空</option>
-                                    <option value="not-empty">非空</option>
+                                    <option value="">快速定位到...</option>
+                                    <option value="位置">位置与尺寸</option>
+                                    <option value="组件">组件配置</option>
+                                    <option value="数据">数据源</option>
+                                    <option value="联动">联动配置</option>
+                                    <option value="下钻">下钻配置</option>
+                                    <option value="解释">解释</option>
+                                    <option value="其他">其他</option>
+                                    <option value="常用">常用视图</option>
                                 </select>
+                                <button
+                                    type="button"
+                                    className="property-btn-small"
+                                    style={panelDensity === 'focus' ? { borderColor: 'var(--color-primary)', background: 'var(--color-primary-light)' } : undefined}
+                                    onClick={() => setPanelDensity('focus')}
+                                >
+                                    高频
+                                </button>
+                                <button
+                                    type="button"
+                                    className="property-btn-small"
+                                    style={panelDensity === 'full' ? { borderColor: 'var(--color-primary)', background: 'var(--color-primary-light)' } : undefined}
+                                    onClick={() => setPanelDensity('full')}
+                                >
+                                    全部
+                                </button>
                             </div>
-                            {(() => {
-                                const mode = String(selectedComponent.config.visibilityMatchMode ?? 'equals');
-                                if (mode === 'empty' || mode === 'not-empty') {
-                                    return null;
-                                }
-                                return (
-                                    <div className="property-row">
-                                        <label className="property-label">匹配值</label>
-                                        <textarea
-                                            className="property-input"
-                                            rows={4}
-                                            value={serializeVisibilityMatchValues(selectedComponent.config.visibilityMatchValues)}
-                                            onChange={(e) => handleConfigChange('visibilityMatchValues', parseVisibilityMatchValues(e.target.value))}
-                                            placeholder={'每行一个值，例如：\noverview\nline'}
-                                        />
-                                    </div>
-                                );
-                            })()}
-                            <div style={{ fontSize: 11, color: '#94a3b8', marginTop: -2 }}>
-                                仅在预览/公开/导出模式生效，设计器中始终可见便于编辑。
+                            <div className="property-quick-filter-row">
+                                <button type="button" className="property-btn-small" onClick={collapseToEssential}>常用视图</button>
+                                <button type="button" className="property-btn-small" onClick={expandAllSections}>全部展开</button>
+                                <button type="button" className="property-btn-small" onClick={collapseAllSections}>全部收起</button>
                             </div>
                         </>
-                    )}
+                    ) : null}
                 </div>
+
+                {shouldRenderSection('quick-actions', '快捷', '操作', '样式', '复制', '对齐') && (
+                    <div className="property-section">
+                        <div className="property-section-title property-section-title-collapsible">
+                            <button
+                                type="button"
+                                className="property-section-toggle"
+                                onClick={() => toggleSection('quick-actions')}
+                            >
+                                {isSectionCollapsed('quick-actions') ? '▸' : '▾'} 快捷操作
+                            </button>
+                        </div>
+                        {!isSectionCollapsed('quick-actions') ? (
+                            <>
+                                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 6 }}>
+                                    <button type="button" className="property-btn-small" style={getQuickActionFilterButtonStyle('core')} onClick={() => setQuickActionMode('core')}>常用</button>
+                                    <button type="button" className="property-btn-small" style={getQuickActionFilterButtonStyle('layout')} onClick={() => setQuickActionMode('layout')}>布局</button>
+                                    <button type="button" className="property-btn-small" style={getQuickActionFilterButtonStyle('nudge')} onClick={() => setQuickActionMode('nudge')}>微调</button>
+                                    <button type="button" className="property-btn-small" style={getQuickActionFilterButtonStyle('clipboard')} onClick={() => setQuickActionMode('clipboard')}>剪贴板</button>
+                                    <button type="button" className="property-btn-small" style={getQuickActionFilterButtonStyle('all')} onClick={() => setQuickActionMode('all')}>全部</button>
+                                </div>
+                                {showQuickActionGroup('core') ? (
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 6 }}>
+                                        <button type="button" className="property-btn-small" onClick={duplicateCurrentComponent}>复制组件</button>
+                                        <button type="button" className="property-btn-small" onClick={() => deleteComponents([selectedComponent.id])}>删除组件</button>
+                                        <button type="button" className="property-btn-small" onClick={() => alignToCanvas('h-center')}>水平居中</button>
+                                        <button type="button" className="property-btn-small" onClick={() => alignToCanvas('v-center')}>垂直居中</button>
+                                    </div>
+                                ) : null}
+                                {showQuickActionGroup('layout') ? (
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 6, marginTop: 6 }}>
+                                        <button type="button" className="property-btn-small" onClick={() => alignToCanvas('left')}>贴左</button>
+                                        <button type="button" className="property-btn-small" onClick={() => alignToCanvas('right')}>贴右</button>
+                                        <button type="button" className="property-btn-small" onClick={() => alignToCanvas('top')}>贴上</button>
+                                        <button type="button" className="property-btn-small" onClick={() => alignToCanvas('bottom')}>贴下</button>
+                                    </div>
+                                ) : null}
+                                {showQuickActionGroup('nudge') ? (
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 6, marginTop: 6 }}>
+                                        <button type="button" className="property-btn-small" onClick={() => nudgePosition(-1, 0)} title="X -1">←1</button>
+                                        <button type="button" className="property-btn-small" onClick={() => nudgePosition(1, 0)} title="X +1">→1</button>
+                                        <button type="button" className="property-btn-small" onClick={() => nudgePosition(0, -1)} title="Y -1">↑1</button>
+                                        <button type="button" className="property-btn-small" onClick={() => nudgePosition(0, 1)} title="Y +1">↓1</button>
+                                        <button type="button" className="property-btn-small" onClick={() => nudgePosition(-10, 0)} title="X -10">←10</button>
+                                        <button type="button" className="property-btn-small" onClick={() => nudgePosition(10, 0)} title="X +10">→10</button>
+                                        <button type="button" className="property-btn-small" onClick={() => nudgePosition(0, -10)} title="Y -10">↑10</button>
+                                        <button type="button" className="property-btn-small" onClick={() => nudgePosition(0, 10)} title="Y +10">↓10</button>
+                                        <button type="button" className="property-btn-small" onClick={() => nudgeSize(-10, 0)} title="宽度 -10">宽-10</button>
+                                        <button type="button" className="property-btn-small" onClick={() => nudgeSize(10, 0)} title="宽度 +10">宽+10</button>
+                                        <button type="button" className="property-btn-small" onClick={() => nudgeSize(0, -10)} title="高度 -10">高-10</button>
+                                        <button type="button" className="property-btn-small" onClick={() => nudgeSize(0, 10)} title="高度 +10">高+10</button>
+                                    </div>
+                                ) : null}
+                                {showQuickActionGroup('clipboard') ? (
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 6, marginTop: 6 }}>
+                                        <button type="button" className="property-btn-small" onClick={copyCurrentStyle}>复制样式</button>
+                                        <button type="button" className="property-btn-small" onClick={applyCopiedStyle}>粘贴样式</button>
+                                        <button type="button" className="property-btn-small" onClick={copyLayoutSnapshot}>复制布局</button>
+                                        <button type="button" className="property-btn-small" onClick={pasteLayoutSnapshot}>粘贴布局</button>
+                                        <button type="button" className="property-btn-small" onClick={() => { void copyConfigJson(); }}>复制配置JSON</button>
+                                        <button type="button" className="property-btn-small" onClick={pasteConfigJson}>粘贴配置JSON</button>
+                                        <button type="button" className="property-btn-small" onClick={() => persistStyleClipboard(null)}>清空样式板</button>
+                                        <button type="button" className="property-btn-small" onClick={() => persistLayoutClipboard(null)}>清空布局板</button>
+                                    </div>
+                                ) : null}
+                                {CHART_COMPONENT_TYPES.has(selectedComponent.type) ? (
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 6, marginTop: 6 }}>
+                                        <button type="button" className="property-btn-small" onClick={() => applyChartPreset('business')} title="适合白底商务大屏">商务预设</button>
+                                        <button type="button" className="property-btn-small" onClick={() => applyChartPreset('compact')} title="适合小尺寸组件">紧凑预设</button>
+                                        <button type="button" className="property-btn-small" onClick={() => applyChartPreset('clear')} title="恢复默认可读策略">恢复预设</button>
+                                    </div>
+                                ) : null}
+                                <div style={{ marginTop: 6, fontSize: 11, color: '#94a3b8', lineHeight: 1.45 }}>
+                                    {styleClipboard
+                                        ? `样式剪贴板：${styleClipboard.type}（${Object.keys(styleClipboard.config || {}).length} 字段）`
+                                        : '样式剪贴板为空，可先在任意组件点击“复制样式”。'}
+                                    <br />
+                                    {layoutClipboard
+                                        ? `布局剪贴板：${layoutClipboard.width}×${layoutClipboard.height} @ (${layoutClipboard.x}, ${layoutClipboard.y})`
+                                        : '布局剪贴板为空，可复制当前组件布局。'}
+                                </div>
+                            </>
+                        ) : null}
+                    </div>
+                )}
+
+                {/* Position & Size */}
+                {shouldRenderSection('position-size', '位置', '尺寸', 'x', 'y', '宽', '高') && (
+                    <div className="property-section">
+                        <div className="property-section-title property-section-title-collapsible">
+                            <button
+                                type="button"
+                                className="property-section-toggle"
+                                onClick={() => toggleSection('position-size')}
+                            >
+                                {isSectionCollapsed('position-size') ? '▸' : '▾'} 位置与尺寸
+                            </button>
+                        </div>
+                        {!isSectionCollapsed('position-size') ? (
+                            <>
+                                <div className="property-row">
+                                    <label className="property-label">X</label>
+                                    <input
+                                        type="number"
+                                        className="property-input"
+                                        value={selectedComponent.x}
+                                        onChange={(e) => handleChange('x', Number(e.target.value))}
+                                    />
+                                </div>
+
+                                <div className="property-row">
+                                    <label className="property-label">Y</label>
+                                    <input
+                                        type="number"
+                                        className="property-input"
+                                        value={selectedComponent.y}
+                                        onChange={(e) => handleChange('y', Number(e.target.value))}
+                                    />
+                                </div>
+
+                                <div className="property-row">
+                                    <label className="property-label">宽度</label>
+                                    <input
+                                        type="number"
+                                        className="property-input"
+                                        value={selectedComponent.width}
+                                        onChange={(e) => handleChange('width', Number(e.target.value))}
+                                    />
+                                </div>
+
+                                <div className="property-row">
+                                    <label className="property-label">高度</label>
+                                    <input
+                                        type="number"
+                                        className="property-input"
+                                        value={selectedComponent.height}
+                                        onChange={(e) => handleChange('height', Number(e.target.value))}
+                                    />
+                                </div>
+                            </>
+                        ) : null}
+                    </div>
+                )}
+
+                {/* Component-specific config */}
+                {runtimePlugin?.propertySchema?.fields?.length && shouldRenderSection('plugin-config', '插件', 'plugin', runtimePlugin.name) ? (
+                    <div className="property-section">
+                        <div className="property-section-title property-section-title-collapsible">
+                            <button
+                                type="button"
+                                className="property-section-toggle"
+                                onClick={() => toggleSection('plugin-config')}
+                            >
+                                {isSectionCollapsed('plugin-config') ? '▸' : '▾'} 插件配置 ({runtimePlugin.name})
+                            </button>
+                        </div>
+                        {!isSectionCollapsed('plugin-config')
+                            ? renderPluginSchemaFields(selectedComponent, runtimePlugin.propertySchema.fields, handleConfigChange)
+                            : null}
+                    </div>
+                ) : null}
+
+                {shouldRenderSection('component-config', '组件', '样式', '图表', '外观') && (
+                    <div className="property-section">
+                        <div
+                            className="property-section-title property-section-title-collapsible"
+                            style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}
+                        >
+                            <button
+                                type="button"
+                                className="property-section-toggle"
+                                onClick={() => toggleSection('component-config')}
+                            >
+                                {isSectionCollapsed('component-config') ? '▸' : '▾'} 组件配置
+                            </button>
+                            {CHART_COMPONENT_TYPES.has(selectedComponent.type) ? (
+                                <div style={{ display: 'inline-flex', gap: 6 }}>
+                                    <button
+                                        type="button"
+                                        className="property-btn-small"
+                                        onClick={() => setComponentConfigMode('quick')}
+                                        style={{
+                                            minHeight: 24,
+                                            padding: '2px 8px',
+                                            opacity: componentConfigMode === 'quick' ? 1 : 0.75,
+                                        }}
+                                    >
+                                        简洁
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="property-btn-small"
+                                        onClick={() => setComponentConfigMode('advanced')}
+                                        style={{
+                                            minHeight: 24,
+                                            padding: '2px 8px',
+                                            opacity: componentConfigMode === 'advanced' ? 1 : 0.75,
+                                        }}
+                                    >
+                                        专业
+                                    </button>
+                                </div>
+                            ) : null}
+                        </div>
+
+                        {!isSectionCollapsed('component-config')
+                            ? (
+                                CHART_COMPONENT_TYPES.has(selectedComponent.type) && componentConfigMode === 'quick'
+                                    ? renderQuickChartConfig(selectedComponent, handleConfigChange, applyChartPreset)
+                                    : renderComponentConfig(selectedComponent, handleConfigChange)
+                            )
+                            : null}
+                    </div>
+                )}
+
+                {/* Data Source */}
+                {shouldRenderSection('data-source', '数据', 'sql', 'card', 'api', 'dataset', 'metric') && (
+                    <div className="property-section">
+                        <div className="property-section-title property-section-title-collapsible">
+                            <button
+                                type="button"
+                                className="property-section-toggle"
+                                onClick={() => toggleSection('data-source')}
+                            >
+                                {isSectionCollapsed('data-source') ? '▸' : '▾'} 数据源
+                            </button>
+                        </div>
+                        {!isSectionCollapsed('data-source')
+                            ? renderDataSourceConfig(selectedComponent, updateComponent, config.globalVariables ?? [])
+                            : null}
+                    </div>
+                )}
+
+                {/* Field Mapping */}
+                {shouldRenderSection('data-source', '字段映射', 'field', 'mapping') && isMappable(selectedComponent.type) && (() => {
+                    const fmSourceCols = selectedComponent.config._sourceColumns as Array<{ name: string; displayName: string; baseType?: string }> ?? [];
+                    const hasFmSource = resolveDataSourceType(selectedComponent.dataSource as DataSourceConfig | undefined) !== 'static';
+                    if (!hasFmSource || fmSourceCols.length === 0) return null;
+                    const currentMapping = (selectedComponent.config._fieldMapping as FieldMapping) ?? {};
+                    const useFieldMapping = selectedComponent.config._useFieldMapping !== false;
+                    return (
+                        <div className="property-section">
+                            <div className="property-section-title property-section-title-collapsible">
+                                <button
+                                    type="button"
+                                    className="property-section-toggle"
+                                    onClick={() => toggleSection('field-mapping')}
+                                >
+                                    {isSectionCollapsed('field-mapping') ? '▸' : '▾'} 字段映射
+                                </button>
+                                <label style={{ fontSize: 11, color: '#94a3b8', display: 'flex', alignItems: 'center', gap: 4, marginLeft: 'auto' }}>
+                                    <input
+                                        type="checkbox"
+                                        checked={useFieldMapping}
+                                        onChange={(e) => {
+                                            handleConfigChange('_useFieldMapping', e.target.checked);
+                                        }}
+                                    />
+                                    启用
+                                </label>
+                            </div>
+                            {!isSectionCollapsed('field-mapping') && useFieldMapping ? (
+                                <FieldMappingPanel
+                                    componentType={selectedComponent.type}
+                                    sourceColumns={fmSourceCols}
+                                    mapping={currentMapping}
+                                    onChange={(newMapping) => handleConfigChange('_fieldMapping', newMapping)}
+                                />
+                            ) : !isSectionCollapsed('field-mapping') ? (
+                                <div style={{ fontSize: 11, color: '#64748b', padding: '4px 0' }}>
+                                    字段映射已关闭，使用高级模式直接编辑 config。
+                                </div>
+                            ) : null}
+                        </div>
+                    );
+                })()}
+
+                {shouldRenderSection('explain', '解释', 'explain') && (
+                    <div className="property-section">
+                        <div className="property-section-title property-section-title-collapsible">
+                            <button
+                                type="button"
+                                className="property-section-toggle"
+                                onClick={() => toggleSection('explain')}
+                            >
+                                {isSectionCollapsed('explain') ? '▸' : '▾'} 解释
+                            </button>
+                        </div>
+                        {!isSectionCollapsed('explain') ? (
+                            canExplain ? (
+                                <div style={{ display: 'grid', gap: 8 }}>
+                                    <button
+                                        type="button"
+                                        className="property-btn-small"
+                                        onClick={() => { void handleExplain(); }}
+                                    >
+                                        解释当前组件
+                                    </button>
+                                    <div style={{ fontSize: 11, color: '#94a3b8', lineHeight: 1.45 }}>
+                                        解释来源 CardId: {explainCardId}
+                                    </div>
+                                    {explainState?.state === 'loading' ? (
+                                        <div style={{ fontSize: 12, color: '#94a3b8' }}>解释生成中...</div>
+                                    ) : null}
+                                    {explainState?.state === 'error' ? (
+                                        <div style={{ fontSize: 12, color: '#ef4444' }}>
+                                            解释失败：{explainState.error instanceof Error ? explainState.error.message : 'unknown error'}
+                                        </div>
+                                    ) : null}
+                                    {explainState?.state === 'loaded' ? (
+                                        <>
+                                            <button
+                                                type="button"
+                                                className="property-btn-small"
+                                                onClick={() => {
+                                                    const text = explainState.value.copyJson ?? JSON.stringify(explainState.value.explainCard ?? {}, null, 2);
+                                                    void writeTextToClipboard(text);
+                                                }}
+                                            >
+                                                复制解释JSON
+                                            </button>
+                                            <pre
+                                                style={{
+                                                    margin: 0,
+                                                    padding: 8,
+                                                    borderRadius: 8,
+                                                    background: 'rgba(15,23,42,0.6)',
+                                                    whiteSpace: 'pre-wrap',
+                                                    wordBreak: 'break-word',
+                                                    fontSize: 11,
+                                                    maxHeight: 240,
+                                                    overflow: 'auto',
+                                                }}
+                                            >
+                                                {JSON.stringify(explainState.value.explainCard ?? {}, null, 2)}
+                                            </pre>
+                                        </>
+                                    ) : null}
+                                </div>
+                            ) : (
+                                <div style={{ fontSize: 11, color: '#94a3b8', lineHeight: 1.45 }}>
+                                    当前组件未绑定可解释的 Card 数据源。
+                                </div>
+                            )
+                        ) : null}
+                    </div>
+                )}
+
+                {/* Chart annotations (markLine / markArea / conditionalColors) */}
+                {shouldRenderSection('component-config', '标注', '辅助线', 'markLine', 'threshold') && (selectedComponent.type === 'line-chart' || selectedComponent.type === 'bar-chart' || selectedComponent.type === 'scatter-chart' || selectedComponent.type === 'combo-chart' || selectedComponent.type === 'waterfall-chart') && (
+                    <div className="property-section">
+                        <div className="property-section-title property-section-title-collapsible">
+                            <button
+                                type="button"
+                                className="property-section-toggle"
+                                onClick={() => toggleSection('annotations')}
+                            >
+                                {isSectionCollapsed('annotations') ? '▸' : '▾'} 标注 / 阈值线
+                            </button>
+                        </div>
+                        {!isSectionCollapsed('annotations') && (
+                            <ChartAnnotationConfig
+                                component={selectedComponent}
+                                onChange={handleConfigChange}
+                            />
+                        )}
+                    </div>
+                )}
+
+                {/* Drill-down config */}
+                {drillDownContent ? (
+                    <div className="property-section">
+                        <div className="property-section-title property-section-title-collapsible">
+                            <button
+                                type="button"
+                                className="property-section-toggle"
+                                onClick={() => toggleSection('drill-down')}
+                            >
+                                {isSectionCollapsed('drill-down') ? '▸' : '▾'} 下钻配置
+                            </button>
+                        </div>
+                        {!isSectionCollapsed('drill-down') ? drillDownContent : null}
+                    </div>
+                ) : null}
+
+                {interactionContent ? (
+                    <div className="property-section">
+                        <div className="property-section-title property-section-title-collapsible">
+                            <button
+                                type="button"
+                                className="property-section-toggle"
+                                onClick={() => toggleSection('interaction')}
+                            >
+                                {isSectionCollapsed('interaction') ? '▸' : '▾'} 联动配置
+                            </button>
+                        </div>
+                        {!isSectionCollapsed('interaction') ? interactionContent : null}
+                    </div>
+                ) : null}
+
+                {/* Visibility & Lock */}
+                {shouldRenderSection('other', '其他', '名称', '容器', '锁定', '可见') && (
+                    <div className="property-section">
+                        <div className="property-section-title property-section-title-collapsible">
+                            <button
+                                type="button"
+                                className="property-section-toggle"
+                                onClick={() => toggleSection('other')}
+                            >
+                                {isSectionCollapsed('other') ? '▸' : '▾'} 其他
+                            </button>
+                        </div>
+                        {!isSectionCollapsed('other') ? (
+                            <>
+                                <div className="property-row">
+                                    <label className="property-label">名称</label>
+                                    <input
+                                        type="text"
+                                        className="property-input"
+                                        value={selectedComponent.name}
+                                        onChange={(e) => handleChange('name', e.target.value)}
+                                    />
+                                </div>
+
+                                <div className="property-row">
+                                    <label className="property-label">所属容器</label>
+                                    <select
+                                        className="property-input"
+                                        value={selectedComponent.parentContainerId || ''}
+                                        onChange={(e) => {
+                                            const parentId = e.target.value || undefined;
+                                            if (!parentId) {
+                                                updateComponent(selectedComponent.id, { parentContainerId: undefined });
+                                                return;
+                                            }
+                                            const parent = config.components.find((item) => item.id === parentId && item.type === 'container');
+                                            if (!parent) {
+                                                updateComponent(selectedComponent.id, { parentContainerId: undefined });
+                                                return;
+                                            }
+                                            if (wouldCreateParentCycle(config.components, selectedComponent.id, parentId)) {
+                                                alert('该容器绑定会形成循环引用，请选择其他容器');
+                                                return;
+                                            }
+                                            const maxX = parent.x + Math.max(0, parent.width - selectedComponent.width);
+                                            const maxY = parent.y + Math.max(0, parent.height - selectedComponent.height);
+                                            const nextX = Math.max(parent.x, Math.min(selectedComponent.x, maxX));
+                                            const nextY = Math.max(parent.y, Math.min(selectedComponent.y, maxY));
+                                            updateComponent(selectedComponent.id, {
+                                                parentContainerId: parentId,
+                                                x: nextX,
+                                                y: nextY,
+                                            });
+                                        }}
+                                    >
+                                        <option value="">-- 无 --</option>
+                                        {config.components
+                                            .filter((item) => (
+                                                item.type === 'container'
+                                                && item.id !== selectedComponent.id
+                                                && !wouldCreateParentCycle(config.components, selectedComponent.id, item.id)
+                                            ))
+                                            .map((item) => (
+                                                <option key={item.id} value={item.id}>
+                                                    {item.name} ({item.id})
+                                                </option>
+                                            ))}
+                                    </select>
+                                </div>
+
+                                {selectedComponent.type === 'container' && (
+                                    <div className="property-row">
+                                        <label className="property-label">子组件数</label>
+                                        <div className="property-input" style={{ display: 'flex', alignItems: 'center' }}>
+                                            {config.components.filter((item) => item.parentContainerId === selectedComponent.id).length}
+                                        </div>
+                                    </div>
+                                )}
+                                {selectedComponent.type === 'tab-switcher' && (
+                                    <div className="property-row" style={{ alignItems: 'flex-start' }}>
+                                        <label className="property-label">Tab联动</label>
+                                        <div style={{ display: 'grid', gap: 6, width: '100%' }}>
+                                            <button type="button" className="property-btn-small" onClick={applyTabVisibilityRules}>
+                                                一键应用显隐规则
+                                            </button>
+                                            <button type="button" className="property-btn-small" onClick={clearTabVisibilityRules}>
+                                                清理显隐规则
+                                            </button>
+                                            <div style={{ fontSize: 11, color: '#94a3b8', lineHeight: 1.5 }}>
+                                                规则会按 Tab 选项顺序分配到图表/表格组件。
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                <div className="property-row">
+                                    <label className="property-label">锁定</label>
+                                    <input
+                                        type="checkbox"
+                                        checked={selectedComponent.locked}
+                                        onChange={(e) => handleChange('locked', e.target.checked)}
+                                    />
+                                </div>
+
+                                <div className="property-row">
+                                    <label className="property-label">可见</label>
+                                    <input
+                                        type="checkbox"
+                                        checked={selectedComponent.visible}
+                                        onChange={(e) => handleChange('visible', e.target.checked)}
+                                    />
+                                </div>
+                                <div className="property-row">
+                                    <label className="property-label">多端可见</label>
+                                    <div style={{ display: 'flex', gap: 8 }}>
+                                        {(['pc', 'tablet', 'mobile'] as const).map((device) => {
+                                            const current = Array.isArray(selectedComponent.config.visibleOn)
+                                                ? selectedComponent.config.visibleOn as string[]
+                                                : ['pc', 'tablet', 'mobile'];
+                                            const checked = current.includes(device);
+                                            const label = device === 'pc' ? 'PC' : device === 'tablet' ? '平板' : '手机';
+                                            return (
+                                                <label key={device} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12 }}>
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={checked}
+                                                        onChange={(e) => {
+                                                            const base = Array.isArray(selectedComponent.config.visibleOn)
+                                                                ? selectedComponent.config.visibleOn as string[]
+                                                                : ['pc', 'tablet', 'mobile'];
+                                                            const next = e.target.checked
+                                                                ? Array.from(new Set([...base, device]))
+                                                                : base.filter((item) => item !== device);
+                                                            handleConfigChange('visibleOn', next);
+                                                        }}
+                                                    />
+                                                    {label}
+                                                </label>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                                <div className="property-row">
+                                    <label className="property-label">变量可见条件</label>
+                                    <input
+                                        type="checkbox"
+                                        checked={selectedComponent.config.visibilityRuleEnabled === true}
+                                        onChange={(e) => handleConfigChange('visibilityRuleEnabled', e.target.checked)}
+                                    />
+                                </div>
+                                {selectedComponent.config.visibilityRuleEnabled === true && (
+                                    <>
+                                        <div className="property-row">
+                                            <label className="property-label">变量Key</label>
+                                            <input
+                                                type="text"
+                                                className="property-input"
+                                                value={String(selectedComponent.config.visibilityVariableKey ?? '')}
+                                                onChange={(e) => handleConfigChange('visibilityVariableKey', e.target.value)}
+                                                placeholder="tabKey"
+                                            />
+                                        </div>
+                                        <div className="property-row">
+                                            <label className="property-label">匹配模式</label>
+                                            <select
+                                                className="property-input"
+                                                value={String(selectedComponent.config.visibilityMatchMode ?? 'equals')}
+                                                onChange={(e) => handleConfigChange('visibilityMatchMode', e.target.value)}
+                                            >
+                                                <option value="equals">等于任一值</option>
+                                                <option value="not-equals">不等于任一值</option>
+                                                <option value="contains">包含任一值</option>
+                                                <option value="not-contains">不包含任一值</option>
+                                                <option value="starts-with">前缀匹配任一值</option>
+                                                <option value="ends-with">后缀匹配任一值</option>
+                                                <option value="empty">为空</option>
+                                                <option value="not-empty">非空</option>
+                                            </select>
+                                        </div>
+                                        {(() => {
+                                            const mode = String(selectedComponent.config.visibilityMatchMode ?? 'equals');
+                                            if (mode === 'empty' || mode === 'not-empty') {
+                                                return null;
+                                            }
+                                            return (
+                                                <div className="property-row">
+                                                    <label className="property-label">匹配值</label>
+                                                    <textarea
+                                                        className="property-input"
+                                                        rows={4}
+                                                        value={serializeVisibilityMatchValues(selectedComponent.config.visibilityMatchValues)}
+                                                        onChange={(e) => handleConfigChange('visibilityMatchValues', parseVisibilityMatchValues(e.target.value))}
+                                                        placeholder={'每行一个值，例如：\noverview\nline'}
+                                                    />
+                                                </div>
+                                            );
+                                        })()}
+                                        <div style={{ fontSize: 11, color: '#94a3b8', marginTop: -2 }}>
+                                            仅在预览/公开/导出模式生效，设计器中始终可见便于编辑。
+                                        </div>
+                                    </>
+                                )}
+                            </>
+                        ) : null}
+                    </div>
+                )}
             </div>
         </div>
     );
@@ -845,6 +2197,7 @@ function renderComponentConfig(
     onChange: (key: string, value: unknown) => void
 ) {
     const { type, config } = component;
+    const legendHeuristic = resolveLegendHeuristicLayout(component);
     const configuredSeriesColors = Array.isArray(config.seriesColors)
         ? (config.seriesColors as string[]).map((item) => String(item))
         : [];
@@ -859,6 +2212,29 @@ function renderComponentConfig(
         if (labels.length === 0) return null;
         return (
             <>
+                {/* Color scheme selector */}
+                <div className="property-row" style={{ marginTop: 8 }}>
+                    <label className="property-label">配色方案</label>
+                    <select
+                        className="property-input"
+                        value={(config._colorScheme as string) || ''}
+                        onChange={(e) => {
+                            const schemeId = e.target.value;
+                            const scheme = COLOR_SCHEMES.find(s => s.id === schemeId);
+                            if (scheme) {
+                                onChange('_colorScheme', schemeId);
+                                onChange('seriesColors', scheme.colors);
+                            } else {
+                                onChange('_colorScheme', '');
+                            }
+                        }}
+                    >
+                        <option value="">自定义</option>
+                        {COLOR_SCHEMES.map(s => (
+                            <option key={s.id} value={s.id}>{s.name}</option>
+                        ))}
+                    </select>
+                </div>
                 <div style={{ fontSize: 11, color: '#888', marginTop: 8, marginBottom: 4 }}>
                     系列配色
                 </div>
@@ -880,6 +2256,48 @@ function renderComponentConfig(
     const renderLegendLayoutRows = () => (
         <>
             <div className="property-row">
+                <label className="property-label">图例显示</label>
+                <select
+                    className="property-input"
+                    value={(config.legendDisplay as string) || 'auto'}
+                    onChange={(e) => onChange('legendDisplay', e.target.value)}
+                >
+                    <option value="auto">自动</option>
+                    <option value="show">显示</option>
+                    <option value="hide">隐藏</option>
+                </select>
+            </div>
+            <div className="property-row">
+                <label className="property-label">图例位置</label>
+                <select
+                    className="property-input"
+                    value={(config.legendPosition as string) || 'auto'}
+                    onChange={(e) => onChange('legendPosition', e.target.value)}
+                >
+                    <option value="auto">自动</option>
+                    <option value="top">上</option>
+                    <option value="bottom">下</option>
+                    <option value="left">左</option>
+                    <option value="right">右</option>
+                </select>
+            </div>
+            <div className="property-row">
+                <label className="property-label">启用拖拽微调</label>
+                <input
+                    type="checkbox"
+                    checked={config.legendDragEnabled === true}
+                    onChange={(e) => onChange('legendDragEnabled', e.target.checked)}
+                />
+            </div>
+            <div className="property-row">
+                <label className="property-label">自动避让</label>
+                <input
+                    type="checkbox"
+                    checked={config.autoLegendAvoid !== false}
+                    onChange={(e) => onChange('autoLegendAvoid', e.target.checked)}
+                />
+            </div>
+            <div className="property-row">
                 <label className="property-label">图例方向</label>
                 <select
                     className="property-input"
@@ -889,6 +2307,19 @@ function renderComponentConfig(
                     <option value="auto">自动</option>
                     <option value="horizontal">横向</option>
                     <option value="vertical">纵向</option>
+                </select>
+            </div>
+            <div className="property-row">
+                <label className="property-label">图例对齐</label>
+                <select
+                    className="property-input"
+                    value={(config.legendAlign as string) || 'auto'}
+                    onChange={(e) => onChange('legendAlign', e.target.value)}
+                >
+                    <option value="auto">自动</option>
+                    <option value="start">靠前</option>
+                    <option value="center">居中</option>
+                    <option value="end">靠后</option>
                 </select>
             </div>
             <div className="property-row">
@@ -902,7 +2333,95 @@ function renderComponentConfig(
                     onChange={(e) => onChange('legendItemGap', Number(e.target.value))}
                 />
             </div>
+            <div className="property-row">
+                <label className="property-label">图例预留(px)</label>
+                <input
+                    type="number"
+                    className="property-input"
+                    min={0}
+                    max={360}
+                    value={(config.legendReserveSize as number) || 0}
+                    onChange={(e) => onChange('legendReserveSize', Number(e.target.value))}
+                    placeholder="0=自动"
+                />
+            </div>
+            <div className="property-row">
+                <label className="property-label">图例水平偏移</label>
+                <input
+                    type="number"
+                    className="property-input"
+                    min={-400}
+                    max={400}
+                    value={(config.legendOffsetX as number) || 0}
+                    onChange={(e) => onChange('legendOffsetX', Number(e.target.value))}
+                />
+            </div>
+            <div className="property-row">
+                <label className="property-label">图例垂直偏移</label>
+                <input
+                    type="number"
+                    className="property-input"
+                    min={-400}
+                    max={400}
+                    value={(config.legendOffsetY as number) || 0}
+                    onChange={(e) => onChange('legendOffsetY', Number(e.target.value))}
+                />
+            </div>
+            <div className="property-row">
+                <label className="property-label">图例文本宽(px)</label>
+                <input
+                    type="number"
+                    className="property-input"
+                    min={0}
+                    max={320}
+                    value={(config.legendNameMaxWidth as number) || 0}
+                    onChange={(e) => onChange('legendNameMaxWidth', Number(e.target.value))}
+                    placeholder="0=自动"
+                />
+            </div>
+            <div className="property-row">
+                <label className="property-label">图例偏移</label>
+                <button
+                    type="button"
+                    className="property-input"
+                    onClick={() => {
+                        onChange('legendOffsetX', 0);
+                        onChange('legendOffsetY', 0);
+                    }}
+                >
+                    重置为自动
+                </button>
+            </div>
+            <div className="property-row">
+                <label className="property-label">图例避让</label>
+                <div style={{ width: '100%' }}>
+                    <button
+                        type="button"
+                        className="property-action-btn"
+                        style={{ width: '100%' }}
+                        onClick={() => applyLegendHeuristicLayout(component, onChange)}
+                        title={legendHeuristic.hint}
+                    >
+                        一键自动避让
+                    </button>
+                    <div style={{ fontSize: 11, color: '#888', marginTop: 4 }}>{legendHeuristic.hint}</div>
+                </div>
+            </div>
         </>
+    );
+
+    const renderCompactPresetRow = () => (
+        <div className="property-row">
+            <label className="property-label">小屏预设</label>
+            <select
+                className="property-input"
+                value={(config.compactLayoutPreset as string) || 'auto'}
+                onChange={(e) => onChange('compactLayoutPreset', e.target.value)}
+            >
+                <option value="auto">自动</option>
+                <option value="off">关闭</option>
+            </select>
+        </div>
     );
 
     const renderChartPaddingRows = () => (
@@ -958,6 +2477,23 @@ function renderComponentConfig(
                     placeholder="0=自动"
                 />
             </div>
+            <div className="property-row">
+                <label className="property-label">图形布局</label>
+                <button
+                    type="button"
+                    className="property-input"
+                    onClick={() => {
+                        onChange('chartPaddingTop', 0);
+                        onChange('chartPaddingRight', 0);
+                        onChange('chartPaddingBottom', 0);
+                        onChange('chartPaddingLeft', 0);
+                        onChange('chartOffsetX', 0);
+                        onChange('chartOffsetY', 0);
+                    }}
+                >
+                    一键重置为自动
+                </button>
+            </div>
         </>
     );
 
@@ -965,6 +2501,14 @@ function renderComponentConfig(
         <>
             <div style={{ fontSize: 11, color: '#888', marginTop: 8, marginBottom: 4 }}>
                 图形位置微调
+            </div>
+            <div className="property-row">
+                <label className="property-label">启用拖拽微调</label>
+                <input
+                    type="checkbox"
+                    checked={config.chartDragEnabled === true}
+                    onChange={(e) => onChange('chartDragEnabled', e.target.checked)}
+                />
             </div>
             <div className="property-row">
                 <label className="property-label">水平偏移</label>
@@ -989,6 +2533,19 @@ function renderComponentConfig(
                 />
             </div>
             <div className="property-row">
+                <label className="property-label">图形偏移</label>
+                <button
+                    type="button"
+                    className="property-input"
+                    onClick={() => {
+                        onChange('chartOffsetX', 0);
+                        onChange('chartOffsetY', 0);
+                    }}
+                >
+                    重置为自动
+                </button>
+            </div>
+            <div className="property-row">
                 <label className="property-label">图形缩放(%)</label>
                 <input
                     type="number"
@@ -999,6 +2556,158 @@ function renderComponentConfig(
                     onChange={(e) => onChange('chartScalePercent', Number(e.target.value))}
                 />
             </div>
+        </>
+    );
+
+    const renderAxisLabelRows = () => (
+        <>
+            <div style={{ fontSize: 11, color: '#888', marginTop: 8, marginBottom: 4 }}>
+                轴标签防拥挤
+            </div>
+            <div className="property-row">
+                <label className="property-label">X轴标签角度</label>
+                <input
+                    type="number"
+                    className="property-input"
+                    min={-90}
+                    max={90}
+                    value={(config.xAxisLabelRotate as number) || 0}
+                    onChange={(e) => onChange('xAxisLabelRotate', Number(e.target.value))}
+                />
+            </div>
+            <div className="property-row">
+                <label className="property-label">X轴最大字数</label>
+                <input
+                    type="number"
+                    className="property-input"
+                    min={0}
+                    max={40}
+                    value={(config.xAxisLabelMaxLength as number) || 0}
+                    onChange={(e) => onChange('xAxisLabelMaxLength', Number(e.target.value))}
+                    placeholder="0=不限"
+                />
+            </div>
+            <div className="property-row">
+                <label className="property-label">X轴抽样间隔</label>
+                <input
+                    type="number"
+                    className="property-input"
+                    min={0}
+                    max={200}
+                    value={(config.xAxisLabelInterval as number) || 0}
+                    onChange={(e) => onChange('xAxisLabelInterval', Number(e.target.value))}
+                    placeholder="0=自动"
+                />
+            </div>
+            <div className="property-row">
+                <label className="property-label">标签系列策略</label>
+                <select
+                    className="property-input"
+                    value={(config.axisSeriesLabelStrategy as string) || 'auto'}
+                    onChange={(e) => onChange('axisSeriesLabelStrategy', e.target.value)}
+                >
+                    <option value="auto">自动</option>
+                    <option value="all">全部系列</option>
+                    <option value="first">仅首系列</option>
+                    <option value="none">隐藏标签</option>
+                </select>
+            </div>
+            <div className="property-row">
+                <label className="property-label">标签步长</label>
+                <input
+                    type="number"
+                    className="property-input"
+                    min={0}
+                    max={200}
+                    value={(config.axisSeriesLabelStep as number) || 0}
+                    onChange={(e) => onChange('axisSeriesLabelStep', Number(e.target.value))}
+                    placeholder="0=自动"
+                />
+            </div>
+            <div className="property-row">
+                <label className="property-label">Tooltip行数</label>
+                <input
+                    type="number"
+                    className="property-input"
+                    min={0}
+                    max={50}
+                    value={(config.axisTooltipMaxRows as number) || 0}
+                    onChange={(e) => onChange('axisTooltipMaxRows', Number(e.target.value))}
+                    placeholder="0=自动"
+                />
+            </div>
+        </>
+    );
+
+    const renderSeriesLabelRows = (options?: { includeLeaderLines?: boolean }) => (
+        <>
+            <div style={{ fontSize: 11, color: '#888', marginTop: 8, marginBottom: 4 }}>
+                数据标签
+            </div>
+            <div className="property-row">
+                <label className="property-label">标签位置</label>
+                <select
+                    className="property-input"
+                    value={(config.seriesLabelPosition as string) || 'auto'}
+                    onChange={(e) => onChange('seriesLabelPosition', e.target.value)}
+                >
+                    <option value="auto">自动</option>
+                    <option value="inside">内部</option>
+                    <option value="outside">外部</option>
+                    <option value="none">隐藏</option>
+                </select>
+            </div>
+            <div className="property-row">
+                <label className="property-label">标签字号</label>
+                <input
+                    type="number"
+                    className="property-input"
+                    min={10}
+                    max={28}
+                    value={(config.seriesLabelFontSize as number) || 12}
+                    onChange={(e) => onChange('seriesLabelFontSize', Number(e.target.value))}
+                />
+            </div>
+            {(options?.includeLeaderLines ?? true) ? (
+                <>
+                    <div className="property-row">
+                        <label className="property-label">标签最小角度</label>
+                        <input
+                            type="number"
+                            className="property-input"
+                            min={0}
+                            max={45}
+                            value={(config.seriesLabelMinAngle as number) || 0}
+                            onChange={(e) => onChange('seriesLabelMinAngle', Number(e.target.value))}
+                            placeholder="0=自动"
+                        />
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">引导线长度1</label>
+                        <input
+                            type="number"
+                            className="property-input"
+                            min={0}
+                            max={60}
+                            value={(config.seriesLabelLineLength as number) || 0}
+                            onChange={(e) => onChange('seriesLabelLineLength', Number(e.target.value))}
+                            placeholder="0=自动"
+                        />
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">引导线长度2</label>
+                        <input
+                            type="number"
+                            className="property-input"
+                            min={0}
+                            max={60}
+                            value={(config.seriesLabelLineLength2 as number) || 0}
+                            onChange={(e) => onChange('seriesLabelLineLength2', Number(e.target.value))}
+                            placeholder="0=自动"
+                        />
+                    </div>
+                </>
+            ) : null}
         </>
     );
 
@@ -1053,9 +2762,10 @@ function renderComponentConfig(
                         <label className="property-label">图例位置</label>
                         <select
                             className="property-input"
-                            value={(config.legendPosition as string) || 'top'}
+                            value={(config.legendPosition as string) || 'auto'}
                             onChange={(e) => onChange('legendPosition', e.target.value)}
                         >
+                            <option value="auto">自动</option>
                             <option value="top">顶部</option>
                             <option value="bottom">底部</option>
                             <option value="left">左侧</option>
@@ -1063,7 +2773,11 @@ function renderComponentConfig(
                         </select>
                     </div>
                     {renderLegendLayoutRows()}
+                    {renderCompactPresetRow()}
                     {renderChartPaddingRows()}
+                    {renderChartOffsetRows()}
+                    {renderAxisLabelRows()}
+                    {renderSeriesLabelRows({ includeLeaderLines: false })}
                     {renderSeriesColorRows(
                         ((config.series as Array<{ name?: string }> | undefined) || [])
                             .map((item, idx) => (item?.name || '').trim() || `系列${idx + 1}`),
@@ -1114,9 +2828,10 @@ function renderComponentConfig(
                                 <label className="property-label">图例位置</label>
                                 <select
                                     className="property-input"
-                                    value={(config.legendPosition as string) || 'top'}
+                                    value={(config.legendPosition as string) || 'auto'}
                                     onChange={(e) => onChange('legendPosition', e.target.value)}
                                 >
+                                    <option value="auto">自动</option>
                                     <option value="top">顶部</option>
                                     <option value="bottom">底部</option>
                                     <option value="left">左侧</option>
@@ -1124,8 +2839,10 @@ function renderComponentConfig(
                                 </select>
                             </div>
                             {renderLegendLayoutRows()}
+                            {renderCompactPresetRow()}
                             {renderChartPaddingRows()}
                             {renderChartOffsetRows()}
+                            {(type === 'pie-chart' || type === 'funnel-chart') && renderSeriesLabelRows()}
                             {renderSeriesColorRows(
                                 ((config.data as Array<{ name?: string }> | undefined) || [])
                                     .map((item, idx) => (item?.name || '').trim() || `系列${idx + 1}`),
@@ -1283,6 +3000,56 @@ function renderComponentConfig(
                             value={(config.fontSize as number) || 14}
                             onChange={(e) => onChange('fontSize', Number(e.target.value))}
                         />
+                    </div>
+                </>
+            );
+
+        case 'richtext':
+            return (
+                <>
+                    <div className="property-row">
+                        <label className="property-label">HTML 内容</label>
+                        <textarea
+                            className="property-input"
+                            rows={8}
+                            value={(config.content as string) || ''}
+                            onChange={(e) => onChange('content', e.target.value)}
+                        />
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">内边距</label>
+                        <input
+                            type="number"
+                            className="property-input"
+                            min={0}
+                            max={60}
+                            value={(config.padding as number) ?? 12}
+                            onChange={(e) => onChange('padding', Number(e.target.value))}
+                        />
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">垂直对齐</label>
+                        <select
+                            className="property-input"
+                            value={(config.verticalAlign as string) || 'top'}
+                            onChange={(e) => onChange('verticalAlign', e.target.value)}
+                        >
+                            <option value="top">顶部</option>
+                            <option value="middle">居中</option>
+                            <option value="bottom">底部</option>
+                        </select>
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">溢出</label>
+                        <select
+                            className="property-input"
+                            value={(config.overflow as string) || 'hidden'}
+                            onChange={(e) => onChange('overflow', e.target.value)}
+                        >
+                            <option value="hidden">隐藏</option>
+                            <option value="visible">可见</option>
+                            <option value="scroll">滚动</option>
+                        </select>
                     </div>
                 </>
             );
@@ -2125,9 +3892,10 @@ function renderComponentConfig(
                         <label className="property-label">图例位置</label>
                         <select
                             className="property-input"
-                            value={(config.legendPosition as string) || 'top'}
+                            value={(config.legendPosition as string) || 'auto'}
                             onChange={(e) => onChange('legendPosition', e.target.value)}
                         >
+                            <option value="auto">自动</option>
                             <option value="top">顶部</option>
                             <option value="bottom">底部</option>
                             <option value="left">左侧</option>
@@ -2135,7 +3903,9 @@ function renderComponentConfig(
                         </select>
                     </div>
                     {renderLegendLayoutRows()}
+                    {renderCompactPresetRow()}
                     {renderChartPaddingRows()}
+                    {renderChartOffsetRows()}
                     {renderSeriesColorRows(['散点系列'])}
                 </>
             );
@@ -2153,6 +3923,20 @@ function renderComponentConfig(
                         />
                     </div>
                     <div className="property-row">
+                        <label className="property-label">地图模式</label>
+                        <select
+                            className="property-input"
+                            value={(config.mapMode as string) || 'region'}
+                            onChange={(e) => onChange('mapMode', e.target.value)}
+                        >
+                            <option value="region">区域填色</option>
+                            <option value="bubble">气泡地图</option>
+                            <option value="scatter">散点地图</option>
+                            <option value="heatmap">热力地图</option>
+                            <option value="flow">流向地图</option>
+                        </select>
+                    </div>
+                    <div className="property-row">
                         <label className="property-label">地图范围</label>
                         <select
                             className="property-input"
@@ -2161,8 +3945,47 @@ function renderComponentConfig(
                         >
                             <option value="china">中国</option>
                             <option value="world">世界</option>
+                            <optgroup label="省级">
+                                {PROVINCE_PRESETS.map(p => (
+                                    <option key={p.code} value={p.code}>{p.name}</option>
+                                ))}
+                            </optgroup>
                         </select>
                     </div>
+                    {((config.mapMode as string) === 'bubble' || (config.mapMode as string) === 'scatter') ? (
+                        <div className="property-row">
+                            <label className="property-label">气泡颜色</label>
+                            <input
+                                type="color"
+                                className="property-input"
+                                value={(config.bubbleColor as string) || '#3b82f6'}
+                                onChange={(e) => onChange('bubbleColor', e.target.value)}
+                            />
+                        </div>
+                    ) : null}
+                    {(config.mapMode as string) === 'heatmap' ? (
+                        <div className="property-row">
+                            <label className="property-label">热力半径</label>
+                            <input
+                                type="number"
+                                className="property-input"
+                                min={5}
+                                max={80}
+                                value={(config.heatmapRadius as number) || 20}
+                                onChange={(e) => onChange('heatmapRadius', Number(e.target.value))}
+                            />
+                        </div>
+                    ) : null}
+                    {(config.mapMode as string) === 'flow' ? (
+                        <div className="property-row">
+                            <label className="property-label">流动动画</label>
+                            <input
+                                type="checkbox"
+                                checked={config.showFlowEffect !== false}
+                                onChange={(e) => onChange('showFlowEffect', e.target.checked)}
+                            />
+                        </div>
+                    ) : null}
                     <div className="property-row">
                         <label className="property-label">区域变量Key</label>
                         <input
@@ -2201,14 +4024,16 @@ function renderComponentConfig(
                             placeholder="https://.../map.geojson"
                         />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">启用下钻</label>
-                        <input
-                            type="checkbox"
-                            checked={config.enableRegionDrill !== false}
-                            onChange={(e) => onChange('enableRegionDrill', e.target.checked)}
-                        />
-                    </div>
+                    {!(config.mapMode as string) || (config.mapMode as string) === 'region' ? (
+                        <div className="property-row">
+                            <label className="property-label">启用下钻</label>
+                            <input
+                                type="checkbox"
+                                checked={config.enableRegionDrill !== false}
+                                onChange={(e) => onChange('enableRegionDrill', e.target.checked)}
+                            />
+                        </div>
+                    ) : null}
                 </>
             );
 
@@ -2306,6 +4131,168 @@ function renderComponentConfig(
                             value={(config.padding as number) || 12}
                             onChange={(e) => onChange('padding', Number(e.target.value))}
                         />
+                    </div>
+                </>
+            );
+
+        // ==================== 3D 可视化 ====================
+        case 'globe-chart':
+            return (
+                <>
+                    <div className="property-row">
+                        <label className="property-label">标题</label>
+                        <input
+                            type="text"
+                            className="property-input"
+                            value={(config.title as string) || '3D 地球'}
+                            onChange={(e) => onChange('title', e.target.value)}
+                        />
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">自动旋转</label>
+                        <select className="property-input" value={config.autoRotate !== false ? 'true' : 'false'} onChange={(e) => onChange('autoRotate', e.target.value === 'true')}>
+                            <option value="true">开启</option>
+                            <option value="false">关闭</option>
+                        </select>
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">旋转速度</label>
+                        <input type="number" className="property-input" min={1} max={50} value={(config.rotateSpeed as number) || 10} onChange={(e) => onChange('rotateSpeed', Number(e.target.value))} />
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">观测距离</label>
+                        <input type="number" className="property-input" min={50} max={500} value={(config.viewDistance as number) || 200} onChange={(e) => onChange('viewDistance', Number(e.target.value))} />
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">底图纹理 URL</label>
+                        <input type="text" className="property-input" placeholder="https://..." value={(config.baseTexture as string) || ''} onChange={(e) => onChange('baseTexture', e.target.value)} />
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">高度纹理 URL</label>
+                        <input type="text" className="property-input" placeholder="https://..." value={(config.heightTexture as string) || ''} onChange={(e) => onChange('heightTexture', e.target.value)} />
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">大气层效果</label>
+                        <select className="property-input" value={config.showAtmosphere !== false ? 'true' : 'false'} onChange={(e) => onChange('showAtmosphere', e.target.value === 'true')}>
+                            <option value="true">开启</option>
+                            <option value="false">关闭</option>
+                        </select>
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">散点大小</label>
+                        <input type="number" className="property-input" min={2} max={40} value={(config.pointSize as number) || 12} onChange={(e) => onChange('pointSize', Number(e.target.value))} />
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">背景色</label>
+                        <input type="color" className="property-input" value={(config.globeBackground as string) || '#000000'} onChange={(e) => onChange('globeBackground', e.target.value)} />
+                    </div>
+                </>
+            );
+
+        case 'bar3d-chart':
+            return (
+                <>
+                    <div className="property-row">
+                        <label className="property-label">标题</label>
+                        <input type="text" className="property-input" value={(config.title as string) || '3D 柱状图'} onChange={(e) => onChange('title', e.target.value)} />
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">视角 Alpha</label>
+                        <input type="number" className="property-input" min={0} max={90} value={(config.viewAlpha as number) || 40} onChange={(e) => onChange('viewAlpha', Number(e.target.value))} />
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">视角 Beta</label>
+                        <input type="number" className="property-input" min={0} max={360} value={(config.viewBeta as number) || 30} onChange={(e) => onChange('viewBeta', Number(e.target.value))} />
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">自动旋转</label>
+                        <select className="property-input" value={config.autoRotate === true ? 'true' : 'false'} onChange={(e) => onChange('autoRotate', e.target.value === 'true')}>
+                            <option value="false">关闭</option>
+                            <option value="true">开启</option>
+                        </select>
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">盒宽</label>
+                        <input type="number" className="property-input" min={20} max={300} value={(config.boxWidth as number) || 100} onChange={(e) => onChange('boxWidth', Number(e.target.value))} />
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">盒深</label>
+                        <input type="number" className="property-input" min={20} max={300} value={(config.boxDepth as number) || 80} onChange={(e) => onChange('boxDepth', Number(e.target.value))} />
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">盒高</label>
+                        <input type="number" className="property-input" min={20} max={300} value={(config.boxHeight as number) || 60} onChange={(e) => onChange('boxHeight', Number(e.target.value))} />
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">显示标签</label>
+                        <select className="property-input" value={config.showLabel === true ? 'true' : 'false'} onChange={(e) => onChange('showLabel', e.target.value === 'true')}>
+                            <option value="false">关闭</option>
+                            <option value="true">开启</option>
+                        </select>
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">色阶低值</label>
+                        <input type="color" className="property-input" value={(config.colorRange as string[])?.[0] || '#313695'} onChange={(e) => onChange('colorRange', [e.target.value, (config.colorRange as string[])?.[1] || '#a50026'])} />
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">色阶高值</label>
+                        <input type="color" className="property-input" value={(config.colorRange as string[])?.[1] || '#a50026'} onChange={(e) => onChange('colorRange', [(config.colorRange as string[])?.[0] || '#313695', e.target.value])} />
+                    </div>
+                </>
+            );
+
+        case 'scatter3d-chart':
+            return (
+                <>
+                    <div className="property-row">
+                        <label className="property-label">标题</label>
+                        <input type="text" className="property-input" value={(config.title as string) || '3D 散点图'} onChange={(e) => onChange('title', e.target.value)} />
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">散点大小</label>
+                        <input type="number" className="property-input" min={2} max={30} value={(config.pointSize as number) || 8} onChange={(e) => onChange('pointSize', Number(e.target.value))} />
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">视角 Alpha</label>
+                        <input type="number" className="property-input" min={0} max={90} value={(config.viewAlpha as number) || 40} onChange={(e) => onChange('viewAlpha', Number(e.target.value))} />
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">视角 Beta</label>
+                        <input type="number" className="property-input" min={0} max={360} value={(config.viewBeta as number) || 30} onChange={(e) => onChange('viewBeta', Number(e.target.value))} />
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">自动旋转</label>
+                        <select className="property-input" value={config.autoRotate === true ? 'true' : 'false'} onChange={(e) => onChange('autoRotate', e.target.value === 'true')}>
+                            <option value="false">关闭</option>
+                            <option value="true">开启</option>
+                        </select>
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">显示标签</label>
+                        <select className="property-input" value={config.showLabel === true ? 'true' : 'false'} onChange={(e) => onChange('showLabel', e.target.value === 'true')}>
+                            <option value="false">关闭</option>
+                            <option value="true">开启</option>
+                        </select>
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">X 轴名称</label>
+                        <input type="text" className="property-input" value={(config.xAxisName as string) || 'X'} onChange={(e) => onChange('xAxisName', e.target.value)} />
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">Y 轴名称</label>
+                        <input type="text" className="property-input" value={(config.yAxisName as string) || 'Y'} onChange={(e) => onChange('yAxisName', e.target.value)} />
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">Z 轴名称</label>
+                        <input type="text" className="property-input" value={(config.zAxisName as string) || 'Z'} onChange={(e) => onChange('zAxisName', e.target.value)} />
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">色阶低值</label>
+                        <input type="color" className="property-input" value={(config.colorRange as string[])?.[0] || '#50a3ba'} onChange={(e) => onChange('colorRange', [e.target.value, (config.colorRange as string[])?.[1] || '#eac736'])} />
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">色阶高值</label>
+                        <input type="color" className="property-input" value={(config.colorRange as string[])?.[1] || '#eac736'} onChange={(e) => onChange('colorRange', [(config.colorRange as string[])?.[0] || '#50a3ba', e.target.value])} />
                     </div>
                 </>
             );
@@ -3033,6 +5020,7 @@ function renderInteractionConfig(
     component: ScreenComponent,
     globalVariables: ScreenGlobalVariable[],
     updateComponent: (id: string, updates: Partial<ScreenComponent>) => void,
+    options?: { embedded?: boolean },
 ) {
     if (!INTERACTION_COMPONENT_TYPES.has(component.type)) {
         return null;
@@ -3046,7 +5034,16 @@ function renderInteractionConfig(
         jumpOpenMode: 'new-tab' as const,
     };
     const mappings = interaction.mappings ?? [];
-    const sourcePathCandidates = ['name', 'seriesName', 'value', 'data.name', 'data.value', 'data.code'];
+    const sourcePathCandidates = (() => {
+        const t = component.type;
+        if (t === 'pie-chart' || t === 'funnel-chart') return ['name', 'value', 'percent', 'data.name'];
+        if (t === 'map-chart') return ['name', 'data.name', 'data.value', 'value'];
+        if (t === 'table' || t === 'scroll-board') return ['row[0]', 'row[1]', 'row[2]', 'name', 'value'];
+        if (t === 'scatter-chart') return ['name', 'value', 'data[0]', 'data[1]', 'seriesName'];
+        if (t === 'treemap-chart' || t === 'sunburst-chart') return ['name', 'value', 'data.name', 'treePathInfo'];
+        if (t === 'radar-chart') return ['name', 'seriesName', 'value', 'data.name'];
+        return ['name', 'seriesName', 'value', 'data.name', 'data.value', 'data.code'];
+    })();
 
     const setInteraction = (next: typeof interaction) => {
         updateComponent(component.id, { interaction: next });
@@ -3058,10 +5055,8 @@ function renderInteractionConfig(
         setInteraction({ ...interaction, mappings: next });
     };
 
-    return (
-        <div className="property-section">
-            <div className="property-section-title">联动配置</div>
-
+    const content = (
+        <>
             <div className="property-row">
                 <label className="property-label">启用点击联动</label>
                 <input
@@ -3216,12 +5211,23 @@ function renderInteractionConfig(
                     )}
                 </>
             )}
+        </>
+    );
+
+    if (options?.embedded) {
+        return content;
+    }
+    return (
+        <div className="property-section">
+            <div className="property-section-title">联动配置</div>
+            {content}
         </div>
     );
 }
 function renderDrillDownConfig(
     component: ScreenComponent,
     updateComponent: (id: string, updates: Partial<ScreenComponent>) => void,
+    options?: { embedded?: boolean },
 ) {
     const { type, dataSource, drillDown } = component;
     const cardId = dataSource?.type === 'card' ? dataSource.cardConfig?.cardId : undefined;
@@ -3254,10 +5260,8 @@ function renderDrillDownConfig(
         setDrillDown({ levels: [...levels, { cardId: 0, paramName: '', label: '' }] });
     };
 
-    return (
-        <div className="property-section">
-            <div className="property-section-title">下钻配置</div>
-
+    const content = (
+        <>
             <div className="property-row">
                 <label className="property-label">启用下钻</label>
                 <input
@@ -3339,6 +5343,16 @@ function renderDrillDownConfig(
                     </button>
                 </>
             )}
+        </>
+    );
+
+    if (options?.embedded) {
+        return content;
+    }
+    return (
+        <div className="property-section">
+            <div className="property-section-title">下钻配置</div>
+            {content}
         </div>
     );
 }
@@ -3695,6 +5709,110 @@ function ScrollBoardConfig({ component, onChange }: {
                 </>
             )}
         </>
+    );
+}
+
+/** Chart annotation config: markLines, markAreas, conditionalColors */
+function ChartAnnotationConfig({ component, onChange }: {
+    component: ScreenComponent;
+    onChange: (key: string, value: unknown) => void;
+}) {
+    const { config } = component;
+    const markLines = (config.markLines as ChartMarkLine[]) ?? [];
+    const markAreas = (config.markAreas as ChartMarkArea[]) ?? [];
+    const conditionalColors = (config.conditionalColors as SeriesConditionalColor[]) ?? [];
+
+    const addMarkLine = () => {
+        if (markLines.length >= 5) return;
+        onChange('markLines', [...markLines, { type: 'value' as const, value: 0, name: '', color: '#ff6b6b', lineStyle: 'dashed' as const, axis: 'y' as const }]);
+    };
+    const updateMarkLine = (idx: number, patch: Partial<ChartMarkLine>) => {
+        onChange('markLines', markLines.map((ml, i) => i === idx ? { ...ml, ...patch } : ml));
+    };
+    const removeMarkLine = (idx: number) => {
+        onChange('markLines', markLines.filter((_, i) => i !== idx));
+    };
+    const addMarkArea = () => {
+        if (markAreas.length >= 3) return;
+        onChange('markAreas', [...markAreas, { from: 0, to: 100, name: '', color: 'rgba(255,107,107,0.15)', axis: 'y' as const }]);
+    };
+    const updateMarkArea = (idx: number, patch: Partial<ChartMarkArea>) => {
+        onChange('markAreas', markAreas.map((ma, i) => i === idx ? { ...ma, ...patch } : ma));
+    };
+    const removeMarkArea = (idx: number) => {
+        onChange('markAreas', markAreas.filter((_, i) => i !== idx));
+    };
+    const addConditionalColor = () => {
+        if (conditionalColors.length >= 5) return;
+        onChange('conditionalColors', [...conditionalColors, { operator: '>' as const, value: 0, color: '#ef4444' }]);
+    };
+    const updateConditionalColor = (idx: number, patch: Partial<SeriesConditionalColor>) => {
+        onChange('conditionalColors', conditionalColors.map((cc, i) => i === idx ? { ...cc, ...patch } : cc));
+    };
+    const removeConditionalColor = (idx: number) => {
+        onChange('conditionalColors', conditionalColors.filter((_, i) => i !== idx));
+    };
+
+    return (
+        <div style={{ display: 'grid', gap: 8 }}>
+            <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600 }}>辅助线 ({markLines.length}/5)</div>
+            {markLines.map((ml, idx) => (
+                <div key={idx} style={{ display: 'grid', gridTemplateColumns: 'auto 1fr 60px 60px auto', gap: 4, alignItems: 'center' }}>
+                    <select className="property-input" style={{ fontSize: 11, padding: '3px 4px' }} value={ml.type}
+                        onChange={(e) => updateMarkLine(idx, { type: e.target.value as ChartMarkLine['type'] })}>
+                        <option value="value">固定值</option><option value="average">平均</option>
+                        <option value="min">最小</option><option value="max">最大</option>
+                    </select>
+                    {ml.type === 'value' ? (
+                        <input type="number" className="property-input" style={{ fontSize: 11, padding: '3px 4px' }} value={ml.value ?? 0}
+                            onChange={(e) => updateMarkLine(idx, { value: Number(e.target.value) })} />
+                    ) : <span />}
+                    <input type="text" className="property-input" style={{ fontSize: 11, padding: '3px 4px' }} placeholder="标签" value={ml.name ?? ''} onChange={(e) => updateMarkLine(idx, { name: e.target.value })} />
+                    <input type="color" className="property-color-input" value={ml.color ?? '#ff6b6b'} onChange={(e) => updateMarkLine(idx, { color: e.target.value })} />
+                    <button type="button" className="property-btn-small" style={{ padding: '2px 6px', fontSize: 11 }} onClick={() => removeMarkLine(idx)}>×</button>
+                </div>
+            ))}
+            {markLines.length < 5 && (
+                <button type="button" className="property-btn-small" onClick={addMarkLine} style={{ fontSize: 11, justifySelf: 'start' }}>+ 辅助线</button>
+            )}
+
+            <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600, marginTop: 4 }}>标记区域 ({markAreas.length}/3)</div>
+            {markAreas.map((ma, idx) => (
+                <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 60px 60px auto', gap: 4, alignItems: 'center' }}>
+                    <input type="number" className="property-input" style={{ fontSize: 11, padding: '3px 4px' }} placeholder="起始" value={ma.from} onChange={(e) => updateMarkArea(idx, { from: Number(e.target.value) })} />
+                    <input type="number" className="property-input" style={{ fontSize: 11, padding: '3px 4px' }} placeholder="结束" value={ma.to} onChange={(e) => updateMarkArea(idx, { to: Number(e.target.value) })} />
+                    <input type="text" className="property-input" style={{ fontSize: 11, padding: '3px 4px' }} placeholder="标签" value={ma.name ?? ''} onChange={(e) => updateMarkArea(idx, { name: e.target.value })} />
+                    <input type="color" className="property-color-input" value={ma.color?.startsWith('rgba') ? '#ff6b6b' : (ma.color ?? '#ff6b6b')}
+                        onChange={(e) => { const h = e.target.value; const r = parseInt(h.slice(1, 3), 16); const g = parseInt(h.slice(3, 5), 16); const b = parseInt(h.slice(5, 7), 16); updateMarkArea(idx, { color: `rgba(${r},${g},${b},0.15)` }); }} />
+                    <button type="button" className="property-btn-small" style={{ padding: '2px 6px', fontSize: 11 }} onClick={() => removeMarkArea(idx)}>×</button>
+                </div>
+            ))}
+            {markAreas.length < 3 && (
+                <button type="button" className="property-btn-small" onClick={addMarkArea} style={{ fontSize: 11, justifySelf: 'start' }}>+ 标记区域</button>
+            )}
+
+            <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600, marginTop: 4 }}>条件着色 ({conditionalColors.length}/5)</div>
+            {conditionalColors.map((cc, idx) => (
+                <div key={idx} style={{ display: 'grid', gridTemplateColumns: 'auto 60px 60px 40px auto', gap: 4, alignItems: 'center' }}>
+                    <select className="property-input" style={{ fontSize: 11, padding: '3px 4px' }} value={cc.operator}
+                        onChange={(e) => updateConditionalColor(idx, { operator: e.target.value as SeriesConditionalColor['operator'] })}>
+                        <option value=">">{'>'}</option><option value=">=">{'>='}</option><option value="<">{'<'}</option>
+                        <option value="<=">{'<='}</option><option value="==">{'=='}</option><option value="between">区间</option>
+                    </select>
+                    <input type="number" className="property-input" style={{ fontSize: 11, padding: '3px 4px' }} value={cc.value}
+                        onChange={(e) => updateConditionalColor(idx, { value: Number(e.target.value) })} />
+                    {cc.operator === 'between' ? (
+                        <input type="number" className="property-input" style={{ fontSize: 11, padding: '3px 4px' }} placeholder="上限" value={cc.valueTo ?? 0}
+                            onChange={(e) => updateConditionalColor(idx, { valueTo: Number(e.target.value) })} />
+                    ) : <span />}
+                    <input type="color" className="property-color-input" value={cc.color} onChange={(e) => updateConditionalColor(idx, { color: e.target.value })} />
+                    <button type="button" className="property-btn-small" style={{ padding: '2px 6px', fontSize: 11 }} onClick={() => removeConditionalColor(idx)}>×</button>
+                </div>
+            ))}
+            {conditionalColors.length < 5 && (
+                <button type="button" className="property-btn-small" onClick={addConditionalColor} style={{ fontSize: 11, justifySelf: 'start' }}>+ 条件着色</button>
+            )}
+        </div>
     );
 }
 

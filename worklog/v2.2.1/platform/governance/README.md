@@ -7,9 +7,13 @@
 - 总览：`worklog/v2.2.1/platform/governance/report/data-governance-center-overview.md`
 - 差距分析：`worklog/v2.2.1/platform/governance/report/data-governance-center-gap-analysis.md`
 - 执行计划：`worklog/v2.2.1/platform/governance/report/execution-plan-p0-p3.md`
+- 完成摘要：`worklog/v2.2.1/platform/governance/report/completion-summary.md`
+- 生产化迁移看板：`worklog/v2.2.1/platform/governance/report/productionization-task-board.md`
+- P3 回归矩阵：`worklog/v2.2.1/platform/governance/report/p3-01-governance-matrix-latest.md`
+- P3 契约守卫：`worklog/v2.2.1/platform/governance/report/p3-02-contract-latest.md`
+- P3 性能基线：`worklog/v2.2.1/platform/governance/report/p3-03-benchmark-latest.md`
 - 任务清单：`worklog/v2.2.1/platform/governance/tasks/README.md`
 - 任务看板：`worklog/v2.2.1/platform/governance/tasks/status-board.md`
-- 自动化脚本：`worklog/v2.2.1/platform/governance/scripts`
 - 原始证据：`worklog/v2.2.1/platform/governance/raw`
 
 ## 说明

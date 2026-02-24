@@ -52,7 +52,19 @@ export const updateSchemaDriftPolicy = (id: string, data: { policyMode: string; 
 	api.post<SchemaDriftEvent>({ url: `/catalog/schema-drift/${id}/policy`, data });
 export const updateSchemaDriftTicket = (id: string, data: { ticketStatus: string; assignee?: string; note?: string }) =>
 	api.post<SchemaDriftEvent>({ url: `/catalog/schema-drift/${id}/ticket`, data });
-export const searchCatalog = (params: { keyword: string; types?: string; limit?: number }) =>
+export const searchCatalog = (params: {
+	keyword: string;
+	types?: string;
+	domainId?: string;
+	sourceId?: string;
+	classification?: string;
+	ownerDept?: string;
+	warehouseLayer?: string;
+	exposedBy?: string;
+	datasetType?: string;
+	enabledOnly?: boolean;
+	limit?: number;
+}) =>
 	api.get({ url: "/catalog/search", params });
 export const getDbtConfig = () => api.get({ url: "/etl/dbt/config" });
 export const updateDbtConfig = (data: any) => api.put({ url: "/etl/dbt/config", data });
@@ -219,6 +231,8 @@ export const getMetadataStandard = (id: string) => api.get({ url: `/modeling/met
 export const createMetadataStandard = (data: any) => api.post({ url: "/modeling/metadata-standards", data });
 export const updateMetadataStandard = (id: string, data: any) => api.put({ url: `/modeling/metadata-standards/${id}`, data });
 export const deleteMetadataStandard = (id: string) => api.delete({ url: `/modeling/metadata-standards/${id}` });
+export const getMetadataStandardReferences = (id: string) =>
+	api.get({ url: `/modeling/metadata-standards/${id}/references` });
 export const importMetadataStandards = (formData: FormData) =>
     api.post({ url: "/modeling/metadata-standards/import", data: formData });
 
@@ -229,12 +243,30 @@ export const createReferenceCode = (data: any) => api.post({ url: "/governance/r
 export const updateReferenceCode = (id: string, data: any) =>
 	api.put({ url: `/governance/reference-codes/${id}`, data });
 export const deleteReferenceCode = (id: string) => api.delete({ url: `/governance/reference-codes/${id}` });
+export const getReferenceCodeReferences = (id: string) =>
+	api.get({ url: `/governance/reference-codes/${id}/references` });
+export const getReferenceCodeImportOpsOverview = (params: { hours?: number } = {}) =>
+	api.get({ url: "/governance/reference-codes/ops/import-overview", params });
 export const listReferenceCodeItems = (id: string) =>
 	api.get({ url: `/governance/reference-codes/${id}/items` });
 export const createReferenceCodeItem = (id: string, data: any) =>
 	api.post({ url: `/governance/reference-codes/${id}/items`, data });
 export const batchReferenceCodeItems = (id: string, data: { raw: string }) =>
 	api.post({ url: `/governance/reference-codes/${id}/items/batch`, data });
+export const previewStructuredReferenceCodeImport = (
+	id: string,
+	data: { conflictPolicy?: string; rows: Array<Record<string, any>> },
+) => api.post({ url: `/governance/reference-codes/${id}/items/import/preview`, data });
+export const applyStructuredReferenceCodeImport = (
+	id: string,
+	data: { conflictPolicy?: string; rows: Array<Record<string, any>> },
+) => api.post({ url: `/governance/reference-codes/${id}/items/import/apply`, data });
+export const rollbackStructuredReferenceCodeImport = (id: string, runId: string) =>
+	api.post({ url: `/governance/reference-codes/${id}/items/import/${runId}/rollback` });
+export const listStructuredReferenceCodeImportRuns = (id: string) =>
+	api.get({ url: `/governance/reference-codes/${id}/items/import/runs` });
+export const getStructuredReferenceCodeImportRun = (id: string, runId: string) =>
+	api.get({ url: `/governance/reference-codes/${id}/items/import/${runId}` });
 export const updateReferenceCodeItem = (id: string, itemId: string | number, data: any) =>
 	api.put({ url: `/governance/reference-codes/${id}/items/${itemId}`, data });
 export const deleteReferenceCodeItem = (id: string, itemId: string | number) =>
@@ -264,6 +296,8 @@ export const listGlossaryTerms = (params: any = {}) => api.get<any[]>({ url: "/m
 export const createGlossaryTerm = (data: any) => api.post({ url: "/modeling/glossary/terms", data });
 export const updateGlossaryTerm = (id: string, data: any) => api.put({ url: `/modeling/glossary/terms/${id}`, data });
 export const deleteGlossaryTerm = (id: string) => api.delete({ url: `/modeling/glossary/terms/${id}` });
+export const getGlossaryTermReferences = (id: string) =>
+	api.get({ url: `/modeling/glossary/terms/${id}/references` });
 
 export const listModelTemplates = () => api.get<any[]>({ url: "/modeling/templates" });
 export const listTemplateLayers = () =>
@@ -272,11 +306,18 @@ export const getModelTemplate = (id: string) => api.get({ url: `/modeling/templa
 export const createModelTemplate = (data: any) => api.post({ url: "/modeling/templates", data });
 export const updateModelTemplate = (id: string, data: any) => api.put({ url: `/modeling/templates/${id}`, data });
 export const deleteModelTemplate = (id: string) => api.delete({ url: `/modeling/templates/${id}` });
+export const getModelTemplateReferences = (id: string) =>
+	api.get({ url: `/modeling/templates/${id}/references` });
 export const validateModelTemplate = (id: string, tableId: string) =>
 	api.get({ url: `/modeling/templates/${id}/validate`, params: { tableId } });
 
 // Governance
 export const listQualityRules = () => api.get({ url: "/governance/quality/rules" });
+export const listQualityRuleVersions = (id: string) => api.get({ url: `/governance/quality/rules/${id}/versions` });
+export const getQualityRuleVersion = (id: string, version: number) =>
+	api.get({ url: `/governance/quality/rules/${id}/versions/${version}` });
+export const changeQualityRuleVersionStatus = (id: string, version: number, data: { status: string; notes?: string }) =>
+	api.post({ url: `/governance/quality/rules/${id}/versions/${version}/status`, data });
 export const createQualityRule = (data: any) => api.post({ url: "/governance/quality/rules", data });
 export const updateQualityRule = (id: string, data: any) => api.put({ url: `/governance/quality/rules/${id}`, data });
 export const deleteQualityRule = (id: string) => api.delete({ url: `/governance/quality/rules/${id}` });
@@ -284,6 +325,7 @@ export const toggleQualityRule = (id: string, enabled: boolean) =>
 	api.post({ url: `/governance/quality/rules/${id}/toggle`, data: { enabled } });
 
 export const triggerQualityRun = (data: any) => api.post({ url: "/governance/quality/runs", data });
+export const triggerQualityDryRun = (data: any) => api.post({ url: "/governance/quality/runs/dry-run", data });
 export const listQualityRuns = (params: any = {}) => api.get({ url: "/governance/quality/runs", params });
 export const getQualityRun = (id: string) => api.get({ url: `/governance/quality/runs/${id}` });
 
@@ -309,6 +351,17 @@ export const updateIssue = (id: string, data: any) => api.put({ url: `/governanc
 export const closeIssue = (id: string, resolution?: string) =>
 	api.post({ url: `/governance/issues/${id}/close`, data: { resolution } });
 export const appendIssueAction = (id: string, data: any) => api.post({ url: `/governance/issues/${id}/actions`, data });
+export const getIssueSlaMetrics = (params: { days?: number } = {}) =>
+	api.get<{ windowDays: number; total: number; open: number; overdue: number; overdueRate: number; avgHandlingHours: number }>({
+		url: "/governance/issues/metrics",
+		params,
+	});
+export const getGovernanceOpsOverview = (params: { days?: number } = {}) =>
+	api.get({ url: "/governance/ops/overview", params });
+export const getGovernanceOpsTrend = (params: { days?: number } = {}) =>
+	api.get({ url: "/governance/ops/trend", params });
+export const getGovernanceReleaseGate = (params: { days?: number } = {}) =>
+	api.get({ url: "/governance/ops/release-gate", params });
 
 // Indicators
 export const listIndicators = (params: any = {}) => api.get({ url: "/governance/indicators", params });
@@ -320,6 +373,29 @@ export const publishIndicator = (id: string) => api.post({ url: `/governance/ind
 export const archiveIndicator = (id: string) => api.post({ url: `/governance/indicators/${id}/archive` });
 export const validateIndicator = (id: string) => api.post({ url: `/governance/indicators/${id}/validate` });
 export const getIndicatorDependencies = (params: any = {}) => api.get({ url: "/governance/indicators/dependencies", params });
+export const listIndicatorVersions = (id: string) => api.get({ url: `/governance/indicators/${id}/versions` });
+export const getIndicatorVersion = (id: string, version: string) =>
+	api.get({ url: `/governance/indicators/${id}/versions/${version}` });
+export const diffIndicatorVersions = (id: string, params: { left?: string; right?: string }) =>
+	api.get({ url: `/governance/indicators/${id}/versions/diff`, params });
+export const rollbackIndicatorVersion = (
+	id: string,
+	version: string,
+	data: { reason?: string; publishAfterRollback?: boolean } = {},
+) => api.post({ url: `/governance/indicators/${id}/versions/${version}/rollback`, data });
+export const listIndicatorReferences = (id: string) => api.get({ url: `/governance/indicators/${id}/references` });
+export const createIndicatorReference = (id: string, data: any) => api.post({ url: `/governance/indicators/${id}/references`, data });
+export const updateIndicatorReference = (id: string, refId: string, data: any) =>
+	api.put({ url: `/governance/indicators/${id}/references/${refId}`, data });
+export const deleteIndicatorReference = (id: string, refId: string) =>
+	api.delete({ url: `/governance/indicators/${id}/references/${refId}` });
+export const getIndicatorPublishPreview = (id: string) => api.post({ url: `/governance/indicators/${id}/publish-preview` });
+export const previewIndicator = (id: string, params: { limit?: number } = {}) =>
+	api.post({ url: `/governance/indicators/${id}/preview`, params });
+export const getIndicatorOpsOverview = (params: { hours?: number } = {}) =>
+	api.get({ url: "/governance/indicators/ops/overview", params });
+export const getIndicatorOpsTrend = (params: { hours?: number; bucketHours?: number } = {}) =>
+	api.get({ url: "/governance/indicators/ops/trend", params });
 
 // Dimensions
 export const listDimensions = (params: any = {}) => api.get({ url: "/governance/dimensions", params });
@@ -390,7 +466,14 @@ export const getCatalogLineage = (datasetId: string, projectName?: string) =>
   api.get({ url: "/catalog/lineage", params: { datasetId, projectName } });
 export const getCatalogLineageImpact = (
   datasetId: string,
-  params: { direction?: "UPSTREAM" | "DOWNSTREAM" | "BOTH"; depth?: number; projectName?: string } = {},
+  params: {
+    direction?: "UPSTREAM" | "DOWNSTREAM" | "BOTH";
+    depth?: number;
+    projectName?: string;
+    layers?: string;
+    changedWithinHours?: number;
+    sourceId?: string;
+  } = {},
 ) => api.get({ url: "/catalog/lineage/impact", params: { datasetId, ...params } });
 export const createCatalogLineage = (data: any) => api.post({ url: "/catalog/lineage", data });
 export const deleteCatalogLineage = (id: string) => api.delete({ url: `/catalog/lineage/${id}` });
@@ -413,6 +496,8 @@ export const listCatalogSyncRuns = (
 	params: { integration?: string; limit?: number; includeDetails?: boolean; sourceId?: string } = {},
 ) =>
 	api.get({ url: "/catalog/sync/runs", params });
+export const getCatalogSyncRunDiagnostics = (runId: string, params: { sourceId?: string } = {}) =>
+	api.get({ url: `/catalog/sync/runs/${runId}/diagnostics`, params });
 export const triggerJdbcCatalogSync = (sourceId: string, data: { reason?: string } = {}) =>
 	api.post({ url: `/catalog/sync/jdbc/${sourceId}/run`, data });
 

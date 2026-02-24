@@ -1,6 +1,6 @@
 # P3-03 治理性能与数据量基线
 
-`status`: `planned`
+`status`: `done`
 `priority`: `P3`
 
 ## 目标
@@ -22,6 +22,13 @@
 - 输出标准压测报告与瓶颈定位。
 - 给出明确容量建议与报警阈值。
 - 关键接口满足目标响应时间。
+
+## 完成说明
+
+- 已交付 HTTP 基线脚本：`worklog/v2.2.1/platform/governance/scripts/run-p3-03-http-benchmark.sh`。
+- 输出指标：`avg/p50/p95/p99/max/non200`，并支持 `--threshold-p95-ms` 与 `--strict` 门禁。
+- 最新报告：`worklog/v2.2.1/platform/governance/report/p3-03-benchmark-latest.md`。
+- 说明：该基线用于离线/现场快速回归；数据库大样本压测可在后续预生产追加。
 
 ## 风险与回滚
 

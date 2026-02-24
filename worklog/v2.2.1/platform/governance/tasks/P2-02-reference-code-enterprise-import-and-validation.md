@@ -1,6 +1,6 @@
 # P2-02 公共码表企业级导入与校验
 
-`status`: `planned`
+`status`: `done`
 `priority`: `P2`
 
 ## 目标
@@ -22,6 +22,15 @@
 - 导入前可预览新增/更新/冲突条目。
 - 冲突可阻断或按策略合并。
 - 导入操作可追踪、可回滚。
+
+## 完成说明
+
+- 新增结构化导入能力（预检/执行/回滚）：
+  - `POST /api/governance/reference-codes/{id}/items/import/preview`
+  - `POST /api/governance/reference-codes/{id}/items/import/apply`
+  - `POST /api/governance/reference-codes/{id}/items/import/{runId}/rollback`
+- 新增导入批次审计实体：`gov_reference_import_run`（Liquibase + Entity + Repository）。
+- 前端码表页已改为结构化导入主流程，并展示冲突/错误明细与回滚入口。
 
 ## 风险与回滚
 

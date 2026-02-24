@@ -12,6 +12,7 @@ import {
 	Input,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
+import { useCatalogManageAccess } from "@/hooks/useModuleManageAccess";
 import { PageHeader } from "@/components/page-header";
 import {
 	listMyDatasetAccessRequests,
@@ -43,6 +44,7 @@ export default function Page() {
 		taskId?: string;
 	}>({ open: false });
 	const [decisionNotes, setDecisionNotes] = useState("");
+	const canManage = useCatalogManageAccess();
 
 	const loadAll = async () => {
 		setLoading(true);
@@ -67,11 +69,19 @@ export default function Page() {
 	}, []);
 
 	const openDecision = (taskId: string, action: "approve" | "reject") => {
+		if (!canManage) {
+			toast.error("当前账号无资产审批权限");
+			return;
+		}
 		setDecisionNotes("");
 		setDecisionModal({ open: true, action, taskId });
 	};
 
 	const handleDecision = async () => {
+		if (!canManage) {
+			toast.error("当前账号无资产审批权限");
+			return;
+		}
 		if (!decisionModal.taskId || !decisionModal.action) return;
 		try {
 			if (decisionModal.action === "approve") {
@@ -106,12 +116,16 @@ export default function Page() {
 		{ title: "数据集", dataIndex: ["request", "datasetName"], render: (v) => v || "-" },
 		{ title: "申请人", dataIndex: ["request", "requesterName"], render: (v) => v || "-" },
 		{ title: "步骤", dataIndex: ["task", "stepOrder"], width: 80, render: (v) => v ?? "-" },
-		{ title: "状态", dataIndex: ["task", "status"], render: (v) => <Tag>{v || "-"}</Tag> },
-		{ title: "创建时间", dataIndex: ["task", "createdDate"], render: (v) => formatDate(v) },
-		{ title: "操作", render: (_, record) => (
-			<Space>
-				<Button size="small" type="primary" onClick={() => openDecision(record.task?.id, "approve")}>同意</Button>
-				<Button size="small" danger onClick={() => openDecision(record.task?.id, "reject")}>驳回</Button>
+			{ title: "状态", dataIndex: ["task", "status"], render: (v) => <Tag>{v || "-"}</Tag> },
+			{ title: "创建时间", dataIndex: ["task", "createdDate"], render: (v) => formatDate(v) },
+			{ title: "操作", render: (_, record) => (
+				<Space>
+					<Button size="small" type="primary" onClick={() => openDecision(record.task?.id, "approve")} disabled={!canManage}>
+						同意
+					</Button>
+				<Button size="small" danger onClick={() => openDecision(record.task?.id, "reject")} disabled={!canManage}>
+					驳回
+				</Button>
 			</Space>
 		) },
 	];
@@ -162,6 +176,7 @@ export default function Page() {
 				onCancel={() => setDecisionModal({ open: false })}
 				onOk={handleDecision}
 				okText="确认"
+				okButtonProps={{ disabled: !canManage }}
 				destroyOnClose
 			>
 				<Text>审批意见（可选）</Text>

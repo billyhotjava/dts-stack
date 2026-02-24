@@ -8,6 +8,7 @@ import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.security.AccessChecker;
 import jakarta.validation.Valid;
+import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -16,6 +17,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.transaction.annotation.Transactional;
@@ -71,6 +73,9 @@ public class CatalogLineageResource {
     public ApiResponse<Map<String, Object>> getLineage(
         @RequestParam UUID datasetId,
         @RequestParam(name = "projectName", required = false) String projectName,
+        @RequestParam(name = "layers", required = false) String layers,
+        @RequestParam(name = "changedWithinHours", required = false) Integer changedWithinHours,
+        @RequestParam(name = "sourceId", required = false) UUID sourceId,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
         CatalogDataset dataset = datasetRepo.findById(datasetId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "dataset not found"));
@@ -79,14 +84,19 @@ public class CatalogLineageResource {
             return ApiResponses.error(com.yuzhi.dts.platform.security.policy.PolicyErrorCodes.RESOURCE_NOT_VISIBLE, "Access denied for dataset");
         }
 
+        Set<String> layerFilters = parseLayerFilters(layers);
+        Instant changedSince = resolveChangedSince(changedWithinHours);
         List<CatalogDatasetLineage> links = lineageRepo
             .findByEitherSide(datasetId)
             .stream()
-            .filter(link -> matchProject(link, projectName))
+            .filter(link -> matchProject(link, projectName) && matchLineageFilters(link, datasetId, layerFilters, sourceId, changedSince, effDept))
             .toList();
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("datasetId", datasetId.toString());
         payload.put("projectName", trimToNull(projectName));
+        payload.put("layers", layerFilters);
+        payload.put("changedWithinHours", normalizeChangedWindow(changedWithinHours));
+        payload.put("sourceId", sourceId != null ? sourceId.toString() : null);
         payload.put(
             "upstreams",
             links.stream().filter(l -> datasetId.equals(l.getDownstreamDatasetId())).map(l -> toEdgeDto(l, effDept)).filter(Objects::nonNull).toList()
@@ -110,6 +120,9 @@ public class CatalogLineageResource {
         @RequestParam(name = "direction", required = false, defaultValue = "BOTH") String direction,
         @RequestParam(name = "depth", required = false, defaultValue = "3") int depth,
         @RequestParam(name = "projectName", required = false) String projectName,
+        @RequestParam(name = "layers", required = false) String layers,
+        @RequestParam(name = "changedWithinHours", required = false) Integer changedWithinHours,
+        @RequestParam(name = "sourceId", required = false) UUID sourceId,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
         CatalogDataset root = datasetRepo.findById(datasetId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "dataset not found"));
@@ -118,6 +131,8 @@ public class CatalogLineageResource {
             return ApiResponses.error(com.yuzhi.dts.platform.security.policy.PolicyErrorCodes.RESOURCE_NOT_VISIBLE, "Access denied for dataset");
         }
 
+        Set<String> layerFilters = parseLayerFilters(layers);
+        Instant changedSince = resolveChangedSince(changedWithinHours);
         int safeDepth = Math.max(1, Math.min(depth, 10));
         String dir = StringUtils.hasText(direction) ? direction.trim().toUpperCase(Locale.ROOT) : "BOTH";
         boolean upstreamEnabled = "UPSTREAM".equals(dir) || "BOTH".equals(dir);
@@ -175,17 +190,89 @@ public class CatalogLineageResource {
             });
         }
 
-        List<Map<String, Object>> edgeDtos = edges.stream().map(edge -> toEdgeDto(edge, effDept)).filter(Objects::nonNull).toList();
+        Map<UUID, CatalogDataset> filteredNodes = nodes
+            .entrySet()
+            .stream()
+            .filter(entry -> {
+                if (datasetId.equals(entry.getKey())) {
+                    return true;
+                }
+                CatalogDataset ds = entry.getValue();
+                return (
+                    matchLayer(ds, layerFilters) &&
+                    matchSource(ds, sourceId) &&
+                    matchChanged(ds != null ? ds.getLastModifiedDate() : null, changedSince)
+                );
+            })
+            .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue, (a, b) -> a, LinkedHashMap::new));
+
+        if (!filteredNodes.containsKey(datasetId)) {
+            filteredNodes.put(datasetId, root);
+        }
+
+        Set<UUID> filteredIds = filteredNodes.keySet();
+        List<Map<String, Object>> edgeDtos = edges
+            .stream()
+            .filter(edge -> {
+                if (edge == null) {
+                    return false;
+                }
+                UUID up = edge.getUpstreamDatasetId();
+                UUID down = edge.getDownstreamDatasetId();
+                if (up == null || down == null || !filteredIds.contains(up) || !filteredIds.contains(down)) {
+                    return false;
+                }
+                CatalogDataset upNode = filteredNodes.get(up);
+                CatalogDataset downNode = filteredNodes.get(down);
+                if (!matchChanged(edge.getLastModifiedDate(), changedSince)) {
+                    return matchChanged(upNode != null ? upNode.getLastModifiedDate() : null, changedSince) ||
+                    matchChanged(downNode != null ? downNode.getLastModifiedDate() : null, changedSince);
+                }
+                return true;
+            })
+            .map(edge -> toEdgeDto(edge, effDept))
+            .filter(Objects::nonNull)
+            .toList();
+
+        Map<String, Long> layerStats = filteredNodes
+            .values()
+            .stream()
+            .collect(
+                Collectors.groupingBy(
+                    ds -> normalizeLayer(ds != null ? ds.getWarehouseLayer() : null),
+                    LinkedHashMap::new,
+                    Collectors.counting()
+                )
+            );
+        Map<String, Long> relationStats = edgeDtos
+            .stream()
+            .collect(
+                Collectors.groupingBy(
+                    edge -> StringUtils.hasText((String) edge.get("relationType")) ? ((String) edge.get("relationType")).toUpperCase(Locale.ROOT) : "UNKNOWN",
+                    LinkedHashMap::new,
+                    Collectors.counting()
+                )
+            );
+        long changedNodeCount = filteredNodes
+            .values()
+            .stream()
+            .filter(ds -> matchChanged(ds != null ? ds.getLastModifiedDate() : null, changedSince))
+            .count();
+
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("datasetId", datasetId.toString());
         payload.put("direction", dir);
         payload.put("depth", safeDepth);
         payload.put("projectName", trimToNull(projectName));
-        payload.put("nodeCount", nodes.size());
+        payload.put("layers", layerFilters);
+        payload.put("changedWithinHours", normalizeChangedWindow(changedWithinHours));
+        payload.put("sourceId", sourceId != null ? sourceId.toString() : null);
+        payload.put("nodeCount", filteredNodes.size());
         payload.put("edgeCount", edgeDtos.size());
+        payload.put("impactStats", Map.of("layerNodeCounts", layerStats, "relationTypeCounts", relationStats, "changedNodeCount", changedNodeCount));
         payload.put(
             "nodes",
-            nodes.values().stream().map(ds -> {
+            filteredNodes.values().stream().map(ds -> {
                 Map<String, Object> dto = new LinkedHashMap<>();
                 dto.put("id", ds.getId() != null ? ds.getId().toString() : null);
                 dto.put("name", ds.getName());
@@ -194,6 +281,10 @@ public class CatalogLineageResource {
                 dto.put("type", ds.getType());
                 dto.put("layer", ds.getWarehouseLayer());
                 dto.put("ownerDept", ds.getOwnerDept());
+                dto.put("owner", ds.getOwner());
+                dto.put("sourceId", ds.getSourceId() != null ? ds.getSourceId().toString() : null);
+                dto.put("lastModifiedAt", ds.getLastModifiedDate());
+                dto.put("snapshotTime", ds.getSnapshotTime());
                 return dto;
             }).toList()
         );
@@ -298,10 +389,19 @@ public class CatalogLineageResource {
         dto.put("downstreamDatasetId", downstreamId != null ? downstreamId.toString() : null);
         dto.put("upstreamName", upstream != null ? upstream.getName() : null);
         dto.put("downstreamName", downstream != null ? downstream.getName() : null);
+        dto.put("upstreamLayer", upstream != null ? upstream.getWarehouseLayer() : null);
+        dto.put("downstreamLayer", downstream != null ? downstream.getWarehouseLayer() : null);
+        dto.put("upstreamOwner", upstream != null ? upstream.getOwner() : null);
+        dto.put("downstreamOwner", downstream != null ? downstream.getOwner() : null);
+        dto.put("upstreamSourceId", upstream != null && upstream.getSourceId() != null ? upstream.getSourceId().toString() : null);
+        dto.put("downstreamSourceId", downstream != null && downstream.getSourceId() != null ? downstream.getSourceId().toString() : null);
+        dto.put("upstreamLastModifiedAt", upstream != null ? upstream.getLastModifiedDate() : null);
+        dto.put("downstreamLastModifiedAt", downstream != null ? downstream.getLastModifiedDate() : null);
         dto.put("upstreamAssetType", link.getUpstreamAssetType());
         dto.put("downstreamAssetType", link.getDownstreamAssetType());
         dto.put("direction", link.getDirection());
         dto.put("projectName", link.getProjectName());
+        dto.put("lastModifiedAt", link.getLastModifiedDate());
         return dto;
     }
 
@@ -336,6 +436,98 @@ public class CatalogLineageResource {
             return false;
         }
         return edgeProject.equalsIgnoreCase(filter);
+    }
+
+    private Set<String> parseLayerFilters(String layers) {
+        String raw = trimToNull(layers);
+        if (raw == null) {
+            return Set.of();
+        }
+        return java.util.Arrays
+            .stream(raw.split(","))
+            .map(String::trim)
+            .filter(StringUtils::hasText)
+            .map(value -> value.toUpperCase(Locale.ROOT))
+            .collect(Collectors.toCollection(LinkedHashSet::new));
+    }
+
+    private Instant resolveChangedSince(Integer changedWithinHours) {
+        int hours = normalizeChangedWindow(changedWithinHours);
+        if (hours <= 0) {
+            return null;
+        }
+        return Instant.now().minusSeconds((long) hours * 3600L);
+    }
+
+    private int normalizeChangedWindow(Integer changedWithinHours) {
+        if (changedWithinHours == null || changedWithinHours <= 0) {
+            return 0;
+        }
+        return Math.min(changedWithinHours, 24 * 365);
+    }
+
+    private boolean matchChanged(Instant value, Instant changedSince) {
+        if (changedSince == null) {
+            return true;
+        }
+        return value != null && !value.isBefore(changedSince);
+    }
+
+    private boolean matchLayer(CatalogDataset dataset, Set<String> layers) {
+        if (layers == null || layers.isEmpty()) {
+            return true;
+        }
+        String layer = normalizeLayer(dataset != null ? dataset.getWarehouseLayer() : null);
+        return layers.contains(layer);
+    }
+
+    private String normalizeLayer(String layer) {
+        if (!StringUtils.hasText(layer)) {
+            return "UNKNOWN";
+        }
+        return layer.trim().toUpperCase(Locale.ROOT);
+    }
+
+    private boolean matchSource(CatalogDataset dataset, UUID sourceId) {
+        if (sourceId == null) {
+            return true;
+        }
+        if (dataset == null || dataset.getSourceId() == null) {
+            return false;
+        }
+        return sourceId.equals(dataset.getSourceId());
+    }
+
+    private boolean matchLineageFilters(
+        CatalogDatasetLineage link,
+        UUID rootId,
+        Set<String> layerFilters,
+        UUID sourceId,
+        Instant changedSince,
+        String effDept
+    ) {
+        if (link == null) {
+            return false;
+        }
+        CatalogDataset upstream = link.getUpstreamDatasetId() != null ? datasetRepo.findById(link.getUpstreamDatasetId()).orElse(null) : null;
+        CatalogDataset downstream = link.getDownstreamDatasetId() != null ? datasetRepo.findById(link.getDownstreamDatasetId()).orElse(null) : null;
+        if (upstream != null && (!accessChecker.canRead(upstream) || !accessChecker.departmentAllowed(upstream, effDept))) {
+            upstream = null;
+        }
+        if (downstream != null && (!accessChecker.canRead(downstream) || !accessChecker.departmentAllowed(downstream, effDept))) {
+            downstream = null;
+        }
+        CatalogDataset peer = rootId.equals(link.getDownstreamDatasetId()) ? upstream : downstream;
+        if (peer == null) {
+            return false;
+        }
+        if (!matchLayer(peer, layerFilters) || !matchSource(peer, sourceId)) {
+            return false;
+        }
+        if (matchChanged(link.getLastModifiedDate(), changedSince)) {
+            return true;
+        }
+        return matchChanged(peer.getLastModifiedDate(), changedSince);
     }
 
     private String claim(String name) {

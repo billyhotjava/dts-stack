@@ -21,6 +21,7 @@ import com.yuzhi.dts.platform.service.governance.request.IssueActionRequest;
 import com.yuzhi.dts.platform.service.governance.request.IssueTicketUpsertRequest;
 import jakarta.persistence.EntityNotFoundException;
 import java.lang.reflect.Array;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -28,6 +29,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.apache.commons.lang3.StringUtils;
@@ -48,7 +50,12 @@ import org.springframework.util.CollectionUtils;
 @Transactional
 public class IssueTicketService {
 
-    private static final List<String> OPEN_STATUSES = List.of("NEW", "IN_PROGRESS", "PENDING");
+    private static final List<String> OPEN_STATUSES = List.of("OPEN", "IN_PROGRESS", "RESOLVED");
+    private static final Set<String> CLOSED_STATUSES = Set.of("CLOSED");
+    private static final String STATUS_OPEN = "OPEN";
+    private static final String STATUS_IN_PROGRESS = "IN_PROGRESS";
+    private static final String STATUS_RESOLVED = "RESOLVED";
+    private static final String STATUS_CLOSED = "CLOSED";
 
     private final GovIssueTicketRepository ticketRepository;
     private final GovIssueActionRepository actionRepository;
@@ -86,6 +93,8 @@ public class IssueTicketService {
         UUID datasetId,
         String assignedTo,
         String owner,
+        String priority,
+        Boolean overdue,
         String keyword,
         int limit,
         String actor,
@@ -112,6 +121,29 @@ public class IssueTicketService {
         String normalizedOwner = normalizePrincipalFilter(owner, actor);
         if (StringUtils.isNotBlank(normalizedOwner)) {
             spec = spec.and((root, query, cb) -> cb.equal(root.get("owner"), normalizedOwner));
+        }
+        if (StringUtils.isNotBlank(priority)) {
+            String normalizedPriority = priority.trim().toUpperCase(Locale.ROOT);
+            spec = spec.and((root, query, cb) -> cb.equal(cb.upper(root.get("priority")), normalizedPriority));
+        }
+        if (overdue != null) {
+            Instant now = Instant.now();
+            if (Boolean.TRUE.equals(overdue)) {
+                spec = spec.and((root, query, cb) ->
+                    cb.and(
+                        cb.lessThan(root.get("dueAt"), now),
+                        cb.not(root.get("status").in(CLOSED_STATUSES))
+                    )
+                );
+            } else {
+                spec = spec.and((root, query, cb) ->
+                    cb.or(
+                        cb.isNull(root.get("dueAt")),
+                        cb.greaterThanOrEqualTo(root.get("dueAt"), now),
+                        root.get("status").in(CLOSED_STATUSES)
+                    )
+                );
+            }
         }
         if (StringUtils.isNotBlank(keyword)) {
             String term = "%" + keyword.trim().toLowerCase(Locale.ROOT) + "%";
@@ -150,7 +182,7 @@ public class IssueTicketService {
         GovIssueTicket ticket = new GovIssueTicket();
         applyUpsert(ticket, request, activeDeptHeader);
         if (StringUtils.isBlank(ticket.getStatus())) {
-            ticket.setStatus("NEW");
+            ticket.setStatus(STATUS_OPEN);
         }
         if (StringUtils.isBlank(ticket.getPriority())) {
             ticket.setPriority(properties.getIssue().getDefaultPriority());
@@ -160,6 +192,9 @@ public class IssueTicketService {
         }
         if (StringUtils.isNotBlank(ticket.getAssignedTo()) && ticket.getAssignedAt() == null) {
             ticket.setAssignedAt(Instant.now());
+        }
+        if (ticket.getDueAt() == null) {
+            ticket.setDueAt(Instant.now().plus(resolveSlaDuration(ticket.getSeverity(), ticket.getPriority())));
         }
         setSource(ticket, request.getSourceType(), request.getSourceId());
         ticketRepository.save(ticket);
@@ -239,6 +274,7 @@ public class IssueTicketService {
         String effectiveActor = StringUtils.defaultIfBlank(actor, SecurityUtils.getCurrentUserLogin().orElse("anonymous"));
         GovIssueTicket ticket = ticketRepository.findById(id).orElseThrow(EntityNotFoundException::new);
         ensureWritable(ticket, effectiveActor, activeDeptHeader);
+        String previousStatus = normalizeIssueStatus(ticket.getStatus());
         applyUpsert(ticket, request, activeDeptHeader);
         if (StringUtils.isNotBlank(request.getSeverity())) {
             ticket.setSeverity(request.getSeverity());
@@ -246,8 +282,32 @@ public class IssueTicketService {
         if (StringUtils.isNotBlank(request.getPriority())) {
             ticket.setPriority(request.getPriority());
         }
+        if (request.getDueAt() != null) {
+            ticket.setDueAt(request.getDueAt());
+        }
+        if (StringUtils.isNotBlank(request.getResolution())) {
+            ticket.setResolution(request.getResolution().trim());
+        }
+        String requestedStatus = normalizeIssueStatus(request.getStatus());
+        if (requestedStatus != null) {
+            ensureStatusTransition(previousStatus, requestedStatus);
+            ticket.setStatus(requestedStatus);
+            if (STATUS_RESOLVED.equals(requestedStatus) && ticket.getResolvedAt() == null) {
+                ticket.setResolvedAt(Instant.now());
+            }
+            if (!STATUS_RESOLVED.equals(requestedStatus) && !STATUS_CLOSED.equals(requestedStatus)) {
+                ticket.setResolvedAt(null);
+                ticket.setResolution(null);
+            }
+        }
+        if ((STATUS_RESOLVED.equals(ticket.getStatus()) || STATUS_CLOSED.equals(ticket.getStatus())) && StringUtils.isBlank(ticket.getResolution())) {
+            throw new IllegalArgumentException("问题单进入已解决/已关闭状态时必须填写处理结论");
+        }
         if (StringUtils.isNotBlank(ticket.getAssignedTo()) && ticket.getAssignedAt() == null) {
             ticket.setAssignedAt(Instant.now());
+        }
+        if (ticket.getDueAt() == null) {
+            ticket.setDueAt(Instant.now().plus(resolveSlaDuration(ticket.getSeverity(), ticket.getPriority())));
         }
         ticketRepository.save(ticket);
 
@@ -271,8 +331,12 @@ public class IssueTicketService {
         String effectiveActor = StringUtils.defaultIfBlank(actor, SecurityUtils.getCurrentUserLogin().orElse("anonymous"));
         GovIssueTicket ticket = ticketRepository.findById(id).orElseThrow(EntityNotFoundException::new);
         ensureWritable(ticket, effectiveActor, activeDeptHeader);
-        ticket.setStatus("CLOSED");
-        ticket.setResolution(resolution);
+        ensureStatusTransition(normalizeIssueStatus(ticket.getStatus()), STATUS_CLOSED);
+        if (StringUtils.isBlank(resolution)) {
+            throw new IllegalArgumentException("关闭问题单必须填写处理结论");
+        }
+        ticket.setStatus(STATUS_CLOSED);
+        ticket.setResolution(resolution.trim());
         ticket.setResolvedAt(Instant.now());
         ticketRepository.save(ticket);
 
@@ -308,6 +372,43 @@ public class IssueTicketService {
         return GovernanceMapper.toDto(action);
     }
 
+    @Transactional(readOnly = true)
+    public Map<String, Object> issueSlaMetrics(int days, String actor, String activeDeptHeader) {
+        int windowDays = Math.max(1, Math.min(days, 365));
+        Instant since = Instant.now().minus(Duration.ofDays(windowDays));
+        String effectiveActor = StringUtils.defaultIfBlank(actor, SecurityUtils.getCurrentUserLogin().orElse("anonymous"));
+        List<GovIssueTicket> visible = ticketRepository
+            .findByCreatedDateAfterOrderByCreatedDateAsc(since)
+            .stream()
+            .filter(ticket -> canReadTicket(ticket, effectiveActor, activeDeptHeader))
+            .toList();
+        Instant now = Instant.now();
+        long total = visible.size();
+        long open = visible.stream().filter(ticket -> !STATUS_CLOSED.equals(normalizeIssueStatusLenient(ticket.getStatus()))).count();
+        long overdue = visible
+            .stream()
+            .filter(ticket -> !STATUS_CLOSED.equals(normalizeIssueStatusLenient(ticket.getStatus())))
+            .filter(ticket -> ticket.getDueAt() != null && ticket.getDueAt().isBefore(now))
+            .count();
+        double avgHandlingHours = visible
+            .stream()
+            .filter(ticket -> ticket.getCreatedDate() != null)
+            .mapToLong(ticket -> {
+                Instant end = ticket.getResolvedAt() != null ? ticket.getResolvedAt() : now;
+                return end.isBefore(ticket.getCreatedDate()) ? 0L : Duration.between(ticket.getCreatedDate(), end).toMinutes();
+            })
+            .average()
+            .orElse(0.0D) / 60.0D;
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("windowDays", windowDays);
+        payload.put("total", total);
+        payload.put("open", open);
+        payload.put("overdue", overdue);
+        payload.put("overdueRate", open <= 0 ? 0.0D : (double) overdue * 100.0D / (double) open);
+        payload.put("avgHandlingHours", avgHandlingHours);
+        return payload;
+    }
+
     private void applyUpsert(GovIssueTicket ticket, IssueTicketUpsertRequest request, String activeDeptHeader) {
         if (ticket == null || request == null) {
             throw new IllegalArgumentException("请求不能为空");
@@ -317,11 +418,20 @@ public class IssueTicketService {
         ticket.setSummary(StringUtils.trimToNull(request.getSummary()));
         ticket.setSeverity(StringUtils.trimToNull(request.getSeverity()));
         ticket.setPriority(StringUtils.trimToNull(request.getPriority()));
-        ticket.setStatus(StringUtils.trimToNull(request.getStatus()));
+        String normalizedStatus = normalizeIssueStatus(request.getStatus());
+        if (normalizedStatus != null) {
+            ticket.setStatus(normalizedStatus);
+        }
         ticket.setDataLevel(StringUtils.trimToNull(request.getDataLevel()));
         ticket.setDatasetId(request.getDatasetId());
         ticket.setOwner(StringUtils.trimToNull(request.getOwner()));
         ticket.setAssignedTo(StringUtils.trimToNull(request.getAssignedTo()));
+        if (request.getDueAt() != null) {
+            ticket.setDueAt(request.getDueAt());
+        }
+        if (StringUtils.isNotBlank(request.getResolution())) {
+            ticket.setResolution(request.getResolution().trim());
+        }
         ticket.setTags(GovernanceMapper.joinCsv(request.getTags()));
         normalizeTicketFields(ticket, request, activeDeptHeader);
     }
@@ -549,7 +659,7 @@ public class IssueTicketService {
 
     private List<String> normalizeStatuses(String raw) {
         if (StringUtils.isBlank(raw)) {
-            return OPEN_STATUSES;
+            return List.of();
         }
         List<String> statuses = new ArrayList<>();
         for (String token : raw.split(",")) {
@@ -560,9 +670,12 @@ public class IssueTicketService {
             if (trimmed.isEmpty()) {
                 continue;
             }
-            statuses.add(trimmed.toUpperCase(Locale.ROOT));
+            String normalized = normalizeIssueStatus(trimmed);
+            if (normalized != null) {
+                statuses.add(normalized);
+            }
         }
-        return statuses.isEmpty() ? OPEN_STATUSES : statuses;
+        return statuses;
     }
 
     private String normalizePrincipalFilter(String raw, String actor) {
@@ -644,5 +757,60 @@ public class IssueTicketService {
             return null;
         }
         return raw;
+    }
+
+    private String normalizeIssueStatus(String status) {
+        String normalized = StringUtils.trimToNull(status);
+        if (normalized == null) {
+            return null;
+        }
+        normalized = normalized.toUpperCase(Locale.ROOT);
+        return switch (normalized) {
+            case "NEW", "OPEN" -> STATUS_OPEN;
+            case "PROCESSING", "IN_PROGRESS", "PENDING" -> STATUS_IN_PROGRESS;
+            case "RESOLVED" -> STATUS_RESOLVED;
+            case "CLOSED" -> STATUS_CLOSED;
+            default -> throw new IllegalArgumentException("不支持的问题单状态: " + status);
+        };
+    }
+
+    private String normalizeIssueStatusLenient(String status) {
+        try {
+            String normalized = normalizeIssueStatus(status);
+            return normalized != null ? normalized : STATUS_OPEN;
+        } catch (Exception ex) {
+            return STATUS_OPEN;
+        }
+    }
+
+    private void ensureStatusTransition(String fromStatus, String toStatus) {
+        String current = StringUtils.defaultIfBlank(fromStatus, STATUS_OPEN);
+        if (Objects.equals(current, toStatus)) {
+            return;
+        }
+        List<String> allowed = switch (current) {
+            case STATUS_OPEN -> List.of(STATUS_IN_PROGRESS);
+            case STATUS_IN_PROGRESS -> List.of(STATUS_RESOLVED);
+            case STATUS_RESOLVED -> List.of(STATUS_CLOSED);
+            case STATUS_CLOSED -> List.of();
+            default -> List.of();
+        };
+        if (!allowed.contains(toStatus)) {
+            throw new IllegalStateException("问题单状态不允许从 " + current + " 变更为 " + toStatus);
+        }
+    }
+
+    private Duration resolveSlaDuration(String severity, String priority) {
+        String priorityKey = StringUtils.defaultString(priority).trim().toUpperCase(Locale.ROOT);
+        if (priorityKey.isEmpty()) {
+            priorityKey = StringUtils.defaultString(severity).trim().toUpperCase(Locale.ROOT);
+        }
+        return switch (priorityKey) {
+            case "URGENT", "CRITICAL" -> Duration.ofHours(24);
+            case "HIGH" -> Duration.ofHours(48);
+            case "MEDIUM" -> Duration.ofHours(72);
+            case "LOW" -> Duration.ofHours(120);
+            default -> Duration.ofHours(72);
+        };
     }
 }

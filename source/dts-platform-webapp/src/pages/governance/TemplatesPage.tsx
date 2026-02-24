@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Badge, Button, Card, Divider, Form, Input, List, Modal, Select, Space, Tag, Typography } from "antd";
+import { Badge, Breadcrumb, Button, Card, Divider, Form, Input, List, Modal, Select, Space, Spin, Tag, Typography } from "antd";
+import { useNavigate, useSearchParams } from "react-router";
 import { EmptyState } from "@/components/empty-state";
+import { useGovernanceManageAccess } from "@/hooks/useModuleManageAccess";
 import { PageHeader } from "@/components/page-header";
-import { createModelTemplate, deleteModelTemplate, listModelTemplates, updateModelTemplate } from "@/api/platformApi";
+import { createModelTemplate, deleteModelTemplate, getModelTemplateReferences, listModelTemplates, updateModelTemplate } from "@/api/platformApi";
 
 const { Text } = Typography;
 
@@ -27,6 +29,21 @@ type ParsedField = {
 	type?: string;
 	desc?: string;
 	required?: boolean;
+};
+
+type AssetReferenceItem = {
+	type?: string;
+	label?: string;
+	id?: string;
+	code?: string;
+	name?: string;
+	path?: string;
+	reason?: string;
+};
+
+type AssetReferencePayload = {
+	totalReferences?: number;
+	items?: AssetReferenceItem[];
 };
 
 const splitTokens = (line: string) =>
@@ -63,17 +80,39 @@ const parseTags = (value?: string): string[] =>
 		.filter(Boolean);
 
 export default function TemplatesPage() {
+	const navigate = useNavigate();
+	const [searchParams, setSearchParams] = useSearchParams();
 	const [items, setItems] = useState<ModelingTemplate[]>([]);
 	const [loading, setLoading] = useState(false);
 	const [modalOpen, setModalOpen] = useState(false);
 	const [saving, setSaving] = useState(false);
 	const [editing, setEditing] = useState<ModelingTemplate | null>(null);
-	const [activeId, setActiveId] = useState<string | null>(null);
-	const [query, setQuery] = useState("");
+	const [activeId, setActiveId] = useState<string | null>(searchParams.get("active") || null);
+	const [query, setQuery] = useState(searchParams.get("keyword") || "");
 	const [form] = Form.useForm();
 	const [fieldModalOpen, setFieldModalOpen] = useState(false);
 	const [fieldSaving, setFieldSaving] = useState(false);
 	const [fieldForm] = Form.useForm();
+	const [referenceLoading, setReferenceLoading] = useState(false);
+	const [references, setReferences] = useState<AssetReferencePayload | null>(null);
+	const canManage = useGovernanceManageAccess();
+
+	const syncQuery = (patch?: { keyword?: string; active?: string | null }) => {
+		const params = new URLSearchParams(searchParams);
+		const keyword = patch?.keyword ?? query;
+		const active = patch?.active ?? activeId;
+		if (keyword?.trim()) {
+			params.set("keyword", keyword.trim());
+		} else {
+			params.delete("keyword");
+		}
+		if (active?.trim()) {
+			params.set("active", active.trim());
+		} else {
+			params.delete("active");
+		}
+		setSearchParams(params, { replace: true });
+	};
 
 	const loadTemplates = useCallback(async () => {
 		setLoading(true);
@@ -90,6 +129,10 @@ export default function TemplatesPage() {
 	useEffect(() => {
 		void loadTemplates();
 	}, [loadTemplates]);
+
+	useEffect(() => {
+		syncQuery();
+	}, [query, activeId]);
 
 	const openModal = (row?: ModelingTemplate) => {
 		setEditing(row || null);
@@ -109,6 +152,10 @@ export default function TemplatesPage() {
 	};
 
 	const submit = async () => {
+		if (!canManage) {
+			toast.error("当前账号无治理维护权限");
+			return;
+		}
 		setSaving(true);
 		try {
 			const values = await form.validateFields(["name"]);
@@ -153,22 +200,53 @@ export default function TemplatesPage() {
 	});
 
 	const removeTemplate = (row: ModelingTemplate) => {
+		if (!canManage) {
+			toast.error("当前账号无治理维护权限");
+			return;
+		}
 		if (!row?.id) return;
-		Modal.confirm({
-			title: "删除模板？",
-			content: "删除后无法恢复。",
-			okText: "删除",
-			cancelText: "取消",
-			onOk: async () => {
-				try {
-					await deleteModelTemplate(row.id as string);
-					toast.success("模板已删除");
-					await loadTemplates();
-				} catch (err: any) {
-					toast.error(err?.message || "删除失败");
+		void (async () => {
+			try {
+				const refs = (await getModelTemplateReferences(row.id as string)) as AssetReferencePayload;
+				const impactCount = Number(refs?.totalReferences || 0);
+				if (impactCount > 0) {
+					Modal.warning({
+						title: `删除被拦截：存在 ${impactCount} 个引用对象`,
+						content: (
+							<List
+								size="small"
+								dataSource={(refs?.items || []).slice(0, 8)}
+								renderItem={(item) => (
+									<List.Item>
+										<Text>
+											{item.label || item.type}：{item.name || item.code || item.id}
+										</Text>
+									</List.Item>
+								)}
+							/>
+						),
+					});
+					return;
 				}
-			},
-		});
+				Modal.confirm({
+					title: "删除模板？",
+					content: "删除后无法恢复。",
+					okText: "删除",
+					cancelText: "取消",
+					onOk: async () => {
+						try {
+							await deleteModelTemplate(row.id as string);
+							toast.success("模板已删除");
+							await loadTemplates();
+						} catch (err: any) {
+							toast.error(err?.message || "删除失败");
+						}
+					},
+				});
+			} catch (err: any) {
+				toast.error(err?.message || "删除前检查失败");
+			}
+		})();
 	};
 
 	useEffect(() => {
@@ -197,11 +275,36 @@ export default function TemplatesPage() {
 		() => items.find((item) => item.id === activeId || (!item.id && item.name === activeId)) || null,
 		[items, activeId]
 	);
+
+	useEffect(() => {
+		const loadReferences = async () => {
+			if (!activeTemplate?.id) {
+				setReferences(null);
+				return;
+			}
+			setReferenceLoading(true);
+			try {
+				const resp = (await getModelTemplateReferences(activeTemplate.id)) as AssetReferencePayload;
+				setReferences(resp || null);
+			} catch (err: any) {
+				setReferences(null);
+				toast.error(err?.message || "加载引用关系失败");
+			} finally {
+				setReferenceLoading(false);
+			}
+		};
+		void loadReferences();
+	}, [activeTemplate?.id]);
+
 	const fieldRows = useMemo(() => parseFieldsTemplate(activeTemplate?.fieldsTemplate), [activeTemplate?.fieldsTemplate]);
 	const metadataTags = useMemo(() => parseTags(activeTemplate?.metadataStandardIds), [activeTemplate?.metadataStandardIds]);
 	const checklistItems = useMemo(() => parseTags(activeTemplate?.reviewChecklist), [activeTemplate?.reviewChecklist]);
 
 	const openFieldEditor = (template: ModelingTemplate | null) => {
+		if (!canManage) {
+			toast.error("当前账号无治理维护权限");
+			return;
+		}
 		if (!template?.id) {
 			toast.error("请先保存模板后再编辑字段");
 			return;
@@ -233,6 +336,10 @@ export default function TemplatesPage() {
 			.join("\n");
 
 	const saveFields = async () => {
+		if (!canManage) {
+			toast.error("当前账号无治理维护权限");
+			return;
+		}
 		if (!activeTemplate?.id) {
 			toast.error("模板不存在，无法保存字段");
 			return;
@@ -257,11 +364,12 @@ export default function TemplatesPage() {
 
 	return (
 		<div className="space-y-4">
+			<Breadcrumb items={[{ title: "数据治理中心" }, { title: "标准管理" }, { title: "标准模板" }]} />
 			<PageHeader
 				title="数据治理中心 · 标准模板"
 				description="定义表结构标准骨架，如公共审计字段、命名规则与检查清单。"
 				actions={
-					<Button type="primary" onClick={() => openModal()}>
+					<Button type="primary" onClick={() => openModal()} disabled={!canManage}>
 						+ 新增模板
 					</Button>
 				}
@@ -302,7 +410,7 @@ export default function TemplatesPage() {
 								}}
 							/>
 						)}
-						<Button block type="dashed" className="mt-4" onClick={() => openModal()}>
+						<Button block type="dashed" className="mt-4" onClick={() => openModal()} disabled={!canManage}>
 							+ 创建新模板
 						</Button>
 					</div>
@@ -314,10 +422,10 @@ export default function TemplatesPage() {
 					extra={
 						activeTemplate ? (
 							<Space>
-								<Button size="small" onClick={() => openModal(activeTemplate)}>
+								<Button size="small" onClick={() => openModal(activeTemplate)} disabled={!canManage}>
 									编辑
 								</Button>
-								<Button size="small" danger onClick={() => removeTemplate(activeTemplate)}>
+								<Button size="small" danger onClick={() => removeTemplate(activeTemplate)} disabled={!canManage}>
 									删除
 								</Button>
 							</Space>
@@ -381,7 +489,7 @@ export default function TemplatesPage() {
 											</div>
 										))
 									)}
-									<Button type="link" className="px-0" onClick={() => openFieldEditor(activeTemplate)}>
+									<Button type="link" className="px-0" onClick={() => openFieldEditor(activeTemplate)} disabled={!canManage}>
 										+ 编辑模板字段
 									</Button>
 								</div>
@@ -418,6 +526,39 @@ export default function TemplatesPage() {
 									)}
 								</div>
 							</div>
+
+							<Divider />
+							<div>
+								<Text strong>引用关系</Text>
+								<div className="mt-2">
+									{referenceLoading ? (
+										<Spin size="small" />
+									) : Number(references?.totalReferences || 0) === 0 ? (
+										<Text type="secondary">暂无引用对象。</Text>
+									) : (
+										<List
+											size="small"
+											dataSource={references?.items || []}
+											renderItem={(item) => (
+												<List.Item
+													actions={[
+														item.path ? (
+															<Button key="jump" type="link" size="small" onClick={() => navigate(item.path as string)}>
+																跳转
+															</Button>
+														) : null,
+													]}
+												>
+													<List.Item.Meta
+														title={`${item.label || item.type || "引用"} · ${item.name || item.code || item.id || "-"}`}
+														description={item.reason || "-"}
+													/>
+												</List.Item>
+											)}
+										/>
+									)}
+								</div>
+							</div>
 						</div>
 					)}
 				</Card>
@@ -431,6 +572,7 @@ export default function TemplatesPage() {
 				okText="保存"
 				cancelText="取消"
 				confirmLoading={saving}
+				okButtonProps={{ disabled: !canManage }}
 				width={760}
 			>
 				<Form layout="vertical" form={form}>
@@ -476,6 +618,7 @@ export default function TemplatesPage() {
 				okText="保存字段"
 				cancelText="取消"
 				confirmLoading={fieldSaving}
+				okButtonProps={{ disabled: !canManage }}
 				width={860}
 			>
 				<Form form={fieldForm} layout="vertical">
@@ -512,13 +655,13 @@ export default function TemplatesPage() {
 											/>
 										</Form.Item>
 										<div className="col-span-12 flex justify-end">
-											<Button type="link" danger size="small" onClick={() => remove(field.name)}>
+											<Button type="link" danger size="small" onClick={() => remove(field.name)} disabled={!canManage}>
 												删除
 											</Button>
 										</div>
 									</div>
 								))}
-								<Button type="dashed" onClick={() => add({ required: true })}>
+								<Button type="dashed" onClick={() => add({ required: true })} disabled={!canManage}>
 									+ 添加字段
 								</Button>
 							</div>

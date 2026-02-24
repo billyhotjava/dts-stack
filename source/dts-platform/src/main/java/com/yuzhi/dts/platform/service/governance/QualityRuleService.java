@@ -24,8 +24,10 @@ import jakarta.persistence.EntityNotFoundException;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.apache.commons.lang3.StringUtils;
@@ -44,6 +46,9 @@ import org.springframework.transaction.annotation.Transactional;
 public class QualityRuleService {
 
     private static final Logger log = LoggerFactory.getLogger(QualityRuleService.class);
+    private static final String STATUS_DRAFT = "DRAFT";
+    private static final String STATUS_PUBLISHED = "PUBLISHED";
+    private static final String STATUS_ARCHIVED = "ARCHIVED";
 
     private final GovRuleRepository ruleRepository;
     private final GovRuleVersionRepository versionRepository;
@@ -202,6 +207,30 @@ public class QualityRuleService {
         GovRule rule = ruleRepository.findById(id).orElseThrow(EntityNotFoundException::new);
         ensureRuleReadable(rule, activeDeptHeader);
         return GovernanceMapper.toDto(rule);
+    }
+
+    @Transactional(readOnly = true)
+    public List<com.yuzhi.dts.platform.service.governance.dto.QualityRuleVersionDto> listRuleVersions(UUID id, String activeDeptHeader) {
+        GovRule rule = ruleRepository.findById(id).orElseThrow(EntityNotFoundException::new);
+        ensureRuleReadable(rule, activeDeptHeader);
+        return versionRepository.findByRuleIdOrderByVersionDesc(id).stream().map(GovernanceMapper::toDto).collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public com.yuzhi.dts.platform.service.governance.dto.QualityRuleVersionDto getRuleVersion(
+        UUID id,
+        Integer version,
+        String activeDeptHeader
+    ) {
+        GovRule rule = ruleRepository.findById(id).orElseThrow(EntityNotFoundException::new);
+        ensureRuleReadable(rule, activeDeptHeader);
+        GovRuleVersion target = versionRepository
+            .findByRuleIdOrderByVersionDesc(id)
+            .stream()
+            .filter(item -> Objects.equals(item.getVersion(), version))
+            .findFirst()
+            .orElseThrow(EntityNotFoundException::new);
+        return GovernanceMapper.toDto(target);
     }
 
     private void ensureRuleReadable(GovRule rule, String activeDeptHeader) {
@@ -407,6 +436,54 @@ public class QualityRuleService {
         return GovernanceMapper.toDto(rule);
     }
 
+    public com.yuzhi.dts.platform.service.governance.dto.QualityRuleVersionDto changeRuleVersionStatus(
+        UUID id,
+        Integer version,
+        String targetStatus,
+        String notes,
+        String actor,
+        String activeDeptHeader
+    ) {
+        GovRule rule = ruleRepository.findById(id).orElseThrow(EntityNotFoundException::new);
+        ensureRuleWritable(rule, activeDeptHeader);
+        GovRuleVersion target = versionRepository
+            .findByRuleIdOrderByVersionDesc(id)
+            .stream()
+            .filter(item -> Objects.equals(item.getVersion(), version))
+            .findFirst()
+            .orElseThrow(EntityNotFoundException::new);
+        String nextStatus = normalizeVersionStatus(targetStatus, target.getStatus());
+        String currentStatus = normalizeVersionStatus(target.getStatus(), STATUS_DRAFT);
+        ensureStatusTransitionAllowed(currentStatus, nextStatus);
+        target.setStatus(nextStatus);
+        if (StringUtils.isNotBlank(notes)) {
+            target.setNotes(notes.trim());
+        }
+        target.setApprovedBy(StringUtils.isNotBlank(actor) ? actor : target.getApprovedBy());
+        target.setApprovedAt(java.time.Instant.now());
+        versionRepository.save(target);
+
+        if (STATUS_PUBLISHED.equals(nextStatus)) {
+            archiveOtherPublishedVersions(rule.getId(), target.getId(), actor);
+            rule.setLatestVersion(target);
+            ruleRepository.save(rule);
+        } else if (Objects.equals(rule.getLatestVersion() != null ? rule.getLatestVersion().getId() : null, target.getId())) {
+            GovRuleVersion fallback = versionRepository
+                .findFirstByRuleIdAndStatusOrderByVersionDesc(rule.getId(), STATUS_PUBLISHED)
+                .orElse(target);
+            rule.setLatestVersion(fallback);
+            ruleRepository.save(rule);
+        }
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("summary", "切换质量规则版本状态：" + rule.getName());
+        payload.put("targetId", id.toString());
+        payload.put("version", version);
+        payload.put("fromStatus", currentStatus);
+        payload.put("toStatus", nextStatus);
+        auditService.auditAction("GOV_RULE_VERSION_STATUS", AuditStage.SUCCESS, id.toString(), payload);
+        return GovernanceMapper.toDto(target);
+    }
+
     private boolean hasInstituteScope() {
         return SecurityUtils.hasCurrentUserAnyOfAuthorities(AuthoritiesConstants.INSTITUTE_PRIVILEGED_ROLES);
     }
@@ -444,11 +521,18 @@ public class QualityRuleService {
         GovRuleVersion version = new GovRuleVersion();
         version.setRule(rule);
         version.setVersion(versionNumber);
-        version.setStatus("PUBLISHED");
+        String targetStatus = resolveInitialVersionStatus(request);
+        version.setStatus(targetStatus);
         version.setDefinition(writeDefinition(request.getDefinition()));
-        version.setApprovedBy(actor);
-        version.setApprovedAt(java.time.Instant.now());
+        if (STATUS_PUBLISHED.equals(targetStatus)) {
+            version.setApprovedBy(actor);
+            version.setApprovedAt(java.time.Instant.now());
+        }
         versionRepository.save(version);
+
+        if (STATUS_PUBLISHED.equals(targetStatus)) {
+            archiveOtherPublishedVersions(rule.getId(), version.getId(), actor);
+        }
 
         List<QualityRuleBindingRequest> bindings = request.getBindings() != null ? request.getBindings() : Collections.emptyList();
         bindings.stream().filter(binding -> binding.getDatasetId() != null).forEach(binding -> {
@@ -463,6 +547,57 @@ public class QualityRuleService {
             bindingRepository.save(entity);
         });
         return version;
+    }
+
+    private void archiveOtherPublishedVersions(UUID ruleId, UUID keepVersionId, String actor) {
+        List<GovRuleVersion> versions = versionRepository.findByRuleIdOrderByVersionDesc(ruleId);
+        versions
+            .stream()
+            .filter(item -> !Objects.equals(item.getId(), keepVersionId))
+            .filter(item -> STATUS_PUBLISHED.equalsIgnoreCase(StringUtils.trimToEmpty(item.getStatus())))
+            .forEach(item -> {
+                item.setStatus(STATUS_ARCHIVED);
+                item.setApprovedBy(StringUtils.isNotBlank(actor) ? actor : item.getApprovedBy());
+                item.setApprovedAt(java.time.Instant.now());
+                versionRepository.save(item);
+            });
+    }
+
+    private String resolveInitialVersionStatus(QualityRuleUpsertRequest request) {
+        if (request == null) {
+            return STATUS_PUBLISHED;
+        }
+        if (request.getPublishNow() == null) {
+            return STATUS_PUBLISHED;
+        }
+        return Boolean.TRUE.equals(request.getPublishNow()) ? STATUS_PUBLISHED : STATUS_DRAFT;
+    }
+
+    private String normalizeVersionStatus(String candidate, String fallback) {
+        String source = StringUtils.trimToNull(candidate);
+        if (source == null) {
+            return StringUtils.defaultIfBlank(fallback, STATUS_DRAFT);
+        }
+        String normalized = source.toUpperCase(Locale.ROOT);
+        if (STATUS_DRAFT.equals(normalized) || STATUS_PUBLISHED.equals(normalized) || STATUS_ARCHIVED.equals(normalized)) {
+            return normalized;
+        }
+        throw new IllegalArgumentException("不支持的版本状态: " + source);
+    }
+
+    private void ensureStatusTransitionAllowed(String fromStatus, String toStatus) {
+        if (Objects.equals(fromStatus, toStatus)) {
+            return;
+        }
+        Set<String> allowedTargets = switch (StringUtils.defaultIfBlank(fromStatus, STATUS_DRAFT)) {
+            case STATUS_DRAFT -> Set.of(STATUS_PUBLISHED, STATUS_ARCHIVED);
+            case STATUS_PUBLISHED -> Set.of(STATUS_ARCHIVED);
+            case STATUS_ARCHIVED -> Set.of();
+            default -> Set.of();
+        };
+        if (!allowedTargets.contains(toStatus)) {
+            throw new IllegalStateException("版本状态不允许从 " + fromStatus + " 变更为 " + toStatus);
+        }
     }
 
     private String writeDefinition(Map<String, Object> definition) {

@@ -139,6 +139,8 @@ final class GovernanceMapper {
         dto.setFinishedAt(entity.getFinishedAt());
         dto.setDurationMs(entity.getDurationMs());
         dto.setMessage(entity.getMessage());
+        dto.setInputParamsJson(entity.getInputParamsJson());
+        dto.setErrorCategory(entity.getErrorCategory());
         dto.setMetricsJson(entity.getMetricsJson());
         dto.setCreatedDate(entity.getCreatedDate());
         dto.setCreatedBy(entity.getCreatedBy());
@@ -258,6 +260,19 @@ final class GovernanceMapper {
         dto.setDueAt(entity.getDueAt());
         dto.setResolvedAt(entity.getResolvedAt());
         dto.setResolution(entity.getResolution());
+        Instant now = Instant.now();
+        Instant handlingEnd = entity.getResolvedAt() != null ? entity.getResolvedAt() : now;
+        if (entity.getCreatedDate() != null && handlingEnd != null && !handlingEnd.isBefore(entity.getCreatedDate())) {
+            dto.setHandlingDurationMs(java.time.Duration.between(entity.getCreatedDate(), handlingEnd).toMillis());
+        }
+        boolean closed = isIssueClosedStatus(entity.getStatus());
+        boolean overdue = !closed && entity.getDueAt() != null && entity.getDueAt().isBefore(now);
+        dto.setOverdue(overdue);
+        if (overdue && entity.getDueAt() != null) {
+            dto.setOverdueDurationMs(java.time.Duration.between(entity.getDueAt(), now).toMillis());
+        } else {
+            dto.setOverdueDurationMs(0L);
+        }
         dto.setOwner(entity.getOwner());
         dto.setTags(splitCsv(entity.getTags()));
         dto.setCreatedDate(entity.getCreatedDate());
@@ -346,6 +361,14 @@ final class GovernanceMapper {
             return alias.trim();
         }
         return item.getDatasetId().toString();
+    }
+
+    private static boolean isIssueClosedStatus(String status) {
+        if (status == null) {
+            return false;
+        }
+        String normalized = status.toUpperCase(Locale.ROOT);
+        return "CLOSED".equals(normalized) || "RESOLVED".equals(normalized);
     }
 
     static List<String> splitCsv(String raw) {

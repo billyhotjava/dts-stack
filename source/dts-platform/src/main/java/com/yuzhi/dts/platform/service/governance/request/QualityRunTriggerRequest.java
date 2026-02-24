@@ -10,6 +10,7 @@ public class QualityRunTriggerRequest {
     private UUID datasetId;
     private String triggerType = "MANUAL";
     private Map<String, Object> parameters;
+    private Boolean dryRun;
 
     public UUID getRuleId() {
         return ruleId;
@@ -49,5 +50,13 @@ public class QualityRunTriggerRequest {
 
     public void setParameters(Map<String, Object> parameters) {
         this.parameters = parameters;
+    }
+
+    public Boolean getDryRun() {
+        return dryRun;
+    }
+
+    public void setDryRun(Boolean dryRun) {
+        this.dryRun = dryRun;
     }
 }

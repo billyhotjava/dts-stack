@@ -22,6 +22,9 @@ public class IssueTicketDto {
     private Instant dueAt;
     private Instant resolvedAt;
     private String resolution;
+    private Boolean overdue;
+    private Long overdueDurationMs;
+    private Long handlingDurationMs;
     private String owner;
     private List<String> tags;
     private Instant createdDate;
@@ -156,6 +159,30 @@ public class IssueTicketDto {
 
     public void setResolution(String resolution) {
         this.resolution = resolution;
+    }
+
+    public Boolean getOverdue() {
+        return overdue;
+    }
+
+    public void setOverdue(Boolean overdue) {
+        this.overdue = overdue;
+    }
+
+    public Long getOverdueDurationMs() {
+        return overdueDurationMs;
+    }
+
+    public void setOverdueDurationMs(Long overdueDurationMs) {
+        this.overdueDurationMs = overdueDurationMs;
+    }
+
+    public Long getHandlingDurationMs() {
+        return handlingDurationMs;
+    }
+
+    public void setHandlingDurationMs(Long handlingDurationMs) {
+        this.handlingDurationMs = handlingDurationMs;
     }
 
     public String getOwner() {

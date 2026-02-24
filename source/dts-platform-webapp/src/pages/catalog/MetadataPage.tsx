@@ -9,6 +9,7 @@ import {
 	Form,
 	Input,
 	Modal,
+	Progress,
 	Row,
 	Select,
 	Space,
@@ -19,10 +20,13 @@ import {
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { EmptyState } from "@/components/empty-state";
+import { useCatalogManageAccess } from "@/hooks/useModuleManageAccess";
 import { PageHeader } from "@/components/page-header";
 import {
 	type CatalogSyncConfig,
 	getCatalogSyncConfig,
+	getCatalogSyncRunDiagnostics,
+	getCatalogSyncStatus,
 	getTechMetadataTableDetail,
 	getTechMetadataTables,
 	type SchemaDriftEvent,
@@ -65,7 +69,15 @@ type SyncRun = {
 	datasetsCreated?: number;
 	datasetsUpdated?: number;
 	datasetsRemoved?: number;
+	datasetsMarkedStale?: number;
+	datasetsPurged?: number;
+	errorCategory?: string;
 	error?: string;
+};
+
+type SyncStatusPayload = {
+	primary?: { inProgress?: boolean };
+	jdbc?: { inProgress?: boolean };
 };
 
 type TableSummary = {
@@ -103,6 +115,17 @@ const statusTag = (status?: string) => {
 	if (normalized === "FAILED") return <Tag color="red">失败</Tag>;
 	if (normalized === "RUNNING") return <Tag color="blue">运行中</Tag>;
 	return <Tag>{status}</Tag>;
+};
+
+const errorCategoryTag = (value?: string) => {
+	const normalized = String(value || "").toUpperCase();
+	if (!normalized || normalized === "NONE") return <Tag>无</Tag>;
+	if (normalized === "AUTH") return <Tag color="red">权限</Tag>;
+	if (normalized === "TIMEOUT") return <Tag color="orange">超时</Tag>;
+	if (normalized === "NETWORK") return <Tag color="gold">网络</Tag>;
+	if (normalized === "SQL") return <Tag color="magenta">SQL</Tag>;
+	if (normalized === "DRIVER") return <Tag color="purple">驱动</Tag>;
+	return <Tag>{normalized}</Tag>;
 };
 
 const driftPolicyTag = (value?: string) => {
@@ -168,7 +191,12 @@ export default function MetadataPage() {
 	const [driftActionType, setDriftActionType] = useState<"policy" | "ticket" | null>(null);
 	const [driftActionTarget, setDriftActionTarget] = useState<SchemaDriftEvent | null>(null);
 	const [driftActionSubmitting, setDriftActionSubmitting] = useState(false);
+	const [syncStatus, setSyncStatus] = useState<SyncStatusPayload | null>(null);
+	const [diagOpen, setDiagOpen] = useState(false);
+	const [diagLoading, setDiagLoading] = useState(false);
+	const [diagData, setDiagData] = useState<any>(null);
 	const [driftForm] = Form.useForm();
+	const canManage = useCatalogManageAccess();
 
 	const selectedPipeline = useMemo(() => {
 		if (!pipelines.length) return null;
@@ -178,6 +206,14 @@ export default function MetadataPage() {
 	useEffect(() => {
 		void loadPipelines();
 		void loadSyncConfig();
+		void loadSyncStatus();
+	}, []);
+
+	useEffect(() => {
+		const timer = window.setInterval(() => {
+			void loadSyncStatus();
+		}, 5000);
+		return () => window.clearInterval(timer);
 	}, []);
 
 	useEffect(() => {
@@ -253,6 +289,15 @@ export default function MetadataPage() {
 		}
 	};
 
+	const loadSyncStatus = async () => {
+		try {
+			const resp: any = await getCatalogSyncStatus();
+			setSyncStatus(resp || null);
+		} catch {
+			setSyncStatus(null);
+		}
+	};
+
 	const loadDriftEvents = async () => {
 		setLoadingDrift(true);
 		try {
@@ -285,6 +330,28 @@ export default function MetadataPage() {
 			toast.error(error?.message || "采集历史加载失败");
 		} finally {
 			setLoadingRuns(false);
+		}
+	};
+
+	const openRunDiagnostics = async (run: SyncRun) => {
+		if (!run?.id) return;
+		setDiagOpen(true);
+		setDiagLoading(true);
+		setDiagData(null);
+		try {
+			const sourceId =
+				run.integration === "JDBC"
+					? selectedPipeline?.sourceId || selectedPipeline?.id
+					: undefined;
+			const resp: any = await getCatalogSyncRunDiagnostics(run.id, {
+				sourceId: sourceId || undefined,
+			});
+			setDiagData(resp || null);
+		} catch (error: any) {
+			toast.error(error?.message || "采集诊断加载失败");
+			setDiagData(null);
+		} finally {
+			setDiagLoading(false);
 		}
 	};
 
@@ -326,6 +393,10 @@ export default function MetadataPage() {
 	};
 
 	const handleTrigger = async () => {
+		if (!canManage) {
+			toast.error("当前账号无资产维护权限");
+			return;
+		}
 		if (!selectedPipeline) {
 			toast.error("请先选择采集任务");
 			return;
@@ -344,6 +415,7 @@ export default function MetadataPage() {
 			}
 			toast.success("已触发采集任务");
 			await loadPipelines();
+			await loadSyncStatus();
 			void loadTables(keyword);
 			if (selectedPipeline.integration) {
 				void loadRuns(selectedPipeline.integration);
@@ -354,6 +426,10 @@ export default function MetadataPage() {
 	};
 
 	const handleAutoSyncToggle = async (checked: boolean) => {
+		if (!canManage) {
+			toast.error("当前账号无资产维护权限");
+			return;
+		}
 		setSyncConfigUpdating(true);
 		try {
 			const resp: any = await updateCatalogSyncConfig({ autoSyncEnabled: checked });
@@ -368,6 +444,10 @@ export default function MetadataPage() {
 	};
 
 	const handleSyncCronSave = async () => {
+		if (!canManage) {
+			toast.error("当前账号无资产维护权限");
+			return;
+		}
 		const cron = cronDraft.trim();
 		if (!validateCronExpression(cron)) {
 			toast.error("Cron 表达式格式不正确（需 5-7 段）");
@@ -411,6 +491,10 @@ export default function MetadataPage() {
 	};
 
 	const submitDriftAction = async () => {
+		if (!canManage) {
+			toast.error("当前账号无资产维护权限");
+			return;
+		}
 		if (!driftActionTarget?.id || !driftActionType) return;
 		try {
 			const values = await driftForm.validateFields();
@@ -451,9 +535,20 @@ export default function MetadataPage() {
 		{ title: "发现表", dataIndex: "tablesDiscovered" },
 		{ title: "新增表", dataIndex: "tablesCreated" },
 		{ title: "更新表", dataIndex: "datasetsUpdated" },
-		{ title: "删除表", dataIndex: "datasetsRemoved" },
+		{ title: "失效总数", dataIndex: "datasetsRemoved" },
+		{ title: "失效标记", dataIndex: "datasetsMarkedStale" },
+		{ title: "物理清理", dataIndex: "datasetsPurged" },
 		{ title: "新增字段", dataIndex: "columnsImported" },
+		{ title: "错误分类", dataIndex: "errorCategory", render: (value) => errorCategoryTag(value) },
 		{ title: "错误", dataIndex: "error", render: (value) => <Text type="danger">{value || "-"}</Text> },
+		{
+			title: "诊断",
+			render: (_, row) => (
+				<Button type="link" size="small" onClick={() => void openRunDiagnostics(row)}>
+					查看日志
+				</Button>
+			),
+		},
 	];
 
 	const columnColumns: ColumnsType<ColumnRow> = [
@@ -508,6 +603,24 @@ export default function MetadataPage() {
 		() => tables.find((item) => item.fqn === selectedFqn) || null,
 		[tables, selectedFqn],
 	);
+	const latestRun = useMemo(() => {
+		if (!runs.length) return null;
+		return runs[0] || null;
+	}, [runs]);
+	const syncInProgress = useMemo(() => {
+		if (!syncStatus) return false;
+		if (selectedPipeline?.integration === "JDBC") return Boolean(syncStatus.jdbc?.inProgress);
+		return Boolean(syncStatus.primary?.inProgress);
+	}, [syncStatus, selectedPipeline?.integration]);
+	const syncProgressPercent = useMemo(() => {
+		if (!syncInProgress) return 100;
+		const startedText = String(selectedPipeline?.lastRun || "").trim();
+		const startedMs = startedText ? new Date(startedText).getTime() : 0;
+		if (!Number.isFinite(startedMs) || startedMs <= 0) return 45;
+		const elapsedSec = Math.max(0, (Date.now() - startedMs) / 1000);
+		const estimated = Math.min(95, Math.floor((elapsedSec / 180) * 100));
+		return Math.max(35, estimated);
+	}, [syncInProgress, selectedPipeline?.lastRun]);
 	const columnRows = useMemo(() => buildColumnRows(tableDetail), [tableDetail]);
 	const columnStatusStats = useMemo(() => {
 		let draft = 0;
@@ -546,29 +659,34 @@ export default function MetadataPage() {
 						<Card title="采集任务与触发" loading={loadingPipelines}>
 							<Space className="mb-3" align="center">
 								<Text type="secondary">自动采集</Text>
-								<Switch
-									checked={Boolean(syncConfig?.autoSyncEnabled)}
-									loading={syncConfigUpdating}
-									onChange={handleAutoSyncToggle}
-									checkedChildren="开启"
-									unCheckedChildren="关闭"
+									<Switch
+										checked={Boolean(syncConfig?.autoSyncEnabled)}
+										loading={syncConfigUpdating}
+										disabled={!canManage}
+										onChange={handleAutoSyncToggle}
+										checkedChildren="开启"
+										unCheckedChildren="关闭"
 								/>
 								<Tag>{syncConfig?.autoSyncCron ? `Cron: ${syncConfig.autoSyncCron}` : "Cron 未配置"}</Tag>
 							</Space>
 							<Space className="mb-3 w-full" direction="vertical" size={8}>
 								<Text type="secondary">自动采集 Cron</Text>
 								<Space.Compact className="w-full">
-									<Input
-										value={cronDraft}
-										onChange={(e) => setCronDraft(e.target.value)}
-										placeholder="例如：0 0 3 * * *"
-										disabled={syncConfigUpdating}
-									/>
-									<Button
-										onClick={handleSyncCronSave}
-										loading={syncConfigUpdating}
-										disabled={!cronDraft.trim() || cronDraft.trim() === String(syncConfig?.autoSyncCron || "").trim()}
-									>
+										<Input
+											value={cronDraft}
+											onChange={(e) => setCronDraft(e.target.value)}
+											placeholder="例如：0 0 3 * * *"
+											disabled={!canManage || syncConfigUpdating}
+										/>
+										<Button
+											onClick={handleSyncCronSave}
+											loading={syncConfigUpdating}
+											disabled={
+												!canManage ||
+												!cronDraft.trim() ||
+												cronDraft.trim() === String(syncConfig?.autoSyncCron || "").trim()
+											}
+										>
 										保存 Cron
 									</Button>
 								</Space.Compact>
@@ -597,6 +715,22 @@ export default function MetadataPage() {
 									<Descriptions.Item label="最近状态">{statusTag(selectedPipeline?.status)}</Descriptions.Item>
 									<Descriptions.Item label="最近发现表">{selectedPipeline?.tablesFound ?? "-"}</Descriptions.Item>
 								</Descriptions>
+								<div className="mt-3">
+									<div className="mb-1 text-xs text-slate-500">同步进度</div>
+									<Progress
+										percent={syncProgressPercent}
+										size="small"
+										status={syncInProgress ? "active" : "normal"}
+										format={() => (syncInProgress ? "运行中" : "空闲")}
+									/>
+								</div>
+								{latestRun ? (
+									<Space size={8} wrap className="mt-2">
+										<Tag color="green">新增 {latestRun.datasetsCreated ?? 0}</Tag>
+										<Tag color="blue">更新 {latestRun.datasetsUpdated ?? 0}</Tag>
+										<Tag color="red">失效 {latestRun.datasetsRemoved ?? 0}</Tag>
+									</Space>
+								) : null}
 								{selectedPipeline?.error ? (
 									<div className="mt-3 text-sm text-red-500">错误：{selectedPipeline.error}</div>
 								) : null}
@@ -610,11 +744,13 @@ export default function MetadataPage() {
 										</ul>
 									</div>
 								) : null}
-								<Space className="mt-4">
-									<Button type="primary" onClick={handleTrigger}>立即采集</Button>
-									<Button onClick={() => selectedPipeline?.integration && loadRuns(selectedPipeline.integration)}>
-										刷新历史
-									</Button>
+									<Space className="mt-4">
+										<Button type="primary" onClick={handleTrigger} disabled={!canManage}>
+											立即采集
+										</Button>
+										<Button onClick={() => selectedPipeline?.integration && loadRuns(selectedPipeline.integration)}>
+											刷新历史
+										</Button>
 								</Space>
 							</Form>
 						) : (
@@ -697,6 +833,40 @@ export default function MetadataPage() {
 				/>
 			</Card>
 
+			<Modal
+				open={diagOpen}
+				title="采集诊断"
+				onCancel={() => setDiagOpen(false)}
+				footer={<Button onClick={() => setDiagOpen(false)}>关闭</Button>}
+				width={860}
+			>
+				<Descriptions size="small" bordered column={2}>
+					<Descriptions.Item label="运行ID">{diagData?.id || "-"}</Descriptions.Item>
+					<Descriptions.Item label="状态">{statusTag(diagData?.status)}</Descriptions.Item>
+					<Descriptions.Item label="集成类型">{diagData?.integration || "-"}</Descriptions.Item>
+					<Descriptions.Item label="错误分类">{errorCategoryTag(diagData?.errorCategory)}</Descriptions.Item>
+					<Descriptions.Item label="开始时间">{diagData?.startedAt || "-"}</Descriptions.Item>
+					<Descriptions.Item label="结束时间">{diagData?.finishedAt || "-"}</Descriptions.Item>
+					<Descriptions.Item label="错误信息" span={2}>
+						{diagData?.error || "-"}
+					</Descriptions.Item>
+				</Descriptions>
+				<div className="mt-3 rounded border bg-muted/20 p-3 text-xs text-muted-foreground">
+					<div className="mb-2 font-medium text-foreground">日志片段</div>
+					{diagLoading ? (
+						<div>加载中...</div>
+					) : (
+						<ul className="list-disc space-y-1 pl-4">
+							{Array.isArray(diagData?.logLines) && diagData.logLines.length ? (
+								diagData.logLines.map((line: string, idx: number) => <li key={idx}>{line}</li>)
+							) : (
+								<li>暂无日志</li>
+							)}
+						</ul>
+					)}
+				</div>
+			</Modal>
+
 			<Card
 				title="Schema 漂移工单"
 				extra={
@@ -763,6 +933,7 @@ export default function MetadataPage() {
 				okText="提交"
 				cancelText="取消"
 				confirmLoading={driftActionSubmitting}
+				okButtonProps={{ disabled: !canManage }}
 			>
 				<Form form={driftForm} layout="vertical">
 					{driftActionType === "policy" ? (

@@ -1,12 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Button, Card, Form, Input, Modal, Space, Table, Typography } from "antd";
+import { Breadcrumb, Button, Card, Descriptions, Divider, Drawer, Form, Input, List, Modal, Space, Spin, Table, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
+import { EyeOutlined } from "@ant-design/icons";
+import { useNavigate, useSearchParams } from "react-router";
 import { EmptyState } from "@/components/empty-state";
+import { useGovernanceManageAccess } from "@/hooks/useModuleManageAccess";
 import { PageHeader } from "@/components/page-header";
 import {
 	createGlossaryTerm,
 	deleteGlossaryTerm,
+	getGlossaryTermReferences,
 	listGlossaryTerms,
 	updateGlossaryTerm,
 } from "@/api/platformApi";
@@ -26,14 +30,48 @@ type GlossaryTerm = {
 	tags?: string;
 };
 
+type AssetReferenceItem = {
+	type?: string;
+	label?: string;
+	id?: string;
+	code?: string;
+	name?: string;
+	path?: string;
+	reason?: string;
+};
+
+type AssetReferencePayload = {
+	totalReferences?: number;
+	items?: AssetReferenceItem[];
+};
+
 export default function GlossaryPage() {
-	const [keyword, setKeyword] = useState("");
+	const navigate = useNavigate();
+	const [searchParams, setSearchParams] = useSearchParams();
+	const [keyword, setKeyword] = useState(searchParams.get("keyword") || "");
 	const [items, setItems] = useState<GlossaryTerm[]>([]);
 	const [loading, setLoading] = useState(false);
 	const [modalOpen, setModalOpen] = useState(false);
 	const [saving, setSaving] = useState(false);
 	const [editing, setEditing] = useState<GlossaryTerm | null>(null);
+	const [detailOpen, setDetailOpen] = useState(false);
+	const [detailTerm, setDetailTerm] = useState<GlossaryTerm | null>(null);
+	const [referenceLoading, setReferenceLoading] = useState(false);
+	const [references, setReferences] = useState<AssetReferencePayload | null>(null);
 	const [form] = Form.useForm();
+	const canManage = useGovernanceManageAccess();
+
+	const applyKeyword = (value: string) => {
+		const normalized = value || "";
+		setKeyword(normalized);
+		const params = new URLSearchParams(searchParams);
+		if (normalized.trim()) {
+			params.set("keyword", normalized.trim());
+		} else {
+			params.delete("keyword");
+		}
+		setSearchParams(params, { replace: true });
+	};
 
 	const loadGlossary = useCallback(async () => {
 		setLoading(true);
@@ -48,6 +86,23 @@ export default function GlossaryPage() {
 			setLoading(false);
 		}
 	}, [keyword]);
+
+	const loadReferences = useCallback(async (id?: string) => {
+		if (!id) {
+			setReferences(null);
+			return;
+		}
+		setReferenceLoading(true);
+		try {
+			const resp = (await getGlossaryTermReferences(id)) as AssetReferencePayload;
+			setReferences(resp || null);
+		} catch (err: any) {
+			setReferences(null);
+			toast.error(err?.message || "加载引用关系失败");
+		} finally {
+			setReferenceLoading(false);
+		}
+	}, []);
 
 	useEffect(() => {
 		void loadGlossary();
@@ -69,6 +124,10 @@ export default function GlossaryPage() {
 	};
 
 	const submit = async () => {
+		if (!canManage) {
+			toast.error("当前账号无治理维护权限");
+			return;
+		}
 		setSaving(true);
 		try {
 			const values = await form.validateFields(["name"]);
@@ -99,22 +158,53 @@ export default function GlossaryPage() {
 	};
 
 	const removeGlossary = (row: GlossaryTerm) => {
+		if (!canManage) {
+			toast.error("当前账号无治理维护权限");
+			return;
+		}
 		if (!row?.id) return;
-		Modal.confirm({
-			title: "删除术语？",
-			content: "删除后无法恢复。",
-			okText: "删除",
-			cancelText: "取消",
-			onOk: async () => {
-				try {
-					await deleteGlossaryTerm(row.id as string);
-					toast.success("术语已删除");
-					await loadGlossary();
-				} catch (err: any) {
-					toast.error(err?.message || "删除失败");
+		void (async () => {
+			try {
+				const refs = (await getGlossaryTermReferences(row.id as string)) as AssetReferencePayload;
+				const impactCount = Number(refs?.totalReferences || 0);
+				if (impactCount > 0) {
+					Modal.warning({
+						title: `删除被拦截：存在 ${impactCount} 个引用对象`,
+						content: (
+							<List
+								size="small"
+								dataSource={(refs?.items || []).slice(0, 8)}
+								renderItem={(item) => (
+									<List.Item>
+										<Text>
+											{item.label || item.type}：{item.name || item.code || item.id}
+										</Text>
+									</List.Item>
+								)}
+							/>
+						),
+					});
+					return;
 				}
-			},
-		});
+				Modal.confirm({
+					title: "删除术语？",
+					content: "删除后无法恢复。",
+					okText: "删除",
+					cancelText: "取消",
+					onOk: async () => {
+						try {
+							await deleteGlossaryTerm(row.id as string);
+							toast.success("术语已删除");
+							await loadGlossary();
+						} catch (err: any) {
+							toast.error(err?.message || "删除失败");
+						}
+					},
+				});
+			} catch (err: any) {
+				toast.error(err?.message || "删除前检查失败");
+			}
+		})();
 	};
 
 	const columns: ColumnsType<GlossaryTerm> = [
@@ -127,10 +217,22 @@ export default function GlossaryPage() {
 			title: "操作",
 			render: (_, row) => (
 				<Space>
-					<Button type="link" size="small" onClick={() => openModal(row)}>
+					<Button
+						type="link"
+						size="small"
+						icon={<EyeOutlined />}
+						onClick={() => {
+							setDetailTerm(row);
+							setDetailOpen(true);
+							void loadReferences(row.id);
+						}}
+					>
+						详情
+					</Button>
+					<Button type="link" size="small" onClick={() => openModal(row)} disabled={!canManage}>
 						编辑
 					</Button>
-					<Button type="link" size="small" danger onClick={() => removeGlossary(row)}>
+					<Button type="link" size="small" danger onClick={() => removeGlossary(row)} disabled={!canManage}>
 						删除
 					</Button>
 				</Space>
@@ -140,13 +242,14 @@ export default function GlossaryPage() {
 
 	return (
 		<div className="space-y-4">
+			<Breadcrumb items={[{ title: "数据治理中心" }, { title: "标准管理" }, { title: "业务术语" }]} />
 			<PageHeader
 				title="数据治理中心 · 标准管理 / 业务术语"
 				description="维护业务术语口径与责任人，确保业务语义一致。"
 				actions={
 					<Space>
 						<Button disabled>同步至 OpenMetadata</Button>
-						<Button type="primary" onClick={() => openModal()}>
+						<Button type="primary" onClick={() => openModal()} disabled={!canManage}>
 							+ 新增术语
 						</Button>
 					</Space>
@@ -160,9 +263,10 @@ export default function GlossaryPage() {
 						style={{ width: 300 }}
 						value={keyword}
 						onChange={(e) => setKeyword(e.target.value)}
-						onSearch={loadGlossary}
+						onSearch={(value) => applyKeyword(value)}
 						allowClear
 					/>
+					<Button onClick={() => applyKeyword("")}>重置</Button>
 				</Space>
 				{items.length === 0 && !loading ? (
 					<EmptyState title="暂无术语" description="请先新增业务术语。" />
@@ -185,6 +289,7 @@ export default function GlossaryPage() {
 				okText="保存"
 				cancelText="取消"
 				confirmLoading={saving}
+				okButtonProps={{ disabled: !canManage }}
 			>
 				<Form layout="vertical" form={form}>
 					<Form.Item name="name" label="术语名称" rules={[{ required: true, message: "请输入术语名称" }]}>
@@ -210,6 +315,73 @@ export default function GlossaryPage() {
 					</Form.Item>
 				</Form>
 			</Modal>
+
+			<Drawer
+				open={detailOpen}
+				title="术语详情"
+				width={680}
+				onClose={() => setDetailOpen(false)}
+				extra={
+					canManage ? (
+						<Button
+							onClick={() => {
+								if (!detailTerm) return;
+								openModal(detailTerm);
+							}}
+						>
+							编辑
+						</Button>
+					) : undefined
+				}
+			>
+				<Descriptions column={1} bordered size="small">
+					<Descriptions.Item label="术语名称">{detailTerm?.name || "-"}</Descriptions.Item>
+					<Descriptions.Item label="标准编码">{detailTerm?.code || "-"}</Descriptions.Item>
+					<Descriptions.Item label="口径定义">{detailTerm?.definition || "-"}</Descriptions.Item>
+					<Descriptions.Item label="别名">{detailTerm?.aliases || "-"}</Descriptions.Item>
+					<Descriptions.Item label="主题域">{detailTerm?.domain || "-"}</Descriptions.Item>
+					<Descriptions.Item label="负责人">{detailTerm?.owner || "-"}</Descriptions.Item>
+					<Descriptions.Item label="标签">{detailTerm?.tags || "-"}</Descriptions.Item>
+				</Descriptions>
+				<Divider />
+				<Text strong>引用关系</Text>
+				<div className="mt-2">
+					{referenceLoading ? (
+						<Spin size="small" />
+					) : Number(references?.totalReferences || 0) === 0 ? (
+						<Text type="secondary">暂无引用对象</Text>
+					) : (
+						<List
+							size="small"
+							dataSource={references?.items || []}
+							renderItem={(item) => (
+								<List.Item
+									actions={[
+										item.path ? (
+											<Button
+												key="jump"
+												type="link"
+												size="small"
+												onClick={() => {
+													navigate(item.path as string);
+													setDetailOpen(false);
+												}}
+											>
+												跳转
+											</Button>
+										) : null,
+									]}
+								>
+									<List.Item.Meta
+										title={`${item.label || item.type || "引用"} · ${item.name || item.code || item.id || "-"}`}
+										description={item.reason || "-"}
+									/>
+								</List.Item>
+							)}
+						/>
+					)}
+				</div>
+			</Drawer>
 		</div>
 	);
 }

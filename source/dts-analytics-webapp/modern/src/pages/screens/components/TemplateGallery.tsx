@@ -21,6 +21,13 @@ const CATEGORY_LABELS: Record<string, string> = {
     custom: '自定义',
     official: '官方',
     industry: '行业',
+    general: '通用',
+    government: '政务',
+    manufacturing: '工业',
+    retail: '零售',
+    finance: '金融',
+    education: '教育/医疗',
+    blank: '空白',
 };
 
 const VISIBILITY_LABELS: Record<string, string> = {
@@ -226,6 +233,7 @@ export function TemplateGallery({ onSelect, onClose }: TemplateGalleryProps) {
                 name: template.name,
                 description: template.description,
                 category: template.category,
+                tags: template.tags,
             }).includes(normalizedKeyword);
         });
     }, [category, normalizedKeyword]);
@@ -642,6 +650,18 @@ export function TemplateGallery({ onSelect, onClose }: TemplateGalleryProps) {
                     <button className="template-gallery-close" onClick={onClose}>✕</button>
                 </div>
 
+                <div className="template-category-tabs">
+                    {allCategories.map((value) => (
+                        <button
+                            key={value}
+                            className={`template-category-tab ${category === value ? 'active' : ''}`}
+                            onClick={() => setCategory(value)}
+                        >
+                            {value === 'all' ? '全部' : (CATEGORY_LABELS[value] || value)}
+                        </button>
+                    ))}
+                </div>
+
                 <div className="template-gallery-filters">
                     <input
                         type="text"
@@ -650,17 +670,6 @@ export function TemplateGallery({ onSelect, onClose }: TemplateGalleryProps) {
                         onChange={(e) => setKeyword(e.target.value)}
                         placeholder="搜索模板名称/标签"
                     />
-                    <select
-                        className="template-category-select"
-                        value={category}
-                        onChange={(e) => setCategory(e.target.value)}
-                    >
-                        {allCategories.map((value) => (
-                            <option key={value} value={value}>
-                                {value === 'all' ? '全部分类' : (CATEGORY_LABELS[value] || value)}
-                            </option>
-                        ))}
-                    </select>
                     <select
                         className="template-category-select"
                         value={visibility}
@@ -724,6 +733,13 @@ export function TemplateGallery({ onSelect, onClose }: TemplateGalleryProps) {
                                     <div className="template-card-info">
                                         <h3>{template.name}</h3>
                                         <p>{template.description}</p>
+                                        {Array.isArray(template.tags) && template.tags.length > 0 && (
+                                            <div className="template-card-tags">
+                                                {template.tags.map((tag) => (
+                                                    <span key={tag} className="template-tag">{tag}</span>
+                                                ))}
+                                            </div>
+                                        )}
                                         <div className="template-card-meta">
                                             {(CATEGORY_LABELS[template.category] || template.category)} · {template.config.components.length} 个组件
                                         </div>
@@ -943,9 +959,38 @@ export function TemplateGallery({ onSelect, onClose }: TemplateGalleryProps) {
                     color: #fff;
                 }
 
+                .template-category-tabs {
+                    display: flex;
+                    gap: 2px;
+                    padding: 10px 24px 0;
+                    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+                    overflow-x: auto;
+                }
+
+                .template-category-tab {
+                    background: none;
+                    border: none;
+                    border-bottom: 2px solid transparent;
+                    padding: 8px 14px;
+                    color: #94a3b8;
+                    font-size: 13px;
+                    cursor: pointer;
+                    white-space: nowrap;
+                    transition: all 0.2s;
+                }
+
+                .template-category-tab:hover {
+                    color: #e2e8f0;
+                }
+
+                .template-category-tab.active {
+                    color: #00d4ff;
+                    border-bottom-color: #00d4ff;
+                }
+
                 .template-gallery-filters {
                     display: grid;
-                    grid-template-columns: 1fr repeat(11, auto);
+                    grid-template-columns: 1fr repeat(10, auto);
                     gap: 8px;
                     padding: 12px 24px;
                     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
@@ -1049,6 +1094,22 @@ export function TemplateGallery({ onSelect, onClose }: TemplateGalleryProps) {
                     font-size: 13px;
                     color: #888;
                     line-height: 1.4;
+                }
+
+                .template-card-tags {
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 4px;
+                    margin-bottom: 8px;
+                }
+
+                .template-tag {
+                    display: inline-block;
+                    padding: 2px 8px;
+                    background: rgba(0, 212, 255, 0.1);
+                    color: #00d4ff;
+                    border-radius: 10px;
+                    font-size: 11px;
                 }
 
                 .template-card-meta {

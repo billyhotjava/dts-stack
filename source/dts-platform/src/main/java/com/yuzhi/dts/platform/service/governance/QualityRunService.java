@@ -25,6 +25,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -99,6 +100,7 @@ public class QualityRunService {
         if (!properties.getQuality().isEnabled()) {
             throw new IllegalStateException("质量检测功能已禁用");
         }
+        boolean dryRun = request != null && Boolean.TRUE.equals(request.getDryRun());
         GovRule rule = resolveRule(request.getRuleId());
         GovRuleVersion version = resolveVersion(rule);
         List<GovRuleBinding> bindings = resolveBindings(version, request.getBindingId(), request.getDatasetId());
@@ -115,12 +117,13 @@ public class QualityRunService {
             run.setRuleVersion(version);
             run.setBinding(binding);
             run.setDatasetId(binding.getDatasetId());
-            run.setTriggerType(StringUtils.defaultIfBlank(request.getTriggerType(), "MANUAL"));
+            run.setTriggerType(dryRun ? "DRY_RUN" : StringUtils.defaultIfBlank(request.getTriggerType(), "MANUAL"));
             run.setTriggerRef(actor);
             run.setStatus("QUEUED");
             run.setSeverity(rule.getSeverity());
             run.setDataLevel(rule.getDataLevel());
             run.setScheduledAt(Instant.now());
+            run.setInputParamsJson(writeJson(params));
             runRepository.save(run);
 
             runIds.add(run.getId());
@@ -129,24 +132,31 @@ public class QualityRunService {
 
         if (!runIds.isEmpty()) {
             List<UUID> dispatchIds = List.copyOf(runIds);
-            if (TransactionSynchronizationManager.isSynchronizationActive()) {
-                TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-                    @Override
-                    public void afterCommit() {
-                        dispatchIds.forEach(id ->
-                            taskExecutor.execute(() ->
-                                runTransactionTemplate.executeWithoutResult(status -> doExecuteRun(id, params))
-                            )
-                        );
-                    }
-                });
+            if (dryRun) {
+                dispatchIds.forEach(id -> doExecuteRun(id, params));
             } else {
-                dispatchIds.forEach(id ->
-                    taskExecutor.execute(() ->
-                        runTransactionTemplate.executeWithoutResult(status -> doExecuteRun(id, params))
-                    )
-                );
+                if (TransactionSynchronizationManager.isSynchronizationActive()) {
+                    TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                        @Override
+                        public void afterCommit() {
+                            dispatchIds.forEach(id ->
+                                taskExecutor.execute(() ->
+                                    runTransactionTemplate.executeWithoutResult(status -> doExecuteRun(id, params))
+                                )
+                            );
+                        }
+                    });
+                } else {
+                    dispatchIds.forEach(id ->
+                        taskExecutor.execute(() ->
+                            runTransactionTemplate.executeWithoutResult(status -> doExecuteRun(id, params))
+                        )
+                    );
+                }
             }
+        }
+        if (dryRun) {
+            return dispatchIdsToDtos(runIds);
         }
         return runs;
     }
@@ -189,6 +199,35 @@ public class QualityRunService {
             .collect(Collectors.toList());
     }
 
+    @Transactional(readOnly = true)
+    public List<QualityRunDto> listRuns(UUID ruleId, UUID datasetId, String status, Instant startedFrom, Instant startedTo, int limit) {
+        int safeLimit = Math.max(1, Math.min(limit, 500));
+        int querySize = Math.max(safeLimit, 200);
+        Pageable pageable = PageRequest.of(0, querySize, Sort.Direction.DESC, "createdDate");
+        List<GovQualityRun> candidates;
+        if (ruleId != null) {
+            candidates = runRepository.findByRuleId(ruleId, pageable);
+        } else if (datasetId != null) {
+            candidates = runRepository.findByDatasetId(datasetId, pageable);
+        } else {
+            candidates = runRepository.findAll(pageable).getContent();
+        }
+        String normalizedStatus = StringUtils.trimToNull(status);
+        return candidates
+            .stream()
+            .filter(run -> normalizedStatus == null || normalizedStatus.equalsIgnoreCase(StringUtils.trimToEmpty(run.getStatus())))
+            .filter(run -> {
+                Instant pivot = run.getStartedAt() != null ? run.getStartedAt() : run.getCreatedDate();
+                if (startedFrom != null && (pivot == null || pivot.isBefore(startedFrom))) {
+                    return false;
+                }
+                return startedTo == null || pivot == null || !pivot.isAfter(startedTo);
+            })
+            .limit(safeLimit)
+            .map(run -> GovernanceMapper.toDto(run, metricRepository.findByRunId(run.getId())))
+            .collect(Collectors.toList());
+    }
+
     private void doExecuteRun(UUID runId, Map<String, Object> params) {
         GovQualityRun run = runRepository.findById(runId).orElseThrow(EntityNotFoundException::new);
         Instant start = Instant.now();
@@ -203,6 +242,7 @@ public class QualityRunService {
                 run.setStatus("SKIPPED");
                 run.setFinishedAt(Instant.now());
                 run.setMessage("未配置检测语句");
+                run.setErrorCategory(null);
                 runRepository.save(run);
                 Map<String, Object> payload = buildRunAuditPayload(run, "运行质量规则：" + resolveRunRuleName(run));
                 payload.put("status", run.getStatus());
@@ -226,6 +266,7 @@ public class QualityRunService {
             StatementExecutionResult.Status aggregate = aggregateStatus(results);
             run.setStatus(mapStatus(aggregate));
             run.setMessage(summaryMessage(results));
+            run.setErrorCategory(resolveErrorCategory(results));
             run.setFinishedAt(Instant.now());
             run.setDurationMs(java.time.Duration.between(start, run.getFinishedAt()).toMillis());
             run.setMetricsJson(writeMetrics(results));
@@ -245,7 +286,9 @@ public class QualityRunService {
                     payload,
                     buildRunAuditTags(run)
                 );
-                createIssueForFailedRun(run, results, resolveRunActor(run));
+                if (!isDryRun(run)) {
+                    createIssueForFailedRun(run, results, resolveRunActor(run));
+                }
             } else {
                 Map<String, Object> payload = buildRunAuditPayload(run, "运行质量规则：" + resolveRunRuleName(run));
                 payload.put("status", run.getStatus());
@@ -266,6 +309,7 @@ public class QualityRunService {
             run.setStatus("FAILED");
             run.setFinishedAt(Instant.now());
             run.setMessage(ex.getMessage());
+            run.setErrorCategory(resolveErrorCategory(ex.getMessage()));
             run.setDurationMs(java.time.Duration.between(start, run.getFinishedAt()).toMillis());
             runRepository.save(run);
             Map<String, Object> payload = buildRunAuditPayload(run, "运行质量规则：" + resolveRunRuleName(run));
@@ -282,8 +326,27 @@ public class QualityRunService {
                 payload,
                 buildRunAuditTags(run)
             );
-            createIssueForFailedRun(run, null, resolveRunActor(run));
+            if (!isDryRun(run)) {
+                createIssueForFailedRun(run, null, resolveRunActor(run));
+            }
         }
+    }
+
+    private boolean isDryRun(GovQualityRun run) {
+        return run != null && "DRY_RUN".equalsIgnoreCase(StringUtils.trimToEmpty(run.getTriggerType()));
+    }
+
+    private List<QualityRunDto> dispatchIdsToDtos(List<UUID> runIds) {
+        if (runIds == null || runIds.isEmpty()) {
+            return Collections.emptyList();
+        }
+        return runIds
+            .stream()
+            .map(runRepository::findById)
+            .filter(Optional::isPresent)
+            .map(Optional::get)
+            .map(run -> GovernanceMapper.toDto(run, metricRepository.findByRunId(run.getId())))
+            .collect(Collectors.toList());
     }
 
     private void createIssueForFailedRun(GovQualityRun run, List<StatementExecutionResult> results, String actor) {
@@ -427,11 +490,14 @@ public class QualityRunService {
 
     private GovRuleVersion resolveVersion(GovRule rule) {
         GovRuleVersion version = rule.getLatestVersion();
-        if (version == null) {
-            version = versionRepository.findFirstByRuleIdOrderByVersionDesc(rule.getId()).orElse(null);
+        if (version != null && !"PUBLISHED".equalsIgnoreCase(StringUtils.trimToEmpty(version.getStatus()))) {
+            version = null;
         }
         if (version == null) {
-            throw new IllegalStateException("规则尚未发布版本");
+            version = versionRepository.findFirstByRuleIdAndStatusOrderByVersionDesc(rule.getId(), "PUBLISHED").orElse(null);
+        }
+        if (version == null) {
+            throw new IllegalStateException("规则尚无可执行的已发布版本");
         }
         return version;
     }
@@ -539,6 +605,57 @@ public class QualityRunService {
         };
     }
 
+    private String resolveErrorCategory(List<StatementExecutionResult> results) {
+        if (results == null || results.isEmpty()) {
+            return null;
+        }
+        StatementExecutionResult failed = results
+            .stream()
+            .filter(item -> item != null && item.status() == StatementExecutionResult.Status.FAILED)
+            .findFirst()
+            .orElse(null);
+        if (failed == null) {
+            return null;
+        }
+        if (StringUtils.isNotBlank(failed.errorCode())) {
+            return normalizeErrorCode(failed.errorCode());
+        }
+        return resolveErrorCategory(failed.message());
+    }
+
+    private String resolveErrorCategory(String rawMessage) {
+        String message = StringUtils.trimToEmpty(rawMessage).toLowerCase(Locale.ROOT);
+        if (message.isEmpty()) {
+            return "UNKNOWN";
+        }
+        if (message.contains("permission denied") || message.contains("access denied") || message.contains("not authorized")) {
+            return "PERMISSION_DENIED";
+        }
+        if (message.contains("timeout") || message.contains("timed out")) {
+            return "TIMEOUT";
+        }
+        if (message.contains("syntax error") || message.contains("parse exception") || message.contains("parser")) {
+            return "SQL_SYNTAX";
+        }
+        if (
+            message.contains("does not exist") ||
+            message.contains("not found") ||
+            message.contains("unknown table") ||
+            message.contains("unknown column")
+        ) {
+            return "OBJECT_NOT_FOUND";
+        }
+        if (message.contains("connection refused") || message.contains("connection reset") || message.contains("connection closed")) {
+            return "CONNECTION_ERROR";
+        }
+        return "EXECUTION_ERROR";
+    }
+
+    private String normalizeErrorCode(String errorCode) {
+        String normalized = StringUtils.trimToEmpty(errorCode).toUpperCase(Locale.ROOT).replace('-', '_');
+        return normalized.isEmpty() ? "UNKNOWN" : normalized;
+    }
+
     private String summaryMessage(List<StatementExecutionResult> results) {
         long failed = results.stream().filter(res -> res.status() == StatementExecutionResult.Status.FAILED).count();
         long skipped = results.stream().filter(res -> res.status() == StatementExecutionResult.Status.SKIPPED).count();
@@ -552,8 +669,12 @@ public class QualityRunService {
     }
 
     private String writeMetrics(List<StatementExecutionResult> results) {
+        return writeJson(results);
+    }
+
+    private String writeJson(Object value) {
         try {
-            return objectMapper.writeValueAsString(results);
+            return objectMapper.writeValueAsString(value);
         } catch (Exception ex) {
             return null;
         }

@@ -22,6 +22,8 @@ public class QualityRunDto {
     private Instant finishedAt;
     private Long durationMs;
     private String message;
+    private String inputParamsJson;
+    private String errorCategory;
     private String metricsJson;
     private List<QualityMetricDto> metrics;
     private Instant createdDate;
@@ -155,6 +157,22 @@ public class QualityRunDto {
         this.message = message;
     }
 
+    public String getInputParamsJson() {
+        return inputParamsJson;
+    }
+
+    public void setInputParamsJson(String inputParamsJson) {
+        this.inputParamsJson = inputParamsJson;
+    }
+
+    public String getErrorCategory() {
+        return errorCategory;
+    }
+
+    public void setErrorCategory(String errorCategory) {
+        this.errorCategory = errorCategory;
+    }
+
     public String getMetricsJson() {
         return metricsJson;
     }
@@ -187,4 +205,3 @@ public class QualityRunDto {
         this.createdBy = createdBy;
     }
 }
-

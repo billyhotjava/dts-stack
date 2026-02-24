@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Alert, Card, Input, Select, Space, Statistic, Table, Tag } from "antd";
+import { Alert, Button, Card, Collapse, Descriptions, Drawer, Input, Select, Space, Statistic, Table, Tag } from "antd";
 import type { ColumnsType } from "antd/es/table";
+import { DownloadOutlined } from "@ant-design/icons";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
 import { getCatalogLineageImpact, listDatasets } from "@/api/platformApi";
@@ -19,6 +20,10 @@ type ImpactNode = {
 	type?: string;
 	layer?: string;
 	ownerDept?: string;
+	owner?: string;
+	sourceId?: string;
+	lastModifiedAt?: string;
+	snapshotTime?: string;
 };
 
 type ImpactEdge = {
@@ -28,11 +33,20 @@ type ImpactEdge = {
 	downstreamDatasetId?: string;
 	upstreamName?: string;
 	downstreamName?: string;
+	upstreamLayer?: string;
+	downstreamLayer?: string;
 	upstreamAssetType?: string;
 	downstreamAssetType?: string;
 	direction?: string;
 	projectName?: string;
 	notes?: string;
+	lastModifiedAt?: string;
+};
+
+type ImpactStats = {
+	layerNodeCounts?: Record<string, number>;
+	relationTypeCounts?: Record<string, number>;
+	changedNodeCount?: number;
 };
 
 type ImpactResult = {
@@ -42,6 +56,10 @@ type ImpactResult = {
 	projectName?: string;
 	nodeCount?: number;
 	edgeCount?: number;
+	layers?: string[];
+	changedWithinHours?: number;
+	sourceId?: string;
+	impactStats?: ImpactStats;
 	nodes?: ImpactNode[];
 	edges?: ImpactEdge[];
 };
@@ -56,14 +74,53 @@ const layerColor = (layer?: string) => {
 	return "processing";
 };
 
+const formatTs = (value?: string) => {
+	if (!value) return "-";
+	try {
+		return new Date(value).toLocaleString();
+	} catch {
+		return value;
+	}
+};
+
+const csvEscape = (value: unknown) => {
+	const text = value == null ? "" : String(value);
+	if (text.includes(",") || text.includes("\"") || text.includes("\n")) {
+		return `"${text.replaceAll("\"", "\"\"")}"`;
+	}
+	return text;
+};
+
+const downloadCsv = (name: string, rows: Array<Record<string, unknown>>) => {
+	if (!rows.length) {
+		return;
+	}
+	const keys = Object.keys(rows[0] || {});
+	const header = keys.join(",");
+	const body = rows
+		.map((row) => keys.map((key) => csvEscape(row[key])).join(","))
+		.join("\n");
+	const blob = new Blob([`${header}\n${body}`], { type: "text/csv;charset=utf-8;" });
+	const url = URL.createObjectURL(blob);
+	const anchor = document.createElement("a");
+	anchor.href = url;
+	anchor.download = name;
+	anchor.click();
+	URL.revokeObjectURL(url);
+};
+
 export default function LineagePage() {
 	const [datasets, setDatasets] = useState<DatasetOption[]>([]);
 	const [selectedId, setSelectedId] = useState<string | undefined>();
 	const [loading, setLoading] = useState(false);
 	const [impact, setImpact] = useState<ImpactResult | null>(null);
+	const [selectedNode, setSelectedNode] = useState<ImpactNode | null>(null);
 	const [direction, setDirection] = useState<"UPSTREAM" | "DOWNSTREAM" | "BOTH">("BOTH");
 	const [depth, setDepth] = useState<number>(3);
 	const [projectName, setProjectName] = useState<string>("");
+	const [layerFilters, setLayerFilters] = useState<string[]>([]);
+	const [changedWithinHours, setChangedWithinHours] = useState<number>(0);
+	const [keyword, setKeyword] = useState<string>("");
 
 	useEffect(() => {
 		void loadDatasets();
@@ -72,10 +129,11 @@ export default function LineagePage() {
 	useEffect(() => {
 		if (!selectedId) {
 			setImpact(null);
+			setSelectedNode(null);
 			return;
 		}
-		void loadImpact(selectedId, direction, depth, projectName);
-	}, [selectedId, direction, depth, projectName]);
+		void loadImpact(selectedId, direction, depth, projectName, layerFilters, changedWithinHours);
+	}, [selectedId, direction, depth, projectName, layerFilters, changedWithinHours]);
 
 	const datasetOptions = useMemo(() => datasets.map((item) => ({ label: item.name, value: item.id })), [datasets]);
 
@@ -100,6 +158,8 @@ export default function LineagePage() {
 		dir: "UPSTREAM" | "DOWNSTREAM" | "BOTH",
 		depthValue: number,
 		project: string,
+		layers: string[],
+		changedHours: number,
 	) => {
 		setLoading(true);
 		try {
@@ -107,6 +167,8 @@ export default function LineagePage() {
 				direction: dir,
 				depth: depthValue,
 				projectName: project.trim() || undefined,
+				layers: layers.length ? layers.join(",") : undefined,
+				changedWithinHours: changedHours > 0 ? changedHours : undefined,
 			});
 			setImpact(resp || null);
 		} catch (error: any) {
@@ -116,6 +178,72 @@ export default function LineagePage() {
 			setLoading(false);
 		}
 	};
+
+	const nodesRaw = useMemo(() => (Array.isArray(impact?.nodes) ? (impact?.nodes ?? []) : []), [impact?.nodes]);
+	const edgesRaw = useMemo(() => (Array.isArray(impact?.edges) ? (impact?.edges ?? []) : []), [impact?.edges]);
+
+	const keywordLower = keyword.trim().toLowerCase();
+	const nodes = useMemo(() => {
+		if (!keywordLower) {
+			return nodesRaw;
+		}
+		return nodesRaw.filter((node) => {
+			const text = `${node.name || ""} ${node.db || ""}.${node.table || ""} ${node.owner || ""} ${node.ownerDept || ""}`.toLowerCase();
+			return text.includes(keywordLower);
+		});
+	}, [nodesRaw, keywordLower]);
+
+	const nodeIdSet = useMemo(() => new Set(nodes.map((node) => node.id).filter(Boolean)), [nodes]);
+	const edges = useMemo(() => {
+		if (!keywordLower) {
+			return edgesRaw;
+		}
+		return edgesRaw.filter((edge) => {
+			const byText =
+				`${edge.upstreamName || ""} ${edge.downstreamName || ""} ${edge.relationType || ""} ${edge.notes || ""}`.toLowerCase().includes(keywordLower);
+			const byNode =
+				(edge.upstreamDatasetId && nodeIdSet.has(edge.upstreamDatasetId)) ||
+				(edge.downstreamDatasetId && nodeIdSet.has(edge.downstreamDatasetId));
+			return Boolean(byText || byNode);
+		});
+	}, [edgesRaw, keywordLower, nodeIdSet]);
+
+	const layerGroupItems = useMemo(() => {
+		const groups = new Map<string, ImpactNode[]>();
+		for (const node of nodes) {
+			const key = String(node.layer || "UNKNOWN").toUpperCase();
+			if (!groups.has(key)) {
+				groups.set(key, []);
+			}
+			groups.get(key)?.push(node);
+		}
+		return [...groups.entries()].map(([layer, list]) => ({
+			key: layer,
+			label: (
+				<Space>
+					<Tag color={layerColor(layer)}>{layer}</Tag>
+					<span>{list.length} 个节点</span>
+				</Space>
+			),
+			children: (
+				<Table
+					size="small"
+					rowKey={(row, idx) => row.id || `${row.db || "db"}.${row.table || "tb"}-${idx}`}
+					columns={[
+						{ title: "节点", dataIndex: "name", render: (v, r) => v || `${r.db || "-"}.${r.table || "-"}` },
+						{ title: "Schema.Table", render: (_, r) => `${r.db || "-"}.${r.table || "-"}` },
+						{ title: "负责人", render: (_, r) => r.owner || r.ownerDept || "-" },
+						{ title: "最近变更", render: (_, r) => formatTs(r.lastModifiedAt) },
+					]}
+					dataSource={list}
+					pagination={false}
+					onRow={(record) => ({
+						onClick: () => setSelectedNode(record),
+					})}
+				/>
+			),
+		}));
+	}, [nodes]);
 
 	const nodeColumns: ColumnsType<ImpactNode> = [
 		{
@@ -144,9 +272,14 @@ export default function LineagePage() {
 			render: (_, row) => `${row.db || "-"}.${row.table || "-"}`,
 		},
 		{
-			title: "项目/部门",
-			dataIndex: "ownerDept",
-			render: (value) => value || "-",
+			title: "负责人",
+			key: "owner",
+			render: (_, row) => row.owner || row.ownerDept || "-",
+		},
+		{
+			title: "最近变更",
+			key: "lastModifiedAt",
+			render: (_, row) => formatTs(row.lastModifiedAt),
 		},
 	];
 
@@ -168,20 +301,10 @@ export default function LineagePage() {
 			render: (value) => (value ? <Tag color="blue">{value}</Tag> : "-"),
 		},
 		{
-			title: "资产类型",
-			key: "assetType",
-			width: 220,
-			render: (_, row) => {
-				const up = row.upstreamAssetType || "-";
-				const down = row.downstreamAssetType || "-";
-				return `${up} -> ${down}`;
-			},
-		},
-		{
-			title: "方向",
-			dataIndex: "direction",
-			width: 190,
-			render: (value) => (value ? <Tag>{value}</Tag> : "-"),
+			title: "分层",
+			key: "layerFlow",
+			width: 180,
+			render: (_, row) => `${row.upstreamLayer || "-"} -> ${row.downstreamLayer || "-"}`,
 		},
 		{
 			title: "项目",
@@ -189,14 +312,52 @@ export default function LineagePage() {
 			width: 150,
 			render: (value) => value || "-",
 		},
+		{
+			title: "最近变更",
+			dataIndex: "lastModifiedAt",
+			width: 190,
+			render: (value) => formatTs(value),
+		},
 	];
 
-	const nodes = Array.isArray(impact?.nodes) ? impact?.nodes ?? [] : [];
-	const edges = Array.isArray(impact?.edges) ? impact?.edges ?? [] : [];
+	const handleExport = () => {
+		if (!impact) {
+			toast.warning("当前无可导出的数据");
+			return;
+		}
+		const stamp = new Date().toISOString().slice(0, 19).replaceAll(":", "-");
+		downloadCsv(
+			`lineage-nodes-${stamp}.csv`,
+			nodes.map((row) => ({
+				id: row.id,
+				name: row.name,
+				layer: row.layer,
+				type: row.type,
+				schema_table: `${row.db || ""}.${row.table || ""}`,
+				owner: row.owner || "",
+				owner_dept: row.ownerDept || "",
+				source_id: row.sourceId || "",
+				last_modified_at: row.lastModifiedAt || "",
+			})),
+		);
+		downloadCsv(
+			`lineage-edges-${stamp}.csv`,
+			edges.map((row) => ({
+				id: row.id,
+				upstream: row.upstreamName || row.upstreamDatasetId || "",
+				downstream: row.downstreamName || row.downstreamDatasetId || "",
+				relation_type: row.relationType || "",
+				layer_flow: `${row.upstreamLayer || ""}->${row.downstreamLayer || ""}`,
+				project_name: row.projectName || "",
+				last_modified_at: row.lastModifiedAt || "",
+			})),
+		);
+		toast.success("已导出节点与关系 CSV");
+	};
 
 	return (
 		<div className="space-y-4">
-			<PageHeader title="数据资产门户 · 血缘影响分析" description="查看跨模块数据链路（ODS/DWD/DWS/ADS）并按项目过滤。" />
+			<PageHeader title="数据资产门户 · 血缘影响分析" description="支持按项目、分层、变更窗口筛选，并可导出影响范围结果。" />
 
 			<Card title="分析条件">
 				<Space size={12} wrap>
@@ -230,13 +391,49 @@ export default function LineagePage() {
 						]}
 						onChange={(value) => setDepth(value)}
 					/>
+					<Select
+						mode="multiple"
+						allowClear
+						placeholder="层级过滤"
+						style={{ minWidth: 220 }}
+						value={layerFilters}
+						options={[
+							{ label: "ODS", value: "ODS" },
+							{ label: "DWD", value: "DWD" },
+							{ label: "DWS", value: "DWS" },
+							{ label: "ADS", value: "ADS" },
+							{ label: "DIM", value: "DIM" },
+						]}
+						onChange={(value) => setLayerFilters(value)}
+					/>
+					<Select
+						style={{ width: 180 }}
+						value={changedWithinHours}
+						options={[
+							{ label: "全部变更", value: 0 },
+							{ label: "最近 24 小时", value: 24 },
+							{ label: "最近 7 天", value: 24 * 7 },
+							{ label: "最近 30 天", value: 24 * 30 },
+						]}
+						onChange={(value) => setChangedWithinHours(value)}
+					/>
 					<Input
 						style={{ width: 220 }}
-						placeholder="按项目名过滤（可选）"
+						placeholder="项目名过滤（可选）"
 						value={projectName}
 						onChange={(e) => setProjectName(e.target.value)}
 						allowClear
 					/>
+					<Input
+						style={{ width: 240 }}
+						placeholder="链路快速搜索（节点/关系）"
+						value={keyword}
+						onChange={(e) => setKeyword(e.target.value)}
+						allowClear
+					/>
+					<Button icon={<DownloadOutlined />} onClick={handleExport} disabled={!nodes.length && !edges.length}>
+						导出结果
+					</Button>
 				</Space>
 			</Card>
 
@@ -246,9 +443,18 @@ export default function LineagePage() {
 				<Space size={24} wrap>
 					<Statistic title="节点数" value={Number(impact?.nodeCount || 0)} />
 					<Statistic title="边数" value={Number(impact?.edgeCount || 0)} />
+					<Statistic title="变更节点" value={Number(impact?.impactStats?.changedNodeCount || 0)} />
 					<Statistic title="方向" value={impact?.direction || direction} />
 					<Statistic title="深度" value={Number(impact?.depth || depth)} />
 				</Space>
+			</Card>
+
+			<Card title="分层折叠视图">
+				{layerGroupItems.length ? (
+					<Collapse items={layerGroupItems} defaultActiveKey={layerGroupItems.map((item) => item.key)} />
+				) : (
+					<EmptyState title="暂无分层节点" description="当前筛选条件下无可展示节点。" />
+				)}
 			</Card>
 
 			<Card title="节点列表">
@@ -259,6 +465,9 @@ export default function LineagePage() {
 						dataSource={nodes}
 						loading={loading}
 						pagination={{ pageSize: 10 }}
+						onRow={(record) => ({
+							onClick: () => setSelectedNode(record),
+						})}
 					/>
 				) : (
 					<EmptyState title="暂无节点" description="当前条件下未检索到血缘节点。" />
@@ -278,6 +487,23 @@ export default function LineagePage() {
 					<EmptyState title="暂无关系边" description="当前条件下未检索到血缘关系。" />
 				)}
 			</Card>
+
+			<Drawer title="节点详情" open={Boolean(selectedNode)} width={520} onClose={() => setSelectedNode(null)} destroyOnClose>
+				{selectedNode ? (
+					<Descriptions column={1} bordered size="small">
+						<Descriptions.Item label="节点名称">{selectedNode.name || "-"}</Descriptions.Item>
+						<Descriptions.Item label="Schema.Table">{`${selectedNode.db || "-"}.${selectedNode.table || "-"}`}</Descriptions.Item>
+						<Descriptions.Item label="分层">
+							<Tag color={layerColor(selectedNode.layer)}>{String(selectedNode.layer || "UNKNOWN").toUpperCase()}</Tag>
+						</Descriptions.Item>
+						<Descriptions.Item label="负责人">{selectedNode.owner || "-"}</Descriptions.Item>
+						<Descriptions.Item label="所属部门">{selectedNode.ownerDept || "-"}</Descriptions.Item>
+						<Descriptions.Item label="来源数据源 ID">{selectedNode.sourceId || "-"}</Descriptions.Item>
+						<Descriptions.Item label="最近变更">{formatTs(selectedNode.lastModifiedAt)}</Descriptions.Item>
+						<Descriptions.Item label="最近采集">{formatTs(selectedNode.snapshotTime)}</Descriptions.Item>
+					</Descriptions>
+				) : null}
+			</Drawer>
 		</div>
 	);
 }

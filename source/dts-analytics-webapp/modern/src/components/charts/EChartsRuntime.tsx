@@ -5,11 +5,16 @@ import {
 	BarChart,
 	FunnelChart,
 	GaugeChart,
+	HeatmapChart,
 	LineChart,
+	LinesChart,
+	EffectScatterChart,
 	MapChart,
 	PieChart,
 	RadarChart,
 	ScatterChart,
+	TreemapChart,
+	SunburstChart,
 } from "echarts/charts";
 import {
 	DatasetComponent,
@@ -39,7 +44,12 @@ echarts.use([
 	RadarChart,
 	FunnelChart,
 	ScatterChart,
+	HeatmapChart,
+	LinesChart,
+	EffectScatterChart,
 	MapChart,
+	TreemapChart,
+	SunburstChart,
 	CanvasRenderer,
 ]);
 

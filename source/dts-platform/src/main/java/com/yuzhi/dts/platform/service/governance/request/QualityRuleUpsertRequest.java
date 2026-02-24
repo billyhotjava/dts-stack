@@ -19,6 +19,7 @@ public class QualityRuleUpsertRequest {
     private String frequencyCron;
     private Boolean template;
     private Boolean enabled;
+    private Boolean publishNow;
     private UUID datasetId;
     private Map<String, Object> definition;
     private List<QualityRuleBindingRequest> bindings;
@@ -125,6 +126,14 @@ public class QualityRuleUpsertRequest {
 
     public void setEnabled(Boolean enabled) {
         this.enabled = enabled;
+    }
+
+    public Boolean getPublishNow() {
+        return publishNow;
+    }
+
+    public void setPublishNow(Boolean publishNow) {
+        this.publishNow = publishNow;
     }
 
     public UUID getDatasetId() {

@@ -385,6 +385,8 @@ public class InfraManagementService {
         sync.put("datasetsCreated", result.datasetsCreated());
         sync.put("datasetsUpdated", result.datasetsUpdated());
         sync.put("datasetsRemoved", result.datasetsRemoved());
+        sync.put("datasetsMarkedStale", result.datasetsMarkedStale());
+        sync.put("datasetsPurged", result.datasetsPurged());
         sync.put("tablesCreated", result.tablesCreated());
         sync.put("columnsImported", result.columnsImported());
         sync.put("lastSyncAt", Instant.now().toString());
@@ -1471,6 +1473,8 @@ public class InfraManagementService {
             meta.put("datasetsCreated", result.datasetsCreated());
             meta.put("datasetsUpdated", result.datasetsUpdated());
             meta.put("datasetsRemoved", result.datasetsRemoved());
+            meta.put("datasetsMarkedStale", result.datasetsMarkedStale());
+            meta.put("datasetsPurged", result.datasetsPurged());
             meta.put("tablesCreated", result.tablesCreated());
             meta.put("columnsImported", result.columnsImported());
             meta.put("databaseProduct", result.databaseProduct());

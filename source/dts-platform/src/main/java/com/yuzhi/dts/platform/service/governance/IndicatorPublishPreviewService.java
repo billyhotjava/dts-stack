@@ -65,24 +65,28 @@ public class IndicatorPublishPreviewService {
         payload.put("currentSignature", computeSignature(indicator));
 
         // Basic config checks
-        List<String> issues = new ArrayList<>();
-        boolean ready = true;
+        List<Map<String, Object>> blockingIssues = new ArrayList<>();
+        List<Map<String, Object>> warningIssues = new ArrayList<>();
         String datasetIdRaw = normalizeText(indicator.getDatasetId());
         UUID datasetId = parseUuid(datasetIdRaw);
         payload.put("datasetIdValid", datasetId != null);
         if (datasetId == null) {
-            ready = false;
-            issues.add("数据集ID格式错误或未配置");
+            blockingIssues.add(
+                issue(
+                    "IND_CFG_DATASET_ID_INVALID",
+                    "BLOCKER",
+                    "数据集ID格式错误或未配置",
+                    "请在指标配置中绑定有效的数据集 UUID"
+                )
+            );
         }
         if (!StringUtils.hasText(indicator.getExpressionSql())) {
-            ready = false;
-            issues.add("未配置计算SQL");
+            blockingIssues.add(issue("IND_CFG_SQL_MISSING", "BLOCKER", "未配置计算SQL", "请先填写计算 SQL"));
         }
 
         CatalogDataset dataset = datasetId != null ? datasetRepository.findById(datasetId).orElse(null) : null;
         if (datasetId != null && dataset == null) {
-            ready = false;
-            issues.add("绑定的数据集不存在");
+            blockingIssues.add(issue("IND_CFG_DATASET_NOT_FOUND", "BLOCKER", "绑定的数据集不存在", "请重新绑定有效数据集"));
         }
         if (dataset != null) {
             payload.put(
@@ -110,8 +114,14 @@ public class IndicatorPublishPreviewService {
         IndicatorValidationResultDto validation = indicatorService.validateComputeRule(indicatorId, activeDept);
         payload.put("validation", validation);
         if (validation == null || !"SUCCESS".equalsIgnoreCase(validation.getStatus())) {
-            ready = false;
-            issues.add("校验未通过：" + safeText(validation != null ? validation.getMessage() : null, "UNKNOWN"));
+            blockingIssues.add(
+                issue(
+                    "IND_VALIDATION_FAILED",
+                    "BLOCKER",
+                    "校验未通过：" + safeText(validation != null ? validation.getMessage() : null, "UNKNOWN"),
+                    "请先修复 SQL、权限或数据集问题后重新校验"
+                )
+            );
         }
 
         // Manual references
@@ -120,7 +130,32 @@ public class IndicatorPublishPreviewService {
             ;
         List<Map<String, Object>> references = refs.stream().map(this::toReferenceDto).toList();
         payload.put("references", references);
-        payload.put("referenceCheck", checkReferences(refs));
+        List<Map<String, Object>> referenceCheck = checkReferences(refs);
+        payload.put("referenceCheck", referenceCheck);
+        for (Map<String, Object> check : referenceCheck) {
+            String status = String.valueOf(check.get("status")).toUpperCase(Locale.ROOT);
+            String refType = safeText(check.get("refType"), "UNKNOWN");
+            String refTarget = safeText(check.get("refTarget"), "");
+            if ("MISSING".equals(status)) {
+                blockingIssues.add(
+                    issue(
+                        "IND_REF_MISSING",
+                        "BLOCKER",
+                        "引用缺失：" + refType + " -> " + refTarget,
+                        "请先补齐缺失的引用对象或更新引用配置"
+                    )
+                );
+            } else if ("UNKNOWN".equals(status)) {
+                warningIssues.add(
+                    issue(
+                        "IND_REF_UNKNOWN",
+                        "WARNING",
+                        "引用校验不完整：" + refType + " -> " + refTarget,
+                        "请检查引用目标格式是否符合约定"
+                    )
+                );
+            }
+        }
 
         // Last published snapshot diff
         GovIndicatorVersion lastPublished = versionRepository
@@ -137,10 +172,17 @@ public class IndicatorPublishPreviewService {
             payload.put("changesSinceLastPublish", List.of());
         }
 
-        payload.put("readyToPublish", ready);
-        if (!issues.isEmpty()) {
-            payload.put("issues", issues);
+        if (lastPublished == null) {
+            warningIssues.add(issue("IND_FIRST_PUBLISH", "WARNING", "尚无历史发布版本", "首次发布后可启用版本差异追踪"));
         }
+
+        boolean ready = blockingIssues.isEmpty();
+        payload.put("readyToPublish", ready);
+        payload.put("blockingIssues", blockingIssues);
+        payload.put("warningIssues", warningIssues);
+        payload.put("publishGate", Map.of("passed", ready, "blockerCount", blockingIssues.size(), "warningCount", warningIssues.size()));
+        payload.put("failureReasonCode", ready ? null : safeText(blockingIssues.get(0).get("code"), null));
+        payload.put("issues", mergeIssues(blockingIssues, warningIssues));
         return payload;
     }
 
@@ -263,7 +305,7 @@ public class IndicatorPublishPreviewService {
         if (Objects.equals(a, b)) {
             return;
         }
-        diffs.add(Map.of("field", field, "before", b, "after", a));
+        diffs.add(Map.of("field", field, "before", b, "after", a, "changed", true));
     }
 
     private Map<String, Object> parseJson(String json) {
@@ -314,5 +356,38 @@ public class IndicatorPublishPreviewService {
         }
         String trimmed = value.trim();
         return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private Map<String, Object> issue(String code, String severity, String message, String suggestion) {
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("code", code);
+        row.put("severity", severity);
+        row.put("message", message);
+        row.put("suggestion", suggestion);
+        return row;
+    }
+
+    private List<String> mergeIssues(List<Map<String, Object>> blockingIssues, List<Map<String, Object>> warningIssues) {
+        List<String> out = new ArrayList<>();
+        if (blockingIssues != null) {
+            for (Map<String, Object> issue : blockingIssues) {
+                out.add(formatIssue(issue));
+            }
+        }
+        if (warningIssues != null) {
+            for (Map<String, Object> issue : warningIssues) {
+                out.add(formatIssue(issue));
+            }
+        }
+        return out;
+    }
+
+    private String formatIssue(Map<String, Object> issue) {
+        if (issue == null || issue.isEmpty()) {
+            return "";
+        }
+        String code = safeText(issue.get("code"), "UNKNOWN");
+        String message = safeText(issue.get("message"), "未知问题");
+        return "[" + code + "] " + message;
     }
 }

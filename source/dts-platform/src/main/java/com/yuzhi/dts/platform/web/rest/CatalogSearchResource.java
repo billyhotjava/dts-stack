@@ -8,6 +8,7 @@ import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogTableSchemaRepository;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.security.AccessChecker;
+import jakarta.persistence.criteria.Predicate;
 import java.lang.reflect.Array;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -18,6 +19,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.core.OAuth2AuthenticatedPrincipal;
@@ -59,6 +61,14 @@ public class CatalogSearchResource {
     public ApiResponse<Map<String, Object>> search(
         @RequestParam(name = "keyword") String keyword,
         @RequestParam(name = "types", required = false) String types,
+        @RequestParam(name = "domainId", required = false) UUID domainId,
+        @RequestParam(name = "sourceId", required = false) UUID sourceId,
+        @RequestParam(name = "classification", required = false) String classification,
+        @RequestParam(name = "ownerDept", required = false) String ownerDept,
+        @RequestParam(name = "warehouseLayer", required = false) String warehouseLayer,
+        @RequestParam(name = "exposedBy", required = false) String exposedBy,
+        @RequestParam(name = "datasetType", required = false) String datasetType,
+        @RequestParam(name = "enabledOnly", required = false, defaultValue = "true") boolean enabledOnly,
         @RequestParam(name = "limit", required = false, defaultValue = "50") int limit,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
@@ -78,7 +88,20 @@ public class CatalogSearchResource {
 
         Map<UUID, Map<String, Object>> visibleDatasetDtoById = new LinkedHashMap<>();
         if (includeDatasets || includeTables || includeColumns) {
-            for (CatalogDataset ds : datasetRepo.findAll(Sort.by("createdDate").descending())) {
+            List<CatalogDataset> datasetScope = datasetRepo.findAll(
+                buildDatasetScopeSpecification(
+                    domainId,
+                    sourceId,
+                    classification,
+                    ownerDept,
+                    warehouseLayer,
+                    exposedBy,
+                    datasetType,
+                    enabledOnly
+                ),
+                Sort.by("createdDate").descending()
+            );
+            for (CatalogDataset ds : datasetScope) {
                 if (!accessChecker.canRead(ds)) continue;
                 if (effDept != null && !accessChecker.departmentAllowed(ds, effDept)) continue;
                 visibleDatasetDtoById.put(ds.getId(), toDatasetDto(ds));
@@ -135,6 +158,14 @@ public class CatalogSearchResource {
         payload.put("keyword", k);
         payload.put("types", typeSet.isEmpty() ? List.of("DATASET", "TABLE", "COLUMN") : typeSet.stream().sorted().toList());
         payload.put("limit", safeLimit);
+        payload.put("domainId", domainId != null ? domainId.toString() : null);
+        payload.put("sourceId", sourceId != null ? sourceId.toString() : null);
+        payload.put("classification", trimToNull(classification));
+        payload.put("ownerDept", trimToNull(ownerDept));
+        payload.put("warehouseLayer", trimToNull(warehouseLayer));
+        payload.put("exposedBy", trimToNull(exposedBy));
+        payload.put("datasetType", trimToNull(datasetType));
+        payload.put("enabledOnly", enabledOnly);
         payload.put("datasets", datasetHits);
         payload.put("tables", tableHits);
         payload.put("columns", columnHits);
@@ -144,6 +175,18 @@ public class CatalogSearchResource {
         auditPayload.put("keyword", k);
         auditPayload.put("types", payload.get("types"));
         auditPayload.put("limit", safeLimit);
+        if (domainId != null) {
+            auditPayload.put("domainId", domainId.toString());
+        }
+        if (sourceId != null) {
+            auditPayload.put("sourceId", sourceId.toString());
+        }
+        putIfHasText(auditPayload, "classification", classification);
+        putIfHasText(auditPayload, "ownerDept", ownerDept);
+        putIfHasText(auditPayload, "warehouseLayer", warehouseLayer);
+        putIfHasText(auditPayload, "exposedBy", exposedBy);
+        putIfHasText(auditPayload, "datasetType", datasetType);
+        auditPayload.put("enabledOnly", enabledOnly);
         auditPayload.put("datasetHits", datasetHits.size());
         auditPayload.put("tableHits", tableHits.size());
         auditPayload.put("columnHits", columnHits.size());
@@ -226,6 +269,61 @@ public class CatalogSearchResource {
             .filter(s -> !s.isEmpty())
             .map(s -> s.toUpperCase(Locale.ROOT))
             .collect(java.util.stream.Collectors.toSet());
+    }
+
+    private Specification<CatalogDataset> buildDatasetScopeSpecification(
+        UUID domainId,
+        UUID sourceId,
+        String classification,
+        String ownerDept,
+        String warehouseLayer,
+        String exposedBy,
+        String datasetType,
+        boolean enabledOnly
+    ) {
+        String classificationText = trimToNull(classification);
+        String ownerDeptText = trimToNull(ownerDept);
+        String layerText = trimToNull(warehouseLayer);
+        String exposedByText = trimToNull(exposedBy);
+        String datasetTypeText = trimToNull(datasetType);
+        return (root, query, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+            if (domainId != null) {
+                predicates.add(cb.equal(root.get("domain").get("id"), domainId));
+            }
+            if (sourceId != null) {
+                predicates.add(cb.equal(root.get("sourceId"), sourceId));
+            }
+            if (classificationText != null) {
+                predicates.add(cb.equal(cb.lower(root.get("classification")), classificationText.toLowerCase(Locale.ROOT)));
+            }
+            if (ownerDeptText != null) {
+                predicates.add(cb.equal(cb.lower(root.get("ownerDept")), ownerDeptText.toLowerCase(Locale.ROOT)));
+            }
+            if (layerText != null) {
+                predicates.add(cb.equal(cb.lower(root.get("warehouseLayer")), layerText.toLowerCase(Locale.ROOT)));
+            }
+            if (exposedByText != null) {
+                predicates.add(cb.equal(cb.lower(root.get("exposedBy")), exposedByText.toLowerCase(Locale.ROOT)));
+            }
+            if (datasetTypeText != null) {
+                predicates.add(cb.equal(cb.lower(root.get("type")), datasetTypeText.toLowerCase(Locale.ROOT)));
+            }
+            if (enabledOnly) {
+                predicates.add(cb.or(cb.isNull(root.get("enabled")), cb.isTrue(root.get("enabled"))));
+            }
+            return predicates.isEmpty() ? cb.conjunction() : cb.and(predicates.toArray(Predicate[]::new));
+        };
+    }
+
+    private void putIfHasText(Map<String, Object> payload, String key, String value) {
+        if (payload == null || key == null) {
+            return;
+        }
+        String text = trimToNull(value);
+        if (text != null) {
+            payload.put(key, text);
+        }
     }
 
     private boolean matchesTable(CatalogTableSchema table, String needle) {

@@ -11,5 +11,5 @@ import org.springframework.stereotype.Repository;
 public interface GovRuleVersionRepository extends JpaRepository<GovRuleVersion, UUID> {
     List<GovRuleVersion> findByRuleIdOrderByVersionDesc(UUID ruleId);
     Optional<GovRuleVersion> findFirstByRuleIdOrderByVersionDesc(UUID ruleId);
+    Optional<GovRuleVersion> findFirstByRuleIdAndStatusOrderByVersionDesc(UUID ruleId, String status);
 }
-

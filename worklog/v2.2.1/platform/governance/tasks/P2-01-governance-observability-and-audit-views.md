@@ -1,6 +1,6 @@
 # P2-01 治理可观测与审计视图
 
-`status`: `planned`
+`status`: `done`
 `priority`: `P2`
 
 ## 目标
@@ -22,6 +22,14 @@
 - 可按日/周查看治理核心 KPI。
 - 失败分类与问题闭环数据可追溯。
 - 运维可通过页面定位异常模块。
+
+## 完成说明
+
+- 后端新增治理运营聚合服务：`GovernanceOpsMetricsService`。
+- 新增接口：
+  - `GET /api/governance/ops/overview`
+  - `GET /api/governance/ops/trend`
+- 前端新增组件：`GovernanceOpsPanel.tsx`，已接入质量管控页。
 
 ## 风险与回滚
 

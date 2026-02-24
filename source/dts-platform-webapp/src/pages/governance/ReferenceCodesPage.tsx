@@ -1,20 +1,28 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Button, Card, Form, Input, Modal, Select, Space, Table, Tag, Typography } from "antd";
+import { Alert, Breadcrumb, Button, Card, Form, Input, List, Modal, Select, Space, Table, Tag, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
+import { useNavigate, useSearchParams } from "react-router";
 import { EmptyState } from "@/components/empty-state";
+import { useGovernanceManageAccess } from "@/hooks/useModuleManageAccess";
 import { PageHeader } from "@/components/page-header";
 import {
-	batchReferenceCodeItems,
+	applyStructuredReferenceCodeImport,
 	createReferenceCode,
 	createReferenceCodeItem,
 	createReferenceCodeMapping,
 	deleteReferenceCode,
 	deleteReferenceCodeItem,
 	deleteReferenceCodeMapping,
+	getStructuredReferenceCodeImportRun,
+	getReferenceCodeImportOpsOverview,
+	getReferenceCodeReferences,
+	listStructuredReferenceCodeImportRuns,
 	listReferenceCodeItems,
 	listReferenceCodeMappings,
 	listReferenceCodes,
+	previewStructuredReferenceCodeImport,
+	rollbackStructuredReferenceCodeImport,
 	syncReferenceCodeSeeds,
 	updateReferenceCode,
 	updateReferenceCodeItem,
@@ -49,6 +57,65 @@ type ReferenceCodeItem = {
 	isDefault?: boolean;
 };
 
+type StructuredImportRow = {
+	codeValue: string;
+	codeName: string;
+	description?: string;
+	sortNum?: number;
+	parentCode?: string;
+	isDefault?: boolean;
+};
+
+type StructuredImportPreview = {
+	runId?: string;
+	total?: number;
+	valid?: number;
+	createCount?: number;
+	updateCount?: number;
+	conflictCount?: number;
+	errorCount?: number;
+	conflictPolicy?: string;
+	strictMode?: boolean;
+	conflicts?: Array<Record<string, any>>;
+	errors?: Array<Record<string, any>>;
+};
+
+type StructuredImportRunSummary = {
+	runId?: string;
+	importMode?: string;
+	conflictPolicy?: string;
+	status?: string;
+	summary?: string;
+	createdBy?: string;
+	createdDate?: string;
+	previewTotal?: number;
+	createCount?: number;
+	updateCount?: number;
+	conflictCount?: number;
+	errorCount?: number;
+	rollbackable?: boolean;
+};
+
+type StructuredImportRunDetail = StructuredImportRunSummary & {
+	diffCount?: number;
+	diffRows?: Array<Record<string, any>>;
+	preview?: Record<string, any>;
+	beforeSample?: Array<Record<string, any>>;
+	afterSample?: Array<Record<string, any>>;
+};
+type ReferenceCodeOpsOverview = {
+	windowHours?: number;
+	directoryCount?: number;
+	totalRuns?: number;
+	appliedRuns?: number;
+	rolledBackRuns?: number;
+	previewRuns?: number;
+	conflictTotal?: number;
+	errorTotal?: number;
+	queryCostMs?: number;
+	failureTop?: Array<{ category?: string; count?: number }>;
+};
+
 type ReferenceCodeMapping = {
 	mapId?: number;
 	codeTypeId?: string;
@@ -58,6 +125,20 @@ type ReferenceCodeMapping = {
 };
 
 type PagedPayload<T> = { content?: T[]; total?: number; page?: number; size?: number };
+type AssetReferenceItem = {
+	type?: string;
+	label?: string;
+	id?: string;
+	code?: string;
+	name?: string;
+	path?: string;
+	reason?: string;
+};
+type AssetReferencePayload = {
+	targetName?: string;
+	totalReferences?: number;
+	items?: AssetReferenceItem[];
+};
 
 const STATUS_LABELS: Record<number, { label: string; color: string }> = {
 	0: { label: "草稿", color: "default" },
@@ -65,10 +146,61 @@ const STATUS_LABELS: Record<number, { label: string; color: string }> = {
 	2: { label: "废弃", color: "red" },
 };
 
+const STRUCTURED_TEMPLATE = "codeValue,codeName,description,sortNum,parentCode,isDefault";
+
+const parseBoolean = (value?: string) => {
+	const text = normalizeText(value)?.toLowerCase();
+	if (!text) return undefined;
+	if (["1", "true", "yes", "y", "是"].includes(text)) return true;
+	if (["0", "false", "no", "n", "否"].includes(text)) return false;
+	return undefined;
+};
+const parseIntOr = (value: string | null, fallback: number) => {
+	const parsed = Number.parseInt(String(value || ""), 10);
+	return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+};
+const formatDateTime = (value?: string) => {
+	if (!value) return "-";
+	const date = new Date(value);
+	if (Number.isNaN(date.getTime())) return value;
+	return date.toLocaleString("zh-CN", { hour12: false });
+};
+
+const parseStructuredRows = (raw: string): StructuredImportRow[] => {
+	const lines = raw
+		.split(/\r?\n/)
+		.map((line) => line.trim())
+		.filter(Boolean);
+	if (lines.length === 0) return [];
+	let start = 0;
+	const first = lines[0].toLowerCase();
+	if (first.includes("codevalue") && first.includes("codename")) {
+		start = 1;
+	}
+	const rows: StructuredImportRow[] = [];
+	for (let i = start; i < lines.length; i++) {
+		const parts = lines[i].split(",").map((part) => part.trim());
+		if (parts.length < 2) continue;
+		const row: StructuredImportRow = {
+			codeValue: parts[0],
+			codeName: parts[1],
+		};
+		if (parts[2]) row.description = parts[2];
+		if (parts[3] && !Number.isNaN(Number(parts[3]))) row.sortNum = Number(parts[3]);
+		if (parts[4]) row.parentCode = parts[4];
+		const boolValue = parseBoolean(parts[5]);
+		if (typeof boolValue === "boolean") row.isDefault = boolValue;
+		rows.push(row);
+	}
+	return rows;
+};
+
 export default function ReferenceCodesPage() {
-	const [keyword, setKeyword] = useState("");
-	const [pageNum, setPageNum] = useState(0);
-	const [pageSize, setPageSize] = useState(10);
+	const navigate = useNavigate();
+	const [searchParams, setSearchParams] = useSearchParams();
+	const [keyword, setKeyword] = useState(searchParams.get("keyword") || "");
+	const [pageNum, setPageNum] = useState(parseIntOr(searchParams.get("page"), 0));
+	const [pageSize, setPageSize] = useState(parseIntOr(searchParams.get("size"), 10) || 10);
 	const [data, setData] = useState<PagedPayload<ReferenceCodeDirectory> | null>(null);
 	const [loading, setLoading] = useState(false);
 	const [modalOpen, setModalOpen] = useState(false);
@@ -81,18 +213,55 @@ export default function ReferenceCodesPage() {
 	const [itemModalOpen, setItemModalOpen] = useState(false);
 	const [itemSaving, setItemSaving] = useState(false);
 	const [itemEditing, setItemEditing] = useState<ReferenceCodeItem | null>(null);
-	const [batchOpen, setBatchOpen] = useState(false);
-	const [batchRaw, setBatchRaw] = useState("");
-	const [batchSaving, setBatchSaving] = useState(false);
+	const [structuredOpen, setStructuredOpen] = useState(false);
+	const [structuredRaw, setStructuredRaw] = useState(STRUCTURED_TEMPLATE);
+	const [structuredPolicy, setStructuredPolicy] = useState("STRICT");
+	const [structuredPreview, setStructuredPreview] = useState<StructuredImportPreview | null>(null);
+	const [structuredLoading, setStructuredLoading] = useState(false);
+	const [structuredRunId, setStructuredRunId] = useState<string | null>(null);
+	const [structuredHistoryOpen, setStructuredHistoryOpen] = useState(false);
+	const [structuredHistoryLoading, setStructuredHistoryLoading] = useState(false);
+	const [structuredHistory, setStructuredHistory] = useState<StructuredImportRunSummary[]>([]);
+	const [structuredHistoryDetail, setStructuredHistoryDetail] = useState<StructuredImportRunDetail | null>(null);
+	const [structuredHistoryDetailLoading, setStructuredHistoryDetailLoading] = useState(false);
+	const [opsOverviewLoading, setOpsOverviewLoading] = useState(false);
+	const [opsOverview, setOpsOverview] = useState<ReferenceCodeOpsOverview | null>(null);
 	const [mappingsOpen, setMappingsOpen] = useState(false);
 	const [mappingsLoading, setMappingsLoading] = useState(false);
 	const [mappings, setMappings] = useState<ReferenceCodeMapping[]>([]);
 	const [mappingModalOpen, setMappingModalOpen] = useState(false);
 	const [mappingSaving, setMappingSaving] = useState(false);
 	const [mappingEditing, setMappingEditing] = useState<ReferenceCodeMapping | null>(null);
+	const [referenceOpen, setReferenceOpen] = useState(false);
+	const [referenceLoading, setReferenceLoading] = useState(false);
+	const [referencePayload, setReferencePayload] = useState<AssetReferencePayload | null>(null);
 	const [form] = Form.useForm();
 	const [itemForm] = Form.useForm();
 	const [mappingForm] = Form.useForm();
+	const canManage = useGovernanceManageAccess();
+
+	const syncQuery = (patch?: { keyword?: string; page?: number; size?: number }) => {
+		const params = new URLSearchParams(searchParams);
+		const nextKeyword = patch?.keyword ?? keyword;
+		const nextPage = patch?.page ?? pageNum;
+		const nextSize = patch?.size ?? pageSize;
+		if (nextKeyword?.trim()) {
+			params.set("keyword", nextKeyword.trim());
+		} else {
+			params.delete("keyword");
+		}
+		if (nextPage > 0) {
+			params.set("page", String(nextPage));
+		} else {
+			params.delete("page");
+		}
+		if (nextSize !== 10) {
+			params.set("size", String(nextSize));
+		} else {
+			params.delete("size");
+		}
+		setSearchParams(params, { replace: true });
+	};
 
 	const loadDirectories = useCallback(async () => {
 		setLoading(true);
@@ -110,9 +279,29 @@ export default function ReferenceCodesPage() {
 		}
 	}, [keyword, pageNum, pageSize]);
 
+	const loadOpsOverview = useCallback(async () => {
+		setOpsOverviewLoading(true);
+		try {
+			const resp = (await getReferenceCodeImportOpsOverview({ hours: 168 })) as ReferenceCodeOpsOverview;
+			setOpsOverview(resp || null);
+		} catch (err: any) {
+			toast.error((err?.message || "加载导入运维概览失败") + "，请稍后重试");
+		} finally {
+			setOpsOverviewLoading(false);
+		}
+	}, []);
+
 	useEffect(() => {
 		void loadDirectories();
 	}, [loadDirectories]);
+
+	useEffect(() => {
+		void loadOpsOverview();
+	}, [loadOpsOverview]);
+
+	useEffect(() => {
+		syncQuery();
+	}, [keyword, pageNum, pageSize]);
 
 	const openModal = (row?: ReferenceCodeDirectory) => {
 		setEditing(row || null);
@@ -132,6 +321,10 @@ export default function ReferenceCodesPage() {
 	};
 
 	const submit = async () => {
+		if (!canManage) {
+			toast.error("当前账号无治理维护权限");
+			return;
+		}
 		setSaving(true);
 		try {
 			const values = await form.validateFields(["codeTypeCode", "codeTypeName"]);
@@ -164,22 +357,68 @@ export default function ReferenceCodesPage() {
 	};
 
 	const removeDirectory = (row: ReferenceCodeDirectory) => {
+		if (!canManage) {
+			toast.error("当前账号无治理维护权限");
+			return;
+		}
 		if (!row?.codeTypeId) return;
-		Modal.confirm({
-			title: "删除码表？",
-			content: "删除后无法恢复。",
-			okText: "删除",
-			cancelText: "取消",
-			onOk: async () => {
-				try {
-					await deleteReferenceCode(row.codeTypeId as string);
-					toast.success("码表已删除");
-					await loadDirectories();
-				} catch (err: any) {
-					toast.error(err?.message || "删除失败");
+		void (async () => {
+			try {
+				const refs = (await getReferenceCodeReferences(row.codeTypeId as string)) as AssetReferencePayload;
+				const impactCount = Number(refs?.totalReferences || 0);
+				if (impactCount > 0) {
+					Modal.warning({
+						title: `删除被拦截：存在 ${impactCount} 个引用对象`,
+						content: (
+							<List
+								size="small"
+								dataSource={(refs?.items || []).slice(0, 8)}
+								renderItem={(item: AssetReferenceItem) => (
+									<List.Item>
+										<Text>
+											{item.label || item.type}：{item.name || item.code || item.id}
+										</Text>
+									</List.Item>
+								)}
+							/>
+						),
+					});
+					return;
 				}
-			},
-		});
+				Modal.confirm({
+					title: "删除码表？",
+					content: "删除后无法恢复。",
+					okText: "删除",
+					cancelText: "取消",
+					onOk: async () => {
+						try {
+							await deleteReferenceCode(row.codeTypeId as string);
+							toast.success("码表已删除");
+							await loadDirectories();
+						} catch (err: any) {
+							toast.error(err?.message || "删除失败");
+						}
+					},
+				});
+			} catch (err: any) {
+				toast.error(err?.message || "删除前检查失败");
+			}
+		})();
+	};
+
+	const openReferences = async (row: ReferenceCodeDirectory) => {
+		if (!row?.codeTypeId) return;
+		setReferenceOpen(true);
+		setReferenceLoading(true);
+		try {
+			const resp = (await getReferenceCodeReferences(row.codeTypeId)) as AssetReferencePayload;
+			setReferencePayload(resp || null);
+		} catch (err: any) {
+			setReferencePayload(null);
+			toast.error(err?.message || "加载引用关系失败");
+		} finally {
+			setReferenceLoading(false);
+		}
 	};
 
 	const openItems = async (row: ReferenceCodeDirectory) => {
@@ -202,23 +441,155 @@ export default function ReferenceCodesPage() {
 		}
 	};
 
-	const openBatch = () => {
-		setBatchRaw("");
-		setBatchOpen(true);
+	const openStructuredImport = () => {
+		if (!canManage) {
+			toast.error("当前账号无治理维护权限");
+			return;
+		}
+		setStructuredRaw(STRUCTURED_TEMPLATE);
+		setStructuredPolicy("STRICT");
+		setStructuredPreview(null);
+		setStructuredRunId(null);
+		setStructuredOpen(true);
 	};
 
-	const submitBatch = async () => {
-		if (!activeDirectory?.codeTypeId || !batchRaw.trim()) return;
-		setBatchSaving(true);
+	const doStructuredPreview = async () => {
+		if (!canManage) {
+			toast.error("当前账号无治理维护权限");
+			return;
+		}
+		if (!activeDirectory?.codeTypeId) return;
+		const rows = parseStructuredRows(structuredRaw);
+		if (rows.length === 0) {
+			toast.error("请至少填写一行导入数据");
+			return;
+		}
+		setStructuredLoading(true);
 		try {
-			const resp = (await batchReferenceCodeItems(activeDirectory.codeTypeId, { raw: batchRaw })) as any;
-			toast.success(`导入完成：新增 ${resp?.created ?? 0}，跳过 ${resp?.skipped ?? 0}，无效 ${resp?.invalid ?? 0}`);
-			setBatchOpen(false);
-			await refreshItems();
+			const resp = (await previewStructuredReferenceCodeImport(activeDirectory.codeTypeId, {
+				conflictPolicy: structuredPolicy,
+				rows,
+			})) as StructuredImportPreview;
+			setStructuredPreview(resp || null);
+			toast.success(
+				`预检完成：新增 ${resp?.createCount ?? 0}，更新 ${resp?.updateCount ?? 0}，冲突 ${resp?.conflictCount ?? 0}，错误 ${resp?.errorCount ?? 0}`
+			);
 		} catch (err: any) {
-			toast.error(err?.message || "批量导入失败");
+			toast.error(err?.message || "预检失败");
 		} finally {
-			setBatchSaving(false);
+			setStructuredLoading(false);
+		}
+	};
+
+	const doStructuredApply = async () => {
+		if (!canManage) {
+			toast.error("当前账号无治理维护权限");
+			return;
+		}
+		if (!activeDirectory?.codeTypeId) return;
+		const rows = parseStructuredRows(structuredRaw);
+		if (rows.length === 0) {
+			toast.error("请至少填写一行导入数据");
+			return;
+		}
+		setStructuredLoading(true);
+		try {
+			const resp = (await applyStructuredReferenceCodeImport(activeDirectory.codeTypeId, {
+				conflictPolicy: structuredPolicy,
+				rows,
+			})) as any;
+			const runId = typeof resp?.runId === "string" ? resp.runId : null;
+			setStructuredRunId(runId);
+			toast.success(`执行完成：新增 ${resp?.created ?? 0}，更新 ${resp?.updated ?? 0}，跳过 ${resp?.skipped ?? 0}`);
+			await refreshItems();
+			await doStructuredPreview();
+			await loadOpsOverview();
+		} catch (err: any) {
+			toast.error(err?.message || "执行导入失败");
+		} finally {
+			setStructuredLoading(false);
+		}
+	};
+
+	const doStructuredRollback = async () => {
+		if (!canManage) {
+			toast.error("当前账号无治理维护权限");
+			return;
+		}
+		if (!activeDirectory?.codeTypeId || !structuredRunId) return;
+		setStructuredLoading(true);
+		try {
+			const resp = (await rollbackStructuredReferenceCodeImport(activeDirectory.codeTypeId, structuredRunId)) as any;
+			toast.success(`回滚完成：恢复 ${resp?.restoredCount ?? 0} 条`);
+			await refreshItems();
+			setStructuredRunId(null);
+			await doStructuredPreview();
+			await loadOpsOverview();
+		} catch (err: any) {
+			toast.error(err?.message || "回滚失败");
+		} finally {
+			setStructuredLoading(false);
+		}
+	};
+
+	const loadStructuredHistory = async (focusRunId?: string) => {
+		if (!activeDirectory?.codeTypeId) return;
+		setStructuredHistoryLoading(true);
+		try {
+			const rows = (await listStructuredReferenceCodeImportRuns(activeDirectory.codeTypeId)) as StructuredImportRunSummary[];
+			const list = Array.isArray(rows) ? rows : [];
+			setStructuredHistory(list);
+			const targetRunId = focusRunId || list[0]?.runId;
+			if (targetRunId) {
+				await loadStructuredHistoryDetail(targetRunId);
+			} else {
+				setStructuredHistoryDetail(null);
+			}
+		} catch (err: any) {
+			toast.error(err?.message || "加载导入历史失败");
+		} finally {
+			setStructuredHistoryLoading(false);
+		}
+	};
+
+	const loadStructuredHistoryDetail = async (runId?: string) => {
+		if (!activeDirectory?.codeTypeId || !runId) return;
+		setStructuredHistoryDetailLoading(true);
+		try {
+			const detail = (await getStructuredReferenceCodeImportRun(activeDirectory.codeTypeId, runId)) as StructuredImportRunDetail;
+			setStructuredHistoryDetail(detail || null);
+		} catch (err: any) {
+			toast.error(err?.message || "加载导入详情失败");
+		} finally {
+			setStructuredHistoryDetailLoading(false);
+		}
+	};
+
+	const openStructuredHistory = async () => {
+		if (!activeDirectory?.codeTypeId) return;
+		setStructuredHistoryOpen(true);
+		setStructuredHistoryDetail(null);
+		await loadStructuredHistory(structuredRunId || undefined);
+	};
+
+	const rollbackHistoryRun = async (runId?: string) => {
+		if (!canManage) {
+			toast.error("当前账号无治理维护权限");
+			return;
+		}
+		if (!activeDirectory?.codeTypeId || !runId) return;
+		setStructuredHistoryDetailLoading(true);
+		try {
+			const resp = (await rollbackStructuredReferenceCodeImport(activeDirectory.codeTypeId, runId)) as any;
+			toast.success(`回滚完成：恢复 ${resp?.restoredCount ?? 0} 条`);
+			setStructuredRunId(null);
+			await refreshItems();
+			await loadStructuredHistory(runId);
+			await loadOpsOverview();
+		} catch (err: any) {
+			toast.error(err?.message || "回滚失败");
+		} finally {
+			setStructuredHistoryDetailLoading(false);
 		}
 	};
 
@@ -255,6 +626,10 @@ export default function ReferenceCodesPage() {
 	};
 
 	const submitMapping = async () => {
+		if (!canManage) {
+			toast.error("当前账号无治理维护权限");
+			return;
+		}
 		if (!activeDirectory?.codeTypeId) return;
 		setMappingSaving(true);
 		try {
@@ -282,6 +657,10 @@ export default function ReferenceCodesPage() {
 	};
 
 	const removeMapping = (row: ReferenceCodeMapping) => {
+		if (!canManage) {
+			toast.error("当前账号无治理维护权限");
+			return;
+		}
 		if (!activeDirectory?.codeTypeId || !row?.mapId) return;
 		Modal.confirm({
 			title: "删除映射？",
@@ -315,6 +694,10 @@ export default function ReferenceCodesPage() {
 	};
 
 	const submitItem = async () => {
+		if (!canManage) {
+			toast.error("当前账号无治理维护权限");
+			return;
+		}
 		if (!activeDirectory?.codeTypeId) return;
 		setItemSaving(true);
 		try {
@@ -345,6 +728,10 @@ export default function ReferenceCodesPage() {
 	};
 
 	const removeItem = (row: ReferenceCodeItem) => {
+		if (!canManage) {
+			toast.error("当前账号无治理维护权限");
+			return;
+		}
 		if (!activeDirectory?.codeTypeId || !row?.itemId) return;
 		Modal.confirm({
 			title: "删除码表项？",
@@ -364,6 +751,10 @@ export default function ReferenceCodesPage() {
 	};
 
 	const syncSeeds = async () => {
+		if (!canManage) {
+			toast.error("当前账号无治理维护权限");
+			return;
+		}
 		try {
 			const resp = (await syncReferenceCodeSeeds()) as any;
 			const summary = resp?.seedPath
@@ -400,10 +791,13 @@ export default function ReferenceCodesPage() {
 					<Button type="link" size="small" onClick={() => openMappings(row)}>
 						映射管理
 					</Button>
-					<Button type="link" size="small" onClick={() => openModal(row)}>
+					<Button type="link" size="small" onClick={() => openReferences(row)}>
+						引用关系
+					</Button>
+					<Button type="link" size="small" onClick={() => openModal(row)} disabled={!canManage}>
 						编辑
 					</Button>
-					<Button type="link" size="small" danger onClick={() => removeDirectory(row)}>
+					<Button type="link" size="small" danger onClick={() => removeDirectory(row)} disabled={!canManage}>
 						删除
 					</Button>
 				</Space>
@@ -427,10 +821,10 @@ export default function ReferenceCodesPage() {
 				title: "操作",
 				render: (_, row) => (
 					<Space>
-						<Button type="link" size="small" onClick={() => openItemModal(row)}>
+						<Button type="link" size="small" onClick={() => openItemModal(row)} disabled={!canManage}>
 							编辑
 						</Button>
-						<Button type="link" size="small" danger onClick={() => removeItem(row)}>
+						<Button type="link" size="small" danger onClick={() => removeItem(row)} disabled={!canManage}>
 							删除
 						</Button>
 					</Space>
@@ -449,10 +843,10 @@ export default function ReferenceCodesPage() {
 				title: "操作",
 				render: (_, row) => (
 					<Space>
-						<Button type="link" size="small" onClick={() => openMappingModal(row)}>
+						<Button type="link" size="small" onClick={() => openMappingModal(row)} disabled={!canManage}>
 							编辑
 						</Button>
-						<Button type="link" size="small" danger onClick={() => removeMapping(row)}>
+						<Button type="link" size="small" danger onClick={() => removeMapping(row)} disabled={!canManage}>
 							删除
 						</Button>
 					</Space>
@@ -462,22 +856,138 @@ export default function ReferenceCodesPage() {
 		[mappings]
 	);
 
+	const conflictColumns: ColumnsType<Record<string, any>> = [
+		{ title: "码值", dataIndex: "codeValue", width: 160, render: (value) => value || "-" },
+		{ title: "当前名称", dataIndex: "currentName", render: (value) => value || "-" },
+		{ title: "导入名称", dataIndex: "incomingName", render: (value) => value || "-" },
+		{ title: "原因", dataIndex: "reason", render: (value) => value || "-" },
+	];
+
+	const errorColumns: ColumnsType<Record<string, any>> = [
+		{ title: "行号", dataIndex: "line", width: 100, render: (value) => value ?? "-" },
+		{ title: "码值", dataIndex: "codeValue", width: 160, render: (value) => value || "-" },
+		{ title: "原因", dataIndex: "reason", render: (value) => value || "-" },
+	];
+
+	const importRunColumns: ColumnsType<StructuredImportRunSummary> = [
+		{ title: "批次ID", dataIndex: "runId", width: 260, render: (value) => <Text className="font-mono text-xs">{value || "-"}</Text> },
+		{ title: "状态", dataIndex: "status", width: 120, render: (value) => <Tag>{value || "-"}</Tag> },
+		{ title: "策略", dataIndex: "conflictPolicy", width: 100, render: (value) => value || "-" },
+		{ title: "新增", dataIndex: "createCount", width: 80, render: (value) => value ?? 0 },
+		{ title: "更新", dataIndex: "updateCount", width: 80, render: (value) => value ?? 0 },
+		{ title: "冲突", dataIndex: "conflictCount", width: 80, render: (value) => value ?? 0 },
+		{ title: "错误", dataIndex: "errorCount", width: 80, render: (value) => value ?? 0 },
+		{ title: "创建时间", dataIndex: "createdDate", width: 170, render: (value) => formatDateTime(value) },
+		{
+			title: "操作",
+			width: 180,
+			render: (_, row) => (
+				<Space>
+					<Button type="link" size="small" onClick={() => void loadStructuredHistoryDetail(row.runId)}>
+						查看
+					</Button>
+					<Button
+						type="link"
+						size="small"
+						danger
+						disabled={!canManage || !row.rollbackable}
+						onClick={() => void rollbackHistoryRun(row.runId)}
+					>
+						回滚
+					</Button>
+				</Space>
+			),
+		},
+	];
+
+	const importDiffColumns: ColumnsType<Record<string, any>> = [
+		{ title: "类型", dataIndex: "changeType", width: 100, render: (value) => <Tag>{value || "-"}</Tag> },
+		{ title: "码值", dataIndex: "codeValue", width: 160, render: (value) => <Text className="font-mono text-xs">{value || "-"}</Text> },
+		{
+			title: "变更前",
+			dataIndex: "before",
+			render: (value) => (
+				<Typography.Text ellipsis style={{ maxWidth: 260, display: "inline-block" }}>
+					{value ? JSON.stringify(value) : "-"}
+				</Typography.Text>
+			),
+		},
+		{
+			title: "变更后",
+			dataIndex: "after",
+			render: (value) => (
+				<Typography.Text ellipsis style={{ maxWidth: 260, display: "inline-block" }}>
+					{value ? JSON.stringify(value) : "-"}
+				</Typography.Text>
+			),
+		},
+	];
+
 	const content = data?.content ?? [];
 
 	return (
 		<div className="space-y-4">
+			<Breadcrumb items={[{ title: "数据治理中心" }, { title: "标准管理" }, { title: "公共码表" }]} />
 			<PageHeader
 				title="数据治理中心 · 标准管理 / 公共码表"
 				description="维护公共枚举码表与业务映射，统一字段取值标准。"
 				actions={
 					<Space>
-						<Button onClick={syncSeeds}>更新 dbt Seeds</Button>
-						<Button type="primary" onClick={() => openModal()}>
+						<Button onClick={syncSeeds} disabled={!canManage}>
+							更新 dbt Seeds
+						</Button>
+						<Button type="primary" onClick={() => openModal()} disabled={!canManage}>
 							+ 新增码表
 						</Button>
 					</Space>
 				}
 			/>
+
+			<Card size="small" loading={opsOverviewLoading}>
+				<Space wrap size={12}>
+					<Card size="small" title="统计窗口(h)" style={{ minWidth: 120 }}>
+						<Text strong>{opsOverview?.windowHours ?? "-"}</Text>
+					</Card>
+					<Card size="small" title="覆盖码表数" style={{ minWidth: 120 }}>
+						<Text strong>{opsOverview?.directoryCount ?? 0}</Text>
+					</Card>
+					<Card size="small" title="导入运行总数" style={{ minWidth: 140 }}>
+						<Text strong>{opsOverview?.totalRuns ?? 0}</Text>
+					</Card>
+					<Card size="small" title="成功执行" style={{ minWidth: 120 }}>
+						<Text strong>{opsOverview?.appliedRuns ?? 0}</Text>
+					</Card>
+					<Card size="small" title="已回滚" style={{ minWidth: 120 }}>
+						<Text strong>{opsOverview?.rolledBackRuns ?? 0}</Text>
+					</Card>
+					<Card size="small" title="冲突总数" style={{ minWidth: 120 }}>
+						<Text strong>{opsOverview?.conflictTotal ?? 0}</Text>
+					</Card>
+					<Card size="small" title="错误总数" style={{ minWidth: 120 }}>
+						<Text strong>{opsOverview?.errorTotal ?? 0}</Text>
+					</Card>
+					<Card size="small" title="查询耗时(ms)" style={{ minWidth: 140 }}>
+						<Text strong>{opsOverview?.queryCostMs ?? "-"}</Text>
+					</Card>
+				</Space>
+				<Space style={{ marginTop: 12 }}>
+					<Text type="secondary">失败分类 TopN：</Text>
+					{(opsOverview?.failureTop || []).length > 0 ? (
+						<Space wrap>
+							{(opsOverview?.failureTop || []).map((item) => (
+								<Tag key={`${item.category || "-"}-${item.count || 0}`}>{`${item.category || "-"}:${item.count || 0}`}</Tag>
+							))}
+						</Space>
+					) : (
+						<Text type="secondary">暂无失败分类</Text>
+					)}
+				</Space>
+				<div style={{ marginTop: 8 }}>
+					<Button size="small" onClick={() => void loadOpsOverview()}>
+						刷新概览
+					</Button>
+				</div>
+			</Card>
 
 			<Card>
 				<Space className="mb-4">
@@ -485,10 +995,24 @@ export default function ReferenceCodesPage() {
 						placeholder="搜索码表..."
 						style={{ width: 320 }}
 						value={keyword}
-						onChange={(e) => setKeyword(e.target.value)}
-						onSearch={loadDirectories}
+						onChange={(e) => {
+							setKeyword(e.target.value);
+							setPageNum(0);
+						}}
+						onSearch={(value) => {
+							setKeyword(value || "");
+							setPageNum(0);
+						}}
 						allowClear
 					/>
+					<Button
+						onClick={() => {
+							setKeyword("");
+							setPageNum(0);
+						}}
+					>
+						重置
+					</Button>
 				</Space>
 				{content.length === 0 && !loading ? (
 					<EmptyState title="暂无码表" description="请先新增公共码表。" />
@@ -502,6 +1026,9 @@ export default function ReferenceCodesPage() {
 							current: (data?.page ?? 0) + 1,
 							pageSize: data?.size ?? pageSize,
 							total: data?.total ?? 0,
+							showSizeChanger: true,
+							pageSizeOptions: [10, 20, 50, 100],
+							showTotal: (total) => `共 ${total} 条`,
 							onChange: (page, size) => {
 								setPageNum(page - 1);
 								setPageSize(size);
@@ -512,6 +1039,43 @@ export default function ReferenceCodesPage() {
 			</Card>
 
 			<Modal
+				open={referenceOpen}
+				title={referencePayload?.targetName ? `引用关系 · ${referencePayload.targetName}` : "引用关系"}
+				onCancel={() => setReferenceOpen(false)}
+				footer={null}
+				width={860}
+			>
+				{referenceLoading ? (
+					<div className="py-6 text-center">
+						<Text type="secondary">加载中...</Text>
+					</div>
+				) : Number(referencePayload?.totalReferences || 0) === 0 ? (
+					<EmptyState title="暂无引用对象" description="当前码表尚未被其他标准资产引用。" />
+				) : (
+					<List
+						size="small"
+						dataSource={referencePayload?.items || []}
+						renderItem={(item: AssetReferenceItem) => (
+							<List.Item
+								actions={[
+									item.path ? (
+										<Button key="jump" type="link" size="small" onClick={() => navigate(item.path as string)}>
+											跳转
+										</Button>
+									) : null,
+								]}
+							>
+								<List.Item.Meta
+									title={`${item.label || item.type || "引用"} · ${item.name || item.code || item.id || "-"}`}
+									description={item.reason || "-"}
+								/>
+							</List.Item>
+						)}
+					/>
+				)}
+			</Modal>
+
+			<Modal
 				open={modalOpen}
 				title={editing ? "编辑码表" : "新增码表"}
 				onCancel={() => setModalOpen(false)}
@@ -519,6 +1083,7 @@ export default function ReferenceCodesPage() {
 				okText="保存"
 				cancelText="取消"
 				confirmLoading={saving}
+				okButtonProps={{ disabled: !canManage }}
 			>
 				<Form form={form} layout="vertical">
 					<Form.Item name="codeTypeId" label="码表ID">
@@ -577,10 +1142,12 @@ export default function ReferenceCodesPage() {
 				width={900}
 			>
 				<Space className="mb-3">
-					<Button type="primary" onClick={() => openItemModal()}>
+					<Button type="primary" onClick={() => openItemModal()} disabled={!canManage}>
 						+ 新增码值
 					</Button>
-					<Button onClick={openBatch}>批量导入</Button>
+					<Button onClick={openStructuredImport} disabled={!canManage}>
+						结构化导入
+					</Button>
 					<Button onClick={() => refreshItems()}>刷新</Button>
 				</Space>
 				<Table
@@ -600,6 +1167,7 @@ export default function ReferenceCodesPage() {
 				okText="保存"
 				cancelText="取消"
 				confirmLoading={itemSaving}
+				okButtonProps={{ disabled: !canManage }}
 			>
 				<Form form={itemForm} layout="vertical">
 					<Form.Item name="codeValue" label="标准代码" rules={[{ required: true, message: "请输入码值" }]}>
@@ -629,20 +1197,137 @@ export default function ReferenceCodesPage() {
 			</Modal>
 
 			<Modal
-				open={batchOpen}
-				title="批量导入码值"
-				onCancel={() => setBatchOpen(false)}
-				onOk={submitBatch}
-				okText="导入"
-				cancelText="取消"
-				confirmLoading={batchSaving}
+				open={structuredOpen}
+				title="结构化导入码值（预检 / 执行 / 回滚）"
+				onCancel={() => setStructuredOpen(false)}
+				footer={null}
+				width={980}
 			>
-				<Input.TextArea
-					rows={6}
-					value={batchRaw}
-					onChange={(e) => setBatchRaw(e.target.value)}
-					placeholder="格式：value:label,value:label，例如 1:男,2:女"
-				/>
+				<Space direction="vertical" className="w-full" size={12}>
+					<Alert
+						type="info"
+						showIcon
+						message="支持 CSV 多行格式（含表头）。建议先“预检”，确认冲突/错误后再执行。"
+					/>
+					<Space>
+						<Select
+							value={structuredPolicy}
+							style={{ width: 180 }}
+							onChange={setStructuredPolicy}
+							options={[
+								{ label: "STRICT（冲突阻断）", value: "STRICT" },
+								{ label: "MERGE（冲突更新）", value: "MERGE" },
+								{ label: "SKIP（冲突跳过）", value: "SKIP" },
+							]}
+						/>
+						<Button loading={structuredLoading} onClick={doStructuredPreview} disabled={!canManage}>
+							预检
+						</Button>
+						<Button type="primary" loading={structuredLoading} onClick={doStructuredApply} disabled={!canManage}>
+							执行导入
+						</Button>
+						<Button danger loading={structuredLoading} disabled={!canManage || !structuredRunId} onClick={doStructuredRollback}>
+							回滚最近执行
+						</Button>
+						<Button onClick={openStructuredHistory}>导入历史</Button>
+					</Space>
+					<Input.TextArea
+						rows={8}
+						value={structuredRaw}
+						onChange={(e) => setStructuredRaw(e.target.value)}
+						placeholder={`${STRUCTURED_TEMPLATE}\n1,男,男性,1,,true`}
+					/>
+					{structuredPreview ? (
+						<Space direction="vertical" className="w-full" size={8}>
+							<div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+								<Card size="small">总行数：{structuredPreview.total ?? 0}</Card>
+								<Card size="small">有效：{structuredPreview.valid ?? 0}</Card>
+								<Card size="small">新增：{structuredPreview.createCount ?? 0}</Card>
+								<Card size="small">更新：{structuredPreview.updateCount ?? 0}</Card>
+							</div>
+							<div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+								<Card size="small">冲突：{structuredPreview.conflictCount ?? 0}</Card>
+								<Card size="small">错误：{structuredPreview.errorCount ?? 0}</Card>
+								<Card size="small">策略：{structuredPreview.conflictPolicy || "-"}</Card>
+								<Card size="small">预检ID：{structuredPreview.runId || "-"}</Card>
+							</div>
+							<Table
+								size="small"
+								title={() => "冲突明细"}
+								rowKey={(row, idx) => `${row.codeValue || "c"}-${idx}`}
+								columns={conflictColumns}
+								dataSource={Array.isArray(structuredPreview.conflicts) ? structuredPreview.conflicts : []}
+								pagination={{ pageSize: 5 }}
+							/>
+							<Table
+								size="small"
+								title={() => "错误明细"}
+								rowKey={(row, idx) => `${row.codeValue || row.line || "e"}-${idx}`}
+								columns={errorColumns}
+								dataSource={Array.isArray(structuredPreview.errors) ? structuredPreview.errors : []}
+								pagination={{ pageSize: 5 }}
+							/>
+						</Space>
+					) : null}
+				</Space>
+			</Modal>
+
+			<Modal
+				open={structuredHistoryOpen}
+				title={
+					activeDirectory
+						? `结构化导入历史 · ${activeDirectory.codeTypeName || activeDirectory.codeTypeCode}`
+						: "结构化导入历史"
+				}
+				onCancel={() => setStructuredHistoryOpen(false)}
+				footer={null}
+				width={1160}
+			>
+				<Space direction="vertical" className="w-full" size={12}>
+					<Space>
+						<Button size="small" onClick={() => void loadStructuredHistory()}>
+							刷新历史
+						</Button>
+						<Button
+							size="small"
+							onClick={() => void loadStructuredHistoryDetail(structuredHistoryDetail?.runId)}
+							disabled={!structuredHistoryDetail?.runId}
+						>
+							重试详情
+						</Button>
+					</Space>
+					<Table
+						size="small"
+						rowKey={(row) => row.runId || Math.random().toString(36)}
+						loading={structuredHistoryLoading}
+						columns={importRunColumns}
+						dataSource={structuredHistory}
+						pagination={{ pageSize: 6 }}
+					/>
+					{structuredHistoryDetail ? (
+						<>
+							<Card size="small" title={`批次详情：${structuredHistoryDetail.runId || "-"}`} loading={structuredHistoryDetailLoading}>
+								<Space wrap split={<span>|</span>}>
+									<Text>状态：{structuredHistoryDetail.status || "-"}</Text>
+									<Text>策略：{structuredHistoryDetail.conflictPolicy || "-"}</Text>
+									<Text>摘要：{structuredHistoryDetail.summary || "-"}</Text>
+									<Text>变更数：{structuredHistoryDetail.diffCount ?? 0}</Text>
+									<Text>创建时间：{formatDateTime(structuredHistoryDetail.createdDate)}</Text>
+								</Space>
+							</Card>
+							<Table
+								size="small"
+								title={() => "变更明细"}
+								rowKey={(row, idx) => `${row.codeValue || "diff"}-${idx}`}
+								columns={importDiffColumns}
+								dataSource={structuredHistoryDetail.diffRows || []}
+								pagination={{ pageSize: 6 }}
+							/>
+						</>
+					) : (
+						<EmptyState title="请选择批次" description="点击上方“查看”加载批次变更详情。" />
+					)}
+				</Space>
 			</Modal>
 
 			<Modal
@@ -657,7 +1342,7 @@ export default function ReferenceCodesPage() {
 				width={900}
 			>
 				<Space className="mb-3">
-					<Button type="primary" onClick={() => openMappingModal()}>
+					<Button type="primary" onClick={() => openMappingModal()} disabled={!canManage}>
 						+ 新增映射
 					</Button>
 					<Button onClick={() => refreshMappings()}>刷新</Button>
@@ -679,6 +1364,7 @@ export default function ReferenceCodesPage() {
 				okText="保存"
 				cancelText="取消"
 				confirmLoading={mappingSaving}
+				okButtonProps={{ disabled: !canManage }}
 			>
 				<Form form={mappingForm} layout="vertical">
 					<Form.Item name="sourceSys" label="源系统" rules={[{ required: true, message: "请输入源系统" }]}>

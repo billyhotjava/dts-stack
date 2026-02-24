@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
 	Badge,
+	Breadcrumb,
 	Button,
 	Card,
 	Divider,
@@ -17,7 +18,9 @@ import {
 	Typography,
 } from "antd";
 import type { DataNode } from "antd/es/tree";
+import { useSearchParams } from "react-router";
 import { EmptyState } from "@/components/empty-state";
+import { useGovernanceManageAccess } from "@/hooks/useModuleManageAccess";
 import { PageHeader } from "@/components/page-header";
 import { createDomain, deleteDomain, getDomainTree, updateDomain } from "@/api/platformApi";
 
@@ -110,16 +113,35 @@ const toTreeNodes = (nodes: DomainNode[]): DataNode[] =>
 	}));
 
 export default function SubjectAreasPage() {
-	const [keyword, setKeyword] = useState("");
+	const [searchParams, setSearchParams] = useSearchParams();
+	const [keyword, setKeyword] = useState(searchParams.get("keyword") || "");
 	const [domainTree, setDomainTree] = useState<DomainNode[]>([]);
 	const [domainIndex, setDomainIndex] = useState<Map<string, DomainNode>>(new Map());
 	const [domainOptions, setDomainOptions] = useState<DomainNode[]>([]);
-	const [selectedKey, setSelectedKey] = useState<string>(ROOT_KEY);
+	const [selectedKey, setSelectedKey] = useState<string>(searchParams.get("active") || ROOT_KEY);
 	const [loading, setLoading] = useState(false);
 	const [modalOpen, setModalOpen] = useState(false);
 	const [saving, setSaving] = useState(false);
 	const [editing, setEditing] = useState<DomainNode | null>(null);
 	const [form] = Form.useForm();
+	const canManage = useGovernanceManageAccess();
+
+	const syncQuery = (patch?: { keyword?: string; active?: string }) => {
+		const params = new URLSearchParams(searchParams);
+		const nextKeyword = patch?.keyword ?? keyword;
+		const nextActive = patch?.active ?? selectedKey;
+		if (nextKeyword?.trim()) {
+			params.set("keyword", nextKeyword.trim());
+		} else {
+			params.delete("keyword");
+		}
+		if (nextActive && nextActive !== ROOT_KEY) {
+			params.set("active", nextActive);
+		} else {
+			params.delete("active");
+		}
+		setSearchParams(params, { replace: true });
+	};
 
 	const loadDomainTree = useCallback(async () => {
 		setLoading(true);
@@ -144,6 +166,10 @@ export default function SubjectAreasPage() {
 	useEffect(() => {
 		void loadDomainTree();
 	}, [loadDomainTree]);
+
+	useEffect(() => {
+		syncQuery();
+	}, [keyword, selectedKey]);
 
 	const filteredTree = useMemo(() => filterDomains(domainTree, keyword), [domainTree, keyword]);
 	const treeData = useMemo(() => {
@@ -174,6 +200,10 @@ export default function SubjectAreasPage() {
 	};
 
 	const submit = async () => {
+		if (!canManage) {
+			toast.error("当前账号无治理维护权限");
+			return;
+		}
 		setSaving(true);
 		try {
 			const values = await form.validateFields(["name"]);
@@ -206,6 +236,10 @@ export default function SubjectAreasPage() {
 	};
 
 	const confirmDelete = (domain?: DomainNode | null) => {
+		if (!canManage) {
+			toast.error("当前账号无治理维护权限");
+			return;
+		}
 		if (!domain?.id) return;
 		Modal.confirm({
 			title: "删除主题域？",
@@ -232,16 +266,19 @@ export default function SubjectAreasPage() {
 
 	return (
 		<div className="space-y-4">
+			<Breadcrumb items={[{ title: "数据治理中心" }, { title: "标准管理" }, { title: "主题域管理" }]} />
 			<PageHeader
 				title="数据治理中心 · 主题域管理"
 				description="维护业务主题域结构，支撑资产归类与治理视角。"
 				actions={
 					<Space>
-						<Button onClick={() => openModal(null, null)}>新增根域</Button>
+						<Button onClick={() => openModal(null, null)} disabled={!canManage}>
+							新增根域
+						</Button>
 						<Button
 							type="primary"
 							onClick={() => openModal(null, activeDomain?.id || undefined)}
-							disabled={!activeDomain?.id}
+							disabled={!canManage || !activeDomain?.id}
 						>
 							+ 新增子域
 						</Button>
@@ -254,7 +291,7 @@ export default function SubjectAreasPage() {
 					<Space direction="vertical" className="w-full" size="middle">
 						<div className="flex items-center justify-between">
 							<Text strong>域目录结构</Text>
-							<Button type="link" size="small" onClick={() => openModal(null, null)}>
+							<Button type="link" size="small" onClick={() => openModal(null, null)} disabled={!canManage}>
 								+ 新增域
 							</Button>
 						</div>
@@ -318,8 +355,10 @@ export default function SubjectAreasPage() {
 									) : null}
 								</div>
 								<Space>
-									<Button onClick={() => openModal(activeDomain, activeDomain.parentId)}>编辑域属性</Button>
-									<Button danger onClick={() => confirmDelete(activeDomain)}>
+									<Button onClick={() => openModal(activeDomain, activeDomain.parentId)} disabled={!canManage}>
+										编辑域属性
+									</Button>
+									<Button danger onClick={() => confirmDelete(activeDomain)} disabled={!canManage}>
 										删除域
 									</Button>
 								</Space>
@@ -381,6 +420,7 @@ export default function SubjectAreasPage() {
 				okText="保存"
 				cancelText="取消"
 				confirmLoading={saving}
+				okButtonProps={{ disabled: !canManage }}
 			>
 				<Form layout="vertical" form={form}>
 					<Form.Item name="name" label="主题域名称" rules={[{ required: true, message: "请输入主题域名称" }]}>

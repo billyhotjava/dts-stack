@@ -5,15 +5,19 @@ import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.governance.ReferenceCodeSeedService;
 import com.yuzhi.dts.platform.service.governance.ReferenceCodeService;
 import com.yuzhi.dts.platform.service.governance.ReferenceCodeService.ReferenceCodeDirectoryRequest;
+import com.yuzhi.dts.platform.service.governance.ReferenceCodeService.ReferenceCodeStructuredImportApplyRequest;
+import com.yuzhi.dts.platform.service.governance.ReferenceCodeService.ReferenceCodeStructuredImportRequest;
 import com.yuzhi.dts.platform.service.governance.ReferenceCodeService.ReferenceCodeItemBatchRequest;
 import com.yuzhi.dts.platform.service.governance.ReferenceCodeService.ReferenceCodeItemRequest;
 import com.yuzhi.dts.platform.service.governance.ReferenceCodeService.ReferenceCodeMappingRequest;
+import com.yuzhi.dts.platform.security.SecurityUtils;
 import com.yuzhi.dts.platform.service.governance.dto.ReferenceCodeMappingDto;
 import com.yuzhi.dts.platform.service.governance.dto.ReferenceCodeDirectoryDto;
 import com.yuzhi.dts.platform.service.governance.dto.ReferenceCodeItemDto;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -31,6 +35,8 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
+import org.springframework.http.HttpStatus;
 
 @RestController
 @RequestMapping("/api/governance/reference-codes")
@@ -61,18 +67,29 @@ public class GovernanceReferenceCodeResource {
         @RequestParam(required = false) String keyword,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
+        long startedAt = System.nanoTime();
         Pageable pageable = PageRequest.of(page, size, Sort.by("lastModifiedDate").descending());
         Page<ReferenceCodeDirectoryDto> result = referenceCodes.listDirectories(keyword, pageable, activeDept);
-        Map<String, Object> payload = Map.of(
-            "content",
-            result.getContent(),
-            "total",
-            result.getTotalElements(),
-            "page",
-            result.getNumber(),
-            "size",
-            result.getSize()
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("content", result.getContent());
+        payload.put("total", result.getTotalElements());
+        payload.put("page", result.getNumber());
+        payload.put("size", result.getSize());
+        payload.put("totalPages", result.getTotalPages());
+        payload.put(
+            "pageStats",
+            Map.of(
+                "page",
+                result.getNumber(),
+                "size",
+                result.getSize(),
+                "total",
+                result.getTotalElements(),
+                "totalPages",
+                result.getTotalPages()
+            )
         );
+        payload.put("queryCostMs", (System.nanoTime() - startedAt) / 1_000_000L);
         Map<String, Object> auditPayload = new LinkedHashMap<>();
         auditPayload.put("summary", "查看公共码表列表");
         auditPayload.put("page", page);
@@ -80,6 +97,20 @@ public class GovernanceReferenceCodeResource {
         if (StringUtils.hasText(keyword)) auditPayload.put("keyword", keyword.trim());
         if (StringUtils.hasText(activeDept)) auditPayload.put("activeDept", activeDept.trim());
         audit.auditAction("GOV_REFERENCE_CODE_LIST", AuditStage.SUCCESS, "LIST", auditPayload);
+        return ApiResponses.ok(payload);
+    }
+
+    @GetMapping("/ops/import-overview")
+    public ApiResponse<Map<String, Object>> importOpsOverview(
+        @RequestParam(defaultValue = "168") int hours,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        Map<String, Object> payload = referenceCodes.importOpsOverview(hours, activeDept);
+        Map<String, Object> detail = new LinkedHashMap<>();
+        detail.put("summary", "查看码表导入运维概览");
+        detail.put("hours", hours);
+        detail.put("totalRuns", payload.getOrDefault("totalRuns", 0));
+        audit.auditAction("GOV_REFERENCE_CODE_OPS_OVERVIEW", AuditStage.SUCCESS, "OVERVIEW", detail);
         return ApiResponses.ok(payload);
     }
 
@@ -96,6 +127,21 @@ public class GovernanceReferenceCodeResource {
         detail.put("codeTypeName", dto.getCodeTypeName());
         audit.auditAction("GOV_REFERENCE_CODE_VIEW", AuditStage.SUCCESS, codeTypeId, detail);
         return ApiResponses.ok(dto);
+    }
+
+    @GetMapping("/{codeTypeId}/references")
+    public ApiResponse<Map<String, Object>> references(
+        @PathVariable String codeTypeId,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        Map<String, Object> payload = referenceCodes.references(codeTypeId, activeDept);
+        int impactCount = payload.get("totalReferences") instanceof Number number ? number.intValue() : 0;
+        Map<String, Object> detail = new LinkedHashMap<>();
+        detail.put("summary", "查看码表引用关系");
+        detail.put("codeTypeId", codeTypeId);
+        detail.put("impactCount", impactCount);
+        audit.auditAction("GOV_REFERENCE_CODE_REFERENCE_VIEW", AuditStage.SUCCESS, codeTypeId, detail);
+        return ApiResponses.ok(payload);
     }
 
     @PostMapping
@@ -135,10 +181,13 @@ public class GovernanceReferenceCodeResource {
         @PathVariable String codeTypeId,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
+        Map<String, Object> references = referenceCodes.references(codeTypeId, activeDept);
+        int impactCount = references.get("totalReferences") instanceof Number number ? number.intValue() : 0;
         referenceCodes.deleteDirectory(codeTypeId, activeDept);
         Map<String, Object> detail = new LinkedHashMap<>();
         detail.put("summary", "删除码表");
         detail.put("codeTypeId", codeTypeId);
+        detail.put("impactCount", impactCount);
         audit.auditAction("GOV_REFERENCE_CODE_DELETE", AuditStage.SUCCESS, codeTypeId, detail);
         return ApiResponses.ok(Boolean.TRUE);
     }
@@ -193,6 +242,112 @@ public class GovernanceReferenceCodeResource {
         Map<String, Object> detail = new LinkedHashMap<>(payload);
         detail.put("summary", "批量导入码表项");
         detail.put("codeTypeId", codeTypeId);
+        audit.auditAction("GOV_REFERENCE_CODE_ITEM_IMPORT", AuditStage.SUCCESS, codeTypeId, detail);
+        return ApiResponses.ok(payload);
+    }
+
+    @PostMapping("/{codeTypeId}/items/import/preview")
+    @PreAuthorize(GOVERNANCE_MAINTAINER_EXPRESSION)
+    public ApiResponse<Map<String, Object>> previewStructuredImport(
+        @PathVariable String codeTypeId,
+        @RequestBody ReferenceCodeStructuredImportRequest request,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        try {
+            Map<String, Object> result = referenceCodes.previewStructuredImport(
+                codeTypeId,
+                request,
+                activeDept,
+                SecurityUtils.getCurrentUserLogin().orElse("system")
+            );
+            Map<String, Object> detail = new LinkedHashMap<>();
+            detail.put("summary", "结构化预检码表导入");
+            detail.put("codeTypeId", codeTypeId);
+            detail.put("conflictCount", result.getOrDefault("conflictCount", 0));
+            detail.put("errorCount", result.getOrDefault("errorCount", 0));
+            audit.auditAction("GOV_REFERENCE_CODE_ITEM_IMPORT", AuditStage.SUCCESS, codeTypeId, detail);
+            return ApiResponses.ok(result);
+        } catch (IllegalArgumentException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "[GOV_REFERENCE_IMPORT_PREVIEW_INVALID] " + ex.getMessage(), ex);
+        }
+    }
+
+    @PostMapping("/{codeTypeId}/items/import/apply")
+    @PreAuthorize(GOVERNANCE_MAINTAINER_EXPRESSION)
+    public ApiResponse<Map<String, Object>> applyStructuredImport(
+        @PathVariable String codeTypeId,
+        @RequestBody ReferenceCodeStructuredImportApplyRequest request,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        try {
+            Map<String, Object> result = referenceCodes.applyStructuredImport(
+                codeTypeId,
+                request,
+                activeDept,
+                SecurityUtils.getCurrentUserLogin().orElse("system")
+            );
+            Map<String, Object> detail = new LinkedHashMap<>();
+            detail.put("summary", "结构化执行码表导入");
+            detail.put("codeTypeId", codeTypeId);
+            detail.put("created", result.getOrDefault("created", 0));
+            detail.put("updated", result.getOrDefault("updated", 0));
+            detail.put("skipped", result.getOrDefault("skipped", 0));
+            detail.put("runId", result.getOrDefault("runId", ""));
+            audit.auditAction("GOV_REFERENCE_CODE_ITEM_IMPORT", AuditStage.SUCCESS, codeTypeId, detail);
+            return ApiResponses.ok(result);
+        } catch (IllegalArgumentException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "[GOV_REFERENCE_IMPORT_APPLY_INVALID] " + ex.getMessage(), ex);
+        }
+    }
+
+    @PostMapping("/{codeTypeId}/items/import/{runId}/rollback")
+    @PreAuthorize(GOVERNANCE_MAINTAINER_EXPRESSION)
+    public ApiResponse<Map<String, Object>> rollbackStructuredImport(
+        @PathVariable String codeTypeId,
+        @PathVariable UUID runId,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        try {
+            Map<String, Object> result = referenceCodes.rollbackStructuredImport(codeTypeId, runId, activeDept);
+            Map<String, Object> detail = new LinkedHashMap<>();
+            detail.put("summary", "回滚码表导入");
+            detail.put("codeTypeId", codeTypeId);
+            detail.put("runId", runId.toString());
+            detail.put("restoredCount", result.getOrDefault("restoredCount", 0));
+            detail.put("idempotent", result.getOrDefault("idempotent", false));
+            audit.auditAction("GOV_REFERENCE_CODE_ITEM_IMPORT_ROLLBACK", AuditStage.SUCCESS, codeTypeId, detail);
+            return ApiResponses.ok(result);
+        } catch (IllegalArgumentException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "[GOV_REFERENCE_IMPORT_ROLLBACK_INVALID] " + ex.getMessage(), ex);
+        }
+    }
+
+    @GetMapping("/{codeTypeId}/items/import/runs")
+    public ApiResponse<List<Map<String, Object>>> listStructuredImportRuns(
+        @PathVariable String codeTypeId,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        List<Map<String, Object>> rows = referenceCodes.listStructuredImportRuns(codeTypeId, activeDept);
+        Map<String, Object> detail = new LinkedHashMap<>();
+        detail.put("summary", "查看码表导入历史");
+        detail.put("codeTypeId", codeTypeId);
+        detail.put("count", rows.size());
+        audit.auditAction("GOV_REFERENCE_CODE_ITEM_IMPORT", AuditStage.SUCCESS, codeTypeId, detail);
+        return ApiResponses.ok(rows);
+    }
+
+    @GetMapping("/{codeTypeId}/items/import/{runId}")
+    public ApiResponse<Map<String, Object>> getStructuredImportRun(
+        @PathVariable String codeTypeId,
+        @PathVariable UUID runId,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        Map<String, Object> payload = referenceCodes.getStructuredImportRunDetail(codeTypeId, runId, activeDept);
+        Map<String, Object> detail = new LinkedHashMap<>();
+        detail.put("summary", "查看码表导入详情");
+        detail.put("codeTypeId", codeTypeId);
+        detail.put("runId", runId.toString());
+        detail.put("diffCount", payload.getOrDefault("diffCount", 0));
         audit.auditAction("GOV_REFERENCE_CODE_ITEM_IMPORT", AuditStage.SUCCESS, codeTypeId, detail);
         return ApiResponses.ok(payload);
     }

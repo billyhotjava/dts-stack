@@ -380,6 +380,11 @@ function patchComponentConfig(
         case 'radar-chart':
         case 'funnel-chart':
         case 'map-chart':
+        case 'combo-chart':
+        case 'wordcloud-chart':
+        case 'treemap-chart':
+        case 'sunburst-chart':
+        case 'waterfall-chart':
             patchConfigValue(next, 'seriesColors', [...tokens.echarts.colorPalette], mode);
             patchConfigValue(next, 'titleColor', tokens.textPrimary, mode);
             break;

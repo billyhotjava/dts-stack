@@ -1,6 +1,6 @@
 # P2-03 治理权限矩阵硬化
 
-`status`: `planned`
+`status`: `done`
 `priority`: `P2`
 
 ## 目标
@@ -22,6 +22,12 @@
 - 权限矩阵与系统行为一致。
 - 关键写操作均有双重校验（注解+服务层）。
 - 权限回归脚本可重复执行。
+
+## 完成说明
+
+- 写接口权限补齐：`POST /api/governance/quality/runs` 已增加 `@PreAuthorize`。
+- 权限矩阵文档：`worklog/v2.2.1/platform/governance/report/p2-03-permission-matrix.md`。
+- 最小回归脚本：`worklog/v2.2.1/platform/governance/scripts/run-p2-03-permission-smoke.sh`。
 
 ## 风险与回滚
 

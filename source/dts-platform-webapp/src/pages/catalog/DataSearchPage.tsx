@@ -25,16 +25,59 @@ const TYPE_OPTIONS = [
 	{ label: "字段", value: "COLUMN" },
 ];
 
+const DATASET_TYPE_OPTIONS = [
+	{ label: "全部系统", value: "ALL" },
+	{ label: "Hive", value: "HIVE" },
+	{ label: "JDBC", value: "JDBC" },
+	{ label: "文件", value: "FILE" },
+];
+
+const CLASSIFICATION_OPTIONS = [
+	{ label: "全部密级", value: "ALL" },
+	{ label: "公开", value: "PUBLIC" },
+	{ label: "内部", value: "INTERNAL" },
+	{ label: "秘密", value: "SECRET" },
+	{ label: "机密", value: "CONFIDENTIAL" },
+];
+
+const LAYER_OPTIONS = [
+	{ label: "全部分层", value: "ALL" },
+	{ label: "ODS", value: "ODS" },
+	{ label: "DWD", value: "DWD" },
+	{ label: "DWS", value: "DWS" },
+	{ label: "ADS", value: "ADS" },
+];
+
+const SEARCH_FORM_STORAGE_KEY = "catalog.search.form.v1";
+const DATASET_FILTER_STORAGE_KEY = "catalog.asset.filter.v1";
+
 export default function DataSearchPage() {
 	const [keyword, setKeyword] = useState("");
 	const [domain, setDomain] = useState<string | undefined>();
 	const [assetType, setAssetType] = useState<string>("ALL");
+	const [datasetType, setDatasetType] = useState<string>("ALL");
+	const [classification, setClassification] = useState<string>("ALL");
+	const [warehouseLayer, setWarehouseLayer] = useState<string>("ALL");
 	const [loading, setLoading] = useState(false);
 	const [results, setResults] = useState<SearchRow[]>([]);
 	const [domains, setDomains] = useState<{ id: string; name: string }[]>([]);
 	const [searched, setSearched] = useState(false);
 
 	useEffect(() => {
+		try {
+			const raw = localStorage.getItem(SEARCH_FORM_STORAGE_KEY);
+			if (raw) {
+				const saved = JSON.parse(raw);
+				setKeyword(typeof saved?.keyword === "string" ? saved.keyword : "");
+				setDomain(typeof saved?.domain === "string" && saved.domain ? saved.domain : undefined);
+				setAssetType(typeof saved?.assetType === "string" && saved.assetType ? saved.assetType : "ALL");
+				setDatasetType(typeof saved?.datasetType === "string" && saved.datasetType ? saved.datasetType : "ALL");
+				setClassification(typeof saved?.classification === "string" && saved.classification ? saved.classification : "ALL");
+				setWarehouseLayer(typeof saved?.warehouseLayer === "string" && saved.warehouseLayer ? saved.warehouseLayer : "ALL");
+			}
+		} catch {
+			// ignore malformed cache
+		}
 		void loadDomains();
 	}, []);
 
@@ -56,6 +99,57 @@ export default function DataSearchPage() {
 			);
 		} catch (error: any) {
 			toast.error(error?.message || "主题域加载失败");
+		}
+	};
+
+	const saveCurrentQuery = () => {
+		const payload = {
+			keyword,
+			domain: domain || "",
+			assetType,
+			datasetType,
+			classification,
+			warehouseLayer,
+		};
+		localStorage.setItem(SEARCH_FORM_STORAGE_KEY, JSON.stringify(payload));
+		toast.success("已保存当前检索条件");
+	};
+
+	const restoreSavedQuery = () => {
+		try {
+			const raw = localStorage.getItem(SEARCH_FORM_STORAGE_KEY);
+			if (!raw) {
+				toast.warning("暂无已保存的检索条件");
+				return;
+			}
+			const saved = JSON.parse(raw);
+			setKeyword(typeof saved?.keyword === "string" ? saved.keyword : "");
+			setDomain(typeof saved?.domain === "string" && saved.domain ? saved.domain : undefined);
+			setAssetType(typeof saved?.assetType === "string" && saved.assetType ? saved.assetType : "ALL");
+			setDatasetType(typeof saved?.datasetType === "string" && saved.datasetType ? saved.datasetType : "ALL");
+			setClassification(typeof saved?.classification === "string" && saved.classification ? saved.classification : "ALL");
+			setWarehouseLayer(typeof saved?.warehouseLayer === "string" && saved.warehouseLayer ? saved.warehouseLayer : "ALL");
+			toast.success("已恢复检索条件");
+		} catch {
+			toast.error("检索条件恢复失败");
+		}
+	};
+
+	const applyAssetFilters = () => {
+		try {
+			const raw = localStorage.getItem(DATASET_FILTER_STORAGE_KEY);
+			if (!raw) {
+				toast.warning("未找到资产列表筛选条件");
+				return;
+			}
+			const saved = JSON.parse(raw);
+			setDomain(typeof saved?.domain === "string" && saved.domain ? saved.domain : undefined);
+			setDatasetType(typeof saved?.assetType === "string" && saved.assetType ? saved.assetType : "ALL");
+			setClassification(typeof saved?.classification === "string" && saved.classification ? saved.classification : "ALL");
+			setWarehouseLayer(typeof saved?.warehouseLayer === "string" && saved.warehouseLayer ? saved.warehouseLayer : "ALL");
+			toast.success("已应用资产列表筛选条件");
+		} catch {
+			toast.error("资产筛选条件读取失败");
 		}
 	};
 
@@ -120,14 +214,15 @@ export default function DataSearchPage() {
 			const resp: any = await searchCatalog({
 				keyword: trimmed,
 				types: assetType === "ALL" ? undefined : assetType,
+				domainId: domain && domain !== "ALL" ? domain : undefined,
+				classification: classification === "ALL" ? undefined : classification,
+				warehouseLayer: warehouseLayer === "ALL" ? undefined : warehouseLayer,
+				datasetType: datasetType === "ALL" ? undefined : datasetType,
+				enabledOnly: true,
 				limit: 200,
 			});
-			const rows = normalizeRows(resp || {});
-			const filtered =
-				domain && domain !== "ALL"
-					? rows.filter((row) => row.domainId === domain)
-					: rows;
-			setResults(filtered);
+			setResults(normalizeRows(resp || {}));
+			saveCurrentQuery();
 		} catch (error: any) {
 			toast.error(error?.message || "搜索失败");
 		} finally {
@@ -201,9 +296,36 @@ export default function DataSearchPage() {
 						onChange={(value) => setAssetType(value || "ALL")}
 						options={TYPE_OPTIONS}
 					/>
+					<Select
+						allowClear
+						placeholder="数据源类型"
+						style={{ minWidth: 180 }}
+						value={datasetType}
+						onChange={(value) => setDatasetType(value || "ALL")}
+						options={DATASET_TYPE_OPTIONS}
+					/>
+					<Select
+						allowClear
+						placeholder="密级"
+						style={{ minWidth: 180 }}
+						value={classification}
+						onChange={(value) => setClassification(value || "ALL")}
+						options={CLASSIFICATION_OPTIONS}
+					/>
+					<Select
+						allowClear
+						placeholder="分层"
+						style={{ minWidth: 180 }}
+						value={warehouseLayer}
+						onChange={(value) => setWarehouseLayer(value || "ALL")}
+						options={LAYER_OPTIONS}
+					/>
 					<Button type="primary" onClick={handleSearch} loading={loading}>
 						搜索
 					</Button>
+					<Button onClick={saveCurrentQuery}>保存条件</Button>
+					<Button onClick={restoreSavedQuery}>恢复条件</Button>
+					<Button onClick={applyAssetFilters}>应用资产筛选</Button>
 				</Space>
 			</Card>
 

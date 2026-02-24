@@ -56,6 +56,9 @@ public class CatalogMetadataService {
             if (dataset == null) {
                 continue;
             }
+            if (Boolean.FALSE.equals(dataset.getEnabled())) {
+                continue;
+            }
             if (!accessChecker.canRead(dataset)) {
                 continue;
             }
@@ -137,6 +140,9 @@ public class CatalogMetadataService {
 
         if (dataset == null) {
             return OpenMetadataService.OpenMetadataResult.notFound(fqn, "未找到本地元数据");
+        }
+        if (Boolean.FALSE.equals(dataset.getEnabled())) {
+            return OpenMetadataService.OpenMetadataResult.notFound(fqn, "元数据已失效，请重新采集");
         }
         if (!accessChecker.canRead(dataset) || !accessChecker.departmentAllowed(dataset, activeDept)) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "数据集不存在或无权访问");

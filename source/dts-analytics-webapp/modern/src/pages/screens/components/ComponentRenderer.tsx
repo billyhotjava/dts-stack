@@ -1,23 +1,36 @@
-import { memo, useMemo, useEffect, useRef, useState, type ComponentType } from 'react';
-import type { CardData, CardParameterBinding, ComponentInteractionMapping, ScreenComponent, ScreenTheme } from '../types';
+import { memo, useMemo, useEffect, useRef, useState, useCallback, type ComponentType, type MouseEvent as ReactMouseEvent } from 'react';
+import type { CardData, ScreenComponent } from '../types';
 import { DRILLABLE_TYPES } from '../types';
 import { useCardDataSource } from '../hooks/useCardDataSource';
 import { useDrillDown } from '../hooks/useDrillDown';
 import { useScreenRuntime } from '../ScreenRuntimeContext';
 import { mapCardDataToConfig } from '../hooks/cardDataMapper';
-import { getThemeTokens, ScreenThemeTokens } from '../screenThemes';
+import { applyFieldMapping } from '../hooks/fieldMappingTransform';
+import type { ChartMarkArea, ChartMarkLine, FieldMapping, SeriesConditionalColor } from '../types';
+import { getThemeTokens } from '../screenThemes';
+import { isSafeSrcUrl } from '../sanitize';
 import { PluginRenderBoundary } from '../plugins/PluginRenderBoundary';
 import { getRendererPlugin } from '../plugins/registry';
 import { readComponentPluginMeta, resolveRuntimePluginId } from '../plugins/runtime';
 import { useScreenPluginRuntime } from '../plugins/useScreenPluginRuntime';
 import type { RendererPlugin } from '../plugins/types';
-
-type ReactEChartsComponent = ComponentType<{
-    style?: React.CSSProperties;
-    option?: unknown;
-    onEvents?: Record<string, (params: Record<string, unknown>) => void>;
-}>;
-type DataViewModule = typeof import('@jiaminghi/data-view-react');
+import type { ReactEChartsComponent, DataViewModule, ComponentRendererProps } from '../renderers/types';
+import { resolvePresetMapUrl, fetchGeoJsonWithCache } from '../renderers/shared/geoJsonCache';
+import { renderMarkdownToHtml } from '../renderers/shared/markdownUtils';
+import {
+    resolveTextColor, estimateVisualTextWidth, truncateTextByVisualWidth,
+    normalizeParameterBindings, resolveDataSourceType,
+    resolveInteractionValue, resolveInteractionMappedValue,
+    resolveInteractionUrlTemplate, resolveFilterOptions, resolveTabOptions,
+    resolveComponentVariableVisibility, resolveFilterOptionsFromData,
+    normalizeFilterDebounceMs, normalizeCarouselItems, resolveCarouselItemsFromData,
+} from '../renderers/shared/chartUtils';
+import type { ComponentInteractionMapping } from '../types';
+import {
+    compareTableValues, resolveTableConditionalStyle,
+    normalizeColumnAlign, formatTableCell, clampColumnWidth, normalizeColumnFormatter,
+    ThemedScrollTable, resolveBoundTableData,
+} from '../renderers/shared/tableUtils';
 
 const ECHART_COMPONENT_TYPES = new Set([
     'line-chart',
@@ -28,7 +41,130 @@ const ECHART_COMPONENT_TYPES = new Set([
     'funnel-chart',
     'scatter-chart',
     'map-chart',
+    'combo-chart',
+    'wordcloud-chart',
+    'treemap-chart',
+    'sunburst-chart',
+    'waterfall-chart',
+    'globe-chart',
+    'bar3d-chart',
+    'scatter3d-chart',
 ]);
+
+const ECHART_3D_TYPES = new Set(['globe-chart', 'bar3d-chart', 'scatter3d-chart']);
+
+function isWebGLSupported(): boolean {
+    try {
+        const canvas = document.createElement('canvas');
+        return !!(canvas.getContext('webgl') || canvas.getContext('webgl2'));
+    } catch {
+        return false;
+    }
+}
+
+// ── Chart annotation injection ──
+const ANNOTATABLE_TYPES = new Set(['line-chart', 'bar-chart', 'scatter-chart', 'combo-chart', 'waterfall-chart']);
+
+function injectChartAnnotations(
+    option: Record<string, unknown>,
+    config: Record<string, unknown>,
+): Record<string, unknown> {
+    const markLines = config.markLines as ChartMarkLine[] | undefined;
+    const markAreas = config.markAreas as ChartMarkArea[] | undefined;
+    const conditionalColors = config.conditionalColors as SeriesConditionalColor[] | undefined;
+
+    if ((!markLines || markLines.length === 0) && (!markAreas || markAreas.length === 0) && (!conditionalColors || conditionalColors.length === 0)) {
+        return option;
+    }
+
+    const series = option.series as Array<Record<string, unknown>> | undefined;
+    if (!Array.isArray(series) || series.length === 0) return option;
+
+    // Build ECharts markLine data
+    const markLineData: Array<Record<string, unknown>> = [];
+    if (markLines) {
+        for (const ml of markLines) {
+            if (ml.type === 'value' && ml.value != null) {
+                const item: Record<string, unknown> = {
+                    name: ml.name ?? `${ml.value}`,
+                    label: { formatter: ml.name ?? `${ml.value}`, position: 'insideEndTop' },
+                    lineStyle: { color: ml.color ?? '#ff6b6b', type: ml.lineStyle ?? 'dashed' },
+                };
+                if (ml.axis === 'x') {
+                    item.xAxis = ml.value;
+                } else {
+                    item.yAxis = ml.value;
+                }
+                markLineData.push(item);
+            } else if (ml.type === 'average' || ml.type === 'min' || ml.type === 'max') {
+                markLineData.push({
+                    type: ml.type,
+                    name: ml.name ?? ml.type,
+                    label: { formatter: ml.name ?? ml.type, position: 'insideEndTop' },
+                    lineStyle: { color: ml.color ?? '#facc15', type: ml.lineStyle ?? 'dashed' },
+                });
+            }
+        }
+    }
+
+    // Build ECharts markArea data
+    const markAreaData: Array<Array<Record<string, unknown>>> = [];
+    if (markAreas) {
+        for (const ma of markAreas) {
+            const start: Record<string, unknown> = { name: ma.name ?? '' };
+            const end: Record<string, unknown> = {};
+            if (ma.axis === 'x') {
+                start.xAxis = ma.from;
+                end.xAxis = ma.to;
+            } else {
+                start.yAxis = ma.from;
+                end.yAxis = ma.to;
+            }
+            start.itemStyle = { color: ma.color ?? 'rgba(255, 107, 107, 0.15)' };
+            markAreaData.push([start, end]);
+        }
+    }
+
+    // Build conditional color function
+    let colorFn: ((params: { value: unknown }) => string) | undefined;
+    if (conditionalColors && conditionalColors.length > 0) {
+        colorFn = (params: { value: unknown }) => {
+            const val = typeof params.value === 'number' ? params.value : (Array.isArray(params.value) ? Number(params.value[1]) : Number(params.value));
+            for (const rule of conditionalColors) {
+                let match = false;
+                switch (rule.operator) {
+                    case '>': match = val > rule.value; break;
+                    case '>=': match = val >= rule.value; break;
+                    case '<': match = val < rule.value; break;
+                    case '<=': match = val <= rule.value; break;
+                    case '==': match = val === rule.value; break;
+                    case 'between': match = val >= rule.value && val <= (rule.valueTo ?? rule.value); break;
+                }
+                if (match) return rule.color;
+            }
+            return '';
+        };
+    }
+
+    // Inject into first series (markLine/markArea) and all series (conditionalColors)
+    const patched = series.map((s, idx) => {
+        const result = { ...s };
+        if (idx === 0) {
+            if (markLineData.length > 0) {
+                result.markLine = { symbol: ['none', 'arrow'], data: markLineData, silent: true };
+            }
+            if (markAreaData.length > 0) {
+                result.markArea = { data: markAreaData, silent: true };
+            }
+        }
+        if (colorFn) {
+            result.itemStyle = { ...(result.itemStyle as Record<string, unknown> || {}), color: colorFn };
+        }
+        return result;
+    });
+
+    return { ...option, series: patched };
+}
 
 const DATAV_COMPONENT_TYPES = new Set([
     'border-box',
@@ -39,771 +175,8 @@ const DATAV_COMPONENT_TYPES = new Set([
     'digital-flop',
 ]);
 
-const MAP_PRESET_URLS: Record<string, string> = {
-    china: 'https://geo.datav.aliyun.com/areas_v3/bound/100000_full.json',
-    world: 'https://geo.datav.aliyun.com/areas_v3/bound/world.geo.json',
-};
-
-const mapGeoJsonFetchCache = new Map<string, Promise<unknown | null>>();
-
-function resolvePresetMapUrl(scope?: string): string | undefined {
-    const key = String(scope || '').trim().toLowerCase();
-    if (!key) return undefined;
-    return MAP_PRESET_URLS[key];
-}
-
-function fetchGeoJsonWithCache(url: string): Promise<unknown | null> {
-    const key = String(url || '').trim();
-    if (!key) return Promise.resolve(null);
-    const cached = mapGeoJsonFetchCache.get(key);
-    if (cached) return cached;
-    const task = fetch(key, { credentials: 'omit' })
-        .then((response) => {
-            if (!response.ok) {
-                throw new Error(`geojson fetch failed: ${response.status}`);
-            }
-            return response.json() as Promise<unknown>;
-        })
-        .catch((error) => {
-            console.warn('[map-chart] failed to load geojson:', key, error);
-            return null;
-        });
-    mapGeoJsonFetchCache.set(key, task);
-    return task;
-}
-
-const LEGACY_LIGHT_TEXT_COLORS = new Set(["#fff", "#ffffff", "#e5e7eb", "#d1d5db", "#cbd5e1", "#94a3b8"]);
-
-function resolveTextColor(candidate: string | undefined, fallback: string): string {
-    if (!candidate || candidate.trim().length === 0) {
-        return fallback;
-    }
-    const normalized = candidate.trim().toLowerCase();
-    const fallbackNormalized = (fallback || "").trim().toLowerCase();
-    if (LEGACY_LIGHT_TEXT_COLORS.has(normalized) && !LEGACY_LIGHT_TEXT_COLORS.has(fallbackNormalized)) {
-        return fallback;
-    }
-    return candidate;
-}
-
-function normalizeParameterBindings(bindings: CardParameterBinding[] | undefined): CardParameterBinding[] {
-    if (!Array.isArray(bindings)) return [];
-    return bindings
-        .map((item) => ({
-            name: (item?.name ?? "").trim(),
-            variableKey: (item?.variableKey ?? "").trim() || undefined,
-            value: item?.value == null ? undefined : String(item.value),
-        }))
-        .filter((item) => item.name.length > 0);
-}
-
-function resolveDataSourceType(dataSource: ScreenComponent["dataSource"]): string {
-    const sourceType = (dataSource as { sourceType?: string } | undefined)?.sourceType;
-    const type = (dataSource as { type?: string } | undefined)?.type;
-    const normalized = (sourceType || type || "").toLowerCase();
-    if (normalized === "database") return "sql";
-    return normalized;
-}
-
-function resolveInteractionValue(params: Record<string, unknown>, sourcePath: string): string | undefined {
-    const path = (sourcePath || "").trim();
-    if (!path) return undefined;
-
-    const read = (obj: unknown, key: string): unknown => {
-        if (!obj || typeof obj !== "object") return undefined;
-        return (obj as Record<string, unknown>)[key];
-    };
-
-    const segments = path.split(".").filter((s) => s.length > 0);
-    let current: unknown = params;
-    for (const seg of segments) {
-        current = read(current, seg);
-    }
-
-    if (current == null) return undefined;
-    if (typeof current === "string") return current;
-    if (typeof current === "number" || typeof current === "boolean") return String(current);
-    return undefined;
-}
-
-function normalizeInteractionTransform(raw: unknown): 'raw' | 'string' | 'number' | 'lowercase' | 'uppercase' {
-    const value = String(raw ?? '').trim().toLowerCase();
-    if (value === 'string' || value === 'number' || value === 'lowercase' || value === 'uppercase') {
-        return value;
-    }
-    return 'raw';
-}
-
-function resolveInteractionMappedValue(
-    rawValue: string | undefined,
-    mapping: ComponentInteractionMapping,
-): string | undefined {
-    const fallback = String(mapping.fallbackValue ?? '').trim();
-    const transform = normalizeInteractionTransform(mapping.transform);
-    const source = rawValue == null ? '' : String(rawValue);
-    let next = source;
-    if (transform === 'lowercase') {
-        next = source.toLowerCase();
-    } else if (transform === 'uppercase') {
-        next = source.toUpperCase();
-    } else if (transform === 'number') {
-        const parsed = Number(source);
-        if (!Number.isFinite(parsed)) {
-            return fallback || undefined;
-        }
-        next = String(parsed);
-    } else if (transform === 'string') {
-        next = String(source);
-    }
-    if (next.trim().length === 0) {
-        return fallback || undefined;
-    }
-    return next;
-}
-
-function resolveInteractionUrlTemplate(template: string, params: Record<string, unknown>): string | undefined {
-    const raw = String(template || '').trim();
-    if (!raw) return undefined;
-    const withValues = raw.replace(/\{\{\s*([^}]+)\s*\}\}/g, (_, path: string) => {
-        const value = resolveInteractionValue(params, path);
-        return value == null ? '' : encodeURIComponent(value);
-    }).trim();
-    if (!withValues) return undefined;
-    if (/^https?:\/\//i.test(withValues) || withValues.startsWith('/')) {
-        return withValues;
-    }
-    return undefined;
-}
-
-function resolveFilterOptions(raw: unknown): Array<{ label: string; value: string }> {
-    if (!Array.isArray(raw)) return [];
-    const out: Array<{ label: string; value: string }> = [];
-    for (const item of raw) {
-        if (typeof item === 'string') {
-            const text = item.trim();
-            if (text) out.push({ label: text, value: text });
-            continue;
-        }
-        if (item && typeof item === 'object') {
-            const row = item as Record<string, unknown>;
-            const value = String(row.value ?? '').trim();
-            if (!value) continue;
-            const label = String(row.label ?? value).trim() || value;
-            out.push({ label, value });
-        }
-    }
-    return out;
-}
-
-function resolveTabOptions(raw: unknown): Array<{ label: string; value: string }> {
-    return resolveFilterOptions(raw);
-}
-
-function normalizeVisibilityMatchValues(raw: unknown): string[] {
-    if (Array.isArray(raw)) {
-        return raw
-            .map((item) => String(item ?? '').trim())
-            .filter((item) => item.length > 0);
-    }
-    const text = String(raw ?? '').trim();
-    if (!text) return [];
-    return text
-        .split(/[\n,，]/g)
-        .map((item) => item.trim())
-        .filter((item) => item.length > 0);
-}
-
-function resolveComponentVariableVisibility(config: Record<string, unknown>, values: Record<string, string>): boolean {
-    const enabled = config.visibilityRuleEnabled === true;
-    if (!enabled) return true;
-    const variableKey = String(config.visibilityVariableKey ?? '').trim();
-    if (!variableKey) return true;
-    const current = String(values?.[variableKey] ?? '').trim();
-    const currentLower = current.toLowerCase();
-    const mode = String(config.visibilityMatchMode ?? 'equals').trim().toLowerCase();
-    const expectedValues = normalizeVisibilityMatchValues(
-        config.visibilityMatchValues ?? config.visibilityMatchValue,
-    );
-    const expectedLower = expectedValues.map((item) => item.toLowerCase());
-    const matched = expectedValues.length > 0 && expectedValues.includes(current);
-    if (mode === 'not-equals' || mode === 'not-in') {
-        return expectedValues.length === 0 ? true : !matched;
-    }
-    if (mode === 'contains') {
-        if (expectedLower.length === 0) return true;
-        return expectedLower.some((item) => item.length > 0 && currentLower.includes(item));
-    }
-    if (mode === 'not-contains') {
-        if (expectedLower.length === 0) return true;
-        return expectedLower.every((item) => item.length === 0 || !currentLower.includes(item));
-    }
-    if (mode === 'starts-with') {
-        if (expectedLower.length === 0) return true;
-        return expectedLower.some((item) => item.length > 0 && currentLower.startsWith(item));
-    }
-    if (mode === 'ends-with') {
-        if (expectedLower.length === 0) return true;
-        return expectedLower.some((item) => item.length > 0 && currentLower.endsWith(item));
-    }
-    if (mode === 'empty') {
-        return current.length === 0;
-    }
-    if (mode === 'not-empty') {
-        return current.length > 0;
-    }
-    return expectedValues.length === 0 ? true : matched;
-}
-
-function resolveColumnIndex(cols: CardData['cols'], rawField: unknown, fallback = 0): number {
-    if (!Array.isArray(cols) || cols.length === 0) {
-        return -1;
-    }
-    const field = String(rawField ?? '').trim();
-    if (!field) {
-        return Math.max(0, Math.min(cols.length - 1, fallback));
-    }
-    if (/^\d+$/.test(field)) {
-        const byNumber = Number(field) - 1;
-        if (Number.isFinite(byNumber) && byNumber >= 0 && byNumber < cols.length) {
-            return byNumber;
-        }
-    }
-    const normalized = field.toLowerCase();
-    const byName = cols.findIndex((col) => String(col.name || '').toLowerCase() === normalized);
-    if (byName >= 0) return byName;
-    const byDisplayName = cols.findIndex((col) => String(col.display_name || '').toLowerCase() === normalized);
-    if (byDisplayName >= 0) return byDisplayName;
-    return Math.max(0, Math.min(cols.length - 1, fallback));
-}
-
-function resolveFilterOptionsFromData(data: CardData | null, config: Record<string, unknown>): Array<{ label: string; value: string }> {
-    if (!data || !Array.isArray(data.rows) || !Array.isArray(data.cols) || data.cols.length === 0) {
-        return [];
-    }
-    const maxRaw = Number(config.dataOptionMax ?? 200);
-    const maxOptions = Number.isFinite(maxRaw) ? Math.max(1, Math.min(2000, Math.floor(maxRaw))) : 200;
-    const valueIndex = resolveColumnIndex(data.cols, config.dataOptionValueField, 0);
-    if (valueIndex < 0) {
-        return [];
-    }
-    const labelIndex = resolveColumnIndex(data.cols, config.dataOptionLabelField, valueIndex);
-    const dedupe = new Set<string>();
-    const out: Array<{ label: string; value: string }> = [];
-    for (const row of data.rows) {
-        if (!Array.isArray(row)) continue;
-        const valueRaw = row[valueIndex];
-        if (valueRaw == null) continue;
-        const value = String(valueRaw).trim();
-        if (!value || dedupe.has(value)) continue;
-        const labelRaw = row[labelIndex];
-        const label = String(labelRaw ?? value).trim() || value;
-        dedupe.add(value);
-        out.push({ label, value });
-        if (out.length >= maxOptions) break;
-    }
-    return out;
-}
-
-function normalizeFilterDebounceMs(raw: unknown): number {
-    const value = Number(raw ?? 0);
-    if (!Number.isFinite(value) || value <= 0) return 0;
-    return Math.max(50, Math.min(5000, Math.round(value)));
-}
-
-function normalizeCarouselItems(raw: unknown): string[] {
-    if (Array.isArray(raw)) {
-        return raw
-            .map((item) => String(item ?? '').trim())
-            .filter((item) => item.length > 0)
-            .slice(0, 200);
-    }
-    const text = String(raw ?? '').trim();
-    if (!text) return [];
-    return text
-        .split(/\r?\n/g)
-        .map((item) => item.trim())
-        .filter((item) => item.length > 0)
-        .slice(0, 200);
-}
-
-function resolveCarouselItemsFromData(data: CardData | null, config: Record<string, unknown>): string[] {
-    if (!data || !Array.isArray(data.rows) || data.rows.length === 0 || !Array.isArray(data.cols) || data.cols.length === 0) {
-        return [];
-    }
-    const max = Number(config.dataItemMax ?? 50);
-    const safeMax = Number.isFinite(max) ? Math.max(1, Math.min(500, Math.floor(max))) : 50;
-    const contentIndex = resolveColumnIndex(data.cols, config.dataItemField, 0);
-    if (contentIndex < 0) {
-        return [];
-    }
-    const out: string[] = [];
-    for (const row of data.rows) {
-        if (!Array.isArray(row) || row.length <= contentIndex) continue;
-        const text = String(row[contentIndex] ?? '').trim();
-        if (!text) continue;
-        out.push(text);
-        if (out.length >= safeMax) break;
-    }
-    return out;
-}
-
-function escapeHtml(input: string): string {
-    return input
-        .replaceAll('&', '&amp;')
-        .replaceAll('<', '&lt;')
-        .replaceAll('>', '&gt;')
-        .replaceAll('"', '&quot;')
-        .replaceAll("'", '&#39;');
-}
-
-function renderMarkdownToHtml(input: string): string {
-    const lines = input.replace(/\r\n/g, '\n').split('\n');
-    const out: string[] = [];
-    let listType: 'ul' | 'ol' | null = null;
-    let inCodeBlock = false;
-    let codeLines: string[] = [];
-
-    const renderInlineMarkdown = (text: string) => {
-        return escapeHtml(text)
-            .replace(/\[(.+?)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noreferrer">$1</a>')
-            .replace(/`([^`]+)`/g, '<code style="padding:1px 4px;border-radius:4px;background:rgba(148,163,184,0.18);">$1</code>')
-            .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-            .replace(/\*(.+?)\*/g, '<em>$1</em>');
-    };
-
-    const closeList = () => {
-        if (listType) {
-            out.push(listType === 'ul' ? '</ul>' : '</ol>');
-            listType = null;
-        }
-    };
-
-    const flushCodeBlock = () => {
-        if (!inCodeBlock) return;
-        const code = escapeHtml(codeLines.join('\n'));
-        out.push(
-            '<pre style="margin:8px 0;padding:10px 12px;border-radius:6px;background:rgba(15,23,42,0.85);border:1px solid rgba(148,163,184,0.25);overflow:auto;">'
-            + `<code style="font-family:Consolas,Monaco,monospace;font-size:12px;line-height:1.5;">${code}</code>`
-            + '</pre>',
-        );
-        inCodeBlock = false;
-        codeLines = [];
-    };
-
-    for (const line of lines) {
-        const raw = line.trim();
-        if (raw.startsWith('```')) {
-            closeList();
-            if (inCodeBlock) {
-                flushCodeBlock();
-            } else {
-                inCodeBlock = true;
-                codeLines = [];
-            }
-            continue;
-        }
-        if (inCodeBlock) {
-            codeLines.push(line);
-            continue;
-        }
-        if (!raw) {
-            closeList();
-            out.push('<br/>');
-            continue;
-        }
-        if (raw === '---' || raw === '***') {
-            closeList();
-            out.push('<hr style="border:none;border-top:1px solid rgba(148,163,184,0.3);margin:10px 0;"/>');
-            continue;
-        }
-        if (raw.startsWith('### ')) {
-            closeList();
-            out.push(`<h3>${escapeHtml(raw.slice(4))}</h3>`);
-            continue;
-        }
-        if (raw.startsWith('## ')) {
-            closeList();
-            out.push(`<h2>${escapeHtml(raw.slice(3))}</h2>`);
-            continue;
-        }
-        if (raw.startsWith('# ')) {
-            closeList();
-            out.push(`<h1>${escapeHtml(raw.slice(2))}</h1>`);
-            continue;
-        }
-        if (raw.startsWith('> ')) {
-            closeList();
-            out.push(
-                '<blockquote style="margin:8px 0;padding:6px 10px;border-left:3px solid rgba(59,130,246,0.65);background:rgba(59,130,246,0.08);">'
-                + `${renderInlineMarkdown(raw.slice(2))}`
-                + '</blockquote>',
-            );
-            continue;
-        }
-        if (raw.startsWith('- ') || raw.startsWith('* ')) {
-            if (listType !== 'ul') {
-                closeList();
-                out.push('<ul>');
-                listType = 'ul';
-            }
-            out.push(`<li>${renderInlineMarkdown(raw.slice(2))}</li>`);
-            continue;
-        }
-        const orderedMatch = raw.match(/^(\d+)\.\s+(.+)$/);
-        if (orderedMatch) {
-            if (listType !== 'ol') {
-                closeList();
-                out.push('<ol>');
-                listType = 'ol';
-            }
-            out.push(`<li>${renderInlineMarkdown(orderedMatch[2])}</li>`);
-            continue;
-        }
-        closeList();
-        const safe = renderInlineMarkdown(raw);
-        out.push(`<p>${safe}</p>`);
-    }
-    closeList();
-    flushCodeBlock();
-    return out.join('');
-}
-
-function compareTableValues(a: unknown, b: unknown): number {
-    const na = Number(a);
-    const nb = Number(b);
-    if (Number.isFinite(na) && Number.isFinite(nb)) {
-        return na - nb;
-    }
-    return String(a ?? '').localeCompare(String(b ?? ''), 'zh-CN');
-}
-
-function resolveTableConditionalStyle(
-    rules: unknown,
-    columnIndex: number,
-    raw: unknown,
-    columnMeta?: { key?: string; title?: string },
-): { color?: string; background?: string } {
-    if (!Array.isArray(rules)) {
-        return {};
-    }
-    const normalizedCurrentKey = String(columnMeta?.key ?? '').trim().toLowerCase();
-    const normalizedCurrentTitle = String(columnMeta?.title ?? '').trim().toLowerCase();
-    for (const item of rules) {
-        if (!item || typeof item !== 'object') continue;
-        const rule = item as Record<string, unknown>;
-        const ruleColumnKey = String(rule.columnKey ?? '').trim().toLowerCase();
-        const ruleColumnTitle = String(rule.columnTitle ?? '').trim().toLowerCase();
-        let columnMatched = false;
-        if (ruleColumnKey && normalizedCurrentKey) {
-            columnMatched = ruleColumnKey === normalizedCurrentKey;
-        }
-        if (!columnMatched && ruleColumnTitle && normalizedCurrentTitle) {
-            columnMatched = ruleColumnTitle === normalizedCurrentTitle;
-        }
-        if (!columnMatched) {
-            const ruleCol = Number(rule.columnIndex);
-            columnMatched = Number.isFinite(ruleCol) && ruleCol === columnIndex;
-        }
-        if (!columnMatched) continue;
-        const operator = String(rule.operator || '').trim();
-        const target = rule.value;
-        const text = String(raw ?? '');
-        const textLower = text.toLowerCase();
-        const targetText = String(target ?? '');
-        const targetLower = targetText.toLowerCase();
-        const nRaw = Number(raw);
-        const nTarget = Number(target);
-        let matched = false;
-        if (operator === 'contains') {
-            matched = targetText.length > 0 && textLower.includes(targetLower);
-        } else if (operator === 'not-contains') {
-            matched = targetText.length === 0 || !textLower.includes(targetLower);
-        } else if (operator === 'starts-with') {
-            matched = targetText.length > 0 && textLower.startsWith(targetLower);
-        } else if (operator === 'ends-with') {
-            matched = targetText.length > 0 && textLower.endsWith(targetLower);
-        } else if (operator === 'empty') {
-            matched = text.trim().length === 0;
-        } else if (operator === 'not-empty') {
-            matched = text.trim().length > 0;
-        } else if (Number.isFinite(nRaw) && Number.isFinite(nTarget)) {
-            if (operator === '>') matched = nRaw > nTarget;
-            if (operator === '>=') matched = nRaw >= nTarget;
-            if (operator === '<') matched = nRaw < nTarget;
-            if (operator === '<=') matched = nRaw <= nTarget;
-            if (operator === '=' || operator === '==') matched = nRaw === nTarget;
-            if (operator === '!=' || operator === '<>') matched = nRaw !== nTarget;
-        } else {
-            if (operator === '=' || operator === '==') matched = text === String(target ?? '');
-            if (operator === '!=' || operator === '<>') matched = text !== String(target ?? '');
-        }
-        if (!matched) continue;
-        return {
-            color: typeof rule.color === 'string' ? rule.color : undefined,
-            background: typeof rule.background === 'string' ? rule.background : undefined,
-        };
-    }
-    return {};
-}
-
-/**
- * 自定义滚动表格，替代 DataV ScrollBoard（DataV 硬编码 color:#fff 无法覆盖）
- */
-type ColumnAlign = 'left' | 'center' | 'right';
-type ColumnFormatter = 'auto' | 'string' | 'number' | 'percent' | 'date';
-
-interface ColumnEntry {
-    source: string;
-    alias?: string;
-    align?: ColumnAlign;
-    width?: number;
-    wrap?: boolean;
-    formatter?: ColumnFormatter;
-}
-
-interface SourceColumnMeta {
-    name: string;
-    displayName: string;
-    baseType?: string;
-}
-
-interface ResolvedColumnMeta {
-    key: string;
-    title: string;
-    align: ColumnAlign;
-    width?: number;
-    wrap: boolean;
-    formatter: ColumnFormatter;
-    baseType?: string;
-}
-
-interface ResolvedTableData {
-    header: string[];
-    data: string[][];
-    columnMeta: ResolvedColumnMeta[];
-}
-
-function normalizeColumnAlign(value: unknown, fallback: ColumnAlign): ColumnAlign {
-    if (value === 'left' || value === 'center' || value === 'right') return value;
-    return fallback;
-}
-
-function normalizeColumnFormatter(value: unknown): ColumnFormatter {
-    if (value === 'string' || value === 'number' || value === 'percent' || value === 'date') return value;
-    return 'auto';
-}
-
-function clampColumnWidth(value: unknown): number | undefined {
-    const n = Number(value);
-    if (!Number.isFinite(n)) return undefined;
-    if (n <= 0) return undefined;
-    return Math.max(5, Math.min(100, n));
-}
-
-function formatTableCell(value: unknown, formatter: ColumnFormatter, baseType?: string): string {
-    if (value == null) return '';
-
-    const toNumber = () => {
-        if (typeof value === 'number') return value;
-        const n = Number(value);
-        return Number.isFinite(n) ? n : undefined;
-    };
-
-    if (formatter === 'string') return String(value);
-    if (formatter === 'number') {
-        const n = toNumber();
-        return n == null ? String(value) : n.toLocaleString('zh-CN');
-    }
-    if (formatter === 'percent') {
-        const n = toNumber();
-        if (n == null) return String(value);
-        const pct = Math.abs(n) <= 1 ? n * 100 : n;
-        return `${pct.toFixed(2)}%`;
-    }
-    if (formatter === 'date') {
-        const d = value instanceof Date ? value : new Date(String(value));
-        if (Number.isNaN(d.getTime())) return String(value);
-        return d.toLocaleString('zh-CN', { hour12: false });
-    }
-
-    // auto: keep plain text to preserve historical behavior
-    if (baseType && baseType.toLowerCase().includes('date')) {
-        const d = new Date(String(value));
-        if (!Number.isNaN(d.getTime())) {
-            return d.toLocaleString('zh-CN', { hour12: false });
-        }
-    }
-    return String(value);
-}
-
-/**
- * 自定义滚动表格，替代 DataV ScrollBoard（DataV 硬编码 color:#fff 无法覆盖）
- */
-function ThemedScrollTable({ config, tokens }: {
-    config: Record<string, unknown>;
-    tokens: ScreenThemeTokens;
-}) {
-    const headers = config.header as string[] || [];
-    const allData = config.data as string[][] || [];
-    const columnMeta = config._columnMeta as ResolvedColumnMeta[] | undefined;
-    const rowNum = config.rowNum as number || 8;
-    const headerBGC = config.headerBGC as string || tokens.scrollBoard.headerBg;
-    const oddRowBGC = config.oddRowBGC as string || tokens.scrollBoard.oddRowBg;
-    const evenRowBGC = config.evenRowBGC as string || tokens.scrollBoard.evenRowBg;
-    const textColor = tokens.scrollBoard.textColor;
-    const headerColor = resolveTextColor(config.headerColor as string | undefined, textColor);
-    const headerHeight = 35;
-
-    // Auto-scroll animation
-    const [offset, setOffset] = useState(0);
-    const rowHeight = 38;
-    const visibleHeight = rowNum * rowHeight;
-    const needScroll = allData.length > rowNum;
-
-    useEffect(() => {
-        if (!needScroll) return;
-        const waitTime = config.waitTime as number || 2000;
-        const timer = setInterval(() => {
-            setOffset(prev => {
-                const next = prev + 1;
-                return next >= allData.length ? 0 : next;
-            });
-        }, waitTime);
-        return () => clearInterval(timer);
-    }, [needScroll, allData.length, config.waitTime]);
-
-    // Build visible rows (wrap around for seamless scrolling)
-    const visibleRows: { cells: string[]; originalIndex: number }[] = [];
-    for (let i = 0; i < Math.min(rowNum + 1, allData.length); i++) {
-        const idx = (offset + i) % allData.length;
-        visibleRows.push({ cells: allData[idx], originalIndex: idx });
-    }
-
-    const getColumnLayout = (index: number): React.CSSProperties => {
-        const meta = columnMeta?.[index];
-        const widthPercent = clampColumnWidth(meta?.width);
-        return {
-            flex: widthPercent ? `0 0 ${widthPercent}%` : '1 1 0',
-            width: widthPercent ? `${widthPercent}%` : undefined,
-            textAlign: normalizeColumnAlign(meta?.align, 'center'),
-        };
-    };
-
-    return (
-        <div style={{ width: '100%', height: '100%', overflow: 'hidden', color: textColor, fontSize: 14 }}>
-            {headers.length > 0 && (
-                <div style={{
-                    display: 'flex', background: headerBGC, height: headerHeight,
-                    lineHeight: `${headerHeight}px`, fontWeight: 600, fontSize: 15, flexShrink: 0,
-                    color: headerColor,
-                }}>
-                    {headers.map((h, i) => (
-                        <div key={i} style={{
-                            ...getColumnLayout(i),
-                            padding: '0 10px',
-                            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                        }}>{h}</div>
-                    ))}
-                </div>
-            )}
-            <div style={{ height: visibleHeight, overflow: 'hidden', position: 'relative' }}>
-                <div style={{
-                    transition: needScroll ? 'transform 0.5s ease' : 'none',
-                    transform: needScroll ? `translateY(-${0}px)` : 'none',
-                }}>
-                    {visibleRows.map((row, ri) => (
-                        <div key={`${offset}-${ri}`} style={{
-                            display: 'flex', height: rowHeight, lineHeight: `${rowHeight}px`,
-                            background: row.originalIndex % 2 === 0 ? evenRowBGC : oddRowBGC,
-                        }}>
-                            {headers.map((_, ci) => (
-                                <div key={ci} style={{
-                                    ...getColumnLayout(ci),
-                                    padding: '0 10px',
-                                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                                }}>{row.cells[ci] ?? ''}</div>
-                            ))}
-                        </div>
-                    ))}
-                </div>
-            </div>
-        </div>
-    );
-}
-
-function resolveBoundTableData(
-    config: Record<string, unknown>,
-    options?: { defaultAlign?: ColumnAlign },
-): ResolvedTableData {
-    const defaultAlign = options?.defaultAlign ?? 'left';
-    const sourceCols = config._sourceColumns as SourceColumnMeta[] | undefined;
-    const columnsConfig = config.columns as ColumnEntry[] | undefined;
-    const allData = (config.data as Array<Array<unknown>> | undefined) || [];
-
-    if (sourceCols?.length) {
-        const effectiveColumns = columnsConfig
-            ? columnsConfig
-            : sourceCols.map((col) => ({ source: col.name } as ColumnEntry));
-        const sourceMetaByName = new Map(sourceCols.map((item) => [item.name, item] as const));
-        const sourceIndexByName = new Map(sourceCols.map((item, index) => [item.name, index] as const));
-
-        const columnMeta = effectiveColumns.map((col): ResolvedColumnMeta => {
-            const sc = sourceMetaByName.get(col.source);
-            return {
-                key: col.source,
-                title: col.alias || sc?.displayName || col.source,
-                align: normalizeColumnAlign(col.align, defaultAlign),
-                width: clampColumnWidth(col.width),
-                wrap: col.wrap === true,
-                formatter: normalizeColumnFormatter(col.formatter),
-                baseType: sc?.baseType,
-            };
-        });
-        const data = allData.map((row) =>
-            columnMeta.map((col) => {
-                const idx = sourceIndexByName.get(col.key);
-                return typeof idx === 'number' ? formatTableCell(row[idx], col.formatter, col.baseType) : '';
-            }),
-        );
-        return {
-            header: columnMeta.map((col) => col.title),
-            data,
-            columnMeta,
-        };
-    }
-
-    const rawHeader = (config.header as string[] | undefined) || [];
-    const alias = config.columnAlias as Record<string, string> | undefined;
-    const mappedHeader = alias
-        ? rawHeader.map((h, i) => alias[String(i)] || h)
-        : rawHeader;
-    const inferredCount = mappedHeader.length > 0
-        ? mappedHeader.length
-        : allData.reduce((max, row) => Math.max(max, row.length), 0);
-    const header = mappedHeader.length > 0
-        ? mappedHeader
-        : Array.from({ length: inferredCount }, (_, i) => `列${i + 1}`);
-    const columnMeta: ResolvedColumnMeta[] = header.map((title, idx) => ({
-        key: String(idx),
-        title,
-        align: defaultAlign,
-        wrap: false,
-        formatter: 'auto',
-    }));
-    const data = allData.map((row) =>
-        columnMeta.map((col, idx) => formatTableCell(row[idx], col.formatter)),
-    );
-
-    return { header, data, columnMeta };
-}
-
-interface ComponentRendererProps {
-    component: ScreenComponent;
-    mode?: 'designer' | 'preview';
-    theme?: ScreenTheme;
-    /** Callback to persist card-derived metadata (e.g. _sourceColumns) back to saved config */
-    onConfigMeta?: (meta: Record<string, unknown>) => void;
-}
+// Utility functions, table components, and types extracted to renderers/shared/:
+// - chartUtils.ts, tableUtils.tsx, markdownUtils.ts, geoJsonCache.ts
 
 export const ComponentRenderer = memo(function ComponentRenderer({ component, mode = 'preview', theme, onConfigMeta }: ComponentRendererProps) {
     const { type, config, width, height, dataSource, drillDown } = component;
@@ -845,7 +218,18 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
     useEffect(() => {
         if (!needsECharts || EChartsComponent) return;
         let cancelled = false;
-        import('../../../components/charts/EChartsRuntime').then((mod) => {
+        const imports: Promise<unknown>[] = [
+            import('../../../components/charts/EChartsRuntime'),
+        ];
+        if (type === 'wordcloud-chart') {
+            imports.push(import('echarts-wordcloud'));
+        }
+        if (ECHART_3D_TYPES.has(type)) {
+            // echarts-gl is an optional dependency — import dynamically and swallow if not installed
+            imports.push(import(/* webpackIgnore: true */ 'echarts-gl' as string).catch(() => null));
+        }
+        Promise.all(imports).then(([echartsModule]) => {
+            const mod = echartsModule as typeof import('../../../components/charts/EChartsRuntime');
             if (!cancelled) {
                 setEChartsComponent(() => mod.default as ReactEChartsComponent);
                 if (typeof mod.registerEChartsMap === 'function') {
@@ -859,7 +243,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
         return () => {
             cancelled = true;
         };
-    }, [needsECharts, EChartsComponent]);
+    }, [needsECharts, EChartsComponent, type]);
 
     useEffect(() => {
         if (type !== 'map-chart' || !registerMapFn) return;
@@ -1025,6 +409,13 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
     // Merge card data into config: card data overrides data fields only, not display fields
     const effectiveConfig = useMemo(() => {
         if (!cardData) return config;
+        const fieldMapping = config._fieldMapping as FieldMapping | undefined;
+        const useFieldMapping = config._useFieldMapping !== false && fieldMapping
+            && (fieldMapping.dimension || (fieldMapping.measures && fieldMapping.measures.length > 0));
+        if (useFieldMapping) {
+            const mapped = applyFieldMapping(type, fieldMapping, cardData);
+            return { ...config, ...mapped };
+        }
         const mapped = mapCardDataToConfig(type, cardData);
         return { ...config, ...mapped };
     }, [config, cardData, type]);
@@ -1032,6 +423,38 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
     // Persist _sourceColumns to saved config so PropertyPanel can read them
     const onConfigMetaRef = useRef(onConfigMeta);
     onConfigMetaRef.current = onConfigMeta;
+    const [legendDragPreview, setLegendDragPreview] = useState<{ x: number; y: number } | null>(null);
+    const legendDragHandlersRef = useRef<{ move: (event: MouseEvent) => void; up: (event: MouseEvent) => void } | null>(null);
+    const [chartDragPreview, setChartDragPreview] = useState<{ x: number; y: number } | null>(null);
+    const chartDragHandlersRef = useRef<{ move: (event: MouseEvent) => void; up: (event: MouseEvent) => void } | null>(null);
+
+    const clearLegendDragHandlers = useCallback(() => {
+        const handlers = legendDragHandlersRef.current;
+        if (!handlers) return;
+        window.removeEventListener('mousemove', handlers.move);
+        window.removeEventListener('mouseup', handlers.up);
+        legendDragHandlersRef.current = null;
+    }, []);
+
+    const clearChartDragHandlers = useCallback(() => {
+        const handlers = chartDragHandlersRef.current;
+        if (!handlers) return;
+        window.removeEventListener('mousemove', handlers.move);
+        window.removeEventListener('mouseup', handlers.up);
+        chartDragHandlersRef.current = null;
+    }, []);
+
+    useEffect(() => () => {
+        clearLegendDragHandlers();
+        clearChartDragHandlers();
+    }, [clearChartDragHandlers, clearLegendDragHandlers]);
+
+    useEffect(() => {
+        setLegendDragPreview(null);
+        setChartDragPreview(null);
+        clearLegendDragHandlers();
+        clearChartDragHandlers();
+    }, [clearChartDragHandlers, clearLegendDragHandlers, component.id]);
 
     const sourceColsKey = (config._sourceColumns as Array<{ name: string }> | undefined)
         ?.map(c => c.name).join(',');
@@ -1239,7 +662,10 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                         meta: `openMode=${interactionJump.openMode}`,
                     });
                     if (interactionJump.openMode === 'self') {
-                        window.location.assign(targetUrl);
+                        // Only allow same-origin navigation for 'self' to prevent open redirect
+                        if (targetUrl.startsWith('/') || (() => { try { return new URL(targetUrl).origin === window.location.origin; } catch { return false; } })()) {
+                            window.location.assign(targetUrl);
+                        }
                     } else {
                         window.open(targetUrl, '_blank', 'noopener,noreferrer');
                     }
@@ -1291,49 +717,353 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
             if (!Number.isFinite(parsed) || parsed <= 0) return undefined;
             return Math.round(Math.max(0, parsed));
         };
+        const compactPresetRaw = String(c.compactLayoutPreset ?? 'auto').trim().toLowerCase();
+        const compactPresetEnabled = compactPresetRaw !== 'off';
+        const isCompactCanvas = compactPresetEnabled && (width < 560 || height < 320);
+        const isTinyCanvas = compactPresetEnabled && (width < 420 || height < 260);
         const titleText = String(c.title ?? '').trim();
         const hasTitle = titleText.length > 0;
-        const legendPos = String(c.legendPosition ?? 'top').trim().toLowerCase();
-        const legendPosition = legendPos === 'bottom' || legendPos === 'left' || legendPos === 'right' ? legendPos : 'top';
+        const xAxisData = Array.isArray(c.xAxisData) ? (c.xAxisData as unknown[]) : [];
+        const xAxisCategoryCount = xAxisData.length;
+        const longestXAxisLabelLength = xAxisData.reduce<number>(
+            (max, item) => Math.max(max, String(item ?? '').trim().length),
+            0,
+        );
+        const xAxisLabelRotateRaw = Number(c.xAxisLabelRotate);
+        const autoXAxisLabelRotate = isCompactCanvas && (xAxisCategoryCount >= 7 || longestXAxisLabelLength >= 8)
+            ? (isTinyCanvas ? -45 : -30)
+            : 0;
+        const xAxisLabelRotate = Number.isFinite(xAxisLabelRotateRaw)
+            ? toNumber(c.xAxisLabelRotate, 0, -90, 90)
+            : autoXAxisLabelRotate;
+        const xAxisLabelMaxLengthRaw = Number(c.xAxisLabelMaxLength);
+        const autoXAxisLabelMaxLength = isCompactCanvas ? (isTinyCanvas ? 8 : 12) : 0;
+        const xAxisLabelMaxLength = Number.isFinite(xAxisLabelMaxLengthRaw)
+            ? Math.round(Math.min(40, Math.max(0, xAxisLabelMaxLengthRaw)))
+            : (longestXAxisLabelLength > autoXAxisLabelMaxLength ? autoXAxisLabelMaxLength : 0);
+        const formatXAxisLabel = (value: unknown) => {
+            const text = String(value ?? '');
+            if (xAxisLabelMaxLength <= 0 || text.length <= xAxisLabelMaxLength) {
+                return text;
+            }
+            const keep = Math.max(1, xAxisLabelMaxLength);
+            return `${text.slice(0, keep)}...`;
+        };
+        const legendNames = (() => {
+            const out: string[] = [];
+            const seen = new Set<string>();
+            const push = (raw: unknown) => {
+                const text = String(raw ?? '').trim();
+                if (!text || seen.has(text)) return;
+                seen.add(text);
+                out.push(text);
+            };
+            if (Array.isArray(c.series)) {
+                for (const item of c.series as Array<Record<string, unknown>>) {
+                    push(item?.name);
+                }
+            }
+            if (Array.isArray(c.data)) {
+                for (const item of c.data as Array<Record<string, unknown>>) {
+                    push(item?.name);
+                }
+            }
+            return out;
+        })();
+        const legendCount = legendNames.length;
+        const legendDisplayRaw = String(c.legendDisplay ?? 'auto').trim().toLowerCase();
+        const legendDisplayMode = legendDisplayRaw === 'show' || legendDisplayRaw === 'hide' ? legendDisplayRaw : 'auto';
+        const longestLegendTextWidth = legendNames.reduce(
+            (max, name) => Math.max(max, estimateVisualTextWidth(name, legendFontSize)),
+            0,
+        );
+        const autoHideLegendForDensity = isTinyCanvas
+            && legendCount >= 16
+            && longestLegendTextWidth >= 90;
+        const legendVisibleByAuto = !autoHideLegendForDensity && (legendCount > 1 || !isCompactCanvas);
+        const legendVisible = legendDisplayMode === 'show'
+            ? true
+            : (legendDisplayMode === 'hide' ? false : legendVisibleByAuto);
+        const autoLegendAvoid = c.autoLegendAvoid !== false;
+        const legendPosRaw = String(c.legendPosition ?? 'auto').trim().toLowerCase();
+        const legendPosMode = legendPosRaw === 'top'
+            || legendPosRaw === 'bottom'
+            || legendPosRaw === 'left'
+            || legendPosRaw === 'right'
+            || legendPosRaw === 'auto'
+            ? legendPosRaw
+            : 'auto';
+        let legendPosition: 'top' | 'bottom' | 'left' | 'right' = (() => {
+            if (legendPosMode !== 'auto') {
+                return legendPosMode;
+            }
+            if (isTinyCanvas) {
+                return width >= height ? 'bottom' : 'right';
+            }
+            if (isCompactCanvas) {
+                return legendCount >= 8
+                    ? (width >= height ? 'bottom' : 'right')
+                    : (width >= height ? 'top' : 'right');
+            }
+            return width >= height ? 'top' : 'right';
+        })();
+        if (legendVisible && autoLegendAvoid && isCompactCanvas && (legendPosition === 'left' || legendPosition === 'right')) {
+            legendPosition = width >= height ? 'top' : 'bottom';
+        }
+        if (legendVisible && autoLegendAvoid && isTinyCanvas && legendPosition === 'top' && legendCount >= 8) {
+            legendPosition = 'bottom';
+        }
         const legendOrientRaw = String(c.legendOrient ?? 'auto').trim().toLowerCase();
         const legendOrient = legendOrientRaw === 'horizontal' || legendOrientRaw === 'vertical'
             ? legendOrientRaw
             : ((legendPosition === 'left' || legendPosition === 'right') ? 'vertical' : 'horizontal');
+        const legendAlignRaw = String(c.legendAlign ?? 'auto').trim().toLowerCase();
+        const legendAlign = legendAlignRaw === 'start' || legendAlignRaw === 'center' || legendAlignRaw === 'end'
+            ? legendAlignRaw
+            : 'auto';
         const legendItemGap = toNumber(c.legendItemGap, 12, 0, 80);
+        const legendReserveOverrideRaw = Number(c.legendReserveSize);
+        const legendReserveOverride = Number.isFinite(legendReserveOverrideRaw) && legendReserveOverrideRaw > 0
+            ? Math.round(Math.min(360, Math.max(20, legendReserveOverrideRaw)))
+            : undefined;
+        const legendOffsetBoundX = Math.max(120, Math.round(width * 0.5));
+        const legendOffsetBoundY = Math.max(120, Math.round(height * 0.5));
+        const legendOffsetXBase = toNumber(c.legendOffsetX, 0, -legendOffsetBoundX, legendOffsetBoundX);
+        const legendOffsetYBase = toNumber(c.legendOffsetY, 0, -legendOffsetBoundY, legendOffsetBoundY);
+        const legendOffsetX = legendDragPreview ? legendDragPreview.x : legendOffsetXBase;
+        const legendOffsetY = legendDragPreview ? legendDragPreview.y : legendOffsetYBase;
+        const legendNameMaxWidthRaw = Number(c.legendNameMaxWidth);
+        const legendNameMaxWidthOverride = Number.isFinite(legendNameMaxWidthRaw) && legendNameMaxWidthRaw > 0
+            ? Math.round(Math.min(320, Math.max(40, legendNameMaxWidthRaw)))
+            : undefined;
+        const chartOffsetBoundX = Math.max(40, Math.round(width * 0.45));
+        const chartOffsetBoundY = Math.max(40, Math.round(height * 0.45));
+        const axisChartOffsetXBase = toNumber(c.chartOffsetX, 0, -chartOffsetBoundX, chartOffsetBoundX);
+        const axisChartOffsetYBase = toNumber(c.chartOffsetY, 0, -chartOffsetBoundY, chartOffsetBoundY);
+        const chartOffsetX = chartDragPreview ? chartDragPreview.x : axisChartOffsetXBase;
+        const chartOffsetY = chartDragPreview ? chartDragPreview.y : axisChartOffsetYBase;
+        const legendTextMaxWidth = (() => {
+            if (!legendVisible || legendCount <= 0) return 0;
+            if (legendNameMaxWidthOverride) {
+                return legendNameMaxWidthOverride;
+            }
+            if (legendPosition === 'left' || legendPosition === 'right') {
+                return Math.max(56, Math.min(220, Math.floor(width * 0.32)));
+            }
+            const slots = Math.max(1, Math.min(legendCount, isTinyCanvas ? 2 : (isCompactCanvas ? 3 : 4)));
+            return Math.max(56, Math.min(240, Math.floor((width - 24) / slots) - 28));
+        })();
+        const shouldTruncateLegend = legendVisible
+            && autoLegendAvoid
+            && legendTextMaxWidth > 0
+            && (isCompactCanvas || longestLegendTextWidth > legendTextMaxWidth + 8);
+        const formatLegendText = (name: string) => {
+            if (!shouldTruncateLegend) {
+                return name;
+            }
+            return truncateTextByVisualWidth(String(name ?? ''), legendTextMaxWidth, legendFontSize);
+        };
+        const estimateHorizontalLegendReserve = () => {
+            if (!legendVisible || legendCount <= 0) return 0;
+            const safeWidth = Math.max(180, width - 24);
+            const perItemWidth = Math.max(64, Math.min(280, Math.max(Math.round(legendFontSize * 5.8), longestLegendTextWidth + 26)));
+            const itemsPerRow = Math.max(1, Math.floor(safeWidth / perItemWidth));
+            const rowCount = Math.max(1, Math.ceil(Math.max(legendCount, 1) / itemsPerRow));
+            const rowHeight = Math.max(18, legendFontSize + 8);
+            const reserve = rowCount * rowHeight + 8;
+            return Math.min(Math.max(40, Math.floor(height * 0.45)), Math.max(32, reserve));
+        };
+        const estimateVerticalLegendReserve = () => {
+            if (!legendVisible || legendCount <= 0) return 0;
+            const baseWidth = Math.max(72, Math.min(260, Math.max(Math.round(64 + legendFontSize * 3.5), longestLegendTextWidth + 26)));
+            const overflowExtra = legendCount > 8 ? Math.min(60, (legendCount - 8) * 4) : 0;
+            const reserve = baseWidth + overflowExtra;
+            return Math.min(Math.max(76, Math.floor(width * 0.42)), Math.max(70, reserve));
+        };
+        const axisLegendReserveDefault = legendPosition === 'left' || legendPosition === 'right'
+            ? estimateVerticalLegendReserve()
+            : estimateHorizontalLegendReserve();
+        const visualLegendReserveDefault = legendPosition === 'left' || legendPosition === 'right'
+            ? Math.max(50, axisLegendReserveDefault - 14)
+            : Math.max(28, axisLegendReserveDefault - 10);
+        const axisLegendReserve = legendReserveOverride ?? axisLegendReserveDefault;
+        const visualLegendReserve = legendReserveOverride ?? visualLegendReserveDefault;
+        const legendBaseLayout: Record<string, unknown> = (() => {
+            if (!legendVisible) {
+                return {};
+            }
+            const resolvedAlign = legendAlign === 'auto'
+                ? ((autoLegendAvoid && isCompactCanvas && legendCount > 8) ? 'start' : 'center')
+                : legendAlign;
+            if (legendPosition === 'bottom') {
+                if (resolvedAlign === 'start') return { top: 'auto', bottom: 4, left: 8 };
+                if (resolvedAlign === 'end') return { top: 'auto', bottom: 4, right: 8 };
+                return { top: 'auto', bottom: 4, left: 'center' };
+            }
+            if (legendPosition === 'left') {
+                if (resolvedAlign === 'start') return { left: 4, top: 8 };
+                if (resolvedAlign === 'end') return { left: 4, bottom: 8 };
+                return { left: 4, top: 'middle' };
+            }
+            if (legendPosition === 'right') {
+                if (resolvedAlign === 'start') return { right: 4, top: 8 };
+                if (resolvedAlign === 'end') return { right: 4, bottom: 8 };
+                return { right: 4, top: 'middle' };
+            }
+            if (resolvedAlign === 'start') return { top: 4, left: 8 };
+            if (resolvedAlign === 'end') return { top: 4, right: 8 };
+            return { top: 4, left: 'center' };
+        })();
+        const estimateLegendRenderSize = () => {
+            if (!legendVisible || legendCount <= 0) {
+                return { width: 0, height: 0 };
+            }
+            if (legendOrient === 'vertical') {
+                const lineHeight = Math.max(18, legendFontSize + 8);
+                const estimatedHeight = Math.min(height - 16, Math.max(lineHeight + 8, legendCount * lineHeight));
+                const estimatedWidth = Math.min(
+                    width - 16,
+                    Math.max(72, (legendNameMaxWidthOverride ?? Math.min(260, longestLegendTextWidth)) + 26),
+                );
+                return { width: estimatedWidth, height: estimatedHeight };
+            }
+            const perItemWidth = Math.max(64, Math.min(280, Math.max((legendNameMaxWidthOverride ?? longestLegendTextWidth) + 26, Math.round(legendFontSize * 5.8))));
+            const itemsPerRow = Math.max(1, Math.floor(Math.max(180, width - 24) / perItemWidth));
+            const rows = Math.max(1, Math.ceil(legendCount / itemsPerRow));
+            const estimatedWidth = Math.min(width - 16, Math.max(perItemWidth, itemsPerRow * perItemWidth));
+            const estimatedHeight = Math.min(height - 16, Math.max(24, rows * (legendFontSize + 8) + 8));
+            return { width: estimatedWidth, height: estimatedHeight };
+        };
+        const legendLayout: Record<string, unknown> = (() => {
+            if (!legendVisible || (legendOffsetX === 0 && legendOffsetY === 0)) {
+                return legendBaseLayout;
+            }
+            const next = { ...legendBaseLayout } as Record<string, unknown>;
+            const est = estimateLegendRenderSize();
+            const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+            if (legendOffsetX !== 0) {
+                if (typeof next.left === 'number') {
+                    next.left = Math.round(clamp(next.left + legendOffsetX, 0, Math.max(0, width - est.width)));
+                } else if (typeof next.right === 'number') {
+                    next.right = Math.round(clamp(next.right - legendOffsetX, 0, Math.max(0, width - est.width)));
+                } else if (next.left === 'center') {
+                    next.left = Math.round(clamp(((width - est.width) / 2) + legendOffsetX, 0, Math.max(0, width - est.width)));
+                }
+            }
+            if (legendOffsetY !== 0) {
+                if (typeof next.top === 'number') {
+                    next.top = Math.round(clamp(next.top + legendOffsetY, 0, Math.max(0, height - est.height)));
+                } else if (typeof next.bottom === 'number') {
+                    next.bottom = Math.round(clamp(next.bottom - legendOffsetY, 0, Math.max(0, height - est.height)));
+                } else if (next.top === 'middle') {
+                    next.top = Math.round(clamp(((height - est.height) / 2) + legendOffsetY, 0, Math.max(0, height - est.height)));
+                }
+            }
+            return next;
+        })();
+        const legendDragEnabled = mode === 'designer'
+            && c.legendDragEnabled === true
+            && legendVisible
+            && legendCount > 0;
+        const chartDragEnabled = mode === 'designer'
+            && c.chartDragEnabled === true;
+        const legendBoxRect = (() => {
+            if (!legendVisible) {
+                return { left: 0, top: 0, width: 0, height: 0 };
+            }
+            const est = estimateLegendRenderSize();
+            const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+            let left = 8;
+            if (typeof legendLayout.left === 'number') {
+                left = legendLayout.left;
+            } else if (typeof legendLayout.right === 'number') {
+                left = width - legendLayout.right - est.width;
+            } else if (legendLayout.left === 'center') {
+                left = (width - est.width) / 2;
+            }
+            let top = 8;
+            if (typeof legendLayout.top === 'number') {
+                top = legendLayout.top;
+            } else if (typeof legendLayout.bottom === 'number') {
+                top = height - legendLayout.bottom - est.height;
+            } else if (legendLayout.top === 'middle') {
+                top = (height - est.height) / 2;
+            }
+            return {
+                left: Math.round(clamp(left, 0, Math.max(0, width - est.width))),
+                top: Math.round(clamp(top, 0, Math.max(0, height - est.height))),
+                width: Math.max(0, est.width),
+                height: Math.max(0, est.height),
+            };
+        })();
+        const legendDragHandleStyle = legendDragEnabled ? {
+            position: 'absolute' as const,
+            left: Math.max(2, Math.min(width - 14, Math.round(legendBoxRect.left + Math.max(8, legendBoxRect.width / 2) - 6))),
+            top: Math.max(2, Math.min(height - 14, Math.round(legendBoxRect.top + 2))),
+            width: 12,
+            height: 12,
+            borderRadius: 999,
+            border: `1px solid ${t.textPrimary}`,
+            background: t.echarts.colorPalette?.[0] || t.accentColor,
+            boxShadow: '0 1px 4px rgba(0,0,0,0.35)',
+            cursor: 'grab',
+            zIndex: 20,
+            opacity: 0.9,
+            padding: 0,
+        } : null;
         const legendConfig: Record<string, unknown> = {
+            show: legendVisible,
             type: c.legendScrollable === false ? 'plain' : 'scroll',
             orient: legendOrient,
             itemGap: legendItemGap,
+            ...(shouldTruncateLegend ? { formatter: (name: string) => formatLegendText(name) } : {}),
             textStyle: { color: t.textPrimary, fontSize: legendFontSize },
             pageTextStyle: { color: t.textSecondary, fontSize: Math.max(10, legendFontSize - 1) },
             pageIconColor: t.textSecondary,
             pageIconInactiveColor: t.textMuted,
-            ...(legendPosition === 'bottom'
-                ? { top: 'auto', bottom: 4, left: 'center' }
-                : legendPosition === 'left'
-                    ? { left: 4, top: 'middle' }
-                    : legendPosition === 'right'
-                        ? { right: 4, top: 'middle' }
-                        : { top: 4, left: 'center' }),
+            ...legendLayout,
         };
+        const axisLabelBottomBoost = Math.abs(xAxisLabelRotate) >= 30 ? 16 : 0;
+        const axisLabelEllipsisBoost = xAxisLabelMaxLength > 0 ? 6 : 0;
         const axisAutoPadding = {
-            left: 56 + (legendPosition === 'left' ? (legendOrient === 'vertical' ? 110 : 70) : 0),
-            right: 30 + (legendPosition === 'right' ? (legendOrient === 'vertical' ? 110 : 70) : 0),
-            top: 18 + (hasTitle ? 28 : 0) + (legendPosition === 'top' ? (legendOrient === 'vertical' ? 58 : 36) : 0),
-            bottom: 42 + (legendPosition === 'bottom' ? (legendOrient === 'vertical' ? 58 : 36) : 0),
+            left: 56 + (legendPosition === 'left' ? axisLegendReserve : 0),
+            right: 30 + (legendPosition === 'right' ? axisLegendReserve : 0),
+            top: 18 + (hasTitle ? 28 : 0) + (legendPosition === 'top' ? axisLegendReserve : 0),
+            bottom: 42 + (legendPosition === 'bottom' ? axisLegendReserve : 0) + axisLabelBottomBoost + axisLabelEllipsisBoost,
         };
+        const axisBaseLeft = readPaddingOverride('chartPaddingLeft') ?? axisAutoPadding.left;
+        const axisBaseRight = readPaddingOverride('chartPaddingRight') ?? axisAutoPadding.right;
+        const axisBaseTop = readPaddingOverride('chartPaddingTop') ?? axisAutoPadding.top;
+        const axisBaseBottom = readPaddingOverride('chartPaddingBottom') ?? axisAutoPadding.bottom;
         const axisGrid = {
-            left: readPaddingOverride('chartPaddingLeft') ?? axisAutoPadding.left,
-            right: readPaddingOverride('chartPaddingRight') ?? axisAutoPadding.right,
-            top: readPaddingOverride('chartPaddingTop') ?? axisAutoPadding.top,
-            bottom: readPaddingOverride('chartPaddingBottom') ?? axisAutoPadding.bottom,
+            left: Math.max(0, axisBaseLeft + Math.max(0, chartOffsetX)),
+            right: Math.max(0, axisBaseRight + Math.max(0, -chartOffsetX)),
+            top: Math.max(0, axisBaseTop + Math.max(0, chartOffsetY)),
+            bottom: Math.max(0, axisBaseBottom + Math.max(0, -chartOffsetY)),
             containLabel: true,
         };
+        const xAxisLabelIntervalRaw = Number(c.xAxisLabelInterval);
+        const autoXAxisLabelInterval = (() => {
+            if (!xAxisCategoryCount || xAxisCategoryCount <= 1) return 0;
+            if (!isCompactCanvas && xAxisCategoryCount <= 12) return 0;
+            const projectedWidth = Math.max(
+                axisFontSize + 6,
+                estimateVisualTextWidth('W'.repeat(Math.max(1, Math.min(16, xAxisLabelMaxLength || longestXAxisLabelLength))), axisFontSize),
+            );
+            const plotSpan = Math.max(120, width - axisGrid.left - axisGrid.right);
+            const perCategorySpan = Math.max(8, plotSpan / xAxisCategoryCount);
+            const rotationFactor = Math.max(0.3, Math.cos(Math.abs(xAxisLabelRotate) * Math.PI / 180));
+            const neededStep = Math.ceil((projectedWidth * rotationFactor) / perCategorySpan);
+            return Math.max(0, Math.min(xAxisCategoryCount - 1, neededStep - 1));
+        })();
+        const xAxisLabelInterval = Number.isFinite(xAxisLabelIntervalRaw) && xAxisLabelIntervalRaw > 0
+            ? Math.max(0, Math.round(xAxisLabelIntervalRaw))
+            : autoXAxisLabelInterval;
         const visualAutoPadding = {
-            left: 12 + (legendPosition === 'left' ? (legendOrient === 'vertical' ? 90 : 50) : 0),
-            right: 12 + (legendPosition === 'right' ? (legendOrient === 'vertical' ? 90 : 50) : 0),
-            top: 12 + (hasTitle ? 28 : 0) + (legendPosition === 'top' ? (legendOrient === 'vertical' ? 52 : 32) : 0),
-            bottom: 12 + (legendPosition === 'bottom' ? (legendOrient === 'vertical' ? 52 : 32) : 0),
+            left: 12 + (legendPosition === 'left' ? visualLegendReserve : 0),
+            right: 12 + (legendPosition === 'right' ? visualLegendReserve : 0),
+            top: 12 + (hasTitle ? 28 : 0) + (legendPosition === 'top' ? visualLegendReserve : 0),
+            bottom: 12 + (legendPosition === 'bottom' ? visualLegendReserve : 0),
         };
         const visualPadding = {
             left: readPaddingOverride('chartPaddingLeft') ?? visualAutoPadding.left,
@@ -1341,9 +1071,189 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
             top: readPaddingOverride('chartPaddingTop') ?? visualAutoPadding.top,
             bottom: readPaddingOverride('chartPaddingBottom') ?? visualAutoPadding.bottom,
         };
-        const chartOffsetX = toNumber(c.chartOffsetX, 0, -Math.max(40, Math.round(width * 0.45)), Math.max(40, Math.round(width * 0.45)));
-        const chartOffsetY = toNumber(c.chartOffsetY, 0, -Math.max(40, Math.round(height * 0.45)), Math.max(40, Math.round(height * 0.45)));
-        const chartScale = toNumber(c.chartScalePercent, 100, 40, 180) / 100;
+        const chartScalePercentRaw = Number(c.chartScalePercent);
+        const chartScalePercent = Number.isFinite(chartScalePercentRaw)
+            ? toNumber(c.chartScalePercent, 100, 40, 180)
+            : (isCompactCanvas ? (isTinyCanvas ? 82 : 90) : 100);
+        const chartScale = chartScalePercent / 100;
+        const seriesLabelPositionRaw = String(c.seriesLabelPosition ?? 'auto').trim().toLowerCase();
+        const seriesLabelPosition = seriesLabelPositionRaw === 'inside'
+            || seriesLabelPositionRaw === 'outside'
+            || seriesLabelPositionRaw === 'none'
+            ? seriesLabelPositionRaw
+            : 'auto';
+        const seriesLabelFontSize = toNumber(c.seriesLabelFontSize, 12, 10, 28);
+        const seriesLabelMinAngleRaw = Number(c.seriesLabelMinAngle);
+        const seriesLabelMinAngle = Number.isFinite(seriesLabelMinAngleRaw) && seriesLabelMinAngleRaw > 0
+            ? toNumber(c.seriesLabelMinAngle, 2, 1, 45)
+            : (isTinyCanvas ? 8 : 2);
+        const seriesLabelLineLengthRaw = Number(c.seriesLabelLineLength);
+        const seriesLabelLineLength2Raw = Number(c.seriesLabelLineLength2);
+        const seriesLabelLineLength = Number.isFinite(seriesLabelLineLengthRaw) && seriesLabelLineLengthRaw > 0
+            ? toNumber(c.seriesLabelLineLength, 12, 4, 60)
+            : (isTinyCanvas ? 8 : 15);
+        const seriesLabelLineLength2 = Number.isFinite(seriesLabelLineLength2Raw) && seriesLabelLineLength2Raw > 0
+            ? toNumber(c.seriesLabelLineLength2, 8, 3, 60)
+            : (isTinyCanvas ? 5 : 10);
+        const axisSeries = Array.isArray(c.series)
+            ? (c.series as Array<Record<string, unknown>>)
+            : [];
+        const axisSeriesCount = axisSeries.length;
+        const axisSeriesPointCount = axisSeries.reduce((sum, item) => {
+            const data = item?.data;
+            return sum + (Array.isArray(data) ? data.length : 0);
+        }, 0);
+        const axisSeriesDensity = xAxisCategoryCount * Math.max(axisSeriesCount, 1);
+        const axisSeriesLabelAutoHide = isCompactCanvas
+            ? axisSeriesDensity > (isTinyCanvas ? 18 : 28)
+            : axisSeriesDensity > 40;
+        const axisSeriesLabelStrategyRaw = String(c.axisSeriesLabelStrategy ?? 'auto').trim().toLowerCase();
+        const axisSeriesLabelStrategy = axisSeriesLabelStrategyRaw === 'all'
+            || axisSeriesLabelStrategyRaw === 'first'
+            || axisSeriesLabelStrategyRaw === 'none'
+            ? axisSeriesLabelStrategyRaw
+            : 'auto';
+        const resolvedAxisSeriesLabelStrategy = (() => {
+            if (axisSeriesLabelStrategy !== 'auto') {
+                return axisSeriesLabelStrategy;
+            }
+            if (seriesLabelPosition === 'none' || axisSeriesLabelAutoHide) {
+                return 'none';
+            }
+            if (isTinyCanvas) {
+                return axisSeriesCount > 1 ? 'first' : 'all';
+            }
+            if (axisSeriesCount >= 3 || axisSeriesDensity > 30) {
+                return 'first';
+            }
+            return 'all';
+        })();
+        const axisSeriesLabelShow = resolvedAxisSeriesLabelStrategy !== 'none';
+        const axisSeriesLabelStepRaw = Number(c.axisSeriesLabelStep);
+        const autoAxisSeriesLabelStep = (() => {
+            if (xAxisCategoryCount <= 0) return 1;
+            const baseTarget = isTinyCanvas ? 5 : (isCompactCanvas ? 8 : 12);
+            const target = resolvedAxisSeriesLabelStrategy === 'all'
+                ? baseTarget
+                : Math.max(4, Math.round(baseTarget * 0.8));
+            const step = Math.ceil(xAxisCategoryCount / Math.max(1, target));
+            return Math.max(1, step);
+        })();
+        const axisSeriesLabelStep = Number.isFinite(axisSeriesLabelStepRaw) && axisSeriesLabelStepRaw > 0
+            ? Math.max(1, Math.round(axisSeriesLabelStepRaw))
+            : autoAxisSeriesLabelStep;
+        const axisLineLabelPosition = seriesLabelPosition === 'inside' ? 'inside' : 'top';
+        const axisBarLabelPosition = seriesLabelPosition === 'inside' ? 'insideTop' : 'top';
+        const axisBarLabelColor = axisBarLabelPosition === 'insideTop' ? '#ffffff' : t.textPrimary;
+        const formatMeasureValue = (raw: unknown): string => {
+            const parsed = Number(raw);
+            if (Number.isFinite(parsed)) {
+                if (Number.isInteger(parsed)) {
+                    return parsed.toLocaleString('zh-CN');
+                }
+                return parsed.toLocaleString('zh-CN', { maximumFractionDigits: 2 });
+            }
+            return String(raw ?? '');
+        };
+        const resolveAxisPointValue = (raw: unknown): unknown => {
+            if (Array.isArray(raw)) {
+                for (let i = raw.length - 1; i >= 0; i -= 1) {
+                    const item = raw[i];
+                    if (item !== null && item !== undefined && item !== '') {
+                        return item;
+                    }
+                }
+                return '';
+            }
+            if (raw && typeof raw === 'object') {
+                const row = raw as Record<string, unknown>;
+                if ('value' in row) {
+                    return resolveAxisPointValue(row.value);
+                }
+            }
+            return raw;
+        };
+        const axisSeriesLabelFormatter = (raw: unknown) => {
+            const row = raw && typeof raw === 'object'
+                ? (raw as Record<string, unknown>)
+                : null;
+            const dataIndexRaw = Number(row?.dataIndex);
+            if (axisSeriesLabelStep > 1 && Number.isFinite(dataIndexRaw) && dataIndexRaw >= 0) {
+                const dataIndex = Math.round(dataIndexRaw);
+                if (dataIndex % axisSeriesLabelStep !== 0) {
+                    return '';
+                }
+            }
+            const value = resolveAxisPointValue(row?.value ?? raw);
+            return formatMeasureValue(value);
+        };
+        const axisTooltipMaxRowsRaw = Number(c.axisTooltipMaxRows);
+        const axisTooltipMaxRows = Number.isFinite(axisTooltipMaxRowsRaw) && axisTooltipMaxRowsRaw > 0
+            ? Math.min(50, Math.max(1, Math.round(axisTooltipMaxRowsRaw)))
+            : (isTinyCanvas ? 4 : (isCompactCanvas ? 6 : 10));
+        const axisTooltipFormatter = (raw: unknown) => {
+            const rows = Array.isArray(raw)
+                ? raw as Array<Record<string, unknown>>
+                : [raw as Record<string, unknown>];
+            if (rows.length === 0) {
+                return '';
+            }
+            const first = rows[0] ?? {};
+            const axisTitle = String(first.axisValueLabel ?? first.axisValue ?? first.name ?? '').trim();
+            const lines = [axisTitle];
+            const withPriority = rows.map((row, index) => {
+                const value = resolveAxisPointValue(row.value ?? row.data);
+                const numeric = Number(value);
+                return {
+                    row,
+                    index,
+                    value,
+                    weight: Number.isFinite(numeric) ? Math.abs(numeric) : -1,
+                };
+            });
+            const limitedRows = withPriority.length > axisTooltipMaxRows
+                ? [...withPriority]
+                    .sort((a, b) => (b.weight - a.weight) || (a.index - b.index))
+                    .slice(0, axisTooltipMaxRows)
+                    .sort((a, b) => a.index - b.index)
+                : withPriority;
+            for (const item of limitedRows) {
+                const row = item.row;
+                const marker = typeof row.marker === 'string' ? row.marker : '';
+                const seriesName = String(row.seriesName ?? '').trim() || '系列';
+                lines.push(`${marker}${seriesName}: ${formatMeasureValue(item.value)}`);
+            }
+            const hidden = rows.length - limitedRows.length;
+            if (hidden > 0) {
+                lines.push(`... 其余 ${hidden} 项`);
+            }
+            return lines.join('<br/>');
+        };
+        const seriesDataCount = Array.isArray(c.data) ? c.data.length : 0;
+        const forceInsideForTiny = isTinyCanvas && seriesDataCount >= 6 && seriesLabelPosition === 'auto';
+        const pieLabelPosition = forceInsideForTiny
+            ? 'inside'
+            : (seriesLabelPosition === 'auto'
+                ? 'outside'
+                : (seriesLabelPosition === 'outside' ? 'outside' : 'inside'));
+        const funnelLabelPosition = forceInsideForTiny
+            ? 'inside'
+            : (seriesLabelPosition === 'outside' ? 'right' : 'inside');
+        const pieLabelShow = seriesLabelPosition !== 'none' && !(isTinyCanvas && seriesDataCount >= 10);
+        const funnelLabelShow = seriesLabelPosition !== 'none' && !(isTinyCanvas && seriesDataCount >= 9);
+        const chartDataPointCount = (() => {
+            if (axisSeriesCount > 0) {
+                return axisSeriesPointCount;
+            }
+            if (Array.isArray(c.data)) {
+                return c.data.length;
+            }
+            return 0;
+        })();
+        const disableChartAnimation = isTinyCanvas || chartDataPointCount > 2000;
+        const chartMotionOption = disableChartAnimation
+            ? { animation: false, animationDuration: 0, animationDurationUpdate: 0 }
+            : {};
         const plotWidth = Math.max(40, width - visualPadding.left - visualPadding.right);
         const plotHeight = Math.max(40, height - visualPadding.top - visualPadding.bottom);
         const plotCenterX = visualPadding.left + (plotWidth / 2) + chartOffsetX;
@@ -1355,6 +1265,21 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
         const funnelRight = Math.max(0, visualPadding.right - chartOffsetX);
         const funnelTop = Math.max(0, visualPadding.top + chartOffsetY);
         const funnelBottom = Math.max(0, visualPadding.bottom - chartOffsetY);
+        const chartDragHandleStyle = chartDragEnabled ? {
+            position: 'absolute' as const,
+            left: Math.max(2, Math.min(width - 14, Math.round(plotCenterX) - 6)),
+            top: Math.max(2, Math.min(height - 14, Math.round(plotCenterY) - 6)),
+            width: 12,
+            height: 12,
+            borderRadius: 3,
+            border: `1px solid ${t.textPrimary}`,
+            background: t.echarts.colorPalette?.[1] || t.accentColor,
+            boxShadow: '0 1px 4px rgba(0,0,0,0.35)',
+            cursor: 'move',
+            zIndex: 20,
+            opacity: 0.92,
+            padding: 0,
+        } : null;
         const dependencyPlaceholder = (label: string) => (
             <div style={{
                 width: '100%',
@@ -1384,227 +1309,620 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
         const ScrollRankingBoard = dataViewModule?.ScrollRankingBoard;
         const WaterLevelPond = dataViewModule?.WaterLevelPond;
         const DigitalFlop = dataViewModule?.DigitalFlop;
+        const renderEChartWithHandles = (
+            option: Record<string, unknown>,
+            onEvents?: Record<string, (params: Record<string, unknown>) => void>,
+        ) => {
+            // Inject markLine / markArea / conditionalColors from config
+            const annotatedOption = injectChartAnnotations(option, c);
+            const chartNode = (
+                <EChart
+                    style={{ width: '100%', height: '100%' }}
+                    option={annotatedOption}
+                    onEvents={onEvents}
+                />
+            );
+            const showLegendHandle = legendDragEnabled && !!legendDragHandleStyle;
+            const showChartHandle = chartDragEnabled && !!chartDragHandleStyle;
+            if (!showLegendHandle && !showChartHandle) {
+                return chartNode;
+            }
+            const handleLegendHandleMouseDown = (event: ReactMouseEvent<HTMLButtonElement>) => {
+                event.preventDefault();
+                event.stopPropagation();
+                clearLegendDragHandlers();
+                clearChartDragHandlers();
+                const startClientX = event.clientX;
+                const startClientY = event.clientY;
+                const startOffsetX = legendOffsetX;
+                const startOffsetY = legendOffsetY;
+                let lastOffsetX = startOffsetX;
+                let lastOffsetY = startOffsetY;
+                const clampX = (value: number) => Math.round(Math.min(legendOffsetBoundX, Math.max(-legendOffsetBoundX, value)));
+                const clampY = (value: number) => Math.round(Math.min(legendOffsetBoundY, Math.max(-legendOffsetBoundY, value)));
+                const move = (moveEvent: MouseEvent) => {
+                    const deltaX = moveEvent.clientX - startClientX;
+                    const deltaY = moveEvent.clientY - startClientY;
+                    lastOffsetX = clampX(startOffsetX + deltaX);
+                    lastOffsetY = clampY(startOffsetY + deltaY);
+                    setLegendDragPreview({ x: lastOffsetX, y: lastOffsetY });
+                };
+                const up = () => {
+                    clearLegendDragHandlers();
+                    setLegendDragPreview(null);
+                    if ((lastOffsetX !== startOffsetX || lastOffsetY !== startOffsetY) && onConfigMetaRef.current) {
+                        onConfigMetaRef.current({
+                            legendOffsetX: lastOffsetX,
+                            legendOffsetY: lastOffsetY,
+                            legendDragEnabled: true,
+                        });
+                    }
+                };
+                legendDragHandlersRef.current = { move, up };
+                window.addEventListener('mousemove', move);
+                window.addEventListener('mouseup', up);
+            };
+            const handleChartHandleMouseDown = (event: ReactMouseEvent<HTMLButtonElement>) => {
+                event.preventDefault();
+                event.stopPropagation();
+                clearLegendDragHandlers();
+                clearChartDragHandlers();
+                const startClientX = event.clientX;
+                const startClientY = event.clientY;
+                const startOffsetX = chartOffsetX;
+                const startOffsetY = chartOffsetY;
+                let lastOffsetX = startOffsetX;
+                let lastOffsetY = startOffsetY;
+                const clampX = (value: number) => Math.round(Math.min(chartOffsetBoundX, Math.max(-chartOffsetBoundX, value)));
+                const clampY = (value: number) => Math.round(Math.min(chartOffsetBoundY, Math.max(-chartOffsetBoundY, value)));
+                const move = (moveEvent: MouseEvent) => {
+                    const deltaX = moveEvent.clientX - startClientX;
+                    const deltaY = moveEvent.clientY - startClientY;
+                    lastOffsetX = clampX(startOffsetX + deltaX);
+                    lastOffsetY = clampY(startOffsetY + deltaY);
+                    setChartDragPreview({ x: lastOffsetX, y: lastOffsetY });
+                };
+                const up = () => {
+                    clearChartDragHandlers();
+                    setChartDragPreview(null);
+                    if ((lastOffsetX !== startOffsetX || lastOffsetY !== startOffsetY) && onConfigMetaRef.current) {
+                        onConfigMetaRef.current({
+                            chartOffsetX: lastOffsetX,
+                            chartOffsetY: lastOffsetY,
+                            chartDragEnabled: true,
+                        });
+                    }
+                };
+                chartDragHandlersRef.current = { move, up };
+                window.addEventListener('mousemove', move);
+                window.addEventListener('mouseup', up);
+            };
+            return (
+                <div style={{ width: '100%', height: '100%', position: 'relative' }}>
+                    {chartNode}
+                    {showLegendHandle ? (
+                        <button
+                            type="button"
+                            style={legendDragHandleStyle!}
+                            onMouseDown={handleLegendHandleMouseDown}
+                            title="拖拽微调图例位置"
+                        />
+                    ) : null}
+                    {showChartHandle ? (
+                        <button
+                            type="button"
+                            style={chartDragHandleStyle!}
+                            onMouseDown={handleChartHandleMouseDown}
+                            title="拖拽微调图形位置"
+                        />
+                    ) : null}
+                </div>
+            );
+        };
 
         switch (type) {
             // ==================== ECharts 图表 ====================
             case 'line-chart':
-                return (
-                    <EChart
-                        style={{ width: '100%', height: '100%' }}
-                        option={{
-                            ...themeOptions,
-                            title: { text: c.title as string, textStyle: { color: t.textPrimary, fontSize: (c.titleFontSize as number) || 14 } },
-                            legend: legendConfig,
-                            xAxis: {
-                                type: 'category',
-                                data: c.xAxisData as string[],
-                                axisLine: { lineStyle: { color: t.echarts.axisLineColor } },
-                                axisLabel: { color: t.echarts.axisLabelColor, fontSize: axisFontSize },
+                return renderEChartWithHandles({
+                    ...themeOptions,
+                    ...chartMotionOption,
+                    title: { text: c.title as string, textStyle: { color: t.textPrimary, fontSize: (c.titleFontSize as number) || 14 } },
+                    legend: legendConfig,
+                    tooltip: {
+                        ...themeOptions.tooltip,
+                        trigger: 'axis',
+                        confine: true,
+                        axisPointer: { type: 'line' },
+                        formatter: axisTooltipFormatter,
+                    },
+                    xAxis: {
+                        type: 'category',
+                        data: c.xAxisData as string[],
+                        axisLine: { lineStyle: { color: t.echarts.axisLineColor } },
+                        axisLabel: {
+                            color: t.echarts.axisLabelColor,
+                            fontSize: axisFontSize,
+                            rotate: xAxisLabelRotate,
+                            hideOverlap: true,
+                            formatter: formatXAxisLabel,
+                            interval: xAxisLabelInterval,
+                        },
+                    },
+                    yAxis: {
+                        type: 'value',
+                        axisLine: { lineStyle: { color: t.echarts.axisLineColor } },
+                        axisLabel: { color: t.echarts.axisLabelColor, fontSize: axisFontSize },
+                        splitLine: { lineStyle: { color: t.echarts.splitLineColor } },
+                    },
+                    series: (c.series as Array<{ name: string; data: number[] }>).map((s, idx) => {
+                        const lineStackMode = String(c.stackMode ?? 'off');
+                        const stackGroup = lineStackMode !== 'off' ? 'stack' : undefined;
+                        return {
+                            name: s.name,
+                            type: 'line' as const,
+                            data: s.data,
+                            smooth: true,
+                            stack: stackGroup,
+                            showSymbol: !isCompactCanvas || xAxisCategoryCount <= 24,
+                            label: {
+                                show: axisSeriesLabelShow && (resolvedAxisSeriesLabelStrategy === 'all' || idx === 0),
+                                position: axisLineLabelPosition,
+                                color: t.textPrimary,
+                                fontSize: seriesLabelFontSize,
+                                distance: isTinyCanvas ? 2 : 6,
+                                formatter: axisSeriesLabelFormatter,
                             },
-                            yAxis: {
-                                type: 'value',
-                                axisLine: { lineStyle: { color: t.echarts.axisLineColor } },
-                                axisLabel: { color: t.echarts.axisLabelColor, fontSize: axisFontSize },
-                                splitLine: { lineStyle: { color: t.echarts.splitLineColor } },
+                            labelLayout: {
+                                hideOverlap: true,
+                                moveOverlap: 'shiftY',
                             },
-                            series: (c.series as Array<{ name: string; data: number[] }>).map((s, idx) => ({
-                                name: s.name,
-                                type: 'line',
-                                data: s.data,
-                                smooth: true,
-                                areaStyle: {
-                                    opacity: 0.3,
-                                    ...(seriesColors[idx] ? { color: seriesColors[idx] } : {}),
-                                },
-                                ...(seriesColors[idx]
-                                    ? { lineStyle: { color: seriesColors[idx] }, itemStyle: { color: seriesColors[idx] } }
-                                    : {}),
-                            })),
-                            grid: axisGrid,
-                        }}
-                        onEvents={echartsClickHandler}
-                    />
-                );
+                            areaStyle: {
+                                opacity: stackGroup ? 0.6 : 0.3,
+                                ...(seriesColors[idx] ? { color: seriesColors[idx] } : {}),
+                            },
+                            ...(seriesColors[idx]
+                                ? { lineStyle: { color: seriesColors[idx] }, itemStyle: { color: seriesColors[idx] } }
+                                : {}),
+                        };
+                    }),
+                    grid: axisGrid,
+                }, echartsClickHandler);
 
-            case 'bar-chart':
-                return (
-                    <EChart
-                        style={{ width: '100%', height: '100%' }}
-                        option={{
-                            ...themeOptions,
-                            title: { text: c.title as string, textStyle: { color: t.textPrimary, fontSize: (c.titleFontSize as number) || 14 } },
-                            legend: legendConfig,
-                            xAxis: {
-                                type: 'category',
-                                data: c.xAxisData as string[],
-                                axisLine: { lineStyle: { color: t.echarts.axisLineColor } },
-                                axisLabel: { color: t.echarts.axisLabelColor, fontSize: axisFontSize },
-                            },
-                            yAxis: {
-                                type: 'value',
-                                axisLine: { lineStyle: { color: t.echarts.axisLineColor } },
-                                axisLabel: { color: t.echarts.axisLabelColor, fontSize: axisFontSize },
-                                splitLine: { lineStyle: { color: t.echarts.splitLineColor } },
-                            },
-                            series: (c.series as Array<{ name: string; data: number[] }>).map((s, idx) => ({
-                                name: s.name,
-                                type: 'bar',
-                                data: s.data,
-                                itemStyle: {
-                                    borderRadius: [4, 4, 0, 0],
-                                    color: seriesColors[idx]
-                                        ? seriesColors[idx]
-                                        : {
-                                            type: 'linear',
-                                            x: 0, y: 0, x2: 0, y2: 1,
-                                            colorStops: [
-                                                { offset: 0, color: t.barGradient[0] },
-                                                { offset: 1, color: t.barGradient[1] },
-                                            ],
-                                        },
+            case 'bar-chart': {
+                const barHorizontal = Boolean(c.horizontal);
+                const barStackMode = String(c.stackMode ?? 'off');
+                const barStackGroup = barStackMode !== 'off' ? 'stack' : undefined;
+                const categoryAxisConfig = {
+                    type: 'category' as const,
+                    data: c.xAxisData as string[],
+                    axisLine: { lineStyle: { color: t.echarts.axisLineColor } },
+                    axisLabel: {
+                        color: t.echarts.axisLabelColor,
+                        fontSize: axisFontSize,
+                        rotate: barHorizontal ? 0 : xAxisLabelRotate,
+                        hideOverlap: true,
+                        formatter: formatXAxisLabel,
+                        interval: xAxisLabelInterval,
+                    },
+                };
+                const valueAxisConfig = {
+                    type: 'value' as const,
+                    axisLine: { lineStyle: { color: t.echarts.axisLineColor } },
+                    axisLabel: { color: t.echarts.axisLabelColor, fontSize: axisFontSize },
+                    splitLine: { lineStyle: { color: t.echarts.splitLineColor } },
+                };
+                return renderEChartWithHandles({
+                    ...themeOptions,
+                    ...chartMotionOption,
+                    title: { text: c.title as string, textStyle: { color: t.textPrimary, fontSize: (c.titleFontSize as number) || 14 } },
+                    legend: legendConfig,
+                    tooltip: {
+                        ...themeOptions.tooltip,
+                        trigger: 'axis',
+                        confine: true,
+                        axisPointer: { type: 'shadow' },
+                        formatter: axisTooltipFormatter,
+                    },
+                    xAxis: barHorizontal ? valueAxisConfig : categoryAxisConfig,
+                    yAxis: barHorizontal ? categoryAxisConfig : valueAxisConfig,
+                    series: (c.series as Array<{ name: string; data: number[] }>).map((s, idx) => ({
+                        name: s.name,
+                        type: 'bar',
+                        data: s.data,
+                        stack: barStackGroup,
+                        label: {
+                            show: axisSeriesLabelShow && (resolvedAxisSeriesLabelStrategy === 'all' || idx === 0),
+                            position: barHorizontal ? 'right' : axisBarLabelPosition,
+                            color: axisBarLabelColor,
+                            fontSize: seriesLabelFontSize,
+                            distance: isTinyCanvas ? 2 : 6,
+                            formatter: axisSeriesLabelFormatter,
+                        },
+                        labelLayout: {
+                            hideOverlap: true,
+                        },
+                        itemStyle: {
+                            borderRadius: barHorizontal ? [0, 4, 4, 0] : [4, 4, 0, 0],
+                            color: seriesColors[idx]
+                                ? seriesColors[idx]
+                                : {
+                                    type: 'linear',
+                                    x: 0, y: 0, x2: barHorizontal ? 1 : 0, y2: barHorizontal ? 0 : 1,
+                                    colorStops: [
+                                        { offset: 0, color: t.barGradient[0] },
+                                        { offset: 1, color: t.barGradient[1] },
+                                    ],
                                 },
-                            })),
-                            grid: axisGrid,
-                        }}
-                        onEvents={echartsClickHandler}
-                    />
-                );
+                        },
+                    })),
+                    grid: axisGrid,
+                }, echartsClickHandler);
+            }
 
             case 'pie-chart':
-                return (
-                    <EChart
-                        style={{ width: '100%', height: '100%' }}
-                        option={{
-                            ...themeOptions,
-                            ...(seriesColors.length > 0 ? { color: seriesColors } : {}),
-                            title: { text: c.title as string, textStyle: { color: t.textPrimary, fontSize: (c.titleFontSize as number) || 14 }, left: 'center' },
-                            legend: legendConfig,
-                            tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
-                            series: [{
-                                type: 'pie',
-                                center: [plotCenterX, plotCenterY],
-                                radius: [pieInnerRadius, pieOuterRadius],
-                                avoidLabelOverlap: true,
-                                label: {
-                                    show: true,
-                                    color: t.pieLabelColor,
-                                    fontSize: 12,
-                                    formatter: '{b}: {d}%',
-                                },
-                                data: c.data as Array<{ name: string; value: number }>,
-                            }],
-                        }}
-                        onEvents={echartsClickHandler}
-                    />
-                );
+                return renderEChartWithHandles({
+                    ...themeOptions,
+                    ...chartMotionOption,
+                    ...(seriesColors.length > 0 ? { color: seriesColors } : {}),
+                    title: { text: c.title as string, textStyle: { color: t.textPrimary, fontSize: (c.titleFontSize as number) || 14 }, left: 'center' },
+                    legend: legendConfig,
+                    tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
+                    series: [{
+                        type: 'pie',
+                        center: [plotCenterX, plotCenterY],
+                        radius: [pieInnerRadius, pieOuterRadius],
+                        avoidLabelOverlap: true,
+                        label: {
+                            show: pieLabelShow,
+                            position: pieLabelPosition,
+                            color: t.pieLabelColor,
+                            fontSize: seriesLabelFontSize,
+                            formatter: pieLabelPosition === 'inside' ? '{d}%' : '{b}: {d}%',
+                        },
+                        labelLine: {
+                            show: pieLabelShow && pieLabelPosition !== 'inside',
+                            length: seriesLabelLineLength,
+                            length2: seriesLabelLineLength2,
+                        },
+                        minShowLabelAngle: seriesLabelMinAngle,
+                        labelLayout: pieLabelPosition === 'inside'
+                            ? { hideOverlap: true }
+                            : { hideOverlap: true, moveOverlap: 'shiftY' },
+                        data: c.data as Array<{ name: string; value: number }>,
+                    }],
+                }, echartsClickHandler);
 
             case 'gauge-chart':
-                return (
-                    <EChart
-                        style={{ width: '100%', height: '100%' }}
-                        option={{
-                            ...themeOptions,
-                            series: [{
-                                type: 'gauge',
-                                min: c.min as number,
-                                max: c.max as number,
-                                progress: { show: true, width: 18 },
-                                axisLine: { lineStyle: { width: 18, color: [[1, t.gauge.axisLineColor]] } },
-                                axisTick: { show: false },
-                                splitLine: { length: 10, lineStyle: { width: 2, color: t.gauge.splitLineColor } },
-                                axisLabel: { distance: 25, color: t.gauge.axisLabelColor, fontSize: 12 },
-                                pointer: { icon: 'path://M12.8,0.7l12,40.1H0.7L12.8,0.7z', length: '12%', width: 10, itemStyle: { color: 'auto' } },
-                                anchor: { show: true, showAbove: true, size: 18, itemStyle: { borderWidth: 6 } },
-                                title: { show: true, offsetCenter: [0, '70%'], fontSize: (c.titleFontSize as number) || 14, color: t.gauge.titleColor },
-                                detail: { valueAnimation: true, fontSize: 28, offsetCenter: [0, '45%'], color: t.gauge.detailColor, formatter: '{value}%' },
-                                data: [{ value: c.value as number, name: c.title as string }],
-                            }],
-                        }}
-                    />
-                );
+                return renderEChartWithHandles({
+                    ...themeOptions,
+                    ...chartMotionOption,
+                    series: [{
+                        type: 'gauge',
+                        min: c.min as number,
+                        max: c.max as number,
+                        progress: { show: true, width: 18 },
+                        axisLine: { lineStyle: { width: 18, color: [[1, t.gauge.axisLineColor]] } },
+                        axisTick: { show: false },
+                        splitLine: { length: 10, lineStyle: { width: 2, color: t.gauge.splitLineColor } },
+                        axisLabel: { distance: 25, color: t.gauge.axisLabelColor, fontSize: 12 },
+                        pointer: { icon: 'path://M12.8,0.7l12,40.1H0.7L12.8,0.7z', length: '12%', width: 10, itemStyle: { color: 'auto' } },
+                        anchor: { show: true, showAbove: true, size: 18, itemStyle: { borderWidth: 6 } },
+                        title: { show: true, offsetCenter: [0, '70%'], fontSize: (c.titleFontSize as number) || 14, color: t.gauge.titleColor },
+                        detail: { valueAnimation: true, fontSize: 28, offsetCenter: [0, '45%'], color: t.gauge.detailColor, formatter: '{value}%' },
+                        data: [{ value: c.value as number, name: c.title as string }],
+                    }],
+                });
 
             case 'radar-chart':
-                return (
-                    <EChart
-                        style={{ width: '100%', height: '100%' }}
-                        option={{
-                            ...themeOptions,
-                            ...(seriesColors.length > 0 ? { color: seriesColors } : {}),
-                            title: { text: c.title as string, textStyle: { color: t.textPrimary, fontSize: (c.titleFontSize as number) || 14 }, left: 'center' },
-                            legend: legendConfig,
-                            radar: {
-                                indicator: c.indicator as Array<{ name: string; max: number }>,
-                                center: [plotCenterX, plotCenterY],
-                                radius: radarRadius,
-                                axisName: { color: t.radar.axisNameColor },
-                                splitLine: { lineStyle: { color: t.radar.splitLineColor } },
-                                splitArea: { areaStyle: { color: ['transparent'] } },
-                            },
-                            series: [{
-                                type: 'radar',
-                                data: [{ value: c.data as number[], areaStyle: { opacity: 0.3 } }],
-                            }],
-                        }}
-                        onEvents={echartsClickHandler}
-                    />
-                );
+                return renderEChartWithHandles({
+                    ...themeOptions,
+                    ...chartMotionOption,
+                    ...(seriesColors.length > 0 ? { color: seriesColors } : {}),
+                    title: { text: c.title as string, textStyle: { color: t.textPrimary, fontSize: (c.titleFontSize as number) || 14 }, left: 'center' },
+                    legend: legendConfig,
+                    radar: {
+                        indicator: c.indicator as Array<{ name: string; max: number }>,
+                        center: [plotCenterX, plotCenterY],
+                        radius: radarRadius,
+                        axisName: { color: t.radar.axisNameColor },
+                        splitLine: { lineStyle: { color: t.radar.splitLineColor } },
+                        splitArea: { areaStyle: { color: ['transparent'] } },
+                    },
+                    series: [{
+                        type: 'radar',
+                        data: [{ value: c.data as number[], areaStyle: { opacity: 0.3 } }],
+                    }],
+                }, echartsClickHandler);
 
             case 'funnel-chart':
-                return (
-                    <EChart
-                        style={{ width: '100%', height: '100%' }}
-                        option={{
-                            ...themeOptions,
-                            ...(seriesColors.length > 0 ? { color: seriesColors } : {}),
-                            title: { text: c.title as string, textStyle: { color: t.textPrimary, fontSize: (c.titleFontSize as number) || 14 }, left: 'center' },
-                            legend: legendConfig,
-                            series: [{
-                                type: 'funnel',
-                                left: funnelLeft,
-                                right: funnelRight,
-                                top: funnelTop,
-                                bottom: funnelBottom,
-                                min: 0,
-                                max: 100,
-                                sort: 'descending',
-                                gap: 2,
-                                label: { show: true, position: 'inside', color: t.funnelLabelColor },
-                                data: c.data as Array<{ name: string; value: number }>,
-                            }],
-                        }}
-                        onEvents={echartsClickHandler}
-                    />
-                );
+                return renderEChartWithHandles({
+                    ...themeOptions,
+                    ...chartMotionOption,
+                    ...(seriesColors.length > 0 ? { color: seriesColors } : {}),
+                    title: { text: c.title as string, textStyle: { color: t.textPrimary, fontSize: (c.titleFontSize as number) || 14 }, left: 'center' },
+                    legend: legendConfig,
+                    series: [{
+                        type: 'funnel',
+                        left: funnelLeft,
+                        right: funnelRight,
+                        top: funnelTop,
+                        bottom: funnelBottom,
+                        min: 0,
+                        max: 100,
+                        sort: 'descending',
+                        gap: 2,
+                        label: {
+                            show: funnelLabelShow,
+                            position: funnelLabelPosition,
+                            color: t.funnelLabelColor,
+                            fontSize: seriesLabelFontSize,
+                            formatter: funnelLabelPosition === 'right' ? '{b}: {c}' : '{b}',
+                        },
+                        labelLine: {
+                            show: funnelLabelShow && funnelLabelPosition === 'right',
+                            length: seriesLabelLineLength,
+                            length2: seriesLabelLineLength2,
+                        },
+                        data: c.data as Array<{ name: string; value: number }>,
+                    }],
+                }, echartsClickHandler);
 
             case 'scatter-chart':
-                return (
-                    <EChart
-                        style={{ width: '100%', height: '100%' }}
-                        option={{
-                            ...themeOptions,
-                            title: { text: c.title as string, textStyle: { color: t.textPrimary, fontSize: (c.titleFontSize as number) || 14 } },
-                            legend: legendConfig,
-                            xAxis: {
-                                axisLine: { lineStyle: { color: t.echarts.axisLineColor } },
-                                axisLabel: { color: t.echarts.axisLabelColor, fontSize: axisFontSize },
-                                splitLine: { lineStyle: { color: t.echarts.splitLineColor } },
+                return renderEChartWithHandles({
+                    ...themeOptions,
+                    ...chartMotionOption,
+                    title: { text: c.title as string, textStyle: { color: t.textPrimary, fontSize: (c.titleFontSize as number) || 14 } },
+                    legend: legendConfig,
+                    xAxis: {
+                        axisLine: { lineStyle: { color: t.echarts.axisLineColor } },
+                        axisLabel: { color: t.echarts.axisLabelColor, fontSize: axisFontSize },
+                        splitLine: { lineStyle: { color: t.echarts.splitLineColor } },
+                    },
+                    yAxis: {
+                        axisLine: { lineStyle: { color: t.echarts.axisLineColor } },
+                        axisLabel: { color: t.echarts.axisLabelColor, fontSize: axisFontSize },
+                        splitLine: { lineStyle: { color: t.echarts.splitLineColor } },
+                    },
+                    series: [{
+                        type: 'scatter',
+                        data: c.data as number[][],
+                        symbolSize: 10,
+                        itemStyle: { color: seriesColors[0] || t.scatterColor },
+                    }],
+                    grid: axisGrid,
+                }, echartsClickHandler);
+
+            case 'combo-chart': {
+                const comboSeries = (c.series as Array<{ name: string; type: 'bar' | 'line'; yAxisIndex?: number; data: number[] }>) || [];
+                const comboYAxis = (c.yAxis as Array<{ name?: string; min?: number; max?: number }>) || [{}];
+                return renderEChartWithHandles({
+                    ...themeOptions,
+                    ...chartMotionOption,
+                    title: { text: c.title as string, textStyle: { color: t.textPrimary, fontSize: (c.titleFontSize as number) || 14 } },
+                    legend: legendConfig,
+                    tooltip: {
+                        ...themeOptions.tooltip,
+                        trigger: 'axis',
+                        confine: true,
+                        axisPointer: { type: 'cross' },
+                        formatter: axisTooltipFormatter,
+                    },
+                    xAxis: {
+                        type: 'category',
+                        data: c.xAxisData as string[],
+                        axisLine: { lineStyle: { color: t.echarts.axisLineColor } },
+                        axisLabel: {
+                            color: t.echarts.axisLabelColor,
+                            fontSize: axisFontSize,
+                            rotate: xAxisLabelRotate,
+                            hideOverlap: true,
+                            formatter: formatXAxisLabel,
+                            interval: xAxisLabelInterval,
+                        },
+                    },
+                    yAxis: comboYAxis.map((y, i) => ({
+                        type: 'value',
+                        name: y.name,
+                        nameTextStyle: { color: t.echarts.axisLabelColor, fontSize: axisFontSize },
+                        min: y.min,
+                        max: y.max,
+                        position: i === 0 ? 'left' : 'right',
+                        axisLine: { show: true, lineStyle: { color: t.echarts.axisLineColor } },
+                        axisLabel: { color: t.echarts.axisLabelColor, fontSize: axisFontSize },
+                        splitLine: { show: i === 0, lineStyle: { color: t.echarts.splitLineColor } },
+                    })),
+                    series: comboSeries.map((s, idx) => ({
+                        name: s.name,
+                        type: s.type || 'bar',
+                        yAxisIndex: s.yAxisIndex || 0,
+                        data: s.data,
+                        smooth: s.type === 'line',
+                        label: {
+                            show: axisSeriesLabelShow && (resolvedAxisSeriesLabelStrategy === 'all' || idx === 0),
+                            position: s.type === 'line' ? axisLineLabelPosition : axisBarLabelPosition,
+                            color: t.textPrimary,
+                            fontSize: seriesLabelFontSize,
+                        },
+                        labelLayout: { hideOverlap: true },
+                        ...(s.type === 'bar' ? {
+                            itemStyle: {
+                                borderRadius: [4, 4, 0, 0],
+                                color: seriesColors[idx] || {
+                                    type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
+                                    colorStops: [{ offset: 0, color: t.barGradient[0] }, { offset: 1, color: t.barGradient[1] }],
+                                },
                             },
-                            yAxis: {
-                                axisLine: { lineStyle: { color: t.echarts.axisLineColor } },
-                                axisLabel: { color: t.echarts.axisLabelColor, fontSize: axisFontSize },
-                                splitLine: { lineStyle: { color: t.echarts.splitLineColor } },
+                        } : {
+                            lineStyle: seriesColors[idx] ? { color: seriesColors[idx] } : {},
+                            itemStyle: seriesColors[idx] ? { color: seriesColors[idx] } : {},
+                            areaStyle: { opacity: 0.15, ...(seriesColors[idx] ? { color: seriesColors[idx] } : {}) },
+                        }),
+                    })),
+                    grid: axisGrid,
+                }, echartsClickHandler);
+            }
+
+            case 'treemap-chart':
+                return renderEChartWithHandles({
+                    ...themeOptions,
+                    ...chartMotionOption,
+                    title: { text: c.title as string, textStyle: { color: t.textPrimary, fontSize: (c.titleFontSize as number) || 14 } },
+                    tooltip: { formatter: '{b}: {c}' },
+                    series: [{
+                        type: 'treemap',
+                        data: c.data as Array<{ name: string; value?: number; children?: unknown[] }>,
+                        leafDepth: 1,
+                        roam: false,
+                        breadcrumb: { show: true, itemStyle: { textStyle: { color: t.textPrimary } } },
+                        label: { show: true, color: '#fff', fontSize: seriesLabelFontSize || 12 },
+                        upperLabel: { show: true, height: 20, color: '#fff', fontSize: 11 },
+                        levels: [
+                            { itemStyle: { borderColor: t.echarts.splitLineColor, borderWidth: 2, gapWidth: 2 } },
+                            { itemStyle: { borderColor: t.echarts.splitLineColor, borderWidth: 1, gapWidth: 1 }, upperLabel: { show: true } },
+                        ],
+                    }],
+                }, echartsClickHandler);
+
+            case 'sunburst-chart':
+                return renderEChartWithHandles({
+                    ...themeOptions,
+                    ...chartMotionOption,
+                    title: { text: c.title as string, textStyle: { color: t.textPrimary, fontSize: (c.titleFontSize as number) || 14 }, left: 'center' },
+                    tooltip: { trigger: 'item', formatter: '{b}: {c}' },
+                    series: [{
+                        type: 'sunburst',
+                        data: c.data as Array<{ name: string; value?: number; children?: unknown[] }>,
+                        radius: ['15%', '90%'],
+                        label: { show: true, color: t.textPrimary, fontSize: seriesLabelFontSize || 11, rotate: 'radial' },
+                        itemStyle: { borderWidth: 1, borderColor: t.echarts.splitLineColor },
+                        emphasis: { focus: 'ancestor' },
+                    }],
+                }, echartsClickHandler);
+
+            case 'wordcloud-chart':
+                return renderEChartWithHandles({
+                    ...themeOptions,
+                    title: { text: c.title as string, textStyle: { color: t.textPrimary, fontSize: (c.titleFontSize as number) || 14 } },
+                    tooltip: { show: true, formatter: '{b}: {c}' },
+                    series: [{
+                        type: 'wordCloud',
+                        shape: (c.shape as string) || 'circle',
+                        sizeRange: (c.fontSizeRange as [number, number]) || [14, 60],
+                        rotationRange: (c.rotationRange as [number, number]) || [-45, 45],
+                        rotationStep: 15,
+                        gridSize: 8,
+                        drawOutOfBound: false,
+                        textStyle: {
+                            fontFamily: 'sans-serif',
+                            color: () => t.echarts.colorPalette[Math.floor(Math.random() * t.echarts.colorPalette.length)],
+                        },
+                        data: (c.data as Array<{ name: string; value: number }>)?.map(d => ({
+                            name: d.name,
+                            value: d.value,
+                        })) || [],
+                    }],
+                });
+
+            case 'waterfall-chart': {
+                const waterfallData = (c.data as Array<{ name: string; value: number; isTotal?: boolean }>) || [];
+                const wfCategories = waterfallData.map(d => d.name);
+                let runningTotal = 0;
+                const transparentBars: number[] = [];
+                const positiveBars: (number | '-')[] = [];
+                const negativeBars: (number | '-')[] = [];
+                for (const item of waterfallData) {
+                    if (item.isTotal) {
+                        transparentBars.push(0);
+                        positiveBars.push(item.value >= 0 ? item.value : '-');
+                        negativeBars.push(item.value < 0 ? Math.abs(item.value) : '-');
+                        runningTotal = item.value;
+                    } else {
+                        if (item.value >= 0) {
+                            transparentBars.push(runningTotal);
+                            positiveBars.push(item.value);
+                            negativeBars.push('-');
+                        } else {
+                            transparentBars.push(runningTotal + item.value);
+                            positiveBars.push('-');
+                            negativeBars.push(Math.abs(item.value));
+                        }
+                        runningTotal += item.value;
+                    }
+                }
+                return renderEChartWithHandles({
+                    ...themeOptions,
+                    ...chartMotionOption,
+                    title: { text: c.title as string, textStyle: { color: t.textPrimary, fontSize: (c.titleFontSize as number) || 14 } },
+                    legend: { show: false },
+                    tooltip: {
+                        ...themeOptions.tooltip,
+                        trigger: 'axis',
+                        confine: true,
+                        axisPointer: { type: 'shadow' },
+                        formatter: (params: unknown) => {
+                            const items = params as Array<{ seriesName: string; value: unknown; dataIndex: number }>;
+                            const idx = items[0]?.dataIndex ?? 0;
+                            const d = waterfallData[idx];
+                            return d ? `${d.name}: ${d.value >= 0 ? '+' : ''}${d.value}` : '';
+                        },
+                    },
+                    xAxis: {
+                        type: 'category',
+                        data: wfCategories,
+                        axisLine: { lineStyle: { color: t.echarts.axisLineColor } },
+                        axisLabel: { color: t.echarts.axisLabelColor, fontSize: axisFontSize, rotate: xAxisLabelRotate },
+                    },
+                    yAxis: {
+                        type: 'value',
+                        axisLine: { lineStyle: { color: t.echarts.axisLineColor } },
+                        axisLabel: { color: t.echarts.axisLabelColor, fontSize: axisFontSize },
+                        splitLine: { lineStyle: { color: t.echarts.splitLineColor } },
+                    },
+                    series: [
+                        {
+                            name: '辅助',
+                            type: 'bar',
+                            stack: 'waterfall',
+                            data: transparentBars,
+                            itemStyle: { borderColor: 'transparent', color: 'transparent' },
+                            emphasis: { itemStyle: { borderColor: 'transparent', color: 'transparent' } },
+                        },
+                        {
+                            name: '增加',
+                            type: 'bar',
+                            stack: 'waterfall',
+                            data: positiveBars,
+                            itemStyle: { color: '#10b981', borderRadius: [4, 4, 0, 0] },
+                            label: {
+                                show: true,
+                                position: 'top',
+                                color: t.textPrimary,
+                                fontSize: seriesLabelFontSize,
+                                formatter: (p: { value: unknown }) => p.value === '-' ? '' : `+${p.value}`,
                             },
-                            series: [{
-                                type: 'scatter',
-                                data: c.data as number[][],
-                                symbolSize: 10,
-                                itemStyle: { color: seriesColors[0] || t.scatterColor },
-                            }],
-                            grid: axisGrid,
-                        }}
-                        onEvents={echartsClickHandler}
-                    />
-                );
+                        },
+                        {
+                            name: '减少',
+                            type: 'bar',
+                            stack: 'waterfall',
+                            data: negativeBars,
+                            itemStyle: { color: '#ef4444', borderRadius: [4, 4, 0, 0] },
+                            label: {
+                                show: true,
+                                position: 'bottom',
+                                color: t.textPrimary,
+                                fontSize: seriesLabelFontSize,
+                                formatter: (p: { value: unknown; dataIndex: number }) => {
+                                    if (p.value === '-') return '';
+                                    const d = waterfallData[p.dataIndex];
+                                    return d ? String(d.value) : '';
+                                },
+                            },
+                        },
+                    ],
+                    grid: axisGrid,
+                }, echartsClickHandler);
+            }
 
             case 'map-chart': {
                 const title = String(c.title ?? '区域地图');
@@ -1652,62 +1970,132 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                 };
 
                 if (usingGeoMap) {
+                    const mapMode = String(c.mapMode ?? 'region');
+                    const baseTitle = { text: title, textStyle: { color: t.textPrimary, fontSize: (c.titleFontSize as number) || 14 } };
+                    const mapClickHandler = (params: Record<string, unknown>) => {
+                        const regionName = String(params.name ?? '');
+                        const row = params.data && typeof params.data === 'object'
+                            ? (params.data as Record<string, unknown>)
+                            : undefined;
+                        const clickedCode = String(row?.code ?? row?.adcode ?? '').trim();
+                        const target = clickedCode
+                            ? regions.find((item) => resolveRegionCode(item) === clickedCode)
+                                || regions.find((item) => String(item.name ?? '') === regionName)
+                            : regions.find((item) => String(item.name ?? '') === regionName);
+                        if (canRegionDrill && target && getChildren(target).length > 0) {
+                            setMapDrillRegion(regionName);
+                        }
+                        const variableKey = String(c.regionVariableKey ?? '').trim();
+                        if (variableKey && regionName) {
+                            runtime.setVariable(variableKey, regionName, `map-chart:${component.id}`);
+                        }
+                        const code = resolveRegionCode(target);
+                        if (regionCodeVariableKey && code) {
+                            runtime.setVariable(regionCodeVariableKey, code, `map-chart:${component.id}`);
+                        }
+                    };
+
+                    // Build mapMode-specific ECharts options
+                    let mapOption: Record<string, unknown>;
+                    if (mapMode === 'bubble' || mapMode === 'scatter') {
+                        const scatterData = (c.scatterData as Array<{ name: string; value: [number, number, number] }>) || [];
+                        const sizeRange = (c.bubbleSizeRange as [number, number]) || (mapMode === 'scatter' ? [6, 6] : [8, 40]);
+                        const maxMag = Math.max(1, ...scatterData.map(d => Math.abs(d.value?.[2] ?? 0)));
+                        mapOption = {
+                            ...themeOptions, ...chartMotionOption,
+                            title: baseTitle,
+                            tooltip: { trigger: 'item', formatter: (p: Record<string, unknown>) => {
+                                const d = p.data as Record<string, unknown> | undefined;
+                                return d ? `${d.name}: ${(d.value as number[])?.[2] ?? ''}` : '';
+                            }},
+                            geo: { map: mapName, roam: true, label: { show: false }, itemStyle: { areaColor: '#1e293b', borderColor: t.echarts.splitLineColor }, emphasis: { itemStyle: { areaColor: '#334155' } } },
+                            series: [{
+                                type: 'scatter', coordinateSystem: 'geo',
+                                data: scatterData.map(d => ({ name: d.name, value: d.value })),
+                                symbolSize: (val: number[]) => { const mag = val?.[2] ?? 0; return sizeRange[0] + (sizeRange[1] - sizeRange[0]) * (Math.abs(mag) / maxMag); },
+                                itemStyle: { color: (c.bubbleColor as string) || t.echarts.colorPalette[0] },
+                                label: { show: mapMode === 'scatter', formatter: '{b}', color: t.textPrimary, fontSize: 10 },
+                            }],
+                        };
+                    } else if (mapMode === 'heatmap') {
+                        const heatmapData = (c.heatmapData as Array<[number, number, number]>) || [];
+                        mapOption = {
+                            ...themeOptions, ...chartMotionOption,
+                            title: baseTitle,
+                            tooltip: { show: true },
+                            geo: { map: mapName, roam: true, label: { show: false }, itemStyle: { areaColor: '#1e293b', borderColor: t.echarts.splitLineColor }, emphasis: { itemStyle: { areaColor: '#334155' } } },
+                            visualMap: { show: true, min: 0, max: Math.max(1, ...heatmapData.map(d => d[2] || 0)), left: 6, bottom: 8, itemWidth: 10, itemHeight: 60, textStyle: { color: t.textSecondary, fontSize: 10 }, inRange: { color: ['#3b82f6', '#f59e0b', '#ef4444'] } },
+                            series: [{
+                                type: 'heatmap', coordinateSystem: 'geo',
+                                data: heatmapData,
+                                pointSize: (c.heatmapRadius as number) || 20,
+                                blurSize: ((c.heatmapRadius as number) || 20) * 1.5,
+                            }],
+                        };
+                    } else if (mapMode === 'flow') {
+                        const flowData = (c.flowData as Array<{ from: { name: string; coord: [number, number] }; to: { name: string; coord: [number, number] }; value?: number }>) || [];
+                        const curveness = (c.flowLineStyle as Record<string, unknown>)?.curveness as number ?? 0.2;
+                        const flowColor = (c.flowLineStyle as Record<string, unknown>)?.color as string ?? t.echarts.colorPalette[0];
+                        const showEffect = c.showFlowEffect !== false;
+                        const endpoints = new Map<string, [number, number]>();
+                        for (const f of flowData) {
+                            if (f.from?.name && f.from?.coord) endpoints.set(f.from.name, f.from.coord);
+                            if (f.to?.name && f.to?.coord) endpoints.set(f.to.name, f.to.coord);
+                        }
+                        mapOption = {
+                            ...themeOptions, ...chartMotionOption,
+                            title: baseTitle,
+                            tooltip: { trigger: 'item' },
+                            geo: { map: mapName, roam: true, label: { show: false }, itemStyle: { areaColor: '#1e293b', borderColor: t.echarts.splitLineColor }, emphasis: { itemStyle: { areaColor: '#334155' } } },
+                            series: [
+                                {
+                                    type: 'lines', coordinateSystem: 'geo',
+                                    data: flowData.map(f => ({ coords: [f.from.coord, f.to.coord], value: f.value })),
+                                    lineStyle: { color: flowColor, width: 1.5, curveness, opacity: 0.6 },
+                                    effect: showEffect ? { show: true, period: 4, trailLength: 0.2, symbol: 'arrow', symbolSize: 6, color: flowColor } : undefined,
+                                },
+                                {
+                                    type: 'effectScatter', coordinateSystem: 'geo',
+                                    data: Array.from(endpoints.entries()).map(([name, coord]) => ({ name, value: coord })),
+                                    symbolSize: 6,
+                                    rippleEffect: { brushType: 'stroke', scale: 3 },
+                                    itemStyle: { color: flowColor },
+                                    label: { show: true, formatter: '{b}', position: 'right', color: t.textPrimary, fontSize: 10 },
+                                },
+                            ],
+                        };
+                    } else {
+                        // Default: region fill map
+                        mapOption = {
+                            ...themeOptions, ...chartMotionOption,
+                            title: baseTitle,
+                            visualMap: {
+                                min: Number.isFinite(minValue) ? minValue : 0,
+                                max: Number.isFinite(maxValue) ? maxValue : 100,
+                                text: ['高', '低'], left: 6, bottom: 8, itemWidth: 10, itemHeight: 60,
+                                textStyle: { color: t.textSecondary, fontSize: 10 },
+                                inRange: { color: ['#93c5fd', '#3b82f6', '#1d4ed8'] },
+                            },
+                            tooltip: { trigger: 'item', formatter: '{b}: {c}' },
+                            series: [{
+                                type: 'map', map: mapName, roam: true,
+                                label: { show: true, color: t.textPrimary, fontSize: 10 },
+                                emphasis: { label: { color: t.textPrimary } },
+                                data: regions.map((item) => ({
+                                    name: String(item.name ?? ''),
+                                    value: Number(item.value ?? 0),
+                                    code: resolveRegionCode(item),
+                                })),
+                            }],
+                        };
+                    }
+
                     return (
                         <div style={{ width: '100%', height: '100%', position: 'relative' }}>
                             <EChart
                                 style={{ width: '100%', height: '100%' }}
-                                option={{
-                                    ...themeOptions,
-                                    title: { text: title, textStyle: { color: t.textPrimary, fontSize: (c.titleFontSize as number) || 14 } },
-                                    visualMap: {
-                                        min: Number.isFinite(minValue) ? minValue : 0,
-                                        max: Number.isFinite(maxValue) ? maxValue : 100,
-                                        text: ['高', '低'],
-                                        left: 6,
-                                        bottom: 8,
-                                        itemWidth: 10,
-                                        itemHeight: 60,
-                                        textStyle: { color: t.textSecondary, fontSize: 10 },
-                                        inRange: { color: ['#93c5fd', '#3b82f6', '#1d4ed8'] },
-                                    },
-                                    tooltip: { trigger: 'item', formatter: '{b}: {c}' },
-                                    series: [{
-                                        type: 'map',
-                                        map: mapName,
-                                        roam: true,
-                                        label: { show: true, color: t.textPrimary, fontSize: 10 },
-                                        emphasis: { label: { color: t.textPrimary } },
-                                        data: regions.map((item) => ({
-                                            name: String(item.name ?? ''),
-                                            value: Number(item.value ?? 0),
-                                            code: resolveRegionCode(item),
-                                        })),
-                                    }],
-                                }}
-                                onEvents={{
-                                    click: (params) => {
-                                        const regionName = String(params.name ?? '');
-                                        const row = params.data && typeof params.data === 'object'
-                                            ? (params.data as Record<string, unknown>)
-                                            : undefined;
-                                        const clickedCode = String(row?.code ?? row?.adcode ?? '').trim();
-                                        const target = clickedCode
-                                            ? regions.find((item) => resolveRegionCode(item) === clickedCode)
-                                                || regions.find((item) => String(item.name ?? '') === regionName)
-                                            : regions.find((item) => String(item.name ?? '') === regionName);
-                                        if (canRegionDrill && target && getChildren(target).length > 0) {
-                                            setMapDrillRegion(regionName);
-                                        }
-                                        const variableKey = String(c.regionVariableKey ?? '').trim();
-                                        if (variableKey && regionName) {
-                                            runtime.setVariable(variableKey, regionName, `map-chart:${component.id}`);
-                                        }
-                                        const code = resolveRegionCode(target);
-                                        if (regionCodeVariableKey && code) {
-                                            runtime.setVariable(regionCodeVariableKey, code, `map-chart:${component.id}`);
-                                        }
-                                    },
-                                }}
+                                option={mapOption}
+                                onEvents={{ click: mapClickHandler }}
                             />
                         </div>
                     );
@@ -1847,6 +2235,37 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                             padding: 8,
                         }}
                         dangerouslySetInnerHTML={{ __html: html }}
+                    />
+                );
+            }
+
+            case 'richtext': {
+                const rtContent = String(c.content ?? '');
+                // Sanitize: strip script/iframe/style/on* attributes
+                const sanitizedRtHtml = rtContent
+                    .replace(/<script[\s\S]*?<\/script>/gi, '')
+                    .replace(/<iframe[\s\S]*?<\/iframe>/gi, '')
+                    .replace(/<style[\s\S]*?<\/style>/gi, '')
+                    .replace(/\bon\w+\s*=\s*["'][^"']*["']/gi, '')
+                    .replace(/\bon\w+\s*=\s*\S+/gi, '')
+                    .replace(/<a\s/gi, '<a rel="noreferrer" target="_blank" ');
+                const rtPadding = Number(c.padding ?? 12);
+                const rtOverflow = String(c.overflow ?? 'hidden');
+                const rtVAlign = String(c.verticalAlign ?? 'top');
+                const alignMap: Record<string, string> = { top: 'flex-start', middle: 'center', bottom: 'flex-end' };
+                return (
+                    <div
+                        style={{
+                            width: '100%',
+                            height: '100%',
+                            padding: rtPadding,
+                            overflow: rtOverflow as 'hidden' | 'visible' | 'scroll',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            justifyContent: alignMap[rtVAlign] ?? 'flex-start',
+                            boxSizing: 'border-box',
+                        }}
+                        dangerouslySetInnerHTML={{ __html: sanitizedRtHtml }}
                     />
                 );
             }
@@ -2336,7 +2755,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                 );
 
             case 'image':
-                return c.src ? (
+                return isSafeSrcUrl(c.src) ? (
                     <img
                         src={c.src as string}
                         alt=""
@@ -2364,7 +2783,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                 );
 
             case 'video':
-                return c.src ? (
+                return isSafeSrcUrl(c.src) ? (
                     <video
                         src={c.src as string}
                         autoPlay={c.autoplay as boolean}
@@ -2390,9 +2809,10 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                 );
 
             case 'iframe':
-                return c.src ? (
+                return isSafeSrcUrl(c.src) ? (
                     <iframe
                         src={c.src as string}
+                        sandbox="allow-scripts allow-same-origin"
                         style={{ width: '100%', height: '100%', border: 'none' }}
                         title="Embedded content"
                     />
@@ -2564,6 +2984,9 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                                                     }}
                                                 >
                                                     <span>{title}</span>
+                                                    {columnMeta[i]?.masked && (
+                                                        <span style={{ fontSize: 9, opacity: 0.5, marginLeft: 2 }} title="此列数据已脱敏">*</span>
+                                                    )}
                                                     {tableSort?.colIndex === i ? (
                                                         <span style={{ fontSize: 10 }}>{tableSort.order === 'asc' ? '▲' : '▼'}</span>
                                                     ) : null}
@@ -2609,7 +3032,16 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                                                         }
                                                         : {}),
                                                 }}>
-                                                    {row[colIndex] ?? ''}
+                                                    {columnMeta[colIndex]?.masked ? (
+                                                        <span
+                                                            style={{ color: 'rgba(148,163,184,0.6)', fontStyle: 'italic' }}
+                                                            title="数据已脱敏"
+                                                        >
+                                                            {row[colIndex] ?? '***'}
+                                                        </span>
+                                                    ) : (
+                                                        row[colIndex] ?? ''
+                                                    )}
                                                 </td>
                                             );
                                         })}
@@ -2730,6 +3162,197 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                 );
             }
 
+            // ==================== 3D 可视化 (echarts-gl) ====================
+            case 'globe-chart': {
+                if (!isWebGLSupported()) {
+                    return (
+                        <div style={{
+                            width: '100%', height: '100%', display: 'flex',
+                            alignItems: 'center', justifyContent: 'center',
+                            background: t.placeholder.background, border: t.placeholder.border,
+                            borderRadius: 4, color: '#ef4444', fontSize: 13,
+                        }}>
+                            当前浏览器不支持 WebGL，无法渲染 3D 组件
+                        </div>
+                    );
+                }
+                const globeTitle = String(c.title ?? '3D 地球');
+                const autoRotate = c.autoRotate !== false;
+                const rotateSpeed = Number(c.rotateSpeed ?? 10);
+                const baseTexture = String(c.baseTexture ?? '');
+                const heightTexture = String(c.heightTexture ?? '');
+                const showAtmosphere = c.showAtmosphere !== false;
+                const globeBgColor = String(c.globeBackground ?? '#000');
+                const scatterData = Array.isArray(c.scatterData)
+                    ? (c.scatterData as Array<{ name: string; value: [number, number, number] }>)
+                    : [];
+                const flowData = Array.isArray(c.flowData)
+                    ? (c.flowData as Array<{ coords: [number, number][] }>)
+                    : [];
+
+                const globeSeries: Array<Record<string, unknown>> = [];
+                if (scatterData.length > 0) {
+                    globeSeries.push({
+                        type: 'scatter3D',
+                        coordinateSystem: 'globe',
+                        data: scatterData.map(d => ({
+                            name: d.name,
+                            value: d.value,
+                        })),
+                        symbolSize: Number(c.pointSize ?? 12),
+                        itemStyle: { color: t.echarts.colorPalette[0] },
+                        label: { show: true, formatter: '{b}', textStyle: { color: '#fff', fontSize: 10 } },
+                    });
+                }
+                if (flowData.length > 0) {
+                    globeSeries.push({
+                        type: 'lines3D',
+                        coordinateSystem: 'globe',
+                        effect: { show: true, trailLength: 0.2, trailWidth: 2, trailOpacity: 0.6 },
+                        lineStyle: { width: 1, color: t.echarts.colorPalette[1], opacity: 0.6 },
+                        data: flowData.map(f => ({ coords: f.coords })),
+                        blendMode: 'lighter',
+                    });
+                }
+
+                return renderEChartWithHandles({
+                    backgroundColor: globeBgColor,
+                    globe: {
+                        baseTexture: baseTexture || undefined,
+                        heightTexture: heightTexture || undefined,
+                        shading: 'color',
+                        viewControl: {
+                            autoRotate,
+                            autoRotateSpeed: rotateSpeed,
+                            distance: Number(c.viewDistance ?? 200),
+                        },
+                        light: {
+                            ambient: { intensity: 0.6 },
+                            main: { intensity: 1.2 },
+                        },
+                        atmosphere: showAtmosphere ? { show: true, glowPower: 6 } : undefined,
+                    },
+                    series: globeSeries,
+                    title: { text: globeTitle, textStyle: { color: t.textPrimary, fontSize: 14 }, left: 'center', top: 8 },
+                }, echartsClickHandler);
+            }
+
+            case 'bar3d-chart': {
+                if (!isWebGLSupported()) {
+                    return (
+                        <div style={{
+                            width: '100%', height: '100%', display: 'flex',
+                            alignItems: 'center', justifyContent: 'center',
+                            background: t.placeholder.background, border: t.placeholder.border,
+                            borderRadius: 4, color: '#ef4444', fontSize: 13,
+                        }}>
+                            当前浏览器不支持 WebGL，无法渲染 3D 组件
+                        </div>
+                    );
+                }
+                const bar3dTitle = String(c.title ?? '3D 柱状图');
+                const xData = Array.isArray(c.xAxisData) ? c.xAxisData as string[] : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+                const yData = Array.isArray(c.yAxisData) ? c.yAxisData as string[] : ['A', 'B', 'C'];
+                const bar3dData = Array.isArray(c.data)
+                    ? (c.data as Array<[number, number, number]>)
+                    : xData.flatMap((_, xi) => yData.map((__, yi) => [xi, yi, Math.round(Math.random() * 100)] as [number, number, number]));
+                const bar3dMax = Math.max(1, ...bar3dData.map(d => d[2]));
+                const colorRangeRaw = c.colorRange as [string, string] | undefined;
+                const colorRange = colorRangeRaw ?? ['#313695', '#a50026'];
+                const viewAlpha = Number(c.viewAlpha ?? 40);
+                const viewBeta = Number(c.viewBeta ?? 30);
+
+                return renderEChartWithHandles({
+                    ...themeOptions,
+                    title: { text: bar3dTitle, textStyle: { color: t.textPrimary, fontSize: 14 }, left: 'center', top: 8 },
+                    tooltip: {},
+                    visualMap: {
+                        max: bar3dMax,
+                        inRange: { color: colorRange },
+                        textStyle: { color: t.textPrimary },
+                    },
+                    xAxis3D: { type: 'category', data: xData, axisLabel: { color: t.textPrimary } },
+                    yAxis3D: { type: 'category', data: yData, axisLabel: { color: t.textPrimary } },
+                    zAxis3D: { type: 'value', axisLabel: { color: t.textPrimary } },
+                    grid3D: {
+                        boxWidth: Number(c.boxWidth ?? 100),
+                        boxDepth: Number(c.boxDepth ?? 80),
+                        boxHeight: Number(c.boxHeight ?? 60),
+                        viewControl: { alpha: viewAlpha, beta: viewBeta, autoRotate: c.autoRotate === true },
+                        light: { main: { intensity: 1.2 }, ambient: { intensity: 0.3 } },
+                    },
+                    series: [{
+                        type: 'bar3D',
+                        data: bar3dData.map(d => ({ value: [d[0], d[1], d[2]] })),
+                        shading: 'lambert',
+                        label: {
+                            show: c.showLabel === true,
+                            textStyle: { color: '#fff', fontSize: 10 },
+                            formatter: (p: Record<string, unknown>) => String((p.value as number[])?.[2] ?? ''),
+                        },
+                    }],
+                }, echartsClickHandler);
+            }
+
+            case 'scatter3d-chart': {
+                if (!isWebGLSupported()) {
+                    return (
+                        <div style={{
+                            width: '100%', height: '100%', display: 'flex',
+                            alignItems: 'center', justifyContent: 'center',
+                            background: t.placeholder.background, border: t.placeholder.border,
+                            borderRadius: 4, color: '#ef4444', fontSize: 13,
+                        }}>
+                            当前浏览器不支持 WebGL，无法渲染 3D 组件
+                        </div>
+                    );
+                }
+                const scatter3dTitle = String(c.title ?? '3D 散点图');
+                const scatter3dData = Array.isArray(c.data)
+                    ? (c.data as Array<[number, number, number]>)
+                    : Array.from({ length: 30 }, () => [
+                        Math.round(Math.random() * 100),
+                        Math.round(Math.random() * 100),
+                        Math.round(Math.random() * 100),
+                    ] as [number, number, number]);
+                const scatter3dMax = Math.max(1, ...scatter3dData.map(d => d[2]));
+                const sColorRange = (c.colorRange as [string, string]) ?? ['#50a3ba', '#eac736'];
+                const sPointSize = Number(c.pointSize ?? 8);
+
+                return renderEChartWithHandles({
+                    ...themeOptions,
+                    title: { text: scatter3dTitle, textStyle: { color: t.textPrimary, fontSize: 14 }, left: 'center', top: 8 },
+                    tooltip: {},
+                    visualMap: {
+                        max: scatter3dMax,
+                        inRange: { color: sColorRange },
+                        dimension: 2,
+                        textStyle: { color: t.textPrimary },
+                    },
+                    xAxis3D: { type: 'value', axisLabel: { color: t.textPrimary }, name: String(c.xAxisName ?? 'X') },
+                    yAxis3D: { type: 'value', axisLabel: { color: t.textPrimary }, name: String(c.yAxisName ?? 'Y') },
+                    zAxis3D: { type: 'value', axisLabel: { color: t.textPrimary }, name: String(c.zAxisName ?? 'Z') },
+                    grid3D: {
+                        viewControl: {
+                            alpha: Number(c.viewAlpha ?? 40),
+                            beta: Number(c.viewBeta ?? 30),
+                            autoRotate: c.autoRotate === true,
+                        },
+                        light: { main: { intensity: 1.2 }, ambient: { intensity: 0.3 } },
+                    },
+                    series: [{
+                        type: 'scatter3D',
+                        data: scatter3dData,
+                        symbolSize: sPointSize,
+                        itemStyle: { opacity: 0.8 },
+                        label: {
+                            show: c.showLabel === true,
+                            textStyle: { color: '#fff', fontSize: 10 },
+                        },
+                    }],
+                }, echartsClickHandler);
+            }
+
             default:
                 return (
                     <div style={{
@@ -2771,6 +3394,8 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
         tableSort,
         tablePage,
         filterInputDraft,
+        legendDragPreview,
+        clearLegendDragHandlers,
         runtime.values,
         runtime,
         runtimePlugin,

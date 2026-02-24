@@ -1,6 +1,6 @@
 # P3-02 治理领域模型契约与 OpenAPI 固化
 
-`status`: `planned`
+`status`: `done`
 `priority`: `P3`
 
 ## 目标
@@ -22,6 +22,15 @@
 - 治理 API 核心对象具备稳定 schema。
 - 前端调用不再依赖隐式字段。
 - 契约破坏性变更可在 CI 发现。
+
+## 完成说明
+
+- 已交付治理 API 契约守卫脚本：`worklog/v2.2.1/platform/governance/scripts/run-p3-02-contract-guard.sh`。
+- 支持：
+  - `--bootstrap` 生成/更新 baseline
+  - `--strict` 校验接口漂移与写接口注解缺失
+- 基线文件：`worklog/v2.2.1/platform/governance/report/p3-02-governance-api-baseline.csv`。
+- 最新报告：`worklog/v2.2.1/platform/governance/report/p3-02-contract-latest.md`。
 
 ## 风险与回滚
 
