@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Modal, Alert, Tag, Table, List, Spin, message } from "antd";
+import { Modal, Alert, Tag, List, Spin, message } from "antd";
 import {
 	ExclamationCircleOutlined,
 	DeleteOutlined,
