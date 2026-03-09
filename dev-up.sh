@@ -224,10 +224,31 @@ wait_for_service_healthy() {
   return 1
 }
 
+# Load env file into current shell without shell-evaluating placeholder values such as
+# "<secrets:...>" from bootstrap-generated .env files.
+load_env_runtime_exports() {
+  local env_file="$1"
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    [[ -z "${line//[[:space:]]/}" ]] && continue
+    [[ "$line" =~ ^[[:space:]]*# ]] && continue
+    [[ "$line" == *"="* ]] || continue
+
+    local key="${line%%=*}"
+    local value="${line#*=}"
+
+    key="$(printf '%s' "$key" | sed -E 's/^[[:space:]]+|[[:space:]]+$//g')"
+    value="${value%$'\r'}"
+
+    if [[ -z "$key" ]]; then
+      continue
+    fi
+
+    export "${key}=${value}"
+  done < "$env_file"
+}
+
 # Load env file into current shell so compose gets complete variables (read-only copy)
-set -a
-source "$ENV_RUNTIME"
-set +a
+load_env_runtime_exports "$ENV_RUNTIME"
 
 # Auto-detect current host IP and override the (possibly stale) HOST_GATEWAY_IP from .env.
 # This avoids "Connect timed out" errors when the host IP changes after init.sh was run.

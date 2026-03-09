@@ -51,8 +51,15 @@
 
 ## Runtime Findings
 
-- Not executed yet.
-- Next baseline step should be a focused walkthrough of the `platform development / modeling / ETL` main flow.
+- `dev-up.sh`
+  - Command: `./dev-up.sh --mode local`
+  - Result: `PARTIAL`
+  - Notes:
+    - the original shell syntax failure on bootstrap `.env` placeholders is fixed
+    - latest run now reaches Docker Compose evaluation instead of dying on line 6 of the env file
+    - the current next runtime blocker is env completeness for legacy compose variables; the latest failure ends at `invalid proto:`
+    - repeated compose warnings show missing vars such as `STACK_ROOT`, `HOST_PLATFORM_UI`, `HOST_FLOW`, `HOST_META`, `TLS_PORT`
+- Next baseline step should be a focused walkthrough of the `platform development / modeling / ETL` main flow, but the local runtime path now first needs env normalization for the legacy compose stack.
 
 ## UI Findings
 
@@ -69,7 +76,9 @@
 - `BUG-002`: done; `dts-platform` unit-test baseline is stable after Mockito agent wiring, stale target cleanup, and test updates
 - `UI-001`: done; route-splitting overlap warnings for `workbench`, `sys/login`, and `sys/error` are removed
 - `UI-002`: done; ETL detail page only shows realtime monitoring for `cdc` tasks, removing reserved noise from batch task pages
+- `OPS-001`: done; `dev-up.sh` no longer shell-sources bootstrap placeholder secrets and can move on to actual compose/runtime validation
 - next candidate should be selected from:
-  - runtime main-flow walkthrough findings
+  - runtime env normalization for missing legacy compose variables (`STACK_ROOT`, hostnames, ports)
+  - runtime main-flow walkthrough findings after the local stack can boot
   - integration environment enablement if onsite validation needs Docker-backed IT coverage
   - large chunk optimization if onsite first-load performance is still a real issue
