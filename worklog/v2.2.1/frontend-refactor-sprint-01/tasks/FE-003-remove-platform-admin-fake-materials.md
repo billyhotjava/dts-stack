@@ -23,6 +23,16 @@
 - 直接删除纯 demo/dev 代码
 - 对真实页面仍依赖的部分，用真实空态或禁用态替换
 
+## 当前进度
+
+- 已删除两端 `demoService.ts`
+- 已删除两端 fake `notice.tsx`
+- 已删除 `FeaturePlaceholder.tsx` 与 `V3Placeholder.tsx`
+- 已移除 `register-koal-devtools.ts` 及其在 `main.tsx` 的 dev-only 注册入口
+- `TaskSchedulingPage.tsx` 已从纯占位页改成真实任务运营入口页
+- `platform/admin` 两端构建已通过
+- `sys/others` 演示页仍在路由树内，需单独断引用后再删除
+
 ## 验收
 
 - `pnpm -C source/dts-platform-webapp build`
@@ -33,3 +43,8 @@
 
 - `notice.tsx` 不是独立页面，误删会影响全局壳层
 - `sys/others` 下部分内容可能被路由树间接引用，删除要先断引用
+
+## 本轮验证
+
+- `pnpm -C source/dts-platform-webapp build`
+- `pnpm -C source/dts-admin-webapp build`
