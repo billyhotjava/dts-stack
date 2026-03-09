@@ -15,6 +15,7 @@ import WorkflowConfigView from "@/admin/views/workflow-config";
 import DataLakeConfigView from "@/admin/views/data-lake-config";
 import DataLakeEditorView from "@/admin/views/data-lake-editor";
 import InfraSettingsView from "@/admin/views/infra-settings";
+import AdminOtherConfigView from "@/admin/views/system/other-config";
 import { getMenusByRole } from "@/admin/config/menus";
 import { useAdminSession } from "@/admin/lib/session-context";
 
@@ -37,8 +38,8 @@ export const adminRoutes: RouteObject[] = [
 	),
 		children: [
 			{ index: true, element: <AdminIndexRedirect /> },
-			{ path: "system", element: <Navigate to="/admin/ops" replace /> },
-			{ path: "system/*", element: <Navigate to="/admin/ops" replace /> },
+			{ path: "system", element: <AdminOtherConfigView /> },
+			{ path: "system/*", element: <Navigate to="/admin/system" replace /> },
 			{ path: "my-changes", element: <MyChangesView /> },
 			{ path: "users", element: <UserManagementView /> },
 			{ path: "users/:id", element: <UserDetailView /> },
