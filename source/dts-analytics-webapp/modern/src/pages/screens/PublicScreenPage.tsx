@@ -6,7 +6,7 @@ import { DeviceModeSwitcher } from './components/DeviceModeSwitcher';
 import { GlobalVariablePanel } from './components/GlobalVariablePanel';
 import { PreviewScaleControl } from './components/PreviewScaleControl';
 import { ScreenRuntimeProvider } from './ScreenRuntimeContext';
-import type { ScreenConfig, ScreenTheme, CarouselConfig } from './types';
+import type { ScreenConfig, ScreenTheme } from './types';
 import { resolveScreenTheme } from './screenThemes';
 import { normalizeScreenConfig } from './specV2';
 import { buildComponentMap, isComponentEffectivelyVisible } from './componentHierarchy';
@@ -19,6 +19,7 @@ import {
     syncDeviceModeToWindowUrl,
     type DeviceMode,
 } from './deviceMode';
+import './ScreenRuntimeShell.css';
 
 export default function PublicScreenPage() {
     const { uuid } = useParams<{ uuid: string }>();
@@ -219,24 +220,26 @@ export default function PublicScreenPage() {
     // ── Early returns MUST be after all hooks ──
     if (loading) {
         return (
-            <div style={{
-                position: 'fixed', inset: 0, display: 'flex',
-                alignItems: 'center', justifyContent: 'center',
-                background: '#000', color: '#fff', fontSize: 16,
-            }}>
-                <span>加载中...</span>
+            <div className="screen-runtime screen-runtime--fullscreen screen-runtime--dark">
+                <div className="screen-runtime__feedback">
+                    <div className="screen-runtime__feedback-card">
+                        <h1>正在加载公开大屏</h1>
+                        <p>正在准备公开访问所需的画布和运行态参数。</p>
+                    </div>
+                </div>
             </div>
         );
     }
 
     if (error || !screen) {
         return (
-            <div style={{
-                position: 'fixed', inset: 0, display: 'flex',
-                alignItems: 'center', justifyContent: 'center',
-                background: '#000', color: '#fff', fontSize: 16,
-            }}>
-                <span>{error || '未找到大屏'}</span>
+            <div className="screen-runtime screen-runtime--fullscreen screen-runtime--dark">
+                <div className="screen-runtime__feedback">
+                    <div className="screen-runtime__feedback-card">
+                        <h1>公开链接不可用</h1>
+                        <p>{error || '未找到大屏'}</p>
+                    </div>
+                </div>
             </div>
         );
     }
@@ -245,7 +248,6 @@ export default function PublicScreenPage() {
     const screenTheme = resolveScreenTheme(rawTheme, screen.backgroundColor);
     const carouselTransition = screen.carouselConfig?.transition ?? 'fade';
     const carouselDuration = screen.carouselConfig?.transitionDuration ?? 800;
-    const outerBg = screenTheme === 'glacier' ? '#e5e7eb' : '#000';
     const screenWidth = contentBounds.width;
     const screenHeight = contentBounds.height;
     const stageWidth = Math.max(1, screenWidth * scale);
@@ -259,16 +261,22 @@ export default function PublicScreenPage() {
 
     return (
         <ScreenRuntimeProvider definitions={effectiveGlobalVars}>
-            <div
-                style={{
-                    position: 'fixed',
-                    inset: 0,
-                    background: outerBg,
-                    padding: isEmbedMode ? 0 : 12,
-                    boxSizing: 'border-box',
-                }}
-            >
-                <div ref={scrollContainerRef} style={{ width: '100%', height: '100%', overflowX: 'auto', overflowY: 'auto' }}>
+            <div className={`screen-runtime screen-runtime--fullscreen ${screenTheme === 'glacier' ? 'screen-runtime--light' : 'screen-runtime--dark'} ${isEmbedMode ? 'screen-runtime--embed' : ''}`}>
+                {!isEmbedMode ? (
+                    <div className="screen-runtime__meta-card">
+                        <div className="screen-runtime__eyebrow">Public Screen</div>
+                        <div className="screen-runtime__title">{screen.name || '未命名大屏'}</div>
+                        <div className="screen-runtime__meta-row">
+                            <span className="screen-runtime__badge is-info">Public Access</span>
+                            <span className="screen-runtime__badge">{screenWidth} × {screenHeight}</span>
+                            <span className="screen-runtime__badge">{visibleSortedComponents.length} 组件</span>
+                            {Object.keys(urlVariableOverrides).length > 0 ? (
+                                <span className="screen-runtime__badge is-warning">URL 参数覆盖 {Object.keys(urlVariableOverrides).length}</span>
+                            ) : null}
+                        </div>
+                    </div>
+                ) : null}
+                <div ref={scrollContainerRef} className="screen-runtime__scroll">
                     {!hideControls && (
                         <PreviewScaleControl
                             scalePercent={scalePercent}
@@ -282,26 +290,11 @@ export default function PublicScreenPage() {
                             }}
                         />
                     )}
-                    <div
-                        style={{
-                            minWidth: '100%',
-                            minHeight: '100%',
-                            display: 'flex',
-                            alignItems: 'flex-start',
-                            justifyContent: 'flex-start',
-                            padding: 8,
-                            boxSizing: 'border-box',
-                        }}
-                    >
-                        <div
-                            style={{
-                                position: 'relative',
-                                width: stageWidth,
-                                height: stageHeight,
-                                flex: '0 0 auto',
-                            }}
-                        >
+                    <div className="screen-runtime__viewport">
+                        <div className="screen-runtime__stage" style={{ width: stageWidth, height: stageHeight }}>
+                            <div className="screen-runtime__canvas-shell">
                             <div
+                                className={`screen-runtime__canvas ${carousel.transitioning ? 'is-transitioning' : ''}`}
                                 style={{
                                     width: screenWidth,
                                     height: screenHeight,
@@ -340,6 +333,7 @@ export default function PublicScreenPage() {
                                         </div>
                                     ))}
                             </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -354,26 +348,11 @@ export default function PublicScreenPage() {
                 )}
                 {/* Carousel page indicator */}
                 {carousel.pageCount > 1 && (
-                    <div style={{
-                        position: 'fixed',
-                        bottom: 16,
-                        left: '50%',
-                        transform: 'translateX(-50%)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 8,
-                        padding: '6px 14px',
-                        background: 'rgba(0,0,0,0.5)',
-                        borderRadius: 20,
-                        zIndex: 9999,
-                    }}>
+                    <div className="screen-runtime__pager">
                         <button
                             type="button"
                             onClick={carousel.prevPage}
-                            style={{
-                                background: 'none', border: 'none', color: '#fff',
-                                cursor: 'pointer', fontSize: 14, padding: '0 4px', opacity: 0.7,
-                            }}
+                            className="runtime-control-btn screen-runtime__pager-nav"
                         >
                             ‹
                         </button>
@@ -382,26 +361,14 @@ export default function PublicScreenPage() {
                                 key={i}
                                 type="button"
                                 onClick={() => carousel.goToPage(i)}
-                                style={{
-                                    width: i === carousel.pageIndex ? 20 : 8,
-                                    height: 8,
-                                    borderRadius: 4,
-                                    border: 'none',
-                                    background: i === carousel.pageIndex ? '#3b82f6' : 'rgba(255,255,255,0.4)',
-                                    cursor: 'pointer',
-                                    padding: 0,
-                                    transition: 'width 0.3s, background 0.3s',
-                                }}
+                                className={`runtime-control-btn screen-runtime__pager-dot ${i === carousel.pageIndex ? 'is-active' : ''}`}
                                 title={`第 ${i + 1} 页`}
                             />
                         ))}
                         <button
                             type="button"
                             onClick={carousel.nextPage}
-                            style={{
-                                background: 'none', border: 'none', color: '#fff',
-                                cursor: 'pointer', fontSize: 14, padding: '0 4px', opacity: 0.7,
-                            }}
+                            className="runtime-control-btn screen-runtime__pager-nav"
                         >
                             ›
                         </button>

@@ -5,7 +5,7 @@ import { ComponentRenderer } from './components/ComponentRenderer';
 import { DeviceModeSwitcher } from './components/DeviceModeSwitcher';
 import { PreviewScaleControl } from './components/PreviewScaleControl';
 import { ScreenRuntimeProvider } from './ScreenRuntimeContext';
-import type { ScreenConfig, ScreenTheme, CarouselConfig } from './types';
+import type { ScreenConfig, ScreenTheme } from './types';
 import { resolveScreenTheme } from './screenThemes';
 import { normalizeScreenConfig } from './specV2';
 import { buildComponentMap, isComponentEffectivelyVisible } from './componentHierarchy';
@@ -18,6 +18,7 @@ import {
     syncDeviceModeToWindowUrl,
     type DeviceMode,
 } from './deviceMode';
+import './ScreenRuntimeShell.css';
 
 const PREVIEW_BATCH_SIZE = 20;
 
@@ -235,31 +236,32 @@ export default function ScreenPreviewPage() {
     // ── Early returns MUST be after all hooks ──
     if (loading) {
         return (
-            <div style={{
-                position: 'fixed', inset: 0, display: 'flex',
-                alignItems: 'center', justifyContent: 'center',
-                background: '#000', color: '#fff', fontSize: 16,
-            }}>
-                <span>加载中...</span>
+            <div className="screen-runtime screen-runtime--fullscreen screen-runtime--dark">
+                <div className="screen-runtime__feedback">
+                    <div className="screen-runtime__feedback-card">
+                        <h1>正在加载预览</h1>
+                        <p>正在准备已发布运行态画布和设备适配信息。</p>
+                    </div>
+                </div>
             </div>
         );
     }
 
     if (error || !screen) {
         return (
-            <div style={{
-                position: 'fixed', inset: 0, display: 'flex',
-                alignItems: 'center', justifyContent: 'center',
-                background: '#000', color: '#fff', fontSize: 16,
-            }}>
-                <span>{error || '未找到大屏'}</span>
+            <div className="screen-runtime screen-runtime--fullscreen screen-runtime--dark">
+                <div className="screen-runtime__feedback">
+                    <div className="screen-runtime__feedback-card">
+                        <h1>预览不可用</h1>
+                        <p>{error || '未找到大屏'}</p>
+                    </div>
+                </div>
             </div>
         );
     }
 
     const rawTheme = (screen as { theme?: string }).theme as ScreenTheme | undefined;
     const screenTheme = resolveScreenTheme(rawTheme, screen.backgroundColor);
-    const outerBg = screenTheme === 'glacier' ? '#e5e7eb' : '#000';
     const screenWidth = contentBounds.width;
     const screenHeight = contentBounds.height;
     const stageWidth = Math.max(1, screenWidth * scale);
@@ -273,16 +275,20 @@ export default function ScreenPreviewPage() {
 
     return (
         <ScreenRuntimeProvider definitions={screen.globalVariables ?? []}>
-        <div
-            style={{
-                position: 'fixed',
-                inset: 0,
-                background: outerBg,
-                padding: 12,
-                boxSizing: 'border-box',
-            }}
-        >
-            <div ref={scrollContainerRef} style={{ width: '100%', height: '100%', overflowX: 'auto', overflowY: 'auto' }}>
+        <div className={`screen-runtime screen-runtime--fullscreen ${screenTheme === 'glacier' ? 'screen-runtime--light' : 'screen-runtime--dark'}`}>
+            <div className="screen-runtime__meta-card">
+                <div className="screen-runtime__eyebrow">Screen Preview</div>
+                <div className="screen-runtime__title">{screen.name || '未命名大屏'}</div>
+                <div className="screen-runtime__meta-row">
+                    <span className="screen-runtime__badge is-info">Published Runtime</span>
+                    <span className="screen-runtime__badge">{screenWidth} × {screenHeight}</span>
+                    <span className="screen-runtime__badge">{visibleSortedComponents.length} 组件</span>
+                    {carousel.pageCount > 1 ? (
+                        <span className="screen-runtime__badge">{carousel.pageIndex + 1}/{carousel.pageCount} 页</span>
+                    ) : null}
+                </div>
+            </div>
+            <div ref={scrollContainerRef} className="screen-runtime__scroll">
                 <PreviewScaleControl
                     scalePercent={scalePercent}
                     onFit={setFitScale}
@@ -294,26 +300,11 @@ export default function ScreenPreviewPage() {
                         setAbsoluteScale(safePercent / 100);
                     }}
                 />
-                <div
-                    style={{
-                        minWidth: '100%',
-                        minHeight: '100%',
-                        display: 'flex',
-                        alignItems: 'flex-start',
-                        justifyContent: 'flex-start',
-                        padding: 8,
-                        boxSizing: 'border-box',
-                    }}
-                >
-                    <div
-                        style={{
-                            position: 'relative',
-                            width: stageWidth,
-                            height: stageHeight,
-                            flex: '0 0 auto',
-                        }}
-                    >
+                <div className="screen-runtime__viewport">
+                    <div className="screen-runtime__stage" style={{ width: stageWidth, height: stageHeight }}>
+                        <div className="screen-runtime__canvas-shell">
                         <div
+                            className="screen-runtime__canvas"
                             style={{
                                 width: screenWidth,
                                 height: screenHeight,
@@ -346,22 +337,11 @@ export default function ScreenPreviewPage() {
                                 ))}
 
                             {visibleCount < visibleSortedComponents.length && (
-                                <div
-                                    style={{
-                                        position: 'absolute',
-                                        right: 12,
-                                        bottom: 12,
-                                        background: 'rgba(0,0,0,0.55)',
-                                        color: '#fff',
-                                        fontSize: 12,
-                                        padding: '4px 8px',
-                                        borderRadius: 6,
-                                        zIndex: 9999,
-                                    }}
-                                >
+                                <div className="screen-runtime__loading-chip">
                                     组件加载中 {visibleCount}/{visibleSortedComponents.length}
                                 </div>
                             )}
+                        </div>
                         </div>
                     </div>
                 </div>
@@ -373,26 +353,11 @@ export default function ScreenPreviewPage() {
                 />
                 {/* Carousel page indicator */}
                 {carousel.pageCount > 1 && (
-                    <div style={{
-                        position: 'fixed',
-                        bottom: 16,
-                        left: '50%',
-                        transform: 'translateX(-50%)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 8,
-                        padding: '6px 14px',
-                        background: 'rgba(0,0,0,0.5)',
-                        borderRadius: 20,
-                        zIndex: 9999,
-                    }}>
+                    <div className="screen-runtime__pager">
                         <button
                             type="button"
                             onClick={carousel.prevPage}
-                            style={{
-                                background: 'none', border: 'none', color: '#fff',
-                                cursor: 'pointer', fontSize: 14, padding: '0 4px', opacity: 0.7,
-                            }}
+                            className="runtime-control-btn screen-runtime__pager-nav"
                         >
                             ‹
                         </button>
@@ -401,26 +366,14 @@ export default function ScreenPreviewPage() {
                                 key={i}
                                 type="button"
                                 onClick={() => carousel.goToPage(i)}
-                                style={{
-                                    width: i === carousel.pageIndex ? 20 : 8,
-                                    height: 8,
-                                    borderRadius: 4,
-                                    border: 'none',
-                                    background: i === carousel.pageIndex ? '#3b82f6' : 'rgba(255,255,255,0.4)',
-                                    cursor: 'pointer',
-                                    padding: 0,
-                                    transition: 'width 0.3s, background 0.3s',
-                                }}
+                                className={`runtime-control-btn screen-runtime__pager-dot ${i === carousel.pageIndex ? 'is-active' : ''}`}
                                 title={`第 ${i + 1} 页`}
                             />
                         ))}
                         <button
                             type="button"
                             onClick={carousel.nextPage}
-                            style={{
-                                background: 'none', border: 'none', color: '#fff',
-                                cursor: 'pointer', fontSize: 14, padding: '0 4px', opacity: 0.7,
-                            }}
+                            className="runtime-control-btn screen-runtime__pager-nav"
                         >
                             ›
                         </button>

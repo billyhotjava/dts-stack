@@ -9,6 +9,7 @@ import { normalizeScreenConfig, buildScreenPayload } from './specV2';
 import { resolveScreenTheme } from './screenThemes';
 import { escapeHtml, safeCssBackgroundUrl } from './sanitize';
 import type { ScreenConfig, ScreenTheme } from './types';
+import './ScreenRuntimeShell.css';
 
 function parseFormat(raw: string | null): 'png' | 'pdf' | 'json' {
     const text = String(raw || '').trim().toLowerCase();
@@ -465,27 +466,30 @@ export default function ScreenExportPage() {
 
     return (
         <ScreenRuntimeProvider definitions={screen?.globalVariables ?? []}>
-            <div
-                style={{
-                    minHeight: '100vh',
-                    background: '#0b1220',
-                    color: '#fff',
-                    padding: 16,
-                    boxSizing: 'border-box',
-                }}
-            >
-                <div style={{ marginBottom: 10, fontSize: 12, opacity: 0.92 }}>
-                    导出任务：`{format.toUpperCase()}` | 模式：`{effectiveMode}` | 设备：`{effectiveDevice}`
-                    {` | 像素比：${exportPixelRatio}`}
-                    {requestId ? ` | requestId: ${requestId}` : ''}
-                    {specDigest ? ` | spec: ${specDigest.slice(0, 12)}` : ''}
+            <div className={`screen-runtime screen-export-shell ${screenTheme === 'glacier' ? 'screen-runtime--light' : 'screen-runtime--dark'}`}>
+                <div className="screen-export-header">
+                    <div className="screen-runtime__eyebrow">Screen Export</div>
+                    <div className="screen-runtime__title">{screen?.name || '导出任务'}</div>
+                    <div className="screen-runtime__meta-row">
+                        <span className="screen-runtime__badge is-info">{format.toUpperCase()}</span>
+                        <span className="screen-runtime__badge">模式 {effectiveMode}</span>
+                        <span className="screen-runtime__badge">设备 {effectiveDevice}</span>
+                        <span className="screen-runtime__badge">像素比 {exportPixelRatio}</span>
+                        {requestId ? <span className="screen-runtime__badge">request {requestId}</span> : null}
+                        {specDigest ? <span className="screen-runtime__badge">spec {specDigest.slice(0, 12)}</span> : null}
+                    </div>
                 </div>
-                <div style={{ marginBottom: 12, fontSize: 13 }}>{error ? `错误：${error}` : statusText}</div>
+                <div className={`screen-export-status ${error ? 'is-error' : ''}`}>
+                    <span className={`screen-runtime__badge ${error ? 'is-warning' : 'is-info'}`}>
+                        {error ? 'Export Failed' : (loading ? 'Rendering' : 'Runtime Ready')}
+                    </span>
+                    <div>{error ? `错误：${error}` : statusText}</div>
+                </div>
                 {error && !loading && (
-                    <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                    <div className="screen-export-actions">
                         <button
                             type="button"
-                            className="header-btn"
+                            className="runtime-control-btn is-primary"
                             onClick={() => {
                                 setError(null);
                                 setStatusText('正在重试导出...');
@@ -497,7 +501,7 @@ export default function ScreenExportPage() {
                         </button>
                         <button
                             type="button"
-                            className="header-btn"
+                            className="runtime-control-btn"
                             onClick={() => {
                                 try {
                                     openPreviewFallback();
@@ -511,7 +515,7 @@ export default function ScreenExportPage() {
                         {format === 'pdf' && (
                             <button
                                 type="button"
-                                className="header-btn"
+                                className="runtime-control-btn"
                                 onClick={() => {
                                     try {
                                         printCanvasDomFallback();
@@ -525,12 +529,16 @@ export default function ScreenExportPage() {
                         )}
                     </div>
                 )}
-                <div style={{ overflow: 'auto', border: '1px solid rgba(148,163,184,0.3)' }}>
+                <div className="screen-export-canvas-shell">
                     {loading || !screen ? (
-                        <div style={{ padding: 24, fontSize: 13 }}>加载中...</div>
+                        <div className="screen-runtime__feedback-card">
+                            <h1>正在准备导出</h1>
+                            <p>运行态画布、导出策略和渲染引擎正在同步。</p>
+                        </div>
                     ) : (
                         <div
                             ref={canvasRef}
+                            className="screen-export-canvas-frame"
                             style={{
                                 width: screen.width || 1920,
                                 height: screen.height || 1080,
@@ -558,28 +566,15 @@ export default function ScreenExportPage() {
                                 </div>
                             ))}
                             {watermark.enabled && watermark.text && (
-                                <div
-                                    style={{
-                                        position: 'absolute',
-                                        inset: 0,
-                                        pointerEvents: 'none',
-                                        opacity: 0.16,
-                                        zIndex: 99999,
-                                        overflow: 'hidden',
-                                    }}
-                                >
+                                <div className="screen-export-watermark">
                                     {Array.from({ length: 20 }).map((_, idx) => (
                                         <div
                                             key={`wm-${idx}`}
+                                            className="screen-export-watermark__item"
                                             style={{
-                                                position: 'absolute',
                                                 left: `${(idx % 5) * 22}%`,
                                                 top: `${Math.floor(idx / 5) * 24}%`,
-                                                transform: 'rotate(-18deg)',
                                                 color: screenTheme === 'glacier' ? '#111827' : '#f8fafc',
-                                                fontSize: 20,
-                                                fontWeight: 600,
-                                                whiteSpace: 'nowrap',
                                             }}
                                         >
                                             {watermark.text}

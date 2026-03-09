@@ -14,35 +14,14 @@ export function DeviceModeSwitcher({
     onSetForcedMode,
 }: DeviceModeSwitcherProps) {
     return (
-        <>
-            <div
-                style={{
-                    position,
-                    left: 12,
-                    bottom: 12,
-                    background: 'rgba(0,0,0,0.55)',
-                    color: '#fff',
-                    fontSize: 12,
-                    padding: '4px 8px',
-                    borderRadius: 6,
-                    zIndex: 9999,
-                }}
-            >
-                设备模式: {deviceMode}{forcedDeviceMode ? ' (forced)' : ' (auto)'}
+        <div className={`runtime-control-card device-mode-switcher device-mode-switcher--${position}`}>
+            <div className="device-mode-switcher__status">
+                <div className="runtime-control-card__title">Device Mode</div>
+                <span className={`screen-runtime__badge ${forcedDeviceMode ? 'is-info' : ''}`}>
+                    {deviceMode}{forcedDeviceMode ? ' forced' : ' auto'}
+                </span>
             </div>
-            <div
-                style={{
-                    position,
-                    left: 12,
-                    top: 12,
-                    display: 'flex',
-                    gap: 6,
-                    zIndex: 9999,
-                    background: 'rgba(0,0,0,0.45)',
-                    borderRadius: 8,
-                    padding: 6,
-                }}
-            >
+            <div className="runtime-control-row">
                 {[
                     { key: 'auto', label: 'Auto' },
                     { key: 'pc', label: 'PC' },
@@ -61,22 +40,13 @@ export function DeviceModeSwitcher({
                                 }
                                 onSetForcedMode(item.key as DeviceMode);
                             }}
-                            style={{
-                                border: active ? '1px solid #38bdf8' : '1px solid rgba(255,255,255,0.35)',
-                                background: active ? 'rgba(56,189,248,0.2)' : 'rgba(0,0,0,0.35)',
-                                color: '#fff',
-                                borderRadius: 6,
-                                padding: '2px 8px',
-                                fontSize: 12,
-                                cursor: 'pointer',
-                            }}
+                            className={`runtime-control-btn ${active ? 'is-active' : ''}`}
                         >
                             {item.label}
                         </button>
                     );
                 })}
             </div>
-        </>
+        </div>
     );
 }
-
