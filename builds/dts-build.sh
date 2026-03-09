@@ -109,8 +109,6 @@ NODE_IMAGE="${NODE_IMAGE:-node:20.17.0-alpine3.20}"
 PNPM_VERSION="${PNPM_VERSION:-10.28.0}"
 IMGVERSION_FILE="${IMGVERSION_FILE:-${REPO_ROOT}/imgversion.conf}"
 MAVEN_IMAGE="${MAVEN_IMAGE:-maven:3.9.9-eclipse-temurin-21}"
-MAVEN_CONTAINER_JAVA_HOME="${MAVEN_CONTAINER_JAVA_HOME:-/opt/java/openjdk}"
-MAVEN_CONTAINER_PATH="${MAVEN_CONTAINER_PATH:-${MAVEN_CONTAINER_JAVA_HOME}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin}"
 MAVEN_SECURITY_OPT="${MAVEN_SECURITY_OPT:-}"
 LEGACY_USE_HOST_MAVEN="${LEGACY_USE_HOST_MAVEN:-}"
 MAVEN_DEBUG="${MAVEN_DEBUG:-}"
@@ -405,55 +403,18 @@ SETTINGS_EOF
       maven_args+=(-s /root/.m2/settings.xml)
     fi
 
-    local use_bash_maven_runner=""
-    if [[ ("${HOST_ARCH}" == "aarch64" || "${HOST_ARCH}" == "arm64") && -z "${DOCKER_PLATFORM_SUPPORTED}" ]]; then
-      use_bash_maven_runner="1"
-    fi
-
     if [[ -n "$MAVEN_DEBUG" ]]; then
       echo "[dts-build] DEBUG: Running mvn with args: ${maven_args[*]} package"
-      if [[ -n "${use_bash_maven_runner}" ]]; then
-        local maven_exec_cmd=""
-        printf -v maven_exec_cmd '%q ' /usr/bin/mvn "${maven_args[@]}" package
-        docker run --rm --memory="${MAVEN_MEMORY_LIMIT}" --memory-swap="${MAVEN_MEMORY_LIMIT}" "${security_opts[@]}" \
-          --entrypoint /bin/bash \
-          -v "${REPO_ROOT}/source:/workspace" \
-          -v "/root/.m2:/root/.m2" \
-          -w /workspace \
-          "$MAVEN_IMAGE" \
-          -lc "export JAVA_HOME=${MAVEN_CONTAINER_JAVA_HOME}; export PATH=${MAVEN_CONTAINER_PATH}; exec ${maven_exec_cmd% }"
-      else
-        docker run --rm --memory="${MAVEN_MEMORY_LIMIT}" --memory-swap="${MAVEN_MEMORY_LIMIT}" "${security_opts[@]}" \
-          -e "JAVA_HOME=${MAVEN_CONTAINER_JAVA_HOME}" \
-          -e "PATH=${MAVEN_CONTAINER_PATH}" \
-          -v "${REPO_ROOT}/source:/workspace" \
-          -v "/root/.m2:/root/.m2" \
-          -w /workspace \
-          "$MAVEN_IMAGE" \
-          mvn "${maven_args[@]}" package
-      fi
-    else
-      if [[ -n "${use_bash_maven_runner}" ]]; then
-        local maven_exec_cmd=""
-        printf -v maven_exec_cmd '%q ' /usr/bin/mvn "${maven_args[@]}" package
-        docker run --rm --memory="${MAVEN_MEMORY_LIMIT}" --memory-swap="${MAVEN_MEMORY_LIMIT}" "${security_opts[@]}" \
-          --entrypoint /bin/bash \
-          -v "${REPO_ROOT}/source:/workspace" \
-          -v "/root/.m2:/root/.m2" \
-          -w /workspace \
-          "$MAVEN_IMAGE" \
-          -lc "export JAVA_HOME=${MAVEN_CONTAINER_JAVA_HOME}; export PATH=${MAVEN_CONTAINER_PATH}; exec ${maven_exec_cmd% }"
-      else
-        docker run --rm --memory="${MAVEN_MEMORY_LIMIT}" --memory-swap="${MAVEN_MEMORY_LIMIT}" "${security_opts[@]}" \
-          -e "JAVA_HOME=${MAVEN_CONTAINER_JAVA_HOME}" \
-          -e "PATH=${MAVEN_CONTAINER_PATH}" \
-          -v "${REPO_ROOT}/source:/workspace" \
-          -v "/root/.m2:/root/.m2" \
-          -w /workspace \
-          "$MAVEN_IMAGE" \
-          mvn "${maven_args[@]}" package
-      fi
     fi
+    # Run mvn directly as the container command — DO NOT wrap in sh -c or bash -lc.
+    # The Maven image's own entrypoint (mvn-entrypoint.sh) sets up JAVA_HOME correctly.
+    # Any shell wrapper (sh -c, bash -lc) corrupts JAVA_HOME on ARM64/Kunpeng.
+    docker run --rm --memory="${MAVEN_MEMORY_LIMIT}" --memory-swap="${MAVEN_MEMORY_LIMIT}" "${security_opts[@]}" \
+      -v "${REPO_ROOT}/source:/workspace" \
+      -v "/root/.m2:/root/.m2" \
+      -w /workspace \
+      "$MAVEN_IMAGE" \
+      mvn "${maven_args[@]}" package
   fi
 
   local jar_path
