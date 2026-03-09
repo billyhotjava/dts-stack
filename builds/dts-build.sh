@@ -405,25 +405,54 @@ SETTINGS_EOF
       maven_args+=(-s /root/.m2/settings.xml)
     fi
 
+    local use_bash_maven_runner=""
+    if [[ ("${HOST_ARCH}" == "aarch64" || "${HOST_ARCH}" == "arm64") && -z "${DOCKER_PLATFORM_SUPPORTED}" ]]; then
+      use_bash_maven_runner="1"
+    fi
+
     if [[ -n "$MAVEN_DEBUG" ]]; then
       echo "[dts-build] DEBUG: Running mvn with args: ${maven_args[*]} package"
-      docker run --rm --memory="${MAVEN_MEMORY_LIMIT}" --memory-swap="${MAVEN_MEMORY_LIMIT}" "${security_opts[@]}" \
-        -e "JAVA_HOME=${MAVEN_CONTAINER_JAVA_HOME}" \
-        -e "PATH=${MAVEN_CONTAINER_PATH}" \
-        -v "${REPO_ROOT}/source:/workspace" \
-        -v "/root/.m2:/root/.m2" \
-        -w /workspace \
-        "$MAVEN_IMAGE" \
-        mvn "${maven_args[@]}" package
+      if [[ -n "${use_bash_maven_runner}" ]]; then
+        local maven_exec_cmd=""
+        printf -v maven_exec_cmd '%q ' /usr/bin/mvn "${maven_args[@]}" package
+        docker run --rm --memory="${MAVEN_MEMORY_LIMIT}" --memory-swap="${MAVEN_MEMORY_LIMIT}" "${security_opts[@]}" \
+          --entrypoint /bin/bash \
+          -v "${REPO_ROOT}/source:/workspace" \
+          -v "/root/.m2:/root/.m2" \
+          -w /workspace \
+          "$MAVEN_IMAGE" \
+          -lc "export JAVA_HOME=${MAVEN_CONTAINER_JAVA_HOME}; export PATH=${MAVEN_CONTAINER_PATH}; exec ${maven_exec_cmd% }"
+      else
+        docker run --rm --memory="${MAVEN_MEMORY_LIMIT}" --memory-swap="${MAVEN_MEMORY_LIMIT}" "${security_opts[@]}" \
+          -e "JAVA_HOME=${MAVEN_CONTAINER_JAVA_HOME}" \
+          -e "PATH=${MAVEN_CONTAINER_PATH}" \
+          -v "${REPO_ROOT}/source:/workspace" \
+          -v "/root/.m2:/root/.m2" \
+          -w /workspace \
+          "$MAVEN_IMAGE" \
+          mvn "${maven_args[@]}" package
+      fi
     else
-      docker run --rm --memory="${MAVEN_MEMORY_LIMIT}" --memory-swap="${MAVEN_MEMORY_LIMIT}" "${security_opts[@]}" \
-        -e "JAVA_HOME=${MAVEN_CONTAINER_JAVA_HOME}" \
-        -e "PATH=${MAVEN_CONTAINER_PATH}" \
-        -v "${REPO_ROOT}/source:/workspace" \
-        -v "/root/.m2:/root/.m2" \
-        -w /workspace \
-        "$MAVEN_IMAGE" \
-        mvn "${maven_args[@]}" package
+      if [[ -n "${use_bash_maven_runner}" ]]; then
+        local maven_exec_cmd=""
+        printf -v maven_exec_cmd '%q ' /usr/bin/mvn "${maven_args[@]}" package
+        docker run --rm --memory="${MAVEN_MEMORY_LIMIT}" --memory-swap="${MAVEN_MEMORY_LIMIT}" "${security_opts[@]}" \
+          --entrypoint /bin/bash \
+          -v "${REPO_ROOT}/source:/workspace" \
+          -v "/root/.m2:/root/.m2" \
+          -w /workspace \
+          "$MAVEN_IMAGE" \
+          -lc "export JAVA_HOME=${MAVEN_CONTAINER_JAVA_HOME}; export PATH=${MAVEN_CONTAINER_PATH}; exec ${maven_exec_cmd% }"
+      else
+        docker run --rm --memory="${MAVEN_MEMORY_LIMIT}" --memory-swap="${MAVEN_MEMORY_LIMIT}" "${security_opts[@]}" \
+          -e "JAVA_HOME=${MAVEN_CONTAINER_JAVA_HOME}" \
+          -e "PATH=${MAVEN_CONTAINER_PATH}" \
+          -v "${REPO_ROOT}/source:/workspace" \
+          -v "/root/.m2:/root/.m2" \
+          -w /workspace \
+          "$MAVEN_IMAGE" \
+          mvn "${maven_args[@]}" package
+      fi
     fi
   fi
 
