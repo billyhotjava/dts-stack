@@ -376,6 +376,19 @@ MAVEN_SETTINGS_EOF
     if [[ "${MAVEN_UNRESTRICTED}" == "1" ]]; then
       security_opts+=(--security-opt "seccomp=unconfined" --ulimit "nproc=65535:65535")
     fi
+    # Docker 18.09 on Kunpeng ARM64 has a restrictive seccomp profile that blocks
+    # pthread_create (clone syscall), preventing JVM from starting GC threads.
+    # Auto-enable seccomp=unconfined for old Docker on ARM64.
+    if [[ -z "${DOCKER_PLATFORM_SUPPORTED}" && ("${HOST_ARCH}" == "aarch64" || "${HOST_ARCH}" == "arm64") ]]; then
+      local has_seccomp=""
+      for opt in "${security_opts[@]+"${security_opts[@]}"}"; do
+        if [[ "$opt" == *seccomp* ]]; then has_seccomp="1"; break; fi
+      done
+      if [[ -z "$has_seccomp" ]]; then
+        echo "[dts-build] INFO: Adding seccomp=unconfined for Docker ${DOCKER_API_VERSION} on ARM64 (JVM thread creation fix)"
+        security_opts+=(--security-opt "seccomp=unconfined")
+      fi
+    fi
     # Generate settings.xml on the HOST side before docker run,
     # so we can run mvn directly without a shell wrapper.
     # Using sh -c inside the container corrupts JAVA_HOME on ARM64/Kunpeng.
@@ -404,35 +417,21 @@ SETTINGS_EOF
       maven_args+=(-s /root/.m2/settings.xml)
     fi
 
-    # Diagnostic: verify JAVA_HOME and java binary inside the container
-    echo "[dts-build] Diagnosing Maven container environment..."
-    docker run --rm "$MAVEN_IMAGE" sh -c \
-      'echo "JAVA_HOME=$JAVA_HOME"; echo "which java=$(which java 2>/dev/null || echo NOT_FOUND)"; echo "which mvn=$(which mvn 2>/dev/null || echo NOT_FOUND)"; ls -la "$JAVA_HOME/bin/java" 2>/dev/null || echo "java binary NOT FOUND at $JAVA_HOME/bin/java"; java -version 2>&1 || true' \
-      || echo "[dts-build] WARN: diagnostic docker run failed (exit $?)"
-
     if [[ -n "$MAVEN_DEBUG" ]]; then
-      echo "[dts-build] DEBUG: Running mvn with args: ${maven_args[*]} package"
+      echo "[dts-build] DEBUG: mvn args: ${maven_args[*]} package"
+      echo "[dts-build] DEBUG: security_opts: ${security_opts[*]+"${security_opts[*]}"}"
     fi
-    # Build docker run command array to avoid empty-array expansion issues
-    local docker_cmd=(docker run --rm
-      --memory="${MAVEN_MEMORY_LIMIT}" --memory-swap="${MAVEN_MEMORY_LIMIT}")
-    if [[ -n "$MAVEN_SECURITY_OPT" ]]; then
-      docker_cmd+=(--security-opt "$MAVEN_SECURITY_OPT")
-    fi
-    if [[ "${MAVEN_UNRESTRICTED}" == "1" ]]; then
-      docker_cmd+=(--security-opt "seccomp=unconfined" --ulimit "nproc=65535:65535")
-    fi
-    docker_cmd+=(
-      -e "JAVA_HOME=${MAVEN_CONTAINER_JAVA_HOME}"
-      -e "PATH=${MAVEN_CONTAINER_JAVA_HOME}/bin:/usr/share/maven/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-      -v "${REPO_ROOT}/source:/workspace"
-      -v "/root/.m2:/root/.m2"
-      -w /workspace
-      "$MAVEN_IMAGE"
+    # Run mvn directly — DO NOT wrap in sh -c or bash -lc.
+    # Explicitly pass JAVA_HOME/PATH via -e for Docker 18.09 compatibility.
+    docker run --rm --memory="${MAVEN_MEMORY_LIMIT}" --memory-swap="${MAVEN_MEMORY_LIMIT}" \
+      ${security_opts[@]+"${security_opts[@]}"} \
+      -e "JAVA_HOME=${MAVEN_CONTAINER_JAVA_HOME}" \
+      -e "PATH=${MAVEN_CONTAINER_JAVA_HOME}/bin:/usr/share/maven/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
+      -v "${REPO_ROOT}/source:/workspace" \
+      -v "/root/.m2:/root/.m2" \
+      -w /workspace \
+      "$MAVEN_IMAGE" \
       mvn "${maven_args[@]}" package
-    )
-    echo "[dts-build] Executing: ${docker_cmd[*]}"
-    "${docker_cmd[@]}"
   fi
 
   local jar_path
