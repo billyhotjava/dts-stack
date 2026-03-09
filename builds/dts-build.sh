@@ -404,20 +404,35 @@ SETTINGS_EOF
       maven_args+=(-s /root/.m2/settings.xml)
     fi
 
+    # Diagnostic: verify JAVA_HOME and java binary inside the container
+    echo "[dts-build] Diagnosing Maven container environment..."
+    docker run --rm "$MAVEN_IMAGE" sh -c \
+      'echo "JAVA_HOME=$JAVA_HOME"; echo "which java=$(which java 2>/dev/null || echo NOT_FOUND)"; echo "which mvn=$(which mvn 2>/dev/null || echo NOT_FOUND)"; ls -la "$JAVA_HOME/bin/java" 2>/dev/null || echo "java binary NOT FOUND at $JAVA_HOME/bin/java"; java -version 2>&1 || true' \
+      || echo "[dts-build] WARN: diagnostic docker run failed (exit $?)"
+
     if [[ -n "$MAVEN_DEBUG" ]]; then
       echo "[dts-build] DEBUG: Running mvn with args: ${maven_args[*]} package"
     fi
-    # Run mvn directly — DO NOT wrap in sh -c or bash -lc.
-    # Explicitly pass JAVA_HOME/PATH via -e because Docker 18.09 on Kunpeng
-    # may not properly inherit the image's ENV variables.
-    docker run --rm --memory="${MAVEN_MEMORY_LIMIT}" --memory-swap="${MAVEN_MEMORY_LIMIT}" "${security_opts[@]}" \
-      -e "JAVA_HOME=${MAVEN_CONTAINER_JAVA_HOME}" \
-      -e "PATH=${MAVEN_CONTAINER_JAVA_HOME}/bin:/usr/share/maven/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
-      -v "${REPO_ROOT}/source:/workspace" \
-      -v "/root/.m2:/root/.m2" \
-      -w /workspace \
-      "$MAVEN_IMAGE" \
+    # Build docker run command array to avoid empty-array expansion issues
+    local docker_cmd=(docker run --rm
+      --memory="${MAVEN_MEMORY_LIMIT}" --memory-swap="${MAVEN_MEMORY_LIMIT}")
+    if [[ -n "$MAVEN_SECURITY_OPT" ]]; then
+      docker_cmd+=(--security-opt "$MAVEN_SECURITY_OPT")
+    fi
+    if [[ "${MAVEN_UNRESTRICTED}" == "1" ]]; then
+      docker_cmd+=(--security-opt "seccomp=unconfined" --ulimit "nproc=65535:65535")
+    fi
+    docker_cmd+=(
+      -e "JAVA_HOME=${MAVEN_CONTAINER_JAVA_HOME}"
+      -e "PATH=${MAVEN_CONTAINER_JAVA_HOME}/bin:/usr/share/maven/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+      -v "${REPO_ROOT}/source:/workspace"
+      -v "/root/.m2:/root/.m2"
+      -w /workspace
+      "$MAVEN_IMAGE"
       mvn "${maven_args[@]}" package
+    )
+    echo "[dts-build] Executing: ${docker_cmd[*]}"
+    "${docker_cmd[@]}"
   fi
 
   local jar_path
