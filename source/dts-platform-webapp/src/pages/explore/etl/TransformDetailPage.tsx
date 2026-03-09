@@ -83,8 +83,12 @@ export default function TransformDetailPage() {
 			setRealtimeStatus(null);
 			return;
 		}
+		if (normalizeText(task.syncMode).toLowerCase() !== "cdc") {
+			setRealtimeStatus(null);
+			return;
+		}
 		void loadRealtimeStatus(Number(task.id), true);
-	}, [task?.id]);
+	}, [task?.id, task?.syncMode]);
 
 	useEffect(() => {
 		return () => {
@@ -205,6 +209,7 @@ export default function TransformDetailPage() {
 	};
 
 	const normalizeText = (value?: string) => String(value || "").trim();
+	const showRealtimeStatusCard = normalizeText(task?.syncMode).toLowerCase() === "cdc";
 
 	const parseModelNames = (selector?: string) => {
 		const raw = normalizeText(selector);
@@ -579,35 +584,37 @@ export default function TransformDetailPage() {
 				</div>
 			</Card>
 
-			<Card
-				title="实时状态（预留）"
-				extra={
-					<Button
-						icon={<ReloadOutlined />}
-						onClick={() => task?.id && loadRealtimeStatus(Number(task.id))}
-						loading={realtimeStatusLoading}
-					>
-						刷新实时状态
-					</Button>
-				}
-			>
-				<Descriptions column={2} bordered>
-					<Descriptions.Item label="连接器">{realtimeStatus?.connectorType || "-"}</Descriptions.Item>
-					<Descriptions.Item label="链路状态">
-						{realtimeStatus?.status ? <Tag color={realtimeStatus.status === "RUNNING" ? "processing" : realtimeStatus.status === "ERROR" ? "error" : "default"}>{realtimeStatus.status}</Tag> : "-"}
-					</Descriptions.Item>
-					<Descriptions.Item label="Topic">{realtimeStatus?.topicName || "-"}</Descriptions.Item>
-					<Descriptions.Item label="Consumer Group">{realtimeStatus?.consumerGroup || "-"}</Descriptions.Item>
-					<Descriptions.Item label="Checkpoint">{realtimeStatus?.checkpointToken || "-"}</Descriptions.Item>
-					<Descriptions.Item label="最新心跳">{realtimeStatus?.lastHeartbeat ? new Date(realtimeStatus.lastHeartbeat).toLocaleString("zh-CN") : "-"}</Descriptions.Item>
-					<Descriptions.Item label="延迟(ms)">{realtimeStatus?.lagMs ?? "-"}</Descriptions.Item>
-					<Descriptions.Item label="吞吐(rps)">{realtimeStatus?.throughputRps ?? "-"}</Descriptions.Item>
-					<Descriptions.Item label="堆积量" span={2}>{realtimeStatus?.backlogCount ?? "-"}</Descriptions.Item>
-				</Descriptions>
-				<div className="mt-2 text-xs text-muted-foreground">
-					该区域用于后续实时链路（Kafka/CDC）监控；当前批处理任务展示为预留状态。
-				</div>
-			</Card>
+			{showRealtimeStatusCard ? (
+				<Card
+					title="实时状态（预留）"
+					extra={
+						<Button
+							icon={<ReloadOutlined />}
+							onClick={() => task?.id && loadRealtimeStatus(Number(task.id))}
+							loading={realtimeStatusLoading}
+						>
+							刷新实时状态
+						</Button>
+					}
+				>
+					<Descriptions column={2} bordered>
+						<Descriptions.Item label="连接器">{realtimeStatus?.connectorType || "-"}</Descriptions.Item>
+						<Descriptions.Item label="链路状态">
+							{realtimeStatus?.status ? <Tag color={realtimeStatus.status === "RUNNING" ? "processing" : realtimeStatus.status === "ERROR" ? "error" : "default"}>{realtimeStatus.status}</Tag> : "-"}
+						</Descriptions.Item>
+						<Descriptions.Item label="Topic">{realtimeStatus?.topicName || "-"}</Descriptions.Item>
+						<Descriptions.Item label="Consumer Group">{realtimeStatus?.consumerGroup || "-"}</Descriptions.Item>
+						<Descriptions.Item label="Checkpoint">{realtimeStatus?.checkpointToken || "-"}</Descriptions.Item>
+						<Descriptions.Item label="最新心跳">{realtimeStatus?.lastHeartbeat ? new Date(realtimeStatus.lastHeartbeat).toLocaleString("zh-CN") : "-"}</Descriptions.Item>
+						<Descriptions.Item label="延迟(ms)">{realtimeStatus?.lagMs ?? "-"}</Descriptions.Item>
+						<Descriptions.Item label="吞吐(rps)">{realtimeStatus?.throughputRps ?? "-"}</Descriptions.Item>
+						<Descriptions.Item label="堆积量" span={2}>{realtimeStatus?.backlogCount ?? "-"}</Descriptions.Item>
+					</Descriptions>
+					<div className="mt-2 text-xs text-muted-foreground">
+						该区域用于后续实时链路（Kafka/CDC）监控；当前展示范围仅限 `cdc` 任务。
+					</div>
+				</Card>
+			) : null}
 
 			{normalizeText(task.syncMode).toLowerCase() === "incremental" ? (
 				<Card

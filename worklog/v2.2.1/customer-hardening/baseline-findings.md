@@ -61,12 +61,14 @@
   - `TransformCreatePage`
   - `QueryWorkbenchPage`
 - Both webapps still show mixed static/dynamic import warnings, which weakens route-level code splitting and can affect first-load performance on onsite environments.
+- `TransformDetailPage` no longer shows the reserved realtime-status panel for non-`cdc` tasks; batch task detail pages are now closer to the customer’s actual usage path.
 
 ## Candidate First-Wave Fixes
 
 - `BUG-001`: done; `dts-platform` dependency convergence is now aligned and the regression script passes
 - `BUG-002`: done; `dts-platform` unit-test baseline is stable after Mockito agent wiring, stale target cleanup, and test updates
 - `UI-001`: done; route-splitting overlap warnings for `workbench`, `sys/login`, and `sys/error` are removed
+- `UI-002`: done; ETL detail page only shows realtime monitoring for `cdc` tasks, removing reserved noise from batch task pages
 - next candidate should be selected from:
   - runtime main-flow walkthrough findings
   - integration environment enablement if onsite validation needs Docker-backed IT coverage
