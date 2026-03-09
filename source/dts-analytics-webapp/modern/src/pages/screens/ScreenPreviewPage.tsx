@@ -4,6 +4,7 @@ import { analyticsApi } from '../../api/analyticsApi';
 import { ComponentRenderer } from './components/ComponentRenderer';
 import { DeviceModeSwitcher } from './components/DeviceModeSwitcher';
 import { PreviewScaleControl } from './components/PreviewScaleControl';
+import { RuntimeActionPanel } from './components/RuntimeActionPanel';
 import { ScreenRuntimeProvider } from './ScreenRuntimeContext';
 import type { ScreenConfig, ScreenTheme } from './types';
 import { resolveScreenTheme } from './screenThemes';
@@ -275,7 +276,10 @@ export default function ScreenPreviewPage() {
 
     return (
         <ScreenRuntimeProvider definitions={screen.globalVariables ?? []}>
-        <div className={`screen-runtime screen-runtime--fullscreen ${screenTheme === 'glacier' ? 'screen-runtime--light' : 'screen-runtime--dark'}`}>
+        <div
+            data-testid="analytics-screen-preview"
+            className={`screen-runtime screen-runtime--fullscreen ${screenTheme === 'glacier' ? 'screen-runtime--light' : 'screen-runtime--dark'}`}
+        >
             <div className="screen-runtime__meta-card">
                 <div className="screen-runtime__eyebrow">Screen Preview</div>
                 <div className="screen-runtime__title">{screen.name || '未命名大屏'}</div>
@@ -323,9 +327,12 @@ export default function ScreenPreviewPage() {
                                 .map((component) => (
                                     <div
                                         key={component.id}
-                                            style={{
-                                                position: 'absolute',
-                                                left: component.x - contentBounds.minLeft,
+                                        data-component-id={component.id}
+                                        data-component-name={component.name}
+                                        data-component-type={component.type}
+                                        style={{
+                                            position: 'absolute',
+                                            left: component.x - contentBounds.minLeft,
                                                 top: component.y - contentBounds.minTop,
                                                 width: component.width,
                                                 height: component.height,
@@ -379,6 +386,7 @@ export default function ScreenPreviewPage() {
                         </button>
                     </div>
                 )}
+                <RuntimeActionPanel />
             </div>
         </div>
         </ScreenRuntimeProvider>

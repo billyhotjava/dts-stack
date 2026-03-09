@@ -163,6 +163,33 @@ export function resolveFilterOptions(raw: unknown): Array<{ label: string; value
     return out;
 }
 
+export function resolveFilterDefaultValue(
+    currentValue: string,
+    configuredDefault: unknown,
+    options: Array<{ label: string; value: string }> = [],
+): string {
+    const current = String(currentValue ?? '').trim();
+    if (current) {
+        return current;
+    }
+    const fallback = String(configuredDefault ?? '').trim();
+    if (fallback) {
+        return fallback;
+    }
+    return String(options[0]?.value ?? '').trim();
+}
+
+export function resolveDateRangeDefaultValues(
+    currentStartValue: string,
+    currentEndValue: string,
+    configuredStartDefault: unknown,
+    configuredEndDefault: unknown,
+): { startValue: string; endValue: string } {
+    const startValue = String(currentStartValue ?? '').trim() || String(configuredStartDefault ?? '').trim();
+    const endValue = String(currentEndValue ?? '').trim() || String(configuredEndDefault ?? '').trim();
+    return { startValue, endValue };
+}
+
 export function resolveTabOptions(raw: unknown): Array<{ label: string; value: string }> {
     return resolveFilterOptions(raw);
 }

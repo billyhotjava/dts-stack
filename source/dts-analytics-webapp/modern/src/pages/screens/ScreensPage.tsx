@@ -429,14 +429,14 @@ export default function ScreensPage() {
     };
 
     return (
-        <div className="page-container">
+        <div className="page-container" data-testid="analytics-screens-page">
             <div className="page-header">
                 <h1 className="page-title">大屏管理</h1>
                 <div style={{ display: 'flex', gap: 10 }}>
                     <button className="primary-btn" onClick={handleOpenAiGenerator}>
                         AI生成
                     </button>
-                    <button className="primary-btn" onClick={handleCreate}>
+                    <button className="primary-btn" data-testid="analytics-screen-create" onClick={handleCreate}>
                         新建大屏
                     </button>
                 </div>
@@ -539,9 +539,10 @@ export default function ScreensPage() {
                 ) : (
                     <div className="screens-grid">
                         {visibleScreens.map((screen) => (
-                            <div key={screen.id} className="screen-card">
+                            <div key={screen.id} className="screen-card" data-testid={`analytics-screen-card-${screen.id}`}>
                                 <div
                                     className="screen-card-preview"
+                                    data-testid={`analytics-screen-edit-${screen.id}`}
                                     onClick={() => handleEdit(screen.id)}
                                 >
                                     <div className="screen-card-placeholder">
@@ -594,6 +595,7 @@ export default function ScreensPage() {
                                 <div className="screen-card-actions">
                                     <button
                                         className="action-btn edit"
+                                        data-testid={`analytics-screen-edit-button-${screen.id}`}
                                         onClick={() => handleEdit(screen.id)}
                                         title="编辑大屏"
                                     >
@@ -601,6 +603,7 @@ export default function ScreensPage() {
                                     </button>
                                     <button
                                         className="action-btn preview"
+                                        data-testid={`analytics-screen-preview-${screen.id}`}
                                         onClick={() => handlePreview(screen.id)}
                                         title="预览大屏"
                                     >

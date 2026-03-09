@@ -32,8 +32,11 @@
 
 ## 当前进度
 
-- 状态：`pending`
-- 依赖：`AN-001`
+- 状态：`done`
+- 完成项：
+  - `PropertyPanel` 已支持筛选组件的默认值与作用说明配置
+  - `ComponentRenderer` 已支持 `filter-input / filter-select / filter-date-range` 的默认值初始化
+  - 模板运行态继续复用现有变量绑定刷新链路，无需额外改 query merge
 
 ## 风险
 

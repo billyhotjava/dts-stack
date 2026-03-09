@@ -648,7 +648,7 @@ export function TemplateGallery({ onSelect, onClose }: TemplateGalleryProps) {
     };
 
     return (
-        <div className="template-gallery-overlay" onClick={onClose}>
+        <div className="template-gallery-overlay" data-testid="analytics-screen-template-gallery" onClick={onClose}>
             <div className="template-gallery-modal" onClick={(e) => e.stopPropagation()}>
                 <div className="template-gallery-header">
                     <h2>📋 模板市场</h2>
@@ -659,6 +659,7 @@ export function TemplateGallery({ onSelect, onClose }: TemplateGalleryProps) {
                     {allCategories.map((value) => (
                         <button
                             key={value}
+                            data-testid={`analytics-screen-template-category-${value}`}
                             className={`template-category-tab ${category === value ? 'active' : ''}`}
                             onClick={() => setCategory(value)}
                         >
@@ -721,6 +722,7 @@ export function TemplateGallery({ onSelect, onClose }: TemplateGalleryProps) {
                             return (
                                 <div
                                     key={key}
+                                    data-testid={`analytics-screen-template-builtin-${template.id}`}
                                     className={`template-card ${selectedKey === key ? 'selected' : ''}`}
                                     onClick={() => setSelectedKey(key)}
                                 >
@@ -773,6 +775,7 @@ export function TemplateGallery({ onSelect, onClose }: TemplateGalleryProps) {
                                 return (
                                     <div
                                         key={key}
+                                        data-testid={`analytics-screen-template-asset-${template.id}`}
                                         className={`template-card ${selectedKey === key ? 'selected' : ''}`}
                                         onClick={() => setSelectedKey(key)}
                                     >
@@ -826,7 +829,7 @@ export function TemplateGallery({ onSelect, onClose }: TemplateGalleryProps) {
                         </>
                     ) : null}
                     <button className="template-btn secondary" onClick={onClose}>取消</button>
-                    <button className="template-btn primary" onClick={handleConfirm}>使用此模板</button>
+                    <button className="template-btn primary" data-testid="analytics-screen-template-confirm" onClick={handleConfirm}>使用此模板</button>
                 </div>
             </div>
 

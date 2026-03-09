@@ -2118,6 +2118,7 @@ export function ScreenHeader() {
                     </div>
                     <div className="screen-header-primary-actions">
                         <select
+                            data-testid="analytics-screen-primary-action-select"
                             className="header-device-select header-primary-desktop"
                             value={primaryAction}
                             onChange={(event) => {
@@ -2136,6 +2137,7 @@ export function ScreenHeader() {
                         </select>
                         <button
                             type="button"
+                            data-testid="analytics-screen-primary-action-button"
                             className="header-btn save-btn header-primary-desktop"
                             onClick={executePrimaryAction}
                             disabled={!canExecutePrimaryAction}
@@ -2170,7 +2172,7 @@ export function ScreenHeader() {
                 </div>
             )}
             {publishNotice && (
-                <div className="screen-publish-notice">
+                <div className="screen-publish-notice" data-testid="analytics-screen-publish-notice">
                     <div className="screen-publish-notice-main">
                         <div className="screen-publish-notice-title">
                             已发布 v{publishNotice.versionNo}（大屏 #{publishNotice.screenId}）

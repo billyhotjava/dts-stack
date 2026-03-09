@@ -5,6 +5,7 @@ import { ComponentRenderer } from './components/ComponentRenderer';
 import { DeviceModeSwitcher } from './components/DeviceModeSwitcher';
 import { GlobalVariablePanel } from './components/GlobalVariablePanel';
 import { PreviewScaleControl } from './components/PreviewScaleControl';
+import { RuntimeActionPanel } from './components/RuntimeActionPanel';
 import { ScreenRuntimeProvider } from './ScreenRuntimeContext';
 import type { ScreenConfig, ScreenTheme } from './types';
 import { resolveScreenTheme } from './screenThemes';
@@ -320,6 +321,9 @@ export default function PublicScreenPage() {
                                     .map((component) => (
                                         <div
                                             key={component.id}
+                                            data-component-id={component.id}
+                                            data-component-name={component.name}
+                                            data-component-type={component.type}
                                             style={{
                                                 position: 'absolute',
                                                 left: component.x - contentBounds.minLeft,
@@ -374,6 +378,7 @@ export default function PublicScreenPage() {
                         </button>
                     </div>
                 )}
+                <RuntimeActionPanel />
             </div>
         </ScreenRuntimeProvider>
     );

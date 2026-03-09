@@ -1,7 +1,14 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { ScreenGlobalVariable } from './types';
 
-export type RuntimeEventKind = 'variable' | 'filter' | 'interaction' | 'drill-down' | 'drill-up' | 'jump';
+export type RuntimeEventKind = 'variable' | 'filter' | 'interaction' | 'drill-down' | 'drill-up' | 'jump' | 'action' | 'panel' | 'intent';
+
+export interface RuntimeActionPanelState {
+    open: boolean;
+    title: string;
+    body: string;
+    source?: string;
+}
 
 export interface RuntimeVariableEvent {
     id: number;
@@ -16,16 +23,32 @@ export interface RuntimeVariableEvent {
 interface ScreenRuntimeContextValue {
     definitions: ScreenGlobalVariable[];
     values: Record<string, string>;
+    panel: RuntimeActionPanelState;
     getEvents: () => RuntimeVariableEvent[];
     setVariable: (key: string, value: string, source?: string) => void;
+    openPanel: (title: string, body: string, source?: string) => void;
+    closePanel: () => void;
     trackEvent: (event: Omit<RuntimeVariableEvent, 'id' | 'at'>) => void;
 }
+
+const emptyPanel: RuntimeActionPanelState = {
+    open: false,
+    title: '',
+    body: '',
+};
 
 const emptyValue: ScreenRuntimeContextValue = {
     definitions: [],
     values: {},
+    panel: emptyPanel,
     getEvents: () => [],
     setVariable: () => {
+        // no-op for unwrapped usage
+    },
+    openPanel: () => {
+        // no-op for unwrapped usage
+    },
+    closePanel: () => {
         // no-op for unwrapped usage
     },
     trackEvent: () => {
@@ -57,6 +80,9 @@ function inferEventKindBySource(source?: string): RuntimeEventKind {
     if (!normalized) return 'variable';
     if (normalized.startsWith('filter-') || normalized.startsWith('map-')) return 'filter';
     if (normalized.startsWith('interaction:')) return 'interaction';
+    if (normalized.startsWith('action:')) return 'action';
+    if (normalized.startsWith('panel:')) return 'panel';
+    if (normalized.startsWith('intent:')) return 'intent';
     if (normalized.startsWith('drill:')) return 'drill-down';
     return 'variable';
 }
@@ -71,6 +97,7 @@ export function ScreenRuntimeProvider({
     const normalizedDefinitions = useMemo(() => normalizeDefinitions(definitions), [definitions]);
     const [values, setValues] = useState<Record<string, string>>({});
     const [events, setEvents] = useState<RuntimeVariableEvent[]>([]);
+    const [panel, setPanel] = useState<RuntimeActionPanelState>(emptyPanel);
 
     // Phase 1.5: use ref for events so context consumers don't re-render on every event
     const eventsRef = useRef(events);
@@ -90,6 +117,7 @@ export function ScreenRuntimeProvider({
     const contextValue = useMemo<ScreenRuntimeContextValue>(() => ({
         definitions: normalizedDefinitions,
         values,
+        panel,
         getEvents: () => eventsRef.current,
         trackEvent: (event) => {
             const safeKey = (event.key || '').trim() || '__event__';
@@ -122,7 +150,18 @@ export function ScreenRuntimeProvider({
                 return [next, ...prev].slice(0, 100);
             });
         },
-    }), [normalizedDefinitions, values]); // events removed from deps
+        openPanel: (title: string, body: string, source?: string) => {
+            setPanel({
+                open: true,
+                title: String(title || '').trim() || '详情',
+                body: String(body || '').trim(),
+                source: source?.trim() || undefined,
+            });
+        },
+        closePanel: () => {
+            setPanel(emptyPanel);
+        },
+    }), [normalizedDefinitions, panel, values]); // events removed from deps
 
     return <ScreenRuntimeContext.Provider value={contextValue}>{children}</ScreenRuntimeContext.Provider>;
 }

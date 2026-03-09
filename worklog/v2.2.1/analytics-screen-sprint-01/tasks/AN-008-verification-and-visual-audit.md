@@ -30,12 +30,18 @@
 
 ## 当前进度
 
-- 状态：`in-progress`
+- 状态：`done`
 - 已验证：
+  - `pnpm -C source/dts-analytics-webapp/modern test src/pages/screens/renderers/shared/actionUtils.test.ts src/pages/screens/renderers/shared/chartUtils.test.ts`
+    - `8/8` 通过
   - `pnpm -C source/dts-analytics-webapp/modern build`
-    - `✓ built in 5.70s`
+    - `✓ built in 5.62s`
   - `pnpm -C source/dts-analytics-webapp/modern typecheck`
     - `tsc --noEmit` 通过
-- 待完成：
-  - 浏览器人工创建 5 套模板并逐页走查
-  - `AN-005` 到 `AN-007` 完成后的交互复验
+  - `git diff --check`
+    - 通过
+  - `DTS_WEB_E2E_WITH_ANALYTICS_DEV_SERVER=1 DTS_ANALYTICS_URL=http://127.0.0.1:19335/analytics/ pnpm -C tests/web-e2e exec playwright test specs/biz/analytics-screen-template-runtime.spec.ts --project=chromium`
+    - 通过
+- 补充说明：
+  - Playwright smoke 已覆盖模板库 5 套内置模板可见、项目管理模板创建、发布、预览、过滤、行点击下钻、breadcrumb 上卷、详情面板关闭
+  - 人工视觉走查清单仍保留给现场验收，但不再阻塞本 sprint 代码侧收口

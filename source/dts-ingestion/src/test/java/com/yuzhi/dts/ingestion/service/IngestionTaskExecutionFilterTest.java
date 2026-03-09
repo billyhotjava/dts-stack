@@ -14,6 +14,7 @@ import com.yuzhi.dts.ingestion.service.etl.AddaxJobService;
 import com.yuzhi.dts.ingestion.service.etl.AirflowAdapter;
 import com.yuzhi.dts.ingestion.service.etl.AirflowDagService;
 import com.yuzhi.dts.ingestion.service.etl.IncrementalSyncService;
+import com.yuzhi.dts.ingestion.service.etl.IngestionRetryService;
 import com.yuzhi.dts.ingestion.service.etl.TargetTableProvisioner;
 import com.yuzhi.dts.ingestion.service.mapper.IngestionExecutionMapper;
 import com.yuzhi.dts.ingestion.service.mapper.IngestionTaskMapper;
@@ -70,6 +71,9 @@ class IngestionTaskExecutionFilterTest {
     @Mock
     private IngestionTaskChangeLogService changeLogService;
 
+    @Mock
+    private IngestionRetryService retryService;
+
     private IngestionTaskService ingestionTaskService;
 
     @BeforeEach
@@ -87,7 +91,8 @@ class IngestionTaskExecutionFilterTest {
             targetTableProvisioner,
             incrementalSyncService,
             auditService,
-            changeLogService
+            changeLogService,
+            retryService
         );
     }
 

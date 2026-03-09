@@ -1830,6 +1830,15 @@ const projectManagementCockpitTemplate: ScreenTemplate = {
                         { cardId: 1002, paramName: 'projectId', label: '项目' },
                     ],
                 },
+                actions: [
+                    { type: 'drill-down', label: '下钻到阶段详情' },
+                    {
+                        type: 'open-panel',
+                        label: '查看阶段摘要',
+                        panelTitle: '阶段 {{name}}',
+                        panelBodyTemplate: '当前阶段：{{name}}\n计划里程碑数：{{value}}\n建议动作：继续下钻到项目层查看具体风险与交付物。',
+                    },
+                ],
             },
             {
                 ...createComponent('pm-risk-pie', 'pie-chart', '风险结构', 760, 256, 340, 310, 15, {
@@ -1870,13 +1879,45 @@ const projectManagementCockpitTemplate: ScreenTemplate = {
                     mappings: [{ variableKey: 'issueStatus', sourcePath: 'name', transform: 'raw' }],
                 },
             },
-            createStaticTableComponent('pm-risk-table', '风险与堵点', 40, 596, 700, 420, ['项目', '风险/堵点', '责任人', '等级', '动作'], [
-                ['QMS二期', '验证数据缺口', '周工', '高', '补采集'],
-                ['PLM整合', 'ECO审批慢', '李工', '中', '催办'],
-                ['主数据治理', '接口方案待定', '王工', '高', '评审'],
-                ['财务共享', '回款口径差异', '陈工', '中', '核对'],
-                ['制造升级', '排期冲突', '赵工', '高', '协调'],
-            ]),
+            {
+                ...createStaticTableComponent('pm-risk-table', '风险与堵点', 40, 596, 700, 420, ['项目', '风险/堵点', '责任人', '等级', '动作'], [
+                    ['QMS二期', '验证数据缺口', '周工', '高', '补采集'],
+                    ['PLM整合', 'ECO审批慢', '李工', '中', '催办'],
+                    ['主数据治理', '接口方案待定', '王工', '高', '评审'],
+                    ['财务共享', '回款口径差异', '陈工', '中', '核对'],
+                    ['制造升级', '排期冲突', '赵工', '高', '协调'],
+                ]),
+                drillDown: {
+                    enabled: true,
+                    levels: [
+                        { cardId: 1101, paramName: 'projectId', label: '项目' },
+                        { cardId: 1102, paramName: 'ownerUserId', label: '责任人' },
+                    ],
+                },
+                actions: [
+                    {
+                        type: 'drill-down',
+                        label: '查看项目风险层级',
+                    },
+                    {
+                        type: 'open-panel',
+                        label: '查看风险详情',
+                        panelTitle: '{{项目}} · {{等级}}风险',
+                        panelBodyTemplate: '风险/堵点：{{风险/堵点}}\n责任人：{{责任人}}\n当前动作：{{动作}}\n建议：立即拉通责任人并更新周报。',
+                    },
+                    {
+                        type: 'emit-intent',
+                        label: '发起跟进意图',
+                        intentName: 'project.follow-up',
+                        intentPayloadTemplate: '{"project":"{{项目}}","owner":"{{责任人}}","riskLevel":"{{等级}}","nextAction":"{{动作}}"}',
+                        mappings: [
+                            { variableKey: 'projectId', sourcePath: '项目', transform: 'raw' },
+                            { variableKey: 'ownerUserId', sourcePath: '责任人', transform: 'raw' },
+                            { variableKey: 'riskLevel', sourcePath: '等级', transform: 'raw' },
+                        ],
+                    },
+                ],
+            },
             createStaticTableComponent('pm-change-table', '变更与审批', 760, 596, 340, 420, ['变更', '类型', '状态', '责任'], [
                 ['CR-101', '范围', '待审批', 'PMO'],
                 ['CR-118', '资源', '处理中', '实施'],
@@ -1889,12 +1930,22 @@ const projectManagementCockpitTemplate: ScreenTemplate = {
                 ['UAT脚本', '03-21', '陈工', '待评审'],
                 ['切换方案', '03-24', '周工', '未启动'],
             ]),
-            createStaticTableComponent('pm-work-item-table', '行动清单', 1500, 596, 380, 420, ['动作', '触发对象', '建议入口', '优先级'], [
-                ['发起协调', '跨部门风险', 'emit-intent', '高'],
-                ['查看详情', '问题项', 'open-panel', '高'],
-                ['跳转周报', '项目卡片', 'jump-url', '中'],
-                ['上卷返回', '里程碑链路', 'drill-up', '中'],
-            ]),
+            {
+                ...createStaticTableComponent('pm-work-item-table', '行动清单', 1500, 596, 380, 420, ['动作', '触发对象', '建议入口', '优先级'], [
+                    ['发起协调', '跨部门风险', 'emit-intent', '高'],
+                    ['查看详情', '问题项', 'open-panel', '高'],
+                    ['跳转周报', '项目卡片', 'jump-url', '中'],
+                    ['上卷返回', '里程碑链路', 'drill-up', '中'],
+                ]),
+                actions: [
+                    {
+                        type: 'open-panel',
+                        label: '查看动作说明',
+                        panelTitle: '{{动作}}',
+                        panelBodyTemplate: '触发对象：{{触发对象}}\n建议入口：{{建议入口}}\n优先级：{{优先级}}\n说明：该动作用于项目管理模板中的上行动作演示。',
+                    },
+                ],
+            },
         ],
     },
 };

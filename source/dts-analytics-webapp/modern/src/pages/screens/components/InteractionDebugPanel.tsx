@@ -10,7 +10,7 @@ interface InteractionDebugPanelProps {
 
 export function InteractionDebugPanel({ open, cycleWarnings, onClose }: InteractionDebugPanelProps) {
     const { definitions, values, getEvents } = useScreenRuntime();
-    const [kindFilter, setKindFilter] = useState<'all' | 'variable' | 'filter' | 'interaction' | 'drill-down' | 'drill-up' | 'jump'>('all');
+    const [kindFilter, setKindFilter] = useState<'all' | 'variable' | 'filter' | 'interaction' | 'drill-down' | 'drill-up' | 'jump' | 'action' | 'panel' | 'intent'>('all');
     const events = getEvents();
     const filteredEvents = useMemo(() => (
         kindFilter === 'all' ? events : events.filter((item) => item.kind === kindFilter)
@@ -61,6 +61,9 @@ export function InteractionDebugPanel({ open, cycleWarnings, onClose }: Interact
                         <option value="drill-down">钻取下钻</option>
                         <option value="drill-up">钻取回退</option>
                         <option value="jump">页面跳转</option>
+                        <option value="action">动作入口</option>
+                        <option value="panel">详情面板</option>
+                        <option value="intent">意图事件</option>
                     </select>
                 </div>
                 <div style={{ maxHeight: 320, overflow: 'auto', fontSize: 12 }}>

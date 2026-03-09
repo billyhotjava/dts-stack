@@ -301,7 +301,10 @@ function ScreenDesignerContent() {
 
     return (
         <ScreenRuntimeProvider definitions={state.config.globalVariables}>
-            <div className={`screen-designer ${focusMode ? 'is-focus-mode' : ''}`}>
+            <div
+                data-testid="analytics-screen-designer"
+                className={`screen-designer ${focusMode ? 'is-focus-mode' : ''}`}
+            >
                 <ScreenHeader />
 
                 <div className="screen-designer-body">

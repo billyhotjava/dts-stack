@@ -200,9 +200,11 @@ export function formatTableCell(value: unknown, formatter: ColumnFormatter, base
 /**
  * 自定义滚动表格，替代 DataV ScrollBoard（DataV 硬编码 color:#fff 无法覆盖）
  */
-export function ThemedScrollTable({ config, tokens }: {
+export function ThemedScrollTable({ config, tokens, onRowClick, isRowInteractive }: {
     config: Record<string, unknown>;
     tokens: ScreenThemeTokens;
+    onRowClick?: (row: string[], rowIndex: number) => void;
+    isRowInteractive?: boolean;
 }) {
     const headers = config.header as string[] || [];
     const allData = config.data as string[][] || [];
@@ -273,10 +275,17 @@ export function ThemedScrollTable({ config, tokens }: {
                     transform: needScroll ? `translateY(-${0}px)` : 'none',
                 }}>
                     {visibleRows.map((row, ri) => (
-                        <div key={`${offset}-${ri}`} style={{
-                            display: 'flex', height: rowHeight, lineHeight: `${rowHeight}px`,
-                            background: row.originalIndex % 2 === 0 ? evenRowBGC : oddRowBGC,
-                        }}>
+                        <div
+                            key={`${offset}-${ri}`}
+                            onClick={() => onRowClick?.(row.cells, row.originalIndex)}
+                            style={{
+                                display: 'flex',
+                                height: rowHeight,
+                                lineHeight: `${rowHeight}px`,
+                                background: row.originalIndex % 2 === 0 ? evenRowBGC : oddRowBGC,
+                                cursor: isRowInteractive ? 'pointer' : 'default',
+                            }}
+                        >
                             {headers.map((_, ci) => (
                                 <div key={ci} style={{
                                     ...getColumnLayout(ci),

@@ -39,8 +39,12 @@
 
 ## 当前进度
 
-- 状态：`pending`
-- 依赖：`AN-001`
+- 状态：`done`
+- 完成项：
+  - `types.ts` 与 `specV2.ts` 已支持动作 contract
+  - `PropertyPanel` 已可配置动作入口
+  - `ComponentRenderer` 已支持图表与表格动作执行
+  - `ScreenRuntimeContext` 与 runtime pages 已支持共享详情面板和意图事件记录
 
 ## 风险
 

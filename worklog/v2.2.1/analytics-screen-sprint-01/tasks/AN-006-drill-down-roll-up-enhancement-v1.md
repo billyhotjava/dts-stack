@@ -31,8 +31,16 @@
 
 ## 当前进度
 
-- 状态：`pending`
-- 依赖：`AN-001`
+- 状态：`done`
+- 已完成：
+  - 运行态继续复用现有 breadcrumb / roll-up 机制
+  - 新动作模型已支持 `drill-down` 与 `drill-up`
+  - 项目管理模板已预置里程碑图的下钻和上卷相关动作
+  - `table` 组件在绑定 card 数据源并配置 drillDown 后，也可直接通过行点击进入下一层
+  - `table` / `scroll-board` 的 light-first runtime 现在都支持行点击动作与默认下钻入口
+  - 静态模板组件也能保留 drill breadcrumb / roll-up 状态，不再被 card data source 前置条件完全拦住
+  - 项目管理模板中的“风险与堵点”表已补 `drillDown + drill-down action`，可在预览态验证下钻和回卷
+  - Playwright smoke 已验证项目管理模板的过滤、行点击下钻、breadcrumb 回卷和详情面板
 
 ## 风险
 

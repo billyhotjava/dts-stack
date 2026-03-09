@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router';
 import { analyticsApi, HttpError } from '../../api/analyticsApi';
 import { ComponentRenderer } from './components/ComponentRenderer';
+import { RuntimeActionPanel } from './components/RuntimeActionPanel';
 import { ScreenRuntimeProvider } from './ScreenRuntimeContext';
 import type { DeviceMode } from './deviceMode';
 import { isVisibleForDevice, resolveDeviceModeByViewport } from './deviceMode';
@@ -553,6 +554,9 @@ export default function ScreenExportPage() {
                             {components.map((component) => (
                                 <div
                                     key={component.id}
+                                    data-component-id={component.id}
+                                    data-component-name={component.name}
+                                    data-component-type={component.type}
                                     style={{
                                         position: 'absolute',
                                         left: component.x,
@@ -585,6 +589,7 @@ export default function ScreenExportPage() {
                         </div>
                     )}
                 </div>
+                <RuntimeActionPanel />
             </div>
         </ScreenRuntimeProvider>
     );

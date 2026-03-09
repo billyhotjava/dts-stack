@@ -1,6 +1,19 @@
 import { useEffect, useState } from 'react';
 import { useScreen } from '../ScreenContext';
-import type { CardParameterBinding, ChartMarkArea, ChartMarkLine, ComponentInteractionMapping, ComponentType, DataSourceConfig, DrillLevel, QuerySourceType, ScreenComponent, ScreenGlobalVariable, SeriesConditionalColor } from '../types';
+import type {
+    CardParameterBinding,
+    ChartMarkArea,
+    ChartMarkLine,
+    ComponentInteractionMapping,
+    ComponentType,
+    DataSourceConfig,
+    DrillLevel,
+    QuerySourceType,
+    ScreenComponent,
+    ScreenComponentAction,
+    ScreenGlobalVariable,
+    SeriesConditionalColor,
+} from '../types';
 import { DRILLABLE_TYPES } from '../types';
 import { CardIdPicker } from './CardIdPicker';
 import { MetricBindingEditor } from './MetricBindingEditor';
@@ -59,6 +72,7 @@ const PROPERTY_SECTION_KEYS = [
     'explain',
     'drill-down',
     'interaction',
+    'actions',
     'other',
 ] as const;
 const PROPERTY_FOCUS_SECTION_KEYS = new Set<string>([
@@ -74,6 +88,7 @@ const PROPERTY_SECTION_ESSENTIAL_COLLAPSED = [
     'explain',
     'drill-down',
     'interaction',
+    'actions',
     'other',
 ] as const;
 const STYLE_CONFIG_EXCLUDE_KEYS = new Set<string>([
@@ -1311,6 +1326,9 @@ export function PropertyPanel() {
     const interactionContent = shouldRenderSection('interaction', '联动', '交互', 'interaction', 'jump')
         ? renderInteractionConfig(selectedComponent, config.globalVariables ?? [], updateComponent, { embedded: true })
         : null;
+    const actionContent = shouldRenderSection('actions', '动作', '面板', '意图', '跳转')
+        ? renderActionConfig(selectedComponent, updateComponent, { embedded: true })
+        : null;
 
     return (
         <div className={`property-panel property-panel--${panelDensity}`}>
@@ -1785,6 +1803,21 @@ export function PropertyPanel() {
                             </button>
                         </div>
                         {!isSectionCollapsed('interaction') ? interactionContent : null}
+                    </div>
+                ) : null}
+
+                {actionContent ? (
+                    <div className="property-section">
+                        <div className="property-section-title property-section-title-collapsible">
+                            <button
+                                type="button"
+                                className="property-section-toggle"
+                                onClick={() => toggleSection('actions')}
+                            >
+                                {isSectionCollapsed('actions') ? '▸' : '▾'} 动作入口
+                            </button>
+                        </div>
+                        {!isSectionCollapsed('actions') ? actionContent : null}
                     </div>
                 ) : null}
 
@@ -3493,6 +3526,26 @@ function renderComponentConfig(
                         />
                     </div>
                     <div className="property-row">
+                        <label className="property-label">默认值</label>
+                        <input
+                            type="text"
+                            className="property-input"
+                            value={(config.defaultValue as string) || ''}
+                            onChange={(e) => onChange('defaultValue', e.target.value)}
+                            placeholder="初始关键字"
+                        />
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">作用说明</label>
+                        <input
+                            type="text"
+                            className="property-input"
+                            value={(config.scopeHint as string) || ''}
+                            onChange={(e) => onChange('scopeHint', e.target.value)}
+                            placeholder="作用于项目、风险、交付物"
+                        />
+                    </div>
+                    <div className="property-row">
                         <label className="property-label">防抖(ms)</label>
                         <input
                             type="number"
@@ -3616,6 +3669,26 @@ function renderComponentConfig(
                             placeholder="请选择"
                         />
                     </div>
+                    <div className="property-row">
+                        <label className="property-label">默认值</label>
+                        <input
+                            type="text"
+                            className="property-input"
+                            value={(config.defaultValue as string) || ''}
+                            onChange={(e) => onChange('defaultValue', e.target.value)}
+                            placeholder="默认选项值"
+                        />
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">作用说明</label>
+                        <input
+                            type="text"
+                            className="property-input"
+                            value={(config.scopeHint as string) || ''}
+                            onChange={(e) => onChange('scopeHint', e.target.value)}
+                            placeholder="作用于项目、风险、交付物"
+                        />
+                    </div>
                 </>
             );
         }
@@ -3650,6 +3723,34 @@ function renderComponentConfig(
                             value={(config.endKey as string) || ''}
                             onChange={(e) => onChange('endKey', e.target.value)}
                             placeholder="endDate"
+                        />
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">默认开始</label>
+                        <input
+                            type="date"
+                            className="property-input"
+                            value={(config.defaultStartValue as string) || ''}
+                            onChange={(e) => onChange('defaultStartValue', e.target.value)}
+                        />
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">默认结束</label>
+                        <input
+                            type="date"
+                            className="property-input"
+                            value={(config.defaultEndValue as string) || ''}
+                            onChange={(e) => onChange('defaultEndValue', e.target.value)}
+                        />
+                    </div>
+                    <div className="property-row">
+                        <label className="property-label">作用说明</label>
+                        <input
+                            type="text"
+                            className="property-input"
+                            value={(config.scopeHint as string) || ''}
+                            onChange={(e) => onChange('scopeHint', e.target.value)}
+                            placeholder="作用于统计周期过滤"
                         />
                     </div>
                 </>
@@ -5022,6 +5123,28 @@ const INTERACTION_COMPONENT_TYPES = new Set<ComponentType>([
     'funnel-chart',
 ]);
 
+const ACTION_COMPONENT_TYPES = new Set<ComponentType>([
+    ...INTERACTION_COMPONENT_TYPES,
+    'table',
+    'scroll-board',
+    'scroll-ranking',
+]);
+
+const DRILL_CONFIGURABLE_TYPES = new Set<ComponentType>([
+    ...Array.from(DRILLABLE_TYPES),
+    'table',
+]);
+
+function getActionSourcePathCandidates(type: ComponentType): string[] {
+    if (type === 'pie-chart' || type === 'funnel-chart') return ['name', 'value', 'percent', 'data.name'];
+    if (type === 'map-chart') return ['name', 'data.name', 'data.value', 'value'];
+    if (type === 'table' || type === 'scroll-board') return ['row[0]', 'row[1]', 'row[2]', 'name', 'value'];
+    if (type === 'scatter-chart') return ['name', 'value', 'data[0]', 'data[1]', 'seriesName'];
+    if (type === 'treemap-chart' || type === 'sunburst-chart') return ['name', 'value', 'data.name', 'treePathInfo'];
+    if (type === 'radar-chart') return ['name', 'seriesName', 'value', 'data.name'];
+    return ['name', 'seriesName', 'value', 'data.name', 'data.value', 'data.code'];
+}
+
 function renderInteractionConfig(
     component: ScreenComponent,
     globalVariables: ScreenGlobalVariable[],
@@ -5230,6 +5353,292 @@ function renderInteractionConfig(
         </div>
     );
 }
+
+function renderActionConfig(
+    component: ScreenComponent,
+    updateComponent: (id: string, updates: Partial<ScreenComponent>) => void,
+    options?: { embedded?: boolean },
+) {
+    if (!ACTION_COMPONENT_TYPES.has(component.type)) {
+        return null;
+    }
+
+    const actions = component.actions ?? [];
+    const sourcePathCandidates = getActionSourcePathCandidates(component.type);
+
+    const setActions = (next: ScreenComponentAction[]) => {
+        updateComponent(component.id, { actions: next });
+    };
+
+    const updateAction = (index: number, patch: Partial<ScreenComponentAction>) => {
+        const next = [...actions];
+        next[index] = { ...next[index], ...patch };
+        setActions(next);
+    };
+
+    const updateMappings = (index: number, nextMappings: ComponentInteractionMapping[]) => {
+        updateAction(index, { mappings: nextMappings });
+    };
+
+    const content = (
+        <>
+            {actions.length === 0 ? (
+                <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 8 }}>
+                    当前组件还没有动作入口。适合配置详情面板、跳转、变量写入或意图事件。
+                </div>
+            ) : null}
+
+            {actions.map((action, index) => {
+                const actionType = action.type || 'set-variable';
+                const mappings = action.mappings ?? [];
+                const showMappings = actionType === 'set-variable' || actionType === 'jump-url' || actionType === 'emit-intent';
+                return (
+                    <div
+                        key={`action-${index}`}
+                        style={{
+                            border: '1px solid rgba(148,163,184,0.18)',
+                            borderRadius: 10,
+                            padding: 10,
+                            marginBottom: 10,
+                            background: 'rgba(248,250,252,0.72)',
+                        }}
+                    >
+                        <div className="property-row">
+                            <label className="property-label">动作标题</label>
+                            <input
+                                type="text"
+                                className="property-input"
+                                value={action.label || ''}
+                                onChange={(e) => updateAction(index, { label: e.target.value })}
+                                placeholder="查看详情 / 发起协调 / 跳转周报"
+                            />
+                        </div>
+
+                        <div className="property-row">
+                            <label className="property-label">动作类型</label>
+                            <select
+                                className="property-input"
+                                value={actionType}
+                                onChange={(e) => updateAction(index, { type: e.target.value as ScreenComponentAction['type'] })}
+                            >
+                                <option value="set-variable">写入变量</option>
+                                <option value="drill-down">下钻</option>
+                                <option value="drill-up">上卷返回</option>
+                                <option value="jump-url">页面跳转</option>
+                                <option value="open-panel">打开详情面板</option>
+                                <option value="emit-intent">发出意图事件</option>
+                            </select>
+                        </div>
+
+                        {showMappings ? (
+                            <>
+                                {mappings.map((mapping, mappingIndex) => (
+                                    <div
+                                        key={`action-${index}-mapping-${mappingIndex}`}
+                                        style={{
+                                            border: '1px dashed rgba(148,163,184,0.22)',
+                                            borderRadius: 8,
+                                            padding: 8,
+                                            marginBottom: 8,
+                                        }}
+                                    >
+                                        <div className="property-row">
+                                            <label className="property-label">目标变量</label>
+                                            <input
+                                                type="text"
+                                                className="property-input"
+                                                value={mapping.variableKey || ''}
+                                                onChange={(e) => {
+                                                    const next = [...mappings];
+                                                    next[mappingIndex] = { ...next[mappingIndex], variableKey: e.target.value };
+                                                    updateMappings(index, next);
+                                                }}
+                                                placeholder="projectId"
+                                            />
+                                        </div>
+                                        <div className="property-row">
+                                            <label className="property-label">取值路径</label>
+                                            <input
+                                                list={`action-source-path-${index}-${mappingIndex}`}
+                                                className="property-input"
+                                                value={mapping.sourcePath || ''}
+                                                onChange={(e) => {
+                                                    const next = [...mappings];
+                                                    next[mappingIndex] = { ...next[mappingIndex], sourcePath: e.target.value };
+                                                    updateMappings(index, next);
+                                                }}
+                                                placeholder="name / row[0] / data.owner"
+                                            />
+                                            <datalist id={`action-source-path-${index}-${mappingIndex}`}>
+                                                {sourcePathCandidates.map((item) => (
+                                                    <option key={item} value={item} />
+                                                ))}
+                                            </datalist>
+                                        </div>
+                                        <div className="property-row">
+                                            <label className="property-label">值转换</label>
+                                            <select
+                                                className="property-input"
+                                                value={String(mapping.transform || 'raw')}
+                                                onChange={(e) => {
+                                                    const next = [...mappings];
+                                                    next[mappingIndex] = { ...next[mappingIndex], transform: e.target.value as ComponentInteractionMapping['transform'] };
+                                                    updateMappings(index, next);
+                                                }}
+                                            >
+                                                <option value="raw">原值</option>
+                                                <option value="string">字符串</option>
+                                                <option value="number">数值</option>
+                                                <option value="lowercase">转小写</option>
+                                                <option value="uppercase">转大写</option>
+                                            </select>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            className="property-input"
+                                            onClick={() => updateMappings(index, mappings.filter((_, i) => i !== mappingIndex))}
+                                            style={{ width: '100%', textAlign: 'center', cursor: 'pointer', color: '#ef4444' }}
+                                        >
+                                            删除映射
+                                        </button>
+                                    </div>
+                                ))}
+
+                                <button
+                                    type="button"
+                                    className="property-input"
+                                    onClick={() => updateMappings(index, [
+                                        ...mappings,
+                                        { variableKey: '', sourcePath: 'name', transform: 'raw', fallbackValue: '' },
+                                    ])}
+                                    style={{ width: '100%', textAlign: 'center', cursor: 'pointer', color: '#2563eb' }}
+                                >
+                                    + 添加变量映射
+                                </button>
+                            </>
+                        ) : null}
+
+                        {actionType === 'jump-url' ? (
+                            <>
+                                <div className="property-row">
+                                    <label className="property-label">跳转链接模板</label>
+                                    <input
+                                        type="text"
+                                        className="property-input"
+                                        value={action.jumpUrlTemplate || ''}
+                                        onChange={(e) => updateAction(index, { jumpUrlTemplate: e.target.value })}
+                                        placeholder="https://host/path?project={{name}}"
+                                    />
+                                </div>
+                                <div className="property-row">
+                                    <label className="property-label">打开方式</label>
+                                    <select
+                                        className="property-input"
+                                        value={action.jumpOpenMode || 'new-tab'}
+                                        onChange={(e) => updateAction(index, { jumpOpenMode: e.target.value === 'self' ? 'self' : 'new-tab' })}
+                                    >
+                                        <option value="new-tab">新窗口</option>
+                                        <option value="self">当前窗口</option>
+                                    </select>
+                                </div>
+                            </>
+                        ) : null}
+
+                        {actionType === 'open-panel' ? (
+                            <>
+                                <div className="property-row">
+                                    <label className="property-label">面板标题模板</label>
+                                    <input
+                                        type="text"
+                                        className="property-input"
+                                        value={action.panelTitle || ''}
+                                        onChange={(e) => updateAction(index, { panelTitle: e.target.value })}
+                                        placeholder="项目 {{name}}"
+                                    />
+                                </div>
+                                <div className="property-row">
+                                    <label className="property-label">面板内容模板</label>
+                                    <textarea
+                                        className="property-input"
+                                        rows={4}
+                                        value={action.panelBodyTemplate || ''}
+                                        onChange={(e) => updateAction(index, { panelBodyTemplate: e.target.value })}
+                                        placeholder={'负责人：{{责任人}}\n状态：{{状态}}\n建议：发起协调'}
+                                    />
+                                </div>
+                            </>
+                        ) : null}
+
+                        {actionType === 'emit-intent' ? (
+                            <>
+                                <div className="property-row">
+                                    <label className="property-label">意图名称</label>
+                                    <input
+                                        type="text"
+                                        className="property-input"
+                                        value={action.intentName || ''}
+                                        onChange={(e) => updateAction(index, { intentName: e.target.value })}
+                                        placeholder="project.follow-up"
+                                    />
+                                </div>
+                                <div className="property-row">
+                                    <label className="property-label">意图负载模板</label>
+                                    <textarea
+                                        className="property-input"
+                                        rows={4}
+                                        value={action.intentPayloadTemplate || ''}
+                                        onChange={(e) => updateAction(index, { intentPayloadTemplate: e.target.value })}
+                                        placeholder={'{"project":"{{name}}","owner":"{{责任人}}"}'}
+                                    />
+                                </div>
+                            </>
+                        ) : null}
+
+                        {(actionType === 'drill-down' || actionType === 'drill-up') ? (
+                            <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 6 }}>
+                                {actionType === 'drill-down'
+                                    ? '运行态会复用当前组件的下钻链路，并使用点击值推进到下一层。'
+                                    : '运行态会从当前钻取层级返回上一层。'}
+                            </div>
+                        ) : null}
+
+                        <button
+                            type="button"
+                            className="property-input"
+                            onClick={() => setActions(actions.filter((_, i) => i !== index))}
+                            style={{ width: '100%', textAlign: 'center', cursor: 'pointer', color: '#ef4444', marginTop: 8 }}
+                        >
+                            删除动作
+                        </button>
+                    </div>
+                );
+            })}
+
+            <button
+                type="button"
+                className="property-input"
+                onClick={() => setActions([
+                    ...actions,
+                    { type: 'open-panel', label: '查看详情', panelTitle: '{{name}}', panelBodyTemplate: '' },
+                ])}
+                style={{ width: '100%', textAlign: 'center', cursor: 'pointer', color: '#2563eb' }}
+            >
+                + 添加动作入口
+            </button>
+        </>
+    );
+
+    if (options?.embedded) {
+        return content;
+    }
+    return (
+        <div className="property-section">
+            <div className="property-section-title">动作入口</div>
+            {content}
+        </div>
+    );
+}
+
 function renderDrillDownConfig(
     component: ScreenComponent,
     updateComponent: (id: string, updates: Partial<ScreenComponent>) => void,
@@ -5238,8 +5647,8 @@ function renderDrillDownConfig(
     const { type, dataSource, drillDown } = component;
     const cardId = dataSource?.type === 'card' ? dataSource.cardConfig?.cardId : undefined;
 
-    // Only show for drillable chart types with a valid card data source
-    if (!DRILLABLE_TYPES.has(type) || dataSource?.type !== 'card' || !cardId || cardId <= 0) {
+    // Show for drill-capable components backed by a valid card data source.
+    if (!DRILL_CONFIGURABLE_TYPES.has(type) || dataSource?.type !== 'card' || !cardId || cardId <= 0) {
         return null;
     }
 
