@@ -41,5 +41,5 @@
 
 ## Candidate First-Wave Fixes
 
-- `BUG-001`: stabilize `dts-platform` dependency convergence and remove baseline build risk
+- `BUG-001`: done; `dts-platform` dependency convergence is now aligned and the regression script passes
 - `UI-001`: improve platform route chunking and first-screen load behavior for development-center pages
