@@ -12,6 +12,19 @@
 
 ## Platform Webapp
 
+已处理：
+
+- `source/dts-platform-webapp/src/layouts/components/notice.tsx`
+- `source/dts-platform-webapp/src/pages/sys/others/kanban/task-utils.ts`
+- `source/dts-platform-webapp/src/pages/sys/others/kanban/types.ts`
+- `source/dts-platform-webapp/src/pages/sys/others/calendar/event-utils.ts`
+- `source/dts-platform-webapp/src/pages/sys/others/calendar/styles.ts`
+- `source/dts-platform-webapp/src/api/services/demoService.ts`
+- `source/dts-platform-webapp/src/debug/register-koal-devtools.ts`
+- `source/dts-platform-webapp/src/pages/common/FeaturePlaceholder.tsx`
+- `source/dts-platform-webapp/src/pages/common/V3Placeholder.tsx`
+- `source/dts-platform-webapp/src/pages/foundation/TaskSchedulingPage.tsx`
+
 ### `faker`
 
 - `source/dts-platform-webapp/src/layouts/components/notice.tsx`
@@ -29,6 +42,25 @@
 - `source/dts-platform-webapp/src/pages/foundation/TaskSchedulingPage.tsx`
 
 ## Admin Webapp
+
+已处理：
+
+- `source/dts-admin-webapp/src/layouts/components/notice.tsx`
+- `source/dts-admin-webapp/src/pages/sys/others/kanban/kanban-column.tsx`
+- `source/dts-admin-webapp/src/pages/sys/others/kanban/task-utils.ts`
+- `source/dts-admin-webapp/src/pages/sys/others/kanban/index.tsx`
+- `source/dts-admin-webapp/src/pages/sys/others/kanban/kanban-task.tsx`
+- `source/dts-admin-webapp/src/pages/sys/others/kanban/task-detail.tsx`
+- `source/dts-admin-webapp/src/pages/sys/others/kanban/types.ts`
+- `source/dts-admin-webapp/src/pages/sys/others/calendar/event-utils.ts`
+- `source/dts-admin-webapp/src/pages/sys/others/calendar/index.tsx`
+- `source/dts-admin-webapp/src/pages/sys/others/calendar/calendar-event-form.tsx`
+- `source/dts-admin-webapp/src/pages/sys/others/calendar/calendar-event.tsx`
+- `source/dts-admin-webapp/src/pages/sys/others/calendar/calendar-header.tsx`
+- `source/dts-admin-webapp/src/pages/sys/others/calendar/styles.ts`
+- `source/dts-admin-webapp/src/pages/sys/others/permission/index.tsx`
+- `source/dts-admin-webapp/src/pages/sys/others/permission/page-test.tsx`
+- `source/dts-admin-webapp/src/api/services/demoService.ts`
 
 ### `faker`
 

@@ -30,8 +30,10 @@
 - 已删除 `FeaturePlaceholder.tsx` 与 `V3Placeholder.tsx`
 - 已移除 `register-koal-devtools.ts` 及其在 `main.tsx` 的 dev-only 注册入口
 - `TaskSchedulingPage.tsx` 已从纯占位页改成真实任务运营入口页
+- 已删除 `admin` 侧 `sys/others/calendar`、`sys/others/kanban`、`sys/others/permission` 的 demo 页面与素材
+- 已删除 `platform` 侧残留的 `sys/others/calendar`、`sys/others/kanban` 假素材工具文件
 - `platform/admin` 两端构建已通过
-- `sys/others` 演示页仍在路由树内，需单独断引用后再删除
+- 代码搜索中不再有 customer-facing 的 `demo/placeholder/faker` 残留
 
 ## 验收
 
@@ -48,3 +50,4 @@
 
 - `pnpm -C source/dts-platform-webapp build`
 - `pnpm -C source/dts-admin-webapp build`
+- `rg -n "faker|FeaturePlaceholder|V3Placeholder|demoService|register-koal-devtools|page-test|sys/others/(calendar|kanban|permission)" source/dts-platform-webapp/src source/dts-admin-webapp/src`
