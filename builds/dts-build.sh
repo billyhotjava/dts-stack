@@ -375,57 +375,49 @@ MAVEN_SETTINGS_EOF
     if [[ "${MAVEN_UNRESTRICTED}" == "1" ]]; then
       security_opts+=(--security-opt "seccomp=unconfined" --ulimit "nproc=65535:65535")
     fi
+    # Generate settings.xml on the HOST side before docker run,
+    # so we can run mvn directly without a shell wrapper.
+    # Using sh -c inside the container corrupts JAVA_HOME on ARM64/Kunpeng.
+    if [[ ! -f /root/.m2/settings.xml ]] && [[ -n "${MAVEN_MIRROR_URL}" ]]; then
+      mkdir -p /root/.m2
+      cat > /root/.m2/settings.xml <<SETTINGS_EOF
+<settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0 https://maven.apache.org/xsd/settings-1.0.0.xsd">
+  <mirrors>
+    <mirror>
+      <id>aliyun</id>
+      <mirrorOf>*</mirrorOf>
+      <url>${MAVEN_MIRROR_URL}</url>
+    </mirror>
+  </mirrors>
+</settings>
+SETTINGS_EOF
+      echo "[dts-build] Generated /root/.m2/settings.xml (mirror: ${MAVEN_MIRROR_URL})"
+    fi
+
     local maven_args=(-B -e -DskipTests -f pom.xml -pl "$module" -am)
     if [[ -f "$MAVEN_SETTINGS_FILE" ]]; then
-      maven_args=(-B -e -DskipTests -s "$MAVEN_SETTINGS_FILE" -f pom.xml -pl "$module" -am)
+      maven_args+=(-s "$MAVEN_SETTINGS_FILE")
+    elif [[ -f /root/.m2/settings.xml ]]; then
+      maven_args+=(-s /root/.m2/settings.xml)
     fi
 
     if [[ -n "$MAVEN_DEBUG" ]]; then
+      echo "[dts-build] DEBUG: Running mvn with args: ${maven_args[*]} package"
       docker run --rm --memory="${MAVEN_MEMORY_LIMIT}" --memory-swap="${MAVEN_MEMORY_LIMIT}" "${security_opts[@]}" \
-        -e "MAVEN_MIRROR_URL=${MAVEN_MIRROR_URL}" \
         -v "${REPO_ROOT}/source:/workspace" \
         -v "/root/.m2:/root/.m2" \
         -w /workspace \
         "$MAVEN_IMAGE" \
-        sh -c 'set -eux; echo "JAVA_HOME=${JAVA_HOME:-unset}"; java -version; \
-          if [ ! -f /root/.m2/settings.xml ]; then \
-            printf "%s\n" \
-              "<settings xmlns=\"http://maven.apache.org/SETTINGS/1.0.0\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://maven.apache.org/SETTINGS/1.0.0 https://maven.apache.org/xsd/settings-1.0.0.xsd\">" \
-              "  <mirrors>" \
-              "    <mirror>" \
-              "      <id>aliyun</id>" \
-              "      <mirrorOf>*</mirrorOf>" \
-              "      <url>'"${MAVEN_MIRROR_URL}"'</url>" \
-              "    </mirror>" \
-              "  </mirrors>" \
-              "</settings>" \
-              > /root/.m2/settings.xml; \
-          fi; \
-          mvn -v; mvn "$@" package' \
-        -- "${maven_args[@]}"
+        mvn "${maven_args[@]}" package
     else
       docker run --rm --memory="${MAVEN_MEMORY_LIMIT}" --memory-swap="${MAVEN_MEMORY_LIMIT}" "${security_opts[@]}" \
-        -e "MAVEN_MIRROR_URL=${MAVEN_MIRROR_URL}" \
         -v "${REPO_ROOT}/source:/workspace" \
         -v "/root/.m2:/root/.m2" \
         -w /workspace \
         "$MAVEN_IMAGE" \
-        sh -c 'set -eu; \
-        if [ ! -f /root/.m2/settings.xml ]; then \
-          printf "%s\n" \
-            "<settings xmlns=\"http://maven.apache.org/SETTINGS/1.0.0\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://maven.apache.org/SETTINGS/1.0.0 https://maven.apache.org/xsd/settings-1.0.0.xsd\">" \
-            "  <mirrors>" \
-            "    <mirror>" \
-            "      <id>aliyun</id>" \
-            "      <mirrorOf>*</mirrorOf>" \
-            "      <url>'"${MAVEN_MIRROR_URL}"'</url>" \
-            "    </mirror>" \
-            "  </mirrors>" \
-            "</settings>" \
-            > /root/.m2/settings.xml; \
-        fi; \
-        mvn "$@" package' \
-        -- "${maven_args[@]}"
+        mvn "${maven_args[@]}" package
     fi
   fi
 
