@@ -109,6 +109,7 @@ NODE_IMAGE="${NODE_IMAGE:-node:20.17.0-alpine3.20}"
 PNPM_VERSION="${PNPM_VERSION:-10.28.0}"
 IMGVERSION_FILE="${IMGVERSION_FILE:-${REPO_ROOT}/imgversion.conf}"
 MAVEN_IMAGE="${MAVEN_IMAGE:-maven:3.9.9-eclipse-temurin-21}"
+MAVEN_CONTAINER_JAVA_HOME="${MAVEN_CONTAINER_JAVA_HOME:-/opt/java/openjdk}"
 MAVEN_SECURITY_OPT="${MAVEN_SECURITY_OPT:-}"
 LEGACY_USE_HOST_MAVEN="${LEGACY_USE_HOST_MAVEN:-}"
 MAVEN_DEBUG="${MAVEN_DEBUG:-}"
@@ -406,10 +407,12 @@ SETTINGS_EOF
     if [[ -n "$MAVEN_DEBUG" ]]; then
       echo "[dts-build] DEBUG: Running mvn with args: ${maven_args[*]} package"
     fi
-    # Run mvn directly as the container command — DO NOT wrap in sh -c or bash -lc.
-    # The Maven image's own entrypoint (mvn-entrypoint.sh) sets up JAVA_HOME correctly.
-    # Any shell wrapper (sh -c, bash -lc) corrupts JAVA_HOME on ARM64/Kunpeng.
+    # Run mvn directly — DO NOT wrap in sh -c or bash -lc.
+    # Explicitly pass JAVA_HOME/PATH via -e because Docker 18.09 on Kunpeng
+    # may not properly inherit the image's ENV variables.
     docker run --rm --memory="${MAVEN_MEMORY_LIMIT}" --memory-swap="${MAVEN_MEMORY_LIMIT}" "${security_opts[@]}" \
+      -e "JAVA_HOME=${MAVEN_CONTAINER_JAVA_HOME}" \
+      -e "PATH=${MAVEN_CONTAINER_JAVA_HOME}/bin:/usr/share/maven/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
       -v "${REPO_ROOT}/source:/workspace" \
       -v "/root/.m2:/root/.m2" \
       -w /workspace \
