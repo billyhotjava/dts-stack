@@ -343,7 +343,7 @@ MAVEN_SETTINGS_EOF
         -v "/root/.m2:/root/.m2" \
         -w /workspace \
         "$MAVEN_IMAGE" \
-        sh -lc 'set -eux; JAVA_BIN=$(command -v java || true); if [ -z "$JAVA_BIN" ]; then echo >&2 "java not found"; exit 1; fi; JAVA_HOME="$(dirname "$(dirname "$(readlink -f "$JAVA_BIN")")")"; export JAVA_HOME; env | grep -E "JAVA_HOME|PATH"; java -version; ls -la "$JAVA_HOME/bin/java"; \
+        sh -c 'set -eux; echo "JAVA_HOME=${JAVA_HOME:-unset}"; java -version; \
           if [ ! -f /root/.m2/settings.xml ]; then \
             printf "%s\n" \
               "<settings xmlns=\"http://maven.apache.org/SETTINGS/1.0.0\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://maven.apache.org/SETTINGS/1.0.0 https://maven.apache.org/xsd/settings-1.0.0.xsd\">" \
@@ -351,7 +351,7 @@ MAVEN_SETTINGS_EOF
               "    <mirror>" \
               "      <id>aliyun</id>" \
               "      <mirrorOf>*</mirrorOf>" \
-              "      <url>${MAVEN_MIRROR_URL}</url>" \
+              "      <url>'"${MAVEN_MIRROR_URL}"'</url>" \
               "    </mirror>" \
               "  </mirrors>" \
               "</settings>" \
@@ -366,7 +366,7 @@ MAVEN_SETTINGS_EOF
         -v "/root/.m2:/root/.m2" \
         -w /workspace \
         "$MAVEN_IMAGE" \
-        sh -lc 'JAVA_BIN=$(command -v java || true); if [ -z "$JAVA_BIN" ]; then echo >&2 "java not found"; exit 1; fi; JAVA_HOME="$(dirname "$(dirname "$(readlink -f "$JAVA_BIN")")")"; export JAVA_HOME; \
+        sh -c 'set -eu; \
         if [ ! -f /root/.m2/settings.xml ]; then \
           printf "%s\n" \
             "<settings xmlns=\"http://maven.apache.org/SETTINGS/1.0.0\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://maven.apache.org/SETTINGS/1.0.0 https://maven.apache.org/xsd/settings-1.0.0.xsd\">" \
@@ -374,7 +374,7 @@ MAVEN_SETTINGS_EOF
             "    <mirror>" \
             "      <id>aliyun</id>" \
             "      <mirrorOf>*</mirrorOf>" \
-            "      <url>${MAVEN_MIRROR_URL}</url>" \
+            "      <url>'"${MAVEN_MIRROR_URL}"'</url>" \
             "    </mirror>" \
             "  </mirrors>" \
             "</settings>" \
