@@ -43,3 +43,5 @@
 
 - `BUG-001`: done; `dts-platform` dependency convergence is now aligned and the regression script passes
 - `UI-001`: improve platform route chunking and first-screen load behavior for development-center pages
+  - first completed slice: removed `workbench` static/dynamic overlap warning
+  - remaining follow-up: login and error page overlap warnings
