@@ -83,8 +83,10 @@ import {
 	getDbtGitLog,
 	getDbtGitDiff,
 	revertDbtFile,
+	getRollbackAuditLog,
 } from "@/api/platformApi";
 import dataSourcesService, { type InfraDataSource } from "@/api/services/dataSourcesService";
+import RollbackImpactModal, { type RollbackRequest } from "@/components/rollback/RollbackImpactModal";
 import { useRouter } from "@/routes/hooks";
 
 const { Text } = Typography;
@@ -467,6 +469,11 @@ export default function SqlModelingPage() {
 	const [gitCommitMsg, setGitCommitMsg] = useState("");
 	const [gitCommitting, setGitCommitting] = useState(false);
 	const [gitReverting, setGitReverting] = useState<string | null>(null);
+	// Rollback state
+	const [rollbackOpen, setRollbackOpen] = useState(false);
+	const [rollbackRequest, setRollbackRequest] = useState<RollbackRequest | null>(null);
+	const [auditLogs, setAuditLogs] = useState<any[]>([]);
+	const [auditLogsLoading, setAuditLogsLoading] = useState(false);
 	const [form] = Form.useForm();
 	const [runForm] = Form.useForm();
 	const [modelForm] = Form.useForm();
@@ -732,6 +739,38 @@ export default function SqlModelingPage() {
 			setGitReverting(null);
 		}
 	}, [loadGitInfo]);
+
+	// --- Rollback helpers ---
+	const loadAuditLogs = async (dataSourceId?: string) => {
+		setAuditLogsLoading(true);
+		try {
+			const resp: any = await getRollbackAuditLog({ dataSourceId });
+			const data = resp?.data || resp;
+			setAuditLogs(Array.isArray(data) ? data : []);
+		} catch {
+			// global interceptor
+		} finally {
+			setAuditLogsLoading(false);
+		}
+	};
+
+	const openRollback = (level: number, rebuildDbt?: boolean) => {
+		if (!activeModel?.name) {
+			toast.error("请先选择一个模型");
+			return;
+		}
+		const tables = [activeModel.name];
+		const dsId = dbtConfig?.config?.targetDataSourceId;
+		setRollbackRequest({
+			level,
+			scope: "task",
+			dataSourceId: dsId,
+			tables,
+			rebuildDbt: rebuildDbt || false,
+		});
+		setRollbackOpen(true);
+		if (dsId) void loadAuditLogs(dsId);
+	};
 
 	useEffect(() => {
 		void loadConfig();
@@ -1806,6 +1845,31 @@ export default function SqlModelingPage() {
 							文档
 						</Button>
 					</Tooltip>
+					{/* 回退操作 */}
+					<Dropdown
+						menu={{
+							items: [
+								{
+									key: "truncate",
+									label: "清空产出表 (Level 1)",
+									icon: <DeleteOutlined />,
+									onClick: () => openRollback(1),
+								},
+								{
+									key: "rebuild",
+									label: "重建产出表 (Level 2)",
+									icon: <UndoOutlined />,
+									danger: true,
+									onClick: () => openRollback(2, true),
+								},
+							],
+						}}
+						disabled={!configEnabled || !workspaceOk || !activeModel}
+					>
+						<Button danger icon={<UndoOutlined />}>
+							回退 <DownOutlined />
+						</Button>
+					</Dropdown>
 					{/* 提交上线 */}
 					<Button
 						type="primary"
@@ -2485,6 +2549,43 @@ export default function SqlModelingPage() {
 								})(),
 							},
 							{
+								key: "audit",
+								label: "回退记录",
+								children: (
+									<div className="p-2">
+										<div className="flex items-center gap-2 mb-2">
+											<Button
+												size="small"
+												icon={<ReloadOutlined />}
+												loading={auditLogsLoading}
+												onClick={() => loadAuditLogs(dbtConfig?.config?.targetDataSourceId)}
+											>
+												加载
+											</Button>
+										</div>
+										{auditLogs.length === 0 ? (
+											<div className="text-xs text-muted-foreground p-2">暂无回退记录</div>
+										) : (
+											<Table
+												size="small"
+												rowKey="id"
+												dataSource={auditLogs}
+												pagination={false}
+												scroll={{ y: 160 }}
+												columns={[
+													{ title: "时间", dataIndex: "executedAt", key: "executedAt", width: 170, render: formatDateTime },
+													{ title: "级别", dataIndex: "level", key: "level", width: 80, render: (v: number) => <Tag color={v >= 2 ? "red" : "orange"}>Level {v}</Tag> },
+													{ title: "范围", dataIndex: "scope", key: "scope", width: 80 },
+													{ title: "表", dataIndex: "tables", key: "tables", ellipsis: true, render: (v: string[]) => (v || []).join(", ") },
+													{ title: "操作人", dataIndex: "executedBy", key: "executedBy", width: 100 },
+													{ title: "状态", dataIndex: "status", key: "status", width: 80, render: (v: string) => <Tag color={v === "SUCCESS" ? "green" : "red"}>{v}</Tag> },
+												]}
+											/>
+										)}
+									</div>
+								),
+							},
+							{
 								key: "brief",
 								label: "使用指南",
 								children: (
@@ -3129,6 +3230,15 @@ WHERE status = 'active'`}
 					]}
 				/>
 			</Drawer>
+			<RollbackImpactModal
+				open={rollbackOpen}
+				request={rollbackRequest}
+				onClose={() => setRollbackOpen(false)}
+				onSuccess={() => {
+					void loadAuditLogs(dbtConfig?.config?.targetDataSourceId);
+					setBottomTab("audit");
+				}}
+			/>
 		</div>
 	);
 }

@@ -231,6 +231,32 @@ public class FileUploadService {
         return name.replaceAll("[^a-zA-Z0-9._-]", "_");
     }
 
+    /**
+     * Clean up uploaded files for a task.
+     * Returns list of deleted file paths.
+     */
+    public List<String> cleanupForTask(com.yuzhi.dts.ingestion.domain.IngestionTask task) {
+        List<String> deleted = new ArrayList<>();
+        if (task == null || task.getSourceConfig() == null) return deleted;
+        var config = task.getSourceConfig();
+        if (config.has("hostPath")) {
+            String hostPath = config.get("hostPath").asText(null);
+            if (StringUtils.hasText(hostPath)) {
+                Path path = Paths.get(hostPath.trim());
+                try {
+                    if (Files.exists(path)) {
+                        Files.delete(path);
+                        deleted.add(hostPath);
+                        LOG.info("[rollback] Deleted upload file: {}", hostPath);
+                    }
+                } catch (Exception ex) {
+                    LOG.warn("[rollback] Failed to delete upload file {}: {}", hostPath, ex.getMessage());
+                }
+            }
+        }
+        return deleted;
+    }
+
     private String resolveJobDir() {
         var settings = settingsService.getSettings(com.yuzhi.dts.ingestion.service.infra.IngestionSettingsService.SERVICE_ADDAX);
         String jobDir = settings.getString("jobDir", properties.getJobDir());

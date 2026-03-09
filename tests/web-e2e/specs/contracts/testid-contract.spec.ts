@@ -25,11 +25,11 @@ const contracts: Contract[] = [
     ids: [
       'admin-infra-settings-page',
       'admin-infra-settings-tabs',
-      'admin-infra-switch-dbt',
-      'admin-infra-service-panel-dbt',
-      'admin-infra-service-save-dbt',
-      'admin-infra-service-test-dbt',
-      'admin-infra-service-test-result-dbt',
+      'admin-infra-switch-',
+      'admin-infra-service-panel-',
+      'admin-infra-service-save-',
+      'admin-infra-service-test-',
+      'admin-infra-service-test-result-',
     ],
   },
   {

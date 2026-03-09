@@ -18,6 +18,7 @@ import {
 	message,
 } from "antd";
 import { PlusOutlined, ReloadOutlined, EditOutlined, DeleteOutlined, ExperimentOutlined, CheckCircleOutlined, CloseCircleOutlined } from "@ant-design/icons";
+import RollbackImpactModal, { type RollbackRequest } from "@/components/rollback/RollbackImpactModal";
 import dataSourcesService, {
 	type ConnectionTestResult,
 	type DataSourceUpsertPayload,
@@ -124,6 +125,8 @@ export default function DataSourcesPage() {
 	const [excelSkipErrors, setExcelSkipErrors] = useState(true);
 	const [excelFillMerged, setExcelFillMerged] = useState(true);
 	const [excelParseResult, setExcelParseResult] = useState<ExcelImportParseResponse | null>(null);
+	const [rollbackOpen, setRollbackOpen] = useState(false);
+	const [rollbackRequest, setRollbackRequest] = useState<RollbackRequest | null>(null);
 	const [form] = Form.useForm();
 
 	const showImpact = (impact: DataSourceUpdateImpact | null) => {
@@ -504,6 +507,11 @@ export default function DataSourcesPage() {
 							<Button size="small" danger icon={<DeleteOutlined />} disabled={adminManaged} onClick={() => handleDelete(record)}>
 								删除
 							</Button>
+							{record.id && (
+								<Button size="small" danger onClick={() => { setRollbackRequest({ level: 3, scope: "datasource", dataSourceId: record.id }); setRollbackOpen(true); }}>
+									全链路回退
+								</Button>
+							)}
 						</Space>
 					);
 				},
@@ -721,6 +729,13 @@ export default function DataSourcesPage() {
 					</Form>
 				</Space>
 			</Modal>
+
+			<RollbackImpactModal
+				open={rollbackOpen}
+				request={rollbackRequest}
+				onClose={() => setRollbackOpen(false)}
+				onSuccess={() => { loadList(); }}
+			/>
 		</Card>
 	);
 }

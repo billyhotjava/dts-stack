@@ -17,6 +17,7 @@
       "timeoutSeconds": 180,
       "env": {
         "DTS_WEB_E2E_USE_TEST_SERVER": "1",
+        "DTS_WEB_E2E_DEV_SERVER_PORT": "19361",
         "DTS_WEB_E2E_HTML_REPORT_DIR": "reports/html/we-core-auth",
         "DTS_WEB_E2E_ARTIFACTS_DIR": "reports/artifacts/we-core-auth"
       },
@@ -146,6 +147,7 @@
       "timeoutSeconds": 180,
       "env": {
         "DTS_WEB_E2E_USE_TEST_SERVER": "1",
+        "DTS_WEB_E2E_DEV_SERVER_PORT": "19362",
         "DTS_WEB_E2E_HTML_REPORT_DIR": "reports/html/we-core-contract",
         "DTS_WEB_E2E_ARTIFACTS_DIR": "reports/artifacts/we-core-contract"
       },
@@ -172,6 +174,7 @@
       "timeoutSeconds": 180,
       "env": {
         "DTS_WEB_E2E_USE_TEST_SERVER": "1",
+        "DTS_WEB_E2E_DEV_SERVER_PORT": "19363",
         "DTS_WEB_E2E_HTML_REPORT_DIR": "reports/html/we-full-auth",
         "DTS_WEB_E2E_ARTIFACTS_DIR": "reports/artifacts/we-full-auth"
       },
@@ -301,6 +304,7 @@
       "timeoutSeconds": 180,
       "env": {
         "DTS_WEB_E2E_USE_TEST_SERVER": "1",
+        "DTS_WEB_E2E_DEV_SERVER_PORT": "19364",
         "DTS_WEB_E2E_HTML_REPORT_DIR": "reports/html/we-full-contract",
         "DTS_WEB_E2E_ARTIFACTS_DIR": "reports/artifacts/we-full-contract"
       },
@@ -331,7 +335,9 @@
         "DTS_BASE_URL": "http://127.0.0.1:19344/expert/",
         "DTS_EXPERT_URL": "http://127.0.0.1:19344/expert/",
         "DTS_PLATFORM_AUTH_TOKEN": "platform-playwright-token",
+        "DTS_ADMIN_AUTH_TOKEN": "admin-playwright-token",
         "DTS_PLATFORM_REQUIRE_PASSWORD_LOGIN": "0",
+        "DTS_ADMIN_REQUIRE_PASSWORD_LOGIN": "0",
         "DTS_WEB_E2E_HTML_REPORT_DIR": "reports/html/we-full-biz-erp-ingest",
         "DTS_WEB_E2E_ARTIFACTS_DIR": "reports/artifacts/we-full-biz-erp-ingest"
       },
@@ -362,7 +368,9 @@
         "DTS_BASE_URL": "http://127.0.0.1:19345/expert/",
         "DTS_EXPERT_URL": "http://127.0.0.1:19345/expert/",
         "DTS_PLATFORM_AUTH_TOKEN": "platform-playwright-token",
+        "DTS_ADMIN_AUTH_TOKEN": "admin-playwright-token",
         "DTS_PLATFORM_REQUIRE_PASSWORD_LOGIN": "0",
+        "DTS_ADMIN_REQUIRE_PASSWORD_LOGIN": "0",
         "DTS_WEB_E2E_HTML_REPORT_DIR": "reports/html/we-full-biz-ai-modeling",
         "DTS_WEB_E2E_ARTIFACTS_DIR": "reports/artifacts/we-full-biz-ai-modeling"
       },
@@ -427,7 +435,9 @@
         "DTS_BASE_URL": "http://127.0.0.1:19347/expert/",
         "DTS_EXPERT_URL": "http://127.0.0.1:19347/expert/",
         "DTS_PLATFORM_AUTH_TOKEN": "platform-playwright-token",
+        "DTS_ADMIN_AUTH_TOKEN": "admin-playwright-token",
         "DTS_PLATFORM_REQUIRE_PASSWORD_LOGIN": "0",
+        "DTS_ADMIN_REQUIRE_PASSWORD_LOGIN": "0",
         "DTS_WEB_E2E_HTML_REPORT_DIR": "reports/html/we-full-biz-auth-rbac-hitl",
         "DTS_WEB_E2E_ARTIFACTS_DIR": "reports/artifacts/we-full-biz-auth-rbac-hitl"
       },
@@ -458,7 +468,9 @@
         "DTS_BASE_URL": "http://127.0.0.1:19348/expert/",
         "DTS_EXPERT_URL": "http://127.0.0.1:19348/expert/",
         "DTS_PLATFORM_AUTH_TOKEN": "platform-playwright-token",
+        "DTS_ADMIN_AUTH_TOKEN": "admin-playwright-token",
         "DTS_PLATFORM_REQUIRE_PASSWORD_LOGIN": "0",
+        "DTS_ADMIN_REQUIRE_PASSWORD_LOGIN": "0",
         "DTS_WEB_E2E_HTML_REPORT_DIR": "reports/html/we-full-biz-governance-remediation",
         "DTS_WEB_E2E_ARTIFACTS_DIR": "reports/artifacts/we-full-biz-governance-remediation"
       },
@@ -486,7 +498,23 @@
       "required": false,
       "timeoutSeconds": 240,
       "env": {
-        "DTS_WEB_E2E_USE_TEST_SERVER": "1",
+        "DTS_WEB_E2E_USE_TEST_SERVER": "0",
+        "DTS_WEB_E2E_WITH_PLATFORM_DEV_SERVER": "1",
+        "DTS_WEB_E2E_WITH_ANALYTICS_DEV_SERVER": "1",
+        "DTS_WEB_E2E_WITH_ADMIN_DEV_SERVER": "1",
+        "DTS_WEB_E2E_PLATFORM_DEV_SERVER_PORT": "19334",
+        "DTS_WEB_E2E_ANALYTICS_DEV_SERVER_PORT": "19335",
+        "DTS_WEB_E2E_ADMIN_DEV_SERVER_PORT": "19336",
+        "DTS_PLATFORM_URL": "http://127.0.0.1:19334/expert/",
+        "DTS_BASE_URL": "http://127.0.0.1:19334/expert/",
+        "DTS_EXPERT_URL": "http://127.0.0.1:19334/expert/",
+        "DTS_ANALYTICS_URL": "http://127.0.0.1:19335/analytics/",
+        "DTS_ADMIN_URL": "http://127.0.0.1:19336/admin/",
+        "DTS_PLATFORM_AUTH_TOKEN": "platform-playwright-token",
+        "DTS_ADMIN_AUTH_TOKEN": "admin-playwright-token",
+        "DTS_PLATFORM_REQUIRE_PASSWORD_LOGIN": "0",
+        "DTS_ADMIN_REQUIRE_PASSWORD_LOGIN": "0",
+        "DTS_WEB_E2E_DEV_SERVER_PORT": "19365",
         "DTS_WEB_E2E_HTML_REPORT_DIR": "reports/html/we-quarantine-seed",
         "DTS_WEB_E2E_ARTIFACTS_DIR": "reports/artifacts/we-quarantine-seed"
       },
@@ -527,7 +555,9 @@
         "DTS_BASE_URL": "http://127.0.0.1:19344/expert/",
         "DTS_EXPERT_URL": "http://127.0.0.1:19344/expert/",
         "DTS_PLATFORM_AUTH_TOKEN": "platform-playwright-token",
+        "DTS_ADMIN_AUTH_TOKEN": "admin-playwright-token",
         "DTS_PLATFORM_REQUIRE_PASSWORD_LOGIN": "0",
+        "DTS_ADMIN_REQUIRE_PASSWORD_LOGIN": "0",
         "DTS_WEB_E2E_HTML_REPORT_DIR": "reports/html/biz-erp-ingest",
         "DTS_WEB_E2E_ARTIFACTS_DIR": "reports/artifacts/biz-erp-ingest"
       },
@@ -558,7 +588,9 @@
         "DTS_BASE_URL": "http://127.0.0.1:19345/expert/",
         "DTS_EXPERT_URL": "http://127.0.0.1:19345/expert/",
         "DTS_PLATFORM_AUTH_TOKEN": "platform-playwright-token",
+        "DTS_ADMIN_AUTH_TOKEN": "admin-playwright-token",
         "DTS_PLATFORM_REQUIRE_PASSWORD_LOGIN": "0",
+        "DTS_ADMIN_REQUIRE_PASSWORD_LOGIN": "0",
         "DTS_WEB_E2E_HTML_REPORT_DIR": "reports/html/biz-ai-modeling",
         "DTS_WEB_E2E_ARTIFACTS_DIR": "reports/artifacts/biz-ai-modeling"
       },
@@ -623,7 +655,9 @@
         "DTS_BASE_URL": "http://127.0.0.1:19347/expert/",
         "DTS_EXPERT_URL": "http://127.0.0.1:19347/expert/",
         "DTS_PLATFORM_AUTH_TOKEN": "platform-playwright-token",
+        "DTS_ADMIN_AUTH_TOKEN": "admin-playwright-token",
         "DTS_PLATFORM_REQUIRE_PASSWORD_LOGIN": "0",
+        "DTS_ADMIN_REQUIRE_PASSWORD_LOGIN": "0",
         "DTS_WEB_E2E_HTML_REPORT_DIR": "reports/html/biz-auth-rbac-hitl",
         "DTS_WEB_E2E_ARTIFACTS_DIR": "reports/artifacts/biz-auth-rbac-hitl"
       },
@@ -654,7 +688,9 @@
         "DTS_BASE_URL": "http://127.0.0.1:19348/expert/",
         "DTS_EXPERT_URL": "http://127.0.0.1:19348/expert/",
         "DTS_PLATFORM_AUTH_TOKEN": "platform-playwright-token",
+        "DTS_ADMIN_AUTH_TOKEN": "admin-playwright-token",
         "DTS_PLATFORM_REQUIRE_PASSWORD_LOGIN": "0",
+        "DTS_ADMIN_REQUIRE_PASSWORD_LOGIN": "0",
         "DTS_WEB_E2E_HTML_REPORT_DIR": "reports/html/biz-governance-remediation",
         "DTS_WEB_E2E_ARTIFACTS_DIR": "reports/artifacts/biz-governance-remediation"
       },

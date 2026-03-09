@@ -408,9 +408,20 @@ export async function ensureStorageStates(): Promise<void> {
   await fs.mkdir(STORAGE_STATE_DIR, { recursive: true });
 
   const platformSession = await resolveSession('platform', urls);
-  const adminSession = await resolveSession('admin', urls);
+  const platformTargetUrl = urls.expert || urls.platform;
+  const analyticsTargetUrl = urls.analytics;
+  const adminTargetUrl = urls.admin;
 
-  await writeStateFile('platform', platformSession, urls);
-  await writeStateFile('analytics', platformSession, urls);
-  await writeStateFile('admin', adminSession, urls);
+  if (platformTargetUrl) {
+    await writeStateFile('platform', platformSession, urls);
+  }
+
+  if (analyticsTargetUrl) {
+    await writeStateFile('analytics', platformSession, urls);
+  }
+
+  if (adminTargetUrl) {
+    const adminSession = await resolveSession('admin', urls);
+    await writeStateFile('admin', adminSession, urls);
+  }
 }

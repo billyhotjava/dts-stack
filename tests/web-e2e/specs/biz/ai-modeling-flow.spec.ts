@@ -1,49 +1,51 @@
-import { test, storageStatePathFor } from '../../fixtures/reset.fixture';
-import { ModelingPage } from '../../pages/ModelingPage';
+import { test, expect, storageStatePathFor } from '../../fixtures/reset.fixture';
 import { PlatformAiAssistantPage } from '../../pages/PlatformAiAssistantPage';
 import { installPlatformAiModelingMocks } from '../../support/platform-ai-modeling-mock';
 
 test.describe('platform ai modeling flow', () => {
   test.use({ storageState: storageStatePathFor('platform') });
 
-  test('should approve ai modeling action and expose generated models in modeling page', async ({ page, authUrls, checkpoints }) => {
+  test('should surface approved AI modeling task and open dbt workspace from workbench', async ({
+    page,
+    authUrls,
+    checkpoints,
+  }) => {
     await installPlatformAiModelingMocks(page, { scenario: 'approve' });
 
-    const assistant = new PlatformAiAssistantPage(page);
-    await assistant.goto(authUrls.expert);
-    await assistant.open();
-    await assistant.startNewSession();
-    await assistant.sendPrompt('请基于 ERP 销售订单生成销售域 DWD 和 DWS 模型');
-    await assistant.expectApprovalCard();
-    await assistant.expectToolTraceResult('generate_sql_models', '销售域');
-    await assistant.approve();
-    await assistant.expectApprovalClosed();
-    await checkpoints.mark('ai-modeling:approved');
+    const workbench = new PlatformAiAssistantPage(page);
+    await workbench.goto(authUrls.expert);
+    await workbench.expectTodo('AI 建模审批待处理');
+    await workbench.expectFavoriteVisible('销售域模型工作区');
+    await checkpoints.mark('ai-modeling:approval-visible');
 
-    const modelingPage = new ModelingPage(page);
-    await modelingPage.goto(authUrls.expert);
-    await modelingPage.expectActiveModel('dwd_sales_orders');
-    await modelingPage.expectSyncStats('模型 +2/~0');
-    await modelingPage.expectLatestBuildStatus('SUCCESS');
-    await checkpoints.mark('ai-modeling:models-visible');
+    await workbench.openFavorite('销售域模型工作区');
+    await expect(page).toHaveURL(/\/dashboard\/modeling\/dbt-files/);
+    await checkpoints.mark('ai-modeling:workspace-opened');
   });
 
-  test('should cancel ai modeling action and keep modeling space unchanged', async ({ page, authUrls, checkpoints }) => {
+  test('should keep draft modeling shortcut visible when approval is not submitted', async ({
+    page,
+    authUrls,
+    checkpoints,
+  }) => {
     await installPlatformAiModelingMocks(page, { scenario: 'cancel' });
 
-    const assistant = new PlatformAiAssistantPage(page);
-    await assistant.goto(authUrls.expert);
-    await assistant.open();
-    await assistant.startNewSession();
-    await assistant.sendPrompt('请自动创建销售域建模方案');
-    await assistant.expectApprovalCard();
-    await assistant.cancel();
-    await assistant.expectApprovalClosed();
-    await checkpoints.mark('ai-modeling:canceled');
+    const workbench = new PlatformAiAssistantPage(page);
+    await workbench.goto(authUrls.expert);
+    await workbench.expectTodo('建模方案待确认');
+    await expect(page.getByText('AI 建模审批待处理')).toHaveCount(0);
+    await workbench.expectFavoriteVisible('销售域建模草稿');
 
-    const modelingPage = new ModelingPage(page);
-    await modelingPage.goto(authUrls.expert);
-    await modelingPage.expectNoGeneratedModels();
-    await checkpoints.mark('ai-modeling:no-models');
+    await workbench.openCreateFavorite();
+    await workbench.fillFavoriteForm({
+      title: '待提交建模方案',
+      targetType: 'MODEL',
+      targetId: 'sales-plan-draft',
+      link: '/dashboard/modeling/dbt-files',
+      sortOrder: '2',
+    });
+    await workbench.saveFavorite();
+    await workbench.expectFavoriteVisible('待提交建模方案');
+    await checkpoints.mark('ai-modeling:draft-visible');
   });
 });

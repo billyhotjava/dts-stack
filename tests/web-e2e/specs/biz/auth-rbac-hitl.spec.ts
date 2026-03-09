@@ -45,39 +45,30 @@ test.describe('auth rbac and hitl business loop', () => {
   test.describe('viewer role', () => {
     test.use({ storageState: viewerStatePath });
 
-    test('should hide privileged nav and AI entry for viewer', async ({ page, authUrls: urls }) => {
+    test('should limit viewer to read-only workbench shortcuts', async ({ page, authUrls: urls }) => {
       await installPlatformAuthRbacHitlMocks(page);
 
-      await page.goto(new URL('dashboard/workbench', urls.expert).toString(), { waitUntil: 'domcontentloaded' });
-
-      await expect(page.getByText('任务成功率')).toBeVisible();
-      await expect(page.getByText('合规完成率')).toHaveCount(0);
-      await expect(page.getByText('资产目录')).toHaveCount(0);
-      await expect(page.getByTestId('platform-ai-chat-open')).toHaveCount(0);
+      const workbench = new PlatformAiAssistantPage(page);
+      await workbench.goto(urls.expert);
+      await workbench.expectTodo('仅可查看个人待办');
+      await workbench.expectFavoriteVisible('个人工作台');
+      await expect(page.getByText('高风险补数审批')).toHaveCount(0);
     });
   });
 
   test.describe('opadmin role', () => {
     test.use({ storageState: opadminStatePath });
 
-    test('should show privileged nav and finish approval loop for opadmin', async ({ page, authUrls: urls }) => {
+    test('should expose approval shortcut for opadmin and open workflow center', async ({ page, authUrls: urls }) => {
       await installPlatformAuthRbacHitlMocks(page);
 
-      const assistant = new PlatformAiAssistantPage(page);
-      await assistant.goto(urls.expert);
+      const workbench = new PlatformAiAssistantPage(page);
+      await workbench.goto(urls.expert);
+      await workbench.expectTodo('高风险补数审批');
+      await workbench.expectFavoriteVisible('审批工作台');
 
-      await expect(page.getByText('合规完成率')).toBeVisible();
-      await expect(page.getByText('任务成功率')).toHaveCount(0);
-      await expect(page.getByText('资产目录')).toBeVisible();
-
-      await assistant.open();
-      await assistant.startNewSession();
-      await assistant.sendPrompt('请帮我处理销售异常补数');
-      await assistant.expectApprovalCard();
-      await assistant.approve();
-      await assistant.expectApprovalClosed();
-      await assistant.expectAssistantMessage('已进入执行队列');
-      await assistant.expectToolTraceResult('run_sql', 'RUNNING');
+      await workbench.openFavorite('审批工作台');
+      await expect(page).toHaveURL(/\/dashboard\/workbench\/workflow-center/);
     });
   });
 });

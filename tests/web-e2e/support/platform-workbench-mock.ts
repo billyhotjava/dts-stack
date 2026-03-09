@@ -21,6 +21,21 @@ type TodoItem = {
   message?: string;
 };
 
+type WorkbenchOverview = {
+  generatedAt?: string;
+  myAssets?: number;
+  todayNewAssets?: number;
+};
+
+export type PlatformWorkbenchFavorite = Favorite;
+export type PlatformWorkbenchTodoItem = TodoItem;
+
+export type PlatformWorkbenchMockOptions = {
+  todos?: TodoItem[];
+  favorites?: Favorite[];
+  overview?: WorkbenchOverview;
+};
+
 function ok(data: unknown) {
   return {
     status: 'SUCCESS',
@@ -45,8 +60,10 @@ function nowIso(): string {
   return new Date().toISOString();
 }
 
-export async function installPlatformWorkbenchMocks(page: Page): Promise<void> {
-  const todos: TodoItem[] = [
+export async function installPlatformWorkbenchMocks(page: Page, options: PlatformWorkbenchMockOptions = {}): Promise<void> {
+  const todos: TodoItem[] = options.todos
+    ? [...options.todos]
+    : [
     {
       type: 'ACCESS_APPROVAL',
       title: '销售数据集访问申请',
@@ -63,9 +80,11 @@ export async function installPlatformWorkbenchMocks(page: Page): Promise<void> {
       taskId: 'TASK-2001',
       message: '客户名称缺失率高于阈值',
     },
-  ];
+    ];
 
-  const favorites: Favorite[] = [
+  const favorites: Favorite[] = options.favorites
+    ? [...options.favorites]
+    : [
     {
       id: 'fav-sales-dataset',
       title: '销售主题数据集',
@@ -75,7 +94,14 @@ export async function installPlatformWorkbenchMocks(page: Page): Promise<void> {
       sortOrder: 1,
       enabled: true,
     },
-  ];
+    ];
+
+  const overview = {
+    generatedAt: nowIso(),
+    myAssets: 12,
+    todayNewAssets: 3,
+    ...options.overview,
+  };
 
   await page.route('**/api/menu/tree**', async (route) => {
     await json(route, ok([]));
@@ -90,14 +116,7 @@ export async function installPlatformWorkbenchMocks(page: Page): Promise<void> {
   });
 
   await page.route('**/api/workbench/overview', async (route) => {
-    await json(
-      route,
-      ok({
-        generatedAt: nowIso(),
-        myAssets: 12,
-        todayNewAssets: 3,
-      }),
-    );
+    await json(route, ok(overview));
   });
 
   await page.route('**/api/workbench/todos', async (route) => {

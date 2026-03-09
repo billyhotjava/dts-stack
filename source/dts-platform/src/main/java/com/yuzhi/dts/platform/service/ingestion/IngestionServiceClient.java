@@ -220,6 +220,25 @@ public class IngestionServiceClient {
         }
     }
 
+    public ApiResponse<Object> rollbackAnalyze(Object request) {
+        return exchangeObject("/api/ingestion/rollback/analyze", HttpMethod.POST, request, null, longRestTemplate);
+    }
+
+    public ApiResponse<Object> rollbackExecute(Object request) {
+        return exchangeObject("/api/ingestion/rollback/execute", HttpMethod.POST, request, null, longRestTemplate);
+    }
+
+    public ApiResponse<Object> getRollbackAuditLog(Long taskId, java.util.UUID dataSourceId) {
+        Map<String, Object> params = new java.util.LinkedHashMap<>();
+        if (taskId != null) {
+            params.put("taskId", taskId.toString());
+        }
+        if (dataSourceId != null) {
+            params.put("dataSourceId", dataSourceId.toString());
+        }
+        return exchangeObject("/api/ingestion/rollback/audit-log", HttpMethod.GET, null, params, restTemplate);
+    }
+
     public Map<String, Object> getInfraSettings(String service) {
         if (!isEnabled() || !StringUtils.hasText(service)) {
             return Map.of();

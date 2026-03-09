@@ -272,23 +272,23 @@ export async function installAnalyticsAppMocks(page: Page): Promise<void> {
     window.localStorage.setItem('dts-analytics.copilotExpanded', 'true');
   });
 
-  await page.route('**/api/app-packs', async (route) => {
+  await page.route('**/analytics/api/app-packs', async (route) => {
     await json(route, envelope([]));
   });
 
-  await page.route('**/api/app-packs/pages', async (route) => {
+  await page.route('**/analytics/api/app-packs/pages', async (route) => {
     await json(route, envelope([]));
   });
 
-  await page.route('**/api/ontology/app-packs', async (route) => {
+  await page.route('**/analytics/api/ontology/app-packs', async (route) => {
     await json(route, { data: [] });
   });
 
-  await page.route('**/api/ai/agent/sessions?*', async (route) => {
+  await page.route('**/analytics/api/ai/agent/sessions?*', async (route) => {
     await json(route, envelope(state.session ? [state.session] : []));
   });
 
-  await page.route('**/api/ai/agent/sessions/*', async (route) => {
+  await page.route('**/analytics/api/ai/agent/sessions/*', async (route) => {
     if (route.request().method() === 'DELETE') {
       state.session = null;
       state.pendingAction = null;
@@ -298,7 +298,7 @@ export async function installAnalyticsAppMocks(page: Page): Promise<void> {
     await json(route, envelope(buildSessionDetail(state)));
   });
 
-  await page.route('**/api/ai/agent/chat', async (route) => {
+  await page.route('**/analytics/api/ai/agent/chat', async (route) => {
     const body = await readJsonBody(route);
     const prompt = String(body.userMessage || '').trim() || '请分析客户销售波动';
     const now = nowIso();
@@ -321,7 +321,7 @@ export async function installAnalyticsAppMocks(page: Page): Promise<void> {
     );
   });
 
-  await page.route('**/api/ai/agent/chat/approve', async (route) => {
+  await page.route('**/analytics/api/ai/agent/chat/approve', async (route) => {
     state.pendingAction = null;
     state.assistantMessage = '已确认执行 SQL 校验，建议继续生成图表并发布大屏。';
     await json(
@@ -336,7 +336,7 @@ export async function installAnalyticsAppMocks(page: Page): Promise<void> {
     );
   });
 
-  await page.route('**/api/ai/agent/chat/cancel', async (route) => {
+  await page.route('**/analytics/api/ai/agent/chat/cancel', async (route) => {
     state.pendingAction = null;
     state.assistantMessage = '已取消该动作。';
     await json(
@@ -351,25 +351,25 @@ export async function installAnalyticsAppMocks(page: Page): Promise<void> {
     );
   });
 
-  await page.route('**/api/analytics/card/*/query', async (route) => {
+  await page.route('**/analytics/api/card/*/query', async (route) => {
     await json(route, buildCardQuery());
   });
 
-  await page.route('**/api/analytics/card', async (route) => {
+  await page.route('**/analytics/api/card', async (route) => {
     await json(route, buildCardList());
   });
 
-  await page.route('**/api/analytics/card/*', async (route) => {
+  await page.route('**/analytics/api/card/*', async (route) => {
     const url = new URL(route.request().url());
     const cardId = url.pathname.split('/').filter(Boolean).at(-1) || '42';
     await json(route, buildCardDetail(cardId));
   });
 
-  await page.route('**/api/analytics/collection', async (route) => {
+  await page.route('**/analytics/api/collection', async (route) => {
     await json(route, buildCollectionList());
   });
 
-  await page.route('**/api/analytics/dashboard/save', async (route) => {
+  await page.route('**/analytics/api/dashboard/save', async (route) => {
     const body = await readJsonBody(route);
     const dashboardPayload = (body.dashboard as Record<string, unknown> | undefined) ?? {};
     const dashcardsPayload = Array.isArray(body.dashcards) ? body.dashcards : [];
@@ -390,16 +390,16 @@ export async function installAnalyticsAppMocks(page: Page): Promise<void> {
     await json(route, buildDashboardDetail(state));
   });
 
-  await page.route('**/api/analytics/dashboard/*/public_link', async (route) => {
+  await page.route('**/analytics/api/dashboard/*/public_link', async (route) => {
     state.dashboard.publicUuid = 'dashboard-public-uuid';
     await json(route, { uuid: state.dashboard.publicUuid });
   });
 
-  await page.route('**/api/analytics/dashboard/*/dashcard/*/card/*/query', async (route) => {
+  await page.route('**/analytics/api/dashboard/*/dashcard/*/card/*/query', async (route) => {
     await json(route, buildCardQuery());
   });
 
-  await page.route('**/api/analytics/dashboard', async (route) => {
+  await page.route('**/analytics/api/dashboard', async (route) => {
     if (route.request().method() === 'POST') {
       const body = await readJsonBody(route);
       state.dashboard.name = String(body.name ?? state.dashboard.name ?? '客户销售经营看板');
@@ -410,11 +410,11 @@ export async function installAnalyticsAppMocks(page: Page): Promise<void> {
     await json(route, buildDashboardList(state));
   });
 
-  await page.route(/\/api\/analytics\/dashboard\/\d+\/params\/[^/]+\/values(?:\?.*)?$/, async (route) => {
+  await page.route(/\/analytics\/api\/dashboard\/\d+\/params\/[^/]+\/values(?:\?.*)?$/, async (route) => {
     await json(route, []);
   });
 
-  await page.route(/\/api\/analytics\/dashboard\/\d+(?:\?.*)?$/, async (route) => {
+  await page.route(/\/analytics\/api\/dashboard\/\d+(?:\?.*)?$/, async (route) => {
     const url = new URL(route.request().url());
     const dashboardId = Number(url.pathname.split('/').filter(Boolean).at(-1) || state.dashboard.id);
     if (dashboardId !== state.dashboard.id) {
@@ -424,20 +424,20 @@ export async function installAnalyticsAppMocks(page: Page): Promise<void> {
     await json(route, buildDashboardDetail(state));
   });
 
-  await page.route('**/api/analytics/screens', async (route) => {
+  await page.route('**/analytics/api/screens', async (route) => {
     await json(route, buildScreenList());
   });
 
-  await page.route('**/api/analytics/screens/*/publish', async (route) => {
+  await page.route('**/analytics/api/screens/*/publish', async (route) => {
     const screenId = new URL(route.request().url()).pathname.split('/').filter(Boolean).at(-2) || '88';
     await json(route, buildVersionPayload(screenId));
   });
 
-  await page.route('**/api/analytics/screens/*/public_link', async (route) => {
+  await page.route('**/analytics/api/screens/*/public_link', async (route) => {
     await json(route, { uuid: 'screen-public-uuid' });
   });
 
-  await page.route('**/api/analytics/screens/*', async (route) => {
+  await page.route('**/analytics/api/screens/*', async (route) => {
     const requestUrl = new URL(route.request().url());
     const parts = requestUrl.pathname.split('/').filter(Boolean);
     const screenId = parts.at(-1) || '88';

@@ -28,10 +28,10 @@
 
 ## 当前进度
 
-- 进行中：
-  - Sprint README
-  - IT 说明
-  - 任务卡
+- 已完成：
+  - `worklog/v2.2.1/sprint-2/README.md`
+  - `worklog/v2.2.1/sprint-2/it/README.md`
+  - `worklog/v2.2.1/sprint-2/tasks/*.md`
 
 ## 风险
 

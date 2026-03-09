@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "@/routes/hooks";
-import { Button, Descriptions, Space, Tag, message, Spin, Modal, Form, Input, Select, Typography, Drawer, Progress, Alert, Table } from "antd";
-import { PlayCircleOutlined, EditOutlined, HistoryOutlined, ArrowLeftOutlined, SyncOutlined, FileTextOutlined, ReloadOutlined } from "@ant-design/icons";
+import { Button, Descriptions, Dropdown, Space, Tag, message, Spin, Modal, Form, Input, Select, Typography, Drawer, Progress, Alert, Table } from "antd";
+import { PlayCircleOutlined, EditOutlined, HistoryOutlined, ArrowLeftOutlined, SyncOutlined, FileTextOutlined, ReloadOutlined, DeleteOutlined } from "@ant-design/icons";
 import { Activity, Database, GitBranch, PlaySquare } from "lucide-react";
 import {
 	PlatformMetaPill,
@@ -20,6 +20,7 @@ import {
 } from "@/api/ingestion";
 import dataSourcesService, { type InfraDataSource } from "@/api/services/dataSourcesService";
 import { listSqlModels } from "@/api/platformApi";
+import RollbackImpactModal, { type RollbackRequest } from "@/components/rollback/RollbackImpactModal";
 
 const { Text } = Typography;
 
@@ -64,6 +65,8 @@ export default function TransformDetailPage() {
 		detail: "",
 		terminal: false,
 	});
+	const [rollbackOpen, setRollbackOpen] = useState(false);
+	const [rollbackRequest, setRollbackRequest] = useState<RollbackRequest | null>(null);
 	const executePollTimerRef = useRef<number | null>(null);
 	const executeStartedAtRef = useRef<number>(0);
 
@@ -441,6 +444,19 @@ export default function TransformDetailPage() {
 		});
 	};
 
+	const openRollback = (level: number) => {
+		setRollbackRequest({
+			level,
+			scope: "task",
+			taskId: Number(task?.id),
+		});
+		setRollbackOpen(true);
+	};
+
+	const handleRollbackSuccess = () => {
+		loadTask();
+	};
+
 	const renderStatus = (status?: string) => {
 		const statusMap: Record<string, { color: string; text: string }> = {
 			draft: { color: "default", text: "草稿" },
@@ -529,6 +545,20 @@ export default function TransformDetailPage() {
 						>
 							重建 DAG
 						</Button>
+						<Dropdown
+							menu={{
+								items: [
+									{ key: "1", label: "Level 1 — 清空数据", onClick: () => openRollback(1) },
+									{ key: "2", label: "Level 2 — 重建表结构", onClick: () => openRollback(2), danger: false },
+									{ key: "3", label: "Level 3 — 全链路回退", onClick: () => openRollback(3), danger: true },
+								],
+							}}
+							disabled={task.status === "deleted"}
+						>
+							<Button className="rounded-2xl" danger icon={<DeleteOutlined />}>
+								数据回退
+							</Button>
+						</Dropdown>
 						<Button
 							className="rounded-2xl"
 							type="primary"
@@ -834,6 +864,13 @@ export default function TransformDetailPage() {
 					) : null}
 				</Space>
 			</Modal>
+
+			<RollbackImpactModal
+				open={rollbackOpen}
+				request={rollbackRequest}
+				onClose={() => setRollbackOpen(false)}
+				onSuccess={handleRollbackSuccess}
+			/>
 
 			<Drawer
 				title="执行日志"

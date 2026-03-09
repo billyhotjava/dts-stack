@@ -23,21 +23,28 @@
 - 三端 build 结果
 - Playwright list 结果
 - 核心 suite 首轮执行结果
+- `biz/full/quarantine` suite 收口执行结果
 
 ## 验收
 
 - `python3 tests/run_suite.py --suite web-e2e-core --dry-run`
 - `python3 tests/run_suite.py --suite web-e2e-full --dry-run`
 - `python3 tests/run_suite.py --suite biz-e2e --dry-run`
+- `python3 tests/run_suite.py --suite web-e2e-quarantine --include-optional --dry-run`
 - `bash tests/run_gates.sh --gate pr --dry-run`
 - `pnpm --dir tests/web-e2e exec playwright test --list`
 
 ## 当前进度
 
-- 进行中：
-  - dry-run 已恢复
-  - 其余验证待执行
+- 已完成：
+  - 四组 suite dry-run
+  - 三端 build 校验
+  - `pnpm --dir tests/web-e2e exec playwright test --list`
+  - `python3 tests/run_suite.py --suite web-e2e-core --fail-fast`
+  - `python3 tests/run_suite.py --suite biz-e2e --fail-fast`
+  - `python3 tests/run_suite.py --suite web-e2e-full --fail-fast`
+  - `python3 tests/run_suite.py --suite web-e2e-quarantine --include-optional --fail-fast`
 
 ## 风险
 
-- 当前分支与 `v2.5.0` 页面结构不完全一致，真实浏览器执行可能暴露额外适配缺口
+- 受限执行环境可能拦截本地 `localhost` 端口绑定；需要允许 Playwright 附带的本地 mock auth server 与前端 dev server 正常监听

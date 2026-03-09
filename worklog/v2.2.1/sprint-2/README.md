@@ -61,8 +61,8 @@
 
 | ID | 标题 | 类型 | 预估 | 状态 |
 |----|------|------|------|------|
-| WE-013 | Sprint-2 README、task 卡片、IT 说明落地 | 文档 | 0.5天 | WIP |
-| WE-014 | dry-run、构建、Playwright 首轮执行验证 | 验证 | 1天 | WIP |
+| WE-013 | Sprint-2 README、task 卡片、IT 说明落地 | 文档 | 0.5天 | DONE |
+| WE-014 | dry-run、构建、Playwright 首轮执行验证 | 验证 | 1天 | DONE |
 
 ## 本 Sprint 不做
 
@@ -77,7 +77,7 @@
 - suite discoverability：`web-e2e-core`、`web-e2e-full`、`biz-e2e`、`web-e2e-quarantine`
 - 三端前端构建：platform、admin、analytics modern
 - Playwright spec discoverability：`playwright test --list`
-- 首轮浏览器执行：优先 `web-e2e-core`，随后 `biz-e2e` 与 `web-e2e-full`
+- 浏览器执行：`web-e2e-core`、`biz-e2e`、`web-e2e-full`、`web-e2e-quarantine`
 - 工件产出：HTML report、artifacts、runner summary
 
 ## 状态跟踪
@@ -87,3 +87,10 @@
 - WIP = 进行中
 - DONE = 已完成
 - BLOCK = 阻塞
+
+当前 Sprint 收口结果：
+- `web-e2e-core` 已真实执行通过
+- `biz-e2e` 已真实执行通过
+- `web-e2e-full` 已真实执行通过
+- `web-e2e-quarantine` 已真实执行通过
+- 若在受限执行环境中运行，需要允许本地 `localhost` 端口绑定，否则 mock auth server 无法启动

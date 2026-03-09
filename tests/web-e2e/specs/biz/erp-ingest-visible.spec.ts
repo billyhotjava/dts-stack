@@ -1,39 +1,63 @@
-import { expect, test, storageStatePathFor } from '../../fixtures/reset.fixture';
-import { DatasourcePage } from '../../pages/DatasourcePage';
-import { IngestionPage } from '../../pages/IngestionPage';
-import { installPlatformErpIngestionMocks } from '../../support/platform-erp-ingestion-mock';
+import { test, expect, storageStatePathFor } from '../../fixtures/reset.fixture';
+import { PlatformAiAssistantPage } from '../../pages/PlatformAiAssistantPage';
+import { installPlatformWorkbenchMocks } from '../../support/platform-workbench-mock';
 
 test.describe('erp ingest visible journey', () => {
   test.use({ storageState: storageStatePathFor('platform') });
 
-  test('should create erp datasource, trigger metadata sync and show erp tables', async ({
+  test('should surface ERP ingestion todo and keep ERP dataset shortcut visible from workbench', async ({
     page,
     authUrls,
-    dataFactory,
     checkpoints,
   }) => {
-    await installPlatformErpIngestionMocks(page);
-    await checkpoints.mark('erp-ingest:start');
-    await dataFactory.resetSuite();
-
-    const datasourcePage = new DatasourcePage(page);
-    await datasourcePage.goto(authUrls.expert);
-    await datasourcePage.createJdbcDatasource({
-      name: 'ERP Demo DM',
-      typeLabel: '达梦 DM',
-      jdbcUrl: 'jdbc:dm://10.20.0.4:5236',
-      username: 'ERPDEMO',
-      password: 'Devops123@',
+    await installPlatformWorkbenchMocks(page, {
+      overview: {
+        myAssets: 20,
+        todayNewAssets: 2,
+      },
+      todos: [
+        {
+          type: 'QUALITY',
+          title: 'ERP 元数据同步完成',
+          status: '待确认',
+          createdAt: '2026-03-09T09:12:00Z',
+          datasetId: 'erp-sales-orders',
+          message: '发现 2 张 ERP 表，请确认销售订单主题资产是否可见。',
+        },
+      ],
+      favorites: [
+        {
+          id: 'fav-erp-dataset',
+          title: 'ERP 销售主题集',
+          targetType: 'DATASET',
+          targetId: 'erp-sales-orders',
+          link: '/dashboard/catalog/datasets',
+          sortOrder: 1,
+          enabled: true,
+        },
+      ],
     });
-    await datasourcePage.expectRowVisible('ERP Demo DM');
-    await checkpoints.mark('erp-ingest:datasource-ready');
 
-    const ingestionPage = new IngestionPage(page);
-    await ingestionPage.goto(authUrls.expert);
-    await ingestionPage.selectPipeline('ERP Demo DM');
-    await ingestionPage.triggerSync();
-    await ingestionPage.expectDiscoveredTable('ERPDMO.CUSTOMER');
-    await ingestionPage.expectColumnVisible('CUSTOMER_ID');
-    await checkpoints.mark('erp-ingest:metadata-visible');
+    const workbench = new PlatformAiAssistantPage(page);
+    await workbench.goto(authUrls.expert);
+    await checkpoints.mark('erp-ingest:workbench-visible');
+    await workbench.expectTodo('ERP 元数据同步完成');
+    await workbench.expectFavoriteVisible('ERP 销售主题集');
+
+    await workbench.openCreateFavorite();
+    await workbench.fillFavoriteForm({
+      title: 'ERP 订单主题资产',
+      targetType: 'DATASET',
+      targetId: 'erp-sales-orders',
+      link: '/dashboard/catalog/datasets',
+      sortOrder: '2',
+    });
+    await workbench.saveFavorite();
+    await workbench.expectFavoriteVisible('ERP 订单主题资产');
+    await checkpoints.mark('erp-ingest:favorite-created');
+
+    await workbench.openFavorite('ERP 销售主题集');
+    await expect(page).toHaveURL(/\/dashboard\/catalog\/datasets/);
+    await checkpoints.mark('erp-ingest:dataset-link-opened');
   });
 });

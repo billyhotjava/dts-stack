@@ -581,3 +581,25 @@ export const listDashboards = () => api.get({ url: "/dashboards" });
 export const visitDashboard = (data?: Record<string, unknown>) => api.post({ url: "/dashboards/visit", data });
 export const submitEtlJob = (jobId: string) => api.post({ url: `/etl-jobs/${jobId}/submit` });
 export const getJobRunStatus = (runId: string) => api.get({ url: `/job-runs/${runId}/status` });
+
+// Rollback
+export const rollbackAnalyze = (data: {
+	level: number;
+	scope: string;
+	taskId?: number;
+	dataSourceId?: string;
+	tables?: string[];
+	rebuildDbt?: boolean;
+}) => api.post({ url: "/rollback/analyze", data });
+
+export const rollbackExecute = (data: {
+	level: number;
+	scope: string;
+	taskId?: number;
+	dataSourceId?: string;
+	tables?: string[];
+	rebuildDbt?: boolean;
+}) => api.post({ url: "/rollback/execute", data });
+
+export const getRollbackAuditLog = (params: { taskId?: number; dataSourceId?: string }) =>
+	api.get({ url: "/rollback/audit-log", params });

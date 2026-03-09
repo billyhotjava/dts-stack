@@ -37,6 +37,8 @@ pnpm install --frozen-lockfile --dir tests/web-e2e
 pnpm --dir tests/web-e2e exec playwright test --list
 python3 tests/run_suite.py --suite web-e2e-core --fail-fast
 python3 tests/run_suite.py --suite biz-e2e --fail-fast
+python3 tests/run_suite.py --suite web-e2e-full --fail-fast
+python3 tests/run_suite.py --suite web-e2e-quarantine --include-optional --fail-fast
 ```
 
 ## Suite 说明
@@ -61,4 +63,5 @@ python3 tests/run_suite.py --suite biz-e2e --fail-fast
 
 - 当前 suite 仍以 mock-first 为主，不能等同于真实后端黑盒 E2E
 - 如果本机缺少 Playwright browser binary，需要额外安装浏览器依赖
+- 如果执行环境限制本地 `localhost` 端口绑定，需要放开本地监听权限，否则 auth mock server 无法启动
 - 当前仓库存在与本 Sprint 无关的用户改动，验证时需避免误回滚

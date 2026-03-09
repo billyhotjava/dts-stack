@@ -74,9 +74,26 @@ export class PlatformAiAssistantPage {
     await expect(this.favoriteCard(title)).toBeVisible();
   }
 
+  async openFavorite(title: string): Promise<void> {
+    const card = this.favoriteCard(title);
+    await card.getByRole('button', { name: '打开' }).click();
+  }
+
   async editFavorite(title: string): Promise<void> {
     const card = this.favoriteCard(title);
     await card.getByRole('button', { name: '编辑' }).click();
     await expect(this.page.getByRole('dialog')).toBeVisible();
+  }
+
+  async openDatasetsLink(): Promise<void> {
+    await this.page.getByTestId('platform-workbench-link-datasets').click();
+  }
+
+  async openJobsLink(): Promise<void> {
+    await this.page.getByTestId('platform-workbench-link-jobs').click();
+  }
+
+  async openDbtLink(): Promise<void> {
+    await this.page.getByTestId('platform-workbench-link-dbt').click();
   }
 }

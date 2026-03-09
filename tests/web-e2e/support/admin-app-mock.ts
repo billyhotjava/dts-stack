@@ -167,6 +167,27 @@ export async function installAdminAppMocks(page: Page): Promise<void> {
   const settings = buildInitialSettings();
   const packs = buildInitialPacks();
 
+  await page.addInitScript(() => {
+    window.localStorage.setItem(
+      'userStore',
+      JSON.stringify({
+        state: {
+          userInfo: {
+            username: 'sysadmin',
+            fullName: '系统管理员',
+            roles: ['ROLE_SYS_ADMIN'],
+            permissions: [],
+          },
+          userToken: {
+            accessToken: 'admin-playwright-token',
+            refreshToken: 'admin-playwright-refresh',
+          },
+        },
+        version: 0,
+      }),
+    );
+  });
+
   await page.route('**/api/menu', async (route) => {
     await json(route, ok([]));
   });
