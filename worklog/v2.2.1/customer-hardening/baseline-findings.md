@@ -42,6 +42,7 @@
 ## Candidate First-Wave Fixes
 
 - `BUG-001`: done; `dts-platform` dependency convergence is now aligned and the regression script passes
-- `UI-001`: improve platform route chunking and first-screen load behavior for development-center pages
-  - first completed slice: removed `workbench` static/dynamic overlap warning
-  - remaining follow-up: login and error page overlap warnings
+- `UI-001`: done; route-splitting overlap warnings for `workbench`, `sys/login`, and `sys/error` are removed
+- next candidate should be selected from:
+  - runtime main-flow walkthrough findings
+  - large chunk optimization if onsite first-load performance is still a real issue

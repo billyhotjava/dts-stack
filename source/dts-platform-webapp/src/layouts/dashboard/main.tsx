@@ -1,8 +1,7 @@
-import { Suspense, useMemo } from "react";
+import { lazy, Suspense, useMemo } from "react";
 import { Outlet, ScrollRestoration, useLocation } from "react-router";
 import { AuthGuard } from "@/components/auth/auth-guard";
 import { LineLoading } from "@/components/loading";
-import Page403 from "@/pages/sys/error/Page403";
 import { useSettings } from "@/store/settingStore";
 import { cn } from "@/utils";
 import { useMenuStore } from "@/store/menuStore";
@@ -15,6 +14,8 @@ import {
 	parseMenuMetadata,
 	resolveMenuPath,
 } from "@/utils/menuTree";
+
+const Page403 = lazy(() => import("@/pages/sys/error/Page403"));
 
 const normalizeAuthCode = (value: unknown): string => {
 	if (typeof value === "string") return value;
@@ -91,7 +92,14 @@ const Main = () => {
 	const currentNavAuth = useMemo(() => resolveAuthForPath(authIndex, pathname), [authIndex, pathname]);
 
 	return (
-		<AuthGuard checkAny={currentNavAuth} fallback={<Page403 />}>
+		<AuthGuard
+			checkAny={currentNavAuth}
+			fallback={
+				<Suspense fallback={<LineLoading />}>
+					<Page403 />
+				</Suspense>
+			}
+		>
 			<main
 				data-slot="slash-layout-main"
 				className={cn(
