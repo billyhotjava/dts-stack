@@ -20,6 +20,15 @@
 - 先处理调度与工作台类页面
 - 后续同样的视觉 contract 可以继续横向套用到其他平台页面
 
+## 当前进度
+
+- 已新增共享页面骨架 `src/components/console-page.tsx`
+- `TaskSchedulingPage.tsx` 已重构为任务运维中心入口页
+- `workbench/index.tsx` 已重构为工作台总览页
+- `workbench/WorkflowCenterPage.tsx` 已重构为统一待办中心
+- `pnpm -C source/dts-platform-webapp build` 已通过
+- 治理、开发相关页面的横向套用仍待继续推进
+
 ## 验收
 
 - `pnpm -C source/dts-platform-webapp build`
@@ -28,3 +37,7 @@
 ## 风险
 
 - 平台页面信息密度通常比 admin 更高，不能只做“换皮”，还要处理信息分区
+
+## 本轮验证
+
+- `pnpm -C source/dts-platform-webapp build`
