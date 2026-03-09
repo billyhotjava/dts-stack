@@ -37,6 +37,8 @@ const MENU_ICON_OVERRIDES: Record<string, string> = {
 	"governance.rules": "local:ic-rules",
 	"governance.compliance": "local:ic-compliance",
 	"explore.workbench": "local:ic-workbench",
+	scripts: "local:ic-scripts",
+	"studio.scripts": "local:ic-scripts",
 	"explore.savedqueries": "local:ic-savedqueries",
 	"explore.saved.queries": "local:ic-savedqueries",
 	savesavedqueries: "local:ic-savedqueries",
@@ -52,12 +54,6 @@ const normalizeAuthCode = (value: unknown): string => {
 };
 
 const resolveMenuIcon = (node: MenuTree, meta: Record<string, any> | null) => {
-	const explicitIcon =
-		(typeof node.icon === "string" && node.icon.trim().length > 0 ? node.icon.trim() : undefined) ??
-		(typeof meta?.icon === "string" && meta.icon.trim().length > 0 ? meta.icon.trim() : undefined);
-	if (explicitIcon) {
-		return explicitIcon;
-	}
 	const candidates: string[] = [];
 	const sectionKey =
 		typeof meta?.sectionKey === "string" && meta.sectionKey.trim().length > 0
@@ -85,11 +81,19 @@ const resolveMenuIcon = (node: MenuTree, meta: Record<string, any> | null) => {
 			candidates.push(pathKey);
 		}
 	}
+	// Local overrides take priority over explicit icons from the database,
+	// ensuring menu items always resolve to bundled icons in offline environments.
 	for (const key of candidates) {
 		const normalizedKey = normalizeIconLookupKey(key);
 		if (normalizedKey && MENU_ICON_OVERRIDES[normalizedKey]) {
 			return MENU_ICON_OVERRIDES[normalizedKey];
 		}
+	}
+	const explicitIcon =
+		(typeof node.icon === "string" && node.icon.trim().length > 0 ? node.icon.trim() : undefined) ??
+		(typeof meta?.icon === "string" && meta.icon.trim().length > 0 ? meta.icon.trim() : undefined);
+	if (explicitIcon) {
+		return explicitIcon;
 	}
 	return undefined;
 };

@@ -81,6 +81,7 @@ public class IngestionTaskService {
     private final IncrementalSyncService incrementalSyncService;
     private final AuditService auditService;
     private final IngestionTaskChangeLogService changeLogService;
+    private final com.yuzhi.dts.ingestion.service.etl.IngestionRetryService retryService;
 
     public IngestionTaskService(
         IngestionTaskRepository taskRepository,
@@ -95,7 +96,8 @@ public class IngestionTaskService {
         com.yuzhi.dts.ingestion.service.etl.TargetTableProvisioner targetTableProvisioner,
         IncrementalSyncService incrementalSyncService,
         AuditService auditService,
-        IngestionTaskChangeLogService changeLogService
+        IngestionTaskChangeLogService changeLogService,
+        @org.springframework.context.annotation.Lazy com.yuzhi.dts.ingestion.service.etl.IngestionRetryService retryService
     ) {
         this.taskRepository = taskRepository;
         this.executionRepository = executionRepository;
@@ -110,6 +112,7 @@ public class IngestionTaskService {
         this.incrementalSyncService = incrementalSyncService;
         this.auditService = auditService;
         this.changeLogService = changeLogService;
+        this.retryService = retryService;
     }
 
     /**
@@ -581,6 +584,14 @@ public class IngestionTaskService {
             execution.setFailureCategory(failureCategory);
             execution.setFailureAdvice(failureAdvice);
             executionRepository.save(execution);
+
+            // Schedule automatic retry if eligible
+            try {
+                retryService.scheduleRetryIfEligible(execution);
+                executionRepository.save(execution);
+            } catch (Exception retryEx) {
+                log.warn("Failed to schedule auto-retry for execution id={}: {}", execution.getId(), retryEx.getMessage());
+            }
 
             task.setLastExecutionStatus("failed");
             taskRepository.save(task);

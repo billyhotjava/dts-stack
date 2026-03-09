@@ -251,6 +251,19 @@ dts:
     password: ${DTS_AIRFLOW_PASSWORD:airflow}
     dag-id: ${DTS_AIRFLOW_DAG_ID:dbt_load}
     dags-dir: ${DTS_AIRFLOW_DAGS_DIR:/opt/airflow/dags}
+  ingestion:
+    enabled: ${DTS_INGESTION_ENABLED:true}
+    base-url: ${DTS_INGESTION_BASE_URL:http://dts-ingestion:8083}
+    service-name: ${DTS_INGESTION_SERVICE_NAME:dts-platform}
+    retry:
+      max-attempts: ${DTS_INGESTION_RETRY_MAX_ATTEMPTS:3}
+      wait-duration-ms: ${DTS_INGESTION_RETRY_WAIT_MS:1000}
+      multiplier: ${DTS_INGESTION_RETRY_MULTIPLIER:2.0}
+    circuit-breaker:
+      failure-rate-threshold: ${DTS_INGESTION_CB_FAILURE_RATE:50}
+      sliding-window-size: ${DTS_INGESTION_CB_WINDOW_SIZE:10}
+      wait-duration-in-open-state-seconds: ${DTS_INGESTION_CB_OPEN_WAIT:30}
+      permitted-calls-in-half-open-state: ${DTS_INGESTION_CB_HALF_OPEN_CALLS:3}
   admin:
     enabled: ${DTS_ADMIN_ENABLED:true}
     base-url: ${DTS_ADMIN_BASE_URL:http://dts-admin:8081}

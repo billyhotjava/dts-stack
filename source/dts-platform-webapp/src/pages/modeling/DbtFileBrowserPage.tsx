@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Editor from "@monaco-editor/react";
 import { toast } from "sonner";
+import { registerDbtLanguage, DBT_SQL_LANGUAGE_ID } from "./dbt-monaco-lang";
+import { FileCode2, FolderTree, RefreshCw, Rocket } from "lucide-react";
 import {
 	Button,
 	Dropdown,
@@ -10,6 +12,7 @@ import {
 	Select,
 	Spin,
 	Tooltip,
+	Tag,
 	Tree,
 	Typography,
 } from "antd";
@@ -39,6 +42,12 @@ import {
 	triggerDbtTest,
 	triggerDbtDocs,
 } from "@/api/platformApi";
+import {
+	PlatformMetaPill,
+	PlatformPageHero,
+	PlatformSectionCard,
+	PlatformSummaryCards,
+} from "@/components/console-page";
 import { useRouter } from "@/routes/hooks";
 
 const { Text } = Typography;
@@ -78,11 +87,33 @@ interface DbtRunSummary {
 	failures?: DbtRunFailure[];
 }
 
+interface DbtSyncArtifactStatus {
+	synced?: boolean;
+	lastSyncAt?: string;
+}
+
 interface DbtSyncStatus {
 	latestRun?: DbtRunSummary | null;
+	manifest?: DbtSyncArtifactStatus | null;
+	runResults?: DbtSyncArtifactStatus | null;
 }
 
 // ── Helpers ───────────────────────────────────────────────────
+
+/** Map file extension → Monaco language id (overrides backend's basic detection). */
+function resolveEditorLanguage(path: string, backendLang?: string): string {
+	const lower = path.toLowerCase();
+	if (lower.endsWith(".sql")) return DBT_SQL_LANGUAGE_ID;
+	if (lower.endsWith(".yml") || lower.endsWith(".yaml")) return "yaml";
+	if (lower.endsWith(".md")) return "markdown";
+	if (lower.endsWith(".csv") || lower.endsWith(".tsv")) return "plaintext";
+	if (lower.endsWith(".json")) return "json";
+	if (lower.endsWith(".py")) return "python";
+	if (lower.endsWith(".sh") || lower.endsWith(".bash")) return "shell";
+	if (lower.endsWith(".toml")) return "ini";
+	if (lower.endsWith(".txt") || lower.endsWith(".cfg") || lower.endsWith(".conf")) return "plaintext";
+	return backendLang || "plaintext";
+}
 
 function fileIcon(node: FileNode) {
 	if (node.type === "directory") return <FolderOutlined />;
@@ -103,6 +134,11 @@ function fileNodeToTreeData(node: FileNode): DataNode {
 		// Stash the full node for context menu / other operations
 		...(({ children: _, ...rest }) => ({ data: rest }))(node),
 	} as DataNode & { data: FileNode };
+}
+
+function countNodes(node?: FileNode | null): number {
+	if (!node) return 0;
+	return 1 + (node.children || []).reduce((sum, child) => sum + countNodes(child), 0);
 }
 
 // ── Component ─────────────────────────────────────────────────
@@ -427,205 +463,201 @@ export default function DbtFileBrowserPage() {
 	const latestRun = syncStatus?.latestRun || null;
 	const latestStatus = String(latestRun?.status || "UNKNOWN").toUpperCase();
 	const latestStatusColor = latestStatus === "SUCCESS" ? "green" : latestStatus === "FAILED" ? "red" : "gold";
+	const summaryCards = [
+		{
+			label: "目录节点",
+			value: countNodes(treeData),
+			note: "含目录与文件节点",
+			icon: <FolderTree className="h-5 w-5" />,
+		},
+		{
+			label: "当前文件",
+			value: activeFile ? "已打开" : "未选择",
+			note: activeFile?.path || "选择一个文件开始编辑",
+			icon: <FileCode2 className="h-5 w-5" />,
+			tone: "info" as const,
+		},
+		{
+			label: "最近构建",
+			value: latestStatus,
+			note: latestRun?.generatedAt ? new Date(latestRun.generatedAt).toLocaleString() : "暂无最近构建",
+			icon: <Rocket className="h-5 w-5" />,
+			tone: "warning" as const,
+		},
+		{
+			label: "编辑状态",
+			value: dirty ? "未保存" : activeFile ? "已同步" : "待开始",
+			note: activeFile?.readOnly ? "当前文件只读" : "支持保存、运行与快速构建",
+			icon: <RefreshCw className="h-5 w-5" />,
+			tone: "success" as const,
+		},
+	];
 
 	return (
-		<div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
-			{/* Toolbar */}
-			<div
-				style={{
-					display: "flex",
-					alignItems: "center",
-					gap: 8,
-					padding: "8px 12px",
-					borderBottom: "1px solid #f0f0f0",
-					flexShrink: 0,
-				}}
-			>
-				<Dropdown
-					menu={{
-						items: [
-							{
-								key: "file",
-								label: "新建文件",
-								icon: <FileOutlined />,
-								onClick: () => {
-									setCreateType("file");
-									setCreatePath(selectedKey && !selectedKey.includes(".") ? selectedKey + "/" : "models/");
-									setCreateOpen(true);
-								},
-							},
-							{
-								key: "dir",
-								label: "新建目录",
-								icon: <FolderOutlined />,
-								onClick: () => {
-									setCreateType("directory");
-									setCreatePath(selectedKey && !selectedKey.includes(".") ? selectedKey + "/" : "models/");
-									setCreateOpen(true);
-								},
-							},
-						],
-					}}
-				>
-					<Button icon={<PlusOutlined />}>新建</Button>
-				</Dropdown>
-				<Button icon={<ReloadOutlined />} onClick={loadTree}>
-					刷新
-				</Button>
-				<div style={{ flex: 1 }} />
-				{activeFile && dirty && (
-					<Button type="primary" icon={<SaveOutlined />} loading={saving} onClick={saveFile}>
-						保存
-					</Button>
-				)}
-				<Tooltip title="触发 dbt run">
-					<Button icon={<RocketOutlined />} onClick={openDbtRunConfig}>
-						运行 dbt
-					</Button>
-				</Tooltip>
-				<Button
-					size="small"
-					onClick={() => handleQuickBuild("compile")}
-					loading={buildSubmitting === "compile"}
-				>
-					编译
-				</Button>
-				<Button
-					size="small"
-					onClick={() => handleQuickBuild("test")}
-					loading={buildSubmitting === "test"}
-				>
-					测试
-				</Button>
-				<Button
-					size="small"
-					onClick={() => handleQuickBuild("docs")}
-					loading={buildSubmitting === "docs"}
-				>
-					文档
-				</Button>
-				</div>
-
-				<div
-					style={{
-						display: "flex",
-						alignItems: "center",
-						justifyContent: "space-between",
-						gap: 8,
-						padding: "8px 12px",
-						borderBottom: "1px solid #f0f0f0",
-						background: "#fafafa",
-						fontSize: 12,
-						flexShrink: 0,
-					}}
-				>
-					<div>
-						<strong>下一步建议:</strong> 在逻辑建模页完成 ODS 一键生成后，这里用于模型微调与运行验证，不再提供 ZIP 导入。
-						<span style={{ marginLeft: 12 }}>
-							最近构建: <Text style={{ color: latestStatusColor }}>{latestStatus}</Text>
-							{latestRun?.command ? ` (${latestRun.command})` : ""}
-							{latestRun?.generatedAt ? ` @ ${new Date(latestRun.generatedAt).toLocaleString()}` : ""}
-						</span>
-					</div>
-					<div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-						<Button size="small" onClick={() => router.push("/modeling/sql")}>
+		<div className="space-y-6">
+			<PlatformPageHero
+				title="DBT 文件工作区"
+				description="这里负责模型微调、文件编辑和快速运行验证，和逻辑建模页形成明确分工。"
+				eyebrow="DBT Workspace"
+				actions={
+					<div className="flex flex-wrap items-center gap-2">
+						<Button className="rounded-2xl" onClick={() => router.push("/modeling/sql")}>
 							回到逻辑建模
 						</Button>
-						<Button size="small" type="link" onClick={() => router.push("/foundation/data-sources")}>
+						<Button className="rounded-2xl" type="link" onClick={() => router.push("/foundation/data-sources")}>
 							去 ODS 接入
 						</Button>
 					</div>
+				}
+				meta={
+					<>
+						<PlatformMetaPill>不再保留 ZIP 导入式占位入口</PlatformMetaPill>
+						<PlatformMetaPill>最近构建 {latestStatus}</PlatformMetaPill>
+						<PlatformMetaPill>{activeFile?.readOnly ? "当前文件只读" : "支持保存与快速构建"}</PlatformMetaPill>
+					</>
+				}
+			/>
+
+			<PlatformSummaryCards items={summaryCards} />
+
+			<PlatformSectionCard
+				title="文件浏览与编辑"
+				description="左侧目录用于定位模型文件，右侧编辑区负责修改、保存和触发构建。"
+				bodyClassName="p-0"
+				action={
+					<div className="flex flex-wrap items-center gap-2">
+						<Dropdown
+							menu={{
+								items: [
+									{
+										key: "file",
+										label: "新建文件",
+										icon: <FileOutlined />,
+										onClick: () => {
+											setCreateType("file");
+											setCreatePath(selectedKey && !selectedKey.includes(".") ? `${selectedKey}/` : "models/");
+											setCreateOpen(true);
+										},
+									},
+									{
+										key: "dir",
+										label: "新建目录",
+										icon: <FolderOutlined />,
+										onClick: () => {
+											setCreateType("directory");
+											setCreatePath(selectedKey && !selectedKey.includes(".") ? `${selectedKey}/` : "models/");
+											setCreateOpen(true);
+										},
+									},
+								],
+							}}
+						>
+							<Button className="rounded-2xl" icon={<PlusOutlined />}>
+								新建
+							</Button>
+						</Dropdown>
+						<Button className="rounded-2xl" icon={<ReloadOutlined />} onClick={loadTree}>
+							刷新
+						</Button>
+						{activeFile && dirty ? (
+							<Button className="rounded-2xl" type="primary" icon={<SaveOutlined />} loading={saving} onClick={saveFile}>
+								保存
+							</Button>
+						) : null}
+						<Tooltip title="触发 dbt run">
+							<Button className="rounded-2xl" icon={<RocketOutlined />} onClick={openDbtRunConfig}>
+								运行 dbt
+							</Button>
+						</Tooltip>
+						<Button className="rounded-2xl" size="small" onClick={() => handleQuickBuild("compile")} loading={buildSubmitting === "compile"}>
+							编译
+						</Button>
+						<Button className="rounded-2xl" size="small" onClick={() => handleQuickBuild("test")} loading={buildSubmitting === "test"}>
+							测试
+						</Button>
+						<Button className="rounded-2xl" size="small" onClick={() => handleQuickBuild("docs")} loading={buildSubmitting === "docs"}>
+							文档
+						</Button>
+					</div>
+				}
+			>
+				<div className="border-b border-border/70 bg-muted/25 px-5 py-4 text-xs text-muted-foreground">
+					<div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+						<div className="leading-6">
+							<span className="font-semibold text-foreground">工作区说明：</span>
+							在逻辑建模页完成 ODS 一键生成后，这里负责模型微调与运行验证。
+							<span className="ml-2 inline-flex items-center gap-2">
+								<Tag color={latestStatusColor}>{latestStatus}</Tag>
+								{latestRun?.command ? <span>{latestRun.command}</span> : null}
+								{latestRun?.generatedAt ? <span>@ {new Date(latestRun.generatedAt).toLocaleString()}</span> : null}
+							</span>
+						</div>
+						<div className="flex flex-wrap items-center gap-2">
+							{syncStatus?.manifest ? <Tag color={syncStatus.manifest.synced ? "success" : "error"}>manifest</Tag> : null}
+							{syncStatus?.runResults ? <Tag color={syncStatus.runResults.synced ? "success" : "error"}>run_results</Tag> : null}
+						</div>
+					</div>
 				</div>
 
-				{/* Main content */}
-				<div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
-				{/* File tree */}
-				<div
-					style={{
-						width: 260,
-						minWidth: 200,
-						borderRight: "1px solid #f0f0f0",
-						overflow: "auto",
-						padding: "8px 0",
-						flexShrink: 0,
-					}}
-				>
-					<Spin spinning={treeLoading} size="small">
-						{antTreeData.length > 0 ? (
-							<Dropdown
-								menu={{ items: contextMenuItems }}
-								trigger={["contextMenu"]}
-							>
-								<div>
-									<Tree
-										showIcon
-										blockNode
-										treeData={antTreeData}
-										expandedKeys={expandedKeys}
-										selectedKeys={selectedKey ? [selectedKey] : []}
-										onExpand={(keys) => setExpandedKeys(keys)}
-										onSelect={(_keys, info) => {
-											const node = (info.node as any)?.data as FileNode | undefined;
-											if (node?.type === "file") {
-												loadFile(node.path);
-											}
-										}}
-										onRightClick={({ node }) => {
-											const data = (node as any)?.data as FileNode | undefined;
-											if (data) setContextNode(data);
-										}}
-									/>
-								</div>
-							</Dropdown>
-						) : (
-							!treeLoading && (
-								<div style={{ padding: 16, textAlign: "center", color: "#999" }}>
-									暂无文件，请先新建目录或文件
-								</div>
-							)
-						)}
-					</Spin>
-				</div>
+				<div className="flex min-h-[720px] flex-col xl:flex-row">
+					<div className="w-full border-b border-border/70 bg-muted/20 xl:w-[280px] xl:border-b-0 xl:border-r">
+						<div className="border-b border-border/70 px-4 py-3">
+							<div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">项目目录</div>
+						</div>
+						<div className="max-h-[720px] overflow-auto px-3 py-3">
+							<Spin spinning={treeLoading} size="small">
+								{antTreeData.length > 0 ? (
+									<Dropdown menu={{ items: contextMenuItems }} trigger={["contextMenu"]}>
+										<div className="rounded-[20px] bg-background px-2 py-2">
+											<Tree
+												showIcon
+												blockNode
+												treeData={antTreeData}
+												expandedKeys={expandedKeys}
+												selectedKeys={selectedKey ? [selectedKey] : []}
+												onExpand={(keys) => setExpandedKeys(keys)}
+												onSelect={(_keys, info) => {
+													const node = (info.node as any)?.data as FileNode | undefined;
+													if (node?.type === "file") {
+														loadFile(node.path);
+													}
+												}}
+												onRightClick={({ node }) => {
+													const data = (node as any)?.data as FileNode | undefined;
+													if (data) setContextNode(data);
+												}}
+											/>
+										</div>
+									</Dropdown>
+								) : (
+									!treeLoading && <div className="px-4 py-10 text-center text-sm text-muted-foreground">暂无文件，请先新建目录或文件。</div>
+								)}
+							</Spin>
+						</div>
+					</div>
 
-				{/* Editor area */}
-				<div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-					{activeFile ? (
-						<>
-							{/* File path header */}
-							<div
-								style={{
-									padding: "6px 12px",
-									borderBottom: "1px solid #f0f0f0",
-									display: "flex",
-									alignItems: "center",
-									gap: 8,
-									flexShrink: 0,
-									background: "#fafafa",
-								}}
-							>
-								<Text style={{ fontSize: 13, fontFamily: "monospace" }}>{activeFile.path}</Text>
-								<div style={{ flex: 1 }} />
-								{activeFile.readOnly && (
-									<Text type="secondary" style={{ fontSize: 12 }}>
-										只读
-									</Text>
-								)}
-								{dirty && (
-									<Text type="warning" style={{ fontSize: 12 }}>
-										已修改
-									</Text>
-								)}
-								<Text type="secondary" style={{ fontSize: 12 }}>
-									{activeFile.language.toUpperCase()}
-								</Text>
-							</div>
-							{/* Monaco editor */}
-							<div style={{ flex: 1, overflow: "hidden" }}>
-								<Spin spinning={fileLoading} size="small" style={{ height: "100%" }}>
+					<div className="flex min-w-0 flex-1 flex-col bg-card">
+						{activeFile ? (
+							<>
+								<div className="flex flex-wrap items-center gap-2 border-b border-border/70 bg-muted/15 px-4 py-3 text-xs">
+									<Text className="font-mono text-[13px] text-foreground">{activeFile.path}</Text>
+									<div className="flex-1" />
+									{activeFile.readOnly ? <Tag>只读</Tag> : null}
+									{dirty ? <Tag color="warning">已修改</Tag> : <Tag color="success">已同步</Tag>}
+									<Tag>{resolveEditorLanguage(activeFile.path, activeFile.language).toUpperCase()}</Tag>
+								</div>
+								<div className="relative flex-1 overflow-hidden">
+									{fileLoading ? (
+										<div className="absolute inset-0 z-10 flex items-center justify-center bg-white/55">
+											<Spin size="small" />
+										</div>
+									) : null}
 									<Editor
 										height="100%"
-										language={activeFile.language}
+										language={resolveEditorLanguage(activeFile.path, activeFile.language)}
+										theme="dbt-light"
 										value={editorValue}
+										beforeMount={(monaco) => registerDbtLanguage(monaco)}
 										onChange={(val) => {
 											setEditorValue(val || "");
 											setDirty(val !== activeFile.content);
@@ -641,30 +673,34 @@ export default function DbtFileBrowserPage() {
 											scrollBeyondLastLine: false,
 											wordWrap: "on",
 											tabSize: 2,
-											renderWhitespace: "boundary",
+											renderWhitespace: "trailing",
+											renderControlCharacters: true,
+											unicodeHighlight: {
+												ambiguousCharacters: true,
+												invisibleCharacters: true,
+												nonBasicASCII: true,
+											},
+											bracketPairColorization: { enabled: true },
+											guides: {
+												bracketPairs: true,
+												indentation: true,
+											},
+											matchBrackets: "always",
+											folding: true,
+											foldingHighlight: true,
 										}}
 									/>
-								</Spin>
+								</div>
+							</>
+						) : (
+							<div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center text-sm text-muted-foreground">
+								<FileTextOutlined style={{ fontSize: 48, opacity: 0.3 }} />
+								<div>选择一个文件开始编辑。</div>
 							</div>
-						</>
-					) : (
-						<div
-							style={{
-								flex: 1,
-								display: "flex",
-								alignItems: "center",
-								justifyContent: "center",
-								color: "#999",
-								flexDirection: "column",
-								gap: 12,
-							}}
-						>
-							<FileTextOutlined style={{ fontSize: 48, opacity: 0.3 }} />
-							<span>选择一个文件开始编辑</span>
-						</div>
-					)}
+						)}
+					</div>
 				</div>
-			</div>
+			</PlatformSectionCard>
 
 			{/* Create File/Dir Modal */}
 			<Modal

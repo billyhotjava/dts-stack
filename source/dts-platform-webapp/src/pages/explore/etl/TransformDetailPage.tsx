@@ -1,8 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "@/routes/hooks";
-import { Button, Card, Descriptions, Space, Tag, message, Spin, Modal, Form, Input, Select, Typography, Drawer, Progress, Alert, Table } from "antd";
+import { Button, Descriptions, Space, Tag, message, Spin, Modal, Form, Input, Select, Typography, Drawer, Progress, Alert, Table } from "antd";
 import { PlayCircleOutlined, EditOutlined, HistoryOutlined, ArrowLeftOutlined, SyncOutlined, FileTextOutlined, ReloadOutlined } from "@ant-design/icons";
-import { PageHeader } from "@/components/page-header";
+import { Activity, Database, GitBranch, PlaySquare } from "lucide-react";
+import {
+	PlatformMetaPill,
+	PlatformPageHero,
+	PlatformSectionCard,
+	PlatformSummaryCards,
+} from "@/components/console-page";
 import { useRouter } from "@/routes/hooks";
 import {
 	ingestionTaskAPI,
@@ -11,7 +17,6 @@ import {
 	type IngestionExecutionLog,
 	type IngestionIncrementalStateDTO,
 	type IngestionRealtimeStatusDTO,
-	resolveExecutionPollIntervalMs,
 } from "@/api/ingestion";
 import dataSourcesService, { type InfraDataSource } from "@/api/services/dataSourcesService";
 import { listSqlModels } from "@/api/platformApi";
@@ -49,6 +54,8 @@ export default function TransformDetailPage() {
 	const [incrementalStatesLoading, setIncrementalStatesLoading] = useState(false);
 	const [realtimeStatus, setRealtimeStatus] = useState<IngestionRealtimeStatusDTO | null>(null);
 	const [realtimeStatusLoading, setRealtimeStatusLoading] = useState(false);
+	const [incrementalStale, setIncrementalStale] = useState(false);
+	const [realtimeStale, setRealtimeStale] = useState(false);
 	const [executeProgressOpen, setExecuteProgressOpen] = useState(false);
 	const [executeProgress, setExecuteProgress] = useState<ExecutionProgressView>({
 		percent: 0,
@@ -93,7 +100,7 @@ export default function TransformDetailPage() {
 	useEffect(() => {
 		return () => {
 			if (executePollTimerRef.current !== null) {
-				window.clearInterval(executePollTimerRef.current);
+				window.clearTimeout(executePollTimerRef.current);
 				executePollTimerRef.current = null;
 			}
 		};
@@ -152,9 +159,14 @@ export default function TransformDetailPage() {
 			}
 			const states = await ingestionTaskAPI.getIncrementalStates(taskId);
 			setIncrementalStates(Array.isArray(states) ? states : []);
-		} catch (error: any) {
-			setIncrementalStates([]);
-			message.error("获取增量检查点失败: " + (error.message || "未知错误"));
+			setIncrementalStale(false);
+		} catch {
+			if (silent) {
+				setIncrementalStale(true);
+			} else {
+				setIncrementalStates([]);
+			}
+			// error already shown by global interceptor
 		} finally {
 			if (!silent) {
 				setIncrementalStatesLoading(false);
@@ -169,11 +181,14 @@ export default function TransformDetailPage() {
 			}
 			const status = await ingestionTaskAPI.getRealtimeStatus(taskId);
 			setRealtimeStatus(status);
-		} catch (error: any) {
-			setRealtimeStatus(null);
-			if (!silent) {
-				message.error("获取实时状态失败: " + (error.message || "未知错误"));
+			setRealtimeStale(false);
+		} catch {
+			if (silent) {
+				setRealtimeStale(true);
+			} else {
+				setRealtimeStatus(null);
 			}
+			// error already shown by global interceptor
 		} finally {
 			if (!silent) {
 				setRealtimeStatusLoading(false);
@@ -306,9 +321,17 @@ export default function TransformDetailPage() {
 		}
 	};
 
+	/** Adaptive polling: starts fast, slows down over time. Never hard-stops. */
+	const adaptivePollDelay = (elapsedMs: number): number => {
+		if (elapsedMs < 30_000) return 3_000;    // first 30s: every 3s
+		if (elapsedMs < 120_000) return 5_000;   // 30s-2min: every 5s
+		if (elapsedMs < 300_000) return 10_000;  // 2-5min: every 10s
+		return 30_000;                            // >5min: every 30s
+	};
+
 	const stopExecutePolling = () => {
 		if (executePollTimerRef.current !== null) {
-			window.clearInterval(executePollTimerRef.current);
+			window.clearTimeout(executePollTimerRef.current);
 			executePollTimerRef.current = null;
 		}
 	};
@@ -361,9 +384,10 @@ export default function TransformDetailPage() {
 		};
 	};
 
-	const startExecuteProgressPolling = (taskId: number, pollIntervalMs?: number) => {
+	const startExecuteProgressPolling = (taskId: number, _pollIntervalMs?: number) => {
 		stopExecutePolling();
-		executeStartedAtRef.current = Date.now();
+		const startTime = Date.now();
+		executeStartedAtRef.current = startTime;
 		setExecuteProgressOpen(true);
 		setExecuteProgress({
 			percent: 10,
@@ -372,19 +396,13 @@ export default function TransformDetailPage() {
 			detail: "正在后台触发执行。",
 			terminal: false,
 		});
+		let slowNotified = false;
 
-		const poll = async () => {
-			const elapsed = Date.now() - executeStartedAtRef.current;
-			if (elapsed > 5 * 60 * 1000) {
-				stopExecutePolling();
-				setExecuteProgress({
-					percent: 100,
-					status: "exception",
-					stage: "状态同步超时",
-					detail: "等待超时，请进入执行历史继续查看状态。",
-					terminal: true,
-				});
-				return;
+		const pollOnce = async () => {
+			const elapsed = Date.now() - startTime;
+			if (elapsed > 5 * 60 * 1000 && !slowNotified) {
+				slowNotified = true;
+				message.info("执行时间较长，已切换为低频刷新");
 			}
 			try {
 				const execution = await ingestionTaskAPI.getLatestExecution(taskId);
@@ -395,16 +413,16 @@ export default function TransformDetailPage() {
 					stopExecutePolling();
 					void loadTask();
 					void loadLatestExecution(true);
+					return;
 				}
 			} catch {
 				setExecuteProgress((prev) => ({ ...prev, detail: "状态同步中，稍后自动重试。" }));
 			}
+			const elapsed2 = Date.now() - startTime;
+			executePollTimerRef.current = window.setTimeout(pollOnce, adaptivePollDelay(elapsed2));
 		};
 
-		void poll();
-		executePollTimerRef.current = window.setInterval(() => {
-			void poll();
-		}, resolveExecutionPollIntervalMs(pollIntervalMs));
+		void pollOnce();
 	};
 
 	const handleRebuildDag = async () => {
@@ -442,23 +460,61 @@ export default function TransformDetailPage() {
 		);
 	}
 
+	const summaryCards = [
+		{
+			label: "任务状态",
+			value: renderStatus(task.status),
+			note: `同步模式 ${task.syncMode || "-"}`,
+			icon: <Activity className="h-5 w-5" />,
+		},
+		{
+			label: "数据源连接",
+			value: sourceDetail?.name || task.sourceDataSourceId || "-",
+			note: sourceDetail?.type || task.sourceType || "未识别来源",
+			icon: <Database className="h-5 w-5" />,
+			tone: "info" as const,
+		},
+		{
+			label: "最新执行",
+			value: task.lastExecutionStatus ? (
+				<Tag color={task.lastExecutionStatus === "success" ? "success" : task.lastExecutionStatus === "failed" ? "error" : "processing"}>
+					{task.lastExecutionStatus}
+				</Tag>
+			) : (
+				"未执行"
+			),
+			note: task.lastExecutedAt ? new Date(task.lastExecutedAt).toLocaleString("zh-CN") : "暂无执行记录",
+			icon: <PlaySquare className="h-5 w-5" />,
+			tone: "warning" as const,
+		},
+		{
+			label: "DBT 绑定",
+			value: task.dbtModelSelector ? "已绑定" : "未绑定",
+			note: task.dbtModelSelector || task.dbtDagSelector || "使用默认 DAG",
+			icon: <GitBranch className="h-5 w-5" />,
+			tone: "success" as const,
+		},
+	];
+
 	return (
-		<div className="flex flex-col gap-6">
-			<PageHeader
+		<div className="space-y-6">
+			<PlatformPageHero
 				title={task.name}
-				description={task.description || "入湖任务详情"}
+				description={task.description || "查看任务配置、执行记录、DBT 绑定与实时链路状态。"}
+				eyebrow="Ingestion Task Detail"
 				actions={
-					<Space>
-						<Button icon={<ArrowLeftOutlined />} onClick={() => router.push("/explore/etl/transform")}>
+					<Space wrap>
+						<Button className="rounded-2xl" icon={<ArrowLeftOutlined />} onClick={() => router.push("/explore/etl/transform")}>
 							返回
 						</Button>
-						<Button icon={<HistoryOutlined />} onClick={() => router.push(`/explore/etl/transform/${id}/executions`)}>
+						<Button className="rounded-2xl" icon={<HistoryOutlined />} onClick={() => router.push(`/explore/etl/transform/${id}/executions`)}>
 							执行历史
 						</Button>
-						<Button icon={<FileTextOutlined />} onClick={openLatestLog} disabled={!task.lastExecutedAt}>
+						<Button className="rounded-2xl" icon={<FileTextOutlined />} onClick={openLatestLog} disabled={!task.lastExecutedAt}>
 							最新日志
 						</Button>
 						<Button
+							className="rounded-2xl"
 							icon={<EditOutlined />}
 							onClick={() => router.push(`/explore/etl/transform/${id}/edit`)}
 							disabled={task.status === "deleted"}
@@ -466,6 +522,7 @@ export default function TransformDetailPage() {
 							编辑
 						</Button>
 						<Button
+							className="rounded-2xl"
 							icon={<SyncOutlined />}
 							onClick={handleRebuildDag}
 							disabled={task.status === "deleted" || task.airflowEnabled === false}
@@ -473,6 +530,7 @@ export default function TransformDetailPage() {
 							重建 DAG
 						</Button>
 						<Button
+							className="rounded-2xl"
 							type="primary"
 							icon={<PlayCircleOutlined />}
 							onClick={handleExecute}
@@ -483,9 +541,19 @@ export default function TransformDetailPage() {
 						</Button>
 					</Space>
 				}
+				meta={
+					<>
+						<PlatformMetaPill>任务 ID {task.id}</PlatformMetaPill>
+						<PlatformMetaPill>{task.airflowEnabled ? "Airflow 已启用" : "Airflow 未启用"}</PlatformMetaPill>
+						<PlatformMetaPill>{showRealtimeStatusCard ? "CDC 实时链路" : "批量任务视图"}</PlatformMetaPill>
+					</>
+				}
 			/>
 
-			<Card title="基本信息">
+			<PlatformSummaryCards items={summaryCards} />
+
+			<div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
+				<PlatformSectionCard title="基本信息" description="任务标识、数据源、同步模式和最近变更信息。">
 				<Descriptions column={2} bordered>
 					<Descriptions.Item label="任务名称">{task.name}</Descriptions.Item>
 					<Descriptions.Item label="状态">{renderStatus(task.status)}</Descriptions.Item>
@@ -503,54 +571,20 @@ export default function TransformDetailPage() {
 						{task.lastModifiedDate ? new Date(task.lastModifiedDate).toLocaleString("zh-CN") : "-"}
 					</Descriptions.Item>
 				</Descriptions>
-			</Card>
+				</PlatformSectionCard>
 
-			<Card title="源端覆盖参数">
-				<pre className="bg-muted p-4 rounded overflow-auto">{JSON.stringify(task.sourceConfig || {}, null, 2)}</pre>
-			</Card>
-
-			{task.destinationConfig && (
-				<Card title="目标配置">
-					<pre className="bg-muted p-4 rounded overflow-auto">{JSON.stringify(task.destinationConfig, null, 2)}</pre>
-				</Card>
-			)}
-
-			{task.tableMapping && task.tableMapping.length > 0 && (
-				<Card title="表映射配置">
-					<pre className="bg-muted p-4 rounded overflow-auto">{JSON.stringify(task.tableMapping, null, 2)}</pre>
-				</Card>
-			)}
-
-			<Card title="Airflow集成">
+				<PlatformSectionCard
+					title="执行与编排"
+					description="查看最后一次执行、Airflow 编排状态，并就近进入日志与执行历史。"
+					action={
+						<Button className="rounded-2xl" icon={<ReloadOutlined />} onClick={() => loadLatestExecution()} loading={latestExecutionLoading}>
+							刷新执行记录
+						</Button>
+					}
+				>
 				<Descriptions column={2} bordered>
-					<Descriptions.Item label="启用状态">{task.airflowEnabled ? <Tag color="success">已启用</Tag> : <Tag>未启用</Tag>}</Descriptions.Item>
+					<Descriptions.Item label="Airflow 启用">{task.airflowEnabled ? <Tag color="success">已启用</Tag> : <Tag>未启用</Tag>}</Descriptions.Item>
 					<Descriptions.Item label="编排模板">{task.airflowDagId ? "系统自动生成" : "系统默认"}</Descriptions.Item>
-				</Descriptions>
-			</Card>
-
-			<Card
-				title="DBT 绑定"
-				extra={
-					<Button type="link" onClick={openDbtModal}>
-						绑定模型 / DAG 族
-					</Button>
-				}
-			>
-				<Descriptions column={2} bordered>
-					<Descriptions.Item label="模型选择器">
-						{task.dbtModelSelector ? <Text code>{task.dbtModelSelector}</Text> : "未绑定"}
-					</Descriptions.Item>
-					<Descriptions.Item label="DAG 族选择器">
-						{task.dbtDagSelector ? <Text code>{task.dbtDagSelector}</Text> : "默认 DAG"}
-					</Descriptions.Item>
-				</Descriptions>
-				<div className="mt-2 text-xs text-muted-foreground">
-					可直接输入 selector（如：model:xxx、tag:xxx），或从模型列表快速生成。
-				</div>
-			</Card>
-
-			<Card title="执行信息">
-				<Descriptions column={2} bordered>
 					<Descriptions.Item label="最后执行时间">
 						{task.lastExecutedAt ? new Date(task.lastExecutedAt).toLocaleString("zh-CN") : "从未执行"}
 					</Descriptions.Item>
@@ -571,9 +605,6 @@ export default function TransformDetailPage() {
 					<Button icon={<FileTextOutlined />} onClick={openLatestLog} disabled={!task.lastExecutedAt}>
 						查看最新日志
 					</Button>
-					<Button icon={<ReloadOutlined />} onClick={() => loadLatestExecution()} loading={latestExecutionLoading}>
-						刷新执行记录
-					</Button>
 					{latestExecution ? (
 						<Text type="secondary">
 							执行ID：{latestExecution.executionId || latestExecution.id} · 状态：{latestExecution.status}
@@ -582,13 +613,56 @@ export default function TransformDetailPage() {
 						<Text type="secondary">暂无执行记录</Text>
 					)}
 				</div>
-			</Card>
+				</PlatformSectionCard>
+			</div>
+
+			<div className="grid gap-6 xl:grid-cols-2">
+				<PlatformSectionCard title="源端覆盖参数" description="源端覆盖参数快照，便于核对 Addax reader 相关配置。">
+					<pre className="overflow-auto rounded-[24px] bg-muted/35 p-4 text-xs leading-6">{JSON.stringify(task.sourceConfig || {}, null, 2)}</pre>
+				</PlatformSectionCard>
+
+				{task.destinationConfig ? (
+					<PlatformSectionCard title="目标配置" description="当前任务的目标端写入配置。">
+						<pre className="overflow-auto rounded-[24px] bg-muted/35 p-4 text-xs leading-6">{JSON.stringify(task.destinationConfig, null, 2)}</pre>
+					</PlatformSectionCard>
+				) : null}
+			</div>
+
+			{task.tableMapping && task.tableMapping.length > 0 ? (
+				<PlatformSectionCard title="表映射配置" description="任务映射到目标表的结构快照。">
+					<pre className="overflow-auto rounded-[24px] bg-muted/35 p-4 text-xs leading-6">{JSON.stringify(task.tableMapping, null, 2)}</pre>
+				</PlatformSectionCard>
+			) : null}
+
+			<PlatformSectionCard
+				title="DBT 绑定"
+				description="模型选择器和 DAG 族选择器都在这里维护，不再跳转到占位页。"
+				action={
+					<Button className="rounded-2xl" type="link" onClick={openDbtModal}>
+						绑定模型 / DAG 族
+					</Button>
+				}
+			>
+				<Descriptions column={2} bordered>
+					<Descriptions.Item label="模型选择器">
+						{task.dbtModelSelector ? <Text code>{task.dbtModelSelector}</Text> : "未绑定"}
+					</Descriptions.Item>
+					<Descriptions.Item label="DAG 族选择器">
+						{task.dbtDagSelector ? <Text code>{task.dbtDagSelector}</Text> : "默认 DAG"}
+					</Descriptions.Item>
+				</Descriptions>
+				<div className="mt-2 text-xs text-muted-foreground">
+					可直接输入 selector（如：model:xxx、tag:xxx），或从模型列表快速生成。
+				</div>
+			</PlatformSectionCard>
 
 			{showRealtimeStatusCard ? (
-				<Card
-					title="实时状态（预留）"
-					extra={
+				<PlatformSectionCard
+					title="实时链路状态"
+					description="当前只对 `cdc` 任务展示实时通道、心跳、延迟和吞吐。"
+					action={
 						<Button
+							className="rounded-2xl"
 							icon={<ReloadOutlined />}
 							onClick={() => task?.id && loadRealtimeStatus(Number(task.id))}
 							loading={realtimeStatusLoading}
@@ -597,6 +671,7 @@ export default function TransformDetailPage() {
 						</Button>
 					}
 				>
+					{realtimeStale && <Alert type="warning" banner message="数据可能已过期，请点击刷新按钮重新加载" className="mb-2" />}
 					<Descriptions column={2} bordered>
 						<Descriptions.Item label="连接器">{realtimeStatus?.connectorType || "-"}</Descriptions.Item>
 						<Descriptions.Item label="链路状态">
@@ -611,16 +686,18 @@ export default function TransformDetailPage() {
 						<Descriptions.Item label="堆积量" span={2}>{realtimeStatus?.backlogCount ?? "-"}</Descriptions.Item>
 					</Descriptions>
 					<div className="mt-2 text-xs text-muted-foreground">
-						该区域用于后续实时链路（Kafka/CDC）监控；当前展示范围仅限 `cdc` 任务。
+						当前展示范围仅限 `cdc` 任务，用于现场排查链路堆积、心跳缺失和消费延迟。
 					</div>
-				</Card>
+				</PlatformSectionCard>
 			) : null}
 
 			{normalizeText(task.syncMode).toLowerCase() === "incremental" ? (
-				<Card
+				<PlatformSectionCard
 					title="增量检查点"
-					extra={
+					description="增量任务会在成功执行后写入最新水位，便于判断本次同步推进是否正常。"
+					action={
 						<Button
+							className="rounded-2xl"
 							icon={<ReloadOutlined />}
 							onClick={() => task?.id && loadIncrementalStates(Number(task.id))}
 							loading={incrementalStatesLoading}
@@ -629,6 +706,7 @@ export default function TransformDetailPage() {
 						</Button>
 					}
 				>
+					{incrementalStale && <Alert type="warning" banner message="数据可能已过期，请点击刷新按钮重新加载" className="mb-2" />}
 					<Table<IngestionIncrementalStateDTO>
 						rowKey={(record) => `${record.taskId}-${record.sourceTable}`}
 						size="small"
@@ -663,7 +741,7 @@ export default function TransformDetailPage() {
 							},
 						]}
 					/>
-				</Card>
+				</PlatformSectionCard>
 			) : null}
 
 			<Modal

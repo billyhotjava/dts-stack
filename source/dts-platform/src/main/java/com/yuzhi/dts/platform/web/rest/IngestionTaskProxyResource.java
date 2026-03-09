@@ -319,6 +319,26 @@ public class IngestionTaskProxyResource {
         return ResponseEntity.ok(ingestionClient.uploadFile(file));
     }
 
+    @GetMapping("/tasks/executions/observability")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ResponseEntity<ApiResponse<Object>> getExecutionsObservability(@RequestParam Map<String, String> params) {
+        Map<String, Object> query = new LinkedHashMap<>();
+        if (params != null) {
+            query.putAll(params);
+        }
+        return ResponseEntity.ok(ingestionClient.getExecutionsObservability(query));
+    }
+
+    @GetMapping("/tasks/executions/governance-overview")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ResponseEntity<ApiResponse<Object>> getGovernanceOverview(@RequestParam Map<String, String> params) {
+        Map<String, Object> query = new LinkedHashMap<>();
+        if (params != null) {
+            query.putAll(params);
+        }
+        return ResponseEntity.ok(ingestionClient.getGovernanceOverview(query));
+    }
+
     @GetMapping("/tasks/changes")
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ResponseEntity<ApiResponse<Map<String, Object>>> listChangeLogs(@RequestParam Map<String, String> params) {

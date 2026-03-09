@@ -8,7 +8,14 @@ import {
 	ReloadOutlined,
 	SyncOutlined,
 } from "@ant-design/icons";
-import { PageHeader } from "@/components/page-header";
+import { Activity, Clock3, ListChecks, ShieldAlert } from "lucide-react";
+import {
+	PlatformFilterBar,
+	PlatformMetaPill,
+	PlatformPageHero,
+	PlatformSectionCard,
+	PlatformSummaryCards,
+} from "@/components/console-page";
 import { useRouter } from "@/routes/hooks";
 import {
 	ingestionTaskAPI,
@@ -16,7 +23,6 @@ import {
 	type IngestionExecutionDTO,
 	type IngestionGovernanceOverviewDTO,
 	type IngestionExecutionObservabilityDTO,
-	resolveExecutionPollIntervalMs,
 } from "@/api/ingestion";
 import { formatTimestamp } from "@/utils/format";
 
@@ -74,9 +80,17 @@ export default function TransformPage() {
 		void loadGovernanceOverview();
 	}, [governanceHours]);
 
+	/** Adaptive polling: starts fast, slows down over time. Never hard-stops. */
+	const adaptivePollDelay = (elapsedMs: number): number => {
+		if (elapsedMs < 30_000) return 3_000;    // first 30s: every 3s
+		if (elapsedMs < 120_000) return 5_000;   // 30s-2min: every 5s
+		if (elapsedMs < 300_000) return 10_000;  // 2-5min: every 10s
+		return 30_000;                            // >5min: every 30s
+	};
+
 	const stopExecutePolling = () => {
 		if (executePollTimerRef.current !== null) {
-			window.clearInterval(executePollTimerRef.current);
+			window.clearTimeout(executePollTimerRef.current);
 			executePollTimerRef.current = null;
 		}
 	};
@@ -96,8 +110,7 @@ export default function TransformPage() {
 			setTasks(content);
 			const total = typeof result?.totalElements === "number" ? result.totalElements : content.length;
 			setPagination((prev) => ({ ...prev, total }));
-		} catch (error: any) {
-			message.error("加载任务列表失败: " + (error.message || "未知错误"));
+		} catch {
 			setTasks([]);
 		} finally {
 			setLoading(false);
@@ -114,8 +127,7 @@ export default function TransformPage() {
 				timeoutMinutes: obsTimeoutMinutes,
 			});
 			setObservability(result);
-		} catch (error: any) {
-			message.error("加载运行指标失败: " + (error.message || "未知错误"));
+		} catch {
 			setObservability(null);
 		} finally {
 			setObservabilityLoading(false);
@@ -127,8 +139,7 @@ export default function TransformPage() {
 		try {
 			const result = await ingestionTaskAPI.getGovernanceOverview({ hours: governanceHours });
 			setGovernanceOverview(result);
-		} catch (error: any) {
-			message.error("加载资源治理指标失败: " + (error.message || "未知错误"));
+		} catch {
 			setGovernanceOverview(null);
 		} finally {
 			setGovernanceLoading(false);
@@ -188,10 +199,11 @@ export default function TransformPage() {
 	const startExecuteProgressPolling = (
 		taskId: number,
 		taskName: string,
-		pollIntervalMs?: number
+		_pollIntervalMs?: number
 	) => {
 		stopExecutePolling();
-		executeStartedAtRef.current = Date.now();
+		const startTime = Date.now();
+		executeStartedAtRef.current = startTime;
 		setExecutingTaskId(taskId);
 		setExecutingTaskName(taskName);
 		setExecuteProgressOpen(true);
@@ -202,19 +214,13 @@ export default function TransformPage() {
 			detail: "正在后台触发执行。",
 			terminal: false,
 		});
+		let slowNotified = false;
 
-		const poll = async () => {
-			const elapsed = Date.now() - executeStartedAtRef.current;
-			if (elapsed > 5 * 60 * 1000) {
-				stopExecutePolling();
-				setExecuteProgress({
-					percent: 100,
-					status: "exception",
-					stage: "状态同步超时",
-					detail: "等待超时，请刷新列表或进入执行历史查看状态。",
-					terminal: true,
-				});
-				return;
+		const pollOnce = async () => {
+			const elapsed = Date.now() - startTime;
+			if (elapsed > 5 * 60 * 1000 && !slowNotified) {
+				slowNotified = true;
+				message.info("执行时间较长，已切换为低频刷新");
 			}
 			try {
 				const execution = await ingestionTaskAPI.getLatestExecution(taskId);
@@ -223,16 +229,16 @@ export default function TransformPage() {
 				if (next.terminal) {
 					stopExecutePolling();
 					void loadTasks();
+					return;
 				}
 			} catch {
 				setExecuteProgress((prev) => ({ ...prev, detail: "状态同步中，稍后自动重试。" }));
 			}
+			const elapsed2 = Date.now() - startTime;
+			executePollTimerRef.current = window.setTimeout(pollOnce, adaptivePollDelay(elapsed2));
 		};
 
-		void poll();
-		executePollTimerRef.current = window.setInterval(() => {
-			void poll();
-		}, resolveExecutionPollIntervalMs(pollIntervalMs));
+		void pollOnce();
 	};
 
 	const handleExecute = async (id: number, name: string) => {
@@ -245,8 +251,8 @@ export default function TransformPage() {
 					message.success("任务已提交，后台正在触发执行");
 					startExecuteProgressPolling(id, name, submit?.pollIntervalMs);
 					void loadTasks();
-				} catch (error: any) {
-					message.error("执行失败: " + (error.message || "未知错误"));
+				} catch {
+					// error already shown by global interceptor
 				}
 			},
 		});
@@ -261,8 +267,8 @@ export default function TransformPage() {
 					await ingestionTaskAPI.rebuildDag(id);
 					message.success("DAG 已重建");
 					void loadTasks();
-				} catch (error: any) {
-					message.error("重建失败: " + (error.message || "未知错误"));
+				} catch {
+					// error already shown by global interceptor
 				}
 			},
 		});
@@ -279,8 +285,8 @@ export default function TransformPage() {
 					await ingestionTaskAPI.deleteTask(id);
 					message.success("任务已删除");
 					void loadTasks();
-				} catch (error: any) {
-					message.error("删除失败: " + (error.message || "未知错误"));
+				} catch {
+					// error already shown by global interceptor
 				}
 			},
 		});
@@ -467,31 +473,101 @@ export default function TransformPage() {
 		{ title: "排队中", dataIndex: "preparing", key: "preparing", width: 100 },
 	];
 
+	const summaryCards = [
+		{
+			label: "任务总数",
+			value: pagination.total || tasks.length,
+			note: `活跃 ${tasks.filter((item) => item.status === "active").length} · 暂停 ${tasks.filter((item) => item.status === "paused").length}`,
+			icon: <ListChecks className="h-5 w-5" />,
+		},
+		{
+			label: "成功率",
+			value: observability ? `${Number(observability.successRate || 0).toFixed(1)}%` : "--",
+			note: `最近 ${obsDays} 天执行窗口`,
+			icon: <Activity className="h-5 w-5" />,
+			tone: "info" as const,
+		},
+		{
+			label: "队列长度",
+			value: governanceOverview?.queueLength ?? "--",
+			note: `最近 ${governanceHours} 小时治理视角`,
+			icon: <Clock3 className="h-5 w-5" />,
+			tone: "warning" as const,
+		},
+		{
+			label: "治理拒绝",
+			value: governanceOverview?.blockedByPolicy ?? "--",
+			note: "并发、窗口与限额策略命中次数",
+			icon: <ShieldAlert className="h-5 w-5" />,
+			tone: "success" as const,
+		},
+	];
+
 	return (
-		<div className="flex flex-col gap-6">
-			<PageHeader
-				title="入湖任务管理"
-				description="使用 Addax 生成作业配置，Airflow 编排执行"
+		<div className="space-y-6">
+			<PlatformPageHero
+				title="入湖任务中心"
+				description="把任务清单、运行可观测性和治理负载放到同一个工作面里，现场优先关注可执行、可追踪和可治理。"
+				eyebrow="Ingestion Operations"
 				actions={
-					<Space>
-						<Button icon={<ReloadOutlined />} onClick={() => void loadTasks()} loading={loading}>
+					<Space wrap>
+						<Button className="rounded-2xl" icon={<ReloadOutlined />} onClick={() => void loadTasks()} loading={loading}>
 							刷新
 						</Button>
-						<Button type="primary" onClick={() => router.push("/explore/etl/transform/new")}>
+						<Button className="rounded-2xl" type="primary" onClick={() => router.push("/explore/etl/transform/new")}>
 							创建入湖任务
 						</Button>
 					</Space>
 				}
+				meta={
+					<>
+						<PlatformMetaPill>最近 {governanceHours} 小时治理窗口</PlatformMetaPill>
+						<PlatformMetaPill>最近 {obsDays} 天执行可观测性</PlatformMetaPill>
+						<PlatformMetaPill>任务列表保留执行、重建 DAG 与删除入口</PlatformMetaPill>
+					</>
+				}
 			/>
 
-			<Card title="运行可观测性（SLA / 失败趋势 / MTTR）" loading={observabilityLoading}>
+			<PlatformSummaryCards items={summaryCards} />
+
+			<PlatformFilterBar>
+				<div>
+					<div className="text-sm font-semibold text-foreground">先看运行体征，再处理任务明细</div>
+					<div className="mt-1 text-sm text-muted-foreground">
+						上半区聚焦 SLA、失败趋势和治理负载，下半区保留任务级执行、重建 DAG 和配置处理入口。
+					</div>
+				</div>
+				<div className="flex flex-wrap items-center gap-2">
+					{[
+						{ label: "全部", value: undefined },
+						{ label: "草稿", value: "draft" },
+						{ label: "活跃", value: "active" },
+						{ label: "暂停", value: "paused" },
+						{ label: "已删除", value: "deleted" },
+					].map((item) => (
+						<Button
+							key={item.label}
+							type={statusFilter === item.value ? "primary" : "default"}
+							size="small"
+							onClick={() => setStatusFilter(item.value)}
+						>
+							{item.label}
+						</Button>
+					))}
+				</div>
+			</PlatformFilterBar>
+
+			<PlatformSectionCard
+				title="运行可观测性与治理负载"
+				description="同一页面同时回答两个问题：任务当前跑得怎么样，治理限额有没有开始拦截现场流量。"
+			>
 				<Card
 					size="small"
-					title="资源与配额治理（并发 / 队列 / 拒绝）"
+					title="资源与配额治理"
 					loading={governanceLoading}
-					style={{ marginBottom: 16 }}
+					className="mb-4 rounded-[24px]"
 					extra={
-						<Space>
+						<Space wrap>
 							<Select
 								style={{ width: 140 }}
 								value={governanceHours}
@@ -504,6 +580,7 @@ export default function TransformPage() {
 								onChange={(value) => setGovernanceHours(value)}
 							/>
 							<Button
+								className="rounded-2xl"
 								icon={<ReloadOutlined />}
 								onClick={() => void loadGovernanceOverview()}
 								loading={governanceLoading}
@@ -537,32 +614,18 @@ export default function TransformPage() {
 									<Statistic title="策略拒绝数" value={governanceOverview.blockedByPolicy || 0} />
 								</Col>
 								<Col xs={12} md={6}>
-									<Statistic
-										title="平均耗时(秒)"
-										value={governanceOverview.avgExecutionSeconds || 0}
-										precision={2}
-									/>
+									<Statistic title="平均耗时(秒)" value={governanceOverview.avgExecutionSeconds || 0} precision={2} />
 								</Col>
 								<Col xs={12} md={6}>
-									<Statistic
-										title="平均排队(秒)"
-										value={governanceOverview.avgQueueWaitSeconds || 0}
-										precision={2}
-									/>
+									<Statistic title="平均排队(秒)" value={governanceOverview.avgQueueWaitSeconds || 0} precision={2} />
 								</Col>
 								<Col xs={12} md={6}>
-									<Statistic
-										title="最长排队(秒)"
-										value={governanceOverview.maxQueueWaitSeconds || 0}
-										precision={2}
-									/>
+									<Statistic title="最长排队(秒)" value={governanceOverview.maxQueueWaitSeconds || 0} precision={2} />
 								</Col>
 							</Row>
 							<Table
 								size="small"
-								rowKey={(record) =>
-									`${record.sourceDataSourceId || "none"}-${record.sourceType || "unknown"}`
-								}
+								rowKey={(record) => `${record.sourceDataSourceId || "none"}-${record.sourceType || "unknown"}`}
 								pagination={false}
 								columns={sourceLoadColumns}
 								dataSource={governanceOverview.sourceLoads || []}
@@ -581,7 +644,8 @@ export default function TransformPage() {
 						<Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无治理指标" />
 					)}
 				</Card>
-				<Space wrap size={12} style={{ marginBottom: 16 }}>
+
+				<div className="mb-4 flex flex-wrap items-center gap-3">
 					<Select
 						allowClear
 						placeholder="按任务过滤"
@@ -618,10 +682,10 @@ export default function TransformPage() {
 							onChange={(value) => setObsTimeoutMinutes(Number(value || 10))}
 						/>
 					</Space>
-					<Button icon={<ReloadOutlined />} onClick={() => void loadObservability()} loading={observabilityLoading}>
+					<Button className="rounded-2xl" icon={<ReloadOutlined />} onClick={() => void loadObservability()} loading={observabilityLoading}>
 						刷新指标
 					</Button>
-				</Space>
+				</div>
 				{observability ? (
 					<Space direction="vertical" size={16} style={{ width: "100%" }}>
 						<Row gutter={[16, 16]}>
@@ -652,7 +716,7 @@ export default function TransformPage() {
 						</Row>
 						<Row gutter={[16, 16]}>
 							<Col xs={24} lg={10}>
-								<Card size="small" title="失败分类 Top5">
+								<Card size="small" title="失败分类 Top5" className="rounded-[24px]">
 									<Space wrap>
 										{(observability.failureTop || []).length ? (
 											observability.failureTop.map((item) => (
@@ -667,15 +731,9 @@ export default function TransformPage() {
 								</Card>
 							</Col>
 							<Col xs={24} lg={14}>
-								<Card size="small" title="日趋势">
+								<Card size="small" title="日趋势" className="rounded-[24px]">
 									{(observability.trend || []).length ? (
-										<Table
-											size="small"
-											rowKey="day"
-											pagination={false}
-											columns={trendColumns}
-											dataSource={observability.trend}
-										/>
+										<Table size="small" rowKey="day" pagination={false} columns={trendColumns} dataSource={observability.trend} />
 									) : (
 										<Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前时间窗没有执行数据" />
 									)}
@@ -686,29 +744,13 @@ export default function TransformPage() {
 				) : (
 					<Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无运行指标" />
 				)}
-			</Card>
+			</PlatformSectionCard>
 
-			<Card>
-				<Space style={{ marginBottom: 16 }}>
-					<span>状态筛选：</span>
-					{[
-						{ label: "全部", value: undefined },
-						{ label: "草稿", value: "draft" },
-						{ label: "活跃", value: "active" },
-						{ label: "暂停", value: "paused" },
-						{ label: "已删除", value: "deleted" },
-					].map((item) => (
-						<Button
-							key={item.label}
-							type={statusFilter === item.value ? "primary" : "default"}
-							size="small"
-							onClick={() => setStatusFilter(item.value)}
-						>
-							{item.label}
-						</Button>
-					))}
-				</Space>
-
+			<PlatformSectionCard
+				title="任务清单"
+				description="保留现场最常用的任务级操作：执行、查看历史、编辑、重建 DAG 和删除。"
+				action={<Tag color="blue">{pagination.total || tasks.length} 条任务</Tag>}
+			>
 				<Table
 					columns={columns}
 					dataSource={tasks}
@@ -727,7 +769,7 @@ export default function TransformPage() {
 						},
 					}}
 				/>
-			</Card>
+			</PlatformSectionCard>
 
 			<Modal
 				open={executeProgressOpen}

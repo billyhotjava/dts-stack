@@ -147,6 +147,7 @@ public class DbtRunResultService {
             int failed = 0;
             int skipped = 0;
             List<DbtRunFailure> failures = new ArrayList<>();
+            List<DbtTestDetail> testDetails = new ArrayList<>();
 
             for (Map<String, Object> result : results) {
                 String status = normalizeStatus(text(result.get("status")));
@@ -176,6 +177,46 @@ public class DbtRunResultService {
                         );
                     }
                 }
+
+                // Collect test details for test nodes
+                if ("test".equalsIgnoreCase(resourceType)) {
+                    String rawStatus = text(result.get("status"));
+                    String compiledSql = text(result.get("compiled_code"));
+                    if (compiledSql == null && manifestNode != null) {
+                        compiledSql = manifestNode.compiledCode();
+                    }
+                    double execTime = asDouble(result.get("execution_time")) != null
+                        ? asDouble(result.get("execution_time")) : 0.0;
+
+                    int failuresCount = -1;
+                    Map<String, Object> adapterResponse = asMap(result.get("adapter_response"));
+                    Object rowsAffected = adapterResponse.get("rows_affected");
+                    if (rowsAffected != null) {
+                        try {
+                            failuresCount = Integer.parseInt(String.valueOf(rowsAffected));
+                        } catch (NumberFormatException ignored) {
+                        }
+                    }
+                    if (failuresCount == -1) {
+                        Object failuresRaw = result.get("failures");
+                        if (failuresRaw instanceof Number n) {
+                            failuresCount = n.intValue();
+                        }
+                    }
+
+                    String testType = manifestNode != null ? manifestNode.testType() : null;
+                    String testedColumn = manifestNode != null ? manifestNode.testedColumn() : null;
+                    String testedModel = manifestNode != null ? manifestNode.testedModel() : null;
+                    if (testType == null) {
+                        testType = inferTestType(name);
+                    }
+
+                    testDetails.add(new DbtTestDetail(
+                        uniqueId, name, testType, testedColumn, testedModel,
+                        rawStatus, resolveFailureMessage(result), compiledSql,
+                        execTime, failuresCount
+                    ));
+                }
             }
 
             String status = failed > 0 ? "FAILED" : (success > 0 ? "SUCCESS" : "SKIPPED");
@@ -192,12 +233,106 @@ public class DbtRunResultService {
                 success,
                 failed,
                 skipped,
-                failures
+                failures,
+                testDetails
             );
         } catch (Exception ex) {
             LOG.warn("Failed to parse run_results.json summary: {}", ex.getMessage());
             return DbtRunSummary.empty("解析 run_results.json 失败: " + ex.getMessage());
         }
+    }
+
+    public List<DbtTestDetail> getTestDetails() {
+        if (!properties.isEnabled()) {
+            return Collections.emptyList();
+        }
+        String projectDir = resolveProjectDir();
+        if (!StringUtils.hasText(projectDir)) {
+            return Collections.emptyList();
+        }
+        String runResultsPath = projectDir + RUN_RESULTS_PATH;
+        File runResultsFile = Path.of(runResultsPath).toFile();
+        if (!runResultsFile.exists()) {
+            return Collections.emptyList();
+        }
+        try {
+            Map<String, Object> raw = objectMapper.readValue(runResultsFile, new TypeReference<>() {});
+            List<Map<String, Object>> results = asList(raw.get("results"));
+            Map<String, ManifestNode> manifestNodes = readManifestNodes(projectDir + MANIFEST_PATH);
+
+            List<DbtTestDetail> details = new ArrayList<>();
+            for (Map<String, Object> result : results) {
+                String uniqueId = resolveUniqueId(result);
+                String resourceType = resolveResourceType(result,
+                    StringUtils.hasText(uniqueId) ? manifestNodes.get(uniqueId) : null);
+                if (!"test".equalsIgnoreCase(resourceType)) {
+                    continue;
+                }
+                ManifestNode manifestNode = StringUtils.hasText(uniqueId) ? manifestNodes.get(uniqueId) : null;
+                String name = resolveNodeName(result, manifestNode);
+                String status = text(result.get("status"));
+                String message = resolveFailureMessage(result);
+                String compiledSql = text(result.get("compiled_code"));
+                if (compiledSql == null && manifestNode != null) {
+                    compiledSql = manifestNode.compiledCode();
+                }
+                double executionTime = asDouble(result.get("execution_time")) != null
+                    ? asDouble(result.get("execution_time")) : 0.0;
+
+                int failuresCount = -1;
+                Map<String, Object> adapterResponse = asMap(result.get("adapter_response"));
+                Object rowsAffected = adapterResponse.get("rows_affected");
+                if (rowsAffected != null) {
+                    try {
+                        failuresCount = Integer.parseInt(String.valueOf(rowsAffected));
+                    } catch (NumberFormatException ignored) {
+                    }
+                }
+                if (failuresCount == -1) {
+                    // try the top-level "failures" field (integer count in dbt)
+                    Object failuresRaw = result.get("failures");
+                    if (failuresRaw instanceof Number n) {
+                        failuresCount = n.intValue();
+                    }
+                }
+
+                String testType = manifestNode != null ? manifestNode.testType() : null;
+                String testedColumn = manifestNode != null ? manifestNode.testedColumn() : null;
+                String testedModel = manifestNode != null ? manifestNode.testedModel() : null;
+                if (testType == null) {
+                    testType = inferTestType(name);
+                }
+
+                details.add(new DbtTestDetail(
+                    uniqueId, name, testType, testedColumn, testedModel,
+                    status, message, compiledSql, executionTime, failuresCount
+                ));
+            }
+            return details;
+        } catch (Exception ex) {
+            LOG.warn("Failed to parse test details from run_results.json: {}", ex.getMessage());
+            return Collections.emptyList();
+        }
+    }
+
+    private String inferTestType(String name) {
+        if (!StringUtils.hasText(name)) {
+            return "custom";
+        }
+        String lower = name.toLowerCase(Locale.ROOT);
+        if (lower.startsWith("not_null_") || lower.contains("_not_null_")) {
+            return "not_null";
+        }
+        if (lower.startsWith("unique_") || lower.contains("_unique_")) {
+            return "unique";
+        }
+        if (lower.startsWith("accepted_values_") || lower.contains("_accepted_values_")) {
+            return "accepted_values";
+        }
+        if (lower.startsWith("relationships_") || lower.contains("_relationships_")) {
+            return "relationships";
+        }
+        return "custom";
     }
 
     private String resolveProjectDir() {
@@ -225,13 +360,35 @@ public class DbtRunResultService {
                     continue;
                 }
                 String uniqueId = String.valueOf(entry.getKey());
+                String testType = null;
+                String testedColumn = null;
+                String testedModel = null;
+                Map<String, Object> testMetadata = asMap(node.get("test_metadata"));
+                if (!testMetadata.isEmpty()) {
+                    testType = text(testMetadata.get("name"));
+                    Map<String, Object> kwargs = asMap(testMetadata.get("kwargs"));
+                    testedColumn = text(kwargs.get("column_name"));
+                    testedModel = text(kwargs.get("model"));
+                }
+                if (testedModel == null) {
+                    // fallback: try depends_on.nodes for the tested model
+                    Map<String, Object> dependsOn = asMap(node.get("depends_on"));
+                    Object depNodes = dependsOn.get("nodes");
+                    if (depNodes instanceof List<?> depList && !depList.isEmpty()) {
+                        testedModel = text(depList.get(0));
+                    }
+                }
                 out.put(
                     uniqueId,
                     new ManifestNode(
                         uniqueId,
                         text(node.get("name")),
                         text(node.get("resource_type")),
-                        text(node.get("path"))
+                        text(node.get("path")),
+                        testType,
+                        testedColumn,
+                        testedModel,
+                        text(node.get("compiled_code"))
                     )
                 );
             }
@@ -429,7 +586,29 @@ public class DbtRunResultService {
         }
     }
 
-    private record ManifestNode(String uniqueId, String name, String resourceType, String path) {}
+    private record ManifestNode(
+        String uniqueId,
+        String name,
+        String resourceType,
+        String path,
+        String testType,
+        String testedColumn,
+        String testedModel,
+        String compiledCode
+    ) {}
+
+    public record DbtTestDetail(
+        String uniqueId,
+        String name,
+        String testType,
+        String testedColumn,
+        String testedModel,
+        String status,
+        String message,
+        String compiledSql,
+        double executionTime,
+        int failuresCount
+    ) {}
 
     public record DbtRunSyncResult(
         boolean enabled,
@@ -466,7 +645,8 @@ public class DbtRunResultService {
         int success,
         int failed,
         int skipped,
-        List<DbtRunFailure> failures
+        List<DbtRunFailure> failures,
+        List<DbtTestDetail> testDetails
     ) {
         public static DbtRunSummary empty(String message) {
             return new DbtRunSummary(
@@ -482,6 +662,7 @@ public class DbtRunResultService {
                 0,
                 0,
                 0,
+                Collections.emptyList(),
                 Collections.emptyList()
             );
         }

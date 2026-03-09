@@ -3,11 +3,18 @@ package com.yuzhi.dts.platform.service.ingestion;
 import com.yuzhi.dts.platform.config.DtsIngestionProperties;
 import com.yuzhi.dts.platform.web.rest.ApiResponse;
 import com.yuzhi.dts.platform.web.rest.ResultStatus;
+import io.github.resilience4j.circuitbreaker.CircuitBreaker;
+import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
+import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
+import io.github.resilience4j.retry.Retry;
+import io.github.resilience4j.retry.RetryConfig;
+import io.github.resilience4j.retry.RetryRegistry;
 import java.net.URI;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.web.client.RestTemplateBuilder;
@@ -18,7 +25,9 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
+import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.client.HttpStatusCodeException;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 
@@ -34,6 +43,8 @@ public class IngestionServiceClient {
     private final RestTemplate healthRestTemplate;
     private final DtsIngestionProperties properties;
     private final AtomicReference<HealthStatus> cachedHealth;
+    private final Retry retry;
+    private final CircuitBreaker circuitBreaker;
 
     public IngestionServiceClient(RestTemplateBuilder builder, DtsIngestionProperties properties) {
         this.properties = properties;
@@ -42,6 +53,35 @@ public class IngestionServiceClient {
         this.longRestTemplate = baseBuilder.setReadTimeout(Duration.ofSeconds(180)).build();
         this.healthRestTemplate = baseBuilder.setReadTimeout(Duration.ofSeconds(3)).build();
         this.cachedHealth = new AtomicReference<>(HealthStatus.unknown());
+
+        // Resilience4j retry: exponential backoff, only on transient failures
+        DtsIngestionProperties.Retry retryProps = properties.getRetry();
+        RetryConfig retryConfig = RetryConfig.custom()
+            .maxAttempts(retryProps.getMaxAttempts())
+            .waitDuration(Duration.ofMillis(retryProps.getWaitDurationMs()))
+            .intervalFunction(io.github.resilience4j.core.IntervalFunction.ofExponentialBackoff(
+                retryProps.getWaitDurationMs(), retryProps.getMultiplier()))
+            .retryExceptions(ResourceAccessException.class, HttpServerErrorException.class)
+            .ignoreExceptions(org.springframework.web.client.HttpClientErrorException.class)
+            .build();
+        this.retry = RetryRegistry.of(retryConfig).retry("ingestion");
+        this.retry.getEventPublisher()
+            .onRetry(event -> LOG.warn("[ingestion-retry] attempt #{} for {}: {}",
+                event.getNumberOfRetryAttempts(), event.getName(), event.getLastThrowable().getMessage()));
+
+        // Resilience4j circuit breaker: open on sustained failures, allow probing in half-open
+        DtsIngestionProperties.CircuitBreaker cbProps = properties.getCircuitBreaker();
+        CircuitBreakerConfig cbConfig = CircuitBreakerConfig.custom()
+            .failureRateThreshold(cbProps.getFailureRateThreshold())
+            .slidingWindowSize(cbProps.getSlidingWindowSize())
+            .waitDurationInOpenState(Duration.ofSeconds(cbProps.getWaitDurationInOpenStateSeconds()))
+            .permittedNumberOfCallsInHalfOpenState(cbProps.getPermittedCallsInHalfOpenState())
+            .recordExceptions(ResourceAccessException.class, HttpServerErrorException.class)
+            .ignoreExceptions(org.springframework.web.client.HttpClientErrorException.class)
+            .build();
+        this.circuitBreaker = CircuitBreakerRegistry.of(cbConfig).circuitBreaker("ingestion");
+        this.circuitBreaker.getEventPublisher()
+            .onStateTransition(event -> LOG.warn("[ingestion-cb] state transition: {}", event.getStateTransition()));
     }
 
     public boolean isEnabled() {
@@ -125,6 +165,14 @@ public class IngestionServiceClient {
 
     public ApiResponse<Object> getRealtimeStatus(Long taskId) {
         return exchangeObject("/api/ingestion/tasks/" + taskId + "/realtime-status", HttpMethod.GET, null, null, restTemplate);
+    }
+
+    public ApiResponse<Object> getExecutionsObservability(Map<String, ?> params) {
+        return exchangeObject("/api/ingestion/tasks/executions/observability", HttpMethod.GET, null, params, restTemplate);
+    }
+
+    public ApiResponse<Object> getGovernanceOverview(Map<String, ?> params) {
+        return exchangeObject("/api/ingestion/tasks/executions/governance-overview", HttpMethod.GET, null, params, restTemplate);
     }
 
     public ApiResponse<Map<String, Object>> listChangeLogs(Map<String, ?> params) {
@@ -221,7 +269,9 @@ public class IngestionServiceClient {
         URI uri = buildAbsoluteUri(path, params);
         try {
             HttpEntity<?> entity = payload == null ? new HttpEntity<>(defaultHeaders()) : new HttpEntity<>(payload, defaultHeaders());
-            ResponseEntity<Object> response = client.exchange(uri, method, entity, Object.class);
+            Supplier<ResponseEntity<Object>> supplier = () -> client.exchange(uri, method, entity, Object.class);
+            ResponseEntity<Object> response = Retry.decorateSupplier(retry,
+                CircuitBreaker.decorateSupplier(circuitBreaker, supplier)).get();
             Object body = response.getBody();
             if (body == null) {
                 if (response.getStatusCode().is2xxSuccessful()) {
@@ -244,11 +294,19 @@ public class IngestionServiceClient {
                 return new ApiResponse<>(response.getStatusCode().value(), "ok", payloadMap);
             }
             return new ApiResponse<>(response.getStatusCode().value(), "ok", Map.of("value", body));
+        } catch (io.github.resilience4j.circuitbreaker.CallNotPermittedException ex) {
+            LOG.warn("Ingestion API {} blocked by circuit breaker (state=OPEN)", path);
+            return new ApiResponse<>(503, "数据采集服务暂时不可用，请稍后重试", null);
         } catch (HttpStatusCodeException ex) {
             LOG.warn("Ingestion API {} failed status={} body={}", path, ex.getStatusCode().value(), ex.getResponseBodyAsString());
             return new ApiResponse<>(ex.getStatusCode().value(), "ingestion service error", null);
         } catch (Exception ex) {
-            LOG.warn("Ingestion API {} error: {}", path, ex.getMessage());
+            Throwable cause = ex.getCause() != null ? ex.getCause() : ex;
+            if (cause instanceof HttpStatusCodeException hsce) {
+                LOG.warn("Ingestion API {} failed after retries status={}", path, hsce.getStatusCode().value());
+                return new ApiResponse<>(hsce.getStatusCode().value(), "ingestion service error", null);
+            }
+            LOG.warn("Ingestion API {} error after retries: {}", path, cause.getMessage());
             return new ApiResponse<>(500, "ingestion service error", null);
         }
     }
@@ -266,7 +324,9 @@ public class IngestionServiceClient {
         URI uri = buildAbsoluteUri(path, params);
         try {
             HttpEntity<?> entity = payload == null ? new HttpEntity<>(defaultHeaders()) : new HttpEntity<>(payload, defaultHeaders());
-            ResponseEntity<Object> response = client.exchange(uri, method, entity, Object.class);
+            Supplier<ResponseEntity<Object>> supplier = () -> client.exchange(uri, method, entity, Object.class);
+            ResponseEntity<Object> response = Retry.decorateSupplier(retry,
+                CircuitBreaker.decorateSupplier(circuitBreaker, supplier)).get();
             Object body = response.getBody();
             if (body == null) {
                 if (response.getStatusCode().is2xxSuccessful()) {
@@ -286,11 +346,19 @@ public class IngestionServiceClient {
                 }
             }
             return new ApiResponse<>(response.getStatusCode().value(), "ok", body);
+        } catch (io.github.resilience4j.circuitbreaker.CallNotPermittedException ex) {
+            LOG.warn("Ingestion API {} blocked by circuit breaker (state=OPEN)", path);
+            return new ApiResponse<>(503, "数据采集服务暂时不可用，请稍后重试", null);
         } catch (HttpStatusCodeException ex) {
             LOG.warn("Ingestion API {} failed status={} body={}", path, ex.getStatusCode().value(), ex.getResponseBodyAsString());
             return new ApiResponse<>(ex.getStatusCode().value(), "ingestion service error", null);
         } catch (Exception ex) {
-            LOG.warn("Ingestion API {} error: {}", path, ex.getMessage());
+            Throwable cause = ex.getCause() != null ? ex.getCause() : ex;
+            if (cause instanceof HttpStatusCodeException hsce) {
+                LOG.warn("Ingestion API {} failed after retries status={}", path, hsce.getStatusCode().value());
+                return new ApiResponse<>(hsce.getStatusCode().value(), "ingestion service error", null);
+            }
+            LOG.warn("Ingestion API {} error after retries: {}", path, cause.getMessage());
             return new ApiResponse<>(500, "ingestion service error", null);
         }
     }

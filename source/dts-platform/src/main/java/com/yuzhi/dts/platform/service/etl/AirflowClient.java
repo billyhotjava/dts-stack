@@ -88,6 +88,35 @@ public class AirflowClient {
         return Optional.empty();
     }
 
+    /**
+     * Fetch task instance log from Airflow REST API.
+     * GET /api/v1/dags/{dagId}/dagRuns/{dagRunId}/taskInstances/{taskId}/logs/{tryNumber}
+     */
+    public String getTaskInstanceLog(String dagId, String dagRunId, String taskId, int tryNumber) {
+        if (!properties.isEnabled()) {
+            return null;
+        }
+        if (!StringUtils.hasText(dagId) || !StringUtils.hasText(dagRunId) || !StringUtils.hasText(taskId)) {
+            return null;
+        }
+        int safeTry = Math.max(1, tryNumber);
+        String path = "/dags/" + dagId + "/dagRuns/" + dagRunId + "/taskInstances/" + taskId + "/logs/" + safeTry;
+        URI uri = buildUri(path);
+        try {
+            HttpHeaders headers = defaultHeaders();
+            headers.setAccept(List.of(MediaType.TEXT_PLAIN));
+            HttpEntity<Void> entity = new HttpEntity<>(headers);
+            ResponseEntity<String> response = restTemplate.exchange(uri, HttpMethod.GET, entity, String.class);
+            return response.getBody();
+        } catch (HttpStatusCodeException ex) {
+            LOG.warn("Airflow task log fetch failed status={} body={}", ex.getStatusCode().value(), ex.getResponseBodyAsString());
+            return "[error] Airflow returned status " + ex.getStatusCode().value() + ": " + ex.getResponseBodyAsString();
+        } catch (Exception ex) {
+            LOG.warn("Airflow task log fetch error: {}", ex.getMessage());
+            return "[error] Failed to fetch log: " + ex.getMessage();
+        }
+    }
+
     private HttpHeaders defaultHeaders() {
         HttpHeaders headers = new HttpHeaders();
         headers.setAccept(List.of(MediaType.APPLICATION_JSON));

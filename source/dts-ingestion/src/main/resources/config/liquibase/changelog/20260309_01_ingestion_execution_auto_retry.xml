@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+    http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="20260309-01-add-retry-columns" author="system">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <columnExists tableName="ingestion_execution" columnName="retry_count"/>
+            </not>
+        </preConditions>
+        <addColumn tableName="ingestion_execution">
+            <column name="retry_count" type="integer" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="max_retries" type="integer" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="next_retry_at" type="timestamp">
+                <constraints nullable="true"/>
+            </column>
+            <column name="retry_exhausted" type="boolean" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+            <column name="parent_execution_id" type="bigint">
+                <constraints nullable="true"/>
+            </column>
+        </addColumn>
+        <createIndex tableName="ingestion_execution" indexName="idx_exec_next_retry">
+            <column name="next_retry_at"/>
+            <column name="status"/>
+            <column name="retry_exhausted"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

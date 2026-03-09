@@ -28,6 +28,7 @@
   - `pnpm -C source/dts-platform-webapp build`
   - `pnpm -C source/dts-admin-webapp build`
   - `pnpm -C source/dts-analytics-webapp/modern build`
+- `platform-webapp` 已在 ETL/DBT 页面重构后再次执行构建，静态检查恢复为绿色
 - `admin-webapp` 构建存在既有 vite chunk warning，但未阻塞产物生成
 - sprint 状态板已更新
 

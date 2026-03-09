@@ -94,6 +94,26 @@ export const triggerDbtTest = (data?: any) => api.post({ url: "/etl/dbt/test", d
 export const triggerDbtDocs = (data?: any) => api.post({ url: "/etl/dbt/docs", data });
 export const checkDbtQualityGate = (data?: any) => api.post({ url: "/etl/dbt/quality-gate/check", data });
 export const checkDbtReleaseGate = (data?: any) => api.post({ url: "/etl/dbt/release-gate/check", data });
+
+// dbt execution log (from Airflow)
+export const getDbtRunLog = (dagRunId: string, params?: { dagId?: string; taskId?: string; tryNumber?: number }) =>
+	api.get({ url: `/etl/dbt/runs/${dagRunId}/logs`, params });
+
+// dbt data preview
+export const previewDbtModel = (model: string, limit = 100) =>
+	api.get({ url: "/etl/dbt/preview", params: { model, limit } });
+
+// dbt git operations
+export const getDbtGitStatus = () => api.get({ url: "/etl/dbt/git/status" });
+export const commitDbtChanges = (data: { message: string; authorName?: string; authorEmail?: string }) =>
+	api.post({ url: "/etl/dbt/git/commit", data });
+export const getDbtGitLog = (limit = 20) => api.get({ url: "/etl/dbt/git/log", params: { limit } });
+export const getDbtGitDiff = (path?: string) =>
+	api.get({ url: "/etl/dbt/git/diff", params: path ? { path } : {} });
+export const revertDbtFile = (path: string) =>
+	api.post({ url: "/etl/dbt/git/revert", data: { path } });
+export const getDbtFileAtCommit = (path: string, commitHash: string) =>
+	api.get({ url: "/etl/dbt/git/file-at-commit", params: { path, commitHash } });
 export const listSqlModels = (params?: any) => api.get({ url: "/modeling/sql-models", params });
 export const getSqlModel = (id: string) => api.get({ url: `/modeling/sql-models/${id}` });
 export const listSqlModelColumns = (id: string) => api.get({ url: `/modeling/sql-models/${id}/columns` });

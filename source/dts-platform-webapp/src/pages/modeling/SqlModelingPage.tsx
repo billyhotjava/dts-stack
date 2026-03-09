@@ -1,6 +1,7 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Editor from "@monaco-editor/react";
 import { toast } from "sonner";
+import { Database, FileCode2, FolderTree, Rocket as RocketIcon } from "lucide-react";
 import {
 	Alert,
 	Badge,
@@ -23,6 +24,7 @@ import {
 	Tree,
 	Typography,
 	Upload,
+	Popconfirm,
 } from "antd";
 import {
 	PlusOutlined,
@@ -37,9 +39,18 @@ import {
 	LinkOutlined,
 	SyncOutlined,
 	RocketOutlined,
+	ReloadOutlined,
+	FileTextOutlined,
+	UndoOutlined,
+	CheckCircleOutlined,
 } from "@ant-design/icons";
 import type { UploadFile } from "antd/es/upload/interface";
 import type { ColumnsType } from "antd/es/table";
+import {
+	PlatformMetaPill,
+	PlatformPageHero,
+	PlatformSummaryCards,
+} from "@/components/console-page";
 import { EmptyState } from "@/components/empty-state";
 import {
 	getDbtConfig,
@@ -65,6 +76,13 @@ import {
 	listDbtSources,
 	listDbtRefs,
 	listTemplateLayers,
+	getDbtRunLog,
+	previewDbtModel,
+	getDbtGitStatus,
+	commitDbtChanges,
+	getDbtGitLog,
+	getDbtGitDiff,
+	revertDbtFile,
 } from "@/api/platformApi";
 import dataSourcesService, { type InfraDataSource } from "@/api/services/dataSourcesService";
 import { useRouter } from "@/routes/hooks";
@@ -417,6 +435,9 @@ export default function SqlModelingPage() {
 	const [runOpen, setRunOpen] = useState(false);
 	const [runSubmitting, setRunSubmitting] = useState(false);
 	const [buildTriggering, setBuildTriggering] = useState<"compile" | "test" | "docs" | null>(null);
+	const [compileResult, setCompileResult] = useState<DbtRunSummary | null>(null);
+	const [testResult, setTestResult] = useState<DbtRunSummary | null>(null);
+	const [runResult, setRunResult] = useState<DbtRunSummary | null>(null);
 	const [columnsLoading, setColumnsLoading] = useState(false);
 	const [modelColumns, setModelColumns] = useState<ModelColumn[]>([]);
 	const [contractImpactLoading, setContractImpactLoading] = useState(false);
@@ -431,6 +452,21 @@ export default function SqlModelingPage() {
 	const [snippetDrawerOpen, setSnippetDrawerOpen] = useState(false);
 	const [snippetTab, setSnippetTab] = useState<"source" | "ref">("source");
 	const [snippetKeyword, setSnippetKeyword] = useState("");
+	// FE-004: Execution log state
+	const [execLog, setExecLog] = useState<string>("");
+	const [execLogLoading, setExecLogLoading] = useState(false);
+	// FE-007: Data preview state
+	const [previewData, setPreviewData] = useState<{ columns: string[]; rows: any[][] } | null>(null);
+	const [previewLoading, setPreviewLoading] = useState(false);
+	const [previewLimit, setPreviewLimit] = useState(100);
+	// FE-006: Git state
+	const [gitStatus, setGitStatus] = useState<{ initialized?: boolean; clean?: boolean; staged?: string[]; unstaged?: string[]; untracked?: string[] } | null>(null);
+	const [gitLog, setGitLog] = useState<Array<{ hash?: string; shortMessage?: string; author?: string; date?: string }>>([]);
+	const [, setGitDiff] = useState<string>("");
+	const [gitLoading, setGitLoading] = useState(false);
+	const [gitCommitMsg, setGitCommitMsg] = useState("");
+	const [gitCommitting, setGitCommitting] = useState(false);
+	const [gitReverting, setGitReverting] = useState<string | null>(null);
 	const [form] = Form.useForm();
 	const [runForm] = Form.useForm();
 	const [modelForm] = Form.useForm();
@@ -465,6 +501,18 @@ export default function SqlModelingPage() {
 		try {
 			const resp = (await getDbtSyncStatus()) as DbtSyncStatus;
 			setDbtSyncStatus(resp || null);
+			// Seed per-operation result from latest run on initial load
+			const latest = resp?.latestRun || null;
+			if (latest?.present) {
+				const cmd = normalizeText(latest.command).toLowerCase();
+				if (cmd === "compile") {
+					setCompileResult((prev) => prev || latest);
+				} else if (cmd === "test") {
+					setTestResult((prev) => prev || latest);
+				} else if (cmd === "run" || cmd === "build") {
+					setRunResult((prev) => prev || latest);
+				}
+			}
 		} catch {
 			setDbtSyncStatus(null);
 		}
@@ -597,6 +645,93 @@ export default function SqlModelingPage() {
 			setRefsLoading(false);
 		}
 	}, []);
+
+	// FE-004: Load execution log from Airflow
+	const loadExecLog = useCallback(async (dagRunId?: string) => {
+		if (!dagRunId) {
+			setExecLog("");
+			return;
+		}
+		setExecLogLoading(true);
+		try {
+			const resp = await getDbtRunLog(dagRunId);
+			setExecLog(typeof resp === "string" ? resp : (resp as any)?.log || (resp as any)?.content || JSON.stringify(resp, null, 2));
+		} catch {
+			setExecLog("日志加载失败，请稍后重试。");
+		} finally {
+			setExecLogLoading(false);
+		}
+	}, []);
+
+	// FE-007: Load data preview
+	const loadPreview = useCallback(async (modelName?: string, limit = 100) => {
+		if (!modelName) {
+			setPreviewData(null);
+			return;
+		}
+		setPreviewLoading(true);
+		try {
+			const resp = (await previewDbtModel(modelName, limit)) as any;
+			const columns: string[] = Array.isArray(resp?.columns) ? resp.columns : [];
+			const rows: any[][] = Array.isArray(resp?.rows) ? resp.rows : [];
+			setPreviewData({ columns, rows });
+		} catch (err: any) {
+			toast.error(err?.message || "数据预览失败");
+			setPreviewData(null);
+		} finally {
+			setPreviewLoading(false);
+		}
+	}, []);
+
+	// FE-006: Load git status + log + diff
+	const loadGitInfo = useCallback(async () => {
+		setGitLoading(true);
+		try {
+			const [statusResp, logResp, diffResp] = await Promise.all([
+				getDbtGitStatus().catch(() => null),
+				getDbtGitLog(20).catch(() => []),
+				getDbtGitDiff().catch(() => ""),
+			]);
+			setGitStatus(statusResp as any);
+			setGitLog(Array.isArray(logResp) ? logResp : (logResp as any)?.commits || []);
+			setGitDiff(typeof diffResp === "string" ? diffResp : (diffResp as any)?.diff || "");
+		} catch {
+			setGitStatus(null);
+		} finally {
+			setGitLoading(false);
+		}
+	}, []);
+
+	const handleGitCommit = useCallback(async () => {
+		if (!gitCommitMsg.trim()) {
+			toast.error("请输入提交信息");
+			return;
+		}
+		setGitCommitting(true);
+		try {
+			await commitDbtChanges({ message: gitCommitMsg.trim() });
+			toast.success("提交成功");
+			setGitCommitMsg("");
+			void loadGitInfo();
+		} catch (err: any) {
+			toast.error(err?.message || "Git 提交失败");
+		} finally {
+			setGitCommitting(false);
+		}
+	}, [gitCommitMsg, loadGitInfo]);
+
+	const handleGitRevert = useCallback(async (path: string) => {
+		setGitReverting(path);
+		try {
+			await revertDbtFile(path);
+			toast.success(`已还原: ${path}`);
+			void loadGitInfo();
+		} catch (err: any) {
+			toast.error(err?.message || "还原失败");
+		} finally {
+			setGitReverting(null);
+		}
+	}, [loadGitInfo]);
 
 	useEffect(() => {
 		void loadConfig();
@@ -784,15 +919,35 @@ export default function SqlModelingPage() {
 				models: selector,
 				target: normalizeText(dbtConfig?.config?.targetName) || "dev",
 			};
+			let triggerResp: any;
 			if (operation === "compile") {
-				await triggerDbtCompile(payload);
+				triggerResp = await triggerDbtCompile(payload);
 			} else if (operation === "test") {
-				await triggerDbtTest(payload);
+				triggerResp = await triggerDbtTest(payload);
 			} else {
-				await triggerDbtDocs(payload);
+				triggerResp = await triggerDbtDocs(payload);
 			}
 			toast.success(`dbt ${operation} 已提交`);
+			setExecLog(""); // clear previous log
 			await Promise.all([loadRuns(), loadSyncStatus()]);
+			// Store result in the appropriate state based on operation type
+			const freshStatus = (await getDbtSyncStatus()) as DbtSyncStatus;
+			const freshRun = freshStatus?.latestRun || null;
+			// Attach dagRunId from trigger response if available
+			const dagRunId = triggerResp?.dag_run_id || triggerResp?.dagRunId || "";
+			if (freshRun && dagRunId) {
+				(freshRun as any).dagRunId = dagRunId;
+			}
+			if (operation === "compile") {
+				setCompileResult(freshRun);
+				setBottomTab("compile");
+			} else if (operation === "test") {
+				setTestResult(freshRun);
+				setBottomTab("test");
+			} else {
+				setRunResult(freshRun);
+				setBottomTab("execlog");
+			}
 		} catch (err: any) {
 			toast.error(err?.message || `dbt ${operation} 触发失败`);
 		} finally {
@@ -1379,8 +1534,28 @@ export default function SqlModelingPage() {
 			{ title: "计划时间", dataIndex: "execution_date", key: "execution_date", width: 180, render: (v) => formatDateTime(v) },
 			{ title: "开始时间", dataIndex: "start_date", key: "start_date", width: 180, render: (v) => formatDateTime(v) },
 			{ title: "结束时间", dataIndex: "end_date", key: "end_date", width: 180, render: (v) => formatDateTime(v) },
+			{
+				title: "操作",
+				key: "actions",
+				width: 80,
+				render: (_value, row) => (
+					<Button
+						size="small"
+						type="link"
+						icon={<FileTextOutlined />}
+						onClick={() => {
+							if (row.dag_run_id) {
+								setBottomTab("execlog");
+								loadExecLog(row.dag_run_id);
+							}
+						}}
+					>
+						日志
+					</Button>
+				),
+			},
 		],
-		[],
+		[loadExecLog],
 	);
 
 	const modelColumnColumns: ColumnsType<ModelColumn> = useMemo(
@@ -1497,12 +1672,69 @@ export default function SqlModelingPage() {
 	];
 
 	const latestRun = dbtSyncStatus?.latestRun || null;
-	const latestFailures = Array.isArray(latestRun?.failures) ? latestRun?.failures : [];
 	const latestBuildStatus = normalizeUpper(latestRun?.status) || "UNKNOWN";
 	const latestBuildColor = latestBuildStatus === "SUCCESS" ? "green" : latestBuildStatus === "FAILED" ? "red" : "gold";
+	const summaryCards = [
+		{
+			label: "项目空间",
+			value: spaces.length,
+			note: activeSpace ? `当前项目 ${activeSpace.name || "-"}` : "从左侧选择项目空间",
+			icon: <FolderTree className="h-5 w-5" />,
+		},
+		{
+			label: "模型总数",
+			value: sqlModels.length,
+			note: activeModel ? `当前模型 ${activeModel.name || "-"}` : "选择模型后进入 SQL 校验",
+			icon: <FileCode2 className="h-5 w-5" />,
+			tone: "info" as const,
+		},
+		{
+			label: "工作区状态",
+			value: workspaceOk ? "可用" : "待修复",
+			note: workspaceStatus?.message || "dbt 工作区已连接",
+			icon: <Database className="h-5 w-5" />,
+			tone: "warning" as const,
+		},
+		{
+			label: "最近构建",
+			value: latestBuildStatus,
+			note: latestRun?.generatedAt ? formatDateTime(latestRun.generatedAt) : "暂无最近构建",
+			icon: <RocketIcon className="h-5 w-5" />,
+			tone: "success" as const,
+		},
+	];
 
 	return (
-		<div className="flex min-h-[calc(100vh-120px)] flex-col overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+		<div className="space-y-6">
+			<PlatformPageHero
+				title="逻辑建模工作区"
+				description="项目空间、模型目录、SQL 编辑、契约影响和发布动作都收敛在同一个 light-first 工作区中。"
+				eyebrow="Modeling Workspace"
+				actions={
+					<Space wrap>
+						<Button className="rounded-2xl" onClick={() => router.push("/modeling/dbt-files")}>
+							打开 DBT 文件
+						</Button>
+						<Button className="rounded-2xl" onClick={() => router.push("/foundation/data-sources")}>
+							去 ODS 接入
+						</Button>
+						<Button className="rounded-2xl" type="primary" onClick={openOdsGenerateModel} disabled={!workspaceOk}>
+							一键生成模型
+						</Button>
+					</Space>
+				}
+				meta={
+					<>
+						<PlatformMetaPill>{configEnabled ? "dbt 已连接" : "dbt 未启用"}</PlatformMetaPill>
+						<PlatformMetaPill>{workspaceOk ? "工作区可用" : "工作区待修复"}</PlatformMetaPill>
+						<PlatformMetaPill>最近构建 {latestBuildStatus}</PlatformMetaPill>
+					</>
+				}
+			/>
+
+			<PlatformSummaryCards items={summaryCards} />
+
+			<div className="flex min-h-[calc(100vh-120px)] flex-col overflow-hidden rounded-[30px] border border-border/70 bg-card shadow-sm">
 			{/* 顶部工具栏 */}
 			<div className="flex h-14 items-center justify-between border-b border-border bg-card px-4">
 				<div className="flex items-center gap-4">
@@ -1688,19 +1920,19 @@ export default function SqlModelingPage() {
 						</Space>
 					</div>
 
-						<div className="flex-1 overflow-auto bg-slate-950 px-6 py-4">
+						<div className="flex-1 overflow-auto bg-muted/10 px-6 py-4">
 							{activeModel ? (
 							<Suspense
 								fallback={
 									<div className="flex h-full items-center justify-center text-center text-xs text-muted-foreground">
-										加载编辑器中...
+										加载 SQL 编辑器中...
 									</div>
 								}
 							>
 								<Editor
 									height="100%"
 									language="sql"
-									theme="vs-dark"
+									theme="vs"
 									value={sqlDraft}
 									onChange={(value) => setSqlDraft(value || "")}
 									options={{
@@ -1715,7 +1947,7 @@ export default function SqlModelingPage() {
 							</Suspense>
 						) : (
 							<div className="flex h-full items-center justify-center text-center text-xs text-muted-foreground">
-								请选择模型查看 SQL。
+								从左侧选择模型后开始校验 SQL、契约字段和发布影响。
 								</div>
 							)}
 						</div>
@@ -1886,49 +2118,270 @@ export default function SqlModelingPage() {
 						items={[
 							{
 								key: "preview",
-								label: "数据预览 (Top 100)",
-								children: (
-									<div className="p-4">
-										<EmptyState title="暂无预览数据" description="运行预览接口接入后展示结果。" compact />
-									</div>
-								),
+								label: "数据预览",
+								children: (() => {
+									if (!activeModel) {
+										return (
+											<div className="p-4">
+												<Alert type="info" showIcon message="请先选择一个模型" />
+											</div>
+										);
+									}
+									const previewColumns = previewData?.columns?.map((col, i) => ({
+										title: col,
+										dataIndex: i,
+										key: col,
+										ellipsis: true,
+										width: 150,
+									})) || [];
+									const previewRows = previewData?.rows?.map((row, idx) => {
+										const record: Record<string, any> = { _key: idx };
+										row.forEach((val, i) => { record[i] = val != null ? String(val) : "NULL"; });
+										return record;
+									}) || [];
+									return (
+										<div className="p-2 space-y-2">
+											<div className="flex items-center gap-2 px-2">
+												<Button
+													size="small"
+													icon={<ReloadOutlined />}
+													loading={previewLoading}
+													onClick={() => loadPreview(activeModel?.name, previewLimit)}
+												>
+													加载预览
+												</Button>
+												<Select
+													size="small"
+													value={previewLimit}
+													onChange={setPreviewLimit}
+													options={[
+														{ label: "50 行", value: 50 },
+														{ label: "100 行", value: 100 },
+														{ label: "200 行", value: 200 },
+														{ label: "500 行", value: 500 },
+													]}
+													style={{ width: 100 }}
+												/>
+												{previewData && (
+													<span className="text-xs text-muted-foreground">
+														{previewRows.length} 行 × {previewColumns.length} 列
+													</span>
+												)}
+											</div>
+											{previewData ? (
+												<Table
+													rowKey="_key"
+													size="small"
+													pagination={false}
+													columns={previewColumns}
+													dataSource={previewRows}
+													scroll={{ x: previewColumns.length * 150, y: 170 }}
+													loading={previewLoading}
+												/>
+											) : (
+												<div className="p-4 text-center">
+													<EmptyState title="暂无数据" description="点击「加载预览」查询模型输出数据" compact />
+												</div>
+											)}
+										</div>
+									);
+								})(),
 							},
 							{
 								key: "compile",
-								label: "编译日志",
-								children: (
-									<div className="p-4 space-y-3 text-xs">
-										<div className="flex items-center gap-2">
-											<Tag color={latestBuildColor}>{latestBuildStatus}</Tag>
-											<span className="text-muted-foreground">
-												命令：{latestRun?.command || "N/A"} | 时间：{formatDateTime(latestRun?.generatedAt)}
-											</span>
-										</div>
-										<div className="text-muted-foreground">
-											总计 {latestRun?.total ?? 0}，成功 {latestRun?.success ?? 0}，失败 {latestRun?.failed ?? 0}，跳过{" "}
-											{latestRun?.skipped ?? 0}
-										</div>
-										{latestFailures.length > 0 ? (
-											<div className="max-h-[145px] overflow-auto rounded border border-border bg-muted/20 p-2">
-												{latestFailures.map((item, idx) => (
-													<div key={`${item.uniqueId || item.name || "f"}-${idx}`} className="mb-2 last:mb-0">
-														<div className="font-medium">
-															{item.uniqueId || item.name || "UNKNOWN_NODE"}
-															{item.resourceType ? ` (${item.resourceType})` : ""}
-														</div>
-														<div className="text-muted-foreground">{item.message || "执行失败"}</div>
-													</div>
-												))}
+								label: "编译结果",
+								children: (() => {
+									const cr = compileResult;
+									const crFailures = Array.isArray(cr?.failures) ? cr.failures : [];
+									const crStatus = normalizeUpper(cr?.status) || "UNKNOWN";
+									const crColor = crStatus === "SUCCESS" ? "green" : crStatus === "FAILED" ? "red" : "gold";
+									if (!cr) {
+										return (
+											<div className="p-4">
+												<Alert type="info" showIcon message="请先执行编译操作" />
 											</div>
-										) : (
-											<Alert
-												type={latestRun?.present ? "success" : "info"}
-												showIcon
-												message={latestRun?.present ? "最近一次构建未发现失败节点" : "暂无构建记录"}
-											/>
-										)}
-									</div>
-								),
+										);
+									}
+									return (
+										<div className="p-4 space-y-3 text-xs">
+											<div className="flex items-center gap-2">
+												<Tag color={crColor}>{crStatus}</Tag>
+												<span className="text-muted-foreground">
+													时间：{formatDateTime(cr.generatedAt)}
+												</span>
+											</div>
+											<div className="text-muted-foreground">
+												总计 {cr.total ?? 0}，成功 {cr.success ?? 0}，失败 {cr.failed ?? 0}，跳过 {cr.skipped ?? 0}
+											</div>
+											{crFailures.length > 0 ? (
+												<div className="max-h-[145px] overflow-auto rounded border border-border bg-muted/20 p-2">
+													{crFailures.map((item, idx) => (
+														<div key={`${item.uniqueId || item.name || "f"}-${idx}`} className="mb-2 last:mb-0">
+															<div className="font-medium">
+																{item.uniqueId || item.name || "UNKNOWN_NODE"}
+																{item.resourceType ? ` (${item.resourceType})` : ""}
+															</div>
+															<div className="text-muted-foreground">{item.message || "编译失败"}</div>
+														</div>
+													))}
+												</div>
+											) : (
+												<Alert type="success" showIcon message="编译通过，未发现失败节点" />
+											)}
+										</div>
+									);
+								})(),
+							},
+							{
+								key: "test",
+								label: "测试结果",
+								children: (() => {
+									const tr = testResult;
+									const trFailures = Array.isArray(tr?.failures) ? tr.failures : [];
+									const trStatus = normalizeUpper(tr?.status) || "UNKNOWN";
+									const trColor = trStatus === "SUCCESS" ? "green" : trStatus === "FAILED" ? "red" : "gold";
+									if (!tr) {
+										return (
+											<div className="p-4">
+												<Alert type="info" showIcon message="请先执行测试操作" />
+											</div>
+										);
+									}
+									const testDetails = (tr as any)?.testDetails as Array<{
+										uniqueId?: string;
+										name?: string;
+										testType?: string;
+										testedColumn?: string;
+										testedModel?: string;
+										status?: string;
+										message?: string;
+										compiledSql?: string;
+										executionTime?: number;
+										failuresCount?: number;
+									}> | undefined;
+									if (testDetails && testDetails.length > 0) {
+										const testTableColumns: ColumnsType<typeof testDetails[number]> = [
+											{ title: "测试名称", dataIndex: "name", key: "name", ellipsis: true, width: 200 },
+											{ title: "类型", dataIndex: "testType", key: "testType", width: 100,
+												render: (v) => <Tag>{v || "generic"}</Tag>,
+											},
+											{ title: "被测模型", dataIndex: "testedModel", key: "testedModel", width: 120, ellipsis: true, render: (v) => v || "-" },
+											{ title: "被测列", dataIndex: "testedColumn", key: "testedColumn", width: 100, render: (v) => v || "-" },
+											{
+												title: "状态", dataIndex: "status", key: "status", width: 80,
+												render: (v) => {
+													const s = normalizeUpper(v);
+													const c = s === "PASS" || s === "SUCCESS" ? "green" : s === "FAIL" || s === "FAILED" || s === "ERROR" ? "red" : "gold";
+													return <Tag color={c}>{s || "UNKNOWN"}</Tag>;
+												},
+											},
+											{
+												title: "耗时", dataIndex: "executionTime", key: "executionTime", width: 70,
+												render: (v) => (v != null ? `${Number(v).toFixed(1)}s` : "-"),
+											},
+											{
+												title: "失败数", dataIndex: "failuresCount", key: "failuresCount", width: 70,
+												render: (v) => (v != null && v > 0 ? <Tag color="red">{v}</Tag> : "-"),
+											},
+											{ title: "错误信息", dataIndex: "message", key: "message", ellipsis: true, render: (v) => v || "-" },
+										];
+										return (
+											<div className="p-2 space-y-2 text-xs">
+												<div className="flex items-center gap-2 px-2">
+													<Tag color={trColor}>{trStatus}</Tag>
+													<span className="text-muted-foreground">
+														总计 {tr.total ?? 0}，成功 {tr.success ?? 0}，失败 {tr.failed ?? 0}
+													</span>
+												</div>
+												<Table
+													rowKey={(row, idx) => `${row.uniqueId || row.name || "t"}-${idx}`}
+													size="small"
+													pagination={false}
+													columns={testTableColumns}
+													dataSource={testDetails}
+													scroll={{ x: 900, y: 160 }}
+												/>
+											</div>
+										);
+									}
+									return (
+										<div className="p-4 space-y-3 text-xs">
+											<div className="flex items-center gap-2">
+												<Tag color={trColor}>{trStatus}</Tag>
+												<span className="text-muted-foreground">
+													时间：{formatDateTime(tr.generatedAt)}
+												</span>
+											</div>
+											<div className="text-muted-foreground">
+												总计 {tr.total ?? 0}，成功 {tr.success ?? 0}，失败 {tr.failed ?? 0}，跳过 {tr.skipped ?? 0}
+											</div>
+											{trFailures.length > 0 ? (
+												<div className="max-h-[145px] overflow-auto rounded border border-border bg-muted/20 p-2">
+													{trFailures.map((item, idx) => (
+														<div key={`${item.uniqueId || item.name || "f"}-${idx}`} className="mb-2 last:mb-0">
+															<div className="font-medium">
+																{item.uniqueId || item.name || "UNKNOWN_NODE"}
+																{item.resourceType ? ` (${item.resourceType})` : ""}
+															</div>
+															<div className="text-muted-foreground">{item.message || "测试失败"}</div>
+														</div>
+													))}
+												</div>
+											) : (
+												<Alert type="success" showIcon message="所有测试通过" />
+											)}
+										</div>
+									);
+								})(),
+							},
+							{
+								key: "execlog",
+								label: "执行日志",
+								children: (() => {
+									const rr = runResult || latestRun;
+									if (!rr?.present) {
+										return (
+											<div className="p-4">
+												<Alert type="info" showIcon message="执行完成后可查看完整日志" />
+											</div>
+										);
+									}
+									const rrStatus = normalizeUpper(rr.status) || "UNKNOWN";
+									const rrColor = rrStatus === "SUCCESS" ? "green" : rrStatus === "FAILED" ? "red" : "gold";
+									// Extract dagRunId from invocationId or latest run
+									const dagRunId = (rr as any)?.dagRunId || rr.invocationId || "";
+									return (
+										<div className="p-2 space-y-2 text-xs">
+											<div className="flex items-center gap-2 px-2">
+												<Tag color={rrColor}>{rrStatus}</Tag>
+												<span className="text-muted-foreground">
+													命令：{rr.command || "N/A"} | 时间：{formatDateTime(rr.generatedAt)}
+												</span>
+												<span className="text-muted-foreground">
+													总计 {rr.total ?? 0}，成功 {rr.success ?? 0}，失败 {rr.failed ?? 0}
+												</span>
+												<Button
+													size="small"
+													icon={<FileTextOutlined />}
+													loading={execLogLoading}
+													disabled={!dagRunId}
+													onClick={() => loadExecLog(dagRunId)}
+												>
+													加载日志
+												</Button>
+											</div>
+											{execLog ? (
+												<pre className="max-h-[180px] overflow-auto rounded border border-border bg-muted/20 p-2 text-xs font-mono whitespace-pre-wrap break-all">
+													{execLog}
+												</pre>
+											) : (
+												<div className="px-2 text-muted-foreground">
+													{dagRunId ? "点击「加载日志」查看 Airflow 执行日志" : "无可用的 DAG 运行 ID"}
+												</div>
+											)}
+										</div>
+									);
+								})(),
 							},
 							{
 								key: "runs",
@@ -1948,8 +2401,92 @@ export default function SqlModelingPage() {
 								),
 							},
 							{
+								key: "gitstatus",
+								label: "变更状态",
+								children: (() => {
+									const allChanges = [
+										...(gitStatus?.staged || []).map((f) => ({ file: f, type: "staged" as const })),
+										...(gitStatus?.unstaged || []).map((f) => ({ file: f, type: "modified" as const })),
+										...(gitStatus?.untracked || []).map((f) => ({ file: f, type: "untracked" as const })),
+									];
+									const typeTag = (t: string) => {
+										if (t === "staged") return <Tag color="green">暂存</Tag>;
+										if (t === "modified") return <Tag color="orange">修改</Tag>;
+										return <Tag>新增</Tag>;
+									};
+									return (
+										<div className="p-2 flex gap-3" style={{ height: 210, overflow: "hidden" }}>
+											{/* Left: file changes + commit */}
+											<div className="flex-1 flex flex-col gap-2 min-w-0">
+												<div className="flex items-center gap-2">
+													<Button size="small" icon={<ReloadOutlined />} loading={gitLoading} onClick={loadGitInfo}>
+														刷新
+													</Button>
+													{gitStatus?.clean && <Tag color="green" icon={<CheckCircleOutlined />}>工作区干净</Tag>}
+													{!gitStatus && !gitLoading && <span className="text-xs text-muted-foreground">点击刷新加载 Git 状态</span>}
+												</div>
+												{allChanges.length > 0 && (
+													<div className="flex-1 overflow-auto text-xs border border-border rounded bg-muted/20 p-1">
+														{allChanges.map(({ file, type }) => (
+															<div key={`${type}-${file}`} className="flex items-center justify-between py-0.5 px-1 hover:bg-muted/30">
+																<span className="flex items-center gap-1 truncate">
+																	{typeTag(type)}
+																	<span className="truncate">{file}</span>
+																</span>
+																<Popconfirm title={`还原 ${file}？`} onConfirm={() => handleGitRevert(file)} okText="确认" cancelText="取消">
+																	<Button size="small" type="text" icon={<UndoOutlined />} loading={gitReverting === file} />
+																</Popconfirm>
+															</div>
+														))}
+													</div>
+												)}
+												{allChanges.length > 0 && (
+													<div className="flex items-center gap-2">
+														<Input
+															size="small"
+															placeholder="提交信息"
+															value={gitCommitMsg}
+															onChange={(e) => setGitCommitMsg(e.target.value)}
+															onPressEnter={handleGitCommit}
+															className="flex-1"
+														/>
+														<Button
+															size="small"
+															type="primary"
+															loading={gitCommitting}
+															disabled={!gitCommitMsg.trim()}
+															onClick={handleGitCommit}
+														>
+															提交
+														</Button>
+													</div>
+												)}
+											</div>
+											{/* Right: recent commits */}
+											<div className="w-72 flex flex-col gap-1 overflow-hidden">
+												<div className="text-xs font-medium text-muted-foreground">最近提交</div>
+												<div className="flex-1 overflow-auto text-xs border border-border rounded bg-muted/20 p-1">
+													{gitLog.length === 0 ? (
+														<div className="p-2 text-muted-foreground">暂无提交记录</div>
+													) : (
+														gitLog.map((c) => (
+															<div key={c.hash} className="py-0.5 px-1 hover:bg-muted/30">
+																<span className="font-mono text-blue-600">{(c.hash || "").substring(0, 7)}</span>
+																{" "}
+																<span className="truncate">{c.shortMessage}</span>
+																<div className="text-muted-foreground">{c.author} · {formatDateTime(c.date)}</div>
+															</div>
+														))
+													)}
+												</div>
+											</div>
+										</div>
+									);
+								})(),
+							},
+							{
 								key: "brief",
-								label: "简要说明",
+								label: "使用指南",
 								children: (
 									<div className="p-4 text-sm text-foreground">
 										<div className="mb-3 font-medium">主流程：ODS 接入 -&gt; 选择映射 -&gt; 一键生成 DWD/DWS/ADS -&gt; 校验并上线</div>
@@ -2074,6 +2611,8 @@ export default function SqlModelingPage() {
 					</Form.Item>
 				</Form>
 			</Modal>
+
+			</div>
 
 			<Drawer
 				open={modelDrawerOpen}

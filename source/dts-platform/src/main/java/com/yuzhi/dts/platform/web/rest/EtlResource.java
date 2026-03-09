@@ -9,6 +9,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.platform.service.etl.DbtManifestService;
 import com.yuzhi.dts.platform.service.etl.DbtAssetSyncService;
 import com.yuzhi.dts.platform.service.etl.DbtDagService;
+import com.yuzhi.dts.platform.service.etl.DbtPreviewService;
 import com.yuzhi.dts.platform.service.etl.DbtArtifactSyncState;
 import com.yuzhi.dts.platform.service.etl.DbtRunResultService;
 import com.yuzhi.dts.platform.service.etl.DbtQualityGateService;
@@ -21,6 +22,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
@@ -34,6 +36,7 @@ public class EtlResource {
     private final DbtSourceService dbtSourceService;
     private final DbtAssetSyncService dbtAssetSyncService;
     private final DbtDagService dbtDagService;
+    private final DbtPreviewService dbtPreviewService;
     private final DbtRunResultService dbtRunResultService;
     private final DbtQualityGateService dbtQualityGateService;
     private final DbtReleaseGateService dbtReleaseGateService;
@@ -50,6 +53,7 @@ public class EtlResource {
         DbtSourceService dbtSourceService,
         DbtAssetSyncService dbtAssetSyncService,
         DbtDagService dbtDagService,
+        DbtPreviewService dbtPreviewService,
         DbtRunResultService dbtRunResultService,
         DbtQualityGateService dbtQualityGateService,
         DbtReleaseGateService dbtReleaseGateService,
@@ -65,6 +69,7 @@ public class EtlResource {
         this.dbtSourceService = dbtSourceService;
         this.dbtAssetSyncService = dbtAssetSyncService;
         this.dbtDagService = dbtDagService;
+        this.dbtPreviewService = dbtPreviewService;
         this.dbtRunResultService = dbtRunResultService;
         this.dbtQualityGateService = dbtQualityGateService;
         this.dbtReleaseGateService = dbtReleaseGateService;
@@ -97,6 +102,16 @@ public class EtlResource {
         ApiResponse<DbtManifestService.DbtModelResult> response = ApiResponses.ok(manifestService.listModels());
         auditService.audit("READ", "etl.dbt.models", "list");
         return response;
+    }
+
+    @GetMapping("/dbt/preview")
+    public ApiResponse<DbtPreviewService.PreviewResult> previewModel(
+        @RequestParam String model,
+        @RequestParam(defaultValue = "100") int limit
+    ) {
+        DbtPreviewService.PreviewResult result = dbtPreviewService.preview(model, Math.min(limit, 500));
+        auditService.audit("READ", "etl.dbt.preview", model);
+        return ApiResponses.ok(result);
     }
 
     @PostMapping("/dbt/sources/refresh")
@@ -146,6 +161,28 @@ public class EtlResource {
         }
         auditService.audit("READ", "etl.dbt.runs", "list");
         return ApiResponses.ok(payload);
+    }
+
+    @GetMapping("/dbt/runs/{dagRunId}/logs")
+    public ResponseEntity<Map<String, Object>> getDbtRunLog(
+        @PathVariable String dagRunId,
+        @RequestParam(defaultValue = "dbt_load") String dagId,
+        @RequestParam(defaultValue = "dbt_run") String taskId,
+        @RequestParam(defaultValue = "1") int tryNumber
+    ) {
+        if (!airflowProperties.isEnabled()) {
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(Map.of("error", "Airflow integration is not enabled"));
+        }
+        String log = airflowClient.getTaskInstanceLog(dagId, dagRunId, taskId, tryNumber);
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("dagId", dagId);
+        result.put("dagRunId", dagRunId);
+        result.put("taskId", taskId);
+        result.put("tryNumber", tryNumber);
+        result.put("log", log != null ? log : "");
+        auditService.audit("READ", "etl.dbt.logs", dagRunId);
+        return ResponseEntity.ok(result);
     }
 
     @PostMapping("/dbt/run")

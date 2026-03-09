@@ -9,6 +9,7 @@ import com.yuzhi.dts.ingestion.repository.IngestionTaskRepository;
 import com.yuzhi.dts.ingestion.service.audit.AuditService;
 import com.yuzhi.dts.ingestion.service.infra.IngestionSettingsService;
 import com.yuzhi.dts.ingestion.service.infra.PlatformInfraClient;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -18,6 +19,8 @@ import java.util.Locale;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -58,6 +61,84 @@ public class AirflowExecutionSyncService {
         this.platformInfraClient = platformInfraClient;
         this.incrementalSyncService = incrementalSyncService;
         this.auditService = auditService;
+    }
+
+    @EventListener(ApplicationReadyEvent.class)
+    @Transactional
+    public void recoverStaleExecutions() {
+        long thresholdMinutes = properties.getStaleExecutionThresholdMinutes() != null
+            ? properties.getStaleExecutionThresholdMinutes() : 60L;
+        Instant cutoff = Instant.now().minus(Duration.ofMinutes(thresholdMinutes));
+
+        List<IngestionExecution> staleExecutions = executionRepository.findByStatusesIgnoreCase(
+            List.of("running", "preparing")
+        );
+
+        int recovered = 0;
+        for (IngestionExecution execution : staleExecutions) {
+            try {
+                Instant referenceTime = execution.getStartTime() != null
+                    ? execution.getStartTime() : execution.getCreatedAt();
+                if (referenceTime != null && referenceTime.isAfter(cutoff)) {
+                    continue; // not stale yet
+                }
+
+                IngestionTask task = execution.getTask();
+                boolean resolvedFromAirflow = false;
+
+                if (task != null && Boolean.TRUE.equals(task.getAirflowEnabled())) {
+                    String dagId = task.getAirflowDagId();
+                    String dagRunId = execution.getExecutionId();
+                    if (StringUtils.hasText(dagId) && StringUtils.hasText(dagRunId)) {
+                        try {
+                            Map<String, Object> dagRun = airflowClient.getDagRun(dagId, dagRunId).orElse(null);
+                            if (dagRun != null && !dagRun.isEmpty()) {
+                                String state = toText(dagRun.get("state"));
+                                if (StringUtils.hasText(state)) {
+                                    String normalized = state.trim().toLowerCase(Locale.ROOT);
+                                    if ("success".equals(normalized)) {
+                                        markExecution(execution, task, "success", null, dagId, dagRunId);
+                                        LOG.warn("[recovery] execution {} recovered from Airflow as success", execution.getId());
+                                        resolvedFromAirflow = true;
+                                    } else if ("failed".equals(normalized) || "error".equals(normalized)) {
+                                        String failureMessage = resolveAirflowFailureMessage(dagId, dagRunId, state);
+                                        markExecution(execution, task, "failed", failureMessage, dagId, dagRunId);
+                                        LOG.warn("[recovery] execution {} recovered from Airflow as failed", execution.getId());
+                                        resolvedFromAirflow = true;
+                                    }
+                                }
+                            }
+                        } catch (Exception airflowEx) {
+                            LOG.warn("[recovery] execution {} failed to query Airflow: {}", execution.getId(), airflowEx.getMessage());
+                        }
+                    }
+                }
+
+                if (!resolvedFromAirflow) {
+                    execution.setStatus("failed");
+                    execution.setEndTime(Instant.now());
+                    execution.setErrorMessage("执行状态在服务重启后无法恢复，已标记为失败");
+                    execution.setFailureCategory("RUNTIME");
+                    execution.setFailureAdvice(ExecutionFailureClassifier.advice("RUNTIME"));
+                    executionRepository.save(execution);
+
+                    if (task != null) {
+                        task.setLastExecutionStatus("failed");
+                        taskRepository.save(task);
+                    }
+                    LOG.warn("[recovery] execution {} marked as failed (zombie recovery)", execution.getId());
+                }
+                recovered++;
+            } catch (Exception ex) {
+                LOG.warn("[recovery] failed to recover execution {}: {}", execution.getId(), ex.getMessage(), ex);
+            }
+        }
+        if (recovered > 0) {
+            LOG.warn("[recovery] recovered {} stale execution(s) on startup", recovered);
+        } else if (!staleExecutions.isEmpty()) {
+            LOG.info("[recovery] found {} in-progress execution(s) but none exceeded stale threshold of {} minutes",
+                staleExecutions.size(), thresholdMinutes);
+        }
     }
 
     @Scheduled(fixedDelayString = "${dts.airflow.execution-poll-interval-ms:15000}")

@@ -1,8 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "@/routes/hooks";
-import { Alert, Button, Card, DatePicker, Drawer, Input, Modal, Progress, Segmented, Select, Space, Spin, Table, Tag, Tooltip, Typography, message } from "antd";
+import { Alert, Button, DatePicker, Drawer, Input, Modal, Progress, Segmented, Select, Space, Spin, Table, Tag, Tooltip, Typography, message } from "antd";
 import { ArrowLeftOutlined, PlayCircleOutlined, ReloadOutlined } from "@ant-design/icons";
-import { PageHeader } from "@/components/page-header";
+import { Activity, Clock3, ListChecks, RotateCcw } from "lucide-react";
+import {
+	PlatformFilterBar,
+	PlatformMetaPill,
+	PlatformPageHero,
+	PlatformSectionCard,
+	PlatformSummaryCards,
+} from "@/components/console-page";
 import { useRouter } from "@/routes/hooks";
 import {
     ingestionTaskAPI,
@@ -11,7 +18,6 @@ import {
     type IngestionExecutionLog,
     type IngestionIncrementalAuditDTO,
     type IngestionIncrementalStateDTO,
-    resolveExecutionPollIntervalMs,
 } from "@/api/ingestion";
 import { formatTimestamp, formatNumber } from "@/utils/format";
 
@@ -91,7 +97,7 @@ export default function TransformExecutionHistoryPage() {
     useEffect(() => {
         return () => {
             if (executePollTimerRef.current !== null) {
-                window.clearInterval(executePollTimerRef.current);
+                window.clearTimeout(executePollTimerRef.current);
                 executePollTimerRef.current = null;
             }
         };
@@ -182,9 +188,17 @@ export default function TransformExecutionHistoryPage() {
         }
     };
 
+    /** Adaptive polling: starts fast, slows down over time. Never hard-stops. */
+    const adaptivePollDelay = (elapsedMs: number): number => {
+        if (elapsedMs < 30_000) return 3_000;    // first 30s: every 3s
+        if (elapsedMs < 120_000) return 5_000;   // 30s-2min: every 5s
+        if (elapsedMs < 300_000) return 10_000;  // 2-5min: every 10s
+        return 30_000;                            // >5min: every 30s
+    };
+
     const stopExecutePolling = () => {
         if (executePollTimerRef.current !== null) {
-            window.clearInterval(executePollTimerRef.current);
+            window.clearTimeout(executePollTimerRef.current);
             executePollTimerRef.current = null;
         }
     };
@@ -237,9 +251,10 @@ export default function TransformExecutionHistoryPage() {
         };
     };
 
-    const startExecuteProgressPolling = (taskId: number, pollIntervalMs?: number) => {
+    const startExecuteProgressPolling = (taskId: number, _pollIntervalMs?: number) => {
         stopExecutePolling();
-        executeStartedAtRef.current = Date.now();
+        const startTime = Date.now();
+        executeStartedAtRef.current = startTime;
         setExecuteProgressOpen(true);
         setLatestExecution(null);
         setExecuteProgress({
@@ -249,19 +264,13 @@ export default function TransformExecutionHistoryPage() {
             detail: "正在后台触发执行。",
             terminal: false,
         });
+        let slowNotified = false;
 
-        const poll = async () => {
-            const elapsed = Date.now() - executeStartedAtRef.current;
-            if (elapsed > 5 * 60 * 1000) {
-                stopExecutePolling();
-                setExecuteProgress({
-                    percent: 100,
-                    status: "exception",
-                    stage: "状态同步超时",
-                    detail: "等待超时，请刷新列表查看执行状态。",
-                    terminal: true,
-                });
-                return;
+        const pollOnce = async () => {
+            const elapsed = Date.now() - startTime;
+            if (elapsed > 5 * 60 * 1000 && !slowNotified) {
+                slowNotified = true;
+                message.info("执行时间较长，已切换为低频刷新");
             }
             try {
                 const execution = await ingestionTaskAPI.getLatestExecution(taskId);
@@ -277,16 +286,16 @@ export default function TransformExecutionHistoryPage() {
                         const executionIds = executions.map((it) => it.id).filter((it): it is number => typeof it === "number");
                         void loadIncrementalAudits(Number(task.id), undefined, true, executionIds);
                     }
+                    return;
                 }
             } catch {
                 setExecuteProgress((prev) => ({ ...prev, detail: "状态同步中，稍后自动重试。" }));
             }
+            const elapsed2 = Date.now() - startTime;
+            executePollTimerRef.current = window.setTimeout(pollOnce, adaptivePollDelay(elapsed2));
         };
 
-        void poll();
-        executePollTimerRef.current = window.setInterval(() => {
-            void poll();
-        }, resolveExecutionPollIntervalMs(pollIntervalMs));
+        void pollOnce();
     };
 
     const handleExecute = async () => {
@@ -641,17 +650,53 @@ export default function TransformExecutionHistoryPage() {
         );
     }
 
+    const runningCount = executions.filter((item) => normalizeText(item.status).toLowerCase() === "running").length;
+    const successCount = executions.filter((item) => normalizeText(item.status).toLowerCase() === "success").length;
+    const retryableCount = executions.filter((item) => normalizeText(item.status).toLowerCase() === "failed").length;
+
+    const summaryCards = [
+        {
+            label: "当前页执行数",
+            value: executions.length,
+            note: `总记录 ${pagination.total}`,
+            icon: <ListChecks className="h-5 w-5" />,
+        },
+        {
+            label: "成功执行",
+            value: successCount,
+            note: "当前筛选页统计",
+            icon: <Activity className="h-5 w-5" />,
+            tone: "success" as const,
+        },
+        {
+            label: "运行中",
+            value: runningCount,
+            note: "用于判断是否还在追踪状态",
+            icon: <Clock3 className="h-5 w-5" />,
+            tone: "info" as const,
+        },
+        {
+            label: "可重试失败",
+            value: retryableCount,
+            note: "失败重试或整批重跑入口仍保留",
+            icon: <RotateCcw className="h-5 w-5" />,
+            tone: "warning" as const,
+        },
+    ];
+
     return (
-        <div className="flex flex-col gap-6">
-            <PageHeader
+        <div className="space-y-6">
+            <PlatformPageHero
                 title={`${task.name} - 执行历史`}
-                description="查看任务的历史执行记录"
+                description="集中查看执行记录、失败分类、水位推进和日志，不再把筛选条件挤进旧式页面头。"
+                eyebrow="Execution Timeline"
                 actions={
-                    <Space>
-                        <Button icon={<ArrowLeftOutlined />} onClick={() => router.push(`/explore/etl/transform/${id}`)}>
+                    <Space wrap>
+                        <Button className="rounded-2xl" icon={<ArrowLeftOutlined />} onClick={() => router.push(`/explore/etl/transform/${id}`)}>
                             返回
                         </Button>
                         <Button
+                            className="rounded-2xl"
                             type="primary"
                             icon={<PlayCircleOutlined />}
                             onClick={handleExecute}
@@ -660,81 +705,106 @@ export default function TransformExecutionHistoryPage() {
                         >
                             执行任务
                         </Button>
-                        <Button icon={<ReloadOutlined />} onClick={loadExecutions} loading={loading}>
+                        <Button className="rounded-2xl" icon={<ReloadOutlined />} onClick={loadExecutions} loading={loading}>
                             刷新
                         </Button>
-                        <Select
-                            allowClear
-                            placeholder="执行状态"
-                            style={{ width: 140 }}
-                            value={statusFilter}
-                            options={[
-                                { label: "运行中", value: "running" },
-                                { label: "成功", value: "success" },
-                                { label: "失败", value: "failed" },
-                                { label: "错误", value: "error" },
-                            ]}
-                            onChange={(value) => {
-                                setStatusFilter(value);
-                                setPagination((prev) => ({ ...prev, current: 1 }));
-                            }}
-                        />
-                        <Select
-                            allowClear
-                            placeholder="失败分类"
-                            style={{ width: 180 }}
-                            value={failureQuickFilter === "governance" ? undefined : failureCategoryFilter}
-                            options={failureCategoryOptions}
-                            onChange={(value) => {
-                                setFailureCategoryFilter(value);
-                                setFailureQuickFilter("all");
-                                setPagination((prev) => ({ ...prev, current: 1 }));
-                            }}
-                        />
-                        <Segmented
-                            options={[
-                                { label: "全部失败", value: "all" },
-                                { label: "仅治理失败", value: "governance" },
-                            ]}
-                            value={failureQuickFilter}
-                            onChange={(value) => {
-                                const next = String(value) === "governance" ? "governance" : "all";
-                                setFailureQuickFilter(next);
-                                setFailureCategoryFilter(next === "governance" ? GOVERNANCE_FAILURE_FILTER : undefined);
-                                setPagination((prev) => ({ ...prev, current: 1 }));
-                            }}
-                        />
-                        {normalizeText(task.syncMode).toLowerCase() === "incremental" ? (
-                            <DatePicker.RangePicker
-                                showTime
-                                allowClear
-                                placeholder={["审计开始时间", "审计结束时间"]}
-                                onChange={(values: any) => {
-                                    const from = values?.[0]?.toISOString?.();
-                                    const to = values?.[1]?.toISOString?.();
-                                    setAuditFrom(from || undefined);
-                                    setAuditTo(to || undefined);
-                                }}
-                            />
-                        ) : null}
-                        {normalizeText(task.syncMode).toLowerCase() === "incremental" ? (
-                            <Button
-                                icon={<ReloadOutlined />}
-                                onClick={() => {
-                                    if (!task?.id) return;
-                                    const executionIds = executions.map((it) => it.id).filter((it): it is number => typeof it === "number");
-                                    void loadIncrementalAudits(Number(task.id), undefined, false, executionIds);
-                                }}
-                                loading={incrementalAuditsLoading}
-                            >
-                                刷新审计
-                            </Button>
-                        ) : null}
                     </Space>
+                }
+                meta={
+                    <>
+                        <PlatformMetaPill>同步模式 {task.syncMode || "-"}</PlatformMetaPill>
+                        <PlatformMetaPill>{failureQuickFilter === "governance" ? "仅治理失败" : "全部失败分类"}</PlatformMetaPill>
+                        <PlatformMetaPill>{statusFilter ? `状态 ${statusFilter}` : "状态全部"}</PlatformMetaPill>
+                    </>
                 }
             />
 
-            <Card>
+            <PlatformSummaryCards items={summaryCards} />
+
+            <PlatformFilterBar>
+                <div>
+                    <div className="text-sm font-semibold text-foreground">先缩小问题范围，再打开日志和水位详情</div>
+                    <div className="mt-1 text-sm text-muted-foreground">
+                        失败分类、治理失败快捷筛选和审计时间窗都放在这里，避免页面头部承担过多控件。
+                    </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                    <Select
+                        allowClear
+                        placeholder="执行状态"
+                        style={{ width: 140 }}
+                        value={statusFilter}
+                        options={[
+                            { label: "运行中", value: "running" },
+                            { label: "成功", value: "success" },
+                            { label: "失败", value: "failed" },
+                            { label: "错误", value: "error" },
+                        ]}
+                        onChange={(value) => {
+                            setStatusFilter(value);
+                            setPagination((prev) => ({ ...prev, current: 1 }));
+                        }}
+                    />
+                    <Select
+                        allowClear
+                        placeholder="失败分类"
+                        style={{ width: 180 }}
+                        value={failureQuickFilter === "governance" ? undefined : failureCategoryFilter}
+                        options={failureCategoryOptions}
+                        onChange={(value) => {
+                            setFailureCategoryFilter(value);
+                            setFailureQuickFilter("all");
+                            setPagination((prev) => ({ ...prev, current: 1 }));
+                        }}
+                    />
+                    <Segmented
+                        options={[
+                            { label: "全部失败", value: "all" },
+                            { label: "仅治理失败", value: "governance" },
+                        ]}
+                        value={failureQuickFilter}
+                        onChange={(value) => {
+                            const next = String(value) === "governance" ? "governance" : "all";
+                            setFailureQuickFilter(next);
+                            setFailureCategoryFilter(next === "governance" ? GOVERNANCE_FAILURE_FILTER : undefined);
+                            setPagination((prev) => ({ ...prev, current: 1 }));
+                        }}
+                    />
+                    {normalizeText(task.syncMode).toLowerCase() === "incremental" ? (
+                        <DatePicker.RangePicker
+                            showTime
+                            allowClear
+                            placeholder={["审计开始时间", "审计结束时间"]}
+                            onChange={(values: any) => {
+                                const from = values?.[0]?.toISOString?.();
+                                const to = values?.[1]?.toISOString?.();
+                                setAuditFrom(from || undefined);
+                                setAuditTo(to || undefined);
+                            }}
+                        />
+                    ) : null}
+                    {normalizeText(task.syncMode).toLowerCase() === "incremental" ? (
+                        <Button
+                            className="rounded-2xl"
+                            icon={<ReloadOutlined />}
+                            onClick={() => {
+                                if (!task?.id) return;
+                                const executionIds = executions.map((it) => it.id).filter((it): it is number => typeof it === "number");
+                                void loadIncrementalAudits(Number(task.id), undefined, false, executionIds);
+                            }}
+                            loading={incrementalAuditsLoading}
+                        >
+                            刷新审计
+                        </Button>
+                    ) : null}
+                </div>
+            </PlatformFilterBar>
+
+            <PlatformSectionCard
+                title="执行记录"
+                description="每条记录都保留查看日志、失败重试、整批重跑和水位推进详情入口。"
+                action={<Tag color="blue">{pagination.total} 条记录</Tag>}
+            >
                 <Table
                     columns={columns}
                     dataSource={executions}
@@ -752,12 +822,13 @@ export default function TransformExecutionHistoryPage() {
                         },
                     }}
                 />
-            </Card>
+            </PlatformSectionCard>
 
             {normalizeText(task.syncMode).toLowerCase() === "incremental" ? (
-                <Card
+                <PlatformSectionCard
                     title="增量检查点（当前）"
-                    extra={
+                    description="这里显示的是任务当前最新水位快照；单次执行的推进情况请在执行记录里打开详情。"
+                    action={
                         <Space>
                             {auditFrom || auditTo ? (
                                 <Tag color="processing">审计范围已生效</Tag>
@@ -765,6 +836,7 @@ export default function TransformExecutionHistoryPage() {
                                 <Tag>审计范围：全部</Tag>
                             )}
                             <Button
+                                className="rounded-2xl"
                                 icon={<ReloadOutlined />}
                                 loading={incrementalStatesLoading}
                                 onClick={() => task?.id && loadIncrementalStates(Number(task.id))}
@@ -811,7 +883,7 @@ export default function TransformExecutionHistoryPage() {
                     <div className="mt-3 text-xs text-muted-foreground">
                         {"该区域是当前最新检查点快照；单次执行的前后水位请看“执行历史 > 水位推进 > 详情”。"}
                     </div>
-                </Card>
+                </PlatformSectionCard>
             ) : null}
             <Modal
                 title="执行进度"

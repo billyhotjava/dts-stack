@@ -17,5 +17,6 @@
     <include file="config/liquibase/changelog/20260213_01_ingestion_execution_failure_classification.xml"/>
     <include file="config/liquibase/changelog/20260215_01_ingestion_task_change_log_workflow.xml"/>
     <include file="config/liquibase/changelog/20260215_02_ingestion_execution_trigger_mode.xml"/>
+    <include file="config/liquibase/changelog/20260309_01_ingestion_execution_auto_retry.xml"/>
 
 </databaseChangeLog>

@@ -102,4 +102,17 @@ public interface IngestionExecutionRepository extends JpaRepository<IngestionExe
 
     @Query("select e from IngestionExecution e join fetch e.task t where lower(e.status) in :statuses")
     List<IngestionExecution> findByStatusesIgnoreCase(@Param("statuses") Collection<String> statuses);
+
+    /**
+     * Find failed executions due for automatic retry.
+     */
+    @Query("""
+        select e from IngestionExecution e join fetch e.task t
+        where e.status = 'failed'
+          and e.retryExhausted = false
+          and e.nextRetryAt is not null
+          and e.nextRetryAt <= :now
+        order by e.nextRetryAt asc
+        """)
+    List<IngestionExecution> findDueForRetry(@Param("now") Instant now);
 }

@@ -25,7 +25,8 @@ public class DbtFileService {
     private static final Logger LOG = LoggerFactory.getLogger(DbtFileService.class);
 
     private static final Set<String> ALLOWED_EXTENSIONS = Set.of(
-        ".sql", ".yml", ".yaml", ".csv", ".md", ".txt"
+        ".sql", ".yml", ".yaml", ".csv", ".tsv", ".md", ".txt",
+        ".json", ".py", ".sh", ".bash", ".toml", ".cfg", ".conf"
     );
 
     private static final Set<String> IGNORED_DIRS = Set.of(
@@ -263,7 +264,12 @@ public class DbtFileService {
         if (lower.endsWith(".sql")) return "sql";
         if (lower.endsWith(".yml") || lower.endsWith(".yaml")) return "yaml";
         if (lower.endsWith(".md")) return "markdown";
-        if (lower.endsWith(".csv")) return "plaintext";
+        if (lower.endsWith(".json")) return "json";
+        if (lower.endsWith(".py")) return "python";
+        if (lower.endsWith(".sh") || lower.endsWith(".bash")) return "shell";
+        if (lower.endsWith(".toml")) return "ini";
+        if (lower.endsWith(".csv") || lower.endsWith(".tsv")) return "plaintext";
+        if (lower.endsWith(".txt") || lower.endsWith(".cfg") || lower.endsWith(".conf")) return "plaintext";
         return "plaintext";
     }
 

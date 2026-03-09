@@ -19,6 +19,7 @@ public class AirflowProperties {
     private boolean executionPollEnabled = true;
     private Long executionPollIntervalMs = 15000L;
     private Integer executionPollBatchSize = 50;
+    private Long staleExecutionThresholdMinutes = 60L;
 
     public boolean isEnabled() {
         return enabled;
@@ -130,5 +131,13 @@ public class AirflowProperties {
 
     public void setExecutionPollBatchSize(Integer executionPollBatchSize) {
         this.executionPollBatchSize = executionPollBatchSize;
+    }
+
+    public Long getStaleExecutionThresholdMinutes() {
+        return staleExecutionThresholdMinutes;
+    }
+
+    public void setStaleExecutionThresholdMinutes(Long staleExecutionThresholdMinutes) {
+        this.staleExecutionThresholdMinutes = staleExecutionThresholdMinutes;
     }
 }

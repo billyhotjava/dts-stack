@@ -106,7 +106,7 @@
         {
           "key": "scripts",
           "path": "scripts",
-          "icon": "solar:terminal-bold-duotone",
+          "icon": "local:ic-scripts",
           "titleKey": "sys.nav.portal.studioScripts",
           "title": "脚本开发（Python/Spark）",
           "externalLink": "/explore/etl/scripts"

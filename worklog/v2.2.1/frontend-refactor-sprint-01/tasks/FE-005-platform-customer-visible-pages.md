@@ -26,8 +26,12 @@
 - `TaskSchedulingPage.tsx` 已重构为任务运维中心入口页
 - `workbench/index.tsx` 已重构为工作台总览页
 - `workbench/WorkflowCenterPage.tsx` 已重构为统一待办中心
+- `explore/etl/TransformPage.tsx` 已改成统一 hero + summary + section card 结构
+- `explore/etl/TransformDetailPage.tsx` 已改成任务详情控制台页，并清掉“实时状态（预留）”文案
+- `explore/etl/TransformExecutionHistoryPage.tsx` 已改成统一筛选条 + 执行记录面板
+- `modeling/DbtFileBrowserPage.tsx` 已改成统一工作区壳层与浅色编辑面板
 - `pnpm -C source/dts-platform-webapp build` 已通过
-- 治理、开发相关页面的横向套用仍待继续推进
+- `SqlModelingPage.tsx` 仍待继续清理旧占位内容并统一工作区视觉
 
 ## 验收
 

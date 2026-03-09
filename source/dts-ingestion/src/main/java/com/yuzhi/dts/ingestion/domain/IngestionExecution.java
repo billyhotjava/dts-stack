@@ -69,6 +69,21 @@ public class IngestionExecution {
     @Column(name = "dropped_tables", columnDefinition = "TEXT")
     private String droppedTables;
 
+    @Column(name = "retry_count", nullable = false)
+    private int retryCount = 0;
+
+    @Column(name = "max_retries", nullable = false)
+    private int maxRetries = 0;
+
+    @Column(name = "next_retry_at")
+    private Instant nextRetryAt;
+
+    @Column(name = "retry_exhausted", nullable = false)
+    private boolean retryExhausted = false;
+
+    @Column(name = "parent_execution_id")
+    private Long parentExecutionId;
+
     @Column(name = "created_at")
     private Instant createdAt = Instant.now();
 
@@ -192,6 +207,46 @@ public class IngestionExecution {
 
     public void setTriggerMode(String triggerMode) {
         this.triggerMode = triggerMode;
+    }
+
+    public int getRetryCount() {
+        return retryCount;
+    }
+
+    public void setRetryCount(int retryCount) {
+        this.retryCount = retryCount;
+    }
+
+    public int getMaxRetries() {
+        return maxRetries;
+    }
+
+    public void setMaxRetries(int maxRetries) {
+        this.maxRetries = maxRetries;
+    }
+
+    public Instant getNextRetryAt() {
+        return nextRetryAt;
+    }
+
+    public void setNextRetryAt(Instant nextRetryAt) {
+        this.nextRetryAt = nextRetryAt;
+    }
+
+    public boolean isRetryExhausted() {
+        return retryExhausted;
+    }
+
+    public void setRetryExhausted(boolean retryExhausted) {
+        this.retryExhausted = retryExhausted;
+    }
+
+    public Long getParentExecutionId() {
+        return parentExecutionId;
+    }
+
+    public void setParentExecutionId(Long parentExecutionId) {
+        this.parentExecutionId = parentExecutionId;
     }
 
     public Instant getCreatedAt() {
