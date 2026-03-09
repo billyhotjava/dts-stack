@@ -46,16 +46,20 @@ export default function AccountDropdown() {
 	return (
 		<DropdownMenu>
 			<DropdownMenuTrigger asChild>
-				<Button variant="ghost" size="icon" className="rounded-full">
-					<img className={`h-6 w-6 ${avatarClassName}`} src={avatar} alt="" />
+				<Button
+					variant="ghost"
+					size="icon"
+					className="h-10 w-10 rounded-2xl border border-border/70 bg-background shadow-[0_10px_24px_rgba(15,23,42,0.06)] hover:bg-accent"
+				>
+					<img className={`h-7 w-7 rounded-xl ${avatarClassName}`} src={avatar} alt="" />
 				</Button>
 			</DropdownMenuTrigger>
-			<DropdownMenuContent className="w-56">
-				<div className="flex items-center gap-2 p-2">
-					<img className={`h-10 w-10 ${avatarClassName}`} src={avatar} alt="" />
-					<div className="flex flex-col items-start">
-						<div className="text-text-primary text-sm font-medium">{fullName || fallbackName || username}</div>
-						<div className="text-text-secondary text-xs">
+			<DropdownMenuContent align="end" className="w-72 rounded-[20px] border border-border/70 bg-card/95 p-1 shadow-[0_18px_40px_rgba(15,23,42,0.12)]">
+				<div className="flex items-center gap-3 rounded-2xl bg-background px-3 py-3">
+					<img className={`h-11 w-11 rounded-2xl ${avatarClassName}`} src={avatar} alt="" />
+					<div className="flex min-w-0 flex-col items-start">
+						<div className="truncate text-text-primary text-sm font-semibold">{fullName || fallbackName || username}</div>
+						<div className="truncate text-text-secondary text-xs">
 							{email}
 							{username ? `（${username}）` : null}
 						</div>

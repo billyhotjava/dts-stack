@@ -3,7 +3,7 @@
 | ID | Type | Module | Summary | Status | Notes |
 |---|---|---|---|---|---|
 | FE-001 | UI-REFactor | all-webapps | unify light-first design contract and token semantics | in-progress | token contract landed in 5 style entry files; `platform/admin` build passed, `analytics modern` verification blocked by missing local deps (`vite` absent, `pnpm install` hit `ENOTFOUND registry.npmjs.org`) |
-| FE-002 | UI-REFactor | platform-webapp,admin-webapp | rebuild shared console shell | planned | dark sidebar + light content, unified header/breadcrumb/action zone |
+| FE-002 | UI-REFactor | platform-webapp,admin-webapp | rebuild shared console shell | done | header/main/nav shell refreshed in both apps; search trigger and account dropdown aligned to the new console style; `platform/admin` builds both passed |
 | FE-003 | Cleanup | platform-webapp,admin-webapp | remove fake notices, demo services, placeholder surfaces | planned | route and menu references must be repaired, not left dangling |
 | FE-004 | UI-REFactor | admin-webapp | refactor customer-visible admin pages | planned | focus on infra/workflow/system views first |
 | FE-005 | UI-REFactor | platform-webapp | refactor customer-visible platform pages | planned | remove reserved content and align cards/header/status surfaces |

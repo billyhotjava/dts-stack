@@ -27,6 +27,26 @@
 - `pnpm -C source/dts-admin-webapp build`
 - 平台与管理端的正常业务页都能在新壳下渲染
 
+## 当前进度
+
+- 已完成：
+  - `source/dts-platform-webapp/src/layouts/dashboard/header.tsx`
+  - `source/dts-platform-webapp/src/layouts/dashboard/main.tsx`
+  - `source/dts-platform-webapp/src/layouts/dashboard/nav/nav-vertical-layout.tsx`
+  - `source/dts-platform-webapp/src/layouts/components/search-bar.tsx`
+  - `source/dts-platform-webapp/src/layouts/components/account-dropdown.tsx`
+  - `source/dts-admin-webapp/src/layouts/dashboard/header.tsx`
+  - `source/dts-admin-webapp/src/layouts/dashboard/main.tsx`
+  - `source/dts-admin-webapp/src/layouts/dashboard/nav/nav-vertical-layout.tsx`
+  - `source/dts-admin-webapp/src/layouts/components/search-bar.tsx`
+  - `source/dts-admin-webapp/src/layouts/components/account-dropdown.tsx`
+- 已验证：
+  - `pnpm -C source/dts-platform-webapp build`
+    - `✓ built in 29.85s`
+  - `pnpm -C source/dts-admin-webapp build`
+    - `✓ built in 34.09s`
+  - admin 仍有既有 chunk warning，但不是本次壳层改动新增错误
+
 ## 风险
 
 - 多页签、权限导航、后端菜单模式都依赖现有布局，需要保持兼容

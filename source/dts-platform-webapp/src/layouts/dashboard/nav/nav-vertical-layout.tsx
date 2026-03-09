@@ -30,7 +30,10 @@ export function NavVerticalLayout({ data, className }: Props) {
 			data-slot="slash-layout-nav"
 			data-dark-sidebar={isDarkSidebar ? "true" : undefined}
 			className={cn(
-				"fixed inset-y-0 left-0 flex-col h-full bg-sidebar border-r border-dashed z-nav transition-[width] duration-300 ease-in-out",
+				"fixed inset-y-0 left-0 z-nav flex h-full flex-col border-r transition-[width] duration-300 ease-in-out",
+				isDark || isDarkSidebar
+					? "border-white/10 shadow-[0_24px_48px_rgba(15,23,42,0.22)]"
+					: "border-border/70 shadow-[0_18px_40px_rgba(15,23,42,0.08)]",
 				className,
 			)}
 			style={{
@@ -39,7 +42,7 @@ export function NavVerticalLayout({ data, className }: Props) {
 			}}
 		>
 			<div
-				className={cn("relative flex items-center py-4 px-3 h-[var(--layout-header-height)] select-none", {
+				className={cn("relative flex h-[calc(var(--layout-header-height)+12px)] items-center px-4 py-5 select-none", {
 					"justify-center": themeLayout === ThemeLayout.Mini,
 				})}
 			>
@@ -51,7 +54,12 @@ export function NavVerticalLayout({ data, className }: Props) {
 					variant="outline"
 					size="icon"
 					onClick={handleToggle}
-					className="h-7 w-7 absolute right-0 translate-x-1/2"
+					className={cn(
+						"h-8 w-8 absolute right-0 translate-x-1/2 rounded-full border shadow-sm",
+						isDark || isDarkSidebar
+							? "border-white/10 bg-white text-slate-900 hover:bg-slate-100"
+							: "border-border/70 bg-background text-text-primary hover:bg-accent",
+					)}
 				>
 					{themeLayout === ThemeLayout.Mini ? (
 						<Icon icon="lucide:arrow-right-to-line" size={12} />
@@ -61,10 +69,10 @@ export function NavVerticalLayout({ data, className }: Props) {
 				</Button>
 			</div>
 
-			<hr className="border-t border-border/40 mx-3" />
+			<hr className={cn("mx-4 border-t", isDark || isDarkSidebar ? "border-white/10" : "border-border/60")} />
 
-			<ScrollArea className={cn("h-[calc(100vh-var(--layout-header-height))] px-2")}>
-				<div className="pb-16">
+			<ScrollArea className={cn("h-[calc(100vh-var(--layout-header-height)-12px)] px-3 pb-4")}>
+				<div className="pb-20 pt-3">
 					{themeLayout === ThemeLayout.Mini ? <NavMini data={data} /> : <NavVertical data={data} />}
 				</div>
 			</ScrollArea>

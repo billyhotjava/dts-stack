@@ -8,6 +8,7 @@ import { Button } from "@/ui/button";
 import { CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandSeparator } from "@/ui/command";
 import { ScrollArea } from "@/ui/scroll-area";
 import { Text } from "@/ui/typography";
+import { cn } from "@/utils";
 import { useFilteredNavData } from "../dashboard/nav";
 
 interface SearchItem {
@@ -97,10 +98,18 @@ const SearchBar = () => {
 
 	return (
 		<>
-			<Button variant="ghost" className="bg-action-selected px-2 rounded-lg" size="sm" onClick={() => setOpen(true)}>
-				<div className="flex items-center justify-center gap-4">
+			<Button
+				variant="ghost"
+				className={cn(
+					"h-10 rounded-2xl border border-border/70 bg-background/70 px-3 text-text-secondary shadow-[0_10px_24px_rgba(15,23,42,0.06)] hover:bg-accent/70",
+				)}
+				size="sm"
+				onClick={() => setOpen(true)}
+			>
+				<div className="flex items-center justify-center gap-3">
 					<Icon icon="local:ic-search" size="20" />
-					<kbd className="flex items-center justify-center rounded-md bg-primary/80 text-common-white px-1.5 py-0.5 text-sm font-semibold">
+					<span className="hidden text-sm font-medium text-text-secondary xl:inline">Search modules and pages</span>
+					<kbd className="flex items-center justify-center rounded-full bg-primary px-2 py-1 text-xs font-semibold text-common-white">
 						<Icon icon="qlementine-icons:key-cmd-16" />
 						<span>K</span>
 					</kbd>
