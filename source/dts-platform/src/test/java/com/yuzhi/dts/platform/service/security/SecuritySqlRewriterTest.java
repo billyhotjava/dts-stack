@@ -39,14 +39,19 @@ class SecuritySqlRewriterTest {
         dataset.setHiveTable("ods_orders");
 
         when(accessChecker.resolveAllowedDataLevels()).thenReturn(List.of(DataLevel.DATA_CONFIDENTIAL, DataLevel.DATA_SECRET));
+        when(metadataResolver.findDataLevelColumnInfo(dataset))
+            .thenReturn(Optional.of(new DatasetSecurityMetadataResolver.ResolvedColumn("data_level", "STRING", false)));
         when(metadataResolver.findDataLevelColumn(dataset)).thenReturn(Optional.of("data_level"));
+        when(metadataResolver.findDeptColumn(dataset)).thenReturn(Optional.of("dept_code"));
 
-        String rewritten = rewriter.guard("SELECT id, amount FROM ods_orders WHERE status = 'DONE';", dataset);
+        String rewritten = rewriter.guard("SELECT id, amount FROM ods_orders WHERE status = 'DONE';", dataset, "D1");
 
-        assertThat(rewritten).contains("SELECT id, amount, `data_level` FROM ods_orders WHERE status = 'DONE'");
+        assertThat(rewritten).contains("SELECT * FROM (");
+        assertThat(rewritten).contains("SELECT id, amount, `data_level`, `dept_code` FROM ods_orders WHERE status = 'DONE'");
         assertThat(rewritten).contains("WHERE");
         assertThat(rewritten).contains("UPPER(TRIM(");
         assertThat(rewritten).contains("CONFIDENTIAL");
+        assertThat(rewritten).contains("'D1'");
         assertThat(rewritten).doesNotEndWith(";");
     }
 
@@ -57,16 +62,21 @@ class SecuritySqlRewriterTest {
         dataset.setHiveTable("ods_orders");
 
         when(accessChecker.resolveAllowedDataLevels()).thenReturn(List.of(DataLevel.DATA_INTERNAL));
+        when(metadataResolver.findDataLevelColumnInfo(dataset))
+            .thenReturn(Optional.of(new DatasetSecurityMetadataResolver.ResolvedColumn("data_level", "STRING", false)));
         when(metadataResolver.findDataLevelColumn(dataset)).thenReturn(Optional.of("data_level"));
+        when(metadataResolver.findDeptColumn(dataset)).thenReturn(Optional.of("dept_code"));
 
         String rewritten = rewriter.guard(
             "SELECT category_id, COUNT(*) FROM ods_orders GROUP BY category_id",
-            dataset
+            dataset,
+            "D1"
         );
 
-        assertThat(rewritten).contains("SELECT category_id, COUNT(*), `data_level` FROM ods_orders");
-        assertThat(rewritten).contains("GROUP BY category_id, `data_level`");
+        assertThat(rewritten).contains("SELECT category_id, COUNT(*), `data_level`, `dept_code` FROM ods_orders");
+        assertThat(rewritten).contains("GROUP BY category_id, `data_level`, `dept_code`");
         assertThat(rewritten).contains("UPPER(TRIM(");
+        assertThat(rewritten).contains("'D1'");
     }
 
     @Test
@@ -89,7 +99,7 @@ class SecuritySqlRewriterTest {
     }
 
     @Test
-    void guardShouldFallbackWhenColumnMissing() {
+    void guardShouldFailWhenDataLevelColumnMissing() {
         CatalogDataset dataset = new CatalogDataset();
         dataset.setId(UUID.randomUUID());
         dataset.setHiveTable("ods_orders");
@@ -97,8 +107,8 @@ class SecuritySqlRewriterTest {
         when(accessChecker.resolveAllowedDataLevels()).thenReturn(List.of(DataLevel.DATA_INTERNAL));
         when(metadataResolver.findDataLevelColumn(dataset)).thenReturn(Optional.empty());
 
-        String rewritten = rewriter.guard("SELECT id FROM ods_orders", dataset);
-
-        assertThat(rewritten).isEqualTo("SELECT id FROM ods_orders");
+        assertThatThrownBy(() -> rewriter.guard("SELECT id FROM ods_orders", dataset, "D1"))
+            .isInstanceOf(SecurityGuardException.class)
+            .hasMessageContaining("数据集缺少数据密级字段");
     }
 }

@@ -26,6 +26,29 @@
     - dynamic import and static import overlap warnings remain
     - route bundle size is still large for key pages
 
+## Test Findings
+
+- `dts-platform`
+  - Command: `./mvnw -ntp -Dtest=SecuritySqlRewriterTest,QueryDatasetServiceTest,IngestionTaskProxyResourceTest test`
+  - Result: `PASS`
+  - Notes:
+    - directly affected regression tests are green after the `2.2.1` downgrade hardening
+- `dts-platform`
+  - Command: `./mvnw -ntp test`
+  - Result: `PASS`
+  - Notes:
+    - surefire phase is now stable on the customer branch
+    - latest run finished with `Tests run: 65, Failures: 0, Errors: 0, Skipped: 0`
+- `dts-platform`
+  - Command: `npm run backend:unit:test`
+  - Result: `FAIL in current sandbox`
+  - Notes:
+    - this script runs Maven `verify`, not only unit tests
+    - surefire/unit tests are green, but later phases still fail because:
+      - Testcontainers integration tests cannot access `/var/run/docker.sock`
+      - checkstyle dependency resolution cannot write under `/home/billy/.m2/repository/com/puppycrawl`
+    - remaining failures are environment and permission related, not the original unit-test baseline issue
+
 ## Runtime Findings
 
 - Not executed yet.
@@ -42,7 +65,9 @@
 ## Candidate First-Wave Fixes
 
 - `BUG-001`: done; `dts-platform` dependency convergence is now aligned and the regression script passes
+- `BUG-002`: done; `dts-platform` unit-test baseline is stable after Mockito agent wiring, stale target cleanup, and test updates
 - `UI-001`: done; route-splitting overlap warnings for `workbench`, `sys/login`, and `sys/error` are removed
 - next candidate should be selected from:
   - runtime main-flow walkthrough findings
+  - integration environment enablement if onsite validation needs Docker-backed IT coverage
   - large chunk optimization if onsite first-load performance is still a real issue

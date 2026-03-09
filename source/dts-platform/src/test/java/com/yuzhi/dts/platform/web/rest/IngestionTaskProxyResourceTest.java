@@ -14,6 +14,8 @@ import com.yuzhi.dts.platform.service.infra.DefaultDestinationSyncService.Defaul
 import com.yuzhi.dts.platform.service.etl.OdsTableMappingSyncService;
 import com.yuzhi.dts.platform.service.ingestion.IngestionServiceClient;
 import com.yuzhi.dts.platform.service.ops.ExternalRunLogService;
+import com.yuzhi.dts.platform.security.session.PortalSessionInactivityFilter;
+import com.yuzhi.dts.platform.web.filter.AuditLoggingFilter;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -45,6 +47,12 @@ class IngestionTaskProxyResourceTest {
 
     @MockBean
     private ExternalRunLogService externalRunLogService;
+
+    @MockBean
+    private PortalSessionInactivityFilter portalSessionInactivityFilter;
+
+    @MockBean
+    private AuditLoggingFilter auditLoggingFilter;
 
     @Test
     void createTaskForwardsPayload() throws Exception {

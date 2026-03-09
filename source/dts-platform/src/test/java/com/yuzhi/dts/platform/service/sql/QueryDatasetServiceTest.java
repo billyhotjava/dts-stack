@@ -11,6 +11,7 @@ import com.yuzhi.dts.platform.repository.explore.QueryDatasetAssetRepository;
 import com.yuzhi.dts.platform.repository.explore.QueryDatasetVersionRepository;
 import com.yuzhi.dts.platform.repository.explore.QueryExecutionRepository;
 import com.yuzhi.dts.platform.repository.explore.ResultSetRepository;
+import com.yuzhi.dts.platform.repository.modeling.ModelingSqlModelRepository;
 import com.yuzhi.dts.platform.service.sql.dto.QueryDatasetResponse;
 import java.util.List;
 import java.util.UUID;
@@ -38,6 +39,9 @@ class QueryDatasetServiceTest {
     @Mock
     private ResultSetRepository resultSetRepository;
 
+    @Mock
+    private ModelingSqlModelRepository modelingSqlModelRepository;
+
     @InjectMocks
     private QueryDatasetService service;
 
@@ -57,6 +61,7 @@ class QueryDatasetServiceTest {
         QueryDatasetAsset ownerNullOther = asset("owner-null-other", null, "dave", true);
         QueryDatasetAsset ownerNullOwn = asset("owner-null-own", null, "alice", true);
 
+        when(modelingSqlModelRepository.findAll()).thenReturn(List.of());
         when(assetRepository.findByEnabledTrueOrderByLastModifiedDateDesc()).thenReturn(List.of(deptVisible, deptInvisible, ownerNullOther));
         when(assetRepository.findByCreatedByOrderByLastModifiedDateDesc("alice")).thenReturn(List.of(ownerNullOwn));
 
@@ -77,6 +82,7 @@ class QueryDatasetServiceTest {
 
         QueryDatasetAsset a1 = asset("a1", "D1", "u1", true);
         QueryDatasetAsset a2 = asset("a2", null, "u2", true);
+        when(modelingSqlModelRepository.findAll()).thenReturn(List.of());
         when(assetRepository.findByEnabledTrueOrderByLastModifiedDateDesc()).thenReturn(List.of(a1, a2));
 
         List<QueryDatasetResponse> result = service.list("D1");
