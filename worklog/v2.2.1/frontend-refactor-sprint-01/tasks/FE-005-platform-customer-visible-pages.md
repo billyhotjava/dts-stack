@@ -30,8 +30,18 @@
 - `explore/etl/TransformDetailPage.tsx` 已改成任务详情控制台页，并清掉“实时状态（预留）”文案
 - `explore/etl/TransformExecutionHistoryPage.tsx` 已改成统一筛选条 + 执行记录面板
 - `modeling/DbtFileBrowserPage.tsx` 已改成统一工作区壳层与浅色编辑面板
+- `modeling/SqlModelingPage.tsx` 已切到 light-first 入口壳层，编辑区从深色工作台收敛回统一控制台风格
+- `governance/GovernanceCenterPage.tsx` 已改成统一治理总览页
+- `governance/GlossaryPage.tsx` 已改成标准管理控制台页
+- `governance/QualityRulesPage.tsx` 已改成规则中心控制台页
+- `governance/TemplatesPage.tsx` 已改成统一标准模板控制台页
+- `governance/SubjectAreasPage.tsx` 已改成统一主题域管理控制台页
+- `governance/ReferenceCodesPage.tsx` 已改成统一公共码表控制台页
+- `catalog/DatasetsPage.tsx` 已改成统一资产门户页
+- `catalog/LineagePage.tsx` 已改成统一血缘分析页
+- `catalog/MetadataPage.tsx` 已改成统一元数据采集控制台页
 - `pnpm -C source/dts-platform-webapp build` 已通过
-- `SqlModelingPage.tsx` 仍待继续清理旧占位内容并统一工作区视觉
+- 本轮目标页已全部横向套用统一页面 contract
 
 ## 验收
 

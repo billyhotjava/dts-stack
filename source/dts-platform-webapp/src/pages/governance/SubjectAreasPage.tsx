@@ -1,12 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { FolderTree, Layers3, ScanSearch, Users } from "lucide-react";
 import {
 	Badge,
-	Breadcrumb,
 	Button,
-	Card,
 	Divider,
-	Empty,
 	Form,
 	Input,
 	Layout,
@@ -19,9 +17,15 @@ import {
 } from "antd";
 import type { DataNode } from "antd/es/tree";
 import { useSearchParams } from "react-router";
+import {
+	PlatformFilterBar,
+	PlatformMetaPill,
+	PlatformPageHero,
+	PlatformSectionCard,
+	PlatformSummaryCards,
+} from "@/components/console-page";
 import { EmptyState } from "@/components/empty-state";
 import { useGovernanceManageAccess } from "@/hooks/useModuleManageAccess";
-import { PageHeader } from "@/components/page-header";
 import { createDomain, deleteDomain, getDomainTree, updateDomain } from "@/api/platformApi";
 
 const { Sider, Content } = Layout;
@@ -185,6 +189,38 @@ export default function SubjectAreasPage() {
 
 	const activeDomain = selectedKey !== ROOT_KEY ? domainIndex.get(selectedKey) || null : null;
 	const activeChildren = activeDomain?.children || [];
+	const ownerCount = useMemo(
+		() => new Set(domainOptions.map((item) => normalizeText(item.owner)).filter(Boolean)).size,
+		[domainOptions],
+	);
+	const summaryCards = [
+		{
+			label: "主题域总数",
+			value: domainOptions.length,
+			note: "当前治理目录中的全部业务主题域",
+			icon: <FolderTree className="h-5 w-5" />,
+		},
+		{
+			label: "根域数量",
+			value: domainTree.length,
+			note: "一级业务主题域入口",
+			icon: <Layers3 className="h-5 w-5" />,
+			tone: "info" as const,
+		},
+		{
+			label: "当前子域",
+			value: activeChildren.length,
+			note: activeDomain?.name || "Root 视角下暂无选中主题域",
+			icon: <ScanSearch className="h-5 w-5" />,
+			tone: "success" as const,
+		},
+		{
+			label: "负责人覆盖",
+			value: ownerCount,
+			note: "已配置负责人主题域数量",
+			icon: <Users className="h-5 w-5" />,
+		},
+	];
 
 	const openModal = (domain?: DomainNode | null, parentId?: string | null) => {
 		setEditing(domain || null);
@@ -265,11 +301,11 @@ export default function SubjectAreasPage() {
 	);
 
 	return (
-		<div className="space-y-4">
-			<Breadcrumb items={[{ title: "数据治理中心" }, { title: "标准管理" }, { title: "主题域管理" }]} />
-			<PageHeader
-				title="数据治理中心 · 主题域管理"
-				description="维护业务主题域结构，支撑资产归类与治理视角。"
+		<div className="space-y-6">
+			<PlatformPageHero
+				title="主题域管理"
+				eyebrow="Governance Console"
+				description="统一维护业务主题域结构、负责人和层级关系，让资产归类和治理视角保持在同一套控制台语言里。"
 				actions={
 					<Space>
 						<Button onClick={() => openModal(null, null)} disabled={!canManage}>
@@ -284,10 +320,38 @@ export default function SubjectAreasPage() {
 						</Button>
 					</Space>
 				}
+				meta={
+					<>
+						<PlatformMetaPill>当前视角 {activeDomain?.name || "全域主题"}</PlatformMetaPill>
+						<PlatformMetaPill>检索关键词 {keyword.trim() || "全部主题域"}</PlatformMetaPill>
+						<PlatformMetaPill>治理权限 {canManage ? "可操作" : "只读"}</PlatformMetaPill>
+					</>
+				}
 			/>
+			<PlatformSummaryCards items={summaryCards} />
 
-			<Layout className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-				<Sider width={320} theme="light" className="border-r border-slate-200 p-4">
+			<PlatformFilterBar>
+				<div className="space-y-1">
+					<div className="text-sm font-medium text-foreground">主题域检索与层级浏览</div>
+					<div className="text-sm text-muted-foreground">按名称、编码或负责人筛选主题域，定位当前治理归属与子域结构。</div>
+				</div>
+				<div className="w-full max-w-xl">
+					<Input.Search
+						placeholder="搜索主题域..."
+						value={keyword}
+						onChange={(e) => setKeyword(e.target.value)}
+						allowClear
+					/>
+				</div>
+			</PlatformFilterBar>
+
+			<PlatformSectionCard
+				title="主题域结构与详情"
+				description="左侧浏览层级目录，右侧查看当前主题域负责人、说明和子域分布。"
+				bodyClassName="pt-0"
+			>
+				<Layout className="overflow-hidden rounded-[24px] border border-border/70 bg-background">
+					<Sider width={320} theme="light" className="border-r border-slate-200 p-4">
 					<Space direction="vertical" className="w-full" size="middle">
 						<div className="flex items-center justify-between">
 							<Text strong>域目录结构</Text>
@@ -295,12 +359,6 @@ export default function SubjectAreasPage() {
 								+ 新增域
 							</Button>
 						</div>
-						<Input.Search
-							placeholder="搜索主题域..."
-							value={keyword}
-							onChange={(e) => setKeyword(e.target.value)}
-							allowClear
-						/>
 						<Tree
 							showLine
 							defaultExpandAll
@@ -315,17 +373,19 @@ export default function SubjectAreasPage() {
 							<EmptyState title="暂无主题域" description="请先创建主题域。" />
 						) : null}
 					</Space>
-				</Sider>
-				<Content className="p-6">
+					</Sider>
+					<Content className="p-6">
 					{loading ? (
-						<Card loading />
+						<div className="rounded-[24px] border border-dashed border-slate-200 bg-slate-50 px-6 py-10 text-center text-sm text-slate-500">
+							主题域结构加载中...
+						</div>
 					) : !activeDomain ? (
-						<Card>
+						<div className="rounded-[24px] border border-slate-200 bg-slate-50 px-6 py-6">
 							<Title level={4}>全域主题视角</Title>
 							<Text type="secondary">请选择左侧主题域查看详情与治理指标。</Text>
 							<Divider />
 							{domainTree.length === 0 ? (
-								<Empty description="暂无主题域结构" />
+								<EmptyState title="暂无主题域结构" description="请先创建主题域后再进入详情视图。" />
 							) : (
 								<Space wrap>
 									{domainOptions.slice(0, 12).map((item) => (
@@ -334,7 +394,7 @@ export default function SubjectAreasPage() {
 									{domainOptions.length > 12 ? <Tag>+{domainOptions.length - 12} 更多</Tag> : null}
 								</Space>
 							)}
-						</Card>
+						</div>
 					) : (
 						<div className="space-y-6">
 							<div className="flex items-start justify-between gap-4">
@@ -367,15 +427,17 @@ export default function SubjectAreasPage() {
 							<Divider />
 
 							<div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-								<Card title="关联术语" size="small">
+								<div className="rounded-[22px] border border-slate-200 bg-slate-50 px-4 py-4">
+									<div className="mb-3 text-sm font-semibold text-slate-900">关联术语</div>
 									<Space wrap>
 										<Tag>暂无挂载</Tag>
 									</Space>
 									<Button className="mt-3" type="dashed" block disabled>
 										+ 挂载术语
 									</Button>
-								</Card>
-								<Card title="域级治理指标" size="small">
+								</div>
+								<div className="rounded-[22px] border border-slate-200 bg-slate-50 px-4 py-4">
+									<div className="mb-3 text-sm font-semibold text-slate-900">域级治理指标</div>
 									<div className="flex items-center justify-between py-1">
 										<Text>落标率</Text>
 										<Text strong>-</Text>
@@ -388,10 +450,11 @@ export default function SubjectAreasPage() {
 										<Text>合规覆盖</Text>
 										<Text strong>-</Text>
 									</div>
-								</Card>
+								</div>
 							</div>
 
-							<Card title="子域列表" size="small">
+							<div className="rounded-[22px] border border-slate-200 bg-slate-50 px-4 py-4">
+								<div className="mb-3 text-sm font-semibold text-slate-900">子域列表</div>
 								{activeChildren.length ? (
 									<Space wrap>
 										{activeChildren.map((child) => (
@@ -406,11 +469,12 @@ export default function SubjectAreasPage() {
 										<Text type="secondary">暂无子域</Text>
 									</Space>
 								)}
-							</Card>
+							</div>
 						</div>
 					)}
-				</Content>
-			</Layout>
+					</Content>
+				</Layout>
+			</PlatformSectionCard>
 
 			<Modal
 				open={modalOpen}

@@ -1,10 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { GitBranch, Layers3, ScanSearch, Waypoints } from "lucide-react";
 import { Alert, Button, Card, Collapse, Descriptions, Drawer, Input, Select, Space, Statistic, Table, Tag } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { DownloadOutlined } from "@ant-design/icons";
+import {
+	PlatformFilterBar,
+	PlatformMetaPill,
+	PlatformPageHero,
+	PlatformSectionCard,
+	PlatformSummaryCards,
+} from "@/components/console-page";
 import { EmptyState } from "@/components/empty-state";
-import { PageHeader } from "@/components/page-header";
 import { getCatalogLineageImpact, listDatasets } from "@/api/platformApi";
 
 type DatasetOption = {
@@ -355,12 +362,66 @@ export default function LineagePage() {
 		toast.success("已导出节点与关系 CSV");
 	};
 
-	return (
-		<div className="space-y-4">
-			<PageHeader title="数据资产门户 · 血缘影响分析" description="支持按项目、分层、变更窗口筛选，并可导出影响范围结果。" />
+	const summaryCards = [
+		{
+			label: "节点数",
+			value: Number(impact?.nodeCount || 0),
+			note: "当前分析结果中的血缘节点",
+			icon: <GitBranch className="h-5 w-5" />,
+		},
+		{
+			label: "关系边",
+			value: Number(impact?.edgeCount || 0),
+			note: "节点之间的关系总数",
+			icon: <Waypoints className="h-5 w-5" />,
+			tone: "info" as const,
+		},
+		{
+			label: "分层视图",
+			value: layerGroupItems.length,
+			note: "当前筛选结果的分层组数",
+			icon: <Layers3 className="h-5 w-5" />,
+			tone: "success" as const,
+		},
+		{
+			label: "变更节点",
+			value: Number(impact?.impactStats?.changedNodeCount || 0),
+			note: "当前窗口内发生变更的节点",
+			icon: <ScanSearch className="h-5 w-5" />,
+			tone: "warning" as const,
+		},
+	];
 
-			<Card title="分析条件">
-				<Space size={12} wrap>
+	return (
+		<div className="space-y-6">
+			<PlatformPageHero
+				title="血缘影响分析"
+				description="支持按方向、深度、分层、项目和变更窗口分析影响范围，并导出节点和关系结果。"
+				eyebrow="Lineage Impact"
+				actions={
+					<Button className="rounded-2xl" icon={<DownloadOutlined />} onClick={handleExport} disabled={!nodes.length && !edges.length}>
+						导出结果
+					</Button>
+				}
+				meta={
+					<>
+						<PlatformMetaPill>{selectedId ? `已选数据集 ${selectedId}` : "请选择数据集"}</PlatformMetaPill>
+						<PlatformMetaPill>方向 {impact?.direction || direction}</PlatformMetaPill>
+						<PlatformMetaPill>深度 {Number(impact?.depth || depth)}</PlatformMetaPill>
+					</>
+				}
+			/>
+
+			<PlatformSummaryCards items={summaryCards} />
+
+			<PlatformFilterBar>
+				<div>
+					<div className="text-sm font-semibold text-foreground">先确定范围，再下钻节点和关系边</div>
+					<div className="mt-1 text-sm text-muted-foreground">
+						数据集、方向、深度、分层和项目过滤一起决定影响范围，关键字用于结果集内快速搜索。
+					</div>
+				</div>
+				<div className="flex flex-wrap items-center gap-2">
 					<Select
 						placeholder="选择数据集"
 						style={{ minWidth: 320 }}
@@ -431,15 +492,13 @@ export default function LineagePage() {
 						onChange={(e) => setKeyword(e.target.value)}
 						allowClear
 					/>
-					<Button icon={<DownloadOutlined />} onClick={handleExport} disabled={!nodes.length && !edges.length}>
-						导出结果
-					</Button>
-				</Space>
-			</Card>
+				</div>
+			</PlatformFilterBar>
 
 			{!selectedId ? <Alert type="info" message="请选择一个数据集开始分析。" showIcon /> : null}
 
-			<Card title="影响概览" loading={loading}>
+			<PlatformSectionCard title="影响概览" description="先看节点、关系边、变更节点、方向和深度，再决定是否继续下钻。">
+				<Card bordered={false} loading={loading} bodyStyle={{ padding: 0 }}>
 				<Space size={24} wrap>
 					<Statistic title="节点数" value={Number(impact?.nodeCount || 0)} />
 					<Statistic title="边数" value={Number(impact?.edgeCount || 0)} />
@@ -447,17 +506,18 @@ export default function LineagePage() {
 					<Statistic title="方向" value={impact?.direction || direction} />
 					<Statistic title="深度" value={Number(impact?.depth || depth)} />
 				</Space>
-			</Card>
+				</Card>
+			</PlatformSectionCard>
 
-			<Card title="分层折叠视图">
+			<PlatformSectionCard title="分层折叠视图" description="按 ODS / DWD / DWS / ADS 等层级折叠查看节点分布。">
 				{layerGroupItems.length ? (
 					<Collapse items={layerGroupItems} defaultActiveKey={layerGroupItems.map((item) => item.key)} />
 				) : (
 					<EmptyState title="暂无分层节点" description="当前筛选条件下无可展示节点。" />
 				)}
-			</Card>
+			</PlatformSectionCard>
 
-			<Card title="节点列表">
+			<PlatformSectionCard title="节点列表" description="点击任意节点可打开右侧详情抽屉。">
 				{nodes.length ? (
 					<Table
 						rowKey={(row, idx) => row.id || `${row.db || "db"}.${row.table || "tb"}-${idx}`}
@@ -472,9 +532,9 @@ export default function LineagePage() {
 				) : (
 					<EmptyState title="暂无节点" description="当前条件下未检索到血缘节点。" />
 				)}
-			</Card>
+			</PlatformSectionCard>
 
-			<Card title="关系边列表">
+			<PlatformSectionCard title="关系边列表" description="关系边列表用于核对上下游传播路径和项目归属。">
 				{edges.length ? (
 					<Table
 						rowKey={(row, idx) => row.id || `${row.upstreamDatasetId || "up"}-${row.downstreamDatasetId || "down"}-${idx}`}
@@ -486,7 +546,7 @@ export default function LineagePage() {
 				) : (
 					<EmptyState title="暂无关系边" description="当前条件下未检索到血缘关系。" />
 				)}
-			</Card>
+			</PlatformSectionCard>
 
 			<Drawer title="节点详情" open={Boolean(selectedNode)} width={520} onClose={() => setSelectedNode(null)} destroyOnClose>
 				{selectedNode ? (

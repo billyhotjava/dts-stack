@@ -1,7 +1,14 @@
 import { ArrowRightOutlined } from "@ant-design/icons";
-import { Alert, Breadcrumb, Button, Card, Col, Row, Space, Tag, Typography } from "antd";
+import { BookOpen, CheckCircle2, ShieldCheck, Sigma } from "lucide-react";
+import { Alert, Button, Card, Col, Row, Space, Tag, Typography } from "antd";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
+import {
+	PlatformMetaPill,
+	PlatformPageHero,
+	PlatformSectionCard,
+	PlatformSummaryCards,
+} from "@/components/console-page";
 import { getGovernanceReleaseGate } from "@/api/platformApi";
 
 type Entry = {
@@ -85,29 +92,78 @@ export default function GovernanceCenterPage() {
 		void loadReleaseGate();
 	}, []);
 
+	const entryCount = sections.reduce((sum, section) => sum + section.entries.length, 0);
+	const summaryCards = [
+		{
+			label: "治理分区",
+			value: sections.length,
+			note: "标准、质量、指标三条主线",
+			icon: <BookOpen className="h-5 w-5" />,
+		},
+		{
+			label: "能力入口",
+			value: entryCount,
+			note: "全部入口已落到真实业务页",
+			icon: <Sigma className="h-5 w-5" />,
+			tone: "info" as const,
+		},
+		{
+			label: "发布门禁",
+			value: releaseGate?.readyForRelease ? "通过" : "待处理",
+			note: releaseGate?.checkedAt ? `最近校验 ${new Date(releaseGate.checkedAt).toLocaleString()}` : "暂无门禁快照",
+			icon: <CheckCircle2 className="h-5 w-5" />,
+			tone: "success" as const,
+		},
+		{
+			label: "阻断项",
+			value: releaseGate?.blockerFailed ?? 0,
+			note: "最近 7 天门禁阻断数",
+			icon: <ShieldCheck className="h-5 w-5" />,
+			tone: "warning" as const,
+		},
+	];
+
 	return (
-		<Space direction="vertical" size={16} style={{ width: "100%" }}>
-			<Breadcrumb items={[{ title: "数据治理中心" }, { title: "总览" }]} />
+		<div className="space-y-6">
+			<PlatformPageHero
+				title="数据治理中心"
+				description="把标准管理、质量管控和指标治理的真实入口放到同一个总览页里，先看门禁，再进具体治理动作。"
+				eyebrow="Governance Overview"
+				actions={
+					<div className="flex flex-wrap items-center gap-2">
+						<Button className="rounded-2xl" onClick={() => navigate("/governance/rules")}>
+							质量规则
+						</Button>
+						<Button className="rounded-2xl" onClick={() => navigate("/governance/standards/glossary")}>
+							术语表
+						</Button>
+						<Button className="rounded-2xl" onClick={() => navigate("/governance/indicators/dictionary")}>
+							指标字典
+						</Button>
+					</div>
+				}
+				meta={
+					<>
+						<PlatformMetaPill>主流程：标准管理 - 质量管控 - 指标治理</PlatformMetaPill>
+						<PlatformMetaPill>最近 7 天发布门禁</PlatformMetaPill>
+						<PlatformMetaPill>全部入口均落到真实业务页</PlatformMetaPill>
+					</>
+				}
+			/>
 
-			<Card>
-				<Typography.Title level={4} style={{ margin: 0 }}>
-					数据治理中心
-				</Typography.Title>
-				<Typography.Paragraph type="secondary" style={{ marginTop: 8, marginBottom: 0 }}>
-					主流程：标准管理 - 质量管控 - 指标治理。选择下方区块即可进入对应能力。
-				</Typography.Paragraph>
-			</Card>
+			<PlatformSummaryCards items={summaryCards} />
 
-			<Card
+			<PlatformSectionCard
 				title="发布门禁（最近 7 天）"
-				extra={
+				description="先判断当前治理基线是否具备发布条件，再决定进入哪个治理区块处理问题。"
+				action={
 					<Button size="small" onClick={() => void loadReleaseGate()}>
 						刷新
 					</Button>
 				}
-				loading={gateLoading}
 			>
-				{releaseGate ? (
+				<Card loading={gateLoading} bordered={false} bodyStyle={{ padding: 0 }}>
+					{releaseGate ? (
 					<Space direction="vertical" size={10} style={{ width: "100%" }}>
 						<Alert
 							type={releaseGate.readyForRelease ? "success" : "warning"}
@@ -125,21 +181,20 @@ export default function GovernanceCenterPage() {
 				) : (
 					<Typography.Text type="secondary">暂无门禁数据。</Typography.Text>
 				)}
-			</Card>
+				</Card>
+			</PlatformSectionCard>
 
 			<Row gutter={[16, 16]}>
 				{sections.map((section) => (
 					<Col key={section.title} xs={24} md={12} xl={8}>
-						<Card
+						<PlatformSectionCard
 							title={section.title}
-							style={{ height: "100%" }}
-							styles={{ body: { display: "flex", flexDirection: "column", gap: 10 } }}
+							description={section.description}
+							className="h-full"
+							bodyClassName="flex flex-col gap-3"
 						>
-							<Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-								{section.description}
-							</Typography.Paragraph>
 							{section.entries.map((entry) => (
-								<Card key={entry.path} size="small">
+								<div key={entry.path} className="rounded-[22px] border border-border/70 bg-muted/35 p-4">
 									<Space direction="vertical" size={6} style={{ width: "100%" }}>
 										<Typography.Text strong>{entry.title}</Typography.Text>
 										<Typography.Text type="secondary">{entry.description}</Typography.Text>
@@ -152,12 +207,12 @@ export default function GovernanceCenterPage() {
 											进入
 										</Button>
 									</Space>
-								</Card>
+								</div>
 							))}
-						</Card>
+						</PlatformSectionCard>
 					</Col>
 				))}
 			</Row>
-		</Space>
+		</div>
 	);
 }

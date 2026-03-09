@@ -197,22 +197,26 @@ export default function Page() {
 	];
 
 	return (
-		<div className="space-y-6">
+		<div className="space-y-6" data-testid="platform-workbench-page">
 			<PlatformPageHero
 				title="工作台总览"
 				description="把个人待办、常用入口和资产沉淀汇总到同一个工作面，减少在治理、开发和审批模块之间来回跳转。"
 				eyebrow="Workbench Overview"
 				actions={
 					<>
-						<Button variant="outline" onClick={() => void loadAll()}>
+						<Button data-testid="platform-workbench-refresh" variant="outline" onClick={() => void loadAll()}>
 							<RefreshCw className="h-4 w-4" />
 							刷新数据
 						</Button>
-						<Button variant="outline" onClick={() => push("/dashboard/workbench/workflow-center")}>
+						<Button
+							data-testid="platform-workbench-todo-center"
+							variant="outline"
+							onClick={() => push("/dashboard/workbench/workflow-center")}
+						>
 							<Workflow className="h-4 w-4" />
 							待办中心
 						</Button>
-						<Button onClick={openCreateFavorite}>
+						<Button data-testid="platform-workbench-new-favorite" onClick={openCreateFavorite}>
 							<Star className="h-4 w-4" />
 							新增收藏
 						</Button>
@@ -237,36 +241,43 @@ export default function Page() {
 					</div>
 				</div>
 				<div className="flex flex-wrap items-center gap-2">
-					<Button variant="outline" onClick={() => push("/dashboard/catalog/datasets")}>
-						数据资产
-					</Button>
-					<Button variant="outline" onClick={() => push("/dashboard/explore/etl/transform")}>
-						任务中心
-					</Button>
-					<Button variant="outline" onClick={() => push("/dashboard/modeling/dbt-files")}>
-						DBT 文件
-					</Button>
-				</div>
-			</PlatformFilterBar>
+						<Button data-testid="platform-workbench-link-datasets" variant="outline" onClick={() => push("/dashboard/catalog/datasets")}>
+							数据资产
+						</Button>
+						<Button data-testid="platform-workbench-link-jobs" variant="outline" onClick={() => push("/dashboard/explore/etl/transform")}>
+							任务中心
+						</Button>
+						<Button data-testid="platform-workbench-link-dbt" variant="outline" onClick={() => push("/dashboard/modeling/dbt-files")}>
+							DBT 文件
+						</Button>
+					</div>
+				</PlatformFilterBar>
 
 			<div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
 				<PlatformSectionCard
 					title="待办预览"
 					description="聚焦最近要处理的审批、质量和结构漂移事项。"
 					action={
-						<Button variant="outline" size="sm" onClick={() => push("/dashboard/workbench/workflow-center")}>
+						<Button
+							data-testid="platform-workbench-view-all-todos"
+							variant="outline"
+							size="sm"
+							onClick={() => push("/dashboard/workbench/workflow-center")}
+						>
 							查看全部
 						</Button>
 					}
 				>
 					{todoPreview.length ? (
-						<Table
-							rowKey={(record) => `${record.type}-${record.taskId || record.requestId || record.datasetId || record.title}`}
-							columns={columns}
-							dataSource={todoPreview}
-							pagination={false}
-							loading={loading}
-						/>
+						<div data-testid="platform-workbench-todos">
+							<Table
+								rowKey={(record) => `${record.type}-${record.taskId || record.requestId || record.datasetId || record.title}`}
+								columns={columns}
+								dataSource={todoPreview}
+								pagination={false}
+								loading={loading}
+							/>
+						</div>
 					) : (
 						<EmptyState title="暂无待办" description="没有需要处理的事项。" />
 					)}
@@ -280,7 +291,11 @@ export default function Page() {
 					{favorites.length ? (
 						<div className="grid gap-3">
 							{favorites.map((favorite) => (
-								<div key={favorite.id} className="rounded-[22px] border border-border/70 bg-muted/35 p-4">
+								<div
+									key={favorite.id}
+									data-testid={`platform-workbench-favorite-card-${favorite.id}`}
+									className="rounded-[22px] border border-border/70 bg-muted/35 p-4"
+								>
 									<div className="flex items-start justify-between gap-3">
 										<div className="space-y-1">
 											<div className="flex flex-wrap items-center gap-2">
@@ -298,11 +313,21 @@ export default function Page() {
 										</div>
 										<div className="flex items-center gap-2">
 											{favorite.link ? (
-												<Button size="sm" variant="outline" onClick={() => openFavorite(favorite)}>
+												<Button
+													data-testid={`platform-workbench-favorite-open-${favorite.id}`}
+													size="sm"
+													variant="outline"
+													onClick={() => openFavorite(favorite)}
+												>
 													打开
 												</Button>
 											) : null}
-											<Button size="sm" variant="ghost" onClick={() => openEditFavorite(favorite)}>
+											<Button
+												data-testid={`platform-workbench-favorite-edit-${favorite.id}`}
+												size="sm"
+												variant="ghost"
+												onClick={() => openEditFavorite(favorite)}
+											>
 												编辑
 											</Button>
 										</div>

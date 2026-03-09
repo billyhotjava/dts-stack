@@ -2,8 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import dayjs from "dayjs";
 import type { Dayjs } from "dayjs";
+import { Activity, ClipboardCheck, Filter, ShieldCheck } from "lucide-react";
 import {
-	Breadcrumb,
 	Button,
 	Card,
 	DatePicker,
@@ -23,7 +23,13 @@ import {
 import type { ColumnsType } from "antd/es/table";
 import { PlusOutlined, PlayCircleOutlined, DeleteOutlined, EditOutlined, EyeOutlined } from "@ant-design/icons";
 import { useSearchParams } from "react-router";
-import { PageHeader } from "@/components/page-header";
+import {
+	PlatformFilterBar,
+	PlatformMetaPill,
+	PlatformPageHero,
+	PlatformSectionCard,
+	PlatformSummaryCards,
+} from "@/components/console-page";
 import { useGovernanceManageAccess } from "@/hooks/useModuleManageAccess";
 import ComplianceCenterPanel from "@/pages/governance/components/ComplianceCenterPanel";
 import IssueWorkflowPanel from "@/pages/governance/components/IssueWorkflowPanel";
@@ -554,20 +560,68 @@ export default function Page() {
 		return Array.isArray(parsed) ? parsed : [];
 	}, [runDetail]);
 
+	const enabledCount = rules.filter((item) => Boolean(item?.enabled)).length;
+	const failedRuns = runs.filter((item) => String(item?.status || "").toUpperCase() === "FAILED").length;
+	const summaryCards = [
+		{
+			label: "规则总数",
+			value: rules.length,
+			note: "当前已加载质量规则",
+			icon: <ClipboardCheck className="h-5 w-5" />,
+		},
+		{
+			label: "启用规则",
+			value: enabledCount,
+			note: "可被调度和手动执行",
+			icon: <ShieldCheck className="h-5 w-5" />,
+			tone: "success" as const,
+		},
+		{
+			label: "当前筛选",
+			value: filteredRules.length,
+			note: "列表过滤后的规则数",
+			icon: <Filter className="h-5 w-5" />,
+			tone: "info" as const,
+		},
+		{
+			label: "失败执行",
+			value: failedRuns,
+			note: "当前执行历史结果集中的失败数",
+			icon: <Activity className="h-5 w-5" />,
+			tone: "warning" as const,
+		},
+	];
+
 	return (
 		<div className="space-y-6">
-			<Breadcrumb items={[{ title: "数据治理中心" }, { title: "质量管控" }, { title: "质量规则" }]} />
-			<PageHeader
-				title="数据治理中心 / 质量管控"
-				description="质量规则配置与执行。"
+			<PlatformPageHero
+				title="质量规则"
+				description="统一管理规则定义、执行历史、任务编排和问题闭环，不再把筛选条件堆在旧式页头里。"
+				eyebrow="Quality Governance"
 				actions={
-					<Button type="primary" icon={<PlusOutlined />} onClick={() => openModal()} disabled={!canManage}>
+					<Button className="rounded-2xl" type="primary" icon={<PlusOutlined />} onClick={() => openModal()} disabled={!canManage}>
 						新增规则
 					</Button>
 				}
+				meta={
+					<>
+						<PlatformMetaPill>{canManage ? "当前账号可维护规则" : "当前账号只读"}</PlatformMetaPill>
+						<PlatformMetaPill>规则、执行、工单与合规面板同页联动</PlatformMetaPill>
+						<PlatformMetaPill>{datasetOptions.length} 个可选数据集</PlatformMetaPill>
+					</>
+				}
 			/>
-			<Card>
-				<Space wrap style={{ marginBottom: 12 }}>
+
+			<PlatformSummaryCards items={summaryCards} />
+
+			<PlatformFilterBar>
+				<div>
+					<div className="text-sm font-semibold text-foreground">先筛规则，再决定执行或发起问题闭环</div>
+					<div className="mt-1 text-sm text-muted-foreground">
+						关键字、规则类型、严重性、启停状态和数据集统一放在一条筛选带里。
+					</div>
+				</div>
+				<div className="flex flex-wrap items-center gap-2">
 					<Input
 						style={{ width: 240 }}
 						allowClear
@@ -610,8 +664,16 @@ export default function Page() {
 						value={filters.datasetId}
 						onChange={(value) => handleFilterChange({ datasetId: value })}
 					/>
-					<Button onClick={resetFilters}>重置筛选</Button>
-				</Space>
+					<Button className="rounded-2xl" onClick={resetFilters}>
+						重置筛选
+					</Button>
+				</div>
+			</PlatformFilterBar>
+
+			<PlatformSectionCard
+				title="规则清单"
+				description="当前筛选结果中的规则都保留详情、试跑、执行、启停和版本状态操作。"
+			>
 				<Table
 					rowKey={(record) => record.id}
 					columns={columns}
@@ -619,8 +681,9 @@ export default function Page() {
 					loading={loading}
 					pagination={{ showSizeChanger: true }}
 				/>
-			</Card>
-			<Card title="执行历史">
+			</PlatformSectionCard>
+
+			<PlatformSectionCard title="执行历史" description="按运行状态、数据集和时间窗查看历史执行结果与结构化明细。">
 				<Space wrap style={{ marginBottom: 12 }}>
 					<Select
 						allowClear
@@ -714,7 +777,7 @@ export default function Page() {
 						},
 					]}
 				/>
-			</Card>
+			</PlatformSectionCard>
 			<QualityTasksPanel />
 			<ComplianceCenterPanel />
 			<IssueWorkflowPanel initialDatasetId={issueDatasetId} initialStatus={issueStatus} />

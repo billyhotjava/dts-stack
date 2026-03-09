@@ -111,54 +111,60 @@ function ServicePanel({ service, title, description, restartHint, capability, fo
 	};
 
 	return (
-		<AdminSectionCard
-			title={title}
-			description={description}
-			action={
-				<div className="flex flex-wrap items-center gap-2">
-					<Badge variant={enabled ? "success" : "outline"} className="rounded-full px-2.5 py-1">
-						{enabled ? "已启用" : "未启用"}
-					</Badge>
-					<Badge variant="info" className="rounded-full px-2.5 py-1">
-						{capability}
-					</Badge>
+		<div data-testid={`admin-infra-service-panel-${service}`}>
+			<AdminSectionCard
+				title={title}
+				description={description}
+				action={
+					<div className="flex flex-wrap items-center gap-2">
+						<Badge variant={enabled ? "success" : "outline"} className="rounded-full px-2.5 py-1">
+							{enabled ? "已启用" : "未启用"}
+						</Badge>
+						<Badge variant="info" className="rounded-full px-2.5 py-1">
+							{capability}
+						</Badge>
+					</div>
+				}
+				bodyClassName="space-y-5"
+			>
+				<div className="flex flex-wrap gap-2">
+					<AdminMetaPill>服务标识：{SERVICE_LABELS[service]}</AdminMetaPill>
+					<AdminMetaPill>配置即时保存</AdminMetaPill>
+					{restartHint ? <AdminMetaPill>涉及服务重启提示</AdminMetaPill> : null}
 				</div>
-			}
-			bodyClassName="space-y-5"
-		>
-			<div className="flex flex-wrap gap-2">
-				<AdminMetaPill>服务标识：{SERVICE_LABELS[service]}</AdminMetaPill>
-				<AdminMetaPill>配置即时保存</AdminMetaPill>
-				{restartHint ? <AdminMetaPill>涉及服务重启提示</AdminMetaPill> : null}
-			</div>
 
-			<Form form={form} layout="vertical" requiredMark disabled={isFetching} className="max-w-4xl">
-				{restartHint ? <Alert className="mb-4" type="warning" showIcon message={restartHint} /> : null}
-				<div className="grid gap-x-5 xl:grid-cols-2">{formContent(form)}</div>
-				<Space wrap className="pt-2">
-					<AntButton type="primary" onClick={handleSave}>
-						保存配置
-					</AntButton>
-					<AntButton onClick={handleTest}>测试连接</AntButton>
-				</Space>
-				{testResult ? (
-					<Alert
-						className="mt-4"
-						type={testResult.success ? "success" : "error"}
-						showIcon
-						message={testResult.message || (testResult.success ? "测试成功" : "测试失败")}
-						description={
-							(testResult.status || testResult.body) ? (
-								<div className="space-y-1">
-									{testResult.status ? <div>状态码: {testResult.status}</div> : null}
-									{testResult.body ? <pre className="whitespace-pre-wrap text-xs">{testResult.body}</pre> : null}
-								</div>
-							) : undefined
-						}
-					/>
-				) : null}
-			</Form>
-		</AdminSectionCard>
+				<Form form={form} layout="vertical" requiredMark disabled={isFetching} className="max-w-4xl">
+					{restartHint ? <Alert className="mb-4" type="warning" showIcon message={restartHint} /> : null}
+					<div className="grid gap-x-5 xl:grid-cols-2">{formContent(form)}</div>
+					<Space wrap className="pt-2">
+						<AntButton data-testid={`admin-infra-service-save-${service}`} type="primary" onClick={handleSave}>
+							保存配置
+						</AntButton>
+						<AntButton data-testid={`admin-infra-service-test-${service}`} onClick={handleTest}>
+							测试连接
+						</AntButton>
+					</Space>
+					{testResult ? (
+						<div data-testid={`admin-infra-service-test-result-${service}`}>
+							<Alert
+								className="mt-4"
+								type={testResult.success ? "success" : "error"}
+								showIcon
+								message={testResult.message || (testResult.success ? "测试成功" : "测试失败")}
+								description={
+									(testResult.status || testResult.body) ? (
+										<div className="space-y-1">
+											{testResult.status ? <div>状态码: {testResult.status}</div> : null}
+											{testResult.body ? <pre className="whitespace-pre-wrap text-xs">{testResult.body}</pre> : null}
+										</div>
+									) : undefined
+								}
+							/>
+						</div>
+					) : null}
+				</Form>
+			</AdminSectionCard>
+		</div>
 	);
 }
 
@@ -477,7 +483,7 @@ export default function InfraSettingsView() {
 	];
 
 	return (
-		<div className="space-y-6">
+		<div className="space-y-6" data-testid="admin-infra-settings-page">
 			<AdminPageHeader
 				title="集成设置"
 				description="把平台联动、调度编排、元数据采集和 DBT 接入参数收敛到同一控制面，避免现场在多个页面来回切换。"
@@ -516,6 +522,7 @@ export default function InfraSettingsView() {
 					{QUICK_SWITCHES.map((item) => (
 						<Button
 							key={item.key}
+							data-testid={`admin-infra-switch-${item.key}`}
 							variant={activeService === item.key ? "contrast" : "outline"}
 							size="sm"
 							onClick={() => setActiveService(item.key)}
@@ -541,7 +548,9 @@ export default function InfraSettingsView() {
 				}
 				bodyClassName="pt-0"
 			>
-				<Tabs activeKey={activeService} onChange={(key) => setActiveService(key as ServiceKey)} items={items} />
+				<div data-testid="admin-infra-settings-tabs">
+					<Tabs activeKey={activeService} onChange={(key) => setActiveService(key as ServiceKey)} items={items} />
+				</div>
 			</AdminSectionCard>
 
 			<div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">

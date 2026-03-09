@@ -1,0 +1,666 @@
+{
+  "web-e2e-core": [
+    {
+      "id": "WE-CORE-001",
+      "name": "Auth gateway returnUrl and storage-state bootstrap",
+      "command": [
+        "pnpm",
+        "--dir",
+        "tests/web-e2e",
+        "exec",
+        "playwright",
+        "test",
+        "specs/core/auth-gateway.spec.ts",
+        "--project=chromium"
+      ],
+      "required": true,
+      "timeoutSeconds": 180,
+      "env": {
+        "DTS_WEB_E2E_USE_TEST_SERVER": "1",
+        "DTS_WEB_E2E_HTML_REPORT_DIR": "reports/html/we-core-auth",
+        "DTS_WEB_E2E_ARTIFACTS_DIR": "reports/artifacts/we-core-auth"
+      },
+      "tags": ["web-e2e", "core", "auth", "browser"],
+      "owner": "qa-platform",
+      "businessJourney": "Auth Gateway -> Session Bootstrap"
+    },
+    {
+      "id": "WE-CORE-002",
+      "name": "Platform copilot core journey",
+      "command": [
+        "pnpm",
+        "--dir",
+        "tests/web-e2e",
+        "exec",
+        "playwright",
+        "test",
+        "specs/core/platform-ai-assistant.spec.ts",
+        "--project=chromium"
+      ],
+      "required": true,
+      "timeoutSeconds": 240,
+      "env": {
+        "DTS_WEB_E2E_USE_TEST_SERVER": "0",
+        "DTS_WEB_E2E_WITH_PLATFORM_DEV_SERVER": "1",
+        "DTS_WEB_E2E_PLATFORM_DEV_SERVER_PORT": "19334",
+        "DTS_PLATFORM_URL": "http://127.0.0.1:19334/expert/",
+        "DTS_BASE_URL": "http://127.0.0.1:19334/expert/",
+        "DTS_EXPERT_URL": "http://127.0.0.1:19334/expert/",
+        "DTS_ADMIN_URL": "http://127.0.0.1:19336/admin/",
+        "DTS_ANALYTICS_URL": "http://127.0.0.1:19335/analytics/",
+        "DTS_PLATFORM_AUTH_TOKEN": "platform-playwright-token",
+        "DTS_ADMIN_AUTH_TOKEN": "admin-playwright-token",
+        "DTS_PLATFORM_REQUIRE_PASSWORD_LOGIN": "0",
+        "DTS_ADMIN_REQUIRE_PASSWORD_LOGIN": "0",
+        "DTS_WEB_E2E_HTML_REPORT_DIR": "reports/html/we-core-platform-ai",
+        "DTS_WEB_E2E_ARTIFACTS_DIR": "reports/artifacts/we-core-platform-ai"
+      },
+      "tags": ["web-e2e", "core", "platform", "ai", "browser"],
+      "owner": "qa-platform",
+      "businessJourney": "Platform Copilot -> HITL"
+    },
+    {
+      "id": "WE-CORE-003",
+      "name": "Analytics AI query core journey",
+      "command": [
+        "pnpm",
+        "--dir",
+        "tests/web-e2e",
+        "exec",
+        "playwright",
+        "test",
+        "specs/core/analytics-ai-query.spec.ts",
+        "--project=chromium"
+      ],
+      "required": true,
+      "timeoutSeconds": 240,
+      "env": {
+        "DTS_WEB_E2E_USE_TEST_SERVER": "0",
+        "DTS_WEB_E2E_WITH_ANALYTICS_DEV_SERVER": "1",
+        "DTS_WEB_E2E_ANALYTICS_DEV_SERVER_PORT": "19335",
+        "DTS_PLATFORM_URL": "http://127.0.0.1:19334/expert/",
+        "DTS_BASE_URL": "http://127.0.0.1:19334/expert/",
+        "DTS_EXPERT_URL": "http://127.0.0.1:19334/expert/",
+        "DTS_ADMIN_URL": "http://127.0.0.1:19336/admin/",
+        "DTS_ANALYTICS_URL": "http://127.0.0.1:19335/analytics/",
+        "DTS_PLATFORM_AUTH_TOKEN": "platform-playwright-token",
+        "DTS_ADMIN_AUTH_TOKEN": "admin-playwright-token",
+        "DTS_PLATFORM_REQUIRE_PASSWORD_LOGIN": "0",
+        "DTS_ADMIN_REQUIRE_PASSWORD_LOGIN": "0",
+        "DTS_WEB_E2E_HTML_REPORT_DIR": "reports/html/we-core-analytics-ai",
+        "DTS_WEB_E2E_ARTIFACTS_DIR": "reports/artifacts/we-core-analytics-ai"
+      },
+      "tags": ["web-e2e", "core", "analytics", "ai", "browser"],
+      "owner": "qa-analytics",
+      "businessJourney": "Analytics Copilot -> Query -> Screen"
+    },
+    {
+      "id": "WE-CORE-004",
+      "name": "Admin AI pack core journey",
+      "command": [
+        "pnpm",
+        "--dir",
+        "tests/web-e2e",
+        "exec",
+        "playwright",
+        "test",
+        "specs/core/admin-ai-pack.spec.ts",
+        "--project=chromium"
+      ],
+      "required": true,
+      "timeoutSeconds": 240,
+      "env": {
+        "DTS_WEB_E2E_USE_TEST_SERVER": "0",
+        "DTS_WEB_E2E_WITH_ADMIN_DEV_SERVER": "1",
+        "DTS_WEB_E2E_ADMIN_DEV_SERVER_PORT": "19336",
+        "DTS_PLATFORM_URL": "http://127.0.0.1:19334/expert/",
+        "DTS_BASE_URL": "http://127.0.0.1:19334/expert/",
+        "DTS_EXPERT_URL": "http://127.0.0.1:19334/expert/",
+        "DTS_ADMIN_URL": "http://127.0.0.1:19336/admin/",
+        "DTS_ANALYTICS_URL": "http://127.0.0.1:19335/analytics/",
+        "DTS_PLATFORM_AUTH_TOKEN": "platform-playwright-token",
+        "DTS_ADMIN_AUTH_TOKEN": "admin-playwright-token",
+        "DTS_PLATFORM_REQUIRE_PASSWORD_LOGIN": "0",
+        "DTS_ADMIN_REQUIRE_PASSWORD_LOGIN": "0",
+        "DTS_WEB_E2E_HTML_REPORT_DIR": "reports/html/we-core-admin",
+        "DTS_WEB_E2E_ARTIFACTS_DIR": "reports/artifacts/we-core-admin"
+      },
+      "tags": ["web-e2e", "core", "admin", "ai", "pack", "browser"],
+      "owner": "qa-admin",
+      "businessJourney": "Admin AI Config -> Pack Management"
+    },
+    {
+      "id": "WE-CORE-005",
+      "name": "Selector contract baseline",
+      "command": [
+        "pnpm",
+        "--dir",
+        "tests/web-e2e",
+        "exec",
+        "playwright",
+        "test",
+        "specs/contracts/testid-contract.spec.ts",
+        "--project=chromium"
+      ],
+      "required": true,
+      "timeoutSeconds": 180,
+      "env": {
+        "DTS_WEB_E2E_USE_TEST_SERVER": "1",
+        "DTS_WEB_E2E_HTML_REPORT_DIR": "reports/html/we-core-contract",
+        "DTS_WEB_E2E_ARTIFACTS_DIR": "reports/artifacts/we-core-contract"
+      },
+      "tags": ["web-e2e", "core", "contracts", "browser"],
+      "owner": "qa-platform",
+      "businessJourney": "Selector Contract Baseline"
+    }
+  ],
+  "web-e2e-full": [
+    {
+      "id": "WE-FULL-001",
+      "name": "Auth gateway returnUrl and storage-state bootstrap",
+      "command": [
+        "pnpm",
+        "--dir",
+        "tests/web-e2e",
+        "exec",
+        "playwright",
+        "test",
+        "specs/core/auth-gateway.spec.ts",
+        "--project=chromium"
+      ],
+      "required": true,
+      "timeoutSeconds": 180,
+      "env": {
+        "DTS_WEB_E2E_USE_TEST_SERVER": "1",
+        "DTS_WEB_E2E_HTML_REPORT_DIR": "reports/html/we-full-auth",
+        "DTS_WEB_E2E_ARTIFACTS_DIR": "reports/artifacts/we-full-auth"
+      },
+      "tags": ["web-e2e", "full", "auth", "browser"],
+      "owner": "qa-platform",
+      "businessJourney": "Auth Gateway -> Session Bootstrap"
+    },
+    {
+      "id": "WE-FULL-002",
+      "name": "Platform copilot core journey",
+      "command": [
+        "pnpm",
+        "--dir",
+        "tests/web-e2e",
+        "exec",
+        "playwright",
+        "test",
+        "specs/core/platform-ai-assistant.spec.ts",
+        "--project=chromium"
+      ],
+      "required": true,
+      "timeoutSeconds": 240,
+      "env": {
+        "DTS_WEB_E2E_USE_TEST_SERVER": "0",
+        "DTS_WEB_E2E_WITH_PLATFORM_DEV_SERVER": "1",
+        "DTS_WEB_E2E_PLATFORM_DEV_SERVER_PORT": "19334",
+        "DTS_PLATFORM_URL": "http://127.0.0.1:19334/expert/",
+        "DTS_BASE_URL": "http://127.0.0.1:19334/expert/",
+        "DTS_EXPERT_URL": "http://127.0.0.1:19334/expert/",
+        "DTS_ADMIN_URL": "http://127.0.0.1:19336/admin/",
+        "DTS_ANALYTICS_URL": "http://127.0.0.1:19335/analytics/",
+        "DTS_PLATFORM_AUTH_TOKEN": "platform-playwright-token",
+        "DTS_ADMIN_AUTH_TOKEN": "admin-playwright-token",
+        "DTS_PLATFORM_REQUIRE_PASSWORD_LOGIN": "0",
+        "DTS_ADMIN_REQUIRE_PASSWORD_LOGIN": "0",
+        "DTS_WEB_E2E_HTML_REPORT_DIR": "reports/html/we-full-platform-ai",
+        "DTS_WEB_E2E_ARTIFACTS_DIR": "reports/artifacts/we-full-platform-ai"
+      },
+      "tags": ["web-e2e", "full", "platform", "ai", "browser"],
+      "owner": "qa-platform",
+      "businessJourney": "Platform Copilot -> HITL"
+    },
+    {
+      "id": "WE-FULL-003",
+      "name": "Analytics AI query core journey",
+      "command": [
+        "pnpm",
+        "--dir",
+        "tests/web-e2e",
+        "exec",
+        "playwright",
+        "test",
+        "specs/core/analytics-ai-query.spec.ts",
+        "--project=chromium"
+      ],
+      "required": true,
+      "timeoutSeconds": 240,
+      "env": {
+        "DTS_WEB_E2E_USE_TEST_SERVER": "0",
+        "DTS_WEB_E2E_WITH_ANALYTICS_DEV_SERVER": "1",
+        "DTS_WEB_E2E_ANALYTICS_DEV_SERVER_PORT": "19335",
+        "DTS_PLATFORM_URL": "http://127.0.0.1:19334/expert/",
+        "DTS_BASE_URL": "http://127.0.0.1:19334/expert/",
+        "DTS_EXPERT_URL": "http://127.0.0.1:19334/expert/",
+        "DTS_ADMIN_URL": "http://127.0.0.1:19336/admin/",
+        "DTS_ANALYTICS_URL": "http://127.0.0.1:19335/analytics/",
+        "DTS_PLATFORM_AUTH_TOKEN": "platform-playwright-token",
+        "DTS_ADMIN_AUTH_TOKEN": "admin-playwright-token",
+        "DTS_PLATFORM_REQUIRE_PASSWORD_LOGIN": "0",
+        "DTS_ADMIN_REQUIRE_PASSWORD_LOGIN": "0",
+        "DTS_WEB_E2E_HTML_REPORT_DIR": "reports/html/we-full-analytics-ai",
+        "DTS_WEB_E2E_ARTIFACTS_DIR": "reports/artifacts/we-full-analytics-ai"
+      },
+      "tags": ["web-e2e", "full", "analytics", "ai", "browser"],
+      "owner": "qa-analytics",
+      "businessJourney": "Analytics Copilot -> Query -> Screen"
+    },
+    {
+      "id": "WE-FULL-004",
+      "name": "Admin AI pack core journey",
+      "command": [
+        "pnpm",
+        "--dir",
+        "tests/web-e2e",
+        "exec",
+        "playwright",
+        "test",
+        "specs/core/admin-ai-pack.spec.ts",
+        "--project=chromium"
+      ],
+      "required": true,
+      "timeoutSeconds": 240,
+      "env": {
+        "DTS_WEB_E2E_USE_TEST_SERVER": "0",
+        "DTS_WEB_E2E_WITH_ADMIN_DEV_SERVER": "1",
+        "DTS_WEB_E2E_ADMIN_DEV_SERVER_PORT": "19336",
+        "DTS_PLATFORM_URL": "http://127.0.0.1:19334/expert/",
+        "DTS_BASE_URL": "http://127.0.0.1:19334/expert/",
+        "DTS_EXPERT_URL": "http://127.0.0.1:19334/expert/",
+        "DTS_ADMIN_URL": "http://127.0.0.1:19336/admin/",
+        "DTS_ANALYTICS_URL": "http://127.0.0.1:19335/analytics/",
+        "DTS_PLATFORM_AUTH_TOKEN": "platform-playwright-token",
+        "DTS_ADMIN_AUTH_TOKEN": "admin-playwright-token",
+        "DTS_PLATFORM_REQUIRE_PASSWORD_LOGIN": "0",
+        "DTS_ADMIN_REQUIRE_PASSWORD_LOGIN": "0",
+        "DTS_WEB_E2E_HTML_REPORT_DIR": "reports/html/we-full-admin",
+        "DTS_WEB_E2E_ARTIFACTS_DIR": "reports/artifacts/we-full-admin"
+      },
+      "tags": ["web-e2e", "full", "admin", "ai", "pack", "browser"],
+      "owner": "qa-admin",
+      "businessJourney": "Admin AI Config -> Pack Management"
+    },
+    {
+      "id": "WE-FULL-005",
+      "name": "Selector contract baseline",
+      "command": [
+        "pnpm",
+        "--dir",
+        "tests/web-e2e",
+        "exec",
+        "playwright",
+        "test",
+        "specs/contracts/testid-contract.spec.ts",
+        "--project=chromium"
+      ],
+      "required": true,
+      "timeoutSeconds": 180,
+      "env": {
+        "DTS_WEB_E2E_USE_TEST_SERVER": "1",
+        "DTS_WEB_E2E_HTML_REPORT_DIR": "reports/html/we-full-contract",
+        "DTS_WEB_E2E_ARTIFACTS_DIR": "reports/artifacts/we-full-contract"
+      },
+      "tags": ["web-e2e", "full", "contracts", "browser"],
+      "owner": "qa-platform",
+      "businessJourney": "Selector Contract Baseline"
+    },
+    {
+      "id": "WE-FULL-006",
+      "name": "ERP datasource ingestion visibility journey",
+      "command": [
+        "pnpm",
+        "--dir",
+        "tests/web-e2e",
+        "exec",
+        "playwright",
+        "test",
+        "specs/biz/erp-ingest-visible.spec.ts",
+        "--project=chromium"
+      ],
+      "required": true,
+      "timeoutSeconds": 240,
+      "env": {
+        "DTS_WEB_E2E_USE_TEST_SERVER": "0",
+        "DTS_WEB_E2E_WITH_PLATFORM_DEV_SERVER": "1",
+        "DTS_WEB_E2E_PLATFORM_DEV_SERVER_PORT": "19344",
+        "DTS_PLATFORM_URL": "http://127.0.0.1:19344/expert/",
+        "DTS_BASE_URL": "http://127.0.0.1:19344/expert/",
+        "DTS_EXPERT_URL": "http://127.0.0.1:19344/expert/",
+        "DTS_PLATFORM_AUTH_TOKEN": "platform-playwright-token",
+        "DTS_PLATFORM_REQUIRE_PASSWORD_LOGIN": "0",
+        "DTS_WEB_E2E_HTML_REPORT_DIR": "reports/html/we-full-biz-erp-ingest",
+        "DTS_WEB_E2E_ARTIFACTS_DIR": "reports/artifacts/we-full-biz-erp-ingest"
+      },
+      "tags": ["web-e2e", "full", "biz", "platform", "browser", "erp", "ingestion"],
+      "owner": "qa-platform",
+      "businessJourney": "ERP -> Metadata -> Visible Data"
+    },
+    {
+      "id": "WE-FULL-007",
+      "name": "AI modeling approval journey",
+      "command": [
+        "pnpm",
+        "--dir",
+        "tests/web-e2e",
+        "exec",
+        "playwright",
+        "test",
+        "specs/biz/ai-modeling-flow.spec.ts",
+        "--project=chromium"
+      ],
+      "required": true,
+      "timeoutSeconds": 240,
+      "env": {
+        "DTS_WEB_E2E_USE_TEST_SERVER": "0",
+        "DTS_WEB_E2E_WITH_PLATFORM_DEV_SERVER": "1",
+        "DTS_WEB_E2E_PLATFORM_DEV_SERVER_PORT": "19345",
+        "DTS_PLATFORM_URL": "http://127.0.0.1:19345/expert/",
+        "DTS_BASE_URL": "http://127.0.0.1:19345/expert/",
+        "DTS_EXPERT_URL": "http://127.0.0.1:19345/expert/",
+        "DTS_PLATFORM_AUTH_TOKEN": "platform-playwright-token",
+        "DTS_PLATFORM_REQUIRE_PASSWORD_LOGIN": "0",
+        "DTS_WEB_E2E_HTML_REPORT_DIR": "reports/html/we-full-biz-ai-modeling",
+        "DTS_WEB_E2E_ARTIFACTS_DIR": "reports/artifacts/we-full-biz-ai-modeling"
+      },
+      "tags": ["web-e2e", "full", "biz", "platform", "browser", "ai", "modeling"],
+      "owner": "qa-platform",
+      "businessJourney": "AI Modeling -> Approval -> Materialization"
+    },
+    {
+      "id": "WE-FULL-008",
+      "name": "Analytics publish journey",
+      "command": [
+        "pnpm",
+        "--dir",
+        "tests/web-e2e",
+        "exec",
+        "playwright",
+        "test",
+        "specs/biz/analytics-publish-flow.spec.ts",
+        "--project=chromium"
+      ],
+      "required": true,
+      "timeoutSeconds": 240,
+      "env": {
+        "DTS_WEB_E2E_USE_TEST_SERVER": "0",
+        "DTS_WEB_E2E_WITH_ANALYTICS_DEV_SERVER": "1",
+        "DTS_WEB_E2E_ANALYTICS_DEV_SERVER_PORT": "19346",
+        "DTS_ANALYTICS_URL": "http://127.0.0.1:19346/analytics/",
+        "DTS_PLATFORM_URL": "http://127.0.0.1:19334/expert/",
+        "DTS_BASE_URL": "http://127.0.0.1:19334/expert/",
+        "DTS_EXPERT_URL": "http://127.0.0.1:19334/expert/",
+        "DTS_PLATFORM_AUTH_TOKEN": "platform-playwright-token",
+        "DTS_ADMIN_AUTH_TOKEN": "admin-playwright-token",
+        "DTS_PLATFORM_REQUIRE_PASSWORD_LOGIN": "0",
+        "DTS_ADMIN_REQUIRE_PASSWORD_LOGIN": "0",
+        "DTS_WEB_E2E_HTML_REPORT_DIR": "reports/html/we-full-biz-analytics-publish",
+        "DTS_WEB_E2E_ARTIFACTS_DIR": "reports/artifacts/we-full-biz-analytics-publish"
+      },
+      "tags": ["web-e2e", "full", "biz", "analytics", "browser", "publish", "dashboard", "screen"],
+      "owner": "qa-analytics",
+      "businessJourney": "Analytics Query -> Dashboard -> Screen Publish"
+    },
+    {
+      "id": "WE-FULL-009",
+      "name": "Auth RBAC and approval journey",
+      "command": [
+        "pnpm",
+        "--dir",
+        "tests/web-e2e",
+        "exec",
+        "playwright",
+        "test",
+        "specs/biz/auth-rbac-hitl.spec.ts",
+        "--project=chromium"
+      ],
+      "required": true,
+      "timeoutSeconds": 240,
+      "env": {
+        "DTS_WEB_E2E_USE_TEST_SERVER": "0",
+        "DTS_WEB_E2E_WITH_PLATFORM_DEV_SERVER": "1",
+        "DTS_WEB_E2E_PLATFORM_DEV_SERVER_PORT": "19347",
+        "DTS_PLATFORM_URL": "http://127.0.0.1:19347/expert/",
+        "DTS_BASE_URL": "http://127.0.0.1:19347/expert/",
+        "DTS_EXPERT_URL": "http://127.0.0.1:19347/expert/",
+        "DTS_PLATFORM_AUTH_TOKEN": "platform-playwright-token",
+        "DTS_PLATFORM_REQUIRE_PASSWORD_LOGIN": "0",
+        "DTS_WEB_E2E_HTML_REPORT_DIR": "reports/html/we-full-biz-auth-rbac-hitl",
+        "DTS_WEB_E2E_ARTIFACTS_DIR": "reports/artifacts/we-full-biz-auth-rbac-hitl"
+      },
+      "tags": ["web-e2e", "full", "biz", "platform", "browser", "auth", "rbac", "hitl"],
+      "owner": "qa-platform",
+      "businessJourney": "Auth Gateway -> RBAC -> HITL"
+    },
+    {
+      "id": "WE-FULL-010",
+      "name": "Governance remediation journey",
+      "command": [
+        "pnpm",
+        "--dir",
+        "tests/web-e2e",
+        "exec",
+        "playwright",
+        "test",
+        "specs/biz/governance-remediation.spec.ts",
+        "--project=chromium"
+      ],
+      "required": true,
+      "timeoutSeconds": 240,
+      "env": {
+        "DTS_WEB_E2E_USE_TEST_SERVER": "0",
+        "DTS_WEB_E2E_WITH_PLATFORM_DEV_SERVER": "1",
+        "DTS_WEB_E2E_PLATFORM_DEV_SERVER_PORT": "19348",
+        "DTS_PLATFORM_URL": "http://127.0.0.1:19348/expert/",
+        "DTS_BASE_URL": "http://127.0.0.1:19348/expert/",
+        "DTS_EXPERT_URL": "http://127.0.0.1:19348/expert/",
+        "DTS_PLATFORM_AUTH_TOKEN": "platform-playwright-token",
+        "DTS_PLATFORM_REQUIRE_PASSWORD_LOGIN": "0",
+        "DTS_WEB_E2E_HTML_REPORT_DIR": "reports/html/we-full-biz-governance-remediation",
+        "DTS_WEB_E2E_ARTIFACTS_DIR": "reports/artifacts/we-full-biz-governance-remediation"
+      },
+      "tags": ["web-e2e", "full", "biz", "platform", "browser", "governance", "remediation", "ai"],
+      "owner": "qa-governance",
+      "businessJourney": "Quality Rule -> Alert -> Remediation"
+    }
+  ],
+  "web-e2e-quarantine": [
+    {
+      "id": "WE-QUAR-001",
+      "name": "Seeded browser smoke across admin/platform/analytics",
+      "command": [
+        "pnpm",
+        "--dir",
+        "tests/web-e2e",
+        "exec",
+        "playwright",
+        "test",
+        "specs/biz/seed-smoke.spec.ts",
+        "--grep",
+        "@seed-smoke",
+        "--project=chromium"
+      ],
+      "required": false,
+      "timeoutSeconds": 240,
+      "env": {
+        "DTS_WEB_E2E_USE_TEST_SERVER": "1",
+        "DTS_WEB_E2E_HTML_REPORT_DIR": "reports/html/we-quarantine-seed",
+        "DTS_WEB_E2E_ARTIFACTS_DIR": "reports/artifacts/we-quarantine-seed"
+      },
+      "tags": ["web-e2e", "quarantine", "seed", "browser", "flaky"],
+      "owner": "qa-web",
+      "businessJourney": "Cross-App Seed Smoke",
+      "quarantine": {
+        "enabled": true,
+        "reason": "cross-app seeded smoke is sensitive to local port and rendering timing",
+        "slaHours": 72,
+        "issue": "WE-QUAR-001",
+        "openedAt": "2026-03-09",
+        "escalation": "if it fails twice in a row, move it back into an active stabilization task"
+      }
+    }
+  ],
+  "biz-e2e": [
+    {
+      "id": "BE-E2E-001",
+      "name": "ERP datasource ingestion visibility journey",
+      "command": [
+        "pnpm",
+        "--dir",
+        "tests/web-e2e",
+        "exec",
+        "playwright",
+        "test",
+        "specs/biz/erp-ingest-visible.spec.ts",
+        "--project=chromium"
+      ],
+      "required": true,
+      "timeoutSeconds": 240,
+      "env": {
+        "DTS_WEB_E2E_USE_TEST_SERVER": "0",
+        "DTS_WEB_E2E_WITH_PLATFORM_DEV_SERVER": "1",
+        "DTS_WEB_E2E_PLATFORM_DEV_SERVER_PORT": "19344",
+        "DTS_PLATFORM_URL": "http://127.0.0.1:19344/expert/",
+        "DTS_BASE_URL": "http://127.0.0.1:19344/expert/",
+        "DTS_EXPERT_URL": "http://127.0.0.1:19344/expert/",
+        "DTS_PLATFORM_AUTH_TOKEN": "platform-playwright-token",
+        "DTS_PLATFORM_REQUIRE_PASSWORD_LOGIN": "0",
+        "DTS_WEB_E2E_HTML_REPORT_DIR": "reports/html/biz-erp-ingest",
+        "DTS_WEB_E2E_ARTIFACTS_DIR": "reports/artifacts/biz-erp-ingest"
+      },
+      "tags": ["biz-e2e", "platform", "browser", "erp", "ingestion"],
+      "owner": "qa-platform",
+      "businessJourney": "ERP -> Metadata -> Visible Data"
+    },
+    {
+      "id": "BE-E2E-002",
+      "name": "AI modeling approval journey",
+      "command": [
+        "pnpm",
+        "--dir",
+        "tests/web-e2e",
+        "exec",
+        "playwright",
+        "test",
+        "specs/biz/ai-modeling-flow.spec.ts",
+        "--project=chromium"
+      ],
+      "required": true,
+      "timeoutSeconds": 240,
+      "env": {
+        "DTS_WEB_E2E_USE_TEST_SERVER": "0",
+        "DTS_WEB_E2E_WITH_PLATFORM_DEV_SERVER": "1",
+        "DTS_WEB_E2E_PLATFORM_DEV_SERVER_PORT": "19345",
+        "DTS_PLATFORM_URL": "http://127.0.0.1:19345/expert/",
+        "DTS_BASE_URL": "http://127.0.0.1:19345/expert/",
+        "DTS_EXPERT_URL": "http://127.0.0.1:19345/expert/",
+        "DTS_PLATFORM_AUTH_TOKEN": "platform-playwright-token",
+        "DTS_PLATFORM_REQUIRE_PASSWORD_LOGIN": "0",
+        "DTS_WEB_E2E_HTML_REPORT_DIR": "reports/html/biz-ai-modeling",
+        "DTS_WEB_E2E_ARTIFACTS_DIR": "reports/artifacts/biz-ai-modeling"
+      },
+      "tags": ["biz-e2e", "platform", "browser", "ai", "modeling"],
+      "owner": "qa-platform",
+      "businessJourney": "AI Modeling -> Approval -> Materialization"
+    },
+    {
+      "id": "BE-E2E-003",
+      "name": "Analytics publish journey",
+      "command": [
+        "pnpm",
+        "--dir",
+        "tests/web-e2e",
+        "exec",
+        "playwright",
+        "test",
+        "specs/biz/analytics-publish-flow.spec.ts",
+        "--project=chromium"
+      ],
+      "required": true,
+      "timeoutSeconds": 240,
+      "env": {
+        "DTS_WEB_E2E_USE_TEST_SERVER": "0",
+        "DTS_WEB_E2E_WITH_ANALYTICS_DEV_SERVER": "1",
+        "DTS_WEB_E2E_ANALYTICS_DEV_SERVER_PORT": "19346",
+        "DTS_ANALYTICS_URL": "http://127.0.0.1:19346/analytics/",
+        "DTS_PLATFORM_URL": "http://127.0.0.1:19334/expert/",
+        "DTS_BASE_URL": "http://127.0.0.1:19334/expert/",
+        "DTS_EXPERT_URL": "http://127.0.0.1:19334/expert/",
+        "DTS_PLATFORM_AUTH_TOKEN": "platform-playwright-token",
+        "DTS_ADMIN_AUTH_TOKEN": "admin-playwright-token",
+        "DTS_PLATFORM_REQUIRE_PASSWORD_LOGIN": "0",
+        "DTS_ADMIN_REQUIRE_PASSWORD_LOGIN": "0",
+        "DTS_WEB_E2E_HTML_REPORT_DIR": "reports/html/biz-analytics-publish",
+        "DTS_WEB_E2E_ARTIFACTS_DIR": "reports/artifacts/biz-analytics-publish"
+      },
+      "tags": ["biz-e2e", "analytics", "browser", "publish", "dashboard", "screen"],
+      "owner": "qa-analytics",
+      "businessJourney": "Analytics Query -> Dashboard -> Screen Publish"
+    },
+    {
+      "id": "BE-E2E-004",
+      "name": "Auth RBAC and approval journey",
+      "command": [
+        "pnpm",
+        "--dir",
+        "tests/web-e2e",
+        "exec",
+        "playwright",
+        "test",
+        "specs/biz/auth-rbac-hitl.spec.ts",
+        "--project=chromium"
+      ],
+      "required": true,
+      "timeoutSeconds": 240,
+      "env": {
+        "DTS_WEB_E2E_USE_TEST_SERVER": "0",
+        "DTS_WEB_E2E_WITH_PLATFORM_DEV_SERVER": "1",
+        "DTS_WEB_E2E_PLATFORM_DEV_SERVER_PORT": "19347",
+        "DTS_PLATFORM_URL": "http://127.0.0.1:19347/expert/",
+        "DTS_BASE_URL": "http://127.0.0.1:19347/expert/",
+        "DTS_EXPERT_URL": "http://127.0.0.1:19347/expert/",
+        "DTS_PLATFORM_AUTH_TOKEN": "platform-playwright-token",
+        "DTS_PLATFORM_REQUIRE_PASSWORD_LOGIN": "0",
+        "DTS_WEB_E2E_HTML_REPORT_DIR": "reports/html/biz-auth-rbac-hitl",
+        "DTS_WEB_E2E_ARTIFACTS_DIR": "reports/artifacts/biz-auth-rbac-hitl"
+      },
+      "tags": ["biz-e2e", "platform", "browser", "auth", "rbac", "hitl"],
+      "owner": "qa-platform",
+      "businessJourney": "Auth Gateway -> RBAC -> HITL"
+    },
+    {
+      "id": "BE-E2E-005",
+      "name": "Governance remediation journey",
+      "command": [
+        "pnpm",
+        "--dir",
+        "tests/web-e2e",
+        "exec",
+        "playwright",
+        "test",
+        "specs/biz/governance-remediation.spec.ts",
+        "--project=chromium"
+      ],
+      "required": true,
+      "timeoutSeconds": 240,
+      "env": {
+        "DTS_WEB_E2E_USE_TEST_SERVER": "0",
+        "DTS_WEB_E2E_WITH_PLATFORM_DEV_SERVER": "1",
+        "DTS_WEB_E2E_PLATFORM_DEV_SERVER_PORT": "19348",
+        "DTS_PLATFORM_URL": "http://127.0.0.1:19348/expert/",
+        "DTS_BASE_URL": "http://127.0.0.1:19348/expert/",
+        "DTS_EXPERT_URL": "http://127.0.0.1:19348/expert/",
+        "DTS_PLATFORM_AUTH_TOKEN": "platform-playwright-token",
+        "DTS_PLATFORM_REQUIRE_PASSWORD_LOGIN": "0",
+        "DTS_WEB_E2E_HTML_REPORT_DIR": "reports/html/biz-governance-remediation",
+        "DTS_WEB_E2E_ARTIFACTS_DIR": "reports/artifacts/biz-governance-remediation"
+      },
+      "tags": ["biz-e2e", "platform", "browser", "governance", "remediation", "ai"],
+      "owner": "qa-governance",
+      "businessJourney": "Quality Rule -> Alert -> Remediation"
+    }
+  ]
+}

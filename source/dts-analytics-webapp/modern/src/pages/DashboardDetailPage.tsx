@@ -185,6 +185,7 @@ export default function DashboardDetailPage() {
 
 	return (
 		<PageContainer maxWidth="full">
+			<div data-testid="analytics-dashboard-detail">
 			{state.state === "loading" && (
 				<div className="loading-container">
 					<Spinner size="lg" />
@@ -199,6 +200,7 @@ export default function DashboardDetailPage() {
 						actions={
 							<>
 								<Button
+									data-testid="analytics-dashboard-share"
 									variant="secondary"
 									icon={<ShareIcon />}
 									loading={shareBusy}
@@ -352,6 +354,7 @@ export default function DashboardDetailPage() {
 					</CollapsibleCard>
 				</>
 			)}
+			</div>
 		</PageContainer>
 	);
 }

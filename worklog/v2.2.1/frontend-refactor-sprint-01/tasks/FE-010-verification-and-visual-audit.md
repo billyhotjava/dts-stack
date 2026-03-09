@@ -28,7 +28,7 @@
   - `pnpm -C source/dts-platform-webapp build`
   - `pnpm -C source/dts-admin-webapp build`
   - `pnpm -C source/dts-analytics-webapp/modern build`
-- `platform-webapp` 已在 ETL/DBT 页面重构后再次执行构建，静态检查恢复为绿色
+- `platform-webapp` 已在 ETL / DBT / modeling / governance / catalog 页面重构后再次执行构建，包含 `MetadataPage`、`TemplatesPage`、`SubjectAreasPage` 与 `ReferenceCodesPage` 的最终一轮改造后也仍然保持绿色
 - `admin-webapp` 构建存在既有 vite chunk warning，但未阻塞产物生成
 - sprint 状态板已更新
 
@@ -39,6 +39,8 @@
   - `foundation/task-scheduling`
   - `etl` 详情页、历史页、创建页
   - `modeling/dbt` 文件浏览页
+  - `governance` 总览页、术语页、质量规则页、标准模板页、主题域页、公共码表页
+  - `catalog` 资产地图页、血缘分析页、元数据采集页
 - `admin-webapp`
   - `/admin/system`
   - `infra-settings`
@@ -54,7 +56,7 @@
 ## 残余风险
 
 - 当前会话没有实际浏览器人工走查能力，视觉审计仍需人工打开页面确认
-- `platform-webapp` 仍有 `FE-005` 未完全收口，因此 sprint 还不能标记为整体完成
+- 当前会话已完成 `FE-005`，但 `FE-010` 仍需要人工浏览器走查后才能把 sprint 整体标记为完成
 
 ## 验收
 

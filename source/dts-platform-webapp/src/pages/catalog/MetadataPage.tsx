@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { AlertTriangle, Clock3, Database, ScanSearch } from "lucide-react";
 import {
 	Alert,
 	Button,
-	Card,
 	Col,
 	Descriptions,
 	Form,
@@ -13,15 +13,22 @@ import {
 	Row,
 	Select,
 	Space,
+	Spin,
 	Switch,
 	Table,
 	Tag,
 	Typography,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
+import {
+	PlatformFilterBar,
+	PlatformMetaPill,
+	PlatformPageHero,
+	PlatformSectionCard,
+	PlatformSummaryCards,
+} from "@/components/console-page";
 import { EmptyState } from "@/components/empty-state";
 import { useCatalogManageAccess } from "@/hooks/useModuleManageAccess";
-import { PageHeader } from "@/components/page-header";
 import {
 	type CatalogSyncConfig,
 	getCatalogSyncConfig,
@@ -634,19 +641,84 @@ export default function MetadataPage() {
 		});
 		return { draft, active, other };
 	}, [columnRows]);
+	const openDriftCount = useMemo(
+		() =>
+			driftEvents.filter((item) => {
+				const ticketStatus = String(item.ticketStatus || "").toUpperCase();
+				return ticketStatus === "OPEN" || ticketStatus === "IN_REVIEW";
+			}).length,
+		[driftEvents],
+	);
+	const summaryCards = [
+		{
+			label: "采集任务",
+			value: pipelines.length,
+			note: selectedPipeline?.name || "当前已纳入同步的资产连接",
+			icon: <Database className="h-5 w-5" />,
+		},
+		{
+			label: "发现表",
+			value: tables.length,
+			note: selectedSummary?.name || "本轮预览可用的技术元数据对象",
+			icon: <ScanSearch className="h-5 w-5" />,
+			tone: "info" as const,
+		},
+		{
+			label: "同步运行",
+			value: runs.length,
+			note: latestRun?.startedAt ? `最近一次 ${latestRun.startedAt}` : "最近 20 次同步执行窗口",
+			icon: <Clock3 className="h-5 w-5" />,
+			tone: "success" as const,
+		},
+		{
+			label: "漂移工单",
+			value: openDriftCount,
+			note: driftEvents.length ? `总计 ${driftEvents.length} 条 schema 漂移记录` : "当前暂无待处理漂移",
+			icon: <AlertTriangle className="h-5 w-5" />,
+			tone: openDriftCount > 0 ? ("warning" as const) : ("default" as const),
+		},
+	];
 
 	return (
-		<div className="space-y-4">
-			<PageHeader
+		<div className="space-y-6">
+			<PlatformPageHero
 				title="元数据采集"
-				description="基于数据源连接触发结构扫描，并在资产门户同步表/字段信息。"
+				eyebrow="Catalog Console"
+				description="统一查看采集任务、同步结果、资产预览和 schema 漂移处置状态，让资产门户和采集运维保持在同一个控制台节奏里。"
 				actions={
 					<Space>
 						<Button onClick={() => void loadPipelines()}>刷新任务</Button>
 						<Button onClick={() => setHelpOpen(true)}>使用说明</Button>
 					</Space>
 				}
+				meta={
+					<>
+						<PlatformMetaPill>当前任务 {selectedPipeline?.name || "未选择"}</PlatformMetaPill>
+						<PlatformMetaPill>自动采集 {syncConfig?.autoSyncEnabled ? "已开启" : "未开启"}</PlatformMetaPill>
+						<PlatformMetaPill>同步状态 {syncInProgress ? "运行中" : "空闲"}</PlatformMetaPill>
+						<PlatformMetaPill>维护权限 {canManage ? "可操作" : "只读"}</PlatformMetaPill>
+					</>
+				}
 			/>
+			<PlatformSummaryCards items={summaryCards} />
+
+			<PlatformFilterBar>
+				<div className="space-y-1">
+					<div className="text-sm font-medium text-foreground">资产同步窗口</div>
+					<div className="text-sm text-muted-foreground">
+						{selectedPipeline?.source || "未绑定数据源"} · {selectedPipeline?.schedule || "未配置调度"}
+					</div>
+				</div>
+				<Space wrap>
+					<PlatformMetaPill>
+						Cron {syncConfig?.autoSyncCron ? syncConfig.autoSyncCron : "未配置"}
+					</PlatformMetaPill>
+					<PlatformMetaPill>
+						最近状态 {selectedPipeline?.status ? String(selectedPipeline.status) : "未知"}
+					</PlatformMetaPill>
+					<PlatformMetaPill>目标表数 {selectedPipeline?.tablesFound ?? 0}</PlatformMetaPill>
+				</Space>
+			</PlatformFilterBar>
 
 			<Alert
 				type="info"
@@ -654,39 +726,44 @@ export default function MetadataPage() {
 				message="采集任务会同步表/字段/索引等结构信息，供资产门户、质量校验与入湖配置复用。"
 			/>
 
-			<Row gutter={[16, 16]} align="top">
-					<Col xs={24} xl={12}>
-						<Card title="采集任务与触发" loading={loadingPipelines}>
+			<Row gutter={[24, 24]} align="top">
+				<Col xs={24} xl={12}>
+					<PlatformSectionCard
+						title="采集任务与触发"
+						description="控制自动采集策略、手动触发入口和最近一次同步进度。"
+					>
+						<Spin spinning={loadingPipelines}>
+							<div className="space-y-4">
 							<Space className="mb-3" align="center">
 								<Text type="secondary">自动采集</Text>
-									<Switch
-										checked={Boolean(syncConfig?.autoSyncEnabled)}
-										loading={syncConfigUpdating}
-										disabled={!canManage}
-										onChange={handleAutoSyncToggle}
-										checkedChildren="开启"
-										unCheckedChildren="关闭"
+								<Switch
+									checked={Boolean(syncConfig?.autoSyncEnabled)}
+									loading={syncConfigUpdating}
+									disabled={!canManage}
+									onChange={handleAutoSyncToggle}
+									checkedChildren="开启"
+									unCheckedChildren="关闭"
 								/>
 								<Tag>{syncConfig?.autoSyncCron ? `Cron: ${syncConfig.autoSyncCron}` : "Cron 未配置"}</Tag>
 							</Space>
-							<Space className="mb-3 w-full" direction="vertical" size={8}>
+							<Space className="w-full" direction="vertical" size={8}>
 								<Text type="secondary">自动采集 Cron</Text>
 								<Space.Compact className="w-full">
-										<Input
-											value={cronDraft}
-											onChange={(e) => setCronDraft(e.target.value)}
-											placeholder="例如：0 0 3 * * *"
-											disabled={!canManage || syncConfigUpdating}
-										/>
-										<Button
-											onClick={handleSyncCronSave}
-											loading={syncConfigUpdating}
-											disabled={
-												!canManage ||
-												!cronDraft.trim() ||
-												cronDraft.trim() === String(syncConfig?.autoSyncCron || "").trim()
-											}
-										>
+									<Input
+										value={cronDraft}
+										onChange={(e) => setCronDraft(e.target.value)}
+										placeholder="例如：0 0 3 * * *"
+										disabled={!canManage || syncConfigUpdating}
+									/>
+									<Button
+										onClick={handleSyncCronSave}
+										loading={syncConfigUpdating}
+										disabled={
+											!canManage ||
+											!cronDraft.trim() ||
+											cronDraft.trim() === String(syncConfig?.autoSyncCron || "").trim()
+										}
+									>
 										保存 Cron
 									</Button>
 								</Space.Compact>
@@ -696,54 +773,54 @@ export default function MetadataPage() {
 							) : null}
 							{pipelines.length ? (
 								<Form form={form} layout="vertical">
-								<Form.Item label="选择采集任务">
-									<Select
-										value={selectedPipeline?.id}
-										onChange={(value) => setSelectedPipelineId(value)}
-										options={pipelines.map((item) => ({
-											label: `${item.name || "采集任务"} · ${item.source || ""}`.trim(),
-											value: item.id,
-										}))}
-									/>
-								</Form.Item>
-								<Form.Item name="reason" label="触发说明">
-									<Input placeholder="例如：测试同步" />
-								</Form.Item>
-								<Descriptions size="small" column={1} bordered>
-									<Descriptions.Item label="来源">{selectedPipeline?.source || "-"}</Descriptions.Item>
-									<Descriptions.Item label="调度策略">{selectedPipeline?.schedule || "-"}</Descriptions.Item>
-									<Descriptions.Item label="最近状态">{statusTag(selectedPipeline?.status)}</Descriptions.Item>
-									<Descriptions.Item label="最近发现表">{selectedPipeline?.tablesFound ?? "-"}</Descriptions.Item>
-								</Descriptions>
-								<div className="mt-3">
-									<div className="mb-1 text-xs text-slate-500">同步进度</div>
-									<Progress
-										percent={syncProgressPercent}
-										size="small"
-										status={syncInProgress ? "active" : "normal"}
-										format={() => (syncInProgress ? "运行中" : "空闲")}
-									/>
-								</div>
-								{latestRun ? (
-									<Space size={8} wrap className="mt-2">
-										<Tag color="green">新增 {latestRun.datasetsCreated ?? 0}</Tag>
-										<Tag color="blue">更新 {latestRun.datasetsUpdated ?? 0}</Tag>
-										<Tag color="red">失效 {latestRun.datasetsRemoved ?? 0}</Tag>
-									</Space>
-								) : null}
-								{selectedPipeline?.error ? (
-									<div className="mt-3 text-sm text-red-500">错误：{selectedPipeline.error}</div>
-								) : null}
-								{selectedPipeline?.logLines && selectedPipeline.logLines.length ? (
-									<div className="mt-3 rounded border bg-muted/20 p-3 text-xs text-muted-foreground">
-										<div className="mb-2 font-medium text-foreground">最近日志</div>
-										<ul className="list-disc space-y-1 pl-4">
-											{selectedPipeline.logLines.slice(0, 10).map((line, idx) => (
-												<li key={idx}>{line}</li>
-											))}
-										</ul>
+									<Form.Item label="选择采集任务">
+										<Select
+											value={selectedPipeline?.id}
+											onChange={(value) => setSelectedPipelineId(value)}
+											options={pipelines.map((item) => ({
+												label: `${item.name || "采集任务"} · ${item.source || ""}`.trim(),
+												value: item.id,
+											}))}
+										/>
+									</Form.Item>
+									<Form.Item name="reason" label="触发说明">
+										<Input placeholder="例如：测试同步" />
+									</Form.Item>
+									<Descriptions size="small" column={1} bordered>
+										<Descriptions.Item label="来源">{selectedPipeline?.source || "-"}</Descriptions.Item>
+										<Descriptions.Item label="调度策略">{selectedPipeline?.schedule || "-"}</Descriptions.Item>
+										<Descriptions.Item label="最近状态">{statusTag(selectedPipeline?.status)}</Descriptions.Item>
+										<Descriptions.Item label="最近发现表">{selectedPipeline?.tablesFound ?? "-"}</Descriptions.Item>
+									</Descriptions>
+									<div>
+										<div className="mb-1 text-xs text-slate-500">同步进度</div>
+										<Progress
+											percent={syncProgressPercent}
+											size="small"
+											status={syncInProgress ? "active" : "normal"}
+											format={() => (syncInProgress ? "运行中" : "空闲")}
+										/>
 									</div>
-								) : null}
+									{latestRun ? (
+										<Space size={8} wrap className="mt-2">
+											<Tag color="green">新增 {latestRun.datasetsCreated ?? 0}</Tag>
+											<Tag color="blue">更新 {latestRun.datasetsUpdated ?? 0}</Tag>
+											<Tag color="red">失效 {latestRun.datasetsRemoved ?? 0}</Tag>
+										</Space>
+									) : null}
+									{selectedPipeline?.error ? (
+										<div className="mt-3 text-sm text-red-500">错误：{selectedPipeline.error}</div>
+									) : null}
+									{selectedPipeline?.logLines && selectedPipeline.logLines.length ? (
+										<div className="mt-3 rounded border bg-muted/20 p-3 text-xs text-muted-foreground">
+											<div className="mb-2 font-medium text-foreground">最近日志</div>
+											<ul className="list-disc space-y-1 pl-4">
+												{selectedPipeline.logLines.slice(0, 10).map((line, idx) => (
+													<li key={idx}>{line}</li>
+												))}
+											</ul>
+										</div>
+									) : null}
 									<Space className="mt-4">
 										<Button type="primary" onClick={handleTrigger} disabled={!canManage}>
 											立即采集
@@ -751,16 +828,22 @@ export default function MetadataPage() {
 										<Button onClick={() => selectedPipeline?.integration && loadRuns(selectedPipeline.integration)}>
 											刷新历史
 										</Button>
-								</Space>
-							</Form>
-						) : (
-							<EmptyState title="暂无采集任务" description="请先配置数据源或数据湖连接。" />
-						)}
-					</Card>
+									</Space>
+								</Form>
+							) : (
+								<EmptyState title="暂无采集任务" description="请先配置数据源或数据湖连接。" />
+							)}
+							</div>
+						</Spin>
+					</PlatformSectionCard>
 				</Col>
 				<Col xs={24} xl={12}>
-					<Card title="元数据结果预览" loading={loadingTables}>
-						<Space direction="vertical" className="w-full" size={12}>
+					<PlatformSectionCard
+						title="元数据结果预览"
+						description="快速检查本轮同步产出的表结构、服务归属和字段状态。"
+					>
+						<Spin spinning={loadingTables}>
+							<Space direction="vertical" className="w-full" size={12}>
 							<Space className="w-full" align="start">
 								<Input
 									placeholder="搜索表名或关键字"
@@ -815,15 +898,20 @@ export default function MetadataPage() {
 										/>
 									</div>
 								</>
-								) : (
-									<EmptyState title="暂无元数据" description="请先完成元数据采集或检查元数据服务连接。" />
-								)}
-						</Space>
-					</Card>
+							) : (
+								<EmptyState title="暂无元数据" description="请先完成元数据采集或检查元数据服务连接。" />
+							)}
+							</Space>
+						</Spin>
+					</PlatformSectionCard>
 				</Col>
 			</Row>
 
-			<Card title="采集历史" extra={<Button onClick={() => selectedPipeline?.integration && loadRuns(selectedPipeline.integration)}>刷新</Button>}>
+			<PlatformSectionCard
+				title="采集历史"
+				description="对照最近 20 次执行的发现表、更新量、失效量和错误分类，快速定位同步异常。"
+				action={<Button onClick={() => selectedPipeline?.integration && loadRuns(selectedPipeline.integration)}>刷新</Button>}
+			>
 				<Table
 					rowKey={(row) => row.id || `${row.startedAt}-${row.finishedAt}`}
 					columns={runColumns}
@@ -831,7 +919,7 @@ export default function MetadataPage() {
 					loading={loadingRuns}
 					pagination={{ pageSize: 8 }}
 				/>
-			</Card>
+			</PlatformSectionCard>
 
 			<Modal
 				open={diagOpen}
@@ -867,9 +955,10 @@ export default function MetadataPage() {
 				</div>
 			</Modal>
 
-			<Card
+			<PlatformSectionCard
 				title="Schema 漂移工单"
-				extra={
+				description="统一查看 schema 变更量、策略模式和工单状态，保持资产同步和治理动作闭环。"
+				action={
 					<Space>
 						<Select
 							value={driftPolicyFilter}
@@ -906,7 +995,7 @@ export default function MetadataPage() {
 					loading={loadingDrift}
 					pagination={{ pageSize: 8 }}
 				/>
-			</Card>
+			</PlatformSectionCard>
 
 			<Modal
 				open={helpOpen}
@@ -918,12 +1007,12 @@ export default function MetadataPage() {
 					</Button>,
 				]}
 			>
-					<div className="space-y-2 text-sm text-slate-600">
-						<div>1. 采集任务来自当前已启用的数据源或主数据连接。</div>
-						<div>2. 触发采集后可在“采集历史”查看执行结果与错误信息。</div>
-						<div>3. 元数据结果预览来自平台采集或 OpenMetadata 服务。</div>
-					</div>
-				</Modal>
+				<div className="space-y-2 text-sm text-slate-600">
+					<div>1. 采集任务来自当前已启用的数据源或主数据连接。</div>
+					<div>2. 触发采集后可在“采集历史”查看执行结果与错误信息。</div>
+					<div>3. 元数据结果预览来自平台采集或 OpenMetadata 服务。</div>
+				</div>
+			</Modal>
 
 			<Modal
 				open={driftActionOpen}
