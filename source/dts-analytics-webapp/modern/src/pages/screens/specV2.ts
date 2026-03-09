@@ -55,6 +55,8 @@ const VISIBILITY_MATCH_MODES = new Set([
     'not-empty',
 ]);
 const INTERACTION_TRANSFORMS = new Set(['raw', 'string', 'number', 'lowercase', 'uppercase']);
+const COMPONENT_ACTION_TYPES = new Set(['set-variable', 'drill-down', 'drill-up', 'jump-url', 'open-panel', 'emit-intent']);
+const JUMP_OPEN_MODES = new Set(['self', 'new-tab']);
 
 function asNumber(value: unknown, fallback: number, min?: number): number {
     const n = Number(value);
@@ -165,6 +167,7 @@ function normalizeComponent(
         config,
         dataSource,
         drillDown: row.drillDown as ScreenComponent['drillDown'],
+        actions: row.actions as ScreenComponent['actions'],
         interaction: row.interaction as ScreenComponent['interaction'],
     };
 }
@@ -365,6 +368,79 @@ export function validateScreenPayload(input: unknown): { errors: string[]; warni
                             });
                         }
                     }
+                }
+            }
+
+            const actions = component.actions;
+            if (actions !== undefined && actions !== null) {
+                if (!Array.isArray(actions)) {
+                    errors.push(`${path}.actions 必须是数组`);
+                } else {
+                    actions.forEach((action, actionIdx) => {
+                        const actionPath = `${path}.actions[${actionIdx}]`;
+                        if (!action || typeof action !== 'object') {
+                            errors.push(`${actionPath} 必须是对象`);
+                            return;
+                        }
+                        const actionRow = action as Record<string, unknown>;
+                        const actionType = asTrimmedString(actionRow.type);
+                        if (!actionType || !COMPONENT_ACTION_TYPES.has(actionType)) {
+                            errors.push(`${actionPath}.type 非法: ${String(actionRow.type ?? '')}`);
+                        }
+                        const mappings = actionRow.mappings;
+                        if (mappings !== undefined && mappings !== null) {
+                            if (!Array.isArray(mappings)) {
+                                errors.push(`${actionPath}.mappings 必须是数组`);
+                            } else {
+                                mappings.forEach((mapping, mappingIdx) => {
+                                    const mappingPath = `${actionPath}.mappings[${mappingIdx}]`;
+                                    if (!mapping || typeof mapping !== 'object') {
+                                        errors.push(`${mappingPath} 必须是对象`);
+                                        return;
+                                    }
+                                    const mappingRow = mapping as Record<string, unknown>;
+                                    const variableKey = asTrimmedString(mappingRow.variableKey);
+                                    const sourcePath = asTrimmedString(mappingRow.sourcePath);
+                                    if (!variableKey) {
+                                        errors.push(`${mappingPath}.variableKey 不能为空`);
+                                    }
+                                    if (!sourcePath) {
+                                        errors.push(`${mappingPath}.sourcePath 不能为空`);
+                                    }
+                                    const transform = String(mappingRow.transform ?? 'raw').trim().toLowerCase();
+                                    if (!INTERACTION_TRANSFORMS.has(transform)) {
+                                        errors.push(`${mappingPath}.transform 非法: ${transform}`);
+                                    }
+                                });
+                            }
+                        }
+                        if (actionType === 'jump-url') {
+                            const template = asTrimmedString(actionRow.jumpUrlTemplate);
+                            if (!template) {
+                                errors.push(`${actionPath}.jumpUrlTemplate 不能为空`);
+                            }
+                            const openMode = String(actionRow.jumpOpenMode ?? 'new-tab').trim().toLowerCase();
+                            if (!JUMP_OPEN_MODES.has(openMode)) {
+                                errors.push(`${actionPath}.jumpOpenMode 非法: ${openMode}`);
+                            }
+                        }
+                        if (actionType === 'open-panel') {
+                            const panelTitle = asTrimmedString(actionRow.panelTitle);
+                            const panelBodyTemplate = asTrimmedString(actionRow.panelBodyTemplate);
+                            if (!panelTitle) {
+                                errors.push(`${actionPath}.panelTitle 不能为空`);
+                            }
+                            if (!panelBodyTemplate) {
+                                errors.push(`${actionPath}.panelBodyTemplate 不能为空`);
+                            }
+                        }
+                        if (actionType === 'emit-intent') {
+                            const intentName = asTrimmedString(actionRow.intentName);
+                            if (!intentName) {
+                                errors.push(`${actionPath}.intentName 不能为空`);
+                            }
+                        }
+                    });
                 }
             }
         });

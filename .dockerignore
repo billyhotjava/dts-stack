@@ -26,3 +26,14 @@ plugins
 plugins/
 worklog
 worklog/
+
+# Large build artifacts — exclude to prevent multi-GB context sent to Docker daemon
+builds/dist
+builds/legacy-dist
+.pnpm-store
+
+# Airflow / dbt runtime dirs
+services/dts-airflow/logs
+services/dts-airflow/dags
+services/dts-dbt/target
+services/dts-dbt/logs

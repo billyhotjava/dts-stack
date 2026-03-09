@@ -104,8 +104,9 @@ MAVEN_IMAGE="${MAVEN_IMAGE:-maven:3.9.9-eclipse-temurin-21}"
 MAVEN_SECURITY_OPT="${MAVEN_SECURITY_OPT:-}"
 LEGACY_USE_HOST_MAVEN="${LEGACY_USE_HOST_MAVEN:-}"
 MAVEN_DEBUG="${MAVEN_DEBUG:-}"
-LEGACY_UNRESTRICTED="${LEGACY_UNRESTRICTED:-1}"
+LEGACY_UNRESTRICTED="${LEGACY_UNRESTRICTED:-0}"
 MAVEN_UNRESTRICTED="${MAVEN_UNRESTRICTED:-${LEGACY_UNRESTRICTED:-}}"
+MAVEN_MEMORY_LIMIT="${MAVEN_MEMORY_LIMIT:-4g}"
 MAVEN_MIRROR_URL="${MAVEN_MIRROR_URL:-https://maven.aliyun.com/repository/public}"
 NPM_REGISTRY="${NPM_REGISTRY:-https://registry.npmmirror.com}"
 MAVEN_SETTINGS_FILE="${MAVEN_SETTINGS_FILE:-/root/.m2/settings.xml}"
@@ -117,6 +118,49 @@ require_cmd() {
     echo "[dts-build] ERROR: '$1' not found in PATH" >&2
     exit 1
   fi
+}
+
+preflight_check() {
+  echo "[dts-build] === Pre-flight check ==="
+  local arch
+  arch="$(uname -m)"
+  echo "[dts-build] Architecture: ${arch}"
+
+  # Warn about ARM64 QEMU emulation risk
+  if [[ "$arch" == "aarch64" || "$arch" == "arm64" ]]; then
+    echo "[dts-build] WARN: Running on ARM64. Ensure base images (maven, node) have native arm64 support."
+    echo "[dts-build] WARN: x86 images emulated via QEMU will cause extreme memory usage and may crash the server."
+  fi
+
+  # Check available memory
+  if command -v free >/dev/null 2>&1; then
+    local avail_mb
+    avail_mb="$(free -m | awk '/^Mem:/ {print $7}')"
+    echo "[dts-build] Available memory: ${avail_mb} MB"
+    if [[ "${avail_mb:-0}" -lt 2048 ]]; then
+      echo "[dts-build] ERROR: Less than 2GB available memory. Build will likely OOM and crash the server." >&2
+      echo "[dts-build] TIP: Free memory by stopping unused containers: docker compose down" >&2
+      exit 1
+    fi
+    if [[ "${avail_mb:-0}" -lt 4096 ]]; then
+      echo "[dts-build] WARN: Less than 4GB available. Consider using LEGACY_USE_HOST_MAVEN=1 to reduce memory pressure."
+    fi
+  fi
+
+  # Check available disk space
+  local avail_disk_gb
+  avail_disk_gb="$(df -BG "${REPO_ROOT}" | awk 'NR==2 {gsub(/G/,"",$4); print $4}')"
+  echo "[dts-build] Available disk: ${avail_disk_gb} GB"
+  if [[ "${avail_disk_gb:-0}" -lt 10 ]]; then
+    echo "[dts-build] ERROR: Less than 10GB disk space. Docker builds will fail." >&2
+    exit 1
+  fi
+
+  # Prune dangling images/build cache to free resources
+  echo "[dts-build] Pruning dangling Docker resources..."
+  docker image prune -f >/dev/null 2>&1 || true
+  docker builder prune -f --filter "until=24h" >/dev/null 2>&1 || true
+  echo "[dts-build] === Pre-flight OK ==="
 }
 
 load_image_versions() {
@@ -228,6 +272,8 @@ build_image_ctx() {
   echo "[dts-build] Building ${name} -> ${tag}"
   docker build -t "$tag" -f "$dockerfile" "${args[@]}" "$context_dir"
   save_image "$tag" "$output_dir"
+  # Free build cache after each image to prevent OOM on memory-constrained servers
+  docker builder prune -f --filter "until=1s" >/dev/null 2>&1 || true
 }
 
 build_image() {
@@ -283,7 +329,7 @@ MAVEN_SETTINGS_EOF
       security_opts+=(--security-opt "$MAVEN_SECURITY_OPT")
     fi
     if [[ "${MAVEN_UNRESTRICTED}" == "1" ]]; then
-      security_opts+=(--security-opt "seccomp=unconfined" --pids-limit=-1 --ulimit "nproc=65535:65535")
+      security_opts+=(--security-opt "seccomp=unconfined" --ulimit "nproc=65535:65535")
     fi
     local maven_args=(-B -e -DskipTests -f pom.xml -pl "$module" -am)
     if [[ -f "$MAVEN_SETTINGS_FILE" ]]; then
@@ -291,7 +337,7 @@ MAVEN_SETTINGS_EOF
     fi
 
     if [[ -n "$MAVEN_DEBUG" ]]; then
-      docker run --rm "${security_opts[@]}" \
+      docker run --rm --memory="${MAVEN_MEMORY_LIMIT}" --memory-swap="${MAVEN_MEMORY_LIMIT}" "${security_opts[@]}" \
         -e "MAVEN_MIRROR_URL=${MAVEN_MIRROR_URL}" \
         -v "${REPO_ROOT}/source:/workspace" \
         -v "/root/.m2:/root/.m2" \
@@ -314,7 +360,7 @@ MAVEN_SETTINGS_EOF
           mvn -v; mvn "$@" package' \
         -- "${maven_args[@]}"
     else
-      docker run --rm "${security_opts[@]}" \
+      docker run --rm --memory="${MAVEN_MEMORY_LIMIT}" --memory-swap="${MAVEN_MEMORY_LIMIT}" "${security_opts[@]}" \
         -e "MAVEN_MIRROR_URL=${MAVEN_MIRROR_URL}" \
         -v "${REPO_ROOT}/source:/workspace" \
         -v "/root/.m2:/root/.m2" \
@@ -881,6 +927,7 @@ if [[ -n "${PACK_MODE}" ]]; then
 fi
 
 require_cmd docker
+preflight_check
 
 if [[ "$MODE" == "all" ]]; then
   build_all_normal

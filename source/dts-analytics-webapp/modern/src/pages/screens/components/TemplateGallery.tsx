@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { analyticsApi, type ScreenIndustryPackAuditRow, type ScreenTemplateItem } from '../../../api/analyticsApi';
-import { screenTemplates, type ScreenTemplate } from '../screenTemplates';
+import {
+    screenTemplates,
+    TEMPLATE_CATEGORY_LABELS,
+    TEMPLATE_CATEGORY_ORDER,
+    type ScreenTemplate,
+} from '../screenTemplates';
 import { SCREEN_SCHEMA_VERSION } from '../specV2';
 import '../ScreenDesigner.css';
 
@@ -18,16 +23,9 @@ const CATEGORY_LABELS: Record<string, string> = {
     tech: '科技',
     dashboard: '仪表盘',
     monitor: '监控',
-    custom: '自定义',
     official: '官方',
     industry: '行业',
-    general: '通用',
-    government: '政务',
-    manufacturing: '工业',
-    retail: '零售',
-    finance: '金融',
-    education: '教育/医疗',
-    blank: '空白',
+    ...TEMPLATE_CATEGORY_LABELS,
 };
 
 const VISIBILITY_LABELS: Record<string, string> = {
@@ -52,6 +50,11 @@ function templateText(template: {
     return [template.name || '', template.description || '', template.category || '', ...(template.tags || [])]
         .join(' ')
         .toLowerCase();
+}
+
+function normalizeTemplateCategory(value?: string | null): string {
+    const text = String(value || '').trim().toLowerCase();
+    return text || 'custom';
 }
 
 function asTemplatePackage(selection: TemplateSelection): Record<string, unknown> {
@@ -240,7 +243,7 @@ export function TemplateGallery({ onSelect, onClose }: TemplateGalleryProps) {
 
     const filteredAssets = useMemo(() => {
         return assetTemplates.filter((template) => {
-            const templateCategory = (template.category || 'custom').toLowerCase();
+            const templateCategory = normalizeTemplateCategory(template.category);
             if (category !== 'all' && templateCategory !== category) {
                 return false;
             }
@@ -261,7 +264,7 @@ export function TemplateGallery({ onSelect, onClose }: TemplateGalleryProps) {
             return templateText({
                 name: template.name,
                 description: template.description,
-                category: template.category || 'custom',
+                category: templateCategory,
                 tags: template.tags,
             }).includes(normalizedKeyword);
         });
@@ -280,14 +283,16 @@ export function TemplateGallery({ onSelect, onClose }: TemplateGalleryProps) {
     }, [industryAuditAction, industryAuditResult, industryAuditRows]);
 
     const allCategories = useMemo(() => {
-        const values = new Set<string>(['all']);
+        const values = new Set<string>();
         for (const t of screenTemplates) {
             values.add(t.category);
         }
         for (const t of assetTemplates) {
-            values.add((t.category || 'custom').toLowerCase());
+            values.add(normalizeTemplateCategory(t.category));
         }
-        return Array.from(values);
+        const ordered = TEMPLATE_CATEGORY_ORDER.filter((value) => values.has(value));
+        const extras = Array.from(values).filter((value) => !TEMPLATE_CATEGORY_ORDER.includes(value as typeof TEMPLATE_CATEGORY_ORDER[number]));
+        return ['all', ...ordered, ...extras];
     }, [assetTemplates]);
 
     const selectedBuiltin = selectedKey.startsWith('builtin:')
@@ -668,7 +673,7 @@ export function TemplateGallery({ onSelect, onClose }: TemplateGalleryProps) {
                         className="template-search-input"
                         value={keyword}
                         onChange={(e) => setKeyword(e.target.value)}
-                        placeholder="搜索模板名称/标签"
+                        placeholder="搜索模板名称、说明、分类或标签"
                     />
                     <select
                         className="template-category-select"
@@ -741,7 +746,12 @@ export function TemplateGallery({ onSelect, onClose }: TemplateGalleryProps) {
                                             </div>
                                         )}
                                         <div className="template-card-meta">
-                                            {(CATEGORY_LABELS[template.category] || template.category)} · {template.config.components.length} 个组件
+                                            {(CATEGORY_LABELS[template.category] || template.category)}
+                                            {` · ${template.config.width}×${template.config.height}`}
+                                            {` · ${template.config.components.length} 个组件`}
+                                            {Array.isArray(template.recommendedVariables) && template.recommendedVariables.length > 0
+                                                ? ` · ${template.recommendedVariables.length} 个预置变量`
+                                                : ''}
                                         </div>
                                     </div>
                                 </div>
@@ -781,10 +791,11 @@ export function TemplateGallery({ onSelect, onClose }: TemplateGalleryProps) {
                                             <h3>{template.name || `模板 #${template.id}`}</h3>
                                             <p>{template.description || '无描述'}</p>
                                             <div className="template-card-meta">
-                                                {(CATEGORY_LABELS[(template.category || 'custom').toLowerCase()] || template.category || 'custom')}
+                                                {(CATEGORY_LABELS[normalizeTemplateCategory(template.category)] || normalizeTemplateCategory(template.category))}
                                                 {` · ${template.listed === false ? '下架' : '上架'}`}
                                                 {` · ${VISIBILITY_LABELS[String(template.visibilityScope || 'team').toLowerCase()] || String(template.visibilityScope || 'team')}`}
                                                 {template.templateVersion ? ` · v${template.templateVersion}` : ''}
+                                                {template.width && template.height ? ` · ${template.width}×${template.height}` : ''}
                                                 {Array.isArray(template.tags) && template.tags.length > 0 ? ` · ${template.tags.join(' / ')}` : ''}
                                             </div>
                                         </div>

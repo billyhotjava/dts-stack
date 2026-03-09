@@ -1,10 +1,51 @@
-import type { ScreenConfig, ScreenComponent } from './types';
+import type { ScreenConfig, ScreenComponent, ScreenGlobalVariable } from './types';
 import { SCREEN_SCHEMA_VERSION } from './specV2';
 
 /**
  * Screen Template definition
  */
-export type TemplateCategory = 'general' | 'government' | 'manufacturing' | 'retail' | 'finance' | 'education' | 'blank';
+export type TemplateCategory =
+    | 'general'
+    | 'government'
+    | 'manufacturing'
+    | 'retail'
+    | 'finance'
+    | 'education'
+    | 'qms'
+    | 'plm'
+    | 'hr'
+    | 'project-management'
+    | 'blank';
+
+export const TEMPLATE_CATEGORY_LABELS: Record<TemplateCategory | 'custom', string> = {
+    general: '通用',
+    government: '政务',
+    manufacturing: '工业',
+    retail: '零售',
+    finance: '财务',
+    education: '教育/医疗',
+    qms: 'QMS',
+    plm: 'PLM',
+    hr: 'HR',
+    'project-management': '项目管理',
+    blank: '空白',
+    custom: '自定义',
+};
+
+export const TEMPLATE_CATEGORY_ORDER: Array<TemplateCategory | 'custom'> = [
+    'project-management',
+    'qms',
+    'plm',
+    'hr',
+    'finance',
+    'manufacturing',
+    'government',
+    'retail',
+    'education',
+    'general',
+    'blank',
+    'custom',
+];
 
 export interface ScreenTemplate {
     id: string;
@@ -13,8 +54,17 @@ export interface ScreenTemplate {
     thumbnail: string; // emoji or icon
     category: TemplateCategory;
     tags: string[];
+    recommendedVariables?: string[];
     config: Omit<ScreenConfig, 'id'>;
 }
+
+const LIGHT_BACKGROUND = '#eef4fb';
+const LIGHT_SURFACE = '#ffffff';
+const LIGHT_TEXT = '#0f172a';
+const LIGHT_MUTED = '#475569';
+const LIGHT_BORDER = 'rgba(148, 163, 184, 0.28)';
+const LIGHT_HEADER_BACKGROUND = '#dbeafe';
+const LIGHT_ALT_ROW = '#f8fafc';
 
 // Helper to create component with unique ID
 function createComponent(
@@ -41,6 +91,150 @@ function createComponent(
         visible: true,
         config,
     };
+}
+
+function createGlobalVariable(
+    key: string,
+    label: string,
+    type: ScreenGlobalVariable['type'] = 'string',
+    defaultValue = '',
+    description?: string,
+): ScreenGlobalVariable {
+    return {
+        key,
+        label,
+        type,
+        defaultValue,
+        description,
+    };
+}
+
+function createTextTitle(
+    id: string,
+    name: string,
+    text: string,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    options?: {
+        fontSize?: number;
+        color?: string;
+        align?: 'flex-start' | 'center' | 'flex-end';
+        fontWeight?: string;
+    },
+): ScreenComponent {
+    return createComponent(id, 'title', name, x, y, width, height, 40, {
+        text,
+        fontSize: options?.fontSize ?? 28,
+        fontWeight: options?.fontWeight ?? '700',
+        color: options?.color ?? LIGHT_TEXT,
+        textAlign: options?.align ?? 'flex-start',
+    });
+}
+
+function createMetricCard(
+    id: string,
+    name: string,
+    title: string,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    value: number,
+    options?: {
+        prefix?: string;
+        suffix?: string;
+        precision?: number;
+        titleColor?: string;
+        valueColor?: string;
+        backgroundColor?: string;
+    },
+): ScreenComponent {
+    return createComponent(id, 'number-card', name, x, y, width, height, 20, {
+        title,
+        value,
+        prefix: options?.prefix ?? '',
+        suffix: options?.suffix ?? '',
+        precision: options?.precision ?? 0,
+        titleColor: options?.titleColor ?? LIGHT_MUTED,
+        valueColor: options?.valueColor ?? LIGHT_TEXT,
+        backgroundColor: options?.backgroundColor ?? LIGHT_SURFACE,
+    });
+}
+
+function createFilterSelectComponent(
+    id: string,
+    name: string,
+    label: string,
+    variableKey: string,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    options: string[],
+    placeholder = '全部',
+): ScreenComponent {
+    return createComponent(id, 'filter-select', name, x, y, width, height, 30, {
+        label,
+        variableKey,
+        options,
+        placeholder,
+        inputBackground: LIGHT_SURFACE,
+        inputBorderColor: LIGHT_BORDER,
+        inputTextColor: LIGHT_TEXT,
+        labelColor: LIGHT_MUTED,
+    });
+}
+
+function createDateRangeFilterComponent(
+    id: string,
+    name: string,
+    label: string,
+    startKey: string,
+    endKey: string,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+): ScreenComponent {
+    return createComponent(id, 'filter-date-range', name, x, y, width, height, 30, {
+        label,
+        startKey,
+        endKey,
+        inputBackground: LIGHT_SURFACE,
+        inputBorderColor: LIGHT_BORDER,
+        inputTextColor: LIGHT_TEXT,
+        labelColor: LIGHT_MUTED,
+    });
+}
+
+function createStaticTableComponent(
+    id: string,
+    name: string,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    header: string[],
+    data: Array<Array<string | number>>,
+): ScreenComponent {
+    return createComponent(id, 'table', name, x, y, width, height, 15, {
+        header,
+        data,
+        fontSize: 12,
+        headerColor: LIGHT_TEXT,
+        headerBackground: LIGHT_HEADER_BACKGROUND,
+        bodyColor: '#334155',
+        bodyBackground: LIGHT_SURFACE,
+        oddRowBackground: LIGHT_SURFACE,
+        evenRowBackground: LIGHT_ALT_ROW,
+        borderColor: LIGHT_BORDER,
+        enableSort: true,
+        enablePagination: true,
+        pageSize: 5,
+        freezeHeader: true,
+    });
 }
 
 /**
@@ -1173,6 +1367,538 @@ const opsKpiTemplate: ScreenTemplate = {
     },
 };
 
+const qmsTemplateVariables: ScreenGlobalVariable[] = [
+    createGlobalVariable('plantCode', '工厂', 'string', ''),
+    createGlobalVariable('defectLevel', '问题等级', 'string', ''),
+    createGlobalVariable('capaOwner', 'CAPA责任人', 'string', ''),
+    createGlobalVariable('dateFrom', '开始日期', 'date', ''),
+    createGlobalVariable('dateTo', '结束日期', 'date', ''),
+];
+
+const qmsCockpitTemplate: ScreenTemplate = {
+    id: 'qms-cockpit',
+    name: 'QMS质量驾驶舱',
+    description: '覆盖偏差、CAPA、稽核和整改闭环的质量管理大屏模板。',
+    thumbnail: '🧪',
+    category: 'qms',
+    tags: ['QMS', 'CAPA', '偏差', '稽核', '整改'],
+    recommendedVariables: qmsTemplateVariables.map((item) => item.key),
+    config: {
+        name: 'QMS质量驾驶舱',
+        description: '质量事件与CAPA闭环监控',
+        width: 1920,
+        height: 1080,
+        backgroundColor: LIGHT_BACKGROUND,
+        theme: 'glacier',
+        globalVariables: qmsTemplateVariables,
+        components: [
+            createTextTitle('qms-title', 'QMS标题', 'QMS质量驾驶舱', 40, 24, 560, 44, { fontSize: 32 }),
+            createTextTitle('qms-subtitle', 'QMS副标题', '质量事件、CAPA、稽核和整改闭环的统一看板', 40, 64, 760, 28, { fontSize: 14, color: LIGHT_MUTED }),
+            createFilterSelectComponent('qms-plant-filter', '工厂筛选', '工厂', 'plantCode', 1160, 28, 180, 64, ['华东工厂', '苏州工厂', '上海工厂']),
+            createFilterSelectComponent('qms-level-filter', '等级筛选', '问题等级', 'defectLevel', 1355, 28, 170, 64, ['重大', '高', '中', '低']),
+            createDateRangeFilterComponent('qms-date-filter', '日期筛选', '统计周期', 'dateFrom', 'dateTo', 1540, 28, 340, 64),
+            createMetricCard('qms-kpi-1', '偏差总数', '当月偏差', 40, 116, 260, 110, 128, { valueColor: '#2563eb' }),
+            createMetricCard('qms-kpi-2', 'CAPA关闭率', 'CAPA关闭率', 320, 116, 260, 110, 92, { suffix: '%', valueColor: '#0f766e' }),
+            createMetricCard('qms-kpi-3', '稽核发现', '稽核发现项', 600, 116, 260, 110, 37, { valueColor: '#d97706' }),
+            createMetricCard('qms-kpi-4', '超期整改', '超期整改项', 880, 116, 260, 110, 9, { valueColor: '#dc2626' }),
+            {
+                ...createComponent('qms-line-trend', 'line-chart', '偏差趋势', 40, 256, 860, 310, 15, {
+                    title: '质量事件趋势',
+                    xAxisData: ['W1', 'W2', 'W3', 'W4', 'W5', 'W6'],
+                    series: [
+                        { name: '偏差', data: [24, 21, 28, 18, 16, 14] },
+                        { name: 'CAPA发起', data: [18, 17, 22, 14, 13, 11] },
+                    ],
+                    lineSmooth: true,
+                    areaStyle: true,
+                    seriesColors: ['#2563eb', '#0ea5e9'],
+                }),
+                interaction: {
+                    enabled: true,
+                    mappings: [{ variableKey: 'dateFrom', sourcePath: 'name', transform: 'raw' }],
+                },
+            },
+            {
+                ...createComponent('qms-capa-owner', 'bar-chart', 'CAPA责任人积压', 930, 256, 450, 310, 15, {
+                    title: 'CAPA责任人积压',
+                    xAxisData: ['赵雷', '王敏', '李鑫', '陈工', '赵燕'],
+                    series: [{ name: '待关闭', data: [8, 6, 5, 3, 2] }],
+                    seriesColors: ['#0f766e'],
+                }),
+                interaction: {
+                    enabled: true,
+                    mappings: [{ variableKey: 'capaOwner', sourcePath: 'name', transform: 'raw' }],
+                },
+            },
+            {
+                ...createComponent('qms-issue-mix', 'pie-chart', '问题结构', 1400, 256, 480, 310, 15, {
+                    title: '问题结构',
+                    data: [
+                        { name: '偏差', value: 38 },
+                        { name: '变更', value: 21 },
+                        { name: '投诉', value: 16 },
+                        { name: '供应商', value: 12 },
+                    ],
+                    seriesColors: ['#2563eb', '#0ea5e9', '#38bdf8', '#cbd5e1'],
+                }),
+                interaction: {
+                    enabled: true,
+                    mappings: [{ variableKey: 'defectLevel', sourcePath: 'name', transform: 'raw' }],
+                },
+            },
+            createStaticTableComponent('qms-open-issues', '未结问题清单', 40, 596, 860, 420, ['编号', '主题', '责任部门', '到期', '状态'], [
+                ['Q-2401', '无菌偏差复盘', '质量部', '03-18', '推进中'],
+                ['Q-2408', '批记录补录', '生产部', '03-16', '超期'],
+                ['Q-2411', '供应商稽核整改', '采购部', '03-22', '待确认'],
+                ['Q-2415', 'OOS根因确认', '实验室', '03-20', '推进中'],
+                ['Q-2419', '培训有效性核查', 'QA', '03-25', '待启动'],
+            ]),
+            {
+                ...createComponent('qms-workshop-bar', 'bar-chart', '车间问题排行', 930, 596, 450, 420, 15, {
+                    title: '车间问题排行',
+                    xAxisData: ['包装', '制剂', '仓储', 'QC', '公用工程'],
+                    series: [{ name: '事件数', data: [16, 11, 9, 7, 4] }],
+                    seriesColors: ['#f59e0b'],
+                }),
+                interaction: {
+                    enabled: true,
+                    mappings: [{ variableKey: 'plantCode', sourcePath: 'name', transform: 'raw' }],
+                },
+            },
+            createStaticTableComponent('qms-audit-table', '稽核与整改节奏', 1400, 596, 480, 420, ['域', '本月计划', '已完成', '风险'], [
+                ['内部稽核', 12, 9, '中'],
+                ['外部稽核', 6, 5, '低'],
+                ['供应商稽核', 8, 4, '高'],
+                ['培训追踪', 14, 11, '中'],
+                ['偏差复盘', 18, 15, '中'],
+            ]),
+        ],
+    },
+};
+
+const plmTemplateVariables: ScreenGlobalVariable[] = [
+    createGlobalVariable('productLine', '产品线', 'string', ''),
+    createGlobalVariable('releaseStage', '阶段', 'string', ''),
+    createGlobalVariable('changePriority', '变更优先级', 'string', ''),
+    createGlobalVariable('dateFrom', '开始日期', 'date', ''),
+    createGlobalVariable('dateTo', '结束日期', 'date', ''),
+];
+
+const plmCockpitTemplate: ScreenTemplate = {
+    id: 'plm-cockpit',
+    name: 'PLM研发交付看板',
+    description: '覆盖阶段门、ECR/ECO、BOM影响和版本发布节奏的 PLM 模板。',
+    thumbnail: '🧩',
+    category: 'plm',
+    tags: ['PLM', '阶段门', 'ECR', 'ECO', 'BOM'],
+    recommendedVariables: plmTemplateVariables.map((item) => item.key),
+    config: {
+        name: 'PLM研发交付看板',
+        description: '研发阶段门与变更交付总览',
+        width: 1920,
+        height: 1080,
+        backgroundColor: LIGHT_BACKGROUND,
+        theme: 'glacier',
+        globalVariables: plmTemplateVariables,
+        components: [
+            createTextTitle('plm-title', 'PLM标题', 'PLM研发交付看板', 40, 24, 560, 44, { fontSize: 32 }),
+            createTextTitle('plm-subtitle', 'PLM副标题', '跟踪项目阶段门、工程变更、BOM影响和版本发布节奏', 40, 64, 760, 28, { fontSize: 14, color: LIGHT_MUTED }),
+            createFilterSelectComponent('plm-product-filter', '产品线筛选', '产品线', 'productLine', 1130, 28, 210, 64, ['平台型产品', '离散制造', '质量系统']),
+            createFilterSelectComponent('plm-stage-filter', '阶段筛选', '阶段', 'releaseStage', 1355, 28, 170, 64, ['概念', '设计', '试产', '验证', '发布']),
+            createDateRangeFilterComponent('plm-date-filter', 'PLM日期筛选', '统计周期', 'dateFrom', 'dateTo', 1540, 28, 340, 64),
+            createMetricCard('plm-kpi-1', '在研项目', '在研项目', 40, 116, 260, 110, 14, { valueColor: '#2563eb' }),
+            createMetricCard('plm-kpi-2', '工程变更', '本月ECR/ECO', 320, 116, 260, 110, 29, { valueColor: '#0f766e' }),
+            createMetricCard('plm-kpi-3', '延期节点', '延期节点', 600, 116, 260, 110, 7, { valueColor: '#dc2626' }),
+            createMetricCard('plm-kpi-4', '影响BOM', '受影响BOM', 880, 116, 260, 110, 63, { valueColor: '#d97706' }),
+            {
+                ...createComponent('plm-stage-gate', 'bar-chart', '阶段门通过', 40, 256, 860, 310, 15, {
+                    title: '阶段门推进',
+                    xAxisData: ['概念', '设计', '试产', '验证', '发布'],
+                    series: [{ name: '项目数', data: [14, 11, 7, 5, 3] }],
+                    seriesColors: ['#2563eb'],
+                }),
+                interaction: {
+                    enabled: true,
+                    mappings: [{ variableKey: 'releaseStage', sourcePath: 'name', transform: 'raw' }],
+                },
+            },
+            createComponent('plm-change-trend', 'line-chart', '变更趋势', 930, 256, 450, 310, 15, {
+                title: '工程变更趋势',
+                xAxisData: ['1月', '2月', '3月', '4月', '5月', '6月'],
+                series: [
+                    { name: 'ECR', data: [8, 11, 13, 9, 14, 16] },
+                    { name: 'ECO', data: [6, 7, 9, 8, 10, 12] },
+                ],
+                lineSmooth: true,
+                areaStyle: true,
+                seriesColors: ['#0f766e', '#38bdf8'],
+            }),
+            {
+                ...createComponent('plm-change-priority', 'pie-chart', '变更优先级', 1400, 256, 480, 310, 15, {
+                    title: '变更优先级结构',
+                    data: [
+                        { name: '紧急', value: 6 },
+                        { name: '高', value: 11 },
+                        { name: '中', value: 9 },
+                        { name: '低', value: 3 },
+                    ],
+                    seriesColors: ['#dc2626', '#f59e0b', '#0ea5e9', '#cbd5e1'],
+                }),
+                interaction: {
+                    enabled: true,
+                    mappings: [{ variableKey: 'changePriority', sourcePath: 'name', transform: 'raw' }],
+                },
+            },
+            createStaticTableComponent('plm-milestone-table', '阶段门里程碑', 40, 596, 860, 420, ['项目', '当前阶段', '计划完成', '负责人', '状态'], [
+                ['QMS二期', '验证', '03-28', '周工', '推进中'],
+                ['MES联动', '设计', '04-10', '刘工', '存在风险'],
+                ['主数据平台', '试产', '03-22', '王工', '推进中'],
+                ['供应商协同', '概念', '04-18', '陈工', '待评审'],
+                ['数据中台', '发布', '03-15', '李工', '待验收'],
+            ]),
+            createStaticTableComponent('plm-bom-impact', 'BOM影响清单', 930, 596, 450, 420, ['BOM', '零件数', '影响版本', '状态'], [
+                ['BOM-A12', 24, 'R2.3', '评估中'],
+                ['BOM-C07', 18, 'R2.2', '已确认'],
+                ['BOM-H31', 13, 'R3.0', '待发起'],
+                ['BOM-M11', 9, 'R1.8', '关闭'],
+                ['BOM-P05', 7, 'R2.1', '推进中'],
+            ]),
+            createStaticTableComponent('plm-release-table', '版本发布节奏', 1400, 596, 480, 420, ['版本', '计划', '范围', '风险'], [
+                ['R3.0', '04-12', '主平台', '高'],
+                ['R2.3', '03-26', 'QMS功能', '中'],
+                ['R2.2', '03-18', 'BOM修订', '低'],
+                ['R1.8', '03-14', '小版本补丁', '低'],
+                ['R3.1', '05-09', '供应链联动', '中'],
+            ]),
+        ],
+    },
+};
+
+const hrTemplateVariables: ScreenGlobalVariable[] = [
+    createGlobalVariable('ownerOrgId', '组织', 'string', ''),
+    createGlobalVariable('staffType', '人员类型', 'string', ''),
+    createGlobalVariable('trainingStatus', '培训状态', 'string', ''),
+    createGlobalVariable('dateFrom', '开始日期', 'date', ''),
+    createGlobalVariable('dateTo', '结束日期', 'date', ''),
+];
+
+const hrCockpitTemplate: ScreenTemplate = {
+    id: 'hr-cockpit',
+    name: 'HR人效与培训看板',
+    description: '覆盖编制、到岗、培训、绩效和离职风险的 HR 系统模板。',
+    thumbnail: '👥',
+    category: 'hr',
+    tags: ['HR', '人效', '培训', '绩效', '离职风险'],
+    recommendedVariables: hrTemplateVariables.map((item) => item.key),
+    config: {
+        name: 'HR人效与培训看板',
+        description: '组织人效与培训运行总览',
+        width: 1920,
+        height: 1080,
+        backgroundColor: LIGHT_BACKGROUND,
+        theme: 'glacier',
+        globalVariables: hrTemplateVariables,
+        components: [
+            createTextTitle('hr-title', 'HR标题', 'HR人效与培训看板', 40, 24, 560, 44, { fontSize: 32 }),
+            createTextTitle('hr-subtitle', 'HR副标题', '编制、到岗、培训、绩效与离职风险的一体化视图', 40, 64, 720, 28, { fontSize: 14, color: LIGHT_MUTED }),
+            createFilterSelectComponent('hr-org-filter', '组织筛选', '组织', 'ownerOrgId', 1130, 28, 210, 64, ['总部', '制造中心', '质量中心', '研发中心']),
+            createFilterSelectComponent('hr-staff-filter', '人员类型筛选', '人员类型', 'staffType', 1355, 28, 170, 64, ['正式员工', '劳务', '实习生']),
+            createDateRangeFilterComponent('hr-date-filter', 'HR日期筛选', '统计周期', 'dateFrom', 'dateTo', 1540, 28, 340, 64),
+            createMetricCard('hr-kpi-1', '编制达成', '编制达成率', 40, 116, 260, 110, 94, { suffix: '%', valueColor: '#2563eb' }),
+            createMetricCard('hr-kpi-2', '关键岗缺口', '关键岗缺口', 320, 116, 260, 110, 12, { valueColor: '#dc2626' }),
+            createMetricCard('hr-kpi-3', '培训完成', '培训完成率', 600, 116, 260, 110, 88, { suffix: '%', valueColor: '#0f766e' }),
+            createMetricCard('hr-kpi-4', '离职风险', '高风险人数', 880, 116, 260, 110, 17, { valueColor: '#d97706' }),
+            {
+                ...createComponent('hr-org-workload', 'bar-chart', '组织负载', 40, 256, 860, 310, 15, {
+                    title: '组织负载与编制',
+                    xAxisData: ['总部', '制造', '质量', '研发', '共享服务'],
+                    series: [
+                        { name: '在岗', data: [138, 296, 114, 162, 88] },
+                        { name: '编制', data: [145, 320, 120, 175, 92] },
+                    ],
+                    seriesColors: ['#2563eb', '#cbd5e1'],
+                }),
+                interaction: {
+                    enabled: true,
+                    mappings: [{ variableKey: 'ownerOrgId', sourcePath: 'name', transform: 'raw' }],
+                },
+            },
+            {
+                ...createComponent('hr-training-status', 'pie-chart', '培训状态', 930, 256, 450, 310, 15, {
+                    title: '培训状态',
+                    data: [
+                        { name: '已完成', value: 244 },
+                        { name: '进行中', value: 58 },
+                        { name: '待安排', value: 23 },
+                    ],
+                    seriesColors: ['#0f766e', '#38bdf8', '#f59e0b'],
+                }),
+                interaction: {
+                    enabled: true,
+                    mappings: [{ variableKey: 'trainingStatus', sourcePath: 'name', transform: 'raw' }],
+                },
+            },
+            createComponent('hr-turnover-trend', 'line-chart', '离职风险趋势', 1400, 256, 480, 310, 15, {
+                title: '离职风险趋势',
+                xAxisData: ['1月', '2月', '3月', '4月', '5月', '6月'],
+                series: [
+                    { name: '主动离职预警', data: [9, 11, 12, 15, 14, 17] },
+                    { name: '关键岗预警', data: [4, 5, 5, 7, 6, 8] },
+                ],
+                lineSmooth: true,
+                areaStyle: true,
+                seriesColors: ['#d97706', '#dc2626'],
+            }),
+            createStaticTableComponent('hr-hiring-table', '招聘与补缺清单', 40, 596, 860, 420, ['岗位', '组织', '需求人数', '到岗', '状态'], [
+                ['数据治理经理', '总部', 2, 1, '招聘中'],
+                ['质量体系专员', '质量中心', 3, 2, '推进中'],
+                ['MES顾问', '制造中心', 2, 0, '高优先'],
+                ['实施经理', '研发中心', 1, 1, '关闭'],
+                ['培训专员', '共享服务', 1, 0, '待面试'],
+            ]),
+            createStaticTableComponent('hr-performance-table', '绩效与人才池', 930, 596, 450, 420, ['等级', '人数', '占比', '动作'], [
+                ['A档', 46, '14%', '保留'],
+                ['B档', 174, '54%', '发展'],
+                ['C档', 86, '26%', '辅导'],
+                ['待观察', 19, '6%', '跟进'],
+            ]),
+            createStaticTableComponent('hr-risk-table', '离职风险名单', 1400, 596, 480, 420, ['姓名', '组织', '风险项', '建议'], [
+                ['张某', '研发中心', 'offer竞争', '主管面谈'],
+                ['李某', '制造中心', '班次压力', '轮岗调整'],
+                ['王某', '质量中心', '发展停滞', '培训提升'],
+                ['周某', '总部', '长期出差', '岗位协同'],
+            ]),
+        ],
+    },
+};
+
+const financeTemplateVariables: ScreenGlobalVariable[] = [
+    createGlobalVariable('financeOrg', '核算组织', 'string', ''),
+    createGlobalVariable('budgetVersion', '预算版本', 'string', ''),
+    createGlobalVariable('expenseType', '费用类型', 'string', ''),
+    createGlobalVariable('dateFrom', '开始日期', 'date', ''),
+    createGlobalVariable('dateTo', '结束日期', 'date', ''),
+];
+
+const financeExecutionTemplate: ScreenTemplate = {
+    id: 'finance-execution-cockpit',
+    name: '财务执行驾驶舱',
+    description: '覆盖预算、执行、成本、回款和应收应付的财务系统模板。',
+    thumbnail: '💹',
+    category: 'finance',
+    tags: ['财务', '预算', '执行', '回款', '应收应付'],
+    recommendedVariables: financeTemplateVariables.map((item) => item.key),
+    config: {
+        name: '财务执行驾驶舱',
+        description: '预算执行与资金回收监控',
+        width: 1920,
+        height: 1080,
+        backgroundColor: LIGHT_BACKGROUND,
+        theme: 'glacier',
+        globalVariables: financeTemplateVariables,
+        components: [
+            createTextTitle('finance-title', '财务标题', '财务执行驾驶舱', 40, 24, 560, 44, { fontSize: 32 }),
+            createTextTitle('finance-subtitle', '财务副标题', '预算、执行、成本、回款与应收应付的一体化财务视图', 40, 64, 780, 28, { fontSize: 14, color: LIGHT_MUTED }),
+            createFilterSelectComponent('finance-org-filter', '财务组织筛选', '核算组织', 'financeOrg', 1130, 28, 210, 64, ['集团总部', '制造事业部', '研发事业部', '营销中心']),
+            createFilterSelectComponent('finance-budget-filter', '预算版本筛选', '预算版本', 'budgetVersion', 1355, 28, 170, 64, ['2026-V1', '2026-R1', '滚动预测']),
+            createDateRangeFilterComponent('finance-date-filter', '财务日期筛选', '统计周期', 'dateFrom', 'dateTo', 1540, 28, 340, 64),
+            createMetricCard('finance-kpi-1', '预算执行', '预算执行率', 40, 116, 260, 110, 87, { suffix: '%', valueColor: '#2563eb' }),
+            createMetricCard('finance-kpi-2', '回款率', '回款率', 320, 116, 260, 110, 91, { suffix: '%', valueColor: '#0f766e' }),
+            createMetricCard('finance-kpi-3', '逾期应收', '逾期应收', 600, 116, 260, 110, 1280, { suffix: '万', valueColor: '#dc2626' }),
+            createMetricCard('finance-kpi-4', '降本达成', '降本达成', 880, 116, 260, 110, 76, { suffix: '%', valueColor: '#d97706' }),
+            createComponent('finance-budget-line', 'line-chart', '预算执行趋势', 40, 256, 860, 310, 15, {
+                title: '预算执行趋势',
+                xAxisData: ['1月', '2月', '3月', '4月', '5月', '6月'],
+                series: [
+                    { name: '预算', data: [1200, 1350, 1280, 1420, 1510, 1600] },
+                    { name: '实际', data: [1160, 1312, 1254, 1480, 1438, 1526] },
+                ],
+                lineSmooth: true,
+                areaStyle: true,
+                seriesColors: ['#2563eb', '#0f766e'],
+            }),
+            {
+                ...createComponent('finance-expense-pie', 'pie-chart', '费用结构', 930, 256, 450, 310, 15, {
+                    title: '费用结构',
+                    data: [
+                        { name: '制造费用', value: 34 },
+                        { name: '研发投入', value: 22 },
+                        { name: '销售费用', value: 19 },
+                        { name: '管理费用', value: 13 },
+                    ],
+                    seriesColors: ['#2563eb', '#0ea5e9', '#38bdf8', '#cbd5e1'],
+                }),
+                interaction: {
+                    enabled: true,
+                    mappings: [{ variableKey: 'expenseType', sourcePath: 'name', transform: 'raw' }],
+                },
+            },
+            {
+                ...createComponent('finance-ar-bar', 'bar-chart', '应收账龄', 1400, 256, 480, 310, 15, {
+                    title: '应收账龄',
+                    xAxisData: ['0-30天', '31-60天', '61-90天', '90天+'],
+                    series: [{ name: '金额(万)', data: [860, 420, 260, 128] }],
+                    seriesColors: ['#d97706'],
+                }),
+                interaction: {
+                    enabled: true,
+                    mappings: [{ variableKey: 'financeOrg', sourcePath: 'name', transform: 'raw' }],
+                },
+            },
+            createStaticTableComponent('finance-payback-table', '回款节奏', 40, 596, 860, 420, ['客户', '计划回款', '实际回款', '差异', '状态'], [
+                ['华东制药', '320万', '280万', '-40万', '跟催'],
+                ['中部器械', '180万', '180万', '0', '达成'],
+                ['北方供应链', '260万', '212万', '-48万', '风险'],
+                ['华南医药', '145万', '156万', '+11万', '达成'],
+                ['西部工业', '90万', '72万', '-18万', '跟催'],
+            ]),
+            createStaticTableComponent('finance-cost-table', '降本项目', 930, 596, 450, 420, ['项目', '年度目标', '已实现', '责任'], [
+                ['采购议价', '320万', '210万', '采购'],
+                ['能源优化', '180万', '102万', '制造'],
+                ['库存压降', '260万', '148万', '供应链'],
+                ['差旅收口', '90万', '64万', '行政'],
+            ]),
+            createStaticTableComponent('finance-ap-table', '应付与付款计划', 1400, 596, 480, 420, ['供应商', '到期', '金额', '状态'], [
+                ['A供应商', '03-15', '86万', '待支付'],
+                ['B供应商', '03-18', '42万', '已审核'],
+                ['C供应商', '03-20', '55万', '待复核'],
+                ['D供应商', '03-25', '31万', '计划中'],
+            ]),
+        ],
+    },
+};
+
+const projectManagementVariables: ScreenGlobalVariable[] = [
+    createGlobalVariable('programId', '项目群', 'string', ''),
+    createGlobalVariable('projectId', '项目', 'string', ''),
+    createGlobalVariable('stageCode', '阶段', 'string', ''),
+    createGlobalVariable('ownerOrgId', '责任组织', 'string', ''),
+    createGlobalVariable('ownerUserId', '责任人', 'string', ''),
+    createGlobalVariable('riskLevel', '风险等级', 'string', ''),
+    createGlobalVariable('issueStatus', '问题状态', 'string', ''),
+    createGlobalVariable('dateFrom', '开始日期', 'date', ''),
+    createGlobalVariable('dateTo', '结束日期', 'date', ''),
+];
+
+const projectManagementCockpitTemplate: ScreenTemplate = {
+    id: 'project-management-cockpit',
+    name: '项目管理作战台',
+    description: '围绕里程碑、风险、变更、责任负载和交付物的高定项目管理模板。',
+    thumbnail: '🗂️',
+    category: 'project-management',
+    tags: ['项目管理', '里程碑', '风险', '堵点', '交付物'],
+    recommendedVariables: projectManagementVariables.map((item) => item.key),
+    config: {
+        name: '项目管理作战台',
+        description: '项目群级别的执行与风险作战台',
+        width: 1920,
+        height: 1080,
+        backgroundColor: LIGHT_BACKGROUND,
+        theme: 'glacier',
+        globalVariables: projectManagementVariables,
+        components: [
+            createTextTitle('pm-title', '项目管理标题', '项目管理作战台', 40, 24, 560, 44, { fontSize: 32 }),
+            createTextTitle('pm-subtitle', '项目管理副标题', '项目总览、里程碑推进、风险堵点、责任负载与交付物闭环', 40, 64, 800, 28, { fontSize: 14, color: LIGHT_MUTED }),
+            createFilterSelectComponent('pm-program-filter', '项目群筛选', '项目群', 'programId', 980, 28, 170, 64, ['集团主项目群', '制造升级群', '质量提升群']),
+            createFilterSelectComponent('pm-project-filter', '项目筛选', '项目', 'projectId', 1165, 28, 170, 64, ['QMS二期', 'PLM整合', '主数据治理', '财务共享']),
+            createFilterSelectComponent('pm-stage-filter', '阶段筛选', '阶段', 'stageCode', 1350, 28, 150, 64, ['立项', '设计', '实施', '验证', '上线']),
+            createFilterSelectComponent('pm-risk-filter', '风险筛选', '风险等级', 'riskLevel', 1515, 28, 150, 64, ['高', '中', '低']),
+            createDateRangeFilterComponent('pm-date-filter', '项目日期筛选', '统计周期', 'dateFrom', 'dateTo', 1680, 28, 200, 64),
+            createMetricCard('pm-kpi-1', '活跃项目', '活跃项目', 40, 116, 220, 110, 21, { valueColor: '#2563eb' }),
+            createMetricCard('pm-kpi-2', '按期里程碑', '按期里程碑', 280, 116, 220, 110, 34, { valueColor: '#0f766e' }),
+            createMetricCard('pm-kpi-3', '高风险项', '高风险项', 520, 116, 220, 110, 8, { valueColor: '#dc2626' }),
+            createMetricCard('pm-kpi-4', '待关闭问题', '待关闭问题', 760, 116, 220, 110, 26, { valueColor: '#d97706' }),
+            createMetricCard('pm-kpi-5', '待审批变更', '待审批变更', 1000, 116, 220, 110, 11, { valueColor: '#7c3aed' }),
+            {
+                ...createComponent('pm-milestone-bar', 'bar-chart', '里程碑推进', 40, 256, 700, 310, 15, {
+                    title: '里程碑推进',
+                    xAxisData: ['立项', '设计', '实施', '验证', '上线'],
+                    series: [
+                        { name: '计划', data: [6, 8, 9, 7, 5] },
+                        { name: '实际', data: [6, 7, 8, 5, 3] },
+                    ],
+                    seriesColors: ['#cbd5e1', '#2563eb'],
+                }),
+                interaction: {
+                    enabled: true,
+                    mappings: [{ variableKey: 'stageCode', sourcePath: 'name', transform: 'raw' }],
+                },
+                drillDown: {
+                    enabled: true,
+                    levels: [
+                        { cardId: 1001, paramName: 'stageCode', label: '阶段' },
+                        { cardId: 1002, paramName: 'projectId', label: '项目' },
+                    ],
+                },
+            },
+            {
+                ...createComponent('pm-risk-pie', 'pie-chart', '风险结构', 760, 256, 340, 310, 15, {
+                    title: '风险结构',
+                    data: [
+                        { name: '高', value: 8 },
+                        { name: '中', value: 14 },
+                        { name: '低', value: 19 },
+                    ],
+                    seriesColors: ['#dc2626', '#f59e0b', '#38bdf8'],
+                }),
+                interaction: {
+                    enabled: true,
+                    mappings: [{ variableKey: 'riskLevel', sourcePath: 'name', transform: 'raw' }],
+                },
+            },
+            {
+                ...createComponent('pm-workload-bar', 'bar-chart', '组织负载', 1120, 256, 360, 310, 15, {
+                    title: '组织负载',
+                    xAxisData: ['PMO', '实施', '数据治理', '接口', '测试'],
+                    series: [{ name: '在办事项', data: [12, 28, 17, 11, 15] }],
+                    seriesColors: ['#0f766e'],
+                }),
+                interaction: {
+                    enabled: true,
+                    mappings: [{ variableKey: 'ownerOrgId', sourcePath: 'name', transform: 'raw' }],
+                },
+            },
+            {
+                ...createComponent('pm-issue-status', 'bar-chart', '问题状态', 1500, 256, 380, 310, 15, {
+                    title: '问题状态',
+                    xAxisData: ['待确认', '处理中', '待验收', '已关闭'],
+                    series: [{ name: '数量', data: [6, 12, 8, 19] }],
+                    seriesColors: ['#d97706'],
+                }),
+                interaction: {
+                    enabled: true,
+                    mappings: [{ variableKey: 'issueStatus', sourcePath: 'name', transform: 'raw' }],
+                },
+            },
+            createStaticTableComponent('pm-risk-table', '风险与堵点', 40, 596, 700, 420, ['项目', '风险/堵点', '责任人', '等级', '动作'], [
+                ['QMS二期', '验证数据缺口', '周工', '高', '补采集'],
+                ['PLM整合', 'ECO审批慢', '李工', '中', '催办'],
+                ['主数据治理', '接口方案待定', '王工', '高', '评审'],
+                ['财务共享', '回款口径差异', '陈工', '中', '核对'],
+                ['制造升级', '排期冲突', '赵工', '高', '协调'],
+            ]),
+            createStaticTableComponent('pm-change-table', '变更与审批', 760, 596, 340, 420, ['变更', '类型', '状态', '责任'], [
+                ['CR-101', '范围', '待审批', 'PMO'],
+                ['CR-118', '资源', '处理中', '实施'],
+                ['CR-126', '计划', '待确认', '测试'],
+                ['CR-133', '预算', '已批准', '财务'],
+            ]),
+            createStaticTableComponent('pm-deliverable-table', '待办与交付物', 1120, 596, 360, 420, ['交付物', '到期', '责任人', '状态'], [
+                ['蓝图确认', '03-16', '刘工', '待确认'],
+                ['接口清单', '03-18', '王工', '推进中'],
+                ['UAT脚本', '03-21', '陈工', '待评审'],
+                ['切换方案', '03-24', '周工', '未启动'],
+            ]),
+            createStaticTableComponent('pm-work-item-table', '行动清单', 1500, 596, 380, 420, ['动作', '触发对象', '建议入口', '优先级'], [
+                ['发起协调', '跨部门风险', 'emit-intent', '高'],
+                ['查看详情', '问题项', 'open-panel', '高'],
+                ['跳转周报', '项目卡片', 'jump-url', '中'],
+                ['上卷返回', '里程碑链路', 'drill-up', '中'],
+            ]),
+        ],
+    },
+};
+
 /**
  * 所有可用模板
  */
@@ -1193,8 +1919,13 @@ export const screenTemplates: ScreenTemplate[] = [
     storeOperationTemplate,
     financeMonitorTemplate,
     riskAlertTemplate,
+    financeExecutionTemplate,
     campusDataTemplate,
     hospitalOperationTemplate,
+    qmsCockpitTemplate,
+    plmCockpitTemplate,
+    hrCockpitTemplate,
+    projectManagementCockpitTemplate,
 ];
 
 /**

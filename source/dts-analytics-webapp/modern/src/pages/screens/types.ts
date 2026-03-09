@@ -31,6 +31,27 @@ export interface ComponentInteractionConfig {
     jumpOpenMode?: 'self' | 'new-tab';
 }
 
+export type ScreenActionType =
+    | 'set-variable'
+    | 'drill-down'
+    | 'drill-up'
+    | 'jump-url'
+    | 'open-panel'
+    | 'emit-intent';
+
+export interface ScreenComponentAction {
+    id?: string;
+    type: ScreenActionType;
+    label?: string;
+    mappings?: ComponentInteractionMapping[];
+    jumpUrlTemplate?: string;
+    jumpOpenMode?: 'self' | 'new-tab';
+    panelTitle?: string;
+    panelBodyTemplate?: string;
+    intentName?: string;
+    intentPayloadTemplate?: string;
+}
+
 export interface DrillLevel {
     cardId: number;
     paramName: string;
@@ -99,6 +120,8 @@ export interface ScreenComponent {
     config: Record<string, unknown>;
     dataSource?: DataSourceConfig;
     drillDown?: DrillDownConfig;
+    actions?: ScreenComponentAction[];
+    // Legacy click interaction contract kept for backward compatibility.
     interaction?: ComponentInteractionConfig;
 }
 
