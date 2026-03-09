@@ -1281,28 +1281,35 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
             opacity: 0.92,
             padding: 0,
         } : null;
-        const dependencyPlaceholder = (label: string) => (
+        const renderUnavailableState = (title: string, detail?: string) => (
             <div style={{
                 width: '100%',
                 height: '100%',
                 display: 'flex',
+                flexDirection: 'column',
                 alignItems: 'center',
                 justifyContent: 'center',
+                gap: 6,
                 background: t.placeholder.background,
                 border: t.placeholder.border,
-                borderRadius: 4,
+                borderRadius: 8,
                 color: t.placeholder.color,
                 fontSize: 12,
+                textAlign: 'center',
+                padding: 12,
             }}>
-                {label}加载中...
+                <strong style={{ fontSize: 12, fontWeight: 600 }}>{title}</strong>
+                {detail ? (
+                    <span style={{ fontSize: 11, opacity: 0.82, lineHeight: 1.5 }}>{detail}</span>
+                ) : null}
             </div>
         );
 
         if (ECHART_COMPONENT_TYPES.has(type) && !EChartsComponent) {
-            return dependencyPlaceholder('图表引擎');
+            return renderUnavailableState('图表引擎未就绪', '正在加载 ECharts 运行时，请稍候。');
         }
         if (DATAV_COMPONENT_TYPES.has(type) && !dataViewModule) {
-            return dependencyPlaceholder('DataV');
+            return renderUnavailableState('DataV 运行时未就绪', '正在加载 DataV 组件运行时，请稍候。');
         }
 
         const EChart = EChartsComponent as ReactEChartsComponent;
@@ -2838,7 +2845,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
             case 'border-box': {
                 const boxType = (c.boxType as number) || 1;
                 const BorderBoxComponent = borderBoxComponents?.[boxType] || borderBoxComponents?.[1];
-                if (!BorderBoxComponent) return dependencyPlaceholder('DataV');
+                if (!BorderBoxComponent) return renderUnavailableState('DataV 运行时未就绪');
                 const colors = c.color as string[] | undefined;
                 return (
                     <BorderBoxComponent color={colors}>
@@ -2853,7 +2860,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
             case 'decoration': {
                 const decorationType = (c.decorationType as number) || 1;
                 const DecorationComponent = decorationComponents?.[decorationType] || decorationComponents?.[1];
-                if (!DecorationComponent) return dependencyPlaceholder('DataV');
+                if (!DecorationComponent) return renderUnavailableState('DataV 运行时未就绪');
                 const colors = c.color as string[] | undefined;
                 return (
                     <DecorationComponent color={colors} style={{ width: '100%', height: '100%' }} />
@@ -2870,7 +2877,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                 if (theme && theme !== 'legacy-dark') {
                     return <ThemedScrollTable config={filteredConfig} tokens={t} />;
                 }
-                if (!ScrollBoard) return dependencyPlaceholder('DataV');
+                if (!ScrollBoard) return renderUnavailableState('DataV 运行时未就绪');
                 const allHaveWidth = columnMeta.length > 0 && columnMeta.every((col) => typeof col.width === 'number');
                 const columnWidth = allHaveWidth
                     ? columnMeta.map((col) => Math.max(40, Math.round((width * Number(col.width)) / 100)))
@@ -3084,7 +3091,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                 );
             }
             case 'scroll-ranking':
-                if (!ScrollRankingBoard) return dependencyPlaceholder('DataV');
+                if (!ScrollRankingBoard) return renderUnavailableState('DataV 运行时未就绪');
                 return (
                     <ScrollRankingBoard
                         config={{
@@ -3098,7 +3105,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                 );
 
             case 'water-level':
-                if (!WaterLevelPond) return dependencyPlaceholder('DataV');
+                if (!WaterLevelPond) return renderUnavailableState('DataV 运行时未就绪');
                 return (
                     <WaterLevelPond
                         config={{
@@ -3110,7 +3117,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                 );
 
             case 'digital-flop':
-                if (!DigitalFlop) return dependencyPlaceholder('DataV');
+                if (!DigitalFlop) return renderUnavailableState('DataV 运行时未就绪');
                 return (
                     <DigitalFlop
                         config={{
@@ -3355,22 +3362,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
             }
 
             default:
-                return (
-                    <div style={{
-                        width: '100%',
-                        height: '100%',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        background: t.placeholder.background,
-                        border: `1px dashed ${t.placeholder.color}`,
-                        borderRadius: 4,
-                        color: t.placeholder.color,
-                        fontSize: 12,
-                    }}>
-                        {type}
-                    </div>
-                );
+                return renderUnavailableState('组件类型未注册', `当前运行态未找到 ${type} 的渲染器。`);
         }
     }, [
         type,
@@ -3480,7 +3472,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                     textOverflow: 'ellipsis',
                     whiteSpace: 'nowrap',
                 }} title="插件未加载，已使用基础组件渲染">
-                    插件未加载，已降级
+                    插件未注册，已降级到基础组件
                 </div>
                 )}
             </div>

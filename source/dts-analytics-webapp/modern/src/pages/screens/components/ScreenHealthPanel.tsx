@@ -119,8 +119,9 @@ export function ScreenHealthPanel({ open, screenId, onClose }: ScreenHealthPanel
     const [report, setReport] = useState<ScreenHealthReport | null>(null);
     const [benchmarkRunning, setBenchmarkRunning] = useState(false);
     const [benchmark, setBenchmark] = useState<{
-        serializeMs: number;
+        frameAvgMs: number;
         frameP95Ms: number;
+        sampleCount: number;
         pass: boolean;
     } | null>(null);
     const browserCheck = useMemo(() => detectBrowserCheck(), []);
@@ -150,22 +151,6 @@ export function ScreenHealthPanel({ open, screenId, onClose }: ScreenHealthPanel
         if (benchmarkRunning) return;
         setBenchmarkRunning(true);
         try {
-            const componentCount = Math.max(1, report?.draft?.componentCount ?? 1);
-            const mock = Array.from({ length: componentCount }, (_, i) => ({
-                id: i,
-                x: i * 3,
-                y: i * 2,
-                w: 320,
-                h: 180,
-                type: i % 3 === 0 ? 'chart' : i % 3 === 1 ? 'text' : 'table',
-                config: { n: i, color: i % 7, tags: ['a', 'b', 'c'] },
-            }));
-
-            const serStart = performance.now();
-            const encoded = JSON.stringify(mock);
-            JSON.parse(encoded);
-            const serializeMs = performance.now() - serStart;
-
             const frameDurations: number[] = [];
             let last = performance.now();
             await new Promise<void>((resolve) => {
@@ -185,11 +170,14 @@ export function ScreenHealthPanel({ open, screenId, onClose }: ScreenHealthPanel
             const sorted = [...frameDurations].sort((a, b) => a - b);
             const p95Index = Math.min(sorted.length - 1, Math.floor(sorted.length * 0.95));
             const frameP95Ms = sorted[p95Index] || 0;
-
-            const pass = serializeMs <= 120 && frameP95Ms <= 50;
+            const frameAvgMs = frameDurations.length > 0
+                ? frameDurations.reduce((sum, item) => sum + item, 0) / frameDurations.length
+                : 0;
+            const pass = frameP95Ms <= 50;
             setBenchmark({
-                serializeMs: Number(serializeMs.toFixed(2)),
+                frameAvgMs: Number(frameAvgMs.toFixed(2)),
                 frameP95Ms: Number(frameP95Ms.toFixed(2)),
+                sampleCount: frameDurations.length,
                 pass,
             });
         } finally {
@@ -240,19 +228,20 @@ export function ScreenHealthPanel({ open, screenId, onClose }: ScreenHealthPanel
 
             <div style={{ border: '1px solid var(--color-border)', borderRadius: 10, padding: 12, marginTop: 12 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                    <div style={{ fontWeight: 600 }}>本地交互基线（实验）</div>
+                    <div style={{ fontWeight: 600 }}>本地浏览器帧稳定性</div>
                     <button type="button" className="header-btn" disabled={benchmarkRunning} onClick={runClientBenchmark}>
                         {benchmarkRunning ? '测量中...' : '运行测量'}
                     </button>
                 </div>
                 {benchmark ? (
                     <div style={{ fontSize: 12, lineHeight: 1.8 }}>
-                        <div>序列化/反序列化: <b>{benchmark.serializeMs} ms</b></div>
+                        <div>样本数: <b>{benchmark.sampleCount}</b></div>
+                        <div>平均帧时延: <b>{benchmark.frameAvgMs} ms</b></div>
                         <div>帧时延 P95: <b>{benchmark.frameP95Ms} ms</b></div>
                         <div>判定: <StatusPill status={benchmark.pass ? 'pass' : 'warn'} /></div>
                     </div>
                 ) : (
-                    <div style={{ fontSize: 12, opacity: 0.75 }}>点击“运行测量”获取当前浏览器性能基线。</div>
+                    <div style={{ fontSize: 12, opacity: 0.75 }}>点击“运行测量”获取当前浏览器的真实帧稳定性样本，不再构造模拟组件数据。</div>
                 )}
             </div>
         </Modal>
