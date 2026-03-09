@@ -21,6 +21,14 @@
 - 重做 analytics 主壳，不再保留它目前独立的一套“BI 风格”
 - 保持 basename 和全屏路由行为不变
 
+## 当前进度
+
+- `AppLayout.tsx` 已重构为统一控制台壳，加入新的 header intro、顶部动作区与侧栏说明卡
+- `layouts/layout.css` 已改成浅色优先的卡片式 header / content shell
+- `components/SidebarNav/SidebarNav.css` 已重绘为与 admin/platform 同家族的浅色侧栏
+- 全屏路由仍保持在 `AppLayout` 之外，未改变 `/screens/:id/edit`、`/screens/:id/preview`、`/screens/:id/export` 和 `/public/screen/:uuid`
+- `pnpm -C source/dts-analytics-webapp/modern build` 已通过
+
 ## 验收
 
 - `pnpm -C source/dts-analytics-webapp/modern build`
@@ -29,3 +37,8 @@
 ## 风险
 
 - analytics 既有普通页面又有全屏页面，改壳时不能误伤 `/screens/:id/edit` 等全屏路由
+
+## 本轮验证
+
+- `pnpm -C source/dts-analytics-webapp/modern install --frozen-lockfile`
+- `pnpm -C source/dts-analytics-webapp/modern build`
