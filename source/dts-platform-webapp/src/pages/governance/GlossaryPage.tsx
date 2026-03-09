@@ -1,17 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { BookOpenText, FolderTree, Link2, UserRound } from "lucide-react";
-import { Button, Descriptions, Divider, Drawer, Form, Input, List, Modal, Space, Spin, Table, Typography } from "antd";
+import { Button, Card, Descriptions, Divider, Drawer, Form, Input, List, Modal, Space, Spin, Table, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { EyeOutlined } from "@ant-design/icons";
 import { useNavigate, useSearchParams } from "react-router";
-import {
-	PlatformFilterBar,
-	PlatformMetaPill,
-	PlatformPageHero,
-	PlatformSectionCard,
-	PlatformSummaryCards,
-} from "@/components/console-page";
 import { EmptyState } from "@/components/empty-state";
 import { useGovernanceManageAccess } from "@/hooks/useModuleManageAccess";
 import {
@@ -247,45 +239,11 @@ export default function GlossaryPage() {
 		},
 	];
 
-	const domainCount = new Set(items.map((item) => normalizeText(item.domain)).filter(Boolean)).size;
-	const ownerCount = new Set(items.map((item) => normalizeText(item.owner)).filter(Boolean)).size;
-	const summaryCards = [
-		{
-			label: "术语总数",
-			value: items.length,
-			note: "当前术语库可检索条目",
-			icon: <BookOpenText className="h-5 w-5" />,
-		},
-		{
-			label: "主题域覆盖",
-			value: domainCount,
-			note: "有明确主题域归属的术语集合",
-			icon: <FolderTree className="h-5 w-5" />,
-			tone: "info" as const,
-		},
-		{
-			label: "负责人覆盖",
-			value: ownerCount,
-			note: "已明确责任人的术语数",
-			icon: <UserRound className="h-5 w-5" />,
-			tone: "success" as const,
-		},
-		{
-			label: "当前详情引用",
-			value: Number(references?.totalReferences || 0),
-			note: detailTerm?.name ? `当前查看 ${detailTerm.name}` : "打开详情后显示引用数",
-			icon: <Link2 className="h-5 w-5" />,
-			tone: "warning" as const,
-		},
-	];
-
 	return (
-		<div className="space-y-6">
-			<PlatformPageHero
+		<div className="space-y-4">
+			<Card
 				title="业务术语"
-				description="维护业务术语、标准编码、口径定义与负责人，避免业务语义在不同模块里漂移。"
-				eyebrow="Glossary Standards"
-				actions={
+				extra={
 					<Space wrap>
 						<Button className="rounded-2xl" disabled>
 							同步至 OpenMetadata
@@ -295,25 +253,8 @@ export default function GlossaryPage() {
 						</Button>
 					</Space>
 				}
-				meta={
-					<>
-						<PlatformMetaPill>标准管理主数据页</PlatformMetaPill>
-						<PlatformMetaPill>{canManage ? "当前账号可维护" : "当前账号只读"}</PlatformMetaPill>
-						<PlatformMetaPill>支持查看引用关系后再决定是否删除</PlatformMetaPill>
-					</>
-				}
-			/>
-
-			<PlatformSummaryCards items={summaryCards} />
-
-			<PlatformFilterBar>
-				<div>
-					<div className="text-sm font-semibold text-foreground">先搜索，再维护术语与口径</div>
-					<div className="mt-1 text-sm text-muted-foreground">
-						先用关键字收敛范围，再决定新增、编辑或查看引用关系。
-					</div>
-				</div>
-				<div className="flex flex-wrap items-center gap-2">
+			>
+				<div className="mb-3 flex flex-wrap items-center gap-2">
 					<Input.Search
 						placeholder="搜索术语名称..."
 						style={{ width: 300 }}
@@ -326,12 +267,6 @@ export default function GlossaryPage() {
 						重置
 					</Button>
 				</div>
-			</PlatformFilterBar>
-
-			<PlatformSectionCard
-				title="术语清单"
-				description="列表页只负责检索和打开详情，引用影响与删除拦截都在详情链路里完成。"
-			>
 				{items.length === 0 && !loading ? (
 					<EmptyState title="暂无术语" description="请先新增业务术语。" />
 				) : (
@@ -340,10 +275,11 @@ export default function GlossaryPage() {
 						dataSource={items}
 						columns={columns}
 						loading={loading}
+						scroll={{ x: 1000 }}
 						pagination={{ pageSize: 10 }}
 					/>
 				)}
-			</PlatformSectionCard>
+			</Card>
 
 			<Modal
 				open={modalOpen}

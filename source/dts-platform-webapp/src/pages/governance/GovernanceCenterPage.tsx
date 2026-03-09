@@ -1,14 +1,8 @@
-import { ArrowRightOutlined } from "@ant-design/icons";
 import { BookOpen, CheckCircle2, ShieldCheck, Sigma } from "lucide-react";
 import { Alert, Button, Card, Col, Row, Space, Tag, Typography } from "antd";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
-import {
-	PlatformMetaPill,
-	PlatformPageHero,
-	PlatformSectionCard,
-	PlatformSummaryCards,
-} from "@/components/console-page";
+import { PlatformSummaryCards } from "@/components/console-page";
 import { getGovernanceReleaseGate } from "@/api/platformApi";
 
 type Entry = {
@@ -19,7 +13,6 @@ type Entry = {
 
 type Section = {
 	title: string;
-	description: string;
 	entries: Entry[];
 };
 
@@ -46,7 +39,6 @@ export default function GovernanceCenterPage() {
 		() => [
 			{
 				title: "标准管理",
-				description: "统一术语、数据元、模板和参考码表，形成标准底座。",
 				entries: [
 					{ title: "术语表", description: "维护业务术语及解释", path: "/governance/standards/glossary" },
 					{ title: "数据元", description: "维护字段标准与口径", path: "/governance/standards/elements" },
@@ -56,7 +48,6 @@ export default function GovernanceCenterPage() {
 			},
 			{
 				title: "质量管控",
-				description: "围绕规则、执行与问题闭环开展质量治理。",
 				entries: [
 					{ title: "质量规则", description: "定义并执行质量规则", path: "/governance/rules" },
 					{ title: "质量看板", description: "查看执行结果与趋势", path: "/governance/quality" },
@@ -65,7 +56,6 @@ export default function GovernanceCenterPage() {
 			},
 			{
 				title: "指标中心",
-				description: "统一指标定义、维度管理、发布与追溯。",
 				entries: [
 					{ title: "指标字典", description: "管理指标与维度定义", path: "/governance/indicators/dictionary" },
 					{ title: "数据资产", description: "按资产回看指标依赖", path: "/catalog/assets" },
@@ -125,38 +115,26 @@ export default function GovernanceCenterPage() {
 
 	return (
 		<div className="space-y-6">
-			<PlatformPageHero
-				title="数据治理中心"
-				description="把标准管理、质量管控和指标治理的真实入口放到同一个总览页里，先看门禁，再进具体治理动作。"
-				eyebrow="Governance Overview"
-				actions={
-					<div className="flex flex-wrap items-center gap-2">
-						<Button className="rounded-2xl" onClick={() => navigate("/governance/rules")}>
-							质量规则
-						</Button>
-						<Button className="rounded-2xl" onClick={() => navigate("/governance/standards/glossary")}>
-							术语表
-						</Button>
-						<Button className="rounded-2xl" onClick={() => navigate("/governance/indicators/dictionary")}>
-							指标字典
-						</Button>
-					</div>
-				}
-				meta={
-					<>
-						<PlatformMetaPill>主流程：标准管理 - 质量管控 - 指标治理</PlatformMetaPill>
-						<PlatformMetaPill>最近 7 天发布门禁</PlatformMetaPill>
-						<PlatformMetaPill>全部入口均落到真实业务页</PlatformMetaPill>
-					</>
-				}
-			/>
+			<div className="flex items-center justify-between">
+				<h1 className="text-xl font-semibold">数据治理中心</h1>
+				<Space>
+					<Button onClick={() => navigate("/governance/rules")}>
+						质量规则
+					</Button>
+					<Button onClick={() => navigate("/governance/standards/glossary")}>
+						术语表
+					</Button>
+					<Button onClick={() => navigate("/governance/indicators/dictionary")}>
+						指标字典
+					</Button>
+				</Space>
+			</div>
 
 			<PlatformSummaryCards items={summaryCards} />
 
-			<PlatformSectionCard
+			<Card
 				title="发布门禁（最近 7 天）"
-				description="先判断当前治理基线是否具备发布条件，再决定进入哪个治理区块处理问题。"
-				action={
+				extra={
 					<Button size="small" onClick={() => void loadReleaseGate()}>
 						刷新
 					</Button>
@@ -182,34 +160,35 @@ export default function GovernanceCenterPage() {
 					<Typography.Text type="secondary">暂无门禁数据。</Typography.Text>
 				)}
 				</Card>
-			</PlatformSectionCard>
+			</Card>
 
 			<Row gutter={[16, 16]}>
 				{sections.map((section) => (
 					<Col key={section.title} xs={24} md={12} xl={8}>
-						<PlatformSectionCard
-							title={section.title}
-							description={section.description}
-							className="h-full"
-							bodyClassName="flex flex-col gap-3"
-						>
-							{section.entries.map((entry) => (
-								<div key={entry.path} className="rounded-[22px] border border-border/70 bg-muted/35 p-4">
-									<Space direction="vertical" size={6} style={{ width: "100%" }}>
-										<Typography.Text strong>{entry.title}</Typography.Text>
-										<Typography.Text type="secondary">{entry.description}</Typography.Text>
-										<Button
-											type="link"
-											style={{ padding: 0, width: "fit-content" }}
-											icon={<ArrowRightOutlined />}
-											onClick={() => navigate(entry.path)}
-										>
-											进入
-										</Button>
-									</Space>
+						<Card title={section.title} className="h-full">
+							<div>
+							{section.entries.map((entry, idx) => (
+								<div
+									key={entry.path}
+									style={{
+										display: "flex",
+										alignItems: "center",
+										justifyContent: "space-between",
+										padding: "12px 0",
+										borderBottom: idx < section.entries.length - 1 ? "1px solid #f0f0f0" : "none",
+									}}
+								>
+									<div>
+										<span style={{ fontWeight: 600 }}>{entry.title}</span>
+										<span style={{ color: "#999", marginLeft: 12 }}>{entry.description}</span>
+									</div>
+									<Button type="link" onClick={() => navigate(entry.path)}>
+										进入
+									</Button>
 								</div>
 							))}
-						</PlatformSectionCard>
+							</div>
+						</Card>
 					</Col>
 				))}
 			</Row>

@@ -270,7 +270,6 @@ export default function QualityPage() {
 		<div className="space-y-4">
 			<PageHeader
 				title="数据治理中心 · 质量报告"
-				description="汇总展示数据集质量规则执行结果与趋势。"
 			/>
 
 			<Card title="选择数据集">

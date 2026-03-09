@@ -554,6 +554,7 @@ export default function DataSourcesPage() {
 				columns={columns as any}
 				dataSource={list}
 				loading={loading}
+				scroll={{ x: 1100 }}
 				pagination={{ pageSize: 12 }}
 			/>
 

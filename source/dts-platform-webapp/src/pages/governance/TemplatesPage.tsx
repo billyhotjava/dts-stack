@@ -1,15 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { ClipboardCheck, Layers3, Link2, ScanSearch } from "lucide-react";
-import { Badge, Button, Divider, Form, Input, List, Modal, Select, Space, Spin, Tag, Typography } from "antd";
+import { Badge, Button, Card, Divider, Form, Input, List, Modal, Select, Space, Spin, Tag, Typography } from "antd";
 import { useNavigate, useSearchParams } from "react-router";
-import {
-	PlatformFilterBar,
-	PlatformMetaPill,
-	PlatformPageHero,
-	PlatformSectionCard,
-	PlatformSummaryCards,
-} from "@/components/console-page";
 import { EmptyState } from "@/components/empty-state";
 import { useGovernanceManageAccess } from "@/hooks/useModuleManageAccess";
 import { createModelTemplate, deleteModelTemplate, getModelTemplateReferences, listModelTemplates, updateModelTemplate } from "@/api/platformApi";
@@ -306,39 +298,6 @@ export default function TemplatesPage() {
 	const fieldRows = useMemo(() => parseFieldsTemplate(activeTemplate?.fieldsTemplate), [activeTemplate?.fieldsTemplate]);
 	const metadataTags = useMemo(() => parseTags(activeTemplate?.metadataStandardIds), [activeTemplate?.metadataStandardIds]);
 	const checklistItems = useMemo(() => parseTags(activeTemplate?.reviewChecklist), [activeTemplate?.reviewChecklist]);
-	const layerCount = useMemo(
-		() => new Set(items.map((item) => normalizeText(item.layer)).filter(Boolean)).size,
-		[items],
-	);
-	const requiredFieldCount = useMemo(() => fieldRows.filter((field) => field.required).length, [fieldRows]);
-	const summaryCards = [
-		{
-			label: "模板总数",
-			value: items.length,
-			note: "当前数据建模标准模板条目",
-			icon: <Layers3 className="h-5 w-5" />,
-		},
-		{
-			label: "层级覆盖",
-			value: layerCount,
-			note: "已定义的模型层级数量",
-			icon: <ScanSearch className="h-5 w-5" />,
-			tone: "info" as const,
-		},
-		{
-			label: "引用对象",
-			value: Number(references?.totalReferences || 0),
-			note: activeTemplate?.name || "当前模板在建模流程中的复用情况",
-			icon: <Link2 className="h-5 w-5" />,
-			tone: "success" as const,
-		},
-		{
-			label: "必选字段",
-			value: requiredFieldCount,
-			note: activeTemplate ? "当前模板中的强制字段数量" : "选择模板后查看字段约束",
-			icon: <ClipboardCheck className="h-5 w-5" />,
-		},
-	];
 
 	const openFieldEditor = (template: ModelingTemplate | null) => {
 		if (!canManage) {
@@ -403,45 +362,29 @@ export default function TemplatesPage() {
 	};
 
 	return (
-		<div className="space-y-6">
-			<PlatformPageHero
+		<div className="space-y-4">
+			<Card
 				title="标准模板"
-				eyebrow="Governance Console"
-				description="统一管理模型模板、公共字段骨架、关联数据元和评审清单，确保建模页面与治理标准保持同一套控制台语言。"
-				actions={
+				extra={
 					<Button type="primary" onClick={() => openModal()} disabled={!canManage}>
 						+ 新增模板
 					</Button>
 				}
-				meta={
-					<>
-						<PlatformMetaPill>当前模板 {activeTemplate?.name || "未选择"}</PlatformMetaPill>
-						<PlatformMetaPill>检索关键词 {query.trim() || "全部模板"}</PlatformMetaPill>
-						<PlatformMetaPill>治理权限 {canManage ? "可操作" : "只读"}</PlatformMetaPill>
-					</>
-				}
-			/>
-			<PlatformSummaryCards items={summaryCards} />
-
-			<PlatformFilterBar>
-				<div className="space-y-1">
-					<div className="text-sm font-medium text-foreground">模板检索与落标范围</div>
-					<div className="text-sm text-muted-foreground">按名称或层级筛选模板，查看字段骨架、数据元关系和评审约束。</div>
-				</div>
-				<div className="w-full max-w-xl">
+			>
+				<div className="mb-3 flex flex-wrap items-center gap-2">
 					<Input
 						placeholder="搜索模板名称或层级..."
+						style={{ width: 400 }}
 						value={query}
 						onChange={(event) => setQuery(event.target.value)}
 					/>
 				</div>
-			</PlatformFilterBar>
+			</Card>
 
 			<div className="grid gap-6 lg:grid-cols-3">
-				<PlatformSectionCard
+				<Card
 					className="lg:col-span-1"
 					title="模板列表"
-					description="选择标准模板，查看建模骨架和复用关系。"
 				>
 					<div className="space-y-4">
 						{items.length === 0 && !loading ? (
@@ -471,13 +414,12 @@ export default function TemplatesPage() {
 							+ 创建新模板
 						</Button>
 					</div>
-				</PlatformSectionCard>
+				</Card>
 
-				<PlatformSectionCard
+				<Card
 					className="lg:col-span-2"
 					title={`模板详情${activeTemplate?.name ? ` · ${activeTemplate.name}` : ""}`}
-					description="查看模板版本、字段约束、关联数据元和当前引用面。"
-					action={
+					extra={
 						activeTemplate ? (
 							<Space>
 								<Button size="small" onClick={() => openModal(activeTemplate)} disabled={!canManage}>
@@ -619,7 +561,7 @@ export default function TemplatesPage() {
 							</div>
 						</div>
 					)}
-				</PlatformSectionCard>
+				</Card>
 			</div>
 
 			<Modal

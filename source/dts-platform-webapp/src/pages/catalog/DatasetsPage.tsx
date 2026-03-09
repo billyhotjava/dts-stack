@@ -1,15 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Database, FolderTree, ShieldCheck, Sparkles } from "lucide-react";
 import { Alert, Button, Card, Form, Input, Modal, Select, Space, Table, Tabs, Tag, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import {
-	PlatformFilterBar,
-	PlatformMetaPill,
-	PlatformPageHero,
-	PlatformSectionCard,
-	PlatformSummaryCards,
-} from "@/components/console-page";
 import { EmptyState } from "@/components/empty-state";
 import {
 	getCatalogReconciliation,
@@ -613,43 +605,11 @@ export default function Page() {
 		},
 	];
 
-	const summaryCards = [
-		{
-			label: "资产总量",
-			value: pageState.total,
-			note: "当前筛选范围内的总资产记录",
-			icon: <Database className="h-5 w-5" />,
-		},
-		{
-			label: "主题域",
-			value: domains.length,
-			note: "资产归属主题域数量",
-			icon: <FolderTree className="h-5 w-5" />,
-			tone: "info" as const,
-		},
-		{
-			label: "活跃资产",
-			value: records.filter((item) => item.status === "启用").length,
-			note: "当前页启用状态资产",
-			icon: <Sparkles className="h-5 w-5" />,
-			tone: "success" as const,
-		},
-		{
-			label: "一致性失败",
-			value: Number(reconciliation?.failedCount || 0),
-			note: "发布前回归与一致性断言阻断数",
-			icon: <ShieldCheck className="h-5 w-5" />,
-			tone: "warning" as const,
-		},
-	];
-
 	return (
-		<div className="space-y-6">
-			<PlatformPageHero
+		<div className="space-y-4">
+			<Card
 				title="资产地图"
-				description="按主题域、资产类型、密级和分层组织资产门户，让全局盘点、详情核查和发布前回归都在一个页面里完成。"
-				eyebrow="Catalog Overview"
-				actions={
+				extra={
 					<div className="flex flex-wrap items-center gap-2">
 						<Button className="rounded-2xl" onClick={() => void loadDatasets(1, pageState.size)} loading={loading}>
 							刷新资产
@@ -659,25 +619,8 @@ export default function Page() {
 						</Button>
 					</div>
 				}
-				meta={
-					<>
-						<PlatformMetaPill>{domain ? `主题域 ${domain}` : "主题域全部"}</PlatformMetaPill>
-						<PlatformMetaPill>{assetType === "ALL" ? "资产类型全部" : `资产类型 ${assetType}`}</PlatformMetaPill>
-						<PlatformMetaPill>{classification === "ALL" ? "密级全部" : `密级 ${classification}`}</PlatformMetaPill>
-					</>
-				}
-			/>
-
-			<PlatformSummaryCards items={summaryCards} />
-
-			<PlatformFilterBar>
-				<div>
-					<div className="text-sm font-semibold text-foreground">先筛资产，再打开详情或回归核对</div>
-					<div className="mt-1 text-sm text-muted-foreground">
-						筛选条件会同时影响资产列表和上方概览卡片，方便快速收敛治理范围。
-					</div>
-				</div>
-				<div className="flex flex-wrap items-center gap-2">
+			>
+				<div className="mb-3 flex flex-wrap items-center gap-2">
 					<Select
 						allowClear
 						placeholder="主题域"
@@ -729,9 +672,9 @@ export default function Page() {
 						重置筛选
 					</Button>
 				</div>
-			</PlatformFilterBar>
+			</Card>
 
-			<PlatformSectionCard title="资产地图视图" description="用轻量概览卡片快速判断资产规模、主题域覆盖和活跃情况。">
+			<Card title="资产地图视图">
 				{records.length ? (
 					<div className="grid gap-3 md:grid-cols-3">
 						<Card size="small" title="资产总量">
@@ -752,15 +695,16 @@ export default function Page() {
 				) : (
 					<EmptyState title="暂无资产地图" description="请先完成元数据采集或同步资产数据。" />
 				)}
-			</PlatformSectionCard>
+			</Card>
 
-				<PlatformSectionCard title="资产列表" description="列表保持分页、详情和筛选联动，不改动原有资产详情链路。">
+				<Card title="资产列表">
 					{records.length ? (
 					<Table
 						rowKey="id"
 						columns={columns}
 						dataSource={records}
 						loading={loading}
+						scroll={{ x: 1400 }}
 						pagination={{
 							current: pageState.page,
 							pageSize: pageState.size,
@@ -776,11 +720,10 @@ export default function Page() {
 				) : (
 					<EmptyState title="暂无资产" description="当前筛选条件下未找到资产。" />
 					)}
-				</PlatformSectionCard>
-				<PlatformSectionCard
+				</Card>
+				<Card
 					title="发布前回归与一致性核对"
-					description="在发布前先看断言阻断、风险建议和核心页面回归清单。"
-					action={
+					extra={
 						<Button loading={reconciliationLoading} onClick={() => void loadReconciliation()}>
 							重新核对
 						</Button>
@@ -845,7 +788,7 @@ export default function Page() {
 					) : (
 						<EmptyState title="暂无核对结果" description="当前账号无权限或尚未执行核对。" />
 					)}
-				</PlatformSectionCard>
+				</Card>
 				<Modal
 					title="资产字段详情"
 				open={detailOpen}

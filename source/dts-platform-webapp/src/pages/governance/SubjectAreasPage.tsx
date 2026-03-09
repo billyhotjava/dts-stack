@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { FolderTree, Layers3, ScanSearch, Users } from "lucide-react";
 import {
 	Badge,
 	Button,
+	Card,
 	Divider,
 	Form,
 	Input,
@@ -17,13 +17,6 @@ import {
 } from "antd";
 import type { DataNode } from "antd/es/tree";
 import { useSearchParams } from "react-router";
-import {
-	PlatformFilterBar,
-	PlatformMetaPill,
-	PlatformPageHero,
-	PlatformSectionCard,
-	PlatformSummaryCards,
-} from "@/components/console-page";
 import { EmptyState } from "@/components/empty-state";
 import { useGovernanceManageAccess } from "@/hooks/useModuleManageAccess";
 import { createDomain, deleteDomain, getDomainTree, updateDomain } from "@/api/platformApi";
@@ -189,39 +182,6 @@ export default function SubjectAreasPage() {
 
 	const activeDomain = selectedKey !== ROOT_KEY ? domainIndex.get(selectedKey) || null : null;
 	const activeChildren = activeDomain?.children || [];
-	const ownerCount = useMemo(
-		() => new Set(domainOptions.map((item) => normalizeText(item.owner)).filter(Boolean)).size,
-		[domainOptions],
-	);
-	const summaryCards = [
-		{
-			label: "主题域总数",
-			value: domainOptions.length,
-			note: "当前治理目录中的全部业务主题域",
-			icon: <FolderTree className="h-5 w-5" />,
-		},
-		{
-			label: "根域数量",
-			value: domainTree.length,
-			note: "一级业务主题域入口",
-			icon: <Layers3 className="h-5 w-5" />,
-			tone: "info" as const,
-		},
-		{
-			label: "当前子域",
-			value: activeChildren.length,
-			note: activeDomain?.name || "Root 视角下暂无选中主题域",
-			icon: <ScanSearch className="h-5 w-5" />,
-			tone: "success" as const,
-		},
-		{
-			label: "负责人覆盖",
-			value: ownerCount,
-			note: "已配置负责人主题域数量",
-			icon: <Users className="h-5 w-5" />,
-		},
-	];
-
 	const openModal = (domain?: DomainNode | null, parentId?: string | null) => {
 		setEditing(domain || null);
 		form.resetFields();
@@ -301,12 +261,10 @@ export default function SubjectAreasPage() {
 	);
 
 	return (
-		<div className="space-y-6">
-			<PlatformPageHero
+		<div className="space-y-4">
+			<Card
 				title="主题域管理"
-				eyebrow="Governance Console"
-				description="统一维护业务主题域结构、负责人和层级关系，让资产归类和治理视角保持在同一套控制台语言里。"
-				actions={
+				extra={
 					<Space>
 						<Button onClick={() => openModal(null, null)} disabled={!canManage}>
 							新增根域
@@ -320,36 +278,16 @@ export default function SubjectAreasPage() {
 						</Button>
 					</Space>
 				}
-				meta={
-					<>
-						<PlatformMetaPill>当前视角 {activeDomain?.name || "全域主题"}</PlatformMetaPill>
-						<PlatformMetaPill>检索关键词 {keyword.trim() || "全部主题域"}</PlatformMetaPill>
-						<PlatformMetaPill>治理权限 {canManage ? "可操作" : "只读"}</PlatformMetaPill>
-					</>
-				}
-			/>
-			<PlatformSummaryCards items={summaryCards} />
-
-			<PlatformFilterBar>
-				<div className="space-y-1">
-					<div className="text-sm font-medium text-foreground">主题域检索与层级浏览</div>
-					<div className="text-sm text-muted-foreground">按名称、编码或负责人筛选主题域，定位当前治理归属与子域结构。</div>
-				</div>
-				<div className="w-full max-w-xl">
+			>
+				<div className="mb-3 flex flex-wrap items-center gap-2">
 					<Input.Search
 						placeholder="搜索主题域..."
+						style={{ width: 400 }}
 						value={keyword}
 						onChange={(e) => setKeyword(e.target.value)}
 						allowClear
 					/>
 				</div>
-			</PlatformFilterBar>
-
-			<PlatformSectionCard
-				title="主题域结构与详情"
-				description="左侧浏览层级目录，右侧查看当前主题域负责人、说明和子域分布。"
-				bodyClassName="pt-0"
-			>
 				<Layout className="overflow-hidden rounded-[24px] border border-border/70 bg-background">
 					<Sider width={320} theme="light" className="border-r border-slate-200 p-4">
 					<Space direction="vertical" className="w-full" size="middle">
@@ -474,7 +412,7 @@ export default function SubjectAreasPage() {
 					)}
 					</Content>
 				</Layout>
-			</PlatformSectionCard>
+			</Card>
 
 			<Modal
 				open={modalOpen}

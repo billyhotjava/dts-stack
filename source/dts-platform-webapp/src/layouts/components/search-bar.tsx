@@ -108,7 +108,7 @@ const SearchBar = () => {
 			>
 				<div className="flex items-center justify-center gap-3">
 					<Icon icon="local:ic-search" size="20" />
-					<span className="hidden text-sm font-medium text-text-secondary xl:inline">Search modules and pages</span>
+					<span className="hidden text-sm font-medium text-text-secondary xl:inline">搜索模块与页面</span>
 					<kbd className="flex items-center justify-center rounded-full bg-primary px-2 py-1 text-xs font-semibold text-common-white">
 						<Icon icon="qlementine-icons:key-cmd-16" />
 						<span>K</span>
@@ -117,9 +117,9 @@ const SearchBar = () => {
 			</Button>
 
 			<CommandDialog open={open} onOpenChange={setOpen}>
-				<CommandInput placeholder="Type a command or search..." value={searchQuery} onValueChange={setSearchQuery} />
+				<CommandInput placeholder="输入命令或搜索..." value={searchQuery} onValueChange={setSearchQuery} />
 				<ScrollArea className="h-[400px]">
-					<CommandEmpty>No results found.</CommandEmpty>
+					<CommandEmpty>未找到结果</CommandEmpty>
 					<CommandGroup heading="Navigations">
 						{flattenedItems.map(({ key, label }) => (
 							<CommandItem key={key} onSelect={() => handleSelect(key)} className="flex flex-col items-start">

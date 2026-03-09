@@ -618,7 +618,19 @@ urlencode_component(){
 
 generate_env_base(){
   if [ -f .env ]; then
-    set -a; . ./.env; set +a
+    # Source .env safely: export line-by-line to handle values with spaces
+    # (plain `. ./.env` would treat "VAR=a b" as "set VAR=a then run b")
+    while IFS= read -r _env_line || [[ -n "$_env_line" ]]; do
+      # skip comments and blank lines
+      [[ -z "$_env_line" || "$_env_line" == \#* ]] && continue
+      _env_key="${_env_line%%=*}"
+      _env_val="${_env_line#*=}"
+      # Strip surrounding double/single quotes (Docker Compose style)
+      if [[ "$_env_val" =~ ^\"(.*)\"$ ]] || [[ "$_env_val" =~ ^\'(.*)\'$ ]]; then
+        _env_val="${BASH_REMATCH[1]}"
+      fi
+      export "${_env_key}=${_env_val}"
+    done < .env
   fi
 
   : "${BASE_DOMAIN:=dts.local}"

@@ -16,6 +16,7 @@ import com.yuzhi.dts.ingestion.repository.IngestionTaskRepository;
 import com.yuzhi.dts.ingestion.service.audit.AuditService;
 import com.yuzhi.dts.ingestion.service.infra.IngestionSettingsService;
 import com.yuzhi.dts.ingestion.service.infra.PlatformInfraClient;
+import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -81,7 +82,8 @@ class AirflowExecutionSyncServiceTest {
         IngestionExecution execution = runningExecution(101L, "manual__001", task);
         Page<IngestionExecution> page = new PageImpl<>(List.of(execution), PageRequest.of(0, 20), 1);
         when(executionRepository.findByStatus(eq("running"), any(PageRequest.class))).thenReturn(page);
-        when(airflowClient.getDagRun("dag-demo", "manual__001")).thenReturn(Optional.of(Map.of("state", "failed")));
+        when(airflowClient.getDagRunLookup("dag-demo", "manual__001"))
+            .thenReturn(AirflowClient.DagRunLookupResult.found(200, Map.of("state", "failed")));
 
         Map<String, Object> taskInstance = new LinkedHashMap<>();
         taskInstance.put("task_id", "addax_ods_demo");
@@ -118,12 +120,36 @@ class AirflowExecutionSyncServiceTest {
         IngestionExecution execution = runningExecution(202L, "manual__002", task);
         Page<IngestionExecution> page = new PageImpl<>(List.of(execution), PageRequest.of(0, 20), 1);
         when(executionRepository.findByStatus(eq("running"), any(PageRequest.class))).thenReturn(page);
-        when(airflowClient.getDagRun("dag-success", "manual__002")).thenReturn(Optional.of(Map.of("state", "success")));
+        when(airflowClient.getDagRunLookup("dag-success", "manual__002"))
+            .thenReturn(AirflowClient.DagRunLookupResult.found(200, Map.of("state", "success")));
 
         syncService.syncRunningExecutions();
 
         verify(incrementalSyncService).updateCheckpointOnSuccess(any(IngestionTask.class), any(IngestionExecution.class));
         verify(auditService, never()).auditAction(eq("INGESTION_TASK_EXECUTE"), eq(AuditStage.FAIL), any(), any());
+    }
+
+    @Test
+    void shouldMarkExecutionFailedWhenDagRunIsMissingBeyondGraceWindow() {
+        IngestionTask task = task(30L, "task-missing", "dag-missing");
+        IngestionExecution execution = runningExecution(303L, "manual__404", task);
+        execution.setStartTime(Instant.now().minusSeconds(10 * 60));
+
+        Page<IngestionExecution> page = new PageImpl<>(List.of(execution), PageRequest.of(0, 20), 1);
+        when(executionRepository.findByStatus(eq("running"), any(PageRequest.class))).thenReturn(page);
+        when(airflowClient.getDagRunLookup("dag-missing", "manual__404"))
+            .thenReturn(AirflowClient.DagRunLookupResult.notFound(404, "DAGRun not found"));
+
+        syncService.syncRunningExecutions();
+
+        ArgumentCaptor<IngestionExecution> executionCaptor = ArgumentCaptor.forClass(IngestionExecution.class);
+        verify(executionRepository).save(executionCaptor.capture());
+        IngestionExecution savedExecution = executionCaptor.getValue();
+        assertThat(savedExecution.getStatus()).isEqualTo("failed");
+        assertThat(savedExecution.getErrorMessage()).contains("DAGRun not found");
+        assertThat(savedExecution.getErrorMessage()).contains("dag-missing");
+        assertThat(savedExecution.getErrorMessage()).contains("manual__404");
+        verify(incrementalSyncService, never()).updateCheckpointOnSuccess(any(), any());
     }
 
     private IngestionTask task(Long id, String name, String dagId) {

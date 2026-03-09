@@ -29,7 +29,6 @@ export function PageContainer({
 // Page Header
 export interface PageHeaderProps {
   title: ReactNode;
-  subtitle?: ReactNode;
   breadcrumbs?: ReactNode;
   actions?: ReactNode;
   className?: string;
@@ -37,7 +36,6 @@ export interface PageHeaderProps {
 
 export function PageHeader({
   title,
-  subtitle,
   breadcrumbs,
   actions,
   className = '',
@@ -48,7 +46,6 @@ export function PageHeader({
       <div className="mb-page-header__content">
         <div className="mb-page-header__titles">
           <h1 className="mb-page-header__title">{title}</h1>
-          {subtitle && <p className="mb-page-header__subtitle">{subtitle}</p>}
         </div>
         {actions && <div className="mb-page-header__actions">{actions}</div>}
       </div>

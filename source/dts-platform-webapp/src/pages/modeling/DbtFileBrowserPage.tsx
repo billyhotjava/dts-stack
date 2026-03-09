@@ -2,9 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Editor from "@monaco-editor/react";
 import { toast } from "sonner";
 import { registerDbtLanguage, DBT_SQL_LANGUAGE_ID } from "./dbt-monaco-lang";
-import { FileCode2, FolderTree, RefreshCw, Rocket } from "lucide-react";
 import {
 	Button,
+	Card,
 	Dropdown,
 	Form,
 	Input,
@@ -42,12 +42,6 @@ import {
 	triggerDbtTest,
 	triggerDbtDocs,
 } from "@/api/platformApi";
-import {
-	PlatformMetaPill,
-	PlatformPageHero,
-	PlatformSectionCard,
-	PlatformSummaryCards,
-} from "@/components/console-page";
 import { useRouter } from "@/routes/hooks";
 
 const { Text } = Typography;
@@ -134,11 +128,6 @@ function fileNodeToTreeData(node: FileNode): DataNode {
 		// Stash the full node for context menu / other operations
 		...(({ children: _, ...rest }) => ({ data: rest }))(node),
 	} as DataNode & { data: FileNode };
-}
-
-function countNodes(node?: FileNode | null): number {
-	if (!node) return 0;
-	return 1 + (node.children || []).reduce((sum, child) => sum + countNodes(child), 0);
 }
 
 // ── Component ─────────────────────────────────────────────────
@@ -463,43 +452,12 @@ export default function DbtFileBrowserPage() {
 	const latestRun = syncStatus?.latestRun || null;
 	const latestStatus = String(latestRun?.status || "UNKNOWN").toUpperCase();
 	const latestStatusColor = latestStatus === "SUCCESS" ? "green" : latestStatus === "FAILED" ? "red" : "gold";
-	const summaryCards = [
-		{
-			label: "目录节点",
-			value: countNodes(treeData),
-			note: "含目录与文件节点",
-			icon: <FolderTree className="h-5 w-5" />,
-		},
-		{
-			label: "当前文件",
-			value: activeFile ? "已打开" : "未选择",
-			note: activeFile?.path || "选择一个文件开始编辑",
-			icon: <FileCode2 className="h-5 w-5" />,
-			tone: "info" as const,
-		},
-		{
-			label: "最近构建",
-			value: latestStatus,
-			note: latestRun?.generatedAt ? new Date(latestRun.generatedAt).toLocaleString() : "暂无最近构建",
-			icon: <Rocket className="h-5 w-5" />,
-			tone: "warning" as const,
-		},
-		{
-			label: "编辑状态",
-			value: dirty ? "未保存" : activeFile ? "已同步" : "待开始",
-			note: activeFile?.readOnly ? "当前文件只读" : "支持保存、运行与快速构建",
-			icon: <RefreshCw className="h-5 w-5" />,
-			tone: "success" as const,
-		},
-	];
 
 	return (
 		<div className="space-y-6">
-			<PlatformPageHero
+			<Card
 				title="DBT 文件工作区"
-				description="这里负责模型微调、文件编辑和快速运行验证，和逻辑建模页形成明确分工。"
-				eyebrow="DBT Workspace"
-				actions={
+				extra={
 					<div className="flex flex-wrap items-center gap-2">
 						<Button className="rounded-2xl" onClick={() => router.push("/modeling/sql")}>
 							回到逻辑建模
@@ -509,22 +467,11 @@ export default function DbtFileBrowserPage() {
 						</Button>
 					</div>
 				}
-				meta={
-					<>
-						<PlatformMetaPill>不再保留 ZIP 导入式占位入口</PlatformMetaPill>
-						<PlatformMetaPill>最近构建 {latestStatus}</PlatformMetaPill>
-						<PlatformMetaPill>{activeFile?.readOnly ? "当前文件只读" : "支持保存与快速构建"}</PlatformMetaPill>
-					</>
-				}
 			/>
 
-			<PlatformSummaryCards items={summaryCards} />
-
-			<PlatformSectionCard
+			<Card
 				title="文件浏览与编辑"
-				description="左侧目录用于定位模型文件，右侧编辑区负责修改、保存和触发构建。"
-				bodyClassName="p-0"
-				action={
+				extra={
 					<div className="flex flex-wrap items-center gap-2">
 						<Dropdown
 							menu={{
@@ -580,6 +527,7 @@ export default function DbtFileBrowserPage() {
 						</Button>
 					</div>
 				}
+				styles={{ body: { padding: 0 } }}
 			>
 				<div className="border-b border-border/70 bg-muted/25 px-5 py-4 text-xs text-muted-foreground">
 					<div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
@@ -700,7 +648,7 @@ export default function DbtFileBrowserPage() {
 						)}
 					</div>
 				</div>
-			</PlatformSectionCard>
+			</Card>
 
 			{/* Create File/Dir Modal */}
 			<Modal

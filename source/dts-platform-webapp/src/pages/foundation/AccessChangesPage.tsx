@@ -282,7 +282,6 @@ export default function AccessChangesPage() {
 		<div className="space-y-4">
 			<PageHeader
 				title="接入变更记录"
-				description="统一记录入湖任务的连接、范围与调度变更。"
 				actions={
 					<Space>
 						<Button onClick={() => loadChanges()}>刷新</Button>

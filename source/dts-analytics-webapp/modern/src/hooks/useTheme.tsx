@@ -4,16 +4,28 @@ export type Theme = 'light' | 'dark';
 
 const THEME_STORAGE_KEY = 'dts-analytics.theme';
 
+function getPlatformTheme(): Theme | null {
+  try {
+    const raw = localStorage.getItem('settings');
+    if (!raw) return null;
+    const store = JSON.parse(raw);
+    // Zustand persist stores under { state: { settings: { themeMode } } } or { settings: { themeMode } }
+    const settings = store?.state?.settings ?? store?.settings;
+    if (settings?.themeMode === 'dark') return 'dark';
+    if (settings?.themeMode === 'light') return 'light';
+  } catch { /* ignore */ }
+  return null;
+}
+
 function getInitialTheme(): Theme {
-  // Check localStorage first
+  // Check analytics-specific preference first
   const stored = localStorage.getItem(THEME_STORAGE_KEY);
   if (stored === 'light' || stored === 'dark') {
     return stored;
   }
-  // Fall back to system preference
-  // if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-  //   return 'dark';
-  // }
+  // Fall back to platform webapp's theme setting
+  const platformTheme = getPlatformTheme();
+  if (platformTheme) return platformTheme;
   return 'light';
 }
 

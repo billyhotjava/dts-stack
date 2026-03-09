@@ -32,7 +32,9 @@ export default function PublicScreenPage() {
     const [manualScale, setManualScale] = useState<number | null>(null);
     const [deviceMode, setDeviceMode] = useState<DeviceMode>('pc');
     const [forcedDeviceMode, setForcedDeviceMode] = useState<DeviceMode | null>(null);
+    const [fabOpen, setFabOpen] = useState(false);
     const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+    const fabRef = useRef<HTMLDivElement | null>(null);
 
     // Embed mode: ?embed=1 hides all controls; ?hideControls=1 hides only zoom controls
     const searchParams = useMemo(() => new URLSearchParams(window.location.search), []);
@@ -208,6 +210,18 @@ export default function PublicScreenPage() {
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [adjustScale, setAbsoluteScale, setFitScale]);
 
+    // Close FAB panel on click outside
+    useEffect(() => {
+        if (!fabOpen) return;
+        const handleClick = (e: MouseEvent) => {
+            if (fabRef.current && !fabRef.current.contains(e.target as Node)) {
+                setFabOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClick);
+        return () => document.removeEventListener('mousedown', handleClick);
+    }, [fabOpen]);
+
     const globalVariables = screen?.globalVariables ?? [];
     // Apply URL variable overrides to global variable definitions
     const effectiveGlobalVars = useMemo(() => {
@@ -263,34 +277,7 @@ export default function PublicScreenPage() {
     return (
         <ScreenRuntimeProvider definitions={effectiveGlobalVars}>
             <div className={`screen-runtime screen-runtime--fullscreen ${screenTheme === 'glacier' ? 'screen-runtime--light' : 'screen-runtime--dark'} ${isEmbedMode ? 'screen-runtime--embed' : ''}`}>
-                {!isEmbedMode ? (
-                    <div className="screen-runtime__meta-card">
-                        <div className="screen-runtime__eyebrow">Public Screen</div>
-                        <div className="screen-runtime__title">{screen.name || '未命名大屏'}</div>
-                        <div className="screen-runtime__meta-row">
-                            <span className="screen-runtime__badge is-info">Public Access</span>
-                            <span className="screen-runtime__badge">{screenWidth} × {screenHeight}</span>
-                            <span className="screen-runtime__badge">{visibleSortedComponents.length} 组件</span>
-                            {Object.keys(urlVariableOverrides).length > 0 ? (
-                                <span className="screen-runtime__badge is-warning">URL 参数覆盖 {Object.keys(urlVariableOverrides).length}</span>
-                            ) : null}
-                        </div>
-                    </div>
-                ) : null}
                 <div ref={scrollContainerRef} className="screen-runtime__scroll">
-                    {!hideControls && (
-                        <PreviewScaleControl
-                            scalePercent={scalePercent}
-                            onFit={setFitScale}
-                            onReset100={() => setAbsoluteScale(1)}
-                            onZoomOut={() => adjustScale(-0.1)}
-                            onZoomIn={() => adjustScale(0.1)}
-                            onSetScalePercent={(percent) => {
-                                const safePercent = Number.isFinite(percent) ? Math.max(20, Math.min(200, Math.round(percent))) : 100;
-                                setAbsoluteScale(safePercent / 100);
-                            }}
-                        />
-                    )}
                     <div className="screen-runtime__viewport">
                         <div className="screen-runtime__stage" style={{ width: stageWidth, height: stageHeight }}>
                             <div className="screen-runtime__canvas-shell">
@@ -340,45 +327,93 @@ export default function PublicScreenPage() {
                             </div>
                         </div>
                     </div>
+                    {/* Carousel page indicator */}
+                    {carousel.pageCount > 1 && (
+                        <div className="screen-runtime__pager">
+                            <button type="button" onClick={carousel.prevPage} className="runtime-control-btn screen-runtime__pager-nav">‹</button>
+                            {Array.from({ length: carousel.pageCount }, (_, i) => (
+                                <button
+                                    key={i}
+                                    type="button"
+                                    onClick={() => carousel.goToPage(i)}
+                                    className={`runtime-control-btn screen-runtime__pager-dot ${i === carousel.pageIndex ? 'is-active' : ''}`}
+                                    title={`第 ${i + 1} 页`}
+                                />
+                            ))}
+                            <button type="button" onClick={carousel.nextPage} className="runtime-control-btn screen-runtime__pager-nav">›</button>
+                        </div>
+                    )}
+                    <RuntimeActionPanel />
                 </div>
-                {!isEmbedMode && <GlobalVariablePanel />}
+
+                {/* Floating controls FAB */}
                 {!isEmbedMode && (
-                    <DeviceModeSwitcher
-                        position="fixed"
-                        deviceMode={deviceMode}
-                        forcedDeviceMode={forcedDeviceMode}
-                        onSetForcedMode={setForcedMode}
-                    />
-                )}
-                {/* Carousel page indicator */}
-                {carousel.pageCount > 1 && (
-                    <div className="screen-runtime__pager">
+                    <div ref={fabRef} className="preview-fab">
                         <button
                             type="button"
-                            onClick={carousel.prevPage}
-                            className="runtime-control-btn screen-runtime__pager-nav"
+                            className="preview-fab__trigger"
+                            onClick={() => setFabOpen((prev) => !prev)}
+                            title="控制面板"
                         >
-                            ‹
+                            ⚙
                         </button>
-                        {Array.from({ length: carousel.pageCount }, (_, i) => (
-                            <button
-                                key={i}
-                                type="button"
-                                onClick={() => carousel.goToPage(i)}
-                                className={`runtime-control-btn screen-runtime__pager-dot ${i === carousel.pageIndex ? 'is-active' : ''}`}
-                                title={`第 ${i + 1} 页`}
-                            />
-                        ))}
-                        <button
-                            type="button"
-                            onClick={carousel.nextPage}
-                            className="runtime-control-btn screen-runtime__pager-nav"
-                        >
-                            ›
-                        </button>
+                        {fabOpen && (
+                            <div className="preview-fab__panel">
+                                <div className="preview-fab__section">
+                                    <div className="preview-fab__section-title">屏幕信息</div>
+                                    <div className="preview-fab__info-name">{screen.name || '未命名大屏'}</div>
+                                    <div className="preview-fab__info-badges">
+                                        <span className="screen-runtime__badge is-info">公开访问</span>
+                                        <span className="screen-runtime__badge">{screenWidth} × {screenHeight}</span>
+                                        <span className="screen-runtime__badge">{visibleSortedComponents.length} 组件</span>
+                                        {carousel.pageCount > 1 ? (
+                                            <span className="screen-runtime__badge">{carousel.pageIndex + 1}/{carousel.pageCount} 页</span>
+                                        ) : null}
+                                        {Object.keys(urlVariableOverrides).length > 0 ? (
+                                            <span className="screen-runtime__badge is-warning">URL 参数覆盖 {Object.keys(urlVariableOverrides).length}</span>
+                                        ) : null}
+                                    </div>
+                                </div>
+                                <div className="preview-fab__divider" />
+                                <div className="preview-fab__section">
+                                    <div className="preview-fab__section-title">缩放</div>
+                                    {!hideControls && (
+                                        <PreviewScaleControl
+                                            scalePercent={scalePercent}
+                                            onFit={setFitScale}
+                                            onReset100={() => setAbsoluteScale(1)}
+                                            onZoomOut={() => adjustScale(-0.1)}
+                                            onZoomIn={() => adjustScale(0.1)}
+                                            onSetScalePercent={(percent) => {
+                                                const safePercent = Number.isFinite(percent) ? Math.max(20, Math.min(200, Math.round(percent))) : 100;
+                                                setAbsoluteScale(safePercent / 100);
+                                            }}
+                                        />
+                                    )}
+                                </div>
+                                <div className="preview-fab__divider" />
+                                <div className="preview-fab__section">
+                                    <div className="preview-fab__section-title">设备模式</div>
+                                    <DeviceModeSwitcher
+                                        position="inline"
+                                        deviceMode={deviceMode}
+                                        forcedDeviceMode={forcedDeviceMode}
+                                        onSetForcedMode={setForcedMode}
+                                    />
+                                </div>
+                                {globalVariables.length > 0 && (
+                                    <>
+                                        <div className="preview-fab__divider" />
+                                        <div className="preview-fab__section">
+                                            <div className="preview-fab__section-title">运行时变量</div>
+                                            <GlobalVariablePanel />
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+                        )}
                     </div>
                 )}
-                <RuntimeActionPanel />
             </div>
         </ScreenRuntimeProvider>
     );

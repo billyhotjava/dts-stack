@@ -1,7 +1,6 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Editor from "@monaco-editor/react";
 import { toast } from "sonner";
-import { Database, FileCode2, FolderTree, Rocket as RocketIcon } from "lucide-react";
 import {
 	Alert,
 	Badge,
@@ -46,11 +45,6 @@ import {
 } from "@ant-design/icons";
 import type { UploadFile } from "antd/es/upload/interface";
 import type { ColumnsType } from "antd/es/table";
-import {
-	PlatformMetaPill,
-	PlatformPageHero,
-	PlatformSummaryCards,
-} from "@/components/console-page";
 import { EmptyState } from "@/components/empty-state";
 import {
 	getDbtConfig,
@@ -1713,43 +1707,12 @@ export default function SqlModelingPage() {
 	const latestRun = dbtSyncStatus?.latestRun || null;
 	const latestBuildStatus = normalizeUpper(latestRun?.status) || "UNKNOWN";
 	const latestBuildColor = latestBuildStatus === "SUCCESS" ? "green" : latestBuildStatus === "FAILED" ? "red" : "gold";
-	const summaryCards = [
-		{
-			label: "项目空间",
-			value: spaces.length,
-			note: activeSpace ? `当前项目 ${activeSpace.name || "-"}` : "从左侧选择项目空间",
-			icon: <FolderTree className="h-5 w-5" />,
-		},
-		{
-			label: "模型总数",
-			value: sqlModels.length,
-			note: activeModel ? `当前模型 ${activeModel.name || "-"}` : "选择模型后进入 SQL 校验",
-			icon: <FileCode2 className="h-5 w-5" />,
-			tone: "info" as const,
-		},
-		{
-			label: "工作区状态",
-			value: workspaceOk ? "可用" : "待修复",
-			note: workspaceStatus?.message || "dbt 工作区已连接",
-			icon: <Database className="h-5 w-5" />,
-			tone: "warning" as const,
-		},
-		{
-			label: "最近构建",
-			value: latestBuildStatus,
-			note: latestRun?.generatedAt ? formatDateTime(latestRun.generatedAt) : "暂无最近构建",
-			icon: <RocketIcon className="h-5 w-5" />,
-			tone: "success" as const,
-		},
-	];
 
 	return (
 		<div className="space-y-6">
-			<PlatformPageHero
+			<Card
 				title="逻辑建模工作区"
-				description="项目空间、模型目录、SQL 编辑、契约影响和发布动作都收敛在同一个 light-first 工作区中。"
-				eyebrow="Modeling Workspace"
-				actions={
+				extra={
 					<Space wrap>
 						<Button className="rounded-2xl" onClick={() => router.push("/modeling/dbt-files")}>
 							打开 DBT 文件
@@ -1762,16 +1725,7 @@ export default function SqlModelingPage() {
 						</Button>
 					</Space>
 				}
-				meta={
-					<>
-						<PlatformMetaPill>{configEnabled ? "dbt 已连接" : "dbt 未启用"}</PlatformMetaPill>
-						<PlatformMetaPill>{workspaceOk ? "工作区可用" : "工作区待修复"}</PlatformMetaPill>
-						<PlatformMetaPill>最近构建 {latestBuildStatus}</PlatformMetaPill>
-					</>
-				}
 			/>
-
-			<PlatformSummaryCards items={summaryCards} />
 
 			<div className="flex min-h-[calc(100vh-120px)] flex-col overflow-hidden rounded-[30px] border border-border/70 bg-card shadow-sm">
 			{/* 顶部工具栏 */}

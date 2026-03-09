@@ -107,7 +107,6 @@ export default function Page() {
 		<div className="space-y-6">
 			<PageHeader
 				title="数据可视化 / 看板中心"
-				description="统一管理可视化看板与外部 BI 入口。"
 				actions={
 					<div className="flex items-center gap-2">
 						<Button icon={<SettingOutlined />} onClick={() => setManageOpen(true)}>

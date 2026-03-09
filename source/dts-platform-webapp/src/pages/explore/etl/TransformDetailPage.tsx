@@ -1,14 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "@/routes/hooks";
-import { Button, Descriptions, Dropdown, Space, Tag, message, Spin, Modal, Form, Input, Select, Typography, Drawer, Progress, Alert, Table } from "antd";
+import { Button, Card, Descriptions, Dropdown, Space, Tag, message, Spin, Modal, Form, Input, Select, Typography, Drawer, Progress, Alert, Table } from "antd";
 import { PlayCircleOutlined, EditOutlined, HistoryOutlined, ArrowLeftOutlined, SyncOutlined, FileTextOutlined, ReloadOutlined, DeleteOutlined } from "@ant-design/icons";
-import { Activity, Database, GitBranch, PlaySquare } from "lucide-react";
-import {
-	PlatformMetaPill,
-	PlatformPageHero,
-	PlatformSectionCard,
-	PlatformSummaryCards,
-} from "@/components/console-page";
 import { useRouter } from "@/routes/hooks";
 import {
 	ingestionTaskAPI,
@@ -476,61 +469,22 @@ export default function TransformDetailPage() {
 		);
 	}
 
-	const summaryCards = [
-		{
-			label: "任务状态",
-			value: renderStatus(task.status),
-			note: `同步模式 ${task.syncMode || "-"}`,
-			icon: <Activity className="h-5 w-5" />,
-		},
-		{
-			label: "数据源连接",
-			value: sourceDetail?.name || task.sourceDataSourceId || "-",
-			note: sourceDetail?.type || task.sourceType || "未识别来源",
-			icon: <Database className="h-5 w-5" />,
-			tone: "info" as const,
-		},
-		{
-			label: "最新执行",
-			value: task.lastExecutionStatus ? (
-				<Tag color={task.lastExecutionStatus === "success" ? "success" : task.lastExecutionStatus === "failed" ? "error" : "processing"}>
-					{task.lastExecutionStatus}
-				</Tag>
-			) : (
-				"未执行"
-			),
-			note: task.lastExecutedAt ? new Date(task.lastExecutedAt).toLocaleString("zh-CN") : "暂无执行记录",
-			icon: <PlaySquare className="h-5 w-5" />,
-			tone: "warning" as const,
-		},
-		{
-			label: "DBT 绑定",
-			value: task.dbtModelSelector ? "已绑定" : "未绑定",
-			note: task.dbtModelSelector || task.dbtDagSelector || "使用默认 DAG",
-			icon: <GitBranch className="h-5 w-5" />,
-			tone: "success" as const,
-		},
-	];
-
 	return (
 		<div className="space-y-6">
-			<PlatformPageHero
+			<Card
 				title={task.name}
-				description={task.description || "查看任务配置、执行记录、DBT 绑定与实时链路状态。"}
-				eyebrow="Ingestion Task Detail"
-				actions={
+				extra={
 					<Space wrap>
-						<Button className="rounded-2xl" icon={<ArrowLeftOutlined />} onClick={() => router.push("/explore/etl/transform")}>
+						<Button icon={<ArrowLeftOutlined />} onClick={() => router.push("/explore/etl/transform")}>
 							返回
 						</Button>
-						<Button className="rounded-2xl" icon={<HistoryOutlined />} onClick={() => router.push(`/explore/etl/transform/${id}/executions`)}>
+						<Button icon={<HistoryOutlined />} onClick={() => router.push(`/explore/etl/transform/${id}/executions`)}>
 							执行历史
 						</Button>
-						<Button className="rounded-2xl" icon={<FileTextOutlined />} onClick={openLatestLog} disabled={!task.lastExecutedAt}>
+						<Button icon={<FileTextOutlined />} onClick={openLatestLog} disabled={!task.lastExecutedAt}>
 							最新日志
 						</Button>
 						<Button
-							className="rounded-2xl"
 							icon={<EditOutlined />}
 							onClick={() => router.push(`/explore/etl/transform/${id}/edit`)}
 							disabled={task.status === "deleted"}
@@ -538,7 +492,6 @@ export default function TransformDetailPage() {
 							编辑
 						</Button>
 						<Button
-							className="rounded-2xl"
 							icon={<SyncOutlined />}
 							onClick={handleRebuildDag}
 							disabled={task.status === "deleted" || task.airflowEnabled === false}
@@ -555,12 +508,11 @@ export default function TransformDetailPage() {
 							}}
 							disabled={task.status === "deleted"}
 						>
-							<Button className="rounded-2xl" danger icon={<DeleteOutlined />}>
+							<Button danger icon={<DeleteOutlined />}>
 								数据回退
 							</Button>
 						</Dropdown>
 						<Button
-							className="rounded-2xl"
 							type="primary"
 							icon={<PlayCircleOutlined />}
 							onClick={handleExecute}
@@ -571,19 +523,10 @@ export default function TransformDetailPage() {
 						</Button>
 					</Space>
 				}
-				meta={
-					<>
-						<PlatformMetaPill>任务 ID {task.id}</PlatformMetaPill>
-						<PlatformMetaPill>{task.airflowEnabled ? "Airflow 已启用" : "Airflow 未启用"}</PlatformMetaPill>
-						<PlatformMetaPill>{showRealtimeStatusCard ? "CDC 实时链路" : "批量任务视图"}</PlatformMetaPill>
-					</>
-				}
 			/>
 
-			<PlatformSummaryCards items={summaryCards} />
-
 			<div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
-				<PlatformSectionCard title="基本信息" description="任务标识、数据源、同步模式和最近变更信息。">
+				<Card title="基本信息">
 				<Descriptions column={2} bordered>
 					<Descriptions.Item label="任务名称">{task.name}</Descriptions.Item>
 					<Descriptions.Item label="状态">{renderStatus(task.status)}</Descriptions.Item>
@@ -601,13 +544,12 @@ export default function TransformDetailPage() {
 						{task.lastModifiedDate ? new Date(task.lastModifiedDate).toLocaleString("zh-CN") : "-"}
 					</Descriptions.Item>
 				</Descriptions>
-				</PlatformSectionCard>
+				</Card>
 
-				<PlatformSectionCard
+				<Card
 					title="执行与编排"
-					description="查看最后一次执行、Airflow 编排状态，并就近进入日志与执行历史。"
-					action={
-						<Button className="rounded-2xl" icon={<ReloadOutlined />} onClick={() => loadLatestExecution()} loading={latestExecutionLoading}>
+					extra={
+						<Button icon={<ReloadOutlined />} onClick={() => loadLatestExecution()} loading={latestExecutionLoading}>
 							刷新执行记录
 						</Button>
 					}
@@ -643,32 +585,31 @@ export default function TransformDetailPage() {
 						<Text type="secondary">暂无执行记录</Text>
 					)}
 				</div>
-				</PlatformSectionCard>
+				</Card>
 			</div>
 
 			<div className="grid gap-6 xl:grid-cols-2">
-				<PlatformSectionCard title="源端覆盖参数" description="源端覆盖参数快照，便于核对 Addax reader 相关配置。">
+				<Card title="源端覆盖参数">
 					<pre className="overflow-auto rounded-[24px] bg-muted/35 p-4 text-xs leading-6">{JSON.stringify(task.sourceConfig || {}, null, 2)}</pre>
-				</PlatformSectionCard>
+				</Card>
 
 				{task.destinationConfig ? (
-					<PlatformSectionCard title="目标配置" description="当前任务的目标端写入配置。">
+					<Card title="目标配置">
 						<pre className="overflow-auto rounded-[24px] bg-muted/35 p-4 text-xs leading-6">{JSON.stringify(task.destinationConfig, null, 2)}</pre>
-					</PlatformSectionCard>
+					</Card>
 				) : null}
 			</div>
 
 			{task.tableMapping && task.tableMapping.length > 0 ? (
-				<PlatformSectionCard title="表映射配置" description="任务映射到目标表的结构快照。">
+				<Card title="表映射配置">
 					<pre className="overflow-auto rounded-[24px] bg-muted/35 p-4 text-xs leading-6">{JSON.stringify(task.tableMapping, null, 2)}</pre>
-				</PlatformSectionCard>
+				</Card>
 			) : null}
 
-			<PlatformSectionCard
+			<Card
 				title="DBT 绑定"
-				description="模型选择器和 DAG 族选择器都在这里维护，不再跳转到占位页。"
-				action={
-					<Button className="rounded-2xl" type="link" onClick={openDbtModal}>
+				extra={
+					<Button type="link" onClick={openDbtModal}>
 						绑定模型 / DAG 族
 					</Button>
 				}
@@ -684,15 +625,13 @@ export default function TransformDetailPage() {
 				<div className="mt-2 text-xs text-muted-foreground">
 					可直接输入 selector（如：model:xxx、tag:xxx），或从模型列表快速生成。
 				</div>
-			</PlatformSectionCard>
+			</Card>
 
 			{showRealtimeStatusCard ? (
-				<PlatformSectionCard
+				<Card
 					title="实时链路状态"
-					description="当前只对 `cdc` 任务展示实时通道、心跳、延迟和吞吐。"
-					action={
+					extra={
 						<Button
-							className="rounded-2xl"
 							icon={<ReloadOutlined />}
 							onClick={() => task?.id && loadRealtimeStatus(Number(task.id))}
 							loading={realtimeStatusLoading}
@@ -718,16 +657,14 @@ export default function TransformDetailPage() {
 					<div className="mt-2 text-xs text-muted-foreground">
 						当前展示范围仅限 `cdc` 任务，用于现场排查链路堆积、心跳缺失和消费延迟。
 					</div>
-				</PlatformSectionCard>
+				</Card>
 			) : null}
 
 			{normalizeText(task.syncMode).toLowerCase() === "incremental" ? (
-				<PlatformSectionCard
+				<Card
 					title="增量检查点"
-					description="增量任务会在成功执行后写入最新水位，便于判断本次同步推进是否正常。"
-					action={
+					extra={
 						<Button
-							className="rounded-2xl"
 							icon={<ReloadOutlined />}
 							onClick={() => task?.id && loadIncrementalStates(Number(task.id))}
 							loading={incrementalStatesLoading}
@@ -771,7 +708,7 @@ export default function TransformDetailPage() {
 							},
 						]}
 					/>
-				</PlatformSectionCard>
+				</Card>
 			) : null}
 
 			<Modal

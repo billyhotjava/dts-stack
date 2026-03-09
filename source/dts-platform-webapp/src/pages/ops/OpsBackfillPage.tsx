@@ -91,7 +91,7 @@ export default function OpsBackfillPage() {
 
 	return (
 		<div className="space-y-6 px-6 py-6">
-			<PageHeader title="补数管理" description="按日期范围触发补数任务。" />
+			<PageHeader title="补数管理" />
 			<Card
 				extra={
 					<Button type="primary" icon={<PlusOutlined />} onClick={openModal}>

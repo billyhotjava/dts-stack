@@ -9,7 +9,7 @@ export function GlobalVariablePanel() {
 
     return (
         <div className="runtime-control-card global-variable-panel">
-            <div className="runtime-control-card__title">Runtime Variables</div>
+            <div className="runtime-control-card__title">运行时变量</div>
             <div className="runtime-control-card__subtitle">页面参数会实时驱动筛选、联动和展示。</div>
             <div className="global-variable-panel__list">
                 {definitions.map((item) => {

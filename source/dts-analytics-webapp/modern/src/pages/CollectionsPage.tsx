@@ -46,7 +46,6 @@ export default function CollectionsPage() {
 		<PageContainer>
 			<PageHeader
 				title={t(locale, "collections.title")}
-				subtitle={t(locale, "collections.subtitle")}
 			/>
 
 			{state.state === "loading" && (

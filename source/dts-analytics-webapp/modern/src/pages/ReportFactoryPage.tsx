@@ -185,7 +185,6 @@ export default function ReportFactoryPage() {
 		<PageContainer>
 			<PageHeader
 				title={t(locale, "reportFactory.title")}
-				subtitle={t(locale, "reportFactory.subtitle")}
 				actions={
 					<Button variant="secondary" size="sm" onClick={() => void Promise.all([loadTemplates(), loadRuns()])}>
 						{t(locale, "common.refresh")}

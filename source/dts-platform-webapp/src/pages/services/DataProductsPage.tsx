@@ -198,7 +198,6 @@ export default function Page() {
 		<div className="space-y-6">
 			<PageHeader
 				title="数据服务中心 / 数据产品"
-				description="产品化包装数据服务并管理版本。"
 				actions={
 					<Button type="primary" icon={<PlusOutlined />} onClick={() => openModal()}>
 						新增数据产品

@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { AlertTriangle, Clock3, Database, ScanSearch } from "lucide-react";
 import {
 	Alert,
 	Button,
+	Card,
 	Col,
 	Descriptions,
 	Form,
@@ -20,13 +20,6 @@ import {
 	Typography,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import {
-	PlatformFilterBar,
-	PlatformMetaPill,
-	PlatformPageHero,
-	PlatformSectionCard,
-	PlatformSummaryCards,
-} from "@/components/console-page";
 import { EmptyState } from "@/components/empty-state";
 import { useCatalogManageAccess } from "@/hooks/useModuleManageAccess";
 import {
@@ -641,84 +634,27 @@ export default function MetadataPage() {
 		});
 		return { draft, active, other };
 	}, [columnRows]);
-	const openDriftCount = useMemo(
-		() =>
-			driftEvents.filter((item) => {
-				const ticketStatus = String(item.ticketStatus || "").toUpperCase();
-				return ticketStatus === "OPEN" || ticketStatus === "IN_REVIEW";
-			}).length,
-		[driftEvents],
-	);
-	const summaryCards = [
-		{
-			label: "采集任务",
-			value: pipelines.length,
-			note: selectedPipeline?.name || "当前已纳入同步的资产连接",
-			icon: <Database className="h-5 w-5" />,
-		},
-		{
-			label: "发现表",
-			value: tables.length,
-			note: selectedSummary?.name || "本轮预览可用的技术元数据对象",
-			icon: <ScanSearch className="h-5 w-5" />,
-			tone: "info" as const,
-		},
-		{
-			label: "同步运行",
-			value: runs.length,
-			note: latestRun?.startedAt ? `最近一次 ${latestRun.startedAt}` : "最近 20 次同步执行窗口",
-			icon: <Clock3 className="h-5 w-5" />,
-			tone: "success" as const,
-		},
-		{
-			label: "漂移工单",
-			value: openDriftCount,
-			note: driftEvents.length ? `总计 ${driftEvents.length} 条 schema 漂移记录` : "当前暂无待处理漂移",
-			icon: <AlertTriangle className="h-5 w-5" />,
-			tone: openDriftCount > 0 ? ("warning" as const) : ("default" as const),
-		},
-	];
-
 	return (
-		<div className="space-y-6">
-			<PlatformPageHero
+		<div className="space-y-4">
+			<Card
 				title="元数据采集"
-				eyebrow="Catalog Console"
-				description="统一查看采集任务、同步结果、资产预览和 schema 漂移处置状态，让资产门户和采集运维保持在同一个控制台节奏里。"
-				actions={
+				extra={
 					<Space>
 						<Button onClick={() => void loadPipelines()}>刷新任务</Button>
 						<Button onClick={() => setHelpOpen(true)}>使用说明</Button>
 					</Space>
 				}
-				meta={
-					<>
-						<PlatformMetaPill>当前任务 {selectedPipeline?.name || "未选择"}</PlatformMetaPill>
-						<PlatformMetaPill>自动采集 {syncConfig?.autoSyncEnabled ? "已开启" : "未开启"}</PlatformMetaPill>
-						<PlatformMetaPill>同步状态 {syncInProgress ? "运行中" : "空闲"}</PlatformMetaPill>
-						<PlatformMetaPill>维护权限 {canManage ? "可操作" : "只读"}</PlatformMetaPill>
-					</>
-				}
-			/>
-			<PlatformSummaryCards items={summaryCards} />
-
-			<PlatformFilterBar>
-				<div className="space-y-1">
-					<div className="text-sm font-medium text-foreground">资产同步窗口</div>
-					<div className="text-sm text-muted-foreground">
-						{selectedPipeline?.source || "未绑定数据源"} · {selectedPipeline?.schedule || "未配置调度"}
-					</div>
-				</div>
+			>
 				<Space wrap>
-					<PlatformMetaPill>
+					<Tag>
 						Cron {syncConfig?.autoSyncCron ? syncConfig.autoSyncCron : "未配置"}
-					</PlatformMetaPill>
-					<PlatformMetaPill>
+					</Tag>
+					<Tag>
 						最近状态 {selectedPipeline?.status ? String(selectedPipeline.status) : "未知"}
-					</PlatformMetaPill>
-					<PlatformMetaPill>目标表数 {selectedPipeline?.tablesFound ?? 0}</PlatformMetaPill>
+					</Tag>
+					<Tag>目标表数 {selectedPipeline?.tablesFound ?? 0}</Tag>
 				</Space>
-			</PlatformFilterBar>
+			</Card>
 
 			<Alert
 				type="info"
@@ -728,9 +664,8 @@ export default function MetadataPage() {
 
 			<Row gutter={[24, 24]} align="top">
 				<Col xs={24} xl={12}>
-					<PlatformSectionCard
+					<Card
 						title="采集任务与触发"
-						description="控制自动采集策略、手动触发入口和最近一次同步进度。"
 					>
 						<Spin spinning={loadingPipelines}>
 							<div className="space-y-4">
@@ -835,12 +770,11 @@ export default function MetadataPage() {
 							)}
 							</div>
 						</Spin>
-					</PlatformSectionCard>
+					</Card>
 				</Col>
 				<Col xs={24} xl={12}>
-					<PlatformSectionCard
+					<Card
 						title="元数据结果预览"
-						description="快速检查本轮同步产出的表结构、服务归属和字段状态。"
 					>
 						<Spin spinning={loadingTables}>
 							<Space direction="vertical" className="w-full" size={12}>
@@ -903,23 +837,23 @@ export default function MetadataPage() {
 							)}
 							</Space>
 						</Spin>
-					</PlatformSectionCard>
+					</Card>
 				</Col>
 			</Row>
 
-			<PlatformSectionCard
+			<Card
 				title="采集历史"
-				description="对照最近 20 次执行的发现表、更新量、失效量和错误分类，快速定位同步异常。"
-				action={<Button onClick={() => selectedPipeline?.integration && loadRuns(selectedPipeline.integration)}>刷新</Button>}
+				extra={<Button onClick={() => selectedPipeline?.integration && loadRuns(selectedPipeline.integration)}>刷新</Button>}
 			>
 				<Table
 					rowKey={(row) => row.id || `${row.startedAt}-${row.finishedAt}`}
 					columns={runColumns}
 					dataSource={runs}
 					loading={loadingRuns}
+					scroll={{ x: 1600 }}
 					pagination={{ pageSize: 8 }}
 				/>
-			</PlatformSectionCard>
+			</Card>
 
 			<Modal
 				open={diagOpen}
@@ -955,10 +889,9 @@ export default function MetadataPage() {
 				</div>
 			</Modal>
 
-			<PlatformSectionCard
+			<Card
 				title="Schema 漂移工单"
-				description="统一查看 schema 变更量、策略模式和工单状态，保持资产同步和治理动作闭环。"
-				action={
+				extra={
 					<Space>
 						<Select
 							value={driftPolicyFilter}
@@ -993,9 +926,10 @@ export default function MetadataPage() {
 					columns={driftColumns}
 					dataSource={driftEvents}
 					loading={loadingDrift}
+					scroll={{ x: 1100 }}
 					pagination={{ pageSize: 8 }}
 				/>
-			</PlatformSectionCard>
+			</Card>
 
 			<Modal
 				open={helpOpen}

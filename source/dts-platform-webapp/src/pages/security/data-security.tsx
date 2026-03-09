@@ -372,7 +372,7 @@ export default function Page() {
 
 	return (
 		<div className="space-y-6">
-			<PageHeader title="数据治理中心 / 分级分类" description="敏感度分级与标签管理。" />
+			<PageHeader title="数据治理中心 / 分级分类" />
 			<Card>
 				<Tabs
 					items={[

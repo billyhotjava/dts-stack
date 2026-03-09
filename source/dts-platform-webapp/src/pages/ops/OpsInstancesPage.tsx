@@ -77,7 +77,7 @@ export default function OpsInstancesPage() {
 
 	return (
 		<div className="space-y-6 px-6 py-6">
-			<PageHeader title="任务实例监控" description="查看任务运行实例与日志入口。" />
+			<PageHeader title="任务实例监控" />
 			<Card
 				extra={
 					<Space>

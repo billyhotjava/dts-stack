@@ -294,7 +294,6 @@ export default function ExploreSessionsPage() {
 		<PageContainer>
 			<PageHeader
 				title={t(locale, "explore.title")}
-				subtitle={t(locale, "explore.subtitle")}
 				actions={
 					<div style={{ display: "flex", alignItems: "center", gap: "var(--spacing-sm)" }}>
 						<label style={{ display: "inline-flex", gap: "var(--spacing-xs)", alignItems: "center", fontSize: "var(--font-size-sm)" }}>

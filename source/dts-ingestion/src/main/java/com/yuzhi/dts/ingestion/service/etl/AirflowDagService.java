@@ -12,6 +12,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.regex.Pattern;
 import org.slf4j.Logger;
@@ -317,7 +318,16 @@ public class AirflowDagService {
         if (!StringUtils.hasText(schedule)) {
             return "manual";
         }
-        String cron = schedule.trim().toLowerCase();
+        String cron = schedule.trim().toLowerCase(Locale.ROOT);
+        if ("manual".equals(cron)) {
+            return "manual";
+        }
+        if (cron.startsWith("interval:")) {
+            return "interval";
+        }
+        if (cron.startsWith("cron:")) {
+            cron = cron.substring("cron:".length()).trim();
+        }
         if ("@hourly".equals(cron) || cron.startsWith("0 *") || cron.startsWith("*/1 ")) {
             return "hourly";
         }
@@ -364,8 +374,7 @@ public class AirflowDagService {
         String addaxImage = escapePythonString(resolveAddaxImage());
         String addaxJobDir = escapePythonString(resolveAddaxJobDir());
         String defaultJobPath = escapePythonString(resolveDefaultJobPath(task));
-        String schedule = normalizeSchedule(task == null ? null : task.getSyncSchedule());
-        String scheduleLiteral = schedule == null ? "None" : "\"" + escapePythonString(schedule) + "\"";
+        String scheduleLiteral = buildScheduleExpression(task == null ? null : task.getSyncSchedule());
         String taskId = resolveTaskId(task);
 
         // For file source tasks, add a PythonOperator pre-task to create the target table.
@@ -415,7 +424,7 @@ public class AirflowDagService {
             from __future__ import annotations
 
             import os
-            from datetime import datetime
+            from datetime import datetime, timedelta
 
             from airflow import DAG
             from airflow.providers.docker.operators.docker import DockerOperator
@@ -499,13 +508,12 @@ public class AirflowDagService {
         String nameTag = sanitizeTag(task == null ? null : task.getName(), "ingestion");
         String addaxImage = escapePythonString(resolveAddaxImage());
         String addaxJobDir = escapePythonString(resolveAddaxJobDir());
-        String schedule = normalizeSchedule(task == null ? null : task.getSyncSchedule());
-        String scheduleLiteral = schedule == null ? "None" : "\"" + escapePythonString(schedule) + "\"";
+        String scheduleLiteral = buildScheduleExpression(task == null ? null : task.getSyncSchedule());
 
         StringBuilder sb = new StringBuilder();
         sb.append("from __future__ import annotations\n\n");
         sb.append("import os\n");
-        sb.append("from datetime import datetime\n\n");
+        sb.append("from datetime import datetime, timedelta\n\n");
         sb.append("from airflow import DAG\n");
         sb.append("from airflow.providers.docker.operators.docker import DockerOperator\n");
         sb.append("from docker.types import Mount\n\n");
@@ -584,11 +592,35 @@ public class AirflowDagService {
         return sb.toString();
     }
 
-    private String normalizeSchedule(String schedule) {
+    private String buildScheduleExpression(String schedule) {
         if (!StringUtils.hasText(schedule)) {
-            return null;
+            return "None";
         }
-        return schedule.trim();
+        String normalized = schedule.trim();
+        String lower = normalized.toLowerCase(Locale.ROOT);
+        if ("manual".equals(lower) || "none".equals(lower)) {
+            return "None";
+        }
+        if (lower.startsWith("interval:")) {
+            String intervalText = normalized.substring("interval:".length()).trim();
+            try {
+                int minutes = Integer.parseInt(intervalText);
+                if (minutes > 0) {
+                    return "timedelta(minutes=" + minutes + ")";
+                }
+            } catch (NumberFormatException ignored) {}
+            LOG.warn("[airflow] invalid interval schedule {}, fallback to manual trigger", normalized);
+            return "None";
+        }
+        if (lower.startsWith("cron:")) {
+            String cron = normalized.substring("cron:".length()).trim();
+            if (!StringUtils.hasText(cron)) {
+                LOG.warn("[airflow] empty cron schedule {}, fallback to manual trigger", normalized);
+                return "None";
+            }
+            return "\"" + escapePythonString(cron) + "\"";
+        }
+        return "\"" + escapePythonString(normalized) + "\"";
     }
 
     private String resolveAddaxJobDir() {

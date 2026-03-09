@@ -93,7 +93,6 @@ export default function DashboardsPage() {
 			<div data-testid="analytics-dashboards-page">
 			<PageHeader
 				title={t(locale, "dashboards.title")}
-				subtitle={t(locale, "dashboards.subtitle")}
 				actions={
 					<Link to="/dashboards/new">
 						<Button variant="primary" icon={<PlusIcon />}>

@@ -131,7 +131,6 @@ export default function CardsPage() {
 		<PageContainer>
 			<PageHeader
 				title={t(locale, "questions.title")}
-				subtitle={t(locale, "questions.subtitle")}
 				actions={
 					<Link to="/questions/new">
 						<Button variant="primary" icon={<PlusIcon />}>

@@ -37,10 +37,10 @@ public interface InfraExternalRunLogRepository extends JpaRepository<InfraExtern
         where r.startedAt is not null
           and r.startedAt >= :fromInclusive
           and r.startedAt < :toExclusive
-          and (:entryKey is null or lower(r.entryKey) = lower(:entryKey))
-          and (:ownerDept is null or lower(r.ownerDept) = lower(:ownerDept))
+          and (cast(:entryKey as text) is null or lower(r.entryKey) = lower(cast(:entryKey as text)))
+          and (cast(:ownerDept as text) is null or lower(r.ownerDept) = lower(cast(:ownerDept as text)))
           and (:artifactId is null or r.artifactId = :artifactId)
-          and (:artifactName is null or lower(r.artifactName) like lower(concat('%', :artifactName, '%')))
+          and (cast(:artifactName as text) is null or lower(r.artifactName) like lower(concat('%', cast(:artifactName as text), '%')))
         order by r.startedAt asc
         """
     )
@@ -56,15 +56,15 @@ public interface InfraExternalRunLogRepository extends JpaRepository<InfraExtern
     @Query(
         """
         select r from InfraExternalRunLog r
-        where (:entryKey is null or lower(r.entryKey) = lower(:entryKey))
+        where (cast(:entryKey as text) is null or lower(r.entryKey) = lower(cast(:entryKey as text)))
           and (:artifactId is null or r.artifactId = :artifactId)
-          and (:status is null or lower(r.status) = lower(:status))
+          and (cast(:status as text) is null or lower(r.status) = lower(cast(:status as text)))
           and (:enabledOnly = false or r.enabled = true)
           and (
-            :keyword is null or
-            lower(r.artifactName) like lower(concat('%', :keyword, '%')) or
-            lower(r.externalRunId) like lower(concat('%', :keyword, '%')) or
-            lower(r.message) like lower(concat('%', :keyword, '%'))
+            cast(:keyword as text) is null or
+            lower(r.artifactName) like lower(concat('%', cast(:keyword as text), '%')) or
+            lower(r.externalRunId) like lower(concat('%', cast(:keyword as text), '%')) or
+            lower(r.message) like lower(concat('%', cast(:keyword as text), '%'))
           )
         order by r.startedAt desc nulls last, r.lastModifiedDate desc
         """

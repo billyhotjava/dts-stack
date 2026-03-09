@@ -21,7 +21,6 @@ export default function DatabaseEditPage() {
 		<PageContainer>
 			<PageHeader
 				title={t(locale, "data.edit")}
-				subtitle={`${t(locale, "data.db")} #${dbId}`}
 				breadcrumbs={
 					<Breadcrumb items={[
 						{ label: t(locale, "data.title"), href: "/data" },

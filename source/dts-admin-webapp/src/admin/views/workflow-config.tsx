@@ -1,16 +1,9 @@
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Checkbox, Form, Input, InputNumber, Modal, Select, Space, Switch, Table } from "antd";
+import { Card, Checkbox, Form, Input, InputNumber, Modal, Select, Space, Switch, Table } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { Check, ListFilter, Shield, Workflow } from "lucide-react";
+import { ListFilter, Workflow } from "lucide-react";
 import { adminApi } from "@/admin/api/adminApi";
-import {
-	AdminFilterBar,
-	AdminMetaPill,
-	AdminPageHeader,
-	AdminSectionCard,
-	AdminSummaryCards,
-} from "@/admin/components/console-page";
 import type { UpsertWorkflowTemplatePayload, WorkflowTemplateConfig, WorkflowStepConfig } from "@/admin/types";
 import { EmptyState } from "@/components/empty-state";
 import { Badge } from "@/ui/badge";
@@ -21,28 +14,28 @@ import { toast } from "sonner";
 type WorkflowTypeOption = { value: string; label: string; note: string };
 
 const WORKFLOW_TYPES: WorkflowTypeOption[] = [
-	{ value: "DATASET_DATA_ACCESS", label: "数据资产访问审批", note: "适用于查询、预览与导出类数据访问申请。" },
-	{ value: "REPORT_ACCESS", label: "报表访问审批", note: "用于报表与 BI 页面访问授权。" },
-	{ value: "SCREEN_ACCESS", label: "大屏访问审批", note: "用于驾驶舱、大屏链接与现场展示授权。" },
-	{ value: "API_ACCESS", label: "API 调用审批", note: "用于 API、服务集成与自动任务调用授权。" },
+	{ value: "DATASET_DATA_ACCESS", label: "\u6570\u636e\u8d44\u4ea7\u8bbf\u95ee\u5ba1\u6279", note: "\u9002\u7528\u4e8e\u67e5\u8be2\u3001\u9884\u89c8\u4e0e\u5bfc\u51fa\u7c7b\u6570\u636e\u8bbf\u95ee\u7533\u8bf7\u3002" },
+	{ value: "REPORT_ACCESS", label: "\u62a5\u8868\u8bbf\u95ee\u5ba1\u6279", note: "\u7528\u4e8e\u62a5\u8868\u4e0e BI \u9875\u9762\u8bbf\u95ee\u6388\u6743\u3002" },
+	{ value: "SCREEN_ACCESS", label: "\u5927\u5c4f\u8bbf\u95ee\u5ba1\u6279", note: "\u7528\u4e8e\u9a7e\u9a76\u8231\u3001\u5927\u5c4f\u94fe\u63a5\u4e0e\u73b0\u573a\u5c55\u793a\u6388\u6743\u3002" },
+	{ value: "API_ACCESS", label: "API \u8c03\u7528\u5ba1\u6279", note: "\u7528\u4e8e API\u3001\u670d\u52a1\u96c6\u6210\u4e0e\u81ea\u52a8\u4efb\u52a1\u8c03\u7528\u6388\u6743\u3002" },
 ];
 
 const OWNER_SCOPES = [
-	{ value: "ANY", label: "通用" },
-	{ value: "INST", label: "所级资产" },
-	{ value: "DEPT", label: "部门资产" },
+	{ value: "ANY", label: "\u901a\u7528" },
+	{ value: "INST", label: "\u6240\u7ea7\u8d44\u4ea7" },
+	{ value: "DEPT", label: "\u90e8\u95e8\u8d44\u4ea7" },
 ];
 
 const CLASSIFICATION_LEVELS = [
-	{ value: "公开", label: "公开" },
-	{ value: "内部", label: "内部" },
-	{ value: "秘密", label: "秘密" },
-	{ value: "机密", label: "机密" },
+	{ value: "\u516c\u5f00", label: "\u516c\u5f00" },
+	{ value: "\u5185\u90e8", label: "\u5185\u90e8" },
+	{ value: "\u79d8\u5bc6", label: "\u79d8\u5bc6" },
+	{ value: "\u673a\u5bc6", label: "\u673a\u5bc6" },
 ];
 
 const APPROVER_ROLES = [
-	{ value: "ROLE_INST_LEADER", label: "所级领导（ROLE_INST_LEADER）" },
-	{ value: "ROLE_DEPT_LEADER", label: "部门领导（ROLE_DEPT_LEADER）" },
+	{ value: "ROLE_INST_LEADER", label: "\u6240\u7ea7\u9886\u5bfc\uff08ROLE_INST_LEADER\uff09" },
+	{ value: "ROLE_DEPT_LEADER", label: "\u90e8\u95e8\u9886\u5bfc\uff08ROLE_DEPT_LEADER\uff09" },
 ];
 
 function normalizeSteps(steps: WorkflowStepConfig[] | undefined): WorkflowStepConfig[] {
@@ -59,11 +52,11 @@ function normalizeSteps(steps: WorkflowStepConfig[] | undefined): WorkflowStepCo
 async function confirmDelete(name: string): Promise<boolean> {
 	return await new Promise((resolve) => {
 		Modal.confirm({
-			title: "确认删除？",
-			content: `将删除工作流配置「${name}」`,
-			okText: "删除",
+			title: "\u786e\u8ba4\u5220\u9664\uff1f",
+			content: `\u5c06\u5220\u9664\u5de5\u4f5c\u6d41\u914d\u7f6e\u300c${name}\u300d`,
+			okText: "\u5220\u9664",
 			okType: "danger",
-			cancelText: "取消",
+			cancelText: "\u53d6\u6d88",
 			onOk: () => resolve(true),
 			onCancel: () => resolve(false),
 		});
@@ -79,92 +72,52 @@ export default function WorkflowConfigView() {
 	const [editing, setEditing] = useState<WorkflowTemplateConfig | null>(null);
 	const [form] = Form.useForm<UpsertWorkflowTemplatePayload>();
 
-	const currentType = useMemo(
-		() => WORKFLOW_TYPES.find((item) => item.value === workflowType) ?? WORKFLOW_TYPES[0],
-		[workflowType],
-	);
-
 	const { data = [], isFetching, refetch } = useQuery({
 		queryKey: ["admin", "workflow-templates", workflowType, enabledOnly],
 		queryFn: () => adminApi.getWorkflowTemplates(workflowType, enabledOnly),
 		enabled: Boolean(workflowType),
 	});
 
-	const stats = useMemo(() => {
-		const enabledCount = data.filter((item) => item.enabled).length;
-		const totalSteps = data.reduce((sum, item) => sum + (item.steps?.length ?? 0), 0);
-		const scopedCount = data.filter((item) => item.ownerScope && item.ownerScope !== "ANY").length;
-		return [
-			{
-				label: "当前模板",
-				value: String(data.length),
-				note: currentType?.label || "审批模板",
-				icon: <Workflow className="h-5 w-5" />,
-			},
-			{
-				label: "启用模板",
-				value: String(enabledCount),
-				note: enabledOnly ? "当前仅查看启用模板" : "包含启用与停用模板",
-				icon: <Check className="h-5 w-5" />,
-				tone: "success" as const,
-			},
-			{
-				label: "审批节点",
-				value: String(totalSteps),
-				note: "当前筛选结果中的节点总数",
-				icon: <ListFilter className="h-5 w-5" />,
-				tone: "info" as const,
-			},
-			{
-				label: "范围约束",
-				value: String(scopedCount),
-				note: "带资产范围或密级约束的模板",
-				icon: <Shield className="h-5 w-5" />,
-				tone: "warning" as const,
-			},
-		];
-	}, [currentType?.label, data, enabledOnly]);
-
 	const columns: ColumnsType<WorkflowTemplateConfig> = useMemo(
 		() => [
-			{ title: "名称", dataIndex: "name", key: "name", width: 260, ellipsis: true },
+			{ title: "\u540d\u79f0", dataIndex: "name", key: "name", width: 260, ellipsis: true },
 			{
-				title: "启用状态",
+				title: "\u542f\u7528\u72b6\u6001",
 				dataIndex: "enabled",
 				key: "enabled",
 				width: 110,
 				render: (value?: boolean) => (
 					<Badge variant={value ? "success" : "outline"} className="rounded-full px-2.5 py-1">
-						{value ? "启用中" : "已停用"}
+						{value ? "\u542f\u7528\u4e2d" : "\u5df2\u505c\u7528"}
 					</Badge>
 				),
 			},
 			{
-				title: "优先级",
+				title: "\u4f18\u5148\u7ea7",
 				dataIndex: "priority",
 				key: "priority",
 				width: 100,
 				render: (value?: number) => value ?? 0,
 			},
 			{
-				title: "资产范围",
+				title: "\u8d44\u4ea7\u8303\u56f4",
 				dataIndex: "ownerScope",
 				key: "ownerScope",
 				width: 140,
 				render: (value?: string) => {
-					const label = OWNER_SCOPES.find((item) => item.value === value)?.label ?? value ?? "通用";
+					const label = OWNER_SCOPES.find((item) => item.value === value)?.label ?? value ?? "\u901a\u7528";
 					return <Badge variant="info" className="rounded-full px-2.5 py-1">{label}</Badge>;
 				},
 			},
 			{
-				title: "密级范围",
+				title: "\u5bc6\u7ea7\u8303\u56f4",
 				key: "classification",
 				width: 180,
 				render: (_, record) => {
 					const min = record.classificationMin?.trim();
 					const max = record.classificationMax?.trim();
 					if (!min && !max) {
-						return <span className="text-muted-foreground">不限</span>;
+						return <span className="text-muted-foreground">\u4e0d\u9650</span>;
 					}
 					if (min && max) {
 						return `${min} ~ ${max}`;
@@ -173,19 +126,19 @@ export default function WorkflowConfigView() {
 				},
 			},
 			{
-				title: "审批链",
+				title: "\u5ba1\u6279\u94fe",
 				key: "steps",
 				render: (_, record) => {
 					const steps = Array.isArray(record.steps) ? record.steps : [];
 					if (!steps.length) {
-						return <span className="text-muted-foreground">未配置</span>;
+						return <span className="text-muted-foreground">\u672a\u914d\u7f6e</span>;
 					}
 					return (
 						<div className="flex flex-col gap-1.5">
 							{steps.map((step) => (
 								<div key={`${record.id}-${step.stepOrder}`} className="text-sm">
 									<span className="font-medium">{step.stepOrder}. {step.approverRole}</span>
-									{step.deptBinding ? <span className="text-muted-foreground">（绑定部门）</span> : null}
+									{step.deptBinding ? <span className="text-muted-foreground">\uff08\u7ed1\u5b9a\u90e8\u95e8\uff09</span> : null}
 								</div>
 							))}
 						</div>
@@ -193,7 +146,7 @@ export default function WorkflowConfigView() {
 				},
 			},
 			{
-				title: "操作",
+				title: "\u64cd\u4f5c",
 				key: "actions",
 				width: 180,
 				fixed: "right",
@@ -222,7 +175,7 @@ export default function WorkflowConfigView() {
 								setModalOpen(true);
 							}}
 						>
-							编辑
+							\u7f16\u8f91
 						</Button>
 						<Button
 							size="sm"
@@ -234,14 +187,14 @@ export default function WorkflowConfigView() {
 								}
 								try {
 									await adminApi.deleteWorkflowTemplate(record.id);
-									toast.success("已删除");
+									toast.success("\u5df2\u5220\u9664");
 									queryClient.invalidateQueries({ queryKey: ["admin", "workflow-templates"] });
 								} catch (error: any) {
-									toast.error(error?.message || "删除失败");
+									toast.error(error?.message || "\u5220\u9664\u5931\u8d25");
 								}
 							}}
 						>
-							删除
+							\u5220\u9664
 						</Button>
 					</div>
 				),
@@ -276,11 +229,11 @@ export default function WorkflowConfigView() {
 			steps: normalizeSteps(values.steps || []),
 		};
 		if (!payload.workflowType || !payload.name) {
-			toast.error("请填写工作流类型与名称");
+			toast.error("\u8bf7\u586b\u5199\u5de5\u4f5c\u6d41\u7c7b\u578b\u4e0e\u540d\u79f0");
 			return;
 		}
 		if (!payload.steps?.length) {
-			toast.error("至少需要配置一个审批节点");
+			toast.error("\u81f3\u5c11\u9700\u8981\u914d\u7f6e\u4e00\u4e2a\u5ba1\u6279\u8282\u70b9");
 			return;
 		}
 
@@ -288,57 +241,38 @@ export default function WorkflowConfigView() {
 		try {
 			if (editing?.id) {
 				await adminApi.updateWorkflowTemplate(editing.id, payload);
-				toast.success("已保存");
+				toast.success("\u5df2\u4fdd\u5b58");
 			} else {
 				await adminApi.createWorkflowTemplate(payload);
-				toast.success("已创建");
+				toast.success("\u5df2\u521b\u5efa");
 			}
 			setModalOpen(false);
 			queryClient.invalidateQueries({ queryKey: ["admin", "workflow-templates"] });
 		} catch (error: any) {
-			toast.error(error?.message || "保存失败");
+			toast.error(error?.message || "\u4fdd\u5b58\u5931\u8d25");
 		} finally {
 			setModalLoading(false);
 		}
 	};
 
 	return (
-		<div className="space-y-6">
-			<AdminPageHeader
-				title="工作流配置"
-				description="统一维护不同业务入口的审批模板，明确每类资产访问请求应该走哪条审批链。"
-				eyebrow="Workflow Control"
-				actions={
+		<div className="space-y-4">
+			<Card
+				title={"\u5de5\u4f5c\u6d41\u914d\u7f6e"}
+				extra={
 					<>
 						<Button variant="outline" onClick={() => refetch()}>
 							<ListFilter className="h-4 w-4" />
-							刷新列表
+							\u5237\u65b0\u5217\u8868
 						</Button>
 						<Button onClick={openCreateModal}>
 							<Workflow className="h-4 w-4" />
-							新增配置
+							\u65b0\u589e\u914d\u7f6e
 						</Button>
 					</>
 				}
-				meta={
-					<>
-						<AdminMetaPill>{currentType?.label}</AdminMetaPill>
-						<AdminMetaPill>{currentType?.note}</AdminMetaPill>
-						<AdminMetaPill>{enabledOnly ? "仅显示启用模板" : "显示全部模板"}</AdminMetaPill>
-					</>
-				}
-			/>
-
-			<AdminSummaryCards items={stats} />
-
-			<AdminFilterBar>
-				<div>
-					<div className="text-sm font-semibold text-foreground">按审批入口筛选模板</div>
-					<div className="mt-1 text-sm text-muted-foreground">
-						当前页负责模板治理，不再用“预留”字样掩盖真实的模板状态。
-					</div>
-				</div>
-				<div className="flex flex-wrap items-center gap-2">
+			>
+				<div className="flex flex-wrap items-center gap-2 mb-4">
 					<Select
 						style={{ width: 240 }}
 						options={WORKFLOW_TYPES.map(({ value, label }) => ({ value, label }))}
@@ -346,17 +280,11 @@ export default function WorkflowConfigView() {
 						onChange={(value) => setWorkflowType(value)}
 					/>
 					<div className="flex items-center gap-2 rounded-2xl border border-border/70 bg-background/80 px-3 py-2">
-						<span className="text-sm text-muted-foreground">仅显示启用</span>
+						<span className="text-sm text-muted-foreground">{"\u4ec5\u663e\u793a\u542f\u7528"}</span>
 						<Switch checked={enabledOnly} onChange={setEnabledOnly} />
 					</div>
 				</div>
-			</AdminFilterBar>
 
-			<AdminSectionCard
-				title="模板清单"
-				description="列表展示优先级、范围约束和审批链，便于统一核对配置口径。"
-				action={<Badge variant="outline" className="rounded-full px-2.5 py-1">{data.length} 条结果</Badge>}
-			>
 				<Table
 					rowKey="id"
 					columns={columns}
@@ -368,63 +296,60 @@ export default function WorkflowConfigView() {
 						emptyText: (
 							<EmptyState
 								compact
-								title="当前筛选下没有工作流模板"
-								description="先创建模板，或切换到其他审批入口查看既有配置。"
+								title={"\u5f53\u524d\u7b5b\u9009\u4e0b\u6ca1\u6709\u5de5\u4f5c\u6d41\u6a21\u677f"}
+								description={"\u5148\u521b\u5efa\u6a21\u677f\uff0c\u6216\u5207\u6362\u5230\u5176\u4ed6\u5ba1\u6279\u5165\u53e3\u67e5\u770b\u65e2\u6709\u914d\u7f6e\u3002"}
 							/>
 						),
 					}}
 				/>
-			</AdminSectionCard>
+			</Card>
 
-			<AdminSectionCard
-				title="匹配说明"
-				description="模板越清晰，审批分派越稳定。建议先确定资产范围，再补密级与节点顺序。"
-			>
+			<Card title={"\u5339\u914d\u8bf4\u660e"}>
 				<div className="grid gap-3 xl:grid-cols-3">
 					{[
-						"同一种工作流类型下，优先级高的模板会优先匹配。",
-						"部门资产场景建议启用“绑定部门”，减少跨组织审批误派。",
-						"报表、大屏和 API 模板可先配置，等业务入口接入后直接生效。",
+						"\u540c\u4e00\u79cd\u5de5\u4f5c\u6d41\u7c7b\u578b\u4e0b\uff0c\u4f18\u5148\u7ea7\u9ad8\u7684\u6a21\u677f\u4f1a\u4f18\u5148\u5339\u914d\u3002",
+						"\u90e8\u95e8\u8d44\u4ea7\u573a\u666f\u5efa\u8bae\u542f\u7528\u201c\u7ed1\u5b9a\u90e8\u95e8\u201d\uff0c\u51cf\u5c11\u8de8\u7ec4\u7ec7\u5ba1\u6279\u8bef\u6d3e\u3002",
+						"\u62a5\u8868\u3001\u5927\u5c4f\u548c API \u6a21\u677f\u53ef\u5148\u914d\u7f6e\uff0c\u7b49\u4e1a\u52a1\u5165\u53e3\u63a5\u5165\u540e\u76f4\u63a5\u751f\u6548\u3002",
 					].map((item) => (
 						<div key={item} className="rounded-[22px] border border-border/70 bg-muted/35 px-4 py-4 text-sm leading-6 text-muted-foreground">
 							{item}
 						</div>
 					))}
 				</div>
-			</AdminSectionCard>
+			</Card>
 
 			<Modal
 				open={modalOpen}
-				title={editing ? "编辑审批工作流" : "新增审批工作流"}
+				title={editing ? "\u7f16\u8f91\u5ba1\u6279\u5de5\u4f5c\u6d41" : "\u65b0\u589e\u5ba1\u6279\u5de5\u4f5c\u6d41"}
 				onCancel={() => setModalOpen(false)}
 				onOk={handleSave}
 				confirmLoading={modalLoading}
 				width={860}
-				okText="保存"
-				cancelText="取消"
+				okText={"\u4fdd\u5b58"}
+				cancelText={"\u53d6\u6d88"}
 			>
 				<Form form={form} layout="vertical">
 					<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-						<Form.Item name="workflowType" label="工作流类型" rules={[{ required: true, message: "请选择工作流类型" }]}>
+						<Form.Item name="workflowType" label={"\u5de5\u4f5c\u6d41\u7c7b\u578b"} rules={[{ required: true, message: "\u8bf7\u9009\u62e9\u5de5\u4f5c\u6d41\u7c7b\u578b" }]}>
 							<Select options={WORKFLOW_TYPES.map(({ value, label }) => ({ value, label }))} disabled={Boolean(editing)} />
 						</Form.Item>
-						<Form.Item name="name" label="名称" rules={[{ required: true, message: "请输入名称" }]}>
-							<Input placeholder="如：部门资产-秘密及以上" />
+						<Form.Item name="name" label={"\u540d\u79f0"} rules={[{ required: true, message: "\u8bf7\u8f93\u5165\u540d\u79f0" }]}>
+							<Input placeholder={"\u5982\uff1a\u90e8\u95e8\u8d44\u4ea7-\u79d8\u5bc6\u53ca\u4ee5\u4e0a"} />
 						</Form.Item>
-						<Form.Item name="enabled" label="启用" valuePropName="checked">
+						<Form.Item name="enabled" label={"\u542f\u7528"} valuePropName="checked">
 							<Switch />
 						</Form.Item>
-						<Form.Item name="priority" label="优先级">
+						<Form.Item name="priority" label={"\u4f18\u5148\u7ea7"}>
 							<InputNumber min={0} style={{ width: "100%" }} />
 						</Form.Item>
-						<Form.Item name="ownerScope" label="资产范围">
+						<Form.Item name="ownerScope" label={"\u8d44\u4ea7\u8303\u56f4"}>
 							<Select options={OWNER_SCOPES} />
 						</Form.Item>
-						<Form.Item name="classificationMin" label="密级下限（可选）">
-							<Select allowClear options={CLASSIFICATION_LEVELS} placeholder="不限" />
+						<Form.Item name="classificationMin" label={"\u5bc6\u7ea7\u4e0b\u9650\uff08\u53ef\u9009\uff09"}>
+							<Select allowClear options={CLASSIFICATION_LEVELS} placeholder={"\u4e0d\u9650"} />
 						</Form.Item>
-						<Form.Item name="classificationMax" label="密级上限（可选）">
-							<Select allowClear options={CLASSIFICATION_LEVELS} placeholder="不限" />
+						<Form.Item name="classificationMax" label={"\u5bc6\u7ea7\u4e0a\u9650\uff08\u53ef\u9009\uff09"}>
+							<Select allowClear options={CLASSIFICATION_LEVELS} placeholder={"\u4e0d\u9650"} />
 						</Form.Item>
 					</div>
 
@@ -433,7 +358,7 @@ export default function WorkflowConfigView() {
 							<div className="space-y-3">
 								<div className="flex items-center justify-between">
 									<Text variant="body2" className="font-semibold">
-										审批节点（按顺序执行）
+										{"\u5ba1\u6279\u8282\u70b9\uff08\u6309\u987a\u5e8f\u6267\u884c\uff09"}
 									</Text>
 									<Button
 										size="sm"
@@ -442,31 +367,31 @@ export default function WorkflowConfigView() {
 											add({ stepOrder: fields.length + 1, approverRole: "ROLE_DEPT_LEADER", deptBinding: true })
 										}
 									>
-										新增节点
+										{"\u65b0\u589e\u8282\u70b9"}
 									</Button>
 								</div>
-								{fields.length === 0 ? <Text variant="body3">暂无节点。</Text> : null}
+								{fields.length === 0 ? <Text variant="body3">{"\u6682\u65e0\u8282\u70b9\u3002"}</Text> : null}
 								{fields.map((field, index) => (
 									<div key={field.key} className="rounded-2xl border border-border/70 p-4">
 										<div className="flex items-center justify-between gap-3">
 											<Text variant="body2" className="font-semibold">
-												第 {index + 1} 节点
+												{"\u7b2c"} {index + 1} {"\u8282\u70b9"}
 											</Text>
 											<Button size="sm" variant="ghost" onClick={() => remove(field.name)}>
-												删除
+												{"\u5220\u9664"}
 											</Button>
 										</div>
 										<Space direction="vertical" style={{ width: "100%" }} size="middle">
 											<Form.Item
 												{...field}
 												name={[field.name, "approverRole"]}
-												label="审批角色"
-												rules={[{ required: true, message: "请选择审批角色" }]}
+												label={"\u5ba1\u6279\u89d2\u8272"}
+												rules={[{ required: true, message: "\u8bf7\u9009\u62e9\u5ba1\u6279\u89d2\u8272" }]}
 											>
-												<Select options={APPROVER_ROLES} placeholder="选择审批角色" showSearch optionFilterProp="label" />
+												<Select options={APPROVER_ROLES} placeholder={"\u9009\u62e9\u5ba1\u6279\u89d2\u8272"} showSearch optionFilterProp="label" />
 											</Form.Item>
 											<Form.Item {...field} name={[field.name, "deptBinding"]} valuePropName="checked">
-												<Checkbox>绑定资产部门（部门领导节点建议勾选）</Checkbox>
+												<Checkbox>{"\u7ed1\u5b9a\u8d44\u4ea7\u90e8\u95e8\uff08\u90e8\u95e8\u9886\u5bfc\u8282\u70b9\u5efa\u8bae\u52fe\u9009\uff09"}</Checkbox>
 											</Form.Item>
 										</Space>
 									</div>
@@ -476,7 +401,7 @@ export default function WorkflowConfigView() {
 					</Form.List>
 
 					<div className="mt-4 rounded-2xl bg-muted/40 p-4 text-sm leading-6 text-muted-foreground">
-						当前实现是“基于角色”的审批链配置。若后续需要把节点直接绑定到具体人，需要扩展模板字段并同步调整审批任务分配逻辑。
+						{"\u5f53\u524d\u5b9e\u73b0\u662f\u201c\u57fa\u4e8e\u89d2\u8272\u201d\u7684\u5ba1\u6279\u94fe\u914d\u7f6e\u3002\u82e5\u540e\u7eed\u9700\u8981\u628a\u8282\u70b9\u76f4\u63a5\u7ed1\u5b9a\u5230\u5177\u4f53\u4eba\uff0c\u9700\u8981\u6269\u5c55\u6a21\u677f\u5b57\u6bb5\u5e76\u540c\u6b65\u8c03\u6574\u5ba1\u6279\u4efb\u52a1\u5206\u914d\u903b\u8f91\u3002"}
 					</div>
 				</Form>
 			</Modal>

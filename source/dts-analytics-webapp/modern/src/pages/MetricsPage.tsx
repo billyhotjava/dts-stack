@@ -60,7 +60,6 @@ export default function MetricsPage() {
 		<PageContainer>
 			<PageHeader
 				title={t(locale, "metrics.title")}
-				subtitle={t(locale, "metrics.subtitle")}
 			/>
 
 			{/* Summary Stats */}

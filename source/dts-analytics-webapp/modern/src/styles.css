@@ -26,6 +26,10 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+html, body, #root {
+  height: 100%;
+}
+
 *,
 *::before,
 *::after {
@@ -224,6 +228,11 @@ select {
 table {
   width: 100%;
   border-collapse: collapse;
+}
+
+/* Prevent tables from overflowing their container */
+.mb-page-section__content {
+  overflow-x: auto;
 }
 
 th, td {

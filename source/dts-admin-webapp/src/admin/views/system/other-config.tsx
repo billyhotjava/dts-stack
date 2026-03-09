@@ -1,16 +1,9 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Form, Input as AntInput, Modal } from "antd";
-import { ArrowRight, LayoutGrid, RefreshCw, Search, Settings, Shield, Workflow } from "lucide-react";
+import { Card, Form, Input as AntInput, Modal } from "antd";
+import { LayoutGrid, RefreshCw, Search, Workflow } from "lucide-react";
 import { adminApi } from "@/admin/api/adminApi";
 import type { PortalMenuItem, SystemConfigItem } from "@/admin/types";
-import {
-	AdminFilterBar,
-	AdminMetaPill,
-	AdminPageHeader,
-	AdminSectionCard,
-	AdminSummaryCards,
-} from "@/admin/components/console-page";
 import { EmptyState } from "@/components/empty-state";
 import { useRouter } from "@/routes/hooks";
 import { Badge } from "@/ui/badge";
@@ -83,36 +76,6 @@ export default function AdminOtherConfigView() {
 		});
 	}, [keyword, systemConfigs]);
 
-	const stats = [
-		{
-			label: "系统配置项",
-			value: String(systemConfigs.length),
-			note: "可发起变更申请的附加配置",
-			icon: <Settings className="h-5 w-5" />,
-		},
-		{
-			label: "门户入口",
-			value: String(activeMenus.length),
-			note: `${rootMenus.length} 个顶层分组`,
-			icon: <LayoutGrid className="h-5 w-5" />,
-			tone: "info" as const,
-		},
-		{
-			label: "运维分类",
-			value: String(opsCategories.length),
-			note: `${opsQuery.data?.total ?? 0} 个配置项`,
-			icon: <Workflow className="h-5 w-5" />,
-			tone: "success" as const,
-		},
-		{
-			label: "重启敏感项",
-			value: String(restartRequiredCount),
-			note: `敏感配置 ${sensitiveCount} 项`,
-			icon: <Shield className="h-5 w-5" />,
-			tone: "warning" as const,
-		},
-	];
-
 	const handleOpenDraft = (config: SystemConfigItem) => {
 		setEditingConfig(config);
 		form.setFieldsValue({
@@ -132,22 +95,20 @@ export default function AdminOtherConfigView() {
 				value: values.value,
 				description: values.description,
 			});
-			toast.success("已提交系统配置变更申请");
+			toast.success("\u5df2\u63d0\u4ea4\u7cfb\u7edf\u914d\u7f6e\u53d8\u66f4\u7533\u8bf7");
 			setDraftOpen(false);
 		} catch (error: any) {
-			toast.error(error?.message || "提交失败");
+			toast.error(error?.message || "\u63d0\u4ea4\u5931\u8d25");
 		} finally {
 			setDraftLoading(false);
 		}
 	};
 
 	return (
-		<div className="space-y-6">
-			<AdminPageHeader
-				title="系统策略与门户治理"
-				description="这里不再放占位文案，而是直接汇总系统附加配置、门户入口治理和运行策略摘要，方便现场统一收口。"
-				eyebrow="System Overview"
-				actions={
+		<div className="space-y-4">
+			<Card
+				title={"\u7cfb\u7edf\u7b56\u7565\u4e0e\u95e8\u6237\u6cbb\u7406"}
+				extra={
 					<>
 						<Button
 							variant="outline"
@@ -158,60 +119,42 @@ export default function AdminOtherConfigView() {
 							}}
 						>
 							<RefreshCw className="h-4 w-4" />
-							刷新总览
+							{"\u5237\u65b0\u603b\u89c8"}
 						</Button>
 						<Button variant="outline" onClick={() => push("/admin/portal-menus")}>
 							<LayoutGrid className="h-4 w-4" />
-							菜单管理
+							{"\u83dc\u5355\u7ba1\u7406"}
 						</Button>
 						<Button onClick={() => push("/admin/ops")}>
 							<Workflow className="h-4 w-4" />
-							运维配置
+							{"\u8fd0\u7ef4\u914d\u7f6e"}
 						</Button>
 					</>
 				}
-				meta={
-					<>
-						<AdminMetaPill>真实配置摘要</AdminMetaPill>
-						<AdminMetaPill>系统附加配置通过变更申请流转</AdminMetaPill>
-						<AdminMetaPill>门户与运行策略保持并列治理</AdminMetaPill>
-					</>
-				}
-			/>
-
-			<AdminSummaryCards items={stats} />
-
-			<AdminFilterBar>
-				<div>
-					<div className="text-sm font-semibold text-foreground">筛选系统附加配置</div>
-					<div className="mt-1 text-sm text-muted-foreground">
-						优先查看系统键值、门户入口和运行策略之间的影响关系，再决定是否发起变更。
-					</div>
-				</div>
-				<div className="flex w-full flex-col gap-2 md:w-auto md:flex-row md:items-center">
+			>
+				<div className="flex w-full flex-col gap-2 md:w-auto md:flex-row md:items-center mb-4">
 					<div className="relative min-w-[260px]">
 						<Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
 						<Input
 							value={keyword}
 							onChange={(event) => setKeyword(event.target.value)}
-							placeholder="搜索 key、值或说明"
+							placeholder={"\u641c\u7d22 key\u3001\u503c\u6216\u8bf4\u660e"}
 							className="pl-9"
 						/>
 					</div>
 					<Button variant="outline" onClick={() => push("/admin/infra-settings")}>
-						系统集成
+						{"\u7cfb\u7edf\u96c6\u6210"}
 					</Button>
 					<Button variant="outline" onClick={() => push("/admin/workflows")}>
-						工作流配置
+						{"\u5de5\u4f5c\u6d41\u914d\u7f6e"}
 					</Button>
 				</div>
-			</AdminFilterBar>
+			</Card>
 
-			<div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
-				<AdminSectionCard
-					title="系统附加配置"
-					description="展示可发起变更申请的系统键值。修改不会直接写入运行环境，而是进入审批流。"
-					action={<Badge variant="outline" className="rounded-full px-2.5 py-1">{filteredConfigs.length} 项</Badge>}
+			<div className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
+				<Card
+					title={"\u7cfb\u7edf\u9644\u52a0\u914d\u7f6e"}
+					extra={<Badge variant="outline" className="rounded-full px-2.5 py-1">{filteredConfigs.length} {"\u9879"}</Badge>}
 				>
 					{systemQuery.isLoading ? (
 						<div className="grid gap-3">
@@ -222,8 +165,8 @@ export default function AdminOtherConfigView() {
 					) : filteredConfigs.length === 0 ? (
 						<EmptyState
 							compact
-							title="没有匹配的系统配置"
-							description={keyword ? "试试更短的关键词，或清空筛选条件。" : "当前还没有系统附加配置项。"}
+							title={"\u6ca1\u6709\u5339\u914d\u7684\u7cfb\u7edf\u914d\u7f6e"}
+							description={keyword ? "\u8bd5\u8bd5\u66f4\u77ed\u7684\u5173\u952e\u8bcd\uff0c\u6216\u6e05\u7a7a\u7b5b\u9009\u6761\u4ef6\u3002" : "\u5f53\u524d\u8fd8\u6ca1\u6709\u7cfb\u7edf\u9644\u52a0\u914d\u7f6e\u9879\u3002"}
 						/>
 					) : (
 						<div className="grid gap-3">
@@ -240,44 +183,40 @@ export default function AdminOtherConfigView() {
 											{item.description ? <div className="text-sm text-muted-foreground">{item.description}</div> : null}
 										</div>
 										<Button size="sm" variant="outline" onClick={() => handleOpenDraft(item)}>
-											发起变更
+											{"\u53d1\u8d77\u53d8\u66f4"}
 										</Button>
 									</div>
 									<div className="mt-4 rounded-2xl border border-border/70 bg-background/90 px-3 py-3 text-sm font-mono leading-6 text-foreground">
-										{item.value || <span className="text-muted-foreground">未设置</span>}
+										{item.value || <span className="text-muted-foreground">{"\u672a\u8bbe\u7f6e"}</span>}
 									</div>
 								</div>
 							))}
 						</div>
 					)}
-				</AdminSectionCard>
+				</Card>
 
-				<AdminSectionCard title="治理导航" description="把最常用的治理入口收敛到一个轻量导航面板。">
+				<Card title={"\u6cbb\u7406\u5bfc\u822a"}>
 					<div className="grid gap-3">
 						{[
 							{
-								title: "门户菜单",
-								description: "维护导航分组、组件路径和展示安全级别。",
+								title: "\u95e8\u6237\u83dc\u5355",
 								path: "/admin/portal-menus",
-								badge: `${activeMenus.length} 条入口`,
+								badge: `${activeMenus.length} \u6761\u5165\u53e3`,
 							},
 							{
-								title: "运维配置",
-								description: "查看功能开关、运行期参数和重启影响面。",
+								title: "\u8fd0\u7ef4\u914d\u7f6e",
 								path: "/admin/ops",
-								badge: `${opsQuery.data?.total ?? 0} 个参数`,
+								badge: `${opsQuery.data?.total ?? 0} \u4e2a\u53c2\u6570`,
 							},
 							{
-								title: "集成设置",
-								description: "统一管理平台、调度和元数据采集的连接参数。",
+								title: "\u96c6\u6210\u8bbe\u7f6e",
 								path: "/admin/infra-settings",
-								badge: "5 条链路",
+								badge: "5 \u6761\u94fe\u8def",
 							},
 							{
-								title: "工作流配置",
-								description: "定义审批模板与资产访问的分派规则。",
+								title: "\u5de5\u4f5c\u6d41\u914d\u7f6e",
 								path: "/admin/workflows",
-								badge: "审批模板",
+								badge: "\u5ba1\u6279\u6a21\u677f",
 							},
 						].map((item) => (
 							<button
@@ -288,39 +227,34 @@ export default function AdminOtherConfigView() {
 							>
 								<div className="space-y-1">
 									<div className="text-sm font-semibold text-foreground">{item.title}</div>
-									<div className="text-sm text-muted-foreground">{item.description}</div>
 									<Badge variant="outline" className="rounded-full px-2.5 py-1">
 										{item.badge}
 									</Badge>
 								</div>
-								<ArrowRight className="h-4 w-4 text-muted-foreground" />
 							</button>
 						))}
 					</div>
-				</AdminSectionCard>
+				</Card>
 			</div>
 
-			<AdminSectionCard
-				title="门户与运行策略摘要"
-				description="用真实计数解释入口治理和运行策略的当前规模，避免继续出现空白说明页。"
-			>
+			<Card title={"\u95e8\u6237\u4e0e\u8fd0\u884c\u7b56\u7565\u6458\u8981"}>
 				<div className="grid gap-4 xl:grid-cols-2">
 					<div className="rounded-[24px] border border-border/70 bg-muted/35 p-4">
 						<div className="flex items-center gap-2 text-sm font-semibold text-foreground">
 							<LayoutGrid className="h-4 w-4" />
-							门户菜单摘要
+							{"\u95e8\u6237\u83dc\u5355\u6458\u8981"}
 						</div>
 						<div className="mt-3 grid gap-3 sm:grid-cols-3">
 							<div className="rounded-2xl border border-border/70 bg-background/90 px-3 py-3">
-								<div className="text-xs text-muted-foreground">顶层分组</div>
+								<div className="text-xs text-muted-foreground">{"\u9876\u5c42\u5206\u7ec4"}</div>
 								<div className="mt-1 text-2xl font-semibold">{rootMenus.length}</div>
 							</div>
 							<div className="rounded-2xl border border-border/70 bg-background/90 px-3 py-3">
-								<div className="text-xs text-muted-foreground">有效入口</div>
+								<div className="text-xs text-muted-foreground">{"\u6709\u6548\u5165\u53e3"}</div>
 								<div className="mt-1 text-2xl font-semibold">{activeMenus.length}</div>
 							</div>
 							<div className="rounded-2xl border border-border/70 bg-background/90 px-3 py-3">
-								<div className="text-xs text-muted-foreground">已删除</div>
+								<div className="text-xs text-muted-foreground">{"\u5df2\u5220\u9664"}</div>
 								<div className="mt-1 text-2xl font-semibold">{flatMenus.length - activeMenus.length}</div>
 							</div>
 						</div>
@@ -336,51 +270,51 @@ export default function AdminOtherConfigView() {
 					<div className="rounded-[24px] border border-border/70 bg-muted/35 p-4">
 						<div className="flex items-center gap-2 text-sm font-semibold text-foreground">
 							<Workflow className="h-4 w-4" />
-							运行策略摘要
+							{"\u8fd0\u884c\u7b56\u7565\u6458\u8981"}
 						</div>
 						<div className="mt-3 grid gap-3 sm:grid-cols-3">
 							<div className="rounded-2xl border border-border/70 bg-background/90 px-3 py-3">
-								<div className="text-xs text-muted-foreground">策略分类</div>
+								<div className="text-xs text-muted-foreground">{"\u7b56\u7565\u5206\u7c7b"}</div>
 								<div className="mt-1 text-2xl font-semibold">{opsCategories.length}</div>
 							</div>
 							<div className="rounded-2xl border border-border/70 bg-background/90 px-3 py-3">
-								<div className="text-xs text-muted-foreground">需重启</div>
+								<div className="text-xs text-muted-foreground">{"\u9700\u91cd\u542f"}</div>
 								<div className="mt-1 text-2xl font-semibold">{restartRequiredCount}</div>
 							</div>
 							<div className="rounded-2xl border border-border/70 bg-background/90 px-3 py-3">
-								<div className="text-xs text-muted-foreground">敏感项</div>
+								<div className="text-xs text-muted-foreground">{"\u654f\u611f\u9879"}</div>
 								<div className="mt-1 text-2xl font-semibold">{sensitiveCount}</div>
 							</div>
 						</div>
 						<div className="mt-4 flex flex-wrap gap-2">
 							{opsCategories.map((category) => (
 								<Badge key={category.key} variant="outline" className="rounded-full px-2.5 py-1">
-									{category.label} · {category.items.length}
+									{category.label} \u00b7 {category.items.length}
 								</Badge>
 							))}
 						</div>
 					</div>
 				</div>
-			</AdminSectionCard>
+			</Card>
 
 			<Modal
 				open={draftOpen}
-				title="发起系统配置变更"
+				title={"\u53d1\u8d77\u7cfb\u7edf\u914d\u7f6e\u53d8\u66f4"}
 				onCancel={() => setDraftOpen(false)}
 				onOk={() => void handleSubmitDraft()}
 				confirmLoading={draftLoading}
-				okText="提交申请"
-				cancelText="取消"
+				okText={"\u63d0\u4ea4\u7533\u8bf7"}
+				cancelText={"\u53d6\u6d88"}
 			>
 				<Form form={form} layout="vertical">
-					<Form.Item name="key" label="配置键" rules={[{ required: true, message: "请输入配置键" }]}>
+					<Form.Item name="key" label={"\u914d\u7f6e\u952e"} rules={[{ required: true, message: "\u8bf7\u8f93\u5165\u914d\u7f6e\u952e" }]}>
 						<AntInput disabled={Boolean(editingConfig?.key)} />
 					</Form.Item>
-					<Form.Item name="value" label="配置值">
-						<AntInput.TextArea rows={4} placeholder="请输入新的配置值" />
+					<Form.Item name="value" label={"\u914d\u7f6e\u503c"}>
+						<AntInput.TextArea rows={4} placeholder={"\u8bf7\u8f93\u5165\u65b0\u7684\u914d\u7f6e\u503c"} />
 					</Form.Item>
-					<Form.Item name="description" label="说明">
-						<AntInput.TextArea rows={3} placeholder="补充变更目的与影响范围" />
+					<Form.Item name="description" label={"\u8bf4\u660e"}>
+						<AntInput.TextArea rows={3} placeholder={"\u8865\u5145\u53d8\u66f4\u76ee\u7684\u4e0e\u5f71\u54cd\u8303\u56f4"} />
 					</Form.Item>
 				</Form>
 			</Modal>

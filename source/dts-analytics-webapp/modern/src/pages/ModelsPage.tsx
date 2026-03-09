@@ -36,7 +36,6 @@ export default function ModelsPage() {
 		<PageContainer>
 			<PageHeader
 				title={t(locale, "models.title")}
-				subtitle={t(locale, "models.subtitle")}
 			/>
 
 			<Card>

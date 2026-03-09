@@ -305,7 +305,14 @@ function ScreenDesignerContent() {
                 data-testid="analytics-screen-designer"
                 className={`screen-designer ${focusMode ? 'is-focus-mode' : ''}`}
             >
-                <ScreenHeader />
+                <ScreenHeader
+                    focusMode={focusMode}
+                    onToggleFocusMode={() => setFocusMode((prev) => !prev)}
+                    showLibraryPanel={showLibraryPanel}
+                    onToggleLibraryPanel={() => setShowLibraryPanel((prev) => !prev)}
+                    showInspectorPanel={showInspectorPanel}
+                    onToggleInspectorPanel={() => setShowInspectorPanel((prev) => !prev)}
+                />
 
                 <div className="screen-designer-body">
                     {!focusMode && showLibraryPanel ? (
@@ -315,36 +322,6 @@ function ScreenDesignerContent() {
                     ) : null}
 
                     <div className="canvas-area">
-                        <div className="designer-focus-actions">
-                            <button
-                                type="button"
-                                className="header-btn"
-                                onClick={() => setFocusMode((prev) => !prev)}
-                                title="快捷键：Ctrl/Cmd + \\"
-                            >
-                                {focusMode ? '退出聚焦' : '聚焦模式'}
-                            </button>
-                            {!focusMode ? (
-                                <>
-                                    <button
-                                        type="button"
-                                        className={`header-btn ${showLibraryPanel ? '' : 'is-muted'}`}
-                                        onClick={() => setShowLibraryPanel((prev) => !prev)}
-                                        title="快捷键：Ctrl/Cmd + Alt + 1"
-                                    >
-                                        {showLibraryPanel ? '左栏开' : '左栏关'}
-                                    </button>
-                                    <button
-                                        type="button"
-                                        className={`header-btn ${showInspectorPanel ? '' : 'is-muted'}`}
-                                        onClick={() => setShowInspectorPanel((prev) => !prev)}
-                                        title="快捷键：Ctrl/Cmd + Alt + 2"
-                                    >
-                                        {showInspectorPanel ? '右栏开' : '右栏关'}
-                                    </button>
-                                </>
-                            ) : null}
-                        </div>
                         <CanvasToolbar />
                         <DesignerCanvas />
                         {(hasMultiPages || pages.length > 0) && (

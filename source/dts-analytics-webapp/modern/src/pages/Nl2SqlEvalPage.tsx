@@ -215,7 +215,6 @@ export default function Nl2SqlEvalPage() {
 		<PageContainer>
 			<PageHeader
 				title={t(locale, "nl2sqlEval.title")}
-				subtitle={t(locale, "nl2sqlEval.subtitle")}
 				actions={
 					<Button variant="secondary" size="sm" onClick={() => void Promise.all([loadCases(), loadRuns()])}>
 						{t(locale, "common.refresh")}

@@ -1023,7 +1023,7 @@ export default function Page() {
 	return (
 		<div className="space-y-6">
 			<Breadcrumb items={[{ title: "数据治理中心" }, { title: "指标中心" }, { title: "指标字典" }]} />
-			<PageHeader title="数据治理中心 / 指标中心" description="指标口径与指标库。" />
+			<PageHeader title="数据治理中心 / 指标中心" />
 			<Card size="small">
 				<Space wrap size={16}>
 					<Card size="small" title="指标总数" style={{ minWidth: 160 }}>

@@ -461,7 +461,6 @@ export default function Page({ embedded }: Props) {
 			{!embedded && (
 				<PageHeader
 					title="数据可视化 / 外部 BI 集成"
-					description="统一管理河图、Tableau、Superset 等外部 BI 的入口与访问策略。"
 					actions={
 						<div className="flex items-center gap-2">
 							<Button icon={<PlusOutlined />} type="primary" onClick={openCreate}>

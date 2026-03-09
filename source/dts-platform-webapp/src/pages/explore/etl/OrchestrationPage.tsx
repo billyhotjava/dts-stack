@@ -404,7 +404,6 @@ export default function OrchestrationPage() {
 		<div className="space-y-6">
 			<PageHeader
 				title="数据开发中心 / 任务编排"
-				description="平台内查看 DAG 状态、最近运行和失败摘要；保留外部编排入口。"
 				actions={
 					<Space>
 						<Button onClick={() => void loadJobs()} loading={jobsLoading}>

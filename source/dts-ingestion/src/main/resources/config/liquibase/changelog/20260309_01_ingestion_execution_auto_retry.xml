@@ -6,33 +6,50 @@
     http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
 
     <changeSet id="20260309-01-add-retry-columns" author="system">
-        <preConditions onFail="MARK_RAN">
-            <not>
-                <columnExists tableName="ingestion_execution" columnName="retry_count"/>
-            </not>
-        </preConditions>
-        <addColumn tableName="ingestion_execution">
-            <column name="retry_count" type="integer" defaultValueNumeric="0">
-                <constraints nullable="false"/>
-            </column>
-            <column name="max_retries" type="integer" defaultValueNumeric="0">
-                <constraints nullable="false"/>
-            </column>
-            <column name="next_retry_at" type="timestamp">
-                <constraints nullable="true"/>
-            </column>
-            <column name="retry_exhausted" type="boolean" defaultValueBoolean="false">
-                <constraints nullable="false"/>
-            </column>
-            <column name="parent_execution_id" type="bigint">
-                <constraints nullable="true"/>
-            </column>
-        </addColumn>
-        <createIndex tableName="ingestion_execution" indexName="idx_exec_next_retry">
-            <column name="next_retry_at"/>
-            <column name="status"/>
-            <column name="retry_exhausted"/>
-        </createIndex>
+        <validCheckSum>ANY</validCheckSum>
+
+        <sql>
+            ALTER TABLE public.ingestion_execution
+                ADD COLUMN IF NOT EXISTS retry_count integer NOT NULL DEFAULT 0
+        </sql>
+        <sql>
+            ALTER TABLE public.ingestion_execution
+                ADD COLUMN IF NOT EXISTS max_retries integer NOT NULL DEFAULT 0
+        </sql>
+        <sql>
+            ALTER TABLE public.ingestion_execution
+                ADD COLUMN IF NOT EXISTS next_retry_at timestamp
+        </sql>
+        <sql>
+            ALTER TABLE public.ingestion_execution
+                ADD COLUMN IF NOT EXISTS retry_exhausted boolean NOT NULL DEFAULT false
+        </sql>
+        <sql>
+            ALTER TABLE public.ingestion_execution
+                ADD COLUMN IF NOT EXISTS parent_execution_id bigint
+        </sql>
+        <sql splitStatements="false" endDelimiter=";">
+            DO $$
+            BEGIN
+                IF EXISTS (
+                    SELECT 1
+                    FROM information_schema.columns
+                    WHERE table_schema = 'public'
+                      AND table_name = 'ingestion_execution'
+                      AND column_name = 'retry_attempt'
+                ) THEN
+                    UPDATE public.ingestion_execution
+                    SET retry_count = COALESCE(retry_attempt, 0)
+                    WHERE retry_count = 0
+                      AND retry_attempt IS NOT NULL;
+                END IF;
+            END
+            $$;
+        </sql>
+        <sql>
+            CREATE INDEX IF NOT EXISTS idx_exec_next_retry
+                ON public.ingestion_execution (next_retry_at, status, retry_exhausted)
+        </sql>
     </changeSet>
 
 </databaseChangeLog>

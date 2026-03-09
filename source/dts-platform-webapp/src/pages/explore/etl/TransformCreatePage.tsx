@@ -2666,7 +2666,6 @@ export default function TransformCreatePage() {
 		<div className="flex flex-col gap-6">
 			<PageHeader
 				title={isEdit ? "编辑入湖任务" : "创建入湖任务"}
-				description="使用 Addax 生成作业配置，并由 Airflow 触发执行。"
 				actions={
 					<Space>
 						<Button

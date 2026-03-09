@@ -107,7 +107,6 @@ export default function MetricLensPage() {
 		<PageContainer>
 			<PageHeader
 				title={t(locale, "metricLens.title")}
-				subtitle={t(locale, "metricLens.subtitle")}
 				actions={
 					<Button variant="secondary" size="sm" onClick={() => void Promise.all([loadList(), loadConflicts()])}>
 						{t(locale, "common.refresh")}

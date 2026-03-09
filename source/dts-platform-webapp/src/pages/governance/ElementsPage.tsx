@@ -318,7 +318,6 @@ export default function ElementsPage() {
 			<Breadcrumb items={[{ title: "数据治理中心" }, { title: "标准管理" }, { title: "数据元" }]} />
 			<PageHeader
 				title="数据治理中心 · 标准管理 / 数据元"
-				description="定义数据元标准字段与技术规则，支撑字段级统一口径。"
 				actions={
 					<Button type="primary" onClick={() => openModal()} disabled={!canManage}>
 						+ 新增数据元

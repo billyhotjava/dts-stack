@@ -119,7 +119,6 @@ export default function CardDetailPage() {
 				<>
 					<PageHeader
 						title={state.value.name ?? "-"}
-						subtitle={state.value.description ?? ""}
 						actions={
 							<>
 								<Button

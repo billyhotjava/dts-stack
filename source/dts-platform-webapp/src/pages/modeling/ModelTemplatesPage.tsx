@@ -285,7 +285,6 @@ export default function Page() {
 		<div className="space-y-4">
 			<PageHeader
 				title="数据开发中心 · 项目空间管理"
-				description="维护项目成员、仓库与环境配置，支撑后续建模与调度。"
 				actions={
 					<Space>
 						<Button onClick={loadSpaces} loading={loading}>

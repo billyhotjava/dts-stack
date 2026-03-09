@@ -59,7 +59,6 @@ export default function CollectionItemsPage() {
 		<PageContainer>
 			<PageHeader
 				title={t(locale, "collections.itemsTitle")}
-				subtitle={t(locale, "collections.itemsSubtitle") + " " + (id ?? "root")}
 				breadcrumbs={
 					<Breadcrumb items={[
 						{ label: t(locale, "collections.title"), href: "/collections" },

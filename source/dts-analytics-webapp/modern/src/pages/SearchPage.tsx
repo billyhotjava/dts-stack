@@ -114,7 +114,6 @@ export default function SearchPage() {
 		<PageContainer>
 			<PageHeader
 				title={t(locale, "search.title")}
-				subtitle={t(locale, "search.subtitle")}
 			/>
 
 			<Card style={{ marginBottom: "var(--spacing-lg)" }}>

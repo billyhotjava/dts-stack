@@ -8,7 +8,7 @@ import { QueryDatasetManager } from "@/components/sql/QueryDatasetManager";
 export default function Page() {
 	return (
 		<div className="space-y-6">
-			<PageHeader title="数据开发中心 / 即席查询" description="快速数据探查与查询，并管理查询沉淀数据集。" />
+			<PageHeader title="数据开发中心 / 即席查询" />
 			<Card>
 				{GLOBAL_CONFIG.enableSqlWorkbench ? (
 					<Tabs

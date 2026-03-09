@@ -6,7 +6,7 @@ const { Text } = Typography;
 export default function Page() {
 	return (
 		<div className="space-y-6">
-			<PageHeader title="BI 可视化 / 自助分析" description="拖拽式分析，支持维度筛选与多指标对比。" />
+			<PageHeader title="BI 可视化 / 自助分析" />
 			<Card>
 				<Text type="secondary">自助分析由独立分析服务提供。</Text>
 				<div className="mt-4">

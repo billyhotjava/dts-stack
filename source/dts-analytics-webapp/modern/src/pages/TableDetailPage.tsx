@@ -68,7 +68,6 @@ export default function TableDetailPage() {
 		<PageContainer>
 			<PageHeader
 				title={state.state === "loaded" ? (state.value.display_name || state.value.name || `Table #${tableId}`) : `${t(locale, "builder.table")} #${tableId}`}
-				subtitle={state.state === "loaded" && state.value.schema ? `Schema: ${state.value.schema}` : undefined}
 				breadcrumbs={
 					<Breadcrumb items={[
 						{ label: t(locale, "data.title"), href: "/data" },

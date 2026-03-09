@@ -42,6 +42,8 @@ public class SqlExecutionService {
     private static final int PREVIEW_LIMIT = 100;
     private static final int DEFAULT_PAGE_SIZE = 200;
     private static final int MAX_PAGE_SIZE = 1000;
+    private static final int EXECUTION_VISIBILITY_RETRIES = 20;
+    private static final long EXECUTION_VISIBILITY_RETRY_MILLIS = 50L;
 
     private final QueryExecutionRepository queryExecutionRepository;
     private final ResultSetRepository resultSetRepository;
@@ -181,8 +183,9 @@ public class SqlExecutionService {
     }
 
     private void executeQueued(UUID executionId, SqlSubmitRequest request, Principal principal) {
-        QueryExecution execution = queryExecutionRepository.findById(executionId).orElse(null);
+        QueryExecution execution = awaitExecutionVisibility(executionId);
         if (execution == null) {
+            LOG.warn("sql execution record not visible for async worker executionId={}", executionId);
             return;
         }
         if (cancelRequested.contains(executionId) || execution.getStatus() == ExecEnums.ExecStatus.CANCELED) {
@@ -460,6 +463,25 @@ public class SqlExecutionService {
         } catch (IllegalArgumentException ex) {
             return null;
         }
+    }
+
+    private QueryExecution awaitExecutionVisibility(UUID executionId) {
+        for (int attempt = 0; attempt < EXECUTION_VISIBILITY_RETRIES; attempt++) {
+            QueryExecution execution = queryExecutionRepository.findById(executionId).orElse(null);
+            if (execution != null) {
+                return execution;
+            }
+            if (attempt + 1 >= EXECUTION_VISIBILITY_RETRIES || cancelRequested.contains(executionId)) {
+                break;
+            }
+            try {
+                Thread.sleep(EXECUTION_VISIBILITY_RETRY_MILLIS);
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+        }
+        return null;
     }
 
     private record StoredResult(List<String> headers, List<Map<String, Object>> rows, long rowCount) {}

@@ -434,7 +434,7 @@ export default function ScreensPage() {
                 <h1 className="page-title">大屏管理</h1>
                 <div style={{ display: 'flex', gap: 10 }}>
                     <button className="primary-btn" onClick={handleOpenAiGenerator}>
-                        AI生成
+                        自动生成
                     </button>
                     <button className="primary-btn" data-testid="analytics-screen-create" onClick={handleCreate}>
                         新建大屏
@@ -546,7 +546,11 @@ export default function ScreensPage() {
                                     onClick={() => handleEdit(screen.id)}
                                 >
                                     <div className="screen-card-placeholder">
-                                        屏
+                                        <svg width="48" height="36" viewBox="0 0 48 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                            <rect x="2" y="2" width="44" height="28" rx="3" stroke="currentColor" strokeWidth="2.5" />
+                                            <line x1="18" y1="34" x2="30" y2="34" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+                                            <line x1="24" y1="30" x2="24" y2="34" stroke="currentColor" strokeWidth="2.5" />
+                                        </svg>
                                     </div>
                                     <div className="screen-card-size">
                                         {screen.width || 1920} × {screen.height || 1080}
@@ -672,6 +676,47 @@ export default function ScreensPage() {
             </div>
 
             <style>{`
+                .page-header {
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    padding: 16px 20px 8px;
+                }
+
+                .page-title {
+                    margin: 0;
+                    font-size: 20px;
+                    font-weight: 600;
+                    color: var(--color-text-primary);
+                }
+
+                .primary-btn {
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    height: 32px;
+                    padding: 0 16px;
+                    font-size: 14px;
+                    font-weight: 400;
+                    line-height: 1.5;
+                    border: 1px solid var(--color-primary, #1677ff);
+                    border-radius: 6px;
+                    background: var(--color-primary, #1677ff);
+                    color: #fff;
+                    cursor: pointer;
+                    transition: all 0.2s;
+                    white-space: nowrap;
+                }
+
+                .primary-btn:hover {
+                    opacity: 0.85;
+                }
+
+                .primary-btn:disabled {
+                    opacity: 0.5;
+                    cursor: not-allowed;
+                }
+
                 .screens-grid {
                     display: grid;
                     grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
@@ -753,7 +798,9 @@ export default function ScreensPage() {
                 .screen-card-preview {
                     position: relative;
                     height: 160px;
-                    background: #0d1b2a;
+                    background:
+                        linear-gradient(135deg, rgba(84, 123, 255, 0.08) 0%, rgba(34, 197, 94, 0.06) 50%, rgba(168, 85, 247, 0.06) 100%),
+                        var(--color-surface-secondary, #f1f5f9);
                     display: flex;
                     align-items: center;
                     justify-content: center;
@@ -761,11 +808,15 @@ export default function ScreensPage() {
                     border-top-left-radius: 8px;
                     border-top-right-radius: 8px;
                     overflow: hidden;
+                    border-bottom: 1px solid var(--color-border);
                 }
-                
+
                 .screen-card-placeholder {
-                    font-size: 48px;
-                    opacity: 0.5;
+                    font-size: 32px;
+                    opacity: 0.18;
+                    font-weight: 700;
+                    letter-spacing: 0.1em;
+                    color: var(--color-text-primary);
                 }
                 
                 .screen-card-size {
@@ -773,10 +824,13 @@ export default function ScreensPage() {
                     bottom: 8px;
                     right: 8px;
                     padding: 4px 8px;
-                    background: rgba(0, 0, 0, 0.6);
-                    color: white;
+                    background: var(--color-surface-secondary, rgba(255, 255, 255, 0.85));
+                    color: var(--color-text-secondary);
+                    border: 1px solid var(--color-border);
                     border-radius: 4px;
                     font-size: 11px;
+                    font-weight: 600;
+                    backdrop-filter: blur(4px);
                 }
                 
                 .screen-card-info {
@@ -1075,6 +1129,42 @@ export default function ScreensPage() {
                     border-top: 1px solid rgba(148, 163, 184, 0.2);
                 }
 
+                .ai-modal .action-btn {
+                    background: rgba(30, 41, 59, 0.8);
+                    color: #e2e8f0;
+                    border-color: rgba(148, 163, 184, 0.3);
+                }
+
+                .ai-modal .action-btn:hover {
+                    background: rgba(51, 65, 85, 0.9);
+                    border-color: rgba(148, 163, 184, 0.5);
+                }
+
+                .ai-modal .action-btn:disabled {
+                    opacity: 0.4;
+                    cursor: not-allowed;
+                }
+
+                .ai-modal .primary-btn {
+                    background: var(--color-primary, #1677ff);
+                    border-color: var(--color-primary, #1677ff);
+                    color: #fff;
+                }
+
+                .ai-modal .primary-btn:disabled {
+                    opacity: 0.4;
+                    cursor: not-allowed;
+                }
+
+                .ai-modal select {
+                    background: #0b1222;
+                    color: #e2e8f0;
+                    border: 1px solid rgba(148, 163, 184, 0.25);
+                    border-radius: 6px;
+                    padding: 6px 10px;
+                    font-size: 13px;
+                }
+
                 @media (max-width: 960px) {
                     .screens-toolbar {
                         padding: 10px 12px 0;
@@ -1149,7 +1239,6 @@ export default function ScreensPage() {
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                 <label style={{ fontSize: 12, color: '#94a3b8', minWidth: 88 }}>优化模式</label>
                                 <select
-                                    className="property-input"
                                     value={aiRefineMode}
                                     onChange={(e) => setAiRefineMode(e.target.value === 'suggest' ? 'suggest' : 'apply')}
                                     style={{ maxWidth: 180 }}

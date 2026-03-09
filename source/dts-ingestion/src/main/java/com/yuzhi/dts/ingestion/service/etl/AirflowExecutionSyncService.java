@@ -91,8 +91,9 @@ public class AirflowExecutionSyncService {
                     String dagRunId = execution.getExecutionId();
                     if (StringUtils.hasText(dagId) && StringUtils.hasText(dagRunId)) {
                         try {
-                            Map<String, Object> dagRun = airflowClient.getDagRun(dagId, dagRunId).orElse(null);
-                            if (dagRun != null && !dagRun.isEmpty()) {
+                            AirflowClient.DagRunLookupResult dagRunLookup = airflowClient.getDagRunLookup(dagId, dagRunId);
+                            Map<String, Object> dagRun = dagRunLookup.dagRun();
+                            if (dagRunLookup.found()) {
                                 String state = toText(dagRun.get("state"));
                                 if (StringUtils.hasText(state)) {
                                     String normalized = state.trim().toLowerCase(Locale.ROOT);
@@ -107,6 +108,11 @@ public class AirflowExecutionSyncService {
                                         resolvedFromAirflow = true;
                                     }
                                 }
+                            } else if (dagRunLookup.notFound()) {
+                                String failureMessage = resolveMissingDagRunMessage(dagId, dagRunId, dagRunLookup.message());
+                                markExecution(execution, task, "failed", failureMessage, dagId, dagRunId);
+                                LOG.warn("[recovery] execution {} recovered from Airflow as missing dag run", execution.getId());
+                                resolvedFromAirflow = true;
                             }
                         } catch (Exception airflowEx) {
                             LOG.warn("[recovery] execution {} failed to query Airflow: {}", execution.getId(), airflowEx.getMessage());
@@ -164,10 +170,15 @@ public class AirflowExecutionSyncService {
             if (!StringUtils.hasText(dagId) || !StringUtils.hasText(dagRunId)) {
                 continue;
             }
-            Map<String, Object> dagRun = airflowClient.getDagRun(dagId, dagRunId).orElse(null);
-            if (dagRun == null || dagRun.isEmpty()) {
+            AirflowClient.DagRunLookupResult dagRunLookup = airflowClient.getDagRunLookup(dagId, dagRunId);
+            if (!dagRunLookup.found()) {
+                if (dagRunLookup.notFound() && shouldFailMissingDagRun(execution)) {
+                    String failureMessage = resolveMissingDagRunMessage(dagId, dagRunId, dagRunLookup.message());
+                    markExecution(execution, task, "failed", failureMessage, dagId, dagRunId);
+                }
                 continue;
             }
+            Map<String, Object> dagRun = dagRunLookup.dagRun();
             String state = toText(dagRun.get("state"));
             if (!StringUtils.hasText(state)) {
                 continue;
@@ -282,6 +293,27 @@ public class AirflowExecutionSyncService {
             return "Airflow state: " + state;
         }
         return truncate("Airflow state: " + state + "; " + String.join(" | ", details), MAX_FAILURE_MSG_LEN);
+    }
+
+    private boolean shouldFailMissingDagRun(IngestionExecution execution) {
+        long graceSeconds = properties.getDagNotFoundRetryWaitSeconds() == null
+            ? 120L
+            : Math.max(30L, properties.getDagNotFoundRetryWaitSeconds().longValue());
+        Instant referenceTime = execution.getStartTime() != null ? execution.getStartTime() : execution.getCreatedAt();
+        if (referenceTime == null) {
+            return true;
+        }
+        return referenceTime.isBefore(Instant.now().minusSeconds(graceSeconds));
+    }
+
+    private String resolveMissingDagRunMessage(String dagId, String dagRunId, String detail) {
+        StringBuilder message = new StringBuilder("Airflow DAGRun not found: dag=");
+        message.append(dagId).append(", run=").append(dagRunId);
+        String normalizedDetail = normalizeDetail(detail);
+        if (StringUtils.hasText(normalizedDetail)) {
+            message.append("; detail=").append(normalizedDetail);
+        }
+        return truncate(message.toString(), MAX_FAILURE_MSG_LEN);
     }
 
     private List<Integer> resolveTryCandidates(Integer hintTry) {
@@ -404,6 +436,13 @@ public class AirflowExecutionSyncService {
             return "";
         }
         return value.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private String normalizeDetail(String value) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        return truncate(value.replaceAll("\\s+", " ").trim(), 512);
     }
 
     private String truncate(String value, int maxLen) {

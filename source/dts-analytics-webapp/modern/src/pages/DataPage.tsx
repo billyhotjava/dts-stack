@@ -79,7 +79,6 @@ export default function DataPage() {
 		<PageContainer>
 			<PageHeader
 				title={t(locale, "data.title")}
-				subtitle={t(locale, "data.subtitle")}
 				actions={
 					<Link to="/data/new">
 						<Button variant="primary" icon={<PlusIcon />}>

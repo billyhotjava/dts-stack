@@ -51,18 +51,18 @@
   }
 }
 
-/* Page Header */
+/* Page Header — compact admin style */
 .mb-page-header {
   margin-bottom: var(--spacing-lg);
 }
 
 .mb-page-header__breadcrumbs {
-  margin-bottom: var(--spacing-md);
+  margin-bottom: var(--spacing-sm);
 }
 
 .mb-page-header__content {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: var(--spacing-lg);
   flex-wrap: wrap;
@@ -74,17 +74,11 @@
 }
 
 .mb-page-header__title {
-  font-size: var(--font-size-2xl);
-  font-weight: var(--font-weight-bold);
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-semibold);
   color: var(--color-text-primary);
   margin: 0;
   line-height: var(--line-height-tight);
-}
-
-.mb-page-header__subtitle {
-  font-size: var(--font-size-md);
-  color: var(--color-text-secondary);
-  margin: var(--spacing-xs) 0 0;
 }
 
 .mb-page-header__actions {

@@ -196,7 +196,6 @@ export default function DashboardDetailPage() {
 				<>
 					<PageHeader
 						title={state.value.name ?? "-"}
-						subtitle={state.value.description ?? ""}
 						actions={
 							<>
 								<Button

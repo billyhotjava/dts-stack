@@ -177,26 +177,21 @@ type RouteNavMeta = {
 	path: string;
 	section: string;
 	nav?: string;
-	blurb?: string;
 };
 
 const ROUTE_NAV_MAP: RouteNavMeta[] = [
-	{ path: "/collections/root", section: "nav.section.core", nav: "nav.myCollection", blurb: "个人与团队收藏目录。" },
-	{ path: "/", section: "nav.section.core", nav: "nav.home", blurb: "平台概览、热点趋势与最近动态。" },
-	{ path: "/analyze", section: "nav.section.core", nav: "nav.analyze", blurb: "即席分析、诊断与异常追踪。" },
-	{ path: "/questions", section: "nav.section.core", nav: "nav.questions", blurb: "查询、卡片与问答沉淀。" },
-	{ path: "/dashboards", section: "nav.section.core", nav: "nav.dashboards", blurb: "看板、驾驶舱与交付面板。" },
-	{ path: "/collections", section: "nav.section.core", nav: "nav.collections", blurb: "沉淀团队资产与个人收藏。" },
-	{ path: "/data", section: "nav.section.data", nav: "nav.data", blurb: "数据源、表与字段资产视图。" },
-	{ path: "/models", section: "nav.section.data", nav: "nav.models", blurb: "语义模型与建模资产管理。" },
-	{ path: "/metrics", section: "nav.section.data", nav: "nav.metrics", blurb: "指标口径、发布与复用。" },
-	{ path: "/trash", section: "nav.section.data", nav: "nav.trash", blurb: "回收站与恢复处理入口。" },
-	{ path: "/screens", section: "nav.section.tools", nav: "nav.screens", blurb: "大屏资产、发布与分享。" },
-	{ path: "/explore-sessions", section: "nav.section.tools", nav: "nav.exploreSessions", blurb: "探索会话记录与复盘。" },
-	{ path: "/report-factory", section: "nav.section.tools", nav: "nav.reportFactory", blurb: "报表生产与交付。" },
-	{ path: "/metric-lens", section: "nav.section.tools", nav: "nav.metricLens", blurb: "指标视角分析与切换。" },
-	{ path: "/nl2sql-eval", section: "nav.section.tools", nav: "nav.nl2sqlEval", blurb: "问数评估与对比验证。" },
-	{ path: "/search", section: "nav.section.tools", nav: "nav.search", blurb: "统一检索页面、指标与模型。" },
+	{ path: "/collections/root", section: "nav.section.core", nav: "nav.myCollection" },
+	{ path: "/", section: "nav.section.core", nav: "nav.home" },
+	{ path: "/analyze", section: "nav.section.core", nav: "nav.analyze" },
+	{ path: "/questions", section: "nav.section.core", nav: "nav.questions" },
+	{ path: "/dashboards", section: "nav.section.core", nav: "nav.dashboards" },
+	{ path: "/collections", section: "nav.section.core", nav: "nav.collections" },
+	{ path: "/data", section: "nav.section.data", nav: "nav.data" },
+	{ path: "/models", section: "nav.section.data", nav: "nav.models" },
+	{ path: "/metrics", section: "nav.section.data", nav: "nav.metrics" },
+	{ path: "/trash", section: "nav.section.data", nav: "nav.trash" },
+	{ path: "/screens", section: "nav.section.tools", nav: "nav.screens" },
+	{ path: "/search", section: "nav.section.tools", nav: "nav.search" },
 ];
 
 function matchRouteMeta(path: string): RouteNavMeta | null {
@@ -235,18 +230,9 @@ function HeaderBreadcrumb() {
 }
 
 function HeaderIntro() {
-	const locale = getEffectiveLocale();
-	const location = useLocation();
-	const matched = matchRouteMeta(location.pathname);
-	const title = matched?.nav ? t(locale, matched.nav) : t(locale, "nav.home");
-	const subtitle = matched?.blurb || "统一查看分析资产、数据入口与交付工具。";
-
 	return (
 		<div className="main-header__intro">
-			<div className="main-header__eyebrow">Analytics Console</div>
 			<HeaderBreadcrumb />
-			<div className="main-header__title">{title}</div>
-			<div className="main-header__subtitle">{subtitle}</div>
 		</div>
 	);
 }
@@ -358,21 +344,12 @@ export function AppLayout() {
 			</Dropdown>
 		);
 
-	const SidebarCallout = (
-		<div className="analytics-sidebar-card">
-			<div className="analytics-sidebar-card__eyebrow">Unified Console</div>
-			<div className="analytics-sidebar-card__title">浅色优先的分析工作台</div>
-			<div className="analytics-sidebar-card__text">常规页面统一纳入控制台壳，全屏设计器与预览继续独立运行。</div>
-		</div>
-	);
-
 	return (
 		<SidebarProvider>
 			<div className="layout">
 				<SidebarNav
 					logo={Logo}
 					logoCollapsed={LogoCollapsed}
-					header={SidebarCallout}
 					footer={null}
 				>
 					<SidebarSection title={t(locale, "nav.section.core")}>
@@ -397,10 +374,6 @@ export function AppLayout() {
 
 					<SidebarSection title={t(locale, "nav.section.tools")}>
 						<SidebarItem to="/screens" icon={<ScreenIcon />} label={t(locale, "nav.screens")} />
-						<SidebarItem to="/explore-sessions" icon={<ExploreSessionIcon />} label={t(locale, "nav.exploreSessions")} />
-						<SidebarItem to="/report-factory" icon={<ReportFactoryIcon />} label={t(locale, "nav.reportFactory")} />
-						<SidebarItem to="/metric-lens" icon={<MetricLensIcon />} label={t(locale, "nav.metricLens")} />
-						<SidebarItem to="/nl2sql-eval" icon={<Nl2SqlEvalIcon />} label={t(locale, "nav.nl2sqlEval")} />
 						<SidebarItem to="/search" icon={<SearchIcon />} label={t(locale, "nav.search")} />
 					</SidebarSection>
 				</SidebarNav>

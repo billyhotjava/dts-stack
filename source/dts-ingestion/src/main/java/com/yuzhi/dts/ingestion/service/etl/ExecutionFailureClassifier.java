@@ -43,6 +43,18 @@ public final class ExecutionFailureClassifier {
         if (containsAny(text, "access denied", "permission denied", "not authorized", "authentication failed", "401", "403")) {
             return CATEGORY_PERMISSION;
         }
+        if (
+            containsAny(
+                text,
+                "airflowtimetableinvalid",
+                "dag 导入失败",
+                "dag import failed",
+                "airflow_dag_not_ready_timeout",
+                "iterator expression"
+            )
+        ) {
+            return CATEGORY_RUNTIME;
+        }
         if (containsAny(text, "syntax error", "create table", "alter table", "drop table", "relation", "does not exist")) {
             return CATEGORY_DDL;
         }

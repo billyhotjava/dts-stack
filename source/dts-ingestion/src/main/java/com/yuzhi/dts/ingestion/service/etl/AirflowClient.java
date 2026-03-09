@@ -100,22 +100,34 @@ public class AirflowClient {
     }
 
     public Optional<Map<String, Object>> getDagRun(String dagId, String dagRunId) {
+        DagRunLookupResult lookup = getDagRunLookup(dagId, dagRunId);
+        if (!lookup.found()) {
+            return Optional.empty();
+        }
+        return Optional.ofNullable(lookup.dagRun());
+    }
+
+    public DagRunLookupResult getDagRunLookup(String dagId, String dagRunId) {
         AirflowSettings settings = resolveSettings();
         if (!settings.enabled() || !StringUtils.hasText(settings.baseUrl()) || !StringUtils.hasText(dagId) || !StringUtils.hasText(dagRunId)) {
-            return Optional.empty();
+            return DagRunLookupResult.disabled();
         }
         URI uri = buildUri(settings, "/dags/" + dagId + "/dagRuns/" + dagRunId, null);
         try {
             HttpHeaders headers = defaultHeaders(settings);
             HttpEntity<Void> entity = new HttpEntity<>(headers);
             ResponseEntity<Map> response = restTemplate.exchange(uri, HttpMethod.GET, entity, Map.class);
-            return Optional.ofNullable(response.getBody());
+            return DagRunLookupResult.found(response.getStatusCode().value(), response.getBody());
         } catch (HttpStatusCodeException ex) {
             LOG.warn("Airflow dag run fetch failed status={} body={}", ex.getStatusCode().value(), ex.getResponseBodyAsString());
+            if (ex.getStatusCode().value() == 404) {
+                return DagRunLookupResult.notFound(ex.getStatusCode().value(), ex.getResponseBodyAsString());
+            }
+            return DagRunLookupResult.error(ex.getStatusCode().value(), ex.getResponseBodyAsString());
         } catch (Exception ex) {
             LOG.warn("Airflow dag run fetch error: {}", ex.getMessage());
+            return DagRunLookupResult.error(-1, ex.getMessage());
         }
-        return Optional.empty();
     }
 
     public Optional<Map<String, Object>> listDagRuns(String dagId, int limit) {
@@ -340,6 +352,32 @@ public class AirflowClient {
     }
 
     public record TriggerResult(boolean success, int statusCode, String message, Map<String, Object> payload) {}
+
+    public record DagRunLookupResult(Map<String, Object> dagRun, int statusCode, String message) {
+        public static DagRunLookupResult disabled() {
+            return new DagRunLookupResult(Map.of(), 0, null);
+        }
+
+        public static DagRunLookupResult found(int statusCode, Map<String, Object> dagRun) {
+            return new DagRunLookupResult(dagRun == null ? Map.of() : dagRun, statusCode, null);
+        }
+
+        public static DagRunLookupResult notFound(int statusCode, String message) {
+            return new DagRunLookupResult(Map.of(), statusCode, message);
+        }
+
+        public static DagRunLookupResult error(int statusCode, String message) {
+            return new DagRunLookupResult(Map.of(), statusCode, message);
+        }
+
+        public boolean found() {
+            return dagRun != null && !dagRun.isEmpty();
+        }
+
+        public boolean notFound() {
+            return statusCode == 404;
+        }
+    }
 
     private record AirflowSettings(boolean enabled, String baseUrl, String apiPath, String username, String password) {}
 }

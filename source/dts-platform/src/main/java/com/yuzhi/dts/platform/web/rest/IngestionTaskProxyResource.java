@@ -230,6 +230,33 @@ public class IngestionTaskProxyResource {
         return ResponseEntity.ok(response);
     }
 
+    @PostMapping("/tasks/{id}/execute/async")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ResponseEntity<ApiResponse<Map<String, Object>>> executeTaskAsync(@PathVariable("id") Long id) {
+        ApiResponse<Map<String, Object>> response = ingestionClient.executeTaskAsync(id);
+        int status = response == null || response.getStatus() <= 0 ? 202 : response.getStatus();
+        return ResponseEntity.status(status).body(response);
+    }
+
+    @PostMapping("/tasks/{id}/executions/{executionId}/retry")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ResponseEntity<ApiResponse<Map<String, Object>>> retryExecution(
+        @PathVariable("id") Long id,
+        @PathVariable("executionId") Long executionId,
+        @RequestParam(value = "mode", required = false, defaultValue = "FAILED_ONLY") String mode,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        ApiResponse<Map<String, Object>> response = ingestionClient.retryExecution(id, executionId, Map.of("mode", mode));
+        if (response != null && response.getData() != null) {
+            try {
+                externalRunLogService.recordIngestionExecution(response.getData(), activeDept);
+            } catch (RuntimeException ex) {
+                // best-effort sync
+            }
+        }
+        return ResponseEntity.ok(response);
+    }
+
     @PostMapping("/tasks/{id}/dag/rebuild")
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ResponseEntity<ApiResponse<Map<String, Object>>> rebuildDag(@PathVariable("id") Long id) {

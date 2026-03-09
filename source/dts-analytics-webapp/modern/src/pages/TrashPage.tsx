@@ -71,7 +71,6 @@ export default function TrashPage() {
 		<PageContainer>
 			<PageHeader
 				title={t(locale, "trash.title")}
-				subtitle={t(locale, "trash.subtitle")}
 			/>
 
 			{state.state === "loading" && (

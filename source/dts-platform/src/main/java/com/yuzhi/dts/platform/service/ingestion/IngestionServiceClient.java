@@ -134,6 +134,10 @@ public class IngestionServiceClient {
         return exchangeTaskLong("/api/ingestion/tasks/" + id + "/execute", HttpMethod.POST, null);
     }
 
+    public ApiResponse<Map<String, Object>> executeTaskAsync(Long id) {
+        return exchangeTaskLong("/api/ingestion/tasks/" + id + "/execute/async", HttpMethod.POST, null);
+    }
+
     public ApiResponse<Map<String, Object>> rebuildDag(Long id) {
         return exchangeTask("/api/ingestion/tasks/" + id + "/dag/rebuild", HttpMethod.POST, null, null);
     }
@@ -148,6 +152,10 @@ public class IngestionServiceClient {
 
     public ApiResponse<Map<String, Object>> getExecutionLog(Long taskId, Long executionId, Map<String, ?> params) {
         return exchangeTask("/api/ingestion/tasks/" + taskId + "/executions/" + executionId + "/logs", HttpMethod.GET, null, params);
+    }
+
+    public ApiResponse<Map<String, Object>> retryExecution(Long taskId, Long executionId, Map<String, ?> params) {
+        return exchangeTask("/api/ingestion/tasks/" + taskId + "/executions/" + executionId + "/retry", HttpMethod.POST, null, params);
     }
 
     public ApiResponse<Object> discoverTables(Object payload) {
@@ -309,7 +317,13 @@ public class IngestionServiceClient {
                 if (unwrapped != null) {
                     return unwrapped;
                 }
-                return new ApiResponse<>(response.getStatusCode().value(), "ok", payloadMap);
+                if (response.getStatusCode().is2xxSuccessful()) {
+                    return new ApiResponse<>(ResultStatus.SUCCESS.getCode(), resolveFallbackMessage(payloadMap), payloadMap);
+                }
+                return new ApiResponse<>(response.getStatusCode().value(), resolveFallbackMessage(payloadMap), payloadMap);
+            }
+            if (response.getStatusCode().is2xxSuccessful()) {
+                return new ApiResponse<>(ResultStatus.SUCCESS.getCode(), "ok", Map.of("value", body));
             }
             return new ApiResponse<>(response.getStatusCode().value(), "ok", Map.of("value", body));
         } catch (io.github.resilience4j.circuitbreaker.CallNotPermittedException ex) {
@@ -362,6 +376,12 @@ public class IngestionServiceClient {
                 if (unwrapped != null) {
                     return unwrapped;
                 }
+                if (response.getStatusCode().is2xxSuccessful()) {
+                    return new ApiResponse<>(ResultStatus.SUCCESS.getCode(), resolveFallbackMessage(map), body);
+                }
+            }
+            if (response.getStatusCode().is2xxSuccessful()) {
+                return new ApiResponse<>(ResultStatus.SUCCESS.getCode(), "ok", body);
             }
             return new ApiResponse<>(response.getStatusCode().value(), "ok", body);
         } catch (io.github.resilience4j.circuitbreaker.CallNotPermittedException ex) {
@@ -429,6 +449,27 @@ public class IngestionServiceClient {
             }
         }
         return response;
+    }
+
+    private String resolveFallbackMessage(Map<?, ?> map) {
+        if (map == null || map.isEmpty()) {
+            return "ok";
+        }
+        Object message = map.get("message");
+        if (message == null) {
+            for (Map.Entry<?, ?> entry : map.entrySet()) {
+                Object key = entry.getKey();
+                if (key != null && "message".equalsIgnoreCase(String.valueOf(key))) {
+                    message = entry.getValue();
+                    break;
+                }
+            }
+        }
+        if (message == null) {
+            return "ok";
+        }
+        String text = String.valueOf(message).trim();
+        return text.isEmpty() ? "ok" : text;
     }
 
     private int parseStatus(Object status, int fallback) {

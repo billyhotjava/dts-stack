@@ -152,20 +152,6 @@ export default function HomePage() {
 
 	return (
 		<PageContainer>
-			{/* Welcome Banner */}
-			<div className="welcome-banner">
-				<div className="welcome-banner__content">
-					<h1 className="welcome-banner__title">
-						{t(locale, "home.welcome")}
-					</h1>
-				</div>
-				<div className="welcome-banner__status">
-					<Badge variant={healthStatus === "ok" ? "success" : healthStatus === "loading" ? "default" : "error"}>
-						{t(locale, "health")}: {healthStatus === "ok" ? "Healthy" : healthStatus}
-					</Badge>
-				</div>
-			</div>
-
 			{/* Error Notices */}
 			{user.state === "error" && <ErrorNotice locale={locale} error={user.error} />}
 			{health.state === "error" && <ErrorNotice locale={locale} error={health.error} />}

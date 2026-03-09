@@ -162,7 +162,6 @@ export default function Page() {
 		<div className="space-y-6">
 			<PageHeader
 				title="数据服务中心 / 数据 API 管理"
-				description="模型发布为 API。"
 				actions={
 					<Button type="primary" icon={<PlusOutlined />} onClick={() => openModal()}>
 						新增 API

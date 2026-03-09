@@ -267,7 +267,6 @@ export default function DataSearchPage() {
 		<div className="space-y-4">
 			<PageHeader
 				title="数据资产门户 · 数据搜索"
-				description="面向资产名称、字段与描述的统一检索入口。"
 			/>
 
 			<Card title="搜索条件">

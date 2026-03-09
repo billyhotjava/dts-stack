@@ -83,7 +83,6 @@ export default function AnalyzePage() {
 		<PageContainer>
 			<PageHeader
 				title={t(locale, "analyze.title")}
-				subtitle={t(locale, "analyze.subtitle")}
 			/>
 
 			<Card style={{ marginBottom: "var(--spacing-lg)" }}>

@@ -46,6 +46,11 @@
 	main[data-slot="slash-layout-main"] :is(p, li, span, label, td, th, input, select, textarea, button) {
 		font-size: inherit;
 	}
+
+	/* Prevent tables from overflowing their container */
+	:where(.ant-table-wrapper) {
+		overflow-x: auto;
+	}
 }
 
 /* Utilities overrides to strictly unify content typography */

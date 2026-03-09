@@ -1,16 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { AlertTriangle, Clock3, Database, ScanSearch } from "lucide-react";
 import { Alert, Button, Card, Form, Input, List, Modal, Select, Space, Table, Tag, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useNavigate, useSearchParams } from "react-router";
-import {
-	PlatformFilterBar,
-	PlatformMetaPill,
-	PlatformPageHero,
-	PlatformSectionCard,
-	PlatformSummaryCards,
-} from "@/components/console-page";
 import { EmptyState } from "@/components/empty-state";
 import { useGovernanceManageAccess } from "@/hooks/useModuleManageAccess";
 import {
@@ -931,47 +923,11 @@ export default function ReferenceCodesPage() {
 	];
 
 	const content = data?.content ?? [];
-	const totalDirectories = data?.total ?? content.length;
-	const totalItems = content.reduce((sum, item) => sum + Number(item.itemCount || 0), 0);
-	const opsAlertTone: "warning" | "default" =
-		Number(opsOverview?.conflictTotal || 0) > 0 || Number(opsOverview?.errorTotal || 0) > 0 ? "warning" : "default";
-	const summaryCards = [
-		{
-			label: "码表目录",
-			value: totalDirectories,
-			note: "当前已纳入标准治理的公共码表",
-			icon: <Database className="h-5 w-5" />,
-		},
-		{
-			label: "标准码值",
-			value: totalItems,
-			note: "当前列表页累计的码值条目数量",
-			icon: <ScanSearch className="h-5 w-5" />,
-			tone: "info" as const,
-		},
-		{
-			label: "导入运行",
-			value: opsOverview?.totalRuns ?? 0,
-			note: "最近统计窗口内的结构化导入批次",
-			icon: <Clock3 className="h-5 w-5" />,
-			tone: "success" as const,
-		},
-		{
-			label: "冲突 / 错误",
-			value: `${opsOverview?.conflictTotal ?? 0} / ${opsOverview?.errorTotal ?? 0}`,
-			note: "用于判断码表导入治理稳定性",
-			icon: <AlertTriangle className="h-5 w-5" />,
-			tone: opsAlertTone,
-		},
-	];
-
 	return (
-		<div className="space-y-6">
-			<PlatformPageHero
+		<div className="space-y-4">
+			<Card
 				title="公共码表"
-				eyebrow="Governance Console"
-				description="统一管理公共码表、标准码值、源系统映射和结构化导入批次，让标准管理和运维回滚停留在同一个控制台视角里。"
-				actions={
+				extra={
 					<Space>
 						<Button onClick={syncSeeds} disabled={!canManage}>
 							更新 dbt Seeds
@@ -981,22 +937,8 @@ export default function ReferenceCodesPage() {
 						</Button>
 					</Space>
 				}
-				meta={
-					<>
-						<PlatformMetaPill>检索关键词 {keyword.trim() || "全部码表"}</PlatformMetaPill>
-						<PlatformMetaPill>统计窗口 {opsOverview?.windowHours ?? "-"}h</PlatformMetaPill>
-						<PlatformMetaPill>治理权限 {canManage ? "可操作" : "只读"}</PlatformMetaPill>
-					</>
-				}
-			/>
-			<PlatformSummaryCards items={summaryCards} />
-
-			<PlatformFilterBar>
-				<div className="space-y-1">
-					<div className="text-sm font-medium text-foreground">码表检索与发布面</div>
-					<div className="text-sm text-muted-foreground">按目录筛选码表，查看标准值、运维批次和映射治理情况。</div>
-				</div>
-				<Space wrap>
+			>
+				<div className="mb-3 flex flex-wrap items-center gap-2">
 					<Input.Search
 						placeholder="搜索码表..."
 						style={{ width: 320 }}
@@ -1019,13 +961,12 @@ export default function ReferenceCodesPage() {
 					>
 						重置
 					</Button>
-				</Space>
-			</PlatformFilterBar>
+				</div>
+			</Card>
 
-			<PlatformSectionCard
+			<Card
 				title="导入运维概览"
-				description="查看码表导入批次、冲突分布和窗口级异常概览，用于判断标准同步链路是否稳定。"
-				action={
+				extra={
 					<Button size="small" onClick={() => void loadOpsOverview()}>
 						刷新概览
 					</Button>
@@ -1071,12 +1012,9 @@ export default function ReferenceCodesPage() {
 					)}
 				</Space>
 				</Card>
-			</PlatformSectionCard>
+			</Card>
 
-			<PlatformSectionCard
-				title="码表目录"
-				description="维护目录编码、业务分类、状态和版本信息，并进入明细、映射和引用治理。"
-			>
+			<Card title="码表目录">
 				{content.length === 0 && !loading ? (
 					<EmptyState title="暂无码表" description="请先新增公共码表。" />
 				) : (
@@ -1099,7 +1037,7 @@ export default function ReferenceCodesPage() {
 						}}
 					/>
 				)}
-			</PlatformSectionCard>
+			</Card>
 
 			<Modal
 				open={referenceOpen}

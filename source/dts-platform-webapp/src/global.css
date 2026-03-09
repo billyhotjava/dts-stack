@@ -65,6 +65,11 @@
 		border-bottom-width: 1px;
 	}
 
+	/* Prevent tables from overflowing their container */
+	:where(.ant-table-wrapper) {
+		overflow-x: auto;
+	}
+
 	/* Ensure table section titles match table header font size */
 	main[data-slot="slash-layout-main"] [data-slot="card"] [data-slot="card-title"] {
 		font-size: 0.875rem !important;

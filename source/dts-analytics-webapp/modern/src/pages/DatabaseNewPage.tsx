@@ -118,7 +118,6 @@ export default function DatabaseNewPage() {
 		<PageContainer>
 			<PageHeader
 				title={t(locale, "data.add")}
-				subtitle={t(locale, "data.platformHint")}
 				breadcrumbs={
 					<Breadcrumb items={[
 						{ label: t(locale, "data.title"), href: "/data" },

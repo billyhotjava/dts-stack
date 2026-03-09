@@ -1,15 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "@/routes/hooks";
-import { Alert, Button, DatePicker, Drawer, Input, Modal, Progress, Segmented, Select, Space, Spin, Table, Tag, Tooltip, Typography, message } from "antd";
+import { Alert, Button, Card, DatePicker, Drawer, Input, Modal, Progress, Segmented, Select, Space, Spin, Table, Tag, Tooltip, Typography, message } from "antd";
 import { ArrowLeftOutlined, PlayCircleOutlined, ReloadOutlined } from "@ant-design/icons";
-import { Activity, Clock3, ListChecks, RotateCcw } from "lucide-react";
-import {
-	PlatformFilterBar,
-	PlatformMetaPill,
-	PlatformPageHero,
-	PlatformSectionCard,
-	PlatformSummaryCards,
-} from "@/components/console-page";
 import { useRouter } from "@/routes/hooks";
 import {
     ingestionTaskAPI,
@@ -650,53 +642,16 @@ export default function TransformExecutionHistoryPage() {
         );
     }
 
-    const runningCount = executions.filter((item) => normalizeText(item.status).toLowerCase() === "running").length;
-    const successCount = executions.filter((item) => normalizeText(item.status).toLowerCase() === "success").length;
-    const retryableCount = executions.filter((item) => normalizeText(item.status).toLowerCase() === "failed").length;
-
-    const summaryCards = [
-        {
-            label: "当前页执行数",
-            value: executions.length,
-            note: `总记录 ${pagination.total}`,
-            icon: <ListChecks className="h-5 w-5" />,
-        },
-        {
-            label: "成功执行",
-            value: successCount,
-            note: "当前筛选页统计",
-            icon: <Activity className="h-5 w-5" />,
-            tone: "success" as const,
-        },
-        {
-            label: "运行中",
-            value: runningCount,
-            note: "用于判断是否还在追踪状态",
-            icon: <Clock3 className="h-5 w-5" />,
-            tone: "info" as const,
-        },
-        {
-            label: "可重试失败",
-            value: retryableCount,
-            note: "失败重试或整批重跑入口仍保留",
-            icon: <RotateCcw className="h-5 w-5" />,
-            tone: "warning" as const,
-        },
-    ];
-
     return (
         <div className="space-y-6">
-            <PlatformPageHero
+            <Card
                 title={`${task.name} - 执行历史`}
-                description="集中查看执行记录、失败分类、水位推进和日志，不再把筛选条件挤进旧式页面头。"
-                eyebrow="Execution Timeline"
-                actions={
+                extra={
                     <Space wrap>
-                        <Button className="rounded-2xl" icon={<ArrowLeftOutlined />} onClick={() => router.push(`/explore/etl/transform/${id}`)}>
+                        <Button icon={<ArrowLeftOutlined />} onClick={() => router.push(`/explore/etl/transform/${id}`)}>
                             返回
                         </Button>
                         <Button
-                            className="rounded-2xl"
                             type="primary"
                             icon={<PlayCircleOutlined />}
                             onClick={handleExecute}
@@ -705,30 +660,13 @@ export default function TransformExecutionHistoryPage() {
                         >
                             执行任务
                         </Button>
-                        <Button className="rounded-2xl" icon={<ReloadOutlined />} onClick={loadExecutions} loading={loading}>
+                        <Button icon={<ReloadOutlined />} onClick={loadExecutions} loading={loading}>
                             刷新
                         </Button>
                     </Space>
                 }
-                meta={
-                    <>
-                        <PlatformMetaPill>同步模式 {task.syncMode || "-"}</PlatformMetaPill>
-                        <PlatformMetaPill>{failureQuickFilter === "governance" ? "仅治理失败" : "全部失败分类"}</PlatformMetaPill>
-                        <PlatformMetaPill>{statusFilter ? `状态 ${statusFilter}` : "状态全部"}</PlatformMetaPill>
-                    </>
-                }
-            />
-
-            <PlatformSummaryCards items={summaryCards} />
-
-            <PlatformFilterBar>
-                <div>
-                    <div className="text-sm font-semibold text-foreground">先缩小问题范围，再打开日志和水位详情</div>
-                    <div className="mt-1 text-sm text-muted-foreground">
-                        失败分类、治理失败快捷筛选和审计时间窗都放在这里，避免页面头部承担过多控件。
-                    </div>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
+            >
+                <Space wrap style={{ marginBottom: 16 }}>
                     <Select
                         allowClear
                         placeholder="执行状态"
@@ -785,7 +723,6 @@ export default function TransformExecutionHistoryPage() {
                     ) : null}
                     {normalizeText(task.syncMode).toLowerCase() === "incremental" ? (
                         <Button
-                            className="rounded-2xl"
                             icon={<ReloadOutlined />}
                             onClick={() => {
                                 if (!task?.id) return;
@@ -797,19 +734,16 @@ export default function TransformExecutionHistoryPage() {
                             刷新审计
                         </Button>
                     ) : null}
-                </div>
-            </PlatformFilterBar>
+                </Space>
+            </Card>
 
-            <PlatformSectionCard
-                title="执行记录"
-                description="每条记录都保留查看日志、失败重试、整批重跑和水位推进详情入口。"
-                action={<Tag color="blue">{pagination.total} 条记录</Tag>}
-            >
+            <Card title="执行记录" extra={<Tag color="blue">{pagination.total} 条记录</Tag>}>
                 <Table
                     columns={columns}
                     dataSource={executions}
                     rowKey="id"
                     loading={loading}
+                    scroll={{ x: 1900 }}
                     pagination={{
                         current: pagination.current,
                         pageSize: pagination.pageSize,
@@ -822,13 +756,12 @@ export default function TransformExecutionHistoryPage() {
                         },
                     }}
                 />
-            </PlatformSectionCard>
+            </Card>
 
             {normalizeText(task.syncMode).toLowerCase() === "incremental" ? (
-                <PlatformSectionCard
+                <Card
                     title="增量检查点（当前）"
-                    description="这里显示的是任务当前最新水位快照；单次执行的推进情况请在执行记录里打开详情。"
-                    action={
+                    extra={
                         <Space>
                             {auditFrom || auditTo ? (
                                 <Tag color="processing">审计范围已生效</Tag>
@@ -836,7 +769,6 @@ export default function TransformExecutionHistoryPage() {
                                 <Tag>审计范围：全部</Tag>
                             )}
                             <Button
-                                className="rounded-2xl"
                                 icon={<ReloadOutlined />}
                                 loading={incrementalStatesLoading}
                                 onClick={() => task?.id && loadIncrementalStates(Number(task.id))}
@@ -883,7 +815,7 @@ export default function TransformExecutionHistoryPage() {
                     <div className="mt-3 text-xs text-muted-foreground">
                         {"该区域是当前最新检查点快照；单次执行的前后水位请看“执行历史 > 水位推进 > 详情”。"}
                     </div>
-                </PlatformSectionCard>
+                </Card>
             ) : null}
             <Modal
                 title="执行进度"

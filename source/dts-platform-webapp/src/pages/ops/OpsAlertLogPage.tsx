@@ -37,7 +37,7 @@ export default function OpsAlertLogPage() {
 
 	return (
 		<div className="space-y-6 px-6 py-6">
-			<PageHeader title="告警日志" description="质量与任务告警统一查看。" />
+			<PageHeader title="告警日志" />
 			<Card>
 				<Table rowKey={(record, idx) => `${record.type}-${idx}`} columns={columns} dataSource={alerts} loading={loading} />
 			</Card>

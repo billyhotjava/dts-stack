@@ -85,7 +85,6 @@ export default function Page() {
 		<div className="space-y-6">
 			<PageHeader
 				title="数据服务中心 / 共享交换"
-				description="数据导出与共享。"
 				actions={
 					<Button type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
 						生成令牌

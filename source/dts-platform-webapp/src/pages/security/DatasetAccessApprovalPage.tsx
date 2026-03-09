@@ -293,7 +293,7 @@ export default function Page() {
 
 	return (
 		<div className="space-y-6">
-			<PageHeader title="数据资产门户 / 权限申请" description="申请、审批、授权全流程闭环。" />
+			<PageHeader title="数据资产门户 / 权限申请" />
 			<Card>
 				<Tabs
 					activeKey={activeTab}

@@ -395,7 +395,6 @@ export default function ScriptStudioPage() {
 		<div className="space-y-5">
 			<PageHeader
 				title="数据开发中心 · 脚本开发（Python/Spark）"
-				description="支持脚本资产管理、版本保存、手动运行与日志追踪。"
 				actions={
 					<Space>
 						<Button onClick={() => void loadScripts()}>刷新</Button>

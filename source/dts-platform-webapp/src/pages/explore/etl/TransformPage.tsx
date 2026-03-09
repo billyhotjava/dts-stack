@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Alert, Button, Card, Col, Empty, InputNumber, Modal, Progress, Row, Select, Space, Statistic, Table, Tag, message } from "antd";
+import { Alert, Button, Card, Modal, Progress, Space, Table, Tag, message } from "antd";
 import {
 	PlayCircleOutlined,
 	EditOutlined,
@@ -8,21 +8,11 @@ import {
 	ReloadOutlined,
 	SyncOutlined,
 } from "@ant-design/icons";
-import { Activity, Clock3, ListChecks, ShieldAlert } from "lucide-react";
-import {
-	PlatformFilterBar,
-	PlatformMetaPill,
-	PlatformPageHero,
-	PlatformSectionCard,
-	PlatformSummaryCards,
-} from "@/components/console-page";
 import { useRouter } from "@/routes/hooks";
 import {
 	ingestionTaskAPI,
 	type IngestionTaskDTO,
 	type IngestionExecutionDTO,
-	type IngestionGovernanceOverviewDTO,
-	type IngestionExecutionObservabilityDTO,
 } from "@/api/ingestion";
 import { formatTimestamp } from "@/utils/format";
 
@@ -50,15 +40,6 @@ export default function TransformPage() {
 	});
 	const [executingTaskName, setExecutingTaskName] = useState<string>("");
 	const [executingTaskId, setExecutingTaskId] = useState<number | null>(null);
-	const [observability, setObservability] = useState<IngestionExecutionObservabilityDTO | null>(null);
-	const [observabilityLoading, setObservabilityLoading] = useState(false);
-	const [governanceOverview, setGovernanceOverview] = useState<IngestionGovernanceOverviewDTO | null>(null);
-	const [governanceLoading, setGovernanceLoading] = useState(false);
-	const [governanceHours, setGovernanceHours] = useState<number>(24);
-	const [obsTaskId, setObsTaskId] = useState<number | undefined>(undefined);
-	const [obsSourceType, setObsSourceType] = useState<string | undefined>(undefined);
-	const [obsDays, setObsDays] = useState<number>(7);
-	const [obsTimeoutMinutes, setObsTimeoutMinutes] = useState<number>(10);
 	const executePollTimerRef = useRef<number | null>(null);
 	const executeStartedAtRef = useRef<number>(0);
 
@@ -71,14 +52,6 @@ export default function TransformPage() {
 			stopExecutePolling();
 		};
 	}, []);
-
-	useEffect(() => {
-		void loadObservability();
-	}, [obsTaskId, obsSourceType, obsDays, obsTimeoutMinutes]);
-
-	useEffect(() => {
-		void loadGovernanceOverview();
-	}, [governanceHours]);
 
 	/** Adaptive polling: starts fast, slows down over time. Never hard-stops. */
 	const adaptivePollDelay = (elapsedMs: number): number => {
@@ -114,35 +87,6 @@ export default function TransformPage() {
 			setTasks([]);
 		} finally {
 			setLoading(false);
-		}
-	};
-
-	const loadObservability = async () => {
-		setObservabilityLoading(true);
-		try {
-			const result = await ingestionTaskAPI.getExecutionsObservability({
-				taskId: obsTaskId,
-				sourceType: obsSourceType || undefined,
-				days: obsDays,
-				timeoutMinutes: obsTimeoutMinutes,
-			});
-			setObservability(result);
-		} catch {
-			setObservability(null);
-		} finally {
-			setObservabilityLoading(false);
-		}
-	};
-
-	const loadGovernanceOverview = async () => {
-		setGovernanceLoading(true);
-		try {
-			const result = await ingestionTaskAPI.getGovernanceOverview({ hours: governanceHours });
-			setGovernanceOverview(result);
-		} catch {
-			setGovernanceOverview(null);
-		} finally {
-			setGovernanceLoading(false);
 		}
 	};
 
@@ -427,90 +371,28 @@ export default function TransformPage() {
 		},
 	];
 
-	const sourceTypeOptions = Array.from(
-		new Set(
-			tasks
-				.map((item) => normalizeText(item.sourceType))
-				.filter((item) => Boolean(item))
-		)
-	).map((item) => ({ label: item, value: item }));
-
-	const taskOptions = tasks
-		.filter((item) => typeof item.id === "number")
-		.map((item) => ({ label: item.name, value: Number(item.id) }));
-
-	const trendColumns = [
-		{ title: "日期", dataIndex: "day", key: "day", width: 120 },
-		{ title: "总执行", dataIndex: "total", key: "total", width: 90 },
-		{ title: "成功", dataIndex: "success", key: "success", width: 90 },
-		{ title: "失败", dataIndex: "failed", key: "failed", width: 90 },
-		{ title: "超时", dataIndex: "timeout", key: "timeout", width: 90 },
-	];
-
-	const sourceLoadColumns = [
-		{
-			title: "来源数据源",
-			dataIndex: "sourceDataSourceId",
-			key: "sourceDataSourceId",
-			render: (value: string | undefined) => value || "N/A",
-		},
-		{
-			title: "来源类型",
-			dataIndex: "sourceType",
-			key: "sourceType",
-			render: (value: string | undefined) => value || "unknown",
-		},
-		{ title: "运行中", dataIndex: "running", key: "running", width: 100 },
-		{ title: "排队中", dataIndex: "preparing", key: "preparing", width: 100 },
-	];
-	const projectLoadColumns = [
-		{
-			title: "项目标识",
-			dataIndex: "projectKey",
-			key: "projectKey",
-		},
-		{ title: "运行中", dataIndex: "running", key: "running", width: 100 },
-		{ title: "排队中", dataIndex: "preparing", key: "preparing", width: 100 },
-	];
-
-	const summaryCards = [
-		{
-			label: "任务总数",
-			value: pagination.total || tasks.length,
-			note: `活跃 ${tasks.filter((item) => item.status === "active").length} · 暂停 ${tasks.filter((item) => item.status === "paused").length}`,
-			icon: <ListChecks className="h-5 w-5" />,
-		},
-		{
-			label: "成功率",
-			value: observability ? `${Number(observability.successRate || 0).toFixed(1)}%` : "--",
-			note: `最近 ${obsDays} 天执行窗口`,
-			icon: <Activity className="h-5 w-5" />,
-			tone: "info" as const,
-		},
-		{
-			label: "队列长度",
-			value: governanceOverview?.queueLength ?? "--",
-			note: `最近 ${governanceHours} 小时治理视角`,
-			icon: <Clock3 className="h-5 w-5" />,
-			tone: "warning" as const,
-		},
-		{
-			label: "治理拒绝",
-			value: governanceOverview?.blockedByPolicy ?? "--",
-			note: "并发、窗口与限额策略命中次数",
-			icon: <ShieldAlert className="h-5 w-5" />,
-			tone: "success" as const,
-		},
-	];
-
 	return (
-		<div className="space-y-6">
-			<PlatformPageHero
+		<div className="space-y-4">
+			<Card
 				title="入湖任务中心"
-				description="把任务清单、运行可观测性和治理负载放到同一个工作面里，现场优先关注可执行、可追踪和可治理。"
-				eyebrow="Ingestion Operations"
-				actions={
+				extra={
 					<Space wrap>
+						{[
+							{ label: "全部", value: undefined },
+							{ label: "草稿", value: "draft" },
+							{ label: "活跃", value: "active" },
+							{ label: "暂停", value: "paused" },
+							{ label: "已删除", value: "deleted" },
+						].map((item) => (
+							<Button
+								key={item.label}
+								type={statusFilter === item.value ? "primary" : "default"}
+								size="small"
+								onClick={() => setStatusFilter(item.value)}
+							>
+								{item.label}
+							</Button>
+						))}
 						<Button className="rounded-2xl" icon={<ReloadOutlined />} onClick={() => void loadTasks()} loading={loading}>
 							刷新
 						</Button>
@@ -519,237 +401,11 @@ export default function TransformPage() {
 						</Button>
 					</Space>
 				}
-				meta={
-					<>
-						<PlatformMetaPill>最近 {governanceHours} 小时治理窗口</PlatformMetaPill>
-						<PlatformMetaPill>最近 {obsDays} 天执行可观测性</PlatformMetaPill>
-						<PlatformMetaPill>任务列表保留执行、重建 DAG 与删除入口</PlatformMetaPill>
-					</>
-				}
 			/>
 
-			<PlatformSummaryCards items={summaryCards} />
-
-			<PlatformFilterBar>
-				<div>
-					<div className="text-sm font-semibold text-foreground">先看运行体征，再处理任务明细</div>
-					<div className="mt-1 text-sm text-muted-foreground">
-						上半区聚焦 SLA、失败趋势和治理负载，下半区保留任务级执行、重建 DAG 和配置处理入口。
-					</div>
-				</div>
-				<div className="flex flex-wrap items-center gap-2">
-					{[
-						{ label: "全部", value: undefined },
-						{ label: "草稿", value: "draft" },
-						{ label: "活跃", value: "active" },
-						{ label: "暂停", value: "paused" },
-						{ label: "已删除", value: "deleted" },
-					].map((item) => (
-						<Button
-							key={item.label}
-							type={statusFilter === item.value ? "primary" : "default"}
-							size="small"
-							onClick={() => setStatusFilter(item.value)}
-						>
-							{item.label}
-						</Button>
-					))}
-				</div>
-			</PlatformFilterBar>
-
-			<PlatformSectionCard
-				title="运行可观测性与治理负载"
-				description="同一页面同时回答两个问题：任务当前跑得怎么样，治理限额有没有开始拦截现场流量。"
-			>
-				<Card
-					size="small"
-					title="资源与配额治理"
-					loading={governanceLoading}
-					className="mb-4 rounded-[24px]"
-					extra={
-						<Space wrap>
-							<Select
-								style={{ width: 140 }}
-								value={governanceHours}
-								options={[
-									{ label: "最近 6 小时", value: 6 },
-									{ label: "最近 24 小时", value: 24 },
-									{ label: "最近 72 小时", value: 72 },
-									{ label: "最近 168 小时", value: 168 },
-								]}
-								onChange={(value) => setGovernanceHours(value)}
-							/>
-							<Button
-								className="rounded-2xl"
-								icon={<ReloadOutlined />}
-								onClick={() => void loadGovernanceOverview()}
-								loading={governanceLoading}
-							>
-								刷新治理
-							</Button>
-						</Space>
-					}
-				>
-					{governanceOverview ? (
-						<Space direction="vertical" size={16} style={{ width: "100%" }}>
-							{governanceOverview.blockedByPolicy > 0 ? (
-								<Alert
-									type="warning"
-									showIcon
-									message={`最近窗口内发生 ${governanceOverview.blockedByPolicy} 次治理拒绝`}
-									description="建议检查任务并发上限、来源并发上限和执行窗口配置，必要时拆分批次或下调调度频率。"
-								/>
-							) : null}
-							<Row gutter={[16, 16]}>
-								<Col xs={12} md={6}>
-									<Statistic title="运行中" value={governanceOverview.running || 0} />
-								</Col>
-								<Col xs={12} md={6}>
-									<Statistic title="排队中" value={governanceOverview.preparing || 0} />
-								</Col>
-								<Col xs={12} md={6}>
-									<Statistic title="队列长度" value={governanceOverview.queueLength || 0} />
-								</Col>
-								<Col xs={12} md={6}>
-									<Statistic title="策略拒绝数" value={governanceOverview.blockedByPolicy || 0} />
-								</Col>
-								<Col xs={12} md={6}>
-									<Statistic title="平均耗时(秒)" value={governanceOverview.avgExecutionSeconds || 0} precision={2} />
-								</Col>
-								<Col xs={12} md={6}>
-									<Statistic title="平均排队(秒)" value={governanceOverview.avgQueueWaitSeconds || 0} precision={2} />
-								</Col>
-								<Col xs={12} md={6}>
-									<Statistic title="最长排队(秒)" value={governanceOverview.maxQueueWaitSeconds || 0} precision={2} />
-								</Col>
-							</Row>
-							<Table
-								size="small"
-								rowKey={(record) => `${record.sourceDataSourceId || "none"}-${record.sourceType || "unknown"}`}
-								pagination={false}
-								columns={sourceLoadColumns}
-								dataSource={governanceOverview.sourceLoads || []}
-								locale={{ emptyText: "暂无来源负载数据" }}
-							/>
-							<Table
-								size="small"
-								rowKey={(record) => record.projectKey || "default"}
-								pagination={false}
-								columns={projectLoadColumns}
-								dataSource={governanceOverview.projectLoads || []}
-								locale={{ emptyText: "暂无项目负载数据" }}
-							/>
-						</Space>
-					) : (
-						<Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无治理指标" />
-					)}
-				</Card>
-
-				<div className="mb-4 flex flex-wrap items-center gap-3">
-					<Select
-						allowClear
-						placeholder="按任务过滤"
-						style={{ width: 220 }}
-						value={obsTaskId}
-						options={taskOptions}
-						onChange={(value) => setObsTaskId(value)}
-					/>
-					<Select
-						allowClear
-						placeholder="按来源类型过滤"
-						style={{ width: 200 }}
-						value={obsSourceType}
-						options={sourceTypeOptions}
-						onChange={(value) => setObsSourceType(value)}
-					/>
-					<Select
-						style={{ width: 150 }}
-						value={obsDays}
-						options={[
-							{ label: "最近 1 天", value: 1 },
-							{ label: "最近 7 天", value: 7 },
-							{ label: "最近 30 天", value: 30 },
-							{ label: "最近 90 天", value: 90 },
-						]}
-						onChange={(value) => setObsDays(value)}
-					/>
-					<Space size={4}>
-						<span>超时阈值(分钟)</span>
-						<InputNumber
-							min={1}
-							max={1440}
-							value={obsTimeoutMinutes}
-							onChange={(value) => setObsTimeoutMinutes(Number(value || 10))}
-						/>
-					</Space>
-					<Button className="rounded-2xl" icon={<ReloadOutlined />} onClick={() => void loadObservability()} loading={observabilityLoading}>
-						刷新指标
-					</Button>
-				</div>
-				{observability ? (
-					<Space direction="vertical" size={16} style={{ width: "100%" }}>
-						<Row gutter={[16, 16]}>
-							<Col xs={12} md={6}>
-								<Statistic title="总执行数" value={observability.total || 0} />
-							</Col>
-							<Col xs={12} md={6}>
-								<Statistic title="成功率" value={observability.successRate || 0} suffix="%" precision={2} />
-							</Col>
-							<Col xs={12} md={6}>
-								<Statistic title="超时率" value={observability.timeoutRate || 0} suffix="%" precision={2} />
-							</Col>
-							<Col xs={12} md={6}>
-								<Statistic title="平均耗时(秒)" value={observability.avgDurationSeconds || 0} precision={2} />
-							</Col>
-							<Col xs={12} md={6}>
-								<Statistic title="MTTR(秒)" value={observability.mttrSeconds || 0} precision={2} />
-							</Col>
-							<Col xs={12} md={6}>
-								<Statistic title="运行中" value={observability.running || 0} />
-							</Col>
-							<Col xs={12} md={6}>
-								<Statistic title="失败数" value={observability.failed || 0} />
-							</Col>
-							<Col xs={12} md={6}>
-								<Statistic title="超时数" value={observability.timeout || 0} />
-							</Col>
-						</Row>
-						<Row gutter={[16, 16]}>
-							<Col xs={24} lg={10}>
-								<Card size="small" title="失败分类 Top5" className="rounded-[24px]">
-									<Space wrap>
-										{(observability.failureTop || []).length ? (
-											observability.failureTop.map((item) => (
-												<Tag color="error" key={item.category}>
-													{item.category}: {item.count}
-												</Tag>
-											))
-										) : (
-											<Tag>暂无失败数据</Tag>
-										)}
-									</Space>
-								</Card>
-							</Col>
-							<Col xs={24} lg={14}>
-								<Card size="small" title="日趋势" className="rounded-[24px]">
-									{(observability.trend || []).length ? (
-										<Table size="small" rowKey="day" pagination={false} columns={trendColumns} dataSource={observability.trend} />
-									) : (
-										<Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前时间窗没有执行数据" />
-									)}
-								</Card>
-							</Col>
-						</Row>
-					</Space>
-				) : (
-					<Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无运行指标" />
-				)}
-			</PlatformSectionCard>
-
-			<PlatformSectionCard
+			<Card
 				title="任务清单"
-				description="保留现场最常用的任务级操作：执行、查看历史、编辑、重建 DAG 和删除。"
-				action={<Tag color="blue">{pagination.total || tasks.length} 条任务</Tag>}
+				extra={<Tag color="blue">{pagination.total || tasks.length} 条任务</Tag>}
 			>
 				<Table
 					columns={columns}
@@ -769,7 +425,7 @@ export default function TransformPage() {
 						},
 					}}
 				/>
-			</PlatformSectionCard>
+			</Card>
 
 			<Modal
 				open={executeProgressOpen}
