@@ -4,7 +4,15 @@ set -euo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
 
-export DOCKER_BUILDKIT=1
+# Enable BuildKit if Docker supports it (>= 18.09 with experimental, or >= 23.0 default).
+# Older Docker on Kylin/EulerOS may not support it — detect and skip.
+DOCKER_BUILDKIT_SUPPORTED=""
+if docker build --help 2>&1 | grep -q -- '--progress'; then
+  export DOCKER_BUILDKIT=1
+  DOCKER_BUILDKIT_SUPPORTED="1"
+else
+  unset DOCKER_BUILDKIT 2>/dev/null || true
+fi
 
 MODE=""
 IMAGE_ONLY=""
@@ -113,16 +121,17 @@ MAVEN_SETTINGS_FILE="${MAVEN_SETTINGS_FILE:-/root/.m2/settings.xml}"
 PREBUILD_JARS="${PREBUILD_JARS:-1}"
 WEBAPP_BUILD_CMD="${WEBAPP_BUILD_CMD:-build}"
 
-# Auto-detect host architecture and set Docker --platform flag for ARM64 (Kunpeng/Apple Silicon).
-# Without this, Docker may pull x86 images and run them via QEMU, causing JAVA_HOME failures and 10x slowdown.
+# Auto-detect host architecture for ARM64 (Kunpeng/Apple Silicon) compatibility.
 HOST_ARCH="$(uname -m)"
-DOCKER_PLATFORM=""
-if [[ "$HOST_ARCH" == "aarch64" || "$HOST_ARCH" == "arm64" ]]; then
-  DOCKER_PLATFORM="linux/arm64"
-elif [[ "$HOST_ARCH" == "x86_64" ]]; then
-  DOCKER_PLATFORM="linux/amd64"
+
+# Detect if Docker supports --platform (requires API >= 1.40 / Docker >= 19.03).
+DOCKER_PLATFORM_SUPPORTED=""
+DOCKER_API_VERSION="$(docker version --format '{{.Server.APIVersion}}' 2>/dev/null || echo "0.0")"
+DOCKER_API_MAJOR="${DOCKER_API_VERSION%%.*}"
+DOCKER_API_MINOR="${DOCKER_API_VERSION#*.}"
+if [[ "${DOCKER_API_MAJOR:-0}" -gt 1 ]] || { [[ "${DOCKER_API_MAJOR}" == "1" ]] && [[ "${DOCKER_API_MINOR:-0}" -ge 40 ]]; }; then
+  DOCKER_PLATFORM_SUPPORTED="1"
 fi
-DOCKER_PLATFORM="${DOCKER_PLATFORM_OVERRIDE:-${DOCKER_PLATFORM}}"
 
 require_cmd() {
   if ! command -v "$1" >/dev/null 2>&1; then
@@ -137,17 +146,31 @@ preflight_check() {
   arch="$(uname -m)"
   echo "[dts-build] Architecture: ${arch}"
 
-  # Warn about ARM64 QEMU emulation risk
+  echo "[dts-build] Docker API: ${DOCKER_API_VERSION}, --platform supported: ${DOCKER_PLATFORM_SUPPORTED:-no}"
+
+  # ARM64 architecture check: ensure Maven/Node images are native arm64, not x86 via QEMU
   if [[ "$arch" == "aarch64" || "$arch" == "arm64" ]]; then
-    echo "[dts-build] INFO: Running on ARM64 (Kunpeng/Apple Silicon). Docker platform: ${DOCKER_PLATFORM}"
-    echo "[dts-build] INFO: Will use --platform ${DOCKER_PLATFORM} to pull native ARM64 images."
-    # Check if existing Maven image is wrong architecture — force re-pull if so
+    echo "[dts-build] INFO: Running on ARM64 (Kunpeng/Apple Silicon)."
     local existing_maven_arch
     existing_maven_arch="$(docker inspect "${MAVEN_IMAGE}" --format '{{.Architecture}}' 2>/dev/null || echo "none")"
     if [[ "$existing_maven_arch" == "amd64" ]]; then
-      echo "[dts-build] WARN: Local Maven image is amd64 (x86), re-pulling as arm64..."
-      docker pull --platform "${DOCKER_PLATFORM}" "${MAVEN_IMAGE}"
+      echo "[dts-build] WARN: Local Maven image '${MAVEN_IMAGE}' is amd64 (x86) — will cause JAVA_HOME errors on ARM64."
+      echo "[dts-build] INFO: Removing wrong-arch image and re-pulling..."
+      docker rmi "${MAVEN_IMAGE}" 2>/dev/null || true
+      if [[ -n "${DOCKER_PLATFORM_SUPPORTED}" ]]; then
+        docker pull --platform linux/arm64 "${MAVEN_IMAGE}"
+      else
+        docker pull "${MAVEN_IMAGE}"
+      fi
+      # Verify after re-pull
+      existing_maven_arch="$(docker inspect "${MAVEN_IMAGE}" --format '{{.Architecture}}' 2>/dev/null || echo "none")"
+      if [[ "$existing_maven_arch" == "amd64" ]]; then
+        echo "[dts-build] ERROR: After re-pull, Maven image is still amd64. Your Docker registry may not have arm64 variant." >&2
+        echo "[dts-build] TIP: Use LEGACY_USE_HOST_MAVEN=1 to build with host-installed Maven instead." >&2
+        exit 1
+      fi
     fi
+    echo "[dts-build] INFO: Maven image arch: ${existing_maven_arch}"
   fi
 
   # Check available memory
@@ -174,10 +197,13 @@ preflight_check() {
     exit 1
   fi
 
-  # Prune dangling images/build cache to free resources
+  # Prune dangling images to free resources
   echo "[dts-build] Pruning dangling Docker resources..."
   docker image prune -f >/dev/null 2>&1 || true
-  docker builder prune -f --filter "until=24h" >/dev/null 2>&1 || true
+  # docker builder prune requires BuildKit (Docker >= 18.09 with experimental, or >= 23.0)
+  if [[ -n "${DOCKER_BUILDKIT_SUPPORTED}" ]]; then
+    docker builder prune -f --filter "until=24h" >/dev/null 2>&1 || true
+  fi
   echo "[dts-build] === Pre-flight OK ==="
 }
 
@@ -287,15 +313,11 @@ build_image_ctx() {
   shift 5
   local args=("$@")
 
-  echo "[dts-build] Building ${name} -> ${tag} (platform=${DOCKER_PLATFORM:-auto})"
-  local platform_args=()
-  if [[ -n "${DOCKER_PLATFORM}" ]]; then
-    platform_args+=(--platform "${DOCKER_PLATFORM}")
-  fi
-  docker build "${platform_args[@]}" -t "$tag" -f "$dockerfile" "${args[@]}" "$context_dir"
+  echo "[dts-build] Building ${name} -> ${tag}"
+  docker build -t "$tag" -f "$dockerfile" "${args[@]}" "$context_dir"
   save_image "$tag" "$output_dir"
-  # Free build cache after each image to prevent OOM on memory-constrained servers
-  docker builder prune -f --filter "until=1s" >/dev/null 2>&1 || true
+  # Free dangling layers after each image to prevent OOM on memory-constrained servers
+  docker image prune -f >/dev/null 2>&1 || true
 }
 
 build_image() {
@@ -357,13 +379,9 @@ MAVEN_SETTINGS_EOF
     if [[ -f "$MAVEN_SETTINGS_FILE" ]]; then
       maven_args=(-B -e -DskipTests -s "$MAVEN_SETTINGS_FILE" -f pom.xml -pl "$module" -am)
     fi
-    local platform_run_args=()
-    if [[ -n "${DOCKER_PLATFORM}" ]]; then
-      platform_run_args+=(--platform "${DOCKER_PLATFORM}")
-    fi
 
     if [[ -n "$MAVEN_DEBUG" ]]; then
-      docker run --rm "${platform_run_args[@]}" --memory="${MAVEN_MEMORY_LIMIT}" --memory-swap="${MAVEN_MEMORY_LIMIT}" "${security_opts[@]}" \
+      docker run --rm --memory="${MAVEN_MEMORY_LIMIT}" --memory-swap="${MAVEN_MEMORY_LIMIT}" "${security_opts[@]}" \
         -e "MAVEN_MIRROR_URL=${MAVEN_MIRROR_URL}" \
         -v "${REPO_ROOT}/source:/workspace" \
         -v "/root/.m2:/root/.m2" \
@@ -386,7 +404,7 @@ MAVEN_SETTINGS_EOF
           mvn -v; mvn "$@" package' \
         -- "${maven_args[@]}"
     else
-      docker run --rm "${platform_run_args[@]}" --memory="${MAVEN_MEMORY_LIMIT}" --memory-swap="${MAVEN_MEMORY_LIMIT}" "${security_opts[@]}" \
+      docker run --rm --memory="${MAVEN_MEMORY_LIMIT}" --memory-swap="${MAVEN_MEMORY_LIMIT}" "${security_opts[@]}" \
         -e "MAVEN_MIRROR_URL=${MAVEN_MIRROR_URL}" \
         -v "${REPO_ROOT}/source:/workspace" \
         -v "/root/.m2:/root/.m2" \
