@@ -113,6 +113,17 @@ MAVEN_SETTINGS_FILE="${MAVEN_SETTINGS_FILE:-/root/.m2/settings.xml}"
 PREBUILD_JARS="${PREBUILD_JARS:-1}"
 WEBAPP_BUILD_CMD="${WEBAPP_BUILD_CMD:-build}"
 
+# Auto-detect host architecture and set Docker --platform flag for ARM64 (Kunpeng/Apple Silicon).
+# Without this, Docker may pull x86 images and run them via QEMU, causing JAVA_HOME failures and 10x slowdown.
+HOST_ARCH="$(uname -m)"
+DOCKER_PLATFORM=""
+if [[ "$HOST_ARCH" == "aarch64" || "$HOST_ARCH" == "arm64" ]]; then
+  DOCKER_PLATFORM="linux/arm64"
+elif [[ "$HOST_ARCH" == "x86_64" ]]; then
+  DOCKER_PLATFORM="linux/amd64"
+fi
+DOCKER_PLATFORM="${DOCKER_PLATFORM_OVERRIDE:-${DOCKER_PLATFORM}}"
+
 require_cmd() {
   if ! command -v "$1" >/dev/null 2>&1; then
     echo "[dts-build] ERROR: '$1' not found in PATH" >&2
@@ -128,8 +139,15 @@ preflight_check() {
 
   # Warn about ARM64 QEMU emulation risk
   if [[ "$arch" == "aarch64" || "$arch" == "arm64" ]]; then
-    echo "[dts-build] WARN: Running on ARM64. Ensure base images (maven, node) have native arm64 support."
-    echo "[dts-build] WARN: x86 images emulated via QEMU will cause extreme memory usage and may crash the server."
+    echo "[dts-build] INFO: Running on ARM64 (Kunpeng/Apple Silicon). Docker platform: ${DOCKER_PLATFORM}"
+    echo "[dts-build] INFO: Will use --platform ${DOCKER_PLATFORM} to pull native ARM64 images."
+    # Check if existing Maven image is wrong architecture — force re-pull if so
+    local existing_maven_arch
+    existing_maven_arch="$(docker inspect "${MAVEN_IMAGE}" --format '{{.Architecture}}' 2>/dev/null || echo "none")"
+    if [[ "$existing_maven_arch" == "amd64" ]]; then
+      echo "[dts-build] WARN: Local Maven image is amd64 (x86), re-pulling as arm64..."
+      docker pull --platform "${DOCKER_PLATFORM}" "${MAVEN_IMAGE}"
+    fi
   fi
 
   # Check available memory
@@ -269,8 +287,12 @@ build_image_ctx() {
   shift 5
   local args=("$@")
 
-  echo "[dts-build] Building ${name} -> ${tag}"
-  docker build -t "$tag" -f "$dockerfile" "${args[@]}" "$context_dir"
+  echo "[dts-build] Building ${name} -> ${tag} (platform=${DOCKER_PLATFORM:-auto})"
+  local platform_args=()
+  if [[ -n "${DOCKER_PLATFORM}" ]]; then
+    platform_args+=(--platform "${DOCKER_PLATFORM}")
+  fi
+  docker build "${platform_args[@]}" -t "$tag" -f "$dockerfile" "${args[@]}" "$context_dir"
   save_image "$tag" "$output_dir"
   # Free build cache after each image to prevent OOM on memory-constrained servers
   docker builder prune -f --filter "until=1s" >/dev/null 2>&1 || true
@@ -335,9 +357,13 @@ MAVEN_SETTINGS_EOF
     if [[ -f "$MAVEN_SETTINGS_FILE" ]]; then
       maven_args=(-B -e -DskipTests -s "$MAVEN_SETTINGS_FILE" -f pom.xml -pl "$module" -am)
     fi
+    local platform_run_args=()
+    if [[ -n "${DOCKER_PLATFORM}" ]]; then
+      platform_run_args+=(--platform "${DOCKER_PLATFORM}")
+    fi
 
     if [[ -n "$MAVEN_DEBUG" ]]; then
-      docker run --rm --memory="${MAVEN_MEMORY_LIMIT}" --memory-swap="${MAVEN_MEMORY_LIMIT}" "${security_opts[@]}" \
+      docker run --rm "${platform_run_args[@]}" --memory="${MAVEN_MEMORY_LIMIT}" --memory-swap="${MAVEN_MEMORY_LIMIT}" "${security_opts[@]}" \
         -e "MAVEN_MIRROR_URL=${MAVEN_MIRROR_URL}" \
         -v "${REPO_ROOT}/source:/workspace" \
         -v "/root/.m2:/root/.m2" \
@@ -360,7 +386,7 @@ MAVEN_SETTINGS_EOF
           mvn -v; mvn "$@" package' \
         -- "${maven_args[@]}"
     else
-      docker run --rm --memory="${MAVEN_MEMORY_LIMIT}" --memory-swap="${MAVEN_MEMORY_LIMIT}" "${security_opts[@]}" \
+      docker run --rm "${platform_run_args[@]}" --memory="${MAVEN_MEMORY_LIMIT}" --memory-swap="${MAVEN_MEMORY_LIMIT}" "${security_opts[@]}" \
         -e "MAVEN_MIRROR_URL=${MAVEN_MIRROR_URL}" \
         -v "${REPO_ROOT}/source:/workspace" \
         -v "/root/.m2:/root/.m2" \
