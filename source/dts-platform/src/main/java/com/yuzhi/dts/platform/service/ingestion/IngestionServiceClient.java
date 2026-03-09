@@ -58,7 +58,6 @@ public class IngestionServiceClient {
         DtsIngestionProperties.Retry retryProps = properties.getRetry();
         RetryConfig retryConfig = RetryConfig.custom()
             .maxAttempts(retryProps.getMaxAttempts())
-            .waitDuration(Duration.ofMillis(retryProps.getWaitDurationMs()))
             .intervalFunction(io.github.resilience4j.core.IntervalFunction.ofExponentialBackoff(
                 retryProps.getWaitDurationMs(), retryProps.getMultiplier()))
             .retryExceptions(ResourceAccessException.class, HttpServerErrorException.class)
