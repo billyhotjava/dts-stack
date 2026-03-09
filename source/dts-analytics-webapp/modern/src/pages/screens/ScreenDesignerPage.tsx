@@ -302,14 +302,15 @@ function ScreenDesignerContent() {
     return (
         <ScreenRuntimeProvider definitions={state.config.globalVariables}>
             <div className={`screen-designer ${focusMode ? 'is-focus-mode' : ''}`}>
-                {/* Top: Header */}
                 <ScreenHeader />
 
                 <div className="screen-designer-body">
-                    {/* Left: Component Library */}
-                    {!focusMode && showLibraryPanel ? <ComponentLibraryPanel /> : null}
+                    {!focusMode && showLibraryPanel ? (
+                        <div className="designer-side-rail designer-side-rail--library">
+                            <ComponentLibraryPanel />
+                        </div>
+                    ) : null}
 
-                    {/* Center: Canvas */}
                     <div className="canvas-area">
                         <div className="designer-focus-actions">
                             <button
@@ -343,7 +344,6 @@ function ScreenDesignerContent() {
                         </div>
                         <CanvasToolbar />
                         <DesignerCanvas />
-                        {/* Multi-page manager bar (shown when pages exist or user creates pages) */}
                         {(hasMultiPages || pages.length > 0) && (
                             <PageManagerPanel
                                 pages={pages}
@@ -358,29 +358,30 @@ function ScreenDesignerContent() {
                         )}
                     </div>
 
-                    {/* Right: Property / Layer tabs */}
                     {!focusMode && showInspectorPanel ? (
-                        <div className="designer-right-panel">
-                            <div className="designer-right-panel-tabs">
-                                <button
-                                    type="button"
-                                    className={`designer-right-panel-tab ${rightPanelTab === 'property' ? 'active' : ''}`}
-                                    onClick={() => setRightPanelTab('property')}
-                                    title="组件属性配置"
-                                >
-                                    属性
-                                </button>
-                                <button
-                                    type="button"
-                                    className={`designer-right-panel-tab ${rightPanelTab === 'layer' ? 'active' : ''}`}
-                                    onClick={() => setRightPanelTab('layer')}
-                                    title="图层管理"
-                                >
-                                    图层
-                                </button>
-                            </div>
-                            <div className="designer-right-panel-content">
-                                {rightPanelTab === 'property' ? <PropertyPanel /> : <LayerPanel />}
+                        <div className="designer-side-rail designer-side-rail--inspector">
+                            <div className="designer-right-panel">
+                                <div className="designer-right-panel-tabs">
+                                    <button
+                                        type="button"
+                                        className={`designer-right-panel-tab ${rightPanelTab === 'property' ? 'active' : ''}`}
+                                        onClick={() => setRightPanelTab('property')}
+                                        title="组件属性配置"
+                                    >
+                                        属性
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className={`designer-right-panel-tab ${rightPanelTab === 'layer' ? 'active' : ''}`}
+                                        onClick={() => setRightPanelTab('layer')}
+                                        title="图层管理"
+                                    >
+                                        图层
+                                    </button>
+                                </div>
+                                <div className="designer-right-panel-content">
+                                    {rightPanelTab === 'property' ? <PropertyPanel /> : <LayerPanel />}
+                                </div>
                             </div>
                         </div>
                     ) : null}

@@ -946,6 +946,11 @@ export function ScreenHeader() {
         return !isSaving && permissions.canEdit && !lockedByOther;
     }, [id, isPublishing, isSaving, lockedByOther, permissions.canEdit, permissions.canPublish, primaryAction]);
 
+    const pageCount = Math.max(config.pages?.length ?? 0, 1);
+    const themeLabel = config.theme === 'glacier'
+        ? '冰川白'
+        : (config.theme === 'titanium' ? '钛合金灰' : '经典深蓝');
+
     const executePrimaryAction = useCallback(() => {
         if (primaryAction === 'preview') {
             handlePreview();
@@ -1832,22 +1837,37 @@ export function ScreenHeader() {
                     <button type="button" className="header-btn back-btn" onClick={handleBack} title="返回列表">
                         ← 返回
                     </button>
-                    <div className="screen-name-container">
-                        {isEditingName ? (
-                            <input
-                                type="text"
-                                className="screen-name-input"
-                                value={nameValue}
-                                onChange={(e) => setNameValue(e.target.value)}
-                                onBlur={handleNameBlur}
-                                onKeyDown={handleNameKeyDown}
-                                autoFocus
-                            />
-                        ) : (
-                            <span className="screen-name" onClick={handleNameClick} title="点击编辑名称">
-                                {config.name}
-                            </span>
-                        )}
+                    <div className="screen-header-intro">
+                        <div className="screen-header-eyebrow">Analytics Workspace</div>
+                        <div className="screen-name-container">
+                            {isEditingName ? (
+                                <input
+                                    type="text"
+                                    className="screen-name-input"
+                                    value={nameValue}
+                                    onChange={(e) => setNameValue(e.target.value)}
+                                    onBlur={handleNameBlur}
+                                    onKeyDown={handleNameKeyDown}
+                                    autoFocus
+                                />
+                            ) : (
+                                <span className="screen-name" onClick={handleNameClick} title="点击编辑名称">
+                                    {config.name}
+                                </span>
+                            )}
+                        </div>
+                        <div className="screen-header-meta-list">
+                            <span className="screen-header-meta-item">画布 {config.width} × {config.height}</span>
+                            <span className="screen-header-meta-item">主题 {themeLabel}</span>
+                            <span className="screen-header-meta-item">组件 {config.components.length}</span>
+                            <span className="screen-header-meta-item">页面 {pageCount}</span>
+                            {cycleWarnings.length > 0 ? (
+                                <span className="screen-header-meta-item is-warning">联动异常 {cycleWarnings.length}</span>
+                            ) : null}
+                            {lockedByOther ? (
+                                <span className="screen-header-meta-item is-warning">编辑锁 {lockOwnerText}</span>
+                            ) : null}
+                        </div>
                     </div>
                 </div>
 
@@ -2144,13 +2164,7 @@ export function ScreenHeader() {
                 </div>
             </div>
             {lockedByOther && (
-                <div style={{
-                    padding: '6px 12px',
-                    fontSize: 12,
-                    color: '#f59e0b',
-                    borderTop: '1px solid rgba(245,158,11,0.3)',
-                    background: 'rgba(245,158,11,0.08)',
-                }}>
+                <div className="screen-lock-notice">
                     编辑锁提示：当前由 {lockOwnerText} 编辑中，保存/发布已被保护性禁用。
                     {lockErrorText ? ` (${lockErrorText})` : ''}
                 </div>

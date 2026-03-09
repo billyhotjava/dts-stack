@@ -852,9 +852,10 @@ export function PropertyPanel() {
 
     if (selectedComponents.length === 0) {
         return (
-            <div className="property-panel">
+            <div className="property-panel property-panel--empty">
                 <div className="property-panel-header">
                     <h3>属性</h3>
+                    <p className="property-panel-subtitle">从画布选择一个组件后，这里会展示它的配置、数据和交互能力。</p>
                 </div>
                 <div className="property-panel-content">
                     <div className="empty-state">
@@ -874,9 +875,13 @@ export function PropertyPanel() {
         const grouped = selectedComponents.filter((item) => Boolean(item.groupId)).length;
         const primarySelected = selectedComponents[0];
         return (
-            <div className="property-panel">
+            <div className="property-panel property-panel--batch">
                 <div className="property-panel-header">
                     <h3>批量属性 ({total})</h3>
+                    <p className="property-panel-subtitle">
+                        统一处理 {primarySelected?.type || 'selected'} 组件。
+                        {grouped > 0 ? ` 当前包含 ${grouped} 个已编组组件。` : ''}
+                    </p>
                 </div>
                 <div className="property-panel-content">
                     <div className="property-section">
@@ -1308,9 +1313,12 @@ export function PropertyPanel() {
         : null;
 
     return (
-        <div className="property-panel">
+        <div className={`property-panel property-panel--${panelDensity}`}>
             <div className="property-panel-header">
                 <h3>属性 - {selectedComponent.name}</h3>
+                <p className="property-panel-subtitle">
+                    {selectedComponent.type} · {selectedComponent.width} × {selectedComponent.height} · {panelDensity === 'focus' ? '高频视图' : '完整视图'}
+                </p>
             </div>
             <div className="property-panel-content">
                 <div className="property-section">
@@ -1359,16 +1367,14 @@ export function PropertyPanel() {
                                 </select>
                                 <button
                                     type="button"
-                                    className="property-btn-small"
-                                    style={panelDensity === 'focus' ? { borderColor: 'var(--color-primary)', background: 'var(--color-primary-light)' } : undefined}
+                                    className={`property-btn-small ${panelDensity === 'focus' ? 'is-active' : ''}`}
                                     onClick={() => setPanelDensity('focus')}
                                 >
                                     高频
                                 </button>
                                 <button
                                     type="button"
-                                    className="property-btn-small"
-                                    style={panelDensity === 'full' ? { borderColor: 'var(--color-primary)', background: 'var(--color-primary-light)' } : undefined}
+                                    className={`property-btn-small ${panelDensity === 'full' ? 'is-active' : ''}`}
                                     onClick={() => setPanelDensity('full')}
                                 >
                                     全部

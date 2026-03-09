@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { useScreen } from '../ScreenContext';
 
 export function LayerPanel() {
@@ -184,11 +184,11 @@ export function LayerPanel() {
         <div className="layer-panel">
             <div className="layer-panel-header">
                 <h4>图层</h4>
-                <span style={{ fontSize: 11, color: 'var(--color-text-tertiary)' }}>
+                <span className="layer-panel-count">
                     {selectedIds.length}/{config.components.length}
                 </span>
             </div>
-            <div style={{ display: 'grid', gap: 6, marginBottom: 10 }}>
+            <div className="layer-panel-tools">
                 <input
                     type="text"
                     className="property-input"
@@ -196,15 +196,14 @@ export function LayerPanel() {
                     value={keyword}
                     onChange={(e) => setKeyword(e.target.value)}
                 />
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 4 }}>
-                    <button className="layer-action-btn" style={{ width: '100%', height: 26 }} onClick={selectFiltered} title="选择当前筛选结果">全选</button>
-                    <button className="layer-action-btn" style={{ width: '100%', height: 26 }} onClick={() => selectComponents([])} title="清空选择">清空</button>
-                    <button className="layer-action-btn" style={{ width: '100%', height: 26 }} onClick={() => setKeyword('')} title="清空搜索">重置</button>
+                <div className="layer-panel-tool-grid">
+                    <button className="layer-action-btn layer-action-btn--wide" onClick={selectFiltered} title="选择当前筛选结果">全选</button>
+                    <button className="layer-action-btn layer-action-btn--wide" onClick={() => selectComponents([])} title="清空选择">清空</button>
+                    <button className="layer-action-btn layer-action-btn--wide" onClick={() => setKeyword('')} title="清空搜索">重置</button>
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: 4 }}>
+                <div className="layer-panel-bulk-row">
                     <select
-                        className="property-input"
-                        style={{ height: 26, padding: '2px 8px' }}
+                        className="property-input property-input--compact"
                         value={bulkAction}
                         onChange={(e) => {
                             const next = e.target.value;
@@ -229,8 +228,7 @@ export function LayerPanel() {
                         <option value="bottom">置底选中</option>
                     </select>
                     <button
-                        className="layer-action-btn"
-                        style={{ height: 26, opacity: hasSelected ? 1 : 0.45, minWidth: 56 }}
+                        className={`layer-action-btn layer-action-btn--wide layer-action-btn--execute ${hasSelected ? '' : 'is-disabled'}`}
                         onClick={executeBulkAction}
                         title="执行批量动作"
                         disabled={!hasSelected}
@@ -241,8 +239,8 @@ export function LayerPanel() {
             </div>
 
             {filteredLayered.length === 0 ? (
-                <div className="empty-state" style={{ padding: '20px 10px' }}>
-                    <div className="empty-state-text" style={{ fontSize: 12 }}>
+                <div className="empty-state empty-state--panel">
+                    <div className="empty-state-text empty-state-text--compact">
                         {config.components.length === 0 ? '暂无组件' : '没有匹配结果'}
                     </div>
                 </div>
@@ -251,12 +249,11 @@ export function LayerPanel() {
                     {filteredLayered.map(({ component, depth }) => (
                         <div
                             key={component.id}
-                            className={`layer-item ${selectedIds.includes(component.id) ? 'selected' : ''}`}
+                            className={`layer-item ${selectedIds.includes(component.id) ? 'selected' : ''} ${component.visible ? '' : 'is-hidden'}`}
                             onClick={(e) => handleLayerClick(component.id, e)}
                             style={{
-                                opacity: component.visible ? 1 : 0.5,
-                                paddingLeft: 8 + depth * 14,
-                            }}
+                                '--layer-depth': String(depth),
+                            } as CSSProperties}
                         >
                             <span className="layer-item-icon">
                                 {getComponentIcon(component.type)}

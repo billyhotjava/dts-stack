@@ -464,6 +464,17 @@ export function CanvasToolbar() {
                 <button className="toolbar-btn" onClick={() => handleZoomStep(25)} title="放大 25%">+</button>
             </div>
 
+            <div className="toolbar-group toolbar-group--status">
+                <div className="toolbar-info-pill">
+                    <span className="toolbar-info-pill__label">画布</span>
+                    <span className="toolbar-info-pill__value">{state.config.width} × {state.config.height}</span>
+                </div>
+                <div className="toolbar-info-pill">
+                    <span className="toolbar-info-pill__label">选中</span>
+                    <span className="toolbar-info-pill__value">{selectedIds.length}</span>
+                </div>
+            </div>
+
             {/* More tools */}
             <div className="toolbar-group">
                 <div className="toolbar-menu" ref={moreToolsRef}>
