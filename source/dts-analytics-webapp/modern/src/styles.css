@@ -18,8 +18,8 @@ html {
 body {
   margin: 0;
   font-family: var(--font-family);
-  background: var(--color-bg-secondary);
-  color: var(--color-text-primary);
+  background: var(--surface-page);
+  color: var(--text-primary);
   font-size: var(--font-size-md);
   line-height: var(--line-height-normal);
   -webkit-font-smoothing: antialiased;
@@ -34,7 +34,7 @@ body {
 
 /* Links */
 a {
-  color: var(--color-text-link);
+  color: var(--text-link);
   text-decoration: none;
   transition: color var(--transition-fast);
 }
@@ -47,7 +47,7 @@ a:hover {
 h1, h2, h3, h4, h5, h6 {
   margin: 0;
   font-weight: var(--font-weight-semibold);
-  color: var(--color-text-primary);
+  color: var(--text-primary);
   line-height: var(--line-height-tight);
 }
 
@@ -68,13 +68,13 @@ code, pre {
 }
 
 code {
-  background: var(--color-bg-tertiary);
+  background: var(--surface-muted);
   padding: var(--spacing-xxs) var(--spacing-xs);
   border-radius: var(--radius-xs);
 }
 
 pre {
-  background: var(--color-bg-tertiary);
+  background: var(--surface-muted);
   padding: var(--spacing-md);
   border-radius: var(--radius-md);
   overflow-x: auto;
@@ -89,8 +89,8 @@ pre {
   padding: var(--spacing-sm) var(--spacing-md);
   border-radius: var(--radius-sm);
   border: 1px solid var(--color-border);
-  background: var(--color-bg-primary);
-  color: var(--color-text-primary);
+  background: var(--surface-card);
+  color: var(--text-primary);
   font-family: inherit;
   font-size: var(--font-size-md);
   font-weight: var(--font-weight-medium);
@@ -100,7 +100,7 @@ pre {
 }
 
 .btn:hover {
-  background: var(--color-bg-tertiary);
+  background: var(--surface-workspace);
   border-color: var(--color-border-hover);
 }
 
@@ -156,8 +156,8 @@ pre {
   padding: var(--spacing-sm) var(--spacing-md);
   border-radius: var(--radius-sm);
   border: 1px solid var(--color-border);
-  background: var(--color-bg-primary);
-  color: var(--color-text-primary);
+  background: var(--surface-card);
+  color: var(--text-primary);
   font-family: inherit;
   font-size: var(--font-size-md);
   transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
@@ -178,7 +178,7 @@ pre {
 }
 
 .input:disabled {
-  background: var(--color-bg-tertiary);
+  background: var(--surface-muted);
   cursor: not-allowed;
   opacity: 0.6;
 }
@@ -189,8 +189,8 @@ pre {
   padding: var(--spacing-sm) var(--spacing-md);
   border-radius: var(--radius-sm);
   border: 1px solid var(--color-border);
-  background: var(--color-bg-primary);
-  color: var(--color-text-primary);
+  background: var(--surface-card);
+  color: var(--text-primary);
   font-family: inherit;
   font-size: var(--font-size-md);
   resize: vertical;
