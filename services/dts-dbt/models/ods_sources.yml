@@ -57,3 +57,11 @@ sources:
           entity: "PURCHASEORDER_DETAIL"
           stream: "PURCHASEORDER_DETAIL"
           stream_namespace: "ERPDEMO"
+      -
+        name: "ods_project_progress"
+        description: "项目进度汇总表 Excel 导入"
+        meta:
+          system: "excel"
+          biz: "project-management"
+          entity: "ods_project_progress"
+          stream: "project_progress"
