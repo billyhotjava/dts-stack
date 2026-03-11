@@ -81,6 +81,7 @@ import {
 } from "@/api/platformApi";
 import dataSourcesService, { type InfraDataSource } from "@/api/services/dataSourcesService";
 import RollbackImpactModal, { type RollbackRequest } from "@/components/rollback/RollbackImpactModal";
+import BatchImportModal from "./BatchImportModal";
 import { useRouter } from "@/routes/hooks";
 
 const { Text } = Typography;
@@ -420,6 +421,7 @@ export default function SqlModelingPage() {
 	const [editingModel, setEditingModel] = useState<SqlModel | null>(null);
 	const [sqlDraft, setSqlDraft] = useState("");
 	const [importOpen, setImportOpen] = useState(false);
+	const [batchImportOpen, setBatchImportOpen] = useState(false);
 	const [importSubmitting, setImportSubmitting] = useState(false);
 	const [sqlFileList, setSqlFileList] = useState<UploadFile[]>([]);
 	const [csvFileList, setCsvFileList] = useState<UploadFile[]>([]);
@@ -1660,6 +1662,13 @@ export default function SqlModelingPage() {
 			label: "导入模型",
 			disabled: !workspaceOk,
 			onClick: openImportModel,
+		},
+		{
+			key: "batch-import",
+			icon: <ImportOutlined />,
+			label: "批量导入",
+			disabled: !workspaceOk,
+			onClick: () => setBatchImportOpen(true),
 		},
 		{
 			key: "generate-ods",
@@ -2956,6 +2965,15 @@ WHERE status = 'active'`}
 					</Form.Item>
 				</Form>
 			</Modal>
+
+			<BatchImportModal
+				open={batchImportOpen}
+				onClose={() => setBatchImportOpen(false)}
+				onSuccess={() => { setBatchImportOpen(false); loadModels(); }}
+				spaces={spaces}
+				dataSources={dataSources}
+				activeSpaceId={activeSpace?.id}
+			/>
 
 			<Modal
 				open={odsGenerateOpen}
