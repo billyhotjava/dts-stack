@@ -30,11 +30,12 @@
 | 类型 | 位置 | 说明 |
 |------|------|------|
 | dbt 模型 (11) | `services/dts-dbt/models/{dim,dwd,dws,ads}/` | ODS source 注册 + 3 DIM + 1 DWD + 3 DWS + 4 ADS |
-| 部署脚本 | `bin/project-progress/deploy.sh` | 自动创建项目空间 + 导入模型 |
-| 导入清单 | `bin/project-progress/manifest/models.tsv` | 11 个模型的 TSV 清单 |
-| 测试数据 | `bin/project-progress/seed-ods-project-progress.sql` | 40 条数据覆盖全部枚举 |
-| 指标验证 | `bin/project-progress/validate-indicators.sql` | 7 组验证查询 |
-| 大屏模板 | `bin/project-progress/screen-template-project-progress.json` | 8 KPI + 4 图表 + 3 表格 |
+| CLI 工具 | `bin/dts-plan`, `bin/dts-deploy`, `bin/dts-manifest-gen` | 项目空间管理、部署、清单生成 |
+| 部署配置 | `services/dts-dbt/deploy/project-progress/deploy.conf` | dts-deploy 部署配置 |
+| 导入清单 | `services/dts-dbt/deploy/project-progress/manifest/models.tsv` | 11 个模型的 TSV 清单 |
+| 测试数据 | `services/dts-dbt/deploy/project-progress/seed-ods-project-progress.sql` | 40 条数据覆盖全部枚举 |
+| 指标验证 | `services/dts-dbt/deploy/project-progress/validate-indicators.sql` | 7 组验证查询 |
+| 大屏模板 | `services/dts-dbt/deploy/project-progress/screen-template-project-progress.json` | 8 KPI + 4 图表 + 3 表格 |
 
 ## 部署
 
@@ -42,7 +43,7 @@
 export API_BASE="https://bi.example.com"
 export TOKEN="<bearer-token>"
 export SOURCE_DATA_SOURCE_ID="<数据湖连接 UUID>"
-bash bin/project-progress/deploy.sh --plan-name "项目进度分析"
+bin/dts-deploy --config services/dts-dbt/deploy/project-progress/deploy.conf
 ```
 
 - 项目名称冲突时自动追加后缀（name-2, name-3）
@@ -58,9 +59,9 @@ bash bin/project-progress/deploy.sh --plan-name "项目进度分析"
 | PM-003 | DWD 节点明细清洗表 | P0 | DONE | `services/dts-dbt/models/dwd/` |
 | PM-004 | DWS 周期汇总表（3 张） | P0 | DONE | `services/dts-dbt/models/dws/` |
 | PM-005 | ADS 指标表（4 张） | P0 | DONE | `services/dts-dbt/models/ads/` |
-| PM-006 | 测试数据 + 验证查询 | P0 | DONE | `bin/project-progress/` |
-| PM-007 | 部署脚本 + 导入清单 | P0 | DONE | `bin/project-progress/deploy.sh` |
-| PM-008 | BI 大屏模板 | P1 | DONE | `bin/project-progress/screen-template-*.json` |
+| PM-006 | 测试数据 + 验证查询 | P0 | DONE | `services/dts-dbt/deploy/project-progress/` |
+| PM-007 | 部署配置 + 导入清单 | P0 | DONE | `services/dts-dbt/deploy/project-progress/deploy.conf` |
+| PM-008 | BI 大屏模板 | P1 | DONE | `services/dts-dbt/deploy/project-progress/screen-template-*.json` |
 | PM-009 | 客户环境部署与口径确认 | P1 | TODO | 待现场执行 |
 
 ## 里程碑
