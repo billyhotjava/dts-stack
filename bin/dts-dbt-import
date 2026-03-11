@@ -131,6 +131,7 @@ resolve_existing_path() {
     candidates+=("$manifest_dir/$path")
     candidates+=("$manifest_dir/../$path")
     candidates+=("$PROJECT_ROOT/$path")
+    candidates+=("$PROJECT_ROOT/services/dts-dbt/$path")
     candidates+=("$(pwd)/$path")
   fi
 
