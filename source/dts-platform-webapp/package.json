@@ -50,6 +50,7 @@
 		"i18next": "^23.16.5",
 		"i18next-browser-languagedetector": "^7.2.1",
 		"input-otp": "^1.4.2",
+		"jszip": "^3.10.1",
 		"lucide-react": "^0.487.0",
 		"monaco-editor": "^0.52.0",
 		"motion": "^12.9.0",
