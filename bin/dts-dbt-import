@@ -9,6 +9,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/lib/dts-common.sh"
+CALLER_NAME="dts-dbt-import"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 DEFAULT_MANIFEST_PATH="$PROJECT_ROOT/docs/intergration/etl/sample-cli-model-import/manifest/models.tsv"
@@ -25,13 +27,6 @@ CONTINUE_ON_ERROR=false
 SHOW_RESPONSE=false
 SKIP_EXISTING=false
 INSECURE=false
-
-red()    { printf '\033[0;31m%s\033[0m\n' "$*"; }
-green()  { printf '\033[0;32m%s\033[0m\n' "$*"; }
-yellow() { printf '\033[0;33m%s\033[0m\n' "$*"; }
-info()   { echo "[dts-dbt-import] $*"; }
-warn()   { yellow "[dts-dbt-import] WARNING: $*"; }
-die()    { red "[dts-dbt-import] ERROR: $*" >&2; exit 1; }
 
 usage() {
   cat <<EOF
