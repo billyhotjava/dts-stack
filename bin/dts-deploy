@@ -1,0 +1,225 @@
+#!/usr/bin/env bash
+# =============================================================================
+# dts-deploy — Orchestrator: create a Plan then import dbt models
+#
+# Usage:
+#   dts-deploy --config <deploy.conf>                    (config-file mode)
+#   dts-deploy --plan-name NAME --manifest <models.tsv>  (direct-params mode)
+#
+# Environment:
+#   API_BASE               — Platform base URL (required)
+#   TOKEN                  — Bearer token (required)
+#   SOURCE_DATA_SOURCE_ID  — Default source data-source UUID (required)
+#   ACTIVE_DEPT            — Department header (optional)
+# =============================================================================
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/lib/dts-common.sh"
+
+# ---------------------------------------------------------------------------
+# Usage
+# ---------------------------------------------------------------------------
+usage() {
+  cat <<'EOF'
+Usage:
+  dts-deploy --config <deploy.conf>   [pass-through flags]
+  dts-deploy --plan-name NAME --manifest <models.tsv> [OPTIONS] [pass-through flags]
+
+Config-file mode:
+  --config <path>     Path to a bash-sourceable deploy.conf
+
+Direct-params mode:
+  --plan-name <name>  Plan name (required)
+  --manifest <path>   TSV manifest path (required)
+  --domain <domain>   Plan domain (optional)
+  --scope <scope>     Plan scope (optional)
+  --tags <tags>       Plan tags (optional)
+  --content <text>    Plan content (optional)
+
+Pass-through flags (forwarded to dts-plan and dts-dbt-import):
+  --dry-run           Validate only, no API calls
+  --insecure          Skip TLS cert verification
+  --skip-existing     Skip models that already exist
+  --show-response     Print API response bodies
+
+Environment variables:
+  API_BASE               Platform base URL (required)
+  TOKEN                  Bearer token (required)
+  SOURCE_DATA_SOURCE_ID  Default source data-source UUID (required)
+  ACTIVE_DEPT            Department header (optional)
+EOF
+  exit "${1:-0}"
+}
+
+# ---------------------------------------------------------------------------
+# Variables
+# ---------------------------------------------------------------------------
+CONFIG_FILE=""
+PLAN_NAME="${PLAN_NAME:-}"
+PLAN_DOMAIN="${PLAN_DOMAIN:-}"
+PLAN_SCOPE="${PLAN_SCOPE:-}"
+PLAN_TAGS="${PLAN_TAGS:-}"
+PLAN_CONTENT="${PLAN_CONTENT:-}"
+MANIFEST_PATH="${MANIFEST_PATH:-}"
+
+# Pass-through flags
+PT_DRY_RUN=false
+PT_INSECURE=false
+PT_SKIP_EXISTING=false
+PT_SHOW_RESPONSE=false
+
+# ---------------------------------------------------------------------------
+# Parse arguments
+# ---------------------------------------------------------------------------
+[[ $# -eq 0 ]] && usage 1
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --config)         CONFIG_FILE="$2"; shift 2 ;;
+    --plan-name)      PLAN_NAME="$2"; shift 2 ;;
+    --manifest)       MANIFEST_PATH="$2"; shift 2 ;;
+    --domain)         PLAN_DOMAIN="$2"; shift 2 ;;
+    --scope)          PLAN_SCOPE="$2"; shift 2 ;;
+    --tags)           PLAN_TAGS="$2"; shift 2 ;;
+    --content)        PLAN_CONTENT="$2"; shift 2 ;;
+    --dry-run)        PT_DRY_RUN=true; shift ;;
+    --insecure)       PT_INSECURE=true; shift ;;
+    --skip-existing)  PT_SKIP_EXISTING=true; shift ;;
+    --show-response)  PT_SHOW_RESPONSE=true; shift ;;
+    -h|--help|help)   usage 0 ;;
+    *)                die "unknown option '$1'. Use 'dts-deploy --help' for usage." ;;
+  esac
+done
+
+# ---------------------------------------------------------------------------
+# Load config file (if provided)
+# ---------------------------------------------------------------------------
+if [[ -n "$CONFIG_FILE" ]]; then
+  [[ -f "$CONFIG_FILE" ]] || die "config file not found: $CONFIG_FILE"
+  info "Loading config: $CONFIG_FILE"
+
+  CONF_DIR="$(cd "$(dirname "$CONFIG_FILE")" && pwd)"
+
+  # Source the config — it may set PLAN_NAME, PLAN_DOMAIN, etc.
+  # shellcheck disable=SC1090
+  source "$CONFIG_FILE"
+
+  # Resolve MANIFEST_PATH relative to the config file's directory
+  if [[ -n "$MANIFEST_PATH" && "$MANIFEST_PATH" != /* ]]; then
+    MANIFEST_PATH="${CONF_DIR}/${MANIFEST_PATH}"
+  fi
+fi
+
+# ---------------------------------------------------------------------------
+# Resolve MANIFEST_PATH relative to cwd (for direct-params mode)
+# ---------------------------------------------------------------------------
+if [[ -n "$MANIFEST_PATH" && "$MANIFEST_PATH" != /* ]]; then
+  MANIFEST_PATH="$(cd "$(dirname "$MANIFEST_PATH")" && pwd)/$(basename "$MANIFEST_PATH")"
+fi
+
+# ---------------------------------------------------------------------------
+# Validate required variables
+# ---------------------------------------------------------------------------
+require_env API_BASE TOKEN SOURCE_DATA_SOURCE_ID
+[[ -n "$PLAN_NAME" ]]    || die "--plan-name (or PLAN_NAME in config) is required"
+[[ -n "$MANIFEST_PATH" ]] || die "--manifest (or MANIFEST_PATH in config) is required"
+[[ -f "$MANIFEST_PATH" ]] || die "manifest not found: $MANIFEST_PATH"
+
+# ---------------------------------------------------------------------------
+# Build pass-through flag arrays
+# ---------------------------------------------------------------------------
+PLAN_PT_FLAGS=()
+IMPORT_PT_FLAGS=()
+
+if $PT_DRY_RUN; then
+  PLAN_PT_FLAGS+=(--dry-run)
+  IMPORT_PT_FLAGS+=(--dry-run)
+fi
+if $PT_INSECURE; then
+  PLAN_PT_FLAGS+=(--insecure)
+  IMPORT_PT_FLAGS+=(--insecure)
+fi
+if $PT_SKIP_EXISTING; then
+  IMPORT_PT_FLAGS+=(--skip-existing)
+fi
+if $PT_SHOW_RESPONSE; then
+  IMPORT_PT_FLAGS+=(--show-response)
+fi
+
+# ---------------------------------------------------------------------------
+# Print deploy summary
+# ---------------------------------------------------------------------------
+info "=== dts-deploy ==="
+info "  plan_name : $PLAN_NAME"
+info "  domain    : ${PLAN_DOMAIN:-(none)}"
+info "  scope     : ${PLAN_SCOPE:-(none)}"
+info "  tags      : ${PLAN_TAGS:-(none)}"
+info "  content   : ${PLAN_CONTENT:-(none)}"
+info "  manifest  : $MANIFEST_PATH"
+info "  api_base  : $API_BASE"
+info "  dry_run   : $PT_DRY_RUN"
+info "  insecure  : $PT_INSECURE"
+info ""
+
+# ---------------------------------------------------------------------------
+# Step 1: Create plan
+# ---------------------------------------------------------------------------
+info "Step 1/2: Creating plan..."
+
+PLAN_CREATE_ARGS=(create --name "$PLAN_NAME")
+[[ -n "$PLAN_DOMAIN" ]]  && PLAN_CREATE_ARGS+=(--domain "$PLAN_DOMAIN")
+[[ -n "$PLAN_SCOPE" ]]   && PLAN_CREATE_ARGS+=(--scope "$PLAN_SCOPE")
+[[ -n "$PLAN_TAGS" ]]    && PLAN_CREATE_ARGS+=(--tags "$PLAN_TAGS")
+[[ -n "$PLAN_CONTENT" ]] && PLAN_CREATE_ARGS+=(--content "$PLAN_CONTENT")
+PLAN_CREATE_ARGS+=("${PLAN_PT_FLAGS[@]}")
+
+PLAN_OUTPUT="$("${SCRIPT_DIR}/dts-plan" "${PLAN_CREATE_ARGS[@]}")"
+
+# Parse plan_id from output (format: plan_id=UUID)
+PLAN_ID=""
+while IFS= read -r line; do
+  if [[ "$line" == plan_id=* ]]; then
+    PLAN_ID="${line#plan_id=}"
+    break
+  fi
+done <<< "$PLAN_OUTPUT"
+
+if [[ -z "$PLAN_ID" ]]; then
+  die "failed to parse plan_id from dts-plan output:
+$PLAN_OUTPUT"
+fi
+
+# In dry-run mode, dts-plan returns a non-UUID placeholder; normalize it
+# so dts-dbt-import's UUID validation does not reject it.
+if $PT_DRY_RUN && [[ "$PLAN_ID" == dry-run-* ]]; then
+  PLAN_ID="00000000-0000-0000-0000-000000000000"
+fi
+
+info "Plan created: $PLAN_ID"
+info ""
+
+# ---------------------------------------------------------------------------
+# Step 2: Import dbt models
+# ---------------------------------------------------------------------------
+info "Step 2/2: Importing dbt models..."
+
+IMPORT_ARGS=(
+  --plan-id "$PLAN_ID"
+  --manifest "$MANIFEST_PATH"
+  --api-base "$API_BASE"
+  --token "$TOKEN"
+  --source-data-source-id "$SOURCE_DATA_SOURCE_ID"
+)
+if [[ -n "${ACTIVE_DEPT:-}" ]]; then
+  IMPORT_ARGS+=(--active-dept "$ACTIVE_DEPT")
+fi
+IMPORT_ARGS+=("${IMPORT_PT_FLAGS[@]}")
+
+"${SCRIPT_DIR}/dts-dbt-import" "${IMPORT_ARGS[@]}"
+
+# ---------------------------------------------------------------------------
+# Done
+# ---------------------------------------------------------------------------
+info ""
+green "[$CALLER_NAME] Deploy completed successfully (plan_id=$PLAN_ID)"
