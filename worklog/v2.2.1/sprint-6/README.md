@@ -1,0 +1,29 @@
+# Sprint-6：CLI 工具抽象 + 批量导入
+
+## 背景
+
+Sprint-5 的部署脚本（deploy.sh）将 Plan 创建和模型导入硬编码在单个领域目录中，不可复用。前端导入弹窗只支持单个模型，无法批量操作。
+
+## 目标
+
+1. 将部署脚本抽象为通用 CLI 工具集（dts-plan / dts-deploy / dts-manifest-gen）
+2. 前端新增批量导入功能（ZIP 上传 + 多文件在线编辑）
+3. 后端新增 batch-import API
+
+## 设计文档
+
+- `design.md` — 完整设计方案
+
+## 任务清单
+
+| 编号 | 任务 | 优先级 | 状态 | 产物位置 |
+|------|------|--------|------|----------|
+| S6-001 | lib/dts-common.sh 共享函数库 | P0 | TODO | `bin/lib/dts-common.sh` |
+| S6-002 | dts-plan CLI | P0 | TODO | `bin/dts-plan` |
+| S6-003 | dts-deploy 编排器 | P0 | TODO | `bin/dts-deploy` |
+| S6-004 | dts-manifest-gen TSV 生成器 | P1 | TODO | `bin/dts-manifest-gen` |
+| S6-005 | dts-dbt-import 改造（source common） | P1 | TODO | `bin/dts-dbt-import` |
+| S6-006 | 业务文件迁移（bin/ → dbt/deploy/） | P0 | TODO | `services/dts-dbt/deploy/` |
+| S6-007 | 后端 batch-import API | P0 | TODO | `ModelingSqlModelResource.java` |
+| S6-008 | 前端批量导入 UI | P0 | TODO | `SqlModelingPage.tsx` |
+| S6-009 | worklog 路径引用更新 | P2 | TODO | `worklog/v2.2.1/sprint-5/` |
