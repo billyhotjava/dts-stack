@@ -116,9 +116,9 @@ json_extract() {
   else
     python3 -c "
 import sys, json
-data = json.load(open('$file'))
+data = json.load(open(sys.argv[1]))
 val = data
-for key in '$field'.split('.'):
+for key in sys.argv[2].split('.'):
     if isinstance(val, dict):
         val = val.get(key)
     else:
@@ -126,7 +126,7 @@ for key in '$field'.split('.'):
         break
 if val is not None:
     print(val)
-" 2>/dev/null || true
+" "$file" "$field" 2>/dev/null || true
   fi
 }
 
@@ -135,5 +135,5 @@ if val is not None:
 #   url_encode <string>
 # ---------------------------------------------------------------------------
 url_encode() {
-  python3 -c "import urllib.parse; print(urllib.parse.quote('$1'))"
+  python3 -c "import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1]))" "$1"
 }

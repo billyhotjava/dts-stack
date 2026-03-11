@@ -137,7 +137,7 @@ const BatchImportModal: React.FC<BatchImportModalProps> = ({
 	};
 
 	const showResults = (data: any) => {
-		const items: ResultRow[] = Array.isArray(data?.results) ? data.results : [];
+		const items: ResultRow[] = Array.isArray(data?.details) ? data.details : [];
 		setResults(items);
 		const imported = items.filter((r) => r.status === "imported").length;
 		const skipped = items.filter((r) => r.status === "skipped").length;

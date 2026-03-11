@@ -187,6 +187,9 @@ public class ModelingSqlModelResource {
         @RequestParam(required = false, defaultValue = "false") boolean skipExisting,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) throws IOException {
+        if (archive.isEmpty()) {
+            throw new IllegalArgumentException("请上传 ZIP 压缩包");
+        }
         Path tempFile = Files.createTempFile("batch-import-", ".zip");
         try {
             archive.transferTo(tempFile);
