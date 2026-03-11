@@ -17,7 +17,10 @@ import com.yuzhi.dts.platform.service.modeling.ModelingSqlModelService.SqlModelR
 import com.yuzhi.dts.platform.web.rest.ApiResponses;
 import com.yuzhi.dts.platform.web.rest.ApiResponse;
 import jakarta.validation.Valid;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -173,6 +176,29 @@ public class ModelingSqlModelResource {
         SqlModelDto dto = sqlModelService.importFromFiles(request, sqlText, csvText, activeDept);
         auditService.audit("IMPORT", "modeling.sql-model", dto.id().toString());
         return ApiResponses.ok(dto);
+    }
+
+    @PostMapping(value = "/batch-import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
+    public ApiResponse<ModelingSqlModelService.BatchImportResult> batchImport(
+        @RequestParam UUID planId,
+        @RequestParam UUID sourceDataSourceId,
+        @RequestParam("archive") MultipartFile archive,
+        @RequestParam(required = false, defaultValue = "false") boolean skipExisting,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) throws IOException {
+        Path tempFile = Files.createTempFile("batch-import-", ".zip");
+        try {
+            archive.transferTo(tempFile);
+            ModelingSqlModelService.BatchImportResult result = sqlModelService.batchImportFromArchive(
+                planId, sourceDataSourceId, skipExisting, tempFile, activeDept
+            );
+            auditService.audit("BATCH_IMPORT", "modeling.sql-model",
+                "plan=" + planId + " total=" + result.total() + " imported=" + result.imported());
+            return ApiResponses.ok(result);
+        } finally {
+            Files.deleteIfExists(tempFile);
+        }
     }
 
     @PostMapping("/generate-from-ods")

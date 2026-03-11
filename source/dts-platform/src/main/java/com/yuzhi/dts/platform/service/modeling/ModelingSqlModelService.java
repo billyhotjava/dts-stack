@@ -1802,4 +1802,206 @@ public class ModelingSqlModelService {
     ) {}
 
     private record ContractMeta(int metricCount, int dimensionCount) {}
+
+    // ── Batch import records ──────────────────────────────────────────
+
+    public record BatchImportResult(
+        int total,
+        int imported,
+        int skipped,
+        int failed,
+        List<BatchImportDetail> details
+    ) {}
+
+    public record BatchImportDetail(
+        String name,
+        String layer,
+        String status,    // "imported" | "skipped" | "failed"
+        String message
+    ) {}
+
+    // ── Batch import from ZIP archive ─────────────────────────────────
+
+    public BatchImportResult batchImportFromArchive(
+        UUID planId,
+        UUID defaultSourceDataSourceId,
+        boolean skipExisting,
+        Path archivePath,
+        String activeDept
+    ) {
+        Path tempDir = null;
+        try {
+            tempDir = Files.createTempDirectory("batch-import-unzip-");
+            unzip(archivePath, tempDir);
+
+            // Find the first .tsv file
+            Path tsvFile = null;
+            try (var stream = Files.walk(tempDir)) {
+                tsvFile = stream
+                    .filter(p -> p.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".tsv"))
+                    .findFirst()
+                    .orElse(null);
+            }
+            if (tsvFile == null) {
+                throw new IllegalArgumentException("ZIP 压缩包中未找到 .tsv 清单文件");
+            }
+
+            Path tsvDir = tsvFile.getParent();
+            List<String> lines = Files.readAllLines(tsvFile, StandardCharsets.UTF_8);
+            List<BatchImportDetail> details = new ArrayList<>();
+            int imported = 0;
+            int skipped = 0;
+            int failed = 0;
+
+            for (String line : lines) {
+                if (!StringUtils.hasText(line)) continue;
+                String[] cols = line.split("\t", -1);
+                if (cols.length == 0 || !StringUtils.hasText(cols[0])) continue;
+                // Skip header row
+                if ("name".equalsIgnoreCase(cols[0].trim())) continue;
+
+                String name = cols[0].trim();
+                String layer = cols.length > 1 ? cols[1].trim() : "";
+                String sqlPath = cols.length > 2 ? cols[2].trim() : "";
+                String sourceDataSourceIdStr = cols.length > 3 ? cols[3].trim() : "";
+                String alias = cols.length > 4 ? cols[4].trim() : "";
+                String schemaName = cols.length > 5 ? cols[5].trim() : "";
+                String materialized = cols.length > 6 ? cols[6].trim() : "";
+                String tags = cols.length > 7 ? cols[7].trim() : "";
+                String status = cols.length > 8 ? cols[8].trim() : "";
+                String enabledStr = cols.length > 9 ? cols[9].trim() : "";
+                String ownerDept = cols.length > 10 ? cols[10].trim() : "";
+                String description = cols.length > 11 ? cols[11].trim() : "";
+                String csvPath = cols.length > 12 ? cols[12].trim() : "";
+
+                try {
+                    // Skip existing check
+                    if (skipExisting && repo.findFirstByPlanIdAndNameIgnoreCase(planId, name).isPresent()) {
+                        details.add(new BatchImportDetail(name, layer, "skipped", "同名模型已存在"));
+                        skipped++;
+                        continue;
+                    }
+
+                    // Resolve SQL file
+                    Path sqlFile = resolveSidecarFile(tsvDir, tempDir, sqlPath, name, ".sql");
+                    if (sqlFile == null || !Files.isRegularFile(sqlFile)) {
+                        details.add(new BatchImportDetail(name, layer, "failed", "找不到 SQL 文件: " + sqlPath));
+                        failed++;
+                        continue;
+                    }
+                    String sqlText = Files.readString(sqlFile, StandardCharsets.UTF_8);
+
+                    // Resolve CSV file (optional)
+                    String csvText = null;
+                    if (StringUtils.hasText(csvPath)) {
+                        Path csvFile = resolveSidecarFile(tsvDir, tempDir, csvPath, name, ".csv");
+                        if (csvFile != null && Files.isRegularFile(csvFile)) {
+                            csvText = Files.readString(csvFile, StandardCharsets.UTF_8);
+                        }
+                    }
+
+                    // Resolve source data source id
+                    UUID sourceId = defaultSourceDataSourceId;
+                    if (StringUtils.hasText(sourceDataSourceIdStr)) {
+                        try {
+                            sourceId = UUID.fromString(sourceDataSourceIdStr);
+                        } catch (IllegalArgumentException ignored) {
+                            // use default
+                        }
+                    }
+
+                    // Parse enabled
+                    Boolean enabled = null;
+                    if (StringUtils.hasText(enabledStr)) {
+                        enabled = "true".equalsIgnoreCase(enabledStr) || "1".equals(enabledStr);
+                    }
+
+                    SqlModelRequest request = new SqlModelRequest(
+                        planId,
+                        name,
+                        StringUtils.hasText(alias) ? alias : null,
+                        layer,
+                        sourceId,
+                        StringUtils.hasText(schemaName) ? schemaName : null,
+                        StringUtils.hasText(materialized) ? materialized : null,
+                        StringUtils.hasText(tags) ? tags : null,
+                        StringUtils.hasText(description) ? description : null,
+                        sqlText,
+                        enabled,
+                        StringUtils.hasText(status) ? status : null,
+                        StringUtils.hasText(ownerDept) ? ownerDept : null,
+                        null
+                    );
+                    importFromFiles(request, sqlText, csvText, activeDept);
+                    details.add(new BatchImportDetail(name, layer, "imported", null));
+                    imported++;
+                } catch (Exception ex) {
+                    LOG.warn("[batch-import] failed to import model '{}': {}", name, ex.getMessage(), ex);
+                    details.add(new BatchImportDetail(name, layer, "failed", ex.getMessage()));
+                    failed++;
+                }
+            }
+
+            int total = imported + skipped + failed;
+            return new BatchImportResult(total, imported, skipped, failed, details);
+        } catch (IOException ex) {
+            throw new RuntimeException("批量导入失败: " + ex.getMessage(), ex);
+        } finally {
+            if (tempDir != null) {
+                try {
+                    deleteRecursively(tempDir);
+                } catch (IOException ignored) {
+                    LOG.warn("[batch-import] failed to clean up temp dir: {}", tempDir);
+                }
+            }
+        }
+    }
+
+    private Path resolveSidecarFile(Path tsvDir, Path unzipRoot, String relativePath, String modelName, String extension) {
+        if (StringUtils.hasText(relativePath)) {
+            Path resolved = tsvDir.resolve(relativePath).normalize();
+            if (Files.isRegularFile(resolved)) return resolved;
+            // Also try from unzip root
+            resolved = unzipRoot.resolve(relativePath).normalize();
+            if (Files.isRegularFile(resolved)) return resolved;
+        }
+        // Fallback: look for <name><extension> in unzip root
+        Path fallback = unzipRoot.resolve(modelName + extension);
+        if (Files.isRegularFile(fallback)) return fallback;
+        // Also try in tsvDir
+        fallback = tsvDir.resolve(modelName + extension);
+        if (Files.isRegularFile(fallback)) return fallback;
+        return null;
+    }
+
+    private void unzip(Path zipPath, Path destDir) throws IOException {
+        try (var zis = new java.util.zip.ZipInputStream(Files.newInputStream(zipPath), StandardCharsets.UTF_8)) {
+            java.util.zip.ZipEntry entry;
+            while ((entry = zis.getNextEntry()) != null) {
+                Path target = destDir.resolve(entry.getName()).normalize();
+                if (!target.startsWith(destDir)) {
+                    throw new IOException("ZIP entry outside target dir: " + entry.getName());
+                }
+                if (entry.isDirectory()) {
+                    Files.createDirectories(target);
+                } else {
+                    Files.createDirectories(target.getParent());
+                    Files.copy(zis, target);
+                }
+                zis.closeEntry();
+            }
+        }
+    }
+
+    private void deleteRecursively(Path dir) throws IOException {
+        if (dir == null || !Files.exists(dir)) return;
+        try (var walk = Files.walk(dir)) {
+            walk.sorted(Comparator.reverseOrder())
+                .forEach(p -> {
+                    try {
+                        Files.deleteIfExists(p);
+                    } catch (IOException ignored) {}
+                });
+        }
+    }
 }
