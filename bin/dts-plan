@@ -89,7 +89,7 @@ resolve_unique_plan_name() {
     fi
     suffix=$((suffix + 1))
     candidate="${base_name}-${suffix}"
-    info "Name '${base_name}' already exists (id=$existing_id), trying '$candidate'"
+    info "Name '${base_name}' already exists (id=$existing_id), trying '$candidate'" >&2
     if [[ $suffix -gt 99 ]]; then
       die "too many name collisions for '$base_name'"
     fi
@@ -172,18 +172,18 @@ cmd_create() {
 
   dts_init_http
 
-  info "Resolving unique plan name for '$name'..."
+  info "Resolving unique plan name for '$name'..." >&2
   local final_name
   final_name="$(resolve_unique_plan_name "$name")"
   if [[ "$final_name" != "$name" ]]; then
-    info "Using resolved name: '$final_name'"
+    info "Using resolved name: '$final_name'" >&2
   fi
 
-  info "Creating plan '$final_name'..."
+  info "Creating plan '$final_name'..." >&2
   local plan_id
   plan_id="$(create_plan "$final_name" "$domain" "$scope" "$tags" "$content")"
 
-  info "Plan created successfully."
+  info "Plan created successfully." >&2
   echo "plan_id=$plan_id"
 }
 

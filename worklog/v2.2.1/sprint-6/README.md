@@ -18,12 +18,14 @@ Sprint-5 的部署脚本（deploy.sh）将 Plan 创建和模型导入硬编码�
 
 | 编号 | 任务 | 优先级 | 状态 | 产物位置 |
 |------|------|--------|------|----------|
-| S6-001 | lib/dts-common.sh 共享函数库 | P0 | TODO | `bin/lib/dts-common.sh` |
-| S6-002 | dts-plan CLI | P0 | TODO | `bin/dts-plan` |
-| S6-003 | dts-deploy 编排器 | P0 | TODO | `bin/dts-deploy` |
-| S6-004 | dts-manifest-gen TSV 生成器 | P1 | TODO | `bin/dts-manifest-gen` |
-| S6-005 | dts-dbt-import 改造（source common） | P1 | TODO | `bin/dts-dbt-import` |
-| S6-006 | 业务文件迁移（bin/ → dbt/deploy/） | P0 | TODO | `services/dts-dbt/deploy/` |
-| S6-007 | 后端 batch-import API | P0 | TODO | `ModelingSqlModelResource.java` |
-| S6-008 | 前端批量导入 UI | P0 | TODO | `SqlModelingPage.tsx` |
-| S6-009 | worklog 路径引用更新 | P2 | TODO | `worklog/v2.2.1/sprint-5/` |
+| S6-001 | lib/dts-common.sh 共享函数库 | P0 | DONE | `bin/lib/dts-common.sh` |
+| S6-002 | dts-plan CLI | P0 | DONE | `bin/dts-plan` |
+| S6-003 | dts-deploy 编排器 | P0 | DONE | `bin/dts-deploy` |
+| S6-004 | dts-manifest-gen TSV 生成器 | P1 | DONE | `bin/dts-manifest-gen` |
+| S6-005 | dts-dbt-import 改造（source common） | P1 | DONE | `bin/dts-dbt-import` |
+| S6-006 | 业务文件迁移（bin/ → dbt/deploy/） | P0 | DONE | `services/dts-dbt/deploy/` |
+| S6-007 | 后端 batch-import API | P0 | DONE | `ModelingSqlModelResource.java` |
+| S6-008 | 前端批量导入 UI | P0 | DONE | `SqlModelingPage.tsx` |
+| S6-009 | worklog 路径引用更新 | P2 | DONE | `worklog/v2.2.1/sprint-5/` |
+| S6-010 | dts-pack 离线打包 CLI | P0 | DONE | `bin/dts-pack` |
+| S6-011 | dts-deploy --package 模式 | P1 | DONE | `bin/dts-deploy` |

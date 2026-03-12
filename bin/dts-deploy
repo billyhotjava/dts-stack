@@ -5,6 +5,7 @@
 # Usage:
 #   dts-deploy --config <deploy.conf>                    (config-file mode)
 #   dts-deploy --plan-name NAME --manifest <models.tsv>  (direct-params mode)
+#   dts-deploy --package <zip-file>                      (package mode)
 #
 # Environment:
 #   API_BASE               — Platform base URL (required)
@@ -25,17 +26,24 @@ usage() {
 Usage:
   dts-deploy --config <deploy.conf>   [pass-through flags]
   dts-deploy --plan-name NAME --manifest <models.tsv> [OPTIONS] [pass-through flags]
+  dts-deploy --package <zip-file> [OPTIONS] [pass-through flags]
 
 Config-file mode:
   --config <path>     Path to a bash-sourceable deploy.conf
 
 Direct-params mode:
-  --plan-name <name>  Plan name (required)
+  --plan-name <name>  Plan name (required unless --plan-id)
   --manifest <path>   TSV manifest path (required)
   --domain <domain>   Plan domain (optional)
   --scope <scope>     Plan scope (optional)
   --tags <tags>       Plan tags (optional)
   --content <text>    Plan content (optional)
+
+Package mode (deploy from dts-pack ZIP):
+  --package <zip>     ZIP file created by dts-pack
+
+Plan targeting:
+  --plan-id <uuid>    Import into an existing Plan (skip Plan creation)
 
 Pass-through flags (forwarded to dts-plan and dts-dbt-import):
   --dry-run           Validate only, no API calls
@@ -56,12 +64,14 @@ EOF
 # Variables
 # ---------------------------------------------------------------------------
 CONFIG_FILE=""
+PACKAGE_FILE=""
 PLAN_NAME="${PLAN_NAME:-}"
 PLAN_DOMAIN="${PLAN_DOMAIN:-}"
 PLAN_SCOPE="${PLAN_SCOPE:-}"
 PLAN_TAGS="${PLAN_TAGS:-}"
 PLAN_CONTENT="${PLAN_CONTENT:-}"
 MANIFEST_PATH="${MANIFEST_PATH:-}"
+PLAN_ID="${PLAN_ID:-}"
 
 # Pass-through flags
 PT_DRY_RUN=false
@@ -77,7 +87,9 @@ PT_SHOW_RESPONSE=false
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --config)         CONFIG_FILE="$2"; shift 2 ;;
+    --package)        PACKAGE_FILE="$2"; shift 2 ;;
     --plan-name)      PLAN_NAME="$2"; shift 2 ;;
+    --plan-id)        PLAN_ID="$2"; shift 2 ;;
     --manifest)       MANIFEST_PATH="$2"; shift 2 ;;
     --domain)         PLAN_DOMAIN="$2"; shift 2 ;;
     --scope)          PLAN_SCOPE="$2"; shift 2 ;;
@@ -112,6 +124,38 @@ if [[ -n "$CONFIG_FILE" ]]; then
 fi
 
 # ---------------------------------------------------------------------------
+# Package mode: extract ZIP to temp directory, source deploy.conf if present
+# ---------------------------------------------------------------------------
+_PACKAGE_TMPDIR=""
+if [[ -n "$PACKAGE_FILE" ]]; then
+  [[ -f "$PACKAGE_FILE" ]] || die "package file not found: $PACKAGE_FILE"
+  _PACKAGE_TMPDIR="$(mktemp -d)"
+  trap 'rm -rf "$_PACKAGE_TMPDIR"' EXIT
+
+  info "Extracting package: $PACKAGE_FILE"
+  unzip -q "$PACKAGE_FILE" -d "$_PACKAGE_TMPDIR"
+
+  # Source deploy.conf from package for Plan metadata (name, domain, etc.)
+  # but clear MANIFEST_PATH first — the package has its own models.tsv at root
+  _SAVED_MANIFEST="${MANIFEST_PATH:-}"
+  if [[ -z "$CONFIG_FILE" && -f "${_PACKAGE_TMPDIR}/deploy.conf" ]]; then
+    CONF_DIR="$_PACKAGE_TMPDIR"
+    # shellcheck disable=SC1090
+    source "${_PACKAGE_TMPDIR}/deploy.conf"
+  fi
+
+  # Package always uses its own models.tsv (overrides whatever deploy.conf set)
+  if [[ -f "${_PACKAGE_TMPDIR}/models.tsv" ]]; then
+    MANIFEST_PATH="${_PACKAGE_TMPDIR}/models.tsv"
+  elif [[ -n "$_SAVED_MANIFEST" ]]; then
+    MANIFEST_PATH="$_SAVED_MANIFEST"
+  fi
+
+  # Set SQL_BASE_DIR so dts-dbt-import finds SQL files in the extracted dir
+  export SQL_BASE_DIR="$_PACKAGE_TMPDIR"
+fi
+
+# ---------------------------------------------------------------------------
 # Resolve MANIFEST_PATH relative to cwd (for direct-params mode)
 # ---------------------------------------------------------------------------
 if [[ -n "$MANIFEST_PATH" && "$MANIFEST_PATH" != /* ]]; then
@@ -122,7 +166,9 @@ fi
 # Validate required variables
 # ---------------------------------------------------------------------------
 require_env API_BASE TOKEN SOURCE_DATA_SOURCE_ID
-[[ -n "$PLAN_NAME" ]]    || die "--plan-name (or PLAN_NAME in config) is required"
+if [[ -z "$PLAN_ID" ]]; then
+  [[ -n "$PLAN_NAME" ]]  || die "--plan-name, --plan-id, or PLAN_NAME in config is required"
+fi
 [[ -n "$MANIFEST_PATH" ]] || die "--manifest (or MANIFEST_PATH in config) is required"
 [[ -f "$MANIFEST_PATH" ]] || die "manifest not found: $MANIFEST_PATH"
 
@@ -151,7 +197,9 @@ fi
 # Print deploy summary
 # ---------------------------------------------------------------------------
 info "=== dts-deploy ==="
-info "  plan_name : $PLAN_NAME"
+[[ -n "$PACKAGE_FILE" ]] && info "  package   : $PACKAGE_FILE"
+[[ -n "$PLAN_ID" ]]      && info "  plan_id   : $PLAN_ID (existing)"
+info "  plan_name : ${PLAN_NAME:-(from --plan-id)}"
 info "  domain    : ${PLAN_DOMAIN:-(none)}"
 info "  scope     : ${PLAN_SCOPE:-(none)}"
 info "  tags      : ${PLAN_TAGS:-(none)}"
@@ -163,40 +211,44 @@ info "  insecure  : $PT_INSECURE"
 info ""
 
 # ---------------------------------------------------------------------------
-# Step 1: Create plan
+# Step 1: Create plan (or use existing --plan-id)
 # ---------------------------------------------------------------------------
-info "Step 1/2: Creating plan..."
+if [[ -n "$PLAN_ID" ]]; then
+  info "Step 1/2: Using existing plan: $PLAN_ID"
+else
+  info "Step 1/2: Creating plan..."
 
-PLAN_CREATE_ARGS=(create --name "$PLAN_NAME")
-[[ -n "$PLAN_DOMAIN" ]]  && PLAN_CREATE_ARGS+=(--domain "$PLAN_DOMAIN")
-[[ -n "$PLAN_SCOPE" ]]   && PLAN_CREATE_ARGS+=(--scope "$PLAN_SCOPE")
-[[ -n "$PLAN_TAGS" ]]    && PLAN_CREATE_ARGS+=(--tags "$PLAN_TAGS")
-[[ -n "$PLAN_CONTENT" ]] && PLAN_CREATE_ARGS+=(--content "$PLAN_CONTENT")
-PLAN_CREATE_ARGS+=("${PLAN_PT_FLAGS[@]}")
+  PLAN_CREATE_ARGS=(create --name "$PLAN_NAME")
+  [[ -n "$PLAN_DOMAIN" ]]  && PLAN_CREATE_ARGS+=(--domain "$PLAN_DOMAIN")
+  [[ -n "$PLAN_SCOPE" ]]   && PLAN_CREATE_ARGS+=(--scope "$PLAN_SCOPE")
+  [[ -n "$PLAN_TAGS" ]]    && PLAN_CREATE_ARGS+=(--tags "$PLAN_TAGS")
+  [[ -n "$PLAN_CONTENT" ]] && PLAN_CREATE_ARGS+=(--content "$PLAN_CONTENT")
+  PLAN_CREATE_ARGS+=("${PLAN_PT_FLAGS[@]}")
 
-PLAN_OUTPUT="$("${SCRIPT_DIR}/dts-plan" "${PLAN_CREATE_ARGS[@]}")"
+  PLAN_OUTPUT="$("${SCRIPT_DIR}/dts-plan" "${PLAN_CREATE_ARGS[@]}")"
 
-# Parse plan_id from output (format: plan_id=UUID)
-PLAN_ID=""
-while IFS= read -r line; do
-  if [[ "$line" == plan_id=* ]]; then
-    PLAN_ID="${line#plan_id=}"
-    break
-  fi
-done <<< "$PLAN_OUTPUT"
+  # Parse plan_id from output (format: plan_id=UUID)
+  PLAN_ID=""
+  while IFS= read -r line; do
+    if [[ "$line" == plan_id=* ]]; then
+      PLAN_ID="${line#plan_id=}"
+      break
+    fi
+  done <<< "$PLAN_OUTPUT"
 
-if [[ -z "$PLAN_ID" ]]; then
-  die "failed to parse plan_id from dts-plan output:
+  if [[ -z "$PLAN_ID" ]]; then
+    die "failed to parse plan_id from dts-plan output:
 $PLAN_OUTPUT"
-fi
+  fi
 
-# In dry-run mode, dts-plan returns a non-UUID placeholder; normalize it
-# so dts-dbt-import's UUID validation does not reject it.
-if $PT_DRY_RUN && [[ "$PLAN_ID" == dry-run-* ]]; then
-  PLAN_ID="00000000-0000-0000-0000-000000000000"
-fi
+  # In dry-run mode, dts-plan returns a non-UUID placeholder; normalize it
+  # so dts-dbt-import's UUID validation does not reject it.
+  if $PT_DRY_RUN && [[ "$PLAN_ID" == dry-run-* ]]; then
+    PLAN_ID="00000000-0000-0000-0000-000000000000"
+  fi
 
-info "Plan created: $PLAN_ID"
+  info "Plan created: $PLAN_ID"
+fi
 info ""
 
 # ---------------------------------------------------------------------------

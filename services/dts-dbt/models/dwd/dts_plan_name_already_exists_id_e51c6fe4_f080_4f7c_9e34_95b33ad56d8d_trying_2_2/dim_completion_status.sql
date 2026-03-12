@@ -1,3 +1,5 @@
+{{ config(materialized='table', tags=['project-management', 'dim', 'dm-erp-demo', 'dwd']) }}
+
 {{
   config(
     materialized='table',

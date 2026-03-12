@@ -133,6 +133,13 @@ resolve_existing_path() {
     candidates+=("$PROJECT_ROOT/$path")
     candidates+=("$PROJECT_ROOT/services/dts-dbt/$path")
     candidates+=("$(pwd)/$path")
+    # SQL_BASE_DIR: for package mode (flattened SQL files in extracted dir)
+    if [[ -n "${SQL_BASE_DIR:-}" ]]; then
+      candidates+=("${SQL_BASE_DIR}/$path")
+      candidates+=("${SQL_BASE_DIR}/$(basename "$path")")
+    fi
+    # Also try basename in manifest_dir (flattened layout)
+    candidates+=("$manifest_dir/$(basename "$path")")
   fi
 
   local c

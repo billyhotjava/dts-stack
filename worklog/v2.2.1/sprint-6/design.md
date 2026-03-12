@@ -236,3 +236,93 @@ export const batchImportSqlModels = (data: FormData) =>
 ### worklog 更新
 
 worklog/v2.2.1/sprint-5/README.md 和 it/README.md 中的路径引用同步更新到新位置。
+
+---
+
+## Part 5：离线打包与部署（dts-pack + dts-deploy --package）
+
+### 背景
+
+最终部署环境为离线环境，`services/` 目录只随大版本更新，不能每次都更新。增量更新的 dbt 模型需要打包成 ZIP，拷贝到现场后通过 CLI 或 UI 导入。
+
+### 概念澄清
+
+- **项目空间 (ModelingPlan)** = DTS 平台自身的模型组织单元
+- **业务模型** = 客户业务数据的 dbt 模型（如项目进度 Excel → ODS → ADS）
+- `dts-pack` 打包的是业务模型，部署时导入到某个 DTS 项目空间中
+
+### dts-pack
+
+从 deploy 配置目录打包自包含 ZIP。
+
+```bash
+# 从 deploy.conf 打包
+bin/dts-pack --config services/dts-dbt/deploy/project-progress/deploy.conf \
+  --output worklog/v2.2.1/sprint-5/dist/ --include-seeds
+
+# 从 manifest 直接打包
+bin/dts-pack --manifest path/models.tsv --output dist/
+```
+
+ZIP 结构（扁平化）：
+
+```
+project-management-20260312.zip
+├── deploy.conf           # Plan 元数据
+├── models.tsv            # 模型清单
+├── dim_completion_status.sql
+├── biz_dwd_project_node.sql
+├── ...
+└── extras/               # 种子数据、验证脚本、大屏模板等
+    ├── seed-ods-project-progress.sql
+    ├── validate-indicators.sql
+    └── screen-template-project-progress.json
+```
+
+选项：
+
+| 选项 | 说明 |
+|------|------|
+| `--config <path>` | deploy.conf 路径，读取 Plan 元数据和 MANIFEST_PATH |
+| `--manifest <path>` | 直接指定 TSV 路径 |
+| `--output <dir>` | 输出目录（默认当前目录） |
+| `--name <filename>` | ZIP 文件名（默认自动生成） |
+| `--include-seeds` | 包含 seed-*.sql / validate-*.sql / screen-template-*.json |
+| `--extras <glob>` | 指定额外文件模式（可重复） |
+| `--dry-run` | 仅列出会打包的文件 |
+
+### dts-deploy --package
+
+从 ZIP 包部署：
+
+```bash
+# 从 ZIP 包创建新项目空间并导入
+bin/dts-deploy --package dist/project-management-20260312.zip
+
+# 导入到已有项目空间
+bin/dts-deploy --package dist/project-management-20260312.zip \
+  --plan-id "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+```
+
+工作流程：
+1. 解压 ZIP 到临时目录
+2. 读取 deploy.conf 获取 Plan 元数据
+3. 使用根目录 models.tsv 作为清单
+4. 设置 SQL_BASE_DIR 指向解压目录（SQL 文件扁平化存放）
+5. 如有 --plan-id 则跳过 Plan 创建，直接导入
+6. 清理临时文件
+
+### 离线部署工作流
+
+```
+开发环境                              现场（离线）
+┌──────────────────┐                ┌──────────────────┐
+│ 修改 dbt 模型     │                │                  │
+│ dts-pack → ZIP    │  ─── 拷贝 ──→ │ dts-deploy        │
+│ 产出: dist/*.zip  │                │   --package *.zip │
+│                  │                │   [--plan-id xxx] │
+└──────────────────┘                └──────────────────┘
+
+或通过 UI：
+  前端 BatchImportModal → ZIP 上传 Tab → 选择 dts-pack 产出的 ZIP 文件
+```
