@@ -19,23 +19,27 @@ IMAGE_ONLY=""
 PACK_MODE=""
 PACK_OUTPUT=""
 PACK_INCLUDE_IMAGES="true"
+SAVE_IMAGE_TARS="${SAVE_IMAGE_TARS:-true}"
 
 usage() {
   cat <<USAGE
 Usage:
   ${0##*/} -all
   ${0##*/} --image <name>
+  ${0##*/} -all --no-save
   ${0##*/} --pack [--output <path>] [--no-images]
 
 Options:
   -all, --all           Build all images (same as legacy buildAll.sh behavior).
   --image <name>        Build a single image and save tarballs to both dist/ and legacy-dist/.
+  --no-save             Build images but skip docker save tarball export (reduces disk pressure).
   --pack                Package dts-stack for deployment (excludes source, logs, git, etc.).
   --output <path>       Output path for the package tarball (default: ./dts-stack-<timestamp>.tar.gz).
   --no-images           Exclude image tarballs from package (smaller package, images loaded separately).
 
 Examples:
   ${0##*/} -all
+  ${0##*/} -all --no-save
   ${0##*/} --image dts-admin
   ${0##*/} --image dts-dbt
   ${0##*/} --pack
@@ -77,6 +81,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --no-images)
       PACK_INCLUDE_IMAGES="false"
+      shift
+      ;;
+    --no-save)
+      SAVE_IMAGE_TARS="false"
       shift
       ;;
     -h|--help)
@@ -191,10 +199,16 @@ preflight_check() {
 
   # Check available disk space
   local avail_disk_gb
+  local required_disk_gb
   avail_disk_gb="$(df -BG "${REPO_ROOT}" | awk 'NR==2 {gsub(/G/,"",$4); print $4}')"
+  required_disk_gb="$(required_min_disk_gb)"
   echo "[dts-build] Available disk: ${avail_disk_gb} GB"
-  if [[ "${avail_disk_gb:-0}" -lt 10 ]]; then
-    echo "[dts-build] ERROR: Less than 10GB disk space. Docker builds will fail." >&2
+  echo "[dts-build] Estimated required disk: ${required_disk_gb} GB"
+  if [[ "${avail_disk_gb:-0}" -lt "${required_disk_gb:-0}" ]]; then
+    echo "[dts-build] ERROR: current mode requires at least ${required_disk_gb}GB free disk, but only ${avail_disk_gb}GB is available." >&2
+    if [[ "${SAVE_IMAGE_TARS}" == "true" && ( "${MODE}" == "all" || -n "${IMAGE_ONLY}" ) ]]; then
+      echo "[dts-build] TIP: Re-run with --no-save to skip docker save tarball export and reduce disk pressure." >&2
+    fi
     exit 1
   fi
 
@@ -206,6 +220,37 @@ preflight_check() {
     docker builder prune -f --filter "until=24h" >/dev/null 2>&1 || true
   fi
   echo "[dts-build] === Pre-flight OK ==="
+}
+
+required_min_disk_gb() {
+  if [[ -n "${PACK_MODE}" ]]; then
+    if [[ "${PACK_INCLUDE_IMAGES}" == "true" ]]; then
+      echo 12
+    else
+      echo 6
+    fi
+    return 0
+  fi
+
+  if [[ "${MODE}" == "all" ]]; then
+    if [[ "${SAVE_IMAGE_TARS}" == "true" ]]; then
+      echo 45
+    else
+      echo 30
+    fi
+    return 0
+  fi
+
+  if [[ -n "${IMAGE_ONLY}" ]]; then
+    if [[ "${SAVE_IMAGE_TARS}" == "true" ]]; then
+      echo 16
+    else
+      echo 12
+    fi
+    return 0
+  fi
+
+  echo 10
 }
 
 load_image_versions() {
@@ -226,6 +271,10 @@ sanitize_tag() {
 save_image() {
   local tag="$1"
   local output_dir="$2"
+  if [[ "${SAVE_IMAGE_TARS}" != "true" ]]; then
+    echo "[dts-build] Skipping tar export for ${tag} (--no-save)"
+    return 0
+  fi
   mkdir -p "$output_dir"
   local tar_path="${output_dir}/$(sanitize_tag "$tag")-${BUILD_TS}.tar"
   docker save "$tag" -o "$tar_path"
@@ -421,17 +470,40 @@ SETTINGS_EOF
       echo "[dts-build] DEBUG: mvn args: ${maven_args[*]} package"
       echo "[dts-build] DEBUG: security_opts: ${security_opts[*]+"${security_opts[*]}"}"
     fi
-    # Run mvn directly — DO NOT wrap in sh -c or bash -lc.
-    # Explicitly pass JAVA_HOME/PATH via -e for Docker 18.09 compatibility.
-    docker run --rm --memory="${MAVEN_MEMORY_LIMIT}" --memory-swap="${MAVEN_MEMORY_LIMIT}" \
-      ${security_opts[@]+"${security_opts[@]}"} \
-      -e "JAVA_HOME=${MAVEN_CONTAINER_JAVA_HOME}" \
-      -e "PATH=${MAVEN_CONTAINER_JAVA_HOME}/bin:/usr/share/maven/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
-      -v "${REPO_ROOT}/source:/workspace" \
-      -v "/root/.m2:/root/.m2" \
-      -w /workspace \
-      "$MAVEN_IMAGE" \
-      mvn "${maven_args[@]}" package
+    local container_path="${MAVEN_CONTAINER_JAVA_HOME}/bin:/usr/share/maven/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+    local use_bash_maven_runner=""
+    if [[ -z "${DOCKER_PLATFORM_SUPPORTED}" && ("${HOST_ARCH}" == "aarch64" || "${HOST_ARCH}" == "arm64") ]]; then
+      use_bash_maven_runner="1"
+    fi
+
+    if [[ -n "${use_bash_maven_runner}" ]]; then
+      local quoted_maven_args=()
+      local arg
+      for arg in "${maven_args[@]}" package; do
+        quoted_maven_args+=("$(printf '%q' "${arg}")")
+      done
+      local bash_cmd="export JAVA_HOME=${MAVEN_CONTAINER_JAVA_HOME}; export PATH=${container_path}; exec /usr/bin/mvn ${quoted_maven_args[*]}"
+      docker run --rm --memory="${MAVEN_MEMORY_LIMIT}" --memory-swap="${MAVEN_MEMORY_LIMIT}" \
+        ${security_opts[@]+"${security_opts[@]}"} \
+        --entrypoint /bin/bash \
+        -v "${REPO_ROOT}/source:/workspace" \
+        -v "/root/.m2:/root/.m2" \
+        -w /workspace \
+        "$MAVEN_IMAGE" \
+        -lc "${bash_cmd}"
+    else
+      # Run mvn directly — DO NOT wrap in sh -c or bash -lc.
+      # Explicitly pass JAVA_HOME/PATH via -e for Docker 18.09 compatibility.
+      docker run --rm --memory="${MAVEN_MEMORY_LIMIT}" --memory-swap="${MAVEN_MEMORY_LIMIT}" \
+        ${security_opts[@]+"${security_opts[@]}"} \
+        -e "JAVA_HOME=${MAVEN_CONTAINER_JAVA_HOME}" \
+        -e "PATH=${container_path}" \
+        -v "${REPO_ROOT}/source:/workspace" \
+        -v "/root/.m2:/root/.m2" \
+        -w /workspace \
+        "$MAVEN_IMAGE" \
+        mvn "${maven_args[@]}" package
+    fi
   fi
 
   local jar_path
