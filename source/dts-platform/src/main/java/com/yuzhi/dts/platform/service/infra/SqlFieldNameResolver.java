@@ -255,6 +255,36 @@ public final class SqlFieldNameResolver {
         putExact(map, "部门", "dept_name");
         putExact(map, "代理公司", "agent_org_name");
         putExact(map, "状态", "state");
+        // 项目进度 Excel 29 字段
+        putExact(map, "项目编号", "project_no");
+        putExact(map, "分系统/分任务", "subsystem");
+        putExact(map, "节点任务及目标", "node_task");
+        putExact(map, "节点计划时间", "plan_date");
+        putExact(map, "节点计划周数", "plan_week");
+        putExact(map, "节点类型", "node_type");
+        putExact(map, "负责人", "owner");
+        putExact(map, "责任科室", "dept");
+        putExact(map, "分管室领导", "dept_leader");
+        putExact(map, "完成情况", "completion_status");
+        putExact(map, "协同部门", "collab_dept");
+        putExact(map, "责任监管部门", "supervisor_dept");
+        putExact(map, "延期预计完成时间", "delay_expected_date");
+        putExact(map, "未完成原因及当前进展", "incomplete_reason");
+        putExact(map, "风险等级", "risk_level");
+        putExact(map, "主要风险内容及措施", "risk_content");
+        putExact(map, "延期影响分析", "delay_impact");
+        putExact(map, "实际完成时间", "actual_date");
+        putExact(map, "实际完成周数", "actual_week");
+        putExact(map, "所领导", "institute_leader");
+        putExact(map, "来源", "source");
+        putExact(map, "延期项目原计划时间", "original_plan_date");
+        putExact(map, "计划延误时间（已变更）", "delay_days_changed");
+        putExact(map, "计划延误时间（未变更）", "delay_days_unchanged");
+        putExact(map, "是否提交延期申请", "delay_applied");
+        putExact(map, "项目主管", "project_manager");
+        putExact(map, "最后更新时间", "last_update_time");
+        putExact(map, "填写人", "filled_by");
+        putExact(map, "亮点工作", "highlight");
         return Collections.unmodifiableMap(map);
     }
 
@@ -289,6 +319,33 @@ public final class SqlFieldNameResolver {
         map.put("日期", "date");
         map.put("地址", "address");
         map.put("电话", "phone");
+        // 项目进度通用术语
+        map.put("项目", "project");
+        map.put("节点", "node");
+        map.put("任务", "task");
+        map.put("计划", "plan");
+        map.put("负责人", "owner");
+        map.put("科室", "dept");
+        map.put("领导", "leader");
+        map.put("完成", "completion");
+        map.put("情况", "status");
+        map.put("协同", "collab");
+        map.put("监管", "supervisor");
+        map.put("延期", "delay");
+        map.put("原因", "reason");
+        map.put("风险", "risk");
+        map.put("等级", "level");
+        map.put("措施", "measure");
+        map.put("影响", "impact");
+        map.put("分析", "analysis");
+        map.put("实际", "actual");
+        map.put("周数", "week");
+        map.put("填写", "filled");
+        map.put("亮点", "highlight");
+        map.put("工作", "work");
+        map.put("主管", "manager");
+        map.put("更新", "update");
+        map.put("变更", "changed");
         return Collections.unmodifiableMap(map);
     }
 

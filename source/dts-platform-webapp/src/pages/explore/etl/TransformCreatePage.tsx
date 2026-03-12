@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, Button, Card, Collapse, Divider, Form, Input, InputNumber, Modal, Progress, Radio, Select, Space, Steps, Switch, Table, Tag, Typography, Upload } from "antd";
 import { SaveOutlined, InboxOutlined, PlusOutlined, DeleteOutlined } from "@ant-design/icons";
 import { toast } from "sonner";
@@ -18,6 +18,7 @@ import {
 	resolveExecutionPollIntervalMs,
 } from "@/api/ingestion";
 import dataSourcesService, { type ExcelImportErrorRow, type InfraDataSource } from "@/api/services/dataSourcesService";
+import { listTables as sqlListTables, listColumns as sqlListColumns, type TableInfo as SqlTableInfo, type ColumnInfo } from "@/api/sql-workbench";
 
 const { Text } = Typography;
 
@@ -1190,6 +1191,13 @@ export default function TransformCreatePage() {
 	const [sqlModels, setSqlModels] = useState<Array<{ id?: string; name?: string; alias?: string }>>([]);
 	const [loadingSqlModels, setLoadingSqlModels] = useState(false);
 	const [fileUploadResult, setFileUploadResult] = useState<FileUploadResult | null>(null);
+	// ODS 表关联
+	const [odsTableList, setOdsTableList] = useState<SqlTableInfo[]>([]);
+	const [odsTableLoading, setOdsTableLoading] = useState(false);
+	const [selectedOdsTable, setSelectedOdsTable] = useState<string | undefined>(undefined);
+	const [odsColumns, setOdsColumns] = useState<ColumnInfo[]>([]);
+	const [odsColumnsLoading, setOdsColumnsLoading] = useState(false);
+	const [odsMatchApplied, setOdsMatchApplied] = useState(false);
 	const [extraColumns, setExtraColumns] = useState<Array<{ name: string; label: string; type: string; defaultValue: string }>>([]);
 	const [uploadingFile, setUploadingFile] = useState(false);
 	const [filePreviewRows, setFilePreviewRows] = useState(20);
@@ -1231,6 +1239,11 @@ export default function TransformCreatePage() {
 		() => dataSources.find((item) => String(item.id) === String(selectedDataSourceId)),
 		[dataSources, selectedDataSourceId]
 	);
+	const lakeDatasourceId = useMemo(() => {
+		if (!defaultDestinationStatus?.destinationName || !dataSources.length) return null;
+		const match = dataSources.find(ds => ds.name === defaultDestinationStatus.destinationName);
+		return match?.id ?? null;
+	}, [dataSources, defaultDestinationStatus]);
 	const discoveredTableKeys = useMemo(
 		() => discoveredTables.map((item) => buildTableKey(item)),
 		[discoveredTables]
@@ -2025,6 +2038,65 @@ export default function TransformCreatePage() {
 		});
 		return buildFileUploadResult(fileName, batchCode, fileId, sheets, parseResult, selectedSheet);
 	};
+
+	// --- ODS 表关联 ---
+	const loadOdsTables = useCallback(async () => {
+		if (!lakeDatasourceId) return;
+		try {
+			setOdsTableLoading(true);
+			const tables = await sqlListTables(lakeDatasourceId);
+			const odsTables = (Array.isArray(tables) ? tables : []).filter(
+				t => t.name?.toLowerCase().startsWith("ods_")
+			);
+			setOdsTableList(odsTables);
+		} catch (err: any) {
+			console.error("Failed to load ODS tables:", err);
+			setOdsTableList([]);
+		} finally {
+			setOdsTableLoading(false);
+		}
+	}, [lakeDatasourceId]);
+
+	const handleOdsTableSelect = useCallback(async (tableName: string | undefined) => {
+		setSelectedOdsTable(tableName);
+		setOdsColumns([]);
+		setOdsMatchApplied(false);
+		if (!tableName || !lakeDatasourceId) return;
+		try {
+			setOdsColumnsLoading(true);
+			const tableInfo = odsTableList.find(t => t.name === tableName);
+			const schema = tableInfo?.schema || "public";
+			const cols = await sqlListColumns(lakeDatasourceId, schema, tableName);
+			setOdsColumns(Array.isArray(cols) ? cols : []);
+		} catch (err: any) {
+			console.error("Failed to load ODS columns:", err);
+			setOdsColumns([]);
+		} finally {
+			setOdsColumnsLoading(false);
+		}
+	}, [lakeDatasourceId, odsTableList]);
+
+	const applyOdsMapping = useCallback(() => {
+		if (!odsColumns.length || !fileUploadResult?.columns?.length) return;
+		const excelCols = [...fileUploadResult.columns];
+		const odsLen = odsColumns.length;
+		const excelLen = excelCols.length;
+		for (let i = 0; i < Math.min(odsLen, excelLen); i++) {
+			excelCols[i] = { ...excelCols[i], name: odsColumns[i].name, _odsMatched: true } as any;
+		}
+		for (let i = odsLen; i < excelLen; i++) {
+			excelCols[i] = { ...excelCols[i], _odsExtra: true } as any;
+		}
+		setFileUploadResult({ ...fileUploadResult, columns: excelCols });
+		setOdsMatchApplied(true);
+	}, [odsColumns, fileUploadResult]);
+
+	const unmatchedOdsFields = useMemo(() => {
+		if (!odsMatchApplied || !odsColumns.length) return [];
+		const excelLen = fileUploadResult?.columns?.length || 0;
+		if (odsColumns.length <= excelLen) return [];
+		return odsColumns.slice(excelLen);
+	}, [odsMatchApplied, odsColumns, fileUploadResult?.columns?.length]);
 
 	const refreshFilePreview = async () => {
 		if (!fileUploadResult?.fileId) {
@@ -2895,6 +2967,7 @@ export default function TransformCreatePage() {
 														filePreviewRows
 													);
 													setFileUploadResult(parsed);
+													setSelectedOdsTable(undefined); setOdsColumns([]); setOdsMatchApplied(false);
 													form.setFieldValue("readerType", "txtfilereader");
 													ensureFileTableName(parsed);
 													onSuccess?.(parsed);
@@ -2960,6 +3033,7 @@ export default function TransformCreatePage() {
 																	filePreviewRows
 																);
 																setFileUploadResult(parsed);
+																setSelectedOdsTable(undefined); setOdsColumns([]); setOdsMatchApplied(false);
 																form.setFieldValue("readerType", "txtfilereader");
 																ensureFileTableName(parsed);
 																toast.success(`已切换到 ${targetSheet.name}，检测到 ${parsed.columns?.length || 0} 列`);
@@ -2996,6 +3070,43 @@ export default function TransformCreatePage() {
 													</Button>
 												)}
 											</Space>
+											{/* ODS 表关联 */}
+											{lakeDatasourceId && (fileUploadResult.columns?.length ?? 0) > 0 && (
+												<div style={{ marginBottom: 12, padding: "8px 12px", background: "#fafafa", borderRadius: 6, border: "1px solid #f0f0f0" }}>
+													<Space wrap>
+														<Text type="secondary">关联 ODS 表：</Text>
+														<Select
+															size="small"
+															style={{ width: 280 }}
+															placeholder="选择 ODS 表以自动匹配字段名"
+															allowClear
+															showSearch
+															loading={odsTableLoading}
+															value={selectedOdsTable}
+															onFocus={() => { if (!odsTableList.length) loadOdsTables(); }}
+															onChange={handleOdsTableSelect}
+															options={odsTableList.map(t => ({ label: t.name, value: t.name }))}
+															filterOption={(input, option) =>
+																(option?.label as string)?.toLowerCase().includes(input.toLowerCase()) ?? false
+															}
+														/>
+														<Button
+															size="small"
+															type="primary"
+															loading={odsColumnsLoading}
+															disabled={!odsColumns.length}
+															onClick={applyOdsMapping}
+														>
+															自动匹配
+														</Button>
+														{odsMatchApplied && (
+															<Text style={{ color: "#52c41a" }}>
+																✓ 已匹配 {Math.min(odsColumns.length, fileUploadResult.columns?.length || 0)} 个字段
+															</Text>
+														)}
+													</Space>
+												</div>
+											)}
 											<Table
 												size="small"
 												dataSource={fileUploadResult.columns || []}
@@ -3021,17 +3132,26 @@ export default function TransformCreatePage() {
 													{
 														title: "字段名",
 														dataIndex: "name",
-														render: (value: string, _: any, index: number) => (
-															<Input
-																size="small"
-																value={value}
-																placeholder="英文字段名"
-																onChange={(e) => {
-																	const cols = [...(fileUploadResult.columns || [])];
-																	cols[index] = { ...cols[index], name: e.target.value };
-																	setFileUploadResult({ ...fileUploadResult, columns: cols });
-																}}
-															/>
+														render: (value: string, record: any, index: number) => (
+															<Space size={4}>
+																<Input
+																	size="small"
+																	value={value}
+																	placeholder="英文字段名"
+																	style={record._odsExtra ? { color: "#999" } : undefined}
+																	onChange={(e) => {
+																		const cols = [...(fileUploadResult.columns || [])];
+																		cols[index] = { ...cols[index], name: e.target.value };
+																		setFileUploadResult({ ...fileUploadResult, columns: cols });
+																	}}
+																/>
+																{odsMatchApplied && record._odsMatched && (
+																	<Tag color="green" style={{ margin: 0 }}>ODS</Tag>
+																)}
+																{odsMatchApplied && record._odsExtra && (
+																	<Tag color="default" style={{ margin: 0 }}>未关联</Tag>
+																)}
+															</Space>
 														),
 													},
 													{
@@ -3145,6 +3265,18 @@ export default function TransformCreatePage() {
 													},
 												]}
 											/>
+											{unmatchedOdsFields.length > 0 && (
+												<div style={{ marginTop: 8, padding: "8px 12px", background: "#fff2f0", border: "1px solid #ffccc7", borderRadius: 6 }}>
+													<Text type="danger" strong style={{ display: "block", marginBottom: 4 }}>
+														⚠ 以下 ODS 字段缺少对应的 Excel 列（将导致下游数仓数据不完整）：
+													</Text>
+													<Space wrap>
+														{unmatchedOdsFields.map((col, i) => (
+															<Tag key={i} color="error">{col.name}</Tag>
+														))}
+													</Space>
+												</div>
+											)}
 											<Button
 												type="dashed"
 												size="small"

@@ -9,10 +9,12 @@ Sprint-5 的部署脚本（deploy.sh）将 Plan 创建和模型导入硬编码�
 1. 将部署脚本抽象为通用 CLI 工具集（dts-plan / dts-deploy / dts-manifest-gen）
 2. 前端新增批量导入功能（ZIP 上传 + 多文件在线编辑）
 3. 后端新增 batch-import API
+4. Excel 入湖关联 ODS 表自动映射字段
 
 ## 设计文档
 
-- `design.md` — 完整设计方案
+- `design.md` — CLI 工具 + 批量导入设计
+- `ods-field-mapping-design.md` — Excel 入湖关联 ODS 表设计
 
 ## 任务清单
 
@@ -29,3 +31,5 @@ Sprint-5 的部署脚本（deploy.sh）将 Plan 创建和模型导入硬编码�
 | S6-009 | worklog 路径引用更新 | P2 | DONE | `worklog/v2.2.1/sprint-5/` |
 | S6-010 | dts-pack 离线打包 CLI | P0 | DONE | `bin/dts-pack` |
 | S6-011 | dts-deploy --package 模式 | P1 | DONE | `bin/dts-deploy` |
+| S6-012 | Excel 入湖关联 ODS 表自动匹配字段 | P0 | DONE | `TransformCreatePage.tsx` |
+| S6-013 | SqlFieldNameResolver 字典扩展 | P1 | DONE | `SqlFieldNameResolver.java` |
