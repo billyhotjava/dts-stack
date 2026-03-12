@@ -47,6 +47,9 @@ public class AnalyticsCard implements Serializable {
     @Column(name = "visualization_settings_json", columnDefinition = "text")
     private String visualizationSettingsJson;
 
+    @Column(name = "card_type", nullable = false, length = 32)
+    private String cardType = "question";
+
     @Column(name = "creator_id")
     private Long creatorId;
 
@@ -134,6 +137,14 @@ public class AnalyticsCard implements Serializable {
 
     public void setVisualizationSettingsJson(String visualizationSettingsJson) {
         this.visualizationSettingsJson = visualizationSettingsJson;
+    }
+
+    public String getCardType() {
+        return cardType;
+    }
+
+    public void setCardType(String cardType) {
+        this.cardType = cardType;
     }
 
     public Long getCreatorId() {

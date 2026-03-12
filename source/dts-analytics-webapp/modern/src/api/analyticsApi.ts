@@ -72,6 +72,7 @@ export type CardListItem = {
 	archived?: boolean;
 	collection_id?: number | null;
 	display?: string;
+	type?: "question" | "model";
 	created_at?: string;
 	updated_at?: string;
 	favorite?: boolean;
@@ -1349,7 +1350,8 @@ export const analyticsApi = {
 		fetchJson<string[]>(
 			`/analytics/api/dashboard/${encodeURIComponent(String(dashId))}/params/${encodeURIComponent(String(paramId))}/search/${encodeURIComponent(String(query))}`,
 		),
-	listCards: () => fetchJson<CardListItem[]>("/analytics/api/card"),
+	listCards: (type?: string) => fetchJson<CardListItem[]>(type ? `/analytics/api/card?type=${encodeURIComponent(type)}` : "/analytics/api/card"),
+	listModels: () => fetchJson<CardListItem[]>("/analytics/api/card?type=model"),
 	getCard: (id: string | number) => fetchJson<CardDetail>(`/analytics/api/card/${encodeURIComponent(String(id))}`),
 	createCard: (body: unknown) => sendJson<CardDetail>("/analytics/api/card", body),
 	updateCard: (id: string | number, body: unknown) =>

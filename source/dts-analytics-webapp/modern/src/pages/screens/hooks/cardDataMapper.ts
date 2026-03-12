@@ -8,14 +8,24 @@ import type { CardData, ComponentType } from '../types';
 export function mapCardDataToConfig(
     type: ComponentType,
     cardData: CardData,
+    config?: Record<string, unknown>,
 ): Record<string, unknown> {
     const { rows, cols } = cardData;
     if (!rows?.length || !cols?.length) return {};
 
     switch (type) {
         case 'number-card':
-        case 'gauge-chart':
+        case 'gauge-chart': {
+            const vf = config?.valueField as string | undefined;
+            if (vf) {
+                const colIdx = cols.findIndex((c) => c.name === vf);
+                if (colIdx >= 0) {
+                    const lastRow = rows[rows.length - 1];
+                    return { value: toNumber(lastRow?.[colIdx]) };
+                }
+            }
             return { value: toNumber(rows[0]?.[0]) };
+        }
 
         case 'line-chart':
         case 'bar-chart':

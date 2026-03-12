@@ -427,7 +427,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
             const mapped = applyFieldMapping(type, fieldMapping, cardData);
             return { ...config, ...mapped };
         }
-        const mapped = mapCardDataToConfig(type, cardData);
+        const mapped = mapCardDataToConfig(type, cardData, config);
         return { ...config, ...mapped };
     }, [config, cardData, type]);
 
@@ -1825,7 +1825,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                         anchor: { show: true, showAbove: true, size: 18, itemStyle: { borderWidth: 6 } },
                         title: { show: true, offsetCenter: [0, '70%'], fontSize: (c.titleFontSize as number) || 14, color: t.gauge.titleColor },
                         detail: { valueAnimation: true, fontSize: 28, offsetCenter: [0, '45%'], color: t.gauge.detailColor, formatter: '{value}%' },
-                        data: [{ value: c.value as number, name: c.title as string }],
+                        data: [{ value: c.value != null ? Number(c.value) : 0, name: c.title as string }],
                     }],
                 });
 
@@ -2414,7 +2414,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                             color: resolveTextColor(c.valueColor as string | undefined, t.numberCard.valueColor),
                         }}>
                             {c.prefix as string}
-                            {(c.value as number).toLocaleString()}
+                            {c.value != null ? Number(c.value).toLocaleString('zh-CN') : '-'}
                             {c.suffix as string}
                         </div>
                     </div>

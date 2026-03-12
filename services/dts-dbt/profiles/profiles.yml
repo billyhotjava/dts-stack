@@ -5,8 +5,8 @@ dts:
       type: postgres
       host: "{{ env_var('DBT_PG_HOST', 'dts-pg') }}"
       port: "{{ env_var('DBT_PG_PORT', '5432') | int }}"
-      user: "{{ env_var('DBT_PG_USER', 'dts_platform') }}"
-      password: "{{ env_var('DBT_PG_PASSWORD', '') }}"
-      dbname: "{{ env_var('DBT_PG_DBNAME', 'dts_platform') }}"
+      user: "{{ env_var('DBT_PG_USER', 'biadmin') }}"
+      password: "{{ env_var('DBT_PG_PASSWORD', 'Devops123@') }}"
+      dbname: "{{ env_var('DBT_PG_DBNAME', 'biadmin') }}"
       schema: public
       threads: 4

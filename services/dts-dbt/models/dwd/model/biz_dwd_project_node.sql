@@ -83,10 +83,10 @@ SELECT
     ELSE false
   END AS is_due,
 
-  'ods_project_progress'::text AS source_table,
+  'col_20260312'::text AS source_table,
   now() AS etl_time
 
-FROM {{ source('ods', 'ods_project_progress') }} o
+FROM {{ source('ods', 'col_20260312') }} o
 LEFT JOIN {{ ref('dim_completion_status') }} cs
   ON cs.code = NULLIF(btrim(o.completion_status), '')
 LEFT JOIN {{ ref('dim_node_type') }} nt

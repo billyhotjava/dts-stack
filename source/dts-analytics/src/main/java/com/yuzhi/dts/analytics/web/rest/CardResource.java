@@ -22,6 +22,7 @@ import com.yuzhi.dts.analytics.web.support.MetabaseAuth;
 import com.yuzhi.dts.analytics.web.support.PlatformContext;
 import com.yuzhi.dts.analytics.web.support.RequestContextUtils;
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.web.bind.annotation.RequestParam;
 import jakarta.servlet.http.HttpServletResponse;
 import java.sql.SQLException;
 import java.time.OffsetDateTime;
@@ -93,7 +94,9 @@ public class CardResource {
     }
 
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<?> list(HttpServletRequest request) {
+    public ResponseEntity<?> list(
+            @RequestParam(name = "type", required = false) String type,
+            HttpServletRequest request) {
         Optional<AnalyticsUser> user = MetabaseAuth.currentUser(sessionService, request);
         if (user.isEmpty()) {
             return ResponseEntity.status(401).contentType(MediaType.TEXT_PLAIN).body("Unauthenticated");
@@ -106,8 +109,14 @@ public class CardResource {
             }
         }
 
-        return ResponseEntity.ok(cardRepository.findAll().stream()
-                .filter(card -> !card.isArchived())
+        List<AnalyticsCard> cards;
+        if (type != null && !type.isBlank()) {
+            cards = cardRepository.findAllByArchivedFalseAndCardTypeOrderByIdAsc(type.trim());
+        } else {
+            cards = cardRepository.findAllByArchivedFalseOrderByIdAsc();
+        }
+
+        return ResponseEntity.ok(cards.stream()
                 .map(card -> toCardResponse(card, null, favoriteCardIds.contains(card.getId())))
                 .toList());
     }
@@ -143,6 +152,8 @@ public class CardResource {
         card.setDatabaseId(databaseId);
         card.setDatasetQueryJson(datasetQuery.toString());
         card.setDisplay(Optional.ofNullable(trimToNull(body.path("display").asText(null))).orElse("table"));
+        String cardType = trimToNull(body.path("type").asText(null));
+        card.setCardType(cardType != null && ("model".equals(cardType) || "question".equals(cardType)) ? cardType : "question");
         JsonNode vizSettings = body.get("visualization_settings");
         card.setVisualizationSettingsJson(vizSettings == null ? "{}" : vizSettings.toString());
         card.setCreatorId(user.get().getId());
@@ -630,6 +641,7 @@ public class CardResource {
         response.put("id", card.getId());
         response.put("parameter_mappings", List.of());
         response.put("display", card.getDisplay());
+        response.put("type", card.getCardType());
         response.put("entity_id", card.getEntityId());
         response.put("collection_preview", true);
         response.put("last-edit-info", Map.of("timestamp", card.getUpdatedAt(), "id", card.getCreatorId()));
