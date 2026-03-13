@@ -64,6 +64,20 @@ export const componentLibrary: ComponentCategory[] = [
                 },
             },
             {
+                type: 'gantt-chart',
+                name: '甘特图',
+                icon: '📊',
+                defaultWidth: 600,
+                defaultHeight: 300,
+                defaultConfig: {
+                    title: '甘特图',
+                    tasks: [
+                        { name: '任务A', type: '一般节点', planDate: '2026-01-01', actualDate: '2026-01-15', isCompleted: true, isOverdue: false, isIncomplete: false, delayDays: 0, riskLevel: '低', owner: '张三' },
+                        { name: '任务B', type: '里程碑节点', planDate: '2026-02-01', actualDate: null, isCompleted: false, isOverdue: false, isIncomplete: true, delayDays: null, riskLevel: '高', owner: '李四' },
+                    ],
+                },
+            },
+            {
                 type: 'radar-chart',
                 name: '雷达图',
                 icon: '🕸️',
