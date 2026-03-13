@@ -1829,6 +1829,141 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                     }],
                 });
 
+            case 'gantt-chart': {
+                const tasks = (c.tasks as Array<{
+                    name: string; type: string; planDate: string; actualDate: string;
+                    isCompleted: boolean; isOverdue: boolean; isIncomplete: boolean;
+                    delayDays: number; riskLevel: string; owner: string;
+                }>) || [];
+                if (!tasks.length) {
+                    return renderEChartWithHandles({ ...themeOptions, title: { text: '暂无数据', left: 'center', top: 'center', textStyle: { color: t.textSecondary, fontSize: 14 } } });
+                }
+
+                const sorted = [...tasks].sort((a, b) => a.planDate.localeCompare(b.planDate));
+                const categories = sorted.map((tk) => tk.name);
+
+                const allDates = sorted.flatMap((tk) => [tk.planDate, tk.actualDate].filter(Boolean));
+                const minDate = allDates.reduce((a, b) => (a < b ? a : b), allDates[0]);
+                const maxDate = allDates.reduce((a, b) => (a > b ? a : b), allDates[0]);
+                const today = new Date().toISOString().slice(0, 10);
+
+                const getBarColor = (tk: (typeof sorted)[0]) => {
+                    if (tk.isCompleted && !tk.isOverdue) return '#52c41a';
+                    if (tk.isCompleted && tk.isOverdue) return '#faad14';
+                    if (tk.isIncomplete) return '#ff4d4f';
+                    return '#1890ff';
+                };
+
+                const barData = sorted.map((tk, idx) => {
+                    const start = new Date(tk.planDate).getTime();
+                    const end = tk.actualDate ? new Date(tk.actualDate).getTime() : Date.now();
+                    return {
+                        value: [idx, start, end, tk.delayDays],
+                        itemStyle: { color: getBarColor(tk) },
+                        task: tk,
+                    };
+                });
+
+                const milestones = sorted
+                    .map((tk, idx) => (tk.type === '里程碑节点' ? {
+                        value: [idx, new Date(tk.planDate).getTime()],
+                        symbol: 'diamond',
+                        symbolSize: 14,
+                        itemStyle: { color: '#722ed1' },
+                        task: tk,
+                    } : null))
+                    .filter(Boolean);
+
+                const xMax = maxDate > today ? maxDate : today;
+                const ganttOption: Record<string, unknown> = {
+                    ...themeOptions,
+                    tooltip: {
+                        trigger: 'item',
+                        formatter: (params: { data?: { task?: (typeof sorted)[0] } }) => {
+                            const tk = params.data?.task;
+                            if (!tk) return '';
+                            return [
+                                `<b>${tk.name}</b>`,
+                                `类型: ${tk.type}`,
+                                `责任人: ${tk.owner}`,
+                                `计划: ${tk.planDate}`,
+                                tk.actualDate ? `实际: ${tk.actualDate}` : '实际: 未完成',
+                                tk.delayDays ? `超期: ${tk.delayDays}天` : '',
+                                `风险: ${tk.riskLevel}`,
+                            ].filter(Boolean).join('<br/>');
+                        },
+                    },
+                    grid: { left: 120, right: 40, top: 30, bottom: 50 },
+                    xAxis: {
+                        type: 'time',
+                        min: minDate,
+                        max: xMax,
+                        axisLabel: { color: t.textSecondary, fontSize: 11 },
+                        splitLine: { lineStyle: { color: t.echarts.splitLineColor, type: 'dashed' } },
+                    },
+                    yAxis: {
+                        type: 'category',
+                        data: categories,
+                        inverse: true,
+                        axisLabel: {
+                            color: t.textPrimary,
+                            fontSize: 11,
+                            width: 100,
+                            overflow: 'truncate',
+                        },
+                        splitLine: { show: false },
+                    },
+                    dataZoom: [{ type: 'inside', xAxisIndex: 0 }],
+                    series: [
+                        {
+                            type: 'custom',
+                            renderItem: (_params: unknown, api: {
+                                value: (idx: number) => number;
+                                coord: (val: [number, number]) => [number, number];
+                                size: (val: [number, number]) => [number, number];
+                                style: (extra?: Record<string, unknown>) => Record<string, unknown>;
+                            }) => {
+                                const catIdx = api.value(0);
+                                const startTime = api.value(1);
+                                const endTime = api.value(2);
+                                const start = api.coord([startTime, catIdx]);
+                                const end = api.coord([endTime, catIdx]);
+                                const barHeight = api.size([0, 1])[1] * 0.6;
+                                return {
+                                    type: 'rect',
+                                    shape: {
+                                        x: start[0],
+                                        y: start[1] - barHeight / 2,
+                                        width: Math.max(end[0] - start[0], 3),
+                                        height: barHeight,
+                                        r: 2,
+                                    },
+                                    style: api.style(),
+                                };
+                            },
+                            encode: { x: [1, 2], y: 0 },
+                            data: barData,
+                            markLine: {
+                                silent: true,
+                                symbol: 'none',
+                                lineStyle: { color: '#ff4d4f', type: 'dashed', width: 2 },
+                                data: [{ xAxis: new Date(today).getTime() }],
+                                label: { formatter: '今日', position: 'start', color: '#ff4d4f', fontSize: 11 },
+                            },
+                        },
+                        ...(milestones.length ? [{
+                            type: 'scatter' as const,
+                            data: milestones,
+                            encode: { x: 1, y: 0 },
+                            symbolSize: 14,
+                            z: 10,
+                        }] : []),
+                    ],
+                };
+
+                return renderEChartWithHandles(ganttOption, echartsClickHandler);
+            }
+
             case 'radar-chart':
                 return renderEChartWithHandles({
                     ...themeOptions,
