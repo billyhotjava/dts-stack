@@ -88,6 +88,24 @@ export function mapCardDataToConfig(
                 })),
             };
 
+        case 'gantt-chart': {
+            const colIndex = (name: string) => cols.findIndex((c) => c.name === name);
+            return {
+                tasks: rows.map((row) => ({
+                    name: String(row[colIndex('node_task')] ?? ''),
+                    type: String(row[colIndex('node_type')] ?? ''),
+                    planDate: String(row[colIndex('plan_date')] ?? ''),
+                    actualDate: String(row[colIndex('actual_date')] ?? ''),
+                    isCompleted: Boolean(row[colIndex('is_completed')]),
+                    isOverdue: Boolean(row[colIndex('is_overdue_completed')]),
+                    isIncomplete: Boolean(row[colIndex('is_incomplete')]),
+                    delayDays: toNumber(row[colIndex('delay_days')]),
+                    riskLevel: String(row[colIndex('risk_level')] ?? ''),
+                    owner: String(row[colIndex('owner')] ?? ''),
+                })),
+            };
+        }
+
         default:
             return {};
     }
