@@ -47,3 +47,27 @@ test('gantt-chart: returns empty on no rows', () => {
     const result = mapCardDataToConfig('gantt-chart', { rows: [], cols: [] });
     assert.deepEqual(result, {});
 });
+
+test('funnel-chart: maps rows to name-value data', () => {
+    const cardData = {
+        cols: [
+            { name: 'name', display_name: '状态', base_type: 'type/Text' },
+            { name: 'value', display_name: '数量', base_type: 'type/Integer' },
+        ],
+        rows: [
+            ['总计', 12],
+            ['已完成', 8],
+            ['进行中', 2],
+            ['超期', 1],
+            ['未启动', 1],
+        ],
+    };
+    const result = mapCardDataToConfig('funnel-chart', cardData, { nameField: 'name', valueField: 'value' });
+    assert.deepStrictEqual(result.data, [
+        { name: '总计', value: 12 },
+        { name: '已完成', value: 8 },
+        { name: '进行中', value: 2 },
+        { name: '超期', value: 1 },
+        { name: '未启动', value: 1 },
+    ]);
+});

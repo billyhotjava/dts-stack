@@ -106,6 +106,19 @@ export function mapCardDataToConfig(
             };
         }
 
+        case 'funnel-chart': {
+            const nameF = config?.nameField as string | undefined;
+            const valF = config?.valueField as string | undefined;
+            const nameIdx = nameF ? cols.findIndex((c) => c.name === nameF) : 0;
+            const valIdx = valF ? cols.findIndex((c) => c.name === valF) : 1;
+            return {
+                data: rows.map((row) => ({
+                    name: String(row[nameIdx >= 0 ? nameIdx : 0] ?? ''),
+                    value: toNumber(row[valIdx >= 0 ? valIdx : 1]),
+                })),
+            };
+        }
+
         default:
             return {};
     }
