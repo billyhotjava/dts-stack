@@ -83,6 +83,7 @@ import dataSourcesService, { type InfraDataSource } from "@/api/services/dataSou
 import RollbackImpactModal, { type RollbackRequest } from "@/components/rollback/RollbackImpactModal";
 import BatchImportModal from "./BatchImportModal";
 import { useRouter } from "@/routes/hooks";
+import { buildArchivePayload, collectUnassignedModelIds } from "./sqlModelArchive.helpers";
 
 const { Text } = Typography;
 const { DirectoryTree } = Tree;
@@ -401,6 +402,7 @@ const layerTag = (layer?: string) => {
 
 const resolveModelKey = (model: SqlModel, fallback: string) => model.id || model.name || fallback;
 const resolveSpaceKey = (space: ProjectSpace, index: number) => `space-${space.id || index}`;
+const UNASSIGNED_SPACE_KEY = "space-unassigned";
 
 export default function SqlModelingPage() {
 	const router = useRouter();
@@ -422,9 +424,13 @@ export default function SqlModelingPage() {
 	const [sqlDraft, setSqlDraft] = useState("");
 	const [importOpen, setImportOpen] = useState(false);
 	const [batchImportOpen, setBatchImportOpen] = useState(false);
+	const [singleArchiveOpen, setSingleArchiveOpen] = useState(false);
+	const [batchArchiveOpen, setBatchArchiveOpen] = useState(false);
 	const [importSubmitting, setImportSubmitting] = useState(false);
+	const [archiveSubmitting, setArchiveSubmitting] = useState(false);
 	const [sqlFileList, setSqlFileList] = useState<UploadFile[]>([]);
 	const [csvFileList, setCsvFileList] = useState<UploadFile[]>([]);
+	const [batchArchiveSelection, setBatchArchiveSelection] = useState<string[]>([]);
 	const [odsGenerateOpen, setOdsGenerateOpen] = useState(false);
 	const [odsGenerateSubmitting, setOdsGenerateSubmitting] = useState(false);
 	const [syncingModels, setSyncingModels] = useState(false);
@@ -475,6 +481,8 @@ export default function SqlModelingPage() {
 	const [modelForm] = Form.useForm();
 	const [importForm] = Form.useForm();
 	const [odsGenerateForm] = Form.useForm();
+	const [singleArchiveForm] = Form.useForm();
+	const [batchArchiveForm] = Form.useForm();
 	const selectedOdsSourceDataSourceId = Form.useWatch("sourceDataSourceId", odsGenerateForm);
 	const dbtSourcesReqSeqRef = useRef(0);
 
@@ -781,17 +789,23 @@ export default function SqlModelingPage() {
 	}, [loadConfig, loadModels, loadRuns, loadSpaces, loadSources, loadLayers, loadSyncStatus, loadDbtSources, loadDbtRefs]);
 
 	useEffect(() => {
-		if (spaces.length === 0) {
+		if (spaces.length === 0 && sqlModels.every((model) => !!model.planId)) {
 			if (activeSpaceKey) {
 				setActiveSpaceKey(null);
 			}
 			return;
 		}
-		const hasActive = !!activeSpaceKey && spaces.some((space, idx) => resolveSpaceKey(space, idx) === activeSpaceKey);
+		const hasActiveSpace = !!activeSpaceKey && spaces.some((space, idx) => resolveSpaceKey(space, idx) === activeSpaceKey);
+		const hasUnassigned = sqlModels.some((model) => !model.planId);
+		const hasActive = hasActiveSpace || (hasUnassigned && activeSpaceKey === UNASSIGNED_SPACE_KEY);
 		if (!hasActive) {
-			setActiveSpaceKey(resolveSpaceKey(spaces[0], 0));
+			if (spaces.length > 0) {
+				setActiveSpaceKey(resolveSpaceKey(spaces[0], 0));
+			} else if (hasUnassigned) {
+				setActiveSpaceKey(UNASSIGNED_SPACE_KEY);
+			}
 		}
-	}, [activeSpaceKey, spaces]);
+	}, [activeSpaceKey, spaces, sqlModels]);
 
 	const saveConfig = async () => {
 		setConfigSaving(true);
@@ -1008,6 +1022,85 @@ export default function SqlModelingPage() {
 			toast.error(err?.message || "同步模型失败");
 		} finally {
 			setSyncingModels(false);
+		}
+	};
+
+	const openSingleArchive = () => {
+		if (!canArchiveActiveModel) return;
+		singleArchiveForm.resetFields();
+		singleArchiveForm.setFieldsValue({ planId: defaultArchivePlanId });
+		setSingleArchiveOpen(true);
+	};
+
+	const openBatchArchive = () => {
+		if (!canBatchArchive) return;
+		batchArchiveForm.resetFields();
+		batchArchiveForm.setFieldsValue({ planId: defaultArchivePlanId });
+		setBatchArchiveSelection(collectUnassignedModelIds(unassignedModels));
+		setBatchArchiveOpen(true);
+	};
+
+	const archiveModelToPlan = async (model: SqlModel, planId: string) => {
+		if (!model?.id) {
+			throw new Error("模型缺少 ID，无法归档");
+		}
+		await updateSqlModel(model.id, buildArchivePayload(model, planId));
+	};
+
+	const submitSingleArchive = async () => {
+		if (!activeModel) return;
+		setArchiveSubmitting(true);
+		try {
+			const values = await singleArchiveForm.validateFields(["planId"]);
+			const planId = String(values.planId || "");
+			await archiveModelToPlan(activeModel, planId);
+			toast.success("模型已归档到项目空间");
+			setSingleArchiveOpen(false);
+			setActiveSpaceKey(`space-${planId}`);
+			await loadModels();
+		} catch (err: any) {
+			toast.error(err?.message || "归档失败");
+		} finally {
+			setArchiveSubmitting(false);
+		}
+	};
+
+	const submitBatchArchive = async () => {
+		setArchiveSubmitting(true);
+		try {
+			const values = await batchArchiveForm.validateFields(["planId"]);
+			const planId = String(values.planId || "");
+			const selectedIds = batchArchiveSelection.filter(Boolean);
+			if (selectedIds.length === 0) {
+				throw new Error("请至少选择一个未归档模型");
+			}
+			const byId = new Map(unassignedModels.filter((model) => model.id).map((model) => [model.id as string, model]));
+			const results = await Promise.allSettled(
+				selectedIds.map((id) => {
+					const model = byId.get(id);
+					if (!model) {
+						return Promise.reject(new Error(`模型不存在: ${id}`));
+					}
+					return archiveModelToPlan(model, planId);
+				}),
+			);
+			const successCount = results.filter((result) => result.status === "fulfilled").length;
+			const failedCount = results.length - successCount;
+			if (successCount === 0) {
+				throw new Error("批量归档全部失败");
+			}
+			if (failedCount === 0) {
+				toast.success(`已归档 ${successCount} 个模型`);
+			} else {
+				toast.warning(`已归档 ${successCount} 个模型，失败 ${failedCount} 个`);
+			}
+			setBatchArchiveOpen(false);
+			setActiveSpaceKey(`space-${planId}`);
+			await loadModels();
+		} catch (err: any) {
+			toast.error(err?.message || "批量归档失败");
+		} finally {
+			setArchiveSubmitting(false);
 		}
 	};
 
@@ -1512,6 +1605,12 @@ export default function SqlModelingPage() {
 		});
 	}, [keyword, models]);
 
+	const unassignedModels = useMemo(
+		() => filteredModels.filter((model) => !model.planId),
+		[filteredModels],
+	);
+
+
 	const buildLayerNodes = useCallback((input: SqlModel[]) => {
 		const layers = new Map<string, SqlModel[]>();
 		input.forEach((model) => {
@@ -1628,16 +1727,27 @@ export default function SqlModelingPage() {
 		return spaceKeyMap.get(activeSpaceKey) || null;
 	}, [activeSpaceKey, spaceKeyMap]);
 
+	const defaultArchivePlanId = useMemo(() => {
+		if (activeSpace?.id) {
+			return activeSpace.id;
+		}
+		return spaces[0]?.id;
+	}, [activeSpace?.id, spaces]);
+
 	const activeSpaceModels = useMemo(() => {
+		if (activeSpaceKey === UNASSIGNED_SPACE_KEY) {
+			return unassignedModels;
+		}
 		if (!activeSpace) return filteredModels;
 		return filteredModels.filter((model) => model.planId === activeSpace.id);
-	}, [activeSpace, filteredModels]);
+	}, [activeSpace, activeSpaceKey, filteredModels, unassignedModels]);
 
 	const activeLayerNodes = useMemo(() => buildLayerNodes(activeSpaceModels), [buildLayerNodes, activeSpaceModels]);
+	const canArchiveActiveModel = !!activeModel?.id && !activeModel?.planId && spaces.length > 0;
+	const canBatchArchive = unassignedModels.length > 0 && spaces.length > 0;
 
 	const treeData = useMemo(() => {
-		if (spaces.length === 0) return [];
-		return spaces.map((space, idx) => {
+		const nodes = spaces.map((space, idx) => {
 			const key = resolveSpaceKey(space, idx);
 			const spaceModels = filteredModels.filter((model) => model.planId === space.id);
 			return {
@@ -1646,7 +1756,15 @@ export default function SqlModelingPage() {
 				children: key === activeSpaceKey ? buildLayerNodes(spaceModels) : [],
 			};
 		});
-	}, [spaces, activeSpaceKey, filteredModels, buildLayerNodes]);
+		if (unassignedModels.length > 0) {
+			nodes.push({
+				title: `未归档工作区模型 (${unassignedModels.length})`,
+				key: UNASSIGNED_SPACE_KEY,
+				children: activeSpaceKey === UNASSIGNED_SPACE_KEY ? buildLayerNodes(unassignedModels) : [],
+			});
+		}
+		return nodes;
+	}, [spaces, activeSpaceKey, filteredModels, buildLayerNodes, unassignedModels]);
 
 	// 模型操作下拉菜单
 	const modelMenuItems = [
@@ -1759,6 +1877,9 @@ export default function SqlModelingPage() {
 							模型 <DownOutlined className="text-xs" />
 						</Button>
 					</Dropdown>
+					<Button onClick={openBatchArchive} disabled={!canBatchArchive}>
+						批量归档
+					</Button>
 					{/* 保存按钮 */}
 					<Button
 						icon={<SaveOutlined />}
@@ -1936,12 +2057,18 @@ export default function SqlModelingPage() {
 						<div className="flex items-center gap-2">
 							<Text strong className="text-sm">{activeModel?.name || "未选择模型"}</Text>
 							{activeModel && layerTag(activeModel?.layer || inferLayer(activeModel.name))}
+							{activeModel && !activeModel.planId && <Tag color="gold">未归档</Tag>}
 							{activeModel?.modelPath && (
 								<Text type="secondary" className="text-xs">{activeModel.modelPath}</Text>
 							)}
 							{sqlDirty && <Tag color="orange" className="text-xs">未保存</Tag>}
 						</div>
 						<Space size="small">
+							{canArchiveActiveModel && (
+								<Button size="small" onClick={openSingleArchive}>
+									归档到项目空间
+								</Button>
+							)}
 							<Tooltip title="刷新模型列表">
 								<Button size="small" icon={<SyncOutlined />} onClick={loadModels} loading={modelsLoading} />
 							</Tooltip>
@@ -2975,6 +3102,94 @@ WHERE status = 'active'`}
 				dataSources={dataSources}
 				activeSpaceId={activeSpace?.id}
 			/>
+
+			<Modal
+				open={singleArchiveOpen}
+				title="归档模型到项目空间"
+				onCancel={() => setSingleArchiveOpen(false)}
+				onOk={submitSingleArchive}
+				okText="归档"
+				cancelText="取消"
+				confirmLoading={archiveSubmitting}
+			>
+				<Form layout="vertical" form={singleArchiveForm} disabled={archiveSubmitting}>
+					<Form.Item label="模型名称">
+						<Input value={activeModel?.name || ""} disabled />
+					</Form.Item>
+					<Form.Item name="planId" label="目标项目空间" rules={[{ required: true, message: "请选择目标项目空间" }]}>
+						<Select
+							placeholder="选择目标项目空间"
+							options={spaces.map((space) => ({ label: space.name || "未命名", value: space.id }))}
+						/>
+					</Form.Item>
+				</Form>
+			</Modal>
+
+			<Modal
+				open={batchArchiveOpen}
+				title="批量归档未归档模型"
+				onCancel={() => setBatchArchiveOpen(false)}
+				onOk={submitBatchArchive}
+				okText="批量归档"
+				cancelText="取消"
+				confirmLoading={archiveSubmitting}
+				width={720}
+			>
+				<Form layout="vertical" form={batchArchiveForm} disabled={archiveSubmitting}>
+					<Form.Item name="planId" label="目标项目空间" rules={[{ required: true, message: "请选择目标项目空间" }]}>
+						<Select
+							placeholder="选择目标项目空间"
+							options={spaces.map((space) => ({ label: space.name || "未命名", value: space.id }))}
+						/>
+					</Form.Item>
+					<Form.Item label={`待归档模型 (${batchArchiveSelection.length}/${unassignedModels.length})`}>
+						<div className="max-h-[320px] space-y-2 overflow-y-auto rounded border border-border p-3">
+							<Checkbox
+								checked={batchArchiveSelection.length > 0 && batchArchiveSelection.length === unassignedModels.length}
+								indeterminate={
+									batchArchiveSelection.length > 0 && batchArchiveSelection.length < unassignedModels.length
+								}
+								onChange={(event) =>
+									setBatchArchiveSelection(event.target.checked ? collectUnassignedModelIds(unassignedModels) : [])
+								}
+							>
+								全选未归档模型
+							</Checkbox>
+							<div className="space-y-2 pt-2">
+								{unassignedModels.map((model, index) => {
+									const modelId = model.id || `unassigned-${index}`;
+									const checked = batchArchiveSelection.includes(modelId);
+									return (
+										<label
+											key={modelId}
+											className="flex cursor-pointer items-start gap-3 rounded border border-border/70 px-3 py-2"
+										>
+											<Checkbox
+												checked={checked}
+												disabled={!model.id}
+												onChange={(event) => {
+													setBatchArchiveSelection((current) =>
+														event.target.checked
+															? [...current, modelId]
+															: current.filter((item) => item !== modelId),
+													);
+												}}
+											/>
+											<div className="min-w-0 flex-1">
+												<div className="flex items-center gap-2">
+													<span className="truncate text-sm font-medium">{model.name || "未命名模型"}</span>
+													{layerTag(model.layer || inferLayer(model.name))}
+												</div>
+												<div className="truncate text-xs text-muted-foreground">{model.modelPath || "未生成路径"}</div>
+											</div>
+										</label>
+									);
+								})}
+							</div>
+						</div>
+					</Form.Item>
+				</Form>
+			</Modal>
 
 			<Modal
 				open={odsGenerateOpen}
