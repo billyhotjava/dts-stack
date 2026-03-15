@@ -139,6 +139,9 @@ public class DbtRunResultService {
             String invocationId = text(metadata.get("invocation_id"));
             String generatedAt = text(metadata.get("generated_at"));
             String command = argsAsCommand(metadata.get("args"));
+            if (!StringUtils.hasText(command)) {
+                command = argsAsCommand(raw.get("args"));
+            }
             List<Map<String, Object>> results = asList(raw.get("results"));
             Map<String, ManifestNode> manifestNodes = readManifestNodes(projectDir + MANIFEST_PATH);
 
@@ -414,7 +417,7 @@ public class DbtRunResultService {
             return null;
         }
         String normalized = status.trim().toUpperCase(Locale.ROOT);
-        if ("SUCCESS".equals(normalized) || "PASSED".equals(normalized)) {
+        if ("SUCCESS".equals(normalized) || "PASSED".equals(normalized) || "PASS".equals(normalized)) {
             return "SUCCESS";
         }
         if ("SKIPPED".equals(normalized)) {
@@ -507,6 +510,30 @@ public class DbtRunResultService {
     private String argsAsCommand(Object argsRaw) {
         if (argsRaw == null) {
             return null;
+        }
+        if (argsRaw instanceof Map<?, ?> map) {
+            String invocationCommand = text(map.get("invocation_command"));
+            if (StringUtils.hasText(invocationCommand)) {
+                return invocationCommand.trim();
+            }
+            String which = text(map.get("which"));
+            if (!StringUtils.hasText(which)) {
+                return null;
+            }
+            List<String> parts = new ArrayList<>();
+            parts.add("dbt");
+            parts.add(which.trim());
+            Object selectRaw = map.get("select");
+            if (selectRaw instanceof List<?> selectList && !selectList.isEmpty()) {
+                parts.add("--select");
+                for (Object item : selectList) {
+                    String value = text(item);
+                    if (StringUtils.hasText(value)) {
+                        parts.add(value);
+                    }
+                }
+            }
+            return String.join(" ", parts);
         }
         if (argsRaw instanceof List<?> list) {
             List<String> parts = new ArrayList<>();

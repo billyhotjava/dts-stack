@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -14,9 +15,14 @@ public class DbtReleaseGateService {
     private static final Duration DEFAULT_MAX_BUILD_AGE = Duration.ofHours(24);
 
     private final DbtRunResultService dbtRunResultService;
+    private final boolean requireGitMetadata;
 
-    public DbtReleaseGateService(DbtRunResultService dbtRunResultService) {
+    public DbtReleaseGateService(
+        DbtRunResultService dbtRunResultService,
+        @Value("${dts.dbt.release-gate.require-git-metadata:false}") boolean requireGitMetadata
+    ) {
         this.dbtRunResultService = dbtRunResultService;
+        this.requireGitMetadata = requireGitMetadata;
     }
 
     public DbtReleaseGateResult evaluate(String selector, String gitRef, String commitSha, Boolean strictMode) {
@@ -61,9 +67,9 @@ public class DbtReleaseGateService {
 
     private void evaluateGitBranch(String gitRef, boolean strict, List<String> blockers, List<String> warnings) {
         if (!StringUtils.hasText(gitRef)) {
-            if (strict) {
+            if (requireGitMetadata && strict) {
                 blockers.add("缺少 Git 分支信息（gitRef）");
-            } else {
+            } else if (requireGitMetadata) {
                 warnings.add("缺少 Git 分支信息（gitRef）");
             }
             return;
@@ -75,9 +81,9 @@ public class DbtReleaseGateService {
 
     private void evaluateCommitSha(String commitSha, boolean strict, List<String> blockers, List<String> warnings) {
         if (!StringUtils.hasText(commitSha)) {
-            if (strict) {
+            if (requireGitMetadata && strict) {
                 blockers.add("缺少 Commit SHA（commitSha）");
-            } else {
+            } else if (requireGitMetadata) {
                 warnings.add("缺少 Commit SHA（commitSha）");
             }
             return;
@@ -144,9 +150,15 @@ public class DbtReleaseGateService {
         }
         String normalized = command.trim().toLowerCase(Locale.ROOT);
         return (
+            "compile".equals(normalized) ||
+            "test".equals(normalized) ||
+            "build".equals(normalized) ||
             normalized.startsWith("compile ") ||
             normalized.startsWith("test ") ||
             normalized.startsWith("build ") ||
+            normalized.startsWith("dbt compile") ||
+            normalized.startsWith("dbt test") ||
+            normalized.startsWith("dbt build") ||
             normalized.contains(" dbt compile") ||
             normalized.contains(" dbt test") ||
             normalized.contains(" dbt build")

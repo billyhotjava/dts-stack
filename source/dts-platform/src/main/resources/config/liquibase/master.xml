@@ -113,4 +113,5 @@
     <include file="config/liquibase/changelog/20260222_02_governance_reference_import_run.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260224_01_governance_quality_run_lifecycle_fields.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260224_02_governance_capacity_indexes.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260316_01_project_cockpit_import.xml" relativeToChangelogFile="false"/>
 </databaseChangeLog>

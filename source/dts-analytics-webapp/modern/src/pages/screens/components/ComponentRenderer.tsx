@@ -1877,8 +1877,11 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                             if (!tk) return '';
                             return [
                                 `<b>${tk.name}</b>`,
+                                tk.majorProjectName ? `重大项目: ${tk.majorProjectName}` : '',
+                                tk.subprojectName ? `子项目: ${tk.subprojectName}` : '',
                                 `类型: ${tk.type}`,
                                 `责任人: ${tk.owner}`,
+                                tk.status ? `状态: ${tk.status}` : '',
                                 `计划: ${tk.planDate}`,
                                 tk.actualDate ? `实际: ${tk.actualDate}` : '实际: 未完成',
                                 tk.delayDays ? `超期: ${tk.delayDays}天` : '',
@@ -3907,4 +3910,3 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
         )
     );
 });
-

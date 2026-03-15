@@ -7,6 +7,8 @@ import com.yuzhi.dts.platform.service.infra.dto.ExcelImportErrorPreviewResponse;
 import com.yuzhi.dts.platform.service.infra.dto.ExcelImportParseRequest;
 import com.yuzhi.dts.platform.service.infra.dto.ExcelImportParseResponse;
 import com.yuzhi.dts.platform.service.infra.dto.ExcelImportPrepareResponse;
+import com.yuzhi.dts.platform.service.infra.dto.ProjectCockpitBatchLoadRequest;
+import com.yuzhi.dts.platform.service.infra.dto.ProjectCockpitBatchLoadResponse;
 import com.yuzhi.dts.platform.web.rest.ApiResponse;
 import com.yuzhi.dts.platform.web.rest.ApiResponses;
 import org.springframework.http.MediaType;
@@ -67,6 +69,23 @@ public class ExcelImportResource {
         String operator = SecurityUtils.getCurrentUserLogin().orElse("system");
         boolean privileged = SecurityUtils.hasCurrentUserAnyOfAuthorities(AuthoritiesConstants.INSTITUTE_PRIVILEGED_ROLES);
         ExcelImportErrorPreviewResponse response = excelImportService.errorPreview(fileId, limit, operator, activeDept, privileged);
+        return ApiResponses.ok(response);
+    }
+
+    @PostMapping("/project-cockpit/load")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ApiResponse<ProjectCockpitBatchLoadResponse> loadProjectCockpit(
+        @RequestBody ProjectCockpitBatchLoadRequest request,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        String operator = SecurityUtils.getCurrentUserLogin().orElse("system");
+        boolean privileged = SecurityUtils.hasCurrentUserAnyOfAuthorities(AuthoritiesConstants.INSTITUTE_PRIVILEGED_ROLES);
+        ProjectCockpitBatchLoadResponse response = excelImportService.loadProjectCockpitBatch(
+            request.fileId(),
+            operator,
+            activeDept,
+            privileged
+        );
         return ApiResponses.ok(response);
     }
 }

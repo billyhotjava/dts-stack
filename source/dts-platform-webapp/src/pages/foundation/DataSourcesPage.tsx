@@ -542,6 +542,7 @@ export default function DataSourcesPage() {
 					<Button icon={<ReloadOutlined />} onClick={loadList} disabled={loading}>
 						刷新
 					</Button>
+					<Button onClick={() => navigate("/foundation/project-cockpit-imports")}>项目主体域接入</Button>
 					<Button onClick={() => navigate("/foundation/jdbc-drivers")}>JDBC 驱动管理</Button>
 					<Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
 						新增数据源

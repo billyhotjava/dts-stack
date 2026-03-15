@@ -90,18 +90,35 @@ export function mapCardDataToConfig(
 
         case 'gantt-chart': {
             const colIndex = (name: string) => cols.findIndex((c) => c.name === name);
+            const firstIndex = (...names: string[]) => names.map(colIndex).find((idx) => idx >= 0) ?? -1;
+            const nameIdx = firstIndex('node_task', 'task_name', 'name');
+            const typeIdx = firstIndex('node_type', 'task_type', 'type');
+            const planIdx = firstIndex('plan_date', 'plan_start', 'start_date');
+            const actualIdx = firstIndex('actual_date', 'actual_end', 'end_date');
+            const completedIdx = firstIndex('is_completed');
+            const overdueIdx = firstIndex('is_overdue_completed', 'is_overdue');
+            const incompleteIdx = firstIndex('is_incomplete');
+            const delayIdx = firstIndex('delay_days');
+            const riskIdx = firstIndex('risk_level');
+            const ownerIdx = firstIndex('owner', 'owner_dept', 'owner_user');
+            const majorProjectIdx = firstIndex('major_project_name');
+            const subprojectIdx = firstIndex('subproject_name');
+            const statusIdx = firstIndex('completion_status', 'status');
             return {
                 tasks: rows.map((row) => ({
-                    name: String(row[colIndex('node_task')] ?? ''),
-                    type: String(row[colIndex('node_type')] ?? ''),
-                    planDate: String(row[colIndex('plan_date')] ?? ''),
-                    actualDate: String(row[colIndex('actual_date')] ?? ''),
-                    isCompleted: Boolean(row[colIndex('is_completed')]),
-                    isOverdue: Boolean(row[colIndex('is_overdue_completed')]),
-                    isIncomplete: Boolean(row[colIndex('is_incomplete')]),
-                    delayDays: toNumber(row[colIndex('delay_days')]),
-                    riskLevel: String(row[colIndex('risk_level')] ?? ''),
-                    owner: String(row[colIndex('owner')] ?? ''),
+                    name: String(row[nameIdx] ?? ''),
+                    type: String(row[typeIdx] ?? ''),
+                    planDate: String(row[planIdx] ?? ''),
+                    actualDate: String(row[actualIdx] ?? ''),
+                    isCompleted: completedIdx >= 0 ? Boolean(row[completedIdx]) : false,
+                    isOverdue: overdueIdx >= 0 ? Boolean(row[overdueIdx]) : toNumber(row[delayIdx]) > 0,
+                    isIncomplete: incompleteIdx >= 0 ? Boolean(row[incompleteIdx]) : false,
+                    delayDays: toNumber(row[delayIdx]),
+                    riskLevel: String(row[riskIdx] ?? ''),
+                    owner: String(row[ownerIdx] ?? ''),
+                    majorProjectName: String(row[majorProjectIdx] ?? ''),
+                    subprojectName: String(row[subprojectIdx] ?? ''),
+                    status: String(row[statusIdx] ?? ''),
                 })),
             };
         }
@@ -205,4 +222,3 @@ function toNumber(val: unknown): number {
     const n = Number(val);
     return Number.isFinite(n) ? n : 0;
 }
-

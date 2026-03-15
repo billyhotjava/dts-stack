@@ -244,6 +244,8 @@ dts:
     config-path: ${DTS_DBT_CONFIG_PATH:/opt/dts/upload/dbt-config.json}
     project-dir: ${DTS_DBT_PROJECT_DIR:/opt/dts/dbt}
     profiles-dir: ${DTS_DBT_PROFILES_DIR:/opt/dts/dbt-profiles}
+    release-gate:
+      require-git-metadata: ${DTS_DBT_RELEASE_GATE_REQUIRE_GIT_METADATA:false}
   airflow:
     enabled: ${DTS_AIRFLOW_ENABLED:true}
     base-url: ${DTS_AIRFLOW_BASE_URL:http://dts-airflow-webserver:8080}

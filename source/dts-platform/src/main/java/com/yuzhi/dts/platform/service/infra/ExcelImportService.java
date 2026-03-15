@@ -11,7 +11,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.config.AirflowProperties;
 import com.yuzhi.dts.platform.domain.infra.InfraExternalExchangeFile;
+import com.yuzhi.dts.platform.domain.infra.InfraProjectCockpitBatch;
+import com.yuzhi.dts.platform.domain.infra.InfraProjectCockpitIssue;
+import com.yuzhi.dts.platform.domain.infra.InfraProjectCockpitRow;
 import com.yuzhi.dts.platform.repository.infra.InfraExternalExchangeFileRepository;
+import com.yuzhi.dts.platform.repository.infra.InfraProjectCockpitBatchRepository;
+import com.yuzhi.dts.platform.repository.infra.InfraProjectCockpitIssueRepository;
+import com.yuzhi.dts.platform.repository.infra.InfraProjectCockpitRowRepository;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.infra.dto.ExcelColumnSpecDto;
 import com.yuzhi.dts.platform.service.infra.dto.ExcelImportErrorPreviewResponse;
@@ -20,6 +26,7 @@ import com.yuzhi.dts.platform.service.infra.dto.ExcelImportParseRequest;
 import com.yuzhi.dts.platform.service.infra.dto.ExcelImportParseResponse;
 import com.yuzhi.dts.platform.service.infra.dto.ExcelImportPrepareResponse;
 import com.yuzhi.dts.platform.service.infra.dto.ExcelSheetInfo;
+import com.yuzhi.dts.platform.service.infra.dto.ProjectCockpitBatchLoadResponse;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.IOException;
@@ -73,17 +80,26 @@ public class ExcelImportService {
 
     private final AirflowProperties airflowProperties;
     private final InfraExternalExchangeFileRepository repository;
+    private final InfraProjectCockpitBatchRepository projectCockpitBatchRepository;
+    private final InfraProjectCockpitRowRepository projectCockpitRowRepository;
+    private final InfraProjectCockpitIssueRepository projectCockpitIssueRepository;
     private final AuditService auditService;
     private final ObjectMapper objectMapper;
 
     public ExcelImportService(
         AirflowProperties airflowProperties,
         InfraExternalExchangeFileRepository repository,
+        InfraProjectCockpitBatchRepository projectCockpitBatchRepository,
+        InfraProjectCockpitRowRepository projectCockpitRowRepository,
+        InfraProjectCockpitIssueRepository projectCockpitIssueRepository,
         AuditService auditService,
         ObjectMapper objectMapper
     ) {
         this.airflowProperties = airflowProperties;
         this.repository = repository;
+        this.projectCockpitBatchRepository = projectCockpitBatchRepository;
+        this.projectCockpitRowRepository = projectCockpitRowRepository;
+        this.projectCockpitIssueRepository = projectCockpitIssueRepository;
         this.auditService = auditService;
         this.objectMapper = objectMapper;
     }
@@ -298,6 +314,168 @@ public class ExcelImportService {
         return new ExcelImportErrorPreviewResponse(entity.getId(), errorCount, resolvedLimit, rows);
     }
 
+    public ProjectCockpitBatchLoadResponse loadProjectCockpitBatch(UUID fileId, String operator, String ownerDept, boolean privileged) {
+        if (fileId == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "fileId 不能为空");
+        }
+        InfraExternalExchangeFile entity = loadFile(fileId, ownerDept, privileged);
+        Map<String, Object> props = readProps(entity.getProps());
+        String csvPath = text(props.get("csvPath"));
+        if (!StringUtils.hasText(csvPath)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请先完成 Excel/CSV 解析");
+        }
+        Path csv = Path.of(csvPath);
+        if (!Files.exists(csv)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "解析后的 CSV 不存在");
+        }
+
+        InfraProjectCockpitBatch batch = projectCockpitBatchRepository
+                .findByExternalExchangeFileId(entity.getId())
+                .orElseGet(InfraProjectCockpitBatch::new);
+        boolean existingBatch = batch.getId() != null;
+        if (!existingBatch) {
+            batch.setExternalExchangeFileId(entity.getId());
+        }
+        batch.setBatchCode(entity.getBatchCode());
+        batch.setSourceFileName(entity.getFileName());
+        batch.setSheetName(text(props.get("sheetName")));
+        batch.setDelimiter(StringUtils.hasText(text(props.get("delimiter"))) ? text(props.get("delimiter")) : DEFAULT_DELIMITER);
+        batch.setOwnerDept(entity.getOwnerDept());
+        batch.setUploadedBy(operator);
+        batch.setStatus("LOADED");
+        batch.setCsvPath(csvPath);
+        batch.setErrorPath(text(props.get("errorPath")));
+        batch.setRowCount(parseRowIndex(text(props.get("rowCount"))));
+        batch.setIssueCount(parseRowIndex(text(props.get("errorCount"))));
+        batch.setLoadedAt(Instant.now());
+        batch.setProps(writeProps(Map.of(
+                "sourceFileId", entity.getId().toString(),
+                "delimiter", batch.getDelimiter(),
+                "sheetName", blankToEmpty(batch.getSheetName())
+        )));
+        batch = projectCockpitBatchRepository.saveAndFlush(batch);
+
+        if (existingBatch) {
+            projectCockpitRowRepository.deleteByBatchId(batch.getId());
+            projectCockpitIssueRepository.deleteByBatchId(batch.getId());
+        }
+
+        int loadedRowCount = persistProjectCockpitRows(batch, csv);
+        int issueCount = persistProjectCockpitIssues(batch, batch.getErrorPath(), batch.getDelimiter());
+        projectCockpitRowRepository.flush();
+        projectCockpitIssueRepository.flush();
+        batch.setRowCount(loadedRowCount);
+        batch.setIssueCount(issueCount);
+        batch.setIssueRowCount(issueCount);
+        batch.setLoadedAt(Instant.now());
+        projectCockpitBatchRepository.saveAndFlush(batch);
+
+        entity.setStatus("PROJECT_DOMAIN_LOADED");
+        entity.setProcessedAt(Instant.now());
+        repository.saveAndFlush(entity);
+
+        auditService.auditAction(
+            "INFRA_EXCEL_IMPORT",
+            AuditStage.SUCCESS,
+            entity.getId().toString(),
+            Map.of(
+                "summary",
+                "项目主体域批次落库",
+                "batch",
+                entity.getBatchCode(),
+                "rows",
+                loadedRowCount,
+                "issues",
+                issueCount,
+                "operator",
+                operator
+            )
+        );
+        return new ProjectCockpitBatchLoadResponse(batch.getId(), batch.getBatchCode(), loadedRowCount, issueCount, batch.getStatus());
+    }
+
+    private int persistProjectCockpitRows(InfraProjectCockpitBatch batch, Path csvPath) {
+        try (BufferedReader reader = Files.newBufferedReader(csvPath, StandardCharsets.UTF_8)) {
+            String headerLine = reader.readLine();
+            if (!StringUtils.hasText(headerLine)) {
+                return 0;
+            }
+            List<String> headers = parseCsvLine(headerLine, batch.getDelimiter());
+            String line;
+            int rowNo = 0;
+            while ((line = reader.readLine()) != null) {
+                rowNo++;
+                List<String> values = normalizeRow(
+                        parseCsvLine(line, batch.getDelimiter()),
+                        headers.size(),
+                        new ArrayList<>(headers.size()),
+                        false
+                );
+                Map<String, String> payload = new LinkedHashMap<>();
+                for (int i = 0; i < headers.size(); i++) {
+                    payload.put(headers.get(i), i < values.size() ? values.get(i) : "");
+                }
+                Map<String, Object> payloadJson = new LinkedHashMap<>(payload);
+                InfraProjectCockpitRow row = new InfraProjectCockpitRow();
+                row.setBatchId(batch.getId());
+                row.setRowNo(rowNo);
+                row.setProjectNo(payload.get("project_no"));
+                row.setSubsystem(payload.get("subsystem"));
+                row.setNodeTask(payload.get("node_task"));
+                row.setDept(payload.get("dept"));
+                row.setOwner(payload.get("owner"));
+                row.setProjectManager(payload.get("project_manager"));
+                row.setPlanDateRaw(payload.get("plan_date"));
+                row.setActualDateRaw(payload.get("actual_date"));
+                row.setCompletionStatusRaw(payload.get("completion_status"));
+                row.setRiskLevelRaw(payload.get("risk_level"));
+                row.setParseStatus(determineParseStatus(payload));
+                row.setRawPayload(writeProps(payloadJson));
+                row.setProps(writeProps(Map.of("sheetName", blankToEmpty(batch.getSheetName()))));
+                projectCockpitRowRepository.save(row);
+            }
+            return rowNo;
+        } catch (IOException ex) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "项目主体域 CSV 读取失败: " + ex.getMessage());
+        }
+    }
+
+    private int persistProjectCockpitIssues(InfraProjectCockpitBatch batch, String errorPath, String delimiter) {
+        if (!StringUtils.hasText(errorPath)) {
+            return 0;
+        }
+        Path path = Path.of(errorPath);
+        if (!Files.exists(path)) {
+            return 0;
+        }
+        int count = 0;
+        try (BufferedReader reader = Files.newBufferedReader(path, StandardCharsets.UTF_8)) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                List<String> values = parseCsvLine(line, delimiter);
+                InfraProjectCockpitIssue issue = new InfraProjectCockpitIssue();
+                issue.setBatchId(batch.getId());
+                issue.setRowNo(parseRowIndex(values.isEmpty() ? null : values.get(0)));
+                issue.setSeverity("WARN");
+                issue.setIssueCode("PARSE_WARNING");
+                issue.setIssueMessage(values.size() > 1 ? values.get(1) : "解析异常");
+                issue.setRawPayload(writeProps(Map.of("rawLine", line)));
+                projectCockpitIssueRepository.save(issue);
+                count++;
+            }
+        } catch (IOException ex) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "项目主体域错误文件读取失败: " + ex.getMessage());
+        }
+        return count;
+    }
+
+    private String determineParseStatus(Map<String, String> payload) {
+        boolean hasWarning = !StringUtils.hasText(payload.get("actual_date"))
+                || !StringUtils.hasText(payload.get("completion_status"))
+                || !StringUtils.hasText(payload.get("risk_level"));
+        return hasWarning ? "PARSED_WITH_WARNINGS" : "PARSED";
+    }
+
     private void parseCsv(Path source, Path csvPath, Path errorPath, ParseContext ctx) {
         List<String> lastValues = new ArrayList<>();
         try (
@@ -481,6 +659,10 @@ public class ExcelImportService {
         if (value == null) return null;
         String text = value.toString();
         return StringUtils.hasText(text) ? text.trim() : null;
+    }
+
+    private String blankToEmpty(String value) {
+        return value == null ? "" : value;
     }
 
     private int normalizeInt(Integer value, int fallback) {

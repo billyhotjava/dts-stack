@@ -829,7 +829,7 @@ export default function SqlModelingPage() {
 			vars: "",
 			gitRef: "",
 			commitSha: "",
-			strictMode: true,
+			strictMode: false,
 		});
 		setRunOpen(true);
 	};
@@ -890,7 +890,7 @@ export default function SqlModelingPage() {
 			})) as DbtReleaseGateResult;
 			if (releaseGate?.blocking) {
 				Modal.error({
-					title: "GitOps 门禁阻断",
+					title: "发布门禁阻断",
 					content: (
 						<div style={{ fontSize: 12 }}>
 							<p>当前不满足发布门禁，请先修复后重试。</p>
@@ -907,7 +907,7 @@ export default function SqlModelingPage() {
 			if (releaseGate?.warning) {
 				const confirmed = await new Promise<boolean>((resolve) =>
 					Modal.confirm({
-						title: "GitOps 门禁告警",
+						title: "发布门禁告警",
 						content: (
 							<div style={{ fontSize: 12 }}>
 								<p>检测到以下告警，是否继续提交上线？</p>
@@ -2655,20 +2655,20 @@ export default function SqlModelingPage() {
 						<Form.Item
 							name="gitRef"
 							label="Git 分支"
-							tooltip="发布策略默认允许 main/master/release/*/hotfix/*"
+							tooltip="可选。仅在环境维护 Git 版本追溯时填写，允许 main/master/release/*/hotfix/*"
 						>
-							<Input placeholder="例如：release/2.2.1" />
+							<Input placeholder="可选，例如：release/2.2.1" />
 						</Form.Item>
 						<Form.Item
 							name="commitSha"
 							label="Commit SHA"
-							tooltip="用于将本次发布与具体代码版本绑定"
+							tooltip="可选。用于将本次发布与具体代码版本绑定"
 						>
-							<Input placeholder="例如：a1b2c3d4" />
+							<Input placeholder="可选，例如：a1b2c3d4" />
 						</Form.Item>
 					</div>
 					<Form.Item name="strictMode" valuePropName="checked">
-						<Checkbox>启用严格 GitOps 门禁（缺少分支/Commit 会阻断发布）</Checkbox>
+						<Checkbox>启用严格发布门禁（客户环境无 Git 时可关闭）</Checkbox>
 					</Form.Item>
 					<Form.Item name="vars" label="运行变量">
 						<Input.TextArea rows={3} placeholder='JSON 结构，例如 {"run_date":"2026-01-19"}' />

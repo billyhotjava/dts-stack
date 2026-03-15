@@ -8,6 +8,7 @@ test('buildExploreSessionSteps sorts visible component outline by zIndex and cap
         name: '运营驾驶舱',
         width: 1920,
         height: 1080,
+        backgroundColor: '#0b1020',
         theme: 'legacy-dark',
         components: Array.from({ length: 22 }, (_, index) => ({
             id: `cmp-${index}`,

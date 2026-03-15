@@ -40,9 +40,14 @@ spring:
   security:
     oauth2:
       client:
+        registration:
+          oidc:
+            client-id: test-client
+            client-secret: test-secret
+            scope: openid,profile,email
         provider:
           oidc:
-            issuer-uri: http://DO_NOT_CALL:9080/realms/jhipster
+            issuer-uri: http://do-not-call:9080/realms/jhipster
       resourceserver:
         jwt:
           principal-claim-name: preferred_username

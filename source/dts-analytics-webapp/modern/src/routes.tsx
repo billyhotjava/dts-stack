@@ -55,6 +55,7 @@ export function createRoutes() {
 					{ path: "/public/card/:uuid", lazy: lazyComponent(() => import("./pages/PublicCardPage")) },
 					{ path: "/public/dashboard/:uuid", lazy: lazyComponent(() => import("./pages/PublicDashboardPage")) },
 					{ path: "/screens", lazy: lazyComponent(() => import("./pages/screens/ScreensPage")) },
+					{ path: "/project-cockpit", lazy: lazyComponent(() => import("./pages/project-cockpit/ProjectCockpitPage")) },
 					{ path: "/explore-sessions", lazy: lazyComponent(() => import("./pages/ExploreSessionsPage")) },
 					{ path: "/report-factory", lazy: lazyComponent(() => import("./pages/ReportFactoryPage")) },
 					{ path: "/metric-lens", lazy: lazyComponent(() => import("./pages/MetricLensPage")) },

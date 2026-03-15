@@ -53,3 +53,10 @@ dts:
       client-id: ${DTS_ANALYTICS_OIDC_CLIENT_ID:}
       client-secret: ${DTS_ANALYTICS_OIDC_CLIENT_SECRET:}
       admin-role: ${DTS_ANALYTICS_OIDC_ADMIN_ROLE:analytics-admin}
+    project-cockpit:
+      warehouse:
+        enabled: ${DTS_ANALYTICS_PROJECT_COCKPIT_WAREHOUSE_ENABLED:false}
+        url: ${DTS_ANALYTICS_PROJECT_COCKPIT_WAREHOUSE_URL:jdbc:postgresql://${PG_HOST:dts-pg}:${PG_PORT:5432}/${PG_DB_BIADMIN:biadmin}}
+        username: ${DTS_ANALYTICS_PROJECT_COCKPIT_WAREHOUSE_USERNAME:${PG_USER_BIADMIN:biadmin}}
+        password: ${DTS_ANALYTICS_PROJECT_COCKPIT_WAREHOUSE_PASSWORD:${PG_PWD_BIADMIN:}}
+        driver-class-name: ${DTS_ANALYTICS_PROJECT_COCKPIT_WAREHOUSE_DRIVER:org.postgresql.Driver}

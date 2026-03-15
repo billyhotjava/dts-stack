@@ -2,16 +2,8 @@ version: 2
 sources:
   -
     name: "ods"
-    schema: "public"
+    schema: "ods"
     tables:
-      -
-        name: "col_20260312"
-        description: "[task:8] prjtest1: col_20260312 -> ods.col_20260312"
-        meta:
-          system: "unknown"
-          biz: "unknown"
-          entity: "col_20260312"
-          stream: "col_20260312"
       -
         name: "CUSTOMER"
         description: "[task:7] dm8test: ERPDEMO.CUSTOMER -> ods.CUSTOMER"
@@ -47,6 +39,14 @@ sources:
           biz: "unknown"
           entity: "ods_patent"
           stream: "patent"
+      -
+        name: "ods_prj_project"
+        description: "[task:8] prjtest1: project -> ods.ods_prj_project"
+        meta:
+          system: "prj"
+          biz: "project"
+          entity: "unknown"
+          stream: "project"
       -
         name: "PRODUCT"
         description: "[task:7] dm8test: ERPDEMO.PRODUCT -> ods.PRODUCT"

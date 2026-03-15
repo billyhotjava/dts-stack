@@ -49,6 +49,15 @@ const ScreenIcon = () => (
 	</svg>
 );
 
+const ProjectCockpitIcon = () => (
+	<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+		<path d="M4 5h16v4H4z" />
+		<path d="M4 11h7v8H4z" />
+		<path d="M13 11h7v3h-7z" />
+		<path d="M13 17h7v2h-7z" />
+	</svg>
+);
+
 const PlusIcon = () => (
 	<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
 		<path d="M5 12h14" />
@@ -160,6 +169,15 @@ export default function HomePage() {
 			<div className="section">
 				<h2 className="sectionTitle">{t(locale, "home.quickActions")}</h2>
 				<div className="grid3">
+					<Link to="/project-cockpit" className="quick-action-card">
+						<div className="quick-action-card__icon">
+							<ProjectCockpitIcon />
+						</div>
+						<div className="quick-action-card__content">
+							<h3>项目看板</h3>
+							<p>统一入口查看重大项目、子项目、计划执行和延期归因。</p>
+						</div>
+					</Link>
 					<Link to="/questions/new" className="quick-action-card">
 						<div className="quick-action-card__icon">
 							<QuestionIcon />

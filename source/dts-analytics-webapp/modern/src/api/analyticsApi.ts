@@ -1332,9 +1332,261 @@ async function requestBinary(
 	};
 }
 
+export type ProjectCockpitFilterQuery = {
+	programId?: string;
+	majorProjectId?: string;
+	dateFrom?: string;
+	dateTo?: string;
+	deptId?: string;
+	riskLevel?: string;
+};
+
+export type ProjectCockpitOption = {
+	value?: string;
+	label?: string;
+};
+
+export type ProjectCockpitKpi = {
+	key?: string;
+	label?: string;
+	value?: string;
+	unit?: string;
+};
+
+export type ProjectCockpitRankingItem = {
+	majorProjectId?: string;
+	majorProjectName?: string;
+	programName?: string;
+	subprojectCount?: number;
+	healthScore?: number;
+	completionRate?: string;
+	highRiskCount?: number;
+	overdueCount?: number;
+	topDelayReason?: string;
+};
+
+export type ProjectCockpitAlertItem = {
+	title?: string;
+	majorProjectName?: string;
+	subprojectName?: string;
+	riskLevel?: string;
+	delayDays?: number;
+	reason?: string;
+};
+
+export type ProjectCockpitSummaryResponse = {
+	dataState?: {
+		warehouseEnabled?: boolean;
+		ready?: boolean;
+		message?: string;
+		batchId?: string;
+		status?: string;
+	};
+	hero?: {
+		title?: string;
+		subtitle?: string;
+		updatedAt?: string;
+		scope?: string;
+	};
+	filters?: {
+		programs?: ProjectCockpitOption[];
+		majorProjects?: ProjectCockpitOption[];
+		depts?: ProjectCockpitOption[];
+		riskLevels?: ProjectCockpitOption[];
+		current?: ProjectCockpitFilterQuery;
+	};
+	kpis?: ProjectCockpitKpi[];
+	ranking?: ProjectCockpitRankingItem[];
+	alerts?: ProjectCockpitAlertItem[];
+	spotlight?: {
+		majorProjectId?: string;
+		majorProjectName?: string;
+		summary?: string;
+		highRiskCount?: number;
+		delayCount?: number;
+		nextMilestone?: string;
+	};
+};
+
+export type ProjectCockpitTrendPoint = {
+	weekLabel?: string;
+	completionRate?: number;
+	delayedNodes?: number;
+	highRiskNodes?: number;
+	milestoneCompletionRate?: number;
+	label?: string;
+	value?: number;
+};
+
+export type ProjectCockpitTrendSeries = {
+	programId?: string;
+	majorProjectId?: string;
+	name?: string;
+	points?: ProjectCockpitTrendPoint[];
+};
+
+export type ProjectCockpitTrendsResponse = {
+	dataState?: {
+		warehouseEnabled?: boolean;
+		ready?: boolean;
+		message?: string;
+		batchId?: string;
+		status?: string;
+	};
+	weekly?: ProjectCockpitTrendPoint[];
+	programSeries?: ProjectCockpitTrendSeries[];
+	majorProjectSeries?: ProjectCockpitTrendSeries[];
+};
+
+export type ProjectCockpitExecutionTask = {
+	id?: string;
+	name?: string;
+	type?: string;
+	planDate?: string;
+	actualDate?: string;
+	isCompleted?: boolean;
+	isOverdue?: boolean;
+	isIncomplete?: boolean;
+	delayDays?: number;
+	riskLevel?: string;
+	owner?: string;
+	majorProjectName?: string;
+	subprojectName?: string;
+	status?: string;
+};
+
+export type ProjectCockpitExecutionResponse = {
+	dataState?: {
+		warehouseEnabled?: boolean;
+		ready?: boolean;
+		message?: string;
+		batchId?: string;
+		status?: string;
+	};
+	ganttTasks?: ProjectCockpitExecutionTask[];
+	milestones?: Array<Record<string, unknown>>;
+	dueList?: Array<Record<string, unknown>>;
+	workload?: Array<Record<string, unknown>>;
+	stageBuckets?: Array<Record<string, unknown>>;
+};
+
+export type ProjectCockpitRiskAttributionResponse = {
+	dataState?: {
+		warehouseEnabled?: boolean;
+		ready?: boolean;
+		message?: string;
+		batchId?: string;
+		status?: string;
+	};
+	riskBreakdown?: Array<Record<string, unknown>>;
+	delayReasonBreakdown?: Array<Record<string, unknown>>;
+	delayReasonMatrix?: Array<Record<string, unknown>>;
+	weeklyDelayTrend?: Array<Record<string, unknown>>;
+	delayedProjects?: Array<Record<string, unknown>>;
+};
+
+export type ProjectCockpitTreeNode = {
+	id?: string;
+	parentId?: string;
+	level?: "major" | "subproject" | "node";
+	name?: string;
+	status?: string;
+	progressRate?: number;
+	riskLevel?: string;
+	delayDays?: number;
+	ownerDept?: string;
+	ownerUser?: string;
+	milestoneCount?: number;
+	incompleteCount?: number;
+	highRiskCount?: number;
+	planDate?: string;
+	actualDate?: string;
+	reason?: string;
+	children?: ProjectCockpitTreeNode[];
+};
+
+export type ProjectCockpitTreeResponse = {
+	selectedMajorProjectId?: string;
+	dataState?: {
+		warehouseEnabled?: boolean;
+		ready?: boolean;
+		message?: string;
+		batchId?: string;
+		status?: string;
+	};
+	tree?: ProjectCockpitTreeNode[];
+	summary?: {
+		selectedMajorProjectId?: string;
+		totalNodes?: number;
+		completedNodes?: number;
+		highRiskNodes?: number;
+		delayNodes?: number;
+		avgHealthScore?: number;
+	};
+};
+
+export type ProjectCockpitDataSupportResponse = {
+	dataState?: {
+		warehouseEnabled?: boolean;
+		ready?: boolean;
+		message?: string;
+		batchId?: string;
+		status?: string;
+	};
+	lastUpdatedAt?: string;
+	batch?: {
+		batchId?: string;
+		sourceFileName?: string;
+		uploadedAt?: string;
+		refreshedAt?: string;
+		status?: string;
+		totalRows?: number;
+		validRows?: number;
+		issueRows?: number;
+		issueCount?: number;
+		coverageRate?: number;
+	};
+	quality?: {
+		issueCount?: number;
+		issueRows?: number;
+		unknownDelayReasonCount?: number;
+		unmappedSubprojectCount?: number;
+		highRiskNodeCount?: number;
+		filteredNodeCount?: number;
+	};
+	coverage?: Array<Record<string, unknown>>;
+	glossary?: Array<Record<string, unknown>>;
+	missingChecklist?: Array<Record<string, unknown>>;
+	dataSources?: Array<Record<string, unknown>>;
+};
+
+function buildProjectCockpitQuery(params?: ProjectCockpitFilterQuery): string {
+	const qs = new URLSearchParams();
+	if (params?.programId) qs.set("programId", params.programId);
+	if (params?.majorProjectId) qs.set("majorProjectId", params.majorProjectId);
+	if (params?.dateFrom) qs.set("dateFrom", params.dateFrom);
+	if (params?.dateTo) qs.set("dateTo", params.dateTo);
+	if (params?.deptId) qs.set("deptId", params.deptId);
+	if (params?.riskLevel) qs.set("riskLevel", params.riskLevel);
+	const query = qs.toString();
+	return query.length > 0 ? `?${query}` : "";
+}
+
 export const analyticsApi = {
 	getCurrentUser: () => fetchJson<CurrentUser>("/analytics/api/user/current"),
 	getHealth: () => fetchJson<{ status?: string }>("/analytics/api/health"),
+	getProjectCockpitSummary: (params?: ProjectCockpitFilterQuery) =>
+		fetchJson<ProjectCockpitSummaryResponse>("/analytics/api/project-cockpit/summary" + buildProjectCockpitQuery(params)),
+	getProjectCockpitTrends: (params?: ProjectCockpitFilterQuery) =>
+		fetchJson<ProjectCockpitTrendsResponse>("/analytics/api/project-cockpit/trends" + buildProjectCockpitQuery(params)),
+	getProjectCockpitExecution: (params?: ProjectCockpitFilterQuery) =>
+		fetchJson<ProjectCockpitExecutionResponse>("/analytics/api/project-cockpit/execution" + buildProjectCockpitQuery(params)),
+	getProjectCockpitRiskAttribution: (params?: ProjectCockpitFilterQuery) =>
+		fetchJson<ProjectCockpitRiskAttributionResponse>("/analytics/api/project-cockpit/risk-attribution" + buildProjectCockpitQuery(params)),
+	getProjectCockpitTree: (params?: ProjectCockpitFilterQuery) =>
+		fetchJson<ProjectCockpitTreeResponse>("/analytics/api/project-cockpit/major-project-tree" + buildProjectCockpitQuery(params)),
+	getProjectCockpitDataSupport: (params?: ProjectCockpitFilterQuery) =>
+		fetchJson<ProjectCockpitDataSupportResponse>("/analytics/api/project-cockpit/data-support" + buildProjectCockpitQuery(params)),
 	listDatabases: () => fetchJson<DatabaseListResponse>("/analytics/api/database"),
 	listPlatformDataSources: () => fetchJson<PlatformDataSourceItem[]>("/analytics/api/platform/data-sources"),
 	listTables: (dbId: string | number) =>

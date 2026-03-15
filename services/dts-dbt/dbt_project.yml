@@ -5,7 +5,12 @@ config-version: 2
 profile: "dts"
 
 model-paths: ["models"]
+seed-paths: ["seeds"]
 
 models:
   dts:
     +materialized: table
+
+seeds:
+  dts:
+    +quote_columns: false

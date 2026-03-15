@@ -48,6 +48,35 @@ test('gantt-chart: returns empty on no rows', () => {
     assert.deepEqual(result, {});
 });
 
+test('gantt-chart: maps project-management alias fields for cockpit reuse', () => {
+    const cols = [
+        { name: 'task_name', display_name: '任务', base_type: 'type/Text' },
+        { name: 'task_type', display_name: '类型', base_type: 'type/Text' },
+        { name: 'plan_start', display_name: '计划开始', base_type: 'type/Date' },
+        { name: 'actual_end', display_name: '实际结束', base_type: 'type/Date' },
+        { name: 'completion_status', display_name: '状态', base_type: 'type/Text' },
+        { name: 'delay_days', display_name: '延期天数', base_type: 'type/Integer' },
+        { name: 'risk_level', display_name: '风险等级', base_type: 'type/Text' },
+        { name: 'owner_dept', display_name: '责任科室', base_type: 'type/Text' },
+        { name: 'major_project_name', display_name: '重大项目', base_type: 'type/Text' },
+        { name: 'subproject_name', display_name: '子项目', base_type: 'type/Text' },
+    ];
+    const rows = [
+        ['关键算法验证', '里程碑节点', '2026-02-01', '2026-02-10', '已完成但有延期', 9, '高', '导航室', '苍穹导航综合工程', '导航处理机'],
+    ];
+
+    const result = mapCardDataToConfig('gantt-chart', { rows, cols });
+    const tasks = result.tasks as Array<Record<string, unknown>>;
+
+    assert.equal(tasks[0].name, '关键算法验证');
+    assert.equal(tasks[0].planDate, '2026-02-01');
+    assert.equal(tasks[0].actualDate, '2026-02-10');
+    assert.equal(tasks[0].status, '已完成但有延期');
+    assert.equal(tasks[0].owner, '导航室');
+    assert.equal(tasks[0].majorProjectName, '苍穹导航综合工程');
+    assert.equal(tasks[0].subprojectName, '导航处理机');
+});
+
 test('funnel-chart: maps rows to name-value data', () => {
     const cardData = {
         cols: [

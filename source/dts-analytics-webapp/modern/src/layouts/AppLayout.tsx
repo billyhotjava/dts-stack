@@ -97,6 +97,15 @@ const ScreenIcon = () => (
 	</svg>
 );
 
+const ProjectCockpitIcon = () => (
+	<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+		<path d="M4 5h16v4H4z" />
+		<path d="M4 11h7v8H4z" />
+		<path d="M13 11h7v3h-7z" />
+		<path d="M13 17h7v2h-7z" />
+	</svg>
+);
+
 const ExploreSessionIcon = () => (
 	<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
 		<path d="M3 4h18v14H3z" />
@@ -191,6 +200,7 @@ const ROUTE_NAV_MAP: RouteNavMeta[] = [
 	{ path: "/metrics", section: "nav.section.data", nav: "nav.metrics" },
 	{ path: "/trash", section: "nav.section.data", nav: "nav.trash" },
 	{ path: "/screens", section: "nav.section.tools", nav: "nav.screens" },
+	{ path: "/project-cockpit", section: "nav.section.tools", nav: "项目看板" },
 	{ path: "/search", section: "nav.section.tools", nav: "nav.search" },
 ];
 
@@ -374,6 +384,7 @@ export function AppLayout() {
 
 					<SidebarSection title={t(locale, "nav.section.tools")}>
 						<SidebarItem to="/screens" icon={<ScreenIcon />} label={t(locale, "nav.screens")} />
+						<SidebarItem to="/project-cockpit" icon={<ProjectCockpitIcon />} label="项目看板" />
 						<SidebarItem to="/search" icon={<SearchIcon />} label={t(locale, "nav.search")} />
 					</SidebarSection>
 				</SidebarNav>
@@ -391,6 +402,10 @@ export function AppLayout() {
 							<Link to="/screens" className="header-action-chip">
 								<ScreenIcon />
 								<span>大屏工厂</span>
+							</Link>
+							<Link to="/project-cockpit" className="header-action-chip">
+								<ProjectCockpitIcon />
+								<span>项目看板</span>
 							</Link>
 							<ThemeToggle className="header-theme-toggle" showLabel={false} />
 							{UserMenu}

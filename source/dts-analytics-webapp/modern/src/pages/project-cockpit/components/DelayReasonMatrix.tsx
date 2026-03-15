@@ -1,0 +1,53 @@
+import { buildDelayReasonMatrixSummary } from "../views/riskAttributionView.helpers";
+
+type Props = {
+	rows: Array<Record<string, unknown>>;
+};
+
+const REASON_LABELS = {
+	technical: "技术攻关",
+	quality: "质量整改",
+	change: "计划变更",
+	coordination: "接口协同",
+	supplier: "外协外购",
+	test: "试验排期",
+	archive: "资料归档",
+	normal: "正常推进",
+} as const;
+
+export function DelayReasonMatrix({ rows }: Props) {
+	const summary = buildDelayReasonMatrixSummary(rows);
+	const reasonKeys = Object.keys(REASON_LABELS) as Array<keyof typeof REASON_LABELS>;
+
+	return (
+		<div className="project-cockpit__matrix">
+			<div className="project-cockpit__matrix-header">
+				<span>责任科室</span>
+				<span>延期总数</span>
+				<span>主因</span>
+				<span>归因结构</span>
+			</div>
+			{summary.rows.map((row) => {
+				const dominantKey = (row.dominantReason ?? "normal") as keyof typeof REASON_LABELS;
+				return (
+					<div key={String(row.dept ?? "")} className="project-cockpit__matrix-row">
+						<strong>{String(row.dept ?? "-")}</strong>
+						<span>{Number(row.total ?? 0)}</span>
+						<span>{REASON_LABELS[dominantKey] ?? "-"}</span>
+						<div className="project-cockpit__matrix-bars">
+							{reasonKeys.map((key) => {
+								const label = REASON_LABELS[key];
+								const value = Number(row[key] ?? 0);
+								return value > 0 ? (
+									<span key={key} className="project-cockpit__matrix-pill" title={`${label}: ${value}`}>
+										{label} {value}
+									</span>
+								) : null;
+							})}
+						</div>
+					</div>
+				);
+			})}
+		</div>
+	);
+}
