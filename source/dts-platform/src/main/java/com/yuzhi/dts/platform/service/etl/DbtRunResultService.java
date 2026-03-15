@@ -131,7 +131,7 @@ public class DbtRunResultService {
         String runResultsPath = projectDir + RUN_RESULTS_PATH;
         File runResultsFile = Path.of(runResultsPath).toFile();
         if (!runResultsFile.exists()) {
-            return DbtRunSummary.empty("run_results.json 不存在");
+            return fallbackSummary(projectDir, runResultsPath, projectDir + MANIFEST_PATH, "run_results.json 不存在");
         }
         try {
             Map<String, Object> raw = objectMapper.readValue(runResultsFile, new TypeReference<>() {});
@@ -241,7 +241,7 @@ public class DbtRunResultService {
             );
         } catch (Exception ex) {
             LOG.warn("Failed to parse run_results.json summary: {}", ex.getMessage());
-            return DbtRunSummary.empty("解析 run_results.json 失败: " + ex.getMessage());
+            return fallbackSummary(projectDir, runResultsPath, projectDir + MANIFEST_PATH, "解析 run_results.json 失败: " + ex.getMessage());
         }
     }
 
@@ -344,6 +344,43 @@ public class DbtRunResultService {
             return view.config().projectDir().trim();
         }
         return properties.getProjectDir();
+    }
+
+    private DbtRunSummary fallbackSummary(String projectDir, String runResultsPath, String manifestPath, String message) {
+        return externalRunLogService
+            .findLatestDbtBuildEvidence()
+            .map(snapshot -> buildSummaryFromEvidence(projectDir, runResultsPath, manifestPath, snapshot))
+            .orElseGet(() -> DbtRunSummary.empty(message));
+    }
+
+    private DbtRunSummary buildSummaryFromEvidence(
+        String projectDir,
+        String runResultsPath,
+        String manifestPath,
+        ExternalRunLogService.DbtBuildEvidenceSnapshot snapshot
+    ) {
+        String status = normalizeStatus(snapshot.status());
+        int total = Math.max(0, snapshot.selectedCount());
+        int success = "SUCCESS".equals(status) ? total : 0;
+        int failed = "FAILED".equals(status) ? Math.max(total, 1) : 0;
+        int skipped = "SKIPPED".equals(status) ? total : 0;
+        Instant generatedAt = snapshot.generatedAt() != null ? snapshot.generatedAt() : snapshot.startedAt();
+        return new DbtRunSummary(
+            true,
+            projectDir,
+            runResultsPath,
+            manifestPath,
+            snapshot.externalRunId(),
+            generatedAt != null ? generatedAt.toString() : null,
+            snapshot.command(),
+            StringUtils.hasText(status) ? status : "UNKNOWN",
+            total,
+            success,
+            failed,
+            skipped,
+            List.of(),
+            List.of()
+        );
     }
 
     private Map<String, ManifestNode> readManifestNodes(String manifestPath) {

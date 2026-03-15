@@ -7,6 +7,7 @@ import com.yuzhi.dts.platform.repository.infra.InfraExternalRunLogRepository;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
@@ -281,6 +282,37 @@ public class ExternalRunLogService {
         return removed;
     }
 
+    public Optional<DbtBuildEvidenceSnapshot> findLatestDbtBuildEvidence() {
+        List<InfraExternalRunLog> runs = repository.search(ENTRY_DBT, null, null, null, true);
+        for (InfraExternalRunLog run : runs) {
+            if (run == null) {
+                continue;
+            }
+            Map<String, Object> metrics = parseJsonMap(run.getMetricsJson());
+            Map<String, Object> conf = asMap(metrics.get("conf"));
+            String operation = normalizeOperation(text(conf.get("operation")));
+            if (!isBuildOperation(operation)) {
+                continue;
+            }
+            String models = text(conf.get("models"));
+            String target = text(conf.get("target"));
+            String command = buildDbtCommand(operation, models, target);
+            Instant generatedAt = run.getFinishedAt() != null ? run.getFinishedAt() : run.getStartedAt();
+            return Optional.of(
+                new DbtBuildEvidenceSnapshot(
+                    run.getExternalRunId(),
+                    normalizeStatus(run.getStatus()),
+                    run.getStartedAt(),
+                    generatedAt,
+                    command,
+                    estimateSelectorCount(models),
+                    "external-run-log"
+                )
+            );
+        }
+        return Optional.empty();
+    }
+
     private UUID resolveIngestionArtifactId(Object taskId) {
         if (taskId == null) {
             return null;
@@ -311,6 +343,45 @@ public class ExternalRunLogService {
 
     private String text(Object value) {
         return value == null ? null : value.toString();
+    }
+
+    private String normalizeOperation(String operation) {
+        if (!StringUtils.hasText(operation)) {
+            return null;
+        }
+        return operation.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private boolean isBuildOperation(String operation) {
+        return "compile".equals(operation) || "test".equals(operation) || "build".equals(operation);
+    }
+
+    private String buildDbtCommand(String operation, String models, String target) {
+        if (!StringUtils.hasText(operation)) {
+            return null;
+        }
+        StringBuilder command = new StringBuilder("dbt ").append(operation.trim().toLowerCase(Locale.ROOT));
+        if (StringUtils.hasText(models)) {
+            command.append(" --select ").append(models.trim());
+        }
+        if (StringUtils.hasText(target)) {
+            command.append(" --target ").append(target.trim());
+        }
+        return command.toString();
+    }
+
+    private int estimateSelectorCount(String models) {
+        if (!StringUtils.hasText(models)) {
+            return 1;
+        }
+        String[] parts = models.trim().split("[,\\s]+");
+        int count = 0;
+        for (String part : parts) {
+            if (StringUtils.hasText(part)) {
+                count++;
+            }
+        }
+        return Math.max(1, count);
     }
 
     private Instant parseInstant(Object value) {
@@ -361,4 +432,22 @@ public class ExternalRunLogService {
             return Map.of();
         }
     }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> asMap(Object raw) {
+        if (raw instanceof Map<?, ?> map) {
+            return (Map<String, Object>) map;
+        }
+        return Map.of();
+    }
+
+    public record DbtBuildEvidenceSnapshot(
+        String externalRunId,
+        String status,
+        Instant startedAt,
+        Instant generatedAt,
+        String command,
+        int selectedCount,
+        String source
+    ) {}
 }
