@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useDrag } from 'react-dnd';
-import type { ScreenPluginManifest } from '../../../api/analyticsApi';
 import { componentLibrary } from '../componentLibrary';
-import type { ComponentCategory, ComponentItem, ComponentType } from '../types';
-import { loadScreenPluginManifests } from '../plugins/manifestLoader';
+import type { ScreenPluginManifest } from '../../../api/analyticsApi';
+import { mapPluginManifestToCategory } from '../componentLibraryPlugins';
+import type { ComponentCategory, ComponentItem } from '../types';
+import { loadScreenPluginManifests, SCREEN_PLUGIN_MANIFESTS_UPDATED_EVENT } from '../plugins/manifestLoader';
 
 interface DraggableComponentItemProps {
     item: ComponentItem;
@@ -68,49 +69,6 @@ function toComponentKey(item: ComponentItem): string {
     return `builtin:${item.type}::${item.name}`;
 }
 
-function mapPluginToCategory(plugin: ScreenPluginManifest): ComponentCategory | null {
-    const list = Array.isArray(plugin.components) ? plugin.components : [];
-    if (list.length === 0) {
-        return null;
-    }
-
-    const items: ComponentItem[] = [];
-    for (const component of list) {
-        const baseTypeRaw = String(component.baseType || '').trim();
-        if (!baseTypeRaw) {
-            continue;
-        }
-
-        items.push({
-            type: baseTypeRaw as ComponentType,
-            name: component.name || component.id,
-            icon: component.icon || '🔌',
-            defaultWidth: component.defaultWidth || 360,
-            defaultHeight: component.defaultHeight || 240,
-            defaultConfig: {
-                ...((component.defaultConfig || {}) as Record<string, unknown>),
-                __plugin: {
-                    pluginId: plugin.id,
-                    componentId: component.id,
-                    version: plugin.version,
-                },
-                __pluginPropertySchema: component.propertySchema || null,
-                __pluginDataContract: component.dataContract || null,
-            },
-        });
-    }
-
-    if (items.length === 0) {
-        return null;
-    }
-
-    return {
-        name: `${plugin.name || plugin.id} @${plugin.version || 'dev'}`,
-        icon: '🔌',
-        items,
-    };
-}
-
 export function ComponentLibraryPanel() {
     const searchInputRef = useRef<HTMLInputElement | null>(null);
     const [plugins, setPlugins] = useState<ScreenPluginManifest[]>([]);
@@ -122,16 +80,27 @@ export function ComponentLibraryPanel() {
     const [collapsedCategories, setCollapsedCategories] = useState<string[]>([]);
 
     useEffect(() => {
-        loadScreenPluginManifests()
-            .then((data) => {
-                setPlugins(data);
-                setPluginError(null);
-            })
-            .catch((error) => {
-                console.error('Failed to load screen plugins:', error);
-                setPluginError('插件清单加载失败');
-                setPlugins([]);
-            });
+        const loadPlugins = (force = false) => {
+            loadScreenPluginManifests(force)
+                .then((data) => {
+                    setPlugins(data);
+                    setPluginError(null);
+                })
+                .catch((error) => {
+                    console.error('Failed to load screen plugins:', error);
+                    setPluginError('插件清单加载失败');
+                    setPlugins([]);
+                });
+        };
+
+        loadPlugins();
+        const handlePluginCatalogUpdated = () => {
+            loadPlugins(true);
+        };
+        window.addEventListener(SCREEN_PLUGIN_MANIFESTS_UPDATED_EVENT, handlePluginCatalogUpdated);
+        return () => {
+            window.removeEventListener(SCREEN_PLUGIN_MANIFESTS_UPDATED_EVENT, handlePluginCatalogUpdated);
+        };
     }, []);
 
     useEffect(() => {
@@ -218,7 +187,7 @@ export function ComponentLibraryPanel() {
 
     const mergedCategories = useMemo(() => {
         const pluginCategories = plugins
-            .map(mapPluginToCategory)
+            .map(mapPluginManifestToCategory)
             .filter((item): item is ComponentCategory => item !== null);
         return [...componentLibrary, ...pluginCategories];
     }, [plugins]);

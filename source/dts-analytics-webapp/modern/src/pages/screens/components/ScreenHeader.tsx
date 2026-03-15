@@ -26,6 +26,8 @@ import { ScreenVersionComparePickerPanel } from './ScreenVersionComparePickerPan
 import { ScreenVersionRollbackPanel } from './ScreenVersionRollbackPanel';
 import { VersionHistoryPanel } from './VersionHistoryPanel';
 import { ScreenSnapshotPanel } from './ScreenSnapshotPanel';
+import { Modal } from '../../../ui/Modal/Modal';
+import { buildExploreSessionSteps } from './ScreenHeader.helpers';
 import { buildScreenPayload, normalizeScreenConfig, validateScreenPayload } from '../specV2';
 import { resolveScreenTheme, applyThemeToComponents, getThemeTokens, type ThemeComponentApplyMode } from '../screenThemes';
 import type { ScreenTheme } from '../types';
@@ -39,6 +41,12 @@ type PublishNotice = {
     previewUrl: string;
     publicUrl: string | null;
     warmupText?: string;
+};
+
+type HeaderActionNotice = {
+    tone: 'success' | 'error';
+    title: string;
+    message: string;
 };
 
 type QuickActionItem = {
@@ -78,44 +86,6 @@ function findNextEnabledQuickActionIndex(
 
 function buildPublishNoticeStorageKey(screenId: string | number): string {
     return `dts.analytics.screen.publishNotice.${screenId}`;
-}
-
-function buildExploreSessionSteps(config: ScreenConfig): Array<Record<string, unknown>> {
-    const now = new Date().toISOString();
-    const componentOutline = [...(config.components ?? [])]
-        .sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0))
-        .slice(0, 20)
-        .map((item) => ({
-            id: item.id,
-            type: item.type,
-            name: item.name,
-            visible: item.visible !== false,
-            dataSourceType: item.dataSource?.sourceType ?? item.dataSource?.type ?? 'static',
-        }));
-    return [
-        {
-            at: now,
-            title: '大屏快照',
-            type: 'screen_snapshot',
-            params: {
-                screenId: config.id || null,
-                screenName: config.name || null,
-                width: config.width,
-                height: config.height,
-                theme: config.theme || null,
-                componentCount: config.components?.length ?? 0,
-                globalVariableCount: config.globalVariables?.length ?? 0,
-            },
-        },
-        {
-            at: now,
-            title: '关键组件概览',
-            type: 'component_outline',
-            params: {
-                components: componentOutline,
-            },
-        },
-    ];
 }
 
 function buildComponentConflictMeta(baseline: ScreenConfig): Record<string, unknown> {
@@ -333,6 +303,20 @@ export function ScreenHeader({
         return 'design';
     });
     const [isSavingTemplate, setIsSavingTemplate] = useState(false);
+    const [headerActionNotice, setHeaderActionNotice] = useState<HeaderActionNotice | null>(null);
+    const [showSaveTemplateDialog, setShowSaveTemplateDialog] = useState(false);
+    const [templateForm, setTemplateForm] = useState({
+        name: `${config.name || '未命名大屏'}-模板`,
+        description: config.description || '',
+        visibilityScope: 'team' as 'personal' | 'team' | 'global',
+    });
+    const [showExploreSessionDialog, setShowExploreSessionDialog] = useState(false);
+    const [exploreSessionForm, setExploreSessionForm] = useState({
+        title: `${config.name || '未命名大屏'} 分析会话`,
+        question: `围绕大屏「${config.name || '未命名大屏'}」展开分析`,
+        conclusion: '',
+        tagsInput: '大屏,复盘',
+    });
     // --- Merged toolbar state (from CanvasToolbar "更多工具") ---
     const [batchAction, setBatchAction] = useState<BatchAction>('duplicate');
     const [themeApplyMode, setThemeApplyMode] = useState<ThemeComponentApplyMode>('force');
@@ -890,6 +874,21 @@ export function ScreenHeader({
     }, [handleLockHttpError, handleUpdateConflictError, saveScreen]);
 
     useEffect(() => {
+        setTemplateForm((current) => ({
+            ...current,
+            name: current.name === `${config.name || '未命名大屏'}-模板` || !current.name
+                ? `${config.name || '未命名大屏'}-模板`
+                : current.name,
+            description: showSaveTemplateDialog ? current.description : (config.description || ''),
+        }));
+        setExploreSessionForm((current) => ({
+            ...current,
+            title: showExploreSessionDialog ? current.title : `${config.name || '未命名大屏'} 分析会话`,
+            question: showExploreSessionDialog ? current.question : `围绕大屏「${config.name || '未命名大屏'}」展开分析`,
+        }));
+    }, [config.description, config.name, showExploreSessionDialog, showSaveTemplateDialog]);
+
+    useEffect(() => {
         const isTypingTarget = (target: EventTarget | null): boolean => {
             const node = target as HTMLElement | null;
             if (!node) return false;
@@ -915,43 +914,62 @@ export function ScreenHeader({
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [handleSave, isSaving, lockedByOther, permissions.canEdit]);
 
-    const handleSaveAsTemplate = useCallback(async () => {
+    const handleSaveAsTemplate = useCallback(() => {
+        setTemplateForm({
+            name: `${config.name || '未命名大屏'}-模板`,
+            description: config.description || '',
+            visibilityScope: 'team',
+        });
+        setShowSaveTemplateDialog(true);
+    }, [config.description, config.name]);
+
+    const handleSubmitSaveAsTemplate = useCallback(async () => {
         if (isSavingTemplate) return;
         setIsSavingTemplate(true);
         try {
             const screenId = await saveScreen();
             if (!screenId) {
-                alert('请先保存大屏后再存为模板');
+                setHeaderActionNotice({
+                    tone: 'error',
+                    title: '模板保存失败',
+                    message: '请先保存大屏后再存为模板。',
+                });
                 return;
             }
-            const defaultName = (config.name || '未命名大屏') + '-模板';
-            const templateName = (window.prompt('模板名称', defaultName) || '').trim();
+            const templateName = templateForm.name.trim();
             if (!templateName) {
                 return;
             }
-            const templateDesc = window.prompt('模板描述（可选）', config.description || '') || '';
-            const visibilityInput = (window.prompt('模板可见范围（personal/team/global）', 'team') || 'team').trim().toLowerCase();
-            const visibilityScope = visibilityInput === 'personal' || visibilityInput === 'global' ? visibilityInput : 'team';
+            const visibilityScope = templateForm.visibilityScope;
             await analyticsApi.createScreenTemplateFromScreen(screenId, {
                 name: templateName,
-                description: templateDesc,
+                description: templateForm.description,
                 category: 'custom',
                 thumbnail: '🧩',
                 visibilityScope,
                 listed: true,
             });
             const scopeText = visibilityScope === 'personal' ? '个人' : visibilityScope === 'global' ? '全局' : '团队';
-            alert(`已保存到${scopeText}模板`);
+            setShowSaveTemplateDialog(false);
+            setHeaderActionNotice({
+                tone: 'success',
+                title: '模板已保存',
+                message: `已保存到${scopeText}模板，可在模板资产中心继续上架、恢复版本和导出。`,
+            });
         } catch (error) {
             console.error('Failed to save screen as template:', error);
             const message = error instanceof HttpError && error.code === 'SCREEN_UPDATE_CONFLICT'
                 ? handleUpdateConflictError(error, '存模板失败，存在并发冲突')
                 : handleLockHttpError(error, '存模板失败');
-            alert(message);
+            setHeaderActionNotice({
+                tone: 'error',
+                title: '模板保存失败',
+                message,
+            });
         } finally {
             setIsSavingTemplate(false);
         }
-    }, [config.description, config.name, handleLockHttpError, handleUpdateConflictError, isSavingTemplate, saveScreen]);
+    }, [handleLockHttpError, handleUpdateConflictError, isSavingTemplate, saveScreen, templateForm]);
 
     const handlePublish = useCallback(async () => {
         if (isPublishing) return;
@@ -1528,7 +1546,11 @@ export function ScreenHeader({
         try {
             const { uuid } = await analyticsApi.createScreenPublicLink(id, {});
             if (!uuid) {
-                alert('未获取到分享链接，请先发布后重试');
+                setHeaderActionNotice({
+                    tone: 'error',
+                    title: '分享链接生成失败',
+                    message: '未获取到分享链接，请先发布后重试。',
+                });
                 return;
             }
             const baseUrl = `${window.location.origin}/analytics/public/screen/${uuid}`;
@@ -1540,47 +1562,72 @@ export function ScreenHeader({
                 : '';
             const shareInfo = `链接分享：\n${baseUrl}\n\n嵌入代码（iframe）：\n${iframeCode}${paramHint}`;
             const copied = await writeTextToClipboard(baseUrl);
-            alert(copied ? `分享链接已复制到剪贴板\n\n${shareInfo}` : shareInfo);
+            setHeaderActionNotice({
+                tone: 'success',
+                title: copied ? '分享链接已复制' : '分享信息已生成',
+                message: shareInfo,
+            });
         } catch (err) {
             console.error('Failed to create public link:', err);
-            alert('创建分享链接失败，请先发布版本');
+            setHeaderActionNotice({
+                tone: 'error',
+                title: '分享链接生成失败',
+                message: '创建分享链接失败，请先发布版本。',
+            });
         } finally {
             setIsSharing(false);
         }
     };
 
-    const handleCreateExploreSession = useCallback(async () => {
+    const handleCreateExploreSession = useCallback(() => {
         if (!permissions.canRead) {
-            alert('当前无读权限，无法沉淀分析会话');
+            setHeaderActionNotice({
+                tone: 'error',
+                title: '无法创建分析会话',
+                message: '当前账号没有读权限，无法沉淀分析会话。',
+            });
             return;
         }
-        const defaultTitle = `${config.name || '未命名大屏'} 分析会话`;
-        const titleInput = window.prompt('会话标题', defaultTitle);
-        if (titleInput === null) {
-            return;
-        }
-        const questionInput = window.prompt('问题描述（可选）', `围绕大屏「${config.name || '未命名大屏'}」展开分析`) ?? '';
-        const conclusionInput = window.prompt('阶段结论（可选）', '') ?? '';
-        const tagsInput = window.prompt('标签（逗号分隔，可选）', '大屏,复盘') ?? '';
-        const tags = tagsInput
-            .split(',')
-            .map((item) => item.trim())
-            .filter((item) => item.length > 0)
-            .slice(0, 20);
-        const created = await analyticsApi.createExploreSession({
-            title: titleInput.trim() || defaultTitle,
-            question: questionInput.trim() || null,
-            conclusion: conclusionInput.trim() || null,
-            tags,
-            steps: buildExploreSessionSteps(config),
+        setExploreSessionForm({
+            title: `${config.name || '未命名大屏'} 分析会话`,
+            question: `围绕大屏「${config.name || '未命名大屏'}」展开分析`,
+            conclusion: '',
+            tagsInput: '大屏,复盘',
         });
-        const createdId = created?.id != null ? `#${created.id}` : '';
-        if (createdId && window.confirm(`已创建分析会话 ${createdId}，是否打开会话中心？`)) {
-            navigate('/explore-sessions');
-            return;
+        setShowExploreSessionDialog(true);
+    }, [config.name, permissions.canRead]);
+
+    const handleSubmitCreateExploreSession = useCallback(async () => {
+        try {
+            const defaultTitle = `${config.name || '未命名大屏'} 分析会话`;
+            const tags = exploreSessionForm.tagsInput
+                .split(',')
+                .map((item) => item.trim())
+                .filter((item) => item.length > 0)
+                .slice(0, 20);
+            const created = await analyticsApi.createExploreSession({
+                title: exploreSessionForm.title.trim() || defaultTitle,
+                question: exploreSessionForm.question.trim() || null,
+                conclusion: exploreSessionForm.conclusion.trim() || null,
+                tags,
+                steps: buildExploreSessionSteps(config),
+            });
+            const createdId = created?.id != null ? `#${created.id}` : '';
+            setShowExploreSessionDialog(false);
+            setHeaderActionNotice({
+                tone: 'success',
+                title: '分析会话已创建',
+                message: `已创建分析会话 ${createdId || ''}。如需继续编排步骤或分享，请前往分析会话中心。`.trim(),
+            });
+        } catch (error) {
+            console.error('Failed to create explore session:', error);
+            setHeaderActionNotice({
+                tone: 'error',
+                title: '分析会话创建失败',
+                message: error instanceof Error ? error.message : '创建分析会话失败，请稍后重试。',
+            });
         }
-        alert(`已创建分析会话 ${createdId}`.trim());
-    }, [config, navigate, permissions.canRead]);
+    }, [config, exploreSessionForm]);
 
     const handleBack = () => {
         navigate('/screens');
@@ -1588,7 +1635,11 @@ export function ScreenHeader({
 
     const handleCopyUrl = useCallback(async (url: string) => {
         const copied = await writeTextToClipboard(url);
-        alert(copied ? '链接已复制到剪贴板' : `复制失败，请手工复制：\n${url}`);
+        setHeaderActionNotice({
+            tone: copied ? 'success' : 'error',
+            title: copied ? '链接已复制' : '复制失败',
+            message: copied ? url : `复制失败，请手工复制：\n${url}`,
+        });
     }, []);
 
     const executeMenuAction = useCallback((action: () => void | Promise<void>) => {
@@ -2271,6 +2322,39 @@ export function ScreenHeader({
                     {lockErrorText ? ` (${lockErrorText})` : ''}
                 </div>
             )}
+            {headerActionNotice && (
+                <div
+                    data-testid="analytics-screen-header-action-notice"
+                    style={{
+                        marginTop: 10,
+                        padding: '12px 14px',
+                        borderRadius: 10,
+                        border: headerActionNotice.tone === 'success'
+                            ? '1px solid rgba(16,185,129,0.28)'
+                            : '1px solid rgba(239,68,68,0.28)',
+                        background: headerActionNotice.tone === 'success'
+                            ? 'rgba(16,185,129,0.08)'
+                            : 'rgba(239,68,68,0.08)',
+                        color: headerActionNotice.tone === 'success' ? '#047857' : '#b91c1c',
+                        display: 'grid',
+                        gap: 4,
+                    }}
+                >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
+                        <strong>{headerActionNotice.title}</strong>
+                        <button
+                            type="button"
+                            className="header-btn"
+                            onClick={() => setHeaderActionNotice(null)}
+                        >
+                            收起
+                        </button>
+                    </div>
+                    <div style={{ fontSize: 12, whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>
+                        {headerActionNotice.message}
+                    </div>
+                </div>
+            )}
             {publishNotice && (
                 <div className="screen-publish-notice" data-testid="analytics-screen-publish-notice">
                     <div className="screen-publish-notice-main">
@@ -2598,6 +2682,129 @@ export function ScreenHeader({
                 screenId={id}
                 onClose={() => setShowSharePolicyPanel(false)}
             />
+
+            <Modal
+                isOpen={showSaveTemplateDialog}
+                onClose={() => setShowSaveTemplateDialog(false)}
+                title="保存为模板"
+                size="md"
+                footer={(
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                        <button type="button" className="header-btn" onClick={() => setShowSaveTemplateDialog(false)}>
+                            取消
+                        </button>
+                        <button
+                            type="button"
+                            className="header-btn save-btn"
+                            onClick={() => void handleSubmitSaveAsTemplate()}
+                            disabled={isSavingTemplate || !templateForm.name.trim()}
+                        >
+                            {isSavingTemplate ? '保存中...' : '确认保存'}
+                        </button>
+                    </div>
+                )}
+            >
+                <div style={{ display: 'grid', gap: 12 }}>
+                    <label style={{ display: 'grid', gap: 6 }}>
+                        <span>模板名称</span>
+                        <input
+                            className="screen-name-input"
+                            value={templateForm.name}
+                            onChange={(event) => setTemplateForm((current) => ({ ...current, name: event.target.value }))}
+                            placeholder="输入模板名称"
+                        />
+                    </label>
+                    <label style={{ display: 'grid', gap: 6 }}>
+                        <span>模板描述</span>
+                        <textarea
+                            className="screen-name-input"
+                            value={templateForm.description}
+                            onChange={(event) => setTemplateForm((current) => ({ ...current, description: event.target.value }))}
+                            placeholder="输入模板描述"
+                            rows={4}
+                            style={{ resize: 'vertical' }}
+                        />
+                    </label>
+                    <label style={{ display: 'grid', gap: 6 }}>
+                        <span>可见范围</span>
+                        <select
+                            className="header-select"
+                            value={templateForm.visibilityScope}
+                            onChange={(event) => setTemplateForm((current) => ({
+                                ...current,
+                                visibilityScope: event.target.value as 'personal' | 'team' | 'global',
+                            }))}
+                        >
+                            <option value="personal">个人</option>
+                            <option value="team">团队</option>
+                            <option value="global">全局</option>
+                        </select>
+                    </label>
+                </div>
+            </Modal>
+
+            <Modal
+                isOpen={showExploreSessionDialog}
+                onClose={() => setShowExploreSessionDialog(false)}
+                title="沉淀分析会话"
+                size="lg"
+                footer={(
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                        <button type="button" className="header-btn" onClick={() => setShowExploreSessionDialog(false)}>
+                            取消
+                        </button>
+                        <button
+                            type="button"
+                            className="header-btn save-btn"
+                            onClick={() => void handleSubmitCreateExploreSession()}
+                            disabled={!exploreSessionForm.title.trim()}
+                        >
+                            创建会话
+                        </button>
+                    </div>
+                )}
+            >
+                <div style={{ display: 'grid', gap: 12 }}>
+                    <label style={{ display: 'grid', gap: 6 }}>
+                        <span>会话标题</span>
+                        <input
+                            className="screen-name-input"
+                            value={exploreSessionForm.title}
+                            onChange={(event) => setExploreSessionForm((current) => ({ ...current, title: event.target.value }))}
+                            placeholder="输入会话标题"
+                        />
+                    </label>
+                    <label style={{ display: 'grid', gap: 6 }}>
+                        <span>问题描述</span>
+                        <textarea
+                            className="screen-name-input"
+                            value={exploreSessionForm.question}
+                            onChange={(event) => setExploreSessionForm((current) => ({ ...current, question: event.target.value }))}
+                            rows={3}
+                            style={{ resize: 'vertical' }}
+                        />
+                    </label>
+                    <label style={{ display: 'grid', gap: 6 }}>
+                        <span>阶段结论</span>
+                        <textarea
+                            className="screen-name-input"
+                            value={exploreSessionForm.conclusion}
+                            onChange={(event) => setExploreSessionForm((current) => ({ ...current, conclusion: event.target.value }))}
+                            rows={3}
+                            style={{ resize: 'vertical' }}
+                        />
+                    </label>
+                    <label style={{ display: 'grid', gap: 6 }}>
+                        <span>标签</span>
+                        <input
+                            className="screen-name-input"
+                            value={exploreSessionForm.tagsInput}
+                            onChange={(event) => setExploreSessionForm((current) => ({ ...current, tagsInput: event.target.value }))}
+                            placeholder="逗号分隔，如：大屏,复盘"
+                        />
+                    </label>
+                </div>
+            </Modal>
 
             {showLinkageGraph && (
                 <LinkageGraphPanel

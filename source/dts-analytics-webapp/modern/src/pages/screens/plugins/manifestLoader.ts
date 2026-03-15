@@ -2,6 +2,7 @@ import { analyticsApi, type ScreenPluginManifest } from '../../../api/analyticsA
 
 let manifestCache: ScreenPluginManifest[] | null = null;
 let loadingPromise: Promise<ScreenPluginManifest[]> | null = null;
+export const SCREEN_PLUGIN_MANIFESTS_UPDATED_EVENT = 'dts:screen-plugin-manifests-updated';
 
 type JsonModuleLike = {
     default?: unknown;
@@ -319,4 +320,11 @@ export async function loadScreenPluginManifests(force = false): Promise<ScreenPl
 
 export function clearScreenPluginManifestCache(): void {
     manifestCache = null;
+}
+
+export function notifyScreenPluginManifestsUpdated(): void {
+    clearScreenPluginManifestCache();
+    if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+        window.dispatchEvent(new CustomEvent(SCREEN_PLUGIN_MANIFESTS_UPDATED_EVENT));
+    }
 }

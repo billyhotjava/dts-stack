@@ -17,7 +17,7 @@
 
 ```bash
 cd source/dts-analytics
-./mvnw test
+mvn -Dtest=MarketplaceResourceIT,ScreenPluginResourceIT,ScreenTemplateResourceIT,ScreenIndustryPackResourceIT test
 ```
 
 ### 2. 前端测试与构建
@@ -31,7 +31,11 @@ cd source/dts-analytics
 建议命令：
 
 ```bash
-pnpm -C source/dts-analytics-webapp/modern test
+node --import tsx --test \
+  source/dts-analytics-webapp/modern/src/pages/screens/ScreenMarketplacePage.test.ts \
+  source/dts-analytics-webapp/modern/src/pages/screens/componentLibraryPlugins.test.ts \
+  source/dts-analytics-webapp/modern/src/pages/screens/components/TemplateGallery.helpers.test.ts \
+  source/dts-analytics-webapp/modern/src/pages/screens/components/ScreenHeader.helpers.test.ts
 pnpm -C source/dts-analytics-webapp/modern build
 ```
 
@@ -45,9 +49,15 @@ pnpm -C source/dts-analytics-webapp/modern build
 - marketplace 打开与安装动作
 - analytics 页面入口可访问
 
+当前仓库已经有现成 smoke：
+
+- `tests/web-e2e/specs/biz/analytics-screen-template-runtime.spec.ts`
+- `tests/web-e2e/specs/biz/analytics-publish-flow.spec.ts`
+
 建议命令：
 
 ```bash
+python3 tests/run_suite.py --suite biz-e2e --dry-run
 python3 tests/run_suite.py --suite web-e2e-core --fail-fast
 python3 tests/run_suite.py --suite web-e2e-full --fail-fast
 ```

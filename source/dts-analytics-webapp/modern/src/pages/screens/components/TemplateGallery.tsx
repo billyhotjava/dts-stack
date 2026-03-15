@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { analyticsApi, type ScreenIndustryPackAuditRow, type ScreenTemplateItem } from '../../../api/analyticsApi';
+import { StructuredActionDialog, type StructuredActionField } from './StructuredActionDialog';
+import { parseRuntimeTargetsInput } from './TemplateGallery.helpers';
 import {
     screenTemplates,
     TEMPLATE_CATEGORY_LABELS,
@@ -126,44 +128,42 @@ function summarizeAuditDetails(details: unknown): string {
     }
 }
 
-function parseRuntimeTargetsInput(input: string): Array<Record<string, unknown>> {
-    const text = String(input || '').trim();
-    if (!text) return [];
-    const rows = text
-        .split('\n')
-        .map((line) => line.trim())
-        .filter((line) => line.length > 0 && !line.startsWith('#'));
-    const targets: Array<Record<string, unknown>> = [];
-    for (const row of rows) {
-        const rawParts = row.split(',');
-        const head = rawParts.slice(0, 7).map((item) => item.trim());
-        const tail = rawParts.slice(7).join(',').trim();
-        const [id, protocol, host, portText, pathOrEmpty, requiredText, expectedStatus] = head;
-        const expectedBodyContains = tail || undefined;
-        const port = Number(portText || '');
-        if (!host || !Number.isFinite(port) || port <= 0) {
-            continue;
-        }
-        const required = requiredText ? !['false', '0', 'no', 'n'].includes(requiredText.toLowerCase()) : true;
-        const item: Record<string, unknown> = {
-            id: id || undefined,
-            protocol: protocol || 'tcp',
-            host,
-            port,
-            required,
-        };
-        if (pathOrEmpty) {
-            item.path = pathOrEmpty;
-        }
-        if (expectedStatus) {
-            item.expectedStatus = expectedStatus;
-        }
-        if (expectedBodyContains) {
-            item.expectedBodyContains = expectedBodyContains;
-        }
-        targets.push(item);
-    }
-    return targets;
+type TemplateGalleryNotice = {
+    tone: 'success' | 'error';
+    title: string;
+    message: string;
+};
+
+type TemplateGalleryDialogKind =
+    | 'industry-export'
+    | 'connector-plan'
+    | 'ops-health'
+    | 'runtime-probe'
+    | 'connector-probe'
+    | 'restore-version';
+
+type TemplateGalleryDialogState = {
+    kind: TemplateGalleryDialogKind;
+    title: string;
+    description?: string;
+    submitText: string;
+    fields: StructuredActionField[];
+};
+
+function downloadJson(filename: string, payload: unknown): void {
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+}
+
+function fieldValue(dialog: TemplateGalleryDialogState | null, key: string): string {
+    return dialog?.fields.find((field) => field.key === key)?.value || '';
 }
 
 export function TemplateGallery({ onSelect, onClose }: TemplateGalleryProps) {
@@ -184,6 +184,10 @@ export function TemplateGallery({ onSelect, onClose }: TemplateGalleryProps) {
     const [industryAuditError, setIndustryAuditError] = useState<string | null>(null);
     const [industryAuditAction, setIndustryAuditAction] = useState<'all' | 'pack.export' | 'pack.import'>('all');
     const [industryAuditResult, setIndustryAuditResult] = useState<'all' | 'success' | 'partial' | 'failed' | 'rejected'>('all');
+    const [actionNotice, setActionNotice] = useState<TemplateGalleryNotice | null>(null);
+    const [dialogState, setDialogState] = useState<TemplateGalleryDialogState | null>(null);
+    const [dialogLoading, setDialogLoading] = useState(false);
+    const [dialogError, setDialogError] = useState<string | null>(null);
 
     const loadAssetTemplates = () => {
         setLoading(true);
@@ -332,18 +336,28 @@ export function TemplateGallery({ onSelect, onClose }: TemplateGalleryProps) {
             if (importMode === 'industry') {
                 const validation = await analyticsApi.validateScreenIndustryPack(payload);
                 if (Array.isArray(validation.errors) && validation.errors.length > 0) {
-                    alert(`行业包校验失败：${validation.errors.join('；')}`);
+                    setActionNotice({
+                        tone: 'error',
+                        title: '行业包校验失败',
+                        message: validation.errors.join('；'),
+                    });
                     return;
                 }
                 if (Array.isArray(validation.warnings) && validation.warnings.length > 0) {
-                    const confirmed = window.confirm(`行业包存在告警：\n${validation.warnings.join('\n')}\n\n是否继续导入？`);
-                    if (!confirmed) {
-                        return;
-                    }
+                    setActionNotice({
+                        tone: 'error',
+                        title: '行业包存在告警',
+                        message: `${validation.warnings.join('\n')}\n\n请确认内容后重新导入。`,
+                    });
+                    return;
                 }
                 const result = await analyticsApi.importScreenIndustryPack(payload);
                 await loadAssetTemplates();
-                alert('行业包导入完成：成功 ' + (result.imported || 0) + '，失败 ' + (result.failed || 0));
+                setActionNotice({
+                    tone: 'success',
+                    title: '行业包导入完成',
+                    message: `成功 ${result.imported || 0}，失败 ${result.failed || 0}`,
+                });
                 return;
             }
 
@@ -375,59 +389,79 @@ export function TemplateGallery({ onSelect, onClose }: TemplateGalleryProps) {
             const created = await analyticsApi.createScreenTemplate(body);
             await loadAssetTemplates();
             setSelectedKey(`asset:${String(created.id)}`);
-            alert('模板包导入成功');
+            setActionNotice({
+                tone: 'success',
+                title: '模板包导入成功',
+                message: `模板已导入到资产中心，资产 ID=${String(created.id)}`,
+            });
         } catch (err) {
             console.error('Failed to import package:', err);
-            alert(importMode === 'industry' ? '行业包导入失败，请检查 JSON 结构' : '模板包导入失败，请检查 JSON 结构');
+            setActionNotice({
+                tone: 'error',
+                title: importMode === 'industry' ? '行业包导入失败' : '模板包导入失败',
+                message: importMode === 'industry' ? '请检查 JSON 结构和行业包内容' : '请检查 JSON 结构和模板内容',
+            });
         }
     };
 
     const handleExportTemplate = () => {
         if (!selectedSelection) {
-            alert('请先选择模板');
+            setActionNotice({
+                tone: 'error',
+                title: '请先选择模板',
+                message: '需要先选中一个内置模板或资产模板，才能执行导出。',
+            });
             return;
         }
         const pack = asTemplatePackage(selectedSelection);
-        const blob = new Blob([JSON.stringify(pack, null, 2)], { type: 'application/json;charset=utf-8' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
         const name = selectedSelection.kind === 'builtin'
             ? selectedSelection.template.name
             : (selectedSelection.template.name || `template-${String(selectedSelection.template.id)}`);
-        link.download = `${name || 'screen-template'}.json`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
+        downloadJson(`${name || 'screen-template'}.json`, pack);
+        setActionNotice({
+            tone: 'success',
+            title: '模板包已导出',
+            message: `${name || 'screen-template'}.json 已开始下载。`,
+        });
     };
 
-    const handleExportIndustryPack = async () => {
-        try {
-            const presets = await analyticsApi.getScreenIndustryPackPresets().catch(() => null);
-            const defaultIndustry = String((presets?.industries?.[0] as Record<string, unknown> | undefined)?.id || 'discrete-manufacturing');
-            const defaultHardware = String((presets?.hardwareProfiles?.[0] as Record<string, unknown> | undefined)?.id || 'edge-box-standard');
-            const industry = (window.prompt('行业标识（例如 discrete-manufacturing / energy-carbon）', defaultIndustry) || defaultIndustry).trim();
-            const hardwareProfile = (window.prompt('硬件预置（例如 edge-box-standard / ipc-dual-4k）', defaultHardware) || defaultHardware).trim();
-            const deploymentMode = (window.prompt('部署模式（online/offline/isolated）', 'online') || 'online').trim();
-            const connectors = (window.prompt('连接器类型（逗号分隔，如 plc,mqtt,opcua,postgresql）', 'plc,mqtt,opcua') || '').trim();
-            const body = selectedSelection && selectedSelection.kind === 'asset'
-                ? { templateIds: [selectedSelection.template.id], industry, hardwareProfile, deploymentMode, connectorTypes: connectors ? connectors.split(',').map(s => s.trim()).filter(Boolean) : undefined }
-                : { industry, hardwareProfile, deploymentMode, connectorTypes: connectors ? connectors.split(',').map(s => s.trim()).filter(Boolean) : undefined };
-            const pack = await analyticsApi.exportScreenIndustryPack(body);
-            const blob = new Blob([JSON.stringify(pack, null, 2)], { type: 'application/json;charset=utf-8' });
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = 'dts-industry-pack.json';
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            URL.revokeObjectURL(url);
-        } catch (err) {
-            console.error('Failed to export industry pack:', err);
-            alert('行业包导出失败');
-        }
+    const updateDialogField = (key: string, value: string) => {
+        setDialogState((current) => current ? {
+            ...current,
+            fields: current.fields.map((field) => field.key === key ? { ...field, value } : field),
+        } : current);
+    };
+
+    const closeDialog = () => {
+        if (dialogLoading) return;
+        setDialogState(null);
+        setDialogError(null);
+    };
+
+    const openIndustryExportDialog = async () => {
+        const presets = await analyticsApi.getScreenIndustryPackPresets().catch(() => null);
+        const defaultIndustry = String((presets?.industries?.[0] as Record<string, unknown> | undefined)?.id || 'discrete-manufacturing');
+        const defaultHardware = String((presets?.hardwareProfiles?.[0] as Record<string, unknown> | undefined)?.id || 'edge-box-standard');
+        const deploymentOptions = Array.isArray(presets?.deploymentModes) && presets.deploymentModes.length > 0
+            ? presets.deploymentModes.map((item) => ({ label: String(item), value: String(item) }))
+            : [
+                { label: 'online', value: 'online' },
+                { label: 'offline', value: 'offline' },
+                { label: 'isolated', value: 'isolated' },
+            ];
+        setDialogError(null);
+        setDialogState({
+            kind: 'industry-export',
+            title: '导出行业包',
+            description: '为当前模板生成可交付的行业包，包含部署模式与连接器预置。',
+            submitText: '导出 JSON',
+            fields: [
+                { key: 'industry', label: '行业标识', value: defaultIndustry, placeholder: '例如 discrete-manufacturing' },
+                { key: 'hardwareProfile', label: '硬件预置', value: defaultHardware, placeholder: '例如 edge-box-standard' },
+                { key: 'deploymentMode', label: '部署模式', kind: 'select', value: 'online', options: deploymentOptions },
+                { key: 'connectors', label: '连接器类型', value: 'plc,mqtt,opcua', placeholder: '逗号分隔，如 plc,mqtt,opcua' },
+            ],
+        });
     };
 
     const handleOpenIndustryAudit = async () => {
@@ -438,159 +472,91 @@ export function TemplateGallery({ onSelect, onClose }: TemplateGalleryProps) {
         await loadIndustryAudit();
     };
 
-    const handleExportConnectorPlan = async () => {
-        try {
-            const presets = await analyticsApi.getScreenIndustryPackPresets().catch(() => null);
-            const allTemplates = Array.isArray(presets?.connectorTemplates)
-                ? (presets?.connectorTemplates as Array<Record<string, unknown>>)
-                : [];
-            const defaultIds = allTemplates
-                .map((item) => String(item.id || '').trim())
-                .filter((id) => id.length > 0)
-                .join(',');
-            const idsInput = (window.prompt('连接器ID（逗号分隔）', defaultIds || 'plc,mqtt,opcua,postgresql') || '').trim();
-            const requestedIds = idsInput
-                .split(',')
-                .map((item) => item.trim().toLowerCase())
-                .filter((item) => item.length > 0);
-            const selectedTemplates = requestedIds.length > 0
-                ? allTemplates.filter((item) => requestedIds.includes(String(item.id || '').trim().toLowerCase()))
-                : allTemplates;
-            const plan = await analyticsApi.generateScreenIndustryConnectorPlan({
-                source: 'template-gallery',
-                connectorTemplates: selectedTemplates,
-            });
-            const blob = new Blob([JSON.stringify(plan, null, 2)], { type: 'application/json;charset=utf-8' });
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = 'dts-connector-plan.json';
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            URL.revokeObjectURL(url);
-            alert(`采集任务草案已生成，任务数：${plan.jobCount ?? 0}`);
-        } catch (err) {
-            console.error('Failed to generate connector plan:', err);
-            alert('采集任务草案生成失败');
-        }
+    const openConnectorPlanDialog = async () => {
+        const presets = await analyticsApi.getScreenIndustryPackPresets().catch(() => null);
+        const allTemplates = Array.isArray(presets?.connectorTemplates)
+            ? (presets?.connectorTemplates as Array<Record<string, unknown>>)
+            : [];
+        const defaultIds = allTemplates
+            .map((item) => String(item.id || '').trim())
+            .filter((id) => id.length > 0)
+            .join(',');
+        setDialogError(null);
+        setDialogState({
+            kind: 'connector-plan',
+            title: '生成采集任务草案',
+            description: '按连接器模板生成可导出的采集任务计划。',
+            submitText: '生成并导出',
+            fields: [
+                { key: 'connectorIds', label: '连接器 ID', value: defaultIds || 'plc,mqtt,opcua,postgresql', placeholder: '逗号分隔' },
+            ],
+        });
     };
 
-    const handleRunOpsHealth = async () => {
-        try {
-            const deploymentMode = (window.prompt('部署模式（online/offline/isolated）', 'online') || 'online').trim() || 'online';
-            const report = await analyticsApi.getScreenIndustryOpsHealth(deploymentMode, true);
-            const summary = report.summary || {};
-            const checks = Array.isArray(report.checks) ? report.checks : [];
-            const lines = checks.map((item) => {
-                const status = String(item.status || '-');
-                const name = String(item.name || '-');
-                const message = String(item.message || '');
-                return `[${status}] ${name}${message ? `: ${message}` : ''}`;
-            });
-            alert(
-                `运维巡检评分: ${String(summary.score ?? '-')} (${deploymentMode})\n`
-                + `模板数: ${String(summary.templateCount ?? '-')}\n`
-                + `失败审计: ${String(summary.failedAudits ?? '-')}\n\n`
-                + lines.join('\n'),
-            );
-        } catch (err) {
-            console.error('Failed to run industry ops health check:', err);
-            alert('运维巡检失败');
-        }
+    const openOpsHealthDialog = () => {
+        setDialogError(null);
+        setDialogState({
+            kind: 'ops-health',
+            title: '运行运维巡检',
+            description: '按部署模式生成模板资产的运维健康报告。',
+            submitText: '开始巡检',
+            fields: [
+                {
+                    key: 'deploymentMode',
+                    label: '部署模式',
+                    kind: 'select',
+                    value: 'online',
+                    options: [
+                        { label: 'online', value: 'online' },
+                        { label: 'offline', value: 'offline' },
+                        { label: 'isolated', value: 'isolated' },
+                    ],
+                },
+            ],
+        });
     };
 
-    const handleProbeRuntime = async () => {
-        try {
-            const timeoutInput = (window.prompt('运行时探测超时毫秒（300-5000）', '1500') || '1500').trim();
-            const timeoutMs = Number(timeoutInput);
-            const customTargetsInput = (window.prompt(
-                '可选：自定义目标（每行一个，格式：id,protocol,host,port,path,required,expectedStatus,expectedBodyContains）\n'
-                + '示例：analytics,http,127.0.0.1,3000,/analytics,true,200-499,metabase\n'
-                + '示例：edge-mqtt,mqtt,127.0.0.1,1883,,false,,\n'
-                + '留空使用默认目标',
-                '',
-            ) || '').trim();
-            const customTargets = parseRuntimeTargetsInput(customTargetsInput);
-            const report = await analyticsApi.probeScreenIndustryRuntime({
-                source: 'template-gallery',
-                timeoutMs: Number.isFinite(timeoutMs) ? timeoutMs : 1500,
-                targets: customTargets.length > 0 ? customTargets : undefined,
-            });
-            const summary = report.summary || {};
-            const rows = Array.isArray(report.rows) ? report.rows : [];
-            const lines = rows.map((item) => {
-                const status = String(item.status || '-');
-                const name = String(item.name || item.id || '-');
-                const protocol = String(item.protocol || 'tcp');
-                const host = String(item.host || '-');
-                const port = String(item.port || '-');
-                const httpStatus = item.httpStatus == null ? '' : ` status=${String(item.httpStatus)}`;
-                const bodyCheck = item.bodyMatched == null
-                    ? ''
-                    : (item.bodyMatched ? ' body=ok' : ' body=miss');
-                const url = item.url == null ? '' : ` ${String(item.url)}`;
-                const bodyPreview = item.bodyPreview == null
-                    ? ''
-                    : ` preview=${String(item.bodyPreview).slice(0, 80)}`;
-                const message = String(item.message || '');
-                return `[${status}] ${name} [${protocol}] (${host}:${port})${httpStatus}${bodyCheck}${url}${bodyPreview}${message ? `: ${message}` : ''}`;
-            });
-            alert(
-                `运行时探测: 总计 ${String(summary.total ?? '-')}, 通过 ${String(summary.pass ?? '-')}, `
-                + `告警 ${String(summary.warn ?? '-')}, 失败 ${String(summary.fail ?? '-')}\n`
-                + `超时: ${String(summary.timeoutMs ?? '-')} ms\n\n`
-                + lines.join('\n'),
-            );
-        } catch (err) {
-            console.error('Failed to probe runtime dependencies:', err);
-            alert('运行时探测失败');
-        }
+    const openRuntimeProbeDialog = () => {
+        setDialogError(null);
+        setDialogState({
+            kind: 'runtime-probe',
+            title: '运行时探测',
+            description: '检测模板交付依赖的运行时端点，支持按行输入自定义探测目标。',
+            submitText: '开始探测',
+            fields: [
+                { key: 'timeoutMs', label: '超时毫秒', value: '1500', placeholder: '300-5000' },
+                {
+                    key: 'customTargets',
+                    label: '自定义目标',
+                    kind: 'textarea',
+                    value: '',
+                    helpText: '每行一个，格式：id,protocol,host,port,path,required,expectedStatus,expectedBodyContains',
+                    placeholder: 'analytics,http,127.0.0.1,3000,/analytics,true,200-499,metabase',
+                },
+            ],
+        });
     };
 
-    const handleProbeConnectors = async () => {
-        try {
-            const presets = await analyticsApi.getScreenIndustryPackPresets().catch(() => null);
-            const allTemplates = Array.isArray(presets?.connectorTemplates)
-                ? (presets?.connectorTemplates as Array<Record<string, unknown>>)
-                : [];
-            const defaultIds = allTemplates
-                .map((item) => String(item.id || '').trim())
-                .filter((id) => id.length > 0)
-                .join(',');
-            const idsInput = (window.prompt('探测连接器ID（逗号分隔）', defaultIds || 'plc,mqtt,opcua,postgresql') || '').trim();
-            const requestedIds = idsInput
-                .split(',')
-                .map((item) => item.trim().toLowerCase())
-                .filter((item) => item.length > 0);
-            const selectedTemplates = requestedIds.length > 0
-                ? allTemplates.filter((item) => requestedIds.includes(String(item.id || '').trim().toLowerCase()))
-                : allTemplates;
-            const timeoutInput = (window.prompt('探测超时毫秒（300-5000）', '1500') || '1500').trim();
-            const timeoutMs = Number(timeoutInput);
-            const report = await analyticsApi.probeScreenIndustryConnectors({
-                source: 'template-gallery',
-                timeoutMs: Number.isFinite(timeoutMs) ? timeoutMs : 1500,
-                connectorTemplates: selectedTemplates,
-            });
-            const summary = report.summary || {};
-            const rows = Array.isArray(report.rows) ? report.rows : [];
-            const lines = rows.map((item) => {
-                const connectorId = String(item.connectorId || '-');
-                const status = String(item.status || '-');
-                const message = String(item.message || '');
-                return `[${status}] ${connectorId}${message ? `: ${message}` : ''}`;
-            });
-            alert(
-                `连接器探测: 总计 ${String(summary.total ?? '-')}, 通过 ${String(summary.pass ?? '-')}, `
-                + `告警 ${String(summary.warn ?? '-')}, 失败 ${String(summary.fail ?? '-')}\n`
-                + `超时: ${String(summary.timeoutMs ?? '-')} ms\n\n`
-                + lines.join('\n'),
-            );
-        } catch (err) {
-            console.error('Failed to probe connectors:', err);
-            alert('连接器探测失败');
-        }
+    const openConnectorProbeDialog = async () => {
+        const presets = await analyticsApi.getScreenIndustryPackPresets().catch(() => null);
+        const allTemplates = Array.isArray(presets?.connectorTemplates)
+            ? (presets?.connectorTemplates as Array<Record<string, unknown>>)
+            : [];
+        const defaultIds = allTemplates
+            .map((item) => String(item.id || '').trim())
+            .filter((id) => id.length > 0)
+            .join(',');
+        setDialogError(null);
+        setDialogState({
+            kind: 'connector-probe',
+            title: '连接器探测',
+            description: '按连接器模板执行连接性探测，并输出结构化诊断结果。',
+            submitText: '开始探测',
+            fields: [
+                { key: 'connectorIds', label: '连接器 ID', value: defaultIds || 'plc,mqtt,opcua,postgresql', placeholder: '逗号分隔' },
+                { key: 'timeoutMs', label: '超时毫秒', value: '1500', placeholder: '300-5000' },
+            ],
+        });
     };
 
     const handleToggleListing = async () => {
@@ -603,16 +569,24 @@ export function TemplateGallery({ onSelect, onClose }: TemplateGalleryProps) {
             const updated = await analyticsApi.updateScreenTemplateListing(selectedAsset.id, nextListed);
             setAssetTemplates((prev) => prev.map((item) => String(item.id) === String(updated.id) ? updated : item));
             setSelectedKey(`asset:${String(updated.id)}`);
-            alert(nextListed ? '模板已上架' : '模板已下架');
+            setActionNotice({
+                tone: 'success',
+                title: nextListed ? '模板已上架' : '模板已下架',
+                message: `${updated.name || `模板 #${updated.id}`} 的市场状态已更新。`,
+            });
         } catch (err) {
             console.error('Failed to update template listing:', err);
-            alert('模板上下架失败');
+            setActionNotice({
+                tone: 'error',
+                title: '模板上下架失败',
+                message: err instanceof Error ? err.message : '更新模板状态失败',
+            });
         } finally {
             setIsUpdatingAsset(false);
         }
     };
 
-    const handleRestoreTemplateVersion = async () => {
+    const openRestoreTemplateVersionDialog = async () => {
         if (!selectedAsset || isUpdatingAsset) {
             return;
         }
@@ -620,30 +594,214 @@ export function TemplateGallery({ onSelect, onClose }: TemplateGalleryProps) {
         try {
             const versions = await analyticsApi.listScreenTemplateVersions(selectedAsset.id, 30);
             if (!Array.isArray(versions) || versions.length === 0) {
-                alert('暂无可恢复版本');
+                setActionNotice({
+                    tone: 'error',
+                    title: '暂无可恢复版本',
+                    message: '当前模板还没有可恢复的历史版本。',
+                });
                 return;
             }
-            const lines = versions
-                .map((v) => `v${v.versionNo ?? '-'} | ${v.action || '-'} | ${v.createdAt || '-'}`)
-                .join('\n');
-            const input = (window.prompt(`版本列表：\n${lines}\n\n输入要恢复的版本号（versionNo）`, '') || '').trim();
-            if (!input) {
-                return;
-            }
-            const versionNo = Number(input);
-            if (!Number.isFinite(versionNo) || versionNo <= 0) {
-                alert('版本号格式不正确');
-                return;
-            }
-            const updated = await analyticsApi.restoreScreenTemplateVersion(selectedAsset.id, versionNo);
-            setAssetTemplates((prev) => prev.map((item) => String(item.id) === String(updated.id) ? updated : item));
-            setSelectedKey(`asset:${String(updated.id)}`);
-            alert('模板恢复成功');
+            setDialogError(null);
+            setDialogState({
+                kind: 'restore-version',
+                title: '恢复模板版本',
+                description: '选择一个历史版本，恢复到当前模板草稿。',
+                submitText: '恢复版本',
+                fields: [
+                    {
+                        key: 'versionNo',
+                        label: '历史版本',
+                        kind: 'select',
+                        value: String(versions[0]?.versionNo || ''),
+                        options: versions.map((version) => ({
+                            label: `v${version.versionNo ?? '-'} · ${version.action || '-'} · ${version.createdAt || '-'}`,
+                            value: String(version.versionNo ?? ''),
+                        })),
+                    },
+                ],
+            });
         } catch (err) {
             console.error('Failed to restore template version:', err);
-            alert('模板版本恢复失败');
+            setActionNotice({
+                tone: 'error',
+                title: '模板版本读取失败',
+                message: err instanceof Error ? err.message : '读取模板版本失败',
+            });
         } finally {
             setIsUpdatingAsset(false);
+        }
+    };
+
+    const handleSubmitDialog = async () => {
+        if (!dialogState) {
+            return;
+        }
+        setDialogLoading(true);
+        setDialogError(null);
+        try {
+            if (dialogState.kind === 'industry-export') {
+                const connectors = fieldValue(dialogState, 'connectors')
+                    .split(',')
+                    .map((item) => item.trim())
+                    .filter(Boolean);
+                const body = selectedSelection && selectedSelection.kind === 'asset'
+                    ? {
+                        templateIds: [selectedSelection.template.id],
+                        industry: fieldValue(dialogState, 'industry'),
+                        hardwareProfile: fieldValue(dialogState, 'hardwareProfile'),
+                        deploymentMode: fieldValue(dialogState, 'deploymentMode'),
+                        connectorTypes: connectors.length > 0 ? connectors : undefined,
+                    }
+                    : {
+                        industry: fieldValue(dialogState, 'industry'),
+                        hardwareProfile: fieldValue(dialogState, 'hardwareProfile'),
+                        deploymentMode: fieldValue(dialogState, 'deploymentMode'),
+                        connectorTypes: connectors.length > 0 ? connectors : undefined,
+                    };
+                const pack = await analyticsApi.exportScreenIndustryPack(body);
+                downloadJson('dts-industry-pack.json', pack);
+                setActionNotice({
+                    tone: 'success',
+                    title: '行业包已导出',
+                    message: 'dts-industry-pack.json 已开始下载。',
+                });
+                setDialogState(null);
+                return;
+            }
+
+            if (dialogState.kind === 'connector-plan') {
+                const presets = await analyticsApi.getScreenIndustryPackPresets().catch(() => null);
+                const allTemplates = Array.isArray(presets?.connectorTemplates)
+                    ? (presets?.connectorTemplates as Array<Record<string, unknown>>)
+                    : [];
+                const requestedIds = fieldValue(dialogState, 'connectorIds')
+                    .split(',')
+                    .map((item) => item.trim().toLowerCase())
+                    .filter(Boolean);
+                const selectedTemplates = requestedIds.length > 0
+                    ? allTemplates.filter((item) => requestedIds.includes(String(item.id || '').trim().toLowerCase()))
+                    : allTemplates;
+                const plan = await analyticsApi.generateScreenIndustryConnectorPlan({
+                    source: 'template-gallery',
+                    connectorTemplates: selectedTemplates,
+                });
+                downloadJson('dts-connector-plan.json', plan);
+                setActionNotice({
+                    tone: 'success',
+                    title: '采集任务草案已生成',
+                    message: `任务数：${plan.jobCount ?? 0}`,
+                });
+                setDialogState(null);
+                return;
+            }
+
+            if (dialogState.kind === 'ops-health') {
+                const deploymentMode = fieldValue(dialogState, 'deploymentMode') || 'online';
+                const report = await analyticsApi.getScreenIndustryOpsHealth(deploymentMode, true);
+                const summary = report.summary || {};
+                const checks = Array.isArray(report.checks) ? report.checks : [];
+                const lines = checks.map((item) => {
+                    const status = String(item.status || '-');
+                    const name = String(item.name || '-');
+                    const message = String(item.message || '');
+                    return `[${status}] ${name}${message ? `: ${message}` : ''}`;
+                });
+                setActionNotice({
+                    tone: 'success',
+                    title: `运维巡检完成 (${deploymentMode})`,
+                    message: `评分: ${String(summary.score ?? '-')}\n模板数: ${String(summary.templateCount ?? '-')}\n失败审计: ${String(summary.failedAudits ?? '-')}\n\n${lines.join('\n')}`,
+                });
+                setDialogState(null);
+                return;
+            }
+
+            if (dialogState.kind === 'runtime-probe') {
+                const timeoutMs = Number(fieldValue(dialogState, 'timeoutMs'));
+                const customTargets = parseRuntimeTargetsInput(fieldValue(dialogState, 'customTargets'));
+                const report = await analyticsApi.probeScreenIndustryRuntime({
+                    source: 'template-gallery',
+                    timeoutMs: Number.isFinite(timeoutMs) ? timeoutMs : 1500,
+                    targets: customTargets.length > 0 ? customTargets : undefined,
+                });
+                const summary = report.summary || {};
+                const rows = Array.isArray(report.rows) ? report.rows : [];
+                const lines = rows.map((item) => {
+                    const status = String(item.status || '-');
+                    const name = String(item.name || item.id || '-');
+                    const protocol = String(item.protocol || 'tcp');
+                    const host = String(item.host || '-');
+                    const port = String(item.port || '-');
+                    const message = String(item.message || '');
+                    return `[${status}] ${name} [${protocol}] (${host}:${port})${message ? `: ${message}` : ''}`;
+                });
+                setActionNotice({
+                    tone: 'success',
+                    title: '运行时探测完成',
+                    message: `总计 ${String(summary.total ?? '-')}, 通过 ${String(summary.pass ?? '-')}, 告警 ${String(summary.warn ?? '-')}, 失败 ${String(summary.fail ?? '-')}\n超时: ${String(summary.timeoutMs ?? '-')} ms\n\n${lines.join('\n')}`,
+                });
+                setDialogState(null);
+                return;
+            }
+
+            if (dialogState.kind === 'connector-probe') {
+                const presets = await analyticsApi.getScreenIndustryPackPresets().catch(() => null);
+                const allTemplates = Array.isArray(presets?.connectorTemplates)
+                    ? (presets?.connectorTemplates as Array<Record<string, unknown>>)
+                    : [];
+                const requestedIds = fieldValue(dialogState, 'connectorIds')
+                    .split(',')
+                    .map((item) => item.trim().toLowerCase())
+                    .filter(Boolean);
+                const selectedTemplates = requestedIds.length > 0
+                    ? allTemplates.filter((item) => requestedIds.includes(String(item.id || '').trim().toLowerCase()))
+                    : allTemplates;
+                const timeoutMs = Number(fieldValue(dialogState, 'timeoutMs'));
+                const report = await analyticsApi.probeScreenIndustryConnectors({
+                    source: 'template-gallery',
+                    timeoutMs: Number.isFinite(timeoutMs) ? timeoutMs : 1500,
+                    connectorTemplates: selectedTemplates,
+                });
+                const summary = report.summary || {};
+                const rows = Array.isArray(report.rows) ? report.rows : [];
+                const lines = rows.map((item) => {
+                    const connectorId = String(item.connectorId || '-');
+                    const status = String(item.status || '-');
+                    const message = String(item.message || '');
+                    return `[${status}] ${connectorId}${message ? `: ${message}` : ''}`;
+                });
+                setActionNotice({
+                    tone: 'success',
+                    title: '连接器探测完成',
+                    message: `总计 ${String(summary.total ?? '-')}, 通过 ${String(summary.pass ?? '-')}, 告警 ${String(summary.warn ?? '-')}, 失败 ${String(summary.fail ?? '-')}\n超时: ${String(summary.timeoutMs ?? '-')} ms\n\n${lines.join('\n')}`,
+                });
+                setDialogState(null);
+                return;
+            }
+
+            if (dialogState.kind === 'restore-version') {
+                if (!selectedAsset) {
+                    throw new Error('当前没有选中的资产模板');
+                }
+                const versionNo = Number(fieldValue(dialogState, 'versionNo'));
+                if (!Number.isFinite(versionNo) || versionNo <= 0) {
+                    setDialogError('版本号格式不正确');
+                    return;
+                }
+                const updated = await analyticsApi.restoreScreenTemplateVersion(selectedAsset.id, versionNo);
+                setAssetTemplates((prev) => prev.map((item) => String(item.id) === String(updated.id) ? updated : item));
+                setSelectedKey(`asset:${String(updated.id)}`);
+                setActionNotice({
+                    tone: 'success',
+                    title: '模板恢复成功',
+                    message: `${updated.name || `模板 #${updated.id}`} 已恢复到 v${versionNo}`,
+                });
+                setDialogState(null);
+            }
+        } catch (err) {
+            console.error('Template gallery action failed:', err);
+            setDialogError(err instanceof Error ? err.message : '执行失败，请稍后重试');
+        } finally {
+            setDialogLoading(false);
         }
     };
 
@@ -654,6 +812,29 @@ export function TemplateGallery({ onSelect, onClose }: TemplateGalleryProps) {
                     <h2>📋 模板市场</h2>
                     <button className="template-gallery-close" onClick={onClose}>✕</button>
                 </div>
+
+                {actionNotice ? (
+                    <div style={{
+                        margin: '14px 24px 0',
+                        padding: '12px 14px',
+                        borderRadius: 12,
+                        border: actionNotice.tone === 'success'
+                            ? '1px solid rgba(16,185,129,0.22)'
+                            : '1px solid rgba(239,68,68,0.22)',
+                        background: actionNotice.tone === 'success'
+                            ? 'rgba(16,185,129,0.12)'
+                            : 'rgba(239,68,68,0.10)',
+                        color: actionNotice.tone === 'success' ? '#bbf7d0' : '#fecaca',
+                    }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
+                            <strong>{actionNotice.title}</strong>
+                            <button className="template-btn secondary" onClick={() => setActionNotice(null)}>关闭</button>
+                        </div>
+                        <div style={{ marginTop: 6, fontSize: 12, whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>
+                            {actionNotice.message}
+                        </div>
+                    </div>
+                ) : null}
 
                 <div className="template-category-tabs">
                     {allCategories.map((value) => (
@@ -699,12 +880,12 @@ export function TemplateGallery({ onSelect, onClose }: TemplateGalleryProps) {
                     <button className="template-btn secondary" onClick={() => handleImportClick('template')}>导入模板包</button>
                     <button className="template-btn secondary" onClick={handleExportTemplate}>导出模板包</button>
                     <button className="template-btn secondary" onClick={() => handleImportClick('industry')}>导入行业包</button>
-                    <button className="template-btn secondary" onClick={handleExportIndustryPack}>导出行业包</button>
+                    <button className="template-btn secondary" onClick={() => void openIndustryExportDialog()}>导出行业包</button>
                     <button className="template-btn secondary" onClick={handleOpenIndustryAudit}>行业包审计</button>
-                    <button className="template-btn secondary" onClick={handleExportConnectorPlan}>采集任务草案</button>
-                    <button className="template-btn secondary" onClick={handleProbeConnectors}>连接器探测</button>
-                    <button className="template-btn secondary" onClick={handleRunOpsHealth}>运维巡检</button>
-                    <button className="template-btn secondary" onClick={handleProbeRuntime}>运行时探测</button>
+                    <button className="template-btn secondary" onClick={() => void openConnectorPlanDialog()}>采集任务草案</button>
+                    <button className="template-btn secondary" onClick={() => void openConnectorProbeDialog()}>连接器探测</button>
+                    <button className="template-btn secondary" onClick={openOpsHealthDialog}>运维巡检</button>
+                    <button className="template-btn secondary" onClick={openRuntimeProbeDialog}>运行时探测</button>
                     <input
                         ref={fileInputRef}
                         type="file"
@@ -821,7 +1002,7 @@ export function TemplateGallery({ onSelect, onClose }: TemplateGalleryProps) {
                             </button>
                             <button
                                 className="template-btn secondary"
-                                onClick={handleRestoreTemplateVersion}
+                                onClick={() => void openRestoreTemplateVersionDialog()}
                                 disabled={isUpdatingAsset}
                             >
                                 版本恢复
@@ -915,6 +1096,19 @@ export function TemplateGallery({ onSelect, onClose }: TemplateGalleryProps) {
                     </div>
                 </div>
             )}
+
+            <StructuredActionDialog
+                open={dialogState !== null}
+                title={dialogState?.title || ''}
+                description={dialogState?.description}
+                submitText={dialogState?.submitText || '确认'}
+                loading={dialogLoading}
+                error={dialogError}
+                fields={dialogState?.fields || []}
+                onClose={closeDialog}
+                onChange={updateDialogField}
+                onSubmit={handleSubmitDialog}
+            />
 
             <style>{`
                 .template-gallery-overlay {

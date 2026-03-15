@@ -28,8 +28,8 @@
 
 ## 当前进度
 
-- 状态：TODO
-- 备注：优先围绕 modern 前端已使用的 API 写测试，不做过度铺开
+- 状态：DONE
+- 备注：已补 marketplace、screen-plugins、screen-templates、screen-packs 四组最小 IT，并实际跑通定向 Maven 测试
 
 ## 风险
 

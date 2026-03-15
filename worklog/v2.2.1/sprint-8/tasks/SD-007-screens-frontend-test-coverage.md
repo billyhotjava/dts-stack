@@ -26,8 +26,8 @@
 
 ## 当前进度
 
-- 状态：TODO
-- 备注：优先补高价值路径，不追求一次性把所有页面都测满
+- 状态：DONE
+- 备注：新增 marketplace、插件映射、TemplateGallery 运行时探测解析、ScreenHeader 会话步骤构建等 helper 测试，screens 相关测试文件已明显多于原始基线
 
 ## 风险
 

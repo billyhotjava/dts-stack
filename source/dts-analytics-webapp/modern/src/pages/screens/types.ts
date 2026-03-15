@@ -317,3 +317,4 @@ export interface ComponentItem {
     defaultHeight: number;
     defaultConfig: Record<string, unknown>;
 }
+

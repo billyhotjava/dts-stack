@@ -653,6 +653,7 @@ export type ScreenTemplateVersionItem = {
 export type ScreenPluginComponent = {
 	id: string;
 	name?: string;
+	description?: string;
 	icon?: string;
 	baseType?: string;
 	defaultWidth?: number;
@@ -660,6 +661,7 @@ export type ScreenPluginComponent = {
 	defaultConfig?: Record<string, unknown>;
 	propertySchema?: Record<string, unknown>;
 	dataContract?: Record<string, unknown>;
+	installed?: boolean;
 };
 
 export type ScreenPluginDataSource = {
@@ -674,9 +676,27 @@ export type ScreenPluginManifest = {
 	name?: string;
 	version?: string;
 	enabled?: boolean;
+	installed?: boolean;
+	origin?: string;
 	signatureRequired?: boolean;
 	components?: ScreenPluginComponent[];
 	dataSources?: ScreenPluginDataSource[];
+};
+
+export type MarketplaceCatalogItem = {
+	id: string;
+	name?: string;
+	description?: string;
+	author?: string;
+	version?: string;
+	category?: string;
+	tags?: string[];
+	thumbnailUrl?: string;
+	downloads?: number;
+	createdAt?: string;
+	updatedAt?: string;
+	installed?: boolean;
+	sourceTemplateId?: number | string;
 };
 
 export type ScreenPluginValidationResult = {
@@ -1774,17 +1794,17 @@ export const analyticsApi = {
 		if (params?.search) qs.set('search', params.search);
 		if (params?.category) qs.set('category', params.category);
 		const suffix = qs.toString() ? `?${qs.toString()}` : '';
-		return fetchJson<unknown[]>(`/analytics/api/marketplace/components${suffix}`);
+		return fetchJson<MarketplaceCatalogItem[]>(`/analytics/api/marketplace/components${suffix}`);
 	},
 	listMarketplaceTemplates: (params?: { search?: string; category?: string }) => {
 		const qs = new URLSearchParams();
 		if (params?.search) qs.set('search', params.search);
 		if (params?.category) qs.set('category', params.category);
 		const suffix = qs.toString() ? `?${qs.toString()}` : '';
-		return fetchJson<unknown[]>(`/analytics/api/marketplace/templates${suffix}`);
+		return fetchJson<MarketplaceCatalogItem[]>(`/analytics/api/marketplace/templates${suffix}`);
 	},
 	installMarketplaceComponent: (id: string) =>
-		sendJson<unknown>(`/analytics/api/marketplace/components/${encodeURIComponent(id)}/install`, {}),
+		sendJson<MarketplaceCatalogItem>(`/analytics/api/marketplace/components/${encodeURIComponent(id)}/install`, {}),
 	installMarketplaceTemplate: (id: string) =>
-		sendJson<unknown>(`/analytics/api/marketplace/templates/${encodeURIComponent(id)}/install`, {}),
+		sendJson<MarketplaceCatalogItem>(`/analytics/api/marketplace/templates/${encodeURIComponent(id)}/install`, {}),
 };

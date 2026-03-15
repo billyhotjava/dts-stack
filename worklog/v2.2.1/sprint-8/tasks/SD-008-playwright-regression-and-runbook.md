@@ -28,8 +28,8 @@
 
 ## 当前进度
 
-- 状态：TODO
-- 备注：第一期优先 smoke，不在本 Sprint 做过深业务编排
+- 状态：DONE
+- 备注：现有 analytics screen/template smoke 已在 `tests/web-e2e/specs/biz/analytics-screen-template-runtime.spec.ts`，sprint 级 runbook 已更新到当前 suite/命令
 
 ## 风险
 

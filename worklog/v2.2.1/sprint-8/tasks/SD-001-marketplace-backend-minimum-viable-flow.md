@@ -32,8 +32,15 @@
 
 ## 当前进度
 
-- 状态：TODO
-- 备注：建议优先复用现有模板资产与插件 manifest 能力，不另起第四套资产模型
+- 状态：DONE
+- 已完成：
+  - 新增 `MarketplaceResource`
+  - 新增 `MarketplaceService`
+  - 打通 `/api/marketplace/components`
+  - 打通 `/api/marketplace/templates`
+  - 打通组件/模板安装接口
+  - 新增 `MarketplaceResourceIT`
+- 备注：当前组件安装态为实例内最小实现；插件安装后进入 `screen-plugins` 的完整闭环留给 `SD-005`
 
 ## 风险
 

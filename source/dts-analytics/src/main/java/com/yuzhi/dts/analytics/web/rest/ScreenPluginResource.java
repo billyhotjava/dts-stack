@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.yuzhi.dts.analytics.domain.AnalyticsUser;
 import com.yuzhi.dts.analytics.service.AnalyticsSessionService;
+import com.yuzhi.dts.analytics.service.MarketplaceService;
 import com.yuzhi.dts.analytics.web.support.MetabaseAuth;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.HashSet;
@@ -30,10 +31,13 @@ public class ScreenPluginResource {
 
     private final AnalyticsSessionService sessionService;
     private final ObjectMapper objectMapper;
+    private final MarketplaceService marketplaceService;
 
-    public ScreenPluginResource(AnalyticsSessionService sessionService, ObjectMapper objectMapper) {
+    public ScreenPluginResource(
+            AnalyticsSessionService sessionService, ObjectMapper objectMapper, MarketplaceService marketplaceService) {
         this.sessionService = sessionService;
         this.objectMapper = objectMapper;
+        this.marketplaceService = marketplaceService;
     }
 
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
@@ -122,6 +126,7 @@ public class ScreenPluginResource {
         kpiPro.put("name", "KPI卡片-Pro");
         kpiPro.put("icon", "🧭");
         kpiPro.put("baseType", "number-card");
+        kpiPro.put("installed", marketplaceService.isComponentInstalled("demo-stat-pack:kpi-card-pro"));
         kpiPro.put("defaultWidth", 280);
         kpiPro.put("defaultHeight", 110);
         kpiPro.set("defaultConfig", objectMapper.createObjectNode()
@@ -149,6 +154,7 @@ public class ScreenPluginResource {
         compactTrend.put("name", "紧凑趋势图");
         compactTrend.put("icon", "📉");
         compactTrend.put("baseType", "line-chart");
+        compactTrend.put("installed", marketplaceService.isComponentInstalled("demo-stat-pack:compact-trend"));
         compactTrend.put("defaultWidth", 460);
         compactTrend.put("defaultHeight", 240);
         ObjectNode compactTrendConfig = objectMapper.createObjectNode();
@@ -185,6 +191,7 @@ public class ScreenPluginResource {
         tableMatrix.put("name", "矩阵表格");
         tableMatrix.put("icon", "🧮");
         tableMatrix.put("baseType", "table");
+        tableMatrix.put("installed", marketplaceService.isComponentInstalled("demo-stat-pack:table-matrix"));
         tableMatrix.put("defaultWidth", 520);
         tableMatrix.put("defaultHeight", 260);
         ObjectNode tableConfig = objectMapper.createObjectNode();

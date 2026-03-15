@@ -30,8 +30,8 @@
 
 ## 当前进度
 
-- 状态：TODO
-- 备注：本期先解决闭环，不扩展更多插件类型
+- 状态：DONE
+- 备注：marketplace 安装结果已反映到 `/api/screen-plugins`，组件库对 `installed=false` 的远端插件组件默认隐藏，并支持安装后刷新
 
 ## 风险
 

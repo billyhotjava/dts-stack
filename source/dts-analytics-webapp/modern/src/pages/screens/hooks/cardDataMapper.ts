@@ -205,3 +205,4 @@ function toNumber(val: unknown): number {
     const n = Number(val);
     return Number.isFinite(n) ? n : 0;
 }
+

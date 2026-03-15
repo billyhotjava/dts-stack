@@ -33,29 +33,29 @@
 
 | ID | 标题 | 类型 | 预估 | 状态 |
 |----|------|------|------|------|
-| SD-001 | Marketplace 后端最小闭环 | 后端 | 2天 | TODO |
-| SD-002 | Marketplace 前端收口与安装体验 | 前端 | 1.5天 | TODO |
+| SD-001 | Marketplace 后端最小闭环 | 后端 | 2天 | DONE |
+| SD-002 | Marketplace 前端收口与安装体验 | 前端 | 1.5天 | DONE |
 
 ### 批次二：模板与操作产品化（SD-003 ~ SD-004）
 
 | ID | 标题 | 类型 | 预估 | 状态 |
 |----|------|------|------|------|
-| SD-003 | TemplateGallery 去 prompt/alert，改结构化弹窗流 | 前端 | 2天 | TODO |
-| SD-004 | ScreenHeader 高价值动作产品化 | 前端 | 2天 | TODO |
+| SD-003 | TemplateGallery 去 prompt/alert，改结构化弹窗流 | 前端 | 2天 | DONE |
+| SD-004 | ScreenHeader 高价值动作产品化 | 前端 | 2天 | DONE |
 
 ### 批次三：插件闭环（SD-005）
 
 | ID | 标题 | 类型 | 预估 | 状态 |
 |----|------|------|------|------|
-| SD-005 | 插件安装与可见性闭环 | 前后端 | 2天 | TODO |
+| SD-005 | 插件安装与可见性闭环 | 前后端 | 2天 | DONE |
 
 ### 批次四：测试补齐（SD-006 ~ SD-008）
 
 | ID | 标题 | 类型 | 预估 | 状态 |
 |----|------|------|------|------|
-| SD-006 | 大屏资产后端集成测试 | 后端测试 | 2天 | TODO |
-| SD-007 | screens 模块前端测试扩充 | 前端测试 | 1.5天 | TODO |
-| SD-008 | Playwright smoke 与 runbook 收口 | 自动化 | 1天 | TODO |
+| SD-006 | 大屏资产后端集成测试 | 后端测试 | 2天 | DONE |
+| SD-007 | screens 模块前端测试扩充 | 前端测试 | 1.5天 | DONE |
+| SD-008 | Playwright smoke 与 runbook 收口 | 自动化 | 1天 | DONE |
 
 ## 本 Sprint 不做
 
