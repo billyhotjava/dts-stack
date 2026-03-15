@@ -12,8 +12,11 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -54,7 +57,8 @@ public class DbtConfigService {
             DbtWorkspaceConfig config;
             if (!Files.exists(path)) {
                 Files.createDirectories(path.getParent());
-                config = new DbtWorkspaceConfig(
+                config = hydrateResolvedConfig(
+                    new DbtWorkspaceConfig(
                     true,
                     properties.getProjectDir(),
                     properties.getProfilesDir(),
@@ -64,10 +68,11 @@ public class DbtConfigService {
                     null,
                     null,
                     Collections.emptyMap()
+                    )
                 );
                 writeConfig(config);
             } else {
-                config = readConfig();
+                config = hydrateResolvedConfig(readConfig());
             }
             // 确保 dbt 宏文件存在
             ensureDbtMacros(config);
@@ -80,9 +85,9 @@ public class DbtConfigService {
         if (!properties.isEnabled()) {
             return DbtConfigView.disabled("dbt 配置未启用");
         }
-        DbtWorkspaceConfig config = readConfig();
+        DbtWorkspaceConfig config = hydrateResolvedConfig(readConfig());
         DbtProfileStatus profileStatus = buildProfile(config);
-        InfraDataSourceDto target = resolveTarget(config.targetDataSourceId());
+        InfraDataSourceDto target = resolveTarget(config);
         DbtWorkspaceStatus workspaceStatus = validateWorkspace(config, false);
         return new DbtConfigView(true, config, profileStatus, target, workspaceStatus);
     }
@@ -91,7 +96,8 @@ public class DbtConfigService {
         if (!properties.isEnabled()) {
             return DbtConfigView.disabled("dbt 配置未启用");
         }
-        DbtWorkspaceConfig config = new DbtWorkspaceConfig(
+        DbtWorkspaceConfig config = hydrateResolvedConfig(
+            new DbtWorkspaceConfig(
             true,
             safeText(request.projectDir(), properties.getProjectDir()),
             safeText(request.profilesDir(), properties.getProfilesDir()),
@@ -101,6 +107,7 @@ public class DbtConfigService {
             safeText(request.database(), null),
             safeText(request.schema(), null),
             request.vars() == null ? Collections.emptyMap() : request.vars()
+            )
         );
         DbtWorkspaceStatus workspaceStatus = validateWorkspace(config, true);
         if (!workspaceStatus.ok()) {
@@ -109,7 +116,7 @@ public class DbtConfigService {
         writeConfig(config);
         DbtProfileStatus profileStatus = buildProfile(config);
         ensureDbtMacros(config);
-        InfraDataSourceDto target = resolveTarget(config.targetDataSourceId());
+        InfraDataSourceDto target = resolveTarget(config);
         return new DbtConfigView(true, config, profileStatus, target, workspaceStatus);
     }
 
@@ -147,10 +154,10 @@ public class DbtConfigService {
     }
 
     private DbtProfileStatus buildProfile(DbtWorkspaceConfig config) {
-        if (config == null || !StringUtils.hasText(config.profilesDir()) || config.targetDataSourceId() == null) {
+        if (config == null || !StringUtils.hasText(config.profilesDir())) {
             return DbtProfileStatus.skipped("未选择目标数仓或 profiles 目录");
         }
-        InfraDataSource source = dataSourceRepository.findById(config.targetDataSourceId()).orElse(null);
+        InfraDataSource source = resolveTargetSource(config);
         if (source == null) {
             return DbtProfileStatus.skipped("目标数仓不存在");
         }
@@ -193,10 +200,12 @@ public class DbtConfigService {
         }
     }
 
-    private InfraDataSourceDto resolveTarget(UUID targetId) {
-        if (targetId == null) return null;
-        return dataSourceRepository
-            .findById(targetId)
+    private InfraDataSourceDto resolveTarget(DbtWorkspaceConfig config) {
+        InfraDataSource target = resolveTargetSource(config);
+        if (target == null) {
+            return null;
+        }
+        return Optional.of(target)
             .map(
                 source ->
                     new InfraDataSourceDto(
@@ -208,6 +217,89 @@ public class DbtConfigService {
                     )
             )
             .orElse(null);
+    }
+
+    private DbtWorkspaceConfig hydrateResolvedConfig(DbtWorkspaceConfig config) {
+        if (config == null || config.targetDataSourceId() != null) {
+            return config;
+        }
+        UUID resolvedTargetId = resolveDefaultTargetDataSourceId(config);
+        if (resolvedTargetId == null) {
+            return config;
+        }
+        return new DbtWorkspaceConfig(
+            config.enabled(),
+            config.projectDir(),
+            config.profilesDir(),
+            config.profileName(),
+            config.targetName(),
+            resolvedTargetId,
+            config.database(),
+            config.schema(),
+            config.vars()
+        );
+    }
+
+    private InfraDataSource resolveTargetSource(DbtWorkspaceConfig config) {
+        if (config == null) {
+            return null;
+        }
+        if (config.targetDataSourceId() != null) {
+            return dataSourceRepository.findById(config.targetDataSourceId()).orElse(null);
+        }
+        UUID targetId = resolveDefaultTargetDataSourceId(config);
+        if (targetId == null) {
+            return null;
+        }
+        return dataSourceRepository.findById(targetId).orElse(null);
+    }
+
+    private UUID resolveDefaultTargetDataSourceId(DbtWorkspaceConfig config) {
+        List<InfraDataSource> candidates = new ArrayList<>(dataSourceRepository.findByStatusIgnoreCase("ACTIVE"));
+        if (candidates.isEmpty()) {
+            candidates.addAll(dataSourceRepository.findAll());
+        }
+        if (candidates.isEmpty()) {
+            return null;
+        }
+        String preferredDatabase = safeText(config != null ? config.database() : null, null);
+        return candidates
+            .stream()
+            .filter(source -> source != null && source.getId() != null)
+            .max(Comparator.comparingInt(source -> scoreTargetSource(source, preferredDatabase)))
+            .map(InfraDataSource::getId)
+            .orElse(null);
+    }
+
+    private int scoreTargetSource(InfraDataSource source, String preferredDatabase) {
+        int score = 0;
+        String name = stringValue(source.getName());
+        String type = stringValue(source.getType());
+        String jdbcUrl = stringValue(source.getJdbcUrl());
+        String status = stringValue(source.getStatus());
+        String normalizedName = name == null ? "" : name.toLowerCase();
+        String normalizedType = type == null ? "" : type.toLowerCase();
+        String normalizedUrl = jdbcUrl == null ? "" : jdbcUrl.toLowerCase();
+        String normalizedDatabase = preferredDatabase == null ? "" : preferredDatabase.toLowerCase();
+        if (normalizedName.contains("biadmin")) {
+            score += 100;
+        }
+        if (normalizedUrl.contains("/biadmin")) {
+            score += 90;
+        }
+        if (StringUtils.hasText(normalizedDatabase) && normalizedUrl.contains("/" + normalizedDatabase)) {
+            score += 120;
+        }
+        if ("postgres".equals(normalizedType) || "postgresql".equals(normalizedType)) {
+            score += 40;
+        }
+        if ("active".equalsIgnoreCase(status)) {
+            score += 10;
+        }
+        if (StringUtils.hasText(jdbcUrl)) {
+            score += 5;
+        }
+        return score;
     }
 
     private DbtWorkspaceConfig readConfig() {
@@ -463,11 +555,14 @@ public class DbtConfigService {
             boolean projectWritable = probeWritable(projectPath);
             detail.put("projectWritable", projectWritable);
             Path targetDir = projectPath.resolve("target");
+            boolean targetExists = Files.isDirectory(targetDir);
             if (createIfMissing) {
                 Files.createDirectories(targetDir);
+                targetExists = true;
             }
             detail.put("targetDir", targetDir.toString());
-            boolean targetWritable = probeWritable(targetDir);
+            detail.put("targetExists", targetExists);
+            boolean targetWritable = targetExists ? probeWritable(targetDir) : projectWritable;
             detail.put("targetWritable", targetWritable);
             if (!projectWritable || !targetWritable) {
                 return DbtWorkspaceStatus.failed("dbt 项目目录或 target 目录不可写");
@@ -478,14 +573,17 @@ public class DbtConfigService {
 
         try {
             Path profilesPath = Path.of(profilesDir);
+            boolean profilesExists = Files.isDirectory(profilesPath);
             if (createIfMissing) {
                 Files.createDirectories(profilesPath);
+                profilesExists = true;
             }
-            if (!Files.isDirectory(profilesPath)) {
+            if (createIfMissing && !Files.isDirectory(profilesPath)) {
                 return DbtWorkspaceStatus.failed("profiles 目录不可用: " + profilesDir);
             }
             detail.put("profilesDir", profilesPath.toString());
-            boolean profilesWritable = probeWritable(profilesPath);
+            detail.put("profilesExists", profilesExists);
+            boolean profilesWritable = profilesExists ? probeWritable(profilesPath) : probeCreatable(profilesPath);
             detail.put("profilesWritable", profilesWritable);
             if (!profilesWritable) {
                 return DbtWorkspaceStatus.failed("profiles 目录不可写");
@@ -502,6 +600,21 @@ public class DbtConfigService {
             Path probe = Files.createTempFile(dir, ".dts_probe_", ".tmp");
             Files.deleteIfExists(probe);
             return true;
+        } catch (Exception ex) {
+            return false;
+        }
+    }
+
+    private static boolean probeCreatable(Path dir) {
+        try {
+            Path parent = dir.getParent();
+            if (parent == null) {
+                return false;
+            }
+            if (!Files.exists(parent)) {
+                return false;
+            }
+            return probeWritable(parent);
         } catch (Exception ex) {
             return false;
         }

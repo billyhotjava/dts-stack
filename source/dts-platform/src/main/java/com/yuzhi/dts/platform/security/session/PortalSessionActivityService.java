@@ -3,7 +3,9 @@ package com.yuzhi.dts.platform.security.session;
 import com.yuzhi.dts.platform.domain.security.PortalSessionCloseReason;
 import com.yuzhi.dts.platform.domain.security.PortalSessionEntity;
 import com.yuzhi.dts.platform.repository.security.PortalSessionRepository;
+import java.time.Duration;
 import java.time.Instant;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -19,9 +21,15 @@ public class PortalSessionActivityService {
     }
 
     private final PortalSessionRepository sessionRepository;
+    private final Duration sessionTtl;
 
-    public PortalSessionActivityService(PortalSessionRepository sessionRepository) {
+    public PortalSessionActivityService(
+        PortalSessionRepository sessionRepository,
+        @Value("${dts.platform.session.timeout-minutes:10}") long timeoutMinutes
+    ) {
         this.sessionRepository = sessionRepository;
+        long minutes = timeoutMinutes <= 0 ? 10 : timeoutMinutes;
+        this.sessionTtl = Duration.ofMinutes(minutes);
     }
 
     public ValidationResult touch(String tokenKey, Instant now) {
@@ -43,6 +51,7 @@ public class PortalSessionActivityService {
             return ValidationResult.EXPIRED;
         }
         entity.setLastSeenAt(effectiveNow);
+        entity.setExpiresAt(effectiveNow.plus(sessionTtl));
         sessionRepository.save(entity);
         return ValidationResult.ACTIVE;
     }

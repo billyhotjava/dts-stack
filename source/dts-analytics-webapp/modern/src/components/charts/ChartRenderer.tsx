@@ -32,6 +32,7 @@ export interface VisualizationSettings {
   'graph.y_axis.axis_enabled'?: boolean;
   'graph.x_axis.title_text'?: string;
   'graph.y_axis.title_text'?: string;
+  'graph.x_axis.label_rotate'?: number;
   'graph.show_values'?: boolean;
   'graph.label_value_frequency'?: string;
 
@@ -167,6 +168,7 @@ export function ChartRenderer({
             showArea={settings['graph.show_area'] === true}
             smooth={settings['graph.smooth'] !== false}
             colors={colors}
+            xAxisLabelRotate={settings['graph.x_axis.label_rotate']}
           />
         );
 

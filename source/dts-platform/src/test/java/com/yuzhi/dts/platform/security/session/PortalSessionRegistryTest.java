@@ -27,7 +27,7 @@ class PortalSessionRegistryTest {
     }
 
     private PortalSessionActivityService newActivityService(PortalSessionRepository repository) {
-        return new PortalSessionActivityService(repository);
+        return new PortalSessionActivityService(repository, 10L);
     }
 
     @Test

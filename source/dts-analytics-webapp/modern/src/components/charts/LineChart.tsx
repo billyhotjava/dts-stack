@@ -1,6 +1,7 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { getChartColor, formatChartValue } from './chartColors';
 import { ChartLegend, type LegendItem } from './ChartLegend';
+import { buildLineChartLayout } from './lineChartLayout';
 import { ChartTooltip, type TooltipData, useChartTooltip } from './ChartTooltip';
 
 interface LineChartProps {
@@ -14,6 +15,7 @@ interface LineChartProps {
   showArea?: boolean;
   smooth?: boolean;
   colors?: string[];
+  xAxisLabelRotate?: number;
 }
 
 // Compute cubic bezier control points for smooth curve
@@ -52,7 +54,8 @@ export function LineChart({
   showDots = true,
   showArea = false,
   smooth = true,
-  colors
+  colors,
+  xAxisLabelRotate = 0,
 }: LineChartProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [hiddenSeries, setHiddenSeries] = useState<Set<string>>(new Set());
@@ -95,11 +98,10 @@ export function LineChart({
 
   const width = 600;
   const height = 300;
-  const padding = { top: 20, right: 20, bottom: 40, left: 60 };
+  const { maxValue, minValue, series, labels } = chartData;
+  const { axisLabelLayout, padding } = buildLineChartLayout(labels, xAxisLabelRotate);
   const chartWidth = width - padding.left - padding.right;
   const chartHeight = height - padding.top - padding.bottom;
-
-  const { maxValue, minValue, series, labels } = chartData;
   const valueRange = maxValue - minValue || 1;
 
   const xLabel = data.cols[xAxisIndex]?.display_name || data.cols[xAxisIndex]?.name || '';
@@ -170,16 +172,17 @@ export function LineChart({
         {/* X-axis labels */}
         {labels.map((label, i) => {
           const x = getX(i);
-          const showLabel = labels.length <= 12 || i % Math.ceil(labels.length / 12) === 0;
+          const showLabel = axisLabelLayout.step === 1 || i % axisLabelLayout.step === 0;
           if (!showLabel) return null;
           return (
             <text
               key={i}
               x={x}
-              y={height - padding.bottom + 16}
+              y={height - axisLabelLayout.bottomPadding + 20}
               fontSize={10}
               fill="var(--color-text-tertiary, #888)"
-              textAnchor="middle"
+              textAnchor={axisLabelLayout.textAnchor}
+              transform={axisLabelLayout.rotate ? `rotate(-${axisLabelLayout.rotate} ${x} ${height - axisLabelLayout.bottomPadding + 20})` : undefined}
             >
               {label.length > 12 ? label.slice(0, 12) + '...' : label}
             </text>

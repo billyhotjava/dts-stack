@@ -1003,6 +1003,7 @@ export default function SqlModelingPage() {
 				toast.success(message);
 			}
 			void loadSyncStatus();
+			await loadModels();
 		} catch (err: any) {
 			toast.error(err?.message || "同步模型失败");
 		} finally {

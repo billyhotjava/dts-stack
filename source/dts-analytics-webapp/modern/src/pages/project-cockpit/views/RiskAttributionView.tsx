@@ -186,6 +186,7 @@ export default function RiskAttributionView({ locale }: { locale: Locale }) {
 								"graph.dimensions": ["weekLabel"],
 								"graph.metrics": ["delayedNodes", "highRiskNodes"],
 								"graph.colors": ["#f59e0b", "#dc2626"],
+								"graph.x_axis.label_rotate": 36,
 							}}
 						/>
 					</div>

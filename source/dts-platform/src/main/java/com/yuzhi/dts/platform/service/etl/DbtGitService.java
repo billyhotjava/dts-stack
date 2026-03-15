@@ -45,9 +45,11 @@ public class DbtGitService {
         """;
 
     private final DbtProperties properties;
+    private final DbtConfigService configService;
 
-    public DbtGitService(DbtProperties properties) {
+    public DbtGitService(DbtProperties properties, DbtConfigService configService) {
         this.properties = properties;
+        this.configService = configService;
     }
 
     // ── Public API ───────────────────────────────────────────────
@@ -268,6 +270,10 @@ public class DbtGitService {
 
     private Path resolveProjectDir() {
         String dir = properties.getProjectDir();
+        DbtConfigService.DbtConfigView view = configService.loadConfig();
+        if (view != null && view.config() != null && StringUtils.hasText(view.config().projectDir())) {
+            dir = view.config().projectDir();
+        }
         if (!StringUtils.hasText(dir)) {
             dir = "/opt/dts/dbt";
         }

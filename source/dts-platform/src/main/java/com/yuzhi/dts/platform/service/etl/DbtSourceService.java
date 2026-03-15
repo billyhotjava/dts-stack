@@ -23,10 +23,16 @@ public class DbtSourceService {
     private static final Logger LOG = LoggerFactory.getLogger(DbtSourceService.class);
 
     private final DbtProperties properties;
+    private final DbtConfigService configService;
     private final InfraOdsTableMappingRepository mappingRepository;
 
-    public DbtSourceService(DbtProperties properties, InfraOdsTableMappingRepository mappingRepository) {
+    public DbtSourceService(
+        DbtProperties properties,
+        DbtConfigService configService,
+        InfraOdsTableMappingRepository mappingRepository
+    ) {
         this.properties = properties;
+        this.configService = configService;
         this.mappingRepository = mappingRepository;
     }
 
@@ -38,7 +44,7 @@ public class DbtSourceService {
         if (mappings.isEmpty()) {
             return DbtSourceRefreshResult.empty("未发现 ODS 映射");
         }
-        Path projectDir = Path.of(properties.getProjectDir());
+        Path projectDir = resolveProjectDir();
         if (!Files.exists(projectDir)) {
             return DbtSourceRefreshResult.empty("dbt 项目目录不存在");
         }
@@ -98,6 +104,18 @@ public class DbtSourceService {
         if (StringUtils.hasText(value)) {
             target.put(key, value);
         }
+    }
+
+    private Path resolveProjectDir() {
+        String dir = properties.getProjectDir();
+        DbtConfigService.DbtConfigView view = configService.loadConfig();
+        if (view != null && view.config() != null && StringUtils.hasText(view.config().projectDir())) {
+            dir = view.config().projectDir();
+        }
+        if (!StringUtils.hasText(dir)) {
+            dir = "/opt/dts/dbt";
+        }
+        return Path.of(dir);
     }
 
     public record DbtSourceRefreshResult(boolean enabled, int tables, String message, String path) {

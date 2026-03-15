@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -26,11 +27,13 @@ import com.yuzhi.dts.platform.service.catalog.CatalogColumnSyncService;
 import com.yuzhi.dts.platform.service.etl.DbtConfigService;
 import com.yuzhi.dts.platform.service.security.OrganizationVisibilityService;
 import java.nio.file.Path;
+import java.nio.file.Files;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.ArrayList;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -87,10 +90,12 @@ class ModelingSqlModelServiceTest {
 
     private UUID planId;
     private ModelingPlan plan;
+    private List<ModelingSqlModel> storedModels;
 
     @BeforeEach
     void setUp() {
         planId = UUID.randomUUID();
+        storedModels = new ArrayList<>();
         plan = new ModelingPlan();
         plan.setId(planId);
         plan.setName("Patent Plan");
@@ -99,17 +104,24 @@ class ModelingSqlModelServiceTest {
         when(security.resolveActiveDept(anyString())).thenReturn("D1");
         when(security.hasInstituteScope()).thenReturn(false);
         when(organizationVisibilityService.isRoot(anyString())).thenReturn(false);
-        when(planRepo.findById(planId)).thenReturn(Optional.of(plan));
-        when(columnSyncService.parseCsv(any(Path.class))).thenReturn(List.of());
-        when(repo.findFirstByPlanIdAndNameIgnoreCase(any(UUID.class), anyString())).thenReturn(Optional.empty());
+        lenient().when(planRepo.findById(planId)).thenReturn(Optional.of(plan));
+        lenient().when(columnSyncService.parseCsv(any(Path.class))).thenReturn(List.of());
+        lenient().when(repo.findFirstByPlanIdAndNameIgnoreCase(any(UUID.class), anyString())).thenReturn(Optional.empty());
+        lenient().when(repo.findAll()).thenAnswer(invocation -> new ArrayList<>(storedModels));
+        lenient().when(repo.findByPlanId(any(UUID.class))).thenAnswer(invocation -> {
+            UUID requestedPlanId = invocation.getArgument(0);
+            return storedModels.stream().filter(model -> requestedPlanId.equals(model.getPlanId())).toList();
+        });
         when(repo.save(any(ModelingSqlModel.class))).thenAnswer(invocation -> {
             ModelingSqlModel model = invocation.getArgument(0);
             if (model.getId() == null) {
                 model.setId(UUID.randomUUID());
             }
+            storedModels.removeIf(existing -> existing.getId() != null && existing.getId().equals(model.getId()));
+            storedModels.add(model);
             return model;
         });
-        when(
+        lenient().when(
             datasetRepository.existsByHiveDatabaseIgnoreCaseAndHiveTableIgnoreCaseAndWarehouseLayerIgnoreCaseAndEnabledTrue(
                 anyString(),
                 anyString(),
@@ -239,6 +251,28 @@ class ModelingSqlModelServiceTest {
         ArgumentCaptor<ModelingSqlModel> captor = ArgumentCaptor.forClass(ModelingSqlModel.class);
         verify(repo).save(captor.capture());
         assertThat(captor.getValue().getSourceDataSourceId()).isEqualTo(datasetSourceId);
+    }
+
+    @Test
+    void list_shouldDiscoverWorkspaceModelsFromDbtProject() throws Exception {
+        Path modelsDir = tempDir.resolve("models").resolve("ads").resolve("project");
+        Files.createDirectories(modelsDir);
+        Files.writeString(modelsDir.resolve("ads_project_cockpit_summary.sql"), "select 1 as metric");
+
+        UUID warehouseId = UUID.randomUUID();
+        InfraDataSource warehouse = source(warehouseId, "数仓 (biadmin)", "postgres");
+        warehouse.setStatus("ACTIVE");
+        when(dataSourceRepository.findByStatusIgnoreCase(anyString())).thenReturn(List.of(warehouse));
+        when(dataSourceRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
+
+        List<ModelingSqlModelService.SqlModelDto> models = service.list(null, "cockpit", "D1");
+
+        assertThat(models).hasSize(1);
+        ModelingSqlModelService.SqlModelDto dto = models.get(0);
+        assertThat(dto.name()).isEqualTo("ads_project_cockpit_summary");
+        assertThat(dto.layer()).isEqualTo("ADS");
+        assertThat(dto.modelPath()).isEqualTo("models/ads/project/ads_project_cockpit_summary.sql");
+        assertThat(dto.sql()).contains("select 1 as metric");
     }
 
     private InfraOdsTableMapping mapping(UUID id, UUID connectionId, String schema, String table, String entityCode) {

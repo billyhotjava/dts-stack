@@ -1,3 +1,5 @@
+import { getGanttOwnerLabelPlacement } from "./projectGanttBoard.helpers";
+
 type Task = {
 	id?: string;
 	name?: string;
@@ -46,6 +48,10 @@ export function ProjectGanttBoard({ tasks }: Props) {
 				const actual = toDateValue(task.actualDate) ?? Date.now();
 				const left = ((plan - start) / total) * 100;
 				const width = Math.max(((actual - plan) / total) * 100, 1.5);
+				const tone = task.riskLevel === "高" ? "high" : task.delayDays ? "warn" : "normal";
+				const owner = String(task.owner ?? "").trim();
+				const ownerPlacement = owner ? getGanttOwnerLabelPlacement(left, width) : "inside";
+				const ownerAnchor = ownerPlacement === "outside-left" ? left : left + width;
 				return (
 					<div key={task.id ?? task.name} className="project-cockpit__gantt-row">
 						<div className="project-cockpit__gantt-meta">
@@ -56,11 +62,23 @@ export function ProjectGanttBoard({ tasks }: Props) {
 						</div>
 						<div className="project-cockpit__gantt-track">
 							<div
-								className={`project-cockpit__gantt-bar project-cockpit__gantt-bar--${task.riskLevel === "高" ? "high" : task.delayDays ? "warn" : "normal"}`}
+								className={`project-cockpit__gantt-bar project-cockpit__gantt-bar--${tone}`}
 								style={{ left: `${left}%`, width: `${width}%` }}
+								title={owner || undefined}
 							>
-								<span>{task.owner}</span>
+								{owner && ownerPlacement === "inside" ? (
+									<span className="project-cockpit__gantt-owner project-cockpit__gantt-owner--inside">{owner}</span>
+								) : null}
 							</div>
+							{owner && ownerPlacement !== "inside" ? (
+								<span
+									className={`project-cockpit__gantt-owner project-cockpit__gantt-owner--outside project-cockpit__gantt-owner--${tone} project-cockpit__gantt-owner--${ownerPlacement === "outside-left" ? "left" : "right"}`}
+									style={{ left: `${Math.min(ownerAnchor, 100)}%` }}
+									title={owner}
+								>
+									{owner}
+								</span>
+							) : null}
 						</div>
 						<div className="project-cockpit__gantt-side">
 							<span>{task.planDate || "--"}</span>

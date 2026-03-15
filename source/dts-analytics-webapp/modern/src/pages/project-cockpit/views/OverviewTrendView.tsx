@@ -142,6 +142,7 @@ export default function OverviewTrendView({ summary, summaryLoading, locale }: P
 									"graph.metrics": ["completionRate", "delayedNodes", "highRiskNodes"],
 									"graph.colors": ["#2563eb", "#f59e0b", "#dc2626"],
 									"graph.show_dots": true,
+									"graph.x_axis.label_rotate": 36,
 								}}
 							/>
 						</div>

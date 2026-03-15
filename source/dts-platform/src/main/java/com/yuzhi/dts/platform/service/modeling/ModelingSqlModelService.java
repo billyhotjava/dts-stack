@@ -33,6 +33,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.nio.file.FileVisitOption;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
@@ -116,6 +117,7 @@ public class ModelingSqlModelService {
     }
 
     public List<SqlModelDto> list(UUID planId, String keyword, String activeDeptHeader) {
+        syncWorkspaceModels(activeDeptHeader);
         String activeDept = security.resolveActiveDept(activeDeptHeader);
         boolean instituteScope = security.hasInstituteScope();
         List<ModelingSqlModel> models = planId == null ? repo.findAll() : repo.findByPlanId(planId);
@@ -1231,6 +1233,111 @@ public class ModelingSqlModelService {
         if (normalized.startsWith("dws_")) return "DWS";
         if (normalized.startsWith("ads_")) return "ADS";
         return null;
+    }
+
+    private void syncWorkspaceModels(String activeDeptHeader) {
+        DbtConfigService.DbtConfigView view = dbtConfigService.loadConfig();
+        if (view == null || view.config() == null || !StringUtils.hasText(view.config().projectDir())) {
+            return;
+        }
+        UUID sourceDataSourceId = resolveFallbackSourceId(activeDeptHeader);
+        if (sourceDataSourceId == null) {
+            return;
+        }
+        Path projectDir = Path.of(view.config().projectDir()).normalize();
+        Path modelsDir = projectDir.resolve("models").normalize();
+        if (!modelsDir.startsWith(projectDir) || !Files.isDirectory(modelsDir)) {
+            return;
+        }
+        Map<String, ModelingSqlModel> existingByName = new LinkedHashMap<>();
+        for (ModelingSqlModel existing : repo.findAll()) {
+            if (existing == null || !StringUtils.hasText(existing.getName())) {
+                continue;
+            }
+            existingByName.putIfAbsent(existing.getName().trim().toLowerCase(Locale.ROOT), existing);
+        }
+        try (var walk = Files.walk(modelsDir, FileVisitOption.FOLLOW_LINKS)) {
+            walk
+                .filter(Files::isRegularFile)
+                .filter(path -> path.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".sql"))
+                .sorted(Comparator.comparing(path -> path.toString().toLowerCase(Locale.ROOT)))
+                .forEach(path -> upsertDiscoveredWorkspaceModel(projectDir, path, view.config(), sourceDataSourceId, existingByName));
+        } catch (IOException ex) {
+            LOG.warn("[dbt-model] failed to discover workspace models: {}", ex.getMessage());
+        }
+    }
+
+    private void upsertDiscoveredWorkspaceModel(
+        Path projectDir,
+        Path sqlFile,
+        DbtConfigService.DbtWorkspaceConfig config,
+        UUID sourceDataSourceId,
+        Map<String, ModelingSqlModel> existingByName
+    ) {
+        try {
+            String fileName = sqlFile.getFileName() == null ? null : sqlFile.getFileName().toString();
+            if (!StringUtils.hasText(fileName) || !fileName.toLowerCase(Locale.ROOT).endsWith(".sql")) {
+                return;
+            }
+            String modelName = fileName.substring(0, fileName.length() - 4);
+            if (!MODEL_NAME_PATTERN.matcher(modelName).matches()) {
+                return;
+            }
+            String relativePath = projectDir.relativize(sqlFile).toString().replace('\\', '/');
+            String sqlText = Files.readString(sqlFile, StandardCharsets.UTF_8);
+            String layer = inferLayerFromPath(relativePath, modelName);
+            String key = modelName.toLowerCase(Locale.ROOT);
+            ModelingSqlModel existing = existingByName.get(key);
+            boolean changed = false;
+            if (existing == null) {
+                existing = new ModelingSqlModel();
+                existing.setName(modelName);
+                existing.setEnabled(Boolean.TRUE);
+                existing.setStatus("DRAFT");
+                existing.setSourceDataSourceId(sourceDataSourceId);
+                existing.setSchemaName(trimToNull(config != null ? config.schema() : null));
+                existing.setMaterialized("table");
+                existing.setDescription("从 dbt 工作区自动发现");
+                changed = true;
+            }
+            if (!relativePath.equals(trimToNull(existing.getModelPath()))) {
+                existing.setModelPath(relativePath);
+                changed = true;
+            }
+            if (!sqlText.equals(defaultText(existing.getSqlText(), ""))) {
+                existing.setSqlText(sqlText);
+                changed = true;
+            }
+            if (!StringUtils.hasText(existing.getLayer()) && StringUtils.hasText(layer)) {
+                existing.setLayer(layer);
+                changed = true;
+            }
+            if (existing.getSourceDataSourceId() == null) {
+                existing.setSourceDataSourceId(sourceDataSourceId);
+                changed = true;
+            }
+            if (!StringUtils.hasText(existing.getMaterialized())) {
+                existing.setMaterialized("table");
+                changed = true;
+            }
+            if (changed) {
+                ModelingSqlModel saved = repo.save(existing);
+                existingByName.put(key, saved);
+            }
+        } catch (IOException ex) {
+            LOG.warn("[dbt-model] failed to load sql file {}: {}", sqlFile, ex.getMessage());
+        }
+    }
+
+    private String inferLayerFromPath(String relativePath, String modelName) {
+        if (StringUtils.hasText(relativePath)) {
+            String normalized = relativePath.replace('\\', '/').toLowerCase(Locale.ROOT);
+            if (normalized.contains("/ods/")) return "ODS";
+            if (normalized.contains("/dwd/")) return "DWD";
+            if (normalized.contains("/dws/")) return "DWS";
+            if (normalized.contains("/ads/")) return "ADS";
+        }
+        return inferLayer(modelName);
     }
 
     private String normalizeLayer(String layer) {
