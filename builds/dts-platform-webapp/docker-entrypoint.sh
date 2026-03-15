@@ -17,13 +17,19 @@ ADMIN_BASE="${ADMIN_API_PROXY_TARGET:-http://dts-admin:8081}"
 ADMIN_UPSTREAM_API="$(printf '%s' "$ADMIN_BASE" | sed 's:/*$::')/api/"
 export ADMIN_UPSTREAM_API
 
+ANALYTICS_API_UPSTREAM="${ANALYTICS_API_PROXY_TARGET:-http://dts-analytics:3000}"
+export ANALYTICS_API_UPSTREAM
+
+ANALYTICS_UI_UPSTREAM="${ANALYTICS_UI_PROXY_TARGET:-http://dts-analytics-webapp-modern:80}"
+export ANALYTICS_UI_UPSTREAM
+
 TEMPLATE="/etc/nginx/http.d/default.conf.template"
 TARGET="/etc/nginx/http.d/default.conf"
 
 if [ -f "$TEMPLATE" ]; then
-  echo "[entrypoint] Rendering Nginx config with UPSTREAM=$UPSTREAM ADMIN_UPSTREAM_API=$ADMIN_UPSTREAM_API"
+  echo "[entrypoint] Rendering Nginx config with UPSTREAM=$UPSTREAM ADMIN_UPSTREAM_API=$ADMIN_UPSTREAM_API ANALYTICS_API_UPSTREAM=$ANALYTICS_API_UPSTREAM ANALYTICS_UI_UPSTREAM=$ANALYTICS_UI_UPSTREAM"
   # shellcheck disable=SC2016
-  envsubst '${UPSTREAM} ${ADMIN_UPSTREAM_API}' < "$TEMPLATE" > "$TARGET"
+  envsubst '${UPSTREAM} ${ADMIN_UPSTREAM_API} ${ANALYTICS_API_UPSTREAM} ${ANALYTICS_UI_UPSTREAM}' < "$TEMPLATE" > "$TARGET"
 fi
 
 # Ensure Koal SDK vendor assets are readable; repair permissions if needed

@@ -119,6 +119,41 @@ export function mapCardDataToConfig(
             };
         }
 
+        case 'combo-chart':
+            return mapAxisChart(rows, cols, config);
+
+        case 'scatter-chart': {
+            const xF = config?.xField as string | undefined;
+            const yF = config?.yField as string | undefined;
+            const sizeF = config?.sizeField as string | undefined;
+            const catF = config?.categoryField as string | undefined;
+            const xIdx = xF ? cols.findIndex((c) => c.name === xF) : 0;
+            const yIdx = yF ? cols.findIndex((c) => c.name === yF) : 1;
+            const sizeIdx = sizeF ? cols.findIndex((c) => c.name === sizeF) : -1;
+            const catIdx = catF ? cols.findIndex((c) => c.name === catF) : -1;
+
+            if (catIdx >= 0) {
+                const groups = new Map<string, number[][]>();
+                for (const row of rows) {
+                    const cat = String(row[catIdx] ?? '');
+                    const point = [toNumber(row[xIdx >= 0 ? xIdx : 0]), toNumber(row[yIdx >= 0 ? yIdx : 1])];
+                    if (sizeIdx >= 0) point.push(toNumber(row[sizeIdx]));
+                    if (!groups.has(cat)) groups.set(cat, []);
+                    groups.get(cat)!.push(point);
+                }
+                return {
+                    series: Array.from(groups.entries()).map(([name, data]) => ({ name, data })),
+                };
+            }
+            return {
+                data: rows.map((row) => {
+                    const point = [toNumber(row[xIdx >= 0 ? xIdx : 0]), toNumber(row[yIdx >= 0 ? yIdx : 1])];
+                    if (sizeIdx >= 0) point.push(toNumber(row[sizeIdx]));
+                    return point;
+                }),
+            };
+        }
+
         default:
             return {};
     }

@@ -479,6 +479,12 @@ services:
       - -lc
       - |
         set -e
+        raw_java_tool_options="$${JAVA_TOOL_OPTIONS:-}"
+        clean_java_tool_options="$$(printf '%s' "$${raw_java_tool_options}" | sed 's/^[[:space:]\"]*//; s/[[:space:]\"]*$$//')"
+        if [ "$${clean_java_tool_options}" != "$${raw_java_tool_options}" ]; then
+          echo "[dts-analytics] sanitized wrapping quotes in JAVA_TOOL_OPTIONS"
+        fi
+        export JAVA_TOOL_OPTIONS="$${clean_java_tool_options}"
         mvn -q -DskipTests package
         mvn -q -DskipTests spring-boot:run \
           -Dspring-boot.run.jvmArguments="-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5007" \
@@ -548,6 +554,8 @@ services:
       CHOKIDAR_INTERVAL: "1000"
       HOST: 0.0.0.0
       PORT: "3002"
+      VITE_API_PROXY_TARGET: http://dts-platform:8081
+      VITE_ANALYTICS_API_PROXY_TARGET: http://dts-analytics:3000
     command:
       [
         "sh",
@@ -670,6 +678,8 @@ services:
       # Vite dev proxy target for admin API; use direct container address in dev to avoid TLS and Traefik
       # Note: vite.config rewrites '/admin/api' -> '/api' for the target, so do NOT include '/api' suffix here.
       VITE_ADMIN_PROXY_TARGET: "http://dts-admin:8081"
+      VITE_ANALYTICS_API_PROXY_TARGET: "http://dts-analytics:3000"
+      VITE_ANALYTICS_UI_PROXY_TARGET: "http://dts-analytics-webapp-modern:3002"
       # Enable experimental SQL workbench by default (can be overridden in .env)
       VITE_ENABLE_SQL_WORKBENCH: ${VITE_ENABLE_SQL_WORKBENCH:-true}
       # Toggle password login UI for platform webapp during dev builds

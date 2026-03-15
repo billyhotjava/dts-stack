@@ -235,7 +235,7 @@ const buildWriterTemplate = (
 			...base,
 			fileType: "text",
 			writeMode: "append",
-			fieldDelimiter: "\u0001",
+			fieldDelimiter: "",
 			nullFormat: "\\N",
 		};
 	}

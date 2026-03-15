@@ -645,6 +645,8 @@ services:
     environment:
       TZ: ${TZ:-Asia/Shanghai}
       API_PROXY_TARGET: http://dts-platform:8081
+      ANALYTICS_API_PROXY_TARGET: http://dts-analytics:3000
+      ANALYTICS_UI_PROXY_TARGET: http://dts-analytics-webapp-modern:80
       # Admin API base URL for Keycloak localization and other admin-proxied calls
       VITE_ADMIN_API_BASE_URL: "https://${HOST_ADMIN_UI}/api"
       # Preferred public domain for BI links (used to rewrite Hetu IP links)

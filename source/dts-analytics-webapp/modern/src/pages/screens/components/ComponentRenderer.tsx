@@ -1670,7 +1670,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                         axisLabel: { color: t.echarts.axisLabelColor, fontSize: axisFontSize },
                         splitLine: { lineStyle: { color: t.echarts.splitLineColor } },
                     },
-                    series: (c.series as Array<{ name: string; data: number[] }>).map((s, idx) => {
+                    series: (Array.isArray(c.series) ? c.series as Array<{ name: string; data: number[] }> : []).map((s, idx) => {
                         const lineStackMode = String(c.stackMode ?? 'off');
                         const stackGroup = lineStackMode !== 'off' ? 'stack' : undefined;
                         return {
@@ -1741,7 +1741,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                     },
                     xAxis: barHorizontal ? valueAxisConfig : categoryAxisConfig,
                     yAxis: barHorizontal ? categoryAxisConfig : valueAxisConfig,
-                    series: (c.series as Array<{ name: string; data: number[] }>).map((s, idx) => ({
+                    series: (Array.isArray(c.series) ? c.series as Array<{ name: string; data: number[] }> : []).map((s, idx) => ({
                         name: s.name,
                         type: 'bar',
                         data: s.data,
@@ -1830,57 +1830,50 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                 });
 
             case 'gantt-chart': {
-                const tasks = (c.tasks as Array<{
-                    name: string; type: string; planDate: string; actualDate: string;
-                    isCompleted: boolean; isOverdue: boolean; isIncomplete: boolean;
-                    delayDays: number; riskLevel: string; owner: string;
-                }>) || [];
+                /* eslint-disable @typescript-eslint/no-explicit-any */
+                const tasks = Array.isArray(c.tasks) ? (c.tasks as Array<Record<string, any>>) : [];
                 if (!tasks.length) {
                     return renderEChartWithHandles({ ...themeOptions, title: { text: '暂无数据', left: 'center', top: 'center', textStyle: { color: t.textSecondary, fontSize: 14 } } });
                 }
 
-                const sorted = [...tasks].sort((a, b) => a.planDate.localeCompare(b.planDate));
-                const categories = sorted.map((tk) => tk.name);
+                const sorted = [...tasks].sort((a, b) => String(a.planDate ?? '').localeCompare(String(b.planDate ?? '')));
+                const categories = sorted.map((tk) => String(tk.name ?? ''));
 
-                const allDates = sorted.flatMap((tk) => [tk.planDate, tk.actualDate].filter(Boolean));
-                const minDate = allDates.reduce((a, b) => (a < b ? a : b), allDates[0]);
-                const maxDate = allDates.reduce((a, b) => (a > b ? a : b), allDates[0]);
+                const allDates = sorted.flatMap((tk) => [tk.planDate, tk.actualDate].filter(Boolean).map(String));
+                if (!allDates.length) {
+                    return renderEChartWithHandles({ ...themeOptions, title: { text: '无有效日期数据', left: 'center', top: 'center', textStyle: { color: t.textSecondary, fontSize: 14 } } });
+                }
+                const minDate = allDates.reduce((a, b) => (a < b ? a : b));
+                const maxDate = allDates.reduce((a, b) => (a > b ? a : b));
                 const today = new Date().toISOString().slice(0, 10);
 
-                const getBarColor = (tk: (typeof sorted)[0]) => {
+                const getBarColor = (tk: Record<string, any>) => {
                     if (tk.isCompleted && !tk.isOverdue) return '#52c41a';
                     if (tk.isCompleted && tk.isOverdue) return '#faad14';
                     if (tk.isIncomplete) return '#ff4d4f';
                     return '#1890ff';
                 };
 
-                const barData = sorted.map((tk, idx) => {
-                    const start = new Date(tk.planDate).getTime();
-                    const end = tk.actualDate ? new Date(tk.actualDate).getTime() : Date.now();
-                    return {
-                        value: [idx, start, end, tk.delayDays],
+                // Build bar data: each bar is [startTime, endTime, categoryIndex]
+                // Using xAxis=time, yAxis=category, bar series type for compatibility
+                const barSeries: any[] = [];
+                sorted.forEach((tk, idx) => {
+                    const start = new Date(String(tk.planDate)).getTime();
+                    const end = tk.actualDate ? new Date(String(tk.actualDate)).getTime() : Date.now();
+                    barSeries.push({
+                        value: [start, idx, end - start, tk.delayDays],
                         itemStyle: { color: getBarColor(tk) },
-                        task: tk,
-                    };
+                        _task: tk,
+                    });
                 });
-
-                const milestones = sorted
-                    .map((tk, idx) => (tk.type === '里程碑节点' ? {
-                        value: [idx, new Date(tk.planDate).getTime()],
-                        symbol: 'diamond',
-                        symbolSize: 14,
-                        itemStyle: { color: '#722ed1' },
-                        task: tk,
-                    } : null))
-                    .filter(Boolean);
 
                 const xMax = maxDate > today ? maxDate : today;
                 const ganttOption: Record<string, unknown> = {
                     ...themeOptions,
                     tooltip: {
                         trigger: 'item',
-                        formatter: (params: { data?: { task?: (typeof sorted)[0] } }) => {
-                            const tk = params.data?.task;
+                        formatter: (params: any) => {
+                            const tk = params.data?._task;
                             if (!tk) return '';
                             return [
                                 `<b>${tk.name}</b>`,
@@ -1909,7 +1902,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                             color: t.textPrimary,
                             fontSize: 11,
                             width: 100,
-                            overflow: 'truncate',
+                            overflow: 'truncate' as const,
                         },
                         splitLine: { show: false },
                     },
@@ -1917,32 +1910,39 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                     series: [
                         {
                             type: 'custom',
-                            renderItem: (_params: unknown, api: {
-                                value: (idx: number) => number;
-                                coord: (val: [number, number]) => [number, number];
-                                size: (val: [number, number]) => [number, number];
-                                style: (extra?: Record<string, unknown>) => Record<string, unknown>;
-                            }) => {
-                                const catIdx = api.value(0);
-                                const startTime = api.value(1);
-                                const endTime = api.value(2);
-                                const start = api.coord([startTime, catIdx]);
-                                const end = api.coord([endTime, catIdx]);
-                                const barHeight = api.size([0, 1])[1] * 0.6;
+                            renderItem: (params: any, api: any) => {
+                                const startVal = api.value(0);
+                                const catIdx = api.value(1);
+                                const duration = api.value(2);
+                                const endVal = startVal + duration;
+                                const startPx = api.coord([startVal, catIdx]);
+                                const endPx = api.coord([endVal, catIdx]);
+                                const categoryHeight = typeof api.size === 'function' ? api.size([0, 1])[1] : 30;
+                                const barHeight = categoryHeight * 0.6;
+                                const style = typeof api.style === 'function' ? api.style() : {};
+                                // 里程碑节点画菱形
+                                if (params.data?._task?.type === '里程碑节点') {
+                                    const sz = Math.min(categoryHeight * 0.7, 16);
+                                    return {
+                                        type: 'diamond',
+                                        shape: { cx: startPx[0], cy: startPx[1], width: sz, height: sz },
+                                        style,
+                                    };
+                                }
                                 return {
                                     type: 'rect',
                                     shape: {
-                                        x: start[0],
-                                        y: start[1] - barHeight / 2,
-                                        width: Math.max(end[0] - start[0], 3),
+                                        x: startPx[0],
+                                        y: startPx[1] - barHeight / 2,
+                                        width: Math.max(endPx[0] - startPx[0], 4),
                                         height: barHeight,
-                                        r: 2,
+                                        r: [2, 2, 2, 2],
                                     },
-                                    style: api.style(),
+                                    style,
                                 };
                             },
-                            encode: { x: [1, 2], y: 0 },
-                            data: barData,
+                            encode: { x: [0], y: 1 },
+                            data: barSeries,
                             markLine: {
                                 silent: true,
                                 symbol: 'none',
@@ -1951,15 +1951,9 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                                 label: { formatter: '今日', position: 'start', color: '#ff4d4f', fontSize: 11 },
                             },
                         },
-                        ...(milestones.length ? [{
-                            type: 'scatter' as const,
-                            data: milestones,
-                            encode: { x: 1, y: 0 },
-                            symbolSize: 14,
-                            z: 10,
-                        }] : []),
                     ],
                 };
+                /* eslint-enable @typescript-eslint/no-explicit-any */
 
                 return renderEChartWithHandles(ganttOption, echartsClickHandler);
             }
@@ -2018,34 +2012,66 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                     }],
                 }, echartsClickHandler);
 
-            case 'scatter-chart':
+            case 'scatter-chart': {
+                /* eslint-disable @typescript-eslint/no-explicit-any */
+                const RISK_COLORS: Record<string, string> = { '高': '#ff4d4f', '中': '#faad14', '低': '#52c41a' };
+                const scatterSeries = c.series as Array<{ name: string; data: number[][] }> | undefined;
+                const scatterData = c.data as number[][] | undefined;
+                const builtSeries = scatterSeries?.length
+                    ? scatterSeries.map((s, idx) => ({
+                        name: s.name,
+                        type: 'scatter' as const,
+                        data: s.data,
+                        symbolSize: (val: number[]) => Math.max((val[2] ?? 1) * 8, 8),
+                        itemStyle: { color: RISK_COLORS[s.name] || seriesColors[idx] || t.scatterColor },
+                    }))
+                    : [{
+                        type: 'scatter' as const,
+                        data: scatterData || [],
+                        symbolSize: 10,
+                        itemStyle: { color: seriesColors[0] || t.scatterColor },
+                    }];
                 return renderEChartWithHandles({
                     ...themeOptions,
                     ...chartMotionOption,
                     title: { text: c.title as string, textStyle: { color: t.textPrimary, fontSize: (c.titleFontSize as number) || 14 } },
                     legend: legendConfig,
+                    tooltip: {
+                        ...themeOptions.tooltip,
+                        formatter: (params: any) => {
+                            const d = params.data || [];
+                            return `${params.seriesName}<br/>超期: ${d[0]}天<br/>节点数: ${d[2] ?? 1}`;
+                        },
+                    },
                     xAxis: {
+                        name: (c as any).xAxisName || '',
                         axisLine: { lineStyle: { color: t.echarts.axisLineColor } },
                         axisLabel: { color: t.echarts.axisLabelColor, fontSize: axisFontSize },
                         splitLine: { lineStyle: { color: t.echarts.splitLineColor } },
                     },
                     yAxis: {
+                        name: (c as any).yAxisName || '',
+                        type: 'value' as const,
                         axisLine: { lineStyle: { color: t.echarts.axisLineColor } },
-                        axisLabel: { color: t.echarts.axisLabelColor, fontSize: axisFontSize },
+                        axisLabel: {
+                            color: t.echarts.axisLabelColor,
+                            fontSize: axisFontSize,
+                            formatter: (v: number) => ['', '低', '中', '高'][v] || String(v),
+                        },
                         splitLine: { lineStyle: { color: t.echarts.splitLineColor } },
+                        min: 0,
+                        max: 4,
+                        interval: 1,
                     },
-                    series: [{
-                        type: 'scatter',
-                        data: c.data as number[][],
-                        symbolSize: 10,
-                        itemStyle: { color: seriesColors[0] || t.scatterColor },
-                    }],
+                    series: builtSeries,
                     grid: axisGrid,
                 }, echartsClickHandler);
+                /* eslint-enable @typescript-eslint/no-explicit-any */
+            }
 
             case 'combo-chart': {
-                const comboSeries = (c.series as Array<{ name: string; type: 'bar' | 'line'; yAxisIndex?: number; data: number[] }>) || [];
-                const comboYAxis = (c.yAxis as Array<{ name?: string; min?: number; max?: number }>) || [{}];
+                const comboSeries = Array.isArray(c.series) ? (c.series as Array<{ name: string; type: 'bar' | 'line'; yAxisIndex?: number; data: number[] }>) : [];
+                const comboYAxis = Array.isArray(c.yAxis) ? (c.yAxis as Array<{ name?: string; min?: number; max?: number }>) : [{}];
                 return renderEChartWithHandles({
                     ...themeOptions,
                     ...chartMotionOption,

@@ -4,6 +4,7 @@ import react from "@vitejs/plugin-react";
 import { visualizer } from "rollup-plugin-visualizer";
 import { defineConfig, loadEnv } from "vite";
 import tsconfigPaths from "vite-tsconfig-paths";
+import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { resolve as resolvePath } from "node:path";
 import legacy from "@vitejs/plugin-legacy";
@@ -13,12 +14,92 @@ import { legacyCssFallbacks } from "./tools/postcss/legacy-css-fallbacks";
 const rootDir = fileURLToPath(new URL(".", import.meta.url));
 const legacySupportedBrowsers = ["chrome >= 95", "edge >= 95", "firefox >= 102", "safari >= 15.4", "ios >= 15.5", "android >= 95"];
 const modernSupportedBrowsers = ["chrome >= 109", "edge >= 109", "firefox >= 115", "safari >= 16.4", "ios >= 16.4", "android >= 109"];
+const adminServiceTarget = { host: "dts-admin", containerPort: 8081, hostPort: 18081 };
+const analyticsApiServiceTarget = { host: "dts-analytics", containerPort: 3000, hostPort: 3000 };
+const analyticsUiServiceTarget = { host: "dts-analytics-webapp-modern", containerPort: 3002, hostPort: 3002 };
+
+type PlatformServerProxyOptions = {
+	apiProxyTarget: string;
+	apiProxyPrefix: string;
+	adminProxyTarget: string;
+	analyticsApiProxyTarget: string;
+	analyticsUiProxyTarget: string;
+};
+
+function resolveServiceProxyTarget(
+	envValue: string | undefined,
+	service: { host: string; containerPort: number; hostPort: number },
+	runningInContainer: boolean,
+) {
+	if (envValue && envValue.trim()) {
+		return envValue.trim();
+	}
+	return runningInContainer
+		? `http://${service.host}:${service.containerPort}`
+		: `http://127.0.0.1:${service.hostPort}`;
+}
+
+export function createPlatformServerProxy({
+	apiProxyTarget,
+	apiProxyPrefix,
+	adminProxyTarget,
+	analyticsApiProxyTarget,
+	analyticsUiProxyTarget,
+}: PlatformServerProxyOptions) {
+	return {
+		"/analytics/api": {
+			target: analyticsApiProxyTarget,
+			changeOrigin: true,
+			rewrite: (path: string) => path.replace(/^\/analytics\/api/, "/api"),
+			secure: false,
+			ws: true,
+			xfwd: true,
+		},
+		"/analytics": {
+			target: analyticsUiProxyTarget,
+			changeOrigin: true,
+			secure: false,
+			xfwd: true,
+		},
+		"/api": {
+			target: apiProxyTarget,
+			changeOrigin: true,
+			// Auto rewrite when targeting Traefik (HTTPS): /api -> /platform/api
+			rewrite:
+				typeof apiProxyPrefix === "string" && apiProxyPrefix.length > 0
+					? (path: string) => path.replace(/^\/api/, `${apiProxyPrefix}/api`)
+					: undefined,
+			secure: false,
+			xfwd: true,
+		},
+		// Proxy Admin API under same-origin path to avoid browser CORS in dev.
+		// When VITE_ADMIN_API_BASE_URL = '/admin/api', frontend calls hit Vite and are forwarded here.
+		"/admin/api": {
+			target: adminProxyTarget,
+			changeOrigin: true,
+			secure: false,
+			xfwd: true,
+			// Conditional rewrite:
+			// - Keycloak endpoints live under '/api/keycloak/**' on the admin service
+			//   Map '/admin/api/keycloak/**' -> '/api/keycloak/**'
+			// - Admin endpoints live under '/api/admin/**'
+			//   Map all other '/admin/api/**' -> '/api/admin/**'
+			rewrite: (path: string) => {
+				if (/^\/admin\/api\/keycloak\//.test(path)) {
+					return path.replace(/^\/admin\/api\//, "/api/");
+				}
+				return path.replace(/^\/admin\/api/, "/api/admin");
+			},
+		},
+	};
+}
 
 export default defineConfig(({ mode }) => {
 	const rawEnv = loadEnv(mode, process.cwd(), "");
 	const env = { ...rawEnv, ...process.env } as Record<string, string | undefined>;
 	const base = env.VITE_APP_PUBLIC_PATH || env.VITE_PUBLIC_PATH || "/";
 	const isProduction = mode === "production";
+	const runningInContainer = existsSync("/.dockerenv");
 
 	const legacyFlagRaw =
 		env.LEGACY_BROWSER_BUILD ??
@@ -54,6 +135,21 @@ export default defineConfig(({ mode }) => {
 	})();
 
 	const apiProxyPrefix = explicitProxyPrefix !== undefined ? explicitProxyPrefix : autoPrefix;
+	const adminProxyTarget = resolveServiceProxyTarget(
+		env.VITE_ADMIN_PROXY_TARGET || rawEnv.VITE_ADMIN_PROXY_TARGET,
+		adminServiceTarget,
+		runningInContainer,
+	);
+	const analyticsApiProxyTarget = resolveServiceProxyTarget(
+		env.VITE_ANALYTICS_API_PROXY_TARGET || rawEnv.VITE_ANALYTICS_API_PROXY_TARGET,
+		analyticsApiServiceTarget,
+		runningInContainer,
+	);
+	const analyticsUiProxyTarget = resolveServiceProxyTarget(
+		env.VITE_ANALYTICS_UI_PROXY_TARGET || rawEnv.VITE_ANALYTICS_UI_PROXY_TARGET,
+		analyticsUiServiceTarget,
+		runningInContainer,
+	);
 	const pollingEnabled = String(env.CHOKIDAR_USEPOLLING || "").trim().toLowerCase() === "true";
 	const pollingInterval = Number(env.CHOKIDAR_INTERVAL || 1000) || 1000;
 
@@ -170,43 +266,14 @@ export default defineConfig(({ mode }) => {
         usePolling: pollingEnabled,
         interval: pollingEnabled ? pollingInterval : undefined,
       },
-			proxy: {
-				"/api": {
-					target: runtimeProxyTarget,
-					changeOrigin: true,
-					// Auto rewrite when targeting Traefik (HTTPS): /api -> /platform/api
-					rewrite:
-						typeof apiProxyPrefix === "string" && apiProxyPrefix.length > 0
-							? (path: string) => path.replace(/^\/api/, `${apiProxyPrefix}/api`)
-							: undefined,
-					secure: false,
-					xfwd: true,
-				},
-				// Proxy Admin API under same-origin path to avoid browser CORS in dev.
-            // When VITE_ADMIN_API_BASE_URL = '/admin/api', frontend calls hit Vite and are forwarded here.
-				"/admin/api": ((): any => {
-					const adminTarget = env.VITE_ADMIN_PROXY_TARGET || rawEnv.VITE_ADMIN_PROXY_TARGET;
-					if (!adminTarget) return undefined;
-                    return {
-                        target: adminTarget,
-                        changeOrigin: true,
-                        secure: false,
-                        xfwd: true,
-                        // Conditional rewrite:
-                        // - Keycloak endpoints live under '/api/keycloak/**' on the admin service
-                        //   Map '/admin/api/keycloak/**' -> '/api/keycloak/**'
-                        // - Admin endpoints live under '/api/admin/**'
-                        //   Map all other '/admin/api/**' -> '/api/admin/**'
-                        rewrite: (path: string) => {
-                            if (/^\/admin\/api\/keycloak\//.test(path)) {
-                                return path.replace(/^\/admin\/api\//, "/api/");
-                            }
-                            return path.replace(/^\/admin\/api/, "/api/admin");
-                        },
-                    };
-                })(),
+				proxy: createPlatformServerProxy({
+					apiProxyTarget: runtimeProxyTarget,
+					apiProxyPrefix,
+					adminProxyTarget,
+					analyticsApiProxyTarget,
+					analyticsUiProxyTarget,
+				}),
 			},
-		},
 
 			build: {
 				target: buildTarget,

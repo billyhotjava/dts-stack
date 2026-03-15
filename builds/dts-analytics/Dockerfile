@@ -80,6 +80,8 @@ ENV TZ=Asia/Shanghai \
 
 WORKDIR /app
 COPY --from=build /workspace/dist/app.jar /app/app.jar
+COPY builds/dts-analytics/docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh
 
 EXPOSE 3000
-ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar /app/app.jar"]
+ENTRYPOINT ["/docker-entrypoint.sh"]

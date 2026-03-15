@@ -20,15 +20,15 @@ interface ServicePanelProps {
 }
 
 const SERVICE_CAPABILITIES: Record<ServiceKey, string> = {
-	platform: "\u5143\u6570\u636e\u8054\u52a8",
-	addax: "\u79bb\u7ebf\u4f5c\u4e1a\u751f\u6210",
-	airflow: "\u4efb\u52a1\u8c03\u5ea6\u7f16\u6392",
-	openmetadata: "\u8840\u7f18\u4e0e\u5143\u6570\u636e\u91c7\u96c6",
-	dbt: "\u5efa\u6a21\u4e0e\u8f6c\u6362\u53c2\u6570",
+	platform: "元数据联动",
+	addax: "离线作业生成",
+	airflow: "任务调度编排",
+	openmetadata: "血缘与元数据采集",
+	dbt: "建模与转换参数",
 };
 
 const QUICK_SWITCHES: Array<{ key: ServiceKey; label: string }> = [
-	{ key: "platform", label: "\u5e73\u53f0\u8054\u52a8" },
+	{ key: "platform", label: "平台联动" },
 	{ key: "addax", label: "Addax" },
 	{ key: "airflow", label: "Airflow" },
 	{ key: "openmetadata", label: "OpenMetadata" },
@@ -65,14 +65,14 @@ function ServicePanel({ service, title, restartHint, capability, formContent }: 
 			const values = await form.validateFields();
 			const payload = buildSettingsPayload(values);
 			await adminApi.updateIntegrationSettings(service, payload);
-			toast.success("\u914d\u7f6e\u5df2\u4fdd\u5b58");
+			toast.success("配置已保存");
 			if (restartHint) {
 				toast.info(restartHint);
 			}
 			queryClient.invalidateQueries({ queryKey: ["admin", "infra-settings", service] });
 		} catch (error: any) {
 			if (error?.errorFields) return;
-			toast.error(error?.message || "\u4fdd\u5b58\u5931\u8d25");
+			toast.error(error?.message || "保存失败");
 		}
 	};
 
@@ -83,14 +83,14 @@ function ServicePanel({ service, title, restartHint, capability, formContent }: 
 			const result = await adminApi.testIntegrationSettings(service, payload);
 			setTestResult(result || null);
 			if (result?.success) {
-				toast.success(result?.message || "\u8fde\u63a5\u6210\u529f");
+				toast.success(result?.message || "连接成功");
 			} else {
-				toast.error(result?.message || "\u8fde\u63a5\u5931\u8d25");
+				toast.error(result?.message || "连接失败");
 			}
 		} catch (error: any) {
 			if (error?.errorFields) return;
-			setTestResult({ success: false, message: error?.message || "\u6d4b\u8bd5\u5931\u8d25" });
-			toast.error(error?.message || "\u6d4b\u8bd5\u5931\u8d25");
+			setTestResult({ success: false, message: error?.message || "测试失败" });
+			toast.error(error?.message || "测试失败");
 		}
 	};
 
@@ -101,7 +101,7 @@ function ServicePanel({ service, title, restartHint, capability, formContent }: 
 				extra={
 					<div className="flex flex-wrap items-center gap-2">
 						<Badge variant={enabled ? "success" : "outline"} className="rounded-full px-2.5 py-1">
-							{enabled ? "\u5df2\u542f\u7528" : "\u672a\u542f\u7528"}
+							{enabled ? "已启用" : "未启用"}
 						</Badge>
 						<Badge variant="info" className="rounded-full px-2.5 py-1">
 							{capability}
@@ -114,10 +114,10 @@ function ServicePanel({ service, title, restartHint, capability, formContent }: 
 					<div className="grid gap-x-5 xl:grid-cols-2">{formContent(form)}</div>
 					<Space wrap className="pt-2">
 						<AntButton data-testid={`admin-infra-service-save-${service}`} type="primary" onClick={handleSave}>
-							\u4fdd\u5b58\u914d\u7f6e
+							保存配置
 						</AntButton>
 						<AntButton data-testid={`admin-infra-service-test-${service}`} onClick={handleTest}>
-							\u6d4b\u8bd5\u8fde\u63a5
+							测试连接
 						</AntButton>
 					</Space>
 					{testResult ? (
@@ -126,11 +126,11 @@ function ServicePanel({ service, title, restartHint, capability, formContent }: 
 								className="mt-4"
 								type={testResult.success ? "success" : "error"}
 								showIcon
-								message={testResult.message || (testResult.success ? "\u6d4b\u8bd5\u6210\u529f" : "\u6d4b\u8bd5\u5931\u8d25")}
+								message={testResult.message || (testResult.success ? "测试成功" : "测试失败")}
 								description={
 									(testResult.status || testResult.body) ? (
 										<div className="space-y-1">
-											{testResult.status ? <div>\u72b6\u6001\u7801: {testResult.status}</div> : null}
+											{testResult.status ? <div>状态码: {testResult.status}</div> : null}
 											{testResult.body ? <pre className="whitespace-pre-wrap text-xs">{testResult.body}</pre> : null}
 										</div>
 									) : undefined
@@ -151,17 +151,17 @@ export default function InfraSettingsView() {
 	const items = [
 		{
 			key: "platform",
-			label: "\u5e73\u53f0",
+			label: "平台",
 			children: (
 				<ServicePanel
 					service="platform"
-					title="\u5e73\u53f0\u4fa7\u8054\u52a8"
-					restartHint="\u8be5\u914d\u7f6e\u901a\u5e38\u53ef\u70ed\u751f\u6548\uff1b\u5982\u65e0\u6548\u8bf7\u91cd\u542f dts-platform\u3002"
+					title="平台侧联动"
+					restartHint="该配置通常可热生效；如无效请重启 dts-platform。"
 					capability={SERVICE_CAPABILITIES.platform}
 					formContent={() => (
 						<>
 							<Form.Item
-								label="\u6570\u636e\u6e90\u81ea\u52a8\u540c\u6b65\u5b57\u6bb5"
+								label="数据源自动同步字段"
 								name="catalogSyncOnDataSource"
 								valuePropName="checked"
 								className="xl:col-span-2"
@@ -169,7 +169,7 @@ export default function InfraSettingsView() {
 								<Switch />
 							</Form.Item>
 							<div className="xl:col-span-2 rounded-2xl border border-border/70 bg-muted/40 p-4 text-sm leading-6 text-muted-foreground">
-								\u5f00\u542f\u540e\uff0c\u65b0\u589e\u6216\u66f4\u65b0\u6570\u636e\u6e90\u4f1a\u81ea\u52a8\u540c\u6b65\u5143\u6570\u636e\u3002JDBC \u7c7b\u6570\u636e\u6e90\u8d70\u5143\u6570\u636e\u6293\u53d6\uff0c\u6587\u4ef6\u7c7b\u6570\u636e\u6e90\u8d70\u5b57\u6bb5\u89e3\u6790\uff0c\u5e76\u81ea\u52a8\u751f\u6210 ODS \u8349\u7a3f\u3002
+								开启后，新增或更新数据源会自动同步元数据。JDBC 类数据源走元数据抓取，文件类数据源走字段解析，并自动生成 ODS 草稿。
 							</div>
 						</>
 					)}
@@ -182,31 +182,31 @@ export default function InfraSettingsView() {
 			children: (
 				<ServicePanel
 					service="addax"
-					title="Addax \u4f5c\u4e1a"
-					restartHint="\u4fdd\u5b58\u540e\u5efa\u8bae\u91cd\u5efa\u5165\u6e56\u4efb\u52a1\uff1b\u955c\u50cf\u53d8\u66f4\u9700\u91cd\u542f\u8c03\u5ea6\u76f8\u5173\u670d\u52a1\u3002"
+					title="Addax 作业"
+					restartHint="保存后建议重建入湖任务；镜像变更需重启调度相关服务。"
 					capability={SERVICE_CAPABILITIES.addax}
 					formContent={() => (
 						<>
-							<Form.Item label="\u542f\u7528" name="enabled" valuePropName="checked">
+							<Form.Item label="启用" name="enabled" valuePropName="checked">
 								<Switch />
 							</Form.Item>
 							<Form.Item
-								label="\u4f5c\u4e1a\u76ee\u5f55"
+								label="作业目录"
 								name="jobDir"
-								rules={[{ required: true, message: "\u8bf7\u8f93\u5165\u4f5c\u4e1a\u76ee\u5f55" }]}
+								rules={[{ required: true, message: "请输入作业目录" }]}
 							>
 								<Input placeholder="/opt/airflow/dags" />
 							</Form.Item>
 							<Form.Item
-								label="\u955c\u50cf"
+								label="镜像"
 								name="image"
-								rules={[{ required: true, message: "\u8bf7\u8f93\u5165\u955c\u50cf" }]}
+								rules={[{ required: true, message: "请输入镜像" }]}
 								className="xl:col-span-2"
 							>
 								<Input placeholder="quay.io/wgzhao/addax:6.0.8" />
 							</Form.Item>
 							<div className="xl:col-span-2 rounded-2xl border border-border/70 bg-muted/40 p-4 text-sm leading-6 text-muted-foreground">
-								Addax \u4f5c\u4e1a\u76ee\u5f55\u9700\u4e0e Airflow DAG \u76ee\u5f55\u4e00\u81f4\u3002\u5199\u5165\u5668\u901a\u7528\u6a21\u677f\u8bf7\u5728\u6570\u636e\u6e56\u7ba1\u7406\u4e2d\u7ef4\u62a4\uff0c\u4efb\u52a1\u4fa7\u53ea\u586b\u5199\u8868\u540d\u4e0e\u5dee\u5f02\u5316\u53c2\u6570\u3002
+								Addax 作业目录需与 Airflow DAG 目录一致。写入器通用模板请在数据湖管理中维护，任务侧只填写表名与差异化参数。
 							</div>
 						</>
 					)}
@@ -219,18 +219,18 @@ export default function InfraSettingsView() {
 			children: (
 				<ServicePanel
 					service="airflow"
-					title="Airflow \u8c03\u5ea6"
-					restartHint="\u4fdd\u5b58\u540e\u5efa\u8bae\u91cd\u542f dts-ingestion \u4e0e dts-platform\uff0c\u4f7f\u8fde\u63a5\u53c2\u6570\u4e00\u81f4\u3002"
+					title="Airflow 调度"
+					restartHint="保存后建议重启 dts-ingestion 与 dts-platform，使连接参数一致。"
 					capability={SERVICE_CAPABILITIES.airflow}
 					formContent={() => (
 						<>
-							<Form.Item label="\u542f\u7528" name="enabled" valuePropName="checked">
+							<Form.Item label="启用" name="enabled" valuePropName="checked">
 								<Switch />
 							</Form.Item>
 							<Form.Item
-								label="Airflow \u5730\u5740"
+								label="Airflow 地址"
 								name="baseUrl"
-								rules={[{ required: true, message: "\u8bf7\u8f93\u5165 Airflow \u5730\u5740" }]}
+								rules={[{ required: true, message: "请输入 Airflow 地址" }]}
 							>
 								<Input placeholder="http://dts-airflow-web:8080" />
 							</Form.Item>
@@ -238,27 +238,27 @@ export default function InfraSettingsView() {
 								<Input placeholder="/api/v1" />
 							</Form.Item>
 							<Form.Item
-								label="DAG \u76ee\u5f55"
+								label="DAG 目录"
 								name="dagsDir"
-								rules={[{ required: true, message: "\u8bf7\u8f93\u5165 DAG \u76ee\u5f55" }]}
+								rules={[{ required: true, message: "请输入 DAG 目录" }]}
 							>
 								<Input placeholder="/opt/airflow/dags" />
 							</Form.Item>
 							<Form.Item
-								label="\u7528\u6237\u540d"
+								label="用户名"
 								name="username"
-								rules={[{ required: true, message: "\u8bf7\u8f93\u5165\u7528\u6237\u540d" }]}
+								rules={[{ required: true, message: "请输入用户名" }]}
 							>
 								<Input placeholder="airflow" />
 							</Form.Item>
 							<Form.Item
-								label="\u5bc6\u7801"
+								label="密码"
 								name="password"
-								rules={[{ required: true, message: "\u8bf7\u8f93\u5165\u5bc6\u7801" }]}
+								rules={[{ required: true, message: "请输入密码" }]}
 							>
 								<Input.Password placeholder="******" />
 							</Form.Item>
-							<Form.Item label="\u9ed8\u8ba4 DAG ID" name="dagId" className="xl:col-span-2">
+							<Form.Item label="默认 DAG ID" name="dagId" className="xl:col-span-2">
 								<Input placeholder="dbt_load" />
 							</Form.Item>
 						</>
@@ -272,18 +272,18 @@ export default function InfraSettingsView() {
 			children: (
 				<ServicePanel
 					service="openmetadata"
-					title="OpenMetadata \u5143\u6570\u636e"
-					restartHint="\u4fdd\u5b58\u540e\u5efa\u8bae\u91cd\u542f dts-ingestion\uff0c\u786e\u4fdd\u91c7\u96c6\u5668\u8bfb\u53d6\u6700\u65b0\u914d\u7f6e\u3002"
+					title="OpenMetadata 元数据"
+					restartHint="保存后建议重启 dts-ingestion，确保采集器读取最新配置。"
 					capability={SERVICE_CAPABILITIES.openmetadata}
 					formContent={() => (
 						<>
-							<Form.Item label="\u542f\u7528" name="enabled" valuePropName="checked">
+							<Form.Item label="启用" name="enabled" valuePropName="checked">
 								<Switch />
 							</Form.Item>
 							<Form.Item
-								label="OpenMetadata \u5730\u5740"
+								label="OpenMetadata 地址"
 								name="baseUrl"
-								rules={[{ required: true, message: "\u8bf7\u8f93\u5165 OpenMetadata \u5730\u5740" }]}
+								rules={[{ required: true, message: "请输入 OpenMetadata 地址" }]}
 							>
 								<Input placeholder="http://openmetadata:8585" />
 							</Form.Item>
@@ -293,82 +293,82 @@ export default function InfraSettingsView() {
 							<Form.Item
 								label="Token"
 								name="authToken"
-								rules={[{ required: true, message: "\u8bf7\u8f93\u5165 Token" }]}
+								rules={[{ required: true, message: "请输入 Token" }]}
 							>
 								<Input.Password placeholder="Bearer ..." />
 							</Form.Item>
-							<Form.Item label="\u8868\u5b57\u6bb5" name="tableFields" className="xl:col-span-2">
+							<Form.Item label="表字段" name="tableFields" className="xl:col-span-2">
 								<Input placeholder="columns,owner,tags,domain" />
 							</Form.Item>
 							<Divider orientation="left" className="xl:col-span-2">
-								\u670d\u52a1\u6807\u8bc6
+								服务标识
 							</Divider>
 							<Form.Item
-								label="\u6e90\u670d\u52a1\u540d\u79f0"
+								label="源服务名称"
 								name="sourceServiceName"
-								rules={[{ required: true, message: "\u8bf7\u8f93\u5165\u6e90\u670d\u52a1\u540d\u79f0" }]}
+								rules={[{ required: true, message: "请输入源服务名称" }]}
 							>
 								<Input placeholder="source_service" />
 							</Form.Item>
 							<Form.Item
-								label="\u6e90\u670d\u52a1\u7c7b\u578b"
+								label="源服务类型"
 								name="sourceServiceType"
-								rules={[{ required: true, message: "\u8bf7\u8f93\u5165\u6e90\u670d\u52a1\u7c7b\u578b" }]}
+								rules={[{ required: true, message: "请输入源服务类型" }]}
 							>
 								<Input placeholder="Postgres" />
 							</Form.Item>
 							<Form.Item
-								label="\u76ee\u6807\u670d\u52a1\u540d\u79f0"
+								label="目标服务名称"
 								name="destinationServiceName"
-								rules={[{ required: true, message: "\u8bf7\u8f93\u5165\u76ee\u6807\u670d\u52a1\u540d\u79f0" }]}
+								rules={[{ required: true, message: "请输入目标服务名称" }]}
 							>
 								<Input placeholder="destination_service" />
 							</Form.Item>
 							<Form.Item
-								label="\u76ee\u6807\u670d\u52a1\u7c7b\u578b"
+								label="目标服务类型"
 								name="destinationServiceType"
-								rules={[{ required: true, message: "\u8bf7\u8f93\u5165\u76ee\u6807\u670d\u52a1\u7c7b\u578b" }]}
+								rules={[{ required: true, message: "请输入目标服务类型" }]}
 							>
 								<Input placeholder="Postgres" />
 							</Form.Item>
 							<Form.Item
-								label="\u6e90\u6570\u636e\u5e93"
+								label="源数据库"
 								name="sourceDatabase"
-								rules={[{ required: true, message: "\u8bf7\u8f93\u5165\u6e90\u6570\u636e\u5e93" }]}
+								rules={[{ required: true, message: "请输入源数据库" }]}
 							>
 								<Input placeholder="source_db" />
 							</Form.Item>
 							<Form.Item
-								label="\u6e90 Schema"
+								label="源 Schema"
 								name="sourceSchema"
-								rules={[{ required: true, message: "\u8bf7\u8f93\u5165\u6e90 Schema" }]}
+								rules={[{ required: true, message: "请输入源 Schema" }]}
 							>
 								<Input placeholder="public" />
 							</Form.Item>
 							<Form.Item
-								label="\u76ee\u6807\u6570\u636e\u5e93"
+								label="目标数据库"
 								name="destinationDatabase"
-								rules={[{ required: true, message: "\u8bf7\u8f93\u5165\u76ee\u6807\u6570\u636e\u5e93" }]}
+								rules={[{ required: true, message: "请输入目标数据库" }]}
 							>
 								<Input placeholder="ods" />
 							</Form.Item>
 							<Form.Item
-								label="\u76ee\u6807 Schema"
+								label="目标 Schema"
 								name="destinationSchema"
-								rules={[{ required: true, message: "\u8bf7\u8f93\u5165\u76ee\u6807 Schema" }]}
+								rules={[{ required: true, message: "请输入目标 Schema" }]}
 							>
 								<Input placeholder="public" />
 							</Form.Item>
 							<Divider orientation="left" className="xl:col-span-2">
-								\u91c7\u96c6\u8bbe\u7f6e
+								采集设置
 							</Divider>
-							<Form.Item label="\u542f\u7528\u91c7\u96c6" name="ingestionEnabled" valuePropName="checked">
+							<Form.Item label="启用采集" name="ingestionEnabled" valuePropName="checked">
 								<Switch />
 							</Form.Item>
-							<Form.Item label="\u91c7\u96c6\u4efb\u52a1\u524d\u7f00" name="ingestionPrefix">
+							<Form.Item label="采集任务前缀" name="ingestionPrefix">
 								<Input placeholder="dts_ingest" />
 							</Form.Item>
-							<Form.Item label="\u91c7\u96c6\u8c03\u5ea6" name="ingestionSchedule" className="xl:col-span-2">
+							<Form.Item label="采集调度" name="ingestionSchedule" className="xl:col-span-2">
 								<Input placeholder="0 * * * *" />
 							</Form.Item>
 						</>
@@ -382,8 +382,8 @@ export default function InfraSettingsView() {
 			children: (
 				<ServicePanel
 					service="dbt"
-					title="DBT \u4efb\u52a1"
-					restartHint="\u542f\u7528\u524d\u8bf7\u540c\u6b65\u5b8c\u6210 dts-ingestion \u4e0e dts-platform \u7684 DBT \u63a5\u5165\u8054\u8c03\u3002"
+					title="DBT 任务"
+					restartHint="启用前请同步完成 dts-ingestion 与 dts-platform 的 DBT 接入联调。"
 					capability={SERVICE_CAPABILITIES.dbt}
 					formContent={() => (
 						<>
@@ -391,23 +391,23 @@ export default function InfraSettingsView() {
 								<Alert
 									type="info"
 									showIcon
-									message="\u5f53\u524d\u57fa\u7ebf\u5148\u7ba1\u7406\u8fde\u63a5\u53c2\u6570"
-									description="\u4efb\u52a1\u53d1\u5e03\u548c\u7f16\u6392\u4ecd\u8d70\u5e73\u53f0\u4fa7\u94fe\u8def\uff0c\u5f85\u73b0\u573a\u786e\u8ba4\u63a5\u5165\u987a\u5e8f\u540e\u518d\u5f00\u653e\u81ea\u52a8\u6267\u884c\u5165\u53e3\u3002"
+									message="当前基线先管理连接参数"
+									description="任务发布和编排仍走平台侧链路，待现场确认接入顺序后再开放自动执行入口。"
 								/>
 							</div>
-							<Form.Item label="\u542f\u7528" name="enabled" valuePropName="checked">
+							<Form.Item label="启用" name="enabled" valuePropName="checked">
 								<Switch />
 							</Form.Item>
-							<Form.Item label="DBT \u5730\u5740" name="baseUrl">
+							<Form.Item label="DBT 地址" name="baseUrl">
 								<Input placeholder="http://dbt-service:8080" />
 							</Form.Item>
 							<Form.Item label="API Path" name="apiPath">
 								<Input placeholder="/api/v1" />
 							</Form.Item>
-							<Form.Item label="\u7528\u6237\u540d" name="username">
+							<Form.Item label="用户名" name="username">
 								<Input />
 							</Form.Item>
-							<Form.Item label="\u5bc6\u7801" name="password">
+							<Form.Item label="密码" name="password">
 								<Input.Password />
 							</Form.Item>
 							<Form.Item label="Token" name="token">
@@ -423,16 +423,16 @@ export default function InfraSettingsView() {
 	return (
 		<div className="space-y-4" data-testid="admin-infra-settings-page">
 			<Card
-				title={"\u96c6\u6210\u8bbe\u7f6e"}
+				title={"集成设置"}
 				extra={
 					<>
 						<Button variant="outline" onClick={() => push("/admin/data-lake")}>
 							<Database className="h-4 w-4" />
-							\u6570\u636e\u6e56\u914d\u7f6e
+							数据湖配置
 						</Button>
 						<Button variant="outline" onClick={() => push("/admin/ops")}>
 							<RefreshCw className="h-4 w-4" />
-							\u8fd0\u7ef4\u914d\u7f6e
+							运维配置
 						</Button>
 					</>
 				}
@@ -457,12 +457,12 @@ export default function InfraSettingsView() {
 			</Card>
 
 			<div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
-				<Card title={"\u8054\u52a8\u5efa\u8bae"}>
+				<Card title={"联动建议"}>
 					<div className="grid gap-3">
 						{[
-							"Addax \u4f5c\u4e1a\u76ee\u5f55\u4e0e Airflow DAG \u76ee\u5f55\u5fc5\u987b\u4fdd\u6301\u4e00\u81f4\u3002",
-							"OpenMetadata \u7684\u6e90/\u76ee\u6807\u670d\u52a1\u547d\u540d\u5e94\u4e0e\u5e73\u53f0\u771f\u5b9e\u8d44\u4ea7\u547d\u540d\u4fdd\u6301\u540c\u53e3\u5f84\u3002",
-							"DBT \u82e5\u53ea\u4fdd\u5b58\u8fde\u63a5\u53c2\u6570\uff0c\u5148\u4e0d\u8981\u5728\u4e1a\u52a1\u9875\u66b4\u9732\u81ea\u52a8\u6267\u884c\u5165\u53e3\u3002",
+							"Addax 作业目录与 Airflow DAG 目录必须保持一致。",
+							"OpenMetadata 的源/目标服务命名应与平台真实资产命名保持同口径。",
+							"DBT 若只保存连接参数，先不要在业务页暴露自动执行入口。",
 						].map((item) => (
 							<div key={item} className="rounded-[22px] border border-border/70 bg-muted/35 px-4 py-3 text-sm text-muted-foreground">
 								{item}
@@ -471,12 +471,12 @@ export default function InfraSettingsView() {
 					</div>
 				</Card>
 
-				<Card title={"\u5173\u8054\u5165\u53e3"}>
+				<Card title={"关联入口"}>
 					<div className="grid gap-3">
 						{[
-							{ title: "\u6570\u636e\u6e56\u914d\u7f6e", path: "/admin/data-lake", icon: <Database className="h-4 w-4" /> },
-							{ title: "\u8fd0\u7ef4\u914d\u7f6e", path: "/admin/ops", icon: <Workflow className="h-4 w-4" /> },
-							{ title: "\u5de5\u4f5c\u6d41\u914d\u7f6e", path: "/admin/workflows", icon: <Workflow className="h-4 w-4" /> },
+							{ title: "数据湖配置", path: "/admin/data-lake", icon: <Database className="h-4 w-4" /> },
+							{ title: "运维配置", path: "/admin/ops", icon: <Workflow className="h-4 w-4" /> },
+							{ title: "工作流配置", path: "/admin/workflows", icon: <Workflow className="h-4 w-4" /> },
 						].map((item) => (
 							<button
 								key={item.path}

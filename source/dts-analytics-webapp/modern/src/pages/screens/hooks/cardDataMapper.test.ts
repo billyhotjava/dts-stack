@@ -71,3 +71,64 @@ test('funnel-chart: maps rows to name-value data', () => {
         { name: '未启动', value: 1 },
     ]);
 });
+
+test('combo-chart: maps rows using same axis chart logic as bar/line', () => {
+    const cardData = {
+        cols: [
+            { name: 'month', display_name: '月份', base_type: 'type/Text' },
+            { name: 'value', display_name: '值', base_type: 'type/Float' },
+            { name: 'delta', display_name: '环比', base_type: 'type/Float' },
+        ],
+        rows: [
+            ['2026-01', 65, 0],
+            ['2026-02', 72, 7],
+        ],
+    };
+    const result = mapCardDataToConfig('combo-chart', cardData, {
+        xAxisField: 'month',
+        series: [{ field: 'value', name: '完成率' }],
+    });
+    assert.deepStrictEqual(result.xAxisData, ['2026-01', '2026-02']);
+    const series = result.series as Array<{ name: string; data: number[] }>;
+    assert.strictEqual(series[0].name, '完成率');
+    assert.deepStrictEqual(series[0].data, [65, 72]);
+});
+
+test('scatter-chart: maps rows to multi-series scatter data by category', () => {
+    const cardData = {
+        cols: [
+            { name: 'x', display_name: '超期天数', base_type: 'type/Float' },
+            { name: 'y', display_name: '风险值', base_type: 'type/Integer' },
+            { name: 'size', display_name: '节点数', base_type: 'type/Integer' },
+            { name: 'category', display_name: '风险等级', base_type: 'type/Text' },
+        ],
+        rows: [
+            [3, 3, 2, '高'],
+            [1, 2, 3, '中'],
+            [0, 1, 5, '低'],
+            [8, 3, 1, '高'],
+        ],
+    };
+    const result = mapCardDataToConfig('scatter-chart', cardData, {
+        xField: 'x', yField: 'y', sizeField: 'size', categoryField: 'category',
+    });
+    assert.ok(Array.isArray(result.series));
+    const series = result.series as Array<{ name: string; data: number[][] }>;
+    assert.strictEqual(series.length, 3);
+    const highSeries = series.find((s) => s.name === '高');
+    assert.strictEqual(highSeries!.data.length, 2);
+    assert.deepStrictEqual(highSeries!.data[0], [3, 3, 2]);
+});
+
+test('scatter-chart: falls back to single series without categoryField', () => {
+    const cardData = {
+        cols: [
+            { name: 'x', display_name: 'X', base_type: 'type/Float' },
+            { name: 'y', display_name: 'Y', base_type: 'type/Float' },
+        ],
+        rows: [[1, 2], [3, 4]],
+    };
+    const result = mapCardDataToConfig('scatter-chart', cardData, {});
+    assert.ok(Array.isArray(result.data));
+    assert.deepStrictEqual(result.data, [[1, 2], [3, 4]]);
+});
