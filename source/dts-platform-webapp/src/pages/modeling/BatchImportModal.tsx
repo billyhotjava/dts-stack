@@ -18,11 +18,12 @@ import type { UploadFile } from "antd/es/upload/interface";
 import type { ColumnsType } from "antd/es/table";
 import JSZip from "jszip";
 import { batchImportSqlModels } from "@/api/platformApi";
+import { extractImportedModelNames } from "./batchImportNavigation.helpers";
 
 interface BatchImportModalProps {
 	open: boolean;
 	onClose: () => void;
-	onSuccess: () => void;
+	onSuccess: (payload: { planId?: string; importedModelNames: string[] }) => void;
 	spaces: Array<{ id?: string; name?: string }>;
 	dataSources: Array<{ id?: string; name?: string }>;
 	activeSpaceId?: string;
@@ -110,9 +111,30 @@ const BatchImportModal: React.FC<BatchImportModalProps> = ({
 	};
 
 	const handleAfterOpenChange = (visible: boolean) => {
-		if (visible && activeSpaceId) {
-			zipForm.setFieldsValue({ planId: activeSpaceId });
-			fileForm.setFieldsValue({ planId: activeSpaceId });
+		if (visible) {
+			const firstDataSourceId = dataSources.find((item) => !!item?.id)?.id;
+			const currentZipSourceId = zipForm.getFieldValue("sourceDataSourceId");
+			const currentFileSourceId = fileForm.getFieldValue("sourceDataSourceId");
+			const validZipSourceId = dataSources.some((item) => item?.id === currentZipSourceId);
+			const validFileSourceId = dataSources.some((item) => item?.id === currentFileSourceId);
+			const nextZipValues: Record<string, string> = {};
+			const nextFileValues: Record<string, string> = {};
+			if (activeSpaceId) {
+				nextZipValues.planId = activeSpaceId;
+				nextFileValues.planId = activeSpaceId;
+			}
+			if (!validZipSourceId && firstDataSourceId) {
+				nextZipValues.sourceDataSourceId = firstDataSourceId;
+			}
+			if (!validFileSourceId && firstDataSourceId) {
+				nextFileValues.sourceDataSourceId = firstDataSourceId;
+			}
+			if (Object.keys(nextZipValues).length > 0) {
+				zipForm.setFieldsValue(nextZipValues);
+			}
+			if (Object.keys(nextFileValues).length > 0) {
+				fileForm.setFieldsValue(nextFileValues);
+			}
 		}
 	};
 
@@ -136,14 +158,15 @@ const BatchImportModal: React.FC<BatchImportModalProps> = ({
 		setFileRows((prev) => prev.map((r) => (r.key === key ? { ...r, [field]: value } : r)));
 	};
 
-	const showResults = (data: any) => {
+	const showResults = (data: any, planId?: string) => {
 		const items: ResultRow[] = Array.isArray(data?.details) ? data.details : [];
 		setResults(items);
-		const imported = items.filter((r) => r.status === "imported").length;
+		const importedModelNames = extractImportedModelNames(items);
+		const imported = importedModelNames.length;
 		const skipped = items.filter((r) => r.status === "skipped").length;
-		const failed = items.filter((r) => r.status === "failed").length;
+		const failed = items.length - imported - skipped;
 		toast.success(`批量导入完成: ${imported} 已导入, ${skipped} 已跳过, ${failed} 失败`);
-		onSuccess();
+		onSuccess({ planId, importedModelNames });
 	};
 
 	const submitZip = async () => {
@@ -160,7 +183,7 @@ const BatchImportModal: React.FC<BatchImportModalProps> = ({
 			formData.append("skipExisting", values.skipExisting ? "true" : "false");
 			formData.append("archive", zipFileList[0].originFileObj);
 			const res = await batchImportSqlModels(formData);
-			showResults(res);
+			showResults(res, values.planId);
 		} catch (err: any) {
 			if (err?.errorFields) return; // form validation
 			toast.error(err?.message || "导入失败");
@@ -203,7 +226,7 @@ const BatchImportModal: React.FC<BatchImportModalProps> = ({
 			formData.append("skipExisting", values.skipExisting ? "true" : "false");
 			formData.append("archive", blob, "batch-import.zip");
 			const res = await batchImportSqlModels(formData);
-			showResults(res);
+			showResults(res, values.planId);
 		} catch (err: any) {
 			if (err?.errorFields) return;
 			toast.error(err?.message || "导入失败");

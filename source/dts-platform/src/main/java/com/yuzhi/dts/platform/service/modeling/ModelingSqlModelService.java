@@ -2060,6 +2060,12 @@ public class ModelingSqlModelService {
                             // use default
                         }
                     }
+                    sourceId = resolveBatchImportSourceId(sourceId, activeDept);
+                    if (sourceId == null) {
+                        details.add(new BatchImportDetail(name, layer, "validation_failed", "来源数据源不存在，且未找到可用默认数据源"));
+                        failed++;
+                        continue;
+                    }
 
                     // Parse enabled
                     Boolean enabled = null;
@@ -2135,6 +2141,18 @@ public class ModelingSqlModelService {
             }
         }
         return null;
+    }
+
+    private UUID resolveBatchImportSourceId(UUID requestedSourceId, String activeDeptHeader) {
+        UUID usable = resolveUsableSourceId(requestedSourceId, activeDeptHeader, "batch-import");
+        if (usable != null) {
+            return usable;
+        }
+        UUID fallback = resolveFallbackSourceId(activeDeptHeader);
+        if (fallback != null && requestedSourceId != null) {
+            LOG.info("[batch-import] fallback sourceDataSourceId {} -> {}", requestedSourceId, fallback);
+        }
+        return fallback;
     }
 
     private Path resolveSidecarFile(Path tsvDir, Path unzipRoot, String relativePath, String modelName, String extension) {

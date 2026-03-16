@@ -88,6 +88,7 @@ import dataSourcesService, { type InfraDataSource } from "@/api/services/dataSou
 import BatchImportModal from "./BatchImportModal";
 import { useRouter } from "@/routes/hooks";
 import { buildArchivePayload, collectUnassignedModelIds } from "./sqlModelArchive.helpers";
+import { resolveBatchImportNavigation } from "./batchImportNavigation.helpers";
 import {
 	buildReleaseSelector,
 	createFailedBuildSummary,
@@ -567,13 +568,29 @@ export default function SqlModelingPage() {
 		setModelsLoading(true);
 		try {
 			const resp = (await listSqlModels()) as SqlModel[];
-			setSqlModels(Array.isArray(resp) ? resp : []);
+			const nextModels = Array.isArray(resp) ? resp : [];
+			setSqlModels(nextModels);
+			return nextModels;
 		} catch (err: any) {
 			toast.error(err?.message || "加载模型失败");
+			return [];
 		} finally {
 			setModelsLoading(false);
 		}
 	}, []);
+
+	const handleBatchImportSuccess = useCallback(
+		async (payload: { planId?: string; importedModelNames: string[] }) => {
+			setBatchImportOpen(false);
+			const nextModels = await loadModels();
+			const nextState = resolveBatchImportNavigation(payload.planId, payload.importedModelNames, nextModels);
+			if (nextState.activeSpaceKey) {
+				setActiveSpaceKey(nextState.activeSpaceKey);
+			}
+			setActiveModelKey(nextState.activeModelKey);
+		},
+		[loadModels],
+	);
 
 	const loadSources = useCallback(async () => {
 		try {
@@ -583,6 +600,11 @@ export default function SqlModelingPage() {
 			toast.error(err?.message || "加载数据源失败");
 		}
 	}, []);
+
+	const openBatchImportModal = useCallback(async () => {
+		await loadSources();
+		setBatchImportOpen(true);
+	}, [loadSources]);
 
 	const loadLayers = useCallback(async () => {
 		try {
@@ -2004,7 +2026,7 @@ export default function SqlModelingPage() {
 			icon: <ImportOutlined />,
 			label: "批量导入",
 			disabled: !workspaceOk,
-			onClick: () => setBatchImportOpen(true),
+			onClick: openBatchImportModal,
 		},
 		{
 			key: "generate-ods",
@@ -3306,7 +3328,7 @@ WHERE status = 'active'`}
 			<BatchImportModal
 				open={batchImportOpen}
 				onClose={() => setBatchImportOpen(false)}
-				onSuccess={() => { setBatchImportOpen(false); loadModels(); }}
+				onSuccess={handleBatchImportSuccess}
 				spaces={spaces}
 				dataSources={dataSources}
 				activeSpaceId={activeSpace?.id}

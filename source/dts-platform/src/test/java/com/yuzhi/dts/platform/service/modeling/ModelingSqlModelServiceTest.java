@@ -397,6 +397,38 @@ class ModelingSqlModelServiceTest {
     }
 
     @Test
+    void batchImportFromArchive_shouldFallbackToUsableDefaultSourceWhenProvidedSourceIsMissing() throws Exception {
+        UUID missingSourceId = UUID.randomUUID();
+        UUID fallbackSourceId = UUID.randomUUID();
+        when(dataSourceRepository.findById(missingSourceId)).thenReturn(Optional.empty());
+        when(dataSourceRepository.findById(fallbackSourceId)).thenReturn(Optional.of(source(fallbackSourceId, "数仓 (biadmin)", "postgres")));
+        when(dataSourceRepository.findByStatusIgnoreCase(anyString())).thenReturn(List.of(source(fallbackSourceId, "数仓 (biadmin)", "postgres")));
+
+        Path archive = createArchive(
+            "models.tsv",
+            """
+            name\tlayer\tsql_path\tsource_data_source_id\talias\tschema_name\tmaterialized\ttags\tstatus\tenabled\towner_dept\tdescription\tcsv_path
+            biz_dwd_project_node\tDWD\tbiz_dwd_project_node.sql\t\t\tpublic\ttable\tproject-management\tDRAFT\ttrue\tD1\t\t
+            """,
+            "biz_dwd_project_node.sql",
+            "select 1 as metric"
+        );
+
+        ModelingSqlModelService.BatchImportResult result = service.batchImportFromArchive(
+            planId,
+            missingSourceId,
+            false,
+            archive,
+            "D1"
+        );
+
+        assertThat(result.total()).isEqualTo(1);
+        assertThat(result.imported()).isEqualTo(1);
+        assertThat(result.failed()).isZero();
+        assertThat(storedModels).singleElement().satisfies(model -> assertThat(model.getSourceDataSourceId()).isEqualTo(fallbackSourceId));
+    }
+
+    @Test
     void importFromFiles_shouldFailWhenWorkspaceSqlCannotBeWritten() throws Exception {
         UUID sourceId = UUID.randomUUID();
         when(dataSourceRepository.findById(sourceId)).thenReturn(Optional.of(source(sourceId, "ODS-Lake", "postgres")));
