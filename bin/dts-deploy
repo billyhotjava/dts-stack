@@ -300,6 +300,40 @@ IMPORT_ARGS+=("${IMPORT_PT_FLAGS[@]}")
 "${SCRIPT_DIR}/dts-dbt-import" "${IMPORT_ARGS[@]}"
 
 # ---------------------------------------------------------------------------
+# Step 2b: Sync YAML and macros from package to dbt project directory
+# ---------------------------------------------------------------------------
+if [[ -n "$_PACKAGE_TMPDIR" ]]; then
+  _DBT_HOST_DIR="${SCRIPT_DIR}/../services/dts-dbt"
+  if [[ -d "$_DBT_HOST_DIR" ]]; then
+    _PKG_ROOT="$_PACKAGE_TMPDIR"
+    # Find the actual content root (may be nested in a subdirectory)
+    if [[ -f "${_PKG_ROOT}/models.tsv" ]]; then
+      _PKG_ROOT="$_PACKAGE_TMPDIR"
+    else
+      _PKG_ROOT=$(find "$_PACKAGE_TMPDIR" -name "models.tsv" -print -quit 2>/dev/null)
+      _PKG_ROOT="${_PKG_ROOT%/models.tsv}"
+    fi
+    # Copy YAML source definitions
+    find "$_PKG_ROOT/models" -name "*.yml" -o -name "*.yaml" 2>/dev/null | while read -r yf; do
+      _REL="${yf#$_PKG_ROOT/}"
+      _DEST="${_DBT_HOST_DIR}/${_REL}"
+      mkdir -p "$(dirname "$_DEST")"
+      cp -f "$yf" "$_DEST"
+      info "  synced: $_REL"
+    done
+    # Copy macros
+    if [[ -d "$_PKG_ROOT/macros" ]]; then
+      mkdir -p "$_DBT_HOST_DIR/macros"
+      find "$_PKG_ROOT/macros" -type f 2>/dev/null | while read -r mf; do
+        _FNAME="$(basename "$mf")"
+        cp -f "$mf" "$_DBT_HOST_DIR/macros/$_FNAME"
+        info "  synced: macros/$_FNAME"
+      done
+    fi
+  fi
+fi
+
+# ---------------------------------------------------------------------------
 # Step 3: Trigger dbt run + sync (if --run)
 # ---------------------------------------------------------------------------
 if $RUN_AFTER_IMPORT && ! $PT_DRY_RUN; then
