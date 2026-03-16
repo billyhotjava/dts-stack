@@ -88,6 +88,24 @@ public class AirflowClient {
         return Optional.empty();
     }
 
+    public Optional<Map<String, Object>> setDagPaused(String dagId, boolean paused) {
+        if (!properties.isEnabled() || !StringUtils.hasText(dagId)) {
+            return Optional.empty();
+        }
+        URI uri = buildUri("/dags/" + dagId);
+        try {
+            HttpHeaders headers = defaultHeaders();
+            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(Map.of("is_paused", paused), headers);
+            ResponseEntity<Map> response = restTemplate.exchange(uri, HttpMethod.PATCH, entity, Map.class);
+            return Optional.ofNullable(response.getBody());
+        } catch (HttpStatusCodeException ex) {
+            LOG.warn("Airflow dag state update failed status={} body={}", ex.getStatusCode().value(), ex.getResponseBodyAsString());
+        } catch (Exception ex) {
+            LOG.warn("Airflow dag state update error: {}", ex.getMessage());
+        }
+        return Optional.empty();
+    }
+
     /**
      * Fetch task instance log from Airflow REST API.
      * GET /api/v1/dags/{dagId}/dagRuns/{dagRunId}/taskInstances/{taskId}/logs/{tryNumber}

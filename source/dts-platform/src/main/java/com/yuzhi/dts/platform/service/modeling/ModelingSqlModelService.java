@@ -35,6 +35,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.nio.file.FileVisitOption;
+import java.nio.file.StandardCopyOption;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
@@ -2160,6 +2161,10 @@ public class ModelingSqlModelService {
                 }
             }
 
+            if (imported > 0) {
+                copyWorkspaceCompanionFiles(tempDir);
+            }
+
             int total = imported + skipped + failed;
             return new BatchImportResult(total, imported, skipped, failed, details);
         } catch (IOException ex) {
@@ -2226,6 +2231,52 @@ public class ModelingSqlModelService {
         // Also try in tsvDir
         fallback = tsvDir.resolve(modelName + extension);
         if (Files.isRegularFile(fallback)) return fallback;
+        return null;
+    }
+
+    private void copyWorkspaceCompanionFiles(Path unzipRoot) throws IOException {
+        DbtConfigService.DbtConfigView view = dbtConfigService.loadConfig();
+        if (view == null || view.config() == null || !StringUtils.hasText(view.config().projectDir())) {
+            return;
+        }
+        Path projectDir = Path.of(view.config().projectDir()).normalize();
+        if (!Files.exists(projectDir)) {
+            return;
+        }
+        try (var walk = Files.walk(unzipRoot)) {
+            for (Path file : walk.filter(Files::isRegularFile).toList()) {
+                String relative = resolveCompanionWorkspacePath(unzipRoot.relativize(file));
+                if (!StringUtils.hasText(relative)) {
+                    continue;
+                }
+                Path target = projectDir.resolve(relative).normalize();
+                if (!target.startsWith(projectDir)) {
+                    throw new IOException("companion file outside workspace: " + relative);
+                }
+                Files.createDirectories(target.getParent());
+                Files.copy(file, target, StandardCopyOption.REPLACE_EXISTING);
+            }
+        }
+    }
+
+    private String resolveCompanionWorkspacePath(Path relativePath) {
+        if (relativePath == null) {
+            return null;
+        }
+        String normalized = relativePath.toString().replace('\\', '/');
+        String lower = normalized.toLowerCase(Locale.ROOT);
+        int modelsIndex = lower.indexOf("models/");
+        if (modelsIndex >= 0 && (lower.endsWith(".yml") || lower.endsWith(".yaml"))) {
+            return normalized.substring(modelsIndex);
+        }
+        int macrosIndex = lower.indexOf("macros/");
+        if (macrosIndex >= 0 && lower.endsWith(".sql")) {
+            return normalized.substring(macrosIndex);
+        }
+        int seedsIndex = lower.indexOf("seeds/");
+        if (seedsIndex >= 0 && (lower.endsWith(".csv") || lower.endsWith(".tsv"))) {
+            return normalized.substring(seedsIndex);
+        }
         return null;
     }
 

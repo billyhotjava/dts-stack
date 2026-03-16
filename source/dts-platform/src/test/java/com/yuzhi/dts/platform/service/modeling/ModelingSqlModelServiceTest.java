@@ -407,6 +407,37 @@ class ModelingSqlModelServiceTest {
     }
 
     @Test
+    void batchImportFromArchive_shouldCopyCompanionWorkspaceFiles() throws Exception {
+        UUID sourceId = UUID.randomUUID();
+        InfraDataSource lake = source(sourceId, "ODS-Lake", "postgres");
+        when(dataSourceRepository.findById(sourceId)).thenReturn(Optional.of(lake));
+
+        Path archive = createArchive(
+            "models.tsv",
+            String.join(
+                "\n",
+                "name\tlayer\tsql_path\tsource_data_source_id",
+                "biz_ads_project_demo\tADS\tbiz_ads_project_demo.sql\t"
+            ),
+            "biz_ads_project_demo.sql",
+            "select 1 as demo_id",
+            "models/project_management_sources.yml",
+            "version: 2\nsources: []\n",
+            "macros/test_helper.sql",
+            "{% macro test_helper() %}select 1{% endmacro %}\n",
+            "seeds/project_mapping.csv",
+            "id,name\n1,demo\n"
+        );
+
+        ModelingSqlModelService.BatchImportResult result = service.batchImportFromArchive(planId, sourceId, false, archive, "D1");
+
+        assertThat(result.imported()).isEqualTo(1);
+        assertThat(tempDir.resolve("models/project_management_sources.yml")).exists();
+        assertThat(tempDir.resolve("macros/test_helper.sql")).exists();
+        assertThat(tempDir.resolve("seeds/project_mapping.csv")).exists();
+    }
+
+    @Test
     void batchImportFromArchive_shouldFallbackToUsableDefaultSourceWhenProvidedSourceIsMissing() throws Exception {
         UUID missingSourceId = UUID.randomUUID();
         UUID fallbackSourceId = UUID.randomUUID();

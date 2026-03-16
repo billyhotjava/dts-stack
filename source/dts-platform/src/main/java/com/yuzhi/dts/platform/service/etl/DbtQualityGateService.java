@@ -65,7 +65,8 @@ public class DbtQualityGateService {
         String command = latestRun != null ? latestRun.command() : null;
         boolean latestFailed = "FAILED".equals(latestStatus);
         boolean qualityCommand = isQualityCommand(command);
-        boolean blocking = latestFailed && qualityCommand;
+        boolean missingUnbuiltRelations = isMissingUnbuiltRelationTestFailure(latestRun);
+        boolean blocking = latestFailed && qualityCommand && !missingUnbuiltRelations;
 
         List<String> warnings = new ArrayList<>();
         if (!missingTests.isEmpty()) {
@@ -73,6 +74,9 @@ public class DbtQualityGateService {
         }
         if (!missingTypeMeta.isEmpty()) {
             warnings.add("以下模型缺少类型元信息(expected_data_type): " + String.join(", ", missingTypeMeta));
+        }
+        if (missingUnbuiltRelations) {
+            warnings.add("最近一次 dbt test 失败是因为目标关系尚未生成，首次上线可继续执行 dbt build");
         }
         if (latestFailed && !qualityCommand) {
             warnings.add("最近一次构建状态为 FAILED，但不是测试命令，请确认是否继续上线");
@@ -103,6 +107,32 @@ public class DbtQualityGateService {
         }
         String normalized = command.toLowerCase(Locale.ROOT);
         return normalized.contains(" test") || normalized.startsWith("test ") || normalized.contains(" build");
+    }
+
+    private boolean isMissingUnbuiltRelationTestFailure(DbtRunResultService.DbtRunSummary latestRun) {
+        if (latestRun == null || !"FAILED".equalsIgnoreCase(defaultText(latestRun.status(), ""))) {
+            return false;
+        }
+        if (!isTestCommand(latestRun.command()) || latestRun.failures() == null || latestRun.failures().isEmpty()) {
+            return false;
+        }
+        return latestRun.failures().stream().allMatch(this::isMissingRelationFailure);
+    }
+
+    private boolean isTestCommand(String command) {
+        if (!StringUtils.hasText(command)) {
+            return false;
+        }
+        String normalized = command.toLowerCase(Locale.ROOT);
+        return normalized.contains(" test") || normalized.startsWith("test ");
+    }
+
+    private boolean isMissingRelationFailure(DbtRunResultService.DbtRunFailure failure) {
+        if (failure == null || !StringUtils.hasText(failure.message())) {
+            return false;
+        }
+        String normalized = failure.message().toLowerCase(Locale.ROOT);
+        return normalized.contains("relation \"") && normalized.contains("does not exist");
     }
 
     private List<String> resolveModelsBySelector(String selector) {

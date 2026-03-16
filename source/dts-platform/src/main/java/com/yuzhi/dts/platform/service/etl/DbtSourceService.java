@@ -3,6 +3,7 @@ package com.yuzhi.dts.platform.service.etl;
 import com.yuzhi.dts.platform.config.DbtProperties;
 import com.yuzhi.dts.platform.domain.infra.InfraOdsTableMapping;
 import com.yuzhi.dts.platform.repository.infra.InfraOdsTableMappingRepository;
+import com.yuzhi.dts.platform.service.topic.TopicBindingRuntimeService;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -25,15 +26,18 @@ public class DbtSourceService {
     private final DbtProperties properties;
     private final DbtConfigService configService;
     private final InfraOdsTableMappingRepository mappingRepository;
+    private final TopicBindingRuntimeService topicBindingRuntimeService;
 
     public DbtSourceService(
         DbtProperties properties,
         DbtConfigService configService,
-        InfraOdsTableMappingRepository mappingRepository
+        InfraOdsTableMappingRepository mappingRepository,
+        TopicBindingRuntimeService topicBindingRuntimeService
     ) {
         this.properties = properties;
         this.configService = configService;
         this.mappingRepository = mappingRepository;
+        this.topicBindingRuntimeService = topicBindingRuntimeService;
     }
 
     public DbtSourceRefreshResult refreshOdsSources() {
@@ -41,9 +45,6 @@ public class DbtSourceService {
             return DbtSourceRefreshResult.disabled("dbt 配置未启用");
         }
         List<InfraOdsTableMapping> mappings = mappingRepository.findByEnabledTrueOrderByOdsSchemaAscOdsTableAsc();
-        if (mappings.isEmpty()) {
-            return DbtSourceRefreshResult.empty("未发现 ODS 映射");
-        }
         Path projectDir = resolveProjectDir();
         if (!Files.exists(projectDir)) {
             return DbtSourceRefreshResult.empty("dbt 项目目录不存在");
@@ -55,6 +56,10 @@ public class DbtSourceService {
             Files.createDirectories(modelsDir);
             String yaml = YamlWriter.toYaml(root);
             Files.writeString(output, yaml, StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+            topicBindingRuntimeService.compileRuntimeArtifacts();
+            if (mappings.isEmpty()) {
+                return DbtSourceRefreshResult.empty("未发现 ODS 映射，已刷新专题绑定运行文件");
+            }
             return DbtSourceRefreshResult.success(output.toString(), mappings.size());
         } catch (IOException ex) {
             LOG.warn("Failed to write dbt sources: {}", ex.getMessage());
@@ -146,11 +151,19 @@ public class DbtSourceService {
                 sb.append(prefix).append(entry.getKey()).append(":");
                 Object value = entry.getValue();
                 if (value instanceof Map<?, ?> nested) {
-                    sb.append("\n");
-                    writeMap(sb, (Map<String, Object>) nested, indent + 2);
+                    if (nested.isEmpty()) {
+                        sb.append(" {}\n");
+                    } else {
+                        sb.append("\n");
+                        writeMap(sb, (Map<String, Object>) nested, indent + 2);
+                    }
                 } else if (value instanceof List<?> list) {
-                    sb.append("\n");
-                    writeList(sb, list, indent + 2);
+                    if (list.isEmpty()) {
+                        sb.append(" []\n");
+                    } else {
+                        sb.append("\n");
+                        writeList(sb, list, indent + 2);
+                    }
                 } else {
                     sb.append(" ").append(scalar(value)).append("\n");
                 }

@@ -52,6 +52,7 @@ class DbtWorkspaceBootstrapTest {
         assertThat(projectDir.resolve("models/ads")).isDirectory();
         assertThat(projectDir.resolve("models/ods_sources.yml")).exists();
         assertThat(projectDir.resolve("macros/get_custom_schema.sql")).exists();
+        assertThat(projectDir.resolve("macros/parse_date_safe.sql")).exists();
         assertThat(projectDir.resolve("seeds")).isDirectory();
         assertThat(projectDir.resolve("tests")).isDirectory();
         assertThat(projectDir.resolve("analyses")).isDirectory();

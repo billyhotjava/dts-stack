@@ -7,17 +7,21 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.yuzhi.dts.analytics.domain.AnalyticsUser;
 import com.yuzhi.dts.analytics.repository.AnalyticsUserRepository;
 import com.yuzhi.dts.analytics.service.AnalyticsSessionService;
+import com.yuzhi.dts.analytics.service.projectcockpit.ProjectCockpitTopicBindingGateway;
 import jakarta.servlet.http.Cookie;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
+
+import static org.mockito.BDDMockito.given;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -37,8 +41,20 @@ class ProjectCockpitResourceIT {
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
+    @MockBean
+    private ProjectCockpitTopicBindingGateway topicBindingGateway;
+
     @BeforeEach
     void setUpWarehouseTables() {
+        given(topicBindingGateway.currentProjectManagementState()).willReturn(
+                new ProjectCockpitTopicBindingGateway.TopicBindingState(
+                        true,
+                        "已绑定",
+                        "pm_ods",
+                        "project_subject_domain",
+                        "ods",
+                        "pm_upload_20260316",
+                        "项目管理专题当前绑定到 ods.pm_upload_20260316。"));
         jdbcTemplate.execute("DROP TABLE IF EXISTS pm_ods_project_progress_batch");
         jdbcTemplate.execute("DROP TABLE IF EXISTS biz_dwd_project_node_enriched");
         jdbcTemplate.execute(
@@ -169,7 +185,9 @@ class ProjectCockpitResourceIT {
                 .andExpect(jsonPath("$.batch.batchId").value("batch-20260316-001"))
                 .andExpect(jsonPath("$.batch.status").value("MODELED"))
                 .andExpect(jsonPath("$.quality.issueCount").value(12))
+                .andExpect(jsonPath("$.missingChecklist[*].id", Matchers.hasItem("topic-binding-project-management")))
                 .andExpect(jsonPath("$.missingChecklist[*].id", Matchers.hasItem("master-data-placeholder")))
+                .andExpect(jsonPath("$.dataSources[*].name", Matchers.hasItem("topic_binding_project_subject_domain")))
                 .andExpect(jsonPath("$.dataSources[*].name", Matchers.hasItem("project_master_data_placeholder")))
                 .andExpect(jsonPath("$.dataState.ready").value(true));
     }

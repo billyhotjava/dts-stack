@@ -253,6 +253,8 @@ dts:
     password: ${DTS_AIRFLOW_PASSWORD:airflow}
     dag-id: ${DTS_AIRFLOW_DAG_ID:dbt_load}
     dags-dir: ${DTS_AIRFLOW_DAGS_DIR:/opt/airflow/dags}
+    dag-ready-wait-seconds: ${DTS_AIRFLOW_DAG_READY_WAIT_SECONDS:15}
+    dag-ready-poll-seconds: ${DTS_AIRFLOW_DAG_READY_POLL_SECONDS:2}
   ingestion:
     enabled: ${DTS_INGESTION_ENABLED:true}
     base-url: ${DTS_INGESTION_BASE_URL:http://dts-ingestion:8083}

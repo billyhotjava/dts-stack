@@ -5,63 +5,10 @@ sources:
     schema: "ods"
     tables:
       -
-        name: "CUSTOMER"
-        description: "[task:7] dm8test: ERPDEMO.CUSTOMER -> ods.CUSTOMER"
-        meta:
-          system: "unknown"
-          biz: "unknown"
-          entity: "CUSTOMER"
-          stream: "CUSTOMER"
-          stream_namespace: "ERPDEMO"
-      -
-        name: "DEPARTMENT"
-        description: "[task:7] dm8test: ERPDEMO.DEPARTMENT -> ods.DEPARTMENT"
-        meta:
-          system: "unknown"
-          biz: "unknown"
-          entity: "DEPARTMENT"
-          stream: "DEPARTMENT"
-          stream_namespace: "ERPDEMO"
-      -
-        name: "EMPLOYEE"
-        description: "[task:7] dm8test: ERPDEMO.EMPLOYEE -> ods.EMPLOYEE"
-        meta:
-          system: "unknown"
-          biz: "unknown"
-          entity: "EMPLOYEE"
-          stream: "EMPLOYEE"
-          stream_namespace: "ERPDEMO"
-      -
-        name: "ods_patent"
-        description: "[task:5] patent_test1: patent -> ods.ods_patent"
-        meta:
-          system: "unknown"
-          biz: "unknown"
-          entity: "ods_patent"
-          stream: "patent"
-      -
-        name: "ods_prj_project"
-        description: "[task:8] prjtest1: project -> ods.ods_prj_project"
+        name: "ods_prj_prjtest2000"
+        description: "[task:1] prjtest1: prjtest2000 -> ods.ods_prj_prjtest2000"
         meta:
           system: "prj"
-          biz: "project"
+          biz: "prjtest2000"
           entity: "unknown"
-          stream: "project"
-      -
-        name: "PRODUCT"
-        description: "[task:7] dm8test: ERPDEMO.PRODUCT -> ods.PRODUCT"
-        meta:
-          system: "unknown"
-          biz: "unknown"
-          entity: "PRODUCT"
-          stream: "PRODUCT"
-          stream_namespace: "ERPDEMO"
-      -
-        name: "PURCHASEORDER_DETAIL"
-        description: "[task:7] dm8test: ERPDEMO.PURCHASEORDER_DETAIL -> ods.PURCHASEORDER_DETAIL"
-        meta:
-          system: "unknown"
-          biz: "unknown"
-          entity: "PURCHASEORDER_DETAIL"
-          stream: "PURCHASEORDER_DETAIL"
-          stream_namespace: "ERPDEMO"
+          stream: "prjtest2000"

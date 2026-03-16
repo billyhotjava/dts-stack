@@ -55,6 +55,18 @@ public class IngestionTaskProxyResource {
         this.externalRunLogService = externalRunLogService;
     }
 
+    @GetMapping("/templates")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ResponseEntity<?> listTemplates() {
+        return ResponseEntity.ok(ingestionClient.listTemplates());
+    }
+
+    @PostMapping("/templates/{templateId}/render")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ResponseEntity<?> renderTemplate(@PathVariable String templateId, @RequestBody(required = false) Map<String, Object> payload) {
+        return ResponseEntity.ok(ingestionClient.renderTemplate(templateId, payload));
+    }
+
     @PostMapping("/tasks")
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ApiResponse<Map<String, Object>> createTask(@RequestBody Map<String, Object> payload) {

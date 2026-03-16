@@ -17,6 +17,8 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import com.yuzhi.dts.analytics.service.projectcockpit.ProjectCockpitMasterDataGateway;
 import com.yuzhi.dts.analytics.service.projectcockpit.ProjectCockpitMasterDataGateway.ProjectCockpitMasterDataState;
+import com.yuzhi.dts.analytics.service.projectcockpit.ProjectCockpitTopicBindingGateway;
+import com.yuzhi.dts.analytics.service.projectcockpit.ProjectCockpitTopicBindingGateway.TopicBindingState;
 import com.yuzhi.dts.analytics.service.projectcockpit.ProjectCockpitWarehouseGateway;
 import com.yuzhi.dts.analytics.service.projectcockpit.ProjectCockpitWarehouseGateway.ProjectCockpitBatchSummary;
 import com.yuzhi.dts.analytics.service.projectcockpit.ProjectCockpitWarehouseGateway.ProjectCockpitWarehouseNode;
@@ -32,6 +34,7 @@ public class ProjectCockpitService {
 
     private final ObjectMapper objectMapper;
     private final ProjectCockpitMasterDataGateway masterDataGateway;
+    private final ProjectCockpitTopicBindingGateway topicBindingGateway;
     private final ProjectCockpitWarehouseGateway warehouseGateway;
 
     private volatile List<MajorProjectRow> majorProjects = List.of();
@@ -41,15 +44,19 @@ public class ProjectCockpitService {
     private volatile boolean formalDataReady;
     private volatile boolean warehouseEnabled;
     private volatile ProjectCockpitMasterDataState masterDataState;
+    private volatile TopicBindingState topicBindingState;
 
     public ProjectCockpitService(
             ObjectMapper objectMapper,
             ProjectCockpitMasterDataGateway masterDataGateway,
+            ProjectCockpitTopicBindingGateway topicBindingGateway,
             ProjectCockpitWarehouseGateway warehouseGateway) {
         this.objectMapper = objectMapper;
         this.masterDataGateway = masterDataGateway;
+        this.topicBindingGateway = topicBindingGateway;
         this.warehouseGateway = warehouseGateway;
         this.masterDataState = masterDataGateway.currentState();
+        this.topicBindingState = topicBindingGateway.currentProjectManagementState();
     }
 
     public ObjectNode summary(Filters filters) {
@@ -153,6 +160,7 @@ public class ProjectCockpitService {
         latestBatch = snapshot.batch();
         formalDataReady = snapshot.ready();
         masterDataState = masterDataGateway.currentState();
+        topicBindingState = topicBindingGateway.currentProjectManagementState();
         nodes = snapshot.ready() ? snapshot.nodes().stream().map(this::mapNode).toList() : List.of();
         majorProjects = deriveMajorProjects(nodes);
         subprojects = deriveSubprojects(nodes);
@@ -816,11 +824,19 @@ public class ProjectCockpitService {
         glossary.add(glossaryItem("里程碑完成率", "里程碑节点中已完成占比，用于判断关键计划推进，当前来自数仓节点事实。"));
         glossary.add(glossaryItem("高风险节点数", "风险等级为高的节点数量，优先用于领导盯防，当前来自数仓节点事实。"));
         glossary.add(glossaryItem("健康度", "综合考虑完成情况、风险等级、延期天数的 0-100 分，当前由项目看板服务基于数仓节点数据聚合。"));
+        glossary.add(glossaryItem(
+                "专题绑定来源",
+                "项目管理专题通过 topic binding 动态映射到现场 ODS 表；当前状态为%s。".formatted(blankToDash(topicBindingState == null ? "" : topicBindingState.status()))));
         return glossary;
     }
 
     private ArrayNode buildMissingChecklist() {
         ArrayNode checklist = objectMapper.createArrayNode();
+        checklist.add(checklistItem(
+                "topic-binding-project-management",
+                "项目管理专题逻辑实体绑定",
+                topicBindingState == null ? "待确认" : blankToDash(topicBindingState.status()),
+                topicBindingState == null ? "尚未读取到专题绑定状态。" : blankToDash(topicBindingState.message())));
         checklist.add(checklistItem(
                 "master-data-placeholder",
                 "项目主数据接口",
@@ -852,6 +868,16 @@ public class ProjectCockpitService {
 
     private ArrayNode buildDataSources() {
         ArrayNode sources = objectMapper.createArrayNode();
+        sources.add(dataSourceItem(
+                "topic_binding_project_subject_domain",
+                topicBindingState == null
+                        ? "项目管理专题逻辑实体绑定状态未加载。"
+                        : "逻辑 source %s.%s 当前绑定到 %s.%s，状态：%s。".formatted(
+                                blankToDash(topicBindingState.sourceName()),
+                                blankToDash(topicBindingState.logicalTableName()),
+                                blankToDash(topicBindingState.schemaName()),
+                                blankToDash(topicBindingState.tableName()),
+                                blankToDash(topicBindingState.status()))));
         sources.add(dataSourceItem(
                 "project_master_data_placeholder",
                 masterDataState == null

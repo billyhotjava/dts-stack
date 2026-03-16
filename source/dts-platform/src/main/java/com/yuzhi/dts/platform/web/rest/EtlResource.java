@@ -20,6 +20,8 @@ import com.yuzhi.dts.platform.service.etl.DbtQualityGateService;
 import com.yuzhi.dts.platform.service.etl.DbtReleaseGateService;
 import com.yuzhi.dts.platform.service.etl.DbtSourceService;
 import com.yuzhi.dts.platform.service.ops.ExternalRunLogService;
+import com.yuzhi.dts.platform.service.topic.TopicBindingRuntimeService;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -45,6 +47,7 @@ public class EtlResource {
     private final DbtRunResultService dbtRunResultService;
     private final DbtQualityGateService dbtQualityGateService;
     private final DbtReleaseGateService dbtReleaseGateService;
+    private final TopicBindingRuntimeService topicBindingRuntimeService;
     private final DbtArtifactSyncState dbtArtifactSyncState;
     private final AirflowClient airflowClient;
     private final AirflowProperties airflowProperties;
@@ -66,6 +69,7 @@ public class EtlResource {
         DbtRunResultService dbtRunResultService,
         DbtQualityGateService dbtQualityGateService,
         DbtReleaseGateService dbtReleaseGateService,
+        TopicBindingRuntimeService topicBindingRuntimeService,
         DbtArtifactSyncState dbtArtifactSyncState,
         AirflowClient airflowClient,
         AirflowProperties airflowProperties,
@@ -84,6 +88,7 @@ public class EtlResource {
         this.dbtRunResultService = dbtRunResultService;
         this.dbtQualityGateService = dbtQualityGateService;
         this.dbtReleaseGateService = dbtReleaseGateService;
+        this.topicBindingRuntimeService = topicBindingRuntimeService;
         this.dbtArtifactSyncState = dbtArtifactSyncState;
         this.airflowClient = airflowClient;
         this.airflowProperties = airflowProperties;
@@ -438,7 +443,7 @@ public class EtlResource {
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
         Map<String, Object> payload = normalizeTriggerPayload(body);
-        Map<String, Object> result = airflowClient.triggerDag(dagId, payload).orElse(Map.of("status", "queued"));
+        Map<String, Object> result = triggerAirflowDagOrThrow(dagId, payload);
         try {
             externalRunLogService.recordAirflowRun(ExternalRunLogService.ENTRY_AIRFLOW, dagId, result, payload, activeDept);
         } catch (RuntimeException ex) {
@@ -486,6 +491,8 @@ public class EtlResource {
             dagId = airflowProperties.getDagId();
         }
         Map<String, Object> conf = new LinkedHashMap<>();
+        dbtSourceService.refreshOdsSources();
+        TopicBindingRuntimeService.RuntimeCompilationResult topicRuntime = topicBindingRuntimeService.compileRuntimeArtifacts();
         conf.put("operation", operation);
         if (StringUtils.hasText(selector)) {
             conf.put("models", selector);
@@ -496,8 +503,15 @@ public class EtlResource {
         if (StringUtils.hasText(request == null ? null : request.target())) {
             conf.put("target", request.target().trim());
         }
+        Map<String, Object> mergedVars = new LinkedHashMap<>();
         if (request != null && request.vars() != null && !request.vars().isEmpty()) {
-            conf.put("vars", toJsonString(request.vars()));
+            mergedVars.putAll(request.vars());
+        }
+        if (topicRuntime != null && topicRuntime.vars() != null && !topicRuntime.vars().isEmpty()) {
+            mergedVars.putAll(topicRuntime.vars());
+        }
+        if (!mergedVars.isEmpty()) {
+            conf.put("vars", toJsonString(mergedVars));
         }
         if (StringUtils.hasText(request == null ? null : request.gitRef())) {
             conf.put("gitRef", request.gitRef().trim());
@@ -509,7 +523,7 @@ public class EtlResource {
             conf.put("buildInvocationId", request.buildInvocationId().trim());
         }
         Map<String, Object> payload = Map.of("conf", conf, "logical_date", Instant.now().toString());
-        Map<String, Object> result = new LinkedHashMap<>(airflowClient.triggerDag(dagId, payload).orElse(Map.of("status", "queued")));
+        Map<String, Object> result = new LinkedHashMap<>(triggerAirflowDagOrThrow(dagId, payload));
         result.putIfAbsent("dagId", dagId);
         try {
             externalRunLogService.recordAirflowRun(ExternalRunLogService.ENTRY_DBT, dagId, result, conf, activeDept);
@@ -545,6 +559,66 @@ public class EtlResource {
         } catch (RuntimeException ex) {
             // best-effort sync
         }
+    }
+
+    private Map<String, Object> triggerAirflowDagOrThrow(String dagId, Map<String, Object> payload) {
+        Map<String, Object> dag = waitForDagRegistration(dagId);
+        ensureDagActive(dagId, dag);
+        return airflowClient
+            .triggerDag(dagId, payload)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Airflow DAG 触发失败: " + dagId));
+    }
+
+    private Map<String, Object> waitForDagRegistration(String dagId) {
+        int waitSeconds = Math.max(0, airflowProperties.getDagReadyWaitSeconds());
+        if (waitSeconds <= 0 || !StringUtils.hasText(dagId) || !airflowProperties.isEnabled()) {
+            return findDag(dagId);
+        }
+        Instant deadline = Instant.now().plus(Duration.ofSeconds(waitSeconds));
+        int pollSeconds = Math.max(0, airflowProperties.getDagReadyPollSeconds());
+        while (true) {
+            Map<String, Object> dag = findDag(dagId);
+            if (dag != null) {
+                return dag;
+            }
+            if (!Instant.now().isBefore(deadline)) {
+                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Airflow DAG 尚未注册完成: " + dagId);
+            }
+            if (pollSeconds > 0) {
+                try {
+                    Thread.sleep(Duration.ofSeconds(pollSeconds).toMillis());
+                } catch (InterruptedException ex) {
+                    Thread.currentThread().interrupt();
+                    throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "等待 Airflow DAG 注册时被中断: " + dagId);
+                }
+            }
+        }
+    }
+
+    private Map<String, Object> findDag(String dagId) {
+        Map<String, Object> payload = airflowClient.listDags(200).orElse(Map.of());
+        for (Map<String, Object> dag : asListOfMaps(payload.get("dags"))) {
+            if (dagId.equals(stringVal(dag.get("dag_id")))) {
+                return dag;
+            }
+        }
+        return null;
+    }
+
+    private void ensureDagActive(String dagId, Map<String, Object> dag) {
+        if (dag == null || !boolVal(dag.get("is_paused"))) {
+            return;
+        }
+        airflowClient
+            .setDagPaused(dagId, false)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Airflow DAG 解锁失败: " + dagId));
+    }
+
+    private boolean boolVal(Object value) {
+        if (value instanceof Boolean bool) {
+            return bool;
+        }
+        return Boolean.parseBoolean(stringVal(value));
     }
 
     private String resolveSelector(DbtRunRequest request, boolean required) {

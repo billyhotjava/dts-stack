@@ -101,6 +101,14 @@ public class IngestionServiceClient {
         return refreshed;
     }
 
+    public Object listTemplates() {
+        return exchangeObject("/api/ingestion/templates", HttpMethod.GET, null, null, restTemplate);
+    }
+
+    public Object renderTemplate(String templateId, Object payload) {
+        return exchangeObject("/api/ingestion/templates/" + templateId + "/render", HttpMethod.POST, payload, null, restTemplate);
+    }
+
     public ApiResponse<Map<String, Object>> createIngestionTask(Object payload) {
         return exchangeTaskLong("/api/ingestion/tasks", HttpMethod.POST, payload);
     }

@@ -71,6 +71,8 @@ class DbtDagServiceTest {
         assertThat(dagSource).contains("DBT_THREADS");
         assertThat(dagSource).contains("DBT_THREADS_DEFAULT=");
         assertThat(dagSource).contains("docker_cmd+=(--threads");
+        assertThat(dagSource).contains("dag_run.conf.get('vars', '') | tojson");
+        assertThat(dagSource).contains("docker_cmd+=(--vars \\\"$vars_json\\\")");
         assertThat(dagSource).doesNotContain("env_var(");
         assertThat(dagSource).doesNotContain("DockerOperator(");
         assertThat(dagSource).doesNotContain("from airflow.providers.docker.operators.docker import DockerOperator");

@@ -9,6 +9,7 @@
 - Platform 任务清单：`worklog/v2.2.1/platform/tasks/README.md`
 - BI 商用化分解（P0/P1/P2）：`worklog/v2.2.1/BI/screen-designer-commercialization-p0-p2-breakdown.md`
 - 前端统一重构 Sprint 01：`worklog/v2.2.1/frontend-refactor-sprint-01/README.md`
+- Sprint-13 项目管理专用大屏模板：`worklog/v2.2.1/sprint-13/README.md`
 
 ## 说明
 - 本目录用于承接 v2.2.0 的剩余工作与 review 新增修复项。

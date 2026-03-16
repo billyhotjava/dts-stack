@@ -1,11 +1,15 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router";
 import {
+	Alert,
 	Button,
 	Card,
 	Descriptions,
 	Form,
 	Input,
 	InputNumber,
+	Modal,
+	Select,
 	Space,
 	Switch,
 	Table,
@@ -15,16 +19,29 @@ import {
 	message,
 } from "antd";
 import { CloudUploadOutlined, EyeOutlined, InboxOutlined, PlayCircleOutlined, ReloadOutlined } from "@ant-design/icons";
+import { listDbtSources } from "@/api/platformApi";
 import dataSourcesService, {
 	type ExcelImportErrorRow,
 	type ExcelImportParseResponse,
 	type ExcelImportPrepareResponse,
 	type ProjectCockpitBatchLoadResponse,
 } from "@/api/services/dataSourcesService";
+import topicBindingService, {
+	type TopicBindingDiagnostics,
+	type TopicBindingTemplateView,
+} from "@/api/services/topicBindingService";
+import {
+	selectPreferredTopicSource,
+	type TopicSourceCandidate,
+} from "./topicBindingCenter.helpers";
+import { selectRecommendedProjectCockpitBinding } from "./projectCockpitImportBinding.helpers";
 
 type UploadRequestOption = Parameters<NonNullable<import("antd").UploadProps["customRequest"]>>[0];
 
 const { Paragraph, Text, Title } = Typography;
+const normalizeText = (value?: string | null) => String(value || "").trim();
+const buildTopicSourceKey = (candidate?: TopicSourceCandidate) =>
+	candidate ? `${normalizeText(candidate.sourceDataSourceId)}|${normalizeText(candidate.schema)}|${normalizeText(candidate.table)}` : "";
 
 const toPreviewRows = (result: ExcelImportParseResponse | null) => {
 	if (!result?.preview?.length || !result.columns?.length) {
@@ -40,6 +57,7 @@ const toPreviewRows = (result: ExcelImportParseResponse | null) => {
 };
 
 export default function ProjectCockpitImportsPage() {
+	const navigate = useNavigate();
 	const [excelPrepared, setExcelPrepared] = useState<ExcelImportPrepareResponse | null>(null);
 	const [excelParseResult, setExcelParseResult] = useState<ExcelImportParseResponse | null>(null);
 	const [batchLoadResult, setBatchLoadResult] = useState<ProjectCockpitBatchLoadResponse | null>(null);
@@ -55,6 +73,16 @@ export default function ProjectCockpitImportsPage() {
 	const [excelDateFormat, setExcelDateFormat] = useState("yyyy-MM-dd HH:mm:ss");
 	const [excelSkipErrors, setExcelSkipErrors] = useState(true);
 	const [excelFillMerged, setExcelFillMerged] = useState(true);
+	const [bindingOpen, setBindingOpen] = useState(false);
+	const [bindingLoading, setBindingLoading] = useState(false);
+	const [bindingSubmitting, setBindingSubmitting] = useState(false);
+	const [bindingTemplates, setBindingTemplates] = useState<TopicBindingTemplateView[]>([]);
+	const [bindingDiagnostics, setBindingDiagnostics] = useState<TopicBindingDiagnostics | null>(null);
+	const [bindingSources, setBindingSources] = useState<TopicSourceCandidate[]>([]);
+	const [selectedTemplateCode, setSelectedTemplateCode] = useState<string>();
+	const [selectedEntityCode, setSelectedEntityCode] = useState<string>();
+	const [selectedDataSourceId, setSelectedDataSourceId] = useState<string>();
+	const [selectedSourceKey, setSelectedSourceKey] = useState<string>();
 
 	const previewColumns = useMemo(() => {
 		if (!excelParseResult?.columns?.length) {
@@ -70,6 +98,74 @@ export default function ProjectCockpitImportsPage() {
 	}, [excelParseResult]);
 
 	const previewRows = useMemo(() => toPreviewRows(excelParseResult), [excelParseResult]);
+	const bindingRows = useMemo(() => (Array.isArray(bindingDiagnostics?.rows) ? bindingDiagnostics.rows : []), [bindingDiagnostics]);
+	const templateOptions = useMemo(
+		() =>
+			bindingTemplates.map((item) => ({
+				value: item.templateCode,
+				label: item.templateName,
+			})),
+		[bindingTemplates],
+	);
+	const entityOptions = useMemo(
+		() =>
+			bindingRows
+				.filter((row) => row.templateCode === selectedTemplateCode)
+				.map((row) => ({
+					value: row.entityCode,
+					label: `${row.entityName || row.entityCode}${row.required ? "（必填）" : ""}`,
+				})),
+		[bindingRows, selectedTemplateCode],
+	);
+	const selectedBindingRow = useMemo(
+		() => bindingRows.find((row) => row.templateCode === selectedTemplateCode && row.entityCode === selectedEntityCode) || null,
+		[bindingRows, selectedEntityCode, selectedTemplateCode],
+	);
+	const uniqueDataSources = useMemo(() => {
+		const seen = new Set<string>();
+		return bindingSources
+			.filter((item) => normalizeText(item.sourceDataSourceId))
+			.filter((item) => {
+				const key = normalizeText(item.sourceDataSourceId);
+				if (seen.has(key)) {
+					return false;
+				}
+				seen.add(key);
+				return true;
+			})
+			.map((item) => ({
+				value: normalizeText(item.sourceDataSourceId),
+				label: item.sourceDataSourceName || normalizeText(item.sourceDataSourceId),
+			}));
+	}, [bindingSources]);
+	const filteredBindingSources = useMemo(() => {
+		if (!normalizeText(selectedDataSourceId)) {
+			return bindingSources;
+		}
+		return bindingSources.filter((item) => normalizeText(item.sourceDataSourceId) === normalizeText(selectedDataSourceId));
+	}, [bindingSources, selectedDataSourceId]);
+
+	useEffect(() => {
+		if (!selectedTemplateCode) {
+			return;
+		}
+		const currentEntityExists = bindingRows.some((row) => row.templateCode === selectedTemplateCode && row.entityCode === selectedEntityCode);
+		if (!currentEntityExists) {
+			const nextEntity = bindingRows.find((row) => row.templateCode === selectedTemplateCode)?.entityCode;
+			setSelectedEntityCode(nextEntity);
+		}
+	}, [bindingRows, selectedEntityCode, selectedTemplateCode]);
+
+	useEffect(() => {
+		if (!bindingOpen) {
+			return;
+		}
+		const preferred = selectPreferredTopicSource(filteredBindingSources, selectedDataSourceId);
+		const nextKey = buildTopicSourceKey(preferred);
+		setSelectedSourceKey((current) =>
+			current && filteredBindingSources.some((item) => buildTopicSourceKey(item) === current) ? current : nextKey || undefined,
+		);
+	}, [bindingOpen, filteredBindingSources, selectedDataSourceId]);
 
 	const resetAll = () => {
 		setExcelPrepared(null);
@@ -83,6 +179,14 @@ export default function ProjectCockpitImportsPage() {
 		setExcelDateFormat("yyyy-MM-dd HH:mm:ss");
 		setExcelSkipErrors(true);
 		setExcelFillMerged(true);
+		setBindingOpen(false);
+		setBindingTemplates([]);
+		setBindingDiagnostics(null);
+		setBindingSources([]);
+		setSelectedTemplateCode(undefined);
+		setSelectedEntityCode(undefined);
+		setSelectedDataSourceId(undefined);
+		setSelectedSourceKey(undefined);
 	};
 
 	const handleExcelUpload = async (options: UploadRequestOption) => {
@@ -173,6 +277,99 @@ export default function ProjectCockpitImportsPage() {
 		}
 	};
 
+	const openBindingModal = async () => {
+		if (!batchLoadResult) {
+			message.warning("请先完成正式落库");
+			return;
+		}
+		setBindingLoading(true);
+		setBindingOpen(true);
+		try {
+			const [templateResp, statusResp, sourceResp] = await Promise.all([
+				topicBindingService.listTemplates(),
+				topicBindingService.getStatus(),
+				listDbtSources() as Promise<TopicSourceCandidate[]>,
+			]);
+			const nextTemplates = Array.isArray(templateResp) ? templateResp : [];
+			const nextDiagnostics = statusResp || null;
+			const nextSources = Array.isArray(sourceResp) ? sourceResp : [];
+			setBindingTemplates(nextTemplates);
+			setBindingDiagnostics(nextDiagnostics);
+			setBindingSources(nextSources);
+			const recommendation = selectRecommendedProjectCockpitBinding(nextTemplates, nextDiagnostics);
+			setSelectedTemplateCode(recommendation?.templateCode || nextTemplates[0]?.templateCode);
+			setSelectedEntityCode(recommendation?.entityCode);
+			const preferredSource = selectPreferredTopicSource(nextSources);
+			setSelectedDataSourceId(normalizeText(preferredSource?.sourceDataSourceId) || undefined);
+			setSelectedSourceKey(buildTopicSourceKey(preferredSource) || undefined);
+		} catch (error: any) {
+			message.error(error?.message || "加载专题绑定上下文失败");
+			setBindingOpen(false);
+		} finally {
+			setBindingLoading(false);
+		}
+	};
+
+	const closeBindingModal = () => {
+		setBindingOpen(false);
+	};
+
+	const submitTopicBinding = async () => {
+		if (!batchLoadResult) {
+			message.warning("请先完成正式落库");
+			return;
+		}
+		if (!selectedTemplateCode || !selectedEntityCode) {
+			message.warning("请选择专题模板和逻辑实体");
+			return;
+		}
+		const candidate = filteredBindingSources.find((item) => buildTopicSourceKey(item) === selectedSourceKey);
+		if (!candidate?.table) {
+			message.warning("请选择一个可用的 ODS 表");
+			return;
+		}
+		setBindingSubmitting(true);
+		try {
+			await topicBindingService.bindOdsTable({
+				templateCode: selectedTemplateCode,
+				entityCode: selectedEntityCode,
+				dataSourceId: normalizeText(candidate.sourceDataSourceId) || undefined,
+				schemaName: normalizeText(candidate.schema) || normalizeText(selectedBindingRow?.expectedSchema) || "ods",
+				tableName: candidate.table,
+				batchId: batchLoadResult.batchId,
+				notes: `bind after project import ${batchLoadResult.batchCode}`,
+			});
+			message.success("专题绑定已完成");
+			setBindingDiagnostics((current) => {
+				if (!current) {
+					return current;
+				}
+				return {
+					...current,
+					rows: current.rows.map((row) =>
+						row.templateCode === selectedTemplateCode && row.entityCode === selectedEntityCode
+							? {
+									...row,
+									bound: true,
+									boundSchemaName: normalizeText(candidate.schema) || normalizeText(selectedBindingRow?.expectedSchema) || "ods",
+									boundTableName: candidate.table,
+									bindingStatus: "ACTIVE",
+								}
+							: row,
+					),
+					missingRequired: current.missingRequired.filter(
+						(item) => item !== `${selectedTemplateCode}.${selectedEntityCode}`,
+					),
+				};
+			});
+			setBindingOpen(false);
+		} catch (error: any) {
+			message.error(error?.message || "专题绑定失败");
+		} finally {
+			setBindingSubmitting(false);
+		}
+	};
+
 	return (
 		<div className="space-y-6">
 			<Card
@@ -182,6 +379,7 @@ export default function ProjectCockpitImportsPage() {
 						<Button icon={<ReloadOutlined />} onClick={resetAll}>
 							重置
 						</Button>
+						<Button onClick={() => navigate("/foundation/topic-bindings")}>专题绑定中心</Button>
 						<Button type="primary" icon={<CloudUploadOutlined />} onClick={handleLoadBatch} disabled={!excelParseResult} loading={loadingBatch}>
 							正式落库
 						</Button>
@@ -269,6 +467,20 @@ export default function ProjectCockpitImportsPage() {
 					<Descriptions.Item label="落库结果">
 						{batchLoadResult ? `${batchLoadResult.loadedRowCount} 行 / ${batchLoadResult.issueCount} 条问题` : "-"}
 					</Descriptions.Item>
+					<Descriptions.Item label="后续动作" span={2}>
+						{batchLoadResult ? (
+							<Space wrap>
+								<Button type="primary" onClick={() => void openBindingModal()}>
+									绑定到专题
+								</Button>
+								<Button type="link" onClick={() => navigate("/foundation/topic-bindings")}>
+									去专题绑定中心
+								</Button>
+							</Space>
+						) : (
+							"-"
+						)}
+					</Descriptions.Item>
 				</Descriptions>
 			</Card>
 
@@ -302,6 +514,63 @@ export default function ProjectCockpitImportsPage() {
 					/>
 				</Space>
 			</Card>
+
+			<Modal
+				open={bindingOpen}
+				title="绑定到专题逻辑实体"
+				onCancel={closeBindingModal}
+				onOk={() => void submitTopicBinding()}
+				confirmLoading={bindingSubmitting}
+				okText="完成绑定"
+				destroyOnClose
+			>
+				<Space direction="vertical" size={16} style={{ width: "100%" }}>
+					<Alert
+						type="info"
+						showIcon
+						message="当前绑定基于项目主体域批次"
+						description={`批次 ${batchLoadResult?.batchCode || "-"} 已落库。请选择专题模板、逻辑实体和现场 ODS 表，系统会把这次批次记录写入专题绑定。`}
+					/>
+					<Select
+						placeholder="选择专题模板"
+						loading={bindingLoading}
+						value={selectedTemplateCode}
+						options={templateOptions}
+						onChange={(value) => setSelectedTemplateCode(value)}
+					/>
+					<Select
+						placeholder="选择逻辑实体"
+						loading={bindingLoading}
+						value={selectedEntityCode}
+						options={entityOptions}
+						onChange={(value) => setSelectedEntityCode(value)}
+					/>
+					<Select
+						placeholder="选择来源数据源"
+						loading={bindingLoading}
+						value={selectedDataSourceId}
+						options={uniqueDataSources}
+						onChange={(value) => setSelectedDataSourceId(value)}
+					/>
+					<Select
+						placeholder="选择现场 ODS 表"
+						loading={bindingLoading}
+						value={selectedSourceKey}
+						options={filteredBindingSources.map((item) => ({
+							value: buildTopicSourceKey(item),
+							label: `${item.schema || "ods"}.${item.table || "-"}`,
+						}))}
+						onChange={(value) => setSelectedSourceKey(value)}
+					/>
+					{selectedBindingRow ? (
+						<Descriptions bordered size="small" column={1}>
+							<Descriptions.Item label="逻辑 Source">{selectedBindingRow.sourceName || "-"}</Descriptions.Item>
+							<Descriptions.Item label="逻辑表">{selectedBindingRow.logicalTableName || "-"}</Descriptions.Item>
+							<Descriptions.Item label="要求">{selectedBindingRow.required ? "必填" : "可选"}</Descriptions.Item>
+						</Descriptions>
+					) : null}
+				</Space>
+			</Modal>
 		</div>
 	);
 }

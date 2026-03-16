@@ -7,6 +7,7 @@ const TransformCreatePage = lazy(() => import("@/pages/explore/etl/TransformCrea
 const TransformDetailPage = lazy(() => import("@/pages/explore/etl/TransformDetailPage"));
 const TransformExecutionHistoryPage = lazy(() => import("@/pages/explore/etl/TransformExecutionHistoryPage"));
 const ProjectCockpitImportsPage = lazy(() => import("@/pages/foundation/ProjectCockpitImportsPage"));
+const TopicBindingCenterPage = lazy(() => import("@/pages/foundation/TopicBindingCenterPage"));
 
 export const STATIC_DASHBOARD_ROUTES: RouteObject[] = [
 	{
@@ -54,6 +55,14 @@ export const STATIC_DASHBOARD_ROUTES: RouteObject[] = [
 		element: (
 			<Suspense fallback={<LineLoading />}>
 				<ProjectCockpitImportsPage />
+			</Suspense>
+		),
+	},
+	{
+		path: "foundation/topic-bindings",
+		element: (
+			<Suspense fallback={<LineLoading />}>
+				<TopicBindingCenterPage />
 			</Suspense>
 		),
 	},

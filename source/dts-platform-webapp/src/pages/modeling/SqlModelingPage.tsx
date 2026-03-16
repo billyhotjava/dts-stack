@@ -39,6 +39,7 @@ import {
 	LinkOutlined,
 	SyncOutlined,
 	RocketOutlined,
+	CloudUploadOutlined,
 	ReloadOutlined,
 	FileTextOutlined,
 	UndoOutlined,
@@ -85,6 +86,7 @@ import {
 	getRollbackAuditLog,
 } from "@/api/platformApi";
 import dataSourcesService, { type InfraDataSource } from "@/api/services/dataSourcesService";
+import topicBindingService, { type TopicBindingDiagnostics } from "@/api/services/topicBindingService";
 import BatchImportModal from "./BatchImportModal";
 import { useRouter } from "@/routes/hooks";
 import { buildArchivePayload, collectUnassignedModelIds } from "./sqlModelArchive.helpers";
@@ -97,6 +99,11 @@ import {
 	inferBuildOperationFromCommand,
 	matchesTriggeredBuildSummary,
 } from "./sqlModelBuild.helpers";
+import {
+	createPrimaryModelingActions,
+	createSecondaryModelingActions,
+	shouldRenderInlineGitCommit,
+} from "./modelingToolbar.helpers";
 
 const { Text } = Typography;
 const { DirectoryTree } = Tree;
@@ -118,6 +125,16 @@ const syncTag = (synced?: boolean) => {
 const normalizeText = (value?: string) => String(value || "").trim();
 const normalizeUpper = (value?: string) => normalizeText(value).toUpperCase();
 const normalizeLower = (value?: string) => normalizeText(value).toLowerCase();
+const resolveTopicBindingSelector = (model?: { dagSelector?: string; name?: string }) => {
+	const dagSelector = normalizeText(model?.dagSelector);
+	if (dagSelector.startsWith("tab:")) {
+		return `tag:${dagSelector.slice(4)}`;
+	}
+	if (dagSelector) {
+		return dagSelector;
+	}
+	return model?.name ? `model:${model.name}` : undefined;
+};
 
 const tryParseJsonObject = (raw: string | undefined) => {
 	const text = normalizeText(raw);
@@ -496,11 +513,14 @@ export default function SqlModelingPage() {
 	const [previewData, setPreviewData] = useState<{ columns: string[]; rows: any[][] } | null>(null);
 	const [previewLoading, setPreviewLoading] = useState(false);
 	const [previewLimit, setPreviewLimit] = useState(100);
+	const [topicDiagnostics, setTopicDiagnostics] = useState<TopicBindingDiagnostics | null>(null);
+	const [topicDiagnosticsLoading, setTopicDiagnosticsLoading] = useState(false);
 	// FE-006: Git state
 	const [gitStatus, setGitStatus] = useState<{ initialized?: boolean; clean?: boolean; staged?: string[]; unstaged?: string[]; untracked?: string[] } | null>(null);
 	const [gitLog, setGitLog] = useState<Array<{ hash?: string; shortMessage?: string; author?: string; date?: string }>>([]);
 	const [, setGitDiff] = useState<string>("");
 	const [gitLoading, setGitLoading] = useState(false);
+	const [gitCommitOpen, setGitCommitOpen] = useState(false);
 	const [gitCommitMsg, setGitCommitMsg] = useState("");
 	const [gitCommitting, setGitCommitting] = useState(false);
 	const [gitReverting, setGitReverting] = useState<string | null>(null);
@@ -713,6 +733,24 @@ export default function SqlModelingPage() {
 		}
 	}, []);
 
+	const loadTopicDiagnostics = useCallback(async (selector?: string) => {
+		const normalizedSelector = normalizeText(selector);
+		if (!normalizedSelector) {
+			setTopicDiagnostics(null);
+			return;
+		}
+		setTopicDiagnosticsLoading(true);
+		try {
+			const resp = await topicBindingService.getStatus(normalizedSelector);
+			setTopicDiagnostics(resp || null);
+		} catch (err: any) {
+			toast.error(err?.message || "加载专题绑定诊断失败");
+			setTopicDiagnostics(null);
+		} finally {
+			setTopicDiagnosticsLoading(false);
+		}
+	}, []);
+
 	// FE-004: Load execution log from Airflow
 	const loadExecLog = useCallback(async (dagRunId?: string, dagId?: string) => {
 		if (!dagRunId) {
@@ -779,6 +817,7 @@ export default function SqlModelingPage() {
 			await commitDbtChanges({ message: gitCommitMsg.trim() });
 			toast.success("提交成功");
 			setGitCommitMsg("");
+			setGitCommitOpen(false);
 			void loadGitInfo();
 		} catch (err: any) {
 			toast.error(err?.message || "Git 提交失败");
@@ -786,6 +825,12 @@ export default function SqlModelingPage() {
 			setGitCommitting(false);
 		}
 	}, [gitCommitMsg, loadGitInfo]);
+
+	const openGitCommitModal = useCallback(() => {
+		setGitCommitMsg("");
+		setGitCommitOpen(true);
+		void loadGitInfo();
+	}, [loadGitInfo]);
 
 	const handleGitRevert = useCallback(async (path: string) => {
 		setGitReverting(path);
@@ -1832,7 +1877,34 @@ export default function SqlModelingPage() {
 		void loadContractImpact(activeModel?.id);
 	}, [activeModel?.id, loadContractImpact]);
 
+	useEffect(() => {
+		void loadTopicDiagnostics(resolveTopicBindingSelector(activeModel || undefined));
+	}, [activeModel?.dagSelector, activeModel?.name, loadTopicDiagnostics]);
+
 	const sqlDirty = !!activeModel && sqlDraft !== (activeModel?.sql || "");
+	const topicBindingAlert = useMemo(() => {
+		if (!topicDiagnostics?.rows?.length) {
+			return null;
+		}
+		if (topicDiagnostics.missingRequired?.length) {
+			return {
+				type: "warning" as const,
+				message: `缺少 ${topicDiagnostics.missingRequired.length} 个必填专题绑定`,
+				description: topicDiagnostics.missingRequired.join("，"),
+			};
+		}
+		return {
+			type: "success" as const,
+			message: "当前模型依赖的专题绑定已就绪",
+			description: topicDiagnostics.rows
+				.map((row) =>
+					row.bound
+						? `${row.templateCode}.${row.entityCode} -> ${row.boundSchemaName || "ods"}.${row.boundTableName || "-"}`
+						: `${row.templateCode}.${row.entityCode} 未绑定`,
+				)
+				.join("；"),
+		};
+	}, [topicDiagnostics]);
 
 	const filteredModels = useMemo(() => {
 		const key = normalizeText(keyword).toLowerCase();
@@ -1865,9 +1937,10 @@ export default function SqlModelingPage() {
 				title: `${layer}_层 (${list.length})`,
 				key: `layer-${layer}`,
 				children: list.map((model, idx) => ({
-					title: <span className="flex items-center gap-1"><span className="truncate">{model.name || model.alias || "未命名模型"}</span>{model.status && model.status !== "DRAFT" && <span className={`inline-block rounded px-1 text-[10px] leading-4 ${model.status === "PUBLISHED" ? "bg-green-500/15 text-green-600" : model.status === "TESTED" ? "bg-orange-500/15 text-orange-600" : "bg-blue-500/15 text-blue-600"}`}>{model.status === "PUBLISHED" ? "已发布" : model.status === "TESTED" ? "已测试" : model.status === "COMMITTED" ? "已提交" : model.status}</span>}</span>,
+					title: <span className="inline-flex items-center gap-1">{model.name || model.alias || "未命名模型"}{model.status && model.status !== "DRAFT" && <span className={`inline-block rounded px-1 text-[10px] leading-4 ${model.status === "PUBLISHED" ? "bg-green-500/15 text-green-600" : model.status === "TESTED" ? "bg-orange-500/15 text-orange-600" : "bg-blue-500/15 text-blue-600"}`}>{model.status === "PUBLISHED" ? "已发布" : model.status === "TESTED" ? "已测试" : model.status === "COMMITTED" ? "已提交" : model.status}</span>}</span>,
 					key: `model:${resolveModelKey(model, `${layer}-${idx}`)}`,
 					isLeaf: true,
+					icon: <></>,
 				})),
 			}));
 	}, []);
@@ -2128,55 +2201,111 @@ export default function SqlModelingPage() {
 						保存
 					</Button>
 					{/* 插入代码 */}
-					<Dropdown menu={{ items: insertMenuItems }} trigger={["click"]}>
-						<Button icon={<CodeOutlined />} disabled={!activeModel}>
-							插入 <DownOutlined className="text-xs" />
-						</Button>
-					</Dropdown>
-				</div>
-					<div className="flex items-center gap-2">
-						<Button icon={<RocketOutlined />} onClick={openRun} disabled={!activeModel || !workspaceOk}>
-							提交上线
-						</Button>
-						<Button icon={<SyncOutlined />} onClick={handleSyncModels} loading={syncingModels} disabled={!workspaceOk}>
-							同步模型
-						</Button>
-						{/* 同步按钮 */}
-						<Tooltip title="生成 dbt docs 产物">
-						<Button
-							onClick={() => triggerBuildOperation("docs")}
-							loading={buildTriggering === "docs"}
-							disabled={!configEnabled || !workspaceOk}
+						<Dropdown menu={{ items: insertMenuItems }} trigger={["click"]}>
+							<Button icon={<CodeOutlined />} disabled={!activeModel}>
+								插入 <DownOutlined className="text-xs" />
+							</Button>
+						</Dropdown>
+					</div>
+						<div className="flex items-center gap-2">
+							{createPrimaryModelingActions().map((action) => {
+								if (action.key === "compile") {
+									return (
+									<Button
+										key={action.key}
+										icon={<CodeOutlined />}
+										onClick={() => triggerBuildOperation("compile")}
+										loading={buildTriggering === "compile"}
+										disabled={!activeModel || !configEnabled || !workspaceOk || buildTriggering != null}
+									>
+										{action.label}
+									</Button>
+								);
+							}
+								if (action.key === "test") {
+									return (
+										<Button
+										key={action.key}
+										icon={<CheckCircleOutlined />}
+										onClick={() => triggerBuildOperation("test")}
+										loading={buildTriggering === "test"}
+										disabled={!activeModel || !configEnabled || !workspaceOk || buildTriggering != null}
+									>
+										{action.label}
+										</Button>
+									);
+								}
+								return (
+									<Button
+										key={action.key}
+										icon={<RocketOutlined />}
+										onClick={openRun}
+										disabled={!activeModel || !workspaceOk}
+									>
+										{action.label}
+									</Button>
+								);
+							})}
+						<Dropdown
+								menu={{
+									items: createSecondaryModelingActions().map((action) => {
+										if (action.key === "commit") {
+											return {
+												key: action.key,
+												label: action.label,
+												icon: <CloudUploadOutlined />,
+												disabled: !workspaceOk,
+												onClick: () => void openGitCommitModal(),
+											};
+										}
+										if (action.key === "sync") {
+											return {
+												key: action.key,
+												label: action.label,
+												icon: <SyncOutlined />,
+												disabled: !workspaceOk || syncingModels,
+												onClick: () => void handleSyncModels(),
+											};
+										}
+										if (action.key === "docs") {
+											return {
+												key: action.key,
+												label: action.label,
+												icon: <FileTextOutlined />,
+												disabled: !configEnabled || !workspaceOk || buildTriggering != null,
+												onClick: () => void triggerBuildOperation("docs"),
+											};
+										}
+										return {
+											key: action.key,
+											label: action.label,
+											icon: <UndoOutlined />,
+											disabled: !configEnabled || !workspaceOk || !activeModel,
+											children: [
+												{
+													key: "truncate",
+													label: "清空产出表 (Level 1)",
+													icon: <DeleteOutlined />,
+													onClick: () => void openOutputAction("truncate"),
+												},
+												{
+													key: "rebuild",
+													label: "重建产出表 (Level 2)",
+													icon: <UndoOutlined />,
+													danger: true,
+													onClick: () => void openOutputAction("rebuild"),
+												},
+											],
+										};
+									}),
+								}}
+							disabled={!workspaceOk}
 						>
-							文档
-						</Button>
-					</Tooltip>
-					{/* 回退操作 */}
-					<Dropdown
-						menu={{
-								items: [
-									{
-										key: "truncate",
-										label: "清空产出表 (Level 1)",
-										icon: <DeleteOutlined />,
-										onClick: () => void openOutputAction("truncate"),
-									},
-									{
-										key: "rebuild",
-										label: "重建产出表 (Level 2)",
-										icon: <UndoOutlined />,
-										danger: true,
-										onClick: () => void openOutputAction("rebuild"),
-									},
-								],
-							}}
-						disabled={!configEnabled || !workspaceOk || !activeModel}
-					>
-						<Button danger icon={<UndoOutlined />}>
-							回退 <DownOutlined />
-						</Button>
-					</Dropdown>
-					{/* 配置按钮 */}
+							<Button>
+								更多 <DownOutlined />
+							</Button>
+						</Dropdown>
+						{/* 配置按钮 */}
 					<Tooltip title="工作区配置">
 						<Button icon={<SettingOutlined />} onClick={() => setConfigOpen(true)} />
 					</Tooltip>
@@ -2212,7 +2341,7 @@ export default function SqlModelingPage() {
 				</div>
 			)}
 			<div className="flex flex-1 min-h-0 overflow-hidden">
-				<div className="w-64 min-w-[256px] max-w-[256px] border-r border-border bg-muted p-4 overflow-x-hidden [&_.ant-tree-title]:block [&_.ant-tree-title]:truncate [&_.ant-tree-title]:max-w-[180px]">
+				<div className="w-64 min-w-[256px] max-w-[256px] border-r border-border bg-muted p-4 overflow-x-auto overflow-y-auto [&_.ant-tree-title]:block [&_.ant-tree-title]:whitespace-nowrap [&_.ant-tree-switcher]:flex-shrink-0">
 					<div className="mb-3 text-xs font-bold uppercase text-muted-foreground">项目目录</div>
 					<Input
 						size="small"
@@ -2289,13 +2418,6 @@ export default function SqlModelingPage() {
 					{activeModel && (
 						<ModelPipeline
 							modelStatus={activeModel.status}
-							modelSelector={activeModel.tags ? `tag:${activeModel.tags.split(",")[0]?.trim()}` : undefined}
-							disabled={!workspaceOk || buildTriggering != null}
-							onStatusChange={(s) => {
-								if (activeModel) activeModel.status = s;
-								loadModels();
-							}}
-							onRefresh={loadModels}
 						/>
 					)}
 						<div className="flex-1 overflow-auto bg-muted/10 px-6 py-4">
@@ -2392,6 +2514,30 @@ export default function SqlModelingPage() {
 														</span>
 													</div>
 												</div>
+												<Divider className="my-2" />
+												<div className="text-xs font-medium text-muted-foreground mb-2">专题绑定诊断</div>
+												{topicDiagnosticsLoading ? (
+													<div className="text-xs text-muted-foreground">正在加载专题绑定状态...</div>
+												) : topicBindingAlert ? (
+													<div className="space-y-2">
+														<Alert
+															type={topicBindingAlert.type}
+															showIcon
+															message={topicBindingAlert.message}
+															description={topicBindingAlert.description}
+														/>
+														<Button size="small" type="link" icon={<LinkOutlined />} onClick={() => router.push("/foundation/topic-bindings")}>
+															打开专题绑定中心
+														</Button>
+													</div>
+												) : (
+													<div className="space-y-2">
+														<div className="text-xs text-muted-foreground">当前模型未命中已定义的专题模板绑定。</div>
+														<Button size="small" type="link" icon={<LinkOutlined />} onClick={() => router.push("/foundation/topic-bindings")}>
+															查看专题绑定中心
+														</Button>
+													</div>
+												)}
 												<Divider className="my-2" />
 												<div className="text-xs font-medium text-muted-foreground mb-2">字段列表</div>
 												{modelColumns.length ? (
@@ -2826,10 +2972,10 @@ export default function SqlModelingPage() {
 														))}
 													</div>
 												)}
-												{allChanges.length > 0 && (
-													<div className="flex items-center gap-2">
-														<Input
-															size="small"
+													{allChanges.length > 0 && shouldRenderInlineGitCommit() && (
+														<div className="flex items-center gap-2">
+															<Input
+																size="small"
 															placeholder="提交信息"
 															value={gitCommitMsg}
 															onChange={(e) => setGitCommitMsg(e.target.value)}
@@ -2844,10 +2990,15 @@ export default function SqlModelingPage() {
 															onClick={handleGitCommit}
 														>
 															提交
-														</Button>
-													</div>
-												)}
-											</div>
+															</Button>
+														</div>
+													)}
+													{allChanges.length > 0 && !shouldRenderInlineGitCommit() && (
+														<div className="rounded border border-dashed border-border bg-muted/10 px-3 py-2 text-xs text-muted-foreground">
+															提交入口已统一到顶部工具栏“提交变更”。
+														</div>
+													)}
+												</div>
 											{/* Right: recent commits */}
 											<div className="w-72 flex flex-col gap-1 overflow-hidden">
 												<div className="text-xs font-medium text-muted-foreground">最近提交</div>
@@ -2993,11 +3144,33 @@ export default function SqlModelingPage() {
 				</Form>
 			</Drawer>
 
-			<Modal
-				open={runOpen}
-				title="提交上线 (dbt build)"
-				onCancel={() => setRunOpen(false)}
-				onOk={submitRun}
+				<Modal
+					open={gitCommitOpen}
+					title="提交变更"
+					onCancel={() => setGitCommitOpen(false)}
+					onOk={handleGitCommit}
+					okText="提交"
+					cancelText="取消"
+					confirmLoading={gitCommitting}
+				>
+					<div className="space-y-3">
+						<Input
+							placeholder="请输入提交信息"
+							value={gitCommitMsg}
+							onChange={(event) => setGitCommitMsg(event.target.value)}
+							onPressEnter={handleGitCommit}
+						/>
+						<div className="rounded border border-border bg-muted/10 px-3 py-2 text-xs text-muted-foreground">
+							当前提交会写入 dbt Git 工作区，建议先完成编译和测试。
+						</div>
+					</div>
+				</Modal>
+
+				<Modal
+					open={runOpen}
+					title="上线 (dbt build)"
+					onCancel={() => setRunOpen(false)}
+					onOk={submitRun}
 				okText="提交"
 				cancelText="取消"
 				confirmLoading={runSubmitting}
@@ -3007,6 +3180,20 @@ export default function SqlModelingPage() {
 					<Form.Item name="models" label="模型选择器" rules={[{ required: true, message: "请输入模型选择器" }]}>
 						<Input placeholder="例如：tag:crm 或 model:xxx" />
 					</Form.Item>
+					{topicBindingAlert ? (
+						<Alert
+							type={topicBindingAlert.type}
+							showIcon
+							message={topicBindingAlert.message}
+							description={topicBindingAlert.description}
+							action={
+								<Button size="small" type="link" onClick={() => router.push("/foundation/topic-bindings")}>
+									去绑定
+								</Button>
+							}
+							className="mb-3"
+						/>
+					) : null}
 					<Form.Item name="target" label="Target">
 						<Input placeholder="dev" />
 					</Form.Item>
@@ -3732,3 +3919,5 @@ WHERE status = 'active'`}
 			</div>
 		);
 	}
+
+

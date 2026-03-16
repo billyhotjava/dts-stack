@@ -11,6 +11,8 @@ public class AirflowProperties {
     private String password;
     private String dagId = "dbt_load";
     private String dagsDir;
+    private int dagReadyWaitSeconds = 0;
+    private int dagReadyPollSeconds = 1;
     private String dockerNetwork = "dts-core";
     private boolean dockerPrivileged = true;
 
@@ -60,6 +62,22 @@ public class AirflowProperties {
 
     public void setDagsDir(String dagsDir) {
         this.dagsDir = dagsDir;
+    }
+
+    public int getDagReadyWaitSeconds() {
+        return dagReadyWaitSeconds;
+    }
+
+    public void setDagReadyWaitSeconds(int dagReadyWaitSeconds) {
+        this.dagReadyWaitSeconds = dagReadyWaitSeconds;
+    }
+
+    public int getDagReadyPollSeconds() {
+        return dagReadyPollSeconds;
+    }
+
+    public void setDagReadyPollSeconds(int dagReadyPollSeconds) {
+        this.dagReadyPollSeconds = dagReadyPollSeconds;
     }
 
     public String getDockerNetwork() {

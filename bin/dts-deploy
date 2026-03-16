@@ -308,7 +308,7 @@ if $RUN_AFTER_IMPORT && ! $PT_DRY_RUN; then
   info "  selector: $_SELECTOR"
 
   # Trigger dbt run
-  _RUN_RESP=$(curl "${_CURL_FLAGS[@]}" -X POST "${API_BASE}/etl/dbt/run" \
+  _RUN_RESP=$(curl "${_CURL_FLAGS[@]}" -X POST "${API_BASE%/}/api/etl/dbt/run" \
     -H "Authorization: Bearer ${TOKEN}" \
     -H "Content-Type: application/json" \
     -H "X-Active-Dept: ${ACTIVE_DEPT:-}" \
@@ -323,7 +323,7 @@ if $RUN_AFTER_IMPORT && ! $PT_DRY_RUN; then
 
   # Trigger sync
   info "  Syncing models to catalog..."
-  _SYNC_RESP=$(curl "${_CURL_FLAGS[@]}" -X POST "${API_BASE}/etl/dbt/models/sync" \
+  _SYNC_RESP=$(curl "${_CURL_FLAGS[@]}" -X POST "${API_BASE%/}/api/etl/dbt/models/sync" \
     -H "Authorization: Bearer ${TOKEN}" \
     -H "Content-Type: application/json" 2>&1) || true
 
