@@ -13,6 +13,7 @@ import com.yuzhi.dts.platform.service.etl.DbtManifestService;
 import com.yuzhi.dts.platform.service.etl.DbtAssetSyncService;
 import com.yuzhi.dts.platform.service.etl.DbtDagService;
 import com.yuzhi.dts.platform.service.etl.DbtPreviewService;
+import com.yuzhi.dts.platform.service.etl.DbtOutputRelationService;
 import com.yuzhi.dts.platform.service.etl.DbtArtifactSyncState;
 import com.yuzhi.dts.platform.service.etl.DbtRunResultService;
 import com.yuzhi.dts.platform.service.etl.DbtQualityGateService;
@@ -40,6 +41,7 @@ public class EtlResource {
     private final DbtAssetSyncService dbtAssetSyncService;
     private final DbtDagService dbtDagService;
     private final DbtPreviewService dbtPreviewService;
+    private final DbtOutputRelationService dbtOutputRelationService;
     private final DbtRunResultService dbtRunResultService;
     private final DbtQualityGateService dbtQualityGateService;
     private final DbtReleaseGateService dbtReleaseGateService;
@@ -60,6 +62,7 @@ public class EtlResource {
         DbtAssetSyncService dbtAssetSyncService,
         DbtDagService dbtDagService,
         DbtPreviewService dbtPreviewService,
+        DbtOutputRelationService dbtOutputRelationService,
         DbtRunResultService dbtRunResultService,
         DbtQualityGateService dbtQualityGateService,
         DbtReleaseGateService dbtReleaseGateService,
@@ -77,6 +80,7 @@ public class EtlResource {
         this.dbtAssetSyncService = dbtAssetSyncService;
         this.dbtDagService = dbtDagService;
         this.dbtPreviewService = dbtPreviewService;
+        this.dbtOutputRelationService = dbtOutputRelationService;
         this.dbtRunResultService = dbtRunResultService;
         this.dbtQualityGateService = dbtQualityGateService;
         this.dbtReleaseGateService = dbtReleaseGateService;
@@ -120,6 +124,62 @@ public class EtlResource {
         DbtPreviewService.PreviewResult result = dbtPreviewService.preview(model, Math.min(limit, 500));
         auditService.audit("READ", "etl.dbt.preview", model);
         return ApiResponses.ok(result);
+    }
+
+    @GetMapping("/dbt/output")
+    public ApiResponse<DbtOutputRelationService.DbtOutputRelationSummary> analyzeDbtOutputRelation(
+        @RequestParam java.util.UUID modelId
+    ) {
+        try {
+            ApiResponse<DbtOutputRelationService.DbtOutputRelationSummary> response = ApiResponses.ok(
+                dbtOutputRelationService.analyze(modelId)
+            );
+            auditService.audit("READ", "etl.dbt.output", String.valueOf(modelId));
+            return response;
+        } catch (IllegalArgumentException | IllegalStateException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ex.getMessage(), ex);
+        }
+    }
+
+    @PostMapping("/dbt/output/truncate")
+    public ApiResponse<DbtOutputRelationService.DbtOutputRelationActionResult> truncateDbtOutputRelation(
+        @RequestBody DbtOutputRelationRequest request
+    ) {
+        try {
+            ApiResponse<DbtOutputRelationService.DbtOutputRelationActionResult> response = ApiResponses.ok(
+                dbtOutputRelationService.truncate(request.modelId())
+            );
+            auditService.audit("EXECUTE", "etl.dbt.output.truncate", String.valueOf(request.modelId()));
+            return response;
+        } catch (IllegalArgumentException | IllegalStateException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ex.getMessage(), ex);
+        }
+    }
+
+    @PostMapping("/dbt/output/rebuild")
+    public ApiResponse<Map<String, Object>> rebuildDbtOutputRelation(
+        @RequestBody DbtOutputRelationRequest request,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        try {
+            DbtOutputRelationService.DbtOutputRelationActionResult prepare = dbtOutputRelationService.prepareRebuild(request.modelId());
+            String selector = prepare.selector();
+            ApiResponse<Map<String, Object>> response = triggerDbtOperation(
+                "build",
+                new DbtRunRequest(selector, selector, request.target(), "build", request.vars(), null, null, null),
+                activeDept,
+                true
+            );
+            Map<String, Object> payload = new LinkedHashMap<>(response.getData());
+            payload.put("relation", prepare.qualifiedName());
+            payload.put("selector", selector);
+            payload.put("dropExecuted", prepare.executed());
+            payload.put("dropMessage", prepare.message());
+            auditService.audit("EXECUTE", "etl.dbt.output.rebuild", String.valueOf(request.modelId()));
+            return ApiResponses.ok(payload);
+        } catch (IllegalArgumentException | IllegalStateException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ex.getMessage(), ex);
+        }
     }
 
     @PostMapping("/dbt/sources/refresh")
@@ -398,6 +458,7 @@ public class EtlResource {
         String commitSha,
         String buildInvocationId
     ) {}
+    public record DbtOutputRelationRequest(java.util.UUID modelId, String target, Map<String, Object> vars) {}
     public record DbtQualityGateRequest(String models) {}
     public record DbtReleaseGateRequest(String models, String gitRef, String commitSha, Boolean strictMode) {}
 

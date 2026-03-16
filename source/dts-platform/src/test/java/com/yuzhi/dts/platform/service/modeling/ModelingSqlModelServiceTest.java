@@ -1,6 +1,7 @@
 package com.yuzhi.dts.platform.service.modeling;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -28,12 +29,15 @@ import com.yuzhi.dts.platform.service.etl.DbtConfigService;
 import com.yuzhi.dts.platform.service.security.OrganizationVisibilityService;
 import java.nio.file.Path;
 import java.nio.file.Files;
+import java.nio.file.StandardOpenOption;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.ArrayList;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -101,8 +105,8 @@ class ModelingSqlModelServiceTest {
         plan.setName("Patent Plan");
         plan.setOwnerDept("D1");
 
-        when(security.resolveActiveDept(anyString())).thenReturn("D1");
-        when(security.hasInstituteScope()).thenReturn(false);
+        lenient().when(security.resolveActiveDept(anyString())).thenReturn("D1");
+        lenient().when(security.hasInstituteScope()).thenReturn(false);
         lenient().when(organizationVisibilityService.isRoot(anyString())).thenReturn(false);
         lenient().when(planRepo.findById(planId)).thenReturn(Optional.of(plan));
         lenient().when(columnSyncService.parseCsv(any(Path.class))).thenReturn(List.of());
@@ -326,6 +330,105 @@ class ModelingSqlModelServiceTest {
         assertThat(models.get(0).dagSelector()).isEqualTo("tag:project-management");
     }
 
+    @Test
+    void batchImportFromArchive_shouldReportValidationFailureWhenSqlFileMissing() throws Exception {
+        UUID sourceId = UUID.randomUUID();
+
+        Path archive = createArchive(
+            "models.tsv",
+            """
+            name\tlayer\tsql_path\tsource_data_source_id\talias\tschema_name\tmaterialized\ttags\tstatus\tenabled\towner_dept\tdescription\tcsv_path
+            biz_ads_missing\tADS\tbiz_ads_missing.sql\t%s\t\tpublic\ttable\tproject-management\tDRAFT\ttrue\tD1\t\t
+            """.formatted(sourceId)
+        );
+
+        ModelingSqlModelService.BatchImportResult result = service.batchImportFromArchive(
+            planId,
+            sourceId,
+            false,
+            archive,
+            "D1"
+        );
+
+        assertThat(result.total()).isEqualTo(1);
+        assertThat(result.failed()).isEqualTo(1);
+        assertThat(result.details()).singleElement().satisfies(detail -> {
+            assertThat(detail.status()).isEqualTo("validation_failed");
+            assertThat(detail.message()).contains("找不到 SQL 文件");
+        });
+    }
+
+    @Test
+    void batchImportFromArchive_shouldReportWriteFailureWhenWorkspaceFileCannotBeCreated() throws Exception {
+        UUID sourceId = UUID.randomUUID();
+        when(dataSourceRepository.findById(sourceId)).thenReturn(Optional.of(source(sourceId, "ODS-Lake", "postgres")));
+        Files.createDirectories(tempDir.resolve("models").resolve("dwd"));
+        Files.writeString(
+            tempDir.resolve("models").resolve("dwd").resolve("patent_plan"),
+            "block-directory-creation",
+            StandardOpenOption.CREATE,
+            StandardOpenOption.TRUNCATE_EXISTING
+        );
+
+        Path archive = createArchive(
+            "models.tsv",
+            """
+            name\tlayer\tsql_path\tsource_data_source_id\talias\tschema_name\tmaterialized\ttags\tstatus\tenabled\towner_dept\tdescription\tcsv_path
+            dwd_blocked_write\tDWD\tdwd_blocked_write.sql\t%s\t\tpublic\ttable\tproject-management\tDRAFT\ttrue\tD1\t\t
+            """.formatted(sourceId),
+            "dwd_blocked_write.sql",
+            "select 1 as metric"
+        );
+
+        ModelingSqlModelService.BatchImportResult result = service.batchImportFromArchive(
+            planId,
+            sourceId,
+            false,
+            archive,
+            "D1"
+        );
+
+        assertThat(result.total()).isEqualTo(1);
+        assertThat(result.failed()).isEqualTo(1);
+        assertThat(result.details()).singleElement().satisfies(detail -> {
+            assertThat(detail.status()).isEqualTo("write_failed");
+            assertThat(detail.message()).isNotBlank();
+        });
+    }
+
+    @Test
+    void importFromFiles_shouldFailWhenWorkspaceSqlCannotBeWritten() throws Exception {
+        UUID sourceId = UUID.randomUUID();
+        when(dataSourceRepository.findById(sourceId)).thenReturn(Optional.of(source(sourceId, "ODS-Lake", "postgres")));
+        Files.createDirectories(tempDir.resolve("models").resolve("ads"));
+        Files.writeString(
+            tempDir.resolve("models").resolve("ads").resolve("patent_plan"),
+            "block-directory-creation",
+            StandardOpenOption.CREATE,
+            StandardOpenOption.TRUNCATE_EXISTING
+        );
+
+        ModelingSqlModelService.SqlModelRequest request = new ModelingSqlModelService.SqlModelRequest(
+            planId,
+            "ads_blocked_write",
+            null,
+            "ADS",
+            sourceId,
+            "public",
+            "table",
+            "project-management",
+            "desc",
+            "select 1 as metric",
+            true,
+            "DRAFT",
+            "D1",
+            null
+        );
+
+        assertThatThrownBy(() -> service.importFromFiles(request, "select 1 as metric", null, "D1"))
+            .isInstanceOf(IllegalStateException.class);
+    }
+
     private InfraOdsTableMapping mapping(UUID id, UUID connectionId, String schema, String table, String entityCode) {
         InfraOdsTableMapping mapping = new InfraOdsTableMapping();
         mapping.setId(id);
@@ -351,5 +454,17 @@ class ModelingSqlModelServiceTest {
         source.setStatus("ACTIVE");
         source.setProps(new ObjectMapper().createObjectNode().put("sourceSystem", "ERP").toString());
         return source;
+    }
+
+    private Path createArchive(String... files) throws Exception {
+        Path archive = tempDir.resolve("batch-import-" + UUID.randomUUID() + ".zip");
+        try (ZipOutputStream zos = new ZipOutputStream(Files.newOutputStream(archive))) {
+            for (int i = 0; i < files.length; i += 2) {
+                zos.putNextEntry(new ZipEntry(files[i]));
+                zos.write(files[i + 1].getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                zos.closeEntry();
+            }
+        }
+        return archive;
     }
 }

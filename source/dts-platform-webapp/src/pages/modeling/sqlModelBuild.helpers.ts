@@ -1,4 +1,4 @@
-export type BuildOperation = "compile" | "test" | "docs";
+export type BuildOperation = "compile" | "test" | "docs" | "build";
 
 export type BuildSummaryLike = {
 	present?: boolean;

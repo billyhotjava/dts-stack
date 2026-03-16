@@ -74,6 +74,9 @@ import {
 	listTemplateLayers,
 	getDbtRunLog,
 	previewDbtModel,
+	getDbtOutputRelation,
+	truncateDbtOutputRelation,
+	rebuildDbtOutputRelation,
 	getDbtGitStatus,
 	commitDbtChanges,
 	getDbtGitLog,
@@ -82,7 +85,6 @@ import {
 	getRollbackAuditLog,
 } from "@/api/platformApi";
 import dataSourcesService, { type InfraDataSource } from "@/api/services/dataSourcesService";
-import RollbackImpactModal, { type RollbackRequest } from "@/components/rollback/RollbackImpactModal";
 import BatchImportModal from "./BatchImportModal";
 import { useRouter } from "@/routes/hooks";
 import { buildArchivePayload, collectUnassignedModelIds } from "./sqlModelArchive.helpers";
@@ -209,6 +211,22 @@ type DbtSyncStatus = {
 	runResults?: DbtSyncArtifactStatus | null;
 	stats?: DbtSyncStats | null;
 	latestRun?: DbtRunSummary | null;
+};
+
+type DbtOutputRelation = {
+	modelId?: string;
+	modelName?: string;
+	selector?: string;
+	database?: string;
+	schema?: string;
+	identifier?: string;
+	qualifiedName?: string;
+	materialized?: string;
+	relationType?: string;
+	exists?: boolean;
+	truncateAllowed?: boolean;
+	downstreamRefCount?: number;
+	message?: string;
 };
 
 type SqlModel = {
@@ -485,9 +503,11 @@ export default function SqlModelingPage() {
 	const [gitCommitMsg, setGitCommitMsg] = useState("");
 	const [gitCommitting, setGitCommitting] = useState(false);
 	const [gitReverting, setGitReverting] = useState<string | null>(null);
-	// Rollback state
-	const [rollbackOpen, setRollbackOpen] = useState(false);
-	const [rollbackRequest, setRollbackRequest] = useState<RollbackRequest | null>(null);
+	const [outputAction, setOutputAction] = useState<"truncate" | "rebuild" | null>(null);
+	const [outputModalOpen, setOutputModalOpen] = useState(false);
+	const [outputRelationLoading, setOutputRelationLoading] = useState(false);
+	const [outputRelationSubmitting, setOutputRelationSubmitting] = useState(false);
+	const [outputRelation, setOutputRelation] = useState<DbtOutputRelation | null>(null);
 	const [auditLogs, setAuditLogs] = useState<any[]>([]);
 	const [auditLogsLoading, setAuditLogsLoading] = useState(false);
 	const [form] = Form.useForm();
@@ -772,22 +792,99 @@ export default function SqlModelingPage() {
 		}
 	};
 
-	const openRollback = (level: number, rebuildDbt?: boolean) => {
-		if (!activeModel?.name) {
+	const openOutputAction = async (action: "truncate" | "rebuild") => {
+		if (!activeModel?.id) {
 			toast.error("请先选择一个模型");
 			return;
 		}
-		const tables = [activeModel.name];
-		const dsId = dbtConfig?.config?.targetDataSourceId;
-		setRollbackRequest({
-			level,
-			scope: "task",
-			dataSourceId: dsId,
-			tables,
-			rebuildDbt: rebuildDbt || false,
-		});
-		setRollbackOpen(true);
-		if (dsId) void loadAuditLogs(dsId);
+		setOutputAction(action);
+		setOutputModalOpen(true);
+		setOutputRelation(null);
+		setOutputRelationLoading(true);
+		try {
+			const resp = (await getDbtOutputRelation(activeModel.id)) as DbtOutputRelation;
+			setOutputRelation(resp || null);
+		} catch (err: any) {
+			toast.error(err?.message || "加载产出表信息失败");
+			setOutputModalOpen(false);
+			setOutputAction(null);
+		} finally {
+			setOutputRelationLoading(false);
+		}
+	};
+
+	const submitOutputAction = async () => {
+		if (!activeModel?.id || !outputAction) {
+			return;
+		}
+		setOutputRelationSubmitting(true);
+		try {
+			if (outputAction === "truncate") {
+				const resp: any = await truncateDbtOutputRelation({ modelId: activeModel.id });
+				const message = resp?.message || "清空产出表完成";
+				toast.success(message);
+				setOutputModalOpen(false);
+				setOutputAction(null);
+				void loadAuditLogs(dbtConfig?.config?.targetDataSourceId);
+				setBottomTab("audit");
+				await loadSyncStatus(normalizeText(outputRelation?.selector) || normalizeText(activeModel.dagSelector) || undefined);
+				return;
+			}
+
+			const selector = normalizeText(outputRelation?.selector) || normalizeText(activeModel.dagSelector) || (activeModel?.name ? `model:${activeModel.name}` : "all");
+			const baselineStatus = (await getDbtSyncStatus(selector ? { models: selector } : undefined)) as DbtSyncStatus;
+			const baselineRun = baselineStatus?.latestRun || null;
+			const resp: any = await rebuildDbtOutputRelation({
+				modelId: activeModel.id,
+				target: normalizeText(dbtConfig?.config?.targetName) || "dev",
+			});
+			const dagRunId = normalizeText(resp?.dag_run_id || resp?.dagRunId);
+			const dagId = normalizeText(resp?.dag_id || resp?.dagId);
+			const pendingRun = {
+				...createPendingBuildSummary("build", selector),
+				dagRunId,
+				dagId,
+			} as DbtRunSummary;
+			setRunResult(pendingRun);
+			setBottomTab("execlog");
+			setOutputModalOpen(false);
+			setOutputAction(null);
+			toast.success(resp?.dropMessage || "已提交重建产出表任务");
+
+			const settled = await waitForBuildResult("build", selector, dagId || undefined, dagRunId || undefined, baselineRun);
+			if (settled.syncStatus) {
+				setDbtSyncStatus(settled.syncStatus);
+			} else {
+				await loadSyncStatus(selector);
+			}
+			await loadRuns();
+
+			let resolvedRun = settled.latestRun || null;
+			if (resolvedRun) {
+				resolvedRun = {
+					...resolvedRun,
+					dagRunId: dagRunId || resolvedRun.dagRunId,
+					dagId: dagId || resolvedRun.dagId,
+				};
+			}
+			if (!resolvedRun && settled.dagState === "failed") {
+				resolvedRun = {
+					...createFailedBuildSummary("build", selector, "重建产出表失败，请查看执行日志"),
+					dagRunId,
+					dagId,
+				} as DbtRunSummary;
+			}
+			setRunResult(resolvedRun || pendingRun);
+			if (settled.dagState === "failed" && dagRunId) {
+				await loadExecLog(dagRunId, dagId || undefined);
+				setBottomTab("execlog");
+			}
+			void loadAuditLogs(dbtConfig?.config?.targetDataSourceId);
+		} catch (err: any) {
+			toast.error(err?.message || (outputAction === "truncate" ? "清空产出表失败" : "重建产出表失败"));
+		} finally {
+			setOutputRelationSubmitting(false);
+		}
 	};
 
 	useEffect(() => {
@@ -862,12 +959,12 @@ export default function SqlModelingPage() {
 		setRunOpen(true);
 	};
 
-	const waitForBuildResult = useCallback(
-		async (
-			operation: "compile" | "test" | "docs",
-			selector: string,
-			dagId: string | undefined,
-			dagRunId: string | undefined,
+		const waitForBuildResult = useCallback(
+			async (
+				operation: "compile" | "test" | "docs" | "build",
+				selector: string,
+				dagId: string | undefined,
+				dagRunId: string | undefined,
 			baselineRun: DbtRunSummary | null,
 		) => {
 			let lastStatus: DbtSyncStatus | null = null;
@@ -2015,9 +2112,15 @@ export default function SqlModelingPage() {
 						</Button>
 					</Dropdown>
 				</div>
-				<div className="flex items-center gap-2">
-					{/* 同步按钮 */}
-					<Tooltip title="生成 dbt docs 产物">
+					<div className="flex items-center gap-2">
+						<Button icon={<RocketOutlined />} onClick={openRun} disabled={!activeModel || !workspaceOk}>
+							提交上线
+						</Button>
+						<Button icon={<SyncOutlined />} onClick={handleSyncModels} loading={syncingModels} disabled={!workspaceOk}>
+							同步模型
+						</Button>
+						{/* 同步按钮 */}
+						<Tooltip title="生成 dbt docs 产物">
 						<Button
 							onClick={() => triggerBuildOperation("docs")}
 							loading={buildTriggering === "docs"}
@@ -2029,22 +2132,22 @@ export default function SqlModelingPage() {
 					{/* 回退操作 */}
 					<Dropdown
 						menu={{
-							items: [
-								{
-									key: "truncate",
-									label: "清空产出表 (Level 1)",
-									icon: <DeleteOutlined />,
-									onClick: () => openRollback(1),
-								},
-								{
-									key: "rebuild",
-									label: "重建产出表 (Level 2)",
-									icon: <UndoOutlined />,
-									danger: true,
-									onClick: () => openRollback(2, true),
-								},
-							],
-						}}
+								items: [
+									{
+										key: "truncate",
+										label: "清空产出表 (Level 1)",
+										icon: <DeleteOutlined />,
+										onClick: () => void openOutputAction("truncate"),
+									},
+									{
+										key: "rebuild",
+										label: "重建产出表 (Level 2)",
+										icon: <UndoOutlined />,
+										danger: true,
+										onClick: () => void openOutputAction("rebuild"),
+									},
+								],
+							}}
 						disabled={!configEnabled || !workspaceOk || !activeModel}
 					>
 						<Button danger icon={<UndoOutlined />}>
@@ -3523,16 +3626,87 @@ WHERE status = 'active'`}
 						},
 					]}
 				/>
-			</Drawer>
-			<RollbackImpactModal
-				open={rollbackOpen}
-				request={rollbackRequest}
-				onClose={() => setRollbackOpen(false)}
-				onSuccess={() => {
-					void loadAuditLogs(dbtConfig?.config?.targetDataSourceId);
-					setBottomTab("audit");
-				}}
-			/>
-		</div>
-	);
-}
+				</Drawer>
+				<Modal
+					open={outputModalOpen}
+					title={outputAction === "rebuild" ? "重建产出表" : "清空产出表"}
+					onCancel={() => {
+						if (outputRelationSubmitting) {
+							return;
+						}
+						setOutputModalOpen(false);
+						setOutputAction(null);
+					}}
+					onOk={() => void submitOutputAction()}
+					confirmLoading={outputRelationSubmitting}
+					okText={outputAction === "rebuild" ? "确认重建" : "确认清空"}
+					okButtonProps={{
+						danger: outputAction === "rebuild",
+						disabled: outputRelationLoading || !activeModel?.id || (outputAction === "truncate" && !!outputRelation?.exists && !outputRelation?.truncateAllowed),
+					}}
+				>
+					<Space direction="vertical" size={12} className="w-full">
+						{outputRelationLoading ? (
+							<div className="py-6 text-center text-sm text-muted-foreground">正在分析当前模型产出 relation...</div>
+						) : outputRelation ? (
+							<>
+								<Alert
+									type={outputAction === "rebuild" ? "warning" : "info"}
+									showIcon
+									message={outputRelation.message || (outputAction === "rebuild" ? "将删除当前 relation 并重新执行 dbt build" : "将清空当前模型产出表数据")}
+								/>
+								<div className="rounded-md border border-border bg-muted/30 p-3 text-sm">
+									<div>
+										<Text type="secondary">模型</Text>
+										<div className="font-medium">{outputRelation.modelName || activeModel?.name || "-"}</div>
+									</div>
+									<div className="mt-2">
+										<Text type="secondary">产出 relation</Text>
+										<div className="font-mono">{outputRelation.qualifiedName || "-"}</div>
+									</div>
+									<div className="mt-2 grid grid-cols-2 gap-3">
+										<div>
+											<Text type="secondary">物化方式</Text>
+											<div>{outputRelation.materialized || "-"}</div>
+										</div>
+										<div>
+											<Text type="secondary">检测类型</Text>
+											<div>{outputRelation.relationType || (outputRelation.exists ? "-" : "未生成")}</div>
+										</div>
+										<div>
+											<Text type="secondary">当前状态</Text>
+											<div>{outputRelation.exists ? "已存在" : "不存在"}</div>
+										</div>
+										<div>
+											<Text type="secondary">下游引用</Text>
+											<div>{outputRelation.downstreamRefCount ?? 0}</div>
+										</div>
+									</div>
+									<div className="mt-2">
+										<Text type="secondary">构建选择器</Text>
+										<div className="font-mono">{outputRelation.selector || activeModel?.dagSelector || "-"}</div>
+									</div>
+								</div>
+								{outputAction === "truncate" && outputRelation.exists && !outputRelation.truncateAllowed ? (
+									<Alert
+										type="error"
+										showIcon
+										message="当前产出 relation 为视图，不支持清空。请改用“重建产出表”。"
+									/>
+								) : null}
+								{outputAction === "rebuild" ? (
+									<Alert
+										type="warning"
+										showIcon
+										message="重建会先删除当前 relation，再执行 dbt build。若 relation 尚不存在，将直接触发 build。"
+									/>
+								) : null}
+							</>
+						) : (
+							<Alert type="error" showIcon message="未能加载当前模型的产出 relation 信息" />
+						)}
+					</Space>
+				</Modal>
+			</div>
+		);
+	}

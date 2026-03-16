@@ -1026,14 +1026,12 @@ public class ModelingSqlModelService {
         if (model == null) return;
         DbtConfigService.DbtConfigView view = dbtConfigService.loadConfig();
         if (view == null || view.config() == null || !StringUtils.hasText(view.config().projectDir())) {
-            LOG.warn("[dbt-model] projectDir 未配置，跳过写入 {}", model.getName());
-            return;
+            throw new IllegalStateException("dbt projectDir 未配置，无法写入模型文件");
         }
         Path projectDir = Path.of(view.config().projectDir()).normalize();
         Path targetPath = projectDir.resolve(model.getModelPath()).normalize();
         if (!targetPath.startsWith(projectDir)) {
-            LOG.warn("[dbt-model] invalid target path {} for model {}", targetPath, model.getName());
-            return;
+            throw new IllegalStateException("模型文件目标路径非法: " + targetPath);
         }
         try {
             Files.createDirectories(targetPath.getParent());
@@ -1041,7 +1039,7 @@ public class ModelingSqlModelService {
             String content = buildSqlContent(model, sourceTag);
             Files.writeString(targetPath, content, StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
         } catch (IOException ex) {
-            LOG.warn("[dbt-model] failed to write {}: {}", targetPath, ex.getMessage());
+            throw new IllegalStateException("写入模型文件失败: " + ex.getMessage(), ex);
         }
     }
 
@@ -1051,14 +1049,12 @@ public class ModelingSqlModelService {
         }
         DbtConfigService.DbtConfigView view = dbtConfigService.loadConfig();
         if (view == null || view.config() == null || !StringUtils.hasText(view.config().projectDir())) {
-            LOG.warn("[dbt-model] projectDir 未配置，跳过 CSV 写入 {}", modelPath);
-            return;
+            throw new IllegalStateException("dbt projectDir 未配置，无法写入 CSV 文件");
         }
         Path projectDir = Path.of(view.config().projectDir()).normalize();
         Path sqlPath = projectDir.resolve(modelPath).normalize();
         if (!sqlPath.startsWith(projectDir)) {
-            LOG.warn("[dbt-model] invalid target path {} for csv", sqlPath);
-            return;
+            throw new IllegalStateException("CSV 目标路径非法: " + sqlPath);
         }
         String baseName = sqlPath.getFileName().toString();
         String csvName = baseName.endsWith(".sql") ? baseName.substring(0, baseName.length() - 4) + ".csv" : baseName + ".csv";
@@ -1067,7 +1063,7 @@ public class ModelingSqlModelService {
             Files.createDirectories(csvPath.getParent());
             Files.writeString(csvPath, csvText.trim() + "\n", StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
         } catch (IOException ex) {
-            LOG.warn("[dbt-model] failed to write csv {}: {}", csvPath, ex.getMessage());
+            throw new IllegalStateException("写入 CSV 文件失败: " + ex.getMessage(), ex);
         }
     }
 
@@ -1963,7 +1959,7 @@ public class ModelingSqlModelService {
     public record BatchImportDetail(
         String name,
         String layer,
-        String status,    // "imported" | "skipped" | "failed"
+        String status,    // "imported" | "skipped" | "validation_failed" | "write_failed"
         String message
     ) {}
 
@@ -1976,6 +1972,7 @@ public class ModelingSqlModelService {
         Path archivePath,
         String activeDept
     ) {
+        ensureWorkspaceWritable();
         Path tempDir = null;
         try {
             tempDir = Files.createTempDirectory("batch-import-unzip-");
@@ -2022,6 +2019,13 @@ public class ModelingSqlModelService {
                 String csvPath = cols.length > 12 ? cols[12].trim() : "";
 
                 try {
+                    String validationError = validateBatchImportEntry(name, layer, sqlPath, materialized);
+                    if (validationError != null) {
+                        details.add(new BatchImportDetail(name, layer, "validation_failed", validationError));
+                        failed++;
+                        continue;
+                    }
+
                     // Skip existing check
                     if (skipExisting && repo.findFirstByPlanIdAndNameIgnoreCase(planId, name).isPresent()) {
                         details.add(new BatchImportDetail(name, layer, "skipped", "同名模型已存在"));
@@ -2032,7 +2036,7 @@ public class ModelingSqlModelService {
                     // Resolve SQL file
                     Path sqlFile = resolveSidecarFile(tsvDir, tempDir, sqlPath, name, ".sql");
                     if (sqlFile == null || !Files.isRegularFile(sqlFile)) {
-                        details.add(new BatchImportDetail(name, layer, "failed", "找不到 SQL 文件: " + sqlPath));
+                        details.add(new BatchImportDetail(name, layer, "validation_failed", "找不到 SQL 文件: " + sqlPath));
                         failed++;
                         continue;
                     }
@@ -2082,9 +2086,13 @@ public class ModelingSqlModelService {
                     importFromFiles(request, sqlText, csvText, activeDept);
                     details.add(new BatchImportDetail(name, layer, "imported", null));
                     imported++;
+                } catch (IllegalArgumentException ex) {
+                    LOG.warn("[batch-import] validation failed for model '{}': {}", name, ex.getMessage());
+                    details.add(new BatchImportDetail(name, layer, "validation_failed", ex.getMessage()));
+                    failed++;
                 } catch (Exception ex) {
                     LOG.warn("[batch-import] failed to import model '{}': {}", name, ex.getMessage(), ex);
-                    details.add(new BatchImportDetail(name, layer, "failed", ex.getMessage()));
+                    details.add(new BatchImportDetail(name, layer, "write_failed", ex.getMessage()));
                     failed++;
                 }
             }
@@ -2102,6 +2110,31 @@ public class ModelingSqlModelService {
                 }
             }
         }
+    }
+
+    private String validateBatchImportEntry(String name, String layer, String sqlPath, String materialized) {
+        if (!StringUtils.hasText(name)) {
+            return "模型名称不能为空";
+        }
+        if (!MODEL_NAME_PATTERN.matcher(name).matches()) {
+            return "模型名称仅允许字母/数字/下划线，且必须以字母开头";
+        }
+        if (!StringUtils.hasText(layer)) {
+            return "模型分层不能为空";
+        }
+        if (!StringUtils.hasText(normalizeLayer(trimToNull(layer)))) {
+            return "非法模型分层: " + layer;
+        }
+        if (!StringUtils.hasText(sqlPath)) {
+            return "SQL 文件路径不能为空";
+        }
+        if (StringUtils.hasText(materialized)) {
+            String normalized = materialized.trim().toLowerCase(Locale.ROOT);
+            if (!Set.of("table", "view", "incremental").contains(normalized)) {
+                return "非法物化方式: " + materialized;
+            }
+        }
+        return null;
     }
 
     private Path resolveSidecarFile(Path tsvDir, Path unzipRoot, String relativePath, String modelName, String extension) {

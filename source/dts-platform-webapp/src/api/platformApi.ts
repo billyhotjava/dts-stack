@@ -102,6 +102,12 @@ export const getDbtRunLog = (dagRunId: string, params?: { dagId?: string; taskId
 // dbt data preview
 export const previewDbtModel = (model: string, limit = 100) =>
 	api.get({ url: "/etl/dbt/preview", params: { model, limit } });
+export const getDbtOutputRelation = (modelId: string) =>
+	api.get({ url: "/etl/dbt/output", params: { modelId } });
+export const truncateDbtOutputRelation = (data: { modelId: string }) =>
+	api.post({ url: "/etl/dbt/output/truncate", data });
+export const rebuildDbtOutputRelation = (data: { modelId: string; target?: string; vars?: Record<string, any> }) =>
+	api.post({ url: "/etl/dbt/output/rebuild", data });
 
 // dbt git operations
 export const getDbtGitStatus = () => api.get({ url: "/etl/dbt/git/status" });

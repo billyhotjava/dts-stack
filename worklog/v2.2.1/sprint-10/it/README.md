@@ -70,7 +70,7 @@
 ## 建议命令
 
 ```bash
-cd source/dts-platform && mvn -Dtest=DbtWorkspaceBootstrapTest,ModelingSqlModelServiceTest,SqlModelOutputServiceTest,EtlResourceTest test
+cd source/dts-platform && mvn -Dtest=DbtWorkspaceBootstrapTest,ModelingSqlModelServiceTest,DbtOutputRelationServiceTest,EtlResourceTest test
 cd source/dts-platform-webapp && pnpm build
 ```
 

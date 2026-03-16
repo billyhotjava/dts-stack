@@ -74,8 +74,7 @@ public class DbtConfigService {
             } else {
                 config = hydrateResolvedConfig(readConfig());
             }
-            // 确保 dbt 宏文件存在
-            ensureDbtMacros(config);
+            ensureWorkspaceBootstrap(config);
         } catch (IOException ex) {
             LOG.warn("Failed to initialize dbt config file: {}", ex.getMessage());
         }
@@ -86,9 +85,10 @@ public class DbtConfigService {
             return DbtConfigView.disabled("dbt 配置未启用");
         }
         DbtWorkspaceConfig config = hydrateResolvedConfig(readConfig());
+        DbtWorkspaceBootstrapResult bootstrap = ensureWorkspaceBootstrap(config);
         DbtProfileStatus profileStatus = buildProfile(config);
         InfraDataSourceDto target = resolveTarget(config);
-        DbtWorkspaceStatus workspaceStatus = validateWorkspace(config, false);
+        DbtWorkspaceStatus workspaceStatus = withBootstrapDetail(validateWorkspace(config, false), bootstrap);
         return new DbtConfigView(true, config, profileStatus, target, workspaceStatus);
     }
 
@@ -109,31 +109,71 @@ public class DbtConfigService {
             request.vars() == null ? Collections.emptyMap() : request.vars()
             )
         );
-        DbtWorkspaceStatus workspaceStatus = validateWorkspace(config, true);
+        DbtWorkspaceBootstrapResult bootstrap = ensureWorkspaceBootstrap(config);
+        DbtWorkspaceStatus workspaceStatus = withBootstrapDetail(validateWorkspace(config, true), bootstrap);
         if (!workspaceStatus.ok()) {
             throw new IllegalArgumentException(workspaceStatus.message());
         }
         writeConfig(config);
         DbtProfileStatus profileStatus = buildProfile(config);
-        ensureDbtMacros(config);
         InfraDataSourceDto target = resolveTarget(config);
         return new DbtConfigView(true, config, profileStatus, target, workspaceStatus);
     }
 
-    /**
-     * 确保 dbt 项目目录下存在必要的宏文件。
-     * macros/get_custom_schema.sql 用于覆盖 dbt 默认的 schema 拼接行为，
-     * 直接使用用户指定的 schema 名称，避免生成 public_public 这样的结果。
-     */
-    private void ensureDbtMacros(DbtWorkspaceConfig config) {
+    private DbtWorkspaceBootstrapResult ensureWorkspaceBootstrap(DbtWorkspaceConfig config) {
         if (config == null || !StringUtils.hasText(config.projectDir())) {
-            return;
+            return DbtWorkspaceBootstrapResult.empty();
         }
+        List<String> created = new ArrayList<>();
         try {
-            Path macrosDir = Path.of(config.projectDir(), "macros");
-            Files.createDirectories(macrosDir);
-            Path macroFile = macrosDir.resolve("get_custom_schema.sql");
-            String macroContent = """
+            Path projectDir = Path.of(config.projectDir());
+            Files.createDirectories(projectDir);
+            createDirectoryIfMissing(projectDir.resolve("models"), created, "models/");
+            createDirectoryIfMissing(projectDir.resolve("models/ods"), created, "models/ods/");
+            createDirectoryIfMissing(projectDir.resolve("models/dwd"), created, "models/dwd/");
+            createDirectoryIfMissing(projectDir.resolve("models/dws"), created, "models/dws/");
+            createDirectoryIfMissing(projectDir.resolve("models/ads"), created, "models/ads/");
+            createDirectoryIfMissing(projectDir.resolve("macros"), created, "macros/");
+            createDirectoryIfMissing(projectDir.resolve("seeds"), created, "seeds/");
+            createDirectoryIfMissing(projectDir.resolve("tests"), created, "tests/");
+            createDirectoryIfMissing(projectDir.resolve("analyses"), created, "analyses/");
+            createDirectoryIfMissing(projectDir.resolve("snapshots"), created, "snapshots/");
+            createDirectoryIfMissing(projectDir.resolve("target"), created, "target/");
+            createDirectoryIfMissing(projectDir.resolve("logs"), created, "logs/");
+
+            writeManagedFileIfMissing(projectDir.resolve("dbt_project.yml"), buildDbtProjectYaml(config), created, "dbt_project.yml");
+            writeManagedFileIfMissing(
+                projectDir.resolve("models/ods_sources.yml"),
+                """
+                version: 2
+                sources: []
+                """,
+                created,
+                "models/ods_sources.yml"
+            );
+            writeManagedFileIfMissing(
+                projectDir.resolve(".gitignore"),
+                """
+                target/
+                logs/
+                dbt_packages/
+                """,
+                created,
+                ".gitignore"
+            );
+            writeManagedFileIfMissing(
+                projectDir.resolve("README.md"),
+                """
+                # DTS dbt workspace
+
+                This workspace is auto-initialized by dts-platform.
+                """,
+                created,
+                "README.md"
+            );
+            writeManagedFileIfMissing(
+                projectDir.resolve("macros/get_custom_schema.sql"),
+                """
                 {% macro generate_schema_name(custom_schema_name, node) -%}
                     {%- if custom_schema_name is none -%}
                         {{ target.schema }}
@@ -141,16 +181,67 @@ public class DbtConfigService {
                         {{ custom_schema_name | trim }}
                     {%- endif -%}
                 {%- endmacro %}
-                """;
-            // 只在文件不存在时创建，避免覆盖用户自定义的宏
-            if (!Files.exists(macroFile)) {
-                Files.writeString(macroFile, macroContent, StandardCharsets.UTF_8,
-                    StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
-                LOG.info("[dbt] created macro file: {}", macroFile);
-            }
+                """,
+                created,
+                "macros/get_custom_schema.sql"
+            );
+            return new DbtWorkspaceBootstrapResult(!created.isEmpty(), created);
         } catch (IOException ex) {
-            LOG.warn("[dbt] failed to create macro file: {}", ex.getMessage());
+            LOG.warn("[dbt] failed to bootstrap workspace: {}", ex.getMessage());
+            return new DbtWorkspaceBootstrapResult(false, List.of("bootstrap_failed:" + ex.getMessage()));
         }
+    }
+
+    private void createDirectoryIfMissing(Path dir, List<String> created, String label) throws IOException {
+        if (Files.isDirectory(dir)) {
+            return;
+        }
+        Files.createDirectories(dir);
+        created.add(label);
+    }
+
+    private void writeManagedFileIfMissing(Path file, String content, List<String> created, String label) throws IOException {
+        if (Files.exists(file) && Files.size(file) > 0) {
+            return;
+        }
+        Files.createDirectories(file.getParent() == null ? file.toAbsolutePath().getParent() : file.getParent());
+        Files.writeString(file, normalizeManagedContent(content), StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+        created.add(label);
+        LOG.info("[dbt] created managed file: {}", file);
+    }
+
+    private String buildDbtProjectYaml(DbtWorkspaceConfig config) {
+        return """
+            name: "dts_workspace"
+            version: "1.0.0"
+            config-version: 2
+            profile: "%s"
+
+            model-paths: ["models"]
+            analysis-paths: ["analyses"]
+            test-paths: ["tests"]
+            seed-paths: ["seeds"]
+            macro-paths: ["macros"]
+            snapshot-paths: ["snapshots"]
+            target-path: "target"
+            clean-targets: ["target", "dbt_packages", "logs"]
+            """.formatted(safeText(config.profileName(), "dts"));
+    }
+
+    private String normalizeManagedContent(String content) {
+        return (content == null ? "" : content.strip()) + "\n";
+    }
+
+    private DbtWorkspaceStatus withBootstrapDetail(DbtWorkspaceStatus status, DbtWorkspaceBootstrapResult bootstrap) {
+        if (status == null) {
+            return null;
+        }
+        Map<String, Object> detail = new LinkedHashMap<>(status.detail() == null ? Map.of() : status.detail());
+        if (bootstrap != null) {
+            detail.put("bootstrapped", bootstrap.changed());
+            detail.put("bootstrapFiles", bootstrap.files());
+        }
+        return new DbtWorkspaceStatus(status.ok(), status.message(), detail);
     }
 
     private DbtProfileStatus buildProfile(DbtWorkspaceConfig config) {
@@ -552,6 +643,8 @@ public class DbtConfigService {
                 return DbtWorkspaceStatus.failed("dbt 项目目录不可用: " + projectDir);
             }
             detail.put("projectDir", projectPath.toString());
+            detail.put("dbtProjectExists", Files.isRegularFile(projectPath.resolve("dbt_project.yml")));
+            detail.put("modelsDirExists", Files.isDirectory(projectPath.resolve("models")));
             boolean projectWritable = probeWritable(projectPath);
             detail.put("projectWritable", projectWritable);
             Path targetDir = projectPath.resolve("target");
@@ -639,6 +732,12 @@ public class DbtConfigService {
                     sb.append(" ").append(value == null ? "\"\"" : value).append("\n");
                 }
             }
+        }
+    }
+
+    private record DbtWorkspaceBootstrapResult(boolean changed, List<String> files) {
+        private static DbtWorkspaceBootstrapResult empty() {
+            return new DbtWorkspaceBootstrapResult(false, List.of());
         }
     }
 }
