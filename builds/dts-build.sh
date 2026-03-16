@@ -28,6 +28,7 @@ Usage:
   ${0##*/} --image <name>
   ${0##*/} -all --no-save
   ${0##*/} --pack [--output <path>] [--no-images]
+  ${0##*/} --bg -all              (run in background, safe for SSH)
 
 Options:
   -all, --all           Build all images (same as legacy buildAll.sh behavior).
@@ -36,10 +37,14 @@ Options:
   --pack                Package dts-stack for deployment (excludes source, logs, git, etc.).
   --output <path>       Output path for the package tarball (default: ./dts-stack-<timestamp>.tar.gz).
   --no-images           Exclude image tarballs from package (smaller package, images loaded separately).
+  --bg                  Run build in background via nohup. Safe for SSH sessions.
+                        Log output goes to builds/dts-build.log. Use 'tail -f builds/dts-build.log' to follow.
 
 Examples:
   ${0##*/} -all
   ${0##*/} -all --no-save
+  ${0##*/} --bg -all
+  ${0##*/} --bg --image dts-analytics
   ${0##*/} --image dts-admin
   ${0##*/} --image dts-dbt
   ${0##*/} --pack
@@ -47,6 +52,20 @@ Examples:
   ${0##*/} --pack --no-images
 USAGE
 }
+
+# --bg: re-exec self under nohup so the build survives SSH disconnects.
+if [[ "${1:-}" == "--bg" ]]; then
+  shift
+  BUILD_LOG="${SCRIPT_DIR}/dts-build.log"
+  echo "[dts-build] Starting background build. Log: ${BUILD_LOG}"
+  echo "[dts-build] Use 'tail -f ${BUILD_LOG}' to follow progress."
+  nohup bash "${BASH_SOURCE[0]}" "$@" > "${BUILD_LOG}" 2>&1 &
+  BG_PID=$!
+  echo "[dts-build] Background PID: ${BG_PID}"
+  # Detach from controlling terminal so SIGHUP won't propagate
+  disown "${BG_PID}" 2>/dev/null || true
+  exit 0
+fi
 
 if [[ $# -eq 0 ]]; then
   usage
@@ -483,7 +502,7 @@ SETTINGS_EOF
         quoted_maven_args+=("$(printf '%q' "${arg}")")
       done
       local bash_cmd="export JAVA_HOME=${MAVEN_CONTAINER_JAVA_HOME}; export PATH=${container_path}; exec /usr/bin/mvn ${quoted_maven_args[*]}"
-      docker run --rm --memory="${MAVEN_MEMORY_LIMIT}" --memory-swap="${MAVEN_MEMORY_LIMIT}" \
+      docker run --rm --memory="${MAVEN_MEMORY_LIMIT}" \
         ${security_opts[@]+"${security_opts[@]}"} \
         --entrypoint /bin/bash \
         -v "${REPO_ROOT}/source:/workspace" \
@@ -494,7 +513,7 @@ SETTINGS_EOF
     else
       # Run mvn directly — DO NOT wrap in sh -c or bash -lc.
       # Explicitly pass JAVA_HOME/PATH via -e for Docker 18.09 compatibility.
-      docker run --rm --memory="${MAVEN_MEMORY_LIMIT}" --memory-swap="${MAVEN_MEMORY_LIMIT}" \
+      docker run --rm --memory="${MAVEN_MEMORY_LIMIT}" \
         ${security_opts[@]+"${security_opts[@]}"} \
         -e "JAVA_HOME=${MAVEN_CONTAINER_JAVA_HOME}" \
         -e "PATH=${container_path}" \
