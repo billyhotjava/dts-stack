@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { analyticsApi, HttpError } from '../../../api/analyticsApi';
 import { resolveAnalyticsErrorCodeMessage } from '../../../api/errorCodeMessages';
 import type { CardParameterBinding, DataSourceConfig, CardData } from '../types';
+import { buildApiRuntimeRequest, resolveApiRuntimePayload } from '../apiDataSourceRuntime';
 import { runWithRetry, scheduleQueryTask } from './queryScheduler';
 
 interface CardDataSourceResult {
@@ -255,6 +256,9 @@ function getCacheKey(
             JSON.stringify(cfg.params ?? {}),
             JSON.stringify(cfg.headers ?? {}),
             cfg.body ?? '',
+            cfg.responsePath ?? '',
+            paramsKey,
+            contextKey,
         ].join(':');
     }
 
@@ -504,16 +508,20 @@ export function useCardDataSource(
                             if (!cfg?.url?.trim()) {
                                 throw new Error('API 数据源未配置 URL');
                             }
-                            const method = cfg.method || 'GET';
-                            const headers = new Headers(cfg.headers ?? {});
+                            const request = buildApiRuntimeRequest(cfg, {
+                                queryParameters: paramsKey !== 'null' ? JSON.parse(paramsKey) : undefined,
+                                queryContext: contextKey !== 'null' ? JSON.parse(contextKey) : undefined,
+                            });
+                            const headers = new Headers(request.headers);
+                            const method = request.method || 'GET';
                             if (method === 'POST' && !headers.has('content-type')) {
                                 headers.set('content-type', 'application/json');
                             }
-                            const response = await fetch(buildApiUrl(cfg.url, cfg.params), {
+                            const response = await fetch(buildApiUrl(request.url, request.params), {
                                 method,
                                 headers,
                                 credentials: 'include',
-                                body: method === 'POST' ? (cfg.body ?? '') : undefined,
+                                body: method === 'POST' ? request.body : undefined,
                             });
                             if (!response.ok) {
                                 const text = await response.text().catch(() => '');
@@ -523,7 +531,7 @@ export function useCardDataSource(
                             const payload = ct.includes('application/json')
                                 ? await response.json()
                                 : await response.text();
-                            return toCardData(payload);
+                            return toCardData(resolveApiRuntimePayload(payload, cfg.responsePath));
                         }
 
                         if (sourceType === 'sql') {

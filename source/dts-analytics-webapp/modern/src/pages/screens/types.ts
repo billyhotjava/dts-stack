@@ -193,6 +193,7 @@ export interface DataSourceConfig {
         headers?: Record<string, string>;
         params?: Record<string, string>;
         body?: string;
+        responsePath?: string;
     };
     databaseConfig?: {
         // Prefer analytics database id; keep connectionId for backward compatibility.
@@ -317,4 +318,3 @@ export interface ComponentItem {
     defaultHeight: number;
     defaultConfig: Record<string, unknown>;
 }
-

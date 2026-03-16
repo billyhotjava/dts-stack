@@ -12,7 +12,7 @@
 .screen-runtime--fullscreen {
   position: fixed;
   inset: 0;
-  padding: 18px;
+  padding: 0;
   box-sizing: border-box;
   overflow: hidden;
 }
@@ -192,7 +192,7 @@
   display: flex;
   align-items: flex-start;
   justify-content: flex-start;
-  padding: 12px;
+  padding: 0;
   box-sizing: border-box;
 }
 
@@ -208,6 +208,11 @@
   border-radius: 28px;
   overflow: hidden;
   box-shadow: 0 30px 64px rgba(15, 23, 42, 0.24);
+}
+
+.screen-runtime--fullscreen .screen-runtime__canvas-shell {
+  border-radius: 0;
+  box-shadow: none;
 }
 
 .screen-runtime__canvas {

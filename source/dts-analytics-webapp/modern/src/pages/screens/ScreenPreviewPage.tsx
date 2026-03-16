@@ -12,6 +12,7 @@ import { normalizeScreenConfig } from './specV2';
 import { buildComponentMap, isComponentEffectivelyVisible } from './componentHierarchy';
 import { safeCssBackgroundUrl } from './sanitize';
 import { useScreenCarousel } from './hooks/useScreenCarousel';
+import { resolveRuntimeScale } from './runtimeScale';
 import {
     isVisibleForDevice,
     parseForcedDeviceModeFromWindow,
@@ -72,11 +73,14 @@ export default function ScreenPreviewPage() {
         const vh = viewport?.height ?? window.innerHeight;
         const nextMode: DeviceMode = forcedDeviceMode || resolveDeviceModeByViewport(vw);
         setDeviceMode(nextMode);
-        const safeWidth = Math.max(vw - 24, 320);
-        const safeHeight = Math.max(vh - 64, 240);
-        const sx = safeWidth / (screen.width || 1920);
-        const sy = safeHeight / (screen.height || 1080);
-        const nextAutoScale = Math.max(0.1, Math.min(sx, sy, 1));
+        const nextAutoScale = resolveRuntimeScale({
+            viewportWidth: vw,
+            viewportHeight: vh,
+            screenWidth: screen.width || 1920,
+            screenHeight: screen.height || 1080,
+            fullscreen: true,
+            allowUpscale: true,
+        }).scale;
         setAutoScale(nextAutoScale);
         if (manualScale === null) {
             setScale(nextAutoScale);

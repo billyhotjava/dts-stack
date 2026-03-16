@@ -1,8 +1,0 @@
-version: 2
-
-sources:
-  - name: pm_ods
-    schema: "{{ var('project_management_ods_schema', 'public') }}"
-    tables:
-      - name: project_subject_domain
-        identifier: "{{ var('project_management_ods_table', 'project_subject_domain') }}"

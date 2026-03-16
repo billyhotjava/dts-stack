@@ -1,10 +1,14 @@
 # Project Management Command Center Screen Implementation Plan
 
+> 2026-03-17 更新：按客户要求拆为“两阶段交付”。
+> Phase 1 为 Java 聚合接口驱动的定制演示版，优先保障客户演示。
+> Phase 2 再把指标逐步迁移到 `card/sql` 查询资产，减少后续现场对 Java 发版的依赖。
+
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** 基于 `worklog/v2.2.1/req/pm/project3.xlsx` 新增一套三屏轮播的科研项目管理专用大屏模板，保留现有 `/project-cockpit` 页面不变，并支持 `1920x1080` 与 `2K 16:9` 无边全屏展示。
+**Goal:** 基于 `worklog/v2.2.1/req/pm/project3.xlsx` 新增一套三屏轮播的科研项目管理专用大屏模板，Phase 1 使用 Java 聚合接口交付客户演示版，保留现有 `/project-cockpit` 页面不变，并支持 `1920x1080` 与 `2K 16:9` 无边全屏展示。
 
-**Architecture:** 复用 `dts-analytics-webapp` 现有 Screen Factory 作为运行壳，在 `ProjectCockpitResource/ProjectCockpitService` 上新增大屏专用聚合接口，前端新增内置模板并补齐 `api` 数据源对全局变量的运行时透传。公共运行态与预览态共用一套缩放 helper，去掉当前只缩小不放大的限制，保证 `16:9` 画布在 `1080p` 和 `2K` 上都能铺满。
+**Architecture:** Phase 1 复用 `dts-analytics-webapp` 现有 Screen Factory 作为运行壳，在 `ProjectCockpitResource/ProjectCockpitService` 上新增大屏专用聚合接口，前端新增内置模板并补齐 `api` 数据源对全局变量的运行时透传。公共运行态与预览态共用一套缩放 helper，去掉当前只缩小不放大的限制，保证 `16:9` 画布在 `1080p` 和 `2K` 上都能铺满。Phase 2 再把模板数据源从 Java 接口切换到卡片资产。
 
 **Tech Stack:** Spring Boot, Java, React 19, TypeScript, Screen Spec v2, ECharts/DataV, Node test runner, Maven
 

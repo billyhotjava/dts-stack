@@ -45,6 +45,10 @@ Package mode (deploy from dts-pack ZIP):
 Plan targeting:
   --plan-id <uuid>    Import into an existing Plan (skip Plan creation)
 
+Authentication:
+  --user <username>   Login username (default: prompted or DTS_USERNAME env)
+  --password <pass>   Login password (default: prompted or DTS_PASSWORD env)
+
 Execution flags:
   --run               After import, trigger dbt run to build tables
   --run-selector TAG  dbt selector for run (default: uses PLAN_TAGS or 'all')
@@ -105,6 +109,8 @@ while [[ $# -gt 0 ]]; do
     --content)        PLAN_CONTENT="$2"; shift 2 ;;
     --run)            RUN_AFTER_IMPORT=true; shift ;;
     --run-selector)   RUN_AFTER_IMPORT=true; RUN_SELECTOR="$2"; shift 2 ;;
+    --user)           export DTS_USERNAME="$2"; shift 2 ;;
+    --password)       export DTS_PASSWORD="$2"; shift 2 ;;
     --dry-run)        PT_DRY_RUN=true; shift ;;
     --insecure)       PT_INSECURE=true; shift ;;
     --skip-existing)  PT_SKIP_EXISTING=true; shift ;;
@@ -170,6 +176,14 @@ fi
 # ---------------------------------------------------------------------------
 if [[ -n "$MANIFEST_PATH" && "$MANIFEST_PATH" != /* ]]; then
   MANIFEST_PATH="$(cd "$(dirname "$MANIFEST_PATH")" && pwd)/$(basename "$MANIFEST_PATH")"
+fi
+
+# ---------------------------------------------------------------------------
+# Auto-login if TOKEN not set
+# ---------------------------------------------------------------------------
+if [[ -z "${TOKEN:-}" && -f "${SCRIPT_DIR}/dts-deploy-env.sh" ]]; then
+  info "Authenticating..."
+  source "${SCRIPT_DIR}/dts-deploy-env.sh"
 fi
 
 # ---------------------------------------------------------------------------
