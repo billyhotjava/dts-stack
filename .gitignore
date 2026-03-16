@@ -21,7 +21,11 @@ services/dts-airflow/dags/*.json
 services/jdbc/*.jar
 services/jdbc/*.JAR
 services/dts-addax/jobs/
-services/dts-airflow/dags/
+services/dts-airflow/dags/*.py
+services/dts-airflow/dags/*.json
+services/dts-airflow/dags/dwh/
+services/dts-airflow/dags/ods/
+services/dts-airflow/dags/exchange/
 services/dts-airflow/logs/
 services/dts-airflow/**/__pycache__/
 services/dts-airflow/**/*.pyc
