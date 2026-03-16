@@ -38,6 +38,10 @@ public class ProjectCockpitWarehouseGateway {
         ProjectCockpitBatchSummary batch = tryLoadLatestBatch();
         if (batch != null) {
             if (!batch.modeled()) {
+                List<ProjectCockpitWarehouseNode> nodes = safeLoadNodeRows();
+                if (!nodes.isEmpty()) {
+                    return ProjectCockpitWarehouseSnapshot.enabled(promoteReadyBatch(batch, nodes), nodes);
+                }
                 return ProjectCockpitWarehouseSnapshot.enabled(batch, List.of());
             }
             return ProjectCockpitWarehouseSnapshot.enabled(batch, safeLoadNodeRows());
@@ -126,6 +130,41 @@ public class ProjectCockpitWarehouseGateway {
                         rs.getInt("unmapped_subproject_count"),
                         rs.getInt("unknown_delay_reason_count")));
         return rows.isEmpty() ? null : rows.get(0);
+    }
+
+    private ProjectCockpitBatchSummary promoteReadyBatch(
+            ProjectCockpitBatchSummary batch,
+            List<ProjectCockpitWarehouseNode> nodes) {
+        int totalRows = batch.totalRows() > 0 ? batch.totalRows() : nodes.size();
+        int validRows = batch.validRows() > 0 ? batch.validRows() : nodes.size();
+        int unmappedSubprojectCount = batch.unmappedSubprojectCount() > 0
+                ? batch.unmappedSubprojectCount()
+                : (int) nodes.stream()
+                        .map(ProjectCockpitWarehouseNode::subprojectId)
+                        .filter(value -> value == null || value.isBlank())
+                        .count();
+        int unknownDelayReasonCount = batch.unknownDelayReasonCount() > 0
+                ? batch.unknownDelayReasonCount()
+                : (int) nodes.stream()
+                        .map(ProjectCockpitWarehouseNode::delayReasonCategory)
+                        .filter(value -> value == null || value.isBlank() || Objects.equals("unknown", value))
+                        .count();
+        double coverageRate = batch.coverageRate() > 0D
+                ? batch.coverageRate()
+                : totalRows == 0 ? 0D : Math.min(1D, (double) validRows / (double) totalRows);
+        return new ProjectCockpitBatchSummary(
+                batch.batchId(),
+                batch.sourceFileName(),
+                batch.uploadedAt(),
+                batch.refreshedAt(),
+                "READY",
+                totalRows,
+                validRows,
+                batch.issueRows(),
+                batch.issueCount(),
+                coverageRate,
+                unmappedSubprojectCount,
+                unknownDelayReasonCount);
     }
 
     private List<ProjectCockpitWarehouseNode> loadNodeRows() {

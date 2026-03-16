@@ -1,6 +1,7 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Editor from "@monaco-editor/react";
 import { toast } from "sonner";
+import ModelPipeline from "./ModelPipeline";
 import {
 	Alert,
 	Badge,
@@ -86,6 +87,7 @@ import BatchImportModal from "./BatchImportModal";
 import { useRouter } from "@/routes/hooks";
 import { buildArchivePayload, collectUnassignedModelIds } from "./sqlModelArchive.helpers";
 import {
+	buildReleaseSelector,
 	createFailedBuildSummary,
 	createPendingBuildSummary,
 	describeBuildSummary,
@@ -1008,14 +1010,16 @@ export default function SqlModelingPage() {
 				}
 			}
 			await triggerDbtRun({
-				models: modelsSelector,
+				models: buildReleaseSelector(modelsSelector),
+				dagSelector: modelsSelector,
+				operation: "build",
 				target: normalizeText(values.target) || undefined,
 				vars: tryParseJsonObject(values.vars),
 				gitRef: normalizeText(values.gitRef) || undefined,
 				commitSha: normalizeText(values.commitSha) || undefined,
 				buildInvocationId: normalizeText(releaseGate?.buildEvidence?.invocationId) || undefined,
 			});
-			toast.success("运行任务已提交");
+			toast.success("dbt build 已提交");
 			setRunOpen(false);
 			await loadRuns();
 		} catch (err: any) {
@@ -2190,7 +2194,18 @@ export default function SqlModelingPage() {
 							</Tooltip>
 						</Space>
 					</div>
-
+					{activeModel && (
+						<ModelPipeline
+							modelStatus={activeModel.status}
+							modelSelector={activeModel.tags ? `tag:${activeModel.tags.split(",")[0]?.trim()}` : undefined}
+							disabled={!workspaceOk || buildTriggering != null}
+							onStatusChange={(s) => {
+								if (activeModel) activeModel.status = s;
+								loadModels();
+							}}
+							onRefresh={loadModels}
+						/>
+					)}
 						<div className="flex-1 overflow-auto bg-muted/10 px-6 py-4">
 							{activeModel ? (
 							<Suspense
@@ -2888,7 +2903,7 @@ export default function SqlModelingPage() {
 
 			<Modal
 				open={runOpen}
-				title="提交变更 (dbt run)"
+				title="提交上线 (dbt build)"
 				onCancel={() => setRunOpen(false)}
 				onOk={submitRun}
 				okText="提交"

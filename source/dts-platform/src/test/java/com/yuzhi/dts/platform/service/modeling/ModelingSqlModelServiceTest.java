@@ -103,7 +103,7 @@ class ModelingSqlModelServiceTest {
 
         when(security.resolveActiveDept(anyString())).thenReturn("D1");
         when(security.hasInstituteScope()).thenReturn(false);
-        when(organizationVisibilityService.isRoot(anyString())).thenReturn(false);
+        lenient().when(organizationVisibilityService.isRoot(anyString())).thenReturn(false);
         lenient().when(planRepo.findById(planId)).thenReturn(Optional.of(plan));
         lenient().when(columnSyncService.parseCsv(any(Path.class))).thenReturn(List.of());
         lenient().when(repo.findFirstByPlanIdAndNameIgnoreCase(any(UUID.class), anyString())).thenReturn(Optional.empty());
@@ -112,7 +112,7 @@ class ModelingSqlModelServiceTest {
             UUID requestedPlanId = invocation.getArgument(0);
             return storedModels.stream().filter(model -> requestedPlanId.equals(model.getPlanId())).toList();
         });
-        when(repo.save(any(ModelingSqlModel.class))).thenAnswer(invocation -> {
+        lenient().when(repo.save(any(ModelingSqlModel.class))).thenAnswer(invocation -> {
             ModelingSqlModel model = invocation.getArgument(0);
             if (model.getId() == null) {
                 model.setId(UUID.randomUUID());
@@ -273,6 +273,57 @@ class ModelingSqlModelServiceTest {
         assertThat(dto.layer()).isEqualTo("ADS");
         assertThat(dto.modelPath()).isEqualTo("models/ads/project/ads_project_cockpit_summary.sql");
         assertThat(dto.sql()).contains("select 1 as metric");
+    }
+
+    @Test
+    void list_shouldDiscoverWorkspaceTagsAndDagSelectorFromSqlConfig() throws Exception {
+        Path modelsDir = tempDir.resolve("models").resolve("ads").resolve("project");
+        Files.createDirectories(modelsDir);
+        Files.writeString(
+            modelsDir.resolve("biz_ads_major_project_overview.sql"),
+            """
+            {{ config(materialized='table', tags=['project-management', 'biz', 'project-cockpit', 'ads']) }}
+            select 1 as metric
+            """
+        );
+
+        UUID warehouseId = UUID.randomUUID();
+        InfraDataSource warehouse = source(warehouseId, "数仓 (biadmin)", "postgres");
+        warehouse.setStatus("ACTIVE");
+        when(dataSourceRepository.findByStatusIgnoreCase(anyString())).thenReturn(List.of(warehouse));
+        when(dataSourceRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
+
+        List<ModelingSqlModelService.SqlModelDto> models = service.list(null, "major_project", "D1");
+
+        assertThat(models).hasSize(1);
+        ModelingSqlModelService.SqlModelDto dto = models.get(0);
+        assertThat(dto.tags()).contains("project-management");
+        assertThat(dto.tags()).contains("project-cockpit");
+        assertThat(dto.dagSelector()).isEqualTo("tag:project-management");
+    }
+
+    @Test
+    void list_shouldPreserveStoredDagSelector() {
+        UUID warehouseId = UUID.randomUUID();
+        InfraDataSource warehouse = source(warehouseId, "数仓 (biadmin)", "postgres");
+        warehouse.setStatus("ACTIVE");
+        when(dataSourceRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
+
+        ModelingSqlModel model = new ModelingSqlModel();
+        model.setId(UUID.randomUUID());
+        model.setName("biz_ads_major_project_overview");
+        model.setLayer("ADS");
+        model.setSourceDataSourceId(warehouseId);
+        model.setTags("project-management,biz,project-cockpit,ads");
+        model.setDagSelector("tag:project-management");
+        model.setSqlText("select 1");
+        model.setEnabled(Boolean.TRUE);
+        storedModels.add(model);
+
+        List<ModelingSqlModelService.SqlModelDto> models = service.list(null, "major_project", "D1");
+
+        assertThat(models).hasSize(1);
+        assertThat(models.get(0).dagSelector()).isEqualTo("tag:project-management");
     }
 
     private InfraOdsTableMapping mapping(UUID id, UUID connectionId, String schema, String table, String entityCode) {

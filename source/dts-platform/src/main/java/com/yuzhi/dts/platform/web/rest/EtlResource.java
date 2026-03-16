@@ -208,15 +208,15 @@ public class EtlResource {
         ApiResponse<Map<String, Object>> response = triggerDbtOperation(operation, request, activeDept, requireSelector);
         auditService.audit("EXECUTE", "etl.dbt." + operation, selector);
 
-        // After successful run trigger: auto-sync models + update status to PUBLISHED
-        if ("run".equals(operation)) {
+        // After successful publish/build trigger: auto-sync models + update status to PUBLISHED
+        if ("run".equals(operation) || "build".equals(operation)) {
             try {
                 dbtAssetSyncService.syncFromManifest();
                 dbtRunResultService.syncFromRunResults();
                 updateModelStatus("PUBLISHED", selector);
-                LOG.info("[dbt-lifecycle] Auto-synced and updated models to PUBLISHED after dbt run");
+                LOG.info("[dbt-lifecycle] Auto-synced and updated models to PUBLISHED after dbt {}", operation);
             } catch (RuntimeException ex) {
-                LOG.warn("[dbt-lifecycle] Auto-sync after dbt run failed: {}", ex.getMessage());
+                LOG.warn("[dbt-lifecycle] Auto-sync after dbt {} failed: {}", operation, ex.getMessage());
             }
         }
         return response;
@@ -571,11 +571,15 @@ public class EtlResource {
      */
     private void updateModelStatus(String newStatus, String selector) {
         List<ModelingSqlModel> models;
-        if ("all".equals(selector) || !StringUtils.hasText(selector)) {
+        String normalizedSelector = StringUtils.hasText(selector) ? selector.trim() : selector;
+        while (StringUtils.hasText(normalizedSelector) && normalizedSelector.startsWith("+")) {
+            normalizedSelector = normalizedSelector.substring(1).trim();
+        }
+        if ("all".equals(normalizedSelector) || !StringUtils.hasText(normalizedSelector)) {
             models = sqlModelRepository.findAll();
         } else {
             // For tag-based selectors like "tag:ods_crm", match models with that tag
-            String tagValue = selector.replace("tag:", "").trim();
+            String tagValue = normalizedSelector.replace("tag:", "").trim();
             models = sqlModelRepository.findAll().stream()
                 .filter(m -> {
                     String tags = m.getTags();

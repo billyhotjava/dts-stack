@@ -256,7 +256,7 @@
           "icon": "solar:document-text-bold-duotone",
           "titleKey": "sys.nav.portal.dataPortalDetail",
           "title": "资产详情",
-          "externalLink": "/catalog/assets"
+          "externalLink": "/catalog/asset-detail"
         },
         {
           "key": "lineage",

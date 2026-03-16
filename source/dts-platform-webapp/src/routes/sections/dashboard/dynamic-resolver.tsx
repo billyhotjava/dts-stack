@@ -22,6 +22,7 @@ type Props = { base?: string };
 const PATH_COMPONENT_OVERRIDES: Record<string, string> = {
 	"/governance": "/pages/governance/GovernanceCenterPage",
 	"/catalog/assets": "/pages/catalog/DatasetsPage",
+	"/catalog/asset-detail": "/pages/catalog/AssetDetailPage",
 	"/catalog/search": "/pages/catalog/DataSearchPage",
 	"/catalog/metadata": "/pages/catalog/MetadataPage",
 	"/catalog/lineage": "/pages/catalog/LineagePage",

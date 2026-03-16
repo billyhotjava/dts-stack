@@ -25,6 +25,7 @@ import com.yuzhi.dts.platform.service.etl.DbtSourceService;
 import com.yuzhi.dts.platform.service.ops.ExternalRunLogService;
 import java.util.List;
 import java.util.Map;
+import com.yuzhi.dts.platform.repository.modeling.ModelingSqlModelRepository;
 import org.junit.jupiter.api.Test;
 
 class EtlResourceTest {
@@ -47,6 +48,7 @@ class EtlResourceTest {
         airflowProperties.setDagId("dbt_load");
         ExternalRunLogService externalRunLogService = mock(ExternalRunLogService.class);
         AuditService auditService = mock(AuditService.class);
+        ModelingSqlModelRepository sqlModelRepository = mock(ModelingSqlModelRepository.class);
 
         Map<String, Object> dagRunsPayload = Map.of("dag_runs", List.of(Map.of("dag_run_id", "dag-run-1", "state", "success")));
         DbtRunResultService.DbtRunSummary summary = new DbtRunResultService.DbtRunSummary(
@@ -85,7 +87,8 @@ class EtlResourceTest {
             airflowProperties,
             externalRunLogService,
             auditService,
-            new ObjectMapper()
+            new ObjectMapper(),
+            sqlModelRepository
         );
 
         ApiResponse<DbtArtifactSyncState.DbtArtifactSyncStatus> response = resource.getDbtSyncStatus("tag:project-management", "BIADMIN");
@@ -100,5 +103,56 @@ class EtlResourceTest {
             eq(dagRunsPayload),
             eq("BIADMIN")
         );
+    }
+
+    @Test
+    void shouldAutoSyncAssetsAfterBuildTrigger() {
+        DbtConfigService dbtConfigService = mock(DbtConfigService.class);
+        DbtManifestService manifestService = mock(DbtManifestService.class);
+        DbtSourceService dbtSourceService = mock(DbtSourceService.class);
+        DbtAssetSyncService dbtAssetSyncService = mock(DbtAssetSyncService.class);
+        DbtDagService dbtDagService = mock(DbtDagService.class);
+        DbtPreviewService dbtPreviewService = mock(DbtPreviewService.class);
+        DbtRunResultService dbtRunResultService = mock(DbtRunResultService.class);
+        DbtQualityGateService dbtQualityGateService = mock(DbtQualityGateService.class);
+        DbtReleaseGateService dbtReleaseGateService = mock(DbtReleaseGateService.class);
+        DbtArtifactSyncState dbtArtifactSyncState = new DbtArtifactSyncState();
+        AirflowClient airflowClient = mock(AirflowClient.class);
+        AirflowProperties airflowProperties = new AirflowProperties();
+        airflowProperties.setEnabled(true);
+        airflowProperties.setDagId("dbt_load");
+        ExternalRunLogService externalRunLogService = mock(ExternalRunLogService.class);
+        AuditService auditService = mock(AuditService.class);
+        ModelingSqlModelRepository sqlModelRepository = mock(ModelingSqlModelRepository.class);
+
+        when(dbtDagService.ensureDagForSelector("tag:project-management")).thenReturn("dwh_biadmin_dbt_manual");
+        when(airflowClient.triggerDag(eq("dwh_biadmin_dbt_manual"), any())).thenReturn(java.util.Optional.of(Map.of("status", "queued")));
+
+        EtlResource resource = new EtlResource(
+            dbtConfigService,
+            manifestService,
+            dbtSourceService,
+            dbtAssetSyncService,
+            dbtDagService,
+            dbtPreviewService,
+            dbtRunResultService,
+            dbtQualityGateService,
+            dbtReleaseGateService,
+            dbtArtifactSyncState,
+            airflowClient,
+            airflowProperties,
+            externalRunLogService,
+            auditService,
+            new ObjectMapper(),
+            sqlModelRepository
+        );
+
+        resource.triggerDbtRun(
+            new EtlResource.DbtRunRequest("tag:project-management", "tag:project-management", "dev", "build", Map.of(), null, null, null),
+            "BIADMIN"
+        );
+
+        verify(dbtAssetSyncService).syncFromManifest();
+        verify(dbtRunResultService).syncFromRunResults();
     }
 }

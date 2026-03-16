@@ -27,6 +27,24 @@ export function buildCommandHint(operation: BuildOperation, selector?: string) {
 	return normalizedSelector ? `dbt ${operation} --select ${normalizedSelector}` : `dbt ${operation}`;
 }
 
+export function buildReleaseSelector(selector?: string) {
+	const normalizedSelector = normalizeText(selector);
+	if (!normalizedSelector || normalizedSelector === "all") {
+		return normalizedSelector || "all";
+	}
+	if (normalizedSelector.startsWith("+")) {
+		return normalizedSelector;
+	}
+	if (
+		normalizedSelector.startsWith("tag:") ||
+		normalizedSelector.startsWith("model:") ||
+		normalizedSelector.startsWith("source:")
+	) {
+		return `+${normalizedSelector}`;
+	}
+	return normalizedSelector;
+}
+
 export function inferBuildOperationFromCommand(command?: string): BuildOperation | "run" | "build" | null {
 	const normalizedCommand = normalizeLower(command);
 	if (!normalizedCommand) {

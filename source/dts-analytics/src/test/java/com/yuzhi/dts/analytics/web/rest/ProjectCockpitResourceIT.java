@@ -127,6 +127,24 @@ class ProjectCockpitResourceIT {
     }
 
     @Test
+    void projectCockpitShouldTreatLoadedBatchWithModeledRowsAsReady() throws Exception {
+        seedBatch("LOADED");
+        seedNodeRows();
+        Cookie sessionCookie = authenticate();
+
+        mockMvc.perform(get("/api/project-cockpit/summary").cookie(sessionCookie))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.dataState.ready").value(true))
+                .andExpect(jsonPath("$.dataState.status").value("READY"))
+                .andExpect(jsonPath("$.kpis[0].value").value("1"));
+
+        mockMvc.perform(get("/api/project-cockpit/data-support").cookie(sessionCookie))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.batch.status").value("READY"))
+                .andExpect(jsonPath("$.dataState.ready").value(true));
+    }
+
+    @Test
     void projectCockpitShouldExposeWarehouseBackedSummaryTreeAndSupportMetadata() throws Exception {
         seedModeledBatch();
         seedNodeRows();
@@ -207,6 +225,10 @@ class ProjectCockpitResourceIT {
     }
 
     private void seedModeledBatch() {
+        seedBatch("MODELED");
+    }
+
+    private void seedBatch(String status) {
         jdbcTemplate.update(
                 """
                 INSERT INTO pm_ods_project_progress_batch (
@@ -217,7 +239,7 @@ class ProjectCockpitResourceIT {
                 """,
                 "batch-20260316-001",
                 "project-cockpit-test-batch-2000.xlsx",
-                "MODELED",
+                status,
                 2000,
                 1836,
                 164,

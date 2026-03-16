@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+	buildReleaseSelector,
 	createFailedBuildSummary,
 	createPendingBuildSummary,
 	describeBuildSummary,
@@ -88,4 +89,11 @@ test("inferBuildOperationFromCommand recognizes full dbt commands", () => {
 	assert.equal(inferBuildOperationFromCommand("dbt test --target dev --select tag:project-management"), "test");
 	assert.equal(inferBuildOperationFromCommand("dbt build --target dev --select tag:project-management"), "build");
 	assert.equal(inferBuildOperationFromCommand("dbt docs generate"), "docs");
+});
+
+test("buildReleaseSelector expands tag selectors to include upstream dependencies", () => {
+	assert.equal(buildReleaseSelector("tag:project-management"), "+tag:project-management");
+	assert.equal(buildReleaseSelector("model:biz_ads_major_project_overview"), "+model:biz_ads_major_project_overview");
+	assert.equal(buildReleaseSelector("all"), "all");
+	assert.equal(buildReleaseSelector("+tag:project-management"), "+tag:project-management");
 });
