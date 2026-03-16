@@ -154,6 +154,64 @@ public class ProjectCockpitService {
         return root;
     }
 
+    public ObjectNode screenHeader(Filters filters) {
+        refreshFormalData();
+        List<NodeRow> filtered = applyFilters(filters);
+        ObjectNode root = objectMapper.createObjectNode();
+        root.put("title", "科研项目管理指挥大屏");
+        root.put("subtitle", formalDataReady
+                ? "面向科研院所项目群的总体态势、执行推进与风险变更轮播大屏。"
+                : EMPTY_SUBTITLE);
+        root.put("updatedAt", latestUpdate(filtered));
+        root.put("scope", buildScopeText(filters, filtered));
+        root.set("dataState", buildDataState());
+        root.set("filters", buildFilters(filters));
+        return root;
+    }
+
+    public ObjectNode screenOverview(Filters filters) {
+        refreshFormalData();
+        List<NodeRow> scoped = applyScopeFilters(filters);
+        List<NodeRow> filtered = applyFilters(filters);
+        ObjectNode root = buildScreenPayload("overview", "总体态势", filters, filtered);
+        root.set("kpis", buildScreenOverviewKpis(scoped, filters));
+        root.set("weekly", buildWeeklyTrend(filtered));
+        root.set("programSeries", buildProgramSeries(filtered));
+        root.set("ranking", buildRanking(filtered));
+        root.set("alerts", buildAlerts(filtered));
+        root.set("spotlight", buildSpotlight(filtered));
+        return root;
+    }
+
+    public ObjectNode screenExecution(Filters filters) {
+        refreshFormalData();
+        List<NodeRow> filtered = applyFilters(filters);
+        ObjectNode root = buildScreenPayload("execution", "执行与里程碑", filters, filtered);
+        root.set("incompleteKpis", buildScreenIncompleteKpis(filtered));
+        root.set("milestoneKpis", buildScreenExecutionKpis(filtered));
+        root.set("ganttTasks", buildExecutionGantt(filtered));
+        root.set("milestones", buildMilestones(filtered));
+        root.set("dueList", buildDueList(filtered));
+        root.set("workload", buildWorkload(filtered));
+        root.set("stageBuckets", buildStageBuckets(filtered));
+        return root;
+    }
+
+    public ObjectNode screenRisk(Filters filters) {
+        refreshFormalData();
+        List<NodeRow> scoped = applyScopeFilters(filters);
+        List<NodeRow> filtered = applyFilters(filters);
+        ObjectNode root = buildScreenPayload("risk", "风险与变更", filters, filtered);
+        root.set("changeKpis", buildScreenRiskKpis(scoped, filters));
+        root.set("riskBreakdown", buildRiskBreakdown(filtered));
+        root.set("delayReasonBreakdown", buildDelayReasonBreakdown(filtered));
+        root.set("delayReasonMatrix", buildDelayReasonMatrix(filtered));
+        root.set("weeklyDelayTrend", buildWeeklyDelayTrend(filtered));
+        root.set("delayedProjects", buildDelayedProjects(filtered));
+        root.set("governanceSummary", buildRiskGovernanceSummary(scoped, filters));
+        return root;
+    }
+
     private void refreshFormalData() {
         ProjectCockpitWarehouseSnapshot snapshot = warehouseGateway.loadSnapshot();
         warehouseEnabled = snapshot.warehouseEnabled();
@@ -330,6 +388,17 @@ public class ProjectCockpitService {
         return value == null ? "" : value.toString();
     }
 
+    private ObjectNode buildScreenPayload(String screenKey, String screenTitle, Filters filters, List<NodeRow> filtered) {
+        ObjectNode root = objectMapper.createObjectNode();
+        root.put("screenKey", screenKey);
+        root.put("screenTitle", screenTitle);
+        root.put("updatedAt", latestUpdate(filtered));
+        root.put("scope", buildScopeText(filters, filtered));
+        root.set("dataState", buildDataState());
+        root.set("filters", buildFilters(filters));
+        return root;
+    }
+
     private ObjectNode buildFilters(Filters filters) {
         ArrayNode programs = objectMapper.createArrayNode();
         uniqueValues(majorProjects, MajorProjectRow::programId, MajorProjectRow::programName)
@@ -388,6 +457,34 @@ public class ProjectCockpitService {
         return kpis;
     }
 
+    private ArrayNode buildScreenOverviewKpis(List<NodeRow> scopedRows, Filters filters) {
+        List<NodeRow> periodRows = filterPlannedInPeriod(scopedRows, filters);
+        List<NodeRow> outsideCompletedRows = filterOutsideCompletedRows(scopedRows, filters, periodRows);
+        long periodNodeTotalCount = periodRows.size();
+        long pendingNormalCount = periodRows.stream().filter(NodeRow::normalPending).count();
+        long dueNodeCount = Math.max(0, periodNodeTotalCount - pendingNormalCount);
+        long incompleteNodeCount = periodRows.stream().filter(NodeRow::openRisk).count();
+        long onTimeCount = periodRows.stream().filter(NodeRow::onTimeCompleted).count();
+        long overdueCompletedCount = periodRows.stream().filter(NodeRow::overdueCompleted).count();
+        long completedNodeCount = onTimeCount + overdueCompletedCount + outsideCompletedRows.size();
+
+        ArrayNode kpis = objectMapper.createArrayNode();
+        kpis.add(kpi("periodNodeTotalCount", "项目本周期节点总数", String.valueOf(periodNodeTotalCount), "个"));
+        kpis.add(kpi("pendingNormalCount", "正常待完成", String.valueOf(pendingNormalCount), "个"));
+        kpis.add(kpi("dueNodeCount", "项目本周期节点已到时间节点总数", String.valueOf(dueNodeCount), "个"));
+        kpis.add(kpi("outsideCompletedCount", "项目本周期以外完成节点总数", String.valueOf(outsideCompletedRows.size()), "个"));
+        kpis.add(kpi("incompleteNodeCount", "项目本周期节点未完成总数", String.valueOf(incompleteNodeCount), "个"));
+        kpis.add(kpi("onTimeCount", "节点按时完成数", String.valueOf(onTimeCount), "个"));
+        kpis.add(kpi("overdueCompletedCount", "节点超期完成数", String.valueOf(overdueCompletedCount), "个"));
+        kpis.add(kpi("completedNodeCount", "节点完成总数", String.valueOf(completedNodeCount), "个"));
+        kpis.add(kpi("completionRate", "节点完成百分比", percentValue(completedNodeCount, dueNodeCount + outsideCompletedRows.size()), "%"));
+        kpis.add(kpi("onTimeRate", "节点按时完成百分比", percentValue(onTimeCount, dueNodeCount + outsideCompletedRows.size()), "%"));
+        kpis.add(kpi("overdueCompletionRate", "超期完成节点百分比", percentValue(
+                overdueCompletedCount + outsideCompletedRows.size(),
+                periodNodeTotalCount + outsideCompletedRows.size()), "%"));
+        return kpis;
+    }
+
     private ArrayNode buildRanking(List<NodeRow> filtered) {
         ArrayNode ranking = objectMapper.createArrayNode();
         Map<String, List<NodeRow>> grouped = filtered.stream()
@@ -441,6 +538,7 @@ public class ProjectCockpitService {
     private ObjectNode buildSpotlight(List<NodeRow> filtered) {
         ObjectNode spotlight = objectMapper.createObjectNode();
         filtered.stream()
+                .filter(node -> node.majorProjectId() != null)
                 .collect(Collectors.groupingBy(NodeRow::majorProjectId))
                 .values().stream()
                 .max(Comparator.comparingInt((List<NodeRow> rows) ->
@@ -489,11 +587,9 @@ public class ProjectCockpitService {
     private ArrayNode buildProgramSeries(List<NodeRow> filtered) {
         ArrayNode series = objectMapper.createArrayNode();
         filtered.stream()
+                .filter(node -> node.programId() != null)
                 .collect(Collectors.groupingBy(NodeRow::programId, LinkedHashMap::new, Collectors.toList()))
                 .forEach((programId, rows) -> {
-                    if (programId == null) {
-                        return;
-                    }
                     ObjectNode item = objectMapper.createObjectNode();
                     item.put("programId", programId);
                     item.put("name", rows.get(0).programName());
@@ -506,11 +602,9 @@ public class ProjectCockpitService {
     private ArrayNode buildMajorProjectSeries(List<NodeRow> filtered) {
         ArrayNode series = objectMapper.createArrayNode();
         filtered.stream()
+                .filter(node -> node.majorProjectId() != null)
                 .collect(Collectors.groupingBy(NodeRow::majorProjectId, LinkedHashMap::new, Collectors.toList()))
                 .forEach((majorProjectId, rows) -> {
-                    if (majorProjectId == null) {
-                        return;
-                    }
                     ObjectNode item = objectMapper.createObjectNode();
                     item.put("majorProjectId", majorProjectId);
                     item.put("name", rows.get(0).majorProjectName());
@@ -605,6 +699,7 @@ public class ProjectCockpitService {
     private ArrayNode buildWorkload(List<NodeRow> filtered) {
         ArrayNode workload = objectMapper.createArrayNode();
         filtered.stream()
+                .filter(node -> node.dept() != null)
                 .collect(Collectors.groupingBy(NodeRow::dept, LinkedHashMap::new, Collectors.toList()))
                 .forEach((dept, rows) -> {
                     ObjectNode item = objectMapper.createObjectNode();
@@ -620,6 +715,7 @@ public class ProjectCockpitService {
     private ArrayNode buildStageBuckets(List<NodeRow> filtered) {
         ArrayNode buckets = objectMapper.createArrayNode();
         filtered.stream()
+                .filter(node -> node.nodeType() != null)
                 .collect(Collectors.groupingBy(NodeRow::nodeType, LinkedHashMap::new, Collectors.toList()))
                 .forEach((nodeType, rows) -> {
                     ObjectNode item = objectMapper.createObjectNode();
@@ -628,6 +724,47 @@ public class ProjectCockpitService {
                     buckets.add(item);
                 });
         return buckets;
+    }
+
+    private ArrayNode buildScreenIncompleteKpis(List<NodeRow> filtered) {
+        ArrayNode kpis = objectMapper.createArrayNode();
+        kpis.add(kpi("incompleteHighRiskCount", "截止目前未完成高风险节点数", String.valueOf(
+                filtered.stream().filter(row -> "高".equals(normalizedRisk(row.riskLevel())) && row.openRisk()).count()), "个"));
+        kpis.add(kpi("incompleteMidRiskCount", "截止目前未完成中风险节点数", String.valueOf(
+                filtered.stream().filter(row -> "中".equals(normalizedRisk(row.riskLevel())) && row.openRisk()).count()), "个"));
+        kpis.add(kpi("incompleteMilestoneCount", "截止目前未完成里程碑节点数", String.valueOf(
+                filtered.stream().filter(row -> row.milestoneNode() && row.openRisk()).count()), "个"));
+        kpis.add(kpi("incompleteMajorCount", "截止目前未完成重大节点数", String.valueOf(
+                filtered.stream().filter(row -> row.majorNode() && row.openRisk()).count()), "个"));
+        kpis.add(kpi("incompleteImportantCount", "截止目前未完成重要节点数", String.valueOf(
+                filtered.stream().filter(row -> row.importantNode() && row.openRisk()).count()), "个"));
+        return kpis;
+    }
+
+    private ArrayNode buildScreenExecutionKpis(List<NodeRow> filtered) {
+        long milestoneOnTimeCount = filtered.stream().filter(row -> row.milestoneNode() && row.onTimeCompleted()).count();
+        long milestoneOverdueCompletedCount = filtered.stream().filter(row -> row.milestoneNode() && row.overdueCompleted()).count();
+        long milestonePendingCount = filtered.stream().filter(row -> row.milestoneNode() && row.normalPending()).count();
+        long milestoneIncompleteCount = filtered.stream().filter(row -> row.milestoneNode() && row.openRisk()).count();
+
+        ArrayNode kpis = objectMapper.createArrayNode();
+        kpis.add(kpi("milestoneOnTimeCount", "里程碑节点按时完成数", String.valueOf(milestoneOnTimeCount), "个"));
+        kpis.add(kpi("milestoneOverdueCompletedCount", "里程碑节点超期完成数", String.valueOf(milestoneOverdueCompletedCount), "个"));
+        kpis.add(kpi("milestonePendingCount", "里程碑节点正常待完成数", String.valueOf(milestonePendingCount), "个"));
+        kpis.add(kpi("milestoneCompletionRate", "里程碑节点完成总百分比", percentValue(
+                milestoneOnTimeCount + milestoneOverdueCompletedCount,
+                milestoneIncompleteCount + milestoneOnTimeCount + milestoneOverdueCompletedCount), "%"));
+        kpis.add(kpi("highRiskNodeCount", "高风险节点数", String.valueOf(
+                filtered.stream().filter(row -> "高".equals(normalizedRisk(row.riskLevel()))).count()), "个"));
+        kpis.add(kpi("midRiskNodeCount", "中风险节点数", String.valueOf(
+                filtered.stream().filter(row -> "中".equals(normalizedRisk(row.riskLevel()))).count()), "个"));
+        kpis.add(kpi("milestoneTotalCount", "里程碑节点总数", String.valueOf(
+                filtered.stream().filter(NodeRow::milestoneNode).count()), "个"));
+        kpis.add(kpi("majorNodeCount", "重大节点总数", String.valueOf(
+                filtered.stream().filter(NodeRow::majorNode).count()), "个"));
+        kpis.add(kpi("importantNodeCount", "重要节点总数", String.valueOf(
+                filtered.stream().filter(NodeRow::importantNode).count()), "个"));
+        return kpis;
     }
 
     private ArrayNode buildRiskBreakdown(List<NodeRow> filtered) {
@@ -660,6 +797,7 @@ public class ProjectCockpitService {
     private ArrayNode buildDelayReasonMatrix(List<NodeRow> filtered) {
         ArrayNode matrix = objectMapper.createArrayNode();
         filtered.stream()
+                .filter(node -> node.dept() != null)
                 .collect(Collectors.groupingBy(NodeRow::dept, LinkedHashMap::new, Collectors.toList()))
                 .forEach((dept, rows) -> {
                     ObjectNode item = objectMapper.createObjectNode();
@@ -714,6 +852,40 @@ public class ProjectCockpitService {
         return delayedProjects;
     }
 
+    private ArrayNode buildScreenRiskKpis(List<NodeRow> scopedRows, Filters filters) {
+        List<NodeRow> dueRows = filterDueByEnd(scopedRows, filters).stream()
+                .filter(row -> !row.generalNode())
+                .toList();
+        ArrayNode kpis = objectMapper.createArrayNode();
+        long abnormalPendingCount = dueRows.stream().filter(NodeRow::abnormalPending).count();
+        long overdueIncompleteUnchangedCount = dueRows.stream().filter(NodeRow::overdueIncompleteUnchanged).count();
+        long overdueIncompleteChangedCount = dueRows.stream().filter(NodeRow::overdueIncompleteChanged).count();
+        long overdueCompletedUnchangedCount = dueRows.stream().filter(NodeRow::overdueCompletedUnchanged).count();
+        long dueNodeCount = Math.max(0, dueRows.size() - dueRows.stream().filter(NodeRow::normalPending).count());
+
+        kpis.add(kpi("abnormalPendingNonGeneralCount", "不正常待变更节点数", String.valueOf(abnormalPendingCount), "个"));
+        kpis.add(kpi("overdueIncompleteUnchangedNonGeneralCount", "超期未完成且未走变更流程的节点数", String.valueOf(overdueIncompleteUnchangedCount), "个"));
+        kpis.add(kpi("overdueIncompleteChangedNonGeneralCount", "超期未完成但走完变更流程节点数", String.valueOf(overdueIncompleteChangedCount), "个"));
+        kpis.add(kpi("overdueCompletedUnchangedNonGeneralCount", "超期已完成未变更", String.valueOf(overdueCompletedUnchangedCount), "个"));
+        kpis.add(kpi("abnormalRate", "节点已经不正常待变更的百分比", percentValue(
+                abnormalPendingCount + overdueIncompleteUnchangedCount,
+                dueNodeCount), "%"));
+        kpis.add(kpi("overdueRate", "节点超期百分比", percentValue(
+                overdueIncompleteUnchangedCount + overdueIncompleteChangedCount,
+                dueNodeCount), "%"));
+        return kpis;
+    }
+
+    private ObjectNode buildRiskGovernanceSummary(List<NodeRow> scopedRows, Filters filters) {
+        List<NodeRow> dueRows = filterDueByEnd(scopedRows, filters);
+        ObjectNode summary = objectMapper.createObjectNode();
+        summary.put("delayedNodeCount", dueRows.stream().filter(NodeRow::delayed).count());
+        summary.put("highRiskNodeCount", dueRows.stream().filter(row -> "高".equals(normalizedRisk(row.riskLevel()))).count());
+        summary.put("openRiskNodeCount", dueRows.stream().filter(NodeRow::openRisk).count());
+        summary.put("changedNodeCount", dueRows.stream().filter(NodeRow::changedStatus).count());
+        return summary;
+    }
+
     private ArrayNode buildProjectTree(String selectedMajorProjectId, List<NodeRow> selectedRows) {
         ArrayNode tree = objectMapper.createArrayNode();
         MajorProjectRow majorProject = majorProjects.stream()
@@ -741,6 +913,7 @@ public class ProjectCockpitService {
         ArrayNode majorChildren = majorNode.putArray("children");
 
         Map<String, List<NodeRow>> bySubproject = selectedRows.stream()
+                .filter(node -> node.subprojectId() != null)
                 .collect(Collectors.groupingBy(NodeRow::subprojectId, LinkedHashMap::new, Collectors.toList()));
         bySubproject.forEach((subprojectId, rows) -> {
             SubprojectRow subproject = subprojects.stream()
@@ -895,15 +1068,65 @@ public class ProjectCockpitService {
         return sources;
     }
 
-    private List<NodeRow> applyFilters(Filters filters) {
+    private List<NodeRow> applyScopeFilters(Filters filters) {
         return nodes.stream()
                 .filter(node -> filters.programId() == null || filters.programId().isBlank() || filters.programId().equals(node.programId()))
                 .filter(node -> filters.majorProjectId() == null || filters.majorProjectId().isBlank() || filters.majorProjectId().equals(node.majorProjectId()))
                 .filter(node -> filters.deptId() == null || filters.deptId().isBlank() || filters.deptId().equals(node.dept()))
                 .filter(node -> filters.riskLevel() == null || filters.riskLevel().isBlank() || filters.riskLevel().equals(normalizedRisk(node.riskLevel())))
+                .toList();
+    }
+
+    private List<NodeRow> applyFilters(Filters filters) {
+        return applyScopeFilters(filters).stream()
                 .filter(node -> filters.dateFrom() == null || node.planDate() == null || !node.planDate().isBefore(filters.dateFrom()))
                 .filter(node -> filters.dateTo() == null || node.planDate() == null || !node.planDate().isAfter(filters.dateTo()))
                 .toList();
+    }
+
+    private List<NodeRow> filterPlannedInPeriod(List<NodeRow> scopedRows, Filters filters) {
+        if (filters.dateFrom() == null && filters.dateTo() == null) {
+            return scopedRows;
+        }
+        return scopedRows.stream()
+                .filter(node -> inDateRange(node.planDate(), filters.dateFrom(), filters.dateTo()))
+                .toList();
+    }
+
+    private List<NodeRow> filterDueByEnd(List<NodeRow> scopedRows, Filters filters) {
+        if (filters.dateTo() == null) {
+            return filters.dateFrom() == null ? scopedRows : filterPlannedInPeriod(scopedRows, filters);
+        }
+        return scopedRows.stream()
+                .filter(node -> node.planDate() != null && !node.planDate().isAfter(filters.dateTo()))
+                .toList();
+    }
+
+    private List<NodeRow> filterOutsideCompletedRows(List<NodeRow> scopedRows, Filters filters, List<NodeRow> periodRows) {
+        if (filters.dateFrom() == null && filters.dateTo() == null) {
+            return List.of();
+        }
+        Map<String, NodeRow> periodById = periodRows.stream()
+                .filter(node -> node.nodeId() != null)
+                .collect(Collectors.toMap(NodeRow::nodeId, Function.identity(), (left, right) -> left, LinkedHashMap::new));
+        return scopedRows.stream()
+                .filter(NodeRow::completed)
+                .filter(node -> inDateRange(node.actualDate(), filters.dateFrom(), filters.dateTo()))
+                .filter(node -> !periodById.containsKey(node.nodeId()))
+                .toList();
+    }
+
+    private boolean inDateRange(LocalDate value, LocalDate dateFrom, LocalDate dateTo) {
+        if (value == null) {
+            return false;
+        }
+        if (dateFrom != null && value.isBefore(dateFrom)) {
+            return false;
+        }
+        if (dateTo != null && value.isAfter(dateTo)) {
+            return false;
+        }
+        return true;
     }
 
     private List<ObjectNode> uniqueValues(List<MajorProjectRow> rows, Function<MajorProjectRow, String> valueFn, Function<MajorProjectRow, String> labelFn) {
@@ -1000,6 +1223,10 @@ public class ProjectCockpitService {
         return String.valueOf(Math.round(numericPercent(numerator, denominator)));
     }
 
+    private String percentValue(long numerator, long denominator) {
+        return String.valueOf(numericPercent(numerator, denominator));
+    }
+
     private double numericPercent(long numerator, long denominator) {
         if (denominator <= 0) {
             return 0;
@@ -1018,6 +1245,7 @@ public class ProjectCockpitService {
     private String topDelayReason(List<NodeRow> rows) {
         return rows.stream()
                 .filter(NodeRow::delayed)
+                .filter(node -> node.delayReasonCategory() != null)
                 .collect(Collectors.groupingBy(NodeRow::delayReasonCategory, Collectors.counting()))
                 .entrySet().stream()
                 .max(Map.Entry.comparingByValue())
@@ -1174,16 +1402,68 @@ public class ProjectCockpitService {
             boolean keyNode,
             boolean milestone) {
 
-        boolean completed() {
-            return "按时完成".equals(completionStatus)
-                    || "超期已完成已变更".equals(completionStatus)
+        String normalizedNodeType() {
+            if (nodeType == null || nodeType.isBlank()) {
+                return "";
+            }
+            return nodeType.trim();
+        }
+
+        boolean normalPending() {
+            return "正常待完成".equals(completionStatus);
+        }
+
+        boolean onTimeCompleted() {
+            return "按时完成".equals(completionStatus);
+        }
+
+        boolean overdueCompleted() {
+            return "超期已完成已变更".equals(completionStatus)
                     || "超期已完成未变更".equals(completionStatus);
         }
 
+        boolean abnormalPending() {
+            return "不正常待变更".equals(completionStatus);
+        }
+
+        boolean overdueIncompleteUnchanged() {
+            return "超期未完成未变更".equals(completionStatus);
+        }
+
+        boolean overdueIncompleteChanged() {
+            return "超期未完成已变更".equals(completionStatus);
+        }
+
+        boolean overdueCompletedUnchanged() {
+            return "超期已完成未变更".equals(completionStatus);
+        }
+
+        boolean changedStatus() {
+            return completionStatus != null && completionStatus.contains("已变更");
+        }
+
+        boolean generalNode() {
+            return "一般节点".equals(normalizedNodeType());
+        }
+
+        boolean milestoneNode() {
+            return "里程碑节点".equals(normalizedNodeType()) || milestone;
+        }
+
+        boolean majorNode() {
+            return "重大节点".equals(normalizedNodeType());
+        }
+
+        boolean importantNode() {
+            return "重要节点".equals(normalizedNodeType());
+        }
+
+        boolean completed() {
+            return onTimeCompleted() || overdueCompleted();
+        }
+
         boolean openRisk() {
-            return "不正常待变更".equals(completionStatus)
-                    || "超期未完成未变更".equals(completionStatus)
-                    || "超期未完成已变更".equals(completionStatus);
+            return abnormalPending() || overdueIncompleteUnchanged() || overdueIncompleteChanged();
         }
 
         boolean delayed() {

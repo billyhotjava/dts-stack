@@ -119,8 +119,11 @@ public class DbtReleaseGateService {
         List<String> warnings
     ) {
         String status = normalizeUpper(summary.status());
-        if (!"SUCCESS".equals(status)) {
+        boolean missingUnbuiltRelations = isMissingUnbuiltRelationTestFailure(summary);
+        if (!"SUCCESS".equals(status) && !missingUnbuiltRelations) {
             blockers.add("最近一次构建状态为 " + defaultText(status, "UNKNOWN") + "，不允许发布");
+        } else if (missingUnbuiltRelations) {
+            warnings.add("最近一次 dbt test 失败是因为目标关系尚未生成，首次上线可继续执行 dbt build");
         }
         if (!isAllowedBuildCommand(summary.command())) {
             blockers.add("最近一次构建命令不是 compile/test/build，请先补齐 CI 校验");
@@ -176,6 +179,32 @@ public class DbtReleaseGateService {
             normalized.contains(" dbt test") ||
             normalized.contains(" dbt build")
         );
+    }
+
+    private boolean isMissingUnbuiltRelationTestFailure(DbtRunResultService.DbtRunSummary summary) {
+        if (summary == null || !"FAILED".equalsIgnoreCase(defaultText(summary.status(), ""))) {
+            return false;
+        }
+        if (!isTestCommand(summary.command()) || summary.failures() == null || summary.failures().isEmpty()) {
+            return false;
+        }
+        return summary.failures().stream().allMatch(this::isMissingRelationFailure);
+    }
+
+    private boolean isTestCommand(String command) {
+        if (!StringUtils.hasText(command)) {
+            return false;
+        }
+        String normalized = command.trim().toLowerCase(Locale.ROOT);
+        return normalized.startsWith("test ") || normalized.startsWith("dbt test") || normalized.contains(" dbt test");
+    }
+
+    private boolean isMissingRelationFailure(DbtRunResultService.DbtRunFailure failure) {
+        if (failure == null || !StringUtils.hasText(failure.message())) {
+            return false;
+        }
+        String normalized = failure.message().toLowerCase(Locale.ROOT);
+        return normalized.contains("relation \"") && normalized.contains("does not exist");
     }
 
     private boolean isAllowedReleaseBranch(String gitRef) {

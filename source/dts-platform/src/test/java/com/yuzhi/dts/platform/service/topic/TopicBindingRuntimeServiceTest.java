@@ -3,15 +3,21 @@ package com.yuzhi.dts.platform.service.topic;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
+import com.yuzhi.dts.platform.domain.infra.InfraOdsTableMapping;
 import com.yuzhi.dts.platform.domain.topic.TopicBinding;
 import com.yuzhi.dts.platform.domain.topic.TopicTemplate;
 import com.yuzhi.dts.platform.domain.topic.TopicTemplateEntity;
+import com.yuzhi.dts.platform.repository.infra.InfraOdsTableMappingRepository;
 import com.yuzhi.dts.platform.repository.modeling.ModelingSqlModelRepository;
 import com.yuzhi.dts.platform.repository.topic.TopicBindingRepository;
 import com.yuzhi.dts.platform.repository.topic.TopicTemplateEntityRepository;
 import com.yuzhi.dts.platform.repository.topic.TopicTemplateRepository;
 import com.yuzhi.dts.platform.service.etl.DbtConfigService;
+import com.yuzhi.dts.platform.service.etl.DbtTargetConnectionFactory;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.sql.Connection;
+import java.sql.DatabaseMetaData;
+import java.sql.ResultSet;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -39,7 +45,25 @@ class TopicBindingRuntimeServiceTest {
     private TopicBindingRepository bindingRepository;
 
     @Mock
+    private InfraOdsTableMappingRepository odsTableMappingRepository;
+
+    @Mock
     private ModelingSqlModelRepository modelingSqlModelRepository;
+
+    @Mock
+    private DbtTargetConnectionFactory connectionFactory;
+
+    @Mock
+    private Connection connection;
+
+    @Mock
+    private DatabaseMetaData metadata;
+
+    @Mock
+    private ResultSet missingResultSet;
+
+    @Mock
+    private ResultSet existingResultSet;
 
     @TempDir
     Path tempDir;
@@ -63,7 +87,9 @@ class TopicBindingRuntimeServiceTest {
             templateRepository,
             entityRepository,
             bindingRepository,
+            odsTableMappingRepository,
             modelingSqlModelRepository,
+            connectionFactory,
             new ObjectMapper()
         );
 
@@ -98,7 +124,9 @@ class TopicBindingRuntimeServiceTest {
             templateRepository,
             entityRepository,
             bindingRepository,
+            odsTableMappingRepository,
             modelingSqlModelRepository,
+            connectionFactory,
             new ObjectMapper()
         );
 
@@ -129,7 +157,9 @@ class TopicBindingRuntimeServiceTest {
             templateRepository,
             entityRepository,
             bindingRepository,
+            odsTableMappingRepository,
             modelingSqlModelRepository,
+            connectionFactory,
             new ObjectMapper()
         );
 
@@ -138,6 +168,95 @@ class TopicBindingRuntimeServiceTest {
         assertThat(result.enabled()).isTrue();
         assertThat(Files.readString(projectDir.resolve("models/__topic_bindings/topic_sources.yml")))
             .isEqualTo("version: 2\nsources: []\n");
+    }
+
+    @Test
+    void compileRuntimeArtifacts_shouldResolveProjectManagementSchemaFromPhysicalOdsMapping() throws Exception {
+        Path projectDir = tempDir.resolve("dbt-mapping");
+        Files.createDirectories(projectDir.resolve("models"));
+        Files.createDirectories(projectDir.resolve("target"));
+        when(dbtConfigService.loadConfig()).thenReturn(configView(projectDir));
+
+        TopicTemplate template = template("project-management", "项目管理专题");
+        TopicTemplateEntity entity = entity(template, "project_subject_domain", "pm_ods", "project_subject_domain", true);
+        TopicBinding binding = binding(template, entity, "ods", "ods_prj_prjtest2000");
+        InfraOdsTableMapping mapping = odsMapping("public", "ods_prj_prjtest2000");
+
+        when(templateRepository.findAll()).thenReturn(List.of(template));
+        when(entityRepository.findAll()).thenReturn(List.of(entity));
+        when(bindingRepository.findAll()).thenReturn(List.of(binding));
+        when(odsTableMappingRepository.findFirstByOdsSchemaIgnoreCaseAndOdsTableIgnoreCase("ods", "ods_prj_prjtest2000"))
+            .thenReturn(java.util.Optional.empty());
+        when(odsTableMappingRepository.findByEnabledTrueAndOdsTableIgnoreCaseOrderByCreatedDateDesc("ods_prj_prjtest2000"))
+            .thenReturn(List.of(mapping));
+
+        TopicBindingRuntimeService service = new TopicBindingRuntimeService(
+            dbtConfigService,
+            templateRepository,
+            entityRepository,
+            bindingRepository,
+            odsTableMappingRepository,
+            modelingSqlModelRepository,
+            connectionFactory,
+            new ObjectMapper()
+        );
+
+        TopicBindingRuntimeService.RuntimeCompilationResult result = service.compileRuntimeArtifacts();
+
+        assertThat(result.vars())
+            .containsEntry("project_management_ods_schema", "public")
+            .containsEntry("project_management_ods_table", "ods_prj_prjtest2000");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> topicBindings = (Map<String, Object>) result.vars().get("topic_bindings");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> templateVars = (Map<String, Object>) topicBindings.get("project-management");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> entityVars = (Map<String, Object>) templateVars.get("project_subject_domain");
+        assertThat(entityVars).containsEntry("schema_name", "public");
+    }
+
+    @Test
+    void compileRuntimeArtifacts_shouldFallbackToTargetSchemaWhenStoredMappingSchemaDoesNotExist() throws Exception {
+        Path projectDir = tempDir.resolve("dbt-target-schema");
+        Files.createDirectories(projectDir.resolve("models"));
+        Files.createDirectories(projectDir.resolve("target"));
+        when(dbtConfigService.loadConfig()).thenReturn(configView(projectDir));
+
+        TopicTemplate template = template("project-management", "项目管理专题");
+        TopicTemplateEntity entity = entity(template, "project_subject_domain", "pm_ods", "project_subject_domain", true);
+        TopicBinding binding = binding(template, entity, "ods", "ods_prj_prjtest2000");
+        InfraOdsTableMapping mapping = odsMapping("ods", "ods_prj_prjtest2000");
+
+        when(templateRepository.findAll()).thenReturn(List.of(template));
+        when(entityRepository.findAll()).thenReturn(List.of(entity));
+        when(bindingRepository.findAll()).thenReturn(List.of(binding));
+        when(odsTableMappingRepository.findFirstByOdsSchemaIgnoreCaseAndOdsTableIgnoreCase("ods", "ods_prj_prjtest2000"))
+            .thenReturn(java.util.Optional.of(mapping));
+        when(connectionFactory.resolveTarget())
+            .thenReturn(new DbtTargetConnectionFactory.TargetWarehouse(UUID.randomUUID(), "biadmin", "public", "POSTGRES", "jdbc:postgresql://dts-pg:5432/biadmin", "biadmin", "Devops123@"));
+        when(connectionFactory.open(org.mockito.ArgumentMatchers.any())).thenReturn(connection);
+        when(connection.getMetaData()).thenReturn(metadata);
+        when(metadata.getTables(null, "ods", "ods_prj_prjtest2000", new String[] { "TABLE", "VIEW" })).thenReturn(missingResultSet);
+        when(missingResultSet.next()).thenReturn(false);
+        when(metadata.getTables(null, "public", "ods_prj_prjtest2000", new String[] { "TABLE", "VIEW" })).thenReturn(existingResultSet);
+        when(existingResultSet.next()).thenReturn(true);
+
+        TopicBindingRuntimeService service = new TopicBindingRuntimeService(
+            dbtConfigService,
+            templateRepository,
+            entityRepository,
+            bindingRepository,
+            odsTableMappingRepository,
+            modelingSqlModelRepository,
+            connectionFactory,
+            new ObjectMapper()
+        );
+
+        TopicBindingRuntimeService.RuntimeCompilationResult result = service.compileRuntimeArtifacts();
+
+        assertThat(result.vars())
+            .containsEntry("project_management_ods_schema", "public")
+            .containsEntry("project_management_ods_table", "ods_prj_prjtest2000");
     }
 
     private DbtConfigService.DbtConfigView configView(Path projectDir) {
@@ -204,5 +323,14 @@ class TopicBindingRuntimeServiceTest {
         binding.setStatus("ACTIVE");
         binding.setBoundBy("tester");
         return binding;
+    }
+
+    private InfraOdsTableMapping odsMapping(String schemaName, String tableName) {
+        InfraOdsTableMapping mapping = new InfraOdsTableMapping();
+        mapping.setId(UUID.randomUUID());
+        mapping.setEnabled(Boolean.TRUE);
+        mapping.setOdsSchema(schemaName);
+        mapping.setOdsTable(tableName);
+        return mapping;
     }
 }

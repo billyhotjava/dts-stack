@@ -290,7 +290,44 @@ public class OdsTableMappingSyncService {
         if (!StringUtils.hasText(schema)) {
             schema = normalize(destinationConfig.get("ods_schema"));
         }
+        if (!StringUtils.hasText(schema) && looksLikePostgresDestination(destinationConfig)) {
+            return "public";
+        }
         return StringUtils.hasText(schema) ? schema : DEFAULT_SCHEMA;
+    }
+
+    private boolean looksLikePostgresDestination(Map<String, Object> destinationConfig) {
+        String writerType = firstNonEmpty(
+            normalize(destinationConfig.get("writerType")),
+            normalize(destinationConfig.get("writer")),
+            normalize(destinationConfig.get("type")),
+            normalize(destinationConfig.get("destinationType")),
+            normalize(destinationConfig.get("destinationDefinitionId"))
+        );
+        if (StringUtils.hasText(writerType)) {
+            String normalized = writerType.toLowerCase(Locale.ROOT);
+            if (normalized.contains("postgres")) {
+                return true;
+            }
+        }
+        String jdbcUrl = firstNonEmpty(
+            normalize(destinationConfig.get("jdbcUrl")),
+            normalize(destinationConfig.get("jdbc_url")),
+            normalize(destinationConfig.get("url"))
+        );
+        return StringUtils.hasText(jdbcUrl) && jdbcUrl.trim().toLowerCase(Locale.ROOT).startsWith("jdbc:postgresql:");
+    }
+
+    private String firstNonEmpty(String... values) {
+        if (values == null) {
+            return null;
+        }
+        for (String value : values) {
+            if (StringUtils.hasText(value)) {
+                return value;
+            }
+        }
+        return null;
     }
 
     private OdsNameParts parseOdsName(String table) {

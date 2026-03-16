@@ -1,20 +1,26 @@
 package com.yuzhi.dts.platform.service.topic;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.yuzhi.dts.platform.domain.infra.InfraOdsTableMapping;
 import com.yuzhi.dts.platform.domain.modeling.ModelingSqlModel;
 import com.yuzhi.dts.platform.domain.topic.TopicBinding;
 import com.yuzhi.dts.platform.domain.topic.TopicTemplate;
 import com.yuzhi.dts.platform.domain.topic.TopicTemplateEntity;
+import com.yuzhi.dts.platform.repository.infra.InfraOdsTableMappingRepository;
 import com.yuzhi.dts.platform.repository.modeling.ModelingSqlModelRepository;
 import com.yuzhi.dts.platform.repository.topic.TopicBindingRepository;
 import com.yuzhi.dts.platform.repository.topic.TopicTemplateEntityRepository;
 import com.yuzhi.dts.platform.repository.topic.TopicTemplateRepository;
 import com.yuzhi.dts.platform.service.etl.DbtConfigService;
+import com.yuzhi.dts.platform.service.etl.DbtTargetConnectionFactory;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.sql.Connection;
+import java.sql.DatabaseMetaData;
+import java.sql.ResultSet;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -42,7 +48,9 @@ public class TopicBindingRuntimeService {
     private final TopicTemplateRepository templateRepository;
     private final TopicTemplateEntityRepository entityRepository;
     private final TopicBindingRepository bindingRepository;
+    private final InfraOdsTableMappingRepository odsTableMappingRepository;
     private final ModelingSqlModelRepository modelingSqlModelRepository;
+    private final DbtTargetConnectionFactory connectionFactory;
     private final ObjectMapper objectMapper;
 
     public TopicBindingRuntimeService(
@@ -50,14 +58,18 @@ public class TopicBindingRuntimeService {
         TopicTemplateRepository templateRepository,
         TopicTemplateEntityRepository entityRepository,
         TopicBindingRepository bindingRepository,
+        InfraOdsTableMappingRepository odsTableMappingRepository,
         ModelingSqlModelRepository modelingSqlModelRepository,
+        DbtTargetConnectionFactory connectionFactory,
         ObjectMapper objectMapper
     ) {
         this.dbtConfigService = dbtConfigService;
         this.templateRepository = templateRepository;
         this.entityRepository = entityRepository;
         this.bindingRepository = bindingRepository;
+        this.odsTableMappingRepository = odsTableMappingRepository;
         this.modelingSqlModelRepository = modelingSqlModelRepository;
+        this.connectionFactory = connectionFactory;
         this.objectMapper = objectMapper;
     }
 
@@ -123,6 +135,7 @@ public class TopicBindingRuntimeService {
                 .toList();
             for (TopicTemplateEntity entity : templateEntities) {
                 TopicBinding binding = bindingByKey.get(bindingKey(template.getId(), entity.getId()));
+                ResolvedBindingTarget resolved = binding == null ? null : resolveBindingTarget(binding, entity);
                 boolean bound = binding != null;
                 if (Boolean.TRUE.equals(entity.getRequired()) && !bound) {
                     missingRequired.add(template.getTemplateCode() + "." + entity.getEntityCode());
@@ -138,8 +151,8 @@ public class TopicBindingRuntimeService {
                         entity.getTableName(),
                         entity.getExpectedSchema(),
                         bound,
-                        binding == null ? null : binding.getSchemaName(),
-                        binding == null ? null : binding.getTableName(),
+                        resolved == null ? null : resolved.schemaName(),
+                        resolved == null ? null : resolved.tableName(),
                         binding == null ? null : binding.getStatus(),
                         binding == null ? null : binding.getBatchId(),
                         binding == null ? null : binding.getOdsMappingId(),
@@ -173,18 +186,15 @@ public class TopicBindingRuntimeService {
                 continue;
             }
             String sourceName = defaultText(entity.getSourceName(), normalizeCode(template.getTemplateCode()) + "_ods");
-            String schemaName = defaultText(binding.getSchemaName(), entity.getExpectedSchema(), "ods");
+            ResolvedBindingTarget resolved = resolveBindingTarget(binding, entity);
+            String schemaName = resolved.schemaName();
             SourceBucket bucket = buckets.computeIfAbsent(sourceName, key -> new SourceBucket(sourceName, schemaName));
             if (!bucket.schemaName.equalsIgnoreCase(schemaName)) {
                 warnings.add("逻辑 source " + sourceName + " 绑定到了多个 schema，当前保留 " + bucket.schemaName + "，忽略 " + schemaName);
             }
             Map<String, Object> table = new LinkedHashMap<>();
             table.put("name", entity.getTableName());
-            if (!entity.getTableName().equalsIgnoreCase(defaultText(binding.getTableName(), entity.getTableName()))) {
-                table.put("identifier", defaultText(binding.getTableName(), entity.getTableName()));
-            } else {
-                table.put("identifier", defaultText(binding.getTableName(), entity.getTableName()));
-            }
+            table.put("identifier", resolved.tableName());
             Map<String, Object> meta = new LinkedHashMap<>();
             meta.put("template_code", template.getTemplateCode());
             meta.put("entity_code", entity.getEntityCode());
@@ -228,6 +238,71 @@ public class TopicBindingRuntimeService {
         return true;
     }
 
+    private ResolvedBindingTarget resolveBindingTarget(TopicBinding binding, TopicTemplateEntity entity) {
+        String schemaName = defaultText(binding.getSchemaName(), entity.getExpectedSchema(), "ods");
+        String tableName = defaultText(binding.getTableName(), entity.getTableName());
+        InfraOdsTableMapping mapping = findMatchingMapping(binding, schemaName, tableName);
+        ResolvedBindingTarget resolved = mapping == null
+            ? new ResolvedBindingTarget(schemaName, tableName)
+            : new ResolvedBindingTarget(
+            defaultText(mapping.getOdsSchema(), schemaName, "public"),
+            defaultText(mapping.getOdsTable(), tableName)
+        );
+        return correctTargetSchema(resolved);
+    }
+
+    private ResolvedBindingTarget correctTargetSchema(ResolvedBindingTarget target) {
+        if (target == null || !StringUtils.hasText(target.tableName())) {
+            return target;
+        }
+        try {
+            DbtTargetConnectionFactory.TargetWarehouse warehouse = connectionFactory.resolveTarget();
+            String currentSchema = defaultText(target.schemaName(), warehouse.schema(), "public");
+            String fallbackSchema = defaultText(warehouse.schema(), "public");
+            if (relationExists(warehouse, currentSchema, target.tableName())) {
+                return new ResolvedBindingTarget(currentSchema, target.tableName());
+            }
+            if (!currentSchema.equalsIgnoreCase(fallbackSchema) && relationExists(warehouse, fallbackSchema, target.tableName())) {
+                LOG.info("[topic-binding] corrected bound table {}.{} -> {}.{}", currentSchema, target.tableName(), fallbackSchema, target.tableName());
+                return new ResolvedBindingTarget(fallbackSchema, target.tableName());
+            }
+        } catch (Exception ex) {
+            LOG.debug("[topic-binding] failed to verify target schema for {}.{}: {}", target.schemaName(), target.tableName(), ex.getMessage());
+        }
+        return target;
+    }
+
+    private boolean relationExists(DbtTargetConnectionFactory.TargetWarehouse warehouse, String schemaName, String tableName) throws Exception {
+        try (Connection connection = connectionFactory.open(warehouse)) {
+            DatabaseMetaData metadata = connection.getMetaData();
+            try (ResultSet tables = metadata.getTables(null, schemaName, tableName, new String[] { "TABLE", "VIEW" })) {
+                return tables.next();
+            }
+        }
+    }
+
+    private InfraOdsTableMapping findMatchingMapping(TopicBinding binding, String schemaName, String tableName) {
+        if (binding.getOdsMappingId() != null) {
+            InfraOdsTableMapping mapping = odsTableMappingRepository.findById(binding.getOdsMappingId()).orElse(null);
+            if (isEnabled(mapping)) {
+                return mapping;
+            }
+        }
+        InfraOdsTableMapping exact = odsTableMappingRepository.findFirstByOdsSchemaIgnoreCaseAndOdsTableIgnoreCase(schemaName, tableName).orElse(null);
+        if (isEnabled(exact)) {
+            return exact;
+        }
+        List<InfraOdsTableMapping> candidates = odsTableMappingRepository.findByEnabledTrueAndOdsTableIgnoreCaseOrderByCreatedDateDesc(tableName);
+        if (candidates == null || candidates.size() != 1) {
+            return null;
+        }
+        return candidates.get(0);
+    }
+
+    private boolean isEnabled(InfraOdsTableMapping mapping) {
+        return mapping != null && Boolean.TRUE.equals(mapping.getEnabled());
+    }
+
     private Map<String, Object> buildVars(
         Map<UUID, TopicTemplate> templatesById,
         Map<UUID, TopicTemplateEntity> entitiesById,
@@ -241,8 +316,9 @@ public class TopicBindingRuntimeService {
             if (template == null || entity == null) {
                 continue;
             }
-            String schemaName = defaultText(binding.getSchemaName(), entity.getExpectedSchema(), "ods");
-            String physicalTable = defaultText(binding.getTableName(), entity.getTableName());
+            ResolvedBindingTarget resolved = resolveBindingTarget(binding, entity);
+            String schemaName = resolved.schemaName();
+            String physicalTable = resolved.tableName();
             @SuppressWarnings("unchecked")
             Map<String, Object> templateVars = (Map<String, Object>) topicBindings.computeIfAbsent(template.getTemplateCode(), key -> new LinkedHashMap<>());
             Map<String, Object> entityVars = new LinkedHashMap<>();
@@ -450,6 +526,8 @@ public class TopicBindingRuntimeService {
             this(sourceName, schemaName, new ArrayList<>());
         }
     }
+
+    private record ResolvedBindingTarget(String schemaName, String tableName) {}
 
     private static final class YamlWriter {
         private static String toYaml(Map<String, Object> root) {

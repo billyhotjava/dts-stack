@@ -18,6 +18,8 @@ public interface InfraOdsTableMappingRepository extends JpaRepository<InfraOdsTa
 
     Optional<InfraOdsTableMapping> findFirstByOdsSchemaIgnoreCaseAndOdsTableIgnoreCase(String odsSchema, String odsTable);
 
+    List<InfraOdsTableMapping> findByEnabledTrueAndOdsTableIgnoreCaseOrderByCreatedDateDesc(String odsTable);
+
     default List<InfraOdsTableMapping> listAllSorted() {
         return findAll(Sort.by(Sort.Order.desc("createdDate")));
     }

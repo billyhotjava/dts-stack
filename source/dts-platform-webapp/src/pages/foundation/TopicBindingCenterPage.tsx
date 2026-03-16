@@ -157,6 +157,7 @@ export default function TopicBindingCenterPage() {
 				dataSourceId: normalizeText(candidate.sourceDataSourceId) || undefined,
 				schemaName: normalizeText(candidate.schema) || normalizeText(bindingRow.expectedSchema) || "ods",
 				tableName: candidate.table,
+				odsMappingId: normalizeText(candidate.id) || undefined,
 				notes: "bind from topic center",
 			});
 			message.success("专题绑定已更新");

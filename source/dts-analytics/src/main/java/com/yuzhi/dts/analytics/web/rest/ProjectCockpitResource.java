@@ -100,6 +100,54 @@ public class ProjectCockpitResource {
         return authorize(request, projectCockpitService.dataSupport(filters(programId, majorProjectId, dateFrom, dateTo, deptId, riskLevel)));
     }
 
+    @GetMapping(path = "/screen/header", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> screenHeader(
+            @RequestParam(value = "programId", required = false) String programId,
+            @RequestParam(value = "majorProjectId", required = false) String majorProjectId,
+            @RequestParam(value = "dateFrom", required = false) String dateFrom,
+            @RequestParam(value = "dateTo", required = false) String dateTo,
+            @RequestParam(value = "deptId", required = false) String deptId,
+            @RequestParam(value = "riskLevel", required = false) String riskLevel,
+            HttpServletRequest request) {
+        return authorize(request, projectCockpitService.screenHeader(filters(programId, majorProjectId, dateFrom, dateTo, deptId, riskLevel)));
+    }
+
+    @GetMapping(path = "/screen/overview", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> screenOverview(
+            @RequestParam(value = "programId", required = false) String programId,
+            @RequestParam(value = "majorProjectId", required = false) String majorProjectId,
+            @RequestParam(value = "dateFrom", required = false) String dateFrom,
+            @RequestParam(value = "dateTo", required = false) String dateTo,
+            @RequestParam(value = "deptId", required = false) String deptId,
+            @RequestParam(value = "riskLevel", required = false) String riskLevel,
+            HttpServletRequest request) {
+        return authorize(request, projectCockpitService.screenOverview(filters(programId, majorProjectId, dateFrom, dateTo, deptId, riskLevel)));
+    }
+
+    @GetMapping(path = "/screen/execution", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> screenExecution(
+            @RequestParam(value = "programId", required = false) String programId,
+            @RequestParam(value = "majorProjectId", required = false) String majorProjectId,
+            @RequestParam(value = "dateFrom", required = false) String dateFrom,
+            @RequestParam(value = "dateTo", required = false) String dateTo,
+            @RequestParam(value = "deptId", required = false) String deptId,
+            @RequestParam(value = "riskLevel", required = false) String riskLevel,
+            HttpServletRequest request) {
+        return authorize(request, projectCockpitService.screenExecution(filters(programId, majorProjectId, dateFrom, dateTo, deptId, riskLevel)));
+    }
+
+    @GetMapping(path = "/screen/risk", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> screenRisk(
+            @RequestParam(value = "programId", required = false) String programId,
+            @RequestParam(value = "majorProjectId", required = false) String majorProjectId,
+            @RequestParam(value = "dateFrom", required = false) String dateFrom,
+            @RequestParam(value = "dateTo", required = false) String dateTo,
+            @RequestParam(value = "deptId", required = false) String deptId,
+            @RequestParam(value = "riskLevel", required = false) String riskLevel,
+            HttpServletRequest request) {
+        return authorize(request, projectCockpitService.screenRisk(filters(programId, majorProjectId, dateFrom, dateTo, deptId, riskLevel)));
+    }
+
     private ResponseEntity<?> authorize(HttpServletRequest request, Object payload) {
         Optional<AnalyticsUser> user = MetabaseAuth.currentUser(sessionService, request);
         if (user.isEmpty()) {

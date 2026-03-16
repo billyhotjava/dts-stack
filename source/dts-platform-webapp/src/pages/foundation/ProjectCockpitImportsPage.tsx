@@ -336,6 +336,7 @@ export default function ProjectCockpitImportsPage() {
 				dataSourceId: normalizeText(candidate.sourceDataSourceId) || undefined,
 				schemaName: normalizeText(candidate.schema) || normalizeText(selectedBindingRow?.expectedSchema) || "ods",
 				tableName: candidate.table,
+				odsMappingId: normalizeText(candidate.id) || undefined,
 				batchId: batchLoadResult.batchId,
 				notes: `bind after project import ${batchLoadResult.batchCode}`,
 			});

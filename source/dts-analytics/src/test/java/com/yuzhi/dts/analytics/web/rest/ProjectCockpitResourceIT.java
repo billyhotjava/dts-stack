@@ -242,6 +242,116 @@ class ProjectCockpitResourceIT {
                 .andExpect(jsonPath("$.glossary").isArray());
     }
 
+    @Test
+    void projectCockpitShouldExposeCommandCenterScreenEndpoints() throws Exception {
+        seedModeledBatch();
+        seedNodeRows();
+        Cookie sessionCookie = authenticate();
+
+        mockMvc.perform(get("/api/project-cockpit/screen/header").cookie(sessionCookie))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.title").value("科研项目管理指挥大屏"))
+                .andExpect(jsonPath("$.filters.current.programId").value(""))
+                .andExpect(jsonPath("$.dataState.ready").value(true));
+
+        mockMvc.perform(get("/api/project-cockpit/screen/overview").cookie(sessionCookie))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.screenKey").value("overview"))
+                .andExpect(jsonPath("$.kpis").isArray())
+                .andExpect(jsonPath("$.kpis.length()").value(Matchers.greaterThan(0)));
+
+        mockMvc.perform(get("/api/project-cockpit/screen/execution").cookie(sessionCookie))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.screenKey").value("execution"))
+                .andExpect(jsonPath("$.milestoneKpis").isArray())
+                .andExpect(jsonPath("$.ganttTasks").isArray());
+
+        mockMvc.perform(get("/api/project-cockpit/screen/risk").cookie(sessionCookie))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.screenKey").value("risk"))
+                .andExpect(jsonPath("$.changeKpis").isArray())
+                .andExpect(jsonPath("$.riskBreakdown").isArray());
+    }
+
+    @Test
+    void projectCockpitScreenMetricsShouldFollowProject3Definitions() throws Exception {
+        seedModeledBatch();
+        seedProject3MetricRows();
+        Cookie sessionCookie = authenticate();
+
+        mockMvc.perform(get("/api/project-cockpit/screen/overview")
+                        .cookie(sessionCookie)
+                        .param("dateFrom", "2026-03-01")
+                        .param("dateTo", "2026-03-31"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.kpis[0].key").value("periodNodeTotalCount"))
+                .andExpect(jsonPath("$.kpis[0].value").value("8"))
+                .andExpect(jsonPath("$.kpis[2].key").value("dueNodeCount"))
+                .andExpect(jsonPath("$.kpis[2].value").value("7"))
+                .andExpect(jsonPath("$.kpis[3].key").value("outsideCompletedCount"))
+                .andExpect(jsonPath("$.kpis[3].value").value("1"))
+                .andExpect(jsonPath("$.kpis[7].key").value("completedNodeCount"))
+                .andExpect(jsonPath("$.kpis[7].value").value("3"))
+                .andExpect(jsonPath("$.kpis[8].key").value("completionRate"))
+                .andExpect(jsonPath("$.kpis[8].value").value("37.5"))
+                .andExpect(jsonPath("$.kpis[9].key").value("onTimeRate"))
+                .andExpect(jsonPath("$.kpis[9].value").value("12.5"))
+                .andExpect(jsonPath("$.kpis[10].key").value("overdueCompletionRate"))
+                .andExpect(jsonPath("$.kpis[10].value").value("22.22"));
+
+        mockMvc.perform(get("/api/project-cockpit/screen/execution")
+                        .cookie(sessionCookie)
+                        .param("dateFrom", "2026-03-01")
+                        .param("dateTo", "2026-03-31"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.incompleteKpis[0].key").value("incompleteHighRiskCount"))
+                .andExpect(jsonPath("$.incompleteKpis[0].value").value("3"))
+                .andExpect(jsonPath("$.incompleteKpis[1].key").value("incompleteMidRiskCount"))
+                .andExpect(jsonPath("$.incompleteKpis[1].value").value("1"))
+                .andExpect(jsonPath("$.incompleteKpis[2].key").value("incompleteMilestoneCount"))
+                .andExpect(jsonPath("$.incompleteKpis[2].value").value("1"))
+                .andExpect(jsonPath("$.incompleteKpis[3].key").value("incompleteMajorCount"))
+                .andExpect(jsonPath("$.incompleteKpis[3].value").value("2"))
+                .andExpect(jsonPath("$.incompleteKpis[4].key").value("incompleteImportantCount"))
+                .andExpect(jsonPath("$.incompleteKpis[4].value").value("1"))
+                .andExpect(jsonPath("$.milestoneKpis[0].key").value("milestoneOnTimeCount"))
+                .andExpect(jsonPath("$.milestoneKpis[0].value").value("1"))
+                .andExpect(jsonPath("$.milestoneKpis[1].key").value("milestoneOverdueCompletedCount"))
+                .andExpect(jsonPath("$.milestoneKpis[1].value").value("1"))
+                .andExpect(jsonPath("$.milestoneKpis[2].key").value("milestonePendingCount"))
+                .andExpect(jsonPath("$.milestoneKpis[2].value").value("1"))
+                .andExpect(jsonPath("$.milestoneKpis[3].key").value("milestoneCompletionRate"))
+                .andExpect(jsonPath("$.milestoneKpis[3].value").value("66.67"))
+                .andExpect(jsonPath("$.milestoneKpis[4].key").value("highRiskNodeCount"))
+                .andExpect(jsonPath("$.milestoneKpis[4].value").value("3"))
+                .andExpect(jsonPath("$.milestoneKpis[5].key").value("midRiskNodeCount"))
+                .andExpect(jsonPath("$.milestoneKpis[5].value").value("3"))
+                .andExpect(jsonPath("$.milestoneKpis[6].key").value("milestoneTotalCount"))
+                .andExpect(jsonPath("$.milestoneKpis[6].value").value("4"))
+                .andExpect(jsonPath("$.milestoneKpis[7].key").value("majorNodeCount"))
+                .andExpect(jsonPath("$.milestoneKpis[7].value").value("2"))
+                .andExpect(jsonPath("$.milestoneKpis[8].key").value("importantNodeCount"))
+                .andExpect(jsonPath("$.milestoneKpis[8].value").value("1"));
+
+        mockMvc.perform(get("/api/project-cockpit/screen/risk")
+                        .cookie(sessionCookie)
+                        .param("dateFrom", "2026-03-01")
+                        .param("dateTo", "2026-03-31"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.changeKpis[0].key").value("abnormalPendingNonGeneralCount"))
+                .andExpect(jsonPath("$.changeKpis[0].value").value("1"))
+                .andExpect(jsonPath("$.changeKpis[1].key").value("overdueIncompleteUnchangedNonGeneralCount"))
+                .andExpect(jsonPath("$.changeKpis[1].value").value("1"))
+                .andExpect(jsonPath("$.changeKpis[2].key").value("overdueIncompleteChangedNonGeneralCount"))
+                .andExpect(jsonPath("$.changeKpis[2].value").value("2"))
+                .andExpect(jsonPath("$.changeKpis[3].key").value("overdueCompletedUnchangedNonGeneralCount"))
+                .andExpect(jsonPath("$.changeKpis[3].value").value("1"))
+                .andExpect(jsonPath("$.changeKpis[4].key").value("abnormalRate"))
+                .andExpect(jsonPath("$.changeKpis[4].value").value("33.33"))
+                .andExpect(jsonPath("$.changeKpis[5].key").value("overdueRate"))
+                .andExpect(jsonPath("$.changeKpis[5].value").value("50.0"));
+    }
+
     private void seedModeledBatch() {
         seedBatch("MODELED");
     }
@@ -334,6 +444,225 @@ class ProjectCockpitResourceIT {
         );
     }
 
+    private void seedProject3MetricRows() {
+        insertNodeDetailed(
+                "metric-1",
+                "SYS-M1",
+                "方案评审",
+                "里程碑节点",
+                "2026-03-05",
+                "2026-03-05",
+                "按时完成",
+                "低",
+                0,
+                "normal",
+                "major-metrics",
+                "项目指标主线",
+                "program-metrics",
+                "项目群指标",
+                "sub-metrics-01",
+                "里程碑子项目",
+                "总体技术部",
+                "张总",
+                "软件一科",
+                "王工",
+                true,
+                true
+        );
+        insertNodeDetailed(
+                "metric-2",
+                "SYS-M1",
+                "初样交付",
+                "里程碑节点",
+                "2026-03-07",
+                "2026-03-10",
+                "超期已完成未变更",
+                "中",
+                3,
+                "change",
+                "major-metrics",
+                "项目指标主线",
+                "program-metrics",
+                "项目群指标",
+                "sub-metrics-01",
+                "里程碑子项目",
+                "总体技术部",
+                "张总",
+                "软件一科",
+                "王工",
+                true,
+                true
+        );
+        insertNodeDetailed(
+                "metric-3",
+                "SYS-M1",
+                "联试启动",
+                "里程碑节点",
+                "2026-03-12",
+                null,
+                "正常待完成",
+                "中",
+                0,
+                "coordination",
+                "major-metrics",
+                "项目指标主线",
+                "program-metrics",
+                "项目群指标",
+                "sub-metrics-01",
+                "里程碑子项目",
+                "总体技术部",
+                "张总",
+                "软件一科",
+                "王工",
+                true,
+                true
+        );
+        insertNodeDetailed(
+                "metric-4",
+                "SYS-M2",
+                "重大攻关",
+                "重大节点",
+                "2026-03-13",
+                null,
+                "不正常待变更",
+                "高",
+                5,
+                "technical",
+                "major-metrics",
+                "项目指标主线",
+                "program-metrics",
+                "项目群指标",
+                "sub-metrics-02",
+                "重大节点子项目",
+                "总体技术部",
+                "张总",
+                "总装二科",
+                "李工",
+                true,
+                false
+        );
+        insertNodeDetailed(
+                "metric-5",
+                "SYS-M2",
+                "关键器件到货",
+                "重大节点",
+                "2026-03-14",
+                null,
+                "超期未完成未变更",
+                "高",
+                7,
+                "supplier",
+                "major-metrics",
+                "项目指标主线",
+                "program-metrics",
+                "项目群指标",
+                "sub-metrics-02",
+                "重大节点子项目",
+                "总体技术部",
+                "张总",
+                "总装二科",
+                "李工",
+                true,
+                false
+        );
+        insertNodeDetailed(
+                "metric-6",
+                "SYS-M3",
+                "接口联调",
+                "重要节点",
+                "2026-03-15",
+                null,
+                "超期未完成已变更",
+                "中",
+                4,
+                "coordination",
+                "major-metrics",
+                "项目指标主线",
+                "program-metrics",
+                "项目群指标",
+                "sub-metrics-03",
+                "重要节点子项目",
+                "总体技术部",
+                "张总",
+                "测试三科",
+                "赵工",
+                true,
+                false
+        );
+        insertNodeDetailed(
+                "metric-7",
+                "SYS-M4",
+                "日报归档",
+                "一般节点",
+                "2026-03-16",
+                null,
+                "超期未完成未变更",
+                "低",
+                2,
+                "archive",
+                "major-metrics",
+                "项目指标主线",
+                "program-metrics",
+                "项目群指标",
+                "sub-metrics-04",
+                "一般节点子项目",
+                "总体技术部",
+                "张总",
+                "文档一科",
+                "钱工",
+                false,
+                false
+        );
+        insertNodeDetailed(
+                "metric-8",
+                "SYS-M1",
+                "正样评审",
+                "里程碑节点",
+                "2026-03-18",
+                null,
+                "超期未完成已变更",
+                "高",
+                6,
+                "change",
+                "major-metrics",
+                "项目指标主线",
+                "program-metrics",
+                "项目群指标",
+                "sub-metrics-01",
+                "里程碑子项目",
+                "总体技术部",
+                "张总",
+                "软件一科",
+                "王工",
+                true,
+                true
+        );
+        insertNodeDetailed(
+                "metric-9",
+                "SYS-M5",
+                "周期外完成",
+                "一般节点",
+                "2026-02-20",
+                "2026-03-06",
+                "超期已完成已变更",
+                "低",
+                10,
+                "change",
+                "major-metrics",
+                "项目指标主线",
+                "program-metrics",
+                "项目群指标",
+                "sub-metrics-05",
+                "周期外子项目",
+                "总体技术部",
+                "张总",
+                "综合保障科",
+                "周工",
+                false,
+                false
+        );
+    }
+
     private void insertNode(
             String nodeId,
             String subsystem,
@@ -354,6 +683,55 @@ class ProjectCockpitResourceIT {
             String majorOwnerLeader,
             String subOwnerDept,
             String subOwnerUser) {
+        insertNodeDetailed(
+                nodeId,
+                subsystem,
+                nodeTask,
+                "里程碑节点",
+                planDate,
+                actualDate,
+                completionStatus,
+                riskLevel,
+                delayDays,
+                delayReasonCategory,
+                majorProjectId,
+                majorProjectName,
+                programId,
+                programName,
+                subprojectId,
+                subprojectName,
+                majorOwnerDept,
+                majorOwnerLeader,
+                subOwnerDept,
+                subOwnerUser,
+                true,
+                true
+        );
+    }
+
+    private void insertNodeDetailed(
+            String nodeId,
+            String subsystem,
+            String nodeTask,
+            String nodeType,
+            String planDate,
+            String actualDate,
+            String completionStatus,
+            String riskLevel,
+            int delayDays,
+            String delayReasonCategory,
+            String majorProjectId,
+            String majorProjectName,
+            String programId,
+            String programName,
+            String subprojectId,
+            String subprojectName,
+            String majorOwnerDept,
+            String majorOwnerLeader,
+            String subOwnerDept,
+            String subOwnerUser,
+            boolean isKeyNode,
+            boolean isMilestone) {
         jdbcTemplate.update(
                 """
                 INSERT INTO biz_dwd_project_node_enriched (
@@ -368,7 +746,7 @@ class ProjectCockpitResourceIT {
                 "P-" + subprojectId,
                 subsystem,
                 nodeTask,
-                "里程碑",
+                nodeType,
                 subOwnerUser,
                 subOwnerDept,
                 "项目经理-" + subprojectId,
@@ -386,8 +764,8 @@ class ProjectCockpitResourceIT {
                 subprojectName,
                 delayDays > 0 ? "接口联调资源冲突" : "",
                 delayDays > 0 ? "影响联试窗口" : "",
-                Boolean.TRUE,
-                Boolean.TRUE,
+                isKeyNode,
+                isMilestone,
                 majorOwnerDept,
                 majorOwnerLeader,
                 subOwnerDept,

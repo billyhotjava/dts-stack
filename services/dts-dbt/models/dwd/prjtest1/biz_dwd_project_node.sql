@@ -49,41 +49,41 @@ SELECT
   NULLIF(btrim(o.delay_applied), '')       AS delay_applied,
 
   -- === 日期解析 ===
-  parse_date_safe(o.plan_date)             AS plan_date,
-  parse_date_safe(o.actual_date)           AS actual_date,
-  parse_date_safe(o.delay_expected_date)   AS delay_expected_date,
-  parse_date_safe(o.original_plan_date)    AS original_plan_date,
-  parse_date_safe(o.last_update_time)      AS last_update_time,
+  {{ parse_date_safe("o.plan_date") }}             AS plan_date,
+  {{ parse_date_safe("o.actual_date") }}           AS actual_date,
+  {{ parse_date_safe("o.delay_expected_date") }}   AS delay_expected_date,
+  {{ parse_date_safe("o.original_plan_date") }}    AS original_plan_date,
+  {{ parse_date_safe("o.last_update_time") }}      AS last_update_time,
 
   -- === 周数 ===
   CASE WHEN o.plan_week ~ '^\d+$' THEN o.plan_week::int END     AS plan_week,
   CASE WHEN o.actual_week ~ '^\d+$' THEN o.actual_week::int END AS actual_week,
 
   -- === 时间维度标签 ===
-  EXTRACT(YEAR FROM parse_date_safe(o.plan_date))::int            AS plan_year,
-  EXTRACT(QUARTER FROM parse_date_safe(o.plan_date))::int         AS plan_quarter,
-  to_char(parse_date_safe(o.plan_date), 'YYYY-MM')                AS plan_month,
-  EXTRACT(WEEK FROM parse_date_safe(o.plan_date))::int            AS plan_week_of_year,
-  to_char(parse_date_safe(o.plan_date), 'IYYY-"W"IW')            AS plan_iso_week,
+  EXTRACT(YEAR FROM {{ parse_date_safe("o.plan_date") }})::int            AS plan_year,
+  EXTRACT(QUARTER FROM {{ parse_date_safe("o.plan_date") }})::int         AS plan_quarter,
+  to_char({{ parse_date_safe("o.plan_date") }}, 'YYYY-MM')                AS plan_month,
+  EXTRACT(WEEK FROM {{ parse_date_safe("o.plan_date") }})::int            AS plan_week_of_year,
+  to_char({{ parse_date_safe("o.plan_date") }}, 'IYYY-"W"IW')            AS plan_iso_week,
 
-  EXTRACT(YEAR FROM parse_date_safe(o.actual_date))::int          AS actual_year,
-  to_char(parse_date_safe(o.actual_date), 'YYYY-MM')              AS actual_month,
+  EXTRACT(YEAR FROM {{ parse_date_safe("o.actual_date") }})::int          AS actual_year,
+  to_char({{ parse_date_safe("o.actual_date") }}, 'YYYY-MM')              AS actual_month,
 
   -- === 衍生字段 ===
   CASE
-    WHEN parse_date_safe(o.plan_date) IS NOT NULL
-     AND parse_date_safe(o.actual_date) IS NOT NULL
-    THEN (parse_date_safe(o.actual_date) - parse_date_safe(o.plan_date))::int
+    WHEN {{ parse_date_safe("o.plan_date") }} IS NOT NULL
+     AND {{ parse_date_safe("o.actual_date") }} IS NOT NULL
+    THEN ({{ parse_date_safe("o.actual_date") }} - {{ parse_date_safe("o.plan_date") }})::int
   END AS delay_days,
 
   CASE
-    WHEN parse_date_safe(o.plan_date) IS NOT NULL
-     AND parse_date_safe(o.plan_date) <= current_date
+    WHEN {{ parse_date_safe("o.plan_date") }} IS NOT NULL
+     AND {{ parse_date_safe("o.plan_date") }} <= current_date
     THEN true
     ELSE false
   END AS is_due,
 
-  {{ var('project_management_ods_table', 'project_subject_domain') | tojson }}::text AS source_table,
+  '{{ var("project_management_ods_table", "project_subject_domain") }}'::text AS source_table,
   now() AS etl_time
 
 FROM {{ ref('ods_project_subject_domain') }} o
