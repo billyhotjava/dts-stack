@@ -246,6 +246,34 @@ public class DbtRunResultService {
         }
     }
 
+    public DbtRunSummary loadLatestBuildSummary(int failureLimit) {
+        DbtRunSummary localSummary = loadLatestSummary(failureLimit);
+        if (!properties.isEnabled()) {
+            return localSummary;
+        }
+        String projectDir = resolveProjectDir();
+        if (!StringUtils.hasText(projectDir)) {
+            return localSummary;
+        }
+        String runResultsPath = projectDir + RUN_RESULTS_PATH;
+        String manifestPath = projectDir + MANIFEST_PATH;
+        DbtRunSummary externalSummary = externalRunLogService
+            .findLatestDbtBuildEvidence()
+            .map(snapshot -> buildSummaryFromEvidence(projectDir, runResultsPath, manifestPath, snapshot))
+            .orElse(null);
+
+        if (shouldPreferExternalBuildSummary(localSummary, externalSummary)) {
+            return externalSummary;
+        }
+        if (localSummary != null && localSummary.present() && isBuildLikeCommand(localSummary.command())) {
+            return localSummary;
+        }
+        if (externalSummary != null) {
+            return externalSummary;
+        }
+        return localSummary == null ? DbtRunSummary.empty("未发现可用构建记录") : localSummary;
+    }
+
     public List<DbtTestDetail> getTestDetails() {
         if (!properties.isEnabled()) {
             return Collections.emptyList();
@@ -381,6 +409,45 @@ public class DbtRunResultService {
             skipped,
             List.of(),
             List.of()
+        );
+    }
+
+    private boolean shouldPreferExternalBuildSummary(DbtRunSummary localSummary, DbtRunSummary externalSummary) {
+        if (externalSummary == null || !externalSummary.present()) {
+            return false;
+        }
+        if (localSummary == null || !localSummary.present()) {
+            return true;
+        }
+        if (!isBuildLikeCommand(localSummary.command())) {
+            return true;
+        }
+        Instant localGeneratedAt = parseInstant(localSummary.generatedAt());
+        Instant externalGeneratedAt = parseInstant(externalSummary.generatedAt());
+        if (externalGeneratedAt != null && localGeneratedAt == null) {
+            return true;
+        }
+        return externalGeneratedAt != null && localGeneratedAt != null && externalGeneratedAt.isAfter(localGeneratedAt);
+    }
+
+    private boolean isBuildLikeCommand(String command) {
+        if (!StringUtils.hasText(command)) {
+            return false;
+        }
+        String normalized = command.trim().toLowerCase(Locale.ROOT);
+        return (
+            "compile".equals(normalized) ||
+            "test".equals(normalized) ||
+            "build".equals(normalized) ||
+            normalized.startsWith("compile ") ||
+            normalized.startsWith("test ") ||
+            normalized.startsWith("build ") ||
+            normalized.startsWith("dbt compile") ||
+            normalized.startsWith("dbt test") ||
+            normalized.startsWith("dbt build") ||
+            normalized.contains(" dbt compile") ||
+            normalized.contains(" dbt test") ||
+            normalized.contains(" dbt build")
         );
     }
 

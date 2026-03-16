@@ -49,6 +49,7 @@ import { EmptyState } from "@/components/empty-state";
 import {
 	getDbtConfig,
 	listDbtRuns,
+	listAirflowJobRuns,
 	listSqlModels,
 	listSqlModelColumns,
 	getSqlModelContractImpact,
@@ -84,6 +85,13 @@ import RollbackImpactModal, { type RollbackRequest } from "@/components/rollback
 import BatchImportModal from "./BatchImportModal";
 import { useRouter } from "@/routes/hooks";
 import { buildArchivePayload, collectUnassignedModelIds } from "./sqlModelArchive.helpers";
+import {
+	createFailedBuildSummary,
+	createPendingBuildSummary,
+	describeBuildSummary,
+	inferBuildOperationFromCommand,
+	matchesTriggeredBuildSummary,
+} from "./sqlModelBuild.helpers";
 
 const { Text } = Typography;
 const { DirectoryTree } = Tree;
@@ -104,6 +112,7 @@ const syncTag = (synced?: boolean) => {
 
 const normalizeText = (value?: string) => String(value || "").trim();
 const normalizeUpper = (value?: string) => normalizeText(value).toUpperCase();
+const normalizeLower = (value?: string) => normalizeText(value).toLowerCase();
 
 const tryParseJsonObject = (raw: string | undefined) => {
 	const text = normalizeText(raw);
@@ -189,6 +198,8 @@ type DbtRunSummary = {
 	failed?: number;
 	skipped?: number;
 	failures?: DbtRunFailure[];
+	dagRunId?: string;
+	dagId?: string;
 };
 
 type DbtSyncStatus = {
@@ -244,6 +255,7 @@ type ProjectSpace = {
 };
 
 type DagRun = {
+	dag_id?: string;
 	dag_run_id?: string;
 	state?: string;
 	execution_date?: string;
@@ -508,19 +520,19 @@ export default function SqlModelingPage() {
 		}
 	}, [form]);
 
-	const loadSyncStatus = useCallback(async () => {
+	const loadSyncStatus = useCallback(async (selector?: string) => {
 		try {
-			const resp = (await getDbtSyncStatus()) as DbtSyncStatus;
+			const resp = (await getDbtSyncStatus(selector ? { models: selector } : undefined)) as DbtSyncStatus;
 			setDbtSyncStatus(resp || null);
 			// Seed per-operation result from latest run on initial load
 			const latest = resp?.latestRun || null;
 			if (latest?.present) {
-				const cmd = normalizeText(latest.command).toLowerCase();
-				if (cmd === "compile") {
+				const operation = inferBuildOperationFromCommand(latest.command);
+				if (operation === "compile") {
 					setCompileResult((prev) => prev || latest);
-				} else if (cmd === "test") {
+				} else if (operation === "test") {
 					setTestResult((prev) => prev || latest);
-				} else if (cmd === "run" || cmd === "build") {
+				} else if (operation === "run" || operation === "build") {
 					setRunResult((prev) => prev || latest);
 				}
 			}
@@ -658,14 +670,14 @@ export default function SqlModelingPage() {
 	}, []);
 
 	// FE-004: Load execution log from Airflow
-	const loadExecLog = useCallback(async (dagRunId?: string) => {
+	const loadExecLog = useCallback(async (dagRunId?: string, dagId?: string) => {
 		if (!dagRunId) {
 			setExecLog("");
 			return;
 		}
 		setExecLogLoading(true);
 		try {
-			const resp = await getDbtRunLog(dagRunId);
+			const resp = await getDbtRunLog(dagRunId, dagId ? { dagId } : undefined);
 			setExecLog(typeof resp === "string" ? resp : (resp as any)?.log || (resp as any)?.content || JSON.stringify(resp, null, 2));
 		} catch {
 			setExecLog("日志加载失败，请稍后重试。");
@@ -848,6 +860,59 @@ export default function SqlModelingPage() {
 		setRunOpen(true);
 	};
 
+	const waitForBuildResult = useCallback(
+		async (
+			operation: "compile" | "test" | "docs",
+			selector: string,
+			dagId: string | undefined,
+			dagRunId: string | undefined,
+			baselineRun: DbtRunSummary | null,
+		) => {
+			let lastStatus: DbtSyncStatus | null = null;
+			let lastSummary: DbtRunSummary | null = null;
+			let lastDagState = "";
+			for (let attempt = 0; attempt < 30; attempt += 1) {
+				if (dagId && dagRunId) {
+					try {
+						const runsPayload = (await listAirflowJobRuns(dagId, 20)) as { dag_runs?: DagRun[] };
+						const dagRuns = Array.isArray(runsPayload?.dag_runs) ? runsPayload.dag_runs : [];
+						const matchedRun = dagRuns.find((run) => {
+							const runId = normalizeText(run?.dag_run_id);
+							return runId && runId === normalizeText(dagRunId);
+						});
+						lastDagState = normalizeLower(matchedRun?.state);
+					} catch {
+						lastDagState = "";
+					}
+				}
+				try {
+					lastStatus = (await getDbtSyncStatus(selector ? { models: selector } : undefined)) as DbtSyncStatus;
+					lastSummary = lastStatus?.latestRun || null;
+				} catch {
+					lastStatus = null;
+					lastSummary = null;
+				}
+
+				if (
+					matchesTriggeredBuildSummary(lastSummary, {
+						operation,
+						selector,
+						baselineGeneratedAt: baselineRun?.generatedAt,
+						baselineInvocationId: baselineRun?.invocationId,
+					})
+				) {
+					return { syncStatus: lastStatus, latestRun: lastSummary, dagState: lastDagState, timedOut: false };
+				}
+				if (lastDagState === "failed") {
+					return { syncStatus: lastStatus, latestRun: lastSummary, dagState: lastDagState, timedOut: false };
+				}
+				await new Promise((resolve) => setTimeout(resolve, 2000));
+			}
+			return { syncStatus: lastStatus, latestRun: lastSummary, dagState: lastDagState, timedOut: true };
+		},
+		[],
+	);
+
 	const submitRun = async () => {
 		setRunSubmitting(true);
 		try {
@@ -964,6 +1029,8 @@ export default function SqlModelingPage() {
 		setBuildTriggering(operation);
 		try {
 			const selector = normalizeText(activeModel?.dagSelector) || (activeModel?.name ? `model:${activeModel.name}` : "all");
+			const baselineStatus = (await getDbtSyncStatus(selector ? { models: selector } : undefined)) as DbtSyncStatus;
+			const baselineRun = baselineStatus?.latestRun || null;
 			const payload = {
 				models: selector,
 				target: normalizeText(dbtConfig?.config?.targetName) || "dev",
@@ -976,26 +1043,75 @@ export default function SqlModelingPage() {
 			} else {
 				triggerResp = await triggerDbtDocs(payload);
 			}
-			toast.success(`dbt ${operation} 已提交`);
-			setExecLog(""); // clear previous log
-			await Promise.all([loadRuns(), loadSyncStatus()]);
-			// Store result in the appropriate state based on operation type
-			const freshStatus = (await getDbtSyncStatus()) as DbtSyncStatus;
-			const freshRun = freshStatus?.latestRun || null;
-			// Attach dagRunId from trigger response if available
-			const dagRunId = triggerResp?.dag_run_id || triggerResp?.dagRunId || "";
-			if (freshRun && dagRunId) {
-				(freshRun as any).dagRunId = dagRunId;
-			}
+			const dagRunId = normalizeText(triggerResp?.dag_run_id || triggerResp?.dagRunId);
+			const dagId = normalizeText(triggerResp?.dag_id || triggerResp?.dagId);
+			const pendingRun = {
+				...createPendingBuildSummary(operation, selector),
+				dagRunId,
+				dagId,
+			} as DbtRunSummary;
+			toast.success(`dbt ${operation} 已提交，正在等待结果`);
+			setExecLog("");
 			if (operation === "compile") {
-				setCompileResult(freshRun);
+				setCompileResult(pendingRun);
 				setBottomTab("compile");
 			} else if (operation === "test") {
-				setTestResult(freshRun);
+				setTestResult(pendingRun);
 				setBottomTab("test");
 			} else {
-				setRunResult(freshRun);
+				setRunResult(pendingRun);
 				setBottomTab("execlog");
+			}
+			const settled = await waitForBuildResult(operation, selector, dagId || undefined, dagRunId || undefined, baselineRun);
+			if (settled.syncStatus) {
+				setDbtSyncStatus(settled.syncStatus);
+			} else {
+				await loadSyncStatus(selector);
+			}
+			await loadRuns();
+
+			let resolvedRun = settled.latestRun || null;
+			if (resolvedRun) {
+				resolvedRun = {
+					...resolvedRun,
+					dagRunId: dagRunId || resolvedRun.dagRunId,
+					dagId: dagId || resolvedRun.dagId,
+				};
+			}
+			if (!resolvedRun && settled.dagState === "failed") {
+				resolvedRun = {
+					...createFailedBuildSummary(operation, selector, `dbt ${operation} 失败，请查看执行日志`),
+					dagRunId,
+					dagId,
+				} as DbtRunSummary;
+			}
+			if (operation === "compile") {
+				setCompileResult(resolvedRun || pendingRun);
+			} else if (operation === "test") {
+				setTestResult(resolvedRun || pendingRun);
+			} else {
+				setRunResult(resolvedRun || pendingRun);
+			}
+
+			const finalStatus = normalizeUpper(resolvedRun?.status);
+			if (settled.dagState === "failed") {
+				if (dagRunId) {
+					await loadExecLog(dagRunId, dagId || undefined);
+					setBottomTab("execlog");
+				}
+				toast.error(`dbt ${operation} 失败`);
+				return;
+			}
+			if (finalStatus === "SUCCESS") {
+				toast.success(`dbt ${operation} 已完成`);
+				return;
+			}
+			if (finalStatus === "SKIPPED") {
+				toast.warning(`dbt ${operation} 返回 SKIPPED，请重新执行后再提交上线`);
+				return;
+			}
+			if (settled.timedOut) {
+				toast.warning(`dbt ${operation} 仍在运行，请稍后刷新结果`);
 			}
 		} catch (err: any) {
 			toast.error(err?.message || `dbt ${operation} 触发失败`);
@@ -1681,7 +1797,7 @@ export default function SqlModelingPage() {
 						onClick={() => {
 							if (row.dag_run_id) {
 								setBottomTab("execlog");
-								loadExecLog(row.dag_run_id);
+								loadExecLog(row.dag_run_id, normalizeText(row?.dag_id) || undefined);
 							}
 						}}
 					>
@@ -1960,7 +2076,7 @@ export default function SqlModelingPage() {
 						type="primary"
 						icon={<RocketOutlined />}
 						onClick={openRun}
-						disabled={!configEnabled || !workspaceOk}
+						disabled={!configEnabled || !workspaceOk || buildTriggering != null}
 					>
 						提交上线
 					</Button>
@@ -2350,6 +2466,10 @@ export default function SqlModelingPage() {
 									const crFailures = Array.isArray(cr?.failures) ? cr.failures : [];
 									const crStatus = normalizeUpper(cr?.status) || "UNKNOWN";
 									const crColor = crStatus === "SUCCESS" ? "green" : crStatus === "FAILED" ? "red" : "gold";
+									const crAlert = describeBuildSummary(cr, {
+										operationLabel: "编译",
+										fallbackMessage: "请先执行编译操作",
+									});
 									if (!cr) {
 										return (
 											<div className="p-4">
@@ -2381,7 +2501,7 @@ export default function SqlModelingPage() {
 													))}
 												</div>
 											) : (
-												<Alert type="success" showIcon message="编译通过，未发现失败节点" />
+												<Alert type={crAlert.type} showIcon message={crAlert.message} />
 											)}
 										</div>
 									);
@@ -2395,6 +2515,10 @@ export default function SqlModelingPage() {
 									const trFailures = Array.isArray(tr?.failures) ? tr.failures : [];
 									const trStatus = normalizeUpper(tr?.status) || "UNKNOWN";
 									const trColor = trStatus === "SUCCESS" ? "green" : trStatus === "FAILED" ? "red" : "gold";
+									const trAlert = describeBuildSummary(tr, {
+										operationLabel: "测试",
+										fallbackMessage: "请先执行测试操作",
+									});
 									if (!tr) {
 										return (
 											<div className="p-4">
@@ -2483,7 +2607,7 @@ export default function SqlModelingPage() {
 													))}
 												</div>
 											) : (
-												<Alert type="success" showIcon message="所有测试通过" />
+												<Alert type={trAlert.type} showIcon message={trAlert.message} />
 											)}
 										</div>
 									);
@@ -2520,7 +2644,7 @@ export default function SqlModelingPage() {
 													icon={<FileTextOutlined />}
 													loading={execLogLoading}
 													disabled={!dagRunId}
-													onClick={() => loadExecLog(dagRunId)}
+													onClick={() => loadExecLog(dagRunId, rr.dagId)}
 												>
 													加载日志
 												</Button>

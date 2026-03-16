@@ -1,6 +1,7 @@
 package com.yuzhi.dts.platform.web.rest;
 
 import com.yuzhi.dts.platform.config.AirflowProperties;
+import com.yuzhi.dts.platform.config.Constants;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.etl.AirflowClient;
 import com.yuzhi.dts.platform.service.etl.DbtConfigService;
@@ -139,8 +140,12 @@ public class EtlResource {
     }
 
     @GetMapping("/dbt/sync/status")
-    public ApiResponse<DbtArtifactSyncState.DbtArtifactSyncStatus> getDbtSyncStatus() {
-        DbtRunResultService.DbtRunSummary latestRun = dbtRunResultService.loadLatestSummary(20);
+    public ApiResponse<DbtArtifactSyncState.DbtArtifactSyncStatus> getDbtSyncStatus(
+        @RequestParam(required = false) String models,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        syncDbtBuildRuns(models, activeDept);
+        DbtRunResultService.DbtRunSummary latestRun = dbtRunResultService.loadLatestBuildSummary(20);
         if (latestRun != null) {
             dbtArtifactSyncState.recordLatestRun(latestRun);
         }
@@ -240,9 +245,11 @@ public class EtlResource {
 
     @PostMapping("/dbt/release-gate/check")
     public ApiResponse<DbtReleaseGateService.DbtReleaseGateResult> checkDbtReleaseGate(
-        @RequestBody(required = false) DbtReleaseGateRequest request
+        @RequestBody(required = false) DbtReleaseGateRequest request,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
         String selector = request == null ? null : request.models();
+        syncDbtBuildRuns(selector, activeDept);
         DbtReleaseGateService.DbtReleaseGateResult result = dbtReleaseGateService.evaluate(
             selector,
             request == null ? null : request.gitRef(),
@@ -413,13 +420,42 @@ public class EtlResource {
             conf.put("buildInvocationId", request.buildInvocationId().trim());
         }
         Map<String, Object> payload = Map.of("conf", conf, "logical_date", Instant.now().toString());
-        Map<String, Object> result = airflowClient.triggerDag(dagId, payload).orElse(Map.of("status", "queued"));
+        Map<String, Object> result = new LinkedHashMap<>(airflowClient.triggerDag(dagId, payload).orElse(Map.of("status", "queued")));
+        result.putIfAbsent("dagId", dagId);
         try {
             externalRunLogService.recordAirflowRun(ExternalRunLogService.ENTRY_DBT, dagId, result, conf, activeDept);
         } catch (RuntimeException ex) {
             // best-effort sync
         }
         return ApiResponses.ok(result);
+    }
+
+    private void syncDbtBuildRuns(String selector, String activeDept) {
+        if (!airflowProperties.isEnabled()) {
+            return;
+        }
+        String dagSelector = resolveDagSelector(null, selector);
+        String dagId = dbtDagService.ensureDagForSelector(dagSelector);
+        if (!StringUtils.hasText(dagId)) {
+            dagId = airflowProperties.getDagId();
+        }
+        if (!StringUtils.hasText(dagId)) {
+            return;
+        }
+        Map<String, Object> payload = airflowClient.listDagRuns(dagId, 10).orElse(Map.of());
+        if (payload.isEmpty()) {
+            return;
+        }
+        try {
+            externalRunLogService.syncAirflowRuns(
+                ExternalRunLogService.ENTRY_DBT,
+                dagId,
+                payload,
+                StringUtils.hasText(activeDept) ? activeDept : Constants.SYSTEM
+            );
+        } catch (RuntimeException ex) {
+            // best-effort sync
+        }
     }
 
     private String resolveSelector(DbtRunRequest request, boolean required) {

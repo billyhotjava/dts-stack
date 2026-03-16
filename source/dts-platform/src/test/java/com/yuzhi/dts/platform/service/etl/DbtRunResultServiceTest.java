@@ -274,4 +274,92 @@ class DbtRunResultServiceTest {
         assertThat(summary.success()).isEqualTo(2);
         assertThat(summary.failed()).isZero();
     }
+
+    @Test
+    void shouldPreferNewerExternalBuildEvidenceOverOlderSkippedLocalRunResults() throws Exception {
+        Path targetDir = Files.createDirectories(tempDir.resolve("target"));
+        Files.writeString(
+            targetDir.resolve("run_results.json"),
+            """
+            {
+              "metadata": {
+                "generated_at": "2026-03-16T05:00:00Z",
+                "invocation_id": "inv-old"
+              },
+              "args": {
+                "invocation_command": "dbt compile --select tag:project-management --target dev",
+                "which": "compile"
+              },
+              "results": []
+            }
+            """
+        );
+        Files.writeString(
+            targetDir.resolve("manifest.json"),
+            """
+            {
+              "nodes": {
+                "model.demo.alpha": {
+                  "name": "alpha",
+                  "resource_type": "model",
+                  "path": "models/alpha.sql",
+                  "tags": ["project-management"]
+                },
+                "model.demo.beta": {
+                  "name": "beta",
+                  "resource_type": "model",
+                  "path": "models/beta.sql",
+                  "tags": ["project-management"]
+                }
+              }
+            }
+            """
+        );
+
+        DbtProperties properties = new DbtProperties();
+        properties.setEnabled(true);
+        properties.setProjectDir(tempDir.toString());
+
+        DbtConfigService configService = mock(DbtConfigService.class);
+        when(configService.loadConfig()).thenReturn(
+            new DbtConfigService.DbtConfigView(
+                true,
+                new DbtConfigService.DbtWorkspaceConfig(true, tempDir.toString(), "/tmp/profiles", "dts", "dev", null, null, null, java.util.Map.of()),
+                null,
+                null,
+                null
+            )
+        );
+
+        ExternalRunLogService externalRunLogService = mock(ExternalRunLogService.class);
+        when(externalRunLogService.findLatestDbtBuildEvidence()).thenReturn(
+            Optional.of(
+                new ExternalRunLogService.DbtBuildEvidenceSnapshot(
+                    "dag-run-4",
+                    "SUCCESS",
+                    Instant.parse("2026-03-16T05:09:00Z"),
+                    Instant.parse("2026-03-16T05:10:00Z"),
+                    "dbt compile --select tag:project-management --target dev",
+                    1,
+                    "external-run-log"
+                )
+            )
+        );
+
+        DbtRunResultService service = new DbtRunResultService(
+            new ObjectMapper(),
+            properties,
+            configService,
+            externalRunLogService
+        );
+
+        DbtRunResultService.DbtRunSummary summary = service.loadLatestBuildSummary(10);
+
+        assertThat(summary.present()).isTrue();
+        assertThat(summary.invocationId()).isEqualTo("dag-run-4");
+        assertThat(summary.status()).isEqualTo("SUCCESS");
+        assertThat(summary.total()).isEqualTo(2);
+        assertThat(summary.success()).isEqualTo(2);
+        assertThat(summary.skipped()).isZero();
+    }
 }

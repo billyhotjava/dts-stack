@@ -86,7 +86,7 @@ export const renameDbtFile = (data: { oldPath: string; newPath: string }) =>
 	api.put({ url: "/etl/dbt/files/rename", data });
 export const listDbtModels = () => api.get({ url: "/etl/dbt/models" });
 export const syncDbtModels = () => api.post({ url: "/etl/dbt/models/sync" });
-export const getDbtSyncStatus = () => api.get({ url: "/etl/dbt/sync/status" });
+export const getDbtSyncStatus = (params?: { models?: string }) => api.get({ url: "/etl/dbt/sync/status", params });
 export const listDbtRuns = (limit = 20) => api.get({ url: "/etl/dbt/runs", params: { limit } });
 export const triggerDbtRun = (data: any) => api.post({ url: "/etl/dbt/run", data });
 export const triggerDbtCompile = (data?: any) => api.post({ url: "/etl/dbt/compile", data });

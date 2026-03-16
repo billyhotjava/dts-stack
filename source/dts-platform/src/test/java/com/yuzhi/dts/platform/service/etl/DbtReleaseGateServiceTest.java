@@ -13,7 +13,7 @@ class DbtReleaseGateServiceTest {
     @Test
     void shouldNotBlockWhenGitMetadataMissingAndGateDoesNotRequireGit() {
         DbtRunResultService runResultService = mock(DbtRunResultService.class);
-        when(runResultService.loadLatestSummary(20)).thenReturn(successfulSummary("dbt build --select model:test_model"));
+        when(runResultService.loadLatestBuildSummary(20)).thenReturn(successfulSummary("dbt build --select model:test_model"));
 
         DbtReleaseGateService service = new DbtReleaseGateService(runResultService, false);
 
@@ -28,7 +28,7 @@ class DbtReleaseGateServiceTest {
     @Test
     void shouldBlockWhenGitMetadataMissingAndGateRequiresGit() {
         DbtRunResultService runResultService = mock(DbtRunResultService.class);
-        when(runResultService.loadLatestSummary(20)).thenReturn(successfulSummary("dbt build --select model:test_model"));
+        when(runResultService.loadLatestBuildSummary(20)).thenReturn(successfulSummary("dbt build --select model:test_model"));
 
         DbtReleaseGateService service = new DbtReleaseGateService(runResultService, true);
 
@@ -41,7 +41,7 @@ class DbtReleaseGateServiceTest {
     @Test
     void shouldStillBlockOnFailedBuildWithoutGitRequirements() {
         DbtRunResultService runResultService = mock(DbtRunResultService.class);
-        when(runResultService.loadLatestSummary(20)).thenReturn(
+        when(runResultService.loadLatestBuildSummary(20)).thenReturn(
             new DbtRunResultService.DbtRunSummary(
                 true,
                 "/tmp/dbt",

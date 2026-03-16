@@ -36,7 +36,7 @@ public class DbtReleaseGateService {
         evaluateGitBranch(normalizedGitRef, strict, blockers, warnings);
         evaluateCommitSha(normalizedCommitSha, strict, blockers, warnings);
 
-        DbtRunResultService.DbtRunSummary latestRun = dbtRunResultService.loadLatestSummary(20);
+        DbtRunResultService.DbtRunSummary latestRun = dbtRunResultService.loadLatestBuildSummary(20);
         BuildEvidence evidence = null;
         if (latestRun == null || !latestRun.present()) {
             blockers.add("未发现可用构建记录，请先执行 dbt compile/test/build");
