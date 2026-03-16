@@ -45,6 +45,10 @@ Package mode (deploy from dts-pack ZIP):
 Plan targeting:
   --plan-id <uuid>    Import into an existing Plan (skip Plan creation)
 
+Execution flags:
+  --run               After import, trigger dbt run to build tables
+  --run-selector TAG  dbt selector for run (default: uses PLAN_TAGS or 'all')
+
 Pass-through flags (forwarded to dts-plan and dts-dbt-import):
   --dry-run           Validate only, no API calls
   --insecure          Skip TLS cert verification
@@ -73,6 +77,10 @@ PLAN_CONTENT="${PLAN_CONTENT:-}"
 MANIFEST_PATH="${MANIFEST_PATH:-}"
 PLAN_ID="${PLAN_ID:-}"
 
+# Execution flags
+RUN_AFTER_IMPORT=false
+RUN_SELECTOR=""
+
 # Pass-through flags
 PT_DRY_RUN=false
 PT_INSECURE=false
@@ -95,6 +103,8 @@ while [[ $# -gt 0 ]]; do
     --scope)          PLAN_SCOPE="$2"; shift 2 ;;
     --tags)           PLAN_TAGS="$2"; shift 2 ;;
     --content)        PLAN_CONTENT="$2"; shift 2 ;;
+    --run)            RUN_AFTER_IMPORT=true; shift ;;
+    --run-selector)   RUN_AFTER_IMPORT=true; RUN_SELECTOR="$2"; shift 2 ;;
     --dry-run)        PT_DRY_RUN=true; shift ;;
     --insecure)       PT_INSECURE=true; shift ;;
     --skip-existing)  PT_SKIP_EXISTING=true; shift ;;
@@ -206,6 +216,7 @@ info "  tags      : ${PLAN_TAGS:-(none)}"
 info "  content   : ${PLAN_CONTENT:-(none)}"
 info "  manifest  : $MANIFEST_PATH"
 info "  api_base  : $API_BASE"
+info "  run_after : $RUN_AFTER_IMPORT"
 info "  dry_run   : $PT_DRY_RUN"
 info "  insecure  : $PT_INSECURE"
 info ""
@@ -254,7 +265,11 @@ info ""
 # ---------------------------------------------------------------------------
 # Step 2: Import dbt models
 # ---------------------------------------------------------------------------
-info "Step 2/2: Importing dbt models..."
+if $RUN_AFTER_IMPORT; then
+  info "Step 2/3: Importing dbt models..."
+else
+  info "Step 2/2: Importing dbt models..."
+fi
 
 IMPORT_ARGS=(
   --plan-id "$PLAN_ID"
@@ -269,6 +284,56 @@ fi
 IMPORT_ARGS+=("${IMPORT_PT_FLAGS[@]}")
 
 "${SCRIPT_DIR}/dts-dbt-import" "${IMPORT_ARGS[@]}"
+
+# ---------------------------------------------------------------------------
+# Step 3: Trigger dbt run + sync (if --run)
+# ---------------------------------------------------------------------------
+if $RUN_AFTER_IMPORT && ! $PT_DRY_RUN; then
+  info ""
+  info "Step 3/3: Triggering dbt run to build tables..."
+
+  # Resolve selector: --run-selector > PLAN_TAGS > "all"
+  _SELECTOR="${RUN_SELECTOR:-}"
+  if [[ -z "$_SELECTOR" && -n "${PLAN_TAGS:-}" ]]; then
+    # Use first tag as selector
+    _SELECTOR="tag:$(echo "$PLAN_TAGS" | cut -d',' -f1 | tr -d ' ')"
+  fi
+  if [[ -z "$_SELECTOR" ]]; then
+    _SELECTOR="all"
+  fi
+
+  _CURL_FLAGS=(-s -S)
+  $PT_INSECURE && _CURL_FLAGS+=(-k)
+
+  info "  selector: $_SELECTOR"
+
+  # Trigger dbt run
+  _RUN_RESP=$(curl "${_CURL_FLAGS[@]}" -X POST "${API_BASE}/etl/dbt/run" \
+    -H "Authorization: Bearer ${TOKEN}" \
+    -H "Content-Type: application/json" \
+    -H "X-Active-Dept: ${ACTIVE_DEPT:-}" \
+    -d "{\"operation\":\"run\",\"models\":\"${_SELECTOR}\"}" 2>&1) || true
+
+  if echo "$_RUN_RESP" | grep -q '"status"'; then
+    info "  dbt run triggered: $(echo "$_RUN_RESP" | grep -o '"dagId":"[^"]*"' || echo 'queued')"
+    $PT_SHOW_RESPONSE && info "  response: $_RUN_RESP"
+  else
+    warn "  dbt run trigger may have failed: $_RUN_RESP"
+  fi
+
+  # Trigger sync
+  info "  Syncing models to catalog..."
+  _SYNC_RESP=$(curl "${_CURL_FLAGS[@]}" -X POST "${API_BASE}/etl/dbt/models/sync" \
+    -H "Authorization: Bearer ${TOKEN}" \
+    -H "Content-Type: application/json" 2>&1) || true
+
+  if echo "$_SYNC_RESP" | grep -q '"data"'; then
+    info "  Sync completed"
+    $PT_SHOW_RESPONSE && info "  response: $_SYNC_RESP"
+  else
+    warn "  Sync may have failed: $_SYNC_RESP"
+  fi
+fi
 
 # ---------------------------------------------------------------------------
 # Done

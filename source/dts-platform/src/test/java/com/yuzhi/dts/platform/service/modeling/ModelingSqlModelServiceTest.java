@@ -26,10 +26,12 @@ import com.yuzhi.dts.platform.repository.service.InfraDataSourceRepository;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.catalog.CatalogColumnSyncService;
 import com.yuzhi.dts.platform.service.etl.DbtConfigService;
+import com.yuzhi.dts.platform.service.infra.AdminInfraClient;
 import com.yuzhi.dts.platform.service.security.OrganizationVisibilityService;
 import java.nio.file.Path;
 import java.nio.file.Files;
 import java.nio.file.StandardOpenOption;
+import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -45,6 +47,7 @@ import org.junit.jupiter.api.io.TempDir;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
@@ -61,6 +64,9 @@ class ModelingSqlModelServiceTest {
 
     @Mock
     private InfraDataSourceRepository dataSourceRepository;
+
+    @Mock
+    private AdminInfraClient adminInfraClient;
 
     @Mock
     private OrganizationVisibilityService organizationVisibilityService;
@@ -86,6 +92,9 @@ class ModelingSqlModelServiceTest {
     @Mock
     private AuditService auditService;
 
+    @Spy
+    private ObjectMapper objectMapper = new ObjectMapper();
+
     @InjectMocks
     private ModelingSqlModelService service;
 
@@ -108,6 +117,7 @@ class ModelingSqlModelServiceTest {
         lenient().when(security.resolveActiveDept(anyString())).thenReturn("D1");
         lenient().when(security.hasInstituteScope()).thenReturn(false);
         lenient().when(organizationVisibilityService.isRoot(anyString())).thenReturn(false);
+        lenient().when(adminInfraClient.fetchDefaultDataLake()).thenReturn(Optional.empty());
         lenient().when(planRepo.findById(planId)).thenReturn(Optional.of(plan));
         lenient().when(columnSyncService.parseCsv(any(Path.class))).thenReturn(List.of());
         lenient().when(repo.findFirstByPlanIdAndNameIgnoreCase(any(UUID.class), anyString())).thenReturn(Optional.empty());
@@ -429,6 +439,60 @@ class ModelingSqlModelServiceTest {
     }
 
     @Test
+    void batchImportFromArchive_shouldAcceptAdminManagedDefaultDataLakeAsSource() throws Exception {
+        UUID adminLakeId = UUID.randomUUID();
+        when(dataSourceRepository.findById(adminLakeId)).thenReturn(Optional.empty());
+        when(adminInfraClient.fetchDefaultDataLake()).thenReturn(Optional.of(adminLake(adminLakeId)));
+
+        Path archive = createArchive(
+            "models.tsv",
+            """
+            name\tlayer\tsql_path\tsource_data_source_id\talias\tschema_name\tmaterialized\ttags\tstatus\tenabled\towner_dept\tdescription\tcsv_path
+            biz_dwd_project_node\tDWD\tbiz_dwd_project_node.sql\t\t\tpublic\ttable\tproject-management\tDRAFT\ttrue\tD1\t\t
+            """,
+            "biz_dwd_project_node.sql",
+            "select 1 as metric"
+        );
+
+        ModelingSqlModelService.BatchImportResult result = service.batchImportFromArchive(
+            planId,
+            adminLakeId,
+            false,
+            archive,
+            "D1"
+        );
+
+        assertThat(result.total()).isEqualTo(1);
+        assertThat(result.imported()).isEqualTo(1);
+        assertThat(result.failed()).isZero();
+        assertThat(storedModels).singleElement().satisfies(model -> assertThat(model.getSourceDataSourceId()).isEqualTo(adminLakeId));
+    }
+
+    @Test
+    void list_shouldResolveAdminManagedDefaultDataLakeSourceName() {
+        UUID adminLakeId = UUID.randomUUID();
+        when(dataSourceRepository.findById(adminLakeId)).thenReturn(Optional.empty());
+        when(adminInfraClient.fetchDefaultDataLake()).thenReturn(Optional.of(adminLake(adminLakeId)));
+
+        ModelingSqlModel model = new ModelingSqlModel();
+        model.setId(UUID.randomUUID());
+        model.setName("biz_ads_major_project_overview");
+        model.setLayer("ADS");
+        model.setSourceDataSourceId(adminLakeId);
+        model.setTags("project-management,biz,project-cockpit,ads");
+        model.setDagSelector("tag:project-management");
+        model.setSqlText("select 1");
+        model.setEnabled(Boolean.TRUE);
+        storedModels.add(model);
+
+        List<ModelingSqlModelService.SqlModelDto> models = service.list(null, "major_project", "D1");
+
+        assertThat(models).hasSize(1);
+        assertThat(models.get(0).sourceDataSourceName()).isEqualTo("默认数据湖");
+        assertThat(models.get(0).sourceSystem()).isEqualTo("admin-data-lake");
+    }
+
+    @Test
     void importFromFiles_shouldFailWhenWorkspaceSqlCannotBeWritten() throws Exception {
         UUID sourceId = UUID.randomUUID();
         when(dataSourceRepository.findById(sourceId)).thenReturn(Optional.of(source(sourceId, "ODS-Lake", "postgres")));
@@ -486,6 +550,30 @@ class ModelingSqlModelServiceTest {
         source.setStatus("ACTIVE");
         source.setProps(new ObjectMapper().createObjectNode().put("sourceSystem", "ERP").toString());
         return source;
+    }
+
+    private AdminInfraClient.AdminDataLakeConfig adminLake(UUID id) {
+        AdminInfraClient.AdminDataLakeConfig lake = new AdminInfraClient.AdminDataLakeConfig();
+        setField(lake, "id", id);
+        setField(lake, "name", "默认数据湖");
+        setField(lake, "type", "DATA_LAKE");
+        setField(lake, "jdbcUrl", "jdbc:postgresql://localhost:5432/biadmin");
+        setField(lake, "username", "biadmin");
+        setField(lake, "password", "secret");
+        setField(lake, "status", "ACTIVE");
+        setField(lake, "defaulted", Boolean.TRUE);
+        setField(lake, "lastVerifiedAt", Instant.now());
+        return lake;
+    }
+
+    private void setField(Object target, String name, Object value) {
+        try {
+            java.lang.reflect.Field field = target.getClass().getDeclaredField(name);
+            field.setAccessible(true);
+            field.set(target, value);
+        } catch (ReflectiveOperationException ex) {
+            throw new IllegalStateException("Failed to set field " + name, ex);
+        }
     }
 
     private Path createArchive(String... files) throws Exception {
