@@ -224,11 +224,10 @@ public class DbtDagService {
         String tagLabel = sanitizeTag(sourceKey, "dbt");
         String layerTag = sanitizeTag(layerGroup, "dwh");
 
-        // 从配置读取 Docker 网络和权限设置
         String dockerNetwork = airflowProperties.getDockerNetwork();
         boolean dockerPrivileged = airflowProperties.isDockerPrivileged();
         String networkMode = StringUtils.hasText(dockerNetwork) ? dockerNetwork : "dts-core";
-        String privilegedStr = dockerPrivileged ? "True" : "False";
+        String privilegedStr = dockerPrivileged ? "true" : "false";
 
         return """
             from __future__ import annotations
@@ -238,34 +237,67 @@ public class DbtDagService {
 
             from airflow import DAG
             from airflow.operators.bash import BashOperator
-            from airflow.providers.docker.operators.docker import DockerOperator
-            from docker.types import Mount
 
             DBT_IMAGE = os.getenv("DBT_IMAGE", "dts-dbt:1.10.0")
             DBT_PROJECT_DIR = os.getenv("DBT_PROJECT_DIR", "%s")
             DBT_PROFILES_DIR = os.getenv("DBT_PROFILES_DIR", "%s")
             DBT_PROJECT_MOUNT = os.getenv("DBT_PROJECT_MOUNT", "/opt/dbt")
             DBT_PROFILES_MOUNT = os.getenv("DBT_PROFILES_MOUNT", "/root/.dbt")
+            DBT_THREADS = os.getenv("DBT_THREADS", "1")
+            DBT_DOCKER_NETWORK = os.getenv("DBT_DOCKER_NETWORK", "%s")
+            DBT_DOCKER_PRIVILEGED = os.getenv("DBT_DOCKER_PRIVILEGED", "%s")
             DTS_PLATFORM_BASE_URL = os.getenv("DTS_PLATFORM_BASE_URL", "http://dts-platform:8081")
             DTS_PLATFORM_SYNC_PATH = os.getenv("DTS_PLATFORM_SYNC_PATH", "/api/etl/dbt/models/sync")
             DTS_PLATFORM_SERVICE = os.getenv("DTS_PLATFORM_SERVICE", "dts-airflow")
 
 
             def build_command():
-                operation = "{{ dag_run.conf.get('operation', 'run') }}"
-                selector = "{{ dag_run.conf.get('models', '%s') }}"
-                target = "{{ dag_run.conf.get('target', '%s') }}"
-                operation = (operation or "run").lower()
-                common_args = ["--project-dir", DBT_PROJECT_MOUNT, "--profiles-dir", DBT_PROFILES_MOUNT, "--target", target]
-                if operation == "docs":
-                    return ["docs", "generate"] + common_args
-                if operation == "compile":
-                    return ["compile"] + common_args + ["--select", selector]
-                if operation == "test":
-                    return ["test"] + common_args + ["--select", selector]
-                if operation == "build":
-                    return ["build"] + common_args + ["--select", selector]
-                return ["run"] + common_args + ["--select", selector]
+                return (
+                    "set -euo pipefail\\n"
+                    f"DBT_IMAGE=\\"{DBT_IMAGE}\\"\\n"
+                    f"DBT_PROJECT_DIR=\\"{DBT_PROJECT_DIR}\\"\\n"
+                    f"DBT_PROFILES_DIR=\\"{DBT_PROFILES_DIR}\\"\\n"
+                    f"DBT_PROJECT_MOUNT=\\"{DBT_PROJECT_MOUNT}\\"\\n"
+                    f"DBT_PROFILES_MOUNT=\\"{DBT_PROFILES_MOUNT}\\"\\n"
+                    f"DBT_THREADS_DEFAULT=\\"{DBT_THREADS}\\"\\n"
+                    f"DBT_DOCKER_NETWORK=\\"{DBT_DOCKER_NETWORK}\\"\\n"
+                    f"DBT_DOCKER_PRIVILEGED=\\"{DBT_DOCKER_PRIVILEGED}\\"\\n"
+                    "operation=\\"{{ dag_run.conf.get('operation', 'run') | lower }}\\"\\n"
+                    "selector=\\"{{ dag_run.conf.get('models', '%s') }}\\"\\n"
+                    "target=\\"{{ dag_run.conf.get('target', '%s') }}\\"\\n"
+                    "threads=\\"{{ dag_run.conf.get('threads', '') }}\\"\\n"
+                    "selector_trim=$(echo \\"$selector\\" | tr -d '[:space:]')\\n"
+                    "selector_norm=$(echo \\"$selector\\" | tr '[:upper:]' '[:lower:]')\\n"
+                    "threads_trim=$(echo \\"$threads\\" | tr -d '[:space:]')\\n"
+                    "if [ -z \\"$threads_trim\\" ]; then\\n"
+                    "  threads_trim=\\"$DBT_THREADS_DEFAULT\\"\\n"
+                    "fi\\n"
+                    "docker_cmd=(docker run --rm --network \\"$DBT_DOCKER_NETWORK\\")\\n"
+                    "if [ \\"$DBT_DOCKER_PRIVILEGED\\" = \\"true\\" ]; then\\n"
+                    "  docker_cmd+=(--privileged)\\n"
+                    "fi\\n"
+                    "docker_cmd+=(\\n"
+                    "  -v \\"$DBT_PROJECT_DIR:$DBT_PROJECT_MOUNT\\"\\n"
+                    "  -v \\"$DBT_PROFILES_DIR:$DBT_PROFILES_MOUNT\\"\\n"
+                    "  -e DBT_USE_EXPERIMENTAL_PARSER=false\\n"
+                    "  -e DBT_PROJECT_MOUNT=\\"$DBT_PROJECT_MOUNT\\"\\n"
+                    "  -e DBT_PROFILES_MOUNT=\\"$DBT_PROFILES_MOUNT\\"\\n"
+                    "  \\"$DBT_IMAGE\\"\\n"
+                    ")\\n"
+                    "if [ \\"$operation\\" = \\"docs\\" ]; then\\n"
+                    "  docker_cmd+=(docs generate --project-dir \\"$DBT_PROJECT_MOUNT\\" --profiles-dir \\"$DBT_PROFILES_MOUNT\\" --target \\"$target\\")\\n"
+                    "else\\n"
+                    "  docker_cmd+=(\\"$operation\\" --project-dir \\"$DBT_PROJECT_MOUNT\\" --profiles-dir \\"$DBT_PROFILES_MOUNT\\" --target \\"$target\\")\\n"
+                    "  if [ -n \\"$threads_trim\\" ]; then\\n"
+                    "    docker_cmd+=(--threads \\"$threads_trim\\")\\n"
+                    "  fi\\n"
+                    "  if [ -n \\"$selector_trim\\" ] && [ \\"$selector_norm\\" != \\"all\\" ]; then\\n"
+                    "    docker_cmd+=(--select \\"$selector\\")\\n"
+                    "  fi\\n"
+                    "fi\\n"
+                    "echo Running: ${docker_cmd[*]}\\n"
+                    "\\"${docker_cmd[@]}\\"\\n"
+                )
 
 
             with DAG(
@@ -275,22 +307,9 @@ public class DbtDagService {
                 catchup=False,
                 tags=["dbt", "transform", "%s", "%s"],
             ) as dag:
-                dbt_run = DockerOperator(
+                dbt_run = BashOperator(
                     task_id="dbt_run",
-                    image=DBT_IMAGE,
-                    api_version="auto",
-                    auto_remove=True,
-                    docker_url="unix://var/run/docker.sock",
-                    network_mode="%s",
-                    command=build_command(),
-                    mount_tmp_dir=False,
-                    mounts=[
-                        Mount(source=DBT_PROJECT_DIR, target=DBT_PROJECT_MOUNT, type="bind"),
-                        Mount(source=DBT_PROFILES_DIR, target=DBT_PROFILES_MOUNT, type="bind"),
-                    ],
-                    environment={"DBT_USE_EXPERIMENTAL_PARSER": "false"},
-                    tty=True,
-                    privileged=%s,
+                    bash_command=build_command(),
                 )
 
                 sync_models = BashOperator(
@@ -306,7 +325,17 @@ public class DbtDagService {
                 )
 
                 dbt_run >> sync_models
-            """.formatted(fallbackProject, fallbackProfiles, selector, fallbackTarget, dagId, layerTag, tagLabel, networkMode, privilegedStr);
+            """.formatted(
+            fallbackProject,
+            fallbackProfiles,
+            networkMode,
+            privilegedStr,
+            selector,
+            fallbackTarget,
+            dagId,
+            layerTag,
+            tagLabel
+        );
     }
 
     private Map<String, Object> parseProps(String raw) {

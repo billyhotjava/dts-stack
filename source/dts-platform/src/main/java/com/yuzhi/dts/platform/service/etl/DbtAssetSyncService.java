@@ -235,7 +235,7 @@ public class DbtAssetSyncService {
                 link.setRelationType("DBT");
                 link.setUpstreamAssetType("DATASET");
                 link.setDownstreamAssetType("MODEL");
-                link.setDirection("UPSTREAM_TO_DOWNSTREAM");
+                link.setDirection("FORWARD");
                 link.setProjectName(resolveDbtProjectName(model.uniqueId));
                 lineageRepository.save(link);
                 created++;

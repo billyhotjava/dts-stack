@@ -361,7 +361,7 @@ public class ExternalRunLogService {
             return null;
         }
         StringBuilder command = new StringBuilder("dbt ").append(operation.trim().toLowerCase(Locale.ROOT));
-        if (StringUtils.hasText(models)) {
+        if (StringUtils.hasText(models) && !"all".equalsIgnoreCase(models.trim())) {
             command.append(" --select ").append(models.trim());
         }
         if (StringUtils.hasText(target)) {

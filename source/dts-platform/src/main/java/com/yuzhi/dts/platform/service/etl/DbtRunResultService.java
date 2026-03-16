@@ -13,6 +13,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -360,7 +361,7 @@ public class DbtRunResultService {
         ExternalRunLogService.DbtBuildEvidenceSnapshot snapshot
     ) {
         String status = normalizeStatus(snapshot.status());
-        int total = Math.max(0, snapshot.selectedCount());
+        int total = resolveFallbackTotal(manifestPath, snapshot);
         int success = "SUCCESS".equals(status) ? total : 0;
         int failed = "FAILED".equals(status) ? Math.max(total, 1) : 0;
         int skipped = "SKIPPED".equals(status) ? total : 0;
@@ -381,6 +382,76 @@ public class DbtRunResultService {
             List.of(),
             List.of()
         );
+    }
+
+    private int resolveFallbackTotal(String manifestPath, ExternalRunLogService.DbtBuildEvidenceSnapshot snapshot) {
+        int selectedCount = Math.max(0, snapshot.selectedCount());
+        if (selectedCount > 1 || !StringUtils.hasText(snapshot.command())) {
+            return selectedCount;
+        }
+        int manifestCount = countManifestNodesForCommand(manifestPath, snapshot.command());
+        return manifestCount > 0 ? manifestCount : selectedCount;
+    }
+
+    private int countManifestNodesForCommand(String manifestPath, String command) {
+        if (!StringUtils.hasText(command)) {
+            return 0;
+        }
+        String normalized = command.trim().toLowerCase(Locale.ROOT);
+        String resourceType = normalized.startsWith("dbt test") ? "test" : "model";
+        String selector = extractSelector(command);
+        int count = 0;
+        for (ManifestNode node : readManifestNodes(manifestPath).values()) {
+            if (!resourceType.equalsIgnoreCase(node.resourceType())) {
+                continue;
+            }
+            if (selectorMatches(node, selector)) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    private boolean selectorMatches(ManifestNode node, String selector) {
+        if (!StringUtils.hasText(selector)) {
+            return true;
+        }
+        String normalizedSelector = selector.trim();
+        if (normalizedSelector.isEmpty()) {
+            return true;
+        }
+        for (String token : normalizedSelector.split(",")) {
+            String current = token.trim();
+            if (current.isEmpty()) {
+                continue;
+            }
+            String lower = current.toLowerCase(Locale.ROOT);
+            if (lower.startsWith("tag:")) {
+                String tag = current.substring(4).trim().toLowerCase(Locale.ROOT);
+                if (!tag.isEmpty() && node.tags().contains(tag)) {
+                    return true;
+                }
+                continue;
+            }
+            if (current.equalsIgnoreCase(node.name()) || current.equalsIgnoreCase(node.uniqueId())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private String extractSelector(String command) {
+        if (!StringUtils.hasText(command)) {
+            return null;
+        }
+        String[] parts = command.trim().split("\\s+");
+        for (int i = 0; i < parts.length - 1; i++) {
+            String part = parts[i];
+            if ("--select".equals(part) || "--models".equals(part)) {
+                return parts[i + 1];
+            }
+        }
+        return null;
     }
 
     private Map<String, ManifestNode> readManifestNodes(String manifestPath) {
@@ -418,6 +489,7 @@ public class DbtRunResultService {
                         testedModel = text(depList.get(0));
                     }
                 }
+                Set<String> tags = Set.copyOf(stringList(node.get("tags")));
                 out.put(
                     uniqueId,
                     new ManifestNode(
@@ -428,7 +500,8 @@ public class DbtRunResultService {
                         testType,
                         testedColumn,
                         testedModel,
-                        text(node.get("compiled_code"))
+                        text(node.get("compiled_code")),
+                        tags
                     )
                 );
             }
@@ -631,6 +704,20 @@ public class DbtRunResultService {
         return out;
     }
 
+    private List<String> stringList(Object raw) {
+        if (!(raw instanceof List<?> list)) {
+            return List.of();
+        }
+        List<String> out = new ArrayList<>();
+        for (Object item : list) {
+            String value = text(item);
+            if (StringUtils.hasText(value)) {
+                out.add(value.trim().toLowerCase(Locale.ROOT));
+            }
+        }
+        return out;
+    }
+
     private String text(Object value) {
         if (value == null) {
             return null;
@@ -658,7 +745,8 @@ public class DbtRunResultService {
         String testType,
         String testedColumn,
         String testedModel,
-        String compiledCode
+        String compiledCode,
+        Set<String> tags
     ) {}
 
     public record DbtTestDetail(
