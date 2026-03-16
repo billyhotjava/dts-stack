@@ -854,15 +854,15 @@ export const SqlWorkbenchExperimental = () => {
 						)}
 
 						{/* 内容 */}
-						<ScrollArea className="flex-1">
+						<div className="flex-1 overflow-auto relative">
 							{activeTab === "results" ? (
 								!result ? (
 									<div className="h-full flex items-center justify-center text-muted-foreground text-sm p-8">
 										选择数据源，输入 SQL 语句，点击"运行"
 									</div>
 								) : preview?.headers?.length ? (
-									<table className="w-full text-xs text-left border-collapse">
-										<thead className="bg-muted/50 sticky top-0">
+									<table className="text-xs text-left border-collapse">
+										<thead className="bg-muted/50 sticky top-0 z-10">
 											<tr>
 												<th className="px-2 py-1.5 font-mono text-muted-foreground border-r w-10 text-center">#</th>
 												{preview.headers.map((header) => (
@@ -873,11 +873,11 @@ export const SqlWorkbenchExperimental = () => {
 										<tbody className="divide-y font-mono">
 											{preview.rows.map((row, idx) => (
 												<tr key={idx} className="hover:bg-muted/30">
-													<td className="px-2 py-1 text-muted-foreground bg-muted/30 border-r text-center">
+													<td className="px-2 py-1 text-muted-foreground bg-muted/30 border-r text-center whitespace-nowrap">
 														{pageOffset + idx + 1}
 													</td>
 													{preview.headers.map((header) => (
-														<td key={header} className="px-2 py-1 border-r">
+														<td key={header} className="px-2 py-1 border-r whitespace-nowrap max-w-xs truncate" title={row[header] != null ? String(row[header]) : undefined}>
 															{row[header] == null ? (
 																<span className="text-muted-foreground italic">NULL</span>
 															) : (
@@ -908,7 +908,7 @@ export const SqlWorkbenchExperimental = () => {
 									)}
 								</div>
 							)}
-						</ScrollArea>
+						</div>
 					</div>
 				</main>
 			</div>

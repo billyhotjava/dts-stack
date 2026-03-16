@@ -943,7 +943,7 @@ export default function SqlModelingPage() {
 						title: "质量门禁告警",
 						content: (
 							<div style={{ fontSize: 12 }}>
-								<p>检测到以下告警，是否继续提交上线？</p>
+								<p>检测到以下告警，是否继续提交变更？</p>
 								<ul style={{ paddingLeft: 18, margin: 0 }}>
 									{(gate.warnings || []).map((item, idx) => (
 										<li key={`${item}-${idx}`}>{item}</li>
@@ -989,7 +989,7 @@ export default function SqlModelingPage() {
 						title: "发布门禁告警",
 						content: (
 							<div style={{ fontSize: 12 }}>
-								<p>检测到以下告警，是否继续提交上线？</p>
+								<p>检测到以下告警，是否继续提交变更？</p>
 								<ul style={{ paddingLeft: 18, margin: 0 }}>
 									{(releaseGate.warnings || []).map((item, idx) => (
 										<li key={`${item}-${idx}`}>{item}</li>
@@ -1107,7 +1107,7 @@ export default function SqlModelingPage() {
 				return;
 			}
 			if (finalStatus === "SKIPPED") {
-				toast.warning(`dbt ${operation} 返回 SKIPPED，请重新执行后再提交上线`);
+				toast.warning(`dbt ${operation} 返回 SKIPPED，请重新执行后再提交变更`);
 				return;
 			}
 			if (settled.timedOut) {
@@ -1496,7 +1496,7 @@ export default function SqlModelingPage() {
 							<ol style={{ margin: 0, paddingLeft: 20, fontSize: 12 }}>
 								<li>检查模型列表中的命名与分层是否符合预期。</li>
 								<li>进入 dbt 文件浏览器按业务口径微调 SQL 并运行 dbt。</li>
-								<li>完成验证后回到逻辑建模执行“提交上线”。</li>
+								<li>完成验证后回到逻辑建模执行“提交变更”。</li>
 							</ol>
 						</div>
 					</div>
@@ -1742,7 +1742,7 @@ export default function SqlModelingPage() {
 				title: `${layer}_层 (${list.length})`,
 				key: `layer-${layer}`,
 				children: list.map((model, idx) => ({
-					title: model.name || model.alias || "未命名模型",
+					title: <span className="flex items-center gap-1"><span className="truncate">{model.name || model.alias || "未命名模型"}</span>{model.status && model.status !== "DRAFT" && <span className={`inline-block rounded px-1 text-[10px] leading-4 ${model.status === "PUBLISHED" ? "bg-green-500/15 text-green-600" : model.status === "TESTED" ? "bg-orange-500/15 text-orange-600" : "bg-blue-500/15 text-blue-600"}`}>{model.status === "PUBLISHED" ? "已发布" : model.status === "TESTED" ? "已测试" : model.status === "COMMITTED" ? "已提交" : model.status}</span>}</span>,
 					key: `model:${resolveModelKey(model, `${layer}-${idx}`)}`,
 					isLeaf: true,
 				})),
@@ -2071,14 +2071,14 @@ export default function SqlModelingPage() {
 							回退 <DownOutlined />
 						</Button>
 					</Dropdown>
-					{/* 提交上线 */}
+					{/* 提交变更 */}
 					<Button
 						type="primary"
 						icon={<RocketOutlined />}
 						onClick={openRun}
 						disabled={!configEnabled || !workspaceOk || buildTriggering != null}
 					>
-						提交上线
+						提交变更
 					</Button>
 					{/* 配置按钮 */}
 					<Tooltip title="工作区配置">
@@ -2810,7 +2810,7 @@ export default function SqlModelingPage() {
 											<li>先在数据集成完成 ODS 表接入或源库映射。</li>
 											<li>在本页选择项目空间和 ODS 映射后执行一键生成。</li>
 											<li>系统自动产出 dwd_ / dws_ / ads_ 模型模板。</li>
-											<li>在 dbt 文件浏览器微调并运行，最后提交上线。</li>
+											<li>在 dbt 文件浏览器微调并运行，最后提交变更。</li>
 										</ol>
 										<Space className="mt-4" size={8}>
 											<Button size="small" onClick={() => router.push("/foundation/data-sources")}>
@@ -2888,7 +2888,7 @@ export default function SqlModelingPage() {
 
 			<Modal
 				open={runOpen}
-				title="提交上线 (dbt run)"
+				title="提交变更 (dbt run)"
 				onCancel={() => setRunOpen(false)}
 				onOk={submitRun}
 				okText="提交"

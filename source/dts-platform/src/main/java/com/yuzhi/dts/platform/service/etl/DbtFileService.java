@@ -1,6 +1,8 @@
 package com.yuzhi.dts.platform.service.etl;
 
 import com.yuzhi.dts.platform.config.DbtProperties;
+import com.yuzhi.dts.platform.domain.modeling.ModelingSqlModel;
+import com.yuzhi.dts.platform.repository.modeling.ModelingSqlModelRepository;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.FileVisitResult;
@@ -40,10 +42,12 @@ public class DbtFileService {
     private static final long MAX_FILE_SIZE = 1024 * 1024; // 1 MB
     private final DbtProperties properties;
     private final DbtConfigService configService;
+    private final ModelingSqlModelRepository sqlModelRepository;
 
-    public DbtFileService(DbtProperties properties, DbtConfigService configService) {
+    public DbtFileService(DbtProperties properties, DbtConfigService configService, ModelingSqlModelRepository sqlModelRepository) {
         this.properties = properties;
         this.configService = configService;
+        this.sqlModelRepository = sqlModelRepository;
     }
 
     // ── Directory Tree ────────────────────────────────────────
@@ -125,6 +129,22 @@ public class DbtFileService {
             LOG.info("[dbt-files] saved: {}", relativePath);
         } catch (IOException ex) {
             throw new IllegalStateException("保存文件失败: " + ex.getMessage(), ex);
+        }
+        // Sync SQL content back to modeling_sql_model and reset status to DRAFT
+        if (relativePath.startsWith("models/") && relativePath.endsWith(".sql")) {
+            try {
+                List<ModelingSqlModel> models = sqlModelRepository.findByModelPathIn(List.of(relativePath));
+                for (ModelingSqlModel model : models) {
+                    model.setSqlText(content);
+                    model.setStatus("DRAFT");
+                }
+                if (!models.isEmpty()) {
+                    sqlModelRepository.saveAll(models);
+                    LOG.info("[dbt-files] Synced SQL content back to {} model(s), status reset to DRAFT", models.size());
+                }
+            } catch (RuntimeException ex) {
+                LOG.warn("[dbt-files] Failed to sync SQL back to model record: {}", ex.getMessage());
+            }
         }
     }
 

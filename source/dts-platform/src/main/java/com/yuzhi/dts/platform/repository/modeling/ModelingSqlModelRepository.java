@@ -14,4 +14,6 @@ public interface ModelingSqlModelRepository extends JpaRepository<ModelingSqlMod
     Optional<ModelingSqlModel> findFirstByPlanIdAndNameIgnoreCase(UUID planId, String name);
 
     List<ModelingSqlModel> findBySourceDataSourceId(UUID sourceDataSourceId);
+
+    List<ModelingSqlModel> findByModelPathIn(List<String> modelPaths);
 }
