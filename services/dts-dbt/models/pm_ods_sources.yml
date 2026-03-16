@@ -5,4 +5,5 @@ sources:
     description: "项目管理 ODS 源表"
     tables:
       - name: "project_subject_domain"
-        description: "项目主体域原始数据"
+        identifier: "ods_project_subject_domain"
+        description: "项目主体域原始数据（物理表名通过 identifier 映射）"

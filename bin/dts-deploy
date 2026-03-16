@@ -330,6 +330,15 @@ if [[ -n "$_PACKAGE_TMPDIR" ]]; then
         info "  synced: macros/$_FNAME"
       done
     fi
+    # Copy seeds
+    if [[ -d "$_PKG_ROOT/seeds" ]]; then
+      mkdir -p "$_DBT_HOST_DIR/seeds"
+      find "$_PKG_ROOT/seeds" -type f 2>/dev/null | while read -r sf; do
+        _FNAME="$(basename "$sf")"
+        cp -f "$sf" "$_DBT_HOST_DIR/seeds/$_FNAME"
+        info "  synced: seeds/$_FNAME"
+      done
+    fi
   fi
 fi
 
