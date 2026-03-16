@@ -332,10 +332,13 @@ if [[ -n "$_PACKAGE_TMPDIR" ]]; then
     fi
     # Copy seeds
     if [[ -d "$_PKG_ROOT/seeds" ]]; then
-      mkdir -p "$_DBT_HOST_DIR/seeds"
+      mkdir -p "$_DBT_HOST_DIR/seeds" 2>/dev/null || true
+      chmod 755 "$_DBT_HOST_DIR/seeds" 2>/dev/null || true
       find "$_PKG_ROOT/seeds" -type f 2>/dev/null | while read -r sf; do
         _FNAME="$(basename "$sf")"
-        cp -f "$sf" "$_DBT_HOST_DIR/seeds/$_FNAME"
+        cp -f "$sf" "$_DBT_HOST_DIR/seeds/$_FNAME" 2>/dev/null || \
+          sudo cp -f "$sf" "$_DBT_HOST_DIR/seeds/$_FNAME" 2>/dev/null || \
+          warn "  failed to copy seeds/$_FNAME (permission denied)"
         info "  synced: seeds/$_FNAME"
       done
     fi
