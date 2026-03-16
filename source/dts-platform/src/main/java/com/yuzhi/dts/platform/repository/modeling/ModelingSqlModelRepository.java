@@ -16,4 +16,10 @@ public interface ModelingSqlModelRepository extends JpaRepository<ModelingSqlMod
     List<ModelingSqlModel> findBySourceDataSourceId(UUID sourceDataSourceId);
 
     List<ModelingSqlModel> findByModelPathIn(List<String> modelPaths);
+
+    @org.springframework.data.jpa.repository.Query("SELECT m FROM ModelingSqlModel m WHERE lower(m.tags) LIKE lower(concat('%', :tag, '%'))")
+    List<ModelingSqlModel> findByTagsContainingIgnoreCase(@org.springframework.data.repository.query.Param("tag") String tag);
+
+    @org.springframework.data.jpa.repository.Query("SELECT m FROM ModelingSqlModel m WHERE upper(m.layer) = upper(:layer)")
+    List<ModelingSqlModel> findByLayerIgnoreCase(@org.springframework.data.repository.query.Param("layer") String layer);
 }

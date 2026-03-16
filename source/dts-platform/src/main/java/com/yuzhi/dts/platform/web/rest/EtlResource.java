@@ -580,18 +580,10 @@ public class EtlResource {
         } else {
             // For tag-based selectors like "tag:ods_crm", match models with that tag
             String tagValue = normalizedSelector.replace("tag:", "").trim();
-            models = sqlModelRepository.findAll().stream()
-                .filter(m -> {
-                    String tags = m.getTags();
-                    return tags != null && tags.toLowerCase().contains(tagValue.toLowerCase());
-                })
-                .toList();
+            models = sqlModelRepository.findByTagsContainingIgnoreCase(tagValue);
             if (models.isEmpty()) {
                 // Fallback: match by layer from selector
-                String layer = tagValue.toUpperCase();
-                models = sqlModelRepository.findAll().stream()
-                    .filter(m -> layer.equals(m.getLayer()))
-                    .toList();
+                models = sqlModelRepository.findByLayerIgnoreCase(tagValue);
             }
         }
         int updated = 0;
@@ -599,7 +591,7 @@ public class EtlResource {
             String current = model.getStatus();
             boolean shouldUpgrade = switch (newStatus) {
                 case "TESTED" -> "COMMITTED".equals(current) || "DRAFT".equals(current) || current == null;
-                case "PUBLISHED" -> !"PUBLISHED".equals(current);
+                case "PUBLISHED" -> "TESTED".equals(current) || "COMMITTED".equals(current);
                 default -> false;
             };
             if (shouldUpgrade) {

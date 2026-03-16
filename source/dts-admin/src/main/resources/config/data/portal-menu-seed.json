@@ -132,7 +132,7 @@
           "path": "dbt-files",
           "icon": "solar:folder-2-bold-duotone",
           "titleKey": "sys.nav.portal.studioDbtFiles",
-          "title": "dbt 项目文件",
+          "title": "项目文件浏览",
           "externalLink": "/modeling/dbt-files"
         }
       ]

@@ -2017,30 +2017,6 @@ export default function SqlModelingPage() {
 				</div>
 				<div className="flex items-center gap-2">
 					{/* 同步按钮 */}
-					<Tooltip title="同步模型到资产目录">
-						<Button
-							icon={<SyncOutlined spin={syncingModels} />}
-							onClick={handleSyncModels}
-							loading={syncingModels}
-							disabled={!configEnabled || !workspaceOk}
-						>
-							同步
-						</Button>
-					</Tooltip>
-					<Button
-						onClick={() => triggerBuildOperation("compile")}
-						loading={buildTriggering === "compile"}
-						disabled={!configEnabled || !workspaceOk}
-					>
-						编译
-					</Button>
-					<Button
-						onClick={() => triggerBuildOperation("test")}
-						loading={buildTriggering === "test"}
-						disabled={!configEnabled || !workspaceOk}
-					>
-						测试
-					</Button>
 					<Tooltip title="生成 dbt docs 产物">
 						<Button
 							onClick={() => triggerBuildOperation("docs")}
@@ -2075,15 +2051,6 @@ export default function SqlModelingPage() {
 							回退 <DownOutlined />
 						</Button>
 					</Dropdown>
-					{/* 提交变更 */}
-					<Button
-						type="primary"
-						icon={<RocketOutlined />}
-						onClick={openRun}
-						disabled={!configEnabled || !workspaceOk || buildTriggering != null}
-					>
-						提交变更
-					</Button>
 					{/* 配置按钮 */}
 					<Tooltip title="工作区配置">
 						<Button icon={<SettingOutlined />} onClick={() => setConfigOpen(true)} />
@@ -2120,7 +2087,7 @@ export default function SqlModelingPage() {
 				</div>
 			)}
 			<div className="flex flex-1 min-h-0 overflow-hidden">
-				<div className="w-64 border-r border-border bg-muted p-4">
+				<div className="w-64 min-w-[256px] max-w-[256px] border-r border-border bg-muted p-4 overflow-x-hidden [&_.ant-tree-title]:block [&_.ant-tree-title]:truncate [&_.ant-tree-title]:max-w-[180px]">
 					<div className="mb-3 text-xs font-bold uppercase text-muted-foreground">项目目录</div>
 					<Input
 						size="small"
