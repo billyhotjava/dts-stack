@@ -116,7 +116,7 @@ export default function ExecutionView({ locale }: { locale: Locale }) {
 			<ExecutionKpiPanel {...snapshot} />
 
 			<div className="project-cockpit__two-column">
-				<TrendPanel title="项目甘特图" subtitle="重大项目、子项目与关键节点统一显示执行时间带。">
+				<TrendPanel title="项目甘特图">
 					{loading ? (
 						<div className="project-cockpit__loading-card"><Spinner size="lg" /></div>
 					) : (
@@ -124,7 +124,7 @@ export default function ExecutionView({ locale }: { locale: Locale }) {
 					)}
 				</TrendPanel>
 
-				<TrendPanel title="里程碑与近期节点" subtitle="先看即将到期和正在拖期的关键工作。">
+				<TrendPanel title="里程碑与近期节点">
 					<div className="project-cockpit__milestone-list">
 						{(data?.milestones ?? []).map((item, index) => (
 							<div key={`${item.name}-${index}`} className="project-cockpit__milestone-item">
@@ -142,7 +142,7 @@ export default function ExecutionView({ locale }: { locale: Locale }) {
 			</div>
 
 			<div className="project-cockpit__two-column">
-				<TrendPanel title="责任科室负载" subtitle="结合在途任务量识别执行压力科室。">
+				<TrendPanel title="责任科室负载">
 					<div className="project-cockpit__chart-block">
 						<ChartRenderer
 							display="row"
@@ -155,7 +155,7 @@ export default function ExecutionView({ locale }: { locale: Locale }) {
 						/>
 					</div>
 				</TrendPanel>
-				<TrendPanel title="节点类型分布" subtitle="当前筛选范围内各阶段/节点类型数量。">
+				<TrendPanel title="节点类型分布">
 					<div className="project-cockpit__chart-block">
 						<ChartRenderer
 							display="pie"
@@ -171,7 +171,7 @@ export default function ExecutionView({ locale }: { locale: Locale }) {
 				</TrendPanel>
 			</div>
 
-			<TrendPanel title="到期 / 超期列表" subtitle="给科长和信息科做逐项跟踪的执行明细。">
+			<TrendPanel title="到期 / 超期列表">
 				<DataTable cols={dueTable.cols} rows={dueTable.rows} pageSize={8} />
 			</TrendPanel>
 

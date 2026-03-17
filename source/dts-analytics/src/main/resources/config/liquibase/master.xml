@@ -39,4 +39,5 @@
     <include file="config/liquibase/changelog/0032_explore_sessions.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/0033_report_factory.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/0034_card_type.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0035_screen_pages_carousel.xml" relativeToChangelogFile="false"/>
 </databaseChangeLog>

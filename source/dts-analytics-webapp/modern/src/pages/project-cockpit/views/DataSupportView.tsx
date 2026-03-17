@@ -116,7 +116,7 @@ export default function DataSupportView({ locale }: { locale: Locale }) {
 			</div>
 
 			<div className="project-cockpit__support-grid">
-				<DataSupportCard title="批次与覆盖情况" subtitle="正式项目主体域批次、覆盖率和异常行都会在这里收口。">
+				<DataSupportCard title="批次与覆盖情况">
 					{loading ? (
 						<div className="project-cockpit__loading-card"><Spinner size="lg" /></div>
 					) : (
@@ -149,7 +149,7 @@ export default function DataSupportView({ locale }: { locale: Locale }) {
 					)}
 				</DataSupportCard>
 
-				<DataSupportCard title="待补与修复入口" subtitle="领导看数异常时，信息科先从这里确认主数据接口占位、数仓维表映射、分类和待补清单。">
+				<DataSupportCard title="待补与修复入口">
 					<div className="project-cockpit__checklist-list">
 						{(data?.missingChecklist ?? []).map((item, index) => (
 							<div key={`${item.id}-${index}`} className="project-cockpit__checklist-item">
@@ -162,11 +162,11 @@ export default function DataSupportView({ locale }: { locale: Locale }) {
 				</DataSupportCard>
 			</div>
 
-			<DataSupportCard title="指标口径说明" subtitle="每个关键指标都要能回溯到当前正式口径；现阶段以数仓模型为准，并保留主数据接口占位。">
+			<DataSupportCard title="指标口径说明">
 				<DataTable cols={glossaryTable.cols} rows={glossaryTable.rows} pageSize={8} />
 			</DataSupportCard>
 
-			<DataSupportCard title="正式数据来源" subtitle="当前项目看板以 DTS 项目主体域数仓为正式来源，同时保留主数据接口占位。">
+			<DataSupportCard title="正式数据来源">
 				<div className="project-cockpit__source-list">
 					{(data?.dataSources ?? []).map((item, index) => (
 						<div key={`${item.name}-${index}`} className="project-cockpit__source-item">
@@ -178,7 +178,7 @@ export default function DataSupportView({ locale }: { locale: Locale }) {
 			</DataSupportCard>
 
 			{data?.dataState?.message ? (
-				<DataSupportCard title="当前数据状态" subtitle="这里说明当前页面读取的是不是正式建模数据。">
+				<DataSupportCard title="当前数据状态">
 					<div className="project-cockpit__checklist-list">
 						<div className="project-cockpit__checklist-item">
 							<strong>状态说明</strong>

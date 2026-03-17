@@ -124,26 +124,23 @@ export default function RiskAttributionView({ locale }: { locale: Locale }) {
 					label="高风险节点"
 					value={String((data?.riskBreakdown ?? []).find((item) => item.name === "高")?.value ?? 0)}
 					unit="个"
-					hint="最高优先级异常集合。"
 					tone="error"
 				/>
 				<HealthScoreCard
 					label="延期项目"
 					value={String((data?.delayedProjects ?? []).length)}
 					unit="项"
-					hint="筛选范围内已拖期的节点项目。"
 					tone="warning"
 				/>
 				<HealthScoreCard
 					label="延期主因"
 					value={String((data?.delayReasonBreakdown ?? [])[0]?.label ?? "正常推进")}
-					hint="用于领导层看结构、中层看处置策略。"
 					tone="info"
 				/>
 			</div>
 
 			<div className="project-cockpit__two-column">
-				<TrendPanel title="风险等级分布" subtitle="看整体风险结构和头部等级。">
+				<TrendPanel title="风险等级分布">
 					{loading ? (
 						<div className="project-cockpit__loading-card"><Spinner size="lg" /></div>
 					) : (
@@ -161,7 +158,7 @@ export default function RiskAttributionView({ locale }: { locale: Locale }) {
 						</div>
 					)}
 				</TrendPanel>
-				<TrendPanel title="延期原因结构" subtitle="按客户关心的归因维度拆解。">
+				<TrendPanel title="延期原因结构">
 					<div className="project-cockpit__chart-block">
 						<ChartRenderer
 							display="row"
@@ -177,7 +174,7 @@ export default function RiskAttributionView({ locale }: { locale: Locale }) {
 			</div>
 
 			<div className="project-cockpit__two-column">
-				<TrendPanel title="延期趋势" subtitle="按周度看延期节点和高风险节点的变化。">
+				<TrendPanel title="延期趋势">
 					<div className="project-cockpit__chart-block">
 						<ChartRenderer
 							display="line"
@@ -192,12 +189,12 @@ export default function RiskAttributionView({ locale }: { locale: Locale }) {
 					</div>
 				</TrendPanel>
 
-				<TrendPanel title="延期原因矩阵" subtitle="按责任科室和延期原因同时展开。">
+				<TrendPanel title="延期原因矩阵">
 					<DelayReasonMatrix rows={(data?.delayReasonMatrix ?? []) as Array<Record<string, unknown>>} />
 				</TrendPanel>
 			</div>
 
-			<TrendPanel title="重点延期项目" subtitle="给中层执行层做逐项协同和闭环。">
+			<TrendPanel title="重点延期项目">
 				<DataTable cols={delayedTable.cols} rows={delayedTable.rows} pageSize={8} />
 			</TrendPanel>
 

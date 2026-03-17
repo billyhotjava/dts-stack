@@ -64,8 +64,8 @@ public class ProjectCockpitService {
         List<NodeRow> filtered = applyFilters(filters);
         ObjectNode root = objectMapper.createObjectNode();
         ObjectNode hero = root.putObject("hero");
-        hero.put("title", "项目看板系统");
-        hero.put("subtitle", formalDataReady ? "统一入口查看项目计划、执行、延期归因和重大项目树进展。" : EMPTY_SUBTITLE);
+        hero.put("title", "项目看板");
+        hero.put("subtitle", "");
         hero.put("updatedAt", latestUpdate(filtered));
         hero.put("scope", buildScopeText(filters, filtered));
 

@@ -123,7 +123,7 @@ export default function MajorProjectTreeView({ locale }: { locale: Locale }) {
 			</div>
 
 			<div className="project-cockpit__tree-layout">
-				<TrendPanel title="重大项目树状进度看板" subtitle="按重大项目 -> 子项目 -> 节点穿透到具体任务。">
+				<TrendPanel title="项目树状进度">
 					{loading ? (
 						<div className="project-cockpit__loading-card"><Spinner size="lg" /></div>
 					) : (

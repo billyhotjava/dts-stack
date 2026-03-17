@@ -22,12 +22,12 @@ import MajorProjectTreeView from "./views/MajorProjectTreeView";
 import DataSupportView from "./views/DataSupportView";
 import "./projectCockpit.css";
 
-const THEME_ITEMS: Array<{ id: ProjectCockpitTheme; label: string; description: string }> = [
-	{ id: "overview", label: "总览趋势", description: "领导层先看项目群态势、预警和趋势变化。" },
-	{ id: "execution", label: "计划执行", description: "围绕甘特、节点推进和科室负载看执行状态。" },
-	{ id: "risk", label: "风险归因", description: "看延期原因、风险分布和重点拖期项目。" },
-	{ id: "tree", label: "重大项目树", description: "按重大项目 -> 子项目 -> 节点下钻穿透。" },
-	{ id: "support", label: "口径支撑", description: "查看覆盖率、指标口径和待客户补充清单。" },
+const THEME_ITEMS: Array<{ id: ProjectCockpitTheme; label: string }> = [
+	{ id: "overview", label: "总览趋势" },
+	{ id: "execution", label: "计划执行" },
+	{ id: "risk", label: "风险归因" },
+	{ id: "tree", label: "重大项目树" },
+	{ id: "support", label: "口径支撑" },
 ];
 
 type Props = {
@@ -87,7 +87,7 @@ export function ProjectCockpitLayout({
 						<div>
 							<div className="project-cockpit__hero-title">{hero?.title ?? "项目看板系统"}</div>
 							<div className="project-cockpit__hero-subtitle">
-								{hero?.subtitle ?? "统一入口查看项目计划、执行、延期归因和重大项目树进展。"}
+								{hero?.scope ?? ""}
 							</div>
 						</div>
 						<div className="project-cockpit__hero-meta">
@@ -105,7 +105,6 @@ export function ProjectCockpitLayout({
 				<Card className="project-cockpit__spotlight-card" shadow="md">
 					<CardHeader
 						title="重点盯防"
-						subtitle="给领导和科长的统一关注点"
 						action={
 							spotlight?.majorProjectId ? (
 								<Button
@@ -141,8 +140,7 @@ export function ProjectCockpitLayout({
 
 			<Card className="project-cockpit__filter-card">
 				<CardHeader
-					title="统一入口筛选"
-					subtitle="所有主题共用同一组条件，避免来回切换和重复点击。"
+					title="筛选条件"
 					action={
 						<Button
 							variant="tertiary"
@@ -219,9 +217,6 @@ export function ProjectCockpitLayout({
 						</Tab>
 					))}
 				</TabList>
-				<div className="project-cockpit__tab-hint">
-					{THEME_ITEMS.find((item) => item.id === queryState.theme)?.description}
-				</div>
 				<TabPanels>
 					<TabPanel value="overview">
 						{summaryLoading && !summary ? (

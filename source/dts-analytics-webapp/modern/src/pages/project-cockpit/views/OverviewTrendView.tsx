@@ -149,10 +149,7 @@ export default function OverviewTrendView({ summary, summaryLoading, locale }: P
 					)}
 				</TrendPanel>
 
-				<TrendPanel
-					title="总览摘要"
-					subtitle="领导层可以先看风险头部项目和重点异常节点。"
-				>
+				<TrendPanel title="总览摘要">
 					<div className="project-cockpit__ranking-list">
 						<div className="project-cockpit__ranking-row">
 							<div className="project-cockpit__ranking-title">
@@ -183,11 +180,11 @@ export default function OverviewTrendView({ summary, summaryLoading, locale }: P
 			</div>
 
 			<div className="project-cockpit__two-column">
-				<TrendPanel title="重大项目排名" subtitle="按高风险、延期和健康度综合排序。">
+				<TrendPanel title="重大项目排名">
 					<DataTable cols={rankingTable.cols} rows={rankingTable.rows} pageSize={6} />
 				</TrendPanel>
 
-				<TrendPanel title="重点预警" subtitle="便于中层执行层快速接手和跟踪。">
+				<TrendPanel title="重点预警">
 					{summaryLoading ? (
 						<div className="project-cockpit__loading-card"><Spinner size="lg" /></div>
 					) : (

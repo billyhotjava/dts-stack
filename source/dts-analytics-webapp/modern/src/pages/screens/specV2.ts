@@ -1,4 +1,4 @@
-import type { ScreenComponent, ScreenConfig, ScreenGlobalVariable, ScreenTheme } from './types';
+import type { CarouselConfig, ScreenComponent, ScreenConfig, ScreenGlobalVariable, ScreenPage, ScreenTheme } from './types';
 
 export const SCREEN_SCHEMA_VERSION = 2;
 
@@ -194,6 +194,54 @@ function normalizeDataSource(input: unknown): ScreenComponent['dataSource'] {
     return dataSource as unknown as ScreenComponent['dataSource'];
 }
 
+function normalizeCarouselConfig(input: unknown): CarouselConfig | undefined {
+    if (!input || typeof input !== 'object') {
+        return undefined;
+    }
+    const row = input as Record<string, unknown>;
+    const transition = asTrimmedString(row.transition);
+    return {
+        enabled: row.enabled === undefined ? false : Boolean(row.enabled),
+        intervalSeconds: asNumber(row.intervalSeconds, 30, 1),
+        transition: transition === 'slide-left' || transition === 'slide-up' || transition === 'none'
+            ? transition
+            : 'fade',
+        transitionDuration: asNumber(row.transitionDuration, 800, 0),
+        loop: row.loop === undefined ? true : Boolean(row.loop),
+    };
+}
+
+function normalizePages(input: unknown, warnings: string[]): ScreenPage[] | undefined {
+    if (input === undefined) {
+        return undefined;
+    }
+    if (!Array.isArray(input)) {
+        warnings.push('pages is not an array, fallback to []');
+        return [];
+    }
+    return input.reduce<ScreenPage[]>((acc, item, pageIndex) => {
+        if (!item || typeof item !== 'object') {
+            warnings.push(`pages[${pageIndex}] is not an object`);
+            return acc;
+        }
+        const row = item as Record<string, unknown>;
+        const rawComponents = Array.isArray(row.components) ? row.components : [];
+        if (!Array.isArray(row.components) && row.components !== undefined) {
+            warnings.push(`pages[${pageIndex}].components is not an array, fallback to []`);
+        }
+        acc.push({
+            id: asTrimmedString(row.id) || `page_${pageIndex + 1}`,
+            name: asString(row.name) || `页面 ${pageIndex + 1}`,
+            components: rawComponents
+                .map((component, componentIndex) => normalizeComponent(component, componentIndex, warnings))
+                .filter((component): component is ScreenComponent => component !== null),
+            backgroundColor: asString(row.backgroundColor),
+            backgroundImage: asTrimmedString(row.backgroundImage),
+        });
+        return acc;
+    }, []);
+}
+
 export function normalizeScreenConfig(
     input: unknown,
     options?: { id?: string | number },
@@ -235,6 +283,8 @@ export function normalizeScreenConfig(
         theme,
         components,
         globalVariables: normalizeGlobalVariables(row.globalVariables),
+        pages: normalizePages(row.pages, warnings),
+        carouselConfig: normalizeCarouselConfig(row.carouselConfig),
     };
 
     return { config, warnings };
@@ -252,6 +302,8 @@ export function buildScreenPayload(config: ScreenConfig): Record<string, unknown
         theme: config.theme,
         components: config.components,
         globalVariables: config.globalVariables ?? [],
+        pages: config.pages ?? [],
+        carouselConfig: config.carouselConfig,
     };
 }
 

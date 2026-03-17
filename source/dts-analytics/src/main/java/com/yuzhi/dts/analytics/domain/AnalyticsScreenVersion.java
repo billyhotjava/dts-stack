@@ -53,6 +53,10 @@ public class AnalyticsScreenVersion implements Serializable {
     private String componentsJson;
     @Column(name = "variables_json", columnDefinition = "text")
     private String variablesJson;
+    @Column(name = "pages_json", columnDefinition = "text")
+    private String pagesJson;
+    @Column(name = "carousel_json", columnDefinition = "text")
+    private String carouselJson;
 
     @Column(name = "creator_id")
     private Long creatorId;
@@ -168,6 +172,22 @@ public class AnalyticsScreenVersion implements Serializable {
 
     public void setVariablesJson(String variablesJson) {
         this.variablesJson = variablesJson;
+    }
+
+    public String getPagesJson() {
+        return pagesJson;
+    }
+
+    public void setPagesJson(String pagesJson) {
+        this.pagesJson = pagesJson;
+    }
+
+    public String getCarouselJson() {
+        return carouselJson;
+    }
+
+    public void setCarouselJson(String carouselJson) {
+        this.carouselJson = carouselJson;
     }
 
     public Long getCreatorId() {

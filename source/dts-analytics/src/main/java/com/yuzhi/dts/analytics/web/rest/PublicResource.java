@@ -721,6 +721,11 @@ public class PublicResource {
         map.put("theme", publishedVersion.getTheme());
         map.put("components", parseJsonArray(publishedVersion.getComponentsJson()));
         map.put("globalVariables", parseJsonArray(publishedVersion.getVariablesJson()));
+        map.put("pages", parseJsonArray(publishedVersion.getPagesJson()));
+        Object carouselConfig = parseJsonObject(publishedVersion.getCarouselJson());
+        if (carouselConfig != null) {
+            map.put("carouselConfig", carouselConfig);
+        }
         map.put("publishedVersionNo", publishedVersion.getVersionNo());
         map.put("public_uuid", publicUuid);
         return map;
@@ -740,4 +745,5 @@ public class PublicResource {
             return List.of();
         }
     }
+
 }

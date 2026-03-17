@@ -791,6 +791,10 @@ public class ScreenResource {
                 : null);
         screen.setComponentsJson(body != null && body.has("components") ? body.path("components").toString() : "[]");
         screen.setVariablesJson(body != null && body.has("globalVariables") ? body.path("globalVariables").toString() : "[]");
+        screen.setPagesJson(body != null && body.has("pages") ? body.path("pages").toString() : "[]");
+        screen.setCarouselJson(body != null && body.has("carouselConfig") && body.path("carouselConfig").isObject()
+                ? body.path("carouselConfig").toString()
+                : null);
         screen.setCreatorId(user.get().getId());
         screen.setArchived(false);
 
@@ -872,6 +876,14 @@ public class ScreenResource {
         }
         if (effectiveBody != null && effectiveBody.has("globalVariables")) {
             screen.setVariablesJson(effectiveBody.path("globalVariables").toString());
+        }
+        if (effectiveBody != null && effectiveBody.has("pages")) {
+            screen.setPagesJson(effectiveBody.path("pages").toString());
+        }
+        if (effectiveBody != null && effectiveBody.has("carouselConfig")) {
+            screen.setCarouselJson(effectiveBody.path("carouselConfig").isObject()
+                    ? effectiveBody.path("carouselConfig").toString()
+                    : null);
         }
 
         screenRepository.save(screen);
@@ -1153,6 +1165,8 @@ public class ScreenResource {
         version.setTheme(screen.getTheme());
         version.setComponentsJson(screen.getComponentsJson());
         version.setVariablesJson(screen.getVariablesJson());
+        version.setPagesJson(screen.getPagesJson());
+        version.setCarouselJson(screen.getCarouselJson());
         version.setCreatorId(creatorId);
         version.setCurrentPublished(currentPublished);
         version.setPublishedAt(publishedAt);
@@ -1169,6 +1183,8 @@ public class ScreenResource {
         screen.setTheme(version.getTheme());
         screen.setComponentsJson(version.getComponentsJson());
         screen.setVariablesJson(version.getVariablesJson());
+        screen.setPagesJson(version.getPagesJson());
+        screen.setCarouselJson(version.getCarouselJson());
     }
 
     private ObjectNode toListResponse(
@@ -1361,11 +1377,21 @@ public class ScreenResource {
             node.put("backgroundImage", effectiveVersion.getBackgroundImage());
             node.set("components", parseComponents(effectiveVersion.getComponentsJson()));
             node.set("globalVariables", parseGlobalVariables(effectiveVersion.getVariablesJson()));
+            node.set("pages", parsePages(effectiveVersion.getPagesJson()));
+            JsonNode carouselConfig = parseCarouselConfig(effectiveVersion.getCarouselJson());
+            if (carouselConfig != null) {
+                node.set("carouselConfig", carouselConfig);
+            }
         } else {
             node.put("backgroundColor", screen.getBackgroundColor());
             node.put("backgroundImage", screen.getBackgroundImage());
             node.set("components", parseComponents(screen.getComponentsJson()));
             node.set("globalVariables", parseGlobalVariables(screen.getVariablesJson()));
+            node.set("pages", parsePages(screen.getPagesJson()));
+            JsonNode carouselConfig = parseCarouselConfig(screen.getCarouselJson());
+            if (carouselConfig != null) {
+                node.set("carouselConfig", carouselConfig);
+            }
         }
         node.put("sourceMode", sourceMode);
         return node;
@@ -1386,6 +1412,11 @@ public class ScreenResource {
         node.put("theme", screen.getTheme());
         node.set("components", parseComponents(screen.getComponentsJson()));
         node.set("globalVariables", parseGlobalVariables(screen.getVariablesJson()));
+        node.set("pages", parsePages(screen.getPagesJson()));
+        JsonNode carouselConfig = parseCarouselConfig(screen.getCarouselJson());
+        if (carouselConfig != null) {
+            node.set("carouselConfig", carouselConfig);
+        }
         if (currentPublishedVersion != null) {
             node.put("publishedVersionNo", currentPublishedVersion.getVersionNo());
             node.putPOJO("publishedAt", currentPublishedVersion.getPublishedAt());
@@ -2020,6 +2051,11 @@ public class ScreenResource {
             node.put("backgroundImage", effectiveVersion.getBackgroundImage());
             node.set("components", parseComponents(effectiveVersion.getComponentsJson()));
             node.set("globalVariables", parseGlobalVariables(effectiveVersion.getVariablesJson()));
+            node.set("pages", parsePages(effectiveVersion.getPagesJson()));
+            JsonNode carouselConfig = parseCarouselConfig(effectiveVersion.getCarouselJson());
+            if (carouselConfig != null) {
+                node.set("carouselConfig", carouselConfig);
+            }
             return node;
         }
         node.put("name", screen.getName());
@@ -2031,7 +2067,42 @@ public class ScreenResource {
         node.put("backgroundImage", screen.getBackgroundImage());
         node.set("components", parseComponents(screen.getComponentsJson()));
         node.set("globalVariables", parseGlobalVariables(screen.getVariablesJson()));
+        node.set("pages", parsePages(screen.getPagesJson()));
+        JsonNode carouselConfig = parseCarouselConfig(screen.getCarouselJson());
+        if (carouselConfig != null) {
+            node.set("carouselConfig", carouselConfig);
+        }
         return node;
+    }
+
+    private JsonNode parsePages(String pagesJson) {
+        if (pagesJson != null && !pagesJson.isBlank()) {
+            try {
+                JsonNode pages = objectMapper.readTree(pagesJson);
+                if (pages == null || pages.isNull()) {
+                    return objectMapper.createArrayNode();
+                }
+                return pages.isArray() ? pages : objectMapper.createArrayNode();
+            } catch (Exception ignore) {
+                return objectMapper.createArrayNode();
+            }
+        }
+        return objectMapper.createArrayNode();
+    }
+
+    private JsonNode parseCarouselConfig(String carouselJson) {
+        if (carouselJson != null && !carouselJson.isBlank()) {
+            try {
+                JsonNode carousel = objectMapper.readTree(carouselJson);
+                if (carousel == null || carousel.isNull() || !carousel.isObject()) {
+                    return null;
+                }
+                return carousel;
+            } catch (Exception ignore) {
+                return null;
+            }
+        }
+        return null;
     }
 
     private String computeSpecDigest(JsonNode node) {

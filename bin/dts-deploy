@@ -313,6 +313,17 @@ if [[ -n "$_PACKAGE_TMPDIR" ]]; then
       _PKG_ROOT=$(find "$_PACKAGE_TMPDIR" -name "models.tsv" -print -quit 2>/dev/null)
       _PKG_ROOT="${_PKG_ROOT%/models.tsv}"
     fi
+    # Overwrite platform-generated SQL with original package SQL
+    # (platform import regenerates SQL with buildSqlContent which may corrupt the content)
+    find "$_PKG_ROOT/models" -name "*.sql" -type f 2>/dev/null | while read -r sf; do
+      _FNAME="$(basename "$sf")"
+      # Find and overwrite any file with the same name in dbt project
+      find "$_DBT_HOST_DIR/models" -name "$_FNAME" -type f 2>/dev/null | while read -r dest; do
+        cp -f "$sf" "$dest"
+      done
+    done
+    info "  synced: SQL model files from package (overwrite platform-generated)"
+
     # Copy YAML source definitions
     find "$_PKG_ROOT/models" -name "*.yml" -o -name "*.yaml" 2>/dev/null | while read -r yf; do
       _REL="${yf#$_PKG_ROOT/}"
@@ -350,7 +361,17 @@ fi
 # ---------------------------------------------------------------------------
 if $RUN_AFTER_IMPORT && ! $PT_DRY_RUN; then
   info ""
-  info "Step 3/3: Triggering dbt run to build tables..."
+  info "Step 3/3: Running dbt seed + triggering dbt run..."
+
+  # Run dbt seed first (synchronous, via Docker)
+  _DBT_HOST_DIR="${SCRIPT_DIR}/../services/dts-dbt"
+  if [[ -d "$_DBT_HOST_DIR/seeds" ]] && ls "$_DBT_HOST_DIR/seeds/"*.csv 1>/dev/null 2>&1; then
+    info "  Running dbt seed..."
+    docker run --rm --network dts-core --privileged \
+      -v "$_DBT_HOST_DIR:/opt/dbt" \
+      -v "$_DBT_HOST_DIR/profiles:/root/.dbt" \
+      dts-dbt:1.10.0 seed --project-dir /opt/dbt --profiles-dir /root/.dbt --target dev 2>&1 | tail -2
+  fi
 
   # Resolve selector: --run-selector > PLAN_TAGS > "all"
   _SELECTOR="${RUN_SELECTOR:-}"

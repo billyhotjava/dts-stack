@@ -6,4 +6,4 @@ sources:
     tables:
       - name: "project_subject_domain"
         identifier: "ods_project_subject_domain"
-        description: "项目主体域原始数据（物理表名通过 identifier 映射）"
+        description: "项目主体域原始数据"
