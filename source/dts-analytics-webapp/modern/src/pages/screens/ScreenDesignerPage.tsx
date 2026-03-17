@@ -7,6 +7,7 @@ import { ScreenRuntimeProvider } from './ScreenRuntimeContext';
 import { analyticsApi } from '../../api/analyticsApi';
 import { resolveScreenTheme } from './screenThemes';
 import { normalizeScreenConfig } from './specV2';
+import { commitScreenPageDraft, materializeScreenPage, resolveScreenPages, switchScreenPage } from './screenPageState';
 import {
     ComponentLibraryPanel,
     CanvasToolbar,
@@ -83,39 +84,47 @@ function ScreenDesignerContent() {
     // --- Multi-page management ---
     const [currentPageIndex, setCurrentPageIndex] = useState(0);
     const pages: ScreenPage[] = useMemo(() => {
-        if (config.pages && config.pages.length > 0) return config.pages;
-        // Single-page fallback: wrap top-level components
-        return [{
-            id: '__default__',
-            name: '页面 1',
-            components: config.components || [],
-        }];
-    }, [config.pages, config.components]);
+        return resolveScreenPages(config);
+    }, [config]);
 
     const hasMultiPages = (config.pages?.length ?? 0) > 1;
 
     const handleAddPage = useCallback(() => {
+        const committed = commitScreenPageDraft(config, currentPageIndex);
         const newPage: ScreenPage = {
             id: `page_${crypto.randomUUID().replace(/-/g, '').slice(0, 12)}`,
             name: `页面 ${pages.length + 1}`,
             components: [],
         };
-        const updatedPages = [...pages, newPage];
-        updateConfig({ pages: updatedPages });
-        setCurrentPageIndex(updatedPages.length - 1);
-    }, [pages, updateConfig]);
+        const updatedPages = [...resolveScreenPages(committed), newPage];
+        const nextIndex = updatedPages.length - 1;
+        updateConfig(materializeScreenPage({
+            ...committed,
+            pages: updatedPages,
+        }, nextIndex));
+        selectComponents([]);
+        setCurrentPageIndex(nextIndex);
+    }, [config, currentPageIndex, pages.length, selectComponents, updateConfig]);
 
     const handleDeletePage = useCallback((index: number) => {
         if (pages.length <= 1) return;
-        const updatedPages = pages.filter((_, i) => i !== index);
-        updateConfig({ pages: updatedPages });
-        if (currentPageIndex >= updatedPages.length) {
-            setCurrentPageIndex(Math.max(0, updatedPages.length - 1));
-        }
-    }, [pages, updateConfig, currentPageIndex]);
+        const committed = commitScreenPageDraft(config, currentPageIndex);
+        const updatedPages = resolveScreenPages(committed).filter((_, i) => i !== index);
+        const nextIndex = currentPageIndex === index
+            ? Math.max(0, Math.min(index, updatedPages.length - 1))
+            : (currentPageIndex > index ? currentPageIndex - 1 : currentPageIndex);
+        updateConfig(materializeScreenPage({
+            ...committed,
+            pages: updatedPages,
+        }, nextIndex));
+        selectComponents([]);
+        setCurrentPageIndex(nextIndex);
+    }, [config, currentPageIndex, pages.length, selectComponents, updateConfig]);
 
     const handleDuplicatePage = useCallback((index: number) => {
-        const source = pages[index];
+        const committed = commitScreenPageDraft(config, currentPageIndex);
+        const resolvedPages = resolveScreenPages(committed);
+        const source = resolvedPages[index];
         if (!source) return;
         const newPage: ScreenPage = {
             ...source,
@@ -126,27 +135,47 @@ function ScreenDesignerContent() {
                 id: `comp_${crypto.randomUUID().replace(/-/g, '').slice(0, 12)}`,
             })),
         };
-        const updatedPages = [...pages];
+        const updatedPages = [...resolvedPages];
         updatedPages.splice(index + 1, 0, newPage);
-        updateConfig({ pages: updatedPages });
-        setCurrentPageIndex(index + 1);
-    }, [pages, updateConfig]);
+        const nextIndex = index + 1;
+        updateConfig(materializeScreenPage({
+            ...committed,
+            pages: updatedPages,
+        }, nextIndex));
+        selectComponents([]);
+        setCurrentPageIndex(nextIndex);
+    }, [config, currentPageIndex, selectComponents, updateConfig]);
 
     const handleRenamePage = useCallback((index: number, name: string) => {
-        const updatedPages = pages.map((p, i) => i === index ? { ...p, name } : p);
+        const committed = commitScreenPageDraft(config, currentPageIndex);
+        const updatedPages = resolveScreenPages(committed).map((p, i) => i === index ? { ...p, name } : p);
         updateConfig({ pages: updatedPages });
-    }, [pages, updateConfig]);
+    }, [config, currentPageIndex, updateConfig]);
 
     const handleMovePage = useCallback((fromIndex: number, toIndex: number) => {
         if (fromIndex === toIndex) return;
-        const updatedPages = [...pages];
+        const committed = commitScreenPageDraft(config, currentPageIndex);
+        const updatedPages = [...resolveScreenPages(committed)];
         const [moved] = updatedPages.splice(fromIndex, 1);
         updatedPages.splice(toIndex, 0, moved);
         updateConfig({ pages: updatedPages });
         if (currentPageIndex === fromIndex) {
             setCurrentPageIndex(toIndex);
+        } else if (currentPageIndex > fromIndex && currentPageIndex <= toIndex) {
+            setCurrentPageIndex(currentPageIndex - 1);
+        } else if (currentPageIndex < fromIndex && currentPageIndex >= toIndex) {
+            setCurrentPageIndex(currentPageIndex + 1);
         }
-    }, [pages, updateConfig, currentPageIndex]);
+    }, [config, currentPageIndex, updateConfig]);
+
+    const handleSwitchPage = useCallback((nextIndex: number) => {
+        if (nextIndex === currentPageIndex) {
+            return;
+        }
+        updateConfig(switchScreenPage(config, currentPageIndex, nextIndex));
+        selectComponents([]);
+        setCurrentPageIndex(nextIndex);
+    }, [config, currentPageIndex, selectComponents, updateConfig]);
 
     // Load existing screen if editing
     useEffect(() => {
@@ -167,13 +196,26 @@ function ScreenDesignerContent() {
                         normalized.config.theme,
                         backgroundColor,
                     );
-                    loadConfig({ ...normalized.config, theme: resolvedTheme });
+                    setCurrentPageIndex(0);
+                    loadConfig(materializeScreenPage({ ...normalized.config, theme: resolvedTheme }, 0));
                 })
                 .catch((error) => {
                     console.error('Failed to load screen:', error);
                 });
         }
     }, [id, loadConfig, navigate]);
+
+    useEffect(() => {
+        if (pages.length === 0 || currentPageIndex < pages.length) {
+            return;
+        }
+        const nextIndex = Math.max(0, pages.length - 1);
+        setCurrentPageIndex(nextIndex);
+        const nextConfig = materializeScreenPage(config, nextIndex);
+        if (nextConfig !== config) {
+            updateConfig(nextConfig);
+        }
+    }, [config, currentPageIndex, pages.length, updateConfig]);
 
     // Keyboard shortcuts
     useEffect(() => {
@@ -306,6 +348,7 @@ function ScreenDesignerContent() {
                 className={`screen-designer ${focusMode ? 'is-focus-mode' : ''}`}
             >
                 <ScreenHeader
+                    currentPageIndex={currentPageIndex}
                     focusMode={focusMode}
                     onToggleFocusMode={() => setFocusMode((prev) => !prev)}
                     showLibraryPanel={showLibraryPanel}
@@ -328,7 +371,7 @@ function ScreenDesignerContent() {
                             <PageManagerPanel
                                 pages={pages}
                                 currentPageIndex={currentPageIndex}
-                                onSwitchPage={setCurrentPageIndex}
+                                onSwitchPage={handleSwitchPage}
                                 onAddPage={handleAddPage}
                                 onDeletePage={handleDeletePage}
                                 onDuplicatePage={handleDuplicatePage}

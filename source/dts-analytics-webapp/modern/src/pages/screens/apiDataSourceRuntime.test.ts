@@ -76,6 +76,32 @@ test('buildApiRuntimeRequest expands post body templates and keeps queryContext 
     }));
 });
 
+test('buildApiRuntimeRequest rewrites project cockpit api url for public screen runtime', () => {
+    const result = buildApiRuntimeRequest(
+        {
+            url: '/analytics/api/project-cockpit/screen/overview',
+            method: 'GET',
+            params: {
+                programId: '{{programId}}',
+            },
+        },
+        {
+            queryContext: {
+                globalVariables: {
+                    programId: 'program-a',
+                },
+                runtimeMeta: {
+                    accessMode: 'public',
+                    publicScreenUuid: 'screen-public-uuid',
+                },
+            },
+        },
+    );
+
+    assert.equal(result.url, '/analytics/api/public/screen/screen-public-uuid/project-cockpit/overview');
+    assert.equal(result.params.programId, 'program-a');
+});
+
 test('resolveApiRuntimePayload extracts nested arrays and wraps a nested object as rows', () => {
     const payload = {
         kpis: [

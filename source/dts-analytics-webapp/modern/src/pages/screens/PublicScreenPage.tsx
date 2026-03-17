@@ -279,7 +279,10 @@ export default function PublicScreenPage() {
     };
 
     return (
-        <ScreenRuntimeProvider definitions={effectiveGlobalVars}>
+        <ScreenRuntimeProvider
+            definitions={effectiveGlobalVars}
+            runtimeMeta={uuid ? { accessMode: 'public', publicScreenUuid: uuid } : { accessMode: 'public' }}
+        >
             <div className={`screen-runtime screen-runtime--fullscreen ${screenTheme === 'glacier' ? 'screen-runtime--light' : 'screen-runtime--dark'} ${isEmbedMode ? 'screen-runtime--embed' : ''}`}>
                 <div ref={scrollContainerRef} className="screen-runtime__scroll">
                     <div className="screen-runtime__viewport">

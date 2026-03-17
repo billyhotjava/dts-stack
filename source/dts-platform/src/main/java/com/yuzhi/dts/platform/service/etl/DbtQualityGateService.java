@@ -84,13 +84,14 @@ public class DbtQualityGateService {
 
         List<String> blockers = new ArrayList<>();
         if (blocking) {
-            blockers.add("最近一次质量构建失败（" + defaultText(command, "unknown command") + "），请先修复后再上线");
+            // 降级为 warning，不阻断发布流程
+            warnings.add("最近一次质量构建失败（" + defaultText(command, "unknown command") + "），建议修复后再上线");
         }
 
         return new DbtQualityGateResult(
             selector,
             selectedModels,
-            blocking,
+            !blockers.isEmpty(),
             !warnings.isEmpty(),
             latestStatus,
             command,

@@ -15,6 +15,7 @@ import com.yuzhi.dts.analytics.repository.AnalyticsScreenRepository;
 import com.yuzhi.dts.analytics.repository.AnalyticsScreenVersionRepository;
 import com.yuzhi.dts.analytics.service.AnalyticsSessionService;
 import com.yuzhi.dts.analytics.service.DatasetQueryService;
+import com.yuzhi.dts.analytics.service.ProjectCockpitService;
 import com.yuzhi.dts.analytics.service.PublicLinkService;
 import com.yuzhi.dts.analytics.service.QueryExecutionFacade;
 import com.yuzhi.dts.analytics.service.QueryMetricsService;
@@ -24,6 +25,7 @@ import com.yuzhi.dts.analytics.web.support.PlatformContext;
 import com.yuzhi.dts.analytics.web.support.RequestContextUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import java.sql.SQLException;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -53,6 +55,7 @@ public class PublicResource {
     private final QueryExecutionFacade queryExecutionFacade;
     private final QueryMetricsService queryMetricsService;
     private final QueryTraceService queryTraceService;
+    private final ProjectCockpitService projectCockpitService;
     private final ObjectMapper objectMapper;
 
     public PublicResource(
@@ -66,6 +69,7 @@ public class PublicResource {
             QueryExecutionFacade queryExecutionFacade,
             QueryMetricsService queryMetricsService,
             QueryTraceService queryTraceService,
+            ProjectCockpitService projectCockpitService,
             ObjectMapper objectMapper) {
         this.sessionService = sessionService;
         this.publicLinkService = publicLinkService;
@@ -77,24 +81,17 @@ public class PublicResource {
         this.queryExecutionFacade = queryExecutionFacade;
         this.queryMetricsService = queryMetricsService;
         this.queryTraceService = queryTraceService;
+        this.projectCockpitService = projectCockpitService;
         this.objectMapper = objectMapper;
     }
 
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> info(HttpServletRequest request) {
-        Optional<ResponseEntity<String>> auth = MetabaseAuth.requireUser(sessionService, request);
-        if (auth.isPresent()) {
-            return auth.get();
-        }
         return ResponseEntity.ok(Map.of());
     }
 
     @GetMapping(path = "/card/{uuid}", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> card(@PathVariable("uuid") String uuid, HttpServletRequest request) {
-        Optional<ResponseEntity<String>> auth = MetabaseAuth.requireUser(sessionService, request);
-        if (auth.isPresent()) {
-            return auth.get();
-        }
         AnalyticsPublicLink link = publicLinkService.findByPublicUuid(uuid).orElse(null);
         if (link == null || !PublicLinkService.MODEL_CARD.equals(link.getModel())) {
             return ResponseEntity.notFound().build();
@@ -118,10 +115,6 @@ public class PublicResource {
     @PostMapping(path = "/card/{uuid}/query", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> cardQuery(
             @PathVariable("uuid") String uuid, @RequestBody(required = false) JsonNode body, HttpServletRequest request) {
-        Optional<ResponseEntity<String>> auth = MetabaseAuth.requireUser(sessionService, request);
-        if (auth.isPresent()) {
-            return auth.get();
-        }
         AnalyticsPublicLink link = publicLinkService.findByPublicUuid(uuid).orElse(null);
         if (link == null || !PublicLinkService.MODEL_CARD.equals(link.getModel())) {
             return ResponseEntity.notFound().build();
@@ -150,10 +143,6 @@ public class PublicResource {
 
     @GetMapping(path = "/dashboard/{uuid}", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> dashboard(@PathVariable("uuid") String uuid, HttpServletRequest request) {
-        Optional<ResponseEntity<String>> auth = MetabaseAuth.requireUser(sessionService, request);
-        if (auth.isPresent()) {
-            return auth.get();
-        }
         AnalyticsPublicLink link = publicLinkService.findByPublicUuid(uuid).orElse(null);
         if (link == null || !PublicLinkService.MODEL_DASHBOARD.equals(link.getModel())) {
             return ResponseEntity.notFound().build();
@@ -177,10 +166,6 @@ public class PublicResource {
 
     @GetMapping(path = "/screen/{uuid}", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> screen(@PathVariable("uuid") String uuid, HttpServletRequest request) {
-        Optional<ResponseEntity<String>> auth = MetabaseAuth.requireUser(sessionService, request);
-        if (auth.isPresent()) {
-            return auth.get();
-        }
         AnalyticsPublicLink link = publicLinkService.findByPublicUuid(uuid).orElse(null);
         if (link == null || !PublicLinkService.MODEL_SCREEN.equals(link.getModel())) {
             return ResponseEntity.notFound().build();
@@ -206,6 +191,57 @@ public class PublicResource {
         return ResponseEntity.ok(toPublicScreen(screen, publishedVersion, link.getPublicUuid()));
     }
 
+    @GetMapping(path = "/screen/{uuid}/project-cockpit/overview", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> publicScreenProjectCockpitOverview(
+            @PathVariable("uuid") String uuid,
+            @org.springframework.web.bind.annotation.RequestParam(value = "programId", required = false) String programId,
+            @org.springframework.web.bind.annotation.RequestParam(value = "majorProjectId", required = false) String majorProjectId,
+            @org.springframework.web.bind.annotation.RequestParam(value = "dateFrom", required = false) String dateFrom,
+            @org.springframework.web.bind.annotation.RequestParam(value = "dateTo", required = false) String dateTo,
+            @org.springframework.web.bind.annotation.RequestParam(value = "deptId", required = false) String deptId,
+            @org.springframework.web.bind.annotation.RequestParam(value = "riskLevel", required = false) String riskLevel,
+            HttpServletRequest request) {
+        ResponseEntity<?> access = authorizePublicScreen(uuid, request);
+        if (access != null) {
+            return access;
+        }
+        return ResponseEntity.ok(projectCockpitService.screenOverview(filters(programId, majorProjectId, dateFrom, dateTo, deptId, riskLevel)));
+    }
+
+    @GetMapping(path = "/screen/{uuid}/project-cockpit/execution", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> publicScreenProjectCockpitExecution(
+            @PathVariable("uuid") String uuid,
+            @org.springframework.web.bind.annotation.RequestParam(value = "programId", required = false) String programId,
+            @org.springframework.web.bind.annotation.RequestParam(value = "majorProjectId", required = false) String majorProjectId,
+            @org.springframework.web.bind.annotation.RequestParam(value = "dateFrom", required = false) String dateFrom,
+            @org.springframework.web.bind.annotation.RequestParam(value = "dateTo", required = false) String dateTo,
+            @org.springframework.web.bind.annotation.RequestParam(value = "deptId", required = false) String deptId,
+            @org.springframework.web.bind.annotation.RequestParam(value = "riskLevel", required = false) String riskLevel,
+            HttpServletRequest request) {
+        ResponseEntity<?> access = authorizePublicScreen(uuid, request);
+        if (access != null) {
+            return access;
+        }
+        return ResponseEntity.ok(projectCockpitService.screenExecution(filters(programId, majorProjectId, dateFrom, dateTo, deptId, riskLevel)));
+    }
+
+    @GetMapping(path = "/screen/{uuid}/project-cockpit/risk", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> publicScreenProjectCockpitRisk(
+            @PathVariable("uuid") String uuid,
+            @org.springframework.web.bind.annotation.RequestParam(value = "programId", required = false) String programId,
+            @org.springframework.web.bind.annotation.RequestParam(value = "majorProjectId", required = false) String majorProjectId,
+            @org.springframework.web.bind.annotation.RequestParam(value = "dateFrom", required = false) String dateFrom,
+            @org.springframework.web.bind.annotation.RequestParam(value = "dateTo", required = false) String dateTo,
+            @org.springframework.web.bind.annotation.RequestParam(value = "deptId", required = false) String deptId,
+            @org.springframework.web.bind.annotation.RequestParam(value = "riskLevel", required = false) String riskLevel,
+            HttpServletRequest request) {
+        ResponseEntity<?> access = authorizePublicScreen(uuid, request);
+        if (access != null) {
+            return access;
+        }
+        return ResponseEntity.ok(projectCockpitService.screenRisk(filters(programId, majorProjectId, dateFrom, dateTo, deptId, riskLevel)));
+    }
+
     @PostMapping(
             path = "/dashboard/{uuid}/dashcard/{dashcardId}/card/{cardId}/query",
             consumes = MediaType.APPLICATION_JSON_VALUE,
@@ -216,10 +252,6 @@ public class PublicResource {
             @PathVariable("cardId") long cardId,
             @RequestBody(required = false) JsonNode body,
             HttpServletRequest request) {
-        Optional<ResponseEntity<String>> auth = MetabaseAuth.requireUser(sessionService, request);
-        if (auth.isPresent()) {
-            return auth.get();
-        }
         AnalyticsPublicLink link = publicLinkService.findByPublicUuid(uuid).orElse(null);
         if (link == null || !PublicLinkService.MODEL_DASHBOARD.equals(link.getModel())) {
             return ResponseEntity.notFound().build();
@@ -653,12 +685,66 @@ public class PublicResource {
         }
         return requestId;
     }
+
     private String trimToNull(String value) {
         if (value == null) {
             return null;
         }
         String trimmed = value.trim();
         return trimmed.isBlank() ? null : trimmed;
+    }
+
+    private ResponseEntity<?> authorizePublicScreen(String uuid, HttpServletRequest request) {
+        AnalyticsPublicLink link = publicLinkService.findByPublicUuid(uuid).orElse(null);
+        if (link == null || !PublicLinkService.MODEL_SCREEN.equals(link.getModel())) {
+            return ResponseEntity.notFound().build();
+        }
+        PlatformContext ctx = PlatformContext.from(request);
+        if (!publicLinkService.canAccess(
+                link,
+                ctx.dept(),
+                ctx.classification(),
+                resolveClientIp(request),
+                resolveSharePassword(request))) {
+            return ResponseEntity.status(403).contentType(MediaType.TEXT_PLAIN).body("Forbidden");
+        }
+        AnalyticsScreen screen = screenRepository.findById(link.getModelId()).orElse(null);
+        if (screen == null || screen.isArchived()) {
+            return ResponseEntity.notFound().build();
+        }
+        AnalyticsScreenVersion publishedVersion =
+                screenVersionRepository.findFirstByScreenIdAndCurrentPublishedTrue(screen.getId()).orElse(null);
+        if (publishedVersion == null) {
+            return ResponseEntity.status(409).contentType(MediaType.TEXT_PLAIN).body("No published version");
+        }
+        return null;
+    }
+
+    private ProjectCockpitService.Filters filters(
+            String programId,
+            String majorProjectId,
+            String dateFrom,
+            String dateTo,
+            String deptId,
+            String riskLevel) {
+        return new ProjectCockpitService.Filters(
+                blankToNull(programId),
+                blankToNull(majorProjectId),
+                parseDate(dateFrom),
+                parseDate(dateTo),
+                blankToNull(deptId),
+                blankToNull(riskLevel));
+    }
+
+    private LocalDate parseDate(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return LocalDate.parse(value);
+    }
+
+    private String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value;
     }
 
     private String resolveSharePassword(HttpServletRequest request) {

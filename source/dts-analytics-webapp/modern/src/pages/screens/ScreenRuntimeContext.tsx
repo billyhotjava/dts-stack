@@ -20,10 +20,16 @@ export interface RuntimeVariableEvent {
     meta?: string;
 }
 
+export interface ScreenRuntimeMeta {
+    accessMode?: 'private' | 'public';
+    publicScreenUuid?: string;
+}
+
 interface ScreenRuntimeContextValue {
     definitions: ScreenGlobalVariable[];
     values: Record<string, string>;
     panel: RuntimeActionPanelState;
+    runtimeMeta?: ScreenRuntimeMeta;
     getEvents: () => RuntimeVariableEvent[];
     setVariable: (key: string, value: string, source?: string) => void;
     openPanel: (title: string, body: string, source?: string) => void;
@@ -41,6 +47,7 @@ const emptyValue: ScreenRuntimeContextValue = {
     definitions: [],
     values: {},
     panel: emptyPanel,
+    runtimeMeta: undefined,
     getEvents: () => [],
     setVariable: () => {
         // no-op for unwrapped usage
@@ -89,9 +96,11 @@ function inferEventKindBySource(source?: string): RuntimeEventKind {
 
 export function ScreenRuntimeProvider({
     definitions,
+    runtimeMeta,
     children,
 }: {
     definitions?: ScreenGlobalVariable[];
+    runtimeMeta?: ScreenRuntimeMeta;
     children: ReactNode;
 }) {
     const normalizedDefinitions = useMemo(() => normalizeDefinitions(definitions), [definitions]);
@@ -118,6 +127,7 @@ export function ScreenRuntimeProvider({
         definitions: normalizedDefinitions,
         values,
         panel,
+        runtimeMeta,
         getEvents: () => eventsRef.current,
         trackEvent: (event) => {
             const safeKey = (event.key || '').trim() || '__event__';
@@ -161,7 +171,7 @@ export function ScreenRuntimeProvider({
         closePanel: () => {
             setPanel(emptyPanel);
         },
-    }), [normalizedDefinitions, panel, values]); // events removed from deps
+    }), [normalizedDefinitions, panel, runtimeMeta, values]); // events removed from deps
 
     return <ScreenRuntimeContext.Provider value={contextValue}>{children}</ScreenRuntimeContext.Provider>;
 }

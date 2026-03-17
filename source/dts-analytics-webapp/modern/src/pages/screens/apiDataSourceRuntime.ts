@@ -27,9 +27,10 @@ export function buildApiRuntimeRequest(
     const params = expandRecord(config.params, templateValues, true);
     const headers = expandRecord(config.headers, templateValues, false);
     const queryContext = isPlainObject(options.queryContext) ? options.queryContext : undefined;
+    const url = rewritePublicScreenProjectCockpitUrl(config.url ?? '', queryContext);
 
     return {
-        url: config.url ?? '',
+        url,
         method,
         headers,
         params,
@@ -127,6 +128,22 @@ function interpolateTemplate(template: string, values: Map<string, string>): str
         const key = String(rawKey ?? '').trim();
         return values.get(key) ?? '';
     });
+}
+
+function rewritePublicScreenProjectCockpitUrl(url: string, queryContext?: Record<string, unknown>): string {
+    const runtimeMeta = isPlainObject(queryContext?.runtimeMeta)
+        ? queryContext.runtimeMeta as Record<string, unknown>
+        : undefined;
+    const accessMode = String(runtimeMeta?.accessMode ?? '').trim().toLowerCase();
+    const publicScreenUuid = String(runtimeMeta?.publicScreenUuid ?? '').trim();
+    if (accessMode !== 'public' || !publicScreenUuid) {
+        return url;
+    }
+    const match = url.match(/^\/analytics\/api\/project-cockpit\/screen\/([^/?#]+)$/);
+    if (!match) {
+        return url;
+    }
+    return `/analytics/api/public/screen/${encodeURIComponent(publicScreenUuid)}/project-cockpit/${match[1]}`;
 }
 
 function extractByPath(payload: unknown, responsePath?: string): unknown {

@@ -140,11 +140,54 @@ class ScreenResourceIT {
 
         String publicUuid = objectMapper.readTree(publicLinkResult.getResponse().getContentAsString()).path("uuid").asText();
 
-        mockMvc.perform(get("/api/public/screen/{uuid}", publicUuid).cookie(sessionCookie))
+        mockMvc.perform(get("/api/public/screen/{uuid}", publicUuid))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.pages.length()").value(2))
                 .andExpect(jsonPath("$.pages[1].components[0].id").value("risk-title"))
                 .andExpect(jsonPath("$.carouselConfig.enabled").value(true));
+    }
+
+    @Test
+    void publicScreenProjectCockpitProxyShouldServeAnonymousRequests() throws Exception {
+        Cookie sessionCookie = authenticate();
+
+        MvcResult createdResult = mockMvc.perform(post("/api/screens")
+                        .cookie(sessionCookie)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "schemaVersion": 2,
+                                  "name": "项目管理指挥大屏",
+                                  "description": "测试公共专题代理",
+                                  "width": 1920,
+                                  "height": 1080,
+                                  "backgroundColor": "#08121f",
+                                  "theme": "legacy-dark",
+                                  "components": []
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        long screenId = objectMapper.readTree(createdResult.getResponse().getContentAsString()).path("id").asLong();
+
+        mockMvc.perform(post("/api/screens/{id}/publish", screenId).cookie(sessionCookie))
+                .andExpect(status().isOk());
+
+        MvcResult publicLinkResult = mockMvc.perform(post("/api/screens/{id}/public_link", screenId)
+                        .cookie(sessionCookie)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        String publicUuid = objectMapper.readTree(publicLinkResult.getResponse().getContentAsString()).path("uuid").asText();
+
+        mockMvc.perform(get("/api/public/screen/{uuid}/project-cockpit/overview", publicUuid))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.screenKey").value("overview"))
+                .andExpect(jsonPath("$.screenTitle").value("总体态势"))
+                .andExpect(jsonPath("$.filters").exists());
     }
 
     private Cookie authenticate() {

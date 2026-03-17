@@ -125,20 +125,50 @@ export DTS_PASSWORD=xxx
 source bin/dts-deploy-env.sh
 ```
 
-## dbt 运行时直接覆盖（方式三）
+## 方式四：直接替换 dbt 目录（推荐，最可靠）
 
-适用于只需要更新 SQL 文件的场景：
+适用于现场离线部署，跳过平台导入，直接替换 dbt 运行时目录。
 
 ```bash
-unzip -o project-management-cli-deploy.zip -d services/dts-dbt/ -x models.tsv
+# 1. 解压 dbt 运行时包（覆盖 services/dts-dbt/，保留 profiles/）
+tar xzf dts-dbt-runtime.tar.gz -C /opt/prod/s10/s10-stack/
+
+# 2. Excel 入湖（目标表名用 ods_project_subject_domain）
+#    通过页面操作：数据接入中心 → 新建入湖任务 → Excel
+
+# 3. 运行 dbt seed + run 建表
+docker run --rm --network dts-core --privileged \
+  -v $(pwd)/services/dts-dbt:/opt/dbt \
+  -v $(pwd)/services/dts-dbt/profiles:/root/.dbt \
+  dts-dbt:1.10.0 seed --project-dir /opt/dbt --profiles-dir /root/.dbt --target dev
 
 docker run --rm --network dts-core --privileged \
   -v $(pwd)/services/dts-dbt:/opt/dbt \
   -v $(pwd)/services/dts-dbt/profiles:/root/.dbt \
-  dts-dbt:1.10.0 run \
-  --project-dir /opt/dbt --profiles-dir /root/.dbt \
-  --target dev --threads 1 \
-  --select tag:project-management
+  dts-dbt:1.10.0 run --project-dir /opt/dbt --profiles-dir /root/.dbt --target dev --threads 1
+```
+
+**优点：** 不经过平台 API，不会重生成 SQL，不产生重复目录，不需要处理权限。
+**注意：** `profiles/` 目录不在包中，由平台自动生成（或手动配置）。
+
+### 包内容
+
+| 文件 | 说明 |
+|------|------|
+| `dts-dbt-runtime.tar.gz` | 9.7K，完整 dbt 项目（排除 profiles/target/.git） |
+
+```
+services/dts-dbt/
+├── dbt_project.yml          # dbt 项目配置
+├── macros/                  # parse_date_safe 等宏
+├── seeds/                   # 维度映射 CSV（4个）
+├── models/
+│   ├── dwd/prjtest1/        # 9 个 DWD 模型
+│   ├── dws/prjtest1/        # 4 个 DWS 模型
+│   ├── ads/prjtest1/        # 7 个 ADS 模型
+│   ├── pm_ods_sources.yml   # source 定义
+│   └── project_cockpit_schema.yml  # 测试定义
+└── profiles/                # [不在包中] 由平台生成
 ```
 
 ## 故障排查

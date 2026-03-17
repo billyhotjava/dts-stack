@@ -319,25 +319,36 @@ if [[ -n "$_PACKAGE_TMPDIR" ]]; then
       _FNAME="$(basename "$sf")"
       # Find and overwrite any file with the same name in dbt project
       find "$_DBT_HOST_DIR/models" -name "$_FNAME" -type f 2>/dev/null | while read -r dest; do
-        cp -f "$sf" "$dest"
+        cp -f "$sf" "$dest" 2>/dev/null || sudo cp -f "$sf" "$dest" 2>/dev/null || true
       done
     done
-    info "  synced: SQL model files from package (overwrite platform-generated)"
+    # Remove duplicate SQL files (platform creates new subdirs on each import)
+    find "$_DBT_HOST_DIR/models" -name "*.sql" -type f | awk -F/ '{print $NF}' | sort | uniq -d | while read -r dup; do
+      # Keep the first one, remove the rest
+      find "$_DBT_HOST_DIR/models" -name "$dup" -type f | sort | tail -n +2 | while read -r extra; do
+        rm -f "$extra" 2>/dev/null || sudo rm -f "$extra" 2>/dev/null || true
+      done
+    done
+    # Remove empty directories left behind
+    find "$_DBT_HOST_DIR/models" -type d -empty -delete 2>/dev/null || true
+
+    info "  synced: SQL model files from package (overwrite platform-generated, deduped)"
 
     # Copy YAML source definitions
     find "$_PKG_ROOT/models" -name "*.yml" -o -name "*.yaml" 2>/dev/null | while read -r yf; do
       _REL="${yf#$_PKG_ROOT/}"
       _DEST="${_DBT_HOST_DIR}/${_REL}"
-      mkdir -p "$(dirname "$_DEST")"
-      cp -f "$yf" "$_DEST"
+      mkdir -p "$(dirname "$_DEST")" 2>/dev/null || sudo mkdir -p "$(dirname "$_DEST")" 2>/dev/null || true
+      cp -f "$yf" "$_DEST" 2>/dev/null || sudo cp -f "$yf" "$_DEST" 2>/dev/null || true
       info "  synced: $_REL"
     done
     # Copy macros
     if [[ -d "$_PKG_ROOT/macros" ]]; then
-      mkdir -p "$_DBT_HOST_DIR/macros"
+      mkdir -p "$_DBT_HOST_DIR/macros" 2>/dev/null || sudo mkdir -p "$_DBT_HOST_DIR/macros" 2>/dev/null || true
       find "$_PKG_ROOT/macros" -type f 2>/dev/null | while read -r mf; do
         _FNAME="$(basename "$mf")"
-        cp -f "$mf" "$_DBT_HOST_DIR/macros/$_FNAME"
+        cp -f "$mf" "$_DBT_HOST_DIR/macros/$_FNAME" 2>/dev/null || \
+          sudo cp -f "$mf" "$_DBT_HOST_DIR/macros/$_FNAME" 2>/dev/null || true
         info "  synced: macros/$_FNAME"
       done
     fi

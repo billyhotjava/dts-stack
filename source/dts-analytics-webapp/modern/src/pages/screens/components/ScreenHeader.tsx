@@ -29,6 +29,7 @@ import { ScreenSnapshotPanel } from './ScreenSnapshotPanel';
 import { Modal } from '../../../ui/Modal/Modal';
 import { buildExploreSessionSteps } from './ScreenHeader.helpers';
 import { buildScreenPayload, normalizeScreenConfig, validateScreenPayload } from '../specV2';
+import { commitScreenPageDraft, materializeScreenPage } from '../screenPageState';
 import { resolveScreenTheme, applyThemeToComponents, getThemeTokens, type ThemeComponentApplyMode } from '../screenThemes';
 import type { ScreenTheme } from '../types';
 import { LinkageGraphPanel } from './LinkageGraphPanel';
@@ -141,6 +142,7 @@ function HeaderMenu({
 }
 
 interface ScreenHeaderProps {
+    currentPageIndex?: number;
     focusMode?: boolean;
     onToggleFocusMode?: () => void;
     showLibraryPanel?: boolean;
@@ -171,6 +173,7 @@ const BATCH_ACTION_OPTIONS = [
 type BatchAction = typeof BATCH_ACTION_OPTIONS[number]['value'];
 
 export function ScreenHeader({
+    currentPageIndex = 0,
     focusMode,
     onToggleFocusMode,
     showLibraryPanel,
@@ -196,6 +199,10 @@ export function ScreenHeader({
         updateSelectedComponents,
     } = useScreen();
     const { config } = state;
+    const persistedConfig = useMemo(
+        () => commitScreenPageDraft(config, currentPageIndex),
+        [config, currentPageIndex],
+    );
     const [isEditingName, setIsEditingName] = useState(false);
     const [nameValue, setNameValue] = useState(config.name);
     const [isSharing, setIsSharing] = useState(false);
@@ -745,7 +752,7 @@ export function ScreenHeader({
 
         setIsSaving(true);
         try {
-            const payload = buildScreenPayload(config) as Record<string, unknown>;
+            const payload = buildScreenPayload(persistedConfig) as Record<string, unknown>;
             const baseline = state.baselineConfig;
             if (id && baseline?.updatedAt) {
                 payload._conflict = buildComponentConflictMeta(baseline);
@@ -762,7 +769,7 @@ export function ScreenHeader({
                 const updated = await analyticsApi.updateScreen(id, payload);
                 const normalized = normalizeScreenConfig(updated, { id: updated.id });
                 const resolvedTheme = resolveScreenTheme(normalized.config.theme, normalized.config.backgroundColor);
-                const synced = { ...normalized.config, theme: resolvedTheme };
+                const synced = materializeScreenPage({ ...normalized.config, theme: resolvedTheme }, currentPageIndex);
                 updateConfig(synced);
                 markBaseline(synced);
                 return id;
@@ -776,7 +783,7 @@ export function ScreenHeader({
         } finally {
             setIsSaving(false);
         }
-    }, [config, id, isSaving, markBaseline, navigate, setIsSaving, state.baselineConfig, updateConfig]);
+    }, [currentPageIndex, id, isSaving, markBaseline, navigate, persistedConfig, setIsSaving, state.baselineConfig, updateConfig]);
 
     const handleLockHttpError = useCallback((error: unknown, fallbackMessage: string): string => {
         if (error instanceof HttpError && error.code === 'SCREEN_EDIT_LOCKED') {
@@ -1258,7 +1265,7 @@ export function ScreenHeader({
             const payload = {
                 schema: 'dts.screen.spec',
                 exportedAt: new Date().toISOString(),
-                screenSpec: buildScreenPayload(config),
+                screenSpec: buildScreenPayload(persistedConfig),
             };
             const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' });
             const url = URL.createObjectURL(blob);
@@ -1357,12 +1364,12 @@ export function ScreenHeader({
             mode: 'draft',
             ...(previewDeviceMode === 'auto' ? {} : { device: previewDeviceMode }),
             pixelRatio,
-            screenSpec: buildScreenPayload(config),
+            screenSpec: buildScreenPayload(persistedConfig),
         });
         const fallbackName = `${config.name || 'screen'}.${format}`;
         downloadBlob(rendered.blob, rendered.fileName || fallbackName);
         return rendered;
-    }, [config, downloadBlob, id, previewDeviceMode, resolveServerRenderPixelRatio]);
+    }, [config.name, downloadBlob, id, persistedConfig, previewDeviceMode, resolveServerRenderPixelRatio]);
 
     const handleExportPng = async () => {
         let preparedRequestId: string | undefined;
@@ -1532,7 +1539,7 @@ export function ScreenHeader({
             if (validation.warnings.length > 0) {
                 console.warn('[screen-import] validate warnings:', validation.warnings);
             }
-            loadConfig(normalized.config);
+            loadConfig(materializeScreenPage(normalized.config, currentPageIndex));
             alert('JSON 导入完成');
         } catch (error) {
             console.error('Failed to import screen json:', error);

@@ -405,7 +405,8 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
         componentType: type,
         mode,
         globalVariables: runtime.values,
-    }), [component.id, mode, runtime.values, type]);
+        ...(runtime.runtimeMeta ? { runtimeMeta: runtime.runtimeMeta } : {}),
+    }), [component.id, mode, runtime.runtimeMeta, runtime.values, type]);
     const visibleByVariableRule = mode !== 'preview'
         || resolveComponentVariableVisibility(config, runtime.values);
 

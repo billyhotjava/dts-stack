@@ -4,12 +4,22 @@ import { SCREEN_SCHEMA_VERSION } from './specV2';
 
 const SCREEN_WIDTH = 1920;
 const SCREEN_HEIGHT = 1080;
-const BG = '#08121f';
-const PANEL_BG = 'rgba(7, 22, 38, 0.78)';
-const PANEL_BORDER = 'rgba(77, 169, 255, 0.26)';
-const TITLE_COLOR = '#d7ecff';
-const SUBTITLE_COLOR = 'rgba(215, 236, 255, 0.72)';
-const ACCENT = '#4ab7ff';
+const BG = '#eef5fb';
+const PANEL_BG = 'rgba(255, 255, 255, 0.94)';
+const PANEL_BORDER = 'rgba(148, 163, 184, 0.24)';
+const TITLE_COLOR = '#16324f';
+const SUBTITLE_COLOR = '#5b7088';
+const BODY_COLOR = '#35526b';
+const ACCENT = '#3b82f6';
+const INPUT_BG = 'rgba(255, 255, 255, 0.96)';
+const INPUT_BORDER = 'rgba(148, 163, 184, 0.42)';
+const KPI_BG = '#ffffff';
+const LINE_SERIES_COLORS = ['#3b82f6', '#38bdf8', '#f4b740'];
+const BAR_SERIES_COLORS = ['#2563eb', '#60a5fa', '#f4b740'];
+const PIE_SERIES_COLORS = ['#60a5fa', '#38bdf8', '#f4b740', '#fb7185', '#818cf8'];
+const TABLE_HEADER_BG = 'rgba(219, 234, 254, 0.96)';
+const TABLE_BODY_BG = 'rgba(255, 255, 255, 0.96)';
+const TABLE_EVEN_ROW_BG = 'rgba(241, 245, 249, 0.96)';
 
 function createComponent(
     id: string,
@@ -83,8 +93,8 @@ function createFilterInput(id: string, label: string, variableKey: string, x: nu
         variableKey,
         placeholder: '全部',
         labelColor: SUBTITLE_COLOR,
-        inputBackground: 'rgba(5, 16, 29, 0.92)',
-        inputBorderColor: PANEL_BORDER,
+        inputBackground: INPUT_BG,
+        inputBorderColor: INPUT_BORDER,
         inputTextColor: TITLE_COLOR,
     });
 }
@@ -100,8 +110,8 @@ function createRiskSelect(id: string, x: number, y: number, width: number): Scre
             { label: '低', value: '低' },
         ],
         labelColor: SUBTITLE_COLOR,
-        inputBackground: 'rgba(5, 16, 29, 0.92)',
-        inputBorderColor: PANEL_BORDER,
+        inputBackground: INPUT_BG,
+        inputBorderColor: INPUT_BORDER,
         inputTextColor: TITLE_COLOR,
     });
 }
@@ -112,8 +122,8 @@ function createDateRange(id: string, x: number, y: number, width: number): Scree
         startKey: 'dateFrom',
         endKey: 'dateTo',
         labelColor: SUBTITLE_COLOR,
-        inputBackground: 'rgba(5, 16, 29, 0.92)',
-        inputBorderColor: PANEL_BORDER,
+        inputBackground: INPUT_BG,
+        inputBorderColor: INPUT_BORDER,
         inputTextColor: TITLE_COLOR,
     });
 }
@@ -163,8 +173,8 @@ function createNumberCard(
         precision: suffix === '%' ? 2 : 0,
         valueField: 'value',
         titleColor: SUBTITLE_COLOR,
-        valueColor: '#f4fbff',
-        backgroundColor: 'rgba(4, 24, 43, 0.9)',
+        valueColor: TITLE_COLOR,
+        backgroundColor: KPI_BG,
     }, buildScreenApiDataSource('/analytics/api/project-cockpit/screen/overview', responsePath));
 }
 
@@ -184,8 +194,8 @@ function createExecutionNumberCard(
         precision: suffix === '%' ? 2 : 0,
         valueField: 'value',
         titleColor: SUBTITLE_COLOR,
-        valueColor: '#f4fbff',
-        backgroundColor: 'rgba(4, 24, 43, 0.9)',
+        valueColor: TITLE_COLOR,
+        backgroundColor: KPI_BG,
     }, buildScreenApiDataSource('/analytics/api/project-cockpit/screen/execution', responsePath));
 }
 
@@ -205,8 +215,8 @@ function createRiskNumberCard(
         precision: suffix === '%' ? 2 : 0,
         valueField: 'value',
         titleColor: SUBTITLE_COLOR,
-        valueColor: '#f4fbff',
-        backgroundColor: 'rgba(4, 24, 43, 0.9)',
+        valueColor: TITLE_COLOR,
+        backgroundColor: KPI_BG,
     }, buildScreenApiDataSource('/analytics/api/project-cockpit/screen/risk', responsePath));
 }
 
@@ -226,7 +236,7 @@ function createLineChart(
         title,
         xAxisField,
         series,
-        seriesColors: ['#4ab7ff', '#ffb14a', '#6ff0c2'],
+        seriesColors: LINE_SERIES_COLORS,
     }, buildScreenApiDataSource(url, responsePath));
 }
 
@@ -246,7 +256,7 @@ function createBarChart(
         title,
         xAxisField,
         series,
-        seriesColors: ['#4ab7ff', '#8a6cff', '#ffc85c'],
+        seriesColors: BAR_SERIES_COLORS,
     }, buildScreenApiDataSource(url, responsePath));
 }
 
@@ -264,7 +274,7 @@ function createPieChart(
         title,
         nameField: 'name',
         valueField: 'value',
-        seriesColors: ['#4ab7ff', '#ffb14a', '#ff6b8b', '#43d39e', '#7b86ff'],
+        seriesColors: PIE_SERIES_COLORS,
     }, buildScreenApiDataSource(url, responsePath));
 }
 
@@ -286,11 +296,11 @@ function createTable(
         data: [],
         fontSize: 12,
         headerColor: TITLE_COLOR,
-        headerBackground: 'rgba(20, 58, 99, 0.95)',
-        bodyColor: TITLE_COLOR,
-        bodyBackground: 'rgba(7, 22, 38, 0.9)',
-        oddRowBackground: 'rgba(7, 22, 38, 0.9)',
-        evenRowBackground: 'rgba(10, 30, 51, 0.92)',
+        headerBackground: TABLE_HEADER_BG,
+        bodyColor: BODY_COLOR,
+        bodyBackground: TABLE_BODY_BG,
+        oddRowBackground: TABLE_BODY_BG,
+        evenRowBackground: TABLE_EVEN_ROW_BG,
         borderColor: PANEL_BORDER,
         enableSort: true,
         enablePagination: false,
@@ -545,7 +555,7 @@ export const projectManagementCommandCenterTemplate: ScreenTemplate = {
         width: SCREEN_WIDTH,
         height: SCREEN_HEIGHT,
         backgroundColor: BG,
-        theme: 'legacy-dark',
+        theme: 'glacier',
         globalVariables: projectManagementVariables,
         pages: [
             buildOverviewPage(),
