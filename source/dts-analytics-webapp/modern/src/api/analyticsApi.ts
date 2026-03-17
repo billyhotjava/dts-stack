@@ -1154,6 +1154,14 @@ async function apiFetch(url: string, init: RequestInit, allowRefresh: boolean): 
 	return await fetch(url, { ...init, credentials: "include", headers: retryHeaders });
 }
 
+export async function fetchWithPlatformAuth(
+	url: string,
+	init: RequestInit = {},
+	allowRefresh: boolean = true,
+): Promise<Response> {
+	return await apiFetch(url, init, allowRefresh);
+}
+
 async function readErrorText(response: Response): Promise<string> {
 	return await response.text().catch(() => "");
 }

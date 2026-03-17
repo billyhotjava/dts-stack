@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { analyticsApi, HttpError } from '../../../api/analyticsApi';
+import { analyticsApi, fetchWithPlatformAuth, HttpError } from '../../../api/analyticsApi';
 import { resolveAnalyticsErrorCodeMessage } from '../../../api/errorCodeMessages';
 import type { CardParameterBinding, DataSourceConfig, CardData } from '../types';
 import { buildApiRuntimeRequest, resolveApiRuntimePayload } from '../apiDataSourceRuntime';
@@ -517,10 +517,9 @@ export function useCardDataSource(
                             if (method === 'POST' && !headers.has('content-type')) {
                                 headers.set('content-type', 'application/json');
                             }
-                            const response = await fetch(buildApiUrl(request.url, request.params), {
+                            const response = await fetchWithPlatformAuth(buildApiUrl(request.url, request.params), {
                                 method,
                                 headers,
-                                credentials: 'include',
                                 body: method === 'POST' ? request.body : undefined,
                             });
                             if (!response.ok) {

@@ -4,139 +4,70 @@
 
 | 文件 | 用途 |
 |------|------|
-| `project-management-cli-deploy.zip` | CLI 命令行部署（含 macros） |
-| `project-management-ui-import.zip` | 页面 ZIP 上传导入 |
-| `models.tsv` | 模型清单（21个模型的元数据） |
+| `99-build-all.sql` | **推荐**：纯 SQL 一键建表（不依赖 dbt） |
+| `project-sql/` | 分层单独 SQL 文件 + KPI 卡片查询 |
+| `project-kpi-queries.md` | 35 个 KPI 指标 SQL 查询文档 |
+| `dts-dbt-runtime.tar.gz` | dbt 运行时目录（用 dbt 方式部署时使用） |
+| `project-management-cli-deploy.zip` | CLI `dts-deploy` 导入包 |
+| `project-management-ui-import.zip` | 页面 ZIP 上传导入包 |
 
-### 模型清单（21个）
+### 数仓表清单（24 张）
 
-| 层 | 数量 | 模型 |
+| 层 | 数量 | 表 |
 |----|------|------|
-| ODS | 1 | ods_project_subject_domain |
-| DWD | 9 | biz_dwd_project_node, biz_dwd_project_node_enriched, dim_completion_status, dim_node_type, dim_risk_level, pm_dim_delay_reason, pm_dim_major_project, pm_dim_subproject, pm_map_node_subject |
+| Seed | 4 | pm_dim_delay_reason_seed, pm_dim_major_project_seed, pm_dim_subproject_seed, pm_map_node_subject_seed |
+| DIM | 7 | dim_completion_status, dim_node_type, dim_risk_level, pm_dim_delay_reason, pm_dim_major_project, pm_dim_subproject, pm_map_node_subject |
+| DWD | 2 | biz_dwd_project_node, biz_dwd_project_node_enriched |
 | DWS | 4 | biz_dws_period_node_summary, biz_dws_period_node_type_summary, biz_dws_period_risk_summary, biz_dws_week_subproject_summary |
 | ADS | 7 | biz_ads_project_kpi_overview, biz_ads_project_milestone_kpi, biz_ads_project_non_general_kpi, biz_ads_project_incomplete_risk, biz_ads_major_project_overview, biz_ads_major_project_tree_snapshot, biz_ads_delay_reason_trend |
 
-### ODS 表名约定
+---
 
-模型 SQL 通过 `{{ source('pm_ods', 'project_subject_domain') }}` 引用 ODS 表。
-**客户现场导入 Excel 时，入湖任务的目标表名必须使用以下约定名称：**
+## 方式一：纯 SQL 一键建表（推荐，最简单）
 
-| 逻辑名（模型引用） | 说明 | Excel 来源 |
-|-------------------|------|-----------|
-| `project_subject_domain` | 项目节点台账 | 项目管理主数据 Excel |
+适用于所有环境，不依赖 dbt、Airflow、平台 API。
 
-> 表名在 `models.tsv` 的 ODS 行中也有记录，现场操作时以此为准。
+### 前提
 
-## 现场部署流程（离线环境）
+ODS 表已通过入湖任务导入（Excel 导入），目标表名为 `ods_project_subject_domain`。
 
-### 准备物料
-
-带到现场的文件：
-- `project-management-cli-deploy.zip` — 模型包
-- 客户的 Excel 源数据文件
-
-### Step 1: 导入 Excel（使用约定表名）
-
-在平台页面操作：
-
-1. **数据接入中心 → 新建入湖任务 → Excel 导入**
-2. 目标表名填写 `project_subject_domain`（必须和模型包约定一致）
-3. 上传客户的 Excel 文件
-4. 执行入湖任务，等待完成
-
-如果有多个 Excel 对应多张 ODS 表，每个都按约定表名创建入湖任务：
-
-```
-客户Excel文件          →  入湖任务目标表名（约定）
-────────────────────      ─────────────────────
-项目节点台账.xlsx      →  project_subject_domain
-```
-
-### Step 2: 配置专题绑定
-
-1. **数据开发中心 → 专题绑定中心**
-2. 找到 `project-management` 专题
-3. 点击"绑定"，选择数据源 `pg-lake`，表名填 `project_subject_domain`
-4. 保存绑定
-
-或通过 API：
-```bash
-curl -sk -X POST "${API_BASE}/api/topic-bindings/ods" \
-  -H "Authorization: Bearer ${TOKEN}" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "templateCode": "project-management",
-    "entityCode": "project_subject_domain",
-    "schemaName": "public",
-    "tableName": "project_subject_domain"
-  }'
-```
-
-### Step 3: 导入模型包 + 建表
+### 执行
 
 ```bash
-# 加载环境（会提示输入用户名和密码）
-source bin/dts-deploy-env.sh
+# 本地环境
+psql -U biadmin -d biadmin -v ods_table=ods_project_subject_domain -f 99-build-all.sql
 
-# 导入模型 + 建表
-bin/dts-deploy \
-  --package project-management-cli-deploy.zip \
-  --plan-name "项目管理" \
-  --skip-existing \
-  --run \
-  --insecure
+# Docker 环境
+docker exec -i s10-stack-dts-pg-1 psql -U biadmin -d biadmin \
+  -v ods_table=ods_project_subject_domain \
+  -f - < 99-build-all.sql
+
+# 远程环境（SSH）
+ssh root@<IP> "cd /opt/prod/s10-stack && docker exec -i s10-stack-dts-pg-1 psql -U biadmin -d biadmin \
+  -v ods_table=ods_project_subject_domain -f -" < 99-build-all.sql
 ```
 
-或通过页面：
-1. **逻辑建模（SQL） → 批量归档 → ZIP 上传** `project-management-ui-import.zip`
-2. 流水线点击 **编译 → 测试 → 发布上线**
+### 自定义 ODS 表名
 
-### 一步到位（ODS 表已存在且绑定已配好）
+如果入湖时用了其他表名，替换 `ods_table` 参数即可：
 
 ```bash
-source bin/dts-deploy-env.sh
-bin/dts-deploy \
-  --package project-management-cli-deploy.zip \
-  --plan-name "项目管理" \
-  --skip-existing \
-  --run \
-  --insecure
+psql -U biadmin -d biadmin -v ods_table=my_custom_ods_table -f 99-build-all.sql
 ```
 
-## CLI 参数说明
+---
 
-| 参数 | 说明 |
-|------|------|
-| `--package <zip>` | 模型包路径 |
-| `--plan-name <name>` | 项目空间名称（自动创建） |
-| `--plan-id <uuid>` | 导入到已有项目空间（替代 --plan-name） |
-| `--skip-existing` | 跳过同名已有模型 |
-| `--run` | 导入后自动触发 dbt run 建表 + sync 目录 |
-| `--run-selector <tag>` | 指定 dbt selector（默认用包内 tags 或 all） |
-| `--insecure` | 跳过自签名 SSL 证书验证 |
-| `--dry-run` | 仅验证，不实际执行 |
+## 方式二：dbt 运行时部署
 
-## 环境变量（可预设，免交互）
+适用于需要使用平台建模功能（编辑、测试、发布）的场景。
 
 ```bash
-export DTS_USERNAME=opadmin
-export DTS_PASSWORD=xxx
-source bin/dts-deploy-env.sh
-```
-
-## 方式四：直接替换 dbt 目录（推荐，最可靠）
-
-适用于现场离线部署，跳过平台导入，直接替换 dbt 运行时目录。
-
-```bash
-# 1. 解压 dbt 运行时包（覆盖 services/dts-dbt/，保留 profiles/）
-tar xzf dts-dbt-runtime.tar.gz -C /opt/prod/s10/s10-stack/
+# 1. 解压 dbt 运行时包
+tar xzf dts-dbt-runtime.tar.gz -C /opt/prod/s10-stack/
 
 # 2. Excel 入湖（目标表名用 ods_project_subject_domain）
-#    通过页面操作：数据接入中心 → 新建入湖任务 → Excel
 
-# 3. 运行 dbt seed + run 建表
+# 3. dbt seed + run（全量重建）
 docker run --rm --network dts-core --privileged \
   -v $(pwd)/services/dts-dbt:/opt/dbt \
   -v $(pwd)/services/dts-dbt/profiles:/root/.dbt \
@@ -145,37 +76,83 @@ docker run --rm --network dts-core --privileged \
 docker run --rm --network dts-core --privileged \
   -v $(pwd)/services/dts-dbt:/opt/dbt \
   -v $(pwd)/services/dts-dbt/profiles:/root/.dbt \
-  dts-dbt:1.10.0 run --project-dir /opt/dbt --profiles-dir /root/.dbt --target dev --threads 1
+  dts-dbt:1.10.0 run --project-dir /opt/dbt --profiles-dir /root/.dbt --target dev --threads 1 --full-refresh
 ```
 
-**优点：** 不经过平台 API，不会重生成 SQL，不产生重复目录，不需要处理权限。
-**注意：** `profiles/` 目录不在包中，由平台自动生成（或手动配置）。
+**注意：** 必须加 `--full-refresh` 确保清除可能的残留重复数据。
 
-### 包内容
+---
 
-| 文件 | 说明 |
-|------|------|
-| `dts-dbt-runtime.tar.gz` | 9.7K，完整 dbt 项目（排除 profiles/target/.git） |
+## 方式三：CLI dts-deploy 部署
 
+```bash
+bin/dts-deploy \
+  --user opadmin --password xxx \
+  --package project-management-cli-deploy.zip \
+  --plan-name "项目管理" \
+  --skip-existing --run --insecure
 ```
-services/dts-dbt/
-├── dbt_project.yml          # dbt 项目配置
-├── macros/                  # parse_date_safe 等宏
-├── seeds/                   # 维度映射 CSV（4个）
-├── models/
-│   ├── dwd/prjtest1/        # 9 个 DWD 模型
-│   ├── dws/prjtest1/        # 4 个 DWS 模型
-│   ├── ads/prjtest1/        # 7 个 ADS 模型
-│   ├── pm_ods_sources.yml   # source 定义
-│   └── project_cockpit_schema.yml  # 测试定义
-└── profiles/                # [不在包中] 由平台生成
+
+---
+
+## 数据重建（已有环境修复）
+
+如果遇到以下问题，需要重建数仓表：
+- 项目看板 OOM（`OutOfMemoryError: Java heap space`）
+- `biz_dwd_project_node_enriched` 行数远超 ODS 表（笛卡尔积）
+- 维度表有重复数据
+
+### dbt 方式重建
+
+```bash
+cd /opt/prod/s10-stack
+
+# 全量重建（清除重复数据）
+docker run --rm --network dts-core --privileged \
+  -v $(pwd)/services/dts-dbt:/opt/dbt \
+  -v $(pwd)/services/dts-dbt/profiles:/root/.dbt \
+  dts-dbt:1.10.0 run --project-dir /opt/dbt --profiles-dir /root/.dbt --target dev --threads 1 --full-refresh
+
+# 重启 analytics 服务（清除 OOM 状态）
+docker restart s10-stack-dts-analytics-1
 ```
+
+### 纯 SQL 方式重建
+
+```bash
+cd /opt/prod/s10-stack
+
+# 一键重建
+docker exec -i s10-stack-dts-pg-1 psql -U biadmin -d biadmin \
+  -v ods_table=ods_project_subject_domain \
+  -f - < 99-build-all.sql
+
+# 重启 analytics 服务
+docker restart s10-stack-dts-analytics-1
+```
+
+---
 
 ## 故障排查
 
 | 错误信息 | 原因 | 解决 |
 |---------|------|------|
-| `relation "project_subject_domain" does not exist` | ODS 表未创建或表名不匹配 | 检查入湖任务是否用了约定表名 |
-| `function parse_date_safe does not exist` | macros 未部署 | 检查 `services/dts-dbt/macros/` 是否有该文件 |
-| `目标数仓数据源不存在` | dbt 工作区未配置 target 数据源 | 页面"逻辑建模"齿轮图标配置数据源 |
-| `dbt found two models with the same name` | 同名 SQL 文件在不同目录 | 删除重复文件，保留一份 |
+| `OutOfMemoryError: Java heap space` | enriched 表数据膨胀（笛卡尔积） | 执行数据重建（见上方），然后重启 analytics |
+| `relation "ods_project_subject_domain" does not exist` | ODS 表未创建 | 先通过入湖任务导入 Excel |
+| `function parse_date_safe does not exist` | 函数未创建 | 执行 `99-build-all.sql`（会自动创建函数） |
+| `dbt found two models with the same name` | 同名 SQL 文件在不同目录 | 删除重复目录，用 `--full-refresh` 重建 |
+| 项目看板"重大项目数"为 0 | seed 维度映射和客户数据不匹配 | 更新 seed CSV 或使用自动推导模型 |
+| analytics 首页 500 错误 | analytics 用户记录缺失或服务 OOM | 重启 analytics：`docker restart s10-stack-dts-analytics-1` |
+
+---
+
+## 增加 Analytics 堆内存
+
+如果数据量较大（>5000 行），建议增加 analytics 服务的堆内存。编辑 `.env`：
+
+```bash
+# 默认 1024m，建议改为 2048m
+ANALYTICS_JAVA_TOOL_OPTIONS="-Xms512m -Xmx2048m"
+```
+
+然后重启：`docker compose restart dts-analytics`
