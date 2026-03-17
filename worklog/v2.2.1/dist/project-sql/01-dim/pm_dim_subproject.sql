@@ -1,25 +1,34 @@
--- DIM：子项目维度（从 seed 表构建）
-DROP TABLE IF EXISTS public.pm_dim_subproject CASCADE;
-CREATE TABLE public.pm_dim_subproject AS
-SELECT
-  NULLIF(btrim(subproject_id), '') AS subproject_id,
-  NULLIF(btrim(subproject_code), '') AS subproject_code,
-  NULLIF(btrim(subproject_name), '') AS subproject_name,
-  NULLIF(btrim(major_project_id), '') AS major_project_id,
-  NULLIF(btrim(project_no), '') AS project_no,
-  NULLIF(btrim(subsystem_name), '') AS subsystem_name,
-  NULLIF(btrim(owner_dept), '') AS owner_dept,
-  NULLIF(btrim(owner_user), '') AS owner_user,
-  NULLIF(btrim(project_manager), '') AS project_manager,
-  CASE WHEN plan_start_date IS NULL THEN NULL ELSE plan_start_date::date END AS plan_start_date,
-  CASE WHEN plan_end_date IS NULL THEN NULL ELSE plan_end_date::date END AS plan_end_date,
+{{ config(materialized='table', tags=['project-management', 'dim', 'project-cockpit', 'dwd']) }}
+
+-- 从 ODS 节点数据自动推导子项目维度，无需 seed
+SELECT DISTINCT
+  md5(COALESCE(btrim(o.project_no), '') || '/' || COALESCE(btrim(o.subsystem), '')) AS subproject_id,
+  btrim(o.project_no) || '-' || left(
+    CASE WHEN o.subsystem LIKE '%/%' THEN btrim(split_part(o.subsystem, '/', 2)) ELSE btrim(o.subsystem) END,
+    8
+  ) AS subproject_code,
   CASE
-    WHEN actual_end_date IS NULL THEN NULL
-    WHEN actual_end_date::text ~ '^\d{8}$' THEN to_date(actual_end_date::text, 'YYYYMMDD')
-    WHEN actual_end_date::text ~ '^\d{4}-\d{2}-\d{2}$' THEN actual_end_date::text::date
-    ELSE NULL
-  END AS actual_end_date,
-  NULLIF(btrim(status), '') AS status,
-  NULLIF(btrim(priority_level), '') AS priority_level,
-  NULLIF(btrim(remark), '') AS remark
-FROM public.pm_dim_subproject_seed;
+    WHEN o.subsystem LIKE '%/%'
+      THEN NULLIF(btrim(split_part(o.subsystem, '/', 2)), '')
+    ELSE NULLIF(btrim(o.subsystem), '')
+  END AS subproject_name,
+  NULLIF(btrim(o.project_no), '') AS major_project_id,
+  NULLIF(btrim(o.project_no), '') AS project_no,
+  NULLIF(btrim(o.subsystem), '') AS subsystem_name,
+  NULLIF(btrim(o.dept), '') AS owner_dept,
+  '' AS owner_user,
+  NULLIF(btrim(o.project_manager), '') AS project_manager,
+  min({{ parse_date_safe("o.plan_date") }}) AS plan_start_date,
+  max({{ parse_date_safe("o.plan_date") }}) AS plan_end_date,
+  NULL::date AS actual_end_date,
+  '执行中' AS status,
+  'A' AS priority_level,
+  '' AS remark
+FROM {{ source('pm_ods', 'project_subject_domain') }} o
+WHERE btrim(COALESCE(o.project_no, '')) != ''
+  AND btrim(COALESCE(o.subsystem, '')) != ''
+GROUP BY
+  COALESCE(btrim(o.project_no), ''),
+  COALESCE(btrim(o.subsystem), ''),
+  NULLIF(btrim(o.dept), ''),
+  NULLIF(btrim(o.project_manager), '')
