@@ -73,8 +73,16 @@ class ProjectCockpitImportServiceIT {
 
         assertThat(response.batchCode()).isEqualTo("excel-202603160001");
         assertThat(response.loadedRowCount()).isEqualTo(2);
+        assertThat(response.acceptedRowCount()).isEqualTo(2);
+        assertThat(response.rejectedRowCount()).isEqualTo(0);
+        assertThat(response.warningRowCount()).isEqualTo(0);
         assertThat(response.issueCount()).isEqualTo(1);
-        assertThat(response.status()).isEqualTo("LOADED");
+        assertThat(response.status()).isEqualTo("LOADED_WITH_WARNINGS");
+
+        var issuePreview = excelImportService.projectCockpitIssuePreview(response.batchId(), "WARN", 20, "tester", "信息科", true);
+        assertThat(issuePreview.issueRowCount()).isEqualTo(1);
+        assertThat(issuePreview.rows()).hasSize(1);
+        assertThat(issuePreview.rows().getFirst().issueCode()).isEqualTo("PARSE_WARNING");
 
         assertThat(jdbcTemplate.queryForObject("select count(*) from infra_project_cockpit_batch", Integer.class)).isEqualTo(1);
         assertThat(jdbcTemplate.queryForObject("select count(*) from infra_project_cockpit_row", Integer.class)).isEqualTo(2);
@@ -83,6 +91,6 @@ class ProjectCockpitImportServiceIT {
                         jdbcTemplate.queryForObject(
                                 "select count(*) from infra_project_cockpit_row where parse_status = 'PARSED_WITH_WARNINGS'",
                                 Integer.class))
-                .isEqualTo(1);
+                .isEqualTo(0);
     }
 }

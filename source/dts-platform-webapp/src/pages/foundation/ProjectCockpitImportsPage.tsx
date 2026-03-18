@@ -24,6 +24,7 @@ import dataSourcesService, {
 	type ExcelImportErrorRow,
 	type ExcelImportParseResponse,
 	type ExcelImportPrepareResponse,
+	type ProjectCockpitBatchIssuePreviewResponse,
 	type ProjectCockpitBatchLoadResponse,
 } from "@/api/services/dataSourcesService";
 import topicBindingService, {
@@ -42,6 +43,18 @@ const { Paragraph, Text, Title } = Typography;
 const normalizeText = (value?: string | null) => String(value || "").trim();
 const buildTopicSourceKey = (candidate?: TopicSourceCandidate) =>
 	candidate ? `${normalizeText(candidate.sourceDataSourceId)}|${normalizeText(candidate.schema)}|${normalizeText(candidate.table)}` : "";
+const resolveBatchStatusColor = (status?: string) => {
+	if (!status) {
+		return "default";
+	}
+	if (status.includes("REJECTION")) {
+		return "error";
+	}
+	if (status.includes("WARNING")) {
+		return "warning";
+	}
+	return "success";
+};
 
 const toPreviewRows = (result: ExcelImportParseResponse | null) => {
 	if (!result?.preview?.length || !result.columns?.length) {
@@ -61,11 +74,14 @@ export default function ProjectCockpitImportsPage() {
 	const [excelPrepared, setExcelPrepared] = useState<ExcelImportPrepareResponse | null>(null);
 	const [excelParseResult, setExcelParseResult] = useState<ExcelImportParseResponse | null>(null);
 	const [batchLoadResult, setBatchLoadResult] = useState<ProjectCockpitBatchLoadResponse | null>(null);
+	const [batchIssuePreview, setBatchIssuePreview] = useState<ProjectCockpitBatchIssuePreviewResponse | null>(null);
+	const [batchIssueSeverity, setBatchIssueSeverity] = useState<"ERROR" | "WARN">("ERROR");
 	const [errorRows, setErrorRows] = useState<ExcelImportErrorRow[]>([]);
 	const [excelUploading, setExcelUploading] = useState(false);
 	const [excelParsing, setExcelParsing] = useState(false);
 	const [loadingBatch, setLoadingBatch] = useState(false);
 	const [loadingErrors, setLoadingErrors] = useState(false);
+	const [loadingBatchIssues, setLoadingBatchIssues] = useState(false);
 	const [excelSheetName, setExcelSheetName] = useState<string | undefined>();
 	const [excelHeaderRow, setExcelHeaderRow] = useState(1);
 	const [excelDataStartRow, setExcelDataStartRow] = useState(2);
@@ -144,6 +160,7 @@ export default function ProjectCockpitImportsPage() {
 		}
 		return bindingSources.filter((item) => normalizeText(item.sourceDataSourceId) === normalizeText(selectedDataSourceId));
 	}, [bindingSources, selectedDataSourceId]);
+	const batchIssueRows = useMemo(() => batchIssuePreview?.rows || [], [batchIssuePreview]);
 
 	useEffect(() => {
 		if (!selectedTemplateCode) {
@@ -171,6 +188,8 @@ export default function ProjectCockpitImportsPage() {
 		setExcelPrepared(null);
 		setExcelParseResult(null);
 		setBatchLoadResult(null);
+		setBatchIssuePreview(null);
+		setBatchIssueSeverity("ERROR");
 		setErrorRows([]);
 		setExcelSheetName(undefined);
 		setExcelHeaderRow(1);
@@ -236,6 +255,8 @@ export default function ProjectCockpitImportsPage() {
 			});
 			setExcelParseResult(resp);
 			setBatchLoadResult(null);
+			setBatchIssuePreview(null);
+			setBatchIssueSeverity("ERROR");
 			setErrorRows([]);
 			message.success("解析完成，可以查看预览并执行项目主体域落库");
 		} catch (error: any) {
@@ -269,11 +290,49 @@ export default function ProjectCockpitImportsPage() {
 		try {
 			const resp = await dataSourcesService.excelLoadProjectCockpit({ fileId: excelPrepared.fileId });
 			setBatchLoadResult(resp);
+			const nextSeverity: "ERROR" | "WARN" = resp.rejectedRowCount > 0 ? "ERROR" : "WARN";
+			setBatchIssueSeverity(nextSeverity);
+			if (resp.issueCount > 0) {
+				try {
+					const issuePreview = await dataSourcesService.projectCockpitIssues({
+						batchId: resp.batchId,
+						severity: nextSeverity,
+						limit: 50,
+					});
+					setBatchIssuePreview(issuePreview);
+				} catch (error: any) {
+					setBatchIssuePreview(null);
+					message.warning(error?.message || "批次已落库，但问题明细暂时加载失败");
+				}
+			} else {
+				setBatchIssuePreview(null);
+			}
 			message.success("项目主体域批次已落库，可继续触发中台建模刷新");
 		} catch (error: any) {
 			message.error(error?.message || "项目主体域落库失败");
 		} finally {
 			setLoadingBatch(false);
+		}
+	};
+
+	const handleLoadBatchIssues = async (severity: "ERROR" | "WARN" = batchIssueSeverity) => {
+		if (!batchLoadResult?.batchId) {
+			message.warning("请先完成正式落库");
+			return;
+		}
+		setBatchIssueSeverity(severity);
+		setLoadingBatchIssues(true);
+		try {
+			const resp = await dataSourcesService.projectCockpitIssues({
+				batchId: batchLoadResult.batchId,
+				severity,
+				limit: 50,
+			});
+			setBatchIssuePreview(resp);
+		} catch (error: any) {
+			message.error(error?.message || "加载落库问题明细失败");
+		} finally {
+			setLoadingBatchIssues(false);
 		}
 	};
 
@@ -463,10 +522,26 @@ export default function ProjectCockpitImportsPage() {
 					<Descriptions.Item label="解析行数">{excelParseResult?.rowCount ?? "-"}</Descriptions.Item>
 					<Descriptions.Item label="解析错误">{excelParseResult?.errorCount ?? "-"}</Descriptions.Item>
 					<Descriptions.Item label="落库状态">
-						{batchLoadResult?.status ? <Tag color="success">{batchLoadResult.status}</Tag> : <Text type="secondary">未落库</Text>}
+						{batchLoadResult?.status ? (
+							<Tag color={resolveBatchStatusColor(batchLoadResult.status)}>{batchLoadResult.status}</Tag>
+						) : (
+							<Text type="secondary">未落库</Text>
+						)}
 					</Descriptions.Item>
 					<Descriptions.Item label="落库结果">
 						{batchLoadResult ? `${batchLoadResult.loadedRowCount} 行 / ${batchLoadResult.issueCount} 条问题` : "-"}
+					</Descriptions.Item>
+					<Descriptions.Item label="可入湖记录">
+						{batchLoadResult ? `${batchLoadResult.acceptedRowCount} 行` : "-"}
+					</Descriptions.Item>
+					<Descriptions.Item label="拦截记录">
+						{batchLoadResult ? `${batchLoadResult.rejectedRowCount} 行` : "-"}
+					</Descriptions.Item>
+					<Descriptions.Item label="告警记录">
+						{batchLoadResult ? `${batchLoadResult.warningRowCount} 行` : "-"}
+					</Descriptions.Item>
+					<Descriptions.Item label="统计说明">
+						{batchLoadResult ? "告警记录已计入可入湖行数，拦截记录可在下方查看明细" : "-"}
 					</Descriptions.Item>
 					<Descriptions.Item label="后续动作" span={2}>
 						{batchLoadResult ? (
@@ -512,6 +587,79 @@ export default function ProjectCockpitImportsPage() {
 							{ title: "问题说明", dataIndex: "message", key: "message" },
 						]}
 						locale={{ emptyText: excelParseResult?.errorCount ? "点击“查看错误预览”加载明细" : "当前没有错误明细" }}
+					/>
+				</Space>
+			</Card>
+
+			<Card
+				title="落库问题明细"
+				extra={
+					batchLoadResult ? (
+						<Space>
+							<Select
+								value={batchIssueSeverity}
+								style={{ width: 180 }}
+								options={[
+									{ value: "ERROR", label: "拦截记录（ERROR）" },
+									{ value: "WARN", label: "告警记录（WARN）" },
+								]}
+								onChange={(value) => void handleLoadBatchIssues(value)}
+							/>
+							<Button icon={<ReloadOutlined />} onClick={() => void handleLoadBatchIssues()} loading={loadingBatchIssues}>
+								刷新明细
+							</Button>
+						</Space>
+					) : null
+				}
+			>
+				<Space direction="vertical" style={{ width: "100%" }} size={12}>
+					<Paragraph type="secondary" style={{ marginBottom: 0 }}>
+						这里展示正式落库阶段被拦截或带告警的记录，用来解释“Excel 总行数”和“最终可入湖行数”之间的差异。
+					</Paragraph>
+					{batchLoadResult ? (
+						<Alert
+							type={batchIssueSeverity === "ERROR" ? "error" : "warning"}
+							showIcon
+							message={`当前批次 ${batchLoadResult.batchCode}：已评估 ${batchLoadResult.loadedRowCount} 行，可入湖 ${batchLoadResult.acceptedRowCount} 行，拦截 ${batchLoadResult.rejectedRowCount} 行，告警 ${batchLoadResult.warningRowCount} 行。`}
+							description={
+								batchIssuePreview
+									? `当前展示 ${batchIssueSeverity} 明细 ${batchIssuePreview.rows.length} / ${batchIssuePreview.issueRowCount} 条。`
+									: "落库后可按 ERROR/WARN 查看问题明细。"
+							}
+						/>
+					) : null}
+					<Table
+						rowKey={(row, index) => `${row.rowIndex || 0}-${row.issueCode || "issue"}-${index || 0}`}
+						size="small"
+						scroll={{ x: 1400 }}
+						pagination={false}
+						loading={loadingBatchIssues}
+						dataSource={batchIssueRows}
+						columns={[
+							{ title: "行号", dataIndex: "rowIndex", key: "rowIndex", width: 90 },
+							{
+								title: "级别",
+								dataIndex: "severity",
+								key: "severity",
+								width: 100,
+								render: (value: string) => <Tag color={value === "ERROR" ? "error" : "warning"}>{value || "-"}</Tag>,
+							},
+							{ title: "问题编码", dataIndex: "issueCode", key: "issueCode", width: 260 },
+							{ title: "问题说明", dataIndex: "message", key: "message", width: 260 },
+							{ title: "项目编号", dataIndex: "projectNo", key: "projectNo", width: 160 },
+							{ title: "分系统", dataIndex: "subsystem", key: "subsystem", width: 160 },
+							{ title: "节点任务", dataIndex: "nodeTask", key: "nodeTask", width: 180 },
+							{ title: "计划日期", dataIndex: "planDate", key: "planDate", width: 160 },
+							{ title: "完成状态", dataIndex: "completionStatus", key: "completionStatus", width: 180 },
+							{ title: "风险等级", dataIndex: "riskLevel", key: "riskLevel", width: 120 },
+						]}
+						locale={{
+							emptyText: batchLoadResult
+								? batchLoadResult.issueCount
+									? "当前筛选下没有问题明细"
+									: "本批次没有落库问题"
+								: "完成正式落库后显示问题明细",
+						}}
 					/>
 				</Space>
 			</Card>

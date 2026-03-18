@@ -1,6 +1,7 @@
 package com.yuzhi.dts.platform.web.rest.infra;
 
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -14,6 +15,7 @@ import java.nio.file.Path;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -86,8 +88,25 @@ class ExcelImportResourceIT {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.data.batchCode").value("excel-202603160002"))
             .andExpect(jsonPath("$.data.loadedRowCount").value(2))
+            .andExpect(jsonPath("$.data.acceptedRowCount").value(2))
+            .andExpect(jsonPath("$.data.rejectedRowCount").value(0))
+            .andExpect(jsonPath("$.data.warningRowCount").value(0))
             .andExpect(jsonPath("$.data.issueCount").value(1))
-            .andExpect(jsonPath("$.data.status").value("LOADED"));
+            .andExpect(jsonPath("$.data.status").value("LOADED_WITH_WARNINGS"));
+
+        UUID batchId = jdbcTemplate.queryForObject("select id from infra_project_cockpit_batch limit 1", UUID.class);
+
+        mockMvc
+            .perform(
+                get("/api/infra/excel-import/project-cockpit/issues")
+                    .header("X-Active-Dept", "信息科")
+                    .param("batchId", batchId.toString())
+                    .param("severity", "WARN")
+                    .param("limit", "20")
+            )
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.issueRowCount").value(1))
+            .andExpect(jsonPath("$.data.rows[0].issueCode").value("PARSE_WARNING"));
 
         org.assertj.core.api.Assertions.assertThat(
                 jdbcTemplate.queryForObject("select count(*) from infra_project_cockpit_batch", Integer.class)

@@ -3,6 +3,7 @@
 -- 适用场景：Excel/CSV 导入 ODS 后，手工/调度执行本 SQL
 -- 目标库：PostgreSQL（public schema）
 -- 数据域：项目节点管理（project-cockpit）
+-- 版本：v2.2.2（同步 dbt 模型重构）
 -- ============================================================
 -- 用法：
 --   psql -U biadmin -d biadmin -f 99-build-all.sql
@@ -88,6 +89,41 @@ BEGIN
 
   RETURN NULL;
 END;
+$$;
+
+-- ------------------------------------------------------------
+-- 前置函数：清理占位符值（等同于 nullif_placeholder 宏）
+-- 将 '/', '#VALUE!', 'N/A' 等无效值统一转为 NULL
+-- ------------------------------------------------------------
+CREATE OR REPLACE FUNCTION nullif_placeholder(p_text text)
+RETURNS text
+LANGUAGE sql
+IMMUTABLE
+AS $$
+  SELECT
+    CASE
+      WHEN p_text IS NULL THEN NULL
+      WHEN upper(btrim(p_text)) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
+        THEN NULL
+      ELSE nullif(btrim(p_text), '')
+    END
+$$;
+
+-- ------------------------------------------------------------
+-- 前置函数：安全解析数值（等同于 parse_numeric_safe 宏）
+-- ------------------------------------------------------------
+CREATE OR REPLACE FUNCTION parse_numeric_safe(p_text text)
+RETURNS numeric
+LANGUAGE sql
+IMMUTABLE
+AS $$
+  SELECT
+    CASE
+      WHEN nullif_placeholder(p_text) IS NULL THEN NULL
+      WHEN regexp_replace(nullif_placeholder(p_text), ',', '', 'g') ~ '^-?\d+(\.\d+)?$'
+        THEN regexp_replace(nullif_placeholder(p_text), ',', '', 'g')::numeric
+      ELSE NULL
+    END
 $$;
 
 -- ============================================================
@@ -284,91 +320,265 @@ FROM (VALUES
 DROP TABLE IF EXISTS public.pm_dim_delay_reason CASCADE;
 CREATE TABLE public.pm_dim_delay_reason AS
 SELECT
-  NULLIF(btrim(delay_reason_category), '') AS delay_reason_category,
-  NULLIF(btrim(delay_reason_label), '') AS delay_reason_label,
-  NULLIF(btrim(description), '') AS description
+  nullif_placeholder(delay_reason_category) AS delay_reason_category,
+  nullif_placeholder(delay_reason_label) AS delay_reason_label,
+  nullif_placeholder(description) AS description
 FROM public.pm_dim_delay_reason_seed;
 
 -- ------------------------------------------------------------
--- 2.5) DIM：重大项目维度（从 seed 构建）
+-- 2.5) DIM：重大项目维度（从 ODS 自动推导）
+-- project_no 即为重大项目标识，不再依赖 "/" 分割 subsystem
 -- ------------------------------------------------------------
 DROP TABLE IF EXISTS public.pm_dim_major_project CASCADE;
 CREATE TABLE public.pm_dim_major_project AS
+DO $$
+DECLARE
+  ods_table text := current_setting('dts.ods_table', true);
+BEGIN
+  IF ods_table IS NULL OR ods_table = '' THEN
+    ods_table := 'ods_project_subject_domain';
+  END IF;
+  EXECUTE format($fmt$
+WITH raw AS (
+  SELECT
+    nullif_placeholder(o.project_no) AS project_no,
+    nullif_placeholder(o.project_no) AS major_project_name,
+    nullif_placeholder(o.dept) AS dept,
+    nullif_placeholder(o.dept_leader) AS dept_leader,
+    parse_date_safe(o.plan_date) AS plan_date
+  FROM public.%I o
+  WHERE btrim(COALESCE(o.project_no, '')) != ''
+),
+agg AS (
+  SELECT
+    project_no,
+    min(major_project_name) AS major_project_name,
+    min(plan_date) AS start_date,
+    max(plan_date) AS plan_end_date
+  FROM raw
+  GROUP BY project_no
+),
+first_dept AS (
+  SELECT DISTINCT ON (project_no)
+    project_no,
+    dept,
+    dept_leader
+  FROM raw
+  WHERE dept IS NOT NULL
+  ORDER BY project_no, dept
+)
+INSERT INTO public.pm_dim_major_project
 SELECT
-  NULLIF(btrim(major_project_id), '') AS major_project_id,
-  NULLIF(btrim(major_project_code), '') AS major_project_code,
-  NULLIF(btrim(major_project_name), '') AS major_project_name,
-  NULLIF(btrim(program_id), '') AS program_id,
-  NULLIF(btrim(program_name), '') AS program_name,
-  NULLIF(btrim(project_level), '') AS project_level,
-  NULLIF(btrim(owner_dept), '') AS owner_dept,
-  NULLIF(btrim(owner_leader), '') AS owner_leader,
-  NULLIF(btrim(priority_level), '') AS priority_level,
-  CASE WHEN start_date IS NULL THEN NULL ELSE start_date::date END AS start_date,
-  CASE WHEN plan_end_date IS NULL THEN NULL ELSE plan_end_date::date END AS plan_end_date,
-  NULLIF(btrim(status), '') AS status,
-  NULLIF(btrim(remark), '') AS remark
-FROM public.pm_dim_major_project_seed;
+  a.project_no AS major_project_id,
+  a.project_no AS major_project_code,
+  a.major_project_name,
+  'program-' || a.project_no AS program_id,
+  a.major_project_name AS program_name,
+  '重大项目' AS project_level,
+  d.dept AS owner_dept,
+  d.dept_leader AS owner_leader,
+  'A' AS priority_level,
+  a.start_date,
+  a.plan_end_date,
+  '执行中' AS status,
+  NULL::text AS remark
+FROM agg a
+LEFT JOIN first_dept d ON d.project_no = a.project_no
+$fmt$, ods_table);
+END $$;
+
+-- Fallback: if DO block approach is not supported in this context, use seed
+-- The table structure must exist for the DO block above to work:
+DO $$
+BEGIN
+  -- If table is empty, populate from seed (legacy fallback)
+  IF NOT EXISTS (SELECT 1 FROM public.pm_dim_major_project LIMIT 1) THEN
+    INSERT INTO public.pm_dim_major_project
+    SELECT
+      nullif_placeholder(major_project_id),
+      nullif_placeholder(major_project_code),
+      nullif_placeholder(major_project_name),
+      nullif_placeholder(program_id),
+      nullif_placeholder(program_name),
+      nullif_placeholder(project_level),
+      nullif_placeholder(owner_dept),
+      nullif_placeholder(owner_leader),
+      nullif_placeholder(priority_level),
+      start_date,
+      plan_end_date,
+      nullif_placeholder(status),
+      nullif_placeholder(remark)
+    FROM public.pm_dim_major_project_seed;
+  END IF;
+END $$;
 
 -- ------------------------------------------------------------
--- 2.6) DIM：子项目维度（从 seed 构建）
+-- 2.6) DIM：子项目维度（从 ODS 自动推导）
+-- subsystem 直接作为子项目名称，不再用 "/" 分割
 -- ------------------------------------------------------------
 DROP TABLE IF EXISTS public.pm_dim_subproject CASCADE;
 CREATE TABLE public.pm_dim_subproject AS
+DO $$
+DECLARE
+  ods_table text := current_setting('dts.ods_table', true);
+BEGIN
+  IF ods_table IS NULL OR ods_table = '' THEN
+    ods_table := 'ods_project_subject_domain';
+  END IF;
+  EXECUTE format($fmt$
+WITH raw AS (
+  SELECT
+    nullif_placeholder(o.project_no) AS project_no,
+    nullif_placeholder(o.subsystem) AS subsystem,
+    nullif_placeholder(o.subsystem) AS subproject_name,
+    nullif_placeholder(o.dept) AS dept,
+    nullif_placeholder(o.project_manager) AS project_manager,
+    parse_date_safe(o.plan_date) AS plan_date
+  FROM public.%I o
+  WHERE btrim(COALESCE(o.project_no, '')) != ''
+    AND btrim(COALESCE(o.subsystem, '')) != ''
+),
+agg AS (
+  SELECT
+    project_no,
+    subsystem,
+    min(subproject_name) AS subproject_name,
+    min(plan_date) AS plan_start_date,
+    max(plan_date) AS plan_end_date
+  FROM raw
+  GROUP BY project_no, subsystem
+),
+first_dept AS (
+  SELECT DISTINCT ON (project_no, subsystem)
+    project_no,
+    subsystem,
+    dept,
+    project_manager
+  FROM raw
+  WHERE dept IS NOT NULL
+  ORDER BY project_no, subsystem, dept
+)
+INSERT INTO public.pm_dim_subproject
 SELECT
-  NULLIF(btrim(subproject_id), '') AS subproject_id,
-  NULLIF(btrim(subproject_code), '') AS subproject_code,
-  NULLIF(btrim(subproject_name), '') AS subproject_name,
-  NULLIF(btrim(major_project_id), '') AS major_project_id,
-  NULLIF(btrim(project_no), '') AS project_no,
-  NULLIF(btrim(subsystem_name), '') AS subsystem_name,
-  NULLIF(btrim(owner_dept), '') AS owner_dept,
-  NULLIF(btrim(owner_user), '') AS owner_user,
-  NULLIF(btrim(project_manager), '') AS project_manager,
-  CASE WHEN plan_start_date IS NULL THEN NULL ELSE plan_start_date::date END AS plan_start_date,
-  CASE WHEN plan_end_date IS NULL THEN NULL ELSE plan_end_date::date END AS plan_end_date,
-  CASE
-    WHEN actual_end_date IS NULL THEN NULL
-    WHEN actual_end_date::text ~ '^\d{8}$' THEN to_date(actual_end_date::text, 'YYYYMMDD')
-    WHEN actual_end_date::text ~ '^\d{4}-\d{2}-\d{2}$' THEN actual_end_date::text::date
-    ELSE NULL
-  END AS actual_end_date,
-  NULLIF(btrim(status), '') AS status,
-  NULLIF(btrim(priority_level), '') AS priority_level,
-  NULLIF(btrim(remark), '') AS remark
-FROM public.pm_dim_subproject_seed;
+  md5(COALESCE(a.project_no, '') || '/' || COALESCE(a.subsystem, '')) AS subproject_id,
+  a.project_no || '-' || left(COALESCE(a.subproject_name, ''), 8) AS subproject_code,
+  a.subproject_name,
+  a.project_no AS major_project_id,
+  a.project_no,
+  a.subsystem AS subsystem_name,
+  d.dept AS owner_dept,
+  NULL::text AS owner_user,
+  d.project_manager,
+  a.plan_start_date,
+  a.plan_end_date,
+  NULL::date AS actual_end_date,
+  '执行中' AS status,
+  'A' AS priority_level,
+  NULL::text AS remark
+FROM agg a
+LEFT JOIN first_dept d ON d.project_no = a.project_no AND d.subsystem = a.subsystem
+$fmt$, ods_table);
+END $$;
+
+-- Fallback: populate from seed if table is empty
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM public.pm_dim_subproject LIMIT 1) THEN
+    INSERT INTO public.pm_dim_subproject
+    SELECT
+      nullif_placeholder(subproject_id),
+      nullif_placeholder(subproject_code),
+      nullif_placeholder(subproject_name),
+      nullif_placeholder(major_project_id),
+      nullif_placeholder(project_no),
+      nullif_placeholder(subsystem_name),
+      nullif_placeholder(owner_dept),
+      nullif_placeholder(owner_user),
+      nullif_placeholder(project_manager),
+      plan_start_date,
+      plan_end_date,
+      actual_end_date,
+      nullif_placeholder(status),
+      nullif_placeholder(priority_level),
+      nullif_placeholder(remark)
+    FROM public.pm_dim_subproject_seed;
+  END IF;
+END $$;
 
 -- ------------------------------------------------------------
--- 2.7) DIM：节点-主题映射（从 seed 构建）
+-- 2.7) DIM：节点-主题映射（从 ODS 自动推导 + seed 覆盖）
+-- node_category/is_key_node/is_milestone 从 node_type 自动推导
 -- ------------------------------------------------------------
 DROP TABLE IF EXISTS public.pm_map_node_subject CASCADE;
 CREATE TABLE public.pm_map_node_subject AS
-SELECT
-  NULLIF(btrim(map_id), '') AS map_id,
-  NULLIF(btrim(project_no), '') AS project_no,
-  NULLIF(btrim(subsystem), '') AS subsystem,
-  NULLIF(btrim(node_task), '') AS node_task,
-  NULLIF(btrim(subproject_id), '') AS subproject_id,
-  NULLIF(btrim(major_project_id), '') AS major_project_id,
-  NULLIF(btrim(node_category), '') AS node_category,
-  NULLIF(btrim(delay_reason_category), '') AS delay_reason_category,
-  CASE
-    WHEN is_key_node IS TRUE THEN true
-    WHEN lower(COALESCE(is_key_node::text, '')) IN ('true', 't', '1', 'yes', 'y') THEN true
-    ELSE false
-  END AS is_key_node,
-  CASE
-    WHEN is_milestone IS TRUE THEN true
-    WHEN lower(COALESCE(is_milestone::text, '')) IN ('true', 't', '1', 'yes', 'y') THEN true
-    ELSE false
-  END AS is_milestone,
-  CASE WHEN sort_order IS NULL THEN NULL ELSE sort_order::int END AS sort_order,
-  NULLIF(btrim(source_flag), '') AS source_flag,
-  CASE
-    WHEN remark IS NULL THEN NULL
-    ELSE NULLIF(btrim(remark::text), '')
-  END AS remark
-FROM public.pm_map_node_subject_seed;
+DO $$
+DECLARE
+  ods_table text := current_setting('dts.ods_table', true);
+BEGIN
+  IF ods_table IS NULL OR ods_table = '' THEN
+    ods_table := 'ods_project_subject_domain';
+  END IF;
+  EXECUTE format($fmt$
+INSERT INTO public.pm_map_node_subject
+SELECT DISTINCT
+  md5(
+    COALESCE(btrim(o.project_no), '') || '|' ||
+    COALESCE(btrim(o.subsystem), '') || '|' ||
+    COALESCE(btrim(o.node_task), '')
+  ) AS map_id,
+  nullif_placeholder(o.project_no) AS project_no,
+  nullif_placeholder(o.subsystem) AS subsystem,
+  nullif_placeholder(o.node_task) AS node_task,
+  md5(COALESCE(btrim(o.project_no), '') || '/' || COALESCE(btrim(o.subsystem), '')) AS subproject_id,
+  nullif_placeholder(o.project_no) AS major_project_id,
+  CASE btrim(o.node_type)
+    WHEN '里程碑节点' THEN 'milestone'
+    WHEN '重大节点' THEN 'critical'
+    WHEN '重要节点' THEN 'critical'
+    ELSE 'routine'
+  END AS node_category,
+  NULL::text AS delay_reason_category,
+  btrim(o.node_type) IN ('重大节点', '重要节点', '里程碑节点') AS is_key_node,
+  btrim(o.node_type) = '里程碑节点' AS is_milestone,
+  NULL::int AS sort_order,
+  'auto' AS source_flag,
+  NULL::text AS remark
+FROM public.%I o
+WHERE btrim(COALESCE(o.project_no, '')) != ''
+  AND btrim(COALESCE(o.node_task, '')) != ''
+$fmt$, ods_table);
+END $$;
+
+-- Merge in seed overrides (seed rows take priority over auto-derived rows)
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM public.pm_map_node_subject_seed LIMIT 1) THEN
+    -- Upsert seed rows: delete matching auto rows first, then insert seed rows
+    DELETE FROM public.pm_map_node_subject m
+    USING public.pm_map_node_subject_seed s
+    WHERE m.project_no = nullif_placeholder(s.project_no)
+      AND m.subsystem  = nullif_placeholder(s.subsystem)
+      AND m.node_task  = nullif_placeholder(s.node_task)
+      AND m.source_flag = 'auto';
+
+    INSERT INTO public.pm_map_node_subject
+    SELECT
+      nullif_placeholder(map_id),
+      nullif_placeholder(project_no),
+      nullif_placeholder(subsystem),
+      nullif_placeholder(node_task),
+      nullif_placeholder(subproject_id),
+      nullif_placeholder(major_project_id),
+      nullif_placeholder(node_category),
+      nullif_placeholder(delay_reason_category),
+      CASE WHEN is_key_node IS TRUE THEN true ELSE false END,
+      CASE WHEN is_milestone IS TRUE THEN true ELSE false END,
+      sort_order,
+      nullif_placeholder(source_flag),
+      CASE WHEN remark IS NULL THEN NULL ELSE nullif_placeholder(remark::text) END
+    FROM public.pm_map_node_subject_seed;
+  END IF;
+END $$;
 
 -- ============================================================
 -- 3) DWD：明细层
@@ -397,37 +607,37 @@ SELECT
     COALESCE(btrim(o.plan_date), '')
   ) AS node_id,
 
-  -- === 原始业务字段 ===
-  NULLIF(btrim(o.project_no), '')          AS project_no,
-  NULLIF(btrim(o.subsystem), '')           AS subsystem,
-  NULLIF(btrim(o.node_task), '')           AS node_task,
-  NULLIF(btrim(o.owner), '')               AS owner,
-  NULLIF(btrim(o.dept), '')                AS dept,
-  NULLIF(btrim(o.dept_leader), '')         AS dept_leader,
-  NULLIF(btrim(o.collab_dept), '')         AS collab_dept,
-  NULLIF(btrim(o.supervisor_dept), '')     AS supervisor_dept,
-  NULLIF(btrim(o.incomplete_reason), '')   AS incomplete_reason,
-  NULLIF(btrim(o.risk_content), '')        AS risk_content,
-  NULLIF(btrim(o.delay_impact), '')        AS delay_impact,
-  NULLIF(btrim(o.institute_leader), '')    AS institute_leader,
-  NULLIF(btrim(o.project_manager), '')     AS project_manager,
-  NULLIF(btrim(o.filled_by), '')           AS filled_by,
-  NULLIF(btrim(o.highlight), '')           AS highlight,
+  -- === 原始业务字段（nullif_placeholder：清除 /, #VALUE!, N/A 等占位符）===
+  nullif_placeholder(o.project_no)          AS project_no,
+  nullif_placeholder(o.subsystem)           AS subsystem,
+  nullif_placeholder(o.node_task)           AS node_task,
+  nullif_placeholder(o.owner)               AS owner,
+  nullif_placeholder(o.dept)                AS dept,
+  nullif_placeholder(o.dept_leader)         AS dept_leader,
+  nullif_placeholder(o.collab_dept)         AS collab_dept,
+  nullif_placeholder(o.supervisor_dept)     AS supervisor_dept,
+  nullif_placeholder(o.incomplete_reason)   AS incomplete_reason,
+  nullif_placeholder(o.risk_content)        AS risk_content,
+  nullif_placeholder(o.delay_impact)        AS delay_impact,
+  nullif_placeholder(o.institute_leader)    AS institute_leader,
+  nullif_placeholder(o.project_manager)     AS project_manager,
+  nullif_placeholder(o.filled_by)           AS filled_by,
+  nullif_placeholder(o.highlight)           AS highlight,
 
   -- === 枚举标准化 ===
-  NULLIF(btrim(o.completion_status), '')   AS completion_status,
-  COALESCE(cs.is_completed, false)         AS is_completed,
-  COALESCE(cs.is_on_time, false)           AS is_on_time,
-  COALESCE(cs.is_overdue_completed, false) AS is_overdue_completed,
-  COALESCE(cs.is_incomplete, false)        AS is_incomplete,
+  nullif_placeholder(o.completion_status)   AS completion_status,
+  COALESCE(cs.is_completed, false)          AS is_completed,
+  COALESCE(cs.is_on_time, false)            AS is_on_time,
+  COALESCE(cs.is_overdue_completed, false)  AS is_overdue_completed,
+  COALESCE(cs.is_incomplete, false)         AS is_incomplete,
 
-  NULLIF(btrim(o.node_type), '')           AS node_type,
-  COALESCE(nt.is_general, false)           AS is_general_node,
+  nullif_placeholder(o.node_type)           AS node_type,
+  COALESCE(nt.is_general, false)            AS is_general_node,
 
-  NULLIF(btrim(o.risk_level), '')          AS risk_level,
+  nullif_placeholder(o.risk_level)          AS risk_level,
 
-  NULLIF(btrim(o.source), '')              AS data_source,
-  NULLIF(btrim(o.delay_applied), '')       AS delay_applied,
+  nullif_placeholder(o.source)              AS data_source,
+  nullif_placeholder(o.delay_applied)       AS delay_applied,
 
   -- === 日期解析 ===
   parse_date_safe(o.plan_date)             AS plan_date,
@@ -436,9 +646,9 @@ SELECT
   parse_date_safe(o.original_plan_date)    AS original_plan_date,
   parse_date_safe(o.last_update_time)      AS last_update_time,
 
-  -- === 周数 ===
-  CASE WHEN o.plan_week ~ '^\d+$' THEN o.plan_week::int END     AS plan_week,
-  CASE WHEN o.actual_week ~ '^\d+$' THEN o.actual_week::int END AS actual_week,
+  -- === 周数（parse_numeric_safe：安全解析整数，忽略 #VALUE! 等）===
+  parse_numeric_safe(o.plan_week)::int     AS plan_week,
+  parse_numeric_safe(o.actual_week)::int   AS actual_week,
 
   -- === 时间维度标签 ===
   EXTRACT(YEAR FROM parse_date_safe(o.plan_date))::int            AS plan_year,
@@ -464,14 +674,14 @@ SELECT
     ELSE false
   END AS is_due,
 
-  'col_20260312'::text AS source_table,
+  'ods_project_subject_domain'::text AS source_table,
   now() AS etl_time
 
 FROM public.%I o
 LEFT JOIN public.dim_completion_status cs
-  ON cs.code = NULLIF(btrim(o.completion_status), '')
+  ON cs.code = nullif_placeholder(o.completion_status)
 LEFT JOIN public.dim_node_type nt
-  ON nt.code = NULLIF(btrim(o.node_type), '')
+  ON nt.code = nullif_placeholder(o.node_type)
 WHERE btrim(COALESCE(o.project_no, '')) != ''
   AND btrim(COALESCE(o.plan_date, '')) != ''
 $fmt$, ods_table);
@@ -510,26 +720,26 @@ classified AS (
 )
 SELECT
   c.*,
-  mp.major_project_id,
-  mp.major_project_code,
-  mp.major_project_name,
-  mp.program_id,
-  mp.program_name,
+  COALESCE(mp.major_project_id, c.project_no) AS major_project_id,
+  COALESCE(mp.major_project_code, c.project_no) AS major_project_code,
+  COALESCE(mp.major_project_name, c.project_no) AS major_project_name,
+  COALESCE(mp.program_id, 'program-' || c.project_no) AS program_id,
+  COALESCE(mp.program_name, c.project_no) AS program_name,
   mp.project_level AS major_project_level,
-  mp.owner_dept AS major_project_owner_dept,
+  COALESCE(mp.owner_dept, c.dept) AS major_project_owner_dept,
   mp.owner_leader AS major_project_owner_leader,
   mp.priority_level AS major_project_priority_level,
-  sp.subproject_id,
-  sp.subproject_code,
-  sp.subproject_name,
-  sp.owner_dept AS subproject_owner_dept,
+  COALESCE(sp.subproject_id, md5(c.project_no || '/' || COALESCE(c.subsystem, ''))) AS subproject_id,
+  COALESCE(sp.subproject_code, c.project_no || '-' || left(COALESCE(c.subsystem, ''), 8)) AS subproject_code,
+  COALESCE(sp.subproject_name, c.subsystem) AS subproject_name,
+  COALESCE(sp.owner_dept, c.dept) AS subproject_owner_dept,
   sp.owner_user AS subproject_owner_user,
-  sp.project_manager AS subproject_owner_manager,
+  COALESCE(sp.project_manager, c.project_manager) AS subproject_owner_manager,
   sp.priority_level AS subproject_priority_level,
   map.map_id,
-  map.node_category,
-  map.is_key_node,
-  map.is_milestone,
+  COALESCE(map.node_category, 'routine') AS node_category,
+  COALESCE(map.is_key_node, false) AS is_key_node,
+  COALESCE(map.is_milestone, false) AS is_milestone,
   map.sort_order,
   COALESCE(map.delay_reason_category, c.delay_reason_category_fallback) AS delay_reason_category,
   dr.delay_reason_label,
@@ -1139,23 +1349,28 @@ ANALYZE public.biz_ads_major_project_tree_snapshot;
 -- ============================================================
 -- 以下表已创建（按依赖顺序）：
 --
+-- === 辅助函数（3 个）===
+--   parse_date_safe()         — 安全解析多格式日期字符串
+--   nullif_placeholder()      — 清除 /, #VALUE!, N/A 等占位符，返回 NULL
+--   parse_numeric_safe()      — 安全解析数值，支持千分位逗号
+--
 -- === SEED 种子表（4 张）===
 --   pm_dim_delay_reason_seed         — 延期原因字典（8 条）
---   pm_dim_major_project_seed        — 重大项目主数据（4 条）
---   pm_dim_subproject_seed           — 子项目主数据（7 条）
---   pm_map_node_subject_seed         — 节点-主题映射（40 条）
+--   pm_dim_major_project_seed        — 重大项目主数据（4 条，备用）
+--   pm_dim_subproject_seed           — 子项目主数据（7 条，备用）
+--   pm_map_node_subject_seed         — 节点-主题映射（40 条，可覆盖自动推导）
 --
 -- === DIM 维度表（7 张）===
 --   dim_completion_status            — 完成状态（7 种）
 --   dim_node_type                    — 节点类型（4 种）
 --   dim_risk_level                   — 风险等级（3 种）
 --   pm_dim_delay_reason              — 延期原因（from seed）
---   pm_dim_major_project             — 重大项目（from seed）
---   pm_dim_subproject                — 子项目（from seed）
---   pm_map_node_subject              — 节点-主题映射（from seed）
+--   pm_dim_major_project             — 重大项目（from ODS，以 project_no 为 ID）
+--   pm_dim_subproject                — 子项目（from ODS，以 subsystem 为名称）
+--   pm_map_node_subject              — 节点-主题映射（from ODS + seed 覆盖）
 --
 -- === DWD 明细层（2 张）===
---   biz_dwd_project_node             — 节点明细（from ODS）
+--   biz_dwd_project_node             — 节点明细（from ODS，nullif_placeholder 清洗）
 --   biz_dwd_project_node_enriched    — 节点富化宽表（from dwd + dim）
 --
 -- === DWS 汇总层（4 张）===
@@ -1173,5 +1388,5 @@ ANALYZE public.biz_ads_major_project_tree_snapshot;
 --   biz_ads_major_project_overview   — 大项目概览
 --   biz_ads_major_project_tree_snapshot — 大项目树形快照
 --
--- 合计：4 + 7 + 2 + 4 + 7 = 24 张表
+-- 合计：3 函数 + 4 + 7 + 2 + 4 + 7 = 24 张表
 -- ============================================================
