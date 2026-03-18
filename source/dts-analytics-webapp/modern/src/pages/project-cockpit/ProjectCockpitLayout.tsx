@@ -1,10 +1,9 @@
-import { Link } from "react-router";
+import { useState } from "react";
 import type { Locale } from "../../i18n";
 import { ErrorNotice } from "../../components/ErrorNotice";
-import { PageHeader } from "../../components/PageContainer/PageContainer";
 import { Badge } from "../../ui/Badge/Badge";
 import { Button } from "../../ui/Button/Button";
-import { Card, CardBody, CardHeader } from "../../ui/Card/Card";
+import { Card, CardBody } from "../../ui/Card/Card";
 import { Spinner } from "../../ui/Loading/Spinner";
 import { Tab, TabList, TabPanel, TabPanels, Tabs } from "../../ui/Tabs/Tabs";
 import { NativeSelect } from "../../ui/Input/Select";
@@ -47,10 +46,6 @@ function optionList(options?: ProjectCockpitOption[]) {
 	];
 }
 
-function themeLabel(theme: ProjectCockpitTheme) {
-	return THEME_ITEMS.find((item) => item.id === theme)?.label ?? "项目看板";
-}
-
 export function ProjectCockpitLayout({
 	locale,
 	summary,
@@ -61,52 +56,96 @@ export function ProjectCockpitLayout({
 	const hero = summary?.hero;
 	const filters = summary?.filters;
 	const spotlight = summary?.spotlight;
+	const [filterOpen, setFilterOpen] = useState(false);
 
 	return (
 		<div className="project-cockpit">
-			<PageHeader
-				title={
-					<div className="project-cockpit__header-title">
-						<div className="project-cockpit__header-kicker">项目管理专题系统</div>
-						<div>{hero?.title ?? "项目看板系统"}</div>
-					</div>
-				}
-				actions={
-					<div className="project-cockpit__header-actions">
-						<Badge variant="info">{themeLabel(queryState.theme)}</Badge>
-						<Link to="/screens">
-							<Button variant="tertiary" size="sm">大屏工厂</Button>
-						</Link>
-					</div>
-				}
-			/>
+			<div className="project-cockpit__topbar">
+				<h2 className="project-cockpit__topbar-title" onClick={() => setFilterOpen((prev) => !prev)} role="button" tabIndex={0}>
+					条件筛选 <span className="project-cockpit__topbar-arrow">{filterOpen ? "▾" : "▸"}</span>
+				</h2>
+			</div>
 
-			<div className="project-cockpit__hero-grid">
-				<Card className="project-cockpit__hero-card" shadow="md">
-					<CardBody className="project-cockpit__hero-body">
-						<div>
-							<div className="project-cockpit__hero-title">{hero?.title ?? "项目看板系统"}</div>
-							<div className="project-cockpit__hero-subtitle">
-								{hero?.scope ?? ""}
-							</div>
-						</div>
-						<div className="project-cockpit__hero-meta">
-							<div>
-								<span className="project-cockpit__meta-label">覆盖范围</span>
-								<strong>{hero?.scope ?? "读取演示数据中"}</strong>
-							</div>
-							<div>
-								<span className="project-cockpit__meta-label">最新更新时间</span>
-								<strong>{hero?.updatedAt ?? "--"}</strong>
-							</div>
+			{filterOpen ? (
+				<Card className="project-cockpit__filter-card">
+					<CardBody>
+						<div className="project-cockpit__filter-bar">
+							<NativeSelect
+								label="项目群"
+								value={queryState.programId}
+								onChange={(event) => updateQueryState({ programId: event.target.value })}
+								options={optionList(filters?.programs)}
+							/>
+							<NativeSelect
+								label="重大项目"
+								value={queryState.majorProjectId}
+								onChange={(event) => updateQueryState({ majorProjectId: event.target.value })}
+								options={optionList(filters?.majorProjects)}
+							/>
+							<NativeSelect
+								label="责任科室"
+								value={queryState.deptId}
+								onChange={(event) => updateQueryState({ deptId: event.target.value })}
+								options={optionList(filters?.depts)}
+							/>
+							<NativeSelect
+								label="风险等级"
+								value={queryState.riskLevel}
+								onChange={(event) => updateQueryState({ riskLevel: event.target.value })}
+								options={optionList(filters?.riskLevels)}
+							/>
+							<Input
+								type="date"
+								label="计划起始"
+								value={queryState.dateFrom}
+								onChange={(event) => updateQueryState({ dateFrom: event.target.value })}
+							/>
+							<Input
+								type="date"
+								label="计划截止"
+								value={queryState.dateTo}
+								onChange={(event) => updateQueryState({ dateTo: event.target.value })}
+							/>
+							<Button
+								variant="tertiary"
+								size="sm"
+								onClick={() =>
+									updateQueryState({
+										programId: "",
+										majorProjectId: "",
+										dateFrom: "",
+										dateTo: "",
+										deptId: "",
+										riskLevel: "",
+									})
+								}
+							>
+								重置
+							</Button>
 						</div>
 					</CardBody>
 				</Card>
-				<Card className="project-cockpit__spotlight-card" shadow="md">
-					<CardHeader
-						title="重点盯防"
-						action={
-							spotlight?.majorProjectId ? (
+			) : null}
+
+			<div className="project-cockpit__hero-grid">
+				<Card className="project-cockpit__hero-card project-cockpit__hero-card--compact" shadow="sm">
+					<CardBody className="project-cockpit__hero-body--compact">
+						<div className="project-cockpit__hero-title--compact">{hero?.title ?? "项目看板"}</div>
+						<span className="project-cockpit__hero-scope">{hero?.scope ?? ""}</span>
+						<span className="project-cockpit__hero-scope">更新: {hero?.updatedAt ?? "--"}</span>
+					</CardBody>
+				</Card>
+				<Card className="project-cockpit__spotlight-card--compact" shadow="sm">
+					<CardBody className="project-cockpit__spotlight-body--compact">
+						<div className="project-cockpit__spotlight-row">
+							<strong>重点盯防</strong>
+							<span className="project-cockpit__spotlight-name--compact">{spotlight?.majorProjectName ?? "暂无"}</span>
+							<div className="project-cockpit__spotlight-metrics">
+								<Badge variant="error">高风险 {spotlight?.highRiskCount ?? 0}</Badge>
+								<Badge variant="warning">延期 {spotlight?.delayCount ?? 0}</Badge>
+								<Badge variant="default">下一里程碑 {spotlight?.nextMilestone ?? "--"}</Badge>
+							</div>
+							{spotlight?.majorProjectId ? (
 								<Button
 									variant="primary"
 									size="sm"
@@ -119,88 +158,11 @@ export function ProjectCockpitLayout({
 								>
 									进入项目树
 								</Button>
-							) : null
-						}
-					/>
-					<CardBody className="project-cockpit__spotlight-body">
-						<div className="project-cockpit__spotlight-name">
-							{spotlight?.majorProjectName ?? "暂无重点项目"}
-						</div>
-						<p className="project-cockpit__spotlight-summary">
-							{spotlight?.summary ?? "当前筛选范围暂无需要重点盯防的项目。"}
-						</p>
-						<div className="project-cockpit__spotlight-metrics">
-							<Badge variant="error">高风险 {spotlight?.highRiskCount ?? 0}</Badge>
-							<Badge variant="warning">延期 {spotlight?.delayCount ?? 0}</Badge>
-							<Badge variant="default">下一里程碑 {spotlight?.nextMilestone ?? "--"}</Badge>
+							) : null}
 						</div>
 					</CardBody>
 				</Card>
 			</div>
-
-			<Card className="project-cockpit__filter-card">
-				<CardHeader
-					title="筛选条件"
-					action={
-						<Button
-							variant="tertiary"
-							size="sm"
-							onClick={() =>
-								updateQueryState({
-									programId: "",
-									majorProjectId: "",
-									dateFrom: "",
-									dateTo: "",
-									deptId: "",
-									riskLevel: "",
-								})
-							}
-						>
-							重置筛选
-						</Button>
-					}
-				/>
-				<CardBody>
-					<div className="project-cockpit__filter-grid">
-						<NativeSelect
-							label="项目群"
-							value={queryState.programId}
-							onChange={(event) => updateQueryState({ programId: event.target.value })}
-							options={optionList(filters?.programs)}
-						/>
-						<NativeSelect
-							label="重大项目"
-							value={queryState.majorProjectId}
-							onChange={(event) => updateQueryState({ majorProjectId: event.target.value })}
-							options={optionList(filters?.majorProjects)}
-						/>
-						<NativeSelect
-							label="责任科室"
-							value={queryState.deptId}
-							onChange={(event) => updateQueryState({ deptId: event.target.value })}
-							options={optionList(filters?.depts)}
-						/>
-						<NativeSelect
-							label="风险等级"
-							value={queryState.riskLevel}
-							onChange={(event) => updateQueryState({ riskLevel: event.target.value })}
-							options={optionList(filters?.riskLevels)}
-						/>
-						<Input
-							type="date"
-							label="计划起始"
-							value={queryState.dateFrom}
-							onChange={(event) => updateQueryState({ dateFrom: event.target.value })}
-						/>
-						<Input
-							type="date"
-							label="计划截止"
-							value={queryState.dateTo}
-							onChange={(event) => updateQueryState({ dateTo: event.target.value })}
-						/>
-					</div>
-				</CardBody>
-			</Card>
 
 			{summaryError ? <ErrorNotice locale={locale} error={summaryError} /> : null}
 
