@@ -913,6 +913,7 @@ pack_deployment() {
     "services/dts-trino"
     "services/jdbc"
     # Tools
+    "bin"
     "tools"
     # Config
     "config"

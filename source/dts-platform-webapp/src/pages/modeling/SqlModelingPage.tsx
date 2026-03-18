@@ -84,6 +84,7 @@ import {
 	getDbtGitDiff,
 	revertDbtFile,
 	getRollbackAuditLog,
+	checkDagReady,
 } from "@/api/platformApi";
 import dataSourcesService, { type InfraDataSource } from "@/api/services/dataSourcesService";
 import topicBindingService, { type TopicBindingDiagnostics } from "@/api/services/topicBindingService";
@@ -1086,6 +1087,14 @@ export default function SqlModelingPage() {
 			const modelsSelector = normalizeText(values.models).startsWith("tab:")
 				? `tag:${normalizeText(values.models).slice(4)}`
 				: normalizeText(values.models);
+			const dagStatus = (await checkDagReady({ selector: modelsSelector })) as { ready?: boolean; message?: string };
+			if (!dagStatus?.ready) {
+				Modal.warning({
+					title: "DAG 未就绪",
+					content: dagStatus?.message || "DAG 正在同步中，请稍后再试",
+				});
+				return;
+			}
 			const gate = (await checkDbtQualityGate({ models: modelsSelector })) as DbtQualityGateResult;
 			if (gate?.blocking) {
 				Modal.error({

@@ -69,6 +69,39 @@ function pickTokenFromResponse(body: unknown): PlatformTokens | null {
 	return { accessToken, refreshToken };
 }
 
+/**
+ * BUG-005: Keep platform session alive while user is active in analytics.
+ * Updates the platform session's lastActivity timestamp in localStorage,
+ * preventing the platform session manager from timing out.
+ */
+const SESSION_ACTIVITY_KEY = "dts.session.lastActivity";
+let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+
+function touchPlatformSession() {
+	localStorage.setItem(SESSION_ACTIVITY_KEY, String(Date.now()));
+}
+
+export function startPlatformSessionHeartbeat() {
+	if (heartbeatTimer) return;
+	// Touch immediately
+	touchPlatformSession();
+	// Then every 60 seconds while user is active in analytics
+	heartbeatTimer = setInterval(touchPlatformSession, 60_000);
+	// Also touch on user interactions within analytics
+	const events = ["click", "keydown", "scroll", "touchstart"] as const;
+	const handler = () => touchPlatformSession();
+	for (const event of events) {
+		document.addEventListener(event, handler, { passive: true });
+	}
+}
+
+export function stopPlatformSessionHeartbeat() {
+	if (heartbeatTimer) {
+		clearInterval(heartbeatTimer);
+		heartbeatTimer = null;
+	}
+}
+
 export async function refreshPlatformAccessToken(refreshToken: string): Promise<PlatformTokens | null> {
 	const rt = String(refreshToken ?? "").trim();
 	if (!rt) return null;

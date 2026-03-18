@@ -1,11 +1,13 @@
 import type { UploadProps } from "antd";
-import { Upload as AntdUpload } from "antd";
-import type { ItemRender } from "antd/es/upload/interface";
+import { Upload as AntdUpload, message } from "antd";
+import type { ItemRender, RcFile } from "antd/es/upload/interface";
 import { StyledUpload } from "./styles";
 import UploadIllustration from "./upload-illustration";
 import UploadListItem from "./upload-list-item";
 
 const { Dragger } = AntdUpload;
+
+const CLASSIFIED_KEYWORDS = ["机密", "秘密"];
 
 interface Props extends UploadProps {
 	thumbnail?: boolean;
@@ -17,10 +19,19 @@ const itemRender: (thumbnail: boolean) => ItemRender = (thumbnail) => {
 		return <UploadListItem file={file} actions={actions} thumbnail={thumbnail} />;
 	};
 };
-export function Upload({ thumbnail = false, ...other }: Props) {
+export function Upload({ thumbnail = false, beforeUpload, ...other }: Props) {
+	const classificationBeforeUpload = (file: RcFile, fileList: RcFile[]) => {
+		const matched = CLASSIFIED_KEYWORDS.find((kw) => file.name.includes(kw));
+		if (matched) {
+			message.error(`非密模块禁止上传含"${matched}"字样的附件`);
+			return AntdUpload.LIST_IGNORE;
+		}
+		return beforeUpload ? beforeUpload(file, fileList) : true;
+	};
+
 	return (
 		<StyledUpload $thumbnail={thumbnail}>
-			<Dragger {...other} itemRender={itemRender(thumbnail)}>
+			<Dragger {...other} beforeUpload={classificationBeforeUpload} itemRender={itemRender(thumbnail)}>
 				<div className="opacity-100 hover:opacity-80">
 					<p className="m-auto max-w-[200px]">
 						<UploadIllustration />

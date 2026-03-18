@@ -13,4 +13,6 @@ public interface AnalyticsFieldRepository extends JpaRepository<AnalyticsField, 
     List<AnalyticsField> findAllByDatabaseIdOrderByTableIdAscPositionAscIdAsc(Long databaseId);
 
     Optional<AnalyticsField> findByTableIdAndName(Long tableId, String name);
+
+    long deleteByDatabaseId(Long databaseId);
 }

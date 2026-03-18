@@ -294,13 +294,13 @@
 }
 
 [data-theme="dark"] .mb-sidebar__item--active {
-  background: var(--color-brand);
+  background: #2E6FAF;
   color: #ffffff;
   box-shadow: none;
 }
 
 [data-theme="dark"] .mb-sidebar__item--active:hover {
-  background: var(--color-brand);
+  background: #2E6FAF;
   color: #ffffff;
 }
 

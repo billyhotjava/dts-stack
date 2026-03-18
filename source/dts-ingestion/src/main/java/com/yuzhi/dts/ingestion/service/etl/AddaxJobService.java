@@ -1415,6 +1415,12 @@ public class AddaxJobService {
             if ("excel".equals(lower)) resolvedReaderType = "excelreader";
             else if ("csv".equals(lower)) resolvedReaderType = "txtfilereader";
         }
+        // BUG-003 fix: For file-based readers, always regenerate job config from current
+        // column definitions. Using saved addaxConfig would skip DDL injection (DROP + CREATE),
+        // causing stale table schema when columns are modified.
+        if (isFileReaderType(resolvedReaderType)) {
+            jobConfig = null;
+        }
         return createJob(
             task.getName(),
             resolvedReaderType,

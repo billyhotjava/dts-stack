@@ -224,6 +224,32 @@ public class EtlResource {
         return ApiResponses.ok(dbtArtifactSyncState.snapshot());
     }
 
+    @GetMapping("/dbt/dag/ready")
+    public ApiResponse<Map<String, Object>> checkDagReady(
+        @RequestParam(required = false) String selector
+    ) {
+        String dagSelector = resolveDagSelector(null, selector);
+        String dagId = dbtDagService.ensureDagForSelector(dagSelector);
+        if (!StringUtils.hasText(dagId)) {
+            dagId = airflowProperties.getDagId();
+        }
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("dagId", dagId);
+        if (!airflowProperties.isEnabled()) {
+            result.put("ready", false);
+            result.put("message", "Airflow 集成未启用");
+            return ApiResponses.ok(result);
+        }
+        Map<String, Object> dag = findDag(dagId);
+        boolean ready = dag != null;
+        result.put("ready", ready);
+        result.put("message", ready ? "DAG 已就绪" : "DAG 正在同步中，请稍后再试");
+        if (dag != null) {
+            result.put("isPaused", boolVal(dag.get("is_paused")));
+        }
+        return ApiResponses.ok(result);
+    }
+
     @GetMapping("/dbt/runs")
     public ApiResponse<Map<String, Object>> listDbtRuns(
         @RequestParam(defaultValue = "20") int limit,

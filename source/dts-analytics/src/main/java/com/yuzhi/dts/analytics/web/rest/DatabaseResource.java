@@ -13,6 +13,7 @@ import com.yuzhi.dts.analytics.repository.AnalyticsTableRepository;
 import com.yuzhi.dts.analytics.service.AnalyticsSessionService;
 import com.yuzhi.dts.analytics.service.JdbcDetailsResolver;
 import com.yuzhi.dts.analytics.service.MetadataSyncService;
+import com.yuzhi.dts.analytics.service.ExternalDatabaseDataSourceRegistry;
 import com.yuzhi.dts.analytics.service.PlatformInfraClient;
 import com.yuzhi.dts.analytics.web.support.MetabaseAuth;
 import com.zaxxer.hikari.HikariConfig;
@@ -57,6 +58,7 @@ public class DatabaseResource {
     private final MetadataSyncService metadataSyncService;
     private final JdbcDetailsResolver jdbcDetailsResolver;
     private final PlatformInfraClient platformInfraClient;
+    private final ExternalDatabaseDataSourceRegistry dataSourceRegistry;
     private final ObjectMapper objectMapper;
 
     public DatabaseResource(
@@ -67,6 +69,7 @@ public class DatabaseResource {
             MetadataSyncService metadataSyncService,
             JdbcDetailsResolver jdbcDetailsResolver,
             PlatformInfraClient platformInfraClient,
+            ExternalDatabaseDataSourceRegistry dataSourceRegistry,
             ObjectMapper objectMapper) {
         this.sessionService = sessionService;
         this.databaseRepository = databaseRepository;
@@ -75,6 +78,7 @@ public class DatabaseResource {
         this.metadataSyncService = metadataSyncService;
         this.jdbcDetailsResolver = jdbcDetailsResolver;
         this.platformInfraClient = platformInfraClient;
+        this.dataSourceRegistry = dataSourceRegistry;
         this.objectMapper = objectMapper;
     }
 
@@ -402,7 +406,13 @@ public class DatabaseResource {
         if (!databaseRepository.existsById(dbId)) {
             return ResponseEntity.notFound().build();
         }
+        // BUG-004 fix: cascade delete child records before deleting database
+        // (FK constraints on analytics_field/analytics_table don't have CASCADE)
+        fieldRepository.deleteByDatabaseId(dbId);
+        tableRepository.deleteByDatabaseId(dbId);
         databaseRepository.deleteById(dbId);
+        // Clean up cached connection pool
+        dataSourceRegistry.evict(dbId);
         return ResponseEntity.noContent().build();
     }
 

@@ -414,6 +414,17 @@
 	--layout-multi-tabs-height: 48px;
 }
 
+/* Fix BUG-001: Improve menu active state contrast on dark sidebar (Chrome 95+) */
+:root:not([data-theme-mode="dark"]) [data-dark-sidebar="true"] .nav-active {
+	color: #C7E0F4 !important;
+	background-color: rgba(80, 158, 227, 0.20) !important;
+}
+
+[data-theme-mode="dark"] [data-slot="slash-layout-nav"] .nav-active {
+	color: #C7E0F4 !important;
+	background-color: rgba(80, 158, 227, 0.18) !important;
+}
+
 /* Provide sRGB fallbacks for browsers without OKLCH (e.g., Chrome 109) */
 :root {
 	--color-red-50: #fef2f2;

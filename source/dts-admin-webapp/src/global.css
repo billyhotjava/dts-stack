@@ -384,6 +384,21 @@
 	--colors-text-disabledChannel: 255 255 255;
 }
 
+/* Fix BUG-001: Improve menu active state contrast on dark sidebar (Chrome 95+) */
+/* Dark sidebar uses !text-primary (blue) + bg-primary/10 for active items,
+   which has poor contrast on dark backgrounds. Override with sRGB-safe colors
+   that work even without OKLCH support (Chrome < 111). */
+:root:not([data-theme-mode="dark"]) [data-dark-sidebar="true"] .nav-active {
+	color: #C7E0F4 !important;
+	background-color: rgba(80, 158, 227, 0.20) !important;
+}
+
+/* Dark mode sidebar: ensure active nav item is readable */
+[data-theme-mode="dark"] [data-slot="slash-layout-nav"] .nav-active {
+	color: #C7E0F4 !important;
+	background-color: rgba(80, 158, 227, 0.18) !important;
+}
+
 /* Provide sRGB fallbacks for browsers without OKLCH (e.g., Chrome 109) */
 :root {
 	--color-red-50: #fef2f2;

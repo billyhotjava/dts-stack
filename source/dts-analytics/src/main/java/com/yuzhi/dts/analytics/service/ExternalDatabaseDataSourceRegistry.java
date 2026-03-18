@@ -80,6 +80,13 @@ public class ExternalDatabaseDataSourceRegistry {
         return jdbcDetailsResolver.resolve(database.getEngine(), details);
     }
 
+    public void evict(long databaseId) {
+        DataSourceEntry removed = dataSources.remove(databaseId);
+        if (removed != null) {
+            removed.dataSource().close();
+        }
+    }
+
     @PreDestroy
     public void shutdown() {
         for (DataSourceEntry entry : dataSources.values()) {
