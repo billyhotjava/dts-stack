@@ -727,7 +727,9 @@ public class AirflowDagService {
     }
 
     /**
-     * Build CREATE TABLE IF NOT EXISTS DDL from file columns in the task's source config.
+     * Build DROP + CREATE TABLE DDL from file columns in the task's source config.
+     * DROP is needed because Addax validates columns during init() (before preSql),
+     * so the table must have the correct schema before the Addax container starts.
      */
     private String buildCreateTableDdl(IngestionTask task) {
         if (task == null) return null;
@@ -766,11 +768,13 @@ public class AirflowDagService {
         if (fileColumnsNode == null || !fileColumnsNode.isArray() || fileColumnsNode.size() == 0) return null;
         boolean autoId = sourceConfig.has("_autoId") && sourceConfig.get("_autoId").asBoolean(false);
 
-        StringBuilder ddl = new StringBuilder("CREATE TABLE IF NOT EXISTS ");
-        if (StringUtils.hasText(schema) && !"public".equalsIgnoreCase(schema)) {
-            ddl.append(pgQuote(schema)).append(".");
-        }
-        ddl.append(pgQuote(tableName)).append(" (");
+        // Build qualified table reference for DROP + CREATE
+        String qualifiedTable = (StringUtils.hasText(schema) && !"public".equalsIgnoreCase(schema))
+            ? pgQuote(schema) + "." + pgQuote(tableName)
+            : pgQuote(tableName);
+        StringBuilder ddl = new StringBuilder();
+        ddl.append("DROP TABLE IF EXISTS ").append(qualifiedTable).append(" CASCADE;\n");
+        ddl.append("CREATE TABLE IF NOT EXISTS ").append(qualifiedTable).append(" (");
         boolean first = true;
         if (autoId) {
             ddl.append("\"id\" bigserial primary key");
