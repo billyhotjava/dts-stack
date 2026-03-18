@@ -71,23 +71,43 @@ function pickTokenFromResponse(body: unknown): PlatformTokens | null {
 
 /**
  * BUG-005: Keep platform session alive while user is active in analytics.
- * Updates the platform session's lastActivity timestamp in localStorage,
- * preventing the platform session manager from timing out.
+ *
+ * Two things must happen:
+ * 1. Update localStorage lastActivity so platform SessionManager won't expire on return
+ * 2. Periodically refresh the JWT so forward-auth doesn't reject API calls
+ *
+ * The platform SPA is fully unloaded when analytics opens (same-tab navigation),
+ * so no platform code runs to handle token refresh — analytics must do it.
  */
 const SESSION_ACTIVITY_KEY = "dts.session.lastActivity";
+const TOKEN_REFRESH_INTERVAL_MS = 4 * 60 * 1000; // 4 minutes (JWT typically expires in 5-10 min)
 let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+let tokenRefreshTimer: ReturnType<typeof setInterval> | null = null;
 
 function touchPlatformSession() {
 	localStorage.setItem(SESSION_ACTIVITY_KEY, String(Date.now()));
 }
 
+async function refreshTokenIfNeeded() {
+	const { refreshToken } = getPlatformTokens();
+	if (!refreshToken) return;
+	try {
+		await refreshPlatformAccessToken(refreshToken);
+	} catch {
+		// Best-effort; next API call will retry via fetchWithPlatformAuth
+	}
+}
+
 export function startPlatformSessionHeartbeat() {
 	if (heartbeatTimer) return;
-	// Touch immediately
+	// Touch activity immediately
 	touchPlatformSession();
-	// Then every 60 seconds while user is active in analytics
+	// Periodic activity heartbeat (every 60s)
 	heartbeatTimer = setInterval(touchPlatformSession, 60_000);
-	// Also touch on user interactions within analytics
+	// Periodic JWT refresh (every 4 min) — keeps the token alive
+	refreshTokenIfNeeded();
+	tokenRefreshTimer = setInterval(refreshTokenIfNeeded, TOKEN_REFRESH_INTERVAL_MS);
+	// Touch on user interactions
 	const events = ["click", "keydown", "scroll", "touchstart"] as const;
 	const handler = () => touchPlatformSession();
 	for (const event of events) {
@@ -99,6 +119,10 @@ export function stopPlatformSessionHeartbeat() {
 	if (heartbeatTimer) {
 		clearInterval(heartbeatTimer);
 		heartbeatTimer = null;
+	}
+	if (tokenRefreshTimer) {
+		clearInterval(tokenRefreshTimer);
+		tokenRefreshTimer = null;
 	}
 }
 
