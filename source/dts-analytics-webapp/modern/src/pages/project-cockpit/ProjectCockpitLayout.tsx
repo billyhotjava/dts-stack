@@ -13,6 +13,7 @@ import type {
 	ProjectCockpitSummaryResponse,
 } from "../../api/analyticsApi";
 import type { ProjectCockpitTheme } from "./projectCockpitQueryState";
+import { parseProjectCockpitQueryState } from "./projectCockpitQueryState";
 import { useProjectCockpitContext } from "./ProjectCockpitContext";
 import OverviewTrendView from "./views/OverviewTrendView";
 import ExecutionView from "./views/ExecutionView";
@@ -109,16 +110,17 @@ export function ProjectCockpitLayout({
 							<Button
 								variant="tertiary"
 								size="sm"
-								onClick={() =>
+								onClick={() => {
+									const defaults = parseProjectCockpitQueryState(new URLSearchParams());
 									updateQueryState({
 										programId: "",
 										majorProjectId: "",
-										dateFrom: "",
-										dateTo: "",
+										dateFrom: defaults.dateFrom,
+										dateTo: defaults.dateTo,
 										deptId: "",
 										riskLevel: "",
-									})
-								}
+									});
+								}}
 							>
 								重置
 							</Button>

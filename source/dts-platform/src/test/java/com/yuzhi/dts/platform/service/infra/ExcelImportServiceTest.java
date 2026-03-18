@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.platform.config.AirflowProperties;
 import com.yuzhi.dts.platform.domain.infra.InfraExternalExchangeFile;
@@ -33,6 +35,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.slf4j.LoggerFactory;
 
 @ExtendWith(MockitoExtension.class)
 class ExcelImportServiceTest {
@@ -226,6 +229,78 @@ class ExcelImportServiceTest {
         Path rejectedCsv = baseDir.resolve("rejected.csv");
         assertThat(Files.readAllLines(acceptedCsv)).hasSize(3);
         assertThat(Files.readAllLines(rejectedCsv)).hasSize(3);
+    }
+
+    @Test
+    void loadProjectCockpitBatchShouldEmitStructuredIssueLogs() throws Exception {
+        UUID fileId = UUID.randomUUID();
+        UUID batchId = UUID.randomUUID();
+        Path baseDir = tempDir.resolve("exchange/excel/issue-log");
+        Files.createDirectories(baseDir);
+        Path csvPath = baseDir.resolve("data.csv");
+        Path errorPath = baseDir.resolve("error.csv");
+        Files.writeString(
+            csvPath,
+            """
+            project_no,subsystem,node_task,dept,owner,project_manager,plan_date,actual_date,completion_status,risk_level
+            P-001,System-A,Node-1,Dept-A,Alice,PM-A,2026-03-01,2026-03-02,已完成,低
+            ,System-B,Node-2,Dept-B,Bob,PM-B,2026-03-03,,进行中,中
+            P-003,,Node-3,Dept-C,Carol,PM-C,2026/03/05,bad-date,,/
+            """.stripIndent() + "\n"
+        );
+        Files.writeString(errorPath, "4,计划日期格式异常\n");
+
+        InfraExternalExchangeFile file = buildParsedFile(fileId, csvPath, errorPath, ",", 3, 1);
+        when(repository.findById(fileId)).thenReturn(Optional.of(file));
+        when(repository.saveAndFlush(any(InfraExternalExchangeFile.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(projectCockpitRowRepository.save(any(InfraProjectCockpitRow.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(projectCockpitIssueRepository.save(any(InfraProjectCockpitIssue.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(projectCockpitBatchRepository.findByExternalExchangeFileId(fileId)).thenReturn(Optional.empty());
+        when(projectCockpitBatchRepository.saveAndFlush(any(InfraProjectCockpitBatch.class))).thenAnswer(invocation -> {
+            InfraProjectCockpitBatch batch = invocation.getArgument(0);
+            if (batch.getId() == null) {
+                batch.setId(batchId);
+            }
+            return batch;
+        });
+
+        var logger = (ch.qos.logback.classic.Logger) LoggerFactory.getLogger(ExcelImportService.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+        try {
+            excelImportService.loadProjectCockpitBatch(fileId, "tester", "信息科", true);
+        } finally {
+            logger.detachAppender(appender);
+            appender.stop();
+        }
+
+        List<String> messages = appender.list
+            .stream()
+            .map(ILoggingEvent::getFormattedMessage)
+            .filter(message -> message.contains("[excel-import-issue]"))
+            .toList();
+
+        assertThat(messages).hasSize(3);
+        assertThat(messages).anySatisfy(message -> {
+            assertThat(message).contains("severity=ERROR");
+            assertThat(message).contains("issueCode=MISSING_PROJECT_NO");
+            assertThat(message).contains("batch=excel-test-");
+            assertThat(message).contains("fileId=" + fileId);
+            assertThat(message).contains("row=2");
+        });
+        assertThat(messages).anySatisfy(message -> {
+            assertThat(message).contains("severity=WARN");
+            assertThat(message).contains("issueCode=INVALID_ACTUAL_DATE,MISSING_SUBSYSTEM,MISSING_COMPLETION_STATUS,MISSING_RISK_LEVEL");
+            assertThat(message).contains("row=3");
+            assertThat(message).contains("projectNo=P-003");
+        });
+        assertThat(messages).anySatisfy(message -> {
+            assertThat(message).contains("severity=WARN");
+            assertThat(message).contains("issueCode=PARSE_WARNING");
+            assertThat(message).contains("row=4");
+            assertThat(message).contains("rawLine=4,计划日期格式异常");
+        });
     }
 
     private InfraExternalExchangeFile buildFile(UUID fileId, Path source, String fileName) {

@@ -551,7 +551,9 @@ public class ExcelImportService {
                 row.setProps(writeProps(Map.of("sheetName", blankToEmpty(batch.getSheetName()))));
                 projectCockpitRowRepository.save(row);
                 for (ProjectCockpitIssueDescriptor descriptor : assessment.issues()) {
-                    projectCockpitIssueRepository.save(buildProjectCockpitIssue(batch, sourceRowNo, descriptor, payload));
+                    InfraProjectCockpitIssue issue = buildProjectCockpitIssue(batch, sourceRowNo, descriptor, payload);
+                    projectCockpitIssueRepository.save(issue);
+                    logProjectCockpitIssue(batch, issue);
                     issueCount++;
                 }
                 if (assessment.hasWarnings()) {
@@ -603,6 +605,7 @@ public class ExcelImportService {
                 issue.setIssueMessage(values.size() > 1 ? values.get(1) : "解析异常");
                 issue.setRawPayload(writeProps(Map.of("rawLine", line)));
                 projectCockpitIssueRepository.save(issue);
+                logProjectCockpitIssue(batch, issue);
                 count++;
             }
         } catch (IOException ex) {
@@ -658,6 +661,52 @@ public class ExcelImportService {
         issuePayload.put("rawPayload", new LinkedHashMap<>(payload));
         issue.setRawPayload(writeProps(issuePayload));
         return issue;
+    }
+
+    private void logProjectCockpitIssue(InfraProjectCockpitBatch batch, InfraProjectCockpitIssue issue) {
+        Map<String, Object> payload = readProps(issue.getRawPayload());
+        StringBuilder message = new StringBuilder("[excel-import-issue]");
+        appendIssueLogField(message, "batch", batch != null ? batch.getBatchCode() : null);
+        appendIssueLogField(
+            message,
+            "fileId",
+            batch != null && batch.getExternalExchangeFileId() != null ? batch.getExternalExchangeFileId().toString() : null
+        );
+        appendIssueLogField(message, "row", issue.getRowNo() == null ? null : String.valueOf(issue.getRowNo()));
+        appendIssueLogField(message, "severity", issue.getSeverity());
+        appendIssueLogField(message, "issueCode", issue.getIssueCode());
+        appendIssueLogField(message, "message", issue.getIssueMessage());
+        appendIssueLogField(message, "projectNo", text(payload.get("projectNo")));
+        appendIssueLogField(message, "subsystem", text(payload.get("subsystem")));
+        appendIssueLogField(message, "nodeTask", text(payload.get("nodeTask")));
+        appendIssueLogField(message, "planDate", text(payload.get("planDate")));
+        appendIssueLogField(message, "completionStatus", text(payload.get("completionStatus")));
+        appendIssueLogField(message, "riskLevel", text(payload.get("riskLevel")));
+        appendIssueLogField(message, "rawLine", truncateIssueLogValue(text(payload.get("rawLine"))));
+        LOG.warn(message.toString());
+    }
+
+    private void appendIssueLogField(StringBuilder message, String key, String value) {
+        message.append(' ').append(key).append('=').append(sanitizeIssueLogValue(value));
+    }
+
+    private String sanitizeIssueLogValue(String value) {
+        if (!StringUtils.hasText(value)) {
+            return "-";
+        }
+        return value.trim().replace('\r', ' ').replace('\n', ' ').replace('\t', ' ');
+    }
+
+    private String truncateIssueLogValue(String value) {
+        if (!StringUtils.hasText(value)) {
+            return value;
+        }
+        String normalized = sanitizeIssueLogValue(value);
+        int limit = 240;
+        if (normalized.length() <= limit) {
+            return normalized;
+        }
+        return normalized.substring(0, limit - 3) + "...";
     }
 
     private ProjectCockpitRowAssessment assessProjectCockpitRow(Map<String, String> payload) {

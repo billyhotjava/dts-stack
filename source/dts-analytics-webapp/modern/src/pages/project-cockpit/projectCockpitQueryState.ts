@@ -20,13 +20,20 @@ export function parseProjectCockpitTheme(value: string | null | undefined): Proj
         : DEFAULT_PROJECT_COCKPIT_THEME;
 }
 
+function todayIso(): string {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+const DEFAULT_DATE_FROM = '2026-01-01';
+
 export function parseProjectCockpitQueryState(params: URLSearchParams): ProjectCockpitQueryState {
     return {
         theme: parseProjectCockpitTheme(params.get('theme')),
         programId: params.get('programId') ?? '',
         majorProjectId: params.get('majorProjectId') ?? '',
-        dateFrom: params.get('dateFrom') ?? '',
-        dateTo: params.get('dateTo') ?? '',
+        dateFrom: params.get('dateFrom') ?? DEFAULT_DATE_FROM,
+        dateTo: params.get('dateTo') ?? todayIso(),
         deptId: params.get('deptId') ?? '',
         riskLevel: params.get('riskLevel') ?? '',
     };
