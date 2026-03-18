@@ -241,8 +241,10 @@ public class DbtDagService {
             DBT_IMAGE = os.getenv("DBT_IMAGE", "dts-dbt:1.10.0")
             DBT_PROJECT_DIR = os.getenv("DBT_PROJECT_DIR", "%s")
             DBT_PROFILES_DIR = os.getenv("DBT_PROFILES_DIR", "%s")
+            DBT_LOG_DIR = os.getenv("DBT_LOG_DIR", os.getenv("STACK_ROOT", "/opt/dts") + "/logs/dbt")
             DBT_PROJECT_MOUNT = os.getenv("DBT_PROJECT_MOUNT", "/opt/dbt")
             DBT_PROFILES_MOUNT = os.getenv("DBT_PROFILES_MOUNT", "/root/.dbt")
+            DBT_LOG_MOUNT = "/opt/dbt-logs"
             DBT_THREADS = os.getenv("DBT_THREADS", "1")
             DBT_DOCKER_NETWORK = os.getenv("DBT_DOCKER_NETWORK", "%s")
             DBT_DOCKER_PRIVILEGED = os.getenv("DBT_DOCKER_PRIVILEGED", "%s")
@@ -288,15 +290,17 @@ public class DbtDagService {
                     "docker_cmd+=(\\n"
                     "  -v \\"$DBT_PROJECT_DIR:$DBT_PROJECT_MOUNT\\"\\n"
                     "  -v \\"$DBT_PROFILES_DIR:$DBT_PROFILES_MOUNT\\"\\n"
+                    "  -v \\"$DBT_LOG_DIR:$DBT_LOG_MOUNT\\"\\n"
                     "  -e DBT_USE_EXPERIMENTAL_PARSER=false\\n"
+                    "  -e DBT_LOG_PATH=$DBT_LOG_MOUNT\\n"
                     "  -e DBT_PROJECT_MOUNT=\\"$DBT_PROJECT_MOUNT\\"\\n"
                     "  -e DBT_PROFILES_MOUNT=\\"$DBT_PROFILES_MOUNT\\"\\n"
                     "  \\"$DBT_IMAGE\\"\\n"
                     ")\\n"
                     "if [ \\"$operation\\" = \\"docs\\" ]; then\\n"
-                    "  docker_cmd+=(docs generate --project-dir \\"$DBT_PROJECT_MOUNT\\" --profiles-dir \\"$DBT_PROFILES_MOUNT\\" --target \\"$target\\")\\n"
+                    "  docker_cmd+=(docs generate --project-dir \\"$DBT_PROJECT_MOUNT\\" --profiles-dir \\"$DBT_PROFILES_MOUNT\\" --log-path \\"$DBT_LOG_MOUNT\\" --target \\"$target\\")\\n"
                     "else\\n"
-                    "  docker_cmd+=(\\"$operation\\" --project-dir \\"$DBT_PROJECT_MOUNT\\" --profiles-dir \\"$DBT_PROFILES_MOUNT\\" --target \\"$target\\")\\n"
+                    "  docker_cmd+=(\\"$operation\\" --project-dir \\"$DBT_PROJECT_MOUNT\\" --profiles-dir \\"$DBT_PROFILES_MOUNT\\" --log-path \\"$DBT_LOG_MOUNT\\" --target \\"$target\\")\\n"
                     "  if [ -n \\"$threads_trim\\" ]; then\\n"
                     "    docker_cmd+=(--threads \\"$threads_trim\\")\\n"
                     "  fi\\n"

@@ -52,6 +52,10 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.CellType;
+import org.apache.poi.ss.usermodel.DataFormatter;
+import org.apache.poi.ss.usermodel.FormulaEvaluator;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.slf4j.Logger;
@@ -525,12 +529,14 @@ public class ExcelImportService {
         if (!StringUtils.hasText(ctx.sheetName)) {
             ctx.sheetName = "sheet-0";
         }
+        Path parseSource = source;
         try (
             BufferedWriter writer = Files.newBufferedWriter(csvPath, StandardCharsets.UTF_8);
             BufferedWriter errorWriter = Files.newBufferedWriter(errorPath, StandardCharsets.UTF_8)
         ) {
+            parseSource = createFormulaEvaluatedCopy(source);
             ExcelRowListener listener = new ExcelRowListener(ctx, writer, errorWriter);
-            var readerBuilder = EasyExcel.read(source.toFile(), listener).headRowNumber(0);
+            var readerBuilder = EasyExcel.read(parseSource.toFile(), listener).headRowNumber(0);
             if (StringUtils.hasText(ctx.sheetName)) {
                 readerBuilder.sheet(ctx.sheetName).doRead();
             } else if (sheetIndex != null) {
@@ -544,6 +550,61 @@ public class ExcelImportService {
             }
             ctx.errorCount++;
             LOG.warn("[excel-import] excel parse failed: {}", ex.getMessage());
+        } finally {
+            if (parseSource != null && !parseSource.equals(source)) {
+                deleteFile(parseSource.toString());
+            }
+        }
+    }
+
+    private Path createFormulaEvaluatedCopy(Path source) {
+        try (InputStream in = Files.newInputStream(source); Workbook workbook = WorkbookFactory.create(in)) {
+            FormulaEvaluator evaluator = workbook.getCreationHelper().createFormulaEvaluator();
+            DataFormatter formatter = new DataFormatter(Locale.ROOT);
+            boolean hasFormula = false;
+            for (int sheetIndex = 0; sheetIndex < workbook.getNumberOfSheets(); sheetIndex++) {
+                var sheet = workbook.getSheetAt(sheetIndex);
+                if (sheet == null) {
+                    continue;
+                }
+                for (var row : sheet) {
+                    if (row == null) {
+                        continue;
+                    }
+                    for (Cell cell : row) {
+                        if (cell == null || cell.getCellType() != CellType.FORMULA) {
+                            continue;
+                        }
+                        hasFormula = true;
+                        replaceFormulaCellWithResolvedValue(cell, evaluator, formatter);
+                    }
+                }
+            }
+            if (!hasFormula) {
+                return source;
+            }
+            Path copy = Files.createTempFile(source.getParent(), "formula-evaluated-", ".xlsx");
+            try (var out = Files.newOutputStream(copy)) {
+                workbook.write(out);
+            }
+            return copy;
+        } catch (Exception ex) {
+            LOG.warn("[excel-import] formula evaluation pre-processing failed: {}", ex.getMessage());
+            return source;
+        }
+    }
+
+    private void replaceFormulaCellWithResolvedValue(Cell cell, FormulaEvaluator evaluator, DataFormatter formatter) {
+        try {
+            String formatted = formatter.formatCellValue(cell, evaluator);
+            CellType evaluatedType = evaluator.evaluateFormulaCell(cell);
+            cell.setBlank();
+            if (evaluatedType == CellType.ERROR || !StringUtils.hasText(formatted)) {
+                return;
+            }
+            cell.setCellValue(formatted.trim());
+        } catch (Exception ex) {
+            cell.setBlank();
         }
     }
 

@@ -186,27 +186,60 @@ public class DbtConfigService {
                 "macros/get_custom_schema.sql"
             );
             writeManagedFileIfMissing(
+                projectDir.resolve("macros/nullif_placeholder.sql"),
+                """
+                {% macro nullif_placeholder(expr) -%}
+                (
+                  case
+                    when {{ expr }} is null then null
+                    when upper(btrim(cast({{ expr }} as text))) in ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
+                      then null
+                    else nullif(btrim(cast({{ expr }} as text)), '')
+                  end
+                )
+                {%- endmacro %}
+                """,
+                created,
+                "macros/nullif_placeholder.sql"
+            );
+            writeManagedFileIfMissing(
+                projectDir.resolve("macros/parse_numeric_safe.sql"),
+                """
+                {% macro parse_numeric_safe(expr) -%}
+                (
+                  case
+                    when {{ nullif_placeholder(expr) }} is null then null
+                    when regexp_replace({{ nullif_placeholder(expr) }}, ',', '', 'g') ~ '^-?\\d+(\\.\\d+)?$'
+                      then regexp_replace({{ nullif_placeholder(expr) }}, ',', '', 'g')::numeric
+                    else null
+                  end
+                )
+                {%- endmacro %}
+                """,
+                created,
+                "macros/parse_numeric_safe.sql"
+            );
+            writeManagedFileIfMissing(
                 projectDir.resolve("macros/parse_date_safe.sql"),
                 """
                 {% macro parse_date_safe(expr) -%}
                 (
                   case
-                    when {{ expr }} is null then null
-                    when btrim(cast({{ expr }} as text)) = '' then null
-                    when btrim(cast({{ expr }} as text)) ~ '^\\d{4}-\\d{2}-\\d{2}$'
-                      then to_date(btrim(cast({{ expr }} as text)), 'YYYY-MM-DD')
-                    when btrim(cast({{ expr }} as text)) ~ '^\\d{4}-\\d{2}-\\d{2}\\s+.*$'
-                      then to_date(substr(btrim(cast({{ expr }} as text)), 1, 10), 'YYYY-MM-DD')
-                    when btrim(cast({{ expr }} as text)) ~ '^\\d{4}/\\d{2}/\\d{2}$'
-                      then to_date(replace(btrim(cast({{ expr }} as text)), '/', '-'), 'YYYY-MM-DD')
-                    when btrim(cast({{ expr }} as text)) ~ '^\\d{4}/\\d{2}/\\d{2}\\s+.*$'
-                      then to_date(replace(substr(btrim(cast({{ expr }} as text)), 1, 10), '/', '-'), 'YYYY-MM-DD')
-                    when btrim(cast({{ expr }} as text)) ~ '^\\d{4}\\.\\d{2}\\.\\d{2}$'
-                      then to_date(replace(btrim(cast({{ expr }} as text)), '.', '-'), 'YYYY-MM-DD')
-                    when btrim(cast({{ expr }} as text)) ~ '^\\d{4}\\.\\d{2}\\.\\d{2}\\s+.*$'
-                      then to_date(replace(substr(btrim(cast({{ expr }} as text)), 1, 10), '.', '-'), 'YYYY-MM-DD')
-                    when btrim(cast({{ expr }} as text)) ~ '^\\d{8}$'
-                      then to_date(btrim(cast({{ expr }} as text)), 'YYYYMMDD')
+                    when {{ nullif_placeholder(expr) }} is null then null
+                    when {{ nullif_placeholder(expr) }} ~ '^\\d{4}-\\d{2}-\\d{2}$'
+                      then to_date({{ nullif_placeholder(expr) }}, 'YYYY-MM-DD')
+                    when {{ nullif_placeholder(expr) }} ~ '^\\d{4}-\\d{2}-\\d{2}\\s+.*$'
+                      then to_date(substr({{ nullif_placeholder(expr) }}, 1, 10), 'YYYY-MM-DD')
+                    when {{ nullif_placeholder(expr) }} ~ '^\\d{4}/\\d{2}/\\d{2}$'
+                      then to_date(replace({{ nullif_placeholder(expr) }}, '/', '-'), 'YYYY-MM-DD')
+                    when {{ nullif_placeholder(expr) }} ~ '^\\d{4}/\\d{2}/\\d{2}\\s+.*$'
+                      then to_date(replace(substr({{ nullif_placeholder(expr) }}, 1, 10), '/', '-'), 'YYYY-MM-DD')
+                    when {{ nullif_placeholder(expr) }} ~ '^\\d{4}\\.\\d{2}\\.\\d{2}$'
+                      then to_date(replace({{ nullif_placeholder(expr) }}, '.', '-'), 'YYYY-MM-DD')
+                    when {{ nullif_placeholder(expr) }} ~ '^\\d{4}\\.\\d{2}\\.\\d{2}\\s+.*$'
+                      then to_date(replace(substr({{ nullif_placeholder(expr) }}, 1, 10), '.', '-'), 'YYYY-MM-DD')
+                    when {{ nullif_placeholder(expr) }} ~ '^\\d{8}$'
+                      then to_date({{ nullif_placeholder(expr) }}, 'YYYYMMDD')
                     else null
                   end
                 )

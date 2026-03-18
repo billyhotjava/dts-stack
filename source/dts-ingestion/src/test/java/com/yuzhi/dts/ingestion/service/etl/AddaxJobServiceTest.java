@@ -18,7 +18,6 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
@@ -36,9 +35,6 @@ class AddaxJobServiceTest {
     private IngestionSettingsService settingsService;
 
     @Mock
-    private IngestionSettingsService.SettingsSnapshot settingsSnapshot;
-
-    @Mock
     private JdbcMetadataService jdbcMetadataService;
 
     private ObjectMapper objectMapper;
@@ -53,8 +49,14 @@ class AddaxJobServiceTest {
         addaxJobService = new AddaxJobService(addaxProperties, settingsService, objectMapper, jdbcMetadataService);
 
         // Mock settings service
+        IngestionSettingsService.SettingsSnapshot settingsSnapshot = new IngestionSettingsService.SettingsSnapshot(
+            Map.of(
+                "jobDir", tempDir.toString(),
+                "dagsDir", tempDir.toString(),
+                "layerDir", ""
+            )
+        );
         lenient().when(settingsService.getSettings(anyString())).thenReturn(settingsSnapshot);
-        lenient().when(settingsSnapshot.getString(anyString(), nullable(String.class))).thenReturn(tempDir.toString());
     }
 
     @Test
@@ -447,6 +449,56 @@ class AddaxJobServiceTest {
         assertThat(preSql).anyMatch(sql -> sql.startsWith("DROP TABLE IF EXISTS"));
         assertThat(preSql).anyMatch(sql -> sql.startsWith("CREATE TABLE IF NOT EXISTS"));
         assertThat(preSql).noneMatch(sql -> sql.startsWith("TRUNCATE TABLE"));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void shouldForceFileSourceColumnsToLandAsText() throws Exception {
+        // Given
+        Map<String, Object> readerConfig = Map.of(
+            "_fileColumns", java.util.List.of(
+                Map.of("safeName", "project_code", "type", "string"),
+                Map.of("safeName", "plan_date", "type", "date"),
+                Map.of("safeName", "risk_score", "type", "double"),
+                Map.of("safeName", "is_key_node", "type", "boolean")
+            ),
+            "path", java.util.List.of("/opt/airflow/dags/exchange/excel/demo/source.xlsx")
+        );
+        Map<String, Object> writerConfig = Map.of(
+            "jdbcUrl", "jdbc:postgresql://127.0.0.1:5432/biadmin",
+            "username", "biadmin",
+            "password", "Devops123@",
+            "table", "ods_project_subject_domain"
+        );
+
+        // When
+        AddaxJobService.AddaxJobResult result = addaxJobService.createJob(
+            "file-text-landing-test",
+            "excelreader",
+            readerConfig,
+            "postgresqlwriter",
+            writerConfig,
+            null
+        );
+
+        // Then
+        Map<String, Object> job = (Map<String, Object>) result.jobConfig().get("job");
+        Map<String, Object> content = (Map<String, Object>) ((java.util.List<?>) job.get("content")).get(0);
+        Map<String, Object> writer = (Map<String, Object>) content.get("writer");
+        Map<String, Object> writerParams = (Map<String, Object>) writer.get("parameter");
+        java.util.List<String> preSql = (java.util.List<String>) writerParams.get("preSql");
+        String createSql = preSql.stream()
+            .filter(sql -> sql.startsWith("CREATE TABLE IF NOT EXISTS"))
+            .findFirst()
+            .orElseThrow();
+
+        assertThat(createSql).contains("\"project_code\" varchar(500)");
+        assertThat(createSql).contains("\"plan_date\" varchar(500)");
+        assertThat(createSql).contains("\"risk_score\" varchar(500)");
+        assertThat(createSql).contains("\"is_key_node\" varchar(500)");
+        assertThat(createSql).doesNotContain("double precision");
+        assertThat(createSql).doesNotContain("\"plan_date\" date");
+        assertThat(createSql).doesNotContain("\"is_key_node\" boolean");
     }
 
     @Test

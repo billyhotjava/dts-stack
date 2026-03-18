@@ -1952,26 +1952,11 @@ public class AddaxJobService {
     }
 
     private String mapFileTypeToPostgres(String fileType, Map<String, Object> col) {
-        if (!StringUtils.hasText(fileType)) return "text";
-        return switch (fileType.toLowerCase(Locale.ROOT)) {
-            case "long", "bigint" -> "bigint";
-            case "integer", "int" -> "integer";
-            case "double" -> "double precision";
-            case "numeric", "decimal" -> {
-                int precision = toInt(col.get("precision"), 18);
-                int scale = toInt(col.get("scale"), 2);
-                yield "numeric(" + precision + "," + scale + ")";
-            }
-            case "date" -> "date";
-            case "timestamp" -> "timestamp";
-            case "boolean" -> "boolean";
-            case "text" -> "text";
-            case "jsonb" -> "jsonb";
-            default -> {
-                int length = toInt(col.get("length"), 500);
-                yield "varchar(" + length + ")";
-            }
-        };
+        int length = toInt(col.get("length"), 500);
+        if (length <= 0) {
+            length = 500;
+        }
+        return "varchar(" + length + ")";
     }
 
     private int toInt(Object value, int defaultValue) {
