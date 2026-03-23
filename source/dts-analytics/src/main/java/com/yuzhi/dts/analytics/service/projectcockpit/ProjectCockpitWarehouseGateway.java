@@ -71,6 +71,57 @@ public class ProjectCockpitWarehouseGateway {
         }
     }
 
+    public List<ProjectCockpitRawMetricRow> loadRawMetricRows() {
+        if (!properties.isEnabled() || jdbcTemplate == null) {
+            return List.of();
+        }
+        try {
+            return jdbcTemplate.query(
+                    """
+                    SELECT
+                      o.project_no,
+                      o.subsystem,
+                      o.node_task,
+                      o.node_type,
+                      o.owner,
+                      o.dept,
+                      o.plan_date,
+                      o.actual_date,
+                      o.completion_status,
+                      o.risk_level,
+                      d.major_project_id,
+                      d.major_project_name,
+                      d.subproject_id,
+                      d.subproject_name
+                    FROM ods_project_subject_domain o
+                    LEFT JOIN biz_dwd_project_node_enriched d
+                      ON COALESCE(o.project_no, '') = COALESCE(d.project_no, '')
+                     AND COALESCE(o.subsystem, '') = COALESCE(d.subsystem, '')
+                     AND COALESCE(o.node_task, '') = COALESCE(d.node_task, '')
+                     AND COALESCE(TRIM(o.plan_date), '') = COALESCE(CAST(d.plan_date AS VARCHAR), '')
+                    ORDER BY COALESCE(d.major_project_id, ''), COALESCE(d.subproject_id, ''), o.plan_date, o.node_task
+                    """,
+                    (rs, rowNum) -> new ProjectCockpitRawMetricRow(
+                            rs.getString("project_no"),
+                            rs.getString("subsystem"),
+                            rs.getString("node_task"),
+                            rs.getString("node_type"),
+                            rs.getString("owner"),
+                            rs.getString("dept"),
+                            rs.getString("plan_date"),
+                            rs.getString("actual_date"),
+                            rs.getString("completion_status"),
+                            rs.getString("risk_level"),
+                            rs.getString("major_project_id"),
+                            rs.getString("major_project_name"),
+                            rs.getString("subproject_id"),
+                            rs.getString("subproject_name")));
+        } catch (DataAccessException ex) {
+            log.warn("Project cockpit warehouse raw ODS rows unavailable: {}", ex.getMessage());
+            return List.of();
+        }
+    }
+
     private ProjectCockpitBatchSummary fallbackBatch(List<ProjectCockpitWarehouseNode> nodes) {
         int totalRows = nodes.size();
         int unmappedSubprojectCount = (int) nodes.stream()
@@ -301,4 +352,20 @@ public class ProjectCockpitWarehouseGateway {
             String majorProjectOwnerLeader,
             String subprojectOwnerDept,
             String subprojectOwnerUser) {}
+
+    public record ProjectCockpitRawMetricRow(
+            String projectNo,
+            String subsystem,
+            String nodeTask,
+            String nodeType,
+            String owner,
+            String dept,
+            String planDate,
+            String actualDate,
+            String completionStatus,
+            String riskLevel,
+            String majorProjectId,
+            String majorProjectName,
+            String subprojectId,
+            String subprojectName) {}
 }

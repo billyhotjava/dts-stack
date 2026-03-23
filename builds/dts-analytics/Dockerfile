@@ -76,9 +76,16 @@ FROM ${RUNTIME_BASE_IMAGE} AS runtime
 ENV TZ=Asia/Shanghai \
     LANG=C.UTF-8 \
     LC_ALL=C.UTF-8 \
+    DEBIAN_FRONTEND=noninteractive \
     JAVA_OPTS="-Djava.security.egd=file:/dev/./urandom -XX:MaxRAMPercentage=75.0 -Duser.timezone=Asia/Shanghai"
 
 WORKDIR /app
+RUN set -eux; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends tzdata ca-certificates curl; \
+    cp /usr/share/zoneinfo/$TZ /etc/localtime; \
+    echo $TZ > /etc/timezone; \
+    rm -rf /var/lib/apt/lists/*
 COPY --from=build /workspace/dist/app.jar /app/app.jar
 COPY builds/dts-analytics/docker-entrypoint.sh /docker-entrypoint.sh
 RUN chmod +x /docker-entrypoint.sh

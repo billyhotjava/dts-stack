@@ -64,6 +64,7 @@ class ProjectCockpitResourceIT {
                         "项目管理专题当前绑定到 ods.pm_upload_20260316。"));
         jdbcTemplate.execute("DROP TABLE IF EXISTS pm_ods_project_progress_batch");
         jdbcTemplate.execute("DROP TABLE IF EXISTS biz_dwd_project_node_enriched");
+        jdbcTemplate.execute("DROP TABLE IF EXISTS ods_project_subject_domain");
         jdbcTemplate.execute(
                 """
                 CREATE TABLE pm_ods_project_progress_batch (
@@ -111,6 +112,22 @@ class ProjectCockpitResourceIT {
                     major_project_owner_leader VARCHAR(128),
                     subproject_owner_dept VARCHAR(128),
                     subproject_owner_user VARCHAR(128)
+                )
+                """
+        );
+        jdbcTemplate.execute(
+                """
+                CREATE TABLE ods_project_subject_domain (
+                    project_no VARCHAR(128),
+                    subsystem VARCHAR(255),
+                    node_task VARCHAR(255),
+                    node_type VARCHAR(64),
+                    owner VARCHAR(128),
+                    dept VARCHAR(128),
+                    plan_date VARCHAR(64),
+                    actual_date VARCHAR(64),
+                    completion_status VARCHAR(64),
+                    risk_level VARCHAR(32)
                 )
                 """
         );
@@ -277,6 +294,12 @@ class ProjectCockpitResourceIT {
                 .andExpect(jsonPath("$.screenKey").value("risk"))
                 .andExpect(jsonPath("$.changeKpis").isArray())
                 .andExpect(jsonPath("$.riskBreakdown").isArray());
+
+        mockMvc.perform(get("/api/project-cockpit/screen/metrics-compare").cookie(sessionCookie))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.summary.metricTotal").value(Matchers.greaterThan(0)))
+                .andExpect(jsonPath("$.groups").isArray())
+                .andExpect(jsonPath("$.groups[0].items").isArray());
     }
 
     @Test
@@ -409,6 +432,30 @@ class ProjectCockpitResourceIT {
                 .andExpect(jsonPath("$.changeKpis[4].value").value("33.33"))
                 .andExpect(jsonPath("$.changeKpis[5].key").value("overdueRate"))
                 .andExpect(jsonPath("$.changeKpis[5].value").value("50.0"));
+    }
+
+    @Test
+    void projectCockpitScreenMetricsCompareShouldExposeSystemAndExcelValues() throws Exception {
+        seedModeledBatch();
+        seedProject3MetricRows();
+        jdbcTemplate.update(
+                "UPDATE ods_project_subject_domain SET completion_status = ? WHERE node_task = ?",
+                "正常待完成",
+                "初样交付");
+        Cookie sessionCookie = authenticate();
+
+        mockMvc.perform(get("/api/project-cockpit/screen/metrics-compare")
+                        .cookie(sessionCookie)
+                        .param("dateFrom", "2026-03-01")
+                        .param("dateTo", "2026-03-31"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.summary.metricTotal").value(16))
+                .andExpect(jsonPath("$.summary.mismatchCount").value(Matchers.greaterThan(0)))
+                .andExpect(jsonPath("$.groups[0].dimension").value("项目（含一般节点）"))
+                .andExpect(jsonPath("$.groups[0].items[0].systemValue").isString())
+                .andExpect(jsonPath("$.groups[0].items[0].excelValue").isString())
+                .andExpect(jsonPath("$.groups[0].items[0].matched").exists())
+                .andExpect(jsonPath("$.mismatchTop").isArray());
     }
 
     @Test
@@ -849,6 +896,24 @@ class ProjectCockpitResourceIT {
                 majorOwnerLeader,
                 subOwnerDept,
                 subOwnerUser
+        );
+        jdbcTemplate.update(
+                """
+                INSERT INTO ods_project_subject_domain (
+                    project_no, subsystem, node_task, node_type, owner, dept,
+                    plan_date, actual_date, completion_status, risk_level
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                "P-" + subprojectId,
+                subsystem,
+                nodeTask,
+                nodeType,
+                subOwnerUser,
+                subOwnerDept,
+                planDate,
+                actualDate,
+                completionStatus,
+                riskLevel
         );
     }
 

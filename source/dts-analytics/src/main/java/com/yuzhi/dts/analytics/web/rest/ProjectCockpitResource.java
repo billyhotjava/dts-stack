@@ -116,6 +116,17 @@ public class ProjectCockpitResource {
         return authorize(request, projectCockpitService.screenMetricsOverview(filters(majorProjectId, dateFrom, dateTo, deptId, riskLevel)));
     }
 
+    @GetMapping(path = "/screen/metrics-compare", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> screenMetricsCompare(
+            @RequestParam(value = "majorProjectId", required = false) String majorProjectId,
+            @RequestParam(value = "dateFrom", required = false) String dateFrom,
+            @RequestParam(value = "dateTo", required = false) String dateTo,
+            @RequestParam(value = "deptId", required = false) String deptId,
+            @RequestParam(value = "riskLevel", required = false) String riskLevel,
+            HttpServletRequest request) {
+        return authorize(request, projectCockpitService.screenMetricsCompare(filters(majorProjectId, dateFrom, dateTo, deptId, riskLevel)));
+    }
+
     @GetMapping(path = "/screen/header", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> screenHeader(
             @RequestParam(value = "majorProjectId", required = false) String majorProjectId,

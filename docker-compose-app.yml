@@ -1,6 +1,12 @@
 ## Production apps overlay: use prebuilt images, no local builds
 ## Note: this file is intended to be used with `docker-compose.yml` (core stack).
 
+x-hc: &hc
+  interval: 10s
+  timeout: 5s
+  retries: 30
+  start_period: 20s
+
 services:
 
   # Traefik overlay (Hetu reverse proxy via path prefixes).
@@ -171,6 +177,10 @@ services:
       - "${HOST_SSO}:${HOST_GATEWAY_IP:-172.17.0.1}"
     networks:
       - dts-core
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8081/management/health >/dev/null || exit 1"]
+      <<: *hc
+    restart: unless-stopped
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=dts-core"
@@ -202,9 +212,9 @@ services:
       #dts-trino:
       #  condition: service_started
       dts-admin:
-        condition: service_started
+        condition: service_healthy
       dts-ingestion:
-        condition: service_started
+        condition: service_healthy
     environment:
       TZ: ${TZ:-Asia/Shanghai}
       SPRING_PROFILES_ACTIVE: ${DTS_PROFILE:-prod}
@@ -269,6 +279,10 @@ services:
       - "${HOST_SSO}:${HOST_GATEWAY_IP:-172.17.0.1}"
     networks:
       - dts-core
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8081/management/health >/dev/null || exit 1"]
+      <<: *hc
+    restart: unless-stopped
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=dts-core"
@@ -350,6 +364,10 @@ services:
       - seccomp=unconfined
     networks:
       - dts-core
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8083/management/health >/dev/null || exit 1"]
+      <<: *hc
+    restart: unless-stopped
 
   dts-analytics:
     image: ${IMAGE_DTS_ANALYTICS:?Set IMAGE_DTS_ANALYTICS in imgversion.conf or .env}
@@ -384,6 +402,10 @@ services:
       - ./services/dts-platform/drivers:/opt/dts/jdbc:ro,z
     networks:
       - dts-core
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:3000/api/health >/dev/null || exit 1"]
+      <<: *hc
+    restart: unless-stopped
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=dts-core"
@@ -414,10 +436,12 @@ services:
     environment:
       TZ: ${TZ:-Asia/Shanghai}
     depends_on:
-      - dts-analytics
+      dts-analytics:
+        condition: service_healthy
     ports: []
     networks:
       - dts-core
+    restart: unless-stopped
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=dts-core"
@@ -447,6 +471,7 @@ services:
     ports: []
     networks:
       - dts-core
+    restart: unless-stopped
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=dts-core"
@@ -458,6 +483,13 @@ services:
   dts-platform-webapp:
     image: ${IMAGE_DTS_PLATFORM_WEBAPP:?Set IMAGE_DTS_PLATFORM_WEBAPP in imgversion.conf or .env}
     ports: []
+    depends_on:
+      dts-platform:
+        condition: service_healthy
+      dts-admin:
+        condition: service_healthy
+      dts-analytics:
+        condition: service_healthy
     environment:
       TZ: ${TZ:-Asia/Shanghai}
       API_PROXY_TARGET: http://dts-platform:8081
@@ -479,6 +511,7 @@ services:
       VITE_HIDE_PASSWORD_LOGIN: ${PLATFORM_VITE_HIDE_PASSWORD_LOGIN:-}
     networks:
       - dts-core
+    restart: unless-stopped
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=dts-core"

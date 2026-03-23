@@ -54,9 +54,9 @@
 
 | Feature | Task 数 | 状态 |
 |---------|---------|------|
-| F1-容器自恢复策略 | 3 | IN_PROGRESS |
-| F2-启动顺序与健康门禁 | 3 | READY |
-| F3-platform-webapp自等待机制 | 3 | IN_PROGRESS |
-| F4-重启回归与现场验收 | 3 | READY |
+| F1-容器自恢复策略 | 3 | DONE |
+| F2-启动顺序与健康门禁 | 3 | DONE |
+| F3-platform-webapp自等待机制 | 3 | DONE |
+| F4-重启回归与现场验收 | 3 | IN_PROGRESS |
 
-**统计**: READY=6, IN_PROGRESS=6, DONE=0, BLOCKED=0
+**统计**: READY=2, IN_PROGRESS=2, DONE=8, BLOCKED=0

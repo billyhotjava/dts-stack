@@ -141,7 +141,7 @@ ENV TZ=Asia/Shanghai \
     JAVA_OPTS="-Djava.security.egd=file:/dev/./urandom -XX:MaxRAMPercentage=75.0 --add-exports=java.base/sun.security.x509=ALL-UNNAMED --add-exports=java.base/sun.security.util=ALL-UNNAMED --add-opens=java.base/sun.security.x509=ALL-UNNAMED --add-opens=java.base/sun.security.util=ALL-UNNAMED"
 RUN set -eux; \
     apt-get -o Acquire::AllowInsecureRepositories=true -o Acquire::AllowDowngradeToInsecureRepositories=true update || true; \
-    apt-get install -y --no-install-recommends tzdata ca-certificates; \
+    apt-get install -y --no-install-recommends tzdata ca-certificates curl; \
     cp /usr/share/zoneinfo/$TZ /etc/localtime; \
     echo $TZ > /etc/timezone; \
     rm -rf /var/lib/apt/lists/*

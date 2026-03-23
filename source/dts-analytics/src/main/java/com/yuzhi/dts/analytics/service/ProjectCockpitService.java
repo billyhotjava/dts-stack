@@ -21,6 +21,7 @@ import com.yuzhi.dts.analytics.service.projectcockpit.ProjectCockpitTopicBinding
 import com.yuzhi.dts.analytics.service.projectcockpit.ProjectCockpitTopicBindingGateway.TopicBindingState;
 import com.yuzhi.dts.analytics.service.projectcockpit.ProjectCockpitWarehouseGateway;
 import com.yuzhi.dts.analytics.service.projectcockpit.ProjectCockpitWarehouseGateway.ProjectCockpitBatchSummary;
+import com.yuzhi.dts.analytics.service.projectcockpit.ProjectCockpitWarehouseGateway.ProjectCockpitRawMetricRow;
 import com.yuzhi.dts.analytics.service.projectcockpit.ProjectCockpitWarehouseGateway.ProjectCockpitWarehouseNode;
 import com.yuzhi.dts.analytics.service.projectcockpit.ProjectCockpitWarehouseGateway.ProjectCockpitWarehouseSnapshot;
 import org.springframework.stereotype.Service;
@@ -31,6 +32,7 @@ public class ProjectCockpitService {
     private static final List<String> RISK_ORDER = List.of("高", "中", "低", "未知");
     private static final List<String> DELAY_REASON_ORDER = List.of("technical", "quality", "change", "coordination", "supplier", "test", "archive", "normal");
     private static final String EMPTY_SUBTITLE = "暂无正式数据，请先通过数据中台上传项目主体域 Excel/CSV 并完成建模刷新。";
+    private static final double PERCENT_COMPARE_TOLERANCE = 0.1D;
 
     private final ObjectMapper objectMapper;
     private final ProjectCockpitMasterDataGateway masterDataGateway;
@@ -295,6 +297,29 @@ public class ProjectCockpitService {
         addDimensionKpi(allKpis, "本周期内节点", "milestoneOverdueCompletedCount2", "里程碑节点超期完成数", milestoneOverdueCompleted, "个");
 
         root.set("kpis", allKpis);
+        return root;
+    }
+
+    public ObjectNode screenMetricsCompare(Filters filters) {
+        refreshFormalData();
+        List<NodeRow> scoped = applyScopeFilters(filters);
+        List<NodeRow> filtered = applyFilters(filters);
+        List<NodeRow> excelNodes = toExcelMetricNodes(warehouseGateway.loadRawMetricRows());
+        List<NodeRow> excelScoped = applyScopeFilters(excelNodes, filters);
+        List<NodeRow> excelFiltered = applyFilters(excelNodes, filters);
+        boolean fallbackToSystem = excelNodes.isEmpty();
+
+        Map<String, String> systemValues = buildMetricCompareValueMap(scoped, filtered, filters);
+        Map<String, String> excelValues = fallbackToSystem
+                ? new LinkedHashMap<>(systemValues)
+                : buildMetricCompareValueMap(excelScoped, excelFiltered, filters);
+
+        List<MetricCompareItem> items = buildMetricCompareItems(systemValues, excelValues, fallbackToSystem);
+
+        ObjectNode root = buildScreenPayload("metrics-compare", "指标对账", filters, filtered);
+        root.set("summary", buildMetricCompareSummary(items));
+        root.set("groups", buildMetricCompareGroups(items));
+        root.set("mismatchTop", buildMetricCompareMismatchTop(items));
         return root;
     }
 
@@ -1249,7 +1274,11 @@ public class ProjectCockpitService {
     }
 
     private List<NodeRow> applyScopeFilters(Filters filters) {
-        return nodes.stream()
+        return applyScopeFilters(nodes, filters);
+    }
+
+    private List<NodeRow> applyScopeFilters(List<NodeRow> source, Filters filters) {
+        return source.stream()
                 .filter(node -> filters.majorProjectId() == null || filters.majorProjectId().isBlank() || filters.majorProjectId().equals(node.majorProjectId()))
                 .filter(node -> filters.deptId() == null || filters.deptId().isBlank() || filters.deptId().equals(node.dept()))
                 .filter(node -> filters.riskLevel() == null || filters.riskLevel().isBlank() || filters.riskLevel().equals(normalizedRisk(node.riskLevel())))
@@ -1257,10 +1286,245 @@ public class ProjectCockpitService {
     }
 
     private List<NodeRow> applyFilters(Filters filters) {
-        return applyScopeFilters(filters).stream()
+        return applyFilters(nodes, filters);
+    }
+
+    private List<NodeRow> applyFilters(List<NodeRow> source, Filters filters) {
+        return applyScopeFilters(source, filters).stream()
                 .filter(node -> filters.dateFrom() == null || node.planDate() == null || !node.planDate().isBefore(filters.dateFrom()))
                 .filter(node -> filters.dateTo() == null || node.planDate() == null || !node.planDate().isAfter(filters.dateTo()))
                 .toList();
+    }
+
+    private Map<String, String> buildMetricCompareValueMap(List<NodeRow> scoped, List<NodeRow> filtered, Filters filters) {
+        Map<String, String> values = new LinkedHashMap<>();
+        putKpiValues(values, buildScreenOverviewKpis(scoped, filters));
+        putKpiValues(values, buildScreenRiskKpis(scoped, filters));
+        putKpiValues(values, buildScreenIncompleteKpis(filtered));
+        putKpiValues(values, buildScreenExecutionKpis(filtered));
+        return values;
+    }
+
+    private void putKpiValues(Map<String, String> values, ArrayNode kpis) {
+        for (int i = 0; i < kpis.size(); i++) {
+            ObjectNode item = (ObjectNode) kpis.get(i);
+            values.put(item.path("key").asText(), item.path("value").asText("0"));
+        }
+    }
+
+    private List<MetricCompareItem> buildMetricCompareItems(
+            Map<String, String> systemValues,
+            Map<String, String> excelValues,
+            boolean fallbackToSystem) {
+        List<MetricCompareItem> items = new ArrayList<>();
+        String fallbackRemark = fallbackToSystem ? "未找到 ODS 明细，已回退系统值" : "";
+
+        items.add(compareMetric("项目（含一般节点）", "periodNodeTotalCount", "项目本周期节点总数", "个", systemValues, excelValues, fallbackRemark));
+        items.add(compareMetric("项目（含一般节点）", "pendingNormalCount", "正常待完成", "个", systemValues, excelValues, fallbackRemark));
+        items.add(compareMetric("项目（含一般节点）", "dueNodeCount", "项目本周期节点已到时间节点总数", "个", systemValues, excelValues, fallbackRemark));
+        items.add(compareMetric("项目（含一般节点）", "incompleteNodeCount", "项目本周期节点未完成总数", "个", systemValues, excelValues, fallbackRemark));
+        items.add(compareMetric("项目（含一般节点）", "onTimeCount", "节点按时完成数", "个", systemValues, excelValues, fallbackRemark));
+        items.add(compareMetric("项目（含一般节点）", "overdueCompletedCount", "节点超期完成数", "个", systemValues, excelValues, fallbackRemark));
+        items.add(compareMetric("项目（含一般节点）", "completedNodeCount", "节点完成总数", "个", systemValues, excelValues, fallbackRemark));
+        items.add(compareMetric("项目（含一般节点）", "completionRate", "节点完成百分比", "%", systemValues, excelValues, fallbackRemark));
+        items.add(compareMetric("项目（含一般节点）", "onTimeRate", "节点按时完成百分比", "%", systemValues, excelValues, fallbackRemark));
+        items.add(compareMetric("项目（含一般节点）", "overdueCompletionRate", "超期完成节点百分比", "%", systemValues, excelValues, fallbackRemark));
+
+        items.add(compareMetric("项目（除一般节点）", "abnormalPendingNonGeneralCount", "不正常待变更节点数", "个", systemValues, excelValues, fallbackRemark));
+        items.add(compareMetric("项目（除一般节点）", "overdueIncompleteUnchangedNonGeneralCount", "超期未完成且未走变更流程的节点数", "个", systemValues, excelValues, fallbackRemark));
+        items.add(compareMetric("项目（除一般节点）", "abnormalRate", "节点已经不正常待变更的百分比", "%", systemValues, excelValues, fallbackRemark));
+        items.add(compareMetric("项目（除一般节点）", "overdueRate", "节点超期百分比", "%", systemValues, excelValues, fallbackRemark));
+
+        items.add(compareMetric("截止目前未完成节点", "incompleteHighRiskCount", "截止目前未完成高风险节点数", "个", systemValues, excelValues, fallbackRemark));
+        items.add(compareMetric("本周期内节点", "milestoneCompletionRate", "里程碑节点完成总百分比", "%", systemValues, excelValues, fallbackRemark));
+        return items;
+    }
+
+    private MetricCompareItem compareMetric(
+            String dimension,
+            String key,
+            String label,
+            String unit,
+            Map<String, String> systemValues,
+            Map<String, String> excelValues,
+            String fallbackRemark) {
+        String systemValue = systemValues.getOrDefault(key, "0");
+        String excelValue = excelValues.getOrDefault(key, systemValue);
+        double systemNumeric = parseNumeric(systemValue);
+        double excelNumeric = parseNumeric(excelValue);
+        double diffAbs = roundTwoDecimals(Math.abs(systemNumeric - excelNumeric));
+        double tolerance = "%".equals(unit) ? PERCENT_COMPARE_TOLERANCE : 0D;
+        boolean matched = diffAbs <= tolerance;
+        double diffRate = Math.abs(excelNumeric) <= 0.000001D ? 0D : roundTwoDecimals((diffAbs * 100D) / Math.abs(excelNumeric));
+        String remark = !fallbackRemark.isBlank() ? fallbackRemark : matched ? "口径一致" : "请对照 Excel 复核";
+        return new MetricCompareItem(
+                dimension,
+                key,
+                label,
+                unit,
+                systemValue,
+                excelValue,
+                formatMetricValue(diffAbs, unit),
+                formatPercentValue(diffRate),
+                matched,
+                matched ? "一致" : "差异",
+                remark,
+                diffAbs);
+    }
+
+    private ObjectNode buildMetricCompareSummary(List<MetricCompareItem> items) {
+        ObjectNode summary = objectMapper.createObjectNode();
+        long mismatchCount = items.stream().filter(item -> !item.matched()).count();
+        MetricCompareItem maxDiff = items.stream()
+                .max(Comparator.comparingDouble(MetricCompareItem::diffAbs))
+                .orElse(null);
+        summary.put("metricTotal", items.size());
+        summary.put("matchedCount", items.size() - mismatchCount);
+        summary.put("mismatchCount", mismatchCount);
+        summary.put("maxDiffValue", maxDiff == null ? "0" : maxDiff.diffValue());
+        summary.put("maxDiffMetric", maxDiff == null ? "-" : maxDiff.label());
+        summary.put("maxDiffDimension", maxDiff == null ? "-" : maxDiff.dimension());
+        return summary;
+    }
+
+    private ArrayNode buildMetricCompareGroups(List<MetricCompareItem> items) {
+        ArrayNode groups = objectMapper.createArrayNode();
+        items.stream()
+                .collect(Collectors.groupingBy(MetricCompareItem::dimension, LinkedHashMap::new, Collectors.toList()))
+                .forEach((dimension, rows) -> {
+                    ObjectNode group = groups.addObject();
+                    group.put("dimension", dimension);
+                    ArrayNode arr = group.putArray("items");
+                    rows.forEach(item -> {
+                        ObjectNode row = arr.addObject();
+                        row.put("metricKey", item.metricKey());
+                        row.put("label", item.label());
+                        row.put("unit", item.unit());
+                        row.put("systemValue", item.systemValue());
+                        row.put("excelValue", item.excelValue());
+                        row.put("diffValue", item.diffValue());
+                        row.put("diffRate", item.diffRate());
+                        row.put("status", item.status());
+                        row.put("matched", item.matched());
+                        row.put("remark", item.remark());
+                    });
+                });
+        return groups;
+    }
+
+    private ArrayNode buildMetricCompareMismatchTop(List<MetricCompareItem> items) {
+        ArrayNode arr = objectMapper.createArrayNode();
+        items.stream()
+                .filter(item -> !item.matched())
+                .sorted(Comparator.comparingDouble(MetricCompareItem::diffAbs).reversed())
+                .limit(8)
+                .forEach(item -> {
+                    ObjectNode row = arr.addObject();
+                    row.put("metricKey", item.metricKey());
+                    row.put("label", item.label());
+                    row.put("dimension", item.dimension());
+                    row.put("diffValue", item.diffValue());
+                    row.put("diffRate", item.diffRate());
+                    row.put("status", item.status());
+                });
+        return arr;
+    }
+
+    private double parseNumeric(String value) {
+        if (value == null || value.isBlank()) {
+            return 0D;
+        }
+        try {
+            return Double.parseDouble(value.trim());
+        } catch (NumberFormatException ex) {
+            return 0D;
+        }
+    }
+
+    private double roundTwoDecimals(double value) {
+        return Math.round(value * 100D) / 100D;
+    }
+
+    private String formatMetricValue(double value, String unit) {
+        if ("%".equals(unit)) {
+            return formatPercentValue(value);
+        }
+        long rounded = Math.round(value);
+        return Math.abs(value - rounded) < 0.000001D ? String.valueOf(rounded) : formatPercentValue(value);
+    }
+
+    private String formatPercentValue(double value) {
+        return String.valueOf(roundTwoDecimals(value));
+    }
+
+    private List<NodeRow> toExcelMetricNodes(List<ProjectCockpitRawMetricRow> rows) {
+        return rows.stream()
+                .map(row -> new NodeRow(
+                        buildRawNodeId(row),
+                        row.projectNo(),
+                        row.subsystem(),
+                        row.nodeTask(),
+                        row.nodeType(),
+                        row.owner(),
+                        row.dept(),
+                        "",
+                        parseLocalDate(row.planDate()),
+                        parseLocalDate(row.actualDate()),
+                        blankToEmpty(row.completionStatus()),
+                        blankToEmpty(row.riskLevel()),
+                        deriveDelayDays(row.planDate(), row.actualDate(), row.completionStatus()),
+                        "",
+                        blankToEmpty(row.majorProjectId()),
+                        blankToEmpty(row.majorProjectName()),
+                        blankToEmpty(row.subprojectId()),
+                        blankToEmpty(row.subprojectName()),
+                        "",
+                        "",
+                        isKeyNodeType(row.nodeType()),
+                        isMilestoneType(row.nodeType())))
+                .toList();
+    }
+
+    private String buildRawNodeId(ProjectCockpitRawMetricRow row) {
+        return String.join("|",
+                blankToEmpty(row.projectNo()),
+                blankToEmpty(row.subsystem()),
+                blankToEmpty(row.nodeTask()),
+                blankToEmpty(row.planDate()));
+    }
+
+    private LocalDate parseLocalDate(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return LocalDate.parse(value.trim());
+        } catch (Exception ex) {
+            return null;
+        }
+    }
+
+    private int deriveDelayDays(String planDate, String actualDate, String completionStatus) {
+        LocalDate plan = parseLocalDate(planDate);
+        LocalDate actual = parseLocalDate(actualDate);
+        if (plan != null && actual != null && actual.isAfter(plan)) {
+            return (int) java.time.temporal.ChronoUnit.DAYS.between(plan, actual);
+        }
+        if (completionStatus != null && completionStatus.contains("超期")) {
+            return 1;
+        }
+        return 0;
+    }
+
+    private boolean isMilestoneType(String nodeType) {
+        return "里程碑节点".equals(blankToEmpty(nodeType).trim());
+    }
+
+    private boolean isKeyNodeType(String nodeType) {
+        String normalized = blankToEmpty(nodeType).trim();
+        return "里程碑节点".equals(normalized)
+                || "重大节点".equals(normalized)
+                || "重要节点".equals(normalized);
     }
 
     private List<NodeRow> filterPlannedInPeriod(List<NodeRow> scopedRows, Filters filters) {
@@ -1538,6 +1802,20 @@ public class ProjectCockpitService {
             long milestoneOnTimeCount,
             long milestoneOverdueCompletedCount,
             long milestoneIncompleteCount) {}
+
+    private record MetricCompareItem(
+            String dimension,
+            String metricKey,
+            String label,
+            String unit,
+            String systemValue,
+            String excelValue,
+            String diffValue,
+            String diffRate,
+            boolean matched,
+            String status,
+            String remark,
+            double diffAbs) {}
 
     private record MajorProjectRow(
             String majorProjectId,

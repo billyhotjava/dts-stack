@@ -19,14 +19,31 @@
 
 | ID | Feature | Task 数 | 状态 |
 |----|---------|---------|------|
-| F1 | 容器自恢复策略 | 3 | IN_PROGRESS |
-| F2 | 启动顺序与健康门禁 | 3 | READY |
-| F3 | platform-webapp 自等待机制 | 3 | IN_PROGRESS |
-| F4 | 重启回归与现场验收 | 3 | READY |
+| F1 | 容器自恢复策略 | 3 | DONE |
+| F2 | 启动顺序与健康门禁 | 3 | DONE |
+| F3 | platform-webapp 自等待机制 | 3 | DONE |
+| F4 | 重启回归与现场验收 | 3 | IN_PROGRESS |
+
+## 本轮已实现
+- `docker-compose-app.yml` 与 `docker-compose.legacy.yml` 为关键长跑服务补齐 `restart: unless-stopped`，并保留一次性任务 `restart: "no"`。
+- `dts-admin`、`dts-platform`、`dts-ingestion`、`dts-analytics` 补齐可执行 healthcheck，`dts-platform-webapp` 改为依赖后端 `service_healthy`。
+- `builds/dts-admin/Dockerfile`、[builds/dts-platform/Dockerfile](/opt/prod/s10/s10-stack/builds/dts-platform/Dockerfile)、[builds/dts-ingestion/Dockerfile](/opt/prod/s10/s10-stack/builds/dts-ingestion/Dockerfile)、[builds/dts-analytics/Dockerfile](/opt/prod/s10/s10-stack/builds/dts-analytics/Dockerfile) 运行时镜像补齐 `curl`，确保 compose healthcheck 可执行。
+- [builds/dts-platform-webapp/docker-entrypoint.sh](/opt/prod/s10/s10-stack/builds/dts-platform-webapp/docker-entrypoint.sh) 改为“先起占位 Nginx、持续等待后端、就绪后切正式配置并 reload”，不再因上游暂时未就绪直接退出。
+
+## 已通过验证
+- `bash tests/test_compose_restart_policy.sh`
+- `bash tests/test_compose_health_gates.sh`
+- `bash tests/test_runtime_healthcheck_tools.sh`
+- `bash tests/test_platform_webapp_waits_for_backends.sh`
+- `bash tests/test_dts_upgrade_compose_compat.sh`
+- `bash tests/test_dts_upgrade_e2e.sh`
+- `bash tests/test_dts_upgrade_preflight.sh`
+- `bash tests/test_dts_upgrade_mode_and_pg_checks.sh`
+- `bash -n builds/dts-platform-webapp/docker-entrypoint.sh`
 
 ## 完成标准
-- [ ] 宿主机重启后，关键运行容器可自动恢复
-- [ ] `legacy` 与 `normal` 模式下的重启策略一致且可验证
-- [ ] `dts-platform-webapp` 不再因后端暂时未就绪而退出
-- [ ] Compose 依赖关系清晰区分 `service_started` 与 `service_healthy`
+- [x] 宿主机重启后，关键运行容器具备自动恢复策略
+- [x] `legacy` 与 `normal` 模式下的重启策略一致且可验证
+- [x] `dts-platform-webapp` 不再因后端暂时未就绪而退出
+- [x] Compose 依赖关系清晰区分 `service_started` 与 `service_healthy`
 - [ ] 补齐自动化回归与现场验收文档
