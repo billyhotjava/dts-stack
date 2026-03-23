@@ -70,3 +70,13 @@
 | F3-执行链与日志链优化 | 3 | DONE |
 
 **统计**: READY=0, IN_PROGRESS=0, DONE=10, BLOCKED=0
+
+## Sprint-12: 数据接入中心产品功能优化 (202603)
+
+| Feature | Task 数 | 状态 |
+|---------|---------|------|
+| F1-数据源与驱动管理体验优化 | 3 | IN_PROGRESS |
+| F2-入湖任务详情与执行观测优化 | 3 | IN_PROGRESS |
+| F3-基础配置协同入口优化 | 3 | READY |
+
+**统计**: READY=5, IN_PROGRESS=2, DONE=2, BLOCKED=0

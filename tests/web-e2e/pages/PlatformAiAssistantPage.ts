@@ -76,12 +76,12 @@ export class PlatformAiAssistantPage {
 
   async openFavorite(title: string): Promise<void> {
     const card = this.favoriteCard(title);
-    await card.getByText('打开', { exact: true }).click();
+    await card.locator('button').first().click();
   }
 
   async editFavorite(title: string): Promise<void> {
     const card = this.favoriteCard(title);
-    await card.getByText('编辑', { exact: true }).click();
+    await card.locator('button').nth(1).click();
     await expect(this.page.getByRole('dialog')).toBeVisible();
   }
 
