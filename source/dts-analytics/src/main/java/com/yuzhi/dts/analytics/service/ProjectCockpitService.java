@@ -326,7 +326,22 @@ public class ProjectCockpitService {
         root.set("ranking", buildRanking(filtered));
         root.set("alerts", buildAlerts(filtered));
         root.set("spotlight", buildSpotlight(filtered));
+        root.set("completionBreakdown", buildCompletionBreakdown(scoped, filters));
         return root;
+    }
+
+    private ArrayNode buildCompletionBreakdown(List<NodeRow> scopedRows, Filters filters) {
+        OverviewPeriodMetrics m = computeOverviewPeriodMetrics(scopedRows, filters);
+        ArrayNode arr = objectMapper.createArrayNode();
+        ObjectNode onTime = objectMapper.createObjectNode();
+        onTime.put("name", "按时完成"); onTime.put("value", m.onTimeCount()); arr.add(onTime);
+        ObjectNode overdue = objectMapper.createObjectNode();
+        overdue.put("name", "超期完成"); overdue.put("value", m.overdueCompletedCount() + m.outsideCompletedCount()); arr.add(overdue);
+        ObjectNode incomplete = objectMapper.createObjectNode();
+        incomplete.put("name", "未完成"); incomplete.put("value", m.incompleteNodeCount()); arr.add(incomplete);
+        ObjectNode pending = objectMapper.createObjectNode();
+        pending.put("name", "正常待完成"); pending.put("value", m.pendingNormalCount()); arr.add(pending);
+        return arr;
     }
 
     public ObjectNode screenExecution(Filters filters) {

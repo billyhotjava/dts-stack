@@ -237,12 +237,37 @@ upgrade_detect_mode() {
   upgrade_append_summary "- compose files: ${UPGRADE_RUNTIME_COMPOSE_FILES[*]}"
 }
 
+upgrade_detect_compose_runner() {
+  if [[ -n "${UPGRADE_COMPOSE_RUNNER:-}" ]]; then
+    printf '%s\n' "${UPGRADE_COMPOSE_RUNNER}"
+    return 0
+  fi
+
+  if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
+    UPGRADE_COMPOSE_RUNNER="docker compose"
+  elif command -v docker-compose >/dev/null 2>&1 && docker-compose version >/dev/null 2>&1; then
+    UPGRADE_COMPOSE_RUNNER="docker-compose"
+  else
+    upgrade_die "neither 'docker compose' nor 'docker-compose' is available"
+  fi
+
+  upgrade_append_log "compose runner=${UPGRADE_COMPOSE_RUNNER}"
+  upgrade_append_summary "- compose runner: ${UPGRADE_COMPOSE_RUNNER}"
+  printf '%s\n' "${UPGRADE_COMPOSE_RUNNER}"
+}
+
 upgrade_compose_cmd() {
   local target_dir="$1"
   shift
+  local compose_runner
+  compose_runner="$(upgrade_detect_compose_runner)"
   (
     cd "${target_dir}"
-    docker compose "$@"
+    if [[ "${compose_runner}" == "docker compose" ]]; then
+      docker compose "$@"
+    else
+      docker-compose "$@"
+    fi
   )
 }
 
@@ -599,7 +624,13 @@ upgrade_should_merge_compose_file() {
 
 upgrade_compose_config_json() {
   local compose_file="$1"
-  docker compose -f "${compose_file}" config --format json
+  local compose_runner
+  compose_runner="$(upgrade_detect_compose_runner)"
+  if [[ "${compose_runner}" == "docker compose" ]]; then
+    docker compose -f "${compose_file}" config --format json
+  else
+    docker-compose -f "${compose_file}" config --format json
+  fi
 }
 
 upgrade_merge_compose_file() {

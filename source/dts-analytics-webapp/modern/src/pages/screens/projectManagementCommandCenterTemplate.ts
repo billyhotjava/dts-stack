@@ -1,4 +1,4 @@
-import type { DataSourceConfig, ScreenComponent, ScreenGlobalVariable, ScreenPage } from './types';
+import type { DataSourceConfig, ScreenComponent, ScreenComponentAction, ScreenGlobalVariable, ScreenPage } from './types';
 import type { ScreenTemplate } from './screenTemplates';
 import { SCREEN_SCHEMA_VERSION } from './specV2';
 
@@ -32,6 +32,7 @@ function createComponent(
     zIndex: number,
     config: Record<string, unknown>,
     dataSource?: DataSourceConfig,
+    actions?: ScreenComponentAction[],
 ): ScreenComponent {
     return {
         id,
@@ -46,7 +47,16 @@ function createComponent(
         visible: true,
         config,
         ...(dataSource ? { dataSource } : {}),
+        ...(actions?.length ? { actions } : {}),
     };
+}
+
+function jumpAction(urlTemplate: string): ScreenComponentAction {
+    return { type: 'jump-url', jumpUrlTemplate: urlTemplate, jumpOpenMode: 'new-tab' };
+}
+
+function withActions(component: ScreenComponent, ...acts: ScreenComponentAction[]): ScreenComponent {
+    return { ...component, actions: acts };
 }
 
 function createVariable(
@@ -63,7 +73,7 @@ function createTitle(id: string, text: string, x: number, y: number, width: numb
         fontSize,
         fontWeight: '700',
         color: TITLE_COLOR,
-        textAlign: 'flex-start',
+        textAlign: 'center',
     });
 }
 
@@ -73,7 +83,7 @@ function createSubtitle(id: string, text: string, x: number, y: number, width: n
         fontSize: 15,
         fontWeight: '500',
         color: SUBTITLE_COLOR,
-        textAlign: 'flex-start',
+        textAlign: 'center',
     });
 }
 
@@ -309,16 +319,19 @@ function createTable(
 }
 
 function createCommonHeader(pageTitle: string, pageIndex: number): ScreenComponent[] {
+    // Layout: left=filters | center=title | right=date+time
     return [
-        createTitle(`pmcc-title-${pageIndex}`, '科研项目管理指挥大屏', 44, 28, 560),
-        createSubtitle(`pmcc-subtitle-${pageIndex}`, `演示定制版 · 第 ${pageIndex + 1} 屏 · ${pageTitle}`, 44, 74, 520),
-        createSubtitle(`pmcc-page-${pageIndex}`, pageTitle, 1520, 34, 120),
+        // Left: filters
+        createFilterInput(`pmcc-program-${pageIndex}`, '项目群', 'programId', 32, 24, 155),
+        createFilterInput(`pmcc-major-${pageIndex}`, '重大项目', 'majorProjectId', 196, 24, 155),
+        createFilterInput(`pmcc-dept-${pageIndex}`, '责任科室', 'deptId', 360, 24, 155),
+        createRiskSelect(`pmcc-risk-${pageIndex}`, 524, 24, 130),
+        // Center: title
+        createTitle(`pmcc-title-${pageIndex}`, '科研项目管理指挥大屏', 680, 20, 560),
+        createSubtitle(`pmcc-subtitle-${pageIndex}`, `第 ${pageIndex + 1} 屏 · ${pageTitle}`, 680, 66, 560),
+        // Right: date range + datetime
+        createDateRange(`pmcc-date-${pageIndex}`, 1310, 24, 310),
         createDatetime(`pmcc-datetime-${pageIndex}`),
-        createFilterInput(`pmcc-program-${pageIndex}`, '项目群', 'programId', 640, 24, 170),
-        createFilterInput(`pmcc-major-${pageIndex}`, '重大项目', 'majorProjectId', 824, 24, 170),
-        createFilterInput(`pmcc-dept-${pageIndex}`, '责任科室', 'deptId', 1008, 24, 170),
-        createRiskSelect(`pmcc-risk-${pageIndex}`, 1192, 24, 140),
-        createDateRange(`pmcc-date-${pageIndex}`, 1346, 24, 300),
     ];
 }
 
@@ -332,9 +345,12 @@ function buildOverviewPage(): ScreenPage {
             createPanel('pmcc-overview-bg-left', 32, 280, 930, 760),
             createPanel('pmcc-overview-bg-right', 988, 280, 900, 760),
             ...createCommonHeader('总体态势', 0),
-            createNumberCard('pmcc-overview-kpi-total', '本周期节点总数', 56, 128, 210, 'kpis.0'),
-            createNumberCard('pmcc-overview-kpi-due', '已到期节点', 286, 128, 210, 'kpis.2'),
-            createNumberCard('pmcc-overview-kpi-completed', '节点完成总数', 516, 128, 210, 'kpis.7'),
+            withActions(createNumberCard('pmcc-overview-kpi-total', '本周期节点总数', 56, 128, 210, 'kpis.0'),
+                jumpAction('/analytics/project-cockpit?theme=overview&drillTarget=completion')),
+            withActions(createNumberCard('pmcc-overview-kpi-due', '已到期节点', 286, 128, 210, 'kpis.2'),
+                jumpAction('/analytics/project-cockpit?theme=overview&drillTarget=overdue')),
+            withActions(createNumberCard('pmcc-overview-kpi-completed', '节点完成总数', 516, 128, 210, 'kpis.7'),
+                jumpAction('/analytics/project-cockpit?theme=overview&drillTarget=completion')),
             createNumberCard('pmcc-overview-kpi-rate', '节点完成百分比', 746, 128, 210, 'kpis.8', '%'),
             createNumberCard('pmcc-overview-kpi-ontime', '按时完成率', 976, 128, 210, 'kpis.9', '%'),
             createNumberCard('pmcc-overview-kpi-overdue', '超期完成率', 1206, 128, 210, 'kpis.10', '%'),
@@ -368,17 +384,27 @@ function buildOverviewPage(): ScreenPage {
                     { field: 'overdueCount', name: '延期' },
                 ],
             ),
-            createTable(
-                'pmcc-overview-alerts',
-                '重点预警清单',
+            createPieChart(
+                'pmcc-overview-completion-ring',
+                '节点完成率',
                 1012,
                 304,
-                852,
+                380,
+                340,
+                '/analytics/api/project-cockpit/screen/overview',
+                'completionBreakdown',
+            ),
+            withActions(createTable(
+                'pmcc-overview-alerts',
+                '重点预警清单',
+                1410,
+                304,
+                454,
                 704,
                 '/analytics/api/project-cockpit/screen/overview',
                 'alerts',
                 ['title', 'majorProjectName', 'riskLevel', 'delayDays', 'reason'],
-            ),
+            ), jumpAction('/analytics/project-cockpit?theme=overview&drillTarget=overdue')),
         ],
     };
 }
@@ -394,9 +420,12 @@ function buildExecutionPage(): ScreenPage {
             createPanel('pmcc-execution-bg-right-top', 988, 262, 900, 370),
             createPanel('pmcc-execution-bg-right-bottom', 988, 650, 900, 390),
             ...createCommonHeader('执行与里程碑', 1),
-            createExecutionNumberCard('pmcc-execution-kpi-high-risk', '未完成高风险', 56, 126, 168, 'incompleteKpis.0'),
-            createExecutionNumberCard('pmcc-execution-kpi-mid-risk', '未完成中风险', 240, 126, 168, 'incompleteKpis.1'),
-            createExecutionNumberCard('pmcc-execution-kpi-milestone-open', '未完成里程碑', 424, 126, 168, 'incompleteKpis.2'),
+            withActions(createExecutionNumberCard('pmcc-execution-kpi-high-risk', '未完成高风险', 56, 126, 168, 'incompleteKpis.0'),
+                jumpAction('/analytics/project-cockpit?theme=risk&drillTarget=high-risk')),
+            withActions(createExecutionNumberCard('pmcc-execution-kpi-mid-risk', '未完成中风险', 240, 126, 168, 'incompleteKpis.1'),
+                jumpAction('/analytics/project-cockpit?theme=risk&drillTarget=high-risk')),
+            withActions(createExecutionNumberCard('pmcc-execution-kpi-milestone-open', '未完成里程碑', 424, 126, 168, 'incompleteKpis.2'),
+                jumpAction('/analytics/project-cockpit?theme=execution&drillTarget=milestone')),
             createExecutionNumberCard('pmcc-execution-kpi-milestone-ontime', '里程碑按时完成', 608, 126, 168, 'milestoneKpis.0'),
             createExecutionNumberCard('pmcc-execution-kpi-milestone-overdue', '里程碑超期完成', 792, 126, 168, 'milestoneKpis.1'),
             createExecutionNumberCard('pmcc-execution-kpi-milestone-rate', '里程碑完成率', 976, 126, 200, 'milestoneKpis.3', '%'),
@@ -405,7 +434,7 @@ function buildExecutionPage(): ScreenPage {
                 '科室负载',
                 56,
                 286,
-                878,
+                420,
                 330,
                 '/analytics/api/project-cockpit/screen/execution',
                 'workload',
@@ -415,7 +444,15 @@ function buildExecutionPage(): ScreenPage {
                     { field: 'overdueCount', name: '延期任务' },
                 ],
             ),
-            createTable(
+            createComponent('pmcc-execution-gantt', 'gantt-chart', '任务甘特图', 496, 286, 462, 330, 10, {
+                title: '任务甘特图',
+                nameField: 'name',
+                startField: 'planDate',
+                endField: 'actualDate',
+                categoryField: 'majorProjectName',
+                statusField: 'riskLevel',
+            }, buildScreenApiDataSource('/analytics/api/project-cockpit/screen/execution', 'ganttTasks')),
+            withActions(createTable(
                 'pmcc-execution-due-list',
                 '到期与延期任务',
                 56,
@@ -425,7 +462,7 @@ function buildExecutionPage(): ScreenPage {
                 '/analytics/api/project-cockpit/screen/execution',
                 'dueList',
                 ['name', 'majorProjectName', 'dept', 'planDate', 'status', 'delayDays'],
-            ),
+            ), jumpAction('/analytics/project-cockpit?theme=execution&drillTarget=overdue')),
             createPieChart(
                 'pmcc-execution-stage',
                 '节点类型分布',
@@ -473,8 +510,10 @@ function buildRiskPage(): ScreenPage {
             createPanel('pmcc-risk-bg-right-top', 988, 280, 900, 360),
             createPanel('pmcc-risk-bg-right-bottom', 988, 658, 900, 382),
             ...createCommonHeader('风险与变更', 2),
-            createRiskNumberCard('pmcc-risk-kpi-abnormal', '不正常待变更', 56, 128, 210, 'changeKpis.0'),
-            createRiskNumberCard('pmcc-risk-kpi-overdue-unchanged', '超期未完未变更', 286, 128, 210, 'changeKpis.1'),
+            withActions(createRiskNumberCard('pmcc-risk-kpi-abnormal', '不正常待变更', 56, 128, 210, 'changeKpis.0'),
+                jumpAction('/analytics/project-cockpit?theme=risk&drillTarget=overdue')),
+            withActions(createRiskNumberCard('pmcc-risk-kpi-overdue-unchanged', '超期未完未变更', 286, 128, 210, 'changeKpis.1'),
+                jumpAction('/analytics/project-cockpit?theme=risk&drillTarget=overdue')),
             createRiskNumberCard('pmcc-risk-kpi-overdue-changed', '超期未完已变更', 516, 128, 210, 'changeKpis.2'),
             createRiskNumberCard('pmcc-risk-kpi-overdue-done', '超期已完成未变更', 746, 128, 210, 'changeKpis.3'),
             createRiskNumberCard('pmcc-risk-kpi-abnormal-rate', '异常率', 976, 128, 210, 'changeKpis.4', '%'),
@@ -516,17 +555,57 @@ function buildRiskPage(): ScreenPage {
                     { field: 'highRiskNodes', name: '高风险节点' },
                 ],
             ),
-            createTable(
+            withActions(createTable(
                 'pmcc-risk-projects',
                 '拖期项目清单',
                 1012,
                 304,
                 852,
-                704,
+                540,
                 '/analytics/api/project-cockpit/screen/risk',
                 'delayedProjects',
                 ['nodeTask', 'majorProjectName', 'subprojectName', 'riskLevel', 'delayDays', 'dept'],
-            ),
+            ), jumpAction('/analytics/project-cockpit?theme=risk&drillTarget=delay-reason')),
+            // 治理摘要 — from governanceSummary
+            createComponent('pmcc-risk-govern-title', 'title', '治理摘要', 1012, 860, 200, 28, 15, {
+                content: '治理摘要',
+                fontSize: 15,
+                fontWeight: 700,
+                color: TITLE_COLOR,
+                textAlign: 'left',
+            }),
+            createComponent('pmcc-risk-govern-delayed', 'number-card', '延期节点数', 1012, 896, 200, 100, 10, {
+                title: '延期节点数',
+                value: 0,
+                valueField: 'delayedNodeCount',
+                titleColor: SUBTITLE_COLOR,
+                valueColor: TITLE_COLOR,
+                backgroundColor: KPI_BG,
+            }, buildScreenApiDataSource('/analytics/api/project-cockpit/screen/risk', 'governanceSummary')),
+            createComponent('pmcc-risk-govern-highrisk', 'number-card', '高风险节点', 1232, 896, 200, 100, 10, {
+                title: '高风险节点',
+                value: 0,
+                valueField: 'highRiskNodeCount',
+                titleColor: SUBTITLE_COLOR,
+                valueColor: TITLE_COLOR,
+                backgroundColor: KPI_BG,
+            }, buildScreenApiDataSource('/analytics/api/project-cockpit/screen/risk', 'governanceSummary')),
+            createComponent('pmcc-risk-govern-openrisk', 'number-card', '待处理风险', 1452, 896, 200, 100, 10, {
+                title: '待处理风险',
+                value: 0,
+                valueField: 'openRiskNodeCount',
+                titleColor: SUBTITLE_COLOR,
+                valueColor: TITLE_COLOR,
+                backgroundColor: KPI_BG,
+            }, buildScreenApiDataSource('/analytics/api/project-cockpit/screen/risk', 'governanceSummary')),
+            createComponent('pmcc-risk-govern-changed', 'number-card', '已变更节点', 1672, 896, 192, 100, 10, {
+                title: '已变更节点',
+                value: 0,
+                valueField: 'changedNodeCount',
+                titleColor: SUBTITLE_COLOR,
+                valueColor: TITLE_COLOR,
+                backgroundColor: KPI_BG,
+            }, buildScreenApiDataSource('/analytics/api/project-cockpit/screen/risk', 'governanceSummary')),
         ],
     };
 }
@@ -540,26 +619,27 @@ function createMetricsCard(
     responsePath: string,
     suffix = '',
 ): ScreenComponent {
-    return createComponent(id, 'number-card', title, x, y, width, 80, 10, {
+    return createComponent(id, 'number-card', title, x, y, width, 90, 10, {
         title,
         value: 0,
         suffix,
         precision: suffix === '%' ? 2 : 0,
         valueField: 'value',
+        valueFontSize: 28,
+        titleFontSize: 12,
         titleColor: SUBTITLE_COLOR,
         valueColor: TITLE_COLOR,
         backgroundColor: KPI_BG,
-        fontSize: 24,
     }, buildScreenApiDataSource('/analytics/api/project-cockpit/screen/metrics-overview', responsePath));
 }
 
 function createDimensionTitle(id: string, text: string, x: number, y: number, width: number): ScreenComponent {
-    return createComponent(id, 'title', text, x, y, width, 32, 15, {
-        content: text,
-        fontSize: 16,
-        fontWeight: 700,
-        color: TITLE_COLOR,
-        textAlign: 'left',
+    return createComponent(id, 'title', text, x, y, width, 34, 15, {
+        text,
+        fontSize: 17,
+        fontWeight: '700',
+        color: '#2563eb',
+        textAlign: 'flex-start',
     });
 }
 
@@ -572,8 +652,8 @@ function buildMetricsPage(): ScreenPage {
     // Col 4 (x: 1148-1888): 本周期内节点 11 items (2 sub-cols)
 
     const cardW = 210;
-    const cardH = 80;
-    const gap = 8;
+    const cardH = 90;
+    const gap = 10;
     const col1X = 56;
     const col2X = 508;
     const col3X = 850;
