@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router";
 import type { Locale } from "../../i18n";
 import { getEffectiveLocale } from "../../i18n";
 import {
@@ -8,8 +9,9 @@ import {
 	type ProjectCockpitSummaryResponse,
 } from "../../api/analyticsApi";
 import { PageContainer } from "../../components/PageContainer/PageContainer";
-import { ProjectCockpitProvider, useProjectCockpitContext } from "./ProjectCockpitContext";
+import { ProjectCockpitProvider, useProjectCockpitContext, type DrillTarget } from "./ProjectCockpitContext";
 import { ProjectCockpitLayout } from "./ProjectCockpitLayout";
+import { parseProjectCockpitDrillParams } from "./projectCockpitQueryState";
 
 function toFilterQuery(state: {
 	programId: string;
@@ -37,6 +39,10 @@ type ContentProps = {
 	onPublishPeriod: (periodStart: string, periodEnd: string) => Promise<void>;
 };
 
+const VALID_DRILL_TARGETS = new Set<string>([
+	"high-risk", "overdue", "completion", "milestone", "delay-reason", "delay-dept",
+]);
+
 function ProjectCockpitPageContent({
 	settings,
 	settingsLoading,
@@ -45,7 +51,29 @@ function ProjectCockpitPageContent({
 	onPublishPeriod,
 }: ContentProps) {
 	const locale: Locale = useMemo(() => getEffectiveLocale(), []);
-	const { effectiveQueryState } = useProjectCockpitContext();
+	const { effectiveQueryState, openDrill } = useProjectCockpitContext();
+	const location = useLocation();
+	const navigate = useNavigate();
+	const drillTriggered = useRef(false);
+
+	// Auto-open DrillDownDrawer when URL contains drillTarget param
+	useEffect(() => {
+		if (drillTriggered.current) return;
+		const params = new URLSearchParams(location.search);
+		const drill = parseProjectCockpitDrillParams(params);
+		if (drill.drillTarget && VALID_DRILL_TARGETS.has(drill.drillTarget)) {
+			drillTriggered.current = true;
+			const drillParams: Record<string, unknown> = {};
+			if (drill.drillDept) drillParams.dept = drill.drillDept;
+			if (drill.drillReason) drillParams.reason = drill.drillReason;
+			openDrill(drill.drillTarget as NonNullable<DrillTarget>, drillParams);
+			// Remove drill params from URL to avoid re-triggering on refresh
+			params.delete("drillTarget");
+			params.delete("drillDept");
+			params.delete("drillReason");
+			navigate({ search: params.toString() }, { replace: true });
+		}
+	}, [location.search, navigate, openDrill]);
 	const [summary, setSummary] = useState<ProjectCockpitSummaryResponse | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<unknown>(null);

@@ -19,6 +19,10 @@ setup_repo() {
     "${target_repo}/builds/dts-analytics-webapp/modern" \
     "${target_repo}/builds/dts-dbt" \
     "${target_repo}/builds/dts-addax" \
+    "${target_repo}/source/dts-admin/target" \
+    "${target_repo}/source/dts-platform/target" \
+    "${target_repo}/source/dts-ingestion/target" \
+    "${target_repo}/source/dts-analytics/target" \
     "${target_repo}/source/dts-airflow-om" \
     "${target_repo}/source"
 
@@ -110,12 +114,26 @@ case "${1:-}" in
     fi
     exit 0
     ;;
+  run)
+    mkdir -p \
+      "__TEST_REPO__/source/dts-admin/target" \
+      "__TEST_REPO__/source/dts-platform/target" \
+      "__TEST_REPO__/source/dts-ingestion/target" \
+      "__TEST_REPO__/source/dts-analytics/target"
+    : > "__TEST_REPO__/source/dts-admin/target/dts-admin-0.0.1-SNAPSHOT.jar"
+    : > "__TEST_REPO__/source/dts-platform/target/dts-platform-0.0.1-SNAPSHOT.jar"
+    : > "__TEST_REPO__/source/dts-ingestion/target/dts-ingestion-0.0.1-SNAPSHOT.jar"
+    : > "__TEST_REPO__/source/dts-analytics/target/dts-analytics-0.0.1-SNAPSHOT.jar"
+    printf 'run:%s\n' "$*" >> "__DOCKER_LOG__"
+    exit 0
+    ;;
   *)
     exit 0
     ;;
 esac
 EOF_DOCKER
   sed -i "s|__DOCKER_LOG__|${docker_log}|g" "${fake_bin}/docker"
+  sed -i "s|__TEST_REPO__|${test_repo}|g" "${fake_bin}/docker"
   chmod +x "${fake_bin}/docker"
 
   cat > "${fake_bin}/free" <<'EOF_FREE'
@@ -209,5 +227,40 @@ fi
 if ! grep -Fq "${SCENARIO2_REPO}/builds/dts-platform/Dockerfile.offline" "${SCENARIO2_DOCKER_LOG}"; then
   echo "expected -all --legacy to invoke offline backend Dockerfiles" >&2
   cat "${SCENARIO2_DOCKER_LOG}" >&2
+  exit 1
+fi
+
+SCENARIO3_REPO="${TMP_DIR}/scenario3-repo"
+SCENARIO3_BIN="${TMP_DIR}/scenario3-bin"
+SCENARIO3_DOCKER_LOG="${TMP_DIR}/scenario3-docker.log"
+setup_repo "${SCENARIO3_REPO}"
+setup_fake_bin "${SCENARIO3_BIN}" "${SCENARIO3_REPO}" "${SCENARIO3_DOCKER_LOG}"
+rm -f \
+  "${SCENARIO3_REPO}/builds/dts-admin/dts-admin.jar" \
+  "${SCENARIO3_REPO}/builds/dts-platform/dts-platform.jar" \
+  "${SCENARIO3_REPO}/builds/dts-ingestion/dts-ingestion.jar" \
+  "${SCENARIO3_REPO}/builds/dts-analytics/dts-analytics.jar"
+
+PATH="${SCENARIO3_BIN}:${PATH}" \
+  MAVEN_MIRROR_URL="" \
+  MAVEN_SETTINGS_FILE="${SCENARIO3_REPO}/.m2/settings.xml" \
+  "${SCENARIO3_REPO}/builds/dts-build.sh" -all --legacy --no-save >/dev/null
+
+for built_jar in \
+  "${SCENARIO3_REPO}/builds/dts-admin/dts-admin.jar" \
+  "${SCENARIO3_REPO}/builds/dts-platform/dts-platform.jar" \
+  "${SCENARIO3_REPO}/builds/dts-ingestion/dts-ingestion.jar" \
+  "${SCENARIO3_REPO}/builds/dts-analytics/dts-analytics.jar"; do
+  if [[ ! -f "${built_jar}" ]]; then
+    echo "expected -all --legacy to prebuild missing backend jar: ${built_jar}" >&2
+    cat "${SCENARIO3_DOCKER_LOG}" >&2
+    exit 1
+  fi
+done
+
+run_count="$(grep -c '^run:' "${SCENARIO3_DOCKER_LOG}")"
+if [[ "${run_count}" != "4" ]]; then
+  echo "expected -all --legacy to invoke Maven container 4 times for missing backend jars, got ${run_count}" >&2
+  cat "${SCENARIO3_DOCKER_LOG}" >&2
   exit 1
 fi

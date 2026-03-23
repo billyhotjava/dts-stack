@@ -221,6 +221,100 @@ public class ProjectCockpitService {
         return root;
     }
 
+    public ObjectNode screenMetricsOverview(Filters filters) {
+        refreshFormalData();
+        List<NodeRow> scoped = applyScopeFilters(filters);
+        List<NodeRow> filtered = applyFilters(filters);
+        ObjectNode root = buildScreenPayload("metrics-overview", "指标全览", filters, filtered);
+        // Combines all 4 dimensions into a single KPI array with "dimension" field
+        ArrayNode allKpis = objectMapper.createArrayNode();
+
+        // Dimension 1: 项目（含一般节点）— from buildScreenOverviewKpis
+        OverviewPeriodMetrics metrics = computeOverviewPeriodMetrics(scoped, filters);
+        addDimensionKpi(allKpis, "项目（含一般节点）", "periodNodeTotalCount", "项目本周期节点总数", metrics.periodNodeTotalCount(), "个");
+        addDimensionKpi(allKpis, "项目（含一般节点）", "pendingNormalCount", "正常待完成", metrics.pendingNormalCount(), "个");
+        addDimensionKpi(allKpis, "项目（含一般节点）", "dueNodeCount", "项目本周期节点已到时间节点总数", metrics.dueNodeCount(), "个");
+        addDimensionKpi(allKpis, "项目（含一般节点）", "outsideCompletedCount", "项目本周期以外完成节点总数", metrics.outsideCompletedCount(), "个");
+        addDimensionKpi(allKpis, "项目（含一般节点）", "incompleteNodeCount", "项目本周期节点未完成总数", metrics.incompleteNodeCount(), "个");
+        addDimensionKpi(allKpis, "项目（含一般节点）", "onTimeCount", "节点按时完成数", metrics.onTimeCount(), "个");
+        addDimensionKpiDuplicate(allKpis, "项目（含一般节点）", "pendingNormalCount2", "正常待完成（重复校验）", metrics.pendingNormalCount(), "个");
+        addDimensionKpi(allKpis, "项目（含一般节点）", "overdueCompletedCount", "节点超期完成数", metrics.overdueCompletedCount(), "个");
+        addDimensionKpi(allKpis, "项目（含一般节点）", "completedNodeCount", "节点完成总数", metrics.completedNodeCount(), "个");
+        addDimensionKpiPercent(allKpis, "项目（含一般节点）", "completionRate", "节点完成百分比", metrics.completedNodeCount(), metrics.dueNodeCount() + metrics.outsideCompletedCount());
+        addDimensionKpiPercent(allKpis, "项目（含一般节点）", "onTimeRate", "节点按时完成百分比", metrics.onTimeCount(), metrics.dueNodeCount() + metrics.outsideCompletedCount());
+        addDimensionKpiPercent(allKpis, "项目（含一般节点）", "overdueCompletionRate", "超期完成节点百分比",
+                metrics.overdueCompletedCount() + metrics.outsideCompletedCount(),
+                metrics.periodNodeTotalCount() + metrics.outsideCompletedCount());
+
+        // Dimension 2: 项目（除一般节点）— from buildScreenRiskKpis
+        List<NodeRow> dueRowsNonGeneral = filterDueByEnd(scoped, filters).stream().filter(row -> !row.generalNode()).toList();
+        long abnormalPendingCount = dueRowsNonGeneral.stream().filter(NodeRow::abnormalPending).count();
+        long overdueIncompleteUnchangedCount = dueRowsNonGeneral.stream().filter(NodeRow::overdueIncompleteUnchanged).count();
+        long overdueIncompleteChangedCount = dueRowsNonGeneral.stream().filter(NodeRow::overdueIncompleteChanged).count();
+        long overdueCompletedUnchangedCount = dueRowsNonGeneral.stream().filter(NodeRow::overdueCompletedUnchanged).count();
+        long dueNonGeneralCount = Math.max(0, dueRowsNonGeneral.size() - dueRowsNonGeneral.stream().filter(NodeRow::normalPending).count());
+        addDimensionKpi(allKpis, "项目（除一般节点）", "abnormalPendingNonGeneral", "不正常待变更节点数", abnormalPendingCount, "个");
+        addDimensionKpi(allKpis, "项目（除一般节点）", "overdueIncompleteUnchangedNonGeneral", "超期未完成且未走变更流程的节点数", overdueIncompleteUnchangedCount, "个");
+        addDimensionKpi(allKpis, "项目（除一般节点）", "overdueIncompleteChangedNonGeneral", "超期未完成但走完变更流程节点数", overdueIncompleteChangedCount, "个");
+        addDimensionKpi(allKpis, "项目（除一般节点）", "overdueCompletedUnchangedNonGeneral", "超期已完成未变更", overdueCompletedUnchangedCount, "个");
+        addDimensionKpiPercent(allKpis, "项目（除一般节点）", "abnormalRate", "节点已经不正常待变更的百分比", abnormalPendingCount + overdueIncompleteUnchangedCount, dueNonGeneralCount);
+        addDimensionKpiPercent(allKpis, "项目（除一般节点）", "overdueRate", "节点超期百分比", overdueIncompleteUnchangedCount + overdueIncompleteChangedCount, dueNonGeneralCount);
+
+        // Dimension 3: 项目（截止目前未完成节点）— from buildScreenIncompleteKpis
+        addDimensionKpi(allKpis, "截止目前未完成节点", "incompleteHighRisk", "截止目前未完成高风险节点数",
+                filtered.stream().filter(row -> "高".equals(normalizedRisk(row.riskLevel())) && row.openRisk()).count(), "个");
+        addDimensionKpi(allKpis, "截止目前未完成节点", "incompleteMidRisk", "截止目前未完成中风险节点数",
+                filtered.stream().filter(row -> "中".equals(normalizedRisk(row.riskLevel())) && row.openRisk()).count(), "个");
+        addDimensionKpi(allKpis, "截止目前未完成节点", "incompleteMilestone", "截止目前未完成里程碑节点数",
+                filtered.stream().filter(row -> row.milestoneNode() && row.openRisk()).count(), "个");
+        addDimensionKpi(allKpis, "截止目前未完成节点", "incompleteMajor", "截止目前未完成重大节点数",
+                filtered.stream().filter(row -> row.majorNode() && row.openRisk()).count(), "个");
+        addDimensionKpi(allKpis, "截止目前未完成节点", "incompleteImportant", "截止目前未完成重要节点数",
+                filtered.stream().filter(row -> row.importantNode() && row.openRisk()).count(), "个");
+
+        // Dimension 4: 项目（本周期内节点）— from buildScreenExecutionKpis
+        long milestoneOnTime = filtered.stream().filter(row -> row.milestoneNode() && row.onTimeCompleted()).count();
+        long milestoneOverdueCompleted = filtered.stream().filter(row -> row.milestoneNode() && row.overdueCompleted()).count();
+        long milestonePending = filtered.stream().filter(row -> row.milestoneNode() && row.normalPending()).count();
+        long milestoneIncomplete = filtered.stream().filter(row -> row.milestoneNode() && row.openRisk()).count();
+        addDimensionKpi(allKpis, "本周期内节点", "milestoneOnTimeCount", "里程碑节点按时完成数", milestoneOnTime, "个");
+        addDimensionKpi(allKpis, "本周期内节点", "milestoneOverdueCompletedCount", "里程碑节点超期完成数", milestoneOverdueCompleted, "个");
+        addDimensionKpi(allKpis, "本周期内节点", "milestonePendingCount", "里程碑节点正常待完成数", milestonePending, "个");
+        addDimensionKpiPercent(allKpis, "本周期内节点", "milestoneCompletionRate", "里程碑节点完成总百分比",
+                milestoneOnTime + milestoneOverdueCompleted, milestoneIncomplete + milestoneOnTime + milestoneOverdueCompleted);
+        addDimensionKpi(allKpis, "本周期内节点", "highRiskNodeCount", "高风险节点数",
+                filtered.stream().filter(row -> "高".equals(normalizedRisk(row.riskLevel()))).count(), "个");
+        addDimensionKpi(allKpis, "本周期内节点", "midRiskNodeCount", "中风险节点数",
+                filtered.stream().filter(row -> "中".equals(normalizedRisk(row.riskLevel()))).count(), "个");
+        addDimensionKpi(allKpis, "本周期内节点", "milestoneTotalCount", "里程碑节点总数",
+                filtered.stream().filter(NodeRow::milestoneNode).count(), "个");
+        addDimensionKpi(allKpis, "本周期内节点", "majorNodeTotalCount", "重大节点总数",
+                filtered.stream().filter(NodeRow::majorNode).count(), "个");
+        addDimensionKpi(allKpis, "本周期内节点", "importantNodeTotalCount", "重要节点总数",
+                filtered.stream().filter(NodeRow::importantNode).count(), "个");
+        addDimensionKpi(allKpis, "本周期内节点", "milestoneOnTimeCount2", "里程碑节点按时完成数", milestoneOnTime, "个");
+        addDimensionKpi(allKpis, "本周期内节点", "milestoneOverdueCompletedCount2", "里程碑节点超期完成数", milestoneOverdueCompleted, "个");
+
+        root.set("kpis", allKpis);
+        return root;
+    }
+
+    private void addDimensionKpi(ArrayNode kpis, String dimension, String key, String label, long value, String unit) {
+        ObjectNode kpi = kpi(key, label, String.valueOf(value), unit);
+        kpi.put("dimension", dimension);
+        kpis.add(kpi);
+    }
+
+    private void addDimensionKpiDuplicate(ArrayNode kpis, String dimension, String key, String label, long value, String unit) {
+        addDimensionKpi(kpis, dimension, key, label, value, unit);
+    }
+
+    private void addDimensionKpiPercent(ArrayNode kpis, String dimension, String key, String label, long numerator, long denominator) {
+        ObjectNode kpi = kpi(key, label, percentValue(numerator, denominator), "%");
+        kpi.put("dimension", dimension);
+        kpis.add(kpi);
+    }
+
     public ObjectNode screenOverview(Filters filters) {
         refreshFormalData();
         List<NodeRow> scoped = applyScopeFilters(filters);

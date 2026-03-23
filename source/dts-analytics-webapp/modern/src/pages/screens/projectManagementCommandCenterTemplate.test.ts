@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { getTemplateById } from './screenTemplates';
 
-test('project management command center template registers three-page Java-backed demo screen', () => {
+test('project management command center template registers four-page Java-backed demo screen', () => {
     const template = getTemplateById('project-management-command-center');
 
     assert.ok(template);
@@ -11,7 +11,7 @@ test('project management command center template registers three-page Java-backe
     assert.equal(template?.config.height, 1080);
     assert.equal(template?.config.theme, 'glacier');
     assert.equal(template?.config.backgroundColor, '#eef5fb');
-    assert.equal(template?.config.pages?.length, 3);
+    assert.equal(template?.config.pages?.length, 4);
     assert.equal(template?.config.carouselConfig?.enabled, true);
     assert.deepEqual(
         (template?.config.globalVariables ?? []).map((item) => item.key),

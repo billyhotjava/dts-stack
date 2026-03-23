@@ -160,7 +160,9 @@ MAVEN_UNRESTRICTED="${MAVEN_UNRESTRICTED:-${LEGACY_UNRESTRICTED:-}}"
 MAVEN_MEMORY_LIMIT="${MAVEN_MEMORY_LIMIT:-4g}"
 MAVEN_MIRROR_URL="${MAVEN_MIRROR_URL:-https://maven.aliyun.com/repository/public}"
 NPM_REGISTRY="${NPM_REGISTRY:-https://registry.npmmirror.com}"
-MAVEN_SETTINGS_FILE="${MAVEN_SETTINGS_FILE:-/root/.m2/settings.xml}"
+MAVEN_SETTINGS_FILE="${MAVEN_SETTINGS_FILE:-${HOME:-/root}/.m2/settings.xml}"
+MAVEN_SETTINGS_DIR="${MAVEN_SETTINGS_DIR:-$(dirname "${MAVEN_SETTINGS_FILE}")}"
+MAVEN_REPO_LOCAL="${MAVEN_REPO_LOCAL:-${MAVEN_SETTINGS_DIR}/repository}"
 PREBUILD_JARS="${PREBUILD_JARS:-1}"
 WEBAPP_BUILD_CMD="${WEBAPP_BUILD_CMD:-build}"
 
@@ -441,7 +443,7 @@ build_maven_module() {
     require_cmd mvn
     echo "[dts-build] Building ${module} jar via host Maven"
     if [[ ! -f "$MAVEN_SETTINGS_FILE" ]]; then
-      mkdir -p "$(dirname "$MAVEN_SETTINGS_FILE")"
+      mkdir -p "$MAVEN_SETTINGS_DIR"
       cat > "$MAVEN_SETTINGS_FILE" <<'MAVEN_SETTINGS_EOF'
 <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
           xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -457,7 +459,7 @@ build_maven_module() {
 MAVEN_SETTINGS_EOF
       sed -i "s|__MAVEN_MIRROR_URL__|${MAVEN_MIRROR_URL}|g" "$MAVEN_SETTINGS_FILE"
     fi
-    mvn -B -e -DskipTests -s "$MAVEN_SETTINGS_FILE" -f "${REPO_ROOT}/source/pom.xml" -pl "$module" -am package
+    mvn -B -e -DskipTests -Dmaven.repo.local="${MAVEN_REPO_LOCAL}" -s "$MAVEN_SETTINGS_FILE" -f "${REPO_ROOT}/source/pom.xml" -pl "$module" -am package
   else
     echo "[dts-build] Building ${module} jar via ${MAVEN_IMAGE}"
     local security_opts=()
@@ -483,9 +485,9 @@ MAVEN_SETTINGS_EOF
     # Generate settings.xml on the HOST side before docker run,
     # so we can run mvn directly without a shell wrapper.
     # Using sh -c inside the container corrupts JAVA_HOME on ARM64/Kunpeng.
-    if [[ ! -f /root/.m2/settings.xml ]] && [[ -n "${MAVEN_MIRROR_URL}" ]]; then
-      mkdir -p /root/.m2
-      cat > /root/.m2/settings.xml <<SETTINGS_EOF
+    if [[ ! -f "$MAVEN_SETTINGS_FILE" ]] && [[ -n "${MAVEN_MIRROR_URL}" ]]; then
+      mkdir -p "$MAVEN_SETTINGS_DIR"
+      cat > "$MAVEN_SETTINGS_FILE" <<SETTINGS_EOF
 <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
           xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
           xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0 https://maven.apache.org/xsd/settings-1.0.0.xsd">
@@ -498,14 +500,12 @@ MAVEN_SETTINGS_EOF
   </mirrors>
 </settings>
 SETTINGS_EOF
-      echo "[dts-build] Generated /root/.m2/settings.xml (mirror: ${MAVEN_MIRROR_URL})"
+      echo "[dts-build] Generated ${MAVEN_SETTINGS_FILE} (mirror: ${MAVEN_MIRROR_URL})"
     fi
 
-    local maven_args=(-B -e -DskipTests -f pom.xml -pl "$module" -am)
+    local maven_args=(-B -e -DskipTests -Dmaven.repo.local="${MAVEN_REPO_LOCAL}" -f pom.xml -pl "$module" -am)
     if [[ -f "$MAVEN_SETTINGS_FILE" ]]; then
       maven_args+=(-s "$MAVEN_SETTINGS_FILE")
-    elif [[ -f /root/.m2/settings.xml ]]; then
-      maven_args+=(-s /root/.m2/settings.xml)
     fi
 
     if [[ -n "$MAVEN_DEBUG" ]]; then
@@ -529,7 +529,7 @@ SETTINGS_EOF
         ${security_opts[@]+"${security_opts[@]}"} \
         --entrypoint /bin/bash \
         -v "${REPO_ROOT}/source:/workspace" \
-        -v "/root/.m2:/root/.m2" \
+        -v "${MAVEN_SETTINGS_DIR}:${MAVEN_SETTINGS_DIR}" \
         -w /workspace \
         "$MAVEN_IMAGE" \
         -lc "${bash_cmd}"
@@ -541,7 +541,7 @@ SETTINGS_EOF
         -e "JAVA_HOME=${MAVEN_CONTAINER_JAVA_HOME}" \
         -e "PATH=${container_path}" \
         -v "${REPO_ROOT}/source:/workspace" \
-        -v "/root/.m2:/root/.m2" \
+        -v "${MAVEN_SETTINGS_DIR}:${MAVEN_SETTINGS_DIR}" \
         -w /workspace \
         "$MAVEN_IMAGE" \
         mvn "${maven_args[@]}" package
@@ -707,11 +707,20 @@ build_all_normal() {
 build_all_legacy() {
   init_images_legacy
   # Legacy/offline Dockerfiles consume prebuilt backend jars directly.
-  # Validate identities before image build to avoid cross-module artifact mix-ups.
-  verify_prebuilt_module_jar "dts-admin" "${REPO_ROOT}/builds/dts-admin/dts-admin.jar"
-  verify_prebuilt_module_jar "dts-platform" "${REPO_ROOT}/builds/dts-platform/dts-platform.jar"
-  verify_prebuilt_module_jar "dts-ingestion" "${REPO_ROOT}/builds/dts-ingestion/dts-ingestion.jar"
-  verify_prebuilt_module_jar "dts-analytics" "${REPO_ROOT}/builds/dts-analytics/dts-analytics.jar"
+  # When legacy-only mode skips the normal build path, we still need to produce
+  # those jars before invoking the offline Dockerfiles.
+  if [[ "${PREBUILD_JARS}" == "1" ]]; then
+    build_maven_module "dts-admin" "dts-admin-*.jar" "${REPO_ROOT}/builds/dts-admin/dts-admin.jar"
+    build_maven_module "dts-platform" "dts-platform-*.jar" "${REPO_ROOT}/builds/dts-platform/dts-platform.jar"
+    build_maven_module "dts-ingestion" "dts-ingestion-*.jar" "${REPO_ROOT}/builds/dts-ingestion/dts-ingestion.jar"
+    build_maven_module "dts-analytics" "dts-analytics-*.jar" "${REPO_ROOT}/builds/dts-analytics/dts-analytics.jar"
+  else
+    # Validate identities before image build to avoid cross-module artifact mix-ups.
+    verify_prebuilt_module_jar "dts-admin" "${REPO_ROOT}/builds/dts-admin/dts-admin.jar"
+    verify_prebuilt_module_jar "dts-platform" "${REPO_ROOT}/builds/dts-platform/dts-platform.jar"
+    verify_prebuilt_module_jar "dts-ingestion" "${REPO_ROOT}/builds/dts-ingestion/dts-ingestion.jar"
+    verify_prebuilt_module_jar "dts-analytics" "${REPO_ROOT}/builds/dts-analytics/dts-analytics.jar"
+  fi
   build_image "dts-admin" "$IMAGE_DTS_ADMIN" "${REPO_ROOT}/builds/dts-admin/Dockerfile.offline" "$LEGACY_DIST"
   build_image "dts-platform" "$IMAGE_DTS_PLATFORM" "${REPO_ROOT}/builds/dts-platform/Dockerfile.offline" "$LEGACY_DIST"
   build_image "dts-ingestion" "$IMAGE_DTS_INGESTION" "${REPO_ROOT}/builds/dts-ingestion/Dockerfile.offline" "$LEGACY_DIST"

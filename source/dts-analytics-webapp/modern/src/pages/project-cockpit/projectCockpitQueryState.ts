@@ -57,6 +57,20 @@ export function createProjectCockpitScopeResetPatch(_state: ProjectCockpitQueryS
     } satisfies Pick<ProjectCockpitQueryState, 'programId' | 'majorProjectId' | 'deptId' | 'riskLevel'>;
 }
 
+export type ProjectCockpitDrillParams = {
+    drillTarget: string;
+    drillDept: string;
+    drillReason: string;
+};
+
+export function parseProjectCockpitDrillParams(params: URLSearchParams): ProjectCockpitDrillParams {
+    return {
+        drillTarget: params.get('drillTarget') ?? '',
+        drillDept: params.get('drillDept') ?? '',
+        drillReason: params.get('drillReason') ?? '',
+    };
+}
+
 export function serializeProjectCockpitQueryState(state: ProjectCockpitQueryState): URLSearchParams {
     const params = new URLSearchParams();
     params.set('theme', parseProjectCockpitTheme(state.theme));

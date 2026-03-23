@@ -531,6 +531,116 @@ function buildRiskPage(): ScreenPage {
     };
 }
 
+function createMetricsCard(
+    id: string,
+    title: string,
+    x: number,
+    y: number,
+    width: number,
+    responsePath: string,
+    suffix = '',
+): ScreenComponent {
+    return createComponent(id, 'number-card', title, x, y, width, 80, 10, {
+        title,
+        value: 0,
+        suffix,
+        precision: suffix === '%' ? 2 : 0,
+        valueField: 'value',
+        titleColor: SUBTITLE_COLOR,
+        valueColor: TITLE_COLOR,
+        backgroundColor: KPI_BG,
+        fontSize: 24,
+    }, buildScreenApiDataSource('/analytics/api/project-cockpit/screen/metrics-overview', responsePath));
+}
+
+function createDimensionTitle(id: string, text: string, x: number, y: number, width: number): ScreenComponent {
+    return createComponent(id, 'title', text, x, y, width, 32, 15, {
+        content: text,
+        fontSize: 16,
+        fontWeight: 700,
+        color: TITLE_COLOR,
+        textAlign: 'left',
+    });
+}
+
+function buildMetricsPage(): ScreenPage {
+    const pageIndex = 3;
+    // Layout: 4 columns for 4 dimensions
+    // Col 1 (x: 32-488): 项目（含一般节点）13 items
+    // Col 2 (x: 508-808): 项目（除一般节点）6 items
+    // Col 3 (x: 828-1128): 截止目前未完成节点 5 items
+    // Col 4 (x: 1148-1888): 本周期内节点 11 items (2 sub-cols)
+
+    const cardW = 210;
+    const cardH = 80;
+    const gap = 8;
+    const col1X = 56;
+    const col2X = 508;
+    const col3X = 850;
+    const col4aX = 1168;
+    const col4bX = 1548;
+    const headerY = 126;
+    const startY = 168;
+
+    function cy(row: number) { return startY + row * (cardH + gap); }
+
+    return {
+        id: 'pmcc-page-metrics',
+        name: '指标全览',
+        backgroundColor: BG,
+        components: [
+            // Background panels
+            createPanel('pmcc-metrics-bg-top', 32, 110, 1856, 930),
+            ...createCommonHeader('指标全览', pageIndex),
+
+            // Dimension 1: 项目（含一般节点）
+            createDimensionTitle('pmcc-metrics-dim1', '项目（含一般节点）', col1X, headerY, 420),
+            createMetricsCard('pmcc-m-d1-0', '项目本周期节点总数', col1X, cy(0), cardW, 'kpis.0'),
+            createMetricsCard('pmcc-m-d1-1', '正常待完成', col1X + cardW + gap, cy(0), cardW, 'kpis.1'),
+            createMetricsCard('pmcc-m-d1-2', '已到时间节点总数', col1X, cy(1), cardW, 'kpis.2'),
+            createMetricsCard('pmcc-m-d1-3', '以外完成节点总数', col1X + cardW + gap, cy(1), cardW, 'kpis.3'),
+            createMetricsCard('pmcc-m-d1-4', '未完成总数', col1X, cy(2), cardW, 'kpis.4'),
+            createMetricsCard('pmcc-m-d1-5', '按时完成数', col1X + cardW + gap, cy(2), cardW, 'kpis.5'),
+            createMetricsCard('pmcc-m-d1-6', '超期完成数', col1X, cy(3), cardW, 'kpis.7'),
+            createMetricsCard('pmcc-m-d1-7', '完成总数', col1X + cardW + gap, cy(3), cardW, 'kpis.8'),
+            createMetricsCard('pmcc-m-d1-8', '节点完成百分比', col1X, cy(4), cardW, 'kpis.9', '%'),
+            createMetricsCard('pmcc-m-d1-9', '按时完成百分比', col1X + cardW + gap, cy(4), cardW, 'kpis.10', '%'),
+            createMetricsCard('pmcc-m-d1-10', '超期完成百分比', col1X, cy(5), cardW, 'kpis.11', '%'),
+
+            // Dimension 2: 项目（除一般节点）
+            createDimensionTitle('pmcc-metrics-dim2', '项目（除一般节点）', col2X, headerY, 320),
+            createMetricsCard('pmcc-m-d2-0', '不正常待变更', col2X, cy(0), cardW + 100, 'kpis.12'),
+            createMetricsCard('pmcc-m-d2-1', '超期未完未变更', col2X, cy(1), cardW + 100, 'kpis.13'),
+            createMetricsCard('pmcc-m-d2-2', '超期未完已变更', col2X, cy(2), cardW + 100, 'kpis.14'),
+            createMetricsCard('pmcc-m-d2-3', '超期已完未变更', col2X, cy(3), cardW + 100, 'kpis.15'),
+            createMetricsCard('pmcc-m-d2-4', '异常率', col2X, cy(4), cardW + 100, 'kpis.16', '%'),
+            createMetricsCard('pmcc-m-d2-5', '超期率', col2X, cy(5), cardW + 100, 'kpis.17', '%'),
+
+            // Dimension 3: 截止目前未完成节点
+            createDimensionTitle('pmcc-metrics-dim3', '截止目前未完成节点', col3X, headerY, 300),
+            createMetricsCard('pmcc-m-d3-0', '高风险未完成', col3X, cy(0), cardW + 80, 'kpis.18'),
+            createMetricsCard('pmcc-m-d3-1', '中风险未完成', col3X, cy(1), cardW + 80, 'kpis.19'),
+            createMetricsCard('pmcc-m-d3-2', '里程碑未完成', col3X, cy(2), cardW + 80, 'kpis.20'),
+            createMetricsCard('pmcc-m-d3-3', '重大节点未完成', col3X, cy(3), cardW + 80, 'kpis.21'),
+            createMetricsCard('pmcc-m-d3-4', '重要节点未完成', col3X, cy(4), cardW + 80, 'kpis.22'),
+
+            // Dimension 4: 本周期内节点
+            createDimensionTitle('pmcc-metrics-dim4', '本周期内节点', col4aX, headerY, 700),
+            createMetricsCard('pmcc-m-d4-0', '里程碑按时完成', col4aX, cy(0), cardW, 'kpis.23'),
+            createMetricsCard('pmcc-m-d4-1', '里程碑超期完成', col4bX, cy(0), cardW, 'kpis.24'),
+            createMetricsCard('pmcc-m-d4-2', '里程碑正常待完成', col4aX, cy(1), cardW, 'kpis.25'),
+            createMetricsCard('pmcc-m-d4-3', '里程碑完成率', col4bX, cy(1), cardW, 'kpis.26', '%'),
+            createMetricsCard('pmcc-m-d4-4', '高风险节点数', col4aX, cy(2), cardW, 'kpis.27'),
+            createMetricsCard('pmcc-m-d4-5', '中风险节点数', col4bX, cy(2), cardW, 'kpis.28'),
+            createMetricsCard('pmcc-m-d4-6', '里程碑节点总数', col4aX, cy(3), cardW, 'kpis.29'),
+            createMetricsCard('pmcc-m-d4-7', '重大节点总数', col4bX, cy(3), cardW, 'kpis.30'),
+            createMetricsCard('pmcc-m-d4-8', '重要节点总数', col4aX, cy(4), cardW, 'kpis.31'),
+            createMetricsCard('pmcc-m-d4-9', '里程碑按时完成', col4bX, cy(4), cardW, 'kpis.32'),
+            createMetricsCard('pmcc-m-d4-10', '里程碑超期完成', col4aX, cy(5), cardW, 'kpis.33'),
+        ],
+    };
+}
+
 const projectManagementVariables: ScreenGlobalVariable[] = [
     createVariable('programId', '项目群', 'string'),
     createVariable('majorProjectId', '重大项目', 'string'),
@@ -543,7 +653,7 @@ const projectManagementVariables: ScreenGlobalVariable[] = [
 export const projectManagementCommandCenterTemplate: ScreenTemplate = {
     id: 'project-management-command-center',
     name: '项目管理指挥大屏',
-    description: 'Java 聚合接口驱动的三屏轮播演示版，面向现场汇报与客户演示。',
+    description: 'Java 聚合接口驱动的四屏轮播版，面向现场汇报与客户演示。含总体态势、执行里程碑、风险变更、指标全览。',
     thumbnail: '🛰️',
     category: 'project-management',
     tags: ['项目管理', '指挥大屏', '演示版', '轮播'],
@@ -551,7 +661,7 @@ export const projectManagementCommandCenterTemplate: ScreenTemplate = {
     config: {
         schemaVersion: SCREEN_SCHEMA_VERSION,
         name: '项目管理指挥大屏',
-        description: '科研项目管理三屏轮播演示版',
+        description: '科研项目管理四屏轮播版',
         width: SCREEN_WIDTH,
         height: SCREEN_HEIGHT,
         backgroundColor: BG,
@@ -561,10 +671,12 @@ export const projectManagementCommandCenterTemplate: ScreenTemplate = {
             buildOverviewPage(),
             buildExecutionPage(),
             buildRiskPage(),
+            buildMetricsPage(),
         ],
         components: [],
         carouselConfig: {
             enabled: true,
+            autoPlay: false,
             intervalSeconds: 15,
             transition: 'fade',
             transitionDuration: 800,
