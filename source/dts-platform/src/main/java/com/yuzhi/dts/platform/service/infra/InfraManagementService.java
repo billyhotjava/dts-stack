@@ -36,6 +36,7 @@ import com.yuzhi.dts.platform.web.rest.infra.HiveConnectionTestRequest;
 import jakarta.persistence.EntityNotFoundException;
 import java.time.Instant;
 import java.time.Duration;
+import java.util.Comparator;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -88,12 +89,14 @@ public class InfraManagementService {
     private static final String TYPE_POSTGRES = "POSTGRES";
     private static final String STATUS_ACTIVE = "ACTIVE";
     private static final String SOURCE_ADMIN_DATA_LAKE = "admin-data-lake";
+    private static final String BIADMIN_NAME = "数仓 (biadmin)";
     private static final String DEFAULT_FILE_SCHEMA = "ods";
     private static final String DATASET_TYPE_FILE = "file";
     private static final String SETTINGS_KEY_CATALOG_SYNC = "catalogSyncOnDataSource";
     private static final String SETTINGS_SERVICE_PLATFORM = "platform";
     private static final String AUDIT_ACTION_CATALOG_SYNC = "FOUNDATION_DATASOURCE_CATALOG_SYNC";
     private static final Duration ADMIN_DATA_LAKE_LOOKUP_TIMEOUT = Duration.ofMillis(800);
+    private static final int LOCAL_DEFAULT_LAKE_SCORE_THRESHOLD = 70;
     private static final java.util.Set<String> JDBC_TYPES = java.util.Set.of(
         "jdbc",
         "postgres",
@@ -193,11 +196,98 @@ public class InfraManagementService {
                     return;
                 }
             }
+            removeLocalFallbackCandidate(result);
             InfraDataSourceDto dto = toDto(lake);
             result.add(0, dto);
         } catch (Exception ex) {
             LOG.debug("Failed to merge admin data lake into data source list: {}", ex.getMessage());
         }
+    }
+
+    private void removeLocalFallbackCandidate(List<InfraDataSourceDto> result) {
+        result
+            .stream()
+            .filter(this::isLocalLakeCandidate)
+            .max(Comparator.comparingInt(this::scoreLocalLake))
+            .filter(candidate -> scoreLocalLake(candidate) >= LOCAL_DEFAULT_LAKE_SCORE_THRESHOLD)
+            .ifPresent(result::remove);
+    }
+
+    private boolean isLocalLakeCandidate(InfraDataSourceDto dto) {
+        if (dto == null) {
+            return false;
+        }
+        Map<String, Object> props = dto.props() == null ? Map.of() : dto.props();
+        if (SOURCE_ADMIN_DATA_LAKE.equalsIgnoreCase(normalize(props.get("source")))) {
+            return false;
+        }
+        String type = normalizeLower(dto.type());
+        if (TYPE_INCEPTOR.equalsIgnoreCase(type)) {
+            return false;
+        }
+        if (StringUtils.hasText(normalize(dto.jdbcUrl())) && (JDBC_TYPES.contains(type) || !StringUtils.hasText(type))) {
+            return true;
+        }
+        return props.containsKey("destinationConfig")
+            || StringUtils.hasText(normalize(props.get("destinationDefinitionId")))
+            || StringUtils.hasText(normalize(props.get("writerType")))
+            || StringUtils.hasText(normalize(props.get("type")));
+    }
+
+    private int scoreLocalLake(InfraDataSourceDto dto) {
+        if (dto == null) {
+            return Integer.MIN_VALUE;
+        }
+        int score = 0;
+        String name = normalizeLower(dto.name());
+        String type = normalizeLower(dto.type());
+        String jdbcUrl = normalizeLower(dto.jdbcUrl());
+        String description = normalizeLower(dto.description());
+        String status = normalizeLower(dto.status());
+
+        if (BIADMIN_NAME.equalsIgnoreCase(name)) {
+            score += 100;
+        }
+        if (StringUtils.hasText(name) && name.contains("biadmin")) {
+            score += 80;
+        }
+        if (StringUtils.hasText(jdbcUrl) && jdbcUrl.contains("/biadmin")) {
+            score += 70;
+        }
+        if (StringUtils.hasText(name) && (name.contains("默认数据湖") || name.contains("默认湖") || name.contains("数仓"))) {
+            score += 40;
+        }
+        if (StringUtils.hasText(name) && name.contains("平台") && (name.contains("postgres") || name.contains("postgresql"))) {
+            score += 40;
+        }
+        if (StringUtils.hasText(description) && (description.contains("临时数据源") || description.contains("平台自用"))) {
+            score += 30;
+        }
+        if ("postgres".equalsIgnoreCase(type) || "postgresql".equalsIgnoreCase(type)) {
+            score += 50;
+        } else if (StringUtils.hasText(type)) {
+            score += 20;
+        }
+        if (STATUS_ACTIVE.equalsIgnoreCase(status)) {
+            score += 5;
+        }
+        if (StringUtils.hasText(jdbcUrl)) {
+            score += 5;
+        }
+        return score;
+    }
+
+    private String normalize(Object value) {
+        if (value == null) {
+            return null;
+        }
+        String text = value.toString().trim();
+        return text.isEmpty() ? null : text;
+    }
+
+    private String normalizeLower(Object value) {
+        String text = normalize(value);
+        return text == null ? null : text.toLowerCase(Locale.ROOT);
     }
 
     private Optional<AdminInfraClient.AdminDataLakeConfig> fetchDefaultDataLakeForList() {

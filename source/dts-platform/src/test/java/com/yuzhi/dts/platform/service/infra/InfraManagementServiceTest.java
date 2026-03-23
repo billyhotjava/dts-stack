@@ -17,6 +17,7 @@ import com.yuzhi.dts.platform.service.catalog.CatalogColumnSyncService;
 import com.yuzhi.dts.platform.service.ingestion.IngestionServiceClient;
 import com.yuzhi.dts.platform.service.infra.dto.InfraDataSourceDto;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -104,5 +105,57 @@ class InfraManagementServiceTest {
         );
 
         assertThat(result).extracting(InfraDataSourceDto::name).containsExactly("Local Lake");
+    }
+
+    @Test
+    void listDataSources_shouldPreferAdminDefaultDataLakeOverLocalFallbackCandidate() {
+        InfraDataSource localFallback = new InfraDataSource();
+        localFallback.setId(UUID.randomUUID());
+        localFallback.setName("平台 PostgreSQL");
+        localFallback.setType("POSTGRES");
+        localFallback.setJdbcUrl("jdbc:postgresql://localhost:5432/platform");
+        localFallback.setStatus("ACTIVE");
+
+        InfraDataSource other = new InfraDataSource();
+        other.setId(UUID.randomUUID());
+        other.setName("ERP 数据库");
+        other.setType("mysql");
+        other.setJdbcUrl("jdbc:mysql://erp:3306/erp");
+        other.setStatus("ACTIVE");
+
+        UUID adminLakeId = UUID.randomUUID();
+        when(dataSourceRepository.findByStatusIgnoreCase("ACTIVE")).thenReturn(List.of(localFallback, other));
+        when(adminInfraClient.fetchDefaultDataLake()).thenReturn(Optional.of(adminLake(adminLakeId)));
+
+        List<InfraDataSourceDto> result = service.listDataSources(null);
+
+        assertThat(result).extracting(InfraDataSourceDto::name).containsExactly("默认数据湖", "ERP 数据库");
+        assertThat(result)
+            .extracting(dto -> dto.props() == null ? null : dto.props().get("source"))
+            .containsExactly("admin-data-lake", null);
+    }
+
+    private AdminInfraClient.AdminDataLakeConfig adminLake(UUID id) {
+        AdminInfraClient.AdminDataLakeConfig lake = new AdminInfraClient.AdminDataLakeConfig();
+        setField(lake, "id", id);
+        setField(lake, "name", "默认数据湖");
+        setField(lake, "type", "DATA_LAKE");
+        setField(lake, "jdbcUrl", "jdbc:postgresql://localhost:5432/biadmin");
+        setField(lake, "username", "biadmin");
+        setField(lake, "password", "secret");
+        setField(lake, "status", "ACTIVE");
+        setField(lake, "defaulted", Boolean.TRUE);
+        setField(lake, "lastVerifiedAt", Instant.now());
+        return lake;
+    }
+
+    private void setField(Object target, String name, Object value) {
+        try {
+            java.lang.reflect.Field field = target.getClass().getDeclaredField(name);
+            field.setAccessible(true);
+            field.set(target, value);
+        } catch (ReflectiveOperationException ex) {
+            throw new IllegalStateException("Failed to set field " + name, ex);
+        }
     }
 }
