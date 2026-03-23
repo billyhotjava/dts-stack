@@ -26,6 +26,14 @@ import { ReviewStep } from "./steps/ReviewStep";
 import type { ExtraColumnDef } from "./steps/types";
 import { resolveAsyncRunPollHint, resolveCreatedTaskId } from "./transformCreateAsyncRun.helpers";
 import { loadTransformCreateBootstrap } from "./transformCreateBootstrap.helpers";
+import { buildTransformCreateDraftPayload } from "./transformCreateDraft.helpers";
+import { buildTransformFileUploadResult, suggestTransformFileTableName } from "./transformCreateFileFlow.helpers";
+import {
+	buildTransformEditRestoreState,
+	parseTransformCreateDraft,
+	resolveTemplateSourceCategory,
+	serializeTransformCreateDraft,
+} from "./transformCreateState.helpers";
 import { useTransformAsyncRunProgress } from "./useTransformAsyncRunProgress";
 
 const { Text } = Typography;
@@ -901,15 +909,9 @@ const buildJobPreview = (values: Record<string, any>, editorMode?: string, reade
 	};
 };
 
-const loadDraft = (): Record<string, any> | null => {
+const loadDraft = () => {
 	try {
-		const stored = localStorage.getItem(DRAFT_STORAGE_KEY);
-		if (!stored) return null;
-		const draft = JSON.parse(stored);
-		if (draft && typeof draft === "object" && draft.savedAt) {
-			return draft;
-		}
-		return null;
+		return parseTransformCreateDraft(localStorage.getItem(DRAFT_STORAGE_KEY));
 	} catch {
 		return null;
 	}
@@ -917,8 +919,7 @@ const loadDraft = (): Record<string, any> | null => {
 
 const saveDraft = (values: Record<string, any>) => {
 	try {
-		const draft = { ...values, savedAt: new Date().toISOString() };
-		localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft));
+		localStorage.setItem(DRAFT_STORAGE_KEY, serializeTransformCreateDraft(values));
 		return true;
 	} catch {
 		return false;
@@ -1310,7 +1311,7 @@ export default function TransformCreatePage() {
 		return () => {
 			active = false;
 		};
-	}, [form, selectedTemplateId]);
+	}, [form]);
 
 	useEffect(() => {
 		if (!selectedDataSource) {
@@ -1501,12 +1502,11 @@ export default function TransformCreatePage() {
 		const draft = loadDraft();
 		if (draft) {
 			setHasDraft(true);
-			const { savedAt, ...formValues } = draft;
-			form.setFieldsValue(formValues);
-			if (formValues.sourceCategory) {
-				setSourceCategory(formValues.sourceCategory);
+			form.setFieldsValue(draft.formValues);
+			if (draft.sourceCategory) {
+				setSourceCategory(draft.sourceCategory);
 			}
-			toast.info(`已恢复草稿 (${new Date(savedAt).toLocaleString()})`);
+			toast.info(`已恢复草稿 (${new Date(draft.savedAt).toLocaleString()})`);
 		}
 	}, [form, isEdit]);
 
@@ -1519,24 +1519,30 @@ export default function TransformCreatePage() {
 				setLoadingTask(true);
 				const task = await ingestionTaskAPI.getTask(editId);
 				setEditingTask(task);
-				form.setFieldsValue(mapTaskToForm(task));
-				const fileMeta = extractFileUploadResult(task);
-				if (fileMeta) {
-					setFileUploadResult(fileMeta);
-					form.setFieldValue("sourceCategory", "file");
-					setSourceCategory("file");
-					form.setFieldValue("readerType", "txtfilereader");
+				const restoreState = buildTransformEditRestoreState(task, {
+					mapTaskToForm,
+					extractFileUploadResult,
+					extractMappingTables,
+					tryParseJson,
+				});
+				form.setFieldsValue(restoreState.formValues);
+				if (restoreState.fileUploadResult) {
+					setFileUploadResult(restoreState.fileUploadResult);
 				}
-				// Restore extra columns from destinationConfig
-				const destConfig = tryParseJson(task.destinationConfig) || {};
-				if (Array.isArray(destConfig._extraColumns) && destConfig._extraColumns.length) {
-					setExtraColumns(destConfig._extraColumns);
+				if (restoreState.sourceCategory) {
+					form.setFieldValue("sourceCategory", restoreState.sourceCategory);
+					setSourceCategory(restoreState.sourceCategory);
 				}
-				const mappingTables = extractMappingTables(task.tableMapping);
-				if (mappingTables.length) {
-					setSelectedTableKeys(mappingTables);
-					form.setFieldValue("selectedTables", mappingTables.join("\n"));
-					syncSelectedTablesToForm(mappingTables, { silent: true });
+				if (restoreState.forceReaderType) {
+					form.setFieldValue("readerType", restoreState.forceReaderType);
+				}
+				if (restoreState.extraColumns.length) {
+					setExtraColumns(restoreState.extraColumns);
+				}
+				if (restoreState.mappingTables.length) {
+					setSelectedTableKeys(restoreState.mappingTables);
+					form.setFieldValue("selectedTables", restoreState.mappingTables.join("\n"));
+					syncSelectedTablesToForm(restoreState.mappingTables, { silent: true });
 				}
 			} catch (error: any) {
 				toast.error(`加载任务失败: ${error?.message || "未知错误"}`);
@@ -1579,13 +1585,12 @@ export default function TransformCreatePage() {
 			form.setFieldsValue(defaults);
 			toast.error(error?.message || "模板预检失败，已按默认值应用");
 		}
-		const sourceCategoryFromTemplate =
-			normalizeText(
-				(form.getFieldValue("sourceCategory") as string) ||
-					((template.defaults || {}) as Record<string, any>).sourceCategory ||
-					template.sourceCategory
-			).toLowerCase() || "database";
-		if (sourceCategoryFromTemplate === "file" || sourceCategoryFromTemplate === "database") {
+		const sourceCategoryFromTemplate = resolveTemplateSourceCategory(
+			form.getFieldValue("sourceCategory") as string,
+			(template.defaults || {}) as Record<string, any>,
+			template.sourceCategory
+		);
+		if (sourceCategoryFromTemplate) {
 			setSourceCategory(sourceCategoryFromTemplate);
 		}
 		toast.success(`已应用模板：${template.name}`);
@@ -1688,47 +1693,32 @@ export default function TransformCreatePage() {
 					writerConfig = applyTablesToConfig(writerConfig, includeTables);
 				}
 			}
-				const draftPayload: Record<string, any> = {
-				draft: true,
+			const draftPayload = buildTransformCreateDraftPayload({
 				name,
 				description: normalizeText(values.description) || undefined,
 				owner: userInfo?.username || userInfo?.login,
-				source: {
-					dataSourceId: isFileDraft ? undefined : sourceDataSourceId,
-					type: resolvedReaderType || undefined,
-					config: readerConfig || {},
-				},
-					sync: {
-						mode: normalizeText(values.syncMode) || "full_refresh",
-						schedule: buildSyncScheduleSpec(values),
-						prefix: normalizeText(values.syncPrefix) || undefined,
-						incrementalColumn: normalizeText(values.incrementalColumn) || undefined,
-						incrementalType: normalizeText(values.incrementalType) || undefined,
-						initialWatermark: normalizeText(values.initialWatermark) || undefined,
-						...buildGovernanceSyncFields(values),
-					},
-				streams: {
-					selection: selectionMode,
-					include: selectionMode === "manual" && includeTables.length ? includeTables : undefined,
-					exclude: selectionMode === "all" && excludeTables.length ? excludeTables : undefined,
-					schema: normalizeText(values.readerSchema) || undefined,
-					tablePattern: normalizeText(values.readerTablePattern) || undefined,
-				},
-				airflow: {
-					enabled: values.airflowEnabled ?? true,
-				},
-				dbt: {
-					modelSelector: normalizeText(values.dbtModelSelector) || undefined,
-					dagSelector: normalizeText(values.dbtDagSelector) || undefined,
-				},
+				isFileDraft,
+				sourceDataSourceId,
+				resolvedReaderType: resolvedReaderType || undefined,
+				readerConfig: readerConfig || {},
+				writerConfig,
+				syncMode: normalizeText(values.syncMode) || "full_refresh",
+				syncSchedule: buildSyncScheduleSpec(values),
+				syncPrefix: normalizeText(values.syncPrefix) || undefined,
+				incrementalColumn: normalizeText(values.incrementalColumn) || undefined,
+				incrementalType: normalizeText(values.incrementalType) || undefined,
+				initialWatermark: normalizeText(values.initialWatermark) || undefined,
+				governanceSyncFields: buildGovernanceSyncFields(values),
+				selectionMode,
+				includeTables,
+				excludeTables,
+				readerSchema: normalizeText(values.readerSchema) || undefined,
+				readerTablePattern: normalizeText(values.readerTablePattern) || undefined,
+				airflowEnabled: values.airflowEnabled ?? true,
+				dbtModelSelector: normalizeText(values.dbtModelSelector) || undefined,
+				dbtDagSelector: normalizeText(values.dbtDagSelector) || undefined,
 				jobConfig: jobConfig || undefined,
-			};
-			if (writerConfig && Object.keys(writerConfig).length > 0) {
-				draftPayload.destination = {
-					usePlatformDefault: true,
-					config: writerConfig,
-				};
-			}
+			});
 			const draftResult: any = await createIngestionTask(draftPayload);
 			const taskId =
 				draftResult?.task?.id ?? draftResult?.taskId ?? draftResult?.task?.taskId ?? undefined;
@@ -1748,62 +1738,12 @@ export default function TransformCreatePage() {
 		}
 	};
 
-	const buildFileUploadResult = (
-		fileName: string,
-		batchCode: string,
-		fileId: string,
-		sheets: Array<{ index: number; name: string }> | undefined,
-		parseResult: {
-			csvPath: string;
-			csvContainerPath: string;
-			errorPath?: string;
-			errorContainerPath?: string;
-			delimiter?: string;
-			columns: Array<{ name: string; dataType?: string; label?: string }>;
-			preview?: string[][];
-			rowCount?: number;
-			errorCount?: number;
-			sheetName?: string;
-		},
-		selectedSheet?: { index?: number; name?: string }
-	): FileUploadResult => {
-		const sourceFileType = resolveFileTypeFromName(fileName);
-		const columns = (parseResult.columns || [])
-			.map((col) => ({
-				name: normalizeText(col.name),
-				type: normalizeText(col.dataType) || "string",
-				label: normalizeText(col.label),
-			}))
-			.filter((col) => col.name);
-		return {
-			hostPath: parseResult.csvPath,
-			containerPath: parseResult.csvContainerPath,
-			fileType: "csv",
-			sourceFileType,
-			columns,
-			originalName: fileName,
-			fileId,
-			batchCode,
-			sheets,
-			sheetName: parseResult.sheetName || selectedSheet?.name,
-			sheetIndex: selectedSheet?.index,
-			csvPath: parseResult.csvPath,
-			csvContainerPath: parseResult.csvContainerPath,
-			errorPath: parseResult.errorPath,
-			errorContainerPath: parseResult.errorContainerPath,
-			delimiter: parseResult.delimiter,
-			preview: parseResult.preview,
-			rowCount: parseResult.rowCount,
-			errorCount: parseResult.errorCount,
-		};
-	};
-
 	const ensureFileTableName = (parsed: FileUploadResult) => {
-		const current = normalizeText(form.getFieldValue("fileTableName"));
-		if (current) return;
-		const prefix = normalizeText(form.getFieldValue("syncPrefix"));
-		const baseName = buildFileBaseName(parsed.originalName);
-		const suggested = normalizeTableName(`${prefix}${baseName}`) || `${prefix}${baseName}`;
+		const suggested = suggestTransformFileTableName(
+			form.getFieldValue("fileTableName"),
+			form.getFieldValue("syncPrefix"),
+			parsed.originalName
+		);
 		if (suggested) {
 			form.setFieldValue("fileTableName", suggested);
 		}
@@ -1831,7 +1771,7 @@ export default function TransformCreatePage() {
 			fillMerged: true,
 			dateFormat: "yyyy-MM-dd HH:mm:ss",
 		});
-		return buildFileUploadResult(fileName, batchCode, fileId, sheets, parseResult, selectedSheet);
+		return buildTransformFileUploadResult(fileName, batchCode, fileId, sheets, parseResult, selectedSheet);
 	};
 
 	// --- ODS 表关联 ---

@@ -8,3 +8,26 @@ export function getGanttOwnerLabelPlacement(leftPercent: number, widthPercent: n
 	}
 	return safeLeft + safeWidth > 82 ? "outside-left" : "outside-right";
 }
+
+type BaselineRangeSource = {
+	planDate?: string;
+	baselineStartDate?: string;
+	baselineEndDate?: string;
+};
+
+export function resolveGanttBaselineRange(source: BaselineRangeSource): { startDate?: string; endDate?: string } {
+	const startDate = source.baselineStartDate?.trim() || source.planDate?.trim();
+	const endDate = source.baselineEndDate?.trim() || startDate;
+	if (!startDate && !endDate) {
+		return {};
+	}
+	if (!startDate) {
+		return { startDate: endDate, endDate };
+	}
+	if (!endDate) {
+		return { startDate, endDate: startDate };
+	}
+	return startDate <= endDate
+		? { startDate, endDate }
+		: { startDate: endDate, endDate: startDate };
+}

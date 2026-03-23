@@ -29,7 +29,7 @@
 | ADS | 7 | biz_ads_project_kpi_overview, biz_ads_project_milestone_kpi, biz_ads_project_non_general_kpi, biz_ads_project_incomplete_risk, biz_ads_major_project_overview, biz_ads_major_project_tree_snapshot, biz_ads_delay_reason_trend |
 
 > **v2.2.2 变更**：移除了 v2.2.1 的 4 张 seed 表，全量改为 ODS 自动推导；
-> `biz_dwd_project_node` 新增字段 `deliverable`、`last_update_month`。
+> `biz_dwd_project_node` 新增字段 `deliverable`、`last_update_week`。
 
 ---
 
@@ -204,7 +204,7 @@ docker restart s10-stack-dts-analytics-1
 | `incomplete_reason` | 未完成原因（用于自动推导延期原因分类） |
 | `risk_content` | 风险内容 |
 | `deliverable` | 交付物（v2.2.2 新增） |
-| `last_update_month` | 最后更新月份（v2.2.2 新增，数值型） |
+| `last_update_week` | 最后更新周数（v2.2.2 新增，数值型） |
 
 > 字段值中的 `/`、`-`、`N/A`、`#VALUE!` 等占位符会自动清除为 NULL，无需预处理。
 
@@ -217,7 +217,7 @@ docker restart s10-stack-dts-analytics-1
 | `OutOfMemoryError: Java heap space` | enriched 表数据膨胀（笛卡尔积） | 执行数据重建（见上方），然后重启 analytics |
 | `relation "ods_project_subject_domain" does not exist` | ODS 表未创建 | 先通过入湖任务导入 Excel；或用 `-v ods_table=实际表名` 指定正确的 ODS 表名 |
 | `column "deliverable" does not exist` | ODS 表缺少 v2.2.2 新增字段 | 在 ODS 表上执行 `ALTER TABLE ods_project_subject_domain ADD COLUMN deliverable text;` |
-| `column "last_update_month" does not exist` | ODS 表缺少 v2.2.2 新增字段 | 在 ODS 表上执行 `ALTER TABLE ods_project_subject_domain ADD COLUMN last_update_month text;` |
+| `column "last_update_week" does not exist` | ODS 表缺少 v2.2.2 新增字段 | 在 ODS 表上执行 `ALTER TABLE ods_project_subject_domain ADD COLUMN last_update_week text;` |
 | `function parse_date_safe does not exist` | 函数未创建 | 执行 `99-build-all.sql`（会自动创建所有函数） |
 | `function nullif_placeholder does not exist` | 函数未创建 | 同上，执行 `99-build-all.sql` |
 | `dbt found two models with the same name` | 同名 SQL 文件在不同目录 | 删除重复目录，用 `--full-refresh` 重建 |

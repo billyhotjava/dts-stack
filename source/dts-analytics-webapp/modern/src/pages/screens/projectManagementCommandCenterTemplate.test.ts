@@ -135,6 +135,7 @@ test('project management command center template registers five-page Java-backed
     assert.equal(executionPendingKpi?.dataSource?.apiConfig?.responsePath, 'milestoneKpis.2');
     assert.equal(executionPendingKpi?.actions?.[0]?.jumpUrlTemplate, '/analytics/project-cockpit?theme=execution&majorProjectId={{majorProjectId}}&dateFrom={{dateFrom}}&dateTo={{dateTo}}&deptId={{deptId}}&riskLevel={{riskLevel}}&drillTarget=milestone');
     assert.equal(executionMilestoneRateKpi?.actions?.[0]?.jumpUrlTemplate, '/analytics/project-cockpit?theme=execution&majorProjectId={{majorProjectId}}&dateFrom={{dateFrom}}&dateTo={{dateTo}}&deptId={{deptId}}&riskLevel={{riskLevel}}&drillTarget=milestone');
+    assert.equal(executionGantt?.config.renderMode, 'board');
     assert.equal(executionGantt?.actions?.[0]?.jumpUrlTemplate, '/analytics/project-cockpit?theme=execution&majorProjectId={{data.majorProjectId}}&dateFrom={{dateFrom}}&dateTo={{dateTo}}&deptId={{data.dept}}&riskLevel={{riskLevel}}&drillTarget=overdue');
     assert.equal(executionWorkload?.actions?.[0]?.jumpUrlTemplate, '/analytics/project-cockpit?theme=execution&majorProjectId={{majorProjectId}}&dateFrom={{dateFrom}}&dateTo={{dateTo}}&deptId={{name}}&riskLevel={{riskLevel}}&drillTarget=overdue');
     assert.equal(executionMilestoneRing?.dataSource?.apiConfig?.responsePath, 'milestoneBreakdown');
@@ -159,8 +160,9 @@ test('project management command center template registers five-page Java-backed
     assert.equal(riskGovernHigh?.actions?.[0]?.jumpUrlTemplate, '/analytics/project-cockpit?theme=risk&majorProjectId={{majorProjectId}}&dateFrom={{dateFrom}}&dateTo={{dateTo}}&deptId={{deptId}}&riskLevel={{riskLevel}}&drillTarget=high-risk');
     assert.equal(riskGovernChanged?.actions?.[0]?.jumpUrlTemplate, '/analytics/project-cockpit?theme=risk&majorProjectId={{majorProjectId}}&dateFrom={{dateFrom}}&dateTo={{dateTo}}&deptId={{deptId}}&riskLevel={{riskLevel}}');
     assert.equal(riskMatrix?.dataSource?.apiConfig?.responsePath, 'delayReasonMatrix');
+    assert.equal(riskMatrix?.config.renderMode, 'delay-reason-matrix');
     assert.deepEqual(riskMatrix?.config.fields, ['dept', 'technical', 'quality', 'change', 'coordination', 'supplier', 'test', 'archive', 'normal', 'total']);
-    assert.equal(riskMatrix?.actions?.[0]?.jumpUrlTemplate, '/analytics/project-cockpit?theme=risk&majorProjectId={{majorProjectId}}&dateFrom={{dateFrom}}&dateTo={{dateTo}}&deptId={{责任科室}}&riskLevel={{riskLevel}}&drillTarget=delay-reason&drillDept={{责任科室}}');
+    assert.equal(riskMatrix?.actions?.[0]?.jumpUrlTemplate, '/analytics/project-cockpit?theme=risk&majorProjectId={{majorProjectId}}&dateFrom={{dateFrom}}&dateTo={{dateTo}}&deptId={{dept}}&riskLevel={{riskLevel}}&drillTarget=delay-reason&drillDept={{dept}}&drillReason={{reason}}');
     assert.equal(riskDelayedProjects?.dataSource?.apiConfig?.responsePath, 'delayedProjects');
     assert.deepEqual(riskDelayedProjects?.config.fields, ['majorProjectName', 'subprojectName', 'nodeTask', 'riskLevel', 'delayDays', 'reason', 'dept']);
     assert.equal(riskDelayedProjects?.actions?.[0]?.jumpUrlTemplate, '/analytics/project-cockpit?theme=risk&majorProjectId={{majorProjectId}}&dateFrom={{dateFrom}}&dateTo={{dateTo}}&deptId={{dept}}&riskLevel={{riskLevel}}&drillTarget=delay-reason&drillReason={{reason}}');

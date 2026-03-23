@@ -1,3 +1,4 @@
+import "./DelayReasonMatrix.css";
 import { buildDelayReasonMatrixSummary } from "../views/riskAttributionView.helpers";
 
 type Props = {

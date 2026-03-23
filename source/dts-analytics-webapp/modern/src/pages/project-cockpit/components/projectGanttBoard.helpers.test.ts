@@ -1,15 +1,27 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { getGanttOwnerLabelPlacement } from "./projectGanttBoard.helpers";
+import { resolveGanttBaselineRange } from "./projectGanttBoard.helpers";
 
-test("getGanttOwnerLabelPlacement keeps wide tasks inside the bar", () => {
-	assert.equal(getGanttOwnerLabelPlacement(8, 18), "inside");
+test("resolveGanttBaselineRange prefers explicit baseline dates and normalizes reversed ranges", () => {
+	const range = resolveGanttBaselineRange({
+		planDate: "2026-03-08",
+		baselineStartDate: "2026-03-12",
+		baselineEndDate: "2026-03-06",
+	});
+
+	assert.deepEqual(range, {
+		startDate: "2026-03-06",
+		endDate: "2026-03-12",
+	});
 });
 
-test("getGanttOwnerLabelPlacement moves narrow tasks to the right when there is room", () => {
-	assert.equal(getGanttOwnerLabelPlacement(12, 4), "outside-right");
-});
+test("resolveGanttBaselineRange falls back to plan date when baseline dates are absent", () => {
+	const range = resolveGanttBaselineRange({
+		planDate: "2026-03-08",
+	});
 
-test("getGanttOwnerLabelPlacement moves narrow tasks to the left near the end of the track", () => {
-	assert.equal(getGanttOwnerLabelPlacement(88, 4), "outside-left");
+	assert.deepEqual(range, {
+		startDate: "2026-03-08",
+		endDate: "2026-03-08",
+	});
 });

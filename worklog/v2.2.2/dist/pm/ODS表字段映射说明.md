@@ -42,7 +42,7 @@ ods_project_subject_domain
 | 26 | 是否提交延期申请 | `delay_applied` | varchar | ✓ | |
 | 27 | 项目主管 | `project_manager` | varchar | ✓ | |
 | 28 | 最后更新时间 | `last_update_time` | varchar | ✓ | 模型用 parse_date_safe 转日期 |
-| 29 | 最后更新月数 | `last_update_month` | varchar | ✓ | v2.2.2 新增，模型用 parse_numeric_safe 转数值 |
+| 29 | 最后更新周数 | `last_update_week` | varchar | ✓ | v2.2.2 新增，模型用 parse_numeric_safe 转数值 |
 | 30 | 填写人 | `filled_by` | varchar | ✓ | |
 | 31 | 亮点工作 | `highlight` | varchar | ✓ | |
 
@@ -81,7 +81,7 @@ CREATE TABLE IF NOT EXISTS ods_project_subject_domain (
     delay_applied   varchar(500),
     project_manager varchar(500),
     last_update_time varchar(500),
-    last_update_month varchar(500),
+    last_update_week varchar(500),
     filled_by       varchar(500),
     highlight       varchar(500),
     source_system   varchar(200) DEFAULT 'excel',

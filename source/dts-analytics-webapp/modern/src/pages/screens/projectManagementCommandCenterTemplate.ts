@@ -627,6 +627,7 @@ function buildExecutionPage(): ScreenPage {
             ], 126, 106),
             withActions(createComponent('pmcc-execution-gantt', 'gantt-chart', '任务甘特图', 56, 286, 878, 520, 10, {
                 title: '任务甘特图',
+                renderMode: 'board',
                 nameField: 'name',
                 startField: 'planDate',
                 endField: 'actualDate',
@@ -879,6 +880,7 @@ function buildRiskPage(): ScreenPage {
                     { source: 'total', alias: '总数' },
                 ],
                 {
+                    renderMode: 'delay-reason-matrix',
                     fontSize: 10,
                     conditionalRules: [
                         { columnKey: 'technical', operator: '>=', value: 2, color: '#991b1b', background: 'rgba(254, 226, 226, 0.92)' },
@@ -898,7 +900,7 @@ function buildRiskPage(): ScreenPage {
                         { columnKey: 'total', operator: '>=', value: 3, color: '#0f172a', background: 'rgba(219, 234, 254, 0.96)' },
                     ],
                 },
-            ), jumpAction(buildCockpitJumpUrl('risk', { deptId: '{{责任科室}}', drillTarget: 'delay-reason', drillDept: '{{责任科室}}' }))),
+            ), jumpAction(buildCockpitJumpUrl('risk', { deptId: '{{dept}}', drillTarget: 'delay-reason', drillDept: '{{dept}}', drillReason: '{{reason}}' }))),
             withActions(createApiTable(
                 'pmcc-risk-delayed-projects',
                 '重点延期项目',

@@ -38,6 +38,18 @@
 - 创建页的“任务提交后异步执行进度”已从 [TransformCreatePage.tsx](/opt/prod/s10/s10-stack/source/dts-platform-webapp/src/pages/explore/etl/TransformCreatePage.tsx) 中抽出到独立 helper 与 hook：
   - [transformCreateAsyncRun.helpers.ts](/opt/prod/s10/s10-stack/source/dts-platform-webapp/src/pages/explore/etl/transformCreateAsyncRun.helpers.ts)
   - [useTransformAsyncRunProgress.ts](/opt/prod/s10/s10-stack/source/dts-platform-webapp/src/pages/explore/etl/useTransformAsyncRunProgress.ts)
+- 创建页初始化加载链已收成统一 bootstrap helper：
+  - [transformCreateBootstrap.helpers.ts](/opt/prod/s10/s10-stack/source/dts-platform-webapp/src/pages/explore/etl/transformCreateBootstrap.helpers.ts)
+  - [transformCreateBootstrap.helpers.test.ts](/opt/prod/s10/s10-stack/source/dts-platform-webapp/src/pages/explore/etl/transformCreateBootstrap.helpers.test.ts)
+- 草稿、编辑态文件流恢复与模板 `sourceCategory` 判定已收成状态 helper：
+  - [transformCreateState.helpers.ts](/opt/prod/s10/s10-stack/source/dts-platform-webapp/src/pages/explore/etl/transformCreateState.helpers.ts)
+  - [transformCreateState.helpers.test.ts](/opt/prod/s10/s10-stack/source/dts-platform-webapp/src/pages/explore/etl/transformCreateState.helpers.test.ts)
+- 文件解析结果与建议表名推导已收成文件流 helper：
+  - [transformCreateFileFlow.helpers.ts](/opt/prod/s10/s10-stack/source/dts-platform-webapp/src/pages/explore/etl/transformCreateFileFlow.helpers.ts)
+  - [transformCreateFileFlow.helpers.test.ts](/opt/prod/s10/s10-stack/source/dts-platform-webapp/src/pages/explore/etl/transformCreateFileFlow.helpers.test.ts)
+- 草稿保存请求体已收成独立 helper：
+  - [transformCreateDraft.helpers.ts](/opt/prod/s10/s10-stack/source/dts-platform-webapp/src/pages/explore/etl/transformCreateDraft.helpers.ts)
+  - [transformCreateDraft.helpers.test.ts](/opt/prod/s10/s10-stack/source/dts-platform-webapp/src/pages/explore/etl/transformCreateDraft.helpers.test.ts)
 - 新增模块级回归：
   - [transformCreateAsyncRun.helpers.test.ts](/opt/prod/s10/s10-stack/source/dts-platform-webapp/src/pages/explore/etl/transformCreateAsyncRun.helpers.test.ts)
 - Excel 文件流已支持“粘贴 ODS 字段列表”并按顺序映射 Excel 列：
@@ -49,6 +61,10 @@
 
 - [x] `pnpm -C source/dts-platform-webapp exec tsx --test src/pages/explore/etl/transformCreateAsyncRun.helpers.test.ts`
 - [x] `pnpm -C source/dts-platform-webapp exec tsx --test src/pages/explore/etl/fileOdsPasteMapping.helpers.test.ts src/pages/explore/etl/transformCreateAsyncRun.helpers.test.ts`
+- [x] `pnpm -C source/dts-platform-webapp exec tsx --test src/pages/explore/etl/transformCreateBootstrap.helpers.test.ts src/pages/explore/etl/fileOdsPasteMapping.helpers.test.ts src/pages/explore/etl/transformCreateAsyncRun.helpers.test.ts`
+- [x] `pnpm -C source/dts-platform-webapp exec tsx --test src/pages/explore/etl/transformCreateState.helpers.test.ts src/pages/explore/etl/transformCreateBootstrap.helpers.test.ts src/pages/explore/etl/fileOdsPasteMapping.helpers.test.ts src/pages/explore/etl/transformCreateAsyncRun.helpers.test.ts`
+- [x] `pnpm -C source/dts-platform-webapp exec tsx --test src/pages/explore/etl/transformCreateFileFlow.helpers.test.ts src/pages/explore/etl/transformCreateState.helpers.test.ts src/pages/explore/etl/transformCreateBootstrap.helpers.test.ts src/pages/explore/etl/fileOdsPasteMapping.helpers.test.ts src/pages/explore/etl/transformCreateAsyncRun.helpers.test.ts`
+- [x] `pnpm -C source/dts-platform-webapp exec tsx --test src/pages/explore/etl/transformCreateDraft.helpers.test.ts src/pages/explore/etl/transformCreateFileFlow.helpers.test.ts src/pages/explore/etl/transformCreateState.helpers.test.ts src/pages/explore/etl/transformCreateBootstrap.helpers.test.ts src/pages/explore/etl/fileOdsPasteMapping.helpers.test.ts src/pages/explore/etl/transformCreateAsyncRun.helpers.test.ts`
 - [ ] `pnpm -C source/dts-platform-webapp build`
   当前被并发改动 [index.tsx](/opt/prod/s10/s10-stack/source/dts-platform-webapp/src/pages/workbench/index.tsx) 中的未使用 `toast` 阻断，不是本次入湖优化引入
 

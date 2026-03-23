@@ -95,6 +95,8 @@ class ProjectCockpitResourceIT {
                     dept VARCHAR(128),
                     project_manager VARCHAR(128),
                     plan_date DATE,
+                    original_plan_date DATE,
+                    delay_expected_date DATE,
                     actual_date DATE,
                     completion_status VARCHAR(64),
                     risk_level VARCHAR(32),
@@ -294,6 +296,8 @@ class ProjectCockpitResourceIT {
                 .andExpect(jsonPath("$.ganttTasks").isArray())
                 .andExpect(jsonPath("$.ganttTasks[0].majorProjectId").isString())
                 .andExpect(jsonPath("$.ganttTasks[0].dept").isString())
+                .andExpect(jsonPath("$.ganttTasks[1].baselineStartDate").value("2026-03-06"))
+                .andExpect(jsonPath("$.ganttTasks[1].baselineEndDate").value("2026-03-13"))
                 .andExpect(jsonPath("$.milestoneBreakdown").isArray())
                 .andExpect(jsonPath("$.executionSummary.overdueCount").exists())
                 .andExpect(jsonPath("$.executionSummary.maxDelayDays").exists());
@@ -863,6 +867,8 @@ class ProjectCockpitResourceIT {
                 nodeTask,
                 "里程碑节点",
                 planDate,
+                delayDays > 0 ? java.time.LocalDate.parse(planDate).minusDays(2).toString() : planDate,
+                delayDays > 0 ? java.time.LocalDate.parse(planDate).plusDays(Math.max(delayDays, 1)).toString() : planDate,
                 actualDate,
                 completionStatus,
                 riskLevel,
@@ -902,15 +908,64 @@ class ProjectCockpitResourceIT {
             String subOwnerUser,
             boolean isKeyNode,
             boolean isMilestone) {
+        insertNodeDetailed(
+                nodeId,
+                subsystem,
+                nodeTask,
+                nodeType,
+                planDate,
+                planDate,
+                planDate,
+                actualDate,
+                completionStatus,
+                riskLevel,
+                delayDays,
+                delayReasonCategory,
+                majorProjectId,
+                majorProjectName,
+                subprojectId,
+                subprojectName,
+                majorOwnerDept,
+                majorOwnerLeader,
+                subOwnerDept,
+                subOwnerUser,
+                isKeyNode,
+                isMilestone
+        );
+    }
+
+    private void insertNodeDetailed(
+            String nodeId,
+            String subsystem,
+            String nodeTask,
+            String nodeType,
+            String planDate,
+            String originalPlanDate,
+            String delayExpectedDate,
+            String actualDate,
+            String completionStatus,
+            String riskLevel,
+            int delayDays,
+            String delayReasonCategory,
+            String majorProjectId,
+            String majorProjectName,
+            String subprojectId,
+            String subprojectName,
+            String majorOwnerDept,
+            String majorOwnerLeader,
+            String subOwnerDept,
+            String subOwnerUser,
+            boolean isKeyNode,
+            boolean isMilestone) {
         jdbcTemplate.update(
                 """
                 INSERT INTO biz_dwd_project_node_enriched (
                     node_id, project_no, subsystem, node_task, node_type, owner, dept, project_manager,
-                    plan_date, actual_date, completion_status, risk_level, delay_days, delay_reason_category,
+                    plan_date, original_plan_date, delay_expected_date, actual_date, completion_status, risk_level, delay_days, delay_reason_category,
                     major_project_id, major_project_name, subproject_id, subproject_name,
                     incomplete_reason, delay_impact, is_key_node, is_milestone,
                     major_project_owner_dept, major_project_owner_leader, subproject_owner_dept, subproject_owner_user
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 nodeId,
                 "P-" + subprojectId,
@@ -921,6 +976,8 @@ class ProjectCockpitResourceIT {
                 subOwnerDept,
                 "项目经理-" + subprojectId,
                 java.sql.Date.valueOf(planDate),
+                originalPlanDate == null ? null : java.sql.Date.valueOf(originalPlanDate),
+                delayExpectedDate == null ? null : java.sql.Date.valueOf(delayExpectedDate),
                 actualDate == null ? null : java.sql.Date.valueOf(actualDate),
                 completionStatus,
                 riskLevel,

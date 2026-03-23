@@ -40,6 +40,8 @@ import {
     normalizeColumnAlign, formatTableCell, clampColumnWidth, normalizeColumnFormatter,
     ThemedScrollTable, resolveBoundTableData,
 } from '../renderers/shared/tableUtils';
+import { ProjectGanttBoard, type ProjectGanttTask } from '../../project-cockpit/components/ProjectGanttBoard';
+import { DelayReasonMatrix } from '../../project-cockpit/components/DelayReasonMatrix';
 
 const ECHART_COMPONENT_TYPES = new Set([
     'line-chart',
@@ -1838,6 +1840,25 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
             case 'gantt-chart': {
                 /* eslint-disable @typescript-eslint/no-explicit-any */
                 const tasks = Array.isArray(c.tasks) ? (c.tasks as Array<Record<string, any>>) : [];
+                const ganttRenderMode = String(c.renderMode ?? '').trim().toLowerCase();
+                if (ganttRenderMode === 'board') {
+                    const onTaskClick = mode === 'preview' && componentActions.length > 0
+                        ? (task: ProjectGanttTask) => {
+                            executeComponentActions({
+                                data: task,
+                                name: task.name,
+                                ...task,
+                            });
+                        }
+                        : undefined;
+                    return (
+                        <ProjectGanttBoard
+                            tasks={tasks as ProjectGanttTask[]}
+                            maxHeight={height}
+                            onTaskClick={onTaskClick}
+                        />
+                    );
+                }
                 if (!tasks.length) {
                     return renderEChartWithHandles({ ...themeOptions, title: { text: '暂无数据', left: 'center', top: 'center', textStyle: { color: t.textSecondary, fontSize: 14 } } });
                 }
@@ -3324,6 +3345,59 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
             }
 
             case 'table': {
+                const tableRenderMode = String(c.renderMode ?? '').trim().toLowerCase();
+                if (tableRenderMode === 'delay-reason-matrix') {
+                    const sourceCols = Array.isArray(cardData?.cols) ? cardData.cols : [];
+                    const sourceRows = Array.isArray(cardData?.rows) ? cardData.rows : [];
+                    const matrixRows = sourceRows.map((row) => Object.fromEntries(
+                        sourceCols.map((col, index) => [col.name, row[index]]),
+                    ));
+                    const canRunMatrixActions = mode === 'preview' && componentActions.length > 0;
+                    if (matrixRows.length === 0) {
+                        return (
+                            <div style={{
+                                width: '100%',
+                                height: '100%',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                borderRadius: 16,
+                                border: '1px dashed rgba(148, 163, 184, 0.3)',
+                                background: 'rgba(248, 250, 252, 0.85)',
+                                color: t.textSecondary,
+                                fontSize: 13,
+                            }}>
+                                当前筛选范围暂无归因矩阵数据。
+                            </div>
+                        );
+                    }
+                    return (
+                        <div style={{ width: '100%', height: '100%', overflow: 'auto' }}>
+                            <DelayReasonMatrix
+                                rows={matrixRows}
+                                onDrillDept={canRunMatrixActions
+                                    ? (dept) => {
+                                        executeComponentActions({
+                                            name: dept,
+                                            dept,
+                                            data: { dept },
+                                        });
+                                    }
+                                    : undefined}
+                                onDrillReason={canRunMatrixActions
+                                    ? (dept, reason) => {
+                                        executeComponentActions({
+                                            name: reason,
+                                            dept,
+                                            reason,
+                                            data: { dept, reason },
+                                        });
+                                    }
+                                    : undefined}
+                            />
+                        </div>
+                    );
+                }
                 const { header: displayHeader, data: displayData, columnMeta } = resolveBoundTableData(c, { defaultAlign: 'left' });
                 const fontSize = (c.fontSize as number) || 13;
                 const headerColor = resolveTextColor(c.headerColor as string | undefined, t.textPrimary);

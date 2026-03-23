@@ -504,6 +504,8 @@ public class ProjectCockpitService {
                 row.dept(),
                 row.projectManager(),
                 row.planDate(),
+                row.originalPlanDate(),
+                row.delayExpectedDate(),
                 row.actualDate(),
                 row.completionStatus(),
                 normalizedRisk(row.riskLevel()),
@@ -916,6 +918,8 @@ public class ProjectCockpitService {
                     task.put("name", row.nodeTask());
                     task.put("type", row.nodeType());
                     task.put("planDate", row.planDate() == null ? "" : row.planDate().toString());
+                    task.put("baselineStartDate", baselineStartDate(row));
+                    task.put("baselineEndDate", baselineEndDate(row));
                     task.put("actualDate", row.actualDate() == null ? "" : row.actualDate().toString());
                     task.put("isCompleted", row.completed());
                     task.put("isOverdue", row.delayed());
@@ -1733,6 +1737,8 @@ public class ProjectCockpitService {
                         row.dept(),
                         "",
                         parseLocalDate(row.planDate()),
+                        null,
+                        null,
                         parseLocalDate(row.actualDate()),
                         blankToEmpty(row.completionStatus()),
                         blankToEmpty(row.riskLevel()),
@@ -1747,6 +1753,36 @@ public class ProjectCockpitService {
                         isKeyNodeType(row.nodeType()),
                         isMilestoneType(row.nodeType())))
                 .toList();
+    }
+
+    private String baselineStartDate(NodeRow row) {
+        LocalDate baselineStart = row.originalPlanDate() != null ? row.originalPlanDate() : row.planDate();
+        LocalDate baselineEnd = row.delayExpectedDate() != null ? row.delayExpectedDate() : baselineStart;
+        if (baselineStart == null && baselineEnd == null) {
+            return "";
+        }
+        if (baselineStart == null) {
+            return baselineEnd.toString();
+        }
+        if (baselineEnd == null) {
+            return baselineStart.toString();
+        }
+        return (baselineStart.isAfter(baselineEnd) ? baselineEnd : baselineStart).toString();
+    }
+
+    private String baselineEndDate(NodeRow row) {
+        LocalDate baselineStart = row.originalPlanDate() != null ? row.originalPlanDate() : row.planDate();
+        LocalDate baselineEnd = row.delayExpectedDate() != null ? row.delayExpectedDate() : baselineStart;
+        if (baselineStart == null && baselineEnd == null) {
+            return "";
+        }
+        if (baselineStart == null) {
+            return baselineEnd.toString();
+        }
+        if (baselineEnd == null) {
+            return baselineStart.toString();
+        }
+        return (baselineStart.isAfter(baselineEnd) ? baselineStart : baselineEnd).toString();
     }
 
     private String buildRawNodeId(ProjectCockpitRawMetricRow row) {
@@ -2117,6 +2153,8 @@ public class ProjectCockpitService {
             String dept,
             String projectManager,
             LocalDate planDate,
+            LocalDate originalPlanDate,
+            LocalDate delayExpectedDate,
             LocalDate actualDate,
             String completionStatus,
             String riskLevel,

@@ -467,7 +467,7 @@ SELECT
   nullif_placeholder(o.filled_by)           AS filled_by,
   nullif_placeholder(o.highlight)           AS highlight,
   nullif_placeholder(o.deliverable)         AS deliverable,
-  parse_numeric_safe(o.last_update_month)::int AS last_update_month,
+  parse_numeric_safe(o.last_update_week)::int AS last_update_week,
 
   -- === 枚举标准化 ===
   nullif_placeholder(o.completion_status)   AS completion_status,
@@ -1227,7 +1227,7 @@ FROM (VALUES
 --   pm_map_node_subject              — 节点-主题映射（from ODS，node_type 自动推导）
 --
 -- === DWD 明细层（2 张）===
---   biz_dwd_project_node             — 节点明细（from ODS，新增 deliverable/last_update_month）
+--   biz_dwd_project_node             — 节点明细（from ODS，新增 deliverable/last_update_week）
 --   biz_dwd_project_node_enriched    — 节点富化宽表（from dwd + dim）
 --
 -- === DWS 汇总层（4 张）===
@@ -1249,7 +1249,7 @@ FROM (VALUES
 --   - 移除 4 张 seed 表（pm_dim_delay_reason_seed / pm_dim_major_project_seed /
 --     pm_dim_subproject_seed / pm_map_node_subject_seed），全量改为 ODS 自动推导
 --   - pm_dim_delay_reason 改为内联 VALUES，不再依赖 seed
---   - biz_dwd_project_node 新增字段：deliverable、last_update_month
+--   - biz_dwd_project_node 新增字段：deliverable、last_update_week
 --   - biz_dwd_project_node_enriched classified CTE 新增衍生字段：
 --     _derived_major_project_name、_derived_subproject_name
 --

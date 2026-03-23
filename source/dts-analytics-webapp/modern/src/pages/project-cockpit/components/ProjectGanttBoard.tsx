@@ -1,12 +1,15 @@
+import "./ProjectGanttBoard.css";
 import { useState } from "react";
-import { getGanttOwnerLabelPlacement } from "./projectGanttBoard.helpers";
+import { getGanttOwnerLabelPlacement, resolveGanttBaselineRange } from "./projectGanttBoard.helpers";
 
-type Task = {
+export type ProjectGanttTask = {
 	id?: string;
 	name?: string;
 	type?: string;
 	planDate?: string;
 	planEndDate?: string;
+	baselineStartDate?: string;
+	baselineEndDate?: string;
 	actualDate?: string;
 	delayDays?: number;
 	riskLevel?: string;
@@ -16,8 +19,9 @@ type Task = {
 };
 
 type Props = {
-	tasks: Task[];
-	maxVisible?: number;
+	tasks: ProjectGanttTask[];
+	maxHeight?: number;
+	onTaskClick?: (task: ProjectGanttTask) => void;
 };
 
 function toDateValue(value?: string) {
@@ -28,11 +32,11 @@ function toDateValue(value?: string) {
 
 type GroupedProject = {
 	name: string;
-	tasks: Task[];
+	tasks: ProjectGanttTask[];
 };
 
-function groupByProject(tasks: Task[]): GroupedProject[] {
-	const map = new Map<string, Task[]>();
+function groupByProject(tasks: ProjectGanttTask[]): GroupedProject[] {
+	const map = new Map<string, ProjectGanttTask[]>();
 	for (const task of tasks) {
 		const key = task.majorProjectName ?? "未分组";
 		const list = map.get(key);
@@ -45,7 +49,7 @@ function groupByProject(tasks: Task[]): GroupedProject[] {
 	return Array.from(map.entries()).map(([name, items]) => ({ name, tasks: items }));
 }
 
-export function ProjectGanttBoard({ tasks, maxVisible }: Props) {
+export function ProjectGanttBoard({ tasks, maxHeight, onTaskClick }: Props) {
 	const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
 
 	if (tasks.length === 0) {
@@ -53,7 +57,16 @@ export function ProjectGanttBoard({ tasks, maxVisible }: Props) {
 	}
 
 	const allDates = tasks
-		.flatMap((task) => [toDateValue(task.planDate), toDateValue(task.planEndDate), toDateValue(task.actualDate)])
+		.flatMap((task) => {
+			const baseline = resolveGanttBaselineRange(task);
+			return [
+				toDateValue(task.planDate),
+				toDateValue(task.planEndDate),
+				toDateValue(task.actualDate),
+				toDateValue(baseline.startDate),
+				toDateValue(baseline.endDate),
+			];
+		})
 		.filter((value): value is number => value != null);
 	if (allDates.length === 0) {
 		return <div className="project-cockpit__empty-block">缺少计划日期，无法渲染甘特视图。</div>;
@@ -78,15 +91,18 @@ export function ProjectGanttBoard({ tasks, maxVisible }: Props) {
 		});
 	};
 
-	const renderRow = (task: Task) => {
+	const renderRow = (task: ProjectGanttTask) => {
 		const planStart = toDateValue(task.planDate) ?? start;
 		const planEnd = toDateValue(task.planEndDate) ?? planStart;
+		const baseline = resolveGanttBaselineRange(task);
+		const baselineStart = toDateValue(baseline.startDate) ?? planStart;
+		const baselineEnd = toDateValue(baseline.endDate) ?? baselineStart;
 		const actual = toDateValue(task.actualDate) ?? Date.now();
 		const isOngoing = !task.actualDate;
 
 		// Baseline bar (plan)
-		const baseLeft = ((planStart - start) / total) * 100;
-		const baseWidth = Math.max(((planEnd - planStart) / total) * 100, 1.5);
+		const baseLeft = ((baselineStart - start) / total) * 100;
+		const baseWidth = Math.max(((baselineEnd - baselineStart) / total) * 100, 1.5);
 
 		// Actual bar
 		const actLeft = ((Math.min(planStart, actual) - start) / total) * 100;
@@ -101,20 +117,36 @@ export function ProjectGanttBoard({ tasks, maxVisible }: Props) {
 		const delayDays = task.delayDays ?? 0;
 		const deviationLabel = delayDays > 0 ? `+${delayDays}天` : delayDays < 0 ? `${delayDays}天` : null;
 		const deviationColor = delayDays > 0 ? "#dc2626" : "#16a34a";
+		const rowInteractive = typeof onTaskClick === "function";
+		const triggerTaskClick = () => {
+			onTaskClick?.(task);
+		};
 
 		return (
-			<div key={task.id ?? task.name} className="project-cockpit__gantt-row">
+			<div
+				key={task.id ?? task.name}
+				className={`project-cockpit__gantt-row${rowInteractive ? " project-cockpit__gantt-row--interactive" : ""}`}
+				role={rowInteractive ? "button" : undefined}
+				tabIndex={rowInteractive ? 0 : undefined}
+				onClick={rowInteractive ? triggerTaskClick : undefined}
+				onKeyDown={rowInteractive ? (event) => {
+					if (event.key === "Enter" || event.key === " ") {
+						event.preventDefault();
+						triggerTaskClick();
+					}
+				} : undefined}
+			>
 				<div className="project-cockpit__gantt-meta">
 					<strong>{task.name}</strong>
 					<span>{task.subprojectName ?? ""}</span>
 				</div>
 				<div className="project-cockpit__gantt-track">
 					{/* Baseline bar (gray, behind) */}
-					{planEnd > planStart && (
+					{baselineEnd >= baselineStart && (
 						<div
 							className="project-cockpit__gantt-bar project-cockpit__gantt-bar--baseline"
 							style={{ left: `${baseLeft}%`, width: `${baseWidth}%` }}
-							title={`计划: ${task.planDate ?? ""} → ${task.planEndDate ?? ""}`}
+							title={`基线: ${baseline.startDate ?? ""} → ${baseline.endDate ?? ""}`}
 						/>
 					)}
 					{/* Actual bar (colored, front) */}
@@ -149,7 +181,7 @@ export function ProjectGanttBoard({ tasks, maxVisible }: Props) {
 	};
 
 	return (
-		<div className="project-cockpit__gantt" style={{ maxHeight: 520, overflowY: "auto" }}>
+		<div className="project-cockpit__gantt" style={{ maxHeight: maxHeight ?? 520, overflowY: "auto" }}>
 			{useGroups
 				? groups.map((group) => {
 						const collapsed = collapsedGroups.has(group.name);
