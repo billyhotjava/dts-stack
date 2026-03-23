@@ -17,10 +17,10 @@ test("buildDataSupportSnapshot counts missing items and identifies last source",
 		},
 		[
 			{ label: "有效行数", value: "1836 / 2000" },
-			{ label: "覆盖重大项目", value: "5 / 5" },
+			{ label: "覆盖项目", value: "5 / 5" },
 		],
 		[
-			{ id: "missing-major-mapping", status: "待补充", title: "重大项目正式映射表" },
+			{ id: "missing-major-mapping", status: "待补充", title: "项目正式映射表" },
 			{ id: "missing-resource-load", status: "待客户补充", title: "资源投入与工时" },
 		],
 		[

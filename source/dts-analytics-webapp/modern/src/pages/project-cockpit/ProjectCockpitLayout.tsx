@@ -30,7 +30,7 @@ const THEME_ITEMS: Array<{ id: ProjectCockpitTheme; label: string }> = [
 	{ id: "overview", label: "总览趋势" },
 	{ id: "execution", label: "计划执行" },
 	{ id: "risk", label: "风险归因" },
-	{ id: "tree", label: "重大项目树" },
+	{ id: "tree", label: "项目树" },
 	{ id: "support", label: "口径支撑" },
 ];
 
@@ -144,13 +144,7 @@ export function ProjectCockpitLayout({
 					<CardBody>
 						<div className="project-cockpit__filter-bar">
 							<NativeSelect
-								label="项目群"
-								value={queryState.programId}
-								onChange={(event) => updateQueryState({ programId: event.target.value })}
-								options={optionList(filters?.programs)}
-							/>
-							<NativeSelect
-								label="重大项目"
+								label="项目"
 								value={queryState.majorProjectId}
 								onChange={(event) => updateQueryState({ majorProjectId: event.target.value })}
 								options={optionList(filters?.majorProjects)}

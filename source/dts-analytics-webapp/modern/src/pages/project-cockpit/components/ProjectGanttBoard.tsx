@@ -149,7 +149,7 @@ export function ProjectGanttBoard({ tasks, maxVisible }: Props) {
 	};
 
 	return (
-		<div className="project-cockpit__gantt" style={{ maxHeight: maxVisible ? undefined : 520, overflowY: "auto" }}>
+		<div className="project-cockpit__gantt" style={{ maxHeight: 520, overflowY: "auto" }}>
 			{useGroups
 				? groups.map((group) => {
 						const collapsed = collapsedGroups.has(group.name);

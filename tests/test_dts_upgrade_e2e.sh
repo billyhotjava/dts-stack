@@ -12,6 +12,7 @@ IMAGES_DIR="${TMP_DIR}/images"
 EXTRA_DIR="${TMP_DIR}/extra"
 STATE_FILE="${TMP_DIR}/services-running"
 EVENTS_FILE="${TMP_DIR}/docker-events.log"
+STALE_FILE="${TMP_DIR}/stale-containers"
 mkdir -p "${FAKE_BIN}" "${SOURCE_ROOT}/config" "${TARGET_DIR}/config" "${IMAGES_DIR}" "${EXTRA_DIR}"
 
 cat > "${FAKE_BIN}/docker" <<'EOF_DOCKER'
@@ -41,8 +42,17 @@ if [[ "${1:-}" == "compose" ]]; then
           exit 0
         fi
         ;;
+      down)
+        rm -f "${FAKE_STALE_CONTAINERS_FILE}" "${FAKE_DOCKER_STATE_FILE}"
+        printf 'down:%s\n' "${compose_file:-cwd}" >> "${FAKE_DOCKER_EVENTS_FILE}"
+        exit 0
+        ;;
       up)
         if [[ "${2:-}" == "-d" ]]; then
+          if [[ -f "${FAKE_STALE_CONTAINERS_FILE}" ]]; then
+            echo "Cannot start service: network deadbeef not found" >&2
+            exit 1
+          fi
           : > "${FAKE_DOCKER_STATE_FILE}"
           printf 'up:%s\n' "${compose_file:-cwd}" >> "${FAKE_DOCKER_EVENTS_FILE}"
           exit 0
@@ -109,15 +119,23 @@ cat > "${EXTRA_DIR}/release-manifest.json" <<'EOF_MANIFEST'
 }
 EOF_MANIFEST
 (cd "${IMAGES_DIR}" && sha256sum placeholder.tar) > "${EXTRA_DIR}/checksums.txt"
+touch "${STALE_FILE}"
 
 PATH="${FAKE_BIN}:${PATH}" \
   FAKE_DOCKER_STATE_FILE="${STATE_FILE}" \
   FAKE_DOCKER_EVENTS_FILE="${EVENTS_FILE}" \
+  FAKE_STALE_CONTAINERS_FILE="${STALE_FILE}" \
   DTS_UPGRADE_SOURCE_ROOT="${SOURCE_ROOT}" \
   "${REPO_ROOT}/bin/dts-upgrade" \
   --target "${TARGET_DIR}" \
   --images-dir "${IMAGES_DIR}" \
   --extra-dir "${EXTRA_DIR}" >/dev/null
+
+if ! grep -Fq 'down:docker-compose.yml' "${EVENTS_FILE}"; then
+  echo "expected upgrade flow to clean stale containers before start" >&2
+  cat "${EVENTS_FILE}" >&2
+  exit 1
+fi
 
 if ! grep -Fq 'up:docker-compose.yml' "${EVENTS_FILE}"; then
   echo "expected upgrade flow to start target stack" >&2

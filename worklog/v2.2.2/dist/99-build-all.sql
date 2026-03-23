@@ -201,16 +201,14 @@ ANALYZE public.pm_dim_delay_reason;
 -- ============================================================
 
 -- ------------------------------------------------------------
--- 2.1) DIM：重大项目维度（从 ODS 自动推导）
--- project_no 即为重大项目标识（客户确认：项目编号代表项目名称）
+-- 2.1) DIM：项目维度（从 ODS 自动推导）
+-- project_no 即为项目标识（客户确认：项目编号代表项目名称）
 -- ------------------------------------------------------------
 DROP TABLE IF EXISTS public.pm_dim_major_project CASCADE;
 CREATE TABLE public.pm_dim_major_project (
   major_project_id   text,
   major_project_code text,
   major_project_name text,
-  program_id         text,
-  program_name       text,
   project_level      text,
   owner_dept         text,
   owner_leader       text,
@@ -262,9 +260,7 @@ SELECT
   a.project_no AS major_project_id,
   a.project_no AS major_project_code,
   a.major_project_name,
-  'program-' || a.project_no AS program_id,
-  a.major_project_name AS program_name,
-  '重大项目' AS project_level,
+  '项目' AS project_level,
   d.dept AS owner_dept,
   d.dept_leader AS owner_leader,
   'A' AS priority_level,
@@ -558,7 +554,7 @@ WITH base AS (
 classified AS (
   SELECT
     b.*,
-    -- project_no = 项目名称（重大项目），subsystem = 子项目名称
+    -- project_no = 项目名称，subsystem = 子项目名称
     -- 不再按 / 拆分，直接使用原始字段
     b.project_no AS _derived_major_project_name,
     b.subsystem  AS _derived_subproject_name,
@@ -580,8 +576,6 @@ SELECT
   COALESCE(mp.major_project_id, c.project_no) AS major_project_id,
   COALESCE(mp.major_project_code, c.project_no) AS major_project_code,
   COALESCE(mp.major_project_name, c._derived_major_project_name) AS major_project_name,
-  COALESCE(mp.program_id, 'program-' || c.project_no) AS program_id,
-  COALESCE(mp.program_name, c._derived_major_project_name) AS program_name,
   mp.project_level AS major_project_level,
   COALESCE(mp.owner_dept, c.dept) AS major_project_owner_dept,
   mp.owner_leader AS major_project_owner_leader,
@@ -755,8 +749,6 @@ ANALYZE public.biz_dws_period_risk_summary;
 DROP TABLE IF EXISTS public.biz_dws_week_subproject_summary CASCADE;
 CREATE TABLE public.biz_dws_week_subproject_summary AS
 SELECT
-  program_id,
-  program_name,
   major_project_id,
   major_project_name,
   subproject_id,
@@ -784,8 +776,6 @@ FROM public.biz_dwd_project_node_enriched
 WHERE subproject_id IS NOT NULL
   AND plan_date IS NOT NULL
 GROUP BY
-  program_id,
-  program_name,
   major_project_id,
   major_project_name,
   subproject_id,
@@ -1000,8 +990,6 @@ ANALYZE public.biz_ads_project_non_general_kpi;
 DROP TABLE IF EXISTS public.biz_ads_delay_reason_trend CASCADE;
 CREATE TABLE public.biz_ads_delay_reason_trend AS
 SELECT
-  program_id,
-  program_name,
   major_project_id,
   major_project_name,
   dept,
@@ -1021,8 +1009,6 @@ SELECT
 FROM public.biz_dwd_project_node_enriched
 WHERE plan_date IS NOT NULL
 GROUP BY
-  program_id,
-  program_name,
   major_project_id,
   major_project_name,
   dept,
@@ -1038,8 +1024,6 @@ ANALYZE public.biz_ads_delay_reason_trend;
 DROP TABLE IF EXISTS public.biz_ads_major_project_overview CASCADE;
 CREATE TABLE public.biz_ads_major_project_overview AS
 SELECT
-  program_id,
-  program_name,
   major_project_id,
   major_project_name,
   COUNT(*) AS total_nodes,
@@ -1062,7 +1046,7 @@ SELECT
   END AS milestone_completion_rate
 FROM public.biz_dwd_project_node_enriched
 WHERE major_project_id IS NOT NULL
-GROUP BY program_id, program_name, major_project_id, major_project_name;
+GROUP BY major_project_id, major_project_name;
 
 ANALYZE public.biz_ads_major_project_overview;
 
@@ -1077,8 +1061,6 @@ WITH major_level AS (
     major_project_id AS entity_id,
     NULL::text AS parent_id,
     major_project_name AS entity_name,
-    program_id,
-    program_name,
     major_project_id,
     major_project_name,
     NULL::text AS subproject_id,
@@ -1102,7 +1084,7 @@ WITH major_level AS (
     0::int AS delay_days
   FROM public.biz_dwd_project_node_enriched
   WHERE major_project_id IS NOT NULL
-  GROUP BY major_project_id, major_project_name, program_id, program_name
+  GROUP BY major_project_id, major_project_name
 ),
 subproject_level AS (
   SELECT
@@ -1110,8 +1092,6 @@ subproject_level AS (
     subproject_id AS entity_id,
     major_project_id AS parent_id,
     subproject_name AS entity_name,
-    program_id,
-    program_name,
     major_project_id,
     major_project_name,
     subproject_id,
@@ -1136,8 +1116,6 @@ subproject_level AS (
   FROM public.biz_dwd_project_node_enriched
   WHERE subproject_id IS NOT NULL
   GROUP BY
-    program_id,
-    program_name,
     major_project_id,
     major_project_name,
     subproject_id,
@@ -1149,8 +1127,6 @@ node_level AS (
     node_id AS entity_id,
     subproject_id AS parent_id,
     node_task AS entity_name,
-    program_id,
-    program_name,
     major_project_id,
     major_project_name,
     subproject_id,
@@ -1246,7 +1222,7 @@ FROM (VALUES
 --   dim_node_type                    — 节点类型（4 种，内联 VALUES）
 --   dim_risk_level                   — 风险等级（3 种，内联 VALUES）
 --   pm_dim_delay_reason              — 延期原因（8 种，内联 VALUES）
---   pm_dim_major_project             — 重大项目（from ODS，以 project_no 为 ID）
+--   pm_dim_major_project             — 项目（from ODS，以 project_no 为 ID）
 --   pm_dim_subproject                — 子项目（from ODS，以 subsystem 为名称）
 --   pm_map_node_subject              — 节点-主题映射（from ODS，node_type 自动推导）
 --

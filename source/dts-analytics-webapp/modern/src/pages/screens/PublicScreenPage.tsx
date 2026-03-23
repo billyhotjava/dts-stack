@@ -14,6 +14,7 @@ import { buildComponentMap, isComponentEffectivelyVisible } from './componentHie
 import { safeCssBackgroundUrl } from './sanitize';
 import { useScreenCarousel } from './hooks/useScreenCarousel';
 import { resolveRuntimeScale } from './runtimeScale';
+import { resolveRuntimeCanvasScaleStyle } from './runtimeCanvasStyle';
 import {
     isVisibleForDevice,
     parseForcedDeviceModeFromWindow,
@@ -235,6 +236,10 @@ export default function PublicScreenPage() {
             return override !== undefined ? { ...gv, defaultValue: override } : gv;
         });
     }, [globalVariables, urlVariableOverrides]);
+    const runtimeCanvasScaleStyle = useMemo(
+        () => resolveRuntimeCanvasScaleStyle(scale, components),
+        [components, scale],
+    );
 
     // ── Early returns MUST be after all hooks ──
     if (loading) {
@@ -299,8 +304,7 @@ export default function PublicScreenPage() {
                                     backgroundPosition: 'center',
                                     position: 'relative',
                                     overflow: 'hidden',
-                                    transform: `scale(${scale})`,
-                                    transformOrigin: 'top left',
+                                    ...runtimeCanvasScaleStyle,
                                     transition: carousel.transitioning
                                         ? `opacity ${carouselDuration}ms ease, transform ${carouselDuration}ms ease`
                                         : 'none',

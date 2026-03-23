@@ -1,3 +1,4 @@
+import { toFilters } from "../utils/viewHelpers";
 import { useEffect, useMemo, useState } from "react";
 import type { Locale } from "../../../i18n";
 import {
@@ -16,16 +17,6 @@ import {
 import { useProjectCockpitContext } from "../ProjectCockpitContext";
 import { buildBreadcrumb, findTreeNodeById, flattenProjectTree } from "./majorProjectTreeView.helpers";
 
-function toFilters(state: ReturnType<typeof useProjectCockpitContext>["effectiveQueryState"]) {
-	return {
-		programId: state.programId || undefined,
-		majorProjectId: state.majorProjectId || undefined,
-		dateFrom: state.dateFrom || undefined,
-		dateTo: state.dateTo || undefined,
-		deptId: state.deptId || undefined,
-		riskLevel: state.riskLevel || undefined,
-	};
-}
 
 export default function MajorProjectTreeView({ locale }: { locale: Locale }) {
 	const { queryState, effectiveQueryState, updateQueryState } = useProjectCockpitContext();
@@ -41,7 +32,6 @@ export default function MajorProjectTreeView({ locale }: { locale: Locale }) {
 			effectiveQueryState.dateTo,
 			effectiveQueryState.deptId,
 			effectiveQueryState.majorProjectId,
-			effectiveQueryState.programId,
 			effectiveQueryState.riskLevel,
 		],
 	);
@@ -103,7 +93,7 @@ export default function MajorProjectTreeView({ locale }: { locale: Locale }) {
 		<div className="project-cockpit__view">
 			<div className="project-cockpit__metric-grid">
 				<HealthScoreCard
-					label="当前主项目节点数"
+					label="当前项目节点数"
 					value={String(data?.summary?.totalNodes ?? 0)}
 					unit="个"
 					tone="info"

@@ -6,7 +6,6 @@ test("mergeProjectCockpitQueryState keeps current theme and merges partial filte
 	const next = mergeProjectCockpitQueryState(
 		{
 			theme: "overview",
-			programId: "program-core",
 			majorProjectId: "major-aurora",
 			dateFrom: "",
 			dateTo: "2026-03-31",
@@ -18,7 +17,6 @@ test("mergeProjectCockpitQueryState keeps current theme and merges partial filte
 
 	assert.deepEqual(next, {
 		theme: "risk",
-		programId: "program-core",
 		majorProjectId: "major-aurora",
 		dateFrom: "",
 		dateTo: "2026-03-31",
@@ -27,20 +25,18 @@ test("mergeProjectCockpitQueryState keeps current theme and merges partial filte
 	});
 });
 
-test("mergeProjectCockpitQueryState resets majorProjectId when programId changes", () => {
+test("mergeProjectCockpitQueryState updates majorProjectId directly without extra hierarchy reset logic", () => {
 	const next = mergeProjectCockpitQueryState(
 		{
 			theme: "tree",
-			programId: "program-core",
 			majorProjectId: "major-aurora",
 			dateFrom: "",
 			dateTo: "",
 			deptId: "",
 			riskLevel: "",
 		},
-		{ programId: "program-opto" },
+		{ majorProjectId: "major-dragon" },
 	);
 
-	assert.equal(next.programId, "program-opto");
-	assert.equal(next.majorProjectId, "");
+	assert.equal(next.majorProjectId, "major-dragon");
 });

@@ -1,3 +1,4 @@
+import { toFilters, toTable } from "../utils/viewHelpers";
 import { useEffect, useMemo, useState } from "react";
 import type { Locale } from "../../../i18n";
 import { analyticsApi, type ProjectCockpitRiskAttributionResponse } from "../../../api/analyticsApi";
@@ -8,23 +9,7 @@ import { Spinner } from "../../../ui/Loading/Spinner";
 import { DelayReasonMatrix, HealthScoreCard, TrendPanel } from "../components";
 import { useProjectCockpitContext } from "../ProjectCockpitContext";
 
-function toFilters(state: ReturnType<typeof useProjectCockpitContext>["effectiveQueryState"]) {
-	return {
-		programId: state.programId || undefined,
-		majorProjectId: state.majorProjectId || undefined,
-		dateFrom: state.dateFrom || undefined,
-		dateTo: state.dateTo || undefined,
-		deptId: state.deptId || undefined,
-		riskLevel: state.riskLevel || undefined,
-	};
-}
 
-function toTable(rows: Array<Record<string, unknown>>, columns: Array<{ key: string; label: string }>) {
-	return {
-		cols: columns.map((column) => ({ name: column.key, display_name: column.label })),
-		rows: rows.map((row) => columns.map((column) => row[column.key] ?? "")),
-	};
-}
 
 export default function RiskAttributionView({ locale }: { locale: Locale }) {
 	const { effectiveQueryState, openDrill } = useProjectCockpitContext();
@@ -39,7 +24,6 @@ export default function RiskAttributionView({ locale }: { locale: Locale }) {
 			effectiveQueryState.dateTo,
 			effectiveQueryState.deptId,
 			effectiveQueryState.majorProjectId,
-			effectiveQueryState.programId,
 			effectiveQueryState.riskLevel,
 		],
 	);
@@ -106,7 +90,7 @@ export default function RiskAttributionView({ locale }: { locale: Locale }) {
 	const delayedTable = useMemo(
 		() =>
 			toTable((data?.delayedProjects ?? []) as Array<Record<string, unknown>>, [
-				{ key: "majorProjectName", label: "重大项目" },
+				{ key: "majorProjectName", label: "项目" },
 				{ key: "subprojectName", label: "子项目" },
 				{ key: "nodeTask", label: "节点" },
 				{ key: "riskLevel", label: "风险" },

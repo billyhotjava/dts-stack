@@ -286,6 +286,19 @@ upgrade_run_target_compose() {
   upgrade_compose_cmd "${target_dir}" "${cmd[@]}"
 }
 
+upgrade_running_services_output() {
+  local target_dir="$1"
+  local files_var="$2"
+  local compose_runner
+
+  compose_runner="$(upgrade_detect_compose_runner)"
+  if [[ "${compose_runner}" == "docker compose" ]]; then
+    upgrade_run_target_compose "${target_dir}" "${files_var}" ps --status running --services 2>/dev/null || true
+  else
+    upgrade_run_target_compose "${target_dir}" "${files_var}" ps --services --filter status=running 2>/dev/null || true
+  fi
+}
+
 upgrade_postgres_target_major() {
   local source_root="$1"
   local source_env="${source_root}/.env"
@@ -330,6 +343,8 @@ upgrade_check_postgres_compatibility() {
 
 upgrade_start_target_stack() {
   local target_dir="$1"
+  upgrade_run_target_compose "${target_dir}" UPGRADE_RUNTIME_COMPOSE_FILES down --remove-orphans >/dev/null || true
+  upgrade_append_log "target stack cleaned before start"
   upgrade_run_target_compose "${target_dir}" UPGRADE_RUNTIME_COMPOSE_FILES up -d >/dev/null
   upgrade_append_log "target stack started"
 }
@@ -338,7 +353,7 @@ upgrade_postcheck() {
   local target_dir="$1"
   local running_services
 
-  running_services="$(upgrade_run_target_compose "${target_dir}" UPGRADE_RUNTIME_COMPOSE_FILES ps --status running --services 2>/dev/null || true)"
+  running_services="$(upgrade_running_services_output "${target_dir}" UPGRADE_RUNTIME_COMPOSE_FILES)"
   if [[ -z "${running_services//[$'\t\r\n ']/}" ]]; then
     upgrade_die "postcheck found no running services"
   fi
@@ -445,7 +460,7 @@ upgrade_check_containers_stopped() {
     return 0
   fi
 
-  output="$(upgrade_run_target_compose "${target_dir}" UPGRADE_PRECHECK_COMPOSE_FILES ps --status running --services 2>/dev/null || true)"
+  output="$(upgrade_running_services_output "${target_dir}" UPGRADE_PRECHECK_COMPOSE_FILES)"
   if [[ -n "${output//[$'\t\r\n ']/}" ]]; then
     upgrade_die "target deployment still has running containers"
   fi
@@ -663,15 +678,130 @@ upgrade_should_merge_compose_file() {
   esac
 }
 
+upgrade_prepare_compose_env_file() {
+  local target_env="${TARGET_DIR:-}/.env"
+  local source_env="${SOURCE_ROOT:-}/.env"
+
+  if [[ -n "${UPGRADE_COMPOSE_ENV_FILE:-}" && -f "${UPGRADE_COMPOSE_ENV_FILE}" ]]; then
+    printf '%s\n' "${UPGRADE_COMPOSE_ENV_FILE}"
+    return 0
+  fi
+
+  UPGRADE_COMPOSE_ENV_FILE="$(mktemp)"
+
+  python3 - <<'PY' "${target_env}" "${source_env}" "${UPGRADE_COMPOSE_ENV_FILE}"
+import collections
+import os
+import sys
+
+target_env, source_env, out_path = sys.argv[1:4]
+
+def read_env(path):
+    items = []
+    if not path or not os.path.isfile(path):
+        return items
+    with open(path, "r", encoding="utf-8") as fh:
+        for raw in fh:
+            line = raw.strip()
+            if not line or line.startswith("#"):
+                continue
+            if line.startswith("export "):
+                line = line[len("export "):].lstrip()
+            if "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            key = key.strip()
+            if not key:
+                continue
+            items.append((key, value))
+    return items
+
+merged = collections.OrderedDict()
+for key, value in read_env(target_env):
+    merged[key] = value
+for key, value in read_env(source_env):
+    merged.setdefault(key, value)
+
+with open(out_path, "w", encoding="utf-8") as fh:
+    for key, value in merged.items():
+        fh.write(f"{key}={value}\n")
+PY
+
+  printf '%s\n' "${UPGRADE_COMPOSE_ENV_FILE}"
+}
+
+upgrade_json_file_valid() {
+  local json_file="$1"
+  python3 - <<'PY' "${json_file}" >/dev/null 2>&1
+import json
+import sys
+
+with open(sys.argv[1], "r", encoding="utf-8") as fh:
+    json.load(fh)
+PY
+}
+
 upgrade_compose_config_json() {
   local compose_file="$1"
   local compose_runner
+  local compose_env_file
+  local stdout_file
+  local stderr_file
+
   compose_runner="$(upgrade_detect_compose_runner)"
+  compose_env_file="$(upgrade_prepare_compose_env_file)"
+  stdout_file="$(mktemp)"
+  stderr_file="$(mktemp)"
+
   if [[ "${compose_runner}" == "docker compose" ]]; then
-    docker compose -f "${compose_file}" config --format json
+    if docker compose --env-file "${compose_env_file}" -f "${compose_file}" config --format json >"${stdout_file}" 2>"${stderr_file}"; then
+      if [[ -s "${stdout_file}" ]] && upgrade_json_file_valid "${stdout_file}"; then
+        cat "${stdout_file}"
+        rm -f "${stdout_file}" "${stderr_file}"
+        return 0
+      fi
+    fi
+    if docker compose --env-file "${compose_env_file}" -f "${compose_file}" config >"${stdout_file}" 2>"${stderr_file}"; then
+      python3 - <<'PY' "${stdout_file}"
+import json
+import sys
+import yaml
+
+with open(sys.argv[1], "r", encoding="utf-8") as fh:
+    data = yaml.safe_load(fh) or {}
+
+json.dump(data, sys.stdout, ensure_ascii=False, indent=2, sort_keys=True)
+sys.stdout.write("\n")
+PY
+      rm -f "${stdout_file}" "${stderr_file}"
+      return 0
+    fi
   else
-    docker-compose -f "${compose_file}" config --format json
+    if docker-compose --env-file "${compose_env_file}" -f "${compose_file}" config --format json >"${stdout_file}" 2>"${stderr_file}"; then
+      if [[ -s "${stdout_file}" ]] && upgrade_json_file_valid "${stdout_file}"; then
+        cat "${stdout_file}"
+        rm -f "${stdout_file}" "${stderr_file}"
+        return 0
+      fi
+    fi
+    if docker-compose --env-file "${compose_env_file}" -f "${compose_file}" config >"${stdout_file}" 2>"${stderr_file}"; then
+      python3 - <<'PY' "${stdout_file}"
+import json
+import sys
+import yaml
+
+with open(sys.argv[1], "r", encoding="utf-8") as fh:
+    data = yaml.safe_load(fh) or {}
+
+json.dump(data, sys.stdout, ensure_ascii=False, indent=2, sort_keys=True)
+sys.stdout.write("\n")
+PY
+      rm -f "${stdout_file}" "${stderr_file}"
+      return 0
+    fi
   fi
+
+  upgrade_die "failed to render compose config for ${compose_file}: $(tr '\n' ' ' < "${stderr_file}")"
 }
 
 upgrade_merge_compose_file() {

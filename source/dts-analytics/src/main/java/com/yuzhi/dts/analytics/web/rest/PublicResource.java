@@ -194,7 +194,6 @@ public class PublicResource {
     @GetMapping(path = "/screen/{uuid}/project-cockpit/overview", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> publicScreenProjectCockpitOverview(
             @PathVariable("uuid") String uuid,
-            @org.springframework.web.bind.annotation.RequestParam(value = "programId", required = false) String programId,
             @org.springframework.web.bind.annotation.RequestParam(value = "majorProjectId", required = false) String majorProjectId,
             @org.springframework.web.bind.annotation.RequestParam(value = "dateFrom", required = false) String dateFrom,
             @org.springframework.web.bind.annotation.RequestParam(value = "dateTo", required = false) String dateTo,
@@ -205,13 +204,12 @@ public class PublicResource {
         if (access != null) {
             return access;
         }
-        return ResponseEntity.ok(projectCockpitService.screenOverview(filters(programId, majorProjectId, dateFrom, dateTo, deptId, riskLevel)));
+        return ResponseEntity.ok(projectCockpitService.screenOverview(filters(majorProjectId, dateFrom, dateTo, deptId, riskLevel)));
     }
 
     @GetMapping(path = "/screen/{uuid}/project-cockpit/execution", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> publicScreenProjectCockpitExecution(
             @PathVariable("uuid") String uuid,
-            @org.springframework.web.bind.annotation.RequestParam(value = "programId", required = false) String programId,
             @org.springframework.web.bind.annotation.RequestParam(value = "majorProjectId", required = false) String majorProjectId,
             @org.springframework.web.bind.annotation.RequestParam(value = "dateFrom", required = false) String dateFrom,
             @org.springframework.web.bind.annotation.RequestParam(value = "dateTo", required = false) String dateTo,
@@ -222,13 +220,12 @@ public class PublicResource {
         if (access != null) {
             return access;
         }
-        return ResponseEntity.ok(projectCockpitService.screenExecution(filters(programId, majorProjectId, dateFrom, dateTo, deptId, riskLevel)));
+        return ResponseEntity.ok(projectCockpitService.screenExecution(filters(majorProjectId, dateFrom, dateTo, deptId, riskLevel)));
     }
 
     @GetMapping(path = "/screen/{uuid}/project-cockpit/risk", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> publicScreenProjectCockpitRisk(
             @PathVariable("uuid") String uuid,
-            @org.springframework.web.bind.annotation.RequestParam(value = "programId", required = false) String programId,
             @org.springframework.web.bind.annotation.RequestParam(value = "majorProjectId", required = false) String majorProjectId,
             @org.springframework.web.bind.annotation.RequestParam(value = "dateFrom", required = false) String dateFrom,
             @org.springframework.web.bind.annotation.RequestParam(value = "dateTo", required = false) String dateTo,
@@ -239,7 +236,7 @@ public class PublicResource {
         if (access != null) {
             return access;
         }
-        return ResponseEntity.ok(projectCockpitService.screenRisk(filters(programId, majorProjectId, dateFrom, dateTo, deptId, riskLevel)));
+        return ResponseEntity.ok(projectCockpitService.screenRisk(filters(majorProjectId, dateFrom, dateTo, deptId, riskLevel)));
     }
 
     @PostMapping(
@@ -721,14 +718,12 @@ public class PublicResource {
     }
 
     private ProjectCockpitService.Filters filters(
-            String programId,
             String majorProjectId,
             String dateFrom,
             String dateTo,
             String deptId,
             String riskLevel) {
         return new ProjectCockpitService.Filters(
-                blankToNull(programId),
                 blankToNull(majorProjectId),
                 parseDate(dateFrom),
                 parseDate(dateTo),

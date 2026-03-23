@@ -54,20 +54,18 @@ export function Drawer({
 				role="dialog"
 				aria-modal="true"
 			>
-				{(title || true) && (
-					<div className="mb-drawer__header">
-						<div className="mb-drawer__header-content">
-							{title && <h3 className="mb-drawer__title">{title}</h3>}
-							{description && <p className="mb-drawer__description">{description}</p>}
-						</div>
-						<button type="button" className="mb-drawer__close" onClick={onClose} aria-label="关闭">
-							<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-								<path d="M18 6 6 18" />
-								<path d="m6 6 12 12" />
-							</svg>
-						</button>
+				<div className="mb-drawer__header">
+					<div className="mb-drawer__header-content">
+						{title && <h3 className="mb-drawer__title">{title}</h3>}
+						{description && <p className="mb-drawer__description">{description}</p>}
 					</div>
-				)}
+					<button type="button" className="mb-drawer__close" onClick={onClose} aria-label="关闭">
+						<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+							<path d="M18 6 6 18" />
+							<path d="m6 6 12 12" />
+						</svg>
+					</button>
+				</div>
 				<div className="mb-drawer__body">{children}</div>
 				{footer && <div className="mb-drawer__footer">{footer}</div>}
 			</div>

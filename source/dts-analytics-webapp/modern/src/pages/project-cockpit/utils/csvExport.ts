@@ -33,6 +33,7 @@ export function exportChartPng(svgElement: SVGSVGElement | null, filename: strin
 	const url = URL.createObjectURL(svgBlob);
 
 	const img = new Image();
+	img.onerror = () => URL.revokeObjectURL(url);
 	img.onload = () => {
 		const canvas = document.createElement("canvas");
 		const scale = 2; // retina

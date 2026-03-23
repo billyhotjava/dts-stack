@@ -13,6 +13,7 @@ import { buildComponentMap, isComponentEffectivelyVisible } from './componentHie
 import { safeCssBackgroundUrl } from './sanitize';
 import { useScreenCarousel } from './hooks/useScreenCarousel';
 import { resolveRuntimeScale } from './runtimeScale';
+import { resolveRuntimeCanvasScaleStyle } from './runtimeCanvasStyle';
 import {
     isVisibleForDevice,
     parseForcedDeviceModeFromWindow,
@@ -286,6 +287,10 @@ export default function ScreenPreviewPage() {
     const stageWidth = Math.max(1, screenWidth * scale);
     const stageHeight = Math.max(1, screenHeight * scale);
     const scalePercent = Math.round(scale * 100);
+    const runtimeCanvasScaleStyle = useMemo(
+        () => resolveRuntimeCanvasScaleStyle(scale, components),
+        [components, scale],
+    );
 
     const setForcedMode = (mode: DeviceMode | null) => {
         setForcedDeviceMode(mode);
@@ -313,8 +318,7 @@ export default function ScreenPreviewPage() {
                                 backgroundPosition: 'center',
                                 position: 'relative',
                                 overflow: 'hidden',
-                                transform: `scale(${scale})`,
-                                transformOrigin: 'top left',
+                                ...runtimeCanvasScaleStyle,
                             }}
                         >
                             {visibleSortedComponents

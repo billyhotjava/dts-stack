@@ -101,8 +101,6 @@ class ProjectCockpitResourceIT {
                     delay_reason_category VARCHAR(64),
                     major_project_id VARCHAR(128),
                     major_project_name VARCHAR(255),
-                    program_id VARCHAR(128),
-                    program_name VARCHAR(255),
                     subproject_id VARCHAR(128),
                     subproject_name VARCHAR(255),
                     incomplete_reason VARCHAR(255),
@@ -176,7 +174,7 @@ class ProjectCockpitResourceIT {
         mockMvc.perform(get("/api/project-cockpit/summary").cookie(sessionCookie))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.dataState.ready").value(true))
-                .andExpect(jsonPath("$.filters.programs[0].value").value("program-a"))
+                .andExpect(jsonPath("$.filters.programs").doesNotExist())
                 .andExpect(jsonPath("$.kpis[0].value").value("1"));
 
         mockMvc.perform(get("/api/project-cockpit/major-project-tree")
@@ -214,14 +212,14 @@ class ProjectCockpitResourceIT {
     }
 
     @Test
-    void projectCockpitShouldReturnEmptySummaryForUnknownProgram() throws Exception {
+    void projectCockpitShouldReturnEmptySummaryForUnknownProject() throws Exception {
         seedModeledBatch();
         seedNodeRows();
         Cookie sessionCookie = authenticate();
 
         mockMvc.perform(get("/api/project-cockpit/summary")
                         .cookie(sessionCookie)
-                        .param("programId", "program-missing"))
+                        .param("majorProjectId", "project-missing"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.dataState.ready").value(true))
                 .andExpect(jsonPath("$.kpis[0].value").value("0"))
@@ -258,7 +256,8 @@ class ProjectCockpitResourceIT {
         mockMvc.perform(get("/api/project-cockpit/screen/header").cookie(sessionCookie))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.title").value("科研项目管理指挥大屏"))
-                .andExpect(jsonPath("$.filters.current.programId").value(""))
+                .andExpect(jsonPath("$.filters.current.programId").doesNotExist())
+                .andExpect(jsonPath("$.filters.current.majorProjectId").value(""))
                 .andExpect(jsonPath("$.dataState.ready").value(true));
 
         mockMvc.perform(get("/api/project-cockpit/screen/overview").cookie(sessionCookie))
@@ -503,8 +502,6 @@ class ProjectCockpitResourceIT {
                 "normal",
                 "major-aurora",
                 "北斗融合主线",
-                "program-a",
-                "项目群A",
                 "sub-aurora-01",
                 "导航底座子项目",
                 "总体技术部",
@@ -524,8 +521,6 @@ class ProjectCockpitResourceIT {
                 "coordination",
                 "major-aurora",
                 "北斗融合主线",
-                "program-a",
-                "项目群A",
                 "sub-aurora-01",
                 "导航底座子项目",
                 "总体技术部",
@@ -545,8 +540,6 @@ class ProjectCockpitResourceIT {
                 "test",
                 "major-aurora",
                 "北斗融合主线",
-                "program-a",
-                "项目群A",
                 "sub-aurora-02",
                 "总装联试子项目",
                 "总体技术部",
@@ -570,8 +563,6 @@ class ProjectCockpitResourceIT {
                 "normal",
                 "major-metrics",
                 "项目指标主线",
-                "program-metrics",
-                "项目群指标",
                 "sub-metrics-01",
                 "里程碑子项目",
                 "总体技术部",
@@ -594,8 +585,6 @@ class ProjectCockpitResourceIT {
                 "change",
                 "major-metrics",
                 "项目指标主线",
-                "program-metrics",
-                "项目群指标",
                 "sub-metrics-01",
                 "里程碑子项目",
                 "总体技术部",
@@ -618,8 +607,6 @@ class ProjectCockpitResourceIT {
                 "coordination",
                 "major-metrics",
                 "项目指标主线",
-                "program-metrics",
-                "项目群指标",
                 "sub-metrics-01",
                 "里程碑子项目",
                 "总体技术部",
@@ -642,8 +629,6 @@ class ProjectCockpitResourceIT {
                 "technical",
                 "major-metrics",
                 "项目指标主线",
-                "program-metrics",
-                "项目群指标",
                 "sub-metrics-02",
                 "重大节点子项目",
                 "总体技术部",
@@ -666,8 +651,6 @@ class ProjectCockpitResourceIT {
                 "supplier",
                 "major-metrics",
                 "项目指标主线",
-                "program-metrics",
-                "项目群指标",
                 "sub-metrics-02",
                 "重大节点子项目",
                 "总体技术部",
@@ -690,8 +673,6 @@ class ProjectCockpitResourceIT {
                 "coordination",
                 "major-metrics",
                 "项目指标主线",
-                "program-metrics",
-                "项目群指标",
                 "sub-metrics-03",
                 "重要节点子项目",
                 "总体技术部",
@@ -714,8 +695,6 @@ class ProjectCockpitResourceIT {
                 "archive",
                 "major-metrics",
                 "项目指标主线",
-                "program-metrics",
-                "项目群指标",
                 "sub-metrics-04",
                 "一般节点子项目",
                 "总体技术部",
@@ -738,8 +717,6 @@ class ProjectCockpitResourceIT {
                 "change",
                 "major-metrics",
                 "项目指标主线",
-                "program-metrics",
-                "项目群指标",
                 "sub-metrics-01",
                 "里程碑子项目",
                 "总体技术部",
@@ -762,8 +739,6 @@ class ProjectCockpitResourceIT {
                 "change",
                 "major-metrics",
                 "项目指标主线",
-                "program-metrics",
-                "项目群指标",
                 "sub-metrics-05",
                 "周期外子项目",
                 "总体技术部",
@@ -787,8 +762,6 @@ class ProjectCockpitResourceIT {
             String delayReasonCategory,
             String majorProjectId,
             String majorProjectName,
-            String programId,
-            String programName,
             String subprojectId,
             String subprojectName,
             String majorOwnerDept,
@@ -808,8 +781,6 @@ class ProjectCockpitResourceIT {
                 delayReasonCategory,
                 majorProjectId,
                 majorProjectName,
-                programId,
-                programName,
                 subprojectId,
                 subprojectName,
                 majorOwnerDept,
@@ -834,8 +805,6 @@ class ProjectCockpitResourceIT {
             String delayReasonCategory,
             String majorProjectId,
             String majorProjectName,
-            String programId,
-            String programName,
             String subprojectId,
             String subprojectName,
             String majorOwnerDept,
@@ -849,10 +818,10 @@ class ProjectCockpitResourceIT {
                 INSERT INTO biz_dwd_project_node_enriched (
                     node_id, project_no, subsystem, node_task, node_type, owner, dept, project_manager,
                     plan_date, actual_date, completion_status, risk_level, delay_days, delay_reason_category,
-                    major_project_id, major_project_name, program_id, program_name, subproject_id, subproject_name,
+                    major_project_id, major_project_name, subproject_id, subproject_name,
                     incomplete_reason, delay_impact, is_key_node, is_milestone,
                     major_project_owner_dept, major_project_owner_leader, subproject_owner_dept, subproject_owner_user
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 nodeId,
                 "P-" + subprojectId,
@@ -870,8 +839,6 @@ class ProjectCockpitResourceIT {
                 delayReasonCategory,
                 majorProjectId,
                 majorProjectName,
-                programId,
-                programName,
                 subprojectId,
                 subprojectName,
                 delayDays > 0 ? "接口联调资源冲突" : "",

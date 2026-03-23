@@ -1,3 +1,4 @@
+import { toFilters, toTable } from "../utils/viewHelpers";
 import { useEffect, useMemo, useState } from "react";
 import type { Locale } from "../../../i18n";
 import {
@@ -11,23 +12,7 @@ import { DataSupportCard } from "../components";
 import { useProjectCockpitContext } from "../ProjectCockpitContext";
 import { buildDataSupportSnapshot } from "./dataSupportView.helpers";
 
-function toFilters(state: ReturnType<typeof useProjectCockpitContext>["effectiveQueryState"]) {
-	return {
-		programId: state.programId || undefined,
-		majorProjectId: state.majorProjectId || undefined,
-		dateFrom: state.dateFrom || undefined,
-		dateTo: state.dateTo || undefined,
-		deptId: state.deptId || undefined,
-		riskLevel: state.riskLevel || undefined,
-	};
-}
 
-function toTable(rows: Array<Record<string, unknown>>, columns: Array<{ key: string; label: string }>) {
-	return {
-		cols: columns.map((column) => ({ name: column.key, display_name: column.label })),
-		rows: rows.map((row) => columns.map((column) => row[column.key] ?? "")),
-	};
-}
 
 export default function DataSupportView({ locale }: { locale: Locale }) {
 	const { effectiveQueryState } = useProjectCockpitContext();
@@ -42,7 +27,6 @@ export default function DataSupportView({ locale }: { locale: Locale }) {
 			effectiveQueryState.dateTo,
 			effectiveQueryState.deptId,
 			effectiveQueryState.majorProjectId,
-			effectiveQueryState.programId,
 			effectiveQueryState.riskLevel,
 		],
 	);

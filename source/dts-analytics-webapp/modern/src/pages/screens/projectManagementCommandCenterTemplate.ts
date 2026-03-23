@@ -109,6 +109,33 @@ function createFilterInput(id: string, label: string, variableKey: string, x: nu
     });
 }
 
+function buildFilterOptionsDataSource(responsePath: string): DataSourceConfig {
+    return buildScreenApiDataSource('/analytics/api/project-cockpit/screen/overview', responsePath);
+}
+
+function createFilterSelect(
+    id: string,
+    label: string,
+    variableKey: string,
+    x: number,
+    y: number,
+    width: number,
+    filterResponsePath: string,
+): ScreenComponent {
+    return createComponent(id, 'filter-select', label, x, y, width, 58, 65, {
+        label,
+        variableKey,
+        placeholder: '全部',
+        optionSourceMode: 'data',
+        dataOptionValueField: 'value',
+        dataOptionLabelField: 'label',
+        labelColor: SUBTITLE_COLOR,
+        inputBackground: INPUT_BG,
+        inputBorderColor: INPUT_BORDER,
+        inputTextColor: TITLE_COLOR,
+    }, buildFilterOptionsDataSource(filterResponsePath));
+}
+
 function createRiskSelect(id: string, x: number, y: number, width: number): ScreenComponent {
     return createComponent(id, 'filter-select', '风险等级', x, y, width, 58, 65, {
         label: '风险等级',
@@ -155,7 +182,6 @@ function buildScreenApiDataSource(url: string, responsePath?: string): DataSourc
             url,
             method: 'GET',
             params: {
-                programId: '{{programId}}',
                 majorProjectId: '{{majorProjectId}}',
                 dateFrom: '{{dateFrom}}',
                 dateTo: '{{dateTo}}',
@@ -318,14 +344,48 @@ function createTable(
     }, buildScreenApiDataSource(url, responsePath));
 }
 
+type KpiDef = {
+    id: string;
+    title: string;
+    url: string;
+    responsePath: string;
+    suffix?: string;
+    jumpUrlTemplate?: string;
+};
+
+/**
+ * Generate a row of evenly-spaced KPI cards filling the full panel width.
+ * x: 56..1864 (inside 32px panel padding) = 1808px usable
+ */
+function createKpiRow(defs: KpiDef[], y: number, height: number): ScreenComponent[] {
+    const startX = 56;
+    const endX = 1864;
+    const totalWidth = endX - startX;
+    const gap = 16;
+    const cardWidth = Math.floor((totalWidth - (defs.length - 1) * gap) / defs.length);
+    return defs.map((def, i) => {
+        const x = startX + i * (cardWidth + gap);
+        const card = createComponent(def.id, 'number-card', def.title, x, y, cardWidth, height, 10, {
+            title: def.title,
+            value: 0,
+            suffix: def.suffix || '',
+            precision: def.suffix === '%' ? 2 : 0,
+            valueField: 'value',
+            titleColor: SUBTITLE_COLOR,
+            valueColor: TITLE_COLOR,
+            backgroundColor: KPI_BG,
+        }, buildScreenApiDataSource(def.url, def.responsePath));
+        return def.jumpUrlTemplate ? withActions(card, jumpAction(def.jumpUrlTemplate)) : card;
+    });
+}
+
 function createCommonHeader(pageTitle: string, pageIndex: number): ScreenComponent[] {
     // Layout: left=filters | center=title | right=date+time
     return [
-        // Left: filters
-        createFilterInput(`pmcc-program-${pageIndex}`, '项目群', 'programId', 32, 24, 155),
-        createFilterInput(`pmcc-major-${pageIndex}`, '重大项目', 'majorProjectId', 196, 24, 155),
-        createFilterInput(`pmcc-dept-${pageIndex}`, '责任科室', 'deptId', 360, 24, 155),
-        createRiskSelect(`pmcc-risk-${pageIndex}`, 524, 24, 130),
+        // Left: filters (dropdown selects with dynamic options from API)
+        createFilterSelect(`pmcc-major-${pageIndex}`, '项目', 'majorProjectId', 32, 24, 180, 'filters.majorProjects'),
+        createFilterSelect(`pmcc-dept-${pageIndex}`, '责任科室', 'deptId', 228, 24, 180, 'filters.depts'),
+        createRiskSelect(`pmcc-risk-${pageIndex}`, 424, 24, 150),
         // Center: title
         createTitle(`pmcc-title-${pageIndex}`, '科研项目管理指挥大屏', 680, 20, 560),
         createSubtitle(`pmcc-subtitle-${pageIndex}`, `第 ${pageIndex + 1} 屏 · ${pageTitle}`, 680, 66, 560),
@@ -345,15 +405,14 @@ function buildOverviewPage(): ScreenPage {
             createPanel('pmcc-overview-bg-left', 32, 280, 930, 760),
             createPanel('pmcc-overview-bg-right', 988, 280, 900, 760),
             ...createCommonHeader('总体态势', 0),
-            withActions(createNumberCard('pmcc-overview-kpi-total', '本周期节点总数', 56, 128, 210, 'kpis.0'),
-                jumpAction('/analytics/project-cockpit?theme=overview&drillTarget=completion')),
-            withActions(createNumberCard('pmcc-overview-kpi-due', '已到期节点', 286, 128, 210, 'kpis.2'),
-                jumpAction('/analytics/project-cockpit?theme=overview&drillTarget=overdue')),
-            withActions(createNumberCard('pmcc-overview-kpi-completed', '节点完成总数', 516, 128, 210, 'kpis.7'),
-                jumpAction('/analytics/project-cockpit?theme=overview&drillTarget=completion')),
-            createNumberCard('pmcc-overview-kpi-rate', '节点完成百分比', 746, 128, 210, 'kpis.8', '%'),
-            createNumberCard('pmcc-overview-kpi-ontime', '按时完成率', 976, 128, 210, 'kpis.9', '%'),
-            createNumberCard('pmcc-overview-kpi-overdue', '超期完成率', 1206, 128, 210, 'kpis.10', '%'),
+            ...createKpiRow([
+                { id: 'pmcc-ov-kpi-total', title: '本周期节点总数', url: '/analytics/api/project-cockpit/screen/overview', responsePath: 'kpis.0', jumpUrlTemplate: '/analytics/project-cockpit?theme=overview&drillTarget=completion' },
+                { id: 'pmcc-ov-kpi-due', title: '已到期节点', url: '/analytics/api/project-cockpit/screen/overview', responsePath: 'kpis.2', jumpUrlTemplate: '/analytics/project-cockpit?theme=overview&drillTarget=overdue' },
+                { id: 'pmcc-ov-kpi-completed', title: '节点完成总数', url: '/analytics/api/project-cockpit/screen/overview', responsePath: 'kpis.7', jumpUrlTemplate: '/analytics/project-cockpit?theme=overview&drillTarget=completion' },
+                { id: 'pmcc-ov-kpi-rate', title: '节点完成率', url: '/analytics/api/project-cockpit/screen/overview', responsePath: 'kpis.8', suffix: '%' },
+                { id: 'pmcc-ov-kpi-ontime', title: '按时完成率', url: '/analytics/api/project-cockpit/screen/overview', responsePath: 'kpis.9', suffix: '%' },
+                { id: 'pmcc-ov-kpi-overdue', title: '超期完成率', url: '/analytics/api/project-cockpit/screen/overview', responsePath: 'kpis.10', suffix: '%' },
+            ], 128, 118),
             createLineChart(
                 'pmcc-overview-weekly',
                 '周度推进态势',
@@ -420,15 +479,16 @@ function buildExecutionPage(): ScreenPage {
             createPanel('pmcc-execution-bg-right-top', 988, 262, 900, 370),
             createPanel('pmcc-execution-bg-right-bottom', 988, 650, 900, 390),
             ...createCommonHeader('执行与里程碑', 1),
-            withActions(createExecutionNumberCard('pmcc-execution-kpi-high-risk', '未完成高风险', 56, 126, 168, 'incompleteKpis.0'),
-                jumpAction('/analytics/project-cockpit?theme=risk&drillTarget=high-risk')),
-            withActions(createExecutionNumberCard('pmcc-execution-kpi-mid-risk', '未完成中风险', 240, 126, 168, 'incompleteKpis.1'),
-                jumpAction('/analytics/project-cockpit?theme=risk&drillTarget=high-risk')),
-            withActions(createExecutionNumberCard('pmcc-execution-kpi-milestone-open', '未完成里程碑', 424, 126, 168, 'incompleteKpis.2'),
-                jumpAction('/analytics/project-cockpit?theme=execution&drillTarget=milestone')),
-            createExecutionNumberCard('pmcc-execution-kpi-milestone-ontime', '里程碑按时完成', 608, 126, 168, 'milestoneKpis.0'),
-            createExecutionNumberCard('pmcc-execution-kpi-milestone-overdue', '里程碑超期完成', 792, 126, 168, 'milestoneKpis.1'),
-            createExecutionNumberCard('pmcc-execution-kpi-milestone-rate', '里程碑完成率', 976, 126, 200, 'milestoneKpis.3', '%'),
+            ...createKpiRow([
+                { id: 'pmcc-ex-kpi-high', title: '未完成高风险', url: '/analytics/api/project-cockpit/screen/execution', responsePath: 'incompleteKpis.0', jumpUrlTemplate: '/analytics/project-cockpit?theme=risk&drillTarget=high-risk' },
+                { id: 'pmcc-ex-kpi-mid', title: '未完成中风险', url: '/analytics/api/project-cockpit/screen/execution', responsePath: 'incompleteKpis.1', jumpUrlTemplate: '/analytics/project-cockpit?theme=risk&drillTarget=high-risk' },
+                { id: 'pmcc-ex-kpi-ms-open', title: '未完成里程碑', url: '/analytics/api/project-cockpit/screen/execution', responsePath: 'incompleteKpis.2', jumpUrlTemplate: '/analytics/project-cockpit?theme=execution&drillTarget=milestone' },
+                { id: 'pmcc-ex-kpi-major', title: '未完成重大节点', url: '/analytics/api/project-cockpit/screen/execution', responsePath: 'incompleteKpis.3' },
+                { id: 'pmcc-ex-kpi-important', title: '未完成重要节点', url: '/analytics/api/project-cockpit/screen/execution', responsePath: 'incompleteKpis.4' },
+                { id: 'pmcc-ex-kpi-ms-ontime', title: '里程碑按时完成', url: '/analytics/api/project-cockpit/screen/execution', responsePath: 'milestoneKpis.0' },
+                { id: 'pmcc-ex-kpi-ms-overdue', title: '里程碑超期完成', url: '/analytics/api/project-cockpit/screen/execution', responsePath: 'milestoneKpis.1' },
+                { id: 'pmcc-ex-kpi-ms-rate', title: '里程碑完成率', url: '/analytics/api/project-cockpit/screen/execution', responsePath: 'milestoneKpis.3', suffix: '%' },
+            ], 126, 106),
             createBarChart(
                 'pmcc-execution-workload',
                 '科室负载',
@@ -510,14 +570,14 @@ function buildRiskPage(): ScreenPage {
             createPanel('pmcc-risk-bg-right-top', 988, 280, 900, 360),
             createPanel('pmcc-risk-bg-right-bottom', 988, 658, 900, 382),
             ...createCommonHeader('风险与变更', 2),
-            withActions(createRiskNumberCard('pmcc-risk-kpi-abnormal', '不正常待变更', 56, 128, 210, 'changeKpis.0'),
-                jumpAction('/analytics/project-cockpit?theme=risk&drillTarget=overdue')),
-            withActions(createRiskNumberCard('pmcc-risk-kpi-overdue-unchanged', '超期未完未变更', 286, 128, 210, 'changeKpis.1'),
-                jumpAction('/analytics/project-cockpit?theme=risk&drillTarget=overdue')),
-            createRiskNumberCard('pmcc-risk-kpi-overdue-changed', '超期未完已变更', 516, 128, 210, 'changeKpis.2'),
-            createRiskNumberCard('pmcc-risk-kpi-overdue-done', '超期已完成未变更', 746, 128, 210, 'changeKpis.3'),
-            createRiskNumberCard('pmcc-risk-kpi-abnormal-rate', '异常率', 976, 128, 210, 'changeKpis.4', '%'),
-            createRiskNumberCard('pmcc-risk-kpi-overdue-rate', '超期率', 1206, 128, 210, 'changeKpis.5', '%'),
+            ...createKpiRow([
+                { id: 'pmcc-rk-kpi-abnormal', title: '不正常待变更', url: '/analytics/api/project-cockpit/screen/risk', responsePath: 'changeKpis.0', jumpUrlTemplate: '/analytics/project-cockpit?theme=risk&drillTarget=overdue' },
+                { id: 'pmcc-rk-kpi-unc', title: '超期未完未变更', url: '/analytics/api/project-cockpit/screen/risk', responsePath: 'changeKpis.1', jumpUrlTemplate: '/analytics/project-cockpit?theme=risk&drillTarget=overdue' },
+                { id: 'pmcc-rk-kpi-chg', title: '超期未完已变更', url: '/analytics/api/project-cockpit/screen/risk', responsePath: 'changeKpis.2' },
+                { id: 'pmcc-rk-kpi-done', title: '超期已完未变更', url: '/analytics/api/project-cockpit/screen/risk', responsePath: 'changeKpis.3' },
+                { id: 'pmcc-rk-kpi-abnrate', title: '异常率', url: '/analytics/api/project-cockpit/screen/risk', responsePath: 'changeKpis.4', suffix: '%' },
+                { id: 'pmcc-rk-kpi-ovrate', title: '超期率', url: '/analytics/api/project-cockpit/screen/risk', responsePath: 'changeKpis.5', suffix: '%' },
+            ], 128, 118),
             createPieChart(
                 'pmcc-risk-breakdown',
                 '风险等级分布',
@@ -722,8 +782,7 @@ function buildMetricsPage(): ScreenPage {
 }
 
 const projectManagementVariables: ScreenGlobalVariable[] = [
-    createVariable('programId', '项目群', 'string'),
-    createVariable('majorProjectId', '重大项目', 'string'),
+    createVariable('majorProjectId', '项目', 'string'),
     createVariable('dateFrom', '开始日期', 'date'),
     createVariable('dateTo', '结束日期', 'date'),
     createVariable('deptId', '责任科室', 'string'),
@@ -732,16 +791,16 @@ const projectManagementVariables: ScreenGlobalVariable[] = [
 
 export const projectManagementCommandCenterTemplate: ScreenTemplate = {
     id: 'project-management-command-center',
-    name: '项目管理指挥大屏',
-    description: 'Java 聚合接口驱动的四屏轮播版，面向现场汇报与客户演示。含总体态势、执行里程碑、风险变更、指标全览。',
+    name: '科研项目管理指挥大屏',
+    description: '科研项目管理四屏轮播指挥大屏，覆盖总体态势、执行与里程碑、风险与变更、指标全览。',
     thumbnail: '🛰️',
     category: 'project-management',
-    tags: ['项目管理', '指挥大屏', '演示版', '轮播'],
+    tags: ['科研项目', '项目管理', '指挥大屏', '轮播'],
     recommendedVariables: projectManagementVariables.map((item) => item.key),
     config: {
         schemaVersion: SCREEN_SCHEMA_VERSION,
-        name: '项目管理指挥大屏',
-        description: '科研项目管理四屏轮播版',
+        name: '科研项目管理指挥大屏',
+        description: '科研项目管理四屏轮播指挥大屏',
         width: SCREEN_WIDTH,
         height: SCREEN_HEIGHT,
         backgroundColor: BG,

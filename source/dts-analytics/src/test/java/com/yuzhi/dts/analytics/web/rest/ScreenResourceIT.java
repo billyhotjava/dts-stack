@@ -57,7 +57,7 @@ class ScreenResourceIT {
                                   "theme": "legacy-dark",
                                   "components": [],
                                   "globalVariables": [
-                                    { "key": "programId", "label": "项目群", "type": "string", "defaultValue": "" }
+                                    { "key": "majorProjectId", "label": "项目", "type": "string", "defaultValue": "" }
                                   ],
                                   "pages": [
                                     {

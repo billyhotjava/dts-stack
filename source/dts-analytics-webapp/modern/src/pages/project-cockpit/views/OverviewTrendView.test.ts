@@ -5,7 +5,7 @@ import { buildOverviewTrendSnapshot } from "./overviewTrendView.helpers";
 test("buildOverviewTrendSnapshot summarizes ranking, alerts and trend points", () => {
 	const snapshot = buildOverviewTrendSnapshot(
 		[
-			{ key: "majorProjectCount", label: "重大项目数", value: "4", unit: "个" },
+			{ key: "majorProjectCount", label: "项目数", value: "4", unit: "个" },
 			{ key: "highRiskNodeCount", label: "高风险节点数", value: "6", unit: "个" },
 		],
 		[

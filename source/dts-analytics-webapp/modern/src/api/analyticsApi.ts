@@ -1350,7 +1350,6 @@ async function requestBinary(
 }
 
 export type ProjectCockpitFilterQuery = {
-	programId?: string;
 	majorProjectId?: string;
 	dateFrom?: string;
 	dateTo?: string;
@@ -1381,7 +1380,6 @@ export type ProjectCockpitKpi = {
 export type ProjectCockpitRankingItem = {
 	majorProjectId?: string;
 	majorProjectName?: string;
-	programName?: string;
 	subprojectCount?: number;
 	healthScore?: number;
 	completionRate?: string;
@@ -1414,7 +1412,6 @@ export type ProjectCockpitSummaryResponse = {
 		scope?: string;
 	};
 	filters?: {
-		programs?: ProjectCockpitOption[];
 		majorProjects?: ProjectCockpitOption[];
 		depts?: ProjectCockpitOption[];
 		riskLevels?: ProjectCockpitOption[];
@@ -1444,7 +1441,6 @@ export type ProjectCockpitTrendPoint = {
 };
 
 export type ProjectCockpitTrendSeries = {
-	programId?: string;
 	majorProjectId?: string;
 	name?: string;
 	points?: ProjectCockpitTrendPoint[];
@@ -1459,7 +1455,6 @@ export type ProjectCockpitTrendsResponse = {
 		status?: string;
 	};
 	weekly?: ProjectCockpitTrendPoint[];
-	programSeries?: ProjectCockpitTrendSeries[];
 	majorProjectSeries?: ProjectCockpitTrendSeries[];
 };
 
@@ -1611,7 +1606,6 @@ export type ProjectCockpitDrillDetailResponse = {
 
 function buildProjectCockpitQuery(params?: ProjectCockpitFilterQuery): string {
 	const qs = new URLSearchParams();
-	if (params?.programId) qs.set("programId", params.programId);
 	if (params?.majorProjectId) qs.set("majorProjectId", params.majorProjectId);
 	if (params?.dateFrom) qs.set("dateFrom", params.dateFrom);
 	if (params?.dateTo) qs.set("dateTo", params.dateTo);

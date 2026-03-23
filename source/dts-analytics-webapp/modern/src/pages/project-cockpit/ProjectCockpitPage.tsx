@@ -14,7 +14,6 @@ import { ProjectCockpitLayout } from "./ProjectCockpitLayout";
 import { parseProjectCockpitDrillParams } from "./projectCockpitQueryState";
 
 function toFilterQuery(state: {
-	programId: string;
 	majorProjectId: string;
 	dateFrom: string;
 	dateTo: string;
@@ -22,7 +21,6 @@ function toFilterQuery(state: {
 	riskLevel: string;
 }): ProjectCockpitFilterQuery {
 	return {
-		programId: state.programId || undefined,
 		majorProjectId: state.majorProjectId || undefined,
 		dateFrom: state.dateFrom || undefined,
 		dateTo: state.dateTo || undefined,
@@ -85,7 +83,6 @@ function ProjectCockpitPageContent({
 			effectiveQueryState.dateTo,
 			effectiveQueryState.deptId,
 			effectiveQueryState.majorProjectId,
-			effectiveQueryState.programId,
 			effectiveQueryState.riskLevel,
 		],
 	);

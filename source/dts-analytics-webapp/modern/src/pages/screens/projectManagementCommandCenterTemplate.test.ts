@@ -7,6 +7,8 @@ test('project management command center template registers four-page Java-backed
 
     assert.ok(template);
     assert.equal(template?.id, 'project-management-command-center');
+    assert.equal(template?.name, '科研项目管理指挥大屏');
+    assert.equal(template?.config.name, '科研项目管理指挥大屏');
     assert.equal(template?.config.width, 1920);
     assert.equal(template?.config.height, 1080);
     assert.equal(template?.config.theme, 'glacier');
@@ -15,7 +17,7 @@ test('project management command center template registers four-page Java-backed
     assert.equal(template?.config.carouselConfig?.enabled, true);
     assert.deepEqual(
         (template?.config.globalVariables ?? []).map((item) => item.key),
-        ['programId', 'majorProjectId', 'dateFrom', 'dateTo', 'deptId', 'riskLevel'],
+        ['majorProjectId', 'dateFrom', 'dateTo', 'deptId', 'riskLevel'],
     );
 
     const overviewPage = template?.config.pages?.[0];
@@ -26,13 +28,13 @@ test('project management command center template registers four-page Java-backed
     assert.ok(executionPage);
     assert.ok(riskPage);
 
-    const overviewCard = overviewPage?.components.find((item) => item.id === 'pmcc-overview-kpi-total');
+    const overviewCard = overviewPage?.components.find((item) => item.id === 'pmcc-ov-kpi-total');
     const overviewPanel = overviewPage?.components.find((item) => item.id === 'pmcc-overview-bg-top');
-    const overviewFilter = overviewPage?.components.find((item) => item.id === 'pmcc-program-0');
+    const overviewFilter = overviewPage?.components.find((item) => item.id === 'pmcc-major-0');
     const overviewChart = overviewPage?.components.find((item) => item.id === 'pmcc-overview-weekly');
     const overviewTable = overviewPage?.components.find((item) => item.id === 'pmcc-overview-alerts');
-    const executionCard = executionPage?.components.find((item) => item.id === 'pmcc-execution-kpi-high-risk');
-    const riskCard = riskPage?.components.find((item) => item.id === 'pmcc-risk-kpi-abnormal');
+    const executionCard = executionPage?.components.find((item) => item.id === 'pmcc-ex-kpi-high');
+    const riskCard = riskPage?.components.find((item) => item.id === 'pmcc-rk-kpi-abnormal');
 
     assert.equal(overviewPage?.backgroundColor, '#eef5fb');
     assert.equal(overviewPanel?.config.fillColor, 'rgba(255, 255, 255, 0.94)');
@@ -50,12 +52,19 @@ test('project management command center template registers four-page Java-backed
     assert.equal(overviewCard?.dataSource?.type, 'api');
     assert.equal(overviewCard?.dataSource?.apiConfig?.url, '/analytics/api/project-cockpit/screen/overview');
     assert.equal(overviewCard?.dataSource?.apiConfig?.responsePath, 'kpis.0');
+    assert.equal(overviewCard?.dataSource?.apiConfig?.params?.majorProjectId, '{{majorProjectId}}');
+    assert.equal(overviewFilter?.dataSource?.apiConfig?.params?.majorProjectId, '{{majorProjectId}}');
+    assert.equal(overviewCard?.actions?.[0]?.type, 'jump-url');
+    assert.equal(overviewCard?.actions?.[0]?.jumpUrlTemplate, '/analytics/project-cockpit?theme=overview&drillTarget=completion');
 
     assert.equal(executionCard?.dataSource?.apiConfig?.url, '/analytics/api/project-cockpit/screen/execution');
     assert.equal(executionCard?.dataSource?.apiConfig?.responsePath, 'incompleteKpis.0');
+    assert.equal(executionCard?.actions?.[0]?.type, 'jump-url');
+    assert.equal(executionCard?.actions?.[0]?.jumpUrlTemplate, '/analytics/project-cockpit?theme=risk&drillTarget=high-risk');
 
     assert.equal(riskCard?.dataSource?.apiConfig?.url, '/analytics/api/project-cockpit/screen/risk');
     assert.equal(riskCard?.dataSource?.apiConfig?.responsePath, 'changeKpis.0');
-
-    assert.ok(getTemplateById('project-management-cockpit'));
+    assert.equal(riskCard?.actions?.[0]?.type, 'jump-url');
+    assert.equal(riskCard?.actions?.[0]?.jumpUrlTemplate, '/analytics/project-cockpit?theme=risk&drillTarget=overdue');
+    assert.equal(getTemplateById('project-management-cockpit'), undefined);
 });

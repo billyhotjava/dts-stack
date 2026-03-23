@@ -1,3 +1,4 @@
+import { toFilters, toTable } from "../utils/viewHelpers";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Locale } from "../../../i18n";
 import { analyticsApi, type ProjectCockpitSummaryResponse, type ProjectCockpitTrendsResponse } from "../../../api/analyticsApi";
@@ -17,23 +18,7 @@ type Props = {
 	locale: Locale;
 };
 
-function toFilters(state: ReturnType<typeof useProjectCockpitContext>["effectiveQueryState"]) {
-	return {
-		programId: state.programId || undefined,
-		majorProjectId: state.majorProjectId || undefined,
-		dateFrom: state.dateFrom || undefined,
-		dateTo: state.dateTo || undefined,
-		deptId: state.deptId || undefined,
-		riskLevel: state.riskLevel || undefined,
-	};
-}
 
-function toTable(rows: Array<Record<string, unknown>>, columns: Array<{ key: string; label: string }>) {
-	return {
-		cols: columns.map((column) => ({ name: column.key, display_name: column.label })),
-		rows: rows.map((row) => columns.map((column) => row[column.key] ?? "")),
-	};
-}
 
 const KPI_DRILL_MAP: Record<string, { target: "high-risk" | "overdue" | "completion" | "milestone"; params?: Record<string, unknown> }> = {
 	highRiskNodeCount: { target: "high-risk", params: { riskLevel: "高" } },
@@ -61,7 +46,6 @@ export default function OverviewTrendView({ summary, summaryLoading, locale }: P
 			effectiveQueryState.dateTo,
 			effectiveQueryState.deptId,
 			effectiveQueryState.majorProjectId,
-			effectiveQueryState.programId,
 			effectiveQueryState.riskLevel,
 		],
 	);
@@ -116,7 +100,7 @@ export default function OverviewTrendView({ summary, summaryLoading, locale }: P
 	const rankingTable = useMemo(
 		() =>
 			toTable((summary?.ranking ?? []) as Array<Record<string, unknown>>, [
-				{ key: "majorProjectName", label: "重大项目" },
+				{ key: "majorProjectName", label: "项目" },
 				{ key: "healthScore", label: "健康度" },
 				{ key: "highRiskCount", label: "高风险" },
 				{ key: "overdueCount", label: "延期" },
@@ -150,7 +134,7 @@ export default function OverviewTrendView({ summary, summaryLoading, locale }: P
 
 			<div className="project-cockpit__two-column">
 				<TrendPanel
-					title="项目群趋势"
+					title="项目趋势"
 					subtitle={`最近周度变化：${snapshot.lastWeekLabel || "--"}，完成率 ${snapshot.lastWeekCompletionRate}%`}
 					action={
 						<Button
@@ -158,7 +142,7 @@ export default function OverviewTrendView({ summary, summaryLoading, locale }: P
 							size="sm"
 							onClick={() => {
 								const svg = document.querySelector<SVGSVGElement>(".project-cockpit__chart-block svg");
-								exportChartPng(svg, "项目群趋势");
+								exportChartPng(svg, "项目趋势");
 							}}
 						>
 							导出
@@ -219,20 +203,20 @@ export default function OverviewTrendView({ summary, summaryLoading, locale }: P
 
 			<div className="project-cockpit__two-column">
 				<TrendPanel
-					title="重大项目排名"
+					title="项目排名"
 					action={
 						<Button
 							variant="tertiary"
 							size="sm"
 							onClick={() => {
 								const cols = [
-									{ key: "majorProjectName", label: "重大项目" },
+									{ key: "majorProjectName", label: "项目" },
 									{ key: "healthScore", label: "健康度" },
 									{ key: "highRiskCount", label: "高风险" },
 									{ key: "overdueCount", label: "延期" },
 									{ key: "topDelayReason", label: "主要归因" },
 								];
-								exportCsv(cols, (summary?.ranking ?? []) as Array<Record<string, unknown>>, "重大项目排名");
+								exportCsv(cols, (summary?.ranking ?? []) as Array<Record<string, unknown>>, "项目排名");
 							}}
 						>
 							导出

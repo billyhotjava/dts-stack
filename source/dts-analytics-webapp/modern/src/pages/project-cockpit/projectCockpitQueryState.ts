@@ -2,7 +2,6 @@ export type ProjectCockpitTheme = 'overview' | 'execution' | 'risk' | 'tree' | '
 
 export type ProjectCockpitQueryState = {
     theme: ProjectCockpitTheme;
-    programId: string;
     majorProjectId: string;
     dateFrom: string;
     dateTo: string;
@@ -28,7 +27,6 @@ export function parseProjectCockpitTheme(value: string | null | undefined): Proj
 export function parseProjectCockpitQueryState(params: URLSearchParams): ProjectCockpitQueryState {
     return {
         theme: parseProjectCockpitTheme(params.get('theme')),
-        programId: params.get('programId') ?? '',
         majorProjectId: params.get('majorProjectId') ?? '',
         dateFrom: params.get('dateFrom') ?? '',
         dateTo: params.get('dateTo') ?? '',
@@ -50,11 +48,10 @@ export function resolveProjectCockpitEffectiveQueryState(
 
 export function createProjectCockpitScopeResetPatch(_state: ProjectCockpitQueryState) {
     return {
-        programId: '',
         majorProjectId: '',
         deptId: '',
         riskLevel: '',
-    } satisfies Pick<ProjectCockpitQueryState, 'programId' | 'majorProjectId' | 'deptId' | 'riskLevel'>;
+    } satisfies Pick<ProjectCockpitQueryState, 'majorProjectId' | 'deptId' | 'riskLevel'>;
 }
 
 export type ProjectCockpitDrillParams = {
@@ -75,7 +72,6 @@ export function serializeProjectCockpitQueryState(state: ProjectCockpitQueryStat
     const params = new URLSearchParams();
     params.set('theme', parseProjectCockpitTheme(state.theme));
 
-    if (state.programId) params.set('programId', state.programId);
     if (state.majorProjectId) params.set('majorProjectId', state.majorProjectId);
     if (state.dateFrom) params.set('dateFrom', state.dateFrom);
     if (state.dateTo) params.set('dateTo', state.dateTo);

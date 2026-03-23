@@ -12,14 +12,10 @@ export function mergeProjectCockpitQueryState(
 	current: ProjectCockpitQueryState,
 	patch: ProjectCockpitQueryPatch,
 ): ProjectCockpitQueryState {
-	const next: ProjectCockpitQueryState = {
+	return {
 		...current,
 		...patch,
 	};
-	if (patch.programId !== undefined && patch.programId !== current.programId) {
-		next.majorProjectId = "";
-	}
-	return next;
 }
 
 export function useProjectCockpitQueryState() {

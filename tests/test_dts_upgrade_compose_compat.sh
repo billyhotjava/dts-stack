@@ -30,19 +30,32 @@ chmod +x "${FAKE_BIN}/docker"
 cat > "${FAKE_BIN}/docker-compose" <<'EOF_DOCKER_COMPOSE'
 #!/usr/bin/env bash
 compose_file=""
+env_file=""
 if [[ "${1:-}" == "version" ]]; then
   echo "docker-compose version 1.29.2, build test"
   exit 0
 fi
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --env-file)
+      env_file="$2"
+      shift 2
+      ;;
     -f)
       compose_file="$2"
       shift 2
       ;;
     ps)
+      if [[ "${2:-}" == "--status" && "${3:-}" == "running" && "${4:-}" == "--services" ]]; then
+        cat >&2 <<'EOF_USAGE'
+List containers.
+
+Usage: ps [options] [--] [SERVICE...]
+EOF_USAGE
+        exit 0
+      fi
       printf 'ps:%s\n' "${compose_file:-cwd}" >> "${FAKE_DOCKER_COMPOSE_EVENTS_FILE}"
-      if [[ -f "${FAKE_DOCKER_STATE_FILE}" ]]; then
+      if [[ -f "${FAKE_DOCKER_STATE_FILE}" && "${2:-}" == "--services" && "${3:-}" == "--filter" && "${4:-}" == "status=running" ]]; then
         printf 'dts-platform\n'
       fi
       exit 0
@@ -57,10 +70,19 @@ while [[ $# -gt 0 ]]; do
       ;;
     config)
       if [[ "${2:-}" == "--format" && "${3:-}" == "json" ]]; then
-        cat "${compose_file}.json"
+        cat >&2 <<'EOF_USAGE'
+Validate and view the Compose file.
+
+Usage: config [options]
+EOF_USAGE
         exit 0
       fi
-      shift
+      if [[ -z "${env_file}" || ! -f "${env_file}" ]] || ! grep -q '^IMAGE_DTS_ADMIN=' "${env_file}"; then
+        echo "Missing mandatory value for IMAGE_DTS_ADMIN" >&2
+        exit 1
+      fi
+      cat "${compose_file}.yaml"
+      exit 0
       ;;
     *)
       shift
@@ -77,20 +99,27 @@ EOF_SOURCE_ENV
 
 cat > "${TARGET_DIR}/.env" <<'EOF_TARGET_ENV'
 IMAGE_POSTGRES=postgres:17.6
+IMAGE_DTS_ADMIN=dts-admin:test
 EOF_TARGET_ENV
 
 cat > "${SOURCE_ROOT}/docker-compose.yml" <<'EOF_SOURCE_COMPOSE'
 services: {}
 EOF_SOURCE_COMPOSE
-cat > "${SOURCE_ROOT}/docker-compose.yml.json" <<'EOF_SOURCE_JSON'
-{"services":{}}
-EOF_SOURCE_JSON
+cat > "${SOURCE_ROOT}/docker-compose.yml.yaml" <<'EOF_SOURCE_YAML'
+name: s10-stack
+services:
+  source-service:
+    image: source:1
+EOF_SOURCE_YAML
 cat > "${TARGET_DIR}/docker-compose.yml" <<'EOF_TARGET_COMPOSE'
 services: {}
 EOF_TARGET_COMPOSE
-cat > "${TARGET_DIR}/docker-compose.yml.json" <<'EOF_TARGET_JSON'
-{"services":{}}
-EOF_TARGET_JSON
+cat > "${TARGET_DIR}/docker-compose.yml.yaml" <<'EOF_TARGET_YAML'
+name: s10-stack
+services:
+  target-service:
+    image: target:1
+EOF_TARGET_YAML
 
 printf 'placeholder' > "${IMAGES_DIR}/placeholder.tar"
 cat > "${EXTRA_DIR}/release-manifest.json" <<'EOF_MANIFEST'

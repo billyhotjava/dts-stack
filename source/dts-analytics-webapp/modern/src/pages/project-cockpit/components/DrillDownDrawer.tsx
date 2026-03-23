@@ -36,7 +36,7 @@ function riskBadge(level?: string) {
 function buildColumns(target: DrillTarget): ColumnDef[] {
 	const base: ColumnDef[] = [
 		{ key: "name", label: "名称" },
-		{ key: "majorProjectName", label: "重大项目" },
+		{ key: "majorProjectName", label: "项目" },
 		{ key: "subprojectName", label: "子项目" },
 	];
 
@@ -116,7 +116,6 @@ export function DrillDownDrawer() {
 		abortRef.current = ctrl;
 
 		const apiParams: Record<string, string> = {
-			...(effectiveQueryState.programId ? { programId: effectiveQueryState.programId } : {}),
 			...(effectiveQueryState.majorProjectId ? { majorProjectId: effectiveQueryState.majorProjectId } : {}),
 			...(effectiveQueryState.dateFrom ? { dateFrom: effectiveQueryState.dateFrom } : {}),
 			...(effectiveQueryState.dateTo ? { dateTo: effectiveQueryState.dateTo } : {}),
@@ -134,8 +133,11 @@ export function DrillDownDrawer() {
 					setItems(resp?.items ?? []);
 				}
 			})
-			.catch(() => {
-				if (!ctrl.signal.aborted) setItems([]);
+			.catch((err) => {
+				if (!ctrl.signal.aborted) {
+					console.warn("[DrillDownDrawer] drill detail fetch failed:", err);
+					setItems([]);
+				}
 			})
 			.finally(() => {
 				if (!ctrl.signal.aborted) setLoading(false);

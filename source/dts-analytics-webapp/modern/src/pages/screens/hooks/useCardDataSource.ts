@@ -101,6 +101,15 @@ function toCardData(payload: unknown): CardData {
         if (obj.data && typeof obj.data === 'object') {
             return toCardData(obj.data);
         }
+        // Single flat object (e.g. {key, label, value, unit} from responsePath extraction)
+        // → convert to single-row CardData with object keys as columns
+        const keys = Object.keys(obj);
+        if (keys.length > 0) {
+            return {
+                rows: [keys.map((k) => obj[k] ?? null)],
+                cols: keys.map((k) => ({ name: k, display_name: k, base_type: 'type/Text' })),
+            };
+        }
     }
 
     if (Array.isArray(payload) && payload.length > 0 && typeof payload[0] === 'object' && !Array.isArray(payload[0])) {

@@ -41,140 +41,128 @@ public class ProjectCockpitResource {
 
     @GetMapping(path = "/summary", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> summary(
-            @RequestParam(value = "programId", required = false) String programId,
             @RequestParam(value = "majorProjectId", required = false) String majorProjectId,
             @RequestParam(value = "dateFrom", required = false) String dateFrom,
             @RequestParam(value = "dateTo", required = false) String dateTo,
             @RequestParam(value = "deptId", required = false) String deptId,
             @RequestParam(value = "riskLevel", required = false) String riskLevel,
             HttpServletRequest request) {
-        return authorize(request, projectCockpitService.summary(filters(programId, majorProjectId, dateFrom, dateTo, deptId, riskLevel)));
+        return authorize(request, projectCockpitService.summary(filters(majorProjectId, dateFrom, dateTo, deptId, riskLevel)));
     }
 
     @GetMapping(path = "/trends", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> trends(
-            @RequestParam(value = "programId", required = false) String programId,
             @RequestParam(value = "majorProjectId", required = false) String majorProjectId,
             @RequestParam(value = "dateFrom", required = false) String dateFrom,
             @RequestParam(value = "dateTo", required = false) String dateTo,
             @RequestParam(value = "deptId", required = false) String deptId,
             @RequestParam(value = "riskLevel", required = false) String riskLevel,
             HttpServletRequest request) {
-        return authorize(request, projectCockpitService.trends(filters(programId, majorProjectId, dateFrom, dateTo, deptId, riskLevel)));
+        return authorize(request, projectCockpitService.trends(filters(majorProjectId, dateFrom, dateTo, deptId, riskLevel)));
     }
 
     @GetMapping(path = "/execution", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> execution(
-            @RequestParam(value = "programId", required = false) String programId,
             @RequestParam(value = "majorProjectId", required = false) String majorProjectId,
             @RequestParam(value = "dateFrom", required = false) String dateFrom,
             @RequestParam(value = "dateTo", required = false) String dateTo,
             @RequestParam(value = "deptId", required = false) String deptId,
             @RequestParam(value = "riskLevel", required = false) String riskLevel,
             HttpServletRequest request) {
-        return authorize(request, projectCockpitService.execution(filters(programId, majorProjectId, dateFrom, dateTo, deptId, riskLevel)));
+        return authorize(request, projectCockpitService.execution(filters(majorProjectId, dateFrom, dateTo, deptId, riskLevel)));
     }
 
     @GetMapping(path = "/risk-attribution", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> riskAttribution(
-            @RequestParam(value = "programId", required = false) String programId,
             @RequestParam(value = "majorProjectId", required = false) String majorProjectId,
             @RequestParam(value = "dateFrom", required = false) String dateFrom,
             @RequestParam(value = "dateTo", required = false) String dateTo,
             @RequestParam(value = "deptId", required = false) String deptId,
             @RequestParam(value = "riskLevel", required = false) String riskLevel,
             HttpServletRequest request) {
-        return authorize(request, projectCockpitService.riskAttribution(filters(programId, majorProjectId, dateFrom, dateTo, deptId, riskLevel)));
+        return authorize(request, projectCockpitService.riskAttribution(filters(majorProjectId, dateFrom, dateTo, deptId, riskLevel)));
     }
 
     @GetMapping(path = "/major-project-tree", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> majorProjectTree(
-            @RequestParam(value = "programId", required = false) String programId,
             @RequestParam(value = "majorProjectId", required = false) String majorProjectId,
             @RequestParam(value = "dateFrom", required = false) String dateFrom,
             @RequestParam(value = "dateTo", required = false) String dateTo,
             @RequestParam(value = "deptId", required = false) String deptId,
             @RequestParam(value = "riskLevel", required = false) String riskLevel,
             HttpServletRequest request) {
-        return authorize(request, projectCockpitService.majorProjectTree(filters(programId, majorProjectId, dateFrom, dateTo, deptId, riskLevel)));
+        return authorize(request, projectCockpitService.majorProjectTree(filters(majorProjectId, dateFrom, dateTo, deptId, riskLevel)));
     }
 
     @GetMapping(path = "/data-support", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> dataSupport(
-            @RequestParam(value = "programId", required = false) String programId,
             @RequestParam(value = "majorProjectId", required = false) String majorProjectId,
             @RequestParam(value = "dateFrom", required = false) String dateFrom,
             @RequestParam(value = "dateTo", required = false) String dateTo,
             @RequestParam(value = "deptId", required = false) String deptId,
             @RequestParam(value = "riskLevel", required = false) String riskLevel,
             HttpServletRequest request) {
-        return authorize(request, projectCockpitService.dataSupport(filters(programId, majorProjectId, dateFrom, dateTo, deptId, riskLevel)));
+        return authorize(request, projectCockpitService.dataSupport(filters(majorProjectId, dateFrom, dateTo, deptId, riskLevel)));
     }
 
     @GetMapping(path = "/screen/metrics-overview", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> screenMetricsOverview(
-            @RequestParam(value = "programId", required = false) String programId,
             @RequestParam(value = "majorProjectId", required = false) String majorProjectId,
             @RequestParam(value = "dateFrom", required = false) String dateFrom,
             @RequestParam(value = "dateTo", required = false) String dateTo,
             @RequestParam(value = "deptId", required = false) String deptId,
             @RequestParam(value = "riskLevel", required = false) String riskLevel,
             HttpServletRequest request) {
-        return authorize(request, projectCockpitService.screenMetricsOverview(filters(programId, majorProjectId, dateFrom, dateTo, deptId, riskLevel)));
+        return authorize(request, projectCockpitService.screenMetricsOverview(filters(majorProjectId, dateFrom, dateTo, deptId, riskLevel)));
     }
 
     @GetMapping(path = "/screen/header", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> screenHeader(
-            @RequestParam(value = "programId", required = false) String programId,
             @RequestParam(value = "majorProjectId", required = false) String majorProjectId,
             @RequestParam(value = "dateFrom", required = false) String dateFrom,
             @RequestParam(value = "dateTo", required = false) String dateTo,
             @RequestParam(value = "deptId", required = false) String deptId,
             @RequestParam(value = "riskLevel", required = false) String riskLevel,
             HttpServletRequest request) {
-        return authorize(request, projectCockpitService.screenHeader(filters(programId, majorProjectId, dateFrom, dateTo, deptId, riskLevel)));
+        return authorize(request, projectCockpitService.screenHeader(filters(majorProjectId, dateFrom, dateTo, deptId, riskLevel)));
     }
 
     @GetMapping(path = "/screen/overview", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> screenOverview(
-            @RequestParam(value = "programId", required = false) String programId,
             @RequestParam(value = "majorProjectId", required = false) String majorProjectId,
             @RequestParam(value = "dateFrom", required = false) String dateFrom,
             @RequestParam(value = "dateTo", required = false) String dateTo,
             @RequestParam(value = "deptId", required = false) String deptId,
             @RequestParam(value = "riskLevel", required = false) String riskLevel,
             HttpServletRequest request) {
-        return authorize(request, projectCockpitService.screenOverview(filters(programId, majorProjectId, dateFrom, dateTo, deptId, riskLevel)));
+        return authorize(request, projectCockpitService.screenOverview(filters(majorProjectId, dateFrom, dateTo, deptId, riskLevel)));
     }
 
     @GetMapping(path = "/screen/execution", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> screenExecution(
-            @RequestParam(value = "programId", required = false) String programId,
             @RequestParam(value = "majorProjectId", required = false) String majorProjectId,
             @RequestParam(value = "dateFrom", required = false) String dateFrom,
             @RequestParam(value = "dateTo", required = false) String dateTo,
             @RequestParam(value = "deptId", required = false) String deptId,
             @RequestParam(value = "riskLevel", required = false) String riskLevel,
             HttpServletRequest request) {
-        return authorize(request, projectCockpitService.screenExecution(filters(programId, majorProjectId, dateFrom, dateTo, deptId, riskLevel)));
+        return authorize(request, projectCockpitService.screenExecution(filters(majorProjectId, dateFrom, dateTo, deptId, riskLevel)));
     }
 
     @GetMapping(path = "/screen/risk", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> screenRisk(
-            @RequestParam(value = "programId", required = false) String programId,
             @RequestParam(value = "majorProjectId", required = false) String majorProjectId,
             @RequestParam(value = "dateFrom", required = false) String dateFrom,
             @RequestParam(value = "dateTo", required = false) String dateTo,
             @RequestParam(value = "deptId", required = false) String deptId,
             @RequestParam(value = "riskLevel", required = false) String riskLevel,
             HttpServletRequest request) {
-        return authorize(request, projectCockpitService.screenRisk(filters(programId, majorProjectId, dateFrom, dateTo, deptId, riskLevel)));
+        return authorize(request, projectCockpitService.screenRisk(filters(majorProjectId, dateFrom, dateTo, deptId, riskLevel)));
     }
 
     @GetMapping(path = "/drill/{target}", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> drillDetail(
             @PathVariable("target") String target,
-            @RequestParam(value = "programId", required = false) String programId,
             @RequestParam(value = "majorProjectId", required = false) String majorProjectId,
             @RequestParam(value = "dateFrom", required = false) String dateFrom,
             @RequestParam(value = "dateTo", required = false) String dateTo,
@@ -185,7 +173,7 @@ public class ProjectCockpitResource {
             HttpServletRequest request) {
         return authorize(request, projectCockpitService.drillDetail(
                 target,
-                filters(programId, majorProjectId, dateFrom, dateTo, deptId, riskLevel),
+                filters(majorProjectId, dateFrom, dateTo, deptId, riskLevel),
                 extraDept,
                 extraReason));
     }
@@ -228,7 +216,6 @@ public class ProjectCockpitResource {
     }
 
     private ProjectCockpitService.Filters filters(
-            String programId,
             String majorProjectId,
             String dateFrom,
             String dateTo,
@@ -236,7 +223,6 @@ public class ProjectCockpitResource {
             String riskLevel) {
         Optional<ProjectCockpitSettingsService.PublishedPeriod> publishedPeriod = projectCockpitSettingsService.getPublishedPeriod();
         return new ProjectCockpitService.Filters(
-                blankToNull(programId),
                 blankToNull(majorProjectId),
                 parseDate(dateFrom, publishedPeriod.map(ProjectCockpitSettingsService.PublishedPeriod::periodStart).orElse(null)),
                 parseDate(dateTo, publishedPeriod.map(ProjectCockpitSettingsService.PublishedPeriod::periodEnd).orElse(null)),
