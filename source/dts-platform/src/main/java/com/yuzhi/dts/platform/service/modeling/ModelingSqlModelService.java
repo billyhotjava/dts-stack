@@ -131,7 +131,7 @@ public class ModelingSqlModelService {
         boolean instituteScope = security.hasInstituteScope();
         List<ModelingSqlModel> models = planId == null ? repo.findAll() : repo.findByPlanId(planId);
         String kw = trimToNull(keyword);
-        List<SqlModelDto> result = new ArrayList<>();
+        Map<String, ModelingSqlModel> deduplicated = new LinkedHashMap<>();
         for (ModelingSqlModel model : models) {
             if (!isOwnerDeptVisible(model != null ? model.getOwnerDept() : null, activeDept, instituteScope)) {
                 continue;
@@ -139,10 +139,228 @@ public class ModelingSqlModelService {
             if (kw != null && !matchKeyword(model, kw)) {
                 continue;
             }
-            result.add(toDto(model));
+            String key = dedupeModelKey(model);
+            ModelingSqlModel existing = deduplicated.get(key);
+            if (shouldReplaceDuplicateModel(model, existing)) {
+                deduplicated.put(key, model);
+            }
         }
+        List<SqlModelDto> result = new ArrayList<>(deduplicated.values().stream().map(this::toDto).toList());
         result.sort((a, b) -> String.valueOf(a.name()).compareToIgnoreCase(String.valueOf(b.name())));
         return result;
+    }
+
+    public SqlModelGovernancePreviewResult previewGovernance(SqlModelGovernancePreviewRequest request, String activeDeptHeader) {
+        String activeDept = security.resolveActiveDept(activeDeptHeader);
+        boolean instituteScope = security.hasInstituteScope();
+        List<ModelingSqlModel> scopedModels = (request != null && request.planId() != null ? repo.findByPlanId(request.planId()) : repo.findAll())
+            .stream()
+            .filter(model -> isOwnerDeptVisible(model != null ? model.getOwnerDept() : null, activeDept, instituteScope))
+            .filter(model -> governanceScopeMatches(model, request))
+            .toList();
+
+        Map<UUID, GovernancePreviewAccumulator> accumulators = new LinkedHashMap<>();
+        Set<String> ruleKeys = normalizeGovernanceRules(request != null ? request.ruleKeys() : null);
+
+        if (ruleKeys.contains("duplicate-model")) {
+            Map<String, List<ModelingSqlModel>> groups = new LinkedHashMap<>();
+            for (ModelingSqlModel model : scopedModels) {
+                groups.computeIfAbsent(dedupeModelKey(model), unused -> new ArrayList<>()).add(model);
+            }
+            for (List<ModelingSqlModel> group : groups.values()) {
+                if (group.size() < 2) {
+                    continue;
+                }
+                ModelingSqlModel keeper = null;
+                for (ModelingSqlModel candidate : group) {
+                    if (shouldReplaceDuplicateModel(candidate, keeper)) {
+                        keeper = candidate;
+                    }
+                }
+                for (ModelingSqlModel candidate : group) {
+                    if (keeper != null && keeper.getId() != null && keeper.getId().equals(candidate.getId())) {
+                        continue;
+                    }
+                    governanceAccumulator(accumulators, candidate).addRuleHit("duplicate-model");
+                }
+            }
+        }
+
+        if (ruleKeys.contains("sql-keyword")) {
+            List<String> sqlKeywords = normalizeSqlKeywords(request != null ? request.sqlKeywords() : null);
+            if (!sqlKeywords.isEmpty()) {
+                for (ModelingSqlModel model : scopedModels) {
+                    if (sqlKeywords.stream().anyMatch(keyword -> governanceSqlContains(model, keyword))) {
+                        governanceAccumulator(accumulators, model).addRuleHit("sql-keyword");
+                    }
+                }
+            }
+        }
+
+        if (ruleKeys.contains("name-pattern") && StringUtils.hasText(request != null ? request.namePattern() : null)) {
+            String namePattern = trimToNull(request.namePattern());
+            for (ModelingSqlModel model : scopedModels) {
+                if (containsIgnoreCase(model != null ? model.getName() : null, namePattern)) {
+                    governanceAccumulator(accumulators, model).addRuleHit("name-pattern");
+                }
+            }
+        }
+
+        if (ruleKeys.contains("path-pattern") && StringUtils.hasText(request != null ? request.modelPathPattern() : null)) {
+            String pathPattern = trimToNull(request.modelPathPattern());
+            for (ModelingSqlModel model : scopedModels) {
+                if (containsIgnoreCase(model != null ? model.getModelPath() : null, pathPattern)) {
+                    governanceAccumulator(accumulators, model).addRuleHit("path-pattern");
+                }
+            }
+        }
+
+        if (ruleKeys.contains("tag-match") && StringUtils.hasText(request != null ? request.tag() : null)) {
+            String tag = trimToNull(request.tag());
+            for (ModelingSqlModel model : scopedModels) {
+                if (containsIgnoreCase(model != null ? model.getTags() : null, tag)) {
+                    governanceAccumulator(accumulators, model).addRuleHit("tag-match");
+                }
+            }
+        }
+
+        if (ruleKeys.contains("preset:project-management-legacy-program")) {
+            for (ModelingSqlModel model : scopedModels) {
+                String tags = normalizeLower(model != null ? model.getTags() : null);
+                if (!tags.contains("project-management")) {
+                    continue;
+                }
+                if (governanceSqlContains(model, "program_id") || governanceSqlContains(model, "program_name")) {
+                    governanceAccumulator(accumulators, model).addRuleHit("preset:project-management-legacy-program");
+                }
+            }
+        }
+
+        List<SqlModelGovernancePreviewItem> items = accumulators
+            .values()
+            .stream()
+            .map(accumulator -> toGovernancePreviewItem(accumulator.model(), accumulator.ruleHits()))
+            .sorted(Comparator.comparing(item -> defaultText(item.name(), ""), String.CASE_INSENSITIVE_ORDER))
+            .toList();
+
+        return new SqlModelGovernancePreviewResult(items.size(), items);
+    }
+
+    public SqlModelGovernanceExecuteResult executeGovernance(SqlModelGovernanceExecuteRequest request, String activeDeptHeader) {
+        if (request == null || request.modelIds() == null || request.modelIds().isEmpty()) {
+            throw new IllegalArgumentException("请选择待治理模型");
+        }
+        String activeDept = security.resolveActiveDept(activeDeptHeader);
+        boolean instituteScope = security.hasInstituteScope();
+
+        List<ModelingSqlModel> selectedModels = request.modelIds()
+            .stream()
+            .distinct()
+            .map(id -> repo.findById(id).orElse(null))
+            .filter(model -> model != null)
+            .filter(model -> isOwnerDeptVisible(model.getOwnerDept(), activeDept, instituteScope))
+            .toList();
+
+        if (selectedModels.isEmpty()) {
+            return new SqlModelGovernanceExecuteResult(request.modelIds().size(), 0, request.modelIds().size(), List.of());
+        }
+
+        boolean deleteFiles = request.deleteFiles() == null || request.deleteFiles();
+        Map<String, Set<UUID>> removingIdsByPath = new LinkedHashMap<>();
+        if (deleteFiles) {
+            for (ModelingSqlModel model : selectedModels) {
+                if (!StringUtils.hasText(model.getModelPath()) || model.getId() == null) {
+                    continue;
+                }
+                removingIdsByPath.computeIfAbsent(model.getModelPath(), unused -> new LinkedHashSet<>()).add(model.getId());
+            }
+        }
+
+        List<SqlModelGovernanceExecuteItem> items = new ArrayList<>();
+        for (ModelingSqlModel model : selectedModels) {
+            try {
+                repo.delete(model);
+                items.add(new SqlModelGovernanceExecuteItem(model.getId(), model.getName(), "DELETED", "模型记录已删除"));
+            } catch (RuntimeException ex) {
+                items.add(
+                    new SqlModelGovernanceExecuteItem(
+                        model.getId(),
+                        model.getName(),
+                        "FAILED",
+                        defaultText(trimToNull(ex.getMessage()), "删除模型失败")
+                    )
+                );
+            }
+        }
+
+        if (deleteFiles) {
+            for (Map.Entry<String, Set<UUID>> entry : removingIdsByPath.entrySet()) {
+                if (!canDeleteModelPathAfterRemoving(entry.getKey(), entry.getValue())) {
+                    continue;
+                }
+                deleteFileIfChanged(entry.getKey(), null);
+            }
+        }
+
+        int deleted = (int) items.stream().filter(item -> "DELETED".equals(item.result())).count();
+        int skipped = request.modelIds().size() - deleted;
+        return new SqlModelGovernanceExecuteResult(request.modelIds().size(), deleted, skipped, items);
+    }
+
+    private String dedupeModelKey(ModelingSqlModel model) {
+        if (model == null) {
+            return UUID.randomUUID().toString();
+        }
+        return defaultText(model.getPlanId() != null ? model.getPlanId().toString() : null, "")
+            + "::"
+            + defaultText(trimToNull(model.getName()), model.getId() != null ? model.getId().toString() : "").toLowerCase(Locale.ROOT);
+    }
+
+    private boolean shouldReplaceDuplicateModel(ModelingSqlModel candidate, ModelingSqlModel existing) {
+        if (candidate == null) {
+            return false;
+        }
+        if (existing == null) {
+            return true;
+        }
+        int byModified = compareInstants(candidate.getLastModifiedDate(), existing.getLastModifiedDate());
+        if (byModified != 0) {
+            return byModified > 0;
+        }
+        int byCreated = compareInstants(candidate.getCreatedDate(), existing.getCreatedDate());
+        if (byCreated != 0) {
+            return byCreated > 0;
+        }
+        int byStatus = Integer.compare(modelStatusRank(candidate.getStatus()), modelStatusRank(existing.getStatus()));
+        if (byStatus != 0) {
+            return byStatus > 0;
+        }
+        return defaultText(candidate.getId() != null ? candidate.getId().toString() : null, "").compareTo(
+            defaultText(existing.getId() != null ? existing.getId().toString() : null, "")
+        ) > 0;
+    }
+
+    private int compareInstants(Instant left, Instant right) {
+        if (left == null && right == null) {
+            return 0;
+        }
+        if (left == null) {
+            return -1;
+        }
+        if (right == null) {
+            return 1;
+        }
+        return left.compareTo(right);
+    }
+
+    private int modelStatusRank(String status) {
+        String normalized = defaultText(trimToNull(status), "").toUpperCase(Locale.ROOT);
+        return switch (normalized) {
+            case "PUBLISHED" -> 3;
+            case "ACTIVE" -> 2;
+            case "DRAFT" -> 1;
+            default -> 0;
+        };
     }
 
     public void syncWorkspaceModels(String activeDeptHeader) {
@@ -313,6 +531,40 @@ public class ModelingSqlModelService {
             request.semanticContract()
         );
         SqlModelDto dto = create(normalized, activeDeptHeader);
+        if (StringUtils.hasText(csvText)) {
+            writeCsvSidecar(dto.modelPath(), csvText);
+            ModelingSqlModel saved = repo.findById(dto.id()).orElse(null);
+            if (saved != null) {
+                syncDraftColumns(saved);
+            }
+        }
+        return dto;
+    }
+
+    private SqlModelDto upsertImportFromFiles(SqlModelRequest request, String sqlText, String csvText, String activeDeptHeader) {
+        if (!StringUtils.hasText(sqlText)) {
+            throw new IllegalArgumentException("SQL 内容不能为空");
+        }
+        SqlModelRequest normalized = new SqlModelRequest(
+            request.planId(),
+            request.name(),
+            request.alias(),
+            request.layer(),
+            request.sourceDataSourceId(),
+            request.schemaName(),
+            request.materialized(),
+            request.tags(),
+            request.description(),
+            sqlText,
+            request.enabled(),
+            request.status(),
+            request.ownerDept(),
+            request.semanticContract()
+        );
+        ModelingSqlModel existing = repo
+            .findFirstByPlanIdAndNameIgnoreCase(normalized.planId(), defaultText(normalized.name(), ""))
+            .orElse(null);
+        SqlModelDto dto = existing == null ? create(normalized, activeDeptHeader) : update(existing.getId(), normalized, activeDeptHeader);
         if (StringUtils.hasText(csvText)) {
             writeCsvSidecar(dto.modelPath(), csvText);
             ModelingSqlModel saved = repo.findById(dto.id()).orElse(null);
@@ -663,8 +915,11 @@ public class ModelingSqlModelService {
         if (!isOwnerDeptVisible(model.getOwnerDept(), activeDept, instituteScope)) {
             throw new IllegalArgumentException("当前账号无权删除该模型");
         }
+        boolean deleteFile = canDeleteModelPathAfterRemoving(model.getModelPath(), model.getId() == null ? Set.of() : Set.of(model.getId()));
         repo.delete(model);
-        deleteFileIfChanged(model.getModelPath(), null);
+        if (deleteFile) {
+            deleteFileIfChanged(model.getModelPath(), null);
+        }
     }
 
     private void apply(ModelingSqlModel model, SqlModelRequest request, String activeDeptHeader, boolean isCreate) {
@@ -1149,6 +1404,149 @@ public class ModelingSqlModelService {
         } catch (IOException ex) {
             LOG.warn("[dbt-model] failed to delete {}: {}", targetPath, ex.getMessage());
         }
+    }
+
+    private GovernancePreviewAccumulator governanceAccumulator(
+        Map<UUID, GovernancePreviewAccumulator> accumulators,
+        ModelingSqlModel model
+    ) {
+        if (model == null || model.getId() == null) {
+            throw new IllegalArgumentException("模型不存在");
+        }
+        return accumulators.computeIfAbsent(model.getId(), unused -> new GovernancePreviewAccumulator(model));
+    }
+
+    private SqlModelGovernancePreviewItem toGovernancePreviewItem(ModelingSqlModel model, Set<String> ruleHits) {
+        ModelingPlan plan = model != null && model.getPlanId() != null ? planRepo.findById(model.getPlanId()).orElse(null) : null;
+        GovernanceImpact impact = collectGovernanceImpact(model);
+        boolean fileDeleteSafe = canDeleteModelPathAfterRemoving(model != null ? model.getModelPath() : null, model != null && model.getId() != null ? Set.of(model.getId()) : Set.of());
+        String suggestedAction = fileDeleteSafe ? "DELETE_WITH_FILE" : "DELETE_RECORD_ONLY";
+        return new SqlModelGovernancePreviewItem(
+            model != null ? model.getId() : null,
+            model != null ? model.getPlanId() : null,
+            plan != null ? plan.getName() : null,
+            model != null ? model.getName() : null,
+            model != null ? model.getLayer() : null,
+            model != null ? model.getStatus() : null,
+            model != null ? model.getModelPath() : null,
+            List.copyOf(ruleHits),
+            impact.downstreamRefCount(),
+            impact.datasetBindingCount(),
+            impact.reportBindingCount(),
+            fileDeleteSafe,
+            suggestedAction
+        );
+    }
+
+    private GovernanceImpact collectGovernanceImpact(ModelingSqlModel model) {
+        if (model == null) {
+            return new GovernanceImpact(0, 0, 0);
+        }
+        int downstreamRefCount = countGovernanceDownstreamRefs(model);
+        Set<UUID> impactedDatasetIds = new LinkedHashSet<>();
+        if (queryDatasetAssetRepository != null) {
+            List<QueryDatasetAsset> allDatasets = queryDatasetAssetRepository.findByEnabledTrueOrderByLastModifiedDateDesc();
+            for (QueryDatasetAsset dataset : allDatasets) {
+                if (dataset == null || dataset.getId() == null) {
+                    continue;
+                }
+                if (referencesModel(dataset.getSqlText(), model.getName(), model.getAlias())) {
+                    impactedDatasetIds.add(dataset.getId());
+                }
+            }
+        }
+        int reportBindingCount = 0;
+        if (biReportLinkRepository != null && !impactedDatasetIds.isEmpty()) {
+            reportBindingCount = (int) biReportLinkRepository
+                .findAll()
+                .stream()
+                .filter(report -> report != null && report.getQueryDatasetId() != null)
+                .filter(report -> impactedDatasetIds.contains(report.getQueryDatasetId()))
+                .count();
+        }
+        return new GovernanceImpact(downstreamRefCount, impactedDatasetIds.size(), reportBindingCount);
+    }
+
+    private int countGovernanceDownstreamRefs(ModelingSqlModel model) {
+        if (model == null || model.getId() == null || !StringUtils.hasText(model.getName())) {
+            return 0;
+        }
+        return (int) repo
+            .findAll()
+            .stream()
+            .filter(candidate -> candidate != null && candidate.getId() != null && !candidate.getId().equals(model.getId()))
+            .filter(candidate -> referencesModel(candidate.getSqlText(), model.getName(), model.getAlias()))
+            .count();
+    }
+
+    private boolean governanceScopeMatches(ModelingSqlModel model, SqlModelGovernancePreviewRequest request) {
+        if (model == null) {
+            return false;
+        }
+        if (request == null) {
+            return true;
+        }
+        if (StringUtils.hasText(request.layer()) && !normalizeUpper(model.getLayer()).equals(normalizeUpper(request.layer()))) {
+            return false;
+        }
+        if (StringUtils.hasText(request.tag()) && !containsIgnoreCase(model.getTags(), request.tag())) {
+            return false;
+        }
+        return true;
+    }
+
+    private Set<String> normalizeGovernanceRules(List<String> rules) {
+        Set<String> normalized = new LinkedHashSet<>();
+        if (rules == null) {
+            return normalized;
+        }
+        for (String rule : rules) {
+            String value = trimToNull(rule);
+            if (value != null) {
+                normalized.add(value);
+            }
+        }
+        return normalized;
+    }
+
+    private List<String> normalizeSqlKeywords(List<String> sqlKeywords) {
+        if (sqlKeywords == null || sqlKeywords.isEmpty()) {
+            return List.of();
+        }
+        return sqlKeywords.stream().map(this::trimToNull).filter(StringUtils::hasText).toList();
+    }
+
+    private boolean governanceSqlContains(ModelingSqlModel model, String keyword) {
+        String sql = normalizeLower(model != null ? model.getSqlText() : null);
+        String normalizedKeyword = normalizeLower(keyword);
+        return StringUtils.hasText(sql) && StringUtils.hasText(normalizedKeyword) && sql.contains(normalizedKeyword);
+    }
+
+    private boolean containsIgnoreCase(String text, String keyword) {
+        return normalizeLower(text).contains(normalizeLower(keyword));
+    }
+
+    private String normalizeLower(String value) {
+        return defaultText(trimToNull(value), "").toLowerCase(Locale.ROOT);
+    }
+
+    private String normalizeUpper(String value) {
+        return defaultText(trimToNull(value), "").toUpperCase(Locale.ROOT);
+    }
+
+    private boolean canDeleteModelPathAfterRemoving(String modelPath, Set<UUID> removingIds) {
+        String normalizedPath = trimToNull(modelPath);
+        if (!StringUtils.hasText(normalizedPath)) {
+            return false;
+        }
+        return repo
+            .findByModelPathIn(List.of(normalizedPath))
+            .stream()
+            .filter(model -> model != null && StringUtils.hasText(model.getModelPath()))
+            .filter(model -> normalizedPath.equals(model.getModelPath()))
+            .filter(model -> model.getId() == null || removingIds == null || !removingIds.contains(model.getId()))
+            .findAny()
+            .isEmpty();
     }
 
     private String buildSqlContent(ModelingSqlModel model, String sourceTag) {
@@ -2150,7 +2548,7 @@ public class ModelingSqlModelService {
                         StringUtils.hasText(ownerDept) ? ownerDept : null,
                         null
                     );
-                    importFromFiles(request, sqlText, csvText, activeDept);
+                    upsertImportFromFiles(request, sqlText, csvText, activeDept);
                     details.add(new BatchImportDetail(name, layer, "imported", null));
                     imported++;
                 } catch (IllegalArgumentException ex) {
@@ -2313,4 +2711,69 @@ public class ModelingSqlModelService {
                 });
         }
     }
+
+    private static final class GovernancePreviewAccumulator {
+
+        private final ModelingSqlModel model;
+        private final Set<String> ruleHits = new LinkedHashSet<>();
+
+        private GovernancePreviewAccumulator(ModelingSqlModel model) {
+            this.model = model;
+        }
+
+        private ModelingSqlModel model() {
+            return model;
+        }
+
+        private Set<String> ruleHits() {
+            return ruleHits;
+        }
+
+        private void addRuleHit(String ruleHit) {
+            if (StringUtils.hasText(ruleHit)) {
+                ruleHits.add(ruleHit);
+            }
+        }
+    }
+
+    private record GovernanceImpact(int downstreamRefCount, int datasetBindingCount, int reportBindingCount) {}
+
+    public record SqlModelGovernancePreviewRequest(
+        UUID planId,
+        List<String> ruleKeys,
+        List<String> sqlKeywords,
+        String namePattern,
+        String modelPathPattern,
+        String tag,
+        String layer
+    ) {}
+
+    public record SqlModelGovernancePreviewResult(int total, List<SqlModelGovernancePreviewItem> items) {}
+
+    public record SqlModelGovernancePreviewItem(
+        UUID modelId,
+        UUID planId,
+        String planName,
+        String name,
+        String layer,
+        String status,
+        String modelPath,
+        List<String> ruleHits,
+        int downstreamRefCount,
+        int datasetBindingCount,
+        int reportBindingCount,
+        boolean fileDeleteSafe,
+        String suggestedAction
+    ) {}
+
+    public record SqlModelGovernanceExecuteRequest(List<UUID> modelIds, Boolean deleteFiles) {}
+
+    public record SqlModelGovernanceExecuteResult(
+        int requested,
+        int deleted,
+        int skipped,
+        List<SqlModelGovernanceExecuteItem> items
+    ) {}
+
+    public record SqlModelGovernanceExecuteItem(UUID modelId, String name, String result, String message) {}
 }

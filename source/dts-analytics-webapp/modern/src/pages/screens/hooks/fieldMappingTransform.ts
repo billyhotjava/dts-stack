@@ -227,9 +227,10 @@ export function applyFieldMapping(
 
         case 'radar-chart': {
             if (dimIdx < 0 || measureIdxs.length === 0) return {};
+            const maxIdx = cols.findIndex((c) => c.name === 'max');
             const indicator = sortedRows.map(row => ({
                 name: String(row[dimIdx] ?? ''),
-                max: undefined,
+                max: maxIdx >= 0 ? toNumber(row[maxIdx]) : undefined,
             }));
 
             if (groupIdx >= 0 && measureIdxs.length === 1) {

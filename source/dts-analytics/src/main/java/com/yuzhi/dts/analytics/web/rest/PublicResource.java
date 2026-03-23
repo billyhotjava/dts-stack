@@ -239,6 +239,22 @@ public class PublicResource {
         return ResponseEntity.ok(projectCockpitService.screenRisk(filters(majorProjectId, dateFrom, dateTo, deptId, riskLevel)));
     }
 
+    @GetMapping(path = "/screen/{uuid}/project-cockpit/tree", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> publicScreenProjectCockpitTree(
+            @PathVariable("uuid") String uuid,
+            @org.springframework.web.bind.annotation.RequestParam(value = "majorProjectId", required = false) String majorProjectId,
+            @org.springframework.web.bind.annotation.RequestParam(value = "dateFrom", required = false) String dateFrom,
+            @org.springframework.web.bind.annotation.RequestParam(value = "dateTo", required = false) String dateTo,
+            @org.springframework.web.bind.annotation.RequestParam(value = "deptId", required = false) String deptId,
+            @org.springframework.web.bind.annotation.RequestParam(value = "riskLevel", required = false) String riskLevel,
+            HttpServletRequest request) {
+        ResponseEntity<?> access = authorizePublicScreen(uuid, request);
+        if (access != null) {
+            return access;
+        }
+        return ResponseEntity.ok(projectCockpitService.screenTree(filters(majorProjectId, dateFrom, dateTo, deptId, riskLevel)));
+    }
+
     @GetMapping(path = "/screen/{uuid}/project-cockpit/metrics-compare", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> publicScreenProjectCockpitMetricsCompare(
             @PathVariable("uuid") String uuid,

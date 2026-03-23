@@ -62,6 +62,8 @@ import {
 	deleteSqlModel,
 	importSqlModel,
 	generateSqlModelsFromOds,
+	previewSqlModelGovernance,
+	executeSqlModelGovernance,
 	listModelingPlans,
 	syncDbtModels,
 	getDbtSyncStatus,
@@ -416,6 +418,39 @@ type SqlModelContractImpact = {
 	}>;
 };
 
+type SqlModelGovernancePreviewItem = {
+	modelId?: string;
+	planId?: string;
+	planName?: string;
+	name?: string;
+	layer?: string;
+	status?: string;
+	modelPath?: string;
+	ruleHits?: string[];
+	downstreamRefCount?: number;
+	datasetBindingCount?: number;
+	reportBindingCount?: number;
+	fileDeleteSafe?: boolean;
+	suggestedAction?: string;
+};
+
+type SqlModelGovernancePreviewResult = {
+	total?: number;
+	items?: SqlModelGovernancePreviewItem[];
+};
+
+type SqlModelGovernanceExecuteResult = {
+	requested?: number;
+	deleted?: number;
+	skipped?: number;
+	items?: Array<{
+		modelId?: string;
+		name?: string;
+		result?: string;
+		message?: string;
+	}>;
+};
+
 type OdsSkippedSeverity = "error" | "warn" | "info";
 
 type OdsSkippedEntry = {
@@ -459,6 +494,16 @@ const layerTag = (layer?: string) => {
 	if (!layer) return <Tag>未分层</Tag>;
 	const color = layer === "ODS" ? "blue" : layer === "DWD" ? "cyan" : layer === "DWS" ? "purple" : layer === "ADS" ? "geekblue" : "default";
 	return <Tag color={color}>{layer}</Tag>;
+};
+
+const governanceRuleLabel = (rule?: string) => {
+	if (rule === "duplicate-model") return "重复模型";
+	if (rule === "preset:project-management-legacy-program") return "项目管理旧 program 模型";
+	if (rule === "sql-keyword") return "SQL 关键字";
+	if (rule === "name-pattern") return "模型名匹配";
+	if (rule === "path-pattern") return "路径匹配";
+	if (rule === "tag-match") return "标签匹配";
+	return rule || "未知规则";
 };
 
 const resolveModelKey = (model: SqlModel, fallback: string) => model.id || model.name || fallback;
@@ -542,12 +587,18 @@ export default function SqlModelingPage() {
 	const [outputRelationLoading, setOutputRelationLoading] = useState(false);
 	const [outputRelationSubmitting, setOutputRelationSubmitting] = useState(false);
 	const [outputRelation, setOutputRelation] = useState<DbtOutputRelation | null>(null);
+	const [governanceOpen, setGovernanceOpen] = useState(false);
+	const [governancePreviewLoading, setGovernancePreviewLoading] = useState(false);
+	const [governanceExecuting, setGovernanceExecuting] = useState(false);
+	const [governancePreview, setGovernancePreview] = useState<SqlModelGovernancePreviewItem[]>([]);
+	const [governanceSelection, setGovernanceSelection] = useState<string[]>([]);
 	const [auditLogs, setAuditLogs] = useState<any[]>([]);
 	const [auditLogsLoading, setAuditLogsLoading] = useState(false);
 	const [form] = Form.useForm();
 	const [runForm] = Form.useForm();
 	const [modelForm] = Form.useForm();
 	const [importForm] = Form.useForm();
+	const [governanceForm] = Form.useForm();
 	const [odsGenerateForm] = Form.useForm();
 	const [singleArchiveForm] = Form.useForm();
 	const [batchArchiveForm] = Form.useForm();
@@ -1360,6 +1411,74 @@ export default function SqlModelingPage() {
 		batchArchiveForm.setFieldsValue({ planId: defaultArchivePlanId });
 		setBatchArchiveSelection(collectUnassignedModelIds(unassignedModels));
 		setBatchArchiveOpen(true);
+	};
+
+	const openGovernanceModal = () => {
+		governanceForm.resetFields();
+		governanceForm.setFieldsValue({
+			planId: activeSpace?.id || spaces[0]?.id,
+			ruleKeys: ["duplicate-model", "preset:project-management-legacy-program"],
+			deleteFiles: true,
+		});
+		setGovernancePreview([]);
+		setGovernanceSelection([]);
+		setGovernanceOpen(true);
+	};
+
+	const handleGovernancePreview = async () => {
+		const values = await governanceForm.validateFields();
+		setGovernancePreviewLoading(true);
+		try {
+			const sqlKeywords = normalizeText(values.sqlKeywords)
+				.split(/\n|,/)
+				.map((item) => normalizeText(item))
+				.filter(Boolean);
+			const resp = (await previewSqlModelGovernance({
+				planId: values.planId,
+				ruleKeys: values.ruleKeys || [],
+				sqlKeywords,
+				namePattern: normalizeText(values.namePattern) || undefined,
+				modelPathPattern: normalizeText(values.modelPathPattern) || undefined,
+				tag: normalizeText(values.tag) || undefined,
+				layer: normalizeText(values.layer) || undefined,
+			})) as SqlModelGovernancePreviewResult;
+			const items = Array.isArray(resp?.items) ? resp.items : [];
+			setGovernancePreview(items);
+			setGovernanceSelection(items.map((item) => item.modelId || "").filter(Boolean));
+			if (!items.length) {
+				toast.info("未命中待治理模型");
+			}
+		} catch (err: any) {
+			toast.error(err?.message || "治理预览失败");
+		} finally {
+			setGovernancePreviewLoading(false);
+		}
+	};
+
+	const handleGovernanceExecute = async () => {
+		if (!governanceSelection.length) {
+			toast.error("请至少选择一个待治理模型");
+			return;
+		}
+		const values = governanceForm.getFieldsValue();
+		setGovernanceExecuting(true);
+		try {
+			const resp = (await executeSqlModelGovernance({
+				modelIds: governanceSelection,
+				deleteFiles: values.deleteFiles !== false,
+			})) as SqlModelGovernanceExecuteResult;
+			const deleted = Number(resp?.deleted || 0);
+			const skipped = Number(resp?.skipped || 0);
+			toast.success(`治理完成：删除 ${deleted} 个，跳过 ${skipped} 个`);
+			await loadModels();
+			setGovernancePreview([]);
+			setGovernanceSelection([]);
+			setGovernanceOpen(false);
+		} catch (err: any) {
+			toast.error(err?.message || "执行模型治理失败");
+		} finally {
+			setGovernanceExecuting(false);
+		}
 	};
 
 	const archiveModelToPlan = async (model: SqlModel, planId: string) => {
@@ -2256,6 +2375,9 @@ export default function SqlModelingPage() {
 							模型 <DownOutlined className="text-xs" />
 						</Button>
 					</Dropdown>
+					<Button onClick={openGovernanceModal} disabled={!workspaceOk}>
+						模型治理
+					</Button>
 					<Button onClick={openBatchArchive} disabled={!canBatchArchive}>
 						批量归档
 					</Button>
@@ -3631,6 +3753,156 @@ WHERE status = 'active'`}
 						</Upload>
 					</Form.Item>
 				</Form>
+			</Modal>
+
+			<Modal
+				open={governanceOpen}
+				title="模型治理"
+				width={1100}
+				onCancel={() => setGovernanceOpen(false)}
+				footer={
+					<Space>
+						<Button onClick={() => setGovernanceOpen(false)}>关闭</Button>
+						<Button onClick={handleGovernancePreview} loading={governancePreviewLoading}>
+							预览命中
+						</Button>
+						<Button
+							type="primary"
+							danger
+							onClick={handleGovernanceExecute}
+							loading={governanceExecuting}
+							disabled={!governanceSelection.length}
+						>
+							执行治理
+						</Button>
+					</Space>
+				}
+			>
+				<Form layout="vertical" form={governanceForm}>
+					<div className="grid gap-4 md:grid-cols-2">
+						<Form.Item name="planId" label="项目空间" rules={[{ required: true, message: "请选择项目空间" }]}>
+							<Select
+								placeholder="选择项目空间"
+								options={spaces.map((space) => ({ label: space.name || "未命名", value: space.id }))}
+							/>
+						</Form.Item>
+						<Form.Item name="layer" label="分层">
+							<Select
+								allowClear
+								placeholder="可选"
+								options={[
+									{ label: "ODS", value: "ODS" },
+									{ label: "DWD", value: "DWD" },
+									{ label: "DWS", value: "DWS" },
+									{ label: "ADS", value: "ADS" },
+								]}
+							/>
+						</Form.Item>
+					</div>
+					<Form.Item
+						name="ruleKeys"
+						label="治理规则"
+						rules={[{ required: true, message: "请至少选择一个治理规则" }]}
+					>
+						<Checkbox.Group
+							options={[
+								{ label: "重复模型", value: "duplicate-model" },
+								{ label: "项目管理旧 program 模型", value: "preset:project-management-legacy-program" },
+								{ label: "SQL 关键字", value: "sql-keyword" },
+								{ label: "模型名匹配", value: "name-pattern" },
+								{ label: "路径匹配", value: "path-pattern" },
+								{ label: "标签匹配", value: "tag-match" },
+							]}
+						/>
+					</Form.Item>
+					<div className="grid gap-4 md:grid-cols-3">
+						<Form.Item name="sqlKeywords" label="SQL 关键字">
+							<Input.TextArea rows={2} placeholder={"program_id, program_name"} />
+						</Form.Item>
+						<Form.Item name="namePattern" label="模型名匹配">
+							<Input placeholder="例如 major_project" />
+						</Form.Item>
+						<Form.Item name="modelPathPattern" label="路径匹配">
+							<Input placeholder="例如 models/ads/prj1/" />
+						</Form.Item>
+					</div>
+					<div className="grid gap-4 md:grid-cols-2">
+						<Form.Item name="tag" label="标签匹配">
+							<Input placeholder="例如 project-management" />
+						</Form.Item>
+						<Form.Item name="deleteFiles" label="同时清理无引用 dbt 文件" valuePropName="checked">
+							<Switch checkedChildren="清理文件" unCheckedChildren="仅删记录" />
+						</Form.Item>
+					</div>
+				</Form>
+				<div className="mt-4">
+					<Table<SqlModelGovernancePreviewItem>
+						size="small"
+						rowKey={(record) => record.modelId || record.modelPath || record.name || Math.random().toString()}
+						loading={governancePreviewLoading}
+						dataSource={governancePreview}
+						rowSelection={{
+							selectedRowKeys: governanceSelection,
+							onChange: (keys) => setGovernanceSelection(keys.map((key) => String(key))),
+						}}
+						pagination={{ pageSize: 8, hideOnSinglePage: true }}
+						columns={[
+							{
+								title: "模型",
+								dataIndex: "name",
+								render: (_, record) => (
+									<div>
+										<div className="font-medium">{record.name || "-"}</div>
+										<div className="text-xs text-muted-foreground">{record.modelPath || "-"}</div>
+									</div>
+								),
+							},
+							{
+								title: "分层",
+								dataIndex: "layer",
+								width: 90,
+								render: (value) => layerTag(value),
+							},
+							{
+								title: "状态",
+								dataIndex: "status",
+								width: 90,
+								render: (value) => <Tag>{value || "-"}</Tag>,
+							},
+							{
+								title: "命中规则",
+								dataIndex: "ruleHits",
+								render: (value: string[] | undefined) => (
+									<Space wrap size={[4, 4]}>
+										{(value || []).map((rule) => (
+											<Tag key={rule}>{governanceRuleLabel(rule)}</Tag>
+										))}
+									</Space>
+								),
+							},
+							{
+								title: "影响",
+								width: 180,
+								render: (_, record) => (
+									<div className="text-xs leading-6">
+										<div>下游 ref: {record.downstreamRefCount || 0}</div>
+										<div>数据集: {record.datasetBindingCount || 0}</div>
+										<div>报表: {record.reportBindingCount || 0}</div>
+									</div>
+								),
+							},
+							{
+								title: "建议动作",
+								width: 140,
+								render: (_, record) => (
+									<Tag color={record.fileDeleteSafe ? "green" : "gold"}>
+										{record.fileDeleteSafe ? "删记录+文件" : "仅删记录"}
+									</Tag>
+								),
+							},
+						]}
+					/>
+				</div>
 			</Modal>
 
 			<BatchImportModal

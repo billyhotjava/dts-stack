@@ -53,6 +53,18 @@ export function resolveActionTemplateText(template: string, params: Record<strin
     });
 }
 
+export function buildActionRuntimeParams(
+    runtimeValues: Record<string, string> | undefined,
+    params: Record<string, unknown>,
+): Record<string, unknown> {
+    const runtime = runtimeValues && typeof runtimeValues === 'object' ? runtimeValues : {};
+    return {
+        ...runtime,
+        ...params,
+        runtime,
+    };
+}
+
 export function buildTableRowActionParams(
     header: string[] | undefined,
     row: Array<string | number | boolean | null | undefined> | undefined,

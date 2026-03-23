@@ -40,6 +40,9 @@ type AuthSession = {
 };
 
 const DEFAULT_DEV_SERVER_PORT = 19333;
+const DEFAULT_PLATFORM_DEV_SERVER_PORT = 19334;
+const DEFAULT_ANALYTICS_DEV_SERVER_PORT = 19335;
+const DEFAULT_ADMIN_DEV_SERVER_PORT = 19336;
 const STORAGE_STATE_DIR = path.resolve(process.cwd(), 'playwright/.auth');
 
 function truthy(value: string | undefined): boolean {
@@ -57,12 +60,44 @@ function firstEnv(names: string[], fallback = ''): string {
   return fallback;
 }
 
+function appDevServerUrl(
+  enabledVar: string,
+  urlVars: string[],
+  fallbackPort: number,
+  fallbackPath: string,
+): string {
+  if (!truthy(process.env[enabledVar])) {
+    return '';
+  }
+  return firstEnv(urlVars, `http://127.0.0.1:${fallbackPort}${fallbackPath}`);
+}
+
 function normalizeAccessToken(token: string): string {
   const value = String(token ?? '').trim();
   if (!value) {
     return '';
   }
   return value.toLowerCase().startsWith('bearer ') ? value.slice(7).trim() : value;
+}
+
+function base64UrlEncode(value: string): string {
+  return Buffer.from(value, 'utf-8').toString('base64url');
+}
+
+function buildMockJwtToken(scope: AuthScope, username: string): string {
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  const header = base64UrlEncode(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
+  const payload = base64UrlEncode(
+    JSON.stringify({
+      sub: username || `${scope}-user`,
+      preferred_username: username || `${scope}-user`,
+      scope,
+      exp: nowSeconds + 4 * 60 * 60,
+      iat: nowSeconds,
+      iss: 'dts-web-e2e',
+    }),
+  );
+  return `${header}.${payload}.e2e-signature`;
 }
 
 function joinUrl(base: string, pathname: string): string {
@@ -198,9 +233,30 @@ export function testServerOrigin(): string {
 export function resolveAuthUrls(): AuthUrls {
   const fallbackOrigin = useTestServer() ? testServerOrigin() : '';
   const authGateway = firstEnv(['DTS_AUTH_GATEWAY_URL'], fallbackOrigin);
-  const admin = firstEnv(['DTS_ADMIN_URL'], fallbackOrigin ? `${fallbackOrigin}/admin/` : '');
-  const platform = firstEnv(['DTS_PLATFORM_URL', 'DTS_BASE_URL'], fallbackOrigin ? `${fallbackOrigin}/expert/` : '');
-  const analytics = firstEnv(['DTS_ANALYTICS_URL'], fallbackOrigin ? `${fallbackOrigin}/analytics/` : '');
+  const adminDevServer = appDevServerUrl(
+    'DTS_WEB_E2E_WITH_ADMIN_DEV_SERVER',
+    ['DTS_ADMIN_URL'],
+    DEFAULT_ADMIN_DEV_SERVER_PORT,
+    '/admin/',
+  );
+  const platformDevServer = appDevServerUrl(
+    'DTS_WEB_E2E_WITH_PLATFORM_DEV_SERVER',
+    ['DTS_PLATFORM_URL', 'DTS_BASE_URL'],
+    DEFAULT_PLATFORM_DEV_SERVER_PORT,
+    '/',
+  );
+  const analyticsDevServer = appDevServerUrl(
+    'DTS_WEB_E2E_WITH_ANALYTICS_DEV_SERVER',
+    ['DTS_ANALYTICS_URL'],
+    DEFAULT_ANALYTICS_DEV_SERVER_PORT,
+    '/analytics/',
+  );
+  const admin = firstEnv(['DTS_ADMIN_URL'], adminDevServer || (fallbackOrigin ? `${fallbackOrigin}/admin/` : ''));
+  const platform = firstEnv(
+    ['DTS_PLATFORM_URL', 'DTS_BASE_URL'],
+    platformDevServer || (fallbackOrigin ? `${fallbackOrigin}/expert/` : ''),
+  );
+  const analytics = firstEnv(['DTS_ANALYTICS_URL'], analyticsDevServer || (fallbackOrigin ? `${fallbackOrigin}/analytics/` : ''));
   const expert = firstEnv(['DTS_EXPERT_URL'], platform || (fallbackOrigin ? `${fallbackOrigin}/expert/` : ''));
   const authLogin = authGateway ? joinUrl(authGateway, '/auth/login') : '';
 
@@ -320,13 +376,23 @@ function tokenFallbackSession(config: ScopeConfig): AuthSession {
 
 async function resolveSession(scope: AuthScope, urls: AuthUrls): Promise<AuthSession> {
   const config = resolveScopeConfig(scope, urls);
+  const prefersMockJwt =
+    scope === 'platform' && truthy(process.env.DTS_WEB_E2E_WITH_PLATFORM_DEV_SERVER) && !config.token && useTestServer();
   if (config.token && !config.requirePasswordLogin) {
     return tokenFallbackSession(config);
   }
 
   if (config.username && config.password) {
     try {
-      return await loginWithPassword(config);
+      const session = await loginWithPassword(config);
+      if (prefersMockJwt && session.accessToken.startsWith('dev-access-')) {
+        return {
+          ...session,
+          accessToken: buildMockJwtToken(scope, config.username || session.username),
+          source: `${session.source}:mock-jwt`,
+        };
+      }
+      return session;
     } catch (error) {
       if (config.token) {
         return tokenFallbackSession(config);

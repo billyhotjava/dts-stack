@@ -11,11 +11,9 @@ import {
 	type DefaultDestinationStatus,
 	type FileUploadResult,
 	type IngestionConnectorCapabilityDTO,
-	type IngestionExecutionDTO,
 	type IngestionTaskDTO,
 	type IngestionTaskTemplateDTO,
 	type TableInfo,
-	resolveExecutionPollIntervalMs,
 } from "@/api/ingestion";
 import dataSourcesService, { type ExcelImportErrorRow, type InfraDataSource } from "@/api/services/dataSourcesService";
 import { listTables as sqlListTables, listColumns as sqlListColumns, type TableInfo as SqlTableInfo, type ColumnInfo } from "@/api/sql-workbench";
@@ -26,6 +24,9 @@ import { DbSourceStep } from "./steps/DbSourceStep";
 import { DbTargetStep } from "./steps/DbTargetStep";
 import { ReviewStep } from "./steps/ReviewStep";
 import type { ExtraColumnDef } from "./steps/types";
+import { resolveAsyncRunPollHint, resolveCreatedTaskId } from "./transformCreateAsyncRun.helpers";
+import { loadTransformCreateBootstrap } from "./transformCreateBootstrap.helpers";
+import { useTransformAsyncRunProgress } from "./useTransformAsyncRunProgress";
 
 const { Text } = Typography;
 
@@ -86,73 +87,6 @@ const JDBC_READER_BY_URL: Record<string, string> = {
 };
 
 const normalizeText = (value?: string) => String(value || "").trim();
-
-type AsyncRunProgressStatus = "active" | "success" | "exception";
-
-type AsyncRunProgressView = {
-	progress: number;
-	status: AsyncRunProgressStatus;
-	stage: string;
-	detail: string;
-	terminal: boolean;
-};
-
-const resolveCreatedTaskId = (payload: any): number | undefined => {
-	const candidate = payload?.task?.id ?? payload?.taskId ?? payload?.id ?? payload?.task?.taskId;
-	const value = Number(candidate);
-	return Number.isFinite(value) && value > 0 ? value : undefined;
-};
-
-const mapExecutionToProgressView = (
-	execution: IngestionExecutionDTO | null,
-	elapsedMs: number
-): AsyncRunProgressView => {
-	if (!execution) {
-		const dynamicProgress = Math.min(45, 15 + Math.floor(elapsedMs / 5000) * 5);
-		return {
-			progress: dynamicProgress,
-			status: "active",
-			stage: "等待执行记录",
-			detail: "任务已提交，系统正在准备 DAG 和作业参数。",
-			terminal: false,
-		};
-	}
-	const rawStatus = normalizeText(execution.status).toLowerCase();
-	if (rawStatus === "success") {
-		return {
-			progress: 100,
-			status: "success",
-			stage: "执行成功",
-			detail: "入湖任务已执行完成。",
-			terminal: true,
-		};
-	}
-	if (rawStatus === "failed" || rawStatus === "error") {
-		return {
-			progress: 100,
-			status: "exception",
-			stage: "执行失败",
-			detail: normalizeText(execution.errorMessage) || "任务执行失败，请查看日志定位原因。",
-			terminal: true,
-		};
-	}
-	if (rawStatus === "preparing") {
-		return {
-			progress: 55,
-			status: "active",
-			stage: "准备执行",
-			detail: "正在生成/校验 Addax 作业并等待 DAG 就绪。",
-			terminal: false,
-		};
-	}
-	return {
-		progress: 80,
-		status: "active",
-		stage: "执行中",
-		detail: "已触发执行，正在同步运行状态。",
-		terminal: false,
-	};
-};
 
 const normalizeIdentifier = (value?: string) => {
 	const text = normalizeText(value).toLowerCase();
@@ -1189,19 +1123,15 @@ export default function TransformCreatePage() {
 	const [errorPreviewRows, setErrorPreviewRows] = useState<ExcelImportErrorRow[]>([]);
 	const [errorPreviewLimit, setErrorPreviewLimit] = useState(50);
 	// batchFieldModalOpen and batchFieldText moved to FileBasicStep
-	const [asyncRunModalOpen, setAsyncRunModalOpen] = useState(false);
-	const [asyncRunTaskId, setAsyncRunTaskId] = useState<number | null>(null);
-	const [asyncRunTaskName, setAsyncRunTaskName] = useState("");
-	const [asyncRunExecution, setAsyncRunExecution] = useState<IngestionExecutionDTO | null>(null);
-	const [asyncRunProgress, setAsyncRunProgress] = useState<AsyncRunProgressView>({
-		progress: 0,
-		status: "active",
-		stage: "等待提交",
-		detail: "",
-		terminal: false,
-	});
-	const asyncRunPollTimerRef = useRef<number | null>(null);
-	const asyncRunStartedAtRef = useRef<number>(0);
+	const {
+		asyncRunModalOpen,
+		asyncRunTaskId,
+		asyncRunTaskName,
+		asyncRunExecution,
+		asyncRunProgress,
+		closeAsyncRunModal,
+		startAsyncRunProgress,
+	} = useTransformAsyncRunProgress();
 	const [form] = Form.useForm();
 	const lastAutoDiscoveryKeyRef = useRef("");
 	const router = useRouter();
@@ -1269,85 +1199,14 @@ export default function TransformCreatePage() {
 		[]
 	);
 
-	const stopAsyncRunPolling = () => {
-		if (asyncRunPollTimerRef.current !== null) {
-			window.clearInterval(asyncRunPollTimerRef.current);
-			asyncRunPollTimerRef.current = null;
-		}
-	};
-
-	useEffect(() => {
-		return () => {
-			if (asyncRunPollTimerRef.current !== null) {
-				window.clearInterval(asyncRunPollTimerRef.current);
-				asyncRunPollTimerRef.current = null;
-			}
-		};
-	}, []);
-
-	const closeAsyncRunModal = () => {
-		stopAsyncRunPolling();
-		setAsyncRunModalOpen(false);
-	};
-
-	const startAsyncRunProgress = (taskId: number, taskName: string, pollIntervalMs?: number) => {
-		stopAsyncRunPolling();
-		asyncRunStartedAtRef.current = Date.now();
-		setAsyncRunTaskId(taskId);
-		setAsyncRunTaskName(taskName);
-		setAsyncRunExecution(null);
-		setAsyncRunModalOpen(true);
-		setAsyncRunProgress({
-			progress: 10,
-			status: "active",
-			stage: "任务已提交",
-			detail: "正在后台触发执行。",
-			terminal: false,
-		});
-
-		const pollExecution = async () => {
-			const elapsedMs = Date.now() - asyncRunStartedAtRef.current;
-			if (elapsedMs > 5 * 60 * 1000) {
-				stopAsyncRunPolling();
-				setAsyncRunProgress({
-					progress: 100,
-					status: "exception",
-					stage: "状态同步超时",
-					detail: "超出等待时间，请进入任务详情页继续查看执行状态。",
-					terminal: true,
-				});
-				return;
-			}
-			try {
-				const latest = await ingestionTaskAPI.getLatestExecution(taskId);
-				setAsyncRunExecution(latest);
-				const nextProgress = mapExecutionToProgressView(latest, elapsedMs);
-				setAsyncRunProgress(nextProgress);
-				if (nextProgress.terminal) {
-					stopAsyncRunPolling();
-				}
-			} catch {
-				setAsyncRunProgress((prev) => ({
-					...prev,
-					detail: "状态同步中，稍后自动重试。",
-				}));
-			}
-		};
-
-		void pollExecution();
-		asyncRunPollTimerRef.current = window.setInterval(() => {
-			void pollExecution();
-		}, resolveExecutionPollIntervalMs(pollIntervalMs));
-	};
-
 	const handleCreateTaskResult = (result: any, runNow: boolean, taskName: string) => {
 		const createdTaskId = resolveCreatedTaskId(result);
-		const pollHint = Number(result?.execution?.pollIntervalMs ?? result?.pollIntervalMs);
+		const pollHint = resolveAsyncRunPollHint(result);
 		clearDraft();
 		setHasDraft(false);
 		if (runNow && createdTaskId) {
 			toast.success("任务已提交，正在后台执行");
-			startAsyncRunProgress(createdTaskId, taskName, Number.isFinite(pollHint) ? pollHint : undefined);
+			startAsyncRunProgress(createdTaskId, taskName, pollHint);
 			return;
 		}
 		toast.success("入湖任务已提交");
@@ -1406,98 +1265,52 @@ export default function TransformCreatePage() {
 	};
 
 	useEffect(() => {
-		const loadSources = async () => {
-			try {
-				setLoadingDataSources(true);
-				const list = await dataSourcesService.list();
-				setDataSources(Array.isArray(list) ? list : []);
-			} catch (error: any) {
-				toast.error(error?.message || "数据源列表加载失败");
-				setDataSources([]);
-			} finally {
-				setLoadingDataSources(false);
-			}
-		};
-		loadSources();
-	}, []);
-
-	useEffect(() => {
-		const loadCapabilities = async () => {
-			try {
-				const rows = await ingestionTaskAPI.getConnectorCapabilities();
-				setConnectorCapabilities(Array.isArray(rows) ? rows : []);
-				setCapabilityLoadFailed(false);
-			} catch {
-				setConnectorCapabilities([]);
-				setCapabilityLoadFailed(true);
-			}
-		};
-		void loadCapabilities();
-	}, []);
-
-	useEffect(() => {
-		const loadTemplates = async () => {
-			try {
-				setLoadingTaskTemplates(true);
-				const rows = await ingestionTaskAPI.getTaskTemplates();
-				const list = Array.isArray(rows) ? rows : [];
-				setTaskTemplates(list);
-				if (!selectedTemplateId && list.length) {
-					setSelectedTemplateId(String(list[0].id));
-				}
-			} catch {
-				setTaskTemplates([]);
-			} finally {
-				setLoadingTaskTemplates(false);
-			}
-		};
-		void loadTemplates();
-	}, []);
-
-	useEffect(() => {
 		let active = true;
-		const loadDefaultDestination = async () => {
-			try {
-				setLoadingDefaultDestination(true);
-				setDefaultDestinationError("");
-				const status = await ingestionTaskAPI.getDefaultDestinationStatus();
-				if (active) {
-					setDefaultDestinationStatus(status);
-					if (status?.writerType) {
-						form.setFieldValue("writerType", status.writerType);
-					}
-				}
-			} catch (error: any) {
-				if (active) {
-					setDefaultDestinationError(error?.message || "无法获取默认数据湖配置");
-				}
-			} finally {
-				if (active) {
-					setLoadingDefaultDestination(false);
-				}
+		const loadBootstrap = async () => {
+			setLoadingDataSources(true);
+			setLoadingTaskTemplates(true);
+			setLoadingDefaultDestination(true);
+			setLoadingSqlModels(true);
+			const bootstrap = await loadTransformCreateBootstrap(
+				{
+					loadDataSources: () => dataSourcesService.list(),
+					loadConnectorCapabilities: () => ingestionTaskAPI.getConnectorCapabilities(),
+					loadTaskTemplates: () => ingestionTaskAPI.getTaskTemplates(),
+					loadDefaultDestinationStatus: () => ingestionTaskAPI.getDefaultDestinationStatus(),
+					loadSqlModels: () => listSqlModels() as Promise<Array<{ id?: string; name?: string; alias?: string }>>,
+				},
+				selectedTemplateId
+			);
+			if (!active) return;
+			setDataSources(bootstrap.dataSources);
+			setConnectorCapabilities(bootstrap.connectorCapabilities);
+			setCapabilityLoadFailed(bootstrap.capabilityLoadFailed);
+			setTaskTemplates(bootstrap.taskTemplates);
+			if (bootstrap.selectedTemplateId && bootstrap.selectedTemplateId !== selectedTemplateId) {
+				setSelectedTemplateId(bootstrap.selectedTemplateId);
 			}
+			setDefaultDestinationStatus(bootstrap.defaultDestinationStatus);
+			setDefaultDestinationError(bootstrap.defaultDestinationError);
+			if (bootstrap.defaultDestinationStatus?.writerType) {
+				form.setFieldValue("writerType", bootstrap.defaultDestinationStatus.writerType);
+			}
+			setSqlModels(bootstrap.sqlModels);
+			if (bootstrap.dataSourcesError) {
+				toast.error(bootstrap.dataSourcesError);
+			}
+			if (bootstrap.sqlModelsError) {
+				toast.error(bootstrap.sqlModelsError);
+			}
+			setLoadingDataSources(false);
+			setLoadingTaskTemplates(false);
+			setLoadingDefaultDestination(false);
+			setLoadingSqlModels(false);
 		};
-		loadDefaultDestination();
+		void loadBootstrap();
 		return () => {
 			active = false;
 		};
-	}, [form]);
-
-	useEffect(() => {
-		const loadModels = async () => {
-			try {
-				setLoadingSqlModels(true);
-				const list = (await listSqlModels()) as Array<{ id?: string; name?: string; alias?: string }>;
-				setSqlModels(Array.isArray(list) ? list : []);
-			} catch (error: any) {
-				toast.error(error?.message || "模型列表加载失败");
-				setSqlModels([]);
-			} finally {
-				setLoadingSqlModels(false);
-			}
-		};
-		loadModels();
-	}, []);
+	}, [form, selectedTemplateId]);
 
 	useEffect(() => {
 		if (!selectedDataSource) {

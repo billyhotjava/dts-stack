@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
     buildTableRowActionParams,
+    buildActionRuntimeParams,
     normalizeScreenActionType,
     resolvePreferredDrillValue,
     resolveActionMappingValues,
@@ -62,6 +63,38 @@ test('buildTableRowActionParams exposes row fields by header name and index', ()
     assert.equal(params['状态'], '推进中');
     assert.deepEqual(params.row, ['QMS二期', '周工', '推进中']);
     assert.equal(params['row[1]'], '周工');
+});
+
+test('buildActionRuntimeParams merges runtime filters and click params for jump-url templates', () => {
+    const params = buildActionRuntimeParams(
+        {
+            majorProjectId: 'major-aurora',
+            dateFrom: '2026-03-01',
+            dateTo: '2026-03-31',
+            deptId: '总体组',
+            riskLevel: '高',
+        },
+        {
+            dept: '质量科',
+            data: { majorProjectId: 'major-dragon' },
+        },
+    );
+
+    assert.equal(params.majorProjectId, 'major-aurora');
+    assert.equal(params.dateFrom, '2026-03-01');
+    assert.equal(params.riskLevel, '高');
+    assert.equal(params.dept, '质量科');
+    assert.deepEqual(params.runtime, {
+        majorProjectId: 'major-aurora',
+        dateFrom: '2026-03-01',
+        dateTo: '2026-03-31',
+        deptId: '总体组',
+        riskLevel: '高',
+    });
+    assert.equal(resolveActionTemplateText(
+        '/analytics/project-cockpit?theme=risk&majorProjectId={{majorProjectId}}&deptId={{dept}}&riskLevel={{runtime.riskLevel}}',
+        params,
+    ), '/analytics/project-cockpit?theme=risk&majorProjectId=major-aurora&deptId=质量科&riskLevel=高');
 });
 
 test('resolvePreferredDrillValue picks chart or table drill labels in priority order', () => {

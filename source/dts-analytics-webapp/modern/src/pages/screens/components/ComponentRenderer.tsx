@@ -27,6 +27,7 @@ import {
     resolveFilterDefaultValue, resolveDateRangeDefaultValues,
 } from '../renderers/shared/chartUtils';
 import {
+    buildActionRuntimeParams,
     buildTableRowActionParams,
     normalizeScreenActionType,
     resolvePreferredDrillValue,
@@ -731,12 +732,13 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
         if (mode !== 'preview' || componentActions.length === 0) {
             return;
         }
+        const actionParams = buildActionRuntimeParams(runtime.values, params);
         for (const action of componentActions) {
             const actionType = normalizeScreenActionType(action.type);
             if (!actionType) {
                 continue;
             }
-            const mappedValues = resolveActionMappingValues(params, action.mappings);
+            const mappedValues = resolveActionMappingValues(actionParams, action.mappings);
             for (const [key, value] of Object.entries(mappedValues)) {
                 runtime.setVariable(key, value, `action:${component.id}:${actionType}`);
             }
@@ -754,7 +756,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                 if (!drillRuntimeEnabled || !drillState.canDrillDown) {
                     continue;
                 }
-                const clickedValue = resolvePreferredDrillValue(params);
+                const clickedValue = resolvePreferredDrillValue(actionParams);
                 if (!clickedValue) {
                     continue;
                 }
@@ -785,7 +787,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
             }
             if (actionType === 'jump-url') {
                 const template = String(action.jumpUrlTemplate || '').trim();
-                const targetUrl = resolveInteractionUrlTemplate(template, params);
+                const targetUrl = resolveInteractionUrlTemplate(template, actionParams);
                 if (!targetUrl) {
                     continue;
                 }
@@ -793,8 +795,8 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                 continue;
             }
             if (actionType === 'open-panel') {
-                const title = resolveActionTemplateText(action.panelTitle || action.label || '详情', params);
-                const body = resolveActionTemplateText(action.panelBodyTemplate || '', params);
+                const title = resolveActionTemplateText(action.panelTitle || action.label || '详情', actionParams);
+                const body = resolveActionTemplateText(action.panelBodyTemplate || '', actionParams);
                 runtime.trackEvent({
                     kind: 'panel',
                     key: 'open-panel',
@@ -807,7 +809,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
             }
             if (actionType === 'emit-intent') {
                 const intentName = String(action.intentName || action.label || 'intent').trim() || 'intent';
-                const payload = resolveActionTemplateText(action.intentPayloadTemplate || '', params) || JSON.stringify(mappedValues);
+                const payload = resolveActionTemplateText(action.intentPayloadTemplate || '', actionParams) || JSON.stringify(mappedValues);
                 runtime.trackEvent({
                     kind: 'intent',
                     key: intentName,
@@ -868,7 +870,10 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                 }
 
                 if (canJump && interactionJump) {
-                    const targetUrl = resolveInteractionUrlTemplate(interactionJump.template, params);
+                    const targetUrl = resolveInteractionUrlTemplate(
+                        interactionJump.template,
+                        buildActionRuntimeParams(runtime.values, params),
+                    );
                     if (targetUrl) {
                         navigateToResolvedUrl(targetUrl, interactionJump.openMode, `interaction:${component.id}`);
                     }
@@ -1963,6 +1968,17 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
             }
 
             case 'radar-chart':
+                {
+                    const mappedSeries = Array.isArray(c.series)
+                        ? (c.series as Array<{ name?: string; data?: number[] }>)
+                        : [];
+                    const radarSeries = mappedSeries.length > 0
+                        ? mappedSeries.map((item, index) => ({
+                            name: item.name,
+                            value: Array.isArray(item.data) ? item.data : [],
+                            areaStyle: { opacity: Math.max(0.14, 0.32 - (index * 0.08)) },
+                        }))
+                        : [{ value: c.data as number[], areaStyle: { opacity: 0.3 } }];
                 return renderEChartWithHandles({
                     ...themeOptions,
                     ...chartMotionOption,
@@ -1979,9 +1995,10 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                     },
                     series: [{
                         type: 'radar',
-                        data: [{ value: c.data as number[], areaStyle: { opacity: 0.3 } }],
+                        data: radarSeries,
                     }],
                 }, echartsClickHandler);
+                }
 
             case 'funnel-chart':
                 return renderEChartWithHandles({

@@ -1998,6 +1998,7 @@ public class IngestionTaskService {
             task.setAirflowDagId(dagId);
         }
         task = taskRepository.save(task);
+        dagPreheatService.preheatDag(dagId);
         return taskMapper.toDto(task);
     }
 

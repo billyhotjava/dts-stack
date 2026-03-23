@@ -16,6 +16,7 @@ import com.yuzhi.dts.platform.domain.infra.InfraOdsTableMapping;
 import com.yuzhi.dts.platform.domain.modeling.ModelingPlan;
 import com.yuzhi.dts.platform.domain.modeling.ModelingSqlModel;
 import com.yuzhi.dts.platform.domain.service.InfraDataSource;
+import com.yuzhi.dts.platform.repository.explore.QueryDatasetAssetRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogColumnSchemaRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogTableSchemaRepository;
@@ -23,6 +24,7 @@ import com.yuzhi.dts.platform.repository.infra.InfraOdsTableMappingRepository;
 import com.yuzhi.dts.platform.repository.modeling.ModelingPlanRepository;
 import com.yuzhi.dts.platform.repository.modeling.ModelingSqlModelRepository;
 import com.yuzhi.dts.platform.repository.service.InfraDataSourceRepository;
+import com.yuzhi.dts.platform.repository.visualization.BiReportLinkRepository;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.catalog.CatalogColumnSyncService;
 import com.yuzhi.dts.platform.service.etl.DbtConfigService;
@@ -90,6 +92,12 @@ class ModelingSqlModelServiceTest {
     private CatalogColumnSyncService columnSyncService;
 
     @Mock
+    private QueryDatasetAssetRepository queryDatasetAssetRepository;
+
+    @Mock
+    private BiReportLinkRepository biReportLinkRepository;
+
+    @Mock
     private AuditService auditService;
 
     @Spy
@@ -120,7 +128,19 @@ class ModelingSqlModelServiceTest {
         lenient().when(adminInfraClient.fetchDefaultDataLake()).thenReturn(Optional.empty());
         lenient().when(planRepo.findById(planId)).thenReturn(Optional.of(plan));
         lenient().when(columnSyncService.parseCsv(any(Path.class))).thenReturn(List.of());
-        lenient().when(repo.findFirstByPlanIdAndNameIgnoreCase(any(UUID.class), anyString())).thenReturn(Optional.empty());
+        lenient().when(repo.findFirstByPlanIdAndNameIgnoreCase(any(UUID.class), anyString())).thenAnswer(invocation -> {
+            UUID requestedPlanId = invocation.getArgument(0);
+            String requestedName = invocation.getArgument(1);
+            return storedModels
+                .stream()
+                .filter(model -> requestedPlanId.equals(model.getPlanId()))
+                .filter(model -> requestedName != null && requestedName.equalsIgnoreCase(model.getName()))
+                .findFirst();
+        });
+        lenient().when(repo.findById(any(UUID.class))).thenAnswer(invocation -> {
+            UUID id = invocation.getArgument(0);
+            return storedModels.stream().filter(model -> id.equals(model.getId())).findFirst();
+        });
         lenient().when(repo.findAll()).thenAnswer(invocation -> new ArrayList<>(storedModels));
         lenient().when(repo.findByPlanId(any(UUID.class))).thenAnswer(invocation -> {
             UUID requestedPlanId = invocation.getArgument(0);
@@ -135,6 +155,21 @@ class ModelingSqlModelServiceTest {
             storedModels.add(model);
             return model;
         });
+        lenient().doAnswer(invocation -> {
+            ModelingSqlModel model = invocation.getArgument(0);
+            storedModels.removeIf(existing -> existing.getId() != null && existing.getId().equals(model.getId()));
+            return null;
+        }).when(repo).delete(any(ModelingSqlModel.class));
+        lenient().when(repo.findByModelPathIn(any())).thenAnswer(invocation -> {
+            @SuppressWarnings("unchecked")
+            List<String> modelPaths = invocation.getArgument(0);
+            return storedModels
+                .stream()
+                .filter(model -> modelPaths != null && modelPaths.contains(model.getModelPath()))
+                .toList();
+        });
+        lenient().when(queryDatasetAssetRepository.findByEnabledTrueOrderByLastModifiedDateDesc()).thenReturn(List.of());
+        lenient().when(biReportLinkRepository.findAll()).thenReturn(List.of());
         lenient().when(
             datasetRepository.existsByHiveDatabaseIgnoreCaseAndHiveTableIgnoreCaseAndWarehouseLayerIgnoreCaseAndEnabledTrue(
                 anyString(),
@@ -439,6 +474,239 @@ class ModelingSqlModelServiceTest {
         assertThat(tempDir.resolve("models/project_management_sources.yml")).exists();
         assertThat(tempDir.resolve("macros/test_helper.sql")).exists();
         assertThat(tempDir.resolve("seeds/project_mapping.csv")).exists();
+    }
+
+    @Test
+    void batchImportFromArchive_shouldUpsertExistingModelInsteadOfCreatingDuplicate() throws Exception {
+        UUID sourceId = UUID.randomUUID();
+        when(dataSourceRepository.findById(sourceId)).thenReturn(Optional.of(source(sourceId, "ODS-Lake", "postgres")));
+
+        Path archive = createArchive(
+            "models.tsv",
+            """
+            name\tlayer\tsql_path\tsource_data_source_id\talias\tschema_name\tmaterialized\ttags\tstatus\tenabled\towner_dept\tdescription\tcsv_path
+            dim_node_type\tDWD\tdim_node_type.sql\t%s\t\tproject-management\ttable\tproject-management\tPUBLISHED\ttrue\tD1\t第一版\t
+            """.formatted(sourceId),
+            "dim_node_type.sql",
+            "select '一般节点' as label"
+        );
+
+        ModelingSqlModelService.BatchImportResult first = service.batchImportFromArchive(planId, sourceId, false, archive, "D1");
+        ModelingSqlModelService.BatchImportResult second = service.batchImportFromArchive(planId, sourceId, false, archive, "D1");
+
+        assertThat(first.imported()).isEqualTo(1);
+        assertThat(second.imported()).isEqualTo(1);
+        assertThat(storedModels).hasSize(1);
+        assertThat(storedModels.get(0).getName()).isEqualTo("dim_node_type");
+    }
+
+    @Test
+    void list_shouldDeduplicateExistingModelsWithSamePlanAndName() {
+        UUID sourceId = UUID.randomUUID();
+
+        ModelingSqlModel older = new ModelingSqlModel();
+        older.setId(UUID.randomUUID());
+        older.setPlanId(planId);
+        older.setName("dim_node_type");
+        older.setLayer("DWD");
+        older.setSourceDataSourceId(sourceId);
+        older.setSqlText("select 'old' as version");
+        older.setStatus("DRAFT");
+        older.setEnabled(Boolean.TRUE);
+        older.setOwnerDept("D1");
+        older.setCreatedDate(Instant.parse("2026-03-20T00:00:00Z"));
+        older.setLastModifiedDate(Instant.parse("2026-03-20T00:00:00Z"));
+
+        ModelingSqlModel newer = new ModelingSqlModel();
+        newer.setId(UUID.randomUUID());
+        newer.setPlanId(planId);
+        newer.setName("dim_node_type");
+        newer.setLayer("DWD");
+        newer.setSourceDataSourceId(sourceId);
+        newer.setSqlText("select 'new' as version");
+        newer.setStatus("PUBLISHED");
+        newer.setEnabled(Boolean.TRUE);
+        newer.setOwnerDept("D1");
+        newer.setCreatedDate(Instant.parse("2026-03-21T00:00:00Z"));
+        newer.setLastModifiedDate(Instant.parse("2026-03-21T00:00:00Z"));
+
+        storedModels.add(older);
+        storedModels.add(newer);
+
+        List<ModelingSqlModelService.SqlModelDto> models = service.list(planId, null, "D1");
+
+        assertThat(models).hasSize(1);
+        assertThat(models.get(0).id()).isEqualTo(newer.getId());
+        assertThat(models.get(0).status()).isEqualTo("PUBLISHED");
+    }
+
+    @Test
+    void delete_shouldRetainSharedModelFileWhenAnotherRecordStillReferencesSamePath() throws Exception {
+        Path sqlPath = tempDir.resolve("models/dwd/project_management/dim_node_type.sql");
+        Files.createDirectories(sqlPath.getParent());
+        Files.writeString(sqlPath, "select 1 as id\n", StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+
+        ModelingSqlModel keeper = new ModelingSqlModel();
+        keeper.setId(UUID.randomUUID());
+        keeper.setPlanId(planId);
+        keeper.setName("dim_node_type");
+        keeper.setOwnerDept("D1");
+        keeper.setModelPath("models/dwd/project_management/dim_node_type.sql");
+
+        ModelingSqlModel duplicate = new ModelingSqlModel();
+        duplicate.setId(UUID.randomUUID());
+        duplicate.setPlanId(planId);
+        duplicate.setName("dim_node_type");
+        duplicate.setOwnerDept("D1");
+        duplicate.setModelPath("models/dwd/project_management/dim_node_type.sql");
+
+        storedModels.add(keeper);
+        storedModels.add(duplicate);
+
+        service.delete(duplicate.getId(), "D1");
+
+        assertThat(storedModels).singleElement().extracting(ModelingSqlModel::getId).isEqualTo(keeper.getId());
+        assertThat(sqlPath).exists();
+    }
+
+    @Test
+    void governancePreview_shouldFindDuplicateAndLegacyProgramModels() {
+        UUID sourceId = UUID.randomUUID();
+
+        ModelingSqlModel duplicateOld = new ModelingSqlModel();
+        duplicateOld.setId(UUID.randomUUID());
+        duplicateOld.setPlanId(planId);
+        duplicateOld.setName("dim_node_type");
+        duplicateOld.setLayer("DWD");
+        duplicateOld.setSourceDataSourceId(sourceId);
+        duplicateOld.setSqlText("select 'old' as version");
+        duplicateOld.setTags("project-management,dim");
+        duplicateOld.setStatus("DRAFT");
+        duplicateOld.setEnabled(Boolean.TRUE);
+        duplicateOld.setOwnerDept("D1");
+        duplicateOld.setModelPath("models/dwd/prj1/dim_node_type.sql");
+        duplicateOld.setCreatedDate(Instant.parse("2026-03-20T00:00:00Z"));
+        duplicateOld.setLastModifiedDate(Instant.parse("2026-03-20T00:00:00Z"));
+
+        ModelingSqlModel duplicateNew = new ModelingSqlModel();
+        duplicateNew.setId(UUID.randomUUID());
+        duplicateNew.setPlanId(planId);
+        duplicateNew.setName("dim_node_type");
+        duplicateNew.setLayer("DWD");
+        duplicateNew.setSourceDataSourceId(sourceId);
+        duplicateNew.setSqlText("select 'new' as version");
+        duplicateNew.setTags("project-management,dim");
+        duplicateNew.setStatus("PUBLISHED");
+        duplicateNew.setEnabled(Boolean.TRUE);
+        duplicateNew.setOwnerDept("D1");
+        duplicateNew.setModelPath("models/dwd/prj1/dim_node_type.sql");
+        duplicateNew.setCreatedDate(Instant.parse("2026-03-21T00:00:00Z"));
+        duplicateNew.setLastModifiedDate(Instant.parse("2026-03-21T00:00:00Z"));
+
+        ModelingSqlModel legacyProgramModel = new ModelingSqlModel();
+        legacyProgramModel.setId(UUID.randomUUID());
+        legacyProgramModel.setPlanId(planId);
+        legacyProgramModel.setName("biz_ads_major_project_overview");
+        legacyProgramModel.setLayer("ADS");
+        legacyProgramModel.setSourceDataSourceId(sourceId);
+        legacyProgramModel.setSqlText("select program_id, program_name from legacy_project_view");
+        legacyProgramModel.setTags("project-management,ads");
+        legacyProgramModel.setStatus("PUBLISHED");
+        legacyProgramModel.setEnabled(Boolean.TRUE);
+        legacyProgramModel.setOwnerDept("D1");
+        legacyProgramModel.setModelPath("models/ads/prj1/biz_ads_major_project_overview.sql");
+
+        ModelingSqlModel cleanModel = new ModelingSqlModel();
+        cleanModel.setId(UUID.randomUUID());
+        cleanModel.setPlanId(planId);
+        cleanModel.setName("biz_ads_project_overview");
+        cleanModel.setLayer("ADS");
+        cleanModel.setSourceDataSourceId(sourceId);
+        cleanModel.setSqlText("select major_project_id from latest_project_view");
+        cleanModel.setTags("project-management,ads");
+        cleanModel.setStatus("PUBLISHED");
+        cleanModel.setEnabled(Boolean.TRUE);
+        cleanModel.setOwnerDept("D1");
+        cleanModel.setModelPath("models/ads/prj1/biz_ads_project_overview.sql");
+
+        storedModels.add(duplicateOld);
+        storedModels.add(duplicateNew);
+        storedModels.add(legacyProgramModel);
+        storedModels.add(cleanModel);
+
+        ModelingSqlModelService.SqlModelGovernancePreviewResult preview = service.previewGovernance(
+            new ModelingSqlModelService.SqlModelGovernancePreviewRequest(
+                planId,
+                List.of("duplicate-model", "preset:project-management-legacy-program"),
+                List.of(),
+                null,
+                null,
+                null,
+                null
+            ),
+            "D1"
+        );
+
+        assertThat(preview.total()).isEqualTo(2);
+        assertThat(preview.items())
+            .extracting(ModelingSqlModelService.SqlModelGovernancePreviewItem::name)
+            .containsExactlyInAnyOrder("dim_node_type", "biz_ads_major_project_overview");
+        assertThat(preview.items())
+            .filteredOn(item -> item.name().equals("dim_node_type"))
+            .singleElement()
+            .satisfies(item -> assertThat(item.ruleHits()).contains("duplicate-model"));
+        assertThat(preview.items())
+            .filteredOn(item -> item.name().equals("biz_ads_major_project_overview"))
+            .singleElement()
+            .satisfies(item -> assertThat(item.ruleHits()).contains("preset:project-management-legacy-program"));
+    }
+
+    @Test
+    void executeGovernance_shouldDeleteSelectedModelsAndOnlyRemoveUnreferencedFiles() throws Exception {
+        Path sharedSqlPath = tempDir.resolve("models/dwd/prj1/dim_node_type.sql");
+        Files.createDirectories(sharedSqlPath.getParent());
+        Files.writeString(sharedSqlPath, "select 1 as id\n", StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+        Path uniqueSqlPath = tempDir.resolve("models/ads/prj1/biz_ads_major_project_overview.sql");
+        Files.createDirectories(uniqueSqlPath.getParent());
+        Files.writeString(uniqueSqlPath, "select program_id from legacy\n", StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+
+        ModelingSqlModel keeper = new ModelingSqlModel();
+        keeper.setId(UUID.randomUUID());
+        keeper.setPlanId(planId);
+        keeper.setName("dim_node_type");
+        keeper.setOwnerDept("D1");
+        keeper.setModelPath("models/dwd/prj1/dim_node_type.sql");
+
+        ModelingSqlModel duplicate = new ModelingSqlModel();
+        duplicate.setId(UUID.randomUUID());
+        duplicate.setPlanId(planId);
+        duplicate.setName("dim_node_type");
+        duplicate.setOwnerDept("D1");
+        duplicate.setModelPath("models/dwd/prj1/dim_node_type.sql");
+
+        ModelingSqlModel legacy = new ModelingSqlModel();
+        legacy.setId(UUID.randomUUID());
+        legacy.setPlanId(planId);
+        legacy.setName("biz_ads_major_project_overview");
+        legacy.setOwnerDept("D1");
+        legacy.setModelPath("models/ads/prj1/biz_ads_major_project_overview.sql");
+
+        storedModels.add(keeper);
+        storedModels.add(duplicate);
+        storedModels.add(legacy);
+
+        ModelingSqlModelService.SqlModelGovernanceExecuteResult result = service.executeGovernance(
+            new ModelingSqlModelService.SqlModelGovernanceExecuteRequest(List.of(duplicate.getId(), legacy.getId()), true),
+            "D1"
+        );
+
+        assertThat(result.deleted()).isEqualTo(2);
+        assertThat(storedModels)
+            .singleElement()
+            .extracting(ModelingSqlModel::getId)
+            .isEqualTo(keeper.getId());
+        assertThat(sharedSqlPath).exists();
+        assertThat(uniqueSqlPath).doesNotExist();
     }
 
     @Test

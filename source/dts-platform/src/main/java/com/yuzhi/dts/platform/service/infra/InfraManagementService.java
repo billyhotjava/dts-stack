@@ -35,6 +35,7 @@ import com.yuzhi.dts.platform.web.rest.ApiResponse;
 import com.yuzhi.dts.platform.web.rest.infra.HiveConnectionTestRequest;
 import jakarta.persistence.EntityNotFoundException;
 import java.time.Instant;
+import java.time.Duration;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -43,6 +44,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import com.yuzhi.dts.common.audit.AuditStage;
 import org.slf4j.Logger;
@@ -90,6 +93,7 @@ public class InfraManagementService {
     private static final String SETTINGS_KEY_CATALOG_SYNC = "catalogSyncOnDataSource";
     private static final String SETTINGS_SERVICE_PLATFORM = "platform";
     private static final String AUDIT_ACTION_CATALOG_SYNC = "FOUNDATION_DATASOURCE_CATALOG_SYNC";
+    private static final Duration ADMIN_DATA_LAKE_LOOKUP_TIMEOUT = Duration.ofMillis(800);
     private static final java.util.Set<String> JDBC_TYPES = java.util.Set.of(
         "jdbc",
         "postgres",
@@ -176,7 +180,7 @@ public class InfraManagementService {
      */
     private void mergeAdminDataLake(List<InfraDataSourceDto> result) {
         try {
-            AdminInfraClient.AdminDataLakeConfig lake = adminInfraClient.fetchDefaultDataLake().orElse(null);
+            AdminInfraClient.AdminDataLakeConfig lake = fetchDefaultDataLakeForList().orElse(null);
             if (lake == null || lake.getId() == null) {
                 return;
             }
@@ -193,6 +197,19 @@ public class InfraManagementService {
             result.add(0, dto);
         } catch (Exception ex) {
             LOG.debug("Failed to merge admin data lake into data source list: {}", ex.getMessage());
+        }
+    }
+
+    private Optional<AdminInfraClient.AdminDataLakeConfig> fetchDefaultDataLakeForList() {
+        try {
+            return CompletableFuture
+                .supplyAsync(adminInfraClient::fetchDefaultDataLake)
+                .completeOnTimeout(Optional.empty(), ADMIN_DATA_LAKE_LOOKUP_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS)
+                .exceptionally(ex -> Optional.empty())
+                .join();
+        } catch (Exception ex) {
+            LOG.debug("Failed to fetch admin default data lake for list view: {}", ex.getMessage());
+            return Optional.empty();
         }
     }
 

@@ -7,6 +7,8 @@ type IngestionTaskState = {
   executionSubmitted: boolean;
 };
 
+type IngestionExecutionRecord = Record<string, unknown>;
+
 type ModelingRunSummary = {
   present: boolean;
   invocationId: string;
@@ -252,6 +254,229 @@ export async function installPlatformIngestionCenterMocks(page: Page): Promise<v
         '生成 Addax 作业成功',
         '写入目标表 ods_erp_orders 完成',
       ].join('\n'),
+    }));
+  });
+
+  await page.route('**/ingestion/tasks/101', async (route) => {
+    await json(route, ok(state.task));
+  });
+
+  await page.route('**/infra/data-sources/ds-erp', async (route) => {
+    await json(route, ok({
+      id: 'ds-erp',
+      name: 'ERP Demo DM',
+      type: 'DM8',
+      jdbcUrl: 'jdbc:dm://127.0.0.1:5236/ERPDMO',
+      username: 'SYSDBA',
+      status: 'ACTIVE',
+    }));
+  });
+}
+
+export async function installPlatformIngestionEdgeMocks(page: Page): Promise<void> {
+  await installPlatformEltShellMocks(page);
+
+  const state = {
+    task: {
+      id: 101,
+      name: 'ERP 销售订单入湖',
+      description: 'ERP 销售订单同步到 pg-lake',
+      sourceType: 'dmreader',
+      sourceConfig: {
+        dataSourceId: 'ds-erp',
+        table: 'ERPDMO.ORDERS',
+      },
+      sourceDataSourceId: 'ds-erp',
+      destinationType: 'postgresqlwriter',
+      destinationConfig: {
+        table: 'ods_erp_orders',
+      },
+      syncMode: 'full_refresh',
+      syncSchedule: 'manual',
+      airflowEnabled: true,
+      airflowDagId: 'ingestion_erp_sales_orders',
+      status: 'active',
+      lastExecutedAt: '2026-03-22T12:00:00Z',
+      lastExecutionStatus: 'failed',
+      createdBy: 'opadmin',
+      createdDate: '2026-03-22T11:00:00Z',
+      lastModifiedBy: 'opadmin',
+      lastModifiedDate: '2026-03-22T11:30:00Z',
+    } as Record<string, unknown>,
+    executions: [
+      {
+        id: 9001,
+        taskId: 101,
+        taskName: 'ERP 销售订单入湖',
+        executionId: 'ingestion-run-9001',
+        status: 'failed',
+        triggerMode: 'MANUAL',
+        startTime: '2026-03-22T12:00:00Z',
+        endTime: '2026-03-22T12:03:00Z',
+        rowsRead: 1024,
+        rowsWritten: 0,
+        failureCategory: 'RUNTIME_ERROR',
+        failureAdvice: '请重建 DAG 后重试',
+        errorMessage: 'Airflow DAG 未就绪',
+        createdAt: '2026-03-22T12:03:00Z',
+      } as IngestionExecutionRecord,
+    ],
+    latestExecution: null as IngestionExecutionRecord | null,
+    activeMode: null as 'retry' | 'execute' | null,
+    activePollCount: 0,
+    nextId: 9002,
+    rebuildCount: 0,
+  };
+  state.latestExecution = state.executions[0];
+
+  const sortExecutions = () => {
+    state.executions.sort((left, right) => {
+      const leftTime = String(left.createdAt || left.startTime || '');
+      const rightTime = String(right.createdAt || right.startTime || '');
+      return rightTime.localeCompare(leftTime);
+    });
+  };
+
+  const scheduleExecution = (mode: 'retry' | 'execute') => {
+    const nextId = state.nextId++;
+    const now = nowIso();
+    const triggerMode = mode === 'retry' ? 'FAILED_ONLY' : 'MANUAL';
+    const execution: IngestionExecutionRecord = {
+      id: nextId,
+      taskId: 101,
+      taskName: 'ERP 销售订单入湖',
+      executionId: `ingestion-run-${nextId}`,
+      status: 'preparing',
+      triggerMode,
+      startTime: now,
+      rowsRead: 0,
+      rowsWritten: 0,
+      createdAt: now,
+    };
+    state.executions = [execution, ...state.executions];
+    state.latestExecution = execution;
+    state.activeMode = mode;
+    state.activePollCount = 0;
+    state.task = {
+      ...state.task,
+      lastExecutionStatus: 'running',
+      lastExecutedAt: now,
+      lastModifiedDate: now,
+    };
+  };
+
+  const settleActiveExecution = () => {
+    if (!state.latestExecution) {
+      return;
+    }
+    const now = nowIso();
+    state.latestExecution = {
+      ...state.latestExecution,
+      status: 'success',
+      endTime: now,
+      rowsRead: state.activeMode === 'retry' ? 1024 : 2048,
+      rowsWritten: state.activeMode === 'retry' ? 1024 : 2048,
+      errorMessage: '',
+      failureCategory: '',
+      failureAdvice: '',
+      createdAt: now,
+    };
+    state.executions = state.executions.map((item) =>
+      item.id === state.latestExecution?.id ? state.latestExecution! : item,
+    );
+    sortExecutions();
+    state.task = {
+      ...state.task,
+      lastExecutionStatus: 'success',
+      lastExecutedAt: now,
+      lastModifiedDate: now,
+    };
+    state.activeMode = null;
+  };
+
+  await page.route('**/ingestion/tasks/list**', async (route) => {
+    await json(
+      route,
+      ok({
+        content: [state.task],
+        totalElements: 1,
+        totalPages: 1,
+        size: 20,
+        number: 0,
+      }),
+    );
+  });
+
+  await page.route('**/ingestion/tasks/101/executions/latest', async (route) => {
+    if (state.activeMode && state.latestExecution) {
+      state.activePollCount += 1;
+      if (state.activePollCount >= 2) {
+        settleActiveExecution();
+      }
+    }
+    await json(route, ok(state.latestExecution));
+  });
+
+  await page.route('**/ingestion/tasks/101/executions/9001/retry/async**', async (route) => {
+    scheduleExecution('retry');
+    await json(route, ok({
+      taskId: 101,
+      taskName: 'ERP 销售订单入湖',
+      status: 'SUBMITTED',
+      async: true,
+      pollIntervalMs: 1000,
+      message: '已提交失败重试任务',
+    }));
+  });
+
+  await page.route('**/ingestion/tasks/101/execute/async', async (route) => {
+    scheduleExecution('execute');
+    await json(route, ok({
+      taskId: 101,
+      taskName: 'ERP 销售订单入湖',
+      status: 'SUBMITTED',
+      async: true,
+      pollIntervalMs: 1000,
+      message: '任务已提交',
+    }));
+  });
+
+  await page.route('**/ingestion/tasks/101/dag/rebuild', async (route) => {
+    state.rebuildCount += 1;
+    state.task = {
+      ...state.task,
+      airflowDagId: `ingestion_erp_sales_orders_v${state.rebuildCount + 1}`,
+      lastModifiedDate: nowIso(),
+    };
+    await json(route, ok(state.task));
+  });
+
+  await page.route('**/ingestion/tasks/101/executions**', async (route) => {
+    await json(
+      route,
+      ok({
+        content: state.executions,
+        totalElements: state.executions.length,
+        totalPages: 1,
+        size: 20,
+        number: 0,
+      }),
+    );
+  });
+
+  await page.route('**/ingestion/tasks/101/executions/*/logs**', async (route) => {
+    const pathname = new URL(route.request().url()).pathname;
+    const executionId = Number(pathname.split('/').slice(-2, -1)[0] || 0);
+    const content =
+      executionId === 9001
+        ? ['Airflow DAG 未就绪', '请重建 DAG 后重试'].join('\n')
+        : ['连接源端数据源 ds-erp 成功', '生成 Addax 作业成功', '写入目标表 ods_erp_orders 完成'].join('\n');
+    await json(route, ok({
+      taskId: 101,
+      executionId,
+      dagId: String(state.task.airflowDagId || 'ingestion_erp_sales_orders'),
+      dagRunId: `manual__${executionId}`,
+      log: content,
     }));
   });
 

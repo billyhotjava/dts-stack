@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
 	Button,
 	Card,
@@ -22,6 +22,7 @@ import type { FormInstance } from "antd/es/form";
 import type { FileUploadResult } from "@/api/ingestion";
 import type { ColumnInfo } from "@/api/sql-workbench";
 import type { SyncModeOption } from "./types";
+import { applyPastedOdsFieldsToFileColumns, parsePastedOdsFields } from "../fileOdsPasteMapping.helpers";
 
 const { Text } = Typography;
 
@@ -107,8 +108,25 @@ export default function FileBasicStep({
 }: FileBasicStepProps) {
 	const [batchFieldModalOpen, setBatchFieldModalOpen] = useState(false);
 	const [batchFieldText, setBatchFieldText] = useState("");
+	const [manualOdsMatchApplied, setManualOdsMatchApplied] = useState(false);
+	const [manualMatchedCount, setManualMatchedCount] = useState(0);
+	const [manualUnmatchedOdsFields, setManualUnmatchedOdsFields] = useState<string[]>([]);
 
 	const normalizedScheduleType = String(scheduleType || "manual").trim() || "manual";
+	const effectiveOdsMatchApplied = odsMatchApplied || manualOdsMatchApplied;
+	const effectiveMatchedCount = odsMatchApplied
+		? Math.min(odsColumns.length, fileUploadResult?.columns?.length || 0)
+		: manualMatchedCount;
+	const effectiveUnmatchedFields = odsMatchApplied
+		? unmatchedOdsFields.map((column) => column?.name).filter((name): name is string => Boolean(name))
+		: manualUnmatchedOdsFields;
+
+	useEffect(() => {
+		setManualOdsMatchApplied(false);
+		setManualMatchedCount(0);
+		setManualUnmatchedOdsFields([]);
+		setBatchFieldText("");
+	}, [fileUploadResult?.fileId, fileUploadResult?.sheetIndex]);
 
 	return (
 		<>
@@ -312,37 +330,54 @@ export default function FileBasicStep({
 						)}
 					</Space>
 					{/* ODS 表关联 */}
-					{lakeDatasourceId && (fileUploadResult.columns?.length ?? 0) > 0 && (
+					{(fileUploadResult.columns?.length ?? 0) > 0 && (
 						<div style={{ marginBottom: 12, padding: "8px 12px", background: "#fafafa", borderRadius: 6, border: "1px solid #f0f0f0" }}>
 							<Space wrap>
 								<Text type="secondary">关联 ODS 表：</Text>
-								<Select
-									size="small"
-									style={{ width: 280 }}
-									placeholder="选择 ODS 表以自动匹配字段名"
-									allowClear
-									showSearch
-									loading={odsTableLoading}
-									value={selectedOdsTable}
-									onFocus={() => { if (!odsTableList.length) loadOdsTables(); }}
-									onChange={handleOdsTableSelect}
-									options={odsTableList}
-									filterOption={(input, option) =>
-										(option?.label as string)?.toLowerCase().includes(input.toLowerCase()) ?? false
-									}
-								/>
+								{lakeDatasourceId ? (
+									<Select
+										size="small"
+										style={{ width: 280 }}
+										placeholder="选择 ODS 表以自动匹配字段名"
+										allowClear
+										showSearch
+										loading={odsTableLoading}
+										value={selectedOdsTable}
+										onFocus={() => { if (!odsTableList.length) loadOdsTables(); }}
+										onChange={handleOdsTableSelect}
+										options={odsTableList}
+										filterOption={(input, option) =>
+											(option?.label as string)?.toLowerCase().includes(input.toLowerCase()) ?? false
+										}
+									/>
+								) : (
+									<Text type="secondary">未配置数据湖连接时，可直接粘贴 ODS 字段列表。</Text>
+								)}
+								{lakeDatasourceId ? (
+									<Button
+										size="small"
+										type="primary"
+										loading={odsColumnsLoading}
+										disabled={!odsColumns.length}
+										onClick={() => {
+											setManualOdsMatchApplied(false);
+											setManualMatchedCount(0);
+											setManualUnmatchedOdsFields([]);
+											applyOdsMapping();
+										}}
+									>
+										自动匹配
+									</Button>
+								) : null}
 								<Button
 									size="small"
-									type="primary"
-									loading={odsColumnsLoading}
-									disabled={!odsColumns.length}
-									onClick={applyOdsMapping}
+									onClick={() => setBatchFieldModalOpen(true)}
 								>
-									自动匹配
+									粘贴 ODS 字段
 								</Button>
-								{odsMatchApplied && (
+								{effectiveOdsMatchApplied && (
 									<Text style={{ color: "#52c41a" }}>
-										✓ 已匹配 {Math.min(odsColumns.length, fileUploadResult.columns?.length || 0)} 个字段
+										✓ 已匹配 {effectiveMatchedCount} 个字段
 									</Text>
 								)}
 							</Space>
@@ -386,10 +421,10 @@ export default function FileBasicStep({
 												setFileUploadResult({ ...fileUploadResult, columns: cols });
 											}}
 										/>
-										{odsMatchApplied && record._odsMatched && (
+										{effectiveOdsMatchApplied && record._odsMatched && (
 											<Tag color="green" style={{ margin: 0 }}>ODS</Tag>
 										)}
-										{odsMatchApplied && record._odsExtra && (
+										{effectiveOdsMatchApplied && record._odsExtra && (
 											<Tag color="default" style={{ margin: 0 }}>未关联</Tag>
 										)}
 									</Space>
@@ -506,14 +541,14 @@ export default function FileBasicStep({
 							},
 						]}
 					/>
-					{unmatchedOdsFields.length > 0 && (
+					{effectiveUnmatchedFields.length > 0 && (
 						<div style={{ marginTop: 8, padding: "8px 12px", background: "#fff2f0", border: "1px solid #ffccc7", borderRadius: 6 }}>
 							<Text type="danger" strong style={{ display: "block", marginBottom: 4 }}>
 								⚠ 以下 ODS 字段缺少对应的 Excel 列（将导致下游数仓数据不完整）：
 							</Text>
 							<Space wrap>
-								{unmatchedOdsFields.map((col, i) => (
-									<Tag key={i} color="error">{col.name}</Tag>
+								{effectiveUnmatchedFields.map((fieldName, i) => (
+									<Tag key={i} color="error">{fieldName}</Tag>
 								))}
 							</Space>
 						</div>
@@ -532,53 +567,35 @@ export default function FileBasicStep({
 					>
 						添加列
 					</Button>
-					<Button
-						type="dashed"
-						size="small"
-						className="mt-2 ml-2"
-						onClick={() => {
-							setBatchFieldText("");
-							setBatchFieldModalOpen(true);
-						}}
-					>
-						批量输入
-					</Button>
 					<Modal
-						title="批量输入列名"
+						title="粘贴 ODS 字段列表"
 						open={batchFieldModalOpen}
 						onCancel={() => setBatchFieldModalOpen(false)}
 						onOk={() => {
-							const names = batchFieldText
-								.split(/[,\n]/)
-								.map((s) => s.trim())
-								.filter((s) => s.length > 0);
-							if (names.length === 0) {
-								toast.warning("未识别到有效列名");
+							const pastedFields = parsePastedOdsFields(batchFieldText);
+							if (pastedFields.length === 0) {
+								toast.warning("未识别到有效字段");
 								return;
 							}
-							const cols = [...(fileUploadResult.columns || [])];
-							let filled = 0;
-							names.forEach((name, i) => {
-								if (i < cols.length) {
-									cols[i] = { ...cols[i], name };
-									filled++;
-								}
-							});
-							setFileUploadResult({ ...fileUploadResult, columns: cols });
+							const mappingResult = applyPastedOdsFieldsToFileColumns(fileUploadResult.columns || [], pastedFields);
+							setFileUploadResult({ ...fileUploadResult, columns: mappingResult.columns });
+							setManualOdsMatchApplied(true);
+							setManualMatchedCount(mappingResult.matchedCount);
+							setManualUnmatchedOdsFields(mappingResult.unmatchedFields);
 							setBatchFieldModalOpen(false);
-							toast.success(`已填充 ${filled} 个列名`);
+							toast.success(`已匹配 ${mappingResult.matchedCount} 个字段`);
 						}}
 						okText="确认"
 						cancelText="取消"
 					>
 						<p className="mb-2 text-gray-500">
-							请输入列名，以逗号或换行分隔，将按顺序填入现有列：
+							请输入 ODS 字段列表，支持逗号、中文逗号、换行或 Tab 分隔，将按顺序匹配到现有 Excel 列：
 						</p>
 						<Input.TextArea
 							rows={6}
 							value={batchFieldText}
 							onChange={(e) => setBatchFieldText(e.target.value)}
-							placeholder={"col_a, col_b, col_c\n或每行一个列名"}
+							placeholder={"field_a,field_b,field_c\n或每行一个字段名"}
 						/>
 					</Modal>
 					{Array.isArray(fileUploadResult.preview) && fileUploadResult.preview.length > 0 && (

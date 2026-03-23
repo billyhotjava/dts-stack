@@ -36,86 +36,79 @@ const TEST_SESSION_ENABLED =
 const TEST_SESSION_REFRESH_MS = Number(import.meta.env.VITE_TEST_SESSION_PING_MS ?? 5 * 60 * 1000);
 const TEST_SESSION_MAX_AGE_MS = Number(import.meta.env.VITE_TEST_SESSION_MAX_AGE_MS ?? 4 * 60 * 60 * 1000);
 
-// Token refresh coordination to avoid stampedes
-let refreshingPromise: Promise<void> | null = null;
+// ── Token refresh coordination ──
+// Single in-flight refresh to avoid stampedes.
+let refreshingPromise: Promise<boolean> | null = null;
+
 async function refreshTokenIfPossible(): Promise<boolean> {
 	const { userToken, actions } = userStore.getState() as any;
 	const refresh = String(userToken?.refreshToken || "").trim();
 	if (!refresh) return false;
-	// Only one refresh at a time
-	if (!refreshingPromise) {
-		refreshingPromise = (async () => {
-			try {
-				const resp: any = await axiosInstance.post(
-					"/keycloak/auth/refresh",
-					{ refreshToken: refresh },
-					{ headers: { Authorization: undefined } },
-				);
-				const nextAccess = String(resp?.accessToken || resp?.data?.accessToken || "").trim();
-				const nextRefresh = String(resp?.refreshToken || resp?.data?.refreshToken || "").trim();
-				const adminAccessToken = String(resp?.adminAccessToken || resp?.data?.adminAccessToken || "").trim();
-				const adminRefreshToken = String(resp?.adminRefreshToken || resp?.data?.adminRefreshToken || "").trim();
-				const adminAccessTokenExpiresAt = String(
-					resp?.adminAccessTokenExpiresAt || resp?.data?.adminAccessTokenExpiresAt || "",
-				).trim();
-				const adminRefreshTokenExpiresAt = String(
-					resp?.adminRefreshTokenExpiresAt || resp?.data?.adminRefreshTokenExpiresAt || "",
-				).trim();
-				if (!nextAccess) throw new Error("no_access_token");
-				actions.setUserToken({
-					accessToken: nextAccess,
-					refreshToken: nextRefresh || refresh,
-					adminAccessToken: adminAccessToken || userToken?.adminAccessToken,
-					adminRefreshToken: adminRefreshToken || userToken?.adminRefreshToken,
-					adminAccessTokenExpiresAt: adminAccessTokenExpiresAt || userToken?.adminAccessTokenExpiresAt,
-					adminRefreshTokenExpiresAt: adminRefreshTokenExpiresAt || userToken?.adminRefreshTokenExpiresAt,
-				});
-			} finally {
-				// Allow subsequent refresh attempts
-				const p = refreshingPromise;
-				refreshingPromise = null;
-				// Wait a tick to let store update propagate
-				try {
-					await p;
-				} catch {}
-			}
-		})();
+
+	// Reuse in-flight refresh
+	if (refreshingPromise) {
+		return refreshingPromise;
 	}
-	try {
-		await refreshingPromise;
-		return true;
-	} catch {
-		return false;
-	}
+
+	refreshingPromise = (async (): Promise<boolean> => {
+		try {
+			const resp: any = await axiosInstance.post(
+				"/keycloak/auth/refresh",
+				{ refreshToken: refresh },
+				// Bypass auth header — this IS the auth endpoint
+				{ headers: { Authorization: undefined }, _isRefreshRequest: true } as any,
+			);
+			const nextAccess = String(resp?.accessToken || resp?.data?.accessToken || "").trim();
+			const nextRefresh = String(resp?.refreshToken || resp?.data?.refreshToken || "").trim();
+			const adminAccessToken = String(resp?.adminAccessToken || resp?.data?.adminAccessToken || "").trim();
+			const adminRefreshToken = String(resp?.adminRefreshToken || resp?.data?.adminRefreshToken || "").trim();
+			const adminAccessTokenExpiresAt = String(
+				resp?.adminAccessTokenExpiresAt || resp?.data?.adminAccessTokenExpiresAt || "",
+			).trim();
+			const adminRefreshTokenExpiresAt = String(
+				resp?.adminRefreshTokenExpiresAt || resp?.data?.adminRefreshTokenExpiresAt || "",
+			).trim();
+			if (!nextAccess) return false;
+			actions.setUserToken({
+				accessToken: nextAccess,
+				refreshToken: nextRefresh || refresh,
+				adminAccessToken: adminAccessToken || userToken?.adminAccessToken,
+				adminRefreshToken: adminRefreshToken || userToken?.adminRefreshToken,
+				adminAccessTokenExpiresAt: adminAccessTokenExpiresAt || userToken?.adminAccessTokenExpiresAt,
+				adminRefreshTokenExpiresAt: adminRefreshTokenExpiresAt || userToken?.adminRefreshTokenExpiresAt,
+			});
+			return true;
+		} catch {
+			return false;
+		} finally {
+			// Clear after a tick so concurrent awaiters get the same result
+			setTimeout(() => { refreshingPromise = null; }, 50);
+		}
+	})();
+
+	return refreshingPromise;
 }
 
+// ── Keep-alive timer ──
 const KEEP_ALIVE_INTERVAL_MS = TEST_SESSION_ENABLED
 	? TEST_SESSION_REFRESH_MS
 	: 4 * 60 * 1000; // 4 min — refresh before typical 5-min access token expiry
 
 let keepAliveTimer: number | null = null;
 function ensureKeepAliveTimer() {
-	if (typeof window === "undefined") {
-		return;
-	}
-	if (keepAliveTimer !== null) {
-		return;
-	}
+	if (typeof window === "undefined") return;
+	if (keepAliveTimer !== null) return;
 	keepAliveTimer = window.setInterval(async () => {
 		const { userToken } = userStore.getState();
-		if (!userToken?.refreshToken) {
-			return;
-		}
+		if (!userToken?.refreshToken) return;
 		if (TEST_SESSION_ENABLED) {
 			const loginTs = Number(localStorage.getItem("dts.session.loginTs") || "0");
-			if (loginTs > 0 && Date.now() - loginTs > TEST_SESSION_MAX_AGE_MS) {
-				return;
-			}
+			if (loginTs > 0 && Date.now() - loginTs > TEST_SESSION_MAX_AGE_MS) return;
 		}
 		try {
 			await refreshTokenIfPossible();
-		} catch (error) {
-			console.warn("[session] keep-alive refresh failed", error);
+		} catch {
+			// keep-alive is best-effort, don't propagate
 		}
 	}, KEEP_ALIVE_INTERVAL_MS);
 }
@@ -123,18 +116,22 @@ function ensureKeepAliveTimer() {
 if (typeof window !== "undefined") {
 	ensureKeepAliveTimer();
 	window.addEventListener("focus", ensureKeepAliveTimer);
-	// When tab becomes visible again (e.g. switching back from analytics-webapp),
-	// immediately refresh token to avoid 401 on next API call.
+	// When tab becomes visible again, proactively refresh token.
+	// Debounce to avoid rapid-fire refreshes on quick tab switches.
+	let visibilityRefreshScheduled = false;
 	document.addEventListener("visibilitychange", () => {
-		if (document.visibilityState === "visible") {
-			const { userToken } = userStore.getState();
-			if (userToken?.refreshToken) {
-				refreshTokenIfPossible().catch(() => {});
-			}
-		}
+		if (document.visibilityState !== "visible" || visibilityRefreshScheduled) return;
+		const { userToken } = userStore.getState();
+		if (!userToken?.refreshToken) return;
+		visibilityRefreshScheduled = true;
+		setTimeout(() => {
+			visibilityRefreshScheduled = false;
+			refreshTokenIfPossible().catch(() => {});
+		}, 300);
 	});
 }
 
+// ── Request interceptor ──
 axiosInstance.interceptors.request.use(
 	(config) => {
 		const { userToken } = userStore.getState();
@@ -158,12 +155,10 @@ axiosInstance.interceptors.request.use(
 		if (!isAuthPath) {
 			try {
 				const ctx = useContextStore.getState();
-				// Initialize defaults from user profile once
 				ctx.actions.initDefaults();
 				if (ctx.activeDept) {
 					(config.headers as any)["X-Active-Dept"] = ctx.activeDept;
 				} else {
-					// Fallback: derive dept from user profile when store hasn't been hydrated yet
 					try {
 						const ui: any = userStore.getState().userInfo || {};
 						const pick = (v: any): string => {
@@ -177,13 +172,9 @@ axiosInstance.interceptors.request.use(
 						const dept = (fromAttrs || fromTop || "").trim();
 						if (dept) {
 							(config.headers as any)["X-Active-Dept"] = dept;
-							try {
-								ctx.actions.setActiveDept(dept);
-							} catch {}
+							try { ctx.actions.setActiveDept(dept); } catch {}
 						}
-					} catch (_e) {
-						// ignore
-					}
+					} catch {}
 				}
 			} catch (_e) {
 				console.warn("Failed to inject active context headers", _e);
@@ -199,33 +190,26 @@ axiosInstance.interceptors.request.use(
 	},
 );
 
+// ── Response interceptor ──
 axiosInstance.interceptors.response.use(
 	(res: AxiosResponse<Result<any>>) => {
 		console.log("API Response:", res.status, res.config.url, res.data);
 
 		if (!res.data) throw new Error(t("sys.api.apiRequestFailed"));
 
-		// 特殊处理Keycloak API
+		// Keycloak API: may or may not wrap in {status, data}
 		if (res.config.url?.includes("/keycloak/")) {
-			// 检查是否是标准响应格式（包含status字段）
 			if (res.data && typeof res.data === "object" && "status" in res.data) {
-				// 对于标准响应格式，返回data字段
 				const { status, data, message } = res.data;
-				if (isSuccessStatus(status)) {
-					return data;
-				}
+				if (isSuccessStatus(status)) return data;
 				throw new Error(message || t("sys.api.apiRequestFailed"));
-			} else {
-				// 对于直接返回数据的API（如用户列表），直接返回响应数据
-				return res.data;
 			}
+			return res.data;
 		}
 
-		// 处理标准API响应格式
+		// Standard API response: {status, data, message}
 		const { status, data, message } = res.data;
-		if (isSuccessStatus(status)) {
-			return data;
-		}
+		if (isSuccessStatus(status)) return data;
 		throw new Error(message || t("sys.api.apiRequestFailed"));
 	},
 	async (error: AxiosError<Result>) => {
@@ -234,10 +218,16 @@ axiosInstance.interceptors.response.use(
 		const isLoginRequest =
 			typeof requestUrl === "string" &&
 			(requestUrl.includes("/keycloak/auth/login") || requestUrl.includes("/keycloak/auth/platform/login"));
-		const shouldSuppressAuthHandling = typeof requestUrl === "string" && requestUrl.includes("/keycloak/localization/");
+		const isRefreshRequest = Boolean((response?.config as any)?._isRefreshRequest);
+		const shouldSuppressAuthHandling = typeof requestUrl === "string" && (
+			requestUrl.includes("/keycloak/localization/")
+			|| requestUrl.includes("/workbench/")
+		);
+
 		if (!(isLoginRequest && response?.status === 401)) {
 			console.error("API Response Error:", response?.status, response?.data, error.message);
 		}
+
 		const apiBody: any = response?.data || {};
 		const headers = response?.headers || {};
 		const sessionExpiredHeader =
@@ -249,35 +239,32 @@ axiosInstance.interceptors.response.use(
 				? headers["x-session-conflict"].toLowerCase() === "true"
 				: false;
 		const errCode: string | undefined = (apiBody && (apiBody as any).code) || undefined;
-		// Prefer Problem Details fields when present; then fall back to common keys
 		const problemDetail =
 			(typeof apiBody === "object" &&
 				(apiBody.detail || apiBody.message || apiBody.title || apiBody.error_description || apiBody.error)) ||
 			undefined;
-		// Attach first field error if available
 		const fieldErrors: any[] = Array.isArray((apiBody as any)?.fieldErrors) ? (apiBody as any).fieldErrors : [];
 		const fieldMsg = fieldErrors.length
 			? `${fieldErrors[0]?.field ?? "字段"}: ${fieldErrors[0]?.message ?? "非法"}`
 			: "";
 		const errMsg = (problemDetail ? String(problemDetail) : "") || fieldMsg || message || t("sys.api.errorMessage");
-		// Friendly hints for security codes
 		let hint = "";
-			switch (String(errCode || "")) {
+		switch (String(errCode || "")) {
 			case "dts-sec-0001":
 				hint = "动作权限不足，请联系管理员申请更高权限";
 				break;
 			case "dts-sec-0002":
 				hint = "作用域/部门不匹配，请在右上角切换上下文后重试";
 				break;
-				case "dts-sec-0003":
-					hint = "权限不足，当前密级不可访问";
-					break;
-				case "dts-sec-0004":
-					hint = "需要审批授权后才能访问数据内容";
-					break;
-				case "dts-sec-0007":
-					hint = "资源不存在或不可见";
-					break;
+			case "dts-sec-0003":
+				hint = "权限不足，当前密级不可访问";
+				break;
+			case "dts-sec-0004":
+				hint = "需要审批授权后才能访问数据内容";
+				break;
+			case "dts-sec-0007":
+				hint = "资源不存在或不可见";
+				break;
 			case "dts-sec-0005":
 			case "dts-sec-0006":
 				hint = "缺少或非法上下文，请设置作用域/部门后重试";
@@ -290,14 +277,14 @@ axiosInstance.interceptors.response.use(
 		const sessionErrorByMessage =
 			typeof combinedMsg === "string" && /已在其他位置登录|会话已超时|重新登录|session/i.test(combinedMsg);
 		const shouldForceLogout = sessionExpiredHeader || sessionConflictHeader || sessionErrorByMessage;
-		// Attempt silent refresh on 401 (non-auth endpoints) and retry once
-		if (response?.status === 401 && !shouldSuppressAuthHandling && !isLoginRequest) {
+
+		// ── 401 handling ──
+		// Never intercept refresh requests themselves — avoid infinite loops
+		if (response?.status === 401 && !shouldSuppressAuthHandling && !isLoginRequest && !isRefreshRequest) {
 			const cfg = response.config || {};
-			// prevent infinite loop
 			if (!(cfg as any)._retry) {
 				const refreshed = await refreshTokenIfPossible();
 				if (refreshed) {
-					// retry original request with updated access token
 					const { userToken } = userStore.getState();
 					(cfg.headers as any) = (cfg.headers as any) || {};
 					(cfg.headers as any).Authorization = userToken?.accessToken ? `Bearer ${userToken.accessToken}` : undefined;
@@ -309,7 +296,7 @@ axiosInstance.interceptors.response.use(
 					}
 				}
 			}
-			// Grace window just after login to avoid kicking user out on in-flight 401s
+			// Grace window just after login
 			try {
 				const loginTs = Number(localStorage.getItem("dts.session.loginTs") || "0");
 				if (loginTs > 0 && Date.now() - loginTs < 2000) {
@@ -317,22 +304,18 @@ axiosInstance.interceptors.response.use(
 					return Promise.reject(error);
 				}
 			} catch {}
-			if (!TEST_SESSION_ENABLED || shouldForceLogout) {
+			// Force logout only when server explicitly signals session issue
+			if (shouldForceLogout) {
 				userStore.getState().actions.clearUserInfoAndToken();
-				try {
-					localStorage.setItem("dts.session.logoutTs", String(Date.now()));
-				} catch {}
+				try { localStorage.setItem("dts.session.logoutTs", String(Date.now())); } catch {}
 				if (typeof window !== "undefined" && !isLoginRouteActive()) {
 					location.replace(resolveLoginHref());
 				}
-			} else {
-				console.warn("[DEV/TEST] 401 after refresh; skipping auto logout");
 			}
+			// Otherwise: just reject — caller handles the error, don't destroy session
 		} else if (shouldForceLogout && !TEST_SESSION_ENABLED) {
 			userStore.getState().actions.clearUserInfoAndToken();
-			try {
-				localStorage.setItem("dts.session.logoutTs", String(Date.now()));
-			} catch {}
+			try { localStorage.setItem("dts.session.logoutTs", String(Date.now())); } catch {}
 			if (typeof window !== "undefined" && !isLoginRouteActive()) {
 				location.replace(resolveLoginHref());
 			}

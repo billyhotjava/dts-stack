@@ -415,6 +415,31 @@ class IngestionTaskServiceTest {
             .hasMessageContaining("Unsupported retry mode");
     }
 
+    @Test
+    void rebuildDag_shouldPreheatRebuiltDag() {
+        Long taskId = 1L;
+        IngestionTask task = createTestTaskEntity();
+        task.setId(taskId);
+        task.setStatus("active");
+        task.setAirflowEnabled(true);
+        task.setAirflowDagId("old-dag");
+
+        IngestionTaskDTO dto = createTestTaskDTO();
+        dto.setId(taskId);
+
+        when(taskRepository.findById(taskId)).thenReturn(Optional.of(task));
+        when(airflowDagService.rebuildDagForTask(task)).thenReturn("rebuilt-dag");
+        when(taskRepository.save(task)).thenReturn(task);
+        when(taskMapper.toDto(task)).thenReturn(dto);
+
+        IngestionTaskDTO result = ingestionTaskService.rebuildDag(taskId);
+
+        assertThat(result).isNotNull();
+        assertThat(task.getAirflowDagId()).isEqualTo("rebuilt-dag");
+        verify(taskRepository).save(task);
+        verify(dagPreheatService).preheatDag("rebuilt-dag");
+    }
+
     // Helper methods
     private IngestionTaskDTO createTestTaskDTO() {
         IngestionTaskDTO dto = new IngestionTaskDTO();

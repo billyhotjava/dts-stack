@@ -166,6 +166,10 @@ public class IngestionServiceClient {
         return exchangeTask("/api/ingestion/tasks/" + taskId + "/executions/" + executionId + "/retry", HttpMethod.POST, null, params);
     }
 
+    public ApiResponse<Map<String, Object>> retryExecutionAsync(Long taskId, Long executionId, Map<String, ?> params) {
+        return exchangeTask("/api/ingestion/tasks/" + taskId + "/executions/" + executionId + "/retry/async", HttpMethod.POST, null, params);
+    }
+
     public ApiResponse<Object> discoverTables(Object payload) {
         return exchangeObject("/api/ingestion/metadata/tables", HttpMethod.POST, payload, null, longRestTemplate);
     }

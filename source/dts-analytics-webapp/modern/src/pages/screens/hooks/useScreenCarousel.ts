@@ -93,6 +93,7 @@ export function useScreenCarousel(
     }, [doTransition, pageCount]);
 
     const nextPage = useCallback(() => {
+        setPaused(true);
         if (pageIndex >= pageCount - 1) {
             if (loop) doTransition(0);
         } else {
@@ -101,6 +102,7 @@ export function useScreenCarousel(
     }, [doTransition, loop, pageCount, pageIndex]);
 
     const prevPage = useCallback(() => {
+        setPaused(true);
         if (pageIndex <= 0) {
             if (loop) doTransition(pageCount - 1);
         } else {

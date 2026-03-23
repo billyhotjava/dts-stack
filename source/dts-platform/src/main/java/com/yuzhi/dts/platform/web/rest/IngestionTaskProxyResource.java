@@ -269,6 +269,18 @@ public class IngestionTaskProxyResource {
         return ResponseEntity.ok(response);
     }
 
+    @PostMapping("/tasks/{id}/executions/{executionId}/retry/async")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ResponseEntity<ApiResponse<Map<String, Object>>> retryExecutionAsync(
+        @PathVariable("id") Long id,
+        @PathVariable("executionId") Long executionId,
+        @RequestParam(value = "mode", required = false, defaultValue = "FAILED_ONLY") String mode
+    ) {
+        ApiResponse<Map<String, Object>> response = ingestionClient.retryExecutionAsync(id, executionId, Map.of("mode", mode));
+        int status = response == null || response.getStatus() <= 0 ? 202 : response.getStatus();
+        return ResponseEntity.status(status).body(response);
+    }
+
     @PostMapping("/tasks/{id}/dag/rebuild")
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ResponseEntity<ApiResponse<Map<String, Object>>> rebuildDag(@PathVariable("id") Long id) {

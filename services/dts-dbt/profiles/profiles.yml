@@ -3,7 +3,7 @@ dts:
   outputs:
     dev:
       type: postgres
-      host: dts-pg
+      host: 10.244.12.39
       port: 5432
       user: biadmin
       password: Devops123@

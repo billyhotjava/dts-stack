@@ -12,12 +12,6 @@
     "requiredRoles": ["EMPLOYEE", "DEPT_DATA_OWNER", "DEPT_LEADER", "INST_DATA_OWNER", "INST_LEADER", "ADMIN", "OP_ADMIN"]
   },
   {
-    "code": "sys.nav.portal.workbenchFavorites",
-    "title": "我的收藏",
-    "route": "/workbench/favorites",
-    "requiredRoles": ["EMPLOYEE", "DEPT_DATA_OWNER", "DEPT_LEADER", "INST_DATA_OWNER", "INST_LEADER", "ADMIN", "OP_ADMIN"]
-  },
-  {
     "code": "sys.nav.portal.resourceSources",
     "title": "数据源管理",
     "route": "/foundation/data-sources",

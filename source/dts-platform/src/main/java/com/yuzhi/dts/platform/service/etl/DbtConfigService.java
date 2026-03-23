@@ -374,7 +374,11 @@ public class DbtConfigService {
     }
 
     private DbtWorkspaceConfig hydrateResolvedConfig(DbtWorkspaceConfig config) {
-        if (config == null || config.targetDataSourceId() != null) {
+        if (config == null) {
+            return config;
+        }
+        InfraDataSource configuredTarget = resolveConfiguredTargetSource(config);
+        if (configuredTarget != null && config.targetDataSourceId() != null) {
             return config;
         }
         UUID resolvedTargetId = resolveDefaultTargetDataSourceId(config);
@@ -398,14 +402,22 @@ public class DbtConfigService {
         if (config == null) {
             return null;
         }
-        if (config.targetDataSourceId() != null) {
-            return dataSourceRepository.findById(config.targetDataSourceId()).orElse(null);
+        InfraDataSource configured = resolveConfiguredTargetSource(config);
+        if (configured != null) {
+            return configured;
         }
         UUID targetId = resolveDefaultTargetDataSourceId(config);
         if (targetId == null) {
             return null;
         }
         return dataSourceRepository.findById(targetId).orElse(null);
+    }
+
+    private InfraDataSource resolveConfiguredTargetSource(DbtWorkspaceConfig config) {
+        if (config == null || config.targetDataSourceId() == null) {
+            return null;
+        }
+        return dataSourceRepository.findById(config.targetDataSourceId()).orElse(null);
     }
 
     private UUID resolveDefaultTargetDataSourceId(DbtWorkspaceConfig config) {

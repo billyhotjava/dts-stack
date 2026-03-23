@@ -25,7 +25,10 @@ async function fetchScreens(): Promise<PublishedScreen[]> {
 		if (userToken?.accessToken) {
 			headers.Authorization = `Bearer ${userToken.accessToken}`;
 		}
-		const resp = await fetch("/analytics/api/screens", { headers, credentials: "include" });
+		const ctrl = new AbortController();
+		const timer = setTimeout(() => ctrl.abort(), 5000);
+		const resp = await fetch("/analytics/api/screens", { headers, credentials: "include", signal: ctrl.signal });
+		clearTimeout(timer);
 		if (!resp.ok) return [];
 		const list: Array<Record<string, unknown>> = await resp.json();
 		if (!Array.isArray(list)) return [];
@@ -180,19 +183,24 @@ export default function Page() {
 	const loadAll = async () => {
 		setLoading(true);
 		try {
-			const [summary, todoList, screenList] = await Promise.all([
+			const results = await Promise.allSettled([
 				workbenchService.overview(),
 				workbenchService.todos(),
-				fetchScreens(),
 			]);
-			setOverview(summary as WorkbenchOverview);
-			setTodos(Array.isArray(todoList) ? (todoList as WorkbenchTodoItem[]) : []);
-			setScreens(screenList);
-		} catch (error: any) {
-			toast.error(error?.message || "工作台数据加载失败");
+			if (results[0].status === "fulfilled") {
+				setOverview(results[0].value as WorkbenchOverview);
+			}
+			if (results[1].status === "fulfilled") {
+				const todoList = results[1].value;
+				setTodos(Array.isArray(todoList) ? (todoList as WorkbenchTodoItem[]) : []);
+			}
+		} catch {
+			// allSettled never throws, but guard just in case
 		} finally {
 			setLoading(false);
 		}
+		// Load screens independently — don't block workbench if analytics is unavailable
+		fetchScreens().then(setScreens).catch(() => {});
 	};
 
 	useEffect(() => {

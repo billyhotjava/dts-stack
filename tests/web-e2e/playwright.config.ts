@@ -24,7 +24,7 @@ function platformDevServerUrl(): string {
   if (explicit) {
     return explicit;
   }
-  return `http://127.0.0.1:${platformDevServerPort()}/expert/`;
+  return `http://127.0.0.1:${platformDevServerPort()}/`;
 }
 
 function useAnalyticsDevServer(): boolean {

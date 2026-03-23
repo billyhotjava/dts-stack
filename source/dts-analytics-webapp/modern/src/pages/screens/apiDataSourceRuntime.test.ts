@@ -102,6 +102,61 @@ test('buildApiRuntimeRequest rewrites project cockpit api url for public screen 
     assert.equal(result.params.programId, 'program-a');
 });
 
+test('buildApiRuntimeRequest rewrites metrics-compare api url for public screen runtime', () => {
+    const result = buildApiRuntimeRequest(
+        {
+            url: '/analytics/api/project-cockpit/screen/metrics-compare',
+            method: 'GET',
+            params: {
+                majorProjectId: '{{majorProjectId}}',
+            },
+        },
+        {
+            queryContext: {
+                globalVariables: {
+                    majorProjectId: 'major-a',
+                },
+                runtimeMeta: {
+                    accessMode: 'public',
+                    publicScreenUuid: 'screen-public-uuid',
+                },
+            },
+        },
+    );
+
+    assert.equal(result.url, '/analytics/api/public/screen/screen-public-uuid/project-cockpit/metrics-compare');
+    assert.equal(result.params.majorProjectId, 'major-a');
+});
+
+test('buildApiRuntimeRequest rewrites tree api url for public screen runtime', () => {
+    const result = buildApiRuntimeRequest(
+        {
+            url: '/analytics/api/project-cockpit/screen/tree',
+            method: 'GET',
+            params: {
+                majorProjectId: '{{majorProjectId}}',
+                deptId: '{{deptId}}',
+            },
+        },
+        {
+            queryContext: {
+                globalVariables: {
+                    majorProjectId: 'major-a',
+                    deptId: 'dept-01',
+                },
+                runtimeMeta: {
+                    accessMode: 'public',
+                    publicScreenUuid: 'screen-public-uuid',
+                },
+            },
+        },
+    );
+
+    assert.equal(result.url, '/analytics/api/public/screen/screen-public-uuid/project-cockpit/tree');
+    assert.equal(result.params.majorProjectId, 'major-a');
+    assert.equal(result.params.deptId, 'dept-01');
+});
+
 test('resolveApiRuntimePayload extracts nested arrays and wraps a nested object as rows', () => {
     const payload = {
         kpis: [

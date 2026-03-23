@@ -281,19 +281,30 @@ class ProjectCockpitResourceIT {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.screenKey").value("overview"))
                 .andExpect(jsonPath("$.kpis").isArray())
-                .andExpect(jsonPath("$.kpis.length()").value(Matchers.greaterThan(0)));
+                .andExpect(jsonPath("$.kpis.length()").value(Matchers.greaterThan(0)))
+                .andExpect(jsonPath("$.completionBreakdown").isArray())
+                .andExpect(jsonPath("$.healthRadar").isArray())
+                .andExpect(jsonPath("$.healthRadar[0].name").value("完成率"))
+                .andExpect(jsonPath("$.spotlight.majorProjectName").isString());
 
         mockMvc.perform(get("/api/project-cockpit/screen/execution").cookie(sessionCookie))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.screenKey").value("execution"))
                 .andExpect(jsonPath("$.milestoneKpis").isArray())
-                .andExpect(jsonPath("$.ganttTasks").isArray());
+                .andExpect(jsonPath("$.ganttTasks").isArray())
+                .andExpect(jsonPath("$.ganttTasks[0].majorProjectId").isString())
+                .andExpect(jsonPath("$.ganttTasks[0].dept").isString())
+                .andExpect(jsonPath("$.milestoneBreakdown").isArray())
+                .andExpect(jsonPath("$.executionSummary.overdueCount").exists())
+                .andExpect(jsonPath("$.executionSummary.maxDelayDays").exists());
 
         mockMvc.perform(get("/api/project-cockpit/screen/risk").cookie(sessionCookie))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.screenKey").value("risk"))
                 .andExpect(jsonPath("$.changeKpis").isArray())
-                .andExpect(jsonPath("$.riskBreakdown").isArray());
+                .andExpect(jsonPath("$.riskBreakdown").isArray())
+                .andExpect(jsonPath("$.delayReasonMatrix").isArray())
+                .andExpect(jsonPath("$.governanceSummary.delayedNodeCount").exists());
 
         mockMvc.perform(get("/api/project-cockpit/screen/metrics-compare").cookie(sessionCookie))
                 .andExpect(status().isOk())
@@ -449,13 +460,44 @@ class ProjectCockpitResourceIT {
                         .param("dateFrom", "2026-03-01")
                         .param("dateTo", "2026-03-31"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.summary.metricTotal").value(16))
+                .andExpect(jsonPath("$.summary.metricTotal").value(34))
                 .andExpect(jsonPath("$.summary.mismatchCount").value(Matchers.greaterThan(0)))
                 .andExpect(jsonPath("$.groups[0].dimension").value("项目（含一般节点）"))
+                .andExpect(jsonPath("$.groups[0].items.length()").value(12))
+                .andExpect(jsonPath("$.groups[1].items.length()").value(6))
+                .andExpect(jsonPath("$.groups[2].items.length()").value(5))
+                .andExpect(jsonPath("$.groups[3].items.length()").value(11))
+                .andExpect(jsonPath("$.groups[0].items[6].label").value("正常待完成（重复校验）"))
+                .andExpect(jsonPath("$.groups[3].items[9].label").value("里程碑节点按时完成数"))
+                .andExpect(jsonPath("$.groups[3].items[10].label").value("里程碑节点超期完成数"))
                 .andExpect(jsonPath("$.groups[0].items[0].systemValue").isString())
                 .andExpect(jsonPath("$.groups[0].items[0].excelValue").isString())
                 .andExpect(jsonPath("$.groups[0].items[0].matched").exists())
                 .andExpect(jsonPath("$.mismatchTop").isArray());
+    }
+
+    @Test
+    void projectCockpitScreenTreeShouldExposeTreeSnapshot() throws Exception {
+        seedModeledBatch();
+        seedNodeRows();
+        Cookie sessionCookie = authenticate();
+
+        mockMvc.perform(get("/api/project-cockpit/screen/tree")
+                        .cookie(sessionCookie)
+                        .param("majorProjectId", "major-aurora")
+                        .param("dateFrom", "2026-03-01")
+                        .param("dateTo", "2026-03-31"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.summary.totalNodes").value(3))
+                .andExpect(jsonPath("$.summary.highRiskNodes").value(Matchers.greaterThanOrEqualTo(1)))
+                .andExpect(jsonPath("$.focusProjects").isArray())
+                .andExpect(jsonPath("$.focusProjects[0].name").value("北斗融合主线"))
+                .andExpect(jsonPath("$.subprojectRows").isArray())
+                .andExpect(jsonPath("$.subprojectRows[0].name").value("导航底座子项目"))
+                .andExpect(jsonPath("$.subprojectRows[0].majorProjectId").isString())
+                .andExpect(jsonPath("$.focusNodes").isArray())
+                .andExpect(jsonPath("$.focusNodes[0].majorProjectId").isString())
+                .andExpect(jsonPath("$.focusNodes[0].name").exists());
     }
 
     @Test

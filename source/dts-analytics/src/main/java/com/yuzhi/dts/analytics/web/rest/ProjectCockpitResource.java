@@ -171,6 +171,17 @@ public class ProjectCockpitResource {
         return authorize(request, projectCockpitService.screenRisk(filters(majorProjectId, dateFrom, dateTo, deptId, riskLevel)));
     }
 
+    @GetMapping(path = "/screen/tree", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> screenTree(
+            @RequestParam(value = "majorProjectId", required = false) String majorProjectId,
+            @RequestParam(value = "dateFrom", required = false) String dateFrom,
+            @RequestParam(value = "dateTo", required = false) String dateTo,
+            @RequestParam(value = "deptId", required = false) String deptId,
+            @RequestParam(value = "riskLevel", required = false) String riskLevel,
+            HttpServletRequest request) {
+        return authorize(request, projectCockpitService.screenTree(filters(majorProjectId, dateFrom, dateTo, deptId, riskLevel)));
+    }
+
     @GetMapping(path = "/drill/{target}", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> drillDetail(
             @PathVariable("target") String target,

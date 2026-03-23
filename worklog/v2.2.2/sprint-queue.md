@@ -60,3 +60,13 @@
 | F4-重启回归与现场验收 | 3 | IN_PROGRESS |
 
 **统计**: READY=2, IN_PROGRESS=2, DONE=8, BLOCKED=0
+
+## Sprint-11: 数据入湖前后端优化 (202603)
+
+| Feature | Task 数 | 状态 |
+|---------|---------|------|
+| F1-创建页与表单状态优化 | 4 | IN_PROGRESS |
+| F2-入湖任务后端服务拆分 | 3 | READY |
+| F3-执行链与日志链优化 | 3 | READY |
+
+**统计**: READY=6, IN_PROGRESS=2, DONE=2, BLOCKED=0

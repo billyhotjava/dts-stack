@@ -312,8 +312,6 @@ export default function PublicScreenPage() {
                                         ? { animation: `carousel-fade-in ${carouselDuration}ms ease` }
                                         : {}),
                                 }}
-                                onMouseEnter={carousel.isCarouselActive ? carousel.pause : undefined}
-                                onMouseLeave={carousel.isCarouselActive ? carousel.resume : undefined}
                             >
                                 {visibleSortedComponents
                                     .map((component) => (

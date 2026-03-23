@@ -120,14 +120,7 @@ public class ProjectCockpitService {
     public ObjectNode majorProjectTree(Filters filters) {
         refreshFormalData();
         List<NodeRow> filtered = applyFilters(filters);
-        String selectedMajorProjectId = filters.majorProjectId();
-        if (selectedMajorProjectId == null || selectedMajorProjectId.isBlank()) {
-            selectedMajorProjectId = filtered.stream()
-                    .map(NodeRow::majorProjectId)
-                    .filter(Objects::nonNull)
-                    .findFirst()
-                    .orElse(majorProjects.isEmpty() ? "" : majorProjects.get(0).majorProjectId());
-        }
+        String selectedMajorProjectId = resolveSelectedMajorProjectId(filtered, filters.majorProjectId());
         final String effectiveMajorProjectId = selectedMajorProjectId;
         List<NodeRow> selectedRows = filtered.stream()
                 .filter(row -> Objects.equals(row.majorProjectId(), effectiveMajorProjectId))
@@ -138,6 +131,24 @@ public class ProjectCockpitService {
         root.set("dataState", buildDataState());
         root.set("tree", buildProjectTree(effectiveMajorProjectId, selectedRows));
         root.set("summary", buildTreeSummary(effectiveMajorProjectId, selectedRows));
+        return root;
+    }
+
+    public ObjectNode screenTree(Filters filters) {
+        refreshFormalData();
+        List<NodeRow> filtered = applyFilters(filters);
+        String selectedMajorProjectId = resolveSelectedMajorProjectId(filtered, filters.majorProjectId());
+        List<NodeRow> selectedRows = filtered.stream()
+                .filter(row -> Objects.equals(row.majorProjectId(), selectedMajorProjectId))
+                .toList();
+
+        ObjectNode root = buildScreenPayload("tree", "项目树与重点项目", filters, selectedRows);
+        root.put("selectedMajorProjectId", blankToEmpty(selectedMajorProjectId));
+        root.put("selectedMajorProjectName", resolveMajorProjectName(selectedMajorProjectId, selectedRows));
+        root.set("summary", buildTreeSummary(selectedMajorProjectId, selectedRows));
+        root.set("focusProjects", buildScreenTreeProjects(filtered, selectedMajorProjectId));
+        root.set("subprojectRows", buildScreenTreeSubprojectRows(selectedRows));
+        root.set("focusNodes", buildScreenTreeFocusNodes(selectedRows));
         return root;
     }
 
@@ -351,6 +362,7 @@ public class ProjectCockpitService {
         root.set("alerts", buildAlerts(filtered));
         root.set("spotlight", buildSpotlight(filtered));
         root.set("completionBreakdown", buildCompletionBreakdown(scoped, filters));
+        root.set("healthRadar", buildOverviewHealthRadar(scoped, filtered, filters));
         return root;
     }
 
@@ -368,12 +380,47 @@ public class ProjectCockpitService {
         return arr;
     }
 
+    private ArrayNode buildOverviewHealthRadar(List<NodeRow> scopedRows, List<NodeRow> filtered, Filters filters) {
+        OverviewPeriodMetrics metrics = computeOverviewPeriodMetrics(scopedRows, filters);
+        long milestoneTotal = filtered.stream().filter(NodeRow::milestoneNode).count();
+        long milestoneCompleted = filtered.stream()
+                .filter(NodeRow::milestoneNode)
+                .filter(NodeRow::completed)
+                .count();
+        long highRiskCount = filtered.stream().filter(row -> "高".equals(normalizedRisk(row.riskLevel()))).count();
+        long delayedCount = filtered.stream().filter(NodeRow::delayed).count();
+
+        ArrayNode radar = objectMapper.createArrayNode();
+        radar.add(healthRadarPoint("完成率", numericPercent(metrics.completedNodeCount(), metrics.dueNodeCount() + metrics.outsideCompletedCount())));
+        radar.add(healthRadarPoint("按时完成率", numericPercent(metrics.onTimeCount(), metrics.dueNodeCount() + metrics.outsideCompletedCount())));
+        radar.add(healthRadarPoint("里程碑完成率", numericPercent(milestoneCompleted, milestoneTotal)));
+        radar.add(healthRadarPoint("风险控制", 100D - numericPercent(highRiskCount, filtered.size())));
+        radar.add(healthRadarPoint("执行力", 100D - numericPercent(delayedCount, filtered.size())));
+        return radar;
+    }
+
+    private ObjectNode healthRadarPoint(String name, double score) {
+        ObjectNode point = objectMapper.createObjectNode();
+        point.put("name", name);
+        point.put("max", 100D);
+        point.put("score", clampPercent(score));
+        return point;
+    }
+
+    private double clampPercent(double value) {
+        if (!Double.isFinite(value)) {
+            return 0D;
+        }
+        return Math.max(0D, Math.min(100D, Math.round(value * 100D) / 100D));
+    }
+
     public ObjectNode screenExecution(Filters filters) {
         refreshFormalData();
         List<NodeRow> filtered = applyFilters(filters);
         ObjectNode root = buildScreenPayload("execution", "执行与里程碑", filters, filtered);
         root.set("incompleteKpis", buildScreenIncompleteKpis(filtered));
         root.set("milestoneKpis", buildScreenExecutionKpis(filtered));
+        root.set("milestoneBreakdown", buildMilestoneBreakdown(filtered));
         root.set("executionSummary", buildExecutionSummary(filtered));
         root.set("ganttTasks", buildExecutionGantt(filtered));
         root.set("milestones", buildMilestones(filtered));
@@ -398,6 +445,25 @@ public class ProjectCockpitService {
         summary.put("nodeTotal", nodeTotal);
         summary.put("dueSoonCount", dueSoonCount);
         return summary;
+    }
+
+    private ArrayNode buildMilestoneBreakdown(List<NodeRow> filtered) {
+        long onTimeCount = filtered.stream().filter(row -> row.milestoneNode() && row.onTimeCompleted()).count();
+        long overdueCompletedCount = filtered.stream().filter(row -> row.milestoneNode() && row.overdueCompleted()).count();
+        long incompleteCount = filtered.stream().filter(row -> row.milestoneNode() && !row.completed()).count();
+
+        ArrayNode breakdown = objectMapper.createArrayNode();
+        breakdown.add(namedValue("按时完成", onTimeCount));
+        breakdown.add(namedValue("超期完成", overdueCompletedCount));
+        breakdown.add(namedValue("未完成", incompleteCount));
+        return breakdown;
+    }
+
+    private ObjectNode namedValue(String name, long value) {
+        ObjectNode item = objectMapper.createObjectNode();
+        item.put("name", name);
+        item.put("value", value);
+        return item;
     }
 
     public ObjectNode screenRisk(Filters filters) {
@@ -857,7 +923,10 @@ public class ProjectCockpitService {
                     task.put("delayDays", Math.max(row.delayDays(), 0));
                     task.put("riskLevel", normalizedRisk(row.riskLevel()));
                     task.put("owner", blankToDash(row.owner()));
+                    task.put("dept", blankToDash(row.dept()));
+                    task.put("majorProjectId", blankToEmpty(row.majorProjectId()));
                     task.put("majorProjectName", row.majorProjectName());
+                    task.put("subprojectId", blankToEmpty(row.subprojectId()));
                     task.put("subprojectName", row.subprojectName());
                     tasks.add(task);
                 });
@@ -1180,6 +1249,149 @@ public class ProjectCockpitService {
         return summary;
     }
 
+    private String resolveSelectedMajorProjectId(List<NodeRow> filtered, String preferredMajorProjectId) {
+        String selectedMajorProjectId = preferredMajorProjectId;
+        if (selectedMajorProjectId == null || selectedMajorProjectId.isBlank()) {
+            selectedMajorProjectId = filtered.stream()
+                    .map(NodeRow::majorProjectId)
+                    .filter(Objects::nonNull)
+                    .findFirst()
+                    .orElse(majorProjects.isEmpty() ? "" : majorProjects.get(0).majorProjectId());
+        }
+        return blankToEmpty(selectedMajorProjectId);
+    }
+
+    private String resolveMajorProjectName(String selectedMajorProjectId, List<NodeRow> selectedRows) {
+        return majorProjects.stream()
+                .filter(row -> Objects.equals(row.majorProjectId(), selectedMajorProjectId))
+                .map(MajorProjectRow::majorProjectName)
+                .filter(name -> name != null && !name.isBlank())
+                .findFirst()
+                .orElseGet(() -> selectedRows.stream()
+                        .map(NodeRow::majorProjectName)
+                        .filter(name -> name != null && !name.isBlank())
+                        .findFirst()
+                        .orElse(""));
+    }
+
+    private String resolveMajorProjectOwnerDept(String majorProjectId, List<NodeRow> rowsForProject) {
+        return majorProjects.stream()
+                .filter(row -> Objects.equals(row.majorProjectId(), majorProjectId))
+                .map(MajorProjectRow::ownerDept)
+                .filter(value -> value != null && !value.isBlank())
+                .findFirst()
+                .orElseGet(() -> rowsForProject.stream()
+                        .map(NodeRow::dept)
+                        .filter(value -> value != null && !value.isBlank())
+                        .findFirst()
+                        .orElse(""));
+    }
+
+    private String resolveSubprojectOwnerDept(String subprojectId, List<NodeRow> values) {
+        return subprojects.stream()
+                .filter(row -> Objects.equals(row.subprojectId(), subprojectId))
+                .map(SubprojectRow::ownerDept)
+                .filter(value -> value != null && !value.isBlank())
+                .findFirst()
+                .orElseGet(() -> values.stream()
+                        .map(NodeRow::dept)
+                        .filter(value -> value != null && !value.isBlank())
+                        .findFirst()
+                        .orElse(""));
+    }
+
+    private ArrayNode buildScreenTreeProjects(List<NodeRow> filtered, String selectedMajorProjectId) {
+        ArrayNode rows = objectMapper.createArrayNode();
+        Map<String, List<NodeRow>> byMajorProject = filtered.stream()
+                .filter(node -> node.majorProjectId() != null && !node.majorProjectId().isBlank())
+                .collect(Collectors.groupingBy(NodeRow::majorProjectId, LinkedHashMap::new, Collectors.toList()));
+
+        byMajorProject.entrySet().stream()
+                .sorted(Comparator
+                        .comparing((Map.Entry<String, List<NodeRow>> entry) -> !Objects.equals(entry.getKey(), selectedMajorProjectId))
+                        .thenComparing((Map.Entry<String, List<NodeRow>> entry) -> entry.getValue().stream()
+                                .filter(row -> "高".equals(normalizedRisk(row.riskLevel())))
+                                .count(), Comparator.reverseOrder())
+                        .thenComparing((Map.Entry<String, List<NodeRow>> entry) -> entry.getValue().stream()
+                                .mapToInt(NodeRow::delayDays)
+                                .map(value -> Math.max(value, 0))
+                                .max()
+                                .orElse(0), Comparator.reverseOrder())
+                        .thenComparing(entry -> resolveMajorProjectName(entry.getKey(), entry.getValue())))
+                .forEach(entry -> {
+                    String majorProjectId = entry.getKey();
+                    List<NodeRow> rowsForProject = entry.getValue();
+                    ObjectNode row = objectMapper.createObjectNode();
+                    row.put("id", majorProjectId);
+                    row.put("name", resolveMajorProjectName(majorProjectId, rowsForProject));
+                    row.put("progressRate", numericPercent(rowsForProject.stream().filter(NodeRow::completed).count(), rowsForProject.size()));
+                    row.put("highRiskCount", rowsForProject.stream().filter(item -> "高".equals(normalizedRisk(item.riskLevel()))).count());
+                    row.put("incompleteCount", rowsForProject.stream().filter(NodeRow::openRisk).count());
+                    row.put("delayDays", rowsForProject.stream().mapToInt(NodeRow::delayDays).map(value -> Math.max(value, 0)).max().orElse(0));
+                    row.put("status", aggregateStatus(rowsForProject));
+                    row.put("ownerDept", blankToDash(resolveMajorProjectOwnerDept(majorProjectId, rowsForProject)));
+                    row.put("selected", Objects.equals(majorProjectId, selectedMajorProjectId));
+                    rows.add(row);
+                });
+        return rows;
+    }
+
+    private ArrayNode buildScreenTreeSubprojectRows(List<NodeRow> selectedRows) {
+        ArrayNode rows = objectMapper.createArrayNode();
+        Map<String, List<NodeRow>> bySubproject = selectedRows.stream()
+                .filter(node -> node.subprojectId() != null && !node.subprojectId().isBlank())
+                .collect(Collectors.groupingBy(NodeRow::subprojectId, LinkedHashMap::new, Collectors.toList()));
+
+        bySubproject.forEach((subprojectId, values) -> {
+            ObjectNode row = objectMapper.createObjectNode();
+            row.put("id", subprojectId);
+            row.put("majorProjectId", values.stream()
+                    .map(NodeRow::majorProjectId)
+                    .filter(value -> value != null && !value.isBlank())
+                    .findFirst()
+                    .orElse(""));
+            row.put("name", values.stream()
+                    .map(NodeRow::subprojectName)
+                    .filter(value -> value != null && !value.isBlank())
+                    .findFirst()
+                    .orElse(blankToDash(subprojectId)));
+            row.put("progressRate", numericPercent(values.stream().filter(NodeRow::completed).count(), values.size()));
+            row.put("incompleteCount", values.stream().filter(NodeRow::openRisk).count());
+            row.put("highRiskCount", values.stream().filter(item -> "高".equals(normalizedRisk(item.riskLevel()))).count());
+            row.put("delayDays", values.stream().mapToInt(NodeRow::delayDays).map(value -> Math.max(value, 0)).max().orElse(0));
+            row.put("status", aggregateStatus(values));
+            row.put("ownerDept", blankToDash(resolveSubprojectOwnerDept(subprojectId, values)));
+            rows.add(row);
+        });
+        return rows;
+    }
+
+    private ArrayNode buildScreenTreeFocusNodes(List<NodeRow> selectedRows) {
+        ArrayNode rows = objectMapper.createArrayNode();
+        selectedRows.stream()
+                .sorted(Comparator
+                        .comparing((NodeRow row) -> "高".equals(normalizedRisk(row.riskLevel())), Comparator.reverseOrder())
+                        .thenComparing((NodeRow row) -> Math.max(row.delayDays(), 0), Comparator.reverseOrder())
+                        .thenComparing(NodeRow::planDate, Comparator.nullsLast(Comparator.naturalOrder())))
+                .limit(12)
+                .forEach(rowValue -> {
+                    ObjectNode row = objectMapper.createObjectNode();
+                    row.put("id", blankToEmpty(rowValue.nodeId()));
+                    row.put("majorProjectId", blankToEmpty(rowValue.majorProjectId()));
+                    row.put("name", blankToDash(rowValue.nodeTask()));
+                    row.put("subprojectName", blankToDash(rowValue.subprojectName()));
+                    row.put("status", blankToDash(rowValue.statusLabel()));
+                    row.put("riskLevel", blankToDash(normalizedRisk(rowValue.riskLevel())));
+                    row.put("delayDays", Math.max(rowValue.delayDays(), 0));
+                    row.put("planDate", rowValue.planDate() == null ? "" : rowValue.planDate().toString());
+                    row.put("actualDate", rowValue.actualDate() == null ? "" : rowValue.actualDate().toString());
+                    row.put("ownerDept", blankToDash(rowValue.dept()));
+                    row.put("reason", blankToDash(rowValue.incompleteReason()));
+                    rows.add(row);
+                });
+        return rows;
+    }
+
     private ArrayNode buildCoverage(List<NodeRow> filtered) {
         ArrayNode coverage = objectMapper.createArrayNode();
         int validRows = latestBatch == null ? 0 : latestBatch.validRows();
@@ -1322,8 +1534,10 @@ public class ProjectCockpitService {
         items.add(compareMetric("项目（含一般节点）", "periodNodeTotalCount", "项目本周期节点总数", "个", systemValues, excelValues, fallbackRemark));
         items.add(compareMetric("项目（含一般节点）", "pendingNormalCount", "正常待完成", "个", systemValues, excelValues, fallbackRemark));
         items.add(compareMetric("项目（含一般节点）", "dueNodeCount", "项目本周期节点已到时间节点总数", "个", systemValues, excelValues, fallbackRemark));
+        items.add(compareMetric("项目（含一般节点）", "outsideCompletedCount", "项目本周期以外完成节点总数", "个", systemValues, excelValues, fallbackRemark));
         items.add(compareMetric("项目（含一般节点）", "incompleteNodeCount", "项目本周期节点未完成总数", "个", systemValues, excelValues, fallbackRemark));
         items.add(compareMetric("项目（含一般节点）", "onTimeCount", "节点按时完成数", "个", systemValues, excelValues, fallbackRemark));
+        items.add(compareMetricAlias("项目（含一般节点）", "pendingNormalCount2", "pendingNormalCount", "正常待完成（重复校验）", "个", systemValues, excelValues, fallbackRemark));
         items.add(compareMetric("项目（含一般节点）", "overdueCompletedCount", "节点超期完成数", "个", systemValues, excelValues, fallbackRemark));
         items.add(compareMetric("项目（含一般节点）", "completedNodeCount", "节点完成总数", "个", systemValues, excelValues, fallbackRemark));
         items.add(compareMetric("项目（含一般节点）", "completionRate", "节点完成百分比", "%", systemValues, excelValues, fallbackRemark));
@@ -1332,12 +1546,62 @@ public class ProjectCockpitService {
 
         items.add(compareMetric("项目（除一般节点）", "abnormalPendingNonGeneralCount", "不正常待变更节点数", "个", systemValues, excelValues, fallbackRemark));
         items.add(compareMetric("项目（除一般节点）", "overdueIncompleteUnchangedNonGeneralCount", "超期未完成且未走变更流程的节点数", "个", systemValues, excelValues, fallbackRemark));
+        items.add(compareMetric("项目（除一般节点）", "overdueIncompleteChangedNonGeneralCount", "超期未完成但走完变更流程节点数", "个", systemValues, excelValues, fallbackRemark));
+        items.add(compareMetric("项目（除一般节点）", "overdueCompletedUnchangedNonGeneralCount", "超期已完成未变更", "个", systemValues, excelValues, fallbackRemark));
         items.add(compareMetric("项目（除一般节点）", "abnormalRate", "节点已经不正常待变更的百分比", "%", systemValues, excelValues, fallbackRemark));
         items.add(compareMetric("项目（除一般节点）", "overdueRate", "节点超期百分比", "%", systemValues, excelValues, fallbackRemark));
 
         items.add(compareMetric("截止目前未完成节点", "incompleteHighRiskCount", "截止目前未完成高风险节点数", "个", systemValues, excelValues, fallbackRemark));
+        items.add(compareMetric("截止目前未完成节点", "incompleteMidRiskCount", "截止目前未完成中风险节点数", "个", systemValues, excelValues, fallbackRemark));
+        items.add(compareMetric("截止目前未完成节点", "incompleteMilestoneCount", "截止目前未完成里程碑节点数", "个", systemValues, excelValues, fallbackRemark));
+        items.add(compareMetric("截止目前未完成节点", "incompleteMajorCount", "截止目前未完成重大节点数", "个", systemValues, excelValues, fallbackRemark));
+        items.add(compareMetric("截止目前未完成节点", "incompleteImportantCount", "截止目前未完成重要节点数", "个", systemValues, excelValues, fallbackRemark));
+
+        items.add(compareMetric("本周期内节点", "milestoneOnTimeCount", "里程碑节点按时完成数", "个", systemValues, excelValues, fallbackRemark));
+        items.add(compareMetric("本周期内节点", "milestoneOverdueCompletedCount", "里程碑节点超期完成数", "个", systemValues, excelValues, fallbackRemark));
+        items.add(compareMetric("本周期内节点", "milestonePendingCount", "里程碑节点正常待完成数", "个", systemValues, excelValues, fallbackRemark));
         items.add(compareMetric("本周期内节点", "milestoneCompletionRate", "里程碑节点完成总百分比", "%", systemValues, excelValues, fallbackRemark));
+        items.add(compareMetric("本周期内节点", "highRiskNodeCount", "高风险节点数", "个", systemValues, excelValues, fallbackRemark));
+        items.add(compareMetric("本周期内节点", "midRiskNodeCount", "中风险节点数", "个", systemValues, excelValues, fallbackRemark));
+        items.add(compareMetric("本周期内节点", "milestoneTotalCount", "里程碑节点总数", "个", systemValues, excelValues, fallbackRemark));
+        items.add(compareMetric("本周期内节点", "majorNodeCount", "重大节点总数", "个", systemValues, excelValues, fallbackRemark));
+        items.add(compareMetric("本周期内节点", "importantNodeCount", "重要节点总数", "个", systemValues, excelValues, fallbackRemark));
+        items.add(compareMetricAlias("本周期内节点", "milestoneOnTimeCount2", "milestoneOnTimeCount", "里程碑节点按时完成数", "个", systemValues, excelValues, fallbackRemark));
+        items.add(compareMetricAlias("本周期内节点", "milestoneOverdueCompletedCount2", "milestoneOverdueCompletedCount", "里程碑节点超期完成数", "个", systemValues, excelValues, fallbackRemark));
         return items;
+    }
+
+    private MetricCompareItem compareMetricAlias(
+            String dimension,
+            String metricKey,
+            String sourceKey,
+            String label,
+            String unit,
+            Map<String, String> systemValues,
+            Map<String, String> excelValues,
+            String fallbackRemark) {
+        String systemValue = systemValues.getOrDefault(sourceKey, "0");
+        String excelValue = excelValues.getOrDefault(sourceKey, systemValue);
+        double systemNumeric = parseNumeric(systemValue);
+        double excelNumeric = parseNumeric(excelValue);
+        double diffAbs = roundTwoDecimals(Math.abs(systemNumeric - excelNumeric));
+        double tolerance = "%".equals(unit) ? PERCENT_COMPARE_TOLERANCE : 0D;
+        boolean matched = diffAbs <= tolerance;
+        double diffRate = Math.abs(excelNumeric) <= 0.000001D ? 0D : roundTwoDecimals((diffAbs * 100D) / Math.abs(excelNumeric));
+        String remark = !fallbackRemark.isBlank() ? fallbackRemark : matched ? "口径一致" : "请对照 Excel 复核";
+        return new MetricCompareItem(
+                dimension,
+                metricKey,
+                label,
+                unit,
+                systemValue,
+                excelValue,
+                formatMetricValue(diffAbs, unit),
+                formatPercentValue(diffRate),
+                matched,
+                matched ? "一致" : "差异",
+                remark,
+                diffAbs);
     }
 
     private MetricCompareItem compareMetric(

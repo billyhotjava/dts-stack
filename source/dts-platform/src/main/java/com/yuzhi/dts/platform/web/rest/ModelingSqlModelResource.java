@@ -11,6 +11,10 @@ import com.yuzhi.dts.platform.service.modeling.DataStandardSecurity;
 import com.yuzhi.dts.platform.service.modeling.ModelingSqlModelService;
 import com.yuzhi.dts.platform.service.modeling.ModelingSqlModelService.SqlModelDto;
 import com.yuzhi.dts.platform.service.modeling.ModelingSqlModelService.SqlModelContractImpact;
+import com.yuzhi.dts.platform.service.modeling.ModelingSqlModelService.SqlModelGovernanceExecuteRequest;
+import com.yuzhi.dts.platform.service.modeling.ModelingSqlModelService.SqlModelGovernanceExecuteResult;
+import com.yuzhi.dts.platform.service.modeling.ModelingSqlModelService.SqlModelGovernancePreviewRequest;
+import com.yuzhi.dts.platform.service.modeling.ModelingSqlModelService.SqlModelGovernancePreviewResult;
 import com.yuzhi.dts.platform.service.modeling.ModelingSqlModelService.SqlModelOdsGenerateRequest;
 import com.yuzhi.dts.platform.service.modeling.ModelingSqlModelService.SqlModelOdsGenerateResult;
 import com.yuzhi.dts.platform.service.modeling.ModelingSqlModelService.SqlModelRequest;
@@ -212,6 +216,28 @@ public class ModelingSqlModelResource {
     ) {
         SqlModelOdsGenerateResult result = sqlModelService.generateFromOds(request, activeDept);
         auditService.audit("GENERATE", "modeling.sql-model", "ods");
+        return ApiResponses.ok(result);
+    }
+
+    @PostMapping("/governance/preview")
+    @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
+    public ApiResponse<SqlModelGovernancePreviewResult> previewGovernance(
+        @RequestBody SqlModelGovernancePreviewRequest request,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        SqlModelGovernancePreviewResult result = sqlModelService.previewGovernance(request, activeDept);
+        auditService.audit("READ", "modeling.sql-model.governance.preview", request != null && request.planId() != null ? request.planId().toString() : "all");
+        return ApiResponses.ok(result);
+    }
+
+    @PostMapping("/governance/execute")
+    @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
+    public ApiResponse<SqlModelGovernanceExecuteResult> executeGovernance(
+        @RequestBody SqlModelGovernanceExecuteRequest request,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        SqlModelGovernanceExecuteResult result = sqlModelService.executeGovernance(request, activeDept);
+        auditService.audit("DELETE", "modeling.sql-model.governance.execute", "requested=" + result.requested() + ",deleted=" + result.deleted());
         return ApiResponses.ok(result);
     }
 

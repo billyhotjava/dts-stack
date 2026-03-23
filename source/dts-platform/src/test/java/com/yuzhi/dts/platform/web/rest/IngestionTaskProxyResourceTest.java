@@ -22,11 +22,18 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.autoconfigure.security.oauth2.client.servlet.OAuth2ClientAutoConfiguration;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
-@WebMvcTest(IngestionTaskProxyResource.class)
+@WebMvcTest(
+    value = IngestionTaskProxyResource.class,
+    excludeAutoConfiguration = OAuth2ClientAutoConfiguration.class,
+    properties = {
+        "spring.autoconfigure.exclude=org.springframework.boot.autoconfigure.security.oauth2.client.servlet.OAuth2ClientAutoConfiguration"
+    }
+)
 @AutoConfigureMockMvc(addFilters = false)
 class IngestionTaskProxyResourceTest {
 
@@ -109,5 +116,21 @@ class IngestionTaskProxyResourceTest {
             .andExpect(jsonPath("$.data.async").value(true));
 
         verify(ingestionClient).executeTaskAsync(5L);
+    }
+
+    @Test
+    void retryExecutionAsyncIsExposedViaPlatformProxy() throws Exception {
+        when(ingestionClient.retryExecutionAsync(1L, 2L, Map.of("mode", "FAILED_ONLY")))
+            .thenReturn(new ApiResponse<>(202, "accepted", Map.of("taskId", 1, "executionId", 2, "status", "submitted", "async", true)));
+
+        mockMvc.perform(post("/api/ingestion/tasks/1/executions/2/retry/async").param("mode", "FAILED_ONLY"))
+            .andExpect(status().isAccepted())
+            .andExpect(jsonPath("$.status").value(202))
+            .andExpect(jsonPath("$.data.taskId").value(1))
+            .andExpect(jsonPath("$.data.executionId").value(2))
+            .andExpect(jsonPath("$.data.status").value("submitted"))
+            .andExpect(jsonPath("$.data.async").value(true));
+
+        verify(ingestionClient).retryExecutionAsync(1L, 2L, Map.of("mode", "FAILED_ONLY"));
     }
 }

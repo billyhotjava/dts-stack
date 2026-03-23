@@ -22,14 +22,6 @@
           "titleKey": "sys.nav.portal.workbenchTodo",
           "title": "待办事项",
           "externalLink": "/workbench/todo"
-        },
-        {
-          "key": "favorites",
-          "path": "favorites",
-          "icon": "solar:star-bold-duotone",
-          "titleKey": "sys.nav.portal.workbenchFavorites",
-          "title": "我的收藏",
-          "externalLink": "/workbench/favorites"
         }
       ]
     },

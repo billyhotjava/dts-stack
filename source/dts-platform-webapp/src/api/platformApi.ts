@@ -133,6 +133,10 @@ export const importSqlModel = (data: FormData) => api.post({ url: "/modeling/sql
 export const batchImportSqlModels = (data: FormData) =>
 	api.post({ url: "/modeling/sql-models/batch-import", data });
 export const generateSqlModelsFromOds = (data: any) => api.post({ url: "/modeling/sql-models/generate-from-ods", data });
+export const previewSqlModelGovernance = (data: any) =>
+	api.post({ url: "/modeling/sql-models/governance/preview", data });
+export const executeSqlModelGovernance = (data: any) =>
+	api.post({ url: "/modeling/sql-models/governance/execute", data });
 export const listDbtSources = (params?: { keyword?: string; sourceDataSourceId?: string }) =>
 	api.get({ url: "/modeling/sql-models/dbt/sources", params });
 export const listDbtRefs = (params?: { keyword?: string; layer?: string }) =>

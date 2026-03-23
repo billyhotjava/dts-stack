@@ -188,6 +188,18 @@ class ScreenResourceIT {
                 .andExpect(jsonPath("$.screenKey").value("overview"))
                 .andExpect(jsonPath("$.screenTitle").value("总体态势"))
                 .andExpect(jsonPath("$.filters").exists());
+
+        mockMvc.perform(get("/api/public/screen/{uuid}/project-cockpit/metrics-compare", publicUuid))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.summary").exists())
+                .andExpect(jsonPath("$.groups").isArray())
+                .andExpect(jsonPath("$.mismatchTop").isArray());
+
+        mockMvc.perform(get("/api/public/screen/{uuid}/project-cockpit/tree", publicUuid))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.summary").exists())
+                .andExpect(jsonPath("$.focusProjects").isArray())
+                .andExpect(jsonPath("$.focusNodes").isArray());
     }
 
     private Cookie authenticate() {

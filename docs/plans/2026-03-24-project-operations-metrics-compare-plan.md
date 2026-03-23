@@ -2,9 +2,9 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** 为“项目运营管理大屏”新增第 5 屏“指标对账”，展示系统值、Excel 值及差异结果。
+**Goal:** 为“项目运营管理大屏”新增第 5 屏“指标对账”，展示全量 34 项系统值、Excel 值及差异结果。
 
-**Architecture:** 后端新增 `metrics-compare` 聚合接口，系统值复用现有 `screenMetricsOverview` 逻辑，Excel 值由 ODS 明细聚合器计算；前端模板新增第 5 屏并接入 public/runtime 链路。
+**Architecture:** 后端新增 `metrics-compare` 聚合接口，系统值复用现有 `screenMetricsOverview` 逻辑，Excel 值由 ODS 明细聚合器计算，并保留重复校验项；前端模板新增第 5 屏并接入 public/runtime 链路。
 
 **Tech Stack:** Spring Boot, Jackson, React, TypeScript, Vite, screen template runtime
 
@@ -46,12 +46,13 @@ Run: `mvn -f source/dts-analytics/pom.xml -Dtest=ProjectCockpitResourceIT test`
 - 新增 `screenMetricsCompare(Filters filters)`。
 - 新增内部对账模型与聚合 helper。
 
-**Step 2: Implement first-batch metrics**
+**Step 2: Implement all metrics**
 
-- 实现 16 项核心指标的：
+- 实现全量 34 项指标的：
   - 系统值抽取
   - Excel 聚合值
   - 差值/偏差率/一致性
+- 对重复校验项保留独立展示 key，但复用同一底层口径值
 
 **Step 3: Add summary + mismatchTop**
 
