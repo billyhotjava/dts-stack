@@ -469,6 +469,42 @@ for image in images:
 ' "${manifest_file}" 2>/dev/null || upgrade_die "failed to parse release manifest: ${manifest_file}"
 }
 
+upgrade_has_image_package() {
+  local images_dir="$1"
+  local extra_dir="$2"
+  local manifest_file="${extra_dir}/release-manifest.json"
+  local checksums_file="${extra_dir}/checksums.txt"
+
+  if [[ -n "${UPGRADE_IMAGE_PACKAGE_PRESENT:-}" ]]; then
+    [[ "${UPGRADE_IMAGE_PACKAGE_PRESENT}" == "true" ]]
+    return
+  fi
+
+  if [[ ! -f "${manifest_file}" || ! -f "${checksums_file}" ]]; then
+    UPGRADE_IMAGE_PACKAGE_PRESENT="false"
+    upgrade_append_log "image package skipped: no release-manifest.json/checksums.txt, assuming images are preloaded"
+    upgrade_append_summary "- image package: skipped (images assumed preloaded)"
+    return 1
+  fi
+
+  if [[ ! -s "${manifest_file}" ]]; then
+    UPGRADE_IMAGE_PACKAGE_PRESENT="false"
+    upgrade_append_log "image package skipped: release-manifest.json is empty, assuming images are preloaded"
+    upgrade_append_summary "- image package: skipped (empty manifest)"
+    return 1
+  fi
+
+  if [[ ! -s "${checksums_file}" ]]; then
+    UPGRADE_IMAGE_PACKAGE_PRESENT="false"
+    upgrade_append_log "image package skipped: checksums.txt is empty, assuming images are preloaded"
+    upgrade_append_summary "- image package: skipped (empty checksums)"
+    return 1
+  fi
+
+  UPGRADE_IMAGE_PACKAGE_PRESENT="true"
+  return 0
+}
+
 upgrade_verify_image_package() {
   local images_dir="$1"
   local extra_dir="$2"
@@ -476,8 +512,9 @@ upgrade_verify_image_package() {
   local checksums_file="${extra_dir}/checksums.txt"
   local image_name
 
-  upgrade_require_file "${manifest_file}" "release manifest"
-  upgrade_require_file "${checksums_file}" "checksums"
+  if ! upgrade_has_image_package "${images_dir}" "${extra_dir}"; then
+    return 0
+  fi
 
   while IFS= read -r image_name; do
     [[ -z "${image_name}" ]] && continue
@@ -496,6 +533,10 @@ upgrade_load_images() {
   local extra_dir="$2"
   local manifest_file="${extra_dir}/release-manifest.json"
   local image_name
+
+  if ! upgrade_has_image_package "${images_dir}" "${extra_dir}"; then
+    return 0
+  fi
 
   while IFS= read -r image_name; do
     [[ -z "${image_name}" ]] && continue

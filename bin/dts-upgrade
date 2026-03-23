@@ -49,8 +49,7 @@ done
 [[ -n "${EXTRA_DIR}" ]] || upgrade_die "--extra-dir is required"
 
 upgrade_require_dir "${TARGET_DIR}" "target"
-upgrade_require_dir "${IMAGES_DIR}" "images"
-upgrade_require_dir "${EXTRA_DIR}" "extra"
+mkdir -p "${IMAGES_DIR}" "${EXTRA_DIR}"
 
 UPGRADE_TIMESTAMP="$(upgrade_timestamp)"
 upgrade_init_logs "${TARGET_DIR}" "${UPGRADE_TIMESTAMP}"

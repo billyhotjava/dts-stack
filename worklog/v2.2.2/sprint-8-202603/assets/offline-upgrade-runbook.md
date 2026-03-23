@@ -11,12 +11,18 @@
 
 1. 确认升级包结构完整：
    - `dts-stack/`
-   - `images/`
-   - `extra/`
+   - `images/`（可为空）
+   - `extra/`（可为空）
 2. 确认旧目录中存在 `.env`
 3. 确认旧目录 PostgreSQL 数据目录为：
    - `services/dts-pg/data`
 4. 确认现场容器已人工停止
+
+补充说明：
+
+- 若镜像已经手工加载到本机，或本机已经 build 出目标镜像，则允许 `images/`、`extra/` 不存在或为空
+- 此时升级器会跳过镜像包校验和 `docker load`
+- 但仍会在执行过程中写入 `rollback-manifest.json`
 
 ## 执行升级
 

@@ -60,12 +60,24 @@ run_upgrade() {
     --extra-dir "${extra_dir}"
 }
 
+ensure_no_docker_loads() {
+  local log_file="${TMP_DIR}/docker-load.log"
+  if [[ -s "${log_file}" ]]; then
+    echo "expected no docker load operations, but found:" >&2
+    cat "${log_file}" >&2
+    exit 1
+  fi
+}
+
 prepare_target() {
   local target_dir="$1"
   mkdir -p "${target_dir}"
   cat > "${target_dir}/docker-compose.yml" <<'EOF_COMPOSE'
 services: {}
 EOF_COMPOSE
+  cat > "${target_dir}/.env" <<'EOF_ENV'
+IMAGE_POSTGRES=postgres:17.6
+EOF_ENV
 }
 
 prepare_extra() {
@@ -124,7 +136,10 @@ expect_failure() {
 expect_success() {
   local output_file="${TMP_DIR}/success.log"
   : > "${TMP_DIR}/docker-load.log"
-  run_upgrade "$@" >"${output_file}" 2>&1
+  if ! run_upgrade "$@" >"${output_file}" 2>&1; then
+    cat "${output_file}" >&2
+    exit 1
+  fi
 }
 
 MISSING_TARGET="${TMP_DIR}/missing-target"
@@ -137,6 +152,31 @@ cat > "${MISSING_EXTRA}/checksums.txt" <<'EOF_SUM'
 deadbeef  one.tar
 EOF_SUM
 expect_failure "image tar referenced by manifest is missing" "${MISSING_TARGET}" "${MISSING_IMAGES}" "${MISSING_EXTRA}"
+
+NO_PACKAGE_TARGET="${TMP_DIR}/no-package-target"
+NO_PACKAGE_IMAGES="${TMP_DIR}/no-package-images"
+NO_PACKAGE_EXTRA="${TMP_DIR}/no-package-extra"
+prepare_target "${NO_PACKAGE_TARGET}"
+expect_success "${NO_PACKAGE_TARGET}" "${NO_PACKAGE_IMAGES}" "${NO_PACKAGE_EXTRA}"
+ensure_no_docker_loads
+if [[ ! -f "${NO_PACKAGE_EXTRA}/rollback-manifest.json" ]]; then
+  echo "expected rollback manifest to be written even when extra dir was initially missing" >&2
+  exit 1
+fi
+rm -f "${STATE_FILE}"
+
+EMPTY_PACKAGE_TARGET="${TMP_DIR}/empty-package-target"
+EMPTY_PACKAGE_IMAGES="${TMP_DIR}/empty-package-images"
+EMPTY_PACKAGE_EXTRA="${TMP_DIR}/empty-package-extra"
+prepare_target "${EMPTY_PACKAGE_TARGET}"
+mkdir -p "${EMPTY_PACKAGE_IMAGES}" "${EMPTY_PACKAGE_EXTRA}"
+expect_success "${EMPTY_PACKAGE_TARGET}" "${EMPTY_PACKAGE_IMAGES}" "${EMPTY_PACKAGE_EXTRA}"
+ensure_no_docker_loads
+if [[ ! -f "${EMPTY_PACKAGE_EXTRA}/rollback-manifest.json" ]]; then
+  echo "expected rollback manifest to be written when extra dir is empty" >&2
+  exit 1
+fi
+rm -f "${STATE_FILE}"
 
 BAD_TARGET="${TMP_DIR}/bad-target"
 BAD_IMAGES="${TMP_DIR}/bad-images"

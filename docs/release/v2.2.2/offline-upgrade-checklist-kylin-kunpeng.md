@@ -129,6 +129,12 @@ cd /data/s10_stack
 ./builds/dts-build.sh --pack --no-images --output /tmp/dts-upgrade.tar.gz
 ```
 
+说明：
+
+- 如果镜像已经手工 `docker load` 或已在本机 build 完成，升级时允许 `images/`、`extra/` 不存在或为空
+- 升级器会自动跳过镜像包校验和 `docker load`
+- 升级器仍会自动写入 `rollback-manifest.json`
+
 如果需要连镜像 tar 一起打包：
 
 ```bash
@@ -169,6 +175,9 @@ find /tmp/dts-upgrade -maxdepth 2 -type f | sort
 
 - `dts-stack/bin/dts-upgrade`
 - `dts-stack/bin/dts-upgrade-rollback`
+
+如果本次走“镜像已预装”模式，则下面两项允许缺失：
+
 - `extra/release-manifest.json`
 - `extra/checksums.txt`
 
@@ -221,6 +230,7 @@ find /data/stack_old/backups -path '*/services/dts-pg/data' -type d | sort
 
 - summary 显示成功
 - compose 文件选择正确
+- 若 `images/` / `extra/` 为空，summary 中应显示镜像包已跳过
 - 关键容器已启动
 - 旧数据库目录还在
 - 冷备目录已生成
