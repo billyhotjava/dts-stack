@@ -46,7 +46,13 @@ class AddaxJobServiceTest {
     @BeforeEach
     void setup() {
         objectMapper = new ObjectMapper();
-        addaxJobService = new AddaxJobService(addaxProperties, settingsService, objectMapper, jdbcMetadataService);
+        addaxJobService = new AddaxJobService(
+            addaxProperties,
+            settingsService,
+            objectMapper,
+            jdbcMetadataService,
+            new AddaxJdbcConfigNormalizer(objectMapper)
+        );
 
         // Mock settings service
         IngestionSettingsService.SettingsSnapshot settingsSnapshot = new IngestionSettingsService.SettingsSnapshot(

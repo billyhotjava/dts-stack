@@ -10,6 +10,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.yuzhi.dts.ingestion.service.IngestionTaskChangeLogService;
+import com.yuzhi.dts.ingestion.service.IngestionExecutionQueryService;
+import com.yuzhi.dts.ingestion.service.IngestionTaskQueryService;
 import com.yuzhi.dts.ingestion.service.IngestionTaskService;
 import com.yuzhi.dts.ingestion.service.audit.AuditService;
 import com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO;
@@ -51,6 +53,12 @@ class IngestionTaskResourceTest {
 
     @MockBean
     private IngestionTaskService ingestionTaskService;
+
+    @MockBean
+    private IngestionTaskQueryService ingestionTaskQueryService;
+
+    @MockBean
+    private IngestionExecutionQueryService ingestionExecutionQueryService;
 
     @MockBean
     private JdbcMetadataService jdbcMetadataService;

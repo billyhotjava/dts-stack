@@ -1,7 +1,7 @@
 # Sprint-11: 数据入湖前后端优化
 
 **时间**: 2026-03
-**状态**: IN_PROGRESS
+**状态**: DONE
 **目标**: 以“创建页状态收口 + 后端职责拆分 + 执行链/日志链统一”为主线，降低数据入湖模块的复杂度，提升可维护性、可测试性和异常场景稳定性。
 
 ## 背景
@@ -18,9 +18,9 @@
 
 | ID | Feature | Task 数 | 状态 |
 |----|---------|---------|------|
-| F1 | 创建页与表单状态优化 | 4 | IN_PROGRESS |
-| F2 | 入湖任务后端服务拆分 | 3 | READY |
-| F3 | 执行链与日志链优化 | 3 | READY |
+| F1 | 创建页与表单状态优化 | 4 | DONE |
+| F2 | 入湖任务后端服务拆分 | 3 | DONE |
+| F3 | 执行链与日志链优化 | 3 | DONE |
 
 ## 当前诊断结论
 
@@ -47,6 +47,12 @@
 - 文件解析结果与建议表名推导已收成文件流 helper：
   - [transformCreateFileFlow.helpers.ts](/opt/prod/s10/s10-stack/source/dts-platform-webapp/src/pages/explore/etl/transformCreateFileFlow.helpers.ts)
   - [transformCreateFileFlow.helpers.test.ts](/opt/prod/s10/s10-stack/source/dts-platform-webapp/src/pages/explore/etl/transformCreateFileFlow.helpers.test.ts)
+- 文件上传成功 / 刷新预览 / 切换 Sheet 的解析参数已统一到：
+  - [transformCreateFileParse.helpers.ts](/opt/prod/s10/s10-stack/source/dts-platform-webapp/src/pages/explore/etl/transformCreateFileParse.helpers.ts)
+  - [transformCreateFileParse.helpers.test.ts](/opt/prod/s10/s10-stack/source/dts-platform-webapp/src/pages/explore/etl/transformCreateFileParse.helpers.test.ts)
+- 文件解析后的 readerType/ODS reset/成功提示也已统一到：
+  - [transformCreateFilePostParse.helpers.ts](/opt/prod/s10/s10-stack/source/dts-platform-webapp/src/pages/explore/etl/transformCreateFilePostParse.helpers.ts)
+  - [transformCreateFilePostParse.helpers.test.ts](/opt/prod/s10/s10-stack/source/dts-platform-webapp/src/pages/explore/etl/transformCreateFilePostParse.helpers.test.ts)
 - 草稿保存请求体已收成独立 helper：
   - [transformCreateDraft.helpers.ts](/opt/prod/s10/s10-stack/source/dts-platform-webapp/src/pages/explore/etl/transformCreateDraft.helpers.ts)
   - [transformCreateDraft.helpers.test.ts](/opt/prod/s10/s10-stack/source/dts-platform-webapp/src/pages/explore/etl/transformCreateDraft.helpers.test.ts)
@@ -60,6 +66,17 @@
   - [fileOdsPasteMapping.helpers.ts](/opt/prod/s10/s10-stack/source/dts-platform-webapp/src/pages/explore/etl/fileOdsPasteMapping.helpers.ts)
   - [fileOdsPasteMapping.helpers.test.ts](/opt/prod/s10/s10-stack/source/dts-platform-webapp/src/pages/explore/etl/fileOdsPasteMapping.helpers.test.ts)
   - [FileBasicStep.tsx](/opt/prod/s10/s10-stack/source/dts-platform-webapp/src/pages/explore/etl/steps/FileBasicStep.tsx)
+- 后端查询与日志职责已出现清晰拆分：
+  - [IngestionTaskQueryService.java](/opt/prod/s10/s10-stack/source/dts-ingestion/src/main/java/com/yuzhi/dts/ingestion/service/IngestionTaskQueryService.java)
+  - [IngestionExecutionQueryService.java](/opt/prod/s10/s10-stack/source/dts-ingestion/src/main/java/com/yuzhi/dts/ingestion/service/IngestionExecutionQueryService.java)
+  - [IngestionTaskResource.java](/opt/prod/s10/s10-stack/source/dts-ingestion/src/main/java/com/yuzhi/dts/ingestion/web/rest/IngestionTaskResource.java)
+- Addax JDBC 归一化逻辑已独立下沉：
+  - [AddaxJdbcConfigNormalizer.java](/opt/prod/s10/s10-stack/source/dts-ingestion/src/main/java/com/yuzhi/dts/ingestion/service/etl/AddaxJdbcConfigNormalizer.java)
+- 入湖 E2E 最小主链已验证：
+  - 创建后执行并查看最新日志
+  - 失败重试
+  - 重建 DAG
+  - 执行历史跟进
 
 ## 当前验证
 
@@ -70,12 +87,16 @@
 - [x] `pnpm -C source/dts-platform-webapp exec tsx --test src/pages/explore/etl/transformCreateFileFlow.helpers.test.ts src/pages/explore/etl/transformCreateState.helpers.test.ts src/pages/explore/etl/transformCreateBootstrap.helpers.test.ts src/pages/explore/etl/fileOdsPasteMapping.helpers.test.ts src/pages/explore/etl/transformCreateAsyncRun.helpers.test.ts`
 - [x] `pnpm -C source/dts-platform-webapp exec tsx --test src/pages/explore/etl/transformCreateDraft.helpers.test.ts src/pages/explore/etl/transformCreateFileFlow.helpers.test.ts src/pages/explore/etl/transformCreateState.helpers.test.ts src/pages/explore/etl/transformCreateBootstrap.helpers.test.ts src/pages/explore/etl/fileOdsPasteMapping.helpers.test.ts src/pages/explore/etl/transformCreateAsyncRun.helpers.test.ts`
 - [x] `pnpm -C source/dts-platform-webapp exec tsx --test src/pages/explore/etl/transformCreateTemplate.helpers.test.ts src/pages/explore/etl/transformCreateDraft.helpers.test.ts src/pages/explore/etl/transformCreateFileFlow.helpers.test.ts src/pages/explore/etl/transformCreateState.helpers.test.ts src/pages/explore/etl/transformCreateBootstrap.helpers.test.ts src/pages/explore/etl/fileOdsPasteMapping.helpers.test.ts src/pages/explore/etl/transformCreateAsyncRun.helpers.test.ts`
+- [x] `pnpm -C source/dts-platform-webapp exec tsx --test src/pages/explore/etl/transformCreateFileParse.helpers.test.ts src/pages/explore/etl/transformCreateTemplate.helpers.test.ts src/pages/explore/etl/transformCreateDraft.helpers.test.ts src/pages/explore/etl/transformCreateFileFlow.helpers.test.ts src/pages/explore/etl/transformCreateState.helpers.test.ts src/pages/explore/etl/transformCreateBootstrap.helpers.test.ts src/pages/explore/etl/fileOdsPasteMapping.helpers.test.ts src/pages/explore/etl/transformCreateAsyncRun.helpers.test.ts`
+- [x] `pnpm -C source/dts-platform-webapp exec tsx --test src/pages/explore/etl/transformCreateFilePostParse.helpers.test.ts src/pages/explore/etl/transformCreateFileParse.helpers.test.ts src/pages/explore/etl/transformCreateTemplate.helpers.test.ts src/pages/explore/etl/transformCreateDraft.helpers.test.ts src/pages/explore/etl/transformCreateFileFlow.helpers.test.ts src/pages/explore/etl/transformCreateState.helpers.test.ts src/pages/explore/etl/transformCreateBootstrap.helpers.test.ts src/pages/explore/etl/fileOdsPasteMapping.helpers.test.ts src/pages/explore/etl/transformCreateAsyncRun.helpers.test.ts`
+- [x] `cd source/dts-ingestion && mvn -Dtest=IngestionExecutionQueryServiceTest,IngestionTaskQueryServiceTest,IngestionTaskResourceTest,AddaxJdbcConfigNormalizerTest,AddaxJobServiceTest,IngestionTaskServiceTest,IngestionTaskExecutionFilterTest,IngestionTaskFullRefreshExecutionTest test`
+- [x] `set -a; source .env; set +a; DTS_WEB_E2E_USE_TEST_SERVER=0 DTS_PLATFORM_URL=http://127.0.0.1:19349/expert/ DTS_BASE_URL=http://127.0.0.1:19349/expert/ DTS_EXPERT_URL=http://127.0.0.1:19349/expert/ DTS_PLATFORM_AUTH_TOKEN=platform-playwright-token DTS_ADMIN_AUTH_TOKEN=admin-playwright-token DTS_PLATFORM_REQUIRE_PASSWORD_LOGIN=0 DTS_ADMIN_REQUIRE_PASSWORD_LOGIN=0 tests/web-e2e/node_modules/.bin/playwright test tests/web-e2e/specs/biz/elt-ingestion-center-smoke.spec.ts tests/web-e2e/specs/biz/elt-ingestion-edge-regression.spec.ts --project=chromium --config=tests/web-e2e/playwright.config.ts`
 - [ ] `pnpm -C source/dts-platform-webapp build`
   当前被并发改动 [index.tsx](/opt/prod/s10/s10-stack/source/dts-platform-webapp/src/pages/workbench/index.tsx) 中的未使用 `toast` 阻断，不是本次入湖优化引入
 
 ## 完成标准
 
-- [ ] 创建页的初始化加载与异步执行进度不再散落在单页大组件内
-- [ ] 入湖后端的查询职责与执行编排职责出现清晰边界
-- [ ] 执行状态与日志回显链路具备更明确的契约和回归测试
-- [ ] 至少完成一批可交付的结构优化与验证，不只是文档诊断
+- [x] 创建页的初始化加载与异步执行进度不再散落在单页大组件内
+- [x] 入湖后端的查询职责与执行编排职责出现清晰边界
+- [x] 执行状态与日志回显链路具备更明确的契约和回归测试
+- [x] 至少完成一批可交付的结构优化与验证，不只是文档诊断

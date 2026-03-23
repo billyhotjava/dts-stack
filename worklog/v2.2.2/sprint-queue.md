@@ -65,8 +65,8 @@
 
 | Feature | Task 数 | 状态 |
 |---------|---------|------|
-| F1-创建页与表单状态优化 | 4 | IN_PROGRESS |
-| F2-入湖任务后端服务拆分 | 3 | READY |
-| F3-执行链与日志链优化 | 3 | READY |
+| F1-创建页与表单状态优化 | 4 | DONE |
+| F2-入湖任务后端服务拆分 | 3 | DONE |
+| F3-执行链与日志链优化 | 3 | DONE |
 
-**统计**: READY=6, IN_PROGRESS=2, DONE=2, BLOCKED=0
+**统计**: READY=0, IN_PROGRESS=0, DONE=10, BLOCKED=0

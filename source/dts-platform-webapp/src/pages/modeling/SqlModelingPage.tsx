@@ -1,6 +1,7 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Editor from "@monaco-editor/react";
 import { toast } from "sonner";
+import { registerDbtLanguage, DBT_SQL_LANGUAGE_ID } from "./dbt-monaco-lang";
 import ModelPipeline from "./ModelPipeline";
 import {
 	Alert,
@@ -604,6 +605,7 @@ export default function SqlModelingPage() {
 	const [batchArchiveForm] = Form.useForm();
 	const selectedOdsSourceDataSourceId = Form.useWatch("sourceDataSourceId", odsGenerateForm);
 	const dbtSourcesReqSeqRef = useRef(0);
+	const buildPollAbortRef = useRef<AbortController | null>(null);
 
 	const loadConfig = useCallback(async () => {
 		setConfigLoading(true);
@@ -879,6 +881,7 @@ export default function SqlModelingPage() {
 	}, []);
 
 	const handleGitCommit = useCallback(async () => {
+		if (gitCommitting) return;
 		if (!gitCommitMsg.trim()) {
 			toast.error("请输入提交信息");
 			return;
@@ -1043,6 +1046,7 @@ export default function SqlModelingPage() {
 
 	useEffect(() => {
 		loadInitialData();
+		return () => { buildPollAbortRef.current?.abort(); };
 	}, [loadInitialData]);
 
 	useEffect(() => {
@@ -1110,10 +1114,14 @@ export default function SqlModelingPage() {
 				dagRunId: string | undefined,
 			baselineRun: DbtRunSummary | null,
 		) => {
+		buildPollAbortRef.current?.abort();
+		const ctrl = new AbortController();
+		buildPollAbortRef.current = ctrl;
 			let lastStatus: DbtSyncStatus | null = null;
 			let lastSummary: DbtRunSummary | null = null;
 			let lastDagState = "";
 			for (let attempt = 0; attempt < 30; attempt += 1) {
+			if (ctrl.signal.aborted) return { syncStatus: lastStatus, latestRun: lastSummary, dagState: lastDagState, timedOut: true };
 				if (dagId && dagRunId) {
 					try {
 						const runsPayload = (await listAirflowJobRuns(dagId, 20)) as { dag_runs?: DagRun[] };
@@ -1693,6 +1701,11 @@ export default function SqlModelingPage() {
 		setOdsGenerateSubmitting(true);
 		try {
 			const values = await odsGenerateForm.validateFields(["planId", "mappingIds"]);
+			if (!Array.isArray(values.mappingIds) || values.mappingIds.length === 0) {
+				toast.error("请至少选择一个 ODS 数据源映射");
+				setOdsGenerateSubmitting(false);
+				return;
+			}
 			const payload = {
 				planId: values.planId,
 				sourceDataSourceId: values.sourceDataSourceId || undefined,
@@ -2048,6 +2061,17 @@ export default function SqlModelingPage() {
 	}, [activeRunsSelector, loadRuns]);
 
 	const sqlDirty = !!activeModel && sqlDraft !== (activeModel?.sql || "");
+
+	useEffect(() => {
+		if (!sqlDirty) return;
+		const handler = (e: BeforeUnloadEvent) => {
+			e.preventDefault();
+			e.returnValue = "";
+		};
+		window.addEventListener("beforeunload", handler);
+		return () => window.removeEventListener("beforeunload", handler);
+	}, [sqlDirty]);
+
 	const topicBindingAlert = useMemo(() => {
 		if (!topicDiagnostics?.rows?.length) {
 			return null;
@@ -2625,9 +2649,10 @@ export default function SqlModelingPage() {
 							>
 								<Editor
 									height="100%"
-									language="sql"
+									language={DBT_SQL_LANGUAGE_ID}
 									theme="vs"
 									value={sqlDraft}
+									beforeMount={(monaco) => registerDbtLanguage(monaco)}
 									onChange={(value) => setSqlDraft(value || "")}
 									options={{
 										fontSize: 13,

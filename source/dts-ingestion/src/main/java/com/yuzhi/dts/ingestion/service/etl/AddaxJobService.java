@@ -39,29 +39,24 @@ public class AddaxJobService {
         "jdbcProperties",
         "connection"
     );
-    private static final Map<String, String> JDBC_PREFIX_DRIVERS = Map.ofEntries(
-        Map.entry("jdbc:dm:", "dm.jdbc.driver.DmDriver"),
-        Map.entry("jdbc:postgresql:", "org.postgresql.Driver"),
-        Map.entry("jdbc:mysql:", "com.mysql.cj.jdbc.Driver"),
-        Map.entry("jdbc:mariadb:", "org.mariadb.jdbc.Driver"),
-        Map.entry("jdbc:oracle:", "oracle.jdbc.OracleDriver"),
-        Map.entry("jdbc:sqlserver:", "com.microsoft.sqlserver.jdbc.SQLServerDriver"),
-        Map.entry("jdbc:clickhouse:", "com.clickhouse.jdbc.ClickHouseDriver"),
-        Map.entry("jdbc:hive2:", "org.apache.hive.jdbc.HiveDriver"),
-        Map.entry("jdbc:db2:", "com.ibm.db2.jcc.DB2Driver"),
-        Map.entry("jdbc:sqlite:", "org.sqlite.JDBC")
-    );
-
     private final AddaxProperties properties;
     private final IngestionSettingsService settingsService;
     private final ObjectMapper objectMapper;
     private final JdbcMetadataService jdbcMetadataService;
+    private final AddaxJdbcConfigNormalizer jdbcConfigNormalizer;
 
-    public AddaxJobService(AddaxProperties properties, IngestionSettingsService settingsService, ObjectMapper objectMapper, JdbcMetadataService jdbcMetadataService) {
+    public AddaxJobService(
+        AddaxProperties properties,
+        IngestionSettingsService settingsService,
+        ObjectMapper objectMapper,
+        JdbcMetadataService jdbcMetadataService,
+        AddaxJdbcConfigNormalizer jdbcConfigNormalizer
+    ) {
         this.properties = properties;
         this.settingsService = settingsService;
         this.objectMapper = objectMapper;
         this.jdbcMetadataService = jdbcMetadataService;
+        this.jdbcConfigNormalizer = jdbcConfigNormalizer;
     }
 
     public record AddaxJobResult(String jobName, String jobPath, Map<String, Object> jobConfig) {}
@@ -727,74 +722,7 @@ public class AddaxJobService {
     }
 
     private void ensureWriterConnection(String pluginType, Map<String, Object> params) {
-        if (params == null || params.isEmpty()) {
-            return;
-        }
-        List<String> jdbcUrls = normalizeJdbcUrlList(params.get("jdbcUrl"));
-        if (jdbcUrls.isEmpty()) {
-            fillJdbcUrlIfMissing(pluginType, params);
-            jdbcUrls = normalizeJdbcUrlList(params.get("jdbcUrl"));
-        }
-        Object connection = params.get("connection");
-        if (connection instanceof List<?> list) {
-            if (!list.isEmpty() && list.get(0) instanceof Map<?, ?> map) {
-                @SuppressWarnings("unchecked")
-                Map<String, Object> connMap = new LinkedHashMap<>((Map<String, Object>) map);
-                if (jdbcUrls.isEmpty()) {
-                    fillJdbcUrlIfMissing(pluginType, connMap);
-                    jdbcUrls = normalizeJdbcUrlList(connMap.get("jdbcUrl"));
-                }
-                if (!jdbcUrls.isEmpty()) {
-                    // Writer jdbcUrl must be a plain string, not a list
-                    connMap.put("jdbcUrl", jdbcUrls.get(0));
-                }
-                if (!connMap.containsKey("table")) {
-                    List<String> tables = extractTables(params);
-                    if (!tables.isEmpty()) {
-                        connMap.put("table", tables);
-                    }
-                }
-                java.util.ArrayList<Object> next = new java.util.ArrayList<>(list);
-                next.set(0, connMap);
-                params.put("connection", next);
-            }
-            ensurePostgresSslMode(params);
-            return;
-        }
-        if (connection instanceof Map<?, ?> map) {
-            @SuppressWarnings("unchecked")
-            Map<String, Object> connMap = new LinkedHashMap<>((Map<String, Object>) map);
-            if (jdbcUrls.isEmpty()) {
-                fillJdbcUrlIfMissing(pluginType, connMap);
-                jdbcUrls = normalizeJdbcUrlList(connMap.get("jdbcUrl"));
-            }
-            if (!jdbcUrls.isEmpty()) {
-                // Writer jdbcUrl must be a plain string, not a list
-                connMap.put("jdbcUrl", jdbcUrls.get(0));
-            }
-            if (!connMap.containsKey("table")) {
-                List<String> tables = extractTables(params);
-                if (!tables.isEmpty()) {
-                    connMap.put("table", tables);
-                }
-            }
-            params.put("connection", List.of(connMap));
-            params.remove("jdbcUrl");
-            ensurePostgresSslMode(params);
-            return;
-        }
-        if (!jdbcUrls.isEmpty()) {
-            Map<String, Object> connMap = new LinkedHashMap<>();
-            // Writer jdbcUrl must be a plain string, not a list
-            connMap.put("jdbcUrl", jdbcUrls.get(0));
-            List<String> tables = extractTables(params);
-            if (!tables.isEmpty()) {
-                connMap.put("table", tables);
-            }
-            params.put("connection", List.of(connMap));
-            params.remove("jdbcUrl");
-        }
-        ensurePostgresSslMode(params);
+        jdbcConfigNormalizer.ensureWriterConnection(pluginType, params);
     }
 
     /**
@@ -856,73 +784,11 @@ public class AddaxJobService {
     }
 
     private Map<String, Object> ensureDriver(String pluginType, Map<String, Object> config) {
-        if (config == null || config.isEmpty()) {
-            return config;
-        }
-        normalizeJdbcUrl(pluginType, config);
-        String existing = normalizeText(config.get("driver"));
-        if (StringUtils.hasText(existing)) {
-            return config;
-        }
-        String driverClass = normalizeText(config.get("driverClass"));
-        if (StringUtils.hasText(driverClass)) {
-            config.put("driver", driverClass);
-            return config;
-        }
-        String jdbcUrl = resolveJdbcUrl(config);
-        String resolved = resolveDriverClass(jdbcUrl, pluginType);
-        if (StringUtils.hasText(resolved)) {
-            config.put("driver", resolved);
-        }
-        return config;
+        return jdbcConfigNormalizer.ensureDriver(pluginType, config);
     }
 
     private void normalizeJdbcUrl(String pluginType, Map<String, Object> config) {
-        if (config == null || config.isEmpty()) {
-            return;
-        }
-        ensureMutableConnection(config);
-        fillJdbcUrlIfMissing(pluginType, config);
-        boolean preferList = !isWriter(pluginType);
-        normalizeJdbcUrlField(config, "jdbcUrl", preferList);
-        Object connection = config.get("connection");
-        if (connection instanceof Map<?, ?> map) {
-            fillJdbcUrlIfMissing(pluginType, map);
-            normalizeJdbcUrlField(map, "jdbcUrl", preferList);
-        } else if (connection instanceof List<?> list) {
-            for (Object entry : list) {
-                if (entry instanceof Map<?, ?> entryMap) {
-                    fillJdbcUrlIfMissing(pluginType, entryMap);
-                    normalizeJdbcUrlField(entryMap, "jdbcUrl", preferList);
-                }
-            }
-        }
-    }
-
-    private void ensureMutableConnection(Map<String, Object> config) {
-        if (config == null || config.isEmpty()) {
-            return;
-        }
-        Object connection = config.get("connection");
-        if (connection instanceof Map<?, ?> map) {
-            config.put("connection", new LinkedHashMap<>(toStringKeyMap(map)));
-            return;
-        }
-        if (connection instanceof List<?> list) {
-            List<Object> normalized = new java.util.ArrayList<>(list.size());
-            boolean changed = false;
-            for (Object item : list) {
-                if (item instanceof Map<?, ?> mapItem) {
-                    normalized.add(new LinkedHashMap<>(toStringKeyMap(mapItem)));
-                    changed = true;
-                } else {
-                    normalized.add(item);
-                }
-            }
-            if (changed) {
-                config.put("connection", normalized);
-            }
-        }
+        jdbcConfigNormalizer.normalizeJdbcUrl(pluginType, config);
     }
 
     private Map<String, Object> toStringKeyMap(Map<?, ?> source) {
@@ -1116,54 +982,6 @@ public class AddaxJobService {
             }
         }
         return normalizeText(value);
-    }
-
-    private String resolveDriverClass(String jdbcUrl, String pluginType) {
-        String url = normalizeText(jdbcUrl);
-        if (StringUtils.hasText(url)) {
-            String lower = url.toLowerCase(Locale.ROOT);
-            for (Map.Entry<String, String> entry : JDBC_PREFIX_DRIVERS.entrySet()) {
-                if (lower.startsWith(entry.getKey())) {
-                    return entry.getValue();
-                }
-            }
-        }
-        String type = normalizeText(pluginType);
-        if (!StringUtils.hasText(type)) {
-            return null;
-        }
-        String lowerType = type.toLowerCase(Locale.ROOT);
-        if (lowerType.contains("dm")) {
-            return "dm.jdbc.driver.DmDriver";
-        }
-        if (lowerType.contains("postgres")) {
-            return "org.postgresql.Driver";
-        }
-        if (lowerType.contains("mysql")) {
-            return "com.mysql.cj.jdbc.Driver";
-        }
-        if (lowerType.contains("mariadb")) {
-            return "org.mariadb.jdbc.Driver";
-        }
-        if (lowerType.contains("oracle")) {
-            return "oracle.jdbc.OracleDriver";
-        }
-        if (lowerType.contains("sqlserver") || lowerType.contains("mssql")) {
-            return "com.microsoft.sqlserver.jdbc.SQLServerDriver";
-        }
-        if (lowerType.contains("clickhouse")) {
-            return "com.clickhouse.jdbc.ClickHouseDriver";
-        }
-        if (lowerType.contains("hive")) {
-            return "org.apache.hive.jdbc.HiveDriver";
-        }
-        if (lowerType.contains("db2")) {
-            return "com.ibm.db2.jcc.DB2Driver";
-        }
-        if (lowerType.contains("sqlite")) {
-            return "org.sqlite.JDBC";
-        }
-        return null;
     }
 
     private String normalizeText(Object value) {

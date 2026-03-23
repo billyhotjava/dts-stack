@@ -5,6 +5,8 @@ import com.fasterxml.jackson.annotation.JsonAlias;
 import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.ingestion.security.SecurityUtils;
 import com.yuzhi.dts.ingestion.service.audit.AuditService;
+import com.yuzhi.dts.ingestion.service.IngestionExecutionQueryService;
+import com.yuzhi.dts.ingestion.service.IngestionTaskQueryService;
 import com.yuzhi.dts.ingestion.service.etl.AddaxJobService;
 import com.yuzhi.dts.ingestion.service.etl.AirflowAdapter;
 import com.yuzhi.dts.ingestion.service.etl.ConnectorCapabilityService;
@@ -71,6 +73,8 @@ public class IngestionTaskResource {
     private final OpenMetadataAdapter openMetadataAdapter;
     private final AirflowAdapter airflowAdapter;
     private final com.yuzhi.dts.ingestion.service.IngestionTaskService ingestionTaskService;
+    private final IngestionTaskQueryService ingestionTaskQueryService;
+    private final IngestionExecutionQueryService ingestionExecutionQueryService;
     private final JdbcMetadataService jdbcMetadataService;
     private final com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver sourceResolver;
     private final IngestionTaskChangeLogService changeLogService;
@@ -85,6 +89,8 @@ public class IngestionTaskResource {
         OpenMetadataAdapter openMetadataAdapter,
         AirflowAdapter airflowAdapter,
         com.yuzhi.dts.ingestion.service.IngestionTaskService ingestionTaskService,
+        IngestionTaskQueryService ingestionTaskQueryService,
+        IngestionExecutionQueryService ingestionExecutionQueryService,
         JdbcMetadataService jdbcMetadataService,
         com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver sourceResolver,
         IngestionTaskChangeLogService changeLogService,
@@ -98,6 +104,8 @@ public class IngestionTaskResource {
         this.openMetadataAdapter = openMetadataAdapter;
         this.airflowAdapter = airflowAdapter;
         this.ingestionTaskService = ingestionTaskService;
+        this.ingestionTaskQueryService = ingestionTaskQueryService;
+        this.ingestionExecutionQueryService = ingestionExecutionQueryService;
         this.jdbcMetadataService = jdbcMetadataService;
         this.sourceResolver = sourceResolver;
         this.changeLogService = changeLogService;
@@ -1714,13 +1722,13 @@ public class IngestionTaskResource {
     ) {
         if (sourceDataSourceId != null) {
             java.util.List<com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO> list =
-                ingestionTaskService.findBySourceDataSourceId(sourceDataSourceId, false);
+                ingestionTaskQueryService.findBySourceDataSourceId(sourceDataSourceId, false);
             org.springframework.data.domain.Page<com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO> page =
                 new org.springframework.data.domain.PageImpl<>(list, pageable, list.size());
             return ResponseEntity.ok(page);
         }
         org.springframework.data.domain.Page<com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO> page =
-            ingestionTaskService.findAll(status, pageable);
+            ingestionTaskQueryService.findAll(status, pageable);
         return ResponseEntity.ok(page);
     }
 
@@ -1734,7 +1742,7 @@ public class IngestionTaskResource {
         @RequestParam(required = false, defaultValue = "false") boolean includeDeleted
     ) {
         List<com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO> list =
-            ingestionTaskService.findBySourceDataSourceId(sourceDataSourceId, includeDeleted);
+            ingestionTaskQueryService.findBySourceDataSourceId(sourceDataSourceId, includeDeleted);
         return ResponseEntity.ok(list);
     }
 
@@ -1746,7 +1754,7 @@ public class IngestionTaskResource {
     public ResponseEntity<com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO> getTask(
         @PathVariable Long id
     ) {
-        return ingestionTaskService.findOne(id)
+        return ingestionTaskQueryService.findOne(id)
             .map(ResponseEntity::ok)
             .orElse(ResponseEntity.<com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO>notFound().build());
     }
@@ -1975,7 +1983,7 @@ public class IngestionTaskResource {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "变更摘要不能为空");
         }
         java.util.Optional<com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO> taskOpt =
-            ingestionTaskService.findOne(request.taskId());
+            ingestionTaskQueryService.findOne(request.taskId());
         if (taskOpt.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "任务不存在");
         }
@@ -2219,7 +2227,7 @@ public class IngestionTaskResource {
     ) {
         try {
             return ResponseEntity.ok(
-                ingestionTaskService.getExecutionObservability(taskId, sourceType, sourceDataSourceId, from, to, days, timeoutMinutes)
+                ingestionTaskQueryService.getExecutionObservability(taskId, sourceType, sourceDataSourceId, from, to, days, timeoutMinutes)
             );
         } catch (IllegalArgumentException e) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
@@ -2234,7 +2242,7 @@ public class IngestionTaskResource {
     public ResponseEntity<IngestionGovernanceOverviewDTO> getGovernanceOverview(
         @RequestParam(value = "hours", required = false) Integer hours
     ) {
-        return ResponseEntity.ok(ingestionTaskService.getGovernanceOverview(hours));
+        return ResponseEntity.ok(ingestionTaskQueryService.getGovernanceOverview(hours));
     }
 
     /**
@@ -2314,7 +2322,7 @@ public class IngestionTaskResource {
         @PathVariable Long id
     ) {
         try {
-            return ResponseEntity.ok(ingestionTaskService.getIncrementalStates(id));
+            return ResponseEntity.ok(ingestionTaskQueryService.getIncrementalStates(id));
         } catch (IllegalArgumentException e) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "任务不存在");
         }
@@ -2330,7 +2338,7 @@ public class IngestionTaskResource {
         @RequestParam(value = "executionId", required = false) Long executionId
     ) {
         try {
-            return ResponseEntity.ok(ingestionTaskService.getIncrementalAudits(id, executionId));
+            return ResponseEntity.ok(ingestionTaskQueryService.getIncrementalAudits(id, executionId));
         } catch (IllegalArgumentException e) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "任务不存在");
         }
@@ -2353,7 +2361,7 @@ public class IngestionTaskResource {
     ) {
         try {
             Page<com.yuzhi.dts.ingestion.service.dto.IngestionIncrementalAuditDTO> page =
-                ingestionTaskService.getIncrementalAuditsPage(id, executionId, executionIds, from, to, pageable, tableName, status);
+                ingestionTaskQueryService.getIncrementalAuditsPage(id, executionId, executionIds, from, to, pageable, tableName, status);
             return ResponseEntity.ok(page);
         } catch (IllegalArgumentException e) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "任务不存在");
@@ -2376,7 +2384,7 @@ public class IngestionTaskResource {
     ) {
         try {
             return ResponseEntity.ok(
-                ingestionTaskService.getIncrementalAuditsSummary(id, executionId, executionIds, from, to, tableName, status)
+                ingestionTaskQueryService.getIncrementalAuditsSummary(id, executionId, executionIds, from, to, tableName, status)
             );
         } catch (IllegalArgumentException e) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "任务不存在");
@@ -2396,7 +2404,7 @@ public class IngestionTaskResource {
         @RequestParam(value = "scope", required = false) String scope
     ) {
         try {
-            Map<String, Object> result = ingestionTaskService.fetchExecutionLog(id, executionId, tryNumber, keyword, scope);
+            Map<String, Object> result = ingestionExecutionQueryService.fetchExecutionLog(id, executionId, tryNumber, keyword, scope);
             return ResponseEntity.ok(result);
         } catch (IllegalArgumentException e) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage());

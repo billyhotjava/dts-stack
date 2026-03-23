@@ -27,12 +27,13 @@ import type { ExtraColumnDef } from "./steps/types";
 import { resolveAsyncRunPollHint, resolveCreatedTaskId } from "./transformCreateAsyncRun.helpers";
 import { loadTransformCreateBootstrap } from "./transformCreateBootstrap.helpers";
 import { buildTransformCreateDraftPayload } from "./transformCreateDraft.helpers";
-import { buildTransformFileUploadResult, suggestTransformFileTableName } from "./transformCreateFileFlow.helpers";
+import { buildTransformFileUploadResult } from "./transformCreateFileFlow.helpers";
 import {
 	buildPreparedFileParseInput,
 	buildRefreshFileParseInput,
 	buildSheetChangeFileParseInput,
 } from "./transformCreateFileParse.helpers";
+import { buildFilePostParseOutcome } from "./transformCreateFilePostParse.helpers";
 import { buildTemplateRenderRequest, resolveTemplateApplyOutcome } from "./transformCreateTemplate.helpers";
 import {
 	buildTransformEditRestoreState,
@@ -1746,17 +1747,6 @@ export default function TransformCreatePage() {
 		}
 	};
 
-	const ensureFileTableName = (parsed: FileUploadResult) => {
-		const suggested = suggestTransformFileTableName(
-			form.getFieldValue("fileTableName"),
-			form.getFieldValue("syncPrefix"),
-			parsed.originalName
-		);
-		if (suggested) {
-			form.setFieldValue("fileTableName", suggested);
-		}
-	};
-
 	const parseFile = async (
 		fileId: string,
 		fileName: string,
@@ -2563,12 +2553,22 @@ export default function TransformCreatePage() {
 												parseInput.selectedSheet,
 												parseInput.previewLimit
 											);
+											const outcome = buildFilePostParseOutcome({
+												parsed,
+												currentFileTableName: form.getFieldValue("fileTableName"),
+												syncPrefix: form.getFieldValue("syncPrefix"),
+												reason: "upload",
+											});
 											setFileUploadResult(parsed);
-											setSelectedOdsTable(undefined); setOdsColumns([]); setOdsMatchApplied(false);
-											form.setFieldValue("readerType", "txtfilereader");
-											ensureFileTableName(parsed);
+											if (outcome.shouldResetOds) {
+												setSelectedOdsTable(undefined); setOdsColumns([]); setOdsMatchApplied(false);
+											}
+											form.setFieldValue("readerType", outcome.readerType);
+											if (outcome.suggestedFileTableName) {
+												form.setFieldValue("fileTableName", outcome.suggestedFileTableName);
+											}
 											onSuccess?.(parsed);
-											toast.success(`文件解析成功，检测到 ${parsed.columns?.length || 0} 列`);
+											toast.success(outcome.successMessage);
 										} catch (err: any) {
 											onError?.(err);
 											toast.error(err?.message || "文件上传失败");
@@ -2589,11 +2589,22 @@ export default function TransformCreatePage() {
 												parseInput.selectedSheet,
 												parseInput.previewLimit
 											);
+											const outcome = buildFilePostParseOutcome({
+												parsed,
+												currentFileTableName: form.getFieldValue("fileTableName"),
+												syncPrefix: form.getFieldValue("syncPrefix"),
+												reason: "sheet-change",
+												sheetName: parseInput.selectedSheet?.name,
+											});
 											setFileUploadResult(parsed);
-											setSelectedOdsTable(undefined); setOdsColumns([]); setOdsMatchApplied(false);
-											form.setFieldValue("readerType", "txtfilereader");
-											ensureFileTableName(parsed);
-											toast.success(`已切换到 ${parseInput.selectedSheet?.name}，检测到 ${parsed.columns?.length || 0} 列`);
+											if (outcome.shouldResetOds) {
+												setSelectedOdsTable(undefined); setOdsColumns([]); setOdsMatchApplied(false);
+											}
+											form.setFieldValue("readerType", outcome.readerType);
+											if (outcome.suggestedFileTableName) {
+												form.setFieldValue("fileTableName", outcome.suggestedFileTableName);
+											}
+											toast.success(outcome.successMessage);
 										} catch (err: any) {
 											toast.error(err?.message || "解析 Sheet 失败");
 										} finally {

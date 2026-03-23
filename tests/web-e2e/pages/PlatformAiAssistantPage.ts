@@ -19,7 +19,7 @@ export class PlatformAiAssistantPage {
     const targetUrl = new URL('dashboard/workbench', expertBaseUrl).toString();
     await this.page.goto(targetUrl, { waitUntil: 'domcontentloaded' });
     await expect(this.root).toBeVisible();
-    await expect(this.page.getByText('工作台总览')).toBeVisible();
+    await expect(this.page.getByRole('heading', { name: '工作台' })).toBeVisible();
   }
 
   favoriteCard(title: string): Locator {
@@ -76,12 +76,12 @@ export class PlatformAiAssistantPage {
 
   async openFavorite(title: string): Promise<void> {
     const card = this.favoriteCard(title);
-    await card.getByRole('button', { name: '打开' }).click();
+    await card.getByText('打开', { exact: true }).click();
   }
 
   async editFavorite(title: string): Promise<void> {
     const card = this.favoriteCard(title);
-    await card.getByRole('button', { name: '编辑' }).click();
+    await card.getByText('编辑', { exact: true }).click();
     await expect(this.page.getByRole('dialog')).toBeVisible();
   }
 

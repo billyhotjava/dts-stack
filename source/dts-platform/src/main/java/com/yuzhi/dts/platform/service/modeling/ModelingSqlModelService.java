@@ -39,6 +39,9 @@ import java.nio.file.StandardCopyOption;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
+import java.util.Collection;
+import java.util.Objects;
+import java.util.stream.Collectors;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HexFormat;
@@ -145,7 +148,7 @@ public class ModelingSqlModelService {
                 deduplicated.put(key, model);
             }
         }
-        List<SqlModelDto> result = new ArrayList<>(deduplicated.values().stream().map(this::toDto).toList());
+        List<SqlModelDto> result = new ArrayList<>(toDtoBatch(deduplicated.values()));
         result.sort((a, b) -> String.valueOf(a.name()).compareToIgnoreCase(String.valueOf(b.name())));
         return result;
     }
@@ -624,6 +627,10 @@ public class ModelingSqlModelService {
         for (InfraOdsTableMapping mapping : mappings) {
             String odsSchema = defaultText(trimToNull(mapping.getOdsSchema()), "public");
             String odsTable = trimToNull(mapping.getOdsTable());
+            if (!isValidIdentifier(odsSchema) || (odsTable != null && !isValidIdentifier(odsTable))) {
+                skipped.add(odsSchema + "." + odsTable + " (标识符包含非法字符)");
+                continue;
+            }
             if (!StringUtils.hasText(odsTable)) {
                 skipped.add("mapping:" + mapping.getId() + " (ODS 表名为空)");
                 continue;
@@ -1265,10 +1272,27 @@ public class ModelingSqlModelService {
         return false;
     }
 
-    private SqlModelDto toDto(ModelingSqlModel model) {
+    /**
+     * Batch-convert models to DTOs with pre-loaded plans and sources to avoid N+1 queries.
+     */
+    private List<SqlModelDto> toDtoBatch(Collection<ModelingSqlModel> models) {
+        if (models.isEmpty()) return List.of();
+        // Pre-load all referenced plans
+        Set<UUID> planIds = models.stream().map(ModelingSqlModel::getPlanId).filter(Objects::nonNull).collect(Collectors.toSet());
+        Map<UUID, ModelingPlan> planMap = planIds.isEmpty() ? Map.of()
+                : planRepo.findAllById(planIds).stream().collect(Collectors.toMap(ModelingPlan::getId, p -> p, (a, b) -> a));
+        // Pre-load all referenced data sources
+        Set<UUID> sourceIds = models.stream().map(ModelingSqlModel::getSourceDataSourceId).filter(Objects::nonNull).collect(Collectors.toSet());
+        Map<UUID, InfraDataSource> sourceMap = sourceIds.isEmpty() ? Map.of()
+                : sourceIds.stream().map(this::resolveSourceEntity).filter(Optional::isPresent).map(Optional::get)
+                    .collect(Collectors.toMap(InfraDataSource::getId, s -> s, (a, b) -> a));
+        return models.stream().map(model -> toDtoWithCache(model, planMap, sourceMap)).toList();
+    }
+
+    private SqlModelDto toDtoWithCache(ModelingSqlModel model, Map<UUID, ModelingPlan> planMap, Map<UUID, InfraDataSource> sourceMap) {
         if (model == null) return null;
-        ModelingPlan plan = model.getPlanId() == null ? null : planRepo.findById(model.getPlanId()).orElse(null);
-        InfraDataSource source = model.getSourceDataSourceId() == null ? null : resolveSourceEntity(model.getSourceDataSourceId()).orElse(null);
+        ModelingPlan plan = model.getPlanId() == null ? null : planMap.get(model.getPlanId());
+        InfraDataSource source = model.getSourceDataSourceId() == null ? null : sourceMap.get(model.getSourceDataSourceId());
         String sourceKey = source != null ? resolveSourceKey(source) : null;
         String sourceTag = sanitizeTag(sourceKey, slugify(sourceKey));
         String dagSelector = defaultText(trimToNull(model.getDagSelector()), resolveDagSelectorValue(model.getTags(), sourceTag));
@@ -1300,6 +1324,25 @@ public class ModelingSqlModelService {
             meta.dimensionCount(),
             model.getCreatedDate(),
             model.getLastModifiedDate()
+        );
+    }
+
+    private SqlModelDto toDto(ModelingSqlModel model) {
+        if (model == null) return null;
+        ModelingPlan plan = model.getPlanId() == null ? null : planRepo.findById(model.getPlanId()).orElse(null);
+        InfraDataSource source = model.getSourceDataSourceId() == null ? null : resolveSourceEntity(model.getSourceDataSourceId()).orElse(null);
+        String sourceKey = source != null ? resolveSourceKey(source) : null;
+        String sourceTag = sanitizeTag(sourceKey, slugify(sourceKey));
+        String dagSelector = defaultText(trimToNull(model.getDagSelector()), resolveDagSelectorValue(model.getTags(), sourceTag));
+        ContractMeta meta = extractContractMeta(model.getSemanticContract());
+        return new SqlModelDto(
+            model.getId(), model.getPlanId(), plan != null ? plan.getName() : null,
+            model.getName(), model.getAlias(), model.getLayer(), model.getSourceDataSourceId(),
+            source != null ? source.getName() : null, sourceKey, dagSelector, model.getTags(),
+            model.getMaterialized(), model.getSchemaName(), model.getDescription(), model.getSqlText(),
+            model.getEnabled(), model.getModelPath(), model.getOwnerDept(), model.getStatus(),
+            model.getSemanticContract(), model.getContractVersion(), model.getContractUpdatedAt(),
+            meta.metricCount(), meta.dimensionCount(), model.getCreatedDate(), model.getLastModifiedDate()
         );
     }
 
@@ -2681,19 +2724,64 @@ public class ModelingSqlModelService {
         return null;
     }
 
+    /** Reject identifiers with characters that could enable template/SQL injection. */
+    private static boolean isValidIdentifier(String value) {
+        return value != null && value.matches("^[A-Za-z_][A-Za-z0-9_.\\-]*$");
+    }
+
+    private static final long MAX_ZIP_ENTRY_SIZE = 50 * 1024 * 1024; // 50 MB per file
+    private static final long MAX_ZIP_TOTAL_SIZE = 200 * 1024 * 1024; // 200 MB total
+    private static final int MAX_ZIP_ENTRIES = 2000;
+
     private void unzip(Path zipPath, Path destDir) throws IOException {
         try (var zis = new java.util.zip.ZipInputStream(Files.newInputStream(zipPath), StandardCharsets.UTF_8)) {
             java.util.zip.ZipEntry entry;
+            long totalSize = 0;
+            int entryCount = 0;
             while ((entry = zis.getNextEntry()) != null) {
-                Path target = destDir.resolve(entry.getName()).normalize();
+                if (++entryCount > MAX_ZIP_ENTRIES) {
+                    throw new IOException("ZIP archive contains too many entries (max " + MAX_ZIP_ENTRIES + ")");
+                }
+                // Reject symlinks
+                String entryName = entry.getName();
+                if (entryName.contains("..") || entryName.startsWith("/")) {
+                    throw new IOException("ZIP entry has suspicious path: " + entryName);
+                }
+                Path target = destDir.resolve(entryName).normalize();
                 if (!target.startsWith(destDir)) {
-                    throw new IOException("ZIP entry outside target dir: " + entry.getName());
+                    throw new IOException("ZIP entry outside target dir: " + entryName);
                 }
                 if (entry.isDirectory()) {
                     Files.createDirectories(target);
                 } else {
+                    // Check individual entry size
+                    long entrySize = entry.getSize();
+                    if (entrySize > MAX_ZIP_ENTRY_SIZE) {
+                        throw new IOException("ZIP entry too large: " + entryName + " (" + entrySize + " bytes)");
+                    }
                     Files.createDirectories(target.getParent());
-                    Files.copy(zis, target);
+                    // Copy with size limit enforcement
+                    try (var out = Files.newOutputStream(target)) {
+                        byte[] buf = new byte[8192];
+                        long written = 0;
+                        int len;
+                        while ((len = zis.read(buf)) > 0) {
+                            written += len;
+                            if (written > MAX_ZIP_ENTRY_SIZE) {
+                                throw new IOException("ZIP entry exceeds size limit during extraction: " + entryName);
+                            }
+                            out.write(buf, 0, len);
+                        }
+                        totalSize += written;
+                    }
+                    if (totalSize > MAX_ZIP_TOTAL_SIZE) {
+                        throw new IOException("ZIP archive total extraction size exceeds limit (" + MAX_ZIP_TOTAL_SIZE / (1024 * 1024) + " MB)");
+                    }
+                    // Reject if extracted file is a symlink (race condition mitigation)
+                    if (Files.isSymbolicLink(target)) {
+                        Files.deleteIfExists(target);
+                        throw new IOException("ZIP entry resolved to symlink: " + entryName);
+                    }
                 }
                 zis.closeEntry();
             }

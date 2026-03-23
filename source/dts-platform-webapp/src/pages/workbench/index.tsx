@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { Button, Card, Col, Row, Space, Tag } from "antd";
+import { Button, Card, Col, Form, Input, Modal, Row, Select, Space, Tag } from "antd";
 import { Database, FileCheck, ListTodo, Monitor, RefreshCw, TrendingUp, Workflow } from "lucide-react";
 import { toast } from "sonner";
 import workbenchService, {
+	type WorkbenchFavorite,
 	type WorkbenchOverview,
 	type WorkbenchTodoItem,
 } from "@/api/services/workbenchService";
@@ -16,6 +17,15 @@ type PublishedScreen = {
 	description?: string | null;
 	updatedAt?: string;
 	publishedAt?: string | null;
+};
+
+type FavoriteFormValues = {
+	title: string;
+	targetType?: string;
+	targetId?: string;
+	link?: string;
+	sortOrder?: number;
+	enabled?: boolean;
 };
 
 async function fetchScreens(): Promise<PublishedScreen[]> {
@@ -177,8 +187,13 @@ export default function Page() {
 	const { push } = useRouter();
 	const [overview, setOverview] = useState<WorkbenchOverview | null>(null);
 	const [todos, setTodos] = useState<WorkbenchTodoItem[]>([]);
+	const [favorites, setFavorites] = useState<WorkbenchFavorite[]>([]);
 	const [screens, setScreens] = useState<PublishedScreen[]>([]);
 	const [loading, setLoading] = useState(false);
+	const [favoriteModalOpen, setFavoriteModalOpen] = useState(false);
+	const [favoriteSaving, setFavoriteSaving] = useState(false);
+	const [editingFavorite, setEditingFavorite] = useState<WorkbenchFavorite | null>(null);
+	const [favoriteForm] = Form.useForm<FavoriteFormValues>();
 
 	const loadAll = async () => {
 		setLoading(true);
@@ -186,6 +201,7 @@ export default function Page() {
 			const results = await Promise.allSettled([
 				workbenchService.overview(),
 				workbenchService.todos(),
+				workbenchService.favorites(),
 			]);
 			if (results[0].status === "fulfilled") {
 				setOverview(results[0].value as WorkbenchOverview);
@@ -193,6 +209,10 @@ export default function Page() {
 			if (results[1].status === "fulfilled") {
 				const todoList = results[1].value;
 				setTodos(Array.isArray(todoList) ? (todoList as WorkbenchTodoItem[]) : []);
+			}
+			if (results[2].status === "fulfilled") {
+				const favoriteList = results[2].value;
+				setFavorites(Array.isArray(favoriteList) ? (favoriteList as WorkbenchFavorite[]) : []);
 			}
 		} catch {
 			// allSettled never throws, but guard just in case
@@ -206,6 +226,77 @@ export default function Page() {
 	useEffect(() => {
 		void loadAll();
 	}, []);
+
+	const openFavoriteCreate = () => {
+		setEditingFavorite(null);
+		favoriteForm.setFieldsValue({
+			title: "",
+			targetType: "LINK",
+			targetId: "",
+			link: "",
+			sortOrder: favorites.length + 1,
+			enabled: true,
+		});
+		setFavoriteModalOpen(true);
+	};
+
+	const openFavoriteEdit = (favorite: WorkbenchFavorite) => {
+		setEditingFavorite(favorite);
+		favoriteForm.setFieldsValue({
+			title: favorite.title,
+			targetType: favorite.targetType || "LINK",
+			targetId: favorite.targetId || "",
+			link: favorite.link || "",
+			sortOrder: favorite.sortOrder || 1,
+			enabled: favorite.enabled !== false,
+		});
+		setFavoriteModalOpen(true);
+	};
+
+	const closeFavoriteModal = () => {
+		setFavoriteModalOpen(false);
+		setEditingFavorite(null);
+		favoriteForm.resetFields();
+	};
+
+	const openFavorite = (favorite: WorkbenchFavorite) => {
+		const target =
+			favorite.link
+			|| inferFavoriteLink(favorite.targetType)
+			|| "/dashboard/workbench";
+		push(target);
+	};
+
+	const saveFavorite = async () => {
+		try {
+			const values = await favoriteForm.validateFields();
+			setFavoriteSaving(true);
+			const payload = {
+				title: values.title,
+				targetType: values.targetType || "LINK",
+				targetId: values.targetId?.trim() || undefined,
+				link: values.link?.trim() || undefined,
+				sortOrder: values.sortOrder ? Number(values.sortOrder) : undefined,
+				enabled: values.enabled !== false,
+			};
+			if (editingFavorite?.id) {
+				await workbenchService.updateFavorite(editingFavorite.id, payload);
+				toast.success("收藏已更新");
+			} else {
+				await workbenchService.createFavorite(payload);
+				toast.success("收藏已创建");
+			}
+			closeFavoriteModal();
+			await loadAll();
+		} catch (error) {
+			if (error && typeof error === "object" && "errorFields" in error) {
+				return;
+			}
+			toast.error("保存收藏失败");
+		} finally {
+			setFavoriteSaving(false);
+		}
+	};
 
 	/* derived data */
 
@@ -271,11 +362,19 @@ export default function Page() {
 			<div className="flex items-center justify-between">
 				<h1 className="text-xl font-semibold">工作台</h1>
 				<Space>
-					<Button onClick={() => void loadAll()} loading={loading} icon={<RefreshCw className="h-4 w-4" />}>
+					<Button
+						data-testid="platform-workbench-refresh"
+						onClick={() => void loadAll()}
+						loading={loading}
+						icon={<RefreshCw className="h-4 w-4" />}
+					>
 						刷新
 					</Button>
 					<Button onClick={() => push("/dashboard/workbench/workflow-center")} icon={<Workflow className="h-4 w-4" />}>
 						待办中心
+					</Button>
+					<Button data-testid="platform-workbench-new-favorite" type="primary" onClick={openFavoriteCreate}>
+						新建收藏
 					</Button>
 				</Space>
 			</div>
@@ -361,6 +460,7 @@ export default function Page() {
 				</Col>
 				<Col xs={24} lg={8}>
 					<Card
+						data-testid="platform-workbench-todos"
 						size="small"
 						title="最近动态"
 						extra={<span style={{ fontSize: 12, color: "#aaa" }}>待办与变更</span>}
@@ -392,6 +492,68 @@ export default function Page() {
 						) : (
 							<div style={{ textAlign: "center", padding: "40px 0", color: "#ccc", fontSize: 13 }}>暂无动态</div>
 						)}
+					</Card>
+				</Col>
+			</Row>
+
+			<Row gutter={[16, 16]}>
+				<Col xs={24} lg={16}>
+					<Card size="small" title="常用入口" extra={<span style={{ fontSize: 12, color: "#aaa" }}>个人收藏</span>}>
+						<div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+							{favorites.length ? (
+								favorites
+									.filter((favorite) => favorite.enabled !== false)
+									.sort((left, right) => Number(left.sortOrder || 9999) - Number(right.sortOrder || 9999))
+									.map((favorite) => (
+										<div
+											key={favorite.id}
+											data-testid={`platform-workbench-favorite-card-${favorite.id}`}
+											style={{
+												border: "1px solid #e5e7eb",
+												borderRadius: 12,
+												padding: 16,
+												background: "#f8fafc",
+												display: "flex",
+												flexDirection: "column",
+												gap: 10,
+											}}
+										>
+											<div>
+												<div style={{ fontSize: 14, fontWeight: 600, color: "#111827" }}>{favorite.title}</div>
+												<div style={{ fontSize: 12, color: "#6b7280", marginTop: 4 }}>
+													{favorite.targetType || "LINK"}
+													{favorite.targetId ? ` · ${favorite.targetId}` : ""}
+												</div>
+											</div>
+											<Space>
+												<Button size="small" type="primary" onClick={() => openFavorite(favorite)}>
+													打开
+												</Button>
+												<Button size="small" onClick={() => openFavoriteEdit(favorite)}>
+													编辑
+												</Button>
+											</Space>
+										</div>
+									))
+							) : (
+								<div style={{ color: "#9ca3af", fontSize: 13 }}>暂无收藏入口</div>
+							)}
+						</div>
+					</Card>
+				</Col>
+				<Col xs={24} lg={8}>
+					<Card size="small" title="快捷链接" extra={<span style={{ fontSize: 12, color: "#aaa" }}>模块直达</span>}>
+						<Space direction="vertical" style={{ width: "100%" }}>
+							<Button data-testid="platform-workbench-link-datasets" block onClick={() => push("/dashboard/catalog/datasets")}>
+								数据资产门户
+							</Button>
+							<Button data-testid="platform-workbench-link-jobs" block onClick={() => push("/dashboard/explore/etl")}>
+								数据入湖中心
+							</Button>
+							<Button data-testid="platform-workbench-link-dbt" block onClick={() => push("/dashboard/modeling/dbt-files")}>
+								逻辑建模中心
+							</Button>
+						</Space>
 					</Card>
 				</Col>
 			</Row>
@@ -436,6 +598,43 @@ export default function Page() {
 					</Card>
 				</Col>
 			</Row>
+
+			<Modal
+				open={favoriteModalOpen}
+				title={editingFavorite ? "编辑收藏" : "新建收藏"}
+				onCancel={closeFavoriteModal}
+				onOk={() => void saveFavorite()}
+				okText="保存"
+				cancelText="取消"
+				confirmLoading={favoriteSaving}
+				destroyOnClose
+			>
+				<Form form={favoriteForm} layout="vertical">
+					<Form.Item label="收藏名称" name="title" rules={[{ required: true, message: "请输入收藏名称" }]}>
+						<Input aria-label="收藏名称" />
+					</Form.Item>
+					<Form.Item label="类型" name="targetType" initialValue="LINK">
+						<Select
+							aria-label="类型"
+							options={[
+								{ label: "链接", value: "LINK" },
+								{ label: "数据集", value: "DATASET" },
+								{ label: "模型", value: "MODEL" },
+								{ label: "任务", value: "JOB" },
+							]}
+						/>
+					</Form.Item>
+					<Form.Item label="目标ID" name="targetId">
+						<Input aria-label="目标ID" />
+					</Form.Item>
+					<Form.Item label="跳转链接" name="link">
+						<Input aria-label="跳转链接" />
+					</Form.Item>
+					<Form.Item label="排序" name="sortOrder">
+						<Input aria-label="排序" type="number" />
+					</Form.Item>
+				</Form>
+			</Modal>
 		</div>
 	);
 }
@@ -459,4 +658,17 @@ function buildTodoTrend(todos: WorkbenchTodoItem[]): number[] {
 		if (dayIndex >= 0 && dayIndex < 7) buckets[dayIndex]++;
 	}
 	return buckets;
+}
+
+function inferFavoriteLink(targetType?: string | null): string | null {
+	switch (String(targetType || "").toUpperCase()) {
+		case "DATASET":
+			return "/dashboard/catalog/datasets";
+		case "MODEL":
+			return "/dashboard/modeling/dbt-files";
+		case "JOB":
+			return "/dashboard/explore/etl";
+		default:
+			return null;
+	}
 }
