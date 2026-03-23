@@ -50,6 +50,9 @@
 - 草稿保存请求体已收成独立 helper：
   - [transformCreateDraft.helpers.ts](/opt/prod/s10/s10-stack/source/dts-platform-webapp/src/pages/explore/etl/transformCreateDraft.helpers.ts)
   - [transformCreateDraft.helpers.test.ts](/opt/prod/s10/s10-stack/source/dts-platform-webapp/src/pages/explore/etl/transformCreateDraft.helpers.test.ts)
+- 模板应用结果已收成独立 helper：
+  - [transformCreateTemplate.helpers.ts](/opt/prod/s10/s10-stack/source/dts-platform-webapp/src/pages/explore/etl/transformCreateTemplate.helpers.ts)
+  - [transformCreateTemplate.helpers.test.ts](/opt/prod/s10/s10-stack/source/dts-platform-webapp/src/pages/explore/etl/transformCreateTemplate.helpers.test.ts)
 - 新增模块级回归：
   - [transformCreateAsyncRun.helpers.test.ts](/opt/prod/s10/s10-stack/source/dts-platform-webapp/src/pages/explore/etl/transformCreateAsyncRun.helpers.test.ts)
 - Excel 文件流已支持“粘贴 ODS 字段列表”并按顺序映射 Excel 列：
@@ -65,6 +68,7 @@
 - [x] `pnpm -C source/dts-platform-webapp exec tsx --test src/pages/explore/etl/transformCreateState.helpers.test.ts src/pages/explore/etl/transformCreateBootstrap.helpers.test.ts src/pages/explore/etl/fileOdsPasteMapping.helpers.test.ts src/pages/explore/etl/transformCreateAsyncRun.helpers.test.ts`
 - [x] `pnpm -C source/dts-platform-webapp exec tsx --test src/pages/explore/etl/transformCreateFileFlow.helpers.test.ts src/pages/explore/etl/transformCreateState.helpers.test.ts src/pages/explore/etl/transformCreateBootstrap.helpers.test.ts src/pages/explore/etl/fileOdsPasteMapping.helpers.test.ts src/pages/explore/etl/transformCreateAsyncRun.helpers.test.ts`
 - [x] `pnpm -C source/dts-platform-webapp exec tsx --test src/pages/explore/etl/transformCreateDraft.helpers.test.ts src/pages/explore/etl/transformCreateFileFlow.helpers.test.ts src/pages/explore/etl/transformCreateState.helpers.test.ts src/pages/explore/etl/transformCreateBootstrap.helpers.test.ts src/pages/explore/etl/fileOdsPasteMapping.helpers.test.ts src/pages/explore/etl/transformCreateAsyncRun.helpers.test.ts`
+- [x] `pnpm -C source/dts-platform-webapp exec tsx --test src/pages/explore/etl/transformCreateTemplate.helpers.test.ts src/pages/explore/etl/transformCreateDraft.helpers.test.ts src/pages/explore/etl/transformCreateFileFlow.helpers.test.ts src/pages/explore/etl/transformCreateState.helpers.test.ts src/pages/explore/etl/transformCreateBootstrap.helpers.test.ts src/pages/explore/etl/fileOdsPasteMapping.helpers.test.ts src/pages/explore/etl/transformCreateAsyncRun.helpers.test.ts`
 - [ ] `pnpm -C source/dts-platform-webapp build`
   当前被并发改动 [index.tsx](/opt/prod/s10/s10-stack/source/dts-platform-webapp/src/pages/workbench/index.tsx) 中的未使用 `toast` 阻断，不是本次入湖优化引入
 

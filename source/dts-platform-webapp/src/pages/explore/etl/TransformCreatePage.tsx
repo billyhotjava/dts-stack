@@ -28,10 +28,10 @@ import { resolveAsyncRunPollHint, resolveCreatedTaskId } from "./transformCreate
 import { loadTransformCreateBootstrap } from "./transformCreateBootstrap.helpers";
 import { buildTransformCreateDraftPayload } from "./transformCreateDraft.helpers";
 import { buildTransformFileUploadResult, suggestTransformFileTableName } from "./transformCreateFileFlow.helpers";
+import { resolveTemplateApplyOutcome } from "./transformCreateTemplate.helpers";
 import {
 	buildTransformEditRestoreState,
 	parseTransformCreateDraft,
-	resolveTemplateSourceCategory,
 	serializeTransformCreateDraft,
 } from "./transformCreateState.helpers";
 import { useTransformAsyncRunProgress } from "./useTransformAsyncRunProgress";
@@ -1570,30 +1570,37 @@ export default function TransformCreatePage() {
 				},
 				strictRequired: false,
 			});
-			const defaults = ((renderResult?.renderedDefaults || template.defaults || {}) as Record<string, any>) || {};
-			form.setFieldsValue(defaults);
-			const templateWarnings = Array.isArray(renderResult?.warnings) ? renderResult.warnings : template.warnings || [];
-			const templateErrors = Array.isArray(renderResult?.errors) ? renderResult.errors : [];
-			if (templateWarnings.length) {
-				toast.info(templateWarnings[0]);
+			const outcome = resolveTemplateApplyOutcome({
+				template,
+				currentSourceCategory: form.getFieldValue("sourceCategory") as string,
+				renderResult,
+			});
+			form.setFieldsValue(outcome.defaults);
+			if (outcome.infoMessage) {
+				toast.info(outcome.infoMessage);
 			}
-			if (templateErrors.length) {
-				toast.warning(`模板参数待补：${templateErrors.slice(0, 2).join("；")}`);
+			if (outcome.warningMessage) {
+				toast.warning(outcome.warningMessage);
 			}
+			if (outcome.sourceCategory) {
+				setSourceCategory(outcome.sourceCategory);
+			}
+			toast.success(outcome.successMessage);
 		} catch (error: any) {
-			const defaults = (template.defaults || {}) as Record<string, any>;
-			form.setFieldsValue(defaults);
-			toast.error(error?.message || "模板预检失败，已按默认值应用");
+			const outcome = resolveTemplateApplyOutcome({
+				template,
+				currentSourceCategory: form.getFieldValue("sourceCategory") as string,
+				errorMessage: error?.message || "模板预检失败，已按默认值应用",
+			});
+			form.setFieldsValue(outcome.defaults);
+			if (outcome.errorMessage) {
+				toast.error(outcome.errorMessage);
+			}
+			if (outcome.sourceCategory) {
+				setSourceCategory(outcome.sourceCategory);
+			}
+			toast.success(outcome.successMessage);
 		}
-		const sourceCategoryFromTemplate = resolveTemplateSourceCategory(
-			form.getFieldValue("sourceCategory") as string,
-			(template.defaults || {}) as Record<string, any>,
-			template.sourceCategory
-		);
-		if (sourceCategoryFromTemplate) {
-			setSourceCategory(sourceCategoryFromTemplate);
-		}
-		toast.success(`已应用模板：${template.name}`);
 		setApplyingTemplate(false);
 	};
 
