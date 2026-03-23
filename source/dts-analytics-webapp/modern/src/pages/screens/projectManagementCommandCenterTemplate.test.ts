@@ -7,8 +7,8 @@ test('project management command center template registers four-page Java-backed
 
     assert.ok(template);
     assert.equal(template?.id, 'project-management-command-center');
-    assert.equal(template?.name, '科研项目管理指挥大屏');
-    assert.equal(template?.config.name, '科研项目管理指挥大屏');
+    assert.equal(template?.name, '项目运营管理大屏');
+    assert.equal(template?.config.name, '项目运营管理大屏');
     assert.equal(template?.config.width, 1920);
     assert.equal(template?.config.height, 1080);
     assert.equal(template?.config.theme, 'glacier');

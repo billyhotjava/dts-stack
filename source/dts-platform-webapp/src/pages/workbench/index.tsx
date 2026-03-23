@@ -1,12 +1,45 @@
 import { useEffect, useMemo, useState } from "react";
 import { Button, Card, Col, Row, Space, Tag } from "antd";
-import { Database, FileCheck, ListTodo, RefreshCw, TrendingUp, Workflow } from "lucide-react";
+import { Database, FileCheck, ListTodo, Monitor, RefreshCw, TrendingUp, Workflow } from "lucide-react";
 import { toast } from "sonner";
 import workbenchService, {
 	type WorkbenchOverview,
 	type WorkbenchTodoItem,
 } from "@/api/services/workbenchService";
 import { useRouter } from "@/routes/hooks";
+import userStore from "@/store/userStore";
+
+
+type PublishedScreen = {
+	id: number | string;
+	name?: string;
+	description?: string | null;
+	updatedAt?: string;
+	publishedAt?: string | null;
+};
+
+async function fetchScreens(): Promise<PublishedScreen[]> {
+	try {
+		const { userToken } = userStore.getState();
+		const headers: Record<string, string> = {};
+		if (userToken?.accessToken) {
+			headers.Authorization = `Bearer ${userToken.accessToken}`;
+		}
+		const resp = await fetch("/analytics/api/screens", { headers, credentials: "include" });
+		if (!resp.ok) return [];
+		const list: Array<Record<string, unknown>> = await resp.json();
+		if (!Array.isArray(list)) return [];
+		return list.map((item) => ({
+			id: item.id as number,
+			name: (item.name as string) || "",
+			description: item.description as string | null,
+			updatedAt: item.updatedAt as string | undefined,
+			publishedAt: item.publishedAt as string | null,
+		}));
+	} catch {
+		return [];
+	}
+}
 
 /* ── helpers ── */
 
@@ -141,17 +174,20 @@ export default function Page() {
 	const { push } = useRouter();
 	const [overview, setOverview] = useState<WorkbenchOverview | null>(null);
 	const [todos, setTodos] = useState<WorkbenchTodoItem[]>([]);
+	const [screens, setScreens] = useState<PublishedScreen[]>([]);
 	const [loading, setLoading] = useState(false);
 
 	const loadAll = async () => {
 		setLoading(true);
 		try {
-			const [summary, todoList] = await Promise.all([
+			const [summary, todoList, screenList] = await Promise.all([
 				workbenchService.overview(),
 				workbenchService.todos(),
+				fetchScreens(),
 			]);
 			setOverview(summary as WorkbenchOverview);
 			setTodos(Array.isArray(todoList) ? (todoList as WorkbenchTodoItem[]) : []);
+			setScreens(screenList);
 		} catch (error: any) {
 			toast.error(error?.message || "工作台数据加载失败");
 		} finally {
@@ -235,6 +271,46 @@ export default function Page() {
 					</Button>
 				</Space>
 			</div>
+
+			{/* Published screens quick access */}
+			{screens.length > 0 && (
+				<Card size="small" title={<span style={{ fontSize: 14, fontWeight: 600 }}>数据大屏</span>} styles={{ body: { padding: "12px 16px" } }} style={{ marginBottom: 8 }}>
+					<div style={{ display: "flex", gap: 12, overflowX: "auto", paddingBottom: 4 }}>
+						{screens.map((screen) => (
+							<div
+								key={screen.id}
+								onClick={() => {
+									window.open(`/analytics/screens/${screen.id}/preview`, "_blank");
+								}}
+								style={{
+									flex: "0 0 180px",
+									height: 88,
+									borderRadius: 8,
+									border: "1px solid #e5e7eb",
+									background: "#f8fafc",
+									cursor: "pointer",
+									display: "flex",
+									flexDirection: "column",
+									alignItems: "center",
+									justifyContent: "center",
+									gap: 6,
+									transition: "border-color 0.15s, box-shadow 0.15s",
+								}}
+								onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#509EE3"; e.currentTarget.style.boxShadow = "0 2px 8px rgba(80,158,227,0.15)"; }}
+								onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#e5e7eb"; e.currentTarget.style.boxShadow = "none"; }}
+							>
+								<Monitor style={{ width: 20, height: 20, color: "#509EE3" }} />
+								<div style={{ fontSize: 13, fontWeight: 600, color: "#1e293b", textAlign: "center", padding: "0 8px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 160 }}>
+									{screen.name || `大屏 #${screen.id}`}
+								</div>
+								<div style={{ fontSize: 11, color: screen.publishedAt ? "#10b981" : "#94a3b8" }}>
+									{screen.publishedAt ? `已发布` : "未发布"}
+								</div>
+							</div>
+						))}
+					</div>
+				</Card>
+			)}
 
 			{/* Row 1: Stat cards */}
 			<Row gutter={[16, 16]}>

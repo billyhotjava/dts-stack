@@ -89,9 +89,13 @@ async function refreshTokenIfPossible(): Promise<boolean> {
 	}
 }
 
+const KEEP_ALIVE_INTERVAL_MS = TEST_SESSION_ENABLED
+	? TEST_SESSION_REFRESH_MS
+	: 4 * 60 * 1000; // 4 min — refresh before typical 5-min access token expiry
+
 let keepAliveTimer: number | null = null;
 function ensureKeepAliveTimer() {
-	if (!TEST_SESSION_ENABLED || typeof window === "undefined") {
+	if (typeof window === "undefined") {
 		return;
 	}
 	if (keepAliveTimer !== null) {
@@ -102,21 +106,33 @@ function ensureKeepAliveTimer() {
 		if (!userToken?.refreshToken) {
 			return;
 		}
-		const loginTs = Number(localStorage.getItem("dts.session.loginTs") || "0");
-		if (loginTs > 0 && Date.now() - loginTs > TEST_SESSION_MAX_AGE_MS) {
-			return;
+		if (TEST_SESSION_ENABLED) {
+			const loginTs = Number(localStorage.getItem("dts.session.loginTs") || "0");
+			if (loginTs > 0 && Date.now() - loginTs > TEST_SESSION_MAX_AGE_MS) {
+				return;
+			}
 		}
 		try {
 			await refreshTokenIfPossible();
 		} catch (error) {
 			console.warn("[session] keep-alive refresh failed", error);
 		}
-	}, TEST_SESSION_REFRESH_MS);
+	}, KEEP_ALIVE_INTERVAL_MS);
 }
 
 if (typeof window !== "undefined") {
 	ensureKeepAliveTimer();
 	window.addEventListener("focus", ensureKeepAliveTimer);
+	// When tab becomes visible again (e.g. switching back from analytics-webapp),
+	// immediately refresh token to avoid 401 on next API call.
+	document.addEventListener("visibilitychange", () => {
+		if (document.visibilityState === "visible") {
+			const { userToken } = userStore.getState();
+			if (userToken?.refreshToken) {
+				refreshTokenIfPossible().catch(() => {});
+			}
+		}
+	});
 }
 
 axiosInstance.interceptors.request.use(

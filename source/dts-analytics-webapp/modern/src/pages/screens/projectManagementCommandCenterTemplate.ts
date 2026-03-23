@@ -387,7 +387,7 @@ function createCommonHeader(pageTitle: string, pageIndex: number): ScreenCompone
         createFilterSelect(`pmcc-dept-${pageIndex}`, '责任科室', 'deptId', 228, 24, 180, 'filters.depts'),
         createRiskSelect(`pmcc-risk-${pageIndex}`, 424, 24, 150),
         // Center: title
-        createTitle(`pmcc-title-${pageIndex}`, '科研项目管理指挥大屏', 680, 20, 560),
+        createTitle(`pmcc-title-${pageIndex}`, '项目运营管理大屏', 680, 20, 560),
         createSubtitle(`pmcc-subtitle-${pageIndex}`, `第 ${pageIndex + 1} 屏 · ${pageTitle}`, 680, 66, 560),
         // Right: date range + datetime
         createDateRange(`pmcc-date-${pageIndex}`, 1310, 24, 310),
@@ -791,16 +791,16 @@ const projectManagementVariables: ScreenGlobalVariable[] = [
 
 export const projectManagementCommandCenterTemplate: ScreenTemplate = {
     id: 'project-management-command-center',
-    name: '科研项目管理指挥大屏',
-    description: '科研项目管理四屏轮播指挥大屏，覆盖总体态势、执行与里程碑、风险与变更、指标全览。',
+    name: '项目运营管理大屏',
+    description: '项目运营管理四屏轮播大屏，覆盖总体态势、执行与里程碑、风险与变更、指标全览。',
     thumbnail: '🛰️',
     category: 'project-management',
     tags: ['科研项目', '项目管理', '指挥大屏', '轮播'],
     recommendedVariables: projectManagementVariables.map((item) => item.key),
     config: {
         schemaVersion: SCREEN_SCHEMA_VERSION,
-        name: '科研项目管理指挥大屏',
-        description: '科研项目管理四屏轮播指挥大屏',
+        name: '项目运营管理大屏',
+        description: '项目运营管理四屏轮播大屏',
         width: SCREEN_WIDTH,
         height: SCREEN_HEIGHT,
         backgroundColor: BG,

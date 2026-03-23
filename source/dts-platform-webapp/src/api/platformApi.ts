@@ -88,7 +88,8 @@ export const listDbtModels = () => api.get({ url: "/etl/dbt/models" });
 export const syncDbtModels = () => api.post({ url: "/etl/dbt/models/sync" });
 export const getDbtSyncStatus = (params?: { models?: string }) => api.get({ url: "/etl/dbt/sync/status", params });
 export const checkDagReady = (params?: { selector?: string }) => api.get({ url: "/etl/dbt/dag/ready", params });
-export const listDbtRuns = (limit = 20) => api.get({ url: "/etl/dbt/runs", params: { limit } });
+export const listDbtRuns = (limit = 20, params?: { dagId?: string; selector?: string }) =>
+	api.get({ url: "/etl/dbt/runs", params: { limit, ...(params || {}) } });
 export const triggerDbtRun = (data: any) => api.post({ url: "/etl/dbt/run", data });
 export const triggerDbtCompile = (data?: any) => api.post({ url: "/etl/dbt/compile", data });
 export const triggerDbtTest = (data?: any) => api.post({ url: "/etl/dbt/test", data });

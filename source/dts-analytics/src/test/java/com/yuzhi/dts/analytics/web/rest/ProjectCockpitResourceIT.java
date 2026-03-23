@@ -255,7 +255,7 @@ class ProjectCockpitResourceIT {
 
         mockMvc.perform(get("/api/project-cockpit/screen/header").cookie(sessionCookie))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.title").value("科研项目管理指挥大屏"))
+                .andExpect(jsonPath("$.title").value("项目运营管理大屏"))
                 .andExpect(jsonPath("$.filters.current.programId").doesNotExist())
                 .andExpect(jsonPath("$.filters.current.majorProjectId").value(""))
                 .andExpect(jsonPath("$.dataState.ready").value(true));

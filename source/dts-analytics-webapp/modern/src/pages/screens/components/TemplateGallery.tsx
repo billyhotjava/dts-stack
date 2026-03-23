@@ -824,7 +824,7 @@ export function TemplateGallery({ onSelect, onClose }: TemplateGalleryProps) {
                         background: actionNotice.tone === 'success'
                             ? 'rgba(16,185,129,0.12)'
                             : 'rgba(239,68,68,0.10)',
-                        color: actionNotice.tone === 'success' ? '#bbf7d0' : '#fecaca',
+                        color: actionNotice.tone === 'success' ? '#166534' : '#991b1b',
                     }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
                             <strong>{actionNotice.title}</strong>
@@ -876,16 +876,9 @@ export function TemplateGallery({ onSelect, onClose }: TemplateGalleryProps) {
                         <option value="listed">仅上架</option>
                         <option value="unlisted">仅下架</option>
                     </select>
-                    <button className="template-btn secondary" onClick={loadAssetTemplates}>刷新资产</button>
-                    <button className="template-btn secondary" onClick={() => handleImportClick('template')}>导入模板包</button>
-                    <button className="template-btn secondary" onClick={handleExportTemplate}>导出模板包</button>
-                    <button className="template-btn secondary" onClick={() => handleImportClick('industry')}>导入行业包</button>
-                    <button className="template-btn secondary" onClick={() => void openIndustryExportDialog()}>导出行业包</button>
-                    <button className="template-btn secondary" onClick={handleOpenIndustryAudit}>行业包审计</button>
-                    <button className="template-btn secondary" onClick={() => void openConnectorPlanDialog()}>采集任务草案</button>
-                    <button className="template-btn secondary" onClick={() => void openConnectorProbeDialog()}>连接器探测</button>
-                    <button className="template-btn secondary" onClick={openOpsHealthDialog}>运维巡检</button>
-                    <button className="template-btn secondary" onClick={openRuntimeProbeDialog}>运行时探测</button>
+                    <button className="template-btn secondary" onClick={loadAssetTemplates}>刷新</button>
+                    <button className="template-btn secondary" onClick={() => handleImportClick('template')}>导入</button>
+                    <button className="template-btn secondary" onClick={handleExportTemplate}>导出</button>
                     <input
                         ref={fileInputRef}
                         type="file"
@@ -907,14 +900,7 @@ export function TemplateGallery({ onSelect, onClose }: TemplateGalleryProps) {
                                     className={`template-card ${selectedKey === key ? 'selected' : ''}`}
                                     onClick={() => setSelectedKey(key)}
                                 >
-                                    <div
-                                        className="template-card-preview"
-                                        style={{
-                                            background: template.config.backgroundColor
-                                                ? `linear-gradient(135deg, ${template.config.backgroundColor} 0%, ${template.config.backgroundColor} 100%)`
-                                                : undefined,
-                                        }}
-                                    >
+                                    <div className="template-card-preview">
                                         <span className="template-card-icon">{template.thumbnail}</span>
                                         <div className="template-card-badge">内置</div>
                                     </div>
@@ -960,14 +946,7 @@ export function TemplateGallery({ onSelect, onClose }: TemplateGalleryProps) {
                                         className={`template-card ${selectedKey === key ? 'selected' : ''}`}
                                         onClick={() => setSelectedKey(key)}
                                     >
-                                        <div
-                                            className="template-card-preview"
-                                            style={{
-                                                background: template.backgroundColor
-                                                    ? `linear-gradient(135deg, ${template.backgroundColor} 0%, ${template.backgroundColor} 100%)`
-                                                    : undefined,
-                                            }}
-                                        >
+                                        <div className="template-card-preview">
                                             <span className="template-card-icon">{template.thumbnail || '🧩'}</span>
                                             <div className="template-card-badge">资产</div>
                                         </div>
@@ -1053,7 +1032,7 @@ export function TemplateGallery({ onSelect, onClose }: TemplateGalleryProps) {
                                 <option value="failed">失败</option>
                                 <option value="rejected">拒绝</option>
                             </select>
-                            <div style={{ fontSize: 12, color: '#94a3b8' }}>
+                            <div style={{ fontSize: 12, color: 'var(--text-muted, rgba(71,85,105,0.6))' }}>
                                 共 {filteredIndustryAuditRows.length} 条
                             </div>
                         </div>
@@ -1113,330 +1092,220 @@ export function TemplateGallery({ onSelect, onClose }: TemplateGalleryProps) {
             <style>{`
                 .template-gallery-overlay {
                     position: fixed;
-                    top: 0;
-                    left: 0;
-                    right: 0;
-                    bottom: 0;
-                    background: rgba(0, 0, 0, 0.7);
+                    top: 0; left: 0; right: 0; bottom: 0;
+                    background: rgba(15, 23, 42, 0.4);
                     display: flex;
                     align-items: center;
                     justify-content: center;
                     z-index: 1000;
                     backdrop-filter: blur(4px);
                 }
-
                 .template-gallery-modal {
-                    background: #1a1f36;
+                    background: var(--surface-card, #fff);
                     border-radius: 12px;
-                    width: 92%;
-                    max-width: 1080px;
-                    max-height: 84vh;
-                    display: flex;
-                    flex-direction: column;
-                    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
-                    border: 1px solid rgba(255, 255, 255, 0.1);
+                    width: 92%; max-width: 1080px; max-height: 84vh;
+                    display: flex; flex-direction: column;
+                    box-shadow: var(--panel-shadow, 0 18px 40px rgba(15,23,42,0.08));
+                    border: 1px solid var(--border-subtle, rgba(148,163,184,0.24));
                 }
-
                 .template-gallery-header {
-                    display: flex;
-                    align-items: center;
-                    justify-content: space-between;
+                    display: flex; align-items: center; justify-content: space-between;
                     padding: 20px 24px;
-                    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+                    border-bottom: 1px solid var(--border-subtle, rgba(148,163,184,0.24));
                 }
-
                 .template-gallery-header h2 {
-                    margin: 0;
-                    font-size: 20px;
-                    color: #fff;
+                    margin: 0; font-size: 20px;
+                    color: var(--text-primary, rgba(15,23,42,0.92));
                 }
-
                 .template-gallery-close {
-                    background: none;
-                    border: none;
-                    color: #888;
-                    font-size: 24px;
-                    cursor: pointer;
-                    padding: 4px 8px;
-                    border-radius: 4px;
-                    transition: all 0.2s;
+                    background: none; border: none;
+                    color: var(--text-muted, rgba(71,85,105,0.6));
+                    font-size: 24px; cursor: pointer;
+                    padding: 4px 8px; border-radius: 4px; transition: all 0.2s;
                 }
-
                 .template-gallery-close:hover {
-                    background: rgba(255, 255, 255, 0.1);
-                    color: #fff;
+                    background: var(--color-bg-hover, rgba(80,158,227,0.08));
+                    color: var(--text-primary, rgba(15,23,42,0.92));
                 }
-
                 .template-category-tabs {
-                    display: flex;
-                    gap: 2px;
+                    display: flex; gap: 2px;
                     padding: 10px 24px 0;
-                    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+                    border-bottom: 1px solid var(--border-subtle, rgba(148,163,184,0.24));
                     overflow-x: auto;
                 }
-
                 .template-category-tab {
-                    background: none;
-                    border: none;
+                    background: none; border: none;
                     border-bottom: 2px solid transparent;
                     padding: 8px 14px;
-                    color: #94a3b8;
-                    font-size: 13px;
-                    cursor: pointer;
-                    white-space: nowrap;
-                    transition: all 0.2s;
+                    color: var(--text-secondary, rgba(51,65,85,0.72));
+                    font-size: 13px; cursor: pointer;
+                    white-space: nowrap; transition: all 0.2s;
                 }
-
                 .template-category-tab:hover {
-                    color: #e2e8f0;
+                    color: var(--text-primary, rgba(15,23,42,0.92));
                 }
-
                 .template-category-tab.active {
-                    color: #00d4ff;
-                    border-bottom-color: #00d4ff;
+                    color: var(--color-brand, #509EE3);
+                    border-bottom-color: var(--color-brand, #509EE3);
                 }
-
                 .template-gallery-filters {
                     display: grid;
                     grid-template-columns: 1fr repeat(10, auto);
-                    gap: 8px;
-                    padding: 12px 24px;
-                    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+                    gap: 8px; padding: 12px 24px;
+                    border-bottom: 1px solid var(--border-subtle, rgba(148,163,184,0.24));
                 }
-
                 .template-search-input {
-                    background: rgba(15, 23, 42, 0.8);
-                    border: 1px solid rgba(255, 255, 255, 0.2);
-                    border-radius: 6px;
-                    padding: 8px 10px;
-                    color: #fff;
+                    background: var(--surface-muted, #F7F9FC);
+                    border: 1px solid var(--border-subtle, rgba(148,163,184,0.24));
+                    border-radius: 6px; padding: 8px 10px;
+                    color: var(--text-primary, rgba(15,23,42,0.92));
                     font-size: 13px;
                 }
-
                 .template-category-select {
-                    background: rgba(15, 23, 42, 0.8);
-                    border: 1px solid rgba(255, 255, 255, 0.2);
-                    border-radius: 6px;
-                    padding: 8px 10px;
-                    color: #fff;
+                    background: var(--surface-muted, #F7F9FC);
+                    border: 1px solid var(--border-subtle, rgba(148,163,184,0.24));
+                    border-radius: 6px; padding: 8px 10px;
+                    color: var(--text-primary, rgba(15,23,42,0.92));
                     font-size: 13px;
                 }
-
                 .template-gallery-content {
-                    flex: 1;
-                    overflow-y: auto;
-                    padding: 24px;
+                    flex: 1; overflow-y: auto; padding: 24px;
+                    background: var(--surface-page, #F4F7FB);
                 }
-
                 .template-section-title {
-                    font-size: 14px;
-                    font-weight: 700;
-                    color: #e2e8f0;
+                    font-size: 14px; font-weight: 700;
+                    color: var(--text-primary, rgba(15,23,42,0.92));
                     margin-bottom: 12px;
                 }
-
                 .template-gallery-grid {
                     display: grid;
                     grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
                     gap: 20px;
                 }
-
                 .template-card {
                     position: relative;
-                    background: #0d1226;
-                    border: 2px solid transparent;
-                    border-radius: 10px;
-                    overflow: hidden;
-                    cursor: pointer;
-                    transition: all 0.2s ease;
+                    background: var(--surface-card, #fff);
+                    border: 2px solid var(--border-subtle, rgba(148,163,184,0.24));
+                    border-radius: 10px; overflow: hidden;
+                    cursor: pointer; transition: all 0.2s ease;
                 }
-
                 .template-card:hover {
-                    border-color: rgba(0, 212, 255, 0.3);
+                    border-color: var(--color-brand-light, #C7E0F4);
                     transform: translateY(-2px);
+                    box-shadow: var(--soft-shadow, 0 10px 24px rgba(15,23,42,0.06));
                 }
-
                 .template-card.selected {
-                    border-color: #00d4ff;
-                    box-shadow: 0 0 20px rgba(0, 212, 255, 0.3);
+                    border-color: var(--color-brand, #509EE3);
+                    box-shadow: 0 0 0 3px rgba(80,158,227,0.2);
                 }
-
                 .template-card-preview {
                     height: 140px;
-                    background: linear-gradient(135deg, #0a0e27 0%, #1a1f46 100%);
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
+                    background: var(--surface-workspace, #ECF1F7);
+                    display: flex; align-items: center; justify-content: center;
                     position: relative;
                 }
-
-                .template-card-icon {
-                    font-size: 48px;
-                }
-
+                .template-card-icon { font-size: 48px; }
                 .template-card-badge {
-                    position: absolute;
-                    top: 10px;
-                    right: 10px;
+                    position: absolute; top: 10px; right: 10px;
                     padding: 4px 10px;
-                    background: rgba(0, 212, 255, 0.2);
-                    color: #00d4ff;
-                    border-radius: 20px;
-                    font-size: 11px;
-                    font-weight: 500;
+                    background: rgba(80,158,227,0.12);
+                    color: var(--color-brand, #509EE3);
+                    border-radius: 20px; font-size: 11px; font-weight: 500;
                 }
-
-                .template-card-info {
-                    padding: 16px;
-                }
-
+                .template-card-info { padding: 16px; }
                 .template-card-info h3 {
-                    margin: 0 0 8px 0;
-                    font-size: 16px;
-                    font-weight: 600;
-                    color: #fff;
+                    margin: 0 0 8px 0; font-size: 16px; font-weight: 600;
+                    color: var(--text-primary, rgba(15,23,42,0.92));
                 }
-
                 .template-card-info p {
-                    margin: 0 0 10px 0;
-                    font-size: 13px;
-                    color: #888;
+                    margin: 0 0 10px 0; font-size: 13px;
+                    color: var(--text-secondary, rgba(51,65,85,0.72));
                     line-height: 1.4;
                 }
-
                 .template-card-tags {
-                    display: flex;
-                    flex-wrap: wrap;
-                    gap: 4px;
-                    margin-bottom: 8px;
+                    display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px;
                 }
-
                 .template-tag {
-                    display: inline-block;
-                    padding: 2px 8px;
-                    background: rgba(0, 212, 255, 0.1);
-                    color: #00d4ff;
-                    border-radius: 10px;
-                    font-size: 11px;
+                    display: inline-block; padding: 2px 8px;
+                    background: rgba(80,158,227,0.1);
+                    color: var(--color-brand, #509EE3);
+                    border-radius: 10px; font-size: 11px;
                 }
-
                 .template-card-meta {
                     font-size: 12px;
-                    color: #666;
+                    color: var(--text-muted, rgba(71,85,105,0.6));
                 }
-
                 .template-empty-hint {
-                    color: #94a3b8;
-                    font-size: 13px;
-                    padding: 14px 4px;
+                    color: var(--text-muted, rgba(71,85,105,0.6));
+                    font-size: 13px; padding: 14px 4px;
                 }
-
                 .template-gallery-footer {
-                    display: flex;
-                    gap: 12px;
-                    justify-content: flex-end;
+                    display: flex; gap: 12px; justify-content: flex-end;
                     padding: 16px 24px;
-                    border-top: 1px solid rgba(255, 255, 255, 0.1);
+                    border-top: 1px solid var(--border-subtle, rgba(148,163,184,0.24));
                 }
-
                 .template-btn {
-                    padding: 10px 14px;
-                    border-radius: 6px;
-                    font-size: 13px;
-                    font-weight: 500;
-                    cursor: pointer;
-                    transition: all 0.2s;
+                    padding: 10px 14px; border-radius: 6px;
+                    font-size: 13px; font-weight: 500;
+                    cursor: pointer; transition: all 0.2s;
                 }
-
                 .template-btn.secondary {
-                    background: transparent;
-                    border: 1px solid rgba(255, 255, 255, 0.2);
-                    color: #888;
+                    background: var(--surface-card, #fff);
+                    border: 1px solid var(--border-strong, rgba(100,116,139,0.38));
+                    color: var(--text-secondary, rgba(51,65,85,0.72));
                 }
-
                 .template-btn.secondary:hover {
-                    border-color: rgba(255, 255, 255, 0.4);
-                    color: #fff;
+                    border-color: var(--color-brand, #509EE3);
+                    color: var(--text-primary, rgba(15,23,42,0.92));
                 }
-
                 .template-btn.primary {
-                    background: linear-gradient(135deg, #00d4ff 0%, #0066ff 100%);
-                    border: none;
-                    color: #fff;
+                    background: var(--color-brand, #509EE3);
+                    border: none; color: #fff;
                 }
-
                 .template-btn.primary:hover {
                     transform: translateY(-1px);
-                    box-shadow: 0 4px 12px rgba(0, 212, 255, 0.4);
+                    box-shadow: 0 4px 12px rgba(80,158,227,0.3);
                 }
-
                 .industry-audit-overlay {
-                    position: fixed;
-                    inset: 0;
-                    z-index: 1600;
-                    background: rgba(2, 6, 23, 0.65);
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    padding: 20px;
+                    position: fixed; inset: 0; z-index: 1600;
+                    background: rgba(15,23,42,0.4);
+                    display: flex; align-items: center; justify-content: center; padding: 20px;
                 }
-
                 .industry-audit-modal {
-                    width: min(1100px, 94vw);
-                    max-height: 82vh;
-                    display: flex;
-                    flex-direction: column;
-                    background: #0f172a;
-                    border: 1px solid rgba(148, 163, 184, 0.28);
+                    width: min(1100px, 94vw); max-height: 82vh;
+                    display: flex; flex-direction: column;
+                    background: var(--surface-card, #fff);
+                    border: 1px solid var(--border-subtle, rgba(148,163,184,0.24));
                     border-radius: 10px;
-                    box-shadow: 0 18px 48px rgba(2, 6, 23, 0.5);
+                    box-shadow: var(--panel-shadow, 0 18px 40px rgba(15,23,42,0.08));
                 }
-
                 .industry-audit-header {
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
+                    display: flex; justify-content: space-between; align-items: center;
                     padding: 14px 16px;
-                    border-bottom: 1px solid rgba(148, 163, 184, 0.2);
-                    color: #e2e8f0;
+                    border-bottom: 1px solid var(--border-subtle, rgba(148,163,184,0.24));
+                    color: var(--text-primary, rgba(15,23,42,0.92));
                 }
-
                 .industry-audit-filters {
-                    display: flex;
-                    gap: 8px;
-                    align-items: center;
+                    display: flex; gap: 8px; align-items: center;
                     padding: 10px 16px;
-                    border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+                    border-bottom: 1px solid var(--border-subtle, rgba(148,163,184,0.24));
                 }
-
-                .industry-audit-body {
-                    flex: 1;
-                    overflow: auto;
-                    padding: 8px 12px 12px;
-                }
-
+                .industry-audit-body { flex: 1; overflow: auto; padding: 8px 12px 12px; }
                 .industry-audit-table {
-                    width: 100%;
-                    border-collapse: collapse;
-                    font-size: 12px;
-                    color: #cbd5e1;
+                    width: 100%; border-collapse: collapse; font-size: 12px;
+                    color: var(--text-primary, rgba(15,23,42,0.92));
                 }
-
                 .industry-audit-table th {
-                    position: sticky;
-                    top: 0;
-                    z-index: 1;
-                    text-align: left;
-                    padding: 8px;
-                    border-bottom: 1px solid rgba(148, 163, 184, 0.3);
-                    background: rgba(15, 23, 42, 0.95);
+                    position: sticky; top: 0; z-index: 1;
+                    text-align: left; padding: 8px;
+                    border-bottom: 1px solid var(--border-strong, rgba(100,116,139,0.38));
+                    background: var(--surface-muted, #F7F9FC);
+                    color: var(--text-secondary, rgba(51,65,85,0.72));
                 }
-
                 .industry-audit-table td {
                     padding: 8px;
-                    border-bottom: 1px solid rgba(148, 163, 184, 0.16);
-                    vertical-align: top;
-                    word-break: break-all;
+                    border-bottom: 1px solid var(--border-subtle, rgba(148,163,184,0.24));
+                    vertical-align: top; word-break: break-all;
                 }
             `}</style>
         </div>

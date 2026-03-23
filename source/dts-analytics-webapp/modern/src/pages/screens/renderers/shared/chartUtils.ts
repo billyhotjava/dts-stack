@@ -176,7 +176,7 @@ export function resolveFilterDefaultValue(
     if (fallback) {
         return fallback;
     }
-    return String(options[0]?.value ?? '').trim();
+    return '';
 }
 
 export function resolveDateRangeDefaultValues(

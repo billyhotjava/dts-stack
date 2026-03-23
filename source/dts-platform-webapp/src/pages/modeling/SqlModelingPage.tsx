@@ -139,6 +139,14 @@ const resolveTopicBindingSelector = (model?: { dagSelector?: string; name?: stri
 	return model?.name ? `model:${model.name}` : undefined;
 };
 
+const resolveDbtSelector = (value?: string) => {
+	const selector = normalizeText(value);
+	if (selector.startsWith("tab:")) {
+		return `tag:${selector.slice(4)}`;
+	}
+	return selector || undefined;
+};
+
 const tryParseJsonObject = (raw: string | undefined) => {
 	const text = normalizeText(raw);
 	if (!text) return undefined;
@@ -662,10 +670,13 @@ export default function SqlModelingPage() {
 		}
 	}, []);
 
-	const loadRuns = useCallback(async () => {
+	const loadRuns = useCallback(async (options?: { dagId?: string; selector?: string }) => {
 		setRunsLoading(true);
 		try {
-			const resp = (await listDbtRuns(20)) as Record<string, any>;
+			const resp = (await listDbtRuns(20, {
+				dagId: normalizeText(options?.dagId) || undefined,
+				selector: resolveDbtSelector(options?.selector) || undefined,
+			})) as Record<string, any>;
 			const list = Array.isArray(resp?.dag_runs) ? (resp.dag_runs as DagRun[]) : [];
 			setRuns(list);
 		} catch (err: any) {
@@ -903,11 +914,14 @@ export default function SqlModelingPage() {
 				setOutputAction(null);
 				void loadAuditLogs(dbtConfig?.config?.targetDataSourceId);
 				setBottomTab("operations"); setOpsSubTab("audit");
-				await loadSyncStatus(normalizeText(outputRelation?.selector) || normalizeText(activeModel.dagSelector) || undefined);
+				await loadSyncStatus(resolveDbtSelector(outputRelation?.selector) || resolveDbtSelector(activeModel.dagSelector) || undefined);
 				return;
 			}
 
-			const selector = normalizeText(outputRelation?.selector) || normalizeText(activeModel.dagSelector) || (activeModel?.name ? `model:${activeModel.name}` : "all");
+			const selector =
+				resolveDbtSelector(outputRelation?.selector) ||
+				resolveDbtSelector(activeModel.dagSelector) ||
+				(activeModel?.name ? `model:${activeModel.name}` : "all");
 			const baselineStatus = (await getDbtSyncStatus(selector ? { models: selector } : undefined)) as DbtSyncStatus;
 			const baselineRun = baselineStatus?.latestRun || null;
 			const resp: any = await rebuildDbtOutputRelation({
@@ -933,7 +947,7 @@ export default function SqlModelingPage() {
 			} else {
 				await loadSyncStatus(selector);
 			}
-			await loadRuns();
+			await loadRuns({ dagId: dagId || undefined, selector });
 
 			let resolvedRun = settled.latestRun || null;
 			if (resolvedRun) {
@@ -970,12 +984,11 @@ export default function SqlModelingPage() {
 		void loadSpaces();
 		// Non-critical loads
 		void loadSyncStatus();
-		void loadRuns();
 		void loadSources();
 		void loadLayers();
 		void loadDbtSources();
 		void loadDbtRefs();
-	}, [loadConfig, loadModels, loadSpaces, loadSyncStatus, loadRuns, loadSources, loadLayers, loadDbtSources, loadDbtRefs]);
+	}, [loadConfig, loadModels, loadSpaces, loadSyncStatus, loadSources, loadLayers, loadDbtSources, loadDbtRefs]);
 
 	useEffect(() => {
 		loadInitialData();
@@ -1026,10 +1039,7 @@ export default function SqlModelingPage() {
 
 	const openRun = () => {
 		runForm.resetFields();
-		const dagSelector = normalizeText(activeModel?.dagSelector);
-		const selector = dagSelector.startsWith("tab:")
-			? `tag:${dagSelector.slice(4)}`
-			: dagSelector || (activeModel?.name ? `model:${activeModel.name}` : "");
+		const selector = resolveDbtSelector(activeModel?.dagSelector) || (activeModel?.name ? `model:${activeModel.name}` : "");
 		runForm.setFieldsValue({
 			models: selector,
 			target: dbtConfig?.config?.targetName || "",
@@ -1098,9 +1108,7 @@ export default function SqlModelingPage() {
 		setRunSubmitting(true);
 		try {
 			const values = await runForm.validateFields(["models"]);
-			const modelsSelector = normalizeText(values.models).startsWith("tab:")
-				? `tag:${normalizeText(values.models).slice(4)}`
-				: normalizeText(values.models);
+			const modelsSelector = resolveDbtSelector(values.models) || "all";
 			const dagStatus = (await checkDagReady({ selector: modelsSelector })) as { ready?: boolean; message?: string };
 			if (!dagStatus?.ready) {
 				Modal.warning({
@@ -1196,7 +1204,7 @@ export default function SqlModelingPage() {
 					return;
 				}
 			}
-			await triggerDbtRun({
+			const triggerResp = await triggerDbtRun({
 				models: buildReleaseSelector(modelsSelector),
 				dagSelector: modelsSelector,
 				operation: "build",
@@ -1206,9 +1214,16 @@ export default function SqlModelingPage() {
 				commitSha: normalizeText(values.commitSha) || undefined,
 				buildInvocationId: normalizeText(releaseGate?.buildEvidence?.invocationId) || undefined,
 			});
+			const dagRunId = normalizeText((triggerResp as any)?.dag_run_id || (triggerResp as any)?.dagRunId);
+			const dagId = normalizeText((triggerResp as any)?.dag_id || (triggerResp as any)?.dagId);
+			setRunResult({
+				...createPendingBuildSummary("build", buildReleaseSelector(modelsSelector)),
+				dagRunId,
+				dagId,
+			});
 			toast.success("dbt build 已提交");
 			setRunOpen(false);
-			await loadRuns();
+			void loadRuns({ dagId: dagId || undefined, selector: modelsSelector });
 		} catch (err: any) {
 			toast.error(err?.message || "触发失败");
 		} finally {
@@ -1219,7 +1234,7 @@ export default function SqlModelingPage() {
 	const triggerBuildOperation = async (operation: "compile" | "test" | "docs") => {
 		setBuildTriggering(operation);
 		try {
-			const selector = normalizeText(activeModel?.dagSelector) || (activeModel?.name ? `model:${activeModel.name}` : "all");
+			const selector = resolveDbtSelector(activeModel?.dagSelector) || (activeModel?.name ? `model:${activeModel.name}` : "all");
 			const baselineStatus = (await getDbtSyncStatus(selector ? { models: selector } : undefined)) as DbtSyncStatus;
 			const baselineRun = baselineStatus?.latestRun || null;
 			const payload = {
@@ -1259,7 +1274,7 @@ export default function SqlModelingPage() {
 			} else {
 				await loadSyncStatus(selector);
 			}
-			await loadRuns();
+			await loadRuns({ dagId: dagId || undefined, selector });
 
 			let resolvedRun = settled.latestRun || null;
 			if (resolvedRun) {
@@ -1888,6 +1903,11 @@ export default function SqlModelingPage() {
 		return modelKeyMap.get(activeModelKey) || null;
 	}, [activeModelKey, modelKeyMap]);
 
+	const activeRunsSelector = useMemo(
+		() => resolveDbtSelector(activeModel?.dagSelector) || (activeModel?.name ? `model:${activeModel.name}` : undefined),
+		[activeModel?.dagSelector, activeModel?.name],
+	);
+
 	useEffect(() => {
 		setSqlDraft(activeModel?.sql || "");
 	}, [activeModel?.id]);
@@ -1903,6 +1923,10 @@ export default function SqlModelingPage() {
 	useEffect(() => {
 		void loadTopicDiagnostics(resolveTopicBindingSelector(activeModel || undefined));
 	}, [activeModel?.dagSelector, activeModel?.name, loadTopicDiagnostics]);
+
+	useEffect(() => {
+		void loadRuns({ selector: activeRunsSelector });
+	}, [activeRunsSelector, loadRuns]);
 
 	const sqlDirty = !!activeModel && sqlDraft !== (activeModel?.sql || "");
 	const topicBindingAlert = useMemo(() => {
@@ -4016,4 +4040,3 @@ WHERE status = 'active'`}
 			</div>
 		);
 	}
-

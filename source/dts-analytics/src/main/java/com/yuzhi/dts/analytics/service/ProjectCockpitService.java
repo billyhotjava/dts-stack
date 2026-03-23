@@ -209,7 +209,7 @@ public class ProjectCockpitService {
         refreshFormalData();
         List<NodeRow> filtered = applyFilters(filters);
         ObjectNode root = objectMapper.createObjectNode();
-        root.put("title", "科研项目管理指挥大屏");
+        root.put("title", "项目运营管理大屏");
         root.put("subtitle", formalDataReady
                 ? "面向科研院所项目的总体态势、执行推进与风险变更轮播大屏。"
                 : EMPTY_SUBTITLE);

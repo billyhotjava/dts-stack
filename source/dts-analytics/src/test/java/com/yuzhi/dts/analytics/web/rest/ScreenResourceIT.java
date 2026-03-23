@@ -49,7 +49,7 @@ class ScreenResourceIT {
                         .content("""
                                 {
                                   "schemaVersion": 2,
-                                  "name": "项目管理指挥大屏",
+                                  "name": "项目运营管理大屏",
                                   "description": "测试多页大屏",
                                   "width": 1920,
                                   "height": 1080,
@@ -157,7 +157,7 @@ class ScreenResourceIT {
                         .content("""
                                 {
                                   "schemaVersion": 2,
-                                  "name": "项目管理指挥大屏",
+                                  "name": "项目运营管理大屏",
                                   "description": "测试公共专题代理",
                                   "width": 1920,
                                   "height": 1080,

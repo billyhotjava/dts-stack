@@ -253,6 +253,11 @@ export default function ScreenPreviewPage() {
         return () => document.removeEventListener('mousedown', handleClick);
     }, [fabOpen]);
 
+    const runtimeCanvasScaleStyle = useMemo(
+        () => resolveRuntimeCanvasScaleStyle(scale, components),
+        [components, scale],
+    );
+
     // ── Early returns MUST be after all hooks ──
     if (loading) {
         return (
@@ -287,10 +292,6 @@ export default function ScreenPreviewPage() {
     const stageWidth = Math.max(1, screenWidth * scale);
     const stageHeight = Math.max(1, screenHeight * scale);
     const scalePercent = Math.round(scale * 100);
-    const runtimeCanvasScaleStyle = useMemo(
-        () => resolveRuntimeCanvasScaleStyle(scale, components),
-        [components, scale],
-    );
 
     const setForcedMode = (mode: DeviceMode | null) => {
         setForcedDeviceMode(mode);

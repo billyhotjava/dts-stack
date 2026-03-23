@@ -256,12 +256,17 @@ public class EtlResource {
     @GetMapping("/dbt/runs")
     public ApiResponse<Map<String, Object>> listDbtRuns(
         @RequestParam(defaultValue = "20") int limit,
+        @RequestParam(required = false) String dagId,
+        @RequestParam(required = false) String selector,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
-        String dagId = airflowProperties.getDagId();
-        Map<String, Object> payload = airflowClient.listDagRuns(dagId, Math.max(1, Math.min(limit, 50))).orElse(Map.of());
+        String effectiveDagId = resolveRunDagId(dagId, selector);
+        Map<String, Object> payload = new LinkedHashMap<>(
+            airflowClient.listDagRuns(effectiveDagId, Math.max(1, Math.min(limit, 50))).orElse(Map.of())
+        );
+        payload.putIfAbsent("dagId", effectiveDagId);
         try {
-            externalRunLogService.syncAirflowRuns(ExternalRunLogService.ENTRY_DBT, dagId, payload, activeDept);
+            externalRunLogService.syncAirflowRuns(ExternalRunLogService.ENTRY_DBT, effectiveDagId, payload, activeDept);
         } catch (RuntimeException ex) {
             // best-effort
         }
@@ -696,6 +701,18 @@ public class EtlResource {
             return "tag:dbt " + selector;
         }
         return "tag:dbt";
+    }
+
+    private String resolveRunDagId(String dagId, String selector) {
+        if (StringUtils.hasText(dagId)) {
+            return dagId.trim();
+        }
+        String dagSelector = resolveDagSelector(null, selector);
+        String resolvedDagId = dbtDagService.ensureDagForSelector(dagSelector);
+        if (StringUtils.hasText(resolvedDagId)) {
+            return resolvedDagId;
+        }
+        return airflowProperties.getDagId();
     }
 
     private String toJsonString(Map<String, Object> vars) {

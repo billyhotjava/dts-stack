@@ -10,7 +10,7 @@ test('resolveFilterDefaultValue prefers current runtime value when present', () 
     ]), 'QMS二期');
 });
 
-test('resolveFilterDefaultValue falls back to configured default or first option', () => {
+test('resolveFilterDefaultValue falls back to configured default and keeps empty selection when no default is set', () => {
     assert.equal(resolveFilterDefaultValue('', 'PLM整合', [
         { label: 'QMS二期', value: 'QMS二期' },
         { label: 'PLM整合', value: 'PLM整合' },
@@ -19,7 +19,7 @@ test('resolveFilterDefaultValue falls back to configured default or first option
     assert.equal(resolveFilterDefaultValue('', '', [
         { label: 'QMS二期', value: 'QMS二期' },
         { label: 'PLM整合', value: 'PLM整合' },
-    ]), 'QMS二期');
+    ]), '');
 });
 
 test('resolveDateRangeDefaultValues fills missing values only', () => {

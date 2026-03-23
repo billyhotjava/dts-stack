@@ -449,6 +449,65 @@ class EtlResourceTest {
     }
 
     @Test
+    void listDbtRuns_shouldUseSelectorSpecificDagWhenProvided() {
+        DbtConfigService dbtConfigService = mock(DbtConfigService.class);
+        DbtManifestService manifestService = mock(DbtManifestService.class);
+        DbtSourceService dbtSourceService = mock(DbtSourceService.class);
+        DbtAssetSyncService dbtAssetSyncService = mock(DbtAssetSyncService.class);
+        DbtDagService dbtDagService = mock(DbtDagService.class);
+        DbtPreviewService dbtPreviewService = mock(DbtPreviewService.class);
+        DbtOutputRelationService dbtOutputRelationService = mock(DbtOutputRelationService.class);
+        DbtRunResultService dbtRunResultService = mock(DbtRunResultService.class);
+        DbtQualityGateService dbtQualityGateService = mock(DbtQualityGateService.class);
+        DbtReleaseGateService dbtReleaseGateService = mock(DbtReleaseGateService.class);
+        TopicBindingRuntimeService topicBindingRuntimeService = mock(TopicBindingRuntimeService.class);
+        DbtArtifactSyncState dbtArtifactSyncState = new DbtArtifactSyncState();
+        AirflowClient airflowClient = mock(AirflowClient.class);
+        AirflowProperties airflowProperties = new AirflowProperties();
+        airflowProperties.setEnabled(true);
+        airflowProperties.setDagId("dbt_load");
+        ExternalRunLogService externalRunLogService = mock(ExternalRunLogService.class);
+        AuditService auditService = mock(AuditService.class);
+        ModelingSqlModelRepository sqlModelRepository = mock(ModelingSqlModelRepository.class);
+
+        when(dbtDagService.ensureDagForSelector("tag:project-management")).thenReturn("dwh_project_management_dbt_manual");
+        when(airflowClient.listDagRuns("dwh_project_management_dbt_manual", 20))
+            .thenReturn(java.util.Optional.of(Map.of("dag_runs", List.of())));
+
+        EtlResource resource = new EtlResource(
+            dbtConfigService,
+            manifestService,
+            dbtSourceService,
+            dbtAssetSyncService,
+            dbtDagService,
+            dbtPreviewService,
+            dbtOutputRelationService,
+            dbtRunResultService,
+            dbtQualityGateService,
+            dbtReleaseGateService,
+            topicBindingRuntimeService,
+            dbtArtifactSyncState,
+            airflowClient,
+            airflowProperties,
+            externalRunLogService,
+            auditService,
+            new ObjectMapper(),
+            sqlModelRepository
+        );
+
+        Map<String, Object> payload = resource.listDbtRuns(20, null, "tag:project-management", "BIADMIN").getData();
+
+        assertThat(payload).containsEntry("dagId", "dwh_project_management_dbt_manual");
+        verify(airflowClient).listDagRuns("dwh_project_management_dbt_manual", 20);
+        verify(externalRunLogService).syncAirflowRuns(
+            ExternalRunLogService.ENTRY_DBT,
+            "dwh_project_management_dbt_manual",
+            payload,
+            "BIADMIN"
+        );
+    }
+
+    @Test
     void rebuildDbtOutputRelation_shouldPrepareRelationAndTriggerBuild() {
         DbtConfigService dbtConfigService = mock(DbtConfigService.class);
         DbtManifestService manifestService = mock(DbtManifestService.class);
