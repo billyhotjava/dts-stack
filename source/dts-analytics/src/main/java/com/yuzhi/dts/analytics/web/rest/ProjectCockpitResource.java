@@ -14,6 +14,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -156,6 +157,25 @@ public class ProjectCockpitResource {
             @RequestParam(value = "riskLevel", required = false) String riskLevel,
             HttpServletRequest request) {
         return authorize(request, projectCockpitService.screenRisk(filters(programId, majorProjectId, dateFrom, dateTo, deptId, riskLevel)));
+    }
+
+    @GetMapping(path = "/drill/{target}", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> drillDetail(
+            @PathVariable("target") String target,
+            @RequestParam(value = "programId", required = false) String programId,
+            @RequestParam(value = "majorProjectId", required = false) String majorProjectId,
+            @RequestParam(value = "dateFrom", required = false) String dateFrom,
+            @RequestParam(value = "dateTo", required = false) String dateTo,
+            @RequestParam(value = "deptId", required = false) String deptId,
+            @RequestParam(value = "riskLevel", required = false) String riskLevel,
+            @RequestParam(value = "dept", required = false) String extraDept,
+            @RequestParam(value = "reason", required = false) String extraReason,
+            HttpServletRequest request) {
+        return authorize(request, projectCockpitService.drillDetail(
+                target,
+                filters(programId, majorProjectId, dateFrom, dateTo, deptId, riskLevel),
+                extraDept,
+                extraReason));
     }
 
     @GetMapping(path = "/settings", produces = MediaType.APPLICATION_JSON_VALUE)

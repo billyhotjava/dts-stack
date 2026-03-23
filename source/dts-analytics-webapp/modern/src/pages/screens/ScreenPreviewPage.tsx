@@ -361,6 +361,19 @@ export default function ScreenPreviewPage() {
                             />
                         ))}
                         <button type="button" onClick={carousel.nextPage} className="runtime-control-btn screen-runtime__pager-nav">›</button>
+                        <button
+                            type="button"
+                            onClick={carousel.togglePlay}
+                            className="runtime-control-btn screen-runtime__pager-play"
+                            title={carousel.isPlaying ? '暂停自动轮播' : '开始自动轮播'}
+                        >
+                            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                                {carousel.isPlaying
+                                    ? <><rect x="3" y="2" width="4" height="12" rx="1" /><rect x="9" y="2" width="4" height="12" rx="1" /></>
+                                    : <path d="M4 2l10 6-10 6V2z" />
+                                }
+                            </svg>
+                        </button>
                     </div>
                 )}
                 <RuntimeActionPanel />

@@ -120,17 +120,17 @@ export default function ProjectCockpitPage() {
 		analyticsApi
 			.getProjectCockpitSettings()
 			.then((value) => {
-				if (cancelled) {
-					return;
-				}
+				if (cancelled) return;
 				setSettings(value);
-				setSettingsLoading(false);
 			})
-			.catch((requestError) => {
-				if (cancelled) {
-					return;
-				}
-				setSettingsError(requestError);
+			.catch(() => {
+				// Settings API may not exist yet (backend not deployed).
+				// Degrade gracefully: treat as "no published period".
+				if (cancelled) return;
+				setSettings(null);
+			})
+			.finally(() => {
+				if (cancelled) return;
 				setSettingsLoading(false);
 			});
 		return () => {

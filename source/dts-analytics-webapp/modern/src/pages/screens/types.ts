@@ -242,6 +242,7 @@ export interface CarouselConfig {
     transition: 'fade' | 'slide-left' | 'slide-up' | 'none';
     transitionDuration: number;    // ms, default 800
     loop: boolean;                 // default true
+    autoPlay?: boolean;            // default false — manual mode, user must click play
 }
 
 export interface ScreenPage {

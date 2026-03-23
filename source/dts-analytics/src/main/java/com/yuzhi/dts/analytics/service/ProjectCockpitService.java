@@ -155,6 +155,57 @@ public class ProjectCockpitService {
         return root;
     }
 
+    public ObjectNode drillDetail(String target, Filters filters, String extraDept, String extraReason) {
+        refreshFormalData();
+        List<NodeRow> filtered = applyFilters(filters);
+
+        List<NodeRow> drillRows = switch (target) {
+            case "high-risk" -> filtered.stream()
+                    .filter(row -> "高".equals(row.riskLevel()))
+                    .toList();
+            case "overdue" -> filtered.stream()
+                    .filter(NodeRow::delayed)
+                    .toList();
+            case "completion" -> filtered;
+            case "milestone" -> filtered.stream()
+                    .filter(NodeRow::milestoneNode)
+                    .toList();
+            case "delay-reason" -> filtered.stream()
+                    .filter(NodeRow::delayed)
+                    .filter(row -> extraDept == null || extraDept.isBlank() || extraDept.equals(row.dept()))
+                    .filter(row -> extraReason == null || extraReason.isBlank() || extraReason.equals(row.delayReasonCategory()))
+                    .toList();
+            case "delay-dept" -> filtered.stream()
+                    .filter(NodeRow::delayed)
+                    .filter(row -> extraDept == null || extraDept.isBlank() || extraDept.equals(row.dept()))
+                    .toList();
+            default -> List.of();
+        };
+
+        ObjectNode root = objectMapper.createObjectNode();
+        root.put("target", target);
+        root.put("total", drillRows.size());
+        ArrayNode items = root.putArray("items");
+        for (NodeRow row : drillRows) {
+            ObjectNode item = items.addObject();
+            item.put("id", row.nodeId());
+            item.put("name", row.nodeTask());
+            item.put("majorProjectName", row.majorProjectName());
+            item.put("subprojectName", row.subprojectName());
+            item.put("riskLevel", row.riskLevel());
+            item.put("status", row.statusLabel());
+            item.put("progressRate", row.completed() ? 100 : 0);
+            item.put("delayDays", row.delayDays());
+            item.put("planDate", row.planDate() != null ? row.planDate().toString() : "");
+            item.put("actualDate", row.actualDate() != null ? row.actualDate().toString() : "");
+            item.put("reason", row.delayReasonCategory());
+            item.put("ownerDept", row.dept());
+            item.put("ownerUser", row.owner());
+            item.put("nodeType", row.normalizedNodeType());
+        }
+        return root;
+    }
+
     public ObjectNode screenHeader(Filters filters) {
         refreshFormalData();
         List<NodeRow> filtered = applyFilters(filters);

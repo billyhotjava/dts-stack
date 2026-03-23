@@ -20,12 +20,15 @@ PACK_MODE=""
 PACK_OUTPUT=""
 PACK_INCLUDE_IMAGES="true"
 SAVE_IMAGE_TARS="${SAVE_IMAGE_TARS:-true}"
+LEGACY_ONLY="false"
 
 usage() {
   cat <<USAGE
 Usage:
   ${0##*/} -all
+  ${0##*/} -all --legacy
   ${0##*/} --image <name>
+  ${0##*/} --image <name> --legacy
   ${0##*/} -all --no-save
   ${0##*/} --pack [--output <path>] [--no-images]
   ${0##*/} --bg -all              (run in background, safe for SSH)
@@ -33,6 +36,7 @@ Usage:
 Options:
   -all, --all           Build all images (same as legacy buildAll.sh behavior).
   --image <name>        Build a single image and save tarballs to both dist/ and legacy-dist/.
+  --legacy              Build only the legacy image set or legacy variant of a single image.
   --no-save             Build images but skip docker save tarball export (reduces disk pressure).
   --pack                Package dts-stack for deployment (excludes source, logs, git, etc.).
   --output <path>       Output path for the package tarball (default: ./dts-stack-<timestamp>.tar.gz).
@@ -42,10 +46,12 @@ Options:
 
 Examples:
   ${0##*/} -all
+  ${0##*/} -all --legacy
   ${0##*/} -all --no-save
   ${0##*/} --bg -all
   ${0##*/} --bg --image dts-analytics
   ${0##*/} --image dts-admin
+  ${0##*/} --image dts-admin --legacy
   ${0##*/} --image dts-dbt
   ${0##*/} --pack
   ${0##*/} --pack --output /tmp/dts-deploy.tar.gz
@@ -106,6 +112,10 @@ while [[ $# -gt 0 ]]; do
       SAVE_IMAGE_TARS="false"
       shift
       ;;
+    --legacy)
+      LEGACY_ONLY="true"
+      shift
+      ;;
     -h|--help)
       usage
       exit 0
@@ -125,6 +135,11 @@ fi
 
 if [[ -n "${PACK_MODE}" && ( -n "${MODE}" || -n "${IMAGE_ONLY}" ) ]]; then
   echo "[dts-build] ERROR: --pack cannot be used with --all or --image" >&2
+  exit 1
+fi
+
+if [[ -n "${PACK_MODE}" && "${LEGACY_ONLY}" == "true" ]]; then
+  echo "[dts-build] ERROR: --legacy cannot be used with --pack" >&2
   exit 1
 fi
 
@@ -252,10 +267,18 @@ required_min_disk_gb() {
   fi
 
   if [[ "${MODE}" == "all" ]]; then
-    if [[ "${SAVE_IMAGE_TARS}" == "true" ]]; then
-      echo 45
+    if [[ "${LEGACY_ONLY}" == "true" ]]; then
+      if [[ "${SAVE_IMAGE_TARS}" == "true" ]]; then
+        echo 30
+      else
+        echo 20
+      fi
     else
-      echo 30
+      if [[ "${SAVE_IMAGE_TARS}" == "true" ]]; then
+        echo 45
+      else
+        echo 30
+      fi
     fi
     return 0
   fi
@@ -729,6 +752,7 @@ build_all_legacy() {
 
 build_single_image() {
   local name="$1"
+  local legacy_only="${2:-false}"
 
   init_images_normal
   init_images_legacy
@@ -836,6 +860,19 @@ build_single_image() {
       )
       ;;
   esac
+
+  if [[ "${legacy_only}" == "true" ]]; then
+    local selected_df="$normal_df"
+    if [[ -n "$legacy_df" && -f "$legacy_df" ]]; then
+      selected_df="$legacy_df"
+    fi
+    if [[ "$name" == "dts-dbt" || "$name" == "dts-addax" ]]; then
+      build_image_ctx "$name" "$normal_tag" "$selected_df" "${REPO_ROOT}/builds/${name}" "$LEGACY_DIST" "${build_args[@]}"
+    else
+      build_image "$name" "$normal_tag" "$selected_df" "$LEGACY_DIST" "${build_args[@]}"
+    fi
+    return 0
+  fi
 
   if [[ "$name" == "dts-dbt" || "$name" == "dts-addax" ]]; then
     build_image_ctx "$name" "$normal_tag" "$normal_df" "${REPO_ROOT}/builds/${name}" "$NORMAL_DIST" "${build_args[@]}"
@@ -1120,10 +1157,14 @@ require_cmd docker
 preflight_check
 
 if [[ "$MODE" == "all" ]]; then
-  build_all_normal
-  build_all_legacy
+  if [[ "${LEGACY_ONLY}" == "true" ]]; then
+    build_all_legacy
+  else
+    build_all_normal
+    build_all_legacy
+  fi
 elif [[ -n "$IMAGE_ONLY" ]]; then
-  build_single_image "$IMAGE_ONLY"
+  build_single_image "$IMAGE_ONLY" "$LEGACY_ONLY"
 else
   usage
   exit 1

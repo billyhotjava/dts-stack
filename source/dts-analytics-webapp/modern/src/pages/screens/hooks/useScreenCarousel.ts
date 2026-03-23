@@ -30,7 +30,11 @@ export interface CarouselState {
     prevPage: () => void;
     /** Whether carousel is active (multi-page + enabled) */
     isCarouselActive: boolean;
-    /** Pause auto-advance (on hover) */
+    /** Whether auto-advance is currently playing */
+    isPlaying: boolean;
+    /** Toggle play/pause */
+    togglePlay: () => void;
+    /** Pause auto-advance */
     pause: () => void;
     /** Resume auto-advance */
     resume: () => void;
@@ -63,11 +67,12 @@ export function useScreenCarousel(
     const interval = (carouselConfig?.intervalSeconds ?? 30) * 1000;
     const transitionMs = carouselConfig?.transitionDuration ?? 800;
     const loop = carouselConfig?.loop !== false;
+    const autoPlay = carouselConfig?.autoPlay ?? false;
 
     const [pageIndex, setPageIndex] = useState(0);
     const [prevPageIndex, setPrevPageIndex] = useState(0);
     const [transitioning, setTransitioning] = useState(false);
-    const [paused, setPaused] = useState(false);
+    const [paused, setPaused] = useState(!autoPlay);
     const transitionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const doTransition = useCallback((nextIndex: number) => {
@@ -83,6 +88,7 @@ export function useScreenCarousel(
 
     const goToPage = useCallback((index: number) => {
         const clamped = Math.max(0, Math.min(index, pageCount - 1));
+        setPaused(true);
         doTransition(clamped);
     }, [doTransition, pageCount]);
 
@@ -132,6 +138,9 @@ export function useScreenCarousel(
             } else if (e.key === 'ArrowRight') {
                 e.preventDefault();
                 nextPage();
+            } else if (e.key === ' ') {
+                e.preventDefault();
+                setPaused(prev => !prev);
             }
         };
         window.addEventListener('keydown', handleKeyDown);
@@ -153,6 +162,7 @@ export function useScreenCarousel(
     }, [pageCount, pageIndex]);
 
     const currentPage = resolvedPages[pageIndex] ?? resolvedPages[0];
+    const isPlaying = enabled && !paused;
 
     return {
         pageIndex,
@@ -166,6 +176,8 @@ export function useScreenCarousel(
         nextPage,
         prevPage,
         isCarouselActive: enabled,
+        isPlaying,
+        togglePlay: () => setPaused(prev => !prev),
         pause: () => setPaused(true),
         resume: () => setPaused(false),
     };

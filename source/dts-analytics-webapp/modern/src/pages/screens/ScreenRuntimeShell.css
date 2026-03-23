@@ -420,6 +420,18 @@
   width: 28px;
 }
 
+.screen-runtime__pager-play {
+  min-width: 34px;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border-radius: 999px;
+  margin-left: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .screen-export-shell {
   min-height: 100vh;
   padding: 24px;

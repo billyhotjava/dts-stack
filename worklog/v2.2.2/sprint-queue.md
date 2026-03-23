@@ -38,3 +38,14 @@
 | F3-升级执行与回滚验收 | 3 | DONE |
 
 **统计**: READY=0, IN_PROGRESS=0, DONE=10, BLOCKED=0
+
+## Sprint-9: 指挥大屏增强与看板联动 (202603)
+
+| Feature | Task 数 | 状态 |
+|---------|---------|------|
+| F1-第4屏指标全览 | 3 | READY |
+| F2-现有三屏丰富化 | 4 | READY |
+| F3-大屏看板联动 | 2 | READY |
+| F4-轮播手动控制 | 2 | READY |
+
+**统计**: READY=11, IN_PROGRESS=0, DONE=0, BLOCKED=0
