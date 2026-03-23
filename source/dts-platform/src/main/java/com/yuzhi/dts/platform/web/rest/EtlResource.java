@@ -301,18 +301,6 @@ public class EtlResource {
         String selector = resolveSelector(request, requireSelector);
         ApiResponse<Map<String, Object>> response = triggerDbtOperation(operation, request, activeDept, requireSelector);
         auditService.audit("EXECUTE", "etl.dbt." + operation, selector);
-
-        // After successful publish/build trigger: auto-sync models + update status to PUBLISHED
-        if ("run".equals(operation) || "build".equals(operation)) {
-            try {
-                dbtAssetSyncService.syncFromManifest();
-                dbtRunResultService.syncFromRunResults();
-                updateModelStatus("PUBLISHED", selector);
-                LOG.info("[dbt-lifecycle] Auto-synced and updated models to PUBLISHED after dbt {}", operation);
-            } catch (RuntimeException ex) {
-                LOG.warn("[dbt-lifecycle] Auto-sync after dbt {} failed: {}", operation, ex.getMessage());
-            }
-        }
         return response;
     }
 
@@ -334,14 +322,6 @@ public class EtlResource {
         String selector = resolveSelector(request, false);
         ApiResponse<Map<String, Object>> response = triggerDbtOperation("test", request, activeDept, false);
         auditService.audit("EXECUTE", "etl.dbt.test", selector);
-
-        // After successful test trigger: update status to TESTED
-        try {
-            updateModelStatus("TESTED", selector);
-            LOG.info("[dbt-lifecycle] Updated models to TESTED after dbt test");
-        } catch (RuntimeException ex) {
-            LOG.warn("[dbt-lifecycle] Failed to update model status after test: {}", ex.getMessage());
-        }
         return response;
     }
 
@@ -775,43 +755,4 @@ public class EtlResource {
         return stringVal(fallback);
     }
 
-    /**
-     * Update model lifecycle status for models matching the given selector.
-     * If selector is "all", updates all models. Otherwise matches by tag or layer.
-     */
-    private void updateModelStatus(String newStatus, String selector) {
-        List<ModelingSqlModel> models;
-        String normalizedSelector = StringUtils.hasText(selector) ? selector.trim() : selector;
-        while (StringUtils.hasText(normalizedSelector) && normalizedSelector.startsWith("+")) {
-            normalizedSelector = normalizedSelector.substring(1).trim();
-        }
-        if ("all".equals(normalizedSelector) || !StringUtils.hasText(normalizedSelector)) {
-            models = sqlModelRepository.findAll();
-        } else {
-            // For tag-based selectors like "tag:ods_crm", match models with that tag
-            String tagValue = normalizedSelector.replace("tag:", "").trim();
-            models = sqlModelRepository.findByTagsContainingIgnoreCase(tagValue);
-            if (models.isEmpty()) {
-                // Fallback: match by layer from selector
-                models = sqlModelRepository.findByLayerIgnoreCase(tagValue);
-            }
-        }
-        int updated = 0;
-        for (ModelingSqlModel model : models) {
-            String current = model.getStatus();
-            boolean shouldUpgrade = switch (newStatus) {
-                case "TESTED" -> "COMMITTED".equals(current) || "DRAFT".equals(current) || current == null;
-                case "PUBLISHED" -> "TESTED".equals(current) || "COMMITTED".equals(current);
-                default -> false;
-            };
-            if (shouldUpgrade) {
-                model.setStatus(newStatus);
-                updated++;
-            }
-        }
-        if (updated > 0) {
-            sqlModelRepository.saveAll(models);
-            LOG.info("[dbt-lifecycle] Updated {} model(s) to {}", updated, newStatus);
-        }
-    }
 }

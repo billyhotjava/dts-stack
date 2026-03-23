@@ -4,6 +4,13 @@ import { ChartLegend, type LegendItem } from './ChartLegend';
 import { buildLineChartLayout } from './lineChartLayout';
 import { ChartTooltip, type TooltipData, useChartTooltip } from './ChartTooltip';
 
+export type ReferenceLine = {
+  y: number;
+  color?: string;
+  label?: string;
+  dashArray?: string;
+};
+
 interface LineChartProps {
   data: {
     rows: any[][];
@@ -16,6 +23,7 @@ interface LineChartProps {
   smooth?: boolean;
   colors?: string[];
   xAxisLabelRotate?: number;
+  referenceLines?: ReferenceLine[];
 }
 
 // Compute cubic bezier control points for smooth curve
@@ -56,6 +64,7 @@ export function LineChart({
   smooth = true,
   colors,
   xAxisLabelRotate = 0,
+  referenceLines,
 }: LineChartProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [hiddenSeries, setHiddenSeries] = useState<Set<string>>(new Set());
@@ -165,6 +174,37 @@ export function LineChart({
               <text x={padding.left - 8} y={y + 4} fontSize={10} fill="var(--color-text-tertiary, #888)" textAnchor="end">
                 {formatChartValue(value, { compact: true })}
               </text>
+            </g>
+          );
+        })}
+
+        {/* Reference lines */}
+        {(referenceLines ?? []).map((ref, i) => {
+          if (ref.y < minValue || ref.y > maxValue) return null;
+          const ry = getY(ref.y);
+          const lineColor = ref.color || '#dc2626';
+          return (
+            <g key={`ref-${i}`}>
+              <line
+                x1={padding.left}
+                y1={ry}
+                x2={width - padding.right}
+                y2={ry}
+                stroke={lineColor}
+                strokeWidth={1.5}
+                strokeDasharray={ref.dashArray || "6 4"}
+              />
+              {ref.label ? (
+                <text
+                  x={width - padding.right + 4}
+                  y={ry + 4}
+                  fontSize={10}
+                  fontWeight={600}
+                  fill={lineColor}
+                >
+                  {ref.label}
+                </text>
+              ) : null}
             </g>
           );
         })}

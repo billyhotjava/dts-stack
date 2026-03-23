@@ -10,6 +10,46 @@
 	justify-content: space-between;
 }
 
+.project-cockpit__period-card {
+	background:
+		radial-gradient(circle at top left, rgba(37, 99, 235, 0.1), transparent 40%),
+		linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(244, 249, 255, 0.96));
+}
+
+.project-cockpit__period-bar {
+	display: grid;
+	grid-template-columns: minmax(220px, 1.1fr) minmax(280px, 1.4fr) minmax(180px, 0.8fr);
+	gap: 16px;
+	align-items: end;
+}
+
+.project-cockpit__period-meta,
+.project-cockpit__period-actions {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.project-cockpit__period-title {
+	font-size: 20px;
+	font-weight: 700;
+	letter-spacing: -0.02em;
+}
+
+.project-cockpit__period-hint,
+.project-cockpit__period-status,
+.project-cockpit__period-tip {
+	font-size: 13px;
+	line-height: 1.6;
+	color: var(--color-text-secondary, #667085);
+}
+
+.project-cockpit__period-inputs {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 12px;
+}
+
 .project-cockpit__topbar-title {
 	font-size: 20px;
 	font-weight: 700;
@@ -167,6 +207,12 @@
 
 .project-cockpit__metric-card {
 	border-top: 3px solid rgba(37, 99, 235, 0.35);
+	transition: box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.project-cockpit__metric-card--drillable:hover {
+	box-shadow: 0 2px 8px rgba(37, 99, 235, 0.18);
+	transform: translateY(-1px);
 }
 
 .project-cockpit__metric-label-row {
@@ -193,6 +239,13 @@
 	font-size: 14px;
 	font-weight: 500;
 	color: var(--color-text-secondary, #667085);
+}
+
+.project-cockpit__metric-trend {
+	margin-left: 8px;
+	font-size: 13px;
+	font-weight: 600;
+	letter-spacing: 0;
 }
 
 .project-cockpit__tabs {
@@ -318,6 +371,24 @@
 	font-size: 12px;
 	background: rgba(37, 99, 235, 0.08);
 	color: #1d4ed8;
+	transition: background 0.15s ease;
+}
+
+.project-cockpit__matrix-pill--clickable {
+	cursor: pointer;
+}
+
+.project-cockpit__matrix-pill--clickable:hover {
+	background: rgba(37, 99, 235, 0.18);
+}
+
+.project-cockpit__matrix-link {
+	cursor: pointer;
+	color: var(--color-brand, #509EE3);
+}
+
+.project-cockpit__matrix-link:hover {
+	text-decoration: underline;
 }
 
 .project-cockpit__gantt {
@@ -389,6 +460,47 @@
 
 .project-cockpit__gantt-bar--high {
 	background: linear-gradient(90deg, #ef4444, #dc2626);
+}
+
+.project-cockpit__gantt-bar--baseline {
+	background: #e5e7eb;
+	height: 8px;
+	top: 12px;
+	border-radius: 4px;
+	box-shadow: none;
+	z-index: 0;
+}
+
+.project-cockpit__gantt-bar--ongoing {
+	border: 2px dashed currentColor;
+	background: none;
+	color: #6b7280;
+}
+
+.project-cockpit__gantt-bar--normal,
+.project-cockpit__gantt-bar--warn,
+.project-cockpit__gantt-bar--high {
+	z-index: 1;
+}
+
+.project-cockpit__gantt-group-header {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 8px 0;
+	cursor: pointer;
+	user-select: none;
+	border-bottom: 1px solid var(--color-border, #e5e7eb);
+}
+
+.project-cockpit__gantt-group-arrow {
+	font-size: 12px;
+	color: var(--color-text-tertiary, #9ca3af);
+}
+
+.project-cockpit__gantt-group-count {
+	font-size: 12px;
+	color: var(--color-text-secondary, #667085);
 }
 
 .project-cockpit__gantt-owner {
@@ -563,6 +675,32 @@
 	top: 16px;
 }
 
+.project-cockpit__breadcrumb {
+	padding: 10px 16px;
+	font-size: 13px;
+	color: var(--color-text-secondary, #667085);
+	border-bottom: 1px solid var(--color-border, #e5e7eb);
+}
+
+.project-cockpit__breadcrumb-sep {
+	margin: 0 6px;
+	color: var(--color-text-tertiary, #9ca3af);
+}
+
+.project-cockpit__breadcrumb-link {
+	cursor: pointer;
+	color: var(--color-brand, #509EE3);
+}
+
+.project-cockpit__breadcrumb-link:hover {
+	text-decoration: underline;
+}
+
+.project-cockpit__breadcrumb-current {
+	font-weight: 600;
+	color: var(--color-text-primary, #111827);
+}
+
 .project-cockpit__detail-wide {
 	grid-column: 1 / -1;
 }
@@ -606,6 +744,10 @@
 	.project-cockpit__gantt-row {
 		grid-template-columns: 1fr;
 	}
+
+	.project-cockpit__period-bar {
+		grid-template-columns: 1fr;
+	}
 }
 
 @media (max-width: 768px) {
@@ -619,6 +761,10 @@
 
 	.project-cockpit__matrix-header,
 	.project-cockpit__matrix-row {
+		grid-template-columns: 1fr;
+	}
+
+	.project-cockpit__period-inputs {
 		grid-template-columns: 1fr;
 	}
 }

@@ -116,4 +116,56 @@ class DbtSourceServiceTest {
         assertThat(Files.readString(configuredProjectDir.resolve("models").resolve("ods_sources.yml")))
             .isEqualTo("version: 2\nsources: []\n");
     }
+
+    @Test
+    void refreshOdsSources_shouldDeduplicateSameSchemaAndTable() throws Exception {
+        Path configuredProjectDir = tempDir.resolve("configured-dbt-dup");
+        Files.createDirectories(configuredProjectDir.resolve("models"));
+
+        DbtProperties properties = new DbtProperties();
+        properties.setEnabled(true);
+
+        DbtConfigService.DbtWorkspaceConfig config = new DbtConfigService.DbtWorkspaceConfig(
+            true,
+            configuredProjectDir.toString(),
+            tempDir.resolve("profiles").toString(),
+            "dts",
+            "dev",
+            null,
+            null,
+            null,
+            Map.of()
+        );
+        DbtConfigService.DbtConfigView view = new DbtConfigService.DbtConfigView(
+            true,
+            config,
+            DbtConfigService.DbtProfileStatus.skipped("test"),
+            null,
+            new DbtConfigService.DbtWorkspaceStatus(true, "ok", Map.of())
+        );
+        when(configService.loadConfig()).thenReturn(view);
+
+        InfraOdsTableMapping first = new InfraOdsTableMapping();
+        first.setOdsSchema("public");
+        first.setOdsTable("ods_project_subject_domain");
+        first.setDescription("first");
+        first.setEnabled(true);
+
+        InfraOdsTableMapping second = new InfraOdsTableMapping();
+        second.setOdsSchema("public");
+        second.setOdsTable("ods_project_subject_domain");
+        second.setDescription("second");
+        second.setEnabled(true);
+
+        when(mappingRepository.findByEnabledTrueOrderByOdsSchemaAscOdsTableAsc()).thenReturn(List.of(first, second));
+
+        DbtSourceService service = new DbtSourceService(properties, configService, mappingRepository, topicBindingRuntimeService);
+
+        DbtSourceService.DbtSourceRefreshResult result = service.refreshOdsSources();
+
+        String yaml = Files.readString(configuredProjectDir.resolve("models").resolve("ods_sources.yml"));
+        assertThat(result.tables()).isEqualTo(1);
+        assertThat(yaml).contains("name: \"ods_project_subject_domain\"");
+        assertThat(yaml).containsOnlyOnce("name: \"ods_project_subject_domain\"");
+    }
 }

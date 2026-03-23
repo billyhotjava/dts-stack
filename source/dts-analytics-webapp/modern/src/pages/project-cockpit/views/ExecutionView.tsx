@@ -13,7 +13,7 @@ import {
 import { useProjectCockpitContext } from "../ProjectCockpitContext";
 import { buildExecutionSnapshot } from "./executionView.helpers";
 
-function toFilters(state: ReturnType<typeof useProjectCockpitContext>["queryState"]) {
+function toFilters(state: ReturnType<typeof useProjectCockpitContext>["effectiveQueryState"]) {
 	return {
 		programId: state.programId || undefined,
 		majorProjectId: state.majorProjectId || undefined,
@@ -32,20 +32,20 @@ function toTable(rows: Array<Record<string, unknown>>, columns: Array<{ key: str
 }
 
 export default function ExecutionView({ locale }: { locale: Locale }) {
-	const { queryState } = useProjectCockpitContext();
+	const { effectiveQueryState, openDrill } = useProjectCockpitContext();
 	const [data, setData] = useState<ProjectCockpitExecutionResponse | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<unknown>(null);
 
 	const filters = useMemo(
-		() => toFilters(queryState),
+		() => toFilters(effectiveQueryState),
 		[
-			queryState.dateFrom,
-			queryState.dateTo,
-			queryState.deptId,
-			queryState.majorProjectId,
-			queryState.programId,
-			queryState.riskLevel,
+			effectiveQueryState.dateFrom,
+			effectiveQueryState.dateTo,
+			effectiveQueryState.deptId,
+			effectiveQueryState.majorProjectId,
+			effectiveQueryState.programId,
+			effectiveQueryState.riskLevel,
 		],
 	);
 
@@ -113,7 +113,11 @@ export default function ExecutionView({ locale }: { locale: Locale }) {
 
 	return (
 		<div className="project-cockpit__view">
-			<ExecutionKpiPanel {...snapshot} />
+			<ExecutionKpiPanel
+				{...snapshot}
+				onDrillOverdue={() => openDrill("overdue")}
+				onDrillMilestone={() => openDrill("milestone", { nodeType: "milestone" })}
+			/>
 
 			<div className="project-cockpit__two-column">
 				<TrendPanel title="项目甘特图">

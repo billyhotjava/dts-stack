@@ -15,26 +15,30 @@ mkdir -p "${FAKE_BIN}" "${SOURCE_ROOT}" "${TARGET_DIR}" "${IMAGES_DIR}" "${EXTRA
 
 cat > "${FAKE_BIN}/docker" <<'EOF_DOCKER'
 #!/usr/bin/env bash
-if [[ "${1:-}" == "compose" && "${2:-}" == "ps" ]]; then
-  if [[ -f "${FAKE_DOCKER_STATE_FILE}" ]]; then
-    printf 'dts-platform\n'
-  fi
-  exit 0
-fi
-if [[ "${1:-}" == "compose" && "${2:-}" == "up" && "${3:-}" == "-d" ]]; then
-  : > "${FAKE_DOCKER_STATE_FILE}"
-  exit 0
-fi
 if [[ "${1:-}" == "load" && "${2:-}" == "-i" ]]; then
   exit 0
 fi
 if [[ "${1:-}" == "compose" ]]; then
   compose_file=""
+  shift
   while [[ $# -gt 0 ]]; do
     case "$1" in
       -f)
         compose_file="$2"
         shift 2
+        ;;
+      ps)
+        if [[ -f "${FAKE_DOCKER_STATE_FILE}" ]]; then
+          printf 'dts-platform\n'
+        fi
+        exit 0
+        ;;
+      up)
+        if [[ "${2:-}" == "-d" ]]; then
+          : > "${FAKE_DOCKER_STATE_FILE}"
+          exit 0
+        fi
+        shift
         ;;
       config)
         if [[ "${2:-}" == "--format" && "${3:-}" == "json" ]]; then

@@ -1,14 +1,39 @@
 import type { ProjectCockpitTreeNode } from "../../../api/analyticsApi";
 import { Badge } from "../../../ui/Badge/Badge";
 import { Card, CardBody, CardHeader } from "../../../ui/Card/Card";
+import type { BreadcrumbItem } from "../views/majorProjectTreeView.helpers";
 
 type Props = {
 	node: ProjectCockpitTreeNode | null;
+	breadcrumb?: BreadcrumbItem[];
+	onBreadcrumbClick?: (id: string) => void;
 };
 
-export function ProjectTreeDetailPanel({ node }: Props) {
+export function ProjectTreeDetailPanel({ node, breadcrumb, onBreadcrumbClick }: Props) {
 	return (
 		<Card className="project-cockpit__detail-card">
+			{breadcrumb && breadcrumb.length > 0 && (
+				<div className="project-cockpit__breadcrumb">
+					{breadcrumb.map((item, idx) => {
+						const isLast = idx === breadcrumb.length - 1;
+						return (
+							<span key={item.id}>
+								{idx > 0 && <span className="project-cockpit__breadcrumb-sep">/</span>}
+								{isLast ? (
+									<span className="project-cockpit__breadcrumb-current">{item.name}</span>
+								) : (
+									<span
+										className="project-cockpit__breadcrumb-link"
+										onClick={() => onBreadcrumbClick?.(item.id)}
+									>
+										{item.name}
+									</span>
+								)}
+							</span>
+						);
+					})}
+				</div>
+			)}
 			<CardHeader
 				title={node?.name ?? "请选择节点"}
 				subtitle={node ? `${node.level ?? "node"} 详情` : "树状看板会显示当前选中节点的细节"}

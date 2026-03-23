@@ -4,6 +4,7 @@ import { getEffectiveLocale } from "../../i18n";
 import {
 	analyticsApi,
 	type ProjectCockpitFilterQuery,
+	type ProjectCockpitSettingsResponse,
 	type ProjectCockpitSummaryResponse,
 } from "../../api/analyticsApi";
 import { PageContainer } from "../../components/PageContainer/PageContainer";
@@ -28,26 +29,43 @@ function toFilterQuery(state: {
 	};
 }
 
-function ProjectCockpitPageInner() {
+type ContentProps = {
+	settings: ProjectCockpitSettingsResponse | null;
+	settingsLoading: boolean;
+	settingsSaving: boolean;
+	settingsError: unknown;
+	onPublishPeriod: (periodStart: string, periodEnd: string) => Promise<void>;
+};
+
+function ProjectCockpitPageContent({
+	settings,
+	settingsLoading,
+	settingsSaving,
+	settingsError,
+	onPublishPeriod,
+}: ContentProps) {
 	const locale: Locale = useMemo(() => getEffectiveLocale(), []);
-	const { queryState } = useProjectCockpitContext();
+	const { effectiveQueryState } = useProjectCockpitContext();
 	const [summary, setSummary] = useState<ProjectCockpitSummaryResponse | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<unknown>(null);
 
 	const filters = useMemo(
-		() => toFilterQuery(queryState),
+		() => toFilterQuery(effectiveQueryState),
 		[
-			queryState.dateFrom,
-			queryState.dateTo,
-			queryState.deptId,
-			queryState.majorProjectId,
-			queryState.programId,
-			queryState.riskLevel,
+			effectiveQueryState.dateFrom,
+			effectiveQueryState.dateTo,
+			effectiveQueryState.deptId,
+			effectiveQueryState.majorProjectId,
+			effectiveQueryState.programId,
+			effectiveQueryState.riskLevel,
 		],
 	);
 
 	useEffect(() => {
+		if (settingsLoading) {
+			return;
+		}
 		let cancelled = false;
 		setLoading(true);
 		setError(null);
@@ -70,12 +88,17 @@ function ProjectCockpitPageInner() {
 		return () => {
 			cancelled = true;
 		};
-	}, [filters]);
+	}, [filters, settingsLoading]);
 
 	return (
 		<PageContainer maxWidth="full" padding="lg">
 			<ProjectCockpitLayout
 				locale={locale}
+				settings={settings}
+				settingsLoading={settingsLoading}
+				settingsSaving={settingsSaving}
+				settingsError={settingsError}
+				onPublishPeriod={onPublishPeriod}
 				summary={summary}
 				summaryLoading={loading}
 				summaryError={error}
@@ -85,9 +108,60 @@ function ProjectCockpitPageInner() {
 }
 
 export default function ProjectCockpitPage() {
+	const [settings, setSettings] = useState<ProjectCockpitSettingsResponse | null>(null);
+	const [settingsLoading, setSettingsLoading] = useState(true);
+	const [settingsError, setSettingsError] = useState<unknown>(null);
+	const [settingsSaving, setSettingsSaving] = useState(false);
+
+	useEffect(() => {
+		let cancelled = false;
+		setSettingsLoading(true);
+		setSettingsError(null);
+		analyticsApi
+			.getProjectCockpitSettings()
+			.then((value) => {
+				if (cancelled) {
+					return;
+				}
+				setSettings(value);
+				setSettingsLoading(false);
+			})
+			.catch((requestError) => {
+				if (cancelled) {
+					return;
+				}
+				setSettingsError(requestError);
+				setSettingsLoading(false);
+			});
+		return () => {
+			cancelled = true;
+		};
+	}, []);
+
+	const handlePublishPeriod = async (periodStart: string, periodEnd: string) => {
+		setSettingsSaving(true);
+		setSettingsError(null);
+		try {
+			await analyticsApi.updateProjectCockpitSettings({ periodStart, periodEnd });
+			const refreshed = await analyticsApi.getProjectCockpitSettings();
+			setSettings(refreshed);
+		} catch (requestError) {
+			setSettingsError(requestError);
+			throw requestError;
+		} finally {
+			setSettingsSaving(false);
+		}
+	};
+
 	return (
-		<ProjectCockpitProvider>
-			<ProjectCockpitPageInner />
+		<ProjectCockpitProvider publishedPeriod={settings}>
+			<ProjectCockpitPageContent
+				settings={settings}
+				settingsLoading={settingsLoading}
+				settingsSaving={settingsSaving}
+				settingsError={settingsError}
+				onPublishPeriod={handlePublishPeriod}
+			/>
 		</ProjectCockpitProvider>
 	);
 }

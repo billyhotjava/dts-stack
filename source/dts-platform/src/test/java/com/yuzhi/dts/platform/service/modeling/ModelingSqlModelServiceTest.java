@@ -161,7 +161,7 @@ class ModelingSqlModelServiceTest {
             null,
             new DbtConfigService.DbtWorkspaceStatus(true, "ok", Map.of())
         );
-        when(dbtConfigService.loadConfig()).thenReturn(view);
+        lenient().when(dbtConfigService.loadConfig()).thenReturn(view);
     }
 
     @Test
@@ -268,7 +268,7 @@ class ModelingSqlModelServiceTest {
     }
 
     @Test
-    void list_shouldDiscoverWorkspaceModelsFromDbtProject() throws Exception {
+    void syncWorkspaceModels_shouldDiscoverWorkspaceModelsFromDbtProject() throws Exception {
         Path modelsDir = tempDir.resolve("models").resolve("ads").resolve("project");
         Files.createDirectories(modelsDir);
         Files.writeString(modelsDir.resolve("ads_project_cockpit_summary.sql"), "select 1 as metric");
@@ -278,6 +278,8 @@ class ModelingSqlModelServiceTest {
         warehouse.setStatus("ACTIVE");
         when(dataSourceRepository.findByStatusIgnoreCase(anyString())).thenReturn(List.of(warehouse));
         when(dataSourceRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
+
+        service.syncWorkspaceModels("D1");
 
         List<ModelingSqlModelService.SqlModelDto> models = service.list(null, "cockpit", "D1");
 
@@ -290,7 +292,7 @@ class ModelingSqlModelServiceTest {
     }
 
     @Test
-    void list_shouldDiscoverWorkspaceTagsAndDagSelectorFromSqlConfig() throws Exception {
+    void syncWorkspaceModels_shouldDiscoverWorkspaceTagsAndDagSelectorFromSqlConfig() throws Exception {
         Path modelsDir = tempDir.resolve("models").resolve("ads").resolve("project");
         Files.createDirectories(modelsDir);
         Files.writeString(
@@ -306,6 +308,8 @@ class ModelingSqlModelServiceTest {
         warehouse.setStatus("ACTIVE");
         when(dataSourceRepository.findByStatusIgnoreCase(anyString())).thenReturn(List.of(warehouse));
         when(dataSourceRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
+
+        service.syncWorkspaceModels("D1");
 
         List<ModelingSqlModelService.SqlModelDto> models = service.list(null, "major_project", "D1");
 
@@ -521,6 +525,25 @@ class ModelingSqlModelServiceTest {
         assertThat(models).hasSize(1);
         assertThat(models.get(0).sourceDataSourceName()).isEqualTo("默认数据湖");
         assertThat(models.get(0).sourceSystem()).isEqualTo("admin-data-lake");
+    }
+
+    @Test
+    void list_shouldNotDiscoverWorkspaceModelsImplicitly() throws Exception {
+        Path sqlFile = tempDir.resolve("models").resolve("dwd").resolve("rogue_model.sql");
+        Files.createDirectories(sqlFile.getParent());
+        Files.writeString(
+            sqlFile,
+            """
+            select 1 as id
+            """,
+            StandardOpenOption.CREATE,
+            StandardOpenOption.TRUNCATE_EXISTING
+        );
+
+        List<ModelingSqlModelService.SqlModelDto> models = service.list(null, null, "D1");
+
+        assertThat(models).isEmpty();
+        assertThat(storedModels).isEmpty();
     }
 
     @Test

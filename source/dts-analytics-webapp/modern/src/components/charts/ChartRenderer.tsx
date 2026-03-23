@@ -169,6 +169,7 @@ export function ChartRenderer({
             smooth={settings['graph.smooth'] !== false}
             colors={colors}
             xAxisLabelRotate={settings['graph.x_axis.label_rotate']}
+            referenceLines={settings['graph.reference_lines']}
           />
         );
 

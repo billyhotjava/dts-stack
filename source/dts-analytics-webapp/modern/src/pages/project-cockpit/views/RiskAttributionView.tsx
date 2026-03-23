@@ -8,7 +8,7 @@ import { Spinner } from "../../../ui/Loading/Spinner";
 import { DelayReasonMatrix, HealthScoreCard, TrendPanel } from "../components";
 import { useProjectCockpitContext } from "../ProjectCockpitContext";
 
-function toFilters(state: ReturnType<typeof useProjectCockpitContext>["queryState"]) {
+function toFilters(state: ReturnType<typeof useProjectCockpitContext>["effectiveQueryState"]) {
 	return {
 		programId: state.programId || undefined,
 		majorProjectId: state.majorProjectId || undefined,
@@ -27,20 +27,20 @@ function toTable(rows: Array<Record<string, unknown>>, columns: Array<{ key: str
 }
 
 export default function RiskAttributionView({ locale }: { locale: Locale }) {
-	const { queryState } = useProjectCockpitContext();
+	const { effectiveQueryState, openDrill } = useProjectCockpitContext();
 	const [data, setData] = useState<ProjectCockpitRiskAttributionResponse | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<unknown>(null);
 
 	const filters = useMemo(
-		() => toFilters(queryState),
+		() => toFilters(effectiveQueryState),
 		[
-			queryState.dateFrom,
-			queryState.dateTo,
-			queryState.deptId,
-			queryState.majorProjectId,
-			queryState.programId,
-			queryState.riskLevel,
+			effectiveQueryState.dateFrom,
+			effectiveQueryState.dateTo,
+			effectiveQueryState.deptId,
+			effectiveQueryState.majorProjectId,
+			effectiveQueryState.programId,
+			effectiveQueryState.riskLevel,
 		],
 	);
 
@@ -125,12 +125,14 @@ export default function RiskAttributionView({ locale }: { locale: Locale }) {
 					value={String((data?.riskBreakdown ?? []).find((item) => item.name === "高")?.value ?? 0)}
 					unit="个"
 					tone="error"
+					onDrill={() => openDrill("high-risk", { riskLevel: "高" })}
 				/>
 				<HealthScoreCard
 					label="延期项目"
 					value={String((data?.delayedProjects ?? []).length)}
 					unit="项"
 					tone="warning"
+					onDrill={() => openDrill("overdue")}
 				/>
 				<HealthScoreCard
 					label="延期主因"
@@ -190,7 +192,11 @@ export default function RiskAttributionView({ locale }: { locale: Locale }) {
 				</TrendPanel>
 
 				<TrendPanel title="延期原因矩阵">
-					<DelayReasonMatrix rows={(data?.delayReasonMatrix ?? []) as Array<Record<string, unknown>>} />
+					<DelayReasonMatrix
+						rows={(data?.delayReasonMatrix ?? []) as Array<Record<string, unknown>>}
+						onDrillReason={(dept, reason) => openDrill("delay-reason", { dept, reason })}
+						onDrillDept={(dept) => openDrill("delay-dept", { dept })}
+					/>
 				</TrendPanel>
 			</div>
 

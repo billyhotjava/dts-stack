@@ -10,16 +10,20 @@ import { NativeSelect } from "../../ui/Input/Select";
 import { Input } from "../../ui/Input/Input";
 import type {
 	ProjectCockpitOption,
+	ProjectCockpitSettingsResponse,
 	ProjectCockpitSummaryResponse,
 } from "../../api/analyticsApi";
-import type { ProjectCockpitTheme } from "./projectCockpitQueryState";
-import { parseProjectCockpitQueryState } from "./projectCockpitQueryState";
+import {
+	createProjectCockpitScopeResetPatch,
+	type ProjectCockpitTheme,
+} from "./projectCockpitQueryState";
 import { useProjectCockpitContext } from "./ProjectCockpitContext";
 import OverviewTrendView from "./views/OverviewTrendView";
 import ExecutionView from "./views/ExecutionView";
 import RiskAttributionView from "./views/RiskAttributionView";
 import MajorProjectTreeView from "./views/MajorProjectTreeView";
 import DataSupportView from "./views/DataSupportView";
+import { DrillDownDrawer } from "./components/DrillDownDrawer";
 import "./projectCockpit.css";
 
 const THEME_ITEMS: Array<{ id: ProjectCockpitTheme; label: string }> = [
@@ -32,6 +36,11 @@ const THEME_ITEMS: Array<{ id: ProjectCockpitTheme; label: string }> = [
 
 type Props = {
 	locale: Locale;
+	settings: ProjectCockpitSettingsResponse | null;
+	settingsLoading: boolean;
+	settingsSaving: boolean;
+	settingsError: unknown;
+	onPublishPeriod: (periodStart: string, periodEnd: string) => Promise<void>;
 	summary: ProjectCockpitSummaryResponse | null;
 	summaryLoading: boolean;
 	summaryError: unknown;
@@ -49,18 +58,81 @@ function optionList(options?: ProjectCockpitOption[]) {
 
 export function ProjectCockpitLayout({
 	locale,
+	settings,
+	settingsLoading,
+	settingsSaving,
+	settingsError,
+	onPublishPeriod,
 	summary,
 	summaryLoading,
 	summaryError,
 }: Props) {
-	const { queryState, updateQueryState, setTheme } = useProjectCockpitContext();
+	const { queryState, effectiveQueryState, updateQueryState, setTheme } = useProjectCockpitContext();
 	const hero = summary?.hero;
 	const filters = summary?.filters;
 	const spotlight = summary?.spotlight;
 	const [filterOpen, setFilterOpen] = useState(false);
+	const canPublish = Boolean(settings?.canPublish);
+	const hasPeriod = Boolean(effectiveQueryState.dateFrom && effectiveQueryState.dateTo);
+	const publishedLabel = settings?.updatedAt
+		? `已发布 ${settings.updatedAt}${settings.updatedBy ? ` · ${settings.updatedBy}` : ""}`
+		: "尚未发布统一统计周期";
 
 	return (
 		<div className="project-cockpit">
+			<Card className="project-cockpit__period-card" shadow="sm">
+				<CardBody>
+					<div className="project-cockpit__period-bar">
+						<div className="project-cockpit__period-meta">
+							<div className="project-cockpit__period-title">统一统计周期</div>
+							<div className="project-cockpit__period-hint">
+								项目看板按 t1/t2 统一口径计算，保存后所有人看到同一版报表。
+							</div>
+							<div className="project-cockpit__period-status">{publishedLabel}</div>
+						</div>
+						<div className="project-cockpit__period-inputs">
+							<Input
+								type="date"
+								label="t1 统计开始"
+								value={effectiveQueryState.dateFrom}
+								onChange={(event) => updateQueryState({ dateFrom: event.target.value })}
+								disabled={settingsLoading}
+							/>
+							<Input
+								type="date"
+								label="t2 统计结束"
+								value={effectiveQueryState.dateTo}
+								onChange={(event) => updateQueryState({ dateTo: event.target.value })}
+								disabled={settingsLoading}
+							/>
+						</div>
+						<div className="project-cockpit__period-actions">
+							{canPublish ? (
+								<Button
+									variant="primary"
+									size="sm"
+									loading={settingsSaving}
+									disabled={!hasPeriod || settingsLoading}
+									onClick={() => {
+										if (!effectiveQueryState.dateFrom || !effectiveQueryState.dateTo) {
+											return;
+										}
+										void onPublishPeriod(effectiveQueryState.dateFrom, effectiveQueryState.dateTo).catch(() => {});
+									}}
+								>
+									保存统一口径
+								</Button>
+							) : null}
+							<span className="project-cockpit__period-tip">
+								{canPublish ? "保存后刷新即可同步到所有用户。" : "当前账号可预览统一口径，但不能发布。"}
+							</span>
+						</div>
+					</div>
+				</CardBody>
+			</Card>
+
+			{settingsError ? <ErrorNotice locale={locale} error={settingsError} /> : null}
+
 			<div className="project-cockpit__topbar">
 				<h2 className="project-cockpit__topbar-title" onClick={() => setFilterOpen((prev) => !prev)} role="button" tabIndex={0}>
 					条件筛选 <span className="project-cockpit__topbar-arrow">{filterOpen ? "▾" : "▸"}</span>
@@ -95,32 +167,10 @@ export function ProjectCockpitLayout({
 								onChange={(event) => updateQueryState({ riskLevel: event.target.value })}
 								options={optionList(filters?.riskLevels)}
 							/>
-							<Input
-								type="date"
-								label="计划起始"
-								value={queryState.dateFrom}
-								onChange={(event) => updateQueryState({ dateFrom: event.target.value })}
-							/>
-							<Input
-								type="date"
-								label="计划截止"
-								value={queryState.dateTo}
-								onChange={(event) => updateQueryState({ dateTo: event.target.value })}
-							/>
 							<Button
 								variant="tertiary"
 								size="sm"
-								onClick={() => {
-									const defaults = parseProjectCockpitQueryState(new URLSearchParams());
-									updateQueryState({
-										programId: "",
-										majorProjectId: "",
-										dateFrom: defaults.dateFrom,
-										dateTo: defaults.dateTo,
-										deptId: "",
-										riskLevel: "",
-									});
-								}}
+								onClick={() => updateQueryState(createProjectCockpitScopeResetPatch(queryState))}
 							>
 								重置
 							</Button>
@@ -205,6 +255,7 @@ export function ProjectCockpitLayout({
 					</TabPanel>
 				</TabPanels>
 			</Tabs>
+			<DrillDownDrawer />
 		</div>
 	);
 }

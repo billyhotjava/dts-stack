@@ -127,7 +127,6 @@ public class ModelingSqlModelService {
     }
 
     public List<SqlModelDto> list(UUID planId, String keyword, String activeDeptHeader) {
-        syncWorkspaceModels(activeDeptHeader);
         String activeDept = security.resolveActiveDept(activeDeptHeader);
         boolean instituteScope = security.hasInstituteScope();
         List<ModelingSqlModel> models = planId == null ? repo.findAll() : repo.findByPlanId(planId);
@@ -144,6 +143,10 @@ public class ModelingSqlModelService {
         }
         result.sort((a, b) -> String.valueOf(a.name()).compareToIgnoreCase(String.valueOf(b.name())));
         return result;
+    }
+
+    public void syncWorkspaceModels(String activeDeptHeader) {
+        syncWorkspaceModelsInternal(activeDeptHeader);
     }
 
     public SqlModelDto get(UUID id, String activeDeptHeader) {
@@ -1319,7 +1322,7 @@ public class ModelingSqlModelService {
         return null;
     }
 
-    private void syncWorkspaceModels(String activeDeptHeader) {
+    private void syncWorkspaceModelsInternal(String activeDeptHeader) {
         DbtConfigService.DbtConfigView view = dbtConfigService.loadConfig();
         if (view == null || view.config() == null || !StringUtils.hasText(view.config().projectDir())) {
             return;

@@ -6,6 +6,8 @@ type Props = {
 	nextMilestoneName: string;
 	dueSoonCount: number;
 	busiestDept: string;
+	onDrillOverdue?: () => void;
+	onDrillMilestone?: () => void;
 };
 
 export function ExecutionKpiPanel(props: Props) {
@@ -17,6 +19,7 @@ export function ExecutionKpiPanel(props: Props) {
 				unit="个"
 				hint="当前筛选范围内已经显性延期的节点。"
 				tone={props.overdueTaskCount > 0 ? "error" : "success"}
+				onDrill={props.onDrillOverdue}
 			/>
 			<HealthScoreCard
 				label="最大延期"
@@ -30,6 +33,7 @@ export function ExecutionKpiPanel(props: Props) {
 				value={props.nextMilestoneName || "--"}
 				hint="执行主题默认展示最近一个需要盯紧的里程碑。"
 				tone="info"
+				onDrill={props.onDrillMilestone}
 			/>
 			<HealthScoreCard
 				label="近期节点"

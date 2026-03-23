@@ -16,23 +16,24 @@ mkdir -p "${FAKE_BIN}" "${SOURCE_ROOT}/config" "${TARGET_DIR}/config" "${IMAGES_
 
 cat > "${FAKE_BIN}/docker" <<'EOF_DOCKER'
 #!/usr/bin/env bash
-if [[ "${1:-}" == "compose" && "${2:-}" == "ps" ]]; then
-  if [[ -f "${FAKE_DOCKER_STATE_FILE}" ]]; then
-    printf 'dts-platform\n'
-  fi
-  exit 0
-fi
 if [[ "${1:-}" == "load" && "${2:-}" == "-i" ]]; then
   printf 'load:%s\n' "${3##*/}" >> "${FAKE_DOCKER_EVENTS_FILE}"
   exit 0
 fi
 if [[ "${1:-}" == "compose" ]]; then
   compose_file=""
+  shift
   while [[ $# -gt 0 ]]; do
     case "$1" in
       -f)
         compose_file="$2"
         shift 2
+        ;;
+      ps)
+        if [[ -f "${FAKE_DOCKER_STATE_FILE}" ]]; then
+          printf 'dts-platform\n'
+        fi
+        exit 0
         ;;
       config)
         if [[ "${2:-}" == "--format" && "${3:-}" == "json" ]]; then
@@ -118,7 +119,7 @@ PATH="${FAKE_BIN}:${PATH}" \
   --images-dir "${IMAGES_DIR}" \
   --extra-dir "${EXTRA_DIR}" >/dev/null
 
-if ! grep -Fq 'up:cwd' "${EVENTS_FILE}"; then
+if ! grep -Fq 'up:docker-compose.yml' "${EVENTS_FILE}"; then
   echo "expected upgrade flow to start target stack" >&2
   cat "${EVENTS_FILE}" >&2
   exit 1

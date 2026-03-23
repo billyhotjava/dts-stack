@@ -25,6 +25,31 @@ type WeeklyPoint = {
 	highRiskNodes?: number;
 };
 
+export type KpiTrend = {
+	rate: number;
+	direction: "up" | "down" | "flat";
+};
+
+/**
+ * Compute week-over-week trend for a given KPI key from weekly data.
+ * Compares the last two weeks.
+ */
+export function computeWeeklyKpiTrend(
+	weekly: WeeklyPoint[],
+	metricKey: "completionRate" | "delayedNodes" | "highRiskNodes",
+): KpiTrend | undefined {
+	if (weekly.length < 2) return undefined;
+	const current = weekly[weekly.length - 1];
+	const previous = weekly[weekly.length - 2];
+	const cur = Number((current as Record<string, unknown>)[metricKey] ?? 0);
+	const prev = Number((previous as Record<string, unknown>)[metricKey] ?? 0);
+	if (prev === 0 && cur === 0) return { rate: 0, direction: "flat" };
+	if (prev === 0) return { rate: 1, direction: "up" };
+	const rate = (cur - prev) / Math.abs(prev);
+	if (rate === 0) return { rate: 0, direction: "flat" };
+	return { rate: Math.abs(rate), direction: rate > 0 ? "up" : "down" };
+}
+
 export function buildOverviewTrendSnapshot(
 	kpis: KpiCard[],
 	ranking: RankingRow[],

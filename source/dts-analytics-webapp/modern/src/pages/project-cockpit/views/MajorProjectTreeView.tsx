@@ -14,9 +14,9 @@ import {
 	TrendPanel,
 } from "../components";
 import { useProjectCockpitContext } from "../ProjectCockpitContext";
-import { findTreeNodeById, flattenProjectTree } from "./majorProjectTreeView.helpers";
+import { buildBreadcrumb, findTreeNodeById, flattenProjectTree } from "./majorProjectTreeView.helpers";
 
-function toFilters(state: ReturnType<typeof useProjectCockpitContext>["queryState"]) {
+function toFilters(state: ReturnType<typeof useProjectCockpitContext>["effectiveQueryState"]) {
 	return {
 		programId: state.programId || undefined,
 		majorProjectId: state.majorProjectId || undefined,
@@ -28,21 +28,21 @@ function toFilters(state: ReturnType<typeof useProjectCockpitContext>["queryStat
 }
 
 export default function MajorProjectTreeView({ locale }: { locale: Locale }) {
-	const { queryState, updateQueryState } = useProjectCockpitContext();
+	const { queryState, effectiveQueryState, updateQueryState } = useProjectCockpitContext();
 	const [data, setData] = useState<ProjectCockpitTreeResponse | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<unknown>(null);
 	const [selectedNodeId, setSelectedNodeId] = useState("");
 
 	const filters = useMemo(
-		() => toFilters(queryState),
+		() => toFilters(effectiveQueryState),
 		[
-			queryState.dateFrom,
-			queryState.dateTo,
-			queryState.deptId,
-			queryState.majorProjectId,
-			queryState.programId,
-			queryState.riskLevel,
+			effectiveQueryState.dateFrom,
+			effectiveQueryState.dateTo,
+			effectiveQueryState.deptId,
+			effectiveQueryState.majorProjectId,
+			effectiveQueryState.programId,
+			effectiveQueryState.riskLevel,
 		],
 	);
 
@@ -94,6 +94,11 @@ export default function MajorProjectTreeView({ locale }: { locale: Locale }) {
 		[data?.tree, selectedNodeId],
 	);
 
+	const breadcrumb = useMemo(
+		() => selectedNodeId ? buildBreadcrumb((data?.tree ?? []) as never as Array<ProjectCockpitTreeNode>, selectedNodeId) : [],
+		[data?.tree, selectedNodeId],
+	);
+
 	return (
 		<div className="project-cockpit__view">
 			<div className="project-cockpit__metric-grid">
@@ -135,7 +140,11 @@ export default function MajorProjectTreeView({ locale }: { locale: Locale }) {
 					)}
 				</TrendPanel>
 
-				<ProjectTreeDetailPanel node={selectedNode as ProjectCockpitTreeNode | null} />
+				<ProjectTreeDetailPanel
+					node={selectedNode as ProjectCockpitTreeNode | null}
+					breadcrumb={breadcrumb}
+					onBreadcrumbClick={setSelectedNodeId}
+				/>
 			</div>
 
 			{error ? <ErrorNotice locale={locale} error={error} /> : null}

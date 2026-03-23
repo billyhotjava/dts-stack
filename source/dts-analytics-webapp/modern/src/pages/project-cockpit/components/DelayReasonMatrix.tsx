@@ -2,6 +2,8 @@ import { buildDelayReasonMatrixSummary } from "../views/riskAttributionView.help
 
 type Props = {
 	rows: Array<Record<string, unknown>>;
+	onDrillReason?: (dept: string, reason: string) => void;
+	onDrillDept?: (dept: string) => void;
 };
 
 const REASON_LABELS = {
@@ -15,7 +17,7 @@ const REASON_LABELS = {
 	normal: "正常推进",
 } as const;
 
-export function DelayReasonMatrix({ rows }: Props) {
+export function DelayReasonMatrix({ rows, onDrillReason, onDrillDept }: Props) {
 	const summary = buildDelayReasonMatrixSummary(rows);
 	const reasonKeys = Object.keys(REASON_LABELS) as Array<keyof typeof REASON_LABELS>;
 
@@ -28,10 +30,16 @@ export function DelayReasonMatrix({ rows }: Props) {
 				<span>归因结构</span>
 			</div>
 			{summary.rows.map((row) => {
+				const dept = String(row.dept ?? "-");
 				const dominantKey = (row.dominantReason ?? "normal") as keyof typeof REASON_LABELS;
 				return (
-					<div key={String(row.dept ?? "")} className="project-cockpit__matrix-row">
-						<strong>{String(row.dept ?? "-")}</strong>
+					<div key={dept} className="project-cockpit__matrix-row">
+						<strong
+							className={onDrillDept ? "project-cockpit__matrix-link" : undefined}
+							onClick={onDrillDept ? () => onDrillDept(dept) : undefined}
+						>
+							{dept}
+						</strong>
 						<span>{Number(row.total ?? 0)}</span>
 						<span>{REASON_LABELS[dominantKey] ?? "-"}</span>
 						<div className="project-cockpit__matrix-bars">
@@ -39,7 +47,12 @@ export function DelayReasonMatrix({ rows }: Props) {
 								const label = REASON_LABELS[key];
 								const value = Number(row[key] ?? 0);
 								return value > 0 ? (
-									<span key={key} className="project-cockpit__matrix-pill" title={`${label}: ${value}`}>
+									<span
+										key={key}
+										className={`project-cockpit__matrix-pill${onDrillReason ? " project-cockpit__matrix-pill--clickable" : ""}`}
+										title={`${label}: ${value}`}
+										onClick={onDrillReason ? () => onDrillReason(dept, key) : undefined}
+									>
 										{label} {value}
 									</span>
 								) : null;

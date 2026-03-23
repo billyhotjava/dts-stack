@@ -61,6 +61,7 @@ public class ProjectCockpitService {
 
     public ObjectNode summary(Filters filters) {
         refreshFormalData();
+        List<NodeRow> scoped = applyScopeFilters(filters);
         List<NodeRow> filtered = applyFilters(filters);
         ObjectNode root = objectMapper.createObjectNode();
         ObjectNode hero = root.putObject("hero");
@@ -71,7 +72,7 @@ public class ProjectCockpitService {
 
         root.set("dataState", buildDataState());
         root.set("filters", buildFilters(filters));
-        root.set("kpis", buildSummaryKpis(filtered));
+        root.set("kpis", buildSummaryKpis(scoped, filtered, filters));
         root.set("ranking", buildRanking(filtered));
         root.set("alerts", buildAlerts(filtered));
         root.set("spotlight", buildSpotlight(filtered));
@@ -437,27 +438,54 @@ public class ProjectCockpitService {
         return filtersNode;
     }
 
-    private ArrayNode buildSummaryKpis(List<NodeRow> filtered) {
+    private ArrayNode buildSummaryKpis(List<NodeRow> scopedRows, List<NodeRow> filtered, Filters filters) {
+        OverviewPeriodMetrics metrics = computeOverviewPeriodMetrics(scopedRows, filters);
         ArrayNode kpis = objectMapper.createArrayNode();
         long majorProjectCount = filtered.stream().map(NodeRow::majorProjectId).filter(Objects::nonNull).distinct().count();
         long subprojectCount = filtered.stream().map(NodeRow::subprojectId).filter(Objects::nonNull).distinct().count();
-        long totalNodes = filtered.size();
-        long completedNodes = filtered.stream().filter(NodeRow::completed).count();
         long overdueNodes = filtered.stream().filter(NodeRow::delayed).count();
         long highRiskNodes = filtered.stream().filter(node -> "高".equals(normalizedRisk(node.riskLevel()))).count();
-        long milestoneNodes = filtered.stream().filter(NodeRow::milestone).count();
-        long milestoneDone = filtered.stream().filter(node -> node.milestone() && node.completed()).count();
+        long milestoneCompletedCount = metrics.milestoneOnTimeCount() + metrics.milestoneOverdueCompletedCount();
+        long milestoneDueCount = metrics.milestoneIncompleteCount() + milestoneCompletedCount;
 
         kpis.add(kpi("majorProjectCount", "重大项目数", String.valueOf(majorProjectCount), "个"));
         kpis.add(kpi("subprojectCount", "子项目数", String.valueOf(subprojectCount), "个"));
-        kpis.add(kpi("completionRate", "节点完成率", percent(completedNodes, totalNodes), "%"));
+        kpis.add(kpi("completionRate", "节点完成率", percentValue(
+                metrics.completedNodeCount(),
+                metrics.dueNodeCount() + metrics.outsideCompletedCount()), "%"));
         kpis.add(kpi("overdueNodeCount", "延期节点数", String.valueOf(overdueNodes), "个"));
         kpis.add(kpi("highRiskNodeCount", "高风险节点数", String.valueOf(highRiskNodes), "个"));
-        kpis.add(kpi("milestoneCompletionRate", "里程碑完成率", percent(milestoneDone, milestoneNodes), "%"));
+        kpis.add(kpi("milestoneCompletionRate", "里程碑完成率", percentValue(
+                milestoneCompletedCount,
+                milestoneDueCount), "%"));
         return kpis;
     }
 
     private ArrayNode buildScreenOverviewKpis(List<NodeRow> scopedRows, Filters filters) {
+        OverviewPeriodMetrics metrics = computeOverviewPeriodMetrics(scopedRows, filters);
+
+        ArrayNode kpis = objectMapper.createArrayNode();
+        kpis.add(kpi("periodNodeTotalCount", "项目本周期节点总数", String.valueOf(metrics.periodNodeTotalCount()), "个"));
+        kpis.add(kpi("pendingNormalCount", "正常待完成", String.valueOf(metrics.pendingNormalCount()), "个"));
+        kpis.add(kpi("dueNodeCount", "项目本周期节点已到时间节点总数", String.valueOf(metrics.dueNodeCount()), "个"));
+        kpis.add(kpi("outsideCompletedCount", "项目本周期以外完成节点总数", String.valueOf(metrics.outsideCompletedCount()), "个"));
+        kpis.add(kpi("incompleteNodeCount", "项目本周期节点未完成总数", String.valueOf(metrics.incompleteNodeCount()), "个"));
+        kpis.add(kpi("onTimeCount", "节点按时完成数", String.valueOf(metrics.onTimeCount()), "个"));
+        kpis.add(kpi("overdueCompletedCount", "节点超期完成数", String.valueOf(metrics.overdueCompletedCount()), "个"));
+        kpis.add(kpi("completedNodeCount", "节点完成总数", String.valueOf(metrics.completedNodeCount()), "个"));
+        kpis.add(kpi("completionRate", "节点完成百分比", percentValue(
+                metrics.completedNodeCount(),
+                metrics.dueNodeCount() + metrics.outsideCompletedCount()), "%"));
+        kpis.add(kpi("onTimeRate", "节点按时完成百分比", percentValue(
+                metrics.onTimeCount(),
+                metrics.dueNodeCount() + metrics.outsideCompletedCount()), "%"));
+        kpis.add(kpi("overdueCompletionRate", "超期完成节点百分比", percentValue(
+                metrics.overdueCompletedCount() + metrics.outsideCompletedCount(),
+                metrics.periodNodeTotalCount() + metrics.outsideCompletedCount()), "%"));
+        return kpis;
+    }
+
+    private OverviewPeriodMetrics computeOverviewPeriodMetrics(List<NodeRow> scopedRows, Filters filters) {
         List<NodeRow> periodRows = filterPlannedInPeriod(scopedRows, filters);
         List<NodeRow> outsideCompletedRows = filterOutsideCompletedRows(scopedRows, filters, periodRows);
         long periodNodeTotalCount = periodRows.size();
@@ -466,23 +494,24 @@ public class ProjectCockpitService {
         long incompleteNodeCount = periodRows.stream().filter(NodeRow::openRisk).count();
         long onTimeCount = periodRows.stream().filter(NodeRow::onTimeCompleted).count();
         long overdueCompletedCount = periodRows.stream().filter(NodeRow::overdueCompleted).count();
-        long completedNodeCount = onTimeCount + overdueCompletedCount + outsideCompletedRows.size();
+        long outsideCompletedCount = outsideCompletedRows.size();
+        long completedNodeCount = onTimeCount + overdueCompletedCount + outsideCompletedCount;
+        long milestoneOnTimeCount = periodRows.stream().filter(row -> row.milestoneNode() && row.onTimeCompleted()).count();
+        long milestoneOverdueCompletedCount = periodRows.stream().filter(row -> row.milestoneNode() && row.overdueCompleted()).count();
+        long milestoneIncompleteCount = periodRows.stream().filter(row -> row.milestoneNode() && row.openRisk()).count();
 
-        ArrayNode kpis = objectMapper.createArrayNode();
-        kpis.add(kpi("periodNodeTotalCount", "项目本周期节点总数", String.valueOf(periodNodeTotalCount), "个"));
-        kpis.add(kpi("pendingNormalCount", "正常待完成", String.valueOf(pendingNormalCount), "个"));
-        kpis.add(kpi("dueNodeCount", "项目本周期节点已到时间节点总数", String.valueOf(dueNodeCount), "个"));
-        kpis.add(kpi("outsideCompletedCount", "项目本周期以外完成节点总数", String.valueOf(outsideCompletedRows.size()), "个"));
-        kpis.add(kpi("incompleteNodeCount", "项目本周期节点未完成总数", String.valueOf(incompleteNodeCount), "个"));
-        kpis.add(kpi("onTimeCount", "节点按时完成数", String.valueOf(onTimeCount), "个"));
-        kpis.add(kpi("overdueCompletedCount", "节点超期完成数", String.valueOf(overdueCompletedCount), "个"));
-        kpis.add(kpi("completedNodeCount", "节点完成总数", String.valueOf(completedNodeCount), "个"));
-        kpis.add(kpi("completionRate", "节点完成百分比", percentValue(completedNodeCount, dueNodeCount + outsideCompletedRows.size()), "%"));
-        kpis.add(kpi("onTimeRate", "节点按时完成百分比", percentValue(onTimeCount, dueNodeCount + outsideCompletedRows.size()), "%"));
-        kpis.add(kpi("overdueCompletionRate", "超期完成节点百分比", percentValue(
-                overdueCompletedCount + outsideCompletedRows.size(),
-                periodNodeTotalCount + outsideCompletedRows.size()), "%"));
-        return kpis;
+        return new OverviewPeriodMetrics(
+                periodNodeTotalCount,
+                pendingNormalCount,
+                dueNodeCount,
+                outsideCompletedCount,
+                incompleteNodeCount,
+                onTimeCount,
+                overdueCompletedCount,
+                completedNodeCount,
+                milestoneOnTimeCount,
+                milestoneOverdueCompletedCount,
+                milestoneIncompleteCount);
     }
 
     private ArrayNode buildRanking(List<NodeRow> filtered) {
@@ -1347,6 +1376,19 @@ public class ProjectCockpitService {
             LocalDate dateTo,
             String deptId,
             String riskLevel) {}
+
+    private record OverviewPeriodMetrics(
+            long periodNodeTotalCount,
+            long pendingNormalCount,
+            long dueNodeCount,
+            long outsideCompletedCount,
+            long incompleteNodeCount,
+            long onTimeCount,
+            long overdueCompletedCount,
+            long completedNodeCount,
+            long milestoneOnTimeCount,
+            long milestoneOverdueCompletedCount,
+            long milestoneIncompleteCount) {}
 
     private record MajorProjectRow(
             String majorProjectId,

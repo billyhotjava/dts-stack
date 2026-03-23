@@ -15,18 +15,34 @@ mkdir -p "${FAKE_BIN}" "${SOURCE_ROOT}" "${TARGET_DIR}/services/dts-pg/data" "${
 
 cat > "${FAKE_BIN}/docker" <<'EOF_DOCKER'
 #!/usr/bin/env bash
-if [[ "${1:-}" == "compose" && "${2:-}" == "ps" ]]; then
-  if [[ -f "${FAKE_DOCKER_STATE_FILE}" ]]; then
-    printf 'dts-platform\n'
-  fi
-  exit 0
-fi
-if [[ "${1:-}" == "compose" && "${2:-}" == "up" && "${3:-}" == "-d" ]]; then
-  : > "${FAKE_DOCKER_STATE_FILE}"
-  exit 0
-fi
 if [[ "${1:-}" == "load" && "${2:-}" == "-i" ]]; then
   exit 0
+fi
+if [[ "${1:-}" == "compose" ]]; then
+  shift
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -f)
+        shift 2
+        ;;
+      ps)
+        if [[ -f "${FAKE_DOCKER_STATE_FILE}" ]]; then
+          printf 'dts-platform\n'
+        fi
+        exit 0
+        ;;
+      up)
+        if [[ "${2:-}" == "-d" ]]; then
+          : > "${FAKE_DOCKER_STATE_FILE}"
+          exit 0
+        fi
+        shift
+        ;;
+      *)
+        shift
+        ;;
+    esac
+  done
 fi
 exit 0
 EOF_DOCKER
@@ -86,6 +102,16 @@ if ! grep -Fq 'keep-runtime-data' "${TARGET_DIR}/services/dts-pg/data/state.txt"
   exit 1
 fi
 
+if [[ ! -f "${BACKUP_DIR}/services/dts-pg/data/state.txt" ]]; then
+  echo "expected postgres data directory to be cold-backed up into backup dir" >&2
+  exit 1
+fi
+
+if ! grep -Fq 'keep-runtime-data' "${BACKUP_DIR}/services/dts-pg/data/state.txt"; then
+  echo "expected postgres cold backup to preserve original runtime data" >&2
+  exit 1
+fi
+
 python3 - <<'PY' "${EXTRA_DIR}/rollback-manifest.json"
 import json
 import sys
@@ -95,4 +121,5 @@ with open(sys.argv[1], "r", encoding="utf-8") as fh:
 
 assert ".env" in data["backedUpFiles"], data
 assert "services/dts-pg/data" in data["protectedDataDirs"], data
+assert "services/dts-pg/data" in data["backedUpDataDirs"], data
 PY

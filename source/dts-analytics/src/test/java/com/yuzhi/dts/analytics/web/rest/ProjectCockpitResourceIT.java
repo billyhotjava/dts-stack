@@ -1,10 +1,13 @@
 package com.yuzhi.dts.analytics.web.rest;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.yuzhi.dts.analytics.domain.AnalyticsSetting;
 import com.yuzhi.dts.analytics.domain.AnalyticsUser;
+import com.yuzhi.dts.analytics.repository.AnalyticsSettingRepository;
 import com.yuzhi.dts.analytics.repository.AnalyticsUserRepository;
 import com.yuzhi.dts.analytics.service.AnalyticsSessionService;
 import com.yuzhi.dts.analytics.service.projectcockpit.ProjectCockpitTopicBindingGateway;
@@ -16,6 +19,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
@@ -34,6 +38,9 @@ class ProjectCockpitResourceIT {
 
     @Autowired
     private AnalyticsUserRepository userRepository;
+
+    @Autowired
+    private AnalyticsSettingRepository settingRepository;
 
     @Autowired
     private AnalyticsSessionService sessionService;
@@ -117,8 +124,8 @@ class ProjectCockpitResourceIT {
 
         mockMvc.perform(get("/api/project-cockpit/summary").cookie(sessionCookie))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.hero.title").value("项目看板系统"))
-                .andExpect(jsonPath("$.hero.subtitle", Matchers.containsString("暂无正式数据")))
+                .andExpect(jsonPath("$.hero.title").value("项目看板"))
+                .andExpect(jsonPath("$.dataState.message", Matchers.containsString("暂无正式数据")))
                 .andExpect(jsonPath("$.dataState.ready").value(false))
                 .andExpect(jsonPath("$.kpis[0].key").value("majorProjectCount"));
     }
@@ -274,6 +281,59 @@ class ProjectCockpitResourceIT {
     }
 
     @Test
+    void projectCockpitShouldReturnPublishedPeriodSettings() throws Exception {
+        savePublishedPeriod("2026-03-01", "2026-03-31", "admin@example.com");
+        Cookie sessionCookie = authenticate();
+
+        mockMvc.perform(get("/api/project-cockpit/settings").cookie(sessionCookie))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.periodStart").value("2026-03-01"))
+                .andExpect(jsonPath("$.periodEnd").value("2026-03-31"))
+                .andExpect(jsonPath("$.updatedBy").value("admin@example.com"))
+                .andExpect(jsonPath("$.updatedAt").isString())
+                .andExpect(jsonPath("$.canPublish").value(true));
+    }
+
+    @Test
+    void projectCockpitShouldAllowSuperuserToPublishPeriodSettings() throws Exception {
+        Cookie sessionCookie = authenticate();
+
+        mockMvc.perform(put("/api/project-cockpit/settings")
+                        .cookie(sessionCookie)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "periodStart": "2026-03-01",
+                                  "periodEnd": "2026-03-31"
+                                }
+                                """))
+                .andExpect(status().isNoContent());
+
+        mockMvc.perform(get("/api/project-cockpit/settings").cookie(sessionCookie))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.periodStart").value("2026-03-01"))
+                .andExpect(jsonPath("$.periodEnd").value("2026-03-31"))
+                .andExpect(jsonPath("$.updatedBy").value("admin@example.com"))
+                .andExpect(jsonPath("$.canPublish").value(true));
+    }
+
+    @Test
+    void projectCockpitShouldRejectNonSuperuserPublishingPeriodSettings() throws Exception {
+        Cookie sessionCookie = authenticateRegularUser();
+
+        mockMvc.perform(put("/api/project-cockpit/settings")
+                        .cookie(sessionCookie)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "periodStart": "2026-03-01",
+                                  "periodEnd": "2026-03-31"
+                                }
+                                """))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void projectCockpitScreenMetricsShouldFollowProject3Definitions() throws Exception {
         seedModeledBatch();
         seedProject3MetricRows();
@@ -350,6 +410,58 @@ class ProjectCockpitResourceIT {
                 .andExpect(jsonPath("$.changeKpis[4].value").value("33.33"))
                 .andExpect(jsonPath("$.changeKpis[5].key").value("overdueRate"))
                 .andExpect(jsonPath("$.changeKpis[5].value").value("50.0"));
+    }
+
+    @Test
+    void projectCockpitSummaryMetricsShouldFollowPublishedPeriodDefinitions() throws Exception {
+        seedModeledBatch();
+        seedProject3MetricRows();
+        Cookie sessionCookie = authenticate();
+
+        mockMvc.perform(get("/api/project-cockpit/summary")
+                        .cookie(sessionCookie)
+                        .param("dateFrom", "2026-03-01")
+                        .param("dateTo", "2026-03-31"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.kpis[0].key").value("majorProjectCount"))
+                .andExpect(jsonPath("$.kpis[0].value").value("1"))
+                .andExpect(jsonPath("$.kpis[1].key").value("subprojectCount"))
+                .andExpect(jsonPath("$.kpis[1].value").value("4"))
+                .andExpect(jsonPath("$.kpis[2].key").value("completionRate"))
+                .andExpect(jsonPath("$.kpis[2].value").value("37.5"))
+                .andExpect(jsonPath("$.kpis[3].key").value("overdueNodeCount"))
+                .andExpect(jsonPath("$.kpis[3].value").value("6"))
+                .andExpect(jsonPath("$.kpis[4].key").value("highRiskNodeCount"))
+                .andExpect(jsonPath("$.kpis[4].value").value("3"))
+                .andExpect(jsonPath("$.kpis[5].key").value("milestoneCompletionRate"))
+                .andExpect(jsonPath("$.kpis[5].value").value("66.67"));
+    }
+
+    @Test
+    void projectCockpitShouldFallbackToPublishedPeriodWhenDatesAreOmitted() throws Exception {
+        seedModeledBatch();
+        seedProject3MetricRows();
+        savePublishedPeriod("2026-03-01", "2026-03-31", "admin@example.com");
+        Cookie sessionCookie = authenticate();
+
+        mockMvc.perform(get("/api/project-cockpit/screen/overview").cookie(sessionCookie))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.filters.current.dateFrom").value("2026-03-01"))
+                .andExpect(jsonPath("$.filters.current.dateTo").value("2026-03-31"))
+                .andExpect(jsonPath("$.kpis[0].key").value("periodNodeTotalCount"))
+                .andExpect(jsonPath("$.kpis[0].value").value("8"))
+                .andExpect(jsonPath("$.kpis[2].key").value("dueNodeCount"))
+                .andExpect(jsonPath("$.kpis[2].value").value("7"))
+                .andExpect(jsonPath("$.kpis[3].key").value("outsideCompletedCount"))
+                .andExpect(jsonPath("$.kpis[3].value").value("1"))
+                .andExpect(jsonPath("$.kpis[7].key").value("completedNodeCount"))
+                .andExpect(jsonPath("$.kpis[7].value").value("3"))
+                .andExpect(jsonPath("$.kpis[8].key").value("completionRate"))
+                .andExpect(jsonPath("$.kpis[8].value").value("37.5"))
+                .andExpect(jsonPath("$.kpis[9].key").value("onTimeRate"))
+                .andExpect(jsonPath("$.kpis[9].value").value("12.5"))
+                .andExpect(jsonPath("$.kpis[10].key").value("overdueCompletionRate"))
+                .andExpect(jsonPath("$.kpis[10].value").value("22.22"));
     }
 
     private void seedModeledBatch() {
@@ -774,17 +886,41 @@ class ProjectCockpitResourceIT {
     }
 
     private Cookie authenticate() {
-        AnalyticsUser admin = userRepository.findByEmailIgnoreCase("admin@example.com").orElseGet(() -> {
+        return authenticate("admin@example.com", "Admin", true);
+    }
+
+    private Cookie authenticateRegularUser() {
+        return authenticate("analyst@example.com", "Analyst", false);
+    }
+
+    private Cookie authenticate(String email, String firstName, boolean superuser) {
+        AnalyticsUser user = userRepository.findByEmailIgnoreCase(email).orElseGet(() -> {
             AnalyticsUser row = new AnalyticsUser();
-            row.setEmail("admin@example.com");
-            row.setFirstName("Admin");
+            row.setEmail(email);
+            row.setFirstName(firstName);
             row.setLastName("User");
             row.setPasswordHash("test-hash");
-            row.setSuperuser(true);
+            row.setSuperuser(superuser);
             row.setActive(true);
             return userRepository.save(row);
         });
-        String sessionId = sessionService.createSession(admin.getId()).toString();
+        String sessionId = sessionService.createSession(user.getId()).toString();
         return new Cookie("metabase.SESSION", sessionId);
+    }
+
+    private void savePublishedPeriod(String periodStart, String periodEnd, String updatedBy) {
+        AnalyticsSetting setting = settingRepository.findById("project-cockpit-period").orElseGet(() -> {
+            AnalyticsSetting row = new AnalyticsSetting();
+            row.setSettingKey("project-cockpit-period");
+            return row;
+        });
+        setting.setSettingValue("""
+                {
+                  "periodStart": "%s",
+                  "periodEnd": "%s",
+                  "updatedBy": "%s"
+                }
+                """.formatted(periodStart, periodEnd, updatedBy));
+        settingRepository.save(setting);
     }
 }

@@ -11,7 +11,7 @@ import { DataSupportCard } from "../components";
 import { useProjectCockpitContext } from "../ProjectCockpitContext";
 import { buildDataSupportSnapshot } from "./dataSupportView.helpers";
 
-function toFilters(state: ReturnType<typeof useProjectCockpitContext>["queryState"]) {
+function toFilters(state: ReturnType<typeof useProjectCockpitContext>["effectiveQueryState"]) {
 	return {
 		programId: state.programId || undefined,
 		majorProjectId: state.majorProjectId || undefined,
@@ -30,20 +30,20 @@ function toTable(rows: Array<Record<string, unknown>>, columns: Array<{ key: str
 }
 
 export default function DataSupportView({ locale }: { locale: Locale }) {
-	const { queryState } = useProjectCockpitContext();
+	const { effectiveQueryState } = useProjectCockpitContext();
 	const [data, setData] = useState<ProjectCockpitDataSupportResponse | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<unknown>(null);
 
 	const filters = useMemo(
-		() => toFilters(queryState),
+		() => toFilters(effectiveQueryState),
 		[
-			queryState.dateFrom,
-			queryState.dateTo,
-			queryState.deptId,
-			queryState.majorProjectId,
-			queryState.programId,
-			queryState.riskLevel,
+			effectiveQueryState.dateFrom,
+			effectiveQueryState.dateTo,
+			effectiveQueryState.deptId,
+			effectiveQueryState.majorProjectId,
+			effectiveQueryState.programId,
+			effectiveQueryState.riskLevel,
 		],
 	);
 

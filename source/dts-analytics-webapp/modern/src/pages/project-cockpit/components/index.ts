@@ -6,3 +6,4 @@ export { ProjectGanttBoard } from "./ProjectGanttBoard";
 export { ProjectTreeProgressBoard } from "./ProjectTreeProgressBoard";
 export { ProjectTreeDetailPanel } from "./ProjectTreeDetailPanel";
 export { DataSupportCard } from "./DataSupportCard";
+export { DrillDownDrawer } from "./DrillDownDrawer";

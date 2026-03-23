@@ -380,8 +380,72 @@ class EtlResourceTest {
             "BIADMIN"
         );
 
-        verify(dbtAssetSyncService).syncFromManifest();
-        verify(dbtRunResultService).syncFromRunResults();
+        verify(dbtAssetSyncService, never()).syncFromManifest();
+        verify(dbtRunResultService, never()).syncFromRunResults();
+        verify(sqlModelRepository, never()).saveAll(any());
+    }
+
+    @Test
+    void triggerDbtTest_shouldNotUpdateModelStatusImmediatelyAfterTrigger() {
+        DbtConfigService dbtConfigService = mock(DbtConfigService.class);
+        DbtManifestService manifestService = mock(DbtManifestService.class);
+        DbtSourceService dbtSourceService = mock(DbtSourceService.class);
+        DbtAssetSyncService dbtAssetSyncService = mock(DbtAssetSyncService.class);
+        DbtDagService dbtDagService = mock(DbtDagService.class);
+        DbtPreviewService dbtPreviewService = mock(DbtPreviewService.class);
+        DbtOutputRelationService dbtOutputRelationService = mock(DbtOutputRelationService.class);
+        DbtRunResultService dbtRunResultService = mock(DbtRunResultService.class);
+        DbtQualityGateService dbtQualityGateService = mock(DbtQualityGateService.class);
+        DbtReleaseGateService dbtReleaseGateService = mock(DbtReleaseGateService.class);
+        TopicBindingRuntimeService topicBindingRuntimeService = mock(TopicBindingRuntimeService.class);
+        DbtArtifactSyncState dbtArtifactSyncState = new DbtArtifactSyncState();
+        AirflowClient airflowClient = mock(AirflowClient.class);
+        AirflowProperties airflowProperties = new AirflowProperties();
+        airflowProperties.setEnabled(true);
+        airflowProperties.setDagId("dbt_load");
+        airflowProperties.setDagReadyWaitSeconds(0);
+        airflowProperties.setDagReadyPollSeconds(0);
+        ExternalRunLogService externalRunLogService = mock(ExternalRunLogService.class);
+        AuditService auditService = mock(AuditService.class);
+        ModelingSqlModelRepository sqlModelRepository = mock(ModelingSqlModelRepository.class);
+
+        when(dbtDagService.ensureDagForSelector("tag:project-management")).thenReturn("dwh_biadmin_dbt_manual");
+        when(dbtSourceService.refreshOdsSources()).thenReturn(DbtSourceService.DbtSourceRefreshResult.success("/tmp/ods_sources.yml", 1));
+        when(topicBindingRuntimeService.compileRuntimeArtifacts()).thenReturn(
+            new TopicBindingRuntimeService.RuntimeCompilationResult(true, "/tmp/topic_sources.yml", 0, Map.of(), List.of())
+        );
+        when(airflowClient.getDag("dwh_biadmin_dbt_manual"))
+            .thenReturn(java.util.Optional.of(Map.of("dag_id", "dwh_biadmin_dbt_manual", "is_paused", false)));
+        when(airflowClient.triggerDag(eq("dwh_biadmin_dbt_manual"), any()))
+            .thenReturn(java.util.Optional.of(Map.of("dag_run_id", "run-1", "state", "queued")));
+
+        EtlResource resource = new EtlResource(
+            dbtConfigService,
+            manifestService,
+            dbtSourceService,
+            dbtAssetSyncService,
+            dbtDagService,
+            dbtPreviewService,
+            dbtOutputRelationService,
+            dbtRunResultService,
+            dbtQualityGateService,
+            dbtReleaseGateService,
+            topicBindingRuntimeService,
+            dbtArtifactSyncState,
+            airflowClient,
+            airflowProperties,
+            externalRunLogService,
+            auditService,
+            new ObjectMapper(),
+            sqlModelRepository
+        );
+
+        resource.triggerDbtTest(
+            new EtlResource.DbtRunRequest("tag:project-management", "tag:project-management", "dev", "test", Map.of(), null, null, null),
+            "BIADMIN"
+        );
+
+        verify(sqlModelRepository, never()).saveAll(any());
     }
 
     @Test

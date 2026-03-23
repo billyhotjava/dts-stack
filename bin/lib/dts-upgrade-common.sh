@@ -32,18 +32,41 @@ upgrade_require_file() {
   [[ -f "${path}" ]] || upgrade_die "${label} file not found: ${path}"
 }
 
+upgrade_env_value_from_file() {
+  local env_file="$1"
+  local key="$2"
+  local line
+
+  [[ -f "${env_file}" ]] || return 1
+  while IFS= read -r line || [[ -n "${line}" ]]; do
+    if [[ "${line}" =~ ^[[:space:]]*(export[[:space:]]+)?${key}=(.*)$ ]]; then
+      printf '%s\n' "${BASH_REMATCH[2]}"
+      return 0
+    fi
+  done < "${env_file}"
+  return 1
+}
+
 upgrade_init_logs() {
   local target_dir="$1"
   local timestamp="$2"
+  upgrade_init_action_logs "${target_dir}" "${timestamp}" "upgrade"
+}
+
+upgrade_init_action_logs() {
+  local target_dir="$1"
+  local timestamp="$2"
+  local prefix="$3"
 
   mkdir -p "${target_dir}/logs"
-  UPGRADE_LOG_FILE="${target_dir}/logs/upgrade-${timestamp}.log"
-  UPGRADE_SUMMARY_FILE="${target_dir}/logs/upgrade-${timestamp}.summary.md"
+  UPGRADE_LOG_FILE="${target_dir}/logs/${prefix}-${timestamp}.log"
+  UPGRADE_SUMMARY_FILE="${target_dir}/logs/${prefix}-${timestamp}.summary.md"
   : > "${UPGRADE_LOG_FILE}"
   cat > "${UPGRADE_SUMMARY_FILE}" <<EOF_SUMMARY
 # DTS Upgrade Summary
 
 - timestamp: ${timestamp}
+- action: ${prefix}
 - status: preflight-ready
 EOF_SUMMARY
 }
@@ -71,6 +94,27 @@ upgrade_append_unique_line() {
   fi
 }
 
+upgrade_manifest_list_field() {
+  local manifest_file="$1"
+  local field_name="$2"
+
+  python3 - <<'PY' "${manifest_file}" "${field_name}"
+import json
+import sys
+
+manifest_file, field_name = sys.argv[1:3]
+with open(manifest_file, "r", encoding="utf-8") as fh:
+    data = json.load(fh)
+
+items = data.get(field_name) or []
+if not isinstance(items, list):
+    raise SystemExit(f"manifest field must be a list: {field_name}")
+
+for item in items:
+    print(item)
+PY
+}
+
 upgrade_init_backup_state() {
   local target_dir="$1"
   local timestamp="$2"
@@ -78,10 +122,12 @@ upgrade_init_backup_state() {
   UPGRADE_BACKUP_DIR="${target_dir}/backups/upgrade-${timestamp}"
   UPGRADE_ROLLBACK_FILES_LIST="${UPGRADE_BACKUP_DIR}/.rollback-files.list"
   UPGRADE_PROTECTED_DIRS_LIST="${UPGRADE_BACKUP_DIR}/.protected-dirs.list"
+  UPGRADE_BACKED_UP_DATA_DIRS_LIST="${UPGRADE_BACKUP_DIR}/.backed-up-data-dirs.list"
 
   mkdir -p "${UPGRADE_BACKUP_DIR}"
   : > "${UPGRADE_ROLLBACK_FILES_LIST}"
   : > "${UPGRADE_PROTECTED_DIRS_LIST}"
+  : > "${UPGRADE_BACKED_UP_DATA_DIRS_LIST}"
 
   if [[ -d "${target_dir}/services/dts-pg/data" ]]; then
     upgrade_append_unique_line "${UPGRADE_PROTECTED_DIRS_LIST}" "services/dts-pg/data"
@@ -118,12 +164,13 @@ upgrade_write_rollback_manifests() {
   python3 - <<'PY' \
     "${UPGRADE_ROLLBACK_FILES_LIST}" \
     "${UPGRADE_PROTECTED_DIRS_LIST}" \
+    "${UPGRADE_BACKED_UP_DATA_DIRS_LIST}" \
     "${backup_manifest}" \
     "${extra_manifest}"
 import json
 import sys
 
-files_list, dirs_list, backup_manifest, extra_manifest = sys.argv[1:5]
+files_list, dirs_list, backed_up_dirs_list, backup_manifest, extra_manifest = sys.argv[1:6]
 
 def read_lines(path):
     with open(path, "r", encoding="utf-8") as fh:
@@ -132,6 +179,7 @@ def read_lines(path):
 payload = {
     "backedUpFiles": read_lines(files_list),
     "protectedDataDirs": read_lines(dirs_list),
+    "backedUpDataDirs": read_lines(backed_up_dirs_list),
 }
 
 for output in (backup_manifest, extra_manifest):
@@ -147,12 +195,117 @@ upgrade_set_state() {
   upgrade_append_summary "- state ${state}"
 }
 
+upgrade_detect_mode() {
+  local source_root="$1"
+  local target_dir="$2"
+  local target_env="${target_dir}/.env"
+  local legacy_stack
+  local deploy_mode
+
+  UPGRADE_MODE="single"
+  UPGRADE_PRECHECK_COMPOSE_FILES=()
+  UPGRADE_RUNTIME_COMPOSE_FILES=()
+
+  legacy_stack="$(upgrade_env_value_from_file "${target_env}" "LEGACY_STACK" || true)"
+  deploy_mode="$(upgrade_env_value_from_file "${target_env}" "DEPLOY_MODE" || true)"
+
+  if [[ "${legacy_stack}" == "true" ]]; then
+    UPGRADE_MODE="legacy"
+    UPGRADE_PRECHECK_COMPOSE_FILES=("docker-compose.legacy.yml")
+    UPGRADE_RUNTIME_COMPOSE_FILES=("docker-compose.legacy.yml")
+  else
+    case "${deploy_mode:-single}" in
+      ""|single)
+        UPGRADE_MODE="single"
+        UPGRADE_PRECHECK_COMPOSE_FILES=("docker-compose.yml")
+        if [[ -f "${target_dir}/docker-compose-app.yml" ]]; then
+          UPGRADE_PRECHECK_COMPOSE_FILES+=("docker-compose-app.yml")
+        fi
+        UPGRADE_RUNTIME_COMPOSE_FILES=("docker-compose.yml")
+        if [[ -f "${target_dir}/docker-compose-app.yml" || -f "${source_root}/docker-compose-app.yml" ]]; then
+          UPGRADE_RUNTIME_COMPOSE_FILES+=("docker-compose-app.yml")
+        fi
+        ;;
+      *)
+        upgrade_die "unsupported DEPLOY_MODE for in-place upgrade: ${deploy_mode}"
+        ;;
+    esac
+  fi
+
+  upgrade_append_log "mode=${UPGRADE_MODE} precheck_compose=${UPGRADE_PRECHECK_COMPOSE_FILES[*]} runtime_compose=${UPGRADE_RUNTIME_COMPOSE_FILES[*]}"
+  upgrade_append_summary "- mode: ${UPGRADE_MODE}"
+  upgrade_append_summary "- compose files: ${UPGRADE_RUNTIME_COMPOSE_FILES[*]}"
+}
+
+upgrade_compose_cmd() {
+  local target_dir="$1"
+  shift
+  (
+    cd "${target_dir}"
+    docker compose "$@"
+  )
+}
+
+upgrade_run_target_compose() {
+  local target_dir="$1"
+  local files_var="$2"
+  shift 2
+  local -a cmd=()
+  local compose_file
+  local -n compose_files_ref="${files_var}"
+
+  for compose_file in "${compose_files_ref[@]}"; do
+    cmd+=(-f "${compose_file}")
+  done
+  cmd+=("$@")
+  upgrade_compose_cmd "${target_dir}" "${cmd[@]}"
+}
+
+upgrade_postgres_target_major() {
+  local source_root="$1"
+  local source_env="${source_root}/.env"
+  local image_postgres
+
+  image_postgres="$(upgrade_env_value_from_file "${source_env}" "IMAGE_POSTGRES" || true)"
+  if [[ -z "${image_postgres}" && -f "${source_root}/imgversion.conf" ]]; then
+    image_postgres="$(grep -E '^IMAGE_POSTGRES=' "${source_root}/imgversion.conf" | head -n1 | cut -d= -f2- | tr -d '\r' || true)"
+  fi
+  [[ -n "${image_postgres}" ]] || return 1
+  if [[ "${image_postgres}" =~ :([0-9]+)(\.[0-9]+)?$ ]]; then
+    printf '%s\n' "${BASH_REMATCH[1]}"
+    return 0
+  fi
+  return 1
+}
+
+upgrade_check_postgres_compatibility() {
+  local source_root="$1"
+  local target_dir="$2"
+  local pg_version_file="${target_dir}/services/dts-pg/data/pgdata/PG_VERSION"
+  local current_major
+  local target_major
+
+  if [[ ! -f "${pg_version_file}" ]]; then
+    upgrade_append_log "postgres compatibility skipped: no PG_VERSION file"
+    upgrade_append_summary "- postgres compatibility: skipped (no existing PG_VERSION)"
+    return 0
+  fi
+
+  current_major="$(tr -d '[:space:]' < "${pg_version_file}")"
+  target_major="$(upgrade_postgres_target_major "${source_root}" || true)"
+  [[ -n "${target_major}" ]] || upgrade_die "unable to determine target postgres major version"
+
+  if [[ "${current_major}" != "${target_major}" ]]; then
+    upgrade_die "postgres major version mismatch: current=${current_major} target=${target_major}"
+  fi
+
+  upgrade_append_log "postgres compatibility ok: current=${current_major} target=${target_major}"
+  upgrade_append_summary "- postgres compatibility: ok (${current_major} -> ${target_major})"
+}
+
 upgrade_start_target_stack() {
   local target_dir="$1"
-  (
-    cd "${target_dir}" &&
-      docker compose up -d >/dev/null
-  )
+  upgrade_run_target_compose "${target_dir}" UPGRADE_RUNTIME_COMPOSE_FILES up -d >/dev/null
   upgrade_append_log "target stack started"
 }
 
@@ -160,10 +313,7 @@ upgrade_postcheck() {
   local target_dir="$1"
   local running_services
 
-  running_services="$(
-    cd "${target_dir}" &&
-      docker compose ps --status running --services 2>/dev/null || true
-  )"
+  running_services="$(upgrade_run_target_compose "${target_dir}" UPGRADE_RUNTIME_COMPOSE_FILES ps --status running --services 2>/dev/null || true)"
   if [[ -z "${running_services//[$'\t\r\n ']/}" ]]; then
     upgrade_die "postcheck found no running services"
   fi
@@ -187,18 +337,90 @@ status=preflight-ready
 EOF_LOCK
 }
 
+upgrade_remove_lock() {
+  local target_dir="$1"
+  rm -f "${target_dir}/.upgrade-lock"
+}
+
+upgrade_backup_postgres_data_dir() {
+  local target_dir="$1"
+  local relative_dir="services/dts-pg/data"
+  local source_dir="${target_dir}/${relative_dir}"
+  local backup_dir="${UPGRADE_BACKUP_DIR}/${relative_dir}"
+
+  if [[ ! -d "${source_dir}" ]]; then
+    return 0
+  fi
+  if [[ -d "${backup_dir}" ]]; then
+    return 0
+  fi
+
+  mkdir -p "$(dirname "${backup_dir}")"
+  cp -a "${source_dir}" "${backup_dir}"
+  upgrade_append_unique_line "${UPGRADE_BACKED_UP_DATA_DIRS_LIST}" "${relative_dir}"
+  upgrade_append_log "postgres cold backup created ${relative_dir}"
+  upgrade_append_summary "- postgres cold backup: ${relative_dir}"
+}
+
+upgrade_restore_backed_up_files() {
+  local target_dir="$1"
+  local backup_dir="$2"
+  local manifest_file="$3"
+  local relative_path
+  local source_file
+  local target_file
+
+  while IFS= read -r relative_path; do
+    [[ -z "${relative_path}" ]] && continue
+    source_file="${backup_dir}/${relative_path}"
+    target_file="${target_dir}/${relative_path}"
+    [[ -f "${source_file}" ]] || upgrade_die "backup file missing for rollback: ${relative_path}"
+    mkdir -p "$(dirname "${target_file}")"
+    cp "${source_file}" "${target_file}"
+    upgrade_append_log "rollback restored file ${relative_path}"
+    upgrade_append_summary "- rollback restored file: ${relative_path}"
+  done < <(upgrade_manifest_list_field "${manifest_file}" "backedUpFiles")
+}
+
+upgrade_restore_backed_up_data_dirs() {
+  local target_dir="$1"
+  local backup_dir="$2"
+  local manifest_file="$3"
+  local relative_dir
+  local source_dir
+  local target_path
+
+  while IFS= read -r relative_dir; do
+    [[ -z "${relative_dir}" ]] && continue
+    source_dir="${backup_dir}/${relative_dir}"
+    target_path="${target_dir}/${relative_dir}"
+    [[ -d "${source_dir}" ]] || upgrade_die "backup data dir missing for rollback: ${relative_dir}"
+    rm -rf "${target_path}"
+    mkdir -p "$(dirname "${target_path}")"
+    cp -a "${source_dir}" "${target_path}"
+    upgrade_append_log "rollback restored data dir ${relative_dir}"
+    upgrade_append_summary "- rollback restored data dir: ${relative_dir}"
+  done < <(upgrade_manifest_list_field "${manifest_file}" "backedUpDataDirs")
+}
+
+upgrade_stop_target_stack() {
+  local target_dir="$1"
+  if [[ ${#UPGRADE_PRECHECK_COMPOSE_FILES[@]} -eq 0 ]]; then
+    return 0
+  fi
+  upgrade_run_target_compose "${target_dir}" UPGRADE_PRECHECK_COMPOSE_FILES down --remove-orphans >/dev/null || true
+  upgrade_append_log "target stack stopped"
+}
+
 upgrade_check_containers_stopped() {
   local target_dir="$1"
   local output
 
-  if [[ ! -f "${target_dir}/docker-compose.yml" ]]; then
+  if [[ ${#UPGRADE_PRECHECK_COMPOSE_FILES[@]} -eq 0 ]]; then
     return 0
   fi
 
-  output="$(
-    cd "${target_dir}" &&
-      docker compose ps --status running --services 2>/dev/null || true
-  )"
+  output="$(upgrade_run_target_compose "${target_dir}" UPGRADE_PRECHECK_COMPOSE_FILES ps --status running --services 2>/dev/null || true)"
   if [[ -n "${output//[$'\t\r\n ']/}" ]]; then
     upgrade_die "target deployment still has running containers"
   fi
@@ -351,11 +573,28 @@ upgrade_merge_env_file() {
   [[ -n "${appended_csv}" ]] && upgrade_append_summary "- env appended: ${appended_csv}"
   [[ -n "${preserved_csv}" ]] && upgrade_append_summary "- env preserved: ${preserved_csv}"
   [[ -n "${conflicts_csv}" ]] && upgrade_append_summary "- env conflicts kept old values: ${conflicts_csv}"
+  return 0
 }
 
 upgrade_compose_files_from_source() {
   local source_root="$1"
   find "${source_root}" -maxdepth 1 -type f \( -name 'docker-compose*.yml' -o -name 'docker-compose*.yaml' \) | sort
+}
+
+upgrade_should_merge_compose_file() {
+  local file_name="$1"
+
+  case "${UPGRADE_MODE:-single}" in
+    legacy)
+      [[ "${file_name}" == "docker-compose.legacy.yml" ]]
+      ;;
+    single)
+      [[ "${file_name}" == "docker-compose.yml" || "${file_name}" == "docker-compose-app.yml" ]]
+      ;;
+    *)
+      return 1
+      ;;
+  esac
 }
 
 upgrade_compose_config_json() {
@@ -448,6 +687,9 @@ upgrade_merge_compose_files() {
   while IFS= read -r source_file; do
     [[ -z "${source_file}" ]] && continue
     file_name="$(basename "${source_file}")"
+    if ! upgrade_should_merge_compose_file "${file_name}"; then
+      continue
+    fi
     upgrade_merge_compose_file "${source_file}" "${target_dir}/${file_name}"
   done < <(upgrade_compose_files_from_source "${source_root}")
 }
@@ -647,4 +889,71 @@ upgrade_merge_config_tree() {
         ;;
     esac
   done < <(find "${source_config_dir}" -type f | sort)
+}
+
+upgrade_should_sync_relative_path() {
+  local relative_path="$1"
+
+  case "${relative_path}" in
+    .env|.upgrade-lock)
+      return 1
+      ;;
+    docker-compose*.yml|docker-compose*.yaml)
+      return 1
+      ;;
+    config/*)
+      return 1
+      ;;
+    services/dts-pg/data|services/dts-pg/data/*)
+      return 1
+      ;;
+    logs/*|backups/*)
+      return 1
+      ;;
+    .git/*|.gitignore)
+      return 1
+      ;;
+    *)
+      return 0
+      ;;
+  esac
+}
+
+upgrade_sync_new_files() {
+  local source_root="$1"
+  local target_dir="$2"
+  local source_file
+  local relative_path
+  local target_file
+  local synced_count=0
+  local updated_count=0
+  local added_count=0
+
+  while IFS= read -r source_file; do
+    [[ -z "${source_file}" ]] && continue
+    relative_path="${source_file#${source_root}/}"
+    [[ "${relative_path}" != "${source_file}" ]] || continue
+
+    if ! upgrade_should_sync_relative_path "${relative_path}"; then
+      continue
+    fi
+
+    target_file="${target_dir}/${relative_path}"
+    if [[ -d "${target_file}" ]]; then
+      upgrade_die "cannot sync package file over existing directory: ${relative_path}"
+    fi
+
+    mkdir -p "$(dirname "${target_file}")"
+    if [[ -f "${target_file}" ]]; then
+      upgrade_backup_target_file "${target_dir}" "${target_file}"
+      updated_count=$((updated_count + 1))
+    else
+      added_count=$((added_count + 1))
+    fi
+    cp -a "${source_file}" "${target_file}"
+    synced_count=$((synced_count + 1))
+    upgrade_append_log "synced runtime file ${relative_path}"
+  done < <(find "${source_root}" -type f | sort)
+
+  upgrade_append_summary "- runtime files synced: total=${synced_count}, updated=${updated_count}, added=${added_count}"
 }

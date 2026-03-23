@@ -178,6 +178,7 @@ public class ModelingAuxResource {
         @Valid @RequestBody ModelingPlan request,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDeptHeader
     ) {
+        ensurePlanNameUnique(null, request != null ? request.getName() : null);
         ModelingPlan plan = new ModelingPlan();
         applyPlanUpsert(plan, request, activeDeptHeader);
         ensurePlanDefaults(plan);
@@ -194,6 +195,7 @@ public class ModelingAuxResource {
         @Valid @RequestBody ModelingPlan request,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDeptHeader
     ) {
+        ensurePlanNameUnique(id, request != null ? request.getName() : null);
         ModelingPlan plan = planRepo.findById(id).orElseThrow(() -> new EntityNotFoundException("数据规划不存在"));
         applyPlanUpsert(plan, request, activeDeptHeader);
         ensurePlanDefaults(plan);
@@ -1168,6 +1170,21 @@ public class ModelingAuxResource {
         } else {
             plan.setVersion(plan.getVersion().trim());
         }
+    }
+
+    private void ensurePlanNameUnique(UUID currentId, String rawName) {
+        String name = StringUtils.trimToNull(rawName);
+        if (name == null) {
+            return;
+        }
+        ModelingPlan existing = planRepo.findFirstByNameIgnoreCase(name).orElse(null);
+        if (existing == null) {
+            return;
+        }
+        if (currentId != null && currentId.equals(existing.getId())) {
+            return;
+        }
+        throw new org.springframework.web.server.ResponseStatusException(HttpStatus.BAD_REQUEST, "项目空间名称已存在: " + name);
     }
 
     private String normalizePlanStatus(String status) {

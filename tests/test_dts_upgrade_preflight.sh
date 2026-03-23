@@ -15,17 +15,33 @@ mkdir -p "${FAKE_BIN}" "${IMAGES_DIR}" "${EXTRA_DIR}" "${SOURCE_ROOT}"
 
 cat > "${FAKE_BIN}/docker" <<'EOF_DOCKER'
 #!/usr/bin/env bash
-if [[ "${1:-}" == "compose" && "${2:-}" == "ps" ]]; then
-  if [[ -f "${FAKE_DOCKER_STATE_FILE}" ]]; then
-    printf 'dts-platform\n'
-  else
-    printf '%s' "${FAKE_DOCKER_PS_OUTPUT:-}"
-  fi
-  exit 0
-fi
-if [[ "${1:-}" == "compose" && "${2:-}" == "up" && "${3:-}" == "-d" ]]; then
-  : > "${FAKE_DOCKER_STATE_FILE}"
-  exit 0
+if [[ "${1:-}" == "compose" ]]; then
+  shift
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -f)
+        shift 2
+        ;;
+      ps)
+        if [[ -f "${FAKE_DOCKER_STATE_FILE}" ]]; then
+          printf 'dts-platform\n'
+        else
+          printf '%s' "${FAKE_DOCKER_PS_OUTPUT:-}"
+        fi
+        exit 0
+        ;;
+      up)
+        if [[ "${2:-}" == "-d" ]]; then
+          : > "${FAKE_DOCKER_STATE_FILE}"
+          exit 0
+        fi
+        shift
+        ;;
+      *)
+        shift
+        ;;
+    esac
+  done
 fi
 exit 0
 EOF_DOCKER

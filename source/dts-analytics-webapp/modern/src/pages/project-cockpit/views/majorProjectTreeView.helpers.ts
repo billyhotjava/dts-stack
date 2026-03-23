@@ -32,3 +32,31 @@ export function findTreeNodeById(tree: ProjectTreeNode[], id: string): ProjectTr
 	}
 	return null;
 }
+
+export type BreadcrumbItem = {
+	id: string;
+	name: string;
+	level: string;
+};
+
+export function buildBreadcrumb(tree: ProjectTreeNode[], selectedId: string): BreadcrumbItem[] {
+	const path: BreadcrumbItem[] = [];
+	const search = (nodes: ProjectTreeNode[]): boolean => {
+		for (const node of nodes) {
+			const nodeId = node.id ?? "";
+			if (nodeId === selectedId) {
+				path.push({ id: nodeId, name: node.name ?? "", level: node.level ?? "" });
+				return true;
+			}
+			if (node.children && node.children.length > 0) {
+				if (search(node.children)) {
+					path.unshift({ id: nodeId, name: node.name ?? "", level: node.level ?? "" });
+					return true;
+				}
+			}
+		}
+		return false;
+	};
+	search(tree);
+	return path;
+}

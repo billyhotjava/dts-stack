@@ -51,37 +51,43 @@ public class DbtSourceService {
         }
         Path modelsDir = projectDir.resolve("models");
         Path output = modelsDir.resolve("ods_sources.yml");
-        Map<String, Object> root = buildSources(mappings);
+        SourceBuildResult build = buildSources(mappings);
         try {
             Files.createDirectories(modelsDir);
-            String yaml = YamlWriter.toYaml(root);
+            String yaml = YamlWriter.toYaml(build.root());
             Files.writeString(output, yaml, StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
             topicBindingRuntimeService.compileRuntimeArtifacts();
-            if (mappings.isEmpty()) {
+            if (build.tables() == 0) {
                 return DbtSourceRefreshResult.empty("未发现 ODS 映射，已刷新专题绑定运行文件");
             }
-            return DbtSourceRefreshResult.success(output.toString(), mappings.size());
+            return DbtSourceRefreshResult.success(output.toString(), build.tables());
         } catch (IOException ex) {
             LOG.warn("Failed to write dbt sources: {}", ex.getMessage());
             return DbtSourceRefreshResult.empty("写入 sources.yml 失败: " + ex.getMessage());
         }
     }
 
-    private Map<String, Object> buildSources(List<InfraOdsTableMapping> mappings) {
+    private SourceBuildResult buildSources(List<InfraOdsTableMapping> mappings) {
         Map<String, List<InfraOdsTableMapping>> grouped = new LinkedHashMap<>();
         for (InfraOdsTableMapping mapping : mappings) {
             String schema = StringUtils.hasText(mapping.getOdsSchema()) ? mapping.getOdsSchema() : "ods";
             grouped.computeIfAbsent(schema, key -> new ArrayList<>()).add(mapping);
         }
         List<Map<String, Object>> sources = new ArrayList<>();
+        int emittedTables = 0;
         for (Map.Entry<String, List<InfraOdsTableMapping>> entry : grouped.entrySet()) {
             Map<String, Object> source = new LinkedHashMap<>();
             source.put("name", entry.getKey());
             source.put("schema", entry.getKey());
+            Map<String, Map<String, Object>> dedupedTables = new LinkedHashMap<>();
             List<Map<String, Object>> tables = new ArrayList<>();
             for (InfraOdsTableMapping mapping : entry.getValue()) {
+                String tableName = mapping.getOdsTable();
+                if (!StringUtils.hasText(tableName) || dedupedTables.containsKey(tableName.toLowerCase())) {
+                    continue;
+                }
                 Map<String, Object> table = new LinkedHashMap<>();
-                table.put("name", mapping.getOdsTable());
+                table.put("name", tableName);
                 if (StringUtils.hasText(mapping.getDescription())) {
                     table.put("description", mapping.getDescription());
                 }
@@ -94,15 +100,17 @@ public class DbtSourceService {
                 if (!meta.isEmpty()) {
                     table.put("meta", meta);
                 }
-                tables.add(table);
+                dedupedTables.put(tableName.toLowerCase(), table);
             }
+            tables.addAll(dedupedTables.values());
+            emittedTables += tables.size();
             source.put("tables", tables);
             sources.add(source);
         }
         Map<String, Object> root = new LinkedHashMap<>();
         root.put("version", 2);
         root.put("sources", sources);
-        return root;
+        return new SourceBuildResult(root, emittedTables);
     }
 
     private void putIfText(Map<String, Object> target, String key, String value) {
@@ -136,6 +144,8 @@ public class DbtSourceService {
             return new DbtSourceRefreshResult(true, tables, "sources.yml 已更新", path);
         }
     }
+
+    private record SourceBuildResult(Map<String, Object> root, int tables) {}
 
     private static final class YamlWriter {
         private static String toYaml(Map<String, Object> root) throws IOException {

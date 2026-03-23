@@ -90,6 +90,12 @@ echo upgrade
 EOF_FILE
 chmod +x "${TEST_REPO}/bin/dts-upgrade"
 
+cat > "${TEST_REPO}/bin/dts-upgrade-rollback" <<'EOF_FILE'
+#!/usr/bin/env bash
+echo rollback
+EOF_FILE
+chmod +x "${TEST_REPO}/bin/dts-upgrade-rollback"
+
 cat > "${TEST_REPO}/bin/lib/dts-upgrade-common.sh" <<'EOF_FILE'
 #!/usr/bin/env bash
 echo common
@@ -153,6 +159,11 @@ fi
 
 if ! grep -qx 'dts-stack/bin/dts-upgrade' <<<"${ARCHIVE_CONTENTS}"; then
   echo "expected packaged archive to include bin/dts-upgrade" >&2
+  exit 1
+fi
+
+if ! grep -qx 'dts-stack/bin/dts-upgrade-rollback' <<<"${ARCHIVE_CONTENTS}"; then
+  echo "expected packaged archive to include bin/dts-upgrade-rollback" >&2
   exit 1
 fi
 

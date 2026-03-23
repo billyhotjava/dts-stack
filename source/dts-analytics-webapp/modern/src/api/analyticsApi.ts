@@ -1358,6 +1358,14 @@ export type ProjectCockpitFilterQuery = {
 	riskLevel?: string;
 };
 
+export type ProjectCockpitSettingsResponse = {
+	periodStart?: string;
+	periodEnd?: string;
+	updatedBy?: string;
+	updatedAt?: string;
+	canPublish?: boolean;
+};
+
 export type ProjectCockpitOption = {
 	value?: string;
 	label?: string;
@@ -1577,6 +1585,30 @@ export type ProjectCockpitDataSupportResponse = {
 	dataSources?: Array<Record<string, unknown>>;
 };
 
+export type ProjectCockpitDrillItem = {
+	id?: string;
+	name?: string;
+	majorProjectName?: string;
+	subprojectName?: string;
+	riskLevel?: string;
+	status?: string;
+	progressRate?: number;
+	delayDays?: number;
+	planDate?: string;
+	actualDate?: string;
+	reason?: string;
+	ownerDept?: string;
+	ownerUser?: string;
+	nodeType?: string;
+};
+
+export type ProjectCockpitDrillDetailResponse = {
+	target?: string;
+	title?: string;
+	items?: ProjectCockpitDrillItem[];
+	total?: number;
+};
+
 function buildProjectCockpitQuery(params?: ProjectCockpitFilterQuery): string {
 	const qs = new URLSearchParams();
 	if (params?.programId) qs.set("programId", params.programId);
@@ -1592,6 +1624,10 @@ function buildProjectCockpitQuery(params?: ProjectCockpitFilterQuery): string {
 export const analyticsApi = {
 	getCurrentUser: () => fetchJson<CurrentUser>("/analytics/api/user/current"),
 	getHealth: () => fetchJson<{ status?: string }>("/analytics/api/health"),
+	getProjectCockpitSettings: () =>
+		fetchJson<ProjectCockpitSettingsResponse>("/analytics/api/project-cockpit/settings"),
+	updateProjectCockpitSettings: (body: { periodStart: string; periodEnd: string }) =>
+		requestJson<void>("/analytics/api/project-cockpit/settings", "PUT", body),
 	getProjectCockpitSummary: (params?: ProjectCockpitFilterQuery) =>
 		fetchJson<ProjectCockpitSummaryResponse>("/analytics/api/project-cockpit/summary" + buildProjectCockpitQuery(params)),
 	getProjectCockpitTrends: (params?: ProjectCockpitFilterQuery) =>
@@ -1604,6 +1640,18 @@ export const analyticsApi = {
 		fetchJson<ProjectCockpitTreeResponse>("/analytics/api/project-cockpit/major-project-tree" + buildProjectCockpitQuery(params)),
 	getProjectCockpitDataSupport: (params?: ProjectCockpitFilterQuery) =>
 		fetchJson<ProjectCockpitDataSupportResponse>("/analytics/api/project-cockpit/data-support" + buildProjectCockpitQuery(params)),
+	getProjectCockpitDrillDetail: (target: string, params?: ProjectCockpitFilterQuery & Record<string, string>) => {
+		const qs = new URLSearchParams();
+		if (params) {
+			for (const [key, val] of Object.entries(params)) {
+				if (val) qs.set(key, val);
+			}
+		}
+		const query = qs.toString();
+		return fetchJson<ProjectCockpitDrillDetailResponse>(
+			`/analytics/api/project-cockpit/drill/${encodeURIComponent(target)}${query ? `?${query}` : ""}`
+		);
+	},
 	listDatabases: () => fetchJson<DatabaseListResponse>("/analytics/api/database"),
 	listPlatformDataSources: () => fetchJson<PlatformDataSourceItem[]>("/analytics/api/platform/data-sources"),
 	listTables: (dbId: string | number) =>

@@ -1,9 +1,0 @@
-version: 2
-sources:
-  - name: "pm_ods"
-    schema: "public"
-    description: "项目管理 ODS 源表"
-    tables:
-      - name: "project_subject_domain"
-        identifier: "ods_project_subject_domain"
-        description: "项目主体域原始数据"
