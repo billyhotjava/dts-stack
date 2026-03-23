@@ -53,6 +53,7 @@
 - 模板应用结果已收成独立 helper：
   - [transformCreateTemplate.helpers.ts](/opt/prod/s10/s10-stack/source/dts-platform-webapp/src/pages/explore/etl/transformCreateTemplate.helpers.ts)
   - [transformCreateTemplate.helpers.test.ts](/opt/prod/s10/s10-stack/source/dts-platform-webapp/src/pages/explore/etl/transformCreateTemplate.helpers.test.ts)
+  - 模板 render 请求参数也已通过同一 helper 收口
 - 新增模块级回归：
   - [transformCreateAsyncRun.helpers.test.ts](/opt/prod/s10/s10-stack/source/dts-platform-webapp/src/pages/explore/etl/transformCreateAsyncRun.helpers.test.ts)
 - Excel 文件流已支持“粘贴 ODS 字段列表”并按顺序映射 Excel 列：

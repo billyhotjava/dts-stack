@@ -1,6 +1,52 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { resolveTemplateApplyOutcome } from "./transformCreateTemplate.helpers";
+import {
+	buildTemplateRenderRequest,
+	resolveTemplateApplyOutcome,
+} from "./transformCreateTemplate.helpers";
+
+test("buildTemplateRenderRequest keeps form snapshot and fills source/file fallbacks", () => {
+	const request = buildTemplateRenderRequest(
+		{
+			name: "excel_task",
+			sourceDataSourceId: "",
+			sourceCategory: "file",
+			writerType: "postgresqlwriter",
+		},
+		"ds-default",
+		"project-plan.xlsx"
+	);
+
+	assert.deepEqual(request, {
+		params: {
+			name: "excel_task",
+			sourceDataSourceId: "ds-default",
+			sourceCategory: "file",
+			writerType: "postgresqlwriter",
+			fileName: "project-plan.xlsx",
+		},
+		strictRequired: false,
+	});
+});
+
+test("buildTemplateRenderRequest preserves explicit sourceDataSourceId and omits empty fileName", () => {
+	const request = buildTemplateRenderRequest(
+		{
+			name: "db_task",
+			sourceDataSourceId: "source-1",
+		},
+		"ds-default",
+		""
+	);
+
+	assert.deepEqual(request, {
+		params: {
+			name: "db_task",
+			sourceDataSourceId: "source-1",
+		},
+		strictRequired: false,
+	});
+});
 
 test("resolveTemplateApplyOutcome prefers rendered defaults and surfaces warnings/errors", () => {
 	const outcome = resolveTemplateApplyOutcome({

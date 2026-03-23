@@ -26,6 +26,24 @@ export type TemplateApplyOutcome = {
 	successMessage: string;
 };
 
+export function buildTemplateRenderRequest(
+	snapshot: Record<string, any>,
+	selectedDataSourceId?: string,
+	fileName?: string
+): { params: Record<string, any>; strictRequired: false } {
+	const params: Record<string, any> = {
+		...snapshot,
+		sourceDataSourceId: snapshot.sourceDataSourceId || selectedDataSourceId,
+	};
+	if (normalizeText(fileName)) {
+		params.fileName = fileName;
+	}
+	return {
+		params,
+		strictRequired: false,
+	};
+}
+
 export function resolveTemplateApplyOutcome(input: TemplateApplyOutcomeInput): TemplateApplyOutcome {
 	const defaults = ((input.renderResult?.renderedDefaults || input.template.defaults || {}) as Record<string, any>) || {};
 	const warnings = Array.isArray(input.renderResult?.warnings) ? input.renderResult?.warnings : input.template.warnings || [];

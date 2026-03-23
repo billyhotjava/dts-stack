@@ -28,7 +28,12 @@ import { resolveAsyncRunPollHint, resolveCreatedTaskId } from "./transformCreate
 import { loadTransformCreateBootstrap } from "./transformCreateBootstrap.helpers";
 import { buildTransformCreateDraftPayload } from "./transformCreateDraft.helpers";
 import { buildTransformFileUploadResult, suggestTransformFileTableName } from "./transformCreateFileFlow.helpers";
-import { resolveTemplateApplyOutcome } from "./transformCreateTemplate.helpers";
+import {
+	buildPreparedFileParseInput,
+	buildRefreshFileParseInput,
+	buildSheetChangeFileParseInput,
+} from "./transformCreateFileParse.helpers";
+import { buildTemplateRenderRequest, resolveTemplateApplyOutcome } from "./transformCreateTemplate.helpers";
 import {
 	buildTransformEditRestoreState,
 	parseTransformCreateDraft,
@@ -1562,14 +1567,10 @@ export default function TransformCreatePage() {
 		setApplyingTemplate(true);
 		try {
 			const snapshot = (form.getFieldsValue(true) || {}) as Record<string, any>;
-			const renderResult = await ingestionTaskAPI.renderTaskTemplate(template.id, {
-				params: {
-					...snapshot,
-					sourceDataSourceId: snapshot.sourceDataSourceId || selectedDataSource?.id,
-					fileName: fileUploadResult?.originalName,
-				},
-				strictRequired: false,
-			});
+			const renderResult = await ingestionTaskAPI.renderTaskTemplate(
+				template.id,
+				buildTemplateRenderRequest(snapshot, selectedDataSource?.id, fileUploadResult?.originalName)
+			);
 			const outcome = resolveTemplateApplyOutcome({
 				template,
 				currentSourceCategory: form.getFieldValue("sourceCategory") as string,
@@ -1841,21 +1842,19 @@ export default function TransformCreatePage() {
 	}, [odsMatchApplied, odsColumns, fileUploadResult?.columns?.length]);
 
 	const refreshFilePreview = async () => {
-		if (!fileUploadResult?.fileId) {
+		const parseInput = buildRefreshFileParseInput(fileUploadResult, filePreviewRows);
+		if (!parseInput) {
 			return;
 		}
 		try {
 			setPreviewRefreshing(true);
-			const selectedSheet = fileUploadResult.sheetName
-				? { name: fileUploadResult.sheetName, index: fileUploadResult.sheetIndex }
-				: undefined;
 			const parsed = await parseFile(
-				fileUploadResult.fileId,
-				fileUploadResult.originalName,
-				fileUploadResult.batchCode || "",
-				fileUploadResult.sheets,
-				selectedSheet,
-				filePreviewRows
+				parseInput.fileId,
+				parseInput.fileName,
+				parseInput.batchCode,
+				parseInput.sheets,
+				parseInput.selectedSheet,
+				parseInput.previewLimit
 			);
 			setFileUploadResult(parsed);
 			toast.success("预览已刷新");
@@ -2555,15 +2554,14 @@ export default function TransformCreatePage() {
 											setUploadingFile(true);
 											setFileUploadResult(null);
 											const prepare = await dataSourcesService.excelPrepare(file);
-											const sheets = prepare.sheets || [];
-											const defaultSheet = sheets.length ? sheets[0] : undefined;
+											const parseInput = buildPreparedFileParseInput(prepare, filePreviewRows);
 											const parsed = await parseFile(
-												prepare.fileId,
-												prepare.fileName,
-												prepare.batchCode,
-												sheets,
-												defaultSheet,
-												filePreviewRows
+												parseInput.fileId,
+												parseInput.fileName,
+												parseInput.batchCode,
+												parseInput.sheets,
+												parseInput.selectedSheet,
+												parseInput.previewLimit
 											);
 											setFileUploadResult(parsed);
 											setSelectedOdsTable(undefined); setOdsColumns([]); setOdsMatchApplied(false);
@@ -2579,23 +2577,23 @@ export default function TransformCreatePage() {
 										}
 									}}
 									onSheetChange={async (value) => {
-										const targetSheet = fileUploadResult?.sheets?.find((item) => item.index === value);
-										if (!targetSheet || !fileUploadResult?.fileId) return;
+										const parseInput = buildSheetChangeFileParseInput(fileUploadResult, value, filePreviewRows);
+										if (!parseInput) return;
 										try {
 											setUploadingFile(true);
 											const parsed = await parseFile(
-												fileUploadResult.fileId,
-												fileUploadResult.originalName,
-												fileUploadResult.batchCode || "",
-												fileUploadResult.sheets,
-												{ index: targetSheet.index, name: targetSheet.name },
-												filePreviewRows
+												parseInput.fileId,
+												parseInput.fileName,
+												parseInput.batchCode,
+												parseInput.sheets,
+												parseInput.selectedSheet,
+												parseInput.previewLimit
 											);
 											setFileUploadResult(parsed);
 											setSelectedOdsTable(undefined); setOdsColumns([]); setOdsMatchApplied(false);
 											form.setFieldValue("readerType", "txtfilereader");
 											ensureFileTableName(parsed);
-											toast.success(`已切换到 ${targetSheet.name}，检测到 ${parsed.columns?.length || 0} 列`);
+											toast.success(`已切换到 ${parseInput.selectedSheet?.name}，检测到 ${parsed.columns?.length || 0} 列`);
 										} catch (err: any) {
 											toast.error(err?.message || "解析 Sheet 失败");
 										} finally {
