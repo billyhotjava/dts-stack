@@ -17,6 +17,7 @@ import com.yuzhi.dts.ingestion.service.etl.AddaxJobService;
 import com.yuzhi.dts.ingestion.service.etl.AirflowAdapter;
 import com.yuzhi.dts.ingestion.service.etl.AirflowClient;
 import com.yuzhi.dts.ingestion.service.etl.AirflowDagService;
+import com.yuzhi.dts.ingestion.service.etl.DagPreheatService;
 import com.yuzhi.dts.ingestion.service.etl.IncrementalSyncService;
 import com.yuzhi.dts.ingestion.service.etl.ExecutionFailureClassifier;
 import com.yuzhi.dts.ingestion.service.mapper.IngestionExecutionMapper;
@@ -82,6 +83,7 @@ public class IngestionTaskService {
     private final AuditService auditService;
     private final IngestionTaskChangeLogService changeLogService;
     private final com.yuzhi.dts.ingestion.service.etl.IngestionRetryService retryService;
+    private final DagPreheatService dagPreheatService;
 
     public IngestionTaskService(
         IngestionTaskRepository taskRepository,
@@ -97,7 +99,8 @@ public class IngestionTaskService {
         IncrementalSyncService incrementalSyncService,
         AuditService auditService,
         IngestionTaskChangeLogService changeLogService,
-        @org.springframework.context.annotation.Lazy com.yuzhi.dts.ingestion.service.etl.IngestionRetryService retryService
+        @org.springframework.context.annotation.Lazy com.yuzhi.dts.ingestion.service.etl.IngestionRetryService retryService,
+        DagPreheatService dagPreheatService
     ) {
         this.taskRepository = taskRepository;
         this.executionRepository = executionRepository;
@@ -113,6 +116,7 @@ public class IngestionTaskService {
         this.auditService = auditService;
         this.changeLogService = changeLogService;
         this.retryService = retryService;
+        this.dagPreheatService = dagPreheatService;
     }
 
     /**
@@ -192,6 +196,11 @@ public class IngestionTaskService {
             Map.of("taskId", savedTask.getId(), "operator", savedTask.getCreatedBy())
         );
 
+        // Preheat: asynchronously poll Airflow so the DAG is registered before the user clicks execute
+        if (StringUtils.hasText(savedTask.getAirflowDagId())) {
+            dagPreheatService.preheatDag(savedTask.getAirflowDagId());
+        }
+
         return taskMapper.toDto(savedTask);
     }
 
@@ -244,6 +253,11 @@ public class IngestionTaskService {
                     changeLogService.recordTaskUpdate(before, updatedTask);
                 } catch (Exception ex) {
                     log.warn("Failed to record change log for task update: {}", id, ex);
+                }
+
+                // Preheat: asynchronously poll Airflow so the DAG is registered before the user clicks execute
+                if (StringUtils.hasText(updatedTask.getAirflowDagId())) {
+                    dagPreheatService.preheatDag(updatedTask.getAirflowDagId());
                 }
 
                 return taskMapper.toDto(updatedTask);
@@ -387,26 +401,19 @@ public class IngestionTaskService {
         return execute(taskId, "MANUAL");
     }
 
+    public IngestionTaskDTO validateAsyncExecutionRequest(Long taskId) {
+        return taskMapper.toDto(loadExecutableTask(taskId));
+    }
+
+    public void validateAsyncRetryRequest(Long taskId, Long executionId, String retryMode) {
+        validateRetryRequest(taskId, executionId, retryMode);
+    }
+
     private IngestionExecutionDTO execute(Long taskId, String triggerMode) {
         log.info("Executing ingestion task ID: {}", taskId);
 
-        IngestionTask task = taskRepository.findById(taskId)
-            .orElseThrow(() -> new IllegalArgumentException("Task not found: " + taskId));
-
-        if (!"active".equals(task.getStatus()) && !"draft".equals(task.getStatus())) {
-            throw new IllegalStateException("Task is not in executable status: " + task.getStatus());
-        }
+        IngestionTask task = loadExecutableTask(taskId);
         GovernancePolicy policy = resolveGovernancePolicy(task);
-        if (!isWithinExecutionWindow(policy)) {
-            throw new IllegalStateException("不在允许执行窗口内，当前策略窗口: " + policy.windowDisplay());
-        }
-        Optional<IngestionExecution> latestExecution = executionRepository.findFirstByTaskIdOrderByCreatedAtDesc(taskId);
-        if (latestExecution.isPresent()
-            && ("running".equalsIgnoreCase(latestExecution.get().getStatus())
-                || "preparing".equalsIgnoreCase(latestExecution.get().getStatus()))
-            && policy.maxConcurrentRuns() <= 1) {
-            throw new IllegalStateException("任务仍在运行中，请稍后重试");
-        }
         // 创建执行记录（先在内存中保留 createdAt，用于统计治理排队等待时长）
         IngestionExecution execution = new IngestionExecution();
         execution.setTask(task);
@@ -415,6 +422,7 @@ public class IngestionTaskService {
         execution.setReplaceMode(resolveReplaceMode(task));
         execution.setTriggerMode(normalizeTriggerMode(triggerMode));
 
+        boolean airflowTriggered = false;
         try {
             IngestionExecution savedPreparingExecution = executionRepository.save(execution);
             if (savedPreparingExecution != null) {
@@ -513,55 +521,108 @@ public class IngestionTaskService {
                         "Airflow 触发失败" + (detail == null ? "" : (": " + detail))
                     );
                 }
+                airflowTriggered = true;
                 String dagRunId = extractDagRunId(airflowResult);
                 if (StringUtils.hasText(dagRunId)) {
                     execution.setExecutionId(dagRunId);
                 } else {
                     execution.setExecutionId("airflow-" + java.util.UUID.randomUUID().toString().substring(0, 8));
                 }
+
+                try {
+                    execution.setStatus("running");
+                    IngestionExecution savedRunningExecution = executionRepository.save(execution);
+                    if (savedRunningExecution != null) {
+                        execution = savedRunningExecution;
+                    }
+
+                    // 更新任务的最后执行信息
+                    task.setLastExecutedAt(Instant.now());
+                    task.setLastExecutionStatus("running");
+                    task.setStatus("active");
+                    taskRepository.save(task);
+
+                    log.info("Started execution {} for task ID: {}", execution.getExecutionId(), taskId);
+
+                    // 记录审计
+                    Map<String, Object> successMeta = new java.util.LinkedHashMap<>();
+                    successMeta.put("taskId", taskId);
+                    successMeta.put("executionId", execution.getId());
+                    String operator = null;
+                    if (execution.getTask() != null) {
+                        operator = execution.getTask().getLastModifiedBy();
+                        if (!StringUtils.hasText(operator)) {
+                            operator = execution.getTask().getCreatedBy();
+                        }
+                    }
+                    if (!StringUtils.hasText(operator)) {
+                        operator = "system";
+                    }
+                    successMeta.put("operator", operator);
+                    auditService.auditAction(
+                        "INGESTION_TASK_EXECUTE",
+                        AuditStage.SUCCESS,
+                        task.getName(),
+                        successMeta
+                    );
+                } catch (Exception postTriggerEx) {
+                    log.warn("Post-trigger operations failed for task {} execution {} (DAG already triggered, dagRunId={}): {}",
+                        taskId, savedPreparingExecution.getId(), dagRunId, postTriggerEx.getMessage(), postTriggerEx);
+                    try {
+                        execution.setStatus("running");
+                        execution.setExecutionId(dagRunId);
+                        executionRepository.save(execution);
+                    } catch (Exception saveEx) {
+                        log.error("Failed to persist running status for execution {}: {}", savedPreparingExecution.getId(), saveEx.getMessage());
+                    }
+                }
             } else {
                 // 如果未启用Airflow，记录为手动执行
                 execution.setExecutionId("manual-" + java.util.UUID.randomUUID().toString().substring(0, 8));
-            }
 
-            execution.setStatus("running");
-            IngestionExecution savedRunningExecution = executionRepository.save(execution);
-            if (savedRunningExecution != null) {
-                execution = savedRunningExecution;
-            }
-
-            // 更新任务的最后执行信息
-            task.setLastExecutedAt(Instant.now());
-            task.setLastExecutionStatus("running");
-            task.setStatus("active");
-            taskRepository.save(task);
-
-            log.info("Started execution {} for task ID: {}", execution.getExecutionId(), taskId);
-
-            // 记录审计
-            Map<String, Object> successMeta = new java.util.LinkedHashMap<>();
-            successMeta.put("taskId", taskId);
-            successMeta.put("executionId", execution.getId());
-            String operator = null;
-            if (execution.getTask() != null) {
-                operator = execution.getTask().getLastModifiedBy();
-                if (!StringUtils.hasText(operator)) {
-                    operator = execution.getTask().getCreatedBy();
+                execution.setStatus("running");
+                IngestionExecution savedRunningExecution = executionRepository.save(execution);
+                if (savedRunningExecution != null) {
+                    execution = savedRunningExecution;
                 }
+
+                // 更新任务的最后执行信息
+                task.setLastExecutedAt(Instant.now());
+                task.setLastExecutionStatus("running");
+                task.setStatus("active");
+                taskRepository.save(task);
+
+                log.info("Started execution {} for task ID: {}", execution.getExecutionId(), taskId);
+
+                // 记录审计
+                Map<String, Object> successMeta = new java.util.LinkedHashMap<>();
+                successMeta.put("taskId", taskId);
+                successMeta.put("executionId", execution.getId());
+                String operator = null;
+                if (execution.getTask() != null) {
+                    operator = execution.getTask().getLastModifiedBy();
+                    if (!StringUtils.hasText(operator)) {
+                        operator = execution.getTask().getCreatedBy();
+                    }
+                }
+                if (!StringUtils.hasText(operator)) {
+                    operator = "system";
+                }
+                successMeta.put("operator", operator);
+                auditService.auditAction(
+                    "INGESTION_TASK_EXECUTE",
+                    AuditStage.SUCCESS,
+                    task.getName(),
+                    successMeta
+                );
             }
-            if (!StringUtils.hasText(operator)) {
-                operator = "system";
-            }
-            successMeta.put("operator", operator);
-            auditService.auditAction(
-                "INGESTION_TASK_EXECUTE",
-                AuditStage.SUCCESS,
-                task.getName(),
-                successMeta
-            );
 
             return executionMapper.toDto(execution);
         } catch (Exception e) {
+            if (airflowTriggered) {
+                log.warn("Post-trigger error for task {} — DAG already running, returning success", taskId, e);
+                return executionMapper.toDto(execution);
+            }
             log.error("Failed to execute task ID: {}", taskId, e);
 
             String failureMessage = extractFailureMessage(e);
@@ -631,21 +692,21 @@ public class IngestionTaskService {
         return CompletableFuture.completedFuture(null);
     }
 
+    @Async("ingestionTaskExecutor")
+    public CompletableFuture<Void> retryExecutionAsync(Long taskId, Long executionId, String retryMode) {
+        try {
+            retryExecution(taskId, executionId, retryMode);
+        } catch (Exception ex) {
+            log.error("Async retry failed for task {} execution {}: {}", taskId, executionId, ex.getMessage(), ex);
+        }
+        return CompletableFuture.completedFuture(null);
+    }
+
     public IngestionExecutionDTO retryExecution(Long taskId, Long executionId, String retryMode) {
-        if (taskId == null || executionId == null) {
-            throw new IllegalArgumentException("taskId and executionId are required");
-        }
-        IngestionTask task = taskRepository.findById(taskId)
-            .orElseThrow(() -> new IllegalArgumentException("Task not found: " + taskId));
-        IngestionExecution execution = executionRepository.findById(executionId)
-            .orElseThrow(() -> new IllegalArgumentException("Execution not found: " + executionId));
-        if (execution.getTask() == null || !taskId.equals(execution.getTask().getId())) {
-            throw new IllegalArgumentException("Execution does not belong to task: " + taskId);
-        }
-        String mode = StringUtils.hasText(retryMode) ? retryMode.trim().toUpperCase(java.util.Locale.ROOT) : "FAILED_ONLY";
-        if (!"FAILED_ONLY".equals(mode) && !"FULL_RERUN".equals(mode)) {
-            throw new IllegalArgumentException("Unsupported retry mode: " + retryMode);
-        }
+        ValidatedRetryRequest validated = validateRetryRequest(taskId, executionId, retryMode);
+        IngestionTask task = validated.task();
+        IngestionExecution execution = validated.execution();
+        String mode = validated.mode();
         String previousStatus = toText(execution.getStatus());
         if ("FAILED_ONLY".equals(mode)) {
             boolean canRetry = "failed".equalsIgnoreCase(previousStatus) || "error".equalsIgnoreCase(previousStatus);
@@ -681,6 +742,47 @@ public class IngestionTaskService {
         );
         return execute(taskId, mode);
     }
+
+    private IngestionTask loadExecutableTask(Long taskId) {
+        IngestionTask task = taskRepository.findById(taskId)
+            .orElseThrow(() -> new IllegalArgumentException("Task not found: " + taskId));
+
+        if (!"active".equals(task.getStatus()) && !"draft".equals(task.getStatus())) {
+            throw new IllegalStateException("Task is not in executable status: " + task.getStatus());
+        }
+        GovernancePolicy policy = resolveGovernancePolicy(task);
+        if (!isWithinExecutionWindow(policy)) {
+            throw new IllegalStateException("不在允许执行窗口内，当前策略窗口: " + policy.windowDisplay());
+        }
+        Optional<IngestionExecution> latestExecution = executionRepository.findFirstByTaskIdOrderByCreatedAtDesc(taskId);
+        if (latestExecution.isPresent()
+            && ("running".equalsIgnoreCase(latestExecution.get().getStatus())
+                || "preparing".equalsIgnoreCase(latestExecution.get().getStatus()))
+            && policy.maxConcurrentRuns() <= 1) {
+            throw new IllegalStateException("任务仍在运行中，请稍后重试");
+        }
+        return task;
+    }
+
+    private ValidatedRetryRequest validateRetryRequest(Long taskId, Long executionId, String retryMode) {
+        if (taskId == null || executionId == null) {
+            throw new IllegalArgumentException("taskId and executionId are required");
+        }
+        IngestionTask task = taskRepository.findById(taskId)
+            .orElseThrow(() -> new IllegalArgumentException("Task not found: " + taskId));
+        IngestionExecution execution = executionRepository.findById(executionId)
+            .orElseThrow(() -> new IllegalArgumentException("Execution not found: " + executionId));
+        if (execution.getTask() == null || !taskId.equals(execution.getTask().getId())) {
+            throw new IllegalArgumentException("Execution does not belong to task: " + taskId);
+        }
+        String mode = StringUtils.hasText(retryMode) ? retryMode.trim().toUpperCase(java.util.Locale.ROOT) : "FAILED_ONLY";
+        if (!"FAILED_ONLY".equals(mode) && !"FULL_RERUN".equals(mode)) {
+            throw new IllegalArgumentException("Unsupported retry mode: " + retryMode);
+        }
+        return new ValidatedRetryRequest(task, execution, mode);
+    }
+
+    private record ValidatedRetryRequest(IngestionTask task, IngestionExecution execution, String mode) {}
 
     private String normalizeTriggerMode(String triggerMode) {
         String mode = toText(triggerMode);

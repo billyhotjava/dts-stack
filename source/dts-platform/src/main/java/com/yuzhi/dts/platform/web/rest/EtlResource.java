@@ -169,15 +169,18 @@ public class EtlResource {
         try {
             DbtOutputRelationService.DbtOutputRelationActionResult prepare = dbtOutputRelationService.prepareRebuild(request.modelId());
             String selector = prepare.selector();
+            // S4-002: Use --full-refresh instead of manual DROP to avoid data loss on build failure
             ApiResponse<Map<String, Object>> response = triggerDbtOperation(
                 "build",
                 new DbtRunRequest(selector, selector, request.target(), "build", request.vars(), null, null, null),
                 activeDept,
+                true,
                 true
             );
             Map<String, Object> payload = new LinkedHashMap<>(response.getData());
             payload.put("relation", prepare.qualifiedName());
             payload.put("selector", selector);
+            payload.put("fullRefresh", true);
             payload.put("dropExecuted", prepare.executed());
             payload.put("dropMessage", prepare.message());
             auditService.audit("EXECUTE", "etl.dbt.output.rebuild", String.valueOf(request.modelId()));
@@ -243,7 +246,7 @@ public class EtlResource {
         Map<String, Object> dag = findDag(dagId);
         boolean ready = dag != null;
         result.put("ready", ready);
-        result.put("message", ready ? "DAG 已就绪" : "DAG 正在同步中，请稍后再试");
+        result.put("message", ready ? "DAG 已就绪" : "DAG [" + dagId + "] 尚未在 Airflow 中注册，请稍后重试（通常需要 30 秒）");
         if (dag != null) {
             result.put("isPaused", boolVal(dag.get("is_paused")));
         }
@@ -510,6 +513,16 @@ public class EtlResource {
         String activeDept,
         boolean selectorRequired
     ) {
+        return triggerDbtOperation(operation, request, activeDept, selectorRequired, false);
+    }
+
+    private ApiResponse<Map<String, Object>> triggerDbtOperation(
+        String operation,
+        DbtRunRequest request,
+        String activeDept,
+        boolean selectorRequired,
+        boolean fullRefresh
+    ) {
         String selector = resolveSelector(request, selectorRequired);
         String dagSelector = resolveDagSelector(request, selector);
         String dagId = dbtDagService.ensureDagForSelector(dagSelector);
@@ -520,6 +533,9 @@ public class EtlResource {
         dbtSourceService.refreshOdsSources();
         TopicBindingRuntimeService.RuntimeCompilationResult topicRuntime = topicBindingRuntimeService.compileRuntimeArtifacts();
         conf.put("operation", operation);
+        if (fullRefresh) {
+            conf.put("full_refresh", true);
+        }
         if (StringUtils.hasText(selector)) {
             conf.put("models", selector);
         }
@@ -590,9 +606,16 @@ public class EtlResource {
     private Map<String, Object> triggerAirflowDagOrThrow(String dagId, Map<String, Object> payload) {
         Map<String, Object> dag = waitForDagRegistration(dagId);
         ensureDagActive(dagId, dag);
-        return airflowClient
-            .triggerDag(dagId, payload)
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Airflow DAG 触发失败: " + dagId));
+        try {
+            return airflowClient
+                .triggerDag(dagId, payload)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Airflow DAG 触发失败: " + dagId));
+        } catch (ResponseStatusException ex) {
+            throw ex;
+        } catch (RuntimeException ex) {
+            LOG.warn("Airflow DAG trigger failed for {}: {}", dagId, ex.getMessage());
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, ex.getMessage(), ex);
+        }
     }
 
     private Map<String, Object> waitForDagRegistration(String dagId) {
@@ -608,24 +631,50 @@ public class EtlResource {
                 return dag;
             }
             if (!Instant.now().isBefore(deadline)) {
-                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Airflow DAG 尚未注册完成: " + dagId);
+                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
+                    "DAG [" + dagId + "] 尚未在 Airflow 中注册，请稍后重试（通常需要 30 秒）");
             }
             if (pollSeconds > 0) {
                 try {
                     Thread.sleep(Duration.ofSeconds(pollSeconds).toMillis());
                 } catch (InterruptedException ex) {
                     Thread.currentThread().interrupt();
-                    throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "等待 Airflow DAG 注册时被中断: " + dagId);
+                    throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
+                        "等待 DAG [" + dagId + "] 注册时被中断，请稍后重试");
                 }
             }
         }
     }
 
     private Map<String, Object> findDag(String dagId) {
-        Map<String, Object> payload = airflowClient.listDags(200).orElse(Map.of());
-        for (Map<String, Object> dag : asListOfMaps(payload.get("dags"))) {
-            if (dagId.equals(stringVal(dag.get("dag_id")))) {
+        if (!StringUtils.hasText(dagId)) {
+            return null;
+        }
+        try {
+            Map<String, Object> dag = airflowClient.getDag(dagId).orElse(null);
+            if (dag != null) {
                 return dag;
+            }
+        } catch (AirflowClient.AirflowApiException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Airflow DAG 查询失败: " + ex.getMessage(), ex);
+        }
+        Map<String, Object> dagList = airflowClient.listDags(200).orElse(null);
+        if (dagList == null) {
+            return null;
+        }
+        Object dags = dagList.get("dags");
+        if (!(dags instanceof List<?> dagEntries)) {
+            return null;
+        }
+        for (Object entry : dagEntries) {
+            if (entry instanceof Map<?, ?> dag && dagId.equals(stringVal(dag.get("dag_id")))) {
+                Map<String, Object> matchedDag = new LinkedHashMap<>();
+                dag.forEach((key, value) -> {
+                    if (key != null) {
+                        matchedDag.put(String.valueOf(key), value);
+                    }
+                });
+                return matchedDag;
             }
         }
         return null;

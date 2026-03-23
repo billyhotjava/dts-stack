@@ -1145,13 +1145,22 @@ async function apiFetch(url: string, init: RequestInit, allowRefresh: boolean): 
 
 	const refreshed = await refreshPlatformAccessToken(tokens.refreshToken);
 	if (!refreshed?.accessToken) {
+		// Refresh failed and no new token — redirect to platform login
+		const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
+		window.location.href = `/#/auth/login?redirect=${returnUrl}`;
 		return response;
 	}
 
 	const retryHeaders = new Headers(init.headers ?? {});
 	if (!retryHeaders.has("accept")) retryHeaders.set("accept", "application/json");
 	retryHeaders.set("authorization", `Bearer ${refreshed.accessToken}`);
-	return await fetch(url, { ...init, credentials: "include", headers: retryHeaders });
+	const retryResponse = await fetch(url, { ...init, credentials: "include", headers: retryHeaders });
+	if (retryResponse.status === 401) {
+		// Retry also failed with 401 — session is unrecoverable
+		const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
+		window.location.href = `/#/auth/login?redirect=${returnUrl}`;
+	}
+	return retryResponse;
 }
 
 export async function fetchWithPlatformAuth(

@@ -13,6 +13,7 @@ import com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO;
 import com.yuzhi.dts.ingestion.service.etl.AddaxJobService;
 import com.yuzhi.dts.ingestion.service.etl.AirflowAdapter;
 import com.yuzhi.dts.ingestion.service.etl.AirflowDagService;
+import com.yuzhi.dts.ingestion.service.etl.DagPreheatService;
 import com.yuzhi.dts.ingestion.service.etl.TargetTableProvisioner;
 import com.yuzhi.dts.ingestion.service.etl.IncrementalSyncService;
 import com.yuzhi.dts.ingestion.service.etl.IngestionRetryService;
@@ -32,6 +33,7 @@ import org.springframework.data.domain.Pageable;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Collections;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -88,6 +90,9 @@ class IngestionTaskServiceTest {
     @Mock
     private IngestionRetryService retryService;
 
+    @Mock
+    private DagPreheatService dagPreheatService;
+
     private IngestionTaskService ingestionTaskService;
     private ObjectMapper objectMapper;
 
@@ -108,7 +113,8 @@ class IngestionTaskServiceTest {
             incrementalSyncService,
             auditService,
             changeLogService,
-            retryService
+            retryService,
+            dagPreheatService
         );
     }
 
@@ -217,9 +223,6 @@ class IngestionTaskServiceTest {
         existingTask.setId(taskId);
 
         when(taskRepository.findById(taskId)).thenReturn(Optional.of(existingTask));
-        when(addaxJobService.createJobFromTask(existingTask)).thenReturn(
-            new AddaxJobService.AddaxJobResult("job.json", "/path/to/job.json", Map.of())
-        );
         when(taskRepository.save(existingTask)).thenReturn(existingTask);
         when(taskMapper.toDto(existingTask)).thenReturn(dto);
 
@@ -233,7 +236,7 @@ class IngestionTaskServiceTest {
     }
 
     @Test
-    void shouldSoftDeleteTask() {
+    void shouldDeleteTaskAndCascadeCleanup() {
         // Given
         Long taskId = 1L;
         IngestionTask task = createTestTaskEntity();
@@ -245,8 +248,12 @@ class IngestionTaskServiceTest {
         ingestionTaskService.delete(taskId);
 
         // Then
-        assertThat(task.getStatus()).isEqualTo("deleted");
-        verify(taskRepository).save(task);
+        verify(executionRepository).deleteByTaskId(taskId);
+        verify(incrementalSyncService).clearCheckpointByTaskId(taskId);
+        verify(changeLogService).deleteByTaskId(taskId);
+        verify(addaxJobService).deleteJobIfExists(task.getAddaxJobPath());
+        verify(airflowDagService).deleteDagForTask(task);
+        verify(taskRepository).delete(task);
     }
 
     @Test
@@ -265,10 +272,16 @@ class IngestionTaskServiceTest {
         execution.setStatus("running");
 
         when(taskRepository.findById(taskId)).thenReturn(Optional.of(task));
+        when(airflowAdapter.isEnabled()).thenReturn(true);
         when(executionRepository.save(any(IngestionExecution.class))).thenReturn(execution);
         when(executionMapper.toDto(execution)).thenReturn(new IngestionExecutionDTO());
         when(addaxJobService.needsJobRebuild(any())).thenReturn(false);
         when(addaxJobService.isJobConfigMalformed(any(java.nio.file.Path.class))).thenReturn(false);
+        when(addaxJobService.splitJobIntoPerTableFiles(task.getAddaxJobPath())).thenReturn(Collections.emptyList());
+        when(addaxJobService.toContainerJobPath(task.getAddaxJobPath())).thenReturn("/opt/addax/job.json");
+        when(airflowDagService.rebuildDagForTask(task, Collections.emptyList())).thenReturn(task.getAirflowDagId());
+        when(airflowAdapter.triggerIfRequested(any(), any(), eq(true))).thenReturn(Map.of("status", "triggered", "dagRunId", "dag-run-1"));
+        when(taskRepository.save(task)).thenReturn(task);
 
         // When
         IngestionExecutionDTO result = ingestionTaskService.execute(taskId);
@@ -276,8 +289,8 @@ class IngestionTaskServiceTest {
         // Then
         assertThat(result).isNotNull();
         verify(airflowAdapter).triggerIfRequested(any(), any(), eq(true));
-        verify(executionRepository).save(any(IngestionExecution.class));
-        verify(taskRepository).save(task);
+        verify(executionRepository, times(2)).save(any(IngestionExecution.class));
+        verify(taskRepository, atLeastOnce()).save(task);
 
         // Verify audit
         verify(auditService).auditAction(
@@ -289,14 +302,25 @@ class IngestionTaskServiceTest {
     }
 
     @Test
-    void shouldHandleExecuteTaskFailure() {
+    void shouldHandleExecuteTaskFailure() throws Exception {
         // Given
         Long taskId = 1L;
         IngestionTask task = createTestTaskEntity();
         task.setId(taskId);
         task.setStatus("active");
+        task.setAirflowEnabled(true);
+        task.setAirflowDagId("test-dag");
+        task.setAddaxJobPath(java.nio.file.Files.createTempFile("addax-job-fail", ".json").toString());
 
         when(taskRepository.findById(taskId)).thenReturn(Optional.of(task));
+        when(airflowAdapter.isEnabled()).thenReturn(true);
+        when(executionRepository.save(any(IngestionExecution.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(addaxJobService.needsJobRebuild(any())).thenReturn(false);
+        when(addaxJobService.isJobConfigMalformed(any(java.nio.file.Path.class))).thenReturn(false);
+        when(addaxJobService.splitJobIntoPerTableFiles(task.getAddaxJobPath())).thenReturn(Collections.emptyList());
+        when(addaxJobService.toContainerJobPath(task.getAddaxJobPath())).thenReturn("/opt/addax/job.json");
+        when(airflowDagService.rebuildDagForTask(task, Collections.emptyList())).thenReturn(task.getAirflowDagId());
+        when(taskRepository.save(task)).thenReturn(task);
         when(airflowAdapter.triggerIfRequested(any(), any(), anyBoolean()))
             .thenThrow(new RuntimeException("Airflow trigger failed"));
 
@@ -351,6 +375,44 @@ class IngestionTaskServiceTest {
         // Then
         assertThat(result).isPresent();
         verify(executionRepository).findFirstByTaskIdOrderByCreatedAtDesc(taskId);
+    }
+
+    @Test
+    void validateAsyncExecutionRequest_shouldRejectWhenLatestExecutionStillRunning() {
+        Long taskId = 1L;
+        IngestionTask task = createTestTaskEntity();
+        task.setId(taskId);
+        task.setStatus("active");
+
+        IngestionExecution latestExecution = new IngestionExecution();
+        latestExecution.setStatus("running");
+
+        when(taskRepository.findById(taskId)).thenReturn(Optional.of(task));
+        when(executionRepository.findFirstByTaskIdOrderByCreatedAtDesc(taskId)).thenReturn(Optional.of(latestExecution));
+
+        assertThatThrownBy(() -> ingestionTaskService.validateAsyncExecutionRequest(taskId))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("任务仍在运行中");
+    }
+
+    @Test
+    void validateAsyncRetryRequest_shouldRejectUnsupportedRetryMode() {
+        Long taskId = 1L;
+        Long executionId = 9L;
+        IngestionTask task = createTestTaskEntity();
+        task.setId(taskId);
+
+        IngestionExecution execution = new IngestionExecution();
+        execution.setId(executionId);
+        execution.setTask(task);
+        execution.setStatus("failed");
+
+        when(taskRepository.findById(taskId)).thenReturn(Optional.of(task));
+        when(executionRepository.findById(executionId)).thenReturn(Optional.of(execution));
+
+        assertThatThrownBy(() -> ingestionTaskService.validateAsyncRetryRequest(taskId, executionId, "BAD_MODE"))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("Unsupported retry mode");
     }
 
     // Helper methods

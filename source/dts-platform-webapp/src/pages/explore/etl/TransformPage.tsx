@@ -330,9 +330,10 @@ export default function TransformPage() {
 						type="primary"
 						icon={<PlayCircleOutlined />}
 						onClick={() => handleExecute(record.id!, record.name)}
-						disabled={record.status === "deleted"}
+						loading={executingTaskId === record.id && !executeProgress.terminal}
+						disabled={record.status === "deleted" || (executingTaskId === record.id && !executeProgress.terminal)}
 					>
-						执行
+						{executingTaskId === record.id && !executeProgress.terminal ? "执行中" : "执行"}
 					</Button>
 					<Button
 						size="small"
@@ -372,7 +373,7 @@ export default function TransformPage() {
 	];
 
 	return (
-		<div className="space-y-4">
+		<div className="space-y-4" data-testid="platform-transform-page">
 			<Card
 				title="入湖任务中心"
 				extra={
@@ -393,38 +394,48 @@ export default function TransformPage() {
 								{item.label}
 							</Button>
 						))}
-						<Button className="rounded-2xl" icon={<ReloadOutlined />} onClick={() => void loadTasks()} loading={loading}>
+						<Button
+							className="rounded-2xl"
+							icon={<ReloadOutlined />}
+							onClick={() => void loadTasks()}
+							loading={loading}
+							data-testid="platform-transform-refresh"
+						>
 							刷新
 						</Button>
-						<Button className="rounded-2xl" type="primary" onClick={() => router.push("/explore/etl/transform/new")}>
+						<Button
+							className="rounded-2xl"
+							type="primary"
+							onClick={() => router.push("/explore/etl/transform/new")}
+							data-testid="platform-transform-create"
+						>
 							创建入湖任务
 						</Button>
 					</Space>
 				}
 			/>
 
-			<Card
-				title="任务清单"
-				extra={<Tag color="blue">{pagination.total || tasks.length} 条任务</Tag>}
-			>
-				<Table
-					columns={columns}
-					dataSource={tasks}
-					rowKey="id"
-					loading={loading}
-					scroll={{ x: 1400 }}
-					pagination={{
-						current: pagination.current,
-						pageSize: pagination.pageSize,
-						total: pagination.total,
-						showSizeChanger: true,
-						showQuickJumper: true,
-						showTotal: (total) => `共 ${total} 条`,
-						onChange: (page, pageSize) => {
-							setPagination((prev) => ({ ...prev, current: page, pageSize: pageSize || 20 }));
-						},
-					}}
-				/>
+			<Card title="任务清单" extra={<Tag color="blue">{pagination.total || tasks.length} 条任务</Tag>}>
+				<div data-testid="platform-transform-table">
+					<Table
+						columns={columns}
+						dataSource={tasks}
+						rowKey="id"
+						loading={loading}
+						scroll={{ x: 1400 }}
+						pagination={{
+							current: pagination.current,
+							pageSize: pagination.pageSize,
+							total: pagination.total,
+							showSizeChanger: true,
+							showQuickJumper: true,
+							showTotal: (total) => `共 ${total} 条`,
+							onChange: (page, pageSize) => {
+								setPagination((prev) => ({ ...prev, current: page, pageSize: pageSize || 20 }));
+							},
+						}}
+					/>
+				</div>
 			</Card>
 
 			<Modal
@@ -459,7 +470,7 @@ export default function TransformPage() {
 					</Space>
 				}
 			>
-				<Space direction="vertical" style={{ width: "100%" }} size={12}>
+				<Space direction="vertical" style={{ width: "100%" }} size={12} data-testid="platform-transform-progress">
 					<Progress percent={executeProgress.percent} status={executeProgress.status} />
 					<Alert
 						type={

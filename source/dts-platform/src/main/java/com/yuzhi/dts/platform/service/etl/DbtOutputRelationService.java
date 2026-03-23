@@ -105,25 +105,18 @@ public class DbtOutputRelationService {
                 "当前模型暂无产出 relation，将直接执行 dbt build"
             );
         }
-        String dropSql = "VIEW".equalsIgnoreCase(summary.relationType())
-            ? "DROP VIEW " + summary.qualifiedName()
-            : "DROP TABLE " + summary.qualifiedName();
-        DbtTargetConnectionFactory.TargetWarehouse target = connectionFactory.resolveTarget();
-        try (Connection connection = connectionFactory.open(target); Statement statement = connection.createStatement()) {
-            statement.execute(dropSql);
-            return new DbtOutputRelationActionResult(
-                summary.modelId(),
-                summary.modelName(),
-                summary.selector(),
-                summary.qualifiedName(),
-                "rebuild",
-                true,
-                true,
-                "已删除当前产出 relation，准备执行 dbt build"
-            );
-        } catch (SQLException ex) {
-            throw new IllegalStateException("重建前删除产出表失败: " + ex.getMessage(), ex);
-        }
+        // S4-002: Do NOT drop the table before build. Instead, rely on dbt --full-refresh
+        // which handles DROP+CREATE atomically within the dbt materialization.
+        return new DbtOutputRelationActionResult(
+            summary.modelId(),
+            summary.modelName(),
+            summary.selector(),
+            summary.qualifiedName(),
+            "rebuild",
+            true,
+            false,
+            "将通过 dbt --full-refresh 安全重建产出 relation"
+        );
     }
 
     private ModelingSqlModel resolveModel(UUID modelId) {

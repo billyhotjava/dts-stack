@@ -66,6 +66,8 @@ class EtlResourceTest {
         when(topicBindingRuntimeService.compileRuntimeArtifacts()).thenReturn(
             new TopicBindingRuntimeService.RuntimeCompilationResult(true, "/tmp/topic_sources.yml", 0, Map.of(), List.of())
         );
+        when(airflowClient.getDag("dwh_biadmin_dbt_manual"))
+            .thenReturn(java.util.Optional.empty(), java.util.Optional.empty());
         when(airflowClient.listDags(200))
             .thenReturn(java.util.Optional.of(Map.of("dags", List.of())))
             .thenReturn(java.util.Optional.of(Map.of("dags", List.of(Map.of("dag_id", "dwh_biadmin_dbt_manual")))));
@@ -131,6 +133,7 @@ class EtlResourceTest {
         when(topicBindingRuntimeService.compileRuntimeArtifacts()).thenReturn(
             new TopicBindingRuntimeService.RuntimeCompilationResult(true, "/tmp/topic_sources.yml", 0, Map.of(), List.of())
         );
+        when(airflowClient.getDag("dwh_biadmin_dbt_manual")).thenReturn(java.util.Optional.empty());
         when(airflowClient.listDags(200))
             .thenReturn(java.util.Optional.of(Map.of("dags", List.of(Map.of("dag_id", "dwh_biadmin_dbt_manual", "is_paused", true)))));
         when(airflowClient.setDagPaused("dwh_biadmin_dbt_manual", false))
@@ -197,6 +200,7 @@ class EtlResourceTest {
         when(topicBindingRuntimeService.compileRuntimeArtifacts()).thenReturn(
             new TopicBindingRuntimeService.RuntimeCompilationResult(true, "/tmp/topic_sources.yml", 0, Map.of(), List.of())
         );
+        when(airflowClient.getDag("dwh_biadmin_dbt_manual")).thenReturn(java.util.Optional.empty());
         when(airflowClient.listDags(200))
             .thenReturn(java.util.Optional.of(Map.of("dags", List.of(Map.of("dag_id", "dwh_biadmin_dbt_manual")))));
         when(airflowClient.triggerDag(eq("dwh_biadmin_dbt_manual"), any())).thenReturn(java.util.Optional.empty());
@@ -339,11 +343,15 @@ class EtlResourceTest {
         AirflowProperties airflowProperties = new AirflowProperties();
         airflowProperties.setEnabled(true);
         airflowProperties.setDagId("dbt_load");
+        airflowProperties.setDagReadyWaitSeconds(0);
+        airflowProperties.setDagReadyPollSeconds(0);
         ExternalRunLogService externalRunLogService = mock(ExternalRunLogService.class);
         AuditService auditService = mock(AuditService.class);
         ModelingSqlModelRepository sqlModelRepository = mock(ModelingSqlModelRepository.class);
 
         when(dbtDagService.ensureDagForSelector("tag:project-management")).thenReturn("dwh_biadmin_dbt_manual");
+        when(airflowClient.getDag("dwh_biadmin_dbt_manual"))
+            .thenReturn(java.util.Optional.of(Map.of("dag_id", "dwh_biadmin_dbt_manual", "is_paused", false)));
         when(airflowClient.triggerDag(eq("dwh_biadmin_dbt_manual"), any())).thenReturn(java.util.Optional.of(Map.of("status", "queued")));
 
         EtlResource resource = new EtlResource(
@@ -394,6 +402,8 @@ class EtlResourceTest {
         AirflowProperties airflowProperties = new AirflowProperties();
         airflowProperties.setEnabled(true);
         airflowProperties.setDagId("dbt_load");
+        airflowProperties.setDagReadyWaitSeconds(0);
+        airflowProperties.setDagReadyPollSeconds(0);
         ExternalRunLogService externalRunLogService = mock(ExternalRunLogService.class);
         AuditService auditService = mock(AuditService.class);
         ModelingSqlModelRepository sqlModelRepository = mock(ModelingSqlModelRepository.class);
@@ -413,6 +423,8 @@ class EtlResourceTest {
                 )
             );
         when(dbtDagService.ensureDagForSelector("tag:project-management")).thenReturn("dwh_biadmin_dbt_manual");
+        when(airflowClient.getDag("dwh_biadmin_dbt_manual"))
+            .thenReturn(java.util.Optional.of(Map.of("dag_id", "dwh_biadmin_dbt_manual", "is_paused", false)));
         when(airflowClient.triggerDag(eq("dwh_biadmin_dbt_manual"), any())).thenReturn(java.util.Optional.of(Map.of("status", "queued")));
 
         EtlResource resource = new EtlResource(
@@ -464,6 +476,8 @@ class EtlResourceTest {
         AirflowProperties airflowProperties = new AirflowProperties();
         airflowProperties.setEnabled(true);
         airflowProperties.setDagId("dbt_load");
+        airflowProperties.setDagReadyWaitSeconds(0);
+        airflowProperties.setDagReadyPollSeconds(0);
         ExternalRunLogService externalRunLogService = mock(ExternalRunLogService.class);
         AuditService auditService = mock(AuditService.class);
         ModelingSqlModelRepository sqlModelRepository = mock(ModelingSqlModelRepository.class);
@@ -479,6 +493,8 @@ class EtlResourceTest {
                 List.of()
             )
         );
+        when(airflowClient.getDag("dwh_biadmin_dbt_manual"))
+            .thenReturn(java.util.Optional.of(Map.of("dag_id", "dwh_biadmin_dbt_manual", "is_paused", false)));
         when(airflowClient.triggerDag(eq("dwh_biadmin_dbt_manual"), any())).thenReturn(java.util.Optional.of(Map.of("status", "queued")));
 
         EtlResource resource = new EtlResource(
@@ -526,5 +542,78 @@ class EtlResourceTest {
             Object vars = conf.get("vars");
             return vars instanceof String text && text.contains("topic_bindings") && text.contains("manual_flag");
         }));
+    }
+
+    @Test
+    void triggerDbtCompile_shouldSurfaceAirflowDagLookupFailure() {
+        DbtConfigService dbtConfigService = mock(DbtConfigService.class);
+        DbtManifestService manifestService = mock(DbtManifestService.class);
+        DbtSourceService dbtSourceService = mock(DbtSourceService.class);
+        DbtAssetSyncService dbtAssetSyncService = mock(DbtAssetSyncService.class);
+        DbtDagService dbtDagService = mock(DbtDagService.class);
+        DbtPreviewService dbtPreviewService = mock(DbtPreviewService.class);
+        DbtOutputRelationService dbtOutputRelationService = mock(DbtOutputRelationService.class);
+        DbtRunResultService dbtRunResultService = mock(DbtRunResultService.class);
+        DbtQualityGateService dbtQualityGateService = mock(DbtQualityGateService.class);
+        DbtReleaseGateService dbtReleaseGateService = mock(DbtReleaseGateService.class);
+        TopicBindingRuntimeService topicBindingRuntimeService = mock(TopicBindingRuntimeService.class);
+        DbtArtifactSyncState dbtArtifactSyncState = new DbtArtifactSyncState();
+        AirflowClient airflowClient = mock(AirflowClient.class);
+        AirflowProperties airflowProperties = new AirflowProperties();
+        airflowProperties.setEnabled(true);
+        airflowProperties.setDagId("dbt_load");
+        airflowProperties.setDagReadyWaitSeconds(0);
+        airflowProperties.setDagReadyPollSeconds(0);
+        ExternalRunLogService externalRunLogService = mock(ExternalRunLogService.class);
+        AuditService auditService = mock(AuditService.class);
+        ModelingSqlModelRepository sqlModelRepository = mock(ModelingSqlModelRepository.class);
+
+        when(dbtDagService.ensureDagForSelector("tag:project-management")).thenReturn("dwh_biadmin_dbt_manual");
+        when(dbtSourceService.refreshOdsSources()).thenReturn(DbtSourceService.DbtSourceRefreshResult.success("/tmp/ods_sources.yml", 1));
+        when(topicBindingRuntimeService.compileRuntimeArtifacts()).thenReturn(
+            new TopicBindingRuntimeService.RuntimeCompilationResult(true, "/tmp/topic_sources.yml", 0, Map.of(), List.of())
+        );
+        when(airflowClient.getDag("dwh_biadmin_dbt_manual"))
+            .thenThrow(new AirflowClient.AirflowApiException("查询 DAG 失败 (dwh_biadmin_dbt_manual): 500 INTERNAL_SERVER_ERROR", null));
+
+        EtlResource resource = new EtlResource(
+            dbtConfigService,
+            manifestService,
+            dbtSourceService,
+            dbtAssetSyncService,
+            dbtDagService,
+            dbtPreviewService,
+            dbtOutputRelationService,
+            dbtRunResultService,
+            dbtQualityGateService,
+            dbtReleaseGateService,
+            topicBindingRuntimeService,
+            dbtArtifactSyncState,
+            airflowClient,
+            airflowProperties,
+            externalRunLogService,
+            auditService,
+            new ObjectMapper(),
+            sqlModelRepository
+        );
+
+        assertThatThrownBy(
+            () ->
+                resource.triggerDbtCompile(
+                    new EtlResource.DbtRunRequest(
+                        "tag:project-management",
+                        "tag:project-management",
+                        "dev",
+                        "compile",
+                        Map.of(),
+                        null,
+                        null,
+                        null
+                    ),
+                    "BIADMIN"
+                )
+        )
+            .isInstanceOf(ResponseStatusException.class)
+            .hasMessageContaining("Airflow DAG 查询失败");
     }
 }

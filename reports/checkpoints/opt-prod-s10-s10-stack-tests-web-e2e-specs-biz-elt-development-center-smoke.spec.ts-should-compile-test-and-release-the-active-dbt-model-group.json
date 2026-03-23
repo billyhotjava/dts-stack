@@ -1,0 +1,160 @@
+{
+  "testId": "/opt/prod/s10/s10-stack/tests/web-e2e/specs/biz/elt-development-center-smoke.spec.ts-should compile, test, and release the active dbt model group",
+  "title": "should compile, test, and release the active dbt model group",
+  "entries": [
+    {
+      "step": "test:begin",
+      "at": "2026-03-23T07:04:00.561Z"
+    },
+    {
+      "step": "test:complete",
+      "at": "2026-03-23T07:04:11.390Z",
+      "detail": {
+        "status": "failed"
+      }
+    },
+    {
+      "step": "test:begin",
+      "at": "2026-03-23T07:05:05.026Z"
+    },
+    {
+      "step": "elt-modeling:workspace-visible",
+      "at": "2026-03-23T07:05:06.779Z"
+    },
+    {
+      "step": "elt-modeling:compile-success",
+      "at": "2026-03-23T07:05:07.090Z"
+    },
+    {
+      "step": "elt-modeling:test-success",
+      "at": "2026-03-23T07:05:07.346Z"
+    },
+    {
+      "step": "test:complete",
+      "at": "2026-03-23T07:05:22.622Z",
+      "detail": {
+        "status": "failed"
+      }
+    },
+    {
+      "step": "test:begin",
+      "at": "2026-03-23T07:05:48.259Z"
+    },
+    {
+      "step": "elt-modeling:workspace-visible",
+      "at": "2026-03-23T07:05:49.784Z"
+    },
+    {
+      "step": "elt-modeling:compile-success",
+      "at": "2026-03-23T07:05:50.107Z"
+    },
+    {
+      "step": "elt-modeling:test-success",
+      "at": "2026-03-23T07:05:50.380Z"
+    },
+    {
+      "step": "elt-modeling:build-submitted",
+      "at": "2026-03-23T07:05:50.749Z"
+    },
+    {
+      "step": "test:complete",
+      "at": "2026-03-23T07:05:51.327Z",
+      "detail": {
+        "status": "failed"
+      }
+    },
+    {
+      "step": "test:begin",
+      "at": "2026-03-23T07:06:14.902Z"
+    },
+    {
+      "step": "elt-modeling:workspace-visible",
+      "at": "2026-03-23T07:06:16.495Z"
+    },
+    {
+      "step": "elt-modeling:compile-success",
+      "at": "2026-03-23T07:06:16.810Z"
+    },
+    {
+      "step": "elt-modeling:test-success",
+      "at": "2026-03-23T07:06:17.089Z"
+    },
+    {
+      "step": "elt-modeling:build-submitted",
+      "at": "2026-03-23T07:06:17.818Z"
+    },
+    {
+      "step": "elt-modeling:run-record-visible",
+      "at": "2026-03-23T07:06:18.268Z"
+    },
+    {
+      "step": "test:complete",
+      "at": "2026-03-23T07:06:18.272Z",
+      "detail": {
+        "status": "passed"
+      }
+    },
+    {
+      "step": "test:begin",
+      "at": "2026-03-23T07:06:38.648Z"
+    },
+    {
+      "step": "elt-modeling:workspace-visible",
+      "at": "2026-03-23T07:06:40.071Z"
+    },
+    {
+      "step": "elt-modeling:compile-success",
+      "at": "2026-03-23T07:06:40.351Z"
+    },
+    {
+      "step": "elt-modeling:test-success",
+      "at": "2026-03-23T07:06:40.625Z"
+    },
+    {
+      "step": "elt-modeling:build-submitted",
+      "at": "2026-03-23T07:06:41.303Z"
+    },
+    {
+      "step": "elt-modeling:run-record-visible",
+      "at": "2026-03-23T07:06:41.718Z"
+    },
+    {
+      "step": "test:complete",
+      "at": "2026-03-23T07:06:41.720Z",
+      "detail": {
+        "status": "passed"
+      }
+    },
+    {
+      "step": "test:begin",
+      "at": "2026-03-23T07:12:46.387Z"
+    },
+    {
+      "step": "elt-modeling:workspace-visible",
+      "at": "2026-03-23T07:12:48.009Z"
+    },
+    {
+      "step": "elt-modeling:compile-success",
+      "at": "2026-03-23T07:12:48.348Z"
+    },
+    {
+      "step": "elt-modeling:test-success",
+      "at": "2026-03-23T07:12:48.647Z"
+    },
+    {
+      "step": "elt-modeling:build-submitted",
+      "at": "2026-03-23T07:12:49.061Z"
+    },
+    {
+      "step": "elt-modeling:run-record-visible",
+      "at": "2026-03-23T07:12:49.480Z"
+    },
+    {
+      "step": "test:complete",
+      "at": "2026-03-23T07:12:49.482Z",
+      "detail": {
+        "status": "passed"
+      }
+    }
+  ]
+}

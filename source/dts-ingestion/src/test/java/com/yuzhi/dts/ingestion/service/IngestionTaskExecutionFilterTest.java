@@ -13,6 +13,7 @@ import com.yuzhi.dts.ingestion.service.dto.IngestionExecutionDTO;
 import com.yuzhi.dts.ingestion.service.etl.AddaxJobService;
 import com.yuzhi.dts.ingestion.service.etl.AirflowAdapter;
 import com.yuzhi.dts.ingestion.service.etl.AirflowDagService;
+import com.yuzhi.dts.ingestion.service.etl.DagPreheatService;
 import com.yuzhi.dts.ingestion.service.etl.IncrementalSyncService;
 import com.yuzhi.dts.ingestion.service.etl.IngestionRetryService;
 import com.yuzhi.dts.ingestion.service.etl.TargetTableProvisioner;
@@ -74,6 +75,9 @@ class IngestionTaskExecutionFilterTest {
     @Mock
     private IngestionRetryService retryService;
 
+    @Mock
+    private DagPreheatService dagPreheatService;
+
     private IngestionTaskService ingestionTaskService;
 
     @BeforeEach
@@ -92,7 +96,8 @@ class IngestionTaskExecutionFilterTest {
             incrementalSyncService,
             auditService,
             changeLogService,
-            retryService
+            retryService,
+            dagPreheatService
         );
     }
 

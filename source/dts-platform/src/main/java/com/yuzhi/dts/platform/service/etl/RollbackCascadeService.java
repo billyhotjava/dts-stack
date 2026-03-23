@@ -143,11 +143,15 @@ public class RollbackCascadeService {
         }
 
         Map<String, Object> payload = Map.of("conf", conf, "logical_date", Instant.now().toString());
-        airflowClient.triggerDag(dagId, payload)
-            .ifPresentOrElse(
-                result -> LOG.info("[rollback-cascade] dbt full-refresh triggered: {}", result),
-                () -> LOG.warn("[rollback-cascade] dbt full-refresh trigger returned empty result")
-            );
+        try {
+            airflowClient.triggerDag(dagId, payload)
+                .ifPresentOrElse(
+                    result -> LOG.info("[rollback-cascade] dbt full-refresh triggered: {}", result),
+                    () -> LOG.warn("[rollback-cascade] dbt full-refresh trigger returned empty result")
+                );
+        } catch (RuntimeException ex) {
+            LOG.warn("[rollback-cascade] dbt full-refresh trigger failed for dagId={}: {}", dagId, ex.getMessage());
+        }
     }
 
     private UUID extractUuid(Map<String, Object> map, String key) {

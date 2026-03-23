@@ -84,6 +84,18 @@ echo shared
 EOF_FILE
 chmod +x "${TEST_REPO}/bin/lib/shared.sh"
 
+cat > "${TEST_REPO}/bin/dts-upgrade" <<'EOF_FILE'
+#!/usr/bin/env bash
+echo upgrade
+EOF_FILE
+chmod +x "${TEST_REPO}/bin/dts-upgrade"
+
+cat > "${TEST_REPO}/bin/lib/dts-upgrade-common.sh" <<'EOF_FILE'
+#!/usr/bin/env bash
+echo common
+EOF_FILE
+chmod +x "${TEST_REPO}/bin/lib/dts-upgrade-common.sh"
+
 cat > "${FAKE_BIN}/docker" <<'EOF_DOCKER'
 #!/usr/bin/env bash
 case "${1:-}" in
@@ -127,13 +139,46 @@ EOF_DF
 chmod +x "${FAKE_BIN}/df"
 
 PATH="${FAKE_BIN}:${PATH}" "${TEST_REPO}/builds/dts-build.sh" --pack --no-images --output "${PACKAGE_PATH}" >/dev/null
+ARCHIVE_CONTENTS="$(tar -tzf "${PACKAGE_PATH}")"
 
-if ! tar -tzf "${PACKAGE_PATH}" | grep -qx 'dts-stack/bin/test-helper.sh'; then
+if ! grep -qx 'dts-stack/bin/test-helper.sh' <<<"${ARCHIVE_CONTENTS}"; then
   echo "expected packaged archive to include bin/test-helper.sh" >&2
   exit 1
 fi
 
-if ! tar -tzf "${PACKAGE_PATH}" | grep -qx 'dts-stack/bin/lib/shared.sh'; then
+if ! grep -qx 'dts-stack/bin/lib/shared.sh' <<<"${ARCHIVE_CONTENTS}"; then
   echo "expected packaged archive to include nested bin/lib/shared.sh" >&2
   exit 1
 fi
+
+if ! grep -qx 'dts-stack/bin/dts-upgrade' <<<"${ARCHIVE_CONTENTS}"; then
+  echo "expected packaged archive to include bin/dts-upgrade" >&2
+  exit 1
+fi
+
+if ! grep -qx 'dts-stack/bin/lib/dts-upgrade-common.sh' <<<"${ARCHIVE_CONTENTS}"; then
+  echo "expected packaged archive to include bin/lib/dts-upgrade-common.sh" >&2
+  exit 1
+fi
+
+if ! grep -qx 'images/' <<<"${ARCHIVE_CONTENTS}"; then
+  echo "expected packaged archive to include top-level images/ directory" >&2
+  exit 1
+fi
+
+if ! grep -qx 'extra/' <<<"${ARCHIVE_CONTENTS}"; then
+  echo "expected packaged archive to include top-level extra/ directory" >&2
+  exit 1
+fi
+
+for metadata_file in \
+  extra/release-manifest.json \
+  extra/merge-rules.yml \
+  extra/checksums.txt \
+  extra/rollback-manifest.json
+do
+  if ! grep -qx "${metadata_file}" <<<"${ARCHIVE_CONTENTS}"; then
+    echo "expected packaged archive to include ${metadata_file}" >&2
+    exit 1
+  fi
+done

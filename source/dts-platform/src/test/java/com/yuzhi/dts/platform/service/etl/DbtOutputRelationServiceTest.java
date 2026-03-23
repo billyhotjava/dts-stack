@@ -111,22 +111,21 @@ class DbtOutputRelationServiceTest {
     }
 
     @Test
-    void prepareRebuild_shouldDropExistingRelation() throws Exception {
+    void prepareRebuild_shouldReturnFullRefreshPlanWithoutDroppingRelation() throws Exception {
         Connection connection = mock(Connection.class);
         DatabaseMetaData metadata = mock(DatabaseMetaData.class);
         ResultSet tables = mock(ResultSet.class);
-        Statement statement = mock(Statement.class);
         when(connectionFactory.open(target)).thenReturn(connection);
         when(connection.getMetaData()).thenReturn(metadata);
         when(metadata.getTables(null, "public", "major_project_overview", new String[] { "TABLE", "VIEW" })).thenReturn(tables);
         when(tables.next()).thenReturn(true, false);
         when(tables.getString("TABLE_TYPE")).thenReturn("TABLE");
-        when(connection.createStatement()).thenReturn(statement);
 
         DbtOutputRelationService.DbtOutputRelationActionResult result = service.prepareRebuild(model.getId());
 
-        assertThat(result.executed()).isTrue();
+        assertThat(result.relationExists()).isTrue();
+        assertThat(result.executed()).isFalse();
         assertThat(result.selector()).isEqualTo("tag:project-management");
-        verify(statement).execute("DROP TABLE \"public\".\"major_project_overview\"");
+        assertThat(result.message()).contains("dbt --full-refresh");
     }
 }

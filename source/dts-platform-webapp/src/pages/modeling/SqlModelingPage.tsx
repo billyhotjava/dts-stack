@@ -25,6 +25,8 @@ import {
 	Typography,
 	Upload,
 	Popconfirm,
+	Segmented,
+	Skeleton,
 } from "antd";
 import {
 	PlusOutlined,
@@ -457,6 +459,7 @@ const UNASSIGNED_SPACE_KEY = "space-unassigned";
 
 export default function SqlModelingPage() {
 	const router = useRouter();
+	const [pageLoadError, setPageLoadError] = useState(false);
 	const [configLoading, setConfigLoading] = useState(false);
 	const [configSaving, setConfigSaving] = useState(false);
 	const [configOpen, setConfigOpen] = useState(false);
@@ -498,6 +501,7 @@ export default function SqlModelingPage() {
 	const [contractImpactLoading, setContractImpactLoading] = useState(false);
 	const [contractImpact, setContractImpact] = useState<SqlModelContractImpact | null>(null);
 	const [bottomTab, setBottomTab] = useState("preview");
+	const [opsSubTab, setOpsSubTab] = useState("compile");
 	const [keyword, setKeyword] = useState("");
 	const [activeModelKey, setActiveModelKey] = useState<string | null>(null);
 	const [dbtSources, setDbtSources] = useState<DbtSourceItem[]>([]);
@@ -559,6 +563,7 @@ export default function SqlModelingPage() {
 			});
 		} catch (err: any) {
 			toast.error(err?.message || "加载 dbt 配置失败");
+			setPageLoadError(true);
 		} finally {
 			setConfigLoading(false);
 		}
@@ -580,7 +585,8 @@ export default function SqlModelingPage() {
 					setRunResult((prev) => prev || latest);
 				}
 			}
-		} catch {
+		} catch (err: any) {
+			toast.error(err?.message || "加载同步状态失败");
 			setDbtSyncStatus(null);
 		}
 	}, []);
@@ -594,6 +600,7 @@ export default function SqlModelingPage() {
 			return nextModels;
 		} catch (err: any) {
 			toast.error(err?.message || "加载模型失败");
+			setPageLoadError(true);
 			return [];
 		} finally {
 			setModelsLoading(false);
@@ -649,6 +656,7 @@ export default function SqlModelingPage() {
 			setSpaces(Array.isArray(resp) ? resp : []);
 		} catch (err: any) {
 			toast.error(err?.message || "加载项目空间失败");
+			setPageLoadError(true);
 		} finally {
 			setSpacesLoading(false);
 		}
@@ -894,7 +902,7 @@ export default function SqlModelingPage() {
 				setOutputModalOpen(false);
 				setOutputAction(null);
 				void loadAuditLogs(dbtConfig?.config?.targetDataSourceId);
-				setBottomTab("audit");
+				setBottomTab("operations"); setOpsSubTab("audit");
 				await loadSyncStatus(normalizeText(outputRelation?.selector) || normalizeText(activeModel.dagSelector) || undefined);
 				return;
 			}
@@ -914,7 +922,7 @@ export default function SqlModelingPage() {
 				dagId,
 			} as DbtRunSummary;
 			setRunResult(pendingRun);
-			setBottomTab("execlog");
+			setBottomTab("operations"); setOpsSubTab("execlog");
 			setOutputModalOpen(false);
 			setOutputAction(null);
 			toast.success(resp?.dropMessage || "已提交重建产出表任务");
@@ -945,7 +953,7 @@ export default function SqlModelingPage() {
 			setRunResult(resolvedRun || pendingRun);
 			if (settled.dagState === "failed" && dagRunId) {
 				await loadExecLog(dagRunId, dagId || undefined);
-				setBottomTab("execlog");
+				setBottomTab("operations"); setOpsSubTab("execlog");
 			}
 			void loadAuditLogs(dbtConfig?.config?.targetDataSourceId);
 		} catch (err: any) {
@@ -955,17 +963,23 @@ export default function SqlModelingPage() {
 		}
 	};
 
-	useEffect(() => {
+	const loadInitialData = useCallback(() => {
+		setPageLoadError(false);
 		void loadConfig();
-		void loadSyncStatus();
 		void loadModels();
-		void loadRuns();
 		void loadSpaces();
+		// Non-critical loads
+		void loadSyncStatus();
+		void loadRuns();
 		void loadSources();
 		void loadLayers();
 		void loadDbtSources();
 		void loadDbtRefs();
-	}, [loadConfig, loadModels, loadRuns, loadSpaces, loadSources, loadLayers, loadSyncStatus, loadDbtSources, loadDbtRefs]);
+	}, [loadConfig, loadModels, loadSpaces, loadSyncStatus, loadRuns, loadSources, loadLayers, loadDbtSources, loadDbtRefs]);
+
+	useEffect(() => {
+		loadInitialData();
+	}, [loadInitialData]);
 
 	useEffect(() => {
 		if (spaces.length === 0 && sqlModels.every((model) => !!model.planId)) {
@@ -1231,13 +1245,13 @@ export default function SqlModelingPage() {
 			setExecLog("");
 			if (operation === "compile") {
 				setCompileResult(pendingRun);
-				setBottomTab("compile");
+				setBottomTab("operations"); setOpsSubTab("compile");
 			} else if (operation === "test") {
 				setTestResult(pendingRun);
-				setBottomTab("test");
+				setBottomTab("operations"); setOpsSubTab("test");
 			} else {
 				setRunResult(pendingRun);
-				setBottomTab("execlog");
+				setBottomTab("operations"); setOpsSubTab("execlog");
 			}
 			const settled = await waitForBuildResult(operation, selector, dagId || undefined, dagRunId || undefined, baselineRun);
 			if (settled.syncStatus) {
@@ -1274,7 +1288,7 @@ export default function SqlModelingPage() {
 			if (settled.dagState === "failed") {
 				if (dagRunId) {
 					await loadExecLog(dagRunId, dagId || undefined);
-					setBottomTab("execlog");
+					setBottomTab("operations"); setOpsSubTab("execlog");
 				}
 				toast.error(`dbt ${operation} 失败`);
 				return;
@@ -1673,7 +1687,7 @@ export default function SqlModelingPage() {
 							<ol style={{ margin: 0, paddingLeft: 20, fontSize: 12 }}>
 								<li>检查模型列表中的命名与分层是否符合预期。</li>
 								<li>进入 dbt 文件浏览器按业务口径微调 SQL 并运行 dbt。</li>
-								<li>完成验证后回到逻辑建模执行“提交变更”。</li>
+								<li>完成验证后回到逻辑建模执行"提交变更"。</li>
 							</ol>
 						</div>
 					</div>
@@ -2001,7 +2015,7 @@ export default function SqlModelingPage() {
 						icon={<FileTextOutlined />}
 						onClick={() => {
 							if (row.dag_run_id) {
-								setBottomTab("execlog");
+								setBottomTab("operations"); setOpsSubTab("execlog");
 								loadExecLog(row.dag_run_id, normalizeText(row?.dag_id) || undefined);
 							}
 						}}
@@ -2158,9 +2172,29 @@ export default function SqlModelingPage() {
 	const latestBuildColor = latestBuildStatus === "SUCCESS" ? "green" : latestBuildStatus === "FAILED" ? "red" : "gold";
 
 	return (
-		<div className="space-y-6">
+		<div className="space-y-6" data-testid="platform-sql-modeling-page">
+			{pageLoadError && (
+				<Alert
+					type="error"
+					showIcon
+					message="数据加载失败"
+					description="网络连接不稳定，部分数据未能加载。"
+					action={<Button size="small" onClick={loadInitialData}>重新加载</Button>}
+					className="mb-4"
+				/>
+			)}
 			<Card
-				title="逻辑建模工作区"
+				title={
+					<Space>
+						<span>逻辑建模工作区</span>
+						<Badge count={sqlModels.length} showZero overflowCount={999} style={{ backgroundColor: sqlModels.length > 0 ? '#1677ff' : '#d9d9d9' }} />
+						{dbtSyncStatus?.stats?.lastSyncAt && (
+							<Typography.Text type="secondary" style={{ fontSize: 12, fontWeight: 'normal' }}>
+								上次同步: {formatDateTime(dbtSyncStatus.stats.lastSyncAt)}
+							</Typography.Text>
+						)}
+					</Space>
+				}
 				extra={
 					<Space wrap>
 						<Button className="rounded-2xl" onClick={() => router.push("/modeling/dbt-files")}>
@@ -2226,6 +2260,7 @@ export default function SqlModelingPage() {
 										onClick={() => triggerBuildOperation("compile")}
 										loading={buildTriggering === "compile"}
 										disabled={!activeModel || !configEnabled || !workspaceOk || buildTriggering != null}
+										data-testid="platform-sql-modeling-compile"
 									>
 										{action.label}
 									</Button>
@@ -2239,6 +2274,7 @@ export default function SqlModelingPage() {
 										onClick={() => triggerBuildOperation("test")}
 										loading={buildTriggering === "test"}
 										disabled={!activeModel || !configEnabled || !workspaceOk || buildTriggering != null}
+										data-testid="platform-sql-modeling-test"
 									>
 										{action.label}
 										</Button>
@@ -2250,6 +2286,7 @@ export default function SqlModelingPage() {
 										icon={<RocketOutlined />}
 										onClick={openRun}
 										disabled={!activeModel || !workspaceOk}
+										data-testid="platform-sql-modeling-release"
 									>
 										{action.label}
 									</Button>
@@ -2360,9 +2397,9 @@ export default function SqlModelingPage() {
 						className="mb-3"
 					/>
 					{spacesLoading ? (
-						<Card size="small" className="border-dashed text-center text-xs text-muted-foreground">
-							加载项目空间中...
-						</Card>
+						<div style={{ padding: 16 }}>
+							<Skeleton active paragraph={{ rows: 8 }} />
+						</div>
 					) : treeData.length === 0 ? (
 						<EmptyState title="暂无项目空间" description="请先在项目空间管理中创建项目空间。" />
 					) : (
@@ -2394,7 +2431,9 @@ export default function SqlModelingPage() {
 								}}
 							/>
 							{modelsLoading ? (
-								<div className="mt-3 text-xs text-muted-foreground">加载模型中...</div>
+								<div className="mt-3">
+									<Skeleton active paragraph={{ rows: 3 }} title={false} />
+								</div>
 							) : activeLayerNodes.length === 0 ? (
 								<div className="mt-3 text-xs text-muted-foreground">当前项目暂无模型。</div>
 							) : null}
@@ -2404,7 +2443,7 @@ export default function SqlModelingPage() {
 
 				<div className="flex flex-1 flex-col">
 					<div className="flex items-center justify-between border-b border-border bg-muted/20 px-4 py-1.5">
-						<div className="flex items-center gap-2">
+						<div className="flex items-center gap-2" data-testid="platform-sql-modeling-active-model">
 							<Text strong className="text-sm">{activeModel?.name || "未选择模型"}</Text>
 							{activeModel && layerTag(activeModel?.layer || inferLayer(activeModel.name))}
 							{activeModel && !activeModel.planId && <Tag color="gold">未归档</Tag>}
@@ -2433,8 +2472,8 @@ export default function SqlModelingPage() {
 							{activeModel ? (
 							<Suspense
 								fallback={
-									<div className="flex h-full items-center justify-center text-center text-xs text-muted-foreground">
-										加载 SQL 编辑器中...
+									<div style={{ padding: 24 }}>
+										<Skeleton active title={{ width: '40%' }} paragraph={{ rows: 10, width: ['100%', '95%', '80%', '90%', '70%', '100%', '85%', '60%', '75%', '50%'] }} />
 									</div>
 								}
 							>
@@ -2455,8 +2494,8 @@ export default function SqlModelingPage() {
 								/>
 							</Suspense>
 						) : (
-							<div className="flex h-full items-center justify-center text-center text-xs text-muted-foreground">
-								从左侧选择模型后开始校验 SQL、契约字段和发布影响。
+							<div style={{ padding: 24, textAlign: 'center' }}>
+								<Typography.Text type="secondary">请从左侧选择一个模型开始编辑</Typography.Text>
 								</div>
 							)}
 						</div>
@@ -2526,7 +2565,7 @@ export default function SqlModelingPage() {
 												<Divider className="my-2" />
 												<div className="text-xs font-medium text-muted-foreground mb-2">专题绑定诊断</div>
 												{topicDiagnosticsLoading ? (
-													<div className="text-xs text-muted-foreground">正在加载专题绑定状态...</div>
+													<Skeleton active paragraph={{ rows: 2 }} title={false} />
 												) : topicBindingAlert ? (
 													<div className="space-y-2">
 														<Alert
@@ -2549,7 +2588,9 @@ export default function SqlModelingPage() {
 												)}
 												<Divider className="my-2" />
 												<div className="text-xs font-medium text-muted-foreground mb-2">字段列表</div>
-												{modelColumns.length ? (
+												{columnsLoading && modelColumns.length === 0 ? (
+													<Skeleton active paragraph={{ rows: 4 }} title={false} />
+												) : modelColumns.length ? (
 													<Table
 														rowKey={(row, idx) => `${row.name || "col"}-${idx}`}
 														size="small"
@@ -2701,7 +2742,11 @@ export default function SqlModelingPage() {
 													</span>
 												)}
 											</div>
-											{previewData ? (
+											{previewLoading && !previewData ? (
+												<div className="p-4">
+													<Skeleton active paragraph={{ rows: 4 }} />
+												</div>
+											) : previewData ? (
 												<Table
 													rowKey="_key"
 													size="small"
@@ -2721,364 +2766,407 @@ export default function SqlModelingPage() {
 								})(),
 							},
 							{
-								key: "compile",
-								label: "编译结果",
-								children: (() => {
-									const cr = compileResult;
-									const crFailures = Array.isArray(cr?.failures) ? cr.failures : [];
-									const crStatus = normalizeUpper(cr?.status) || "UNKNOWN";
-									const crColor = crStatus === "SUCCESS" ? "green" : crStatus === "FAILED" ? "red" : "gold";
-									const crAlert = describeBuildSummary(cr, {
-										operationLabel: "编译",
-										fallbackMessage: "请先执行编译操作",
-									});
-									if (!cr) {
-										return (
-											<div className="p-4">
-												<Alert type="info" showIcon message="请先执行编译操作" />
-											</div>
-										);
-									}
-									return (
-										<div className="p-4 space-y-3 text-xs">
-											<div className="flex items-center gap-2">
-												<Tag color={crColor}>{crStatus}</Tag>
-												<span className="text-muted-foreground">
-													时间：{formatDateTime(cr.generatedAt)}
-												</span>
-											</div>
-											<div className="text-muted-foreground">
-												总计 {cr.total ?? 0}，成功 {cr.success ?? 0}，失败 {cr.failed ?? 0}，跳过 {cr.skipped ?? 0}
-											</div>
-											{crFailures.length > 0 ? (
-												<div className="max-h-[145px] overflow-auto rounded border border-border bg-muted/20 p-2">
-													{crFailures.map((item, idx) => (
-														<div key={`${item.uniqueId || item.name || "f"}-${idx}`} className="mb-2 last:mb-0">
-															<div className="font-medium">
-																{item.uniqueId || item.name || "UNKNOWN_NODE"}
-																{item.resourceType ? ` (${item.resourceType})` : ""}
-															</div>
-															<div className="text-muted-foreground">{item.message || "编译失败"}</div>
-														</div>
-													))}
-												</div>
-											) : (
-												<Alert type={crAlert.type} showIcon message={crAlert.message} />
-											)}
-										</div>
-									);
-								})(),
-							},
-							{
-								key: "test",
-								label: "测试结果",
-								children: (() => {
-									const tr = testResult;
-									const trFailures = Array.isArray(tr?.failures) ? tr.failures : [];
-									const trStatus = normalizeUpper(tr?.status) || "UNKNOWN";
-									const trColor = trStatus === "SUCCESS" ? "green" : trStatus === "FAILED" ? "red" : "gold";
-									const trAlert = describeBuildSummary(tr, {
-										operationLabel: "测试",
-										fallbackMessage: "请先执行测试操作",
-									});
-									if (!tr) {
-										return (
-											<div className="p-4">
-												<Alert type="info" showIcon message="请先执行测试操作" />
-											</div>
-										);
-									}
-									const testDetails = (tr as any)?.testDetails as Array<{
-										uniqueId?: string;
-										name?: string;
-										testType?: string;
-										testedColumn?: string;
-										testedModel?: string;
-										status?: string;
-										message?: string;
-										compiledSql?: string;
-										executionTime?: number;
-										failuresCount?: number;
-									}> | undefined;
-									if (testDetails && testDetails.length > 0) {
-										const testTableColumns: ColumnsType<typeof testDetails[number]> = [
-											{ title: "测试名称", dataIndex: "name", key: "name", ellipsis: true, width: 200 },
-											{ title: "类型", dataIndex: "testType", key: "testType", width: 100,
-												render: (v) => <Tag>{v || "generic"}</Tag>,
-											},
-											{ title: "被测模型", dataIndex: "testedModel", key: "testedModel", width: 120, ellipsis: true, render: (v) => v || "-" },
-											{ title: "被测列", dataIndex: "testedColumn", key: "testedColumn", width: 100, render: (v) => v || "-" },
-											{
-												title: "状态", dataIndex: "status", key: "status", width: 80,
-												render: (v) => {
-													const s = normalizeUpper(v);
-													const c = s === "PASS" || s === "SUCCESS" ? "green" : s === "FAIL" || s === "FAILED" || s === "ERROR" ? "red" : "gold";
-													return <Tag color={c}>{s || "UNKNOWN"}</Tag>;
-												},
-											},
-											{
-												title: "耗时", dataIndex: "executionTime", key: "executionTime", width: 70,
-												render: (v) => (v != null ? `${Number(v).toFixed(1)}s` : "-"),
-											},
-											{
-												title: "失败数", dataIndex: "failuresCount", key: "failuresCount", width: 70,
-												render: (v) => (v != null && v > 0 ? <Tag color="red">{v}</Tag> : "-"),
-											},
-											{ title: "错误信息", dataIndex: "message", key: "message", ellipsis: true, render: (v) => v || "-" },
-										];
-										return (
-											<div className="p-2 space-y-2 text-xs">
-												<div className="flex items-center gap-2 px-2">
-													<Tag color={trColor}>{trStatus}</Tag>
-													<span className="text-muted-foreground">
-														总计 {tr.total ?? 0}，成功 {tr.success ?? 0}，失败 {tr.failed ?? 0}
-													</span>
-												</div>
-												<Table
-													rowKey={(row, idx) => `${row.uniqueId || row.name || "t"}-${idx}`}
-													size="small"
-													pagination={false}
-													columns={testTableColumns}
-													dataSource={testDetails}
-													scroll={{ x: 900, y: 160 }}
-												/>
-											</div>
-										);
-									}
-									return (
-										<div className="p-4 space-y-3 text-xs">
-											<div className="flex items-center gap-2">
-												<Tag color={trColor}>{trStatus}</Tag>
-												<span className="text-muted-foreground">
-													时间：{formatDateTime(tr.generatedAt)}
-												</span>
-											</div>
-											<div className="text-muted-foreground">
-												总计 {tr.total ?? 0}，成功 {tr.success ?? 0}，失败 {tr.failed ?? 0}，跳过 {tr.skipped ?? 0}
-											</div>
-											{trFailures.length > 0 ? (
-												<div className="max-h-[145px] overflow-auto rounded border border-border bg-muted/20 p-2">
-													{trFailures.map((item, idx) => (
-														<div key={`${item.uniqueId || item.name || "f"}-${idx}`} className="mb-2 last:mb-0">
-															<div className="font-medium">
-																{item.uniqueId || item.name || "UNKNOWN_NODE"}
-																{item.resourceType ? ` (${item.resourceType})` : ""}
-															</div>
-															<div className="text-muted-foreground">{item.message || "测试失败"}</div>
-														</div>
-													))}
-												</div>
-											) : (
-												<Alert type={trAlert.type} showIcon message={trAlert.message} />
-											)}
-										</div>
-									);
-								})(),
-							},
-							{
-								key: "execlog",
-								label: "执行日志",
-								children: (() => {
-									const rr = runResult || latestRun;
-									if (!rr?.present) {
-										return (
-											<div className="p-4">
-												<Alert type="info" showIcon message="执行完成后可查看完整日志" />
-											</div>
-										);
-									}
-									const rrStatus = normalizeUpper(rr.status) || "UNKNOWN";
-									const rrColor = rrStatus === "SUCCESS" ? "green" : rrStatus === "FAILED" ? "red" : "gold";
-									// Extract dagRunId from invocationId or latest run
-									const dagRunId = (rr as any)?.dagRunId || rr.invocationId || "";
-									return (
-										<div className="p-2 space-y-2 text-xs">
-											<div className="flex items-center gap-2 px-2">
-												<Tag color={rrColor}>{rrStatus}</Tag>
-												<span className="text-muted-foreground">
-													命令：{rr.command || "N/A"} | 时间：{formatDateTime(rr.generatedAt)}
-												</span>
-												<span className="text-muted-foreground">
-													总计 {rr.total ?? 0}，成功 {rr.success ?? 0}，失败 {rr.failed ?? 0}
-												</span>
-												<Button
-													size="small"
-													icon={<FileTextOutlined />}
-													loading={execLogLoading}
-													disabled={!dagRunId}
-													onClick={() => loadExecLog(dagRunId, rr.dagId)}
-												>
-													加载日志
-												</Button>
-											</div>
-											{execLog ? (
-												<pre className="max-h-[180px] overflow-auto rounded border border-border bg-muted/20 p-2 text-xs font-mono whitespace-pre-wrap break-all">
-													{execLog}
-												</pre>
-											) : (
-												<div className="px-2 text-muted-foreground">
-													{dagRunId ? "点击「加载日志」查看 Airflow 执行日志" : "无可用的 DAG 运行 ID"}
-												</div>
-											)}
-										</div>
-									);
-								})(),
-							},
-							{
-								key: "runs",
-								label: "运行记录",
-								children: runs.length === 0 && !runsLoading ? (
-									<div className="p-4 text-sm text-muted-foreground">暂无运行记录。</div>
-								) : (
-									<Table
-										rowKey={(row) => row.dag_run_id || Math.random().toString(36)}
-										size="small"
-										pagination={false}
-										columns={runColumns}
-										dataSource={runs}
-										loading={runsLoading}
-										scroll={{ y: 170 }}
-									/>
-								),
-							},
-							{
-								key: "gitstatus",
-								label: "变更状态",
-								children: (() => {
-									const allChanges = [
-										...(gitStatus?.staged || []).map((f) => ({ file: f, type: "staged" as const })),
-										...(gitStatus?.unstaged || []).map((f) => ({ file: f, type: "modified" as const })),
-										...(gitStatus?.untracked || []).map((f) => ({ file: f, type: "untracked" as const })),
-									];
-									const typeTag = (t: string) => {
-										if (t === "staged") return <Tag color="green">暂存</Tag>;
-										if (t === "modified") return <Tag color="orange">修改</Tag>;
-										return <Tag>新增</Tag>;
-									};
-									return (
-										<div className="p-2 flex gap-3" style={{ height: 210, overflow: "hidden" }}>
-											{/* Left: file changes + commit */}
-											<div className="flex-1 flex flex-col gap-2 min-w-0">
-												<div className="flex items-center gap-2">
-													<Button size="small" icon={<ReloadOutlined />} loading={gitLoading} onClick={loadGitInfo}>
-														刷新
-													</Button>
-													{gitStatus?.clean && <Tag color="green" icon={<CheckCircleOutlined />}>工作区干净</Tag>}
-													{!gitStatus && !gitLoading && <span className="text-xs text-muted-foreground">点击刷新加载 Git 状态</span>}
-												</div>
-												{allChanges.length > 0 && (
-													<div className="flex-1 overflow-auto text-xs border border-border rounded bg-muted/20 p-1">
-														{allChanges.map(({ file, type }) => (
-															<div key={`${type}-${file}`} className="flex items-center justify-between py-0.5 px-1 hover:bg-muted/30">
-																<span className="flex items-center gap-1 truncate">
-																	{typeTag(type)}
-																	<span className="truncate">{file}</span>
-																</span>
-																<Popconfirm title={`还原 ${file}？`} onConfirm={() => handleGitRevert(file)} okText="确认" cancelText="取消">
-																	<Button size="small" type="text" icon={<UndoOutlined />} loading={gitReverting === file} />
-																</Popconfirm>
-															</div>
-														))}
-													</div>
-												)}
-													{allChanges.length > 0 && shouldRenderInlineGitCommit() && (
-														<div className="flex items-center gap-2">
-															<Input
-																size="small"
-															placeholder="提交信息"
-															value={gitCommitMsg}
-															onChange={(e) => setGitCommitMsg(e.target.value)}
-															onPressEnter={handleGitCommit}
-															className="flex-1"
-														/>
-														<Button
-															size="small"
-															type="primary"
-															loading={gitCommitting}
-															disabled={!gitCommitMsg.trim()}
-															onClick={handleGitCommit}
-														>
-															提交
-															</Button>
-														</div>
-													)}
-													{allChanges.length > 0 && !shouldRenderInlineGitCommit() && (
-														<div className="rounded border border-dashed border-border bg-muted/10 px-3 py-2 text-xs text-muted-foreground">
-															提交入口已统一到顶部工具栏“提交变更”。
-														</div>
-													)}
-												</div>
-											{/* Right: recent commits */}
-											<div className="w-72 flex flex-col gap-1 overflow-hidden">
-												<div className="text-xs font-medium text-muted-foreground">最近提交</div>
-												<div className="flex-1 overflow-auto text-xs border border-border rounded bg-muted/20 p-1">
-													{gitLog.length === 0 ? (
-														<div className="p-2 text-muted-foreground">暂无提交记录</div>
-													) : (
-														gitLog.map((c) => (
-															<div key={c.hash} className="py-0.5 px-1 hover:bg-muted/30">
-																<span className="font-mono text-blue-600">{(c.hash || "").substring(0, 7)}</span>
-																{" "}
-																<span className="truncate">{c.shortMessage}</span>
-																<div className="text-muted-foreground">{c.author} · {formatDateTime(c.date)}</div>
-															</div>
-														))
-													)}
-												</div>
-											</div>
-										</div>
-									);
-								})(),
-							},
-							{
-								key: "audit",
-								label: "回退记录",
+								key: "operations",
+								label: "操作记录",
 								children: (
 									<div className="p-2">
-										<div className="flex items-center gap-2 mb-2">
-											<Button
-												size="small"
-												icon={<ReloadOutlined />}
-												loading={auditLogsLoading}
-												onClick={() => loadAuditLogs(dbtConfig?.config?.targetDataSourceId)}
-											>
-												加载
-											</Button>
-										</div>
-										{auditLogs.length === 0 ? (
-											<div className="text-xs text-muted-foreground p-2">暂无回退记录</div>
-										) : (
-											<Table
-												size="small"
-												rowKey="id"
-												dataSource={auditLogs}
-												pagination={false}
-												scroll={{ y: 160 }}
-												columns={[
-													{ title: "时间", dataIndex: "executedAt", key: "executedAt", width: 170, render: formatDateTime },
-													{ title: "级别", dataIndex: "level", key: "level", width: 80, render: (v: number) => <Tag color={v >= 2 ? "red" : "orange"}>Level {v}</Tag> },
-													{ title: "范围", dataIndex: "scope", key: "scope", width: 80 },
-													{ title: "表", dataIndex: "tables", key: "tables", ellipsis: true, render: (v: string[]) => (v || []).join(", ") },
-													{ title: "操作人", dataIndex: "executedBy", key: "executedBy", width: 100 },
-													{ title: "状态", dataIndex: "status", key: "status", width: 80, render: (v: string) => <Tag color={v === "SUCCESS" ? "green" : "red"}>{v}</Tag> },
-												]}
-											/>
+										<Segmented
+											size="small"
+											value={opsSubTab}
+											onChange={(val) => setOpsSubTab(val as string)}
+											options={[
+												{ label: "编译", value: "compile" },
+												{ label: "测试", value: "test" },
+												{ label: "执行日志", value: "execlog" },
+												{ label: "运行记录", value: "runs" },
+												{ label: "变更状态", value: "gitstatus" },
+												{ label: "回退记录", value: "audit" },
+											]}
+											className="mb-2"
+											data-testid="platform-sql-modeling-ops-tabs"
+										/>
+										{opsSubTab === "compile" && (() => {
+											const cr = compileResult;
+											const crFailures = Array.isArray(cr?.failures) ? cr.failures : [];
+											const crStatus = normalizeUpper(cr?.status) || "UNKNOWN";
+											const crColor = crStatus === "SUCCESS" ? "green" : crStatus === "FAILED" ? "red" : "gold";
+											const crAlert = describeBuildSummary(cr, {
+												operationLabel: "编译",
+												fallbackMessage: "请先执行编译操作",
+											});
+											if (!cr) {
+												return (
+													<div className="p-4">
+														<Alert type="info" showIcon message="请先执行编译操作" />
+													</div>
+												);
+											}
+											return (
+												<div className="p-4 space-y-3 text-xs">
+													<div className="flex items-center gap-2">
+														<Tag color={crColor}>{crStatus}</Tag>
+														<span className="text-muted-foreground">
+															时间：{formatDateTime(cr.generatedAt)}
+														</span>
+													</div>
+													<div className="text-muted-foreground">
+														总计 {cr.total ?? 0}，成功 {cr.success ?? 0}，失败 {cr.failed ?? 0}，跳过 {cr.skipped ?? 0}
+													</div>
+													{crFailures.length > 0 ? (
+														<div className="max-h-[145px] overflow-auto rounded border border-border bg-muted/20 p-2">
+															{crFailures.map((item, idx) => (
+																<div key={`${item.uniqueId || item.name || "f"}-${idx}`} className="mb-2 last:mb-0">
+																	<div className="font-medium">
+																		{item.uniqueId || item.name || "UNKNOWN_NODE"}
+																		{item.resourceType ? ` (${item.resourceType})` : ""}
+																	</div>
+																	<div className="text-muted-foreground">{item.message || "编译失败"}</div>
+																</div>
+															))}
+														</div>
+													) : (
+														<Alert type={crAlert.type} showIcon message={crAlert.message} />
+													)}
+												</div>
+											);
+										})()}
+										{opsSubTab === "test" && (() => {
+											const tr = testResult;
+											const trFailures = Array.isArray(tr?.failures) ? tr.failures : [];
+											const trStatus = normalizeUpper(tr?.status) || "UNKNOWN";
+											const trColor = trStatus === "SUCCESS" ? "green" : trStatus === "FAILED" ? "red" : "gold";
+											const trAlert = describeBuildSummary(tr, {
+												operationLabel: "测试",
+												fallbackMessage: "请先执行测试操作",
+											});
+											if (!tr) {
+												return (
+													<div className="p-4">
+														<Alert type="info" showIcon message="请先执行测试操作" />
+													</div>
+												);
+											}
+											const testDetails = (tr as any)?.testDetails as Array<{
+												uniqueId?: string;
+												name?: string;
+												testType?: string;
+												testedColumn?: string;
+												testedModel?: string;
+												status?: string;
+												message?: string;
+												compiledSql?: string;
+												executionTime?: number;
+												failuresCount?: number;
+											}> | undefined;
+											if (testDetails && testDetails.length > 0) {
+												const testTableColumns: ColumnsType<typeof testDetails[number]> = [
+													{ title: "测试名称", dataIndex: "name", key: "name", ellipsis: true, width: 200 },
+													{ title: "类型", dataIndex: "testType", key: "testType", width: 100,
+														render: (v) => <Tag>{v || "generic"}</Tag>,
+													},
+													{ title: "被测模型", dataIndex: "testedModel", key: "testedModel", width: 120, ellipsis: true, render: (v) => v || "-" },
+													{ title: "被测列", dataIndex: "testedColumn", key: "testedColumn", width: 100, render: (v) => v || "-" },
+													{
+														title: "状态", dataIndex: "status", key: "status", width: 80,
+														render: (v) => {
+															const s = normalizeUpper(v);
+															const c = s === "PASS" || s === "SUCCESS" ? "green" : s === "FAIL" || s === "FAILED" || s === "ERROR" ? "red" : "gold";
+															return <Tag color={c}>{s || "UNKNOWN"}</Tag>;
+														},
+													},
+													{
+														title: "耗时", dataIndex: "executionTime", key: "executionTime", width: 70,
+														render: (v) => (v != null ? `${Number(v).toFixed(1)}s` : "-"),
+													},
+													{
+														title: "失败数", dataIndex: "failuresCount", key: "failuresCount", width: 70,
+														render: (v) => (v != null && v > 0 ? <Tag color="red">{v}</Tag> : "-"),
+													},
+													{ title: "错误信息", dataIndex: "message", key: "message", ellipsis: true, render: (v) => v || "-" },
+												];
+												return (
+													<div className="p-2 space-y-2 text-xs">
+														<div className="flex items-center gap-2 px-2">
+															<Tag color={trColor}>{trStatus}</Tag>
+															<span className="text-muted-foreground">
+																总计 {tr.total ?? 0}，成功 {tr.success ?? 0}，失败 {tr.failed ?? 0}
+															</span>
+														</div>
+														<Table
+															rowKey={(row, idx) => `${row.uniqueId || row.name || "t"}-${idx}`}
+															size="small"
+															pagination={false}
+															columns={testTableColumns}
+															dataSource={testDetails}
+															scroll={{ x: 900, y: 160 }}
+														/>
+													</div>
+												);
+											}
+											return (
+												<div className="p-4 space-y-3 text-xs">
+													<div className="flex items-center gap-2">
+														<Tag color={trColor}>{trStatus}</Tag>
+														<span className="text-muted-foreground">
+															时间：{formatDateTime(tr.generatedAt)}
+														</span>
+													</div>
+													<div className="text-muted-foreground">
+														总计 {tr.total ?? 0}，成功 {tr.success ?? 0}，失败 {tr.failed ?? 0}，跳过 {tr.skipped ?? 0}
+													</div>
+													{trFailures.length > 0 ? (
+														<div className="max-h-[145px] overflow-auto rounded border border-border bg-muted/20 p-2">
+															{trFailures.map((item, idx) => (
+																<div key={`${item.uniqueId || item.name || "f"}-${idx}`} className="mb-2 last:mb-0">
+																	<div className="font-medium">
+																		{item.uniqueId || item.name || "UNKNOWN_NODE"}
+																		{item.resourceType ? ` (${item.resourceType})` : ""}
+																	</div>
+																	<div className="text-muted-foreground">{item.message || "测试失败"}</div>
+																</div>
+															))}
+														</div>
+													) : (
+														<Alert type={trAlert.type} showIcon message={trAlert.message} />
+													)}
+												</div>
+											);
+										})()}
+										{opsSubTab === "execlog" && (() => {
+											const rr = runResult || latestRun;
+											if (!rr?.present) {
+												return (
+													<div className="p-4">
+														<Alert type="info" showIcon message="执行完成后可查看完整日志" />
+													</div>
+												);
+											}
+											const rrStatus = normalizeUpper(rr.status) || "UNKNOWN";
+											const rrColor = rrStatus === "SUCCESS" ? "green" : rrStatus === "FAILED" ? "red" : "gold";
+											// Extract dagRunId from invocationId or latest run
+											const dagRunId = (rr as any)?.dagRunId || rr.invocationId || "";
+											return (
+												<div className="p-2 space-y-2 text-xs">
+													<div className="flex items-center gap-2 px-2">
+														<Tag color={rrColor}>{rrStatus}</Tag>
+														<span className="text-muted-foreground">
+															命令：{rr.command || "N/A"} | 时间：{formatDateTime(rr.generatedAt)}
+														</span>
+														<span className="text-muted-foreground">
+															总计 {rr.total ?? 0}，成功 {rr.success ?? 0}，失败 {rr.failed ?? 0}
+														</span>
+														<Button
+															size="small"
+															icon={<FileTextOutlined />}
+															loading={execLogLoading}
+															disabled={!dagRunId}
+															onClick={() => loadExecLog(dagRunId, rr.dagId)}
+														>
+															加载日志
+														</Button>
+													</div>
+													{execLogLoading ? (
+														<div className="p-4">
+															<Skeleton active paragraph={{ rows: 4 }} />
+														</div>
+													) : execLog ? (
+														<pre className="max-h-[180px] overflow-auto rounded border border-border bg-muted/20 p-2 text-xs font-mono whitespace-pre-wrap break-all">
+															{execLog}
+														</pre>
+													) : (
+														<div className="px-2 text-muted-foreground">
+															{dagRunId ? "点击「加载日志」查看 Airflow 执行日志" : "无可用的 DAG 运行 ID"}
+														</div>
+													)}
+												</div>
+											);
+										})()}
+										{opsSubTab === "runs" && (
+											runs.length === 0 && !runsLoading ? (
+												<div className="p-4 text-sm text-muted-foreground">暂无运行记录。</div>
+											) : (
+												<Table
+													rowKey={(row) => row.dag_run_id || Math.random().toString(36)}
+													size="small"
+													pagination={false}
+													columns={runColumns}
+													dataSource={runs}
+													loading={runsLoading}
+													scroll={{ y: 170 }}
+												/>
+											)
+										)}
+										{opsSubTab === "gitstatus" && (() => {
+											const allChanges = [
+												...(gitStatus?.staged || []).map((f) => ({ file: f, type: "staged" as const })),
+												...(gitStatus?.unstaged || []).map((f) => ({ file: f, type: "modified" as const })),
+												...(gitStatus?.untracked || []).map((f) => ({ file: f, type: "untracked" as const })),
+											];
+											const typeTag = (t: string) => {
+												if (t === "staged") return <Tag color="green">暂存</Tag>;
+												if (t === "modified") return <Tag color="orange">修改</Tag>;
+												return <Tag>新增</Tag>;
+											};
+											return (
+												<div className="p-2 flex gap-3" style={{ height: 210, overflow: "hidden" }}>
+													{/* Left: file changes + commit */}
+													<div className="flex-1 flex flex-col gap-2 min-w-0">
+														<div className="flex items-center gap-2">
+															<Button size="small" icon={<ReloadOutlined />} loading={gitLoading} onClick={loadGitInfo}>
+																刷新
+															</Button>
+															{gitStatus?.clean && <Tag color="green" icon={<CheckCircleOutlined />}>工作区干净</Tag>}
+															{!gitStatus && !gitLoading && <span className="text-xs text-muted-foreground">点击刷新加载 Git 状态</span>}
+														</div>
+														{allChanges.length > 0 && (
+															<div className="flex-1 overflow-auto text-xs border border-border rounded bg-muted/20 p-1">
+																{allChanges.map(({ file, type }) => (
+																	<div key={`${type}-${file}`} className="flex items-center justify-between py-0.5 px-1 hover:bg-muted/30">
+																		<span className="flex items-center gap-1 truncate">
+																			{typeTag(type)}
+																			<span className="truncate">{file}</span>
+																		</span>
+																		<Popconfirm title={`还原 ${file}？`} onConfirm={() => handleGitRevert(file)} okText="确认" cancelText="取消">
+																			<Button size="small" type="text" icon={<UndoOutlined />} loading={gitReverting === file} />
+																		</Popconfirm>
+																	</div>
+																))}
+															</div>
+														)}
+															{allChanges.length > 0 && shouldRenderInlineGitCommit() && (
+																<div className="flex items-center gap-2">
+																	<Input
+																		size="small"
+																	placeholder="提交信息"
+																	value={gitCommitMsg}
+																	onChange={(e) => setGitCommitMsg(e.target.value)}
+																	onPressEnter={handleGitCommit}
+																	className="flex-1"
+																/>
+																<Button
+																	size="small"
+																	type="primary"
+																	loading={gitCommitting}
+																	disabled={!gitCommitMsg.trim()}
+																	onClick={handleGitCommit}
+																>
+																	提交
+																	</Button>
+																</div>
+															)}
+															{allChanges.length > 0 && !shouldRenderInlineGitCommit() && (
+																<div className="rounded border border-dashed border-border bg-muted/10 px-3 py-2 text-xs text-muted-foreground">
+																	提交入口已统一到顶部工具栏"提交变更"。
+																</div>
+															)}
+														</div>
+													{/* Right: recent commits */}
+													<div className="w-72 flex flex-col gap-1 overflow-hidden">
+														<div className="text-xs font-medium text-muted-foreground">最近提交</div>
+														<div className="flex-1 overflow-auto text-xs border border-border rounded bg-muted/20 p-1">
+															{gitLog.length === 0 ? (
+																<div className="p-2 text-muted-foreground">暂无提交记录</div>
+															) : (
+																gitLog.map((c) => (
+																	<div key={c.hash} className="py-0.5 px-1 hover:bg-muted/30">
+																		<span className="font-mono text-blue-600">{(c.hash || "").substring(0, 7)}</span>
+																		{" "}
+																		<span className="truncate">{c.shortMessage}</span>
+																		<div className="text-muted-foreground">{c.author} · {formatDateTime(c.date)}</div>
+																	</div>
+																))
+															)}
+														</div>
+													</div>
+												</div>
+											);
+										})()}
+										{opsSubTab === "audit" && (
+											<div className="p-2">
+												<div className="flex items-center gap-2 mb-2">
+													<Button
+														size="small"
+														icon={<ReloadOutlined />}
+														loading={auditLogsLoading}
+														onClick={() => loadAuditLogs(dbtConfig?.config?.targetDataSourceId)}
+													>
+														加载
+													</Button>
+												</div>
+												{auditLogs.length === 0 ? (
+													<div className="text-xs text-muted-foreground p-2">暂无回退记录</div>
+												) : (
+													<Table
+														size="small"
+														rowKey="id"
+														dataSource={auditLogs}
+														pagination={false}
+														scroll={{ y: 160 }}
+														columns={[
+															{ title: "时间", dataIndex: "executedAt", key: "executedAt", width: 170, render: formatDateTime },
+															{ title: "级别", dataIndex: "level", key: "level", width: 80, render: (v: number) => <Tag color={v >= 2 ? "red" : "orange"}>Level {v}</Tag> },
+															{ title: "范围", dataIndex: "scope", key: "scope", width: 80 },
+															{ title: "表", dataIndex: "tables", key: "tables", ellipsis: true, render: (v: string[]) => (v || []).join(", ") },
+															{ title: "操作人", dataIndex: "executedBy", key: "executedBy", width: 100 },
+															{ title: "状态", dataIndex: "status", key: "status", width: 80, render: (v: string) => <Tag color={v === "SUCCESS" ? "green" : "red"}>{v}</Tag> },
+														]}
+													/>
+												)}
+											</div>
 										)}
 									</div>
 								),
 							},
 							{
-								key: "brief",
-								label: "使用指南",
+								key: "guide",
+								label: "操作说明",
 								children: (
-									<div className="p-4 text-sm text-foreground">
-										<div className="mb-3 font-medium">主流程：ODS 接入 -&gt; 选择映射 -&gt; 一键生成 DWD/DWS/ADS -&gt; 校验并上线</div>
-										<ol className="list-decimal pl-5 text-xs text-muted-foreground">
-											<li>先在数据集成完成 ODS 表接入或源库映射。</li>
-											<li>在本页选择项目空间和 ODS 映射后执行一键生成。</li>
-											<li>系统自动产出 dwd_ / dws_ / ads_ 模型模板。</li>
-											<li>在 dbt 文件浏览器微调并运行，最后提交变更。</li>
+									<div className="p-4 text-sm leading-relaxed overflow-auto" style={{ maxHeight: 240 }}>
+										<div className="font-semibold text-base mb-3">建模与上线操作流程</div>
+
+										<div className="font-medium mb-1">一、数据准备</div>
+										<ol className="list-decimal pl-5 text-xs text-muted-foreground mb-3">
+											<li>在「数据集成」中完成 Excel / 数据库的入湖任务，生成 ODS 层表。</li>
+											<li>回到本页，点击「ODS 一键生成」选择源表，系统自动生成 DWD/DWS/ADS 模型模板。</li>
 										</ol>
+
+										<div className="font-medium mb-1">二、模型编辑</div>
+										<ol className="list-decimal pl-5 text-xs text-muted-foreground mb-3">
+											<li>在左侧模型树选择模型，右侧 SQL 编辑器中修改逻辑。</li>
+											<li>点击工具栏「编译」验证 SQL 语法（dbt compile）。</li>
+											<li>点击「测试」运行数据质量测试（dbt test）。</li>
+											<li>在「数据预览」Tab 查看模型输出数据。</li>
+										</ol>
+
+										<div className="font-medium mb-1">三、上线发布</div>
+										<ol className="list-decimal pl-5 text-xs text-muted-foreground mb-3">
+											<li>点击工具栏「上线」按钮，填写模型选择器（如 <code>tag:erp</code>）。</li>
+											<li>系统依次执行三道检查：
+												<ul className="list-disc pl-5 mt-1">
+													<li><strong>DAG 就绪检查</strong> — 确认 Airflow 已注册执行计划（约 30 秒）</li>
+													<li><strong>质量门禁</strong> — 检查模型是否有编译错误或测试失败</li>
+													<li><strong>发布门禁</strong> — 检查 Git 提交状态、依赖完整性</li>
+												</ul>
+											</li>
+											<li>检查通过后，提交 <code>dbt build --select tag:erp</code> 到 Airflow 执行。</li>
+											<li>Airflow 启动 Docker 容器运行 dbt，按依赖顺序建表 / 刷数据。</li>
+											<li>执行完成后结果自动同步回平台，可在「操作记录 → 运行记录」查看。</li>
+										</ol>
+
+										<div className="font-medium mb-1">四、重建表</div>
+										<ol className="list-decimal pl-5 text-xs text-muted-foreground mb-3">
+											<li>右键模型 →「数据输出」→ 选择「重建」。</li>
+											<li>系统使用 <code>dbt build --full-refresh</code> 安全重建，构建失败时保留原表数据。</li>
+										</ol>
+
+										<div className="font-medium mb-1">五、常见问题</div>
+										<ul className="list-disc pl-5 text-xs text-muted-foreground">
+											<li><strong>DAG 未就绪</strong>：新模型首次上线需等待约 30 秒让 Airflow 注册 DAG，稍后重试即可。</li>
+											<li><strong>质量门禁阻断</strong>：先执行编译 + 测试修复问题，再尝试上线。</li>
+											<li><strong>执行超时</strong>：检查「操作记录 → 执行日志」中的 Airflow 日志定位原因。</li>
+											<li><strong>数据预览为空</strong>：确认模型已成功执行（状态为 SUCCESS），再点击加载预览。</li>
+										</ul>
+
 										<Space className="mt-4" size={8}>
 											<Button size="small" onClick={() => router.push("/foundation/data-sources")}>
 												去 ODS 接入
@@ -3871,7 +3959,7 @@ WHERE status = 'active'`}
 								<Alert
 									type={outputAction === "rebuild" ? "warning" : "info"}
 									showIcon
-									message={outputRelation.message || (outputAction === "rebuild" ? "将删除当前 relation 并重新执行 dbt build" : "将清空当前模型产出表数据")}
+									message={outputRelation.message || (outputAction === "rebuild" ? "将通过 dbt --full-refresh 安全重建产出 relation" : "将清空当前模型产出表数据")}
 								/>
 								<div className="rounded-md border border-border bg-muted/30 p-3 text-sm">
 									<div>
@@ -3909,14 +3997,14 @@ WHERE status = 'active'`}
 									<Alert
 										type="error"
 										showIcon
-										message="当前产出 relation 为视图，不支持清空。请改用“重建产出表”。"
+										message="当前产出 relation 为视图，不支持清空。请改用「重建产出表」。"
 									/>
 								) : null}
 								{outputAction === "rebuild" ? (
 									<Alert
 										type="warning"
 										showIcon
-										message="重建会先删除当前 relation，再执行 dbt build。若 relation 尚不存在，将直接触发 build。"
+										message="重建将使用 dbt --full-refresh 安全地重建产出表，构建失败时不会丢失原有数据。"
 									/>
 								) : null}
 							</>
@@ -3928,5 +4016,4 @@ WHERE status = 'active'`}
 			</div>
 		);
 	}
-
 

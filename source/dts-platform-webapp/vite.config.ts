@@ -288,6 +288,7 @@ export default defineConfig(({ mode }) => {
 						"vendor-ui": ["antd", "@ant-design/cssinjs", "styled-components"],
 						"vendor-utils": ["axios", "dayjs", "i18next", "zustand", "@iconify/react"],
 						"vendor-charts": ["apexcharts", "react-apexcharts"],
+						"vendor-monaco": ["monaco-editor"],
 					},
 				},
 			},

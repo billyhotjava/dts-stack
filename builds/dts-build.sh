@@ -872,7 +872,9 @@ pack_deployment() {
   local tmp_dir
   tmp_dir="$(mktemp -d)"
   local pack_dir="${tmp_dir}/dts-stack"
-  mkdir -p "${pack_dir}"
+  local images_dir="${tmp_dir}/images"
+  local extra_dir="${tmp_dir}/extra"
+  mkdir -p "${pack_dir}" "${images_dir}" "${extra_dir}"
 
   # Define files/directories to include
   local include_files=(
@@ -957,14 +959,12 @@ pack_deployment() {
   # Copy image tarballs if requested
   if [[ "${include_images}" == "true" ]]; then
     if [[ -d "${REPO_ROOT}/builds/dist" ]] && [[ -n "$(ls -A "${REPO_ROOT}/builds/dist" 2>/dev/null)" ]]; then
-      mkdir -p "${pack_dir}/builds/dist"
-      cp "${REPO_ROOT}/builds/dist/"*.tar "${pack_dir}/builds/dist/" 2>/dev/null || true
-      echo "[dts-build]   + builds/dist/*.tar"
+      cp "${REPO_ROOT}/builds/dist/"*.tar "${images_dir}/" 2>/dev/null || true
+      echo "[dts-build]   + images/*.tar (from builds/dist)"
     fi
     if [[ -d "${REPO_ROOT}/builds/legacy-dist" ]] && [[ -n "$(ls -A "${REPO_ROOT}/builds/legacy-dist" 2>/dev/null)" ]]; then
-      mkdir -p "${pack_dir}/builds/legacy-dist"
-      cp "${REPO_ROOT}/builds/legacy-dist/"*.tar "${pack_dir}/builds/legacy-dist/" 2>/dev/null || true
-      echo "[dts-build]   + builds/legacy-dist/*.tar"
+      cp "${REPO_ROOT}/builds/legacy-dist/"*.tar "${images_dir}/" 2>/dev/null || true
+      echo "[dts-build]   + images/*.tar (from builds/legacy-dist)"
     fi
   fi
 
@@ -1067,9 +1067,39 @@ for tar in builds/dist/*.tar; do docker load -i "$tar"; done
 DEPLOY_README
   echo "[dts-build]   + DEPLOY.md"
 
+  cat > "${extra_dir}/release-manifest.json" <<'RELEASE_MANIFEST'
+{
+  "version": "generated-at-pack-time",
+  "images": [],
+  "notes": "Populate during release packaging."
+}
+RELEASE_MANIFEST
+  echo "[dts-build]   + extra/release-manifest.json"
+
+  cat > "${extra_dir}/merge-rules.yml" <<'MERGE_RULES'
+env:
+  strategy: old-values-win
+compose:
+  strategy: old-values-win
+config:
+  strategy: old-values-win
+MERGE_RULES
+  echo "[dts-build]   + extra/merge-rules.yml"
+
+  : > "${extra_dir}/checksums.txt"
+  echo "[dts-build]   + extra/checksums.txt"
+
+  cat > "${extra_dir}/rollback-manifest.json" <<'ROLLBACK_MANIFEST'
+{
+  "backups": [],
+  "dataDirs": []
+}
+ROLLBACK_MANIFEST
+  echo "[dts-build]   + extra/rollback-manifest.json"
+
   # Create the tarball
   echo "[dts-build] Creating tarball..."
-  tar -czf "${output_path}" -C "${tmp_dir}" "dts-stack"
+  tar -czf "${output_path}" -C "${tmp_dir}" "dts-stack" "images" "extra"
 
   # Cleanup
   rm -rf "${tmp_dir}"

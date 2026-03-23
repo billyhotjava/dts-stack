@@ -283,6 +283,12 @@ public class ExternalRunLogService {
     }
 
     public Optional<DbtBuildEvidenceSnapshot> findLatestDbtBuildEvidence() {
+        return findRecentDbtBuildEvidence(1).stream().findFirst();
+    }
+
+    public List<DbtBuildEvidenceSnapshot> findRecentDbtBuildEvidence(int limit) {
+        int safeLimit = Math.max(1, limit);
+        List<DbtBuildEvidenceSnapshot> evidence = new java.util.ArrayList<>();
         List<InfraExternalRunLog> runs = repository.search(ENTRY_DBT, null, null, null, true);
         for (InfraExternalRunLog run : runs) {
             if (run == null) {
@@ -298,7 +304,7 @@ public class ExternalRunLogService {
             String target = text(conf.get("target"));
             String command = buildDbtCommand(operation, models, target);
             Instant generatedAt = run.getFinishedAt() != null ? run.getFinishedAt() : run.getStartedAt();
-            return Optional.of(
+            evidence.add(
                 new DbtBuildEvidenceSnapshot(
                     run.getExternalRunId(),
                     normalizeStatus(run.getStatus()),
@@ -309,8 +315,11 @@ public class ExternalRunLogService {
                     "external-run-log"
                 )
             );
+            if (evidence.size() >= safeLimit) {
+                break;
+            }
         }
-        return Optional.empty();
+        return List.copyOf(evidence);
     }
 
     private UUID resolveIngestionArtifactId(Object taskId) {

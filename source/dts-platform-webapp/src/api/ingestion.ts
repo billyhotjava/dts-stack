@@ -450,6 +450,14 @@ class IngestionTaskAPI {
     return api.post({ url: `/ingestion/tasks/${taskId}/executions/${executionId}/retry`, params });
   }
 
+  async retryExecutionAsync(
+    taskId: number,
+    executionId: number,
+    params?: { mode?: "FAILED_ONLY" | "FULL_RERUN" }
+  ): Promise<any> {
+    return api.post({ url: `/ingestion/tasks/${taskId}/executions/${executionId}/retry/async`, params });
+  }
+
   async getIncrementalStates(taskId: number): Promise<IngestionIncrementalStateDTO[]> {
     return api.get({ url: `/ingestion/tasks/${taskId}/incremental-states` });
   }

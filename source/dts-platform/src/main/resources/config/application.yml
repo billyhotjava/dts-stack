@@ -291,7 +291,7 @@ dts:
       table-fqn-pattern: ${DTS_PLATFORM_OPENMETADATA_TABLE_FQN_PATTERN:{service}.{database}.{table}}
       table-fields: ${DTS_PLATFORM_OPENMETADATA_TABLE_FIELDS:columns,owner,tags,domain,usageSummary,profile}
     session:
-      timeout-minutes: ${DTS_PLATFORM_SESSION_TIMEOUT_MINUTES:10}
+      timeout-minutes: ${DTS_PLATFORM_SESSION_TIMEOUT_MINUTES:30}
     hive:
       enabled: false
       jdbc-url: jdbc:hive2://dts-hive:10000/default

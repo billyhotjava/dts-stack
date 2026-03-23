@@ -45,10 +45,11 @@ public class AirflowClient {
             return Optional.ofNullable(response.getBody());
         } catch (HttpStatusCodeException ex) {
             LOG.warn("Airflow dag trigger failed status={} body={}", ex.getStatusCode().value(), ex.getResponseBodyAsString());
+            throw new RuntimeException("Airflow DAG 触发失败 (" + dagId + "): " + ex.getStatusCode() + " - " + ex.getResponseBodyAsString(), ex);
         } catch (Exception ex) {
             LOG.warn("Airflow dag trigger error: {}", ex.getMessage());
+            throw new RuntimeException("Airflow DAG 触发失败 (" + dagId + "): " + ex.getMessage(), ex);
         }
-        return Optional.empty();
     }
 
     public Optional<Map<String, Object>> listDagRuns(String dagId, int limit) {
@@ -104,6 +105,41 @@ public class AirflowClient {
             LOG.warn("Airflow dag state update error: {}", ex.getMessage());
         }
         return Optional.empty();
+    }
+
+    public Optional<Map<String, Object>> getDag(String dagId) {
+        if (!properties.isEnabled() || !StringUtils.hasText(dagId)) {
+            return Optional.empty();
+        }
+        URI uri = buildUri("/dags/" + dagId);
+        try {
+            HttpHeaders headers = defaultHeaders();
+            HttpEntity<Void> entity = new HttpEntity<>(headers);
+            ResponseEntity<Map> resp = restTemplate.exchange(uri, HttpMethod.GET, entity, Map.class);
+            if (resp.getStatusCode().is2xxSuccessful() && resp.getBody() != null) {
+                return Optional.of(resp.getBody());
+            }
+        } catch (HttpStatusCodeException ex) {
+            if (ex.getStatusCode().value() == 404) {
+                return Optional.empty(); // DAG not found yet
+            }
+            LOG.warn("Airflow getDag failed for {}: status={}", dagId, ex.getStatusCode());
+            throw new AirflowApiException(
+                "查询 DAG 失败 (" + dagId + "): " + ex.getStatusCode() + " - " + ex.getResponseBodyAsString(),
+                ex
+            );
+        } catch (Exception ex) {
+            LOG.warn("Airflow getDag error for {}: {}", dagId, ex.getMessage());
+            throw new AirflowApiException("查询 DAG 失败 (" + dagId + "): " + ex.getMessage(), ex);
+        }
+        return Optional.empty();
+    }
+
+    public static class AirflowApiException extends RuntimeException {
+
+        public AirflowApiException(String message, Throwable cause) {
+            super(message, cause);
+        }
     }
 
     /**

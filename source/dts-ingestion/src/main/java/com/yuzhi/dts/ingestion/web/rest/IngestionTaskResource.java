@@ -31,6 +31,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.scheduling.support.CronExpression;
+import org.springframework.core.task.TaskRejectedException;
 import org.springframework.util.StringUtils;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -2067,6 +2068,8 @@ public class IngestionTaskResource {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "任务不存在");
         } catch (IllegalStateException e) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, e.getMessage());
+        } catch (TaskRejectedException e) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "后台执行队列繁忙，请稍后重试");
         }
     }
 
@@ -2078,21 +2081,24 @@ public class IngestionTaskResource {
     public ResponseEntity<Map<String, Object>> executeTaskAsync(
         @PathVariable Long id
     ) {
-        com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO task = ingestionTaskService.findOne(id)
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "任务不存在"));
-        String status = task.getStatus();
-        if (!"active".equals(status) && !"draft".equals(status)) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Task is not in executable status: " + status);
+        try {
+            com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO task = ingestionTaskService.validateAsyncExecutionRequest(id);
+            ingestionTaskService.executeAsync(id);
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("taskId", id);
+            payload.put("taskName", task.getName());
+            payload.put("status", "submitted");
+            payload.put("async", true);
+            payload.put("pollIntervalMs", resolveExecutionPollIntervalMs());
+            payload.put("message", "任务已提交，正在后台触发执行");
+            return ResponseEntity.accepted().body(payload);
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "任务不存在");
+        } catch (IllegalStateException e) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, e.getMessage());
+        } catch (TaskRejectedException e) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "后台执行队列繁忙，请稍后重试");
         }
-        ingestionTaskService.executeAsync(id);
-        Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("taskId", id);
-        payload.put("taskName", task.getName());
-        payload.put("status", "submitted");
-        payload.put("async", true);
-        payload.put("pollIntervalMs", resolveExecutionPollIntervalMs());
-        payload.put("message", "任务已提交，正在后台触发执行");
-        return ResponseEntity.accepted().body(payload);
     }
 
     /**
@@ -2111,6 +2117,36 @@ public class IngestionTaskResource {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage());
         } catch (IllegalStateException e) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, e.getMessage());
+        }
+    }
+
+    /**
+     * POST /api/ingestion/tasks/{id}/executions/{executionId}/retry/async : 异步重试执行
+     */
+    @PostMapping("/tasks/{id}/executions/{executionId}/retry/async")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ResponseEntity<Map<String, Object>> retryExecutionAsync(
+        @PathVariable Long id,
+        @PathVariable Long executionId,
+        @RequestParam(value = "mode", required = false, defaultValue = "FAILED_ONLY") String mode
+    ) {
+        try {
+            ingestionTaskService.validateAsyncRetryRequest(id, executionId, mode);
+            ingestionTaskService.retryExecutionAsync(id, executionId, mode);
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("taskId", id);
+            payload.put("executionId", executionId);
+            payload.put("status", "submitted");
+            payload.put("async", true);
+            payload.put("pollIntervalMs", resolveExecutionPollIntervalMs());
+            payload.put("message", "重试已提交，正在后台执行");
+            return ResponseEntity.accepted().body(payload);
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage());
+        } catch (IllegalStateException e) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, e.getMessage());
+        } catch (TaskRejectedException e) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "后台执行队列繁忙，请稍后重试");
         }
     }
 

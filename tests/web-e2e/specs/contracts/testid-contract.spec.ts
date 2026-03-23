@@ -40,6 +40,25 @@ const contracts: Contract[] = [
     file: 'source/dts-analytics-webapp/modern/src/pages/DashboardDetailPage.tsx',
     ids: ['analytics-dashboard-detail', 'analytics-dashboard-share'],
   },
+  {
+    file: 'source/dts-platform-webapp/src/pages/explore/etl/TransformPage.tsx',
+    ids: ['platform-transform-page', 'platform-transform-refresh', 'platform-transform-create', 'platform-transform-table'],
+  },
+  {
+    file: 'source/dts-platform-webapp/src/pages/explore/etl/TransformDetailPage.tsx',
+    ids: ['platform-transform-detail-page', 'platform-transform-open-log', 'platform-transform-execute', 'platform-transform-log-drawer'],
+  },
+  {
+    file: 'source/dts-platform-webapp/src/pages/modeling/SqlModelingPage.tsx',
+    ids: [
+      'platform-sql-modeling-page',
+      'platform-sql-modeling-compile',
+      'platform-sql-modeling-test',
+      'platform-sql-modeling-release',
+      'platform-sql-modeling-active-model',
+      'platform-sql-modeling-ops-tabs',
+    ],
+  },
 ];
 
 test('core web apps should expose stable data-testid contracts', async () => {

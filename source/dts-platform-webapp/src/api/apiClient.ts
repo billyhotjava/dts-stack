@@ -10,7 +10,7 @@ import userStore from "@/store/userStore";
 
 const axiosInstance = axios.create({
 	baseURL: GLOBAL_CONFIG.apiBaseUrl,
-	timeout: 50000,
+	timeout: 15000,
 	headers: { "Content-Type": "application/json;charset=utf-8" },
 });
 

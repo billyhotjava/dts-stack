@@ -477,6 +477,72 @@
       "tags": ["web-e2e", "full", "biz", "platform", "browser", "governance", "remediation", "ai"],
       "owner": "qa-governance",
       "businessJourney": "Quality Rule -> Alert -> Remediation"
+    },
+    {
+      "id": "WE-FULL-011",
+      "name": "ELT ingestion center execute and log journey",
+      "command": [
+        "pnpm",
+        "--dir",
+        "tests/web-e2e",
+        "exec",
+        "playwright",
+        "test",
+        "specs/biz/elt-ingestion-center-smoke.spec.ts",
+        "--project=chromium"
+      ],
+      "required": true,
+      "timeoutSeconds": 240,
+      "env": {
+        "DTS_WEB_E2E_USE_TEST_SERVER": "0",
+        "DTS_WEB_E2E_WITH_PLATFORM_DEV_SERVER": "1",
+        "DTS_WEB_E2E_PLATFORM_DEV_SERVER_PORT": "19349",
+        "DTS_PLATFORM_URL": "http://127.0.0.1:19349/expert/",
+        "DTS_BASE_URL": "http://127.0.0.1:19349/expert/",
+        "DTS_EXPERT_URL": "http://127.0.0.1:19349/expert/",
+        "DTS_PLATFORM_AUTH_TOKEN": "platform-playwright-token",
+        "DTS_ADMIN_AUTH_TOKEN": "admin-playwright-token",
+        "DTS_PLATFORM_REQUIRE_PASSWORD_LOGIN": "0",
+        "DTS_ADMIN_REQUIRE_PASSWORD_LOGIN": "0",
+        "DTS_WEB_E2E_HTML_REPORT_DIR": "reports/html/we-full-biz-elt-ingestion",
+        "DTS_WEB_E2E_ARTIFACTS_DIR": "reports/artifacts/we-full-biz-elt-ingestion"
+      },
+      "tags": ["web-e2e", "full", "biz", "platform", "browser", "elt", "ingestion"],
+      "owner": "qa-platform",
+      "businessJourney": "Ingestion Center -> Execute -> Log"
+    },
+    {
+      "id": "WE-FULL-012",
+      "name": "ELT development center compile-test-release journey",
+      "command": [
+        "pnpm",
+        "--dir",
+        "tests/web-e2e",
+        "exec",
+        "playwright",
+        "test",
+        "specs/biz/elt-development-center-smoke.spec.ts",
+        "--project=chromium"
+      ],
+      "required": true,
+      "timeoutSeconds": 240,
+      "env": {
+        "DTS_WEB_E2E_USE_TEST_SERVER": "0",
+        "DTS_WEB_E2E_WITH_PLATFORM_DEV_SERVER": "1",
+        "DTS_WEB_E2E_PLATFORM_DEV_SERVER_PORT": "19350",
+        "DTS_PLATFORM_URL": "http://127.0.0.1:19350/expert/",
+        "DTS_BASE_URL": "http://127.0.0.1:19350/expert/",
+        "DTS_EXPERT_URL": "http://127.0.0.1:19350/expert/",
+        "DTS_PLATFORM_AUTH_TOKEN": "platform-playwright-token",
+        "DTS_ADMIN_AUTH_TOKEN": "admin-playwright-token",
+        "DTS_PLATFORM_REQUIRE_PASSWORD_LOGIN": "0",
+        "DTS_ADMIN_REQUIRE_PASSWORD_LOGIN": "0",
+        "DTS_WEB_E2E_HTML_REPORT_DIR": "reports/html/we-full-biz-elt-modeling",
+        "DTS_WEB_E2E_ARTIFACTS_DIR": "reports/artifacts/we-full-biz-elt-modeling"
+      },
+      "tags": ["web-e2e", "full", "biz", "platform", "browser", "elt", "modeling"],
+      "owner": "qa-platform",
+      "businessJourney": "Development Center -> Compile -> Test -> Release"
     }
   ],
   "web-e2e-quarantine": [
@@ -697,6 +763,72 @@
       "tags": ["biz-e2e", "platform", "browser", "governance", "remediation", "ai"],
       "owner": "qa-governance",
       "businessJourney": "Quality Rule -> Alert -> Remediation"
+    },
+    {
+      "id": "BE-E2E-006",
+      "name": "ELT ingestion center execute and log journey",
+      "command": [
+        "pnpm",
+        "--dir",
+        "tests/web-e2e",
+        "exec",
+        "playwright",
+        "test",
+        "specs/biz/elt-ingestion-center-smoke.spec.ts",
+        "--project=chromium"
+      ],
+      "required": true,
+      "timeoutSeconds": 240,
+      "env": {
+        "DTS_WEB_E2E_USE_TEST_SERVER": "0",
+        "DTS_WEB_E2E_WITH_PLATFORM_DEV_SERVER": "1",
+        "DTS_WEB_E2E_PLATFORM_DEV_SERVER_PORT": "19349",
+        "DTS_PLATFORM_URL": "http://127.0.0.1:19349/expert/",
+        "DTS_BASE_URL": "http://127.0.0.1:19349/expert/",
+        "DTS_EXPERT_URL": "http://127.0.0.1:19349/expert/",
+        "DTS_PLATFORM_AUTH_TOKEN": "platform-playwright-token",
+        "DTS_ADMIN_AUTH_TOKEN": "admin-playwright-token",
+        "DTS_PLATFORM_REQUIRE_PASSWORD_LOGIN": "0",
+        "DTS_ADMIN_REQUIRE_PASSWORD_LOGIN": "0",
+        "DTS_WEB_E2E_HTML_REPORT_DIR": "reports/html/biz-elt-ingestion",
+        "DTS_WEB_E2E_ARTIFACTS_DIR": "reports/artifacts/biz-elt-ingestion"
+      },
+      "tags": ["biz-e2e", "platform", "browser", "elt", "ingestion"],
+      "owner": "qa-platform",
+      "businessJourney": "Ingestion Center -> Execute -> Log"
+    },
+    {
+      "id": "BE-E2E-007",
+      "name": "ELT development center compile-test-release journey",
+      "command": [
+        "pnpm",
+        "--dir",
+        "tests/web-e2e",
+        "exec",
+        "playwright",
+        "test",
+        "specs/biz/elt-development-center-smoke.spec.ts",
+        "--project=chromium"
+      ],
+      "required": true,
+      "timeoutSeconds": 240,
+      "env": {
+        "DTS_WEB_E2E_USE_TEST_SERVER": "0",
+        "DTS_WEB_E2E_WITH_PLATFORM_DEV_SERVER": "1",
+        "DTS_WEB_E2E_PLATFORM_DEV_SERVER_PORT": "19350",
+        "DTS_PLATFORM_URL": "http://127.0.0.1:19350/expert/",
+        "DTS_BASE_URL": "http://127.0.0.1:19350/expert/",
+        "DTS_EXPERT_URL": "http://127.0.0.1:19350/expert/",
+        "DTS_PLATFORM_AUTH_TOKEN": "platform-playwright-token",
+        "DTS_ADMIN_AUTH_TOKEN": "admin-playwright-token",
+        "DTS_PLATFORM_REQUIRE_PASSWORD_LOGIN": "0",
+        "DTS_ADMIN_REQUIRE_PASSWORD_LOGIN": "0",
+        "DTS_WEB_E2E_HTML_REPORT_DIR": "reports/html/biz-elt-modeling",
+        "DTS_WEB_E2E_ARTIFACTS_DIR": "reports/artifacts/biz-elt-modeling"
+      },
+      "tags": ["biz-e2e", "platform", "browser", "elt", "modeling"],
+      "owner": "qa-platform",
+      "businessJourney": "Development Center -> Compile -> Test -> Release"
     }
   ]
 }

@@ -322,19 +322,25 @@ public class OpsService {
             LOG.warn("Failed to serialize backfill payload: {}", ex.getMessage());
         }
 
-        Optional<Map<String, Object>> triggered = airflowClient.triggerDag(dagId, Map.of("conf", payload));
-        if (triggered.isPresent()) {
-            request.setStatus("RUNNING");
-            Object runId = triggered.orElseThrow().get("dag_run_id");
-            if (runId == null) {
-                runId = triggered.orElseThrow().get("run_id");
+        try {
+            Optional<Map<String, Object>> triggered = airflowClient.triggerDag(dagId, Map.of("conf", payload));
+            if (triggered.isPresent()) {
+                request.setStatus("RUNNING");
+                Object runId = triggered.orElseThrow().get("dag_run_id");
+                if (runId == null) {
+                    runId = triggered.orElseThrow().get("run_id");
+                }
+                if (runId != null) {
+                    request.setExternalRunId(String.valueOf(runId));
+                }
+            } else {
+                request.setStatus("PENDING");
+                request.setMessage("Airflow 未启用或触发失败");
             }
-            if (runId != null) {
-                request.setExternalRunId(String.valueOf(runId));
-            }
-        } else {
-            request.setStatus("PENDING");
-            request.setMessage("Airflow 未启用或触发失败");
+        } catch (RuntimeException ex) {
+            LOG.warn("Backfill trigger failed for dagId={}: {}", dagId, ex.getMessage());
+            request.setStatus("FAILED");
+            request.setMessage("Airflow 触发失败: " + ex.getMessage());
         }
         return backfillRepository.save(request);
     }

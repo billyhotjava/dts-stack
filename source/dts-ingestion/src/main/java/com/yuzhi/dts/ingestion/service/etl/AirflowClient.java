@@ -235,6 +235,13 @@ public class AirflowClient {
         return Optional.empty();
     }
 
+    /**
+     * Check whether a DAG is already registered in Airflow (single non-blocking call).
+     */
+    public boolean isDagRegistered(String dagId) {
+        return dagExists(dagId);
+    }
+
     public boolean waitForDag(String dagId, Duration timeout, Duration interval) {
         if (!StringUtils.hasText(dagId)) {
             return false;

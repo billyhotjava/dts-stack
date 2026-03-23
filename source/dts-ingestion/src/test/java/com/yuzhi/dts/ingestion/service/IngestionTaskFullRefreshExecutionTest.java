@@ -18,6 +18,7 @@ import com.yuzhi.dts.ingestion.service.dto.IngestionExecutionDTO;
 import com.yuzhi.dts.ingestion.service.etl.AddaxJobService;
 import com.yuzhi.dts.ingestion.service.etl.AirflowAdapter;
 import com.yuzhi.dts.ingestion.service.etl.AirflowDagService;
+import com.yuzhi.dts.ingestion.service.etl.DagPreheatService;
 import com.yuzhi.dts.ingestion.service.etl.IncrementalSyncService;
 import com.yuzhi.dts.ingestion.service.etl.IngestionRetryService;
 import com.yuzhi.dts.ingestion.service.etl.TargetTableProvisioner;
@@ -79,6 +80,9 @@ class IngestionTaskFullRefreshExecutionTest {
     @Mock
     private IngestionRetryService retryService;
 
+    @Mock
+    private DagPreheatService dagPreheatService;
+
     private IngestionTaskService service;
     private ObjectMapper objectMapper;
 
@@ -99,7 +103,8 @@ class IngestionTaskFullRefreshExecutionTest {
             incrementalSyncService,
             auditService,
             changeLogService,
-            retryService
+            retryService,
+            dagPreheatService
         );
 
         when(airflowAdapter.isEnabled()).thenReturn(false);

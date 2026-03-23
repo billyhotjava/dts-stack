@@ -13,7 +13,7 @@ const STORAGE_KEYS = {
 
 const SESSION_TIMEOUT_MINUTES = Math.max(
 	1,
-	Number(import.meta.env.VITE_SESSION_TIMEOUT_MINUTES ?? import.meta.env.VITE_PORTAL_SESSION_TIMEOUT ?? "10"),
+	Number(import.meta.env.VITE_SESSION_TIMEOUT_MINUTES ?? import.meta.env.VITE_PORTAL_SESSION_TIMEOUT ?? "30"),
 );
 const SESSION_TIMEOUT_MS = SESSION_TIMEOUT_MINUTES * 60 * 1000;
 const SESSION_IDLE_GRACE_MS = 30 * 1000;
@@ -164,6 +164,11 @@ export default function SessionManager() {
 
 		const run = async () => {
 			if (cancelled) return;
+			// Re-read from localStorage in case analytics heartbeat updated it
+			const storedActivity = readLastActivity();
+			if (storedActivity > lastActivityRef.current) {
+				lastActivityRef.current = storedActivity;
+			}
 			const idleFor = Date.now() - lastActivityRef.current;
 			if (idleFor > SESSION_TIMEOUT_MS + SESSION_IDLE_GRACE_MS) {
 				if (!logoutInProgressRef.current) {
@@ -237,6 +242,17 @@ export default function SessionManager() {
 
 		const logoutDueToIdle = () => {
 			if (logoutInProgressRef.current) return;
+			// Re-read from localStorage in case analytics heartbeat updated it
+			const storedActivity = readLastActivity();
+			if (storedActivity > lastActivityRef.current) {
+				lastActivityRef.current = storedActivity;
+			}
+			const idleFor = Date.now() - lastActivityRef.current;
+			if (idleFor < SESSION_TIMEOUT_MS) {
+				// Not actually idle — analytics was active. Reset timer.
+				resetTimer();
+				return;
+			}
 			logoutInProgressRef.current = true;
 			const refreshToken = token?.refreshToken;
 			const username = user?.username || user?.email || undefined;

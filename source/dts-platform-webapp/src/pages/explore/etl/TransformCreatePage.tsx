@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Alert, Button, Card, Collapse, Divider, Form, Input, InputNumber, Modal, Progress, Radio, Select, Space, Steps, Switch, Table, Tag, Typography, Upload } from "antd";
-import { SaveOutlined, InboxOutlined, PlusOutlined, DeleteOutlined } from "@ant-design/icons";
+import { Alert, Button, Card, Divider, Form, Input, InputNumber, Modal, Progress, Select, Space, Steps, Table, Tag, Typography } from "antd";
+import { SaveOutlined } from "@ant-design/icons";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
 import { createIngestionTask, listSqlModels } from "@/api/platformApi";
@@ -19,6 +19,13 @@ import {
 } from "@/api/ingestion";
 import dataSourcesService, { type ExcelImportErrorRow, type InfraDataSource } from "@/api/services/dataSourcesService";
 import { listTables as sqlListTables, listColumns as sqlListColumns, type TableInfo as SqlTableInfo, type ColumnInfo } from "@/api/sql-workbench";
+import FileBasicStep from "./steps/FileBasicStep";
+import { FileTargetStep } from "./steps/FileTargetStep";
+import { DbBasicStep } from "./steps/DbBasicStep";
+import { DbSourceStep } from "./steps/DbSourceStep";
+import { DbTargetStep } from "./steps/DbTargetStep";
+import { ReviewStep } from "./steps/ReviewStep";
+import type { ExtraColumnDef } from "./steps/types";
 
 const { Text } = Typography;
 
@@ -77,8 +84,6 @@ const JDBC_READER_BY_URL: Record<string, string> = {
 	"jdbc:db2:": "db2reader",
 	"jdbc:sqlite:": "sqlitereader",
 };
-
-const TABLE_PLACEHOLDER = "${table}";
 
 const normalizeText = (value?: string) => String(value || "").trim();
 
@@ -962,29 +967,6 @@ const buildJobPreview = (values: Record<string, any>, editorMode?: string, reade
 	};
 };
 
-const jsonValidator = (label: string, forbidConnection = false) => (_: any, value: string) => {
-	if (!normalizeText(value)) return Promise.resolve();
-	try {
-		const parsed = JSON.parse(value);
-		if (forbidConnection && hasConnectionOverride(parsed)) {
-			return Promise.reject(new Error(`${label} 不允许包含连接信息，请仅填写表/字段/过滤等覆盖参数`));
-		}
-		return Promise.resolve();
-	} catch {
-		return Promise.reject(new Error(`${label} JSON 格式错误`));
-	}
-};
-
-const writerConfigValidator = (_: any, value: string) => {
-	if (!normalizeText(value)) return Promise.resolve();
-	try {
-		JSON.parse(value);
-		return Promise.resolve();
-	} catch {
-		return Promise.reject(new Error("Writer 配置 JSON 格式错误"));
-	}
-};
-
 const loadDraft = (): Record<string, any> | null => {
 	try {
 		const stored = localStorage.getItem(DRAFT_STORAGE_KEY);
@@ -1175,7 +1157,6 @@ export default function TransformCreatePage() {
 	const [selectedTableKeys, setSelectedTableKeys] = useState<string[]>([]);
 	const selectedTableKeysRef = useRef<string[]>([]);
 	const [discoverError, setDiscoverError] = useState("");
-	const [tablePageSize, setTablePageSize] = useState(8);
 	const [defaultDestinationStatus, setDefaultDestinationStatus] = useState<DefaultDestinationStatus | null>(null);
 	const [loadingDefaultDestination, setLoadingDefaultDestination] = useState(false);
 	const [defaultDestinationError, setDefaultDestinationError] = useState("");
@@ -1198,7 +1179,7 @@ export default function TransformCreatePage() {
 	const [odsColumns, setOdsColumns] = useState<ColumnInfo[]>([]);
 	const [odsColumnsLoading, setOdsColumnsLoading] = useState(false);
 	const [odsMatchApplied, setOdsMatchApplied] = useState(false);
-	const [extraColumns, setExtraColumns] = useState<Array<{ name: string; label: string; type: string; defaultValue: string }>>([]);
+	const [extraColumns, setExtraColumns] = useState<ExtraColumnDef[]>([]);
 	const [uploadingFile, setUploadingFile] = useState(false);
 	const [filePreviewRows, setFilePreviewRows] = useState(20);
 	const [filePreviewCols, setFilePreviewCols] = useState(8);
@@ -1207,6 +1188,7 @@ export default function TransformCreatePage() {
 	const [errorPreviewLoading, setErrorPreviewLoading] = useState(false);
 	const [errorPreviewRows, setErrorPreviewRows] = useState<ExcelImportErrorRow[]>([]);
 	const [errorPreviewLimit, setErrorPreviewLimit] = useState(50);
+	// batchFieldModalOpen and batchFieldText moved to FileBasicStep
 	const [asyncRunModalOpen, setAsyncRunModalOpen] = useState(false);
 	const [asyncRunTaskId, setAsyncRunTaskId] = useState<number | null>(null);
 	const [asyncRunTaskName, setAsyncRunTaskName] = useState("");
@@ -2205,33 +2187,6 @@ export default function TransformCreatePage() {
 		return Promise.reject(new Error("请输入表名"));
 	};
 
-	const writerTablesValidator = (_: any, value: string) => {
-		const mode = normalizeText(form.getFieldValue("tableSelectionMode")) || "all";
-		if (mode === "all") {
-			return Promise.resolve();
-		}
-		if (resolveSelectedTables().length) {
-			return Promise.resolve();
-		}
-		const tables = splitLines(value);
-		if (tables.length) {
-			return Promise.resolve();
-		}
-		return Promise.reject(new Error("请填写目标表名"));
-	};
-
-	const fileTableNameValidator = (_: any, value: string) => {
-		const text = normalizeText(value);
-		if (!text) {
-			return Promise.resolve();
-		}
-		const normalized = normalizeTableName(text);
-		if (!normalized) {
-			return Promise.reject(new Error("目标表名仅支持字母、数字、下划线，可包含 schema"));
-		}
-		return Promise.resolve();
-	};
-
 	const readerTypeValidator = (_: any, value: string) => {
 		const direct = normalizeText(value);
 		if (direct) {
@@ -2822,1423 +2777,172 @@ export default function TransformCreatePage() {
 						<>
 							{/* ===== 文件上传模式 ===== */}
 							{currentStep === 0 && (
-								<>
-									<Form.Item
-										name="name"
-										label="任务名称"
-										rules={[{ required: true, message: "请输入任务名称" }]}
-									>
-										<Input placeholder="例如：csv-import-task" />
-									</Form.Item>
-									<Form.Item name="description" label="任务描述">
-										<Input.TextArea rows={2} placeholder="可选，说明任务用途" />
-									</Form.Item>
-										<Form.Item name="syncMode" label="同步模式" tooltip="同步模式由连接器能力契约驱动">
-											<Radio.Group>
-												{syncModeOptions.map((item) => (
-													<Radio.Button key={item.value} value={item.value} disabled={item.disabled}>
-														{item.label}
-													</Radio.Button>
-												))}
-											</Radio.Group>
-										</Form.Item>
-										<div className="grid gap-4 md:grid-cols-3">
-											<Form.Item name="scheduleType" label="调度策略">
-												<Select
-													options={[
-														{ label: "手动触发", value: "manual" },
-														{ label: "按间隔执行", value: "interval" },
-														{ label: "按 Cron 执行", value: "cron" },
-													]}
-												/>
-											</Form.Item>
-											{(normalizeText(scheduleType) || "manual") === "interval" ? (
-												<Form.Item
-													name="scheduleIntervalMinutes"
-													label="执行间隔(分钟)"
-													rules={[{ required: true, message: "请输入执行间隔" }]}
-												>
-													<InputNumber min={1} precision={0} className="w-full" />
-												</Form.Item>
-											) : null}
-											{(normalizeText(scheduleType) || "manual") === "cron" ? (
-												<Form.Item
-													name="scheduleCron"
-													label="Cron 表达式"
-													rules={[{ validator: validateCronExpression }]}
-												>
-													<Input placeholder="例如：0 */30 * * * *" />
-												</Form.Item>
-											) : null}
-										</div>
-										<Collapse
-											size="small"
-											className="mb-4"
-											items={[
-												{
-													key: "governance-file",
-													label: "运行治理策略（可选）",
-													children: (
-														<div className="grid gap-4 md:grid-cols-3">
-															<Form.Item name="taskConcurrency" label="任务并发上限">
-																<InputNumber min={1} precision={0} className="w-full" placeholder="默认 1" />
-															</Form.Item>
-															<Form.Item name="sourceConcurrency" label="来源并发上限">
-																<InputNumber min={0} precision={0} className="w-full" placeholder="0 表示不限" />
-															</Form.Item>
-															<Form.Item name="projectConcurrency" label="项目并发上限">
-																<InputNumber min={0} precision={0} className="w-full" placeholder="0 表示不限" />
-															</Form.Item>
-															<Form.Item name="projectKey" label="项目标识">
-																<Input placeholder="例如 project:patent" />
-															</Form.Item>
-															<Form.Item name="priority" label="队列优先级">
-																<Select
-																	allowClear
-																	options={[
-																		{ label: "HIGH", value: "HIGH" },
-																		{ label: "MEDIUM", value: "MEDIUM" },
-																		{ label: "LOW", value: "LOW" },
-																	]}
-																/>
-															</Form.Item>
-															<Form.Item name="rejectPolicy" label="限流策略">
-																<Select
-																	allowClear
-																	options={[
-																		{ label: "REJECT", value: "REJECT" },
-																		{ label: "QUEUE", value: "QUEUE" },
-																	]}
-																/>
-															</Form.Item>
-															<Form.Item name="windowStart" label="执行窗口开始">
-																<Input placeholder="HH:mm，例如 01:00" />
-															</Form.Item>
-															<Form.Item name="windowEnd" label="执行窗口结束">
-																<Input placeholder="HH:mm，例如 06:00" />
-															</Form.Item>
-															<Form.Item name="windowTimezone" label="执行窗口时区">
-																<Select
-																	allowClear
-																	options={[
-																		{ label: "Asia/Shanghai", value: "Asia/Shanghai" },
-																		{ label: "UTC", value: "UTC" },
-																	]}
-																/>
-															</Form.Item>
-														</div>
-													),
-												},
-											]}
-										/>
-								<Space size={[8, 8]} wrap className="mb-3">
-									<Text type="secondary">当前连接器能力：</Text>
-									{["FULL", "INCREMENTAL", "CDC", "BACKFILL"].map((cap) => (
-										<Tag key={cap} color={activeCapabilitySet.has(cap) ? "green" : "default"}>
-											{cap}
-										</Tag>
-									))}
-									{capabilityLoadFailed ? <Text type="warning">能力探测失败，已使用保守降级策略</Text> : null}
-								</Space>
-									<Form.Item name="sourceCategory" label="数据来源">
-										<Radio.Group onChange={(e) => setSourceCategory(e.target.value)}>
-											<Radio.Button value="database">数据库</Radio.Button>
-											<Radio.Button value="file">文件上传</Radio.Button>
-										</Radio.Group>
-									</Form.Item>
-									<Form.Item label="上传文件" required>
-										<Upload.Dragger
-											accept=".xlsx,.csv"
-											maxCount={1}
-											showUploadList={false}
-											customRequest={async ({ file, onSuccess, onError }) => {
-												try {
-													setUploadingFile(true);
-													setFileUploadResult(null);
-													const prepare = await dataSourcesService.excelPrepare(file as File);
-													const sheets = prepare.sheets || [];
-													const defaultSheet = sheets.length ? sheets[0] : undefined;
-													const parsed = await parseFile(
-														prepare.fileId,
-														prepare.fileName,
-														prepare.batchCode,
-														sheets,
-														defaultSheet,
-														filePreviewRows
-													);
-													setFileUploadResult(parsed);
-													setSelectedOdsTable(undefined); setOdsColumns([]); setOdsMatchApplied(false);
-													form.setFieldValue("readerType", "txtfilereader");
-													ensureFileTableName(parsed);
-													onSuccess?.(parsed);
-													toast.success(`文件解析成功，检测到 ${parsed.columns?.length || 0} 列`);
-												} catch (err: any) {
-													onError?.(err);
-													toast.error(err?.message || "文件上传失败");
-												} finally {
-													setUploadingFile(false);
-												}
-											}}
-											disabled={uploadingFile}
-										>
-											<p className="ant-upload-drag-icon">
-												<InboxOutlined />
-											</p>
-											<p className="ant-upload-text">
-												{uploadingFile ? "上传中..." : "点击或拖拽上传 Excel / CSV 文件"}
-											</p>
-											<p className="ant-upload-hint">支持 .xlsx, .csv 格式</p>
-										</Upload.Dragger>
-									</Form.Item>
-									{fileUploadResult && (
-										<Card type="inner" title={`已解析文件: ${fileUploadResult.originalName}`} className="mb-4">
-											<Text type="secondary" className="block mb-2">
-												文件类型: <Tag>{fileUploadResult.sourceFileType || fileUploadResult.fileType}</Tag>
-												检测到 {fileUploadResult.columns?.length || 0} 列
-												{typeof fileUploadResult.rowCount === "number" && (
-													<>
-														{" · "}预览总行数: <Tag color="blue">{fileUploadResult.rowCount}</Tag>
-													</>
-												)}
-												{typeof fileUploadResult.errorCount === "number" && (
-													<>
-														{" · "}错误行:{" "}
-														<Tag color={fileUploadResult.errorCount > 0 ? "red" : "green"}>
-															{fileUploadResult.errorCount}
-														</Tag>
-													</>
-												)}
-											</Text>
-											{Array.isArray(fileUploadResult.sheets) && fileUploadResult.sheets.length > 1 && (
-												<Space className="mb-3" wrap>
-													<Text type="secondary">选择 Sheet：</Text>
-													<Select
-														style={{ minWidth: 200 }}
-														value={fileUploadResult.sheetIndex}
-														options={fileUploadResult.sheets.map((sheet) => ({
-															label: sheet.name,
-															value: sheet.index,
-														}))}
-														onChange={async (value) => {
-															const targetSheet = fileUploadResult.sheets?.find((item) => item.index === value);
-															if (!targetSheet || !fileUploadResult.fileId) return;
-															try {
-																setUploadingFile(true);
-																const parsed = await parseFile(
-																	fileUploadResult.fileId,
-																	fileUploadResult.originalName,
-																	fileUploadResult.batchCode || "",
-																	fileUploadResult.sheets,
-																	{ index: targetSheet.index, name: targetSheet.name },
-																	filePreviewRows
-																);
-																setFileUploadResult(parsed);
-																setSelectedOdsTable(undefined); setOdsColumns([]); setOdsMatchApplied(false);
-																form.setFieldValue("readerType", "txtfilereader");
-																ensureFileTableName(parsed);
-																toast.success(`已切换到 ${targetSheet.name}，检测到 ${parsed.columns?.length || 0} 列`);
-															} catch (err: any) {
-																toast.error(err?.message || "解析 Sheet 失败");
-															} finally {
-																setUploadingFile(false);
-															}
-														}}
-													/>
-												</Space>
-											)}
-											<Space className="mb-3" wrap>
-												<Text type="secondary">预览行数</Text>
-												<InputNumber
-													min={1}
-													max={2000}
-													value={filePreviewRows}
-													onChange={(value) => setFilePreviewRows(value ? Number(value) : 20)}
-												/>
-												<Text type="secondary">预览列数</Text>
-												<InputNumber
-													min={1}
-													max={50}
-													value={filePreviewCols}
-													onChange={(value) => setFilePreviewCols(value ? Number(value) : 8)}
-												/>
-												<Button size="small" onClick={refreshFilePreview} loading={previewRefreshing}>
-													刷新预览
-												</Button>
-												{(fileUploadResult.errorCount || 0) > 0 && (
-													<Button size="small" onClick={openErrorPreview} loading={errorPreviewLoading}>
-														查看错误行
-													</Button>
-												)}
-											</Space>
-											{/* ODS 表关联 */}
-											{lakeDatasourceId && (fileUploadResult.columns?.length ?? 0) > 0 && (
-												<div style={{ marginBottom: 12, padding: "8px 12px", background: "#fafafa", borderRadius: 6, border: "1px solid #f0f0f0" }}>
-													<Space wrap>
-														<Text type="secondary">关联 ODS 表：</Text>
-														<Select
-															size="small"
-															style={{ width: 280 }}
-															placeholder="选择 ODS 表以自动匹配字段名"
-															allowClear
-															showSearch
-															loading={odsTableLoading}
-															value={selectedOdsTable}
-															onFocus={() => { if (!odsTableList.length) loadOdsTables(); }}
-															onChange={handleOdsTableSelect}
-															options={odsTableList.map(t => ({ label: t.name, value: t.name }))}
-															filterOption={(input, option) =>
-																(option?.label as string)?.toLowerCase().includes(input.toLowerCase()) ?? false
-															}
-														/>
-														<Button
-															size="small"
-															type="primary"
-															loading={odsColumnsLoading}
-															disabled={!odsColumns.length}
-															onClick={applyOdsMapping}
-														>
-															自动匹配
-														</Button>
-														{odsMatchApplied && (
-															<Text style={{ color: "#52c41a" }}>
-																✓ 已匹配 {Math.min(odsColumns.length, fileUploadResult.columns?.length || 0)} 个字段
-															</Text>
-														)}
-													</Space>
-												</div>
-											)}
-											<Table
-												size="small"
-												dataSource={fileUploadResult.columns || []}
-												rowKey={(_: any, index: any) => String(index)}
-												pagination={false}
-												columns={[
-													{
-														title: "显示名称",
-														dataIndex: "label",
-														render: (value: string, _: any, index: number) => (
-															<Input
-																size="small"
-																value={value || ""}
-																placeholder="中文名/显示名"
-																onChange={(e) => {
-																	const cols = [...(fileUploadResult.columns || [])];
-																	cols[index] = { ...cols[index], label: e.target.value };
-																	setFileUploadResult({ ...fileUploadResult, columns: cols });
-																}}
-															/>
-														),
-													},
-													{
-														title: "字段名",
-														dataIndex: "name",
-														render: (value: string, record: any, index: number) => (
-															<Space size={4}>
-																<Input
-																	size="small"
-																	value={value}
-																	placeholder="英文字段名"
-																	style={record._odsExtra ? { color: "#999" } : undefined}
-																	onChange={(e) => {
-																		const cols = [...(fileUploadResult.columns || [])];
-																		cols[index] = { ...cols[index], name: e.target.value };
-																		setFileUploadResult({ ...fileUploadResult, columns: cols });
-																	}}
-																/>
-																{odsMatchApplied && record._odsMatched && (
-																	<Tag color="green" style={{ margin: 0 }}>ODS</Tag>
-																)}
-																{odsMatchApplied && record._odsExtra && (
-																	<Tag color="default" style={{ margin: 0 }}>未关联</Tag>
-																)}
-															</Space>
-														),
-													},
-													{
-														title: "数据类型",
-														dataIndex: "type",
-														width: 170,
-														render: (value: string, _: any, index: number) => (
-															<Select
-																size="small"
-																value={value}
-																style={{ width: "100%" }}
-																onChange={(v) => {
-																	const cols = [...(fileUploadResult.columns || [])];
-																	const patch: Record<string, any> = { type: v };
-																	if (v === "string" && !cols[index].length) patch.length = 500;
-																	if (v === "numeric" && !cols[index].precision) { patch.precision = 18; patch.scale = 2; }
-																	if (v !== "string") patch.length = undefined;
-																	if (v !== "numeric") { patch.precision = undefined; patch.scale = undefined; }
-																	cols[index] = { ...cols[index], ...patch };
-																	setFileUploadResult({ ...fileUploadResult, columns: cols });
-																}}
-																options={[
-																	{ label: "VARCHAR", value: "string" },
-																	{ label: "TEXT", value: "text" },
-																	{ label: "INTEGER", value: "integer" },
-																	{ label: "BIGINT", value: "long" },
-																	{ label: "NUMERIC", value: "numeric" },
-																	{ label: "DOUBLE PRECISION", value: "double" },
-																	{ label: "BOOLEAN", value: "boolean" },
-																	{ label: "DATE", value: "date" },
-																	{ label: "TIMESTAMP", value: "timestamp" },
-																	{ label: "JSONB", value: "jsonb" },
-																]}
-															/>
-														),
-													},
-													{
-														title: "类型参数",
-														dataIndex: "length",
-														width: 180,
-														render: (_: any, record: any, index: number) => {
-															if (record.type === "string") {
-																return (
-																	<InputNumber
-																		size="small"
-																		min={1}
-																		max={10485760}
-																		value={record.length ?? 500}
-																		addonBefore="长度"
-																		style={{ width: "100%" }}
-																		onChange={(v) => {
-																			const cols = [...(fileUploadResult.columns || [])];
-																			cols[index] = { ...cols[index], length: v ?? 500 };
-																			setFileUploadResult({ ...fileUploadResult, columns: cols });
-																		}}
-																	/>
-																);
-															}
-															if (record.type === "numeric") {
-																return (
-																	<Space size={4}>
-																		<InputNumber
-																			size="small"
-																			min={1}
-																			max={1000}
-																			value={record.precision ?? 18}
-																			addonBefore="精度"
-																			style={{ width: 110 }}
-																			onChange={(v) => {
-																				const cols = [...(fileUploadResult.columns || [])];
-																				cols[index] = { ...cols[index], precision: v ?? 18 };
-																				setFileUploadResult({ ...fileUploadResult, columns: cols });
-																			}}
-																		/>
-																		<InputNumber
-																			size="small"
-																			min={0}
-																			max={100}
-																			value={record.scale ?? 2}
-																			addonBefore="标度"
-																			style={{ width: 110 }}
-																			onChange={(v) => {
-																				const cols = [...(fileUploadResult.columns || [])];
-																				cols[index] = { ...cols[index], scale: v ?? 2 };
-																				setFileUploadResult({ ...fileUploadResult, columns: cols });
-																			}}
-																		/>
-																	</Space>
-																);
-															}
-															return <Text type="secondary">-</Text>;
-														},
-													},
-													{
-														title: "操作",
-														width: 60,
-														align: "center" as const,
-														render: (_: any, __: any, index: number) => (
-															<Button
-																type="text"
-																danger
-																size="small"
-																icon={<DeleteOutlined />}
-																onClick={() => {
-																	const cols = [...(fileUploadResult.columns || [])];
-																	cols.splice(index, 1);
-																	setFileUploadResult({ ...fileUploadResult, columns: cols });
-																}}
-															/>
-														),
-													},
-												]}
-											/>
-											{unmatchedOdsFields.length > 0 && (
-												<div style={{ marginTop: 8, padding: "8px 12px", background: "#fff2f0", border: "1px solid #ffccc7", borderRadius: 6 }}>
-													<Text type="danger" strong style={{ display: "block", marginBottom: 4 }}>
-														⚠ 以下 ODS 字段缺少对应的 Excel 列（将导致下游数仓数据不完整）：
-													</Text>
-													<Space wrap>
-														{unmatchedOdsFields.map((col, i) => (
-															<Tag key={i} color="error">{col.name}</Tag>
-														))}
-													</Space>
-												</div>
-											)}
-											<Button
-												type="dashed"
-												size="small"
-												icon={<PlusOutlined />}
-												className="mt-2"
-												onClick={() => {
-													const cols = [...(fileUploadResult.columns || [])];
-													const idx = cols.length + 1;
-													cols.push({ name: `col_${idx}`, type: "string", label: "", length: 500 });
-													setFileUploadResult({ ...fileUploadResult, columns: cols });
-												}}
-											>
-												添加列
-											</Button>
-											{Array.isArray(fileUploadResult.preview) && fileUploadResult.preview.length > 0 && (
-												<>
-													<Divider orientation="left" className="mt-4">
-														预览数据（最多 {filePreviewRows} 行）
-													</Divider>
-													<Table
-														size="small"
-														pagination={false}
-														rowKey="__row"
-														scroll={{ x: true }}
-														dataSource={fileUploadResult.preview.map((row, index) => {
-															const record: Record<string, any> = { __row: index + 1 };
-															(fileUploadResult.columns || []).forEach((col, colIndex) => {
-																if (colIndex >= Math.max(1, filePreviewCols)) return;
-																record[col.name] = row?.[colIndex] ?? "";
-															});
-															return record;
-														})}
-														columns={[
-															{ title: "行号", dataIndex: "__row", width: 80 },
-															...(fileUploadResult.columns || [])
-																.slice(0, Math.max(1, filePreviewCols))
-																.map((col) => ({
-																	title: col.label || col.name,
-																	dataIndex: col.name,
-																	ellipsis: true,
-																})),
-														]}
-													/>
-													{(fileUploadResult.columns || []).length > Math.max(1, filePreviewCols) && (
-														<Text type="secondary" className="block mt-2">
-															仅展示前 {Math.max(1, filePreviewCols)} 列，剩余列已省略。
-														</Text>
-													)}
-												</>
-											)}
-										</Card>
-									)}
-								</>
+								<FileBasicStep
+									form={form}
+									fileUploadResult={fileUploadResult}
+									setFileUploadResult={setFileUploadResult}
+									odsColumns={odsColumns}
+									odsMatchApplied={odsMatchApplied}
+									defaultDestinationStatus={defaultDestinationStatus}
+									syncModeOptions={syncModeOptions}
+									scheduleType={scheduleType}
+									activeCapabilitySet={activeCapabilitySet}
+									capabilityLoadFailed={capabilityLoadFailed}
+									setSourceCategory={setSourceCategory}
+									uploadingFile={uploadingFile}
+									onFileUpload={async (file, onSuccess, onError) => {
+										try {
+											setUploadingFile(true);
+											setFileUploadResult(null);
+											const prepare = await dataSourcesService.excelPrepare(file);
+											const sheets = prepare.sheets || [];
+											const defaultSheet = sheets.length ? sheets[0] : undefined;
+											const parsed = await parseFile(
+												prepare.fileId,
+												prepare.fileName,
+												prepare.batchCode,
+												sheets,
+												defaultSheet,
+												filePreviewRows
+											);
+											setFileUploadResult(parsed);
+											setSelectedOdsTable(undefined); setOdsColumns([]); setOdsMatchApplied(false);
+											form.setFieldValue("readerType", "txtfilereader");
+											ensureFileTableName(parsed);
+											onSuccess?.(parsed);
+											toast.success(`文件解析成功，检测到 ${parsed.columns?.length || 0} 列`);
+										} catch (err: any) {
+											onError?.(err);
+											toast.error(err?.message || "文件上传失败");
+										} finally {
+											setUploadingFile(false);
+										}
+									}}
+									onSheetChange={async (value) => {
+										const targetSheet = fileUploadResult?.sheets?.find((item) => item.index === value);
+										if (!targetSheet || !fileUploadResult?.fileId) return;
+										try {
+											setUploadingFile(true);
+											const parsed = await parseFile(
+												fileUploadResult.fileId,
+												fileUploadResult.originalName,
+												fileUploadResult.batchCode || "",
+												fileUploadResult.sheets,
+												{ index: targetSheet.index, name: targetSheet.name },
+												filePreviewRows
+											);
+											setFileUploadResult(parsed);
+											setSelectedOdsTable(undefined); setOdsColumns([]); setOdsMatchApplied(false);
+											form.setFieldValue("readerType", "txtfilereader");
+											ensureFileTableName(parsed);
+											toast.success(`已切换到 ${targetSheet.name}，检测到 ${parsed.columns?.length || 0} 列`);
+										} catch (err: any) {
+											toast.error(err?.message || "解析 Sheet 失败");
+										} finally {
+											setUploadingFile(false);
+										}
+									}}
+									filePreviewRows={filePreviewRows}
+									setFilePreviewRows={setFilePreviewRows}
+									filePreviewCols={filePreviewCols}
+									setFilePreviewCols={setFilePreviewCols}
+									refreshFilePreview={refreshFilePreview}
+									previewRefreshing={previewRefreshing}
+									openErrorPreview={openErrorPreview}
+									errorPreviewLoading={errorPreviewLoading}
+									lakeDatasourceId={lakeDatasourceId}
+									odsTableLoading={odsTableLoading}
+									selectedOdsTable={selectedOdsTable}
+									odsTableList={odsTableList.map(t => ({ label: t.name, value: t.name }))}
+									loadOdsTables={loadOdsTables}
+									handleOdsTableSelect={handleOdsTableSelect}
+									odsColumnsLoading={odsColumnsLoading}
+									applyOdsMapping={applyOdsMapping}
+									unmatchedOdsFields={unmatchedOdsFields}
+									validateCronExpression={validateCronExpression}
+								/>
 							)}
 							{currentStep === 1 && (
-								<>
-									<Divider orientation="left">目标配置</Divider>
-									{defaultDestinationStatus ? (
-										<Alert
-											type={defaultDestinationStatus.available ? "success" : "warning"}
-											showIcon
-											message="默认数据湖"
-											description={[
-												defaultDestinationStatus.destinationName
-													? `数据湖：${defaultDestinationStatus.destinationName}`
-													: null,
-												defaultDestinationStatus.writerType
-													? `Writer：${defaultDestinationStatus.writerType}`
-													: null,
-												defaultDestinationStatus.message ? defaultDestinationStatus.message : null,
-											]
-												.filter(Boolean)
-												.join(" · ")}
-											className="mb-4"
-										/>
-									) : null}
-									<Form.Item
-										name="fileTableName"
-										label="目标表名"
-										rules={[{ validator: fileTableNameValidator }]}
-										tooltip="仅允许字母、数字、下划线，可包含 schema.table"
-									>
-										<Input placeholder="例如：ods_patent_info" />
-									</Form.Item>
-									<Form.Item name="syncPrefix" label="目标表前缀">
-										<Input placeholder="例如：ods_erp_" />
-									</Form.Item>
-									<Form.Item
-										name="fileAutoId"
-										label="自动生成ID"
-										valuePropName="checked"
-										tooltip="为文件入湖的目标表追加自增 ID 字段（默认开启）"
-									>
-										<Switch />
-									</Form.Item>
-									<Text type="secondary" className="block -mt-3 mb-4">
-										未填写目标表名时，系统将使用：前缀 + 文件名（去除扩展名）。例如：ods_erp_ + sales_data → ods_erp_sales_data
-									</Text>
-									<Collapse
-										ghost
-										className="mb-4"
-										items={[
-											{
-												key: "file-column-rules",
-												label: "字段规则（可选）",
-												children: (
-													<div className="space-y-4">
-														<div className="grid gap-4 md:grid-cols-2">
-															<Form.Item name="columnPrefix" label="字段名前缀">
-																<Input placeholder="例如：src_" />
-															</Form.Item>
-															<Form.Item name="columnSuffix" label="字段名后缀">
-																<Input placeholder="例如：_raw" />
-															</Form.Item>
-														</div>
-														<Text type="secondary" className="block -mt-2 mb-2">
-															对目标表所有字段统一添加前缀/后缀。留空则使用文件原始字段名。
-														</Text>
-														<Divider orientation="left" plain>
-															追加字段
-														</Divider>
-														<Table
-															size="small"
-															dataSource={extraColumns}
-															rowKey={(_: any, index: any) => String(index)}
-															pagination={false}
-															locale={{ emptyText: "暂无追加字段" }}
-															columns={[
-																{
-																	title: "字段名",
-																	dataIndex: "name",
-																	render: (value: string, _: any, index: number) => (
-																		<Input
-																			size="small"
-																			value={value}
-																			placeholder="英文字段名"
-																			onChange={(e) => {
-																				const cols = [...extraColumns];
-																				cols[index] = { ...cols[index], name: e.target.value };
-																				setExtraColumns(cols);
-																			}}
-																		/>
-																	),
-																},
-																{
-																	title: "显示名称",
-																	dataIndex: "label",
-																	render: (value: string, _: any, index: number) => (
-																		<Input
-																			size="small"
-																			value={value}
-																			placeholder="中文名"
-																			onChange={(e) => {
-																				const cols = [...extraColumns];
-																				cols[index] = { ...cols[index], label: e.target.value };
-																				setExtraColumns(cols);
-																			}}
-																		/>
-																	),
-																},
-																{
-																	title: "数据类型",
-																	dataIndex: "type",
-																	width: 160,
-																	render: (value: string, _: any, index: number) => (
-																		<Select
-																			size="small"
-																			value={value}
-																			style={{ width: "100%" }}
-																			onChange={(v) => {
-																				const cols = [...extraColumns];
-																				cols[index] = { ...cols[index], type: v };
-																				setExtraColumns(cols);
-																			}}
-																			options={[
-																				{ label: "VARCHAR", value: "string" },
-																				{ label: "TEXT", value: "text" },
-																				{ label: "INTEGER", value: "integer" },
-																				{ label: "BIGINT", value: "long" },
-																				{ label: "TIMESTAMP", value: "timestamp" },
-																				{ label: "BOOLEAN", value: "boolean" },
-																			]}
-																		/>
-																	),
-																},
-																{
-																	title: "默认值 (SQL)",
-																	dataIndex: "defaultValue",
-																	width: 180,
-																	render: (value: string, _: any, index: number) => (
-																		<Input
-																			size="small"
-																			value={value}
-																			placeholder="CURRENT_TIMESTAMP"
-																			onChange={(e) => {
-																				const cols = [...extraColumns];
-																				cols[index] = { ...cols[index], defaultValue: e.target.value };
-																				setExtraColumns(cols);
-																			}}
-																		/>
-																	),
-																},
-																{
-																	title: "操作",
-																	width: 50,
-																	align: "center" as const,
-																	render: (_: any, __: any, index: number) => (
-																		<Button
-																			type="text"
-																			danger
-																			size="small"
-																			icon={<DeleteOutlined />}
-																			onClick={() => {
-																				const cols = [...extraColumns];
-																				cols.splice(index, 1);
-																				setExtraColumns(cols);
-																			}}
-																		/>
-																	),
-																},
-															]}
-														/>
-														<Button
-															type="dashed"
-															size="small"
-															icon={<PlusOutlined />}
-															onClick={() => {
-																setExtraColumns([
-																	...extraColumns,
-																	{ name: "", label: "", type: "string", defaultValue: "" },
-																]);
-															}}
-														>
-															添加字段
-														</Button>
-													</div>
-												),
-											},
-										]}
-									/>
-									{fileUploadResult && (
-										<Alert
-											type="info"
-											showIcon
-											message={`目标表预览：${normalizeText(form.getFieldValue("fileTableName")) || (normalizeText(form.getFieldValue("syncPrefix")) + buildFileBaseName(fileUploadResult.originalName))}`}
-											className="mb-4"
-										/>
-									)}
-									<Divider orientation="left">数据湖连接（可选覆盖）</Divider>
-									<Text type="secondary" className="block mb-4">
-										若默认数据湖凭据不可用，可在此处手动指定目标库连接信息。留空则使用默认数据湖配置。
-									</Text>
-									<div className="grid gap-4 md:grid-cols-2">
-										<Form.Item name="writerUsername" label="用户名">
-											<Input placeholder="数据库账号" />
-										</Form.Item>
-										<Form.Item name="writerPassword" label="密码">
-											<Input.Password placeholder="数据库密码" />
-										</Form.Item>
-									</div>
-									<Form.Item name="writerJdbcUrls" label="JDBC URL（可选覆盖）">
-										<Input placeholder="jdbc:postgresql://host:5432/db" />
-									</Form.Item>
-									<Form.Item name="writerSchema" label="Schema（可选）">
-										<Input placeholder="例如 public" />
-									</Form.Item>
-								</>
+								<FileTargetStep
+									form={form}
+									defaultDestinationStatus={defaultDestinationStatus}
+									extraColumns={extraColumns}
+									setExtraColumns={setExtraColumns}
+									fileUploadResult={fileUploadResult}
+								/>
 							)}
 							{currentStep === 2 && (
-								<>
-									<Form.Item name="jobConfig" label="作业参数 (JSON，可选)" rules={[{ validator: jsonValidator("作业参数") }]}>
-										<Input.TextArea rows={4} placeholder='{"setting":{"speed":{"channel":3}}}' />
-									</Form.Item>
-									<Card type="inner" title="Airflow 触发">
-										<Form.Item name="airflowEnabled" label="启用 Airflow" valuePropName="checked">
-											<Switch />
-										</Form.Item>
-										<Form.Item name="runNow" label="立即触发" valuePropName="checked">
-											<Switch />
-										</Form.Item>
-										<Text type="secondary">
-											若未勾选立即触发，仅保存作业配置，后续可在 Airflow 中手动运行。
-										</Text>
-									</Card>
-								</>
+								<ReviewStep
+									form={form}
+									isFileFlow={true}
+									previewState={previewState}
+									sqlModels={sqlModels}
+									loadingSqlModels={loadingSqlModels}
+									onNavigateToModeling={() => router.push("/modeling/sql")}
+								/>
 							)}
 						</>
 					) : (
 						<>
 							{/* ===== 数据库模式 ===== */}
 							{currentStep === 0 && (
-								<>
-									<Form.Item name="editorMode" label="配置方式">
-										<Radio.Group>
-											<Radio.Button value="visual">可视化</Radio.Button>
-											<Radio.Button value="json">JSON</Radio.Button>
-										</Radio.Group>
-									</Form.Item>
-									<Form.Item
-										name="name"
-										label="任务名称"
-										rules={[{ required: true, message: "请输入任务名称" }]}
-									>
-										<Input placeholder="例如：pg-lake-task1" />
-									</Form.Item>
-									<Form.Item name="description" label="任务描述">
-										<Input.TextArea rows={2} placeholder="可选，说明任务用途" />
-									</Form.Item>
-									<Form.Item name="sourceSystem" label="源系统标识">
-										<Input placeholder="可选，例如：erp、crm（用于绑定 DAG）" />
-									</Form.Item>
-										<Form.Item name="syncMode" label="同步模式" tooltip="同步模式由连接器能力契约驱动">
-											<Radio.Group>
-												{syncModeOptions.map((item) => (
-													<Radio.Button key={item.value} value={item.value} disabled={item.disabled}>
-														{item.label}
-													</Radio.Button>
-												))}
-											</Radio.Group>
-										</Form.Item>
-								<div className="grid gap-4 md:grid-cols-3">
-									<Form.Item name="scheduleType" label="调度策略">
-										<Select
-											options={[
-												{ label: "手动触发", value: "manual" },
-												{ label: "按间隔执行", value: "interval" },
-												{ label: "按 Cron 执行", value: "cron" },
-											]}
-										/>
-									</Form.Item>
-									{(normalizeText(scheduleType) || "manual") === "interval" ? (
-										<Form.Item
-											name="scheduleIntervalMinutes"
-											label="执行间隔(分钟)"
-											rules={[{ required: true, message: "请输入执行间隔" }]}
-										>
-											<InputNumber min={1} precision={0} className="w-full" />
-										</Form.Item>
-									) : null}
-									{(normalizeText(scheduleType) || "manual") === "cron" ? (
-										<Form.Item
-											name="scheduleCron"
-											label="Cron 表达式"
-											rules={[{ validator: validateCronExpression }]}
-										>
-											<Input placeholder="例如：0 */30 * * * *" />
-										</Form.Item>
-									) : null}
-								</div>
-								<Space size={[8, 8]} wrap className="mb-3">
-									<Text type="secondary">当前连接器能力：</Text>
-									{["FULL", "INCREMENTAL", "CDC", "BACKFILL"].map((cap) => (
-										<Tag key={cap} color={activeCapabilitySet.has(cap) ? "green" : "default"}>
-											{cap}
-										</Tag>
-									))}
-									{!supportsIncremental ? <Text type="warning">当前连接器不支持增量</Text> : null}
-									{supportsCdc ? <Text type="secondary">已支持 CDC 模式</Text> : null}
-									{supportsBackfill ? <Text type="secondary">已支持历史回灌模式</Text> : null}
-									{capabilityLoadFailed ? <Text type="warning">能力探测失败，已使用保守降级策略</Text> : null}
-								</Space>
-									{(normalizeSyncModeValue(syncMode) || "full_refresh") === "incremental" ? (
-										<div className="grid gap-4 md:grid-cols-3">
-											<Form.Item
-												name="incrementalColumn"
-												label="增量列"
-												rules={[{ required: true, message: "请输入增量列名" }]}
-											>
-												<Input placeholder="例如 updated_at 或 id" />
-											</Form.Item>
-											<Form.Item name="incrementalType" label="增量类型">
-												<Select
-													options={[
-														{ label: "datetime", value: "datetime" },
-														{ label: "number", value: "number" },
-														{ label: "string", value: "string" },
-													]}
-												/>
-											</Form.Item>
-											<Form.Item name="initialWatermark" label="初始水位（可选）">
-												<Input placeholder="首次运行起点，如 2025-01-01 00:00:00" />
-											</Form.Item>
-										</div>
-									) : null}
-									<Collapse
-										size="small"
-										className="mb-4"
-										items={[
-											{
-												key: "governance-db",
-												label: "运行治理策略（可选）",
-												children: (
-													<div className="grid gap-4 md:grid-cols-3">
-														<Form.Item name="taskConcurrency" label="任务并发上限">
-															<InputNumber min={1} precision={0} className="w-full" placeholder="默认 1" />
-														</Form.Item>
-														<Form.Item name="sourceConcurrency" label="来源并发上限">
-															<InputNumber min={0} precision={0} className="w-full" placeholder="0 表示不限" />
-														</Form.Item>
-														<Form.Item name="projectConcurrency" label="项目并发上限">
-															<InputNumber min={0} precision={0} className="w-full" placeholder="0 表示不限" />
-														</Form.Item>
-														<Form.Item name="projectKey" label="项目标识">
-															<Input placeholder="例如 project:patent" />
-														</Form.Item>
-														<Form.Item name="priority" label="队列优先级">
-															<Select
-																allowClear
-																options={[
-																	{ label: "HIGH", value: "HIGH" },
-																	{ label: "MEDIUM", value: "MEDIUM" },
-																	{ label: "LOW", value: "LOW" },
-																]}
-															/>
-														</Form.Item>
-														<Form.Item name="rejectPolicy" label="限流策略">
-															<Select
-																allowClear
-																options={[
-																	{ label: "REJECT", value: "REJECT" },
-																	{ label: "QUEUE", value: "QUEUE" },
-																]}
-															/>
-														</Form.Item>
-														<Form.Item name="windowStart" label="执行窗口开始">
-															<Input placeholder="HH:mm，例如 01:00" />
-														</Form.Item>
-														<Form.Item name="windowEnd" label="执行窗口结束">
-															<Input placeholder="HH:mm，例如 06:00" />
-														</Form.Item>
-														<Form.Item name="windowTimezone" label="执行窗口时区">
-															<Select
-																allowClear
-																options={[
-																	{ label: "Asia/Shanghai", value: "Asia/Shanghai" },
-																	{ label: "UTC", value: "UTC" },
-																]}
-															/>
-														</Form.Item>
-													</div>
-												),
-											},
-										]}
-									/>
-									<Form.Item name="sourceCategory" label="数据来源">
-										<Radio.Group onChange={(e) => setSourceCategory(e.target.value)}>
-											<Radio.Button value="database">数据库</Radio.Button>
-											<Radio.Button value="file">文件上传</Radio.Button>
-										</Radio.Group>
-									</Form.Item>
-
-								</>
+								<DbBasicStep
+									form={form}
+									editorMode={editorMode}
+									setEditorMode={(mode) => form.setFieldValue("editorMode", mode)}
+									connectorCapability={activeConnectorCapability}
+									syncModeOptions={syncModeOptions}
+									sourceCategory={sourceCategory}
+									setSourceCategory={setSourceCategory}
+									activeCapabilitySet={activeCapabilitySet}
+									supportsIncremental={supportsIncremental}
+									supportsCdc={supportsCdc}
+									supportsBackfill={supportsBackfill}
+									capabilityLoadFailed={capabilityLoadFailed}
+								/>
 							)}
 							{currentStep === 1 && (
-								<>
-									<Divider orientation="left">Reader 配置</Divider>
-									<Form.Item
-										name="sourceDataSourceId"
-										label="数据源连接"
-										rules={[{ required: true, message: "请选择数据源连接" }]}
-									>
-										<Select
-											loading={loadingDataSources}
-											placeholder={loadingDataSources ? "加载中..." : "请选择数据源连接"}
-											options={dataSources.map((item) => ({
-												label: `${item.name} (${item.type || "unknown"})`,
-												value: item.id,
-											}))}
-											showSearch
-											optionFilterProp="label"
-										/>
-									</Form.Item>
-									<Form.Item
-										name="readerType"
-										label="Reader 类型"
-										rules={[{ validator: readerTypeValidator }]}
-									>
-										<Input placeholder="将根据数据源自动生成" disabled />
-									</Form.Item>
-									<Form.Item name="tableSelectionMode" label="入湖表选择">
-										<Radio.Group
-											onChange={(e) => {
-												const next = normalizeText(e.target?.value) || "all";
-												if (next === "all") {
-													syncSelectedTablesToForm([], { silent: true });
-												}
-											}}
-										>
-											<Radio.Button value="all">全部表（默认）</Radio.Button>
-											<Radio.Button value="manual">手动选择</Radio.Button>
-										</Radio.Group>
-									</Form.Item>
-									{tableSelectionMode === "all" ? (
-										<Form.Item name="tableExclude" label="排除表（每行一个，可选）">
-											<Input.TextArea rows={2} placeholder="schema.table 或 table_name" />
-										</Form.Item>
-									) : null}
-									{editorMode === "json" ? (
-										<Form.Item
-											name="readerConfig"
-											label="Reader 配置 (JSON)"
-											rules={[
-												{ required: true, message: "请输入 Reader 配置" },
-												{ validator: jsonValidator("Reader 配置", true) },
-											]}
-										>
-											<Input.TextArea rows={6} placeholder='{"column":["*"],"table":["table_a"]}' />
-										</Form.Item>
-									) : (
-										<>
-											<div className="grid gap-4 md:grid-cols-2">
-												<Form.Item
-													name="readerTables"
-													label="Reader 表（每行一个）"
-													dependencies={["tableSelectionMode"]}
-													rules={[{ validator: readerTablesValidator }]}
-												>
-													<Input.TextArea rows={3} placeholder="source_table" />
-												</Form.Item>
-												<Form.Item name="readerColumns" label="Reader 字段（逗号分隔）">
-													<Input placeholder="* 或 id,name,created_at" />
-												</Form.Item>
-											</div>
-											<div className="grid gap-4 md:grid-cols-2">
-												<Form.Item name="readerWhere" label="Reader 过滤条件">
-													<Input placeholder="可选，例如：status = 1" />
-												</Form.Item>
-											</div>
-											<Collapse
-												ghost
-												items={[
-													{
-														key: "reader-advanced",
-														label: "Reader 高级参数",
-														children: (
-															<div className="space-y-4">
-																<Form.Item name="readerQuerySql" label="Reader 查询 SQL（每行一条）">
-																	<Input.TextArea rows={3} placeholder="select * from t where ..." />
-																</Form.Item>
-																<Form.Item name="readerExtraConfig" label="Reader 扩展配置 JSON">
-																	<Input.TextArea rows={4} placeholder='{"splitPk":"id"}' />
-																</Form.Item>
-															</div>
-														),
-													},
-												]}
-											/>
-										</>
-									)}
-									<Divider orientation="left">源端表发现</Divider>
-									<Card type="inner">
-										<div className="grid gap-4 md:grid-cols-3">
-											<Form.Item name="readerSchema" label="Schema（可选）">
-												<Input placeholder="例如 public" />
-											</Form.Item>
-											<Form.Item name="readerTablePattern" label="表名筛选（可选）">
-												<Input placeholder="支持 SQL LIKE，例如 ods_%" />
-											</Form.Item>
-											<Form.Item label="操作">
-												<Space>
-													<Button onClick={handleDiscoverTables} loading={discoveringTables}>
-														获取表清单
-													</Button>
-													<Button
-														onClick={() => {
-															setSelectedTableKeys(discoveredTableKeys);
-															syncSelectedTablesToForm(discoveredTableKeys, { silent: true });
-														}}
-														disabled={!discoveredTableKeys.length}
-													>
-														全选
-													</Button>
-													<Button
-														onClick={() => {
-															setSelectedTableKeys([]);
-															syncSelectedTablesToForm([], { silent: true });
-														}}
-														disabled={!selectedTableKeys.length}
-													>
-														清空
-													</Button>
-													<Button onClick={handleApplyTables} disabled={!selectedTableKeys.length}>
-														应用选择
-													</Button>
-												</Space>
-											</Form.Item>
-										</div>
-										{discoverError ? (
-											<Alert type="warning" message={discoverError} showIcon className="mb-3" />
-										) : null}
-										<Table
-											rowKey={(record) => buildTableKey(record)}
-											size="small"
-											loading={discoveringTables}
-											dataSource={discoveredTables}
-											rowSelection={{
-												selectedRowKeys: selectedTableKeys,
-												onChange: (keys) => {
-													const nextKeys = keys.map((key) => String(key));
-													syncSelectedTablesToForm(nextKeys, { silent: true });
-												},
-											}}
-											columns={[
-												{ title: "Schema", dataIndex: "schema", width: 140 },
-												{ title: "表名", dataIndex: "name" },
-												{ title: "类型", dataIndex: "type", width: 120 },
-											]}
-											pagination={{
-												pageSize: tablePageSize,
-												showSizeChanger: true,
-												pageSizeOptions: [8, 20, 50, 100],
-												onShowSizeChange: (_current: number, size: number) => setTablePageSize(size),
-											}}
-										/>
-										<Text type="secondary" className="block mt-2">
-											已发现 {discoveredTables.length} 张表，已选择 {selectedTableKeys.length} 张表
-										</Text>
-									</Card>
-								</>
+								<DbSourceStep
+									form={form}
+									selectedTableKeys={selectedTableKeys}
+									setSelectedTableKeys={setSelectedTableKeys}
+									editorMode={editorMode}
+									selectedDataSource={selectedDataSource ?? null}
+									availableTables={discoveredTables}
+									loadingTables={discoveringTables}
+									discoveredTableKeys={discoveredTableKeys}
+									discoverError={discoverError}
+									loadingDataSources={loadingDataSources}
+									dataSources={dataSources}
+									onDiscoverTables={handleDiscoverTables}
+									onApplyTables={handleApplyTables}
+									syncSelectedTablesToForm={syncSelectedTablesToForm}
+									readerTablesValidator={readerTablesValidator}
+									readerTypeValidator={readerTypeValidator}
+								/>
 							)}
 							{currentStep === 2 && (
-								<>
-									<Divider orientation="left">目标端配置</Divider>
-									{loadingDefaultDestination ? (
-										<Alert
-											type="info"
-											showIcon
-											message="正在加载默认数据湖配置"
-											className="mb-4"
-										/>
-									) : null}
-									{defaultDestinationError ? (
-										<Alert
-											type="error"
-											showIcon
-											message="默认数据湖不可用"
-											description={defaultDestinationError}
-											className="mb-4"
-										/>
-									) : null}
-									{defaultDestinationStatus ? (
-										<Alert
-											type={defaultDestinationStatus.available ? "success" : "warning"}
-											showIcon
-											message="默认数据湖"
-											description={[
-												defaultDestinationStatus.destinationName
-													? `数据湖：${defaultDestinationStatus.destinationName}`
-													: null,
-												defaultDestinationStatus.writerType
-													? `Writer：${defaultDestinationStatus.writerType}`
-													: null,
-												defaultDestinationStatus.message ? defaultDestinationStatus.message : null,
-											]
-												.filter(Boolean)
-												.join(" · ")}
-											className="mb-4"
-										/>
-									) : null}
-									<Form.Item name="syncPrefix" label="目标表前缀">
-										<Input placeholder="例如：ods_erp_" />
-									</Form.Item>
-									<Text type="secondary" className="block -mt-3 mb-4">
-										用于自动生成 ODS 表名（如：ods_erp_ + 源表名）。若 Writer 已指定目标表，可留空。
-									</Text>
-									<Collapse
-										ghost
-										className="mb-4"
-										items={[
-											{
-												key: "column-rules",
-												label: "字段规则（可选）",
-												children: (
-													<div className="space-y-4">
-														<div className="grid gap-4 md:grid-cols-2">
-															<Form.Item name="columnPrefix" label="字段名前缀">
-																<Input placeholder="例如：src_" />
-															</Form.Item>
-															<Form.Item name="columnSuffix" label="字段名后缀">
-																<Input placeholder="例如：_raw" />
-															</Form.Item>
-														</div>
-														<Text type="secondary" className="block -mt-2 mb-2">
-															对源表所有字段统一添加前缀/后缀，例如 src_ + id → src_id。留空则不变。
-														</Text>
-														<Divider orientation="left" plain>
-															追加字段
-														</Divider>
-														<Table
-															size="small"
-															dataSource={extraColumns}
-															rowKey={(_: any, index: any) => String(index)}
-															pagination={false}
-															locale={{ emptyText: "暂无追加字段" }}
-															columns={[
-																{
-																	title: "字段名",
-																	dataIndex: "name",
-																	render: (value: string, _: any, index: number) => (
-																		<Input
-																			size="small"
-																			value={value}
-																			placeholder="英文字段名"
-																			onChange={(e) => {
-																				const cols = [...extraColumns];
-																				cols[index] = { ...cols[index], name: e.target.value };
-																				setExtraColumns(cols);
-																			}}
-																		/>
-																	),
-																},
-																{
-																	title: "显示名称",
-																	dataIndex: "label",
-																	render: (value: string, _: any, index: number) => (
-																		<Input
-																			size="small"
-																			value={value}
-																			placeholder="中文名"
-																			onChange={(e) => {
-																				const cols = [...extraColumns];
-																				cols[index] = { ...cols[index], label: e.target.value };
-																				setExtraColumns(cols);
-																			}}
-																		/>
-																	),
-																},
-																{
-																	title: "数据类型",
-																	dataIndex: "type",
-																	width: 160,
-																	render: (value: string, _: any, index: number) => (
-																		<Select
-																			size="small"
-																			value={value}
-																			style={{ width: "100%" }}
-																			onChange={(v) => {
-																				const cols = [...extraColumns];
-																				cols[index] = { ...cols[index], type: v };
-																				setExtraColumns(cols);
-																			}}
-																			options={[
-																				{ label: "VARCHAR", value: "string" },
-																				{ label: "TEXT", value: "text" },
-																				{ label: "INTEGER", value: "integer" },
-																				{ label: "BIGINT", value: "long" },
-																				{ label: "TIMESTAMP", value: "timestamp" },
-																				{ label: "BOOLEAN", value: "boolean" },
-																			]}
-																		/>
-																	),
-																},
-																{
-																	title: "默认值 (SQL)",
-																	dataIndex: "defaultValue",
-																	width: 180,
-																	render: (value: string, _: any, index: number) => (
-																		<Input
-																			size="small"
-																			value={value}
-																			placeholder="CURRENT_TIMESTAMP"
-																			onChange={(e) => {
-																				const cols = [...extraColumns];
-																				cols[index] = { ...cols[index], defaultValue: e.target.value };
-																				setExtraColumns(cols);
-																			}}
-																		/>
-																	),
-																},
-																{
-																	title: "操作",
-																	width: 50,
-																	align: "center" as const,
-																	render: (_: any, __: any, index: number) => (
-																		<Button
-																			type="text"
-																			danger
-																			size="small"
-																			icon={<DeleteOutlined />}
-																			onClick={() => {
-																				const cols = [...extraColumns];
-																				cols.splice(index, 1);
-																				setExtraColumns(cols);
-																			}}
-																		/>
-																	),
-																},
-															]}
-														/>
-														<Button
-															type="dashed"
-															size="small"
-															icon={<PlusOutlined />}
-															onClick={() => {
-																setExtraColumns([
-																	...extraColumns,
-																	{ name: "", label: "", type: "string", defaultValue: "" },
-																]);
-															}}
-														>
-															添加字段
-														</Button>
-														<Text type="secondary" className="block mt-2">
-															追加字段会在数据加载完成后通过 ALTER TABLE 添加到目标表，默认值使用 SQL 表达式（如 CURRENT_TIMESTAMP、&apos;erp&apos;）。
-														</Text>
-													</div>
-												),
-											},
-										]}
-									/>
-									<Divider orientation="left">Writer 配置</Divider>
-									<Form.Item label="Writer 类型" required>
-										<Input value={formValues?.writerType || ""} placeholder="由默认数据湖自动提供" disabled />
-									</Form.Item>
-									{editorMode === "json" ? (
-										<Form.Item
-											name="writerConfig"
-											label="Writer 配置 (JSON)"
-											required
-											rules={[
-												{ required: true, message: "请输入 Writer 配置" },
-												{ validator: writerConfigValidator },
-											]}
-										>
-											<Input.TextArea
-												rows={6}
-												placeholder='{"connection":[{"table":["target_table"]}],"column":["*"]}'
-											/>
-										</Form.Item>
-									) : (
-										<>
-											<div className="grid gap-4 md:grid-cols-2">
-												<Form.Item
-													name="writerJdbcUrls"
-													label="Writer JDBC URL（每行一个，可选覆盖）"
-												>
-													<Input.TextArea rows={3} placeholder="jdbc:postgresql://host:5432/db" />
-												</Form.Item>
-												<Form.Item
-													name="writerTables"
-													label="Writer 表（每行一个）"
-													rules={[
-														{ validator: writerTablesValidator },
-													]}
-												>
-													<Input.TextArea rows={3} placeholder="target_table" />
-												</Form.Item>
-											</div>
-											<div className="grid gap-4 md:grid-cols-2">
-												<Form.Item name="writerColumns" label="Writer 字段（逗号分隔）">
-													<Input placeholder="* 或 id,name,created_at" />
-												</Form.Item>
-												<Form.Item name="writerWriteMode" label="Writer 写入模式">
-													<Input placeholder="insert / replace / update" />
-												</Form.Item>
-											</div>
-											<div className="grid gap-4 md:grid-cols-2">
-												<Form.Item
-													name="writerUsername"
-													label="Writer 用户名"
-												>
-													<Input placeholder="数据库账号" />
-												</Form.Item>
-												<Form.Item
-													name="writerPassword"
-													label="Writer 密码"
-												>
-													<Input.Password placeholder="******" />
-												</Form.Item>
-											</div>
-											<Form.Item name="writerSchema" label="Writer Schema">
-												<Input placeholder="可选，例如 public" />
-											</Form.Item>
-											<Collapse
-												ghost
-												items={[
-													{
-														key: "writer-advanced",
-														label: "Writer 高级参数",
-														children: (
-															<div className="space-y-4">
-																<Form.Item name="writerPreSql" label="Writer 前置 SQL（每行一条）">
-																	<Input.TextArea rows={3} placeholder="delete from t where ..." />
-																</Form.Item>
-																<Form.Item name="writerPostSql" label="Writer 后置 SQL（每行一条）">
-																	<Input.TextArea rows={3} placeholder="analyze table t" />
-																</Form.Item>
-																<Form.Item name="writerExtraConfig" label="Writer 扩展配置 JSON">
-																	<Input.TextArea rows={4} placeholder='{"batchSize":1000}' />
-																</Form.Item>
-															</div>
-														),
-													},
-												]}
-											/>
-										</>
-									)}
-									<Text type="secondary" className="block mt-2">
-										入湖任务需要提供目标表名，可使用 {TABLE_PLACEHOLDER} 占位符或具体表名。
-									</Text>
-								</>
+								<DbTargetStep
+									form={form}
+									defaultDestinationStatus={defaultDestinationStatus}
+									extraColumns={extraColumns}
+									setExtraColumns={setExtraColumns}
+									editorMode={editorMode}
+									formValues={form.getFieldsValue(true)}
+									loadingDefaultDestination={loadingDefaultDestination}
+									defaultDestinationError={defaultDestinationError}
+									resolveSelectedTables={() => selectedTableKeys}
+								/>
 							)}
 							{currentStep === 3 && (
-								<>
-									<Card
-										type="inner"
-										title="dbt 模型联动"
-										extra={
-											<Button size="small" onClick={() => router.push("/modeling/sql")}>
-												进入建模
-											</Button>
-										}
-										className="mb-4"
-									>
-										<Form.Item name="dbtModels" label="选择模型（可选）">
-											<Select
-												mode="multiple"
-												allowClear
-												loading={loadingSqlModels}
-												placeholder={loadingSqlModels ? "模型加载中..." : "选择需要联动的模型"}
-												options={sqlModels.map((model) => ({
-													label: model.alias ? `${model.name} (${model.alias})` : model.name,
-													value: model.name,
-												}))}
-												showSearch
-												optionFilterProp="label"
-											/>
-										</Form.Item>
-										<Form.Item name="dbtModelSelector" label="模型选择器（可选）">
-											<Input placeholder="例如：model:ods_xxx model:dwd_xxx" />
-										</Form.Item>
-										<Form.Item name="dbtDagSelector" label="DAG 族选择器（可选）">
-											<Input placeholder="例如：tab:erp" />
-										</Form.Item>
-										<Text type="secondary">
-											若未填写模型选择器，将根据选中的模型生成 model:xxx 选择器；DAG 族建议使用 tab:源系统。
-										</Text>
-									</Card>
-									<Form.Item name="jobConfig" label="作业参数 (JSON，可选)" rules={[{ validator: jsonValidator("作业参数") }]}>
-										<Input.TextArea rows={4} placeholder='{"setting":{"speed":{"channel":3}}}' />
-									</Form.Item>
-									<Card type="inner" title="作业预览">
-										{previewState.error ? (
-											<Alert type="warning" message={previewState.error} showIcon />
-										) : (
-											<pre className="bg-muted p-4 rounded overflow-auto">
-												{JSON.stringify(previewState.config, null, 2)}
-											</pre>
-										)}
-									</Card>
-									<Card type="inner" title="Airflow 触发">
-										<Form.Item name="airflowEnabled" label="启用 Airflow" valuePropName="checked">
-											<Switch />
-										</Form.Item>
-										<Form.Item name="runNow" label="立即触发" valuePropName="checked">
-											<Switch />
-										</Form.Item>
-										<Text type="secondary">
-											若未勾选立即触发，仅保存作业配置，后续可在 Airflow 中手动运行。
-										</Text>
-									</Card>
-								</>
+								<ReviewStep
+									form={form}
+									isFileFlow={false}
+									previewState={previewState}
+									sqlModels={sqlModels}
+									loadingSqlModels={loadingSqlModels}
+									onNavigateToModeling={() => router.push("/modeling/sql")}
+								/>
 							)}
 						</>
 					)}

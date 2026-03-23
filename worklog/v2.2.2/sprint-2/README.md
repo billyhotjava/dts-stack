@@ -55,4 +55,5 @@
 
 - [design.md](./design.md)
 - [plan.md](./plan.md)
+- [runbook.md](./runbook.md)
 - [tasks](./tasks)

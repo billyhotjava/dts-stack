@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "@/routes/hooks";
-import { Button, Card, Descriptions, Dropdown, Space, Tag, message, Spin, Modal, Form, Input, Select, Typography, Drawer, Progress, Alert, Table } from "antd";
+import { Button, Card, Descriptions, Dropdown, Space, Tabs, Tag, message, Spin, Modal, Form, Input, Select, Typography, Drawer, Progress, Alert, Table } from "antd";
 import { PlayCircleOutlined, EditOutlined, HistoryOutlined, ArrowLeftOutlined, SyncOutlined, FileTextOutlined, ReloadOutlined, DeleteOutlined } from "@ant-design/icons";
 import { useRouter } from "@/routes/hooks";
 import {
@@ -14,6 +14,7 @@ import {
 import dataSourcesService, { type InfraDataSource } from "@/api/services/dataSourcesService";
 import { listSqlModels } from "@/api/platformApi";
 import RollbackImpactModal, { type RollbackRequest } from "@/components/rollback/RollbackImpactModal";
+import ExecutionHistoryTable from "./components/ExecutionHistoryTable";
 
 const { Text } = Typography;
 
@@ -28,6 +29,7 @@ type ExecutionProgressView = {
 export default function TransformDetailPage() {
 	const { id } = useParams();
 	const router = useRouter();
+	const [activeTab, setActiveTab] = useState<string>("config");
 	const [task, setTask] = useState<IngestionTaskDTO | null>(null);
 	const [sourceDetail, setSourceDetail] = useState<InfraDataSource | null>(null);
 	const [loading, setLoading] = useState(false);
@@ -470,7 +472,7 @@ export default function TransformDetailPage() {
 	}
 
 	return (
-		<div className="space-y-6">
+		<div className="space-y-6" data-testid="platform-transform-detail-page">
 			<Card
 				title={task.name}
 				extra={
@@ -481,7 +483,12 @@ export default function TransformDetailPage() {
 						<Button icon={<HistoryOutlined />} onClick={() => router.push(`/explore/etl/transform/${id}/executions`)}>
 							执行历史
 						</Button>
-						<Button icon={<FileTextOutlined />} onClick={openLatestLog} disabled={!task.lastExecutedAt}>
+						<Button
+							icon={<FileTextOutlined />}
+							onClick={openLatestLog}
+							disabled={!task.lastExecutedAt}
+							data-testid="platform-transform-open-log"
+						>
 							最新日志
 						</Button>
 						<Button
@@ -516,14 +523,25 @@ export default function TransformDetailPage() {
 							type="primary"
 							icon={<PlayCircleOutlined />}
 							onClick={handleExecute}
-							loading={executeSubmitting}
-							disabled={task.status === "deleted"}
+							loading={executeSubmitting || (executeProgressOpen && !executeProgress.terminal)}
+							disabled={task.status === "deleted" || executeSubmitting || (executeProgressOpen && !executeProgress.terminal)}
+							data-testid="platform-transform-execute"
 						>
-							执行任务
+							{executeSubmitting ? "提交中..." : (executeProgressOpen && !executeProgress.terminal) ? "执行中" : "执行任务"}
 						</Button>
 					</Space>
 				}
 			/>
+
+			<Tabs
+				activeKey={activeTab}
+				onChange={setActiveTab}
+				items={[
+					{
+						key: "config",
+						label: "任务配置",
+						children: (
+							<div className="space-y-6">
 
 			<div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
 				<Card title="基本信息">
@@ -711,6 +729,17 @@ export default function TransformDetailPage() {
 				</Card>
 			) : null}
 
+							</div>
+						),
+					},
+					{
+						key: "history",
+						label: "执行历史",
+						children: <ExecutionHistoryTable taskId={Number(id)} />,
+					},
+				]}
+			/>
+
 			<Modal
 				open={dbtModalOpen}
 				title="绑定 DBT 模型与 DAG 族"
@@ -779,7 +808,7 @@ export default function TransformDetailPage() {
 				}
 				width={620}
 			>
-				<Space direction="vertical" size={16} className="w-full">
+				<Space direction="vertical" size={16} className="w-full" data-testid="platform-transform-detail-progress">
 					<Text>任务：{task?.name || "-"}</Text>
 					<Progress percent={executeProgress.percent} status={executeProgress.status} />
 					<Alert
@@ -823,6 +852,7 @@ export default function TransformDetailPage() {
 					</Space>
 				}
 			>
+				<div data-testid="platform-transform-log-drawer">
 				<div className="mb-3">
 					{logMeta?.dagId ? (
 						<Text type="secondary">
@@ -834,6 +864,7 @@ export default function TransformDetailPage() {
 				<pre className="whitespace-pre-wrap break-words text-xs bg-muted p-3 rounded border border-border">
 					{logLoading ? "日志加载中..." : logContent || "暂无日志"}
 				</pre>
+				</div>
 			</Drawer>
 		</div>
 	);

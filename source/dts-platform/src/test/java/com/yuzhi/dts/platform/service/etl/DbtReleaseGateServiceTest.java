@@ -19,6 +19,7 @@ class DbtReleaseGateServiceTest {
         when(topicBindingRuntimeService.diagnose("model:test_model")).thenReturn(
             new TopicBindingRuntimeService.BindingDiagnostics("model:test_model", List.of(), List.of(), List.of())
         );
+        when(runResultService.hasRecentCompatibleBuildEvidence("model:test_model", 20)).thenReturn(false);
 
         DbtReleaseGateService service = new DbtReleaseGateService(runResultService, topicBindingRuntimeService, false);
 
@@ -79,8 +80,7 @@ class DbtReleaseGateServiceTest {
 
         assertThat(result.blocking()).isTrue();
         assertThat(result.blockers()).contains(
-            "最近一次构建状态为 FAILED，不允许发布",
-            "最近一次构建命令不是 compile/test/build，请先补齐 CI 校验"
+            "最近一次记录命令不是 compile/test/build，且最近 20 条中未发现匹配 selector 的有效 CI 校验，请先补齐 CI 校验"
         );
     }
 
@@ -196,6 +196,42 @@ class DbtReleaseGateServiceTest {
 
         assertThat(result.blocking()).isTrue();
         assertThat(result.blockers()).contains("最近一次构建状态为 FAILED，不允许发布");
+    }
+
+    @Test
+    void shouldWarnWhenLatestCommandIsNotBuildLikeButRecentMatchingEvidenceExists() {
+        DbtRunResultService runResultService = mock(DbtRunResultService.class);
+        TopicBindingRuntimeService topicBindingRuntimeService = mock(TopicBindingRuntimeService.class);
+        when(runResultService.loadLatestBuildSummary(20)).thenReturn(
+            new DbtRunResultService.DbtRunSummary(
+                true,
+                "/tmp/dbt",
+                "/tmp/dbt/target/run_results.json",
+                "/tmp/dbt/target/manifest.json",
+                "inv-4",
+                Instant.now().toString(),
+                "dbt run --select tag:project-management",
+                "FAILED",
+                1,
+                0,
+                1,
+                0,
+                List.of(),
+                List.of()
+            )
+        );
+        when(runResultService.hasRecentCompatibleBuildEvidence("tag:project-management", 20)).thenReturn(true);
+        when(topicBindingRuntimeService.diagnose("tag:project-management")).thenReturn(
+            new TopicBindingRuntimeService.BindingDiagnostics("tag:project-management", List.of(), List.of(), List.of())
+        );
+
+        DbtReleaseGateService service = new DbtReleaseGateService(runResultService, topicBindingRuntimeService, false);
+
+        DbtReleaseGateService.DbtReleaseGateResult result = service.evaluate("tag:project-management", null, null, false);
+
+        assertThat(result.blocking()).isFalse();
+        assertThat(result.warning()).isTrue();
+        assertThat(result.warnings()).contains("最近一次记录命令不是 compile/test/build，但最近 20 条中已发现匹配 selector 的有效 CI 校验");
     }
 
     private DbtRunResultService.DbtRunSummary successfulSummary(String command) {

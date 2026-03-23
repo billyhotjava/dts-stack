@@ -274,6 +274,20 @@ public class DbtRunResultService {
         return localSummary == null ? DbtRunSummary.empty("未发现可用构建记录") : localSummary;
     }
 
+    public boolean hasRecentCompatibleBuildEvidence(String selector, int limit) {
+        int safeLimit = Math.max(1, limit);
+        DbtRunSummary latestSummary = loadLatestSummary(safeLimit);
+        if (latestSummary != null && latestSummary.present() && isBuildLikeCommand(latestSummary.command())) {
+            if (commandMatchesSelector(latestSummary.command(), selector)) {
+                return true;
+            }
+        }
+        return externalRunLogService
+            .findRecentDbtBuildEvidence(safeLimit)
+            .stream()
+            .anyMatch(snapshot -> isBuildLikeCommand(snapshot.command()) && commandMatchesSelector(snapshot.command(), selector));
+    }
+
     public List<DbtTestDetail> getTestDetails() {
         if (!properties.isEnabled()) {
             return Collections.emptyList();
@@ -519,6 +533,39 @@ public class DbtRunResultService {
             }
         }
         return null;
+    }
+
+    private boolean commandMatchesSelector(String command, String expectedSelector) {
+        String normalizedExpected = normalizeSelector(expectedSelector);
+        if (!StringUtils.hasText(normalizedExpected) || "all".equalsIgnoreCase(normalizedExpected)) {
+            return true;
+        }
+        String normalizedActual = normalizeSelector(extractSelector(command));
+        return StringUtils.hasText(normalizedActual) && normalizedActual.equalsIgnoreCase(normalizedExpected);
+    }
+
+    private String normalizeSelector(String selector) {
+        if (!StringUtils.hasText(selector)) {
+            return null;
+        }
+        java.util.List<String> tokens = new java.util.ArrayList<>();
+        for (String raw : selector.trim().split("[,\\s]+")) {
+            if (!StringUtils.hasText(raw)) {
+                continue;
+            }
+            String token = raw.trim();
+            while (token.startsWith("+")) {
+                token = token.substring(1).trim();
+            }
+            if (StringUtils.hasText(token)) {
+                tokens.add(token.toLowerCase(Locale.ROOT));
+            }
+        }
+        if (tokens.isEmpty()) {
+            return null;
+        }
+        java.util.Collections.sort(tokens);
+        return String.join(",", tokens);
     }
 
     private Map<String, ManifestNode> readManifestNodes(String manifestPath) {

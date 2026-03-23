@@ -11,7 +11,7 @@ public class AirflowProperties {
     private String password;
     private String dagId = "dbt_load";
     private String dagsDir;
-    private int dagReadyWaitSeconds = 0;
+    private int dagReadyWaitSeconds = 30;
     private int dagReadyPollSeconds = 1;
     private String dockerNetwork = "dts-core";
     private boolean dockerPrivileged = true;

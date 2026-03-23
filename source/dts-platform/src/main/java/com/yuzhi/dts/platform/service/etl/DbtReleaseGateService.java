@@ -14,6 +14,7 @@ import org.springframework.util.StringUtils;
 public class DbtReleaseGateService {
 
     private static final Duration DEFAULT_MAX_BUILD_AGE = Duration.ofHours(24);
+    private static final int RECENT_BUILD_EVIDENCE_LIMIT = 20;
 
     private final DbtRunResultService dbtRunResultService;
     private final TopicBindingRuntimeService topicBindingRuntimeService;
@@ -39,7 +40,7 @@ public class DbtReleaseGateService {
 
         evaluateGitBranch(normalizedGitRef, strict, blockers, warnings);
         evaluateCommitSha(normalizedCommitSha, strict, blockers, warnings);
-        evaluateTopicBindings(normalizedSelector, warnings);
+        evaluateTopicBindings(normalizedSelector, blockers);
 
         DbtRunResultService.DbtRunSummary latestRun = dbtRunResultService.loadLatestBuildSummary(20);
         BuildEvidence evidence = null;
@@ -70,32 +71,36 @@ public class DbtReleaseGateService {
         );
     }
 
-    private void evaluateTopicBindings(String selector, List<String> warnings) {
+    private void evaluateTopicBindings(String selector, List<String> blockers) {
         TopicBindingRuntimeService.BindingDiagnostics diagnostics = topicBindingRuntimeService.diagnose(selector);
         if (diagnostics == null || diagnostics.missingRequired().isEmpty()) {
             return;
         }
-        warnings.add("缺少专题绑定：" + String.join(", ", diagnostics.missingRequired()));
+        blockers.add("缺少专题绑定：" + String.join(", ", diagnostics.missingRequired()));
     }
 
     private void evaluateGitBranch(String gitRef, boolean strict, List<String> blockers, List<String> warnings) {
         if (!StringUtils.hasText(gitRef)) {
             if (requireGitMetadata && strict) {
-                warnings.add("缺少 Git 分支信息（gitRef）");
+                blockers.add("缺少 Git 分支信息（gitRef）");
             } else if (requireGitMetadata) {
                 warnings.add("缺少 Git 分支信息（gitRef）");
             }
             return;
         }
         if (!isAllowedReleaseBranch(gitRef)) {
-            warnings.add("分支不符合发布策略，仅允许 main/master/release/*/hotfix/*，当前: " + gitRef);
+            if (strict) {
+                blockers.add("分支不符合发布策略，仅允许 main/master/release/*/hotfix/*，当前: " + gitRef);
+            } else {
+                warnings.add("分支不符合发布策略，仅允许 main/master/release/*/hotfix/*，当前: " + gitRef);
+            }
         }
     }
 
     private void evaluateCommitSha(String commitSha, boolean strict, List<String> blockers, List<String> warnings) {
         if (!StringUtils.hasText(commitSha)) {
             if (requireGitMetadata && strict) {
-                warnings.add("缺少 Commit SHA（commitSha）");
+                blockers.add("缺少 Commit SHA（commitSha）");
             } else if (requireGitMetadata) {
                 warnings.add("缺少 Commit SHA（commitSha）");
             }
@@ -104,7 +109,7 @@ public class DbtReleaseGateService {
         String normalized = commitSha.trim();
         if (!normalized.matches("^[0-9a-fA-F]{7,40}$")) {
             if (strict) {
-                warnings.add("Commit SHA 格式非法，需为 7-40 位十六进制");
+                blockers.add("Commit SHA 格式非法，需为 7-40 位十六进制");
             } else {
                 warnings.add("Commit SHA 格式非法，需为 7-40 位十六进制");
             }
@@ -118,20 +123,33 @@ public class DbtReleaseGateService {
         List<String> blockers,
         List<String> warnings
     ) {
+        if (!isAllowedBuildCommand(summary.command())) {
+            if (dbtRunResultService.hasRecentCompatibleBuildEvidence(selector, RECENT_BUILD_EVIDENCE_LIMIT)) {
+                warnings.add(
+                    "最近一次记录命令不是 compile/test/build，但最近 "
+                        + RECENT_BUILD_EVIDENCE_LIMIT
+                        + " 条中已发现匹配 selector 的有效 CI 校验"
+                );
+            } else {
+                blockers.add(
+                    "最近一次记录命令不是 compile/test/build，且最近 "
+                        + RECENT_BUILD_EVIDENCE_LIMIT
+                        + " 条中未发现匹配 selector 的有效 CI 校验，请先补齐 CI 校验"
+                );
+            }
+            return;
+        }
         String status = normalizeUpper(summary.status());
         boolean missingUnbuiltRelations = isMissingUnbuiltRelationTestFailure(summary);
         if (!"SUCCESS".equals(status) && !missingUnbuiltRelations) {
-            warnings.add("最近一次构建状态为 " + defaultText(status, "UNKNOWN") + "，不允许发布");
+            blockers.add("最近一次构建状态为 " + defaultText(status, "UNKNOWN") + "，不允许发布");
         } else if (missingUnbuiltRelations) {
             warnings.add("最近一次 dbt test 失败是因为目标关系尚未生成，首次上线可继续执行 dbt build");
-        }
-        if (!isAllowedBuildCommand(summary.command())) {
-            warnings.add("最近一次构建命令不是 compile/test/build，建议补齐 CI 校验");
         }
         Instant generatedAt = parseInstant(summary.generatedAt());
         if (generatedAt == null) {
             if (strict) {
-                warnings.add("构建记录缺少生成时间，无法确认有效性");
+                blockers.add("构建记录缺少生成时间，无法确认有效性");
             } else {
                 warnings.add("构建记录缺少生成时间，建议重跑 compile/test");
             }
@@ -141,7 +159,7 @@ public class DbtReleaseGateService {
                 String msg =
                     "构建记录已过期（" + age.toHours() + "h），需在 " + DEFAULT_MAX_BUILD_AGE.toHours() + "h 内完成 compile/test/build";
                 if (strict) {
-                    warnings.add(msg);
+                    blockers.add(msg);
                 } else {
                     warnings.add(msg);
                 }

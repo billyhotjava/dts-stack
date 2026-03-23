@@ -88,13 +88,25 @@ function touchPlatformSession() {
 	localStorage.setItem(SESSION_ACTIVITY_KEY, String(Date.now()));
 }
 
+function redirectToLogin() {
+	const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
+	window.location.href = `/#/auth/login?redirect=${returnUrl}`;
+}
+
 async function refreshTokenIfNeeded() {
 	const { refreshToken } = getPlatformTokens();
-	if (!refreshToken) return;
+	if (!refreshToken) {
+		console.warn("[session] No refresh token available, redirecting to login");
+		redirectToLogin();
+		return;
+	}
 	try {
-		await refreshPlatformAccessToken(refreshToken);
-	} catch {
-		// Best-effort; next API call will retry via fetchWithPlatformAuth
+		const result = await refreshPlatformAccessToken(refreshToken);
+		if (!result) {
+			console.warn("[session] Token refresh returned null");
+		}
+	} catch (err) {
+		console.warn("[session] Token refresh failed:", err);
 	}
 }
 
@@ -136,7 +148,15 @@ export async function refreshPlatformAccessToken(refreshToken: string): Promise<
 		headers: { "content-type": "application/json", accept: "application/json" },
 		body: JSON.stringify({ refreshToken: rt }),
 	});
-	if (!response.ok) return null;
+	if (!response.ok) {
+		// If refresh fails, check if we have any valid token left
+		const current = getPlatformTokens();
+		if (!current.accessToken) {
+			// No valid token remaining, redirect to platform login
+			redirectToLogin();
+		}
+		return null;
+	}
 
 	const body = await response.json().catch(() => null);
 	const tokens = pickTokenFromResponse(body);
