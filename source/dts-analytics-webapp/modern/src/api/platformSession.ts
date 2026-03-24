@@ -80,9 +80,42 @@ function pickTokenFromResponse(body: unknown): PlatformTokens | null {
  * so no platform code runs to handle token refresh — analytics must do it.
  */
 const SESSION_ACTIVITY_KEY = "dts.session.lastActivity";
-const TOKEN_REFRESH_INTERVAL_MS = 4 * 60 * 1000; // 4 minutes (JWT typically expires in 5-10 min)
+const DEFAULT_TOKEN_REFRESH_INTERVAL_MS = 4 * 60 * 1000;
+const MIN_REFRESH_DELAY_MS = 30 * 1000;
+const TOKEN_REFRESH_SKEW_MS = 60 * 1000;
 let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
-let tokenRefreshTimer: ReturnType<typeof setInterval> | null = null;
+let tokenRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+
+function decodeJwtExp(token?: string): number | null {
+	if (!token) return null;
+	try {
+		const parts = token.split(".");
+		if (parts.length < 2) return null;
+		let payload = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+		while (payload.length % 4 !== 0) payload += "=";
+		const json = atob(payload);
+		const obj = JSON.parse(json);
+		return typeof obj?.exp === "number" ? obj.exp * 1000 : null;
+	} catch {
+		return null;
+	}
+}
+
+function resolveConfiguredSessionTimeoutMinutes(): number {
+	const value = Number(import.meta.env.VITE_SESSION_TIMEOUT_MINUTES ?? import.meta.env.VITE_PORTAL_SESSION_TIMEOUT ?? "30");
+	return Number.isFinite(value) && value > 0 ? value : 30;
+}
+
+export function computeNextRefreshDelayMs(accessToken?: string, sessionTimeoutMinutes: number = 30): number {
+	const normalizedTimeout = Number.isFinite(sessionTimeoutMinutes) && sessionTimeoutMinutes > 0 ? sessionTimeoutMinutes : 30;
+	const sessionKeepaliveDelayMs = (normalizedTimeout * 60 * 1000) / 2;
+	const tokenExpiryMs = decodeJwtExp(accessToken);
+	const tokenRefreshDelayMs =
+		tokenExpiryMs == null ? Number.POSITIVE_INFINITY : Math.max(MIN_REFRESH_DELAY_MS, tokenExpiryMs - Date.now() - TOKEN_REFRESH_SKEW_MS);
+
+	const nextDelayMs = Math.min(DEFAULT_TOKEN_REFRESH_INTERVAL_MS, sessionKeepaliveDelayMs, tokenRefreshDelayMs);
+	return Math.max(MIN_REFRESH_DELAY_MS, Number.isFinite(nextDelayMs) ? nextDelayMs : DEFAULT_TOKEN_REFRESH_INTERVAL_MS);
+}
 
 function touchPlatformSession() {
 	localStorage.setItem(SESSION_ACTIVITY_KEY, String(Date.now()));
@@ -110,15 +143,26 @@ async function refreshTokenIfNeeded() {
 	}
 }
 
+function scheduleTokenRefresh(delayMs: number) {
+	if (tokenRefreshTimer) {
+		clearTimeout(tokenRefreshTimer);
+	}
+	tokenRefreshTimer = setTimeout(async () => {
+		await refreshTokenIfNeeded();
+		const { accessToken } = getPlatformTokens();
+		scheduleTokenRefresh(computeNextRefreshDelayMs(accessToken, resolveConfiguredSessionTimeoutMinutes()));
+	}, delayMs);
+}
+
 export function startPlatformSessionHeartbeat() {
 	if (heartbeatTimer) return;
 	// Touch activity immediately
 	touchPlatformSession();
 	// Periodic activity heartbeat (every 60s)
 	heartbeatTimer = setInterval(touchPlatformSession, 60_000);
-	// Periodic JWT refresh (every 4 min) — keeps the token alive
-	refreshTokenIfNeeded();
-	tokenRefreshTimer = setInterval(refreshTokenIfNeeded, TOKEN_REFRESH_INTERVAL_MS);
+	// Periodic portal session refresh — keeps both token and server-side session alive.
+	const { accessToken } = getPlatformTokens();
+	scheduleTokenRefresh(computeNextRefreshDelayMs(accessToken, resolveConfiguredSessionTimeoutMinutes()));
 	// Touch on user interactions
 	const events = ["click", "keydown", "scroll", "touchstart"] as const;
 	const handler = () => touchPlatformSession();
@@ -133,7 +177,7 @@ export function stopPlatformSessionHeartbeat() {
 		heartbeatTimer = null;
 	}
 	if (tokenRefreshTimer) {
-		clearInterval(tokenRefreshTimer);
+		clearTimeout(tokenRefreshTimer);
 		tokenRefreshTimer = null;
 	}
 }

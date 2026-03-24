@@ -108,6 +108,19 @@ class PortalSessionRegistryTest {
             .isInstanceOf(PortalSessionRegistry.ActiveSessionExistsException.class);
     }
 
+    @Test
+    void createSessionFallsBackToThirtyMinuteTimeoutWhenConfiguredTimeoutIsNonPositive() {
+        var repository = newRepository();
+        var registry = new PortalSessionRegistry(0, true, repository);
+        Instant before = Instant.now();
+
+        var session = registry.createSession("portaluser", List.of("ROLE_USER"), List.of("portal.view"), null);
+        Instant after = Instant.now();
+
+        assertThat(session.expiresAt()).isAfterOrEqualTo(before.plusSeconds(29 * 60));
+        assertThat(session.expiresAt()).isBeforeOrEqualTo(after.plusSeconds(31 * 60));
+    }
+
     private static final class InMemoryPortalSessionRepository implements InvocationHandler {
 
         private final Map<UUID, PortalSessionEntity> storage = new ConcurrentHashMap<>();

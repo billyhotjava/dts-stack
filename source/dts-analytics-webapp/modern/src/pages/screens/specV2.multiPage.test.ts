@@ -92,3 +92,52 @@ test('buildScreenPayload and normalizeScreenConfig preserve multi-page screen de
     assert.equal(normalized.config.carouselConfig?.enabled, true);
     assert.equal(normalized.config.carouselConfig?.intervalSeconds, 15);
 });
+
+test('normalizeScreenConfig migrates legacy project operations gantt screen component to board mode', () => {
+    const normalized = normalizeScreenConfig({
+        id: 'screen-legacy-pmcc',
+        name: '项目运营管理大屏',
+        width: 1920,
+        height: 1080,
+        backgroundColor: '#eef5fb',
+        pages: [
+            {
+                id: 'page-execution',
+                name: '执行与里程碑',
+                components: [
+                    {
+                        id: 'pmcc-execution-gantt',
+                        type: 'gantt-chart',
+                        name: '任务甘特图',
+                        x: 56,
+                        y: 286,
+                        width: 878,
+                        height: 520,
+                        zIndex: 10,
+                        visible: true,
+                        locked: false,
+                        config: {
+                            title: '任务甘特图',
+                        },
+                        dataSource: {
+                            type: 'api',
+                            apiConfig: {
+                                url: '/analytics/api/project-cockpit/screen/execution',
+                                responsePath: 'ganttTasks',
+                            },
+                        },
+                    },
+                ],
+            },
+        ],
+    });
+
+    const component = normalized.config.pages?.[0]?.components[0];
+    assert.equal(component?.id, 'pmcc-execution-gantt');
+    assert.equal(component?.config.renderMode, 'board');
+    assert.equal(component?.config.nameField, 'name');
+    assert.equal(component?.config.startField, 'planDate');
+    assert.equal(component?.config.endField, 'actualDate');
+    assert.equal(component?.config.categoryField, 'majorProjectName');
+    assert.equal(component?.config.statusField, 'riskLevel');
+});

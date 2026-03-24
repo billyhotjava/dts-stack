@@ -12,10 +12,10 @@ import com.yuzhi.dts.platform.repository.security.PortalSessionRepository;
 import com.yuzhi.dts.platform.security.session.PortalSessionActivityService.ValidationResult;
 import java.time.Instant;
 import java.util.Optional;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -25,8 +25,12 @@ class PortalSessionActivityServiceTest {
     @Mock
     private PortalSessionRepository sessionRepository;
 
-    @InjectMocks
     private PortalSessionActivityService service;
+
+    @BeforeEach
+    void setUp() {
+        service = new PortalSessionActivityService(sessionRepository, 10L);
+    }
 
     @Test
     void touchUpdatesLastSeenForActiveToken() {
@@ -104,5 +108,23 @@ class PortalSessionActivityServiceTest {
         PortalSessionEntity saved = captor.getValue();
         assertThat(saved.getRevokedReason()).isEqualTo(PortalSessionCloseReason.CONCURRENT);
         assertThat(saved.getRevokedAt()).isNotNull();
+    }
+
+    @Test
+    void touchFallsBackToThirtyMinuteTimeoutWhenConfiguredTimeoutIsNonPositive() {
+        PortalSessionActivityService fallbackService = new PortalSessionActivityService(sessionRepository, 0L);
+        Instant now = Instant.parse("2025-01-01T00:00:00Z");
+        PortalSessionEntity entity = new PortalSessionEntity();
+        entity.setAccessToken("token-5");
+        entity.setExpiresAt(now.plusSeconds(120));
+
+        when(sessionRepository.findByAccessToken("token-5")).thenReturn(Optional.of(entity));
+
+        ValidationResult result = fallbackService.touch("token-5", now);
+
+        assertThat(result).isEqualTo(ValidationResult.ACTIVE);
+        ArgumentCaptor<PortalSessionEntity> captor = ArgumentCaptor.forClass(PortalSessionEntity.class);
+        verify(sessionRepository).save(captor.capture());
+        assertThat(captor.getValue().getExpiresAt()).isEqualTo(now.plusSeconds(30 * 60));
     }
 }

@@ -7,10 +7,15 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.yuzhi.dts.analytics.domain.AnalyticsScreen;
+import com.yuzhi.dts.analytics.domain.AnalyticsScreenAcl;
 import com.yuzhi.dts.analytics.domain.AnalyticsUser;
+import com.yuzhi.dts.analytics.repository.AnalyticsScreenAclRepository;
+import com.yuzhi.dts.analytics.repository.AnalyticsScreenRepository;
 import com.yuzhi.dts.analytics.repository.AnalyticsUserRepository;
 import com.yuzhi.dts.analytics.service.AnalyticsSessionService;
 import jakarta.servlet.http.Cookie;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -37,7 +42,19 @@ class ScreenResourceIT {
     private AnalyticsUserRepository userRepository;
 
     @Autowired
+    private AnalyticsScreenRepository screenRepository;
+
+    @Autowired
+    private AnalyticsScreenAclRepository screenAclRepository;
+
+    @Autowired
     private AnalyticsSessionService sessionService;
+
+    private static final List<String> DEFAULT_SCREEN_READ_ROLES = List.of(
+            "ROLE_DEPT_LEADER",
+            "ROLE_DEPT_DATA_OWNER",
+            "ROLE_INST_DATA_OWNER",
+            "ROLE_INST_LEADER");
 
     @Test
     void screenShouldPersistPagesAndCarouselForDraftAndPublicViews() throws Exception {
@@ -202,18 +219,115 @@ class ScreenResourceIT {
                 .andExpect(jsonPath("$.focusNodes").isArray());
     }
 
+    @Test
+    void createScreenShouldGrantDefaultReadAclToLeadershipAndDataOwnerRoles() throws Exception {
+        Cookie sessionCookie = authenticate("creator@example.com", false);
+
+        MvcResult createdResult = mockMvc.perform(post("/api/screens")
+                        .cookie(sessionCookie)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "schemaVersion": 2,
+                                  "name": "默认可见性测试大屏",
+                                  "components": []
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        long screenId = objectMapper.readTree(createdResult.getResponse().getContentAsString()).path("id").asLong();
+
+        MvcResult aclResult = mockMvc.perform(get("/api/screens/{id}/acl", screenId).cookie(sessionCookie))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        JsonNode acl = objectMapper.readTree(aclResult.getResponse().getContentAsString());
+        for (String role : DEFAULT_SCREEN_READ_ROLES) {
+            assertHasAclEntry(acl, "ROLE", role, "READ");
+        }
+    }
+
+    @Test
+    void listScreensShouldBackfillDefaultReadAclForHistoricalScreens() throws Exception {
+        Cookie creatorCookie = authenticate("history-creator@example.com", false);
+        Cookie leaderCookie = authenticate("dept-leader@example.com", false);
+        AnalyticsUser creator = userRepository.findByEmailIgnoreCase("history-creator@example.com").orElseThrow();
+        AnalyticsScreen screen = new AnalyticsScreen();
+        screen.setName("历史大屏可见性修复");
+        screen.setWidth(1920);
+        screen.setHeight(1080);
+        screen.setBackgroundColor("#0d1b2a");
+        screen.setComponentsJson("[]");
+        screen.setVariablesJson("[]");
+        screen.setPagesJson("[]");
+        screen.setCreatorId(creator.getId());
+        screen.setArchived(false);
+        screen = screenRepository.save(screen);
+        long screenId = screen.getId();
+
+        AnalyticsScreenAcl creatorManage = new AnalyticsScreenAcl();
+        creatorManage.setScreenId(screenId);
+        creatorManage.setSubjectType("USER");
+        creatorManage.setSubjectId(String.valueOf(creator.getId()));
+        creatorManage.setPerm("MANAGE");
+        creatorManage.setCreatorId(creator.getId());
+        screenAclRepository.save(creatorManage);
+
+        MvcResult listResult = mockMvc.perform(get("/api/screens")
+                        .cookie(leaderCookie)
+                        .header("X-DTS-Roles", "ROLE_DEPT_LEADER"))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        JsonNode list = objectMapper.readTree(listResult.getResponse().getContentAsString());
+        boolean found = false;
+        for (JsonNode item : list) {
+            if (item.path("id").asLong() == screenId) {
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            throw new AssertionError("expected historical screen to become visible to ROLE_DEPT_LEADER after backfill");
+        }
+
+        MvcResult aclResult = mockMvc.perform(get("/api/screens/{id}/acl", screenId).cookie(creatorCookie))
+                .andExpect(status().isOk())
+                .andReturn();
+        JsonNode acl = objectMapper.readTree(aclResult.getResponse().getContentAsString());
+        assertHasAclEntry(acl, "ROLE", "ROLE_DEPT_LEADER", "READ");
+    }
+
     private Cookie authenticate() {
-        AnalyticsUser admin = userRepository.findByEmailIgnoreCase("admin@example.com").orElseGet(() -> {
+        return authenticate("admin@example.com", true);
+    }
+
+    private Cookie authenticate(String email, boolean superuser) {
+        AnalyticsUser admin = userRepository.findByEmailIgnoreCase(email).orElseGet(() -> {
             AnalyticsUser row = new AnalyticsUser();
-            row.setEmail("admin@example.com");
+            row.setEmail(email);
             row.setFirstName("Admin");
             row.setLastName("User");
             row.setPasswordHash("test-hash");
-            row.setSuperuser(true);
+            row.setSuperuser(superuser);
             row.setActive(true);
             return userRepository.save(row);
         });
+        admin.setSuperuser(superuser);
+        userRepository.save(admin);
         String sessionId = sessionService.createSession(admin.getId()).toString();
         return new Cookie("metabase.SESSION", sessionId);
+    }
+
+    private void assertHasAclEntry(JsonNode acl, String subjectType, String subjectId, String perm) {
+        for (JsonNode item : acl) {
+            if (subjectType.equals(item.path("subjectType").asText())
+                    && subjectId.equals(item.path("subjectId").asText())
+                    && perm.equals(item.path("perm").asText())) {
+                return;
+            }
+        }
+        throw new AssertionError("expected acl entry " + subjectType + "/" + subjectId + "/" + perm);
     }
 }

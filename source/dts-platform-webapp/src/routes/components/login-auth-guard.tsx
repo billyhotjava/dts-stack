@@ -40,7 +40,7 @@ function isSessionIdle(): boolean {
 		if (!(lastActivity > 0)) return false;
 		const timeoutMinutes = Math.max(
 			1,
-			Number(import.meta.env.VITE_SESSION_TIMEOUT_MINUTES ?? import.meta.env.VITE_PORTAL_SESSION_TIMEOUT ?? "10"),
+			Number(import.meta.env.VITE_SESSION_TIMEOUT_MINUTES ?? import.meta.env.VITE_PORTAL_SESSION_TIMEOUT ?? "30"),
 		);
 		const timeoutMs = timeoutMinutes * 60 * 1000;
 		return Date.now() - lastActivity > timeoutMs;

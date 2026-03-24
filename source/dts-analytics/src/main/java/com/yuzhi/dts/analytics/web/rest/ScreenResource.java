@@ -800,6 +800,7 @@ public class ScreenResource {
 
         screen = screenRepository.save(screen);
         screenAclService.ensureCreatorManage(screen);
+        screenAclService.ensureDefaultReadRoles(screen);
 
         ScreenAclService.PermissionSnapshot permissions = new ScreenAclService.PermissionSnapshot(true, true, true, true);
         ObjectNode detail = toDetailResponse(screen, null, null, "draft", permissions);

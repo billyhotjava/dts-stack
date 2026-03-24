@@ -11,6 +11,12 @@ const COMPONENT_TYPES = new Set<ScreenComponent['type']>([
     'radar-chart',
     'funnel-chart',
     'map-chart',
+    'combo-chart',
+    'wordcloud-chart',
+    'treemap-chart',
+    'sunburst-chart',
+    'waterfall-chart',
+    'gantt-chart',
     'border-box',
     'decoration',
     'scroll-board',
@@ -37,6 +43,10 @@ const COMPONENT_TYPES = new Set<ScreenComponent['type']>([
     'filter-input',
     'filter-select',
     'filter-date-range',
+    'richtext',
+    'globe-chart',
+    'bar3d-chart',
+    'scatter3d-chart',
 ]);
 
 const THEMES = new Set<ScreenTheme>(['legacy-dark', 'titanium', 'glacier']);
@@ -146,9 +156,10 @@ function normalizeComponent(
     }
 
     const id = asTrimmedString(row.id) || `comp_autogen_${Date.now()}_${index}`;
-    const config = row.config && typeof row.config === 'object'
+    const baseConfig = row.config && typeof row.config === 'object'
         ? (row.config as Record<string, unknown>)
         : {};
+    const config = normalizeComponentConfig(id, type, baseConfig);
     const dataSource = normalizeDataSource(row.dataSource);
 
     return {
@@ -170,6 +181,25 @@ function normalizeComponent(
         actions: row.actions as ScreenComponent['actions'],
         interaction: row.interaction as ScreenComponent['interaction'],
     };
+}
+
+function normalizeComponentConfig(
+    id: string,
+    type: ScreenComponent['type'],
+    config: Record<string, unknown>,
+): Record<string, unknown> {
+    if (type === 'gantt-chart' && id === 'pmcc-execution-gantt') {
+        return {
+            ...config,
+            renderMode: asTrimmedString(config.renderMode) || 'board',
+            nameField: asTrimmedString(config.nameField) || 'name',
+            startField: asTrimmedString(config.startField) || 'planDate',
+            endField: asTrimmedString(config.endField) || 'actualDate',
+            categoryField: asTrimmedString(config.categoryField) || 'majorProjectName',
+            statusField: asTrimmedString(config.statusField) || 'riskLevel',
+        };
+    }
+    return config;
 }
 
 function normalizeDataSource(input: unknown): ScreenComponent['dataSource'] {

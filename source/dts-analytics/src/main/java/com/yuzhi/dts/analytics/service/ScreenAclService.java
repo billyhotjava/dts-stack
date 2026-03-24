@@ -6,6 +6,7 @@ import com.yuzhi.dts.analytics.domain.AnalyticsUser;
 import com.yuzhi.dts.analytics.repository.AnalyticsScreenAclRepository;
 import com.yuzhi.dts.analytics.web.support.PlatformContext;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -26,6 +27,11 @@ public class ScreenAclService {
 
     public static final String SUBJECT_TYPE_USER = "USER";
     public static final String SUBJECT_TYPE_ROLE = "ROLE";
+    public static final List<String> DEFAULT_READ_ROLES = List.of(
+            "ROLE_DEPT_LEADER",
+            "ROLE_DEPT_DATA_OWNER",
+            "ROLE_INST_DATA_OWNER",
+            "ROLE_INST_LEADER");
 
     private static final Set<String> VALID_SUBJECT_TYPES = Set.of(SUBJECT_TYPE_USER, SUBJECT_TYPE_ROLE);
     private static final Set<String> VALID_PERMS = Set.of("READ", "EDIT", "PUBLISH", "MANAGE");
@@ -36,8 +42,8 @@ public class ScreenAclService {
         this.screenAclRepository = screenAclRepository;
     }
 
-    @Transactional(readOnly = true)
     public PermissionSnapshot snapshot(AnalyticsScreen screen, AnalyticsUser user, PlatformContext context) {
+        ensureDefaultReadRoles(screen);
         if (user == null) {
             return PermissionSnapshot.none();
         }
@@ -45,7 +51,10 @@ public class ScreenAclService {
             return PermissionSnapshot.all();
         }
 
-        Set<String> granted = resolveGrantedPerms(screen.getId(), user.getId(), context == null ? null : context.roles());
+        Set<String> granted = resolveGrantedPerms(
+                screenAclRepository.findAllByScreenIdOrderByIdAsc(screen.getId()),
+                user.getId(),
+                context == null ? null : context.roles());
         boolean canManage = granted.contains("MANAGE");
         boolean canPublish = canManage || granted.contains("PUBLISH");
         boolean canEdit = canPublish || granted.contains("EDIT");
@@ -81,6 +90,39 @@ public class ScreenAclService {
         }
     }
 
+    public void ensureDefaultReadRoles(AnalyticsScreen screen) {
+        if (screen == null || screen.getId() == null || screen.getCreatorId() == null) {
+            return;
+        }
+        List<AnalyticsScreenAcl> existingEntries = screenAclRepository.findAllByScreenIdOrderByIdAsc(screen.getId());
+        Set<String> existingRoleReads = new LinkedHashSet<>();
+        for (AnalyticsScreenAcl entry : existingEntries) {
+            if (SUBJECT_TYPE_ROLE.equals(normalize(entry.getSubjectType()))
+                    && "READ".equals(normalize(entry.getPerm()))
+                    && entry.getSubjectId() != null
+                    && !entry.getSubjectId().isBlank()) {
+                existingRoleReads.add(entry.getSubjectId().trim());
+            }
+        }
+
+        List<AnalyticsScreenAcl> missingEntries = new ArrayList<>();
+        for (String role : DEFAULT_READ_ROLES) {
+            if (existingRoleReads.contains(role)) {
+                continue;
+            }
+            AnalyticsScreenAcl acl = new AnalyticsScreenAcl();
+            acl.setScreenId(screen.getId());
+            acl.setSubjectType(SUBJECT_TYPE_ROLE);
+            acl.setSubjectId(role);
+            acl.setPerm("READ");
+            acl.setCreatorId(screen.getCreatorId());
+            missingEntries.add(acl);
+        }
+        if (!missingEntries.isEmpty()) {
+            screenAclRepository.saveAll(missingEntries);
+        }
+    }
+
     @Transactional(readOnly = true)
     public List<AnalyticsScreenAcl> listEntries(Long screenId) {
         return screenAclRepository.findAllByScreenIdOrderByIdAsc(screenId);
@@ -99,6 +141,7 @@ public class ScreenAclService {
             screenAclRepository.saveAll(entries);
         }
         ensureCreatorManage(screen);
+        ensureDefaultReadRoles(screen);
     }
 
     public boolean isValidSubjectType(String subjectType) {
@@ -116,8 +159,7 @@ public class ScreenAclService {
         return value.trim().toUpperCase(Locale.ROOT);
     }
 
-    private Set<String> resolveGrantedPerms(Long screenId, Long userId, String rolesHeader) {
-        List<AnalyticsScreenAcl> entries = screenAclRepository.findAllByScreenIdOrderByIdAsc(screenId);
+    private Set<String> resolveGrantedPerms(Collection<AnalyticsScreenAcl> entries, Long userId, String rolesHeader) {
         if (entries.isEmpty()) {
             return Set.of();
         }
