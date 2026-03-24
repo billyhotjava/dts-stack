@@ -333,10 +333,6 @@ public class PortalMenuService {
     }
 
     private boolean matchesRole(PortalMenuVisibility visibility, Set<String> roleCodes) {
-        // Unconditional bypass for operator admin: OP_ADMIN must see all menus permanently
-        if (!CollectionUtils.isEmpty(roleCodes) && roleCodes.contains(AuthoritiesConstants.OP_ADMIN)) {
-            return true;
-        }
         String rawRequiredRole = visibility.getRoleCode();
         if (!StringUtils.hasText(rawRequiredRole)) {
             return true;
@@ -382,15 +378,6 @@ public class PortalMenuService {
                     return true;
                 }
             }
-        }
-
-        // Governance triad are also allowed to bypass explicit constraints
-        if (
-            roleCodes.contains(AuthoritiesConstants.SYS_ADMIN) ||
-            roleCodes.contains(AuthoritiesConstants.AUTH_ADMIN) ||
-            roleCodes.contains(AuthoritiesConstants.AUDITOR_ADMIN)
-        ) {
-            return true;
         }
         return false;
     }
