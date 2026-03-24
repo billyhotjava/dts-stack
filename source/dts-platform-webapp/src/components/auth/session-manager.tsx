@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { resolveLoginHref } from "@/routes/constants";
 import { useUserActions, useUserInfo, useUserToken } from "@/store/userStore";
 import userService from "@/api/services/userService";
+import { hasPersistedSessionChanged, parsePersistedUserStoreSnapshot } from "./sessionSync.helpers";
 
 const STORAGE_KEYS = {
 	SESSION_ID: "dts.session.id",
@@ -72,7 +73,7 @@ function writeLastActivity(ts: number, lastWriteRef: { current: number }) {
 export default function SessionManager() {
 	const user = useUserInfo();
 	const token = useUserToken();
-	const { setUserToken, clearUserInfoAndToken } = useUserActions();
+	const { setUserInfo, setUserToken, clearUserInfoAndToken } = useUserActions();
 
 	const tabIdRef = useRef<string>(genId());
 	const mySessionIdRef = useRef<string | null>(null);
@@ -106,6 +107,19 @@ export default function SessionManager() {
 	useEffect(() => {
 		const onStorage = (e: StorageEvent) => {
 			if (!e.key) return;
+			if (e.key === "userStore" && e.newValue) {
+				const nextSnapshot = parsePersistedUserStoreSnapshot(e.newValue);
+				const currentSnapshot = { userInfo: user, userToken: token };
+				if (hasPersistedSessionChanged(currentSnapshot, nextSnapshot)) {
+					if (nextSnapshot?.userInfo && Object.keys(nextSnapshot.userInfo).length > 0) {
+						setUserInfo(nextSnapshot.userInfo as any);
+					}
+					if (nextSnapshot?.userToken && Object.keys(nextSnapshot.userToken).length > 0) {
+						setUserToken(nextSnapshot.userToken);
+					}
+				}
+				return;
+			}
 			if (e.key === STORAGE_KEYS.SESSION_ID) {
 				const newId = e.newValue;
 				if (isLoggedIn && newId && newId !== mySessionIdRef.current && !logoutInProgressRef.current) {
@@ -127,7 +141,7 @@ export default function SessionManager() {
 		};
 		window.addEventListener("storage", onStorage);
 		return () => window.removeEventListener("storage", onStorage);
-	}, [isLoggedIn, clearUserInfoAndToken]);
+	}, [isLoggedIn, clearUserInfoAndToken, setUserInfo, setUserToken, token, user]);
 
 	useEffect(() => {
 		if (!isLoggedIn) return;

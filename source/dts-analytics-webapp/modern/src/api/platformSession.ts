@@ -80,6 +80,7 @@ function pickTokenFromResponse(body: unknown): PlatformTokens | null {
  * so no platform code runs to handle token refresh — analytics must do it.
  */
 const SESSION_ACTIVITY_KEY = "dts.session.lastActivity";
+const OPAQUE_TOKEN_REFRESH_INTERVAL_MS = 60 * 1000;
 const DEFAULT_TOKEN_REFRESH_INTERVAL_MS = 4 * 60 * 1000;
 const MIN_REFRESH_DELAY_MS = 30 * 1000;
 const TOKEN_REFRESH_SKEW_MS = 60 * 1000;
@@ -110,8 +111,11 @@ export function computeNextRefreshDelayMs(accessToken?: string, sessionTimeoutMi
 	const normalizedTimeout = Number.isFinite(sessionTimeoutMinutes) && sessionTimeoutMinutes > 0 ? sessionTimeoutMinutes : 30;
 	const sessionKeepaliveDelayMs = (normalizedTimeout * 60 * 1000) / 2;
 	const tokenExpiryMs = decodeJwtExp(accessToken);
+	if (tokenExpiryMs == null) {
+		return Math.max(MIN_REFRESH_DELAY_MS, Math.min(OPAQUE_TOKEN_REFRESH_INTERVAL_MS, sessionKeepaliveDelayMs));
+	}
 	const tokenRefreshDelayMs =
-		tokenExpiryMs == null ? Number.POSITIVE_INFINITY : Math.max(MIN_REFRESH_DELAY_MS, tokenExpiryMs - Date.now() - TOKEN_REFRESH_SKEW_MS);
+		Math.max(MIN_REFRESH_DELAY_MS, tokenExpiryMs - Date.now() - TOKEN_REFRESH_SKEW_MS);
 
 	const nextDelayMs = Math.min(DEFAULT_TOKEN_REFRESH_INTERVAL_MS, sessionKeepaliveDelayMs, tokenRefreshDelayMs);
 	return Math.max(MIN_REFRESH_DELAY_MS, Number.isFinite(nextDelayMs) ? nextDelayMs : DEFAULT_TOKEN_REFRESH_INTERVAL_MS);
