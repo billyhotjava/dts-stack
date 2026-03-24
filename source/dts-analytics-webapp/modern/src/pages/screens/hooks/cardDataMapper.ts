@@ -91,24 +91,33 @@ export function mapCardDataToConfig(
         case 'gantt-chart': {
             const colIndex = (name: string) => cols.findIndex((c) => c.name === name);
             const firstIndex = (...names: string[]) => names.map(colIndex).find((idx) => idx >= 0) ?? -1;
+            const idIdx = firstIndex('id', 'node_id');
             const nameIdx = firstIndex('node_task', 'task_name', 'name');
             const typeIdx = firstIndex('node_type', 'task_type', 'type');
-            const planIdx = firstIndex('plan_date', 'plan_start', 'start_date');
-            const actualIdx = firstIndex('actual_date', 'actual_end', 'end_date');
+            const planIdx = firstIndex('plan_date', 'plan_start', 'start_date', 'planDate');
+            const baselineStartIdx = firstIndex('baseline_start_date', 'baselineStartDate');
+            const baselineEndIdx = firstIndex('baseline_end_date', 'baselineEndDate');
+            const actualIdx = firstIndex('actual_date', 'actual_end', 'end_date', 'actualDate');
             const completedIdx = firstIndex('is_completed');
             const overdueIdx = firstIndex('is_overdue_completed', 'is_overdue');
             const incompleteIdx = firstIndex('is_incomplete');
-            const delayIdx = firstIndex('delay_days');
-            const riskIdx = firstIndex('risk_level');
+            const delayIdx = firstIndex('delay_days', 'delayDays');
+            const riskIdx = firstIndex('risk_level', 'riskLevel');
             const ownerIdx = firstIndex('owner', 'owner_dept', 'owner_user');
-            const majorProjectIdx = firstIndex('major_project_name');
-            const subprojectIdx = firstIndex('subproject_name');
+            const deptIdx = firstIndex('dept', 'ownerDept', 'owner_dept');
+            const majorProjectIdIdx = firstIndex('major_project_id', 'majorProjectId');
+            const majorProjectIdx = firstIndex('major_project_name', 'majorProjectName');
+            const subprojectIdIdx = firstIndex('subproject_id', 'subprojectId');
+            const subprojectIdx = firstIndex('subproject_name', 'subprojectName');
             const statusIdx = firstIndex('completion_status', 'status');
             return {
                 tasks: rows.map((row) => ({
+                    id: idIdx >= 0 ? String(row[idIdx] ?? '') : '',
                     name: String(row[nameIdx] ?? ''),
                     type: String(row[typeIdx] ?? ''),
                     planDate: String(row[planIdx] ?? ''),
+                    baselineStartDate: baselineStartIdx >= 0 ? String(row[baselineStartIdx] ?? '') : '',
+                    baselineEndDate: baselineEndIdx >= 0 ? String(row[baselineEndIdx] ?? '') : '',
                     actualDate: String(row[actualIdx] ?? ''),
                     isCompleted: completedIdx >= 0 ? Boolean(row[completedIdx]) : false,
                     isOverdue: overdueIdx >= 0 ? Boolean(row[overdueIdx]) : toNumber(row[delayIdx]) > 0,
@@ -116,7 +125,10 @@ export function mapCardDataToConfig(
                     delayDays: toNumber(row[delayIdx]),
                     riskLevel: String(row[riskIdx] ?? ''),
                     owner: String(row[ownerIdx] ?? ''),
+                    dept: deptIdx >= 0 ? String(row[deptIdx] ?? '') : '',
+                    majorProjectId: majorProjectIdIdx >= 0 ? String(row[majorProjectIdIdx] ?? '') : '',
                     majorProjectName: String(row[majorProjectIdx] ?? ''),
+                    subprojectId: subprojectIdIdx >= 0 ? String(row[subprojectIdIdx] ?? '') : '',
                     subprojectName: String(row[subprojectIdx] ?? ''),
                     status: String(row[statusIdx] ?? ''),
                 })),
