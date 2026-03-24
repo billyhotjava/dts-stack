@@ -821,7 +821,6 @@ generate_env_base(){
   : "${OAUTH2_PLATFORM_CLIENT_ID:=dts-system}"
   : "${OAUTH2_PLATFORM_CLIENT_SECRET:=${SECRET}}"
   OIDC_ISSUER_URI="https://${HOST_SSO}/realms/${KC_REALM}"
-  OIDC_ISSUER_INTERNAL_URI="${OIDC_ISSUER_INTERNAL_URI:-http://dts-keycloak:8080/realms/${KC_REALM}}"
 
   # ---------- Analytics ----------
   # Prefer your self-built image (offline/air-gapped friendly). Default aligns with other DTS app images.
@@ -1001,7 +1000,6 @@ KC_HOSTNAME_STRICT_HTTPS=${KC_HOSTNAME_STRICT_HTTPS}
 KC_DB_URL_PROPERTIES=${KC_DB_URL_PROPERTIES}
 KC_REALM=${KC_REALM}
 OIDC_ISSUER_URI=${OIDC_ISSUER_URI}
-OIDC_ISSUER_INTERNAL_URI=${OIDC_ISSUER_INTERNAL_URI}
 TRUSTSTORE_PASSWORD=${TRUSTSTORE_PASSWORD}
 
 # ====== Postgres (mode/host filled later) ======

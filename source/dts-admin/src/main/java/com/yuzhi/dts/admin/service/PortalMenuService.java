@@ -333,6 +333,10 @@ public class PortalMenuService {
     }
 
     private boolean matchesRole(PortalMenuVisibility visibility, Set<String> roleCodes) {
+        // Unconditional bypass for operator admin: OP_ADMIN must see all menus permanently
+        if (!CollectionUtils.isEmpty(roleCodes) && roleCodes.contains(AuthoritiesConstants.OP_ADMIN)) {
+            return true;
+        }
         String rawRequiredRole = visibility.getRoleCode();
         if (!StringUtils.hasText(rawRequiredRole)) {
             return true;
@@ -378,6 +382,15 @@ public class PortalMenuService {
                     return true;
                 }
             }
+        }
+
+        // Governance triad are also allowed to bypass explicit constraints
+        if (
+            roleCodes.contains(AuthoritiesConstants.SYS_ADMIN) ||
+            roleCodes.contains(AuthoritiesConstants.AUTH_ADMIN) ||
+            roleCodes.contains(AuthoritiesConstants.AUDITOR_ADMIN)
+        ) {
+            return true;
         }
         return false;
     }
@@ -733,23 +746,23 @@ public class PortalMenuService {
             }
 
             // Non-destructive: ensure missing seed nodes exist; do not wipe customized menus on upgrades.
-            boolean createdSeedNodes = false;
             try {
-                Boolean result = menuMutationTx.execute(status -> upsertMenusFromSeed(seed));
-                createdSeedNodes = Boolean.TRUE.equals(result);
+                menuMutationTx.execute(status -> {
+                    upsertMenusFromSeed(seed);
+                    return null;
+                });
             } catch (Exception ex) {
                 log.warn("Failed ensuring portal menus from seed: {}", ex.getMessage());
                 log.debug("Portal menu seed upsert error stack", ex);
             }
 
-            if (createdSeedNodes) {
-                try {
-                    menuMutationTx.execute(status -> {
-                        applyDefaultRoleBindings();
-                        return null;
-                    });
-                } catch (Exception ignored) {}
-            }
+            // Ensure default role bindings exist at least once
+            try {
+                menuMutationTx.execute(status -> {
+                    applyDefaultRoleBindings();
+                    return null;
+                });
+            } catch (Exception ignored) {}
 
             // Soft-delete legacy root menus that are no longer part of the seed
             try {
@@ -828,13 +841,12 @@ public class PortalMenuService {
         return null;
     }
 
-    private boolean upsertMenusFromSeed(MenuSeed seed) {
+    private void upsertMenusFromSeed(MenuSeed seed) {
         if (seed == null || seed.portalNavSections() == null || seed.portalNavSections().isEmpty()) {
-            return false;
+            return;
         }
         List<PortalMenu> roots = menuRepo.findByDeletedFalseAndParentIsNullOrderBySortOrderAscIdAsc();
         int sortOrder = 1;
-        boolean createdAny = false;
         for (MenuNode section : seed.portalNavSections()) {
             if (section == null) continue;
             String sectionKey = StringUtils.hasText(section.key()) ? section.key().trim() : "section-" + sortOrder;
@@ -847,18 +859,16 @@ public class PortalMenuService {
                 String sectionComposite = StringUtils.hasText(section.key()) ? section.key() : sectionKey;
                 PortalMenu root = buildMenuTree(section, null, sortOrder, sectionComposite, sectionComposite);
                 menuRepo.save(root);
-                createdAny = true;
             } else {
                 // Ensure seed subtree exists under this root
-                createdAny = ensureChildrenFromSeed(existingRoot, section.children(), 1, sectionKey, sectionKey) || createdAny;
+                ensureChildrenFromSeed(existingRoot, section.children(), 1, sectionKey, sectionKey);
             }
             sortOrder++;
         }
         menuRepo.flush();
-        return createdAny;
     }
 
-    private boolean ensureChildrenFromSeed(
+    private void ensureChildrenFromSeed(
         PortalMenu parent,
         List<MenuNode> seedChildren,
         int startOrder,
@@ -866,11 +876,10 @@ public class PortalMenuService {
         String sectionKey
     ) {
         if (parent == null || parent.getId() == null || seedChildren == null || seedChildren.isEmpty()) {
-            return false;
+            return;
         }
         List<PortalMenu> existingChildren = menuRepo.findByParentIdOrderBySortOrderAscIdAsc(parent.getId());
         int childOrder = startOrder;
-        boolean createdAny = false;
         for (MenuNode child : seedChildren) {
             if (child == null) continue;
             String childKey = StringUtils.hasText(child.key()) ? child.key().trim() : "entry-" + childOrder;
@@ -880,10 +889,9 @@ public class PortalMenuService {
                 PortalMenu created = buildMenuTree(child, parent, childOrder, nextCompositeKey, sectionKey);
                 created.setParent(parent);
                 menuRepo.save(created);
-                createdAny = true;
             } else {
                 // Recurse to ensure deeper nodes exist; keep existing attributes untouched.
-                createdAny = ensureChildrenFromSeed(existing, child.children(), 1, nextCompositeKey, sectionKey) || createdAny;
+                ensureChildrenFromSeed(existing, child.children(), 1, nextCompositeKey, sectionKey);
                 // Ensure leaf component is present when seed defines a leaf but existing has none
                 if ((child.children() == null || child.children().isEmpty()) && !StringUtils.hasText(existing.getComponent())) {
                     String component = resolveComponent(nextCompositeKey);
@@ -895,7 +903,6 @@ public class PortalMenuService {
             }
             childOrder++;
         }
-        return createdAny;
     }
 
     private PortalMenu findChildByMetadataKey(Long parentId, List<PortalMenu> candidates, String expectedKey) {

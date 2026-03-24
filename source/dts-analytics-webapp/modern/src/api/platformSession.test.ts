@@ -27,10 +27,10 @@ test("computeNextRefreshDelayMs refreshes before short-lived token expiry", () =
 
 test("computeNextRefreshDelayMs respects short configured session timeout when token is opaque", () => {
 	const delay = computeNextRefreshDelayMs("opaque-portal-token", 3);
-	assert.equal(delay, 60_000);
+	assert.equal(delay, 90_000);
 });
 
-test("computeNextRefreshDelayMs keeps opaque portal tokens on a one-minute refresh cadence by default", () => {
+test("computeNextRefreshDelayMs defaults to four minutes when timeout is absent", () => {
 	const delay = computeNextRefreshDelayMs("opaque-portal-token", 30);
-	assert.equal(delay, 60_000);
+	assert.equal(delay, 4 * 60 * 1000);
 });
