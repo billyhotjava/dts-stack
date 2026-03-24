@@ -77,6 +77,47 @@ test('gantt-chart: maps project-management alias fields for cockpit reuse', () =
     assert.equal(tasks[0].subprojectName, '导航处理机');
 });
 
+test('gantt-chart: maps screen execution camelCase fields for command center board mode', () => {
+    const cols = [
+        { name: 'id', display_name: 'ID', base_type: 'type/Text' },
+        { name: 'name', display_name: '任务', base_type: 'type/Text' },
+        { name: 'type', display_name: '类型', base_type: 'type/Text' },
+        { name: 'planDate', display_name: '计划日期', base_type: 'type/Date' },
+        { name: 'baselineStartDate', display_name: '基线开始', base_type: 'type/Date' },
+        { name: 'baselineEndDate', display_name: '基线结束', base_type: 'type/Date' },
+        { name: 'actualDate', display_name: '实际日期', base_type: 'type/Date' },
+        { name: 'delayDays', display_name: '延期天数', base_type: 'type/Integer' },
+        { name: 'riskLevel', display_name: '风险等级', base_type: 'type/Text' },
+        { name: 'owner', display_name: '责任人', base_type: 'type/Text' },
+        { name: 'dept', display_name: '责任科室', base_type: 'type/Text' },
+        { name: 'majorProjectId', display_name: '项目ID', base_type: 'type/Text' },
+        { name: 'majorProjectName', display_name: '项目', base_type: 'type/Text' },
+        { name: 'subprojectId', display_name: '子项目ID', base_type: 'type/Text' },
+        { name: 'subprojectName', display_name: '子项目', base_type: 'type/Text' },
+        { name: 'status', display_name: '状态', base_type: 'type/Text' },
+    ];
+    const rows = [
+        ['node-01', '详细设计评审', '里程碑节点', '2026-01-07', '2026-01-05', '2026-01-09', '', 4, '高', '张工', '质量室', 'PRJ-2026-003', 'PRJ-2026-003', 'sub-03', '海天感知平台', '延期中'],
+    ];
+
+    const result = mapCardDataToConfig('gantt-chart', { rows, cols });
+    const tasks = result.tasks as Array<Record<string, unknown>>;
+
+    assert.equal(tasks[0].id, 'node-01');
+    assert.equal(tasks[0].planDate, '2026-01-07');
+    assert.equal(tasks[0].baselineStartDate, '2026-01-05');
+    assert.equal(tasks[0].baselineEndDate, '2026-01-09');
+    assert.equal(tasks[0].actualDate, '');
+    assert.equal(tasks[0].delayDays, 4);
+    assert.equal(tasks[0].riskLevel, '高');
+    assert.equal(tasks[0].dept, '质量室');
+    assert.equal(tasks[0].majorProjectId, 'PRJ-2026-003');
+    assert.equal(tasks[0].majorProjectName, 'PRJ-2026-003');
+    assert.equal(tasks[0].subprojectId, 'sub-03');
+    assert.equal(tasks[0].subprojectName, '海天感知平台');
+    assert.equal(tasks[0].status, '延期中');
+});
+
 test('funnel-chart: maps rows to name-value data', () => {
     const cardData = {
         cols: [
