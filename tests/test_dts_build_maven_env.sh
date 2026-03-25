@@ -115,6 +115,26 @@ if ! grep -qx -- "/bin/bash" "${FAKE_DOCKER_LOG}"; then
   exit 1
 fi
 
+if ! grep -qx -- "--security-opt" "${FAKE_DOCKER_LOG}"; then
+  echo "expected docker run to include security options on aarch64 + old Docker API" >&2
+  exit 1
+fi
+
+if ! grep -qx -- "seccomp=unconfined" "${FAKE_DOCKER_LOG}"; then
+  echo "expected docker run to include seccomp=unconfined" >&2
+  exit 1
+fi
+
+if ! grep -qx -- "--ulimit" "${FAKE_DOCKER_LOG}"; then
+  echo "expected docker run to include ulimit for old Docker aarch64 maven builds" >&2
+  exit 1
+fi
+
+if ! grep -qx -- "nproc=65535:65535" "${FAKE_DOCKER_LOG}"; then
+  echo "expected docker run to lift nproc limit for old Docker aarch64 maven builds" >&2
+  exit 1
+fi
+
 if ! grep -q 'export JAVA_HOME=/opt/java/openjdk;' "${FAKE_DOCKER_LOG}"; then
   echo "expected fallback command to export JAVA_HOME explicitly" >&2
   exit 1

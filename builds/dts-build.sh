@@ -505,17 +505,26 @@ MAVEN_SETTINGS_EOF
     if [[ "${MAVEN_UNRESTRICTED}" == "1" ]]; then
       security_opts+=(--security-opt "seccomp=unconfined" --ulimit "nproc=65535:65535")
     fi
-    # Docker 18.09 on Kunpeng ARM64 has a restrictive seccomp profile that blocks
-    # pthread_create (clone syscall), preventing JVM from starting GC threads.
-    # Auto-enable seccomp=unconfined for old Docker on ARM64.
+    # Docker 18.09 / API 1.39 on Kunpeng ARM64 is sensitive to both seccomp
+    # and low process/thread limits during JVM startup. Auto-enable the same
+    # relaxation we use for explicit MAVEN_UNRESTRICTED builds.
     if [[ -z "${DOCKER_PLATFORM_SUPPORTED}" && ("${HOST_ARCH}" == "aarch64" || "${HOST_ARCH}" == "arm64") ]]; then
       local has_seccomp=""
+      local has_nproc=""
       for opt in "${security_opts[@]+"${security_opts[@]}"}"; do
         if [[ "$opt" == *seccomp* ]]; then has_seccomp="1"; break; fi
       done
+      for opt in "${security_opts[@]+"${security_opts[@]}"}"; do
+        if [[ "$opt" == *nproc=* ]]; then has_nproc="1"; break; fi
+      done
+      if [[ -z "$has_seccomp" || -z "$has_nproc" ]]; then
+        echo "[dts-build] INFO: Enabling unrestricted Maven container mode for Docker ${DOCKER_API_VERSION} on ARM64 (JVM thread/process limits fix)"
+      fi
       if [[ -z "$has_seccomp" ]]; then
-        echo "[dts-build] INFO: Adding seccomp=unconfined for Docker ${DOCKER_API_VERSION} on ARM64 (JVM thread creation fix)"
         security_opts+=(--security-opt "seccomp=unconfined")
+      fi
+      if [[ -z "$has_nproc" ]]; then
+        security_opts+=(--ulimit "nproc=65535:65535")
       fi
     fi
     # Generate settings.xml on the HOST side before docker run,
