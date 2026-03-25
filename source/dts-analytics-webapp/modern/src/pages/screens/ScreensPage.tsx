@@ -203,13 +203,14 @@ export default function ScreensPage() {
             }
 
             const config = createConfigFromTemplate(selection.template);
-            const response = await analyticsApi.createScreen(
-                buildScreenPayload({
-                    id: '',
-                    ...config,
-                }),
-            );
-            navigate(`/screens/${response.id}/edit`);
+            navigate('/screens/new', {
+                state: {
+                    initialConfig: {
+                        id: '',
+                        ...config,
+                    },
+                },
+            });
         } catch (err) {
             console.error('Failed to create screen from template:', err);
             navigate('/screens/new');

@@ -1,4 +1,5 @@
 import { memo, useMemo, useEffect, useRef, useState, useCallback, type ComponentType, type MouseEvent as ReactMouseEvent } from 'react';
+import { analyticsApi, type ScreenListItem } from '../../../api/analyticsApi';
 import type { CardData, ScreenComponent } from '../types';
 import { DRILLABLE_TYPES } from '../types';
 import { useCardDataSource } from '../hooks/useCardDataSource';
@@ -26,6 +27,7 @@ import {
     normalizeFilterDebounceMs, normalizeCarouselItems, resolveCarouselItemsFromData,
     resolveFilterDefaultValue, resolveDateRangeDefaultValues,
 } from '../renderers/shared/chartUtils';
+import { resolveChartTitleLayout } from '../renderers/shared/chartTitleLayout';
 import {
     buildActionRuntimeParams,
     buildTableRowActionParams,
@@ -185,6 +187,51 @@ const DATAV_COMPONENT_TYPES = new Set([
     'water-level',
     'digital-flop',
 ]);
+
+const SCREEN_REF_PREFIX = 'screen-ref:';
+const SCREEN_REF_CACHE_TTL_MS = 30_000;
+let screenRefCache: { expiresAt: number; items: ScreenListItem[] } | null = null;
+
+function parseScreenReferenceUrl(targetUrl: string): { screenName: string; fallbackUrl: string } | null {
+    if (!targetUrl.startsWith(SCREEN_REF_PREFIX)) {
+        return null;
+    }
+    const raw = targetUrl.slice(SCREEN_REF_PREFIX.length);
+    const [screenNamePart, fallbackPart = ''] = raw.split('|', 2);
+    const screenName = decodeURIComponent(screenNamePart || '').trim();
+    const fallbackUrl = decodeURIComponent(fallbackPart || '').trim() || '/analytics/screens';
+    if (!screenName) {
+        return { screenName: '', fallbackUrl };
+    }
+    return { screenName, fallbackUrl };
+}
+
+async function resolveScreenReferenceUrl(targetUrl: string): Promise<string> {
+    const parsed = parseScreenReferenceUrl(targetUrl);
+    if (!parsed) {
+        return targetUrl;
+    }
+    if (!parsed.screenName) {
+        return parsed.fallbackUrl;
+    }
+    try {
+        const now = Date.now();
+        let items = screenRefCache && screenRefCache.expiresAt > now ? screenRefCache.items : null;
+        if (!items) {
+            items = await analyticsApi.listScreens();
+            screenRefCache = { expiresAt: now + SCREEN_REF_CACHE_TTL_MS, items };
+        }
+        const exact = items
+            .filter((item) => String(item.name || '').trim() === parsed.screenName)
+            .sort((a, b) => new Date(String(b.updatedAt || 0)).getTime() - new Date(String(a.updatedAt || 0)).getTime())[0];
+        if (exact?.id != null) {
+            return `/analytics/screens/${encodeURIComponent(String(exact.id))}/preview`;
+        }
+    } catch (error) {
+        console.error('Failed to resolve screen reference jump target:', error);
+    }
+    return parsed.fallbackUrl;
+}
 
 // Utility functions, table components, and types extracted to renderers/shared/:
 // - chartUtils.ts, tableUtils.tsx, markdownUtils.ts, geoJsonCache.ts
@@ -438,10 +485,20 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
     // Persist _sourceColumns to saved config so PropertyPanel can read them
     const onConfigMetaRef = useRef(onConfigMeta);
     onConfigMetaRef.current = onConfigMeta;
+    const [titleDragPreview, setTitleDragPreview] = useState<{ x: number; y: number } | null>(null);
+    const titleDragHandlersRef = useRef<{ move: (event: MouseEvent) => void; up: (event: MouseEvent) => void } | null>(null);
     const [legendDragPreview, setLegendDragPreview] = useState<{ x: number; y: number } | null>(null);
     const legendDragHandlersRef = useRef<{ move: (event: MouseEvent) => void; up: (event: MouseEvent) => void } | null>(null);
     const [chartDragPreview, setChartDragPreview] = useState<{ x: number; y: number } | null>(null);
     const chartDragHandlersRef = useRef<{ move: (event: MouseEvent) => void; up: (event: MouseEvent) => void } | null>(null);
+
+    const clearTitleDragHandlers = useCallback(() => {
+        const handlers = titleDragHandlersRef.current;
+        if (!handlers) return;
+        window.removeEventListener('mousemove', handlers.move);
+        window.removeEventListener('mouseup', handlers.up);
+        titleDragHandlersRef.current = null;
+    }, []);
 
     const clearLegendDragHandlers = useCallback(() => {
         const handlers = legendDragHandlersRef.current;
@@ -460,16 +517,19 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
     }, []);
 
     useEffect(() => () => {
+        clearTitleDragHandlers();
         clearLegendDragHandlers();
         clearChartDragHandlers();
-    }, [clearChartDragHandlers, clearLegendDragHandlers]);
+    }, [clearChartDragHandlers, clearLegendDragHandlers, clearTitleDragHandlers]);
 
     useEffect(() => {
+        setTitleDragPreview(null);
         setLegendDragPreview(null);
         setChartDragPreview(null);
+        clearTitleDragHandlers();
         clearLegendDragHandlers();
         clearChartDragHandlers();
-    }, [clearChartDragHandlers, clearLegendDragHandlers, component.id]);
+    }, [clearChartDragHandlers, clearLegendDragHandlers, clearTitleDragHandlers, component.id]);
 
     const sourceColsKey = (config._sourceColumns as Array<{ name: string }> | undefined)
         ?.map(c => c.name).join(',');
@@ -713,21 +773,22 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
             : []
     ), [component.actions, mode]);
 
-    const navigateToResolvedUrl = useCallback((targetUrl: string, openMode: 'self' | 'new-tab', source: string) => {
+    const navigateToResolvedUrl = useCallback(async (targetUrl: string, openMode: 'self' | 'new-tab', source: string) => {
+        const resolvedTargetUrl = await resolveScreenReferenceUrl(targetUrl);
         runtime.trackEvent({
             kind: 'jump',
             key: 'jumpUrl',
-            value: targetUrl,
+            value: resolvedTargetUrl,
             source,
-            meta: `openMode=${openMode}`,
+            meta: `openMode=${openMode};raw=${targetUrl}`,
         });
         if (openMode === 'self') {
-            if (targetUrl.startsWith('/') || (() => { try { return new URL(targetUrl).origin === window.location.origin; } catch { return false; } })()) {
-                window.location.assign(targetUrl);
+            if (resolvedTargetUrl.startsWith('/') || (() => { try { return new URL(resolvedTargetUrl).origin === window.location.origin; } catch { return false; } })()) {
+                window.location.assign(resolvedTargetUrl);
             }
             return;
         }
-        window.open(targetUrl, '_blank', 'noopener,noreferrer');
+        window.open(resolvedTargetUrl, '_blank', 'noopener,noreferrer');
     }, [runtime]);
 
     const executeComponentActions = useCallback((params: Record<string, unknown>) => {
@@ -1059,6 +1120,37 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
         const axisChartOffsetYBase = toNumber(c.chartOffsetY, 0, -chartOffsetBoundY, chartOffsetBoundY);
         const chartOffsetX = chartDragPreview ? chartDragPreview.x : axisChartOffsetXBase;
         const chartOffsetY = chartDragPreview ? chartDragPreview.y : axisChartOffsetYBase;
+        const titleOffsetBoundX = Math.max(120, Math.round(width * 0.45));
+        const titleOffsetBoundY = Math.max(80, Math.round(height * 0.35));
+        const titleOffsetXBase = toNumber(c.titleOffsetX, 0, -titleOffsetBoundX, titleOffsetBoundX);
+        const titleOffsetYBase = toNumber(c.titleOffsetY, 0, -titleOffsetBoundY, titleOffsetBoundY);
+        const titleOffsetX = titleDragPreview ? titleDragPreview.x : titleOffsetXBase;
+        const titleOffsetY = titleDragPreview ? titleDragPreview.y : titleOffsetYBase;
+        const titleDefaultPosition = (() => {
+            switch (type) {
+                case 'pie-chart':
+                case 'radar-chart':
+                case 'funnel-chart':
+                case 'wordcloud-chart':
+                case 'globe-chart':
+                case 'bar3d-chart':
+                case 'scatter3d-chart':
+                    return 'center' as const;
+                default:
+                    return 'left' as const;
+            }
+        })();
+        const chartTitleLayout = resolveChartTitleLayout({
+            text: titleText,
+            width,
+            height,
+            fontSize: (c.titleFontSize as number) || 14,
+            color: t.textPrimary,
+            positionRaw: c.titlePosition,
+            offsetX: titleOffsetX,
+            offsetY: titleOffsetY,
+            defaultPosition: titleDefaultPosition,
+        });
         const legendTextMaxWidth = (() => {
             if (!legendVisible || legendCount <= 0) return 0;
             if (legendNameMaxWidthOverride) {
@@ -1497,6 +1589,24 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
             opacity: 0.92,
             padding: 0,
         } : null;
+        const titleDragEnabled = mode === 'designer'
+            && c.titleDragEnabled === true
+            && hasTitle;
+        const titleDragHandleStyle = titleDragEnabled ? {
+            position: 'absolute' as const,
+            left: Math.max(2, Math.min(width - 14, Math.round(chartTitleLayout.handleRect.left + (chartTitleLayout.handleRect.width / 2)) - 6)),
+            top: Math.max(2, Math.min(height - 14, Math.round(chartTitleLayout.handleRect.top + (chartTitleLayout.handleRect.height / 2)) - 6)),
+            width: 12,
+            height: 12,
+            borderRadius: 999,
+            border: `1px solid ${t.textPrimary}`,
+            background: t.echarts.colorPalette?.[2] || t.accentColor,
+            boxShadow: '0 1px 4px rgba(0,0,0,0.35)',
+            cursor: 'grab',
+            zIndex: 20,
+            opacity: 0.92,
+            padding: 0,
+        } : null;
         const renderUnavailableState = (title: string, detail?: string) => (
             <div style={{
                 width: '100%',
@@ -1546,14 +1656,52 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                     onEvents={onEvents}
                 />
             );
+            const showTitleHandle = titleDragEnabled && !!titleDragHandleStyle;
             const showLegendHandle = legendDragEnabled && !!legendDragHandleStyle;
             const showChartHandle = chartDragEnabled && !!chartDragHandleStyle;
-            if (!showLegendHandle && !showChartHandle) {
+            if (!showTitleHandle && !showLegendHandle && !showChartHandle) {
                 return chartNode;
             }
+            const handleTitleHandleMouseDown = (event: ReactMouseEvent<HTMLButtonElement>) => {
+                event.preventDefault();
+                event.stopPropagation();
+                clearTitleDragHandlers();
+                clearLegendDragHandlers();
+                clearChartDragHandlers();
+                const startClientX = event.clientX;
+                const startClientY = event.clientY;
+                const startOffsetX = titleOffsetX;
+                const startOffsetY = titleOffsetY;
+                let lastOffsetX = startOffsetX;
+                let lastOffsetY = startOffsetY;
+                const clampX = (value: number) => Math.round(Math.min(titleOffsetBoundX, Math.max(-titleOffsetBoundX, value)));
+                const clampY = (value: number) => Math.round(Math.min(titleOffsetBoundY, Math.max(-titleOffsetBoundY, value)));
+                const move = (moveEvent: MouseEvent) => {
+                    const deltaX = moveEvent.clientX - startClientX;
+                    const deltaY = moveEvent.clientY - startClientY;
+                    lastOffsetX = clampX(startOffsetX + deltaX);
+                    lastOffsetY = clampY(startOffsetY + deltaY);
+                    setTitleDragPreview({ x: lastOffsetX, y: lastOffsetY });
+                };
+                const up = () => {
+                    clearTitleDragHandlers();
+                    setTitleDragPreview(null);
+                    if ((lastOffsetX !== startOffsetX || lastOffsetY !== startOffsetY) && onConfigMetaRef.current) {
+                        onConfigMetaRef.current({
+                            titleOffsetX: lastOffsetX,
+                            titleOffsetY: lastOffsetY,
+                            titleDragEnabled: true,
+                        });
+                    }
+                };
+                titleDragHandlersRef.current = { move, up };
+                window.addEventListener('mousemove', move);
+                window.addEventListener('mouseup', up);
+            };
             const handleLegendHandleMouseDown = (event: ReactMouseEvent<HTMLButtonElement>) => {
                 event.preventDefault();
                 event.stopPropagation();
+                clearTitleDragHandlers();
                 clearLegendDragHandlers();
                 clearChartDragHandlers();
                 const startClientX = event.clientX;
@@ -1589,6 +1737,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
             const handleChartHandleMouseDown = (event: ReactMouseEvent<HTMLButtonElement>) => {
                 event.preventDefault();
                 event.stopPropagation();
+                clearTitleDragHandlers();
                 clearLegendDragHandlers();
                 clearChartDragHandlers();
                 const startClientX = event.clientX;
@@ -1624,6 +1773,14 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
             return (
                 <div style={{ width: '100%', height: '100%', position: 'relative' }}>
                     {chartNode}
+                    {showTitleHandle ? (
+                        <button
+                            type="button"
+                            style={titleDragHandleStyle!}
+                            onMouseDown={handleTitleHandleMouseDown}
+                            title="拖拽微调标题位置"
+                        />
+                    ) : null}
                     {showLegendHandle ? (
                         <button
                             type="button"
@@ -1650,7 +1807,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                 return renderEChartWithHandles({
                     ...themeOptions,
                     ...chartMotionOption,
-                    title: { text: c.title as string, textStyle: { color: t.textPrimary, fontSize: (c.titleFontSize as number) || 14 } },
+                    title: chartTitleLayout.titleOption,
                     legend: legendConfig,
                     tooltip: {
                         ...themeOptions.tooltip,
@@ -1738,7 +1895,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                 return renderEChartWithHandles({
                     ...themeOptions,
                     ...chartMotionOption,
-                    title: { text: c.title as string, textStyle: { color: t.textPrimary, fontSize: (c.titleFontSize as number) || 14 } },
+                    title: chartTitleLayout.titleOption,
                     legend: legendConfig,
                     tooltip: {
                         ...themeOptions.tooltip,
@@ -1788,7 +1945,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                     ...themeOptions,
                     ...chartMotionOption,
                     ...(seriesColors.length > 0 ? { color: seriesColors } : {}),
-                    title: { text: c.title as string, textStyle: { color: t.textPrimary, fontSize: (c.titleFontSize as number) || 14 }, left: 'center' },
+                    title: chartTitleLayout.titleOption,
                     legend: legendConfig,
                     tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
                     series: [{
@@ -2004,7 +2161,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                     ...themeOptions,
                     ...chartMotionOption,
                     ...(seriesColors.length > 0 ? { color: seriesColors } : {}),
-                    title: { text: c.title as string, textStyle: { color: t.textPrimary, fontSize: (c.titleFontSize as number) || 14 }, left: 'center' },
+                    title: chartTitleLayout.titleOption,
                     legend: legendConfig,
                     radar: {
                         indicator: c.indicator as Array<{ name: string; max: number }>,
@@ -2026,7 +2183,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                     ...themeOptions,
                     ...chartMotionOption,
                     ...(seriesColors.length > 0 ? { color: seriesColors } : {}),
-                    title: { text: c.title as string, textStyle: { color: t.textPrimary, fontSize: (c.titleFontSize as number) || 14 }, left: 'center' },
+                    title: chartTitleLayout.titleOption,
                     legend: legendConfig,
                     series: [{
                         type: 'funnel',
@@ -2076,7 +2233,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                 return renderEChartWithHandles({
                     ...themeOptions,
                     ...chartMotionOption,
-                    title: { text: c.title as string, textStyle: { color: t.textPrimary, fontSize: (c.titleFontSize as number) || 14 } },
+                    title: chartTitleLayout.titleOption,
                     legend: legendConfig,
                     tooltip: {
                         ...themeOptions.tooltip,
@@ -2117,7 +2274,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                 return renderEChartWithHandles({
                     ...themeOptions,
                     ...chartMotionOption,
-                    title: { text: c.title as string, textStyle: { color: t.textPrimary, fontSize: (c.titleFontSize as number) || 14 } },
+                    title: chartTitleLayout.titleOption,
                     legend: legendConfig,
                     tooltip: {
                         ...themeOptions.tooltip,
@@ -2185,7 +2342,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                 return renderEChartWithHandles({
                     ...themeOptions,
                     ...chartMotionOption,
-                    title: { text: c.title as string, textStyle: { color: t.textPrimary, fontSize: (c.titleFontSize as number) || 14 } },
+                    title: chartTitleLayout.titleOption,
                     tooltip: { formatter: '{b}: {c}' },
                     series: [{
                         type: 'treemap',
@@ -2206,7 +2363,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                 return renderEChartWithHandles({
                     ...themeOptions,
                     ...chartMotionOption,
-                    title: { text: c.title as string, textStyle: { color: t.textPrimary, fontSize: (c.titleFontSize as number) || 14 }, left: 'center' },
+                    title: chartTitleLayout.titleOption,
                     tooltip: { trigger: 'item', formatter: '{b}: {c}' },
                     series: [{
                         type: 'sunburst',
@@ -2221,7 +2378,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
             case 'wordcloud-chart':
                 return renderEChartWithHandles({
                     ...themeOptions,
-                    title: { text: c.title as string, textStyle: { color: t.textPrimary, fontSize: (c.titleFontSize as number) || 14 } },
+                    title: chartTitleLayout.titleOption,
                     tooltip: { show: true, formatter: '{b}: {c}' },
                     series: [{
                         type: 'wordCloud',
@@ -2271,7 +2428,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                 return renderEChartWithHandles({
                     ...themeOptions,
                     ...chartMotionOption,
-                    title: { text: c.title as string, textStyle: { color: t.textPrimary, fontSize: (c.titleFontSize as number) || 14 } },
+                    title: chartTitleLayout.titleOption,
                     legend: { show: false },
                     tooltip: {
                         ...themeOptions.tooltip,
@@ -2390,7 +2547,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
 
                 if (usingGeoMap) {
                     const mapMode = String(c.mapMode ?? 'region');
-                    const baseTitle = { text: title, textStyle: { color: t.textPrimary, fontSize: (c.titleFontSize as number) || 14 } };
+                    const baseTitle = chartTitleLayout.titleOption;
                     const mapClickHandler = (params: Record<string, unknown>) => {
                         const regionName = String(params.name ?? '');
                         const row = params.data && typeof params.data === 'object'
@@ -3707,7 +3864,6 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                         </div>
                     );
                 }
-                const globeTitle = String(c.title ?? '3D 地球');
                 const autoRotate = c.autoRotate !== false;
                 const rotateSpeed = Number(c.rotateSpeed ?? 10);
                 const baseTexture = String(c.baseTexture ?? '');
@@ -3764,7 +3920,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                         atmosphere: showAtmosphere ? { show: true, glowPower: 6 } : undefined,
                     },
                     series: globeSeries,
-                    title: { text: globeTitle, textStyle: { color: t.textPrimary, fontSize: 14 }, left: 'center', top: 8 },
+                    title: chartTitleLayout.titleOption,
                 }, echartsClickHandler);
             }
 
@@ -3781,7 +3937,6 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                         </div>
                     );
                 }
-                const bar3dTitle = String(c.title ?? '3D 柱状图');
                 const xData = Array.isArray(c.xAxisData) ? c.xAxisData as string[] : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
                 const yData = Array.isArray(c.yAxisData) ? c.yAxisData as string[] : ['A', 'B', 'C'];
                 const bar3dData = Array.isArray(c.data)
@@ -3795,7 +3950,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
 
                 return renderEChartWithHandles({
                     ...themeOptions,
-                    title: { text: bar3dTitle, textStyle: { color: t.textPrimary, fontSize: 14 }, left: 'center', top: 8 },
+                    title: chartTitleLayout.titleOption,
                     tooltip: {},
                     visualMap: {
                         max: bar3dMax,
@@ -3838,7 +3993,6 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                         </div>
                     );
                 }
-                const scatter3dTitle = String(c.title ?? '3D 散点图');
                 const scatter3dData = Array.isArray(c.data)
                     ? (c.data as Array<[number, number, number]>)
                     : Array.from({ length: 30 }, () => [
@@ -3852,7 +4006,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
 
                 return renderEChartWithHandles({
                     ...themeOptions,
-                    title: { text: scatter3dTitle, textStyle: { color: t.textPrimary, fontSize: 14 }, left: 'center', top: 8 },
+                    title: chartTitleLayout.titleOption,
                     tooltip: {},
                     visualMap: {
                         max: scatter3dMax,
@@ -3917,10 +4071,53 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
         runtimePlugin,
     ]);
 
+    const supportsRuntimeActionWrapper = mode === 'preview'
+        && componentActions.length > 0
+        && ['shape', 'title', 'number-card', 'markdown-text'].includes(type);
+    const wrappedContent = supportsRuntimeActionWrapper ? (
+        <div
+            role="button"
+            tabIndex={0}
+            onClick={() => {
+                executeComponentActions({
+                    name: component.name,
+                    title: typeof effectiveConfig.title === 'string' ? effectiveConfig.title : undefined,
+                    text: typeof effectiveConfig.text === 'string' ? effectiveConfig.text : undefined,
+                    value: effectiveConfig.value,
+                    data: {
+                        title: effectiveConfig.title,
+                        text: effectiveConfig.text,
+                        value: effectiveConfig.value,
+                    },
+                });
+            }}
+            onKeyDown={(event) => {
+                if (event.key !== 'Enter' && event.key !== ' ') {
+                    return;
+                }
+                event.preventDefault();
+                executeComponentActions({
+                    name: component.name,
+                    title: typeof effectiveConfig.title === 'string' ? effectiveConfig.title : undefined,
+                    text: typeof effectiveConfig.text === 'string' ? effectiveConfig.text : undefined,
+                    value: effectiveConfig.value,
+                    data: {
+                        title: effectiveConfig.title,
+                        text: effectiveConfig.text,
+                        value: effectiveConfig.value,
+                    },
+                });
+            }}
+            style={{ width: '100%', height: '100%', cursor: 'pointer' }}
+        >
+            {content}
+        </div>
+    ) : content;
+
     return (
         !visibleByVariableRule ? null : (
         <div style={{ width: '100%', height: '100%', overflow: 'hidden', position: 'relative' }}>
-            {content}
+            {wrappedContent}
             {/* Drill-down breadcrumb overlay */}
             {drillRuntimeEnabled && drillState.breadcrumbs.length > 1 && (
                 <div style={{

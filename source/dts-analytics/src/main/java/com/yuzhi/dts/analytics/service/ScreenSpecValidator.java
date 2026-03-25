@@ -29,6 +29,7 @@ public class ScreenSpecValidator {
             "treemap-chart",
             "sunburst-chart",
             "waterfall-chart",
+            "gantt-chart",
             // DataV 装饰
             "border-box",
             "decoration",

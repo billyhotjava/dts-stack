@@ -1,13 +1,18 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
-import { useNavigate, useParams } from 'react-router';
+import { useLocation, useNavigate, useParams } from 'react-router';
 import { ScreenProvider, useScreen } from './ScreenContext';
 import { ScreenRuntimeProvider } from './ScreenRuntimeContext';
 import { analyticsApi } from '../../api/analyticsApi';
 import { resolveScreenTheme } from './screenThemes';
 import { normalizeScreenConfig } from './specV2';
 import { commitScreenPageDraft, materializeScreenPage, resolveScreenPages, switchScreenPage } from './screenPageState';
+import {
+    resolveInitialFocusMode,
+    resolveInitialRightPanelTab,
+    resolveInitialSidePanelVisibility,
+} from './screenDesignerLayoutState';
 import {
     ComponentLibraryPanel,
     CanvasToolbar,
@@ -22,6 +27,7 @@ import './ScreenDesigner.css';
 
 function ScreenDesignerContent() {
     const { id } = useParams<{ id: string }>();
+    const location = useLocation();
     const navigate = useNavigate();
     const {
         undo,
@@ -39,30 +45,18 @@ function ScreenDesignerContent() {
     } = useScreen();
     const { selectedIds } = state;
     const { config } = state;
-    const [rightPanelTab, setRightPanelTab] = useState<'property' | 'layer'>(() => {
-        const raw = typeof window !== 'undefined'
-            ? window.localStorage.getItem('dts.analytics.screenDesigner.rightPanelTab')
-            : null;
-        return raw === 'layer' ? 'layer' : 'property';
-    });
-    const [focusMode, setFocusMode] = useState<boolean>(() => {
-        const raw = typeof window !== 'undefined'
-            ? window.localStorage.getItem('dts.analytics.screenDesigner.focusMode')
-            : null;
-        return raw === 'true';
-    });
-    const [showLibraryPanel, setShowLibraryPanel] = useState<boolean>(() => {
-        const raw = typeof window !== 'undefined'
-            ? window.localStorage.getItem('dts.analytics.screenDesigner.showLibraryPanel')
-            : null;
-        return raw !== 'false';
-    });
-    const [showInspectorPanel, setShowInspectorPanel] = useState<boolean>(() => {
-        const raw = typeof window !== 'undefined'
-            ? window.localStorage.getItem('dts.analytics.screenDesigner.showInspectorPanel')
-            : null;
-        return raw !== 'false';
-    });
+    const [rightPanelTab, setRightPanelTab] = useState<'property' | 'layer'>(() => resolveInitialRightPanelTab(
+        typeof window !== 'undefined' ? window.localStorage : undefined,
+    ));
+    const [focusMode, setFocusMode] = useState<boolean>(() => resolveInitialFocusMode(
+        typeof window !== 'undefined' ? window.localStorage : undefined,
+    ));
+    const initialSidePanels = resolveInitialSidePanelVisibility(
+        typeof window !== 'undefined' ? window.localStorage : undefined,
+    );
+    const [showLibraryPanel, setShowLibraryPanel] = useState<boolean>(initialSidePanels.showLibraryPanel);
+    const [showInspectorPanel, setShowInspectorPanel] = useState<boolean>(initialSidePanels.showInspectorPanel);
+    const [hasLoadedInitialState, setHasLoadedInitialState] = useState(false);
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
@@ -72,15 +66,6 @@ function ScreenDesignerContent() {
         if (typeof window === 'undefined') return;
         window.localStorage.setItem('dts.analytics.screenDesigner.focusMode', focusMode ? 'true' : 'false');
     }, [focusMode]);
-    useEffect(() => {
-        if (typeof window === 'undefined') return;
-        window.localStorage.setItem('dts.analytics.screenDesigner.showLibraryPanel', showLibraryPanel ? 'true' : 'false');
-    }, [showLibraryPanel]);
-    useEffect(() => {
-        if (typeof window === 'undefined') return;
-        window.localStorage.setItem('dts.analytics.screenDesigner.showInspectorPanel', showInspectorPanel ? 'true' : 'false');
-    }, [showInspectorPanel]);
-
     // --- Multi-page management ---
     const [currentPageIndex, setCurrentPageIndex] = useState(0);
     const pages: ScreenPage[] = useMemo(() => {
@@ -204,6 +189,28 @@ function ScreenDesignerContent() {
                 });
         }
     }, [id, loadConfig, navigate]);
+
+    useEffect(() => {
+        if (id || hasLoadedInitialState) {
+            return;
+        }
+        const initialConfig = (location.state as { initialConfig?: Record<string, unknown> } | null)?.initialConfig;
+        if (!initialConfig || typeof initialConfig !== 'object') {
+            return;
+        }
+        const normalized = normalizeScreenConfig(initialConfig, { id: '' });
+        if (normalized.warnings.length > 0) {
+            console.warn('[screen-spec-v2] initial template config normalized with warnings:', normalized.warnings);
+        }
+        const backgroundColor = normalized.config.backgroundColor || '#0d1b2a';
+        const resolvedTheme = resolveScreenTheme(
+            normalized.config.theme,
+            backgroundColor,
+        );
+        setCurrentPageIndex(0);
+        loadConfig(materializeScreenPage({ ...normalized.config, theme: resolvedTheme }, 0));
+        setHasLoadedInitialState(true);
+    }, [hasLoadedInitialState, id, loadConfig, location.state]);
 
     useEffect(() => {
         if (pages.length === 0 || currentPageIndex < pages.length) {

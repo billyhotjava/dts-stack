@@ -425,6 +425,42 @@ build_image() {
   build_image_ctx "$name" "$tag" "$dockerfile" "$REPO_ROOT" "$output_dir" "${args[@]}"
 }
 
+create_temp_context_from_repo_paths() {
+  local tmp_context
+  tmp_context="$(mktemp -d)"
+  (
+    cd "$REPO_ROOT"
+    tar -cf - "$@"
+  ) | (
+    cd "$tmp_context"
+    tar -xf -
+  )
+  echo "$tmp_context"
+}
+
+build_analytics_modern_image() {
+  local tag="$1"
+  local output_dir="$2"
+  shift 2
+  local args=("$@")
+  local tmp_context
+  tmp_context="$(create_temp_context_from_repo_paths \
+    builds/dts-analytics-webapp/modern \
+    source/dts-analytics-webapp/modern)"
+  if ! build_image_ctx \
+    "dts-analytics-webapp-modern" \
+    "$tag" \
+    "${tmp_context}/builds/dts-analytics-webapp/modern/Dockerfile" \
+    "$tmp_context" \
+    "$output_dir" \
+    "${args[@]}"; then
+    local build_rc=$?
+    rm -rf "$tmp_context"
+    return "$build_rc"
+  fi
+  rm -rf "$tmp_context"
+}
+
 build_maven_module() {
   local module="$1"
   local jar_glob="$2"
@@ -682,7 +718,7 @@ build_all_normal() {
     --build-arg NPM_REGISTRY="${NPM_REGISTRY:-}" \
     --build-arg NPM_HTTP_PROXY="${NPM_HTTP_PROXY:-${HTTP_PROXY:-}}" \
     --build-arg NPM_HTTPS_PROXY="${NPM_HTTPS_PROXY:-${HTTPS_PROXY:-}}"
-  build_image "dts-analytics-webapp-modern" "$IMAGE_DTS_ANALYTICS_WEBAPP_MODERN" "${REPO_ROOT}/builds/dts-analytics-webapp/modern/Dockerfile" "$NORMAL_DIST" \
+  build_analytics_modern_image "$IMAGE_DTS_ANALYTICS_WEBAPP_MODERN" "$NORMAL_DIST" \
     --build-arg PNPM_VERSION="${PNPM_VERSION}" \
     --build-arg WEBAPP_BUILD_CMD="${WEBAPP_BUILD_CMD}" \
     --build-arg NPM_REGISTRY="${NPM_REGISTRY:-}" \
@@ -737,7 +773,7 @@ build_all_legacy() {
     --build-arg NPM_REGISTRY="${NPM_REGISTRY:-}" \
     --build-arg NPM_HTTP_PROXY="${NPM_HTTP_PROXY:-${HTTP_PROXY:-}}" \
     --build-arg NPM_HTTPS_PROXY="${NPM_HTTPS_PROXY:-${HTTPS_PROXY:-}}"
-  build_image "dts-analytics-webapp-modern" "$IMAGE_DTS_ANALYTICS_WEBAPP_MODERN" "${REPO_ROOT}/builds/dts-analytics-webapp/modern/Dockerfile" "$LEGACY_DIST" \
+  build_analytics_modern_image "$IMAGE_DTS_ANALYTICS_WEBAPP_MODERN" "$LEGACY_DIST" \
     --build-arg PNPM_VERSION="${PNPM_VERSION}" \
     --build-arg WEBAPP_BUILD_CMD="${WEBAPP_BUILD_CMD}" \
     --build-arg NPM_REGISTRY="${NPM_REGISTRY:-}" \
@@ -843,11 +879,13 @@ build_single_image() {
         --build-arg NPM_HTTPS_PROXY="${NPM_HTTPS_PROXY:-${HTTPS_PROXY:-}}")
       ;;
     dts-analytics-webapp-modern)
-      build_args+=(--build-arg PNPM_VERSION="${PNPM_VERSION}"
+      build_args+=(
+        --build-arg PNPM_VERSION="${PNPM_VERSION}"
         --build-arg WEBAPP_BUILD_CMD="${WEBAPP_BUILD_CMD}"
         --build-arg NPM_REGISTRY="${NPM_REGISTRY:-}"
         --build-arg NPM_HTTP_PROXY="${NPM_HTTP_PROXY:-${HTTP_PROXY:-}}"
-        --build-arg NPM_HTTPS_PROXY="${NPM_HTTPS_PROXY:-${HTTPS_PROXY:-}}")
+        --build-arg NPM_HTTPS_PROXY="${NPM_HTTPS_PROXY:-${HTTPS_PROXY:-}}"
+      )
       ;;
     dts-airflow-om)
       build_args+=(
@@ -875,11 +913,21 @@ build_single_image() {
     if [[ -n "$legacy_df" && -f "$legacy_df" ]]; then
       selected_df="$legacy_df"
     fi
+    if [[ "$name" == "dts-analytics-webapp-modern" ]]; then
+      build_analytics_modern_image "$normal_tag" "$LEGACY_DIST" "${build_args[@]}"
+      return 0
+    fi
     if [[ "$name" == "dts-dbt" || "$name" == "dts-addax" ]]; then
       build_image_ctx "$name" "$normal_tag" "$selected_df" "${REPO_ROOT}/builds/${name}" "$LEGACY_DIST" "${build_args[@]}"
     else
       build_image "$name" "$normal_tag" "$selected_df" "$LEGACY_DIST" "${build_args[@]}"
     fi
+    return 0
+  fi
+
+  if [[ "$name" == "dts-analytics-webapp-modern" ]]; then
+    build_analytics_modern_image "$normal_tag" "$NORMAL_DIST" "${build_args[@]}"
+    save_image "$normal_tag" "$LEGACY_DIST"
     return 0
   fi
 

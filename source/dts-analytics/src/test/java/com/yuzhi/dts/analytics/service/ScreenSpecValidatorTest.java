@@ -189,4 +189,33 @@ class ScreenSpecValidatorTest {
         ScreenSpecValidator.ValidationResult result = validator.validateForWrite(payload);
         assertThat(result.errors()).isEmpty();
     }
+
+    @Test
+    void validateForWrite_ganttChart_accepted() throws Exception {
+        ScreenSpecValidator validator = new ScreenSpecValidator();
+        var payload = objectMapper.readTree("""
+                {
+                  "schemaVersion": 2,
+                  "width": 1920,
+                  "height": 1080,
+                  "components": [
+                    {
+                      "id": "c-gantt",
+                      "type": "gantt-chart",
+                      "x": 0,
+                      "y": 0,
+                      "width": 640,
+                      "height": 320,
+                      "config": {
+                        "title": "项目执行监控"
+                      }
+                    }
+                  ]
+                }
+                """);
+
+        ScreenSpecValidator.ValidationResult result = validator.validateForWrite(payload);
+        assertThat(result.errors()).isEmpty();
+        assertThat(result.warnings()).isEmpty();
+    }
 }

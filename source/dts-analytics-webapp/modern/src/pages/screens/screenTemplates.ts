@@ -1,6 +1,7 @@
 import type { ScreenConfig, ScreenComponent, ScreenGlobalVariable } from './types';
 import { SCREEN_SCHEMA_VERSION } from './specV2';
 import { projectManagementCommandCenterTemplate } from './projectManagementCommandCenterTemplate';
+import { gpmcTemplates } from './gpmcTemplates';
 
 /**
  * Screen Template definition
@@ -1795,6 +1796,7 @@ export const screenTemplates: ScreenTemplate[] = [
     qmsCockpitTemplate,
     plmCockpitTemplate,
     hrCockpitTemplate,
+    ...gpmcTemplates,
     projectManagementCommandCenterTemplate,
 ];
 

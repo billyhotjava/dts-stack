@@ -256,6 +256,77 @@ function applyLegendHeuristicLayout(
     onChange('legendOffsetY', 0);
 }
 
+function renderChartTitleLayoutRows(
+    config: Record<string, unknown>,
+    onChange: (key: string, value: unknown) => void,
+) {
+    return (
+        <>
+            <div style={{ fontSize: 11, color: '#888', marginTop: 8, marginBottom: 4 }}>
+                标题位置微调
+            </div>
+            <div className="property-row">
+                <label className="property-label">标题位置</label>
+                <select
+                    className="property-input"
+                    value={(config.titlePosition as string) || 'auto'}
+                    onChange={(e) => onChange('titlePosition', e.target.value)}
+                >
+                    <option value="auto">自动</option>
+                    <option value="left">左侧</option>
+                    <option value="center">居中</option>
+                    <option value="right">右侧</option>
+                </select>
+            </div>
+            <div className="property-row">
+                <label className="property-label">启用拖拽微调</label>
+                <input
+                    type="checkbox"
+                    checked={config.titleDragEnabled === true}
+                    onChange={(e) => onChange('titleDragEnabled', e.target.checked)}
+                />
+            </div>
+            <div className="property-row">
+                <label className="property-label">水平偏移</label>
+                <input
+                    type="number"
+                    className="property-input"
+                    min={-400}
+                    max={400}
+                    value={(config.titleOffsetX as number) || 0}
+                    onChange={(e) => onChange('titleOffsetX', Number(e.target.value))}
+                />
+            </div>
+            <div className="property-row">
+                <label className="property-label">垂直偏移</label>
+                <input
+                    type="number"
+                    className="property-input"
+                    min={-200}
+                    max={200}
+                    value={(config.titleOffsetY as number) || 0}
+                    onChange={(e) => onChange('titleOffsetY', Number(e.target.value))}
+                />
+            </div>
+            <div className="property-row">
+                <label className="property-label">标题布局</label>
+                <button
+                    type="button"
+                    className="property-input"
+                    onClick={() => {
+                        onChange('titlePosition', 'auto');
+                        onChange('titleDragEnabled', false);
+                        onChange('titleOffsetX', 0);
+                        onChange('titleOffsetY', 0);
+                    }}
+                >
+                    一键重置为自动
+                </button>
+            </div>
+        </>
+    );
+}
+
 function renderQuickChartConfig(
     component: ScreenComponent,
     onChange: (key: string, value: unknown) => void,
@@ -346,6 +417,7 @@ function renderQuickChartConfig(
                     onChange={(e) => onChange('titleFontSize', Number(e.target.value))}
                 />
             </div>
+            {renderChartTitleLayoutRows(config as Record<string, unknown>, onChange)}
             <div className="property-row">
                 <label className="property-label">图例显示</label>
                 <select
@@ -2775,6 +2847,7 @@ function renderComponentConfig(
                             onChange={(e) => onChange('titleFontSize', Number(e.target.value))}
                         />
                     </div>
+                    {renderChartTitleLayoutRows(config as Record<string, unknown>, onChange)}
                     <div className="property-row">
                         <label className="property-label">坐标轴字号</label>
                         <input
@@ -2850,6 +2923,7 @@ function renderComponentConfig(
                             onChange={(e) => onChange('titleFontSize', Number(e.target.value))}
                         />
                     </div>
+                    {renderChartTitleLayoutRows(config as Record<string, unknown>, onChange)}
                     {type !== 'gauge-chart' && (
                         <>
                             <div className="property-row">
@@ -3973,6 +4047,7 @@ function renderComponentConfig(
                             onChange={(e) => onChange('titleFontSize', Number(e.target.value))}
                         />
                     </div>
+                    {renderChartTitleLayoutRows(config as Record<string, unknown>, onChange)}
                     <div className="property-row">
                         <label className="property-label">坐标轴字号</label>
                         <input
@@ -4029,6 +4104,18 @@ function renderComponentConfig(
                             onChange={(e) => onChange('title', e.target.value)}
                         />
                     </div>
+                    <div className="property-row">
+                        <label className="property-label">标题字号</label>
+                        <input
+                            type="number"
+                            className="property-input"
+                            min={10}
+                            max={36}
+                            value={(config.titleFontSize as number) || 14}
+                            onChange={(e) => onChange('titleFontSize', Number(e.target.value))}
+                        />
+                    </div>
+                    {renderChartTitleLayoutRows(config as Record<string, unknown>, onChange)}
                     <div className="property-row">
                         <label className="property-label">地图模式</label>
                         <select
@@ -4256,6 +4343,18 @@ function renderComponentConfig(
                         />
                     </div>
                     <div className="property-row">
+                        <label className="property-label">标题字号</label>
+                        <input
+                            type="number"
+                            className="property-input"
+                            min={10}
+                            max={36}
+                            value={(config.titleFontSize as number) || 14}
+                            onChange={(e) => onChange('titleFontSize', Number(e.target.value))}
+                        />
+                    </div>
+                    {renderChartTitleLayoutRows(config as Record<string, unknown>, onChange)}
+                    <div className="property-row">
                         <label className="property-label">自动旋转</label>
                         <select className="property-input" value={config.autoRotate !== false ? 'true' : 'false'} onChange={(e) => onChange('autoRotate', e.target.value === 'true')}>
                             <option value="true">开启</option>
@@ -4303,6 +4402,18 @@ function renderComponentConfig(
                         <label className="property-label">标题</label>
                         <input type="text" className="property-input" value={(config.title as string) || '3D 柱状图'} onChange={(e) => onChange('title', e.target.value)} />
                     </div>
+                    <div className="property-row">
+                        <label className="property-label">标题字号</label>
+                        <input
+                            type="number"
+                            className="property-input"
+                            min={10}
+                            max={36}
+                            value={(config.titleFontSize as number) || 14}
+                            onChange={(e) => onChange('titleFontSize', Number(e.target.value))}
+                        />
+                    </div>
+                    {renderChartTitleLayoutRows(config as Record<string, unknown>, onChange)}
                     <div className="property-row">
                         <label className="property-label">视角 Alpha</label>
                         <input type="number" className="property-input" min={0} max={90} value={(config.viewAlpha as number) || 40} onChange={(e) => onChange('viewAlpha', Number(e.target.value))} />
@@ -4355,6 +4466,18 @@ function renderComponentConfig(
                         <label className="property-label">标题</label>
                         <input type="text" className="property-input" value={(config.title as string) || '3D 散点图'} onChange={(e) => onChange('title', e.target.value)} />
                     </div>
+                    <div className="property-row">
+                        <label className="property-label">标题字号</label>
+                        <input
+                            type="number"
+                            className="property-input"
+                            min={10}
+                            max={36}
+                            value={(config.titleFontSize as number) || 14}
+                            onChange={(e) => onChange('titleFontSize', Number(e.target.value))}
+                        />
+                    </div>
+                    {renderChartTitleLayoutRows(config as Record<string, unknown>, onChange)}
                     <div className="property-row">
                         <label className="property-label">散点大小</label>
                         <input type="number" className="property-input" min={2} max={30} value={(config.pointSize as number) || 8} onChange={(e) => onChange('pointSize', Number(e.target.value))} />

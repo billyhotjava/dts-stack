@@ -80,3 +80,14 @@
 | F3-基础配置协同入口优化 | 3 | READY |
 
 **统计**: READY=5, IN_PROGRESS=2, DONE=2, BLOCKED=0
+
+## Sprint-14: GPMC Phase 2 信息架构与模板化交付 (202603)
+
+| Feature | Task 数 | 状态 |
+|---------|---------|------|
+| F1-源表语义与指标口径建模 | 3 | DONE |
+| F2-大屏看板与下钻信息架构 | 3 | DONE |
+| F3-GPMC模板化交付 | 3 | DONE |
+| F4-实施准备与验收基线 | 3 | DONE |
+
+**统计**: READY=0, IN_PROGRESS=0, DONE=12, BLOCKED=0
