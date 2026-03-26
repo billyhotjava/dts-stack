@@ -36,6 +36,8 @@ import { PROVINCE_PRESETS } from '../renderers/shared/geoJsonCache';
 import { FieldMappingPanel, isMappable } from './FieldMappingPanel';
 import type { FieldMapping } from '../types';
 import { COLOR_SCHEMES, recommendColorSchemes, type ColorScheme } from '../colorSchemes';
+import UploadedDataEditor from './UploadedDataEditor';
+import { DatasetPicker } from './DatasetPicker';
 
 type ExplainState =
     | { state: 'loading' }
@@ -786,7 +788,9 @@ function resolveTabSwitcherOptionValues(raw: unknown): string[] {
     return out;
 }
 
-export function PropertyPanel() {
+export type PropertyPanelTab = 'style' | 'data' | 'interaction' | 'advanced';
+
+export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPanelTab }) {
     const {
         state,
         updateComponent,
@@ -1402,16 +1406,22 @@ export function PropertyPanel() {
         ? renderActionConfig(selectedComponent, updateComponent, { embedded: true })
         : null;
 
+    const isStyleTab = activeTab === 'style';
+    const isDataTab = activeTab === 'data';
+    const isInteractionTab = activeTab === 'interaction';
+    const isAdvancedTab = activeTab === 'advanced';
+    const TAB_LABELS: Record<PropertyPanelTab, string> = { style: '样式', data: '数据', interaction: '交互', advanced: '高级' };
+
     return (
         <div className={`property-panel property-panel--${panelDensity}`}>
             <div className="property-panel-header">
-                <h3>属性 - {selectedComponent.name}</h3>
+                <h3>{selectedComponent.name}</h3>
                 <p className="property-panel-subtitle">
-                    {selectedComponent.type} · {selectedComponent.width} × {selectedComponent.height} · {panelDensity === 'focus' ? '高频视图' : '完整视图'}
+                    {selectedComponent.type} · {selectedComponent.width} × {selectedComponent.height} · {TAB_LABELS[activeTab]}
                 </p>
             </div>
             <div className="property-panel-content">
-                <div className="property-section">
+                {isStyleTab && <div className="property-section">
                     <div className="property-section-title property-section-title-collapsible">
                         <button
                             type="button"
@@ -1477,9 +1487,9 @@ export function PropertyPanel() {
                             </div>
                         </>
                     ) : null}
-                </div>
+                </div>}
 
-                {shouldRenderSection('quick-actions', '快捷', '操作', '样式', '复制', '对齐') && (
+                {isStyleTab && shouldRenderSection('quick-actions', '快捷', '操作', '样式', '复制', '对齐') && (
                     <div className="property-section">
                         <div className="property-section-title property-section-title-collapsible">
                             <button
@@ -1565,7 +1575,7 @@ export function PropertyPanel() {
                 )}
 
                 {/* Position & Size */}
-                {shouldRenderSection('position-size', '位置', '尺寸', 'x', 'y', '宽', '高') && (
+                {isStyleTab && shouldRenderSection('position-size', '位置', '尺寸', 'x', 'y', '宽', '高') && (
                     <div className="property-section">
                         <div className="property-section-title property-section-title-collapsible">
                             <button
@@ -1622,8 +1632,8 @@ export function PropertyPanel() {
                     </div>
                 )}
 
-                {/* Component-specific config */}
-                {runtimePlugin?.propertySchema?.fields?.length && shouldRenderSection('plugin-config', '插件', 'plugin', runtimePlugin.name) ? (
+                {/* Component-specific config (plugin) */}
+                {isStyleTab && runtimePlugin?.propertySchema?.fields?.length && shouldRenderSection('plugin-config', '插件', 'plugin', runtimePlugin.name) ? (
                     <div className="property-section">
                         <div className="property-section-title property-section-title-collapsible">
                             <button
@@ -1640,7 +1650,7 @@ export function PropertyPanel() {
                     </div>
                 ) : null}
 
-                {shouldRenderSection('component-config', '组件', '样式', '图表', '外观') && (
+                {isStyleTab && shouldRenderSection('component-config', '组件', '样式', '图表', '外观') && (
                     <div className="property-section">
                         <div
                             className="property-section-title property-section-title-collapsible"
@@ -1694,7 +1704,7 @@ export function PropertyPanel() {
                 )}
 
                 {/* Data Source */}
-                {shouldRenderSection('data-source', '数据', 'sql', 'card', 'api', 'dataset', 'metric') && (
+                {isDataTab && shouldRenderSection('data-source', '数据', 'sql', 'card', 'api', 'dataset', 'metric') && (
                     <div className="property-section">
                         <div className="property-section-title property-section-title-collapsible">
                             <button
@@ -1712,7 +1722,7 @@ export function PropertyPanel() {
                 )}
 
                 {/* Field Mapping */}
-                {shouldRenderSection('data-source', '字段映射', 'field', 'mapping') && isMappable(selectedComponent.type) && (() => {
+                {isDataTab && shouldRenderSection('data-source', '字段映射', 'field', 'mapping') && isMappable(selectedComponent.type) && (() => {
                     const fmSourceCols = selectedComponent.config._sourceColumns as Array<{ name: string; displayName: string; baseType?: string }> ?? [];
                     const hasFmSource = resolveDataSourceType(selectedComponent.dataSource as DataSourceConfig | undefined) !== 'static';
                     if (!hasFmSource || fmSourceCols.length === 0) return null;
@@ -1755,7 +1765,7 @@ export function PropertyPanel() {
                     );
                 })()}
 
-                {shouldRenderSection('explain', '解释', 'explain') && (
+                {isDataTab && shouldRenderSection('explain', '解释', 'explain') && (
                     <div className="property-section">
                         <div className="property-section-title property-section-title-collapsible">
                             <button
@@ -1827,7 +1837,7 @@ export function PropertyPanel() {
                 )}
 
                 {/* Chart annotations (markLine / markArea / conditionalColors) */}
-                {shouldRenderSection('component-config', '标注', '辅助线', 'markLine', 'threshold') && (selectedComponent.type === 'line-chart' || selectedComponent.type === 'bar-chart' || selectedComponent.type === 'scatter-chart' || selectedComponent.type === 'combo-chart' || selectedComponent.type === 'waterfall-chart') && (
+                {isStyleTab && shouldRenderSection('component-config', '标注', '辅助线', 'markLine', 'threshold') && (selectedComponent.type === 'line-chart' || selectedComponent.type === 'bar-chart' || selectedComponent.type === 'scatter-chart' || selectedComponent.type === 'combo-chart' || selectedComponent.type === 'waterfall-chart') && (
                     <div className="property-section">
                         <div className="property-section-title property-section-title-collapsible">
                             <button
@@ -1848,7 +1858,7 @@ export function PropertyPanel() {
                 )}
 
                 {/* Drill-down config */}
-                {drillDownContent ? (
+                {isInteractionTab && drillDownContent ? (
                     <div className="property-section">
                         <div className="property-section-title property-section-title-collapsible">
                             <button
@@ -1863,7 +1873,7 @@ export function PropertyPanel() {
                     </div>
                 ) : null}
 
-                {interactionContent ? (
+                {isInteractionTab && interactionContent ? (
                     <div className="property-section">
                         <div className="property-section-title property-section-title-collapsible">
                             <button
@@ -1878,7 +1888,7 @@ export function PropertyPanel() {
                     </div>
                 ) : null}
 
-                {actionContent ? (
+                {isInteractionTab && actionContent ? (
                     <div className="property-section">
                         <div className="property-section-title property-section-title-collapsible">
                             <button
@@ -1893,8 +1903,8 @@ export function PropertyPanel() {
                     </div>
                 ) : null}
 
-                {/* Visibility & Lock */}
-                {shouldRenderSection('other', '其他', '名称', '容器', '锁定', '可见') && (
+                {/* Visibility & Lock & Name */}
+                {isAdvancedTab && shouldRenderSection('other', '其他', '名称', '容器', '锁定', '可见') && (
                     <div className="property-section">
                         <div className="property-section-title property-section-title-collapsible">
                             <button
@@ -2097,6 +2107,91 @@ export function PropertyPanel() {
                                 )}
                             </>
                         ) : null}
+                    </div>
+                )}
+
+                {isInteractionTab && !drillDownContent && !interactionContent && !actionContent && (
+                    <div className="property-panel-tab-empty">
+                        <div className="empty-state-icon">🔗</div>
+                        <div className="empty-state-text">当前组件暂无交互配置</div>
+                        <div className="empty-state-hint">图表类组件支持下钻、联动和动作配置</div>
+                    </div>
+                )}
+                {isAdvancedTab && (
+                    <div className="property-section" style={{ marginTop: 8 }}>
+                        <div className="property-section-title property-section-title-collapsible">
+                            <button
+                                type="button"
+                                className="property-section-toggle"
+                                onClick={() => toggleSection('animation')}
+                            >
+                                {isSectionCollapsed('animation') ? '▸' : '▾'} 入场动画
+                            </button>
+                        </div>
+                        {!isSectionCollapsed('animation') && (
+                            <>
+                                <div className="property-row">
+                                    <label className="property-label">动画类型</label>
+                                    <select
+                                        className="property-input"
+                                        value={String(selectedComponent.config.animationType ?? 'none')}
+                                        onChange={(e) => handleConfigChange('animationType', e.target.value)}
+                                    >
+                                        <option value="none">无</option>
+                                        <option value="fadeIn">淡入</option>
+                                        <option value="slideUp">上滑进入</option>
+                                        <option value="slideDown">下滑进入</option>
+                                        <option value="slideLeft">左滑进入</option>
+                                        <option value="slideRight">右滑进入</option>
+                                        <option value="zoomIn">缩放进入</option>
+                                        <option value="bounceIn">弹性进入</option>
+                                        <option value="rotateIn">旋转进入</option>
+                                    </select>
+                                </div>
+                                <div className="property-row">
+                                    <label className="property-label">时长(ms)</label>
+                                    <input
+                                        type="number"
+                                        className="property-input"
+                                        min={100}
+                                        max={5000}
+                                        step={100}
+                                        value={Number(selectedComponent.config.animationDuration ?? 600)}
+                                        onChange={(e) => handleConfigChange('animationDuration', Number(e.target.value))}
+                                    />
+                                </div>
+                                <div className="property-row">
+                                    <label className="property-label">延迟(ms)</label>
+                                    <input
+                                        type="number"
+                                        className="property-input"
+                                        min={0}
+                                        max={10000}
+                                        step={100}
+                                        value={Number(selectedComponent.config.animationDelay ?? 0)}
+                                        onChange={(e) => handleConfigChange('animationDelay', Number(e.target.value))}
+                                    />
+                                </div>
+                                <div className="property-row">
+                                    <label className="property-label">缓动函数</label>
+                                    <select
+                                        className="property-input"
+                                        value={String(selectedComponent.config.animationEasing ?? 'ease')}
+                                        onChange={(e) => handleConfigChange('animationEasing', e.target.value)}
+                                    >
+                                        <option value="ease">ease</option>
+                                        <option value="linear">linear</option>
+                                        <option value="ease-in">ease-in</option>
+                                        <option value="ease-out">ease-out</option>
+                                        <option value="ease-in-out">ease-in-out</option>
+                                        <option value="cubic-bezier(0.34,1.56,0.64,1)">弹性</option>
+                                    </select>
+                                </div>
+                                <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4, lineHeight: 1.45 }}>
+                                    入场动画仅在预览和运行时生效，设计器中不播放。
+                                </div>
+                            </>
+                        )}
                     </div>
                 )}
             </div>
@@ -2860,6 +2955,15 @@ function renderComponentConfig(
                         />
                     </div>
                     <div className="property-row">
+                        <label className="property-label">坐标轴颜色</label>
+                        <input
+                            type="color"
+                            className="property-color-input"
+                            value={(config.axisLabelColor as string) || '#6b7280'}
+                            onChange={(e) => onChange('axisLabelColor', e.target.value)}
+                        />
+                    </div>
+                    <div className="property-row">
                         <label className="property-label">图例字号</label>
                         <input
                             type="number"
@@ -2890,10 +2994,14 @@ function renderComponentConfig(
                     {renderChartOffsetRows()}
                     {renderAxisLabelRows()}
                     {renderSeriesLabelRows({ includeLeaderLines: false })}
-                    {renderSeriesColorRows(
-                        ((config.series as Array<{ name?: string }> | undefined) || [])
-                            .map((item, idx) => (item?.name || '').trim() || `系列${idx + 1}`),
-                    )}
+                    {renderSeriesColorRows((() => {
+                        const series = (config.series as Array<{ name?: string }> | undefined) || [];
+                        if (series.length > 0) return series.map((item, idx) => (item?.name || '').trim() || `系列${idx + 1}`);
+                        // Fallback: infer from static data headers (col 2+ are series)
+                        const headers = config.header as string[] | undefined;
+                        if (Array.isArray(headers) && headers.length > 1) return headers.slice(1);
+                        return ['系列1'];
+                    })())}
                 </>
             );
 
@@ -2956,9 +3064,15 @@ function renderComponentConfig(
                             {renderChartPaddingRows()}
                             {renderChartOffsetRows()}
                             {(type === 'pie-chart' || type === 'funnel-chart') && renderSeriesLabelRows()}
-                            {renderSeriesColorRows(
-                                ((config.data as Array<{ name?: string }> | undefined) || [])
-                                    .map((item, idx) => (item?.name || '').trim() || `系列${idx + 1}`),
+                            {renderSeriesColorRows((() => {
+                                const data = (config.data as Array<{ name?: string }> | undefined) || [];
+                                if (data.length > 0 && typeof data[0] === 'object' && !Array.isArray(data[0])) return data.map((item, idx) => (item?.name || '').trim() || `系列${idx + 1}`);
+                                // Fallback: infer from static data rows (each row = a slice for pie)
+                                const headers = config.header as string[] | undefined;
+                                const rows = config.data as string[][] | undefined;
+                                if (Array.isArray(rows) && Array.isArray(rows[0])) return rows.map((r, i) => String(r[0] || `系列${i+1}`));
+                                return ['系列1'];
+                            })(),
                             )}
                         </>
                     )}
@@ -4060,6 +4174,15 @@ function renderComponentConfig(
                         />
                     </div>
                     <div className="property-row">
+                        <label className="property-label">坐标轴颜色</label>
+                        <input
+                            type="color"
+                            className="property-color-input"
+                            value={(config.axisLabelColor as string) || '#6b7280'}
+                            onChange={(e) => onChange('axisLabelColor', e.target.value)}
+                        />
+                    </div>
+                    <div className="property-row">
                         <label className="property-label">图例字号</label>
                         <input
                             type="number"
@@ -4671,6 +4794,13 @@ function renderDataSourceConfig(
                 },
             });
         }
+        if (nextType === 'uploaded') {
+            setDataSource({
+                type: 'uploaded',
+                sourceType: 'uploaded',
+                uploadedConfig: { datasetId: '', datasetName: '' },
+            });
+        }
     };
 
     return (
@@ -4688,8 +4818,13 @@ function renderDataSourceConfig(
                     <option value="sql">SQL 模式</option>
                     <option value="dataset">Dataset 模式</option>
                     <option value="metric">Metric 语义模式</option>
+                    <option value="uploaded">文件上传</option>
                 </select>
             </div>
+
+            {dsType === 'static' && (
+                <StaticDataEditor key={component.id} component={component} updateComponent={updateComponent} />
+            )}
 
             {dsType === 'card' && (
                 <>
@@ -5182,6 +5317,31 @@ function renderDataSourceConfig(
                     </div>
                 </>
             )}
+
+            {dsType === 'uploaded' && (
+                <>
+                    <div className="property-section-label" style={{ marginTop: 8 }}>上传新文件</div>
+                    <UploadedDataEditor
+                        existingDatasetId={ds?.uploadedConfig?.datasetId}
+                        onBind={(cfg) => {
+                            setDataSource({
+                                type: 'uploaded',
+                                uploadedConfig: cfg,
+                            });
+                        }}
+                    />
+                    <div className="property-section-label" style={{ marginTop: 12 }}>或选择已有数据集</div>
+                    <DatasetPicker
+                        selectedId={ds?.uploadedConfig?.datasetId}
+                        onSelect={(cfg) => {
+                            setDataSource({
+                                type: 'uploaded',
+                                uploadedConfig: cfg,
+                            });
+                        }}
+                    />
+                </>
+            )}
         </>
     );
 }
@@ -5189,7 +5349,7 @@ function renderDataSourceConfig(
 function resolveDataSourceType(ds?: DataSourceConfig): 'static' | QuerySourceType {
     const type = ((ds?.sourceType ?? ds?.type) || 'static').toLowerCase();
     if (type === 'database' || type === 'sql') return 'sql';
-    if (type === 'card' || type === 'api' || type === 'dataset' || type === 'metric') {
+    if (type === 'card' || type === 'api' || type === 'dataset' || type === 'metric' || type === 'uploaded') {
         return type;
     }
     return 'static';
@@ -6555,6 +6715,255 @@ function TableConfig({ component, onChange }: {
                     ))}
                 </>
             )}
+
+            {/* Table 样式增强 */}
+            <div className="property-section-label">样式</div>
+            <div className="property-row">
+                <label className="property-label">表头背景</label>
+                <input type="color" className="property-input" value={(config.headerBackground as string) || '#112238'} onChange={(e) => onChange('headerBackground', e.target.value)} />
+            </div>
+            <div className="property-row">
+                <label className="property-label">行背景</label>
+                <input type="color" className="property-input" value={(config.bodyBackground as string) || '#0d1b2d'} onChange={(e) => onChange('bodyBackground', e.target.value)} />
+            </div>
+            <div className="property-row">
+                <label className="property-label">交替行背景</label>
+                <input type="color" className="property-input" value={(config.oddRowBackground as string) || '#10233a'} onChange={(e) => onChange('oddRowBackground', e.target.value)} />
+            </div>
+            <div className="property-row">
+                <label className="property-label">文字颜色</label>
+                <input type="color" className="property-input" value={(config.bodyColor as string) || '#c8ddf5'} onChange={(e) => onChange('bodyColor', e.target.value)} />
+            </div>
+            <div className="property-row">
+                <label className="property-label">边框颜色</label>
+                <input type="color" className="property-input" value={(config.borderColor as string) || '#1e3a5f'} onChange={(e) => onChange('borderColor', e.target.value)} />
+            </div>
+        </>
+    );
+}
+
+// Default templates per component type
+const STATIC_DATA_TEMPLATES: Record<string, { headers: string[]; rows: string[][] }> = {
+    'bar-chart': { headers: ['月份', '销量', '成本'], rows: [['一月', '120', '80'], ['二月', '200', '150'], ['三月', '150', '100']] },
+    'line-chart': { headers: ['月份', '指标A', '指标B'], rows: [['一月', '42', '30'], ['二月', '55', '48'], ['三月', '62', '51']] },
+    'pie-chart': { headers: ['名称', '数值'], rows: [['类别A', '35'], ['类别B', '25'], ['类别C', '20'], ['类别D', '15']] },
+    'table': { headers: ['编号', '名称', '状态'], rows: [['001', '项目A', '进行中'], ['002', '项目B', '已完成']] },
+    'scroll-board': { headers: ['项目', '进度', '负责人'], rows: [['项目A', '80%', '张三'], ['项目B', '60%', '李四']] },
+    'number-card': { headers: ['label', 'value'], rows: [['总数', '128']] },
+    'gauge-chart': { headers: ['label', 'value'], rows: [['完成率', '78']] },
+    'radar-chart': { headers: ['维度', '系列A', '系列B'], rows: [['进度', '80', '70'], ['质量', '90', '60'], ['成本', '70', '85']] },
+    'funnel-chart': { headers: ['阶段', '数量'], rows: [['线索', '100'], ['商机', '60'], ['成交', '30']] },
+    'scatter-chart': { headers: ['X', 'Y'], rows: [['10', '20'], ['30', '50'], ['50', '40'], ['70', '80']] },
+};
+
+const STATIC_DATA_HINTS: Record<string, string> = {
+    'bar-chart': '第1列=X轴标签，其余列=数值系列',
+    'line-chart': '第1列=X轴标签，其余列=数值系列',
+    'pie-chart': '第1列=名称，第2列=数值',
+    'table': '所有列直接展示为表格',
+    'number-card': '第1列=标签，第2列=数值',
+    'gauge-chart': '第1列=标签，第2列=数值(0-100)',
+    'radar-chart': '第1列=维度名，其余列=各系列数值',
+    'scatter-chart': '第1列=X值，第2列=Y值',
+};
+
+function StaticDataEditor({ component, updateComponent }: {
+    component: ScreenComponent;
+    updateComponent: (id: string, updates: Partial<ScreenComponent>) => void;
+}) {
+    const config = component.config;
+    const componentType = component.type;
+    const [mode, setMode] = useState<'table' | 'json'>('table');
+
+    const defaultTemplate = STATIC_DATA_TEMPLATES[componentType] || { headers: ['列1', '列2', '列3'], rows: [['', '', ''], ['', '', '']] };
+
+    // Parse existing data into header + rows
+    const [headers, setHeaders] = useState<string[]>(() => {
+        const h = config.header as string[] | undefined;
+        if (Array.isArray(h) && h.length > 0) return h.map(String);
+        return defaultTemplate.headers;
+    });
+    const [rows, setRows] = useState<string[][]>(() => {
+        const d = config.data as string[][] | undefined;
+        if (Array.isArray(d) && d.length > 0) return d.map((r) => Array.isArray(r) ? r.map(String) : []);
+        return defaultTemplate.rows;
+    });
+    const [jsonText, setJsonText] = useState('');
+    const [jsonError, setJsonError] = useState<string | null>(null);
+
+    // Sync to component config
+    const applyTableData = (nextHeaders: string[], nextRows: string[][]) => {
+        updateComponent(component.id, { config: { ...config, header: nextHeaders, data: nextRows } });
+    };
+
+    const updateCell = (rowIdx: number, colIdx: number, value: string) => {
+        const next = rows.map((r, ri) => ri === rowIdx ? r.map((c, ci) => ci === colIdx ? value : c) : [...r]);
+        setRows(next);
+        applyTableData(headers, next);
+    };
+
+    const updateHeader = (colIdx: number, value: string) => {
+        const next = headers.map((h, i) => i === colIdx ? value : h);
+        setHeaders(next);
+        applyTableData(next, rows);
+    };
+
+    const addRow = () => {
+        const next = [...rows, headers.map(() => '')];
+        setRows(next);
+        applyTableData(headers, next);
+    };
+
+    const deleteRow = (idx: number) => {
+        if (rows.length <= 1) return;
+        const next = rows.filter((_, i) => i !== idx);
+        setRows(next);
+        applyTableData(headers, next);
+    };
+
+    const addColumn = () => {
+        const nextH = [...headers, '新列'];
+        const nextR = rows.map((r) => [...r, '']);
+        setHeaders(nextH);
+        setRows(nextR);
+        applyTableData(nextH, nextR);
+    };
+
+    const deleteColumn = (idx: number) => {
+        if (headers.length <= 1) return;
+        const nextH = headers.filter((_, i) => i !== idx);
+        const nextR = rows.map((r) => r.filter((_, i) => i !== idx));
+        setHeaders(nextH);
+        setRows(nextR);
+        applyTableData(nextH, nextR);
+    };
+
+    const switchToJson = () => {
+        setJsonText(JSON.stringify([headers, ...rows], null, 2));
+        setJsonError(null);
+        setMode('json');
+    };
+
+    const applyJson = () => {
+        try {
+            const parsed = JSON.parse(jsonText);
+            if (!Array.isArray(parsed) || parsed.length < 1) throw new Error('需要至少一行（表头）');
+            const h = parsed[0].map(String);
+            const d = parsed.slice(1).map((r: unknown[]) => {
+                const row = Array.isArray(r) ? r.map(String) : [];
+                while (row.length < h.length) row.push('');
+                return row.slice(0, h.length);
+            });
+            setHeaders(h);
+            setRows(d.length > 0 ? d : [h.map(() => '')]);
+            applyTableData(h, d.length > 0 ? d : [h.map(() => '')]);
+            setJsonError(null);
+            setMode('table');
+        } catch (e) {
+            setJsonError(e instanceof Error ? e.message : 'JSON 错误');
+        }
+    };
+
+    return (
+        <>
+            <div className="property-section-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6 }}>
+                <span>静态数据</span>
+                <span style={{ display: 'flex', gap: 8 }}>
+                    <button type="button" style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: 11 }}
+                        onClick={() => { setHeaders(defaultTemplate.headers); setRows(defaultTemplate.rows); applyTableData(defaultTemplate.headers, defaultTemplate.rows); }}
+                        title="重置为当前组件类型的示例数据"
+                    >重置模板</button>
+                    <button type="button" style={{ background: 'none', border: 'none', color: 'var(--color-primary, #509EE3)', cursor: 'pointer', fontSize: 11 }}
+                        onClick={() => mode === 'table' ? switchToJson() : setMode('table')}
+                    >{mode === 'table' ? 'JSON' : '表格'}</button>
+                </span>
+            </div>
+
+            {mode === 'table' ? (
+                <div style={{ border: '1px solid var(--color-border, #e5e7eb)', borderRadius: 6, overflow: 'auto', maxHeight: 320 }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                        <thead>
+                            <tr>
+                                <th style={{ width: 28, padding: '4px 2px', background: 'var(--color-bg-secondary, #f4f7fb)', borderBottom: '1px solid var(--color-border, #e5e7eb)', fontSize: 10, color: '#999' }}>#</th>
+                                {headers.map((h, ci) => (
+                                    <th key={ci} style={{ padding: 0, background: 'var(--color-bg-secondary, #f4f7fb)', borderBottom: '1px solid var(--color-border, #e5e7eb)', position: 'relative' }}>
+                                        <input
+                                            type="text"
+                                            value={h}
+                                            onChange={(e) => updateHeader(ci, e.target.value)}
+                                            style={{ width: '100%', border: 'none', background: 'transparent', padding: '6px 8px', fontSize: 12, fontWeight: 600, outline: 'none', boxSizing: 'border-box' }}
+                                        />
+                                        {headers.length > 1 && (
+                                            <button type="button" onClick={() => deleteColumn(ci)}
+                                                style={{ position: 'absolute', top: 0, right: 2, background: 'none', border: 'none', color: '#ccc', cursor: 'pointer', fontSize: 10, lineHeight: 1 }}
+                                                title="删除列">×</button>
+                                        )}
+                                    </th>
+                                ))}
+                                <th style={{ width: 28, padding: 0, background: 'var(--color-bg-secondary, #f4f7fb)', borderBottom: '1px solid var(--color-border, #e5e7eb)' }}>
+                                    <button type="button" onClick={addColumn}
+                                        style={{ background: 'none', border: 'none', color: 'var(--color-primary, #509EE3)', cursor: 'pointer', fontSize: 14, padding: '2px 6px' }}
+                                        title="添加列">+</button>
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {rows.map((row, ri) => (
+                                <tr key={ri}>
+                                    <td style={{ padding: '2px 4px', textAlign: 'center', fontSize: 10, color: '#999', borderBottom: '1px solid var(--color-border, #e5e7eb)', userSelect: 'none' }}>
+                                        {ri + 1}
+                                    </td>
+                                    {row.slice(0, headers.length).map((cell, ci) => (
+                                        <td key={ci} style={{ padding: 0, borderBottom: '1px solid var(--color-border, #e5e7eb)' }}>
+                                            <input
+                                                type="text"
+                                                value={cell}
+                                                onChange={(e) => updateCell(ri, ci, e.target.value)}
+                                                style={{ width: '100%', border: 'none', background: 'transparent', padding: '5px 8px', fontSize: 12, outline: 'none', boxSizing: 'border-box' }}
+                                            />
+                                        </td>
+                                    ))}
+                                    <td style={{ padding: 0, textAlign: 'center', borderBottom: '1px solid var(--color-border, #e5e7eb)' }}>
+                                        {rows.length > 1 && (
+                                            <button type="button" onClick={() => deleteRow(ri)}
+                                                style={{ background: 'none', border: 'none', color: '#ccc', cursor: 'pointer', fontSize: 12 }}
+                                                title="删除行">×</button>
+                                        )}
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                    <div style={{ padding: '4px 8px', borderTop: '1px solid var(--color-border, #e5e7eb)' }}>
+                        <button type="button" onClick={addRow}
+                            style={{ background: 'none', border: '1px dashed var(--color-border, #d1d5db)', borderRadius: 4, padding: '3px 12px', cursor: 'pointer', fontSize: 11, color: 'var(--color-primary, #509EE3)', width: '100%' }}
+                        >+ 添加行</button>
+                    </div>
+                </div>
+            ) : (
+                <div>
+                    <textarea
+                        className="property-input"
+                        style={{ width: '100%', height: 200, fontFamily: 'monospace', fontSize: 11, resize: 'vertical' }}
+                        value={jsonText}
+                        onChange={(e) => { setJsonText(e.target.value); setJsonError(null); }}
+                        spellCheck={false}
+                    />
+                    {jsonError && <div style={{ color: '#ef4444', fontSize: 11, marginTop: 4 }}>{jsonError}</div>}
+                    <button type="button" className="property-btn" style={{ marginTop: 6, width: '100%' }} onClick={applyJson}>
+                        应用 JSON
+                    </button>
+                </div>
+            )}
+
+            <div style={{ fontSize: 10, color: '#94a3b8', padding: '4px 0', lineHeight: 1.4 }}>
+                {headers.length} 列 × {rows.length} 行
+                {STATIC_DATA_HINTS[componentType] && (
+                    <span style={{ display: 'block', marginTop: 2, color: '#60a5fa' }}>
+                        格式：{STATIC_DATA_HINTS[componentType]}
+                    </span>
+                )}
+            </div>
         </>
     );
 }

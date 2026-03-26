@@ -1,7 +1,7 @@
 import React, { useState, useRef, useCallback, useMemo } from 'react';
 import * as XLSX from 'xlsx';
 import Papa from 'papaparse';
-import { analyticsApi } from '../../../../api/analyticsApi';
+import { analyticsApi } from '../../../api/analyticsApi';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */

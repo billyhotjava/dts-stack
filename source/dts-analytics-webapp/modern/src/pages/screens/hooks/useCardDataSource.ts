@@ -12,11 +12,29 @@ interface CardDataSourceResult {
 }
 
 const CACHE_TTL_MS = 5000;
+const CACHE_MAX_ENTRIES = 200;
+const CACHE_CLEANUP_INTERVAL_MS = 30000;
 const DEFAULT_CARD_TIMEOUT_MS = 30000;
 const DEFAULT_DATASET_TIMEOUT_MS = 30000;
 const DEFAULT_API_TIMEOUT_MS = 20000;
 const cacheStore = new Map<string, { expiresAt: number; data: CardData }>();
 const inflightStore = new Map<string, Promise<CardData>>();
+
+// Periodic cache cleanup to prevent memory leaks
+if (typeof window !== 'undefined') {
+    setInterval(() => {
+        const now = Date.now();
+        for (const [key, entry] of cacheStore) {
+            if (entry.expiresAt <= now) cacheStore.delete(key);
+        }
+        // LRU eviction if cache exceeds max entries
+        if (cacheStore.size > CACHE_MAX_ENTRIES) {
+            const entries = Array.from(cacheStore.entries()).sort((a, b) => a[1].expiresAt - b[1].expiresAt);
+            const toRemove = entries.slice(0, cacheStore.size - CACHE_MAX_ENTRIES);
+            for (const [key] of toRemove) cacheStore.delete(key);
+        }
+    }, CACHE_CLEANUP_INTERVAL_MS);
+}
 
 type CardDataColumn = CardData['cols'][number];
 
@@ -166,11 +184,12 @@ function parseDatabaseId(dataSource?: DataSourceConfig): number | null {
     return n;
 }
 
-function resolveSourceType(dataSource?: DataSourceConfig): 'static' | 'card' | 'api' | 'sql' | 'dataset' | 'metric' {
+function resolveSourceType(dataSource?: DataSourceConfig): 'static' | 'card' | 'api' | 'sql' | 'dataset' | 'metric' | 'uploaded' {
     if (!dataSource) return 'static';
     const sourceType = ((dataSource.sourceType ?? dataSource.type) || '').toLowerCase();
     if (!sourceType || sourceType === 'static') return 'static';
     if (sourceType === 'database' || sourceType === 'sql') return 'sql';
+    if (sourceType === 'uploaded' || dataSource.uploadedConfig?.datasetId) return 'uploaded';
     if (sourceType === 'card' || sourceType === 'api' || sourceType === 'dataset' || sourceType === 'metric') {
         return sourceType;
     }
@@ -218,7 +237,7 @@ function mergeBindingsWithRuntime(
 }
 
 function getCacheKey(
-    sourceType: 'static' | 'card' | 'api' | 'sql' | 'dataset' | 'metric',
+    sourceType: 'static' | 'card' | 'api' | 'sql' | 'dataset' | 'metric' | 'uploaded',
     dataSource: DataSourceConfig | undefined,
     cardId: number | undefined,
     databaseId: number | null,
@@ -271,11 +290,17 @@ function getCacheKey(
         ].join(':');
     }
 
+    if (sourceType === 'uploaded') {
+        const datasetId = dataSource.uploadedConfig?.datasetId;
+        if (!datasetId) return null;
+        return `uploaded:${datasetId}`;
+    }
+
     return null;
 }
 
 function resolveQueryTimeoutMs(
-    sourceType: 'static' | 'card' | 'api' | 'sql' | 'dataset' | 'metric',
+    sourceType: 'static' | 'card' | 'api' | 'sql' | 'dataset' | 'metric' | 'uploaded',
     dataSource?: DataSourceConfig,
 ): number {
     if (sourceType === 'sql') {
@@ -583,6 +608,21 @@ export function useCardDataSource(
                                 throw new Error(String(result.error));
                             }
                             return toCardData(result.data ?? result);
+                        }
+
+                        if (sourceType === 'uploaded') {
+                            const datasetId = dataSource?.uploadedConfig?.datasetId;
+                            if (!datasetId) {
+                                // No dataset bound yet — return empty data
+                                return { rows: [], cols: [] };
+                            }
+                            const result = await analyticsApi.getScreenDatasetData(datasetId);
+                            const cols = (result.cols || []).map((c: { name: string; displayName?: string; type?: string }) => ({
+                                name: c.name,
+                                display_name: c.displayName || c.name,
+                                base_type: c.type === 'number' ? 'type/Integer' : c.type === 'date' ? 'type/DateTime' : 'type/Text',
+                            }));
+                            return { rows: result.rows || [], cols };
                         }
 
                         throw new Error(`暂不支持的数据源类型: ${String(sourceType)}`);
