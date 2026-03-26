@@ -6382,6 +6382,30 @@ function TableConfig({ component, onChange }: {
                 />
             </div>
             <div className="property-row">
+                <label className="property-label">表头字号</label>
+                <input
+                    type="number"
+                    className="property-input"
+                    min={10}
+                    max={36}
+                    value={(config.headerFontSize as number) || (config.fontSize as number) || 13}
+                    onChange={(e) => onChange('headerFontSize', Number(e.target.value))}
+                />
+            </div>
+            <div className="property-row">
+                <label className="property-label">表头对齐</label>
+                <select
+                    className="property-input"
+                    value={(config.headerAlign as string) || ''}
+                    onChange={(e) => onChange('headerAlign', e.target.value || undefined)}
+                >
+                    <option value="">跟随列对齐</option>
+                    <option value="left">左对齐</option>
+                    <option value="center">居中</option>
+                    <option value="right">右对齐</option>
+                </select>
+            </div>
+            <div className="property-row">
                 <label className="property-label">表头颜色</label>
                 <input
                     type="color"

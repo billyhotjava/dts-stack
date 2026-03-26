@@ -1608,8 +1608,8 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                     );
                 }
                 const { header: displayHeader, data: displayData, columnMeta } = resolveBoundTableData(c, { defaultAlign: 'left' });
-                const fontSize = (c.fontSize as number) || 16;
-                const headerFontSize = (c.headerFontSize as number) || fontSize;
+                const fontSize = Number(c.fontSize) || 16;
+                const headerFontSize = Number(c.headerFontSize) || fontSize;
                 const headerColor = resolveTextColor(c.headerColor as string | undefined, t.textPrimary);
                 const headerBackground = (c.headerBackground as string) || 'rgba(148, 163, 184, 0.16)';
                 const bodyColor = resolveTextColor(c.bodyColor as string | undefined, t.textSecondary);
@@ -1641,7 +1641,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                 return (
                     <div style={{ width: '100%', height: '100%', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
                         <div style={{ flex: 1, overflow: 'auto' }}>
-                        <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', fontSize }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
                             {displayHeader.length > 0 && (
                                 <thead>
                                     <tr style={{ background: headerBackground }}>
@@ -1692,6 +1692,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                                                         border: 'none',
                                                         background: 'transparent',
                                                         color: headerColor,
+                                                        fontSize: 'inherit',
                                                         fontWeight: 600,
                                                         cursor: enableSort ? 'pointer' : 'default',
                                                         display: 'inline-flex',
@@ -1752,6 +1753,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                                             const cellBackground = conditional.background || rowBackground;
                                             return (
                                                 <td key={colIndex} style={{
+                                                    fontSize,
                                                     color: conditional.color || bodyColor,
                                                     background: cellBackground,
                                                     borderBottom: '1px solid ' + borderColor,
