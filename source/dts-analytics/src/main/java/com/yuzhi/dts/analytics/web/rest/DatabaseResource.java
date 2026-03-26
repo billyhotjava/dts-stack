@@ -13,6 +13,7 @@ import com.yuzhi.dts.analytics.repository.AnalyticsTableRepository;
 import com.yuzhi.dts.analytics.service.AnalyticsSessionService;
 import com.yuzhi.dts.analytics.service.JdbcDetailsResolver;
 import com.yuzhi.dts.analytics.service.MetadataSyncService;
+import com.yuzhi.dts.analytics.service.DatabaseUploadTableService;
 import com.yuzhi.dts.analytics.service.ExternalDatabaseDataSourceRegistry;
 import com.yuzhi.dts.analytics.service.PlatformInfraClient;
 import com.yuzhi.dts.analytics.web.support.MetabaseAuth;
@@ -59,6 +60,7 @@ public class DatabaseResource {
     private final JdbcDetailsResolver jdbcDetailsResolver;
     private final PlatformInfraClient platformInfraClient;
     private final ExternalDatabaseDataSourceRegistry dataSourceRegistry;
+    private final DatabaseUploadTableService uploadTableService;
     private final ObjectMapper objectMapper;
 
     public DatabaseResource(
@@ -70,6 +72,7 @@ public class DatabaseResource {
             JdbcDetailsResolver jdbcDetailsResolver,
             PlatformInfraClient platformInfraClient,
             ExternalDatabaseDataSourceRegistry dataSourceRegistry,
+            DatabaseUploadTableService uploadTableService,
             ObjectMapper objectMapper) {
         this.sessionService = sessionService;
         this.databaseRepository = databaseRepository;
@@ -79,6 +82,7 @@ public class DatabaseResource {
         this.jdbcDetailsResolver = jdbcDetailsResolver;
         this.platformInfraClient = platformInfraClient;
         this.dataSourceRegistry = dataSourceRegistry;
+        this.uploadTableService = uploadTableService;
         this.objectMapper = objectMapper;
     }
 
@@ -439,6 +443,43 @@ public class DatabaseResource {
         return ResponseEntity.ok(toDatabaseGet(db, true));
     }
 
+    @PostMapping(path = "/{dbId}/upload-table", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> uploadTable(
+            @PathVariable("dbId") long dbId,
+            @RequestBody UploadTableRequest body,
+            HttpServletRequest request) {
+        Optional<ResponseEntity<String>> auth = MetabaseAuth.requireUser(sessionService, request);
+        if (auth.isPresent()) {
+            return auth.get();
+        }
+        if (!databaseRepository.existsById(dbId)) {
+            return ResponseEntity.notFound().build();
+        }
+        if (body == null || body.tableName() == null || body.tableName().isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("errors", Map.of("tableName", "表名不能为空")));
+        }
+        if (body.columns() == null || body.columns().isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("errors", Map.of("columns", "列定义不能为空")));
+        }
+
+        List<DatabaseUploadTableService.ColumnDef> columns = body.columns().stream()
+                .map(c -> new DatabaseUploadTableService.ColumnDef(c.name(), c.displayName(), c.type()))
+                .toList();
+
+        try {
+            DatabaseUploadTableService.UploadResult result = uploadTableService.uploadTable(
+                    dbId, body.tableName(), columns, body.rows());
+            return ResponseEntity.ok(Map.of(
+                    "tableName", result.tableName(),
+                    "schema", result.schema(),
+                    "rowCount", result.rowCount()));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("errors", Map.of("database", e.getMessage())));
+        } catch (SQLException e) {
+            return ResponseEntity.internalServerError().body(Map.of("error", "上传表失败: " + e.getMessage()));
+        }
+    }
+
     @PostMapping(path = "/validate", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> validateConnection(@RequestBody DatabaseRequest request, HttpServletRequest servletRequest) {
         Optional<ResponseEntity<String>> auth = MetabaseAuth.requireSuperuser(sessionService, servletRequest);
@@ -783,4 +824,14 @@ public class DatabaseResource {
             @JsonProperty("auto_run_queries") Boolean autoRunQueries,
             @JsonProperty("is_full_sync") Boolean isFullSync,
             @JsonProperty("is_on_demand") Boolean isOnDemand) {}
+
+    public record UploadTableRequest(
+            @JsonProperty("tableName") String tableName,
+            @JsonProperty("columns") List<UploadColumnDef> columns,
+            @JsonProperty("rows") List<List<Object>> rows) {}
+
+    public record UploadColumnDef(
+            @JsonProperty("name") String name,
+            @JsonProperty("displayName") String displayName,
+            @JsonProperty("type") String type) {}
 }
