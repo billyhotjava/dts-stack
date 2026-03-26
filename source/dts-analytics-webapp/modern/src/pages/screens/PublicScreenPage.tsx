@@ -304,7 +304,7 @@ export default function PublicScreenPage() {
                                 style={{
                                     width: screenWidth,
                                     height: screenHeight,
-                                    backgroundColor: carousel.currentPageBgColor || screen.backgroundColor || '#0d1b2a',
+                                    backgroundColor: carousel.currentPageBgColor || screen.backgroundColor || '#1e1f26',
                                     backgroundImage: safeCssBackgroundUrl(carousel.currentPageBgImage || screen.backgroundImage),
                                     backgroundSize: 'cover',
                                     backgroundPosition: 'center',

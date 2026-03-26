@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { useScreen } from '../ScreenContext';
 
 export function LayerPanel() {
@@ -7,6 +7,8 @@ export function LayerPanel() {
     const [keyword, setKeyword] = useState('');
     const [bulkAction, setBulkAction] = useState<'show' | 'hide' | 'lock' | 'unlock' | 'top' | 'bottom'>('show');
     const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+    const [dragOverId, setDragOverId] = useState<string | null>(null);
+    const dragSourceId = useRef<string | null>(null);
 
     useEffect(() => {
         const handlePointerDown = (event: MouseEvent) => {
@@ -86,6 +88,45 @@ export function LayerPanel() {
     const handleLockToggle = (id: string, locked: boolean) => {
         dispatch({ type: 'UPDATE_COMPONENT', payload: { id, updates: { locked: !locked } } });
     };
+
+    const handleDragStart = useCallback((e: React.DragEvent, id: string) => {
+        dragSourceId.current = id;
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', id);
+        (e.currentTarget as HTMLElement).style.opacity = '0.4';
+    }, []);
+
+    const handleDragEnd = useCallback((e: React.DragEvent) => {
+        (e.currentTarget as HTMLElement).style.opacity = '1';
+        dragSourceId.current = null;
+        setDragOverId(null);
+    }, []);
+
+    const handleDragOver = useCallback((e: React.DragEvent, id: string) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        if (id !== dragSourceId.current) {
+            setDragOverId(id);
+        }
+    }, []);
+
+    const handleDrop = useCallback((e: React.DragEvent, targetId: string) => {
+        e.preventDefault();
+        setDragOverId(null);
+        const sourceId = dragSourceId.current;
+        if (!sourceId || sourceId === targetId) return;
+        const sorted = config.components.slice().sort((a, b) => b.zIndex - a.zIndex);
+        const sourceIdx = sorted.findIndex(c => c.id === sourceId);
+        const targetIdx = sorted.findIndex(c => c.id === targetId);
+        if (sourceIdx < 0 || targetIdx < 0) return;
+        const [moved] = sorted.splice(sourceIdx, 1);
+        sorted.splice(targetIdx, 0, moved);
+        const nextComponents = sorted.map((c, i) => ({
+            ...c,
+            zIndex: sorted.length - i,
+        }));
+        dispatch({ type: 'SET_CONFIG', payload: { ...config, components: nextComponents } });
+    }, [config, dispatch]);
 
     const getComponentIcon = (type: string): string => {
         const iconMap: Record<string, string> = {
@@ -249,8 +290,14 @@ export function LayerPanel() {
                     {filteredLayered.map(({ component, depth }) => (
                         <div
                             key={component.id}
-                            className={`layer-item ${selectedIds.includes(component.id) ? 'selected' : ''} ${component.visible ? '' : 'is-hidden'}`}
+                            className={`layer-item ${selectedIds.includes(component.id) ? 'selected' : ''} ${component.visible ? '' : 'is-hidden'} ${dragOverId === component.id ? 'drag-over' : ''}`}
                             onClick={(e) => handleLayerClick(component.id, e)}
+                            draggable
+                            onDragStart={(e) => handleDragStart(e, component.id)}
+                            onDragEnd={handleDragEnd}
+                            onDragOver={(e) => handleDragOver(e, component.id)}
+                            onDrop={(e) => handleDrop(e, component.id)}
+                            onDragLeave={() => setDragOverId(null)}
                             style={{
                                 '--layer-depth': String(depth),
                             } as CSSProperties}

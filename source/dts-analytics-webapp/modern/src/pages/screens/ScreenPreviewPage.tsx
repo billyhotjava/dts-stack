@@ -6,6 +6,7 @@ import { DeviceModeSwitcher } from './components/DeviceModeSwitcher';
 import { PreviewScaleControl } from './components/PreviewScaleControl';
 import { RuntimeActionPanel } from './components/RuntimeActionPanel';
 import { ScreenRuntimeProvider } from './ScreenRuntimeContext';
+import { SharedStoreProvider } from './hooks/useSharedStore';
 import type { ScreenConfig, ScreenTheme } from './types';
 import { resolveScreenTheme } from './screenThemes';
 import { applyThemeCssVariables } from './themes/screenCssVariables';
@@ -15,6 +16,7 @@ import { safeCssBackgroundUrl } from './sanitize';
 import { useScreenCarousel } from './hooks/useScreenCarousel';
 import { resolveRuntimeScale } from './runtimeScale';
 import { resolveRuntimeCanvasScaleStyle } from './runtimeCanvasStyle';
+import { ScaleAdapter, type ScaleMode } from './renderers/ScaleAdapter';
 import {
     isVisibleForDevice,
     parseForcedDeviceModeFromWindow,
@@ -25,6 +27,29 @@ import {
 import './ScreenRuntimeShell.css';
 
 const PREVIEW_BATCH_SIZE = 20;
+
+const ENTRY_ANIMATION_KEYFRAMES: Record<string, string> = {
+    fadeIn: 'screen-anim-fadeIn',
+    slideUp: 'screen-anim-slideUp',
+    slideDown: 'screen-anim-slideDown',
+    slideLeft: 'screen-anim-slideLeft',
+    slideRight: 'screen-anim-slideRight',
+    zoomIn: 'screen-anim-zoomIn',
+    bounceIn: 'screen-anim-bounceIn',
+    rotateIn: 'screen-anim-rotateIn',
+};
+
+function resolveEntryAnimationStyle(config: Record<string, unknown>): React.CSSProperties | undefined {
+    const type = String(config.animationType ?? 'none');
+    const animName = ENTRY_ANIMATION_KEYFRAMES[type];
+    if (!animName) return undefined;
+    const duration = Number(config.animationDuration ?? 600);
+    const delay = Number(config.animationDelay ?? 0);
+    const easing = String(config.animationEasing ?? 'ease');
+    return {
+        animation: `${animName} ${duration}ms ${easing} ${delay}ms both`,
+    };
+}
 
 export default function ScreenPreviewPage() {
     const { id } = useParams<{ id: string }>();
@@ -37,6 +62,11 @@ export default function ScreenPreviewPage() {
     const [deviceMode, setDeviceMode] = useState<DeviceMode>('pc');
     const [forcedDeviceMode, setForcedDeviceMode] = useState<DeviceMode | null>(null);
     const [visibleCount, setVisibleCount] = useState(PREVIEW_BATCH_SIZE);
+    // ScaleAdapter mode: activated via ?scaleMode=fit|fill|stretch
+    const scaleModeParam = useMemo(() => {
+        const p = new URLSearchParams(window.location.search).get('scaleMode');
+        return (p === 'fit' || p === 'fill' || p === 'stretch') ? p as ScaleMode : null;
+    }, []);
     const [fabOpen, setFabOpen] = useState(false);
     const scrollContainerRef = useRef<HTMLDivElement | null>(null);
     const fabRef = useRef<HTMLDivElement | null>(null);
@@ -310,11 +340,29 @@ export default function ScreenPreviewPage() {
 
     return (
         <ScreenRuntimeProvider definitions={screen.globalVariables ?? []}>
+        <SharedStoreProvider>
         <div
             data-testid="analytics-screen-preview"
             className={`screen-runtime screen-runtime--fullscreen ${screenTheme === 'glacier' ? 'screen-runtime--light' : 'screen-runtime--dark'}`}
         >
             <div ref={scrollContainerRef} className="screen-runtime__scroll">
+                {scaleModeParam ? (
+                <ScaleAdapter designWidth={screenWidth} designHeight={screenHeight} mode={scaleModeParam} className="screen-runtime__viewport">
+                    <div ref={canvasRef} className="screen-runtime__canvas" style={{
+                        width: screenWidth, height: screenHeight,
+                        backgroundColor: carousel.currentPageBgColor || screen.backgroundColor || '#1e1f26',
+                        backgroundImage: safeCssBackgroundUrl(carousel.currentPageBgImage || screen.backgroundImage),
+                        backgroundSize: 'cover', backgroundPosition: 'center',
+                        position: 'relative', overflow: 'hidden',
+                    }}>
+                        {visibleSortedComponents.map((comp) => (
+                            <div key={comp.id} style={{ position: 'absolute', left: comp.x, top: comp.y, width: comp.width, height: comp.height, zIndex: comp.zIndex, ...resolveEntryAnimationStyle(comp.config) }}>
+                                <ComponentRenderer component={comp} mode="preview" theme={screenTheme} />
+                            </div>
+                        ))}
+                    </div>
+                </ScaleAdapter>
+                ) : (
                 <div className="screen-runtime__viewport">
                     <div className="screen-runtime__stage" style={{ width: stageWidth, height: stageHeight }}>
                         <div className="screen-runtime__canvas-shell">
@@ -324,7 +372,7 @@ export default function ScreenPreviewPage() {
                             style={{
                                 width: screenWidth,
                                 height: screenHeight,
-                                backgroundColor: carousel.currentPageBgColor || screen.backgroundColor || '#0d1b2a',
+                                backgroundColor: carousel.currentPageBgColor || screen.backgroundColor || '#1e1f26',
                                 backgroundImage: safeCssBackgroundUrl(carousel.currentPageBgImage || screen.backgroundImage),
                                 backgroundSize: 'cover',
                                 backgroundPosition: 'center',
@@ -348,6 +396,7 @@ export default function ScreenPreviewPage() {
                                             width: component.width,
                                             height: component.height,
                                             zIndex: component.zIndex,
+                                            ...resolveEntryAnimationStyle(component.config),
                                         }}
                                     >
                                         <ComponentRenderer component={component} mode="preview" theme={screenTheme} />
@@ -363,6 +412,7 @@ export default function ScreenPreviewPage() {
                         </div>
                     </div>
                 </div>
+                )}
                 {/* Carousel page indicator */}
                 {carousel.pageCount > 1 && (
                     <div className="screen-runtime__pager">
@@ -448,6 +498,7 @@ export default function ScreenPreviewPage() {
                 )}
             </div>
         </div>
+        </SharedStoreProvider>
         </ScreenRuntimeProvider>
     );
 }

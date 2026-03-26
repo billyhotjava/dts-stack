@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { ScreenGlobalVariable } from './types';
+import { useDrillView, type DrillViewState } from './hooks/useDrillView';
 
 export type RuntimeEventKind = 'variable' | 'filter' | 'interaction' | 'drill-down' | 'drill-up' | 'jump' | 'action' | 'panel' | 'intent';
 
@@ -30,6 +31,7 @@ interface ScreenRuntimeContextValue {
     values: Record<string, string>;
     panel: RuntimeActionPanelState;
     runtimeMeta?: ScreenRuntimeMeta;
+    drillView: DrillViewState;
     getEvents: () => RuntimeVariableEvent[];
     setVariable: (key: string, value: string, source?: string) => void;
     openPanel: (title: string, body: string, source?: string) => void;
@@ -43,24 +45,27 @@ const emptyPanel: RuntimeActionPanelState = {
     body: '',
 };
 
+const emptyDrillView: DrillViewState = {
+    activeViewId: null,
+    breadcrumbs: [],
+    drillToView: () => {},
+    navigateToLevel: () => {},
+    navigateToRoot: () => {},
+    depth: 0,
+    currentParams: {},
+};
+
 const emptyValue: ScreenRuntimeContextValue = {
     definitions: [],
     values: {},
     panel: emptyPanel,
     runtimeMeta: undefined,
+    drillView: emptyDrillView,
     getEvents: () => [],
-    setVariable: () => {
-        // no-op for unwrapped usage
-    },
-    openPanel: () => {
-        // no-op for unwrapped usage
-    },
-    closePanel: () => {
-        // no-op for unwrapped usage
-    },
-    trackEvent: () => {
-        // no-op for unwrapped usage
-    },
+    setVariable: () => {},
+    openPanel: () => {},
+    closePanel: () => {},
+    trackEvent: () => {},
 };
 
 const ScreenRuntimeContext = createContext<ScreenRuntimeContextValue>(emptyValue);
@@ -77,6 +82,7 @@ function normalizeDefinitions(definitions: ScreenGlobalVariable[] | undefined): 
             type: item.type === 'number' || item.type === 'date' ? item.type : 'string',
             defaultValue: item.defaultValue ?? '',
             description: item.description,
+            dependsOn: item.dependsOn,
         });
     }
     return Array.from(dedup.values());
@@ -106,6 +112,7 @@ export function ScreenRuntimeProvider({
     const normalizedDefinitions = useMemo(() => normalizeDefinitions(definitions), [definitions]);
     const [values, setValues] = useState<Record<string, string>>({});
     const [events, setEvents] = useState<RuntimeVariableEvent[]>([]);
+    const drillView = useDrillView();
     const [panel, setPanel] = useState<RuntimeActionPanelState>(emptyPanel);
 
     // Phase 1.5: use ref for events so context consumers don't re-render on every event
@@ -128,6 +135,7 @@ export function ScreenRuntimeProvider({
         values,
         panel,
         runtimeMeta,
+        drillView,
         getEvents: () => eventsRef.current,
         trackEvent: (event) => {
             const safeKey = (event.key || '').trim() || '__event__';
@@ -181,7 +189,7 @@ export function ScreenRuntimeProvider({
         closePanel: () => {
             setPanel(emptyPanel);
         },
-    }), [normalizedDefinitions, panel, runtimeMeta, values]); // events removed from deps
+    }), [drillView, normalizedDefinitions, panel, runtimeMeta, values]); // events removed from deps
 
     return <ScreenRuntimeContext.Provider value={contextValue}>{children}</ScreenRuntimeContext.Provider>;
 }

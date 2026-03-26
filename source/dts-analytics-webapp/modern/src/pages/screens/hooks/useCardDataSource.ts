@@ -184,12 +184,11 @@ function parseDatabaseId(dataSource?: DataSourceConfig): number | null {
     return n;
 }
 
-function resolveSourceType(dataSource?: DataSourceConfig): 'static' | 'card' | 'api' | 'sql' | 'dataset' | 'metric' | 'uploaded' {
+function resolveSourceType(dataSource?: DataSourceConfig): 'static' | 'card' | 'api' | 'sql' | 'dataset' | 'metric' {
     if (!dataSource) return 'static';
     const sourceType = ((dataSource.sourceType ?? dataSource.type) || '').toLowerCase();
     if (!sourceType || sourceType === 'static') return 'static';
     if (sourceType === 'database' || sourceType === 'sql') return 'sql';
-    if (sourceType === 'uploaded' || dataSource.uploadedConfig?.datasetId) return 'uploaded';
     if (sourceType === 'card' || sourceType === 'api' || sourceType === 'dataset' || sourceType === 'metric') {
         return sourceType;
     }
@@ -237,7 +236,7 @@ function mergeBindingsWithRuntime(
 }
 
 function getCacheKey(
-    sourceType: 'static' | 'card' | 'api' | 'sql' | 'dataset' | 'metric' | 'uploaded',
+    sourceType: 'static' | 'card' | 'api' | 'sql' | 'dataset' | 'metric',
     dataSource: DataSourceConfig | undefined,
     cardId: number | undefined,
     databaseId: number | null,
@@ -290,17 +289,11 @@ function getCacheKey(
         ].join(':');
     }
 
-    if (sourceType === 'uploaded') {
-        const datasetId = dataSource.uploadedConfig?.datasetId;
-        if (!datasetId) return null;
-        return `uploaded:${datasetId}`;
-    }
-
     return null;
 }
 
 function resolveQueryTimeoutMs(
-    sourceType: 'static' | 'card' | 'api' | 'sql' | 'dataset' | 'metric' | 'uploaded',
+    sourceType: 'static' | 'card' | 'api' | 'sql' | 'dataset' | 'metric',
     dataSource?: DataSourceConfig,
 ): number {
     if (sourceType === 'sql') {
@@ -608,21 +601,6 @@ export function useCardDataSource(
                                 throw new Error(String(result.error));
                             }
                             return toCardData(result.data ?? result);
-                        }
-
-                        if (sourceType === 'uploaded') {
-                            const datasetId = dataSource?.uploadedConfig?.datasetId;
-                            if (!datasetId) {
-                                // No dataset bound yet — return empty data
-                                return { rows: [], cols: [] };
-                            }
-                            const result = await analyticsApi.getScreenDatasetData(datasetId);
-                            const cols = (result.cols || []).map((c: { name: string; displayName?: string; type?: string }) => ({
-                                name: c.name,
-                                display_name: c.displayName || c.name,
-                                base_type: c.type === 'number' ? 'type/Integer' : c.type === 'date' ? 'type/DateTime' : 'type/Text',
-                            }));
-                            return { rows: result.rows || [], cols };
                         }
 
                         throw new Error(`暂不支持的数据源类型: ${String(sourceType)}`);

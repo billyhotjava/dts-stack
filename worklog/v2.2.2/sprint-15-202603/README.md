@@ -1,7 +1,7 @@
 # Sprint-15: 大屏设计系统重构
 
 **时间**: 2026-03
-**状态**: READY
+**状态**: IN_PROGRESS
 **目标**: 重构大屏设计器核心架构——渲染器分层拆分、主题系统 CSS Variables 化、数据联动与下钻增强、布局自适应
 
 ## 背景
@@ -19,22 +19,29 @@
 
 | ID | Feature | Task 数 | 状态 |
 |----|---------|---------|------|
-| F1 | 渲染器分层拆分 | 3 | READY |
-| F2 | 主题系统 CSS Variables 化 | 3 | READY |
-| F3 | 数据联动与下钻增强 | 4 | READY |
-| F4 | 布局自适应 | 2 | READY |
-| F5 | 编辑器体验增强 | 5 | READY |
+| F1 | 渲染器分层拆分 | 3 | IN_PROGRESS — DataLayer/InteractionLayer 已抽出，ComponentRenderer 仍需进一步拆分 |
+| F2 | 主题系统 CSS Variables 化 | 3 | IN_PROGRESS — CSS Variables 注入已实现，自定义主题面板待开发 |
+| F3 | 数据联动与下钻增强 | 4 | IN_PROGRESS — hooks 已定义并接入运行链路，端到端验证待完成 |
+| F4 | 布局自适应 | 2 | DONE — ScaleAdapter 已实现并集成 |
+| F5 | 编辑器体验增强 | 5 | IN_PROGRESS — Tab重构/右键菜单/格式刷/动画/图层拖拽已完成，Table列宽拖拽待实现 |
+| F6 | 数据源增强 | 3 | IN_PROGRESS — 静态数据编辑器已完成，Excel上传待开发 |
+| F7 | 仪表盘图表统一为ECharts | 5 | IN_PROGRESS — ChartRenderer 已重构使用 ECharts |
 
 ## 完成标准
-- [ ] ComponentRenderer 从 4004 行拆分为 Shell(~100行) + 6 个族渲染器
-- [ ] 主题切换即时生效（包括 ECharts 图表颜色）
-- [ ] 内置主题从 3 个扩展到 6 个，支持用户自定义
-- [ ] 组件间可共享数据，变量支持级联
-- [ ] 新增 drill-view action，支持页内下钻
-- [ ] 运行时 ScaleAdapter 支持 fit/fill/stretch 三种适配
-- [ ] 现有大屏配置通过迁移脚本兼容
-- [ ] 网格线清晰 + 对齐辅助线
-- [ ] 格式刷可复制组件样式
-- [ ] Table 编辑器支持列宽和样式
-- [ ] 工具箱菜单分组更清晰
-- [ ] Chrome 95 兼容
+
+- [x] 编辑器强制暗色主题，统一 AvueData 风格
+- [x] 右侧面板从 2Tab 改为 5Tab（样式/数据/交互/图层/高级）
+- [x] Canvas 右键上下文菜单（复制/删除/置顶/锁定等）
+- [x] 工具栏分组优化 + 格式刷入口
+- [x] 组件库 3列卡片 + 分类标签过滤
+- [x] 入场动画配置（8种动画 + 自动编排）
+- [x] 图层面板拖拽排序
+- [x] 分辨率刻度尺（水平+垂直）
+- [x] SharedStoreProvider 接入预览运行链路
+- [x] useDrillView 接入 ScreenRuntimeContext
+- [x] DataLayer 支持 shared store 变量解析
+- [x] ComponentRenderer ECharts 懒加载提取为 useEChartsLoader (1969→1807行)（F1）
+- [x] 自定义主题编辑面板 — 空选时显示画布设置+6色自定义编辑器（F2）
+- [x] Table 列宽拖拽调整 — 表头分隔条拖拽（F5）
+- [ ] Excel/CSV 上传数据源（F6）
+- [ ] Chrome 95 兼容验证

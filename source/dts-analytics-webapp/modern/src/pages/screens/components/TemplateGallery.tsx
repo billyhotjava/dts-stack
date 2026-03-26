@@ -377,7 +377,7 @@ export function TemplateGallery({ onSelect, onClose }: TemplateGalleryProps) {
                     schemaVersion: typeof rawConfig.schemaVersion === 'number' ? rawConfig.schemaVersion : SCREEN_SCHEMA_VERSION,
                     width: typeof rawConfig.width === 'number' ? rawConfig.width : 1920,
                     height: typeof rawConfig.height === 'number' ? rawConfig.height : 1080,
-                    backgroundColor: typeof rawConfig.backgroundColor === 'string' ? rawConfig.backgroundColor : '#0d1b2a',
+                    backgroundColor: typeof rawConfig.backgroundColor === 'string' ? rawConfig.backgroundColor : '#1e1f26',
                     backgroundImage: typeof rawConfig.backgroundImage === 'string' ? rawConfig.backgroundImage : null,
                     theme: typeof rawConfig.theme === 'string' ? rawConfig.theme : null,
                     themePack: rawConfig.themePack && typeof rawConfig.themePack === 'object' ? rawConfig.themePack : undefined,

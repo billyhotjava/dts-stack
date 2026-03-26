@@ -236,6 +236,7 @@ export function ComponentLibraryPanel() {
 
     const recentCategory = useMemo<ComponentCategory | null>(() => {
         const items = recent
+            .slice(0, 5)
             .map((key) => componentIndex.get(key))
             .filter((item): item is ComponentItem => Boolean(item));
         if (items.length === 0) {
@@ -298,39 +299,23 @@ export function ComponentLibraryPanel() {
         setCollapsedCategories((prev) => prev.filter((item) => !visibleCategoryNames.includes(item)));
     };
 
+    const CATEGORY_TAGS = ['图表', '边框', '装饰', '数据展示', '文本', '筛选器', '媒体', '3D'] as const;
+    const [activeTag, setActiveTag] = useState<string>('');
+
+    const tagFilteredCategories = useMemo(() => {
+        if (!activeTag) return visibleCategories;
+        return visibleCategories.filter(c => c.name.includes(activeTag));
+    }, [visibleCategories, activeTag]);
+
     return (
         <div className="component-library">
             <div className="component-library-header">
-                <h3>组件库</h3>
-                <div style={{ fontSize: 11, opacity: 0.7 }}>插件: {plugins.length}</div>
-                <div className="component-library-scope-row">
-                    <button type="button" className={`component-library-scope-btn ${activeScope === 'all' ? 'active' : ''}`} onClick={() => setActiveScope('all')}>全部</button>
-                    <button type="button" className={`component-library-scope-btn ${activeScope === 'builtin' ? 'active' : ''}`} onClick={() => setActiveScope('builtin')}>内置</button>
-                    <button type="button" className={`component-library-scope-btn ${activeScope === 'plugin' ? 'active' : ''}`} onClick={() => setActiveScope('plugin')}>插件</button>
-                    <button type="button" className={`component-library-scope-btn ${activeScope === 'favorites' ? 'active' : ''}`} onClick={() => setActiveScope('favorites')}>常用({favorites.length})</button>
-                    <button type="button" className={`component-library-scope-btn ${activeScope === 'recent' ? 'active' : ''}`} onClick={() => setActiveScope('recent')}>最近({recent.length})</button>
-                </div>
-                <div className="component-library-scope-row">
-                    <button type="button" className="component-library-scope-btn" onClick={() => persistFavorites([])} disabled={favorites.length === 0}>清空常用</button>
-                    <button type="button" className="component-library-scope-btn" onClick={() => persistRecent([])} disabled={recent.length === 0}>清空最近</button>
-                </div>
-                <div className="component-library-scope-row">
-                    <button
-                        type="button"
-                        className="component-library-scope-btn"
-                        onClick={expandVisibleCategories}
-                        disabled={visibleCategoryNames.length === 0}
-                    >
-                        展开分类
-                    </button>
-                    <button
-                        type="button"
-                        className="component-library-scope-btn"
-                        onClick={collapseVisibleCategories}
-                        disabled={visibleCategoryNames.length === 0}
-                    >
-                        收起分类
-                    </button>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <h3 style={{ margin: 0 }}>组件库</h3>
+                    <div style={{ display: 'flex', gap: 4, fontSize: 10 }}>
+                        <button type="button" className="component-library-scope-btn" onClick={expandVisibleCategories} title="展开分类">▼</button>
+                        <button type="button" className="component-library-scope-btn" onClick={collapseVisibleCategories} title="收起分类">▲</button>
+                    </div>
                 </div>
                 <input
                     ref={searchInputRef}
@@ -338,9 +323,27 @@ export function ComponentLibraryPanel() {
                     className="property-input"
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
-                    placeholder="搜索组件（/）"
-                    style={{ marginTop: 8, width: '100%' }}
+                    placeholder="搜索组件（按 / 聚焦）"
+                    style={{ marginTop: 6, width: '100%' }}
                 />
+                <div className="component-library-scope-row" style={{ marginTop: 6 }}>
+                    <button type="button" className={`component-library-scope-btn ${activeScope === 'all' ? 'active' : ''}`} onClick={() => setActiveScope('all')}>全部</button>
+                    <button type="button" className={`component-library-scope-btn ${activeScope === 'favorites' ? 'active' : ''}`} onClick={() => setActiveScope('favorites')}>★{favorites.length}</button>
+                    <button type="button" className={`component-library-scope-btn ${activeScope === 'recent' ? 'active' : ''}`} onClick={() => setActiveScope('recent')}>⏱{recent.length}</button>
+                    <button type="button" className={`component-library-scope-btn ${activeScope === 'plugin' ? 'active' : ''}`} onClick={() => setActiveScope('plugin')}>🔌</button>
+                </div>
+                <div className="component-library-tags" style={{ marginTop: 4 }}>
+                    {CATEGORY_TAGS.map(tag => (
+                        <button
+                            key={tag}
+                            type="button"
+                            className={`component-library-tag ${activeTag === tag ? 'active' : ''}`}
+                            onClick={() => setActiveTag(activeTag === tag ? '' : tag)}
+                        >
+                            {tag}
+                        </button>
+                    ))}
+                </div>
             </div>
             <div className="component-library-content">
                 {pluginError && (
@@ -382,7 +385,7 @@ export function ComponentLibraryPanel() {
                         </div>
                     </div>
                 )}
-                {visibleCategories.map((category: ComponentCategory) => (
+                {tagFilteredCategories.map((category: ComponentCategory) => (
                     <div key={category.name} className="component-category">
                         <div className="component-category-title" style={{ cursor: 'pointer' }} onClick={() => toggleCategory(category.name)}>
                             {collapsedCategories.includes(category.name) ? '▸' : '▾'} {category.icon} {category.name}

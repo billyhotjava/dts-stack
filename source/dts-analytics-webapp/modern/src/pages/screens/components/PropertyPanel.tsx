@@ -36,8 +36,6 @@ import { PROVINCE_PRESETS } from '../renderers/shared/geoJsonCache';
 import { FieldMappingPanel, isMappable } from './FieldMappingPanel';
 import type { FieldMapping } from '../types';
 import { COLOR_SCHEMES, recommendColorSchemes, type ColorScheme } from '../colorSchemes';
-import UploadedDataEditor from './UploadedDataEditor';
-import { DatasetPicker } from './DatasetPicker';
 
 type ExplainState =
     | { state: 'loading' }
@@ -942,17 +940,91 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
     };
 
     if (selectedComponents.length === 0) {
+        const customTheme = (config as unknown as Record<string, unknown>).customTheme as Record<string, string> | undefined;
+        const handleCustomThemeChange = (key: string, value: string) => {
+            updateConfig({ customTheme: { ...(customTheme || {}), [key]: value } } as Partial<typeof config>);
+        };
+        const isCustom = config.theme === 'brand-custom';
         return (
             <div className="property-panel property-panel--empty">
                 <div className="property-panel-header">
-                    <h3>属性</h3>
-                    <p className="property-panel-subtitle">从画布选择一个组件后，这里会展示它的配置、数据和交互能力。</p>
+                    <h3>画布设置</h3>
+                    <p className="property-panel-subtitle">全局主题与画布属性</p>
                 </div>
                 <div className="property-panel-content">
-                    <div className="empty-state">
-                        <div className="empty-state-icon">🎨</div>
-                        <div className="empty-state-text">选择组件以编辑属性</div>
-                        <div className="empty-state-hint">点击画布中的组件进行选择</div>
+                    <div className="property-section">
+                        <div className="property-section-title">主题</div>
+                        <div className="property-row">
+                            <label className="property-label">主题方案</label>
+                            <select
+                                className="property-input"
+                                value={config.theme || 'legacy-dark'}
+                                onChange={(e) => updateConfig({ theme: e.target.value as typeof config.theme })}
+                            >
+                                <option value="legacy-dark">经典暗色</option>
+                                <option value="titanium">钛金属</option>
+                                <option value="glacier">冰川</option>
+                                <option value="light-business">商务浅色</option>
+                                <option value="dark-command">指挥暗色</option>
+                                <option value="brand-custom">自定义</option>
+                            </select>
+                        </div>
+                        {isCustom && (
+                            <>
+                                <div style={{ fontSize: 11, color: 'var(--color-text-tertiary)', margin: '8px 0 4px' }}>自定义主题颜色</div>
+                                {[
+                                    ['primaryColor', '主色', '#409eff'],
+                                    ['backgroundColor', '背景色', '#1e1f26'],
+                                    ['textPrimary', '主文字', '#e2e8f0'],
+                                    ['textSecondary', '副文字', '#94a3b8'],
+                                    ['borderColor', '边框', '#1e293b'],
+                                    ['cardBackground', '卡片背景', '#1a2332'],
+                                ].map(([key, label, fallback]) => (
+                                    <div className="property-row" key={key}>
+                                        <label className="property-label">{label}</label>
+                                        <input
+                                            type="color"
+                                            className="property-color-input"
+                                            value={customTheme?.[key] || fallback}
+                                            onChange={(e) => handleCustomThemeChange(key, e.target.value)}
+                                        />
+                                    </div>
+                                ))}
+                            </>
+                        )}
+                    </div>
+                    <div className="property-section">
+                        <div className="property-section-title">画布</div>
+                        <div className="property-row">
+                            <label className="property-label">宽度</label>
+                            <input
+                                type="number"
+                                className="property-input"
+                                value={config.width || 1920}
+                                onChange={(e) => updateConfig({ width: Math.max(320, Number(e.target.value) || 1920) })}
+                            />
+                        </div>
+                        <div className="property-row">
+                            <label className="property-label">高度</label>
+                            <input
+                                type="number"
+                                className="property-input"
+                                value={config.height || 1080}
+                                onChange={(e) => updateConfig({ height: Math.max(240, Number(e.target.value) || 1080) })}
+                            />
+                        </div>
+                        <div className="property-row">
+                            <label className="property-label">背景色</label>
+                            <input
+                                type="color"
+                                className="property-color-input"
+                                value={config.backgroundColor || '#1e1f26'}
+                                onChange={(e) => updateConfig({ backgroundColor: e.target.value })}
+                            />
+                        </div>
+                    </div>
+                    <div className="empty-state" style={{ padding: '20px 0' }}>
+                        <div className="empty-state-hint">点击画布中的组件进行选择编辑</div>
                     </div>
                 </div>
             </div>
@@ -2187,6 +2259,41 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
                                         <option value="cubic-bezier(0.34,1.56,0.64,1)">弹性</option>
                                     </select>
                                 </div>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginTop: 8 }}>
+                                    <button
+                                        type="button"
+                                        className="property-btn-small"
+                                        title="按位置自动设置递增延迟（从上到下、从左到右）"
+                                        onClick={() => {
+                                            const sorted = [...config.components]
+                                                .filter(c => c.visible && String(c.config.animationType ?? 'none') !== 'none')
+                                                .sort((a, b) => a.y !== b.y ? a.y - b.y : a.x - b.x);
+                                            const nextComponents = config.components.map(c => {
+                                                const idx = sorted.findIndex(s => s.id === c.id);
+                                                if (idx >= 0) return { ...c, config: { ...c.config, animationDelay: idx * 150 } };
+                                                return c;
+                                            });
+                                            updateConfig({ components: nextComponents });
+                                        }}
+                                    >
+                                        自动编排延迟
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="property-btn-small"
+                                        onClick={() => {
+                                            const nextComponents = config.components.map(c => {
+                                                if (String(c.config.animationType ?? 'none') !== 'none') {
+                                                    return { ...c, config: { ...c.config, animationDelay: 0 } };
+                                                }
+                                                return c;
+                                            });
+                                            updateConfig({ components: nextComponents });
+                                        }}
+                                    >
+                                        清除所有延迟
+                                    </button>
+                                </div>
                                 <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4, lineHeight: 1.45 }}>
                                     入场动画仅在预览和运行时生效，设计器中不播放。
                                 </div>
@@ -2996,10 +3103,17 @@ function renderComponentConfig(
                     {renderSeriesLabelRows({ includeLeaderLines: false })}
                     {renderSeriesColorRows((() => {
                         const series = (config.series as Array<{ name?: string }> | undefined) || [];
-                        if (series.length > 0) return series.map((item, idx) => (item?.name || '').trim() || `系列${idx + 1}`);
+                        if (series.length > 1) return series.map((item, idx) => (item?.name || '').trim() || `系列${idx + 1}`);
+                        // Infer from _sourceColumns (data-bound columns, col 2+ are measures/series)
+                        const sourceCols = config._sourceColumns as Array<{ name: string; displayName?: string }> | undefined;
+                        if (Array.isArray(sourceCols) && sourceCols.length > 1) {
+                            return sourceCols.slice(1).map((c, idx) => c.displayName || c.name || `系列${idx + 1}`);
+                        }
                         // Fallback: infer from static data headers (col 2+ are series)
                         const headers = config.header as string[] | undefined;
                         if (Array.isArray(headers) && headers.length > 1) return headers.slice(1);
+                        // Use series[0] name if single series exists
+                        if (series.length === 1) return [(series[0]?.name || '').trim() || '系列1'];
                         return ['系列1'];
                     })())}
                 </>
@@ -4794,13 +4908,6 @@ function renderDataSourceConfig(
                 },
             });
         }
-        if (nextType === 'uploaded') {
-            setDataSource({
-                type: 'uploaded',
-                sourceType: 'uploaded',
-                uploadedConfig: { datasetId: '', datasetName: '' },
-            });
-        }
     };
 
     return (
@@ -4818,7 +4925,6 @@ function renderDataSourceConfig(
                     <option value="sql">SQL 模式</option>
                     <option value="dataset">Dataset 模式</option>
                     <option value="metric">Metric 语义模式</option>
-                    <option value="uploaded">文件上传</option>
                 </select>
             </div>
 
@@ -5318,30 +5424,6 @@ function renderDataSourceConfig(
                 </>
             )}
 
-            {dsType === 'uploaded' && (
-                <>
-                    <div className="property-section-label" style={{ marginTop: 8 }}>上传新文件</div>
-                    <UploadedDataEditor
-                        existingDatasetId={ds?.uploadedConfig?.datasetId}
-                        onBind={(cfg) => {
-                            setDataSource({
-                                type: 'uploaded',
-                                uploadedConfig: cfg,
-                            });
-                        }}
-                    />
-                    <div className="property-section-label" style={{ marginTop: 12 }}>或选择已有数据集</div>
-                    <DatasetPicker
-                        selectedId={ds?.uploadedConfig?.datasetId}
-                        onSelect={(cfg) => {
-                            setDataSource({
-                                type: 'uploaded',
-                                uploadedConfig: cfg,
-                            });
-                        }}
-                    />
-                </>
-            )}
         </>
     );
 }
@@ -5349,7 +5431,7 @@ function renderDataSourceConfig(
 function resolveDataSourceType(ds?: DataSourceConfig): 'static' | QuerySourceType {
     const type = ((ds?.sourceType ?? ds?.type) || 'static').toLowerCase();
     if (type === 'database' || type === 'sql') return 'sql';
-    if (type === 'card' || type === 'api' || type === 'dataset' || type === 'metric' || type === 'uploaded') {
+    if (type === 'card' || type === 'api' || type === 'dataset' || type === 'metric') {
         return type;
     }
     return 'static';

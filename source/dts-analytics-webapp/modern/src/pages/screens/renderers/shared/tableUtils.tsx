@@ -1,5 +1,5 @@
 /** Table rendering utilities for screen components. */
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ScreenThemeTokens } from '../../screenThemes';
 
 // ---------------------------------------------------------------------------
@@ -244,30 +244,88 @@ export function ThemedScrollTable({ config, tokens, onRowClick, isRowInteractive
         visibleRows.push({ cells: allData[idx], originalIndex: idx });
     }
 
-    const getColumnLayout = (index: number): React.CSSProperties => {
-        const meta = columnMeta?.[index];
-        const widthPercent = clampColumnWidth(meta?.width);
-        return {
-            flex: widthPercent ? `0 0 ${widthPercent}%` : '1 1 0',
-            width: widthPercent ? `${widthPercent}%` : undefined,
-            textAlign: normalizeColumnAlign(meta?.align, 'center'),
+    // Column resize state
+    const [colWidths, setColWidths] = useState<number[]>([]);
+    const resizing = useRef<{ colIndex: number; startX: number; startWidth: number } | null>(null);
+    const headerRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        if (headers.length > 0 && colWidths.length !== headers.length) {
+            setColWidths(headers.map((_, i) => {
+                const meta = columnMeta?.[i];
+                const w = clampColumnWidth(meta?.width);
+                return w || (100 / headers.length);
+            }));
+        }
+    }, [headers.length, columnMeta, colWidths.length]);
+
+    const handleResizeStart = useCallback((e: React.MouseEvent, colIndex: number) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const headerEl = headerRef.current;
+        if (!headerEl) return;
+        const currentWidth = colWidths[colIndex] || (100 / headers.length);
+        resizing.current = { colIndex, startX: e.clientX, startWidth: currentWidth };
+
+        const onMove = (ev: MouseEvent) => {
+            if (!resizing.current || !headerEl) return;
+            const totalWidth = headerEl.offsetWidth;
+            const delta = ev.clientX - resizing.current.startX;
+            const deltaPercent = (delta / totalWidth) * 100;
+            const newWidth = Math.max(5, resizing.current.startWidth + deltaPercent);
+            setColWidths(prev => {
+                const next = [...prev];
+                next[resizing.current!.colIndex] = newWidth;
+                return next;
+            });
         };
+        const onUp = () => {
+            resizing.current = null;
+            window.removeEventListener('mousemove', onMove);
+            window.removeEventListener('mouseup', onUp);
+        };
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('mouseup', onUp);
+    }, [colWidths, headers.length]);
+
+    const getColumnLayout = (index: number): React.CSSProperties => {
+        const w = colWidths[index];
+        const align = normalizeColumnAlign(columnMeta?.[index]?.align, 'center');
+        if (w) {
+            return { flex: `0 0 ${w}%`, width: `${w}%`, textAlign: align };
+        }
+        return { flex: '1 1 0', textAlign: align };
     };
 
     return (
         <div style={{ width: '100%', height: '100%', overflow: 'hidden', color: textColor, fontSize: 14 }}>
             {headers.length > 0 && (
-                <div style={{
+                <div ref={headerRef} style={{
                     display: 'flex', background: headerBGC, height: headerHeight,
                     lineHeight: `${headerHeight}px`, fontWeight: 600, fontSize: 15, flexShrink: 0,
-                    color: headerColor,
+                    color: headerColor, position: 'relative',
                 }}>
                     {headers.map((h, i) => (
                         <div key={i} style={{
                             ...getColumnLayout(i),
                             padding: '0 10px',
                             whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                        }}>{h}</div>
+                            position: 'relative',
+                        }}>
+                            {h}
+                            {i < headers.length - 1 && (
+                                <div
+                                    onMouseDown={(e) => handleResizeStart(e, i)}
+                                    style={{
+                                        position: 'absolute', right: -2, top: 0, bottom: 0, width: 5,
+                                        cursor: 'col-resize', zIndex: 1,
+                                        background: resizing.current?.colIndex === i ? 'rgba(64,158,255,0.4)' : 'transparent',
+                                    }}
+                                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'rgba(64,158,255,0.3)'; }}
+                                    onMouseLeave={(e) => { if (!resizing.current) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+                                />
+                            )}
+                        </div>
                     ))}
                 </div>
             )}

@@ -543,7 +543,7 @@ export default function ScreenExportPage() {
                             style={{
                                 width: screen.width || 1920,
                                 height: screen.height || 1080,
-                                backgroundColor: screen.backgroundColor || '#0d1b2a',
+                                backgroundColor: screen.backgroundColor || '#1e1f26',
                                 backgroundImage: safeCssBackgroundUrl(screen.backgroundImage),
                                 backgroundSize: 'cover',
                                 backgroundPosition: 'center',

@@ -358,6 +358,7 @@ export function CanvasComponent({ component, isSelected, theme }: CanvasComponen
 
     return (
         <div
+            data-component-id={component.id}
             className={`canvas-component ${isSelected ? 'selected' : ''} ${component.locked ? 'locked' : ''}`}
             style={{
                 left: component.x,

@@ -11,6 +11,15 @@ export function generateId(prefix = 'comp'): string {
 // ── Undo history cap ────────────────────────────────────────────────────────
 const MAX_HISTORY = 80;
 
+/** Style keys copied by format painter */
+const FORMAT_PAINTER_STYLE_KEYS = [
+    'backgroundColor', 'borderColor', 'borderWidth', 'borderRadius', 'radius',
+    'fillColor', 'titleColor', 'valueColor', 'fontSize', 'fontWeight', 'color',
+    'headerColor', 'headerBackground', 'bodyColor', 'bodyBackground', 'oddRowBackground', 'evenRowBackground',
+    'textAlign', 'labelColor', 'inputBackground', 'inputBorderColor', 'inputTextColor',
+    'seriesColors', 'titleFontSize', 'valueFontSize',
+] as const;
+
 function pushHistory(
     history: ScreenConfig[],
     historyIndex: number,
@@ -31,7 +40,7 @@ const defaultConfig: ScreenConfig = {
     name: '未命名大屏',
     width: 1920,
     height: 1080,
-    backgroundColor: '#0d1b2a',
+    backgroundColor: '#1e1f26',
     components: [],
     globalVariables: [],
 };
@@ -393,6 +402,10 @@ interface ScreenContextValue {
     clipboard: ScreenComponent[];
     copyComponents: () => void;
     pasteComponents: () => void;
+    // Format painter
+    formatSource: Record<string, unknown> | null;
+    pickFormatSource: () => void;
+    applyFormatToSelected: () => void;
     // Save/Load
     loadConfig: (config: ScreenConfig) => void;
     markBaseline: (config: ScreenConfig) => void;
@@ -416,6 +429,29 @@ const ScreenContext = createContext<ScreenContextValue | null>(null);
 export function ScreenProvider({ children }: { children: ReactNode }) {
     const [state, dispatch] = useReducer(screenReducer, initialState);
     const [clipboard, setClipboard] = useState<ScreenComponent[]>([]);
+    const [formatSource, setFormatSource] = useState<Record<string, unknown> | null>(null);
+
+    const pickFormatSource = useCallback(() => {
+        if (state.selectedIds.length !== 1) return;
+        const comp = state.config.components.find((c) => c.id === state.selectedIds[0]);
+        if (!comp) return;
+        const style: Record<string, unknown> = {};
+        for (const key of FORMAT_PAINTER_STYLE_KEYS) {
+            if (comp.config[key] !== undefined) style[key] = comp.config[key];
+        }
+        setFormatSource(style);
+    }, [state.selectedIds, state.config.components]);
+
+    const applyFormatToSelected = useCallback(() => {
+        if (!formatSource || state.selectedIds.length === 0) return;
+        for (const id of state.selectedIds) {
+            const comp = state.config.components.find((c) => c.id === id);
+            if (!comp) continue;
+            dispatch({ type: 'UPDATE_COMPONENT', payload: { id, updates: { config: { ...comp.config, ...formatSource } } } });
+        }
+        dispatch({ type: 'SNAPSHOT' });
+        setFormatSource(null);
+    }, [formatSource, state.selectedIds, state.config.components, dispatch]);
     const [isSaving, setIsSaving] = useState(false);
     const [snapGuides, setSnapGuidesState] = useState<{ x: number[]; y: number[] }>({ x: [], y: [] });
 
@@ -608,6 +644,9 @@ export function ScreenProvider({ children }: { children: ReactNode }) {
         clipboard,
         copyComponents,
         pasteComponents,
+        formatSource,
+        pickFormatSource,
+        applyFormatToSelected,
         loadConfig,
         markBaseline,
         updateConfig,
@@ -624,10 +663,10 @@ export function ScreenProvider({ children }: { children: ReactNode }) {
         isSaving,
         setIsSaving,
     }), [
-        state, canUndo, canRedo, clipboard, snapGuides, isSaving,
+        state, canUndo, canRedo, clipboard, formatSource, snapGuides, isSaving,
         // useCallback refs are stable and won't trigger extra renders
         addComponent, updateComponent, deleteComponents, selectComponents,
-        undo, redo, copyComponents, pasteComponents, loadConfig,
+        undo, redo, copyComponents, pasteComponents, pickFormatSource, applyFormatToSelected, loadConfig,
         markBaseline, updateConfig, updateSelectedComponents,
         groupSelected, ungroupSelected, alignSelected, distributeSelected,
         duplicateSelected, snapshotTransform, setSnapGuides, clearSnapGuides, setIsSaving, dispatch,

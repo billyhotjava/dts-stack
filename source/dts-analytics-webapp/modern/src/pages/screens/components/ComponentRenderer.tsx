@@ -1,13 +1,8 @@
-import { memo, useMemo, useEffect, useRef, useState, useCallback, type ComponentType, type MouseEvent as ReactMouseEvent } from 'react';
-import type { CardData, ScreenComponent } from '../types';
-import { DRILLABLE_TYPES } from '../types';
-import { useCardDataSource } from '../hooks/useCardDataSource';
-import { useDrillDown } from '../hooks/useDrillDown';
+import { memo, useMemo, useEffect, useRef, useState, useCallback, type MouseEvent as ReactMouseEvent } from 'react';
+import type { ScreenComponent } from '../types';
 import { useScreenRuntime } from '../ScreenRuntimeContext';
-import { mapCardDataToConfig } from '../hooks/cardDataMapper';
-import { applyFieldMapping } from '../hooks/fieldMappingTransform';
 import { useComponentData } from '../renderers/DataLayer';
-import type { ChartMarkArea, ChartMarkLine, FieldMapping, SeriesConditionalColor } from '../types';
+import type { ChartMarkArea, ChartMarkLine, SeriesConditionalColor } from '../types';
 import { getThemeTokens } from '../screenThemes';
 import { isSafeSrcUrl } from '../sanitize';
 import { PluginRenderBoundary } from '../plugins/PluginRenderBoundary';
@@ -15,14 +10,12 @@ import { getRendererPlugin } from '../plugins/registry';
 import { readComponentPluginMeta, resolveRuntimePluginId } from '../plugins/runtime';
 import { useScreenPluginRuntime } from '../plugins/useScreenPluginRuntime';
 import type { RendererPlugin } from '../plugins/types';
-import type { ReactEChartsComponent, DataViewModule, ComponentRendererProps } from '../renderers/types';
-import { resolvePresetMapUrl, fetchGeoJsonWithCache } from '../renderers/shared/geoJsonCache';
+import type { ReactEChartsComponent, ComponentRendererProps } from '../renderers/types';
 import { renderMarkdownToHtml } from '../renderers/shared/markdownUtils';
 import {
     resolveTextColor, estimateVisualTextWidth, truncateTextByVisualWidth,
-    normalizeParameterBindings, resolveDataSourceType,
     resolveFilterOptions, resolveTabOptions,
-    resolveComponentVariableVisibility, resolveFilterOptionsFromData,
+    resolveFilterOptionsFromData,
     normalizeFilterDebounceMs, normalizeCarouselItems, resolveCarouselItemsFromData,
     resolveFilterDefaultValue, resolveDateRangeDefaultValues,
 } from '../renderers/shared/chartUtils';
@@ -42,39 +35,12 @@ import { renderECharts } from '../renderers/EChartsRenderer';
 import { renderBasic } from '../renderers/BasicRenderer';
 import { renderDataV } from '../renderers/DataVRenderer';
 import { renderTable } from '../renderers/TableRenderer';
+import {
+    useEChartsLoader, isWebGLSupported,
+    ECHART_COMPONENT_TYPES, ECHART_3D_TYPES, DATAV_COMPONENT_TYPES,
+} from '../hooks/useEChartsLoader';
 
 import { DelayReasonMatrix } from '../../project-cockpit/components/DelayReasonMatrix';
-
-const ECHART_COMPONENT_TYPES = new Set([
-    'line-chart',
-    'bar-chart',
-    'pie-chart',
-    'gauge-chart',
-    'gantt-chart',
-    'radar-chart',
-    'funnel-chart',
-    'scatter-chart',
-    'map-chart',
-    'combo-chart',
-    'wordcloud-chart',
-    'treemap-chart',
-    'sunburst-chart',
-    'waterfall-chart',
-    'globe-chart',
-    'bar3d-chart',
-    'scatter3d-chart',
-]);
-
-const ECHART_3D_TYPES = new Set(['globe-chart', 'bar3d-chart', 'scatter3d-chart']);
-
-function isWebGLSupported(): boolean {
-    try {
-        const canvas = document.createElement('canvas');
-        return !!(canvas.getContext('webgl') || canvas.getContext('webgl2'));
-    } catch {
-        return false;
-    }
-}
 
 // ── Chart annotation injection ──
 const ANNOTATABLE_TYPES = new Set(['line-chart', 'bar-chart', 'scatter-chart', 'combo-chart', 'waterfall-chart']);
@@ -180,15 +146,6 @@ function injectChartAnnotations(
     return { ...option, series: patched };
 }
 
-const DATAV_COMPONENT_TYPES = new Set([
-    'border-box',
-    'decoration',
-    'scroll-board',
-    'scroll-ranking',
-    'water-level',
-    'digital-flop',
-]);
-
 // Utility functions, table components, and types extracted to renderers/shared/:
 // - chartUtils.ts, tableUtils.tsx, markdownUtils.ts, geoJsonCache.ts
 // - InteractionLayer.tsx (interaction hook + screen-reference URL resolution)
@@ -219,138 +176,19 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
         },
     }), [t]);
 
-    const needsECharts = ECHART_COMPONENT_TYPES.has(type);
-    const needsDataV = DATAV_COMPONENT_TYPES.has(type);
-    const [EChartsComponent, setEChartsComponent] = useState<ReactEChartsComponent | null>(null);
-    const [registerMapFn, setRegisterMapFn] = useState<((mapName: string, geoJson: unknown) => boolean) | null>(null);
-    const [hasMapFn, setHasMapFn] = useState<((mapName: string) => boolean) | null>(null);
-    const [dataViewModule, setDataViewModule] = useState<DataViewModule | null>(null);
+    const {
+        EChartsComponent, registerMapFn, hasMapFn,
+        dataViewModule, borderBoxComponents, decorationComponents, mapReadyVersion,
+    } = useEChartsLoader(type, config as Record<string, unknown>);
     const [mapDrillRegion, setMapDrillRegion] = useState<string | null>(null);
-    const [mapReadyVersion, setMapReadyVersion] = useState(0);
     const [tableSort, setTableSort] = useState<{ colIndex: number; order: 'asc' | 'desc' } | null>(null);
     const [tablePage, setTablePage] = useState(1);
-
-    useEffect(() => {
-        if (!needsECharts || EChartsComponent) return;
-        let cancelled = false;
-        const imports: Promise<unknown>[] = [
-            import('../../../components/charts/EChartsRuntime'),
-        ];
-        if (type === 'wordcloud-chart') {
-            imports.push(import('echarts-wordcloud'));
-        }
-        if (ECHART_3D_TYPES.has(type)) {
-            // echarts-gl is an optional peer dep — use variable to bypass Vite static analysis
-            const glPkg = 'echarts-gl';
-            imports.push(import(/* @vite-ignore */ glPkg).catch(() => null));
-        }
-        Promise.all(imports).then(([echartsModule]) => {
-            const mod = echartsModule as typeof import('../../../components/charts/EChartsRuntime');
-            if (!cancelled) {
-                setEChartsComponent(() => mod.default as ReactEChartsComponent);
-                if (typeof mod.registerEChartsMap === 'function') {
-                    setRegisterMapFn(() => mod.registerEChartsMap);
-                }
-                if (typeof mod.hasEChartsMap === 'function') {
-                    setHasMapFn(() => mod.hasEChartsMap);
-                }
-            }
-        });
-        return () => {
-            cancelled = true;
-        };
-    }, [needsECharts, EChartsComponent, type]);
-
-    useEffect(() => {
-        if (type !== 'map-chart' || !registerMapFn) return;
-        const cfg = config as Record<string, unknown>;
-        const mapName = String(cfg.mapName || cfg.mapScope || 'dts-map').trim();
-        if (!mapName) return;
-        const geoJson = cfg.geoJson;
-        const geoJsonUrlRaw = typeof cfg.geoJsonUrl === 'string' ? cfg.geoJsonUrl.trim() : '';
-        const presetAllowed = cfg.usePresetGeoJson !== false;
-        const presetUrl = presetAllowed ? resolvePresetMapUrl(String(cfg.mapScope || 'china')) : undefined;
-        const geoJsonUrl = geoJsonUrlRaw || presetUrl || '';
-        let cancelled = false;
-
-        if (geoJson && typeof geoJson === 'object') {
-            if (registerMapFn(mapName, geoJson)) {
-                setMapReadyVersion((v) => v + 1);
-            }
-            return;
-        }
-
-        if (!geoJsonUrl) {
-            return;
-        }
-
-        fetchGeoJsonWithCache(geoJsonUrl).then((loaded) => {
-            if (cancelled || !loaded || typeof loaded !== 'object') return;
-            if (registerMapFn(mapName, loaded)) {
-                setMapReadyVersion((v) => v + 1);
-            }
-        });
-
-        return () => {
-            cancelled = true;
-        };
-    }, [config, registerMapFn, type]);
-
-    useEffect(() => {
-        if (!needsDataV || dataViewModule) return;
-        let cancelled = false;
-        import('@jiaminghi/data-view-react').then((mod) => {
-            if (!cancelled) {
-                setDataViewModule(mod);
-            }
-        });
-        return () => {
-            cancelled = true;
-        };
-    }, [needsDataV, dataViewModule]);
 
     useEffect(() => {
         setMapDrillRegion(null);
         setTableSort(null);
         setTablePage(1);
     }, [component.id]);
-
-    const borderBoxComponents = useMemo(() => {
-        if (!dataViewModule) return null;
-        return {
-            1: dataViewModule.BorderBox1,
-            2: dataViewModule.BorderBox2,
-            3: dataViewModule.BorderBox3,
-            4: dataViewModule.BorderBox4,
-            5: dataViewModule.BorderBox5,
-            6: dataViewModule.BorderBox6,
-            7: dataViewModule.BorderBox7,
-            8: dataViewModule.BorderBox8,
-            9: dataViewModule.BorderBox9,
-            10: dataViewModule.BorderBox10,
-            11: dataViewModule.BorderBox11,
-            12: dataViewModule.BorderBox12,
-            13: dataViewModule.BorderBox13,
-        } as Record<number, ComponentType<{ children?: React.ReactNode; color?: string[] }>>;
-    }, [dataViewModule]);
-
-    const decorationComponents = useMemo(() => {
-        if (!dataViewModule) return null;
-        return {
-            1: dataViewModule.Decoration1,
-            2: dataViewModule.Decoration2,
-            3: dataViewModule.Decoration3,
-            4: dataViewModule.Decoration4,
-            5: dataViewModule.Decoration5,
-            6: dataViewModule.Decoration6,
-            7: dataViewModule.Decoration7,
-            8: dataViewModule.Decoration8,
-            9: dataViewModule.Decoration9,
-            10: dataViewModule.Decoration10,
-            11: dataViewModule.Decoration11,
-            12: dataViewModule.Decoration12,
-        } as Record<number, ComponentType<{ color?: string[]; style?: React.CSSProperties }>>;
-    }, [dataViewModule]);
 
     const {
         cardData, cardLoading, cardError, effectiveConfig,
@@ -630,6 +468,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
             );
         }
         const axisFontSize = (c.axisFontSize as number) || 15;
+        const axisLabelColor = typeof c.axisLabelColor === 'string' && c.axisLabelColor.trim() ? c.axisLabelColor.trim() : undefined;
         const legendFontSize = (c.legendFontSize as number) || 15;
         const seriesColors = Array.isArray(c.seriesColors)
             ? (c.seriesColors as string[]).filter((color) => typeof color === 'string' && color.trim().length > 0)
@@ -1470,7 +1309,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                     type, c, t, width, height, mode, componentId: component.id, runtime,
                     EChart, renderEChartWithHandles,
                     themeOptions, chartMotionOption, chartTitleLayout, legendConfig, axisGrid, seriesColors,
-                    axisFontSize, seriesLabelFontSize,
+                    axisFontSize, axisLabelColor, seriesLabelFontSize,
                     xAxisLabelRotate, xAxisLabelInterval, formatXAxisLabel,
                     axisSeriesLabelShow, resolvedAxisSeriesLabelStrategy, axisSeriesLabelFormatter,
                     axisLineLabelPosition, axisBarLabelPosition, axisBarLabelColor, axisTooltipFormatter,
@@ -1550,295 +1389,6 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                     dataViewModule: dataViewModule as Record<string, React.ComponentType<Record<string, unknown>>> | null,
                     renderUnavailableState,
                 });
-
-            // ==================== DataV 数据展示组件 ====================
-
-            case 'table': {
-                const tableRenderMode = String(c.renderMode ?? '').trim().toLowerCase();
-                if (tableRenderMode === 'delay-reason-matrix') {
-                    const sourceCols = Array.isArray(cardData?.cols) ? cardData.cols : [];
-                    const sourceRows = Array.isArray(cardData?.rows) ? cardData.rows : [];
-                    const matrixRows = sourceRows.map((row) => Object.fromEntries(
-                        sourceCols.map((col, index) => [col.name, row[index]]),
-                    ));
-                    const canRunMatrixActions = mode === 'preview' && componentActions.length > 0;
-                    if (matrixRows.length === 0) {
-                        return (
-                            <div style={{
-                                width: '100%',
-                                height: '100%',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                borderRadius: 16,
-                                border: '1px dashed rgba(148, 163, 184, 0.3)',
-                                background: 'rgba(248, 250, 252, 0.85)',
-                                color: t.textSecondary,
-                                fontSize: 13,
-                            }}>
-                                当前筛选范围暂无归因矩阵数据。
-                            </div>
-                        );
-                    }
-                    return (
-                        <div style={{ width: '100%', height: '100%', overflow: 'auto' }}>
-                            <DelayReasonMatrix
-                                rows={matrixRows}
-                                onDrillDept={canRunMatrixActions
-                                    ? (dept) => {
-                                        executeComponentActions({
-                                            name: dept,
-                                            dept,
-                                            data: { dept },
-                                        });
-                                    }
-                                    : undefined}
-                                onDrillReason={canRunMatrixActions
-                                    ? (dept, reason) => {
-                                        executeComponentActions({
-                                            name: reason,
-                                            dept,
-                                            reason,
-                                            data: { dept, reason },
-                                        });
-                                    }
-                                    : undefined}
-                            />
-                        </div>
-                    );
-                }
-                const { header: displayHeader, data: displayData, columnMeta } = resolveBoundTableData(c, { defaultAlign: 'left' });
-                const fontSize = Number(c.fontSize) || 16;
-                const headerFontSize = Number(c.headerFontSize) || fontSize;
-                const headerColor = resolveTextColor(c.headerColor as string | undefined, t.textPrimary);
-                const headerBackground = (c.headerBackground as string) || 'rgba(148, 163, 184, 0.16)';
-                const bodyColor = resolveTextColor(c.bodyColor as string | undefined, t.textSecondary);
-                const bodyBackground = (c.bodyBackground as string) || 'transparent';
-                const borderColor = (c.borderColor as string) || 'rgba(148, 163, 184, 0.24)';
-                const oddRowBackground = (c.oddRowBackground as string) || bodyBackground;
-                const evenRowBackground = (c.evenRowBackground as string) || 'rgba(148, 163, 184, 0.06)';
-                const enableSort = c.enableSort !== false;
-                const enablePagination = c.enablePagination === true;
-                const freezeHeader = c.freezeHeader !== false;
-                const freezeFirstColumn = c.freezeFirstColumn === true;
-                const pageSize = Math.max(1, Number(c.pageSize || 10));
-                const conditionalRules = c.conditionalRules;
-
-                const sortedRows = tableSort && enableSort
-                    ? [...displayData].sort((a, b) => {
-                        const v = compareTableValues(a[tableSort.colIndex], b[tableSort.colIndex]);
-                        return tableSort.order === 'asc' ? v : -v;
-                    })
-                    : displayData;
-                const totalPages = enablePagination ? Math.max(1, Math.ceil(sortedRows.length / pageSize)) : 1;
-                const safePage = Math.max(1, Math.min(tablePage, totalPages));
-                const pageRows = enablePagination
-                    ? sortedRows.slice((safePage - 1) * pageSize, safePage * pageSize)
-                    : sortedRows;
-                const canRunTableActions = mode === 'preview' && componentActions.length > 0;
-                const canRunTableDefaultDrill = mode === 'preview' && !canRunTableActions && drillRuntimeEnabled && drillState.canDrillDown;
-
-                return (
-                    <div style={{ width: '100%', height: '100%', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-                        <div style={{ flex: 1, overflow: 'auto' }}>
-                        <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
-                            {displayHeader.length > 0 && (
-                                <thead>
-                                    <tr style={{ background: headerBackground }}>
-                                        {displayHeader.map((title, i) => (
-                                            <th key={i} style={{
-                                                color: headerColor,
-                                                fontSize: headerFontSize,
-                                                width: columnMeta[i]?.width ? `${columnMeta[i].width}%` : undefined,
-                                                borderBottom: '1px solid ' + borderColor,
-                                                borderRight: i < displayHeader.length - 1 ? '1px solid ' + borderColor : 'none',
-                                                padding: '8px 10px',
-                                                textAlign: columnMeta[i]?.headerAlign ?? columnMeta[i]?.align ?? 'left',
-                                                fontWeight: 600,
-                                                whiteSpace: columnMeta[i]?.wrap ? 'normal' : 'nowrap',
-                                                overflow: 'hidden',
-                                                textOverflow: columnMeta[i]?.wrap ? undefined : 'ellipsis',
-                                                overflowWrap: columnMeta[i]?.wrap ? 'anywhere' : undefined,
-                                                wordBreak: columnMeta[i]?.wrap ? 'break-word' : undefined,
-                                                lineHeight: columnMeta[i]?.wrap ? 1.35 : undefined,
-                                                ...(freezeHeader ? { position: 'sticky', top: 0, zIndex: 3 } : {}),
-                                                ...(freezeFirstColumn && i === 0
-                                                    ? {
-                                                        position: 'sticky',
-                                                        left: 0,
-                                                        zIndex: freezeHeader ? 5 : 2,
-                                                        background: headerBackground,
-                                                        boxShadow: `1px 0 0 ${borderColor}`,
-                                                    }
-                                                    : {}),
-                                            }}>
-                                                <button
-                                                    type="button"
-                                                    disabled={!enableSort}
-                                                    onClick={() => {
-                                                        if (!enableSort) return;
-                                                        setTablePage(1);
-                                                        setTableSort((prev) => {
-                                                            if (!prev || prev.colIndex !== i) {
-                                                                return { colIndex: i, order: 'asc' };
-                                                            }
-                                                            if (prev.order === 'asc') {
-                                                                return { colIndex: i, order: 'desc' };
-                                                            }
-                                                            return null;
-                                                        });
-                                                    }}
-                                                    style={{
-                                                        border: 'none',
-                                                        background: 'transparent',
-                                                        color: headerColor,
-                                                        fontSize: 'inherit',
-                                                        fontWeight: 600,
-                                                        cursor: enableSort ? 'pointer' : 'default',
-                                                        display: 'inline-flex',
-                                                        alignItems: 'center',
-                                                        gap: 4,
-                                                        padding: 0,
-                                                    }}
-                                                >
-                                                    <span>{title}</span>
-                                                    {columnMeta[i]?.masked && (
-                                                        <span style={{ fontSize: 9, opacity: 0.5, marginLeft: 2 }} title="此列数据已脱敏">*</span>
-                                                    )}
-                                                    {tableSort?.colIndex === i ? (
-                                                        <span style={{ fontSize: 10 }}>{tableSort.order === 'asc' ? '▲' : '▼'}</span>
-                                                    ) : null}
-                                                </button>
-                                            </th>
-                                        ))}
-                                    </tr>
-                                </thead>
-                            )}
-                            <tbody>
-                                {pageRows.map((row, rowIndex) => (
-                                    <tr
-                                        key={rowIndex}
-                                        onClick={() => {
-                                            const params = buildTableRowActionParams(displayHeader, row);
-                                            if (canRunTableActions) {
-                                                executeComponentActions(params);
-                                                return;
-                                            }
-                                            if (canRunTableDefaultDrill) {
-                                                const clickedValue = resolvePreferredDrillValue(params);
-                                                if (!clickedValue) return;
-                                                runtime.trackEvent({
-                                                    kind: 'drill-down',
-                                                    key: 'drillValue',
-                                                    value: clickedValue,
-                                                    source: `drill:${component.id}:table`,
-                                                    meta: `depth=${drillState.breadcrumbs.length}`,
-                                                });
-                                                drillState.handleDrill(clickedValue);
-                                            }
-                                        }}
-                                        style={{
-                                            background: rowIndex % 2 === 0 ? oddRowBackground : evenRowBackground,
-                                            cursor: canRunTableActions || canRunTableDefaultDrill ? 'pointer' : 'default',
-                                        }}
-                                    >
-                                        {displayHeader.map((_, colIndex) => {
-                                            const conditional = resolveTableConditionalStyle(
-                                                conditionalRules,
-                                                colIndex,
-                                                row[colIndex],
-                                                columnMeta[colIndex],
-                                            );
-                                            const rowBackground = rowIndex % 2 === 0 ? oddRowBackground : evenRowBackground;
-                                            const cellBackground = conditional.background || rowBackground;
-                                            return (
-                                                <td key={colIndex} style={{
-                                                    fontSize,
-                                                    color: conditional.color || bodyColor,
-                                                    background: cellBackground,
-                                                    borderBottom: '1px solid ' + borderColor,
-                                                    borderRight: colIndex < displayHeader.length - 1 ? '1px solid ' + borderColor : 'none',
-                                                    padding: '8px 10px',
-                                                    textAlign: columnMeta[colIndex]?.align || 'left',
-                                                    whiteSpace: columnMeta[colIndex]?.wrap ? 'normal' : 'nowrap',
-                                                    overflow: 'hidden',
-                                                    textOverflow: columnMeta[colIndex]?.wrap ? undefined : 'ellipsis',
-                                                    overflowWrap: columnMeta[colIndex]?.wrap ? 'anywhere' : undefined,
-                                                    wordBreak: columnMeta[colIndex]?.wrap ? 'break-word' : undefined,
-                                                    lineHeight: columnMeta[colIndex]?.wrap ? 1.35 : undefined,
-                                                    ...(freezeFirstColumn && colIndex === 0
-                                                        ? {
-                                                            position: 'sticky',
-                                                            left: 0,
-                                                            zIndex: 1,
-                                                            boxShadow: `1px 0 0 ${borderColor}`,
-                                                            background: cellBackground,
-                                                        }
-                                                        : {}),
-                                                }}>
-                                                    {columnMeta[colIndex]?.masked ? (
-                                                        <span
-                                                            style={{ color: 'rgba(148,163,184,0.6)', fontStyle: 'italic' }}
-                                                            title="数据已脱敏"
-                                                        >
-                                                            {row[colIndex] ?? '***'}
-                                                        </span>
-                                                    ) : (
-                                                        row[colIndex] ?? ''
-                                                    )}
-                                                </td>
-                                            );
-                                        })}
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                        </div>
-                        {enablePagination && totalPages > 1 ? (
-                            <div style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'flex-end',
-                                gap: 6,
-                                paddingTop: 8,
-                                color: t.textSecondary,
-                                fontSize: 12,
-                            }}>
-                                <button
-                                    type="button"
-                                    disabled={safePage <= 1}
-                                    onClick={() => setTablePage((p) => Math.max(1, p - 1))}
-                                    style={{ border: '1px solid rgba(148,163,184,0.35)', background: 'transparent', color: t.textPrimary, borderRadius: 4, padding: '2px 8px', cursor: 'pointer' }}
-                                >
-                                    上一页
-                                </button>
-                                <span>{safePage}/{totalPages}</span>
-                                <button
-                                    type="button"
-                                    disabled={safePage >= totalPages}
-                                    onClick={() => setTablePage((p) => Math.min(totalPages, p + 1))}
-                                    style={{ border: '1px solid rgba(148,163,184,0.35)', background: 'transparent', color: t.textPrimary, borderRadius: 4, padding: '2px 8px', cursor: 'pointer' }}
-                                >
-                                    下一页
-                                </button>
-                            </div>
-                        ) : null}
-                    </div>
-                );
-            }
-            case 'scroll-ranking':
-                if (!ScrollRankingBoard) return renderUnavailableState('DataV 运行时未就绪');
-                return (
-                    <ScrollRankingBoard
-                        config={{
-                            data: c.data as Array<{ name: string; value: number }>,
-                            rowNum: c.rowNum as number || 5,
-                            waitTime: c.waitTime as number || 2000,
-                            carousel: 'single',
-                        }}
-                        style={{ width: '100%', height: '100%' }}
-                    />
-                );
 
             case 'water-level':
                 if (!WaterLevelPond) return renderUnavailableState('DataV 运行时未就绪');

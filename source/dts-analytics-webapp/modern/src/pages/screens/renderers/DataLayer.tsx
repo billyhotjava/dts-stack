@@ -4,11 +4,12 @@
  * query context, card data fetching, and effectiveConfig computation.
  */
 
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import type { CardData, ScreenComponent, FieldMapping } from '../types';
 import { DRILLABLE_TYPES } from '../types';
 import { useCardDataSource } from '../hooks/useCardDataSource';
 import { useDrillDown } from '../hooks/useDrillDown';
+import { useSharedStore } from '../hooks/useSharedStore';
 import { mapCardDataToConfig } from '../hooks/cardDataMapper';
 import { applyFieldMapping } from '../hooks/fieldMappingTransform';
 import {
@@ -41,6 +42,7 @@ export function useComponentData(
     runtime: ScreenRuntime,
 ): UseComponentDataResult {
     const { type, config, dataSource, drillDown } = component;
+    const sharedStore = useSharedStore();
 
     const dataSourceType = useMemo(() => resolveDataSourceType(dataSource), [dataSource]);
     const sourceBindings = useMemo(() => {
@@ -63,13 +65,20 @@ export function useComponentData(
         for (const item of sourceBindings) {
             let value = item.value ?? "";
             if (item.variableKey) {
-                value = runtime.values[item.variableKey] ?? "";
+                // Support {{ shared.KEY }} references
+                const sharedMatch = /^shared\.(.+)$/.exec(item.variableKey);
+                if (sharedMatch) {
+                    const sv = sharedStore.getValue(sharedMatch[1]);
+                    value = sv != null ? String(sv) : "";
+                } else {
+                    value = runtime.values[item.variableKey] ?? "";
+                }
             }
             if ((item.name || "").trim().length === 0) continue;
             out.push({ name: item.name, value: String(value ?? "") });
         }
         return out;
-    }, [sourceBindings, runtime.values]);
+    }, [sourceBindings, runtime.values, sharedStore]);
 
     // Drill runtime state should remain available for template-defined drill paths
     // even when the current component is static and only uses breadcrumb/context state.
@@ -115,17 +124,49 @@ export function useComponentData(
         queryContext,
     );
 
+    // Write component exports to shared store after data loads
+    useEffect(() => {
+        if (!cardData || mode !== 'preview') return;
+        const exports = config.exports as { key?: string; path?: string } | undefined;
+        if (!exports?.key) return;
+        const key = exports.key.trim();
+        if (!key) return;
+        let value: unknown = cardData;
+        if (exports.path) {
+            const parts = exports.path.split('.');
+            let cursor: unknown = cardData;
+            for (const part of parts) {
+                if (cursor == null || typeof cursor !== 'object') { cursor = undefined; break; }
+                cursor = (cursor as Record<string, unknown>)[part];
+            }
+            value = cursor;
+        }
+        sharedStore.setValue(key, value);
+    }, [cardData, config.exports, mode, sharedStore]);
+
     // Merge card data into config: card data overrides data fields only, not display fields
     const effectiveConfig = useMemo(() => {
-        if (!cardData) return config;
+        // For static sources with inline header+data, construct CardData and map it
+        let resolvedCardData = cardData;
+        if (!resolvedCardData && Array.isArray(config.header) && Array.isArray(config.data)) {
+            const header = config.header as string[];
+            const data = config.data as string[][];
+            if (header.length > 0) {
+                resolvedCardData = {
+                    cols: header.map((h) => ({ name: String(h), display_name: String(h), base_type: 'type/Text' })),
+                    rows: data,
+                };
+            }
+        }
+        if (!resolvedCardData) return config;
         const fieldMapping = config._fieldMapping as FieldMapping | undefined;
         const useFieldMapping = config._useFieldMapping !== false && fieldMapping
             && (fieldMapping.dimension || (fieldMapping.measures && fieldMapping.measures.length > 0));
         if (useFieldMapping) {
-            const mapped = applyFieldMapping(type, fieldMapping, cardData);
+            const mapped = applyFieldMapping(type, fieldMapping, resolvedCardData);
             return { ...config, ...mapped };
         }
-        const mapped = mapCardDataToConfig(type, cardData, config);
+        const mapped = mapCardDataToConfig(type, resolvedCardData, config);
         return { ...config, ...mapped };
     }, [config, cardData, type]);
 

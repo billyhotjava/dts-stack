@@ -567,7 +567,7 @@ const blankTemplate: ScreenTemplate = {
         description: '',
         width: 1920,
         height: 1080,
-        backgroundColor: '#0d1b2a',
+        backgroundColor: '#1e1f26',
         components: [],
     },
 };
@@ -1088,12 +1088,12 @@ const businessLightTemplate: ScreenTemplate = {
 const blank4kTemplate: ScreenTemplate = {
     id: 'blank-4k', name: '空白模板 · 4K', description: '3840×2160 超高清空白大屏', thumbnail: '🖥️',
     category: 'blank', tags: ['空白', '4K', '超高清'],
-    config: { name: '未命名大屏(4K)', description: '', width: 3840, height: 2160, backgroundColor: '#0d1b2a', components: [] },
+    config: { name: '未命名大屏(4K)', description: '', width: 3840, height: 2160, backgroundColor: '#1e1f26', components: [] },
 };
 const blankSmallTemplate: ScreenTemplate = {
     id: 'blank-small', name: '空白模板 · 小屏', description: '1280×720 小屏幕空白模板', thumbnail: '📱',
     category: 'blank', tags: ['空白', '小屏', '720p'],
-    config: { name: '未命名大屏(720p)', description: '', width: 1280, height: 720, backgroundColor: '#0d1b2a', components: [] },
+    config: { name: '未命名大屏(720p)', description: '', width: 1280, height: 720, backgroundColor: '#1e1f26', components: [] },
 };
 
 // ============================================================

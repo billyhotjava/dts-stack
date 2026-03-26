@@ -1,22 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { useScreen } from '../ScreenContext';
 
 const ZOOM_OPTIONS = [50, 75, 100, 125, 150, 200];
-
-const ARRANGE_OPTIONS = [
-    { value: 'group', label: '组合' },
-    { value: 'ungroup', label: '解组' },
-    { value: 'align-left', label: '左对齐' },
-    { value: 'align-h-center', label: '水平居中' },
-    { value: 'align-right', label: '右对齐' },
-    { value: 'align-top', label: '顶对齐' },
-    { value: 'align-v-center', label: '垂直居中' },
-    { value: 'align-bottom', label: '底对齐' },
-    { value: 'distribute-horizontal', label: '水平分布' },
-    { value: 'distribute-vertical', label: '垂直分布' },
-] as const;
-
-type ArrangeAction = typeof ARRANGE_OPTIONS[number]['value'];
 
 export function CanvasToolbar() {
     const {
@@ -30,9 +15,11 @@ export function CanvasToolbar() {
         distributeSelected,
         groupSelected,
         ungroupSelected,
+        formatSource,
+        pickFormatSource,
+        applyFormatToSelected,
     } = useScreen();
-    const { selectedIds, zoom } = state;
-    const [arrangeAction, setArrangeAction] = useState<ArrangeAction>('align-left');
+    const { selectedIds, zoom, showGrid } = state;
     const canAlign = selectedIds.length >= 2;
     const canDistribute = selectedIds.length >= 3;
     const canGroup = selectedIds.length >= 2;
@@ -55,139 +42,116 @@ export function CanvasToolbar() {
         dispatch({ type: 'SET_ZOOM', payload: next });
     };
 
-    const executeArrangeAction = () => {
-        if (arrangeAction === 'group') {
-            if (!canGroup) return;
-            groupSelected();
-            return;
-        }
-        if (arrangeAction === 'ungroup') {
-            if (!canUngroup) return;
-            ungroupSelected();
-            return;
-        }
-        if (arrangeAction === 'align-left') {
-            if (!canAlign) return;
-            alignSelected('left');
-            return;
-        }
-        if (arrangeAction === 'align-h-center') {
-            if (!canAlign) return;
-            alignSelected('h-center');
-            return;
-        }
-        if (arrangeAction === 'align-right') {
-            if (!canAlign) return;
-            alignSelected('right');
-            return;
-        }
-        if (arrangeAction === 'align-top') {
-            if (!canAlign) return;
-            alignSelected('top');
-            return;
-        }
-        if (arrangeAction === 'align-v-center') {
-            if (!canAlign) return;
-            alignSelected('v-center');
-            return;
-        }
-        if (arrangeAction === 'align-bottom') {
-            if (!canAlign) return;
-            alignSelected('bottom');
-            return;
-        }
-        if (arrangeAction === 'distribute-horizontal') {
-            if (!canDistribute) return;
-            distributeSelected('horizontal');
-            return;
-        }
-        if (arrangeAction === 'distribute-vertical') {
-            if (!canDistribute) return;
-            distributeSelected('vertical');
-        }
-    };
-
-    const canExecuteArrange = (() => {
-        if (arrangeAction === 'group') return canGroup;
-        if (arrangeAction === 'ungroup') return canUngroup;
-        if (arrangeAction.startsWith('distribute')) return canDistribute;
-        return canAlign;
-    })();
-
     return (
         <div className="canvas-toolbar">
-            {/* Undo/Redo */}
-            <div className="toolbar-group">
-                <button
-                    className="toolbar-btn"
-                    onClick={undo}
-                    disabled={!canUndo}
-                    title="撤销 (Ctrl+Z)"
-                >
-                    撤销
+            {/* History */}
+            <div className="toolbar-group" title="历史操作">
+                <button className="toolbar-btn" onClick={undo} disabled={!canUndo} title="撤销 (Ctrl+Z)">
+                    ↩
                 </button>
-                <button
-                    className="toolbar-btn"
-                    onClick={redo}
-                    disabled={!canRedo}
-                    title="重做 (Ctrl+Y)"
-                >
-                    重做
+                <button className="toolbar-btn" onClick={redo} disabled={!canRedo} title="重做 (Ctrl+Y)">
+                    ↪
                 </button>
             </div>
 
-            {/* Align / distribute */}
-            <div className="toolbar-group">
-                <select
-                    className="zoom-select"
-                    value={arrangeAction}
-                    onChange={(e) => setArrangeAction(e.target.value as ArrangeAction)}
-                    title="排列动作"
-                >
-                    {ARRANGE_OPTIONS.map((item) => (
-                        <option key={item.value} value={item.value}>
-                            {item.label}
-                        </option>
-                    ))}
-                </select>
-                <button
-                    className="toolbar-btn"
-                    onClick={executeArrangeAction}
-                    disabled={!canExecuteArrange}
-                    title={canExecuteArrange ? '执行排列动作' : '请先选择足够的组件'}
-                >
-                    执行
+            <div className="toolbar-separator" />
+
+            {/* Alignment */}
+            <div className="toolbar-group" title="对齐">
+                <button className="toolbar-btn toolbar-btn--icon" onClick={() => alignSelected('left')} disabled={!canAlign} title="左对齐">
+                    ⫷
+                </button>
+                <button className="toolbar-btn toolbar-btn--icon" onClick={() => alignSelected('h-center')} disabled={!canAlign} title="水平居中">
+                    ⫿
+                </button>
+                <button className="toolbar-btn toolbar-btn--icon" onClick={() => alignSelected('right')} disabled={!canAlign} title="右对齐">
+                    ⫸
+                </button>
+                <button className="toolbar-btn toolbar-btn--icon" onClick={() => alignSelected('top')} disabled={!canAlign} title="顶对齐">
+                    ⫠
+                </button>
+                <button className="toolbar-btn toolbar-btn--icon" onClick={() => alignSelected('v-center')} disabled={!canAlign} title="垂直居中">
+                    ⫟
+                </button>
+                <button className="toolbar-btn toolbar-btn--icon" onClick={() => alignSelected('bottom')} disabled={!canAlign} title="底对齐">
+                    ⫡
                 </button>
             </div>
+
+            <div className="toolbar-separator" />
+
+            {/* Distribution & Grouping */}
+            <div className="toolbar-group" title="分布与编组">
+                <button className="toolbar-btn" onClick={() => distributeSelected('horizontal')} disabled={!canDistribute} title="水平等距分布 (3+)">
+                    ⫞H
+                </button>
+                <button className="toolbar-btn" onClick={() => distributeSelected('vertical')} disabled={!canDistribute} title="垂直等距分布 (3+)">
+                    ⫞V
+                </button>
+                <button className="toolbar-btn" onClick={groupSelected} disabled={!canGroup} title="编组 (2+)">
+                    组
+                </button>
+                <button className="toolbar-btn" onClick={ungroupSelected} disabled={!canUngroup} title="解组">
+                    解
+                </button>
+            </div>
+
+            <div className="toolbar-separator" />
+
+            {/* Format painter */}
+            <div className="toolbar-group" title="格式刷">
+                <button
+                    className={`toolbar-btn ${formatSource ? 'toolbar-btn--active' : ''}`}
+                    onClick={pickFormatSource}
+                    disabled={selectedIds.length !== 1}
+                    title="拾取样式：选中一个组件后点击此按钮"
+                >
+                    🖌
+                </button>
+                <button
+                    className="toolbar-btn"
+                    onClick={applyFormatToSelected}
+                    disabled={!formatSource || selectedIds.length === 0}
+                    title="应用样式：选中目标组件后点击此按钮"
+                >
+                    刷
+                </button>
+            </div>
+
+            <div className="toolbar-separator" />
+
+            {/* View controls */}
+            <div className="toolbar-group" title="视图控制">
+                <button
+                    className={`toolbar-btn ${showGrid ? 'toolbar-btn--active' : ''}`}
+                    onClick={() => dispatch({ type: 'TOGGLE_GRID' })}
+                    title="网格 (G)"
+                >
+                    #
+                </button>
+            </div>
+
+            {/* Spacer */}
+            <div style={{ flex: 1 }} />
 
             {/* Zoom */}
             <div className="toolbar-group">
                 <button className="toolbar-btn" onClick={() => handleZoomStep(-25)} title="缩小 25%">-</button>
-                <select
-                    className="zoom-select"
-                    value={zoom}
-                    onChange={handleZoomChange}
-                >
+                <select className="zoom-select" value={zoom} onChange={handleZoomChange}>
                     {zoomSelectOptions.map((z) => (
-                        <option key={z} value={z}>
-                            {z}%
-                        </option>
+                        <option key={z} value={z}>{z}%</option>
                     ))}
                 </select>
                 <button className="toolbar-btn" onClick={() => handleZoomStep(25)} title="放大 25%">+</button>
             </div>
 
-            <div className="toolbar-group toolbar-group--status">
-                <div className="toolbar-info-pill">
-                    <span className="toolbar-info-pill__label">画布</span>
-                    <span className="toolbar-info-pill__value">{state.config.width} × {state.config.height}</span>
-                </div>
-                <div className="toolbar-info-pill">
-                    <span className="toolbar-info-pill__label">选中</span>
-                    <span className="toolbar-info-pill__value">{selectedIds.length}</span>
-                </div>
-            </div>
+            <div className="toolbar-separator" />
 
+            {/* Status - compact */}
+            <div className="toolbar-group toolbar-group--status">
+                <span className="toolbar-status-text">{state.config.width}×{state.config.height}</span>
+                {selectedIds.length > 0 && <span className="toolbar-status-text">选{selectedIds.length}</span>}
+            </div>
         </div>
     );
 }

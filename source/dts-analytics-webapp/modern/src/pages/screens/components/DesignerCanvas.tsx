@@ -7,12 +7,26 @@ import type { ComponentItem, ScreenComponent } from '../types';
 import { buildComponentMap, isComponentEffectivelyVisible } from '../componentHierarchy';
 import { applyChartPresetDefaults, isChartComponentType } from '../chartPresets';
 import { safeCssBackgroundUrl } from '../sanitize';
+import { applyThemeCssVariables } from '../themes/screenCssVariables';
+import { resolveScreenTheme } from '../screenThemes';
+
+type ContextMenuState = {
+    x: number;
+    y: number;
+    componentId?: string;
+} | null;
 
 export function DesignerCanvas() {
-    const { state, addComponent, selectComponents, snapGuides, dispatch } = useScreen();
+    const { state, addComponent, selectComponents, snapGuides, dispatch, deleteComponents, copyComponents, pasteComponents, duplicateSelected, undo, redo, clipboard } = useScreen();
     const { config, selectedIds, zoom, showGrid } = state;
     const containerRef = useRef<HTMLDivElement>(null);
     const canvasRef = useRef<HTMLDivElement>(null);
+
+    // Apply theme CSS Variables to canvas so components pick up theme changes
+    const editorTheme = resolveScreenTheme(config.theme, config.backgroundColor);
+    useEffect(() => {
+        if (canvasRef.current) applyThemeCssVariables(canvasRef.current, editorTheme);
+    }, [editorTheme]);
     const [fitScale, setFitScale] = useState(1);
 
     // Phase 4.4: resize debounce with requestAnimationFrame
@@ -138,6 +152,41 @@ export function DesignerCanvas() {
         }
     }, [selectComponents]);
 
+    // Right-click context menu
+    const [ctxMenu, setCtxMenu] = useState<ContextMenuState>(null);
+    const closeMenu = useCallback(() => setCtxMenu(null), []);
+
+    useEffect(() => {
+        if (ctxMenu) {
+            const handler = () => setCtxMenu(null);
+            window.addEventListener('click', handler);
+            window.addEventListener('scroll', handler, true);
+            return () => {
+                window.removeEventListener('click', handler);
+                window.removeEventListener('scroll', handler, true);
+            };
+        }
+    }, [ctxMenu]);
+
+    const handleContextMenu = useCallback((e: React.MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        // Find which component was right-clicked (walk up from target)
+        let node = e.target as HTMLElement | null;
+        let componentId: string | undefined;
+        while (node && node !== e.currentTarget) {
+            if (node.dataset?.componentId) {
+                componentId = node.dataset.componentId;
+                break;
+            }
+            node = node.parentElement;
+        }
+        if (componentId && !selectedIds.includes(componentId)) {
+            selectComponents([componentId]);
+        }
+        setCtxMenu({ x: e.clientX, y: e.clientY, componentId });
+    }, [selectComponents, selectedIds]);
+
     // Phase 1.4: useMemo for visible sorted components
     const visibleSortedComponents = useMemo(() => {
         const componentMap = buildComponentMap(config.components);
@@ -148,8 +197,39 @@ export function DesignerCanvas() {
 
     const scale = Math.max(0.1, (zoom / 100) * fitScale);
 
+    // Ruler tick marks
+    const rulerStep = scale >= 0.5 ? 100 : scale >= 0.25 ? 200 : 400;
+    const hTicks = useMemo(() => {
+        const ticks: number[] = [];
+        for (let x = 0; x <= config.width; x += rulerStep) ticks.push(x);
+        return ticks;
+    }, [config.width, rulerStep]);
+    const vTicks = useMemo(() => {
+        const ticks: number[] = [];
+        for (let y = 0; y <= config.height; y += rulerStep) ticks.push(y);
+        return ticks;
+    }, [config.height, rulerStep]);
+
     return (
         <div className="canvas-container" ref={containerRef}>
+            {/* Horizontal ruler */}
+            <div className="canvas-ruler canvas-ruler--h" style={{ paddingLeft: 30 }}>
+                <div style={{ position: 'relative', width: config.width * scale, height: '100%', overflow: 'hidden' }}>
+                    {hTicks.map(x => (
+                        <span key={x} className="canvas-ruler-tick" style={{ left: x * scale }}>{x}</span>
+                    ))}
+                </div>
+            </div>
+            <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
+                {/* Vertical ruler */}
+                <div className="canvas-ruler canvas-ruler--v">
+                    <div style={{ position: 'relative', height: config.height * scale, width: '100%', overflow: 'hidden' }}>
+                        {vTicks.map(y => (
+                            <span key={y} className="canvas-ruler-tick" style={{ top: y * scale }}>{y}</span>
+                        ))}
+                    </div>
+                </div>
+            <div className="canvas-scroll-area" style={{ flex: 1, overflow: 'auto', position: 'relative' }}>
             <div
                 className="canvas-wrapper"
                 style={{
@@ -174,6 +254,7 @@ export function DesignerCanvas() {
                         transformOrigin: 'top left',
                     }}
                     onClick={handleCanvasClick}
+                    onContextMenu={handleContextMenu}
                 >
                     {showGrid && <div className="canvas-grid" />}
 
@@ -191,12 +272,12 @@ export function DesignerCanvas() {
                             key={`snap-x-${idx}`}
                             style={{
                                 position: 'absolute',
-                                left: x,
+                                left: x - 1,
                                 top: 0,
-                                width: 1,
+                                width: 2,
                                 height: config.height,
                                 background: 'rgba(14, 165, 233, 0.9)',
-                                boxShadow: '0 0 0 1px rgba(14,165,233,0.2)',
+                                boxShadow: '0 0 4px rgba(14,165,233,0.5)',
                                 pointerEvents: 'none',
                                 zIndex: 9999,
                             }}
@@ -208,11 +289,11 @@ export function DesignerCanvas() {
                             style={{
                                 position: 'absolute',
                                 left: 0,
-                                top: y,
+                                top: y - 1,
                                 width: config.width,
-                                height: 1,
+                                height: 2,
                                 background: 'rgba(14, 165, 233, 0.9)',
-                                boxShadow: '0 0 0 1px rgba(14,165,233,0.2)',
+                                boxShadow: '0 0 4px rgba(14,165,233,0.5)',
                                 pointerEvents: 'none',
                                 zIndex: 9999,
                             }}
@@ -232,6 +313,90 @@ export function DesignerCanvas() {
                     )}
                 </div>
             </div>
+
+            </div>{/* end canvas-scroll-area */}
+            </div>{/* end flex row (ruler + canvas) */}
+
+            {/* Right-click context menu */}
+            {ctxMenu && (
+                <div
+                    className="canvas-context-menu"
+                    style={{ left: ctxMenu.x, top: ctxMenu.y }}
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    {ctxMenu.componentId && selectedIds.length > 0 ? (
+                        <>
+                            <button type="button" className="ctx-menu-item" onClick={() => { duplicateSelected(); closeMenu(); }}>
+                                复制组件
+                            </button>
+                            <button type="button" className="ctx-menu-item" onClick={() => { copyComponents(); closeMenu(); }}>
+                                拷贝 (Ctrl+C)
+                            </button>
+                            <button type="button" className="ctx-menu-item" onClick={() => { deleteComponents(selectedIds); closeMenu(); }}>
+                                删除
+                            </button>
+                            <div className="ctx-menu-divider" />
+                            <button type="button" className="ctx-menu-item" onClick={() => {
+                                selectedIds.forEach(id => {
+                                    const c = config.components.find(c => c.id === id);
+                                    if (c) dispatch({ type: 'REORDER_LAYER', payload: { id, direction: 'top' } });
+                                });
+                                closeMenu();
+                            }}>
+                                置顶
+                            </button>
+                            <button type="button" className="ctx-menu-item" onClick={() => {
+                                selectedIds.forEach(id => {
+                                    dispatch({ type: 'REORDER_LAYER', payload: { id, direction: 'bottom' } });
+                                });
+                                closeMenu();
+                            }}>
+                                置底
+                            </button>
+                            <div className="ctx-menu-divider" />
+                            <button type="button" className="ctx-menu-item" onClick={() => {
+                                selectedIds.forEach(id => {
+                                    const c = config.components.find(c => c.id === id);
+                                    if (c) {
+                                        dispatch({ type: 'UPDATE_COMPONENT', payload: { id, updates: { locked: !c.locked } } });
+                                    }
+                                });
+                                closeMenu();
+                            }}>
+                                {config.components.find(c => c.id === selectedIds[0])?.locked ? '解锁' : '锁定'}
+                            </button>
+                            <button type="button" className="ctx-menu-item" onClick={() => {
+                                selectedIds.forEach(id => {
+                                    const c = config.components.find(c => c.id === id);
+                                    if (c) {
+                                        dispatch({ type: 'UPDATE_COMPONENT', payload: { id, updates: { visible: !c.visible } } });
+                                    }
+                                });
+                                closeMenu();
+                            }}>
+                                {config.components.find(c => c.id === selectedIds[0])?.visible ? '隐藏' : '显示'}
+                            </button>
+                        </>
+                    ) : (
+                        <>
+                            <button type="button" className="ctx-menu-item" onClick={() => { pasteComponents(); closeMenu(); }} disabled={!clipboard?.length}>
+                                粘贴 (Ctrl+V)
+                            </button>
+                            <div className="ctx-menu-divider" />
+                            <button type="button" className="ctx-menu-item" onClick={() => { undo(); closeMenu(); }}>
+                                撤销 (Ctrl+Z)
+                            </button>
+                            <button type="button" className="ctx-menu-item" onClick={() => { redo(); closeMenu(); }}>
+                                重做 (Ctrl+Y)
+                            </button>
+                            <div className="ctx-menu-divider" />
+                            <button type="button" className="ctx-menu-item" onClick={() => { selectComponents(config.components.map(c => c.id)); closeMenu(); }}>
+                                全选
+                            </button>
+                        </>
+                    )}
+                </div>
+            )}
         </div>
     );
 }

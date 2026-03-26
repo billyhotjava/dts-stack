@@ -41,6 +41,9 @@ export function buildApiRuntimeRequest(
 export function resolveApiRuntimePayload(payload: unknown, responsePath?: string): unknown {
     const extracted = extractByPath(payload, responsePath);
     if (extracted == null) {
+        if (responsePath && responsePath.trim()) {
+            console.warn(`[DataSource] responsePath "${responsePath}" 未能从响应中提取数据。请检查路径是否正确。`, { availableKeys: payload && typeof payload === 'object' ? Object.keys(payload) : '(非对象)' });
+        }
         return [];
     }
     if (Array.isArray(extracted)) {

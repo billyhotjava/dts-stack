@@ -304,14 +304,7 @@ export function ScreenHeader({
         }
         return 'save';
     });
-    const [toolsSection, setToolsSection] = useState<'design' | 'release' | 'governance'>(() => {
-        if (typeof window === 'undefined') return 'design';
-        const raw = window.localStorage.getItem(TOOLS_SECTION_STORAGE_KEY);
-        if (raw === 'design' || raw === 'release' || raw === 'governance') {
-            return raw;
-        }
-        return 'design';
-    });
+    // toolsSection removed — toolbox split into 3 independent header menus
     const [isSavingTemplate, setIsSavingTemplate] = useState(false);
     const [headerActionNotice, setHeaderActionNotice] = useState<HeaderActionNotice | null>(null);
     const [showSaveTemplateDialog, setShowSaveTemplateDialog] = useState(false);
@@ -475,7 +468,7 @@ export function ScreenHeader({
     const quickInputRef = useRef<HTMLInputElement | null>(null);
     const quickActionRefs = useRef<Array<HTMLButtonElement | null>>([]);
     const menuContainerRef = useRef<HTMLDivElement | null>(null);
-    const [activeMenu, setActiveMenu] = useState<'primary' | 'tools' | null>(null);
+    const [activeMenu, setActiveMenu] = useState<'primary' | 'tools-design' | 'tools-release' | 'tools-governance' | null>(null);
     const [permissions, setPermissions] = useState({
         canRead: true,
         canEdit: true,
@@ -546,10 +539,7 @@ export function ScreenHeader({
         window.localStorage.setItem(PRIMARY_ACTION_STORAGE_KEY, primaryAction);
     }, [primaryAction]);
 
-    useEffect(() => {
-        if (typeof window === 'undefined') return;
-        window.localStorage.setItem(TOOLS_SECTION_STORAGE_KEY, toolsSection);
-    }, [toolsSection]);
+    // toolsSection localStorage persistence removed — no longer needed
 
     useEffect(() => {
         if (!id && primaryAction === 'publish') {
@@ -2148,140 +2138,139 @@ export function ScreenHeader({
                             </HeaderMenu>
                         </div>
                         <HeaderMenu
-                            label={`工具箱${cycleWarnings.length > 0 ? `(${cycleWarnings.length})` : ''}`}
-                            open={activeMenu === 'tools'}
-                            onToggle={() => setActiveMenu((prev) => (prev === 'tools' ? null : 'tools'))}
+                            label={`视图${cycleWarnings.length > 0 ? `(${cycleWarnings.length})` : ''}`}
+                            open={activeMenu === 'tools-design'}
+                            onToggle={() => setActiveMenu((prev) => (prev === 'tools-design' ? null : 'tools-design'))}
                         >
-                            <div className="header-menu-tabs" role="tablist" aria-label="工具箱分区">
-                                <button type="button" className={`header-menu-tab ${toolsSection === 'design' ? 'is-active' : ''}`} onClick={() => setToolsSection('design')}>视图</button>
-                                <button type="button" className={`header-menu-tab ${toolsSection === 'release' ? 'is-active' : ''}`} onClick={() => setToolsSection('release')}>版本导出</button>
-                                <button type="button" className={`header-menu-tab ${toolsSection === 'governance' ? 'is-active' : ''}`} onClick={() => setToolsSection('governance')}>治理</button>
-                            </div>
-                            {toolsSection === 'design' ? (
-                                <>
-                                    {/* 面板 */}
-                                    {onToggleFocusMode && (
-                                        <div className="header-menu-section">
-                                            <div className="header-menu-section-title">面板</div>
-                                            <button type="button" className={`header-btn ${focusMode ? 'active' : ''}`} onClick={() => { onToggleFocusMode(); setActiveMenu(null); }} title="Ctrl/Cmd + \\">
-                                                {focusMode ? '退出聚焦' : '聚焦模式'}
-                                            </button>
-                                            {!focusMode && onToggleLibraryPanel && (
-                                                <button type="button" className={`header-btn ${showLibraryPanel ? 'active' : ''}`} onClick={onToggleLibraryPanel} title="Ctrl/Cmd+Alt+1">
-                                                    {showLibraryPanel ? '隐藏左栏' : '显示左栏'}
-                                                </button>
-                                            )}
-                                            {!focusMode && onToggleInspectorPanel && (
-                                                <button type="button" className={`header-btn ${showInspectorPanel ? 'active' : ''}`} onClick={onToggleInspectorPanel} title="Ctrl/Cmd+Alt+2">
-                                                    {showInspectorPanel ? '隐藏右栏' : '显示右栏'}
-                                                </button>
-                                            )}
-                                        </div>
-                                    )}
-                                    {/* 视图 */}
-                                    <div className="header-menu-section">
-                                        <div className="header-menu-section-title">视图与主题</div>
-                                        <button type="button" className="header-btn" onClick={handleZoomReset} title="缩放重置为 100%">缩放100%</button>
-                                        <button type="button" className="header-btn" onClick={handleZoomFit} title="按当前窗口自动适配缩放">缩放适配</button>
-                                        <button type="button" className={`header-btn ${showGrid ? 'active' : ''}`} onClick={() => dispatch({ type: 'TOGGLE_GRID' })} title="显示/隐藏网格">
-                                            {showGrid ? '隐藏网格' : '显示网格'}
-                                        </button>
-                                        <select className="header-device-select" value={config.theme || ''} onChange={handleToolbarThemeChange} title="切换主题">
-                                            {THEME_OPTIONS.map((opt) => (<option key={opt.value} value={opt.value}>{opt.label}</option>))}
-                                        </select>
-                                    </div>
-                                    {/* 主题工具 */}
-                                    <div className="header-menu-section">
-                                        <div className="header-menu-section-title">主题工具</div>
-                                        <select className="header-device-select" value={themeApplyMode} onChange={(e) => setThemeApplyMode(e.target.value === 'safe' ? 'safe' : 'force')} title="组件样式应用策略">
-                                            <option value="force">强制覆盖</option>
-                                            <option value="safe">仅补缺省</option>
-                                        </select>
-                                        <button type="button" className="header-btn" onClick={() => applyThemeToAllComponents(themeApplyMode)} title="按当前主题批量刷新组件样式">应用样式</button>
-                                        <button type="button" className="header-btn" onClick={handleExportThemePack} title="导出主题包">导出主题</button>
-                                        <button type="button" className="header-btn" onClick={handleImportThemePackClick} title="导入主题包">导入主题</button>
-                                    </div>
-                                    {/* 批量动作 */}
-                                    <div className="header-menu-section">
-                                        <div className="header-menu-section-title">批量动作</div>
-                                        <select className="header-device-select" value={batchAction} onChange={(e) => setBatchAction(e.target.value as BatchAction)} title="批量动作">
-                                            {BATCH_ACTION_OPTIONS.map((item) => (<option key={item.value} value={item.value}>{item.label}</option>))}
-                                        </select>
-                                        <button type="button" className="header-btn" onClick={executeBatchAction} disabled={!canExecuteBatch} title={canExecuteBatch ? '执行批量动作' : '请先选择组件'}>执行动作</button>
-                                    </div>
-                                    {/* 联动 & 设计 */}
-                                    <div className="header-menu-section">
-                                        <div className="header-menu-section-title">设计与联动</div>
-                                        <button type="button" className="header-btn" onClick={() => { setActiveMenu(null); setShowLinkageGraph(prev => !prev); }} title="查看组件联动关系图">联动关系图</button>
-                                        <label className="header-menu-inline-label" htmlFor="screen-design-action">设计动作</label>
-                                        <select id="screen-design-action" className="header-device-select" value={designAction} onChange={(e) => { const next = e.target.value; if (next === 'session' || next === 'variables' || next === 'interaction' || next === 'collaboration' || next === 'template' || next === 'import' || next === 'command') { setDesignAction(next); return; } setDesignAction('variables'); }} title="选择设计动作">
-                                            <option value="variables">变量管理</option>
-                                            <option value="interaction">联动调试</option>
-                                            <option value="session">沉淀会话</option>
-                                            <option value="collaboration">协作批注</option>
-                                            <option value="template">保存模板</option>
-                                            <option value="import">导入JSON</option>
-                                            <option value="command">命令面板</option>
-                                        </select>
-                                        <button type="button" className="header-btn" onClick={executeDesignAction} disabled={!canExecuteDesignAction} title="执行设计动作">执行设计动作</button>
-                                    </div>
-                                    {/* 帮助 */}
-                                    <div className="header-menu-section">
-                                        <div className="header-menu-section-title">帮助</div>
-                                        <button type="button" className="header-btn" onClick={handleShortcutHelp} title="查看快捷键">快捷键</button>
-                                    </div>
-                                </>
-                            ) : null}
-                            {toolsSection === 'release' ? (
+                            {/* 面板 */}
+                            {onToggleFocusMode && (
                                 <div className="header-menu-section">
-                                    <div className="header-menu-section-title">版本与导出</div>
-                                    <label className="header-menu-inline-label" htmlFor="screen-preview-device-mode">预览设备</label>
-                                    <select id="screen-preview-device-mode" className="header-device-select" value={previewDeviceMode} onChange={(e) => { const next = e.target.value; if (next === 'pc' || next === 'tablet' || next === 'mobile') { setPreviewDeviceMode(next); return; } setPreviewDeviceMode('auto'); }} title="预览设备模式">
-                                        <option value="auto">自动</option>
-                                        <option value="pc">PC</option>
-                                        <option value="tablet">平板</option>
-                                        <option value="mobile">手机</option>
-                                    </select>
-                                    {id ? (
-                                        <>
-                                            <label className="header-menu-inline-label" htmlFor="screen-version-action">版本动作</label>
-                                            <select id="screen-version-action" className="header-device-select" value={versionAction} onChange={(e) => { setVersionAction(e.target.value === 'compare' ? 'compare' : 'history'); }} title="选择版本动作">
-                                                <option value="history">版本历史/回滚</option>
-                                                <option value="compare">版本对比</option>
-                                            </select>
-                                            <button type="button" className="header-btn" onClick={executeVersionAction} disabled={isLoadingVersions || (versionAction === 'history' ? !permissions.canPublish : !permissions.canRead)} title={versionAction === 'history' ? '查看版本历史并回滚' : '查看版本差异摘要'}>
-                                                {isLoadingVersions ? '加载中...' : '执行版本动作'}
-                                            </button>
-                                        </>
-                                    ) : null}
-                                    <label className="header-menu-inline-label" htmlFor="screen-export-action">导出动作</label>
-                                    <select id="screen-export-action" className="header-device-select" value={exportAction} onChange={(e) => { const next = e.target.value; if (next === 'json' || next === 'pdf' || next === 'png') { setExportAction(next); return; } setExportAction('png'); }} title="选择导出格式">
-                                        <option value="png">导出PNG</option>
-                                        <option value="pdf">导出PDF</option>
-                                        <option value="json">导出JSON</option>
-                                    </select>
-                                    <button type="button" className="header-btn" onClick={executeExportAction} title="执行导出">执行导出</button>
-                                </div>
-                            ) : null}
-                            {toolsSection === 'governance' ? (
-                                <div className="header-menu-section">
-                                    <div className="header-menu-section-title">治理与安全</div>
-                                    <label className="header-menu-inline-label" htmlFor="screen-governance-action">治理动作</label>
-                                    <select id="screen-governance-action" className="header-device-select" value={governanceAction} onChange={(e) => { const next = e.target.value; if (next === 'edit-lock' || next === 'cache' || next === 'compliance' || next === 'health' || next === 'acl' || next === 'audit' || next === 'share-policy' || next === 'share-link') { setGovernanceAction(next); return; } setGovernanceAction('cache'); }} title="选择治理动作">
-                                        <option value="edit-lock">编辑锁{lockedByOther ? '(占用)' : (editLock?.mine ? '(我)' : '')}</option>
-                                        <option value="cache">缓存观测</option>
-                                        <option value="compliance">合规</option>
-                                        <option value="health">体检</option>
-                                        <option value="acl">权限</option>
-                                        <option value="audit">审计</option>
-                                        <option value="share-policy">分享策略</option>
-                                        <option value="share-link">分享链接</option>
-                                    </select>
-                                    <button type="button" className="header-btn" onClick={executeGovernanceAction} disabled={!canExecuteGovernanceAction || (governanceAction === 'share-link' && isSharing)} title="执行治理动作">
-                                        {governanceAction === 'share-link' && isSharing ? '分享中...' : '执行治理动作'}
+                                    <div className="header-menu-section-title">面板</div>
+                                    <button type="button" className={`header-btn ${focusMode ? 'active' : ''}`} onClick={() => { onToggleFocusMode(); setActiveMenu(null); }} title="Ctrl/Cmd + \\">
+                                        {focusMode ? '退出聚焦' : '聚焦模式'}
                                     </button>
+                                    {!focusMode && onToggleLibraryPanel && (
+                                        <button type="button" className={`header-btn ${showLibraryPanel ? 'active' : ''}`} onClick={onToggleLibraryPanel} title="Ctrl/Cmd+Alt+1">
+                                            {showLibraryPanel ? '隐藏左栏' : '显示左栏'}
+                                        </button>
+                                    )}
+                                    {!focusMode && onToggleInspectorPanel && (
+                                        <button type="button" className={`header-btn ${showInspectorPanel ? 'active' : ''}`} onClick={onToggleInspectorPanel} title="Ctrl/Cmd+Alt+2">
+                                            {showInspectorPanel ? '隐藏右栏' : '显示右栏'}
+                                        </button>
+                                    )}
                                 </div>
-                            ) : null}
+                            )}
+                            {/* 视图 */}
+                            <div className="header-menu-section">
+                                <div className="header-menu-section-title">视图与主题</div>
+                                <button type="button" className="header-btn" onClick={handleZoomReset} title="缩放重置为 100%">缩放100%</button>
+                                <button type="button" className="header-btn" onClick={handleZoomFit} title="按当前窗口自动适配缩放">缩放适配</button>
+                                <button type="button" className={`header-btn ${showGrid ? 'active' : ''}`} onClick={() => dispatch({ type: 'TOGGLE_GRID' })} title="显示/隐藏网格">
+                                    {showGrid ? '隐藏网格' : '显示网格'}
+                                </button>
+                                <select className="header-device-select" value={config.theme || ''} onChange={handleToolbarThemeChange} title="切换主题">
+                                    {THEME_OPTIONS.map((opt) => (<option key={opt.value} value={opt.value}>{opt.label}</option>))}
+                                </select>
+                            </div>
+                            {/* 主题工具 */}
+                            <div className="header-menu-section">
+                                <div className="header-menu-section-title">主题工具</div>
+                                <select className="header-device-select" value={themeApplyMode} onChange={(e) => setThemeApplyMode(e.target.value === 'safe' ? 'safe' : 'force')} title="组件样式应用策略">
+                                    <option value="force">强制覆盖</option>
+                                    <option value="safe">仅补缺省</option>
+                                </select>
+                                <button type="button" className="header-btn" onClick={() => applyThemeToAllComponents(themeApplyMode)} title="按当前主题批量刷新组件样式">应用样式</button>
+                                <button type="button" className="header-btn" onClick={handleExportThemePack} title="导出主题包">导出主题</button>
+                                <button type="button" className="header-btn" onClick={handleImportThemePackClick} title="导入主题包">导入主题</button>
+                            </div>
+                            {/* 批量动作 */}
+                            <div className="header-menu-section">
+                                <div className="header-menu-section-title">批量动作</div>
+                                <select className="header-device-select" value={batchAction} onChange={(e) => setBatchAction(e.target.value as BatchAction)} title="批量动作">
+                                    {BATCH_ACTION_OPTIONS.map((item) => (<option key={item.value} value={item.value}>{item.label}</option>))}
+                                </select>
+                                <button type="button" className="header-btn" onClick={executeBatchAction} disabled={!canExecuteBatch} title={canExecuteBatch ? '执行批量动作' : '请先选择组件'}>执行动作</button>
+                            </div>
+                            {/* 联动 & 设计 */}
+                            <div className="header-menu-section">
+                                <div className="header-menu-section-title">设计与联动</div>
+                                <button type="button" className="header-btn" onClick={() => { setActiveMenu(null); setShowLinkageGraph(prev => !prev); }} title="查看组件联动关系图">联动关系图</button>
+                                <label className="header-menu-inline-label" htmlFor="screen-design-action">设计动作</label>
+                                <select id="screen-design-action" className="header-device-select" value={designAction} onChange={(e) => { const next = e.target.value; if (next === 'session' || next === 'variables' || next === 'interaction' || next === 'collaboration' || next === 'template' || next === 'import' || next === 'command') { setDesignAction(next); return; } setDesignAction('variables'); }} title="选择设计动作">
+                                    <option value="variables">变量管理</option>
+                                    <option value="interaction">联动调试</option>
+                                    <option value="session">沉淀会话</option>
+                                    <option value="collaboration">协作批注</option>
+                                    <option value="template">保存模板</option>
+                                    <option value="import">导入JSON</option>
+                                    <option value="command">命令面板</option>
+                                </select>
+                                <button type="button" className="header-btn" onClick={executeDesignAction} disabled={!canExecuteDesignAction} title="执行设计动作">执行设计动作</button>
+                            </div>
+                            {/* 帮助 */}
+                            <div className="header-menu-section">
+                                <div className="header-menu-section-title">帮助</div>
+                                <button type="button" className="header-btn" onClick={handleShortcutHelp} title="查看快捷键">快捷键</button>
+                            </div>
+                        </HeaderMenu>
+                        <HeaderMenu
+                            label="版本导出"
+                            open={activeMenu === 'tools-release'}
+                            onToggle={() => setActiveMenu((prev) => (prev === 'tools-release' ? null : 'tools-release'))}
+                        >
+                            <div className="header-menu-section">
+                                <div className="header-menu-section-title">版本与导出</div>
+                                <label className="header-menu-inline-label" htmlFor="screen-preview-device-mode">预览设备</label>
+                                <select id="screen-preview-device-mode" className="header-device-select" value={previewDeviceMode} onChange={(e) => { const next = e.target.value; if (next === 'pc' || next === 'tablet' || next === 'mobile') { setPreviewDeviceMode(next); return; } setPreviewDeviceMode('auto'); }} title="预览设备模式">
+                                    <option value="auto">自动</option>
+                                    <option value="pc">PC</option>
+                                    <option value="tablet">平板</option>
+                                    <option value="mobile">手机</option>
+                                </select>
+                                {id ? (
+                                    <>
+                                        <label className="header-menu-inline-label" htmlFor="screen-version-action">版本动作</label>
+                                        <select id="screen-version-action" className="header-device-select" value={versionAction} onChange={(e) => { setVersionAction(e.target.value === 'compare' ? 'compare' : 'history'); }} title="选择版本动作">
+                                            <option value="history">版本历史/回滚</option>
+                                            <option value="compare">版本对比</option>
+                                        </select>
+                                        <button type="button" className="header-btn" onClick={executeVersionAction} disabled={isLoadingVersions || (versionAction === 'history' ? !permissions.canPublish : !permissions.canRead)} title={versionAction === 'history' ? '查看版本历史并回滚' : '查看版本差异摘要'}>
+                                            {isLoadingVersions ? '加载中...' : '执行版本动作'}
+                                        </button>
+                                    </>
+                                ) : null}
+                                <label className="header-menu-inline-label" htmlFor="screen-export-action">导出动作</label>
+                                <select id="screen-export-action" className="header-device-select" value={exportAction} onChange={(e) => { const next = e.target.value; if (next === 'json' || next === 'pdf' || next === 'png') { setExportAction(next); return; } setExportAction('png'); }} title="选择导出格式">
+                                    <option value="png">导出PNG</option>
+                                    <option value="pdf">导出PDF</option>
+                                    <option value="json">导出JSON</option>
+                                </select>
+                                <button type="button" className="header-btn" onClick={executeExportAction} title="执行导出">执行导出</button>
+                            </div>
+                        </HeaderMenu>
+                        <HeaderMenu
+                            label="治理"
+                            open={activeMenu === 'tools-governance'}
+                            onToggle={() => setActiveMenu((prev) => (prev === 'tools-governance' ? null : 'tools-governance'))}
+                        >
+                            <div className="header-menu-section">
+                                <div className="header-menu-section-title">治理与安全</div>
+                                <label className="header-menu-inline-label" htmlFor="screen-governance-action">治理动作</label>
+                                <select id="screen-governance-action" className="header-device-select" value={governanceAction} onChange={(e) => { const next = e.target.value; if (next === 'edit-lock' || next === 'cache' || next === 'compliance' || next === 'health' || next === 'acl' || next === 'audit' || next === 'share-policy' || next === 'share-link') { setGovernanceAction(next); return; } setGovernanceAction('cache'); }} title="选择治理动作">
+                                    <option value="edit-lock">编辑锁{lockedByOther ? '(占用)' : (editLock?.mine ? '(我)' : '')}</option>
+                                    <option value="cache">缓存观测</option>
+                                    <option value="compliance">合规</option>
+                                    <option value="health">体检</option>
+                                    <option value="acl">权限</option>
+                                    <option value="audit">审计</option>
+                                    <option value="share-policy">分享策略</option>
+                                    <option value="share-link">分享链接</option>
+                                </select>
+                                <button type="button" className="header-btn" onClick={executeGovernanceAction} disabled={!canExecuteGovernanceAction || (governanceAction === 'share-link' && isSharing)} title="执行治理动作">
+                                    {governanceAction === 'share-link' && isSharing ? '分享中...' : '执行治理动作'}
+                                </button>
+                            </div>
                         </HeaderMenu>
                         <input ref={themeInputRef} type="file" accept="application/json,.json" style={{ display: 'none' }} onChange={handleThemePackFileChange} />
                     </div>

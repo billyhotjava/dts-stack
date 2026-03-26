@@ -2118,31 +2118,11 @@ export const analyticsApi = {
 		sendJson<MarketplaceCatalogItem>(`/analytics/api/marketplace/components/${encodeURIComponent(id)}/install`, {}),
 	installMarketplaceTemplate: (id: string) =>
 		sendJson<MarketplaceCatalogItem>(`/analytics/api/marketplace/templates/${encodeURIComponent(id)}/install`, {}),
-	// Screen uploaded datasets
-	createScreenDataset: (body: {
-		name: string;
-		originalFileName: string;
-		fileType: string;
-		columnsMeta: Array<{ name: string; displayName: string; type: string }>;
+	// Upload table data
+	uploadTable: (dbId: number | string, body: {
+		tableName: string;
+		columns: Array<{ name: string; displayName: string; type: string }>;
 		rows: unknown[][];
-		fileSize: number;
-	}) => sendJson<{ uuid: string; name: string; rowCount: number }>(
-		'/analytics/api/screen-datasets', body),
-	listScreenDatasets: () => fetchJson<Array<{
-		uuid: string;
-		name: string;
-		originalFileName: string;
-		fileType: string;
-		columnsMeta: Array<{ name: string; displayName: string; type: string }>;
-		rowCount: number;
-		fileSize: number;
-		createdAt: string;
-	}>>('/analytics/api/screen-datasets'),
-	getScreenDatasetData: (uuid: string) => fetchJson<{
-		cols: Array<{ name: string; displayName: string; type: string }>;
-		rows: unknown[][];
-		rowCount: number;
-	}>(`/analytics/api/screen-datasets/${uuid}/data`),
-	deleteScreenDataset: (uuid: string) =>
-		requestJson<void>(`/analytics/api/screen-datasets/${uuid}`, 'DELETE'),
+	}) => sendJson<{ tableName: string; schema: string; rowCount: number }>(
+		`/analytics/api/database/${dbId}/upload-table`, body),
 };

@@ -79,7 +79,7 @@ export interface ScreenThemeTokens {
 }
 
 const legacyDarkTheme: ScreenThemeTokens = {
-    canvasBackground: '#0d1b2a',
+    canvasBackground: '#1e1f26',
     cardBackground: 'linear-gradient(135deg, rgba(99, 102, 241, 0.2) 0%, rgba(99, 102, 241, 0.05) 100%)',
     cardBorder: '1px solid rgba(99, 102, 241, 0.3)',
     cardShadow: 'none',

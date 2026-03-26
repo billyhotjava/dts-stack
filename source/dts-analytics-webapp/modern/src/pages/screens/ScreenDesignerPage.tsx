@@ -12,6 +12,7 @@ import {
     resolveInitialFocusMode,
     resolveInitialRightPanelTab,
     resolveInitialSidePanelVisibility,
+    type RightPanelTab,
 } from './screenDesignerLayoutState';
 import {
     ComponentLibraryPanel,
@@ -45,7 +46,7 @@ function ScreenDesignerContent() {
     } = useScreen();
     const { selectedIds } = state;
     const { config } = state;
-    const [rightPanelTab, setRightPanelTab] = useState<'property' | 'layer'>(() => resolveInitialRightPanelTab(
+    const [rightPanelTab, setRightPanelTab] = useState<RightPanelTab>(() => resolveInitialRightPanelTab(
         typeof window !== 'undefined' ? window.localStorage : undefined,
     ));
     const [focusMode, setFocusMode] = useState<boolean>(() => resolveInitialFocusMode(
@@ -66,8 +67,17 @@ function ScreenDesignerContent() {
         if (typeof window === 'undefined') return;
         window.localStorage.setItem('dts.analytics.screenDesigner.focusMode', focusMode ? 'true' : 'false');
     }, [focusMode]);
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        window.localStorage.setItem('dts.analytics.screenDesigner.showLibraryPanel', showLibraryPanel ? 'true' : 'false');
+    }, [showLibraryPanel]);
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        window.localStorage.setItem('dts.analytics.screenDesigner.showInspectorPanel', showInspectorPanel ? 'true' : 'false');
+    }, [showInspectorPanel]);
     // --- Multi-page management ---
     const [currentPageIndex, setCurrentPageIndex] = useState(0);
+    const [showShortcuts, setShowShortcuts] = useState(false);
     const pages: ScreenPage[] = useMemo(() => {
         return resolveScreenPages(config);
     }, [config]);
@@ -176,7 +186,7 @@ function ScreenDesignerContent() {
                     if (normalized.warnings.length > 0) {
                         console.warn('[screen-spec-v2] normalized with warnings:', normalized.warnings);
                     }
-                    const backgroundColor = normalized.config.backgroundColor || '#0d1b2a';
+                    const backgroundColor = normalized.config.backgroundColor || '#1e1f26';
                     const resolvedTheme = resolveScreenTheme(
                         normalized.config.theme,
                         backgroundColor,
@@ -202,7 +212,7 @@ function ScreenDesignerContent() {
         if (normalized.warnings.length > 0) {
             console.warn('[screen-spec-v2] initial template config normalized with warnings:', normalized.warnings);
         }
-        const backgroundColor = normalized.config.backgroundColor || '#0d1b2a';
+        const backgroundColor = normalized.config.backgroundColor || '#1e1f26';
         const resolvedTheme = resolveScreenTheme(
             normalized.config.theme,
             backgroundColor,
@@ -290,6 +300,12 @@ function ScreenDesignerContent() {
                 e.preventDefault();
                 dispatch({ type: 'SET_ZOOM', payload: 100 });
             }
+            // Ctrl/Cmd+/ : Toggle shortcuts panel
+            if (hotkey && e.key === '/') {
+                e.preventDefault();
+                setShowShortcuts((prev) => !prev);
+                return;
+            }
             // Ctrl/Cmd+\ : Toggle focus mode
             if (hotkey && e.code === 'Backslash') {
                 e.preventDefault();
@@ -306,15 +322,11 @@ function ScreenDesignerContent() {
                 setShowInspectorPanel((prev) => !prev);
                 return;
             }
-            // Ctrl/Cmd+1/2 : switch right panel tab
-            if (hotkey && !e.altKey && e.key === '1') {
+            // Ctrl/Cmd+1..5 : switch right panel tab
+            const tabShortcuts: Record<string, RightPanelTab> = { '1': 'style', '2': 'data', '3': 'interaction', '4': 'layer', '5': 'advanced' };
+            if (hotkey && !e.altKey && tabShortcuts[e.key]) {
                 e.preventDefault();
-                setRightPanelTab('property');
-                return;
-            }
-            if (hotkey && !e.altKey && e.key === '2') {
-                e.preventDefault();
-                setRightPanelTab('layer');
+                setRightPanelTab(tabShortcuts[e.key]);
                 return;
             }
             // Arrow keys: nudge selected components (Shift = 10px)
@@ -349,6 +361,7 @@ function ScreenDesignerContent() {
     }, [undo, redo, deleteComponents, copyComponents, pasteComponents, duplicateSelected, selectedIds, clipboard, dispatch, selectComponents, state.config.components, state.config.height, state.config.width, state.zoom]);
 
     return (
+        <>
         <ScreenRuntimeProvider definitions={state.config.globalVariables}>
             <div
                 data-testid="analytics-screen-designer"
@@ -392,25 +405,26 @@ function ScreenDesignerContent() {
                         <div className="designer-side-rail designer-side-rail--inspector">
                             <div className="designer-right-panel">
                                 <div className="designer-right-panel-tabs">
-                                    <button
-                                        type="button"
-                                        className={`designer-right-panel-tab ${rightPanelTab === 'property' ? 'active' : ''}`}
-                                        onClick={() => setRightPanelTab('property')}
-                                        title="组件属性配置"
-                                    >
-                                        属性
-                                    </button>
-                                    <button
-                                        type="button"
-                                        className={`designer-right-panel-tab ${rightPanelTab === 'layer' ? 'active' : ''}`}
-                                        onClick={() => setRightPanelTab('layer')}
-                                        title="图层管理"
-                                    >
-                                        图层
-                                    </button>
+                                    {([
+                                        ['style', '样式', '组件外观与位置'],
+                                        ['data', '数据', '数据源与字段映射'],
+                                        ['interaction', '交互', '联动/下钻/动作'],
+                                        ['layer', '图层', '图层管理与排序'],
+                                        ['advanced', '高级', '动画/解释/其他'],
+                                    ] as const).map(([key, label, title]) => (
+                                        <button
+                                            key={key}
+                                            type="button"
+                                            className={`designer-right-panel-tab ${rightPanelTab === key ? 'active' : ''}`}
+                                            onClick={() => setRightPanelTab(key)}
+                                            title={title}
+                                        >
+                                            {label}
+                                        </button>
+                                    ))}
                                 </div>
                                 <div className="designer-right-panel-content">
-                                    {rightPanelTab === 'property' ? <PropertyPanel /> : <LayerPanel />}
+                                    {rightPanelTab === 'layer' ? <LayerPanel /> : <PropertyPanel activeTab={rightPanelTab} />}
                                 </div>
                             </div>
                         </div>
@@ -418,6 +432,45 @@ function ScreenDesignerContent() {
                 </div>
             </div>
         </ScreenRuntimeProvider>
+            {/* Shortcuts Panel (Ctrl+/) */}
+            {showShortcuts && (
+                <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowShortcuts(false)}>
+                    <div style={{ background: '#1a1f36', borderRadius: 12, padding: '24px 32px', maxWidth: 480, color: '#e2e8f0', boxShadow: '0 20px 60px rgba(0,0,0,0.5)', border: '1px solid rgba(255,255,255,0.1)' }} onClick={(e) => e.stopPropagation()}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
+                            <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>快捷键</h2>
+                            <button type="button" style={{ background: 'none', border: 'none', color: '#888', fontSize: 20, cursor: 'pointer' }} onClick={() => setShowShortcuts(false)}>×</button>
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '8px 24px', fontSize: 13 }}>
+                            {[
+                                ['撤销', 'Ctrl+Z'],
+                                ['重做', 'Ctrl+Y'],
+                                ['复制', 'Ctrl+C'],
+                                ['粘贴', 'Ctrl+V'],
+                                ['复制组件', 'Ctrl+D'],
+                                ['全选', 'Ctrl+A'],
+                                ['删除', 'Delete'],
+                                ['放大', 'Ctrl++'],
+                                ['缩小', 'Ctrl+-'],
+                                ['重置缩放', 'Ctrl+0'],
+                                ['聚焦模式', 'Ctrl+\\'],
+                                ['左栏显隐', 'Ctrl+Alt+1'],
+                                ['右栏显隐', 'Ctrl+Alt+2'],
+                                ['属性面板', 'Ctrl+1'],
+                                ['图层面板', 'Ctrl+2'],
+                                ['微调位置', '方向键'],
+                                ['大步微调', 'Shift+方向键'],
+                                ['快捷键面板', 'Ctrl+/'],
+                            ].map(([label, key]) => (
+                                <div key={label} style={{ display: 'contents' }}>
+                                    <span>{label}</span>
+                                    <kbd style={{ padding: '2px 8px', borderRadius: 4, background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', fontSize: 12, fontFamily: 'monospace' }}>{key}</kbd>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            )}
+        </>
     );
 }
 

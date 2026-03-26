@@ -287,7 +287,7 @@ export function normalizeScreenConfig(
     const id = options?.id ?? row.id ?? '';
     const width = asNumber(row.width, 1920, 200);
     const height = asNumber(row.height, 1080, 120);
-    const backgroundColor = asString(row.backgroundColor) || '#0d1b2a';
+    const backgroundColor = asString(row.backgroundColor) || '#1e1f26';
     const themeRaw = asString(row.theme);
     const theme = themeRaw && THEMES.has(themeRaw as ScreenTheme) ? (themeRaw as ScreenTheme) : undefined;
 

@@ -45,6 +45,7 @@ export interface EChartsRendererProps {
 
     // Axis font / label config
     axisFontSize: number;
+    axisLabelColor?: string;
     seriesLabelFontSize: number;
     xAxisLabelRotate: number;
     xAxisLabelInterval: number;
@@ -107,7 +108,7 @@ export function renderECharts(props: EChartsRendererProps): ReactNode | null {
         type, c, t, width, height, mode, componentId, runtime,
         EChart, renderEChartWithHandles,
         themeOptions, chartMotionOption, chartTitleLayout, legendConfig, axisGrid, seriesColors,
-        axisFontSize, seriesLabelFontSize,
+        axisFontSize, axisLabelColor: axisLabelColorOverride, seriesLabelFontSize,
         xAxisLabelRotate, xAxisLabelInterval, formatXAxisLabel,
         axisSeriesLabelShow, resolvedAxisSeriesLabelStrategy, axisSeriesLabelFormatter,
         axisLineLabelPosition, axisBarLabelPosition, axisBarLabelColor, axisTooltipFormatter,
@@ -120,6 +121,7 @@ export function renderECharts(props: EChartsRendererProps): ReactNode | null {
         mapDrillRegion, setMapDrillRegion, mapReadyVersion, hasMapFn,
     } = props;
 
+    const axisLabelColor = axisLabelColorOverride || t.echarts.axisLabelColor;
     const component = { id: componentId };
 
     switch (type) {
@@ -142,7 +144,7 @@ export function renderECharts(props: EChartsRendererProps): ReactNode | null {
                     data: c.xAxisData as string[],
                     axisLine: { lineStyle: { color: t.echarts.axisLineColor } },
                     axisLabel: {
-                        color: t.echarts.axisLabelColor,
+                        color: axisLabelColor,
                         fontSize: axisFontSize,
                         rotate: xAxisLabelRotate,
                         hideOverlap: true,
@@ -153,7 +155,7 @@ export function renderECharts(props: EChartsRendererProps): ReactNode | null {
                 yAxis: {
                     type: 'value',
                     axisLine: { lineStyle: { color: t.echarts.axisLineColor } },
-                    axisLabel: { color: t.echarts.axisLabelColor, fontSize: axisFontSize },
+                    axisLabel: { color: axisLabelColor, fontSize: axisFontSize },
                     splitLine: { lineStyle: { color: t.echarts.splitLineColor } },
                 },
                 series: (Array.isArray(c.series) ? c.series as Array<{ name: string; data: number[] }> : []).map((s, idx) => {
@@ -199,7 +201,7 @@ export function renderECharts(props: EChartsRendererProps): ReactNode | null {
                 data: c.xAxisData as string[],
                 axisLine: { lineStyle: { color: t.echarts.axisLineColor } },
                 axisLabel: {
-                    color: t.echarts.axisLabelColor,
+                    color: axisLabelColor,
                     fontSize: axisFontSize,
                     rotate: barHorizontal ? 0 : xAxisLabelRotate,
                     hideOverlap: true,
@@ -210,7 +212,7 @@ export function renderECharts(props: EChartsRendererProps): ReactNode | null {
             const valueAxisConfig = {
                 type: 'value' as const,
                 axisLine: { lineStyle: { color: t.echarts.axisLineColor } },
-                axisLabel: { color: t.echarts.axisLabelColor, fontSize: axisFontSize },
+                axisLabel: { color: axisLabelColor, fontSize: axisFontSize },
                 splitLine: { lineStyle: { color: t.echarts.splitLineColor } },
             };
             return renderEChartWithHandles({
@@ -573,7 +575,7 @@ export function renderECharts(props: EChartsRendererProps): ReactNode | null {
                 xAxis: {
                     name: (c as any).xAxisName || '',
                     axisLine: { lineStyle: { color: t.echarts.axisLineColor } },
-                    axisLabel: { color: t.echarts.axisLabelColor, fontSize: axisFontSize },
+                    axisLabel: { color: axisLabelColor, fontSize: axisFontSize },
                     splitLine: { lineStyle: { color: t.echarts.splitLineColor } },
                 },
                 yAxis: {
@@ -581,7 +583,7 @@ export function renderECharts(props: EChartsRendererProps): ReactNode | null {
                     type: 'value' as const,
                     axisLine: { lineStyle: { color: t.echarts.axisLineColor } },
                     axisLabel: {
-                        color: t.echarts.axisLabelColor,
+                        color: axisLabelColor,
                         fontSize: axisFontSize,
                         formatter: (v: number) => ['', '低', '中', '高'][v] || String(v),
                     },
@@ -616,7 +618,7 @@ export function renderECharts(props: EChartsRendererProps): ReactNode | null {
                     data: c.xAxisData as string[],
                     axisLine: { lineStyle: { color: t.echarts.axisLineColor } },
                     axisLabel: {
-                        color: t.echarts.axisLabelColor,
+                        color: axisLabelColor,
                         fontSize: axisFontSize,
                         rotate: xAxisLabelRotate,
                         hideOverlap: true,
@@ -627,12 +629,12 @@ export function renderECharts(props: EChartsRendererProps): ReactNode | null {
                 yAxis: comboYAxis.map((y, i) => ({
                     type: 'value',
                     name: y.name,
-                    nameTextStyle: { color: t.echarts.axisLabelColor, fontSize: axisFontSize },
+                    nameTextStyle: { color: axisLabelColor, fontSize: axisFontSize },
                     min: y.min,
                     max: y.max,
                     position: i === 0 ? 'left' : 'right',
                     axisLine: { show: true, lineStyle: { color: t.echarts.axisLineColor } },
-                    axisLabel: { color: t.echarts.axisLabelColor, fontSize: axisFontSize },
+                    axisLabel: { color: axisLabelColor, fontSize: axisFontSize },
                     splitLine: { show: i === 0, lineStyle: { color: t.echarts.splitLineColor } },
                 })),
                 series: comboSeries.map((s, idx) => ({
@@ -774,12 +776,12 @@ export function renderECharts(props: EChartsRendererProps): ReactNode | null {
                     type: 'category',
                     data: wfCategories,
                     axisLine: { lineStyle: { color: t.echarts.axisLineColor } },
-                    axisLabel: { color: t.echarts.axisLabelColor, fontSize: axisFontSize, rotate: xAxisLabelRotate },
+                    axisLabel: { color: axisLabelColor, fontSize: axisFontSize, rotate: xAxisLabelRotate },
                 },
                 yAxis: {
                     type: 'value',
                     axisLine: { lineStyle: { color: t.echarts.axisLineColor } },
-                    axisLabel: { color: t.echarts.axisLabelColor, fontSize: axisFontSize },
+                    axisLabel: { color: axisLabelColor, fontSize: axisFontSize },
                     splitLine: { lineStyle: { color: t.echarts.splitLineColor } },
                 },
                 series: [

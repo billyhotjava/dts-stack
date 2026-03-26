@@ -1,15 +1,15 @@
 import React, { useState, useRef, useCallback, useMemo } from 'react';
 import * as XLSX from 'xlsx';
 import Papa from 'papaparse';
-import { analyticsApi } from '../../../api/analyticsApi';
+import { analyticsApi } from '../api/analyticsApi';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
 /* ------------------------------------------------------------------ */
 
 export interface UploadedDataEditorProps {
-    onBind: (config: { datasetId: string; datasetName: string }) => void;
-    existingDatasetId?: string;
+    databaseId: number | string;
+    onComplete: (result: { tableName: string; schema: string; rowCount: number }) => void;
 }
 
 type ColType = 'text' | 'number' | 'date' | 'boolean';
@@ -239,7 +239,7 @@ const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 /*  Component                                                          */
 /* ------------------------------------------------------------------ */
 
-export default function UploadedDataEditor({ onBind, existingDatasetId }: UploadedDataEditorProps) {
+export default function UploadedDataEditor({ databaseId, onComplete }: UploadedDataEditorProps) {
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     // File state
@@ -409,30 +409,19 @@ export default function UploadedDataEditor({ onBind, existingDatasetId }: Upload
         setError(null);
         try {
             const activeCols = columns.map((c, i) => ({ ...c, origIdx: i })).filter((c) => !c.excluded);
-            const colsMeta = activeCols.map((c) => ({
-                name: c.originalName,
-                displayName: c.displayName,
-                type: c.type,
-            }));
-            const rows = allRows.map((row) =>
-                activeCols.map((c) => (row as unknown[])[c.origIdx])
-            );
-            const ext = file.name.split('.').pop()?.toLowerCase() || '';
-            const result = await analyticsApi.createScreenDataset({
-                name: datasetName || filenameWithoutExt(file.name),
-                originalFileName: file.name,
-                fileType: ext,
-                columnsMeta: colsMeta,
-                rows: rows,
-                fileSize: file.size,
+            const activeIndices = activeCols.map((c) => c.origIdx);
+            const result = await analyticsApi.uploadTable(databaseId, {
+                tableName: datasetName || 'imported_data',
+                columns: activeCols.map(c => ({ name: c.originalName, displayName: c.displayName, type: c.type })),
+                rows: allRows.map(row => activeIndices.map(i => (row as unknown[])[i])),
             });
-            onBind({ datasetId: result.uuid, datasetName: result.name });
+            onComplete(result);
         } catch (err) {
             setError('上传失败：' + (err instanceof Error ? err.message : String(err)));
         } finally {
             setUploading(false);
         }
-    }, [file, activeColumns, columns, allRows, datasetName, onBind]);
+    }, [file, activeColumns, columns, allRows, datasetName, databaseId, onComplete]);
 
     /* ---------- Drag and drop ---------- */
 
@@ -466,32 +455,6 @@ export default function UploadedDataEditor({ onBind, existingDatasetId }: Upload
     }, []);
 
     /* ---------- Render ---------- */
-
-    // If already bound to a dataset, show that
-    if (existingDatasetId && !file) {
-        return (
-            <div style={{ fontSize: 11, color: '#94a3b8', padding: '8px 0' }}>
-                <span>已绑定数据集：</span>
-                <span style={{ color: '#e2e8f0' }}>{existingDatasetId}</span>
-                <div style={{ marginTop: 8 }}>
-                    <button
-                        type="button"
-                        style={{ ...S.uploadBtn, background: 'rgba(148,163,184,0.15)', fontSize: 12, padding: '6px 0' }}
-                        onClick={() => fileInputRef.current?.click()}
-                    >
-                        重新上传
-                    </button>
-                    <input
-                        ref={fileInputRef}
-                        type="file"
-                        accept=".xlsx,.xls,.csv"
-                        style={{ display: 'none' }}
-                        onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }}
-                    />
-                </div>
-            </div>
-        );
-    }
 
     // No file selected yet — show drop zone
     if (!file) {
