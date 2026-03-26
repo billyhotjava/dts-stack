@@ -182,8 +182,8 @@ export type ComponentType =
     | 'bar3d-chart'
     | 'scatter3d-chart';
 
-export type DataSourceType = 'static' | 'api' | 'card' | 'sql' | 'dataset' | 'metric' | 'database';
-export type QuerySourceType = 'metric' | 'dataset' | 'sql' | 'card' | 'api';
+export type DataSourceType = 'static' | 'api' | 'card' | 'sql' | 'dataset' | 'metric' | 'database' | 'uploaded';
+export type QuerySourceType = 'metric' | 'dataset' | 'sql' | 'card' | 'api' | 'uploaded';
 
 export interface DataSourceConfig {
     /**
@@ -235,6 +235,10 @@ export interface DataSourceConfig {
         metricId?: number; // 语义指标绑定
         metricVersion?: string; // 指标版本/口径版本
         parameterBindings?: CardParameterBinding[]; // 参数绑定（变量/静态值）
+    };
+    uploadedConfig?: {
+        datasetId: string;
+        datasetName?: string;
     };
 }
 
