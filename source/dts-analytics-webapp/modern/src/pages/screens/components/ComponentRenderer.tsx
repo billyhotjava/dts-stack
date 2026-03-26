@@ -1609,6 +1609,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                 }
                 const { header: displayHeader, data: displayData, columnMeta } = resolveBoundTableData(c, { defaultAlign: 'left' });
                 const fontSize = (c.fontSize as number) || 16;
+                const headerFontSize = (c.headerFontSize as number) || fontSize;
                 const headerColor = resolveTextColor(c.headerColor as string | undefined, t.textPrimary);
                 const headerBackground = (c.headerBackground as string) || 'rgba(148, 163, 184, 0.16)';
                 const bodyColor = resolveTextColor(c.bodyColor as string | undefined, t.textSecondary);
@@ -1647,6 +1648,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                                         {displayHeader.map((title, i) => (
                                             <th key={i} style={{
                                                 color: headerColor,
+                                                fontSize: headerFontSize,
                                                 width: columnMeta[i]?.width ? `${columnMeta[i].width}%` : undefined,
                                                 borderBottom: '1px solid ' + borderColor,
                                                 borderRight: i < displayHeader.length - 1 ? '1px solid ' + borderColor : 'none',
