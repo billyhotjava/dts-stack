@@ -261,6 +261,12 @@ const messages: Record<Locale, Record<string, string>> = {
 		"filter.title": "筛选",
 		"filter.clear": "清除",
 		"filter.all": "（全部）",
+		"data.tabPlatform": "平台数据源",
+		"data.tabOther": "其他数据源",
+		"data.uploadTitle": "导入 Excel / CSV",
+		"data.uploadDesc": "上传 Excel/CSV 文件后自动建表，可用于临时分析和大屏展示",
+		"data.uploadSuccess": "导入成功，正在跳转...",
+		"data.selectDatabase": "选择目标数据库",
 	},
 	en: {
 		title: "DTS Analytics",
@@ -496,6 +502,12 @@ const messages: Record<Locale, Record<string, string>> = {
 		"filter.title": "Filters",
 		"filter.clear": "Clear",
 		"filter.all": "(All)",
+		"data.tabPlatform": "Platform Sources",
+		"data.tabOther": "Other Sources",
+		"data.uploadTitle": "Import Excel / CSV",
+		"data.uploadDesc": "Upload Excel/CSV files to create tables for analysis and dashboards",
+		"data.uploadSuccess": "Import successful, redirecting...",
+		"data.selectDatabase": "Select target database",
 	},
 };
 

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { analyticsApi, type PlatformDataSourceItem } from "../api/analyticsApi";
+import UploadedDataEditor from "../components/UploadedDataEditor";
 import { PageContainer, PageHeader, Breadcrumb } from "../components/PageContainer/PageContainer";
 import { EmptyState } from "../components/EmptyState";
 import { ErrorNotice } from "../components/ErrorNotice";
@@ -57,6 +58,9 @@ export default function DatabaseNewPage() {
 	const [importingId, setImportingId] = useState<string | null>(null);
 	const [okMessage, setOkMessage] = useState("");
 	const [error, setError] = useState<unknown>(null);
+	const [activeTab, setActiveTab] = useState<'platform' | 'other'>('platform');
+	const [databases, setDatabases] = useState<Array<{ id: number; name: string }>>([]);
+	const [selectedDbId, setSelectedDbId] = useState<number | null>(null);
 
 	const reload = () => {
 		setState({ state: "loading" });
@@ -74,6 +78,15 @@ export default function DatabaseNewPage() {
 
 	useEffect(() => {
 		reload();
+	}, []);
+
+	useEffect(() => {
+		analyticsApi.listDatabases().then((list: any) => {
+			const dbs = (Array.isArray(list) ? list : list?.data || [])
+				.map((d: any) => ({ id: d.id, name: d.name }));
+			setDatabases(dbs);
+			if (dbs.length > 0) setSelectedDbId(dbs[0].id);
+		}).catch(() => {});
 	}, []);
 
 	const filtered = useMemo(() => {
@@ -127,7 +140,40 @@ export default function DatabaseNewPage() {
 			/>
 
 			<Card>
-				<CardHeader title={t(locale, "data.platformSources")} icon={<DatabaseIcon />} />
+				<div style={{ display: 'flex', borderBottom: '1px solid var(--color-border)', marginBottom: 'var(--spacing-md)' }}>
+					<button
+						type="button"
+						onClick={() => setActiveTab('platform')}
+						style={{
+							padding: 'var(--spacing-sm) var(--spacing-md)',
+							border: 'none',
+							background: 'none',
+							cursor: 'pointer',
+							fontSize: 'var(--font-size-md)',
+							fontWeight: activeTab === 'platform' ? 'var(--font-weight-semibold)' : 'normal',
+							color: activeTab === 'platform' ? 'var(--color-brand)' : 'var(--color-text-secondary)',
+							borderBottom: activeTab === 'platform' ? '2px solid var(--color-brand)' : '2px solid transparent',
+						}}
+					>
+						{t(locale, 'data.tabPlatform')}
+					</button>
+					<button
+						type="button"
+						onClick={() => setActiveTab('other')}
+						style={{
+							padding: 'var(--spacing-sm) var(--spacing-md)',
+							border: 'none',
+							background: 'none',
+							cursor: 'pointer',
+							fontSize: 'var(--font-size-md)',
+							fontWeight: activeTab === 'other' ? 'var(--font-weight-semibold)' : 'normal',
+							color: activeTab === 'other' ? 'var(--color-brand)' : 'var(--color-text-secondary)',
+							borderBottom: activeTab === 'other' ? '2px solid var(--color-brand)' : '2px solid transparent',
+						}}
+					>
+						{t(locale, 'data.tabOther')}
+					</button>
+				</div>
 				<CardBody>
 					{error ? <ErrorNotice locale={locale} error={error} /> : null}
 					{okMessage && (
@@ -146,88 +192,141 @@ export default function DatabaseNewPage() {
 						</div>
 					)}
 
-					<div style={{ display: "flex", gap: "var(--spacing-sm)", marginBottom: "var(--spacing-md)" }}>
-						<SearchInput
-							label={t(locale, "common.search")}
-							value={query}
-							onChange={(e) => setQuery(e.target.value)}
-							placeholder={t(locale, "search.placeholder")}
-							onClear={() => setQuery("")}
-						/>
-						<Button variant="secondary" onClick={reload}>
-							{t(locale, "common.refresh")}
-						</Button>
-					</div>
+					{activeTab === 'platform' && (
+						<>
+							<div style={{ display: "flex", gap: "var(--spacing-sm)", marginBottom: "var(--spacing-md)" }}>
+								<SearchInput
+									label={t(locale, "common.search")}
+									value={query}
+									onChange={(e) => setQuery(e.target.value)}
+									placeholder={t(locale, "search.placeholder")}
+									onClear={() => setQuery("")}
+								/>
+								<Button variant="secondary" onClick={reload}>
+									{t(locale, "common.refresh")}
+								</Button>
+							</div>
 
-					{state.state === "loading" && (
-						<div className="loading-container" style={{ padding: "var(--spacing-xl)" }}>
-							<Spinner size="lg" />
-						</div>
+							{state.state === "loading" && (
+								<div className="loading-container" style={{ padding: "var(--spacing-xl)" }}>
+									<Spinner size="lg" />
+								</div>
+							)}
+
+							{state.state === "loaded" && filtered.length === 0 && (
+								<EmptyState
+									title={t(locale, "data.platformEmpty")}
+									description={t(locale, "data.platformEmptyDesc")}
+								/>
+							)}
+
+							{state.state === "loaded" && filtered.length > 0 && (
+								<div className="grid3">
+									{filtered.map((item) => (
+										<Card key={item.id} variant="hoverable" style={{ height: "100%" }}>
+											<CardBody>
+												<div style={{ display: "flex", alignItems: "flex-start", gap: "var(--spacing-md)" }}>
+													<div style={{
+														display: "flex",
+														alignItems: "center",
+														justifyContent: "center",
+														width: 40,
+														height: 40,
+														borderRadius: "var(--radius-md)",
+														background: "var(--color-bg-hover)",
+														color: "var(--color-brand)",
+														flexShrink: 0,
+													}}>
+														<DatabaseIcon />
+													</div>
+													<div style={{ flex: 1, minWidth: 0 }}>
+														<h3 style={{ margin: 0, fontSize: "var(--font-size-md)", fontWeight: "var(--font-weight-semibold)" }}>
+															{item.name || item.id}
+														</h3>
+														<p className="text-muted" style={{ margin: "var(--spacing-xs) 0 0", fontSize: "var(--font-size-sm)" }}>
+															{t(locale, "common.id")}: {item.id}
+														</p>
+														{item.description ? (
+															<p className="text-muted" style={{ margin: "var(--spacing-xs) 0 0", fontSize: "var(--font-size-sm)" }}>
+																{item.description}
+															</p>
+														) : null}
+													</div>
+													<div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "var(--spacing-xs)" }}>
+														<Badge variant="default" size="sm">
+															{item.type || "JDBC"}
+														</Badge>
+														{item.status ? (
+															<Badge variant={item.status === "active" ? "success" : "default"} size="sm">
+																{item.status}
+															</Badge>
+														) : null}
+													</div>
+												</div>
+												<div style={{ display: "flex", justifyContent: "flex-end", marginTop: "var(--spacing-md)" }}>
+													<Button
+														variant="primary"
+														icon={<PlusIcon />}
+														loading={importingId === item.id}
+														onClick={() => importSource(item)}
+													>
+														{t(locale, "data.import")}
+													</Button>
+												</div>
+											</CardBody>
+										</Card>
+									))}
+								</div>
+							)}
+						</>
 					)}
 
-					{state.state === "loaded" && filtered.length === 0 && (
-						<EmptyState
-							title={t(locale, "data.platformEmpty")}
-							description={t(locale, "data.platformEmptyDesc")}
-						/>
-					)}
+					{activeTab === 'other' && (
+						<div>
+							<p style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--font-size-sm)', marginBottom: 'var(--spacing-md)' }}>
+								{t(locale, 'data.uploadDesc')}
+							</p>
 
-					{state.state === "loaded" && filtered.length > 0 && (
-						<div className="grid3">
-							{filtered.map((item) => (
-								<Card key={item.id} variant="hoverable" style={{ height: "100%" }}>
-									<CardBody>
-										<div style={{ display: "flex", alignItems: "flex-start", gap: "var(--spacing-md)" }}>
-											<div style={{
-												display: "flex",
-												alignItems: "center",
-												justifyContent: "center",
-												width: 40,
-												height: 40,
-												borderRadius: "var(--radius-md)",
-												background: "var(--color-bg-hover)",
-												color: "var(--color-brand)",
-												flexShrink: 0,
-											}}>
-												<DatabaseIcon />
-											</div>
-											<div style={{ flex: 1, minWidth: 0 }}>
-												<h3 style={{ margin: 0, fontSize: "var(--font-size-md)", fontWeight: "var(--font-weight-semibold)" }}>
-													{item.name || item.id}
-												</h3>
-												<p className="text-muted" style={{ margin: "var(--spacing-xs) 0 0", fontSize: "var(--font-size-sm)" }}>
-													{t(locale, "common.id")}: {item.id}
-												</p>
-												{item.description ? (
-													<p className="text-muted" style={{ margin: "var(--spacing-xs) 0 0", fontSize: "var(--font-size-sm)" }}>
-														{item.description}
-													</p>
-												) : null}
-											</div>
-											<div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "var(--spacing-xs)" }}>
-												<Badge variant="default" size="sm">
-													{item.type || "JDBC"}
-												</Badge>
-												{item.status ? (
-													<Badge variant={item.status === "active" ? "success" : "default"} size="sm">
-														{item.status}
-													</Badge>
-												) : null}
-											</div>
-										</div>
-										<div style={{ display: "flex", justifyContent: "flex-end", marginTop: "var(--spacing-md)" }}>
-											<Button
-												variant="primary"
-												icon={<PlusIcon />}
-												loading={importingId === item.id}
-												onClick={() => importSource(item)}
-											>
-												{t(locale, "data.import")}
-											</Button>
-										</div>
-									</CardBody>
-								</Card>
-							))}
+							{/* Database selector */}
+							<div style={{ marginBottom: 'var(--spacing-md)' }}>
+								<label style={{ display: 'block', marginBottom: 'var(--spacing-xs)', fontSize: 'var(--font-size-sm)', fontWeight: 'var(--font-weight-semibold)' }}>
+									{t(locale, 'data.selectDatabase')}
+								</label>
+								<select
+									value={selectedDbId ?? ''}
+									onChange={(e) => setSelectedDbId(Number(e.target.value))}
+									style={{
+										width: '100%',
+										padding: 'var(--spacing-sm)',
+										fontSize: 'var(--font-size-md)',
+										borderRadius: 'var(--radius-sm)',
+										border: '1px solid var(--color-border)',
+										background: 'var(--color-bg)',
+										color: 'var(--color-text)',
+									}}
+								>
+									{databases.map(db => (
+										<option key={db.id} value={db.id}>{db.name}</option>
+									))}
+								</select>
+							</div>
+
+							{/* Upload editor */}
+							{selectedDbId && (
+								<UploadedDataEditor
+									databaseId={selectedDbId}
+									onComplete={(result: { tableName: string; schema: string; rowCount: number }) => {
+										setOkMessage(`导入成功: ${result.tableName} (${result.rowCount} 行)`);
+										if (selectedDbId) {
+											analyticsApi.syncDatabaseSchema(selectedDbId).then(() => {
+												navigate(`/data/${selectedDbId}`, { replace: true });
+											}).catch(() => {
+												navigate(`/data/${selectedDbId}`, { replace: true });
+											});
+										}
+									}}
+								/>
+							)}
 						</div>
 					)}
 				</CardBody>
