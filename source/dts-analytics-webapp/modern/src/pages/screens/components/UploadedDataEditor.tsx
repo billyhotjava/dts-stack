@@ -504,7 +504,7 @@ export default function UploadedDataEditor({ onBind, existingDatasetId }: Upload
                     onDragLeave={handleDragLeave}
                     onClick={() => fileInputRef.current?.click()}
                 >
-                    <div style={{ fontSize: 24, marginBottom: 4 }}>&#128194;</div>
+                    <div style={{ fontSize: 20, marginBottom: 4, opacity: 0.6 }}>[ + ]</div>
                     <div>拖拽文件到此处 或 点击选择</div>
                     <div style={{ fontSize: 10, color: '#64748b', marginTop: 4 }}>
                         支持 .xlsx / .xls / .csv，最大 50MB

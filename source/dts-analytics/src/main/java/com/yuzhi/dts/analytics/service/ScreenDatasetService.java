@@ -11,24 +11,34 @@ import javax.crypto.Cipher;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class ScreenDatasetService {
 
+    private static final Logger log = LoggerFactory.getLogger(ScreenDatasetService.class);
     private static final String AES_GCM = "AES/GCM/NoPadding";
     private static final int GCM_IV_LENGTH = 12;
     private static final int GCM_TAG_LENGTH = 128;
+    private static final String DEFAULT_KEY = "default-32-char-key-change-me!!";
 
     private final AnalyticsScreenDatasetRepository repository;
     private final SecretKey secretKey;
 
     public ScreenDatasetService(
             AnalyticsScreenDatasetRepository repository,
-            @Value("${screen.dataset.encryption-key:default-32-char-key-change-me!!}") String encryptionKey) {
+            @Value("${screen.dataset.encryption-key:" + DEFAULT_KEY + "}") String encryptionKey) {
         this.repository = repository;
+        if (DEFAULT_KEY.equals(encryptionKey)) {
+            log.warn("⚠ screen.dataset.encryption-key is using the DEFAULT key. "
+                    + "Set SCREEN_DATASET_KEY env variable for production deployments.");
+        }
         byte[] keyBytes = new byte[32];
         byte[] src = encryptionKey.getBytes(StandardCharsets.UTF_8);
         System.arraycopy(src, 0, keyBytes, 0, Math.min(src.length, 32));
@@ -58,7 +68,7 @@ public class ScreenDatasetService {
 
     public AnalyticsScreenDataset getByUuid(String uuid) {
         return repository.findByUuid(uuid)
-                .orElseThrow(() -> new RuntimeException("Dataset not found: " + uuid));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Dataset not found: " + uuid));
     }
 
     public String decryptData(AnalyticsScreenDataset dataset) {

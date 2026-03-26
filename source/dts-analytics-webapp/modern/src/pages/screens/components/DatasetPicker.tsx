@@ -28,7 +28,7 @@ function formatDate(iso: string): string {
 }
 
 function formatRowCount(n: number): string {
-    return n.toLocaleString('en-US') + ' 行';
+    return n.toLocaleString('zh-CN') + ' 行';
 }
 
 export function DatasetPicker({ onSelect, selectedId }: DatasetPickerProps) {
